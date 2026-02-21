@@ -269,7 +269,7 @@ launch_session() {
     fi
 
     # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" $env_flag claude
+    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" --var cc_account="$account" $env_flag claude
 
     # Apply tab colors. Retry a few times since Claude may briefly override
     # the tab title on startup.
@@ -509,22 +509,32 @@ cmd_list() {
             {
                 index: ($tab_idx + 1),
                 title: $tab.title,
-                config_dir: (
-                    [$tab.windows[] | .foreground_processes[]? |
-                        select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
-                        .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
-                    ] | if length > 0 then .[0] else "" end
+                account: (
+                    [$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+                    if length > 0 then .[0]
+                    else
+                        (
+                            [$tab.windows[] | .foreground_processes[]? |
+                                select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                                .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                            ] | if length > 0 then
+                                (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                            else $default_account end
+                        )
+                    end
                 ),
-                dir: ($tab.windows[0].cwd // "unknown"),
+                dir: (
+                    [$tab.windows[] |
+                        select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                    ] | if length > 0 then .[0].cwd else ($tab.windows[0].cwd // "unknown") end
+                ),
                 status: (
                     if ($os.is_focused and $tab.is_focused)
                     then "focused"
                     else "idle"
                     end
                 )
-            } |
-            .account = (if .config_dir != "" then ($accounts[.config_dir] // "unknown") else $default_account end) |
-            del(.config_dir)
+            }
         ] | .[] |
         [(.index | tostring), .title, .account, .dir, .status] |
         @tsv
@@ -662,16 +672,26 @@ cmd_save() {
             ) |
             {
                 title: .title,
-                dir: .windows[0].cwd,
-                config_dir: (
-                    [.windows[] | .foreground_processes[]? |
-                        select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
-                        .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
-                    ] | if length > 0 then .[0] else "" end
+                dir: (
+                    [.windows[] |
+                        select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                    ] | if length > 0 then .[0].cwd else .windows[0].cwd end
+                ),
+                account: (
+                    [.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+                    if length > 0 then .[0]
+                    else
+                        (
+                            [.windows[] | .foreground_processes[]? |
+                                select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                                .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                            ] | if length > 0 then
+                                (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                            else $default_account end
+                        )
+                    end
                 )
-            } |
-            .account = (if .config_dir != "" then ($accounts[.config_dir] // "unknown") else $default_account end) |
-            del(.config_dir)
+            }
         ] | .[] | [.title, .dir, .account] | @tsv
     ')"
 

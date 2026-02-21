@@ -189,19 +189,28 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
             ] | any
         ) |
 
-        # Extract CLAUDE_CONFIG_DIR from foreground process cmdline
+        # Find the window running claude and use its cwd
         (
-            [$tab.windows[] | .foreground_processes[]? |
-                select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
-                .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
-            ] | if length > 0 then .[0] else "" end
-        ) as $config_dir |
+            [$tab.windows[] |
+                select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+            ] | if length > 0 then .[0].cwd else $tab.windows[0].cwd end
+        ) as $cwd |
 
-        # Determine account by looking up config_dir in accounts map
-        (if $config_dir != "" then ($accounts[$config_dir] // "unknown") else $default_account end) as $account |
-
-        # cwd of the first window
-        ($tab.windows[0].cwd) as $cwd |
+        # Determine account: prefer user_vars.cc_account, fall back to cmdline, then default
+        (
+            [$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+            if length > 0 then .[0]
+            else
+                (
+                    [$tab.windows[] | .foreground_processes[]? |
+                        select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                        .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                    ] | if length > 0 then
+                        (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                    else $default_account end
+                )
+            end
+        ) as $account |
 
         # Status: focused only when both OS window and tab are focused
         (
