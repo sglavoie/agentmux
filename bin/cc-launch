@@ -30,24 +30,107 @@ SOCKET=""  # Initialized in main() after argument parsing
 # Config file
 # ---------------------------------------------------------------------------
 CONFIG_FILE="${CC_MANAGER_CONFIG:-$HOME/.config/cc-manager/sessions.conf}"
+ACCOUNTS_CONFIG="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.conf}"
+
+# ---------------------------------------------------------------------------
+# Account loading from accounts.conf
+# ---------------------------------------------------------------------------
+# Parallel indexed arrays (bash 3 compatible)
+_ACCOUNT_NAMES=()
+_ACCOUNT_DIRS=()
+_ACCOUNT_COLORS=()
+
+load_accounts() {
+    _ACCOUNT_NAMES=()
+    _ACCOUNT_DIRS=()
+    _ACCOUNT_COLORS=()
+
+    if [[ -f "$ACCOUNTS_CONFIG" ]]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            local name config_dir color
+            IFS='|' read -r name config_dir color <<< "$line"
+            name="$(echo "$name" | xargs)"
+            config_dir="$(echo "$config_dir" | xargs)"
+            color="$(echo "$color" | xargs)"
+            config_dir="$(expand_tilde "$config_dir")"
+            [[ -z "$name" ]] && continue
+            _ACCOUNT_NAMES+=("$name")
+            _ACCOUNT_DIRS+=("$config_dir")
+            _ACCOUNT_COLORS+=("${color:-gray}")
+        done < "$ACCOUNTS_CONFIG"
+    else
+        _ACCOUNT_NAMES=(work personal)
+        _ACCOUNT_DIRS=("$HOME/.claude" "$HOME/.claude-personal")
+        _ACCOUNT_COLORS=(green blue)
+        echo "Note: No accounts.conf found at $ACCOUNTS_CONFIG; using default work/personal accounts." >&2
+    fi
+}
+
+# Lookup helpers for the parallel arrays
+_account_index() {
+    local target="$1"
+    local i
+    for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
+        if [[ "${_ACCOUNT_NAMES[$i]}" == "$target" ]]; then
+            echo "$i"
+            return 0
+        fi
+    done
+    return 1
+}
+
+_account_dir() {
+    local idx
+    idx="$(_account_index "$1")" || return 1
+    echo "${_ACCOUNT_DIRS[$idx]}"
+}
+
+_account_color() {
+    local idx
+    idx="$(_account_index "$1")" || return 1
+    echo "${_ACCOUNT_COLORS[$idx]}"
+}
+
+_all_account_names() {
+    local IFS=' '
+    echo "${_ACCOUNT_NAMES[*]}"
+}
+
+# ---------------------------------------------------------------------------
+# Color palette (10 named colors)
+# ---------------------------------------------------------------------------
+resolve_palette_color() {
+    local color="$1"
+    case "$color" in
+        green)  echo "active_bg=#2d7d46 active_fg=#ffffff inactive_bg=#1a4a2a inactive_fg=#aaaaaa" ;;
+        blue)   echo "active_bg=#2d5a88 active_fg=#ffffff inactive_bg=#1a3655 inactive_fg=#aaaaaa" ;;
+        red)    echo "active_bg=#8b2d2d active_fg=#ffffff inactive_bg=#551a1a inactive_fg=#aaaaaa" ;;
+        orange) echo "active_bg=#8b5a2d active_fg=#ffffff inactive_bg=#553a1a inactive_fg=#aaaaaa" ;;
+        purple) echo "active_bg=#5a2d8b active_fg=#ffffff inactive_bg=#3a1a55 inactive_fg=#aaaaaa" ;;
+        teal)   echo "active_bg=#2d7d7d active_fg=#ffffff inactive_bg=#1a4a4a inactive_fg=#aaaaaa" ;;
+        pink)   echo "active_bg=#8b2d6a active_fg=#ffffff inactive_bg=#551a42 inactive_fg=#aaaaaa" ;;
+        yellow) echo "active_bg=#7d7d2d active_fg=#ffffff inactive_bg=#4a4a1a inactive_fg=#aaaaaa" ;;
+        gray)   echo "active_bg=#555555 active_fg=#ffffff inactive_bg=#333333 inactive_fg=#aaaaaa" ;;
+        cyan)   echo "active_bg=#2d6a8b active_fg=#ffffff inactive_bg=#1a4255 inactive_fg=#aaaaaa" ;;
+        *)
+            echo "Warning: Unknown color '$color', falling back to gray." >&2
+            echo "active_bg=#555555 active_fg=#ffffff inactive_bg=#333333 inactive_fg=#aaaaaa"
+            ;;
+    esac
+}
 
 # ---------------------------------------------------------------------------
 # Account → command mapping
 # ---------------------------------------------------------------------------
-claude_command_for_account() {
+claude_config_dir_for_account() {
     local account="$1"
-    case "$account" in
-        work)
-            echo "claude"
-            ;;
-        personal)
-            echo "env CLAUDE_CONFIG_DIR=$HOME/.claude-personal claude"
-            ;;
-        *)
-            echo "Error: Unknown account '$account'. Use 'work' or 'personal'." >&2
-            return 1
-            ;;
-    esac
+    local config_dir
+    config_dir="$(_account_dir "$account")" || {
+        echo "Error: Unknown account '$account'. Available: $(_all_account_names)" >&2
+        return 1
+    }
+    echo "$config_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -55,18 +138,46 @@ claude_command_for_account() {
 # ---------------------------------------------------------------------------
 tab_colors_for_account() {
     local account="$1"
-    case "$account" in
-        work)
-            echo "active_bg=#2d7d46 active_fg=#ffffff inactive_bg=#1a4a2a inactive_fg=#aaaaaa"
-            ;;
-        personal)
-            echo "active_bg=#2d5a88 active_fg=#ffffff inactive_bg=#1a3655 inactive_fg=#aaaaaa"
-            ;;
-        *)
-            echo "Error: Unknown account '$account'." >&2
-            return 1
-            ;;
-    esac
+    local color
+    color="$(_account_color "$account")" || {
+        echo "Warning: Unknown account '$account', using gray." >&2
+        resolve_palette_color "gray"
+        return
+    }
+    resolve_palette_color "$color"
+}
+
+# ---------------------------------------------------------------------------
+# Build JSON mapping of config_dir → account_name (for jq --argjson)
+# ---------------------------------------------------------------------------
+build_accounts_json() {
+    local json="{"
+    local first=true
+    local i
+    for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
+        [[ "$first" == "true" ]] || json+=","
+        first=false
+        json+="$(printf '%s:%s' \
+            "$(echo "${_ACCOUNT_DIRS[$i]}" | jq -Rs '.[:-1]')" \
+            "$(echo "${_ACCOUNT_NAMES[$i]}" | jq -Rs '.[:-1]')")"
+    done
+    json+="}"
+    echo "$json"
+}
+
+# ---------------------------------------------------------------------------
+# Find the account name that uses the default config dir
+# ---------------------------------------------------------------------------
+default_account_name() {
+    local i
+    for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
+        local dir="${_ACCOUNT_DIRS[$i]}"
+        if [[ -z "$dir" || "$dir" == "$HOME/.claude" ]]; then
+            echo "${_ACCOUNT_NAMES[$i]}"
+            return
+        fi
+    done
+    echo "work"
 }
 
 # ---------------------------------------------------------------------------
@@ -108,14 +219,31 @@ launch_session() {
         return 1  # signal: not launched
     fi
 
-    local cmd colors
-    cmd="$(claude_command_for_account "$account")"
+    local config_dir colors
+    config_dir="$(claude_config_dir_for_account "$account")"
     colors="$(tab_colors_for_account "$account")"
 
+    # Build the launch command. Use kitty's --env flag for non-default config
+    # dirs so the launched process is always "claude" directly (not wrapped in
+    # env), which ensures kitty creates a proper interactive tab.
+    local env_flag=""
+    if [[ -n "$config_dir" && "$config_dir" != "$HOME/.claude" ]]; then
+        env_flag="--env CLAUDE_CONFIG_DIR=$config_dir"
+    fi
+
     # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" $cmd
-    # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors
+    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" $env_flag claude
+
+    # Apply tab colors. Retry a few times since Claude may briefly override
+    # the tab title on startup.
+    local i
+    for ((i = 0; i < 5; i++)); do
+        # shellcheck disable=SC2086
+        if kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors 2>/dev/null; then
+            break
+        fi
+        sleep 0.1
+    done
 
     echo "Launched [$title] (account=$account, dir=$dir)"
     return 0
@@ -202,8 +330,12 @@ cmd_list() {
         exit 1
     }
 
+    local accounts_json default_account
+    accounts_json="$(build_accounts_json)"
+    default_account="$(default_account_name)"
+
     local table
-    table="$(echo "$ls_json" | jq -r '
+    table="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" '
         [.[] | . as $os |
             $os.tabs | to_entries[] |
             .key as $tab_idx | .value as $tab |
@@ -213,11 +345,11 @@ cmd_list() {
             {
                 index: ($tab_idx + 1),
                 title: $tab.title,
-                account: (
-                    if ([$tab.windows[] | .foreground_processes[]?.cmdline[]? | test("CLAUDE_CONFIG_DIR")] | any)
-                    then "personal"
-                    else "work"
-                    end
+                config_dir: (
+                    [$tab.windows[] | .foreground_processes[]? |
+                        select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                        .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                    ] | if length > 0 then .[0] else "" end
                 ),
                 dir: ($tab.windows[0].cwd // "unknown"),
                 status: (
@@ -226,7 +358,9 @@ cmd_list() {
                     else "idle"
                     end
                 )
-            }
+            } |
+            .account = (if .config_dir != "" then ($accounts[.config_dir] // "unknown") else $default_account end) |
+            del(.config_dir)
         ] | .[] |
         [(.index | tostring), .title, .account, .dir, .status] |
         @tsv
@@ -280,10 +414,25 @@ cmd_cleanup() {
         exit 1
     }
 
+    # Build a regex matching title prefixes for all loaded accounts.
+    # Convention: tab titles are prefixed with the account's uppercase initial
+    # followed by a colon (e.g. W:project for work, C:app for client-x).
+    local initials=""
+    local i
+    for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
+        local ch="${_ACCOUNT_NAMES[$i]:0:1}"
+        ch="$(echo "$ch" | tr '[:lower:]' '[:upper:]')"
+        if [[ "$initials" != *"$ch"* ]]; then
+            initials+="$ch"
+        fi
+    done
+    [[ -z "$initials" ]] && initials="WP"
+    local title_pattern="^[$initials]:"
+
     local stale
-    stale="$(echo "$ls_json" | jq -r '
+    stale="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
         [.[] | .tabs[] |
-            select(.title | test("^[WP]:")) |
+            select(.title | test($pat)) |
             select(
                 [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any | not
             ) |
@@ -326,8 +475,12 @@ cmd_save() {
         exit 1
     }
 
+    local accounts_json default_account
+    accounts_json="$(build_accounts_json)"
+    default_account="$(default_account_name)"
+
     local sessions
-    sessions="$(echo "$ls_json" | jq -r '
+    sessions="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" '
         [.[] | .tabs[] |
             select(
                 [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
@@ -335,13 +488,15 @@ cmd_save() {
             {
                 title: .title,
                 dir: .windows[0].cwd,
-                account: (
-                    if ([.windows[] | .foreground_processes[]?.cmdline[]? | test("CLAUDE_CONFIG_DIR")] | any)
-                    then "personal"
-                    else "work"
-                    end
+                config_dir: (
+                    [.windows[] | .foreground_processes[]? |
+                        select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                        .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                    ] | if length > 0 then .[0] else "" end
                 )
-            }
+            } |
+            .account = (if .config_dir != "" then ($accounts[.config_dir] // "unknown") else $default_account end) |
+            del(.config_dir)
         ] | .[] | [.title, .dir, .account] | @tsv
     ')"
 
@@ -401,13 +556,15 @@ Config file (default: ~/.config/cc-manager/sessions.conf):
         title | directory | account
     Lines starting with # are comments. Blank lines are ignored.
 
-Accounts:
-    work       Uses the default 'claude' binary
-    personal   Uses 'claude' with CLAUDE_CONFIG_DIR=~/.claude-personal
+Accounts (defined in ~/.config/cc-manager/accounts.conf):
+    Each line: name | claude_config_dir | color
+    Colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan
+    If accounts.conf is missing, defaults to work (green) and personal (blue).
 
 Environment:
     KITTY_LISTEN_ON      Kitty remote-control socket (auto-detected if unset)
     CC_MANAGER_CONFIG    Path to sessions config file
+    CC_MANAGER_ACCOUNTS  Path to accounts config file
 USAGE
 }
 
@@ -441,6 +598,8 @@ main() {
     if [[ -z "$SOCKET" ]]; then
         SOCKET="$(discover_socket)"
     fi
+
+    load_accounts
 
     case "${1:-}" in
         --add)

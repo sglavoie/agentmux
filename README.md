@@ -1,12 +1,12 @@
 # cc-manager-kitty
 
-Opinionated Claude Code session manager across two accounts (work and personal) using Kitty terminal tabs with direct tab switching, color-coded accounts, and a status overview.
+Opinionated Claude Code session manager with support for multiple accounts using Kitty terminal tabs with direct tab switching, color-coded accounts, and a status overview.
 
 ## Prerequisites
 
 Kitty must be running with remote control enabled. Your `kitty.conf` should include:
 
-```
+```plaintext
 allow_remote_control yes
 listen_on unix:/tmp/kitty-{kitty_pid}
 ```
@@ -31,7 +31,7 @@ This creates symlinks for the binaries into `~/.local/bin/`, the Kitty kitten an
 
 Add this line to your `kitty.conf`:
 
-```
+```plaintext
 include cc-manager.conf
 ```
 
@@ -39,20 +39,44 @@ Then reload Kitty config with `ctrl+shift+f5`.
 
 This gives you `cmd+1` through `cmd+0` for tabs 1-10, `cmd+l` to toggle between the last two tabs, error marker highlighting on `f3`, broadcast input on `f1`, and `ctrl+shift+d` to open the interactive session dashboard.
 
-### 3. Create your sessions config
+### 3. Define your accounts
 
 ```bash
 mkdir -p ~/.config/cc-manager
+cp config/accounts.example ~/.config/cc-manager/accounts.conf
+```
+
+Edit `~/.config/cc-manager/accounts.conf` to define your Claude accounts. Each line has three pipe-delimited fields:
+
+```plaintext
+name | claude_config_dir | color
+```
+
+The `name` is an identifier you reference from `sessions.conf`. The `claude_config_dir` is the path to the Claude config directory for that account (empty or `~/.claude` means the default). The `color` is a name from the built-in palette: green, blue, red, orange, purple, teal, pink, yellow, gray, or cyan.
+
+Example with three accounts:
+
+```plaintext
+work     | ~/.claude            | green
+personal | ~/.claude-personal   | blue
+client-x | ~/.claude-client-x   | orange
+```
+
+If `accounts.conf` does not exist, cc-manager falls back to two default accounts: `work` (green, default config) and `personal` (blue, `~/.claude-personal`).
+
+### 4. Create your sessions config
+
+```bash
 cp config/sessions.example ~/.config/cc-manager/sessions.conf
 ```
 
 Edit `~/.config/cc-manager/sessions.conf` to define your sessions. The format is pipe-delimited with three fields per line:
 
-```
+```plaintext
 title | directory | account
 ```
 
-The account field is either `work` (uses the default `claude` binary) or `personal` (runs `claude` with `CLAUDE_CONFIG_DIR=~/.claude-personal`). Tab titles are conventionally prefixed `W:` for work and `P:` for personal.
+The `account` field references an entry from `accounts.conf`. Tab titles are conventionally prefixed with an initial for the account (e.g. `W:` for work, `P:` for personal).
 
 ## Usage
 
@@ -62,7 +86,7 @@ The account field is either `work` (uses the default `claude` binary) or `person
 cc-launch
 ```
 
-Reads `~/.config/cc-manager/sessions.conf` and creates a Kitty tab for each entry. Tabs are colored green for work accounts and blue for personal accounts. Running it again is safe since it skips tabs that already exist (idempotent).
+Reads `~/.config/cc-manager/sessions.conf` and creates a Kitty tab for each entry. Tabs are colored according to the palette color assigned to each account in `accounts.conf`. Running it again is safe since it skips tabs that already exist (idempotent).
 
 ### Add an ad-hoc session
 
@@ -97,11 +121,11 @@ Same idea as `cc-launch --list` but with dynamically sized columns for cleaner o
 
 ### Interactive session dashboard
 
-Press `ctrl+shift+d` to open the dashboard as a Kitty overlay. It shows all tabs running Claude Code in a navigable list, color-coded green for work accounts and blue for personal accounts.
+Press `ctrl+shift+d` to open the dashboard as a Kitty overlay. It shows all tabs running Claude Code in a navigable list, color-coded by account using the palette from `accounts.conf`.
 
 Keybindings inside the dashboard:
 
-```
+```plaintext
 ↑ / k       Move selection up
 ↓ / j       Move selection down
 Enter       Focus the selected tab (closes the dashboard)
@@ -111,7 +135,7 @@ r           Refresh the session list
 q / Esc     Dismiss the dashboard
 ```
 
-The new-session form accepts a title, working directory, and account type. Press Enter to advance between fields and Tab to toggle the account between work and personal. The new tab is created immediately with the appropriate Claude command and tab coloring.
+The new-session form accepts a title, working directory, and account type. Press Enter to advance between fields and Tab to cycle through the available accounts. The new tab is created immediately with the appropriate Claude command and tab coloring.
 
 ### Save current sessions to config
 
@@ -160,10 +184,11 @@ Copy `sessions/example.conf` and customize it for your projects. This approach i
 
 ## Configuration
 
-Override the default config file location with the `CC_MANAGER_CONFIG` environment variable:
+Both config files live in `~/.config/cc-manager/` by default. Override their locations with environment variables:
 
 ```bash
 CC_MANAGER_CONFIG=~/my-sessions.conf cc-launch
+CC_MANAGER_ACCOUNTS=~/my-accounts.conf cc-launch
 ```
 
 The Kitty socket is auto-detected from `KITTY_LISTEN_ON` or by finding the most recent `/tmp/kitty-*` socket. You can also override it per-command with `--socket` (see "Multiple Kitty instances" above).
@@ -181,11 +206,12 @@ This enables tab completion for all subcommands, tab titles (for `--close`), acc
 
 ## File layout
 
-```
+```plaintext
 Makefile                        Install/uninstall symlinks
 cc-manager.conf                 Kitty config snippet (include from kitty.conf)
 bin/cc-launch                   Session launcher and manager
 bin/cc-status                   Status overview tool
+config/accounts.example         Example account definitions (colors, config dirs)
 config/sessions.example         Example session definitions
 sessions/example.conf           Example Kitty session file for startup
 kittens/claude_dashboard.py     Interactive session picker (overlay kitten)

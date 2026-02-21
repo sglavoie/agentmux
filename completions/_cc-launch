@@ -15,6 +15,17 @@ _cc_launch_sockets() {
     [[ ${#socks} -gt 0 ]] && _describe 'kitty socket' socks
 }
 
+_cc_launch_accounts() {
+    local accounts_file="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.conf}"
+    local -a accts
+    if [[ -f "$accounts_file" ]]; then
+        accts=(${(f)"$(command grep -v '^\s*#' "$accounts_file" | command grep -v '^\s*$' | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"})
+    else
+        accts=(work personal)
+    fi
+    [[ ${#accts} -gt 0 ]] && _values 'account' $accts
+}
+
 _cc-launch() {
     local context state state_descr line
     typeset -A opt_args
@@ -34,7 +45,7 @@ _cc-launch() {
                         case $CURRENT in
                             5) _message 'title' ;;
                             6) _files -/ ;;
-                            7) _values 'account' work personal ;;
+                            7) _cc_launch_accounts ;;
                         esac
                         return
                         ;;
@@ -67,7 +78,7 @@ _cc-launch() {
             case $CURRENT in
                 3) _message 'title' ;;
                 4) _files -/ ;;
-                5) _values 'account' work personal ;;
+                5) _cc_launch_accounts ;;
             esac
             ;;
         --close)

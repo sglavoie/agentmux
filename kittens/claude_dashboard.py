@@ -7,7 +7,7 @@ Launch via the kitten action in kitty.conf:
 Or run standalone in a Kitty overlay:
     launch --type=overlay python3 /path/to/kittens/claude_dashboard.py
 
-Lists all tabs running Claude Code, color-coded by account (work/personal).
+Lists all tabs running Claude Code, color-coded by account.
 Navigate with j/k or arrows, Enter to focus, x to close, n to create new,
 r to refresh, q/Esc to dismiss.
 """
@@ -20,25 +20,130 @@ import subprocess
 import sys
 
 
-# ── Color pair IDs ───────────────────────────────────────────────────────────
+# ── Color palette ────────────────────────────────────────────────────────────
+# Each entry maps a color name to (active_bg_rgb, inactive_bg_rgb) tuples.
+# active_fg is always (255,255,255) and inactive_fg is always (170,170,170).
 
+PALETTE = {
+    "green":  ((0x2d, 0x7d, 0x46), (0x1a, 0x4a, 0x2a)),
+    "blue":   ((0x2d, 0x5a, 0x88), (0x1a, 0x36, 0x55)),
+    "red":    ((0x8b, 0x2d, 0x2d), (0x55, 0x1a, 0x1a)),
+    "orange": ((0x8b, 0x5a, 0x2d), (0x55, 0x3a, 0x1a)),
+    "purple": ((0x5a, 0x2d, 0x8b), (0x3a, 0x1a, 0x55)),
+    "teal":   ((0x2d, 0x7d, 0x7d), (0x1a, 0x4a, 0x4a)),
+    "pink":   ((0x8b, 0x2d, 0x6a), (0x55, 0x1a, 0x42)),
+    "yellow": ((0x7d, 0x7d, 0x2d), (0x4a, 0x4a, 0x1a)),
+    "gray":   ((0x55, 0x55, 0x55), (0x33, 0x33, 0x33)),
+    "cyan":   ((0x2d, 0x6a, 0x8b), (0x1a, 0x42, 0x55)),
+}
+
+ACTIVE_FG = (255, 255, 255)
+INACTIVE_FG = (170, 170, 170)
+
+# Fixed color pair IDs for UI chrome (not account-specific)
 CP_NORMAL = 1
-CP_WORK = 2
-CP_PERSONAL = 3
-CP_WORK_SEL = 4
-CP_PERSONAL_SEL = 5
-CP_HEADER = 6
-CP_DIM = 7
-CP_WARN = 8
-CP_INPUT = 9
-CP_INPUT_ACTIVE = 10
+CP_HEADER = 2
+CP_DIM = 3
+CP_WARN = 4
+CP_INPUT = 5
+CP_INPUT_ACTIVE = 6
 
-# RGB values (0–255) for custom colors
-WORK_FG = (80, 200, 120)
-PERSONAL_FG = (100, 160, 230)
+# Dynamic account color pairs start at this offset.
+# Each account gets two pair IDs: one normal, one selected.
+_CP_ACCOUNT_BASE = 10
+
+# RGB values for shared UI colors
 SEL_BG = (40, 40, 60)
 DIM_FG = (110, 110, 110)
 WARN_FG = (220, 180, 50)
+
+
+# ── Account configuration ───────────────────────────────────────────────────
+
+_accounts = {}       # name -> {"config_dir": str, "color": str}
+_account_names = []  # ordered list of account names
+# Maps account name -> (cp_normal, cp_selected) curses color pair IDs
+_account_cp = {}
+
+
+def _accounts_config_path():
+    env = os.environ.get("CC_MANAGER_ACCOUNTS", "")
+    if env:
+        return env
+    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config"))
+    return os.path.join(xdg, "cc-manager", "accounts.conf")
+
+
+def load_accounts():
+    """Parse accounts.conf into the module-level _accounts dict.
+
+    Falls back to hardcoded work/personal defaults if the file is missing.
+    """
+    global _accounts, _account_names
+    _accounts = {}
+    _account_names = []
+
+    path = _accounts_config_path()
+    if os.path.isfile(path):
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("|")
+                if len(parts) < 2:
+                    continue
+                name = parts[0].strip()
+                config_dir = parts[1].strip() if len(parts) > 1 else ""
+                color = parts[2].strip() if len(parts) > 2 else "gray"
+                if not name:
+                    continue
+                config_dir = os.path.expanduser(config_dir) if config_dir else ""
+                _accounts[name] = {"config_dir": config_dir, "color": color}
+                _account_names.append(name)
+    else:
+        home = os.path.expanduser("~")
+        _accounts["work"] = {"config_dir": os.path.join(home, ".claude"), "color": "green"}
+        _accounts["personal"] = {"config_dir": os.path.join(home, ".claude-personal"), "color": "blue"}
+        _account_names = ["work", "personal"]
+
+
+def _resolve_account_by_config_dir(config_dir):
+    """Reverse-lookup: find an account name matching the given config directory."""
+    home = os.path.expanduser("~")
+    default_dir = os.path.join(home, ".claude")
+
+    for name, info in _accounts.items():
+        d = info["config_dir"]
+        if config_dir and d == config_dir:
+            return name
+        if not config_dir and (not d or d == default_dir):
+            return name
+
+    # No config dir detected — return the account that uses the default dir
+    if not config_dir:
+        for name, info in _accounts.items():
+            d = info["config_dir"]
+            if not d or d == default_dir:
+                return name
+
+    return _account_names[0] if _account_names else "unknown"
+
+
+def _palette_tab_colors(account):
+    """Return a list of kitty set-tab-color arguments for the given account."""
+    color_name = _accounts.get(account, {}).get("color", "gray")
+    active_bg, inactive_bg = PALETTE.get(color_name, PALETTE["gray"])
+
+    def _hex(rgb):
+        return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+    return [
+        f"active_bg={_hex(active_bg)}",
+        "active_fg=#ffffff",
+        f"inactive_bg={_hex(inactive_bg)}",
+        "inactive_fg=#aaaaaa",
+    ]
 
 
 # ── Kitty integration ───────────────────────────────────────────────────────
@@ -78,36 +183,39 @@ def query_sessions(socket):
     except json.JSONDecodeError:
         return []
 
+    home = os.path.expanduser("~")
+    default_dir = os.path.join(home, ".claude")
+
     sessions = []
     for os_win in data:
         os_focused = os_win.get("is_focused", False)
         for idx, tab in enumerate(os_win.get("tabs", [])):
             has_claude = False
-            has_config_dir = False
+            detected_config_dir = ""
             windows = tab.get("windows", [])
             cwd = windows[0].get("cwd", "") if windows else ""
 
             for win in windows:
                 for proc in win.get("foreground_processes", []):
-                    cmdline = " ".join(proc.get("cmdline", []))
-                    if "claude" in cmdline.lower():
+                    cmdline = proc.get("cmdline", [])
+                    cmdline_str = " ".join(cmdline)
+                    if "claude" in cmdline_str.lower():
                         has_claude = True
-                    if "CLAUDE_CONFIG_DIR" in cmdline:
-                        has_config_dir = True
+                    for arg in cmdline:
+                        if "CLAUDE_CONFIG_DIR=" in arg:
+                            detected_config_dir = arg.split("=", 1)[1]
 
             if not has_claude:
                 continue
+
+            account = _resolve_account_by_config_dir(detected_config_dir)
 
             title = tab.get("title", "")
             sessions.append(
                 {
                     "index": idx + 1,
                     "title": title,
-                    "account": (
-                        "personal"
-                        if (has_config_dir or title.startswith("P:"))
-                        else "work"
-                    ),
+                    "account": account,
                     "cwd": cwd,
                     "status": (
                         "focused"
@@ -134,36 +242,23 @@ def do_launch(socket, title, directory, account):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
     cmd = ["launch", "--type=tab", "--tab-title", title, "--cwd", directory]
-    if account == "personal":
-        cmd += [
-            "env",
-            f"CLAUDE_CONFIG_DIR={os.path.expanduser('~/.claude-personal')}",
-            "claude",
-        ]
-    else:
-        cmd += ["claude"]
-    kitty_cmd(socket, *cmd)
 
-    colors = {
-        "work": [
-            "active_bg=#2d7d46",
-            "active_fg=#ffffff",
-            "inactive_bg=#1a4a2a",
-            "inactive_fg=#aaaaaa",
-        ],
-        "personal": [
-            "active_bg=#2d5a88",
-            "active_fg=#ffffff",
-            "inactive_bg=#1a3655",
-            "inactive_fg=#aaaaaa",
-        ],
-    }
+    home = os.path.expanduser("~")
+    default_dir = os.path.join(home, ".claude")
+    config_dir = _accounts.get(account, {}).get("config_dir", "")
+
+    if not config_dir or config_dir == default_dir:
+        cmd += ["claude"]
+    else:
+        cmd += ["env", f"CLAUDE_CONFIG_DIR={config_dir}", "claude"]
+
+    kitty_cmd(socket, *cmd)
     kitty_cmd(
         socket,
         "set-tab-color",
         "--match",
         f"title:^{title}$",
-        *colors.get(account, colors["work"]),
+        *_palette_tab_colors(account),
     )
 
 
@@ -176,39 +271,70 @@ def _c(r, g, b):
 
 
 def init_colors():
-    """Set up curses color pairs, with a fallback for limited-color terminals."""
+    """Set up curses color pairs dynamically based on loaded accounts."""
+    global _account_cp
     curses.start_color()
     curses.use_default_colors()
 
+    _account_cp = {}
+
     if curses.can_change_color() and curses.COLORS >= 256:
+        # Reserve custom color slots starting at 16
         base = 16
-        curses.init_color(base, *_c(*WORK_FG))
-        curses.init_color(base + 1, *_c(*PERSONAL_FG))
-        curses.init_color(base + 2, *_c(*SEL_BG))
-        curses.init_color(base + 3, *_c(*DIM_FG))
-        curses.init_color(base + 4, *_c(*WARN_FG))
+        # Shared UI colors
+        curses.init_color(base, *_c(*SEL_BG))
+        curses.init_color(base + 1, *_c(*DIM_FG))
+        curses.init_color(base + 2, *_c(*WARN_FG))
+        sel_bg_slot = base
+        dim_slot = base + 1
+        warn_slot = base + 2
 
         curses.init_pair(CP_NORMAL, -1, -1)
-        curses.init_pair(CP_WORK, base, -1)
-        curses.init_pair(CP_PERSONAL, base + 1, -1)
-        curses.init_pair(CP_WORK_SEL, base, base + 2)
-        curses.init_pair(CP_PERSONAL_SEL, base + 1, base + 2)
         curses.init_pair(CP_HEADER, curses.COLOR_WHITE, -1)
-        curses.init_pair(CP_DIM, base + 3, -1)
-        curses.init_pair(CP_WARN, base + 4, -1)
+        curses.init_pair(CP_DIM, dim_slot, -1)
+        curses.init_pair(CP_WARN, warn_slot, -1)
         curses.init_pair(CP_INPUT, -1, -1)
-        curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, base + 2)
+        curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, sel_bg_slot)
+
+        # Dynamically allocate a color slot + two pair IDs per account
+        color_slot = base + 3
+        pair_id = _CP_ACCOUNT_BASE
+        for name in _account_names:
+            color_name = _accounts[name]["color"]
+            active_bg, _ = PALETTE.get(color_name, PALETTE["gray"])
+            curses.init_color(color_slot, *_c(*active_bg))
+            curses.init_pair(pair_id, color_slot, -1)           # normal
+            curses.init_pair(pair_id + 1, color_slot, sel_bg_slot)  # selected
+            _account_cp[name] = (pair_id, pair_id + 1)
+            color_slot += 1
+            pair_id += 2
     else:
+        # Fallback: cycle through a few basic curses colors
+        _FALLBACK_COLORS = [
+            curses.COLOR_GREEN, curses.COLOR_CYAN, curses.COLOR_RED,
+            curses.COLOR_YELLOW, curses.COLOR_MAGENTA, curses.COLOR_WHITE,
+        ]
+
         curses.init_pair(CP_NORMAL, -1, -1)
-        curses.init_pair(CP_WORK, curses.COLOR_GREEN, -1)
-        curses.init_pair(CP_PERSONAL, curses.COLOR_CYAN, -1)
-        curses.init_pair(CP_WORK_SEL, curses.COLOR_GREEN, curses.COLOR_BLACK)
-        curses.init_pair(CP_PERSONAL_SEL, curses.COLOR_CYAN, curses.COLOR_BLACK)
         curses.init_pair(CP_HEADER, curses.COLOR_WHITE, -1)
         curses.init_pair(CP_DIM, curses.COLOR_WHITE, -1)
         curses.init_pair(CP_WARN, curses.COLOR_YELLOW, -1)
         curses.init_pair(CP_INPUT, -1, -1)
         curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, curses.COLOR_BLACK)
+
+        pair_id = _CP_ACCOUNT_BASE
+        for i, name in enumerate(_account_names):
+            fg = _FALLBACK_COLORS[i % len(_FALLBACK_COLORS)]
+            curses.init_pair(pair_id, fg, -1)
+            curses.init_pair(pair_id + 1, fg, curses.COLOR_BLACK)
+            _account_cp[name] = (pair_id, pair_id + 1)
+            pair_id += 2
+
+
+def _cp_for_account(account, selected=False):
+    """Return the curses color pair ID for a given account name."""
+    cp_normal, cp_sel = _account_cp.get(account, (CP_NORMAL, CP_NORMAL))
+    return cp_sel if selected else cp_normal
 
 
 def safe_addstr(win, y, x, text, attr=0):
@@ -305,10 +431,7 @@ def draw_list_view(stdscr, sessions, selected):
         sel = si == selected
         mark = "▸" if sel else " "
 
-        if s["account"] == "work":
-            cp = CP_WORK_SEL if sel else CP_WORK
-        else:
-            cp = CP_PERSONAL_SEL if sel else CP_PERSONAL
+        cp = _cp_for_account(s["account"], selected=sel)
 
         short_dir = shorten_path(s["cwd"], c_dir - 1)
         line = (
@@ -335,7 +458,7 @@ def draw_footer(stdscr, mode):
     hints = {
         "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  n New  r Refresh  q Quit",
         "confirm": "y Confirm close    Any other key Cancel",
-        "new": "Enter Next/Submit    Tab Toggle account    Esc Cancel",
+        "new": "Enter Next/Submit    Tab Cycle account    Esc Cancel",
     }
     text = hints.get(mode, "")
     safe_addstr(stdscr, rows - 1, 2, text[: cols - 3], curses.color_pair(CP_DIM))
@@ -380,7 +503,7 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
         if key == "account":
             display = f" {val} "
             if is_active:
-                display += "  (Tab to toggle)"
+                display += "  (Tab to cycle)"
             cp = CP_INPUT_ACTIVE if is_active else CP_INPUT
             safe_addstr(stdscr, y, 17, display, curses.color_pair(cp))
         else:
@@ -423,6 +546,17 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
 # ── Main event loop ─────────────────────────────────────────────────────────
 
 
+def _cycle_account(current):
+    """Return the next account name in the loaded list, wrapping around."""
+    if not _account_names:
+        return current
+    try:
+        idx = _account_names.index(current)
+    except ValueError:
+        idx = -1
+    return _account_names[(idx + 1) % len(_account_names)]
+
+
 def dashboard(stdscr, socket):
     """Run the interactive dashboard loop."""
     curses.curs_set(0)
@@ -442,8 +576,9 @@ def dashboard(stdscr, socket):
     msg = ""
     msg_frames = 0
 
-    # New-session form state
-    new_fields = {"title": "", "dir": "~/", "account": "work"}
+    # New-session form state — default to first loaded account
+    default_account = _account_names[0] if _account_names else "work"
+    new_fields = {"title": "", "dir": "~/", "account": default_account}
     new_active = 0
     new_cursor = 0
 
@@ -485,7 +620,7 @@ def dashboard(stdscr, socket):
                 mode = "confirm"
             elif key in (ord("n"), ord("N")):
                 mode = "new"
-                new_fields = {"title": "", "dir": "~/", "account": "work"}
+                new_fields = {"title": "", "dir": "~/", "account": default_account}
                 new_active = 0
                 new_cursor = 0
             elif key in (ord("r"), ord("R")):
@@ -513,11 +648,7 @@ def dashboard(stdscr, socket):
                 mode = "list"
             elif key == 9:  # Tab
                 if fk == "account":
-                    new_fields["account"] = (
-                        "personal"
-                        if new_fields["account"] == "work"
-                        else "work"
-                    )
+                    new_fields["account"] = _cycle_account(new_fields["account"])
                 else:
                     new_active = min(new_active + 1, 2)
                     new_cursor = len(new_fields[field_keys[new_active]])
@@ -574,6 +705,8 @@ def main(args=None):
     function in a child process attached to an overlay window. When run directly,
     ``curses.wrapper`` manages the terminal setup and teardown.
     """
+    load_accounts()
+
     socket = get_kitty_socket()
     if not socket:
         print(
