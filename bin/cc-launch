@@ -27,6 +27,43 @@ discover_socket() {
 SOCKET=""  # Initialized in main() after argument parsing
 
 # ---------------------------------------------------------------------------
+# Gum detection and styling
+# ---------------------------------------------------------------------------
+HAS_GUM=false
+if command -v gum >/dev/null 2>&1; then
+    HAS_GUM=true
+fi
+
+require_gum() {
+    if [[ "$HAS_GUM" != "true" ]]; then
+        echo "Error: This feature requires gum (charmbracelet/gum)." >&2
+        echo "Install it with: brew install gum" >&2
+        exit 1
+    fi
+}
+
+GUM_HEADER_COLOR="#aaaaaa"
+GUM_ACCENT_COLOR="#2d7d46"
+
+gum_color_for_account() {
+    local color
+    color="$(_account_color "$1" 2>/dev/null)" || color="gray"
+    case "$color" in
+        green)  echo "#2d7d46" ;;
+        blue)   echo "#2d5a88" ;;
+        red)    echo "#8b2d2d" ;;
+        orange) echo "#8b5a2d" ;;
+        purple) echo "#5a2d8b" ;;
+        teal)   echo "#2d7d7d" ;;
+        pink)   echo "#8b2d6a" ;;
+        yellow) echo "#7d7d2d" ;;
+        gray)   echo "#555555" ;;
+        cyan)   echo "#2d6a8b" ;;
+        *)      echo "#555555" ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # Config file
 # ---------------------------------------------------------------------------
 CONFIG_FILE="${CC_MANAGER_CONFIG:-$HOME/.config/cc-manager/sessions.conf}"
@@ -250,6 +287,81 @@ launch_session() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: interactive session picker (requires gum)
+# ---------------------------------------------------------------------------
+cmd_launch_interactive() {
+    require_gum
+
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        echo "Error: Config file not found: $CONFIG_FILE" >&2
+        exit 1
+    fi
+
+    local -a items=()
+    local -a keys=()
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+        local title dir account
+        IFS='|' read -r title dir account <<< "$line"
+        title="$(echo "$title" | xargs)"
+        dir="$(echo "$dir" | xargs)"
+        account="$(echo "${account:-work}" | xargs)"
+        [[ -z "$account" ]] && account="work"
+
+        items+=("$(printf '%-20s  %-40s  (%s)' "$title" "$dir" "$account")")
+        keys+=("${title}|${dir}|${account}")
+    done < "$CONFIG_FILE"
+
+    if [[ ${#items[@]} -eq 0 ]]; then
+        echo "No sessions defined in $CONFIG_FILE"
+        return
+    fi
+
+    # Build --selected arguments to pre-select all items
+    local selected_args=()
+    local i
+    for ((i = 0; i < ${#items[@]}; i++)); do
+        selected_args+=("--selected" "${items[$i]}")
+    done
+
+    local choices
+    choices="$(printf '%s\n' "${items[@]}" | gum choose --no-limit \
+        --header "Select sessions to launch:" \
+        --header.foreground "$GUM_HEADER_COLOR" \
+        --cursor.foreground "$GUM_ACCENT_COLOR" \
+        --selected.foreground "$GUM_ACCENT_COLOR" \
+        "${selected_args[@]}")" || {
+        echo "No sessions selected."
+        return
+    }
+
+    local launched=0
+    local existed=0
+
+    while IFS= read -r chosen; do
+        [[ -z "$chosen" ]] && continue
+        # Find the matching key by comparing display strings
+        local j
+        for ((j = 0; j < ${#items[@]}; j++)); do
+            if [[ "${items[$j]}" == "$chosen" ]]; then
+                local title dir account
+                IFS='|' read -r title dir account <<< "${keys[$j]}"
+                if launch_session "$title" "$dir" "$account"; then
+                    launched=$((launched + 1))
+                else
+                    existed=$((existed + 1))
+                fi
+                break
+            fi
+        done
+    done <<< "$choices"
+
+    echo "Launched $launched new session(s), $existed already existed."
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: launch all sessions from config
 # ---------------------------------------------------------------------------
 cmd_launch_all() {
@@ -289,12 +401,35 @@ cmd_launch_all() {
 cmd_add() {
     local title="${1:-}"
     local dir="${2:-}"
-    local account="${3:-work}"
+    local account="${3:-}"
 
     if [[ -z "$title" || -z "$dir" ]]; then
         echo "Error: --add requires TITLE and DIR arguments." >&2
         echo "Usage: cc-launch --add TITLE DIR [ACCOUNT]" >&2
         exit 1
+    fi
+
+    if [[ -z "$account" ]]; then
+        if [[ "$HAS_GUM" == "true" && ${#_ACCOUNT_NAMES[@]} -gt 1 ]]; then
+            local -a display_items=()
+            local i
+            for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
+                display_items+=("${_ACCOUNT_NAMES[$i]}  (${_ACCOUNT_COLORS[$i]})")
+            done
+            local chosen
+            chosen="$(printf '%s\n' "${display_items[@]}" | gum choose \
+                --header "Select account:" \
+                --header.foreground "$GUM_HEADER_COLOR" \
+                --cursor.foreground "$GUM_ACCENT_COLOR")" || {
+                echo "No account selected."
+                return
+            }
+            account="${chosen%%  (*}"
+        elif [[ ${#_ACCOUNT_NAMES[@]} -eq 1 ]]; then
+            account="${_ACCOUNT_NAMES[0]}"
+        else
+            account="work"
+        fi
     fi
 
     launch_session "$title" "$dir" "$account"
@@ -307,8 +442,37 @@ cmd_close() {
     local title="${1:-}"
 
     if [[ -z "$title" ]]; then
-        echo "Error: --close requires a TITLE argument." >&2
-        exit 1
+        require_gum
+
+        local ls_json
+        ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+            echo "Error: Failed to query kitty." >&2
+            exit 1
+        }
+
+        local -a claude_titles=()
+        while IFS= read -r t; do
+            [[ -n "$t" ]] && claude_titles+=("$t")
+        done < <(echo "$ls_json" | jq -r '
+            [.[] | .tabs[] |
+                select(
+                    [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+                ) | .title
+            ] | .[]
+        ')
+
+        if [[ ${#claude_titles[@]} -eq 0 ]]; then
+            echo "No Claude sessions found."
+            return
+        fi
+
+        title="$(printf '%s\n' "${claude_titles[@]}" | gum choose \
+            --header "Select session to close:" \
+            --header.foreground "$GUM_HEADER_COLOR" \
+            --cursor.foreground "#8b2d2d")" || {
+            echo "No session selected."
+            return
+        }
     fi
 
     if ! tab_exists "$title"; then
@@ -452,8 +616,19 @@ cmd_cleanup() {
     done <<< "$stale"
     echo ""
 
-    read -rp "Close all stale sessions? [y/N] " answer
-    if [[ "$answer" =~ ^[Yy] ]]; then
+    local confirmed=false
+    if [[ "$HAS_GUM" == "true" ]]; then
+        if gum confirm "Close all stale sessions?" --affirmative "Yes, close them" --negative "Cancel"; then
+            confirmed=true
+        fi
+    else
+        read -rp "Close all stale sessions? [y/N] " answer
+        if [[ "$answer" =~ ^[Yy] ]]; then
+            confirmed=true
+        fi
+    fi
+
+    if [[ "$confirmed" == "true" ]]; then
         while IFS=$'\t' read -r title tab_id; do
             kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
             echo "Closed: $title"
@@ -506,6 +681,12 @@ cmd_save() {
     fi
 
     if [[ -f "$output_file" ]]; then
+        if [[ "$HAS_GUM" == "true" ]]; then
+            if ! gum confirm "Overwrite $output_file? (backup will be created)" --affirmative "Yes" --negative "Cancel"; then
+                echo "Save cancelled."
+                return
+            fi
+        fi
         cp "$output_file" "${output_file}.bak"
         echo "Backed up existing config to ${output_file}.bak"
     fi
@@ -538,9 +719,10 @@ Usage:
     cc-launch [--socket SOCKET] [COMMAND]
 
 Commands:
-    (none)                          Launch all sessions defined in the config file
-    --add TITLE DIR [ACCOUNT]       Launch a single ad-hoc session tab
-    --close TITLE                   Close the tab with the given title
+    (none)                          Interactively select sessions to launch (requires gum)
+    --all                           Launch all sessions defined in the config file
+    --add TITLE DIR [ACCOUNT]       Launch a single ad-hoc session tab (account picker if omitted)
+    --close [TITLE]                 Close a tab (interactive picker if no title given)
     --list                          List open tabs running Claude
     --save [FILE]                   Save current Claude sessions to config file
     --cleanup                       Find and close stale sessions (dead processes)
@@ -565,6 +747,11 @@ Environment:
     KITTY_LISTEN_ON      Kitty remote-control socket (auto-detected if unset)
     CC_MANAGER_CONFIG    Path to sessions config file
     CC_MANAGER_ACCOUNTS  Path to accounts config file
+
+Optional dependency:
+    gum (charmbracelet/gum) — enables interactive session picker and confirmation
+    dialogs. Install with: brew install gum. Falls back to non-interactive
+    behavior when gum is not installed.
 USAGE
 }
 
@@ -602,6 +789,9 @@ main() {
     load_accounts
 
     case "${1:-}" in
+        --all)
+            cmd_launch_all
+            ;;
         --add)
             shift
             cmd_add "$@"
@@ -621,7 +811,11 @@ main() {
             cmd_save "$@"
             ;;
         "")
-            cmd_launch_all
+            if [[ "$HAS_GUM" == "true" ]]; then
+                cmd_launch_interactive
+            else
+                cmd_launch_all
+            fi
             ;;
         *)
             echo "Error: Unknown option '$1'. See --help for usage." >&2

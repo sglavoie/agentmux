@@ -59,6 +59,7 @@ _cc-launch() {
                         ;;
                     *)
                         _values 'command' \
+                            '--all[Launch all sessions from config]' \
                             '--add[Launch a single ad-hoc session tab]' \
                             '--close[Close a tab by title]' \
                             '--list[List open tabs running Claude]' \
@@ -89,6 +90,7 @@ _cc-launch() {
             ;;
         *)
             _values 'command' \
+                '--all[Launch all sessions from config]' \
                 '--add[Launch a single ad-hoc session tab]' \
                 '--close[Close a tab by title]' \
                 '--list[List open tabs running Claude]' \
