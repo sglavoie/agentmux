@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# cc-hook-indicator — Add/remove ⚡ prefix on the current tab's title.
+# Called by Claude Code hooks with "active" or "idle" as $1.
+# Relies on KITTY_WINDOW_ID being set in the environment (Kitty sets this
+# automatically for all processes inside its windows).
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: cc-hook-indicator active|idle" >&2
+    exit 1
+fi
+
+ACTION="$1"
+
+if [[ -z "${KITTY_WINDOW_ID:-}" ]]; then
+    echo "Error: KITTY_WINDOW_ID is not set" >&2
+    exit 1
+fi
+
+# Resolve the lib directory by following the symlink.
+SCRIPT_PATH="$(readlink "$0" || echo "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+# shellcheck source=../lib/cc-title-icons.sh
+source "$LIB_DIR/cc-title-icons.sh"
+
+# Discover the Kitty socket.
+TO_ARGS=()
+if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+    TO_ARGS=("--to" "$KITTY_LISTEN_ON")
+fi
+
+# Get current tab info.
+info="$(get_tab_info "$KITTY_WINDOW_ID" ${TO_ARGS[@]+"${TO_ARGS[@]}"})"
+tab_id="$(echo "$info" | head -n1)"
+current_title="$(echo "$info" | tail -n1)"
+
+if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
+    exit 0
+fi
+
+# Determine current icon state.
+has_star=false
+has_bolt=false
+remaining="$current_title"
+if [[ "$remaining" == "★ "* ]]; then
+    has_star=true
+    remaining="${remaining#★ }"
+fi
+if [[ "$remaining" == "⚡ "* ]]; then
+    has_bolt=true
+    remaining="${remaining#⚡ }"
+fi
+
+# Apply the requested action.
+case "$ACTION" in
+    active)
+        has_bolt=true
+        ;;
+    idle)
+        has_bolt=false
+        ;;
+    *)
+        echo "Error: unknown action '$ACTION' (expected 'active' or 'idle')" >&2
+        exit 1
+        ;;
+esac
+
+new_title="$(build_title "$remaining" "$has_star" "$has_bolt")"
+
+# Only update if the title actually changed.
+if [[ "$new_title" != "$current_title" ]]; then
+    kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title"
+fi

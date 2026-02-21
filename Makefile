@@ -1,10 +1,14 @@
 PREFIX_BIN   := $(HOME)/.local/bin
+PREFIX_LIB   := $(HOME)/.local/lib/cc-manager
 PREFIX_KITTY := $(HOME)/.config/kitty
 PREFIX_ZFUNC := $(HOME)/.zfunc
 
 SYMLINKS := \
 	$(PREFIX_BIN)/cc-launch:bin/cc-launch \
 	$(PREFIX_BIN)/cc-status:bin/cc-status \
+	$(PREFIX_BIN)/cc-toggle-star:bin/cc-toggle-star \
+	$(PREFIX_BIN)/cc-hook-indicator:hooks/cc-hook-indicator \
+	$(PREFIX_LIB)/cc-title-icons.sh:lib/cc-title-icons.sh \
 	$(PREFIX_KITTY)/claude_dashboard.py:kittens/claude_dashboard.py \
 	$(PREFIX_ZFUNC)/_cc-launch:completions/_cc-launch \
 	$(PREFIX_ZFUNC)/_cc-status:completions/_cc-status \
@@ -13,7 +17,7 @@ SYMLINKS := \
 .PHONY: install uninstall
 
 install:
-	@mkdir -p $(PREFIX_BIN) $(PREFIX_KITTY) $(PREFIX_ZFUNC)
+	@mkdir -p $(PREFIX_BIN) $(PREFIX_LIB) $(PREFIX_KITTY) $(PREFIX_ZFUNC)
 	@$(foreach pair,$(SYMLINKS),\
 		ln -sf $(CURDIR)/$(word 2,$(subst :, ,$(pair))) $(word 1,$(subst :, ,$(pair)));)
 	@echo "Symlinks created."

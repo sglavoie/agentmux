@@ -237,7 +237,7 @@ tab_exists() {
     local ls_json
     ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
     echo "$ls_json" | jq -e --arg t "$title" '
-        [.[].tabs[] | select(.title == $t)] | length > 0
+        [.[].tabs[] | select(.title | sub("^★ "; "") | sub("^⚡ "; "") | . == $t)] | length > 0
     ' >/dev/null 2>&1
 }
 
@@ -480,7 +480,7 @@ cmd_close() {
         exit 1
     fi
 
-    kitty @ --to "$SOCKET" close-tab --match "title:^${title}$"
+    kitty @ --to "$SOCKET" close-tab --match "title:^(★ )?(⚡ )?${title}$"
     echo "Closed tab '$title'."
 }
 
@@ -601,7 +601,7 @@ cmd_cleanup() {
         fi
     done
     [[ -z "$initials" ]] && initials="WP"
-    local title_pattern="^[$initials]:"
+    local title_pattern="^(★ )?(⚡ )?[$initials]:"
 
     local stale
     stale="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
@@ -671,7 +671,7 @@ cmd_save() {
                 [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
             ) |
             {
-                title: .title,
+                title: (.title | sub("^★ "; "") | sub("^⚡ "; "")),
                 dir: (
                     [.windows[] |
                         select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
