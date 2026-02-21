@@ -1,0 +1,45 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project overview
+
+cc-manager-kitty is a Claude Code session manager for the Kitty terminal. It manages multiple Claude Code sessions as Kitty tabs, with support for multiple accounts (each with its own `CLAUDE_CONFIG_DIR`), color-coded tab bars, and an interactive curses-based dashboard. The tool relies on Kitty's remote control protocol (`kitty @`) and `jq` for JSON processing.
+
+## Installation and testing
+
+There is no build step or test suite. The project consists of shell scripts and a Python kitten. Install and uninstall via `make install` and `make uninstall`, which create/remove symlinks to `~/.local/bin/`, `~/.config/kitty/`, and `~/.zfunc/`. To verify changes manually, run `cc-launch --help` or `cc-status --help` after installing.
+
+## Architecture
+
+The codebase has three main components that share the same account-loading logic and color palette, implemented independently in each file.
+
+`bin/cc-launch` is the primary Bash script (~850 lines). It handles session lifecycle: launching tabs from `sessions.conf`, adding/closing individual tabs, listing active sessions, saving current state back to config, and cleaning up stale tabs. It uses `kitty @ launch`, `kitty @ ls`, and `kitty @ set-tab-color` for all Kitty interactions, and optionally uses `gum` (charmbracelet/gum) for interactive TUI prompts. The dispatch is a case-match in `main()` routing `--all`, `--add`, `--close`, `--list`, `--save`, `--cleanup`, and `--sockets` to their respective `cmd_*` functions.
+
+`bin/cc-status` is a smaller Bash script that queries `kitty @ ls` and prints a dynamically-sized table of active Claude sessions. It duplicates the account-loading and `build_accounts_json` logic from `cc-launch`.
+
+`kittens/claude_dashboard.py` is a Python curses application that runs as a Kitty overlay kitten (via `kitten claude_dashboard.py`). It provides an interactive session list with navigation, close-confirmation, and a new-session creation form. It reimplements account loading and the color palette in Python, and calls `kitty @` commands via `subprocess.run`.
+
+## Key conventions
+
+Account detection uses Kitty user vars (`--var cc_account=NAME` set at launch time) as the primary method, with a fallback to parsing `CLAUDE_CONFIG_DIR` from process cmdlines. Both the shell scripts and the Python kitten implement this two-tier lookup.
+
+Config files use pipe-delimited formats: `accounts.conf` has `name | config_dir | color` and `sessions.conf` has `title | directory | account`. Lines starting with `#` are comments. The config directory defaults to `~/.config/cc-manager/` but can be overridden via `CC_MANAGER_CONFIG` and `CC_MANAGER_ACCOUNTS` environment variables.
+
+The color palette has exactly 10 named colors (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan), each with active/inactive background hex values. This palette is defined three times: in `cc-launch` (as shell case statements returning kitty color args), in `cc-status` (inherited via accounts JSON), and in `claude_dashboard.py` (as a Python dict of RGB tuples). Changes to the palette must be synchronized across all three files.
+
+Tab title convention uses an uppercase initial of the account name followed by a colon (e.g., `W:project` for work, `P:dotfiles` for personal). The `--cleanup` command relies on this pattern to identify managed tabs.
+
+Kitty socket discovery follows a three-step precedence: explicit `--socket` argument, then `KITTY_LISTEN_ON` environment variable, then the most recent `/tmp/kitty-*` socket file.
+
+Shell scripts target Bash 3 compatibility (macOS default), using parallel indexed arrays instead of associative arrays for account storage.
+
+## Kitty documentation reference
+
+The `docs/` directory contains concise reference documents extracted from the official Kitty documentation at https://sw.kovidgoyal.net/kitty/. Consult these when working on Kitty-specific functionality:
+
+- `docs/kitty_remote_control.md` covers the `kitten @` remote control protocol, including how to enable it, socket discovery, the `--to` flag, and summaries of all commands used by this project (`ls`, `launch`, `set-tab-color`, `close-tab`, `set-tab-title`, `focus-tab`).
+- `docs/kitty_launch.md` details the launch command's options for creating tabs, setting environment variables, user variables (`--var`), working directories, focus control, and process lifecycle.
+- `docs/kitty_kittens.md` explains how to write custom Kitty kittens in Python, including the `main()` / `handle_result()` entry points, the `boss` object, remote control from within kittens, and how `claude_dashboard.py` diverges from the standard pattern.
+- `docs/kitty_tab_bar.md` covers tab bar configuration in `kitty.conf` (position, style, title templates, colors) and per-tab color overrides via `kitten @ set-tab-color`, which is how cc-manager applies account-specific colors.
+- `docs/kitty_match_syntax.md` documents the `--match` expression syntax used across all `kitten @` commands, including available fields, query types, Boolean operators, and how cc-manager uses `var:cc_account` matching.
