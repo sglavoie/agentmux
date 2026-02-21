@@ -1,0 +1,474 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# cc-launch: Launcher for managing Claude Code sessions as Kitty terminal tabs.
+# Requires: kitty remote control (kitty @), jq
+
+# ---------------------------------------------------------------------------
+# Socket discovery
+# ---------------------------------------------------------------------------
+discover_socket() {
+    if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+        echo "$KITTY_LISTEN_ON"
+        return
+    fi
+
+    local latest=""
+    latest="$(ls -t /tmp/kitty-* 2>/dev/null | head -n1)" || true
+    if [[ -n "$latest" ]]; then
+        echo "unix:$latest"
+        return
+    fi
+
+    echo "Error: No kitty socket found. Set KITTY_LISTEN_ON or ensure kitty is running with remote control enabled." >&2
+    exit 1
+}
+
+SOCKET=""  # Initialized in main() after argument parsing
+
+# ---------------------------------------------------------------------------
+# Config file
+# ---------------------------------------------------------------------------
+CONFIG_FILE="${CC_MANAGER_CONFIG:-$HOME/.config/cc-manager/sessions.conf}"
+
+# ---------------------------------------------------------------------------
+# Account → command mapping
+# ---------------------------------------------------------------------------
+claude_command_for_account() {
+    local account="$1"
+    case "$account" in
+        work)
+            echo "claude"
+            ;;
+        personal)
+            echo "env CLAUDE_CONFIG_DIR=$HOME/.claude-personal claude"
+            ;;
+        *)
+            echo "Error: Unknown account '$account'. Use 'work' or 'personal'." >&2
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Account → tab color mapping
+# ---------------------------------------------------------------------------
+tab_colors_for_account() {
+    local account="$1"
+    case "$account" in
+        work)
+            echo "active_bg=#2d7d46 active_fg=#ffffff inactive_bg=#1a4a2a inactive_fg=#aaaaaa"
+            ;;
+        personal)
+            echo "active_bg=#2d5a88 active_fg=#ffffff inactive_bg=#1a3655 inactive_fg=#aaaaaa"
+            ;;
+        *)
+            echo "Error: Unknown account '$account'." >&2
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Tilde expansion for directory paths
+# ---------------------------------------------------------------------------
+expand_tilde() {
+    local path="$1"
+    if [[ "$path" == "~"* ]]; then
+        echo "${HOME}${path:1}"
+    else
+        echo "$path"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Check whether a tab with the given title already exists
+# ---------------------------------------------------------------------------
+tab_exists() {
+    local title="$1"
+    local ls_json
+    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
+    echo "$ls_json" | jq -e --arg t "$title" '
+        [.[].tabs[] | select(.title == $t)] | length > 0
+    ' >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------------------
+# Launch a single session tab
+# ---------------------------------------------------------------------------
+launch_session() {
+    local title="$1"
+    local dir="$2"
+    local account="${3:-work}"
+
+    dir="$(expand_tilde "$dir")"
+
+    if tab_exists "$title"; then
+        echo "Skipping [$title]: already exists"
+        return 1  # signal: not launched
+    fi
+
+    local cmd colors
+    cmd="$(claude_command_for_account "$account")"
+    colors="$(tab_colors_for_account "$account")"
+
+    # shellcheck disable=SC2086
+    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" $cmd
+    # shellcheck disable=SC2086
+    kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors
+
+    echo "Launched [$title] (account=$account, dir=$dir)"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: launch all sessions from config
+# ---------------------------------------------------------------------------
+cmd_launch_all() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        echo "Error: Config file not found: $CONFIG_FILE" >&2
+        exit 1
+    fi
+
+    local launched=0
+    local existed=0
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip comments and blank lines
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+        # Parse pipe-delimited fields and trim whitespace
+        local title dir account
+        IFS='|' read -r title dir account <<< "$line"
+        title="$(echo "$title" | xargs)"
+        dir="$(echo "$dir" | xargs)"
+        account="$(echo "${account:-work}" | xargs)"
+        [[ -z "$account" ]] && account="work"
+
+        if launch_session "$title" "$dir" "$account"; then
+            launched=$((launched + 1))
+        else
+            existed=$((existed + 1))
+        fi
+    done < "$CONFIG_FILE"
+
+    echo "Launched $launched new session(s), $existed already existed."
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: add a single ad-hoc session
+# ---------------------------------------------------------------------------
+cmd_add() {
+    local title="${1:-}"
+    local dir="${2:-}"
+    local account="${3:-work}"
+
+    if [[ -z "$title" || -z "$dir" ]]; then
+        echo "Error: --add requires TITLE and DIR arguments." >&2
+        echo "Usage: cc-launch --add TITLE DIR [ACCOUNT]" >&2
+        exit 1
+    fi
+
+    launch_session "$title" "$dir" "$account"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: close a tab by title
+# ---------------------------------------------------------------------------
+cmd_close() {
+    local title="${1:-}"
+
+    if [[ -z "$title" ]]; then
+        echo "Error: --close requires a TITLE argument." >&2
+        exit 1
+    fi
+
+    if ! tab_exists "$title"; then
+        echo "Error: No tab found with title '$title'." >&2
+        exit 1
+    fi
+
+    kitty @ --to "$SOCKET" close-tab --match "title:^${title}$"
+    echo "Closed tab '$title'."
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: list Claude tabs
+# ---------------------------------------------------------------------------
+cmd_list() {
+    local ls_json
+    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+        echo "Error: Failed to query kitty." >&2
+        exit 1
+    }
+
+    local table
+    table="$(echo "$ls_json" | jq -r '
+        [.[] | . as $os |
+            $os.tabs | to_entries[] |
+            .key as $tab_idx | .value as $tab |
+            select(
+                [$tab.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+            ) |
+            {
+                index: ($tab_idx + 1),
+                title: $tab.title,
+                account: (
+                    if ([$tab.windows[] | .foreground_processes[]?.cmdline[]? | test("CLAUDE_CONFIG_DIR")] | any)
+                    then "personal"
+                    else "work"
+                    end
+                ),
+                dir: ($tab.windows[0].cwd // "unknown"),
+                status: (
+                    if ($os.is_focused and $tab.is_focused)
+                    then "focused"
+                    else "idle"
+                    end
+                )
+            }
+        ] | .[] |
+        [(.index | tostring), .title, .account, .dir, .status] |
+        @tsv
+    ')"
+
+    if [[ -z "$table" ]]; then
+        echo "No Claude sessions found."
+        return
+    fi
+
+    printf "%-6s %-30s %-10s %-40s %s\n" "Index" "Title" "Account" "Directory" "Status"
+    printf "%-6s %-30s %-10s %-40s %s\n" "-----" "-----" "-------" "---------" "------"
+    while IFS=$'\t' read -r idx title account dir status; do
+        printf "%-6s %-30s %-10s %-40s %s\n" "$idx" "$title" "$account" "$dir" "$status"
+    done <<< "$table"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: list available Kitty sockets
+# ---------------------------------------------------------------------------
+cmd_sockets() {
+    local found=0
+    for sock in /tmp/kitty-*; do
+        [[ -e "$sock" ]] || continue
+        found=1
+        local pid="${sock#/tmp/kitty-}"
+        local status="stale"
+        if kitty @ --to "unix:$sock" ls >/dev/null 2>&1; then
+            status="active"
+        fi
+        echo "unix:$sock  ($status, pid=$pid)"
+    done
+
+    if [[ $found -eq 0 ]]; then
+        echo "No kitty sockets found in /tmp/"
+    fi
+
+    if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+        echo ""
+        echo "KITTY_LISTEN_ON=$KITTY_LISTEN_ON"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: cleanup stale sessions (tabs with W:/P: title but no Claude process)
+# ---------------------------------------------------------------------------
+cmd_cleanup() {
+    local ls_json
+    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+        echo "Error: Failed to query kitty." >&2
+        exit 1
+    }
+
+    local stale
+    stale="$(echo "$ls_json" | jq -r '
+        [.[] | .tabs[] |
+            select(.title | test("^[WP]:")) |
+            select(
+                [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any | not
+            ) |
+            { title: .title, id: .id }
+        ] | .[] | [.title, (.id | tostring)] | @tsv
+    ')"
+
+    if [[ -z "$stale" ]]; then
+        echo "No stale sessions found."
+        return
+    fi
+
+    echo "Stale sessions (no Claude process running):"
+    echo ""
+    while IFS=$'\t' read -r title tab_id; do
+        echo "  $title (tab id: $tab_id)"
+    done <<< "$stale"
+    echo ""
+
+    read -rp "Close all stale sessions? [y/N] " answer
+    if [[ "$answer" =~ ^[Yy] ]]; then
+        while IFS=$'\t' read -r title tab_id; do
+            kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
+            echo "Closed: $title"
+        done <<< "$stale"
+    else
+        echo "No sessions closed."
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: save current Claude sessions to config file
+# ---------------------------------------------------------------------------
+cmd_save() {
+    local output_file="${1:-$CONFIG_FILE}"
+
+    local ls_json
+    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+        echo "Error: Failed to query kitty." >&2
+        exit 1
+    }
+
+    local sessions
+    sessions="$(echo "$ls_json" | jq -r '
+        [.[] | .tabs[] |
+            select(
+                [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+            ) |
+            {
+                title: .title,
+                dir: .windows[0].cwd,
+                account: (
+                    if ([.windows[] | .foreground_processes[]?.cmdline[]? | test("CLAUDE_CONFIG_DIR")] | any)
+                    then "personal"
+                    else "work"
+                    end
+                )
+            }
+        ] | .[] | [.title, .dir, .account] | @tsv
+    ')"
+
+    if [[ -z "$sessions" ]]; then
+        echo "No Claude sessions to save."
+        return
+    fi
+
+    if [[ -f "$output_file" ]]; then
+        cp "$output_file" "${output_file}.bak"
+        echo "Backed up existing config to ${output_file}.bak"
+    fi
+
+    {
+        echo "# cc-manager session definitions"
+        echo "# Saved by cc-launch --save on $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "#"
+        echo "# Format: title | directory | account"
+        echo ""
+        while IFS=$'\t' read -r title dir account; do
+            dir="${dir/#$HOME/\~}"
+            printf "%-20s | %-40s | %s\n" "$title" "$dir" "$account"
+        done <<< "$sessions"
+    } > "$output_file"
+
+    local count
+    count="$(echo "$sessions" | wc -l | xargs)"
+    echo "Saved $count session(s) to $output_file"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: help
+# ---------------------------------------------------------------------------
+cmd_help() {
+    cat <<'USAGE'
+cc-launch: Manage Claude Code sessions as Kitty terminal tabs.
+
+Usage:
+    cc-launch [--socket SOCKET] [COMMAND]
+
+Commands:
+    (none)                          Launch all sessions defined in the config file
+    --add TITLE DIR [ACCOUNT]       Launch a single ad-hoc session tab
+    --close TITLE                   Close the tab with the given title
+    --list                          List open tabs running Claude
+    --save [FILE]                   Save current Claude sessions to config file
+    --cleanup                       Find and close stale sessions (dead processes)
+    --sockets                       List available Kitty sockets
+    --help                          Show this help message
+
+Global options:
+    --socket SOCKET     Target a specific Kitty socket (e.g. unix:/tmp/kitty-12345)
+
+Config file (default: ~/.config/cc-manager/sessions.conf):
+    Override with CC_MANAGER_CONFIG env var.
+    Format (pipe-delimited):
+        title | directory | account
+    Lines starting with # are comments. Blank lines are ignored.
+
+Accounts:
+    work       Uses the default 'claude' binary
+    personal   Uses 'claude' with CLAUDE_CONFIG_DIR=~/.claude-personal
+
+Environment:
+    KITTY_LISTEN_ON      Kitty remote-control socket (auto-detected if unset)
+    CC_MANAGER_CONFIG    Path to sessions config file
+USAGE
+}
+
+# ---------------------------------------------------------------------------
+# Main dispatch
+# ---------------------------------------------------------------------------
+main() {
+    # Parse global --socket option
+    if [[ "${1:-}" == "--socket" ]]; then
+        if [[ -z "${2:-}" ]]; then
+            echo "Error: --socket requires a SOCKET argument." >&2
+            exit 1
+        fi
+        SOCKET="$2"
+        shift 2
+    fi
+
+    # --sockets and --help don't need an active socket
+    case "${1:-}" in
+        --sockets)
+            cmd_sockets
+            return
+            ;;
+        --help|-h)
+            cmd_help
+            return
+            ;;
+    esac
+
+    # Initialize socket if not overridden via --socket
+    if [[ -z "$SOCKET" ]]; then
+        SOCKET="$(discover_socket)"
+    fi
+
+    case "${1:-}" in
+        --add)
+            shift
+            cmd_add "$@"
+            ;;
+        --close)
+            shift
+            cmd_close "$@"
+            ;;
+        --list)
+            cmd_list
+            ;;
+        --cleanup)
+            cmd_cleanup
+            ;;
+        --save)
+            shift
+            cmd_save "$@"
+            ;;
+        "")
+            cmd_launch_all
+            ;;
+        *)
+            echo "Error: Unknown option '$1'. See --help for usage." >&2
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

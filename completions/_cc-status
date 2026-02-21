@@ -1,0 +1,25 @@
+#compdef cc-status
+
+# Zsh completion for cc-status — Claude Code session status viewer.
+# Installed to ~/.zfunc/ by `make install`.
+
+_cc_status_sockets() {
+    local -a socks
+    socks=(/tmp/kitty-*(N))
+    [[ ${#socks} -gt 0 ]] && _describe 'kitty socket' socks
+}
+
+_cc-status() {
+    case "$words[2]" in
+        --socket)
+            [[ $CURRENT -eq 3 ]] && _cc_status_sockets
+            ;;
+        *)
+            _values 'option' \
+                '--socket[Target a specific Kitty socket]' \
+                '--help[Show help message]'
+            ;;
+    esac
+}
+
+_cc-status "$@"

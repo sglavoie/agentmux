@@ -1,0 +1,93 @@
+#compdef cc-launch
+
+# Zsh completion for cc-launch — Claude Code session manager for Kitty.
+# Installed to ~/.zfunc/ by `make install`.
+
+_cc_launch_tab_titles() {
+    local -a titles
+    titles=(${(f)"$(cc-launch --list 2>/dev/null | tail -n +3 | awk '{print $2}')"})
+    [[ ${#titles} -gt 0 ]] && _describe 'tab title' titles
+}
+
+_cc_launch_sockets() {
+    local -a socks
+    socks=(/tmp/kitty-*(N))
+    [[ ${#socks} -gt 0 ]] && _describe 'kitty socket' socks
+}
+
+_cc-launch() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    # Handle --socket as a global option that can precede any subcommand
+    if [[ "$words[2]" == "--socket" ]]; then
+        case $CURRENT in
+            3)
+                _cc_launch_sockets
+                return
+                ;;
+            *)
+                # Shift context past --socket ARG and complete the subcommand
+                local subcmd="$words[4]"
+                case "$subcmd" in
+                    --add)
+                        case $CURRENT in
+                            5) _message 'title' ;;
+                            6) _files -/ ;;
+                            7) _values 'account' work personal ;;
+                        esac
+                        return
+                        ;;
+                    --close)
+                        [[ $CURRENT -eq 5 ]] && _cc_launch_tab_titles
+                        return
+                        ;;
+                    --save)
+                        [[ $CURRENT -eq 5 ]] && _files
+                        return
+                        ;;
+                    *)
+                        _values 'command' \
+                            '--add[Launch a single ad-hoc session tab]' \
+                            '--close[Close a tab by title]' \
+                            '--list[List open tabs running Claude]' \
+                            '--save[Save current sessions to config file]' \
+                            '--cleanup[Find and close stale sessions]' \
+                            '--sockets[List available Kitty sockets]' \
+                            '--help[Show help message]'
+                        return
+                        ;;
+                esac
+                ;;
+        esac
+    fi
+
+    case "$words[2]" in
+        --add)
+            case $CURRENT in
+                3) _message 'title' ;;
+                4) _files -/ ;;
+                5) _values 'account' work personal ;;
+            esac
+            ;;
+        --close)
+            [[ $CURRENT -eq 3 ]] && _cc_launch_tab_titles
+            ;;
+        --save)
+            [[ $CURRENT -eq 3 ]] && _files
+            ;;
+        *)
+            _values 'command' \
+                '--add[Launch a single ad-hoc session tab]' \
+                '--close[Close a tab by title]' \
+                '--list[List open tabs running Claude]' \
+                '--save[Save current sessions to config file]' \
+                '--cleanup[Find and close stale sessions]' \
+                '--sockets[List available Kitty sockets]' \
+                '--socket[Target a specific Kitty socket]' \
+                '--help[Show help message]'
+            ;;
+    esac
+}
+
+_cc-launch "$@"

@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# cc-status — show active Claude Code sessions running in Kitty tabs
+# ---------------------------------------------------------------------------
+
+show_help() {
+    cat <<'EOF'
+Usage: cc-status [--socket SOCKET] [--help]
+
+Display a table of all Kitty tabs that are running Claude Code sessions.
+
+Options:
+  --socket SOCKET   Target a specific Kitty socket (e.g. unix:/tmp/kitty-12345)
+  --help            Show this help message
+
+Columns:
+  Tab        1-based tab index within the OS window
+  Title      The tab's title
+  Account    "personal" if CLAUDE_CONFIG_DIR is set (or title starts with
+             "P:"), otherwise "work"
+  Directory  The cwd of the first window in the tab
+  Status     "focused" if both the tab and its OS window are focused,
+             otherwise "idle"
+
+Socket discovery:
+  1. Uses --socket value if provided.
+  2. Uses KITTY_LISTEN_ON if set.
+  3. Otherwise globs /tmp/kitty-* and picks the most recent socket.
+
+EOF
+    exit 0
+}
+
+# ---- Argument parsing ------------------------------------------------------
+
+SOCKET=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help)
+            show_help
+            ;;
+        --socket)
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: --socket requires a SOCKET argument." >&2
+                exit 1
+            fi
+            SOCKET="$2"
+            shift 2
+            ;;
+        *)
+            echo "Error: Unknown option '$1'. See --help for usage." >&2
+            exit 1
+            ;;
+    esac
+done
+
+# ---- Socket discovery (if not overridden) ----------------------------------
+
+if [[ -z "$SOCKET" ]]; then
+    if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+        SOCKET="$KITTY_LISTEN_ON"
+    else
+        latest_socket=""
+        latest_mtime=0
+        for sock in /tmp/kitty-*; do
+            [[ -e "$sock" ]] || continue
+            if [[ "$OSTYPE" == darwin* ]]; then
+                mtime=$(stat -f '%m' "$sock" 2>/dev/null || echo 0)
+            else
+                mtime=$(stat -c '%Y' "$sock" 2>/dev/null || echo 0)
+            fi
+            if (( mtime > latest_mtime )); then
+                latest_mtime=$mtime
+                latest_socket="$sock"
+            fi
+        done
+
+        if [[ -z "$latest_socket" ]]; then
+            echo "Error: No kitty socket found. Is Kitty running with remote control enabled?" >&2
+            exit 1
+        fi
+        SOCKET="unix:$latest_socket"
+    fi
+fi
+
+# ---- Query kitty and build the table --------------------------------------
+
+ls_json=$(kitty @ --to "$SOCKET" ls 2>/dev/null) || {
+    echo "Error: Failed to query kitty at socket $SOCKET" >&2
+    exit 1
+}
+
+# Bail out if the response is empty or has no OS windows
+if [[ -z "$ls_json" ]] || [[ "$(echo "$ls_json" | jq 'length')" -eq 0 ]]; then
+    echo "No active Claude Code sessions found."
+    exit 0
+fi
+
+# Use jq to extract rows for every tab that has a claude process.
+# Each output line is tab-delimited: tab_index \t title \t account \t cwd \t status
+rows=$(echo "$ls_json" | jq -r '
+    [.[] | . as $os |
+        $os.tabs | to_entries[] |
+        .key as $tab_idx | .value as $tab |
+
+        # Check whether any window in this tab has a foreground process whose
+        # cmdline contains "claude"
+        select(
+            [ $tab.windows[]
+              | .foreground_processes[]?
+              | .cmdline[]?
+              | test("claude")
+            ] | any
+        ) |
+
+        # Determine account: check env.CLAUDE_CONFIG_DIR first, fall back to
+        # title prefix "P:"
+        ( [ $tab.windows[]
+            | select(.env? != null)
+            | .env.CLAUDE_CONFIG_DIR? // empty
+          ] | length > 0
+        ) as $has_config_dir |
+        (
+            if $has_config_dir then "personal"
+            elif ($tab.title | startswith("P:")) then "personal"
+            else "work"
+            end
+        ) as $account |
+
+        # cwd of the first window
+        ($tab.windows[0].cwd) as $cwd |
+
+        # Status: focused only when both OS window and tab are focused
+        (
+            if ($os.is_focused and $tab.is_focused) then "focused"
+            else "idle"
+            end
+        ) as $status |
+
+        {
+            tab_index: ($tab_idx + 1),
+            title: $tab.title,
+            account: $account,
+            cwd: $cwd,
+            status: $status
+        }
+    ] | .[] | [
+        (.tab_index | tostring),
+        .title,
+        .account,
+        .cwd,
+        .status
+    ] | join("\t")
+')
+
+if [[ -z "$rows" ]]; then
+    echo "No active Claude Code sessions found."
+    exit 0
+fi
+
+# ---- Print the table -------------------------------------------------------
+
+# Determine column widths by scanning all rows (and the header)
+header_tab="Tab"
+header_title="Title"
+header_account="Account"
+header_dir="Directory"
+header_status="Status"
+
+max_tab=${#header_tab}
+max_title=${#header_title}
+max_account=${#header_account}
+max_dir=${#header_dir}
+max_status=${#header_status}
+
+while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status; do
+    (( ${#col_tab}     > max_tab ))     && max_tab=${#col_tab}
+    (( ${#col_title}   > max_title ))   && max_title=${#col_title}
+    (( ${#col_account} > max_account )) && max_account=${#col_account}
+    (( ${#col_dir}     > max_dir ))     && max_dir=${#col_dir}
+    (( ${#col_status}  > max_status ))  && max_status=${#col_status}
+done <<< "$rows"
+
+# Add a little padding
+fmt="%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_dir}s  %-${max_status}s\n"
+
+# Header
+printf "$fmt" "$header_tab" "$header_title" "$header_account" "$header_dir" "$header_status"
+
+# Separator
+sep_tab=$(printf '%*s' "$max_tab" '' | tr ' ' '-')
+sep_title=$(printf '%*s' "$max_title" '' | tr ' ' '-')
+sep_account=$(printf '%*s' "$max_account" '' | tr ' ' '-')
+sep_dir=$(printf '%*s' "$max_dir" '' | tr ' ' '-')
+sep_status=$(printf '%*s' "$max_status" '' | tr ' ' '-')
+printf "$fmt" "$sep_tab" "$sep_title" "$sep_account" "$sep_dir" "$sep_status"
+
+# Data rows
+while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status; do
+    printf "$fmt" "$col_tab" "$col_title" "$col_account" "$col_dir" "$col_status"
+done <<< "$rows"
