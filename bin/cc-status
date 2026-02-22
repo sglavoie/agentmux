@@ -240,6 +240,19 @@ if [[ -z "$rows" ]]; then
     exit 0
 fi
 
+# ---- Helpers ----------------------------------------------------------------
+
+# Return the number of extra bytes beyond character count (for printf padding).
+# Multi-byte Unicode characters (like ★, ⚡, ·) cause printf %-Ns to under-pad
+# because printf counts bytes, not visible characters.
+extra_bytes() {
+    local str="$1"
+    local byte_len char_len
+    byte_len=$(printf '%s' "$str" | LC_ALL=C wc -c)
+    char_len=${#str}
+    echo $(( byte_len - char_len ))
+}
+
 # ---- Print the table -------------------------------------------------------
 
 # Determine column widths by scanning all rows (and the header)
@@ -277,7 +290,8 @@ sep_dir=$(printf '%*s' "$max_dir" '' | tr ' ' '-')
 sep_status=$(printf '%*s' "$max_status" '' | tr ' ' '-')
 printf "$fmt" "$sep_tab" "$sep_title" "$sep_account" "$sep_dir" "$sep_status"
 
-# Data rows
+# Data rows (adjust printf widths for multi-byte Unicode characters)
 while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status; do
-    printf "$fmt" "$col_tab" "$col_title" "$col_account" "$col_dir" "$col_status"
+    printf "%-$(( max_tab + $(extra_bytes "$col_tab") ))s  %-$(( max_title + $(extra_bytes "$col_title") ))s  %-$(( max_account + $(extra_bytes "$col_account") ))s  %-$(( max_dir + $(extra_bytes "$col_dir") ))s  %-$(( max_status + $(extra_bytes "$col_status") ))s\n" \
+        "$col_tab" "$col_title" "$col_account" "$col_dir" "$col_status"
 done <<< "$rows"
