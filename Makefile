@@ -4,12 +4,14 @@ PREFIX_KITTY := $(HOME)/.config/kitty
 PREFIX_ZFUNC := $(HOME)/.zfunc
 
 SYMLINKS := \
+	$(PREFIX_BIN)/ccm:bin/ccm \
 	$(PREFIX_BIN)/cc-launch:bin/cc-launch \
 	$(PREFIX_BIN)/cc-status:bin/cc-status \
 	$(PREFIX_BIN)/cc-toggle-star:bin/cc-toggle-star \
 	$(PREFIX_BIN)/cc-hook-indicator:hooks/cc-hook-indicator \
 	$(PREFIX_LIB)/cc-title-icons.sh:lib/cc-title-icons.sh \
 	$(PREFIX_KITTY)/claude_dashboard.py:kittens/claude_dashboard.py \
+	$(PREFIX_ZFUNC)/_ccm:completions/_ccm \
 	$(PREFIX_ZFUNC)/_cc-launch:completions/_cc-launch \
 	$(PREFIX_ZFUNC)/_cc-status:completions/_cc-status \
 	$(PREFIX_KITTY)/cc-manager.conf:cc-manager.conf

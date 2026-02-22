@@ -12,7 +12,9 @@ There is no build step or test suite. The project consists of shell scripts and 
 
 ## Architecture
 
-The codebase has three main components that share the same account-loading logic and color palette, implemented independently in each file.
+The codebase has a unified CLI entry point and three main components that share the same account-loading logic and color palette, implemented independently in each file.
+
+`bin/ccm` is the unified CLI entry point (~150 lines) that provides a single `ccm` command with subcommands. It delegates `ccm launch`, `ccm status`, and `ccm star` to the existing scripts via `exec`, and implements `ccm config` subcommands (edit, show, path, init) for managing config files. It also provides `ccm dashboard` to launch the curses kitten and `ccm help` for discoverability.
 
 `bin/cc-launch` is the primary Bash script (~850 lines). It handles session lifecycle: launching tabs from `sessions.conf`, adding/closing individual tabs, listing active sessions, saving current state back to config, and cleaning up stale tabs. It uses `kitty @ launch`, `kitty @ ls`, and `kitty @ set-tab-color` for all Kitty interactions, and optionally uses `gum` (charmbracelet/gum) for interactive TUI prompts. The dispatch is a case-match in `main()` routing `--all`, `--add`, `--close`, `--list`, `--save`, `--cleanup`, and `--sockets` to their respective `cmd_*` functions.
 

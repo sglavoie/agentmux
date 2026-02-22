@@ -1,0 +1,116 @@
+#compdef ccm
+
+# Zsh completion for ccm — Unified CLI for cc-manager-kitty.
+# Installed to ~/.zfunc/ by `make install`.
+
+_ccm_config_files() {
+    local -a files
+    files=(
+        'accounts:Account definitions (name, config dir, color)'
+        'sessions:Session definitions (title, directory, account)'
+        'hooks:Hook configuration (JSON)'
+    )
+    _describe 'config file' files
+}
+
+_ccm_sockets() {
+    local -a socks
+    socks=(/tmp/kitty-*(N))
+    [[ ${#socks} -gt 0 ]] && _describe 'kitty socket' socks
+}
+
+_ccm() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    # Handle --socket as a global option that can precede any subcommand
+    if [[ "$words[2]" == "--socket" ]]; then
+        case $CURRENT in
+            3)
+                _ccm_sockets
+                return
+                ;;
+            *)
+                # Shift context past --socket ARG and complete the subcommand
+                local subcmd="$words[4]"
+                case "$subcmd" in
+                    config)
+                        local config_sub="$words[5]"
+                        case "$config_sub" in
+                            edit|show|path)
+                                [[ $CURRENT -eq 6 ]] && _ccm_config_files
+                                return
+                                ;;
+                            *)
+                                [[ $CURRENT -eq 5 ]] && _values 'config subcommand' \
+                                    'edit[Open config file in editor]' \
+                                    'show[Print config file contents]' \
+                                    'path[Print config file path]' \
+                                    'init[Copy example configs if missing]'
+                                return
+                                ;;
+                        esac
+                        ;;
+                    launch)
+                        # Delegate to cc-launch completions for remaining args
+                        shift 3 words
+                        (( CURRENT -= 3 ))
+                        _cc-launch
+                        return
+                        ;;
+                    *)
+                        _values 'command' \
+                            'launch[Manage and launch Claude Code sessions]' \
+                            'status[Show active session status table]' \
+                            'star[Toggle star on active tab]' \
+                            'config[Manage config files]' \
+                            'dashboard[Launch curses dashboard kitten]' \
+                            'help[Show help]'
+                        return
+                        ;;
+                esac
+                ;;
+        esac
+    fi
+
+    case "$words[2]" in
+        config)
+            local config_sub="$words[3]"
+            case "$config_sub" in
+                edit|show|path)
+                    [[ $CURRENT -eq 4 ]] && _ccm_config_files
+                    ;;
+                *)
+                    [[ $CURRENT -eq 3 ]] && _values 'config subcommand' \
+                        'edit[Open config file in editor]' \
+                        'show[Print config file contents]' \
+                        'path[Print config file path]' \
+                        'init[Copy example configs if missing]'
+                    ;;
+            esac
+            ;;
+        launch)
+            # Delegate to cc-launch completions for remaining args
+            shift words
+            (( CURRENT -= 1 ))
+            _cc-launch
+            ;;
+        help)
+            [[ $CURRENT -eq 3 ]] && _values 'command' \
+                'launch' 'status' 'star' 'config' 'dashboard'
+            ;;
+        *)
+            _values 'command' \
+                'launch[Manage and launch Claude Code sessions]' \
+                'status[Show active session status table]' \
+                'star[Toggle star on active tab]' \
+                'config[Manage config files]' \
+                'dashboard[Launch curses dashboard kitten]' \
+                'help[Show help]' \
+                '--socket[Target a specific Kitty socket]' \
+                '--version[Print version]'
+            ;;
+    esac
+}
+
+_ccm "$@"
