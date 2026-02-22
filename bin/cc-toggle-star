@@ -39,13 +39,13 @@ fi
 has_star=false
 has_bolt=false
 remaining="$current_title"
-if [[ "$remaining" == "★ "* ]]; then
+if [[ "$remaining" == "★"* ]]; then
     has_star=true
     remaining="${remaining#★ }"
 fi
-if [[ "$remaining" == "⚡ "* ]]; then
+if [[ "$remaining" == "⚡"* ]]; then
     has_bolt=true
-    remaining="${remaining#⚡ }"
+    remaining="${remaining#⚡}"
 fi
 
 # Toggle the star.

@@ -545,11 +545,29 @@ cmd_list() {
         return
     fi
 
-    printf "%-6s %-30s %-10s %-40s %s\n" "Index" "Title" "Account" "Directory" "Status"
-    printf "%-6s %-30s %-10s %-40s %s\n" "-----" "-----" "-------" "---------" "------"
+    # Collect rows and compute max column widths dynamically
+    local -a rows=() col_idx=() col_title=() col_account=() col_dir=() col_status=()
+    local w1=5 w2=5 w3=7 w4=9  # minimum widths from header labels
     while IFS=$'\t' read -r idx title account dir status; do
-        printf "%-6s %-30s %-10s %-40s %s\n" "$idx" "$title" "$account" "$dir" "$status"
+        rows+=("$idx"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status")
+        (( ${#idx} > w1 )) && w1=${#idx}
+        (( ${#title} > w2 )) && w2=${#title}
+        (( ${#account} > w3 )) && w3=${#account}
+        (( ${#dir} > w4 )) && w4=${#dir}
     done <<< "$table"
+
+    local fmt="%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %s\n"
+    printf "$fmt" "Index" "Title" "Account" "Directory" "Status"
+    printf "$fmt" \
+        "$(printf '%*s' "$w1" '' | tr ' ' '-')" \
+        "$(printf '%*s' "$w2" '' | tr ' ' '-')" \
+        "$(printf '%*s' "$w3" '' | tr ' ' '-')" \
+        "$(printf '%*s' "$w4" '' | tr ' ' '-')" \
+        "------"
+    for row in "${rows[@]}"; do
+        IFS=$'\t' read -r idx title account dir status <<< "$row"
+        printf "$fmt" "$idx" "$title" "$account" "$dir" "$status"
+    done
 }
 
 # ---------------------------------------------------------------------------
