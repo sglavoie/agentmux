@@ -363,20 +363,12 @@ cmd_launch_interactive() {
         return
     fi
 
-    # Build --selected arguments to pre-select all items
-    local selected_args=()
-    local i
-    for ((i = 0; i < ${#items[@]}; i++)); do
-        selected_args+=("--selected" "${items[$i]}")
-    done
-
     local choices
     choices="$(printf '%s\n' "${items[@]}" | gum choose --no-limit \
         --header "Select sessions to launch:" \
         --header.foreground "$GUM_HEADER_COLOR" \
         --cursor.foreground "$GUM_ACCENT_COLOR" \
-        --selected.foreground "$GUM_ACCENT_COLOR" \
-        "${selected_args[@]}")" || {
+        --selected.foreground "$GUM_ACCENT_COLOR")" || {
         echo "No sessions selected."
         return
     }
