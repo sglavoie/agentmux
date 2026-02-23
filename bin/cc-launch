@@ -323,9 +323,11 @@ launch_session() {
     # Build the launch command. Use kitty's --env flag for non-default config
     # dirs so the launched process is always "claude" directly (not wrapped in
     # env), which ensures kitty creates a proper interactive tab.
-    local env_flag=""
+    # Always pass KITTY_LISTEN_ON so that hooks (e.g. cc-hook-indicator) can
+    # reach the Kitty remote-control socket even without a TTY.
+    local env_flag="--env KITTY_LISTEN_ON=$SOCKET"
     if [[ -n "$config_dir" && "$config_dir" != "$HOME/.claude" ]]; then
-        env_flag="--env CLAUDE_CONFIG_DIR=$config_dir"
+        env_flag="$env_flag --env CLAUDE_CONFIG_DIR=$config_dir"
     fi
 
     local effective_flags

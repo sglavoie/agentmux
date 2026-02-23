@@ -22,6 +22,25 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
+# ── Resolve absolute path to cc-hook-indicator ───────────────────────────────
+
+HOOK_CMD=""
+# Try the standard install location first (matches Makefile PREFIX_BIN)
+if [[ -x "$HOME/.local/bin/cc-hook-indicator" ]]; then
+    HOOK_CMD="$HOME/.local/bin/cc-hook-indicator"
+else
+    # Derive from repo layout: lib/install-hooks.sh -> bin/cc-hook-indicator
+    repo_dir="$(cd "$(dirname "$HOOKS_EXAMPLE")/.." 2>/dev/null && pwd)"
+    if [[ -x "$repo_dir/bin/cc-hook-indicator" ]]; then
+        HOOK_CMD="$repo_dir/bin/cc-hook-indicator"
+    fi
+fi
+
+if [[ -z "$HOOK_CMD" ]]; then
+    echo "Error: cc-hook-indicator not found in ~/.local/bin/ or repo bin/." >&2
+    exit 1
+fi
+
 # ── Load accounts ────────────────────────────────────────────────────────────
 
 ACCOUNTS_CONFIG="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.conf}"
@@ -56,8 +75,11 @@ fi
 
 # ── Merge hooks into each settings.json ──────────────────────────────────────
 
-# Extract the hook entries we want to install from the example file
-EXAMPLE_HOOKS="$(jq '.hooks' "$HOOKS_EXAMPLE")"
+# Extract the hook entries we want to install from the example file,
+# substituting bare cc-hook-indicator with its absolute path
+EXAMPLE_HOOKS="$(jq --arg cmd "$HOOK_CMD" '
+    .hooks | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
+' "$HOOKS_EXAMPLE")"
 
 # List of hook events to process
 HOOK_EVENTS=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop SessionEnd)
@@ -68,7 +90,9 @@ for config_dir in "${CONFIG_DIRS[@]}"; do
     # If settings.json doesn't exist, create it with just the hooks
     if [[ ! -f "$settings_file" ]]; then
         mkdir -p "$config_dir"
-        cp "$HOOKS_EXAMPLE" "$settings_file"
+        jq --arg cmd "$HOOK_CMD" '
+            walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
+        ' "$HOOKS_EXAMPLE" > "$settings_file"
         echo "  Created $settings_file with cc-hook-indicator hooks"
         continue
     fi
@@ -88,7 +112,22 @@ for config_dir in "${CONFIG_DIRS[@]}"; do
     done
 
     if [[ "$all_present" == "true" ]]; then
-        echo "  Skipped $settings_file (hooks already present)"
+        # Check if any existing hook commands use bare names (no leading /)
+        has_bare="$(jq -r '
+            [.hooks[]?[]?.hooks[]? | select(.command | test("cc-hook-indicator"))
+                | .command | test("^/") | not] | any
+        ' "$settings_file")"
+        if [[ "$has_bare" == "true" ]]; then
+            cp "$settings_file" "${settings_file}.bak"
+            tmp_file="${settings_file}.tmp"
+            jq --arg cmd "$HOOK_CMD" '
+                walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
+            ' "$settings_file" > "$tmp_file"
+            mv "$tmp_file" "$settings_file"
+            echo "  Upgraded $settings_file hooks to absolute paths"
+        else
+            echo "  Skipped $settings_file (hooks already present with absolute paths)"
+        fi
         continue
     fi
 
