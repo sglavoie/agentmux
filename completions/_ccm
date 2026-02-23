@@ -8,6 +8,7 @@ _ccm_config_files() {
     files=(
         'accounts:Account definitions (name, config dir, color)'
         'sessions:Session definitions (title, directory, account)'
+        'defaults:Global defaults (claude flags)'
         'hooks:Hook configuration (JSON)'
     )
     _describe 'config file' files

@@ -41,11 +41,14 @@ resolve_config_file() {
         sessions)
             echo "${CC_MANAGER_CONFIG:-$config_dir/sessions.conf}"
             ;;
+        defaults)
+            echo "${CC_MANAGER_DEFAULTS:-$config_dir/defaults.conf}"
+            ;;
         hooks)
             echo "$config_dir/hooks.json"
             ;;
         *)
-            echo "Error: Unknown config file '$key'. Use: accounts, sessions, hooks" >&2
+            echo "Error: Unknown config file '$key'. Use: accounts, sessions, defaults, hooks" >&2
             return 1
             ;;
     esac
@@ -69,11 +72,12 @@ cmd_config_edit() {
     editor="$(resolve_editor)"
 
     if [[ $# -eq 0 ]]; then
-        local f1 f2
+        local f1 f2 f3
         f1="$(resolve_config_file accounts)"
         f2="$(resolve_config_file sessions)"
+        f3="$(resolve_config_file defaults)"
         # Unquoted $editor to support compound values like "code --wait"
-        $editor "$f1" "$f2"
+        $editor "$f1" "$f2" "$f3"
     else
         local f
         f="$(resolve_config_file "$1")"
@@ -87,7 +91,7 @@ cmd_config_edit() {
 cmd_config_show() {
     if [[ $# -eq 0 ]]; then
         local f
-        for key in accounts sessions; do
+        for key in accounts sessions defaults; do
             f="$(resolve_config_file "$key")"
             echo "==> $f <=="
             if [[ -f "$f" ]]; then
@@ -113,6 +117,7 @@ cmd_config_path() {
     if [[ $# -eq 0 ]]; then
         resolve_config_file accounts
         resolve_config_file sessions
+        resolve_config_file defaults
     else
         resolve_config_file "$1"
     fi
@@ -140,6 +145,18 @@ cmd_config_init() {
 
     src="$REPO_DIR/config/sessions.example"
     dest="$config_dir/sessions.conf"
+    if [[ -f "$dest" ]]; then
+        echo "Skipping $dest (already exists)"
+    elif [[ -f "$src" ]]; then
+        cp "$src" "$dest"
+        echo "Created $dest"
+        copied=$((copied + 1))
+    else
+        echo "Warning: $src not found in repository" >&2
+    fi
+
+    src="$REPO_DIR/config/defaults.example"
+    dest="$config_dir/defaults.conf"
     if [[ -f "$dest" ]]; then
         echo "Skipping $dest (already exists)"
     elif [[ -f "$src" ]]; then
@@ -186,7 +203,7 @@ cmd_config() {
             ;;
         "")
             echo "Usage: ccm config <edit|show|path|init> [FILE]" >&2
-            echo "FILE: accounts, sessions, hooks" >&2
+            echo "FILE: accounts, sessions, defaults, hooks" >&2
             return 1
             ;;
         *)
@@ -218,8 +235,8 @@ Subcommands:
     path [FILE]     Print resolved config file path(s)
     init            Copy example configs to ~/.config/cc-manager/ if missing
 
-FILE can be: accounts, sessions, hooks
-When FILE is omitted, edit/show/path operate on both accounts and sessions.
+FILE can be: accounts, sessions, defaults, hooks
+When FILE is omitted, edit/show/path operate on accounts, sessions, and defaults.
 HELP
             ;;
         "")

@@ -1,11 +1,13 @@
 # cc-manager session definitions
 #
-# Format: title | directory | account
+# Format: title | directory | account [| claude_flags]
 #
-# title     — Tab title (convention: prefix with account initial, e.g. W: P: C:)
-# directory — Working directory (~ is expanded)
-# account   — Account name as defined in accounts.conf
-#              (see config/accounts.example or ~/.config/cc-manager/accounts.conf)
+# title        — Tab title (convention: prefix with account initial, e.g. W: P: C:)
+# directory    — Working directory (~ is expanded)
+# account      — Account name as defined in accounts.conf
+#                 (see config/accounts.example or ~/.config/cc-manager/accounts.conf)
+# claude_flags — (optional) Per-session Claude flags, overriding defaults.conf.
+#                 Use "-" to disable global defaults for this session.
 #
 # Lines starting with # are comments. Blank lines are ignored.
 # Whitespace around the pipe delimiters is trimmed.
@@ -19,3 +21,7 @@ P:dotfiles        | ~/dotfiles                 | personal
 
 # If you define additional accounts in accounts.conf, reference them here:
 # C:client-app    | ~/clients/client-x/app     | client-x
+#
+# Per-session flag overrides (optional 4th column):
+# W:risky-project | ~/projects/risky           | work     | --dangerously-skip-permissions
+# P:safe-project  | ~/personal/safe            | personal | -

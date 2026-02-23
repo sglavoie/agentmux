@@ -68,6 +68,7 @@ gum_color_for_account() {
 # ---------------------------------------------------------------------------
 CONFIG_FILE="${CC_MANAGER_CONFIG:-$HOME/.config/cc-manager/sessions.conf}"
 ACCOUNTS_CONFIG="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.conf}"
+DEFAULTS_CONFIG="${CC_MANAGER_DEFAULTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/defaults.conf}"
 
 # ---------------------------------------------------------------------------
 # Account loading from accounts.conf
@@ -101,6 +102,44 @@ load_accounts() {
         _ACCOUNT_DIRS=("$HOME/.claude" "$HOME/.claude-personal")
         _ACCOUNT_COLORS=(green blue)
         echo "Note: No accounts.conf found at $ACCOUNTS_CONFIG; using default work/personal accounts." >&2
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Defaults loading from defaults.conf
+# ---------------------------------------------------------------------------
+_DEFAULT_CLAUDE_FLAGS=""
+
+load_defaults() {
+    _DEFAULT_CLAUDE_FLAGS=""
+
+    [[ -f "$DEFAULTS_CONFIG" ]] || return 0
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        local key value
+        IFS='=' read -r key value <<< "$line"
+        key="$(echo "$key" | xargs)"
+        value="$(echo "$value" | xargs)"
+        case "$key" in
+            claude_flags)
+                _DEFAULT_CLAUDE_FLAGS="$value"
+                ;;
+        esac
+    done < "$DEFAULTS_CONFIG"
+}
+
+# ---------------------------------------------------------------------------
+# Resolve effective claude flags for a session
+# ---------------------------------------------------------------------------
+resolve_claude_flags() {
+    local override="${1:-}"
+    if [[ -z "$override" ]]; then
+        echo "$_DEFAULT_CLAUDE_FLAGS"
+    elif [[ "$override" == "-" ]]; then
+        echo ""
+    else
+        echo "$override"
     fi
 }
 
@@ -248,6 +287,7 @@ launch_session() {
     local title="$1"
     local dir="$2"
     local account="${3:-work}"
+    local flags="${4:-}"
 
     dir="$(expand_tilde "$dir")"
 
@@ -268,8 +308,11 @@ launch_session() {
         env_flag="--env CLAUDE_CONFIG_DIR=$config_dir"
     fi
 
+    local effective_flags
+    effective_flags="$(resolve_claude_flags "$flags")"
+
     # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" --var cc_account="$account" $env_flag claude
+    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" --var cc_account="$account" $env_flag claude $effective_flags
 
     # Apply tab colors. Retry a few times since Claude may briefly override
     # the tab title on startup.
@@ -303,15 +346,16 @@ cmd_launch_interactive() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
-        local title dir account
-        IFS='|' read -r title dir account <<< "$line"
+        local title dir account flags
+        IFS='|' read -r title dir account flags <<< "$line"
         title="$(echo "$title" | xargs)"
         dir="$(echo "$dir" | xargs)"
         account="$(echo "${account:-work}" | xargs)"
+        flags="$(echo "${flags:-}" | xargs)"
         [[ -z "$account" ]] && account="work"
 
         items+=("$(printf '%-20s  %-40s  (%s)' "$title" "$dir" "$account")")
-        keys+=("${title}|${dir}|${account}")
+        keys+=("${title}|${dir}|${account}|${flags}")
     done < "$CONFIG_FILE"
 
     if [[ ${#items[@]} -eq 0 ]]; then
@@ -346,9 +390,9 @@ cmd_launch_interactive() {
         local j
         for ((j = 0; j < ${#items[@]}; j++)); do
             if [[ "${items[$j]}" == "$chosen" ]]; then
-                local title dir account
-                IFS='|' read -r title dir account <<< "${keys[$j]}"
-                if launch_session "$title" "$dir" "$account"; then
+                local title dir account flags
+                IFS='|' read -r title dir account flags <<< "${keys[$j]}"
+                if launch_session "$title" "$dir" "$account" "$flags"; then
                     launched=$((launched + 1))
                 else
                     existed=$((existed + 1))
@@ -378,14 +422,15 @@ cmd_launch_all() {
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
         # Parse pipe-delimited fields and trim whitespace
-        local title dir account
-        IFS='|' read -r title dir account <<< "$line"
+        local title dir account flags
+        IFS='|' read -r title dir account flags <<< "$line"
         title="$(echo "$title" | xargs)"
         dir="$(echo "$dir" | xargs)"
         account="$(echo "${account:-work}" | xargs)"
+        flags="$(echo "${flags:-}" | xargs)"
         [[ -z "$account" ]] && account="work"
 
-        if launch_session "$title" "$dir" "$account"; then
+        if launch_session "$title" "$dir" "$account" "$flags"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
@@ -432,7 +477,7 @@ cmd_add() {
         fi
     fi
 
-    launch_session "$title" "$dir" "$account"
+    launch_session "$title" "$dir" "$account" ""
 }
 
 # ---------------------------------------------------------------------------
@@ -773,7 +818,9 @@ Global options:
 Config file (default: ~/.config/cc-manager/sessions.conf):
     Override with CC_MANAGER_CONFIG env var.
     Format (pipe-delimited):
-        title | directory | account
+        title | directory | account [| claude_flags]
+    The optional 4th column overrides the global claude_flags from defaults.conf.
+    Use "-" to disable global flags for a specific session.
     Lines starting with # are comments. Blank lines are ignored.
 
 Accounts (defined in ~/.config/cc-manager/accounts.conf):
@@ -781,10 +828,15 @@ Accounts (defined in ~/.config/cc-manager/accounts.conf):
     Colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan
     If accounts.conf is missing, defaults to work (green) and personal (blue).
 
+Defaults (defined in ~/.config/cc-manager/defaults.conf):
+    Key-value pairs (key = value). Supported keys:
+        claude_flags — Extra flags passed to every Claude session
+
 Environment:
     KITTY_LISTEN_ON      Kitty remote-control socket (auto-detected if unset)
     CC_MANAGER_CONFIG    Path to sessions config file
     CC_MANAGER_ACCOUNTS  Path to accounts config file
+    CC_MANAGER_DEFAULTS  Path to defaults config file
 
 Optional dependency:
     gum (charmbracelet/gum) — enables interactive session picker and confirmation
@@ -825,6 +877,7 @@ main() {
     fi
 
     load_accounts
+    load_defaults
 
     case "${1:-}" in
         --all)

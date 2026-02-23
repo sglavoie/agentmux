@@ -70,13 +70,37 @@ If `accounts.conf` does not exist, cc-manager falls back to two default accounts
 cp config/sessions.example ~/.config/cc-manager/sessions.conf
 ```
 
-Edit `~/.config/cc-manager/sessions.conf` to define your sessions. The format is pipe-delimited with three fields per line:
+Edit `~/.config/cc-manager/sessions.conf` to define your sessions. The format is pipe-delimited:
 
 ```plaintext
-title | directory | account
+title | directory | account [| claude_flags]
 ```
 
-The `account` field references an entry from `accounts.conf`. Tab titles are conventionally prefixed with an initial for the account (e.g. `W:` for work, `P:` for personal).
+The `account` field references an entry from `accounts.conf`. Tab titles are conventionally prefixed with an initial for the account (e.g. `W:` for work, `P:` for personal). The optional 4th column lets you override the global Claude flags for that specific session (see step 5 below).
+
+### 5. (Optional) Set global Claude flags
+
+If you want to pass flags like `--dangerously-skip-permissions` to every Claude session by default, create a defaults file:
+
+```bash
+cp config/defaults.example ~/.config/cc-manager/defaults.conf
+```
+
+Edit `~/.config/cc-manager/defaults.conf` and uncomment the `claude_flags` line:
+
+```plaintext
+claude_flags = --dangerously-skip-permissions
+```
+
+This applies to all sessions unless overridden per-session in `sessions.conf`. To override the global flags for a specific session, add a 4th column to that session's line. Use `-` to disable flags entirely for one session:
+
+```plaintext
+W:project-alpha  | ~/projects/alpha  | work
+W:project-beta   | ~/projects/beta   | work  | --dangerously-skip-permissions
+W:safe-project   | ~/projects/safe   | work  | -
+```
+
+In this example, `project-alpha` inherits whatever is in `defaults.conf`, `project-beta` always gets `--dangerously-skip-permissions` regardless of the global default, and `safe-project` never gets any flags even if the global default is set. There is no merging; the per-session value completely replaces the global default.
 
 ## Usage
 
@@ -135,7 +159,7 @@ r           Refresh the session list
 q / Esc     Dismiss the dashboard
 ```
 
-The new-session form accepts a title, working directory, and account type. Press Enter to advance between fields and Tab to cycle through the available accounts. The new tab is created immediately with the appropriate Claude command and tab coloring.
+The new-session form accepts a title, working directory, account type, and optional Claude flags. Press Enter to advance between fields and Tab to cycle through the available accounts. Leave the flags field empty to inherit the global default from `defaults.conf`, or enter `-` to disable flags for that session. The new tab is created immediately with the appropriate Claude command and tab coloring.
 
 ### Save current sessions to config
 
@@ -143,7 +167,7 @@ The new-session form accepts a title, working directory, and account type. Press
 cc-launch --save
 ```
 
-Snapshots all currently running Claude sessions back to the config file (`~/.config/cc-manager/sessions.conf` by default). The existing file is backed up with a `.bak` extension before overwriting. You can also save to a specific file:
+Snapshots all currently running Claude sessions back to the config file (`~/.config/cc-manager/sessions.conf` by default). The existing file is backed up with a `.bak` extension before overwriting. Note that per-session flag overrides (the 4th column) are not preserved by `--save` since live Kitty tab state has no knowledge of what flags were used at launch time. You can also save to a specific file:
 
 ```bash
 cc-launch --save ~/my-snapshot.conf
@@ -184,11 +208,12 @@ Copy `sessions/example.conf` and customize it for your projects. This approach i
 
 ## Configuration
 
-Both config files live in `~/.config/cc-manager/` by default. Override their locations with environment variables:
+All config files live in `~/.config/cc-manager/` by default. Override their locations with environment variables:
 
 ```bash
 CC_MANAGER_CONFIG=~/my-sessions.conf cc-launch
 CC_MANAGER_ACCOUNTS=~/my-accounts.conf cc-launch
+CC_MANAGER_DEFAULTS=~/my-defaults.conf cc-launch
 ```
 
 The Kitty socket is auto-detected from `KITTY_LISTEN_ON` or by finding the most recent `/tmp/kitty-*` socket. You can also override it per-command with `--socket` (see "Multiple Kitty instances" above).
@@ -212,7 +237,8 @@ cc-manager.conf                 Kitty config snippet (include from kitty.conf)
 bin/cc-launch                   Session launcher and manager
 bin/cc-status                   Status overview tool
 config/accounts.example         Example account definitions (colors, config dirs)
-config/sessions.example         Example session definitions
+config/sessions.example         Example session definitions (with optional flags column)
+config/defaults.example         Example global defaults (claude_flags)
 sessions/example.conf           Example Kitty session file for startup
 kittens/claude_dashboard.py     Interactive session picker (overlay kitten)
 completions/_cc-launch          Zsh completion for cc-launch

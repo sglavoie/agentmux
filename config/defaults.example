@@ -1,0 +1,12 @@
+# cc-manager global defaults
+#
+# Format: key = value
+#
+# Supported keys:
+#   claude_flags — Extra flags passed to every Claude session
+#                  (e.g. --dangerously-skip-permissions)
+#
+# Lines starting with # are comments. Blank lines are ignored.
+# Whitespace around the = delimiter is trimmed.
+
+# claude_flags = --dangerously-skip-permissions

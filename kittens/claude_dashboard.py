@@ -65,6 +65,9 @@ _account_names = []  # ordered list of account names
 # Maps account name -> (cp_normal, cp_selected) curses color pair IDs
 _account_cp = {}
 
+# Global default flags loaded from defaults.conf
+_default_claude_flags = ""
+
 
 def _accounts_config_path():
     env = os.environ.get("CC_MANAGER_ACCOUNTS", "")
@@ -106,6 +109,50 @@ def load_accounts():
         _accounts["work"] = {"config_dir": os.path.join(home, ".claude"), "color": "green"}
         _accounts["personal"] = {"config_dir": os.path.join(home, ".claude-personal"), "color": "blue"}
         _account_names = ["work", "personal"]
+
+
+def _defaults_config_path():
+    env = os.environ.get("CC_MANAGER_DEFAULTS", "")
+    if env:
+        return env
+    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config"))
+    return os.path.join(xdg, "cc-manager", "defaults.conf")
+
+
+def load_defaults():
+    """Parse defaults.conf into the module-level _default_claude_flags."""
+    global _default_claude_flags
+    _default_claude_flags = ""
+
+    path = _defaults_config_path()
+    if not os.path.isfile(path):
+        return
+
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            if key == "claude_flags":
+                _default_claude_flags = value
+
+
+def _resolve_claude_flags(override=""):
+    """Return the effective claude flags for a session.
+
+    Empty override inherits the global default, "-" disables all flags,
+    and any other value replaces the global default entirely.
+    """
+    if not override:
+        return _default_claude_flags
+    if override == "-":
+        return ""
+    return override
 
 
 def _resolve_account_by_config_dir(config_dir):
@@ -238,10 +285,11 @@ def do_close(socket, tab_id):
     kitty_cmd(socket, "close-tab", "--match", f"id:{tab_id}")
 
 
-def do_launch(socket, title, directory, account):
+def do_launch(socket, title, directory, account, flags=""):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
-    cmd = ["launch", "--type=tab", "--tab-title", title, "--cwd", directory]
+    cmd = ["launch", "--type=tab", "--tab-title", title, "--cwd", directory,
+           "--var", f"cc_account={account}"]
 
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
@@ -251,6 +299,10 @@ def do_launch(socket, title, directory, account):
         cmd += ["claude"]
     else:
         cmd += ["env", f"CLAUDE_CONFIG_DIR={config_dir}", "claude"]
+
+    effective_flags = _resolve_claude_flags(flags)
+    if effective_flags:
+        cmd += effective_flags.split()
 
     kitty_cmd(socket, *cmd)
     kitty_cmd(
@@ -458,7 +510,7 @@ def draw_footer(stdscr, mode):
     hints = {
         "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  n New  r Refresh  q Quit",
         "confirm": "y Confirm close    Any other key Cancel",
-        "new": "Enter Next/Submit    Tab Cycle account    Esc Cancel",
+        "new": "Enter Next/Submit    Tab Cycle    Esc Cancel",
     }
     text = hints.get(mode, "")
     safe_addstr(stdscr, rows - 1, 2, text[: cols - 3], curses.color_pair(CP_DIM))
@@ -490,8 +542,8 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
-    labels = ["Title:", "Directory:", "Account:"]
-    field_keys = ["title", "dir", "account"]
+    labels = ["Title:", "Directory:", "Account:", "Flags:"]
+    field_keys = ["title", "dir", "account", "flags"]
 
     for i, (label, key) in enumerate(zip(labels, field_keys)):
         y = 4 + i * 2
@@ -540,6 +592,14 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
                     curses.color_pair(CP_INPUT),
                 )
 
+    # Hint below the Flags field
+    flags_hint_y = 4 + len(field_keys) * 2
+    safe_addstr(
+        stdscr, flags_hint_y, 17,
+        '(empty = inherit global, "-" = disable)',
+        curses.color_pair(CP_DIM),
+    )
+
     draw_footer(stdscr, "new")
 
 
@@ -578,7 +638,7 @@ def dashboard(stdscr, socket):
 
     # New-session form state — default to first loaded account
     default_account = _account_names[0] if _account_names else "work"
-    new_fields = {"title": "", "dir": "~/", "account": default_account}
+    new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": ""}
     new_active = 0
     new_cursor = 0
 
@@ -620,7 +680,7 @@ def dashboard(stdscr, socket):
                 mode = "confirm"
             elif key in (ord("n"), ord("N")):
                 mode = "new"
-                new_fields = {"title": "", "dir": "~/", "account": default_account}
+                new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": ""}
                 new_active = 0
                 new_cursor = 0
             elif key in (ord("r"), ord("R")):
@@ -641,7 +701,8 @@ def dashboard(stdscr, socket):
 
         # ── New session form ─────────────────────────────────────
         elif mode == "new":
-            field_keys = ["title", "dir", "account"]
+            field_keys = ["title", "dir", "account", "flags"]
+            last_field = len(field_keys) - 1
             fk = field_keys[new_active]
 
             if key == 27:  # Esc — cancel
@@ -650,10 +711,10 @@ def dashboard(stdscr, socket):
                 if fk == "account":
                     new_fields["account"] = _cycle_account(new_fields["account"])
                 else:
-                    new_active = min(new_active + 1, 2)
+                    new_active = min(new_active + 1, last_field)
                     new_cursor = len(new_fields[field_keys[new_active]])
             elif key in (10, 13, curses.KEY_ENTER):
-                if new_active < 2:
+                if new_active < last_field:
                     new_active += 1
                     new_cursor = len(new_fields[field_keys[new_active]])
                 else:
@@ -661,8 +722,9 @@ def dashboard(stdscr, socket):
                     t = new_fields["title"].strip()
                     d = new_fields["dir"].strip()
                     a = new_fields["account"]
+                    fl = new_fields["flags"].strip()
                     if t and d:
-                        do_launch(socket, t, d, a)
+                        do_launch(socket, t, d, a, fl)
                         sessions = query_sessions(socket)
                         selected = max(0, len(sessions) - 1)
                         msg = f'Launched "{t}"'
@@ -706,6 +768,7 @@ def main(args=None):
     ``curses.wrapper`` manages the terminal setup and teardown.
     """
     load_accounts()
+    load_defaults()
 
     socket = get_kitty_socket()
     if not socket:
