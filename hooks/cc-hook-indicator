@@ -72,5 +72,5 @@ new_title="$(build_title "$remaining" "$has_star" "$has_bolt")"
 
 # Only update if the title actually changed.
 if [[ "$new_title" != "$current_title" ]]; then
-    kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title"
+    kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title" 2>/dev/null || true
 fi

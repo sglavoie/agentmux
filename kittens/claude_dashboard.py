@@ -67,8 +67,9 @@ _account_names = []  # ordered list of account names
 # Maps account name -> (cp_normal, cp_selected) curses color pair IDs
 _account_cp = {}
 
-# Global default flags loaded from defaults.conf
+# Global defaults loaded from defaults.conf
 _default_claude_flags = ""
+_default_project_window = ""
 
 
 def _accounts_config_path():
@@ -122,9 +123,10 @@ def _defaults_config_path():
 
 
 def load_defaults():
-    """Parse defaults.conf into the module-level _default_claude_flags."""
-    global _default_claude_flags
+    """Parse defaults.conf into the module-level default settings."""
+    global _default_claude_flags, _default_project_window
     _default_claude_flags = ""
+    _default_project_window = ""
 
     path = _defaults_config_path()
     if not os.path.isfile(path):
@@ -142,6 +144,8 @@ def load_defaults():
             value = value.strip()
             if key == "claude_flags":
                 _default_claude_flags = value
+            elif key == "project_window":
+                _default_project_window = value
 
 
 def _resolve_claude_flags(override=""):
@@ -152,6 +156,19 @@ def _resolve_claude_flags(override=""):
     """
     if not override:
         return _default_claude_flags
+    if override == "-":
+        return ""
+    return override
+
+
+def _resolve_project_window(override=""):
+    """Return the effective project window layout for a session.
+
+    Empty override inherits the global default, "-" disables the project window,
+    and any other value replaces the global default entirely.
+    """
+    if not override:
+        return _default_project_window
     if override == "-":
         return ""
     return override
@@ -327,7 +344,7 @@ def do_close(socket, tab_id):
     kitty_cmd(socket, "close-tab", "--match", f"id:{tab_id}")
 
 
-def do_launch(socket, title, directory, account, flags=""):
+def do_launch(socket, title, directory, account, flags="", pw_override=""):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
     cmd = ["launch", "--type=tab", "--tab-title", title, "--cwd", directory,
@@ -354,6 +371,22 @@ def do_launch(socket, title, directory, account, flags=""):
         f"title:^{title}$",
         *_palette_tab_colors(account),
     )
+
+    pw_mode = _resolve_project_window(pw_override)
+    if pw_mode:
+        kitty_cmd(
+            socket,
+            "launch", "--type=window",
+            "--match", f"title:^{title}$",
+            "--cwd", directory,
+            "--keep-focus",
+        )
+        kitty_cmd(
+            socket,
+            "goto-layout",
+            "--match", f"title:^{title}$",
+            pw_mode,
+        )
 
 
 # ── Curses helpers ───────────────────────────────────────────────────────────
@@ -600,8 +633,8 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
-    labels = ["Title:", "Directory:", "Account:", "Flags:"]
-    field_keys = ["title", "dir", "account", "flags"]
+    labels = ["Title:", "Directory:", "Account:", "Flags:", "Split:"]
+    field_keys = ["title", "dir", "account", "flags", "pw"]
 
     for i, (label, key) in enumerate(zip(labels, field_keys)):
         y = 4 + i * 2
@@ -610,7 +643,7 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
         safe_addstr(stdscr, y, 4, f"{label:>12}", curses.color_pair(CP_HEADER))
 
         val = fields[key]
-        if key == "account":
+        if key in ("account", "pw"):
             display = f" {val} "
             if is_active:
                 display += "  (Tab to cycle)"
@@ -650,11 +683,11 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
                     curses.color_pair(CP_INPUT),
                 )
 
-    # Hint below the Flags field
-    flags_hint_y = 4 + len(field_keys) * 2
+    # Hint below the last field
+    hint_y = 4 + len(field_keys) * 2
     safe_addstr(
-        stdscr, flags_hint_y, 17,
-        '(empty = inherit global, "-" = disable)',
+        stdscr, hint_y, 17,
+        'Flags/Split: empty = inherit global, "-" = disable',
         curses.color_pair(CP_DIM),
     )
 
@@ -673,6 +706,18 @@ def _cycle_account(current):
     except ValueError:
         idx = -1
     return _account_names[(idx + 1) % len(_account_names)]
+
+
+_PW_OPTIONS = ["none", "stack", "vsplit", "hsplit", "split"]
+
+
+def _cycle_pw(current):
+    """Return the next project window option, wrapping around."""
+    try:
+        idx = _PW_OPTIONS.index(current)
+    except ValueError:
+        idx = -1
+    return _PW_OPTIONS[(idx + 1) % len(_PW_OPTIONS)]
 
 
 def dashboard(stdscr, socket):
@@ -697,7 +742,8 @@ def dashboard(stdscr, socket):
 
     # New-session form state — default to first loaded account
     default_account = _account_names[0] if _account_names else "work"
-    new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": ""}
+    default_pw = _default_project_window if _default_project_window else "none"
+    new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": "", "pw": default_pw}
     new_active = 0
     new_cursor = 0
 
@@ -739,7 +785,7 @@ def dashboard(stdscr, socket):
                 mode = "confirm"
             elif key in (ord("n"), ord("N")):
                 mode = "new"
-                new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": ""}
+                new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": "", "pw": default_pw}
                 new_active = 0
                 new_cursor = 0
             elif key in (ord("a"), ord("A")):
@@ -767,7 +813,7 @@ def dashboard(stdscr, socket):
 
         # ── New session form ─────────────────────────────────────
         elif mode == "new":
-            field_keys = ["title", "dir", "account", "flags"]
+            field_keys = ["title", "dir", "account", "flags", "pw"]
             last_field = len(field_keys) - 1
             fk = field_keys[new_active]
 
@@ -776,6 +822,8 @@ def dashboard(stdscr, socket):
             elif key == 9:  # Tab
                 if fk == "account":
                     new_fields["account"] = _cycle_account(new_fields["account"])
+                elif fk == "pw":
+                    new_fields["pw"] = _cycle_pw(new_fields["pw"])
                 else:
                     new_active = min(new_active + 1, last_field)
                     new_cursor = len(new_fields[field_keys[new_active]])
@@ -789,8 +837,10 @@ def dashboard(stdscr, socket):
                     d = new_fields["dir"].strip()
                     a = new_fields["account"]
                     fl = new_fields["flags"].strip()
+                    pw_val = new_fields["pw"]
+                    pw_val = "" if pw_val == "none" else pw_val
                     if t and d:
-                        do_launch(socket, t, d, a, fl)
+                        do_launch(socket, t, d, a, fl, pw_val)
                         sessions = query_sessions(socket, managed_only=(not show_all))
                         selected = max(0, len(sessions) - 1)
                         msg = f'Launched "{t}"'
@@ -799,7 +849,7 @@ def dashboard(stdscr, socket):
                         msg = "Title and directory are required"
                         msg_frames = 20
                     mode = "list"
-            elif fk != "account":
+            elif fk not in ("account", "pw"):
                 # Text editing in title / dir fields
                 val = new_fields[fk]
                 if key in (curses.KEY_BACKSPACE, 127, 8):

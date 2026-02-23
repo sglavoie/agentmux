@@ -109,9 +109,11 @@ load_accounts() {
 # Defaults loading from defaults.conf
 # ---------------------------------------------------------------------------
 _DEFAULT_CLAUDE_FLAGS=""
+_DEFAULT_PROJECT_WINDOW=""
 
 load_defaults() {
     _DEFAULT_CLAUDE_FLAGS=""
+    _DEFAULT_PROJECT_WINDOW=""
 
     [[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
@@ -125,6 +127,9 @@ load_defaults() {
             claude_flags)
                 _DEFAULT_CLAUDE_FLAGS="$value"
                 ;;
+            project_window)
+                _DEFAULT_PROJECT_WINDOW="$value"
+                ;;
         esac
     done < "$DEFAULTS_CONFIG"
 }
@@ -136,6 +141,20 @@ resolve_claude_flags() {
     local override="${1:-}"
     if [[ -z "$override" ]]; then
         echo "$_DEFAULT_CLAUDE_FLAGS"
+    elif [[ "$override" == "-" ]]; then
+        echo ""
+    else
+        echo "$override"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Resolve effective project window layout for a session
+# ---------------------------------------------------------------------------
+resolve_project_window() {
+    local override="${1:-}"
+    if [[ -z "$override" ]]; then
+        echo "$_DEFAULT_PROJECT_WINDOW"
     elif [[ "$override" == "-" ]]; then
         echo ""
     else
@@ -288,6 +307,7 @@ launch_session() {
     local dir="$2"
     local account="${3:-work}"
     local flags="${4:-}"
+    local pw_override="${5:-}"
 
     dir="$(expand_tilde "$dir")"
 
@@ -325,6 +345,14 @@ launch_session() {
         sleep 0.1
     done
 
+    # Launch a project window alongside Claude if configured
+    local pw_mode
+    pw_mode="$(resolve_project_window "$pw_override")"
+    if [[ -n "$pw_mode" ]]; then
+        kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus
+        kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode"
+    fi
+
     echo "Launched [$title] (account=$account, dir=$dir)"
     return 0
 }
@@ -346,16 +374,17 @@ cmd_launch_interactive() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
-        local title dir account flags
-        IFS='|' read -r title dir account flags <<< "$line"
+        local title dir account flags pw
+        IFS='|' read -r title dir account flags pw <<< "$line"
         title="$(echo "$title" | xargs)"
         dir="$(echo "$dir" | xargs)"
         account="$(echo "${account:-work}" | xargs)"
         flags="$(echo "${flags:-}" | xargs)"
+        pw="$(echo "${pw:-}" | xargs)"
         [[ -z "$account" ]] && account="work"
 
         items+=("$(printf '%-20s  %-40s  (%s)' "$title" "$dir" "$account")")
-        keys+=("${title}|${dir}|${account}|${flags}")
+        keys+=("${title}|${dir}|${account}|${flags}|${pw}")
     done < "$CONFIG_FILE"
 
     if [[ ${#items[@]} -eq 0 ]]; then
@@ -382,9 +411,9 @@ cmd_launch_interactive() {
         local j
         for ((j = 0; j < ${#items[@]}; j++)); do
             if [[ "${items[$j]}" == "$chosen" ]]; then
-                local title dir account flags
-                IFS='|' read -r title dir account flags <<< "${keys[$j]}"
-                if launch_session "$title" "$dir" "$account" "$flags"; then
+                local title dir account flags pw
+                IFS='|' read -r title dir account flags pw <<< "${keys[$j]}"
+                if launch_session "$title" "$dir" "$account" "$flags" "$pw"; then
                     launched=$((launched + 1))
                 else
                     existed=$((existed + 1))
@@ -414,15 +443,16 @@ cmd_launch_all() {
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
         # Parse pipe-delimited fields and trim whitespace
-        local title dir account flags
-        IFS='|' read -r title dir account flags <<< "$line"
+        local title dir account flags pw
+        IFS='|' read -r title dir account flags pw <<< "$line"
         title="$(echo "$title" | xargs)"
         dir="$(echo "$dir" | xargs)"
         account="$(echo "${account:-work}" | xargs)"
         flags="$(echo "${flags:-}" | xargs)"
+        pw="$(echo "${pw:-}" | xargs)"
         [[ -z "$account" ]] && account="work"
 
-        if launch_session "$title" "$dir" "$account" "$flags"; then
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
@@ -817,9 +847,10 @@ Global options:
 Config file (default: ~/.config/cc-manager/sessions.conf):
     Override with CC_MANAGER_CONFIG env var.
     Format (pipe-delimited):
-        title | directory | account [| claude_flags]
+        title | directory | account [| claude_flags [| project_window]]
     The optional 4th column overrides the global claude_flags from defaults.conf.
-    Use "-" to disable global flags for a specific session.
+    The optional 5th column overrides the global project_window from defaults.conf.
+    Use "-" to disable global flags/project_window for a specific session.
     Lines starting with # are comments. Blank lines are ignored.
 
 Accounts (defined in ~/.config/cc-manager/accounts.conf):
@@ -829,7 +860,9 @@ Accounts (defined in ~/.config/cc-manager/accounts.conf):
 
 Defaults (defined in ~/.config/cc-manager/defaults.conf):
     Key-value pairs (key = value). Supported keys:
-        claude_flags — Extra flags passed to every Claude session
+        claude_flags     — Extra flags passed to every Claude session
+        project_window   — Open a shell window alongside Claude in each tab.
+                           Values: (empty) = disabled, stack, vsplit, hsplit, split
 
 Environment:
     KITTY_LISTEN_ON      Kitty remote-control socket (auto-detected if unset)

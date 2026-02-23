@@ -1,13 +1,16 @@
 # cc-manager session definitions
 #
-# Format: title | directory | account [| claude_flags]
+# Format: title | directory | account [| claude_flags [| project_window]]
 #
-# title        — Tab title (convention: prefix with account initial, e.g. W: P: C:)
-# directory    — Working directory (~ is expanded)
-# account      — Account name as defined in accounts.conf
-#                 (see config/accounts.example or ~/.config/cc-manager/accounts.conf)
-# claude_flags — (optional) Per-session Claude flags, overriding defaults.conf.
-#                 Use "-" to disable global defaults for this session.
+# title          — Tab title (convention: prefix with account initial, e.g. W: P: C:)
+# directory      — Working directory (~ is expanded)
+# account        — Account name as defined in accounts.conf
+#                   (see config/accounts.example or ~/.config/cc-manager/accounts.conf)
+# claude_flags   — (optional) Per-session Claude flags, overriding defaults.conf.
+#                   Use "-" to disable global defaults for this session.
+# project_window — (optional) Per-session layout override for the project window.
+#                   Values: (empty) = inherit global, "-" = disable, stack, vsplit, hsplit, split
+#                   The 4th column must be present (even if empty) when specifying the 5th.
 #
 # Lines starting with # are comments. Blank lines are ignored.
 # Whitespace around the pipe delimiters is trimmed.
@@ -25,3 +28,7 @@ P:dotfiles        | ~/dotfiles                 | personal
 # Per-session flag overrides (optional 4th column):
 # W:risky-project | ~/projects/risky           | work     | --dangerously-skip-permissions
 # P:safe-project  | ~/personal/safe            | personal | -
+#
+# Per-session project_window overrides (optional 5th column):
+# W:with-split    | ~/projects/beta            | work     |                               | vsplit
+# W:no-window     | ~/projects/gamma           | work     | -                             | -

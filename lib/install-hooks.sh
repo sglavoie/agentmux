@@ -60,7 +60,7 @@ fi
 EXAMPLE_HOOKS="$(jq '.hooks' "$HOOKS_EXAMPLE")"
 
 # List of hook events to process
-HOOK_EVENTS=(UserPromptSubmit Stop)
+HOOK_EVENTS=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop SessionEnd)
 
 for config_dir in "${CONFIG_DIRS[@]}"; do
     settings_file="$config_dir/settings.json"

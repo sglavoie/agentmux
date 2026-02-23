@@ -3,10 +3,15 @@
 # Format: key = value
 #
 # Supported keys:
-#   claude_flags — Extra flags passed to every Claude session
-#                  (e.g. --dangerously-skip-permissions)
+#   claude_flags    — Extra flags passed to every Claude session
+#                     (e.g. --dangerously-skip-permissions)
+#   project_window  — Open a shell window alongside Claude in each tab.
+#                     Values: (empty) = disabled, stack, vsplit, hsplit, split
+#                     With "stack", only one window is visible at a time;
+#                     toggle with Kitty shortcuts (e.g. ctrl+shift+]).
 #
 # Lines starting with # are comments. Blank lines are ignored.
 # Whitespace around the = delimiter is trimmed.
 
 # claude_flags = --dangerously-skip-permissions
+# project_window = stack
