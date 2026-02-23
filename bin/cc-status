@@ -7,12 +7,14 @@ set -euo pipefail
 
 show_help() {
     cat <<'EOF'
-Usage: cc-status [--socket SOCKET] [--help]
+Usage: cc-status [--socket SOCKET] [--all] [--help]
 
-Display a table of all Kitty tabs that are running Claude Code sessions.
+Display a table of Kitty tabs running Claude Code sessions.
+By default only ccm-managed sessions are shown (those launched via ccm).
 
 Options:
   --socket SOCKET   Target a specific Kitty socket (e.g. unix:/tmp/kitty-12345)
+  --all             Include all Claude tabs, not just ccm-managed ones
   --help            Show this help message
 
 Columns:
@@ -35,11 +37,16 @@ EOF
 # ---- Argument parsing ------------------------------------------------------
 
 SOCKET=""
+SHOW_ALL=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --help)
             show_help
+            ;;
+        --all)
+            SHOW_ALL=true
+            shift
             ;;
         --socket)
             if [[ -z "${2:-}" ]]; then
@@ -174,7 +181,7 @@ default_account="$(default_account_name)"
 
 # Use jq to extract rows for every tab that has a claude process.
 # Each output line is tab-delimited: tab_index \t title \t account \t cwd \t status
-rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" '
+rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg show_all "$SHOW_ALL" '
     [.[] | . as $os |
         $os.tabs | to_entries[] |
         .key as $tab_idx | .value as $tab |
@@ -189,11 +196,23 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
             ] | any
         ) |
 
-        # Find the window running claude and use its cwd
+        # Filter to ccm-managed tabs unless --all is given
+        select(
+            $show_all == "true" or
+            ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
+            ($tab.title | test("^(★ )?(⚡ )?[A-Z]:"))
+        ) |
+
+        # Find cwd: prefer user_vars.cc_cwd (set at launch), fall back to
+        # the claude window cwd, then windows[0].cwd
         (
-            [$tab.windows[] |
-                select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
-            ] | if length > 0 then .[0].cwd else $tab.windows[0].cwd end
+            [$tab.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
+            if length > 0 then .[0]
+            else
+                [$tab.windows[] |
+                    select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                ] | if length > 0 then .[0].cwd else $tab.windows[0].cwd end
+            end
         ) as $cwd |
 
         # Determine account: prefer user_vars.cc_account, fall back to cmdline, then default
@@ -221,7 +240,7 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
 
         {
             tab_index: ($tab_idx + 1),
-            title: $tab.title,
+            title: ($tab.title | sub("^★ "; "") | sub("^⚡ "; "")),
             account: $account,
             cwd: $cwd,
             status: $status

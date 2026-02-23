@@ -312,7 +312,7 @@ launch_session() {
     effective_flags="$(resolve_claude_flags "$flags")"
 
     # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" --var cc_account="$account" $env_flag claude $effective_flags
+    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" $env_flag claude $effective_flags
 
     # Apply tab colors. Retry a few times since Claude may briefly override
     # the tab title on startup.
@@ -550,6 +550,11 @@ cmd_list() {
             .key as $tab_idx | .value as $tab |
             select(
                 [$tab.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+            ) |
+            # Only show ccm-managed tabs
+            select(
+                ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
+                ($tab.title | test("^(★ )?(⚡ )?[A-Z]:"))
             ) |
             {
                 index: ($tab_idx + 1),

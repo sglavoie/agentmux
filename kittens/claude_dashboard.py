@@ -16,8 +16,10 @@ import curses
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
+import unicodedata
 
 
 # ── Color palette ────────────────────────────────────────────────────────────
@@ -220,8 +222,25 @@ def kitty_cmd(socket, *args):
         return None
 
 
-def query_sessions(socket):
-    """Query Kitty for all tabs that have a Claude process running."""
+def _strip_icons(title):
+    """Remove leading star/bolt icon prefixes from a tab title."""
+    if title.startswith("★ "):
+        title = title[2:]
+    if title.startswith("⚡ "):
+        title = title[2:]
+    return title
+
+
+_MANAGED_TITLE_RE = re.compile(r"^(★ )?(⚡ )?[A-Z]:")
+
+
+def query_sessions(socket, managed_only=True):
+    """Query Kitty for tabs running Claude Code.
+
+    When managed_only is True (the default), only tabs launched by ccm are
+    returned — identified by the cc_account user variable or the standard
+    X:title naming convention.
+    """
     result = kitty_cmd(socket, "ls")
     if not result or result.returncode != 0:
         return []
@@ -240,24 +259,45 @@ def query_sessions(socket):
             has_claude = False
             detected_config_dir = ""
             windows = tab.get("windows", [])
-            cwd = windows[0].get("cwd", "") if windows else ""
+            cwd = ""
+            user_vars = {}
 
             for win in windows:
+                uv = win.get("user_vars", {})
+                if not user_vars and ("cc_account" in uv or "cc_cwd" in uv):
+                    user_vars = uv
                 for proc in win.get("foreground_processes", []):
                     cmdline = proc.get("cmdline", [])
                     cmdline_str = " ".join(cmdline)
                     if "claude" in cmdline_str.lower():
                         has_claude = True
+                        if not cwd:
+                            cwd = win.get("cwd", "")
                     for arg in cmdline:
                         if "CLAUDE_CONFIG_DIR=" in arg:
                             detected_config_dir = arg.split("=", 1)[1]
 
+            # Prefer cc_cwd user_var (set at launch) over process cwd
+            if "cc_cwd" in user_vars:
+                cwd = user_vars["cc_cwd"]
+            elif not cwd and windows:
+                cwd = windows[0].get("cwd", "")
+
             if not has_claude:
                 continue
 
-            account = _resolve_account_by_config_dir(detected_config_dir)
+            # Filter to ccm-managed tabs when managed_only is set
+            tab_title = tab.get("title", "")
+            has_cc_var = bool(user_vars.get("cc_account"))
+            if managed_only and not has_cc_var and not _MANAGED_TITLE_RE.match(tab_title):
+                continue
 
-            title = tab.get("title", "")
+            if "cc_account" in user_vars:
+                account = user_vars["cc_account"]
+            else:
+                account = _resolve_account_by_config_dir(detected_config_dir)
+
+            title = _strip_icons(tab.get("title", ""))
             sessions.append(
                 {
                     "index": idx + 1,
@@ -289,7 +329,7 @@ def do_launch(socket, title, directory, account, flags=""):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
     cmd = ["launch", "--type=tab", "--tab-title", title, "--cwd", directory,
-           "--var", f"cc_account={account}"]
+           "--var", f"cc_account={account}", "--var", f"cc_cwd={directory}"]
 
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
@@ -401,6 +441,21 @@ def safe_addstr(win, y, x, text, attr=0):
         pass
 
 
+def _display_width(text):
+    """Return the visual display width of text, accounting for wide characters."""
+    w = 0
+    for ch in text:
+        eaw = unicodedata.east_asian_width(ch)
+        w += 2 if eaw in ("W", "F") else 1
+    return w
+
+
+def _pad_to_width(text, width):
+    """Pad text with spaces to reach the target visual width."""
+    current = _display_width(text)
+    return text + " " * max(0, width - current)
+
+
 def shorten_path(path, max_len):
     """Collapse home prefix to ~ and truncate long paths with a leading ellipsis."""
     home = os.path.expanduser("~")
@@ -486,10 +541,11 @@ def draw_list_view(stdscr, sessions, selected):
         cp = _cp_for_account(s["account"], selected=sel)
 
         short_dir = shorten_path(s["cwd"], c_dir - 1)
+        title_padded = _pad_to_width(s["title"], c_title)
         line = (
             f"{mark} "
             f'{s["index"]:<{c_tab}}'
-            f'{s["title"]:<{c_title}}'
+            f'{title_padded}'
             f'{s["account"]:<{c_acct}}'
             f"{short_dir:<{c_dir}}"
             f'{s["status"]}'
@@ -508,7 +564,7 @@ def draw_footer(stdscr, mode):
     rows, cols = stdscr.getmaxyx()
 
     hints = {
-        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  n New  r Refresh  q Quit",
+        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  n New  a All  r Refresh  q Quit",
         "confirm": "y Confirm close    Any other key Cancel",
         "new": "Enter Next/Submit    Tab Cycle    Esc Cancel",
     }
@@ -623,7 +679,8 @@ def dashboard(stdscr, socket):
     init_colors()
     stdscr.timeout(100)
 
-    sessions = query_sessions(socket)
+    show_all = False
+    sessions = query_sessions(socket, managed_only=True)
     selected = 0
 
     # Auto-scroll to the focused session, if one exists
@@ -683,8 +740,15 @@ def dashboard(stdscr, socket):
                 new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": ""}
                 new_active = 0
                 new_cursor = 0
+            elif key in (ord("a"), ord("A")):
+                show_all = not show_all
+                sessions = query_sessions(socket, managed_only=(not show_all))
+                selected = min(selected, max(0, len(sessions) - 1))
+                label = "all" if show_all else "managed"
+                msg = f"Showing {label} sessions ({len(sessions)} found)"
+                msg_frames = 20
             elif key in (ord("r"), ord("R")):
-                sessions = query_sessions(socket)
+                sessions = query_sessions(socket, managed_only=(not show_all))
                 selected = min(selected, max(0, len(sessions) - 1))
                 msg = f"{len(sessions)} session(s) found"
                 msg_frames = 20
@@ -693,7 +757,7 @@ def dashboard(stdscr, socket):
         elif mode == "confirm":
             if key in (ord("y"), ord("Y")) and sessions:
                 do_close(socket, sessions[selected]["tab_id"])
-                sessions = query_sessions(socket)
+                sessions = query_sessions(socket, managed_only=(not show_all))
                 selected = min(selected, max(0, len(sessions) - 1))
                 msg = "Session closed"
                 msg_frames = 20
@@ -725,7 +789,7 @@ def dashboard(stdscr, socket):
                     fl = new_fields["flags"].strip()
                     if t and d:
                         do_launch(socket, t, d, a, fl)
-                        sessions = query_sessions(socket)
+                        sessions = query_sessions(socket, managed_only=(not show_all))
                         selected = max(0, len(sessions) - 1)
                         msg = f'Launched "{t}"'
                         msg_frames = 20
