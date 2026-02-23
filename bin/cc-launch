@@ -332,7 +332,7 @@ launch_session() {
     effective_flags="$(resolve_claude_flags "$flags")"
 
     # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" $env_flag claude $effective_flags
+    kitty @ --to "$SOCKET" launch --type=tab --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" $env_flag claude $effective_flags
 
     # Apply tab colors. Retry a few times since Claude may briefly override
     # the tab title on startup.

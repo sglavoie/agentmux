@@ -347,7 +347,7 @@ def do_close(socket, tab_id):
 def do_launch(socket, title, directory, account, flags="", pw_override=""):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
-    cmd = ["launch", "--type=tab", "--tab-title", title, "--cwd", directory,
+    cmd = ["launch", "--type=tab", "--allow-remote-control", "--tab-title", title, "--cwd", directory,
            "--var", f"cc_account={account}", "--var", f"cc_cwd={directory}"]
 
     home = os.path.expanduser("~")
