@@ -16,7 +16,7 @@ SYMLINKS := \
 	$(PREFIX_ZFUNC)/_cc-status:completions/_cc-status \
 	$(PREFIX_KITTY)/cc-manager.conf:cc-manager.conf
 
-.PHONY: install uninstall
+.PHONY: install uninstall install-hooks
 
 install:
 	@mkdir -p $(PREFIX_BIN) $(PREFIX_LIB) $(PREFIX_KITTY) $(PREFIX_ZFUNC)
@@ -28,6 +28,13 @@ install:
 	@echo "  include cc-manager.conf"
 	@echo ""
 	@echo "Then reload Kitty config with ctrl+shift+f5."
+	@echo ""
+	@$(MAKE) --no-print-directory install-hooks
+
+install-hooks:
+	@echo "Installing Claude Code hooks..."
+	@bash $(CURDIR)/lib/install-hooks.sh "$(CURDIR)/config/hooks.example.json"
+	@echo "Hooks installation complete."
 
 uninstall:
 	@$(foreach pair,$(SYMLINKS),\
@@ -37,3 +44,7 @@ uninstall:
 			echo "Removed $$target"; \
 		fi;)
 	@echo "Done."
+	@echo ""
+	@echo "Note: Claude Code hooks in settings.json were not removed."
+	@echo "To remove them manually, edit each account's settings.json and"
+	@echo "delete the cc-hook-indicator entries from the hooks section."

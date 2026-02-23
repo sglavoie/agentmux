@@ -307,6 +307,8 @@ def query_sessions(socket, managed_only=True):
                     "status": (
                         "focused"
                         if (os_focused and tab.get("is_focused", False))
+                        else "active"
+                        if tab_title.startswith("⚡ ") or tab_title.startswith("★ ⚡ ")
                         else "idle"
                     ),
                     "tab_id": tab.get("id", 0),

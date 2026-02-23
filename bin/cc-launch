@@ -573,6 +573,8 @@ cmd_list() {
                 status: (
                     if ($os.is_focused and $tab.is_focused)
                     then "focused"
+                    elif ($tab.title | test("^(★ )?⚡ "))
+                    then "active"
                     else "idle"
                     end
                 )

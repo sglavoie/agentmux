@@ -23,7 +23,7 @@ Columns:
   Account    Account name from accounts.conf (matched by CLAUDE_CONFIG_DIR)
   Directory  The cwd of the first window in the tab
   Status     "focused" if both the tab and its OS window are focused,
-             otherwise "idle"
+             "active" if the tab title shows the ⚡ indicator, otherwise "idle"
 
 Socket discovery:
   1. Uses --socket value if provided.
@@ -231,9 +231,10 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
             end
         ) as $account |
 
-        # Status: focused only when both OS window and tab are focused
+        # Status: focused > active (⚡ indicator) > idle
         (
             if ($os.is_focused and $tab.is_focused) then "focused"
+            elif ($tab.title | test("^(★ )?⚡ ")) then "active"
             else "idle"
             end
         ) as $status |
