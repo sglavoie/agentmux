@@ -423,3 +423,206 @@ default_account_name() {
     done
     echo "work"
 }
+
+# ---------------------------------------------------------------------------
+# Sort managed tabs by account then title
+# ---------------------------------------------------------------------------
+sort_tabs() {
+    local socket="$1"
+    [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]] || return 0
+
+    _load_icons
+    local strip_re
+    strip_re="$(_icon_strip_regex)"
+    local managed_re="${strip_re}[A-Z]:"
+
+    local ls_json
+    ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 0
+
+    # Extract tab data from the first OS window: id, title, cc_account user var
+    local tab_data
+    tab_data="$(printf '%s' "$ls_json" | jq -r --arg strip_re "$strip_re" --arg managed_re "$managed_re" '
+        .[0].tabs // [] | to_entries[] |
+        .key as $pos | .value as $tab |
+        ($tab.title | sub($strip_re; "")) as $stripped |
+        (
+            [$tab.windows[]? | .user_vars.cc_account // empty | select(. != "")] |
+            if length > 0 then .[0] else "" end
+        ) as $cc_acct |
+        [
+            ($tab.id | tostring),
+            $tab.title,
+            $stripped,
+            $cc_acct,
+            (if $tab.is_focused then "1" else "0" end)
+        ] | @tsv
+    ')"
+
+    [[ -z "$tab_data" ]] && return 0
+
+    # Read tab data into arrays
+    local -a tab_ids=() tab_titles=() tab_stripped=() tab_accounts=() tab_focused=()
+    local -a managed_indices=() unmanaged_indices=()
+    local focused_id=""
+    local idx=0
+
+    while IFS=$'\t' read -r tid ttitle tstripped taccount tfocused; do
+        [[ -z "$tid" ]] && continue
+        tab_ids+=("$tid")
+        tab_titles+=("$ttitle")
+        tab_stripped+=("$tstripped")
+        tab_focused+=("$tfocused")
+
+        # Detect account: prefer cc_account user var, fall back to title prefix
+        if [[ -n "$taccount" ]]; then
+            tab_accounts+=("$taccount")
+        elif [[ "$tstripped" =~ ^[A-Z]: ]]; then
+            # Reverse-lookup account by initial
+            local initial="${tstripped:0:1}"
+            local found_account=""
+            local ai
+            for ((ai = 0; ai < ${#_ACCOUNT_NAMES[@]}; ai++)); do
+                local name_initial="${_ACCOUNT_NAMES[$ai]:0:1}"
+                name_initial="$(echo "$name_initial" | tr '[:lower:]' '[:upper:]')"
+                if [[ "$name_initial" == "$initial" ]]; then
+                    found_account="${_ACCOUNT_NAMES[$ai]}"
+                    break
+                fi
+            done
+            tab_accounts+=("${found_account:-unknown}")
+        else
+            tab_accounts+=("")
+        fi
+
+        # Classify as managed or not
+        if [[ -n "$taccount" ]] || [[ "$tstripped" =~ ^[A-Z]: ]]; then
+            managed_indices+=("$idx")
+        else
+            unmanaged_indices+=("$idx")
+        fi
+
+        if [[ "$tfocused" == "1" ]]; then
+            focused_id="$tid"
+        fi
+        idx=$((idx + 1))
+    done <<< "$tab_data"
+
+    local total=${#tab_ids[@]}
+    [[ $total -le 1 ]] && return 0
+    [[ ${#managed_indices[@]} -le 1 && ${#unmanaged_indices[@]} -eq 0 ]] && return 0
+
+    # Sort managed indices by (account_lower, stripped_title_lower)
+    local -a sort_input=()
+    local mi
+    for mi in "${managed_indices[@]}"; do
+        local sort_key
+        sort_key="$(echo "${tab_accounts[$mi]}:${tab_stripped[$mi]}" | tr '[:upper:]' '[:lower:]')"
+        sort_input+=("${sort_key}"$'\t'"${mi}")
+    done
+
+    local -a sorted_managed=()
+    if [[ ${#sort_input[@]} -gt 0 ]]; then
+        while IFS=$'\t' read -r _key si; do
+            sorted_managed+=("$si")
+        done < <(printf '%s\n' "${sort_input[@]}" | sort -f -t $'\t' -k1,1)
+    fi
+
+    # Build desired order: sorted managed first, then unmanaged in original order
+    local -a desired_order=()
+    for mi in "${sorted_managed[@]}"; do
+        desired_order+=("$mi")
+    done
+    for mi in "${unmanaged_indices[@]}"; do
+        desired_order+=("$mi")
+    done
+
+    # Check if already in correct order
+    local -a current_ids=()
+    local di
+    for ((di = 0; di < total; di++)); do
+        current_ids+=("${tab_ids[$di]}")
+    done
+
+    local -a desired_ids=()
+    for di in "${desired_order[@]}"; do
+        desired_ids+=("${tab_ids[$di]}")
+    done
+
+    local already_sorted=true
+    for ((di = 0; di < total; di++)); do
+        if [[ "${current_ids[$di]}" != "${desired_ids[$di]}" ]]; then
+            already_sorted=false
+            break
+        fi
+    done
+    [[ "$already_sorted" == "true" ]] && return 0
+
+    # Build position map: tab_id -> current position
+    local -a pos_by_id=()
+    for ((di = 0; di < total; di++)); do
+        pos_by_id+=("${current_ids[$di]}")
+    done
+
+    # Selection sort: for each target position, move the correct tab there
+    for ((di = 0; di < total; di++)); do
+        local want_id="${desired_ids[$di]}"
+
+        # Find current position of wanted tab
+        local cur_pos=-1
+        local pi
+        for ((pi = 0; pi < total; pi++)); do
+            if [[ "${pos_by_id[$pi]}" == "$want_id" ]]; then
+                cur_pos=$pi
+                break
+            fi
+        done
+
+        [[ $cur_pos -eq $di ]] && continue
+
+        # Focus the tab we want to move
+        kitty @ --to "$socket" focus-tab --match "id:$want_id" 2>/dev/null
+
+        if [[ $cur_pos -gt $di ]]; then
+            # Move backward (cur_pos - di) times
+            local moves=$((cur_pos - di))
+            local mi
+            for ((mi = 0; mi < moves; mi++)); do
+                kitty @ --to "$socket" action move_tab_backward 2>/dev/null
+            done
+        else
+            # Move forward (di - cur_pos) times
+            local moves=$((di - cur_pos))
+            local mi
+            for ((mi = 0; mi < moves; mi++)); do
+                kitty @ --to "$socket" action move_tab_forward 2>/dev/null
+            done
+        fi
+
+        # Update position tracking: remove from cur_pos, insert at di
+        local moved_id="${pos_by_id[$cur_pos]}"
+        local -a new_pos=()
+        for ((pi = 0; pi < total; pi++)); do
+            [[ $pi -eq $cur_pos ]] && continue
+            new_pos+=("${pos_by_id[$pi]}")
+        done
+        # Insert at di
+        local -a final_pos=()
+        local inserted=false
+        for ((pi = 0; pi < ${#new_pos[@]}; pi++)); do
+            if [[ $pi -eq $di ]] && [[ "$inserted" == "false" ]]; then
+                final_pos+=("$moved_id")
+                inserted=true
+            fi
+            final_pos+=("${new_pos[$pi]}")
+        done
+        if [[ "$inserted" == "false" ]]; then
+            final_pos+=("$moved_id")
+        fi
+        pos_by_id=("${final_pos[@]}")
+    done
+
+    # Restore focus to the originally focused tab
+    if [[ -n "$focused_id" ]]; then
+        kitty @ --to "$socket" focus-tab --match "id:$focused_id" 2>/dev/null
+    fi
+}

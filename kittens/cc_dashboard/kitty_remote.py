@@ -332,3 +332,103 @@ def do_restart(socket, session, flags="", pw_override=""):
     do_launch(
         socket, session["title"], session["cwd"], session["account"], flags, pw_override
     )
+
+
+def do_sort_tabs(socket):
+    """Sort managed tabs by account then title, pushing non-managed tabs to the end.
+
+    Checks _cfg._default_sort_sessions and returns immediately if not "alpha".
+    Uses kitty @ focus-tab + action move_tab_forward/backward to reorder.
+    """
+    if _cfg._default_sort_sessions != "alpha":
+        return
+
+    result = kitty_cmd(socket, "ls")
+    if not result or result.returncode != 0:
+        return
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return
+
+    if not data:
+        return
+    tabs = data[0].get("tabs", [])
+    if len(tabs) <= 1:
+        return
+
+    # Build tab info list with classification
+    managed = []  # (sort_key, position, tab_id)
+    unmanaged = []  # (position, tab_id)
+    focused_id = None
+
+    for pos, tab in enumerate(tabs):
+        tab_id = tab.get("id", 0)
+        title = tab.get("title", "")
+        stripped = _strip_icons(title)
+
+        if tab.get("is_focused", False):
+            focused_id = tab_id
+
+        # Detect account from user vars
+        cc_account = ""
+        for win in tab.get("windows", []):
+            uv = win.get("user_vars", {})
+            acc = uv.get("cc_account", "")
+            if acc:
+                cc_account = acc
+                break
+
+        is_managed = bool(cc_account) or bool(_MANAGED_TITLE_RE.match(title))
+
+        if is_managed:
+            account = cc_account
+            if not account and _MANAGED_TITLE_RE.match(title):
+                initial = stripped[0].upper() if stripped else ""
+                for name in _cfg._account_names:
+                    if name and name[0].upper() == initial:
+                        account = name
+                        break
+                if not account:
+                    account = "unknown"
+            sort_key = (account.lower(), stripped.lower())
+            managed.append((sort_key, pos, tab_id))
+        else:
+            unmanaged.append((pos, tab_id))
+
+    if not managed:
+        return
+
+    # Build desired order
+    managed.sort(key=lambda x: x[0])
+    desired_ids = [m[2] for m in managed] + [u[1] for u in unmanaged]
+    current_ids = [tab.get("id", 0) for tab in tabs]
+
+    if desired_ids == current_ids:
+        return
+
+    # Selection sort using focus + move
+    pos_list = list(current_ids)
+    total = len(pos_list)
+
+    for target_pos in range(total):
+        want_id = desired_ids[target_pos]
+
+        cur_pos = pos_list.index(want_id)
+        if cur_pos == target_pos:
+            continue
+
+        kitty_cmd(socket, "focus-tab", "--match", f"id:{want_id}")
+
+        moves = abs(cur_pos - target_pos)
+        direction = "move_tab_backward" if cur_pos > target_pos else "move_tab_forward"
+        for _ in range(moves):
+            kitty_cmd(socket, "action", direction)
+
+        # Update position tracking
+        pos_list.pop(cur_pos)
+        pos_list.insert(target_pos, want_id)
+
+    # Restore original focus
+    if focused_id is not None:
+        kitty_cmd(socket, "focus-tab", "--match", f"id:{focused_id}")

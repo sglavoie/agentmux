@@ -12,6 +12,8 @@
 #   sort_sessions   — Sort sessions alphabetically by title on launch.
 #                     Values: (empty) = preserve file order, alpha = alphabetical
 #                     Useful for grouping tabs by account prefix (P:, T:, W:, etc.).
+#                     Also reorders live tabs after creating or restarting sessions
+#                     so new tabs land in sorted position rather than at the end.
 #   dashboard_refresh — Auto-refresh interval (seconds) for the dashboard.
 #                       Values: 0 = disabled, any positive integer = interval
 #                       Default: 3

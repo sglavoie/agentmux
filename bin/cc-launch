@@ -121,6 +121,7 @@ cmd_launch_interactive() {
         fi
     done <<< "$picker_output"
 
+    sort_tabs "$SOCKET"
     echo "Launched $launched new session(s), $existed already existed."
 }
 
@@ -167,6 +168,7 @@ cmd_launch_all() {
         fi
     done <<< "$lines"
 
+    sort_tabs "$SOCKET"
     echo "Launched $launched new session(s), $existed already existed."
 }
 
@@ -208,6 +210,7 @@ cmd_add() {
     fi
 
     launch_session "$title" "$dir" "$account" ""
+    sort_tabs "$SOCKET"
 }
 
 # ---------------------------------------------------------------------------
@@ -351,6 +354,7 @@ cmd_restart() {
     echo "Closed tab '$title', relaunching..."
     sleep 0.3
     launch_session "$title" "$dir" "$account" ""
+    sort_tabs "$SOCKET"
 }
 
 # ---------------------------------------------------------------------------
@@ -735,7 +739,8 @@ Defaults (defined in ~/.config/cc-manager/defaults.conf):
         claude_flags     — Extra flags passed to every Claude session
         project_window   — Open a shell window alongside Claude in each tab.
                            Values: (empty) = disabled, stack, vsplit, hsplit, split
-        sort_sessions    — Sort sessions alphabetically by title on launch.
+        sort_sessions    — Sort sessions alphabetically by title on launch and
+                           reorder live tabs after creating or restarting sessions.
                            Values: (empty) = file order, alpha = alphabetical
         dashboard_refresh — Auto-refresh interval (seconds) for the dashboard.
                            Values: 0 = disabled, any positive integer = interval.

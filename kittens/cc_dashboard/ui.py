@@ -12,6 +12,7 @@ from cc_dashboard.kitty_remote import (
     do_focus,
     do_launch,
     do_restart,
+    do_sort_tabs,
     format_duration,
     query_sessions,
 )
@@ -1252,6 +1253,7 @@ def dashboard(stdscr, socket):
         elif mode == "confirm_restart":
             if key in (ord("y"), ord("Y")) and filtered:
                 do_restart(socket, filtered[selected])
+                do_sort_tabs(socket)
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
@@ -1289,6 +1291,7 @@ def dashboard(stdscr, socket):
                     pw_val = "" if pw_val == "none" else pw_val
                     if t and d:
                         do_launch(socket, t, d, a, fl, pw_val)
+                        do_sort_tabs(socket)
                         sessions = query_sessions(socket, managed_only=(not show_all))
                         filtered = _apply_filters(
                             sessions, search_query, account_filter
@@ -1408,6 +1411,7 @@ def dashboard(stdscr, socket):
                     entry["flags"],
                     pw_val,
                 )
+                do_sort_tabs(socket)
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = max(0, len(filtered) - 1)
