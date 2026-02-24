@@ -137,6 +137,19 @@ def _pad_to_width(text, width):
     return text + " " * max(0, width - current)
 
 
+def _filter_sessions(sessions, query):
+    """Return sessions matching query (case-insensitive) against title, cwd, or account."""
+    if not query:
+        return sessions
+    q = query.lower()
+    return [
+        s for s in sessions
+        if q in s["title"].lower()
+        or q in s["cwd"].lower()
+        or q in s["account"].lower()
+    ]
+
+
 def shorten_path(path, max_len):
     """Collapse home prefix to ~ and truncate long paths with a leading ellipsis."""
     home = os.path.expanduser("~")
@@ -245,7 +258,7 @@ def draw_footer(stdscr, mode):
     rows, cols = stdscr.getmaxyx()
 
     hints = {
-        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  n New  a All  r Refresh  q Quit",
+        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  n New  / Search  a All  r Refresh  q Quit",
         "confirm": "y Confirm close    Any other key Cancel",
         "new": "Enter Next/Submit    Tab Cycle    Esc Cancel",
     }
@@ -264,6 +277,42 @@ def draw_status_message(stdscr, message):
     """Draw a transient status message above the footer."""
     rows, _ = stdscr.getmaxyx()
     safe_addstr(stdscr, rows - 3, 2, message, curses.color_pair(CP_WARN))
+
+
+def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
+    """Draw the search/filter bar on the status line."""
+    rows, cols = stdscr.getmaxyx()
+    y = rows - 3
+
+    if active:
+        # Active search input: / query|
+        prefix = "/ "
+        before = query[:cursor_pos]
+        after = query[cursor_pos:]
+        cursor_ch = after[0] if after else " "
+        after_rest = after[1:] if len(after) > 1 else ""
+
+        safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
+        x = 2 + len(prefix)
+        safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+        safe_addstr(
+            stdscr, y, x + len(before), cursor_ch,
+            curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+        )
+        if after_rest:
+            safe_addstr(
+                stdscr, y, x + len(before) + 1, after_rest,
+                curses.color_pair(CP_INPUT_ACTIVE),
+            )
+        hint = f"  ({match_count} matches)"
+        safe_addstr(
+            stdscr, y, x + len(query) + 1, hint,
+            curses.color_pair(CP_DIM),
+        )
+    else:
+        # Accepted filter display
+        text = f'Filter: "{query}" ({match_count} matches)  [Esc clear]'
+        safe_addstr(stdscr, y, 2, text, curses.color_pair(CP_DIM))
 
 
 def draw_new_form(stdscr, fields, active_field, cursor_pos):
@@ -389,6 +438,12 @@ def dashboard(stdscr, socket):
     msg = ""
     msg_frames = 0
 
+    # Search/filter state
+    search_query = ""
+    search_active = False
+    search_cursor = 0
+    filtered = sessions
+
     # New-session form state — default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
     default_pw = _cfg._default_project_window if _cfg._default_project_window else "none"
@@ -399,11 +454,16 @@ def dashboard(stdscr, socket):
     while True:
         # ── Draw ─────────────────────────────────────────────────
         if mode in ("list", "confirm"):
-            draw_list_view(stdscr, sessions, selected)
+            draw_list_view(stdscr, filtered, selected)
             if msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
-            if mode == "confirm" and sessions:
-                draw_confirm_prompt(stdscr, sessions[selected])
+            elif search_active or search_query:
+                draw_search_bar(
+                    stdscr, search_query, search_cursor,
+                    search_active, len(filtered),
+                )
+            if mode == "confirm" and filtered:
+                draw_confirm_prompt(stdscr, filtered[selected])
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor)
 
@@ -421,16 +481,76 @@ def dashboard(stdscr, socket):
 
         # ── List mode ────────────────────────────────────────────
         if mode == "list":
-            if key in (ord("q"), ord("Q"), 27):
+            # ── Search-active input handling ─────────────────────
+            if search_active:
+                if key == 27:  # Escape — cancel search
+                    search_active = False
+                    search_query = ""
+                    search_cursor = 0
+                    filtered = sessions
+                    selected = min(selected, max(0, len(filtered) - 1))
+                    continue
+                elif key in (10, 13, curses.KEY_ENTER):  # Accept filter
+                    search_active = False
+                    continue
+                elif key in (curses.KEY_UP, ord("k"), ord("K")) and filtered:
+                    selected = (selected - 1) % len(filtered)
+                    continue
+                elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and filtered:
+                    selected = (selected + 1) % len(filtered)
+                    continue
+                elif key in (curses.KEY_BACKSPACE, 127, 8):
+                    if search_cursor > 0:
+                        search_query = (
+                            search_query[: search_cursor - 1]
+                            + search_query[search_cursor:]
+                        )
+                        search_cursor -= 1
+                        filtered = _filter_sessions(sessions, search_query)
+                        selected = min(selected, max(0, len(filtered) - 1))
+                    continue
+                elif key == curses.KEY_LEFT:
+                    search_cursor = max(0, search_cursor - 1)
+                    continue
+                elif key == curses.KEY_RIGHT:
+                    search_cursor = min(len(search_query), search_cursor + 1)
+                    continue
+                elif 32 <= key < 127:
+                    search_query = (
+                        search_query[:search_cursor]
+                        + chr(key)
+                        + search_query[search_cursor:]
+                    )
+                    search_cursor += 1
+                    filtered = _filter_sessions(sessions, search_query)
+                    selected = min(selected, max(0, len(filtered) - 1))
+                    continue
+                else:
+                    continue
+
+            if key in (ord("q"), ord("Q")):
                 return
-            if key in (curses.KEY_UP, ord("k"), ord("K")) and sessions:
-                selected = (selected - 1) % len(sessions)
-            elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and sessions:
-                selected = (selected + 1) % len(sessions)
-            elif key in (10, 13, curses.KEY_ENTER) and sessions:
-                do_focus(socket, sessions[selected]["tab_id"])
+            if key == 27:  # Escape
+                if search_query:
+                    search_query = ""
+                    search_cursor = 0
+                    filtered = sessions
+                    selected = min(selected, max(0, len(filtered) - 1))
+                else:
+                    return
+            elif key == ord("/"):
+                search_active = True
+                search_query = ""
+                search_cursor = 0
+                filtered = sessions
+            elif key in (curses.KEY_UP, ord("k"), ord("K")) and filtered:
+                selected = (selected - 1) % len(filtered)
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and filtered:
+                selected = (selected + 1) % len(filtered)
+            elif key in (10, 13, curses.KEY_ENTER) and filtered:
+                do_focus(socket, filtered[selected]["tab_id"])
                 return
-            elif key in (ord("x"), ord("X")) and sessions:
+            elif key in (ord("x"), ord("X")) and filtered:
                 mode = "confirm"
             elif key in (ord("n"), ord("N")):
                 mode = "new"
@@ -440,22 +560,25 @@ def dashboard(stdscr, socket):
             elif key in (ord("a"), ord("A")):
                 show_all = not show_all
                 sessions = query_sessions(socket, managed_only=(not show_all))
-                selected = min(selected, max(0, len(sessions) - 1))
+                filtered = _filter_sessions(sessions, search_query)
+                selected = min(selected, max(0, len(filtered) - 1))
                 label = "all" if show_all else "managed"
-                msg = f"Showing {label} sessions ({len(sessions)} found)"
+                msg = f"Showing {label} sessions ({len(filtered)} found)"
                 msg_frames = 20
             elif key in (ord("r"), ord("R")):
                 sessions = query_sessions(socket, managed_only=(not show_all))
-                selected = min(selected, max(0, len(sessions) - 1))
-                msg = f"{len(sessions)} session(s) found"
+                filtered = _filter_sessions(sessions, search_query)
+                selected = min(selected, max(0, len(filtered) - 1))
+                msg = f"{len(filtered)} session(s) found"
                 msg_frames = 20
 
         # ── Confirm close ────────────────────────────────────────
         elif mode == "confirm":
-            if key in (ord("y"), ord("Y")) and sessions:
-                do_close(socket, sessions[selected]["tab_id"])
+            if key in (ord("y"), ord("Y")) and filtered:
+                do_close(socket, filtered[selected]["tab_id"])
                 sessions = query_sessions(socket, managed_only=(not show_all))
-                selected = min(selected, max(0, len(sessions) - 1))
+                filtered = _filter_sessions(sessions, search_query)
+                selected = min(selected, max(0, len(filtered) - 1))
                 msg = "Session closed"
                 msg_frames = 20
             mode = "list"
@@ -491,7 +614,8 @@ def dashboard(stdscr, socket):
                     if t and d:
                         do_launch(socket, t, d, a, fl, pw_val)
                         sessions = query_sessions(socket, managed_only=(not show_all))
-                        selected = max(0, len(sessions) - 1)
+                        filtered = _filter_sessions(sessions, search_query)
+                        selected = max(0, len(filtered) - 1)
                         msg = f'Launched "{t}"'
                         msg_frames = 20
                     else:
