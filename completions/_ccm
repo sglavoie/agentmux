@@ -66,6 +66,7 @@ _ccm() {
                             'star[Toggle star on active tab]' \
                             'config[Manage config files]' \
                             'dashboard[Launch curses dashboard kitten]' \
+                            'switch[Quick-switch to a session]' \
                             'help[Show help]'
                         return
                         ;;
@@ -98,7 +99,7 @@ _ccm() {
             ;;
         help)
             [[ $CURRENT -eq 3 ]] && _values 'command' \
-                'launch' 'status' 'star' 'config' 'dashboard'
+                'launch' 'status' 'star' 'config' 'dashboard' 'switch'
             ;;
         *)
             _values 'command' \
@@ -107,6 +108,7 @@ _ccm() {
                 'star[Toggle star on active tab]' \
                 'config[Manage config files]' \
                 'dashboard[Launch curses dashboard kitten]' \
+                'switch[Quick-switch to a session]' \
                 'help[Show help]' \
                 '--socket[Target a specific Kitty socket]' \
                 '--version[Print version]'

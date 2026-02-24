@@ -239,6 +239,18 @@ FILE can be: accounts, sessions, defaults, hooks
 When FILE is omitted, edit/show/path operate on accounts, sessions, and defaults.
 HELP
             ;;
+        switch)
+            cat <<'HELP'
+Usage: ccm switch
+
+Launch a lightweight fuzzy-finder overlay listing all running Claude sessions.
+Type to filter by title, account, or working directory. Use arrow keys or
+ctrl+n/ctrl+p to navigate, Enter to jump to the selected session, Escape to
+dismiss without switching.
+
+Keyboard shortcut: ctrl+shift+p (in Kitty with cc-manager.conf included).
+HELP
+            ;;
         "")
             cat <<HELP
 ccm $CCM_VERSION — Claude Code Manager CLI
@@ -251,6 +263,7 @@ Commands:
     star [args]         Toggle star on active tab (delegates to cc-toggle-star)
     config <subcmd>     Manage config files (edit, show, path, init)
     dashboard           Launch the curses dashboard kitten
+    switch              Quick-switch: fuzzy-find and jump to a session
     help [COMMAND]      Show help for cc or a specific command
     --version           Print version
 
@@ -302,6 +315,9 @@ main() {
             ;;
         dashboard)
             exec kitten claude_dashboard.py
+            ;;
+        switch)
+            exec kitten cc_quick_switch.py
             ;;
         help)
             shift
