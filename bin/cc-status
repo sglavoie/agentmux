@@ -5,6 +5,11 @@ set -euo pipefail
 # cc-status — show active Claude Code sessions running in Kitty tabs
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Shared library
+# ---------------------------------------------------------------------------
+source "$(dirname "$(readlink -f "$0")")/../lib/cc-common.sh"
+
 show_help() {
     cat <<'EOF'
 Usage: cc-status [--socket SOCKET] [--all] [--help]
@@ -66,99 +71,10 @@ done
 # ---- Socket discovery (if not overridden) ----------------------------------
 
 if [[ -z "$SOCKET" ]]; then
-    if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
-        SOCKET="$KITTY_LISTEN_ON"
-    else
-        latest_socket=""
-        latest_mtime=0
-        for sock in /tmp/kitty-*; do
-            [[ -e "$sock" ]] || continue
-            if [[ "$OSTYPE" == darwin* ]]; then
-                mtime=$(stat -f '%m' "$sock" 2>/dev/null || echo 0)
-            else
-                mtime=$(stat -c '%Y' "$sock" 2>/dev/null || echo 0)
-            fi
-            if (( mtime > latest_mtime )); then
-                latest_mtime=$mtime
-                latest_socket="$sock"
-            fi
-        done
-
-        if [[ -z "$latest_socket" ]]; then
-            echo "Error: No kitty socket found. Is Kitty running with remote control enabled?" >&2
-            exit 1
-        fi
-        SOCKET="unix:$latest_socket"
-    fi
+    SOCKET="$(discover_socket)"
 fi
 
-# ---- Account loading -------------------------------------------------------
-
-ACCOUNTS_CONFIG="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.conf}"
-
-expand_tilde() {
-    local path="$1"
-    if [[ "$path" == "~"* ]]; then
-        echo "${HOME}${path:1}"
-    else
-        echo "$path"
-    fi
-}
-
-# Parallel indexed arrays (bash 3 compatible)
-_ACCOUNT_NAMES=()
-_ACCOUNT_DIRS=()
-
-load_accounts() {
-    _ACCOUNT_NAMES=()
-    _ACCOUNT_DIRS=()
-
-    if [[ -f "$ACCOUNTS_CONFIG" ]]; then
-        while IFS= read -r line || [[ -n "$line" ]]; do
-            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-            local name config_dir color
-            IFS='|' read -r name config_dir color <<< "$line"
-            name="$(echo "$name" | xargs)"
-            config_dir="$(echo "$config_dir" | xargs)"
-            config_dir="$(expand_tilde "$config_dir")"
-            [[ -z "$name" ]] && continue
-            _ACCOUNT_NAMES+=("$name")
-            _ACCOUNT_DIRS+=("$config_dir")
-        done < "$ACCOUNTS_CONFIG"
-    else
-        _ACCOUNT_NAMES=(work personal)
-        _ACCOUNT_DIRS=("$HOME/.claude" "$HOME/.claude-personal")
-    fi
-}
-
-# Build JSON mapping of config_dir → account_name (for jq --argjson)
-build_accounts_json() {
-    local json="{"
-    local first=true
-    local i
-    for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
-        [[ "$first" == "true" ]] || json+=","
-        first=false
-        json+="$(printf '%s:%s' \
-            "$(echo "${_ACCOUNT_DIRS[$i]}" | jq -Rs '.[:-1]')" \
-            "$(echo "${_ACCOUNT_NAMES[$i]}" | jq -Rs '.[:-1]')")"
-    done
-    json+="}"
-    echo "$json"
-}
-
-# Find the account name that uses the default config dir
-default_account_name() {
-    local i
-    for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
-        local dir="${_ACCOUNT_DIRS[$i]}"
-        if [[ -z "$dir" || "$dir" == "$HOME/.claude" ]]; then
-            echo "${_ACCOUNT_NAMES[$i]}"
-            return
-        fi
-    done
-    echo "work"
-}
+# ---- Load accounts ---------------------------------------------------------
 
 load_accounts
 

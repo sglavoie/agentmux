@@ -12,13 +12,15 @@ There is no build step or test suite. The project consists of shell scripts and 
 
 ## Architecture
 
-The codebase has a unified CLI entry point and three main components that share the same account-loading logic and color palette, implemented independently in each file.
+The codebase has a unified CLI entry point, a shared Bash library, and three main components.
 
 `bin/ccm` is the unified CLI entry point (~150 lines) that provides a single `ccm` command with subcommands. It delegates `ccm launch`, `ccm status`, and `ccm star` to the existing scripts via `exec`, and implements `ccm config` subcommands (edit, show, path, init) for managing config files. It also provides `ccm dashboard` to launch the curses kitten and `ccm help` for discoverability.
 
-`bin/cc-launch` is the primary Bash script (~850 lines). It handles session lifecycle: launching tabs from `sessions.conf`, adding/closing individual tabs, listing active sessions, saving current state back to config, and cleaning up stale tabs. It uses `kitty @ launch`, `kitty @ ls`, and `kitty @ set-tab-color` for all Kitty interactions, and optionally uses `gum` (charmbracelet/gum) for interactive TUI prompts. The dispatch is a case-match in `main()` routing `--all`, `--add`, `--close`, `--list`, `--save`, `--cleanup`, and `--sockets` to their respective `cmd_*` functions.
+`lib/cc-common.sh` is the shared Bash library sourced by both `cc-launch` and `cc-status`. It contains socket discovery, gum detection and styling, config file path resolution, tilde expansion, account loading (parallel indexed arrays), defaults loading, flag/project-window resolution, the 10-color palette, account-to-color mapping, and the `build_accounts_json`/`default_account_name` utilities. It has a source guard to prevent double-sourcing and does not call any functions at source time; callers invoke `load_accounts`, `load_defaults`, etc. explicitly.
 
-`bin/cc-status` is a smaller Bash script that queries `kitty @ ls` and prints a dynamically-sized table of active Claude sessions. It duplicates the account-loading and `build_accounts_json` logic from `cc-launch`.
+`bin/cc-launch` is the primary Bash script (~650 lines). It handles session lifecycle: launching tabs from `sessions.conf`, adding/closing individual tabs, listing active sessions, saving current state back to config, and cleaning up stale tabs. It uses `kitty @ launch`, `kitty @ ls`, and `kitty @ set-tab-color` for all Kitty interactions, and optionally uses `gum` (charmbracelet/gum) for interactive TUI prompts. The dispatch is a case-match in `main()` routing `--all`, `--add`, `--close`, `--list`, `--save`, `--cleanup`, and `--sockets` to their respective `cmd_*` functions.
+
+`bin/cc-status` is a smaller Bash script that queries `kitty @ ls` and prints a dynamically-sized table of active Claude sessions. It sources `lib/cc-common.sh` for account loading and utility functions.
 
 `kittens/claude_dashboard.py` is a Python curses application that runs as a Kitty overlay kitten (via `kitten claude_dashboard.py`). It provides an interactive session list with navigation, close-confirmation, and a new-session creation form. It reimplements account loading and the color palette in Python, and calls `kitty @` commands via `subprocess.run`.
 
@@ -30,7 +32,7 @@ Config files use pipe-delimited formats: `accounts.conf` has `name | config_dir 
 
 `defaults.conf` provides global settings using `key = value` format. Supported keys are `claude_flags` (extra flags passed to every Claude session, e.g. `--dangerously-skip-permissions`) and `project_window` (open a shell window alongside Claude in each tab; valid values are empty/unset for disabled, `stack`, `vsplit`, `hsplit`, `split`). The file path can be overridden via the `CC_MANAGER_DEFAULTS` environment variable. Override resolution follows a simple model for both keys: if a session's column is empty, the global default applies; if it is `-`, the feature is disabled; any other value replaces the global default entirely with no merging. Note that the `--save` command reconstructs `sessions.conf` from live Kitty tab state and cannot recover per-session flag or project_window overrides, so the 4th and 5th columns are not round-tripped.
 
-The color palette has exactly 10 named colors (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan), each with active/inactive background hex values. This palette is defined three times: in `cc-launch` (as shell case statements returning kitty color args), in `cc-status` (inherited via accounts JSON), and in `claude_dashboard.py` (as a Python dict of RGB tuples). Changes to the palette must be synchronized across all three files.
+The color palette has exactly 10 named colors (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan), each with active/inactive background hex values. This palette is defined twice: in `lib/cc-common.sh` (as shell case statements returning kitty color args, used by both `cc-launch` and `cc-status`) and in `claude_dashboard.py` (as a Python dict of RGB tuples). Changes to the palette must be synchronized across both files.
 
 Tab title convention uses an uppercase initial of the account name followed by a colon (e.g., `W:project` for work, `P:dotfiles` for personal). The `--cleanup` command relies on this pattern to identify managed tabs.
 
