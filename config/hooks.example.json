@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cc-hook-indicator active",
+            "command": "cc-hook-indicator active prompt",
             "async": true
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cc-hook-indicator active",
+            "command": "cc-hook-indicator active tool",
             "async": true
           }
         ]

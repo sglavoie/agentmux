@@ -2,6 +2,7 @@
 
 import curses
 import os
+import time
 import unicodedata
 
 from cc_dashboard import config as _cfg
@@ -11,6 +12,7 @@ from cc_dashboard.kitty_remote import (
     do_focus,
     do_launch,
     do_restart,
+    format_duration,
     query_sessions,
 )
 
@@ -22,6 +24,7 @@ CP_DIM = 3
 CP_WARN = 4
 CP_INPUT = 5
 CP_INPUT_ACTIVE = 6
+CP_ATTENTION = 7
 
 # Dynamic account color pairs start at this offset.
 # Each account gets two pair IDs: one normal, one selected.
@@ -31,6 +34,7 @@ _CP_ACCOUNT_BASE = 10
 SEL_BG = (40, 40, 60)
 DIM_FG = (110, 110, 110)
 WARN_FG = (220, 180, 50)
+ATTENTION_FG = (255, 80, 60)
 
 # Maps account name -> (cp_normal, cp_selected) curses color pair IDs
 _account_cp = {}
@@ -59,9 +63,11 @@ def init_colors():
         curses.init_color(base, *_c(*SEL_BG))
         curses.init_color(base + 1, *_c(*DIM_FG))
         curses.init_color(base + 2, *_c(*WARN_FG))
+        curses.init_color(base + 3, *_c(*ATTENTION_FG))
         sel_bg_slot = base
         dim_slot = base + 1
         warn_slot = base + 2
+        attention_slot = base + 3
 
         curses.init_pair(CP_NORMAL, -1, -1)
         curses.init_pair(CP_HEADER, curses.COLOR_WHITE, -1)
@@ -69,9 +75,10 @@ def init_colors():
         curses.init_pair(CP_WARN, warn_slot, -1)
         curses.init_pair(CP_INPUT, -1, -1)
         curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, sel_bg_slot)
+        curses.init_pair(CP_ATTENTION, attention_slot, -1)
 
         # Dynamically allocate a color slot + two pair IDs per account
-        color_slot = base + 3
+        color_slot = base + 4
         pair_id = _CP_ACCOUNT_BASE
         for name in _cfg._account_names:
             color_name = _cfg._accounts[name]["color"]
@@ -95,6 +102,7 @@ def init_colors():
         curses.init_pair(CP_WARN, curses.COLOR_YELLOW, -1)
         curses.init_pair(CP_INPUT, -1, -1)
         curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, curses.COLOR_BLACK)
+        curses.init_pair(CP_ATTENTION, curses.COLOR_RED, -1)
 
         pair_id = _CP_ACCOUNT_BASE
         for i, name in enumerate(_cfg._account_names):
@@ -204,7 +212,7 @@ def shorten_path(path, max_len):
 
 # ── Detail pane ──────────────────────────────────────────────────────────────
 
-DETAIL_PANE_HEIGHT = 9
+DETAIL_PANE_HEIGHT = 11
 
 
 def draw_detail_pane(stdscr, session, detail_y):
@@ -307,6 +315,39 @@ def draw_detail_pane(stdscr, session, detail_y):
     safe_addstr(stdscr, y, lx, " Cmdline: ", label_attr)
     safe_addstr(stdscr, y, lx + 10, (cmdline_display if cmdline_display else "n/a")[:cols - lx - 11], val_attr)
 
+    # Row 7–8: Activity data
+    activity = session.get("activity")
+    if activity:
+        now = int(time.time())
+        age_str = format_duration(now - activity["first_event_ts"])
+        last_active_str = time.strftime("%H:%M:%S", time.localtime(activity["last_event_ts"]))
+
+        y += 1
+        safe_addstr(stdscr, y, lx, " Session age: ", label_attr)
+        safe_addstr(stdscr, y, lx + 14, age_str, val_attr)
+        safe_addstr(stdscr, y, rx, "Last active: ", label_attr)
+        safe_addstr(stdscr, y, rx + 13, last_active_str, val_attr)
+
+        y += 1
+        safe_addstr(stdscr, y, lx, " Events: ", label_attr)
+        parts_x = lx + 9
+        prompts_str = f'{activity["prompt_count"]} prompts, '
+        tools_str = f'{activity["tool_use_count"]} tools, '
+        errors_str = f'{activity["tool_failure_count"]} errors, '
+        perms_str = f'{activity["permission_count"]} permissions'
+        safe_addstr(stdscr, y, parts_x, prompts_str, val_attr)
+        parts_x += len(prompts_str)
+        safe_addstr(stdscr, y, parts_x, tools_str, val_attr)
+        parts_x += len(tools_str)
+        err_attr = curses.color_pair(CP_WARN) if activity["tool_failure_count"] > 0 else val_attr
+        safe_addstr(stdscr, y, parts_x, errors_str, err_attr)
+        parts_x += len(errors_str)
+        perm_attr = curses.color_pair(CP_WARN) if activity["permission_count"] > 0 else val_attr
+        safe_addstr(stdscr, y, parts_x, perms_str, perm_attr)
+    else:
+        y += 1
+        safe_addstr(stdscr, y, lx, " No activity data", curses.color_pair(CP_DIM))
+
 
 # ── Drawing ──────────────────────────────────────────────────────────────────
 
@@ -344,7 +385,7 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
     c_tab = 5
     c_title = 28
     c_acct = 10
-    c_status = 11
+    c_status = 18
     c_dir = max(12, cols - c_tab - c_title - c_acct - c_status - 8)
 
     # Header row
@@ -385,19 +426,36 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
 
         short_dir = shorten_path(s["cwd"], c_dir - 1)
         title_padded = _pad_to_width(s["title"], c_title)
+
+        # Build status text with idle duration from activity data
+        status_text = s["status"]
+        activity = s.get("activity")
+        if activity:
+            now = int(time.time())
+            idle_secs = now - activity["last_event_ts"]
+            status_text = f'{s["status"]} {format_duration(idle_secs)}'
+
         line = (
             f"{mark} "
             f'{s["index"]:<{c_tab}}'
             f'{title_padded}'
             f'{s["account"]:<{c_acct}}'
             f"{short_dir:<{c_dir}}"
-            f'{s["status"]}'
         )
 
-        attr = curses.color_pair(cp)
+        row_attr = curses.color_pair(cp)
         if sel:
-            attr |= curses.A_BOLD
-        safe_addstr(stdscr, 5 + vi, 1, line, attr)
+            row_attr |= curses.A_BOLD
+        y = 5 + vi
+        safe_addstr(stdscr, y, 1, line, row_attr)
+
+        # Render status with attention highlighting for permission/error
+        status_x = 1 + len(line)
+        if s["status"] in ("permission", "error"):
+            status_attr = curses.color_pair(CP_ATTENTION) | curses.A_BOLD
+        else:
+            status_attr = row_attr
+        safe_addstr(stdscr, y, status_x, status_text, status_attr)
 
     draw_footer(stdscr, "list")
 
@@ -693,7 +751,9 @@ def _session_fingerprint(sessions):
     """Return a hashable fingerprint of session state for change detection."""
     return tuple(
         (s["tab_id"], s["title"], s["status"], s["cwd"], s["account"],
-         s.get("window_count", 1))
+         s.get("window_count", 1),
+         (s.get("activity") or {}).get("last_event_ts"),
+         (s.get("activity") or {}).get("last_event_type"))
         for s in sessions
     )
 

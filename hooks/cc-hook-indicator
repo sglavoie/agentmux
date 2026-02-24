@@ -7,17 +7,29 @@ set -euo pipefail
 # automatically for all processes inside its windows).
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: cc-hook-indicator active|stop|permission|idle|failure|clear [WINDOW_ID]" >&2
+    echo "Usage: cc-hook-indicator active|stop|permission|idle|failure|clear [EVENT_KIND] [WINDOW_ID]" >&2
     exit 1
 fi
 
 ACTION="$1"
+EVENT_KIND=""
 
-# Accept optional window ID as $2 (used by F4 keybinding via @active-kitty-window-id),
-# falling back to KITTY_WINDOW_ID (set automatically inside Kitty windows for hooks).
-if [[ $# -ge 2 ]]; then
-    KITTY_WINDOW_ID="$2"
-elif [[ -z "${KITTY_WINDOW_ID:-}" ]]; then
+# Parse remaining args: $2 can be an event kind (prompt, tool, etc.) or a
+# numeric window ID (backward compat with F4 keybinding).  $3, if present,
+# is always a window ID.
+if [[ $# -ge 3 ]]; then
+    EVENT_KIND="$2"
+    KITTY_WINDOW_ID="$3"
+elif [[ $# -ge 2 ]]; then
+    if [[ "$2" =~ ^[0-9]+$ ]]; then
+        # Numeric = window ID (backward compat: "cc-hook-indicator clear <WINDOW_ID>")
+        KITTY_WINDOW_ID="$2"
+    else
+        EVENT_KIND="$2"
+    fi
+fi
+
+if [[ -z "${KITTY_WINDOW_ID:-}" ]]; then
     echo "Error: KITTY_WINDOW_ID is not set" >&2
     exit 1
 fi
@@ -70,6 +82,75 @@ current_title="$(echo "$info" | tail -n1)"
 if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
     exit 0
 fi
+
+# ---------------------------------------------------------------------------
+# Activity tracking — write compact state file for dashboard consumption
+# ---------------------------------------------------------------------------
+_update_activity() {
+    local activity_file="/tmp/ccm-activity-${tab_id}.counts"
+    local now
+    now=$(date +%s)
+
+    # Determine event kind from EVENT_KIND (if present) or derive from ACTION
+    local event_kind="$EVENT_KIND"
+    if [[ -z "$event_kind" ]]; then
+        case "$ACTION" in
+            active)     event_kind="prompt" ;;
+            failure)    event_kind="failure" ;;
+            permission) event_kind="permission" ;;
+            stop)       event_kind="stop" ;;
+            *)          event_kind="" ;;
+        esac
+    fi
+
+    # Skip tracking for clear/idle actions
+    [[ -z "$event_kind" ]] && return 0
+
+    # Read existing counts (9 lines: first_event_ts, last_event_ts,
+    # last_event_type, prompt_count, tool_use_count, tool_failure_count,
+    # permission_count, stop_count, last_attention_ts)
+    local first_ts="$now" last_ts="$now" last_type="$event_kind"
+    local prompts=0 tools=0 failures=0 permissions=0 stops=0 attention_ts=0
+
+    if [[ -f "$activity_file" ]]; then
+        local i=0
+        while IFS= read -r line; do
+            case $i in
+                0) first_ts="$line" ;; 1) last_ts="$line" ;; 2) last_type="$line" ;;
+                3) prompts="$line" ;; 4) tools="$line" ;; 5) failures="$line" ;;
+                6) permissions="$line" ;; 7) stops="$line" ;; 8) attention_ts="$line" ;;
+            esac
+            i=$((i + 1))
+        done < "$activity_file"
+        # Ensure numeric defaults for any missing/corrupt values
+        first_ts="${first_ts:-$now}"
+        prompts="${prompts:-0}"
+        tools="${tools:-0}"
+        failures="${failures:-0}"
+        permissions="${permissions:-0}"
+        stops="${stops:-0}"
+        attention_ts="${attention_ts:-0}"
+    fi
+
+    last_ts="$now"
+    last_type="$event_kind"
+
+    case "$event_kind" in
+        prompt)     prompts=$((prompts + 1)) ;;
+        tool)       tools=$((tools + 1)) ;;
+        failure)    failures=$((failures + 1)); attention_ts="$now" ;;
+        permission) permissions=$((permissions + 1)); attention_ts="$now" ;;
+        stop)       stops=$((stops + 1)) ;;
+    esac
+
+    local tmpfile="${activity_file}.tmp.$$"
+    printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+        "$first_ts" "$last_ts" "$last_type" \
+        "$prompts" "$tools" "$failures" "$permissions" "$stops" "$attention_ts" \
+        > "$tmpfile" && mv "$tmpfile" "$activity_file"
+}
+
+_update_activity
 
 # Determine current icon state.
 has_star=false

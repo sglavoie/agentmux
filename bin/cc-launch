@@ -577,6 +577,38 @@ cmd_cleanup() {
     else
         echo "No sessions closed."
     fi
+
+    # Clean up orphaned activity and notification files.
+    # Collect tab IDs of all currently managed tabs.
+    local live_ids
+    live_ids="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
+        [.[] | .tabs[] |
+            select(
+                (.title | test($pat)) or
+                ([.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0)
+            ) | .id
+        ] | .[]
+    ')"
+
+    local orphaned=0
+    for f in /tmp/ccm-activity-*.counts /tmp/ccm-notify-*; do
+        [[ -e "$f" ]] || continue
+        local fname="${f##*/}"
+        # Extract tab_id: ccm-activity-<id>.counts or ccm-notify-<type>-<id>
+        local file_id=""
+        case "$fname" in
+            ccm-activity-*.counts) file_id="${fname#ccm-activity-}"; file_id="${file_id%.counts}" ;;
+            ccm-notify-*)          file_id="${fname##*-}" ;;
+        esac
+        [[ -z "$file_id" ]] && continue
+        if ! echo "$live_ids" | grep -qx "$file_id"; then
+            rm -f "$f"
+            orphaned=$((orphaned + 1))
+        fi
+    done
+    if [[ $orphaned -gt 0 ]]; then
+        echo "Removed $orphaned orphaned activity/notification file(s)."
+    fi
 }
 
 # ---------------------------------------------------------------------------

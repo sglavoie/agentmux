@@ -82,6 +82,61 @@ def _detect_state(title):
     return ""
 
 
+def format_duration(seconds):
+    """Format a duration in seconds into a compact human-readable string."""
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    remaining_min = minutes % 60
+    if remaining_min:
+        return f"{hours}h {remaining_min}m"
+    return f"{hours}h"
+
+
+def load_activity(tab_id):
+    """Read and parse the activity counts file for a tab, returning a dict or None."""
+    path = f"/tmp/ccm-activity-{tab_id}.counts"
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return None
+    if len(lines) < 9:
+        return None
+    try:
+        return {
+            "first_event_ts": int(lines[0]),
+            "last_event_ts": int(lines[1]),
+            "last_event_type": lines[2],
+            "prompt_count": int(lines[3]),
+            "tool_use_count": int(lines[4]),
+            "tool_failure_count": int(lines[5]),
+            "permission_count": int(lines[6]),
+            "stop_count": int(lines[7]),
+            "last_attention_ts": int(lines[8]),
+        }
+    except (ValueError, IndexError):
+        return None
+
+
+def cleanup_stale_activity(live_tab_ids):
+    """Remove orphaned activity files whose tab_id is not in the live set."""
+    live = set(str(tid) for tid in live_tab_ids)
+    for path in glob.glob("/tmp/ccm-activity-*.counts"):
+        fname = os.path.basename(path)
+        # Extract tab_id from "ccm-activity-<tab_id>.counts"
+        tab_id_str = fname.replace("ccm-activity-", "").replace(".counts", "")
+        if tab_id_str not in live:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
 def query_sessions(socket, managed_only=True):
     """Query Kitty for tabs running Claude Code.
 
@@ -164,6 +219,8 @@ def query_sessions(socket, managed_only=True):
 
             title = _strip_icons(tab.get("title", ""))
             icon_state = _detect_state(tab_title)
+            tab_id = tab.get("id", 0)
+            activity = load_activity(tab_id)
             sessions.append(
                 {
                     "index": idx + 1,
@@ -177,13 +234,16 @@ def query_sessions(socket, managed_only=True):
                         if icon_state
                         else "idle"
                     ),
-                    "tab_id": tab.get("id", 0),
+                    "tab_id": tab_id,
                     "window_count": len(windows),
                     "pids": pids,
                     "cmdlines": cmdlines,
                     "config_dir": detected_config_dir,
+                    "activity": activity,
                 }
             )
+
+    cleanup_stale_activity(s["tab_id"] for s in sessions)
     return sessions
 
 
