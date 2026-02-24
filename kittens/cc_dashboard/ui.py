@@ -75,8 +75,8 @@ def init_colors():
         pair_id = _CP_ACCOUNT_BASE
         for name in _cfg._account_names:
             color_name = _cfg._accounts[name]["color"]
-            active_bg, _ = PALETTE.get(color_name, PALETTE["gray"])
-            curses.init_color(color_slot, *_c(*active_bg))
+            _, _, text_fg = PALETTE.get(color_name, PALETTE["gray"])
+            curses.init_color(color_slot, *_c(*text_fg))
             curses.init_pair(pair_id, color_slot, -1)           # normal
             curses.init_pair(pair_id + 1, color_slot, sel_bg_slot)  # selected
             _account_cp[name] = (pair_id, pair_id + 1)

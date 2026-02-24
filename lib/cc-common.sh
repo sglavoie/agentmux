@@ -49,18 +49,87 @@ gum_color_for_account() {
     local color
     color="$(_account_color "$1" 2>/dev/null)" || color="gray"
     case "$color" in
-        green)  echo "#2d7d46" ;;
-        blue)   echo "#2d5a88" ;;
-        red)    echo "#8b2d2d" ;;
-        orange) echo "#8b5a2d" ;;
-        purple) echo "#5a2d8b" ;;
-        teal)   echo "#2d7d7d" ;;
-        pink)   echo "#8b2d6a" ;;
-        yellow) echo "#7d7d2d" ;;
-        gray)   echo "#555555" ;;
-        cyan)   echo "#2d6a8b" ;;
-        *)      echo "#555555" ;;
+        green)  echo "#48c870" ;;
+        blue)   echo "#4890da" ;;
+        red)    echo "#de4848" ;;
+        orange) echo "#de9048" ;;
+        purple) echo "#9048de" ;;
+        teal)   echo "#48c8c8" ;;
+        pink)   echo "#de48aa" ;;
+        yellow) echo "#c8c848" ;;
+        gray)   echo "#969696" ;;
+        cyan)   echo "#48aade" ;;
+        *)      echo "#969696" ;;
     esac
+}
+
+# ---------------------------------------------------------------------------
+# ANSI formatting helpers (shared by cc-status and cc-launch --list)
+# ---------------------------------------------------------------------------
+
+# Map palette color name → 24-bit ANSI foreground escape (uses active_bg RGB)
+ansi_fg_for_color() {
+    local color="$1"
+    case "$color" in
+        green)  printf '\033[38;2;72;200;112m' ;;
+        blue)   printf '\033[38;2;72;144;218m' ;;
+        red)    printf '\033[38;2;222;72;72m' ;;
+        orange) printf '\033[38;2;222;144;72m' ;;
+        purple) printf '\033[38;2;144;72;222m' ;;
+        teal)   printf '\033[38;2;72;200;200m' ;;
+        pink)   printf '\033[38;2;222;72;170m' ;;
+        yellow) printf '\033[38;2;200;200;72m' ;;
+        gray)   printf '\033[38;2;150;150;150m' ;;
+        cyan)   printf '\033[38;2;72;170;222m' ;;
+        *)      printf '\033[38;2;150;150;150m' ;;
+    esac
+}
+
+# Convenience: look up account color, then return ANSI foreground
+ansi_fg_for_account() {
+    local color
+    color="$(_account_color "$1" 2>/dev/null)" || color="gray"
+    ansi_fg_for_color "$color"
+}
+
+# Replace $HOME prefix with ~
+shorten_path() {
+    local path="$1"
+    if [[ "$path" == "$HOME"* ]]; then
+        echo "~${path#"$HOME"}"
+    else
+        echo "$path"
+    fi
+}
+
+# Print a character N times (Bash 3 compatible)
+repeat_char() {
+    local ch="$1" count="$2"
+    local i
+    for ((i = 0; i < count; i++)); do
+        printf '%s' "$ch"
+    done
+}
+
+# Return extra bytes beyond character count (for printf padding with multibyte)
+extra_bytes() {
+    local str="$1"
+    local byte_len char_len
+    byte_len=$(printf '%s' "$str" | LC_ALL=C wc -c)
+    char_len=${#str}
+    echo $(( byte_len - char_len ))
+}
+
+# Detect whether color output is supported; sets BOLD, DIM, RESET, USE_COLOR
+init_color() {
+    USE_COLOR=false
+    BOLD="" DIM="" RESET=""
+    if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]] && [[ "${TERM:-}" != "dumb" ]]; then
+        USE_COLOR=true
+        BOLD=$'\033[1m'
+        DIM=$'\033[2m'
+        RESET=$'\033[0m'
+    fi
 }
 
 # ---------------------------------------------------------------------------

@@ -421,28 +421,59 @@ cmd_list() {
         return
     fi
 
-    # Collect rows and compute max column widths dynamically
-    local -a rows=() col_idx=() col_title=() col_account=() col_dir=() col_status=()
-    local w1=5 w2=5 w3=7 w4=9  # minimum widths from header labels
+    init_color
+
+    # Column headers
+    local header_mk=" " header_idx="Index" header_title="Title"
+    local header_account="Account" header_dir="Directory" header_status="Status"
+    local max_mk=2 w1=${#header_idx} w2=${#header_title} w3=${#header_account} w4=${#header_dir} w5=${#header_status}
+
+    # Pre-process rows: shorten paths and compute max widths
+    local -a rows=()
     while IFS=$'\t' read -r idx title account dir status; do
+        dir="$(shorten_path "$dir")"
         rows+=("$idx"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status")
         (( ${#idx} > w1 )) && w1=${#idx}
         (( ${#title} > w2 )) && w2=${#title}
         (( ${#account} > w3 )) && w3=${#account}
         (( ${#dir} > w4 )) && w4=${#dir}
+        (( ${#status} > w5 )) && w5=${#status}
     done <<< "$table"
 
-    local fmt="%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %s\n"
-    printf "$fmt" "Index" "Title" "Account" "Directory" "Status"
-    printf "$fmt" \
-        "$(printf '%*s' "$w1" '' | tr ' ' '-')" \
-        "$(printf '%*s' "$w2" '' | tr ' ' '-')" \
-        "$(printf '%*s' "$w3" '' | tr ' ' '-')" \
-        "$(printf '%*s' "$w4" '' | tr ' ' '-')" \
-        "------"
+    # Header
+    printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %-${w5}s%s\n" \
+        "$BOLD" "$header_mk" "$header_idx" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
+
+    # Separator
+    printf "%s%s%s\n" "$DIM" \
+        "$(repeat_char '─' $(( max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w4 + 2 + w5 )))" \
+        "$RESET"
+
+    # Data rows
     for row in "${rows[@]}"; do
         IFS=$'\t' read -r idx title account dir status <<< "$row"
-        printf "$fmt" "$idx" "$title" "$account" "$dir" "$status"
+
+        local local_mk=" "
+        if [[ "$status" == "focused" ]]; then
+            local_mk="▸"
+        fi
+
+        local local_color="" local_reset=""
+        if [[ "$USE_COLOR" == "true" ]]; then
+            local_color="$(ansi_fg_for_account "$account")"
+            local_reset="$RESET"
+        fi
+
+        local local_status="$status"
+        if [[ "$USE_COLOR" == "true" ]]; then
+            case "$status" in
+                focused) local_status="${BOLD}${status}${RESET}${local_color}" ;;
+                idle)    local_status="${DIM}${status}${RESET}${local_color}" ;;
+            esac
+        fi
+
+        printf "%s%-$(( max_mk + $(extra_bytes "$local_mk") ))s%-$(( w1 + $(extra_bytes "$idx") ))s  %-$(( w2 + $(extra_bytes "$title") ))s  %-$(( w3 + $(extra_bytes "$account") ))s  %-$(( w4 + $(extra_bytes "$dir") ))s  %s%s\n" \
+            "$local_color" "$local_mk" "$idx" "$title" "$account" "$dir" "$local_status" "$local_reset"
     done
 }
 
