@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ccm — Unified CLI for cc-manager-kitty.
+# ccm — Claude Code Manager CLI
 # Delegates to cc-launch, cc-status, and cc-toggle-star, and provides
 # config-file management subcommands.
 
@@ -241,7 +241,7 @@ HELP
             ;;
         "")
             cat <<HELP
-ccm $CCM_VERSION — Unified CLI for cc-manager-kitty
+ccm $CCM_VERSION — Claude Code Manager CLI
 
 Usage: ccm <command> [args...]
 

@@ -278,6 +278,100 @@ cmd_close() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: restart a session (close + relaunch with same metadata)
+# ---------------------------------------------------------------------------
+cmd_restart() {
+    local title="${1:-}"
+
+    local ls_json
+    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+        echo "Error: Failed to query kitty." >&2
+        exit 1
+    }
+
+    local accounts_json default_account
+    accounts_json="$(build_accounts_json)"
+    default_account="$(default_account_name)"
+
+    if [[ -z "$title" ]]; then
+        require_gum
+
+        local -a claude_titles=()
+        while IFS= read -r t; do
+            [[ -n "$t" ]] && claude_titles+=("$t")
+        done < <(echo "$ls_json" | jq -r '
+            [.[] | .tabs[] |
+                select(
+                    [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+                ) | .title | sub("^★ "; "") | sub("^⚡ "; "")
+            ] | .[]
+        ')
+
+        if [[ ${#claude_titles[@]} -eq 0 ]]; then
+            echo "No Claude sessions found."
+            return
+        fi
+
+        title="$(printf '%s\n' "${claude_titles[@]}" | gum choose \
+            --header "Select session to restart:" \
+            --header.foreground "$GUM_HEADER_COLOR" \
+            --cursor.foreground "$GUM_ACCENT_COLOR")" || {
+            echo "No session selected."
+            return
+        }
+    fi
+
+    # Find the tab metadata for the selected title
+    local tab_info
+    tab_info="$(echo "$ls_json" | jq -r --arg t "$title" --argjson accounts "$accounts_json" --arg default_account "$default_account" '
+        [.[] | .tabs[] |
+            select(
+                (.title | sub("^★ "; "") | sub("^⚡ "; "")) == $t
+            ) |
+            {
+                tab_id: .id,
+                account: (
+                    [.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+                    if length > 0 then .[0]
+                    else
+                        (
+                            [.windows[] | .foreground_processes[]? |
+                                select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                                .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                            ] | if length > 0 then
+                                (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                            else $default_account end
+                        )
+                    end
+                ),
+                dir: (
+                    [.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
+                    if length > 0 then .[0]
+                    else
+                        ([.windows[] |
+                            select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                        ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
+                    end
+                )
+            }
+        ] | .[0] // empty | [(.tab_id | tostring), .account, .dir] | @tsv
+    ')"
+
+    if [[ -z "$tab_info" ]]; then
+        echo "Error: No tab found with title '$title'." >&2
+        exit 1
+    fi
+
+    local tab_id account dir
+    IFS=$'\t' read -r tab_id account dir <<< "$tab_info"
+
+    kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
+    echo "Closed tab '$title', relaunching..."
+    sleep 0.3
+    launch_session "$title" "$dir" "$account" ""
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: list Claude tabs
 # ---------------------------------------------------------------------------
 cmd_list() {
@@ -561,6 +655,7 @@ Commands:
     --all                           Launch all sessions defined in the config file
     --add TITLE DIR [ACCOUNT]       Launch a single ad-hoc session tab (account picker if omitted)
     --close [TITLE]                 Close a tab (interactive picker if no title given)
+    --restart [TITLE]               Close and relaunch a session (interactive picker if no title given)
     --list                          List open tabs running Claude
     --save [FILE]                   Save current Claude sessions to config file
     --cleanup                       Find and close stale sessions (dead processes)
@@ -648,6 +743,10 @@ main() {
         --close)
             shift
             cmd_close "$@"
+            ;;
+        --restart)
+            shift
+            cmd_restart "$@"
             ;;
         --list)
             cmd_list

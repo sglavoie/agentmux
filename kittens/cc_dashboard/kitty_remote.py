@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import time
 
 from cc_dashboard import config as _cfg
 
@@ -94,12 +95,17 @@ def query_sessions(socket, managed_only=True):
             elif not cwd and windows:
                 cwd = windows[0].get("cwd", "")
 
-            if not has_claude:
+            has_cc_var = bool(user_vars.get("cc_account"))
+
+            # Require either a running Claude process or ccm user vars.
+            # Tabs launched by ccm have cc_account set immediately, but
+            # Claude may not yet appear as a foreground process if the tab
+            # was just created (e.g. after a restart).
+            if not has_claude and not has_cc_var:
                 continue
 
             # Filter to ccm-managed tabs when managed_only is set
             tab_title = tab.get("title", "")
-            has_cc_var = bool(user_vars.get("cc_account"))
             if managed_only and not has_cc_var and not _MANAGED_TITLE_RE.match(tab_title):
                 continue
 
@@ -159,13 +165,20 @@ def do_launch(socket, title, directory, account, flags="", pw_override=""):
         cmd += effective_flags.split()
 
     kitty_cmd(socket, *cmd)
-    kitty_cmd(
-        socket,
-        "set-tab-color",
-        "--match",
-        f"title:^{title}$",
-        *_cfg._palette_tab_colors(account),
-    )
+
+    # Retry set-tab-color a few times since Claude may briefly override
+    # the tab title on startup, causing the title match to fail.
+    for _ in range(5):
+        result = kitty_cmd(
+            socket,
+            "set-tab-color",
+            "--match",
+            f"title:^{title}$",
+            *_cfg._palette_tab_colors(account),
+        )
+        if result and result.returncode == 0:
+            break
+        time.sleep(0.1)
 
     pw_mode = _cfg._resolve_project_window(pw_override)
     if pw_mode:
@@ -182,3 +195,10 @@ def do_launch(socket, title, directory, account, flags="", pw_override=""):
             "--match", f"title:^{title}$",
             pw_mode,
         )
+
+
+def do_restart(socket, session, flags="", pw_override=""):
+    """Close and relaunch a session with the same title, directory, and account."""
+    do_close(socket, session["tab_id"])
+    time.sleep(0.3)
+    do_launch(socket, session["title"], session["cwd"], session["account"], flags, pw_override)

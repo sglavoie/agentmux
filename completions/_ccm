@@ -1,6 +1,6 @@
 #compdef ccm
 
-# Zsh completion for ccm — Unified CLI for cc-manager-kitty.
+# Zsh completion for ccm — Claude Code Manager CLI.
 # Installed to ~/.zfunc/ by `make install`.
 
 _ccm_config_files() {

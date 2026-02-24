@@ -10,6 +10,7 @@ from cc_dashboard.kitty_remote import (
     do_close,
     do_focus,
     do_launch,
+    do_restart,
     query_sessions,
 )
 
@@ -258,18 +259,19 @@ def draw_footer(stdscr, mode):
     rows, cols = stdscr.getmaxyx()
 
     hints = {
-        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  n New  / Search  a All  r Refresh  q Quit",
+        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  R Restart  n New  / Search  a All  r Refresh  q Quit",
         "confirm": "y Confirm close    Any other key Cancel",
+        "confirm_restart": "y Confirm restart    Any other key Cancel",
         "new": "Enter Next/Submit    Tab Cycle    Esc Cancel",
     }
     text = hints.get(mode, "")
     safe_addstr(stdscr, rows - 1, 2, text[: cols - 3], curses.color_pair(CP_DIM))
 
 
-def draw_confirm_prompt(stdscr, session):
-    """Draw the close-confirmation prompt above the footer."""
+def draw_confirm_prompt(stdscr, session, action="Close"):
+    """Draw a confirmation prompt above the footer."""
     rows, _ = stdscr.getmaxyx()
-    msg = f'Close session "{session["title"]}"?  y/n'
+    msg = f'{action} session "{session["title"]}"?  y/n'
     safe_addstr(stdscr, rows - 3, 2, msg, curses.color_pair(CP_WARN) | curses.A_BOLD)
 
 
@@ -434,7 +436,7 @@ def dashboard(stdscr, socket):
             selected = i
             break
 
-    mode = "list"  # list | confirm | new
+    mode = "list"  # list | confirm | confirm_restart | new
     msg = ""
     msg_frames = 0
 
@@ -453,7 +455,7 @@ def dashboard(stdscr, socket):
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm"):
+        if mode in ("list", "confirm", "confirm_restart"):
             draw_list_view(stdscr, filtered, selected)
             if msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
@@ -463,7 +465,9 @@ def dashboard(stdscr, socket):
                     search_active, len(filtered),
                 )
             if mode == "confirm" and filtered:
-                draw_confirm_prompt(stdscr, filtered[selected])
+                draw_confirm_prompt(stdscr, filtered[selected], "Close")
+            elif mode == "confirm_restart" and filtered:
+                draw_confirm_prompt(stdscr, filtered[selected], "Restart")
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor)
 
@@ -565,12 +569,14 @@ def dashboard(stdscr, socket):
                 label = "all" if show_all else "managed"
                 msg = f"Showing {label} sessions ({len(filtered)} found)"
                 msg_frames = 20
-            elif key in (ord("r"), ord("R")):
+            elif key == ord("r"):
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _filter_sessions(sessions, search_query)
                 selected = min(selected, max(0, len(filtered) - 1))
                 msg = f"{len(filtered)} session(s) found"
                 msg_frames = 20
+            elif key == ord("R") and filtered:
+                mode = "confirm_restart"
 
         # ── Confirm close ────────────────────────────────────────
         elif mode == "confirm":
@@ -580,6 +586,17 @@ def dashboard(stdscr, socket):
                 filtered = _filter_sessions(sessions, search_query)
                 selected = min(selected, max(0, len(filtered) - 1))
                 msg = "Session closed"
+                msg_frames = 20
+            mode = "list"
+
+        # ── Confirm restart ──────────────────────────────────────
+        elif mode == "confirm_restart":
+            if key in (ord("y"), ord("Y")) and filtered:
+                do_restart(socket, filtered[selected])
+                sessions = query_sessions(socket, managed_only=(not show_all))
+                filtered = _filter_sessions(sessions, search_query)
+                selected = min(selected, max(0, len(filtered) - 1))
+                msg = "Session restarted"
                 msg_frames = 20
             mode = "list"
 
