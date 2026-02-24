@@ -152,10 +152,12 @@ _all_account_names() {
 # ---------------------------------------------------------------------------
 _DEFAULT_CLAUDE_FLAGS=""
 _DEFAULT_PROJECT_WINDOW=""
+_DEFAULT_SORT_SESSIONS=""
 
 load_defaults() {
     _DEFAULT_CLAUDE_FLAGS=""
     _DEFAULT_PROJECT_WINDOW=""
+    _DEFAULT_SORT_SESSIONS=""
 
     [[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
@@ -171,6 +173,9 @@ load_defaults() {
                 ;;
             project_window)
                 _DEFAULT_PROJECT_WINDOW="$value"
+                ;;
+            sort_sessions)
+                _DEFAULT_SORT_SESSIONS="$value"
                 ;;
         esac
     done < "$DEFAULTS_CONFIG"

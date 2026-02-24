@@ -161,12 +161,22 @@ cmd_launch_all() {
         exit 1
     fi
 
+    # Collect non-comment, non-blank lines; optionally sort by title
+    local lines=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        lines+="$line"$'\n'
+    done < "$CONFIG_FILE"
+
+    if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
+        lines="$(echo -n "$lines" | sort -f)"
+    fi
+
     local launched=0
     local existed=0
 
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        # Skip comments and blank lines
-        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
 
         # Parse pipe-delimited fields and trim whitespace
         local title dir account flags pw
@@ -183,7 +193,7 @@ cmd_launch_all() {
         else
             existed=$((existed + 1))
         fi
-    done < "$CONFIG_FILE"
+    done <<< "$lines"
 
     echo "Launched $launched new session(s), $existed already existed."
 }
@@ -684,6 +694,8 @@ Defaults (defined in ~/.config/cc-manager/defaults.conf):
         claude_flags     — Extra flags passed to every Claude session
         project_window   — Open a shell window alongside Claude in each tab.
                            Values: (empty) = disabled, stack, vsplit, hsplit, split
+        sort_sessions    — Sort sessions alphabetically by title on launch.
+                           Values: (empty) = file order, alpha = alphabetical
 
 Environment:
     KITTY_LISTEN_ON      Kitty remote-control socket (auto-detected if unset)
