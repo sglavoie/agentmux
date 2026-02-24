@@ -151,6 +151,19 @@ def _filter_sessions(sessions, query):
     ]
 
 
+def _filter_config_sessions(sessions, query):
+    """Return config sessions matching query (case-insensitive) against title, dir, or account."""
+    if not query:
+        return sessions
+    q = query.lower()
+    return [
+        s for s in sessions
+        if q in s["title"].lower()
+        or q in s["dir"].lower()
+        or q in s["account"].lower()
+    ]
+
+
 def shorten_path(path, max_len):
     """Collapse home prefix to ~ and truncate long paths with a leading ellipsis."""
     home = os.path.expanduser("~")
@@ -254,15 +267,73 @@ def draw_list_view(stdscr, sessions, selected):
     draw_footer(stdscr, "list")
 
 
+def draw_pick_view(stdscr, entries, selected, running_titles):
+    """Draw the config session picker list."""
+    rows, cols = stdscr.getmaxyx()
+    stdscr.erase()
+
+    title = "Launch from Config"
+    safe_addstr(
+        stdscr, 1, max(0, (cols - len(title)) // 2), title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    if not entries:
+        safe_addstr(stdscr, 4, 3, "No sessions configured.", curses.color_pair(CP_DIM))
+        safe_addstr(stdscr, 5, 3, "Add entries to sessions.conf, then try again.", curses.color_pair(CP_DIM))
+        draw_footer(stdscr, "pick")
+        return
+
+    c_title = 28
+    c_acct = 12
+    c_dir = max(12, cols - c_title - c_acct - 6)
+
+    hdr = f'  {"Title":<{c_title}}{"Account":<{c_acct}}{"Directory":<{c_dir}}'
+    safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
+    sep = f'  {"─" * c_title}{"─" * c_acct}{"─" * c_dir}'
+    safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
+
+    avail = rows - 8
+    if len(entries) <= avail:
+        offset = 0
+    else:
+        offset = max(0, min(selected - avail // 2, len(entries) - avail))
+
+    for vi, si in enumerate(range(offset, min(offset + avail, len(entries)))):
+        entry = entries[si]
+        sel = si == selected
+        mark = "▸" if sel else " "
+
+        is_running = entry["title"] in running_titles
+        display_title = entry["title"]
+        if is_running:
+            display_title += " (running)"
+
+        cp = _cp_for_account(entry["account"], selected=sel)
+        short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
+        title_padded = _pad_to_width(display_title, c_title)
+        line = f"{mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
+
+        attr = curses.color_pair(cp)
+        if sel:
+            attr |= curses.A_BOLD
+        if is_running and not sel:
+            attr = curses.color_pair(CP_DIM)
+        safe_addstr(stdscr, 5 + vi, 1, line, attr)
+
+    draw_footer(stdscr, "pick")
+
+
 def draw_footer(stdscr, mode):
     """Draw the help-key footer at the bottom of the screen."""
     rows, cols = stdscr.getmaxyx()
 
     hints = {
-        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  R Restart  n New  / Search  a All  r Refresh  q Quit",
+        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  R Restart  n New  l Launch  / Search  a All  r Refresh  q Quit",
         "confirm": "y Confirm close    Any other key Cancel",
         "confirm_restart": "y Confirm restart    Any other key Cancel",
         "new": "Enter Next/Submit    Tab Cycle    Esc Cancel",
+        "pick": "↑/k Up  ↓/j Down  Enter Launch  / Search  Esc Back  q Back",
     }
     text = hints.get(mode, "")
     safe_addstr(stdscr, rows - 1, 2, text[: cols - 3], curses.color_pair(CP_DIM))
@@ -436,9 +507,17 @@ def dashboard(stdscr, socket):
             selected = i
             break
 
-    mode = "list"  # list | confirm | confirm_restart | new
+    mode = "list"  # list | confirm | confirm_restart | new | pick
     msg = ""
     msg_frames = 0
+
+    # Pick mode (launch from config) state
+    pick_selected = 0
+    pick_filtered = list(_cfg._sessions)
+    pick_running = set()
+    pick_query = ""
+    pick_cursor = 0
+    pick_search_active = False
 
     # Search/filter state
     search_query = ""
@@ -470,6 +549,15 @@ def dashboard(stdscr, socket):
                 draw_confirm_prompt(stdscr, filtered[selected], "Restart")
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor)
+        elif mode == "pick":
+            draw_pick_view(stdscr, pick_filtered, pick_selected, pick_running)
+            if msg and msg_frames > 0:
+                draw_status_message(stdscr, msg)
+            elif pick_search_active or pick_query:
+                draw_search_bar(
+                    stdscr, pick_query, pick_cursor,
+                    pick_search_active, len(pick_filtered),
+                )
 
         stdscr.refresh()
 
@@ -561,6 +649,18 @@ def dashboard(stdscr, socket):
                 new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": "", "pw": default_pw}
                 new_active = 0
                 new_cursor = 0
+            elif key == ord("l"):
+                if _cfg._sessions:
+                    mode = "pick"
+                    pick_selected = 0
+                    pick_filtered = list(_cfg._sessions)
+                    pick_running = {s["title"] for s in sessions}
+                    pick_query = ""
+                    pick_cursor = 0
+                    pick_search_active = False
+                else:
+                    msg = "No sessions configured in sessions.conf"
+                    msg_frames = 20
             elif key in (ord("a"), ord("A")):
                 show_all = not show_all
                 sessions = query_sessions(socket, managed_only=(not show_all))
@@ -661,3 +761,72 @@ def dashboard(stdscr, socket):
                         val[:new_cursor] + chr(key) + val[new_cursor:]
                     )
                     new_cursor += 1
+
+        # ── Pick mode (launch from config) ────────────────────────
+        elif mode == "pick":
+            if pick_search_active:
+                if key == 27:  # Escape — cancel search
+                    pick_search_active = False
+                    pick_query = ""
+                    pick_cursor = 0
+                    pick_filtered = list(_cfg._sessions)
+                    pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
+                    continue
+                elif key in (10, 13, curses.KEY_ENTER):
+                    pick_search_active = False
+                    continue
+                elif key in (curses.KEY_UP, ord("k"), ord("K")) and pick_filtered:
+                    pick_selected = (pick_selected - 1) % len(pick_filtered)
+                    continue
+                elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and pick_filtered:
+                    pick_selected = (pick_selected + 1) % len(pick_filtered)
+                    continue
+                elif key in (curses.KEY_BACKSPACE, 127, 8):
+                    if pick_cursor > 0:
+                        pick_query = pick_query[:pick_cursor - 1] + pick_query[pick_cursor:]
+                        pick_cursor -= 1
+                        pick_filtered = _filter_config_sessions(_cfg._sessions, pick_query)
+                        pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
+                    continue
+                elif key == curses.KEY_LEFT:
+                    pick_cursor = max(0, pick_cursor - 1)
+                    continue
+                elif key == curses.KEY_RIGHT:
+                    pick_cursor = min(len(pick_query), pick_cursor + 1)
+                    continue
+                elif 32 <= key < 127:
+                    pick_query = pick_query[:pick_cursor] + chr(key) + pick_query[pick_cursor:]
+                    pick_cursor += 1
+                    pick_filtered = _filter_config_sessions(_cfg._sessions, pick_query)
+                    pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
+                    continue
+                else:
+                    continue
+
+            if key in (ord("q"), ord("Q"), 27):  # q or Esc — back to list
+                if pick_query and key == 27:
+                    pick_query = ""
+                    pick_cursor = 0
+                    pick_filtered = list(_cfg._sessions)
+                    pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
+                else:
+                    mode = "list"
+            elif key == ord("/"):
+                pick_search_active = True
+                pick_query = ""
+                pick_cursor = 0
+                pick_filtered = list(_cfg._sessions)
+            elif key in (curses.KEY_UP, ord("k"), ord("K")) and pick_filtered:
+                pick_selected = (pick_selected - 1) % len(pick_filtered)
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and pick_filtered:
+                pick_selected = (pick_selected + 1) % len(pick_filtered)
+            elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:
+                entry = pick_filtered[pick_selected]
+                pw_val = entry["pw"]
+                do_launch(socket, entry["title"], entry["dir"], entry["account"], entry["flags"], pw_val)
+                sessions = query_sessions(socket, managed_only=(not show_all))
+                filtered = _filter_sessions(sessions, search_query)
+                selected = max(0, len(filtered) - 1)
+                msg = f'Launched "{entry["title"]}"'
+                msg_frames = 20
+                mode = "list"

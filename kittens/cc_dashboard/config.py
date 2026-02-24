@@ -110,6 +110,53 @@ def load_defaults():
                 _default_project_window = value
 
 
+# ── Session configuration ──────────────────────────────────────────────────
+
+_sessions = []  # list of {"title": str, "dir": str, "account": str, "flags": str, "pw": str}
+
+
+def _sessions_config_path():
+    env = os.environ.get("CC_MANAGER_CONFIG", "")
+    if env:
+        return os.path.join(env, "sessions.conf") if os.path.isdir(env) else env
+    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config"))
+    return os.path.join(xdg, "cc-manager", "sessions.conf")
+
+
+def load_sessions():
+    """Parse sessions.conf into the module-level _sessions list."""
+    global _sessions
+    _sessions = []
+
+    path = _sessions_config_path()
+    if not os.path.isfile(path):
+        return
+
+    default_account = _account_names[0] if _account_names else "work"
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("|")
+            if len(parts) < 2:
+                continue
+            title = parts[0].strip()
+            directory = parts[1].strip()
+            account = parts[2].strip() if len(parts) > 2 and parts[2].strip() else default_account
+            flags = parts[3].strip() if len(parts) > 3 else ""
+            pw = parts[4].strip() if len(parts) > 4 else ""
+            if not title:
+                continue
+            _sessions.append({
+                "title": title,
+                "dir": directory,
+                "account": account,
+                "flags": flags,
+                "pw": pw,
+            })
+
+
 def _resolve_claude_flags(override=""):
     """Return the effective claude flags for a session.
 

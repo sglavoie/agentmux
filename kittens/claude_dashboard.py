@@ -18,7 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
-from cc_dashboard.config import load_accounts, load_defaults
+from cc_dashboard.config import load_accounts, load_defaults, load_sessions
 from cc_dashboard.kitty_remote import get_kitty_socket
 from cc_dashboard.ui import dashboard
 
@@ -32,6 +32,7 @@ def main(args=None):
     """
     load_accounts()
     load_defaults()
+    load_sessions()
 
     socket = get_kitty_socket()
     if not socket:
