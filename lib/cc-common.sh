@@ -7,6 +7,70 @@
 _CC_COMMON_LOADED=1
 
 # ---------------------------------------------------------------------------
+# Data directory resolution and JSON loading
+# ---------------------------------------------------------------------------
+_CC_DATA_DIR=""
+_PALETTE_JSON=""
+_ICONS_JSON=""
+_PALETTE_ACTIVE_FG=""
+_PALETTE_INACTIVE_FG=""
+_ICON_STAR=""
+_ICON_BOLT=""
+_ICON_STOP=""
+_ICON_KEY=""
+_ICON_ERROR=""
+
+_resolve_data_dir() {
+    [[ -n "$_CC_DATA_DIR" ]] && return 0
+    local script_path lib_dir
+    script_path="${BASH_SOURCE[0]}"
+    if [[ -L "$script_path" ]]; then
+        script_path="$(readlink "$script_path")"
+    fi
+    lib_dir="$(cd "$(dirname "$script_path")" && pwd)"
+    # Repo layout: lib/ is sibling to data/
+    if [[ -f "$lib_dir/../data/palette.json" ]]; then
+        _CC_DATA_DIR="$(cd "$lib_dir/../data" && pwd)"
+    # Installed layout: JSON files symlinked alongside cc-common.sh
+    elif [[ -f "$lib_dir/palette.json" ]]; then
+        _CC_DATA_DIR="$lib_dir"
+    else
+        echo "Error: Cannot find data directory (palette.json) from $lib_dir" >&2
+        return 1
+    fi
+}
+
+_load_palette() {
+    [[ -n "$_PALETTE_JSON" ]] && return 0
+    _resolve_data_dir
+    _PALETTE_JSON="$(< "$_CC_DATA_DIR/palette.json")"
+    _PALETTE_ACTIVE_FG=$(printf '%s' "$_PALETTE_JSON" | jq -r '.active_fg')
+    _PALETTE_INACTIVE_FG=$(printf '%s' "$_PALETTE_JSON" | jq -r '.inactive_fg')
+}
+
+_load_icons() {
+    [[ -n "$_ICONS_JSON" ]] && return 0
+    _resolve_data_dir
+    _ICONS_JSON="$(< "$_CC_DATA_DIR/icons.json")"
+    _ICON_STAR=$(printf '%s' "$_ICONS_JSON" | jq -r '.star')
+    _ICON_BOLT=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.bolt')
+    _ICON_STOP=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.stop')
+    _ICON_KEY=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.key')
+    _ICON_ERROR=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.error')
+}
+
+# Build a jq-compatible regex pattern for stripping icon prefixes.
+# Output: ^(★)?(⚡|🛑|🔑|⚠️)?
+_icon_strip_regex() {
+    _load_icons
+    local states
+    states=$(printf '%s' "$_ICONS_JSON" | jq -r '
+        [.state_order[] as $k | .states[$k]] | join("|")
+    ')
+    printf '^(%s)?(%s)?' "$_ICON_STAR" "$states"
+}
+
+# ---------------------------------------------------------------------------
 # Socket discovery
 # ---------------------------------------------------------------------------
 discover_socket() {
@@ -48,41 +112,27 @@ GUM_ACCENT_COLOR="#2d7d46"
 gum_color_for_account() {
     local color
     color="$(_account_color "$1" 2>/dev/null)" || color="gray"
-    case "$color" in
-        green)  echo "#48c870" ;;
-        blue)   echo "#4890da" ;;
-        red)    echo "#de4848" ;;
-        orange) echo "#de9048" ;;
-        purple) echo "#9048de" ;;
-        teal)   echo "#48c8c8" ;;
-        pink)   echo "#de48aa" ;;
-        yellow) echo "#c8c848" ;;
-        gray)   echo "#969696" ;;
-        cyan)   echo "#48aade" ;;
-        *)      echo "#969696" ;;
-    esac
+    _load_palette
+    local rgb
+    rgb=$(printf '%s' "$_PALETTE_JSON" | jq -r --arg c "$color" '
+        (.colors[$c] // .colors["gray"]).text_fg | map(tostring) | join(";")
+    ')
+    local r g b_val
+    IFS=';' read -r r g b_val <<< "$rgb"
+    printf '#%02x%02x%02x\n' "$r" "$g" "$b_val"
 }
 
 # ---------------------------------------------------------------------------
 # ANSI formatting helpers (shared by cc-status and cc-launch --list)
 # ---------------------------------------------------------------------------
 
-# Map palette color name → 24-bit ANSI foreground escape (uses active_bg RGB)
+# Map palette color name → 24-bit ANSI foreground escape (uses text_fg RGB)
 ansi_fg_for_color() {
     local color="$1"
-    case "$color" in
-        green)  printf '\033[38;2;72;200;112m' ;;
-        blue)   printf '\033[38;2;72;144;218m' ;;
-        red)    printf '\033[38;2;222;72;72m' ;;
-        orange) printf '\033[38;2;222;144;72m' ;;
-        purple) printf '\033[38;2;144;72;222m' ;;
-        teal)   printf '\033[38;2;72;200;200m' ;;
-        pink)   printf '\033[38;2;222;72;170m' ;;
-        yellow) printf '\033[38;2;200;200;72m' ;;
-        gray)   printf '\033[38;2;150;150;150m' ;;
-        cyan)   printf '\033[38;2;72;170;222m' ;;
-        *)      printf '\033[38;2;150;150;150m' ;;
-    esac
+    _load_palette
+    printf '\033[38;2;%sm' "$(printf '%s' "$_PALETTE_JSON" | jq -r --arg c "$color" '
+        (.colors[$c] // .colors["gray"]).text_fg | map(tostring) | join(";")
+    ')"
 }
 
 # Convenience: look up account color, then return ANSI foreground
@@ -288,22 +338,15 @@ resolve_project_window() {
 # ---------------------------------------------------------------------------
 resolve_palette_color() {
     local color="$1"
-    case "$color" in
-        green)  echo "active_bg=#2d7d46 active_fg=#ffffff inactive_bg=#1a4a2a inactive_fg=#aaaaaa" ;;
-        blue)   echo "active_bg=#2d5a88 active_fg=#ffffff inactive_bg=#1a3655 inactive_fg=#aaaaaa" ;;
-        red)    echo "active_bg=#8b2d2d active_fg=#ffffff inactive_bg=#551a1a inactive_fg=#aaaaaa" ;;
-        orange) echo "active_bg=#8b5a2d active_fg=#ffffff inactive_bg=#553a1a inactive_fg=#aaaaaa" ;;
-        purple) echo "active_bg=#5a2d8b active_fg=#ffffff inactive_bg=#3a1a55 inactive_fg=#aaaaaa" ;;
-        teal)   echo "active_bg=#2d7d7d active_fg=#ffffff inactive_bg=#1a4a4a inactive_fg=#aaaaaa" ;;
-        pink)   echo "active_bg=#8b2d6a active_fg=#ffffff inactive_bg=#551a42 inactive_fg=#aaaaaa" ;;
-        yellow) echo "active_bg=#7d7d2d active_fg=#ffffff inactive_bg=#4a4a1a inactive_fg=#aaaaaa" ;;
-        gray)   echo "active_bg=#555555 active_fg=#ffffff inactive_bg=#333333 inactive_fg=#aaaaaa" ;;
-        cyan)   echo "active_bg=#2d6a8b active_fg=#ffffff inactive_bg=#1a4255 inactive_fg=#aaaaaa" ;;
-        *)
-            echo "Warning: Unknown color '$color', falling back to gray." >&2
-            echo "active_bg=#555555 active_fg=#ffffff inactive_bg=#333333 inactive_fg=#aaaaaa"
-            ;;
-    esac
+    _load_palette
+    if ! printf '%s' "$_PALETTE_JSON" | jq -e --arg c "$color" '.colors[$c]' >/dev/null 2>&1; then
+        echo "Warning: Unknown color '$color', falling back to gray." >&2
+    fi
+    printf '%s' "$_PALETTE_JSON" | jq -r --arg c "$color" \
+        --arg afg "$_PALETTE_ACTIVE_FG" --arg ifg "$_PALETTE_INACTIVE_FG" '
+        (.colors[$c] // .colors["gray"]) |
+        "active_bg=\(.active_bg) active_fg=\($afg) inactive_bg=\(.inactive_bg) inactive_fg=\($ifg)"
+    '
 }
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,16 @@
+{
+  "active_fg": "#ffffff",
+  "inactive_fg": "#aaaaaa",
+  "colors": {
+    "green":  { "active_bg": "#2d7d46", "inactive_bg": "#1a4a2a", "text_fg": [72, 200, 112] },
+    "blue":   { "active_bg": "#2d5a88", "inactive_bg": "#1a3655", "text_fg": [72, 144, 218] },
+    "red":    { "active_bg": "#8b2d2d", "inactive_bg": "#551a1a", "text_fg": [222, 72, 72] },
+    "orange": { "active_bg": "#8b5a2d", "inactive_bg": "#553a1a", "text_fg": [222, 144, 72] },
+    "purple": { "active_bg": "#5a2d8b", "inactive_bg": "#3a1a55", "text_fg": [144, 72, 222] },
+    "teal":   { "active_bg": "#2d7d7d", "inactive_bg": "#1a4a4a", "text_fg": [72, 200, 200] },
+    "pink":   { "active_bg": "#8b2d6a", "inactive_bg": "#551a42", "text_fg": [222, 72, 170] },
+    "yellow": { "active_bg": "#7d7d2d", "inactive_bg": "#4a4a1a", "text_fg": [200, 200, 72] },
+    "gray":   { "active_bg": "#555555", "inactive_bg": "#333333", "text_fg": [150, 150, 150] },
+    "cyan":   { "active_bg": "#2d6a8b", "inactive_bg": "#1a4255", "text_fg": [72, 170, 222] }
+  }
+}

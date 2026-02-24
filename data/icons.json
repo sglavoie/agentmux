@@ -1,0 +1,10 @@
+{
+  "star": "★",
+  "states": {
+    "bolt": "⚡",
+    "stop": "🛑",
+    "key": "🔑",
+    "error": "⚠️"
+  },
+  "state_order": ["bolt", "stop", "key", "error"]
+}

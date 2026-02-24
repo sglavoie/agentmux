@@ -1,28 +1,62 @@
 """Account and defaults configuration for the Claude Code Dashboard."""
 
+import json
 import os
 
 
+# ── Shared data loading ──────────────────────────────────────────────────────
+
+
+def _resolve_data_path(filename):
+    """Resolve the path to a shared JSON data file.
+
+    Checks the repo layout first (../../data/ relative to this file), then
+    the installed layout (~/.local/lib/cc-manager/).
+    """
+    this_dir = os.path.dirname(os.path.realpath(__file__))
+    repo_path = os.path.join(this_dir, "..", "..", "data", filename)
+    if os.path.isfile(repo_path):
+        return os.path.realpath(repo_path)
+    installed_path = os.path.join(
+        os.path.expanduser("~"), ".local", "lib", "cc-manager", filename
+    )
+    if os.path.isfile(installed_path):
+        return installed_path
+    return None
+
+
+def _hex_to_rgb(hex_str):
+    """Convert a hex color string like '#2d7d46' to an (R, G, B) tuple."""
+    h = hex_str.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def _load_palette():
+    """Load color palette from data/palette.json.
+
+    Returns (palette_dict, active_fg_tuple, inactive_fg_tuple) where
+    palette_dict maps color names to (active_bg_rgb, inactive_bg_rgb, text_fg_rgb).
+    """
+    path = _resolve_data_path("palette.json")
+    if not path:
+        return {}, (255, 255, 255), (170, 170, 170)
+    with open(path) as f:
+        data = json.load(f)
+    palette = {}
+    for name, entry in data.get("colors", {}).items():
+        palette[name] = (
+            _hex_to_rgb(entry["active_bg"]),
+            _hex_to_rgb(entry["inactive_bg"]),
+            tuple(entry["text_fg"]),
+        )
+    return palette, _hex_to_rgb(data["active_fg"]), _hex_to_rgb(data["inactive_fg"])
+
+
 # ── Color palette ────────────────────────────────────────────────────────────
-# Each entry maps a color name to (active_bg_rgb, inactive_bg_rgb, text_fg_rgb).
-# active_fg is always (255,255,255) and inactive_fg is always (170,170,170).
-# text_fg is a brighter variant used for foreground text in the dashboard.
+# Loaded from data/palette.json. Each entry maps a color name to
+# (active_bg_rgb, inactive_bg_rgb, text_fg_rgb).
 
-PALETTE = {
-    "green":  ((0x2d, 0x7d, 0x46), (0x1a, 0x4a, 0x2a), (72, 200, 112)),
-    "blue":   ((0x2d, 0x5a, 0x88), (0x1a, 0x36, 0x55), (72, 144, 218)),
-    "red":    ((0x8b, 0x2d, 0x2d), (0x55, 0x1a, 0x1a), (222, 72, 72)),
-    "orange": ((0x8b, 0x5a, 0x2d), (0x55, 0x3a, 0x1a), (222, 144, 72)),
-    "purple": ((0x5a, 0x2d, 0x8b), (0x3a, 0x1a, 0x55), (144, 72, 222)),
-    "teal":   ((0x2d, 0x7d, 0x7d), (0x1a, 0x4a, 0x4a), (72, 200, 200)),
-    "pink":   ((0x8b, 0x2d, 0x6a), (0x55, 0x1a, 0x42), (222, 72, 170)),
-    "yellow": ((0x7d, 0x7d, 0x2d), (0x4a, 0x4a, 0x1a), (200, 200, 72)),
-    "gray":   ((0x55, 0x55, 0x55), (0x33, 0x33, 0x33), (150, 150, 150)),
-    "cyan":   ((0x2d, 0x6a, 0x8b), (0x1a, 0x42, 0x55), (72, 170, 222)),
-}
-
-ACTIVE_FG = (255, 255, 255)
-INACTIVE_FG = (170, 170, 170)
+PALETTE, ACTIVE_FG, INACTIVE_FG = _load_palette()
 
 
 # ── Account configuration ───────────────────────────────────────────────────
@@ -231,7 +265,7 @@ def _palette_tab_colors(account):
 
     return [
         f"active_bg={_hex(active_bg)}",
-        "active_fg=#ffffff",
+        f"active_fg={_hex(ACTIVE_FG)}",
         f"inactive_bg={_hex(inactive_bg)}",
-        "inactive_fg=#aaaaaa",
+        f"inactive_fg={_hex(INACTIVE_FG)}",
     ]

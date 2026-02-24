@@ -2,14 +2,26 @@
 # cc-title-icons.sh — Shared functions for tab title icon management.
 # Sourced by cc-toggle-star and cc-hook-indicator.
 
+# Source cc-common.sh for icon loading (source guard prevents double-sourcing).
+_CC_TITLE_ICONS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_CC_TITLE_ICONS_DIR/cc-common.sh" ]]; then
+    source "$_CC_TITLE_ICONS_DIR/cc-common.sh"
+else
+    # Follow symlink to find the real lib directory
+    _real_path="$(readlink "${BASH_SOURCE[0]}" || echo "${BASH_SOURCE[0]}")"
+    _real_dir="$(cd "$(dirname "$_real_path")" && pwd)"
+    source "$_real_dir/cc-common.sh"
+fi
+_load_icons
+
 # Remove leading ★and state icon prefixes from a title string.
 strip_icons() {
     local title="$1"
-    title="${title#★}"
-    title="${title#⚡}"
-    title="${title#🛑}"
-    title="${title#🔑}"
-    title="${title#⚠️}"
+    title="${title#"$_ICON_STAR"}"
+    title="${title#"$_ICON_BOLT"}"
+    title="${title#"$_ICON_STOP"}"
+    title="${title#"$_ICON_KEY"}"
+    title="${title#"$_ICON_ERROR"}"
     echo "$title"
 }
 
@@ -17,13 +29,13 @@ strip_icons() {
 # Outputs one of: bolt, stop, key, error, or empty string.
 detect_state() {
     local title="$1"
-    title="${title#★}"
+    title="${title#"$_ICON_STAR"}"
     case "$title" in
-        "⚡"*) echo "bolt" ;;
-        "🛑"*) echo "stop" ;;
-        "🔑"*) echo "key" ;;
-        "⚠️"*) echo "error" ;;
-        *)      echo "" ;;
+        "$_ICON_BOLT"*) echo "bolt" ;;
+        "$_ICON_STOP"*) echo "stop" ;;
+        "$_ICON_KEY"*)  echo "key" ;;
+        "$_ICON_ERROR"*) echo "error" ;;
+        *)              echo "" ;;
     esac
 }
 
@@ -34,13 +46,13 @@ build_title() {
     local base="$1" has_star="$2" state="$3"
     local result="$base"
     case "$state" in
-        bolt) result="⚡$result" ;;
-        stop) result="🛑$result" ;;
-        key)   result="🔑$result" ;;
-        error) result="⚠️$result" ;;
+        bolt)  result="${_ICON_BOLT}$result" ;;
+        stop)  result="${_ICON_STOP}$result" ;;
+        key)   result="${_ICON_KEY}$result" ;;
+        error) result="${_ICON_ERROR}$result" ;;
     esac
     if [[ "$has_star" == "true" ]]; then
-        result="★$result"
+        result="${_ICON_STAR}$result"
     fi
     echo "$result"
 }

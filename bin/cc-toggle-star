@@ -38,9 +38,9 @@ fi
 # Determine current icon state.
 has_star=false
 remaining="$current_title"
-if [[ "$remaining" == "★"* ]]; then
+if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
     has_star=true
-    remaining="${remaining#★}"
+    remaining="${remaining#"$_ICON_STAR"}"
 fi
 
 state="$(detect_state "$current_title")"

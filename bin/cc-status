@@ -78,6 +78,11 @@ fi
 # ---- Load accounts ---------------------------------------------------------
 
 load_accounts
+_load_icons
+
+# Build shell variables for icon-based jq patterns
+_STRIP_RE="$(_icon_strip_regex)"
+_MANAGED_RE="${_STRIP_RE}[A-Z]:"
 
 # ---- Query kitty and build the table --------------------------------------
 
@@ -98,7 +103,7 @@ default_account="$(default_account_name)"
 
 # Use jq to extract rows for every tab that has a claude process.
 # Each output line is tab-delimited: tab_index \t title \t account \t cwd \t status
-rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg show_all "$SHOW_ALL" '
+rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg show_all "$SHOW_ALL" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" '
     [.[] | . as $os |
         $os.tabs | to_entries[] |
         .key as $tab_idx | .value as $tab |
@@ -117,7 +122,7 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
         select(
             $show_all == "true" or
             ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
-            ($tab.title | test("^(★)?(⚡|🛑|🔑)?[A-Z]:"))
+            ($tab.title | test($managed_re))
         ) |
 
         # Find cwd: prefer user_vars.cc_cwd (set at launch), fall back to
@@ -151,16 +156,17 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
         # Status: focused > active/stopped/permission (icon indicator) > idle
         (
             if ($os.is_focused and $tab.is_focused) then "focused"
-            elif ($tab.title | test("^(★)?⚡")) then "active"
-            elif ($tab.title | test("^(★)?🛑")) then "stopped"
-            elif ($tab.title | test("^(★)?🔑")) then "permission"
+            elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_bolt)) then "active"
+            elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_stop)) then "stopped"
+            elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_key)) then "permission"
+            elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_error)) then "error"
             else "idle"
             end
         ) as $status |
 
         {
             tab_index: ($tab_idx + 1),
-            title: ($tab.title | sub("^★"; "") | sub("^⚡"; "") | sub("^🛑"; "") | sub("^🔑"; "")),
+            title: ($tab.title | sub($strip_re; "")),
             account: $account,
             cwd: $cwd,
             status: $status

@@ -8,6 +8,30 @@ import subprocess
 import time
 
 from cc_dashboard import config as _cfg
+from cc_dashboard.config import _resolve_data_path
+
+
+# ── Icon loading from data/icons.json ────────────────────────────────────────
+
+def _load_icons():
+    """Load icon definitions from data/icons.json."""
+    path = _resolve_data_path("icons.json")
+    if not path:
+        return {"star": "★", "states": {"bolt": "⚡", "stop": "🛑", "key": "🔑", "error": "⚠️"}, "state_order": ["bolt", "stop", "key", "error"]}
+    with open(path) as f:
+        return json.load(f)
+
+
+_ICONS = _load_icons()
+_ICON_STAR = _ICONS["star"]
+_ICON_STATES = _ICONS["states"]
+_STATE_NAMES = {"bolt": "active", "stop": "stopped", "key": "permission", "error": "error"}
+
+# Build the managed-title regex dynamically from loaded icons
+_state_icons_alt = "|".join(re.escape(_ICON_STATES[k]) for k in _ICONS["state_order"])
+_MANAGED_TITLE_RE = re.compile(
+    r"^(" + re.escape(_ICON_STAR) + r")?(" + _state_icons_alt + r")?[A-Z]:"
+)
 
 
 def get_kitty_socket():
@@ -34,11 +58,12 @@ def kitty_cmd(socket, *args):
 
 def _strip_icons(title):
     """Remove leading star and state icon prefixes from a tab title."""
-    if title.startswith("★"):
-        title = title[2:]
-    for icon in ("⚡", "🛑", "🔑", "⚠️"):
+    if title.startswith(_ICON_STAR):
+        title = title[len(_ICON_STAR):]
+    for key in _ICONS["state_order"]:
+        icon = _ICON_STATES[key]
         if title.startswith(icon):
-            title = title[len(icon) :]
+            title = title[len(icon):]
             break
     return title
 
@@ -46,23 +71,15 @@ def _strip_icons(title):
 def _detect_state(title):
     """Detect the state icon in a tab title, returning a status string.
 
-    Returns one of: "active", "stopped", "permission", or "".
-    The ★prefix is skipped before checking.
+    Returns one of: "active", "stopped", "permission", "error", or "".
+    The star prefix is skipped before checking.
     """
-    if title.startswith("★"):
-        title = title[2:]
-    if title.startswith("⚡"):
-        return "active"
-    if title.startswith("🛑"):
-        return "stopped"
-    if title.startswith("🔑"):
-        return "permission"
-    if title.startswith("⚠️"):
-        return "error"
+    if title.startswith(_ICON_STAR):
+        title = title[len(_ICON_STAR):]
+    for key in _ICONS["state_order"]:
+        if title.startswith(_ICON_STATES[key]):
+            return _STATE_NAMES[key]
     return ""
-
-
-_MANAGED_TITLE_RE = re.compile(r"^(★)?(⚡|🛑|🔑|⚠️)?[A-Z]:")
 
 
 def query_sessions(socket, managed_only=True):

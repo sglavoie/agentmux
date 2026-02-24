@@ -11,6 +11,8 @@ SYMLINKS := \
 	$(PREFIX_BIN)/cc-hook-indicator:hooks/cc-hook-indicator \
 	$(PREFIX_LIB)/cc-common.sh:lib/cc-common.sh \
 	$(PREFIX_LIB)/cc-title-icons.sh:lib/cc-title-icons.sh \
+	$(PREFIX_LIB)/palette.json:data/palette.json \
+	$(PREFIX_LIB)/icons.json:data/icons.json \
 	$(PREFIX_KITTY)/cc_dashboard:kittens/cc_dashboard \
 	$(PREFIX_KITTY)/claude_dashboard.py:kittens/claude_dashboard.py \
 	$(PREFIX_KITTY)/cc_session_picker.py:kittens/cc_session_picker.py \
