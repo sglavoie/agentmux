@@ -435,6 +435,110 @@ default_account_name() {
 }
 
 # ---------------------------------------------------------------------------
+# Compute where to insert a new tab to maintain sorted order
+# ---------------------------------------------------------------------------
+# Prints "first" if the tab should be the first tab, a tab ID if the tab
+# should be placed after that tab, or nothing if sorting is disabled.
+compute_insert_location() {
+    local socket="$1"
+    local new_account="$2"
+    local new_title="$3"
+    [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]] || return 0
+
+    _load_icons
+    local strip_re
+    strip_re="$(_icon_strip_regex)"
+
+    local ls_json
+    ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 0
+
+    # Extract managed tabs: tab_id, account, stripped_title
+    local tab_data
+    tab_data="$(printf '%s' "$ls_json" | jq -r --arg strip_re "$strip_re" '
+        .[0].tabs // [] | .[] |
+        (.title | sub($strip_re; "")) as $stripped |
+        (
+            [.windows[]? | .user_vars.cc_account // empty | select(. != "")] |
+            if length > 0 then .[0] else "" end
+        ) as $cc_acct |
+        select($cc_acct != "" or ($stripped | test("^[A-Z]:"))) |
+        [(.id | tostring), $cc_acct, $stripped] | @tsv
+    ')"
+
+    # Build sort keys for existing managed tabs
+    local -a existing_keys=()
+    local -a existing_ids=()
+
+    if [[ -n "$tab_data" ]]; then
+        while IFS=$'\t' read -r tid taccount tstripped; do
+            [[ -z "$tid" ]] && continue
+            local acct="$taccount"
+            if [[ -z "$acct" && "$tstripped" =~ ^[A-Z]: ]]; then
+                local initial="${tstripped:0:1}"
+                local ai
+                for ((ai = 0; ai < ${#_ACCOUNT_NAMES[@]}; ai++)); do
+                    local name_initial="${_ACCOUNT_NAMES[$ai]:0:1}"
+                    name_initial="$(echo "$name_initial" | tr '[:lower:]' '[:upper:]')"
+                    if [[ "$name_initial" == "$initial" ]]; then
+                        acct="${_ACCOUNT_NAMES[$ai]}"
+                        break
+                    fi
+                done
+                [[ -z "$acct" ]] && acct="unknown"
+            fi
+            # Strip the account initial prefix (e.g. "P:ccm" -> "ccm")
+            local project_name="$tstripped"
+            if [[ "$project_name" =~ ^[A-Z]: ]]; then
+                project_name="${project_name:2}"
+            fi
+            local sort_key
+            sort_key="$(echo "${acct}:${project_name}" | tr '[:upper:]' '[:lower:]')"
+            existing_keys+=("$sort_key")
+            existing_ids+=("$tid")
+        done <<< "$tab_data"
+    fi
+
+    # Build the sort key for the new tab (strip account prefix from title)
+    local new_project="$new_title"
+    if [[ "$new_project" =~ ^[A-Z]: ]]; then
+        new_project="${new_project:2}"
+    fi
+    local new_key
+    new_key="$(echo "${new_account}:${new_project}" | tr '[:upper:]' '[:lower:]')"
+
+    # Sort existing keys and find where the new one goes
+    # Build a combined list with indices, sort it, then find the position
+    local -a all_entries=()
+    local i
+    for ((i = 0; i < ${#existing_keys[@]}; i++)); do
+        all_entries+=("${existing_keys[$i]}"$'\t'"existing"$'\t'"${existing_ids[$i]}")
+    done
+    all_entries+=("${new_key}"$'\t'"new"$'\t'"0")
+
+    local -a sorted_entries=()
+    while IFS= read -r entry; do
+        sorted_entries+=("$entry")
+    done < <(printf '%s\n' "${all_entries[@]}" | sort -f -t $'\t' -k1,1)
+
+    # Find the entry just before "new" in the sorted list
+    local prev_id=""
+    for entry in "${sorted_entries[@]}"; do
+        local etype eid
+        IFS=$'\t' read -r _ etype eid <<< "$entry"
+        if [[ "$etype" == "new" ]]; then
+            break
+        fi
+        prev_id="$eid"
+    done
+
+    if [[ -z "$prev_id" ]]; then
+        echo "first"
+    else
+        echo "$prev_id"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Sort managed tabs by account then title
 # ---------------------------------------------------------------------------
 sort_tabs() {
@@ -521,12 +625,16 @@ sort_tabs() {
     [[ $total -le 1 ]] && return 0
     [[ ${#managed_indices[@]} -le 1 && ${#unmanaged_indices[@]} -eq 0 ]] && return 0
 
-    # Sort managed indices by (account_lower, stripped_title_lower)
+    # Sort managed indices by (account_lower, project_name_lower)
     local -a sort_input=()
     local mi
     for mi in "${managed_indices[@]}"; do
+        local project_name="${tab_stripped[$mi]}"
+        if [[ "$project_name" =~ ^[A-Z]: ]]; then
+            project_name="${project_name:2}"
+        fi
         local sort_key
-        sort_key="$(echo "${tab_accounts[$mi]}:${tab_stripped[$mi]}" | tr '[:upper:]' '[:lower:]')"
+        sort_key="$(echo "${tab_accounts[$mi]}:${project_name}" | tr '[:upper:]' '[:lower:]')"
         sort_input+=("${sort_key}"$'\t'"${mi}")
     done
 
@@ -591,6 +699,7 @@ sort_tabs() {
 
         # Focus the tab we want to move
         kitty @ --to "$socket" focus-tab --match "id:$want_id" 2>/dev/null
+        sleep 0.05
 
         if [[ $cur_pos -gt $di ]]; then
             # Move backward (cur_pos - di) times

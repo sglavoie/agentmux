@@ -68,6 +68,17 @@ def _strip_icons(title):
     return title
 
 
+def _strip_account_prefix(title):
+    """Remove the leading 'X:' account initial prefix from a stripped title.
+
+    E.g. 'P:ccm' -> 'ccm', 'T:Excel' -> 'Excel'. Titles without the prefix
+    are returned as-is.
+    """
+    if len(title) >= 2 and title[0].isupper() and title[1] == ":":
+        return title[2:]
+    return title
+
+
 def _detect_state(title):
     """Detect the state icon in a tab title, returning a status string.
 
@@ -257,12 +268,98 @@ def do_close(socket, tab_id):
     kitty_cmd(socket, "close-tab", "--match", f"id:{tab_id}")
 
 
-def do_launch(socket, title, directory, account, flags="", pw_override=""):
+def compute_insert_location(socket, account, title):
+    """Compute where to insert a new tab to maintain sorted order.
+
+    Returns ("first", None) if the tab should be first,
+    ("after", tab_id) if it should be placed after that tab,
+    or (None, None) if sorting is disabled.
+    """
+    if _cfg._default_sort_sessions != "alpha":
+        return (None, None)
+
+    result = kitty_cmd(socket, "ls")
+    if not result or result.returncode != 0:
+        return (None, None)
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return (None, None)
+
+    if not data:
+        return (None, None)
+    tabs = data[0].get("tabs", [])
+
+    # Collect existing managed tabs with their sort keys
+    existing = []  # (sort_key, tab_id)
+    for tab in tabs:
+        tab_id = tab.get("id", 0)
+        tab_title = tab.get("title", "")
+        stripped = _strip_icons(tab_title)
+
+        cc_account = ""
+        for win in tab.get("windows", []):
+            uv = win.get("user_vars", {})
+            acc = uv.get("cc_account", "")
+            if acc:
+                cc_account = acc
+                break
+
+        is_managed = bool(cc_account) or bool(_MANAGED_TITLE_RE.match(tab_title))
+        if not is_managed:
+            continue
+
+        acct = cc_account
+        if not acct and _MANAGED_TITLE_RE.match(tab_title):
+            initial = stripped[0].upper() if stripped else ""
+            for name in _cfg._account_names:
+                if name and name[0].upper() == initial:
+                    acct = name
+                    break
+            if not acct:
+                acct = "unknown"
+
+        project_name = _strip_account_prefix(stripped)
+        sort_key = (acct.lower(), project_name.lower())
+        existing.append((sort_key, tab_id))
+
+    # Sort existing and find where the new tab fits
+    existing.sort(key=lambda x: x[0])
+    new_project = _strip_account_prefix(title)
+    new_key = (account.lower(), new_project.lower())
+
+    # Find the last existing entry whose key is <= new_key
+    prev_id = None
+    for sort_key, tab_id in existing:
+        if sort_key <= new_key:
+            prev_id = tab_id
+        else:
+            break
+
+    if prev_id is None:
+        return ("first", None)
+    return ("after", prev_id)
+
+
+def do_launch(socket, title, directory, account, flags="", pw_override="", location=None):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
+
+    # Handle positional insertion
+    loc_args = []
+    if location:
+        loc_type, loc_id = location
+        if loc_type == "first":
+            loc_args = ["--location", "first"]
+        elif loc_type == "after" and loc_id is not None:
+            kitty_cmd(socket, "focus-tab", "--match", f"id:{loc_id}")
+            time.sleep(0.1)
+            loc_args = ["--location", "after"]
+
     cmd = [
         "launch",
         "--type=tab",
+    ] + loc_args + [
         "--allow-remote-control",
         "--tab-title",
         title,
@@ -329,8 +426,11 @@ def do_restart(socket, session, flags="", pw_override=""):
     """Close and relaunch a session with the same title, directory, and account."""
     do_close(socket, session["tab_id"])
     time.sleep(0.3)
+    # Compute insertion location after close so the dead tab ID isn't in the list
+    location = compute_insert_location(socket, session["account"], session["title"])
     do_launch(
-        socket, session["title"], session["cwd"], session["account"], flags, pw_override
+        socket, session["title"], session["cwd"], session["account"], flags, pw_override,
+        location=location,
     )
 
 
@@ -391,7 +491,8 @@ def do_sort_tabs(socket):
                         break
                 if not account:
                     account = "unknown"
-            sort_key = (account.lower(), stripped.lower())
+            project_name = _strip_account_prefix(stripped)
+            sort_key = (account.lower(), project_name.lower())
             managed.append((sort_key, pos, tab_id))
         else:
             unmanaged.append((pos, tab_id))
@@ -419,6 +520,7 @@ def do_sort_tabs(socket):
             continue
 
         kitty_cmd(socket, "focus-tab", "--match", f"id:{want_id}")
+        time.sleep(0.05)
 
         moves = abs(cur_pos - target_pos)
         direction = "move_tab_backward" if cur_pos > target_pos else "move_tab_forward"

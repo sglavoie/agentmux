@@ -32,6 +32,7 @@ launch_session() {
     local account="${3:-work}"
     local flags="${4:-}"
     local pw_override="${5:-}"
+    local location_args="${6:-}"
 
     dir="$(expand_tilde "$dir")"
 
@@ -59,7 +60,7 @@ launch_session() {
 
     local shell_cmd="exec claude $effective_flags"
     # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
+    kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
 
     # Apply tab colors. Retry a few times since Claude may briefly override
     # the tab title on startup.
@@ -114,14 +115,23 @@ cmd_launch_interactive() {
         pw="$(echo "${pw:-}" | xargs)"
         [[ -z "$account" ]] && account="work"
 
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw"; then
+        local insert_loc loc_args=""
+        insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+        if [[ "$insert_loc" == "first" ]]; then
+            loc_args="--location first"
+        elif [[ -n "$insert_loc" ]]; then
+            kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+            sleep 0.1
+            loc_args="--location after"
+        fi
+
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
         fi
     done <<< "$picker_output"
 
-    sort_tabs "$SOCKET"
     echo "Launched $launched new session(s), $existed already existed."
 }
 
@@ -161,14 +171,23 @@ cmd_launch_all() {
         pw="$(echo "${pw:-}" | xargs)"
         [[ -z "$account" ]] && account="work"
 
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw"; then
+        local insert_loc loc_args=""
+        insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+        if [[ "$insert_loc" == "first" ]]; then
+            loc_args="--location first"
+        elif [[ -n "$insert_loc" ]]; then
+            kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+            sleep 0.1
+            loc_args="--location after"
+        fi
+
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
         fi
     done <<< "$lines"
 
-    sort_tabs "$SOCKET"
     echo "Launched $launched new session(s), $existed already existed."
 }
 
@@ -209,8 +228,17 @@ cmd_add() {
         fi
     fi
 
-    launch_session "$title" "$dir" "$account" ""
-    sort_tabs "$SOCKET"
+    local insert_loc loc_args=""
+    insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+    if [[ "$insert_loc" == "first" ]]; then
+        loc_args="--location first"
+    elif [[ -n "$insert_loc" ]]; then
+        kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+        sleep 0.1
+        loc_args="--location after"
+    fi
+
+    launch_session "$title" "$dir" "$account" "" "" "$loc_args"
 }
 
 # ---------------------------------------------------------------------------
@@ -353,8 +381,18 @@ cmd_restart() {
     kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
     echo "Closed tab '$title', relaunching..."
     sleep 0.3
-    launch_session "$title" "$dir" "$account" ""
-    sort_tabs "$SOCKET"
+
+    local insert_loc loc_args=""
+    insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+    if [[ "$insert_loc" == "first" ]]; then
+        loc_args="--location first"
+    elif [[ -n "$insert_loc" ]]; then
+        kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+        sleep 0.1
+        loc_args="--location after"
+    fi
+
+    launch_session "$title" "$dir" "$account" "" "" "$loc_args"
 }
 
 # ---------------------------------------------------------------------------

@@ -9,11 +9,11 @@ import unicodedata
 from cc_dashboard import config as _cfg
 from cc_dashboard.config import PALETTE
 from cc_dashboard.kitty_remote import (
+    compute_insert_location,
     do_close,
     do_focus,
     do_launch,
     do_restart,
-    do_sort_tabs,
     format_duration,
     query_sessions,
 )
@@ -1324,7 +1324,6 @@ def dashboard(stdscr, socket):
         elif mode == "confirm_restart":
             if key in (ord("y"), ord("Y")) and filtered:
                 do_restart(socket, filtered[selected])
-                do_sort_tabs(socket)
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
@@ -1361,8 +1360,8 @@ def dashboard(stdscr, socket):
                     pw_val = new_fields["pw"]
                     pw_val = "" if pw_val == "none" else pw_val
                     if t and d:
-                        do_launch(socket, t, d, a, fl, pw_val)
-                        do_sort_tabs(socket)
+                        loc = compute_insert_location(socket, a, t)
+                        do_launch(socket, t, d, a, fl, pw_val, location=loc)
                         sessions = query_sessions(socket, managed_only=(not show_all))
                         filtered = _apply_filters(
                             sessions, search_query, account_filter
@@ -1474,6 +1473,9 @@ def dashboard(stdscr, socket):
             elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:
                 entry = pick_filtered[pick_selected]
                 pw_val = entry["pw"]
+                loc = compute_insert_location(
+                    socket, entry["account"], entry["title"]
+                )
                 do_launch(
                     socket,
                     entry["title"],
@@ -1481,8 +1483,8 @@ def dashboard(stdscr, socket):
                     entry["account"],
                     entry["flags"],
                     pw_val,
+                    location=loc,
                 )
-                do_sort_tabs(socket)
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = max(0, len(filtered) - 1)
