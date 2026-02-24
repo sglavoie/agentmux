@@ -85,46 +85,19 @@ launch_session() {
 }
 
 # ---------------------------------------------------------------------------
-# Subcommand: interactive session picker (requires gum)
+# Subcommand: interactive session picker (curses UI)
 # ---------------------------------------------------------------------------
 cmd_launch_interactive() {
-    require_gum
+    local picker_script
+    picker_script="$(dirname "$(readlink -f "$0")")/../kittens/cc_session_picker.py"
 
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo "Error: Config file not found: $CONFIG_FILE" >&2
+    if [[ ! -f "$picker_script" ]]; then
+        echo "Error: Picker script not found: $picker_script" >&2
         exit 1
     fi
 
-    local -a items=()
-    local -a keys=()
-
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-
-        local title dir account flags pw
-        IFS='|' read -r title dir account flags pw <<< "$line"
-        title="$(echo "$title" | xargs)"
-        dir="$(echo "$dir" | xargs)"
-        account="$(echo "${account:-work}" | xargs)"
-        flags="$(echo "${flags:-}" | xargs)"
-        pw="$(echo "${pw:-}" | xargs)"
-        [[ -z "$account" ]] && account="work"
-
-        items+=("$(printf '%-20s  %-40s  (%s)' "$title" "$dir" "$account")")
-        keys+=("${title}|${dir}|${account}|${flags}|${pw}")
-    done < "$CONFIG_FILE"
-
-    if [[ ${#items[@]} -eq 0 ]]; then
-        echo "No sessions defined in $CONFIG_FILE"
-        return
-    fi
-
-    local choices
-    choices="$(printf '%s\n' "${items[@]}" | gum choose --no-limit \
-        --header "Select sessions to launch:" \
-        --header.foreground "$GUM_HEADER_COLOR" \
-        --cursor.foreground "$GUM_ACCENT_COLOR" \
-        --selected.foreground "$GUM_ACCENT_COLOR")" || {
+    local picker_output
+    picker_output="$(python3 "$picker_script")" || {
         echo "No sessions selected."
         return
     }
@@ -132,23 +105,21 @@ cmd_launch_interactive() {
     local launched=0
     local existed=0
 
-    while IFS= read -r chosen; do
-        [[ -z "$chosen" ]] && continue
-        # Find the matching key by comparing display strings
-        local j
-        for ((j = 0; j < ${#items[@]}; j++)); do
-            if [[ "${items[$j]}" == "$chosen" ]]; then
-                local title dir account flags pw
-                IFS='|' read -r title dir account flags pw <<< "${keys[$j]}"
-                if launch_session "$title" "$dir" "$account" "$flags" "$pw"; then
-                    launched=$((launched + 1))
-                else
-                    existed=$((existed + 1))
-                fi
-                break
-            fi
-        done
-    done <<< "$choices"
+    while IFS='|' read -r title dir account flags pw; do
+        [[ -z "$title" ]] && continue
+        title="$(echo "$title" | xargs)"
+        dir="$(echo "$dir" | xargs)"
+        account="$(echo "${account:-work}" | xargs)"
+        flags="$(echo "${flags:-}" | xargs)"
+        pw="$(echo "${pw:-}" | xargs)"
+        [[ -z "$account" ]] && account="work"
+
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw"; then
+            launched=$((launched + 1))
+        else
+            existed=$((existed + 1))
+        fi
+    done <<< "$picker_output"
 
     echo "Launched $launched new session(s), $existed already existed."
 }
@@ -662,7 +633,7 @@ Usage:
     cc-launch [--socket SOCKET] [COMMAND]
 
 Commands:
-    (none)                          Interactively select sessions to launch (requires gum)
+    (none)                          Interactively select sessions to launch (requires python3)
     --all                           Launch all sessions defined in the config file
     --add TITLE DIR [ACCOUNT]       Launch a single ad-hoc session tab (account picker if omitted)
     --close [TITLE]                 Close a tab (interactive picker if no title given)
@@ -775,7 +746,7 @@ main() {
             cmd_save "$@"
             ;;
         "")
-            if [[ "$HAS_GUM" == "true" ]]; then
+            if command -v python3 >/dev/null 2>&1; then
                 cmd_launch_interactive
             else
                 cmd_launch_all

@@ -13,6 +13,7 @@ SYMLINKS := \
 	$(PREFIX_LIB)/cc-title-icons.sh:lib/cc-title-icons.sh \
 	$(PREFIX_KITTY)/cc_dashboard:kittens/cc_dashboard \
 	$(PREFIX_KITTY)/claude_dashboard.py:kittens/claude_dashboard.py \
+	$(PREFIX_KITTY)/cc_session_picker.py:kittens/cc_session_picker.py \
 	$(PREFIX_ZFUNC)/_ccm:completions/_ccm \
 	$(PREFIX_ZFUNC)/_cc-launch:completions/_cc-launch \
 	$(PREFIX_ZFUNC)/_cc-status:completions/_cc-status \

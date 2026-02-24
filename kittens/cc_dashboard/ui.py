@@ -151,6 +151,22 @@ def _filter_sessions(sessions, query):
     ]
 
 
+def _filter_by_accounts(sessions, enabled_accounts):
+    """Return sessions filtered to only those whose account is in enabled_accounts.
+
+    When enabled_accounts is None, returns the full list (no filtering).
+    """
+    if enabled_accounts is None:
+        return sessions
+    return [s for s in sessions if s["account"] in enabled_accounts]
+
+
+def _apply_filters(sessions, search_query, account_filter):
+    """Chain account filtering then text search."""
+    result = _filter_by_accounts(sessions, account_filter)
+    return _filter_sessions(result, search_query)
+
+
 def _filter_config_sessions(sessions, query):
     """Return config sessions matching query (case-insensitive) against title, dir, or account."""
     if not query:
@@ -475,7 +491,8 @@ def draw_footer(stdscr, mode):
     rows, cols = stdscr.getmaxyx()
 
     hints = {
-        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  R Restart  n New  l Launch  d Detail  / Search  a All  r Refresh  q Quit",
+        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  R Restart  n New  l Launch  d Detail  / Search  a All  f Acct  r Refresh  q Quit",
+        "filter": "1-N Toggle account  f Done  Esc Clear",
         "confirm": "y Confirm close    Any other key Cancel",
         "confirm_restart": "y Confirm restart    Any other key Cancel",
         "new": "Enter Next/Submit    Tab Cycle    Esc Cancel",
@@ -532,6 +549,41 @@ def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
         # Accepted filter display
         text = f'Filter: "{query}" ({match_count} matches)  [Esc clear]'
         safe_addstr(stdscr, y, 2, text, curses.color_pair(CP_DIM))
+
+
+def draw_filter_bar(stdscr, account_filter, account_filter_mode):
+    """Draw the account filter bar on row 2.
+
+    Each account is shown as N:name in its account color when enabled,
+    or in CP_DIM when disabled. The prefix indicates whether filter mode
+    is actively interactive.
+    """
+    _, cols = stdscr.getmaxyx()
+
+    if account_filter_mode:
+        prefix = "Filter: "
+        prefix_attr = curses.color_pair(CP_WARN)
+    else:
+        prefix = "Accounts: "
+        prefix_attr = curses.color_pair(CP_DIM)
+
+    safe_addstr(stdscr, 2, 2, prefix, prefix_attr)
+    x = 2 + len(prefix)
+
+    for i, name in enumerate(_cfg._account_names):
+        if i >= 9:
+            break
+        label = f"{i + 1}:{name}"
+        enabled = account_filter is None or name in account_filter
+        if enabled:
+            cp = _cp_for_account(name)
+            attr = curses.color_pair(cp)
+        else:
+            attr = curses.color_pair(CP_DIM)
+        safe_addstr(stdscr, 2, x, label, attr)
+        x += len(label) + 2
+        if x >= cols - 2:
+            break
 
 
 def draw_new_form(stdscr, fields, active_field, cursor_pos):
@@ -687,6 +739,10 @@ def dashboard(stdscr, socket):
     search_cursor = 0
     filtered = sessions
 
+    # Account filter state
+    account_filter = None       # None = show all; set of names = show only these
+    account_filter_mode = False  # True when filter bar is interactive
+
     # New-session form state — default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
     default_pw = _cfg._default_project_window if _cfg._default_project_window else "none"
@@ -710,6 +766,13 @@ def dashboard(stdscr, socket):
                     stdscr, search_query, search_cursor,
                     search_active, len(filtered),
                 )
+            if account_filter is not None or account_filter_mode:
+                draw_filter_bar(stdscr, account_filter, account_filter_mode)
+            if account_filter_mode:
+                # Override footer with filter-mode hints
+                rows_now, cols_now = stdscr.getmaxyx()
+                safe_addstr(stdscr, rows_now - 1, 0, " " * (cols_now - 1), curses.color_pair(CP_NORMAL))
+                draw_footer(stdscr, "filter")
             if mode == "confirm" and filtered:
                 draw_confirm_prompt(stdscr, filtered[selected], "Close")
             elif mode == "confirm_restart" and filtered:
@@ -744,7 +807,7 @@ def dashboard(stdscr, socket):
                     refresh_ticks = 0
                     new_sessions = query_sessions(socket, managed_only=(not show_all))
                     old_fp = _session_fingerprint(filtered)
-                    new_filtered = _filter_sessions(new_sessions, search_query)
+                    new_filtered = _apply_filters(new_sessions, search_query, account_filter)
                     if _session_fingerprint(new_filtered) != old_fp:
                         # Preserve selection by matching tab_id
                         old_tab_id = filtered[selected]["tab_id"] if filtered and selected < len(filtered) else None
@@ -770,7 +833,7 @@ def dashboard(stdscr, socket):
                     search_active = False
                     search_query = ""
                     search_cursor = 0
-                    filtered = sessions
+                    filtered = _apply_filters(sessions, search_query, account_filter)
                     selected = min(selected, max(0, len(filtered) - 1))
                     continue
                 elif key in (10, 13, curses.KEY_ENTER):  # Accept filter
@@ -789,7 +852,7 @@ def dashboard(stdscr, socket):
                             + search_query[search_cursor:]
                         )
                         search_cursor -= 1
-                        filtered = _filter_sessions(sessions, search_query)
+                        filtered = _apply_filters(sessions, search_query, account_filter)
                         selected = min(selected, max(0, len(filtered) - 1))
                     continue
                 elif key == curses.KEY_LEFT:
@@ -805,27 +868,59 @@ def dashboard(stdscr, socket):
                         + search_query[search_cursor:]
                     )
                     search_cursor += 1
-                    filtered = _filter_sessions(sessions, search_query)
+                    filtered = _apply_filters(sessions, search_query, account_filter)
                     selected = min(selected, max(0, len(filtered) - 1))
                     continue
                 else:
                     continue
 
+            # Number keys for account filter toggling (only in filter mode)
+            if account_filter_mode and ord("1") <= key <= ord("9"):
+                idx = key - ord("1")
+                if idx < len(_cfg._account_names):
+                    name = _cfg._account_names[idx]
+                    if account_filter is None:
+                        # First press: solo this account
+                        account_filter = {name}
+                    elif name in account_filter:
+                        # Remove this account
+                        account_filter.discard(name)
+                        if not account_filter:
+                            # Last account removed: clear filter entirely
+                            account_filter = None
+                    else:
+                        # Add this account
+                        account_filter.add(name)
+                    filtered = _apply_filters(sessions, search_query, account_filter)
+                    selected = min(selected, max(0, len(filtered) - 1))
+                continue
+
             if key in (ord("q"), ord("Q")):
                 return
-            if key == 27:  # Escape
-                if search_query:
+            if key == 27:  # Escape — cascade: filter mode → search → account filter → quit
+                if account_filter_mode:
+                    account_filter_mode = False
+                    account_filter = None
+                    filtered = _apply_filters(sessions, search_query, account_filter)
+                    selected = min(selected, max(0, len(filtered) - 1))
+                elif search_query:
                     search_query = ""
                     search_cursor = 0
-                    filtered = sessions
+                    filtered = _apply_filters(sessions, search_query, account_filter)
+                    selected = min(selected, max(0, len(filtered) - 1))
+                elif account_filter is not None:
+                    account_filter = None
+                    filtered = _apply_filters(sessions, search_query, account_filter)
                     selected = min(selected, max(0, len(filtered) - 1))
                 else:
                     return
+            elif key == ord("f"):
+                account_filter_mode = not account_filter_mode
             elif key == ord("/"):
                 search_active = True
                 search_query = ""
                 search_cursor = 0
-                filtered = sessions
+                filtered = _apply_filters(sessions, search_query, account_filter)
             elif key in (curses.KEY_UP, ord("k"), ord("K")) and filtered:
                 selected = (selected - 1) % len(filtered)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and filtered:
@@ -855,7 +950,7 @@ def dashboard(stdscr, socket):
             elif key in (ord("a"), ord("A")):
                 show_all = not show_all
                 sessions = query_sessions(socket, managed_only=(not show_all))
-                filtered = _filter_sessions(sessions, search_query)
+                filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
                 label = "all" if show_all else "managed"
                 msg = f"Showing {label} sessions ({len(filtered)} found)"
@@ -864,7 +959,7 @@ def dashboard(stdscr, socket):
                 show_detail = not show_detail
             elif key == ord("r"):
                 sessions = query_sessions(socket, managed_only=(not show_all))
-                filtered = _filter_sessions(sessions, search_query)
+                filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
                 msg = f"{len(filtered)} session(s) found"
                 msg_frames = 20
@@ -876,7 +971,7 @@ def dashboard(stdscr, socket):
             if key in (ord("y"), ord("Y")) and filtered:
                 do_close(socket, filtered[selected]["tab_id"])
                 sessions = query_sessions(socket, managed_only=(not show_all))
-                filtered = _filter_sessions(sessions, search_query)
+                filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
                 msg = "Session closed"
                 msg_frames = 20
@@ -887,7 +982,7 @@ def dashboard(stdscr, socket):
             if key in (ord("y"), ord("Y")) and filtered:
                 do_restart(socket, filtered[selected])
                 sessions = query_sessions(socket, managed_only=(not show_all))
-                filtered = _filter_sessions(sessions, search_query)
+                filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
                 msg = "Session restarted"
                 msg_frames = 20
@@ -924,7 +1019,7 @@ def dashboard(stdscr, socket):
                     if t and d:
                         do_launch(socket, t, d, a, fl, pw_val)
                         sessions = query_sessions(socket, managed_only=(not show_all))
-                        filtered = _filter_sessions(sessions, search_query)
+                        filtered = _apply_filters(sessions, search_query, account_filter)
                         selected = max(0, len(filtered) - 1)
                         msg = f'Launched "{t}"'
                         msg_frames = 20
@@ -1020,7 +1115,7 @@ def dashboard(stdscr, socket):
                 pw_val = entry["pw"]
                 do_launch(socket, entry["title"], entry["dir"], entry["account"], entry["flags"], pw_val)
                 sessions = query_sessions(socket, managed_only=(not show_all))
-                filtered = _filter_sessions(sessions, search_query)
+                filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = max(0, len(filtered) - 1)
                 msg = f'Launched "{entry["title"]}"'
                 msg_frames = 20
