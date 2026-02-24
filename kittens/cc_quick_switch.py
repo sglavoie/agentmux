@@ -10,8 +10,18 @@ import curses
 import os
 import sys
 
-if "__file__" in dir():
-    sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+def _kitten_dir():
+    """Return the directory containing this kitten script."""
+    for candidate in (
+        globals().get("__file__"),
+        sys.argv[0] if sys.argv else None,
+    ):
+        if candidate and os.path.isfile(candidate):
+            return os.path.dirname(os.path.realpath(candidate))
+    return os.path.expanduser("~/.config/kitty")
+
+
+sys.path.insert(0, _kitten_dir())
 
 from cc_dashboard.config import load_accounts
 from cc_dashboard.kitty_remote import do_focus, get_kitty_socket, query_sessions

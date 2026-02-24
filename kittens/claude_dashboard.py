@@ -16,7 +16,24 @@ import curses
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+def _kitten_dir():
+    """Return the directory containing this kitten script.
+
+    When Kitty runs a kitten via ``kitten foo.py``, ``__file__`` may not be
+    defined.  Fall back to ``sys.argv[0]`` (which Kitty sets to the script
+    path) and finally to ``~/.config/kitty/`` where ``make install`` symlinks
+    the kittens.
+    """
+    for candidate in (
+        globals().get("__file__"),
+        sys.argv[0] if sys.argv else None,
+    ):
+        if candidate and os.path.isfile(candidate):
+            return os.path.dirname(os.path.realpath(candidate))
+    return os.path.expanduser("~/.config/kitty")
+
+
+sys.path.insert(0, _kitten_dir())
 
 from cc_dashboard.config import load_accounts, load_defaults, load_sessions
 from cc_dashboard.kitty_remote import get_kitty_socket
@@ -53,7 +70,7 @@ def main(args=None):
 try:
     from kittens.tui.handler import result_handler
 
-    @result_handler(no_ui=True)
+    @result_handler()
     def handle_result(args, answer, target_window_id, boss):
         pass
 
