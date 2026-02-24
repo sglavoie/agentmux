@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# cc-hook-indicator — Add/remove ⚡ prefix on the current tab's title.
-# Called by Claude Code hooks with "active" or "idle" as $1.
+# cc-hook-indicator — Set state icon prefix on the current tab's title.
+# Called by Claude Code hooks with "active", "stop", "permission", or "idle" as $1.
 # Relies on KITTY_WINDOW_ID being set in the environment (Kitty sets this
 # automatically for all processes inside its windows).
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: cc-hook-indicator active|idle" >&2
+    echo "Usage: cc-hook-indicator active|stop|permission|idle" >&2
     exit 1
 fi
 
@@ -43,32 +43,36 @@ fi
 
 # Determine current icon state.
 has_star=false
-has_bolt=false
 remaining="$current_title"
 if [[ "$remaining" == "★ "* ]]; then
     has_star=true
     remaining="${remaining#★ }"
 fi
-if [[ "$remaining" == "⚡ "* ]]; then
-    has_bolt=true
-    remaining="${remaining#⚡ }"
-fi
+
+# Strip any existing state icon to get the base title.
+remaining="$(strip_icons "$remaining")"
 
 # Apply the requested action.
 case "$ACTION" in
     active)
-        has_bolt=true
+        state="bolt"
+        ;;
+    stop)
+        state="stop"
+        ;;
+    permission)
+        state="key"
         ;;
     idle)
-        has_bolt=false
+        state=""
         ;;
     *)
-        echo "Error: unknown action '$ACTION' (expected 'active' or 'idle')" >&2
+        echo "Error: unknown action '$ACTION' (expected 'active', 'stop', 'permission', or 'idle')" >&2
         exit 1
         ;;
 esac
 
-new_title="$(build_title "$remaining" "$has_star" "$has_bolt")"
+new_title="$(build_title "$remaining" "$has_star" "$state")"
 
 # Only update if the title actually changed.
 if [[ "$new_title" != "$current_title" ]]; then

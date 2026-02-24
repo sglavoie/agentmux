@@ -2,22 +2,40 @@
 # cc-title-icons.sh — Shared functions for tab title icon management.
 # Sourced by cc-toggle-star and cc-hook-indicator.
 
-# Remove leading ★ and ⚡ prefixes from a title string.
+# Remove leading ★ and state icon prefixes from a title string.
 strip_icons() {
     local title="$1"
     title="${title#★ }"
     title="${title#⚡ }"
+    title="${title#🛑 }"
+    title="${title#🔑 }"
     echo "$title"
 }
 
-# Reconstruct a title from a base string plus boolean flags.
-# Order is always: ★ ⚡ base
+# Detect which state icon is currently present (after stripping ★).
+# Outputs one of: bolt, stop, key, or empty string.
+detect_state() {
+    local title="$1"
+    title="${title#★ }"
+    case "$title" in
+        "⚡ "*) echo "bolt" ;;
+        "🛑 "*) echo "stop" ;;
+        "🔑 "*) echo "key" ;;
+        *)      echo "" ;;
+    esac
+}
+
+# Reconstruct a title from a base string, star flag, and state name.
+# Order is always: ★ <state-icon> base
+# state is one of: bolt, stop, key, or empty string.
 build_title() {
-    local base="$1" has_star="$2" has_bolt="$3"
+    local base="$1" has_star="$2" state="$3"
     local result="$base"
-    if [[ "$has_bolt" == "true" ]]; then
-        result="⚡ $result"
-    fi
+    case "$state" in
+        bolt) result="⚡ $result" ;;
+        stop) result="🛑 $result" ;;
+        key)  result="🔑 $result" ;;
+    esac
     if [[ "$has_star" == "true" ]]; then
         result="★ $result"
     fi

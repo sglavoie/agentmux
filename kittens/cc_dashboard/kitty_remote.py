@@ -35,15 +35,34 @@ def kitty_cmd(socket, *args):
 
 
 def _strip_icons(title):
-    """Remove leading star/bolt icon prefixes from a tab title."""
+    """Remove leading star and state icon prefixes from a tab title."""
     if title.startswith("★ "):
         title = title[2:]
-    if title.startswith("⚡ "):
-        title = title[2:]
+    for icon in ("⚡ ", "🛑 ", "🔑 "):
+        if title.startswith(icon):
+            title = title[len(icon):]
+            break
     return title
 
 
-_MANAGED_TITLE_RE = re.compile(r"^(★ )?(⚡ )?[A-Z]:")
+def _detect_state(title):
+    """Detect the state icon in a tab title, returning a status string.
+
+    Returns one of: "active", "stopped", "permission", or "".
+    The ★ prefix is skipped before checking.
+    """
+    if title.startswith("★ "):
+        title = title[2:]
+    if title.startswith("⚡ "):
+        return "active"
+    if title.startswith("🛑 "):
+        return "stopped"
+    if title.startswith("🔑 "):
+        return "permission"
+    return ""
+
+
+_MANAGED_TITLE_RE = re.compile(r"^(★ )?(⚡ |🛑 |🔑 )?[A-Z]:")
 
 
 def query_sessions(socket, managed_only=True):
@@ -123,6 +142,7 @@ def query_sessions(socket, managed_only=True):
                 account = _cfg._resolve_account_by_config_dir(detected_config_dir)
 
             title = _strip_icons(tab.get("title", ""))
+            icon_state = _detect_state(tab_title)
             sessions.append(
                 {
                     "index": idx + 1,
@@ -132,8 +152,8 @@ def query_sessions(socket, managed_only=True):
                     "status": (
                         "focused"
                         if (os_focused and tab.get("is_focused", False))
-                        else "active"
-                        if tab_title.startswith("⚡ ") or tab_title.startswith("★ ⚡ ")
+                        else icon_state
+                        if icon_state
                         else "idle"
                     ),
                     "tab_id": tab.get("id", 0),

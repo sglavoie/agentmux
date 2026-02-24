@@ -344,7 +344,7 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
     c_tab = 5
     c_title = 28
     c_acct = 10
-    c_status = 8
+    c_status = 11
     c_dir = max(12, cols - c_tab - c_title - c_acct - c_status - 8)
 
     # Header row
