@@ -97,66 +97,30 @@ for config_dir in "${CONFIG_DIRS[@]}"; do
         continue
     fi
 
-    # Check if all hook events already have cc-hook-indicator
-    all_present=true
+    # Build the jq filter that, for each event, strips existing ccm entries
+    # and appends the current ones from hooks.example.json.
+    # User-defined hook entries (those without cc-hook-indicator) are preserved.
+    jq_filter='.hooks //= {}'
     for event in "${HOOK_EVENTS[@]}"; do
-        has_hook="$(jq -r --arg event "$event" '
-            (.hooks[$event] // [])
-            | [.[] | .hooks[]? | select(.command | test("cc-hook-indicator"))]
-            | length > 0
-        ' "$settings_file")"
-        if [[ "$has_hook" != "true" ]]; then
-            all_present=false
-            break
-        fi
+        new_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg event "$event" '.[$event] // []')"
+        jq_filter="$jq_filter"'
+            | .hooks["'"$event"'"] = (
+                [(.hooks["'"$event"'"] // [])[] |
+                    select([.hooks[]? | .command // "" | test("cc-hook-indicator")] | any | not)
+                ] + '"$new_entries"'
+            )'
     done
 
-    if [[ "$all_present" == "true" ]]; then
-        # Check if any existing hook commands use bare names (no leading /)
-        has_bare="$(jq -r '
-            [.hooks[]?[]?.hooks[]? | select(.command | test("cc-hook-indicator"))
-                | .command | test("^/") | not] | any
-        ' "$settings_file")"
-        if [[ "$has_bare" == "true" ]]; then
-            cp "$settings_file" "${settings_file}.bak"
-            tmp_file="${settings_file}.tmp"
-            jq --arg cmd "$HOOK_CMD" '
-                walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
-            ' "$settings_file" > "$tmp_file"
-            mv "$tmp_file" "$settings_file"
-            echo "  Upgraded $settings_file hooks to absolute paths"
-        else
-            echo "  Skipped $settings_file (hooks already present with absolute paths)"
-        fi
-        continue
-    fi
+    tmp_file="${settings_file}.tmp"
+    jq "$jq_filter" "$settings_file" > "$tmp_file"
 
-    # Create backup before modifying
-    cp "$settings_file" "${settings_file}.bak"
-
-    # Merge each hook event
-    for event in "${HOOK_EVENTS[@]}"; do
-        has_hook="$(jq -r --arg event "$event" '
-            (.hooks[$event] // [])
-            | [.[] | .hooks[]? | select(.command | test("cc-hook-indicator"))]
-            | length > 0
-        ' "$settings_file")"
-
-        if [[ "$has_hook" == "true" ]]; then
-            continue
-        fi
-
-        # Get the new entries for this event from the example
-        new_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg event "$event" '.[$event]')"
-
-        # Append the new entries to the existing ones (or create the key)
-        tmp_file="${settings_file}.tmp"
-        jq --arg event "$event" --argjson new_entries "$new_entries" '
-            .hooks //= {} |
-            .hooks[$event] = (.hooks[$event] // []) + $new_entries
-        ' "$settings_file" > "$tmp_file"
+    # Compare to see if anything actually changed
+    if diff -q "$settings_file" "$tmp_file" >/dev/null 2>&1; then
+        rm "$tmp_file"
+        echo "  Skipped $settings_file (hooks already up to date)"
+    else
+        cp "$settings_file" "${settings_file}.bak"
         mv "$tmp_file" "$settings_file"
-    done
-
-    echo "  Added cc-hook-indicator hooks to $settings_file"
+        echo "  Updated cc-hook-indicator hooks in $settings_file"
+    fi
 done
