@@ -69,6 +69,8 @@ _default_claude_flags = ""
 _default_project_window = ""
 _default_sort_sessions = ""
 _default_dashboard_refresh = 3
+_default_idle_alert_minutes = 0
+_default_notify_idle = ""
 
 
 def _accounts_config_path():
@@ -123,11 +125,13 @@ def _defaults_config_path():
 
 def load_defaults():
     """Parse defaults.conf into the module-level default settings."""
-    global _default_claude_flags, _default_project_window, _default_sort_sessions, _default_dashboard_refresh
+    global _default_claude_flags, _default_project_window, _default_sort_sessions, _default_dashboard_refresh, _default_idle_alert_minutes, _default_notify_idle
     _default_claude_flags = ""
     _default_project_window = ""
     _default_sort_sessions = ""
     _default_dashboard_refresh = 3
+    _default_idle_alert_minutes = 0
+    _default_notify_idle = ""
 
     path = _defaults_config_path()
     if not os.path.isfile(path):
@@ -154,6 +158,13 @@ def load_defaults():
                     _default_dashboard_refresh = max(0, int(value))
                 except ValueError:
                     pass
+            elif key == "idle_alert_minutes":
+                try:
+                    _default_idle_alert_minutes = max(0, int(value))
+                except ValueError:
+                    pass
+            elif key == "notify_idle":
+                _default_notify_idle = value
 
 
 # ── Session configuration ──────────────────────────────────────────────────

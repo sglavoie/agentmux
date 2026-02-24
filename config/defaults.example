@@ -23,6 +23,13 @@
 #                       Values: on, (empty/off) = disabled. Default: off.
 #   notify_stop       — Show a macOS notification when a session stops.
 #                       Values: on, (empty/off) = disabled. Default: off.
+#   idle_alert_minutes — Highlight sessions idle longer than this threshold
+#                        in the dashboard (yellow). Values: 0 or omitted = disabled,
+#                        any positive integer = minutes. Default: 0.
+#   notify_idle        — Show a macOS notification when a session exceeds the
+#                        idle_alert_minutes threshold. Only fires once per idle
+#                        period (resets when the session becomes active again).
+#                        Values: on, (empty/off) = disabled. Default: off.
 #
 # Lines starting with # are comments. Blank lines are ignored.
 # Whitespace around the = delimiter is trimmed.
@@ -34,3 +41,5 @@
 # notify_error = on
 # notify_permission = on
 # notify_stop = off
+# idle_alert_minutes = 30
+# notify_idle = on

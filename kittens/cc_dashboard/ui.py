@@ -2,6 +2,7 @@
 
 import curses
 import os
+import subprocess
 import time
 import unicodedata
 
@@ -368,6 +369,65 @@ def draw_detail_pane(stdscr, session, detail_y):
         safe_addstr(stdscr, y, lx, " No activity data", curses.color_pair(CP_DIM))
 
 
+# ── Idle alert notifications ─────────────────────────────────────────────────
+
+
+def _check_idle_notifications(sessions):
+    """Send macOS notifications for sessions that have been idle too long.
+
+    Uses per-tab cooldown files whose mtime tracks the last_event_ts that
+    triggered the notification.  A new notification only fires when the
+    session's last_event_ts has advanced (i.e. new activity occurred and the
+    session went idle again).
+    """
+    threshold = _cfg._default_idle_alert_minutes * 60
+    if threshold <= 0 or _cfg._default_notify_idle != "on":
+        return
+
+    now = int(time.time())
+    for s in sessions:
+        if s["status"] not in ("idle", "stopped"):
+            continue
+        activity = s.get("activity")
+        if not activity:
+            continue
+        idle_secs = now - activity["last_event_ts"]
+        if idle_secs < threshold:
+            continue
+
+        cooldown_file = f"/tmp/ccm-notify-idle-{s['tab_id']}"
+        last_event_ts = activity["last_event_ts"]
+
+        if os.path.isfile(cooldown_file):
+            try:
+                cooldown_mtime = int(os.path.getmtime(cooldown_file))
+            except OSError:
+                cooldown_mtime = 0
+            if cooldown_mtime >= last_event_ts:
+                continue
+
+        # Write the cooldown file with mtime set to last_event_ts so we
+        # won't re-notify until activity advances past this timestamp.
+        try:
+            with open(cooldown_file, "w") as f:
+                f.write("")
+            os.utime(cooldown_file, (last_event_ts, last_event_ts))
+        except OSError:
+            pass
+
+        title = s.get("title", "Session")
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display notification "{title} has been idle for '
+                f'{format_duration(idle_secs)}" with title "cc-manager" '
+                f'subtitle "Session idle"',
+            ],
+            capture_output=True,
+        )
+
+
 # ── Drawing ──────────────────────────────────────────────────────────────────
 
 
@@ -442,6 +502,7 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
 
         # Build status text with idle duration from activity data
         status_text = s["status"]
+        idle_secs = 0
         activity = s.get("activity")
         if activity:
             now = int(time.time())
@@ -462,10 +523,19 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
         y = 5 + vi
         safe_addstr(stdscr, y, 1, line, row_attr)
 
-        # Render status with attention highlighting for permission/error
+        # Render status with attention highlighting for permission/error,
+        # or warn highlighting for idle sessions exceeding the threshold
         status_x = 1 + len(line)
+        idle_threshold = _cfg._default_idle_alert_minutes * 60
         if s["status"] in ("permission", "error"):
             status_attr = curses.color_pair(CP_ATTENTION) | curses.A_BOLD
+        elif (
+            idle_threshold > 0
+            and s["status"] in ("idle", "stopped")
+            and activity
+            and idle_secs >= idle_threshold
+        ):
+            status_attr = curses.color_pair(CP_WARN) | curses.A_BOLD
         else:
             status_attr = row_attr
         safe_addstr(stdscr, y, status_x, status_text, status_attr)
@@ -1047,6 +1117,7 @@ def dashboard(stdscr, socket):
                 if refresh_ticks >= refresh_threshold:
                     refresh_ticks = 0
                     new_sessions = query_sessions(socket, managed_only=(not show_all))
+                    _check_idle_notifications(new_sessions)
                     old_fp = _session_fingerprint(filtered)
                     new_filtered = _apply_filters(
                         new_sessions, search_query, account_filter
