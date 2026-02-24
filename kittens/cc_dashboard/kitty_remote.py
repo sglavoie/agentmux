@@ -15,9 +15,7 @@ def get_kitty_socket():
     sock = os.environ.get("KITTY_LISTEN_ON", "")
     if sock:
         return sock
-    candidates = sorted(
-        glob.glob("/tmp/kitty-*"), key=os.path.getmtime, reverse=True
-    )
+    candidates = sorted(glob.glob("/tmp/kitty-*"), key=os.path.getmtime, reverse=True)
     return f"unix:{candidates[0]}" if candidates else ""
 
 
@@ -36,11 +34,11 @@ def kitty_cmd(socket, *args):
 
 def _strip_icons(title):
     """Remove leading star and state icon prefixes from a tab title."""
-    if title.startswith("★ "):
+    if title.startswith("★"):
         title = title[2:]
-    for icon in ("⚡ ", "🛑 ", "🔑 "):
+    for icon in ("⚡", "🛑", "🔑", "⚠️"):
         if title.startswith(icon):
-            title = title[len(icon):]
+            title = title[len(icon) :]
             break
     return title
 
@@ -49,20 +47,22 @@ def _detect_state(title):
     """Detect the state icon in a tab title, returning a status string.
 
     Returns one of: "active", "stopped", "permission", or "".
-    The ★ prefix is skipped before checking.
+    The ★prefix is skipped before checking.
     """
-    if title.startswith("★ "):
+    if title.startswith("★"):
         title = title[2:]
-    if title.startswith("⚡ "):
+    if title.startswith("⚡"):
         return "active"
-    if title.startswith("🛑 "):
+    if title.startswith("🛑"):
         return "stopped"
-    if title.startswith("🔑 "):
+    if title.startswith("🔑"):
         return "permission"
+    if title.startswith("⚠️"):
+        return "error"
     return ""
 
 
-_MANAGED_TITLE_RE = re.compile(r"^(★ )?(⚡ |🛑 |🔑 )?[A-Z]:")
+_MANAGED_TITLE_RE = re.compile(r"^(★)?(⚡|🛑|🔑|⚠️)?[A-Z]:")
 
 
 def query_sessions(socket, managed_only=True):
@@ -133,7 +133,11 @@ def query_sessions(socket, managed_only=True):
 
             # Filter to ccm-managed tabs when managed_only is set
             tab_title = tab.get("title", "")
-            if managed_only and not has_cc_var and not _MANAGED_TITLE_RE.match(tab_title):
+            if (
+                managed_only
+                and not has_cc_var
+                and not _MANAGED_TITLE_RE.match(tab_title)
+            ):
                 continue
 
             if "cc_account" in user_vars:
@@ -179,9 +183,21 @@ def do_close(socket, tab_id):
 def do_launch(socket, title, directory, account, flags="", pw_override=""):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
-    cmd = ["launch", "--type=tab", "--allow-remote-control", "--tab-title", title, "--cwd", directory,
-           "--env", f"KITTY_LISTEN_ON={socket}",
-           "--var", f"cc_account={account}", "--var", f"cc_cwd={directory}"]
+    cmd = [
+        "launch",
+        "--type=tab",
+        "--allow-remote-control",
+        "--tab-title",
+        title,
+        "--cwd",
+        directory,
+        "--env",
+        f"KITTY_LISTEN_ON={socket}",
+        "--var",
+        f"cc_account={account}",
+        "--var",
+        f"cc_cwd={directory}",
+    ]
 
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
@@ -215,15 +231,19 @@ def do_launch(socket, title, directory, account, flags="", pw_override=""):
     if pw_mode:
         kitty_cmd(
             socket,
-            "launch", "--type=window",
-            "--match", f"title:^{title}$",
-            "--cwd", directory,
+            "launch",
+            "--type=window",
+            "--match",
+            f"title:^{title}$",
+            "--cwd",
+            directory,
             "--keep-focus",
         )
         kitty_cmd(
             socket,
             "goto-layout",
-            "--match", f"title:^{title}$",
+            "--match",
+            f"title:^{title}$",
             pw_mode,
         )
 
@@ -232,4 +252,6 @@ def do_restart(socket, session, flags="", pw_override=""):
     """Close and relaunch a session with the same title, directory, and account."""
     do_close(socket, session["tab_id"])
     time.sleep(0.3)
-    do_launch(socket, session["title"], session["cwd"], session["account"], flags, pw_override)
+    do_launch(
+        socket, session["title"], session["cwd"], session["account"], flags, pw_override
+    )

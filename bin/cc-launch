@@ -19,7 +19,7 @@ tab_exists() {
     local ls_json
     ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
     echo "$ls_json" | jq -e --arg t "$title" '
-        [.[].tabs[] | select(.title | sub("^★ "; "") | sub("^⚡ "; "") | sub("^🛑 "; "") | sub("^🔑 "; "") | . == $t)] | length > 0
+        [.[].tabs[] | select(.title | sub("^★"; "") | sub("^⚡"; "") | sub("^🛑"; "") | sub("^🔑"; "") | sub("^⚠️"; "") | . == $t)] | length > 0
     ' >/dev/null 2>&1
 }
 
@@ -255,7 +255,7 @@ cmd_close() {
         exit 1
     fi
 
-    kitty @ --to "$SOCKET" close-tab --match "title:^(★ )?(⚡ |🛑 |🔑 )?${title}$"
+    kitty @ --to "$SOCKET" close-tab --match "title:^(★)?(⚡|🛑|🔑|⚠️)?${title}$"
     echo "Closed tab '$title'."
 }
 
@@ -285,7 +285,7 @@ cmd_restart() {
             [.[] | .tabs[] |
                 select(
                     [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
-                ) | .title | sub("^★ "; "") | sub("^⚡ "; "") | sub("^🛑 "; "") | sub("^🔑 "; "")
+                ) | .title | sub("^★"; "") | sub("^⚡"; "") | sub("^🛑"; "") | sub("^🔑"; "") | sub("^⚠️"; "")
             ] | .[]
         ')
 
@@ -308,7 +308,7 @@ cmd_restart() {
     tab_info="$(echo "$ls_json" | jq -r --arg t "$title" --argjson accounts "$accounts_json" --arg default_account "$default_account" '
         [.[] | .tabs[] |
             select(
-                (.title | sub("^★ "; "") | sub("^⚡ "; "") | sub("^🛑 "; "") | sub("^🔑 "; "")) == $t
+                (.title | sub("^★"; "") | sub("^⚡"; "") | sub("^🛑"; "") | sub("^🔑"; "") | sub("^⚠️"; "")) == $t
             ) |
             {
                 tab_id: .id,
@@ -378,7 +378,7 @@ cmd_list() {
             # Only show ccm-managed tabs
             select(
                 ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
-                ($tab.title | test("^(★ )?(⚡ |🛑 |🔑 )?[A-Z]:"))
+                ($tab.title | test("^(★)?(⚡|🛑|🔑|⚠️)?[A-Z]:"))
             ) |
             {
                 index: ($tab_idx + 1),
@@ -405,12 +405,14 @@ cmd_list() {
                 status: (
                     if ($os.is_focused and $tab.is_focused)
                     then "focused"
-                    elif ($tab.title | test("^(★ )?⚡ "))
+                    elif ($tab.title | test("^(★)?⚡"))
                     then "active"
-                    elif ($tab.title | test("^(★ )?🛑 "))
+                    elif ($tab.title | test("^(★)?🛑"))
                     then "stopped"
-                    elif ($tab.title | test("^(★ )?🔑 "))
+                    elif ($tab.title | test("^(★)?🔑"))
                     then "permission"
+                    elif ($tab.title | test("^(★)?⚠️"))
+                    then "error"
                     else "idle"
                     end
                 )
@@ -530,7 +532,7 @@ cmd_cleanup() {
         fi
     done
     [[ -z "$initials" ]] && initials="WP"
-    local title_pattern="^(★ )?(⚡ |🛑 |🔑 )?[$initials]:"
+    local title_pattern="^(★)?(⚡|🛑|🔑|⚠️)?[$initials]:"
 
     local stale
     stale="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
@@ -600,7 +602,7 @@ cmd_save() {
                 [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
             ) |
             {
-                title: (.title | sub("^★ "; "") | sub("^⚡ "; "") | sub("^🛑 "; "") | sub("^🔑 "; "")),
+                title: (.title | sub("^★"; "") | sub("^⚡"; "") | sub("^🛑"; "") | sub("^🔑"; "") | sub("^⚠️"; "")),
                 dir: (
                     [.windows[] |
                         select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)

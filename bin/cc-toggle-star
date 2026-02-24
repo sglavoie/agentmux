@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# cc-toggle-star — Toggle ★ prefix on the active tab's title.
+# cc-toggle-star — Toggle ★prefix on the active tab's title.
 # Called from a Kitty keybinding with @active-kitty-window-id as $1.
 
 if [[ $# -lt 1 ]]; then
@@ -38,9 +38,9 @@ fi
 # Determine current icon state.
 has_star=false
 remaining="$current_title"
-if [[ "$remaining" == "★ "* ]]; then
+if [[ "$remaining" == "★"* ]]; then
     has_star=true
-    remaining="${remaining#★ }"
+    remaining="${remaining#★}"
 fi
 
 state="$(detect_state "$current_title")"

@@ -117,7 +117,7 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
         select(
             $show_all == "true" or
             ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
-            ($tab.title | test("^(★ )?(⚡ |🛑 |🔑 )?[A-Z]:"))
+            ($tab.title | test("^(★)?(⚡|🛑|🔑)?[A-Z]:"))
         ) |
 
         # Find cwd: prefer user_vars.cc_cwd (set at launch), fall back to
@@ -151,16 +151,16 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
         # Status: focused > active/stopped/permission (icon indicator) > idle
         (
             if ($os.is_focused and $tab.is_focused) then "focused"
-            elif ($tab.title | test("^(★ )?⚡ ")) then "active"
-            elif ($tab.title | test("^(★ )?🛑 ")) then "stopped"
-            elif ($tab.title | test("^(★ )?🔑 ")) then "permission"
+            elif ($tab.title | test("^(★)?⚡")) then "active"
+            elif ($tab.title | test("^(★)?🛑")) then "stopped"
+            elif ($tab.title | test("^(★)?🔑")) then "permission"
             else "idle"
             end
         ) as $status |
 
         {
             tab_index: ($tab_idx + 1),
-            title: ($tab.title | sub("^★ "; "") | sub("^⚡ "; "") | sub("^🛑 "; "") | sub("^🔑 "; "")),
+            title: ($tab.title | sub("^★"; "") | sub("^⚡"; "") | sub("^🛑"; "") | sub("^🔑"; "")),
             account: $account,
             cwd: $cwd,
             status: $status

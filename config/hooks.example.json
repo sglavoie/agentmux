@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cc-hook-indicator active",
+            "command": "cc-hook-indicator failure",
             "async": true
           }
         ]

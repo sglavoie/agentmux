@@ -2,18 +2,22 @@
 set -euo pipefail
 
 # cc-hook-indicator — Set state icon prefix on the current tab's title.
-# Called by Claude Code hooks with "active", "stop", "permission", or "idle" as $1.
+# Called by Claude Code hooks with "active", "stop", "permission", "idle", "failure", or "clear" as $1.
 # Relies on KITTY_WINDOW_ID being set in the environment (Kitty sets this
 # automatically for all processes inside its windows).
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: cc-hook-indicator active|stop|permission|idle" >&2
+    echo "Usage: cc-hook-indicator active|stop|permission|idle|failure|clear [WINDOW_ID]" >&2
     exit 1
 fi
 
 ACTION="$1"
 
-if [[ -z "${KITTY_WINDOW_ID:-}" ]]; then
+# Accept optional window ID as $2 (used by F4 keybinding via @active-kitty-window-id),
+# falling back to KITTY_WINDOW_ID (set automatically inside Kitty windows for hooks).
+if [[ $# -ge 2 ]]; then
+    KITTY_WINDOW_ID="$2"
+elif [[ -z "${KITTY_WINDOW_ID:-}" ]]; then
     echo "Error: KITTY_WINDOW_ID is not set" >&2
     exit 1
 fi
@@ -44,9 +48,9 @@ fi
 # Determine current icon state.
 has_star=false
 remaining="$current_title"
-if [[ "$remaining" == "★ "* ]]; then
+if [[ "$remaining" == "★"* ]]; then
     has_star=true
-    remaining="${remaining#★ }"
+    remaining="${remaining#★}"
 fi
 
 # Strip any existing state icon to get the base title.
@@ -66,8 +70,14 @@ case "$ACTION" in
     idle)
         state=""
         ;;
+    failure)
+        state="error"
+        ;;
+    clear)
+        state=""
+        ;;
     *)
-        echo "Error: unknown action '$ACTION' (expected 'active', 'stop', 'permission', or 'idle')" >&2
+        echo "Error: unknown action '$ACTION' (expected 'active', 'stop', 'permission', 'idle', 'failure', or 'clear')" >&2
         exit 1
         ;;
 esac
@@ -77,4 +87,11 @@ new_title="$(build_title "$remaining" "$has_star" "$state")"
 # Only update if the title actually changed.
 if [[ "$new_title" != "$current_title" ]]; then
     kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title" 2>/dev/null || true
+fi
+
+# Manage scrollback markers for error states.
+if [[ "$ACTION" == "failure" ]]; then
+    kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} create-marker --match "id:$KITTY_WINDOW_ID" iregex 1 '\bError\b' 2 '\bFailed\b' 3 '\bWarning\b' 3 '\bDEPRECATED\b' 2>/dev/null || true
+elif [[ "$ACTION" == "active" || "$ACTION" == "clear" ]]; then
+    kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} remove-marker --match "id:$KITTY_WINDOW_ID" 2>/dev/null || true
 fi
