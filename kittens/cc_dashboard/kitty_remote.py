@@ -155,14 +155,13 @@ def do_launch(socket, title, directory, account, flags="", pw_override=""):
     default_dir = os.path.join(home, ".claude")
     config_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
 
-    if not config_dir or config_dir == default_dir:
-        cmd += ["claude"]
-    else:
-        cmd += ["env", f"CLAUDE_CONFIG_DIR={config_dir}", "claude"]
+    if config_dir and config_dir != default_dir:
+        cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
 
+    shell = os.environ.get("SHELL", "/bin/zsh")
     effective_flags = _cfg._resolve_claude_flags(flags)
-    if effective_flags:
-        cmd += effective_flags.split()
+    shell_cmd = f"exec claude {effective_flags}" if effective_flags else "exec claude"
+    cmd += [shell, "-lic", shell_cmd]
 
     kitty_cmd(socket, *cmd)
 
