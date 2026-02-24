@@ -84,7 +84,7 @@ def init_colors():
             color_name = _cfg._accounts[name]["color"]
             _, _, text_fg = PALETTE.get(color_name, PALETTE["gray"])
             curses.init_color(color_slot, *_c(*text_fg))
-            curses.init_pair(pair_id, color_slot, -1)           # normal
+            curses.init_pair(pair_id, color_slot, -1)  # normal
             curses.init_pair(pair_id + 1, color_slot, sel_bg_slot)  # selected
             _account_cp[name] = (pair_id, pair_id + 1)
             color_slot += 1
@@ -92,8 +92,12 @@ def init_colors():
     else:
         # Fallback: cycle through a few basic curses colors
         _FALLBACK_COLORS = [
-            curses.COLOR_GREEN, curses.COLOR_CYAN, curses.COLOR_RED,
-            curses.COLOR_YELLOW, curses.COLOR_MAGENTA, curses.COLOR_WHITE,
+            curses.COLOR_GREEN,
+            curses.COLOR_CYAN,
+            curses.COLOR_RED,
+            curses.COLOR_YELLOW,
+            curses.COLOR_MAGENTA,
+            curses.COLOR_WHITE,
         ]
 
         curses.init_pair(CP_NORMAL, -1, -1)
@@ -152,10 +156,9 @@ def _filter_sessions(sessions, query):
         return sessions
     q = query.lower()
     return [
-        s for s in sessions
-        if q in s["title"].lower()
-        or q in s["cwd"].lower()
-        or q in s["account"].lower()
+        s
+        for s in sessions
+        if q in s["title"].lower() or q in s["cwd"].lower() or q in s["account"].lower()
     ]
 
 
@@ -181,10 +184,9 @@ def _filter_config_sessions(sessions, query):
         return sessions
     q = query.lower()
     return [
-        s for s in sessions
-        if q in s["title"].lower()
-        or q in s["dir"].lower()
-        or q in s["account"].lower()
+        s
+        for s in sessions
+        if q in s["title"].lower() or q in s["dir"].lower() or q in s["account"].lower()
     ]
 
 
@@ -240,14 +242,14 @@ def draw_detail_pane(stdscr, session, detail_y):
     home = os.path.expanduser("~")
     full_dir = session["cwd"]
     if full_dir.startswith(home):
-        full_dir = "~" + full_dir[len(home):]
+        full_dir = "~" + full_dir[len(home) :]
 
     config_dir = session.get("config_dir", "")
     if not config_dir:
         acct_info = _cfg._accounts.get(session["account"], {})
         config_dir = acct_info.get("config_dir", "")
     if config_dir and config_dir.startswith(home):
-        config_dir = "~" + config_dir[len(home):]
+        config_dir = "~" + config_dir[len(home) :]
     if not config_dir:
         config_dir = "~/.claude"
 
@@ -269,7 +271,7 @@ def draw_detail_pane(stdscr, session, detail_y):
 
     # Two-column layout: left column ends around mid-screen, right column starts there
     mid = max(cols // 2, 40)
-    lx = 2   # left column x
+    lx = 2  # left column x
     rx = mid  # right column x
 
     # Row 1: Title / Tab ID
@@ -290,17 +292,19 @@ def draw_detail_pane(stdscr, session, detail_y):
     # Row 3: Directory / PIDs
     y += 1
     safe_addstr(stdscr, y, lx, " Directory: ", label_attr)
-    safe_addstr(stdscr, y, lx + 12, full_dir[:mid - lx - 13], val_attr)
+    safe_addstr(stdscr, y, lx + 12, full_dir[: mid - lx - 13], val_attr)
     safe_addstr(stdscr, y, rx, "PIDs: ", label_attr)
-    safe_addstr(stdscr, y, rx + 6, pids_str[:cols - rx - 7] if pids_str else "n/a", val_attr)
+    safe_addstr(
+        stdscr, y, rx + 6, pids_str[: cols - rx - 7] if pids_str else "n/a", val_attr
+    )
 
     # Row 4: Config dir / Flags
     y += 1
     safe_addstr(stdscr, y, lx, " Config dir: ", label_attr)
-    safe_addstr(stdscr, y, lx + 13, config_dir[:mid - lx - 14], val_attr)
+    safe_addstr(stdscr, y, lx + 13, config_dir[: mid - lx - 14], val_attr)
     safe_addstr(stdscr, y, rx, "Flags: ", label_attr)
     flags_display = effective_flags if effective_flags else "none"
-    safe_addstr(stdscr, y, rx + 7, flags_display[:cols - rx - 8], val_attr)
+    safe_addstr(stdscr, y, rx + 7, flags_display[: cols - rx - 8], val_attr)
 
     # Row 5: Status / Split
     y += 1
@@ -313,14 +317,22 @@ def draw_detail_pane(stdscr, session, detail_y):
     # Row 6: Cmdline (full width)
     y += 1
     safe_addstr(stdscr, y, lx, " Cmdline: ", label_attr)
-    safe_addstr(stdscr, y, lx + 10, (cmdline_display if cmdline_display else "n/a")[:cols - lx - 11], val_attr)
+    safe_addstr(
+        stdscr,
+        y,
+        lx + 10,
+        (cmdline_display if cmdline_display else "n/a")[: cols - lx - 11],
+        val_attr,
+    )
 
     # Row 7–8: Activity data
     activity = session.get("activity")
     if activity:
         now = int(time.time())
         age_str = format_duration(now - activity["first_event_ts"])
-        last_active_str = time.strftime("%H:%M:%S", time.localtime(activity["last_event_ts"]))
+        last_active_str = time.strftime(
+            "%H:%M:%S", time.localtime(activity["last_event_ts"])
+        )
 
         y += 1
         safe_addstr(stdscr, y, lx, " Session age: ", label_attr)
@@ -331,18 +343,24 @@ def draw_detail_pane(stdscr, session, detail_y):
         y += 1
         safe_addstr(stdscr, y, lx, " Events: ", label_attr)
         parts_x = lx + 9
-        prompts_str = f'{activity["prompt_count"]} prompts, '
-        tools_str = f'{activity["tool_use_count"]} tools, '
-        errors_str = f'{activity["tool_failure_count"]} errors, '
-        perms_str = f'{activity["permission_count"]} permissions'
+        prompts_str = f"{activity['prompt_count']} prompts, "
+        tools_str = f"{activity['tool_use_count']} tools, "
+        errors_str = f"{activity['tool_failure_count']} errors, "
+        perms_str = f"{activity['permission_count']} permissions"
         safe_addstr(stdscr, y, parts_x, prompts_str, val_attr)
         parts_x += len(prompts_str)
         safe_addstr(stdscr, y, parts_x, tools_str, val_attr)
         parts_x += len(tools_str)
-        err_attr = curses.color_pair(CP_WARN) if activity["tool_failure_count"] > 0 else val_attr
+        err_attr = (
+            curses.color_pair(CP_WARN)
+            if activity["tool_failure_count"] > 0
+            else val_attr
+        )
         safe_addstr(stdscr, y, parts_x, errors_str, err_attr)
         parts_x += len(errors_str)
-        perm_attr = curses.color_pair(CP_WARN) if activity["permission_count"] > 0 else val_attr
+        perm_attr = (
+            curses.color_pair(CP_WARN) if activity["permission_count"] > 0 else val_attr
+        )
         safe_addstr(stdscr, y, parts_x, perms_str, perm_attr)
     else:
         y += 1
@@ -390,21 +408,15 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
 
     # Header row
     hdr = (
-        f'  {"Tab":<{c_tab}}'
-        f'{"Title":<{c_title}}'
-        f'{"Account":<{c_acct}}'
-        f'{"Directory":<{c_dir}}'
-        f'{"Status"}'
+        f"  {'Tab':<{c_tab}}"
+        f"{'Title':<{c_title}}"
+        f"{'Account':<{c_acct}}"
+        f"{'Directory':<{c_dir}}"
+        f"{'Status'}"
     )
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
-    sep = (
-        f'  {"─" * c_tab}'
-        f'{"─" * c_title}'
-        f'{"─" * c_acct}'
-        f'{"─" * c_dir}'
-        f'{"─" * c_status}'
-    )
+    sep = f"  {'─' * c_tab}{'─' * c_title}{'─' * c_acct}{'─' * c_dir}{'─' * c_status}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     # Scrollable session rows
@@ -433,13 +445,13 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
         if activity:
             now = int(time.time())
             idle_secs = now - activity["last_event_ts"]
-            status_text = f'{s["status"]} {format_duration(idle_secs)}'
+            status_text = f"{s['status']} {format_duration(idle_secs)}"
 
         line = (
             f"{mark} "
-            f'{s["index"]:<{c_tab}}'
-            f'{title_padded}'
-            f'{s["account"]:<{c_acct}}'
+            f"{s['index']:<{c_tab}}"
+            f"{title_padded}"
+            f"{s['account']:<{c_acct}}"
             f"{short_dir:<{c_dir}}"
         )
 
@@ -467,13 +479,22 @@ def draw_pick_view(stdscr, entries, selected, running_count):
 
     title = "Launch from Config"
     safe_addstr(
-        stdscr, 1, max(0, (cols - len(title)) // 2), title,
+        stdscr,
+        1,
+        max(0, (cols - len(title)) // 2),
+        title,
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
     if not entries:
         safe_addstr(stdscr, 4, 3, "No sessions configured.", curses.color_pair(CP_DIM))
-        safe_addstr(stdscr, 5, 3, "Add entries to sessions.conf, then try again.", curses.color_pair(CP_DIM))
+        safe_addstr(
+            stdscr,
+            5,
+            3,
+            "Add entries to sessions.conf, then try again.",
+            curses.color_pair(CP_DIM),
+        )
         draw_footer(stdscr, "pick")
         return
 
@@ -481,9 +502,9 @@ def draw_pick_view(stdscr, entries, selected, running_count):
     c_acct = 12
     c_dir = max(12, cols - c_title - c_acct - 6)
 
-    hdr = f'  {"Title":<{c_title}}{"Account":<{c_acct}}{"Directory":<{c_dir}}'
+    hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}{'Directory':<{c_dir}}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
-    sep = f'  {"─" * c_title}{"─" * c_acct}{"─" * c_dir}'
+    sep = f"  {'─' * c_title}{'─' * c_acct}{'─' * c_dir}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     # Build visual rows: interleave section headers with entries.
@@ -519,7 +540,10 @@ def draw_pick_view(stdscr, entries, selected, running_count):
 
         if row[0] == "header":
             safe_addstr(
-                stdscr, screen_y, 2, row[1],
+                stdscr,
+                screen_y,
+                2,
+                row[1],
                 curses.color_pair(CP_DIM) | curses.A_BOLD,
             )
         else:
@@ -532,7 +556,9 @@ def draw_pick_view(stdscr, entries, selected, running_count):
             cp = _cp_for_account(entry["account"], selected=sel)
             short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
             title_padded = _pad_to_width(entry["title"], c_title)
-            line = f"{mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
+            line = (
+                f"{mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
+            )
 
             attr = curses.color_pair(cp)
             if sel:
@@ -544,20 +570,136 @@ def draw_pick_view(stdscr, entries, selected, running_count):
     draw_footer(stdscr, "pick")
 
 
+_HELP_SECTIONS = [
+    (
+        "Navigation",
+        [
+            ("k / Up", "Move selection up"),
+            ("j / Down", "Move selection down"),
+            ("Enter", "Focus & switch to selected tab"),
+            ("q", "Quit dashboard"),
+        ],
+    ),
+    (
+        "Session Actions",
+        [
+            ("x", "Close session (with confirmation)"),
+            ("R", "Restart session (with confirmation)"),
+            ("n", "Open new session form"),
+            ("l", "Launch session from config"),
+        ],
+    ),
+    (
+        "View",
+        [
+            ("d", "Toggle detail pane"),
+            ("a", "Toggle all / managed tabs"),
+            ("r", "Refresh session list"),
+        ],
+    ),
+    (
+        "Search",
+        [
+            ("/", "Start search"),
+            ("Enter", "Accept search query"),
+            ("Esc", "Cancel search"),
+        ],
+    ),
+    (
+        "Account Filter",
+        [
+            ("f", "Enter / exit filter mode"),
+            ("1-9", "Toggle account visibility"),
+            ("Esc", "Clear filter"),
+        ],
+    ),
+]
+
+# Pre-build the help content as a list of (type, text, text2) tuples.
+# type: "header" for section headers, "binding" for key-desc pairs, "blank".
+_HELP_LINES = []
+for _sect_name, _bindings in _HELP_SECTIONS:
+    _HELP_LINES.append(("header", _sect_name, ""))
+    for _key, _desc in _bindings:
+        _HELP_LINES.append(("binding", _key, _desc))
+    _HELP_LINES.append(("blank", "", ""))
+# Remove trailing blank line
+if _HELP_LINES and _HELP_LINES[-1][0] == "blank":
+    _HELP_LINES.pop()
+
+
+def draw_help_overlay(stdscr, scroll):
+    """Draw a full-screen help overlay listing all keybindings."""
+    stdscr.erase()
+    rows, cols = stdscr.getmaxyx()
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+    dim_attr = curses.color_pair(CP_DIM)
+
+    key_col = 4
+    desc_col = 18
+
+    # Row 0: title, rows 1..rows-3: content area, row rows-2: scroll hint, row rows-1: footer
+    safe_addstr(stdscr, 0, 2, "Dashboard Help", header_attr)
+    content_height = rows - 3  # available lines for help content
+    total = len(_HELP_LINES)
+    visible = _HELP_LINES[scroll : scroll + content_height]
+
+    for i, (kind, text1, text2) in enumerate(visible):
+        y = i + 1
+        if kind == "header":
+            safe_addstr(stdscr, y, 2, text1, header_attr)
+        elif kind == "binding":
+            safe_addstr(stdscr, y, key_col, text1, normal_attr)
+            safe_addstr(stdscr, y, desc_col, text2[: cols - desc_col - 1], dim_attr)
+
+    # Scroll indicator when content overflows
+    if total > content_height:
+        pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
+        safe_addstr(stdscr, rows - 2, 2, f"j/k to scroll  {pos}", dim_attr)
+
+    safe_addstr(stdscr, rows - 1, 2, "Press ? / q / Esc to close help", dim_attr)
+
+
+_FOOTER_HINTS = {
+    "list": [
+        "? Help",
+        "q Quit",
+        "Enter Focus",
+        "x Close",
+        "R Restart",
+        "n New",
+        "l Launch",
+        "d Detail",
+        "/ Search",
+        "a All",
+        "f Acct",
+        "r Refresh",
+    ],
+    "filter": ["1-N Toggle account", "f Done", "Esc Clear"],
+    "confirm": ["y Confirm close", "Any other key Cancel"],
+    "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
+    "new": ["Enter Next/Submit", "Tab Cycle", "Esc Cancel"],
+    "pick": ["Enter Launch", "/ Search", "Esc Back", "q Back"],
+}
+
+
 def draw_footer(stdscr, mode):
     """Draw the help-key footer at the bottom of the screen."""
     rows, cols = stdscr.getmaxyx()
-
-    hints = {
-        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  R Restart  n New  l Launch  d Detail  / Search  a All  f Acct  r Refresh  q Quit",
-        "filter": "1-N Toggle account  f Done  Esc Clear",
-        "confirm": "y Confirm close    Any other key Cancel",
-        "confirm_restart": "y Confirm restart    Any other key Cancel",
-        "new": "Enter Next/Submit    Tab Cycle    Esc Cancel",
-        "pick": "↑/k Up  ↓/j Down  Enter Launch  / Search  Esc Back  q Back",
-    }
-    text = hints.get(mode, "")
-    safe_addstr(stdscr, rows - 1, 2, text[: cols - 3], curses.color_pair(CP_DIM))
+    sep = "  "
+    avail = cols - 3  # 2-char left margin + 1 safety
+    items = _FOOTER_HINTS.get(mode, [])
+    parts = []
+    length = 0
+    for item in items:
+        item_len = len(item)
+        needed = item_len if not parts else len(sep) + item_len
+        if length + needed > avail:
+            break
+        parts.append(item)
+        length += needed
+    safe_addstr(stdscr, rows - 1, 2, sep.join(parts), curses.color_pair(CP_DIM))
 
 
 def draw_confirm_prompt(stdscr, session, action="Close"):
@@ -590,17 +732,26 @@ def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
         x = 2 + len(prefix)
         safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
         safe_addstr(
-            stdscr, y, x + len(before), cursor_ch,
+            stdscr,
+            y,
+            x + len(before),
+            cursor_ch,
             curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
         )
         if after_rest:
             safe_addstr(
-                stdscr, y, x + len(before) + 1, after_rest,
+                stdscr,
+                y,
+                x + len(before) + 1,
+                after_rest,
                 curses.color_pair(CP_INPUT_ACTIVE),
             )
         hint = f"  ({match_count} matches)"
         safe_addstr(
-            stdscr, y, x + len(query) + 1, hint,
+            stdscr,
+            y,
+            x + len(query) + 1,
+            hint,
             curses.color_pair(CP_DIM),
         )
     else:
@@ -678,9 +829,7 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
             if is_active:
                 before = val[:cursor_pos]
                 after = val[cursor_pos:]
-                safe_addstr(
-                    stdscr, y, 17, before, curses.color_pair(CP_INPUT_ACTIVE)
-                )
+                safe_addstr(stdscr, y, 17, before, curses.color_pair(CP_INPUT_ACTIVE))
                 # Cursor character (reversed)
                 cursor_ch = after[0] if after else " "
                 safe_addstr(
@@ -710,7 +859,9 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
     # Hint below the last field
     hint_y = 4 + len(field_keys) * 2
     safe_addstr(
-        stdscr, hint_y, 17,
+        stdscr,
+        hint_y,
+        17,
         'Flags/Split: empty = inherit global, "-" = disable',
         curses.color_pair(CP_DIM),
     )
@@ -750,10 +901,16 @@ def _cycle_pw(current):
 def _session_fingerprint(sessions):
     """Return a hashable fingerprint of session state for change detection."""
     return tuple(
-        (s["tab_id"], s["title"], s["status"], s["cwd"], s["account"],
-         s.get("window_count", 1),
-         (s.get("activity") or {}).get("last_event_ts"),
-         (s.get("activity") or {}).get("last_event_type"))
+        (
+            s["tab_id"],
+            s["title"],
+            s["status"],
+            s["cwd"],
+            s["account"],
+            s.get("window_count", 1),
+            (s.get("activity") or {}).get("last_event_ts"),
+            (s.get("activity") or {}).get("last_event_type"),
+        )
         for s in sessions
     )
 
@@ -775,7 +932,8 @@ def dashboard(stdscr, socket):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | new | pick
+    mode = "list"  # list | confirm | confirm_restart | new | pick | help
+    help_scroll = 0
     msg = ""
     msg_frames = 0
 
@@ -800,13 +958,21 @@ def dashboard(stdscr, socket):
     filtered = sessions
 
     # Account filter state
-    account_filter = None       # None = show all; set of names = show only these
+    account_filter = None  # None = show all; set of names = show only these
     account_filter_mode = False  # True when filter bar is interactive
 
     # New-session form state — default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
-    default_pw = _cfg._default_project_window if _cfg._default_project_window else "none"
-    new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": "", "pw": default_pw}
+    default_pw = (
+        _cfg._default_project_window if _cfg._default_project_window else "none"
+    )
+    new_fields = {
+        "title": "",
+        "dir": "~/",
+        "account": default_account,
+        "flags": "",
+        "pw": default_pw,
+    }
     new_active = 0
     new_cursor = 0
 
@@ -823,15 +989,24 @@ def dashboard(stdscr, socket):
                 draw_status_message(stdscr, msg)
             elif search_active or search_query:
                 draw_search_bar(
-                    stdscr, search_query, search_cursor,
-                    search_active, len(filtered),
+                    stdscr,
+                    search_query,
+                    search_cursor,
+                    search_active,
+                    len(filtered),
                 )
             if account_filter is not None or account_filter_mode:
                 draw_filter_bar(stdscr, account_filter, account_filter_mode)
             if account_filter_mode:
                 # Override footer with filter-mode hints
                 rows_now, cols_now = stdscr.getmaxyx()
-                safe_addstr(stdscr, rows_now - 1, 0, " " * (cols_now - 1), curses.color_pair(CP_NORMAL))
+                safe_addstr(
+                    stdscr,
+                    rows_now - 1,
+                    0,
+                    " " * (cols_now - 1),
+                    curses.color_pair(CP_NORMAL),
+                )
                 draw_footer(stdscr, "filter")
             if mode == "confirm" and filtered:
                 draw_confirm_prompt(stdscr, filtered[selected], "Close")
@@ -845,9 +1020,14 @@ def dashboard(stdscr, socket):
                 draw_status_message(stdscr, msg)
             elif pick_search_active or pick_query:
                 draw_search_bar(
-                    stdscr, pick_query, pick_cursor,
-                    pick_search_active, len(pick_filtered),
+                    stdscr,
+                    pick_query,
+                    pick_cursor,
+                    pick_search_active,
+                    len(pick_filtered),
                 )
+        elif mode == "help":
+            draw_help_overlay(stdscr, help_scroll)
 
         stdscr.refresh()
 
@@ -867,10 +1047,16 @@ def dashboard(stdscr, socket):
                     refresh_ticks = 0
                     new_sessions = query_sessions(socket, managed_only=(not show_all))
                     old_fp = _session_fingerprint(filtered)
-                    new_filtered = _apply_filters(new_sessions, search_query, account_filter)
+                    new_filtered = _apply_filters(
+                        new_sessions, search_query, account_filter
+                    )
                     if _session_fingerprint(new_filtered) != old_fp:
                         # Preserve selection by matching tab_id
-                        old_tab_id = filtered[selected]["tab_id"] if filtered and selected < len(filtered) else None
+                        old_tab_id = (
+                            filtered[selected]["tab_id"]
+                            if filtered and selected < len(filtered)
+                            else None
+                        )
                         sessions = new_sessions
                         filtered = new_filtered
                         selected = 0
@@ -912,7 +1098,9 @@ def dashboard(stdscr, socket):
                             + search_query[search_cursor:]
                         )
                         search_cursor -= 1
-                        filtered = _apply_filters(sessions, search_query, account_filter)
+                        filtered = _apply_filters(
+                            sessions, search_query, account_filter
+                        )
                         selected = min(selected, max(0, len(filtered) - 1))
                     continue
                 elif key == curses.KEY_LEFT:
@@ -957,7 +1145,9 @@ def dashboard(stdscr, socket):
 
             if key in (ord("q"), ord("Q")):
                 return
-            if key == 27:  # Escape — cascade: filter mode → search → account filter → quit
+            if (
+                key == 27
+            ):  # Escape — cascade: filter mode → search → account filter → quit
                 if account_filter_mode:
                     account_filter_mode = False
                     account_filter = None
@@ -992,7 +1182,13 @@ def dashboard(stdscr, socket):
                 mode = "confirm"
             elif key in (ord("n"), ord("N")):
                 mode = "new"
-                new_fields = {"title": "", "dir": "~/", "account": default_account, "flags": "", "pw": default_pw}
+                new_fields = {
+                    "title": "",
+                    "dir": "~/",
+                    "account": default_account,
+                    "flags": "",
+                    "pw": default_pw,
+                }
                 new_active = 0
                 new_cursor = 0
             elif key == ord("l"):
@@ -1000,7 +1196,9 @@ def dashboard(stdscr, socket):
                     mode = "pick"
                     pick_selected = 0
                     pick_running = {s["title"] for s in sessions}
-                    pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
+                    pick_filtered, pick_running_count = _sort_pick_entries(
+                        list(_cfg._sessions), pick_running
+                    )
                     pick_query = ""
                     pick_cursor = 0
                     pick_search_active = False
@@ -1025,6 +1223,19 @@ def dashboard(stdscr, socket):
                 msg_frames = 20
             elif key == ord("R") and filtered:
                 mode = "confirm_restart"
+            elif key == ord("?"):
+                mode = "help"
+                help_scroll = 0
+
+        # ── Help overlay ──────────────────────────────────────────
+        elif mode == "help":
+            help_max = max(0, len(_HELP_LINES) - (stdscr.getmaxyx()[0] - 3))
+            if key in (ord("?"), ord("q"), ord("Q"), 27):
+                mode = "list"
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                help_scroll = min(help_scroll + 1, help_max)
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                help_scroll = max(help_scroll - 1, 0)
 
         # ── Confirm close ────────────────────────────────────────
         elif mode == "confirm":
@@ -1079,7 +1290,9 @@ def dashboard(stdscr, socket):
                     if t and d:
                         do_launch(socket, t, d, a, fl, pw_val)
                         sessions = query_sessions(socket, managed_only=(not show_all))
-                        filtered = _apply_filters(sessions, search_query, account_filter)
+                        filtered = _apply_filters(
+                            sessions, search_query, account_filter
+                        )
                         selected = max(0, len(filtered) - 1)
                         msg = f'Launched "{t}"'
                         msg_frames = 20
@@ -1092,9 +1305,7 @@ def dashboard(stdscr, socket):
                 val = new_fields[fk]
                 if key in (curses.KEY_BACKSPACE, 127, 8):
                     if new_cursor > 0:
-                        new_fields[fk] = (
-                            val[: new_cursor - 1] + val[new_cursor:]
-                        )
+                        new_fields[fk] = val[: new_cursor - 1] + val[new_cursor:]
                         new_cursor -= 1
                 elif key == curses.KEY_LEFT:
                     new_cursor = max(0, new_cursor - 1)
@@ -1105,9 +1316,7 @@ def dashboard(stdscr, socket):
                 elif key == curses.KEY_END or key == 5:  # Ctrl+E
                     new_cursor = len(new_fields[fk])
                 elif 32 <= key < 127:
-                    new_fields[fk] = (
-                        val[:new_cursor] + chr(key) + val[new_cursor:]
-                    )
+                    new_fields[fk] = val[:new_cursor] + chr(key) + val[new_cursor:]
                     new_cursor += 1
 
         # ── Pick mode (launch from config) ────────────────────────
@@ -1117,7 +1326,9 @@ def dashboard(stdscr, socket):
                     pick_search_active = False
                     pick_query = ""
                     pick_cursor = 0
-                    pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
+                    pick_filtered, pick_running_count = _sort_pick_entries(
+                        list(_cfg._sessions), pick_running
+                    )
                     pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                     continue
                 elif key in (10, 13, curses.KEY_ENTER):
@@ -1131,11 +1342,19 @@ def dashboard(stdscr, socket):
                     continue
                 elif key in (curses.KEY_BACKSPACE, 127, 8):
                     if pick_cursor > 0:
-                        pick_query = pick_query[:pick_cursor - 1] + pick_query[pick_cursor:]
+                        pick_query = (
+                            pick_query[: pick_cursor - 1] + pick_query[pick_cursor:]
+                        )
                         pick_cursor -= 1
-                        pick_filtered = _filter_config_sessions(_cfg._sessions, pick_query)
-                        pick_filtered, pick_running_count = _sort_pick_entries(pick_filtered, pick_running)
-                        pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
+                        pick_filtered = _filter_config_sessions(
+                            _cfg._sessions, pick_query
+                        )
+                        pick_filtered, pick_running_count = _sort_pick_entries(
+                            pick_filtered, pick_running
+                        )
+                        pick_selected = min(
+                            pick_selected, max(0, len(pick_filtered) - 1)
+                        )
                     continue
                 elif key == curses.KEY_LEFT:
                     pick_cursor = max(0, pick_cursor - 1)
@@ -1144,10 +1363,14 @@ def dashboard(stdscr, socket):
                     pick_cursor = min(len(pick_query), pick_cursor + 1)
                     continue
                 elif 32 <= key < 127:
-                    pick_query = pick_query[:pick_cursor] + chr(key) + pick_query[pick_cursor:]
+                    pick_query = (
+                        pick_query[:pick_cursor] + chr(key) + pick_query[pick_cursor:]
+                    )
                     pick_cursor += 1
                     pick_filtered = _filter_config_sessions(_cfg._sessions, pick_query)
-                    pick_filtered, pick_running_count = _sort_pick_entries(pick_filtered, pick_running)
+                    pick_filtered, pick_running_count = _sort_pick_entries(
+                        pick_filtered, pick_running
+                    )
                     pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                     continue
                 else:
@@ -1157,7 +1380,9 @@ def dashboard(stdscr, socket):
                 if pick_query and key == 27:
                     pick_query = ""
                     pick_cursor = 0
-                    pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
+                    pick_filtered, pick_running_count = _sort_pick_entries(
+                        list(_cfg._sessions), pick_running
+                    )
                     pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                 else:
                     mode = "list"
@@ -1165,7 +1390,9 @@ def dashboard(stdscr, socket):
                 pick_search_active = True
                 pick_query = ""
                 pick_cursor = 0
-                pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
+                pick_filtered, pick_running_count = _sort_pick_entries(
+                    list(_cfg._sessions), pick_running
+                )
             elif key in (curses.KEY_UP, ord("k"), ord("K")) and pick_filtered:
                 pick_selected = (pick_selected - 1) % len(pick_filtered)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and pick_filtered:
@@ -1173,7 +1400,14 @@ def dashboard(stdscr, socket):
             elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:
                 entry = pick_filtered[pick_selected]
                 pw_val = entry["pw"]
-                do_launch(socket, entry["title"], entry["dir"], entry["account"], entry["flags"], pw_val)
+                do_launch(
+                    socket,
+                    entry["title"],
+                    entry["dir"],
+                    entry["account"],
+                    entry["flags"],
+                    pw_val,
+                )
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = max(0, len(filtered) - 1)
