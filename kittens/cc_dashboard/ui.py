@@ -164,6 +164,16 @@ def _filter_config_sessions(sessions, query):
     ]
 
 
+def _sort_pick_entries(entries, running_titles):
+    """Sort entries with running sessions first, stopped second, preserving order within each group.
+
+    Returns (sorted_list, running_count).
+    """
+    running = [e for e in entries if e["title"] in running_titles]
+    stopped = [e for e in entries if e["title"] not in running_titles]
+    return running + stopped, len(running)
+
+
 def shorten_path(path, max_len):
     """Collapse home prefix to ~ and truncate long paths with a leading ellipsis."""
     home = os.path.expanduser("~")
@@ -267,8 +277,8 @@ def draw_list_view(stdscr, sessions, selected):
     draw_footer(stdscr, "list")
 
 
-def draw_pick_view(stdscr, entries, selected, running_titles):
-    """Draw the config session picker list."""
+def draw_pick_view(stdscr, entries, selected, running_count):
+    """Draw the config session picker list with Running/Stopped sections."""
     rows, cols = stdscr.getmaxyx()
     stdscr.erase()
 
@@ -293,33 +303,60 @@ def draw_pick_view(stdscr, entries, selected, running_titles):
     sep = f'  {"─" * c_title}{"─" * c_acct}{"─" * c_dir}'
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
+    # Build visual rows: interleave section headers with entries.
+    # Each visual row is either ("header", label) or ("entry", entry_index).
+    stopped_count = len(entries) - running_count
+    visual_rows = []
+    if running_count > 0:
+        visual_rows.append(("header", f"Running ({running_count})"))
+        for i in range(running_count):
+            visual_rows.append(("entry", i))
+    if stopped_count > 0:
+        visual_rows.append(("header", f"Stopped ({stopped_count})"))
+        for i in range(running_count, len(entries)):
+            visual_rows.append(("entry", i))
+
+    # Find the visual index of the selected entry for scroll computation.
+    sel_visual = 0
+    for vi, row in enumerate(visual_rows):
+        if row[0] == "entry" and row[1] == selected:
+            sel_visual = vi
+            break
+
     avail = rows - 8
-    if len(entries) <= avail:
+    total_visual = len(visual_rows)
+    if total_visual <= avail:
         offset = 0
     else:
-        offset = max(0, min(selected - avail // 2, len(entries) - avail))
+        offset = max(0, min(sel_visual - avail // 2, total_visual - avail))
 
-    for vi, si in enumerate(range(offset, min(offset + avail, len(entries)))):
-        entry = entries[si]
-        sel = si == selected
-        mark = "▸" if sel else " "
+    for vi in range(offset, min(offset + avail, total_visual)):
+        row = visual_rows[vi]
+        screen_y = 5 + (vi - offset)
 
-        is_running = entry["title"] in running_titles
-        display_title = entry["title"]
-        if is_running:
-            display_title += " (running)"
+        if row[0] == "header":
+            safe_addstr(
+                stdscr, screen_y, 2, row[1],
+                curses.color_pair(CP_DIM) | curses.A_BOLD,
+            )
+        else:
+            entry_idx = row[1]
+            entry = entries[entry_idx]
+            sel = entry_idx == selected
+            mark = "▸" if sel else " "
+            is_running = entry_idx < running_count
 
-        cp = _cp_for_account(entry["account"], selected=sel)
-        short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
-        title_padded = _pad_to_width(display_title, c_title)
-        line = f"{mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
+            cp = _cp_for_account(entry["account"], selected=sel)
+            short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
+            title_padded = _pad_to_width(entry["title"], c_title)
+            line = f"{mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
 
-        attr = curses.color_pair(cp)
-        if sel:
-            attr |= curses.A_BOLD
-        if is_running and not sel:
-            attr = curses.color_pair(CP_DIM)
-        safe_addstr(stdscr, 5 + vi, 1, line, attr)
+            attr = curses.color_pair(cp)
+            if sel:
+                attr |= curses.A_BOLD
+            if is_running and not sel:
+                attr = curses.color_pair(CP_DIM)
+            safe_addstr(stdscr, screen_y, 1, line, attr)
 
     draw_footer(stdscr, "pick")
 
@@ -515,6 +552,7 @@ def dashboard(stdscr, socket):
     pick_selected = 0
     pick_filtered = list(_cfg._sessions)
     pick_running = set()
+    pick_running_count = 0
     pick_query = ""
     pick_cursor = 0
     pick_search_active = False
@@ -550,7 +588,7 @@ def dashboard(stdscr, socket):
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor)
         elif mode == "pick":
-            draw_pick_view(stdscr, pick_filtered, pick_selected, pick_running)
+            draw_pick_view(stdscr, pick_filtered, pick_selected, pick_running_count)
             if msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
             elif pick_search_active or pick_query:
@@ -653,8 +691,8 @@ def dashboard(stdscr, socket):
                 if _cfg._sessions:
                     mode = "pick"
                     pick_selected = 0
-                    pick_filtered = list(_cfg._sessions)
                     pick_running = {s["title"] for s in sessions}
+                    pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
                     pick_query = ""
                     pick_cursor = 0
                     pick_search_active = False
@@ -769,7 +807,7 @@ def dashboard(stdscr, socket):
                     pick_search_active = False
                     pick_query = ""
                     pick_cursor = 0
-                    pick_filtered = list(_cfg._sessions)
+                    pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
                     pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                     continue
                 elif key in (10, 13, curses.KEY_ENTER):
@@ -786,6 +824,7 @@ def dashboard(stdscr, socket):
                         pick_query = pick_query[:pick_cursor - 1] + pick_query[pick_cursor:]
                         pick_cursor -= 1
                         pick_filtered = _filter_config_sessions(_cfg._sessions, pick_query)
+                        pick_filtered, pick_running_count = _sort_pick_entries(pick_filtered, pick_running)
                         pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                     continue
                 elif key == curses.KEY_LEFT:
@@ -798,6 +837,7 @@ def dashboard(stdscr, socket):
                     pick_query = pick_query[:pick_cursor] + chr(key) + pick_query[pick_cursor:]
                     pick_cursor += 1
                     pick_filtered = _filter_config_sessions(_cfg._sessions, pick_query)
+                    pick_filtered, pick_running_count = _sort_pick_entries(pick_filtered, pick_running)
                     pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                     continue
                 else:
@@ -807,7 +847,7 @@ def dashboard(stdscr, socket):
                 if pick_query and key == 27:
                     pick_query = ""
                     pick_cursor = 0
-                    pick_filtered = list(_cfg._sessions)
+                    pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
                     pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                 else:
                     mode = "list"
@@ -815,7 +855,7 @@ def dashboard(stdscr, socket):
                 pick_search_active = True
                 pick_query = ""
                 pick_cursor = 0
-                pick_filtered = list(_cfg._sessions)
+                pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
             elif key in (curses.KEY_UP, ord("k"), ord("K")) and pick_filtered:
                 pick_selected = (pick_selected - 1) % len(pick_filtered)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and pick_filtered:
