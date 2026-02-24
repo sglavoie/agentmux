@@ -164,6 +164,14 @@ def load_sessions():
             })
 
 
+def _find_config_session(title):
+    """Find a config session entry matching the given title, or None."""
+    for entry in _sessions:
+        if entry["title"] == title:
+            return entry
+    return None
+
+
 def _resolve_claude_flags(override=""):
     """Return the effective claude flags for a session.
 

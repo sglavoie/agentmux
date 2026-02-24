@@ -186,10 +186,116 @@ def shorten_path(path, max_len):
     return "..." + path[-(max_len - 3) :]
 
 
+# ── Detail pane ──────────────────────────────────────────────────────────────
+
+DETAIL_PANE_HEIGHT = 9
+
+
+def draw_detail_pane(stdscr, session, detail_y):
+    """Render the detail pane for the selected session starting at detail_y."""
+    rows, cols = stdscr.getmaxyx()
+    if detail_y + DETAIL_PANE_HEIGHT > rows:
+        return
+
+    # Separator line
+    sep = "─── Detail " + "─" * max(0, cols - 14)
+    safe_addstr(stdscr, detail_y, 1, sep, curses.color_pair(CP_DIM))
+
+    # Look up config session for flags/split info
+    cfg_entry = _cfg._find_config_session(session["title"])
+    effective_flags = ""
+    effective_split = ""
+    if cfg_entry:
+        effective_flags = _cfg._resolve_claude_flags(cfg_entry.get("flags", ""))
+        effective_split = _cfg._resolve_project_window(cfg_entry.get("pw", ""))
+    else:
+        effective_flags = _cfg._resolve_claude_flags("")
+        effective_split = _cfg._resolve_project_window("")
+
+    # Resolve display values
+    home = os.path.expanduser("~")
+    full_dir = session["cwd"]
+    if full_dir.startswith(home):
+        full_dir = "~" + full_dir[len(home):]
+
+    config_dir = session.get("config_dir", "")
+    if not config_dir:
+        acct_info = _cfg._accounts.get(session["account"], {})
+        config_dir = acct_info.get("config_dir", "")
+    if config_dir and config_dir.startswith(home):
+        config_dir = "~" + config_dir[len(home):]
+    if not config_dir:
+        config_dir = "~/.claude"
+
+    color_name = _cfg._accounts.get(session["account"], {}).get("color", "gray")
+    pids_str = ", ".join(str(p) for p in session.get("pids", []))
+    window_count = str(session.get("window_count", 1))
+
+    # Find the first cmdline that contains "claude" for display
+    cmdline_display = ""
+    for cl in session.get("cmdlines", []):
+        if "claude" in cl.lower():
+            cmdline_display = cl
+            break
+
+    label_attr = curses.color_pair(CP_HEADER)
+    val_attr = curses.color_pair(CP_NORMAL)
+    acct_cp = _cp_for_account(session["account"])
+    acct_attr = curses.color_pair(acct_cp)
+
+    # Two-column layout: left column ends around mid-screen, right column starts there
+    mid = max(cols // 2, 40)
+    lx = 2   # left column x
+    rx = mid  # right column x
+
+    # Row 1: Title / Tab ID
+    y = detail_y + 1
+    safe_addstr(stdscr, y, lx, " Title: ", label_attr)
+    safe_addstr(stdscr, y, lx + 8, session["title"], val_attr)
+    safe_addstr(stdscr, y, rx, "Tab ID: ", label_attr)
+    safe_addstr(stdscr, y, rx + 8, str(session.get("tab_id", "")), val_attr)
+
+    # Row 2: Account (color) / Windows
+    y += 1
+    safe_addstr(stdscr, y, lx, " Account: ", label_attr)
+    acct_text = f"{session['account']} ({color_name})"
+    safe_addstr(stdscr, y, lx + 10, acct_text, acct_attr)
+    safe_addstr(stdscr, y, rx, "Windows: ", label_attr)
+    safe_addstr(stdscr, y, rx + 9, window_count, val_attr)
+
+    # Row 3: Directory / PIDs
+    y += 1
+    safe_addstr(stdscr, y, lx, " Directory: ", label_attr)
+    safe_addstr(stdscr, y, lx + 12, full_dir[:mid - lx - 13], val_attr)
+    safe_addstr(stdscr, y, rx, "PIDs: ", label_attr)
+    safe_addstr(stdscr, y, rx + 6, pids_str[:cols - rx - 7] if pids_str else "n/a", val_attr)
+
+    # Row 4: Config dir / Flags
+    y += 1
+    safe_addstr(stdscr, y, lx, " Config dir: ", label_attr)
+    safe_addstr(stdscr, y, lx + 13, config_dir[:mid - lx - 14], val_attr)
+    safe_addstr(stdscr, y, rx, "Flags: ", label_attr)
+    flags_display = effective_flags if effective_flags else "none"
+    safe_addstr(stdscr, y, rx + 7, flags_display[:cols - rx - 8], val_attr)
+
+    # Row 5: Status / Split
+    y += 1
+    safe_addstr(stdscr, y, lx, " Status: ", label_attr)
+    safe_addstr(stdscr, y, lx + 9, session["status"], val_attr)
+    safe_addstr(stdscr, y, rx, "Split: ", label_attr)
+    split_display = effective_split if effective_split else "none"
+    safe_addstr(stdscr, y, rx + 7, split_display, val_attr)
+
+    # Row 6: Cmdline (full width)
+    y += 1
+    safe_addstr(stdscr, y, lx, " Cmdline: ", label_attr)
+    safe_addstr(stdscr, y, lx + 10, (cmdline_display if cmdline_display else "n/a")[:cols - lx - 11], val_attr)
+
+
 # ── Drawing ──────────────────────────────────────────────────────────────────
 
 
-def draw_list_view(stdscr, sessions, selected):
+def draw_list_view(stdscr, sessions, selected, detail_visible=False):
     """Draw the main session list with header, rows, and footer."""
     rows, cols = stdscr.getmaxyx()
     stdscr.erase()
@@ -246,6 +352,9 @@ def draw_list_view(stdscr, sessions, selected):
 
     # Scrollable session rows
     avail = rows - 8
+    if detail_visible:
+        avail -= DETAIL_PANE_HEIGHT
+    avail = max(1, avail)
     if len(sessions) <= avail:
         offset = 0
     else:
@@ -366,7 +475,7 @@ def draw_footer(stdscr, mode):
     rows, cols = stdscr.getmaxyx()
 
     hints = {
-        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  R Restart  n New  l Launch  / Search  a All  r Refresh  q Quit",
+        "list": "↑/k Up  ↓/j Down  Enter Focus  x Close  R Restart  n New  l Launch  d Detail  / Search  a All  r Refresh  q Quit",
         "confirm": "y Confirm close    Any other key Cancel",
         "confirm_restart": "y Confirm restart    Any other key Cancel",
         "new": "Enter Next/Submit    Tab Cycle    Esc Cancel",
@@ -531,7 +640,8 @@ def _cycle_pw(current):
 def _session_fingerprint(sessions):
     """Return a hashable fingerprint of session state for change detection."""
     return tuple(
-        (s["tab_id"], s["title"], s["status"], s["cwd"], s["account"])
+        (s["tab_id"], s["title"], s["status"], s["cwd"], s["account"],
+         s.get("window_count", 1))
         for s in sessions
     )
 
@@ -552,6 +662,7 @@ def dashboard(stdscr, socket):
             selected = i
             break
 
+    show_detail = False
     mode = "list"  # list | confirm | confirm_restart | new | pick
     msg = ""
     msg_frames = 0
@@ -586,7 +697,12 @@ def dashboard(stdscr, socket):
     while True:
         # ── Draw ─────────────────────────────────────────────────
         if mode in ("list", "confirm", "confirm_restart"):
-            draw_list_view(stdscr, filtered, selected)
+            rows, cols = stdscr.getmaxyx()
+            detail_visible = show_detail and rows >= 20 and bool(filtered)
+            draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible)
+            if detail_visible:
+                detail_y = rows - 1 - DETAIL_PANE_HEIGHT
+                draw_detail_pane(stdscr, filtered[selected], detail_y)
             if msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
             elif search_active or search_query:
@@ -744,6 +860,8 @@ def dashboard(stdscr, socket):
                 label = "all" if show_all else "managed"
                 msg = f"Showing {label} sessions ({len(filtered)} found)"
                 msg_frames = 20
+            elif key == ord("d"):
+                show_detail = not show_detail
             elif key == ord("r"):
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _filter_sessions(sessions, search_query)

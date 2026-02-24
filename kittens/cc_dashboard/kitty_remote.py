@@ -74,6 +74,9 @@ def query_sessions(socket, managed_only=True):
             cwd = ""
             user_vars = {}
 
+            pids = []
+            cmdlines = []
+
             for win in windows:
                 uv = win.get("user_vars", {})
                 if not user_vars and ("cc_account" in uv or "cc_cwd" in uv):
@@ -81,6 +84,11 @@ def query_sessions(socket, managed_only=True):
                 for proc in win.get("foreground_processes", []):
                     cmdline = proc.get("cmdline", [])
                     cmdline_str = " ".join(cmdline)
+                    pid = proc.get("pid")
+                    if pid:
+                        pids.append(pid)
+                    if cmdline:
+                        cmdlines.append(cmdline_str)
                     if "claude" in cmdline_str.lower():
                         has_claude = True
                         if not cwd:
@@ -129,6 +137,10 @@ def query_sessions(socket, managed_only=True):
                         else "idle"
                     ),
                     "tab_id": tab.get("id", 0),
+                    "window_count": len(windows),
+                    "pids": pids,
+                    "cmdlines": cmdlines,
+                    "config_dir": detected_config_dir,
                 }
             )
     return sessions
