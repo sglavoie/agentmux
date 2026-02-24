@@ -153,11 +153,13 @@ _all_account_names() {
 _DEFAULT_CLAUDE_FLAGS=""
 _DEFAULT_PROJECT_WINDOW=""
 _DEFAULT_SORT_SESSIONS=""
+_DEFAULT_DASHBOARD_REFRESH=""
 
 load_defaults() {
     _DEFAULT_CLAUDE_FLAGS=""
     _DEFAULT_PROJECT_WINDOW=""
     _DEFAULT_SORT_SESSIONS=""
+    _DEFAULT_DASHBOARD_REFRESH=""
 
     [[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
@@ -176,6 +178,9 @@ load_defaults() {
                 ;;
             sort_sessions)
                 _DEFAULT_SORT_SESSIONS="$value"
+                ;;
+            dashboard_refresh)
+                _DEFAULT_DASHBOARD_REFRESH="$value"
                 ;;
         esac
     done < "$DEFAULTS_CONFIG"

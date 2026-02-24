@@ -697,6 +697,9 @@ Defaults (defined in ~/.config/cc-manager/defaults.conf):
                            Values: (empty) = disabled, stack, vsplit, hsplit, split
         sort_sessions    — Sort sessions alphabetically by title on launch.
                            Values: (empty) = file order, alpha = alphabetical
+        dashboard_refresh — Auto-refresh interval (seconds) for the dashboard.
+                           Values: 0 = disabled, any positive integer = interval.
+                           Default: 3.
 
 Environment:
     KITTY_LISTEN_ON      Kitty remote-control socket (auto-detected if unset)

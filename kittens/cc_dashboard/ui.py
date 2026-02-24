@@ -528,6 +528,14 @@ def _cycle_pw(current):
 # ── Main event loop ─────────────────────────────────────────────────────────
 
 
+def _session_fingerprint(sessions):
+    """Return a hashable fingerprint of session state for change detection."""
+    return tuple(
+        (s["tab_id"], s["title"], s["status"], s["cwd"], s["account"])
+        for s in sessions
+    )
+
+
 def dashboard(stdscr, socket):
     """Run the interactive dashboard loop."""
     curses.curs_set(0)
@@ -556,6 +564,11 @@ def dashboard(stdscr, socket):
     pick_query = ""
     pick_cursor = 0
     pick_search_active = False
+
+    # Auto-refresh state
+    refresh_interval = _cfg._default_dashboard_refresh
+    refresh_ticks = 0
+    refresh_threshold = refresh_interval * 10  # each tick is ~100ms
 
     # Search/filter state
     search_query = ""
@@ -606,8 +619,32 @@ def dashboard(stdscr, socket):
                 msg = ""
 
         key = stdscr.getch()
-        if key == -1 or key == curses.KEY_RESIZE:
+        if key == curses.KEY_RESIZE:
             continue
+        if key == -1:
+            if mode == "list" and not search_active and refresh_threshold > 0:
+                refresh_ticks += 1
+                if refresh_ticks >= refresh_threshold:
+                    refresh_ticks = 0
+                    new_sessions = query_sessions(socket, managed_only=(not show_all))
+                    old_fp = _session_fingerprint(filtered)
+                    new_filtered = _filter_sessions(new_sessions, search_query)
+                    if _session_fingerprint(new_filtered) != old_fp:
+                        # Preserve selection by matching tab_id
+                        old_tab_id = filtered[selected]["tab_id"] if filtered and selected < len(filtered) else None
+                        sessions = new_sessions
+                        filtered = new_filtered
+                        selected = 0
+                        if old_tab_id is not None:
+                            for i, s in enumerate(filtered):
+                                if s["tab_id"] == old_tab_id:
+                                    selected = i
+                                    break
+                        selected = min(selected, max(0, len(filtered) - 1))
+            continue
+
+        # Reset auto-refresh timer on any keypress
+        refresh_ticks = 0
 
         # ── List mode ────────────────────────────────────────────
         if mode == "list":

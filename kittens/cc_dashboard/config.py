@@ -32,6 +32,7 @@ _account_names = []  # ordered list of account names
 # Global defaults loaded from defaults.conf
 _default_claude_flags = ""
 _default_project_window = ""
+_default_dashboard_refresh = 3
 
 
 def _accounts_config_path():
@@ -86,9 +87,10 @@ def _defaults_config_path():
 
 def load_defaults():
     """Parse defaults.conf into the module-level default settings."""
-    global _default_claude_flags, _default_project_window
+    global _default_claude_flags, _default_project_window, _default_dashboard_refresh
     _default_claude_flags = ""
     _default_project_window = ""
+    _default_dashboard_refresh = 3
 
     path = _defaults_config_path()
     if not os.path.isfile(path):
@@ -108,6 +110,11 @@ def load_defaults():
                 _default_claude_flags = value
             elif key == "project_window":
                 _default_project_window = value
+            elif key == "dashboard_refresh":
+                try:
+                    _default_dashboard_refresh = max(0, int(value))
+                except ValueError:
+                    pass
 
 
 # ── Session configuration ──────────────────────────────────────────────────
