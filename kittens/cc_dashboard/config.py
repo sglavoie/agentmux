@@ -1,8 +1,8 @@
 """Account and defaults configuration for the Claude Code Dashboard."""
 
+import contextlib
 import json
 import os
-
 
 # ── Shared data loading ──────────────────────────────────────────────────────
 
@@ -61,8 +61,8 @@ PALETTE, ACTIVE_FG, INACTIVE_FG = _load_palette()
 
 # ── Account configuration ───────────────────────────────────────────────────
 
-_accounts = {}       # name -> {"config_dir": str, "color": str}
-_account_names = []  # ordered list of account names
+_accounts: dict[str, dict[str, str]] = {}  # name -> {"config_dir": str, "color": str}
+_account_names: list[str] = []  # ordered list of account names
 
 # Global defaults loaded from defaults.conf
 _default_claude_flags = ""
@@ -77,7 +77,9 @@ def _accounts_config_path():
     env = os.environ.get("CC_MANAGER_ACCOUNTS", "")
     if env:
         return env
-    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config"))
+    xdg = os.environ.get(
+        "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
+    )
     return os.path.join(xdg, "cc-manager", "accounts.conf")
 
 
@@ -110,8 +112,14 @@ def load_accounts():
                 _account_names.append(name)
     else:
         home = os.path.expanduser("~")
-        _accounts["work"] = {"config_dir": os.path.join(home, ".claude"), "color": "green"}
-        _accounts["personal"] = {"config_dir": os.path.join(home, ".claude-personal"), "color": "blue"}
+        _accounts["work"] = {
+            "config_dir": os.path.join(home, ".claude"),
+            "color": "green",
+        }
+        _accounts["personal"] = {
+            "config_dir": os.path.join(home, ".claude-personal"),
+            "color": "blue",
+        }
         _account_names = ["work", "personal"]
 
 
@@ -119,13 +127,21 @@ def _defaults_config_path():
     env = os.environ.get("CC_MANAGER_DEFAULTS", "")
     if env:
         return env
-    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config"))
+    xdg = os.environ.get(
+        "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
+    )
     return os.path.join(xdg, "cc-manager", "defaults.conf")
 
 
 def load_defaults():
     """Parse defaults.conf into the module-level default settings."""
-    global _default_claude_flags, _default_project_window, _default_sort_sessions, _default_dashboard_refresh, _default_idle_alert_minutes, _default_notify_idle
+    global \
+        _default_claude_flags, \
+        _default_project_window, \
+        _default_sort_sessions, \
+        _default_dashboard_refresh, \
+        _default_idle_alert_minutes, \
+        _default_notify_idle
     _default_claude_flags = ""
     _default_project_window = ""
     _default_sort_sessions = ""
@@ -154,29 +170,28 @@ def load_defaults():
             elif key == "sort_sessions":
                 _default_sort_sessions = value
             elif key == "dashboard_refresh":
-                try:
+                with contextlib.suppress(ValueError):
                     _default_dashboard_refresh = max(0, int(value))
-                except ValueError:
-                    pass
             elif key == "idle_alert_minutes":
-                try:
+                with contextlib.suppress(ValueError):
                     _default_idle_alert_minutes = max(0, int(value))
-                except ValueError:
-                    pass
             elif key == "notify_idle":
                 _default_notify_idle = value
 
 
 # ── Session configuration ──────────────────────────────────────────────────
 
-_sessions = []  # list of {"title": str, "dir": str, "account": str, "flags": str, "pw": str}
+# list of {"title": str, "dir": str, "account": str, "flags": str, "pw": str}
+_sessions: list[dict[str, str]] = []
 
 
 def _sessions_config_path():
     env = os.environ.get("CC_MANAGER_CONFIG", "")
     if env:
         return os.path.join(env, "sessions.conf") if os.path.isdir(env) else env
-    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config"))
+    xdg = os.environ.get(
+        "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
+    )
     return os.path.join(xdg, "cc-manager", "sessions.conf")
 
 
@@ -200,18 +215,24 @@ def load_sessions():
                 continue
             title = parts[0].strip()
             directory = parts[1].strip()
-            account = parts[2].strip() if len(parts) > 2 and parts[2].strip() else default_account
+            account = (
+                parts[2].strip()
+                if len(parts) > 2 and parts[2].strip()
+                else default_account
+            )
             flags = parts[3].strip() if len(parts) > 3 else ""
             pw = parts[4].strip() if len(parts) > 4 else ""
             if not title:
                 continue
-            _sessions.append({
-                "title": title,
-                "dir": directory,
-                "account": account,
-                "flags": flags,
-                "pw": pw,
-            })
+            _sessions.append(
+                {
+                    "title": title,
+                    "dir": directory,
+                    "account": account,
+                    "flags": flags,
+                    "pw": pw,
+                }
+            )
 
 
 def _find_config_session(title):

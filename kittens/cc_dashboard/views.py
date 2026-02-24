@@ -1,4 +1,4 @@
-"""All draw_* functions, help data, cycling helpers, idle notifications, and detail pane."""
+"""Draw functions, help data, cycling helpers, idle notifications."""
 
 import curses
 import os
@@ -18,7 +18,6 @@ from cc_dashboard.colors import (
 )
 from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
 from cc_dashboard.kitty_remote import format_duration
-
 
 # ── Detail pane ──────────────────────────────────────────────────────────────
 
@@ -387,7 +386,7 @@ def draw_pick_view(stdscr, entries, selected, running_count):
     # Build visual rows: interleave section headers with entries.
     # Each visual row is either ("header", label) or ("entry", entry_index).
     stopped_count = len(entries) - running_count
-    visual_rows = []
+    visual_rows: list[tuple[str, str | int]] = []
     if running_count > 0:
         visual_rows.append(("header", f"Running ({running_count})"))
         for i in range(running_count):
@@ -492,8 +491,8 @@ _HELP_SECTIONS = [
     ),
 ]
 
-# Pre-build the help content as a list of (type, text, text2) tuples.
-# type: "header" for section headers, "binding" for key-desc pairs, "blank".
+# Pre-build help content as a list of (kind, text, text2) tuples.
+# kind: "header" for section headers, "binding" for key-desc pairs, "blank".
 _HELP_LINES = []
 for _sect_name, _bindings in _HELP_SECTIONS:
     _HELP_LINES.append(("header", _sect_name, ""))
@@ -516,7 +515,7 @@ def draw_help_overlay(stdscr, scroll):
     key_col = 4
     desc_col = 18
 
-    # Row 0: title, rows 1..rows-3: content area, row rows-2: scroll hint, row rows-1: footer
+    # Row 0: title, rows 1..rows-3: content, row rows-2: scroll, row rows-1: footer
     safe_addstr(stdscr, 0, 2, "Dashboard Help", header_attr)
     content_height = rows - 3  # available lines for help content
     total = len(_HELP_LINES)
@@ -567,7 +566,7 @@ def draw_footer(stdscr, mode):
     sep = "  "
     avail = cols - 3  # 2-char left margin + 1 safety
     items = _FOOTER_HINTS.get(mode, [])
-    parts = []
+    parts: list[str] = []
     length = 0
     for item in items:
         item_len = len(item)
@@ -594,7 +593,7 @@ def draw_status_message(stdscr, message):
 
 def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
     """Draw the search/filter bar on the status line."""
-    rows, cols = stdscr.getmaxyx()
+    rows, _cols = stdscr.getmaxyx()
     y = rows - 3
 
     if active:
@@ -674,7 +673,7 @@ def draw_filter_bar(stdscr, account_filter, account_filter_mode):
 
 def draw_new_form(stdscr, fields, active_field, cursor_pos):
     """Draw the new-session creation form."""
-    rows, cols = stdscr.getmaxyx()
+    _rows, cols = stdscr.getmaxyx()
     stdscr.erase()
 
     safe_addstr(
@@ -688,7 +687,7 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
     labels = ["Title:", "Directory:", "Account:", "Flags:", "Split:"]
     field_keys = ["title", "dir", "account", "flags", "pw"]
 
-    for i, (label, key) in enumerate(zip(labels, field_keys)):
+    for i, (label, key) in enumerate(zip(labels, field_keys, strict=False)):
         y = 4 + i * 2
         is_active = i == active_field
 

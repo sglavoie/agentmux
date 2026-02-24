@@ -2,7 +2,7 @@
 
 
 def _filter_sessions(sessions, query):
-    """Return sessions matching query (case-insensitive) against title, cwd, or account."""
+    """Return sessions matching query against title, cwd, or account."""
     if not query:
         return sessions
     q = query.lower()
@@ -30,7 +30,7 @@ def _apply_filters(sessions, search_query, account_filter):
 
 
 def _filter_config_sessions(sessions, query):
-    """Return config sessions matching query (case-insensitive) against title, dir, or account."""
+    """Return config sessions matching query against title, dir, or account."""
     if not query:
         return sessions
     q = query.lower()
@@ -42,7 +42,7 @@ def _filter_config_sessions(sessions, query):
 
 
 def _sort_pick_entries(entries, running_titles):
-    """Sort entries with running sessions first, stopped second, preserving order within each group.
+    """Sort entries: running first, stopped second, preserving order.
 
     Returns (sorted_list, running_count).
     """

@@ -1,0 +1,45 @@
+[project]
+name = "sglavoie-cc-manager-kitty"
+version = "0.1.0"
+description = "Claude Code session manager for the Kitty terminal"
+authors = [
+    { name = "Sébastien Lavoie", email = "sgdlavoie@gmail.com" }
+]
+dependencies = []
+readme = "README.md"
+requires-python = ">= 3.13"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "ruff>=0.15.2",
+    "mypy>=1.19.1",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+src = ["kittens"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"claude_dashboard.py" = ["E402"]
+"cc_session_picker.py" = ["E402"]
+"cc_quick_switch.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "kittens"
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true

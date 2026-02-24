@@ -11,7 +11,7 @@ set -euo pipefail
 source "$(dirname "$(readlink -f "$0")")/../lib/cc-common.sh"
 
 show_help() {
-    cat <<'EOF'
+	cat <<'EOF'
 Usage: cc-status [--socket SOCKET] [--all] [--help]
 
 Display a table of Kitty tabs running Claude Code sessions.
@@ -37,7 +37,7 @@ Socket discovery:
   3. Otherwise globs /tmp/kitty-* and picks the most recent socket.
 
 EOF
-    exit 0
+	exit 0
 }
 
 # ---- Argument parsing ------------------------------------------------------
@@ -46,33 +46,33 @@ SOCKET=""
 SHOW_ALL=false
 
 while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --help)
-            show_help
-            ;;
-        --all)
-            SHOW_ALL=true
-            shift
-            ;;
-        --socket)
-            if [[ -z "${2:-}" ]]; then
-                echo "Error: --socket requires a SOCKET argument." >&2
-                exit 1
-            fi
-            SOCKET="$2"
-            shift 2
-            ;;
-        *)
-            echo "Error: Unknown option '$1'. See --help for usage." >&2
-            exit 1
-            ;;
-    esac
+	case "$1" in
+	--help)
+		show_help
+		;;
+	--all)
+		SHOW_ALL=true
+		shift
+		;;
+	--socket)
+		if [[ -z "${2:-}" ]]; then
+			echo "Error: --socket requires a SOCKET argument." >&2
+			exit 1
+		fi
+		SOCKET="$2"
+		shift 2
+		;;
+	*)
+		echo "Error: Unknown option '$1'. See --help for usage." >&2
+		exit 1
+		;;
+	esac
 done
 
 # ---- Socket discovery (if not overridden) ----------------------------------
 
 if [[ -z "$SOCKET" ]]; then
-    SOCKET="$(discover_socket)"
+	SOCKET="$(discover_socket)"
 fi
 
 # ---- Load accounts ---------------------------------------------------------
@@ -87,14 +87,14 @@ _MANAGED_RE="${_STRIP_RE}[A-Z]:"
 # ---- Query kitty and build the table --------------------------------------
 
 ls_json=$(kitty @ --to "$SOCKET" ls 2>/dev/null) || {
-    echo "Error: Failed to query kitty at socket $SOCKET" >&2
-    exit 1
+	echo "Error: Failed to query kitty at socket $SOCKET" >&2
+	exit 1
 }
 
 # Bail out if the response is empty or has no OS windows
 if [[ -z "$ls_json" ]] || [[ "$(echo "$ls_json" | jq 'length')" -eq 0 ]]; then
-    echo "No active Claude Code sessions found."
-    exit 0
+	echo "No active Claude Code sessions found."
+	exit 0
 fi
 
 # Build the accounts lookup for jq
@@ -181,8 +181,8 @@ rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default
 ')
 
 if [[ -z "$rows" ]]; then
-    echo "No active Claude Code sessions found."
-    exit 0
+	echo "No active Claude Code sessions found."
+	exit 0
 fi
 
 # ---- Print the table -------------------------------------------------------
@@ -207,53 +207,53 @@ max_status=${#header_status}
 # Pre-process rows: shorten paths, then scan for max widths
 processed_rows=""
 while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status; do
-    col_dir="$(shorten_path "$col_dir")"
-    processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_status}"$'\n'
-    (( ${#col_tab}     > max_tab ))     && max_tab=${#col_tab}
-    (( ${#col_title}   > max_title ))   && max_title=${#col_title}
-    (( ${#col_account} > max_account )) && max_account=${#col_account}
-    (( ${#col_dir}     > max_dir ))     && max_dir=${#col_dir}
-    (( ${#col_status}  > max_status ))  && max_status=${#col_status}
-done <<< "$rows"
+	col_dir="$(shorten_path "$col_dir")"
+	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_status}"$'\n'
+	((${#col_tab} > max_tab)) && max_tab=${#col_tab}
+	((${#col_title} > max_title)) && max_title=${#col_title}
+	((${#col_account} > max_account)) && max_account=${#col_account}
+	((${#col_dir} > max_dir)) && max_dir=${#col_dir}
+	((${#col_status} > max_status)) && max_status=${#col_status}
+done <<<"$rows"
 
 # Header
 printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_dir}s  %-${max_status}s%s\n" \
-    "$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
+	"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
 
 # Separator
 printf "%s%s%s\n" "$DIM" \
-    "$(repeat_char '─' $(( max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_dir + 2 + max_status )))" \
-    "$RESET"
+	"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_dir + 2 + max_status)))" \
+	"$RESET"
 
 # Data rows
 while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status; do
-    [[ -z "$col_tab" ]] && continue
+	[[ -z "$col_tab" ]] && continue
 
-    # Focus marker
-    local_mk=" "
-    if [[ "$col_status" == "focused" ]]; then
-        local_mk="▸"
-    fi
+	# Focus marker
+	local_mk=" "
+	if [[ "$col_status" == "focused" ]]; then
+		local_mk="▸"
+	fi
 
-    # Row color
-    local_color=""
-    local_reset=""
-    if [[ "$USE_COLOR" == "true" ]]; then
-        local_color="$(ansi_fg_for_account "$col_account")"
-        local_reset="$RESET"
-    fi
+	# Row color
+	local_color=""
+	local_reset=""
+	if [[ "$USE_COLOR" == "true" ]]; then
+		local_color="$(ansi_fg_for_account "$col_account")"
+		local_reset="$RESET"
+	fi
 
-    # Status styling
-    local_status="$col_status"
-    if [[ "$USE_COLOR" == "true" ]]; then
-        case "$col_status" in
-            focused)    local_status="${BOLD}${col_status}${RESET}${local_color}" ;;
-            stopped)    local_status="${BOLD}${col_status}${RESET}${local_color}" ;;
-            permission) local_status="${BOLD}${col_status}${RESET}${local_color}" ;;
-            idle)       local_status="${DIM}${col_status}${RESET}${local_color}" ;;
-        esac
-    fi
+	# Status styling
+	local_status="$col_status"
+	if [[ "$USE_COLOR" == "true" ]]; then
+		case "$col_status" in
+		focused) local_status="${BOLD}${col_status}${RESET}${local_color}" ;;
+		stopped) local_status="${BOLD}${col_status}${RESET}${local_color}" ;;
+		permission) local_status="${BOLD}${col_status}${RESET}${local_color}" ;;
+		idle) local_status="${DIM}${col_status}${RESET}${local_color}" ;;
+		esac
+	fi
 
-    printf "%s%-$(( max_mk + $(extra_bytes "$local_mk") ))s%-$(( max_tab + $(extra_bytes "$col_tab") ))s  %-$(( max_title + $(extra_bytes "$col_title") ))s  %-$(( max_account + $(extra_bytes "$col_account") ))s  %-$(( max_dir + $(extra_bytes "$col_dir") ))s  %s%s\n" \
-        "$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_dir" "$local_status" "$local_reset"
-done <<< "$processed_rows"
+	printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %s%s\n" \
+		"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_dir" "$local_status" "$local_reset"
+done <<<"$processed_rows"

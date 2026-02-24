@@ -12,6 +12,7 @@ import curses
 import os
 import sys
 
+
 def _kitten_dir():
     """Return the directory containing this kitten script."""
     for candidate in (
@@ -25,14 +26,12 @@ def _kitten_dir():
 
 sys.path.insert(0, _kitten_dir())
 
-from cc_dashboard.config import load_accounts, load_defaults, load_sessions
 from cc_dashboard import config as _cfg
+from cc_dashboard.config import load_accounts, load_defaults, load_sessions
 from cc_dashboard.kitty_remote import get_kitty_socket, query_sessions
 from cc_dashboard.ui import (
     CP_DIM,
     CP_HEADER,
-    CP_INPUT_ACTIVE,
-    CP_WARN,
     _cp_for_account,
     _filter_config_sessions,
     _pad_to_width,
@@ -51,13 +50,22 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
 
     title = "Select Sessions"
     safe_addstr(
-        stdscr, 1, max(0, (cols - len(title)) // 2), title,
+        stdscr,
+        1,
+        max(0, (cols - len(title)) // 2),
+        title,
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
     if not entries:
         safe_addstr(stdscr, 4, 3, "No sessions configured.", curses.color_pair(CP_DIM))
-        safe_addstr(stdscr, 5, 3, "Add entries to sessions.conf, then try again.", curses.color_pair(CP_DIM))
+        safe_addstr(
+            stdscr,
+            5,
+            3,
+            "Add entries to sessions.conf, then try again.",
+            curses.color_pair(CP_DIM),
+        )
         draw_picker_footer(stdscr)
         return
 
@@ -65,13 +73,13 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
     c_acct = 12
     c_dir = max(12, cols - c_title - c_acct - 10)  # extra space for toggle marker
 
-    hdr = f'      {"Title":<{c_title}}{"Account":<{c_acct}}{"Directory":<{c_dir}}'
+    hdr = f"      {'Title':<{c_title}}{'Account':<{c_acct}}{'Directory':<{c_dir}}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
-    sep = f'      {"─" * c_title}{"─" * c_acct}{"─" * c_dir}'
+    sep = f"      {'─' * c_title}{'─' * c_acct}{'─' * c_dir}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     stopped_count = len(entries) - running_count
-    visual_rows = []
+    visual_rows: list[tuple[str, str | int]] = []
     if running_count > 0:
         visual_rows.append(("header", f"Running ({running_count})"))
         for i in range(running_count):
@@ -100,7 +108,10 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
 
         if row[0] == "header":
             safe_addstr(
-                stdscr, screen_y, 2, row[1],
+                stdscr,
+                screen_y,
+                2,
+                row[1],
                 curses.color_pair(CP_DIM) | curses.A_BOLD,
             )
         else:
@@ -115,7 +126,9 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
             cp = _cp_for_account(entry["account"], selected=sel)
             short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
             title_padded = _pad_to_width(entry["title"], c_title)
-            line = f"{cursor_mark} {toggle_mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
+            acct = f"{entry['account']:<{c_acct}}"
+            sdir = f"{short_dir:<{c_dir}}"
+            line = f"{cursor_mark} {toggle_mark} {title_padded}{acct}{sdir}"
 
             attr = curses.color_pair(cp)
             if sel:
@@ -143,9 +156,11 @@ def picker_main(stdscr, socket):
     sessions = query_sessions(socket, managed_only=True)
     pick_running = {s["title"] for s in sessions}
 
-    pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
+    pick_filtered, pick_running_count = _sort_pick_entries(
+        list(_cfg._sessions), pick_running
+    )
     pick_selected = 0
-    toggled = set()
+    toggled: set[int] = set()
 
     pick_query = ""
     pick_cursor = 0
@@ -153,11 +168,16 @@ def picker_main(stdscr, socket):
 
     while True:
         # Draw
-        draw_picker_view(stdscr, pick_filtered, pick_selected, pick_running_count, toggled)
+        draw_picker_view(
+            stdscr, pick_filtered, pick_selected, pick_running_count, toggled
+        )
         if pick_search_active or pick_query:
             draw_search_bar(
-                stdscr, pick_query, pick_cursor,
-                pick_search_active, len(pick_filtered),
+                stdscr,
+                pick_query,
+                pick_cursor,
+                pick_search_active,
+                len(pick_filtered),
             )
         stdscr.refresh()
 
@@ -170,7 +190,9 @@ def picker_main(stdscr, socket):
                 pick_search_active = False
                 pick_query = ""
                 pick_cursor = 0
-                pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
+                pick_filtered, pick_running_count = _sort_pick_entries(
+                    list(_cfg._sessions), pick_running
+                )
                 pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                 continue
             elif key in (10, 13, curses.KEY_ENTER):
@@ -184,10 +206,14 @@ def picker_main(stdscr, socket):
                 continue
             elif key in (curses.KEY_BACKSPACE, 127, 8):
                 if pick_cursor > 0:
-                    pick_query = pick_query[:pick_cursor - 1] + pick_query[pick_cursor:]
+                    pick_query = (
+                        pick_query[: pick_cursor - 1] + pick_query[pick_cursor:]
+                    )
                     pick_cursor -= 1
                     pick_filtered = _filter_config_sessions(_cfg._sessions, pick_query)
-                    pick_filtered, pick_running_count = _sort_pick_entries(pick_filtered, pick_running)
+                    pick_filtered, pick_running_count = _sort_pick_entries(
+                        pick_filtered, pick_running
+                    )
                     pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                     toggled.clear()
                 continue
@@ -198,10 +224,14 @@ def picker_main(stdscr, socket):
                 pick_cursor = min(len(pick_query), pick_cursor + 1)
                 continue
             elif 32 <= key < 127:
-                pick_query = pick_query[:pick_cursor] + chr(key) + pick_query[pick_cursor:]
+                pick_query = (
+                    pick_query[:pick_cursor] + chr(key) + pick_query[pick_cursor:]
+                )
                 pick_cursor += 1
                 pick_filtered = _filter_config_sessions(_cfg._sessions, pick_query)
-                pick_filtered, pick_running_count = _sort_pick_entries(pick_filtered, pick_running)
+                pick_filtered, pick_running_count = _sort_pick_entries(
+                    pick_filtered, pick_running
+                )
                 pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                 toggled.clear()
                 continue
@@ -215,7 +245,9 @@ def picker_main(stdscr, socket):
             if pick_query:
                 pick_query = ""
                 pick_cursor = 0
-                pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
+                pick_filtered, pick_running_count = _sort_pick_entries(
+                    list(_cfg._sessions), pick_running
+                )
                 pick_selected = min(pick_selected, max(0, len(pick_filtered) - 1))
                 toggled.clear()
             else:
@@ -224,7 +256,9 @@ def picker_main(stdscr, socket):
             pick_search_active = True
             pick_query = ""
             pick_cursor = 0
-            pick_filtered, pick_running_count = _sort_pick_entries(list(_cfg._sessions), pick_running)
+            pick_filtered, pick_running_count = _sort_pick_entries(
+                list(_cfg._sessions), pick_running
+            )
         elif key in (curses.KEY_UP, ord("k"), ord("K")) and pick_filtered:
             pick_selected = (pick_selected - 1) % len(pick_filtered)
         elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and pick_filtered:
@@ -236,7 +270,9 @@ def picker_main(stdscr, socket):
                 toggled.add(pick_selected)
         elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:
             if toggled:
-                return [pick_filtered[i] for i in sorted(toggled) if i < len(pick_filtered)]
+                return [
+                    pick_filtered[i] for i in sorted(toggled) if i < len(pick_filtered)
+                ]
             else:
                 return [pick_filtered[pick_selected]]
 

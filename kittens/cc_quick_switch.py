@@ -10,6 +10,7 @@ import curses
 import os
 import sys
 
+
 def _kitten_dir():
     """Return the directory containing this kitten script."""
     for candidate in (
@@ -41,7 +42,7 @@ from cc_dashboard.ui import (
 
 def draw_search_input(stdscr, query, cursor_pos, match_count, total_count):
     """Draw the always-active search bar at the top of the overlay."""
-    rows, cols = stdscr.getmaxyx()
+    _rows, _cols = stdscr.getmaxyx()
     y = 1
 
     prefix = " > "
@@ -98,10 +99,7 @@ def draw_session_list(stdscr, sessions, selected):
     avail = rows - 6
     total = len(sessions)
 
-    if total <= avail:
-        offset = 0
-    else:
-        offset = max(0, min(selected - avail // 2, total - avail))
+    offset = 0 if total <= avail else max(0, min(selected - avail // 2, total - avail))
 
     for i in range(offset, min(offset + avail, total)):
         screen_y = 4 + (i - offset)

@@ -9,16 +9,16 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 source "$(dirname "$(readlink -f "$0")")/../lib/cc-common.sh"
 
-SOCKET=""  # Initialized in main() after argument parsing
+SOCKET="" # Initialized in main() after argument parsing
 
 # ---------------------------------------------------------------------------
 # Check whether a tab with the given title already exists
 # ---------------------------------------------------------------------------
 tab_exists() {
-    local title="$1"
-    local ls_json
-    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
-    echo "$ls_json" | jq -e --arg t "$title" --arg strip_re "$_STRIP_RE" '
+	local title="$1"
+	local ls_json
+	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
+	echo "$ls_json" | jq -e --arg t "$title" --arg strip_re "$_STRIP_RE" '
         [.[].tabs[] | select(.title | sub($strip_re; "") | . == $t)] | length > 0
     ' >/dev/null 2>&1
 }
@@ -27,239 +27,239 @@ tab_exists() {
 # Launch a single session tab
 # ---------------------------------------------------------------------------
 launch_session() {
-    local title="$1"
-    local dir="$2"
-    local account="${3:-work}"
-    local flags="${4:-}"
-    local pw_override="${5:-}"
-    local location_args="${6:-}"
+	local title="$1"
+	local dir="$2"
+	local account="${3:-work}"
+	local flags="${4:-}"
+	local pw_override="${5:-}"
+	local location_args="${6:-}"
 
-    dir="$(expand_tilde "$dir")"
+	dir="$(expand_tilde "$dir")"
 
-    if tab_exists "$title"; then
-        echo "Skipping [$title]: already exists"
-        return 1  # signal: not launched
-    fi
+	if tab_exists "$title"; then
+		echo "Skipping [$title]: already exists"
+		return 1 # signal: not launched
+	fi
 
-    local config_dir colors
-    config_dir="$(claude_config_dir_for_account "$account")"
-    colors="$(tab_colors_for_account "$account")"
+	local config_dir colors
+	config_dir="$(claude_config_dir_for_account "$account")"
+	colors="$(tab_colors_for_account "$account")"
 
-    # Build the launch command. Use kitty's --env flag for non-default config
-    # dirs so the launched process is always "claude" directly (not wrapped in
-    # env), which ensures kitty creates a proper interactive tab.
-    # Always pass KITTY_LISTEN_ON so that hooks (e.g. cc-hook-indicator) can
-    # reach the Kitty remote-control socket even without a TTY.
-    local env_flag="--env KITTY_LISTEN_ON=$SOCKET"
-    if [[ -n "$config_dir" && "$config_dir" != "$HOME/.claude" ]]; then
-        env_flag="$env_flag --env CLAUDE_CONFIG_DIR=$config_dir"
-    fi
+	# Build the launch command. Use kitty's --env flag for non-default config
+	# dirs so the launched process is always "claude" directly (not wrapped in
+	# env), which ensures kitty creates a proper interactive tab.
+	# Always pass KITTY_LISTEN_ON so that hooks (e.g. cc-hook-indicator) can
+	# reach the Kitty remote-control socket even without a TTY.
+	local env_flag="--env KITTY_LISTEN_ON=$SOCKET"
+	if [[ -n "$config_dir" && "$config_dir" != "$HOME/.claude" ]]; then
+		env_flag="$env_flag --env CLAUDE_CONFIG_DIR=$config_dir"
+	fi
 
-    local effective_flags
-    effective_flags="$(resolve_claude_flags "$flags")"
+	local effective_flags
+	effective_flags="$(resolve_claude_flags "$flags")"
 
-    local shell_cmd="exec claude $effective_flags"
-    # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
+	local shell_cmd="exec claude $effective_flags"
+	# shellcheck disable=SC2086
+	kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
 
-    # Apply tab colors. Retry a few times since Claude may briefly override
-    # the tab title on startup.
-    local i
-    for ((i = 0; i < 5; i++)); do
-        # shellcheck disable=SC2086
-        if kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors 2>/dev/null; then
-            break
-        fi
-        sleep 0.1
-    done
+	# Apply tab colors. Retry a few times since Claude may briefly override
+	# the tab title on startup.
+	local i
+	for ((i = 0; i < 5; i++)); do
+		# shellcheck disable=SC2086
+		if kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors 2>/dev/null; then
+			break
+		fi
+		sleep 0.1
+	done
 
-    # Launch a project window alongside Claude if configured
-    local pw_mode
-    pw_mode="$(resolve_project_window "$pw_override")"
-    if [[ -n "$pw_mode" ]]; then
-        kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus
-        kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode"
-    fi
+	# Launch a project window alongside Claude if configured
+	local pw_mode
+	pw_mode="$(resolve_project_window "$pw_override")"
+	if [[ -n "$pw_mode" ]]; then
+		kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus
+		kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode"
+	fi
 
-    echo "Launched [$title] (account=$account, dir=$dir)"
-    return 0
+	echo "Launched [$title] (account=$account, dir=$dir)"
+	return 0
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: interactive session picker (curses UI)
 # ---------------------------------------------------------------------------
 cmd_launch_interactive() {
-    local picker_script
-    picker_script="$(dirname "$(readlink -f "$0")")/../kittens/cc_session_picker.py"
+	local picker_script
+	picker_script="$(dirname "$(readlink -f "$0")")/../kittens/cc_session_picker.py"
 
-    if [[ ! -f "$picker_script" ]]; then
-        echo "Error: Picker script not found: $picker_script" >&2
-        exit 1
-    fi
+	if [[ ! -f "$picker_script" ]]; then
+		echo "Error: Picker script not found: $picker_script" >&2
+		exit 1
+	fi
 
-    local picker_output
-    picker_output="$(python3 "$picker_script")" || {
-        echo "No sessions selected."
-        return
-    }
+	local picker_output
+	picker_output="$(python3 "$picker_script")" || {
+		echo "No sessions selected."
+		return
+	}
 
-    local launched=0
-    local existed=0
+	local launched=0
+	local existed=0
 
-    while IFS='|' read -r title dir account flags pw; do
-        [[ -z "$title" ]] && continue
-        title="$(echo "$title" | xargs)"
-        dir="$(echo "$dir" | xargs)"
-        account="$(echo "${account:-work}" | xargs)"
-        flags="$(echo "${flags:-}" | xargs)"
-        pw="$(echo "${pw:-}" | xargs)"
-        [[ -z "$account" ]] && account="work"
+	while IFS='|' read -r title dir account flags pw; do
+		[[ -z "$title" ]] && continue
+		title="$(echo "$title" | xargs)"
+		dir="$(echo "$dir" | xargs)"
+		account="$(echo "${account:-work}" | xargs)"
+		flags="$(echo "${flags:-}" | xargs)"
+		pw="$(echo "${pw:-}" | xargs)"
+		[[ -z "$account" ]] && account="work"
 
-        local insert_loc loc_args=""
-        insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
-        if [[ "$insert_loc" == "first" ]]; then
-            loc_args="--location first"
-        elif [[ -n "$insert_loc" ]]; then
-            kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
-            sleep 0.1
-            loc_args="--location after"
-        fi
+		local insert_loc loc_args=""
+		insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+		if [[ "$insert_loc" == "first" ]]; then
+			loc_args="--location first"
+		elif [[ -n "$insert_loc" ]]; then
+			kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+			sleep 0.1
+			loc_args="--location after"
+		fi
 
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args"; then
-            launched=$((launched + 1))
-        else
-            existed=$((existed + 1))
-        fi
-    done <<< "$picker_output"
+		if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args"; then
+			launched=$((launched + 1))
+		else
+			existed=$((existed + 1))
+		fi
+	done <<<"$picker_output"
 
-    echo "Launched $launched new session(s), $existed already existed."
+	echo "Launched $launched new session(s), $existed already existed."
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: launch all sessions from config
 # ---------------------------------------------------------------------------
 cmd_launch_all() {
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo "Error: Config file not found: $CONFIG_FILE" >&2
-        exit 1
-    fi
+	if [[ ! -f "$CONFIG_FILE" ]]; then
+		echo "Error: Config file not found: $CONFIG_FILE" >&2
+		exit 1
+	fi
 
-    # Collect non-comment, non-blank lines; optionally sort by title
-    local lines=""
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-        lines+="$line"$'\n'
-    done < "$CONFIG_FILE"
+	# Collect non-comment, non-blank lines; optionally sort by title
+	local lines=""
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+		lines+="$line"$'\n'
+	done <"$CONFIG_FILE"
 
-    if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
-        lines="$(echo -n "$lines" | sort -f)"
-    fi
+	if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
+		lines="$(echo -n "$lines" | sort -f)"
+	fi
 
-    local launched=0
-    local existed=0
+	local launched=0
+	local existed=0
 
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
+	while IFS= read -r line; do
+		[[ -z "$line" ]] && continue
 
-        # Parse pipe-delimited fields and trim whitespace
-        local title dir account flags pw
-        IFS='|' read -r title dir account flags pw <<< "$line"
-        title="$(echo "$title" | xargs)"
-        dir="$(echo "$dir" | xargs)"
-        account="$(echo "${account:-work}" | xargs)"
-        flags="$(echo "${flags:-}" | xargs)"
-        pw="$(echo "${pw:-}" | xargs)"
-        [[ -z "$account" ]] && account="work"
+		# Parse pipe-delimited fields and trim whitespace
+		local title dir account flags pw
+		IFS='|' read -r title dir account flags pw <<<"$line"
+		title="$(echo "$title" | xargs)"
+		dir="$(echo "$dir" | xargs)"
+		account="$(echo "${account:-work}" | xargs)"
+		flags="$(echo "${flags:-}" | xargs)"
+		pw="$(echo "${pw:-}" | xargs)"
+		[[ -z "$account" ]] && account="work"
 
-        local insert_loc loc_args=""
-        insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
-        if [[ "$insert_loc" == "first" ]]; then
-            loc_args="--location first"
-        elif [[ -n "$insert_loc" ]]; then
-            kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
-            sleep 0.1
-            loc_args="--location after"
-        fi
+		local insert_loc loc_args=""
+		insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+		if [[ "$insert_loc" == "first" ]]; then
+			loc_args="--location first"
+		elif [[ -n "$insert_loc" ]]; then
+			kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+			sleep 0.1
+			loc_args="--location after"
+		fi
 
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args"; then
-            launched=$((launched + 1))
-        else
-            existed=$((existed + 1))
-        fi
-    done <<< "$lines"
+		if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args"; then
+			launched=$((launched + 1))
+		else
+			existed=$((existed + 1))
+		fi
+	done <<<"$lines"
 
-    echo "Launched $launched new session(s), $existed already existed."
+	echo "Launched $launched new session(s), $existed already existed."
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: add a single ad-hoc session
 # ---------------------------------------------------------------------------
 cmd_add() {
-    local title="${1:-}"
-    local dir="${2:-}"
-    local account="${3:-}"
+	local title="${1:-}"
+	local dir="${2:-}"
+	local account="${3:-}"
 
-    if [[ -z "$title" || -z "$dir" ]]; then
-        echo "Error: --add requires TITLE and DIR arguments." >&2
-        echo "Usage: cc-launch --add TITLE DIR [ACCOUNT]" >&2
-        exit 1
-    fi
+	if [[ -z "$title" || -z "$dir" ]]; then
+		echo "Error: --add requires TITLE and DIR arguments." >&2
+		echo "Usage: cc-launch --add TITLE DIR [ACCOUNT]" >&2
+		exit 1
+	fi
 
-    if [[ -z "$account" ]]; then
-        if [[ "$HAS_GUM" == "true" && ${#_ACCOUNT_NAMES[@]} -gt 1 ]]; then
-            local -a display_items=()
-            local i
-            for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
-                display_items+=("${_ACCOUNT_NAMES[$i]}  (${_ACCOUNT_COLORS[$i]})")
-            done
-            local chosen
-            chosen="$(printf '%s\n' "${display_items[@]}" | gum choose \
-                --header "Select account:" \
-                --header.foreground "$GUM_HEADER_COLOR" \
-                --cursor.foreground "$GUM_ACCENT_COLOR")" || {
-                echo "No account selected."
-                return
-            }
-            account="${chosen%%  (*}"
-        elif [[ ${#_ACCOUNT_NAMES[@]} -eq 1 ]]; then
-            account="${_ACCOUNT_NAMES[0]}"
-        else
-            account="work"
-        fi
-    fi
+	if [[ -z "$account" ]]; then
+		if [[ "$HAS_GUM" == "true" && ${#_ACCOUNT_NAMES[@]} -gt 1 ]]; then
+			local -a display_items=()
+			local i
+			for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
+				display_items+=("${_ACCOUNT_NAMES[$i]}  (${_ACCOUNT_COLORS[$i]})")
+			done
+			local chosen
+			chosen="$(printf '%s\n' "${display_items[@]}" | gum choose \
+				--header "Select account:" \
+				--header.foreground "$GUM_HEADER_COLOR" \
+				--cursor.foreground "$GUM_ACCENT_COLOR")" || {
+				echo "No account selected."
+				return
+			}
+			account="${chosen%%  (*}"
+		elif [[ ${#_ACCOUNT_NAMES[@]} -eq 1 ]]; then
+			account="${_ACCOUNT_NAMES[0]}"
+		else
+			account="work"
+		fi
+	fi
 
-    local insert_loc loc_args=""
-    insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
-    if [[ "$insert_loc" == "first" ]]; then
-        loc_args="--location first"
-    elif [[ -n "$insert_loc" ]]; then
-        kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
-        sleep 0.1
-        loc_args="--location after"
-    fi
+	local insert_loc loc_args=""
+	insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+	if [[ "$insert_loc" == "first" ]]; then
+		loc_args="--location first"
+	elif [[ -n "$insert_loc" ]]; then
+		kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+		sleep 0.1
+		loc_args="--location after"
+	fi
 
-    launch_session "$title" "$dir" "$account" "" "" "$loc_args"
+	launch_session "$title" "$dir" "$account" "" "" "$loc_args"
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: close a tab by title
 # ---------------------------------------------------------------------------
 cmd_close() {
-    local title="${1:-}"
+	local title="${1:-}"
 
-    if [[ -z "$title" ]]; then
-        require_gum
+	if [[ -z "$title" ]]; then
+		require_gum
 
-        local ls_json
-        ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-            echo "Error: Failed to query kitty." >&2
-            exit 1
-        }
+		local ls_json
+		ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+			echo "Error: Failed to query kitty." >&2
+			exit 1
+		}
 
-        local -a claude_titles=()
-        while IFS= read -r t; do
-            [[ -n "$t" ]] && claude_titles+=("$t")
-        done < <(echo "$ls_json" | jq -r '
+		local -a claude_titles=()
+		while IFS= read -r t; do
+			[[ -n "$t" ]] && claude_titles+=("$t")
+		done < <(echo "$ls_json" | jq -r '
             [.[] | .tabs[] |
                 select(
                     [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
@@ -267,52 +267,52 @@ cmd_close() {
             ] | .[]
         ')
 
-        if [[ ${#claude_titles[@]} -eq 0 ]]; then
-            echo "No Claude sessions found."
-            return
-        fi
+		if [[ ${#claude_titles[@]} -eq 0 ]]; then
+			echo "No Claude sessions found."
+			return
+		fi
 
-        title="$(printf '%s\n' "${claude_titles[@]}" | gum choose \
-            --header "Select session to close:" \
-            --header.foreground "$GUM_HEADER_COLOR" \
-            --cursor.foreground "#8b2d2d")" || {
-            echo "No session selected."
-            return
-        }
-    fi
+		title="$(printf '%s\n' "${claude_titles[@]}" | gum choose \
+			--header "Select session to close:" \
+			--header.foreground "$GUM_HEADER_COLOR" \
+			--cursor.foreground "#8b2d2d")" || {
+			echo "No session selected."
+			return
+		}
+	fi
 
-    if ! tab_exists "$title"; then
-        echo "Error: No tab found with title '$title'." >&2
-        exit 1
-    fi
+	if ! tab_exists "$title"; then
+		echo "Error: No tab found with title '$title'." >&2
+		exit 1
+	fi
 
-    kitty @ --to "$SOCKET" close-tab --match "title:${_STRIP_RE}${title}$"
-    echo "Closed tab '$title'."
+	kitty @ --to "$SOCKET" close-tab --match "title:${_STRIP_RE}${title}$"
+	echo "Closed tab '$title'."
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: restart a session (close + relaunch with same metadata)
 # ---------------------------------------------------------------------------
 cmd_restart() {
-    local title="${1:-}"
+	local title="${1:-}"
 
-    local ls_json
-    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-        echo "Error: Failed to query kitty." >&2
-        exit 1
-    }
+	local ls_json
+	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+		echo "Error: Failed to query kitty." >&2
+		exit 1
+	}
 
-    local accounts_json default_account
-    accounts_json="$(build_accounts_json)"
-    default_account="$(default_account_name)"
+	local accounts_json default_account
+	accounts_json="$(build_accounts_json)"
+	default_account="$(default_account_name)"
 
-    if [[ -z "$title" ]]; then
-        require_gum
+	if [[ -z "$title" ]]; then
+		require_gum
 
-        local -a claude_titles=()
-        while IFS= read -r t; do
-            [[ -n "$t" ]] && claude_titles+=("$t")
-        done < <(echo "$ls_json" | jq -r --arg strip_re "$_STRIP_RE" '
+		local -a claude_titles=()
+		while IFS= read -r t; do
+			[[ -n "$t" ]] && claude_titles+=("$t")
+		done < <(echo "$ls_json" | jq -r --arg strip_re "$_STRIP_RE" '
             [.[] | .tabs[] |
                 select(
                     [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
@@ -320,23 +320,23 @@ cmd_restart() {
             ] | .[]
         ')
 
-        if [[ ${#claude_titles[@]} -eq 0 ]]; then
-            echo "No Claude sessions found."
-            return
-        fi
+		if [[ ${#claude_titles[@]} -eq 0 ]]; then
+			echo "No Claude sessions found."
+			return
+		fi
 
-        title="$(printf '%s\n' "${claude_titles[@]}" | gum choose \
-            --header "Select session to restart:" \
-            --header.foreground "$GUM_HEADER_COLOR" \
-            --cursor.foreground "$GUM_ACCENT_COLOR")" || {
-            echo "No session selected."
-            return
-        }
-    fi
+		title="$(printf '%s\n' "${claude_titles[@]}" | gum choose \
+			--header "Select session to restart:" \
+			--header.foreground "$GUM_HEADER_COLOR" \
+			--cursor.foreground "$GUM_ACCENT_COLOR")" || {
+			echo "No session selected."
+			return
+		}
+	fi
 
-    # Find the tab metadata for the selected title
-    local tab_info
-    tab_info="$(echo "$ls_json" | jq -r --arg t "$title" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
+	# Find the tab metadata for the selected title
+	local tab_info
+	tab_info="$(echo "$ls_json" | jq -r --arg t "$title" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
         [.[] | .tabs[] |
             select(
                 (.title | sub($strip_re; "")) == $t
@@ -370,47 +370,47 @@ cmd_restart() {
         ] | .[0] // empty | [(.tab_id | tostring), .account, .dir] | @tsv
     ')"
 
-    if [[ -z "$tab_info" ]]; then
-        echo "Error: No tab found with title '$title'." >&2
-        exit 1
-    fi
+	if [[ -z "$tab_info" ]]; then
+		echo "Error: No tab found with title '$title'." >&2
+		exit 1
+	fi
 
-    local tab_id account dir
-    IFS=$'\t' read -r tab_id account dir <<< "$tab_info"
+	local tab_id account dir
+	IFS=$'\t' read -r tab_id account dir <<<"$tab_info"
 
-    kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
-    echo "Closed tab '$title', relaunching..."
-    sleep 0.3
+	kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
+	echo "Closed tab '$title', relaunching..."
+	sleep 0.3
 
-    local insert_loc loc_args=""
-    insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
-    if [[ "$insert_loc" == "first" ]]; then
-        loc_args="--location first"
-    elif [[ -n "$insert_loc" ]]; then
-        kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
-        sleep 0.1
-        loc_args="--location after"
-    fi
+	local insert_loc loc_args=""
+	insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+	if [[ "$insert_loc" == "first" ]]; then
+		loc_args="--location first"
+	elif [[ -n "$insert_loc" ]]; then
+		kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+		sleep 0.1
+		loc_args="--location after"
+	fi
 
-    launch_session "$title" "$dir" "$account" "" "" "$loc_args"
+	launch_session "$title" "$dir" "$account" "" "" "$loc_args"
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: list Claude tabs
 # ---------------------------------------------------------------------------
 cmd_list() {
-    local ls_json
-    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-        echo "Error: Failed to query kitty." >&2
-        exit 1
-    }
+	local ls_json
+	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+		echo "Error: Failed to query kitty." >&2
+		exit 1
+	}
 
-    local accounts_json default_account
-    accounts_json="$(build_accounts_json)"
-    default_account="$(default_account_name)"
+	local accounts_json default_account
+	accounts_json="$(build_accounts_json)"
+	default_account="$(default_account_name)"
 
-    local table
-    table="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" '
+	local table
+	table="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" '
         [.[] | . as $os |
             $os.tabs | to_entries[] |
             .key as $tab_idx | .value as $tab |
@@ -464,120 +464,120 @@ cmd_list() {
         @tsv
     ')"
 
-    if [[ -z "$table" ]]; then
-        echo "No Claude sessions found."
-        return
-    fi
+	if [[ -z "$table" ]]; then
+		echo "No Claude sessions found."
+		return
+	fi
 
-    init_color
+	init_color
 
-    # Column headers
-    local header_mk=" " header_idx="Index" header_title="Title"
-    local header_account="Account" header_dir="Directory" header_status="Status"
-    local max_mk=2 w1=${#header_idx} w2=${#header_title} w3=${#header_account} w4=${#header_dir} w5=${#header_status}
+	# Column headers
+	local header_mk=" " header_idx="Index" header_title="Title"
+	local header_account="Account" header_dir="Directory" header_status="Status"
+	local max_mk=2 w1=${#header_idx} w2=${#header_title} w3=${#header_account} w4=${#header_dir} w5=${#header_status}
 
-    # Pre-process rows: shorten paths and compute max widths
-    local -a rows=()
-    while IFS=$'\t' read -r idx title account dir status; do
-        dir="$(shorten_path "$dir")"
-        rows+=("$idx"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status")
-        (( ${#idx} > w1 )) && w1=${#idx}
-        (( ${#title} > w2 )) && w2=${#title}
-        (( ${#account} > w3 )) && w3=${#account}
-        (( ${#dir} > w4 )) && w4=${#dir}
-        (( ${#status} > w5 )) && w5=${#status}
-    done <<< "$table"
+	# Pre-process rows: shorten paths and compute max widths
+	local -a rows=()
+	while IFS=$'\t' read -r idx title account dir status; do
+		dir="$(shorten_path "$dir")"
+		rows+=("$idx"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status")
+		((${#idx} > w1)) && w1=${#idx}
+		((${#title} > w2)) && w2=${#title}
+		((${#account} > w3)) && w3=${#account}
+		((${#dir} > w4)) && w4=${#dir}
+		((${#status} > w5)) && w5=${#status}
+	done <<<"$table"
 
-    # Header
-    printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %-${w5}s%s\n" \
-        "$BOLD" "$header_mk" "$header_idx" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
+	# Header
+	printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %-${w5}s%s\n" \
+		"$BOLD" "$header_mk" "$header_idx" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
 
-    # Separator
-    printf "%s%s%s\n" "$DIM" \
-        "$(repeat_char '─' $(( max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w4 + 2 + w5 )))" \
-        "$RESET"
+	# Separator
+	printf "%s%s%s\n" "$DIM" \
+		"$(repeat_char '─' $((max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w4 + 2 + w5)))" \
+		"$RESET"
 
-    # Data rows
-    for row in "${rows[@]}"; do
-        IFS=$'\t' read -r idx title account dir status <<< "$row"
+	# Data rows
+	for row in "${rows[@]}"; do
+		IFS=$'\t' read -r idx title account dir status <<<"$row"
 
-        local local_mk=" "
-        if [[ "$status" == "focused" ]]; then
-            local_mk="▸"
-        fi
+		local local_mk=" "
+		if [[ "$status" == "focused" ]]; then
+			local_mk="▸"
+		fi
 
-        local local_color="" local_reset=""
-        if [[ "$USE_COLOR" == "true" ]]; then
-            local_color="$(ansi_fg_for_account "$account")"
-            local_reset="$RESET"
-        fi
+		local local_color="" local_reset=""
+		if [[ "$USE_COLOR" == "true" ]]; then
+			local_color="$(ansi_fg_for_account "$account")"
+			local_reset="$RESET"
+		fi
 
-        local local_status="$status"
-        if [[ "$USE_COLOR" == "true" ]]; then
-            case "$status" in
-                focused) local_status="${BOLD}${status}${RESET}${local_color}" ;;
-                idle)    local_status="${DIM}${status}${RESET}${local_color}" ;;
-            esac
-        fi
+		local local_status="$status"
+		if [[ "$USE_COLOR" == "true" ]]; then
+			case "$status" in
+			focused) local_status="${BOLD}${status}${RESET}${local_color}" ;;
+			idle) local_status="${DIM}${status}${RESET}${local_color}" ;;
+			esac
+		fi
 
-        printf "%s%-$(( max_mk + $(extra_bytes "$local_mk") ))s%-$(( w1 + $(extra_bytes "$idx") ))s  %-$(( w2 + $(extra_bytes "$title") ))s  %-$(( w3 + $(extra_bytes "$account") ))s  %-$(( w4 + $(extra_bytes "$dir") ))s  %s%s\n" \
-            "$local_color" "$local_mk" "$idx" "$title" "$account" "$dir" "$local_status" "$local_reset"
-    done
+		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$idx")))s  %-$((w2 + $(extra_bytes "$title")))s  %-$((w3 + $(extra_bytes "$account")))s  %-$((w4 + $(extra_bytes "$dir")))s  %s%s\n" \
+			"$local_color" "$local_mk" "$idx" "$title" "$account" "$dir" "$local_status" "$local_reset"
+	done
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: list available Kitty sockets
 # ---------------------------------------------------------------------------
 cmd_sockets() {
-    local found=0
-    for sock in /tmp/kitty-*; do
-        [[ -e "$sock" ]] || continue
-        found=1
-        local pid="${sock#/tmp/kitty-}"
-        local status="stale"
-        if kitty @ --to "unix:$sock" ls >/dev/null 2>&1; then
-            status="active"
-        fi
-        echo "unix:$sock  ($status, pid=$pid)"
-    done
+	local found=0
+	for sock in /tmp/kitty-*; do
+		[[ -e "$sock" ]] || continue
+		found=1
+		local pid="${sock#/tmp/kitty-}"
+		local status="stale"
+		if kitty @ --to "unix:$sock" ls >/dev/null 2>&1; then
+			status="active"
+		fi
+		echo "unix:$sock  ($status, pid=$pid)"
+	done
 
-    if [[ $found -eq 0 ]]; then
-        echo "No kitty sockets found in /tmp/"
-    fi
+	if [[ $found -eq 0 ]]; then
+		echo "No kitty sockets found in /tmp/"
+	fi
 
-    if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
-        echo ""
-        echo "KITTY_LISTEN_ON=$KITTY_LISTEN_ON"
-    fi
+	if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+		echo ""
+		echo "KITTY_LISTEN_ON=$KITTY_LISTEN_ON"
+	fi
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: cleanup stale sessions (tabs with W:/P: title but no Claude process)
 # ---------------------------------------------------------------------------
 cmd_cleanup() {
-    local ls_json
-    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-        echo "Error: Failed to query kitty." >&2
-        exit 1
-    }
+	local ls_json
+	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+		echo "Error: Failed to query kitty." >&2
+		exit 1
+	}
 
-    # Build a regex matching title prefixes for all loaded accounts.
-    # Convention: tab titles are prefixed with the account's uppercase initial
-    # followed by a colon (e.g. W:project for work, C:app for client-x).
-    local initials=""
-    local i
-    for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
-        local ch="${_ACCOUNT_NAMES[$i]:0:1}"
-        ch="$(echo "$ch" | tr '[:lower:]' '[:upper:]')"
-        if [[ "$initials" != *"$ch"* ]]; then
-            initials+="$ch"
-        fi
-    done
-    [[ -z "$initials" ]] && initials="WP"
-    local title_pattern="${_STRIP_RE}[$initials]:"
+	# Build a regex matching title prefixes for all loaded accounts.
+	# Convention: tab titles are prefixed with the account's uppercase initial
+	# followed by a colon (e.g. W:project for work, C:app for client-x).
+	local initials=""
+	local i
+	for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
+		local ch="${_ACCOUNT_NAMES[$i]:0:1}"
+		ch="$(echo "$ch" | tr '[:lower:]' '[:upper:]')"
+		if [[ "$initials" != *"$ch"* ]]; then
+			initials+="$ch"
+		fi
+	done
+	[[ -z "$initials" ]] && initials="WP"
+	local title_pattern="${_STRIP_RE}[$initials]:"
 
-    local stale
-    stale="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
+	local stale
+	stale="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
         [.[] | .tabs[] |
             select(.title | test($pat)) |
             select(
@@ -587,43 +587,43 @@ cmd_cleanup() {
         ] | .[] | [.title, (.id | tostring)] | @tsv
     ')"
 
-    if [[ -z "$stale" ]]; then
-        echo "No stale sessions found."
-        return
-    fi
+	if [[ -z "$stale" ]]; then
+		echo "No stale sessions found."
+		return
+	fi
 
-    echo "Stale sessions (no Claude process running):"
-    echo ""
-    while IFS=$'\t' read -r title tab_id; do
-        echo "  $title (tab id: $tab_id)"
-    done <<< "$stale"
-    echo ""
+	echo "Stale sessions (no Claude process running):"
+	echo ""
+	while IFS=$'\t' read -r title tab_id; do
+		echo "  $title (tab id: $tab_id)"
+	done <<<"$stale"
+	echo ""
 
-    local confirmed=false
-    if [[ "$HAS_GUM" == "true" ]]; then
-        if gum confirm "Close all stale sessions?" --affirmative "Yes, close them" --negative "Cancel"; then
-            confirmed=true
-        fi
-    else
-        read -rp "Close all stale sessions? [y/N] " answer
-        if [[ "$answer" =~ ^[Yy] ]]; then
-            confirmed=true
-        fi
-    fi
+	local confirmed=false
+	if [[ "$HAS_GUM" == "true" ]]; then
+		if gum confirm "Close all stale sessions?" --affirmative "Yes, close them" --negative "Cancel"; then
+			confirmed=true
+		fi
+	else
+		read -rp "Close all stale sessions? [y/N] " answer
+		if [[ "$answer" =~ ^[Yy] ]]; then
+			confirmed=true
+		fi
+	fi
 
-    if [[ "$confirmed" == "true" ]]; then
-        while IFS=$'\t' read -r title tab_id; do
-            kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
-            echo "Closed: $title"
-        done <<< "$stale"
-    else
-        echo "No sessions closed."
-    fi
+	if [[ "$confirmed" == "true" ]]; then
+		while IFS=$'\t' read -r title tab_id; do
+			kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
+			echo "Closed: $title"
+		done <<<"$stale"
+	else
+		echo "No sessions closed."
+	fi
 
-    # Clean up orphaned activity and notification files.
-    # Collect tab IDs of all currently managed tabs.
-    local live_ids
-    live_ids="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
+	# Clean up orphaned activity and notification files.
+	# Collect tab IDs of all currently managed tabs.
+	local live_ids
+	live_ids="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
         [.[] | .tabs[] |
             select(
                 (.title | test($pat)) or
@@ -632,45 +632,48 @@ cmd_cleanup() {
         ] | .[]
     ')"
 
-    local orphaned=0
-    for f in /tmp/ccm-activity-*.counts /tmp/ccm-notify-*; do
-        [[ -e "$f" ]] || continue
-        local fname="${f##*/}"
-        # Extract tab_id: ccm-activity-<id>.counts or ccm-notify-<type>-<id>
-        local file_id=""
-        case "$fname" in
-            ccm-activity-*.counts) file_id="${fname#ccm-activity-}"; file_id="${file_id%.counts}" ;;
-            ccm-notify-*)          file_id="${fname##*-}" ;;
-        esac
-        [[ -z "$file_id" ]] && continue
-        if ! echo "$live_ids" | grep -qx "$file_id"; then
-            rm -f "$f"
-            orphaned=$((orphaned + 1))
-        fi
-    done
-    if [[ $orphaned -gt 0 ]]; then
-        echo "Removed $orphaned orphaned activity/notification file(s)."
-    fi
+	local orphaned=0
+	for f in /tmp/ccm-activity-*.counts /tmp/ccm-notify-*; do
+		[[ -e "$f" ]] || continue
+		local fname="${f##*/}"
+		# Extract tab_id: ccm-activity-<id>.counts or ccm-notify-<type>-<id>
+		local file_id=""
+		case "$fname" in
+		ccm-activity-*.counts)
+			file_id="${fname#ccm-activity-}"
+			file_id="${file_id%.counts}"
+			;;
+		ccm-notify-*) file_id="${fname##*-}" ;;
+		esac
+		[[ -z "$file_id" ]] && continue
+		if ! echo "$live_ids" | grep -qx "$file_id"; then
+			rm -f "$f"
+			orphaned=$((orphaned + 1))
+		fi
+	done
+	if [[ $orphaned -gt 0 ]]; then
+		echo "Removed $orphaned orphaned activity/notification file(s)."
+	fi
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: save current Claude sessions to config file
 # ---------------------------------------------------------------------------
 cmd_save() {
-    local output_file="${1:-$CONFIG_FILE}"
+	local output_file="${1:-$CONFIG_FILE}"
 
-    local ls_json
-    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-        echo "Error: Failed to query kitty." >&2
-        exit 1
-    }
+	local ls_json
+	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
+		echo "Error: Failed to query kitty." >&2
+		exit 1
+	}
 
-    local accounts_json default_account
-    accounts_json="$(build_accounts_json)"
-    default_account="$(default_account_name)"
+	local accounts_json default_account
+	accounts_json="$(build_accounts_json)"
+	default_account="$(default_account_name)"
 
-    local sessions
-    sessions="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
+	local sessions
+	sessions="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
         [.[] | .tabs[] |
             select(
                 [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
@@ -700,44 +703,44 @@ cmd_save() {
         ] | .[] | [.title, .dir, .account] | @tsv
     ')"
 
-    if [[ -z "$sessions" ]]; then
-        echo "No Claude sessions to save."
-        return
-    fi
+	if [[ -z "$sessions" ]]; then
+		echo "No Claude sessions to save."
+		return
+	fi
 
-    if [[ -f "$output_file" ]]; then
-        if [[ "$HAS_GUM" == "true" ]]; then
-            if ! gum confirm "Overwrite $output_file? (backup will be created)" --affirmative "Yes" --negative "Cancel"; then
-                echo "Save cancelled."
-                return
-            fi
-        fi
-        cp "$output_file" "${output_file}.bak"
-        echo "Backed up existing config to ${output_file}.bak"
-    fi
+	if [[ -f "$output_file" ]]; then
+		if [[ "$HAS_GUM" == "true" ]]; then
+			if ! gum confirm "Overwrite $output_file? (backup will be created)" --affirmative "Yes" --negative "Cancel"; then
+				echo "Save cancelled."
+				return
+			fi
+		fi
+		cp "$output_file" "${output_file}.bak"
+		echo "Backed up existing config to ${output_file}.bak"
+	fi
 
-    {
-        echo "# cc-manager session definitions"
-        echo "# Saved by cc-launch --save on $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "#"
-        echo "# Format: title | directory | account"
-        echo ""
-        while IFS=$'\t' read -r title dir account; do
-            dir="${dir/#$HOME/\~}"
-            printf "%-20s | %-40s | %s\n" "$title" "$dir" "$account"
-        done <<< "$sessions"
-    } > "$output_file"
+	{
+		echo "# cc-manager session definitions"
+		echo "# Saved by cc-launch --save on $(date '+%Y-%m-%d %H:%M:%S')"
+		echo "#"
+		echo "# Format: title | directory | account"
+		echo ""
+		while IFS=$'\t' read -r title dir account; do
+			dir="${dir/#$HOME/\~}"
+			printf "%-20s | %-40s | %s\n" "$title" "$dir" "$account"
+		done <<<"$sessions"
+	} >"$output_file"
 
-    local count
-    count="$(echo "$sessions" | wc -l | xargs)"
-    echo "Saved $count session(s) to $output_file"
+	local count
+	count="$(echo "$sessions" | wc -l | xargs)"
+	echo "Saved $count session(s) to $output_file"
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: help
 # ---------------------------------------------------------------------------
 cmd_help() {
-    cat <<'USAGE'
+	cat <<'USAGE'
 cc-launch: Manage Claude Code sessions as Kitty terminal tabs.
 
 Usage:
@@ -801,79 +804,79 @@ USAGE
 # Main dispatch
 # ---------------------------------------------------------------------------
 main() {
-    # Parse global --socket option
-    if [[ "${1:-}" == "--socket" ]]; then
-        if [[ -z "${2:-}" ]]; then
-            echo "Error: --socket requires a SOCKET argument." >&2
-            exit 1
-        fi
-        SOCKET="$2"
-        shift 2
-    fi
+	# Parse global --socket option
+	if [[ "${1:-}" == "--socket" ]]; then
+		if [[ -z "${2:-}" ]]; then
+			echo "Error: --socket requires a SOCKET argument." >&2
+			exit 1
+		fi
+		SOCKET="$2"
+		shift 2
+	fi
 
-    # --sockets and --help don't need an active socket
-    case "${1:-}" in
-        --sockets)
-            cmd_sockets
-            return
-            ;;
-        --help|-h)
-            cmd_help
-            return
-            ;;
-    esac
+	# --sockets and --help don't need an active socket
+	case "${1:-}" in
+	--sockets)
+		cmd_sockets
+		return
+		;;
+	--help | -h)
+		cmd_help
+		return
+		;;
+	esac
 
-    # Initialize socket if not overridden via --socket
-    if [[ -z "$SOCKET" ]]; then
-        SOCKET="$(discover_socket)"
-    fi
+	# Initialize socket if not overridden via --socket
+	if [[ -z "$SOCKET" ]]; then
+		SOCKET="$(discover_socket)"
+	fi
 
-    load_accounts
-    load_defaults
-    _load_icons
+	load_accounts
+	load_defaults
+	_load_icons
 
-    # Build shell variables for icon-based jq patterns
-    _STRIP_RE="$(_icon_strip_regex)"
-    _MANAGED_RE="${_STRIP_RE}[A-Z]:"
+	# Build shell variables for icon-based jq patterns
+	_STRIP_RE="$(_icon_strip_regex)"
+	_MANAGED_RE="${_STRIP_RE}[A-Z]:"
 
-    case "${1:-}" in
-        --all)
-            cmd_launch_all
-            ;;
-        --add)
-            shift
-            cmd_add "$@"
-            ;;
-        --close)
-            shift
-            cmd_close "$@"
-            ;;
-        --restart)
-            shift
-            cmd_restart "$@"
-            ;;
-        --list)
-            cmd_list
-            ;;
-        --cleanup)
-            cmd_cleanup
-            ;;
-        --save)
-            shift
-            cmd_save "$@"
-            ;;
-        "")
-            if command -v python3 >/dev/null 2>&1; then
-                cmd_launch_interactive
-            else
-                cmd_launch_all
-            fi
-            ;;
-        *)
-            echo "Error: Unknown option '$1'. See --help for usage." >&2
-            exit 1
-            ;;
-    esac
+	case "${1:-}" in
+	--all)
+		cmd_launch_all
+		;;
+	--add)
+		shift
+		cmd_add "$@"
+		;;
+	--close)
+		shift
+		cmd_close "$@"
+		;;
+	--restart)
+		shift
+		cmd_restart "$@"
+		;;
+	--list)
+		cmd_list
+		;;
+	--cleanup)
+		cmd_cleanup
+		;;
+	--save)
+		shift
+		cmd_save "$@"
+		;;
+	"")
+		if command -v python3 >/dev/null 2>&1; then
+			cmd_launch_interactive
+		else
+			cmd_launch_all
+		fi
+		;;
+	*)
+		echo "Error: Unknown option '$1'. See --help for usage." >&2
+		exit 1
+		;;
+	esac
 }
 
 main "$@"

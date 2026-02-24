@@ -16,6 +16,7 @@ import curses
 import os
 import sys
 
+
 def _kitten_dir():
     """Return the directory containing this kitten script.
 
@@ -68,7 +69,7 @@ def main(args=None):
 # main() returns.  All tab actions are performed from within main() via
 # subprocess calls to kitty @, so handle_result is intentionally a no-op.
 try:
-    from kittens.tui.handler import result_handler
+    from kittens.tui.handler import result_handler  # type: ignore[import-not-found]
 
     @result_handler()
     def handle_result(args, answer, target_window_id, boss):

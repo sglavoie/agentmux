@@ -1,3 +1,10 @@
+PYTHON_SRC    := kittens/
+SHELL_SCRIPTS := bin/cc-launch bin/cc-status bin/cc-toggle-star bin/ccm \
+                 lib/cc-common.sh lib/cc-title-icons.sh lib/install-hooks.sh
+RYE           := $(HOME)/.rye/shims/rye
+SHELLCHECK    := /opt/homebrew/bin/shellcheck
+SHFMT         := /opt/homebrew/bin/shfmt
+
 PREFIX_BIN   := $(HOME)/.local/bin
 PREFIX_LIB   := $(HOME)/.local/lib/cc-manager
 PREFIX_KITTY := $(HOME)/.config/kitty
@@ -22,7 +29,7 @@ SYMLINKS := \
 	$(PREFIX_ZFUNC)/_cc-status:completions/_cc-status \
 	$(PREFIX_KITTY)/cc-manager.conf:cc-manager.conf
 
-.PHONY: install uninstall install-hooks
+.PHONY: install uninstall install-hooks lint format format-check typecheck check
 
 install:
 	@mkdir -p $(PREFIX_BIN) $(PREFIX_LIB) $(PREFIX_KITTY) $(PREFIX_ZFUNC)
@@ -54,3 +61,20 @@ uninstall:
 	@echo "Note: Claude Code hooks in settings.json were not removed."
 	@echo "To remove them manually, edit each account's settings.json and"
 	@echo "delete the cc-hook-indicator entries from the hooks section."
+
+lint:
+	$(RYE) run ruff check $(PYTHON_SRC)
+	$(SHELLCHECK) $(SHELL_SCRIPTS)
+
+format:
+	$(RYE) run ruff format $(PYTHON_SRC)
+	$(SHFMT) -w $(SHELL_SCRIPTS)
+
+format-check:
+	$(RYE) run ruff format --check $(PYTHON_SRC)
+	$(SHFMT) -d $(SHELL_SCRIPTS)
+
+typecheck:
+	$(RYE) run mypy $(PYTHON_SRC)
+
+check: lint format-check typecheck

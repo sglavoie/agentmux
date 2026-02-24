@@ -5,7 +5,6 @@ import curses
 from cc_dashboard import config as _cfg
 from cc_dashboard.config import PALETTE
 
-
 # Fixed color pair IDs for UI chrome (not account-specific)
 CP_NORMAL = 1
 CP_HEADER = 2
@@ -26,7 +25,7 @@ WARN_FG = (220, 180, 50)
 ATTENTION_FG = (255, 80, 60)
 
 # Maps account name -> (cp_normal, cp_selected) curses color pair IDs
-_account_cp = {}
+_account_cp: dict[str, tuple[int, int]] = {}
 
 
 def _c(r, g, b):

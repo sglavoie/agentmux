@@ -3,7 +3,7 @@
 import curses
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.colors import CP_DIM, CP_NORMAL, init_colors
+from cc_dashboard.colors import CP_NORMAL, init_colors
 from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.filters import (
     _apply_filters,
@@ -19,11 +19,11 @@ from cc_dashboard.kitty_remote import (
     query_sessions,
 )
 from cc_dashboard.views import (
-    DETAIL_PANE_HEIGHT,
     _HELP_LINES,
+    DETAIL_PANE_HEIGHT,
+    _check_idle_notifications,
     _cycle_account,
     _cycle_pw,
-    _check_idle_notifications,
     draw_confirm_prompt,
     draw_detail_pane,
     draw_filter_bar,
@@ -118,7 +118,7 @@ def dashboard(stdscr, socket):
     while True:
         # ── Draw ─────────────────────────────────────────────────
         if mode in ("list", "confirm", "confirm_restart"):
-            rows, cols = stdscr.getmaxyx()
+            rows, _cols = stdscr.getmaxyx()
             detail_visible = show_detail and rows >= 20 and bool(filtered)
             draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible)
             if detail_visible:
@@ -541,9 +541,7 @@ def dashboard(stdscr, socket):
             elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:
                 entry = pick_filtered[pick_selected]
                 pw_val = entry["pw"]
-                loc = compute_insert_location(
-                    socket, entry["account"], entry["title"]
-                )
+                loc = compute_insert_location(socket, entry["account"], entry["title"])
                 do_launch(
                     socket,
                     entry["title"],

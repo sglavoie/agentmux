@@ -5,8 +5,8 @@ set -euo pipefail
 # Called from a Kitty keybinding with @active-kitty-window-id as $1.
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: cc-toggle-star WINDOW_ID" >&2
-    exit 1
+	echo "Usage: cc-toggle-star WINDOW_ID" >&2
+	exit 1
 fi
 
 WIN_ID="$1"
@@ -22,7 +22,7 @@ source "$LIB_DIR/cc-title-icons.sh"
 # Discover the Kitty socket.
 TO_ARGS=()
 if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
-    TO_ARGS=("--to" "$KITTY_LISTEN_ON")
+	TO_ARGS=("--to" "$KITTY_LISTEN_ON")
 fi
 
 # Get current tab info.
@@ -31,16 +31,16 @@ tab_id="$(echo "$info" | head -n1)"
 current_title="$(echo "$info" | tail -n1)"
 
 if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
-    echo "Error: Could not find tab for window $WIN_ID" >&2
-    exit 1
+	echo "Error: Could not find tab for window $WIN_ID" >&2
+	exit 1
 fi
 
 # Determine current icon state.
 has_star=false
 remaining="$current_title"
 if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
-    has_star=true
-    remaining="${remaining#"$_ICON_STAR"}"
+	has_star=true
+	remaining="${remaining#"$_ICON_STAR"}"
 fi
 
 state="$(detect_state "$current_title")"
@@ -48,9 +48,9 @@ remaining="$(strip_icons "$remaining")"
 
 # Toggle the star.
 if [[ "$has_star" == "true" ]]; then
-    has_star=false
+	has_star=false
 else
-    has_star=true
+	has_star=true
 fi
 
 new_title="$(build_title "$remaining" "$has_star" "$state")"

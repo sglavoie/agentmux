@@ -1,5 +1,6 @@
 """Kitty remote control integration for the Claude Code Dashboard."""
 
+import contextlib
 import glob
 import json
 import os
@@ -10,14 +11,18 @@ import time
 from cc_dashboard import config as _cfg
 from cc_dashboard.config import _resolve_data_path
 
-
 # ── Icon loading from data/icons.json ────────────────────────────────────────
+
 
 def _load_icons():
     """Load icon definitions from data/icons.json."""
     path = _resolve_data_path("icons.json")
     if not path:
-        return {"star": "★", "states": {"bolt": "⚡", "stop": "🛑", "key": "🔑", "error": "⚠️"}, "state_order": ["bolt", "stop", "key", "error"]}
+        return {
+            "star": "★",
+            "states": {"bolt": "⚡", "stop": "🛑", "key": "🔑", "error": "⚠️"},
+            "state_order": ["bolt", "stop", "key", "error"],
+        }
     with open(path) as f:
         return json.load(f)
 
@@ -25,7 +30,12 @@ def _load_icons():
 _ICONS = _load_icons()
 _ICON_STAR = _ICONS["star"]
 _ICON_STATES = _ICONS["states"]
-_STATE_NAMES = {"bolt": "active", "stop": "stopped", "key": "permission", "error": "error"}
+_STATE_NAMES = {
+    "bolt": "active",
+    "stop": "stopped",
+    "key": "permission",
+    "error": "error",
+}
 
 # Build the managed-title regex dynamically from loaded icons
 _state_icons_alt = "|".join(re.escape(_ICON_STATES[k]) for k in _ICONS["state_order"])
@@ -47,7 +57,7 @@ def kitty_cmd(socket, *args):
     """Run a kitty @ remote control command. Returns the CompletedProcess or None."""
     try:
         return subprocess.run(
-            ["kitty", "@", "--to", socket] + list(args),
+            ["kitty", "@", "--to", socket, *list(args)],
             capture_output=True,
             text=True,
             timeout=5,
@@ -59,11 +69,11 @@ def kitty_cmd(socket, *args):
 def _strip_icons(title):
     """Remove leading star and state icon prefixes from a tab title."""
     if title.startswith(_ICON_STAR):
-        title = title[len(_ICON_STAR):]
+        title = title[len(_ICON_STAR) :]
     for key in _ICONS["state_order"]:
         icon = _ICON_STATES[key]
         if title.startswith(icon):
-            title = title[len(icon):]
+            title = title[len(icon) :]
             break
     return title
 
@@ -86,7 +96,7 @@ def _detect_state(title):
     The star prefix is skipped before checking.
     """
     if title.startswith(_ICON_STAR):
-        title = title[len(_ICON_STAR):]
+        title = title[len(_ICON_STAR) :]
     for key in _ICONS["state_order"]:
         if title.startswith(_ICON_STATES[key]):
             return _STATE_NAMES[key]
@@ -142,10 +152,8 @@ def cleanup_stale_activity(live_tab_ids):
         # Extract tab_id from "ccm-activity-<tab_id>.counts"
         tab_id_str = fname.replace("ccm-activity-", "").replace(".counts", "")
         if tab_id_str not in live:
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(path)
-            except OSError:
-                pass
 
 
 def query_sessions(socket, managed_only=True):
@@ -164,7 +172,7 @@ def query_sessions(socket, managed_only=True):
         return []
 
     home = os.path.expanduser("~")
-    default_dir = os.path.join(home, ".claude")
+    os.path.join(home, ".claude")
 
     sessions = []
     for os_win in data:
@@ -174,7 +182,7 @@ def query_sessions(socket, managed_only=True):
             detected_config_dir = ""
             windows = tab.get("windows", [])
             cwd = ""
-            user_vars = {}
+            user_vars: dict[str, str] = {}
 
             pids = []
             cmdlines = []
@@ -341,7 +349,9 @@ def compute_insert_location(socket, account, title):
     return ("after", prev_id)
 
 
-def do_launch(socket, title, directory, account, flags="", pw_override="", location=None):
+def do_launch(
+    socket, title, directory, account, flags="", pw_override="", location=None
+):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
 
@@ -359,7 +369,7 @@ def do_launch(socket, title, directory, account, flags="", pw_override="", locat
     cmd = [
         "launch",
         "--type=tab",
-    ] + loc_args + [
+        *loc_args,
         "--allow-remote-control",
         "--tab-title",
         title,
@@ -429,7 +439,12 @@ def do_restart(socket, session, flags="", pw_override=""):
     # Compute insertion location after close so the dead tab ID isn't in the list
     location = compute_insert_location(socket, session["account"], session["title"])
     do_launch(
-        socket, session["title"], session["cwd"], session["account"], flags, pw_override,
+        socket,
+        session["title"],
+        session["cwd"],
+        session["account"],
+        flags,
+        pw_override,
         location=location,
     )
 

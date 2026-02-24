@@ -1,5 +1,6 @@
 """Low-level curses utilities and shared drawing primitives."""
 
+import contextlib
 import curses
 import os
 import unicodedata
@@ -11,10 +12,8 @@ def safe_addstr(win, y, x, text, attr=0):
     if y < 0 or y >= rows or x >= cols:
         return
     text = text[: cols - x]
-    try:
+    with contextlib.suppress(curses.error):
         win.addstr(y, x, text, attr)
-    except curses.error:
-        pass
 
 
 def _display_width(text):

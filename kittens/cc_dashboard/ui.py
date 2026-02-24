@@ -36,13 +36,19 @@ from cc_dashboard.filters import (  # noqa: F401
     _sort_pick_entries,
 )
 
+# ── loop ─────────────────────────────────────────────────────────────────────
+from cc_dashboard.loop import (  # noqa: F401
+    _session_fingerprint,
+    dashboard,
+)
+
 # ── views ────────────────────────────────────────────────────────────────────
 from cc_dashboard.views import (  # noqa: F401
-    DETAIL_PANE_HEIGHT,
     _FOOTER_HINTS,
     _HELP_LINES,
     _HELP_SECTIONS,
     _PW_OPTIONS,
+    DETAIL_PANE_HEIGHT,
     _check_idle_notifications,
     _cycle_account,
     _cycle_pw,
@@ -56,10 +62,4 @@ from cc_dashboard.views import (  # noqa: F401
     draw_pick_view,
     draw_search_bar,
     draw_status_message,
-)
-
-# ── loop ─────────────────────────────────────────────────────────────────────
-from cc_dashboard.loop import (  # noqa: F401
-    _session_fingerprint,
-    dashboard,
 )
