@@ -15,6 +15,12 @@
 #   dashboard_refresh — Auto-refresh interval (seconds) for the dashboard.
 #                       Values: 0 = disabled, any positive integer = interval
 #                       Default: 3
+#   notify_error      — Show a macOS notification on tool use failures.
+#                       Values: on, (empty/off) = disabled. Default: off.
+#   notify_permission — Show a macOS notification on permission requests.
+#                       Values: on, (empty/off) = disabled. Default: off.
+#   notify_stop       — Show a macOS notification when a session stops.
+#                       Values: on, (empty/off) = disabled. Default: off.
 #
 # Lines starting with # are comments. Blank lines are ignored.
 # Whitespace around the = delimiter is trimmed.
@@ -23,3 +29,6 @@
 # project_window = stack
 # sort_sessions = alpha
 # dashboard_refresh = 3
+# notify_error = on
+# notify_permission = on
+# notify_stop = off

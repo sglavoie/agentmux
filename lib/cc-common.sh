@@ -273,12 +273,18 @@ _DEFAULT_CLAUDE_FLAGS=""
 _DEFAULT_PROJECT_WINDOW=""
 _DEFAULT_SORT_SESSIONS=""
 _DEFAULT_DASHBOARD_REFRESH=""
+_DEFAULT_NOTIFY_ERROR=""
+_DEFAULT_NOTIFY_PERMISSION=""
+_DEFAULT_NOTIFY_STOP=""
 
 load_defaults() {
     _DEFAULT_CLAUDE_FLAGS=""
     _DEFAULT_PROJECT_WINDOW=""
     _DEFAULT_SORT_SESSIONS=""
     _DEFAULT_DASHBOARD_REFRESH=""
+    _DEFAULT_NOTIFY_ERROR=""
+    _DEFAULT_NOTIFY_PERMISSION=""
+    _DEFAULT_NOTIFY_STOP=""
 
     [[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
@@ -300,6 +306,15 @@ load_defaults() {
                 ;;
             dashboard_refresh)
                 _DEFAULT_DASHBOARD_REFRESH="$value"
+                ;;
+            notify_error)
+                _DEFAULT_NOTIFY_ERROR="$value"
+                ;;
+            notify_permission)
+                _DEFAULT_NOTIFY_PERMISSION="$value"
+                ;;
+            notify_stop)
+                _DEFAULT_NOTIFY_STOP="$value"
                 ;;
         esac
     done < "$DEFAULTS_CONFIG"

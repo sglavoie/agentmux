@@ -30,6 +30,32 @@ LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
 # shellcheck source=../lib/cc-title-icons.sh
 source "$LIB_DIR/cc-title-icons.sh"
 
+# Load notification settings from defaults.conf.
+load_defaults
+
+# ---------------------------------------------------------------------------
+# macOS desktop notification helper (cooldown prevents spam)
+# ---------------------------------------------------------------------------
+_NOTIFY_COOLDOWN=10  # seconds between duplicate notifications
+
+_maybe_notify() {
+    local enabled="$1" subtitle="$2" session_label="$3"
+    [[ "$enabled" == "on" ]] || return 0
+
+    local cooldown_file="/tmp/ccm-notify-${ACTION}-${tab_id}"
+    if [[ -f "$cooldown_file" ]]; then
+        local now last_time
+        now=$(date +%s)
+        last_time=$(stat -f %m "$cooldown_file" 2>/dev/null || echo 0)
+        if (( now - last_time < _NOTIFY_COOLDOWN )); then
+            return 0
+        fi
+    fi
+    touch "$cooldown_file"
+
+    osascript -e "display notification \"${session_label} needs attention\" with title \"cc-manager\" subtitle \"${subtitle}\"" 2>/dev/null || true
+}
+
 # Discover the Kitty socket.
 TO_ARGS=()
 if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
@@ -83,6 +109,13 @@ case "$ACTION" in
 esac
 
 new_title="$(build_title "$remaining" "$has_star" "$state")"
+
+# Send macOS desktop notification if enabled for this event type.
+case "$ACTION" in
+    failure)    _maybe_notify "$_DEFAULT_NOTIFY_ERROR" "Error" "$remaining" ;;
+    permission) _maybe_notify "$_DEFAULT_NOTIFY_PERMISSION" "Permission Required" "$remaining" ;;
+    stop)       _maybe_notify "$_DEFAULT_NOTIFY_STOP" "Stopped" "$remaining" ;;
+esac
 
 # Only update if the title actually changed.
 if [[ "$new_title" != "$current_title" ]]; then
