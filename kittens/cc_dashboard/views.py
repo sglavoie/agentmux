@@ -2,6 +2,7 @@
 
 import curses
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -183,6 +184,25 @@ def draw_detail_pane(stdscr, session, detail_y):
 
 # ── Idle alert notifications ─────────────────────────────────────────────────
 
+
+def _find_alerter():
+    """Locate the alerter binary, accounting for Kitty's restricted PATH.
+
+    When Kitty is launched as a macOS .app (Dock, Spotlight, etc.) it only
+    inherits the minimal system PATH (/usr/bin:/bin:/usr/sbin:/sbin), so
+    shutil.which() alone will miss Homebrew-installed binaries.  We fall back
+    to probing the standard Homebrew prefix locations directly.
+    """
+    path = shutil.which("alerter")
+    if path:
+        return path
+    for candidate in ("/opt/homebrew/bin/alerter", "/usr/local/bin/alerter"):
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+_ALERTER_BIN = _find_alerter()
 _alerter_warned = False
 
 
@@ -194,8 +214,17 @@ def _send_notification(title, subtitle, message, group=None, timeout=10):
     blocked while alerter waits for dismissal or timeout.
     """
     global _alerter_warned
+    if _ALERTER_BIN is None:
+        if not _alerter_warned:
+            _alerter_warned = True
+            print(
+                "cc-manager: alerter not found. Install with: "
+                "brew install vjeantet/tap/alerter",
+                file=sys.stderr,
+            )
+        return
     cmd = [
-        "alerter",
+        _ALERTER_BIN,
         "--title",
         title,
         "--subtitle",
@@ -207,20 +236,11 @@ def _send_notification(title, subtitle, message, group=None, timeout=10):
     ]
     if group is not None:
         cmd += ["--group", str(group)]
-    try:
-        subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except FileNotFoundError:
-        if not _alerter_warned:
-            _alerter_warned = True
-            print(
-                "cc-manager: alerter not found. Install with: "
-                "brew install vjeantet/tap/alerter",
-                file=sys.stderr,
-            )
+    subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def _check_idle_notifications(sessions):
