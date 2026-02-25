@@ -276,6 +276,11 @@ def do_close(socket, tab_id):
     kitty_cmd(socket, "close-tab", "--match", f"id:{tab_id}")
 
 
+def do_rename(socket, tab_id, new_title):
+    """Rename a tab by its Kitty tab ID."""
+    kitty_cmd(socket, "set-tab-title", "--match", f"id:{tab_id}", new_title)
+
+
 def compute_insert_location(socket, account, title):
     """Compute where to insert a new tab to maintain sorted order.
 

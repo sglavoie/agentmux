@@ -259,7 +259,7 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
             stdscr,
             5,
             3,
-            "Press n to create a new session, or r to refresh.",
+            "Press n to create a new session, or Ctrl+r to refresh.",
             curses.color_pair(CP_DIM),
         )
         draw_footer(stdscr, "list")
@@ -461,6 +461,7 @@ _HELP_SECTIONS = [
         [
             ("x", "Close session (with confirmation)"),
             ("R", "Restart session (with confirmation)"),
+            ("r", "Rename selected session"),
             ("n", "Open new session form"),
             ("l", "Launch session from config"),
         ],
@@ -470,7 +471,7 @@ _HELP_SECTIONS = [
         [
             ("d", "Toggle detail pane"),
             ("a", "Toggle all / managed tabs"),
-            ("r", "Refresh session list"),
+            ("Ctrl+r", "Refresh session list"),
         ],
     ),
     (
@@ -544,14 +545,16 @@ _FOOTER_HINTS = {
         "Enter Focus",
         "x Close",
         "R Restart",
+        "r Rename",
         "n New",
         "l Launch",
         "d Detail",
         "/ Search",
         "a All",
         "f Acct",
-        "r Refresh",
+        "^r Refresh",
     ],
+    "rename": ["Enter Confirm", "Esc Cancel"],
     "filter": ["1-N Toggle account", "f Done", "Esc Clear"],
     "confirm": ["y Confirm close", "Any other key Cancel"],
     "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
@@ -634,6 +637,37 @@ def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
         # Accepted filter display
         text = f'Filter: "{query}" ({match_count} matches)  [Esc clear]'
         safe_addstr(stdscr, y, 2, text, curses.color_pair(CP_DIM))
+
+
+def draw_rename_input(stdscr, current_value, cursor_pos):
+    """Draw a single-line rename input on the status line area."""
+    rows, _cols = stdscr.getmaxyx()
+    y = rows - 3
+
+    prefix = "Rename: "
+    before = current_value[:cursor_pos]
+    after = current_value[cursor_pos:]
+    cursor_ch = after[0] if after else " "
+    after_rest = after[1:] if len(after) > 1 else ""
+
+    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
+    x = 2 + len(prefix)
+    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+    safe_addstr(
+        stdscr,
+        y,
+        x + len(before),
+        cursor_ch,
+        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+    )
+    if after_rest:
+        safe_addstr(
+            stdscr,
+            y,
+            x + len(before) + 1,
+            after_rest,
+            curses.color_pair(CP_INPUT_ACTIVE),
+        )
 
 
 def draw_filter_bar(stdscr, account_filter, account_filter_mode):

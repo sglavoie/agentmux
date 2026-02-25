@@ -15,6 +15,7 @@ from cc_dashboard.kitty_remote import (
     do_close,
     do_focus,
     do_launch,
+    do_rename,
     do_restart,
     query_sessions,
 )
@@ -32,6 +33,7 @@ from cc_dashboard.views import (
     draw_list_view,
     draw_new_form,
     draw_pick_view,
+    draw_rename_input,
     draw_search_bar,
     draw_status_message,
 )
@@ -71,7 +73,7 @@ def dashboard(stdscr, socket):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | new | pick | help
+    mode = "list"  # list | confirm | confirm_restart | rename | new | pick | help
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -100,6 +102,10 @@ def dashboard(stdscr, socket):
     account_filter = None  # None = show all; set of names = show only these
     account_filter_mode = False  # True when filter bar is interactive
 
+    # Rename state
+    rename_value = ""
+    rename_cursor = 0
+
     # New-session form state -- default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
     default_pw = (
@@ -117,7 +123,7 @@ def dashboard(stdscr, socket):
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart"):
+        if mode in ("list", "confirm", "confirm_restart", "rename"):
             rows, _cols = stdscr.getmaxyx()
             detail_visible = show_detail and rows >= 20 and bool(filtered)
             draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible)
@@ -151,6 +157,9 @@ def dashboard(stdscr, socket):
                 draw_confirm_prompt(stdscr, filtered[selected], "Close")
             elif mode == "confirm_restart" and filtered:
                 draw_confirm_prompt(stdscr, filtered[selected], "Restart")
+            elif mode == "rename":
+                draw_rename_input(stdscr, rename_value, rename_cursor)
+                draw_footer(stdscr, "rename")
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor)
         elif mode == "pick":
@@ -355,12 +364,21 @@ def dashboard(stdscr, socket):
                 msg_frames = 20
             elif key == ord("d"):
                 show_detail = not show_detail
-            elif key == ord("r"):
+            elif key == 18:  # Ctrl+r -- refresh
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
                 msg = f"{len(filtered)} session(s) found"
                 msg_frames = 20
+            elif key == ord("r") and filtered:
+                mode = "rename"
+                title = filtered[selected]["title"]
+                # Strip the account prefix (X:) for editing
+                if len(title) >= 2 and title[0].isupper() and title[1] == ":":
+                    rename_value = title[2:]
+                else:
+                    rename_value = title
+                rename_cursor = len(rename_value)
             elif key == ord("R") and filtered:
                 mode = "confirm_restart"
             elif key == ord("?"):
@@ -398,6 +416,61 @@ def dashboard(stdscr, socket):
                 msg = "Session restarted"
                 msg_frames = 20
             mode = "list"
+
+        # ── Rename mode ──────────────────────────────────────────
+        elif mode == "rename":
+            if key == 27:  # Esc -- cancel
+                mode = "list"
+            elif key in (10, 13, curses.KEY_ENTER):
+                new_name = rename_value.strip()
+                if not new_name:
+                    msg = "Title cannot be empty"
+                    msg_frames = 20
+                    mode = "list"
+                else:
+                    # Re-prepend the account prefix if the original title had one
+                    orig_title = filtered[selected]["title"]
+                    if (
+                        len(orig_title) >= 2
+                        and orig_title[0].isupper()
+                        and orig_title[1] == ":"
+                    ):
+                        full_title = orig_title[:2] + new_name
+                    else:
+                        full_title = new_name
+                    old_tab_id = filtered[selected]["tab_id"]
+                    do_rename(socket, old_tab_id, full_title)
+                    sessions = query_sessions(socket, managed_only=(not show_all))
+                    filtered = _apply_filters(sessions, search_query, account_filter)
+                    # Preserve selection by tab_id
+                    selected = 0
+                    for i, s in enumerate(filtered):
+                        if s["tab_id"] == old_tab_id:
+                            selected = i
+                            break
+                    selected = min(selected, max(0, len(filtered) - 1))
+                    msg = f'Renamed to "{full_title}"'
+                    msg_frames = 20
+                    mode = "list"
+            elif key in (curses.KEY_BACKSPACE, 127, 8):
+                if rename_cursor > 0:
+                    rename_value = (
+                        rename_value[: rename_cursor - 1] + rename_value[rename_cursor:]
+                    )
+                    rename_cursor -= 1
+            elif key == curses.KEY_LEFT:
+                rename_cursor = max(0, rename_cursor - 1)
+            elif key == curses.KEY_RIGHT:
+                rename_cursor = min(len(rename_value), rename_cursor + 1)
+            elif key == curses.KEY_HOME or key == 1:  # Ctrl+A
+                rename_cursor = 0
+            elif key == curses.KEY_END or key == 5:  # Ctrl+E
+                rename_cursor = len(rename_value)
+            elif 32 <= key < 127:
+                before = rename_value[:rename_cursor]
+                after = rename_value[rename_cursor:]
+                rename_value = before + chr(key) + after
+                rename_cursor += 1
 
         # ── New session form ─────────────────────────────────────
         elif mode == "new":
