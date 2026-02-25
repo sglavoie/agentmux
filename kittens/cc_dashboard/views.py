@@ -18,7 +18,7 @@ from cc_dashboard.colors import (
     _cp_for_account,
 )
 from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
-from cc_dashboard.kitty_remote import _strip_override_marker, format_duration
+from cc_dashboard.kitty_remote import _ICON_STATES, _strip_override_marker, format_duration
 
 # ── Detail pane ──────────────────────────────────────────────────────────────
 
@@ -261,10 +261,11 @@ def _check_idle_notifications(sessions):
             pass
 
         session_title = s.get("title", "Session")
+        stop_icon = _ICON_STATES.get("stop", "")
         _send_notification(
-            title="cc-manager",
-            subtitle="Session idle",
-            message=f"{session_title} has been idle for {format_duration(idle_secs)}",
+            title=session_title,
+            subtitle=f"{stop_icon} Session idle",
+            message=f"idle for {format_duration(idle_secs)}",
             group=s["tab_id"],
         )
 
