@@ -22,6 +22,7 @@ from cc_dashboard.kitty_remote import (
     do_launch,
     do_rename,
     do_restart,
+    get_host_tab_id,
     query_sessions,
 )
 from cc_dashboard.views import (
@@ -71,6 +72,10 @@ def dashboard(stdscr, socket):
     show_all = False
     sessions = query_sessions(socket, managed_only=True)
     selected = 0
+
+    # Detect the tab that hosts this dashboard overlay so we can handle
+    # restart/close operations on it safely.
+    host_tab_id = get_host_tab_id(socket)
 
     # Auto-scroll to the focused session, if one exists
     for i, s in enumerate(sessions):
@@ -433,18 +438,29 @@ def dashboard(stdscr, socket):
         # ── Confirm close ────────────────────────────────────────
         elif mode == "confirm":
             if key in (ord("y"), ord("Y")) and filtered:
-                do_close(socket, filtered[selected]["tab_id"])
-                sessions = query_sessions(socket, managed_only=(not show_all))
-                filtered = _apply_filters(sessions, search_query, account_filter)
-                selected = min(selected, max(0, len(filtered) - 1))
-                msg = "Session closed"
-                msg_frames = 20
+                target = filtered[selected]
+                if host_tab_id is not None and target["tab_id"] == host_tab_id:
+                    msg = "Cannot close host tab from dashboard"
+                    msg_frames = 30
+                else:
+                    do_close(socket, target["tab_id"])
+                    sessions = query_sessions(socket, managed_only=(not show_all))
+                    filtered = _apply_filters(sessions, search_query, account_filter)
+                    selected = min(selected, max(0, len(filtered) - 1))
+                    msg = "Session closed"
+                    msg_frames = 20
             mode = "list"
 
         # ── Confirm restart ──────────────────────────────────────
         elif mode == "confirm_restart":
             if key in (ord("y"), ord("Y")) and filtered:
-                do_restart(socket, filtered[selected])
+                sess = filtered[selected]
+                is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
+                do_restart(socket, sess, host_tab_id=host_tab_id)
+                if is_host:
+                    # Detached process will close+relaunch the host tab;
+                    # the dashboard overlay will be destroyed with it.
+                    return
                 sessions = query_sessions(socket, managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
@@ -523,11 +539,18 @@ def dashboard(stdscr, socket):
                                 config_dir_override=selected_path,
                             )
                         else:
+                            is_host = (
+                                host_tab_id is not None
+                                and sess["tab_id"] == host_tab_id
+                            )
                             do_restart(
                                 socket,
                                 sess,
                                 config_dir_override=selected_path,
+                                host_tab_id=host_tab_id,
                             )
+                            if is_host:
+                                return
                         sessions = query_sessions(socket, managed_only=(not show_all))
                         filtered = _apply_filters(
                             sessions, search_query, account_filter

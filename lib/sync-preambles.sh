@@ -48,8 +48,23 @@ migrate_marker() {
 
 	for pattern in "${KNOWN_LAST_LINES[@]}"; do
 		if grep -qF "$pattern" "$user_file"; then
+			# Escape sed BRE address metacharacters using parameter expansion
+			# (backslash must come first to avoid double-escaping)
+			escaped="$pattern"
+			escaped="${escaped//\\/\\\\}"
+			escaped="${escaped//./\\.}"
+			escaped="${escaped//[/\\[}"
+			escaped="${escaped//\*/\\*}"
+			escaped="${escaped//^/\\^}"
+			escaped="${escaped//$/\\$}"
+			escaped="${escaped//(/\\(}"
+			escaped="${escaped//)/\\)}"
+			escaped="${escaped//+/\\+}"
+			escaped="${escaped//?/\\?}"
+			escaped="${escaped//\{/\\{}"
+			escaped="${escaped//|/\\|}"
 			# Insert the marker line after the known last doc line
-			sed -i '' "/^$(sed 's/[.[\*^$()+?{|]/\\&/g' <<<"$pattern")$/a\\
+			sed -i '' "/^${escaped}$/a\\
 $MARKER
 " "$user_file"
 			echo "  Migrated: inserted marker into $user_file"

@@ -5,6 +5,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 
@@ -51,6 +52,35 @@ def get_kitty_socket():
         return sock
     candidates = sorted(glob.glob("/tmp/kitty-*"), key=os.path.getmtime, reverse=True)
     return f"unix:{candidates[0]}" if candidates else ""
+
+
+def get_host_tab_id(socket):
+    """Return the tab ID of the tab hosting the current dashboard process.
+
+    Reads KITTY_WINDOW_ID (set by Kitty for all child processes) and maps it
+    to a tab ID by walking the kitty @ ls output.  Returns None when the
+    window ID is unavailable or the lookup fails.
+    """
+    wid_str = os.environ.get("KITTY_WINDOW_ID")
+    if not wid_str:
+        return None
+    try:
+        wid = int(wid_str)
+    except ValueError:
+        return None
+    result = kitty_cmd(socket, "ls")
+    if not result or result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    for os_win in data:
+        for tab in os_win.get("tabs", []):
+            for win in tab.get("windows", []):
+                if win.get("id") == wid:
+                    return tab.get("id")
+    return None
 
 
 _DEBUG_LOG = os.environ.get("CCM_DEBUG_LOG", "")
@@ -308,12 +338,16 @@ def do_rename(socket, tab_id, new_title):
     kitty_cmd(socket, "set-tab-title", "--match", f"id:{tab_id}", new_title)
 
 
-def compute_insert_location(socket, account, title):
+def compute_insert_location(socket, account, title, exclude_tab_id=None):
     """Compute where to insert a new tab to maintain sorted order.
 
     Returns ("first", None) if the tab should be first,
     ("after", tab_id) if it should be placed after that tab,
     or (None, None) if sorting is disabled.
+
+    exclude_tab_id: if provided, that tab is ignored when building the sorted
+    list.  Used when pre-computing the location before a tab has been closed
+    (e.g. the host tab restart path).
     """
     if _cfg._default_sort_sessions != "alpha":
         return (None, None)
@@ -334,6 +368,8 @@ def compute_insert_location(socket, account, title):
     existing = []  # (sort_key, tab_id)
     for tab in tabs:
         tab_id = tab.get("id", 0)
+        if exclude_tab_id is not None and tab_id == exclude_tab_id:
+            continue
         tab_title = tab.get("title", "")
         stripped = _strip_icons(tab_title)
 
@@ -475,13 +511,217 @@ def do_launch(
         )
 
 
-def do_restart(socket, session, flags="", pw_override="", config_dir_override=None):
+def _spawn_detached_restart(
+    socket,
+    tab_id,
+    title,
+    cwd,
+    account,
+    flags="",
+    pw_override="",
+    config_dir_override=None,
+):
+    """Spawn a fully detached subprocess to close+relaunch a session.
+
+    Used when the session being restarted is the dashboard's own host tab.
+    Because closing that tab destroys the dashboard overlay, the close+launch
+    sequence must run in a separate process that outlives the dashboard.
+
+    All kitty @ command arguments are built here in the main process (mirroring
+    do_launch exactly) so the detached script needs only the stdlib.
+    Each step is {"cmd": [...], "sleep": float, "retry": int} where retry > 0
+    means retry up to that many extra times (sleeping 0.1s between) until the
+    command returns rc 0.
+    """
+    directory = os.path.expanduser(cwd)
+    home = os.path.expanduser("~")
+    default_dir = os.path.join(home, ".claude")
+    config_dir = (
+        config_dir_override
+        if config_dir_override
+        else _cfg._accounts.get(account, {}).get("config_dir", "")
+    )
+    shell = os.environ.get("SHELL", "/bin/zsh")
+    effective_flags = _cfg._resolve_claude_flags(flags)
+    shell_cmd = f"exec claude {effective_flags}" if effective_flags else "exec claude"
+
+    # Pre-compute sort location excluding the closing tab
+    location = compute_insert_location(socket, account, title, exclude_tab_id=tab_id)
+    loc_type, loc_id = location
+    loc_args = []
+
+    steps = []
+
+    # 1. Close the host tab
+    steps.append(
+        {
+            "cmd": [
+                "kitty",
+                "@",
+                "--to",
+                socket,
+                "close-tab",
+                "--match",
+                f"id:{tab_id}",
+            ],
+            "sleep": 0.5,
+        }
+    )
+
+    # 2. Focus neighbour tab for sorted insertion (mirrors do_launch)
+    if loc_type == "first":
+        loc_args = ["--location", "first"]
+    elif loc_type == "after" and loc_id is not None:
+        steps.append(
+            {
+                "cmd": [
+                    "kitty",
+                    "@",
+                    "--to",
+                    socket,
+                    "focus-tab",
+                    "--match",
+                    f"id:{loc_id}",
+                ],
+                "sleep": 0.1,
+            }
+        )
+        loc_args = ["--location", "after"]
+
+    # 3. Launch the tab
+    launch_cmd = [
+        "kitty",
+        "@",
+        "--to",
+        socket,
+        "launch",
+        "--type=tab",
+        *loc_args,
+        "--allow-remote-control",
+        "--tab-title",
+        title,
+        "--cwd",
+        directory,
+        "--env",
+        f"KITTY_LISTEN_ON={socket}",
+        "--var",
+        f"cc_account={account}",
+        "--var",
+        f"cc_cwd={directory}",
+    ]
+    if config_dir and config_dir != default_dir:
+        launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
+    launch_cmd += [shell, "-lic", shell_cmd]
+    steps.append({"cmd": launch_cmd})
+
+    # 4. Set tab colour (with retries, mirrors do_launch)
+    steps.append(
+        {
+            "cmd": [
+                "kitty",
+                "@",
+                "--to",
+                socket,
+                "set-tab-color",
+                "--match",
+                f"title:^{title}$",
+                *_cfg._palette_tab_colors(account),
+            ],
+            "retry": 5,
+            "retry_sleep": 0.1,
+        }
+    )
+
+    # 5. Project window (mirrors do_launch pw_mode block)
+    pw_mode = _cfg._resolve_project_window(pw_override)
+    if pw_mode:
+        steps.append(
+            {
+                "cmd": [
+                    "kitty",
+                    "@",
+                    "--to",
+                    socket,
+                    "launch",
+                    "--type=window",
+                    "--match",
+                    f"title:^{title}$",
+                    "--cwd",
+                    directory,
+                    "--keep-focus",
+                ]
+            }
+        )
+        steps.append(
+            {
+                "cmd": [
+                    "kitty",
+                    "@",
+                    "--to",
+                    socket,
+                    "goto-layout",
+                    "--match",
+                    f"title:^{title}$",
+                    pw_mode,
+                ]
+            }
+        )
+
+    # ── Minimal detached script — stdlib only ────────────────────────────────
+    script = """
+import json, os, subprocess, time
+steps = json.loads(os.environ["_CCM_STEPS"])
+for step in steps:
+    cmd = step["cmd"]
+    retry = step.get("retry", 0)
+    retry_sleep = step.get("retry_sleep", 0.1)
+    sleep_after = step.get("sleep", 0)
+    if retry:
+        for _ in range(retry + 1):
+            r = subprocess.run(cmd, capture_output=True)
+            if r.returncode == 0:
+                break
+            time.sleep(retry_sleep)
+    else:
+        subprocess.run(cmd, capture_output=True)
+    if sleep_after:
+        time.sleep(sleep_after)
+"""
+    env = os.environ.copy()
+    env["_CCM_STEPS"] = json.dumps(steps)
+
+    # sys.executable inside a Kitty kitten is the kitty binary itself, not
+    # Python.  Locate the real python3 on PATH instead.
+    python = shutil.which("python3") or shutil.which("python")
+    if not python:
+        return  # no Python found — cannot spawn detached process
+    subprocess.Popen(
+        [python, "-c", script],
+        start_new_session=True,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def do_restart(
+    socket,
+    session,
+    flags="",
+    pw_override="",
+    config_dir_override=None,
+    host_tab_id=None,
+):
     """Close and relaunch a session with the same title, directory, and account.
 
     When config_dir_override is provided, the session is relaunched with a
     different CLAUDE_CONFIG_DIR, but the tab keeps its original account,
     color, and title prefix so it stays in its visual group.  An overline
     marker is appended to signal the override.
+
+    When host_tab_id matches the target tab_id, a detached subprocess is used
+    so the relaunch survives the dashboard overlay being destroyed along with
+    the host tab.
     """
     account = session["account"]
     title = session["title"]
@@ -491,6 +731,12 @@ def do_restart(socket, session, flags="", pw_override="", config_dir_override=No
 
     tab_id = session["tab_id"]
     cwd = session["cwd"]
+
+    if host_tab_id is not None and tab_id == host_tab_id:
+        _spawn_detached_restart(
+            socket, tab_id, title, cwd, account, flags, pw_override, config_dir_override
+        )
+        return
 
     do_close(socket, tab_id)
     time.sleep(0.3)
