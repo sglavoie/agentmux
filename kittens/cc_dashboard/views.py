@@ -3,6 +3,7 @@
 import curses
 import os
 import subprocess
+import sys
 import time
 
 from cc_dashboard import config as _cfg
@@ -180,6 +181,41 @@ def draw_detail_pane(stdscr, session, detail_y):
 
 # ── Idle alert notifications ─────────────────────────────────────────────────
 
+_alerter_warned = False
+
+
+def _send_notification(title, subtitle, message, group=None, timeout=10):
+    """Send a macOS notification via alerter (non-blocking).
+
+    If alerter is not installed, logs a one-time warning to stderr and
+    returns silently.  Uses Popen so the curses event loop is never
+    blocked while alerter waits for dismissal or timeout.
+    """
+    global _alerter_warned
+    cmd = [
+        "alerter",
+        "--title", title,
+        "--subtitle", subtitle,
+        "--message", message,
+        "--timeout", str(timeout),
+    ]
+    if group is not None:
+        cmd += ["--group", str(group)]
+    try:
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        if not _alerter_warned:
+            _alerter_warned = True
+            print(
+                "cc-manager: alerter not found. Install with: "
+                "brew install vjeantet/tap/alerter",
+                file=sys.stderr,
+            )
+
 
 def _check_idle_notifications(sessions):
     """Send macOS notifications for sessions that have been idle too long.
@@ -224,16 +260,12 @@ def _check_idle_notifications(sessions):
         except OSError:
             pass
 
-        title = s.get("title", "Session")
-        subprocess.run(
-            [
-                "osascript",
-                "-e",
-                f'display notification "{title} has been idle for '
-                f'{format_duration(idle_secs)}" with title "cc-manager" '
-                f'subtitle "Session idle"',
-            ],
-            capture_output=True,
+        session_title = s.get("title", "Session")
+        _send_notification(
+            title="cc-manager",
+            subtitle="Session idle",
+            message=f"{session_title} has been idle for {format_duration(idle_secs)}",
+            group=s["tab_id"],
         )
 
 

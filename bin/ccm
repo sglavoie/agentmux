@@ -214,6 +214,52 @@ cmd_config() {
 }
 
 # ---------------------------------------------------------------------------
+# Notify
+# ---------------------------------------------------------------------------
+cmd_notify() {
+	local title="cc-manager"
+	local subtitle="Test notification"
+	local message="If you see this, notifications are working."
+	local timeout=5
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--title)
+			title="${2:?--title requires a value}"
+			shift 2
+			;;
+		--subtitle)
+			subtitle="${2:?--subtitle requires a value}"
+			shift 2
+			;;
+		--message)
+			message="${2:?--message requires a value}"
+			shift 2
+			;;
+		--timeout)
+			timeout="${2:?--timeout requires a value}"
+			shift 2
+			;;
+		*)
+			echo "Error: Unknown flag '$1'. Run 'ccm help notify' for usage." >&2
+			return 1
+			;;
+		esac
+	done
+
+	if ! command -v alerter >/dev/null 2>&1; then
+		echo "Error: alerter is not installed." >&2
+		echo "Install with: brew install vjeantet/tap/alerter" >&2
+		return 1
+	fi
+
+	echo "Notification sent (waiting for dismissal or timeout)..."
+	alerter --title "$title" --subtitle "$subtitle" \
+		--message "$message" --timeout "$timeout" \
+		>/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------------------
 # Help
 # ---------------------------------------------------------------------------
 cmd_help() {
@@ -237,6 +283,22 @@ Subcommands:
 
 FILE can be: accounts, sessions, defaults, hooks
 When FILE is omitted, edit/show/path operate on accounts, sessions, and defaults.
+HELP
+		;;
+	notify)
+		cat <<'HELP'
+Usage: ccm notify [--title TEXT] [--subtitle TEXT] [--message TEXT] [--timeout SECS]
+
+Send a test macOS notification via alerter. Useful for verifying that
+notifications are working correctly.
+
+Options:
+    --title TEXT       Notification title (default: "cc-manager")
+    --subtitle TEXT    Notification subtitle (default: "Test notification")
+    --message TEXT     Notification body (default: "If you see this, notifications are working.")
+    --timeout SECS    Auto-dismiss after SECS seconds (default: 5)
+
+Requires: brew install vjeantet/tap/alerter
 HELP
 		;;
 	switch)
@@ -264,6 +326,7 @@ Commands:
     config <subcmd>     Manage config files (edit, show, path, init)
     dashboard           Launch the curses dashboard kitten
     switch              Quick-switch: fuzzy-find and jump to a session
+    notify [flags]      Send a test notification via alerter
     help [COMMAND]      Show help for cc or a specific command
     --version           Print version
 
@@ -318,6 +381,10 @@ main() {
 		;;
 	switch)
 		exec kitten cc_quick_switch.py
+		;;
+	notify)
+		shift
+		cmd_notify "$@"
 		;;
 	help)
 		shift
