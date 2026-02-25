@@ -17,7 +17,7 @@ from cc_dashboard.colors import (
     _cp_for_account,
 )
 from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
-from cc_dashboard.kitty_remote import format_duration
+from cc_dashboard.kitty_remote import _strip_override_marker, format_duration
 
 # ── Detail pane ──────────────────────────────────────────────────────────────
 
@@ -34,8 +34,12 @@ def draw_detail_pane(stdscr, session, detail_y):
     sep = "─── Detail " + "─" * max(0, cols - 14)
     safe_addstr(stdscr, detail_y, 1, sep, curses.color_pair(CP_DIM))
 
-    # Look up config session for flags/split info
+    # Look up config session for flags/split info; retry without override marker
     cfg_entry = _cfg._find_config_session(session["title"])
+    if cfg_entry is None:
+        cfg_entry = _cfg._find_config_session(
+            _strip_override_marker(session["title"])
+        )
     effective_flags = ""
     effective_split = ""
     if cfg_entry:
@@ -461,7 +465,7 @@ _HELP_SECTIONS = [
         [
             ("x", "Close session (with confirmation)"),
             ("R", "Restart session (with confirmation)"),
-            ("O", "Override account for session"),
+            ("O", "Override config dir for session"),
             ("r", "Rename selected session"),
             ("n", "Open new session form"),
             ("l", "Launch session from config"),
@@ -546,7 +550,7 @@ _FOOTER_HINTS = {
         "Enter Focus",
         "x Close",
         "R Restart",
-        "O Acct",
+        "O CfgDir",
         "r Rename",
         "n New",
         "l Launch",
@@ -561,7 +565,7 @@ _FOOTER_HINTS = {
     "confirm": ["y Confirm close", "Any other key Cancel"],
     "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
     "new": ["Enter Next/Submit", "Tab Cycle", "Esc Cancel"],
-    "pick": ["Enter Launch", "O Acct", "/ Search", "Esc Back", "q Back"],
+    "pick": ["Enter Launch", "O CfgDir", "/ Search", "Esc Back", "q Back"],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
 }
 
@@ -592,22 +596,36 @@ def draw_confirm_prompt(stdscr, session, action="Close"):
 
 
 def draw_override_picker(stdscr, session, override_selected):
-    """Draw an account selection overlay for account override.
+    """Draw a config dir selection overlay for override.
 
-    Shows all configured accounts in a centered box, each in its own color.
-    The currently selected account is marked with an arrow, and the session's
-    current account is labeled "(current)".
+    Shows all unique config dir paths in a centered box.  The currently
+    selected path is marked with an arrow, and the session's current
+    config dir is labeled "(current)".
     """
     rows, cols = stdscr.getmaxyx()
-    names = _cfg._account_names
-    if not names:
+    dirs = _cfg._unique_config_dirs()
+    if not dirs:
         return
 
+    home = os.path.expanduser("~")
+
+    def _short(p):
+        if p.startswith(home):
+            return "~" + p[len(home):]
+        return p
+
+    display_dirs = [_short(d) for d in dirs]
+
+    # Determine the session's current config dir for the "(current)" label
+    current_dir = _cfg._accounts.get(session.get("account", ""), {}).get(
+        "config_dir", ""
+    )
+
     # Box dimensions
-    max_name_len = max(len(n) for n in names)
-    # "  > name (current)" — arrow(2) + name + " (current)"(10) + padding
-    box_w = min(cols - 4, max(30, max_name_len + 20))
-    box_h = len(names) + 4  # title + blank + entries + blank
+    max_dir_len = max(len(d) for d in display_dirs)
+    # "  > path (current)" — arrow(2) + path + " (current)"(10) + padding
+    box_w = min(cols - 4, max(36, max_dir_len + 20))
+    box_h = len(dirs) + 4  # title + subtitle + blank + entries
     box_y = max(0, (rows - box_h) // 2)
     box_x = max(0, (cols - box_w) // 2)
 
@@ -618,7 +636,7 @@ def draw_override_picker(stdscr, session, override_selected):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
 
     # Title
-    title = "Override Account"
+    title = "Override Config Dir"
     safe_addstr(
         stdscr,
         box_y,
@@ -638,19 +656,18 @@ def draw_override_picker(stdscr, session, override_selected):
         dim_attr,
     )
 
-    # Account list
-    current_account = session["account"]
-    for i, name in enumerate(names):
+    # Config dir list
+    normal_attr = curses.color_pair(CP_NORMAL)
+    for i, display in enumerate(display_dirs):
         y = box_y + 3 + i
         if y >= rows - 1:
             break
         sel = i == override_selected
         marker = "\u25b8 " if sel else "  "
-        suffix = " (current)" if name == current_account else ""
-        label = f"{marker}{name}{suffix}"
+        suffix = " (current)" if dirs[i] == current_dir else ""
+        label = f"{marker}{display}{suffix}"
 
-        cp = _cp_for_account(name, selected=sel)
-        attr = curses.color_pair(cp)
+        attr = normal_attr
         if sel:
             attr |= curses.A_BOLD
         safe_addstr(stdscr, y, box_x + 2, label, attr)

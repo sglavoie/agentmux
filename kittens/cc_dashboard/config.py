@@ -291,6 +291,18 @@ def _resolve_account_by_config_dir(config_dir):
     return _account_names[0] if _account_names else "unknown"
 
 
+def _unique_config_dirs():
+    """Return a deduplicated, ordered list of config_dir paths from all accounts."""
+    seen = set()
+    result = []
+    for name in _account_names:
+        d = _accounts.get(name, {}).get("config_dir", "")
+        if d and d not in seen:
+            seen.add(d)
+            result.append(d)
+    return result
+
+
 def _palette_tab_colors(account):
     """Return a list of kitty set-tab-color arguments for the given account."""
     color_name = _accounts.get(account, {}).get("color", "gray")

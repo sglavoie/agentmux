@@ -1,6 +1,7 @@
 """Main event loop and session fingerprinting for the Claude Code Dashboard."""
 
 import curses
+import os
 import time
 
 from cc_dashboard import config as _cfg
@@ -12,7 +13,10 @@ from cc_dashboard.filters import (
     _sort_pick_entries,
 )
 from cc_dashboard.kitty_remote import (
+    OVERRIDE_MARKER,
+    _append_override_marker,
     _strip_account_prefix,
+    _strip_override_marker,
     compute_insert_location,
     do_close,
     do_focus,
@@ -395,17 +399,22 @@ def dashboard(stdscr, socket):
                     rename_value = title[2:]
                 else:
                     rename_value = title
+                # Strip trailing override marker so user doesn't see/edit it
+                rename_value = _strip_override_marker(rename_value)
                 rename_cursor = len(rename_value)
             elif key == ord("R") and filtered:
                 mode = "confirm_restart"
             elif key == ord("O") and filtered:
                 mode = "override"
                 override_source = "list"
-                # Pre-select the session's current account
-                current_acct = filtered[selected]["account"]
+                # Pre-select the session's current config dir
+                current_dir = _cfg._accounts.get(
+                    filtered[selected]["account"], {}
+                ).get("config_dir", "")
+                dirs = _cfg._unique_config_dirs()
                 override_selected = 0
-                for i, name in enumerate(_cfg._account_names):
-                    if name == current_acct:
+                for i, d in enumerate(dirs):
+                    if d == current_dir:
                         override_selected = i
                         break
             elif key == ord("?"):
@@ -450,35 +459,39 @@ def dashboard(stdscr, socket):
             if key in (27, ord("q"), ord("Q")):  # Esc / q -- cancel
                 mode = cancel_mode
             elif key in (curses.KEY_UP, ord("k"), ord("K")):
-                if _cfg._account_names:
-                    override_selected = (override_selected - 1) % len(
-                        _cfg._account_names
-                    )
+                dirs = _cfg._unique_config_dirs()
+                if dirs:
+                    override_selected = (override_selected - 1) % len(dirs)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
-                if _cfg._account_names:
-                    override_selected = (override_selected + 1) % len(
-                        _cfg._account_names
-                    )
+                dirs = _cfg._unique_config_dirs()
+                if dirs:
+                    override_selected = (override_selected + 1) % len(dirs)
             elif key in (10, 13, curses.KEY_ENTER):
-                new_account = _cfg._account_names[override_selected]
+                dirs = _cfg._unique_config_dirs()
+                selected_path = dirs[override_selected] if dirs else ""
 
                 if override_source == "pick" and pick_filtered:
-                    # Launch config entry with (possibly overridden) account
                     entry = pick_filtered[pick_selected]
+                    account = entry["account"]
                     title = entry["title"]
-                    if new_account != entry["account"]:
-                        stripped = _strip_account_prefix(title)
-                        title = f"{new_account[0].upper()}:{stripped}"
+                    current_dir = _cfg._accounts.get(account, {}).get(
+                        "config_dir", ""
+                    )
+                    cdo = None
+                    if selected_path != current_dir:
+                        title = _append_override_marker(title)
+                        cdo = selected_path
                     pw_val = entry["pw"]
-                    loc = compute_insert_location(socket, new_account, title)
+                    loc = compute_insert_location(socket, account, title)
                     do_launch(
                         socket,
                         title,
                         entry["dir"],
-                        new_account,
+                        account,
                         entry["flags"],
                         pw_val,
                         location=loc,
+                        config_dir_override=cdo,
                     )
                     sessions = query_sessions(socket, managed_only=(not show_all))
                     filtered = _apply_filters(sessions, search_query, account_filter)
@@ -489,33 +502,44 @@ def dashboard(stdscr, socket):
 
                 elif override_source == "list" and filtered:
                     sess = filtered[selected]
-                    if new_account == sess["account"]:
-                        msg = "Same account selected, no change"
+                    current_dir = _cfg._accounts.get(
+                        sess["account"], {}
+                    ).get("config_dir", "")
+                    if selected_path == current_dir:
+                        msg = "Same config dir selected, no change"
                         msg_frames = 20
                     else:
                         if sess["status"] == "stopped":
                             do_close(socket, sess["tab_id"])
                             time.sleep(0.3)
-                            stripped = _strip_account_prefix(sess["title"])
-                            new_title = f"{new_account[0].upper()}:{stripped}"
+                            new_title = _append_override_marker(sess["title"])
+                            account = sess["account"]
                             location = compute_insert_location(
-                                socket, new_account, new_title
+                                socket, account, new_title
                             )
                             do_launch(
                                 socket,
                                 new_title,
                                 sess["cwd"],
-                                new_account,
+                                account,
                                 location=location,
+                                config_dir_override=selected_path,
                             )
                         else:
-                            do_restart(socket, sess, account_override=new_account)
+                            do_restart(
+                                socket, sess,
+                                config_dir_override=selected_path,
+                            )
                         sessions = query_sessions(socket, managed_only=(not show_all))
                         filtered = _apply_filters(
                             sessions, search_query, account_filter
                         )
                         selected = min(selected, max(0, len(filtered) - 1))
-                        msg = f'Switched to account "{new_account}"'
+                        home = os.path.expanduser("~")
+                        display_path = selected_path
+                        if display_path.startswith(home):
+                            display_path = "~" + display_path[len(home):]
+                        msg = f'Config dir overridden to "{display_path}"'
                         msg_frames = 20
                     mode = "list"
 
@@ -535,6 +559,7 @@ def dashboard(stdscr, socket):
                 else:
                     # Re-prepend the account prefix if the original title had one
                     orig_title = filtered[selected]["title"]
+                    had_override = orig_title.endswith(OVERRIDE_MARKER)
                     if (
                         len(orig_title) >= 2
                         and orig_title[0].isupper()
@@ -543,6 +568,9 @@ def dashboard(stdscr, socket):
                         full_title = orig_title[:2] + new_name
                     else:
                         full_title = new_name
+                    # Re-append override marker if original had one
+                    if had_override:
+                        full_title = _append_override_marker(full_title)
                     old_tab_id = filtered[selected]["tab_id"]
                     do_rename(socket, old_tab_id, full_title)
                     sessions = query_sessions(socket, managed_only=(not show_all))
@@ -719,10 +747,13 @@ def dashboard(stdscr, socket):
             elif key == ord("O") and pick_filtered:
                 mode = "override"
                 override_source = "pick"
-                current_acct = pick_filtered[pick_selected]["account"]
+                current_dir = _cfg._accounts.get(
+                    pick_filtered[pick_selected]["account"], {}
+                ).get("config_dir", "")
+                dirs = _cfg._unique_config_dirs()
                 override_selected = 0
-                for i, name in enumerate(_cfg._account_names):
-                    if name == current_acct:
+                for i, d in enumerate(dirs):
+                    if d == current_dir:
                         override_selected = i
                         break
             elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:

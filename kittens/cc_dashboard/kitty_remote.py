@@ -103,6 +103,19 @@ def _strip_account_prefix(title):
     return title
 
 
+OVERRIDE_MARKER = "\u203e"  # U+203E OVERLINE
+
+
+def _strip_override_marker(title):
+    """Remove trailing override marker(s) from a title."""
+    return title.rstrip(OVERRIDE_MARKER)
+
+
+def _append_override_marker(title):
+    """Append a single override marker to a title (idempotent)."""
+    return _strip_override_marker(title) + OVERRIDE_MARKER
+
+
 def _detect_state(title):
     """Detect the state icon in a tab title, returning a status string.
 
@@ -369,7 +382,14 @@ def compute_insert_location(socket, account, title):
 
 
 def do_launch(
-    socket, title, directory, account, flags="", pw_override="", location=None
+    socket,
+    title,
+    directory,
+    account,
+    flags="",
+    pw_override="",
+    location=None,
+    config_dir_override=None,
 ):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
@@ -404,7 +424,7 @@ def do_launch(
 
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
-    config_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
+    config_dir = config_dir_override if config_dir_override else _cfg._accounts.get(account, {}).get("config_dir", "")
 
     if config_dir and config_dir != default_dir:
         cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
@@ -451,29 +471,36 @@ def do_launch(
         )
 
 
-def do_restart(socket, session, flags="", pw_override="", account_override=None):
+def do_restart(socket, session, flags="", pw_override="", config_dir_override=None):
     """Close and relaunch a session with the same title, directory, and account.
 
-    When account_override is provided, the session is relaunched under the new
-    account.  The title prefix (e.g. 'W:') is updated to match the new account's
-    initial, and the tab receives the new account's color.
+    When config_dir_override is provided, the session is relaunched with a
+    different CLAUDE_CONFIG_DIR, but the tab keeps its original account,
+    color, and title prefix so it stays in its visual group.  An overline
+    marker is appended to signal the override.
     """
-    account = account_override if account_override else session["account"]
+    account = session["account"]
     title = session["title"]
 
-    # Update the title prefix when switching accounts
-    if account_override:
-        stripped = _strip_account_prefix(title)
-        title = f"{account_override[0].upper()}:{stripped}"
+    if config_dir_override:
+        title = _append_override_marker(title)
 
     tab_id = session["tab_id"]
     cwd = session["cwd"]
 
     do_close(socket, tab_id)
     time.sleep(0.3)
-    # Compute insertion location after close so the dead tab ID isn't in the list
     location = compute_insert_location(socket, account, title)
-    do_launch(socket, title, cwd, account, flags, pw_override, location=location)
+    do_launch(
+        socket,
+        title,
+        cwd,
+        account,
+        flags,
+        pw_override,
+        location=location,
+        config_dir_override=config_dir_override,
+    )
 
 
 def do_sort_tabs(socket):

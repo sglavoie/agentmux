@@ -679,7 +679,7 @@ cmd_save() {
                 [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
             ) |
             {
-                title: (.title | sub($strip_re; "")),
+                title: (.title | sub($strip_re; "") | sub("‾$"; "")),
                 dir: (
                     [.windows[] |
                         select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
