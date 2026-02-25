@@ -47,7 +47,8 @@ _ccm() {
                                     'edit[Open config file in editor]' \
                                     'show[Print config file contents]' \
                                     'path[Print config file path]' \
-                                    'init[Copy example configs if missing]'
+                                    'init[Copy example configs if missing]' \
+                                    'sync[Update documentation preambles]'
                                 return
                                 ;;
                         esac
@@ -87,7 +88,8 @@ _ccm() {
                         'edit[Open config file in editor]' \
                         'show[Print config file contents]' \
                         'path[Print config file path]' \
-                        'init[Copy example configs if missing]'
+                        'init[Copy example configs if missing]' \
+                                    'sync[Update documentation preambles]'
                     ;;
             esac
             ;;

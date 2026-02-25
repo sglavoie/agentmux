@@ -48,7 +48,7 @@ load_defaults
 # ---------------------------------------------------------------------------
 # macOS desktop notification helper (cooldown prevents spam)
 # ---------------------------------------------------------------------------
-_NOTIFY_COOLDOWN=10  # seconds between duplicate notifications
+_NOTIFY_COOLDOWN=10 # seconds between duplicate notifications
 
 _maybe_notify() {
     local enabled="$1" icon="$2" subtitle="$3" session_label="$4"
@@ -60,7 +60,7 @@ _maybe_notify() {
         local now last_time
         now=$(date +%s)
         last_time=$(stat -f %m "$cooldown_file" 2>/dev/null || echo 0)
-        if (( now - last_time < _NOTIFY_COOLDOWN )); then
+        if ((now - last_time < _NOTIFY_COOLDOWN)); then
             return 0
         fi
     fi
@@ -77,18 +77,18 @@ _maybe_notify() {
 # ---------------------------------------------------------------------------
 _is_too_recent() {
     local min_secs="${_DEFAULT_NOTIFY_MIN_SECS:-0}"
-    [[ "$min_secs" -gt 0 ]] || return 1  # threshold disabled
-    [[ "$_prev_last_ts" -gt 0 ]] || return 0  # no prior activity = suppress
+    [[ "$min_secs" -gt 0 ]] || return 1      # threshold disabled
+    [[ "$_prev_last_ts" -gt 0 ]] || return 0 # no prior activity = suppress
 
     local now
     now=$(date +%s)
     local elapsed=$((now - _prev_last_ts))
-    (( elapsed < min_secs ))
+    ((elapsed < min_secs))
 }
 
 _matches_ignore_pattern() {
     local patterns="${_DEFAULT_NOTIFY_IGNORE_PATTERNS:-}"
-    [[ -n "$patterns" ]] || return 1  # no patterns = don't suppress
+    [[ -n "$patterns" ]] || return 1 # no patterns = don't suppress
 
     local screen_text
     screen_text=$(kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} get-text --extent screen --match "id:$KITTY_WINDOW_ID" 2>/dev/null) || return 1
@@ -97,7 +97,7 @@ _matches_ignore_pattern() {
     for pattern in $patterns; do
         [[ -n "$pattern" ]] || continue
         if echo "$screen_text" | grep -qE "$pattern"; then
-            return 0  # match found = suppress
+            return 0 # match found = suppress
         fi
     done
     return 1
@@ -136,11 +136,11 @@ _update_activity() {
     local event_kind="$EVENT_KIND"
     if [[ -z "$event_kind" ]]; then
         case "$ACTION" in
-            active)     event_kind="prompt" ;;
-            failure)    event_kind="failure" ;;
-            permission) event_kind="permission" ;;
-            stop)       event_kind="stop" ;;
-            *)          event_kind="" ;;
+        active) event_kind="prompt" ;;
+        failure) event_kind="failure" ;;
+        permission) event_kind="permission" ;;
+        stop) event_kind="stop" ;;
+        *) event_kind="" ;;
         esac
     fi
 
@@ -157,12 +157,12 @@ _update_activity() {
         local i=0
         while IFS= read -r line; do
             case $i in
-                0) first_ts="$line" ;; 1) last_ts="$line" ;; 2) last_type="$line" ;;
-                3) prompts="$line" ;; 4) tools="$line" ;; 5) failures="$line" ;;
-                6) permissions="$line" ;; 7) stops="$line" ;; 8) attention_ts="$line" ;;
+            0) first_ts="$line" ;; 1) last_ts="$line" ;; 2) last_type="$line" ;;
+            3) prompts="$line" ;; 4) tools="$line" ;; 5) failures="$line" ;;
+            6) permissions="$line" ;; 7) stops="$line" ;; 8) attention_ts="$line" ;;
             esac
             i=$((i + 1))
-        done < "$activity_file"
+        done <"$activity_file"
         # Ensure numeric defaults for any missing/corrupt values
         first_ts="${first_ts:-$now}"
         prompts="${prompts:-0}"
@@ -177,18 +177,24 @@ _update_activity() {
     last_type="$event_kind"
 
     case "$event_kind" in
-        prompt)     prompts=$((prompts + 1)) ;;
-        tool)       tools=$((tools + 1)) ;;
-        failure)    failures=$((failures + 1)); attention_ts="$now" ;;
-        permission) permissions=$((permissions + 1)); attention_ts="$now" ;;
-        stop)       stops=$((stops + 1)) ;;
+    prompt) prompts=$((prompts + 1)) ;;
+    tool) tools=$((tools + 1)) ;;
+    failure)
+        failures=$((failures + 1))
+        attention_ts="$now"
+        ;;
+    permission)
+        permissions=$((permissions + 1))
+        attention_ts="$now"
+        ;;
+    stop) stops=$((stops + 1)) ;;
     esac
 
     local tmpfile="${activity_file}.tmp.$$"
     printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
         "$first_ts" "$last_ts" "$last_type" \
         "$prompts" "$tools" "$failures" "$permissions" "$stops" "$attention_ts" \
-        > "$tmpfile" && mv "$tmpfile" "$activity_file"
+        >"$tmpfile" && mv "$tmpfile" "$activity_file"
 }
 
 # Capture previous last_event_ts before _update_activity overwrites it.
@@ -199,10 +205,10 @@ if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission"
         _cap_i=0
         while IFS= read -r line; do
             case $_cap_i in
-                1) _prev_last_ts="$line" ;;
+            1) _prev_last_ts="$line" ;;
             esac
             _cap_i=$((_cap_i + 1))
-        done < "$_activity_file"
+        done <"$_activity_file"
     fi
 fi
 
@@ -221,43 +227,43 @@ remaining="$(strip_icons "$remaining")"
 
 # Apply the requested action.
 case "$ACTION" in
-    active)
-        state="bolt"
-        ;;
-    stop)
-        state="stop"
-        ;;
-    permission)
-        state="key"
-        ;;
-    idle)
-        state=""
-        ;;
-    failure)
-        state="error"
-        ;;
-    clear)
-        state=""
-        ;;
-    *)
-        echo "Error: unknown action '$ACTION' (expected 'active', 'stop', 'permission', 'idle', 'failure', or 'clear')" >&2
-        exit 1
-        ;;
+active)
+    state="bolt"
+    ;;
+stop)
+    state="stop"
+    ;;
+permission)
+    state="key"
+    ;;
+idle)
+    state=""
+    ;;
+failure)
+    state="error"
+    ;;
+clear)
+    state=""
+    ;;
+*)
+    echo "Error: unknown action '$ACTION' (expected 'active', 'stop', 'permission', 'idle', 'failure', or 'clear')" >&2
+    exit 1
+    ;;
 esac
 
 new_title="$(build_title "$remaining" "$has_star" "$state")"
 
 # Send macOS desktop notification if enabled for this event type.
 case "$ACTION" in
-    failure)
-        _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_ERROR" "$_ICON_ERROR" "Error" "$remaining"
-        ;;
-    permission)
-        _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_PERMISSION" "$_ICON_KEY" "Permission Required" "$remaining"
-        ;;
-    stop)
-        _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_STOP" "$_ICON_STOP" "Stopped" "$remaining"
-        ;;
+failure)
+    _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_ERROR" "$_ICON_ERROR" "Error" "$remaining"
+    ;;
+permission)
+    _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_PERMISSION" "$_ICON_KEY" "Permission Required" "$remaining"
+    ;;
+stop)
+    _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_STOP" "$_ICON_STOP" "Stopped" "$remaining"
+    ;;
 esac
 
 # Only update if the title actually changed.

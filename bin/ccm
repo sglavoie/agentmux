@@ -201,13 +201,16 @@ cmd_config() {
 	init)
 		cmd_config_init
 		;;
+	sync)
+		bash "$REPO_DIR/lib/sync-preambles.sh" "$REPO_DIR"
+		;;
 	"")
-		echo "Usage: ccm config <edit|show|path|init> [FILE]" >&2
+		echo "Usage: ccm config <edit|show|path|init|sync> [FILE]" >&2
 		echo "FILE: accounts, sessions, defaults, hooks" >&2
 		return 1
 		;;
 	*)
-		echo "Error: Unknown config subcommand '$1'. Use: edit, show, path, init" >&2
+		echo "Error: Unknown config subcommand '$1'. Use: edit, show, path, init, sync" >&2
 		return 1
 		;;
 	esac
@@ -280,9 +283,15 @@ Subcommands:
     show [FILE]     Print config file contents to stdout
     path [FILE]     Print resolved config file path(s)
     init            Copy example configs to ~/.config/cc-manager/ if missing
+    sync            Update documentation preambles in existing config files
 
 FILE can be: accounts, sessions, defaults, hooks
 When FILE is omitted, edit/show/path operate on accounts, sessions, and defaults.
+
+The sync subcommand replaces the documentation header (above the marker line)
+in each user config file with the latest version from the example files, while
+preserving all user data below the marker. This runs automatically during
+'make install' but can also be invoked standalone.
 HELP
 		;;
 	notify)

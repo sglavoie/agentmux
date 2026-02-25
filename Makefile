@@ -1,6 +1,7 @@
 PYTHON_SRC    := kittens/
 SHELL_SCRIPTS := bin/cc-launch bin/cc-status bin/cc-toggle-star bin/ccm \
-                 lib/cc-common.sh lib/cc-title-icons.sh lib/install-hooks.sh
+                 lib/cc-common.sh lib/cc-title-icons.sh lib/install-hooks.sh \
+                 lib/sync-preambles.sh
 RYE           := $(HOME)/.rye/shims/rye
 SHELLCHECK    := /opt/homebrew/bin/shellcheck
 SHFMT         := /opt/homebrew/bin/shfmt
@@ -29,7 +30,7 @@ SYMLINKS := \
 	$(PREFIX_ZFUNC)/_cc-status:completions/_cc-status \
 	$(PREFIX_KITTY)/cc-manager.conf:cc-manager.conf
 
-.PHONY: install uninstall install-hooks lint format format-check typecheck check
+.PHONY: install uninstall install-hooks sync-preambles lint format format-check typecheck check
 
 install:
 	@mkdir -p $(PREFIX_BIN) $(PREFIX_LIB) $(PREFIX_KITTY) $(PREFIX_ZFUNC)
@@ -42,7 +43,12 @@ install:
 	@echo ""
 	@echo "Then reload Kitty config with ctrl+shift+f5."
 	@echo ""
+	@$(MAKE) --no-print-directory sync-preambles
 	@$(MAKE) --no-print-directory install-hooks
+
+sync-preambles:
+	@echo "Syncing config documentation..."
+	@bash $(CURDIR)/lib/sync-preambles.sh "$(CURDIR)"
 
 install-hooks:
 	@echo "Installing Claude Code hooks..."
