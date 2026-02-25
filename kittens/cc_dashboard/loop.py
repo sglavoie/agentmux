@@ -1,6 +1,7 @@
 """Main event loop and session fingerprinting for the Claude Code Dashboard."""
 
 import curses
+import time
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.colors import CP_NORMAL, init_colors
@@ -11,6 +12,7 @@ from cc_dashboard.filters import (
     _sort_pick_entries,
 )
 from cc_dashboard.kitty_remote import (
+    _strip_account_prefix,
     compute_insert_location,
     do_close,
     do_focus,
@@ -32,6 +34,7 @@ from cc_dashboard.views import (
     draw_help_overlay,
     draw_list_view,
     draw_new_form,
+    draw_override_picker,
     draw_pick_view,
     draw_rename_input,
     draw_search_bar,
@@ -106,6 +109,10 @@ def dashboard(stdscr, socket):
     rename_value = ""
     rename_cursor = 0
 
+    # Override (account picker) state
+    override_selected = 0
+    override_source = "list"  # "list" or "pick" -- where O was pressed
+
     # New-session form state -- default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
     default_pw = (
@@ -123,7 +130,9 @@ def dashboard(stdscr, socket):
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "rename"):
+        if mode in ("list", "confirm", "confirm_restart", "rename") or (
+            mode == "override" and override_source == "list"
+        ):
             rows, _cols = stdscr.getmaxyx()
             detail_visible = show_detail and rows >= 20 and bool(filtered)
             draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible)
@@ -160,9 +169,12 @@ def dashboard(stdscr, socket):
             elif mode == "rename":
                 draw_rename_input(stdscr, rename_value, rename_cursor)
                 draw_footer(stdscr, "rename")
+            elif mode == "override" and filtered:
+                draw_override_picker(stdscr, filtered[selected], override_selected)
+                draw_footer(stdscr, "override")
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor)
-        elif mode == "pick":
+        elif mode == "pick" or (mode == "override" and override_source == "pick"):
             draw_pick_view(stdscr, pick_filtered, pick_selected, pick_running_count)
             if msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
@@ -174,6 +186,11 @@ def dashboard(stdscr, socket):
                     pick_search_active,
                     len(pick_filtered),
                 )
+            if mode == "override" and pick_filtered:
+                draw_override_picker(
+                    stdscr, pick_filtered[pick_selected], override_selected
+                )
+                draw_footer(stdscr, "override")
         elif mode == "help":
             draw_help_overlay(stdscr, help_scroll)
 
@@ -381,6 +398,16 @@ def dashboard(stdscr, socket):
                 rename_cursor = len(rename_value)
             elif key == ord("R") and filtered:
                 mode = "confirm_restart"
+            elif key == ord("O") and filtered:
+                mode = "override"
+                override_source = "list"
+                # Pre-select the session's current account
+                current_acct = filtered[selected]["account"]
+                override_selected = 0
+                for i, name in enumerate(_cfg._account_names):
+                    if name == current_acct:
+                        override_selected = i
+                        break
             elif key == ord("?"):
                 mode = "help"
                 help_scroll = 0
@@ -416,6 +443,84 @@ def dashboard(stdscr, socket):
                 msg = "Session restarted"
                 msg_frames = 20
             mode = "list"
+
+        # ── Override (account picker) ─────────────────────────────
+        elif mode == "override":
+            cancel_mode = "pick" if override_source == "pick" else "list"
+            if key in (27, ord("q"), ord("Q")):  # Esc / q -- cancel
+                mode = cancel_mode
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                if _cfg._account_names:
+                    override_selected = (override_selected - 1) % len(
+                        _cfg._account_names
+                    )
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                if _cfg._account_names:
+                    override_selected = (override_selected + 1) % len(
+                        _cfg._account_names
+                    )
+            elif key in (10, 13, curses.KEY_ENTER):
+                new_account = _cfg._account_names[override_selected]
+
+                if override_source == "pick" and pick_filtered:
+                    # Launch config entry with (possibly overridden) account
+                    entry = pick_filtered[pick_selected]
+                    title = entry["title"]
+                    if new_account != entry["account"]:
+                        stripped = _strip_account_prefix(title)
+                        title = f"{new_account[0].upper()}:{stripped}"
+                    pw_val = entry["pw"]
+                    loc = compute_insert_location(socket, new_account, title)
+                    do_launch(
+                        socket,
+                        title,
+                        entry["dir"],
+                        new_account,
+                        entry["flags"],
+                        pw_val,
+                        location=loc,
+                    )
+                    sessions = query_sessions(socket, managed_only=(not show_all))
+                    filtered = _apply_filters(sessions, search_query, account_filter)
+                    selected = max(0, len(filtered) - 1)
+                    msg = f'Launched "{title}"'
+                    msg_frames = 20
+                    mode = "list"
+
+                elif override_source == "list" and filtered:
+                    sess = filtered[selected]
+                    if new_account == sess["account"]:
+                        msg = "Same account selected, no change"
+                        msg_frames = 20
+                    else:
+                        if sess["status"] == "stopped":
+                            do_close(socket, sess["tab_id"])
+                            time.sleep(0.3)
+                            stripped = _strip_account_prefix(sess["title"])
+                            new_title = f"{new_account[0].upper()}:{stripped}"
+                            location = compute_insert_location(
+                                socket, new_account, new_title
+                            )
+                            do_launch(
+                                socket,
+                                new_title,
+                                sess["cwd"],
+                                new_account,
+                                location=location,
+                            )
+                        else:
+                            do_restart(socket, sess, account_override=new_account)
+                        sessions = query_sessions(socket, managed_only=(not show_all))
+                        filtered = _apply_filters(
+                            sessions, search_query, account_filter
+                        )
+                        selected = min(selected, max(0, len(filtered) - 1))
+                        msg = f'Switched to account "{new_account}"'
+                        msg_frames = 20
+                    mode = "list"
+
+                else:
+                    mode = cancel_mode
 
         # ── Rename mode ──────────────────────────────────────────
         elif mode == "rename":
@@ -611,6 +716,15 @@ def dashboard(stdscr, socket):
                 pick_selected = (pick_selected - 1) % len(pick_filtered)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and pick_filtered:
                 pick_selected = (pick_selected + 1) % len(pick_filtered)
+            elif key == ord("O") and pick_filtered:
+                mode = "override"
+                override_source = "pick"
+                current_acct = pick_filtered[pick_selected]["account"]
+                override_selected = 0
+                for i, name in enumerate(_cfg._account_names):
+                    if name == current_acct:
+                        override_selected = i
+                        break
             elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:
                 entry = pick_filtered[pick_selected]
                 pw_val = entry["pw"]

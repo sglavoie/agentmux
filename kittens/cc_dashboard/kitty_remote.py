@@ -53,16 +53,30 @@ def get_kitty_socket():
     return f"unix:{candidates[0]}" if candidates else ""
 
 
+_DEBUG_LOG = os.environ.get("CCM_DEBUG_LOG", "")
+
+
 def kitty_cmd(socket, *args):
     """Run a kitty @ remote control command. Returns the CompletedProcess or None."""
     try:
-        return subprocess.run(
+        result = subprocess.run(
             ["kitty", "@", "--to", socket, *list(args)],
             capture_output=True,
             text=True,
             timeout=5,
         )
-    except (subprocess.SubprocessError, OSError):
+        if _DEBUG_LOG and result.returncode != 0:
+            with open(_DEBUG_LOG, "a") as f:
+                f.write(
+                    f"FAIL rc={result.returncode} cmd={list(args)}\n"
+                    f"  stdout={result.stdout!r}\n"
+                    f"  stderr={result.stderr!r}\n"
+                )
+        return result
+    except (subprocess.SubprocessError, OSError) as exc:
+        if _DEBUG_LOG:
+            with open(_DEBUG_LOG, "a") as f:
+                f.write(f"EXCEPTION cmd={list(args)} exc={exc}\n")
         return None
 
 
@@ -437,21 +451,29 @@ def do_launch(
         )
 
 
-def do_restart(socket, session, flags="", pw_override=""):
-    """Close and relaunch a session with the same title, directory, and account."""
-    do_close(socket, session["tab_id"])
+def do_restart(socket, session, flags="", pw_override="", account_override=None):
+    """Close and relaunch a session with the same title, directory, and account.
+
+    When account_override is provided, the session is relaunched under the new
+    account.  The title prefix (e.g. 'W:') is updated to match the new account's
+    initial, and the tab receives the new account's color.
+    """
+    account = account_override if account_override else session["account"]
+    title = session["title"]
+
+    # Update the title prefix when switching accounts
+    if account_override:
+        stripped = _strip_account_prefix(title)
+        title = f"{account_override[0].upper()}:{stripped}"
+
+    tab_id = session["tab_id"]
+    cwd = session["cwd"]
+
+    do_close(socket, tab_id)
     time.sleep(0.3)
     # Compute insertion location after close so the dead tab ID isn't in the list
-    location = compute_insert_location(socket, session["account"], session["title"])
-    do_launch(
-        socket,
-        session["title"],
-        session["cwd"],
-        session["account"],
-        flags,
-        pw_override,
-        location=location,
-    )
+    location = compute_insert_location(socket, account, title)
+    do_launch(socket, title, cwd, account, flags, pw_override, location=location)
 
 
 def do_sort_tabs(socket):

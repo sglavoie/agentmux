@@ -461,6 +461,7 @@ _HELP_SECTIONS = [
         [
             ("x", "Close session (with confirmation)"),
             ("R", "Restart session (with confirmation)"),
+            ("O", "Override account for session"),
             ("r", "Rename selected session"),
             ("n", "Open new session form"),
             ("l", "Launch session from config"),
@@ -545,6 +546,7 @@ _FOOTER_HINTS = {
         "Enter Focus",
         "x Close",
         "R Restart",
+        "O Acct",
         "r Rename",
         "n New",
         "l Launch",
@@ -559,7 +561,8 @@ _FOOTER_HINTS = {
     "confirm": ["y Confirm close", "Any other key Cancel"],
     "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
     "new": ["Enter Next/Submit", "Tab Cycle", "Esc Cancel"],
-    "pick": ["Enter Launch", "/ Search", "Esc Back", "q Back"],
+    "pick": ["Enter Launch", "O Acct", "/ Search", "Esc Back", "q Back"],
+    "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
 }
 
 
@@ -586,6 +589,71 @@ def draw_confirm_prompt(stdscr, session, action="Close"):
     rows, _ = stdscr.getmaxyx()
     msg = f'{action} session "{session["title"]}"?  y/n'
     safe_addstr(stdscr, rows - 3, 2, msg, curses.color_pair(CP_WARN) | curses.A_BOLD)
+
+
+def draw_override_picker(stdscr, session, override_selected):
+    """Draw an account selection overlay for account override.
+
+    Shows all configured accounts in a centered box, each in its own color.
+    The currently selected account is marked with an arrow, and the session's
+    current account is labeled "(current)".
+    """
+    rows, cols = stdscr.getmaxyx()
+    names = _cfg._account_names
+    if not names:
+        return
+
+    # Box dimensions
+    max_name_len = max(len(n) for n in names)
+    # "  > name (current)" — arrow(2) + name + " (current)"(10) + padding
+    box_w = min(cols - 4, max(30, max_name_len + 20))
+    box_h = len(names) + 4  # title + blank + entries + blank
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    # Draw background
+    blank_line = " " * box_w
+    dim_attr = curses.color_pair(CP_DIM)
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    # Title
+    title = "Override Account"
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    # Subtitle: session name
+    session_title = session["title"]
+    sub = f'for "{session_title}"'
+    safe_addstr(
+        stdscr,
+        box_y + 1,
+        box_x + max(0, (box_w - len(sub)) // 2),
+        sub,
+        dim_attr,
+    )
+
+    # Account list
+    current_account = session["account"]
+    for i, name in enumerate(names):
+        y = box_y + 3 + i
+        if y >= rows - 1:
+            break
+        sel = i == override_selected
+        marker = "\u25b8 " if sel else "  "
+        suffix = " (current)" if name == current_account else ""
+        label = f"{marker}{name}{suffix}"
+
+        cp = _cp_for_account(name, selected=sel)
+        attr = curses.color_pair(cp)
+        if sel:
+            attr |= curses.A_BOLD
+        safe_addstr(stdscr, y, box_x + 2, label, attr)
 
 
 def draw_status_message(stdscr, message):
