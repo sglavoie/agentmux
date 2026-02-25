@@ -456,7 +456,17 @@ def dashboard(stdscr, socket):
             if key in (ord("y"), ord("Y")) and filtered:
                 sess = filtered[selected]
                 is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
-                do_restart(socket, sess, host_tab_id=host_tab_id)
+                cfg_entry = _cfg._find_config_session(sess["title"])
+                if cfg_entry is None:
+                    cfg_entry = _cfg._find_config_session(
+                        _strip_override_marker(sess["title"])
+                    )
+                r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                do_restart(
+                    socket, sess, flags=r_flags, pw_override=r_pw,
+                    host_tab_id=host_tab_id,
+                )
                 if is_host:
                     # Detached process will close+relaunch the host tab;
                     # the dashboard overlay will be destroyed with it.

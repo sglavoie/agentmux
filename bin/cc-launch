@@ -392,7 +392,26 @@ cmd_restart() {
 		loc_args="--location after"
 	fi
 
-	launch_session "$title" "$dir" "$account" "" "" "$loc_args"
+	# Look up per-session flags and project_window from sessions.conf
+	local cfg_flags="" cfg_pw=""
+	if [[ -f "$CONFIG_FILE" ]]; then
+		# Strip trailing override markers (U+203E OVERLINE) for matching
+		local lookup_title="${title%%‾*}"
+		local cfg_line
+		while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
+			[[ -z "$cfg_line" || "$cfg_line" =~ ^[[:space:]]*# ]] && continue
+			local cfg_title cfg_f cfg_p
+			IFS='|' read -r cfg_title _ _ cfg_f cfg_p <<<"$cfg_line"
+			cfg_title="$(echo "$cfg_title" | xargs)"
+			if [[ "$cfg_title" == "$lookup_title" ]]; then
+				cfg_flags="$(echo "${cfg_f:-}" | xargs)"
+				cfg_pw="$(echo "${cfg_p:-}" | xargs)"
+				break
+			fi
+		done <"$CONFIG_FILE"
+	fi
+
+	launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args"
 }
 
 # ---------------------------------------------------------------------------
