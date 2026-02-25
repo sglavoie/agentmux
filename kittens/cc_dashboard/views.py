@@ -18,7 +18,11 @@ from cc_dashboard.colors import (
     _cp_for_account,
 )
 from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
-from cc_dashboard.kitty_remote import _ICON_STATES, _strip_override_marker, format_duration
+from cc_dashboard.kitty_remote import (
+    _ICON_STATES,
+    _strip_override_marker,
+    format_duration,
+)
 
 # ── Detail pane ──────────────────────────────────────────────────────────────
 
@@ -38,9 +42,7 @@ def draw_detail_pane(stdscr, session, detail_y):
     # Look up config session for flags/split info; retry without override marker
     cfg_entry = _cfg._find_config_session(session["title"])
     if cfg_entry is None:
-        cfg_entry = _cfg._find_config_session(
-            _strip_override_marker(session["title"])
-        )
+        cfg_entry = _cfg._find_config_session(_strip_override_marker(session["title"]))
     effective_flags = ""
     effective_split = ""
     if cfg_entry:
@@ -194,10 +196,14 @@ def _send_notification(title, subtitle, message, group=None, timeout=10):
     global _alerter_warned
     cmd = [
         "alerter",
-        "--title", title,
-        "--subtitle", subtitle,
-        "--message", message,
-        "--timeout", str(timeout),
+        "--title",
+        title,
+        "--subtitle",
+        subtitle,
+        "--message",
+        message,
+        "--timeout",
+        str(timeout),
     ]
     if group is not None:
         cmd += ["--group", str(group)]
@@ -644,7 +650,7 @@ def draw_override_picker(stdscr, session, override_selected):
 
     def _short(p):
         if p.startswith(home):
-            return "~" + p[len(home):]
+            return "~" + p[len(home) :]
         return p
 
     display_dirs = [_short(d) for d in dirs]

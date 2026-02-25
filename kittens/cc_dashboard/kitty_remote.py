@@ -424,7 +424,11 @@ def do_launch(
 
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
-    config_dir = config_dir_override if config_dir_override else _cfg._accounts.get(account, {}).get("config_dir", "")
+    config_dir = (
+        config_dir_override
+        if config_dir_override
+        else _cfg._accounts.get(account, {}).get("config_dir", "")
+    )
 
     if config_dir and config_dir != default_dir:
         cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]

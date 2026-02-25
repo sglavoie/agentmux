@@ -30,6 +30,18 @@
 #                        idle_alert_minutes threshold. Only fires once per idle
 #                        period (resets when the session becomes active again).
 #                        Values: on, (empty/off) = disabled. Default: off.
+#   notify_min_secs    — Minimum seconds since last activity before any
+#                        notification (stop, error, permission) fires.
+#                        If an event arrives within this window, the
+#                        notification is suppressed (e.g. after /clear).
+#                        The tab icon is unaffected.
+#                        Values: 0 = disabled, any positive integer.
+#                        Default: 0.
+#   notify_ignore_patterns — Pipe-separated regex patterns matched against
+#                            the current Kitty screen content. If any pattern
+#                            matches, the notification is suppressed.
+#                            Example: Conversation cleared|Context compacted
+#                            Default: empty (disabled).
 #
 # Lines starting with # are comments. Blank lines are ignored.
 # Whitespace around the = delimiter is trimmed.
@@ -43,3 +55,5 @@
 # notify_stop = off
 # idle_alert_minutes = 30
 # notify_idle = on
+# notify_min_secs = 3
+# notify_ignore_patterns = Conversation cleared|Context compacted

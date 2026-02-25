@@ -283,6 +283,8 @@ _DEFAULT_NOTIFY_PERMISSION=""
 _DEFAULT_NOTIFY_STOP=""
 _DEFAULT_IDLE_ALERT_MINUTES=""
 _DEFAULT_NOTIFY_IDLE=""
+_DEFAULT_NOTIFY_MIN_SECS=""
+_DEFAULT_NOTIFY_IGNORE_PATTERNS=""
 
 load_defaults() {
 	_DEFAULT_CLAUDE_FLAGS=""
@@ -294,6 +296,8 @@ load_defaults() {
 	_DEFAULT_NOTIFY_STOP=""
 	_DEFAULT_IDLE_ALERT_MINUTES=""
 	_DEFAULT_NOTIFY_IDLE=""
+	_DEFAULT_NOTIFY_MIN_SECS=""
+	_DEFAULT_NOTIFY_IGNORE_PATTERNS=""
 
 	[[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
@@ -330,6 +334,12 @@ load_defaults() {
 			;;
 		notify_idle)
 			_DEFAULT_NOTIFY_IDLE="$value"
+			;;
+		notify_min_secs)
+			_DEFAULT_NOTIFY_MIN_SECS="$value"
+			;;
+		notify_ignore_patterns)
+			_DEFAULT_NOTIFY_IGNORE_PATTERNS="$value"
 			;;
 		esac
 	done <"$DEFAULTS_CONFIG"

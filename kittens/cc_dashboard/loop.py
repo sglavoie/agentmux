@@ -15,7 +15,6 @@ from cc_dashboard.filters import (
 from cc_dashboard.kitty_remote import (
     OVERRIDE_MARKER,
     _append_override_marker,
-    _strip_account_prefix,
     _strip_override_marker,
     compute_insert_location,
     do_close,
@@ -408,9 +407,9 @@ def dashboard(stdscr, socket):
                 mode = "override"
                 override_source = "list"
                 # Pre-select the session's current config dir
-                current_dir = _cfg._accounts.get(
-                    filtered[selected]["account"], {}
-                ).get("config_dir", "")
+                current_dir = _cfg._accounts.get(filtered[selected]["account"], {}).get(
+                    "config_dir", ""
+                )
                 dirs = _cfg._unique_config_dirs()
                 override_selected = 0
                 for i, d in enumerate(dirs):
@@ -474,9 +473,7 @@ def dashboard(stdscr, socket):
                     entry = pick_filtered[pick_selected]
                     account = entry["account"]
                     title = entry["title"]
-                    current_dir = _cfg._accounts.get(account, {}).get(
-                        "config_dir", ""
-                    )
+                    current_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
                     cdo = None
                     if selected_path != current_dir:
                         title = _append_override_marker(title)
@@ -502,9 +499,9 @@ def dashboard(stdscr, socket):
 
                 elif override_source == "list" and filtered:
                     sess = filtered[selected]
-                    current_dir = _cfg._accounts.get(
-                        sess["account"], {}
-                    ).get("config_dir", "")
+                    current_dir = _cfg._accounts.get(sess["account"], {}).get(
+                        "config_dir", ""
+                    )
                     if selected_path == current_dir:
                         msg = "Same config dir selected, no change"
                         msg_frames = 20
@@ -527,7 +524,8 @@ def dashboard(stdscr, socket):
                             )
                         else:
                             do_restart(
-                                socket, sess,
+                                socket,
+                                sess,
                                 config_dir_override=selected_path,
                             )
                         sessions = query_sessions(socket, managed_only=(not show_all))
@@ -538,7 +536,7 @@ def dashboard(stdscr, socket):
                         home = os.path.expanduser("~")
                         display_path = selected_path
                         if display_path.startswith(home):
-                            display_path = "~" + display_path[len(home):]
+                            display_path = "~" + display_path[len(home) :]
                         msg = f'Config dir overridden to "{display_path}"'
                         msg_frames = 20
                     mode = "list"

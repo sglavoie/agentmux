@@ -72,6 +72,43 @@ _maybe_notify() {
         >/dev/null 2>&1 &
 }
 
+# ---------------------------------------------------------------------------
+# Notification suppression helpers
+# ---------------------------------------------------------------------------
+_is_too_recent() {
+    local min_secs="${_DEFAULT_NOTIFY_MIN_SECS:-0}"
+    [[ "$min_secs" -gt 0 ]] || return 1  # threshold disabled
+    [[ "$_prev_last_ts" -gt 0 ]] || return 0  # no prior activity = suppress
+
+    local now
+    now=$(date +%s)
+    local elapsed=$((now - _prev_last_ts))
+    (( elapsed < min_secs ))
+}
+
+_matches_ignore_pattern() {
+    local patterns="${_DEFAULT_NOTIFY_IGNORE_PATTERNS:-}"
+    [[ -n "$patterns" ]] || return 1  # no patterns = don't suppress
+
+    local screen_text
+    screen_text=$(kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} get-text --extent screen --match "id:$KITTY_WINDOW_ID" 2>/dev/null) || return 1
+
+    local IFS='|'
+    for pattern in $patterns; do
+        [[ -n "$pattern" ]] || continue
+        if echo "$screen_text" | grep -qE "$pattern"; then
+            return 0  # match found = suppress
+        fi
+    done
+    return 1
+}
+
+_should_suppress_notify() {
+    _is_too_recent && return 0
+    _matches_ignore_pattern && return 0
+    return 1
+}
+
 # Discover the Kitty socket.
 TO_ARGS=()
 if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
@@ -154,6 +191,21 @@ _update_activity() {
         > "$tmpfile" && mv "$tmpfile" "$activity_file"
 }
 
+# Capture previous last_event_ts before _update_activity overwrites it.
+_prev_last_ts=0
+if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission" ]]; then
+    _activity_file="/tmp/ccm-activity-${tab_id}.counts"
+    if [[ -f "$_activity_file" ]]; then
+        _cap_i=0
+        while IFS= read -r line; do
+            case $_cap_i in
+                1) _prev_last_ts="$line" ;;
+            esac
+            _cap_i=$((_cap_i + 1))
+        done < "$_activity_file"
+    fi
+fi
+
 _update_activity
 
 # Determine current icon state.
@@ -197,9 +249,15 @@ new_title="$(build_title "$remaining" "$has_star" "$state")"
 
 # Send macOS desktop notification if enabled for this event type.
 case "$ACTION" in
-    failure)    _maybe_notify "$_DEFAULT_NOTIFY_ERROR" "$_ICON_ERROR" "Error" "$remaining" ;;
-    permission) _maybe_notify "$_DEFAULT_NOTIFY_PERMISSION" "$_ICON_KEY" "Permission Required" "$remaining" ;;
-    stop)       _maybe_notify "$_DEFAULT_NOTIFY_STOP" "$_ICON_STOP" "Stopped" "$remaining" ;;
+    failure)
+        _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_ERROR" "$_ICON_ERROR" "Error" "$remaining"
+        ;;
+    permission)
+        _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_PERMISSION" "$_ICON_KEY" "Permission Required" "$remaining"
+        ;;
+    stop)
+        _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_STOP" "$_ICON_STOP" "Stopped" "$remaining"
+        ;;
 esac
 
 # Only update if the title actually changed.
