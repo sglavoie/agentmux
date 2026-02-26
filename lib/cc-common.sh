@@ -774,7 +774,5 @@ sort_tabs() {
 		reorder_args+=("--focus=$focused_id")
 	fi
 	reorder_args+=("${desired_ids[@]}")
-	if ! kitty @ --to "$socket" kitten cc_reorder_tabs.py "${reorder_args[@]}" 2>/tmp/cc-reorder-debug.log; then
-		echo "reorder_tabs error: $(cat /tmp/cc-reorder-debug.log)" >&2
-	fi
+	kitty @ --to "$socket" kitten cc_reorder_tabs.py "${reorder_args[@]}"
 }
