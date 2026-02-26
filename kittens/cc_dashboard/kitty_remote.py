@@ -858,29 +858,16 @@ def do_sort_tabs(socket):
     if desired_ids == current_ids:
         return
 
-    # Selection sort using focus + move
-    pos_list = list(current_ids)
-    total = len(pos_list)
-
-    for target_pos in range(total):
-        want_id = desired_ids[target_pos]
-
-        cur_pos = pos_list.index(want_id)
-        if cur_pos == target_pos:
-            continue
-
-        kitty_cmd(socket, "focus-tab", "--match", f"id:{want_id}")
-        time.sleep(0.05)
-
-        moves = abs(cur_pos - target_pos)
-        direction = "move_tab_backward" if cur_pos > target_pos else "move_tab_forward"
-        for _ in range(moves):
-            kitty_cmd(socket, "action", direction)
-
-        # Update position tracking
-        pos_list.pop(cur_pos)
-        pos_list.insert(target_pos, want_id)
-
-    # Restore original focus
+    # Atomically reorder tabs via headless kitten (kitty @ kitten dispatches
+    # directly into the Kitty process, triggering handle_result with boss)
+    cmd = [
+        "kitty", "@", "--to", socket, "kitten",
+        "cc_reorder_tabs.py",
+    ]
     if focused_id is not None:
-        kitty_cmd(socket, "focus-tab", "--match", f"id:{focused_id}")
+        cmd.append(f"--focus={focused_id}")
+    cmd.extend(str(tid) for tid in desired_ids)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+    if result.returncode != 0:
+        import sys
+        print(f"reorder_tabs error: {result.stderr}", file=sys.stderr)

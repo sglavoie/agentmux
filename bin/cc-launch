@@ -108,11 +108,11 @@ cmd_launch_interactive() {
 
 	while IFS='|' read -r title dir account flags pw; do
 		[[ -z "$title" ]] && continue
-		title="$(echo "$title" | xargs)"
-		dir="$(echo "$dir" | xargs)"
-		account="$(echo "${account:-work}" | xargs)"
-		flags="$(echo "${flags:-}" | xargs)"
-		pw="$(echo "${pw:-}" | xargs)"
+		title="$(_trim "$title")"
+		dir="$(_trim "$dir")"
+		account="$(_trim "${account:-work}")"
+		flags="$(_trim "${flags:-}")"
+		pw="$(_trim "${pw:-}")"
 		[[ -z "$account" ]] && account="work"
 
 		local insert_loc loc_args=""
@@ -164,11 +164,11 @@ cmd_launch_all() {
 		# Parse pipe-delimited fields and trim whitespace
 		local title dir account flags pw
 		IFS='|' read -r title dir account flags pw <<<"$line"
-		title="$(echo "$title" | xargs)"
-		dir="$(echo "$dir" | xargs)"
-		account="$(echo "${account:-work}" | xargs)"
-		flags="$(echo "${flags:-}" | xargs)"
-		pw="$(echo "${pw:-}" | xargs)"
+		title="$(_trim "$title")"
+		dir="$(_trim "$dir")"
+		account="$(_trim "${account:-work}")"
+		flags="$(_trim "${flags:-}")"
+		pw="$(_trim "${pw:-}")"
 		[[ -z "$account" ]] && account="work"
 
 		local insert_loc loc_args=""
@@ -402,10 +402,10 @@ cmd_restart() {
 			[[ -z "$cfg_line" || "$cfg_line" =~ ^[[:space:]]*# ]] && continue
 			local cfg_title cfg_f cfg_p
 			IFS='|' read -r cfg_title _ _ cfg_f cfg_p <<<"$cfg_line"
-			cfg_title="$(echo "$cfg_title" | xargs)"
+			cfg_title="$(_trim "$cfg_title")"
 			if [[ "$cfg_title" == "$lookup_title" ]]; then
-				cfg_flags="$(echo "${cfg_f:-}" | xargs)"
-				cfg_pw="$(echo "${cfg_p:-}" | xargs)"
+				cfg_flags="$(_trim "${cfg_f:-}")"
+				cfg_pw="$(_trim "${cfg_p:-}")"
 				break
 			fi
 		done <"$CONFIG_FILE"
@@ -751,7 +751,7 @@ cmd_save() {
 	} >"$output_file"
 
 	local count
-	count="$(echo "$sessions" | wc -l | xargs)"
+	count="$(_trim "$(echo "$sessions" | wc -l)")"
 	echo "Saved $count session(s) to $output_file"
 }
 

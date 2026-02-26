@@ -7,6 +7,16 @@
 _CC_COMMON_LOADED=1
 
 # ---------------------------------------------------------------------------
+# Utility: trim leading/trailing whitespace (shell-native, xargs-safe)
+# ---------------------------------------------------------------------------
+_trim() {
+	local s="$1"
+	s="${s#"${s%%[![:space:]]*}"}"
+	s="${s%"${s##*[![:space:]]}"}"
+	printf '%s' "$s"
+}
+
+# ---------------------------------------------------------------------------
 # Data directory resolution and JSON loading
 # ---------------------------------------------------------------------------
 _CC_DATA_DIR=""
@@ -224,9 +234,9 @@ load_accounts() {
 			[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 			local name config_dir color
 			IFS='|' read -r name config_dir color <<<"$line"
-			name="$(echo "$name" | xargs)"
-			config_dir="$(echo "$config_dir" | xargs)"
-			color="$(echo "$color" | xargs)"
+			name="$(_trim "$name")"
+			config_dir="$(_trim "$config_dir")"
+			color="$(_trim "$color")"
 			config_dir="$(expand_tilde "$config_dir")"
 			[[ -z "$name" ]] && continue
 			_ACCOUNT_NAMES+=("$name")
@@ -305,8 +315,8 @@ load_defaults() {
 		[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 		local key value
 		IFS='=' read -r key value <<<"$line"
-		key="$(echo "$key" | xargs)"
-		value="$(echo "$value" | xargs)"
+		key="$(_trim "$key")"
+		value="$(_trim "$value")"
 		case "$key" in
 		claude_flags)
 			_DEFAULT_CLAUDE_FLAGS="$value"
@@ -476,7 +486,7 @@ compute_insert_location() {
             if length > 0 then .[0] else "" end
         ) as $cc_acct |
         select($cc_acct != "" or ($stripped | test("^[A-Z]:"))) |
-        [(.id | tostring), .title, $cc_acct, $stripped] | @tsv
+        [(.id | tostring), .title, (if $cc_acct == "" then "-" else $cc_acct end), $stripped] | @tsv
     ')"
 
 	# Build sort keys for existing managed tabs
@@ -487,6 +497,7 @@ compute_insert_location() {
 	if [[ -n "$tab_data" ]]; then
 		while IFS=$'\t' read -r tid traw taccount tstripped; do
 			[[ -z "$tid" ]] && continue
+			[[ "$taccount" == "-" ]] && taccount=""
 			local acct="$taccount"
 			if [[ -z "$acct" && "$tstripped" =~ ^[A-Z]: ]]; then
 				local initial="${tstripped:0:1}"
@@ -592,7 +603,7 @@ sort_tabs() {
             ($tab.id | tostring),
             $tab.title,
             $stripped,
-            $cc_acct,
+            (if $cc_acct == "" then "-" else $cc_acct end),
             (if $tab.is_focused then "1" else "0" end)
         ] | @tsv
     ')"
@@ -609,6 +620,7 @@ sort_tabs() {
 
 	while IFS=$'\t' read -r tid ttitle tstripped taccount tfocused; do
 		[[ -z "$tid" ]] && continue
+		[[ "$taccount" == "-" ]] && taccount=""
 		tab_ids+=("$tid")
 		tab_titles+=("$ttitle")
 		tab_stripped+=("$tstripped")
@@ -694,7 +706,7 @@ sort_tabs() {
 				sorted_managed+=("$si")
 			done < <(printf '%s\n' "${sort_input[@]}" | sort -f -t $'\t' -k1,1)
 		fi
-		for mi in "${sorted_managed[@]}"; do
+		for mi in ${sorted_managed[@]+"${sorted_managed[@]}"}; do
 			desired_order+=("$mi")
 		done
 	else
@@ -722,15 +734,15 @@ sort_tabs() {
 				sorted_pinned+=("$si")
 			done < <(printf '%s\n' "${pinned_input[@]}" | sort -f -t $'\t' -k1,1)
 		fi
-		for mi in "${sorted_pinned[@]}"; do
+		for mi in ${sorted_pinned[@]+"${sorted_pinned[@]}"}; do
 			desired_order+=("$mi")
 		done
-		for mi in "${unpinned_managed[@]}"; do
+		for mi in ${unpinned_managed[@]+"${unpinned_managed[@]}"}; do
 			desired_order+=("$mi")
 		done
 	fi
 
-	for mi in "${unmanaged_indices[@]}"; do
+	for mi in ${unmanaged_indices[@]+"${unmanaged_indices[@]}"}; do
 		desired_order+=("$mi")
 	done
 
@@ -755,73 +767,14 @@ sort_tabs() {
 	done
 	[[ "$already_sorted" == "true" ]] && return 0
 
-	# Build position map: tab_id -> current position
-	local -a pos_by_id=()
-	for ((di = 0; di < total; di++)); do
-		pos_by_id+=("${current_ids[$di]}")
-	done
-
-	# Selection sort: for each target position, move the correct tab there
-	for ((di = 0; di < total; di++)); do
-		local want_id="${desired_ids[$di]}"
-
-		# Find current position of wanted tab
-		local cur_pos=-1
-		local pi
-		for ((pi = 0; pi < total; pi++)); do
-			if [[ "${pos_by_id[$pi]}" == "$want_id" ]]; then
-				cur_pos=$pi
-				break
-			fi
-		done
-
-		[[ $cur_pos -eq $di ]] && continue
-
-		# Focus the tab we want to move
-		kitty @ --to "$socket" focus-tab --match "id:$want_id" 2>/dev/null
-		sleep 0.05
-
-		if [[ $cur_pos -gt $di ]]; then
-			# Move backward (cur_pos - di) times
-			local moves=$((cur_pos - di))
-			local mi
-			for ((mi = 0; mi < moves; mi++)); do
-				kitty @ --to "$socket" action move_tab_backward 2>/dev/null
-			done
-		else
-			# Move forward (di - cur_pos) times
-			local moves=$((di - cur_pos))
-			local mi
-			for ((mi = 0; mi < moves; mi++)); do
-				kitty @ --to "$socket" action move_tab_forward 2>/dev/null
-			done
-		fi
-
-		# Update position tracking: remove from cur_pos, insert at di
-		local moved_id="${pos_by_id[$cur_pos]}"
-		local -a new_pos=()
-		for ((pi = 0; pi < total; pi++)); do
-			[[ $pi -eq $cur_pos ]] && continue
-			new_pos+=("${pos_by_id[$pi]}")
-		done
-		# Insert at di
-		local -a final_pos=()
-		local inserted=false
-		for ((pi = 0; pi < ${#new_pos[@]}; pi++)); do
-			if [[ $pi -eq $di ]] && [[ "$inserted" == "false" ]]; then
-				final_pos+=("$moved_id")
-				inserted=true
-			fi
-			final_pos+=("${new_pos[$pi]}")
-		done
-		if [[ "$inserted" == "false" ]]; then
-			final_pos+=("$moved_id")
-		fi
-		pos_by_id=("${final_pos[@]}")
-	done
-
-	# Restore focus to the originally focused tab
+	# Atomically reorder tabs via headless kitten (kitty @ kitten dispatches
+	# directly into the Kitty process, triggering handle_result with boss)
+	local -a reorder_args=()
 	if [[ -n "$focused_id" ]]; then
-		kitty @ --to "$socket" focus-tab --match "id:$focused_id" 2>/dev/null
+		reorder_args+=("--focus=$focused_id")
+	fi
+	reorder_args+=("${desired_ids[@]}")
+	if ! kitty @ --to "$socket" kitten cc_reorder_tabs.py "${reorder_args[@]}" 2>/tmp/cc-reorder-debug.log; then
+		echo "reorder_tabs error: $(cat /tmp/cc-reorder-debug.log)" >&2
 	fi
 }
