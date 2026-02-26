@@ -251,6 +251,31 @@ clear)
     ;;
 esac
 
+# Priority guard: prevent async 'active' (PostToolUse) from overwriting
+# a high-priority state (stop/failure/permission) that was just set.
+_state_file="/tmp/ccm-state-${tab_id}"
+
+case "$ACTION" in
+stop|failure|permission)
+    # Mark high-priority state so concurrent 'active' calls don't overwrite
+    echo "$ACTION $(date +%s)" > "$_state_file"
+    ;;
+active)
+    # Check if a high-priority state was set recently (within 2s)
+    if [[ -f "$_state_file" ]]; then
+        _prio_ts=$(awk '{print $2}' "$_state_file")
+        _now=$(date +%s)
+        if ((_now - _prio_ts < 2)); then
+            exit 0
+        fi
+        rm -f "$_state_file"
+    fi
+    ;;
+idle|clear)
+    rm -f "$_state_file"
+    ;;
+esac
+
 new_title="$(build_title "$remaining" "$has_star" "$state")"
 
 # Send macOS desktop notification if enabled for this event type.
