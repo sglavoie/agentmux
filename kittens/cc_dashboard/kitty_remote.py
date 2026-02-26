@@ -518,6 +518,53 @@ def do_launch(
         )
 
 
+def _spawn_detached_close(socket, tab_id):
+    """Spawn a detached subprocess to close a tab after the dashboard exits.
+
+    Used when the tab being closed is the dashboard's own host tab.
+    A short delay lets the dashboard's return clean up curses before the tab
+    is destroyed.
+    """
+    steps = [
+        {
+            "cmd": [
+                "kitty",
+                "@",
+                "--to",
+                socket,
+                "close-tab",
+                "--match",
+                f"id:{tab_id}",
+            ],
+            "sleep": 0.3,
+        }
+    ]
+
+    script = """
+import json, os, subprocess, time
+steps = json.loads(os.environ["_CCM_STEPS"])
+for step in steps:
+    cmd = step["cmd"]
+    sleep_after = step.get("sleep", 0)
+    if sleep_after:
+        time.sleep(sleep_after)
+    subprocess.run(cmd, capture_output=True)
+"""
+    env = os.environ.copy()
+    env["_CCM_STEPS"] = json.dumps(steps)
+
+    python = shutil.which("python3") or shutil.which("python")
+    if not python:
+        return
+    subprocess.Popen(
+        [python, "-c", script],
+        start_new_session=True,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def _spawn_detached_restart(
     socket,
     tab_id,

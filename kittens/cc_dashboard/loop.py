@@ -17,6 +17,7 @@ from cc_dashboard.kitty_remote import (
     _append_override_marker,
     _strip_override_marker,
     compute_insert_location,
+    _spawn_detached_close,
     do_close,
     do_focus,
     do_launch,
@@ -440,8 +441,8 @@ def dashboard(stdscr, socket):
             if key in (ord("y"), ord("Y")) and filtered:
                 target = filtered[selected]
                 if host_tab_id is not None and target["tab_id"] == host_tab_id:
-                    msg = "Cannot close host tab from dashboard"
-                    msg_frames = 30
+                    _spawn_detached_close(socket, target["tab_id"])
+                    return
                 else:
                     do_close(socket, target["tab_id"])
                     sessions = query_sessions(socket, managed_only=(not show_all))
@@ -516,12 +517,7 @@ def dashboard(stdscr, socket):
                         location=loc,
                         config_dir_override=cdo,
                     )
-                    sessions = query_sessions(socket, managed_only=(not show_all))
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = max(0, len(filtered) - 1)
-                    msg = f'Launched "{title}"'
-                    msg_frames = 20
-                    mode = "list"
+                    return
 
                 elif override_source == "list" and filtered:
                     sess = filtered[selected]
@@ -548,6 +544,7 @@ def dashboard(stdscr, socket):
                                 location=location,
                                 config_dir_override=selected_path,
                             )
+                            return
                         else:
                             is_host = (
                                 host_tab_id is not None
@@ -667,13 +664,7 @@ def dashboard(stdscr, socket):
                     if t and d:
                         loc = compute_insert_location(socket, a, t)
                         do_launch(socket, t, d, a, fl, pw_val, location=loc)
-                        sessions = query_sessions(socket, managed_only=(not show_all))
-                        filtered = _apply_filters(
-                            sessions, search_query, account_filter
-                        )
-                        selected = max(0, len(filtered) - 1)
-                        msg = f'Launched "{t}"'
-                        msg_frames = 20
+                        return
                     else:
                         msg = "Title and directory are required"
                         msg_frames = 20
@@ -800,9 +791,4 @@ def dashboard(stdscr, socket):
                     pw_val,
                     location=loc,
                 )
-                sessions = query_sessions(socket, managed_only=(not show_all))
-                filtered = _apply_filters(sessions, search_query, account_filter)
-                selected = max(0, len(filtered) - 1)
-                msg = f'Launched "{entry["title"]}"'
-                msg_frames = 20
-                mode = "list"
+                return
