@@ -37,7 +37,7 @@ include cc-manager.conf
 
 Then reload Kitty config with `ctrl+shift+f5`.
 
-This gives you `cmd+1` through `cmd+0` for tabs 1-10, `cmd+l` to toggle between the last two tabs, error marker highlighting on `f3`, broadcast input on `f1`, and `ctrl+shift+d` to open the interactive session dashboard.
+This gives you `cmd+1` through `cmd+0` for tabs 1-10, `cmd+l` to toggle between the last two tabs, error marker highlighting on `f3`, a keybinding quick-reference on `f1`, broadcast input on `f12`, and `ctrl+shift+d` to open the interactive session dashboard.
 
 ### 3. Define your accounts
 

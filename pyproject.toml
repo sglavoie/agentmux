@@ -36,6 +36,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 "claude_dashboard.py" = ["E402"]
 "cc_session_picker.py" = ["E402"]
 "cc_quick_switch.py" = ["E402"]
+"cc_keybindings.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.13"

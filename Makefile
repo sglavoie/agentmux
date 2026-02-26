@@ -25,6 +25,7 @@ SYMLINKS := \
 	$(PREFIX_KITTY)/claude_dashboard.py:kittens/claude_dashboard.py \
 	$(PREFIX_KITTY)/cc_session_picker.py:kittens/cc_session_picker.py \
 	$(PREFIX_KITTY)/cc_quick_switch.py:kittens/cc_quick_switch.py \
+	$(PREFIX_KITTY)/cc_keybindings.py:kittens/cc_keybindings.py \
 	$(PREFIX_KITTY)/cc_reorder_tabs.py:kittens/cc_reorder_tabs.py \
 	$(PREFIX_ZFUNC)/_ccm:completions/_ccm \
 	$(PREFIX_ZFUNC)/_cc-launch:completions/_cc-launch \
