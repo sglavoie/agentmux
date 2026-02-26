@@ -458,7 +458,6 @@ compute_insert_location() {
 	local socket="$1"
 	local new_account="$2"
 	local new_title="$3"
-	[[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]] || return 0
 
 	_load_icons
 	local strip_re
@@ -467,7 +466,7 @@ compute_insert_location() {
 	local ls_json
 	ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 0
 
-	# Extract managed tabs: tab_id, account, stripped_title
+	# Extract managed tabs: tab_id, raw_title, account, stripped_title
 	local tab_data
 	tab_data="$(printf '%s' "$ls_json" | jq -r --arg strip_re "$strip_re" '
         .[0].tabs // [] | .[] |
@@ -477,15 +476,16 @@ compute_insert_location() {
             if length > 0 then .[0] else "" end
         ) as $cc_acct |
         select($cc_acct != "" or ($stripped | test("^[A-Z]:"))) |
-        [(.id | tostring), $cc_acct, $stripped] | @tsv
+        [(.id | tostring), .title, $cc_acct, $stripped] | @tsv
     ')"
 
 	# Build sort keys for existing managed tabs
 	local -a existing_keys=()
 	local -a existing_ids=()
+	local has_pinned=false
 
 	if [[ -n "$tab_data" ]]; then
-		while IFS=$'\t' read -r tid taccount tstripped; do
+		while IFS=$'\t' read -r tid traw taccount tstripped; do
 			[[ -z "$tid" ]] && continue
 			local acct="$taccount"
 			if [[ -z "$acct" && "$tstripped" =~ ^[A-Z]: ]]; then
@@ -506,20 +506,31 @@ compute_insert_location() {
 			if [[ "$project_name" =~ ^[A-Z]: ]]; then
 				project_name="${project_name:2}"
 			fi
+			# Detect pin status from raw title
+			local pin_prefix="1"
+			if [[ "$traw" == "${_ICON_STAR}"* ]]; then
+				pin_prefix="0"
+				has_pinned=true
+			fi
 			local sort_key
-			sort_key="$(echo "${acct}:${project_name}" | tr '[:upper:]' '[:lower:]')"
+			sort_key="$(echo "${pin_prefix}:${acct}:${project_name}" | tr '[:upper:]' '[:lower:]')"
 			existing_keys+=("$sort_key")
 			existing_ids+=("$tid")
 		done <<<"$tab_data"
 	fi
 
-	# Build the sort key for the new tab (strip account prefix from title)
+	# When sort is not alpha and no pinned tabs exist, no insertion guidance needed
+	if [[ "$_DEFAULT_SORT_SESSIONS" != "alpha" && "$has_pinned" == "false" ]]; then
+		return 0
+	fi
+
+	# Build the sort key for the new tab (never pinned, so prefix is 1)
 	local new_project="$new_title"
 	if [[ "$new_project" =~ ^[A-Z]: ]]; then
 		new_project="${new_project:2}"
 	fi
 	local new_key
-	new_key="$(echo "${new_account}:${new_project}" | tr '[:upper:]' '[:lower:]')"
+	new_key="$(echo "1:${new_account}:${new_project}" | tr '[:upper:]' '[:lower:]')"
 
 	# Sort existing keys and find where the new one goes
 	# Build a combined list with indices, sort it, then find the position
@@ -558,7 +569,6 @@ compute_insert_location() {
 # ---------------------------------------------------------------------------
 sort_tabs() {
 	local socket="$1"
-	[[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]] || return 0
 
 	_load_icons
 	local strip_re
@@ -591,9 +601,11 @@ sort_tabs() {
 
 	# Read tab data into arrays
 	local -a tab_ids=() tab_titles=() tab_stripped=() tab_accounts=() tab_focused=()
+	local -a tab_pinned=()
 	local -a managed_indices=() unmanaged_indices=()
 	local focused_id=""
 	local idx=0
+	local has_pinned=false
 
 	while IFS=$'\t' read -r tid ttitle tstripped taccount tfocused; do
 		[[ -z "$tid" ]] && continue
@@ -601,6 +613,14 @@ sort_tabs() {
 		tab_titles+=("$ttitle")
 		tab_stripped+=("$tstripped")
 		tab_focused+=("$tfocused")
+
+		# Detect pin status from raw title
+		if [[ "$ttitle" == "${_ICON_STAR}"* ]]; then
+			tab_pinned+=("1")
+			has_pinned=true
+		else
+			tab_pinned+=("0")
+		fi
 
 		# Detect account: prefer cc_account user var, fall back to title prefix
 		if [[ -n "$taccount" ]]; then
@@ -640,7 +660,13 @@ sort_tabs() {
 	[[ $total -le 1 ]] && return 0
 	[[ ${#managed_indices[@]} -le 1 && ${#unmanaged_indices[@]} -eq 0 ]] && return 0
 
-	# Sort managed indices by (account_lower, project_name_lower)
+	# When sort_sessions is not alpha and no pinned tabs exist, nothing to do
+	if [[ "$_DEFAULT_SORT_SESSIONS" != "alpha" && "$has_pinned" == "false" ]]; then
+		return 0
+	fi
+
+	# Build sort keys for managed tabs
+	# Pin prefix: 0 for pinned (sorts first), 1 for unpinned
 	local -a sort_input=()
 	local mi
 	for mi in "${managed_indices[@]}"; do
@@ -648,23 +674,62 @@ sort_tabs() {
 		if [[ "$project_name" =~ ^[A-Z]: ]]; then
 			project_name="${project_name:2}"
 		fi
+		local pin_prefix="1"
+		if [[ "${tab_pinned[$mi]}" == "1" ]]; then
+			pin_prefix="0"
+		fi
 		local sort_key
-		sort_key="$(echo "${tab_accounts[$mi]}:${project_name}" | tr '[:upper:]' '[:lower:]')"
+		sort_key="$(echo "${pin_prefix}:${tab_accounts[$mi]}:${project_name}" | tr '[:upper:]' '[:lower:]')"
 		sort_input+=("${sort_key}"$'\t'"${mi}")
 	done
 
-	local -a sorted_managed=()
-	if [[ ${#sort_input[@]} -gt 0 ]]; then
-		while IFS=$'\t' read -r _key si; do
-			sorted_managed+=("$si")
-		done < <(printf '%s\n' "${sort_input[@]}" | sort -f -t $'\t' -k1,1)
+	# Build desired order depending on sort mode
+	local -a desired_order=()
+
+	if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
+		# Full sort: all managed tabs sorted by (pin, account, project)
+		local -a sorted_managed=()
+		if [[ ${#sort_input[@]} -gt 0 ]]; then
+			while IFS=$'\t' read -r _key si; do
+				sorted_managed+=("$si")
+			done < <(printf '%s\n' "${sort_input[@]}" | sort -f -t $'\t' -k1,1)
+		fi
+		for mi in "${sorted_managed[@]}"; do
+			desired_order+=("$mi")
+		done
+	else
+		# Non-alpha mode: pinned tabs sorted alphabetically at front,
+		# unpinned managed tabs retain their current relative order
+		local -a pinned_input=()
+		local -a unpinned_managed=()
+		for mi in "${managed_indices[@]}"; do
+			if [[ "${tab_pinned[$mi]}" == "1" ]]; then
+				local project_name="${tab_stripped[$mi]}"
+				if [[ "$project_name" =~ ^[A-Z]: ]]; then
+					project_name="${project_name:2}"
+				fi
+				local sort_key
+				sort_key="$(echo "${tab_accounts[$mi]}:${project_name}" | tr '[:upper:]' '[:lower:]')"
+				pinned_input+=("${sort_key}"$'\t'"${mi}")
+			else
+				unpinned_managed+=("$mi")
+			fi
+		done
+		# Sort pinned tabs alphabetically
+		local -a sorted_pinned=()
+		if [[ ${#pinned_input[@]} -gt 0 ]]; then
+			while IFS=$'\t' read -r _key si; do
+				sorted_pinned+=("$si")
+			done < <(printf '%s\n' "${pinned_input[@]}" | sort -f -t $'\t' -k1,1)
+		fi
+		for mi in "${sorted_pinned[@]}"; do
+			desired_order+=("$mi")
+		done
+		for mi in "${unpinned_managed[@]}"; do
+			desired_order+=("$mi")
+		done
 	fi
 
-	# Build desired order: sorted managed first, then unmanaged in original order
-	local -a desired_order=()
-	for mi in "${sorted_managed[@]}"; do
-		desired_order+=("$mi")
-	done
 	for mi in "${unmanaged_indices[@]}"; do
 		desired_order+=("$mi")
 	done

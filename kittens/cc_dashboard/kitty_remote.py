@@ -343,15 +343,12 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None):
 
     Returns ("first", None) if the tab should be first,
     ("after", tab_id) if it should be placed after that tab,
-    or (None, None) if sorting is disabled.
+    or (None, None) if sorting is disabled / no reordering needed.
 
     exclude_tab_id: if provided, that tab is ignored when building the sorted
     list.  Used when pre-computing the location before a tab has been closed
     (e.g. the host tab restart path).
     """
-    if _cfg._default_sort_sessions != "alpha":
-        return (None, None)
-
     result = kitty_cmd(socket, "ls")
     if not result or result.returncode != 0:
         return (None, None)
@@ -366,12 +363,16 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None):
 
     # Collect existing managed tabs with their sort keys
     existing = []  # (sort_key, tab_id)
+    has_pinned = False
     for tab in tabs:
         tab_id = tab.get("id", 0)
         if exclude_tab_id is not None and tab_id == exclude_tab_id:
             continue
         tab_title = tab.get("title", "")
         stripped = _strip_icons(tab_title)
+        pinned = tab_title.startswith(_ICON_STAR)
+        if pinned:
+            has_pinned = True
 
         cc_account = ""
         for win in tab.get("windows", []):
@@ -396,13 +397,19 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None):
                 acct = "unknown"
 
         project_name = _strip_account_prefix(stripped)
-        sort_key = (acct.lower(), project_name.lower())
+        pin_prefix = 0 if pinned else 1
+        sort_key = (pin_prefix, acct.lower(), project_name.lower())
         existing.append((sort_key, tab_id))
+
+    # When sort is not alpha and no pinned tabs exist, no insertion guidance
+    if _cfg._default_sort_sessions != "alpha" and not has_pinned:
+        return (None, None)
 
     # Sort existing and find where the new tab fits
     existing.sort(key=lambda x: x[0])
     new_project = _strip_account_prefix(title)
-    new_key = (account.lower(), new_project.lower())
+    # New tabs are never pinned, so pin_prefix is always 1
+    new_key = (1, account.lower(), new_project.lower())
 
     # Find the last existing entry whose key is <= new_key
     prev_id = None
@@ -756,12 +763,13 @@ def do_restart(
 def do_sort_tabs(socket):
     """Sort managed tabs by account then title, pushing non-managed tabs to the end.
 
-    Checks _cfg._default_sort_sessions and returns immediately if not "alpha".
+    Pinned (starred) tabs always sort to the front, alphabetically among
+    themselves.  When sort_sessions is "alpha", unpinned managed tabs are also
+    sorted alphabetically after the pinned group.  When sort_sessions is not
+    "alpha", unpinned managed tabs retain their current relative order, and the
+    function returns early if no pinned tabs exist.
     Uses kitty @ focus-tab + action move_tab_forward/backward to reorder.
     """
-    if _cfg._default_sort_sessions != "alpha":
-        return
-
     result = kitty_cmd(socket, "ls")
     if not result or result.returncode != 0:
         return
@@ -777,14 +785,18 @@ def do_sort_tabs(socket):
         return
 
     # Build tab info list with classification
-    managed = []  # (sort_key, position, tab_id)
+    managed = []  # (sort_key, position, tab_id, is_pinned)
     unmanaged = []  # (position, tab_id)
     focused_id = None
+    has_pinned = False
 
     for pos, tab in enumerate(tabs):
         tab_id = tab.get("id", 0)
         title = tab.get("title", "")
         stripped = _strip_icons(title)
+        pinned = title.startswith(_ICON_STAR)
+        if pinned:
+            has_pinned = True
 
         if tab.get("is_focused", False):
             focused_id = tab_id
@@ -811,17 +823,36 @@ def do_sort_tabs(socket):
                 if not account:
                     account = "unknown"
             project_name = _strip_account_prefix(stripped)
-            sort_key = (account.lower(), project_name.lower())
-            managed.append((sort_key, pos, tab_id))
+            pin_prefix = 0 if pinned else 1
+            sort_key = (pin_prefix, account.lower(), project_name.lower())
+            managed.append((sort_key, pos, tab_id, pinned))
         else:
             unmanaged.append((pos, tab_id))
 
     if not managed:
         return
 
-    # Build desired order
-    managed.sort(key=lambda x: x[0])
-    desired_ids = [m[2] for m in managed] + [u[1] for u in unmanaged]
+    # When sort_sessions is not alpha and no pinned tabs exist, nothing to do
+    if _cfg._default_sort_sessions != "alpha" and not has_pinned:
+        return
+
+    # Build desired order depending on sort mode
+    if _cfg._default_sort_sessions == "alpha":
+        # Full sort: all managed tabs sorted by (pin, account, project)
+        managed.sort(key=lambda x: x[0])
+        desired_ids = [m[2] for m in managed] + [u[1] for u in unmanaged]
+    else:
+        # Non-alpha mode: pinned tabs sorted alphabetically at front,
+        # unpinned managed tabs retain their current relative order
+        pinned_tabs = [m for m in managed if m[3]]
+        unpinned_tabs = [m for m in managed if not m[3]]
+        pinned_tabs.sort(key=lambda x: x[0])
+        desired_ids = (
+            [m[2] for m in pinned_tabs]
+            + [m[2] for m in unpinned_tabs]
+            + [u[1] for u in unmanaged]
+        )
+
     current_ids = [tab.get("id", 0) for tab in tabs]
 
     if desired_ids == current_ids:

@@ -55,3 +55,9 @@ fi
 
 new_title="$(build_title "$remaining" "$has_star" "$state")"
 kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title"
+
+# Reorder tabs so pinned tabs move to the front
+SOCKET="${KITTY_LISTEN_ON:-$(discover_socket)}"
+load_accounts
+load_defaults
+sort_tabs "$SOCKET"

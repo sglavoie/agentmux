@@ -36,7 +36,7 @@ Config files use pipe-delimited formats: `accounts.conf` has `name | config_dir 
 
 The color palette has exactly 10 named colors (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan), each with active/inactive background hex values and text foreground RGB values. The palette and icon set are defined once in `data/palette.json` and `data/icons.json` respectively, and read at runtime by both the Bash library (via `jq`) and the Python kitten code (via `json` stdlib). To change a color or icon, edit the corresponding JSON file — no synchronization across files is needed.
 
-Tab title convention uses an uppercase initial of the account name followed by a colon (e.g., `W:project` for work, `P:dotfiles` for personal). The `--cleanup` command relies on this pattern to identify managed tabs.
+Tab title convention uses an uppercase initial of the account name followed by a colon (e.g., `W:project` for work, `P:dotfiles` for personal). The `--cleanup` command relies on this pattern to identify managed tabs. The star icon (`★`) functions as a pin toggle, bound to F2: pressing F2 stars the tab and moves it to the front of the tab bar, where pinned tabs are sorted alphabetically among themselves. Pressing F2 again unstars the tab and returns it to its natural position. Pinning works regardless of whether `sort_sessions=alpha` is enabled — pinned tabs always reorder to the front.
 
 Kitty socket discovery follows a three-step precedence: explicit `--socket` argument, then `KITTY_LISTEN_ON` environment variable, then the most recent `/tmp/kitty-*` socket file.
 
