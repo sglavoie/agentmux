@@ -567,6 +567,9 @@ def query_sessions(socket, managed_only=True):
             else:
                 account = _cfg._resolve_account_by_config_dir(detected_config_dir)
 
+            cc_flags = user_vars.get("cc_flags", "")
+            cc_pw = user_vars.get("cc_pw", "")
+
             title = _strip_icons(tab.get("title", ""))
             icon_state = _detect_state(tab_title)
             tab_id = tab.get("id", 0)
@@ -578,6 +581,8 @@ def query_sessions(socket, managed_only=True):
                     "title": title,
                     "account": account,
                     "cwd": cwd,
+                    "cc_flags": cc_flags,
+                    "cc_pw": cc_pw,
                     "git": git_info,
                     "status": (
                         "focused"
@@ -795,6 +800,10 @@ def do_launch(
         f"cc_account={account}",
         "--var",
         f"cc_cwd={directory}",
+        "--var",
+        f"cc_flags={flags}",
+        "--var",
+        f"cc_pw={pw_override}",
     ]
 
     home = os.path.expanduser("~")
@@ -998,6 +1007,10 @@ def _spawn_detached_restart(
         f"cc_account={account}",
         "--var",
         f"cc_cwd={directory}",
+        "--var",
+        f"cc_flags={flags}",
+        "--var",
+        f"cc_pw={pw_override}",
     ]
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
@@ -1237,6 +1250,10 @@ def _spawn_detached_move(
         f"cc_account={account}",
         "--var",
         f"cc_cwd={directory}",
+        "--var",
+        f"cc_flags={flags}",
+        "--var",
+        f"cc_pw={pw_override}",
     ]
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]

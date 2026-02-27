@@ -60,7 +60,7 @@ launch_session() {
 
 	local shell_cmd="exec claude $effective_flags"
 	# shellcheck disable=SC2086
-	kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
+	kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
 
 	# Apply tab colors. Retry a few times since Claude may briefly override
 	# the tab title on startup.
@@ -482,8 +482,16 @@ cmd_restart() {
                             ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
                         end
                     )
-                }
-            ] | .[0] // empty | [(.tab_id | tostring), .account, .dir] | @tsv
+                },
+                flags: (
+                    [.windows[] | .user_vars.cc_flags // empty | select(. != "")] |
+                    if length > 0 then .[0] else "" end
+                ),
+                pw: (
+                    [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
+                    if length > 0 then .[0] else "" end
+                )
+            } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
         ')"
 
 		if [[ -n "$tab_info" ]]; then
@@ -500,8 +508,8 @@ cmd_restart() {
 	# Use the socket where the tab was found
 	SOCKET="$target_socket"
 
-	local tab_id account dir
-	IFS=$'\t' read -r tab_id account dir <<<"$tab_info"
+	local tab_id account dir live_flags live_pw
+	IFS=$'\t' read -r tab_id account dir live_flags live_pw <<<"$tab_info"
 
 	kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
 	echo "Closed tab '$title', relaunching..."
@@ -517,10 +525,9 @@ cmd_restart() {
 		loc_args="--location after"
 	fi
 
-	# Look up per-session flags and project_window from sessions.conf
-	local cfg_flags="" cfg_pw=""
-	if [[ -f "$CONFIG_FILE" ]]; then
-		# Strip trailing override markers (U+203E OVERLINE) for matching
+	# Prefer live user vars; fall back to sessions.conf for pre-upgrade tabs
+	local cfg_flags="$live_flags" cfg_pw="$live_pw"
+	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -f "$CONFIG_FILE" ]]; then
 		local lookup_title="${title%%‾*}"
 		local cfg_line
 		while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
@@ -622,8 +629,16 @@ cmd_move() {
                             ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
                         end
                     )
-                }
-            ] | .[0] // empty | [(.tab_id | tostring), .account, .dir] | @tsv
+                },
+                flags: (
+                    [.windows[] | .user_vars.cc_flags // empty | select(. != "")] |
+                    if length > 0 then .[0] else "" end
+                ),
+                pw: (
+                    [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
+                    if length > 0 then .[0] else "" end
+                )
+            } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
         ')"
 
 		if [[ -n "$tab_info" ]]; then
@@ -642,8 +657,8 @@ cmd_move() {
 		exit 1
 	fi
 
-	local tab_id account dir
-	IFS=$'\t' read -r tab_id account dir <<<"$tab_info"
+	local tab_id account dir live_flags live_pw
+	IFS=$'\t' read -r tab_id account dir live_flags live_pw <<<"$tab_info"
 
 	# Close on source
 	kitty @ --to "$source_socket" close-tab --match "id:$tab_id"
@@ -663,9 +678,9 @@ cmd_move() {
 		loc_args="--location after"
 	fi
 
-	# Look up per-session flags and project_window from sessions.conf
-	local cfg_flags="" cfg_pw=""
-	if [[ -f "$CONFIG_FILE" ]]; then
+	# Prefer live user vars; fall back to sessions.conf for pre-upgrade tabs
+	local cfg_flags="$live_flags" cfg_pw="$live_pw"
+	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -f "$CONFIG_FILE" ]]; then
 		local lookup_title="${title%%‾*}"
 		local cfg_line
 		while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
@@ -1076,9 +1091,17 @@ cmd_save() {
                             else $default_account end
                         )
                     end
+                ),
+                flags: (
+                    [.windows[] | .user_vars.cc_flags // empty | select(. != "")] |
+                    if length > 0 then .[0] else "" end
+                ),
+                pw: (
+                    [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
+                    if length > 0 then .[0] else "" end
                 )
             }
-        ] | .[] | [.title, .dir, .account] | @tsv
+        ] | .[] | [.title, .dir, .account, .flags, .pw] | @tsv
     ')"
 
 	if [[ -z "$sessions" ]]; then
@@ -1097,15 +1120,39 @@ cmd_save() {
 		echo "Backed up existing config to ${output_file}.bak"
 	fi
 
+	# Preserve leading comment/blank lines from the existing file
+	local header_lines=""
+	if [[ -f "$output_file" ]]; then
+		while IFS= read -r line || [[ -n "$line" ]]; do
+			if [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]]; then
+				header_lines+="$line"$'\n'
+			else
+				break
+			fi
+		done <"$output_file"
+	fi
+
+	# Fall back to a default header if no comments were preserved
+	if [[ -z "$header_lines" ]]; then
+		header_lines="# cc-manager session definitions
+# Saved by cc-launch --save on $(date '+%Y-%m-%d %H:%M:%S')
+#
+# Format: title | directory | account [| claude_flags [| project_window]]
+
+"
+	fi
+
 	{
-		echo "# cc-manager session definitions"
-		echo "# Saved by cc-launch --save on $(date '+%Y-%m-%d %H:%M:%S')"
-		echo "#"
-		echo "# Format: title | directory | account"
-		echo ""
-		while IFS=$'\t' read -r title dir account; do
+		printf '%s' "$header_lines"
+		while IFS=$'\t' read -r title dir account flags pw; do
 			dir="${dir/#$HOME/\~}"
-			printf "%-20s | %-40s | %s\n" "$title" "$dir" "$account"
+			if [[ -n "$pw" ]]; then
+				printf "%-20s | %-40s | %-10s | %-30s | %s\n" "$title" "$dir" "$account" "$flags" "$pw"
+			elif [[ -n "$flags" ]]; then
+				printf "%-20s | %-40s | %-10s | %s\n" "$title" "$dir" "$account" "$flags"
+			else
+				printf "%-20s | %-40s | %s\n" "$title" "$dir" "$account"
+			fi
 		done <<<"$sessions"
 	} >"$output_file"
 

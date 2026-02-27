@@ -338,10 +338,22 @@ def save_sessions(live_sessions):
     """Save live sessions to sessions.conf, mirroring cmd_save from cc-launch.
 
     Accepts the sessions list from query_all_sessions (dicts with 'title',
-    'cwd', 'account' keys).  Returns (count, backup_created).
+    'cwd', 'account', 'cc_flags', 'cc_pw' keys).
+    Returns (count, backup_created).
     """
     path = _sessions_config_path()
     home = os.path.expanduser("~")
+
+    # Preserve leading comment/blank lines from the existing file
+    header_lines = []
+    if os.path.isfile(path):
+        with open(path) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("#") or not stripped:
+                    header_lines.append(line)
+                else:
+                    break
 
     backup_created = False
     if os.path.isfile(path):
@@ -349,20 +361,31 @@ def save_sessions(live_sessions):
         backup_created = True
 
     with open(path, "w") as f:
-        f.write("# cc-manager session definitions\n")
-        f.write(
-            f"# Saved by dashboard on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        )
-        f.write("#\n")
-        f.write("# Format: title | directory | account\n")
-        f.write("\n")
+        if header_lines:
+            for line in header_lines:
+                f.write(line)
+        else:
+            f.write("# cc-manager session definitions\n")
+            f.write(
+                f"# Saved by dashboard on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            )
+            f.write("#\n")
+            f.write("# Format: title | directory | account [| claude_flags [| project_window]]\n")
+            f.write("\n")
         for s in live_sessions:
             title = s.get("title", "")
             directory = s.get("cwd", "~/")
             if directory.startswith(home):
                 directory = "~" + directory[len(home):]
             account = s.get("account", "unknown")
-            f.write(f"{title:<20s} | {directory:<40s} | {account}\n")
+            flags = s.get("cc_flags", "")
+            pw = s.get("cc_pw", "")
+            if pw:
+                f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw}\n")
+            elif flags:
+                f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags}\n")
+            else:
+                f.write(f"{title:<20s} | {directory:<40s} | {account}\n")
 
     load_sessions()
     return len(live_sessions), backup_created

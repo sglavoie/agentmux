@@ -702,13 +702,16 @@ def dashboard(stdscr):
                     else:
                         is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
                         sess_socket = sess.get("socket", home_socket)
-                        cfg_entry = _cfg._find_config_session(sess["title"])
-                        if cfg_entry is None:
-                            cfg_entry = _cfg._find_config_session(
-                                _strip_override_marker(sess["title"])
-                            )
-                        r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
-                        r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                        r_flags = sess.get("cc_flags", "")
+                        r_pw = sess.get("cc_pw", "")
+                        if not r_flags and not r_pw:
+                            cfg_entry = _cfg._find_config_session(sess["title"])
+                            if cfg_entry is None:
+                                cfg_entry = _cfg._find_config_session(
+                                    _strip_override_marker(sess["title"])
+                                )
+                            r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                            r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
                         ok = do_move(
                             sess_socket,
                             target_socket,
@@ -961,13 +964,16 @@ def dashboard(stdscr):
             if key in (ord("y"), ord("Y")) and filtered:
                 sess = filtered[selected]
                 is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
-                cfg_entry = _cfg._find_config_session(sess["title"])
-                if cfg_entry is None:
-                    cfg_entry = _cfg._find_config_session(
-                        _strip_override_marker(sess["title"])
-                    )
-                r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
-                r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                r_flags = sess.get("cc_flags", "")
+                r_pw = sess.get("cc_pw", "")
+                if not r_flags and not r_pw:
+                    cfg_entry = _cfg._find_config_session(sess["title"])
+                    if cfg_entry is None:
+                        cfg_entry = _cfg._find_config_session(
+                            _strip_override_marker(sess["title"])
+                        )
+                    r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                    r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
                 sess_socket = sess.get("socket", home_socket)
                 ok = do_restart(
                     sess_socket, sess, flags=r_flags, pw_override=r_pw,
@@ -1067,6 +1073,8 @@ def dashboard(stdscr):
                                 new_title,
                                 sess["cwd"],
                                 account,
+                                sess.get("cc_flags", ""),
+                                sess.get("cc_pw", ""),
                                 location=location,
                                 config_dir_override=selected_path,
                             )
@@ -1079,6 +1087,8 @@ def dashboard(stdscr):
                             do_restart(
                                 sess_socket,
                                 sess,
+                                flags=sess.get("cc_flags", ""),
+                                pw_override=sess.get("cc_pw", ""),
                                 config_dir_override=selected_path,
                                 host_tab_id=host_tab_id,
                             )
@@ -1121,13 +1131,16 @@ def dashboard(stdscr):
                 else:
                     is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
                     sess_socket = sess.get("socket", home_socket)
-                    cfg_entry = _cfg._find_config_session(sess["title"])
-                    if cfg_entry is None:
-                        cfg_entry = _cfg._find_config_session(
-                            _strip_override_marker(sess["title"])
-                        )
-                    r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
-                    r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                    r_flags = sess.get("cc_flags", "")
+                    r_pw = sess.get("cc_pw", "")
+                    if not r_flags and not r_pw:
+                        cfg_entry = _cfg._find_config_session(sess["title"])
+                        if cfg_entry is None:
+                            cfg_entry = _cfg._find_config_session(
+                                _strip_override_marker(sess["title"])
+                            )
+                        r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                        r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
                     ok = do_move(
                         sess_socket,
                         target_socket,
@@ -1230,13 +1243,16 @@ def dashboard(stdscr):
                             new_title = orig_title[:2] + f"{proj}-{branch}"
                         else:
                             new_title = f"{proj}-{branch}"
-                        # Look up source session config for flags/pw
-                        stripped = _strip_override_marker(orig_title)
-                        if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
-                            stripped = stripped[2:]
-                        src_cfg = next((s for s in _cfg._sessions if s["title"] == stripped), None)
-                        flags = src_cfg["flags"] if src_cfg else ""
-                        pw_val = src_cfg["pw"] if src_cfg else ""
+                        # Prefer live user vars for flags/pw; fall back to config
+                        flags = sess.get("cc_flags", "")
+                        pw_val = sess.get("cc_pw", "")
+                        if not flags and not pw_val:
+                            stripped = _strip_override_marker(orig_title)
+                            if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+                                stripped = stripped[2:]
+                            src_cfg = next((s for s in _cfg._sessions if s["title"] == stripped), None)
+                            flags = src_cfg["flags"] if src_cfg else ""
+                            pw_val = src_cfg["pw"] if src_cfg else ""
                         # Launch
                         target_socket = sess.get("socket", home_socket)
                         loc = compute_insert_location(target_socket, sess["account"], new_title)
