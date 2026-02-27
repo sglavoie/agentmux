@@ -418,6 +418,50 @@ def append_session(title, directory, account, flags="", pw=""):
     load_sessions()
 
 
+def update_session(original_title, title, directory, account, flags="", pw=""):
+    """Update an existing session entry in sessions.conf by original title.
+
+    Returns True if the entry was found and updated, False otherwise.
+    """
+    path = _sessions_config_path()
+    if not os.path.isfile(path):
+        return False
+
+    home = os.path.expanduser("~")
+    if directory.startswith(home):
+        directory = "~" + directory[len(home):]
+
+    with open(path) as f:
+        lines = f.readlines()
+
+    found = False
+    updated = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            parts = stripped.split("|")
+            if len(parts) >= 2 and parts[0].strip() == original_title:
+                found = True
+                new_line = f"{title:<20s} | {directory:<40s} | {account}"
+                if pw:
+                    new_line += f" | {flags:<30s} | {pw}"
+                elif flags:
+                    new_line += f" | {flags}"
+                updated.append(new_line + "\n")
+                continue
+        updated.append(line)
+
+    if not found:
+        return False
+
+    shutil.copy2(path, path + ".bak")
+    with open(path, "w") as f:
+        f.writelines(updated)
+
+    load_sessions()
+    return True
+
+
 def remove_session(title):
     """Remove a session entry from sessions.conf by title. Returns True if found."""
     path = _sessions_config_path()

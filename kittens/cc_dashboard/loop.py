@@ -245,6 +245,7 @@ def dashboard(stdscr):
             "account": default_account,
             "flags": "",
             "pw": default_pw,
+            "save": "yes",
         }
         if multi_instance:
             fields["instance"] = home_instance_label
@@ -253,11 +254,26 @@ def dashboard(stdscr):
     new_fields = _make_new_fields()
     new_active = 0
     new_cursor = 0
+    form_mode = "new"  # "new" or "edit"
+    edit_original_title = ""
     dir_browse_active = False
     dir_browse_entries = []
     dir_browse_selected = 0
     dir_browse_scroll = 0
     dir_browse_show_hidden = False
+
+    def _reload_all_config():
+        """Re-read all config files from disk and refresh derived state."""
+        nonlocal default_account, default_pw, refresh_interval, refresh_threshold
+        _cfg.load_accounts()
+        _cfg.load_defaults()
+        _cfg.load_sessions()
+        default_account = _cfg._account_names[0] if _cfg._account_names else "work"
+        default_pw = (
+            _cfg._default_project_window if _cfg._default_project_window else "none"
+        )
+        refresh_interval = _cfg._default_dashboard_refresh
+        refresh_threshold = refresh_interval * 10
 
     def _refilter():
         nonlocal filtered, selected
@@ -358,7 +374,10 @@ def dashboard(stdscr):
                 match_index=peek_match_index,
             )
         elif mode == "new":
-            draw_new_form(stdscr, new_fields, new_active, new_cursor, multi_instance=multi_instance)
+            form_title = "Edit Session" if form_mode == "edit" else "New Session"
+            draw_new_form(stdscr, new_fields, new_active, new_cursor,
+                          multi_instance=(multi_instance and form_mode == "new"),
+                          form_title=form_title)
             if dir_browse_active:
                 draw_dir_dropdown(stdscr, dir_browse_entries, dir_browse_selected,
                                   dir_browse_scroll, dir_browse_show_hidden)
@@ -549,10 +568,33 @@ def dashboard(stdscr):
                 mode = "confirm"
             elif key in (ord("n"), ord("N")):
                 mode = "new"
+                form_mode = "new"
                 new_fields = _make_new_fields()
                 new_active = 0
                 new_cursor = 0
                 dir_browse_active = False
+            elif key == ord("e") and filtered:
+                sess = filtered[selected]
+                stripped = _strip_override_marker(sess["title"])
+                cfg_entry = _cfg._find_config_session(stripped)
+                if cfg_entry is None:
+                    msg = "Session not in config (use S to save first)"
+                    msg_frames = 20
+                else:
+                    mode = "new"
+                    form_mode = "edit"
+                    edit_original_title = cfg_entry["title"]
+                    pw_val = cfg_entry.get("pw", "")
+                    new_fields = {
+                        "title": cfg_entry["title"],
+                        "dir": cfg_entry["dir"],
+                        "account": cfg_entry["account"],
+                        "flags": cfg_entry.get("flags", ""),
+                        "pw": pw_val if pw_val else "none",
+                    }
+                    new_active = 0
+                    new_cursor = len(new_fields["title"])
+                    dir_browse_active = False
             elif key == ord("l"):
                 if _cfg._sessions:
                     mode = "pick"
@@ -772,6 +814,10 @@ def dashboard(stdscr):
                 config_file_label, config_file_path = config_entries[config_selected]
                 config_action_selected = 0
                 mode = "config_action"
+            elif key in (ord("r"), ord("R")):
+                _reload_all_config()
+                msg = "Config reloaded from disk"
+                msg_frames = 20
 
         # ── Config action picker ──────────────────────────────────
         elif mode == "config_action":
@@ -792,9 +838,9 @@ def dashboard(stdscr):
                     mode = "config_show"
                 elif config_action_selected == 1:  # Edit in editor
                     do_open_editor(home_socket, config_file_path)
-                    msg = f"Opened {config_file_label} in editor"
-                    msg_frames = 20
-                    mode = "list"
+                    msg = f"Opened {config_file_label} in editor — press R to reload config"
+                    msg_frames = 30
+                    mode = "config_pick"
                 elif config_action_selected == 2:  # Show file path
                     msg = _shorten_home(config_file_path)
                     msg_frames = 30
@@ -810,6 +856,10 @@ def dashboard(stdscr):
                 config_show_scroll = min(config_show_scroll + 1, max_scroll)
             elif key in (curses.KEY_UP, ord("k"), ord("K")):
                 config_show_scroll = max(config_show_scroll - 1, 0)
+            elif key in (ord("r"), ord("R")):
+                _reload_all_config()
+                msg = "Config reloaded from disk"
+                msg_frames = 20
 
         # ── Peek overlay ─────────────────────────────────────────
         elif mode == "peek":
@@ -1287,11 +1337,14 @@ def dashboard(stdscr):
                 worktree_branch = before + chr(key) + after
                 worktree_cursor += 1
 
-        # ── New session form ─────────────────────────────────────
+        # ── New / Edit session form ──────────────────────────────
         elif mode == "new":
-            field_keys = ["title", "dir", "account", "flags", "pw"]
-            if multi_instance:
-                field_keys.append("instance")
+            if form_mode == "edit":
+                field_keys = ["title", "dir", "account", "flags", "pw"]
+            else:
+                field_keys = ["title", "dir", "account", "flags", "pw", "save"]
+                if multi_instance:
+                    field_keys.insert(-1, "instance")
             last_field = len(field_keys) - 1
             fk = field_keys[new_active]
 
@@ -1360,6 +1413,7 @@ def dashboard(stdscr):
                     dir_browse_scroll = 0
             elif key == 27:  # Esc -- cancel
                 dir_browse_active = False
+                form_mode = "new"
                 mode = "list"
             elif key == curses.KEY_UP:
                 new_active = max(new_active - 1, 0)
@@ -1372,6 +1426,8 @@ def dashboard(stdscr):
                     new_fields["account"] = _cycle_account(new_fields["account"])
                 elif fk == "pw":
                     new_fields["pw"] = _cycle_pw(new_fields["pw"])
+                elif fk == "save":
+                    new_fields["save"] = "no" if new_fields["save"] == "yes" else "yes"
                 elif fk == "instance":
                     new_fields["instance"] = _cycle_instance(
                         new_fields["instance"], instance_labels
@@ -1398,21 +1454,42 @@ def dashboard(stdscr):
                     fl = new_fields["flags"].strip()
                     pw_val = new_fields["pw"]
                     pw_val = "" if pw_val == "none" else pw_val
-                    # Use the selected instance's socket, or home_socket
-                    target_socket = home_socket
-                    if multi_instance and "instance" in new_fields:
-                        target_socket = instance_socket_map.get(
-                            new_fields["instance"], home_socket
-                        )
-                    if t and d:
-                        loc = compute_insert_location(target_socket, a, t)
-                        do_launch(target_socket, t, d, a, fl, pw_val, location=loc)
-                        return
+                    if form_mode == "edit":
+                        if not t or not d:
+                            msg = "Title and directory are required"
+                            msg_frames = 20
+                        elif t != edit_original_title and _cfg._find_config_session(t):
+                            msg = "A session with that title already exists"
+                            msg_frames = 20
+                        else:
+                            _cfg.update_session(edit_original_title, t, d, a, fl, pw_val)
+                            # Check if the edited session is currently running
+                            running_titles = {s["title"] for s in sessions}
+                            stripped_running = {_strip_override_marker(rt) for rt in running_titles}
+                            if edit_original_title in stripped_running:
+                                msg = "Config updated (restart session to apply)"
+                            else:
+                                msg = "Config updated"
+                            msg_frames = 20
+                            mode = "list"
                     else:
-                        msg = "Title and directory are required"
-                        msg_frames = 20
-                    mode = "list"
-            elif fk not in ("account", "pw", "instance"):
+                        # Use the selected instance's socket, or home_socket
+                        target_socket = home_socket
+                        if multi_instance and "instance" in new_fields:
+                            target_socket = instance_socket_map.get(
+                                new_fields["instance"], home_socket
+                            )
+                        if t and d:
+                            loc = compute_insert_location(target_socket, a, t)
+                            do_launch(target_socket, t, d, a, fl, pw_val, location=loc)
+                            if new_fields.get("save") == "yes":
+                                _cfg.append_session(t, d, a, fl, pw_val)
+                            return
+                        else:
+                            msg = "Title and directory are required"
+                            msg_frames = 20
+                        mode = "list"
+            elif fk not in ("account", "pw", "instance", "save"):
                 # Text editing in title / dir fields
                 val = new_fields[fk]
                 if key in (curses.KEY_BACKSPACE, 127, 8):

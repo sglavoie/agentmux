@@ -714,6 +714,7 @@ _HELP_SECTIONS = [
             ("m", "Move session to another instance"),
             ("O", "Override config dir for session"),
             ("r", "Rename selected session"),
+            ("e", "Edit session config entry"),
             ("n", "Open new session form"),
             ("l", "Launch session from config"),
             ("S", "Save sessions to sessions.conf"),
@@ -808,6 +809,7 @@ _FOOTER_HINTS = {
         "m Move",
         "O CfgDir",
         "r Rename",
+        "e Edit",
         "n New",
         "l Launch",
         "w Worktree",
@@ -834,7 +836,7 @@ _FOOTER_HINTS = {
     "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
     "peek": ["j/k Scroll", "^D/^U Half-page", "^F/^B Page", "G/g Top/Bot", "/ Search", "n/N Next/Prev", "r Refresh", "s Screen/Scrollback", "q/Esc Close"],
     "peek_search": ["Enter Confirm", "Esc Cancel"],
-    "config_pick": ["j/k Navigate", "Enter Select", "Esc Back"],
+    "config_pick": ["j/k Navigate", "Enter Select", "R Reload", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
     "worktree": ["Enter Create", "Esc Cancel"],
@@ -1232,7 +1234,7 @@ def draw_config_show(stdscr, label, path, lines, scroll):
         pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
         safe_addstr(stdscr, rows - 2, 2, f"j/k to scroll  {pos}", dim_attr)
 
-    safe_addstr(stdscr, rows - 1, 2, "Press q / Esc to close", dim_attr)
+    safe_addstr(stdscr, rows - 1, 2, "q/Esc Close  R Reload config", dim_attr)
 
 
 def _render_peek_line(stdscr, row, line, cols, query, is_match, is_current,
@@ -1503,16 +1505,17 @@ def draw_filter_bar(stdscr, account_filter, account_filter_mode):
             break
 
 
-def draw_new_form(stdscr, fields, active_field, cursor_pos, multi_instance=False):
-    """Draw the new-session creation form."""
+def draw_new_form(stdscr, fields, active_field, cursor_pos, multi_instance=False,
+                  form_title="New Session"):
+    """Draw the new-session or edit-session form."""
     _rows, cols = stdscr.getmaxyx()
     stdscr.clear()
 
     safe_addstr(
         stdscr,
         1,
-        max(0, (cols - 11) // 2),
-        "New Session",
+        max(0, (cols - len(form_title)) // 2),
+        form_title,
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
@@ -1520,9 +1523,14 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos, multi_instance=False
     field_keys = ["title", "dir", "account", "flags", "pw"]
     cycle_fields = {"account", "pw"}
 
-    if multi_instance:
-        labels.append("Instance:")
-        field_keys.append("instance")
+    if "save" in fields:
+        labels.append("Save:")
+        field_keys.append("save")
+        cycle_fields.add("save")
+
+    if multi_instance and "instance" in fields:
+        labels.insert(-1, "Instance:")
+        field_keys.insert(-1, "instance")
         cycle_fields.add("instance")
 
     for i, (label, key) in enumerate(zip(labels, field_keys, strict=False)):
