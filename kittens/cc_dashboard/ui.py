@@ -29,7 +29,10 @@ from cc_dashboard.drawing import (  # noqa: F401
 
 # ── filters ──────────────────────────────────────────────────────────────────
 from cc_dashboard.filters import (  # noqa: F401
+    SORT_LABELS,
+    SORT_MODES,
     _apply_filters,
+    _apply_sort,
     _filter_by_accounts,
     _filter_config_sessions,
     _filter_sessions,
@@ -55,6 +58,7 @@ from cc_dashboard.views import (  # noqa: F401
     draw_confirm_prompt,
     draw_detail_pane,
     draw_filter_bar,
+    draw_sort_picker,
     draw_footer,
     draw_help_overlay,
     draw_list_view,

@@ -26,6 +26,10 @@ def _kitten_dir():
 
 sys.path.insert(0, _kitten_dir())
 
+for _mod in list(sys.modules):
+    if _mod.startswith("cc_dashboard"):
+        del sys.modules[_mod]
+
 from cc_dashboard import config as _cfg
 from cc_dashboard.config import load_accounts, load_defaults, load_sessions
 from cc_dashboard.kitty_remote import get_kitty_socket, query_sessions

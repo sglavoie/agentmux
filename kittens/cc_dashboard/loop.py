@@ -8,7 +8,10 @@ from cc_dashboard import config as _cfg
 from cc_dashboard.colors import CP_NORMAL, CP_WARN, init_colors
 from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.filters import (
+    SORT_LABELS,
+    SORT_MODES,
     _apply_filters,
+    _apply_sort,
     _filter_config_sessions,
     _sort_pick_entries,
 )
@@ -44,6 +47,7 @@ from cc_dashboard.views import (
     draw_config_picker,
     draw_config_show,
     draw_confirm_prompt,
+    draw_sort_picker,
     draw_peek_overlay,
     draw_detail_pane,
     draw_filter_bar,
@@ -132,7 +136,7 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | confirm_save | rename | new | pick | help | move_picker | config_pick | config_action | config_show
+    mode = "list"  # list | confirm | confirm_restart | confirm_save | rename | new | pick | help | move_picker | config_pick | config_action | config_show | sort_pick
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -157,6 +161,7 @@ def dashboard(stdscr):
     search_active = False
     search_cursor = 0
     filtered = sessions
+    sort_mode = "default"
 
     # Account filter state
     account_filter = None  # None = show all; set of names = show only these
@@ -172,6 +177,9 @@ def dashboard(stdscr):
 
     # Move picker state
     move_selected = 0
+
+    # Sort picker state
+    sort_selected = 0
 
     # Config browser state
     config_selected = 0
@@ -210,14 +218,31 @@ def dashboard(stdscr):
     new_active = 0
     new_cursor = 0
 
+    def _refilter():
+        nonlocal filtered, selected
+        old_tab_id = (
+            filtered[selected]["tab_id"]
+            if filtered and selected < len(filtered)
+            else None
+        )
+        filtered = _apply_sort(
+            _apply_filters(sessions, search_query, account_filter), sort_mode
+        )
+        if old_tab_id is not None:
+            for i, s in enumerate(filtered):
+                if s["tab_id"] == old_tab_id:
+                    selected = i
+                    break
+        selected = min(selected, max(0, len(filtered) - 1))
+
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "confirm_save", "rename", "move_picker", "config_pick", "config_action") or (
+        if mode in ("list", "confirm", "confirm_restart", "confirm_save", "rename", "move_picker", "config_pick", "config_action", "sort_pick") or (
             mode == "override" and override_source == "list"
         ):
             rows, _cols = stdscr.getmaxyx()
             detail_visible = show_detail and rows >= 20 and bool(filtered)
-            draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible)
+            draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible, sort_label=SORT_LABELS[sort_mode])
             if detail_visible:
                 detail_y = rows - 1 - DETAIL_PANE_HEIGHT
                 draw_detail_pane(stdscr, filtered[selected], detail_y)
@@ -273,6 +298,9 @@ def dashboard(stdscr):
             elif mode == "config_action":
                 draw_config_action_picker(stdscr, config_file_label, config_file_path, config_action_selected)
                 draw_footer(stdscr, "config_action")
+            elif mode == "sort_pick":
+                draw_sort_picker(stdscr, sort_selected, sort_mode)
+                draw_footer(stdscr, "sort_pick")
         elif mode == "config_show":
             draw_config_show(stdscr, config_file_label, config_file_path, config_show_lines, config_show_scroll)
         elif mode == "peek":
@@ -320,8 +348,9 @@ def dashboard(stdscr):
                     new_sessions = query_all_sessions(managed_only=(not show_all))
                     _check_idle_notifications(new_sessions)
                     old_fp = _session_fingerprint(filtered)
-                    new_filtered = _apply_filters(
-                        new_sessions, search_query, account_filter
+                    new_filtered = _apply_sort(
+                        _apply_filters(new_sessions, search_query, account_filter),
+                        sort_mode,
                     )
                     if _session_fingerprint(new_filtered) != old_fp:
                         # Preserve selection by matching tab_id
@@ -352,8 +381,7 @@ def dashboard(stdscr):
                     search_active = False
                     search_query = ""
                     search_cursor = 0
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                     continue
                 elif key in (10, 13, curses.KEY_ENTER):  # Accept filter
                     search_active = False
@@ -371,10 +399,7 @@ def dashboard(stdscr):
                             + search_query[search_cursor:]
                         )
                         search_cursor -= 1
-                        filtered = _apply_filters(
-                            sessions, search_query, account_filter
-                        )
-                        selected = min(selected, max(0, len(filtered) - 1))
+                        _refilter()
                     continue
                 elif key == curses.KEY_LEFT:
                     search_cursor = max(0, search_cursor - 1)
@@ -389,8 +414,7 @@ def dashboard(stdscr):
                         + search_query[search_cursor:]
                     )
                     search_cursor += 1
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                     continue
                 else:
                     continue
@@ -412,8 +436,7 @@ def dashboard(stdscr):
                     else:
                         # Add this account
                         account_filter.add(name)
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                 continue
 
             if key in (ord("q"), ord("Q")):
@@ -424,17 +447,14 @@ def dashboard(stdscr):
                 if account_filter_mode:
                     account_filter_mode = False
                     account_filter = None
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                 elif search_query:
                     search_query = ""
                     search_cursor = 0
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                 elif account_filter is not None:
                     account_filter = None
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                 else:
                     return
             elif key == ord("f"):
@@ -443,7 +463,7 @@ def dashboard(stdscr):
                 search_active = True
                 search_query = ""
                 search_cursor = 0
-                filtered = _apply_filters(sessions, search_query, account_filter)
+                _refilter()
             elif key in (curses.KEY_UP, ord("k"), ord("K")) and filtered:
                 selected = (selected - 1) % len(filtered)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and filtered:
@@ -479,13 +499,15 @@ def dashboard(stdscr):
             elif key in (ord("a"), ord("A")):
                 show_all = not show_all
                 sessions = query_all_sessions(managed_only=(not show_all))
-                filtered = _apply_filters(sessions, search_query, account_filter)
-                selected = min(selected, max(0, len(filtered) - 1))
+                _refilter()
                 label = "all" if show_all else "managed"
                 msg = f"Showing {label} sessions ({len(filtered)} found)"
                 msg_frames = 20
             elif key == ord("d"):
                 show_detail = not show_detail
+            elif key == ord("s"):
+                mode = "sort_pick"
+                sort_selected = SORT_MODES.index(sort_mode)
             elif key == ord("p") and filtered:
                 sess = filtered[selected]
                 win_id = sess.get("claude_window_id", 0)
@@ -510,8 +532,7 @@ def dashboard(stdscr):
                 mode = "peek"
             elif key == 18:  # Ctrl+r -- refresh
                 sessions = query_all_sessions(managed_only=(not show_all))
-                filtered = _apply_filters(sessions, search_query, account_filter)
-                selected = min(selected, max(0, len(filtered) - 1))
+                _refilter()
                 msg = f"{len(filtered)} session(s) found"
                 msg_frames = 20
             elif key == ord("r") and filtered:
@@ -583,8 +604,7 @@ def dashboard(stdscr):
                         if is_host:
                             return
                         sessions = query_all_sessions(managed_only=(not show_all))
-                        filtered = _apply_filters(sessions, search_query, account_filter)
-                        selected = min(selected, max(0, len(filtered) - 1))
+                        _refilter()
                         if ok:
                             msg = f"Session moved to {targets[0]}"
                         else:
@@ -599,6 +619,22 @@ def dashboard(stdscr):
             elif key == ord("c"):
                 mode = "config_pick"
                 config_selected = 0
+
+        # ── Sort picker ───────────────────────────────────────────
+        elif mode == "sort_pick":
+            if key in (27, ord("q"), ord("Q")):
+                mode = "list"
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                sort_selected = (sort_selected - 1) % len(SORT_MODES)
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                sort_selected = (sort_selected + 1) % len(SORT_MODES)
+            elif key in (10, 13, curses.KEY_ENTER):
+                sort_mode = SORT_MODES[sort_selected]
+                _refilter()
+                label = SORT_LABELS[sort_mode]
+                msg = f"Sort: {label}" if label else "Sort: default (tab order)"
+                msg_frames = 15
+                mode = "list"
 
         # ── Config file picker ────────────────────────────────────
         elif mode == "config_pick":
@@ -732,8 +768,7 @@ def dashboard(stdscr):
                 else:
                     ok = do_close(target_socket, target["tab_id"])
                     sessions = query_all_sessions(managed_only=(not show_all))
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                     if ok:
                         msg = "Session closed"
                     else:
@@ -764,8 +799,7 @@ def dashboard(stdscr):
                     # the dashboard overlay will be destroyed with it.
                     return
                 sessions = query_all_sessions(managed_only=(not show_all))
-                filtered = _apply_filters(sessions, search_query, account_filter)
-                selected = min(selected, max(0, len(filtered) - 1))
+                _refilter()
                 if ok:
                     msg = "Session restarted"
                 else:
@@ -872,10 +906,7 @@ def dashboard(stdscr):
                             if is_host:
                                 return
                         sessions = query_all_sessions(managed_only=(not show_all))
-                        filtered = _apply_filters(
-                            sessions, search_query, account_filter
-                        )
-                        selected = min(selected, max(0, len(filtered) - 1))
+                        _refilter()
                         home = os.path.expanduser("~")
                         display_path = selected_path
                         if display_path.startswith(home):
@@ -929,8 +960,7 @@ def dashboard(stdscr):
                     if is_host:
                         return
                     sessions = query_all_sessions(managed_only=(not show_all))
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                     if ok:
                         msg = f"Session moved to {target_label}"
                     else:
@@ -968,14 +998,7 @@ def dashboard(stdscr):
                     rename_socket = filtered[selected].get("socket", home_socket)
                     ok = do_rename(rename_socket, old_tab_id, full_title)
                     sessions = query_all_sessions(managed_only=(not show_all))
-                    filtered = _apply_filters(sessions, search_query, account_filter)
-                    # Preserve selection by tab_id
-                    selected = 0
-                    for i, s in enumerate(filtered):
-                        if s["tab_id"] == old_tab_id:
-                            selected = i
-                            break
-                    selected = min(selected, max(0, len(filtered) - 1))
+                    _refilter()
                     if ok:
                         msg = f'Renamed to "{full_title}"'
                     else:

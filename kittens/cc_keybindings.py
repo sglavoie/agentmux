@@ -24,6 +24,10 @@ def _kitten_dir():
 
 sys.path.insert(0, _kitten_dir())
 
+for _mod in list(sys.modules):
+    if _mod.startswith("cc_dashboard"):
+        del sys.modules[_mod]
+
 from cc_dashboard.colors import (
     CP_DIM,
     CP_HEADER,

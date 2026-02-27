@@ -19,6 +19,7 @@ from cc_dashboard.colors import (
     _cp_for_account,
 )
 from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
+from cc_dashboard.filters import SORT_MODES
 from cc_dashboard.kitty_remote import (
     _ICON_STATES,
     _strip_override_marker,
@@ -322,20 +323,26 @@ def _check_idle_notifications(sessions):
 # ── Drawing ──────────────────────────────────────────────────────────────────
 
 
-def draw_list_view(stdscr, sessions, selected, detail_visible=False):
+def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=""):
     """Draw the main session list with header, rows, and footer."""
     rows, cols = stdscr.getmaxyx()
     stdscr.erase()
 
     # Title
     title = "Claude Code Dashboard"
+    title_x = max(0, (cols - len(title)) // 2)
     safe_addstr(
         stdscr,
         1,
-        max(0, (cols - len(title)) // 2),
+        title_x,
         title,
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
+    if sort_label:
+        indicator = f" [{sort_label}]"
+        ind_x = title_x + len(title)
+        if ind_x + len(indicator) < cols:
+            safe_addstr(stdscr, 1, ind_x, indicator, curses.color_pair(CP_DIM))
 
     if not sessions:
         safe_addstr(
@@ -591,6 +598,10 @@ _HELP_SECTIONS = [
         ],
     ),
     (
+        "Sort",
+        [("s", "Open sort picker")],
+    ),
+    (
         "Search",
         [
             ("/", "Start search"),
@@ -673,6 +684,7 @@ _FOOTER_HINTS = {
         "/ Search",
         "a All",
         "f Acct",
+        "s Sort",
         "^r Refresh",
     ],
     "rename": ["Enter Confirm", "Esc Cancel"],
@@ -687,6 +699,7 @@ _FOOTER_HINTS = {
     "peek": ["j/k Scroll", "^D/^U Half-page", "^F/^B Page", "G/g Top/Bot", "r Refresh", "s Screen/Scrollback", "q/Esc Close"],
     "config_pick": ["j/k Navigate", "Enter Select", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
+    "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
 }
 
 
@@ -895,6 +908,79 @@ def draw_config_picker(stdscr, config_entries, selected):
 
     # Title
     title = "Config Files"
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    # Entries
+    normal_attr = curses.color_pair(CP_NORMAL)
+    for i, display in enumerate(display_rows):
+        y = box_y + 2 + i
+        if y >= rows - 1:
+            break
+        sel = i == selected
+        marker = "\u25b8 " if sel else "  "
+        label = f"{marker}{display}"
+
+        attr = normal_attr
+        if sel:
+            attr |= curses.A_BOLD
+        safe_addstr(stdscr, y, box_x + 2, label[: box_w - 4], attr)
+
+
+_SORT_DESCRIPTIONS = {
+    "default": "Default Kitty tab-bar order",
+    "name": "Alphabetical by title",
+    "account": "Grouped by account, alpha within",
+    "status": "Error \u2192 permission \u2192 active \u2192 idle \u2192 stopped",
+    "idle": "Most idle first",
+    "activity": "Most recently active first",
+}
+
+_SORT_DISPLAY_LABELS = {
+    "default": "Tab order",
+    "name": "Name",
+    "account": "Account",
+    "status": "Status",
+    "idle": "Idle",
+    "activity": "Activity",
+}
+
+
+def draw_sort_picker(stdscr, selected, current_mode):
+    """Draw a centered sort mode picker overlay.
+
+    selected is the cursor index, current_mode is the active sort mode string.
+    """
+    rows, cols = stdscr.getmaxyx()
+
+    label_col = max(len(v) for v in _SORT_DISPLAY_LABELS.values()) + 2
+
+    display_rows = []
+    for mode in SORT_MODES:
+        check = "\u2713 " if mode == current_mode else "  "
+        label = _SORT_DISPLAY_LABELS[mode].ljust(label_col)
+        desc = _SORT_DESCRIPTIONS[mode]
+        display_rows.append(f"{check}{label}{desc}")
+
+    max_row_len = max(len(r) for r in display_rows)
+    box_w = min(cols - 4, max(40, max_row_len + 10))
+    box_h = len(SORT_MODES) + 3  # title + blank + entries
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    # Draw background
+    blank_line = " " * box_w
+    dim_attr = curses.color_pair(CP_DIM)
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    # Title
+    title = "Sort By"
     safe_addstr(
         stdscr,
         box_y,

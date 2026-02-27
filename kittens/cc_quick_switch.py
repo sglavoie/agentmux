@@ -25,6 +25,12 @@ def _kitten_dir():
 
 sys.path.insert(0, _kitten_dir())
 
+# Flush cached cc_dashboard modules so Kitty's long-lived Python process
+# always picks up the current source files without requiring a restart.
+for _mod in list(sys.modules):
+    if _mod.startswith("cc_dashboard"):
+        del sys.modules[_mod]
+
 from cc_dashboard import config as _cfg
 from cc_dashboard.config import load_accounts, load_defaults
 from cc_dashboard.kitty_remote import (
@@ -33,19 +39,23 @@ from cc_dashboard.kitty_remote import (
     get_kitty_socket,
     query_all_sessions,
 )
-from cc_dashboard.ui import (
+from cc_dashboard.colors import (
     CP_ATTENTION,
     CP_DIM,
     CP_HEADER,
     CP_INPUT_ACTIVE,
     CP_WARN,
     _cp_for_account,
-    _filter_sessions,
-    _pad_to_width,
     init_colors,
-    safe_addstr,
-    shorten_path,
 )
+from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
+from cc_dashboard.filters import (
+    SORT_LABELS,
+    SORT_MODES,
+    _apply_sort,
+    _filter_sessions,
+)
+from cc_dashboard.views import draw_sort_picker
 
 
 def draw_search_input(stdscr, query, cursor_pos, match_count, total_count):
@@ -180,10 +190,14 @@ def draw_session_list(stdscr, sessions, selected, multi_instance=False):
         safe_addstr(stdscr, screen_y, dir_x, short_dir, row_attr)
 
 
-def draw_footer(stdscr):
+def draw_footer(stdscr, sort_mode="default"):
     """Draw the keybinding hints at the bottom."""
     rows, cols = stdscr.getmaxyx()
-    text = "ctrl+p Up  ctrl+n Down  Enter Switch  Esc Quit"
+    text = "ctrl+p Up  ctrl+n Down  Enter Switch  s Sort"
+    label = SORT_LABELS.get(sort_mode, "")
+    if label:
+        text += f" [{label}]"
+    text += "  Esc Quit"
     safe_addstr(stdscr, rows - 1, 2, text[: cols - 3], curses.color_pair(CP_DIM))
 
 
@@ -211,17 +225,37 @@ def quick_switch_main(stdscr):
     query = ""
     cursor = 0
     selected = 0
+    sort_mode = "default"
+    sort_picking = False
+    sort_selected = 0
     filtered = list(all_sessions)
 
     while True:
         stdscr.erase()
         draw_search_input(stdscr, query, cursor, len(filtered), len(all_sessions))
         draw_session_list(stdscr, filtered, selected, multi_instance=multi_instance)
-        draw_footer(stdscr)
+        draw_footer(stdscr, sort_mode)
+        if sort_picking:
+            draw_sort_picker(stdscr, sort_selected, sort_mode)
         stdscr.refresh()
 
         key = stdscr.getch()
         if key == -1:
+            continue
+
+        # Sort picker intercepts all keys when active
+        if sort_picking:
+            if key == 27:
+                sort_picking = False
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                sort_selected = (sort_selected - 1) % len(SORT_MODES)
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                sort_selected = (sort_selected + 1) % len(SORT_MODES)
+            elif key in (10, 13, curses.KEY_ENTER):
+                sort_mode = SORT_MODES[sort_selected]
+                filtered = _apply_sort(_filter_sessions(all_sessions, query), sort_mode)
+                selected = min(selected, max(0, len(filtered) - 1))
+                sort_picking = False
             continue
 
         # Escape — quit
@@ -243,12 +277,18 @@ def quick_switch_main(stdscr):
             selected = (selected + 1) % len(filtered)
             continue
 
+        # Sort picker
+        if key == ord("s"):
+            sort_picking = True
+            sort_selected = SORT_MODES.index(sort_mode)
+            continue
+
         # Backspace
         if key in (curses.KEY_BACKSPACE, 127, 8):
             if cursor > 0:
                 query = query[: cursor - 1] + query[cursor:]
                 cursor -= 1
-                filtered = _filter_sessions(all_sessions, query)
+                filtered = _apply_sort(_filter_sessions(all_sessions, query), sort_mode)
                 selected = min(selected, max(0, len(filtered) - 1))
             continue
 
@@ -272,7 +312,7 @@ def quick_switch_main(stdscr):
         if key == 21:  # ctrl+u
             query = ""
             cursor = 0
-            filtered = list(all_sessions)
+            filtered = _apply_sort(list(all_sessions), sort_mode)
             selected = 0
             continue
 
@@ -280,7 +320,7 @@ def quick_switch_main(stdscr):
         if 32 <= key < 127:
             query = query[:cursor] + chr(key) + query[cursor:]
             cursor += 1
-            filtered = _filter_sessions(all_sessions, query)
+            filtered = _apply_sort(_filter_sessions(all_sessions, query), sort_mode)
             selected = min(selected, max(0, len(filtered) - 1))
             continue
 

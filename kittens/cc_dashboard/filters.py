@@ -52,3 +52,55 @@ def _sort_pick_entries(entries, running_titles):
     running = [e for e in entries if e["title"] in running_titles]
     stopped = [e for e in entries if e["title"] not in running_titles]
     return running + stopped, len(running)
+
+
+# ── Sort modes ──────────────────────────────────────────────────────────────
+
+SORT_MODES = ("default", "name", "account", "status", "idle", "activity")
+
+SORT_LABELS = {
+    "default": "",
+    "name": "Name",
+    "account": "Account",
+    "status": "Status",
+    "idle": "Idle",
+    "activity": "Activity",
+}
+
+_STATUS_PRIORITY = {
+    "error": 0,
+    "permission": 1,
+    "active": 2,
+    "focused": 3,
+    "idle": 4,
+    "stopped": 5,
+}
+
+
+def _apply_sort(sessions, sort_mode):
+    """Return a new list of sessions sorted by the given mode."""
+    if sort_mode == "default":
+        return list(sessions)
+    if sort_mode == "name":
+        return sorted(sessions, key=lambda s: s["title"].lower())
+    if sort_mode == "account":
+        return sorted(sessions, key=lambda s: (s["account"].lower(), s["title"].lower()))
+    if sort_mode == "status":
+        return sorted(sessions, key=lambda s: _STATUS_PRIORITY.get(s["status"], 99))
+    if sort_mode == "idle":
+        return sorted(
+            sessions,
+            key=lambda s: (
+                0 if s.get("activity") else 1,
+                s["activity"]["last_event_ts"] if s.get("activity") else 0,
+            ),
+        )
+    if sort_mode == "activity":
+        return sorted(
+            sessions,
+            key=lambda s: (
+                0 if s.get("activity") else 1,
+                -s["activity"]["last_event_ts"] if s.get("activity") else 0,
+            ),
+        )
+    return list(sessions)
