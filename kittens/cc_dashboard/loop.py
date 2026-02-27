@@ -5,7 +5,7 @@ import os
 import time
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.colors import CP_NORMAL, init_colors
+from cc_dashboard.colors import CP_NORMAL, CP_WARN, init_colors
 from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.filters import (
     _apply_filters,
@@ -132,7 +132,7 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | rename | new | pick | help | move_picker | config_pick | config_action | config_show
+    mode = "list"  # list | confirm | confirm_restart | confirm_save | rename | new | pick | help | move_picker | config_pick | config_action | config_show
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -212,7 +212,7 @@ def dashboard(stdscr):
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "rename", "move_picker", "config_pick", "config_action") or (
+        if mode in ("list", "confirm", "confirm_restart", "confirm_save", "rename", "move_picker", "config_pick", "config_action") or (
             mode == "override" and override_source == "list"
         ):
             rows, _cols = stdscr.getmaxyx()
@@ -248,6 +248,16 @@ def dashboard(stdscr):
                 draw_confirm_prompt(stdscr, filtered[selected], "Close")
             elif mode == "confirm_restart" and filtered:
                 draw_confirm_prompt(stdscr, filtered[selected], "Restart")
+            elif mode == "confirm_save":
+                rows_now, _ = stdscr.getmaxyx()
+                prompt = f"Save {len(sessions)} session(s) to sessions.conf? y/n"
+                safe_addstr(
+                    stdscr,
+                    rows_now - 3,
+                    2,
+                    prompt,
+                    curses.color_pair(CP_WARN) | curses.A_BOLD,
+                )
             elif mode == "rename":
                 draw_rename_input(stdscr, rename_value, rename_cursor)
                 draw_footer(stdscr, "rename")
@@ -517,6 +527,12 @@ def dashboard(stdscr):
                 rename_cursor = len(rename_value)
             elif key == ord("R") and filtered:
                 mode = "confirm_restart"
+            elif key == ord("S"):
+                if sessions:
+                    mode = "confirm_save"
+                else:
+                    msg = "No sessions to save"
+                    msg_frames = 20
             elif key == ord("O") and filtered:
                 mode = "override"
                 override_source = "list"
@@ -744,6 +760,14 @@ def dashboard(stdscr):
                     inst = sess.get("instance_label", sess_socket)
                     msg = f"Instance {inst} is no longer available"
                 msg_frames = 20
+            mode = "list"
+
+        # ── Confirm save ────────────────────────────────────────
+        elif mode == "confirm_save":
+            if key in (ord("y"), ord("Y")):
+                count, _ = _cfg.save_sessions(sessions)
+                msg = f"Saved {count} session(s) to sessions.conf"
+                msg_frames = 25
             mode = "list"
 
         # ── Override (account picker) ─────────────────────────────

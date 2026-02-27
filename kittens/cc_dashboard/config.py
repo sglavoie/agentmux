@@ -3,6 +3,8 @@
 import contextlib
 import json
 import os
+import shutil
+from datetime import datetime
 
 # ── Shared data loading ──────────────────────────────────────────────────────
 
@@ -330,6 +332,40 @@ def _unique_config_dirs():
             seen.add(d)
             result.append(d)
     return result
+
+
+def save_sessions(live_sessions):
+    """Save live sessions to sessions.conf, mirroring cmd_save from cc-launch.
+
+    Accepts the sessions list from query_all_sessions (dicts with 'title',
+    'cwd', 'account' keys).  Returns (count, backup_created).
+    """
+    path = _sessions_config_path()
+    home = os.path.expanduser("~")
+
+    backup_created = False
+    if os.path.isfile(path):
+        shutil.copy2(path, path + ".bak")
+        backup_created = True
+
+    with open(path, "w") as f:
+        f.write("# cc-manager session definitions\n")
+        f.write(
+            f"# Saved by dashboard on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
+        f.write("#\n")
+        f.write("# Format: title | directory | account\n")
+        f.write("\n")
+        for s in live_sessions:
+            title = s.get("title", "")
+            directory = s.get("cwd", "~/")
+            if directory.startswith(home):
+                directory = "~" + directory[len(home):]
+            account = s.get("account", "unknown")
+            f.write(f"{title:<20s} | {directory:<40s} | {account}\n")
+
+    load_sessions()
+    return len(live_sessions), backup_created
 
 
 def _palette_tab_colors(account):
