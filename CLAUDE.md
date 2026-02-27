@@ -42,6 +42,8 @@ Kitty socket discovery follows a three-step precedence: explicit `--socket` argu
 
 Shell scripts target Bash 3 compatibility (macOS default), using parallel indexed arrays instead of associative arrays for account storage.
 
+`cc-hook-indicator` automatically detects `claude -p` (pipe mode) invocations by walking the process tree. When pipe mode is detected, macOS notifications are suppressed, but icon changes and activity tracking still function normally.
+
 ## Kitty documentation reference
 
 The `docs/` directory contains concise reference documents extracted from the official Kitty documentation at https://sw.kovidgoyal.net/kitty/. Consult these when working on Kitty-specific functionality:

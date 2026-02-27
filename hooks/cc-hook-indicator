@@ -107,8 +107,25 @@ _matches_ignore_pattern() {
 }
 
 _should_suppress_notify() {
+    [[ "$_PIPE_MODE" == true ]] && return 0
     _is_too_recent && return 0
     _matches_ignore_pattern && return 0
+    return 1
+}
+
+_is_pipe_mode() {
+    local pid="$PPID"
+    local depth=0
+    while [[ "$depth" -lt 4 && "$pid" -gt 1 ]]; do
+        local cmd_line
+        cmd_line=$(ps -o args= -p "$pid" 2>/dev/null) || return 1
+        if echo "$cmd_line" | grep -qE '(^|/)claude[[:space:]]' &&
+            echo "$cmd_line" | grep -qE '(^|[[:space:]])(-p|--print)([[:space:]]|$)'; then
+            return 0
+        fi
+        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || return 1
+        depth=$((depth + 1))
+    done
     return 1
 }
 
@@ -126,6 +143,10 @@ current_title="$(echo "$info" | tail -n1)"
 if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
     exit 0
 fi
+
+# Detect pipe mode early; used later to suppress only notifications.
+_PIPE_MODE=false
+_is_pipe_mode && _PIPE_MODE=true
 
 # ---------------------------------------------------------------------------
 # Activity tracking — write compact state file for dashboard consumption
