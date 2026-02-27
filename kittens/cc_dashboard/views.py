@@ -660,8 +660,10 @@ def draw_delete_view(stdscr, entries, selected, running_count):
     draw_footer(stdscr, "delete")
 
 
-def draw_delete_confirm(stdscr, delete_step, entry):
+def draw_delete_confirm(stdscr, delete_step, entry, warnings=None):
     """Draw the confirmation prompt for the delete flow."""
+    if warnings is None:
+        warnings = []
     rows, _ = stdscr.getmaxyx()
     title = entry["title"]
     if delete_step == "confirm_config":
@@ -678,9 +680,18 @@ def draw_delete_confirm(stdscr, delete_step, entry):
             type_tag, "directory"
         )
         path = os.path.expanduser(entry["dir"])
+        prompt_row = rows - 3
+        if warnings:
+            for i, w in enumerate(warnings):
+                wy = prompt_row - len(warnings) + i
+                if wy >= 1:
+                    safe_addstr(
+                        stdscr, wy, 4, f"⚠ {w}",
+                        curses.color_pair(CP_WARN),
+                    )
         msg = f'Delete {type_label} at {path}?  y/n'
         safe_addstr(
-            stdscr, rows - 3, 2, msg,
+            stdscr, prompt_row, 2, msg,
             curses.color_pair(CP_WARN) | curses.A_BOLD,
         )
 

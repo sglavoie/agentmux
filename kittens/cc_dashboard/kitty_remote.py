@@ -391,6 +391,48 @@ def detect_worktree(cwd):
     return {"is_worktree": False, "main_repo": ""}
 
 
+def check_git_safety(path):
+    """Check a git repo for uncommitted changes, untracked files, and unpushed commits.
+
+    Returns a list of warning strings. Empty list means the repo is clean.
+    Silently skips any check that fails or times out.
+    """
+    warnings = []
+
+    # Single git status call covers both uncommitted changes and untracked files
+    try:
+        result = subprocess.run(
+            ["git", "-C", path, "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            lines = result.stdout.strip().splitlines()
+            untracked = [l for l in lines if l.startswith("?? ")]
+            changed = [l for l in lines if not l.startswith("?? ")]
+            if changed:
+                warnings.append(f"Has uncommitted changes ({len(changed)} files)")
+            if untracked:
+                warnings.append(f"Has untracked files ({len(untracked)} files)")
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+    # Check for unpushed commits
+    try:
+        result = subprocess.run(
+            ["git", "-C", path, "log", "--oneline", "@{u}..HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            count = len(result.stdout.strip().splitlines())
+            warnings.append(f"Has unpushed commits ({count} commits)")
+        elif result.returncode != 0:
+            warnings.append("No remote tracking branch")
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+    return warnings
+
+
 def do_remove_worktree(main_repo, worktree_path):
     """Remove a git worktree cleanly. Returns None on success or error string."""
     try:

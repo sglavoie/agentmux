@@ -28,6 +28,7 @@ from cc_dashboard.kitty_remote import (
     do_create_worktree,
     do_launch,
     do_remove_worktree,
+    check_git_safety,
     detect_worktree,
     do_move,
     do_open_editor,
@@ -209,6 +210,7 @@ def dashboard(stdscr):
     delete_filtered: list[dict] = []
     delete_running_count = 0
     delete_target_entry: dict = {}  # the entry being confirmed for deletion
+    delete_warnings: list[str] = []  # git safety warnings for confirm_data step
 
     # Config browser state
     config_selected = 0
@@ -383,7 +385,7 @@ def dashboard(stdscr):
         elif mode == "delete":
             draw_delete_view(stdscr, delete_filtered, delete_selected, delete_running_count)
             if delete_step in ("confirm_config", "confirm_data"):
-                draw_delete_confirm(stdscr, delete_step, delete_target_entry)
+                draw_delete_confirm(stdscr, delete_step, delete_target_entry, delete_warnings)
                 draw_footer(stdscr, "delete_confirm")
             elif msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
@@ -1550,6 +1552,10 @@ def dashboard(stdscr):
                     delete_step = "confirm_data"
                     # Check if directory exists and is valid for deletion
                     expanded = os.path.expanduser(delete_target_entry["dir"])
+                    if os.path.isdir(expanded) and delete_target_entry.get("type_tag") == "[repo]":
+                        delete_warnings = check_git_safety(expanded)
+                    else:
+                        delete_warnings = []
                     if not os.path.isdir(expanded) or delete_target_entry.get("type_tag") == "[n/a]":
                         msg = f'Removed "{title}" from config (directory not found)'
                         msg_frames = 30
