@@ -91,7 +91,7 @@ _matches_ignore_pattern() {
     [[ -n "$patterns" ]] || return 1 # no patterns = don't suppress
 
     # Brief delay to let the TUI redraw before capturing screen content.
-    sleep 0.3
+    sleep 0.5
 
     local screen_text
     screen_text=$(kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} get-text --extent screen --match "id:$KITTY_WINDOW_ID" 2>/dev/null) || return 1
