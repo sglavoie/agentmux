@@ -31,6 +31,7 @@ def _load_icons():
 
 _ICONS = _load_icons()
 _ICON_STAR = _ICONS["star"]
+_ICON_FLAG = _ICONS.get("flag", "❗")
 _ICON_STATES = _ICONS["states"]
 _STATE_NAMES = {
     "bolt": "active",
@@ -42,7 +43,13 @@ _STATE_NAMES = {
 # Build the managed-title regex dynamically from loaded icons
 _state_icons_alt = "|".join(re.escape(_ICON_STATES[k]) for k in _ICONS["state_order"])
 _MANAGED_TITLE_RE = re.compile(
-    r"^(" + re.escape(_ICON_STAR) + r")?(" + _state_icons_alt + r")?[A-Z]:"
+    r"^("
+    + re.escape(_ICON_STAR)
+    + r")?("
+    + re.escape(_ICON_FLAG)
+    + r")?("
+    + _state_icons_alt
+    + r")?[A-Z]:"
 )
 
 
@@ -177,9 +184,11 @@ def get_window_text(socket, window_id, extent="screen"):
 
 
 def _strip_icons(title):
-    """Remove leading star and state icon prefixes from a tab title."""
+    """Remove leading star, flag, and state icon prefixes from a tab title."""
     if title.startswith(_ICON_STAR):
         title = title[len(_ICON_STAR) :]
+    if title.startswith(_ICON_FLAG):
+        title = title[len(_ICON_FLAG) :]
     for key in _ICONS["state_order"]:
         icon = _ICON_STATES[key]
         if title.startswith(icon):
@@ -216,10 +225,12 @@ def _detect_state(title):
     """Detect the state icon in a tab title, returning a status string.
 
     Returns one of: "active", "stopped", "permission", "error", or "".
-    The star prefix is skipped before checking.
+    The star and flag prefixes are skipped before checking.
     """
     if title.startswith(_ICON_STAR):
         title = title[len(_ICON_STAR) :]
+    if title.startswith(_ICON_FLAG):
+        title = title[len(_ICON_FLAG) :]
     for key in _ICONS["state_order"]:
         if title.startswith(_ICON_STATES[key]):
             return _STATE_NAMES[key]

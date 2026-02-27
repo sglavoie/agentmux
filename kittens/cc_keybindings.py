@@ -43,6 +43,7 @@ _SECTIONS = [
         [
             ("F1", "Keybinding reference (this overlay)"),
             ("F2", "Toggle star / pin on current tab"),
+            ("F5", "Toggle flag on current tab"),
             ("F3", "Toggle error / warning markers"),
             ("F4", "Clear markers and state icons"),
             ("F12", "Broadcast input to all tab windows"),

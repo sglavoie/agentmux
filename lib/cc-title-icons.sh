@@ -14,10 +14,11 @@ else
 fi
 _load_icons
 
-# Remove leading ★and state icon prefixes from a title string.
+# Remove leading ★, ❗, and state icon prefixes from a title string.
 strip_icons() {
 	local title="$1"
 	title="${title#"$_ICON_STAR"}"
+	title="${title#"$_ICON_FLAG"}"
 	title="${title#"$_ICON_BOLT"}"
 	title="${title#"$_ICON_STOP"}"
 	title="${title#"$_ICON_KEY"}"
@@ -25,11 +26,12 @@ strip_icons() {
 	echo "$title"
 }
 
-# Detect which state icon is currently present (after stripping ★).
+# Detect which state icon is currently present (after stripping ★ and ❗).
 # Outputs one of: bolt, stop, key, error, or empty string.
 detect_state() {
 	local title="$1"
 	title="${title#"$_ICON_STAR"}"
+	title="${title#"$_ICON_FLAG"}"
 	case "$title" in
 	"$_ICON_BOLT"*) echo "bolt" ;;
 	"$_ICON_STOP"*) echo "stop" ;;
@@ -39,11 +41,11 @@ detect_state() {
 	esac
 }
 
-# Reconstruct a title from a base string, star flag, and state name.
-# Order is always: ★<state-icon> base
+# Reconstruct a title from a base string, star flag, flag flag, and state name.
+# Order is always: ★❗<state-icon> base
 # state is one of: bolt, stop, key, error, or empty string.
 build_title() {
-	local base="$1" has_star="$2" state="$3"
+	local base="$1" has_star="$2" state="$3" has_flag="${4:-}"
 	local result="$base"
 	case "$state" in
 	bolt) result="${_ICON_BOLT}$result" ;;
@@ -51,6 +53,9 @@ build_title() {
 	key) result="${_ICON_KEY}$result" ;;
 	error) result="${_ICON_ERROR}$result" ;;
 	esac
+	if [[ "$has_flag" == "true" ]]; then
+		result="${_ICON_FLAG}$result"
+	fi
 	if [[ "$has_star" == "true" ]]; then
 		result="${_ICON_STAR}$result"
 	fi

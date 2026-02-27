@@ -1,5 +1,5 @@
 PYTHON_SRC    := kittens/
-SHELL_SCRIPTS := bin/cc-launch bin/cc-status bin/cc-toggle-star bin/ccm \
+SHELL_SCRIPTS := bin/cc-launch bin/cc-status bin/cc-toggle-star bin/cc-toggle-flag bin/ccm \
                  lib/cc-common.sh lib/cc-title-icons.sh lib/install-hooks.sh \
                  lib/sync-preambles.sh
 RYE           := $(HOME)/.rye/shims/rye
@@ -16,6 +16,7 @@ SYMLINKS := \
 	$(PREFIX_BIN)/cc-launch:bin/cc-launch \
 	$(PREFIX_BIN)/cc-status:bin/cc-status \
 	$(PREFIX_BIN)/cc-toggle-star:bin/cc-toggle-star \
+	$(PREFIX_BIN)/cc-toggle-flag:bin/cc-toggle-flag \
 	$(PREFIX_BIN)/cc-hook-indicator:hooks/cc-hook-indicator \
 	$(PREFIX_LIB)/cc-common.sh:lib/cc-common.sh \
 	$(PREFIX_LIB)/cc-title-icons.sh:lib/cc-title-icons.sh \

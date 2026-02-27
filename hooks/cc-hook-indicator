@@ -240,10 +240,14 @@ _update_activity
 
 # Determine current icon state.
 has_star=false
+has_flag=false
 remaining="$current_title"
 if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
     has_star=true
     remaining="${remaining#"$_ICON_STAR"}"
+fi
+if [[ "$remaining" == "${_ICON_FLAG}"* ]]; then
+    has_flag=true
 fi
 
 # Strip any existing state icon to get the base title.
@@ -300,7 +304,7 @@ idle|clear)
     ;;
 esac
 
-new_title="$(build_title "$remaining" "$has_star" "$state")"
+new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag")"
 
 # Send macOS desktop notification if enabled for this event type.
 case "$ACTION" in

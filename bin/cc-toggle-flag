@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# cc-toggle-flag — Toggle ❗flag on the active tab's title.
+# Called from a Kitty keybinding with @active-kitty-window-id as $1.
+# The flag is purely visual and does NOT affect tab ordering.
+
+if [[ $# -lt 1 ]]; then
+	echo "Usage: cc-toggle-flag WINDOW_ID" >&2
+	exit 1
+fi
+
+WIN_ID="$1"
+
+# Resolve the lib directory by following the symlink.
+SCRIPT_PATH="$(readlink "$0" || echo "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+# shellcheck source=../lib/cc-title-icons.sh
+source "$LIB_DIR/cc-title-icons.sh"
+
+# Discover the Kitty socket.
+TO_ARGS=()
+if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+	TO_ARGS=("--to" "$KITTY_LISTEN_ON")
+fi
+
+# Get current tab info.
+info="$(get_tab_info "$WIN_ID" ${TO_ARGS[@]+"${TO_ARGS[@]}"})"
+tab_id="$(echo "$info" | head -n1)"
+current_title="$(echo "$info" | tail -n1)"
+
+if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
+	echo "Error: Could not find tab for window $WIN_ID" >&2
+	exit 1
+fi
+
+# Determine current icon state.
+has_star=false
+has_flag=false
+remaining="$current_title"
+if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
+	has_star=true
+	remaining="${remaining#"$_ICON_STAR"}"
+fi
+if [[ "$remaining" == "${_ICON_FLAG}"* ]]; then
+	has_flag=true
+fi
+
+state="$(detect_state "$current_title")"
+remaining="$(strip_icons "$remaining")"
+
+# Toggle the flag.
+if [[ "$has_flag" == "true" ]]; then
+	has_flag=false
+else
+	has_flag=true
+fi
+
+new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag")"
+kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title"

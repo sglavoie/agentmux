@@ -715,7 +715,7 @@ cmd_list() {
 		ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
 
 		local inst_rows
-		inst_rows="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" --arg inst_label "$inst_label" '
+		inst_rows="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" --arg icon_flag "$_ICON_FLAG" --arg inst_label "$inst_label" '
             [.[] | . as $os |
                 $os.tabs | to_entries[] |
                 .key as $tab_idx | .value as $tab |
@@ -752,13 +752,13 @@ cmd_list() {
                     status: (
                         if ($os.is_focused and $tab.is_focused)
                         then "focused"
-                        elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_bolt))
+                        elif ($tab.title | test("^(" + $icon_star + ")?(" + $icon_flag + ")?" + $icon_bolt))
                         then "active"
-                        elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_stop))
+                        elif ($tab.title | test("^(" + $icon_star + ")?(" + $icon_flag + ")?" + $icon_stop))
                         then "stopped"
-                        elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_key))
+                        elif ($tab.title | test("^(" + $icon_star + ")?(" + $icon_flag + ")?" + $icon_key))
                         then "permission"
-                        elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_error))
+                        elif ($tab.title | test("^(" + $icon_star + ")?(" + $icon_flag + ")?" + $icon_error))
                         then "error"
                         else "idle"
                         end

@@ -37,10 +37,14 @@ fi
 
 # Determine current icon state.
 has_star=false
+has_flag=false
 remaining="$current_title"
 if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
 	has_star=true
 	remaining="${remaining#"$_ICON_STAR"}"
+fi
+if [[ "$remaining" == "${_ICON_FLAG}"* ]]; then
+	has_flag=true
 fi
 
 state="$(detect_state "$current_title")"
@@ -53,7 +57,7 @@ else
 	has_star=true
 fi
 
-new_title="$(build_title "$remaining" "$has_star" "$state")"
+new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag")"
 kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title"
 sleep 0.05
 
