@@ -63,6 +63,8 @@ from cc_dashboard.views import (
     draw_search_bar,
     draw_status_message,
     draw_worktree_input,
+    _scan_directories,
+    draw_dir_dropdown,
 )
 
 
@@ -232,6 +234,11 @@ def dashboard(stdscr):
     new_fields = _make_new_fields()
     new_active = 0
     new_cursor = 0
+    dir_browse_active = False
+    dir_browse_entries = []
+    dir_browse_selected = 0
+    dir_browse_scroll = 0
+    dir_browse_show_hidden = False
 
     def _refilter():
         nonlocal filtered, selected
@@ -333,6 +340,10 @@ def dashboard(stdscr):
             )
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor, multi_instance=multi_instance)
+            if dir_browse_active:
+                draw_dir_dropdown(stdscr, dir_browse_entries, dir_browse_selected,
+                                  dir_browse_scroll, dir_browse_show_hidden)
+                draw_footer(stdscr, "new_dir_browse")
         elif mode == "pick" or (mode == "override" and override_source == "pick"):
             draw_pick_view(stdscr, pick_filtered, pick_selected, pick_running_count)
             if msg and msg_frames > 0:
@@ -507,6 +518,7 @@ def dashboard(stdscr):
                 new_fields = _make_new_fields()
                 new_active = 0
                 new_cursor = 0
+                dir_browse_active = False
             elif key == ord("l"):
                 if _cfg._sessions:
                     mode = "pick"
@@ -1201,7 +1213,71 @@ def dashboard(stdscr):
             last_field = len(field_keys) - 1
             fk = field_keys[new_active]
 
-            if key == 27:  # Esc -- cancel
+            if dir_browse_active and fk == "dir":
+                if key == 27:  # Escape - close dropdown
+                    dir_browse_active = False
+                elif key == curses.KEY_UP:
+                    dir_browse_selected = max(0, dir_browse_selected - 1)
+                    if dir_browse_selected < dir_browse_scroll:
+                        dir_browse_scroll = dir_browse_selected
+                elif key == curses.KEY_DOWN:
+                    if dir_browse_entries:
+                        dir_browse_selected = min(
+                            len(dir_browse_entries) - 1, dir_browse_selected + 1
+                        )
+                        max_vis = min(10, stdscr.getmaxyx()[0] - 10)
+                        if dir_browse_selected >= dir_browse_scroll + max_vis:
+                            dir_browse_scroll = dir_browse_selected - max_vis + 1
+                elif key in (10, 13, curses.KEY_ENTER, 9):  # Enter or Tab - accept & drill
+                    if dir_browse_entries:
+                        selected_name = dir_browse_entries[dir_browse_selected]
+                        val = new_fields["dir"]
+                        if val.endswith("/"):
+                            base = val
+                        else:
+                            idx = val.rfind("/")
+                            base = val[:idx + 1] if idx >= 0 else ""
+                        new_fields["dir"] = base + selected_name + "/"
+                        new_cursor = len(new_fields["dir"])
+                        dir_browse_entries = _scan_directories(
+                            new_fields["dir"], show_hidden=dir_browse_show_hidden
+                        )
+                        dir_browse_selected = 0
+                        dir_browse_scroll = 0
+                        if not dir_browse_entries:
+                            dir_browse_active = False
+                    else:
+                        dir_browse_active = False
+                elif key == ord("."):  # Toggle hidden directories
+                    dir_browse_show_hidden = not dir_browse_show_hidden
+                    dir_browse_entries = _scan_directories(
+                        new_fields["dir"], show_hidden=dir_browse_show_hidden
+                    )
+                    dir_browse_selected = 0
+                    dir_browse_scroll = 0
+                elif key in (curses.KEY_BACKSPACE, 127, 8):
+                    if new_cursor > 0:
+                        val = new_fields["dir"]
+                        new_fields["dir"] = val[:new_cursor - 1] + val[new_cursor:]
+                        new_cursor -= 1
+                        dir_browse_entries = _scan_directories(
+                            new_fields["dir"], show_hidden=dir_browse_show_hidden
+                        )
+                        dir_browse_selected = 0
+                        dir_browse_scroll = 0
+                        if not new_fields["dir"]:
+                            dir_browse_active = False
+                elif 32 <= key < 127:
+                    val = new_fields["dir"]
+                    new_fields["dir"] = val[:new_cursor] + chr(key) + val[new_cursor:]
+                    new_cursor += 1
+                    dir_browse_entries = _scan_directories(
+                        new_fields["dir"], show_hidden=dir_browse_show_hidden
+                    )
+                    dir_browse_selected = 0
+                    dir_browse_scroll = 0
+            elif key == 27:  # Esc -- cancel
+                dir_browse_active = False
                 mode = "list"
             elif key == curses.KEY_UP:
                 new_active = max(new_active - 1, 0)
@@ -1218,6 +1294,13 @@ def dashboard(stdscr):
                     new_fields["instance"] = _cycle_instance(
                         new_fields["instance"], instance_labels
                     )
+                elif fk == "dir":
+                    dir_browse_entries = _scan_directories(
+                        new_fields["dir"], show_hidden=dir_browse_show_hidden
+                    )
+                    dir_browse_active = True
+                    dir_browse_selected = 0
+                    dir_browse_scroll = 0
                 else:
                     new_active = min(new_active + 1, last_field)
                     new_cursor = len(new_fields[field_keys[new_active]])

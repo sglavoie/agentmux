@@ -701,6 +701,7 @@ _FOOTER_HINTS = {
     "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
     "confirm_save": ["y Confirm save", "Any other key Cancel"],
     "new": ["Enter Next/Submit", "Tab Cycle", "Up/Dn Navigate", "Esc Cancel"],
+    "new_dir_browse": ["Enter Select", "Up/Dn Navigate", ". Toggle hidden", "Esc Close"],
     "pick": ["Enter Launch", "i Instance", "O CfgDir", "/ Search", "Esc Back", "q Back"],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
     "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
@@ -1488,3 +1489,67 @@ def _cycle_instance(current, instance_labels):
     except ValueError:
         idx = -1
     return instance_labels[(idx + 1) % len(instance_labels)]
+
+
+# ── Directory browser ───────────────────────────────────────────────────────
+
+
+def _scan_directories(field_value, max_results=50, show_hidden=False):
+    """Scan filesystem for directories matching the current dir field input."""
+    expanded = os.path.expanduser(field_value)
+    if field_value.endswith("/") or expanded.endswith("/"):
+        scan_dir = expanded
+        partial = ""
+    else:
+        scan_dir = os.path.dirname(expanded)
+        partial = os.path.basename(expanded)
+    if not os.path.isdir(scan_dir):
+        return []
+    try:
+        entries = sorted(
+            entry.name
+            for entry in os.scandir(scan_dir)
+            if entry.is_dir(follow_symlinks=True)
+            and (show_hidden or not entry.name.startswith("."))
+            and (not partial or partial.lower() in entry.name.lower())
+        )
+    except PermissionError:
+        return []
+    return entries[:max_results]
+
+
+def draw_dir_dropdown(stdscr, entries, selected, scroll, show_hidden=False):
+    """Draw a directory autocomplete dropdown below the dir field."""
+    rows, cols = stdscr.getmaxyx()
+    dropdown_y = 7
+    dropdown_x = 17
+    max_visible = min(10, rows - dropdown_y - 3)
+    if max_visible < 1:
+        return
+    if not entries:
+        safe_addstr(
+            stdscr, dropdown_y, dropdown_x,
+            "(no matching directories)", curses.color_pair(CP_DIM),
+        )
+        return
+    visible = entries[scroll:scroll + max_visible]
+    max_width = cols - dropdown_x - 2
+    for i, name in enumerate(visible):
+        y = dropdown_y + i
+        if y >= rows - 2:
+            break
+        abs_idx = scroll + i
+        is_sel = abs_idx == selected
+        prefix = "> " if is_sel else "  "
+        display = (prefix + name + "/")[:max_width]
+        if is_sel:
+            attr = curses.color_pair(CP_INPUT_ACTIVE) | curses.A_BOLD
+        else:
+            attr = curses.color_pair(CP_NORMAL)
+        safe_addstr(stdscr, y, dropdown_x, display, attr)
+    total = len(entries)
+    if total > max_visible:
+        indicator = f"[{scroll + 1}-{min(scroll + max_visible, total)}/{total}]"
+        ind_y = dropdown_y + len(visible)
+        if ind_y < rows - 2:
+            safe_addstr(stdscr, ind_y, dropdown_x, indicator, curses.color_pair(CP_DIM))
