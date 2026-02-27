@@ -43,9 +43,9 @@ _SECTIONS = [
         [
             ("F1", "Keybinding reference (this overlay)"),
             ("F2", "Toggle star / pin on current tab"),
-            ("F5", "Toggle flag on current tab"),
             ("F3", "Toggle error / warning markers"),
             ("F4", "Clear markers and state icons"),
+            ("F5", "Toggle flag on current tab"),
             ("F12", "Broadcast input to all tab windows"),
             ("Cmd+1..0", "Switch to tab 1-10"),
             ("Cmd+L", "Toggle between last two tabs"),
@@ -72,6 +72,7 @@ _SECTIONS = [
             ("n", "Open new session form"),
             ("l", "Launch session from config"),
             ("w", "Clone session to git worktree"),
+            ("D", "Delete session from config"),
         ],
     ),
     (

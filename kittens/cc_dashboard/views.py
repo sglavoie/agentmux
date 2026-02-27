@@ -570,6 +570,121 @@ def draw_pick_view(stdscr, entries, selected, running_count):
     draw_footer(stdscr, "pick")
 
 
+def draw_delete_view(stdscr, entries, selected, running_count):
+    """Draw the delete session picker list with Running/Stopped sections."""
+    rows, cols = stdscr.getmaxyx()
+    stdscr.clear()
+
+    title = "Delete Session"
+    safe_addstr(
+        stdscr,
+        1,
+        max(0, (cols - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    if not entries:
+        safe_addstr(stdscr, 4, 3, "No sessions configured.", curses.color_pair(CP_DIM))
+        draw_footer(stdscr, "delete")
+        return
+
+    c_title = 24
+    c_acct = 12
+    c_type = 12
+    c_dir = max(12, cols - c_title - c_acct - c_type - 6)
+
+    hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}{'Type':<{c_type}}{'Directory':<{c_dir}}"
+    safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
+    sep = f"  {'─' * c_title}{'─' * c_acct}{'─' * c_type}{'─' * c_dir}"
+    safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
+
+    stopped_count = len(entries) - running_count
+    visual_rows: list[tuple[str, str | int]] = []
+    if running_count > 0:
+        visual_rows.append(("header", f"Running ({running_count})"))
+        for i in range(running_count):
+            visual_rows.append(("entry", i))
+    if stopped_count > 0:
+        visual_rows.append(("header", f"Stopped ({stopped_count})"))
+        for i in range(running_count, len(entries)):
+            visual_rows.append(("entry", i))
+
+    sel_visual = 0
+    for vi, row in enumerate(visual_rows):
+        if row[0] == "entry" and row[1] == selected:
+            sel_visual = vi
+            break
+
+    avail = rows - 8
+    total_visual = len(visual_rows)
+    if total_visual <= avail:
+        offset = 0
+    else:
+        offset = max(0, min(sel_visual - avail // 2, total_visual - avail))
+
+    for vi in range(offset, min(offset + avail, total_visual)):
+        row = visual_rows[vi]
+        screen_y = 5 + (vi - offset)
+
+        if row[0] == "header":
+            safe_addstr(
+                stdscr, screen_y, 2, row[1],
+                curses.color_pair(CP_DIM) | curses.A_BOLD,
+            )
+        else:
+            entry_idx = row[1]
+            entry = entries[entry_idx]
+            sel = entry_idx == selected
+            mark = "\u25b8" if sel else " "
+            is_running = entry_idx < running_count
+
+            cp = _cp_for_account(entry["account"], selected=sel)
+            short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
+            title_padded = _pad_to_width(
+                _truncate_to_width(entry["title"], c_title - 1), c_title
+            )
+            type_tag = entry.get("type_tag", "[dir]")
+            line = (
+                f"{mark} {title_padded}{entry['account']:<{c_acct}}"
+                f"{type_tag:<{c_type}}{short_dir:<{c_dir}}"
+            )
+
+            attr = curses.color_pair(cp)
+            if sel:
+                attr |= curses.A_BOLD
+            if is_running and not sel:
+                attr = curses.color_pair(CP_DIM)
+            safe_addstr(stdscr, screen_y, 1, line, attr)
+
+    draw_footer(stdscr, "delete")
+
+
+def draw_delete_confirm(stdscr, delete_step, entry):
+    """Draw the confirmation prompt for the delete flow."""
+    rows, _ = stdscr.getmaxyx()
+    title = entry["title"]
+    if delete_step == "confirm_config":
+        is_running = entry.get("is_running", False)
+        warning = " (session is running)" if is_running else ""
+        msg = f'Remove "{title}" from sessions.conf?{warning}  y/n'
+        safe_addstr(
+            stdscr, rows - 3, 2, msg,
+            curses.color_pair(CP_WARN) | curses.A_BOLD,
+        )
+    elif delete_step == "confirm_data":
+        type_tag = entry.get("type_tag", "[dir]")
+        type_label = {"[worktree]": "worktree", "[repo]": "git repo"}.get(
+            type_tag, "directory"
+        )
+        path = os.path.expanduser(entry["dir"])
+        msg = f'Delete {type_label} at {path}?  y/n'
+        safe_addstr(
+            stdscr, rows - 3, 2, msg,
+            curses.color_pair(CP_WARN) | curses.A_BOLD,
+        )
+
+
 _HELP_SECTIONS = [
     (
         "Navigation",
@@ -685,6 +800,7 @@ _FOOTER_HINTS = {
         "n New",
         "l Launch",
         "w Worktree",
+        "D Delete",
         "S Save",
         "c Config",
         "d Detail",
@@ -711,6 +827,8 @@ _FOOTER_HINTS = {
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
     "worktree": ["Enter Create", "Esc Cancel"],
+    "delete": ["Enter Select", "/ Search", "q Back", "Esc Back"],
+    "delete_confirm": ["y Confirm", "Any other key Cancel"],
 }
 
 

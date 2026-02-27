@@ -2,6 +2,7 @@
 
 import curses
 import os
+import shutil
 import time
 
 from cc_dashboard import config as _cfg
@@ -26,6 +27,8 @@ from cc_dashboard.kitty_remote import (
     do_focus,
     do_create_worktree,
     do_launch,
+    do_remove_worktree,
+    detect_worktree,
     do_move,
     do_open_editor,
     do_rename,
@@ -48,6 +51,8 @@ from cc_dashboard.views import (
     draw_config_picker,
     draw_config_show,
     draw_confirm_prompt,
+    draw_delete_confirm,
+    draw_delete_view,
     draw_sort_picker,
     draw_peek_overlay,
     draw_detail_pane,
@@ -148,7 +153,7 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | confirm_save | rename | worktree | new | pick | help | move_picker | config_pick | config_action | config_show | sort_pick
+    mode = "list"  # list | confirm | confirm_restart | confirm_save | rename | worktree | new | pick | delete | help | move_picker | config_pick | config_action | config_show | sort_pick
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -192,6 +197,18 @@ def dashboard(stdscr):
 
     # Sort picker state
     sort_selected = 0
+
+    # Delete mode state
+    delete_entries: list[dict] = []
+    delete_selected = 0
+    delete_step = "select"  # select | confirm_config | confirm_data
+    delete_running: set[str] = set()
+    delete_search_active = False
+    delete_query = ""
+    delete_cursor = 0
+    delete_filtered: list[dict] = []
+    delete_running_count = 0
+    delete_target_entry: dict = {}  # the entry being confirmed for deletion
 
     # Config browser state
     config_selected = 0
@@ -363,6 +380,21 @@ def dashboard(stdscr):
                     stdscr, pick_filtered[pick_selected], override_selected
                 )
                 draw_footer(stdscr, "override")
+        elif mode == "delete":
+            draw_delete_view(stdscr, delete_filtered, delete_selected, delete_running_count)
+            if delete_step in ("confirm_config", "confirm_data"):
+                draw_delete_confirm(stdscr, delete_step, delete_target_entry)
+                draw_footer(stdscr, "delete_confirm")
+            elif msg and msg_frames > 0:
+                draw_status_message(stdscr, msg)
+            elif delete_search_active or delete_query:
+                draw_search_bar(
+                    stdscr,
+                    delete_query,
+                    delete_cursor,
+                    delete_search_active,
+                    len(delete_filtered),
+                )
         elif mode == "help":
             draw_help_overlay(stdscr, help_scroll)
 
@@ -531,6 +563,38 @@ def dashboard(stdscr):
                     pick_cursor = 0
                     pick_search_active = False
                     pick_target_instance = home_instance_label
+                else:
+                    msg = "No sessions configured in sessions.conf"
+                    msg_frames = 20
+            elif key == ord("D"):
+                if _cfg._sessions:
+                    mode = "delete"
+                    delete_step = "select"
+                    delete_running = {s["title"] for s in sessions}
+                    # Build entries with type tags
+                    delete_entries = []
+                    for entry in _cfg._sessions:
+                        e = dict(entry)
+                        expanded = os.path.expanduser(e["dir"])
+                        if os.path.isdir(expanded):
+                            wt = detect_worktree(expanded)
+                            if wt["is_worktree"]:
+                                e["type_tag"] = "[worktree]"
+                                e["wt_main_repo"] = wt["main_repo"]
+                            elif os.path.isdir(os.path.join(expanded, ".git")):
+                                e["type_tag"] = "[repo]"
+                            else:
+                                e["type_tag"] = "[dir]"
+                        else:
+                            e["type_tag"] = "[n/a]"
+                        delete_entries.append(e)
+                    delete_filtered, delete_running_count = _sort_pick_entries(
+                        delete_entries, delete_running
+                    )
+                    delete_selected = 0
+                    delete_query = ""
+                    delete_cursor = 0
+                    delete_search_active = False
                 else:
                     msg = "No sessions configured in sessions.conf"
                     msg_frames = 20
@@ -1460,3 +1524,165 @@ def dashboard(stdscr):
                     location=loc,
                 )
                 return
+
+        # ── Delete mode ──────────────────────────────────────────
+        elif mode == "delete":
+            if delete_step == "confirm_config":
+                if key == ord("y"):
+                    title = delete_target_entry["title"]
+                    _cfg.remove_session(title)
+                    delete_step = "confirm_data"
+                    # Check if directory exists and is valid for deletion
+                    expanded = os.path.expanduser(delete_target_entry["dir"])
+                    if not os.path.isdir(expanded) or delete_target_entry.get("type_tag") == "[n/a]":
+                        msg = f'Removed "{title}" from config (directory not found)'
+                        msg_frames = 30
+                        # Rebuild entries from refreshed config
+                        delete_entries = []
+                        for entry in _cfg._sessions:
+                            e = dict(entry)
+                            exp = os.path.expanduser(e["dir"])
+                            if os.path.isdir(exp):
+                                wt = detect_worktree(exp)
+                                if wt["is_worktree"]:
+                                    e["type_tag"] = "[worktree]"
+                                    e["wt_main_repo"] = wt["main_repo"]
+                                elif os.path.isdir(os.path.join(exp, ".git")):
+                                    e["type_tag"] = "[repo]"
+                                else:
+                                    e["type_tag"] = "[dir]"
+                            else:
+                                e["type_tag"] = "[n/a]"
+                            delete_entries.append(e)
+                        delete_filtered, delete_running_count = _sort_pick_entries(
+                            delete_entries, delete_running
+                        )
+                        delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                        delete_step = "select"
+                else:
+                    delete_step = "select"
+            elif delete_step == "confirm_data":
+                if key == ord("y"):
+                    title = delete_target_entry["title"]
+                    expanded = os.path.expanduser(delete_target_entry["dir"])
+                    type_tag = delete_target_entry.get("type_tag", "[dir]")
+                    err = None
+                    if type_tag == "[worktree]":
+                        main_repo = delete_target_entry.get("wt_main_repo", "")
+                        err = do_remove_worktree(main_repo, expanded)
+                    else:
+                        try:
+                            shutil.rmtree(expanded)
+                        except OSError as exc:
+                            err = str(exc)
+                    if err:
+                        msg = f"Error: {err}"
+                    else:
+                        msg = f'Deleted "{title}" data at {expanded}'
+                    msg_frames = 30
+                else:
+                    msg = "Config entry removed, directory kept"
+                    msg_frames = 30
+                # Rebuild entries from refreshed config
+                delete_entries = []
+                for entry in _cfg._sessions:
+                    e = dict(entry)
+                    exp = os.path.expanduser(e["dir"])
+                    if os.path.isdir(exp):
+                        wt = detect_worktree(exp)
+                        if wt["is_worktree"]:
+                            e["type_tag"] = "[worktree]"
+                            e["wt_main_repo"] = wt["main_repo"]
+                        elif os.path.isdir(os.path.join(exp, ".git")):
+                            e["type_tag"] = "[repo]"
+                        else:
+                            e["type_tag"] = "[dir]"
+                    else:
+                        e["type_tag"] = "[n/a]"
+                    delete_entries.append(e)
+                delete_filtered, delete_running_count = _sort_pick_entries(
+                    delete_entries, delete_running
+                )
+                delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                delete_step = "select"
+            elif delete_search_active:
+                if key == 27:
+                    delete_search_active = False
+                    delete_query = ""
+                    delete_cursor = 0
+                    delete_filtered, delete_running_count = _sort_pick_entries(
+                        delete_entries, delete_running
+                    )
+                    delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                    continue
+                elif key in (10, 13, curses.KEY_ENTER):
+                    delete_search_active = False
+                    continue
+                elif key in (curses.KEY_UP, ord("k"), ord("K")) and delete_filtered:
+                    delete_selected = (delete_selected - 1) % len(delete_filtered)
+                    continue
+                elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and delete_filtered:
+                    delete_selected = (delete_selected + 1) % len(delete_filtered)
+                    continue
+                elif key in (curses.KEY_BACKSPACE, 127, 8):
+                    if delete_cursor > 0:
+                        delete_query = (
+                            delete_query[: delete_cursor - 1] + delete_query[delete_cursor:]
+                        )
+                        delete_cursor -= 1
+                        delete_filtered = _filter_config_sessions(
+                            delete_entries, delete_query
+                        )
+                        delete_filtered, delete_running_count = _sort_pick_entries(
+                            delete_filtered, delete_running
+                        )
+                        delete_selected = min(
+                            delete_selected, max(0, len(delete_filtered) - 1)
+                        )
+                    continue
+                elif key == curses.KEY_LEFT:
+                    delete_cursor = max(0, delete_cursor - 1)
+                    continue
+                elif key == curses.KEY_RIGHT:
+                    delete_cursor = min(len(delete_query), delete_cursor + 1)
+                    continue
+                elif 32 <= key < 127:
+                    delete_query = (
+                        delete_query[:delete_cursor] + chr(key) + delete_query[delete_cursor:]
+                    )
+                    delete_cursor += 1
+                    delete_filtered = _filter_config_sessions(delete_entries, delete_query)
+                    delete_filtered, delete_running_count = _sort_pick_entries(
+                        delete_filtered, delete_running
+                    )
+                    delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                    continue
+                else:
+                    continue
+            else:
+                # delete_step == "select", not searching
+                if key in (ord("q"), ord("Q"), 27):
+                    if delete_query and key == 27:
+                        delete_query = ""
+                        delete_cursor = 0
+                        delete_filtered, delete_running_count = _sort_pick_entries(
+                            delete_entries, delete_running
+                        )
+                        delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                    else:
+                        mode = "list"
+                elif key == ord("/"):
+                    delete_search_active = True
+                    delete_query = ""
+                    delete_cursor = 0
+                    delete_filtered, delete_running_count = _sort_pick_entries(
+                        delete_entries, delete_running
+                    )
+                elif key in (curses.KEY_UP, ord("k"), ord("K")) and delete_filtered:
+                    delete_selected = (delete_selected - 1) % len(delete_filtered)
+                elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and delete_filtered:
+                    delete_selected = (delete_selected + 1) % len(delete_filtered)
+                elif key in (10, 13, curses.KEY_ENTER) and delete_filtered:
+                    delete_target_entry = dict(delete_filtered[delete_selected])
+                    delete_target_entry["is_running"] = delete_target_entry["title"] in delete_running
+                    delete_step = "confirm_config"

@@ -395,6 +395,37 @@ def append_session(title, directory, account, flags="", pw=""):
     load_sessions()
 
 
+def remove_session(title):
+    """Remove a session entry from sessions.conf by title. Returns True if found."""
+    path = _sessions_config_path()
+    if not os.path.isfile(path):
+        return False
+
+    with open(path) as f:
+        lines = f.readlines()
+
+    found = False
+    kept = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            parts = stripped.split("|")
+            if len(parts) >= 2 and parts[0].strip() == title:
+                found = True
+                continue
+        kept.append(line)
+
+    if not found:
+        return False
+
+    shutil.copy2(path, path + ".bak")
+    with open(path, "w") as f:
+        f.writelines(kept)
+
+    load_sessions()
+    return True
+
+
 def _palette_tab_colors(account):
     """Return a list of kitty set-tab-color arguments for the given account."""
     color_name = _accounts.get(account, {}).get("color", "gray")

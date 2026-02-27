@@ -359,6 +359,54 @@ def do_create_worktree(cwd, branch_name):
     return {"worktree_path": worktree_path, "project_name": project_name}
 
 
+def detect_worktree(cwd):
+    """Check if a directory is a git worktree (not a normal repo or non-git dir).
+
+    Returns {"is_worktree": bool, "main_repo": str} where main_repo is the
+    git common dir path (needed for `git worktree remove`).
+    """
+    try:
+        common = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--git-common-dir"],
+            capture_output=True, text=True, timeout=10,
+        )
+        gitdir = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--git-dir"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return {"is_worktree": False, "main_repo": ""}
+
+    if common.returncode != 0 or gitdir.returncode != 0:
+        return {"is_worktree": False, "main_repo": ""}
+
+    common_dir = os.path.realpath(os.path.join(cwd, common.stdout.strip()))
+    git_dir = os.path.realpath(os.path.join(cwd, gitdir.stdout.strip()))
+
+    if common_dir != git_dir:
+        # main_repo is the working tree that contains the common .git dir
+        main_repo = os.path.dirname(common_dir)
+        return {"is_worktree": True, "main_repo": main_repo}
+
+    return {"is_worktree": False, "main_repo": ""}
+
+
+def do_remove_worktree(main_repo, worktree_path):
+    """Remove a git worktree cleanly. Returns None on success or error string."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", main_repo, "worktree", "remove", worktree_path],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (subprocess.SubprocessError, OSError) as exc:
+        return str(exc)
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        return stderr if stderr else "git worktree remove failed"
+    return None
+
+
 def format_duration(seconds):
     """Format a duration in seconds into a compact human-readable string."""
     seconds = max(0, int(seconds))
