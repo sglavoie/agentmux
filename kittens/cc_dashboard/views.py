@@ -684,7 +684,7 @@ _FOOTER_HINTS = {
     "pick": ["Enter Launch", "i Instance", "O CfgDir", "/ Search", "Esc Back", "q Back"],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
     "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
-    "peek": ["j/k Scroll", "r Refresh", "s Screen/Scrollback", "G Bottom", "g Top", "q/Esc Close"],
+    "peek": ["j/k Scroll", "^D/^U Half-page", "^F/^B Page", "G/g Top/Bot", "r Refresh", "s Screen/Scrollback", "q/Esc Close"],
     "config_pick": ["j/k Navigate", "Enter Select", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
 }

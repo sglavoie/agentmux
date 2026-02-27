@@ -668,6 +668,18 @@ def dashboard(stdscr):
                 peek_scroll = max_scroll
             elif key == ord("g"):
                 peek_scroll = 0
+            elif key == 4:  # Ctrl+d
+                peek_scroll = min(peek_scroll + content_height // 2, max_scroll)
+            elif key == 21:  # Ctrl+u
+                peek_scroll = max(peek_scroll - content_height // 2, 0)
+            elif key in (6, curses.KEY_NPAGE):  # Ctrl+f / Page Down
+                peek_scroll = min(peek_scroll + content_height, max_scroll)
+            elif key in (2, curses.KEY_PPAGE):  # Ctrl+b / Page Up
+                peek_scroll = max(peek_scroll - content_height, 0)
+            elif key == curses.KEY_HOME:
+                peek_scroll = 0
+            elif key == curses.KEY_END:
+                peek_scroll = max_scroll
             elif key == ord("r"):
                 sess = filtered[selected] if filtered else None
                 if sess:
