@@ -195,6 +195,35 @@ def _sessions_config_path():
     return os.path.join(xdg, "cc-manager", "sessions.conf")
 
 
+def _config_dir():
+    """Return the base config directory, mirroring resolve_config_dir() from bin/ccm."""
+    env_config = os.environ.get("CC_MANAGER_CONFIG", "")
+    if env_config:
+        return os.path.dirname(env_config) if os.path.isfile(env_config) else env_config
+    env_accounts = os.environ.get("CC_MANAGER_ACCOUNTS", "")
+    if env_accounts:
+        return os.path.dirname(env_accounts)
+    xdg = os.environ.get(
+        "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
+    )
+    return os.path.join(xdg, "cc-manager")
+
+
+def _hooks_config_path():
+    """Return the path to hooks.json in the config directory."""
+    return os.path.join(_config_dir(), "hooks.json")
+
+
+def _all_config_paths():
+    """Return a list of (label, path) tuples for all config files."""
+    return [
+        ("accounts", _accounts_config_path()),
+        ("sessions", _sessions_config_path()),
+        ("defaults", _defaults_config_path()),
+        ("hooks", _hooks_config_path()),
+    ]
+
+
 def load_sessions():
     """Parse sessions.conf into the module-level _sessions list."""
     global _sessions

@@ -5,6 +5,7 @@ import glob
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import time
@@ -1308,3 +1309,23 @@ def do_sort_tabs(socket):
     if result.returncode != 0:
         import sys
         print(f"reorder_tabs error: {result.stderr}", file=sys.stderr)
+
+
+def do_open_editor(socket, filepath):
+    """Open a file in the user's editor in a new Kitty OS window.
+
+    Resolves the editor from $VISUAL / $EDITOR / vi, then launches it
+    via kitty @ launch --type=os-window.  Uses shlex.split to handle
+    compound editors like "code --wait".
+    """
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
+    editor_parts = shlex.split(editor)
+    subprocess.Popen(
+        [
+            "kitty", "@", "--to", socket,
+            "launch", "--type=os-window",
+            *editor_parts, filepath,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )

@@ -23,6 +23,7 @@ from cc_dashboard.kitty_remote import (
     do_focus,
     do_launch,
     do_move,
+    do_open_editor,
     do_rename,
     do_restart,
     get_all_kitty_sockets,
@@ -37,6 +38,10 @@ from cc_dashboard.views import (
     _cycle_account,
     _cycle_instance,
     _cycle_pw,
+    _shorten_home,
+    draw_config_action_picker,
+    draw_config_picker,
+    draw_config_show,
     draw_confirm_prompt,
     draw_detail_pane,
     draw_filter_bar,
@@ -112,7 +117,7 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | rename | new | pick | help | move_picker
+    mode = "list"  # list | confirm | confirm_restart | rename | new | pick | help | move_picker | config_pick | config_action | config_show
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -153,6 +158,14 @@ def dashboard(stdscr):
     # Move picker state
     move_selected = 0
 
+    # Config browser state
+    config_selected = 0
+    config_action_selected = 0
+    config_file_label = ""
+    config_file_path = ""
+    config_show_lines = []
+    config_show_scroll = 0
+
     # New-session form state -- default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
     default_pw = (
@@ -177,7 +190,7 @@ def dashboard(stdscr):
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "rename", "move_picker") or (
+        if mode in ("list", "confirm", "confirm_restart", "rename", "move_picker", "config_pick", "config_action") or (
             mode == "override" and override_source == "list"
         ):
             rows, _cols = stdscr.getmaxyx()
@@ -222,6 +235,14 @@ def dashboard(stdscr):
             elif mode == "move_picker" and filtered:
                 draw_move_picker(stdscr, filtered[selected], instance_labels, move_selected)
                 draw_footer(stdscr, "move")
+            elif mode == "config_pick":
+                draw_config_picker(stdscr, _cfg._all_config_paths(), config_selected)
+                draw_footer(stdscr, "config_pick")
+            elif mode == "config_action":
+                draw_config_action_picker(stdscr, config_file_label, config_file_path, config_action_selected)
+                draw_footer(stdscr, "config_action")
+        elif mode == "config_show":
+            draw_config_show(stdscr, config_file_label, config_file_path, config_show_lines, config_show_scroll)
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor, multi_instance=multi_instance)
         elif mode == "pick" or (mode == "override" and override_source == "pick"):
@@ -513,6 +534,63 @@ def dashboard(stdscr):
             elif key == ord("?"):
                 mode = "help"
                 help_scroll = 0
+            elif key == ord("c"):
+                mode = "config_pick"
+                config_selected = 0
+
+        # ── Config file picker ────────────────────────────────────
+        elif mode == "config_pick":
+            config_entries = _cfg._all_config_paths()
+            if key in (27, ord("q"), ord("Q")):
+                mode = "list"
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                if config_entries:
+                    config_selected = (config_selected - 1) % len(config_entries)
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                if config_entries:
+                    config_selected = (config_selected + 1) % len(config_entries)
+            elif key in (10, 13, curses.KEY_ENTER) and config_entries:
+                config_file_label, config_file_path = config_entries[config_selected]
+                config_action_selected = 0
+                mode = "config_action"
+
+        # ── Config action picker ──────────────────────────────────
+        elif mode == "config_action":
+            if key == 27:
+                mode = "config_pick"
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                config_action_selected = (config_action_selected - 1) % 3
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                config_action_selected = (config_action_selected + 1) % 3
+            elif key in (10, 13, curses.KEY_ENTER):
+                if config_action_selected == 0:  # Show contents
+                    try:
+                        with open(config_file_path, errors="replace") as f:
+                            config_show_lines = f.read().splitlines()
+                    except OSError:
+                        config_show_lines = ["(file not found)"]
+                    config_show_scroll = 0
+                    mode = "config_show"
+                elif config_action_selected == 1:  # Edit in editor
+                    do_open_editor(home_socket, config_file_path)
+                    msg = f"Opened {config_file_label} in editor"
+                    msg_frames = 20
+                    mode = "list"
+                elif config_action_selected == 2:  # Show file path
+                    msg = _shorten_home(config_file_path)
+                    msg_frames = 30
+                    mode = "list"
+
+        # ── Config file viewer ────────────────────────────────────
+        elif mode == "config_show":
+            if key in (27, ord("q"), ord("Q")):
+                mode = "config_pick"
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                content_height = stdscr.getmaxyx()[0] - 3
+                max_scroll = max(0, len(config_show_lines) - content_height)
+                config_show_scroll = min(config_show_scroll + 1, max_scroll)
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                config_show_scroll = max(config_show_scroll - 1, 0)
 
         # ── Help overlay ──────────────────────────────────────────
         elif mode == "help":

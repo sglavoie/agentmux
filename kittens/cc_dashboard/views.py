@@ -584,6 +584,7 @@ _HELP_SECTIONS = [
         [
             ("d", "Toggle detail pane"),
             ("a", "Toggle all / managed tabs"),
+            ("c", "Open config file browser"),
             ("Ctrl+r", "Refresh session list"),
         ],
     ),
@@ -663,6 +664,7 @@ _FOOTER_HINTS = {
         "r Rename",
         "n New",
         "l Launch",
+        "c Config",
         "d Detail",
         "/ Search",
         "a All",
@@ -677,6 +679,8 @@ _FOOTER_HINTS = {
     "pick": ["Enter Launch", "i Instance", "O CfgDir", "/ Search", "Esc Back", "q Back"],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
     "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
+    "config_pick": ["j/k Navigate", "Enter Select", "Esc Back"],
+    "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
 }
 
 
@@ -845,6 +849,156 @@ def draw_move_picker(stdscr, session, instance_labels, move_selected):
         if sel:
             attr |= curses.A_BOLD
         safe_addstr(stdscr, y, box_x + 2, label, attr)
+
+
+def _shorten_home(path):
+    """Replace the home directory prefix with ~ for display."""
+    home = os.path.expanduser("~")
+    if path.startswith(home):
+        return "~" + path[len(home):]
+    return path
+
+
+def draw_config_picker(stdscr, config_entries, selected):
+    """Draw a centered config file picker overlay.
+
+    config_entries is a list of (label, path) tuples from _all_config_paths().
+    """
+    rows, cols = stdscr.getmaxyx()
+    if not config_entries:
+        return
+
+    # Build display rows
+    display_rows = []
+    for label, path in config_entries:
+        short = _shorten_home(path)
+        suffix = "" if os.path.isfile(path) else " (missing)"
+        display_rows.append(f"{label}: {short}{suffix}")
+
+    max_row_len = max(len(r) for r in display_rows)
+    box_w = min(cols - 4, max(40, max_row_len + 10))
+    box_h = len(config_entries) + 3  # title + blank + entries
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    # Draw background
+    blank_line = " " * box_w
+    dim_attr = curses.color_pair(CP_DIM)
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    # Title
+    title = "Config Files"
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    # Entries
+    normal_attr = curses.color_pair(CP_NORMAL)
+    for i, display in enumerate(display_rows):
+        y = box_y + 2 + i
+        if y >= rows - 1:
+            break
+        sel = i == selected
+        marker = "\u25b8 " if sel else "  "
+        label = f"{marker}{display}"
+
+        attr = normal_attr
+        if sel:
+            attr |= curses.A_BOLD
+        safe_addstr(stdscr, y, box_x + 2, label[: box_w - 4], attr)
+
+
+def draw_config_action_picker(stdscr, label, path, selected):
+    """Draw a centered action picker for a selected config file."""
+    rows, cols = stdscr.getmaxyx()
+    actions = ["Show contents", "Edit in editor", "Show file path"]
+
+    short_path = _shorten_home(path)
+    subtitle = f"{label}: {short_path}"
+
+    max_action_len = max(len(a) for a in actions)
+    box_w = min(cols - 4, max(40, max(max_action_len, len(subtitle)) + 10))
+    box_h = len(actions) + 4  # title + subtitle + blank + entries
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    # Draw background
+    blank_line = " " * box_w
+    dim_attr = curses.color_pair(CP_DIM)
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    # Title
+    title = f"Config: {label}"
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    # Subtitle
+    safe_addstr(
+        stdscr,
+        box_y + 1,
+        box_x + max(0, (box_w - len(subtitle)) // 2),
+        subtitle[: box_w - 2],
+        dim_attr,
+    )
+
+    # Actions
+    normal_attr = curses.color_pair(CP_NORMAL)
+    for i, action in enumerate(actions):
+        y = box_y + 3 + i
+        if y >= rows - 1:
+            break
+        sel = i == selected
+        marker = "\u25b8 " if sel else "  "
+        text = f"{marker}{action}"
+
+        attr = normal_attr
+        if sel:
+            attr |= curses.A_BOLD
+        safe_addstr(stdscr, y, box_x + 2, text, attr)
+
+
+def draw_config_show(stdscr, label, path, lines, scroll):
+    """Draw a full-screen scrollable file viewer for a config file."""
+    stdscr.erase()
+    rows, cols = stdscr.getmaxyx()
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+    dim_attr = curses.color_pair(CP_DIM)
+
+    # Row 0: title
+    short_path = _shorten_home(path)
+    title = f"{label}: {short_path}"
+    safe_addstr(stdscr, 0, 2, title, header_attr)
+
+    content_height = rows - 3  # rows 1 to rows-3 for content
+
+    if not lines or (len(lines) == 1 and lines[0] == "(file not found)"):
+        display_lines = lines if lines else ["(file not found)"]
+        for i, line in enumerate(display_lines[:content_height]):
+            safe_addstr(stdscr, i + 1, 2, line[: cols - 3], dim_attr)
+    else:
+        visible = lines[scroll : scroll + content_height]
+        for i, line in enumerate(visible):
+            safe_addstr(stdscr, i + 1, 2, line[: cols - 3], normal_attr)
+
+    # Scroll indicator
+    total = len(lines) if lines else 0
+    if total > content_height:
+        pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
+        safe_addstr(stdscr, rows - 2, 2, f"j/k to scroll  {pos}", dim_attr)
+
+    safe_addstr(stdscr, rows - 1, 2, "Press q / Esc to close", dim_attr)
 
 
 def draw_status_message(stdscr, message):
