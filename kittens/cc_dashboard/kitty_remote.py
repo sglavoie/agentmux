@@ -167,6 +167,15 @@ def kitty_cmd(socket, *args):
         return None
 
 
+def get_window_text(socket, window_id, extent="screen"):
+    """Capture text from a Kitty window. Returns text string or None."""
+    result = kitty_cmd(socket, "get-text", "--extent", extent,
+                       "--match", f"id:{window_id}")
+    if result and result.returncode == 0:
+        return result.stdout
+    return None
+
+
 def _strip_icons(title):
     """Remove leading star and state icon prefixes from a tab title."""
     if title.startswith(_ICON_STAR):
@@ -305,6 +314,28 @@ def cleanup_stale_activity(live_tab_ids):
                 os.remove(path)
 
 
+def _is_claude_process(cmdline):
+    """Check if a process cmdline represents the Claude Code CLI.
+
+    Returns True for the actual Claude binary (e.g. ["claude", ...] or
+    ["/path/to/claude", ...]) but False for kittens or scripts that
+    merely contain 'claude' in their filename (e.g. claude_dashboard.py,
+    cc_quick_switch.py).
+    """
+    for arg in cmdline:
+        arg_lower = arg.lower()
+        if "claude" not in arg_lower:
+            continue
+        # Skip Python/kitten scripts that happen to contain "claude"
+        if arg_lower.endswith(".py"):
+            continue
+        # Skip kitty kitten invocations (e.g. "kitten claude_dashboard.py")
+        if arg_lower == "kitten" or arg_lower.endswith("/kitten"):
+            continue
+        return True
+    return False
+
+
 def query_sessions(socket, managed_only=True):
     """Query Kitty for tabs running Claude Code.
 
@@ -332,6 +363,7 @@ def query_sessions(socket, managed_only=True):
             windows = tab.get("windows", [])
             cwd = ""
             user_vars: dict[str, str] = {}
+            claude_win_id = 0
 
             pids = []
             cmdlines = []
@@ -348,8 +380,9 @@ def query_sessions(socket, managed_only=True):
                         pids.append(pid)
                     if cmdline:
                         cmdlines.append(cmdline_str)
-                    if "claude" in cmdline_str.lower():
+                    if _is_claude_process(cmdline):
                         has_claude = True
+                        claude_win_id = win.get("id", 0)
                         if not cwd:
                             cwd = win.get("cwd", "")
                     for arg in cmdline:
@@ -379,6 +412,9 @@ def query_sessions(socket, managed_only=True):
                 and not _MANAGED_TITLE_RE.match(tab_title)
             ):
                 continue
+
+            if claude_win_id == 0 and windows:
+                claude_win_id = windows[0].get("id", 0)
 
             if "cc_account" in user_vars:
                 account = user_vars["cc_account"]
@@ -410,6 +446,7 @@ def query_sessions(socket, managed_only=True):
                     "cmdlines": cmdlines,
                     "config_dir": detected_config_dir,
                     "activity": activity,
+                    "claude_window_id": claude_win_id,
                 }
             )
 

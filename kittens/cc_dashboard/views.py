@@ -577,6 +577,7 @@ _HELP_SECTIONS = [
             ("r", "Rename selected session"),
             ("n", "Open new session form"),
             ("l", "Launch session from config"),
+            ("p", "Peek at session output"),
         ],
     ),
     (
@@ -666,6 +667,7 @@ _FOOTER_HINTS = {
         "l Launch",
         "c Config",
         "d Detail",
+        "p Peek",
         "/ Search",
         "a All",
         "f Acct",
@@ -679,6 +681,7 @@ _FOOTER_HINTS = {
     "pick": ["Enter Launch", "i Instance", "O CfgDir", "/ Search", "Esc Back", "q Back"],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
     "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
+    "peek": ["j/k Scroll", "r Refresh", "s Screen/Scrollback", "G Bottom", "g Top", "q/Esc Close"],
     "config_pick": ["j/k Navigate", "Enter Select", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
 }
@@ -999,6 +1002,40 @@ def draw_config_show(stdscr, label, path, lines, scroll):
         safe_addstr(stdscr, rows - 2, 2, f"j/k to scroll  {pos}", dim_attr)
 
     safe_addstr(stdscr, rows - 1, 2, "Press q / Esc to close", dim_attr)
+
+
+def draw_peek_overlay(stdscr, session_title, lines, scroll, extent, error=""):
+    """Draw a full-screen scrollable view of a session's terminal output."""
+    # clear() forces a full terminal repaint, preventing colored backgrounds
+    # from the list view bleeding through on rows the peek doesn't draw over.
+    stdscr.clear()
+    rows, cols = stdscr.getmaxyx()
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+    dim_attr = curses.color_pair(CP_DIM)
+    warn_attr = curses.color_pair(CP_WARN)
+
+    extent_label = "scrollback" if extent == "all" else "screen"
+    title = f"Peek: {session_title} [{extent_label}]"
+    safe_addstr(stdscr, 0, 2, title, header_attr)
+
+    content_height = rows - 3
+
+    if error:
+        safe_addstr(stdscr, 2, 2, error, warn_attr)
+    elif not lines or (len(lines) == 1 and not lines[0].strip()):
+        safe_addstr(stdscr, 2, 2, "(empty output)", dim_attr)
+    else:
+        visible = lines[scroll : scroll + content_height]
+        for i, line in enumerate(visible):
+            safe_addstr(stdscr, i + 1, 0, line[: cols - 1], normal_attr)
+
+    total = len(lines) if lines else 0
+    if total > content_height:
+        pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
+        safe_addstr(stdscr, rows - 2, 2, f"j/k to scroll  {pos}", dim_attr)
+
+    draw_footer(stdscr, "peek")
 
 
 def draw_status_message(stdscr, message):

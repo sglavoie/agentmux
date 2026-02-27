@@ -29,6 +29,7 @@ from cc_dashboard.kitty_remote import (
     get_all_kitty_sockets,
     get_host_tab_id,
     get_kitty_socket,
+    get_window_text,
     query_all_sessions,
 )
 from cc_dashboard.views import (
@@ -43,6 +44,7 @@ from cc_dashboard.views import (
     draw_config_picker,
     draw_config_show,
     draw_confirm_prompt,
+    draw_peek_overlay,
     draw_detail_pane,
     draw_filter_bar,
     draw_footer,
@@ -56,6 +58,13 @@ from cc_dashboard.views import (
     draw_search_bar,
     draw_status_message,
 )
+
+
+def _rstrip_blank_lines(lines):
+    """Remove trailing blank/whitespace-only lines from a list."""
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return lines
 
 
 def _session_fingerprint(sessions):
@@ -109,6 +118,12 @@ def dashboard(stdscr):
     # Detect the tab that hosts this dashboard overlay so we can handle
     # restart/close operations on it safely.
     host_tab_id = get_host_tab_id(home_socket)
+
+    # The window ID of this overlay kitten (from KITTY_WINDOW_ID).
+    # get-text on this ID returns the dashboard's own output, not the
+    # underlying session, so we skip it when peeking.
+    _host_wid_str = os.environ.get("KITTY_WINDOW_ID", "")
+    host_window_id = int(_host_wid_str) if _host_wid_str.isdigit() else 0
 
     # Auto-scroll to the focused session, if one exists
     for i, s in enumerate(sessions):
@@ -165,6 +180,13 @@ def dashboard(stdscr):
     config_file_path = ""
     config_show_lines = []
     config_show_scroll = 0
+
+    # Peek state
+    peek_lines = []
+    peek_scroll = 0
+    peek_extent = "screen"
+    peek_session_title = ""
+    peek_error = ""
 
     # New-session form state -- default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
@@ -243,6 +265,8 @@ def dashboard(stdscr):
                 draw_footer(stdscr, "config_action")
         elif mode == "config_show":
             draw_config_show(stdscr, config_file_label, config_file_path, config_show_lines, config_show_scroll)
+        elif mode == "peek":
+            draw_peek_overlay(stdscr, peek_session_title, peek_lines, peek_scroll, peek_extent, peek_error)
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor, multi_instance=multi_instance)
         elif mode == "pick" or (mode == "override" and override_source == "pick"):
@@ -452,6 +476,28 @@ def dashboard(stdscr):
                 msg_frames = 20
             elif key == ord("d"):
                 show_detail = not show_detail
+            elif key == ord("p") and filtered:
+                sess = filtered[selected]
+                win_id = sess.get("claude_window_id", 0)
+                sess_socket = sess.get("socket", home_socket)
+                peek_session_title = sess["title"]
+                peek_extent = "screen"
+                peek_scroll = 0
+                if not win_id:
+                    peek_error = "No window ID available for this session"
+                    peek_lines = []
+                elif host_window_id and win_id == host_window_id:
+                    peek_error = "Dashboard overlay is active on this window"
+                    peek_lines = []
+                else:
+                    text = get_window_text(sess_socket, win_id, peek_extent)
+                    if text is None:
+                        peek_error = "Failed to capture window text"
+                        peek_lines = []
+                    else:
+                        peek_error = ""
+                        peek_lines = _rstrip_blank_lines(text.splitlines())
+                mode = "peek"
             elif key == 18:  # Ctrl+r -- refresh
                 sessions = query_all_sessions(managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
@@ -591,6 +637,51 @@ def dashboard(stdscr):
                 config_show_scroll = min(config_show_scroll + 1, max_scroll)
             elif key in (curses.KEY_UP, ord("k"), ord("K")):
                 config_show_scroll = max(config_show_scroll - 1, 0)
+
+        # ── Peek overlay ─────────────────────────────────────────
+        elif mode == "peek":
+            content_height = stdscr.getmaxyx()[0] - 3
+            max_scroll = max(0, len(peek_lines) - content_height)
+            if key in (27, ord("q"), ord("Q")):
+                mode = "list"
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                peek_scroll = min(peek_scroll + 1, max_scroll)
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                peek_scroll = max(peek_scroll - 1, 0)
+            elif key == ord("G"):
+                peek_scroll = max_scroll
+            elif key == ord("g"):
+                peek_scroll = 0
+            elif key == ord("r"):
+                sess = filtered[selected] if filtered else None
+                if sess:
+                    win_id = sess.get("claude_window_id", 0)
+                    sess_socket = sess.get("socket", home_socket)
+                    if win_id:
+                        text = get_window_text(sess_socket, win_id, peek_extent)
+                        if text is not None:
+                            peek_lines = _rstrip_blank_lines(text.splitlines())
+                            peek_error = ""
+                            peek_scroll = min(peek_scroll, max(0, len(peek_lines) - content_height))
+                        else:
+                            peek_error = "Failed to capture window text"
+                            peek_lines = []
+                            peek_scroll = 0
+            elif key == ord("s"):
+                peek_extent = "all" if peek_extent == "screen" else "screen"
+                peek_scroll = 0
+                sess = filtered[selected] if filtered else None
+                if sess:
+                    win_id = sess.get("claude_window_id", 0)
+                    sess_socket = sess.get("socket", home_socket)
+                    if win_id:
+                        text = get_window_text(sess_socket, win_id, peek_extent)
+                        if text is not None:
+                            peek_lines = _rstrip_blank_lines(text.splitlines())
+                            peek_error = ""
+                        else:
+                            peek_error = "Failed to capture window text"
+                            peek_lines = []
 
         # ── Help overlay ──────────────────────────────────────────
         elif mode == "help":
