@@ -14,6 +14,7 @@ from cc_dashboard.colors import (
     CP_HEADER,
     CP_INPUT,
     CP_INPUT_ACTIVE,
+    CP_MATCH,
     CP_NORMAL,
     CP_WARN,
     _cp_for_account,
@@ -696,7 +697,8 @@ _FOOTER_HINTS = {
     "pick": ["Enter Launch", "i Instance", "O CfgDir", "/ Search", "Esc Back", "q Back"],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
     "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
-    "peek": ["j/k Scroll", "^D/^U Half-page", "^F/^B Page", "G/g Top/Bot", "r Refresh", "s Screen/Scrollback", "q/Esc Close"],
+    "peek": ["j/k Scroll", "^D/^U Half-page", "^F/^B Page", "G/g Top/Bot", "/ Search", "n/N Next/Prev", "r Refresh", "s Screen/Scrollback", "q/Esc Close"],
+    "peek_search": ["Enter Confirm", "Esc Cancel"],
     "config_pick": ["j/k Navigate", "Enter Select", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
@@ -1093,7 +1095,64 @@ def draw_config_show(stdscr, label, path, lines, scroll):
     safe_addstr(stdscr, rows - 1, 2, "Press q / Esc to close", dim_attr)
 
 
-def draw_peek_overlay(stdscr, session_title, lines, scroll, extent, error=""):
+def _render_peek_line(stdscr, row, line, cols, query, is_match, is_current,
+                      normal_attr, match_attr, span_attr, current_attr):
+    """Render a single peek line with optional match-span highlighting."""
+    clipped = line[: cols - 1]
+    if not query or not is_match:
+        safe_addstr(stdscr, row, 0, clipped, normal_attr)
+        return
+
+    q_lower = query.lower()
+    q_len = len(query)
+    line_lower = clipped.lower()
+    bg_attr = match_attr
+    hl_attr = current_attr if is_current else span_attr
+    x = 0
+    pos = 0
+    while pos < len(clipped):
+        idx = line_lower.find(q_lower, pos)
+        if idx == -1:
+            safe_addstr(stdscr, row, x, clipped[pos:], bg_attr)
+            break
+        if idx > pos:
+            safe_addstr(stdscr, row, x, clipped[pos:idx], bg_attr)
+            x += idx - pos
+        safe_addstr(stdscr, row, x, clipped[idx : idx + q_len], hl_attr)
+        x += q_len
+        pos = idx + q_len
+    else:
+        pass
+
+
+def _draw_peek_search_bar(stdscr, query, cursor_pos, match_count):
+    """Draw the peek search input bar at rows - 2."""
+    rows, _cols = stdscr.getmaxyx()
+    y = rows - 2
+
+    prefix = "/ "
+    before = query[:cursor_pos]
+    after = query[cursor_pos:]
+    cursor_ch = after[0] if after else " "
+    after_rest = after[1:] if len(after) > 1 else ""
+
+    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
+    x = 2 + len(prefix)
+    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+    safe_addstr(
+        stdscr, y, x + len(before), cursor_ch,
+        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+    )
+    if after_rest:
+        safe_addstr(stdscr, y, x + len(before) + 1, after_rest,
+                    curses.color_pair(CP_INPUT_ACTIVE))
+    hint = f"  ({match_count} matches)"
+    safe_addstr(stdscr, y, x + len(query) + 1, hint, curses.color_pair(CP_DIM))
+
+
+def draw_peek_overlay(stdscr, session_title, lines, scroll, extent, error="",
+                      search_query="", search_active=False, search_cursor=0,
+                      match_line_indices=None, match_index=0):
     """Draw a full-screen scrollable view of a session's terminal output."""
     # clear() forces a full terminal repaint, preventing colored backgrounds
     # from the list view bleeding through on rows the peek doesn't draw over.
@@ -1103,6 +1162,14 @@ def draw_peek_overlay(stdscr, session_title, lines, scroll, extent, error=""):
     normal_attr = curses.color_pair(CP_NORMAL)
     dim_attr = curses.color_pair(CP_DIM)
     warn_attr = curses.color_pair(CP_WARN)
+    match_attr = curses.color_pair(CP_MATCH)
+    span_attr = curses.color_pair(CP_WARN) | curses.A_BOLD
+    current_attr = curses.color_pair(CP_ATTENTION) | curses.A_BOLD
+
+    if match_line_indices is None:
+        match_line_indices = []
+    match_set = set(match_line_indices)
+    current_line_idx = match_line_indices[match_index] if match_line_indices else -1
 
     extent_label = "scrollback" if extent == "all" else "screen"
     title = f"Peek: {session_title} [{extent_label}]"
@@ -1117,14 +1184,30 @@ def draw_peek_overlay(stdscr, session_title, lines, scroll, extent, error=""):
     else:
         visible = lines[scroll : scroll + content_height]
         for i, line in enumerate(visible):
-            safe_addstr(stdscr, i + 1, 0, line[: cols - 1], normal_attr)
+            abs_idx = scroll + i
+            is_match = abs_idx in match_set
+            is_current = abs_idx == current_line_idx
+            _render_peek_line(
+                stdscr, i + 1, line, cols, search_query,
+                is_match, is_current, normal_attr, match_attr,
+                span_attr, current_attr,
+            )
 
     total = len(lines) if lines else 0
-    if total > content_height:
+    if search_active:
+        _draw_peek_search_bar(stdscr, search_query, search_cursor, len(match_line_indices))
+    elif match_line_indices:
+        indicator = f"[match {match_index + 1}/{len(match_line_indices)}]"
+        if total > content_height:
+            pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
+            safe_addstr(stdscr, rows - 2, 2, f"{indicator}  {pos}", dim_attr)
+        else:
+            safe_addstr(stdscr, rows - 2, 2, indicator, dim_attr)
+    elif total > content_height:
         pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
         safe_addstr(stdscr, rows - 2, 2, f"j/k to scroll  {pos}", dim_attr)
 
-    draw_footer(stdscr, "peek")
+    draw_footer(stdscr, "peek_search" if search_active else "peek")
 
 
 def draw_status_message(stdscr, message):

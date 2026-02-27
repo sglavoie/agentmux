@@ -64,6 +64,14 @@ from cc_dashboard.views import (
 )
 
 
+def _compute_peek_matches(lines, query):
+    """Return sorted list of line indices containing query (case-insensitive)."""
+    if not query:
+        return []
+    q = query.lower()
+    return [i for i, line in enumerate(lines) if q in line.lower()]
+
+
 def _rstrip_blank_lines(lines):
     """Remove trailing blank/whitespace-only lines from a list."""
     while lines and not lines[-1].strip():
@@ -195,6 +203,11 @@ def dashboard(stdscr):
     peek_extent = "screen"
     peek_session_title = ""
     peek_error = ""
+    peek_search_query = ""
+    peek_search_active = False
+    peek_search_cursor = 0
+    peek_match_lines = []
+    peek_match_index = 0
 
     # New-session form state -- default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
@@ -304,7 +317,15 @@ def dashboard(stdscr):
         elif mode == "config_show":
             draw_config_show(stdscr, config_file_label, config_file_path, config_show_lines, config_show_scroll)
         elif mode == "peek":
-            draw_peek_overlay(stdscr, peek_session_title, peek_lines, peek_scroll, peek_extent, peek_error)
+            draw_peek_overlay(
+                stdscr, peek_session_title, peek_lines, peek_scroll, peek_extent,
+                error=peek_error,
+                search_query=peek_search_query,
+                search_active=peek_search_active,
+                search_cursor=peek_search_cursor,
+                match_line_indices=peek_match_lines,
+                match_index=peek_match_index,
+            )
         elif mode == "new":
             draw_new_form(stdscr, new_fields, new_active, new_cursor, multi_instance=multi_instance)
         elif mode == "pick" or (mode == "override" and override_source == "pick"):
@@ -515,6 +536,11 @@ def dashboard(stdscr):
                 peek_session_title = sess["title"]
                 peek_extent = "screen"
                 peek_scroll = 0
+                peek_search_query = ""
+                peek_search_active = False
+                peek_search_cursor = 0
+                peek_match_lines = []
+                peek_match_index = 0
                 if not win_id:
                     peek_error = "No window ID available for this session"
                     peek_lines = []
@@ -694,8 +720,67 @@ def dashboard(stdscr):
         elif mode == "peek":
             content_height = stdscr.getmaxyx()[0] - 3
             max_scroll = max(0, len(peek_lines) - content_height)
+
+            # ── Tier 1: search input active ──
+            if peek_search_active:
+                if key == 27:  # Esc — cancel search
+                    peek_search_active = False
+                    peek_search_query = ""
+                    peek_search_cursor = 0
+                    peek_match_lines = []
+                    peek_match_index = 0
+                elif key in (10, 13, curses.KEY_ENTER):  # Enter — confirm
+                    peek_search_active = False
+                    if peek_match_lines:
+                        peek_scroll = min(peek_match_lines[0], max_scroll)
+                        peek_match_index = 0
+                elif key in (127, 8, curses.KEY_BACKSPACE):
+                    if peek_search_cursor > 0:
+                        peek_search_query = (
+                            peek_search_query[: peek_search_cursor - 1]
+                            + peek_search_query[peek_search_cursor:]
+                        )
+                        peek_search_cursor -= 1
+                        peek_match_lines = _compute_peek_matches(peek_lines, peek_search_query)
+                        peek_match_index = 0
+                elif key == curses.KEY_LEFT:
+                    peek_search_cursor = max(0, peek_search_cursor - 1)
+                elif key == curses.KEY_RIGHT:
+                    peek_search_cursor = min(len(peek_search_query), peek_search_cursor + 1)
+                elif 32 <= key <= 126:
+                    ch = chr(key)
+                    peek_search_query = (
+                        peek_search_query[: peek_search_cursor]
+                        + ch
+                        + peek_search_query[peek_search_cursor:]
+                    )
+                    peek_search_cursor += 1
+                    peek_match_lines = _compute_peek_matches(peek_lines, peek_search_query)
+                    peek_match_index = 0
+                continue
+
+            # ── Tier 2: normal peek navigation ──
             if key in (27, ord("q"), ord("Q")):
-                mode = "list"
+                if peek_search_query:
+                    peek_search_query = ""
+                    peek_match_lines = []
+                    peek_match_index = 0
+                else:
+                    mode = "list"
+            elif key == ord("/"):
+                peek_search_active = True
+                peek_search_query = ""
+                peek_search_cursor = 0
+                peek_match_lines = []
+                peek_match_index = 0
+            elif key == ord("n"):
+                if peek_match_lines:
+                    peek_match_index = (peek_match_index + 1) % len(peek_match_lines)
+                    peek_scroll = min(peek_match_lines[peek_match_index], max_scroll)
+            elif key == ord("N"):
+                if peek_match_lines:
+                    peek_match_index = (peek_match_index - 1) % len(peek_match_lines)
+                    peek_scroll = min(peek_match_lines[peek_match_index], max_scroll)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
                 peek_scroll = min(peek_scroll + 1, max_scroll)
             elif key in (curses.KEY_UP, ord("k"), ord("K")):
@@ -731,6 +816,8 @@ def dashboard(stdscr):
                             peek_error = "Failed to capture window text"
                             peek_lines = []
                             peek_scroll = 0
+                        peek_match_lines = _compute_peek_matches(peek_lines, peek_search_query)
+                        peek_match_index = 0
             elif key == ord("s"):
                 peek_extent = "all" if peek_extent == "screen" else "screen"
                 peek_scroll = 0
@@ -746,6 +833,8 @@ def dashboard(stdscr):
                         else:
                             peek_error = "Failed to capture window text"
                             peek_lines = []
+                    peek_match_lines = _compute_peek_matches(peek_lines, peek_search_query)
+                    peek_match_index = 0
 
         # ── Help overlay ──────────────────────────────────────────
         elif mode == "help":

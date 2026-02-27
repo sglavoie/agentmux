@@ -13,6 +13,7 @@ CP_WARN = 4
 CP_INPUT = 5
 CP_INPUT_ACTIVE = 6
 CP_ATTENTION = 7
+CP_MATCH = 8
 
 # Dynamic account color pairs start at this offset.
 # Each account gets two pair IDs: one normal, one selected.
@@ -23,6 +24,7 @@ SEL_BG = (40, 40, 60)
 DIM_FG = (110, 110, 110)
 WARN_FG = (220, 180, 50)
 ATTENTION_FG = (255, 80, 60)
+MATCH_BG = (60, 50, 20)
 
 # Maps account name -> (cp_normal, cp_selected) curses color pair IDs
 _account_cp: dict[str, tuple[int, int]] = {}
@@ -62,8 +64,12 @@ def init_colors():
         curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, sel_bg_slot)
         curses.init_pair(CP_ATTENTION, attention_slot, -1)
 
+        curses.init_color(base + 4, *_c(*MATCH_BG))
+        match_bg_slot = base + 4
+        curses.init_pair(CP_MATCH, curses.COLOR_WHITE, match_bg_slot)
+
         # Dynamically allocate a color slot + two pair IDs per account
-        color_slot = base + 4
+        color_slot = base + 5
         pair_id = _CP_ACCOUNT_BASE
         for name in _cfg._account_names:
             color_name = _cfg._accounts[name]["color"]
@@ -92,6 +98,7 @@ def init_colors():
         curses.init_pair(CP_INPUT, -1, -1)
         curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(CP_ATTENTION, curses.COLOR_RED, -1)
+        curses.init_pair(CP_MATCH, curses.COLOR_WHITE, curses.COLOR_BLACK)
 
         pair_id = _CP_ACCOUNT_BASE
         for i, name in enumerate(_cfg._account_names):
