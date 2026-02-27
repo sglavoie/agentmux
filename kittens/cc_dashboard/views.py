@@ -27,7 +27,7 @@ from cc_dashboard.kitty_remote import (
 
 # ── Detail pane ──────────────────────────────────────────────────────────────
 
-DETAIL_PANE_HEIGHT = 11
+DETAIL_PANE_HEIGHT = 12
 
 
 def draw_detail_pane(stdscr, session, detail_y):
@@ -129,7 +129,16 @@ def draw_detail_pane(stdscr, session, detail_y):
     split_display = effective_split if effective_split else "none"
     safe_addstr(stdscr, y, rx + 7, split_display, val_attr)
 
-    # Row 6: Cmdline (full width)
+    # Row 6: Socket / Instance
+    y += 1
+    socket_display = session.get("socket", "")
+    instance_display = session.get("instance_label", "")
+    safe_addstr(stdscr, y, lx, " Socket: ", label_attr)
+    safe_addstr(stdscr, y, lx + 9, socket_display[: mid - lx - 10], val_attr)
+    safe_addstr(stdscr, y, rx, "Instance: ", label_attr)
+    safe_addstr(stdscr, y, rx + 10, instance_display, val_attr)
+
+    # Row 7: Cmdline (full width)
     y += 1
     safe_addstr(stdscr, y, lx, " Cmdline: ", label_attr)
     safe_addstr(
@@ -325,27 +334,38 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
             "Press n to create a new session, or Ctrl+r to refresh.",
             curses.color_pair(CP_DIM),
         )
-        draw_footer(stdscr, "list")
+        draw_footer(stdscr, "list", exclude={"m Move"})
         return
+
+    # Show Instance column only when sessions span multiple instances
+    multi_instance = len({s.get("instance_label", "") for s in sessions}) > 1
+    c_inst = 10 if multi_instance else 0
 
     # Column widths
     c_tab = 5
     c_title = 28
     c_acct = 10
     c_status = 18
-    c_dir = max(12, cols - c_tab - c_title - c_acct - c_status - 8)
+    c_dir = max(12, cols - c_tab - c_title - c_acct - c_inst - c_status - 8)
 
     # Header row
     hdr = (
         f"  {'Tab':<{c_tab}}"
         f"{'Title':<{c_title}}"
         f"{'Account':<{c_acct}}"
+    )
+    if multi_instance:
+        hdr += f"{'Instance':<{c_inst}}"
+    hdr += (
         f"{'Directory':<{c_dir}}"
         f"{'Status'}"
     )
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
-    sep = f"  {'─' * c_tab}{'─' * c_title}{'─' * c_acct}{'─' * c_dir}{'─' * c_status}"
+    sep = f"  {'─' * c_tab}{'─' * c_title}{'─' * c_acct}"
+    if multi_instance:
+        sep += '─' * c_inst
+    sep += f"{'─' * c_dir}{'─' * c_status}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     # Scrollable session rows
@@ -382,8 +402,10 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
             f"{s['index']:<{c_tab}}"
             f"{title_padded}"
             f"{s['account']:<{c_acct}}"
-            f"{short_dir:<{c_dir}}"
         )
+        if multi_instance:
+            line += f"{s.get('instance_label', ''):<{c_inst}}"
+        line += f"{short_dir:<{c_dir}}"
 
         row_attr = curses.color_pair(cp)
         if sel:
@@ -408,7 +430,8 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
             status_attr = row_attr
         safe_addstr(stdscr, y, status_x, status_text, status_attr)
 
-    draw_footer(stdscr, "list")
+    footer_exclude = None if multi_instance else {"m Move"}
+    draw_footer(stdscr, "list", exclude=footer_exclude)
 
 
 def draw_pick_view(stdscr, entries, selected, running_count):
@@ -524,6 +547,7 @@ _HELP_SECTIONS = [
         [
             ("x", "Close session (with confirmation)"),
             ("R", "Restart session (with confirmation)"),
+            ("m", "Move session to another instance"),
             ("O", "Override config dir for session"),
             ("r", "Rename selected session"),
             ("n", "Open new session form"),
@@ -609,6 +633,7 @@ _FOOTER_HINTS = {
         "Enter Focus",
         "x Close",
         "R Restart",
+        "m Move",
         "O CfgDir",
         "r Rename",
         "n New",
@@ -624,17 +649,20 @@ _FOOTER_HINTS = {
     "confirm": ["y Confirm close", "Any other key Cancel"],
     "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
     "new": ["Enter Next/Submit", "Tab Cycle", "Esc Cancel"],
-    "pick": ["Enter Launch", "O CfgDir", "/ Search", "Esc Back", "q Back"],
+    "pick": ["Enter Launch", "i Instance", "O CfgDir", "/ Search", "Esc Back", "q Back"],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
+    "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
 }
 
 
-def draw_footer(stdscr, mode):
+def draw_footer(stdscr, mode, exclude=None):
     """Draw the help-key footer at the bottom of the screen."""
     rows, cols = stdscr.getmaxyx()
     sep = "  "
     avail = cols - 3  # 2-char left margin + 1 safety
     items = _FOOTER_HINTS.get(mode, [])
+    if exclude:
+        items = [i for i in items if i not in exclude]
     parts: list[str] = []
     length = 0
     for item in items:
@@ -725,6 +753,68 @@ def draw_override_picker(stdscr, session, override_selected):
         marker = "\u25b8 " if sel else "  "
         suffix = " (current)" if dirs[i] == current_dir else ""
         label = f"{marker}{display}{suffix}"
+
+        attr = normal_attr
+        if sel:
+            attr |= curses.A_BOLD
+        safe_addstr(stdscr, y, box_x + 2, label, attr)
+
+
+def draw_move_picker(stdscr, session, instance_labels, move_selected):
+    """Draw an instance selection overlay for moving a session.
+
+    Shows all instance labels except the session's current one in a
+    centered box.  The currently selected target is marked with an arrow.
+    """
+    rows, cols = stdscr.getmaxyx()
+    current_instance = session.get("instance_label", "")
+    targets = [lbl for lbl in instance_labels if lbl != current_instance]
+    if not targets:
+        return
+
+    # Box dimensions
+    max_label_len = max(len(lbl) for lbl in targets)
+    box_w = min(cols - 4, max(36, max_label_len + 16))
+    box_h = len(targets) + 4  # title + subtitle + blank + entries
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    # Draw background
+    blank_line = " " * box_w
+    dim_attr = curses.color_pair(CP_DIM)
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    # Title
+    title = "Move to Instance"
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    # Subtitle: session name
+    session_title = session["title"]
+    sub = f'"{session_title}" from {current_instance}'
+    safe_addstr(
+        stdscr,
+        box_y + 1,
+        box_x + max(0, (box_w - len(sub)) // 2),
+        sub,
+        dim_attr,
+    )
+
+    # Instance list
+    normal_attr = curses.color_pair(CP_NORMAL)
+    for i, lbl in enumerate(targets):
+        y = box_y + 3 + i
+        if y >= rows - 1:
+            break
+        sel = i == move_selected
+        marker = "\u25b8 " if sel else "  "
+        label = f"{marker}{lbl}"
 
         attr = normal_attr
         if sel:
@@ -849,7 +939,7 @@ def draw_filter_bar(stdscr, account_filter, account_filter_mode):
             break
 
 
-def draw_new_form(stdscr, fields, active_field, cursor_pos):
+def draw_new_form(stdscr, fields, active_field, cursor_pos, multi_instance=False):
     """Draw the new-session creation form."""
     _rows, cols = stdscr.getmaxyx()
     stdscr.erase()
@@ -864,6 +954,12 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
 
     labels = ["Title:", "Directory:", "Account:", "Flags:", "Split:"]
     field_keys = ["title", "dir", "account", "flags", "pw"]
+    cycle_fields = {"account", "pw"}
+
+    if multi_instance:
+        labels.append("Instance:")
+        field_keys.append("instance")
+        cycle_fields.add("instance")
 
     for i, (label, key) in enumerate(zip(labels, field_keys, strict=False)):
         y = 4 + i * 2
@@ -872,7 +968,7 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos):
         safe_addstr(stdscr, y, 4, f"{label:>12}", curses.color_pair(CP_HEADER))
 
         val = fields[key]
-        if key in ("account", "pw"):
+        if key in cycle_fields:
             display = f" {val} "
             if is_active:
                 display += "  (Tab to cycle)"
@@ -947,3 +1043,14 @@ def _cycle_pw(current):
     except ValueError:
         idx = -1
     return _PW_OPTIONS[(idx + 1) % len(_PW_OPTIONS)]
+
+
+def _cycle_instance(current, instance_labels):
+    """Return the next instance label from the list, wrapping around."""
+    if not instance_labels:
+        return current
+    try:
+        idx = instance_labels.index(current)
+    except ValueError:
+        idx = -1
+    return instance_labels[(idx + 1) % len(instance_labels)]

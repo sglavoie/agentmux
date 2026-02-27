@@ -37,6 +37,9 @@ SYMLINKS := \
 install:
 	@mkdir -p $(PREFIX_BIN) $(PREFIX_LIB) $(PREFIX_KITTY) $(PREFIX_ZFUNC)
 	@$(foreach pair,$(SYMLINKS),\
+		if [ -d "$(word 1,$(subst :, ,$(pair)))" ] && [ ! -L "$(word 1,$(subst :, ,$(pair)))" ]; then \
+			rm -rf "$(word 1,$(subst :, ,$(pair)))"; \
+		fi; \
 		ln -sf $(CURDIR)/$(word 2,$(subst :, ,$(pair))) $(word 1,$(subst :, ,$(pair)));)
 	@echo "Symlinks created."
 	@echo ""

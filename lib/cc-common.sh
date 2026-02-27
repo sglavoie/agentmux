@@ -102,6 +102,63 @@ discover_socket() {
 }
 
 # ---------------------------------------------------------------------------
+# Multi-instance socket discovery
+# ---------------------------------------------------------------------------
+# Populates parallel arrays _INSTANCE_SOCKETS and _INSTANCE_LABELS with all
+# active Kitty sockets. Mirrors get_all_kitty_sockets() in kitty_remote.py.
+_INSTANCE_SOCKETS=()
+_INSTANCE_LABELS=()
+
+discover_all_sockets() {
+	_INSTANCE_SOCKETS=()
+	_INSTANCE_LABELS=()
+	local -a candidates=()
+	local -a seen=()
+
+	# KITTY_LISTEN_ON first (the "home" instance)
+	if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+		candidates+=("$KITTY_LISTEN_ON")
+		seen+=("$KITTY_LISTEN_ON")
+	fi
+
+	# All /tmp/kitty-* sockets, most recent first
+	local sock_path
+	# shellcheck disable=SC2012 # intentional: need newest socket by mtime
+	for sock_path in $(ls -t /tmp/kitty-* 2>/dev/null); do
+		local sock="unix:$sock_path"
+		local already=false
+		local s
+		for s in "${seen[@]+"${seen[@]}"}"; do
+			if [[ "$s" == "$sock" ]]; then
+				already=true
+				break
+			fi
+		done
+		if [[ "$already" == "false" ]]; then
+			candidates+=("$sock")
+			seen+=("$sock")
+		fi
+	done
+
+	# Probe each candidate
+	local candidate
+	for candidate in "${candidates[@]+"${candidates[@]}"}"; do
+		if kitty @ --to "$candidate" ls >/dev/null 2>&1; then
+			_INSTANCE_SOCKETS+=("$candidate")
+			# Derive label from PID in socket filename
+			local bare="${candidate#unix:}"
+			local base
+			base="$(basename "$bare")"
+			local label="$candidate"
+			if [[ "$base" =~ ^kitty-([0-9]+) ]]; then
+				label="K:${BASH_REMATCH[1]}"
+			fi
+			_INSTANCE_LABELS+=("$label")
+		fi
+	done
+}
+
+# ---------------------------------------------------------------------------
 # Gum detection and styling
 # ---------------------------------------------------------------------------
 HAS_GUM=false

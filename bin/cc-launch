@@ -250,44 +250,105 @@ cmd_close() {
 	if [[ -z "$title" ]]; then
 		require_gum
 
-		local ls_json
-		ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-			echo "Error: Failed to query kitty." >&2
+		discover_all_sockets
+		if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+			echo "Error: No active Kitty instances found." >&2
 			exit 1
-		}
+		fi
 
-		local -a claude_titles=()
-		while IFS= read -r t; do
-			[[ -n "$t" ]] && claude_titles+=("$t")
-		done < <(echo "$ls_json" | jq -r '
-            [.[] | .tabs[] |
-                select(
-                    [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
-                ) | .title
-            ] | .[]
-        ')
+		local multi_instance=false
+		if [[ ${#_INSTANCE_SOCKETS[@]} -gt 1 ]]; then
+			multi_instance=true
+		fi
 
-		if [[ ${#claude_titles[@]} -eq 0 ]]; then
+		# Aggregate Claude sessions from all instances
+		local -a claude_entries=()  # "title\tsocket" or "title (instance)\tsocket"
+		local si
+		for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+			local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+			local inst_label="${_INSTANCE_LABELS[$si]}"
+			local ls_json
+			ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+			local -a inst_titles=()
+			while IFS= read -r t; do
+				[[ -n "$t" ]] && inst_titles+=("$t")
+			done < <(echo "$ls_json" | jq -r '
+                [.[] | .tabs[] |
+                    select(
+                        [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+                    ) | .title
+                ] | .[]
+            ')
+
+			local t
+			for t in "${inst_titles[@]+"${inst_titles[@]}"}"; do
+				if [[ "$multi_instance" == "true" ]]; then
+					claude_entries+=("${t} (${inst_label})"$'\t'"${inst_socket}")
+				else
+					claude_entries+=("${t}"$'\t'"${inst_socket}")
+				fi
+			done
+		done
+
+		if [[ ${#claude_entries[@]} -eq 0 ]]; then
 			echo "No Claude sessions found."
 			return
 		fi
 
-		title="$(printf '%s\n' "${claude_titles[@]}" | gum choose \
+		# Build display list (first column only)
+		local -a display_items=()
+		local entry
+		for entry in "${claude_entries[@]}"; do
+			display_items+=("${entry%%$'\t'*}")
+		done
+
+		local chosen
+		chosen="$(printf '%s\n' "${display_items[@]}" | gum choose \
 			--header "Select session to close:" \
 			--header.foreground "$GUM_HEADER_COLOR" \
 			--cursor.foreground "#8b2d2d")" || {
 			echo "No session selected."
 			return
 		}
-	fi
 
-	if ! tab_exists "$title"; then
+		# Find the matching entry to get the socket
+		local close_socket=""
+		for entry in "${claude_entries[@]}"; do
+			if [[ "${entry%%$'\t'*}" == "$chosen" ]]; then
+				close_socket="${entry#*$'\t'}"
+				break
+			fi
+		done
+
+		# Strip instance label from chosen to get the raw title
+		if [[ "$multi_instance" == "true" ]]; then
+			title="$(echo "$chosen" | sed 's/ (K:[0-9]*)$//')"
+		else
+			title="$chosen"
+		fi
+
+		kitty @ --to "$close_socket" close-tab --match "title:${_STRIP_RE}${title}$"
+		echo "Closed tab '$title'."
+	else
+		# Title given directly — search all instances for it
+		discover_all_sockets
+		local si
+		for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+			local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+			local ls_json
+			ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+			if echo "$ls_json" | jq -e --arg t "$title" --arg strip_re "$_STRIP_RE" '
+				[.[].tabs[] | select(.title | sub($strip_re; "") | . == $t)] | length > 0
+			' >/dev/null 2>&1; then
+				kitty @ --to "$inst_socket" close-tab --match "title:${_STRIP_RE}${title}$"
+				echo "Closed tab '$title'."
+				return
+			fi
+		done
 		echo "Error: No tab found with title '$title'." >&2
 		exit 1
 	fi
-
-	kitty @ --to "$SOCKET" close-tab --match "title:${_STRIP_RE}${title}$"
-	echo "Closed tab '$title'."
 }
 
 # ---------------------------------------------------------------------------
@@ -296,11 +357,16 @@ cmd_close() {
 cmd_restart() {
 	local title="${1:-}"
 
-	local ls_json
-	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-		echo "Error: Failed to query kitty." >&2
+	discover_all_sockets
+	if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+		echo "Error: No active Kitty instances found." >&2
 		exit 1
-	}
+	fi
+
+	local multi_instance=false
+	if [[ ${#_INSTANCE_SOCKETS[@]} -gt 1 ]]; then
+		multi_instance=true
+	fi
 
 	local accounts_json default_account
 	accounts_json="$(build_accounts_json)"
@@ -309,71 +375,130 @@ cmd_restart() {
 	if [[ -z "$title" ]]; then
 		require_gum
 
-		local -a claude_titles=()
-		while IFS= read -r t; do
-			[[ -n "$t" ]] && claude_titles+=("$t")
-		done < <(echo "$ls_json" | jq -r --arg strip_re "$_STRIP_RE" '
-            [.[] | .tabs[] |
-                select(
-                    [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
-                ) | .title | sub($strip_re; "")
-            ] | .[]
-        ')
+		# Aggregate stripped titles from all instances
+		local -a restart_entries=()  # "title\tsocket" or "title (instance)\tsocket"
+		local si
+		for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+			local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+			local inst_label="${_INSTANCE_LABELS[$si]}"
+			local ls_json
+			ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
 
-		if [[ ${#claude_titles[@]} -eq 0 ]]; then
+			local -a inst_titles=()
+			while IFS= read -r t; do
+				[[ -n "$t" ]] && inst_titles+=("$t")
+			done < <(echo "$ls_json" | jq -r --arg strip_re "$_STRIP_RE" '
+                [.[] | .tabs[] |
+                    select(
+                        [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+                    ) | .title | sub($strip_re; "")
+                ] | .[]
+            ')
+
+			local t
+			for t in "${inst_titles[@]+"${inst_titles[@]}"}"; do
+				if [[ "$multi_instance" == "true" ]]; then
+					restart_entries+=("${t} (${inst_label})"$'\t'"${inst_socket}")
+				else
+					restart_entries+=("${t}"$'\t'"${inst_socket}")
+				fi
+			done
+		done
+
+		if [[ ${#restart_entries[@]} -eq 0 ]]; then
 			echo "No Claude sessions found."
 			return
 		fi
 
-		title="$(printf '%s\n' "${claude_titles[@]}" | gum choose \
+		local -a display_items=()
+		local entry
+		for entry in "${restart_entries[@]}"; do
+			display_items+=("${entry%%$'\t'*}")
+		done
+
+		local chosen
+		chosen="$(printf '%s\n' "${display_items[@]}" | gum choose \
 			--header "Select session to restart:" \
 			--header.foreground "$GUM_HEADER_COLOR" \
 			--cursor.foreground "$GUM_ACCENT_COLOR")" || {
 			echo "No session selected."
 			return
 		}
+
+		# Find the matching socket
+		local restart_socket=""
+		for entry in "${restart_entries[@]}"; do
+			if [[ "${entry%%$'\t'*}" == "$chosen" ]]; then
+				restart_socket="${entry#*$'\t'}"
+				break
+			fi
+		done
+
+		# Strip instance label from chosen to get the raw title
+		if [[ "$multi_instance" == "true" ]]; then
+			title="$(echo "$chosen" | sed 's/ (K:[0-9]*)$//')"
+		else
+			title="$chosen"
+		fi
+
+		SOCKET="$restart_socket"
 	fi
 
-	# Find the tab metadata for the selected title
-	local tab_info
-	tab_info="$(echo "$ls_json" | jq -r --arg t "$title" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
-        [.[] | .tabs[] |
-            select(
-                (.title | sub($strip_re; "")) == $t
-            ) |
-            {
-                tab_id: .id,
-                account: (
-                    [.windows[] | .user_vars.cc_account // empty | select(. != "")] |
-                    if length > 0 then .[0]
-                    else
-                        (
-                            [.windows[] | .foreground_processes[]? |
-                                select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
-                                .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
-                            ] | if length > 0 then
-                                (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
-                            else $default_account end
-                        )
-                    end
-                ),
-                dir: (
-                    [.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
-                    if length > 0 then .[0]
-                    else
-                        ([.windows[] |
-                            select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
-                        ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
-                    end
-                )
-            }
-        ] | .[0] // empty | [(.tab_id | tostring), .account, .dir] | @tsv
-    ')"
+	# Find the tab metadata for the selected title across all instances
+	local tab_info="" target_socket=""
+	local si
+	for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+		local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+		local ls_json
+		ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+		tab_info="$(echo "$ls_json" | jq -r --arg t "$title" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
+            [.[] | .tabs[] |
+                select(
+                    (.title | sub($strip_re; "")) == $t
+                ) |
+                {
+                    tab_id: .id,
+                    account: (
+                        [.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+                        if length > 0 then .[0]
+                        else
+                            (
+                                [.windows[] | .foreground_processes[]? |
+                                    select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                                    .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                                ] | if length > 0 then
+                                    (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                                else $default_account end
+                            )
+                        end
+                    ),
+                    dir: (
+                        [.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
+                        if length > 0 then .[0]
+                        else
+                            ([.windows[] |
+                                select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                            ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
+                        end
+                    )
+                }
+            ] | .[0] // empty | [(.tab_id | tostring), .account, .dir] | @tsv
+        ')"
+
+		if [[ -n "$tab_info" ]]; then
+			target_socket="$inst_socket"
+			break
+		fi
+	done
 
 	if [[ -z "$tab_info" ]]; then
 		echo "Error: No tab found with title '$title'." >&2
 		exit 1
 	fi
+
+	# Use the socket where the tab was found
+	SOCKET="$target_socket"
 
 	local tab_id account dir
 	IFS=$'\t' read -r tab_id account dir <<<"$tab_info"
@@ -415,73 +540,242 @@ cmd_restart() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: move a session to a different Kitty instance
+# ---------------------------------------------------------------------------
+cmd_move() {
+	local title="${1:-}"
+
+	if [[ -z "$title" ]]; then
+		echo "Error: --move requires a TITLE argument." >&2
+		echo "Usage: cc-launch --move TITLE --instance TARGET" >&2
+		exit 1
+	fi
+
+	if [[ -z "$_MOVE_TARGET_INSTANCE" ]]; then
+		echo "Error: --move requires --instance TARGET to specify the destination." >&2
+		exit 1
+	fi
+
+	discover_all_sockets
+	if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+		echo "Error: No active Kitty instances found." >&2
+		exit 1
+	fi
+
+	# Resolve target instance label to a socket
+	local target_socket=""
+	local si
+	for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+		if [[ "${_INSTANCE_LABELS[$si]}" == "$_MOVE_TARGET_INSTANCE" ]]; then
+			target_socket="${_INSTANCE_SOCKETS[$si]}"
+			break
+		fi
+	done
+
+	if [[ -z "$target_socket" ]]; then
+		echo "Error: No active Kitty instance found with label '$_MOVE_TARGET_INSTANCE'." >&2
+		echo "Available instances:" >&2
+		for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+			echo "  ${_INSTANCE_LABELS[$si]}  (${_INSTANCE_SOCKETS[$si]})" >&2
+		done
+		exit 1
+	fi
+
+	# Find the session across all instances
+	local accounts_json default_account
+	accounts_json="$(build_accounts_json)"
+	default_account="$(default_account_name)"
+
+	local tab_info="" source_socket=""
+	for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+		local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+		local ls_json
+		ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+		tab_info="$(echo "$ls_json" | jq -r --arg t "$title" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
+            [.[] | .tabs[] |
+                select(
+                    (.title | sub($strip_re; "")) == $t
+                ) |
+                {
+                    tab_id: .id,
+                    account: (
+                        [.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+                        if length > 0 then .[0]
+                        else
+                            (
+                                [.windows[] | .foreground_processes[]? |
+                                    select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                                    .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                                ] | if length > 0 then
+                                    (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                                else $default_account end
+                            )
+                        end
+                    ),
+                    dir: (
+                        [.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
+                        if length > 0 then .[0]
+                        else
+                            ([.windows[] |
+                                select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                            ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
+                        end
+                    )
+                }
+            ] | .[0] // empty | [(.tab_id | tostring), .account, .dir] | @tsv
+        ')"
+
+		if [[ -n "$tab_info" ]]; then
+			source_socket="$inst_socket"
+			break
+		fi
+	done
+
+	if [[ -z "$tab_info" ]]; then
+		echo "Error: No tab found with title '$title'." >&2
+		exit 1
+	fi
+
+	if [[ "$source_socket" == "$target_socket" ]]; then
+		echo "Session '$title' is already in the target instance." >&2
+		exit 1
+	fi
+
+	local tab_id account dir
+	IFS=$'\t' read -r tab_id account dir <<<"$tab_info"
+
+	# Close on source
+	kitty @ --to "$source_socket" close-tab --match "id:$tab_id"
+	echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..."
+	sleep 0.3
+
+	# Relaunch on target
+	SOCKET="$target_socket"
+
+	local insert_loc loc_args=""
+	insert_loc="$(compute_insert_location "$SOCKET" "$account" "$title")"
+	if [[ "$insert_loc" == "first" ]]; then
+		loc_args="--location first"
+	elif [[ -n "$insert_loc" ]]; then
+		kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+		sleep 0.1
+		loc_args="--location after"
+	fi
+
+	# Look up per-session flags and project_window from sessions.conf
+	local cfg_flags="" cfg_pw=""
+	if [[ -f "$CONFIG_FILE" ]]; then
+		local lookup_title="${title%%‾*}"
+		local cfg_line
+		while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
+			[[ -z "$cfg_line" || "$cfg_line" =~ ^[[:space:]]*# ]] && continue
+			local cfg_title cfg_f cfg_p
+			IFS='|' read -r cfg_title _ _ cfg_f cfg_p <<<"$cfg_line"
+			cfg_title="$(_trim "$cfg_title")"
+			if [[ "$cfg_title" == "$lookup_title" ]]; then
+				cfg_flags="$(_trim "${cfg_f:-}")"
+				cfg_pw="$(_trim "${cfg_p:-}")"
+				break
+			fi
+		done <"$CONFIG_FILE"
+	fi
+
+	launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args"
+	echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE."
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: list Claude tabs
 # ---------------------------------------------------------------------------
 cmd_list() {
-	local ls_json
-	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-		echo "Error: Failed to query kitty." >&2
+	discover_all_sockets
+
+	if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+		echo "Error: No active Kitty instances found." >&2
 		exit 1
-	}
+	fi
 
 	local accounts_json default_account
 	accounts_json="$(build_accounts_json)"
 	default_account="$(default_account_name)"
 
-	local table
-	table="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" '
-        [.[] | . as $os |
-            $os.tabs | to_entries[] |
-            .key as $tab_idx | .value as $tab |
-            select(
-                [$tab.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
-            ) |
-            # Only show ccm-managed tabs
-            select(
-                ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
-                ($tab.title | test($managed_re))
-            ) |
-            {
-                index: ($tab_idx + 1),
-                title: $tab.title,
-                account: (
-                    [$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] |
-                    if length > 0 then .[0]
-                    else
-                        (
-                            [$tab.windows[] | .foreground_processes[]? |
-                                select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
-                                .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
-                            ] | if length > 0 then
-                                (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
-                            else $default_account end
-                        )
-                    end
-                ),
-                dir: (
-                    [$tab.windows[] |
-                        select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
-                    ] | if length > 0 then .[0].cwd else ($tab.windows[0].cwd // "unknown") end
-                ),
-                status: (
-                    if ($os.is_focused and $tab.is_focused)
-                    then "focused"
-                    elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_bolt))
-                    then "active"
-                    elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_stop))
-                    then "stopped"
-                    elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_key))
-                    then "permission"
-                    elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_error))
-                    then "error"
-                    else "idle"
-                    end
-                )
-            }
-        ] | .[] |
-        [(.index | tostring), .title, .account, .dir, .status] |
-        @tsv
-    ')"
+	local multi_instance=false
+	if [[ ${#_INSTANCE_SOCKETS[@]} -gt 1 ]]; then
+		multi_instance=true
+	fi
+
+	# Collect sessions from all instances
+	local table=""
+	local si
+	for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+		local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+		local inst_label="${_INSTANCE_LABELS[$si]}"
+		local ls_json
+		ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+		local inst_rows
+		inst_rows="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" --arg inst_label "$inst_label" '
+            [.[] | . as $os |
+                $os.tabs | to_entries[] |
+                .key as $tab_idx | .value as $tab |
+                select(
+                    [$tab.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+                ) |
+                # Only show ccm-managed tabs
+                select(
+                    ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
+                    ($tab.title | test($managed_re))
+                ) |
+                {
+                    index: ($tab_idx + 1),
+                    title: $tab.title,
+                    account: (
+                        [$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+                        if length > 0 then .[0]
+                        else
+                            (
+                                [$tab.windows[] | .foreground_processes[]? |
+                                    select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                                    .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                                ] | if length > 0 then
+                                    (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                                else $default_account end
+                            )
+                        end
+                    ),
+                    dir: (
+                        [$tab.windows[] |
+                            select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                        ] | if length > 0 then .[0].cwd else ($tab.windows[0].cwd // "unknown") end
+                    ),
+                    status: (
+                        if ($os.is_focused and $tab.is_focused)
+                        then "focused"
+                        elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_bolt))
+                        then "active"
+                        elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_stop))
+                        then "stopped"
+                        elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_key))
+                        then "permission"
+                        elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_error))
+                        then "error"
+                        else "idle"
+                        end
+                    ),
+                    instance: $inst_label
+                }
+            ] | .[] |
+            [(.index | tostring), .title, .account, .dir, .status, .instance] |
+            @tsv
+        ')"
+		if [[ -n "$inst_rows" ]]; then
+			if [[ -n "$table" ]]; then
+				table+=$'\n'
+			fi
+			table+="$inst_rows"
+		fi
+	done
 
 	if [[ -z "$table" ]]; then
 		echo "No Claude sessions found."
@@ -493,32 +787,41 @@ cmd_list() {
 	# Column headers
 	local header_mk=" " header_idx="Index" header_title="Title"
 	local header_account="Account" header_dir="Directory" header_status="Status"
+	local header_inst="Instance"
 	local max_mk=2 w1=${#header_idx} w2=${#header_title} w3=${#header_account} w4=${#header_dir} w5=${#header_status}
+	local w6=${#header_inst}
 
 	# Pre-process rows: shorten paths and compute max widths
 	local -a rows=()
-	while IFS=$'\t' read -r idx title account dir status; do
+	while IFS=$'\t' read -r idx title account dir status instance; do
 		dir="$(shorten_path "$dir")"
-		rows+=("$idx"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status")
+		rows+=("$idx"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status"$'\t'"$instance")
 		((${#idx} > w1)) && w1=${#idx}
 		((${#title} > w2)) && w2=${#title}
 		((${#account} > w3)) && w3=${#account}
 		((${#dir} > w4)) && w4=${#dir}
 		((${#status} > w5)) && w5=${#status}
+		((${#instance} > w6)) && w6=${#instance}
 	done <<<"$table"
 
 	# Header
-	printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %-${w5}s%s\n" \
-		"$BOLD" "$header_mk" "$header_idx" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
-
-	# Separator
-	printf "%s%s%s\n" "$DIM" \
-		"$(repeat_char '─' $((max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w4 + 2 + w5)))" \
-		"$RESET"
+	if [[ "$multi_instance" == "true" ]]; then
+		printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w6}s  %-${w4}s  %-${w5}s%s\n" \
+			"$BOLD" "$header_mk" "$header_idx" "$header_title" "$header_account" "$header_inst" "$header_dir" "$header_status" "$RESET"
+		printf "%s%s%s\n" "$DIM" \
+			"$(repeat_char '─' $((max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w6 + 2 + w4 + 2 + w5)))" \
+			"$RESET"
+	else
+		printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %-${w5}s%s\n" \
+			"$BOLD" "$header_mk" "$header_idx" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
+		printf "%s%s%s\n" "$DIM" \
+			"$(repeat_char '─' $((max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w4 + 2 + w5)))" \
+			"$RESET"
+	fi
 
 	# Data rows
 	for row in "${rows[@]}"; do
-		IFS=$'\t' read -r idx title account dir status <<<"$row"
+		IFS=$'\t' read -r idx title account dir status instance <<<"$row"
 
 		local local_mk=" "
 		if [[ "$status" == "focused" ]]; then
@@ -539,8 +842,13 @@ cmd_list() {
 			esac
 		fi
 
-		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$idx")))s  %-$((w2 + $(extra_bytes "$title")))s  %-$((w3 + $(extra_bytes "$account")))s  %-$((w4 + $(extra_bytes "$dir")))s  %s%s\n" \
-			"$local_color" "$local_mk" "$idx" "$title" "$account" "$dir" "$local_status" "$local_reset"
+		if [[ "$multi_instance" == "true" ]]; then
+			printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$idx")))s  %-$((w2 + $(extra_bytes "$title")))s  %-$((w3 + $(extra_bytes "$account")))s  %-$((w6 + $(extra_bytes "$instance")))s  %-$((w4 + $(extra_bytes "$dir")))s  %s%s\n" \
+				"$local_color" "$local_mk" "$idx" "$title" "$account" "$instance" "$dir" "$local_status" "$local_reset"
+		else
+			printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$idx")))s  %-$((w2 + $(extra_bytes "$title")))s  %-$((w3 + $(extra_bytes "$account")))s  %-$((w4 + $(extra_bytes "$dir")))s  %s%s\n" \
+				"$local_color" "$local_mk" "$idx" "$title" "$account" "$dir" "$local_status" "$local_reset"
+		fi
 	done
 }
 
@@ -548,16 +856,35 @@ cmd_list() {
 # Subcommand: list available Kitty sockets
 # ---------------------------------------------------------------------------
 cmd_sockets() {
+	_load_icons
+	local strip_re
+	strip_re="$(_icon_strip_regex)"
+	local managed_re="${strip_re}[A-Z]:"
+
 	local found=0
 	for sock in /tmp/kitty-*; do
 		[[ -e "$sock" ]] || continue
 		found=1
 		local pid="${sock#/tmp/kitty-}"
 		local status="stale"
-		if kitty @ --to "unix:$sock" ls >/dev/null 2>&1; then
+		local managed_count=""
+		local ls_out
+		if ls_out="$(kitty @ --to "unix:$sock" ls 2>/dev/null)"; then
 			status="active"
+			managed_count="$(printf '%s' "$ls_out" | jq -r --arg managed_re "$managed_re" '
+				[.[] | .tabs[] | . as $tab |
+					select(
+						([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
+						($tab.title | test($managed_re))
+					)
+				] | length
+			' 2>/dev/null)" || managed_count="?"
 		fi
-		echo "unix:$sock  ($status, pid=$pid)"
+		if [[ -n "$managed_count" && "$managed_count" != "0" ]]; then
+			echo "unix:$sock  ($status, pid=$pid, $managed_count managed tab(s))"
+		else
+			echo "unix:$sock  ($status, pid=$pid)"
+		fi
 	done
 
 	if [[ $found -eq 0 ]]; then
@@ -574,15 +901,18 @@ cmd_sockets() {
 # Subcommand: cleanup stale sessions (tabs with W:/P: title but no Claude process)
 # ---------------------------------------------------------------------------
 cmd_cleanup() {
-	local ls_json
-	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-		echo "Error: Failed to query kitty." >&2
+	discover_all_sockets
+	if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+		echo "Error: No active Kitty instances found." >&2
 		exit 1
-	}
+	fi
+
+	local multi_instance=false
+	if [[ ${#_INSTANCE_SOCKETS[@]} -gt 1 ]]; then
+		multi_instance=true
+	fi
 
 	# Build a regex matching title prefixes for all loaded accounts.
-	# Convention: tab titles are prefixed with the account's uppercase initial
-	# followed by a colon (e.g. W:project for work, C:app for client-x).
 	local initials=""
 	local i
 	for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
@@ -595,67 +925,96 @@ cmd_cleanup() {
 	[[ -z "$initials" ]] && initials="WP"
 	local title_pattern="${_STRIP_RE}[$initials]:"
 
-	local stale
-	stale="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
-        [.[] | .tabs[] |
-            select(.title | test($pat)) |
-            select(
-                [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any | not
-            ) |
-            { title: .title, id: .id }
-        ] | .[] | [.title, (.id | tostring)] | @tsv
-    ')"
+	# Aggregate stale sessions from all instances
+	# Each entry: "title\ttab_id\tsocket[\tinst_label]"
+	local stale=""
+	local live_ids=""
+	local si
+	for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+		local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+		local inst_label="${_INSTANCE_LABELS[$si]}"
+		local ls_json
+		ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+		local inst_stale
+		inst_stale="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
+            [.[] | .tabs[] |
+                select(.title | test($pat)) |
+                select(
+                    [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any | not
+                ) |
+                { title: .title, id: .id }
+            ] | .[] | [.title, (.id | tostring)] | @tsv
+        ')"
+
+		if [[ -n "$inst_stale" ]]; then
+			while IFS=$'\t' read -r title tab_id; do
+				if [[ -n "$stale" ]]; then
+					stale+=$'\n'
+				fi
+				stale+="${title}"$'\t'"${tab_id}"$'\t'"${inst_socket}"$'\t'"${inst_label}"
+			done <<<"$inst_stale"
+		fi
+
+		# Collect live tab IDs for orphan cleanup
+		local inst_live
+		inst_live="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
+            [.[] | .tabs[] |
+                select(
+                    (.title | test($pat)) or
+                    ([.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0)
+                ) | .id
+            ] | .[]
+        ')"
+		if [[ -n "$inst_live" ]]; then
+			if [[ -n "$live_ids" ]]; then
+				live_ids+=$'\n'
+			fi
+			live_ids+="$inst_live"
+		fi
+	done
 
 	if [[ -z "$stale" ]]; then
 		echo "No stale sessions found."
-		return
-	fi
-
-	echo "Stale sessions (no Claude process running):"
-	echo ""
-	while IFS=$'\t' read -r title tab_id; do
-		echo "  $title (tab id: $tab_id)"
-	done <<<"$stale"
-	echo ""
-
-	local confirmed=false
-	if [[ "$HAS_GUM" == "true" ]]; then
-		if gum confirm "Close all stale sessions?" --affirmative "Yes, close them" --negative "Cancel"; then
-			confirmed=true
-		fi
 	else
-		read -rp "Close all stale sessions? [y/N] " answer
-		if [[ "$answer" =~ ^[Yy] ]]; then
-			confirmed=true
-		fi
-	fi
-
-	if [[ "$confirmed" == "true" ]]; then
-		while IFS=$'\t' read -r title tab_id; do
-			kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
-			echo "Closed: $title"
+		echo "Stale sessions (no Claude process running):"
+		echo ""
+		while IFS=$'\t' read -r title tab_id sock inst_label; do
+			if [[ "$multi_instance" == "true" ]]; then
+				echo "  $title (tab id: $tab_id, instance: $inst_label)"
+			else
+				echo "  $title (tab id: $tab_id)"
+			fi
 		done <<<"$stale"
-	else
-		echo "No sessions closed."
+		echo ""
+
+		local confirmed=false
+		if [[ "$HAS_GUM" == "true" ]]; then
+			if gum confirm "Close all stale sessions?" --affirmative "Yes, close them" --negative "Cancel"; then
+				confirmed=true
+			fi
+		else
+			read -rp "Close all stale sessions? [y/N] " answer
+			if [[ "$answer" =~ ^[Yy] ]]; then
+				confirmed=true
+			fi
+		fi
+
+		if [[ "$confirmed" == "true" ]]; then
+			while IFS=$'\t' read -r title tab_id sock inst_label; do
+				kitty @ --to "$sock" close-tab --match "id:$tab_id"
+				echo "Closed: $title"
+			done <<<"$stale"
+		else
+			echo "No sessions closed."
+		fi
 	fi
 
 	# Clean up orphaned activity and notification files.
-	# Collect tab IDs of all currently managed tabs.
-	local live_ids
-	live_ids="$(echo "$ls_json" | jq -r --arg pat "$title_pattern" '
-        [.[] | .tabs[] |
-            select(
-                (.title | test($pat)) or
-                ([.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0)
-            ) | .id
-        ] | .[]
-    ')"
-
 	local orphaned=0
 	for f in /tmp/ccm-activity-*.counts /tmp/ccm-notify-*; do
 		[[ -e "$f" ]] || continue
 		local fname="${f##*/}"
-		# Extract tab_id: ccm-activity-<id>.counts or ccm-notify-<type>-<id>
 		local file_id=""
 		case "$fname" in
 		ccm-activity-*.counts)
@@ -771,6 +1130,7 @@ Commands:
     --add TITLE DIR [ACCOUNT]       Launch a single ad-hoc session tab (account picker if omitted)
     --close [TITLE]                 Close a tab (interactive picker if no title given)
     --restart [TITLE]               Close and relaunch a session (interactive picker if no title given)
+    --move TITLE --instance LABEL   Move a session to a different Kitty instance
     --list                          List open tabs running Claude
     --save [FILE]                   Save current Claude sessions to config file
     --cleanup                       Find and close stale sessions (dead processes)
@@ -779,6 +1139,8 @@ Commands:
 
 Global options:
     --socket SOCKET     Target a specific Kitty socket (e.g. unix:/tmp/kitty-12345)
+    --instance LABEL    Target a specific Kitty instance by label (e.g. K:12345).
+                        Use --sockets to list available instances.
 
 Config file (default: ~/.config/cc-manager/sessions.conf):
     Override with CC_MANAGER_CONFIG env var.
@@ -823,15 +1185,31 @@ USAGE
 # Main dispatch
 # ---------------------------------------------------------------------------
 main() {
-	# Parse global --socket option
-	if [[ "${1:-}" == "--socket" ]]; then
-		if [[ -z "${2:-}" ]]; then
-			echo "Error: --socket requires a SOCKET argument." >&2
-			exit 1
-		fi
-		SOCKET="$2"
-		shift 2
-	fi
+	local instance_label=""
+	_MOVE_TARGET_INSTANCE=""
+
+	# Parse global options (--socket, --instance)
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--socket)
+			if [[ -z "${2:-}" ]]; then
+				echo "Error: --socket requires a SOCKET argument." >&2
+				exit 1
+			fi
+			SOCKET="$2"
+			shift 2
+			;;
+		--instance)
+			if [[ -z "${2:-}" ]]; then
+				echo "Error: --instance requires a LABEL argument (e.g. K:12345)." >&2
+				exit 1
+			fi
+			instance_label="$2"
+			shift 2
+			;;
+		*) break ;;
+		esac
+	done
 
 	# --sockets and --help don't need an active socket
 	case "${1:-}" in
@@ -845,7 +1223,34 @@ main() {
 		;;
 	esac
 
-	# Initialize socket if not overridden via --socket
+	# For --move, --instance specifies the target (not the source socket)
+	if [[ "${1:-}" == "--move" && -n "$instance_label" ]]; then
+		_MOVE_TARGET_INSTANCE="$instance_label"
+		instance_label=""
+	fi
+
+	# Resolve --instance to a socket (for non-move commands)
+	if [[ -n "$instance_label" ]]; then
+		discover_all_sockets
+		local si found=false
+		for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+			if [[ "${_INSTANCE_LABELS[$si]}" == "$instance_label" ]]; then
+				SOCKET="${_INSTANCE_SOCKETS[$si]}"
+				found=true
+				break
+			fi
+		done
+		if [[ "$found" == "false" ]]; then
+			echo "Error: No active Kitty instance found with label '$instance_label'." >&2
+			echo "Available instances:" >&2
+			for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+				echo "  ${_INSTANCE_LABELS[$si]}  (${_INSTANCE_SOCKETS[$si]})" >&2
+			done
+			exit 1
+		fi
+	fi
+
+	# Initialize socket if not overridden via --socket or --instance
 	if [[ -z "$SOCKET" ]]; then
 		SOCKET="$(discover_socket)"
 	fi
@@ -873,6 +1278,10 @@ main() {
 	--restart)
 		shift
 		cmd_restart "$@"
+		;;
+	--move)
+		shift
+		cmd_move "$@"
 		;;
 	--list)
 		cmd_list

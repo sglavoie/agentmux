@@ -19,18 +19,23 @@ from cc_dashboard.kitty_remote import (
     compute_insert_location,
     _spawn_detached_close,
     do_close,
+    do_cross_instance_focus,
     do_focus,
     do_launch,
+    do_move,
     do_rename,
     do_restart,
+    get_all_kitty_sockets,
     get_host_tab_id,
-    query_sessions,
+    get_kitty_socket,
+    query_all_sessions,
 )
 from cc_dashboard.views import (
     _HELP_LINES,
     DETAIL_PANE_HEIGHT,
     _check_idle_notifications,
     _cycle_account,
+    _cycle_instance,
     _cycle_pw,
     draw_confirm_prompt,
     draw_detail_pane,
@@ -38,6 +43,7 @@ from cc_dashboard.views import (
     draw_footer,
     draw_help_overlay,
     draw_list_view,
+    draw_move_picker,
     draw_new_form,
     draw_override_picker,
     draw_pick_view,
@@ -51,6 +57,7 @@ def _session_fingerprint(sessions):
     """Return a hashable fingerprint of session state for change detection."""
     return tuple(
         (
+            s.get("socket", ""),
             s["tab_id"],
             s["title"],
             s["status"],
@@ -64,19 +71,37 @@ def _session_fingerprint(sessions):
     )
 
 
-def dashboard(stdscr, socket):
+def dashboard(stdscr):
     """Run the interactive dashboard loop."""
     curses.curs_set(0)
     init_colors()
     stdscr.timeout(100)
 
+    # Determine the "home" socket — the Kitty instance running this dashboard.
+    # Used for host-tab detection (restart/close of the tab we live in).
+    home_socket = os.environ.get("KITTY_LISTEN_ON", "") or get_kitty_socket()
+
+    # Discover all active Kitty instances for the instance selector
+    discovered_sockets = get_all_kitty_sockets()  # [(socket, label), ...]
+    instance_labels = [label for _, label in discovered_sockets]
+    instance_socket_map = {label: sock for sock, label in discovered_sockets}
+    # Find the home instance label for defaults
+    home_instance_label = ""
+    for sock, label in discovered_sockets:
+        if sock == home_socket:
+            home_instance_label = label
+            break
+    if not home_instance_label and instance_labels:
+        home_instance_label = instance_labels[0]
+    multi_instance = len(discovered_sockets) > 1
+
     show_all = False
-    sessions = query_sessions(socket, managed_only=True)
+    sessions = query_all_sessions(managed_only=True)
     selected = 0
 
     # Detect the tab that hosts this dashboard overlay so we can handle
     # restart/close operations on it safely.
-    host_tab_id = get_host_tab_id(socket)
+    host_tab_id = get_host_tab_id(home_socket)
 
     # Auto-scroll to the focused session, if one exists
     for i, s in enumerate(sessions):
@@ -85,7 +110,7 @@ def dashboard(stdscr, socket):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | rename | new | pick | help
+    mode = "list"  # list | confirm | confirm_restart | rename | new | pick | help | move_picker
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -98,6 +123,7 @@ def dashboard(stdscr, socket):
     pick_query = ""
     pick_cursor = 0
     pick_search_active = False
+    pick_target_instance = home_instance_label  # target instance for pick launches
 
     # Auto-refresh state
     refresh_interval = _cfg._default_dashboard_refresh
@@ -122,24 +148,34 @@ def dashboard(stdscr, socket):
     override_selected = 0
     override_source = "list"  # "list" or "pick" -- where O was pressed
 
+    # Move picker state
+    move_selected = 0
+
     # New-session form state -- default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
     default_pw = (
         _cfg._default_project_window if _cfg._default_project_window else "none"
     )
-    new_fields = {
-        "title": "",
-        "dir": "~/",
-        "account": default_account,
-        "flags": "",
-        "pw": default_pw,
-    }
+
+    def _make_new_fields():
+        fields = {
+            "title": "",
+            "dir": "~/",
+            "account": default_account,
+            "flags": "",
+            "pw": default_pw,
+        }
+        if multi_instance:
+            fields["instance"] = home_instance_label
+        return fields
+
+    new_fields = _make_new_fields()
     new_active = 0
     new_cursor = 0
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "rename") or (
+        if mode in ("list", "confirm", "confirm_restart", "rename", "move_picker") or (
             mode == "override" and override_source == "list"
         ):
             rows, _cols = stdscr.getmaxyx()
@@ -181,12 +217,17 @@ def dashboard(stdscr, socket):
             elif mode == "override" and filtered:
                 draw_override_picker(stdscr, filtered[selected], override_selected)
                 draw_footer(stdscr, "override")
+            elif mode == "move_picker" and filtered:
+                draw_move_picker(stdscr, filtered[selected], instance_labels, move_selected)
+                draw_footer(stdscr, "move")
         elif mode == "new":
-            draw_new_form(stdscr, new_fields, new_active, new_cursor)
+            draw_new_form(stdscr, new_fields, new_active, new_cursor, multi_instance=multi_instance)
         elif mode == "pick" or (mode == "override" and override_source == "pick"):
             draw_pick_view(stdscr, pick_filtered, pick_selected, pick_running_count)
             if msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
+            elif multi_instance and not pick_search_active and not pick_query:
+                draw_status_message(stdscr, f"Target: {pick_target_instance}  (i to cycle)")
             elif pick_search_active or pick_query:
                 draw_search_bar(
                     stdscr,
@@ -219,7 +260,7 @@ def dashboard(stdscr, socket):
                 refresh_ticks += 1
                 if refresh_ticks >= refresh_threshold:
                     refresh_ticks = 0
-                    new_sessions = query_sessions(socket, managed_only=(not show_all))
+                    new_sessions = query_all_sessions(managed_only=(not show_all))
                     _check_idle_notifications(new_sessions)
                     old_fp = _session_fingerprint(filtered)
                     new_filtered = _apply_filters(
@@ -351,19 +392,16 @@ def dashboard(stdscr, socket):
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and filtered:
                 selected = (selected + 1) % len(filtered)
             elif key in (10, 13, curses.KEY_ENTER) and filtered:
-                do_focus(socket, filtered[selected]["tab_id"])
+                sess = filtered[selected]
+                do_cross_instance_focus(
+                    sess.get("socket", home_socket), sess["tab_id"], home_socket
+                )
                 return
             elif key in (ord("x"), ord("X")) and filtered:
                 mode = "confirm"
             elif key in (ord("n"), ord("N")):
                 mode = "new"
-                new_fields = {
-                    "title": "",
-                    "dir": "~/",
-                    "account": default_account,
-                    "flags": "",
-                    "pw": default_pw,
-                }
+                new_fields = _make_new_fields()
                 new_active = 0
                 new_cursor = 0
             elif key == ord("l"):
@@ -377,12 +415,13 @@ def dashboard(stdscr, socket):
                     pick_query = ""
                     pick_cursor = 0
                     pick_search_active = False
+                    pick_target_instance = home_instance_label
                 else:
                     msg = "No sessions configured in sessions.conf"
                     msg_frames = 20
             elif key in (ord("a"), ord("A")):
                 show_all = not show_all
-                sessions = query_sessions(socket, managed_only=(not show_all))
+                sessions = query_all_sessions(managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
                 label = "all" if show_all else "managed"
@@ -391,7 +430,7 @@ def dashboard(stdscr, socket):
             elif key == ord("d"):
                 show_detail = not show_detail
             elif key == 18:  # Ctrl+r -- refresh
-                sessions = query_sessions(socket, managed_only=(not show_all))
+                sessions = query_all_sessions(managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
                 msg = f"{len(filtered)} session(s) found"
@@ -422,6 +461,53 @@ def dashboard(stdscr, socket):
                     if d == current_dir:
                         override_selected = i
                         break
+            elif key == ord("m") and filtered and not multi_instance:
+                msg = "Only one Kitty instance running"
+                msg_frames = 20
+            elif key == ord("m") and filtered and multi_instance:
+                sess = filtered[selected]
+                current_inst = sess.get("instance_label", "")
+                targets = [lbl for lbl in instance_labels if lbl != current_inst]
+                if not targets:
+                    msg = "No other instances to move to"
+                    msg_frames = 20
+                elif len(targets) == 1:
+                    # Only one target — move immediately
+                    target_socket = instance_socket_map.get(targets[0], "")
+                    if not target_socket:
+                        msg = f"Instance {targets[0]} is no longer available"
+                        msg_frames = 20
+                    else:
+                        is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
+                        sess_socket = sess.get("socket", home_socket)
+                        cfg_entry = _cfg._find_config_session(sess["title"])
+                        if cfg_entry is None:
+                            cfg_entry = _cfg._find_config_session(
+                                _strip_override_marker(sess["title"])
+                            )
+                        r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                        r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                        ok = do_move(
+                            sess_socket,
+                            target_socket,
+                            sess,
+                            flags=r_flags,
+                            pw_override=r_pw,
+                            host_tab_id=host_tab_id,
+                        )
+                        if is_host:
+                            return
+                        sessions = query_all_sessions(managed_only=(not show_all))
+                        filtered = _apply_filters(sessions, search_query, account_filter)
+                        selected = min(selected, max(0, len(filtered) - 1))
+                        if ok:
+                            msg = f"Session moved to {targets[0]}"
+                        else:
+                            msg = f"Instance {sess.get('instance_label', sess_socket)} is no longer available"
+                        msg_frames = 20
+                else:
+                    mode = "move_picker"
+                    move_selected = 0
             elif key == ord("?"):
                 mode = "help"
                 help_scroll = 0
@@ -440,15 +526,20 @@ def dashboard(stdscr, socket):
         elif mode == "confirm":
             if key in (ord("y"), ord("Y")) and filtered:
                 target = filtered[selected]
+                target_socket = target.get("socket", home_socket)
                 if host_tab_id is not None and target["tab_id"] == host_tab_id:
-                    _spawn_detached_close(socket, target["tab_id"])
+                    _spawn_detached_close(target_socket, target["tab_id"])
                     return
                 else:
-                    do_close(socket, target["tab_id"])
-                    sessions = query_sessions(socket, managed_only=(not show_all))
+                    ok = do_close(target_socket, target["tab_id"])
+                    sessions = query_all_sessions(managed_only=(not show_all))
                     filtered = _apply_filters(sessions, search_query, account_filter)
                     selected = min(selected, max(0, len(filtered) - 1))
-                    msg = "Session closed"
+                    if ok:
+                        msg = "Session closed"
+                    else:
+                        inst = target.get("instance_label", target_socket)
+                        msg = f"Instance {inst} is no longer available"
                     msg_frames = 20
             mode = "list"
 
@@ -464,18 +555,23 @@ def dashboard(stdscr, socket):
                     )
                 r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
                 r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
-                do_restart(
-                    socket, sess, flags=r_flags, pw_override=r_pw,
+                sess_socket = sess.get("socket", home_socket)
+                ok = do_restart(
+                    sess_socket, sess, flags=r_flags, pw_override=r_pw,
                     host_tab_id=host_tab_id,
                 )
                 if is_host:
                     # Detached process will close+relaunch the host tab;
                     # the dashboard overlay will be destroyed with it.
                     return
-                sessions = query_sessions(socket, managed_only=(not show_all))
+                sessions = query_all_sessions(managed_only=(not show_all))
                 filtered = _apply_filters(sessions, search_query, account_filter)
                 selected = min(selected, max(0, len(filtered) - 1))
-                msg = "Session restarted"
+                if ok:
+                    msg = "Session restarted"
+                else:
+                    inst = sess.get("instance_label", sess_socket)
+                    msg = f"Instance {inst} is no longer available"
                 msg_frames = 20
             mode = "list"
 
@@ -506,9 +602,12 @@ def dashboard(stdscr, socket):
                         title = _append_override_marker(title)
                         cdo = selected_path
                     pw_val = entry["pw"]
-                    loc = compute_insert_location(socket, account, title)
+                    target_socket = instance_socket_map.get(
+                        pick_target_instance, home_socket
+                    ) if multi_instance else home_socket
+                    loc = compute_insert_location(target_socket, account, title)
                     do_launch(
-                        socket,
+                        target_socket,
                         title,
                         entry["dir"],
                         account,
@@ -521,6 +620,7 @@ def dashboard(stdscr, socket):
 
                 elif override_source == "list" and filtered:
                     sess = filtered[selected]
+                    sess_socket = sess.get("socket", home_socket)
                     current_dir = _cfg._accounts.get(sess["account"], {}).get(
                         "config_dir", ""
                     )
@@ -529,15 +629,21 @@ def dashboard(stdscr, socket):
                         msg_frames = 20
                     else:
                         if sess["status"] == "stopped":
-                            do_close(socket, sess["tab_id"])
+                            ok = do_close(sess_socket, sess["tab_id"])
+                            if not ok:
+                                inst = sess.get("instance_label", sess_socket)
+                                msg = f"Instance {inst} is no longer available"
+                                msg_frames = 20
+                                mode = "list"
+                                continue
                             time.sleep(0.3)
                             new_title = _append_override_marker(sess["title"])
                             account = sess["account"]
                             location = compute_insert_location(
-                                socket, account, new_title
+                                sess_socket, account, new_title
                             )
                             do_launch(
-                                socket,
+                                sess_socket,
                                 new_title,
                                 sess["cwd"],
                                 account,
@@ -551,14 +657,14 @@ def dashboard(stdscr, socket):
                                 and sess["tab_id"] == host_tab_id
                             )
                             do_restart(
-                                socket,
+                                sess_socket,
                                 sess,
                                 config_dir_override=selected_path,
                                 host_tab_id=host_tab_id,
                             )
                             if is_host:
                                 return
-                        sessions = query_sessions(socket, managed_only=(not show_all))
+                        sessions = query_all_sessions(managed_only=(not show_all))
                         filtered = _apply_filters(
                             sessions, search_query, account_filter
                         )
@@ -573,6 +679,58 @@ def dashboard(stdscr, socket):
 
                 else:
                     mode = cancel_mode
+
+        # ── Move picker ──────────────────────────────────────────
+        elif mode == "move_picker":
+            sess = filtered[selected] if filtered else None
+            current_inst = sess.get("instance_label", "") if sess else ""
+            targets = [lbl for lbl in instance_labels if lbl != current_inst]
+
+            if key in (27, ord("q"), ord("Q")):  # Esc / q -- cancel
+                mode = "list"
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                if targets:
+                    move_selected = (move_selected - 1) % len(targets)
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                if targets:
+                    move_selected = (move_selected + 1) % len(targets)
+            elif key in (10, 13, curses.KEY_ENTER) and sess and targets:
+                target_label = targets[move_selected]
+                target_socket = instance_socket_map.get(target_label, "")
+                if not target_socket:
+                    msg = f"Instance {target_label} is no longer available"
+                    msg_frames = 20
+                    mode = "list"
+                else:
+                    is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
+                    sess_socket = sess.get("socket", home_socket)
+                    cfg_entry = _cfg._find_config_session(sess["title"])
+                    if cfg_entry is None:
+                        cfg_entry = _cfg._find_config_session(
+                            _strip_override_marker(sess["title"])
+                        )
+                    r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                    r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                    ok = do_move(
+                        sess_socket,
+                        target_socket,
+                        sess,
+                        flags=r_flags,
+                        pw_override=r_pw,
+                        host_tab_id=host_tab_id,
+                    )
+                    if is_host:
+                        return
+                    sessions = query_all_sessions(managed_only=(not show_all))
+                    filtered = _apply_filters(sessions, search_query, account_filter)
+                    selected = min(selected, max(0, len(filtered) - 1))
+                    if ok:
+                        msg = f"Session moved to {target_label}"
+                    else:
+                        inst = sess.get("instance_label", sess_socket)
+                        msg = f"Instance {inst} is no longer available"
+                    msg_frames = 20
+                    mode = "list"
 
         # ── Rename mode ──────────────────────────────────────────
         elif mode == "rename":
@@ -600,8 +758,9 @@ def dashboard(stdscr, socket):
                     if had_override:
                         full_title = _append_override_marker(full_title)
                     old_tab_id = filtered[selected]["tab_id"]
-                    do_rename(socket, old_tab_id, full_title)
-                    sessions = query_sessions(socket, managed_only=(not show_all))
+                    rename_socket = filtered[selected].get("socket", home_socket)
+                    ok = do_rename(rename_socket, old_tab_id, full_title)
+                    sessions = query_all_sessions(managed_only=(not show_all))
                     filtered = _apply_filters(sessions, search_query, account_filter)
                     # Preserve selection by tab_id
                     selected = 0
@@ -610,7 +769,11 @@ def dashboard(stdscr, socket):
                             selected = i
                             break
                     selected = min(selected, max(0, len(filtered) - 1))
-                    msg = f'Renamed to "{full_title}"'
+                    if ok:
+                        msg = f'Renamed to "{full_title}"'
+                    else:
+                        inst = filtered[selected].get("instance_label", rename_socket) if filtered else rename_socket
+                        msg = f"Instance {inst} is no longer available"
                     msg_frames = 20
                     mode = "list"
             elif key in (curses.KEY_BACKSPACE, 127, 8):
@@ -636,6 +799,8 @@ def dashboard(stdscr, socket):
         # ── New session form ─────────────────────────────────────
         elif mode == "new":
             field_keys = ["title", "dir", "account", "flags", "pw"]
+            if multi_instance:
+                field_keys.append("instance")
             last_field = len(field_keys) - 1
             fk = field_keys[new_active]
 
@@ -646,6 +811,10 @@ def dashboard(stdscr, socket):
                     new_fields["account"] = _cycle_account(new_fields["account"])
                 elif fk == "pw":
                     new_fields["pw"] = _cycle_pw(new_fields["pw"])
+                elif fk == "instance":
+                    new_fields["instance"] = _cycle_instance(
+                        new_fields["instance"], instance_labels
+                    )
                 else:
                     new_active = min(new_active + 1, last_field)
                     new_cursor = len(new_fields[field_keys[new_active]])
@@ -661,15 +830,21 @@ def dashboard(stdscr, socket):
                     fl = new_fields["flags"].strip()
                     pw_val = new_fields["pw"]
                     pw_val = "" if pw_val == "none" else pw_val
+                    # Use the selected instance's socket, or home_socket
+                    target_socket = home_socket
+                    if multi_instance and "instance" in new_fields:
+                        target_socket = instance_socket_map.get(
+                            new_fields["instance"], home_socket
+                        )
                     if t and d:
-                        loc = compute_insert_location(socket, a, t)
-                        do_launch(socket, t, d, a, fl, pw_val, location=loc)
+                        loc = compute_insert_location(target_socket, a, t)
+                        do_launch(target_socket, t, d, a, fl, pw_val, location=loc)
                         return
                     else:
                         msg = "Title and directory are required"
                         msg_frames = 20
                     mode = "list"
-            elif fk not in ("account", "pw"):
+            elif fk not in ("account", "pw", "instance"):
                 # Text editing in title / dir fields
                 val = new_fields[fk]
                 if key in (curses.KEY_BACKSPACE, 127, 8):
@@ -766,6 +941,10 @@ def dashboard(stdscr, socket):
                 pick_selected = (pick_selected - 1) % len(pick_filtered)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and pick_filtered:
                 pick_selected = (pick_selected + 1) % len(pick_filtered)
+            elif key == ord("i") and multi_instance:
+                pick_target_instance = _cycle_instance(
+                    pick_target_instance, instance_labels
+                )
             elif key == ord("O") and pick_filtered:
                 mode = "override"
                 override_source = "pick"
@@ -781,9 +960,12 @@ def dashboard(stdscr, socket):
             elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:
                 entry = pick_filtered[pick_selected]
                 pw_val = entry["pw"]
-                loc = compute_insert_location(socket, entry["account"], entry["title"])
+                target_socket = instance_socket_map.get(
+                    pick_target_instance, home_socket
+                ) if multi_instance else home_socket
+                loc = compute_insert_location(target_socket, entry["account"], entry["title"])
                 do_launch(
-                    socket,
+                    target_socket,
                     entry["title"],
                     entry["dir"],
                     entry["account"],

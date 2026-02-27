@@ -26,15 +26,15 @@ Columns:
   Tab        1-based tab index within the OS window
   Title      The tab's title
   Account    Account name from accounts.conf (matched by CLAUDE_CONFIG_DIR)
+  Instance   Kitty instance label (K:PID); shown when multiple instances exist
   Directory  The cwd of the first window in the tab
   Status     "focused" if both the tab and its OS window are focused,
              "active" if the tab title shows ⚡, "stopped" for 🛑,
              "permission" for 🔑, otherwise "idle"
 
 Socket discovery:
-  1. Uses --socket value if provided.
-  2. Uses KITTY_LISTEN_ON if set.
-  3. Otherwise globs /tmp/kitty-* and picks the most recent socket.
+  1. Uses --socket value if provided (queries only that instance).
+  2. Otherwise discovers all active Kitty instances and aggregates sessions.
 
 EOF
 	exit 0
@@ -69,12 +69,6 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-# ---- Socket discovery (if not overridden) ----------------------------------
-
-if [[ -z "$SOCKET" ]]; then
-	SOCKET="$(discover_socket)"
-fi
-
 # ---- Load accounts ---------------------------------------------------------
 
 load_accounts
@@ -84,101 +78,128 @@ _load_icons
 _STRIP_RE="$(_icon_strip_regex)"
 _MANAGED_RE="${_STRIP_RE}[A-Z]:"
 
-# ---- Query kitty and build the table --------------------------------------
+# ---- Socket discovery and multi-instance query -----------------------------
 
-ls_json=$(kitty @ --to "$SOCKET" ls 2>/dev/null) || {
-	echo "Error: Failed to query kitty at socket $SOCKET" >&2
+# When --socket is given, query only that socket; otherwise discover all
+if [[ -n "$SOCKET" ]]; then
+	_INSTANCE_SOCKETS=("$SOCKET")
+	# Derive label
+	bare="${SOCKET#unix:}"
+	base="$(basename "$bare")"
+	if [[ "$base" =~ ^kitty-([0-9]+) ]]; then
+		_INSTANCE_LABELS=("K:${BASH_REMATCH[1]}")
+	else
+		_INSTANCE_LABELS=("$SOCKET")
+	fi
+else
+	discover_all_sockets
+fi
+
+if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+	echo "Error: No active Kitty instances found." >&2
 	exit 1
-}
+fi
 
-# Bail out if the response is empty or has no OS windows
-if [[ -z "$ls_json" ]] || [[ "$(echo "$ls_json" | jq 'length')" -eq 0 ]]; then
-	echo "No active Claude Code sessions found."
-	exit 0
+multi_instance=false
+if [[ ${#_INSTANCE_SOCKETS[@]} -gt 1 ]]; then
+	multi_instance=true
 fi
 
 # Build the accounts lookup for jq
 accounts_json="$(build_accounts_json)"
 default_account="$(default_account_name)"
 
-# Use jq to extract rows for every tab that has a claude process.
-# Each output line is tab-delimited: tab_index \t title \t account \t cwd \t status
-rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg show_all "$SHOW_ALL" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" '
-    [.[] | . as $os |
-        $os.tabs | to_entries[] |
-        .key as $tab_idx | .value as $tab |
+# Query all instances and collect rows
+rows=""
+for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+	inst_socket="${_INSTANCE_SOCKETS[$si]}"
+	inst_label="${_INSTANCE_LABELS[$si]}"
+	ls_json=$(kitty @ --to "$inst_socket" ls 2>/dev/null) || continue
 
-        # Check whether any window in this tab has a foreground process whose
-        # cmdline contains "claude"
-        select(
-            [ $tab.windows[]
-              | .foreground_processes[]?
-              | .cmdline[]?
-              | test("claude")
-            ] | any
-        ) |
+	# Bail out if empty
+	if [[ -z "$ls_json" ]] || [[ "$(echo "$ls_json" | jq 'length')" -eq 0 ]]; then
+		continue
+	fi
 
-        # Filter to ccm-managed tabs unless --all is given
-        select(
-            $show_all == "true" or
-            ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
-            ($tab.title | test($managed_re))
-        ) |
+	inst_rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg show_all "$SHOW_ALL" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" --arg inst_label "$inst_label" '
+        [.[] | . as $os |
+            $os.tabs | to_entries[] |
+            .key as $tab_idx | .value as $tab |
 
-        # Find cwd: prefer user_vars.cc_cwd (set at launch), fall back to
-        # the claude window cwd, then windows[0].cwd
-        (
-            [$tab.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
-            if length > 0 then .[0]
-            else
-                [$tab.windows[] |
-                    select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
-                ] | if length > 0 then .[0].cwd else $tab.windows[0].cwd end
-            end
-        ) as $cwd |
+            select(
+                [ $tab.windows[]
+                  | .foreground_processes[]?
+                  | .cmdline[]?
+                  | test("claude")
+                ] | any
+            ) |
 
-        # Determine account: prefer user_vars.cc_account, fall back to cmdline, then default
-        (
-            [$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] |
-            if length > 0 then .[0]
-            else
-                (
-                    [$tab.windows[] | .foreground_processes[]? |
-                        select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
-                        .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
-                    ] | if length > 0 then
-                        (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
-                    else $default_account end
-                )
-            end
-        ) as $account |
+            select(
+                $show_all == "true" or
+                ([$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0) or
+                ($tab.title | test($managed_re))
+            ) |
 
-        # Status: focused > active/stopped/permission (icon indicator) > idle
-        (
-            if ($os.is_focused and $tab.is_focused) then "focused"
-            elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_bolt)) then "active"
-            elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_stop)) then "stopped"
-            elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_key)) then "permission"
-            elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_error)) then "error"
-            else "idle"
-            end
-        ) as $status |
+            (
+                [$tab.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
+                if length > 0 then .[0]
+                else
+                    [$tab.windows[] |
+                        select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                    ] | if length > 0 then .[0].cwd else $tab.windows[0].cwd end
+                end
+            ) as $cwd |
 
-        {
-            tab_index: ($tab_idx + 1),
-            title: ($tab.title | sub($strip_re; "")),
-            account: $account,
-            cwd: $cwd,
-            status: $status
-        }
-    ] | .[] | [
-        (.tab_index | tostring),
-        .title,
-        .account,
-        .cwd,
-        .status
-    ] | join("\t")
-')
+            (
+                [$tab.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+                if length > 0 then .[0]
+                else
+                    (
+                        [$tab.windows[] | .foreground_processes[]? |
+                            select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                            .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                        ] | if length > 0 then
+                            (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                        else $default_account end
+                    )
+                end
+            ) as $account |
+
+            (
+                if ($os.is_focused and $tab.is_focused) then "focused"
+                elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_bolt)) then "active"
+                elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_stop)) then "stopped"
+                elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_key)) then "permission"
+                elif ($tab.title | test("^(" + $icon_star + ")?" + $icon_error)) then "error"
+                else "idle"
+                end
+            ) as $status |
+
+            {
+                tab_index: ($tab_idx + 1),
+                title: ($tab.title | sub($strip_re; "")),
+                account: $account,
+                cwd: $cwd,
+                status: $status,
+                instance: $inst_label
+            }
+        ] | .[] | [
+            (.tab_index | tostring),
+            .title,
+            .account,
+            .cwd,
+            .status,
+            .instance
+        ] | join("\t")
+    ')
+
+	if [[ -n "$inst_rows" ]]; then
+		if [[ -n "$rows" ]]; then
+			rows+=$'\n'
+		fi
+		rows+="$inst_rows"
+	fi
+done
 
 if [[ -z "$rows" ]]; then
 	echo "No active Claude Code sessions found."
@@ -196,6 +217,7 @@ header_title="Title"
 header_account="Account"
 header_dir="Directory"
 header_status="Status"
+header_inst="Instance"
 
 max_mk=2
 max_tab=${#header_tab}
@@ -203,30 +225,38 @@ max_title=${#header_title}
 max_account=${#header_account}
 max_dir=${#header_dir}
 max_status=${#header_status}
+max_inst=${#header_inst}
 
 # Pre-process rows: shorten paths, then scan for max widths
 processed_rows=""
-while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status; do
+while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst; do
 	col_dir="$(shorten_path "$col_dir")"
-	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_status}"$'\n'
+	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\n'
 	((${#col_tab} > max_tab)) && max_tab=${#col_tab}
 	((${#col_title} > max_title)) && max_title=${#col_title}
 	((${#col_account} > max_account)) && max_account=${#col_account}
 	((${#col_dir} > max_dir)) && max_dir=${#col_dir}
 	((${#col_status} > max_status)) && max_status=${#col_status}
+	((${#col_inst} > max_inst)) && max_inst=${#col_inst}
 done <<<"$rows"
 
 # Header
-printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_dir}s  %-${max_status}s%s\n" \
-	"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
-
-# Separator
-printf "%s%s%s\n" "$DIM" \
-	"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_dir + 2 + max_status)))" \
-	"$RESET"
+if [[ "$multi_instance" == "true" ]]; then
+	printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_inst}s  %-${max_dir}s  %-${max_status}s%s\n" \
+		"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_inst" "$header_dir" "$header_status" "$RESET"
+	printf "%s%s%s\n" "$DIM" \
+		"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_inst + 2 + max_dir + 2 + max_status)))" \
+		"$RESET"
+else
+	printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_dir}s  %-${max_status}s%s\n" \
+		"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
+	printf "%s%s%s\n" "$DIM" \
+		"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_dir + 2 + max_status)))" \
+		"$RESET"
+fi
 
 # Data rows
-while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status; do
+while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst; do
 	[[ -z "$col_tab" ]] && continue
 
 	# Focus marker
@@ -254,6 +284,11 @@ while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status; do
 		esac
 	fi
 
-	printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %s%s\n" \
-		"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_dir" "$local_status" "$local_reset"
+	if [[ "$multi_instance" == "true" ]]; then
+		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_inst + $(extra_bytes "$col_inst")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %s%s\n" \
+			"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_inst" "$col_dir" "$local_status" "$local_reset"
+	else
+		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %s%s\n" \
+			"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_dir" "$local_status" "$local_reset"
+	fi
 done <<<"$processed_rows"

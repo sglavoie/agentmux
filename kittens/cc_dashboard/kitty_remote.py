@@ -54,6 +54,62 @@ def get_kitty_socket():
     return f"unix:{candidates[0]}" if candidates else ""
 
 
+def _socket_label(socket_path):
+    """Derive a short instance label from a socket path.
+
+    Extracts the PID from filenames like /tmp/kitty-12345-... and returns
+    "K:12345".  Falls back to the full socket path when the pattern doesn't
+    match.
+    """
+    # socket_path is typically "unix:/tmp/kitty-PID-..." or just "/tmp/kitty-PID-..."
+    bare = socket_path.removeprefix("unix:")
+    base = os.path.basename(bare)
+    m = re.match(r"kitty-(\d+)", base)
+    if m:
+        return f"K:{m.group(1)}"
+    return socket_path
+
+
+def get_all_kitty_sockets():
+    """Discover all active Kitty remote control sockets.
+
+    Collects all /tmp/kitty-* sockets plus KITTY_LISTEN_ON, probes each
+    with ``kitty @ ls`` (2-second timeout), and returns a list of
+    ``(socket, label)`` tuples for the ones that respond.
+    """
+    seen = set()
+    candidates = []
+
+    # KITTY_LISTEN_ON first (the "home" instance)
+    env_sock = os.environ.get("KITTY_LISTEN_ON", "")
+    if env_sock:
+        candidates.append(env_sock)
+        seen.add(env_sock)
+
+    # All /tmp/kitty-* sockets, most recent first
+    for path in sorted(glob.glob("/tmp/kitty-*"), key=os.path.getmtime, reverse=True):
+        sock = f"unix:{path}"
+        if sock not in seen:
+            candidates.append(sock)
+            seen.add(sock)
+
+    active = []
+    for sock in candidates:
+        try:
+            result = subprocess.run(
+                ["kitty", "@", "--to", sock, "ls"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if result.returncode == 0:
+                active.append((sock, _socket_label(sock)))
+        except (subprocess.SubprocessError, OSError):
+            pass
+
+    return active
+
+
 def get_host_tab_id(socket):
     """Return the tab ID of the tab hosting the current dashboard process.
 
@@ -323,19 +379,74 @@ def query_sessions(socket, managed_only=True):
     return sessions
 
 
+def query_all_sessions(managed_only=True):
+    """Query all Kitty instances for Claude Code sessions.
+
+    Calls ``query_sessions`` for each active socket discovered by
+    ``get_all_kitty_sockets`` and injects ``"socket"`` and
+    ``"instance_label"`` keys into every session dict.  The ``(socket,
+    tab_id)`` pair serves as the globally unique identifier since tab IDs
+    alone can collide across Kitty processes.
+    """
+    sockets = get_all_kitty_sockets()
+    all_sessions = []
+    for sock, label in sockets:
+        sessions = query_sessions(sock, managed_only=managed_only)
+        for s in sessions:
+            s["socket"] = sock
+            s["instance_label"] = label
+        all_sessions.extend(sessions)
+    return all_sessions
+
+
 def do_focus(socket, tab_id):
-    """Focus a tab by its Kitty tab ID."""
-    kitty_cmd(socket, "focus-tab", "--match", f"id:{tab_id}")
+    """Focus a tab by its Kitty tab ID. Returns True on success."""
+    result = kitty_cmd(socket, "focus-tab", "--match", f"id:{tab_id}")
+    return result is not None and result.returncode == 0
+
+
+def do_cross_instance_focus(socket, tab_id, home_socket):
+    """Focus a tab and raise the OS window if it's in a different Kitty instance.
+
+    When the target socket matches home_socket, this delegates to do_focus.
+    When the target is a different instance, it additionally uses osascript
+    to bring that instance's OS window to the foreground.
+    """
+    do_focus(socket, tab_id)
+    if socket == home_socket:
+        return
+    # Extract PID from the socket path (e.g. "unix:/tmp/kitty-12345-...")
+    bare = socket.removeprefix("unix:")
+    base = os.path.basename(bare)
+    m = re.match(r"kitty-(\d+)", base)
+    if not m:
+        return
+    pid = m.group(1)
+    try:
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'tell application "System Events" to set frontmost of '
+                f"(first process whose unix id is {pid}) to true",
+            ],
+            capture_output=True,
+            timeout=3,
+        )
+    except (subprocess.SubprocessError, OSError):
+        pass
 
 
 def do_close(socket, tab_id):
-    """Close a tab by its Kitty tab ID."""
-    kitty_cmd(socket, "close-tab", "--match", f"id:{tab_id}")
+    """Close a tab by its Kitty tab ID. Returns True on success."""
+    result = kitty_cmd(socket, "close-tab", "--match", f"id:{tab_id}")
+    return result is not None and result.returncode == 0
 
 
 def do_rename(socket, tab_id, new_title):
-    """Rename a tab by its Kitty tab ID."""
-    kitty_cmd(socket, "set-tab-title", "--match", f"id:{tab_id}", new_title)
+    """Rename a tab by its Kitty tab ID. Returns True on success."""
+    result = kitty_cmd(socket, "set-tab-title", "--match", f"id:{tab_id}", new_title)
+    return result is not None and result.returncode == 0
 
 
 def compute_insert_location(socket, account, title, exclude_tab_id=None):
@@ -481,7 +592,9 @@ def do_launch(
     shell_cmd = f"exec claude {effective_flags}" if effective_flags else "exec claude"
     cmd += [shell, "-lic", shell_cmd]
 
-    kitty_cmd(socket, *cmd)
+    result = kitty_cmd(socket, *cmd)
+    if not result or result.returncode != 0:
+        return False
 
     # Retry set-tab-color a few times since Claude may briefly override
     # the tab title on startup, causing the title match to fail.
@@ -516,6 +629,8 @@ def do_launch(
             f"title:^{title}$",
             pw_mode,
         )
+
+    return True
 
 
 def _spawn_detached_close(socket, tab_id):
@@ -790,13 +905,251 @@ def do_restart(
         _spawn_detached_restart(
             socket, tab_id, title, cwd, account, flags, pw_override, config_dir_override
         )
-        return
+        return True
 
-    do_close(socket, tab_id)
+    ok = do_close(socket, tab_id)
+    if not ok:
+        return False
     time.sleep(0.3)
     location = compute_insert_location(socket, account, title)
-    do_launch(
+    return do_launch(
         socket,
+        title,
+        cwd,
+        account,
+        flags,
+        pw_override,
+        location=location,
+        config_dir_override=config_dir_override,
+    )
+
+
+def _spawn_detached_move(
+    source_socket,
+    target_socket,
+    tab_id,
+    title,
+    cwd,
+    account,
+    flags="",
+    pw_override="",
+    config_dir_override=None,
+):
+    """Spawn a detached subprocess to close a session on one instance and relaunch on another.
+
+    Used when the session being moved is the dashboard's own host tab.
+    Mirrors _spawn_detached_restart but targets a different socket for the
+    relaunch step.
+    """
+    directory = os.path.expanduser(cwd)
+    home = os.path.expanduser("~")
+    default_dir = os.path.join(home, ".claude")
+    config_dir = (
+        config_dir_override
+        if config_dir_override
+        else _cfg._accounts.get(account, {}).get("config_dir", "")
+    )
+    shell = os.environ.get("SHELL", "/bin/zsh")
+    effective_flags = _cfg._resolve_claude_flags(flags)
+    shell_cmd = f"exec claude {effective_flags}" if effective_flags else "exec claude"
+
+    # Compute insert location on the target instance
+    location = compute_insert_location(target_socket, account, title)
+    loc_type, loc_id = location
+    loc_args = []
+
+    steps = []
+
+    # 1. Close the tab on the source instance
+    steps.append(
+        {
+            "cmd": [
+                "kitty",
+                "@",
+                "--to",
+                source_socket,
+                "close-tab",
+                "--match",
+                f"id:{tab_id}",
+            ],
+            "sleep": 0.5,
+        }
+    )
+
+    # 2. Focus neighbour tab for sorted insertion on the target
+    if loc_type == "first":
+        loc_args = ["--location", "first"]
+    elif loc_type == "after" and loc_id is not None:
+        steps.append(
+            {
+                "cmd": [
+                    "kitty",
+                    "@",
+                    "--to",
+                    target_socket,
+                    "focus-tab",
+                    "--match",
+                    f"id:{loc_id}",
+                ],
+                "sleep": 0.1,
+            }
+        )
+        loc_args = ["--location", "after"]
+
+    # 3. Launch the tab on the target instance
+    launch_cmd = [
+        "kitty",
+        "@",
+        "--to",
+        target_socket,
+        "launch",
+        "--type=tab",
+        *loc_args,
+        "--allow-remote-control",
+        "--tab-title",
+        title,
+        "--cwd",
+        directory,
+        "--env",
+        f"KITTY_LISTEN_ON={target_socket}",
+        "--var",
+        f"cc_account={account}",
+        "--var",
+        f"cc_cwd={directory}",
+    ]
+    if config_dir and config_dir != default_dir:
+        launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
+    launch_cmd += [shell, "-lic", shell_cmd]
+    steps.append({"cmd": launch_cmd})
+
+    # 4. Set tab colour (with retries)
+    steps.append(
+        {
+            "cmd": [
+                "kitty",
+                "@",
+                "--to",
+                target_socket,
+                "set-tab-color",
+                "--match",
+                f"title:^{title}$",
+                *_cfg._palette_tab_colors(account),
+            ],
+            "retry": 5,
+            "retry_sleep": 0.1,
+        }
+    )
+
+    # 5. Project window (if configured)
+    pw_mode = _cfg._resolve_project_window(pw_override)
+    if pw_mode:
+        steps.append(
+            {
+                "cmd": [
+                    "kitty",
+                    "@",
+                    "--to",
+                    target_socket,
+                    "launch",
+                    "--type=window",
+                    "--match",
+                    f"title:^{title}$",
+                    "--cwd",
+                    directory,
+                    "--keep-focus",
+                ]
+            }
+        )
+        steps.append(
+            {
+                "cmd": [
+                    "kitty",
+                    "@",
+                    "--to",
+                    target_socket,
+                    "goto-layout",
+                    "--match",
+                    f"title:^{title}$",
+                    pw_mode,
+                ]
+            }
+        )
+
+    script = """
+import json, os, subprocess, time
+steps = json.loads(os.environ["_CCM_STEPS"])
+for step in steps:
+    cmd = step["cmd"]
+    retry = step.get("retry", 0)
+    retry_sleep = step.get("retry_sleep", 0.1)
+    sleep_after = step.get("sleep", 0)
+    if retry:
+        for _ in range(retry + 1):
+            r = subprocess.run(cmd, capture_output=True)
+            if r.returncode == 0:
+                break
+            time.sleep(retry_sleep)
+    else:
+        subprocess.run(cmd, capture_output=True)
+    if sleep_after:
+        time.sleep(sleep_after)
+"""
+    env = os.environ.copy()
+    env["_CCM_STEPS"] = json.dumps(steps)
+
+    python = shutil.which("python3") or shutil.which("python")
+    if not python:
+        return
+    subprocess.Popen(
+        [python, "-c", script],
+        start_new_session=True,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def do_move(
+    source_socket,
+    target_socket,
+    session,
+    flags="",
+    pw_override="",
+    config_dir_override=None,
+    host_tab_id=None,
+):
+    """Move a session from one Kitty instance to another (close + relaunch).
+
+    Preserves the session's title, cwd, account, and metadata.  When
+    host_tab_id matches the session's tab_id, a detached subprocess is
+    used so the move survives the dashboard overlay being destroyed.
+    """
+    account = session["account"]
+    title = session["title"]
+    tab_id = session["tab_id"]
+    cwd = session["cwd"]
+
+    if host_tab_id is not None and tab_id == host_tab_id:
+        _spawn_detached_move(
+            source_socket,
+            target_socket,
+            tab_id,
+            title,
+            cwd,
+            account,
+            flags,
+            pw_override,
+            config_dir_override,
+        )
+        return True
+
+    ok = do_close(source_socket, tab_id)
+    if not ok:
+        return False
+    time.sleep(0.3)
+    location = compute_insert_location(target_socket, account, title)
+    return do_launch(
+        target_socket,
         title,
         cwd,
         account,

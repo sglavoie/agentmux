@@ -37,7 +37,6 @@ def _kitten_dir():
 sys.path.insert(0, _kitten_dir())
 
 from cc_dashboard.config import load_accounts, load_defaults, load_sessions
-from cc_dashboard.kitty_remote import get_kitty_socket
 from cc_dashboard.ui import dashboard
 
 
@@ -52,16 +51,7 @@ def main(args=None):
     load_defaults()
     load_sessions()
 
-    socket = get_kitty_socket()
-    if not socket:
-        print(
-            "Error: No kitty socket found. "
-            "Is Kitty running with remote control enabled?"
-        )
-        input("Press Enter to close...")
-        return ""
-
-    curses.wrapper(lambda stdscr: dashboard(stdscr, socket))
+    curses.wrapper(dashboard)
     return ""
 
 

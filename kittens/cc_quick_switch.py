@@ -25,7 +25,11 @@ def _kitten_dir():
 sys.path.insert(0, _kitten_dir())
 
 from cc_dashboard.config import load_accounts
-from cc_dashboard.kitty_remote import do_focus, get_kitty_socket, query_sessions
+from cc_dashboard.kitty_remote import (
+    do_cross_instance_focus,
+    get_kitty_socket,
+    query_all_sessions,
+)
 from cc_dashboard.ui import (
     CP_DIM,
     CP_HEADER,
@@ -81,7 +85,7 @@ def draw_search_input(stdscr, query, cursor_pos, match_count, total_count):
     )
 
 
-def draw_session_list(stdscr, sessions, selected):
+def draw_session_list(stdscr, sessions, selected, multi_instance=False):
     """Draw the filtered session list below the search bar."""
     rows, cols = stdscr.getmaxyx()
 
@@ -91,9 +95,13 @@ def draw_session_list(stdscr, sessions, selected):
 
     c_title = 26
     c_acct = 12
-    c_dir = max(12, cols - c_title - c_acct - 6)
+    c_inst = 10 if multi_instance else 0
+    c_dir = max(12, cols - c_title - c_acct - c_inst - 6)
 
-    hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}{'Directory':<{c_dir}}"
+    hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}"
+    if multi_instance:
+        hdr += f"{'Instance':<{c_inst}}"
+    hdr += f"{'Directory':<{c_dir}}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
     avail = rows - 6
@@ -110,7 +118,10 @@ def draw_session_list(stdscr, sessions, selected):
         cp = _cp_for_account(session["account"], selected=sel)
         short_dir = shorten_path(session["cwd"], c_dir - 1)
         title_padded = _pad_to_width(session["title"], c_title)
-        line = f"{cursor_mark} {title_padded}{session['account']:<{c_acct}}{short_dir}"
+        line = f"{cursor_mark} {title_padded}{session['account']:<{c_acct}}"
+        if multi_instance:
+            line += f"{session.get('instance_label', ''):<{c_inst}}"
+        line += short_dir
 
         attr = curses.color_pair(cp)
         if sel:
@@ -125,13 +136,13 @@ def draw_footer(stdscr):
     safe_addstr(stdscr, rows - 1, 2, text[: cols - 3], curses.color_pair(CP_DIM))
 
 
-def quick_switch_main(stdscr, socket):
-    """Run the quick-switch event loop. Returns the tab_id to focus, or None."""
+def quick_switch_main(stdscr):
+    """Run the quick-switch event loop. Returns (socket, tab_id) to focus, or None."""
     curses.curs_set(0)
     init_colors()
     stdscr.timeout(100)
 
-    all_sessions = query_sessions(socket, managed_only=True)
+    all_sessions = query_all_sessions(managed_only=True)
     if not all_sessions:
         stdscr.erase()
         safe_addstr(
@@ -143,6 +154,9 @@ def quick_switch_main(stdscr, socket):
         stdscr.getch()
         return None
 
+    # Show instance label when sessions span multiple Kitty instances
+    multi_instance = len({s.get("instance_label", "") for s in all_sessions}) > 1
+
     query = ""
     cursor = 0
     selected = 0
@@ -151,7 +165,7 @@ def quick_switch_main(stdscr, socket):
     while True:
         stdscr.erase()
         draw_search_input(stdscr, query, cursor, len(filtered), len(all_sessions))
-        draw_session_list(stdscr, filtered, selected)
+        draw_session_list(stdscr, filtered, selected, multi_instance=multi_instance)
         draw_footer(stdscr)
         stdscr.refresh()
 
@@ -166,7 +180,8 @@ def quick_switch_main(stdscr, socket):
         # Enter — focus selected
         if key in (10, 13, curses.KEY_ENTER):
             if filtered:
-                return filtered[selected]["tab_id"]
+                sess = filtered[selected]
+                return (sess.get("socket", ""), sess["tab_id"])
             return None
 
         # Navigation: arrow keys, ctrl+n/ctrl+p, ctrl+k
@@ -224,25 +239,18 @@ def quick_switch_main(stdscr, socket):
 def main(args=None):
     load_accounts()
 
-    socket = get_kitty_socket()
-    if not socket:
-        print(
-            "Error: No kitty socket found. "
-            "Is Kitty running with remote control enabled?",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    result_tab_id = None
+    home_socket = os.environ.get("KITTY_LISTEN_ON", "") or get_kitty_socket()
+    result = None
 
     def run(stdscr):
-        nonlocal result_tab_id
-        result_tab_id = quick_switch_main(stdscr, socket)
+        nonlocal result
+        result = quick_switch_main(stdscr)
 
     curses.wrapper(run)
 
-    if result_tab_id is not None:
-        do_focus(socket, result_tab_id)
+    if result is not None:
+        sock, tab_id = result
+        do_cross_instance_focus(sock, tab_id, home_socket)
 
 
 if __name__ == "__main__":
