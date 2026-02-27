@@ -587,6 +587,7 @@ _HELP_SECTIONS = [
             ("l", "Launch session from config"),
             ("S", "Save sessions to sessions.conf"),
             ("p", "Peek at session output"),
+            ("w", "Clone session to git worktree"),
         ],
     ),
     (
@@ -678,6 +679,7 @@ _FOOTER_HINTS = {
         "r Rename",
         "n New",
         "l Launch",
+        "w Worktree",
         "S Save",
         "c Config",
         "d Detail",
@@ -702,6 +704,7 @@ _FOOTER_HINTS = {
     "config_pick": ["j/k Navigate", "Enter Select", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
+    "worktree": ["Enter Create", "Esc Cancel"],
 }
 
 
@@ -722,6 +725,8 @@ def draw_footer(stdscr, mode, exclude=None):
             break
         parts.append(item)
         length += needed
+    # Clear the full line first to remove residual text from previous footer
+    safe_addstr(stdscr, rows - 1, 0, " " * (cols - 1), curses.color_pair(CP_NORMAL))
     safe_addstr(stdscr, rows - 1, 2, sep.join(parts), curses.color_pair(CP_DIM))
 
 
@@ -1272,6 +1277,42 @@ def draw_rename_input(stdscr, current_value, cursor_pos):
     cursor_ch = after[0] if after else " "
     after_rest = after[1:] if len(after) > 1 else ""
 
+    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
+    x = 2 + len(prefix)
+    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+    safe_addstr(
+        stdscr,
+        y,
+        x + len(before),
+        cursor_ch,
+        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+    )
+    if after_rest:
+        safe_addstr(
+            stdscr,
+            y,
+            x + len(before) + 1,
+            after_rest,
+            curses.color_pair(CP_INPUT_ACTIVE),
+        )
+
+
+def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
+    """Draw a two-line worktree input on the status line area."""
+    rows, _cols = stdscr.getmaxyx()
+
+    # Source info line
+    source_text = f'Clone "{session["title"]}" \u2192 worktree'
+    safe_addstr(stdscr, rows - 4, 2, source_text, curses.color_pair(CP_DIM))
+
+    # Branch input line
+    prefix = "Branch: "
+    before = branch_value[:cursor_pos]
+    after = branch_value[cursor_pos:]
+    cursor_ch = after[0] if after else " "
+    after_rest = after[1:] if len(after) > 1 else ""
+
+    y = rows - 3
     safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
     x = 2 + len(prefix)
     safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))

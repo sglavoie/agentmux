@@ -368,6 +368,33 @@ def save_sessions(live_sessions):
     return len(live_sessions), backup_created
 
 
+def append_session(title, directory, account, flags="", pw=""):
+    """Append a single session entry to sessions.conf."""
+    path = _sessions_config_path()
+    home = os.path.expanduser("~")
+    if directory.startswith(home):
+        directory = "~" + directory[len(home):]
+
+    # Ensure the file ends with a newline before appending
+    needs_newline = False
+    if os.path.isfile(path) and os.path.getsize(path) > 0:
+        with open(path, "rb") as f:
+            f.seek(-1, 2)
+            needs_newline = f.read(1) != b"\n"
+
+    with open(path, "a") as f:
+        if needs_newline:
+            f.write("\n")
+        line = f"{title:<20s} | {directory:<40s} | {account}"
+        if pw:
+            line += f" | {flags} | {pw}"
+        elif flags:
+            line += f" | {flags}"
+        f.write(line + "\n")
+
+    load_sessions()
+
+
 def _palette_tab_colors(account):
     """Return a list of kitty set-tab-color arguments for the given account."""
     color_name = _accounts.get(account, {}).get("color", "gray")

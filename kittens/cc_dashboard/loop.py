@@ -24,6 +24,7 @@ from cc_dashboard.kitty_remote import (
     do_close,
     do_cross_instance_focus,
     do_focus,
+    do_create_worktree,
     do_launch,
     do_move,
     do_open_editor,
@@ -61,6 +62,7 @@ from cc_dashboard.views import (
     draw_rename_input,
     draw_search_bar,
     draw_status_message,
+    draw_worktree_input,
 )
 
 
@@ -144,7 +146,7 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | confirm_save | rename | new | pick | help | move_picker | config_pick | config_action | config_show | sort_pick
+    mode = "list"  # list | confirm | confirm_restart | confirm_save | rename | worktree | new | pick | help | move_picker | config_pick | config_action | config_show | sort_pick
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -250,7 +252,7 @@ def dashboard(stdscr):
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "confirm_save", "rename", "move_picker", "config_pick", "config_action", "sort_pick") or (
+        if mode in ("list", "confirm", "confirm_restart", "confirm_save", "rename", "worktree", "move_picker", "config_pick", "config_action", "sort_pick") or (
             mode == "override" and override_source == "list"
         ):
             rows, _cols = stdscr.getmaxyx()
@@ -299,6 +301,9 @@ def dashboard(stdscr):
             elif mode == "rename":
                 draw_rename_input(stdscr, rename_value, rename_cursor)
                 draw_footer(stdscr, "rename")
+            elif mode == "worktree" and filtered:
+                draw_worktree_input(stdscr, filtered[selected], worktree_branch, worktree_cursor)
+                draw_footer(stdscr, "worktree")
             elif mode == "override" and filtered:
                 draw_override_picker(stdscr, filtered[selected], override_selected)
                 draw_footer(stdscr, "override")
@@ -572,6 +577,15 @@ def dashboard(stdscr):
                 # Strip trailing override marker so user doesn't see/edit it
                 rename_value = _strip_override_marker(rename_value)
                 rename_cursor = len(rename_value)
+            elif key == ord("w") and filtered:
+                sess = filtered[selected]
+                if not sess.get("git"):
+                    msg = "Not a git repository"
+                    msg_frames = 20
+                else:
+                    mode = "worktree"
+                    worktree_branch = ""
+                    worktree_cursor = 0
             elif key == ord("R") and filtered:
                 mode = "confirm_restart"
             elif key == ord("S"):
@@ -1114,6 +1128,70 @@ def dashboard(stdscr):
                 after = rename_value[rename_cursor:]
                 rename_value = before + chr(key) + after
                 rename_cursor += 1
+
+        # ── Worktree mode ────────────────────────────────────────
+        elif mode == "worktree":
+            if key == 27:  # Esc -- cancel
+                mode = "list"
+            elif key in (10, 13, curses.KEY_ENTER):
+                branch = worktree_branch.strip()
+                if not branch:
+                    msg = "Branch name cannot be empty"
+                    msg_frames = 20
+                    mode = "list"
+                else:
+                    sess = filtered[selected]
+                    result = do_create_worktree(sess["cwd"], branch)
+                    if isinstance(result, str):
+                        msg = result
+                        msg_frames = 40
+                        mode = "list"
+                    else:
+                        wt_path = result["worktree_path"]
+                        proj = result["project_name"]
+                        orig_title = sess["title"]
+                        if len(orig_title) >= 2 and orig_title[0].isupper() and orig_title[1] == ":":
+                            new_title = orig_title[:2] + f"{proj}-{branch}"
+                        else:
+                            new_title = f"{proj}-{branch}"
+                        # Look up source session config for flags/pw
+                        stripped = _strip_override_marker(orig_title)
+                        if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+                            stripped = stripped[2:]
+                        src_cfg = next((s for s in _cfg._sessions if s["title"] == stripped), None)
+                        flags = src_cfg["flags"] if src_cfg else ""
+                        pw_val = src_cfg["pw"] if src_cfg else ""
+                        # Launch
+                        target_socket = sess.get("socket", home_socket)
+                        loc = compute_insert_location(target_socket, sess["account"], new_title)
+                        do_launch(target_socket, new_title, wt_path, sess["account"], flags, pw_val, location=loc)
+                        # Persist (append_session handles ~ collapse)
+                        _cfg.append_session(new_title, wt_path, sess["account"], flags, pw_val)
+                        # Refresh
+                        sessions = query_all_sessions(managed_only=(not show_all))
+                        _refilter()
+                        msg = f"Worktree created: {os.path.basename(wt_path)}"
+                        msg_frames = 40
+                        mode = "list"
+            elif key in (curses.KEY_BACKSPACE, 127, 8):
+                if worktree_cursor > 0:
+                    worktree_branch = (
+                        worktree_branch[: worktree_cursor - 1] + worktree_branch[worktree_cursor:]
+                    )
+                    worktree_cursor -= 1
+            elif key == curses.KEY_LEFT:
+                worktree_cursor = max(0, worktree_cursor - 1)
+            elif key == curses.KEY_RIGHT:
+                worktree_cursor = min(len(worktree_branch), worktree_cursor + 1)
+            elif key == curses.KEY_HOME or key == 1:  # Ctrl+A
+                worktree_cursor = 0
+            elif key == curses.KEY_END or key == 5:  # Ctrl+E
+                worktree_cursor = len(worktree_branch)
+            elif 32 <= key < 127:
+                before = worktree_branch[:worktree_cursor]
+                after = worktree_branch[worktree_cursor:]
+                worktree_branch = before + chr(key) + after
+                worktree_cursor += 1
 
         # ── New session form ─────────────────────────────────────
         elif mode == "new":

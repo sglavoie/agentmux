@@ -70,6 +70,7 @@ _SECTIONS = [
             ("r", "Rename selected session"),
             ("n", "Open new session form"),
             ("l", "Launch session from config"),
+            ("w", "Clone session to git worktree"),
         ],
     ),
     (

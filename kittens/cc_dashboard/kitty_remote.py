@@ -261,6 +261,93 @@ def _get_git_info(cwd):
     return {"branch": branch, "dirty": dirty}
 
 
+def do_create_worktree(cwd, branch_name):
+    """Create a git worktree for the given branch.
+
+    Returns a dict on success: {"worktree_path": str, "project_name": str}
+    Returns a string error message on failure.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return "Could not determine git root"
+        repo_root = result.stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return "Could not determine git root"
+
+    project_name = os.path.basename(repo_root)
+    worktree_path = os.path.normpath(
+        os.path.join(repo_root, "..", f"{project_name}-{branch_name}")
+    )
+
+    branch_exists = False
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_root, "rev-parse", "--verify", branch_name],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            branch_exists = True
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+    if not branch_exists:
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    repo_root,
+                    "rev-parse",
+                    "--verify",
+                    f"origin/{branch_name}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                branch_exists = True
+        except (subprocess.SubprocessError, OSError):
+            pass
+
+    if branch_exists:
+        cmd = ["git", "-C", repo_root, "worktree", "add", worktree_path, branch_name]
+    else:
+        cmd = [
+            "git",
+            "-C",
+            repo_root,
+            "worktree",
+            "add",
+            "-b",
+            branch_name,
+            worktree_path,
+        ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except (subprocess.SubprocessError, OSError) as exc:
+        return str(exc)
+
+    if result.returncode != 0:
+        stderr_lines = result.stderr.strip().splitlines()
+        # Prefer the last "fatal:" line over progress messages like "Preparing worktree"
+        for line in reversed(stderr_lines):
+            if line.startswith("fatal:"):
+                return line
+        return stderr_lines[-1] if stderr_lines else "git worktree add failed"
+
+    return {"worktree_path": worktree_path, "project_name": project_name}
+
+
 def format_duration(seconds):
     """Format a duration in seconds into a compact human-readable string."""
     seconds = max(0, int(seconds))
