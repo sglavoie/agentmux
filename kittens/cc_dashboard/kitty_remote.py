@@ -216,6 +216,41 @@ def _detect_state(title):
     return ""
 
 
+def _get_git_info(cwd):
+    """Return git branch and dirty state for a directory, or None if not a git repo.
+
+    Returns {"branch": str, "dirty": bool} on success, None otherwise.
+    Each git command has a 2-second timeout to avoid stalling on slow filesystems.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode != 0:
+            return None
+        branch = result.stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return None
+
+    dirty = False
+    try:
+        result = subprocess.run(
+            ["git", "-C", cwd, "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            dirty = True
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+    return {"branch": branch, "dirty": dirty}
+
+
 def format_duration(seconds):
     """Format a duration in seconds into a compact human-readable string."""
     seconds = max(0, int(seconds))
@@ -353,12 +388,14 @@ def query_sessions(socket, managed_only=True):
             icon_state = _detect_state(tab_title)
             tab_id = tab.get("id", 0)
             activity = load_activity(tab_id)
+            git_info = _get_git_info(cwd) if cwd else None
             sessions.append(
                 {
                     "index": idx + 1,
                     "title": title,
                     "account": account,
                     "cwd": cwd,
+                    "git": git_info,
                     "status": (
                         "focused"
                         if (os_focused and tab.get("is_focused", False))

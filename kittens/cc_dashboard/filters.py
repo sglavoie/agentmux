@@ -9,7 +9,10 @@ def _filter_sessions(sessions, query):
     return [
         s
         for s in sessions
-        if q in s["title"].lower() or q in s["cwd"].lower() or q in s["account"].lower()
+        if q in s["title"].lower()
+        or q in s["cwd"].lower()
+        or q in s["account"].lower()
+        or q in ((s.get("git") or {}).get("branch", "")).lower()
     ]
 
 

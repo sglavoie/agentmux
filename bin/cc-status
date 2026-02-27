@@ -28,6 +28,7 @@ Columns:
   Account    Account name from accounts.conf (matched by CLAUDE_CONFIG_DIR)
   Instance   Kitty instance label (K:PID); shown when multiple instances exist
   Directory  The cwd of the first window in the tab
+  Branch     Git branch name (* suffix if dirty), or - for non-git dirs
   Status     "focused" if both the tab and its OS window are focused,
              "active" if the tab title shows ⚡, "stopped" for 🛑,
              "permission" for 🔑, otherwise "idle"
@@ -216,6 +217,7 @@ header_tab="Tab"
 header_title="Title"
 header_account="Account"
 header_dir="Directory"
+header_branch="Branch"
 header_status="Status"
 header_inst="Instance"
 
@@ -224,39 +226,47 @@ max_tab=${#header_tab}
 max_title=${#header_title}
 max_account=${#header_account}
 max_dir=${#header_dir}
+max_branch=${#header_branch}
 max_status=${#header_status}
 max_inst=${#header_inst}
 
 # Pre-process rows: shorten paths, then scan for max widths
 processed_rows=""
 while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst; do
+	col_branch="$(git -C "$col_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")"
+	if [[ "$col_branch" != "-" ]]; then
+		if [[ -n "$(git -C "$col_dir" status --porcelain 2>/dev/null)" ]]; then
+			col_branch="${col_branch}*"
+		fi
+	fi
 	col_dir="$(shorten_path "$col_dir")"
-	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\n'
+	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_branch}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\n'
 	((${#col_tab} > max_tab)) && max_tab=${#col_tab}
 	((${#col_title} > max_title)) && max_title=${#col_title}
 	((${#col_account} > max_account)) && max_account=${#col_account}
 	((${#col_dir} > max_dir)) && max_dir=${#col_dir}
+	((${#col_branch} > max_branch)) && max_branch=${#col_branch}
 	((${#col_status} > max_status)) && max_status=${#col_status}
 	((${#col_inst} > max_inst)) && max_inst=${#col_inst}
 done <<<"$rows"
 
 # Header
 if [[ "$multi_instance" == "true" ]]; then
-	printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_inst}s  %-${max_dir}s  %-${max_status}s%s\n" \
-		"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_inst" "$header_dir" "$header_status" "$RESET"
+	printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_inst}s  %-${max_dir}s  %-${max_branch}s  %-${max_status}s%s\n" \
+		"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_inst" "$header_dir" "$header_branch" "$header_status" "$RESET"
 	printf "%s%s%s\n" "$DIM" \
-		"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_inst + 2 + max_dir + 2 + max_status)))" \
+		"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_inst + 2 + max_dir + 2 + max_branch + 2 + max_status)))" \
 		"$RESET"
 else
-	printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_dir}s  %-${max_status}s%s\n" \
-		"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_dir" "$header_status" "$RESET"
+	printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_dir}s  %-${max_branch}s  %-${max_status}s%s\n" \
+		"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_dir" "$header_branch" "$header_status" "$RESET"
 	printf "%s%s%s\n" "$DIM" \
-		"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_dir + 2 + max_status)))" \
+		"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_dir + 2 + max_branch + 2 + max_status)))" \
 		"$RESET"
 fi
 
 # Data rows
-while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst; do
+while IFS=$'\t' read -r col_tab col_title col_account col_dir col_branch col_status col_inst; do
 	[[ -z "$col_tab" ]] && continue
 
 	# Focus marker
@@ -285,10 +295,10 @@ while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_ins
 	fi
 
 	if [[ "$multi_instance" == "true" ]]; then
-		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_inst + $(extra_bytes "$col_inst")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %s%s\n" \
-			"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_inst" "$col_dir" "$local_status" "$local_reset"
+		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_inst + $(extra_bytes "$col_inst")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %-$((max_branch + $(extra_bytes "$col_branch")))s  %s%s\n" \
+			"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_inst" "$col_dir" "$col_branch" "$local_status" "$local_reset"
 	else
-		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %s%s\n" \
-			"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_dir" "$local_status" "$local_reset"
+		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %-$((max_branch + $(extra_bytes "$col_branch")))s  %s%s\n" \
+			"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_dir" "$col_branch" "$local_status" "$local_reset"
 	fi
 done <<<"$processed_rows"

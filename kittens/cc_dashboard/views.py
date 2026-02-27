@@ -27,7 +27,7 @@ from cc_dashboard.kitty_remote import (
 
 # ── Detail pane ──────────────────────────────────────────────────────────────
 
-DETAIL_PANE_HEIGHT = 12
+DETAIL_PANE_HEIGHT = 13
 
 
 def draw_detail_pane(stdscr, session, detail_y):
@@ -129,7 +129,21 @@ def draw_detail_pane(stdscr, session, detail_y):
     split_display = effective_split if effective_split else "none"
     safe_addstr(stdscr, y, rx + 7, split_display, val_attr)
 
-    # Row 6: Socket / Instance
+    # Row 6: Branch / Working tree
+    y += 1
+    git_info = session.get("git")
+    safe_addstr(stdscr, y, lx, " Branch: ", label_attr)
+    if git_info:
+        safe_addstr(stdscr, y, lx + 9, git_info["branch"][: mid - lx - 10], val_attr)
+        safe_addstr(stdscr, y, rx, "Working tree: ", label_attr)
+        if git_info["dirty"]:
+            safe_addstr(stdscr, y, rx + 14, "dirty", curses.color_pair(CP_WARN))
+        else:
+            safe_addstr(stdscr, y, rx + 14, "clean", val_attr)
+    else:
+        safe_addstr(stdscr, y, lx + 9, "not a git repo", curses.color_pair(CP_DIM))
+
+    # Row 7: Socket / Instance
     y += 1
     socket_display = session.get("socket", "")
     instance_display = session.get("instance_label", "")
@@ -342,30 +356,30 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
     c_inst = 10 if multi_instance else 0
 
     # Column widths
-    c_tab = 5
-    c_title = 28
+    c_title = 20
     c_acct = 10
+    c_branch = 24
     c_status = 18
-    c_dir = max(12, cols - c_tab - c_title - c_acct - c_inst - c_status - 8)
+    c_dir = max(12, cols - c_title - c_acct - c_inst - c_branch - c_status - 8)
 
     # Header row
     hdr = (
-        f"  {'Tab':<{c_tab}}"
-        f"{'Title':<{c_title}}"
+        f"  {'Title':<{c_title}}"
         f"{'Account':<{c_acct}}"
     )
     if multi_instance:
         hdr += f"{'Instance':<{c_inst}}"
     hdr += (
         f"{'Directory':<{c_dir}}"
+        f"{'Branch':<{c_branch}}"
         f"{'Status'}"
     )
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
-    sep = f"  {'─' * c_tab}{'─' * c_title}{'─' * c_acct}"
+    sep = f"  {'─' * c_title}{'─' * c_acct}"
     if multi_instance:
         sep += '─' * c_inst
-    sep += f"{'─' * c_dir}{'─' * c_status}"
+    sep += f"{'─' * c_dir}{'─' * c_branch}{'─' * c_status}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     # Scrollable session rows
@@ -388,6 +402,17 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
         short_dir = shorten_path(s["cwd"], c_dir - 1)
         title_padded = _pad_to_width(s["title"], c_title)
 
+        # Build branch display
+        git_info = s.get("git")
+        if git_info:
+            branch_display = git_info["branch"]
+            if git_info["dirty"]:
+                branch_display += "*"
+            if len(branch_display) > c_branch - 1:
+                branch_display = branch_display[: c_branch - 2] + "…"
+        else:
+            branch_display = "-"
+
         # Build status text with idle duration from activity data
         status_text = s["status"]
         idle_secs = 0
@@ -399,13 +424,13 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False):
 
         line = (
             f"{mark} "
-            f"{s['index']:<{c_tab}}"
             f"{title_padded}"
             f"{s['account']:<{c_acct}}"
         )
         if multi_instance:
             line += f"{s.get('instance_label', ''):<{c_inst}}"
         line += f"{short_dir:<{c_dir}}"
+        line += f"{branch_display:<{c_branch}}"
 
         row_attr = curses.color_pair(cp)
         if sel:

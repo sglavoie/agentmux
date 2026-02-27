@@ -66,6 +66,8 @@ def _session_fingerprint(sessions):
             s.get("window_count", 1),
             (s.get("activity") or {}).get("last_event_ts"),
             (s.get("activity") or {}).get("last_event_type"),
+            (s.get("git") or {}).get("branch"),
+            (s.get("git") or {}).get("dirty"),
         )
         for s in sessions
     )
