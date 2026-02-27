@@ -25,6 +25,22 @@ def _display_width(text):
     return w
 
 
+def _truncate_to_width(text, width):
+    """Truncate text with a trailing ellipsis when it exceeds the target width."""
+    if width < 1 or _display_width(text) <= width:
+        return text
+    result = []
+    w = 0
+    for ch in text:
+        eaw = unicodedata.east_asian_width(ch)
+        cw = 2 if eaw in ("W", "F") else 1
+        if w + cw > width - 1:
+            break
+        result.append(ch)
+        w += cw
+    return "".join(result) + "…"
+
+
 def _pad_to_width(text, width):
     """Pad text with spaces to reach the target visual width."""
     current = _display_width(text)

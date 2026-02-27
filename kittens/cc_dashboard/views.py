@@ -19,7 +19,12 @@ from cc_dashboard.colors import (
     CP_WARN,
     _cp_for_account,
 )
-from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
+from cc_dashboard.drawing import (
+    _pad_to_width,
+    _truncate_to_width,
+    safe_addstr,
+    shorten_path,
+)
 from cc_dashboard.filters import SORT_MODES
 from cc_dashboard.kitty_remote import (
     _ICON_STATES,
@@ -408,7 +413,7 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
         cp = _cp_for_account(s["account"], selected=sel)
 
         short_dir = shorten_path(s["cwd"], c_dir - 1)
-        title_padded = _pad_to_width(s["title"], c_title)
+        title_padded = _pad_to_width(_truncate_to_width(s["title"], c_title - 1), c_title)
 
         # Build branch display
         git_info = s.get("git")
@@ -550,7 +555,7 @@ def draw_pick_view(stdscr, entries, selected, running_count):
 
             cp = _cp_for_account(entry["account"], selected=sel)
             short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
-            title_padded = _pad_to_width(entry["title"], c_title)
+            title_padded = _pad_to_width(_truncate_to_width(entry["title"], c_title - 1), c_title)
             line = (
                 f"{mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
             )
