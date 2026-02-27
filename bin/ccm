@@ -310,6 +310,9 @@ Options:
 Requires: brew install vjeantet/tap/alerter
 HELP
 		;;
+	idle-watch)
+		exec cc-idle-watch --help
+		;;
 	switch)
 		cat <<'HELP'
 Usage: ccm switch
@@ -336,6 +339,7 @@ Commands:
     dashboard           Launch the curses dashboard kitten
     switch              Quick-switch: fuzzy-find and jump to a session
     notify [flags]      Send a test notification via alerter
+    idle-watch <cmd>    Manage background idle notification watcher
     help [COMMAND]      Show help for cc or a specific command
     --version           Print version
 
@@ -394,6 +398,10 @@ main() {
 	notify)
 		shift
 		cmd_notify "$@"
+		;;
+	idle-watch)
+		shift
+		exec cc-idle-watch "$@"
 		;;
 	help)
 		shift

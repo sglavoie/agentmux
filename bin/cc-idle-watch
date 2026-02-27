@@ -1,0 +1,281 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# cc-idle-watch: Background watcher that polls activity files and fires
+# alerter notifications for Claude Code sessions that have crossed the
+# idle threshold.  Works independently of the curses dashboard and uses
+# the same cooldown-file mechanism to prevent duplicate notifications.
+
+# ---------------------------------------------------------------------------
+# Shared library
+# ---------------------------------------------------------------------------
+source "$(dirname "$(readlink -f "$0")")/../lib/cc-common.sh"
+
+PID_FILE="/tmp/ccm-idle-watch.pid"
+LOG_FILE="/tmp/ccm-idle-watch.log"
+POLL_INTERVAL=30
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+_format_duration() {
+	local secs="$1"
+	[[ "$secs" -lt 0 ]] && secs=0
+	if [[ "$secs" -lt 60 ]]; then
+		echo "${secs}s"
+		return
+	fi
+	local mins=$((secs / 60))
+	if [[ "$mins" -lt 60 ]]; then
+		echo "${mins}m"
+		return
+	fi
+	local hours=$((mins / 60))
+	local remaining=$((mins % 60))
+	if [[ "$remaining" -gt 0 ]]; then
+		echo "${hours}h ${remaining}m"
+	else
+		echo "${hours}h"
+	fi
+}
+
+_is_running() {
+	[[ -f "$PID_FILE" ]] || return 1
+	local pid
+	pid="$(cat "$PID_FILE" 2>/dev/null)" || return 1
+	[[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+# Build a lookup of tab_id -> tab_title from kitty @ ls across all instances.
+_build_tab_titles() {
+	_TAB_TITLES=()
+	_TAB_TITLE_IDS=()
+
+	discover_all_sockets
+
+	local socket ls_json
+	for socket in "${_INSTANCE_SOCKETS[@]+"${_INSTANCE_SOCKETS[@]}"}"; do
+		ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || continue
+		# Extract id and title pairs using jq
+		local pairs
+		pairs="$(echo "$ls_json" | jq -r '.[].tabs[] | "\(.id)\t\(.title)"' 2>/dev/null)" || continue
+		while IFS=$'\t' read -r tid ttitle; do
+			[[ -z "$tid" ]] && continue
+			_TAB_TITLE_IDS+=("$tid")
+			_TAB_TITLES+=("$ttitle")
+		done <<<"$pairs"
+	done
+}
+
+_get_tab_title() {
+	local tab_id="$1"
+	local i
+	for i in "${!_TAB_TITLE_IDS[@]}"; do
+		if [[ "${_TAB_TITLE_IDS[$i]}" == "$tab_id" ]]; then
+			echo "${_TAB_TITLES[$i]}"
+			return
+		fi
+	done
+	echo "tab-${tab_id}"
+}
+
+# ---------------------------------------------------------------------------
+# Daemon loop
+# ---------------------------------------------------------------------------
+cmd_daemon() {
+	# Write PID file and arrange cleanup
+	echo $$ >"$PID_FILE"
+	trap 'rm -f "$PID_FILE"' EXIT INT TERM
+
+	while true; do
+		# Re-read config each iteration so live changes take effect
+		load_defaults
+
+		local threshold=0
+		if [[ -n "$_DEFAULT_IDLE_ALERT_MINUTES" ]]; then
+			threshold=$((_DEFAULT_IDLE_ALERT_MINUTES * 60))
+		fi
+
+		# If idle notifications are disabled, sleep and check again
+		if [[ "$threshold" -le 0 || "${_DEFAULT_NOTIFY_IDLE:-}" != "on" ]]; then
+			sleep "$POLL_INTERVAL"
+			continue
+		fi
+
+		# Build tab title lookup once per iteration
+		_build_tab_titles
+
+		local now
+		now="$(date +%s)"
+
+		# Iterate activity files
+		local activity_file
+		for activity_file in /tmp/ccm-activity-*.counts; do
+			[[ -e "$activity_file" ]] || continue
+
+			# Extract tab_id from filename
+			local basename_f
+			basename_f="$(basename "$activity_file")"
+			local tab_id="${basename_f#ccm-activity-}"
+			tab_id="${tab_id%.counts}"
+
+			# Read the activity file (9-line format)
+			local lines
+			lines="$(cat "$activity_file" 2>/dev/null)" || continue
+			local line_arr=()
+			while IFS= read -r l; do
+				line_arr+=("$l")
+			done <<<"$lines"
+
+			[[ "${#line_arr[@]}" -lt 9 ]] && continue
+
+			local last_event_ts="${line_arr[1]}"
+			[[ -z "$last_event_ts" || "$last_event_ts" == "0" ]] && continue
+
+			local idle_secs=$((now - last_event_ts))
+			[[ "$idle_secs" -lt "$threshold" ]] && continue
+
+			# Check cooldown file
+			local cooldown_file="/tmp/ccm-notify-idle-${tab_id}"
+			if [[ -f "$cooldown_file" ]]; then
+				local cooldown_mtime
+				cooldown_mtime="$(stat -f '%m' "$cooldown_file" 2>/dev/null)" || cooldown_mtime=0
+				if [[ "$cooldown_mtime" -ge "$last_event_ts" ]]; then
+					continue
+				fi
+			fi
+
+			# Write cooldown file with mtime = last_event_ts
+			touch "$cooldown_file"
+			touch -t "$(date -r "$last_event_ts" '+%Y%m%d%H%M.%S')" "$cooldown_file"
+
+			# Fire notification
+			local title
+			title="$(_get_tab_title "$tab_id")"
+			local duration
+			duration="$(_format_duration "$idle_secs")"
+
+			if command -v alerter >/dev/null 2>&1; then
+				alerter --title "$title" --subtitle "⏸ Session idle" \
+					--message "idle for ${duration}" \
+					--group "ccm-idle-${tab_id}" \
+					--timeout 10 \
+					>/dev/null 2>&1 &
+			fi
+		done
+
+		sleep "$POLL_INTERVAL"
+	done
+}
+
+# ---------------------------------------------------------------------------
+# Start / Stop / Status
+# ---------------------------------------------------------------------------
+cmd_start() {
+	if _is_running; then
+		echo "Idle watcher already running (PID $(cat "$PID_FILE"))."
+		return 0
+	fi
+
+	# Double-fork via setsid to detach from the terminal
+	if command -v setsid >/dev/null 2>&1; then
+		setsid "$0" --daemon >>"$LOG_FILE" 2>&1 &
+	else
+		# macOS: setsid not available, use nohup + background
+		nohup "$0" --daemon >>"$LOG_FILE" 2>&1 &
+		disown 2>/dev/null || true
+	fi
+
+	# Brief wait for PID file to appear
+	local i=0
+	while [[ $i -lt 10 ]] && [[ ! -f "$PID_FILE" ]]; do
+		sleep 0.1
+		i=$((i + 1))
+	done
+
+	if _is_running; then
+		echo "Idle watcher started (PID $(cat "$PID_FILE"))."
+	else
+		echo "Warning: Idle watcher may not have started. Check $LOG_FILE" >&2
+	fi
+}
+
+cmd_stop() {
+	if ! _is_running; then
+		echo "Idle watcher is not running."
+		rm -f "$PID_FILE"
+		return 0
+	fi
+
+	local pid
+	pid="$(cat "$PID_FILE")"
+	kill "$pid" 2>/dev/null || true
+
+	local i=0
+	while [[ $i -lt 20 ]] && kill -0 "$pid" 2>/dev/null; do
+		sleep 0.1
+		i=$((i + 1))
+	done
+
+	if kill -0 "$pid" 2>/dev/null; then
+		echo "Warning: Process $pid did not exit, sending SIGKILL." >&2
+		kill -9 "$pid" 2>/dev/null || true
+	fi
+
+	rm -f "$PID_FILE"
+	echo "Idle watcher stopped."
+}
+
+cmd_status() {
+	if _is_running; then
+		echo "Idle watcher is running (PID $(cat "$PID_FILE"))."
+	else
+		rm -f "$PID_FILE" 2>/dev/null
+		echo "Idle watcher is not running."
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# Main dispatch
+# ---------------------------------------------------------------------------
+main() {
+	case "${1:---help}" in
+	--start | start)
+		cmd_start
+		;;
+	--stop | stop)
+		cmd_stop
+		;;
+	--status | status)
+		cmd_status
+		;;
+	--daemon)
+		cmd_daemon
+		;;
+	--help | -h | help)
+		cat <<'HELP'
+Usage: cc-idle-watch <command>
+
+Commands:
+    --start     Start the background idle watcher (idempotent)
+    --stop      Stop a running idle watcher
+    --status    Check whether the idle watcher is running
+
+The watcher polls activity files every 30 seconds and fires macOS
+alerter notifications for sessions that have exceeded the configured
+idle_alert_minutes threshold.  It uses the same cooldown files as the
+dashboard, so duplicate notifications are prevented.
+
+Configure via defaults.conf:
+    notify_idle = on
+    idle_alert_minutes = 5
+HELP
+		;;
+	*)
+		echo "Error: Unknown command '$1'. Run 'cc-idle-watch --help' for usage." >&2
+		exit 1
+		;;
+	esac
+}
+
+main "$@"

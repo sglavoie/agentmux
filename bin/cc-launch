@@ -189,6 +189,14 @@ cmd_launch_all() {
 	done <<<"$lines"
 
 	echo "Launched $launched new session(s), $existed already existed."
+
+	# Auto-start the background idle watcher if idle notifications are enabled
+	if [[ "${_DEFAULT_NOTIFY_IDLE:-}" == "on" ]] \
+		&& [[ -n "${_DEFAULT_IDLE_ALERT_MINUTES:-}" ]] \
+		&& [[ "${_DEFAULT_IDLE_ALERT_MINUTES:-0}" -gt 0 ]] \
+		&& command -v cc-idle-watch >/dev/null 2>&1; then
+		cc-idle-watch --start
+	fi
 }
 
 # ---------------------------------------------------------------------------

@@ -68,6 +68,7 @@ _ccm() {
                             'config[Manage config files]' \
                             'dashboard[Launch curses dashboard kitten]' \
                             'switch[Quick-switch to a session]' \
+                            'idle-watch[Manage background idle watcher]' \
                             'help[Show help]'
                         return
                         ;;
@@ -99,9 +100,15 @@ _ccm() {
             (( CURRENT -= 1 ))
             _cc-launch
             ;;
+        idle-watch)
+            [[ $CURRENT -eq 3 ]] && _values 'idle-watch command' \
+                '--start[Start the background idle watcher]' \
+                '--stop[Stop a running idle watcher]' \
+                '--status[Check whether the idle watcher is running]'
+            ;;
         help)
             [[ $CURRENT -eq 3 ]] && _values 'command' \
-                'launch' 'status' 'star' 'config' 'dashboard' 'switch'
+                'launch' 'status' 'star' 'config' 'dashboard' 'switch' 'idle-watch'
             ;;
         *)
             _values 'command' \
@@ -111,6 +118,7 @@ _ccm() {
                 'config[Manage config files]' \
                 'dashboard[Launch curses dashboard kitten]' \
                 'switch[Quick-switch to a session]' \
+                'idle-watch[Manage background idle watcher]' \
                 'help[Show help]' \
                 '--socket[Target a specific Kitty socket]' \
                 '--version[Print version]'
