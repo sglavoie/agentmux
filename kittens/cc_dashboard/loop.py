@@ -1036,6 +1036,12 @@ def dashboard(stdscr):
 
             if key == 27:  # Esc -- cancel
                 mode = "list"
+            elif key == curses.KEY_UP:
+                new_active = max(new_active - 1, 0)
+                new_cursor = len(new_fields[field_keys[new_active]])
+            elif key == curses.KEY_DOWN:
+                new_active = min(new_active + 1, last_field)
+                new_cursor = len(new_fields[field_keys[new_active]])
             elif key == 9:  # Tab
                 if fk == "account":
                     new_fields["account"] = _cycle_account(new_fields["account"])

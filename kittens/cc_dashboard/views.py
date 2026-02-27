@@ -692,7 +692,7 @@ _FOOTER_HINTS = {
     "confirm": ["y Confirm close", "Any other key Cancel"],
     "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
     "confirm_save": ["y Confirm save", "Any other key Cancel"],
-    "new": ["Enter Next/Submit", "Tab Cycle", "Esc Cancel"],
+    "new": ["Enter Next/Submit", "Tab Cycle", "Up/Dn Navigate", "Esc Cancel"],
     "pick": ["Enter Launch", "i Instance", "O CfgDir", "/ Search", "Esc Back", "q Back"],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
     "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
