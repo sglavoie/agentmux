@@ -332,7 +332,7 @@ def _check_idle_notifications(sessions):
 def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=""):
     """Draw the main session list with header, rows, and footer."""
     rows, cols = stdscr.getmaxyx()
-    stdscr.erase()
+    stdscr.clear()
 
     # Title
     title = "Claude Code Dashboard"
@@ -475,7 +475,7 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
 def draw_pick_view(stdscr, entries, selected, running_count):
     """Draw the config session picker list with Running/Stopped sections."""
     rows, cols = stdscr.getmaxyx()
-    stdscr.erase()
+    stdscr.clear()
 
     title = "Launch from Config"
     safe_addstr(
@@ -641,7 +641,7 @@ if _HELP_LINES and _HELP_LINES[-1][0] == "blank":
 
 def draw_help_overlay(stdscr, scroll):
     """Draw a full-screen help overlay listing all keybindings."""
-    stdscr.erase()
+    stdscr.clear()
     rows, cols = stdscr.getmaxyx()
     header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
     normal_attr = curses.color_pair(CP_NORMAL)
@@ -1075,7 +1075,7 @@ def draw_config_action_picker(stdscr, label, path, selected):
 
 def draw_config_show(stdscr, label, path, lines, scroll):
     """Draw a full-screen scrollable file viewer for a config file."""
-    stdscr.erase()
+    stdscr.clear()
     rows, cols = stdscr.getmaxyx()
     header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
     normal_attr = curses.color_pair(CP_NORMAL)
@@ -1377,7 +1377,7 @@ def draw_filter_bar(stdscr, account_filter, account_filter_mode):
 def draw_new_form(stdscr, fields, active_field, cursor_pos, multi_instance=False):
     """Draw the new-session creation form."""
     _rows, cols = stdscr.getmaxyx()
-    stdscr.erase()
+    stdscr.clear()
 
     safe_addstr(
         stdscr,
