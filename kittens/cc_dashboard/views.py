@@ -34,7 +34,7 @@ from cc_dashboard.kitty_remote import (
 
 # ── Detail pane ──────────────────────────────────────────────────────────────
 
-DETAIL_PANE_HEIGHT = 13
+DETAIL_PANE_HEIGHT = 14
 
 
 def draw_detail_pane(stdscr, session, detail_y):
@@ -135,6 +135,15 @@ def draw_detail_pane(stdscr, session, detail_y):
     safe_addstr(stdscr, y, rx, "Split: ", label_attr)
     split_display = effective_split if effective_split else "none"
     safe_addstr(stdscr, y, rx + 7, split_display, val_attr)
+
+    # Row 5b: Env vars (only if non-empty)
+    env_display = session.get("cc_env", "")
+    if not env_display and cfg_entry:
+        env_display = cfg_entry.get("env", "")
+    if env_display and env_display != "-":
+        y += 1
+        safe_addstr(stdscr, y, lx, " Env vars: ", label_attr)
+        safe_addstr(stdscr, y, lx + 11, env_display[: cols - lx - 12], val_attr)
 
     # Row 6: Branch / Working tree
     y += 1
@@ -1596,8 +1605,8 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos, multi_instance=False
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
-    labels = ["Title:", "Directory:", "Account:", "Flags:", "Split:"]
-    field_keys = ["title", "dir", "account", "flags", "pw"]
+    labels = ["Title:", "Directory:", "Account:", "Flags:", "Split:", "Env vars:"]
+    field_keys = ["title", "dir", "account", "flags", "pw", "env"]
     cycle_fields = {"account", "pw"}
 
     if "save" in fields:
@@ -1661,7 +1670,7 @@ def draw_new_form(stdscr, fields, active_field, cursor_pos, multi_instance=False
         stdscr,
         hint_y,
         17,
-        'Flags/Split: empty = inherit global, "-" = disable',
+        'Flags/Split: empty = inherit global, "-" = disable  |  Env: KEY=VAL KEY2=VAL2',
         curses.color_pair(CP_DIM),
     )
 

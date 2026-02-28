@@ -33,6 +33,7 @@ launch_session() {
 	local flags="${4:-}"
 	local pw_override="${5:-}"
 	local location_args="${6:-}"
+	local env_vars="${7:-}"
 
 	dir="$(expand_tilde "$dir")"
 
@@ -55,12 +56,20 @@ launch_session() {
 		env_flag="$env_flag --env CLAUDE_CONFIG_DIR=$config_dir"
 	fi
 
+	# Inject per-session environment variables from the 6th column
+	if [[ -n "$env_vars" && "$env_vars" != "-" ]]; then
+		local kv
+		for kv in $env_vars; do
+			[[ "$kv" == *=* ]] && env_flag="$env_flag --env $kv"
+		done
+	fi
+
 	local effective_flags
 	effective_flags="$(resolve_claude_flags "$flags")"
 
 	local shell_cmd="exec claude $effective_flags"
 	# shellcheck disable=SC2086
-	kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
+	kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
 
 	# Apply tab colors. Retry a few times since Claude may briefly override
 	# the tab title on startup.
@@ -106,13 +115,14 @@ cmd_launch_interactive() {
 	local launched=0
 	local existed=0
 
-	while IFS='|' read -r title dir account flags pw; do
+	while IFS='|' read -r title dir account flags pw env_vars; do
 		[[ -z "$title" ]] && continue
 		title="$(_trim "$title")"
 		dir="$(_trim "$dir")"
 		account="$(_trim "${account:-work}")"
 		flags="$(_trim "${flags:-}")"
 		pw="$(_trim "${pw:-}")"
+		env_vars="$(_trim "${env_vars:-}")"
 		[[ -z "$account" ]] && account="work"
 
 		local insert_loc loc_args=""
@@ -125,7 +135,7 @@ cmd_launch_interactive() {
 			loc_args="--location after"
 		fi
 
-		if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args"; then
+		if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars"; then
 			launched=$((launched + 1))
 		else
 			existed=$((existed + 1))
@@ -162,13 +172,14 @@ cmd_launch_all() {
 		[[ -z "$line" ]] && continue
 
 		# Parse pipe-delimited fields and trim whitespace
-		local title dir account flags pw
-		IFS='|' read -r title dir account flags pw <<<"$line"
+		local title dir account flags pw env_vars
+		IFS='|' read -r title dir account flags pw env_vars <<<"$line"
 		title="$(_trim "$title")"
 		dir="$(_trim "$dir")"
 		account="$(_trim "${account:-work}")"
 		flags="$(_trim "${flags:-}")"
 		pw="$(_trim "${pw:-}")"
+		env_vars="$(_trim "${env_vars:-}")"
 		[[ -z "$account" ]] && account="work"
 
 		local insert_loc loc_args=""
@@ -181,7 +192,7 @@ cmd_launch_all() {
 			loc_args="--location after"
 		fi
 
-		if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args"; then
+		if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars"; then
 			launched=$((launched + 1))
 		else
 			existed=$((existed + 1))
@@ -206,10 +217,11 @@ cmd_add() {
 	local title="${1:-}"
 	local dir="${2:-}"
 	local account="${3:-}"
+	local env_vars="${4:-}"
 
 	if [[ -z "$title" || -z "$dir" ]]; then
 		echo "Error: --add requires TITLE and DIR arguments." >&2
-		echo "Usage: cc-launch --add TITLE DIR [ACCOUNT]" >&2
+		echo "Usage: cc-launch --add TITLE DIR [ACCOUNT [ENV_VARS]]" >&2
 		exit 1
 	fi
 
@@ -246,7 +258,7 @@ cmd_add() {
 		loc_args="--location after"
 	fi
 
-	launch_session "$title" "$dir" "$account" "" "" "$loc_args"
+	launch_session "$title" "$dir" "$account" "" "" "$loc_args" "$env_vars"
 }
 
 # ---------------------------------------------------------------------------
@@ -497,8 +509,12 @@ cmd_restart() {
                     pw: (
                         [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
                         if length > 0 then .[0] else "" end
+                    ),
+                    env: (
+                        [.windows[] | .user_vars.cc_env // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
                     )
-                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
+                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw, .env] | @tsv
         ')"
 
 		if [[ -n "$tab_info" ]]; then
@@ -515,8 +531,8 @@ cmd_restart() {
 	# Use the socket where the tab was found
 	SOCKET="$target_socket"
 
-	local tab_id account dir live_flags live_pw
-	IFS=$'\t' read -r tab_id account dir live_flags live_pw <<<"$tab_info"
+	local tab_id account dir live_flags live_pw live_env
+	IFS=$'\t' read -r tab_id account dir live_flags live_pw live_env <<<"$tab_info"
 
 	kitty @ --to "$SOCKET" close-tab --match "id:$tab_id"
 	echo "Closed tab '$title', relaunching..."
@@ -533,24 +549,25 @@ cmd_restart() {
 	fi
 
 	# Prefer live user vars; fall back to sessions.conf for pre-upgrade tabs
-	local cfg_flags="$live_flags" cfg_pw="$live_pw"
-	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -f "$CONFIG_FILE" ]]; then
+	local cfg_flags="$live_flags" cfg_pw="$live_pw" cfg_env="$live_env"
+	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -z "$cfg_env" && -f "$CONFIG_FILE" ]]; then
 		local lookup_title="${title%%‾*}"
 		local cfg_line
 		while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
 			[[ -z "$cfg_line" || "$cfg_line" =~ ^[[:space:]]*# ]] && continue
-			local cfg_title cfg_f cfg_p
-			IFS='|' read -r cfg_title _ _ cfg_f cfg_p <<<"$cfg_line"
+			local cfg_title cfg_f cfg_p cfg_e
+			IFS='|' read -r cfg_title _ _ cfg_f cfg_p cfg_e <<<"$cfg_line"
 			cfg_title="$(_trim "$cfg_title")"
 			if [[ "$cfg_title" == "$lookup_title" ]]; then
 				cfg_flags="$(_trim "${cfg_f:-}")"
 				cfg_pw="$(_trim "${cfg_p:-}")"
+				cfg_env="$(_trim "${cfg_e:-}")"
 				break
 			fi
 		done <"$CONFIG_FILE"
 	fi
 
-	launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args"
+	launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"
 }
 
 # ---------------------------------------------------------------------------
@@ -691,8 +708,12 @@ cmd_clone() {
                     pw: (
                         [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
                         if length > 0 then .[0] else "" end
+                    ),
+                    env: (
+                        [.windows[] | .user_vars.cc_env // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
                     )
-                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
+                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw, .env] | @tsv
         ')"
 
 		if [[ -n "$tab_info" ]]; then
@@ -709,8 +730,8 @@ cmd_clone() {
 	# Use the socket where the tab was found
 	SOCKET="$target_socket"
 
-	local tab_id account dir live_flags live_pw
-	IFS=$'\t' read -r tab_id account dir live_flags live_pw <<<"$tab_info"
+	local tab_id account dir live_flags live_pw live_env
+	IFS=$'\t' read -r tab_id account dir live_flags live_pw live_env <<<"$tab_info"
 
 	# Generate unique clone title: strip trailing -N, increment until unique
 	local base_title clone_title n
@@ -735,36 +756,44 @@ cmd_clone() {
 	fi
 
 	# Prefer live user vars; fall back to sessions.conf for pre-upgrade tabs
-	local cfg_flags="$live_flags" cfg_pw="$live_pw"
-	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -f "$CONFIG_FILE" ]]; then
+	local cfg_flags="$live_flags" cfg_pw="$live_pw" cfg_env="$live_env"
+	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -z "$cfg_env" && -f "$CONFIG_FILE" ]]; then
 		local lookup_title="${title%%‾*}"
 		local cfg_line
 		while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
 			[[ -z "$cfg_line" || "$cfg_line" =~ ^[[:space:]]*# ]] && continue
-			local cfg_title cfg_f cfg_p
-			IFS='|' read -r cfg_title _ _ cfg_f cfg_p <<<"$cfg_line"
+			local cfg_title cfg_f cfg_p cfg_e
+			IFS='|' read -r cfg_title _ _ cfg_f cfg_p cfg_e <<<"$cfg_line"
 			cfg_title="$(_trim "$cfg_title")"
 			if [[ "$cfg_title" == "$lookup_title" ]]; then
 				cfg_flags="$(_trim "${cfg_f:-}")"
 				cfg_pw="$(_trim "${cfg_p:-}")"
+				cfg_env="$(_trim "${cfg_e:-}")"
 				break
 			fi
 		done <"$CONFIG_FILE"
 	fi
 
-	if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args"; then
+	if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"; then
 		# Append to sessions.conf so the clone survives ccm launch --all
 		if [[ -f "$CONFIG_FILE" ]]; then
 			local conf_line="$clone_title | $dir | $account"
 			if [[ -n "$cfg_flags" ]]; then
 				conf_line="$conf_line | $cfg_flags"
 			fi
-			if [[ -n "$cfg_pw" ]]; then
+			if [[ -n "$cfg_pw" || -n "$cfg_env" ]]; then
 				# Ensure flags column exists even if empty
 				if [[ -z "$cfg_flags" ]]; then
 					conf_line="$conf_line | "
 				fi
 				conf_line="$conf_line | $cfg_pw"
+			fi
+			if [[ -n "$cfg_env" ]]; then
+				# Ensure pw column exists even if empty
+				if [[ -z "$cfg_pw" && -z "$cfg_flags" ]]; then
+					conf_line="$conf_line | "
+				fi
+				conf_line="$conf_line | $cfg_env"
 			fi
 			echo "$conf_line" >>"$CONFIG_FILE"
 		fi
@@ -862,8 +891,12 @@ cmd_move() {
                     pw: (
                         [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
                         if length > 0 then .[0] else "" end
+                    ),
+                    env: (
+                        [.windows[] | .user_vars.cc_env // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
                     )
-                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
+                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw, .env] | @tsv
         ')"
 
 		if [[ -n "$tab_info" ]]; then
@@ -882,8 +915,8 @@ cmd_move() {
 		exit 1
 	fi
 
-	local tab_id account dir live_flags live_pw
-	IFS=$'\t' read -r tab_id account dir live_flags live_pw <<<"$tab_info"
+	local tab_id account dir live_flags live_pw live_env
+	IFS=$'\t' read -r tab_id account dir live_flags live_pw live_env <<<"$tab_info"
 
 	# Close on source
 	kitty @ --to "$source_socket" close-tab --match "id:$tab_id"
@@ -904,24 +937,25 @@ cmd_move() {
 	fi
 
 	# Prefer live user vars; fall back to sessions.conf for pre-upgrade tabs
-	local cfg_flags="$live_flags" cfg_pw="$live_pw"
-	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -f "$CONFIG_FILE" ]]; then
+	local cfg_flags="$live_flags" cfg_pw="$live_pw" cfg_env="$live_env"
+	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -z "$cfg_env" && -f "$CONFIG_FILE" ]]; then
 		local lookup_title="${title%%‾*}"
 		local cfg_line
 		while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
 			[[ -z "$cfg_line" || "$cfg_line" =~ ^[[:space:]]*# ]] && continue
-			local cfg_title cfg_f cfg_p
-			IFS='|' read -r cfg_title _ _ cfg_f cfg_p <<<"$cfg_line"
+			local cfg_title cfg_f cfg_p cfg_e
+			IFS='|' read -r cfg_title _ _ cfg_f cfg_p cfg_e <<<"$cfg_line"
 			cfg_title="$(_trim "$cfg_title")"
 			if [[ "$cfg_title" == "$lookup_title" ]]; then
 				cfg_flags="$(_trim "${cfg_f:-}")"
 				cfg_pw="$(_trim "${cfg_p:-}")"
+				cfg_env="$(_trim "${cfg_e:-}")"
 				break
 			fi
 		done <"$CONFIG_FILE"
 	fi
 
-	launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args"
+	launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"
 	echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE."
 }
 
@@ -1324,9 +1358,13 @@ cmd_save() {
                 pw: (
                     [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
                     if length > 0 then .[0] else "" end
+                ),
+                env: (
+                    [.windows[] | .user_vars.cc_env // empty | select(. != "")] |
+                    if length > 0 then .[0] else "" end
                 )
             }
-        ] | .[] | [.title, .dir, .account, .flags, .pw] | @tsv
+        ] | .[] | [.title, .dir, .account, .flags, .pw, .env] | @tsv
     ')"
 
 	if [[ -z "$sessions" ]]; then
@@ -1362,16 +1400,18 @@ cmd_save() {
 		header_lines="# cc-manager session definitions
 # Saved by cc-launch --save on $(date '+%Y-%m-%d %H:%M:%S')
 #
-# Format: title | directory | account [| claude_flags [| project_window]]
+# Format: title | directory | account [| claude_flags [| project_window [| env_vars]]]
 
 "
 	fi
 
 	{
 		printf '%s' "$header_lines"
-		while IFS=$'\t' read -r title dir account flags pw; do
+		while IFS=$'\t' read -r title dir account flags pw env_vars; do
 			dir="${dir/#$HOME/\~}"
-			if [[ -n "$pw" ]]; then
+			if [[ -n "$env_vars" ]]; then
+				printf "%-20s | %-40s | %-10s | %-30s | %-10s | %s\n" "$title" "$dir" "$account" "$flags" "$pw" "$env_vars"
+			elif [[ -n "$pw" ]]; then
 				printf "%-20s | %-40s | %-10s | %-30s | %s\n" "$title" "$dir" "$account" "$flags" "$pw"
 			elif [[ -n "$flags" ]]; then
 				printf "%-20s | %-40s | %-10s | %s\n" "$title" "$dir" "$account" "$flags"
@@ -1399,7 +1439,7 @@ Usage:
 Commands:
     (none)                          Interactively select sessions to launch (requires python3)
     --all                           Launch all sessions defined in the config file
-    --add TITLE DIR [ACCOUNT]       Launch a single ad-hoc session tab (account picker if omitted)
+    --add TITLE DIR [ACCOUNT [ENV]]  Launch a single ad-hoc session tab (account picker if omitted)
     --close [TITLE]                 Close a tab (interactive picker if no title given)
     --restart [TITLE]               Close and relaunch a session (interactive picker if no title given)
     --clone [TITLE]                 Clone a session (interactive picker if no title given)

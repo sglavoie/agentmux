@@ -611,6 +611,7 @@ def query_sessions(socket, managed_only=True):
 
             cc_flags = user_vars.get("cc_flags", "")
             cc_pw = user_vars.get("cc_pw", "")
+            cc_env = user_vars.get("cc_env", "")
 
             title = _strip_icons(tab.get("title", ""))
             icon_state = _detect_state(tab_title)
@@ -625,6 +626,7 @@ def query_sessions(socket, managed_only=True):
                     "cwd": cwd,
                     "cc_flags": cc_flags,
                     "cc_pw": cc_pw,
+                    "cc_env": cc_env,
                     "git": git_info,
                     "status": (
                         "focused"
@@ -830,6 +832,7 @@ def do_launch(
     pw_override="",
     location=None,
     config_dir_override=None,
+    env_vars="",
 ):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
@@ -864,6 +867,8 @@ def do_launch(
         f"cc_flags={flags}",
         "--var",
         f"cc_pw={pw_override}",
+        "--var",
+        f"cc_env={env_vars}",
     ]
 
     home = os.path.expanduser("~")
@@ -876,6 +881,11 @@ def do_launch(
 
     if config_dir and config_dir != default_dir:
         cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
+
+    if env_vars and env_vars != "-":
+        for token in shlex.split(env_vars):
+            if "=" in token:
+                cmd += ["--env", token]
 
     shell = os.environ.get("SHELL", "/bin/zsh")
     effective_flags = _cfg._resolve_claude_flags(flags)
@@ -979,6 +989,7 @@ def _spawn_detached_restart(
     flags="",
     pw_override="",
     config_dir_override=None,
+    env_vars="",
 ):
     """Spawn a fully detached subprocess to close+relaunch a session.
 
@@ -1071,9 +1082,15 @@ def _spawn_detached_restart(
         f"cc_flags={flags}",
         "--var",
         f"cc_pw={pw_override}",
+        "--var",
+        f"cc_env={env_vars}",
     ]
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
+    if env_vars and env_vars != "-":
+        for token in shlex.split(env_vars):
+            if "=" in token:
+                launch_cmd += ["--env", token]
     launch_cmd += [shell, "-lic", shell_cmd]
     steps.append({"cmd": launch_cmd})
 
@@ -1174,6 +1191,7 @@ def do_restart(
     pw_override="",
     config_dir_override=None,
     host_tab_id=None,
+    env_vars="",
 ):
     """Close and relaunch a session with the same title, directory, and account.
 
@@ -1197,7 +1215,7 @@ def do_restart(
 
     if host_tab_id is not None and tab_id == host_tab_id:
         _spawn_detached_restart(
-            socket, tab_id, title, cwd, account, flags, pw_override, config_dir_override
+            socket, tab_id, title, cwd, account, flags, pw_override, config_dir_override, env_vars
         )
         return True
 
@@ -1215,6 +1233,7 @@ def do_restart(
         pw_override,
         location=location,
         config_dir_override=config_dir_override,
+        env_vars=env_vars,
     )
 
 
@@ -1228,6 +1247,7 @@ def _spawn_detached_move(
     flags="",
     pw_override="",
     config_dir_override=None,
+    env_vars="",
 ):
     """Spawn a detached subprocess to close a session on one instance and relaunch on another.
 
@@ -1314,9 +1334,15 @@ def _spawn_detached_move(
         f"cc_flags={flags}",
         "--var",
         f"cc_pw={pw_override}",
+        "--var",
+        f"cc_env={env_vars}",
     ]
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
+    if env_vars and env_vars != "-":
+        for token in shlex.split(env_vars):
+            if "=" in token:
+                launch_cmd += ["--env", token]
     launch_cmd += [shell, "-lic", shell_cmd]
     steps.append({"cmd": launch_cmd})
 
@@ -1415,6 +1441,7 @@ def do_move(
     pw_override="",
     config_dir_override=None,
     host_tab_id=None,
+    env_vars="",
 ):
     """Move a session from one Kitty instance to another (close + relaunch).
 
@@ -1438,6 +1465,7 @@ def do_move(
             flags,
             pw_override,
             config_dir_override,
+            env_vars,
         )
         return True
 
@@ -1455,6 +1483,7 @@ def do_move(
         pw_override,
         location=location,
         config_dir_override=config_dir_override,
+        env_vars=env_vars,
     )
 
 

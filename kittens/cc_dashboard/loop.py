@@ -250,6 +250,7 @@ def dashboard(stdscr):
             "account": default_account,
             "flags": "",
             "pw": default_pw,
+            "env": "",
             "save": "yes",
         }
         if multi_instance:
@@ -449,6 +450,7 @@ def dashboard(stdscr):
                 refresh_ticks += 1
                 if refresh_ticks >= refresh_threshold:
                     refresh_ticks = 0
+                    _reload_all_config()
                     new_sessions = query_all_sessions(managed_only=(not show_all))
                     _check_idle_notifications(new_sessions)
                     old_fp = _session_fingerprint(filtered)
@@ -621,11 +623,13 @@ def dashboard(stdscr):
                         "account": cfg_entry["account"],
                         "flags": cfg_entry.get("flags", ""),
                         "pw": pw_val if pw_val else "none",
+                        "env": cfg_entry.get("env", ""),
                     }
                     new_active = 0
                     new_cursor = len(new_fields["title"])
                     dir_browse_active = False
             elif key == ord("l"):
+                _reload_all_config()
                 if _cfg._sessions:
                     mode = "pick"
                     pick_selected = 0
@@ -641,6 +645,7 @@ def dashboard(stdscr):
                     msg = "No sessions configured in sessions.conf"
                     msg_frames = 20
             elif key == ord("D"):
+                _reload_all_config()
                 if _cfg._sessions:
                     mode = "delete"
                     delete_step = "select"
@@ -790,7 +795,8 @@ def dashboard(stdscr):
                         sess_socket = sess.get("socket", home_socket)
                         r_flags = sess.get("cc_flags", "")
                         r_pw = sess.get("cc_pw", "")
-                        if not r_flags and not r_pw:
+                        r_env = sess.get("cc_env", "")
+                        if not r_flags and not r_pw and not r_env:
                             cfg_entry = _cfg._find_config_session(sess["title"])
                             if cfg_entry is None:
                                 cfg_entry = _cfg._find_config_session(
@@ -798,6 +804,7 @@ def dashboard(stdscr):
                                 )
                             r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
                             r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                            r_env = cfg_entry.get("env", "") if cfg_entry else ""
                         ok = do_move(
                             sess_socket,
                             target_socket,
@@ -805,6 +812,7 @@ def dashboard(stdscr):
                             flags=r_flags,
                             pw_override=r_pw,
                             host_tab_id=host_tab_id,
+                            env_vars=r_env,
                         )
                         if is_host:
                             return
@@ -836,7 +844,8 @@ def dashboard(stdscr):
                             for t in targets_sorted:
                                 r_flags = t.get("cc_flags", "")
                                 r_pw = t.get("cc_pw", "")
-                                if not r_flags and not r_pw:
+                                r_env = t.get("cc_env", "")
+                                if not r_flags and not r_pw and not r_env:
                                     cfg_entry = _cfg._find_config_session(t["title"])
                                     if cfg_entry is None:
                                         cfg_entry = _cfg._find_config_session(
@@ -844,12 +853,14 @@ def dashboard(stdscr):
                                         )
                                     r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
                                     r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                                    r_env = cfg_entry.get("env", "") if cfg_entry else ""
                                 t_socket = t.get("socket", home_socket)
                                 is_host = has_host and t["tab_id"] == host_tab_id
                                 ok = do_move(
                                     t_socket, target_socket, t,
                                     flags=r_flags, pw_override=r_pw,
                                     host_tab_id=host_tab_id,
+                                    env_vars=r_env,
                                 )
                                 if is_host:
                                     return
@@ -1110,7 +1121,8 @@ def dashboard(stdscr):
                 is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
                 r_flags = sess.get("cc_flags", "")
                 r_pw = sess.get("cc_pw", "")
-                if not r_flags and not r_pw:
+                r_env = sess.get("cc_env", "")
+                if not r_flags and not r_pw and not r_env:
                     cfg_entry = _cfg._find_config_session(sess["title"])
                     if cfg_entry is None:
                         cfg_entry = _cfg._find_config_session(
@@ -1118,10 +1130,12 @@ def dashboard(stdscr):
                         )
                     r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
                     r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                    r_env = cfg_entry.get("env", "") if cfg_entry else ""
                 sess_socket = sess.get("socket", home_socket)
                 ok = do_restart(
                     sess_socket, sess, flags=r_flags, pw_override=r_pw,
                     host_tab_id=host_tab_id,
+                    env_vars=r_env,
                 )
                 if is_host:
                     # Detached process will close+relaunch the host tab;
@@ -1173,7 +1187,8 @@ def dashboard(stdscr):
                 for t in targets_sorted:
                     r_flags = t.get("cc_flags", "")
                     r_pw = t.get("cc_pw", "")
-                    if not r_flags and not r_pw:
+                    r_env = t.get("cc_env", "")
+                    if not r_flags and not r_pw and not r_env:
                         cfg_entry = _cfg._find_config_session(t["title"])
                         if cfg_entry is None:
                             cfg_entry = _cfg._find_config_session(
@@ -1181,11 +1196,13 @@ def dashboard(stdscr):
                             )
                         r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
                         r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                        r_env = cfg_entry.get("env", "") if cfg_entry else ""
                     t_socket = t.get("socket", home_socket)
                     is_host = has_host and t["tab_id"] == host_tab_id
                     ok = do_restart(
                         t_socket, t, flags=r_flags, pw_override=r_pw,
                         host_tab_id=host_tab_id,
+                        env_vars=r_env,
                     )
                     if is_host:
                         return
@@ -1246,6 +1263,7 @@ def dashboard(stdscr):
                         pw_val,
                         location=loc,
                         config_dir_override=cdo,
+                        env_vars=entry.get("env", ""),
                     )
                     return
 
@@ -1282,6 +1300,7 @@ def dashboard(stdscr):
                                 sess.get("cc_pw", ""),
                                 location=location,
                                 config_dir_override=selected_path,
+                                env_vars=sess.get("cc_env", ""),
                             )
                             return
                         else:
@@ -1296,6 +1315,7 @@ def dashboard(stdscr):
                                 pw_override=sess.get("cc_pw", ""),
                                 config_dir_override=selected_path,
                                 host_tab_id=host_tab_id,
+                                env_vars=sess.get("cc_env", ""),
                             )
                             if is_host:
                                 return
@@ -1352,7 +1372,8 @@ def dashboard(stdscr):
                         for t in targets_sorted:
                             r_flags = t.get("cc_flags", "")
                             r_pw = t.get("cc_pw", "")
-                            if not r_flags and not r_pw:
+                            r_env = t.get("cc_env", "")
+                            if not r_flags and not r_pw and not r_env:
                                 cfg_entry = _cfg._find_config_session(t["title"])
                                 if cfg_entry is None:
                                     cfg_entry = _cfg._find_config_session(
@@ -1360,12 +1381,14 @@ def dashboard(stdscr):
                                     )
                                 r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
                                 r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                                r_env = cfg_entry.get("env", "") if cfg_entry else ""
                             t_socket = t.get("socket", home_socket)
                             is_host = has_host and t["tab_id"] == host_tab_id
                             ok = do_move(
                                 t_socket, target_socket, t,
                                 flags=r_flags, pw_override=r_pw,
                                 host_tab_id=host_tab_id,
+                                env_vars=r_env,
                             )
                             if is_host:
                                 return
@@ -1382,7 +1405,8 @@ def dashboard(stdscr):
                     sess_socket = sess.get("socket", home_socket)
                     r_flags = sess.get("cc_flags", "")
                     r_pw = sess.get("cc_pw", "")
-                    if not r_flags and not r_pw:
+                    r_env = sess.get("cc_env", "")
+                    if not r_flags and not r_pw and not r_env:
                         cfg_entry = _cfg._find_config_session(sess["title"])
                         if cfg_entry is None:
                             cfg_entry = _cfg._find_config_session(
@@ -1390,6 +1414,7 @@ def dashboard(stdscr):
                             )
                         r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
                         r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                        r_env = cfg_entry.get("env", "") if cfg_entry else ""
                     ok = do_move(
                         sess_socket,
                         target_socket,
@@ -1397,6 +1422,7 @@ def dashboard(stdscr):
                         flags=r_flags,
                         pw_override=r_pw,
                         host_tab_id=host_tab_id,
+                        env_vars=r_env,
                     )
                     if is_host:
                         return
@@ -1492,22 +1518,24 @@ def dashboard(stdscr):
                             new_title = orig_title[:2] + f"{proj}-{branch}"
                         else:
                             new_title = f"{proj}-{branch}"
-                        # Prefer live user vars for flags/pw; fall back to config
+                        # Prefer live user vars for flags/pw/env; fall back to config
                         flags = sess.get("cc_flags", "")
                         pw_val = sess.get("cc_pw", "")
-                        if not flags and not pw_val:
+                        env_val = sess.get("cc_env", "")
+                        if not flags and not pw_val and not env_val:
                             stripped = _strip_override_marker(orig_title)
                             if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
                                 stripped = stripped[2:]
                             src_cfg = next((s for s in _cfg._sessions if s["title"] == stripped), None)
                             flags = src_cfg["flags"] if src_cfg else ""
                             pw_val = src_cfg["pw"] if src_cfg else ""
+                            env_val = src_cfg["env"] if src_cfg else ""
                         # Launch
                         target_socket = sess.get("socket", home_socket)
                         loc = compute_insert_location(target_socket, sess["account"], new_title)
-                        do_launch(target_socket, new_title, wt_path, sess["account"], flags, pw_val, location=loc)
+                        do_launch(target_socket, new_title, wt_path, sess["account"], flags, pw_val, location=loc, env_vars=env_val)
                         # Persist (append_session handles ~ collapse)
-                        _cfg.append_session(new_title, wt_path, sess["account"], flags, pw_val)
+                        _cfg.append_session(new_title, wt_path, sess["account"], flags, pw_val, env=env_val)
                         # Refresh
                         sessions = query_all_sessions(managed_only=(not show_all))
                         _refilter()
@@ -1546,10 +1574,11 @@ def dashboard(stdscr):
                     mode = "list"
                 else:
                     sess = filtered[selected]
-                    # Prefer live user vars for flags/pw; fall back to config
+                    # Prefer live user vars for flags/pw/env; fall back to config
                     flags = sess.get("cc_flags", "")
                     pw_val = sess.get("cc_pw", "")
-                    if not flags and not pw_val:
+                    env_val = sess.get("cc_env", "")
+                    if not flags and not pw_val and not env_val:
                         orig_title = sess["title"]
                         stripped = _strip_override_marker(orig_title)
                         if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
@@ -1557,12 +1586,13 @@ def dashboard(stdscr):
                         src_cfg = next((s for s in _cfg._sessions if s["title"] == stripped), None)
                         flags = src_cfg["flags"] if src_cfg else ""
                         pw_val = src_cfg["pw"] if src_cfg else ""
+                        env_val = src_cfg["env"] if src_cfg else ""
                     # Launch
                     target_socket = sess.get("socket", home_socket)
                     loc = compute_insert_location(target_socket, sess["account"], title)
-                    do_launch(target_socket, title, sess["cwd"], sess["account"], flags, pw_val, location=loc)
+                    do_launch(target_socket, title, sess["cwd"], sess["account"], flags, pw_val, location=loc, env_vars=env_val)
                     # Persist
-                    _cfg.append_session(title, sess["cwd"], sess["account"], flags, pw_val)
+                    _cfg.append_session(title, sess["cwd"], sess["account"], flags, pw_val, env=env_val)
                     # Refresh
                     sessions = query_all_sessions(managed_only=(not show_all))
                     _refilter()
@@ -1592,9 +1622,9 @@ def dashboard(stdscr):
         # ── New / Edit session form ──────────────────────────────
         elif mode == "new":
             if form_mode == "edit":
-                field_keys = ["title", "dir", "account", "flags", "pw"]
+                field_keys = ["title", "dir", "account", "flags", "pw", "env"]
             else:
-                field_keys = ["title", "dir", "account", "flags", "pw", "save"]
+                field_keys = ["title", "dir", "account", "flags", "pw", "env", "save"]
                 if multi_instance:
                     field_keys.insert(-1, "instance")
             last_field = len(field_keys) - 1
@@ -1714,7 +1744,8 @@ def dashboard(stdscr):
                             msg = "A session with that title already exists"
                             msg_frames = 20
                         else:
-                            _cfg.update_session(edit_original_title, t, d, a, fl, pw_val)
+                            edit_env = new_fields.get("env", "")
+                            _cfg.update_session(edit_original_title, t, d, a, fl, pw_val, env=edit_env)
                             # Check if the edited session is currently running
                             running_titles = {s["title"] for s in sessions}
                             stripped_running = {_strip_override_marker(rt) for rt in running_titles}
@@ -1732,10 +1763,11 @@ def dashboard(stdscr):
                                 new_fields["instance"], home_socket
                             )
                         if t and d:
+                            env_val = new_fields.get("env", "").strip()
                             loc = compute_insert_location(target_socket, a, t)
-                            do_launch(target_socket, t, d, a, fl, pw_val, location=loc)
+                            do_launch(target_socket, t, d, a, fl, pw_val, location=loc, env_vars=env_val)
                             if new_fields.get("save") == "yes":
-                                _cfg.append_session(t, d, a, fl, pw_val)
+                                _cfg.append_session(t, d, a, fl, pw_val, env=env_val)
                             return
                         else:
                             msg = "Title and directory are required"
@@ -1869,6 +1901,7 @@ def dashboard(stdscr):
                     entry["flags"],
                     pw_val,
                     location=loc,
+                    env_vars=entry.get("env", ""),
                 )
                 return
 

@@ -183,7 +183,7 @@ def load_defaults():
 
 # ── Session configuration ──────────────────────────────────────────────────
 
-# list of {"title": str, "dir": str, "account": str, "flags": str, "pw": str}
+# list of {"title": str, "dir": str, "account": str, "flags": str, "pw": str, "env": str}
 _sessions: list[dict[str, str]] = []
 
 
@@ -253,6 +253,7 @@ def load_sessions():
             )
             flags = parts[3].strip() if len(parts) > 3 else ""
             pw = parts[4].strip() if len(parts) > 4 else ""
+            env = parts[5].strip() if len(parts) > 5 else ""
             if not title:
                 continue
             _sessions.append(
@@ -262,6 +263,7 @@ def load_sessions():
                     "account": account,
                     "flags": flags,
                     "pw": pw,
+                    "env": env,
                 }
             )
 
@@ -370,7 +372,7 @@ def save_sessions(live_sessions):
                 f"# Saved by dashboard on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
             )
             f.write("#\n")
-            f.write("# Format: title | directory | account [| claude_flags [| project_window]]\n")
+            f.write("# Format: title | directory | account [| claude_flags [| project_window [| env_vars]]]\n")
             f.write("\n")
         for s in live_sessions:
             title = s.get("title", "")
@@ -380,7 +382,10 @@ def save_sessions(live_sessions):
             account = s.get("account", "unknown")
             flags = s.get("cc_flags", "")
             pw = s.get("cc_pw", "")
-            if pw:
+            env = s.get("cc_env", "")
+            if env:
+                f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw:<10s} | {env}\n")
+            elif pw:
                 f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw}\n")
             elif flags:
                 f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags}\n")
@@ -391,7 +396,7 @@ def save_sessions(live_sessions):
     return len(live_sessions), backup_created
 
 
-def append_session(title, directory, account, flags="", pw=""):
+def append_session(title, directory, account, flags="", pw="", env=""):
     """Append a single session entry to sessions.conf."""
     path = _sessions_config_path()
     home = os.path.expanduser("~")
@@ -409,7 +414,9 @@ def append_session(title, directory, account, flags="", pw=""):
         if needs_newline:
             f.write("\n")
         line = f"{title:<20s} | {directory:<40s} | {account}"
-        if pw:
+        if env:
+            line += f" | {flags:<30s} | {pw:<10s} | {env}"
+        elif pw:
             line += f" | {flags} | {pw}"
         elif flags:
             line += f" | {flags}"
@@ -418,7 +425,7 @@ def append_session(title, directory, account, flags="", pw=""):
     load_sessions()
 
 
-def update_session(original_title, title, directory, account, flags="", pw=""):
+def update_session(original_title, title, directory, account, flags="", pw="", env=""):
     """Update an existing session entry in sessions.conf by original title.
 
     Returns True if the entry was found and updated, False otherwise.
@@ -443,7 +450,9 @@ def update_session(original_title, title, directory, account, flags="", pw=""):
             if len(parts) >= 2 and parts[0].strip() == original_title:
                 found = True
                 new_line = f"{title:<20s} | {directory:<40s} | {account}"
-                if pw:
+                if env:
+                    new_line += f" | {flags:<30s} | {pw:<10s} | {env}"
+                elif pw:
                     new_line += f" | {flags:<30s} | {pw}"
                 elif flags:
                     new_line += f" | {flags}"
