@@ -816,9 +816,11 @@ def dashboard(stdscr):
                 mode = "override"
                 override_source = "list"
                 # Pre-select the session's current config dir
-                current_dir = _cfg._accounts.get(filtered[selected]["account"], {}).get(
-                    "config_dir", ""
-                )
+                current_dir = filtered[selected].get("config_dir", "")
+                if not current_dir:
+                    current_dir = _cfg._accounts.get(filtered[selected]["account"], {}).get(
+                        "config_dir", ""
+                    )
                 dirs = _cfg._unique_config_dirs()
                 override_selected = 0
                 for i, d in enumerate(dirs):
@@ -2222,9 +2224,11 @@ def dashboard(stdscr):
             elif key == ord("O") and pick_filtered:
                 mode = "override"
                 override_source = "pick"
-                current_dir = _cfg._accounts.get(
-                    pick_filtered[pick_selected]["account"], {}
-                ).get("config_dir", "")
+                current_dir = pick_filtered[pick_selected].get("config_dir", "")
+                if not current_dir:
+                    current_dir = _cfg._accounts.get(
+                        pick_filtered[pick_selected]["account"], {}
+                    ).get("config_dir", "")
                 dirs = _cfg._unique_config_dirs()
                 override_selected = 0
                 for i, d in enumerate(dirs):

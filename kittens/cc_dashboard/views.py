@@ -981,9 +981,11 @@ def draw_override_picker(stdscr, session, override_selected):
     display_dirs = [_short(d) for d in dirs]
 
     # Determine the session's current config dir for the "(current)" label
-    current_dir = _cfg._accounts.get(session.get("account", ""), {}).get(
-        "config_dir", ""
-    )
+    current_dir = session.get("config_dir", "")
+    if not current_dir:
+        current_dir = _cfg._accounts.get(session.get("account", ""), {}).get(
+            "config_dir", ""
+        )
 
     # Box dimensions
     max_dir_len = max(len(d) for d in display_dirs)
