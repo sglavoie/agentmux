@@ -41,6 +41,7 @@ from cc_dashboard.kitty_remote import (
     get_window_text,
     query_all_sessions,
 )
+from cc_dashboard.kitty_remote import run_hooks_sync
 from cc_dashboard.views import (
     _HELP_LINES,
     DETAIL_PANE_HEIGHT,
@@ -48,6 +49,7 @@ from cc_dashboard.views import (
     _cycle_account,
     _cycle_instance,
     _cycle_pw,
+    _hooks_event_rows,
     _shorten_home,
     draw_config_action_picker,
     draw_config_picker,
@@ -56,6 +58,10 @@ from cc_dashboard.views import (
     draw_confirm_prompt,
     draw_delete_confirm,
     draw_delete_view,
+    draw_hooks_cmd_input,
+    draw_hooks_event_view,
+    draw_hooks_sync_confirm,
+    draw_hooks_view,
     draw_sort_picker,
     draw_peek_overlay,
     draw_detail_pane,
@@ -159,7 +165,7 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | confirm_batch_close | confirm_batch_restart | confirm_save | rename | worktree | new | pick | delete | help | move_picker | config_pick | config_action | config_show | sort_pick
+    mode = "list"  # list | confirm | confirm_restart | confirm_batch_close | confirm_batch_restart | confirm_save | rename | worktree | new | pick | delete | help | move_picker | config_pick | config_action | config_show | sort_pick | hooks | hooks_event | hooks_sync_confirm | hooks_cmd_input
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -224,6 +230,16 @@ def dashboard(stdscr):
     config_file_path = ""
     config_show_lines = []
     config_show_scroll = 0
+
+    # Hooks manager state
+    hooks_drift = {}           # {account_name: "in_sync"|"drifted"|"missing"}
+    hooks_selected = 0         # cursor position in hooks account list
+    hooks_event_selected = 0   # cursor position in hooks event list
+    hooks_account = ""         # account name when in hooks_event mode
+    hooks_cmd_value = ""       # text input for custom command
+    hooks_cmd_cursor = 0       # cursor position in command input
+    hooks_target_event = ""    # event name for command input
+    hooks_sync_scope = ""      # "all" or account name for sync confirm
 
     # Peek state
     peek_lines = []
@@ -431,6 +447,18 @@ def dashboard(stdscr):
                     delete_search_active,
                     len(delete_filtered),
                 )
+        elif mode == "hooks":
+            draw_hooks_view(stdscr, _cfg._accounts, hooks_drift,
+                            _cfg._hooks_global, _cfg._hooks_overrides, hooks_selected)
+        elif mode == "hooks_event":
+            draw_hooks_event_view(stdscr, hooks_account,
+                                  _cfg._hooks_global, _cfg._hooks_overrides,
+                                  hooks_drift.get(hooks_account, "missing"), hooks_event_selected)
+        elif mode == "hooks_sync_confirm":
+            draw_hooks_sync_confirm(stdscr, hooks_sync_scope)
+        elif mode == "hooks_cmd_input":
+            draw_hooks_cmd_input(stdscr, hooks_account, hooks_target_event,
+                                 hooks_cmd_value, hooks_cmd_cursor)
         elif mode == "help":
             draw_help_overlay(stdscr, help_scroll)
 
@@ -885,6 +913,11 @@ def dashboard(stdscr):
             elif key == ord("C"):
                 mode = "config_pick"
                 config_selected = 0
+            elif key == ord("H"):
+                _cfg.load_hooks()
+                hooks_drift = _cfg._detect_all_drift()
+                hooks_selected = 0
+                mode = "hooks"
 
         # ── Sort picker ───────────────────────────────────────────
         elif mode == "sort_pick":
@@ -901,6 +934,128 @@ def dashboard(stdscr):
                 msg = f"Sort: {label}" if label else "Sort: default (tab order)"
                 msg_frames = 15
                 mode = "list"
+
+        # ── Hooks overview ────────────────────────────────────────
+        elif mode == "hooks":
+            account_list = list(_cfg._accounts)
+            if key in (ord("j"), curses.KEY_DOWN) and account_list:
+                hooks_selected = (hooks_selected + 1) % len(account_list)
+            elif key in (ord("k"), curses.KEY_UP) and account_list:
+                hooks_selected = (hooks_selected - 1) % len(account_list)
+            elif key in (10, 13, curses.KEY_ENTER) and account_list:
+                hooks_account = account_list[hooks_selected]
+                hooks_event_selected = 0
+                mode = "hooks_event"
+            elif key == ord("s") and account_list:
+                hooks_sync_scope = account_list[hooks_selected]
+                mode = "hooks_sync_confirm"
+            elif key == ord("S"):
+                hooks_sync_scope = "all"
+                mode = "hooks_sync_confirm"
+            elif key in (ord("q"), 27):
+                mode = "list"
+
+        # ── Hooks event detail ───────────────────────────────────
+        elif mode == "hooks_event":
+            event_rows = _hooks_event_rows(hooks_account, _cfg._hooks_overrides)
+            if key in (ord("j"), curses.KEY_DOWN) and event_rows:
+                hooks_event_selected = (hooks_event_selected + 1) % len(event_rows)
+            elif key in (ord("k"), curses.KEY_UP) and event_rows:
+                hooks_event_selected = (hooks_event_selected - 1) % len(event_rows)
+            elif key == ord(" ") and event_rows and hooks_event_selected < len(event_rows):
+                row = event_rows[hooks_event_selected]
+                if row[0] == "event":
+                    _, event_name, _ = row
+                    enabled = _cfg.toggle_hook_event(hooks_account, event_name)
+                    hooks_drift[hooks_account] = _cfg._detect_drift(hooks_account)
+                    state = "enabled" if enabled else "disabled"
+                    msg = f"{event_name}: {state}"
+                    msg_frames = 15
+            elif key == ord("a") and event_rows and hooks_event_selected < len(event_rows):
+                row = event_rows[hooks_event_selected]
+                # Determine which event this row belongs to
+                if row[0] == "event":
+                    hooks_target_event = row[1]
+                elif row[0] == "extra":
+                    hooks_target_event = row[1]
+                hooks_cmd_value = ""
+                hooks_cmd_cursor = 0
+                mode = "hooks_cmd_input"
+            elif key == ord("d") and event_rows and hooks_event_selected < len(event_rows):
+                row = event_rows[hooks_event_selected]
+                if row[0] == "extra":
+                    _, event_name, cmd_idx, cmd_str = row
+                    _cfg.remove_extra_command(hooks_account, event_name, cmd_idx)
+                    hooks_drift[hooks_account] = _cfg._detect_drift(hooks_account)
+                    # Adjust selection if we removed the last row
+                    new_rows = _hooks_event_rows(hooks_account, _cfg._hooks_overrides)
+                    hooks_event_selected = min(hooks_event_selected, max(0, len(new_rows) - 1))
+                    msg = "Command removed"
+                    msg_frames = 15
+            elif key == ord("s"):
+                hooks_sync_scope = hooks_account
+                mode = "hooks_sync_confirm"
+            elif key == 27:
+                mode = "hooks"
+
+        # ── Hooks sync confirm ───────────────────────────────────
+        elif mode == "hooks_sync_confirm":
+            if key in (ord("y"), ord("Y")):
+                if hooks_sync_scope == "all":
+                    ok, output = run_hooks_sync()
+                    scope_msg = "all accounts"
+                else:
+                    ok, output = run_hooks_sync(hooks_sync_scope)
+                    scope_msg = hooks_sync_scope
+                # Refresh drift
+                hooks_drift = _cfg._detect_all_drift()
+                if ok:
+                    msg = f"Hooks synced for {scope_msg}"
+                else:
+                    msg = f"Sync failed: {output[:60]}"
+                msg_frames = 25
+                mode = "hooks"
+            else:
+                # Any non-y key cancels
+                if hooks_sync_scope == "all" or hooks_sync_scope not in _cfg._accounts:
+                    mode = "hooks"
+                else:
+                    mode = "hooks_event"
+
+        # ── Hooks command input ──────────────────────────────────
+        elif mode == "hooks_cmd_input":
+            if key == 27:  # Esc -- cancel
+                mode = "hooks_event"
+            elif key in (10, 13, curses.KEY_ENTER):
+                cmd = hooks_cmd_value.strip()
+                if cmd:
+                    _cfg.add_extra_command(hooks_account, hooks_target_event, cmd)
+                    hooks_drift[hooks_account] = _cfg._detect_drift(hooks_account)
+                    msg = "Command added"
+                    msg_frames = 15
+                mode = "hooks_event"
+            elif key in (curses.KEY_BACKSPACE, 127, 8):
+                if hooks_cmd_cursor > 0:
+                    hooks_cmd_value = (
+                        hooks_cmd_value[: hooks_cmd_cursor - 1]
+                        + hooks_cmd_value[hooks_cmd_cursor:]
+                    )
+                    hooks_cmd_cursor -= 1
+            elif key == curses.KEY_LEFT:
+                hooks_cmd_cursor = max(0, hooks_cmd_cursor - 1)
+            elif key == curses.KEY_RIGHT:
+                hooks_cmd_cursor = min(len(hooks_cmd_value), hooks_cmd_cursor + 1)
+            elif key == curses.KEY_HOME or key == 1:  # Ctrl+A
+                hooks_cmd_cursor = 0
+            elif key == curses.KEY_END or key == 5:  # Ctrl+E
+                hooks_cmd_cursor = len(hooks_cmd_value)
+            elif 32 <= key < 127:
+                hooks_cmd_value = (
+                    hooks_cmd_value[:hooks_cmd_cursor]
+                    + chr(key)
+                    + hooks_cmd_value[hooks_cmd_cursor:]
+                )
+                hooks_cmd_cursor += 1
 
         # ── Config file picker ────────────────────────────────────
         elif mode == "config_pick":

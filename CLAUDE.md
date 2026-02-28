@@ -44,6 +44,10 @@ Shell scripts target Bash 3 compatibility (macOS default), using parallel indexe
 
 `cc-hook-indicator` automatically detects `claude -p` (pipe mode) invocations by walking the process tree. When pipe mode is detected, macOS notifications are suppressed, but icon changes and activity tracking still function normally.
 
+Hooks are managed through `~/.config/cc-manager/hooks.json`, which has two top-level keys: `hooks` (the global defaults defining which `cc-hook-indicator` commands run for each of the 6 Claude Code hook events) and `account_overrides` (per-account customizations). The `account_overrides` object is keyed by account name and supports `disabled_events` (an array of event names to suppress the built-in `cc-hook-indicator` entry for that account) and `extra_commands` (a dict mapping event names to arrays of additional hook entries appended after the built-in ones). A file without `account_overrides` behaves identically to one with an empty `account_overrides` object, preserving backward compatibility.
+
+The `ccm hooks` CLI subcommand provides two operations: `ccm hooks sync [ACCOUNT]` runs `install-hooks.sh` to merge the computed effective hooks into each account's `settings.json` (or a single account when specified), and `ccm hooks status` prints a table showing whether each account's installed hooks are `in_sync`, `drifted`, or `missing` relative to the current `hooks.json` configuration. The dashboard provides an interactive hooks manager accessible via the `H` key from the session list, where users can navigate accounts, toggle events on/off per account, add or remove custom hook commands, and trigger sync operations with visual drift feedback.
+
 ## Kitty documentation reference
 
 The `docs/` directory contains concise reference documents extracted from the official Kitty documentation at https://sw.kovidgoyal.net/kitty/. Consult these when working on Kitty-specific functionality:

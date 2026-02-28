@@ -10,7 +10,37 @@ set -euo pipefail
 # then for each config dir merges the hook entries from hooks.example.json
 # into $config_dir/settings.json without replacing existing hooks.
 
-HOOKS_EXAMPLE="${1:?Usage: install-hooks.sh <hooks-example-json>}"
+# ── Argument parsing ─────────────────────────────────────────────────────────
+
+FILTER_ACCOUNT=""
+HOOKS_EXAMPLE=""
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--account)
+		[[ $# -lt 2 ]] && {
+			echo "Error: --account requires a NAME argument" >&2
+			exit 1
+		}
+		FILTER_ACCOUNT="$2"
+		shift 2
+		;;
+	-*)
+		echo "Error: unknown option: $1" >&2
+		echo "Usage: install-hooks.sh [--account NAME] <hooks-example-json>" >&2
+		exit 1
+		;;
+	*)
+		HOOKS_EXAMPLE="$1"
+		shift
+		;;
+	esac
+done
+
+if [[ -z "$HOOKS_EXAMPLE" ]]; then
+	echo "Usage: install-hooks.sh [--account NAME] <hooks-example-json>" >&2
+	exit 1
+fi
 
 if [[ ! -f "$HOOKS_EXAMPLE" ]]; then
 	echo "Error: hooks example file not found: $HOOKS_EXAMPLE" >&2
@@ -55,22 +85,47 @@ expand_tilde() {
 }
 
 CONFIG_DIRS=()
+ACCOUNT_NAMES=()
 
 if [[ -f "$ACCOUNTS_CONFIG" ]]; then
 	while IFS= read -r line || [[ -n "$line" ]]; do
 		[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 		_local_name="" local_dir="" _local_color=""
 		IFS='|' read -r _local_name local_dir _local_color <<<"$line"
+		_local_name="$(echo "$_local_name" | xargs)"
 		local_dir="$(echo "$local_dir" | xargs)"
 		local_dir="$(expand_tilde "$local_dir")"
 		[[ -z "$local_dir" ]] && local_dir="$HOME/.claude"
+		# When --account is set, skip non-matching accounts
+		if [[ -n "$FILTER_ACCOUNT" && "$_local_name" != "$FILTER_ACCOUNT" ]]; then
+			continue
+		fi
+		ACCOUNT_NAMES+=("$_local_name")
 		CONFIG_DIRS+=("$local_dir")
 	done <"$ACCOUNTS_CONFIG"
 fi
 
 # Fallback: if no accounts.conf or no entries found, use the default dir
 if [[ ${#CONFIG_DIRS[@]} -eq 0 ]]; then
+	if [[ -n "$FILTER_ACCOUNT" ]]; then
+		echo "Error: account '$FILTER_ACCOUNT' not found in $ACCOUNTS_CONFIG" >&2
+		exit 1
+	fi
 	CONFIG_DIRS=("$HOME/.claude")
+	ACCOUNT_NAMES=("default")
+fi
+
+# ── Load account overrides from hooks.json ──────────────────────────────────
+
+CCM_CONFIG_DIR="${CC_MANAGER_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager}"
+HOOKS_JSON="$CCM_CONFIG_DIR/hooks.json"
+
+ACCOUNT_OVERRIDES="{}"
+if [[ -f "$HOOKS_JSON" ]]; then
+	_overrides="$(jq -r '.account_overrides // {}' "$HOOKS_JSON" 2>/dev/null || true)"
+	if [[ -n "$_overrides" && "$_overrides" != "null" ]]; then
+		ACCOUNT_OVERRIDES="$_overrides"
+	fi
 fi
 
 # ── Merge hooks into each settings.json ──────────────────────────────────────
@@ -84,15 +139,38 @@ EXAMPLE_HOOKS="$(jq --arg cmd "$HOOK_CMD" '
 # List of hook events to process
 HOOK_EVENTS=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop SessionEnd)
 
-for config_dir in "${CONFIG_DIRS[@]}"; do
+for i in "${!CONFIG_DIRS[@]}"; do
+	config_dir="${CONFIG_DIRS[$i]}"
+	account_name="${ACCOUNT_NAMES[$i]}"
 	settings_file="$config_dir/settings.json"
 
-	# If settings.json doesn't exist, create it with just the hooks
+	# Look up this account's overrides (disabled_events and extra_commands)
+	acct_overrides="$(echo "$ACCOUNT_OVERRIDES" | jq --arg name "$account_name" '.[$name] // {}')"
+	acct_disabled="$(echo "$acct_overrides" | jq '.disabled_events // []')"
+	acct_extra="$(echo "$acct_overrides" | jq '.extra_commands // {}')"
+
+	# If settings.json doesn't exist, create it with hooks (respecting overrides)
 	if [[ ! -f "$settings_file" ]]; then
 		mkdir -p "$config_dir"
-		jq --arg cmd "$HOOK_CMD" '
-            walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
-        ' "$HOOKS_EXAMPLE" >"$settings_file"
+		# Build a fresh hooks object respecting disabled_events and extra_commands
+		create_filter=''
+		for event in "${HOOK_EVENTS[@]}"; do
+			is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')"
+			extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" '
+				(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
+			')"
+			if [[ "$is_disabled" == "true" ]]; then
+				# Event disabled: only include extra_commands if any
+				if [[ "$(echo "$extra_for_event" | jq 'length')" -gt 0 ]]; then
+					create_filter="$create_filter | .hooks[\"$event\"] = $extra_for_event"
+				fi
+			else
+				example_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg event "$event" '.[$event] // []')"
+				combined="$(jq -n --argjson a "$example_entries" --argjson b "$extra_for_event" '$a + $b')"
+				create_filter="$create_filter | .hooks[\"$event\"] = $combined"
+			fi
+		done
+		jq -n "{ hooks: {} } $create_filter" >"$settings_file"
 		echo "  Created $settings_file with cc-hook-indicator hooks"
 		continue
 	fi
@@ -102,13 +180,29 @@ for config_dir in "${CONFIG_DIRS[@]}"; do
 	# User-defined hook entries (those without cc-hook-indicator) are preserved.
 	jq_filter='.hooks //= {}'
 	for event in "${HOOK_EVENTS[@]}"; do
-		new_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg event "$event" '.[$event] // []')"
-		jq_filter="$jq_filter"'
-            | .hooks["'"$event"'"] = (
-                [(.hooks["'"$event"'"] // [])[] |
-                    select([.hooks[]? | .command // "" | test("cc-hook-indicator")] | any | not)
-                ] + '"$new_entries"'
-            )'
+		is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')"
+		extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" '
+			(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
+		')"
+
+		if [[ "$is_disabled" == "true" ]]; then
+			# Event disabled: strip cc-hook-indicator entries, preserve user entries, add extra_commands
+			jq_filter="$jq_filter"'
+                | .hooks["'"$event"'"] = (
+                    [(.hooks["'"$event"'"] // [])[] |
+                        select([.hooks[]? | .command // "" | test("cc-hook-indicator")] | any | not)
+                    ] + '"$extra_for_event"'
+                )'
+		else
+			new_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg event "$event" '.[$event] // []')"
+			combined="$(jq -n --argjson a "$new_entries" --argjson b "$extra_for_event" '$a + $b')"
+			jq_filter="$jq_filter"'
+                | .hooks["'"$event"'"] = (
+                    [(.hooks["'"$event"'"] // [])[] |
+                        select([.hooks[]? | .command // "" | test("cc-hook-indicator")] | any | not)
+                    ] + '"$combined"'
+                )'
+		fi
 	done
 
 	tmp_file="${settings_file}.tmp"

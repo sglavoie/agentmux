@@ -782,6 +782,19 @@ _HELP_SECTIONS = [
             ("Esc", "Clear filter"),
         ],
     ),
+    (
+        "Hooks Manager",
+        [
+            ("H", "Open hooks manager"),
+            ("j/k", "Navigate accounts / events"),
+            ("Enter", "View events for account"),
+            ("Space", "Toggle hook event on/off"),
+            ("a", "Add custom command"),
+            ("d", "Delete custom command"),
+            ("s", "Sync hooks for account"),
+            ("S", "Sync all accounts"),
+        ],
+    ),
 ]
 
 # Pre-build help content as a list of (kind, text, text2) tuples.
@@ -848,6 +861,7 @@ _FOOTER_HINTS = {
         "D Delete",
         "S Save",
         "C Config",
+        "H Hooks",
         "d Detail",
         "p Peek",
         "/ Search",
@@ -879,6 +893,10 @@ _FOOTER_HINTS = {
     "worktree": ["Enter Create", "Esc Cancel"],
     "delete": ["Enter Select", "/ Search", "q Back", "Esc Back"],
     "delete_confirm": ["y Confirm", "Any other key Cancel"],
+    "hooks": ["j/k Navigate", "Enter Events", "s Sync account", "S Sync all", "q Back", "Esc Back"],
+    "hooks_event": ["j/k Navigate", "Space Toggle", "a Add cmd", "d Delete cmd", "s Sync", "Esc Back"],
+    "hooks_sync_confirm": ["y Confirm sync", "Any other key Cancel"],
+    "hooks_cmd_input": ["Enter Confirm", "Esc Cancel"],
 }
 
 
@@ -1532,6 +1550,227 @@ def draw_clone_input(stdscr, session, title_value, cursor_pos):
     prefix = "Title: "
     before = title_value[:cursor_pos]
     after = title_value[cursor_pos:]
+    cursor_ch = after[0] if after else " "
+    after_rest = after[1:] if len(after) > 1 else ""
+
+    y = rows - 3
+    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
+    x = 2 + len(prefix)
+    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+    safe_addstr(
+        stdscr,
+        y,
+        x + len(before),
+        cursor_ch,
+        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+    )
+    if after_rest:
+        safe_addstr(
+            stdscr,
+            y,
+            x + len(before) + 1,
+            after_rest,
+            curses.color_pair(CP_INPUT_ACTIVE),
+        )
+
+
+# ── Hooks manager views ─────────────────────────────────────────────────────
+
+# Abbreviated event labels for the overview table columns
+_HOOK_EVENT_ABBR = {
+    "UserPromptSubmit": "Pmpt",
+    "PostToolUse": "Tool",
+    "PostToolUseFailure": "Fail",
+    "PermissionRequest": "Perm",
+    "Stop": "Stop",
+    "SessionEnd": "End",
+}
+
+_DRIFT_BADGES = {
+    "in_sync": ("synced", CP_DIM),
+    "drifted": ("drifted", CP_WARN),
+    "missing": ("missing", CP_WARN),
+}
+
+
+def draw_hooks_view(stdscr, accounts, drift_status, hooks_global, hooks_overrides, selected):
+    """Draw the hooks overview showing all accounts with event columns and sync status."""
+    stdscr.clear()
+    rows, cols = stdscr.getmaxyx()
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+    dim_attr = curses.color_pair(CP_DIM)
+
+    safe_addstr(stdscr, 0, 2, "Hooks Manager", header_attr)
+
+    if not accounts:
+        safe_addstr(stdscr, 2, 4, "No accounts configured", dim_attr)
+        draw_footer(stdscr, "hooks")
+        return
+
+    account_list = list(accounts)
+    from cc_dashboard.config import HOOK_EVENTS
+
+    # Column layout: account name (15), then 6 event columns (6 each), then sync badge
+    name_w = 15
+    ev_w = 6
+    col_start = 4
+
+    # Header row
+    header_y = 2
+    safe_addstr(stdscr, header_y, col_start, "Account".ljust(name_w), dim_attr)
+    for i, event in enumerate(HOOK_EVENTS):
+        abbr = _HOOK_EVENT_ABBR.get(event, event[:4])
+        safe_addstr(stdscr, header_y, col_start + name_w + i * ev_w, abbr.ljust(ev_w), dim_attr)
+    safe_addstr(stdscr, header_y, col_start + name_w + len(HOOK_EVENTS) * ev_w, "Status", dim_attr)
+
+    # Account rows
+    for idx, acct_name in enumerate(account_list):
+        y = header_y + 1 + idx
+        if y >= rows - 2:
+            break
+
+        is_selected = idx == selected
+        override = hooks_overrides.get(acct_name, {})
+        disabled_events = override.get("disabled_events", [])
+
+        # Account name in its palette color
+        acct_cp = _cp_for_account(acct_name)
+        name_attr = curses.color_pair(acct_cp)
+        if is_selected:
+            name_attr |= curses.A_REVERSE
+
+        display_name = acct_name[:name_w - 1].ljust(name_w)
+        safe_addstr(stdscr, y, col_start, display_name, name_attr)
+
+        # Event columns
+        for i, event in enumerate(HOOK_EVENTS):
+            x = col_start + name_w + i * ev_w
+            if event in disabled_events:
+                label = "off"
+                attr = dim_attr
+            else:
+                label = "on"
+                attr = normal_attr
+            if is_selected:
+                attr |= curses.A_REVERSE
+            safe_addstr(stdscr, y, x, label.ljust(ev_w), attr)
+
+        # Sync badge
+        drift = drift_status.get(acct_name, "missing")
+        badge_text, badge_cp = _DRIFT_BADGES.get(drift, ("?", CP_DIM))
+        badge_attr = curses.color_pair(badge_cp)
+        if is_selected:
+            badge_attr |= curses.A_REVERSE
+        safe_addstr(stdscr, y, col_start + name_w + len(HOOK_EVENTS) * ev_w, badge_text, badge_attr)
+
+    draw_footer(stdscr, "hooks")
+
+
+def _hooks_event_rows(account_name, hooks_overrides):
+    """Build a flat list of rows for the hooks event detail view.
+
+    Returns a list of tuples:
+        ("event", event_name, is_disabled)
+        ("extra", event_name, index, command_str)
+    """
+    from cc_dashboard.config import HOOK_EVENTS
+    override = hooks_overrides.get(account_name, {})
+    disabled_events = override.get("disabled_events", [])
+    extra_commands = override.get("extra_commands", {})
+
+    result = []
+    for event in HOOK_EVENTS:
+        result.append(("event", event, event in disabled_events))
+        for i, cmd_entry in enumerate(extra_commands.get(event, [])):
+            result.append(("extra", event, i, cmd_entry.get("command", "")))
+    return result
+
+
+def draw_hooks_event_view(stdscr, account_name, hooks_global, hooks_overrides, drift_status, selected):
+    """Draw event detail for a single account's hooks."""
+    stdscr.clear()
+    rows, cols = stdscr.getmaxyx()
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+    dim_attr = curses.color_pair(CP_DIM)
+    warn_attr = curses.color_pair(CP_WARN)
+
+    title = f"Hooks: {account_name}"
+    safe_addstr(stdscr, 0, 2, title, header_attr)
+
+    # Drift badge in title line
+    drift = drift_status if isinstance(drift_status, str) else "missing"
+    badge_text, badge_cp = _DRIFT_BADGES.get(drift, ("?", CP_DIM))
+    safe_addstr(stdscr, 0, 2 + len(title) + 2, f"[{badge_text}]", curses.color_pair(badge_cp))
+
+    event_rows = _hooks_event_rows(account_name, hooks_overrides)
+
+    for idx, row in enumerate(event_rows):
+        y = 2 + idx
+        if y >= rows - 2:
+            break
+
+        is_selected = idx == selected
+
+        if row[0] == "event":
+            _, event_name, is_disabled = row
+            marker = "\u25b8 " if is_selected else "  "
+            status = "disabled" if is_disabled else "enabled"
+            status_attr = dim_attr if is_disabled else normal_attr
+            if is_selected:
+                status_attr |= curses.A_REVERSE
+
+            safe_addstr(stdscr, y, 2, marker, normal_attr)
+            safe_addstr(stdscr, y, 4, event_name.ljust(22), status_attr)
+            badge = " off" if is_disabled else " on"
+            badge_a = dim_attr if is_disabled else curses.color_pair(CP_ATTENTION)
+            if is_selected:
+                badge_a |= curses.A_REVERSE
+            safe_addstr(stdscr, y, 26, badge, badge_a)
+
+        elif row[0] == "extra":
+            _, event_name, cmd_idx, cmd_str = row
+            marker = "\u25b8 " if is_selected else "  "
+            prefix = f"    + "
+            attr = dim_attr
+            if is_selected:
+                attr |= curses.A_REVERSE
+            safe_addstr(stdscr, y, 2, marker, normal_attr)
+            max_cmd_w = cols - 12
+            display_cmd = cmd_str[:max_cmd_w] if len(cmd_str) > max_cmd_w else cmd_str
+            safe_addstr(stdscr, y, 4, f"    + {display_cmd}", attr)
+
+    draw_footer(stdscr, "hooks_event")
+
+
+def draw_hooks_sync_confirm(stdscr, scope_label):
+    """Draw a centered sync confirmation overlay."""
+    rows, cols = stdscr.getmaxyx()
+    attr = curses.color_pair(CP_WARN) | curses.A_BOLD
+    dim_attr = curses.color_pair(CP_DIM)
+
+    msg1 = f"Sync hooks for {scope_label}?"
+    msg2 = "settings.json will be backed up. User-defined entries preserved."
+    msg3 = "y/n"
+
+    safe_addstr(stdscr, rows - 5, 2, msg1, attr)
+    safe_addstr(stdscr, rows - 4, 2, msg2, dim_attr)
+    safe_addstr(stdscr, rows - 3, 2, msg3, attr)
+
+
+def draw_hooks_cmd_input(stdscr, account_name, event_name, value, cursor_pos):
+    """Draw a text input overlay for entering a custom hook command."""
+    rows, _cols = stdscr.getmaxyx()
+
+    # Context line
+    context = f"Add command for {event_name} ({account_name})"
+    safe_addstr(stdscr, rows - 4, 2, context, curses.color_pair(CP_DIM))
+
+    # Command input line
+    prefix = "Command: "
+    before = value[:cursor_pos]
+    after = value[cursor_pos:]
     cursor_ch = after[0] if after else " "
     after_rest = after[1:] if len(after) > 1 else ""
 

@@ -1,6 +1,7 @@
 """Account and defaults configuration for the Claude Code Dashboard."""
 
 import contextlib
+import copy
 import json
 import os
 import shutil
@@ -65,6 +66,11 @@ PALETTE, ACTIVE_FG, INACTIVE_FG = _load_palette()
 
 _accounts: dict[str, dict[str, str]] = {}  # name -> {"config_dir": str, "color": str}
 _account_names: list[str] = []  # ordered list of account names
+
+# Hooks configuration loaded from hooks.json
+_hooks_global: dict = {}        # event_name -> [hook_entries]
+_hooks_overrides: dict = {}     # account_name -> override config
+_cached_hook_cmd: str | None = None
 
 # Global defaults loaded from defaults.conf
 _default_claude_flags = ""
@@ -516,3 +522,319 @@ def _palette_tab_colors(account):
         f"inactive_bg={_hex(inactive_bg)}",
         f"inactive_fg={_hex(INACTIVE_FG)}",
     ]
+
+
+# ── Hooks configuration ───────────────────────────────────────────────────
+
+HOOK_EVENTS = [
+    "UserPromptSubmit",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PermissionRequest",
+    "Stop",
+    "SessionEnd",
+]
+
+
+def _resolve_hooks_example_path():
+    """Check repo layout then installed layout for hooks.example.json"""
+    this_dir = os.path.dirname(os.path.realpath(__file__))
+    repo_path = os.path.join(this_dir, "..", "..", "config", "hooks.example.json")
+    if os.path.isfile(repo_path):
+        return os.path.realpath(repo_path)
+    installed_path = os.path.join(
+        os.path.expanduser("~"), ".local", "lib", "cc-manager", "hooks.example.json"
+    )
+    if os.path.isfile(installed_path):
+        return installed_path
+    return None
+
+
+def load_hooks():
+    """Parse hooks.json into the module-level hooks dicts.
+
+    Falls back to hooks.example.json if hooks.json is missing.
+    Returns (_hooks_global, _hooks_overrides).
+    """
+    global _hooks_global, _hooks_overrides
+    _hooks_global = {}
+    _hooks_overrides = {}
+
+    path = _hooks_config_path()
+    if not os.path.isfile(path):
+        path = _resolve_hooks_example_path()
+    if not path or not os.path.isfile(path):
+        return _hooks_global, _hooks_overrides
+
+    with contextlib.suppress(json.JSONDecodeError, OSError):
+        with open(path) as f:
+            data = json.load(f)
+        _hooks_global = data.get("hooks", {})
+        _hooks_overrides = data.get("account_overrides", {})
+
+    return _hooks_global, _hooks_overrides
+
+
+def _resolve_hook_cmd():
+    """Resolve the absolute path to cc-hook-indicator, with caching"""
+    global _cached_hook_cmd
+    if _cached_hook_cmd is not None:
+        return _cached_hook_cmd
+
+    local_bin = os.path.join(os.path.expanduser("~"), ".local", "bin", "cc-hook-indicator")
+    if os.path.isfile(local_bin) and os.access(local_bin, os.X_OK):
+        _cached_hook_cmd = local_bin
+        return _cached_hook_cmd
+
+    which_result = shutil.which("cc-hook-indicator")
+    if which_result:
+        _cached_hook_cmd = which_result
+        return _cached_hook_cmd
+
+    _cached_hook_cmd = "cc-hook-indicator"
+    return _cached_hook_cmd
+
+
+def _load_example_hooks():
+    """Load the base hooks from hooks.example.json (what install-hooks.sh uses)."""
+    path = _resolve_hooks_example_path()
+    if not path:
+        return {}
+    with contextlib.suppress(json.JSONDecodeError, OSError):
+        with open(path) as f:
+            return json.load(f).get("hooks", {})
+    return {}
+
+
+def _compute_effective_hooks(account_name, base_hooks=None):
+    """Compute the effective hooks for an account after applying overrides.
+
+    Uses base_hooks as the starting point (defaults to _hooks_global).
+    Returns a dict of {event_name: [hook_entries]} with cc-hook-indicator
+    paths resolved to their absolute location.
+    """
+    if not _hooks_global:
+        load_hooks()
+
+    if base_hooks is None:
+        base_hooks = _hooks_global
+
+    override = _hooks_overrides.get(account_name, {})
+    disabled_events = override.get("disabled_events", [])
+    extra_commands = override.get("extra_commands", {})
+    resolved_cmd = _resolve_hook_cmd()
+
+    result = {}
+    for event in HOOK_EVENTS:
+        entries = copy.deepcopy(base_hooks.get(event, []))
+
+        # Filter out cc-hook-indicator entries for disabled events
+        if event in disabled_events:
+            filtered = []
+            for entry in entries:
+                inner_hooks = entry.get("hooks", [])
+                inner_hooks = [
+                    h for h in inner_hooks
+                    if "cc-hook-indicator" not in h.get("command", "")
+                ]
+                if inner_hooks:
+                    entry["hooks"] = inner_hooks
+                    filtered.append(entry)
+            entries = filtered
+
+        # Substitute bare cc-hook-indicator with resolved path
+        for entry in entries:
+            for hook in entry.get("hooks", []):
+                cmd = hook.get("command", "")
+                if cmd and "cc-hook-indicator" in cmd:
+                    hook["command"] = cmd.replace("cc-hook-indicator", resolved_cmd)
+
+        # Append extra_commands for this event
+        for extra in extra_commands.get(event, []):
+            extra = copy.deepcopy(extra)
+            cmd = extra.get("command", "")
+            if cmd and "cc-hook-indicator" in cmd:
+                extra["command"] = cmd.replace("cc-hook-indicator", resolved_cmd)
+            entries.append({"hooks": [extra]})
+
+        result[event] = entries
+
+    return result
+
+
+def _detect_drift(account_name):
+    """Compare installed settings.json hooks against computed effective hooks.
+
+    Returns "missing", "drifted", or "in_sync".
+    """
+    account_info = _accounts.get(account_name)
+    if not account_info:
+        return "missing"
+
+    config_dir = account_info.get("config_dir", "")
+    if not config_dir:
+        return "missing"
+
+    settings_path = os.path.join(config_dir, "settings.json")
+    if not os.path.isfile(settings_path):
+        return "missing"
+
+    with contextlib.suppress(json.JSONDecodeError, OSError):
+        with open(settings_path) as f:
+            data = json.load(f)
+
+        installed_hooks = data.get("hooks", {})
+        example_hooks = _load_example_hooks()
+        effective = _compute_effective_hooks(account_name, base_hooks=example_hooks)
+        resolved_cmd = _resolve_hook_cmd()
+
+        override = _hooks_overrides.get(account_name, {})
+        extra_commands = override.get("extra_commands", {})
+
+        for event in HOOK_EVENTS:
+            installed_entries = installed_hooks.get(event, [])
+            effective_entries = effective.get(event, [])
+
+            # Build set of extra_commands for this event to identify managed entries
+            extra_cmds = {e.get("command", "") for e in extra_commands.get(event, [])}
+
+            # Filter installed entries to only ccm-managed ones
+            def _is_managed(entry):
+                for hook in entry.get("hooks", []):
+                    cmd = hook.get("command", "")
+                    if "cc-hook-indicator" in cmd or resolved_cmd in cmd:
+                        return True
+                    if cmd in extra_cmds:
+                        return True
+                return False
+
+            installed_managed = [e for e in installed_entries if _is_managed(e)]
+
+            # Normalize both sides by replacing absolute path with bare name
+            def _normalize(entries):
+                entries = copy.deepcopy(entries)
+                for entry in entries:
+                    for hook in entry.get("hooks", []):
+                        cmd = hook.get("command", "")
+                        if resolved_cmd != "cc-hook-indicator" and resolved_cmd in cmd:
+                            hook["command"] = cmd.replace(
+                                resolved_cmd, "cc-hook-indicator"
+                            )
+                return entries
+
+            if _normalize(installed_managed) != _normalize(effective_entries):
+                return "drifted"
+
+        return "in_sync"
+
+    return "missing"
+
+
+def _detect_all_drift():
+    """Return {account_name: status} for all configured accounts"""
+    return {name: _detect_drift(name) for name in _account_names}
+
+
+def save_hooks(global_hooks, account_overrides):
+    """Write hooks configuration to hooks.json.
+
+    Creates a .bak copy before overwriting, following the same pattern as
+    save_sessions.
+    """
+    global _hooks_global, _hooks_overrides
+
+    path = _hooks_config_path()
+    if os.path.isfile(path):
+        shutil.copy2(path, path + ".bak")
+
+    with open(path, "w") as f:
+        json.dump(
+            {"hooks": global_hooks, "account_overrides": account_overrides},
+            f,
+            indent=2,
+        )
+        f.write("\n")
+
+    _hooks_global = global_hooks
+    _hooks_overrides = account_overrides
+
+
+def toggle_hook_event(account_name, event_name):
+    """Toggle a hook event for an account.
+
+    Returns True if the event is now enabled, False if disabled.
+    """
+    if not _hooks_global:
+        load_hooks()
+
+    if account_name not in _hooks_overrides:
+        _hooks_overrides[account_name] = {}
+    override = _hooks_overrides[account_name]
+
+    if "disabled_events" not in override:
+        override["disabled_events"] = []
+
+    disabled = override["disabled_events"]
+    if event_name in disabled:
+        disabled.remove(event_name)
+        enabled = True
+    else:
+        disabled.append(event_name)
+        enabled = False
+
+    # Clean up empty disabled_events list
+    if not disabled:
+        del override["disabled_events"]
+    # Clean up empty override dict
+    if not override:
+        del _hooks_overrides[account_name]
+
+    save_hooks(_hooks_global, _hooks_overrides)
+    return enabled
+
+
+def add_extra_command(account_name, event_name, command_str):
+    """Add an extra command hook for an account and event"""
+    if not _hooks_global:
+        load_hooks()
+
+    if account_name not in _hooks_overrides:
+        _hooks_overrides[account_name] = {}
+    override = _hooks_overrides[account_name]
+
+    if "extra_commands" not in override:
+        override["extra_commands"] = {}
+    if event_name not in override["extra_commands"]:
+        override["extra_commands"][event_name] = []
+
+    override["extra_commands"][event_name].append(
+        {"type": "command", "command": command_str, "async": True}
+    )
+
+    save_hooks(_hooks_global, _hooks_overrides)
+
+
+def remove_extra_command(account_name, event_name, index):
+    """Remove an extra command hook by index for an account and event"""
+    if not _hooks_global:
+        load_hooks()
+
+    override = _hooks_overrides.get(account_name, {})
+    extras = override.get("extra_commands", {}).get(event_name, [])
+
+    if index < 0 or index >= len(extras):
+        return
+
+    extras.pop(index)
+
+    # Clean up empty structures
+    if not extras:
+        del override["extra_commands"][event_name]
+    if not override.get("extra_commands"):
+        with contextlib.suppress(KeyError):
+            del override["extra_commands"]
+    if not override:
+        with contextlib.suppress(KeyError):
+            del _hooks_overrides[account_name]
+
+    save_hooks(_hooks_global, _hooks_overrides)
