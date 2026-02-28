@@ -5,8 +5,20 @@
 
 _cc_launch_tab_titles() {
     local -a titles
-    titles=(${(f)"$(cc-launch --list 2>/dev/null | tail -n +3 | awk '{print $2}')"})
+    titles=(${(f)"$(cc-launch --list 2>/dev/null | tail -n +3 | awk '{print $4}')"})
     [[ ${#titles} -gt 0 ]] && _describe 'tab title' titles
+}
+
+_cc_launch_tab_ids() {
+    local -a ids
+    ids=(${(f)"$(cc-launch --list 2>/dev/null | tail -n +3 | awk '{print $3}')"})
+    [[ ${#ids} -gt 0 ]] && _describe 'kitty tab id' ids
+}
+
+_cc_launch_instances() {
+    local -a inst
+    inst=(${(f)"$(cc-launch --sockets 2>/dev/null | awk '/^unix:\/tmp\/kitty-/ {print $1}' | sed -E 's#^unix:/tmp/kitty-([0-9]+)$#K:\1#')"})
+    [[ ${#inst} -gt 0 ]] && _describe 'kitty instance label' inst
 }
 
 _cc_launch_sockets() {
@@ -50,11 +62,32 @@ _cc-launch() {
                         return
                         ;;
                     --close)
-                        [[ $CURRENT -eq 5 ]] && _cc_launch_tab_titles
+                        case $CURRENT in
+                            5|7) _cc_launch_instances ;;
+                            6|8) _cc_launch_tab_ids ;;
+                        esac
+                        return
+                        ;;
+                    --restart)
+                        case $CURRENT in
+                            5|7) _cc_launch_instances ;;
+                            6|8) _cc_launch_tab_ids ;;
+                        esac
                         return
                         ;;
                     --clone)
-                        [[ $CURRENT -eq 5 ]] && _cc_launch_tab_titles
+                        case $CURRENT in
+                            5|7) _cc_launch_instances ;;
+                            6|8) _cc_launch_tab_ids ;;
+                        esac
+                        return
+                        ;;
+                    --move)
+                        case $CURRENT in
+                            5|7) _cc_launch_instances ;;
+                            6|8) _cc_launch_tab_ids ;;
+                            9|10) _cc_launch_instances ;;
+                        esac
                         return
                         ;;
                     --save)
@@ -65,12 +98,17 @@ _cc-launch() {
                         _values 'command' \
                             '--all[Launch all sessions from config]' \
                             '--add[Launch a single ad-hoc session tab]' \
-                            '--close[Close a tab by title]' \
-                            '--clone[Clone a session with same settings]' \
+                            '--close[Close a tab by stable selector]' \
+                            '--restart[Restart a session by stable selector]' \
+                            '--clone[Clone a session by stable selector]' \
+                            '--move[Move a session between Kitty instances]' \
                             '--list[List open tabs running Claude]' \
                             '--save[Save current sessions to config file]' \
                             '--cleanup[Find and close stale sessions]' \
                             '--sockets[List available Kitty sockets]' \
+                            '--instance[Source Kitty instance label]' \
+                            '--tab-id[Kitty tab id in selected instance]' \
+                            '--target-instance[Destination Kitty instance label for --move]' \
                             '--help[Show help message]'
                         return
                         ;;
@@ -88,10 +126,29 @@ _cc-launch() {
             esac
             ;;
         --close)
-            [[ $CURRENT -eq 3 ]] && _cc_launch_tab_titles
+            case $CURRENT in
+                3|5) _cc_launch_instances ;;
+                4|6) _cc_launch_tab_ids ;;
+            esac
+            ;;
+        --restart)
+            case $CURRENT in
+                3|5) _cc_launch_instances ;;
+                4|6) _cc_launch_tab_ids ;;
+            esac
             ;;
         --clone)
-            [[ $CURRENT -eq 3 ]] && _cc_launch_tab_titles
+            case $CURRENT in
+                3|5) _cc_launch_instances ;;
+                4|6) _cc_launch_tab_ids ;;
+            esac
+            ;;
+        --move)
+            case $CURRENT in
+                3|5) _cc_launch_instances ;;
+                4|6) _cc_launch_tab_ids ;;
+                7|8) _cc_launch_instances ;;
+            esac
             ;;
         --save)
             [[ $CURRENT -eq 3 ]] && _files
@@ -100,13 +157,18 @@ _cc-launch() {
             _values 'command' \
                 '--all[Launch all sessions from config]' \
                 '--add[Launch a single ad-hoc session tab]' \
-                '--close[Close a tab by title]' \
-                '--clone[Clone a session with same settings]' \
+                '--close[Close a tab by stable selector]' \
+                '--restart[Restart a session by stable selector]' \
+                '--clone[Clone a session by stable selector]' \
+                '--move[Move a session between Kitty instances]' \
                 '--list[List open tabs running Claude]' \
                 '--save[Save current sessions to config file]' \
                 '--cleanup[Find and close stale sessions]' \
                 '--sockets[List available Kitty sockets]' \
                 '--socket[Target a specific Kitty socket]' \
+                '--instance[Source Kitty instance label]' \
+                '--tab-id[Kitty tab id in selected instance]' \
+                '--target-instance[Destination Kitty instance label for --move]' \
                 '--help[Show help message]'
             ;;
     esac

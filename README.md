@@ -124,8 +124,10 @@ The account argument defaults to `work` if omitted.
 ### Close a session
 
 ```bash
-cc-launch --close "W:hotfix"
+cc-launch --close --instance K:12345 --tab-id 67
 ```
+
+Destructive operations now use stable Kitty selectors to avoid title-collision mistakes.
 
 ### List active Claude sessions
 
@@ -133,7 +135,17 @@ cc-launch --close "W:hotfix"
 cc-launch --list
 ```
 
-Shows a table of all Kitty tabs currently running Claude, with their index, title, account, directory, and focus status.
+Shows a table of all Kitty tabs currently running Claude, with index, tab id, title, account, instance, directory, and focus status.
+
+Use the `Instance` + `TabID` columns as inputs to destructive commands.
+
+### Restart, clone, or move a session safely
+
+```bash
+cc-launch --restart --instance K:12345 --tab-id 67
+cc-launch --clone --instance K:12345 --tab-id 67
+cc-launch --move --instance K:12345 --tab-id 67 --target-instance K:67890
+```
 
 ### Quick status overview
 
