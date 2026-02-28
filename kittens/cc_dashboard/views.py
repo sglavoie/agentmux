@@ -1245,12 +1245,13 @@ def draw_actlog_browse(stdscr, entries, selected, scroll):
         draw_footer(stdscr, "actlog_browse")
         return
 
-    # Column layout
+    # Column layout — title absorbs remaining width
     id_w = 14  # truncated session_id
-    title_w = 20
     mtime_w = 18
     count_w = 8
     size_w = 10
+    fixed_w = id_w + mtime_w + count_w + 2 + size_w + 5  # 5 = left margin + safety
+    title_w = max(20, cols - fixed_w)
 
     # Header row
     header_y = 2
@@ -1276,9 +1277,7 @@ def draw_actlog_browse(stdscr, entries, selected, scroll):
         attr = normal_attr | curses.A_REVERSE if is_selected else normal_attr
 
         sid_short = entry["session_id"][:id_w - 2]
-        title = entry.get("title", "")
-        if not title:
-            title = "ended"
+        title = entry.get("title", "") or "ended"
         title = title[:title_w - 2]
 
         mtime_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(entry["mtime"]))

@@ -634,21 +634,33 @@ def list_activity_logs(sessions):
             stat = os.stat(path)
         except OSError:
             continue
-        # Count lines (events) without fully parsing
+        # Count lines and extract cwd from the first entry for ended sessions
         event_count = 0
+        first_cwd = ""
         try:
             with open(path) as f:
-                for _ in f:
+                for line in f:
                     event_count += 1
+                    if event_count == 1 and not running_ids.get(session_id):
+                        try:
+                            first_cwd = json.loads(line.strip()).get("cwd", "")
+                        except (json.JSONDecodeError, ValueError):
+                            pass
         except OSError:
             pass
+        title = running_ids.get(session_id, "")
+        if not title and first_cwd:
+            project = os.path.basename(first_cwd.rstrip("/"))
+            title = f"{project} (ended)"
+        elif not title:
+            title = "ended"
         entries.append({
             "session_id": session_id,
             "path": path,
             "mtime": stat.st_mtime,
             "size": stat.st_size,
             "event_count": event_count,
-            "title": running_ids.get(session_id, ""),
+            "title": title,
         })
 
     entries.sort(key=lambda e: e["mtime"], reverse=True)

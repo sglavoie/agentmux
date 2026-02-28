@@ -1168,10 +1168,14 @@ def dashboard(stdscr):
                 if actlog_match_lines:
                     actlog_match_index = (actlog_match_index + 1) % len(actlog_match_lines)
                     actlog_scroll = min(actlog_match_lines[actlog_match_index], max_scroll)
+                else:
+                    actlog_scroll = min(actlog_scroll + content_height // 2, max_scroll)
             elif key == ord("N"):
                 if actlog_match_lines:
                     actlog_match_index = (actlog_match_index - 1) % len(actlog_match_lines)
                     actlog_scroll = min(actlog_match_lines[actlog_match_index], max_scroll)
+                else:
+                    actlog_scroll = max(actlog_scroll - content_height // 2, 0)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
                 actlog_scroll = min(actlog_scroll + 1, max_scroll)
             elif key in (curses.KEY_UP, ord("k"), ord("K")):
