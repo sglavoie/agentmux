@@ -48,8 +48,6 @@ from cc_dashboard.loop import (  # noqa: F401
 # ── views ────────────────────────────────────────────────────────────────────
 from cc_dashboard.views import (  # noqa: F401
     _FOOTER_HINTS,
-    _HELP_LINES,
-    _HELP_SECTIONS,
     _PW_OPTIONS,
     DETAIL_PANE_HEIGHT,
     _check_idle_notifications,
@@ -60,7 +58,6 @@ from cc_dashboard.views import (  # noqa: F401
     draw_filter_bar,
     draw_sort_picker,
     draw_footer,
-    draw_help_overlay,
     draw_list_view,
     draw_new_form,
     draw_pick_view,

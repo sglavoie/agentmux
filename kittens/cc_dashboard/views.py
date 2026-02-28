@@ -728,158 +728,14 @@ def draw_delete_confirm(stdscr, delete_step, entry, warnings=None):
         )
 
 
-_HELP_SECTIONS = [
-    (
-        "Navigation",
-        [
-            ("k / Up", "Move selection up"),
-            ("j / Down", "Move selection down"),
-            ("Enter", "Focus & switch to selected tab"),
-            ("q", "Quit dashboard"),
-        ],
-    ),
-    (
-        "Session Actions",
-        [
-            ("t", "Open session actions menu"),
-            ("x", "Close session (with confirmation)"),
-            ("R", "Restart session (with confirmation)"),
-            ("m", "Move session to another instance"),
-            ("O", "Override config dir for session"),
-            ("r", "Rename selected session"),
-            ("e", "Edit session config entry"),
-            ("n", "Open new session form"),
-            ("l", "Launch session from config"),
-            ("S", "Save sessions to sessions.conf"),
-            ("p", "Peek at session output"),
-            ("c", "Clone session (same dir, account, flags)"),
-            ("w", "Clone session to git worktree"),
-        ],
-    ),
-    (
-        "Multi-Select",
-        [
-            ("Space", "Mark / unmark session"),
-            ("U", "Clear all marks"),
-            ("x / R / m", "Batch action on marked sessions"),
-        ],
-    ),
-    (
-        "View",
-        [
-            ("d", "Toggle detail pane"),
-            ("a", "Toggle all / managed tabs"),
-            ("C", "Open config file browser"),
-            ("Ctrl+r", "Refresh session list"),
-        ],
-    ),
-    (
-        "Sort",
-        [("s", "Open sort picker")],
-    ),
-    (
-        "Search",
-        [
-            ("/", "Start search"),
-            ("Enter", "Accept search query"),
-            ("Esc", "Cancel search"),
-        ],
-    ),
-    (
-        "Account Filter",
-        [
-            ("f", "Enter / exit filter mode"),
-            ("1-9", "Toggle account visibility"),
-            ("Esc", "Clear filter"),
-        ],
-    ),
-    (
-        "Hooks Manager",
-        [
-            ("H", "Open hooks manager"),
-            ("j/k", "Navigate accounts / events"),
-            ("Enter", "View events for account"),
-            ("Space", "Toggle hook event on/off"),
-            ("a", "Add custom command"),
-            ("d", "Delete custom command"),
-            ("s", "Sync hooks for account"),
-            ("S", "Sync all accounts"),
-        ],
-    ),
-    (
-        "Activity Log",
-        [
-            ("L", "View session activity log"),
-            ("j/k", "Scroll log entries"),
-            ("b", "Browse all log files"),
-            ("/", "Search within log"),
-            ("r", "Reload log from disk"),
-        ],
-    ),
-]
-
-# Pre-build help content as a list of (kind, text, text2) tuples.
-# kind: "header" for section headers, "binding" for key-desc pairs, "blank".
-_HELP_LINES = []
-for _sect_name, _bindings in _HELP_SECTIONS:
-    _HELP_LINES.append(("header", _sect_name, ""))
-    for _key, _desc in _bindings:
-        _HELP_LINES.append(("binding", _key, _desc))
-    _HELP_LINES.append(("blank", "", ""))
-# Remove trailing blank line
-if _HELP_LINES and _HELP_LINES[-1][0] == "blank":
-    _HELP_LINES.pop()
-
-
-def draw_help_overlay(stdscr, scroll):
-    """Draw a full-screen help overlay listing all keybindings."""
-    stdscr.clear()
-    rows, cols = stdscr.getmaxyx()
-    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
-    normal_attr = curses.color_pair(CP_NORMAL)
-    dim_attr = curses.color_pair(CP_DIM)
-
-    key_col = 4
-    desc_col = 18
-
-    # Row 0: title, rows 1..rows-3: content, row rows-2: scroll, row rows-1: footer
-    safe_addstr(stdscr, 0, 2, "Dashboard Help", header_attr)
-    content_height = rows - 3  # available lines for help content
-    total = len(_HELP_LINES)
-    visible = _HELP_LINES[scroll : scroll + content_height]
-
-    for i, (kind, text1, text2) in enumerate(visible):
-        y = i + 1
-        if kind == "header":
-            safe_addstr(stdscr, y, 2, text1, header_attr)
-        elif kind == "binding":
-            safe_addstr(stdscr, y, key_col, text1, normal_attr)
-            safe_addstr(stdscr, y, desc_col, text2[: cols - desc_col - 1], dim_attr)
-
-    # Scroll indicator when content overflows
-    if total > content_height:
-        pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
-        safe_addstr(stdscr, rows - 2, 2, f"j/k to scroll  {pos}", dim_attr)
-
-    safe_addstr(stdscr, rows - 1, 2, "Press ? / q / Esc to close help", dim_attr)
-
-
 _FOOTER_HINTS = {
     "list": [
-        "? Help",
         "q Quit",
         "Enter Focus",
         "t Actions",
-        "x Close",
-        "R Restart",
-        "m Move",
-        "O CfgDir",
-        "r Rename",
         "e Edit",
         "n New",
         "l Launch",
-        "c Clone",
-        "w Worktree",
         "D Delete",
         "S Save",
         "C Config",
@@ -934,7 +790,13 @@ _FOOTER_HINTS = {
     "config_pick": ["j/k Navigate", "Enter Select", "R Reload", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
-    "actions": ["j/k Navigate", "Enter Select", "Esc Cancel"],
+    "actions": [
+        "j/k Navigate",
+        "Enter Apply",
+        "Esc Back",
+        "Marked: Restart/Close/Move",
+        "Single: Restart opts/Clone/Override/Rename/Worktree",
+    ],
     "clone": ["Enter Clone", "Esc Cancel"],
     "worktree": ["Enter Create", "Esc Cancel"],
     "restart_options": [
@@ -977,6 +839,14 @@ _FOOTER_HINTS = {
     "actlog_browse": ["j/k Navigate", "Enter View", "q Back", "Esc Back"],
 }
 
+_ACTIONS_FOOTER_COMPACT = [
+    "j/k Nav",
+    "Enter Apply",
+    "Esc Back",
+    "Marked: restart/close/move",
+    "Single: all actions",
+]
+
 
 def draw_footer(stdscr, mode, exclude=None):
     """Draw the help-key footer at the bottom of the screen."""
@@ -984,6 +854,8 @@ def draw_footer(stdscr, mode, exclude=None):
     sep = "  "
     avail = cols - 3  # 2-char left margin + 1 safety
     items = _FOOTER_HINTS.get(mode, [])
+    if mode == "actions" and cols < 120:
+        items = _ACTIONS_FOOTER_COMPACT
     if exclude:
         items = [i for i in items if i not in exclude]
     parts: list[str] = []
@@ -1100,7 +972,7 @@ def draw_override_picker(stdscr, session, override_selected):
         safe_addstr(stdscr, y, box_x + 2, label, attr)
 
 
-def draw_move_picker(stdscr, session, instance_labels, move_selected):
+def draw_move_picker(stdscr, session, instance_labels, move_selected, subtitle=None):
     """Draw an instance selection overlay for moving a session.
 
     Shows all instance labels except the session's current one in a
@@ -1135,9 +1007,12 @@ def draw_move_picker(stdscr, session, instance_labels, move_selected):
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
-    # Subtitle: session name
-    session_title = session["title"]
-    sub = f'"{session_title}" from {current_instance}'
+    # Subtitle: session name or grouped scope
+    if subtitle:
+        sub = subtitle
+    else:
+        session_title = session["title"]
+        sub = f'"{session_title}" from {current_instance}'
     safe_addstr(
         stdscr,
         box_y + 1,
@@ -1162,15 +1037,15 @@ def draw_move_picker(stdscr, session, instance_labels, move_selected):
         safe_addstr(stdscr, y, box_x + 2, label, attr)
 
 
-def draw_session_action_picker(stdscr, session, action_labels, selected):
-    """Draw a centered action picker for the selected session."""
+def draw_session_action_picker(stdscr, subtitle, action_labels, selected):
+    """Draw a centered action picker for selected or marked sessions."""
     rows, cols = stdscr.getmaxyx()
     if not action_labels:
         return
 
     max_action_len = max(len(label) for label in action_labels)
     title = "Session Actions"
-    subtitle = session.get("title", "")
+    subtitle = subtitle or ""
 
     box_w = min(cols - 4, max(42, max(max_action_len, len(subtitle)) + 12))
     box_h = len(action_labels) + 4  # title + subtitle + blank + actions
@@ -1912,8 +1787,12 @@ def draw_peek_overlay(
 
 def draw_status_message(stdscr, message):
     """Draw a transient status message above the footer."""
-    rows, _ = stdscr.getmaxyx()
-    safe_addstr(stdscr, rows - 3, 2, message, curses.color_pair(CP_WARN))
+    rows, cols = stdscr.getmaxyx()
+    max_w = max(0, cols - 4)
+    clipped = message
+    if len(clipped) > max_w:
+        clipped = clipped[: max(0, max_w - 3)] + "..."
+    safe_addstr(stdscr, rows - 3, 2, clipped, curses.color_pair(CP_WARN))
 
 
 def draw_search_bar(stdscr, query, cursor_pos, active, match_count):

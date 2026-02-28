@@ -159,16 +159,15 @@ Same idea as `cc-launch --list` but with dynamically sized columns for cleaner o
 
 Press `ctrl+shift+d` to open the dashboard as a Kitty overlay. It shows all tabs running Claude Code in a navigable list, color-coded by account using the palette from `accounts.conf`.
 
-Keybindings inside the dashboard:
+Use `F1` for the complete keybinding reference. Core dashboard controls:
 
 ```plaintext
 ↑ / k       Move selection up
 ↓ / j       Move selection down
 Enter       Focus the selected tab (closes the dashboard)
-t           Open session actions menu for selected tab
-x           Close the selected session (asks for confirmation)
-R           Restart the selected session (asks for confirmation)
-m           Move selected session to another Kitty instance
+t           Open session actions menu (selected tab or all marked tabs)
+Space       Mark / unmark a session for grouped actions
+U           Clear all marks
 n           Create a new session (opens a title/directory/account form)
 Ctrl+r      Refresh the session list
 q / Esc     Dismiss the dashboard

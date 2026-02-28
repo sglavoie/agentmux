@@ -65,14 +65,31 @@ _SECTIONS = [
     (
         "Dashboard — Session Actions",
         [
-            ("x", "Close session (with confirmation)"),
-            ("R", "Restart session (with confirmation)"),
-            ("O", "Override config dir for session"),
-            ("r", "Rename selected session"),
+            ("t", "Open actions menu for selected/marked sessions"),
+            (
+                "Menu: Restart / Close / Move",
+                "Available for marked sessions (when marks exist)",
+            ),
+            (
+                "Menu: Restart opts / Clone / Override / Rename / Worktree",
+                "Single-session only",
+            ),
+            ("Enter", "Apply selected action in the actions menu"),
+            ("Esc", "Back from the actions menu"),
             ("n", "Open new session form"),
             ("l", "Launch session from config"),
-            ("w", "Clone session to git worktree"),
+            ("e", "Edit selected session config entry"),
             ("D", "Delete session from config"),
+            ("S", "Save running sessions to sessions.conf"),
+            ("p", "Peek at selected session output"),
+        ],
+    ),
+    (
+        "Dashboard — Multi-Select",
+        [
+            ("Space", "Mark / unmark session"),
+            ("U", "Clear all marks"),
+            ("t", "Actions apply to marked sessions when marks exist"),
         ],
     ),
     (
