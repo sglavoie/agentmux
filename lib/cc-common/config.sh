@@ -11,10 +11,10 @@ ACCOUNTS_CONFIG="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-man
 DEFAULTS_CONFIG="${CC_MANAGER_DEFAULTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/defaults.conf}"
 
 expand_tilde() {
-    local path="$1"
-    if [[ "$path" == "~"* ]]; then
-        echo "${HOME}${path:1}"
-    else
-        echo "$path"
-    fi
+	local path="$1"
+	if [[ "$path" == "~"* ]]; then
+		echo "${HOME}${path:1}"
+	else
+		echo "$path"
+	fi
 }

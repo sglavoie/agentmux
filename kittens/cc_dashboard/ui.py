@@ -40,10 +40,8 @@ from cc_dashboard.filters import (  # noqa: F401
 )
 
 # ── loop ─────────────────────────────────────────────────────────────────────
-from cc_dashboard.loop import (  # noqa: F401
-    _session_fingerprint,
-    dashboard,
-)
+from cc_dashboard.loop import dashboard  # noqa: F401
+from cc_dashboard.loop_helpers import _session_fingerprint  # noqa: F401
 
 # ── views ────────────────────────────────────────────────────────────────────
 from cc_dashboard.views import (  # noqa: F401

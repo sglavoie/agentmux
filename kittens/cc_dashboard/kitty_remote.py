@@ -4,7 +4,7 @@ Compatibility facade that re-exports the legacy kitty_remote API from the
 newly split cc_dashboard.remote modules.
 """
 
-from cc_dashboard.remote.actions import (
+from cc_dashboard.remote import (
     compute_insert_location,
     do_close,
     do_cross_instance_focus,

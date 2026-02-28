@@ -45,12 +45,15 @@ extra_bytes() {
 init_color() {
 	# shellcheck disable=SC2034 # used by scripts that source this library
 	USE_COLOR=false
-	# shellcheck disable=SC2034 # used by scripts that source this library
 	BOLD="" DIM="" RESET=""
 	if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]] && [[ "${TERM:-}" != "dumb" ]]; then
+		# shellcheck disable=SC2034 # used by scripts that source this library
 		USE_COLOR=true
+		# shellcheck disable=SC2034 # used by scripts that source this library
 		BOLD=$'\033[1m'
+		# shellcheck disable=SC2034 # used by scripts that source this library
 		DIM=$'\033[2m'
+		# shellcheck disable=SC2034 # used by scripts that source this library
 		RESET=$'\033[0m'
 	fi
 }

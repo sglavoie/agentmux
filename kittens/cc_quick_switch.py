@@ -49,7 +49,7 @@ from cc_dashboard.filters import (
     _apply_sort,
     _filter_sessions,
 )
-from cc_dashboard.remote.actions import do_cross_instance_focus
+from cc_dashboard.remote import do_cross_instance_focus
 from cc_dashboard.remote.command import get_kitty_socket
 from cc_dashboard.remote.sessions import query_all_sessions
 from cc_dashboard.remote.shared import format_duration
