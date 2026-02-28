@@ -216,6 +216,9 @@ def draw_detail_pane(stdscr, session, detail_y):
             curses.color_pair(CP_WARN) if activity["permission_count"] > 0 else val_attr
         )
         safe_addstr(stdscr, y, parts_x, perms_str, perm_attr)
+        parts_x += len(perms_str)
+        tasks_str = f", {activity['task_completed_count']} tasks"
+        safe_addstr(stdscr, y, parts_x, tasks_str, val_attr)
     else:
         y += 1
         safe_addstr(stdscr, y, lx, " No activity data", curses.color_pair(CP_DIM))
@@ -1583,6 +1586,7 @@ _HOOK_EVENT_ABBR = {
     "PostToolUseFailure": "Fail",
     "PermissionRequest": "Perm",
     "Stop": "Stop",
+    "TaskCompleted": "Task",
     "SessionEnd": "End",
 }
 
@@ -1611,7 +1615,7 @@ def draw_hooks_view(stdscr, accounts, drift_status, hooks_global, hooks_override
     account_list = list(accounts)
     from cc_dashboard.config import HOOK_EVENTS
 
-    # Column layout: account name (15), then 6 event columns (6 each), then sync badge
+    # Column layout: account name (15), then 7 event columns (6 each), then sync badge
     name_w = 15
     ev_w = 6
     col_start = 4

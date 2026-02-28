@@ -137,7 +137,7 @@ EXAMPLE_HOOKS="$(jq --arg cmd "$HOOK_CMD" '
 ' "$HOOKS_EXAMPLE")"
 
 # List of hook events to process
-HOOK_EVENTS=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop SessionEnd)
+HOOK_EVENTS=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop TaskCompleted SessionEnd)
 
 for i in "${!CONFIG_DIRS[@]}"; do
 	config_dir="${CONFIG_DIRS[$i]}"

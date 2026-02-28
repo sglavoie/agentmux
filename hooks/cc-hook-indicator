@@ -171,11 +171,11 @@ _update_activity() {
     # Skip tracking for clear/idle actions
     [[ -z "$event_kind" ]] && return 0
 
-    # Read existing counts (9 lines: first_event_ts, last_event_ts,
+    # Read existing counts (10 lines: first_event_ts, last_event_ts,
     # last_event_type, prompt_count, tool_use_count, tool_failure_count,
-    # permission_count, stop_count, last_attention_ts)
+    # permission_count, stop_count, last_attention_ts, task_completes)
     local first_ts="$now" last_ts="$now" last_type="$event_kind"
-    local prompts=0 tools=0 failures=0 permissions=0 stops=0 attention_ts=0
+    local prompts=0 tools=0 failures=0 permissions=0 stops=0 attention_ts=0 task_completes=0
 
     if [[ -f "$activity_file" ]]; then
         local i=0
@@ -184,6 +184,7 @@ _update_activity() {
             0) first_ts="$line" ;; 1) last_ts="$line" ;; 2) last_type="$line" ;;
             3) prompts="$line" ;; 4) tools="$line" ;; 5) failures="$line" ;;
             6) permissions="$line" ;; 7) stops="$line" ;; 8) attention_ts="$line" ;;
+            9) task_completes="$line" ;;
             esac
             i=$((i + 1))
         done <"$activity_file"
@@ -195,6 +196,7 @@ _update_activity() {
         permissions="${permissions:-0}"
         stops="${stops:-0}"
         attention_ts="${attention_ts:-0}"
+        task_completes="${task_completes:-0}"
     fi
 
     last_ts="$now"
@@ -212,12 +214,14 @@ _update_activity() {
         attention_ts="$now"
         ;;
     stop) stops=$((stops + 1)) ;;
+    task_complete) task_completes=$((task_completes + 1)) ;;
     esac
 
     local tmpfile="${activity_file}.tmp.$$"
-    printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
         "$first_ts" "$last_ts" "$last_type" \
         "$prompts" "$tools" "$failures" "$permissions" "$stops" "$attention_ts" \
+        "$task_completes" \
         >"$tmpfile" && mv "$tmpfile" "$activity_file"
 }
 

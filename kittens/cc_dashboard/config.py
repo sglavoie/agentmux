@@ -532,6 +532,7 @@ HOOK_EVENTS = [
     "PostToolUseFailure",
     "PermissionRequest",
     "Stop",
+    "TaskCompleted",
     "SessionEnd",
 ]
 
