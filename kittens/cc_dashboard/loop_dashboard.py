@@ -4,6 +4,7 @@ import curses
 import os
 import shutil
 import time
+from typing import Any
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.colors import CP_NORMAL, CP_WARN, init_colors
@@ -53,11 +54,6 @@ from cc_dashboard.remote.actions import (
     generate_clone_title,
     run_hooks_sync,
 )
-from cc_dashboard.remote.git_ops import (
-    check_git_safety,
-    do_create_worktree,
-    do_remove_worktree,
-)
 from cc_dashboard.remote.activity import (
     list_activity_logs,
     load_activity_log,
@@ -68,6 +64,11 @@ from cc_dashboard.remote.command import (
     get_host_tab_id,
     get_kitty_socket,
     get_window_text,
+)
+from cc_dashboard.remote.git_ops import (
+    check_git_safety,
+    do_create_worktree,
+    do_remove_worktree,
 )
 from cc_dashboard.remote.sessions import query_all_sessions
 from cc_dashboard.remote.shared import (
@@ -146,8 +147,8 @@ def dashboard(stdscr):
     show_all = False
     sessions = query_all_sessions(managed_only=True)
     selected = 0
-    marked = set()  # set of tab_ids for multi-select
-    batch_targets = []  # resolved sessions for batch operations
+    marked: set[int] = set()  # set of tab_ids for multi-select
+    batch_targets: list[dict[str, Any]] = []  # resolved sessions for batch operations
 
     # Detect the tab that hosts this dashboard overlay so we can handle
     # restart/close operations on it safely.
@@ -166,7 +167,12 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | actions | restart_options | confirm | confirm_restart | confirm_batch_close | confirm_batch_restart | confirm_save | rename | worktree | new | pick | delete | move_picker | config_pick | config_action | config_show | sort_pick | hooks | hooks_event | hooks_sync_confirm | hooks_cmd_input
+    # list | actions | restart_options | confirm | confirm_restart |
+    # confirm_batch_close | confirm_batch_restart | confirm_save | rename |
+    # worktree | new | pick | delete | move_picker | config_pick |
+    # config_action | config_show | sort_pick | hooks | hooks_event |
+    # hooks_sync_confirm | hooks_cmd_input
+    mode = "list"
     msg = ""
     msg_frames = 0
 
@@ -217,7 +223,7 @@ def dashboard(stdscr):
     # Session actions state
     actions_selected = 0
     actions_scope = "selected"  # selected | marked
-    actions_targets = []
+    actions_targets: list[dict[str, Any]] = []
     restart_target_socket = ""
     restart_target_tab_id = 0
     restart_default_config_label = "(account default)"
@@ -248,11 +254,11 @@ def dashboard(stdscr):
     config_action_selected = 0
     config_file_label = ""
     config_file_path = ""
-    config_show_lines = []
+    config_show_lines: list[str] = []
     config_show_scroll = 0
 
     # Hooks manager state
-    hooks_drift = {}  # {account_name: "in_sync"|"drifted"|"missing"}
+    hooks_drift: dict[str, str] = {}  # {account_name: "in_sync"|"drifted"|"missing"}
     hooks_selected = 0  # cursor position in hooks account list
     hooks_event_selected = 0  # cursor position in hooks event list
     hooks_account = ""  # account name when in hooks_event mode
@@ -262,7 +268,7 @@ def dashboard(stdscr):
     hooks_sync_scope = ""  # "all" or account name for sync confirm
 
     # Peek state
-    peek_lines = []
+    peek_lines: list[str] = []
     peek_scroll = 0
     peek_extent = "screen"
     peek_session_title = ""
@@ -270,17 +276,23 @@ def dashboard(stdscr):
     peek_search_query = ""
     peek_search_active = False
     peek_search_cursor = 0
-    peek_match_lines = []
+    peek_match_lines: list[int] = []
     peek_match_index = 0
 
     # Activity log viewer state
-    actlog_lines, actlog_scroll, actlog_session_title, actlog_session_id = [], 0, "", ""
-    actlog_summary = {}
+    actlog_lines: list[str] = []
+    actlog_scroll = 0
+    actlog_session_title = ""
+    actlog_session_id = ""
+    actlog_summary: dict[str, Any] = {}
     actlog_search_query, actlog_search_active, actlog_search_cursor = "", False, 0
-    actlog_match_lines, actlog_match_index = [], 0
+    actlog_match_lines: list[int] = []
+    actlog_match_index = 0
 
     # Activity log browser state
-    actlog_browse_entries, actlog_browse_selected, actlog_browse_scroll = [], 0, 0
+    actlog_browse_entries: list[dict[str, Any]] = []
+    actlog_browse_selected = 0
+    actlog_browse_scroll = 0
 
     # New-session form state -- default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
@@ -299,7 +311,7 @@ def dashboard(stdscr):
     form_mode = "new"  # "new" or "edit"
     edit_original_title = ""
     dir_browse_active = False
-    dir_browse_entries = []
+    dir_browse_entries: list[str] = []
     dir_browse_selected = 0
     dir_browse_scroll = 0
     dir_browse_show_hidden = False
@@ -730,9 +742,9 @@ def dashboard(stdscr):
 
             if key in (ord("q"), ord("Q")):
                 return
-            if (
-                key == 27
-            ):  # Escape -- cascade: marks -> filter mode -> search -> account filter -> quit
+            # Escape -- cascade: marks -> filter mode -> search ->
+            # account filter -> quit
+            if key == 27:
                 if marked:
                     marked.clear()
                 elif account_filter_mode:
@@ -1043,8 +1055,9 @@ def dashboard(stdscr):
                     )
                 elif fk == "config_dir":
                     config_choices = [
-                        restart_default_config_label
-                    ] + _cfg._unique_config_dirs()
+                        restart_default_config_label,
+                        *_cfg._unique_config_dirs(),
+                    ]
                     try:
                         idx = config_choices.index(restart_options_fields["config_dir"])
                     except ValueError:
@@ -1094,7 +1107,9 @@ def dashboard(stdscr):
                     pw_override = restart_options_fields["pw"]
                     pw_override = "" if pw_override == "none" else pw_override
                     env_vars = restart_options_fields["env"].strip()
-                    config_dir_override = restart_options_fields["config_dir"]
+                    config_dir_override: str | None = restart_options_fields[
+                        "config_dir"
+                    ]
                     if config_dir_override == restart_default_config_label:
                         config_dir_override = None
 
@@ -1110,7 +1125,10 @@ def dashboard(stdscr):
                             host_tab_id=host_tab_id,
                             env_vars=env_vars,
                         )
-                        success_msg = f"Session restarted in {restart_options_fields.get('instance', '')}".strip()
+                        success_msg = (
+                            "Session restarted in "
+                            f"{restart_options_fields.get('instance', '')}"
+                        ).strip()
                     else:
                         ok = do_restart(
                             sess_socket,
@@ -1235,7 +1253,7 @@ def dashboard(stdscr):
             ):
                 row = event_rows[hooks_event_selected]
                 if row[0] == "extra":
-                    _, event_name, cmd_idx, cmd_str = row
+                    _, event_name, cmd_idx, _cmd_str = row
                     _cfg.remove_extra_command(hooks_account, event_name, cmd_idx)
                     hooks_drift[hooks_account] = _cfg._detect_drift(hooks_account)
                     # Adjust selection if we removed the last row
@@ -1517,7 +1535,10 @@ def dashboard(stdscr):
                     mode = "config_show"
                 elif config_action_selected == 1:  # Edit in editor
                     do_open_editor(home_socket, config_file_path)
-                    msg = f"Opened {config_file_label} in editor — press R to reload config"
+                    msg = (
+                        f"Opened {config_file_label} in editor — "
+                        "press R to reload config"
+                    )
                     msg_frames = 30
                     mode = "config_pick"
                 elif config_action_selected == 2:  # Show file path

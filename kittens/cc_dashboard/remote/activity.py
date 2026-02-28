@@ -114,7 +114,7 @@ def load_activity_log(session_id):
     if not entries:
         return [], {}
 
-    tool_counts = {}
+    tool_counts: dict[str, int] = {}
     stop_count = 0
     first_ts = None
     last_ts = None
@@ -184,10 +184,8 @@ def list_activity_logs(sessions):
                 for line in f:
                     event_count += 1
                     if event_count == 1 and not running_ids.get(session_id):
-                        try:
+                        with contextlib.suppress(json.JSONDecodeError, ValueError):
                             first_cwd = json.loads(line.strip()).get("cwd", "")
-                        except (json.JSONDecodeError, ValueError):
-                            pass
         except OSError:
             pass
 

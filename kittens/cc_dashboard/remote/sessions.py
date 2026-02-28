@@ -51,16 +51,17 @@ def query_sessions(socket, managed_only=True):
             detected_config_dir = ""
             windows = tab.get("windows", [])
             cwd = ""
-            user_vars = {}
+            user_vars: dict[str, str] = {}
             claude_win_id = 0
 
             pids = []
             cmdlines = []
 
             for win in windows:
-                uv = win.get("user_vars", {})
+                uv_raw = win.get("user_vars", {})
+                uv = uv_raw if isinstance(uv_raw, dict) else {}
                 if not user_vars and ("cc_account" in uv or "cc_cwd" in uv):
-                    user_vars = uv
+                    user_vars = {str(k): str(v) for k, v in uv.items()}
                 for proc in win.get("foreground_processes", []):
                     cmdline = proc.get("cmdline", [])
                     cmdline_str = " ".join(cmdline)

@@ -190,7 +190,10 @@ def load_defaults():
 
 # ── Session configuration ──────────────────────────────────────────────────
 
-# list of {"title": str, "dir": str, "account": str, "flags": str, "pw": str, "env": str}
+# list of {
+#   "title": str, "dir": str, "account": str,
+#   "flags": str, "pw": str, "env": str
+# }
 _sessions: list[dict[str, str]] = []
 
 
@@ -374,13 +377,13 @@ def save_sessions(live_sessions):
             for line in header_lines:
                 f.write(line)
         else:
+            saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write("# cc-manager session definitions\n")
-            f.write(
-                f"# Saved by dashboard on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            )
+            f.write(f"# Saved by dashboard on {saved_at}\n")
             f.write("#\n")
             f.write(
-                "# Format: title | directory | account [| claude_flags [| project_window [| env_vars]]]\n"
+                "# Format: title | directory | account"
+                " [| claude_flags [| project_window [| env_vars]]]\n"
             )
             f.write("\n")
         for s in live_sessions:
@@ -392,16 +395,13 @@ def save_sessions(live_sessions):
             flags = s.get("cc_flags", "")
             pw = s.get("cc_pw", "")
             env = s.get("cc_env", "")
+            base = f"{title:<20s} | {directory:<40s} | {account:<10s}"
             if env:
-                f.write(
-                    f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw:<10s} | {env}\n"
-                )
+                f.write(f"{base} | {flags:<30s} | {pw:<10s} | {env}\n")
             elif pw:
-                f.write(
-                    f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw}\n"
-                )
+                f.write(f"{base} | {flags:<30s} | {pw}\n")
             elif flags:
-                f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags}\n")
+                f.write(f"{base} | {flags}\n")
             else:
                 f.write(f"{title:<20s} | {directory:<40s} | {account}\n")
 
@@ -632,9 +632,8 @@ def _load_example_hooks():
     path = _resolve_hooks_example_path()
     if not path:
         return {}
-    with contextlib.suppress(json.JSONDecodeError, OSError):
-        with open(path) as f:
-            return json.load(f).get("hooks", {})
+    with contextlib.suppress(json.JSONDecodeError, OSError), open(path) as f:
+        return json.load(f).get("hooks", {})
     return {}
 
 
@@ -740,7 +739,7 @@ def _detect_drift(account_name):
             extra_cmds = {e.get("command", "") for e in extra_commands.get(event, [])}
 
             # Filter installed entries to only ccm-managed ones
-            def _is_managed(entry):
+            def _is_managed(entry, extra_cmds=extra_cmds):
                 for hook in entry.get("hooks", []):
                     cmd = hook.get("command", "")
                     if "cc-hook-indicator" in cmd or resolved_cmd in cmd:

@@ -1,5 +1,6 @@
 """Tab action helpers: focus, launch, restart, move, sort, and hooks sync."""
 
+import contextlib
 import json
 import os
 import re
@@ -41,7 +42,7 @@ def do_cross_instance_focus(socket, tab_id, home_socket):
     if not m:
         return
     pid = m.group(1)
-    try:
+    with contextlib.suppress(subprocess.SubprocessError, OSError):
         subprocess.run(
             [
                 "osascript",
@@ -52,8 +53,6 @@ def do_cross_instance_focus(socket, tab_id, home_socket):
             capture_output=True,
             timeout=3,
         )
-    except (subprocess.SubprocessError, OSError):
-        pass
 
 
 def do_close(socket, tab_id):

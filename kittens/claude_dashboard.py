@@ -65,7 +65,7 @@ def main(args=None):
 # main() returns.  All tab actions are performed from within main() via
 # subprocess calls to kitty @, so handle_result is intentionally a no-op.
 try:
-    from kittens.tui.handler import result_handler  # type: ignore[import-not-found]
+    from kittens.tui.handler import result_handler  # type: ignore[import-untyped]
 
     @result_handler()
     def handle_result(args, answer, target_window_id, boss):

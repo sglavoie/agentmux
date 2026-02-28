@@ -679,6 +679,8 @@ _DRIFT_BADGES = {
     "missing": ("missing", CP_WARN),
 }
 
+type HooksEventRow = tuple[str, str, bool] | tuple[str, str, int, str]
+
 
 def _hooks_event_rows(account_name, hooks_overrides):
     """Build a flat list of rows for the hooks event detail view."""
@@ -688,11 +690,11 @@ def _hooks_event_rows(account_name, hooks_overrides):
     disabled_events = override.get("disabled_events", [])
     extra_commands = override.get("extra_commands", {})
 
-    result = []
+    result: list[HooksEventRow] = []
     for event in HOOK_EVENTS:
         result.append(("event", event, event in disabled_events))
         for i, cmd_entry in enumerate(extra_commands.get(event, [])):
-            result.append(("extra", event, i, cmd_entry.get("command", "")))
+            result.append(("extra", event, i, str(cmd_entry.get("command", ""))))
     return result
 
 

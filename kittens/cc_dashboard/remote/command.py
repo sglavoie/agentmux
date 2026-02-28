@@ -6,7 +6,6 @@ import os
 import re
 import subprocess
 
-
 _DEBUG_LOG = os.environ.get("CCM_DEBUG_LOG", "")
 
 

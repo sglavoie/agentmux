@@ -8,30 +8,41 @@ given sequence in a single atomic call, avoiding the sequential focus+move
 approach.
 """
 
+import contextlib
+import importlib
+from collections.abc import Callable
+from typing import Any
 
-def main(args):
+
+def main(args: list[str]) -> None:
     pass
 
 
-from kittens.tui.handler import result_handler  # noqa: E402
+try:
+    from kittens.tui.handler import result_handler  # type: ignore[import-untyped]
+except ImportError:
+
+    def result_handler(*_args: Any, **_kwargs: Any) -> Callable[[Any], Any]:
+        def _decorator(func: Any) -> Any:
+            return func
+
+        return _decorator
 
 
 @result_handler(no_ui=True)
-def handle_result(args, answer, target_window_id, boss):
+def handle_result(
+    args: list[str], answer: str, target_window_id: int, boss: Any
+) -> None:
     tab_args = args[1:]  # skip the kitten script name
     focus_id = None
     tab_ids = []
     for arg in tab_args:
         if arg.startswith("--focus="):
-            try:
+            with contextlib.suppress(ValueError):
                 focus_id = int(arg.split("=", 1)[1])
-            except ValueError:
-                pass
         else:
-            try:
+            with contextlib.suppress(ValueError):
                 tab_ids.append(int(arg))
-            except ValueError:
-                pass
     if not tab_ids:
         return
     tm = boss.active_tab_manager
@@ -48,7 +59,13 @@ def handle_result(args, answer, target_window_id, boss):
                 ordered.append(tab)
         # Reorder by adjacent swaps, syncing the C backend each time
         # (same approach as TabManager.move_tab in Kitty 0.45.0)
-        from kitty.fast_data_types import swap_tabs
+        try:
+            fast_data_types = importlib.import_module("kitty.fast_data_types")
+            swap_tabs = fast_data_types.swap_tabs
+        except ImportError:
+
+            def swap_tabs(*_args: Any, **_kwargs: Any) -> None:
+                return None
 
         id_to_target = {tab.id: i for i, tab in enumerate(ordered)}
         for target_pos in range(len(tm.tabs)):

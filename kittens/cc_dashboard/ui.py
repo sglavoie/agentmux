@@ -56,11 +56,11 @@ from cc_dashboard.views import (  # noqa: F401
     draw_confirm_prompt,
     draw_detail_pane,
     draw_filter_bar,
-    draw_sort_picker,
     draw_footer,
     draw_list_view,
     draw_new_form,
     draw_pick_view,
     draw_search_bar,
+    draw_sort_picker,
     draw_status_message,
 )

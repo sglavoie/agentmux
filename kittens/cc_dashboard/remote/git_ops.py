@@ -177,8 +177,8 @@ def check_git_safety(path):
         )
         if result.returncode == 0 and result.stdout.strip():
             lines = result.stdout.strip().splitlines()
-            untracked = [l for l in lines if l.startswith("?? ")]
-            changed = [l for l in lines if not l.startswith("?? ")]
+            untracked = [line for line in lines if line.startswith("?? ")]
+            changed = [line for line in lines if not line.startswith("?? ")]
             if changed:
                 warnings.append(f"Has uncommitted changes ({len(changed)} files)")
             if untracked:
