@@ -51,6 +51,7 @@ from cc_dashboard.views import (
     draw_config_action_picker,
     draw_config_picker,
     draw_config_show,
+    draw_batch_confirm_prompt,
     draw_confirm_prompt,
     draw_delete_confirm,
     draw_delete_view,
@@ -137,6 +138,7 @@ def dashboard(stdscr):
     sessions = query_all_sessions(managed_only=True)
     selected = 0
     marked = set()  # set of tab_ids for multi-select
+    batch_targets = []  # resolved sessions for batch operations
 
     # Detect the tab that hosts this dashboard overlay so we can handle
     # restart/close operations on it safely.
@@ -155,7 +157,7 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | confirm_save | rename | worktree | new | pick | delete | help | move_picker | config_pick | config_action | config_show | sort_pick
+    mode = "list"  # list | confirm | confirm_restart | confirm_batch_close | confirm_batch_restart | confirm_save | rename | worktree | new | pick | delete | help | move_picker | config_pick | config_action | config_show | sort_pick
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -295,7 +297,7 @@ def dashboard(stdscr):
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "confirm_save", "rename", "worktree", "move_picker", "config_pick", "config_action", "sort_pick") or (
+        if mode in ("list", "confirm", "confirm_restart", "confirm_batch_close", "confirm_batch_restart", "confirm_save", "rename", "worktree", "move_picker", "config_pick", "config_action", "sort_pick") or (
             mode == "override" and override_source == "list"
         ):
             rows, _cols = stdscr.getmaxyx()
@@ -331,6 +333,12 @@ def dashboard(stdscr):
                 draw_confirm_prompt(stdscr, filtered[selected], "Close")
             elif mode == "confirm_restart" and filtered:
                 draw_confirm_prompt(stdscr, filtered[selected], "Restart")
+            elif mode == "confirm_batch_close":
+                draw_batch_confirm_prompt(stdscr, batch_targets, "Close")
+                draw_footer(stdscr, "confirm_batch_close")
+            elif mode == "confirm_batch_restart":
+                draw_batch_confirm_prompt(stdscr, batch_targets, "Restart")
+                draw_footer(stdscr, "confirm_batch_restart")
             elif mode == "confirm_save":
                 rows_now, _ = stdscr.getmaxyx()
                 prompt = f"Save {len(sessions)} session(s) to sessions.conf? y/n"
@@ -451,6 +459,7 @@ def dashboard(stdscr):
                             else None
                         )
                         sessions = new_sessions
+                        marked &= {s["tab_id"] for s in sessions}
                         filtered = new_filtered
                         selected = 0
                         if old_tab_id is not None:
@@ -574,7 +583,14 @@ def dashboard(stdscr):
                 )
                 return
             elif key in (ord("x"), ord("X")) and filtered:
-                mode = "confirm"
+                if marked:
+                    batch_targets = [s for s in filtered if s["tab_id"] in marked]
+                    if batch_targets:
+                        mode = "confirm_batch_close"
+                    else:
+                        mode = "confirm"
+                else:
+                    mode = "confirm"
             elif key in (ord("n"), ord("N")):
                 mode = "new"
                 form_mode = "new"
@@ -692,6 +708,7 @@ def dashboard(stdscr):
                 mode = "peek"
             elif key == 18:  # Ctrl+r -- refresh
                 sessions = query_all_sessions(managed_only=(not show_all))
+                marked &= {s["tab_id"] for s in sessions}
                 _refilter()
                 msg = f"{len(filtered)} session(s) found"
                 msg_frames = 20
@@ -716,7 +733,14 @@ def dashboard(stdscr):
                     worktree_branch = ""
                     worktree_cursor = 0
             elif key == ord("R") and filtered:
-                mode = "confirm_restart"
+                if marked:
+                    batch_targets = [s for s in filtered if s["tab_id"] in marked]
+                    if batch_targets:
+                        mode = "confirm_batch_restart"
+                    else:
+                        mode = "confirm_restart"
+                else:
+                    mode = "confirm_restart"
             elif key == ord("S"):
                 if sessions:
                     mode = "confirm_save"
@@ -740,14 +764,18 @@ def dashboard(stdscr):
                 msg = "Only one Kitty instance running"
                 msg_frames = 20
             elif key == ord("m") and filtered and multi_instance:
+                if marked:
+                    batch_targets = [s for s in filtered if s["tab_id"] in marked]
+                if not marked:
+                    batch_targets = []
                 sess = filtered[selected]
                 current_inst = sess.get("instance_label", "")
                 targets = [lbl for lbl in instance_labels if lbl != current_inst]
                 if not targets:
                     msg = "No other instances to move to"
                     msg_frames = 20
-                elif len(targets) == 1:
-                    # Only one target — move immediately
+                elif len(targets) == 1 and not batch_targets:
+                    # Only one target, single session — move immediately
                     target_socket = instance_socket_map.get(targets[0], "")
                     if not target_socket:
                         msg = f"Instance {targets[0]} is no longer available"
@@ -782,6 +810,51 @@ def dashboard(stdscr):
                         else:
                             msg = f"Instance {sess.get('instance_label', sess_socket)} is no longer available"
                         msg_frames = 20
+                elif len(targets) == 1 and batch_targets:
+                    # Only one target, batch move — move all marked immediately
+                    target_socket = instance_socket_map.get(targets[0], "")
+                    if not target_socket:
+                        msg = f"Instance {targets[0]} is no longer available"
+                        msg_frames = 20
+                    else:
+                        has_host = host_tab_id is not None
+                        to_move = [s for s in batch_targets if s.get("instance_label", "") != targets[0]]
+                        if not to_move:
+                            msg = "All marked sessions already on target instance"
+                            msg_frames = 20
+                        else:
+                            targets_sorted = sorted(
+                                to_move,
+                                key=lambda s: (1 if has_host and s["tab_id"] == host_tab_id else 0),
+                            )
+                            moved = 0
+                            for t in targets_sorted:
+                                r_flags = t.get("cc_flags", "")
+                                r_pw = t.get("cc_pw", "")
+                                if not r_flags and not r_pw:
+                                    cfg_entry = _cfg._find_config_session(t["title"])
+                                    if cfg_entry is None:
+                                        cfg_entry = _cfg._find_config_session(
+                                            _strip_override_marker(t["title"])
+                                        )
+                                    r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                                    r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                                t_socket = t.get("socket", home_socket)
+                                is_host = has_host and t["tab_id"] == host_tab_id
+                                ok = do_move(
+                                    t_socket, target_socket, t,
+                                    flags=r_flags, pw_override=r_pw,
+                                    host_tab_id=host_tab_id,
+                                )
+                                if is_host:
+                                    return
+                                if ok:
+                                    moved += 1
+                            marked.clear()
+                            sessions = query_all_sessions(managed_only=(not show_all))
+                            _refilter()
+                            msg = f"Moved {moved} session(s) to {targets[0]}"
+                            msg_frames = 20
                 else:
                     mode = "move_picker"
                     move_selected = 0
@@ -1054,6 +1127,67 @@ def dashboard(stdscr):
                 msg_frames = 20
             mode = "list"
 
+        # ── Confirm batch close ─────────────────────────────────
+        elif mode == "confirm_batch_close":
+            if key in (ord("y"), ord("Y")) and batch_targets:
+                # Sort so host tab is processed last
+                has_host = host_tab_id is not None
+                targets_sorted = sorted(
+                    batch_targets,
+                    key=lambda s: (1 if has_host and s["tab_id"] == host_tab_id else 0),
+                )
+                closed = 0
+                for t in targets_sorted:
+                    t_socket = t.get("socket", home_socket)
+                    if has_host and t["tab_id"] == host_tab_id:
+                        _spawn_detached_close(t_socket, t["tab_id"])
+                        return
+                    if do_close(t_socket, t["tab_id"]):
+                        closed += 1
+                marked.clear()
+                sessions = query_all_sessions(managed_only=(not show_all))
+                _refilter()
+                msg = f"Closed {closed} session(s)"
+                msg_frames = 20
+            mode = "list"
+
+        # ── Confirm batch restart ──────────────────────────────
+        elif mode == "confirm_batch_restart":
+            if key in (ord("y"), ord("Y")) and batch_targets:
+                has_host = host_tab_id is not None
+                targets_sorted = sorted(
+                    batch_targets,
+                    key=lambda s: (1 if has_host and s["tab_id"] == host_tab_id else 0),
+                )
+                restarted = 0
+                for t in targets_sorted:
+                    r_flags = t.get("cc_flags", "")
+                    r_pw = t.get("cc_pw", "")
+                    if not r_flags and not r_pw:
+                        cfg_entry = _cfg._find_config_session(t["title"])
+                        if cfg_entry is None:
+                            cfg_entry = _cfg._find_config_session(
+                                _strip_override_marker(t["title"])
+                            )
+                        r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                        r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                    t_socket = t.get("socket", home_socket)
+                    is_host = has_host and t["tab_id"] == host_tab_id
+                    ok = do_restart(
+                        t_socket, t, flags=r_flags, pw_override=r_pw,
+                        host_tab_id=host_tab_id,
+                    )
+                    if is_host:
+                        return
+                    if ok:
+                        restarted += 1
+                marked.clear()
+                sessions = query_all_sessions(managed_only=(not show_all))
+                _refilter()
+                msg = f"Restarted {restarted} session(s)"
+                msg_frames = 20
+            mode = "list"
+
         # ── Confirm save ────────────────────────────────────────
         elif mode == "confirm_save":
             if key in (ord("y"), ord("Y")):
@@ -1188,6 +1322,50 @@ def dashboard(stdscr):
                 if not target_socket:
                     msg = f"Instance {target_label} is no longer available"
                     msg_frames = 20
+                    mode = "list"
+                elif marked:
+                    # Batch move all marked sessions
+                    to_move = [
+                        s for s in filtered
+                        if s["tab_id"] in marked and s.get("instance_label", "") != target_label
+                    ]
+                    if not to_move:
+                        msg = "All marked sessions already on target instance"
+                        msg_frames = 20
+                    else:
+                        has_host = host_tab_id is not None
+                        targets_sorted = sorted(
+                            to_move,
+                            key=lambda s: (1 if has_host and s["tab_id"] == host_tab_id else 0),
+                        )
+                        moved = 0
+                        for t in targets_sorted:
+                            r_flags = t.get("cc_flags", "")
+                            r_pw = t.get("cc_pw", "")
+                            if not r_flags and not r_pw:
+                                cfg_entry = _cfg._find_config_session(t["title"])
+                                if cfg_entry is None:
+                                    cfg_entry = _cfg._find_config_session(
+                                        _strip_override_marker(t["title"])
+                                    )
+                                r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                                r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+                            t_socket = t.get("socket", home_socket)
+                            is_host = has_host and t["tab_id"] == host_tab_id
+                            ok = do_move(
+                                t_socket, target_socket, t,
+                                flags=r_flags, pw_override=r_pw,
+                                host_tab_id=host_tab_id,
+                            )
+                            if is_host:
+                                return
+                            if ok:
+                                moved += 1
+                        marked.clear()
+                        sessions = query_all_sessions(managed_only=(not show_all))
+                        _refilter()
+                        msg = f"Moved {moved} session(s) to {target_label}"
+                        msg_frames = 20
                     mode = "list"
                 else:
                     is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id

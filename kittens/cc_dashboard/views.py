@@ -415,11 +415,11 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
         sel = si == selected
         is_marked = marked and s["tab_id"] in marked
         if sel and is_marked:
-            mark = "\u25b8\u25cf"
+            mark = ">*"
         elif sel:
-            mark = "\u25b8 "
+            mark = "> "
         elif is_marked:
-            mark = " \u25cf"
+            mark = " *"
         else:
             mark = "  "
 
@@ -851,6 +851,8 @@ _FOOTER_HINTS = {
     "filter": ["1-N Toggle account", "f Done", "Esc Clear"],
     "confirm": ["y Confirm close", "Any other key Cancel"],
     "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
+    "confirm_batch_close": ["y Confirm close all", "Any other key Cancel"],
+    "confirm_batch_restart": ["y Confirm restart all", "Any other key Cancel"],
     "confirm_save": ["y Confirm save", "Any other key Cancel"],
     "new": ["Enter Next/Submit", "Tab Cycle", "Up/Dn Navigate", "Esc Cancel"],
     "new_dir_browse": ["Enter Select", "Up/Dn Navigate", ". Toggle hidden", "Esc Close"],
@@ -895,6 +897,19 @@ def draw_confirm_prompt(stdscr, session, action="Close"):
     rows, _ = stdscr.getmaxyx()
     msg = f'{action} session "{session["title"]}"?  y/n'
     safe_addstr(stdscr, rows - 3, 2, msg, curses.color_pair(CP_WARN) | curses.A_BOLD)
+
+
+def draw_batch_confirm_prompt(stdscr, sessions, action="Close"):
+    """Draw a batch confirmation prompt listing affected sessions."""
+    rows, cols = stdscr.getmaxyx()
+    attr = curses.color_pair(CP_WARN) | curses.A_BOLD
+    prompt = f"{action} {len(sessions)} session(s)?  y/n"
+    safe_addstr(stdscr, rows - 4, 2, prompt, attr)
+    titles = ", ".join(s["title"] for s in sessions)
+    max_w = cols - 5
+    if len(titles) > max_w:
+        titles = titles[: max_w - 3] + "..."
+    safe_addstr(stdscr, rows - 3, 4, titles, curses.color_pair(CP_DIM))
 
 
 def draw_override_picker(stdscr, session, override_selected):
