@@ -732,6 +732,7 @@ _HELP_SECTIONS = [
             ("l", "Launch session from config"),
             ("S", "Save sessions to sessions.conf"),
             ("p", "Peek at session output"),
+            ("c", "Clone session (same dir, account, flags)"),
             ("w", "Clone session to git worktree"),
         ],
     ),
@@ -748,7 +749,7 @@ _HELP_SECTIONS = [
         [
             ("d", "Toggle detail pane"),
             ("a", "Toggle all / managed tabs"),
-            ("c", "Open config file browser"),
+            ("C", "Open config file browser"),
             ("Ctrl+r", "Refresh session list"),
         ],
     ),
@@ -833,10 +834,11 @@ _FOOTER_HINTS = {
         "e Edit",
         "n New",
         "l Launch",
+        "c Clone",
         "w Worktree",
         "D Delete",
         "S Save",
-        "c Config",
+        "C Config",
         "d Detail",
         "p Peek",
         "/ Search",
@@ -864,6 +866,7 @@ _FOOTER_HINTS = {
     "config_pick": ["j/k Navigate", "Enter Select", "R Reload", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
+    "clone": ["Enter Clone", "Esc Cancel"],
     "worktree": ["Enter Create", "Esc Cancel"],
     "delete": ["Enter Select", "/ Search", "q Back", "Esc Back"],
     "delete_confirm": ["y Confirm", "Any other key Cancel"],
@@ -1484,6 +1487,42 @@ def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
     prefix = "Branch: "
     before = branch_value[:cursor_pos]
     after = branch_value[cursor_pos:]
+    cursor_ch = after[0] if after else " "
+    after_rest = after[1:] if len(after) > 1 else ""
+
+    y = rows - 3
+    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
+    x = 2 + len(prefix)
+    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+    safe_addstr(
+        stdscr,
+        y,
+        x + len(before),
+        cursor_ch,
+        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+    )
+    if after_rest:
+        safe_addstr(
+            stdscr,
+            y,
+            x + len(before) + 1,
+            after_rest,
+            curses.color_pair(CP_INPUT_ACTIVE),
+        )
+
+
+def draw_clone_input(stdscr, session, title_value, cursor_pos):
+    """Draw a two-line clone input on the status line area."""
+    rows, _cols = stdscr.getmaxyx()
+
+    # Source info line
+    source_text = f'Clone "{session["title"]}" \u2192 new session'
+    safe_addstr(stdscr, rows - 4, 2, source_text, curses.color_pair(CP_DIM))
+
+    # Title input line
+    prefix = "Title: "
+    before = title_value[:cursor_pos]
+    after = title_value[cursor_pos:]
     cursor_ch = after[0] if after else " "
     after_rest = after[1:] if len(after) > 1 else ""
 

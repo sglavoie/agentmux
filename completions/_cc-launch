@@ -53,6 +53,10 @@ _cc-launch() {
                         [[ $CURRENT -eq 5 ]] && _cc_launch_tab_titles
                         return
                         ;;
+                    --clone)
+                        [[ $CURRENT -eq 5 ]] && _cc_launch_tab_titles
+                        return
+                        ;;
                     --save)
                         [[ $CURRENT -eq 5 ]] && _files
                         return
@@ -62,6 +66,7 @@ _cc-launch() {
                             '--all[Launch all sessions from config]' \
                             '--add[Launch a single ad-hoc session tab]' \
                             '--close[Close a tab by title]' \
+                            '--clone[Clone a session with same settings]' \
                             '--list[List open tabs running Claude]' \
                             '--save[Save current sessions to config file]' \
                             '--cleanup[Find and close stale sessions]' \
@@ -85,6 +90,9 @@ _cc-launch() {
         --close)
             [[ $CURRENT -eq 3 ]] && _cc_launch_tab_titles
             ;;
+        --clone)
+            [[ $CURRENT -eq 3 ]] && _cc_launch_tab_titles
+            ;;
         --save)
             [[ $CURRENT -eq 3 ]] && _files
             ;;
@@ -93,6 +101,7 @@ _cc-launch() {
                 '--all[Launch all sessions from config]' \
                 '--add[Launch a single ad-hoc session tab]' \
                 '--close[Close a tab by title]' \
+                '--clone[Clone a session with same settings]' \
                 '--list[List open tabs running Claude]' \
                 '--save[Save current sessions to config file]' \
                 '--cleanup[Find and close stale sessions]' \

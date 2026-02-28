@@ -489,17 +489,16 @@ cmd_restart() {
                                 select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
                             ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
                         end
+                    ),
+                    flags: (
+                        [.windows[] | .user_vars.cc_flags // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
+                    ),
+                    pw: (
+                        [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
                     )
-                },
-                flags: (
-                    [.windows[] | .user_vars.cc_flags // empty | select(. != "")] |
-                    if length > 0 then .[0] else "" end
-                ),
-                pw: (
-                    [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
-                    if length > 0 then .[0] else "" end
-                )
-            } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
+                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
         ')"
 
 		if [[ -n "$tab_info" ]]; then
@@ -552,6 +551,225 @@ cmd_restart() {
 	fi
 
 	launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: clone a session (same dir, account, flags, project_window)
+# ---------------------------------------------------------------------------
+cmd_clone() {
+	local title="${1:-}"
+
+	discover_all_sockets
+	if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+		echo "Error: No active Kitty instances found." >&2
+		exit 1
+	fi
+
+	local multi_instance=false
+	if [[ ${#_INSTANCE_SOCKETS[@]} -gt 1 ]]; then
+		multi_instance=true
+	fi
+
+	local accounts_json default_account
+	accounts_json="$(build_accounts_json)"
+	default_account="$(default_account_name)"
+
+	if [[ -z "$title" ]]; then
+		require_gum
+
+		# Aggregate stripped titles from all instances
+		local -a clone_entries=()  # "title\tsocket" or "title (instance)\tsocket"
+		local si
+		for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+			local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+			local inst_label="${_INSTANCE_LABELS[$si]}"
+			local ls_json
+			ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+			local -a inst_titles=()
+			while IFS= read -r t; do
+				[[ -n "$t" ]] && inst_titles+=("$t")
+			done < <(echo "$ls_json" | jq -r --arg strip_re "$_STRIP_RE" '
+                [.[] | .tabs[] |
+                    select(
+                        [.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
+                    ) | .title | sub($strip_re; "")
+                ] | .[]
+            ')
+
+			local t
+			for t in "${inst_titles[@]+"${inst_titles[@]}"}"; do
+				if [[ "$multi_instance" == "true" ]]; then
+					clone_entries+=("${t} (${inst_label})"$'\t'"${inst_socket}")
+				else
+					clone_entries+=("${t}"$'\t'"${inst_socket}")
+				fi
+			done
+		done
+
+		if [[ ${#clone_entries[@]} -eq 0 ]]; then
+			echo "No Claude sessions found."
+			return
+		fi
+
+		local -a display_items=()
+		local entry
+		for entry in "${clone_entries[@]}"; do
+			display_items+=("${entry%%$'\t'*}")
+		done
+
+		local chosen
+		chosen="$(printf '%s\n' "${display_items[@]}" | gum choose \
+			--header "Select session to clone:" \
+			--header.foreground "$GUM_HEADER_COLOR" \
+			--cursor.foreground "$GUM_ACCENT_COLOR")" || {
+			echo "No session selected."
+			return
+		}
+
+		# Find the matching socket
+		local clone_socket=""
+		for entry in "${clone_entries[@]}"; do
+			if [[ "${entry%%$'\t'*}" == "$chosen" ]]; then
+				clone_socket="${entry#*$'\t'}"
+				break
+			fi
+		done
+
+		# Strip instance label from chosen to get the raw title
+		if [[ "$multi_instance" == "true" ]]; then
+			title="$(echo "$chosen" | sed 's/ (K:[0-9]*)$//')"
+		else
+			title="$chosen"
+		fi
+
+		SOCKET="$clone_socket"
+	fi
+
+	# Find the tab metadata for the selected title across all instances
+	local tab_info="" target_socket=""
+	local si
+	for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+		local inst_socket="${_INSTANCE_SOCKETS[$si]}"
+		local ls_json
+		ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+		tab_info="$(echo "$ls_json" | jq -r --arg t "$title" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
+            [.[] | .tabs[] |
+                select(
+                    (.title | sub($strip_re; "")) == $t
+                ) |
+                {
+                    tab_id: .id,
+                    account: (
+                        [.windows[] | .user_vars.cc_account // empty | select(. != "")] |
+                        if length > 0 then .[0]
+                        else
+                            (
+                                [.windows[] | .foreground_processes[]? |
+                                    select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
+                                    .cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
+                                ] | if length > 0 then
+                                    (.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+                                else $default_account end
+                            )
+                        end
+                    ),
+                    dir: (
+                        [.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
+                        if length > 0 then .[0]
+                        else
+                            ([.windows[] |
+                                select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+                            ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
+                        end
+                    ),
+                    flags: (
+                        [.windows[] | .user_vars.cc_flags // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
+                    ),
+                    pw: (
+                        [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
+                    )
+                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
+        ')"
+
+		if [[ -n "$tab_info" ]]; then
+			target_socket="$inst_socket"
+			break
+		fi
+	done
+
+	if [[ -z "$tab_info" ]]; then
+		echo "Error: No tab found with title '$title'." >&2
+		exit 1
+	fi
+
+	# Use the socket where the tab was found
+	SOCKET="$target_socket"
+
+	local tab_id account dir live_flags live_pw
+	IFS=$'\t' read -r tab_id account dir live_flags live_pw <<<"$tab_info"
+
+	# Generate unique clone title: strip trailing -N, increment until unique
+	local base_title clone_title n
+	base_title="$(echo "$title" | sed 's/-[0-9]*$//')"
+	n=2
+	while true; do
+		clone_title="${base_title}-${n}"
+		if ! tab_exists "$clone_title"; then
+			break
+		fi
+		n=$((n + 1))
+	done
+
+	local insert_loc loc_args=""
+	insert_loc="$(compute_insert_location "$SOCKET" "$account" "$clone_title")"
+	if [[ "$insert_loc" == "first" ]]; then
+		loc_args="--location first"
+	elif [[ -n "$insert_loc" ]]; then
+		kitty @ --to "$SOCKET" focus-tab --match "id:$insert_loc" 2>/dev/null
+		sleep 0.1
+		loc_args="--location after"
+	fi
+
+	# Prefer live user vars; fall back to sessions.conf for pre-upgrade tabs
+	local cfg_flags="$live_flags" cfg_pw="$live_pw"
+	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -f "$CONFIG_FILE" ]]; then
+		local lookup_title="${title%%‾*}"
+		local cfg_line
+		while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
+			[[ -z "$cfg_line" || "$cfg_line" =~ ^[[:space:]]*# ]] && continue
+			local cfg_title cfg_f cfg_p
+			IFS='|' read -r cfg_title _ _ cfg_f cfg_p <<<"$cfg_line"
+			cfg_title="$(_trim "$cfg_title")"
+			if [[ "$cfg_title" == "$lookup_title" ]]; then
+				cfg_flags="$(_trim "${cfg_f:-}")"
+				cfg_pw="$(_trim "${cfg_p:-}")"
+				break
+			fi
+		done <"$CONFIG_FILE"
+	fi
+
+	if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args"; then
+		# Append to sessions.conf so the clone survives ccm launch --all
+		if [[ -f "$CONFIG_FILE" ]]; then
+			local conf_line="$clone_title | $dir | $account"
+			if [[ -n "$cfg_flags" ]]; then
+				conf_line="$conf_line | $cfg_flags"
+			fi
+			if [[ -n "$cfg_pw" ]]; then
+				# Ensure flags column exists even if empty
+				if [[ -z "$cfg_flags" ]]; then
+					conf_line="$conf_line | "
+				fi
+				conf_line="$conf_line | $cfg_pw"
+			fi
+			echo "$conf_line" >>"$CONFIG_FILE"
+		fi
+		echo "Cloned '$title' as '$clone_title'."
+	fi
 }
 
 # ---------------------------------------------------------------------------
@@ -636,17 +854,16 @@ cmd_move() {
                                 select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
                             ] | if length > 0 then .[0].cwd else .windows[0].cwd end)
                         end
+                    ),
+                    flags: (
+                        [.windows[] | .user_vars.cc_flags // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
+                    ),
+                    pw: (
+                        [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
+                        if length > 0 then .[0] else "" end
                     )
-                },
-                flags: (
-                    [.windows[] | .user_vars.cc_flags // empty | select(. != "")] |
-                    if length > 0 then .[0] else "" end
-                ),
-                pw: (
-                    [.windows[] | .user_vars.cc_pw // empty | select(. != "")] |
-                    if length > 0 then .[0] else "" end
-                )
-            } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
+                } ] | .[0] // empty | [(.tab_id | tostring), .account, .dir, .flags, .pw] | @tsv
         ')"
 
 		if [[ -n "$tab_info" ]]; then
@@ -1185,6 +1402,7 @@ Commands:
     --add TITLE DIR [ACCOUNT]       Launch a single ad-hoc session tab (account picker if omitted)
     --close [TITLE]                 Close a tab (interactive picker if no title given)
     --restart [TITLE]               Close and relaunch a session (interactive picker if no title given)
+    --clone [TITLE]                 Clone a session (interactive picker if no title given)
     --move TITLE --instance LABEL   Move a session to a different Kitty instance
     --list                          List open tabs running Claude
     --save [FILE]                   Save current Claude sessions to config file
@@ -1333,6 +1551,10 @@ main() {
 	--restart)
 		shift
 		cmd_restart "$@"
+		;;
+	--clone)
+		shift
+		cmd_clone "$@"
 		;;
 	--move)
 		shift

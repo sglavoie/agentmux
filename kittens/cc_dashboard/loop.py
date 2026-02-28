@@ -21,6 +21,7 @@ from cc_dashboard.kitty_remote import (
     _append_override_marker,
     _strip_override_marker,
     compute_insert_location,
+    generate_clone_title,
     _spawn_detached_close,
     do_close,
     do_cross_instance_focus,
@@ -69,6 +70,7 @@ from cc_dashboard.views import (
     draw_rename_input,
     draw_search_bar,
     draw_status_message,
+    draw_clone_input,
     draw_worktree_input,
     _scan_directories,
     draw_dir_dropdown,
@@ -297,7 +299,7 @@ def dashboard(stdscr):
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "confirm_batch_close", "confirm_batch_restart", "confirm_save", "rename", "worktree", "move_picker", "config_pick", "config_action", "sort_pick") or (
+        if mode in ("list", "confirm", "confirm_restart", "confirm_batch_close", "confirm_batch_restart", "confirm_save", "rename", "worktree", "clone", "move_picker", "config_pick", "config_action", "sort_pick") or (
             mode == "override" and override_source == "list"
         ):
             rows, _cols = stdscr.getmaxyx()
@@ -355,6 +357,9 @@ def dashboard(stdscr):
             elif mode == "worktree" and filtered:
                 draw_worktree_input(stdscr, filtered[selected], worktree_branch, worktree_cursor)
                 draw_footer(stdscr, "worktree")
+            elif mode == "clone" and filtered:
+                draw_clone_input(stdscr, filtered[selected], clone_title, clone_cursor)
+                draw_footer(stdscr, "clone")
             elif mode == "override" and filtered:
                 draw_override_picker(stdscr, filtered[selected], override_selected)
                 draw_footer(stdscr, "override")
@@ -861,7 +866,12 @@ def dashboard(stdscr):
             elif key == ord("?"):
                 mode = "help"
                 help_scroll = 0
-            elif key == ord("c"):
+            elif key == ord("c") and filtered:
+                sess = filtered[selected]
+                clone_title = generate_clone_title(sessions, sess["title"])
+                clone_cursor = len(clone_title)
+                mode = "clone"
+            elif key == ord("C"):
                 mode = "config_pick"
                 config_selected = 0
 
@@ -1523,6 +1533,61 @@ def dashboard(stdscr):
                 after = worktree_branch[worktree_cursor:]
                 worktree_branch = before + chr(key) + after
                 worktree_cursor += 1
+
+        # ── Clone mode ─────────────────────────────────────────
+        elif mode == "clone":
+            if key == 27:  # Esc -- cancel
+                mode = "list"
+            elif key in (10, 13, curses.KEY_ENTER):
+                title = clone_title.strip()
+                if not title:
+                    msg = "Title cannot be empty"
+                    msg_frames = 20
+                    mode = "list"
+                else:
+                    sess = filtered[selected]
+                    # Prefer live user vars for flags/pw; fall back to config
+                    flags = sess.get("cc_flags", "")
+                    pw_val = sess.get("cc_pw", "")
+                    if not flags and not pw_val:
+                        orig_title = sess["title"]
+                        stripped = _strip_override_marker(orig_title)
+                        if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+                            stripped = stripped[2:]
+                        src_cfg = next((s for s in _cfg._sessions if s["title"] == stripped), None)
+                        flags = src_cfg["flags"] if src_cfg else ""
+                        pw_val = src_cfg["pw"] if src_cfg else ""
+                    # Launch
+                    target_socket = sess.get("socket", home_socket)
+                    loc = compute_insert_location(target_socket, sess["account"], title)
+                    do_launch(target_socket, title, sess["cwd"], sess["account"], flags, pw_val, location=loc)
+                    # Persist
+                    _cfg.append_session(title, sess["cwd"], sess["account"], flags, pw_val)
+                    # Refresh
+                    sessions = query_all_sessions(managed_only=(not show_all))
+                    _refilter()
+                    msg = f"Cloned as \"{title}\""
+                    msg_frames = 40
+                    mode = "list"
+            elif key in (curses.KEY_BACKSPACE, 127, 8):
+                if clone_cursor > 0:
+                    clone_title = (
+                        clone_title[: clone_cursor - 1] + clone_title[clone_cursor:]
+                    )
+                    clone_cursor -= 1
+            elif key == curses.KEY_LEFT:
+                clone_cursor = max(0, clone_cursor - 1)
+            elif key == curses.KEY_RIGHT:
+                clone_cursor = min(len(clone_title), clone_cursor + 1)
+            elif key == curses.KEY_HOME or key == 1:  # Ctrl+A
+                clone_cursor = 0
+            elif key == curses.KEY_END or key == 5:  # Ctrl+E
+                clone_cursor = len(clone_title)
+            elif 32 <= key < 127:
+                before = clone_title[:clone_cursor]
+                after = clone_title[clone_cursor:]
+                clone_title = before + chr(key) + after
+                clone_cursor += 1
 
         # ── New / Edit session form ──────────────────────────────
         elif mode == "new":

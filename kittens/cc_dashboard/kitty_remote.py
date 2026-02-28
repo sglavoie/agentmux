@@ -717,6 +717,24 @@ def do_rename(socket, tab_id, new_title):
     return result is not None and result.returncode == 0
 
 
+def generate_clone_title(sessions, original_title):
+    """Generate a unique title for a cloned session.
+
+    Strips the override marker and any trailing -N suffix to find the base
+    title, then increments N until a unique title is found among existing
+    sessions.
+    """
+    existing_titles = {s["title"] for s in sessions}
+    stripped = _strip_override_marker(original_title)
+    base = re.sub(r"-(\d+)$", "", stripped)
+    n = 2
+    while True:
+        candidate = f"{base}-{n}"
+        if candidate not in existing_titles:
+            return candidate
+        n += 1
+
+
 def compute_insert_location(socket, account, title, exclude_tab_id=None):
     """Compute where to insert a new tab to maintain sorted order.
 
