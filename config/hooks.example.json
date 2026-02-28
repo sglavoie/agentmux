@@ -18,6 +18,11 @@
             "type": "command",
             "command": "cc-hook-indicator active tool",
             "async": true
+          },
+          {
+            "type": "command",
+            "command": "cc-activity-log tool",
+            "async": true
           }
         ]
       }
@@ -51,6 +56,11 @@
             "type": "command",
             "command": "cc-hook-indicator stop",
             "async": true
+          },
+          {
+            "type": "command",
+            "command": "cc-activity-log stop",
+            "async": true
           }
         ]
       }
@@ -72,6 +82,11 @@
           {
             "type": "command",
             "command": "cc-hook-indicator stop",
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "cc-activity-log end",
             "async": true
           }
         ]

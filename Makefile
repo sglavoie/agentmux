@@ -1,7 +1,7 @@
 PYTHON_SRC    := kittens/
 SHELL_SCRIPTS := bin/cc-launch bin/cc-status bin/cc-toggle-star bin/cc-toggle-flag bin/cc-idle-watch bin/ccm \
                  lib/cc-common.sh lib/cc-title-icons.sh lib/install-hooks.sh \
-                 lib/sync-preambles.sh
+                 lib/sync-preambles.sh hooks/cc-activity-log
 RYE           := $(HOME)/.rye/shims/rye
 SHELLCHECK    := /opt/homebrew/bin/shellcheck
 SHFMT         := /opt/homebrew/bin/shfmt
@@ -19,6 +19,7 @@ SYMLINKS := \
 	$(PREFIX_BIN)/cc-toggle-flag:bin/cc-toggle-flag \
 	$(PREFIX_BIN)/cc-idle-watch:bin/cc-idle-watch \
 	$(PREFIX_BIN)/cc-hook-indicator:hooks/cc-hook-indicator \
+	$(PREFIX_BIN)/cc-activity-log:hooks/cc-activity-log \
 	$(PREFIX_LIB)/cc-common.sh:lib/cc-common.sh \
 	$(PREFIX_LIB)/cc-title-icons.sh:lib/cc-title-icons.sh \
 	$(PREFIX_LIB)/palette.json:data/palette.json \

@@ -798,6 +798,16 @@ _HELP_SECTIONS = [
             ("S", "Sync all accounts"),
         ],
     ),
+    (
+        "Activity Log",
+        [
+            ("L", "View session activity log"),
+            ("j/k", "Scroll log entries"),
+            ("b", "Browse all log files"),
+            ("/", "Search within log"),
+            ("r", "Reload log from disk"),
+        ],
+    ),
 ]
 
 # Pre-build help content as a list of (kind, text, text2) tuples.
@@ -865,6 +875,7 @@ _FOOTER_HINTS = {
         "S Save",
         "C Config",
         "H Hooks",
+        "L Log",
         "d Detail",
         "p Peek",
         "/ Search",
@@ -900,6 +911,9 @@ _FOOTER_HINTS = {
     "hooks_event": ["j/k Navigate", "Space Toggle", "a Add cmd", "d Delete cmd", "s Sync", "Esc Back"],
     "hooks_sync_confirm": ["y Confirm sync", "Any other key Cancel"],
     "hooks_cmd_input": ["Enter Confirm", "Esc Cancel"],
+    "actlog": ["j/k Scroll", "^D/^U Half-page", "G/g Top/Bot", "/ Search", "n/N Next/Prev", "b Browse all", "r Refresh", "q/Esc Close"],
+    "actlog_search": ["Enter Confirm", "Esc Cancel"],
+    "actlog_browse": ["j/k Navigate", "Enter View", "q Back", "Esc Back"],
 }
 
 
@@ -1091,6 +1105,211 @@ def _shorten_home(path):
     if path.startswith(home):
         return "~" + path[len(home):]
     return path
+
+
+def _format_log_entry(entry, cols):
+    """Format a single JSONL activity log entry into a display string."""
+    import time as _time
+
+    ts = entry.get("ts")
+    time_str = _time.strftime("%H:%M:%S", _time.localtime(ts)) if ts else "??:??:??"
+
+    event = entry.get("event", "?")
+    tool = entry.get("tool", "")
+    ctx = entry.get("ctx", {})
+
+    if event == "tool":
+        # Build context string based on tool type
+        if tool in ("Read", "Write", "Edit"):
+            detail = ctx.get("file_path", "")
+            if detail:
+                detail = _shorten_home(detail)
+        elif tool == "Bash":
+            detail = ctx.get("cmd", "")
+        elif tool in ("Grep", "Glob"):
+            detail = ctx.get("pattern", "")
+        elif tool == "WebFetch":
+            detail = ctx.get("url", "")
+        elif tool == "WebSearch":
+            detail = ctx.get("query", "")
+        elif tool == "Task":
+            detail = ctx.get("desc", "")
+            agent = ctx.get("agent", "")
+            if agent:
+                detail = f"[{agent}] {detail}"
+        else:
+            keys = ctx.get("keys", [])
+            detail = ", ".join(keys) if keys else ""
+        line = f"{time_str}  {event:<5} {tool:<12} {detail}"
+    elif event == "stop":
+        line = f"{time_str}  stop"
+    elif event == "session_end":
+        reason = entry.get("reason", "")
+        line = f"{time_str}  session_end  {reason}" if reason else f"{time_str}  session_end"
+    elif event == "summary":
+        total = entry.get("total_events", "?")
+        line = f"{time_str}  summary  total_events={total}"
+    else:
+        line = f"{time_str}  {event}"
+
+    # Truncate to terminal width
+    if len(line) > cols - 3:
+        line = line[: cols - 6] + "..."
+    return line
+
+
+def draw_actlog_view(stdscr, title, lines, scroll, summary,
+                     search_query="", search_active=False, search_cursor=0,
+                     match_line_indices=None, match_index=0):
+    """Draw a full-screen scrollable activity log viewer."""
+    stdscr.clear()
+    rows, cols = stdscr.getmaxyx()
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+    dim_attr = curses.color_pair(CP_DIM)
+    match_attr = curses.color_pair(CP_MATCH)
+    span_attr = curses.color_pair(CP_WARN) | curses.A_BOLD
+    current_attr = curses.color_pair(CP_ATTENTION) | curses.A_BOLD
+
+    if match_line_indices is None:
+        match_line_indices = []
+    match_set = set(match_line_indices)
+    current_line_idx = match_line_indices[match_index] if match_line_indices else -1
+
+    # Row 0: title
+    safe_addstr(stdscr, 0, 2, f"Activity Log: {title}", header_attr)
+
+    # Row 1: summary stats
+    if summary:
+        total = summary.get("total", 0)
+        stop_count = summary.get("stop_count", 0)
+        tool_counts = summary.get("tool_counts", [])
+        top_tools = "  ".join(f"{name}:{cnt}" for name, cnt in tool_counts[:5])
+        stat_line = f"Events: {total}  Stops: {stop_count}"
+        if top_tools:
+            stat_line += f"  Top: {top_tools}"
+        safe_addstr(stdscr, 1, 2, stat_line[:cols - 3], dim_attr)
+
+        # Row 2: duration
+        duration = summary.get("duration", "")
+        if duration:
+            safe_addstr(stdscr, 2, 2, f"Duration: {duration}", dim_attr)
+
+    # Content area starts at row 3
+    content_start = 3
+    content_height = rows - content_start - 2  # leave room for scroll indicator + footer
+
+    if not lines:
+        safe_addstr(stdscr, content_start, 2, "(no log entries)", dim_attr)
+    else:
+        visible = lines[scroll : scroll + content_height]
+        for i, line in enumerate(visible):
+            abs_idx = scroll + i
+            is_match = abs_idx in match_set
+            is_current = abs_idx == current_line_idx
+            _render_peek_line(
+                stdscr, content_start + i, line, cols, search_query,
+                is_match, is_current, normal_attr, match_attr,
+                span_attr, current_attr,
+            )
+
+    total = len(lines) if lines else 0
+    if search_active:
+        _draw_peek_search_bar(stdscr, search_query, search_cursor, len(match_line_indices))
+    elif match_line_indices:
+        indicator = f"[match {match_index + 1}/{len(match_line_indices)}]"
+        if total > content_height:
+            pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
+            safe_addstr(stdscr, rows - 2, 2, f"{indicator}  {pos}", dim_attr)
+        else:
+            safe_addstr(stdscr, rows - 2, 2, indicator, dim_attr)
+    elif total > content_height:
+        pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
+        safe_addstr(stdscr, rows - 2, 2, f"j/k to scroll  {pos}", dim_attr)
+
+    draw_footer(stdscr, "actlog_search" if search_active else "actlog")
+
+
+def draw_actlog_browse(stdscr, entries, selected, scroll):
+    """Draw a tabular listing of all activity log files."""
+    stdscr.clear()
+    rows, cols = stdscr.getmaxyx()
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+    dim_attr = curses.color_pair(CP_DIM)
+
+    safe_addstr(stdscr, 0, 2, "Activity Logs — Browse All", header_attr)
+
+    if not entries:
+        safe_addstr(stdscr, 2, 4, "No activity log files found", dim_attr)
+        draw_footer(stdscr, "actlog_browse")
+        return
+
+    # Column layout
+    id_w = 14  # truncated session_id
+    title_w = 20
+    mtime_w = 18
+    count_w = 8
+    size_w = 10
+
+    # Header row
+    header_y = 2
+    hdr = (
+        "Session ID".ljust(id_w)
+        + "Title".ljust(title_w)
+        + "Modified".ljust(mtime_w)
+        + "Events".rjust(count_w)
+        + "  "
+        + "Size".rjust(size_w)
+    )
+    safe_addstr(stdscr, header_y, 4, hdr[:cols - 5], dim_attr)
+
+    content_height = rows - header_y - 3  # room for header, footer, scroll indicator
+    visible = entries[scroll : scroll + content_height]
+
+    for i, entry in enumerate(visible):
+        y = header_y + 1 + i
+        if y >= rows - 2:
+            break
+
+        is_selected = (scroll + i) == selected
+        attr = normal_attr | curses.A_REVERSE if is_selected else normal_attr
+
+        sid_short = entry["session_id"][:id_w - 2]
+        title = entry.get("title", "")
+        if not title:
+            title = "ended"
+        title = title[:title_w - 2]
+
+        mtime_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(entry["mtime"]))
+
+        count_str = str(entry["event_count"])
+
+        # Human-readable file size
+        sz = entry["size"]
+        if sz < 1024:
+            size_str = f"{sz} B"
+        elif sz < 1024 * 1024:
+            size_str = f"{sz / 1024:.1f} KB"
+        else:
+            size_str = f"{sz / (1024 * 1024):.1f} MB"
+
+        row_text = (
+            sid_short.ljust(id_w)
+            + title.ljust(title_w)
+            + mtime_str.ljust(mtime_w)
+            + count_str.rjust(count_w)
+            + "  "
+            + size_str.rjust(size_w)
+        )
+        safe_addstr(stdscr, y, 4, _pad_to_width(row_text[:cols - 5], cols - 5), attr)
+
+    total = len(entries)
+    if total > content_height:
+        pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
+        safe_addstr(stdscr, rows - 2, 2, pos, dim_attr)
+
+    draw_footer(stdscr, "actlog_browse")
 
 
 def draw_config_picker(stdscr, config_entries, selected):

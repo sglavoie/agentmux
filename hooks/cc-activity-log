@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# cc-activity-log — Append JSONL activity entries to per-session log files.
+# Called by Claude Code hooks with "tool", "stop", or "end" as $1.
+# Reads hook event JSON from stdin, extracts relevant fields via jq,
+# and writes a single line to {log_dir}/{session_id}.jsonl.
+
+# Silently exit if jq is not available — logging is best-effort.
+command -v jq >/dev/null 2>&1 || exit 0
+
+if [[ $# -lt 1 ]]; then
+	echo "Usage: cc-activity-log tool|stop|end" >&2
+	exit 1
+fi
+
+ACTION="$1"
+
+# Read the full hook event JSON from stdin.
+INPUT="$(cat)"
+[[ -z "$INPUT" ]] && exit 0
+
+# Extract session_id — bail if missing/empty.
+SESSION_ID="$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)" || true
+[[ -z "$SESSION_ID" ]] && exit 0
+
+# Resolve log directory and ensure it exists.
+LOG_DIR="${CC_MANAGER_LOGS:-${XDG_STATE_HOME:-$HOME/.local/state}/cc-manager/activity}"
+mkdir -p "$LOG_DIR"
+
+LOG_FILE="$LOG_DIR/$SESSION_ID.jsonl"
+NOW="$(date +%s)"
+
+# ---------------------------------------------------------------------------
+# Resolve Kitty tab_id (cached per session to avoid repeated kitten @ ls).
+# ---------------------------------------------------------------------------
+_resolve_tab_id() {
+	local cache="/tmp/ccm-tabid-$SESSION_ID"
+	if [[ -f "$cache" ]]; then
+		cat "$cache"
+		return
+	fi
+	local tid=""
+	if [[ -n "${KITTY_WINDOW_ID:-}" ]]; then
+		local to_args=()
+		[[ -n "${KITTY_LISTEN_ON:-}" ]] && to_args=("--to" "$KITTY_LISTEN_ON")
+		tid="$(kitten @ ${to_args[@]+"${to_args[@]}"} ls 2>/dev/null |
+			jq -r --arg wid "$KITTY_WINDOW_ID" '
+				[.[] | .tabs[] | select(.windows[]? | .id == ($wid | tonumber)) | .id] | first // empty
+			' 2>/dev/null)" || true
+	fi
+	if [[ -n "$tid" ]]; then
+		echo "$tid" >"$cache"
+		echo "$tid"
+	fi
+}
+
+TID="$(_resolve_tab_id)"
+
+# ---------------------------------------------------------------------------
+# Build and append the JSONL entry.
+# ---------------------------------------------------------------------------
+case "$ACTION" in
+tool)
+	# Extract tool_name and a context object that varies by tool type.
+	ENTRY="$(echo "$INPUT" | jq -c --argjson ts "$NOW" --arg tid "$TID" '
+		def truncate(n): if length > n then .[:n] + "…" else . end;
+		.session_id as $sid | .cwd as $cwd | .tool_name as $tool |
+		(
+			if   $tool == "Edit" or $tool == "Write" or $tool == "Read"
+			then {file_path: .tool_input.file_path}
+			elif $tool == "Bash"
+			then {cmd: ((.tool_input.command // "") | truncate(200))}
+			elif $tool == "Grep"
+			then {pattern: .tool_input.pattern}
+			elif $tool == "Glob"
+			then {pattern: .tool_input.pattern}
+			elif $tool == "WebFetch"
+			then {url: .tool_input.url}
+			elif $tool == "WebSearch"
+			then {query: .tool_input.query}
+			elif $tool == "Task"
+			then {desc: .tool_input.description, agent: .tool_input.subagent_type}
+			else {keys: (.tool_input | keys)}
+			end
+		) as $ctx |
+		{ts: $ts, event: "tool", tool: $tool, ctx: $ctx, cwd: $cwd, sid: $sid}
+		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
+	' 2>/dev/null)" || true
+	[[ -n "$ENTRY" ]] && echo "$ENTRY" >>"$LOG_FILE"
+	;;
+
+stop)
+	ENTRY="$(jq -n -c --argjson ts "$NOW" --arg sid "$SESSION_ID" --arg tid "$TID" '
+		{ts: $ts, event: "stop", sid: $sid}
+		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
+	')"
+	echo "$ENTRY" >>"$LOG_FILE"
+	;;
+
+end)
+	REASON="$(echo "$INPUT" | jq -r '.reason // "unknown"' 2>/dev/null)" || REASON="unknown"
+	# Write session_end entry.
+	ENTRY="$(jq -n -c --argjson ts "$NOW" --arg sid "$SESSION_ID" --arg reason "$REASON" --arg tid "$TID" '
+		{ts: $ts, event: "session_end", sid: $sid, reason: $reason}
+		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
+	')"
+	echo "$ENTRY" >>"$LOG_FILE"
+	# Write a summary line with total event count.
+	if [[ -f "$LOG_FILE" ]]; then
+		TOTAL="$(wc -l <"$LOG_FILE" | tr -d ' ')"
+		jq -n -c --argjson ts "$NOW" --arg sid "$SESSION_ID" --argjson total "$TOTAL" \
+			'{ts: $ts, event: "summary", sid: $sid, total_events: $total}' >>"$LOG_FILE"
+	fi
+	;;
+
+*)
+	echo "Error: unknown action '$ACTION' (expected 'tool', 'stop', or 'end')" >&2
+	exit 1
+	;;
+esac

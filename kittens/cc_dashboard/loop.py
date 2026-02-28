@@ -41,7 +41,7 @@ from cc_dashboard.kitty_remote import (
     get_window_text,
     query_all_sessions,
 )
-from cc_dashboard.kitty_remote import run_hooks_sync
+from cc_dashboard.kitty_remote import list_activity_logs, load_activity_log, resolve_session_id, run_hooks_sync
 from cc_dashboard.views import (
     _HELP_LINES,
     DETAIL_PANE_HEIGHT,
@@ -62,6 +62,9 @@ from cc_dashboard.views import (
     draw_hooks_event_view,
     draw_hooks_sync_confirm,
     draw_hooks_view,
+    draw_actlog_browse,
+    draw_actlog_view,
+    _format_log_entry,
     draw_sort_picker,
     draw_peek_overlay,
     draw_detail_pane,
@@ -252,6 +255,15 @@ def dashboard(stdscr):
     peek_search_cursor = 0
     peek_match_lines = []
     peek_match_index = 0
+
+    # Activity log viewer state
+    actlog_lines, actlog_scroll, actlog_session_title, actlog_session_id = [], 0, "", ""
+    actlog_summary = {}
+    actlog_search_query, actlog_search_active, actlog_search_cursor = "", False, 0
+    actlog_match_lines, actlog_match_index = [], 0
+
+    # Activity log browser state
+    actlog_browse_entries, actlog_browse_selected, actlog_browse_scroll = [], 0, 0
 
     # New-session form state -- default to first loaded account
     default_account = _cfg._account_names[0] if _cfg._account_names else "work"
@@ -459,6 +471,21 @@ def dashboard(stdscr):
         elif mode == "hooks_cmd_input":
             draw_hooks_cmd_input(stdscr, hooks_account, hooks_target_event,
                                  hooks_cmd_value, hooks_cmd_cursor)
+        elif mode == "actlog":
+            draw_actlog_view(
+                stdscr, actlog_session_title, actlog_lines, actlog_scroll,
+                actlog_summary,
+                search_query=actlog_search_query,
+                search_active=actlog_search_active,
+                search_cursor=actlog_search_cursor,
+                match_line_indices=actlog_match_lines,
+                match_index=actlog_match_index,
+            )
+        elif mode == "actlog_browse":
+            draw_actlog_browse(stdscr, actlog_browse_entries, actlog_browse_selected,
+                               actlog_browse_scroll)
+            if msg and msg_frames > 0:
+                draw_status_message(stdscr, msg)
         elif mode == "help":
             draw_help_overlay(stdscr, help_scroll)
 
@@ -918,6 +945,29 @@ def dashboard(stdscr):
                 hooks_drift = _cfg._detect_all_drift()
                 hooks_selected = 0
                 mode = "hooks"
+            elif key == ord("L") and filtered:
+                sess = filtered[selected]
+                sid = resolve_session_id(sess["tab_id"])
+                if sid:
+                    entries, summary = load_activity_log(sid)
+                    if entries:
+                        actlog_session_title = sess["title"]
+                        actlog_session_id = sid
+                        actlog_summary = summary
+                        actlog_lines = [_format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries]
+                        actlog_scroll = max(0, len(actlog_lines) - (stdscr.getmaxyx()[0] - 5))
+                        actlog_search_query = ""
+                        actlog_search_active = False
+                        actlog_search_cursor = 0
+                        actlog_match_lines = []
+                        actlog_match_index = 0
+                        mode = "actlog"
+                    else:
+                        msg = "No activity log entries for this session"
+                        msg_frames = 20
+                else:
+                    msg = "No activity log found for this session"
+                    msg_frames = 20
 
         # ── Sort picker ───────────────────────────────────────────
         elif mode == "sort_pick":
@@ -1056,6 +1106,142 @@ def dashboard(stdscr):
                     + hooks_cmd_value[hooks_cmd_cursor:]
                 )
                 hooks_cmd_cursor += 1
+
+        # ── Activity log viewer ────────────────────────────────────
+        elif mode == "actlog":
+            content_height = stdscr.getmaxyx()[0] - 5
+            max_scroll = max(0, len(actlog_lines) - content_height)
+
+            # ── Tier 1: search input active ──
+            if actlog_search_active:
+                if key == 27:  # Esc — cancel search
+                    actlog_search_active = False
+                    actlog_search_query = ""
+                    actlog_search_cursor = 0
+                    actlog_match_lines = []
+                    actlog_match_index = 0
+                elif key in (10, 13, curses.KEY_ENTER):  # Enter — confirm
+                    actlog_search_active = False
+                    if actlog_match_lines:
+                        actlog_scroll = min(actlog_match_lines[0], max_scroll)
+                        actlog_match_index = 0
+                elif key in (127, 8, curses.KEY_BACKSPACE):
+                    if actlog_search_cursor > 0:
+                        actlog_search_query = (
+                            actlog_search_query[: actlog_search_cursor - 1]
+                            + actlog_search_query[actlog_search_cursor:]
+                        )
+                        actlog_search_cursor -= 1
+                        actlog_match_lines = _compute_peek_matches(actlog_lines, actlog_search_query)
+                        actlog_match_index = 0
+                elif key == curses.KEY_LEFT:
+                    actlog_search_cursor = max(0, actlog_search_cursor - 1)
+                elif key == curses.KEY_RIGHT:
+                    actlog_search_cursor = min(len(actlog_search_query), actlog_search_cursor + 1)
+                elif 32 <= key <= 126:
+                    ch = chr(key)
+                    actlog_search_query = (
+                        actlog_search_query[: actlog_search_cursor]
+                        + ch
+                        + actlog_search_query[actlog_search_cursor:]
+                    )
+                    actlog_search_cursor += 1
+                    actlog_match_lines = _compute_peek_matches(actlog_lines, actlog_search_query)
+                    actlog_match_index = 0
+                continue
+
+            # ── Tier 2: normal actlog navigation ──
+            if key in (27, ord("q"), ord("Q")):
+                if actlog_search_query:
+                    actlog_search_query = ""
+                    actlog_match_lines = []
+                    actlog_match_index = 0
+                else:
+                    mode = "list"
+            elif key == ord("/"):
+                actlog_search_active = True
+                actlog_search_query = ""
+                actlog_search_cursor = 0
+                actlog_match_lines = []
+                actlog_match_index = 0
+            elif key == ord("n"):
+                if actlog_match_lines:
+                    actlog_match_index = (actlog_match_index + 1) % len(actlog_match_lines)
+                    actlog_scroll = min(actlog_match_lines[actlog_match_index], max_scroll)
+            elif key == ord("N"):
+                if actlog_match_lines:
+                    actlog_match_index = (actlog_match_index - 1) % len(actlog_match_lines)
+                    actlog_scroll = min(actlog_match_lines[actlog_match_index], max_scroll)
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+                actlog_scroll = min(actlog_scroll + 1, max_scroll)
+            elif key in (curses.KEY_UP, ord("k"), ord("K")):
+                actlog_scroll = max(actlog_scroll - 1, 0)
+            elif key == ord("G"):
+                actlog_scroll = max_scroll
+            elif key == ord("g"):
+                actlog_scroll = 0
+            elif key == 4:  # Ctrl+d
+                actlog_scroll = min(actlog_scroll + content_height // 2, max_scroll)
+            elif key == 21:  # Ctrl+u
+                actlog_scroll = max(actlog_scroll - content_height // 2, 0)
+            elif key in (6, curses.KEY_NPAGE):  # Ctrl+f / Page Down
+                actlog_scroll = min(actlog_scroll + content_height, max_scroll)
+            elif key in (2, curses.KEY_PPAGE):  # Ctrl+b / Page Up
+                actlog_scroll = max(actlog_scroll - content_height, 0)
+            elif key == ord("r"):
+                # Reload log from disk
+                if actlog_session_id:
+                    entries, summary = load_activity_log(actlog_session_id)
+                    if entries:
+                        actlog_summary = summary
+                        actlog_lines = [_format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries]
+                        actlog_scroll = min(actlog_scroll, max(0, len(actlog_lines) - content_height))
+                        actlog_match_lines = _compute_peek_matches(actlog_lines, actlog_search_query)
+                        actlog_match_index = 0
+            elif key == ord("b"):
+                actlog_browse_entries = list_activity_logs(sessions)
+                actlog_browse_selected = 0
+                actlog_browse_scroll = 0
+                mode = "actlog_browse"
+
+        # ── Activity log browser ─────────────────────────────────
+        elif mode == "actlog_browse":
+            if key in (ord("q"), ord("Q"), 27):
+                mode = "list"
+            elif key in (ord("j"), curses.KEY_DOWN) and actlog_browse_entries:
+                actlog_browse_selected = (actlog_browse_selected + 1) % len(actlog_browse_entries)
+                # Scroll to keep selection visible
+                browse_content_h = stdscr.getmaxyx()[0] - 5
+                if actlog_browse_selected >= actlog_browse_scroll + browse_content_h:
+                    actlog_browse_scroll = actlog_browse_selected - browse_content_h + 1
+                elif actlog_browse_selected < actlog_browse_scroll:
+                    actlog_browse_scroll = actlog_browse_selected
+            elif key in (ord("k"), curses.KEY_UP) and actlog_browse_entries:
+                actlog_browse_selected = (actlog_browse_selected - 1) % len(actlog_browse_entries)
+                browse_content_h = stdscr.getmaxyx()[0] - 5
+                if actlog_browse_selected >= actlog_browse_scroll + browse_content_h:
+                    actlog_browse_scroll = actlog_browse_selected - browse_content_h + 1
+                elif actlog_browse_selected < actlog_browse_scroll:
+                    actlog_browse_scroll = actlog_browse_selected
+            elif key in (10, 13, curses.KEY_ENTER) and actlog_browse_entries:
+                chosen = actlog_browse_entries[actlog_browse_selected]
+                sid = chosen["session_id"]
+                entries, summary = load_activity_log(sid)
+                if entries:
+                    actlog_session_title = chosen.get("title", "") or sid[:12]
+                    actlog_session_id = sid
+                    actlog_summary = summary
+                    actlog_lines = [_format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries]
+                    actlog_scroll = max(0, len(actlog_lines) - (stdscr.getmaxyx()[0] - 5))
+                    actlog_search_query = ""
+                    actlog_search_active = False
+                    actlog_search_cursor = 0
+                    actlog_match_lines = []
+                    actlog_match_index = 0
+                    mode = "actlog"
+                else:
+                    msg = "Log file is empty"
+                    msg_frames = 20
 
         # ── Config file picker ────────────────────────────────────
         elif mode == "config_pick":

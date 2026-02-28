@@ -71,6 +71,7 @@ _account_names: list[str] = []  # ordered list of account names
 _hooks_global: dict = {}        # event_name -> [hook_entries]
 _hooks_overrides: dict = {}     # account_name -> override config
 _cached_hook_cmd: str | None = None
+_cached_log_cmd: str | None = None
 
 # Global defaults loaded from defaults.conf
 _default_claude_flags = ""
@@ -596,6 +597,26 @@ def _resolve_hook_cmd():
     return _cached_hook_cmd
 
 
+def _resolve_log_cmd():
+    """Resolve the absolute path to cc-activity-log, with caching"""
+    global _cached_log_cmd
+    if _cached_log_cmd is not None:
+        return _cached_log_cmd
+
+    local_bin = os.path.join(os.path.expanduser("~"), ".local", "bin", "cc-activity-log")
+    if os.path.isfile(local_bin) and os.access(local_bin, os.X_OK):
+        _cached_log_cmd = local_bin
+        return _cached_log_cmd
+
+    which_result = shutil.which("cc-activity-log")
+    if which_result:
+        _cached_log_cmd = which_result
+        return _cached_log_cmd
+
+    _cached_log_cmd = "cc-activity-log"
+    return _cached_log_cmd
+
+
 def _load_example_hooks():
     """Load the base hooks from hooks.example.json (what install-hooks.sh uses)."""
     path = _resolve_hooks_example_path()
@@ -624,6 +645,7 @@ def _compute_effective_hooks(account_name, base_hooks=None):
     disabled_events = override.get("disabled_events", [])
     extra_commands = override.get("extra_commands", {})
     resolved_cmd = _resolve_hook_cmd()
+    resolved_log_cmd = _resolve_log_cmd()
 
     result = {}
     for event in HOOK_EVENTS:
@@ -643,19 +665,25 @@ def _compute_effective_hooks(account_name, base_hooks=None):
                     filtered.append(entry)
             entries = filtered
 
-        # Substitute bare cc-hook-indicator with resolved path
+        # Substitute bare command names with resolved paths
         for entry in entries:
             for hook in entry.get("hooks", []):
                 cmd = hook.get("command", "")
                 if cmd and "cc-hook-indicator" in cmd:
-                    hook["command"] = cmd.replace("cc-hook-indicator", resolved_cmd)
+                    cmd = cmd.replace("cc-hook-indicator", resolved_cmd)
+                if cmd and "cc-activity-log" in cmd:
+                    cmd = cmd.replace("cc-activity-log", resolved_log_cmd)
+                hook["command"] = cmd
 
         # Append extra_commands for this event
         for extra in extra_commands.get(event, []):
             extra = copy.deepcopy(extra)
             cmd = extra.get("command", "")
             if cmd and "cc-hook-indicator" in cmd:
-                extra["command"] = cmd.replace("cc-hook-indicator", resolved_cmd)
+                cmd = cmd.replace("cc-hook-indicator", resolved_cmd)
+            if cmd and "cc-activity-log" in cmd:
+                cmd = cmd.replace("cc-activity-log", resolved_log_cmd)
+            extra["command"] = cmd
             entries.append({"hooks": [extra]})
 
         result[event] = entries
@@ -688,6 +716,7 @@ def _detect_drift(account_name):
         example_hooks = _load_example_hooks()
         effective = _compute_effective_hooks(account_name, base_hooks=example_hooks)
         resolved_cmd = _resolve_hook_cmd()
+        resolved_log_cmd = _resolve_log_cmd()
 
         override = _hooks_overrides.get(account_name, {})
         extra_commands = override.get("extra_commands", {})
@@ -705,22 +734,25 @@ def _detect_drift(account_name):
                     cmd = hook.get("command", "")
                     if "cc-hook-indicator" in cmd or resolved_cmd in cmd:
                         return True
+                    if "cc-activity-log" in cmd or resolved_log_cmd in cmd:
+                        return True
                     if cmd in extra_cmds:
                         return True
                 return False
 
             installed_managed = [e for e in installed_entries if _is_managed(e)]
 
-            # Normalize both sides by replacing absolute path with bare name
+            # Normalize both sides by replacing absolute paths with bare names
             def _normalize(entries):
                 entries = copy.deepcopy(entries)
                 for entry in entries:
                     for hook in entry.get("hooks", []):
                         cmd = hook.get("command", "")
                         if resolved_cmd != "cc-hook-indicator" and resolved_cmd in cmd:
-                            hook["command"] = cmd.replace(
-                                resolved_cmd, "cc-hook-indicator"
-                            )
+                            cmd = cmd.replace(resolved_cmd, "cc-hook-indicator")
+                        if resolved_log_cmd != "cc-activity-log" and resolved_log_cmd in cmd:
+                            cmd = cmd.replace(resolved_log_cmd, "cc-activity-log")
+                        hook["command"] = cmd
                 return entries
 
             if _normalize(installed_managed) != _normalize(effective_entries):

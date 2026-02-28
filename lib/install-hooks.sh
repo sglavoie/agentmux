@@ -71,6 +71,23 @@ if [[ -z "$HOOK_CMD" ]]; then
 	exit 1
 fi
 
+# ── Resolve absolute path to cc-activity-log ─────────────────────────────
+
+LOG_CMD=""
+if [[ -x "$HOME/.local/bin/cc-activity-log" ]]; then
+	LOG_CMD="$HOME/.local/bin/cc-activity-log"
+else
+	repo_dir="$(cd "$(dirname "$HOOKS_EXAMPLE")/.." 2>/dev/null && pwd)"
+	if [[ -x "$repo_dir/hooks/cc-activity-log" ]]; then
+		LOG_CMD="$repo_dir/hooks/cc-activity-log"
+	fi
+fi
+
+if [[ -z "$LOG_CMD" ]]; then
+	echo "Warning: cc-activity-log not found; using bare name." >&2
+	LOG_CMD="cc-activity-log"
+fi
+
 # ── Load accounts ────────────────────────────────────────────────────────────
 
 ACCOUNTS_CONFIG="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.conf}"
@@ -132,8 +149,8 @@ fi
 
 # Extract the hook entries we want to install from the example file,
 # substituting bare cc-hook-indicator with its absolute path
-EXAMPLE_HOOKS="$(jq --arg cmd "$HOOK_CMD" '
-    .hooks | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
+EXAMPLE_HOOKS="$(jq --arg cmd "$HOOK_CMD" --arg logcmd "$LOG_CMD" '
+    .hooks | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 ' "$HOOKS_EXAMPLE")"
 
 # List of hook events to process
@@ -156,8 +173,8 @@ for i in "${!CONFIG_DIRS[@]}"; do
 		create_filter=''
 		for event in "${HOOK_EVENTS[@]}"; do
 			is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')"
-			extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" '
-				(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
+			extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" --arg logcmd "$LOG_CMD" '
+				(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 			')"
 			if [[ "$is_disabled" == "true" ]]; then
 				# Event disabled: only include extra_commands if any
@@ -181,8 +198,8 @@ for i in "${!CONFIG_DIRS[@]}"; do
 	jq_filter='.hooks //= {}'
 	for event in "${HOOK_EVENTS[@]}"; do
 		is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')"
-		extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" '
-			(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) else . end)
+		extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" --arg logcmd "$LOG_CMD" '
+			(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 		')"
 
 		if [[ "$is_disabled" == "true" ]]; then
@@ -190,7 +207,7 @@ for i in "${!CONFIG_DIRS[@]}"; do
 			jq_filter="$jq_filter"'
                 | .hooks["'"$event"'"] = (
                     [(.hooks["'"$event"'"] // [])[] |
-                        select([.hooks[]? | .command // "" | test("cc-hook-indicator")] | any | not)
+                        select([.hooks[]? | .command // "" | test("cc-hook-indicator|cc-activity-log")] | any | not)
                     ] + '"$extra_for_event"'
                 )'
 		else
@@ -199,7 +216,7 @@ for i in "${!CONFIG_DIRS[@]}"; do
 			jq_filter="$jq_filter"'
                 | .hooks["'"$event"'"] = (
                     [(.hooks["'"$event"'"] // [])[] |
-                        select([.hooks[]? | .command // "" | test("cc-hook-indicator")] | any | not)
+                        select([.hooks[]? | .command // "" | test("cc-hook-indicator|cc-activity-log")] | any | not)
                     ] + '"$combined"'
                 )'
 		fi

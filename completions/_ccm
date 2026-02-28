@@ -66,6 +66,8 @@ _ccm() {
                             'status[Show active session status table]' \
                             'star[Toggle star on active tab]' \
                             'config[Manage config files]' \
+                            'hooks[Manage hooks]' \
+                            'logs[Query and manage activity logs]' \
                             'dashboard[Launch curses dashboard kitten]' \
                             'switch[Quick-switch to a session]' \
                             'idle-watch[Manage background idle watcher]' \
@@ -106,9 +108,38 @@ _ccm() {
                 '--stop[Stop a running idle watcher]' \
                 '--status[Check whether the idle watcher is running]'
             ;;
+        logs)
+            local logs_sub="$words[3]"
+            case "$logs_sub" in
+                show|summary)
+                    # Complete session IDs from log filenames.
+                    if [[ $CURRENT -eq 4 ]]; then
+                        local log_dir="${CC_MANAGER_LOGS:-${XDG_STATE_HOME:-$HOME/.local/state}/cc-manager/activity}"
+                        if [[ -d "$log_dir" ]]; then
+                            local -a sessions
+                            sessions=(${log_dir}/*.jsonl(N:t:r))
+                            [[ ${#sessions} -gt 0 ]] && _describe 'session id' sessions
+                        fi
+                    fi
+                    ;;
+                clean)
+                    [[ $CURRENT -ge 4 ]] && _values 'clean option' \
+                        '--older-than[Age threshold in days]' \
+                        '--dry-run[Preview without deleting]'
+                    ;;
+                *)
+                    [[ $CURRENT -eq 3 ]] && _values 'logs subcommand' \
+                        'list[List all session log files]' \
+                        'show[Show log entries for a session]' \
+                        'summary[Print aggregate summary for a session]' \
+                        'clean[Delete old log files]' \
+                        'dir[Print the log directory path]'
+                    ;;
+            esac
+            ;;
         help)
             [[ $CURRENT -eq 3 ]] && _values 'command' \
-                'launch' 'status' 'star' 'config' 'dashboard' 'switch' 'idle-watch'
+                'launch' 'status' 'star' 'config' 'hooks' 'logs' 'dashboard' 'switch' 'idle-watch'
             ;;
         *)
             _values 'command' \
@@ -116,6 +147,8 @@ _ccm() {
                 'status[Show active session status table]' \
                 'star[Toggle star on active tab]' \
                 'config[Manage config files]' \
+                'hooks[Manage hooks]' \
+                'logs[Query and manage activity logs]' \
                 'dashboard[Launch curses dashboard kitten]' \
                 'switch[Quick-switch to a session]' \
                 'idle-watch[Manage background idle watcher]' \
