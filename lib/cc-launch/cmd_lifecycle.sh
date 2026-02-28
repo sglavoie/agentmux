@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+
+[[ -n "${_CC_LAUNCH_CMD_LIFECYCLE_LOADED:-}" ]] && return 0
+_CC_LAUNCH_CMD_LIFECYCLE_LOADED=1
+
+cmd_close() {
+    if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
+        echo "Error: --close requires --instance LABEL and --tab-id ID." >&2
+        echo "Usage: cc-launch --close --instance LABEL --tab-id ID" >&2
+        exit 1
+    fi
+
+    local source_socket
+    source_socket="$(resolve_instance_socket "$_TARGET_INSTANCE_LABEL")" || {
+        echo "Error: No active Kitty instance found with label '$_TARGET_INSTANCE_LABEL'." >&2
+        echo "Available instances:" >&2
+        print_available_instances
+        exit 1
+    }
+
+    local accounts_json default_account
+    accounts_json="$(build_accounts_json)"
+    default_account="$(default_account_name)"
+
+    local tab_info title
+    tab_info="$(tab_metadata_by_id "$source_socket" "$_TARGET_TAB_ID" "$accounts_json" "$default_account")"
+    if [[ -z "$tab_info" ]]; then
+        echo "Error: No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'." >&2
+        exit 1
+    fi
+    IFS=$'\t' read -r title _ <<<"$tab_info"
+
+    kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"
+    echo "Closed tab '$title' (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID)."
+}
+
+cmd_restart() {
+    if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
+        echo "Error: --restart requires --instance LABEL and --tab-id ID." >&2
+        echo "Usage: cc-launch --restart --instance LABEL --tab-id ID" >&2
+        exit 1
+    fi
+
+    local source_socket
+    source_socket="$(resolve_instance_socket "$_TARGET_INSTANCE_LABEL")" || {
+        echo "Error: No active Kitty instance found with label '$_TARGET_INSTANCE_LABEL'." >&2
+        echo "Available instances:" >&2
+        print_available_instances
+        exit 1
+    }
+
+    discover_all_sockets
+    if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+        echo "Error: No active Kitty instances found." >&2
+        exit 1
+    fi
+
+    local accounts_json default_account
+    accounts_json="$(build_accounts_json)"
+    default_account="$(default_account_name)"
+
+    local tab_info
+    tab_info="$(tab_metadata_by_id "$source_socket" "$_TARGET_TAB_ID" "$accounts_json" "$default_account")"
+    if [[ -z "$tab_info" ]]; then
+        echo "Error: No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'." >&2
+        exit 1
+    fi
+
+    local title account dir live_flags live_pw live_env
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env <<<"$tab_info"
+    SOCKET="$source_socket"
+
+    kitty @ --to "$SOCKET" close-tab --match "id:$_TARGET_TAB_ID"
+    echo "Closed tab '$title', relaunching..."
+    sleep 0.3
+
+    local loc_args
+    loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
+
+    local fallback
+    fallback="$(lookup_session_overrides "$title" "$live_flags" "$live_pw" "$live_env")"
+    local cfg_flags cfg_pw cfg_env
+    IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
+
+    launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"
+}
+
+cmd_clone() {
+    if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
+        echo "Error: --clone requires --instance LABEL and --tab-id ID." >&2
+        echo "Usage: cc-launch --clone --instance LABEL --tab-id ID" >&2
+        exit 1
+    fi
+
+    local source_socket
+    source_socket="$(resolve_instance_socket "$_TARGET_INSTANCE_LABEL")" || {
+        echo "Error: No active Kitty instance found with label '$_TARGET_INSTANCE_LABEL'." >&2
+        echo "Available instances:" >&2
+        print_available_instances
+        exit 1
+    }
+
+    discover_all_sockets
+    if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+        echo "Error: No active Kitty instances found." >&2
+        exit 1
+    fi
+
+    local accounts_json default_account
+    accounts_json="$(build_accounts_json)"
+    default_account="$(default_account_name)"
+
+    local tab_info
+    tab_info="$(tab_metadata_by_id "$source_socket" "$_TARGET_TAB_ID" "$accounts_json" "$default_account")"
+    if [[ -z "$tab_info" ]]; then
+        echo "Error: No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'." >&2
+        exit 1
+    fi
+
+    local title account dir live_flags live_pw live_env
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env <<<"$tab_info"
+    SOCKET="$source_socket"
+
+    local base_title clone_title number
+    base_title="$(echo "$title" | sed 's/-[0-9]*$//')"
+    number=2
+    while true; do
+        clone_title="${base_title}-${number}"
+        if ! tab_exists "$clone_title"; then
+            break
+        fi
+        number=$((number + 1))
+    done
+
+    local loc_args
+    loc_args="$(resolve_location_args "$SOCKET" "$account" "$clone_title")"
+
+    local fallback
+    fallback="$(lookup_session_overrides "$title" "$live_flags" "$live_pw" "$live_env")"
+    local cfg_flags cfg_pw cfg_env
+    IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
+
+    if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"; then
+        if [[ -f "$CONFIG_FILE" ]]; then
+            local conf_line="$clone_title | $dir | $account"
+            if [[ -n "$cfg_flags" ]]; then
+                conf_line="$conf_line | $cfg_flags"
+            fi
+            if [[ -n "$cfg_pw" || -n "$cfg_env" ]]; then
+                if [[ -z "$cfg_flags" ]]; then
+                    conf_line="$conf_line | "
+                fi
+                conf_line="$conf_line | $cfg_pw"
+            fi
+            if [[ -n "$cfg_env" ]]; then
+                if [[ -z "$cfg_pw" && -z "$cfg_flags" ]]; then
+                    conf_line="$conf_line | "
+                fi
+                conf_line="$conf_line | $cfg_env"
+            fi
+            echo "$conf_line" >>"$CONFIG_FILE"
+        fi
+        echo "Cloned '$title' as '$clone_title'."
+    fi
+}
+
+cmd_move() {
+    if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
+        echo "Error: --move requires --instance LABEL and --tab-id ID for the source tab." >&2
+        echo "Usage: cc-launch --move --instance SOURCE --tab-id ID --target-instance TARGET" >&2
+        exit 1
+    fi
+
+    if [[ -z "$_MOVE_TARGET_INSTANCE" ]]; then
+        echo "Error: --move requires --target-instance TARGET to specify the destination." >&2
+        echo "Usage: cc-launch --move --instance SOURCE --tab-id ID --target-instance TARGET" >&2
+        exit 1
+    fi
+
+    discover_all_sockets
+    if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+        echo "Error: No active Kitty instances found." >&2
+        exit 1
+    fi
+
+    local source_socket
+    source_socket="$(resolve_instance_socket "$_TARGET_INSTANCE_LABEL")" || {
+        echo "Error: No active Kitty instance found with label '$_TARGET_INSTANCE_LABEL'." >&2
+        echo "Available instances:" >&2
+        print_available_instances
+        exit 1
+    }
+
+    local target_socket=""
+    local idx
+    for ((idx = 0; idx < ${#_INSTANCE_SOCKETS[@]}; idx++)); do
+        if [[ "${_INSTANCE_LABELS[$idx]}" == "$_MOVE_TARGET_INSTANCE" ]]; then
+            target_socket="${_INSTANCE_SOCKETS[$idx]}"
+            break
+        fi
+    done
+
+    if [[ -z "$target_socket" ]]; then
+        echo "Error: No active Kitty instance found with label '$_MOVE_TARGET_INSTANCE'." >&2
+        echo "Available instances:" >&2
+        print_available_instances
+        exit 1
+    fi
+
+    local accounts_json default_account
+    accounts_json="$(build_accounts_json)"
+    default_account="$(default_account_name)"
+
+    local tab_info
+    tab_info="$(tab_metadata_by_id "$source_socket" "$_TARGET_TAB_ID" "$accounts_json" "$default_account")"
+    if [[ -z "$tab_info" ]]; then
+        echo "Error: No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'." >&2
+        exit 1
+    fi
+
+    if [[ "$source_socket" == "$target_socket" ]]; then
+        echo "Session is already in the target instance." >&2
+        exit 1
+    fi
+
+    local title account dir live_flags live_pw live_env
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env <<<"$tab_info"
+
+    kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"
+    echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..."
+    sleep 0.3
+
+    SOCKET="$target_socket"
+    local loc_args
+    loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
+
+    local fallback
+    fallback="$(lookup_session_overrides "$title" "$live_flags" "$live_pw" "$live_env")"
+    local cfg_flags cfg_pw cfg_env
+    IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
+
+    launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"
+    echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE."
+}

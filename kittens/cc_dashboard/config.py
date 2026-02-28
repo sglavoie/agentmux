@@ -68,8 +68,8 @@ _accounts: dict[str, dict[str, str]] = {}  # name -> {"config_dir": str, "color"
 _account_names: list[str] = []  # ordered list of account names
 
 # Hooks configuration loaded from hooks.json
-_hooks_global: dict = {}        # event_name -> [hook_entries]
-_hooks_overrides: dict = {}     # account_name -> override config
+_hooks_global: dict = {}  # event_name -> [hook_entries]
+_hooks_overrides: dict = {}  # account_name -> override config
 _cached_hook_cmd: str | None = None
 _cached_log_cmd: str | None = None
 
@@ -379,21 +379,27 @@ def save_sessions(live_sessions):
                 f"# Saved by dashboard on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
             )
             f.write("#\n")
-            f.write("# Format: title | directory | account [| claude_flags [| project_window [| env_vars]]]\n")
+            f.write(
+                "# Format: title | directory | account [| claude_flags [| project_window [| env_vars]]]\n"
+            )
             f.write("\n")
         for s in live_sessions:
             title = s.get("title", "")
             directory = s.get("cwd", "~/")
             if directory.startswith(home):
-                directory = "~" + directory[len(home):]
+                directory = "~" + directory[len(home) :]
             account = s.get("account", "unknown")
             flags = s.get("cc_flags", "")
             pw = s.get("cc_pw", "")
             env = s.get("cc_env", "")
             if env:
-                f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw:<10s} | {env}\n")
+                f.write(
+                    f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw:<10s} | {env}\n"
+                )
             elif pw:
-                f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw}\n")
+                f.write(
+                    f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags:<30s} | {pw}\n"
+                )
             elif flags:
                 f.write(f"{title:<20s} | {directory:<40s} | {account:<10s} | {flags}\n")
             else:
@@ -408,7 +414,7 @@ def append_session(title, directory, account, flags="", pw="", env=""):
     path = _sessions_config_path()
     home = os.path.expanduser("~")
     if directory.startswith(home):
-        directory = "~" + directory[len(home):]
+        directory = "~" + directory[len(home) :]
 
     # Ensure the file ends with a newline before appending
     needs_newline = False
@@ -443,7 +449,7 @@ def update_session(original_title, title, directory, account, flags="", pw="", e
 
     home = os.path.expanduser("~")
     if directory.startswith(home):
-        directory = "~" + directory[len(home):]
+        directory = "~" + directory[len(home) :]
 
     with open(path) as f:
         lines = f.readlines()
@@ -583,7 +589,9 @@ def _resolve_hook_cmd():
     if _cached_hook_cmd is not None:
         return _cached_hook_cmd
 
-    local_bin = os.path.join(os.path.expanduser("~"), ".local", "bin", "cc-hook-indicator")
+    local_bin = os.path.join(
+        os.path.expanduser("~"), ".local", "bin", "cc-hook-indicator"
+    )
     if os.path.isfile(local_bin) and os.access(local_bin, os.X_OK):
         _cached_hook_cmd = local_bin
         return _cached_hook_cmd
@@ -603,7 +611,9 @@ def _resolve_log_cmd():
     if _cached_log_cmd is not None:
         return _cached_log_cmd
 
-    local_bin = os.path.join(os.path.expanduser("~"), ".local", "bin", "cc-activity-log")
+    local_bin = os.path.join(
+        os.path.expanduser("~"), ".local", "bin", "cc-activity-log"
+    )
     if os.path.isfile(local_bin) and os.access(local_bin, os.X_OK):
         _cached_log_cmd = local_bin
         return _cached_log_cmd
@@ -657,7 +667,8 @@ def _compute_effective_hooks(account_name, base_hooks=None):
             for entry in entries:
                 inner_hooks = entry.get("hooks", [])
                 inner_hooks = [
-                    h for h in inner_hooks
+                    h
+                    for h in inner_hooks
                     if "cc-hook-indicator" not in h.get("command", "")
                 ]
                 if inner_hooks:
@@ -750,7 +761,10 @@ def _detect_drift(account_name):
                         cmd = hook.get("command", "")
                         if resolved_cmd != "cc-hook-indicator" and resolved_cmd in cmd:
                             cmd = cmd.replace(resolved_cmd, "cc-hook-indicator")
-                        if resolved_log_cmd != "cc-activity-log" and resolved_log_cmd in cmd:
+                        if (
+                            resolved_log_cmd != "cc-activity-log"
+                            and resolved_log_cmd in cmd
+                        ):
                             cmd = cmd.replace(resolved_log_cmd, "cc-activity-log")
                         hook["command"] = cmd
                 return entries

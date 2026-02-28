@@ -1,6 +1,6 @@
 PYTHON_SRC    := kittens/
 SHELL_SCRIPTS := bin/cc-launch bin/cc-status bin/cc-toggle-star bin/cc-toggle-flag bin/cc-idle-watch bin/ccm \
-                 lib/cc-common.sh lib/cc-title-icons.sh lib/install-hooks.sh \
+				 lib/cc-common.sh lib/cc-common/*.sh lib/cc-title-icons.sh lib/install-hooks.sh \
                  lib/sync-preambles.sh hooks/cc-activity-log
 RYE           := $(HOME)/.rye/shims/rye
 SHELLCHECK    := /opt/homebrew/bin/shellcheck

@@ -32,13 +32,6 @@ for _mod in list(sys.modules):
         del sys.modules[_mod]
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.config import load_accounts, load_defaults
-from cc_dashboard.kitty_remote import (
-    do_cross_instance_focus,
-    format_duration,
-    get_kitty_socket,
-    query_all_sessions,
-)
 from cc_dashboard.colors import (
     CP_ATTENTION,
     CP_DIM,
@@ -48,6 +41,7 @@ from cc_dashboard.colors import (
     _cp_for_account,
     init_colors,
 )
+from cc_dashboard.config import load_accounts, load_defaults
 from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
 from cc_dashboard.filters import (
     SORT_LABELS,
@@ -55,6 +49,10 @@ from cc_dashboard.filters import (
     _apply_sort,
     _filter_sessions,
 )
+from cc_dashboard.remote.actions import do_cross_instance_focus
+from cc_dashboard.remote.command import get_kitty_socket
+from cc_dashboard.remote.sessions import query_all_sessions
+from cc_dashboard.remote.shared import format_duration
 from cc_dashboard.views import draw_sort_picker
 
 
@@ -117,11 +115,7 @@ def draw_session_list(stdscr, sessions, selected, multi_instance=False):
     hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}"
     if multi_instance:
         hdr += f"{'Instance':<{c_inst}}"
-    hdr += (
-        f"{'Branch':<{c_branch}}"
-        f"{'Status':<{c_status}}"
-        f"{'Directory':<{c_dir}}"
-    )
+    hdr += f"{'Branch':<{c_branch}}{'Status':<{c_status}}{'Directory':<{c_dir}}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
     avail = rows - 6
@@ -182,7 +176,9 @@ def draw_session_list(stdscr, sessions, selected, multi_instance=False):
             status_attr = curses.color_pair(CP_WARN) | curses.A_BOLD
         else:
             status_attr = row_attr
-        safe_addstr(stdscr, screen_y, status_x, f"{status_text:<{c_status}}", status_attr)
+        safe_addstr(
+            stdscr, screen_y, status_x, f"{status_text:<{c_status}}", status_attr
+        )
 
         # Render directory after status with normal row color
         dir_x = status_x + c_status

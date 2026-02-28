@@ -84,7 +84,9 @@ def _apply_sort(sessions, sort_mode):
     if sort_mode == "name":
         return sorted(sessions, key=lambda s: s["title"].lower())
     if sort_mode == "account":
-        return sorted(sessions, key=lambda s: (s["account"].lower(), s["title"].lower()))
+        return sorted(
+            sessions, key=lambda s: (s["account"].lower(), s["title"].lower())
+        )
     if sort_mode == "status":
         return sorted(sessions, key=lambda s: _STATUS_PRIORITY.get(s["status"], 99))
     if sort_mode == "idle":

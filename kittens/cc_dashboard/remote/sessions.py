@@ -1,0 +1,162 @@
+"""Session discovery across kitty instances."""
+
+import json
+
+from cc_dashboard import config as _cfg
+from cc_dashboard.remote.activity import cleanup_stale_activity, load_activity
+from cc_dashboard.remote.command import get_all_kitty_sockets, kitty_cmd
+from cc_dashboard.remote.git_ops import _get_git_info
+from cc_dashboard.remote.shared import _MANAGED_TITLE_RE, _detect_state, _strip_icons
+
+
+def _is_claude_process(cmdline):
+    """Check if a process cmdline represents the Claude Code CLI.
+
+    Returns True for the actual Claude binary (e.g. ["claude", ...] or
+    ["/path/to/claude", ...]) but False for kittens or scripts that
+    merely contain 'claude' in their filename.
+    """
+    for arg in cmdline:
+        arg_lower = arg.lower()
+        if "claude" not in arg_lower:
+            continue
+        if arg_lower.endswith(".py"):
+            continue
+        if arg_lower == "kitten" or arg_lower.endswith("/kitten"):
+            continue
+        return True
+    return False
+
+
+def query_sessions(socket, managed_only=True):
+    """Query Kitty for tabs running Claude Code.
+
+    When managed_only is True (the default), only tabs launched by ccm are
+    returned — identified by the cc_account user variable or the standard
+    X:title naming convention.
+    """
+    result = kitty_cmd(socket, "ls")
+    if not result or result.returncode != 0:
+        return []
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
+    sessions = []
+    for os_win in data:
+        os_focused = os_win.get("is_focused", False)
+        for idx, tab in enumerate(os_win.get("tabs", [])):
+            has_claude = False
+            detected_config_dir = ""
+            windows = tab.get("windows", [])
+            cwd = ""
+            user_vars = {}
+            claude_win_id = 0
+
+            pids = []
+            cmdlines = []
+
+            for win in windows:
+                uv = win.get("user_vars", {})
+                if not user_vars and ("cc_account" in uv or "cc_cwd" in uv):
+                    user_vars = uv
+                for proc in win.get("foreground_processes", []):
+                    cmdline = proc.get("cmdline", [])
+                    cmdline_str = " ".join(cmdline)
+                    pid = proc.get("pid")
+                    if pid:
+                        pids.append(pid)
+                    if cmdline:
+                        cmdlines.append(cmdline_str)
+                    if _is_claude_process(cmdline):
+                        has_claude = True
+                        claude_win_id = win.get("id", 0)
+                        if not cwd:
+                            cwd = win.get("cwd", "")
+                    for arg in cmdline:
+                        if "CLAUDE_CONFIG_DIR=" in arg:
+                            detected_config_dir = arg.split("=", 1)[1]
+
+            if "cc_cwd" in user_vars:
+                cwd = user_vars["cc_cwd"]
+            elif not cwd and windows:
+                cwd = windows[0].get("cwd", "")
+
+            has_cc_var = bool(user_vars.get("cc_account"))
+
+            if not has_claude and not has_cc_var:
+                continue
+
+            tab_title = tab.get("title", "")
+            if (
+                managed_only
+                and not has_cc_var
+                and not _MANAGED_TITLE_RE.match(tab_title)
+            ):
+                continue
+
+            if claude_win_id == 0 and windows:
+                claude_win_id = windows[0].get("id", 0)
+
+            if "cc_account" in user_vars:
+                account = user_vars["cc_account"]
+            else:
+                account = _cfg._resolve_account_by_config_dir(detected_config_dir)
+
+            cc_flags = user_vars.get("cc_flags", "")
+            cc_pw = user_vars.get("cc_pw", "")
+            cc_env = user_vars.get("cc_env", "")
+
+            title = _strip_icons(tab.get("title", ""))
+            icon_state = _detect_state(tab_title)
+            tab_id = tab.get("id", 0)
+            activity = load_activity(tab_id)
+            git_info = _get_git_info(cwd) if cwd else None
+            sessions.append(
+                {
+                    "index": idx + 1,
+                    "title": title,
+                    "account": account,
+                    "cwd": cwd,
+                    "cc_flags": cc_flags,
+                    "cc_pw": cc_pw,
+                    "cc_env": cc_env,
+                    "git": git_info,
+                    "status": (
+                        "focused"
+                        if (os_focused and tab.get("is_focused", False))
+                        else icon_state
+                        if icon_state
+                        else "idle"
+                    ),
+                    "tab_id": tab_id,
+                    "window_count": len(windows),
+                    "pids": pids,
+                    "cmdlines": cmdlines,
+                    "config_dir": detected_config_dir,
+                    "activity": activity,
+                    "claude_window_id": claude_win_id,
+                }
+            )
+
+    cleanup_stale_activity(s["tab_id"] for s in sessions)
+    return sessions
+
+
+def query_all_sessions(managed_only=True):
+    """Query all Kitty instances for Claude Code sessions.
+
+    Calls ``query_sessions`` for each active socket discovered by
+    ``get_all_kitty_sockets`` and injects ``"socket"`` and
+    ``"instance_label"`` keys into every session dict.
+    """
+    sockets = get_all_kitty_sockets()
+    all_sessions = []
+    for sock, label in sockets:
+        sessions = query_sessions(sock, managed_only=managed_only)
+        for s in sessions:
+            s["socket"] = sock
+            s["instance_label"] = label
+        all_sessions.extend(sessions)
+    return all_sessions

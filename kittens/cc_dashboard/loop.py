@@ -16,36 +16,52 @@ from cc_dashboard.filters import (
     _filter_config_sessions,
     _sort_pick_entries,
 )
-from cc_dashboard.kitty_remote import (
-    OVERRIDE_MARKER,
-    _append_override_marker,
-    _strip_override_marker,
-    compute_insert_location,
-    generate_clone_title,
+from cc_dashboard.remote.actions import (
     _spawn_detached_close,
+    compute_insert_location,
     do_close,
     do_cross_instance_focus,
-    do_focus,
-    do_create_worktree,
     do_launch,
-    do_remove_worktree,
-    check_git_safety,
-    detect_worktree,
     do_move,
     do_open_editor,
     do_rename,
     do_restart,
+    generate_clone_title,
+    run_hooks_sync,
+)
+from cc_dashboard.remote.git_ops import (
+    check_git_safety,
+    do_create_worktree,
+    do_remove_worktree,
+)
+from cc_dashboard.remote.activity import (
+    list_activity_logs,
+    load_activity_log,
+    resolve_session_id,
+)
+from cc_dashboard.remote.command import (
     get_all_kitty_sockets,
     get_host_tab_id,
     get_kitty_socket,
     get_window_text,
-    query_all_sessions,
 )
-from cc_dashboard.kitty_remote import (
-    list_activity_logs,
-    load_activity_log,
-    resolve_session_id,
-    run_hooks_sync,
+from cc_dashboard.remote.sessions import query_all_sessions
+from cc_dashboard.remote.shared import (
+    OVERRIDE_MARKER,
+    _append_override_marker,
+    _strip_override_marker,
+)
+from cc_dashboard.loop_helpers import (
+    _begin_restart_options as _begin_restart_options_helper,
+    _build_delete_entries,
+    _build_session_actions as _build_session_actions_helper,
+    _compute_peek_matches,
+    _make_new_fields as _make_new_fields_helper,
+    _refilter as _refilter_helper,
+    _reload_all_config as _reload_all_config_helper,
+    _resolve_session_runtime_options as _resolve_session_runtime_options_helper,
+    _rstrip_blank_lines,
+    _session_fingerprint,
 )
 from cc_dashboard.views import (
     DETAIL_PANE_HEIGHT,
@@ -89,41 +105,6 @@ from cc_dashboard.views import (
     _scan_directories,
     draw_dir_dropdown,
 )
-
-
-def _compute_peek_matches(lines, query):
-    """Return sorted list of line indices containing query (case-insensitive)."""
-    if not query:
-        return []
-    q = query.lower()
-    return [i for i, line in enumerate(lines) if q in line.lower()]
-
-
-def _rstrip_blank_lines(lines):
-    """Remove trailing blank/whitespace-only lines from a list."""
-    while lines and not lines[-1].strip():
-        lines.pop()
-    return lines
-
-
-def _session_fingerprint(sessions):
-    """Return a hashable fingerprint of session state for change detection."""
-    return tuple(
-        (
-            s.get("socket", ""),
-            s["tab_id"],
-            s["title"],
-            s["status"],
-            s["cwd"],
-            s["account"],
-            s.get("window_count", 1),
-            (s.get("activity") or {}).get("last_event_ts"),
-            (s.get("activity") or {}).get("last_event_type"),
-            (s.get("git") or {}).get("branch"),
-            (s.get("git") or {}).get("dirty"),
-        )
-        for s in sessions
-    )
 
 
 def dashboard(stdscr):
@@ -206,6 +187,10 @@ def dashboard(stdscr):
     # Rename state
     rename_value = ""
     rename_cursor = 0
+    clone_title = ""
+    clone_cursor = 0
+    worktree_branch = ""
+    worktree_cursor = 0
 
     # Override (account picker) state
     override_selected = 0
@@ -292,18 +277,9 @@ def dashboard(stdscr):
     )
 
     def _make_new_fields():
-        fields = {
-            "title": "",
-            "dir": "~/",
-            "account": default_account,
-            "flags": "",
-            "pw": default_pw,
-            "env": "",
-            "save": "yes",
-        }
-        if multi_instance:
-            fields["instance"] = home_instance_label
-        return fields
+        return _make_new_fields_helper(
+            default_account, default_pw, multi_instance, home_instance_label
+        )
 
     new_fields = _make_new_fields()
     new_active = 0
@@ -319,99 +295,46 @@ def dashboard(stdscr):
     def _reload_all_config():
         """Re-read all config files from disk and refresh derived state."""
         nonlocal default_account, default_pw, refresh_interval, refresh_threshold
-        _cfg.load_accounts()
-        _cfg.load_defaults()
-        _cfg.load_sessions()
-        default_account = _cfg._account_names[0] if _cfg._account_names else "work"
-        default_pw = (
-            _cfg._default_project_window if _cfg._default_project_window else "none"
-        )
-        refresh_interval = _cfg._default_dashboard_refresh
-        refresh_threshold = refresh_interval * 10
+        (
+            default_account,
+            default_pw,
+            refresh_interval,
+            refresh_threshold,
+        ) = _reload_all_config_helper()
 
     def _refilter():
         nonlocal filtered, selected
-        old_tab_id = (
-            filtered[selected]["tab_id"]
-            if filtered and selected < len(filtered)
-            else None
+        filtered, selected = _refilter_helper(
+            sessions,
+            search_query,
+            account_filter,
+            sort_mode,
+            filtered,
+            selected,
         )
-        filtered = _apply_sort(
-            _apply_filters(sessions, search_query, account_filter), sort_mode
-        )
-        if old_tab_id is not None:
-            for i, s in enumerate(filtered):
-                if s["tab_id"] == old_tab_id:
-                    selected = i
-                    break
-        selected = min(selected, max(0, len(filtered) - 1))
 
     def _resolve_session_runtime_options(sess):
-        r_flags = sess.get("cc_flags", "")
-        r_pw = sess.get("cc_pw", "")
-        r_env = sess.get("cc_env", "")
-        if not r_flags and not r_pw and not r_env:
-            cfg_entry = _cfg._find_config_session(sess["title"])
-            if cfg_entry is None:
-                cfg_entry = _cfg._find_config_session(
-                    _strip_override_marker(sess["title"])
-                )
-            r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
-            r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
-            r_env = cfg_entry.get("env", "") if cfg_entry else ""
-        return r_flags, r_pw, r_env
+        return _resolve_session_runtime_options_helper(sess)
 
     def _build_session_actions(sess, scope="selected"):
-        if scope == "marked":
-            actions = [
-                ("restart", "Restart marked sessions"),
-                ("close", "Close marked sessions"),
-            ]
-            if multi_instance:
-                actions.insert(1, ("move", "Move marked sessions"))
-            return actions
-
-        actions = [
-            ("restart", "Restart now"),
-            ("restart_options", "Restart with options"),
-            ("clone", "Clone session"),
-            ("override", "Override config dir"),
-            ("rename", "Rename session"),
-            ("close", "Close session"),
-        ]
-        if sess.get("git"):
-            actions.insert(3, ("worktree", "Clone to git worktree"))
-        if multi_instance:
-            actions.insert(2, ("move", "Move to another instance"))
-        return actions
+        return _build_session_actions_helper(sess, scope, multi_instance)
 
     def _begin_restart_options(sess):
         nonlocal mode, restart_options_fields, restart_options_active
         nonlocal restart_options_cursor, restart_target_socket, restart_target_tab_id
-        flags, pw_override, env_vars = _resolve_session_runtime_options(sess)
-        account = sess.get("account", "")
-        default_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
-        current_dir = sess.get("config_dir", "") or default_dir
-        config_choice = (
-            restart_default_config_label
-            if not current_dir or current_dir == default_dir
-            else current_dir
+        state = _begin_restart_options_helper(
+            sess,
+            multi_instance,
+            home_instance_label,
+            restart_default_config_label,
+            home_socket,
         )
-        restart_options_fields = {
-            "flags": flags,
-            "pw": pw_override if pw_override else "none",
-            "env": env_vars,
-            "config_dir": config_choice,
-        }
-        if multi_instance:
-            restart_options_fields["instance"] = sess.get(
-                "instance_label", home_instance_label
-            )
-        restart_options_active = 0
-        restart_options_cursor = len(restart_options_fields["flags"])
-        restart_target_socket = sess.get("socket", home_socket)
-        restart_target_tab_id = sess.get("tab_id", 0)
-        mode = "restart_options"
+        restart_options_fields = state["restart_options_fields"]
+        restart_options_active = state["restart_options_active"]
+        restart_options_cursor = state["restart_options_cursor"]
+        restart_target_socket = state["restart_target_socket"]
+        restart_target_tab_id = state["restart_target_tab_id"]
+        mode = state["mode"]
 
     while True:
         # ── Draw ─────────────────────────────────────────────────
@@ -888,23 +811,7 @@ def dashboard(stdscr):
                     mode = "delete"
                     delete_step = "select"
                     delete_running = {s["title"] for s in sessions}
-                    # Build entries with type tags
-                    delete_entries = []
-                    for entry in _cfg._sessions:
-                        e = dict(entry)
-                        expanded = os.path.expanduser(e["dir"])
-                        if os.path.isdir(expanded):
-                            wt = detect_worktree(expanded)
-                            if wt["is_worktree"]:
-                                e["type_tag"] = "[worktree]"
-                                e["wt_main_repo"] = wt["main_repo"]
-                            elif os.path.isdir(os.path.join(expanded, ".git")):
-                                e["type_tag"] = "[repo]"
-                            else:
-                                e["type_tag"] = "[dir]"
-                        else:
-                            e["type_tag"] = "[n/a]"
-                        delete_entries.append(e)
+                    delete_entries = _build_delete_entries(_cfg._sessions)
                     delete_filtered, delete_running_count = _sort_pick_entries(
                         delete_entries, delete_running
                     )
@@ -2679,23 +2586,7 @@ def dashboard(stdscr):
                     ):
                         msg = f'Removed "{title}" from config (directory not found)'
                         msg_frames = 30
-                        # Rebuild entries from refreshed config
-                        delete_entries = []
-                        for entry in _cfg._sessions:
-                            e = dict(entry)
-                            exp = os.path.expanduser(e["dir"])
-                            if os.path.isdir(exp):
-                                wt = detect_worktree(exp)
-                                if wt["is_worktree"]:
-                                    e["type_tag"] = "[worktree]"
-                                    e["wt_main_repo"] = wt["main_repo"]
-                                elif os.path.isdir(os.path.join(exp, ".git")):
-                                    e["type_tag"] = "[repo]"
-                                else:
-                                    e["type_tag"] = "[dir]"
-                            else:
-                                e["type_tag"] = "[n/a]"
-                            delete_entries.append(e)
+                        delete_entries = _build_delete_entries(_cfg._sessions)
                         delete_filtered, delete_running_count = _sort_pick_entries(
                             delete_entries, delete_running
                         )
@@ -2727,23 +2618,7 @@ def dashboard(stdscr):
                 else:
                     msg = "Config entry removed, directory kept"
                     msg_frames = 30
-                # Rebuild entries from refreshed config
-                delete_entries = []
-                for entry in _cfg._sessions:
-                    e = dict(entry)
-                    exp = os.path.expanduser(e["dir"])
-                    if os.path.isdir(exp):
-                        wt = detect_worktree(exp)
-                        if wt["is_worktree"]:
-                            e["type_tag"] = "[worktree]"
-                            e["wt_main_repo"] = wt["main_repo"]
-                        elif os.path.isdir(os.path.join(exp, ".git")):
-                            e["type_tag"] = "[repo]"
-                        else:
-                            e["type_tag"] = "[dir]"
-                    else:
-                        e["type_tag"] = "[n/a]"
-                    delete_entries.append(e)
+                delete_entries = _build_delete_entries(_cfg._sessions)
                 delete_filtered, delete_running_count = _sort_pick_entries(
                     delete_entries, delete_running
                 )

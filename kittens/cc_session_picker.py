@@ -32,7 +32,8 @@ for _mod in list(sys.modules):
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.config import load_accounts, load_defaults, load_sessions
-from cc_dashboard.kitty_remote import get_kitty_socket, query_sessions
+from cc_dashboard.remote.command import get_kitty_socket
+from cc_dashboard.remote.sessions import query_sessions
 from cc_dashboard.ui import (
     CP_DIM,
     CP_HEADER,

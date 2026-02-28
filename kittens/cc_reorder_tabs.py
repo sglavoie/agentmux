@@ -49,15 +49,18 @@ def handle_result(args, answer, target_window_id, boss):
         # Reorder by adjacent swaps, syncing the C backend each time
         # (same approach as TabManager.move_tab in Kitty 0.45.0)
         from kitty.fast_data_types import swap_tabs
+
         id_to_target = {tab.id: i for i, tab in enumerate(ordered)}
         for target_pos in range(len(tm.tabs)):
             cur_pos = next(
-                j for j in range(target_pos, len(tm.tabs))
+                j
+                for j in range(target_pos, len(tm.tabs))
                 if id_to_target.get(tm.tabs[j].id) == target_pos
             )
             while cur_pos > target_pos:
                 tm.tabs[cur_pos], tm.tabs[cur_pos - 1] = (
-                    tm.tabs[cur_pos - 1], tm.tabs[cur_pos]
+                    tm.tabs[cur_pos - 1],
+                    tm.tabs[cur_pos],
                 )
                 swap_tabs(tm.os_window_id, cur_pos - 1, cur_pos)
                 cur_pos -= 1
