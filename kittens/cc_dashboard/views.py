@@ -329,7 +329,7 @@ def _check_idle_notifications(sessions):
 # ── Drawing ──────────────────────────────────────────────────────────────────
 
 
-def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=""):
+def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label="", marked=None):
     """Draw the main session list with header, rows, and footer."""
     rows, cols = stdscr.getmaxyx()
     stdscr.clear()
@@ -344,11 +344,16 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
         title,
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
+    badge_x = title_x + len(title)
     if sort_label:
         indicator = f" [{sort_label}]"
-        ind_x = title_x + len(title)
-        if ind_x + len(indicator) < cols:
-            safe_addstr(stdscr, 1, ind_x, indicator, curses.color_pair(CP_DIM))
+        if badge_x + len(indicator) < cols:
+            safe_addstr(stdscr, 1, badge_x, indicator, curses.color_pair(CP_DIM))
+            badge_x += len(indicator)
+    if marked:
+        mark_badge = f" [{len(marked)} marked]"
+        if badge_x + len(mark_badge) < cols:
+            safe_addstr(stdscr, 1, badge_x, mark_badge, curses.color_pair(CP_WARN))
 
     if not sessions:
         safe_addstr(
@@ -408,7 +413,15 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
     for vi, si in enumerate(range(offset, min(offset + avail, len(sessions)))):
         s = sessions[si]
         sel = si == selected
-        mark = "\u25b8" if sel else " "
+        is_marked = marked and s["tab_id"] in marked
+        if sel and is_marked:
+            mark = "\u25b8\u25cf"
+        elif sel:
+            mark = "\u25b8 "
+        elif is_marked:
+            mark = " \u25cf"
+        else:
+            mark = "  "
 
         cp = _cp_for_account(s["account"], selected=sel)
 
@@ -436,7 +449,7 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
             status_text = f"{s['status']} {format_duration(idle_secs)}"
 
         line = (
-            f"{mark} "
+            f"{mark}"
             f"{title_padded}"
             f"{s['account']:<{c_acct}}"
         )
@@ -723,6 +736,14 @@ _HELP_SECTIONS = [
         ],
     ),
     (
+        "Multi-Select",
+        [
+            ("Space", "Mark / unmark session"),
+            ("U", "Clear all marks"),
+            ("x / R / m", "Batch action on marked sessions"),
+        ],
+    ),
+    (
         "View",
         [
             ("d", "Toggle detail pane"),
@@ -822,6 +843,8 @@ _FOOTER_HINTS = {
         "a All",
         "f Acct",
         "s Sort",
+        "Space Mark",
+        "U Unmark",
         "^r Refresh",
     ],
     "rename": ["Enter Confirm", "Esc Cancel"],

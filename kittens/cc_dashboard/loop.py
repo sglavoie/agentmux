@@ -136,6 +136,7 @@ def dashboard(stdscr):
     show_all = False
     sessions = query_all_sessions(managed_only=True)
     selected = 0
+    marked = set()  # set of tab_ids for multi-select
 
     # Detect the tab that hosts this dashboard overlay so we can handle
     # restart/close operations on it safely.
@@ -299,7 +300,7 @@ def dashboard(stdscr):
         ):
             rows, _cols = stdscr.getmaxyx()
             detail_visible = show_detail and rows >= 20 and bool(filtered)
-            draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible, sort_label=SORT_LABELS[sort_mode])
+            draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible, sort_label=SORT_LABELS[sort_mode], marked=marked)
             if detail_visible:
                 detail_y = rows - 1 - DETAIL_PANE_HEIGHT
                 draw_detail_pane(stdscr, filtered[selected], detail_y)
@@ -533,8 +534,10 @@ def dashboard(stdscr):
                 return
             if (
                 key == 27
-            ):  # Escape -- cascade: filter mode -> search -> account filter -> quit
-                if account_filter_mode:
+            ):  # Escape -- cascade: marks -> filter mode -> search -> account filter -> quit
+                if marked:
+                    marked.clear()
+                elif account_filter_mode:
                     account_filter_mode = False
                     account_filter = None
                     _refilter()
@@ -558,6 +561,12 @@ def dashboard(stdscr):
                 selected = (selected - 1) % len(filtered)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and filtered:
                 selected = (selected + 1) % len(filtered)
+            elif key == ord(" ") and filtered:
+                tid = filtered[selected]["tab_id"]
+                marked.symmetric_difference_update({tid})
+                selected = min(selected + 1, len(filtered) - 1)
+            elif key == ord("U") and marked:
+                marked.clear()
             elif key in (10, 13, curses.KEY_ENTER) and filtered:
                 sess = filtered[selected]
                 do_cross_instance_focus(
