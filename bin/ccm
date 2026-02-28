@@ -11,548 +11,548 @@ CCM_VERSION="0.1.0"
 # Path resolution
 # ---------------------------------------------------------------------------
 resolve_repo_dir() {
-	local script_path script_dir
-	script_path="$(readlink "$0" || echo "$0")"
-	script_dir="$(cd "$(dirname "$script_path")" && pwd)"
-	cd "$script_dir/.." && pwd
+    local script_path script_dir
+    script_path="$(readlink "$0" || echo "$0")"
+    script_dir="$(cd "$(dirname "$script_path")" && pwd)"
+    cd "$script_dir/.." && pwd
 }
 
 REPO_DIR="$(resolve_repo_dir)"
 
 resolve_config_dir() {
-	if [[ -n "${CC_MANAGER_CONFIG:-}" ]]; then
-		dirname "$CC_MANAGER_CONFIG"
-	elif [[ -n "${CC_MANAGER_ACCOUNTS:-}" ]]; then
-		dirname "$CC_MANAGER_ACCOUNTS"
-	else
-		echo "${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager"
-	fi
+    if [[ -n "${CC_MANAGER_CONFIG:-}" ]]; then
+        dirname "$CC_MANAGER_CONFIG"
+    elif [[ -n "${CC_MANAGER_ACCOUNTS:-}" ]]; then
+        dirname "$CC_MANAGER_ACCOUNTS"
+    else
+        echo "${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager"
+    fi
 }
 
 resolve_config_file() {
-	local key="$1"
-	local config_dir
-	config_dir="$(resolve_config_dir)"
+    local key="$1"
+    local config_dir
+    config_dir="$(resolve_config_dir)"
 
-	case "$key" in
-	accounts)
-		echo "${CC_MANAGER_ACCOUNTS:-$config_dir/accounts.conf}"
-		;;
-	sessions)
-		echo "${CC_MANAGER_CONFIG:-$config_dir/sessions.conf}"
-		;;
-	defaults)
-		echo "${CC_MANAGER_DEFAULTS:-$config_dir/defaults.conf}"
-		;;
-	hooks)
-		echo "$config_dir/hooks.json"
-		;;
-	*)
-		echo "Error: Unknown config file '$key'. Use: accounts, sessions, defaults, hooks" >&2
-		return 1
-		;;
-	esac
+    case "$key" in
+    accounts)
+        echo "${CC_MANAGER_ACCOUNTS:-$config_dir/accounts.conf}"
+        ;;
+    sessions)
+        echo "${CC_MANAGER_CONFIG:-$config_dir/sessions.conf}"
+        ;;
+    defaults)
+        echo "${CC_MANAGER_DEFAULTS:-$config_dir/defaults.conf}"
+        ;;
+    hooks)
+        echo "$config_dir/hooks.json"
+        ;;
+    *)
+        echo "Error: Unknown config file '$key'. Use: accounts, sessions, defaults, hooks" >&2
+        return 1
+        ;;
+    esac
 }
 
 resolve_editor() {
-	if [[ -n "${VISUAL:-}" ]]; then
-		echo "$VISUAL"
-	elif [[ -n "${EDITOR:-}" ]]; then
-		echo "$EDITOR"
-	else
-		echo "vi"
-	fi
+    if [[ -n "${VISUAL:-}" ]]; then
+        echo "$VISUAL"
+    elif [[ -n "${EDITOR:-}" ]]; then
+        echo "$EDITOR"
+    else
+        echo "vi"
+    fi
 }
 
 # ---------------------------------------------------------------------------
 # Config subcommands
 # ---------------------------------------------------------------------------
 cmd_config_edit() {
-	local editor
-	editor="$(resolve_editor)"
+    local editor
+    editor="$(resolve_editor)"
 
-	if [[ $# -eq 0 ]]; then
-		local f1 f2 f3 f4
-		f1="$(resolve_config_file accounts)"
-		f2="$(resolve_config_file sessions)"
-		f3="$(resolve_config_file defaults)"
-		f4="$(resolve_config_file hooks)"
-		# Unquoted $editor to support compound values like "code --wait"
-		$editor "$f1" "$f2" "$f3" "$f4"
-	else
-		local f
-		f="$(resolve_config_file "$1")"
-		if [[ ! -f "$f" ]]; then
-			echo "Warning: $f does not exist yet. Run 'ccm config init' to create it." >&2
-		fi
-		$editor "$f"
-	fi
+    if [[ $# -eq 0 ]]; then
+        local f1 f2 f3 f4
+        f1="$(resolve_config_file accounts)"
+        f2="$(resolve_config_file sessions)"
+        f3="$(resolve_config_file defaults)"
+        f4="$(resolve_config_file hooks)"
+        # Unquoted $editor to support compound values like "code --wait"
+        $editor "$f1" "$f2" "$f3" "$f4"
+    else
+        local f
+        f="$(resolve_config_file "$1")"
+        if [[ ! -f "$f" ]]; then
+            echo "Warning: $f does not exist yet. Run 'ccm config init' to create it." >&2
+        fi
+        $editor "$f"
+    fi
 }
 
 cmd_config_show() {
-	if [[ $# -eq 0 ]]; then
-		local f
-		for key in accounts sessions defaults hooks; do
-			f="$(resolve_config_file "$key")"
-			echo "==> $f <=="
-			if [[ -f "$f" ]]; then
-				cat "$f"
-			else
-				echo "(file not found)"
-			fi
-			echo
-		done
-	else
-		local f
-		f="$(resolve_config_file "$1")"
-		if [[ -f "$f" ]]; then
-			cat "$f"
-		else
-			echo "Error: $f not found. Run 'ccm config init' to create default configs." >&2
-			return 1
-		fi
-	fi
+    if [[ $# -eq 0 ]]; then
+        local f
+        for key in accounts sessions defaults hooks; do
+            f="$(resolve_config_file "$key")"
+            echo "==> $f <=="
+            if [[ -f "$f" ]]; then
+                cat "$f"
+            else
+                echo "(file not found)"
+            fi
+            echo
+        done
+    else
+        local f
+        f="$(resolve_config_file "$1")"
+        if [[ -f "$f" ]]; then
+            cat "$f"
+        else
+            echo "Error: $f not found. Run 'ccm config init' to create default configs." >&2
+            return 1
+        fi
+    fi
 }
 
 cmd_config_path() {
-	if [[ $# -eq 0 ]]; then
-		resolve_config_file accounts
-		resolve_config_file sessions
-		resolve_config_file defaults
-		resolve_config_file hooks
-	else
-		resolve_config_file "$1"
-	fi
+    if [[ $# -eq 0 ]]; then
+        resolve_config_file accounts
+        resolve_config_file sessions
+        resolve_config_file defaults
+        resolve_config_file hooks
+    else
+        resolve_config_file "$1"
+    fi
 }
 
 cmd_config_init() {
-	local config_dir
-	config_dir="$(resolve_config_dir)"
-	mkdir -p "$config_dir"
+    local config_dir
+    config_dir="$(resolve_config_dir)"
+    mkdir -p "$config_dir"
 
-	local copied=0
-	local src dest
+    local copied=0
+    local src dest
 
-	src="$REPO_DIR/config/accounts.example"
-	dest="$config_dir/accounts.conf"
-	if [[ -f "$dest" ]]; then
-		echo "Skipping $dest (already exists)"
-	elif [[ -f "$src" ]]; then
-		cp "$src" "$dest"
-		echo "Created $dest"
-		copied=$((copied + 1))
-	else
-		echo "Warning: $src not found in repository" >&2
-	fi
+    src="$REPO_DIR/config/accounts.example"
+    dest="$config_dir/accounts.conf"
+    if [[ -f "$dest" ]]; then
+        echo "Skipping $dest (already exists)"
+    elif [[ -f "$src" ]]; then
+        cp "$src" "$dest"
+        echo "Created $dest"
+        copied=$((copied + 1))
+    else
+        echo "Warning: $src not found in repository" >&2
+    fi
 
-	src="$REPO_DIR/config/sessions.example"
-	dest="$config_dir/sessions.conf"
-	if [[ -f "$dest" ]]; then
-		echo "Skipping $dest (already exists)"
-	elif [[ -f "$src" ]]; then
-		cp "$src" "$dest"
-		echo "Created $dest"
-		copied=$((copied + 1))
-	else
-		echo "Warning: $src not found in repository" >&2
-	fi
+    src="$REPO_DIR/config/sessions.example"
+    dest="$config_dir/sessions.conf"
+    if [[ -f "$dest" ]]; then
+        echo "Skipping $dest (already exists)"
+    elif [[ -f "$src" ]]; then
+        cp "$src" "$dest"
+        echo "Created $dest"
+        copied=$((copied + 1))
+    else
+        echo "Warning: $src not found in repository" >&2
+    fi
 
-	src="$REPO_DIR/config/defaults.example"
-	dest="$config_dir/defaults.conf"
-	if [[ -f "$dest" ]]; then
-		echo "Skipping $dest (already exists)"
-	elif [[ -f "$src" ]]; then
-		cp "$src" "$dest"
-		echo "Created $dest"
-		copied=$((copied + 1))
-	else
-		echo "Warning: $src not found in repository" >&2
-	fi
+    src="$REPO_DIR/config/defaults.example"
+    dest="$config_dir/defaults.conf"
+    if [[ -f "$dest" ]]; then
+        echo "Skipping $dest (already exists)"
+    elif [[ -f "$src" ]]; then
+        cp "$src" "$dest"
+        echo "Created $dest"
+        copied=$((copied + 1))
+    else
+        echo "Warning: $src not found in repository" >&2
+    fi
 
-	src="$REPO_DIR/config/hooks.example.json"
-	dest="$config_dir/hooks.json"
-	if [[ -f "$dest" ]]; then
-		echo "Skipping $dest (already exists)"
-	elif [[ -f "$src" ]]; then
-		cp "$src" "$dest"
-		echo "Created $dest"
-		copied=$((copied + 1))
-	else
-		echo "Warning: $src not found in repository" >&2
-	fi
+    src="$REPO_DIR/config/hooks.example.json"
+    dest="$config_dir/hooks.json"
+    if [[ -f "$dest" ]]; then
+        echo "Skipping $dest (already exists)"
+    elif [[ -f "$src" ]]; then
+        cp "$src" "$dest"
+        echo "Created $dest"
+        copied=$((copied + 1))
+    else
+        echo "Warning: $src not found in repository" >&2
+    fi
 
-	if [[ $copied -eq 0 ]]; then
-		echo "All config files already exist."
-	fi
+    if [[ $copied -eq 0 ]]; then
+        echo "All config files already exist."
+    fi
 }
 
 cmd_config() {
-	case "${1:-}" in
-	edit)
-		shift
-		cmd_config_edit "$@"
-		;;
-	show)
-		shift
-		cmd_config_show "$@"
-		;;
-	path)
-		shift
-		cmd_config_path "$@"
-		;;
-	init)
-		cmd_config_init
-		;;
-	sync)
-		bash "$REPO_DIR/lib/sync-preambles.sh" "$REPO_DIR"
-		;;
-	"")
-		echo "Usage: ccm config <edit|show|path|init|sync> [FILE]" >&2
-		echo "FILE: accounts, sessions, defaults, hooks" >&2
-		return 1
-		;;
-	*)
-		echo "Error: Unknown config subcommand '$1'. Use: edit, show, path, init, sync" >&2
-		return 1
-		;;
-	esac
+    case "${1:-}" in
+    edit)
+        shift
+        cmd_config_edit "$@"
+        ;;
+    show)
+        shift
+        cmd_config_show "$@"
+        ;;
+    path)
+        shift
+        cmd_config_path "$@"
+        ;;
+    init)
+        cmd_config_init
+        ;;
+    sync)
+        bash "$REPO_DIR/lib/sync-preambles.sh" "$REPO_DIR"
+        ;;
+    "")
+        echo "Usage: ccm config <edit|show|path|init|sync> [FILE]" >&2
+        echo "FILE: accounts, sessions, defaults, hooks" >&2
+        return 1
+        ;;
+    *)
+        echo "Error: Unknown config subcommand '$1'. Use: edit, show, path, init, sync" >&2
+        return 1
+        ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
 # Notify
 # ---------------------------------------------------------------------------
 cmd_notify() {
-	local title="cc-manager"
-	local subtitle="Test notification"
-	local message="If you see this, notifications are working."
-	local timeout=5
+    local title="cc-manager"
+    local subtitle="Test notification"
+    local message="If you see this, notifications are working."
+    local timeout=5
 
-	while [[ $# -gt 0 ]]; do
-		case "$1" in
-		--title)
-			title="${2:?--title requires a value}"
-			shift 2
-			;;
-		--subtitle)
-			subtitle="${2:?--subtitle requires a value}"
-			shift 2
-			;;
-		--message)
-			message="${2:?--message requires a value}"
-			shift 2
-			;;
-		--timeout)
-			timeout="${2:?--timeout requires a value}"
-			shift 2
-			;;
-		*)
-			echo "Error: Unknown flag '$1'. Run 'ccm help notify' for usage." >&2
-			return 1
-			;;
-		esac
-	done
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --title)
+            title="${2:?--title requires a value}"
+            shift 2
+            ;;
+        --subtitle)
+            subtitle="${2:?--subtitle requires a value}"
+            shift 2
+            ;;
+        --message)
+            message="${2:?--message requires a value}"
+            shift 2
+            ;;
+        --timeout)
+            timeout="${2:?--timeout requires a value}"
+            shift 2
+            ;;
+        *)
+            echo "Error: Unknown flag '$1'. Run 'ccm help notify' for usage." >&2
+            return 1
+            ;;
+        esac
+    done
 
-	if ! command -v alerter >/dev/null 2>&1; then
-		echo "Error: alerter is not installed." >&2
-		echo "Install with: brew install vjeantet/tap/alerter" >&2
-		return 1
-	fi
+    if ! command -v alerter >/dev/null 2>&1; then
+        echo "Error: alerter is not installed." >&2
+        echo "Install with: brew install vjeantet/tap/alerter" >&2
+        return 1
+    fi
 
-	echo "Notification sent (waiting for dismissal or timeout)..."
-	alerter --title "$title" --subtitle "$subtitle" \
-		--message "$message" --timeout "$timeout" \
-		>/dev/null 2>&1
+    echo "Notification sent (waiting for dismissal or timeout)..."
+    alerter --title "$title" --subtitle "$subtitle" \
+        --message "$message" --timeout "$timeout" \
+        >/dev/null 2>&1
 }
 
 # ---------------------------------------------------------------------------
 # Hooks
 # ---------------------------------------------------------------------------
 cmd_hooks_sync() {
-	local hooks_example install_script
-	install_script="$REPO_DIR/lib/install-hooks.sh"
-	hooks_example="$REPO_DIR/config/hooks.example.json"
+    local hooks_example install_script
+    install_script="$REPO_DIR/lib/install-hooks.sh"
+    hooks_example="$REPO_DIR/config/hooks.example.json"
 
-	if [[ ! -f "$install_script" ]]; then
-		echo "Error: install-hooks.sh not found at $install_script" >&2
-		return 1
-	fi
-	if [[ ! -f "$hooks_example" ]]; then
-		echo "Error: hooks.example.json not found at $hooks_example" >&2
-		return 1
-	fi
+    if [[ ! -f "$install_script" ]]; then
+        echo "Error: install-hooks.sh not found at $install_script" >&2
+        return 1
+    fi
+    if [[ ! -f "$hooks_example" ]]; then
+        echo "Error: hooks.example.json not found at $hooks_example" >&2
+        return 1
+    fi
 
-	if [[ $# -gt 0 ]]; then
-		bash "$install_script" --account "$1" "$hooks_example"
-	else
-		bash "$install_script" "$hooks_example"
-	fi
+    if [[ $# -gt 0 ]]; then
+        bash "$install_script" --account "$1" "$hooks_example"
+    else
+        bash "$install_script" "$hooks_example"
+    fi
 }
 
 cmd_hooks_status() {
-	if ! command -v jq >/dev/null 2>&1; then
-		echo "Error: jq is required but not found." >&2
-		return 1
-	fi
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "Error: jq is required but not found." >&2
+        return 1
+    fi
 
-	# Source cc-common.sh for account loading
-	# shellcheck source=../lib/cc-common.sh
-	source "$REPO_DIR/lib/cc-common.sh"
-	load_accounts
+    # Source cc-common.sh for account loading
+    # shellcheck source=../lib/cc-common.sh
+    source "$REPO_DIR/lib/cc-common.sh"
+    load_accounts
 
-	# Load hooks.json for account_overrides
-	local ccm_config_dir hooks_json
-	ccm_config_dir="$(resolve_config_dir)"
-	hooks_json="$ccm_config_dir/hooks.json"
+    # Load hooks.json for account_overrides
+    local ccm_config_dir hooks_json
+    ccm_config_dir="$(resolve_config_dir)"
+    hooks_json="$ccm_config_dir/hooks.json"
 
-	local account_overrides="{}"
-	if [[ -f "$hooks_json" ]]; then
-		local _ov
-		_ov="$(jq -r '.account_overrides // {}' "$hooks_json" 2>/dev/null || true)"
-		if [[ -n "$_ov" && "$_ov" != "null" ]]; then
-			account_overrides="$_ov"
-		fi
-	fi
+    local account_overrides="{}"
+    if [[ -f "$hooks_json" ]]; then
+        local _ov
+        _ov="$(jq -r '.account_overrides // {}' "$hooks_json" 2>/dev/null || true)"
+        if [[ -n "$_ov" && "$_ov" != "null" ]]; then
+            account_overrides="$_ov"
+        fi
+    fi
 
-	# Resolve cc-hook-indicator path
-	local hook_cmd=""
-	if [[ -x "$HOME/.local/bin/cc-hook-indicator" ]]; then
-		hook_cmd="$HOME/.local/bin/cc-hook-indicator"
-	elif command -v cc-hook-indicator >/dev/null 2>&1; then
-		hook_cmd="$(command -v cc-hook-indicator)"
-	fi
+    # Resolve cc-hook-indicator path
+    local hook_cmd=""
+    if [[ -x "$HOME/.local/bin/cc-hook-indicator" ]]; then
+        hook_cmd="$HOME/.local/bin/cc-hook-indicator"
+    elif command -v cc-hook-indicator >/dev/null 2>&1; then
+        hook_cmd="$(command -v cc-hook-indicator)"
+    fi
 
-	# Resolve cc-activity-log path
-	local log_cmd=""
-	if [[ -x "$HOME/.local/bin/cc-activity-log" ]]; then
-		log_cmd="$HOME/.local/bin/cc-activity-log"
-	elif command -v cc-activity-log >/dev/null 2>&1; then
-		log_cmd="$(command -v cc-activity-log)"
-	fi
+    # Resolve cc-activity-log path
+    local log_cmd=""
+    if [[ -x "$HOME/.local/bin/cc-activity-log" ]]; then
+        log_cmd="$HOME/.local/bin/cc-activity-log"
+    elif command -v cc-activity-log >/dev/null 2>&1; then
+        log_cmd="$(command -v cc-activity-log)"
+    fi
 
-	local hooks_example="$REPO_DIR/config/hooks.example.json"
-	if [[ ! -f "$hooks_example" ]]; then
-		echo "Error: hooks.example.json not found" >&2
-		return 1
-	fi
+    local hooks_example="$REPO_DIR/config/hooks.example.json"
+    if [[ ! -f "$hooks_example" ]]; then
+        echo "Error: hooks.example.json not found" >&2
+        return 1
+    fi
 
-	local example_hooks
-	if [[ -n "$hook_cmd" || -n "$log_cmd" ]]; then
-		example_hooks="$(jq --arg cmd "${hook_cmd:-cc-hook-indicator}" --arg logcmd "${log_cmd:-cc-activity-log}" '
+    local example_hooks
+    if [[ -n "$hook_cmd" || -n "$log_cmd" ]]; then
+        example_hooks="$(jq --arg cmd "${hook_cmd:-cc-hook-indicator}" --arg logcmd "${log_cmd:-cc-activity-log}" '
 			.hooks | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 		' "$hooks_example")"
-	else
-		example_hooks="$(jq '.hooks' "$hooks_example")"
-	fi
+    else
+        example_hooks="$(jq '.hooks' "$hooks_example")"
+    fi
 
-	local hook_events=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop SessionEnd)
+    local hook_events=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop SessionEnd)
 
-	printf "%-20s %s\n" "Account" "Status"
-	printf "%-20s %s\n" "-------" "------"
+    printf "%-20s %s\n" "Account" "Status"
+    printf "%-20s %s\n" "-------" "------"
 
-	local i
-	for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
-		local acct_name="${_ACCOUNT_NAMES[$i]}"
-		local config_dir="${_ACCOUNT_DIRS[$i]}"
-		local settings_file="$config_dir/settings.json"
-		local status="in_sync"
+    local i
+    for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
+        local acct_name="${_ACCOUNT_NAMES[$i]}"
+        local config_dir="${_ACCOUNT_DIRS[$i]}"
+        local settings_file="$config_dir/settings.json"
+        local status="in_sync"
 
-		if [[ ! -f "$settings_file" ]]; then
-			status="missing"
-		else
-			local acct_ov acct_disabled acct_extra
-			acct_ov="$(echo "$account_overrides" | jq --arg name "$acct_name" '.[$name] // {}')"
-			acct_disabled="$(echo "$acct_ov" | jq '.disabled_events // []')"
-			acct_extra="$(echo "$acct_ov" | jq '.extra_commands // {}')"
+        if [[ ! -f "$settings_file" ]]; then
+            status="missing"
+        else
+            local acct_ov acct_disabled acct_extra
+            acct_ov="$(echo "$account_overrides" | jq --arg name "$acct_name" '.[$name] // {}')"
+            acct_disabled="$(echo "$acct_ov" | jq '.disabled_events // []')"
+            acct_extra="$(echo "$acct_ov" | jq '.extra_commands // {}')"
 
-			for event in "${hook_events[@]}"; do
-				local is_disabled extra_for_event expected_entries installed_entries
-				is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')"
-				extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" '(.[$e] // [])')"
+            for event in "${hook_events[@]}"; do
+                local is_disabled extra_for_event expected_entries installed_entries
+                is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')"
+                extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" '(.[$e] // [])')"
 
-				if [[ "$is_disabled" == "true" ]]; then
-					# Expected: extra_commands only (cc-hook-indicator disabled)
-					expected_entries="$extra_for_event"
-				else
-					local base_entries
-					base_entries="$(echo "$example_hooks" | jq --arg e "$event" '.[$e] // []')"
-					expected_entries="$(jq -n --argjson a "$base_entries" --argjson b "$extra_for_event" '$a + $b')"
-				fi
+                if [[ "$is_disabled" == "true" ]]; then
+                    # Expected: extra_commands only (cc-hook-indicator disabled)
+                    expected_entries="$extra_for_event"
+                else
+                    local base_entries
+                    base_entries="$(echo "$example_hooks" | jq --arg e "$event" '.[$e] // []')"
+                    expected_entries="$(jq -n --argjson a "$base_entries" --argjson b "$extra_for_event" '$a + $b')"
+                fi
 
-				# Extract installed entries, filtering to only ccm-managed ones
-				# (those containing cc-hook-indicator in any hook command)
-				local all_installed managed_installed
-				all_installed="$(jq --arg e "$event" '(.hooks[$e] // [])' "$settings_file")"
+                # Extract installed entries, filtering to only ccm-managed ones
+                # (those containing cc-hook-indicator in any hook command)
+                local all_installed managed_installed
+                all_installed="$(jq --arg e "$event" '(.hooks[$e] // [])' "$settings_file")"
 
-				if [[ -n "$hook_cmd" || -n "$log_cmd" ]]; then
-					managed_installed="$(echo "$all_installed" | jq --arg cmd "${hook_cmd:-cc-hook-indicator}" --arg logcmd "${log_cmd:-cc-activity-log}" \
-						'[.[] | select([.hooks[]? | .command // "" | (contains("cc-hook-indicator") or contains($cmd) or contains("cc-activity-log") or contains($logcmd))] | any)]')"
-				else
-					managed_installed="$(echo "$all_installed" | jq \
-						'[.[] | select([.hooks[]? | .command // "" | (contains("cc-hook-indicator") or contains("cc-activity-log"))] | any)]')"
-				fi
+                if [[ -n "$hook_cmd" || -n "$log_cmd" ]]; then
+                    managed_installed="$(echo "$all_installed" | jq --arg cmd "${hook_cmd:-cc-hook-indicator}" --arg logcmd "${log_cmd:-cc-activity-log}" \
+                        '[.[] | select([.hooks[]? | .command // "" | (contains("cc-hook-indicator") or contains($cmd) or contains("cc-activity-log") or contains($logcmd))] | any)]')"
+                else
+                    managed_installed="$(echo "$all_installed" | jq \
+                        '[.[] | select([.hooks[]? | .command // "" | (contains("cc-hook-indicator") or contains("cc-activity-log"))] | any)]')"
+                fi
 
-				# Normalize both sides: strip absolute paths back to bare names
-				local norm_expected norm_installed
-				if [[ -n "$hook_cmd" || -n "$log_cmd" ]]; then
-					norm_expected="$(echo "$expected_entries" | jq --arg cmd "${hook_cmd:-cc-hook-indicator}" --arg logcmd "${log_cmd:-cc-activity-log}" '
+                # Normalize both sides: strip absolute paths back to bare names
+                local norm_expected norm_installed
+                if [[ -n "$hook_cmd" || -n "$log_cmd" ]]; then
+                    norm_expected="$(echo "$expected_entries" | jq --arg cmd "${hook_cmd:-cc-hook-indicator}" --arg logcmd "${log_cmd:-cc-activity-log}" '
 						walk(if type == "string" then gsub($cmd; "cc-hook-indicator") | gsub($logcmd; "cc-activity-log") else . end)
 					')"
-					norm_installed="$(echo "$managed_installed" | jq --arg cmd "${hook_cmd:-cc-hook-indicator}" --arg logcmd "${log_cmd:-cc-activity-log}" '
+                    norm_installed="$(echo "$managed_installed" | jq --arg cmd "${hook_cmd:-cc-hook-indicator}" --arg logcmd "${log_cmd:-cc-activity-log}" '
 						walk(if type == "string" then gsub($cmd; "cc-hook-indicator") | gsub($logcmd; "cc-activity-log") else . end)
 					')"
-				else
-					norm_expected="$expected_entries"
-					norm_installed="$managed_installed"
-				fi
+                else
+                    norm_expected="$expected_entries"
+                    norm_installed="$managed_installed"
+                fi
 
-				if [[ "$(echo "$norm_expected" | jq -Sc '.')" != "$(echo "$norm_installed" | jq -Sc '.')" ]]; then
-					status="drifted"
-					break
-				fi
-			done
-		fi
+                if [[ "$(echo "$norm_expected" | jq -Sc '.')" != "$(echo "$norm_installed" | jq -Sc '.')" ]]; then
+                    status="drifted"
+                    break
+                fi
+            done
+        fi
 
-		printf "%-20s %s\n" "$acct_name" "$status"
-	done
+        printf "%-20s %s\n" "$acct_name" "$status"
+    done
 }
 
 # ---------------------------------------------------------------------------
 # Logs
 # ---------------------------------------------------------------------------
 _resolve_log_dir() {
-	echo "${CC_MANAGER_LOGS:-${XDG_STATE_HOME:-$HOME/.local/state}/cc-manager/activity}"
+    echo "${CC_MANAGER_LOGS:-${XDG_STATE_HOME:-$HOME/.local/state}/cc-manager/activity}"
 }
 
 cmd_logs_list() {
-	local log_dir
-	log_dir="$(_resolve_log_dir)"
+    local log_dir
+    log_dir="$(_resolve_log_dir)"
 
-	if [[ ! -d "$log_dir" ]]; then
-		echo "No log directory found at $log_dir"
-		return 0
-	fi
+    if [[ ! -d "$log_dir" ]]; then
+        echo "No log directory found at $log_dir"
+        return 0
+    fi
 
-	local files
-	files=("$log_dir"/*.jsonl)
-	# Handle no-match: glob expands literally when nothing matches.
-	if [[ ${#files[@]} -eq 0 || ! -e "${files[0]}" ]]; then
-		echo "No log files found in $log_dir"
-		return 0
-	fi
+    local files
+    files=("$log_dir"/*.jsonl)
+    # Handle no-match: glob expands literally when nothing matches.
+    if [[ ${#files[@]} -eq 0 || ! -e "${files[0]}" ]]; then
+        echo "No log files found in $log_dir"
+        return 0
+    fi
 
-	# Sort by last-modified descending.
-	local sorted
-	sorted="$(ls -1t "$log_dir"/*.jsonl 2>/dev/null)" || true
-	if [[ -z "$sorted" ]]; then
-		echo "No log files found in $log_dir"
-		return 0
-	fi
+    # Sort by last-modified descending.
+    local sorted
+    sorted="$(ls -1t "$log_dir"/*.jsonl 2>/dev/null)" || true
+    if [[ -z "$sorted" ]]; then
+        echo "No log files found in $log_dir"
+        return 0
+    fi
 
-	printf "%-40s %8s %7s  %s\n" "Session ID" "Size" "Events" "Working Directory"
-	printf "%-40s %8s %7s  %s\n" "----------" "----" "------" "-----------------"
+    printf "%-40s %8s %7s  %s\n" "Session ID" "Size" "Events" "Working Directory"
+    printf "%-40s %8s %7s  %s\n" "----------" "----" "------" "-----------------"
 
-	while IFS= read -r f; do
-		local sid size events cwd_val
-		sid="$(basename "$f" .jsonl)"
-		size="$(wc -c <"$f" | tr -d ' ')"
-		events="$(wc -l <"$f" | tr -d ' ')"
-		# Extract cwd from first entry.
-		cwd_val="$(head -1 "$f" | jq -r '.cwd // "-"' 2>/dev/null)" || cwd_val="-"
+    while IFS= read -r f; do
+        local sid size events cwd_val
+        sid="$(basename "$f" .jsonl)"
+        size="$(wc -c <"$f" | tr -d ' ')"
+        events="$(wc -l <"$f" | tr -d ' ')"
+        # Extract cwd from first entry.
+        cwd_val="$(head -1 "$f" | jq -r '.cwd // "-"' 2>/dev/null)" || cwd_val="-"
 
-		# Human-readable size.
-		local hr_size
-		if [[ $size -ge 1048576 ]]; then
-			hr_size="$(awk "BEGIN {printf \"%.1fM\", $size/1048576}")"
-		elif [[ $size -ge 1024 ]]; then
-			hr_size="$(awk "BEGIN {printf \"%.1fK\", $size/1024}")"
-		else
-			hr_size="${size}B"
-		fi
+        # Human-readable size.
+        local hr_size
+        if [[ $size -ge 1048576 ]]; then
+            hr_size="$(awk "BEGIN {printf \"%.1fM\", $size/1048576}")"
+        elif [[ $size -ge 1024 ]]; then
+            hr_size="$(awk "BEGIN {printf \"%.1fK\", $size/1024}")"
+        else
+            hr_size="${size}B"
+        fi
 
-		printf "%-40s %8s %7s  %s\n" "$sid" "$hr_size" "$events" "$cwd_val"
-	done <<<"$sorted"
+        printf "%-40s %8s %7s  %s\n" "$sid" "$hr_size" "$events" "$cwd_val"
+    done <<<"$sorted"
 }
 
 cmd_logs_show() {
-	local session_id="" pretty=false tail_n=""
+    local session_id="" pretty=false tail_n=""
 
-	while [[ $# -gt 0 ]]; do
-		case "$1" in
-		--pretty)
-			pretty=true
-			shift
-			;;
-		--tail)
-			tail_n="${2:?--tail requires a number}"
-			shift 2
-			;;
-		-*)
-			echo "Error: Unknown flag '$1'. Run 'ccm help logs' for usage." >&2
-			return 1
-			;;
-		*)
-			session_id="$1"
-			shift
-			;;
-		esac
-	done
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --pretty)
+            pretty=true
+            shift
+            ;;
+        --tail)
+            tail_n="${2:?--tail requires a number}"
+            shift 2
+            ;;
+        -*)
+            echo "Error: Unknown flag '$1'. Run 'ccm help logs' for usage." >&2
+            return 1
+            ;;
+        *)
+            session_id="$1"
+            shift
+            ;;
+        esac
+    done
 
-	if [[ -z "$session_id" ]]; then
-		echo "Usage: ccm logs show SESSION_ID [--pretty] [--tail N]" >&2
-		return 1
-	fi
+    if [[ -z "$session_id" ]]; then
+        echo "Usage: ccm logs show SESSION_ID [--pretty] [--tail N]" >&2
+        return 1
+    fi
 
-	local log_dir log_file
-	log_dir="$(_resolve_log_dir)"
-	log_file="$log_dir/$session_id.jsonl"
+    local log_dir log_file
+    log_dir="$(_resolve_log_dir)"
+    log_file="$log_dir/$session_id.jsonl"
 
-	if [[ ! -f "$log_file" ]]; then
-		echo "Error: Log file not found: $log_file" >&2
-		return 1
-	fi
+    if [[ ! -f "$log_file" ]]; then
+        echo "Error: Log file not found: $log_file" >&2
+        return 1
+    fi
 
-	local content
-	if [[ -n "$tail_n" ]]; then
-		content="$(tail -n "$tail_n" "$log_file")"
-	else
-		content="$(cat "$log_file")"
-	fi
+    local content
+    if [[ -n "$tail_n" ]]; then
+        content="$(tail -n "$tail_n" "$log_file")"
+    else
+        content="$(cat "$log_file")"
+    fi
 
-	if [[ "$pretty" == true ]]; then
-		echo "$content" | jq .
-	else
-		echo "$content"
-	fi
+    if [[ "$pretty" == true ]]; then
+        echo "$content" | jq .
+    else
+        echo "$content"
+    fi
 }
 
 cmd_logs_summary() {
-	local session_id="${1:-}"
-	if [[ -z "$session_id" ]]; then
-		echo "Usage: ccm logs summary SESSION_ID" >&2
-		return 1
-	fi
+    local session_id="${1:-}"
+    if [[ -z "$session_id" ]]; then
+        echo "Usage: ccm logs summary SESSION_ID" >&2
+        return 1
+    fi
 
-	local log_dir log_file
-	log_dir="$(_resolve_log_dir)"
-	log_file="$log_dir/$session_id.jsonl"
+    local log_dir log_file
+    log_dir="$(_resolve_log_dir)"
+    log_file="$log_dir/$session_id.jsonl"
 
-	if [[ ! -f "$log_file" ]]; then
-		echo "Error: Log file not found: $log_file" >&2
-		return 1
-	fi
+    if [[ ! -f "$log_file" ]]; then
+        echo "Error: Log file not found: $log_file" >&2
+        return 1
+    fi
 
-	local first_ts
-	first_ts="$(head -1 "$log_file" | jq -r '.ts' 2>/dev/null)" || first_ts=""
-	if [[ -n "$first_ts" ]]; then
-		local start_date
-		start_date="$(date -r "$first_ts" '+%Y-%m-%d %H:%M' 2>/dev/null || date -d "@$first_ts" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$first_ts")"
-		printf "Session:   %s (started %s)\n" "$session_id" "$start_date"
-	else
-		printf "Session:   %s\n" "$session_id"
-	fi
+    local first_ts
+    first_ts="$(head -1 "$log_file" | jq -r '.ts' 2>/dev/null)" || first_ts=""
+    if [[ -n "$first_ts" ]]; then
+        local start_date
+        start_date="$(date -r "$first_ts" '+%Y-%m-%d %H:%M' 2>/dev/null || date -d "@$first_ts" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$first_ts")"
+        printf "Session:   %s (started %s)\n" "$session_id" "$start_date"
+    else
+        printf "Session:   %s\n" "$session_id"
+    fi
 
-	# Compute the rest of the summary in a single jq invocation.
-	jq -rs '
+    # Compute the rest of the summary in a single jq invocation.
+    jq -rs '
 		(map(select(.event == "tool")) | length) as $tool_count |
 		(map(select(.event == "stop")) | length) as $stop_count |
 		(map(select(.event == "session_end")) | length) as $end_count |
@@ -570,136 +570,136 @@ cmd_logs_summary() {
 }
 
 cmd_logs_clean() {
-	local days=30 dry_run=false
+    local days=30 dry_run=false
 
-	while [[ $# -gt 0 ]]; do
-		case "$1" in
-		--older-than)
-			days="${2:?--older-than requires a number}"
-			shift 2
-			;;
-		--dry-run)
-			dry_run=true
-			shift
-			;;
-		-*)
-			echo "Error: Unknown flag '$1'. Run 'ccm help logs' for usage." >&2
-			return 1
-			;;
-		*)
-			echo "Error: Unexpected argument '$1'. Run 'ccm help logs' for usage." >&2
-			return 1
-			;;
-		esac
-	done
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --older-than)
+            days="${2:?--older-than requires a number}"
+            shift 2
+            ;;
+        --dry-run)
+            dry_run=true
+            shift
+            ;;
+        -*)
+            echo "Error: Unknown flag '$1'. Run 'ccm help logs' for usage." >&2
+            return 1
+            ;;
+        *)
+            echo "Error: Unexpected argument '$1'. Run 'ccm help logs' for usage." >&2
+            return 1
+            ;;
+        esac
+    done
 
-	local log_dir
-	log_dir="$(_resolve_log_dir)"
+    local log_dir
+    log_dir="$(_resolve_log_dir)"
 
-	if [[ ! -d "$log_dir" ]]; then
-		echo "No log directory found at $log_dir"
-		return 0
-	fi
+    if [[ ! -d "$log_dir" ]]; then
+        echo "No log directory found at $log_dir"
+        return 0
+    fi
 
-	local count=0
-	local total_size=0
-	while IFS= read -r f; do
-		local size
-		size="$(wc -c <"$f" | tr -d ' ')"
-		total_size=$((total_size + size))
-		count=$((count + 1))
-		if [[ "$dry_run" == true ]]; then
-			echo "Would delete: $(basename "$f" .jsonl) ($(wc -l <"$f" | tr -d ' ') events)"
-		else
-			rm "$f"
-		fi
-	done < <(find "$log_dir" -name "*.jsonl" -mtime "+$days" -type f 2>/dev/null)
+    local count=0
+    local total_size=0
+    while IFS= read -r f; do
+        local size
+        size="$(wc -c <"$f" | tr -d ' ')"
+        total_size=$((total_size + size))
+        count=$((count + 1))
+        if [[ "$dry_run" == true ]]; then
+            echo "Would delete: $(basename "$f" .jsonl) ($(wc -l <"$f" | tr -d ' ') events)"
+        else
+            rm "$f"
+        fi
+    done < <(find "$log_dir" -name "*.jsonl" -mtime "+$days" -type f 2>/dev/null)
 
-	if [[ $count -eq 0 ]]; then
-		echo "No log files older than $days days."
-	elif [[ "$dry_run" == true ]]; then
-		echo "Would delete $count file(s)."
-	else
-		echo "Deleted $count file(s)."
-	fi
+    if [[ $count -eq 0 ]]; then
+        echo "No log files older than $days days."
+    elif [[ "$dry_run" == true ]]; then
+        echo "Would delete $count file(s)."
+    else
+        echo "Deleted $count file(s)."
+    fi
 }
 
 cmd_logs() {
-	case "${1:-}" in
-	list | ls)
-		cmd_logs_list
-		;;
-	show)
-		shift
-		cmd_logs_show "$@"
-		;;
-	summary)
-		shift
-		cmd_logs_summary "$@"
-		;;
-	clean)
-		shift
-		cmd_logs_clean "$@"
-		;;
-	dir)
-		_resolve_log_dir
-		;;
-	"")
-		echo "Usage: ccm logs <list|show|summary|clean|dir>" >&2
-		echo "" >&2
-		echo "Subcommands:" >&2
-		echo "    list              List all session log files" >&2
-		echo "    show SESSION_ID   Show log entries for a session" >&2
-		echo "    summary SESSION_ID  Print an aggregate summary" >&2
-		echo "    clean             Delete old log files" >&2
-		echo "    dir               Print the log directory path" >&2
-		return 1
-		;;
-	*)
-		echo "Error: Unknown logs subcommand '$1'. Use: list, show, summary, clean, dir" >&2
-		return 1
-		;;
-	esac
+    case "${1:-}" in
+    list | ls)
+        cmd_logs_list
+        ;;
+    show)
+        shift
+        cmd_logs_show "$@"
+        ;;
+    summary)
+        shift
+        cmd_logs_summary "$@"
+        ;;
+    clean)
+        shift
+        cmd_logs_clean "$@"
+        ;;
+    dir)
+        _resolve_log_dir
+        ;;
+    "")
+        echo "Usage: ccm logs <list|show|summary|clean|dir>" >&2
+        echo "" >&2
+        echo "Subcommands:" >&2
+        echo "    list              List all session log files" >&2
+        echo "    show SESSION_ID   Show log entries for a session" >&2
+        echo "    summary SESSION_ID  Print an aggregate summary" >&2
+        echo "    clean             Delete old log files" >&2
+        echo "    dir               Print the log directory path" >&2
+        return 1
+        ;;
+    *)
+        echo "Error: Unknown logs subcommand '$1'. Use: list, show, summary, clean, dir" >&2
+        return 1
+        ;;
+    esac
 }
 
 cmd_hooks() {
-	case "${1:-}" in
-	sync)
-		shift
-		cmd_hooks_sync "$@"
-		;;
-	status)
-		cmd_hooks_status
-		;;
-	"")
-		echo "Usage: ccm hooks <sync|status> [ACCOUNT]" >&2
-		echo "" >&2
-		echo "Subcommands:" >&2
-		echo "    sync [ACCOUNT]    Sync hooks to settings.json (all accounts or one)" >&2
-		echo "    status            Show drift status for all accounts" >&2
-		return 1
-		;;
-	*)
-		echo "Error: Unknown hooks subcommand '$1'. Use: sync, status" >&2
-		return 1
-		;;
-	esac
+    case "${1:-}" in
+    sync)
+        shift
+        cmd_hooks_sync "$@"
+        ;;
+    status)
+        cmd_hooks_status
+        ;;
+    "")
+        echo "Usage: ccm hooks <sync|status> [ACCOUNT]" >&2
+        echo "" >&2
+        echo "Subcommands:" >&2
+        echo "    sync [ACCOUNT]    Sync hooks to settings.json (all accounts or one)" >&2
+        echo "    status            Show drift status for all accounts" >&2
+        return 1
+        ;;
+    *)
+        echo "Error: Unknown hooks subcommand '$1'. Use: sync, status" >&2
+        return 1
+        ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
 # Help
 # ---------------------------------------------------------------------------
 cmd_help() {
-	local subcmd="${1:-}"
-	case "$subcmd" in
-	launch)
-		exec cc-launch ${SOCKET_ARGS[@]+"${SOCKET_ARGS[@]}"} --help
-		;;
-	status)
-		exec cc-status --help
-		;;
-	config)
-		cat <<'HELP'
+    local subcmd="${1:-}"
+    case "$subcmd" in
+    launch)
+        exec cc-launch ${SOCKET_ARGS[@]+"${SOCKET_ARGS[@]}"} --help
+        ;;
+    status)
+        exec cc-status --help
+        ;;
+    config)
+        cat <<'HELP'
 Usage: ccm config <subcommand> [FILE]
 
 Subcommands:
@@ -717,9 +717,9 @@ in each user config file with the latest version from the example files, while
 preserving all user data below the marker. This runs automatically during
 'make install' but can also be invoked standalone.
 HELP
-		;;
-	notify)
-		cat <<'HELP'
+        ;;
+    notify)
+        cat <<'HELP'
 Usage: ccm notify [--title TEXT] [--subtitle TEXT] [--message TEXT] [--timeout SECS]
 
 Send a test macOS notification via alerter. Useful for verifying that
@@ -733,9 +733,9 @@ Options:
 
 Requires: brew install vjeantet/tap/alerter
 HELP
-		;;
-	hooks)
-		cat <<'HELP'
+        ;;
+    hooks)
+        cat <<'HELP'
 Usage: ccm hooks <subcommand> [ACCOUNT]
 
 Subcommands:
@@ -750,9 +750,9 @@ The hooks system is configured via ~/.config/cc-manager/hooks.json, which
 defines global hook events and optional per-account overrides (disabled_events,
 extra_commands). Use the dashboard (H key) for interactive management.
 HELP
-		;;
-	logs)
-		cat <<'HELP'
+        ;;
+    logs)
+        cat <<'HELP'
 Usage: ccm logs <subcommand> [args]
 
 Subcommands:
@@ -770,12 +770,12 @@ Subcommands:
 Log files are stored in ${CC_MANAGER_LOGS:-~/.local/state/cc-manager/activity/}
 as per-session JSONL files written by the cc-activity-log hook.
 HELP
-		;;
-	idle-watch)
-		exec cc-idle-watch --help
-		;;
-	switch)
-		cat <<'HELP'
+        ;;
+    idle-watch)
+        exec cc-idle-watch --help
+        ;;
+    switch)
+        cat <<'HELP'
 Usage: ccm switch
 
 Launch a lightweight fuzzy-finder overlay listing all running Claude sessions.
@@ -785,9 +785,9 @@ dismiss without switching.
 
 Keyboard shortcut: ctrl+shift+p (in Kitty with cc-manager.conf included).
 HELP
-		;;
-	"")
-		cat <<HELP
+        ;;
+    "")
+        cat <<HELP
 ccm $CCM_VERSION — Claude Code Manager CLI
 
 Usage: ccm <command> [args...]
@@ -813,87 +813,87 @@ Run 'ccm help <command>' for details on a specific command.
 Tip: Run 'ccm help launch' for selector-based destructive launch commands
 	using --instance LABEL and --tab-id ID.
 HELP
-		;;
-	*)
-		echo "No help available for '$subcmd'. Run 'ccm help' to see all commands." >&2
-		return 1
-		;;
-	esac
+        ;;
+    *)
+        echo "No help available for '$subcmd'. Run 'ccm help' to see all commands." >&2
+        return 1
+        ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
 # Main dispatch
 # ---------------------------------------------------------------------------
 main() {
-	local SOCKET_ARGS=()
+    local SOCKET_ARGS=()
 
-	# Parse global --socket option
-	if [[ "${1:-}" == "--socket" ]]; then
-		if [[ -z "${2:-}" ]]; then
-			echo "Error: --socket requires a SOCKET argument." >&2
-			exit 1
-		fi
-		SOCKET_ARGS=("--socket" "$2")
-		shift 2
-	fi
+    # Parse global --socket option
+    if [[ "${1:-}" == "--socket" ]]; then
+        if [[ -z "${2:-}" ]]; then
+            echo "Error: --socket requires a SOCKET argument." >&2
+            exit 1
+        fi
+        SOCKET_ARGS=("--socket" "$2")
+        shift 2
+    fi
 
-	case "${1:-}" in
-	launch)
-		shift
-		exec cc-launch ${SOCKET_ARGS[@]+"${SOCKET_ARGS[@]}"} "$@"
-		;;
-	status)
-		shift
-		exec cc-status ${SOCKET_ARGS[@]+"${SOCKET_ARGS[@]}"} "$@"
-		;;
-	star)
-		shift
-		exec cc-toggle-star "$@"
-		;;
-	config)
-		shift
-		cmd_config "$@"
-		;;
-	dashboard)
-		exec kitten claude_dashboard.py
-		;;
-	switch)
-		exec kitten cc_quick_switch.py
-		;;
-	notify)
-		shift
-		cmd_notify "$@"
-		;;
-	hooks)
-		shift
-		cmd_hooks "$@"
-		;;
-	logs)
-		shift
-		cmd_logs "$@"
-		;;
-	idle-watch)
-		shift
-		exec cc-idle-watch "$@"
-		;;
-	help)
-		shift
-		cmd_help "$@"
-		;;
-	--version | -v)
-		echo "ccm $CCM_VERSION"
-		;;
-	--help | -h)
-		cmd_help
-		;;
-	"")
-		cmd_help
-		;;
-	*)
-		echo "Error: Unknown command '$1'. Run 'ccm help' for usage." >&2
-		exit 1
-		;;
-	esac
+    case "${1:-}" in
+    launch)
+        shift
+        exec cc-launch ${SOCKET_ARGS[@]+"${SOCKET_ARGS[@]}"} "$@"
+        ;;
+    status)
+        shift
+        exec cc-status ${SOCKET_ARGS[@]+"${SOCKET_ARGS[@]}"} "$@"
+        ;;
+    star)
+        shift
+        exec cc-toggle-star "$@"
+        ;;
+    config)
+        shift
+        cmd_config "$@"
+        ;;
+    dashboard)
+        exec kitten claude_dashboard.py
+        ;;
+    switch)
+        exec kitten cc_quick_switch.py
+        ;;
+    notify)
+        shift
+        cmd_notify "$@"
+        ;;
+    hooks)
+        shift
+        cmd_hooks "$@"
+        ;;
+    logs)
+        shift
+        cmd_logs "$@"
+        ;;
+    idle-watch)
+        shift
+        exec cc-idle-watch "$@"
+        ;;
+    help)
+        shift
+        cmd_help "$@"
+        ;;
+    --version | -v)
+        echo "ccm $CCM_VERSION"
+        ;;
+    --help | -h)
+        cmd_help
+        ;;
+    "")
+        cmd_help
+        ;;
+    *)
+        echo "Error: Unknown command '$1'. Run 'ccm help' for usage." >&2
+        exit 1
+        ;;
+    esac
 }
 
 main "$@"

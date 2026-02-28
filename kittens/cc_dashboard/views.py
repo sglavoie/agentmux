@@ -341,7 +341,9 @@ def _check_idle_notifications(sessions):
 # ── Drawing ──────────────────────────────────────────────────────────────────
 
 
-def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label="", marked=None):
+def draw_list_view(
+    stdscr, sessions, selected, detail_visible=False, sort_label="", marked=None
+):
     """Draw the main session list with header, rows, and footer."""
     rows, cols = stdscr.getmaxyx()
     stdscr.clear()
@@ -393,22 +395,15 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
     c_dir = max(12, cols - c_title - c_acct - c_inst - c_branch - c_status - 8)
 
     # Header row
-    hdr = (
-        f"  {'Title':<{c_title}}"
-        f"{'Account':<{c_acct}}"
-    )
+    hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}"
     if multi_instance:
         hdr += f"{'Instance':<{c_inst}}"
-    hdr += (
-        f"{'Directory':<{c_dir}}"
-        f"{'Branch':<{c_branch}}"
-        f"{'Status'}"
-    )
+    hdr += f"{'Directory':<{c_dir}}{'Branch':<{c_branch}}{'Status'}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
     sep = f"  {'─' * c_title}{'─' * c_acct}"
     if multi_instance:
-        sep += '─' * c_inst
+        sep += "─" * c_inst
     sep += f"{'─' * c_dir}{'─' * c_branch}{'─' * c_status}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
@@ -438,7 +433,9 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
         cp = _cp_for_account(s["account"], selected=sel)
 
         short_dir = shorten_path(s["cwd"], c_dir - 1)
-        title_padded = _pad_to_width(_truncate_to_width(s["title"], c_title - 1), c_title)
+        title_padded = _pad_to_width(
+            _truncate_to_width(s["title"], c_title - 1), c_title
+        )
 
         # Build branch display
         git_info = s.get("git")
@@ -460,11 +457,7 @@ def draw_list_view(stdscr, sessions, selected, detail_visible=False, sort_label=
             idle_secs = now - activity["last_event_ts"]
             status_text = f"{s['status']} {format_duration(idle_secs)}"
 
-        line = (
-            f"{mark}"
-            f"{title_padded}"
-            f"{s['account']:<{c_acct}}"
-        )
+        line = f"{mark}{title_padded}{s['account']:<{c_acct}}"
         if multi_instance:
             line += f"{s.get('instance_label', ''):<{c_inst}}"
         line += f"{short_dir:<{c_dir}}"
@@ -580,7 +573,9 @@ def draw_pick_view(stdscr, entries, selected, running_count):
 
             cp = _cp_for_account(entry["account"], selected=sel)
             short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
-            title_padded = _pad_to_width(_truncate_to_width(entry["title"], c_title - 1), c_title)
+            title_padded = _pad_to_width(
+                _truncate_to_width(entry["title"], c_title - 1), c_title
+            )
             line = (
                 f"{mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
             )
@@ -654,7 +649,10 @@ def draw_delete_view(stdscr, entries, selected, running_count):
 
         if row[0] == "header":
             safe_addstr(
-                stdscr, screen_y, 2, row[1],
+                stdscr,
+                screen_y,
+                2,
+                row[1],
                 curses.color_pair(CP_DIM) | curses.A_BOLD,
             )
         else:
@@ -696,7 +694,10 @@ def draw_delete_confirm(stdscr, delete_step, entry, warnings=None):
         warning = " (session is running)" if is_running else ""
         msg = f'Remove "{title}" from sessions.conf?{warning}  y/n'
         safe_addstr(
-            stdscr, rows - 3, 2, msg,
+            stdscr,
+            rows - 3,
+            2,
+            msg,
             curses.color_pair(CP_WARN) | curses.A_BOLD,
         )
     elif delete_step == "confirm_data":
@@ -711,12 +712,18 @@ def draw_delete_confirm(stdscr, delete_step, entry, warnings=None):
                 wy = prompt_row - len(warnings) + i
                 if wy >= 1:
                     safe_addstr(
-                        stdscr, wy, 4, f"⚠ {w}",
+                        stdscr,
+                        wy,
+                        4,
+                        f"⚠ {w}",
                         curses.color_pair(CP_WARN),
                     )
-        msg = f'Delete {type_label} at {path}?  y/n'
+        msg = f"Delete {type_label} at {path}?  y/n"
         safe_addstr(
-            stdscr, prompt_row, 2, msg,
+            stdscr,
+            prompt_row,
+            2,
+            msg,
             curses.color_pair(CP_WARN) | curses.A_BOLD,
         )
 
@@ -734,6 +741,7 @@ _HELP_SECTIONS = [
     (
         "Session Actions",
         [
+            ("t", "Open session actions menu"),
             ("x", "Close session (with confirmation)"),
             ("R", "Restart session (with confirmation)"),
             ("m", "Move session to another instance"),
@@ -861,6 +869,7 @@ _FOOTER_HINTS = {
         "? Help",
         "q Quit",
         "Enter Focus",
+        "t Actions",
         "x Close",
         "R Restart",
         "m Move",
@@ -894,24 +903,76 @@ _FOOTER_HINTS = {
     "confirm_batch_restart": ["y Confirm restart all", "Any other key Cancel"],
     "confirm_save": ["y Confirm save", "Any other key Cancel"],
     "new": ["Enter Next/Submit", "Tab Cycle", "Up/Dn Navigate", "Esc Cancel"],
-    "new_dir_browse": ["Enter Select", "Up/Dn Navigate", ". Toggle hidden", "Esc Close"],
-    "pick": ["Enter Launch", "i Instance", "O CfgDir", "/ Search", "Esc Back", "q Back"],
+    "new_dir_browse": [
+        "Enter Select",
+        "Up/Dn Navigate",
+        ". Toggle hidden",
+        "Esc Close",
+    ],
+    "pick": [
+        "Enter Launch",
+        "i Instance",
+        "O CfgDir",
+        "/ Search",
+        "Esc Back",
+        "q Back",
+    ],
     "override": ["j/k Navigate", "Enter Confirm", "Esc Cancel"],
     "move": ["j/k Navigate", "Enter Move", "Esc Cancel"],
-    "peek": ["j/k Scroll", "^D/^U Half-page", "^F/^B Page", "G/g Top/Bot", "/ Search", "n/N Next/Prev", "r Refresh", "s Screen/Scrollback", "q/Esc Close"],
+    "peek": [
+        "j/k Scroll",
+        "^D/^U Half-page",
+        "^F/^B Page",
+        "G/g Top/Bot",
+        "/ Search",
+        "n/N Next/Prev",
+        "r Refresh",
+        "s Screen/Scrollback",
+        "q/Esc Close",
+    ],
     "peek_search": ["Enter Confirm", "Esc Cancel"],
     "config_pick": ["j/k Navigate", "Enter Select", "R Reload", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
+    "actions": ["j/k Navigate", "Enter Select", "Esc Cancel"],
     "clone": ["Enter Clone", "Esc Cancel"],
     "worktree": ["Enter Create", "Esc Cancel"],
+    "restart_options": [
+        "Enter Next/Apply",
+        "Tab Cycle",
+        "Up/Dn Navigate",
+        "Esc Cancel",
+    ],
     "delete": ["Enter Select", "/ Search", "q Back", "Esc Back"],
     "delete_confirm": ["y Confirm", "Any other key Cancel"],
-    "hooks": ["j/k Navigate", "Enter Events", "s Sync account", "S Sync all", "q Back", "Esc Back"],
-    "hooks_event": ["j/k Navigate", "Space Toggle", "a Add cmd", "d Delete cmd", "s Sync", "Esc Back"],
+    "hooks": [
+        "j/k Navigate",
+        "Enter Events",
+        "s Sync account",
+        "S Sync all",
+        "q Back",
+        "Esc Back",
+    ],
+    "hooks_event": [
+        "j/k Navigate",
+        "Space Toggle",
+        "a Add cmd",
+        "d Delete cmd",
+        "s Sync",
+        "Esc Back",
+    ],
     "hooks_sync_confirm": ["y Confirm sync", "Any other key Cancel"],
     "hooks_cmd_input": ["Enter Confirm", "Esc Cancel"],
-    "actlog": ["j/k Scroll", "^D/^U Half-page", "G/g Top/Bot", "/ Search", "n/N Next/Prev", "b Browse all", "r Refresh", "q/Esc Close"],
+    "actlog": [
+        "j/k Scroll",
+        "^D/^U Half-page",
+        "G/g Top/Bot",
+        "/ Search",
+        "n/N Next/Prev",
+        "b Browse all",
+        "r Refresh",
+        "q/Esc Close",
+    ],
     "actlog_search": ["Enter Confirm", "Esc Cancel"],
     "actlog_browse": ["j/k Navigate", "Enter View", "q Back", "Esc Back"],
 }
@@ -1101,11 +1162,153 @@ def draw_move_picker(stdscr, session, instance_labels, move_selected):
         safe_addstr(stdscr, y, box_x + 2, label, attr)
 
 
+def draw_session_action_picker(stdscr, session, action_labels, selected):
+    """Draw a centered action picker for the selected session."""
+    rows, cols = stdscr.getmaxyx()
+    if not action_labels:
+        return
+
+    max_action_len = max(len(label) for label in action_labels)
+    title = "Session Actions"
+    subtitle = session.get("title", "")
+
+    box_w = min(cols - 4, max(42, max(max_action_len, len(subtitle)) + 12))
+    box_h = len(action_labels) + 4  # title + subtitle + blank + actions
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    blank_line = " " * box_w
+    dim_attr = curses.color_pair(CP_DIM)
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+    safe_addstr(
+        stdscr,
+        box_y + 1,
+        box_x + max(0, (box_w - len(subtitle)) // 2),
+        subtitle[: box_w - 2],
+        dim_attr,
+    )
+
+    normal_attr = curses.color_pair(CP_NORMAL)
+    for i, label in enumerate(action_labels):
+        y = box_y + 3 + i
+        if y >= rows - 1:
+            break
+        is_selected = i == selected
+        marker = "\u25b8 " if is_selected else "  "
+        attr = normal_attr
+        if is_selected:
+            attr |= curses.A_BOLD
+        safe_addstr(stdscr, y, box_x + 2, f"{marker}{label}"[: box_w - 4], attr)
+
+
+def draw_restart_options_form(
+    stdscr,
+    session,
+    fields,
+    active_field,
+    cursor_pos,
+    *,
+    multi_instance=False,
+):
+    """Draw restart options form for a selected running session."""
+    _rows, cols = stdscr.getmaxyx()
+    stdscr.clear()
+
+    title = "Restart Options"
+    safe_addstr(
+        stdscr,
+        1,
+        max(0, (cols - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    subtitle = session.get("title", "")
+    safe_addstr(
+        stdscr,
+        2,
+        max(0, (cols - len(subtitle)) // 2),
+        subtitle,
+        curses.color_pair(CP_DIM),
+    )
+
+    labels = ["Flags:", "Split:", "Env vars:", "Config dir:"]
+    field_keys = ["flags", "pw", "env", "config_dir"]
+    cycle_fields = {"pw", "config_dir"}
+
+    if multi_instance and "instance" in fields:
+        labels.append("Instance:")
+        field_keys.append("instance")
+        cycle_fields.add("instance")
+
+    for i, (label, key) in enumerate(zip(labels, field_keys, strict=False)):
+        y = 5 + i * 2
+        is_active = i == active_field
+        safe_addstr(stdscr, y, 4, f"{label:>12}", curses.color_pair(CP_HEADER))
+
+        val = fields[key]
+        if key in cycle_fields:
+            display = f" {val} "
+            if is_active:
+                display += "  (Tab to cycle)"
+            cp = CP_INPUT_ACTIVE if is_active else CP_INPUT
+            safe_addstr(stdscr, y, 17, display[: cols - 20], curses.color_pair(cp))
+        else:
+            if is_active:
+                before = val[:cursor_pos]
+                after = val[cursor_pos:]
+                safe_addstr(stdscr, y, 17, before, curses.color_pair(CP_INPUT_ACTIVE))
+                cursor_ch = after[0] if after else " "
+                safe_addstr(
+                    stdscr,
+                    y,
+                    17 + len(before),
+                    cursor_ch,
+                    curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+                )
+                if len(after) > 1:
+                    safe_addstr(
+                        stdscr,
+                        y,
+                        17 + len(before) + 1,
+                        after[1:],
+                        curses.color_pair(CP_INPUT_ACTIVE),
+                    )
+            else:
+                safe_addstr(
+                    stdscr,
+                    y,
+                    17,
+                    val[: cols - 20],
+                    curses.color_pair(CP_INPUT),
+                )
+
+    hint_y = 5 + len(field_keys) * 2
+    safe_addstr(
+        stdscr,
+        hint_y,
+        17,
+        'Flags/Split: empty = inherit global, "-" = disable  |  Env: KEY=VAL KEY2=VAL2',
+        curses.color_pair(CP_DIM),
+    )
+
+    draw_footer(stdscr, "restart_options")
+
+
 def _shorten_home(path):
     """Replace the home directory prefix with ~ for display."""
     home = os.path.expanduser("~")
     if path.startswith(home):
-        return "~" + path[len(home):]
+        return "~" + path[len(home) :]
     return path
 
 
@@ -1147,7 +1350,11 @@ def _format_log_entry(entry, cols):
         line = f"{time_str}  stop"
     elif event == "session_end":
         reason = entry.get("reason", "")
-        line = f"{time_str}  session_end  {reason}" if reason else f"{time_str}  session_end"
+        line = (
+            f"{time_str}  session_end  {reason}"
+            if reason
+            else f"{time_str}  session_end"
+        )
     elif event == "summary":
         total = entry.get("total_events", "?")
         line = f"{time_str}  summary  total_events={total}"
@@ -1160,9 +1367,18 @@ def _format_log_entry(entry, cols):
     return line
 
 
-def draw_actlog_view(stdscr, title, lines, scroll, summary,
-                     search_query="", search_active=False, search_cursor=0,
-                     match_line_indices=None, match_index=0):
+def draw_actlog_view(
+    stdscr,
+    title,
+    lines,
+    scroll,
+    summary,
+    search_query="",
+    search_active=False,
+    search_cursor=0,
+    match_line_indices=None,
+    match_index=0,
+):
     """Draw a full-screen scrollable activity log viewer."""
     stdscr.clear()
     rows, cols = stdscr.getmaxyx()
@@ -1190,7 +1406,7 @@ def draw_actlog_view(stdscr, title, lines, scroll, summary,
         stat_line = f"Events: {total}  Stops: {stop_count}"
         if top_tools:
             stat_line += f"  Top: {top_tools}"
-        safe_addstr(stdscr, 1, 2, stat_line[:cols - 3], dim_attr)
+        safe_addstr(stdscr, 1, 2, stat_line[: cols - 3], dim_attr)
 
         # Row 2: duration
         duration = summary.get("duration", "")
@@ -1199,7 +1415,9 @@ def draw_actlog_view(stdscr, title, lines, scroll, summary,
 
     # Content area starts at row 3
     content_start = 3
-    content_height = rows - content_start - 2  # leave room for scroll indicator + footer
+    content_height = (
+        rows - content_start - 2
+    )  # leave room for scroll indicator + footer
 
     if not lines:
         safe_addstr(stdscr, content_start, 2, "(no log entries)", dim_attr)
@@ -1210,14 +1428,24 @@ def draw_actlog_view(stdscr, title, lines, scroll, summary,
             is_match = abs_idx in match_set
             is_current = abs_idx == current_line_idx
             _render_peek_line(
-                stdscr, content_start + i, line, cols, search_query,
-                is_match, is_current, normal_attr, match_attr,
-                span_attr, current_attr,
+                stdscr,
+                content_start + i,
+                line,
+                cols,
+                search_query,
+                is_match,
+                is_current,
+                normal_attr,
+                match_attr,
+                span_attr,
+                current_attr,
             )
 
     total = len(lines) if lines else 0
     if search_active:
-        _draw_peek_search_bar(stdscr, search_query, search_cursor, len(match_line_indices))
+        _draw_peek_search_bar(
+            stdscr, search_query, search_cursor, len(match_line_indices)
+        )
     elif match_line_indices:
         indicator = f"[match {match_index + 1}/{len(match_line_indices)}]"
         if total > content_height:
@@ -1265,7 +1493,7 @@ def draw_actlog_browse(stdscr, entries, selected, scroll):
         + "  "
         + "Size".rjust(size_w)
     )
-    safe_addstr(stdscr, header_y, 4, hdr[:cols - 5], dim_attr)
+    safe_addstr(stdscr, header_y, 4, hdr[: cols - 5], dim_attr)
 
     content_height = rows - header_y - 3  # room for header, footer, scroll indicator
     visible = entries[scroll : scroll + content_height]
@@ -1278,9 +1506,9 @@ def draw_actlog_browse(stdscr, entries, selected, scroll):
         is_selected = (scroll + i) == selected
         attr = normal_attr | curses.A_REVERSE if is_selected else normal_attr
 
-        sid_short = entry["session_id"][:id_w - 2]
+        sid_short = entry["session_id"][: id_w - 2]
         title = entry.get("title", "") or "ended"
-        title = title[:title_w - 2]
+        title = title[: title_w - 2]
 
         mtime_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(entry["mtime"]))
 
@@ -1303,7 +1531,7 @@ def draw_actlog_browse(stdscr, entries, selected, scroll):
             + "  "
             + size_str.rjust(size_w)
         )
-        safe_addstr(stdscr, y, 4, _pad_to_width(row_text[:cols - 5], cols - 5), attr)
+        safe_addstr(stdscr, y, 4, _pad_to_width(row_text[: cols - 5], cols - 5), attr)
 
     total = len(entries)
     if total > content_height:
@@ -1528,8 +1756,19 @@ def draw_config_show(stdscr, label, path, lines, scroll):
     safe_addstr(stdscr, rows - 1, 2, "q/Esc Close  R Reload config", dim_attr)
 
 
-def _render_peek_line(stdscr, row, line, cols, query, is_match, is_current,
-                      normal_attr, match_attr, span_attr, current_attr):
+def _render_peek_line(
+    stdscr,
+    row,
+    line,
+    cols,
+    query,
+    is_match,
+    is_current,
+    normal_attr,
+    match_attr,
+    span_attr,
+    current_attr,
+):
     """Render a single peek line with optional match-span highlighting."""
     clipped = line[: cols - 1]
     if not query or not is_match:
@@ -1573,19 +1812,37 @@ def _draw_peek_search_bar(stdscr, query, cursor_pos, match_count):
     x = 2 + len(prefix)
     safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
     safe_addstr(
-        stdscr, y, x + len(before), cursor_ch,
+        stdscr,
+        y,
+        x + len(before),
+        cursor_ch,
         curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
     )
     if after_rest:
-        safe_addstr(stdscr, y, x + len(before) + 1, after_rest,
-                    curses.color_pair(CP_INPUT_ACTIVE))
+        safe_addstr(
+            stdscr,
+            y,
+            x + len(before) + 1,
+            after_rest,
+            curses.color_pair(CP_INPUT_ACTIVE),
+        )
     hint = f"  ({match_count} matches)"
     safe_addstr(stdscr, y, x + len(query) + 1, hint, curses.color_pair(CP_DIM))
 
 
-def draw_peek_overlay(stdscr, session_title, lines, scroll, extent, error="",
-                      search_query="", search_active=False, search_cursor=0,
-                      match_line_indices=None, match_index=0):
+def draw_peek_overlay(
+    stdscr,
+    session_title,
+    lines,
+    scroll,
+    extent,
+    error="",
+    search_query="",
+    search_active=False,
+    search_cursor=0,
+    match_line_indices=None,
+    match_index=0,
+):
     """Draw a full-screen scrollable view of a session's terminal output."""
     # clear() forces a full terminal repaint, preventing colored backgrounds
     # from the list view bleeding through on rows the peek doesn't draw over.
@@ -1621,14 +1878,24 @@ def draw_peek_overlay(stdscr, session_title, lines, scroll, extent, error="",
             is_match = abs_idx in match_set
             is_current = abs_idx == current_line_idx
             _render_peek_line(
-                stdscr, i + 1, line, cols, search_query,
-                is_match, is_current, normal_attr, match_attr,
-                span_attr, current_attr,
+                stdscr,
+                i + 1,
+                line,
+                cols,
+                search_query,
+                is_match,
+                is_current,
+                normal_attr,
+                match_attr,
+                span_attr,
+                current_attr,
             )
 
     total = len(lines) if lines else 0
     if search_active:
-        _draw_peek_search_bar(stdscr, search_query, search_cursor, len(match_line_indices))
+        _draw_peek_search_bar(
+            stdscr, search_query, search_cursor, len(match_line_indices)
+        )
     elif match_line_indices:
         indicator = f"[match {match_index + 1}/{len(match_line_indices)}]"
         if total > content_height:
@@ -1817,7 +2084,9 @@ _DRIFT_BADGES = {
 }
 
 
-def draw_hooks_view(stdscr, accounts, drift_status, hooks_global, hooks_overrides, selected):
+def draw_hooks_view(
+    stdscr, accounts, drift_status, hooks_global, hooks_overrides, selected
+):
     """Draw the hooks overview showing all accounts with event columns and sync status."""
     stdscr.clear()
     rows, cols = stdscr.getmaxyx()
@@ -1845,8 +2114,16 @@ def draw_hooks_view(stdscr, accounts, drift_status, hooks_global, hooks_override
     safe_addstr(stdscr, header_y, col_start, "Account".ljust(name_w), dim_attr)
     for i, event in enumerate(HOOK_EVENTS):
         abbr = _HOOK_EVENT_ABBR.get(event, event[:4])
-        safe_addstr(stdscr, header_y, col_start + name_w + i * ev_w, abbr.ljust(ev_w), dim_attr)
-    safe_addstr(stdscr, header_y, col_start + name_w + len(HOOK_EVENTS) * ev_w, "Status", dim_attr)
+        safe_addstr(
+            stdscr, header_y, col_start + name_w + i * ev_w, abbr.ljust(ev_w), dim_attr
+        )
+    safe_addstr(
+        stdscr,
+        header_y,
+        col_start + name_w + len(HOOK_EVENTS) * ev_w,
+        "Status",
+        dim_attr,
+    )
 
     # Account rows
     for idx, acct_name in enumerate(account_list):
@@ -1864,7 +2141,7 @@ def draw_hooks_view(stdscr, accounts, drift_status, hooks_global, hooks_override
         if is_selected:
             name_attr |= curses.A_REVERSE
 
-        display_name = acct_name[:name_w - 1].ljust(name_w)
+        display_name = acct_name[: name_w - 1].ljust(name_w)
         safe_addstr(stdscr, y, col_start, display_name, name_attr)
 
         # Event columns
@@ -1886,7 +2163,13 @@ def draw_hooks_view(stdscr, accounts, drift_status, hooks_global, hooks_override
         badge_attr = curses.color_pair(badge_cp)
         if is_selected:
             badge_attr |= curses.A_REVERSE
-        safe_addstr(stdscr, y, col_start + name_w + len(HOOK_EVENTS) * ev_w, badge_text, badge_attr)
+        safe_addstr(
+            stdscr,
+            y,
+            col_start + name_w + len(HOOK_EVENTS) * ev_w,
+            badge_text,
+            badge_attr,
+        )
 
     draw_footer(stdscr, "hooks")
 
@@ -1899,6 +2182,7 @@ def _hooks_event_rows(account_name, hooks_overrides):
         ("extra", event_name, index, command_str)
     """
     from cc_dashboard.config import HOOK_EVENTS
+
     override = hooks_overrides.get(account_name, {})
     disabled_events = override.get("disabled_events", [])
     extra_commands = override.get("extra_commands", {})
@@ -1911,7 +2195,9 @@ def _hooks_event_rows(account_name, hooks_overrides):
     return result
 
 
-def draw_hooks_event_view(stdscr, account_name, hooks_global, hooks_overrides, drift_status, selected):
+def draw_hooks_event_view(
+    stdscr, account_name, hooks_global, hooks_overrides, drift_status, selected
+):
     """Draw event detail for a single account's hooks."""
     stdscr.clear()
     rows, cols = stdscr.getmaxyx()
@@ -1926,7 +2212,9 @@ def draw_hooks_event_view(stdscr, account_name, hooks_global, hooks_overrides, d
     # Drift badge in title line
     drift = drift_status if isinstance(drift_status, str) else "missing"
     badge_text, badge_cp = _DRIFT_BADGES.get(drift, ("?", CP_DIM))
-    safe_addstr(stdscr, 0, 2 + len(title) + 2, f"[{badge_text}]", curses.color_pair(badge_cp))
+    safe_addstr(
+        stdscr, 0, 2 + len(title) + 2, f"[{badge_text}]", curses.color_pair(badge_cp)
+    )
 
     event_rows = _hooks_event_rows(account_name, hooks_overrides)
 
@@ -2054,8 +2342,14 @@ def draw_filter_bar(stdscr, account_filter, account_filter_mode):
             break
 
 
-def draw_new_form(stdscr, fields, active_field, cursor_pos, multi_instance=False,
-                  form_title="New Session"):
+def draw_new_form(
+    stdscr,
+    fields,
+    active_field,
+    cursor_pos,
+    multi_instance=False,
+    form_title="New Session",
+):
     """Draw the new-session or edit-session form."""
     _rows, cols = stdscr.getmaxyx()
     stdscr.clear()
@@ -2214,11 +2508,14 @@ def draw_dir_dropdown(stdscr, entries, selected, scroll, show_hidden=False):
         return
     if not entries:
         safe_addstr(
-            stdscr, dropdown_y, dropdown_x,
-            "(no matching directories)", curses.color_pair(CP_DIM),
+            stdscr,
+            dropdown_y,
+            dropdown_x,
+            "(no matching directories)",
+            curses.color_pair(CP_DIM),
         )
         return
-    visible = entries[scroll:scroll + max_visible]
+    visible = entries[scroll : scroll + max_visible]
     max_width = cols - dropdown_x - 2
     for i, name in enumerate(visible):
         y = dropdown_y + i

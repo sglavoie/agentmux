@@ -41,7 +41,12 @@ from cc_dashboard.kitty_remote import (
     get_window_text,
     query_all_sessions,
 )
-from cc_dashboard.kitty_remote import list_activity_logs, load_activity_log, resolve_session_id, run_hooks_sync
+from cc_dashboard.kitty_remote import (
+    list_activity_logs,
+    load_activity_log,
+    resolve_session_id,
+    run_hooks_sync,
+)
 from cc_dashboard.views import (
     _HELP_LINES,
     DETAIL_PANE_HEIGHT,
@@ -75,8 +80,10 @@ from cc_dashboard.views import (
     draw_move_picker,
     draw_new_form,
     draw_override_picker,
+    draw_restart_options_form,
     draw_pick_view,
     draw_rename_input,
+    draw_session_action_picker,
     draw_search_bar,
     draw_status_message,
     draw_clone_input,
@@ -168,7 +175,7 @@ def dashboard(stdscr):
             break
 
     show_detail = False
-    mode = "list"  # list | confirm | confirm_restart | confirm_batch_close | confirm_batch_restart | confirm_save | rename | worktree | new | pick | delete | help | move_picker | config_pick | config_action | config_show | sort_pick | hooks | hooks_event | hooks_sync_confirm | hooks_cmd_input
+    mode = "list"  # list | actions | restart_options | confirm | confirm_restart | confirm_batch_close | confirm_batch_restart | confirm_save | rename | worktree | new | pick | delete | help | move_picker | config_pick | config_action | config_show | sort_pick | hooks | hooks_event | hooks_sync_confirm | hooks_cmd_input
     help_scroll = 0
     msg = ""
     msg_frames = 0
@@ -213,6 +220,20 @@ def dashboard(stdscr):
     # Sort picker state
     sort_selected = 0
 
+    # Session actions state
+    actions_selected = 0
+    restart_target_socket = ""
+    restart_target_tab_id = 0
+    restart_default_config_label = "(account default)"
+    restart_options_fields = {
+        "flags": "",
+        "pw": "none",
+        "env": "",
+        "config_dir": restart_default_config_label,
+    }
+    restart_options_active = 0
+    restart_options_cursor = 0
+
     # Delete mode state
     delete_entries: list[dict] = []
     delete_selected = 0
@@ -235,14 +256,14 @@ def dashboard(stdscr):
     config_show_scroll = 0
 
     # Hooks manager state
-    hooks_drift = {}           # {account_name: "in_sync"|"drifted"|"missing"}
-    hooks_selected = 0         # cursor position in hooks account list
-    hooks_event_selected = 0   # cursor position in hooks event list
-    hooks_account = ""         # account name when in hooks_event mode
-    hooks_cmd_value = ""       # text input for custom command
-    hooks_cmd_cursor = 0       # cursor position in command input
-    hooks_target_event = ""    # event name for command input
-    hooks_sync_scope = ""      # "all" or account name for sync confirm
+    hooks_drift = {}  # {account_name: "in_sync"|"drifted"|"missing"}
+    hooks_selected = 0  # cursor position in hooks account list
+    hooks_event_selected = 0  # cursor position in hooks event list
+    hooks_account = ""  # account name when in hooks_event mode
+    hooks_cmd_value = ""  # text input for custom command
+    hooks_cmd_cursor = 0  # cursor position in command input
+    hooks_target_event = ""  # event name for command input
+    hooks_sync_scope = ""  # "all" or account name for sync confirm
 
     # Peek state
     peek_lines = []
@@ -326,14 +347,93 @@ def dashboard(stdscr):
                     break
         selected = min(selected, max(0, len(filtered) - 1))
 
+    def _resolve_session_runtime_options(sess):
+        r_flags = sess.get("cc_flags", "")
+        r_pw = sess.get("cc_pw", "")
+        r_env = sess.get("cc_env", "")
+        if not r_flags and not r_pw and not r_env:
+            cfg_entry = _cfg._find_config_session(sess["title"])
+            if cfg_entry is None:
+                cfg_entry = _cfg._find_config_session(
+                    _strip_override_marker(sess["title"])
+                )
+            r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+            r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+            r_env = cfg_entry.get("env", "") if cfg_entry else ""
+        return r_flags, r_pw, r_env
+
+    def _build_session_actions(sess):
+        actions = [
+            ("restart", "Restart now"),
+            ("restart_options", "Restart with options"),
+            ("clone", "Clone session"),
+            ("override", "Override config dir"),
+            ("rename", "Rename session"),
+            ("close", "Close session"),
+        ]
+        if sess.get("git"):
+            actions.insert(3, ("worktree", "Clone to git worktree"))
+        if multi_instance:
+            actions.insert(2, ("move", "Move to another instance"))
+        return actions
+
+    def _begin_restart_options(sess):
+        nonlocal mode, restart_options_fields, restart_options_active
+        nonlocal restart_options_cursor, restart_target_socket, restart_target_tab_id
+        flags, pw_override, env_vars = _resolve_session_runtime_options(sess)
+        account = sess.get("account", "")
+        default_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
+        current_dir = sess.get("config_dir", "") or default_dir
+        config_choice = (
+            restart_default_config_label
+            if not current_dir or current_dir == default_dir
+            else current_dir
+        )
+        restart_options_fields = {
+            "flags": flags,
+            "pw": pw_override if pw_override else "none",
+            "env": env_vars,
+            "config_dir": config_choice,
+        }
+        if multi_instance:
+            restart_options_fields["instance"] = sess.get(
+                "instance_label", home_instance_label
+            )
+        restart_options_active = 0
+        restart_options_cursor = len(restart_options_fields["flags"])
+        restart_target_socket = sess.get("socket", home_socket)
+        restart_target_tab_id = sess.get("tab_id", 0)
+        mode = "restart_options"
+
     while True:
         # ── Draw ─────────────────────────────────────────────────
-        if mode in ("list", "confirm", "confirm_restart", "confirm_batch_close", "confirm_batch_restart", "confirm_save", "rename", "worktree", "clone", "move_picker", "config_pick", "config_action", "sort_pick") or (
-            mode == "override" and override_source == "list"
-        ):
+        if mode in (
+            "list",
+            "actions",
+            "restart_options",
+            "confirm",
+            "confirm_restart",
+            "confirm_batch_close",
+            "confirm_batch_restart",
+            "confirm_save",
+            "rename",
+            "worktree",
+            "clone",
+            "move_picker",
+            "config_pick",
+            "config_action",
+            "sort_pick",
+        ) or (mode == "override" and override_source == "list"):
             rows, _cols = stdscr.getmaxyx()
             detail_visible = show_detail and rows >= 20 and bool(filtered)
-            draw_list_view(stdscr, filtered, selected, detail_visible=detail_visible, sort_label=SORT_LABELS[sort_mode], marked=marked)
+            draw_list_view(
+                stdscr,
+                filtered,
+                selected,
+                detail_visible=detail_visible,
+                sort_label=SORT_LABELS[sort_mode],
+                marked=marked,
+            )
             if detail_visible:
                 detail_y = rows - 1 - DETAIL_PANE_HEIGHT
                 draw_detail_pane(stdscr, filtered[selected], detail_y)
@@ -384,7 +484,9 @@ def dashboard(stdscr):
                 draw_rename_input(stdscr, rename_value, rename_cursor)
                 draw_footer(stdscr, "rename")
             elif mode == "worktree" and filtered:
-                draw_worktree_input(stdscr, filtered[selected], worktree_branch, worktree_cursor)
+                draw_worktree_input(
+                    stdscr, filtered[selected], worktree_branch, worktree_cursor
+                )
                 draw_footer(stdscr, "worktree")
             elif mode == "clone" and filtered:
                 draw_clone_input(stdscr, filtered[selected], clone_title, clone_cursor)
@@ -393,22 +495,53 @@ def dashboard(stdscr):
                 draw_override_picker(stdscr, filtered[selected], override_selected)
                 draw_footer(stdscr, "override")
             elif mode == "move_picker" and filtered:
-                draw_move_picker(stdscr, filtered[selected], instance_labels, move_selected)
+                draw_move_picker(
+                    stdscr, filtered[selected], instance_labels, move_selected
+                )
                 draw_footer(stdscr, "move")
             elif mode == "config_pick":
                 draw_config_picker(stdscr, _cfg._all_config_paths(), config_selected)
                 draw_footer(stdscr, "config_pick")
             elif mode == "config_action":
-                draw_config_action_picker(stdscr, config_file_label, config_file_path, config_action_selected)
+                draw_config_action_picker(
+                    stdscr, config_file_label, config_file_path, config_action_selected
+                )
                 draw_footer(stdscr, "config_action")
             elif mode == "sort_pick":
                 draw_sort_picker(stdscr, sort_selected, sort_mode)
                 draw_footer(stdscr, "sort_pick")
+            elif mode == "actions" and filtered:
+                action_labels = [
+                    label for _, label in _build_session_actions(filtered[selected])
+                ]
+                draw_session_action_picker(
+                    stdscr, filtered[selected], action_labels, actions_selected
+                )
+                draw_footer(stdscr, "actions")
+            elif mode == "restart_options" and filtered:
+                draw_restart_options_form(
+                    stdscr,
+                    filtered[selected],
+                    restart_options_fields,
+                    restart_options_active,
+                    restart_options_cursor,
+                    multi_instance=multi_instance,
+                )
         elif mode == "config_show":
-            draw_config_show(stdscr, config_file_label, config_file_path, config_show_lines, config_show_scroll)
+            draw_config_show(
+                stdscr,
+                config_file_label,
+                config_file_path,
+                config_show_lines,
+                config_show_scroll,
+            )
         elif mode == "peek":
             draw_peek_overlay(
-                stdscr, peek_session_title, peek_lines, peek_scroll, peek_extent,
+                stdscr,
+                peek_session_title,
+                peek_lines,
+                peek_scroll,
+                peek_extent,
                 error=peek_error,
                 search_query=peek_search_query,
                 search_active=peek_search_active,
@@ -418,19 +551,31 @@ def dashboard(stdscr):
             )
         elif mode == "new":
             form_title = "Edit Session" if form_mode == "edit" else "New Session"
-            draw_new_form(stdscr, new_fields, new_active, new_cursor,
-                          multi_instance=(multi_instance and form_mode == "new"),
-                          form_title=form_title)
+            draw_new_form(
+                stdscr,
+                new_fields,
+                new_active,
+                new_cursor,
+                multi_instance=(multi_instance and form_mode == "new"),
+                form_title=form_title,
+            )
             if dir_browse_active:
-                draw_dir_dropdown(stdscr, dir_browse_entries, dir_browse_selected,
-                                  dir_browse_scroll, dir_browse_show_hidden)
+                draw_dir_dropdown(
+                    stdscr,
+                    dir_browse_entries,
+                    dir_browse_selected,
+                    dir_browse_scroll,
+                    dir_browse_show_hidden,
+                )
                 draw_footer(stdscr, "new_dir_browse")
         elif mode == "pick" or (mode == "override" and override_source == "pick"):
             draw_pick_view(stdscr, pick_filtered, pick_selected, pick_running_count)
             if msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
             elif multi_instance and not pick_search_active and not pick_query:
-                draw_status_message(stdscr, f"Target: {pick_target_instance}  (i to cycle)")
+                draw_status_message(
+                    stdscr, f"Target: {pick_target_instance}  (i to cycle)"
+                )
             elif pick_search_active or pick_query:
                 draw_search_bar(
                     stdscr,
@@ -445,9 +590,13 @@ def dashboard(stdscr):
                 )
                 draw_footer(stdscr, "override")
         elif mode == "delete":
-            draw_delete_view(stdscr, delete_filtered, delete_selected, delete_running_count)
+            draw_delete_view(
+                stdscr, delete_filtered, delete_selected, delete_running_count
+            )
             if delete_step in ("confirm_config", "confirm_data"):
-                draw_delete_confirm(stdscr, delete_step, delete_target_entry, delete_warnings)
+                draw_delete_confirm(
+                    stdscr, delete_step, delete_target_entry, delete_warnings
+                )
                 draw_footer(stdscr, "delete_confirm")
             elif msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
@@ -460,20 +609,39 @@ def dashboard(stdscr):
                     len(delete_filtered),
                 )
         elif mode == "hooks":
-            draw_hooks_view(stdscr, _cfg._accounts, hooks_drift,
-                            _cfg._hooks_global, _cfg._hooks_overrides, hooks_selected)
+            draw_hooks_view(
+                stdscr,
+                _cfg._accounts,
+                hooks_drift,
+                _cfg._hooks_global,
+                _cfg._hooks_overrides,
+                hooks_selected,
+            )
         elif mode == "hooks_event":
-            draw_hooks_event_view(stdscr, hooks_account,
-                                  _cfg._hooks_global, _cfg._hooks_overrides,
-                                  hooks_drift.get(hooks_account, "missing"), hooks_event_selected)
+            draw_hooks_event_view(
+                stdscr,
+                hooks_account,
+                _cfg._hooks_global,
+                _cfg._hooks_overrides,
+                hooks_drift.get(hooks_account, "missing"),
+                hooks_event_selected,
+            )
         elif mode == "hooks_sync_confirm":
             draw_hooks_sync_confirm(stdscr, hooks_sync_scope)
         elif mode == "hooks_cmd_input":
-            draw_hooks_cmd_input(stdscr, hooks_account, hooks_target_event,
-                                 hooks_cmd_value, hooks_cmd_cursor)
+            draw_hooks_cmd_input(
+                stdscr,
+                hooks_account,
+                hooks_target_event,
+                hooks_cmd_value,
+                hooks_cmd_cursor,
+            )
         elif mode == "actlog":
             draw_actlog_view(
-                stdscr, actlog_session_title, actlog_lines, actlog_scroll,
+                stdscr,
+                actlog_session_title,
+                actlog_lines,
+                actlog_scroll,
                 actlog_summary,
                 search_query=actlog_search_query,
                 search_active=actlog_search_active,
@@ -482,8 +650,12 @@ def dashboard(stdscr):
                 match_index=actlog_match_index,
             )
         elif mode == "actlog_browse":
-            draw_actlog_browse(stdscr, actlog_browse_entries, actlog_browse_selected,
-                               actlog_browse_scroll)
+            draw_actlog_browse(
+                stdscr,
+                actlog_browse_entries,
+                actlog_browse_selected,
+                actlog_browse_scroll,
+            )
             if msg and msg_frames > 0:
                 draw_status_message(stdscr, msg)
         elif mode == "help":
@@ -732,7 +904,7 @@ def dashboard(stdscr):
                 else:
                     msg = "No sessions configured in sessions.conf"
                     msg_frames = 20
-            elif key in (ord("a"), ord("A")):
+            elif key == ord("a"):
                 show_all = not show_all
                 sessions = query_all_sessions(managed_only=(not show_all))
                 _refilter()
@@ -741,6 +913,9 @@ def dashboard(stdscr):
                 msg_frames = 20
             elif key == ord("d"):
                 show_detail = not show_detail
+            elif key == ord("t") and filtered:
+                mode = "actions"
+                actions_selected = 0
             elif key == ord("s"):
                 mode = "sort_pick"
                 sort_selected = SORT_MODES.index(sort_mode)
@@ -818,9 +993,9 @@ def dashboard(stdscr):
                 # Pre-select the session's current config dir
                 current_dir = filtered[selected].get("config_dir", "")
                 if not current_dir:
-                    current_dir = _cfg._accounts.get(filtered[selected]["account"], {}).get(
-                        "config_dir", ""
-                    )
+                    current_dir = _cfg._accounts.get(
+                        filtered[selected]["account"], {}
+                    ).get("config_dir", "")
                 dirs = _cfg._unique_config_dirs()
                 override_selected = 0
                 for i, d in enumerate(dirs):
@@ -848,7 +1023,9 @@ def dashboard(stdscr):
                         msg = f"Instance {targets[0]} is no longer available"
                         msg_frames = 20
                     else:
-                        is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
+                        is_host = (
+                            host_tab_id is not None and sess["tab_id"] == host_tab_id
+                        )
                         sess_socket = sess.get("socket", home_socket)
                         r_flags = sess.get("cc_flags", "")
                         r_pw = sess.get("cc_pw", "")
@@ -888,14 +1065,20 @@ def dashboard(stdscr):
                         msg_frames = 20
                     else:
                         has_host = host_tab_id is not None
-                        to_move = [s for s in batch_targets if s.get("instance_label", "") != targets[0]]
+                        to_move = [
+                            s
+                            for s in batch_targets
+                            if s.get("instance_label", "") != targets[0]
+                        ]
                         if not to_move:
                             msg = "All marked sessions already on target instance"
                             msg_frames = 20
                         else:
                             targets_sorted = sorted(
                                 to_move,
-                                key=lambda s: (1 if has_host and s["tab_id"] == host_tab_id else 0),
+                                key=lambda s: (
+                                    1 if has_host and s["tab_id"] == host_tab_id else 0
+                                ),
                             )
                             moved = 0
                             for t in targets_sorted:
@@ -908,14 +1091,21 @@ def dashboard(stdscr):
                                         cfg_entry = _cfg._find_config_session(
                                             _strip_override_marker(t["title"])
                                         )
-                                    r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                                    r_flags = (
+                                        cfg_entry.get("flags", "") if cfg_entry else ""
+                                    )
                                     r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
-                                    r_env = cfg_entry.get("env", "") if cfg_entry else ""
+                                    r_env = (
+                                        cfg_entry.get("env", "") if cfg_entry else ""
+                                    )
                                 t_socket = t.get("socket", home_socket)
                                 is_host = has_host and t["tab_id"] == host_tab_id
                                 ok = do_move(
-                                    t_socket, target_socket, t,
-                                    flags=r_flags, pw_override=r_pw,
+                                    t_socket,
+                                    target_socket,
+                                    t,
+                                    flags=r_flags,
+                                    pw_override=r_pw,
                                     host_tab_id=host_tab_id,
                                     env_vars=r_env,
                                 )
@@ -956,8 +1146,12 @@ def dashboard(stdscr):
                         actlog_session_title = sess["title"]
                         actlog_session_id = sid
                         actlog_summary = summary
-                        actlog_lines = [_format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries]
-                        actlog_scroll = max(0, len(actlog_lines) - (stdscr.getmaxyx()[0] - 5))
+                        actlog_lines = [
+                            _format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries
+                        ]
+                        actlog_scroll = max(
+                            0, len(actlog_lines) - (stdscr.getmaxyx()[0] - 5)
+                        )
                         actlog_search_query = ""
                         actlog_search_active = False
                         actlog_search_cursor = 0
@@ -970,6 +1164,223 @@ def dashboard(stdscr):
                 else:
                     msg = "No activity log found for this session"
                     msg_frames = 20
+
+        # ── Session actions picker ─────────────────────────────
+        elif mode == "actions":
+            if key in (27, ord("q"), ord("Q")):
+                mode = "list"
+            elif key in (curses.KEY_UP, ord("k"), ord("K")) and filtered:
+                actions = _build_session_actions(filtered[selected])
+                if actions:
+                    actions_selected = (actions_selected - 1) % len(actions)
+            elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and filtered:
+                actions = _build_session_actions(filtered[selected])
+                if actions:
+                    actions_selected = (actions_selected + 1) % len(actions)
+            elif key in (10, 13, curses.KEY_ENTER) and filtered:
+                sess = filtered[selected]
+                actions = _build_session_actions(sess)
+                if not actions:
+                    mode = "list"
+                    continue
+                action_id = actions[actions_selected][0]
+                if action_id == "restart":
+                    mode = "confirm_restart"
+                elif action_id == "restart_options":
+                    _begin_restart_options(sess)
+                elif action_id == "move":
+                    if not multi_instance:
+                        msg = "Only one Kitty instance running"
+                        msg_frames = 20
+                        mode = "list"
+                    else:
+                        mode = "move_picker"
+                        move_selected = 0
+                elif action_id == "clone":
+                    clone_title = generate_clone_title(sessions, sess["title"])
+                    clone_cursor = len(clone_title)
+                    mode = "clone"
+                elif action_id == "worktree":
+                    if not sess.get("git"):
+                        msg = "Not a git repository"
+                        msg_frames = 20
+                        mode = "list"
+                    else:
+                        mode = "worktree"
+                        worktree_branch = ""
+                        worktree_cursor = 0
+                elif action_id == "override":
+                    mode = "override"
+                    override_source = "list"
+                    current_dir = sess.get("config_dir", "")
+                    if not current_dir:
+                        current_dir = _cfg._accounts.get(sess["account"], {}).get(
+                            "config_dir", ""
+                        )
+                    dirs = _cfg._unique_config_dirs()
+                    override_selected = 0
+                    for i, d in enumerate(dirs):
+                        if d == current_dir:
+                            override_selected = i
+                            break
+                elif action_id == "rename":
+                    mode = "rename"
+                    title = sess["title"]
+                    if len(title) >= 2 and title[0].isupper() and title[1] == ":":
+                        rename_value = title[2:]
+                    else:
+                        rename_value = title
+                    rename_value = _strip_override_marker(rename_value)
+                    rename_cursor = len(rename_value)
+                elif action_id == "close":
+                    mode = "confirm"
+
+        # ── Restart options form ────────────────────────────────
+        elif mode == "restart_options":
+            text_fields = {"flags", "env"}
+            cycle_fields = ["pw", "config_dir"]
+            field_keys = ["flags", "pw", "env", "config_dir"]
+            if multi_instance and "instance" in restart_options_fields:
+                field_keys.append("instance")
+                cycle_fields.append("instance")
+            fk = field_keys[restart_options_active]
+            last_field = len(field_keys) - 1
+
+            if key == 27:
+                mode = "list"
+            elif key == curses.KEY_UP:
+                restart_options_active = max(0, restart_options_active - 1)
+                active_key = field_keys[restart_options_active]
+                if active_key in text_fields:
+                    restart_options_cursor = len(restart_options_fields[active_key])
+            elif key == curses.KEY_DOWN:
+                restart_options_active = min(last_field, restart_options_active + 1)
+                active_key = field_keys[restart_options_active]
+                if active_key in text_fields:
+                    restart_options_cursor = len(restart_options_fields[active_key])
+            elif key == 9:  # Tab
+                if fk == "pw":
+                    restart_options_fields["pw"] = _cycle_pw(
+                        restart_options_fields["pw"]
+                    )
+                elif fk == "config_dir":
+                    config_choices = [
+                        restart_default_config_label
+                    ] + _cfg._unique_config_dirs()
+                    try:
+                        idx = config_choices.index(restart_options_fields["config_dir"])
+                    except ValueError:
+                        idx = 0
+                    restart_options_fields["config_dir"] = config_choices[
+                        (idx + 1) % len(config_choices)
+                    ]
+                elif fk == "instance":
+                    restart_options_fields["instance"] = _cycle_instance(
+                        restart_options_fields["instance"], instance_labels
+                    )
+                else:
+                    restart_options_active = min(last_field, restart_options_active + 1)
+                    active_key = field_keys[restart_options_active]
+                    if active_key in text_fields:
+                        restart_options_cursor = len(restart_options_fields[active_key])
+            elif key in (10, 13, curses.KEY_ENTER):
+                if restart_options_active < last_field:
+                    restart_options_active += 1
+                    active_key = field_keys[restart_options_active]
+                    if active_key in text_fields:
+                        restart_options_cursor = len(restart_options_fields[active_key])
+                else:
+                    sess = next(
+                        (
+                            s
+                            for s in sessions
+                            if s.get("tab_id") == restart_target_tab_id
+                            and s.get("socket", home_socket) == restart_target_socket
+                        ),
+                        None,
+                    )
+                    if sess is None:
+                        msg = "Session no longer available"
+                        msg_frames = 20
+                        mode = "list"
+                        continue
+
+                    sess_socket = sess.get("socket", home_socket)
+                    target_socket = sess_socket
+                    if multi_instance and "instance" in restart_options_fields:
+                        target_socket = instance_socket_map.get(
+                            restart_options_fields["instance"], sess_socket
+                        )
+
+                    flags = restart_options_fields["flags"].strip()
+                    pw_override = restart_options_fields["pw"]
+                    pw_override = "" if pw_override == "none" else pw_override
+                    env_vars = restart_options_fields["env"].strip()
+                    config_dir_override = restart_options_fields["config_dir"]
+                    if config_dir_override == restart_default_config_label:
+                        config_dir_override = None
+
+                    is_host = host_tab_id is not None and sess["tab_id"] == host_tab_id
+                    if target_socket != sess_socket:
+                        ok = do_move(
+                            sess_socket,
+                            target_socket,
+                            sess,
+                            flags=flags,
+                            pw_override=pw_override,
+                            config_dir_override=config_dir_override,
+                            host_tab_id=host_tab_id,
+                            env_vars=env_vars,
+                        )
+                        success_msg = f"Session restarted in {restart_options_fields.get('instance', '')}".strip()
+                    else:
+                        ok = do_restart(
+                            sess_socket,
+                            sess,
+                            flags=flags,
+                            pw_override=pw_override,
+                            config_dir_override=config_dir_override,
+                            host_tab_id=host_tab_id,
+                            env_vars=env_vars,
+                        )
+                        success_msg = "Session restarted"
+
+                    if is_host:
+                        return
+
+                    sessions = query_all_sessions(managed_only=(not show_all))
+                    _refilter()
+                    if ok:
+                        msg = success_msg
+                    else:
+                        inst = sess.get("instance_label", sess_socket)
+                        msg = f"Instance {inst} is no longer available"
+                    msg_frames = 20
+                    mode = "list"
+            elif fk in text_fields:
+                val = restart_options_fields[fk]
+                if key in (curses.KEY_BACKSPACE, 127, 8):
+                    if restart_options_cursor > 0:
+                        restart_options_fields[fk] = (
+                            val[: restart_options_cursor - 1]
+                            + val[restart_options_cursor:]
+                        )
+                        restart_options_cursor -= 1
+                elif key == curses.KEY_LEFT:
+                    restart_options_cursor = max(0, restart_options_cursor - 1)
+                elif key == curses.KEY_RIGHT:
+                    restart_options_cursor = min(len(val), restart_options_cursor + 1)
+                elif key == curses.KEY_HOME or key == 1:
+                    restart_options_cursor = 0
+                elif key == curses.KEY_END or key == 5:
+                    restart_options_cursor = len(val)
+                elif 32 <= key < 127:
+                    restart_options_fields[fk] = (
+                        val[:restart_options_cursor]
+                        + chr(key)
+                        + val[restart_options_cursor:]
+                    )
+                    restart_options_cursor += 1
 
         # ── Sort picker ───────────────────────────────────────────
         elif mode == "sort_pick":
@@ -1014,7 +1425,11 @@ def dashboard(stdscr):
                 hooks_event_selected = (hooks_event_selected + 1) % len(event_rows)
             elif key in (ord("k"), curses.KEY_UP) and event_rows:
                 hooks_event_selected = (hooks_event_selected - 1) % len(event_rows)
-            elif key == ord(" ") and event_rows and hooks_event_selected < len(event_rows):
+            elif (
+                key == ord(" ")
+                and event_rows
+                and hooks_event_selected < len(event_rows)
+            ):
                 row = event_rows[hooks_event_selected]
                 if row[0] == "event":
                     _, event_name, _ = row
@@ -1023,7 +1438,11 @@ def dashboard(stdscr):
                     state = "enabled" if enabled else "disabled"
                     msg = f"{event_name}: {state}"
                     msg_frames = 15
-            elif key == ord("a") and event_rows and hooks_event_selected < len(event_rows):
+            elif (
+                key == ord("a")
+                and event_rows
+                and hooks_event_selected < len(event_rows)
+            ):
                 row = event_rows[hooks_event_selected]
                 # Determine which event this row belongs to
                 if row[0] == "event":
@@ -1033,7 +1452,11 @@ def dashboard(stdscr):
                 hooks_cmd_value = ""
                 hooks_cmd_cursor = 0
                 mode = "hooks_cmd_input"
-            elif key == ord("d") and event_rows and hooks_event_selected < len(event_rows):
+            elif (
+                key == ord("d")
+                and event_rows
+                and hooks_event_selected < len(event_rows)
+            ):
                 row = event_rows[hooks_event_selected]
                 if row[0] == "extra":
                     _, event_name, cmd_idx, cmd_str = row
@@ -1041,7 +1464,9 @@ def dashboard(stdscr):
                     hooks_drift[hooks_account] = _cfg._detect_drift(hooks_account)
                     # Adjust selection if we removed the last row
                     new_rows = _hooks_event_rows(hooks_account, _cfg._hooks_overrides)
-                    hooks_event_selected = min(hooks_event_selected, max(0, len(new_rows) - 1))
+                    hooks_event_selected = min(
+                        hooks_event_selected, max(0, len(new_rows) - 1)
+                    )
                     msg = "Command removed"
                     msg_frames = 15
             elif key == ord("s"):
@@ -1134,21 +1559,27 @@ def dashboard(stdscr):
                             + actlog_search_query[actlog_search_cursor:]
                         )
                         actlog_search_cursor -= 1
-                        actlog_match_lines = _compute_peek_matches(actlog_lines, actlog_search_query)
+                        actlog_match_lines = _compute_peek_matches(
+                            actlog_lines, actlog_search_query
+                        )
                         actlog_match_index = 0
                 elif key == curses.KEY_LEFT:
                     actlog_search_cursor = max(0, actlog_search_cursor - 1)
                 elif key == curses.KEY_RIGHT:
-                    actlog_search_cursor = min(len(actlog_search_query), actlog_search_cursor + 1)
+                    actlog_search_cursor = min(
+                        len(actlog_search_query), actlog_search_cursor + 1
+                    )
                 elif 32 <= key <= 126:
                     ch = chr(key)
                     actlog_search_query = (
-                        actlog_search_query[: actlog_search_cursor]
+                        actlog_search_query[:actlog_search_cursor]
                         + ch
                         + actlog_search_query[actlog_search_cursor:]
                     )
                     actlog_search_cursor += 1
-                    actlog_match_lines = _compute_peek_matches(actlog_lines, actlog_search_query)
+                    actlog_match_lines = _compute_peek_matches(
+                        actlog_lines, actlog_search_query
+                    )
                     actlog_match_index = 0
                 continue
 
@@ -1168,14 +1599,22 @@ def dashboard(stdscr):
                 actlog_match_index = 0
             elif key == ord("n"):
                 if actlog_match_lines:
-                    actlog_match_index = (actlog_match_index + 1) % len(actlog_match_lines)
-                    actlog_scroll = min(actlog_match_lines[actlog_match_index], max_scroll)
+                    actlog_match_index = (actlog_match_index + 1) % len(
+                        actlog_match_lines
+                    )
+                    actlog_scroll = min(
+                        actlog_match_lines[actlog_match_index], max_scroll
+                    )
                 else:
                     actlog_scroll = min(actlog_scroll + content_height // 2, max_scroll)
             elif key == ord("N"):
                 if actlog_match_lines:
-                    actlog_match_index = (actlog_match_index - 1) % len(actlog_match_lines)
-                    actlog_scroll = min(actlog_match_lines[actlog_match_index], max_scroll)
+                    actlog_match_index = (actlog_match_index - 1) % len(
+                        actlog_match_lines
+                    )
+                    actlog_scroll = min(
+                        actlog_match_lines[actlog_match_index], max_scroll
+                    )
                 else:
                     actlog_scroll = max(actlog_scroll - content_height // 2, 0)
             elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
@@ -1200,9 +1639,15 @@ def dashboard(stdscr):
                     entries, summary = load_activity_log(actlog_session_id)
                     if entries:
                         actlog_summary = summary
-                        actlog_lines = [_format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries]
-                        actlog_scroll = min(actlog_scroll, max(0, len(actlog_lines) - content_height))
-                        actlog_match_lines = _compute_peek_matches(actlog_lines, actlog_search_query)
+                        actlog_lines = [
+                            _format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries
+                        ]
+                        actlog_scroll = min(
+                            actlog_scroll, max(0, len(actlog_lines) - content_height)
+                        )
+                        actlog_match_lines = _compute_peek_matches(
+                            actlog_lines, actlog_search_query
+                        )
                         actlog_match_index = 0
             elif key == ord("b"):
                 actlog_browse_entries = list_activity_logs(sessions)
@@ -1215,7 +1660,9 @@ def dashboard(stdscr):
             if key in (ord("q"), ord("Q"), 27):
                 mode = "list"
             elif key in (ord("j"), curses.KEY_DOWN) and actlog_browse_entries:
-                actlog_browse_selected = (actlog_browse_selected + 1) % len(actlog_browse_entries)
+                actlog_browse_selected = (actlog_browse_selected + 1) % len(
+                    actlog_browse_entries
+                )
                 # Scroll to keep selection visible
                 browse_content_h = stdscr.getmaxyx()[0] - 5
                 if actlog_browse_selected >= actlog_browse_scroll + browse_content_h:
@@ -1223,7 +1670,9 @@ def dashboard(stdscr):
                 elif actlog_browse_selected < actlog_browse_scroll:
                     actlog_browse_scroll = actlog_browse_selected
             elif key in (ord("k"), curses.KEY_UP) and actlog_browse_entries:
-                actlog_browse_selected = (actlog_browse_selected - 1) % len(actlog_browse_entries)
+                actlog_browse_selected = (actlog_browse_selected - 1) % len(
+                    actlog_browse_entries
+                )
                 browse_content_h = stdscr.getmaxyx()[0] - 5
                 if actlog_browse_selected >= actlog_browse_scroll + browse_content_h:
                     actlog_browse_scroll = actlog_browse_selected - browse_content_h + 1
@@ -1237,8 +1686,12 @@ def dashboard(stdscr):
                     actlog_session_title = chosen.get("title", "") or sid[:12]
                     actlog_session_id = sid
                     actlog_summary = summary
-                    actlog_lines = [_format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries]
-                    actlog_scroll = max(0, len(actlog_lines) - (stdscr.getmaxyx()[0] - 5))
+                    actlog_lines = [
+                        _format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries
+                    ]
+                    actlog_scroll = max(
+                        0, len(actlog_lines) - (stdscr.getmaxyx()[0] - 5)
+                    )
                     actlog_search_query = ""
                     actlog_search_active = False
                     actlog_search_cursor = 0
@@ -1336,21 +1789,27 @@ def dashboard(stdscr):
                             + peek_search_query[peek_search_cursor:]
                         )
                         peek_search_cursor -= 1
-                        peek_match_lines = _compute_peek_matches(peek_lines, peek_search_query)
+                        peek_match_lines = _compute_peek_matches(
+                            peek_lines, peek_search_query
+                        )
                         peek_match_index = 0
                 elif key == curses.KEY_LEFT:
                     peek_search_cursor = max(0, peek_search_cursor - 1)
                 elif key == curses.KEY_RIGHT:
-                    peek_search_cursor = min(len(peek_search_query), peek_search_cursor + 1)
+                    peek_search_cursor = min(
+                        len(peek_search_query), peek_search_cursor + 1
+                    )
                 elif 32 <= key <= 126:
                     ch = chr(key)
                     peek_search_query = (
-                        peek_search_query[: peek_search_cursor]
+                        peek_search_query[:peek_search_cursor]
                         + ch
                         + peek_search_query[peek_search_cursor:]
                     )
                     peek_search_cursor += 1
-                    peek_match_lines = _compute_peek_matches(peek_lines, peek_search_query)
+                    peek_match_lines = _compute_peek_matches(
+                        peek_lines, peek_search_query
+                    )
                     peek_match_index = 0
                 continue
 
@@ -1406,12 +1865,16 @@ def dashboard(stdscr):
                         if text is not None:
                             peek_lines = _rstrip_blank_lines(text.splitlines())
                             peek_error = ""
-                            peek_scroll = min(peek_scroll, max(0, len(peek_lines) - content_height))
+                            peek_scroll = min(
+                                peek_scroll, max(0, len(peek_lines) - content_height)
+                            )
                         else:
                             peek_error = "Failed to capture window text"
                             peek_lines = []
                             peek_scroll = 0
-                        peek_match_lines = _compute_peek_matches(peek_lines, peek_search_query)
+                        peek_match_lines = _compute_peek_matches(
+                            peek_lines, peek_search_query
+                        )
                         peek_match_index = 0
             elif key == ord("s"):
                 peek_extent = "all" if peek_extent == "screen" else "screen"
@@ -1428,7 +1891,9 @@ def dashboard(stdscr):
                         else:
                             peek_error = "Failed to capture window text"
                             peek_lines = []
-                    peek_match_lines = _compute_peek_matches(peek_lines, peek_search_query)
+                    peek_match_lines = _compute_peek_matches(
+                        peek_lines, peek_search_query
+                    )
                     peek_match_index = 0
 
         # ── Help overlay ──────────────────────────────────────────
@@ -1480,7 +1945,10 @@ def dashboard(stdscr):
                     r_env = cfg_entry.get("env", "") if cfg_entry else ""
                 sess_socket = sess.get("socket", home_socket)
                 ok = do_restart(
-                    sess_socket, sess, flags=r_flags, pw_override=r_pw,
+                    sess_socket,
+                    sess,
+                    flags=r_flags,
+                    pw_override=r_pw,
                     host_tab_id=host_tab_id,
                     env_vars=r_env,
                 )
@@ -1505,7 +1973,7 @@ def dashboard(stdscr):
                 has_host = host_tab_id is not None
                 targets_sorted = sorted(
                     batch_targets,
-                    key=lambda s: (1 if has_host and s["tab_id"] == host_tab_id else 0),
+                    key=lambda s: 1 if has_host and s["tab_id"] == host_tab_id else 0,
                 )
                 closed = 0
                 for t in targets_sorted:
@@ -1528,7 +1996,7 @@ def dashboard(stdscr):
                 has_host = host_tab_id is not None
                 targets_sorted = sorted(
                     batch_targets,
-                    key=lambda s: (1 if has_host and s["tab_id"] == host_tab_id else 0),
+                    key=lambda s: 1 if has_host and s["tab_id"] == host_tab_id else 0,
                 )
                 restarted = 0
                 for t in targets_sorted:
@@ -1547,7 +2015,10 @@ def dashboard(stdscr):
                     t_socket = t.get("socket", home_socket)
                     is_host = has_host and t["tab_id"] == host_tab_id
                     ok = do_restart(
-                        t_socket, t, flags=r_flags, pw_override=r_pw,
+                        t_socket,
+                        t,
+                        flags=r_flags,
+                        pw_override=r_pw,
                         host_tab_id=host_tab_id,
                         env_vars=r_env,
                     )
@@ -1597,9 +2068,11 @@ def dashboard(stdscr):
                         title = _append_override_marker(title)
                         cdo = selected_path
                     pw_val = entry["pw"]
-                    target_socket = instance_socket_map.get(
-                        pick_target_instance, home_socket
-                    ) if multi_instance else home_socket
+                    target_socket = (
+                        instance_socket_map.get(pick_target_instance, home_socket)
+                        if multi_instance
+                        else home_socket
+                    )
                     loc = compute_insert_location(target_socket, account, title)
                     do_launch(
                         target_socket,
@@ -1703,8 +2176,10 @@ def dashboard(stdscr):
                 elif marked:
                     # Batch move all marked sessions
                     to_move = [
-                        s for s in filtered
-                        if s["tab_id"] in marked and s.get("instance_label", "") != target_label
+                        s
+                        for s in filtered
+                        if s["tab_id"] in marked
+                        and s.get("instance_label", "") != target_label
                     ]
                     if not to_move:
                         msg = "All marked sessions already on target instance"
@@ -1713,7 +2188,9 @@ def dashboard(stdscr):
                         has_host = host_tab_id is not None
                         targets_sorted = sorted(
                             to_move,
-                            key=lambda s: (1 if has_host and s["tab_id"] == host_tab_id else 0),
+                            key=lambda s: (
+                                1 if has_host and s["tab_id"] == host_tab_id else 0
+                            ),
                         )
                         moved = 0
                         for t in targets_sorted:
@@ -1726,14 +2203,19 @@ def dashboard(stdscr):
                                     cfg_entry = _cfg._find_config_session(
                                         _strip_override_marker(t["title"])
                                     )
-                                r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+                                r_flags = (
+                                    cfg_entry.get("flags", "") if cfg_entry else ""
+                                )
                                 r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
                                 r_env = cfg_entry.get("env", "") if cfg_entry else ""
                             t_socket = t.get("socket", home_socket)
                             is_host = has_host and t["tab_id"] == host_tab_id
                             ok = do_move(
-                                t_socket, target_socket, t,
-                                flags=r_flags, pw_override=r_pw,
+                                t_socket,
+                                target_socket,
+                                t,
+                                flags=r_flags,
+                                pw_override=r_pw,
                                 host_tab_id=host_tab_id,
                                 env_vars=r_env,
                             )
@@ -1816,7 +2298,11 @@ def dashboard(stdscr):
                     if ok:
                         msg = f'Renamed to "{full_title}"'
                     else:
-                        inst = filtered[selected].get("instance_label", rename_socket) if filtered else rename_socket
+                        inst = (
+                            filtered[selected].get("instance_label", rename_socket)
+                            if filtered
+                            else rename_socket
+                        )
                         msg = f"Instance {inst} is no longer available"
                     msg_frames = 20
                     mode = "list"
@@ -1861,7 +2347,11 @@ def dashboard(stdscr):
                         wt_path = result["worktree_path"]
                         proj = result["project_name"]
                         orig_title = sess["title"]
-                        if len(orig_title) >= 2 and orig_title[0].isupper() and orig_title[1] == ":":
+                        if (
+                            len(orig_title) >= 2
+                            and orig_title[0].isupper()
+                            and orig_title[1] == ":"
+                        ):
                             new_title = orig_title[:2] + f"{proj}-{branch}"
                         else:
                             new_title = f"{proj}-{branch}"
@@ -1871,18 +2361,43 @@ def dashboard(stdscr):
                         env_val = sess.get("cc_env", "")
                         if not flags and not pw_val and not env_val:
                             stripped = _strip_override_marker(orig_title)
-                            if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+                            if (
+                                len(stripped) >= 2
+                                and stripped[0].isupper()
+                                and stripped[1] == ":"
+                            ):
                                 stripped = stripped[2:]
-                            src_cfg = next((s for s in _cfg._sessions if s["title"] == stripped), None)
+                            src_cfg = next(
+                                (s for s in _cfg._sessions if s["title"] == stripped),
+                                None,
+                            )
                             flags = src_cfg["flags"] if src_cfg else ""
                             pw_val = src_cfg["pw"] if src_cfg else ""
                             env_val = src_cfg["env"] if src_cfg else ""
                         # Launch
                         target_socket = sess.get("socket", home_socket)
-                        loc = compute_insert_location(target_socket, sess["account"], new_title)
-                        do_launch(target_socket, new_title, wt_path, sess["account"], flags, pw_val, location=loc, env_vars=env_val)
+                        loc = compute_insert_location(
+                            target_socket, sess["account"], new_title
+                        )
+                        do_launch(
+                            target_socket,
+                            new_title,
+                            wt_path,
+                            sess["account"],
+                            flags,
+                            pw_val,
+                            location=loc,
+                            env_vars=env_val,
+                        )
                         # Persist (append_session handles ~ collapse)
-                        _cfg.append_session(new_title, wt_path, sess["account"], flags, pw_val, env=env_val)
+                        _cfg.append_session(
+                            new_title,
+                            wt_path,
+                            sess["account"],
+                            flags,
+                            pw_val,
+                            env=env_val,
+                        )
                         # Refresh
                         sessions = query_all_sessions(managed_only=(not show_all))
                         _refilter()
@@ -1892,7 +2407,8 @@ def dashboard(stdscr):
             elif key in (curses.KEY_BACKSPACE, 127, 8):
                 if worktree_cursor > 0:
                     worktree_branch = (
-                        worktree_branch[: worktree_cursor - 1] + worktree_branch[worktree_cursor:]
+                        worktree_branch[: worktree_cursor - 1]
+                        + worktree_branch[worktree_cursor:]
                     )
                     worktree_cursor -= 1
             elif key == curses.KEY_LEFT:
@@ -1928,22 +2444,39 @@ def dashboard(stdscr):
                     if not flags and not pw_val and not env_val:
                         orig_title = sess["title"]
                         stripped = _strip_override_marker(orig_title)
-                        if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+                        if (
+                            len(stripped) >= 2
+                            and stripped[0].isupper()
+                            and stripped[1] == ":"
+                        ):
                             stripped = stripped[2:]
-                        src_cfg = next((s for s in _cfg._sessions if s["title"] == stripped), None)
+                        src_cfg = next(
+                            (s for s in _cfg._sessions if s["title"] == stripped), None
+                        )
                         flags = src_cfg["flags"] if src_cfg else ""
                         pw_val = src_cfg["pw"] if src_cfg else ""
                         env_val = src_cfg["env"] if src_cfg else ""
                     # Launch
                     target_socket = sess.get("socket", home_socket)
                     loc = compute_insert_location(target_socket, sess["account"], title)
-                    do_launch(target_socket, title, sess["cwd"], sess["account"], flags, pw_val, location=loc, env_vars=env_val)
+                    do_launch(
+                        target_socket,
+                        title,
+                        sess["cwd"],
+                        sess["account"],
+                        flags,
+                        pw_val,
+                        location=loc,
+                        env_vars=env_val,
+                    )
                     # Persist
-                    _cfg.append_session(title, sess["cwd"], sess["account"], flags, pw_val, env=env_val)
+                    _cfg.append_session(
+                        title, sess["cwd"], sess["account"], flags, pw_val, env=env_val
+                    )
                     # Refresh
                     sessions = query_all_sessions(managed_only=(not show_all))
                     _refilter()
-                    msg = f"Cloned as \"{title}\""
+                    msg = f'Cloned as "{title}"'
                     msg_frames = 40
                     mode = "list"
             elif key in (curses.KEY_BACKSPACE, 127, 8):
@@ -1992,7 +2525,12 @@ def dashboard(stdscr):
                         max_vis = min(10, stdscr.getmaxyx()[0] - 10)
                         if dir_browse_selected >= dir_browse_scroll + max_vis:
                             dir_browse_scroll = dir_browse_selected - max_vis + 1
-                elif key in (10, 13, curses.KEY_ENTER, 9):  # Enter or Tab - accept & drill
+                elif key in (
+                    10,
+                    13,
+                    curses.KEY_ENTER,
+                    9,
+                ):  # Enter or Tab - accept & drill
                     if dir_browse_entries:
                         selected_name = dir_browse_entries[dir_browse_selected]
                         val = new_fields["dir"]
@@ -2000,7 +2538,7 @@ def dashboard(stdscr):
                             base = val
                         else:
                             idx = val.rfind("/")
-                            base = val[:idx + 1] if idx >= 0 else ""
+                            base = val[: idx + 1] if idx >= 0 else ""
                         new_fields["dir"] = base + selected_name + "/"
                         new_cursor = len(new_fields["dir"])
                         dir_browse_entries = _scan_directories(
@@ -2022,7 +2560,7 @@ def dashboard(stdscr):
                 elif key in (curses.KEY_BACKSPACE, 127, 8):
                     if new_cursor > 0:
                         val = new_fields["dir"]
-                        new_fields["dir"] = val[:new_cursor - 1] + val[new_cursor:]
+                        new_fields["dir"] = val[: new_cursor - 1] + val[new_cursor:]
                         new_cursor -= 1
                         dir_browse_entries = _scan_directories(
                             new_fields["dir"], show_hidden=dir_browse_show_hidden
@@ -2092,10 +2630,14 @@ def dashboard(stdscr):
                             msg_frames = 20
                         else:
                             edit_env = new_fields.get("env", "")
-                            _cfg.update_session(edit_original_title, t, d, a, fl, pw_val, env=edit_env)
+                            _cfg.update_session(
+                                edit_original_title, t, d, a, fl, pw_val, env=edit_env
+                            )
                             # Check if the edited session is currently running
                             running_titles = {s["title"] for s in sessions}
-                            stripped_running = {_strip_override_marker(rt) for rt in running_titles}
+                            stripped_running = {
+                                _strip_override_marker(rt) for rt in running_titles
+                            }
                             if edit_original_title in stripped_running:
                                 msg = "Config updated (restart session to apply)"
                             else:
@@ -2112,7 +2654,16 @@ def dashboard(stdscr):
                         if t and d:
                             env_val = new_fields.get("env", "").strip()
                             loc = compute_insert_location(target_socket, a, t)
-                            do_launch(target_socket, t, d, a, fl, pw_val, location=loc, env_vars=env_val)
+                            do_launch(
+                                target_socket,
+                                t,
+                                d,
+                                a,
+                                fl,
+                                pw_val,
+                                location=loc,
+                                env_vars=env_val,
+                            )
                             if new_fields.get("save") == "yes":
                                 _cfg.append_session(t, d, a, fl, pw_val, env=env_val)
                             return
@@ -2238,10 +2789,14 @@ def dashboard(stdscr):
             elif key in (10, 13, curses.KEY_ENTER) and pick_filtered:
                 entry = pick_filtered[pick_selected]
                 pw_val = entry["pw"]
-                target_socket = instance_socket_map.get(
-                    pick_target_instance, home_socket
-                ) if multi_instance else home_socket
-                loc = compute_insert_location(target_socket, entry["account"], entry["title"])
+                target_socket = (
+                    instance_socket_map.get(pick_target_instance, home_socket)
+                    if multi_instance
+                    else home_socket
+                )
+                loc = compute_insert_location(
+                    target_socket, entry["account"], entry["title"]
+                )
                 do_launch(
                     target_socket,
                     entry["title"],
@@ -2263,11 +2818,17 @@ def dashboard(stdscr):
                     delete_step = "confirm_data"
                     # Check if directory exists and is valid for deletion
                     expanded = os.path.expanduser(delete_target_entry["dir"])
-                    if os.path.isdir(expanded) and delete_target_entry.get("type_tag") == "[repo]":
+                    if (
+                        os.path.isdir(expanded)
+                        and delete_target_entry.get("type_tag") == "[repo]"
+                    ):
                         delete_warnings = check_git_safety(expanded)
                     else:
                         delete_warnings = []
-                    if not os.path.isdir(expanded) or delete_target_entry.get("type_tag") == "[n/a]":
+                    if (
+                        not os.path.isdir(expanded)
+                        or delete_target_entry.get("type_tag") == "[n/a]"
+                    ):
                         msg = f'Removed "{title}" from config (directory not found)'
                         msg_frames = 30
                         # Rebuild entries from refreshed config
@@ -2290,7 +2851,9 @@ def dashboard(stdscr):
                         delete_filtered, delete_running_count = _sort_pick_entries(
                             delete_entries, delete_running
                         )
-                        delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                        delete_selected = min(
+                            delete_selected, max(0, len(delete_filtered) - 1)
+                        )
                         delete_step = "select"
                 else:
                     delete_step = "select"
@@ -2346,7 +2909,9 @@ def dashboard(stdscr):
                     delete_filtered, delete_running_count = _sort_pick_entries(
                         delete_entries, delete_running
                     )
-                    delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                    delete_selected = min(
+                        delete_selected, max(0, len(delete_filtered) - 1)
+                    )
                     continue
                 elif key in (10, 13, curses.KEY_ENTER):
                     delete_search_active = False
@@ -2360,7 +2925,8 @@ def dashboard(stdscr):
                 elif key in (curses.KEY_BACKSPACE, 127, 8):
                     if delete_cursor > 0:
                         delete_query = (
-                            delete_query[: delete_cursor - 1] + delete_query[delete_cursor:]
+                            delete_query[: delete_cursor - 1]
+                            + delete_query[delete_cursor:]
                         )
                         delete_cursor -= 1
                         delete_filtered = _filter_config_sessions(
@@ -2381,14 +2947,20 @@ def dashboard(stdscr):
                     continue
                 elif 32 <= key < 127:
                     delete_query = (
-                        delete_query[:delete_cursor] + chr(key) + delete_query[delete_cursor:]
+                        delete_query[:delete_cursor]
+                        + chr(key)
+                        + delete_query[delete_cursor:]
                     )
                     delete_cursor += 1
-                    delete_filtered = _filter_config_sessions(delete_entries, delete_query)
+                    delete_filtered = _filter_config_sessions(
+                        delete_entries, delete_query
+                    )
                     delete_filtered, delete_running_count = _sort_pick_entries(
                         delete_filtered, delete_running
                     )
-                    delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                    delete_selected = min(
+                        delete_selected, max(0, len(delete_filtered) - 1)
+                    )
                     continue
                 else:
                     continue
@@ -2401,7 +2973,9 @@ def dashboard(stdscr):
                         delete_filtered, delete_running_count = _sort_pick_entries(
                             delete_entries, delete_running
                         )
-                        delete_selected = min(delete_selected, max(0, len(delete_filtered) - 1))
+                        delete_selected = min(
+                            delete_selected, max(0, len(delete_filtered) - 1)
+                        )
                     else:
                         mode = "list"
                 elif key == ord("/"):
@@ -2417,5 +2991,7 @@ def dashboard(stdscr):
                     delete_selected = (delete_selected + 1) % len(delete_filtered)
                 elif key in (10, 13, curses.KEY_ENTER) and delete_filtered:
                     delete_target_entry = dict(delete_filtered[delete_selected])
-                    delete_target_entry["is_running"] = delete_target_entry["title"] in delete_running
+                    delete_target_entry["is_running"] = (
+                        delete_target_entry["title"] in delete_running
+                    )
                     delete_step = "confirm_config"
