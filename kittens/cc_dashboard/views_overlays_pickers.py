@@ -4,7 +4,7 @@ import curses
 import os
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.colors import CP_DIM, CP_HEADER, CP_NORMAL
+from cc_dashboard.colors import CP_DIM, CP_HEADER, CP_NORMAL, _cp_for_palette_color
 from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.filters import SORT_MODES
 from cc_dashboard.views_shared import _shorten_home
@@ -282,6 +282,64 @@ def draw_sort_picker(stdscr, selected, current_mode):
             f"{marker}{display}"[: box_w - 4],
             normal_attr | (curses.A_BOLD if sel else 0),
         )
+
+
+def draw_color_picker(stdscr, session, palette_names, current_color, account_color, selected):
+    """Draw a color selection overlay for tab color override."""
+    rows, cols = stdscr.getmaxyx()
+    total_items = len(palette_names) + 1  # +1 for reset option
+    box_w = min(cols - 4, max(36, 30))
+    box_h = total_items + 5  # title + subtitle + blank + items + blank
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    blank_line = " " * box_w
+    dim_attr = curses.color_pair(CP_DIM)
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    title = "Set Tab Color"
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    sub = f'for "{session["title"]}"'
+    safe_addstr(
+        stdscr,
+        box_y + 1,
+        box_x + max(0, (box_w - len(sub)) // 2),
+        sub,
+        dim_attr,
+    )
+
+    for i, color_name in enumerate(palette_names):
+        y = box_y + 3 + i
+        if y >= rows - 1:
+            break
+        sel = i == selected
+        marker = "▸ " if sel else "  "
+        check = "✓ " if color_name == current_color else "  "
+        label = f"{marker}{check}{color_name}"
+
+        attr = curses.color_pair(_cp_for_palette_color(color_name, selected=sel))
+        if sel:
+            attr |= curses.A_BOLD
+        safe_addstr(stdscr, y, box_x + 2, label, attr)
+
+    # Reset option
+    reset_y = box_y + 3 + len(palette_names)
+    if reset_y < rows - 1:
+        sel = selected == len(palette_names)
+        marker = "▸ " if sel else "  "
+        reset_label = f"{marker}  Reset to default ({account_color})"
+        normal_attr = curses.color_pair(CP_NORMAL)
+        if sel:
+            normal_attr |= curses.A_BOLD
+        safe_addstr(stdscr, reset_y, box_x + 2, reset_label, normal_attr)
 
 
 def draw_config_action_picker(stdscr, label, path, selected):

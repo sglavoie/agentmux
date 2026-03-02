@@ -50,3 +50,4 @@ def _load_palette():
 
 
 PALETTE, ACTIVE_FG, INACTIVE_FG = _load_palette()
+PALETTE_NAMES = list(PALETTE.keys())

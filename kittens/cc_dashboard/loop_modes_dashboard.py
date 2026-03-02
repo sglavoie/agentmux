@@ -97,6 +97,16 @@ def handle_actions_mode(key, state, build_session_actions):
                 if d == current_dir:
                     state["override_selected"] = i
                     break
+        elif action_id == "color":
+            acct_info = state["cfg"]._accounts.get(sess.get("account", ""), {})
+            account_color = acct_info.get("color", "gray")
+            current_color = sess.get("cc_color", "") or account_color
+            state["mode"] = "color_picker"
+            state["color_selected"] = 0
+            for i, name in enumerate(state["palette_names"]):
+                if name == current_color:
+                    state["color_selected"] = i
+                    break
         elif action_id == "rename":
             state["mode"] = "rename"
             title = sess["title"]
@@ -473,6 +483,55 @@ def handle_confirm_modes(key, state):
         return True
 
     return False
+
+
+def handle_color_picker_mode(key, state):
+    """Handle key events for the color picker mode."""
+    if state["mode"] != "color_picker":
+        return False
+
+    total = len(state["palette_names"]) + 1  # +1 for reset option
+
+    if key in (27, ord("q"), ord("Q")):
+        state["mode"] = "list"
+    elif key in (curses.KEY_UP, ord("k"), ord("K")):
+        state["color_selected"] = (state["color_selected"] - 1) % total
+    elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
+        state["color_selected"] = (state["color_selected"] + 1) % total
+    elif key in (10, 13, curses.KEY_ENTER):
+        sess = state["filtered"][state["selected"]]
+        palette_names = state["palette_names"]
+
+        if state["color_selected"] < len(palette_names):
+            chosen = palette_names[state["color_selected"]]
+        else:
+            chosen = ""  # reset
+
+        acct_color = state["cfg"]._accounts.get(
+            sess.get("account", ""), {}
+        ).get("color", "gray")
+
+        # If chosen matches account default, treat as reset
+        if chosen == acct_color:
+            chosen = ""
+
+        sess_socket = sess.get("socket", state["home_socket"])
+        ok = state["do_set_color"](sess_socket, sess, chosen)
+
+        if ok:
+            label = chosen if chosen else f"default ({acct_color})"
+            state["msg"] = f"Tab color: {label}"
+        else:
+            state["msg"] = "Failed to set tab color"
+        state["msg_frames"] = 20
+
+        state["sessions"] = state["query_all_sessions"](
+            managed_only=(not state["show_all"])
+        )
+        state["refilter"]()
+        state["mode"] = "list"
+
+    return True
 
 
 def handle_move_picker_mode(key, state):

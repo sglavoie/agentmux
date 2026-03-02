@@ -66,6 +66,7 @@ def draw_detail_pane(stdscr, session, detail_y):
     label_attr = curses.color_pair(CP_HEADER)
     val_attr = curses.color_pair(CP_NORMAL)
     acct_attr = curses.color_pair(_cp_for_account(session["account"]))
+    override_attr = curses.color_pair(CP_WARN)
 
     mid = max(cols // 2, 40)
     lx = 2
@@ -79,7 +80,14 @@ def draw_detail_pane(stdscr, session, detail_y):
 
     y += 1
     safe_addstr(stdscr, y, lx, " Account: ", label_attr)
-    safe_addstr(stdscr, y, lx + 10, f"{session['account']} ({color_name})", acct_attr)
+    cc_color = session.get("cc_color", "")
+    if cc_color and cc_color != color_name:
+        acct_display = f"{session['account']} ({cc_color})"
+        acct_display_attr = override_attr
+    else:
+        acct_display = f"{session['account']} ({color_name})"
+        acct_display_attr = acct_attr
+    safe_addstr(stdscr, y, lx + 10, acct_display, acct_display_attr)
     safe_addstr(stdscr, y, rx, "Windows: ", label_attr)
     safe_addstr(stdscr, y, rx + 9, window_count, val_attr)
 
@@ -92,7 +100,6 @@ def draw_detail_pane(stdscr, session, detail_y):
     )
 
     y += 1
-    override_attr = curses.color_pair(CP_WARN)
     safe_addstr(stdscr, y, lx, " Config dir: ", label_attr)
     safe_addstr(
         stdscr, y, lx + 13, config_dir[: mid - lx - 14],

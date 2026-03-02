@@ -73,6 +73,7 @@ _FOOTER_HINTS = {
     "config_pick": ["j/k Navigate", "Enter Select", "R Reload", "Esc Back"],
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
+    "color_picker": ["Esc Cancel", "j/k Navigate", "Enter Select"],
     "actions": [
         "j/k Navigate",
         "Enter Apply",

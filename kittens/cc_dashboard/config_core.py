@@ -421,9 +421,12 @@ def remove_session(title):
     return True
 
 
-def _palette_tab_colors(account):
+def _palette_tab_colors(account, color_override=""):
     """Return a list of kitty set-tab-color arguments for the given account."""
-    color_name = _state._accounts.get(account, {}).get("color", "gray")
+    if color_override and color_override in PALETTE:
+        color_name = color_override
+    else:
+        color_name = _state._accounts.get(account, {}).get("color", "gray")
     active_bg, inactive_bg, _ = PALETTE.get(color_name, PALETTE["gray"])
 
     def _hex(rgb):

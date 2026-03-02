@@ -23,6 +23,7 @@ from cc_dashboard.views_overlays_logs import (
 )
 from cc_dashboard.views_overlays_peek import draw_config_show, draw_peek_overlay
 from cc_dashboard.views_overlays_pickers import (
+    draw_color_picker,
     draw_config_action_picker,
     draw_config_picker,
     draw_move_picker,
@@ -42,6 +43,7 @@ __all__ = [
     "_hooks_event_rows",
     "draw_actlog_browse",
     "draw_actlog_view",
+    "draw_color_picker",
     "draw_config_action_picker",
     "draw_config_picker",
     "draw_config_show",

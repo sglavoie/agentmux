@@ -27,6 +27,7 @@ from cc_dashboard.loop_helpers import (
     _reload_all_config as _reload_all_config_helper,
 )
 from cc_dashboard.loop_render import draw_dashboard_frame
+from cc_dashboard.config_data import PALETTE_NAMES
 from cc_dashboard.remote import (
     _spawn_detached_close,
     compute_insert_location,
@@ -38,6 +39,7 @@ from cc_dashboard.remote import (
     do_restart,
     generate_clone_title,
 )
+from cc_dashboard.remote.actions_core import do_set_color
 from cc_dashboard.remote.activity import load_activity_log, resolve_session_id
 from cc_dashboard.remote.command import (
     get_all_kitty_sockets,
@@ -242,6 +244,9 @@ def dashboard(stdscr):
         "do_restart": do_restart,
         "generate_clone_title": generate_clone_title,
         "do_rename": do_rename,
+        "color_selected": 0,
+        "palette_names": PALETTE_NAMES,
+        "do_set_color": do_set_color,
         "do_create_worktree": do_create_worktree,
         "resolve_session_id": resolve_session_id,
         "load_activity_log": load_activity_log,

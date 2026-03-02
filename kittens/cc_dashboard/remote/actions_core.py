@@ -19,6 +19,36 @@ from cc_dashboard.remote.shared import (
 )
 
 
+def do_set_color(socket, session, color_name):
+    """Apply a color override to a session's tab and persist via user var.
+
+    Pass empty string for color_name to reset to account default.
+    Returns True on success.
+    """
+    tab_id = session["tab_id"]
+    win_id = session.get("claude_window_id", 0)
+    account = session["account"]
+
+    result = kitty_cmd(
+        socket,
+        "set-tab-color",
+        "--match", f"id:{tab_id}",
+        *_cfg._palette_tab_colors(account, color_override=color_name),
+    )
+    if not result or result.returncode != 0:
+        return False
+
+    if win_id:
+        kitty_cmd(
+            socket,
+            "set-user-vars",
+            "--match", f"id:{win_id}",
+            f"cc_color={color_name}",
+        )
+
+    return True
+
+
 def do_focus(socket, tab_id):
     """Focus a tab by its Kitty tab ID. Returns True on success."""
     result = kitty_cmd(socket, "focus-tab", "--match", f"id:{tab_id}")
@@ -176,6 +206,7 @@ def do_launch(
     location=None,
     config_dir_override=None,
     env_vars="",
+    color_override="",
 ):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
@@ -213,6 +244,9 @@ def do_launch(
         f"cc_env={env_vars}",
     ]
 
+    if color_override:
+        cmd += ["--var", f"cc_color={color_override}"]
+
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
     config_dir = (
@@ -246,7 +280,7 @@ def do_launch(
             "set-tab-color",
             "--match",
             f"title:^{title}$",
-            *_cfg._palette_tab_colors(account),
+            *_cfg._palette_tab_colors(account, color_override=color_override),
         )
         if result and result.returncode == 0:
             break

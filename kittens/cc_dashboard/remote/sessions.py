@@ -114,6 +114,7 @@ def query_sessions(socket, managed_only=True):
             cc_pw = user_vars.get("cc_pw", "")
             cc_env = user_vars.get("cc_env", "")
             cc_config_dir = user_vars.get("cc_config_dir", "")
+            cc_color = user_vars.get("cc_color", "")
 
             title = _strip_icons(tab.get("title", ""))
             icon_state = _detect_state(tab_title)
@@ -131,6 +132,7 @@ def query_sessions(socket, managed_only=True):
                     "cc_flags": cc_flags,
                     "cc_pw": cc_pw,
                     "cc_env": cc_env,
+                    "cc_color": cc_color,
                     "git": git_info,
                     "model": session_meta.get("model", ""),
                     "agent_type": session_meta.get("agent_type", ""),

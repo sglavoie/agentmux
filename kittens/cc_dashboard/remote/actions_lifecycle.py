@@ -68,6 +68,7 @@ def _spawn_detached_restart(
     pw_override="",
     config_dir_override=None,
     env_vars="",
+    color_override="",
 ):
     """Spawn a fully detached subprocess to close+relaunch a session."""
     directory = os.path.expanduser(cwd)
@@ -147,6 +148,8 @@ def _spawn_detached_restart(
         "--var",
         f"cc_env={env_vars}",
     ]
+    if color_override:
+        launch_cmd += ["--var", f"cc_color={color_override}"]
     launch_cmd += ["--var", f"cc_config_dir={config_dir}"]
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
@@ -167,7 +170,7 @@ def _spawn_detached_restart(
                 "set-tab-color",
                 "--match",
                 f"title:^{title}$",
-                *_cfg._palette_tab_colors(account),
+                *_cfg._palette_tab_colors(account, color_override=color_override),
             ],
             "retry": 5,
             "retry_sleep": 0.1,
@@ -254,6 +257,7 @@ def do_restart(
     """Close and relaunch a session with the same title, directory, and account."""
     account = session["account"]
     title = session["title"]
+    cc_color = session.get("cc_color", "")
 
     if config_dir_override:
         title = _append_override_marker(title)
@@ -272,6 +276,7 @@ def do_restart(
             pw_override,
             config_dir_override,
             env_vars,
+            color_override=cc_color,
         )
         return True
 
@@ -290,6 +295,7 @@ def do_restart(
         location=location,
         config_dir_override=config_dir_override,
         env_vars=env_vars,
+        color_override=cc_color,
     )
 
 
@@ -304,6 +310,7 @@ def _spawn_detached_move(
     pw_override="",
     config_dir_override=None,
     env_vars="",
+    color_override="",
 ):
     """Spawn a detached subprocess to move a session across kitty instances."""
     directory = os.path.expanduser(cwd)
@@ -383,6 +390,8 @@ def _spawn_detached_move(
         "--var",
         f"cc_env={env_vars}",
     ]
+    if color_override:
+        launch_cmd += ["--var", f"cc_color={color_override}"]
     launch_cmd += ["--var", f"cc_config_dir={config_dir}"]
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
@@ -403,7 +412,7 @@ def _spawn_detached_move(
                 "set-tab-color",
                 "--match",
                 f"title:^{title}$",
-                *_cfg._palette_tab_colors(account),
+                *_cfg._palette_tab_colors(account, color_override=color_override),
             ],
             "retry": 5,
             "retry_sleep": 0.1,
@@ -493,6 +502,7 @@ def do_move(
     title = session["title"]
     tab_id = session["tab_id"]
     cwd = session["cwd"]
+    cc_color = session.get("cc_color", "")
 
     if host_tab_id is not None and tab_id == host_tab_id:
         _spawn_detached_move(
@@ -506,6 +516,7 @@ def do_move(
             pw_override,
             config_dir_override,
             env_vars,
+            color_override=cc_color,
         )
         return True
 
@@ -524,4 +535,5 @@ def do_move(
         location=location,
         config_dir_override=config_dir_override,
         env_vars=env_vars,
+        color_override=cc_color,
     )

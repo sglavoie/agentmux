@@ -115,4 +115,6 @@ def build_draw_state(state: dict[str, Any]) -> dict[str, Any]:
         "actlog_browse_entries": state["actlog_browse_entries"],
         "actlog_browse_selected": state["actlog_browse_selected"],
         "actlog_browse_scroll": state["actlog_browse_scroll"],
+        "color_selected": state.get("color_selected", 0),
+        "palette_names": state.get("palette_names", []),
     }

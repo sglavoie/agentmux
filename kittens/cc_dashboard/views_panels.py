@@ -14,6 +14,7 @@ from cc_dashboard.colors import (
     CP_NORMAL,
     CP_WARN,
     _cp_for_account,
+    _cp_for_palette_color,
 )
 from cc_dashboard.drawing import (
     _pad_to_width,
@@ -114,7 +115,11 @@ def draw_list_view(
         else:
             mark = "  "
 
-        cp = _cp_for_account(s["account"], selected=sel)
+        cc_color = s.get("cc_color", "")
+        if cc_color:
+            cp = _cp_for_palette_color(cc_color, selected=sel)
+        else:
+            cp = _cp_for_account(s["account"], selected=sel)
         short_dir = shorten_path(s["cwd"], c_dir - 1)
         title_padded = _pad_to_width(
             _truncate_to_width(s["title"], c_title - 1), c_title

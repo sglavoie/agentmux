@@ -11,6 +11,7 @@ from cc_dashboard.views import (
     draw_actlog_view,
     draw_batch_confirm_prompt,
     draw_clone_input,
+    draw_color_picker,
     draw_config_action_picker,
     draw_config_picker,
     draw_config_show,
@@ -64,6 +65,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         "config_pick",
         "config_action",
         "sort_pick",
+        "color_picker",
     ) or (mode == "override" and state["override_source"] == "list"):
         rows, _cols = stdscr.getmaxyx()
         filtered = state["filtered"]
@@ -179,6 +181,16 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         elif mode == "sort_pick":
             draw_sort_picker(stdscr, state["sort_selected"], state["sort_mode"])
             draw_footer(stdscr, "sort_pick")
+        elif mode == "color_picker" and filtered:
+            sess = filtered[selected]
+            acct_info = state["cfg"]._accounts.get(sess.get("account", ""), {})
+            account_color = acct_info.get("color", "gray")
+            current_color = sess.get("cc_color", "") or account_color
+            draw_color_picker(
+                stdscr, sess, state["palette_names"],
+                current_color, account_color, state["color_selected"],
+            )
+            draw_footer(stdscr, "color_picker")
         elif mode == "actions" and filtered:
             sess = filtered[selected]
             action_labels = [

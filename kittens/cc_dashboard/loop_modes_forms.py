@@ -61,6 +61,7 @@ def handle_override_mode(key, state):
                 location=loc,
                 config_dir_override=cdo,
                 env_vars=entry.get("env", ""),
+                color_override=entry.get("cc_color", ""),
             )
             state["should_exit"] = True
             return True
@@ -99,6 +100,7 @@ def handle_override_mode(key, state):
                         location=location,
                         config_dir_override=selected_path,
                         env_vars=sess.get("cc_env", ""),
+                        color_override=sess.get("cc_color", ""),
                     )
                     state["should_exit"] = True
                     return True
@@ -273,6 +275,7 @@ def handle_worktree_mode(key, state):
                     pw_val,
                     location=loc,
                     env_vars=env_val,
+                    color_override=sess.get("cc_color", ""),
                 )
                 state["cfg"].append_session(
                     new_title,
@@ -346,6 +349,7 @@ def handle_clone_mode(key, state):
                 pw_val,
                 location=loc,
                 env_vars=env_val,
+                color_override=sess.get("cc_color", ""),
             )
             state["cfg"].append_session(
                 title,

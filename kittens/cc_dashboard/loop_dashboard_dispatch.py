@@ -10,6 +10,7 @@ from cc_dashboard.loop_mode_list import handle_list_mode
 from cc_dashboard.loop_modes_config import handle_config_modes
 from cc_dashboard.loop_modes_dashboard import (
     handle_actions_mode,
+    handle_color_picker_mode,
     handle_confirm_modes,
     handle_move_picker_mode,
     handle_restart_options_mode,
@@ -167,6 +168,7 @@ def dispatch_mode(
                 state["restart_default_config_label"],
                 state["home_socket"],
             ),
+            "palette_names": state["palette_names"],
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }
@@ -205,6 +207,27 @@ def dispatch_mode(
         for k in restart_state:
             state[k] = restart_state[k]
         should_exit = restart_state["should_exit"]
+
+    elif mode == "color_picker":
+        color_state: dict[str, Any] = {
+            "mode": mode,
+            "filtered": state["filtered"],
+            "selected": state["selected"],
+            "color_selected": state["color_selected"],
+            "palette_names": state["palette_names"],
+            "cfg": state["cfg"],
+            "home_socket": state["home_socket"],
+            "show_all": state["show_all"],
+            "sessions": state["sessions"],
+            "do_set_color": state["do_set_color"],
+            "query_all_sessions": state["query_all_sessions"],
+            "refilter": state["refilter"],
+            "msg": state["msg"],
+            "msg_frames": state["msg_frames"],
+        }
+        handle_color_picker_mode(key, color_state)
+        for k in color_state:
+            state[k] = color_state[k]
 
     elif mode == "sort_pick":
         sort_state: dict[str, Any] = {

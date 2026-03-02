@@ -4,6 +4,7 @@ import curses
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.config import PALETTE
+from cc_dashboard.config_data import PALETTE_NAMES
 
 # Fixed color pair IDs for UI chrome (not account-specific)
 CP_NORMAL = 1
@@ -29,6 +30,9 @@ MATCH_BG = (60, 50, 20)
 # Maps account name -> (cp_normal, cp_selected) curses color pair IDs
 _account_cp: dict[str, tuple[int, int]] = {}
 
+# Maps palette color name -> (cp_normal, cp_selected) curses color pair IDs
+_palette_cp: dict[str, tuple[int, int]] = {}
+
 
 def _c(r, g, b):
     """Convert 0-255 RGB to curses 0-1000 range."""
@@ -37,11 +41,12 @@ def _c(r, g, b):
 
 def init_colors():
     """Set up curses color pairs dynamically based on loaded accounts."""
-    global _account_cp
+    global _account_cp, _palette_cp
     curses.start_color()
     curses.use_default_colors()
 
     _account_cp = {}
+    _palette_cp = {}
 
     if curses.can_change_color() and curses.COLORS >= 256:
         # Reserve custom color slots starting at 16
@@ -80,6 +85,25 @@ def init_colors():
             _account_cp[name] = (pair_id, pair_id + 1)
             color_slot += 1
             pair_id += 2
+
+        # Allocate color pairs for all palette colors not already covered by accounts
+        acct_color_to_cp: dict[str, tuple[int, int]] = {}
+        for name in _cfg._account_names:
+            c = _cfg._accounts[name]["color"]
+            if c not in acct_color_to_cp:
+                acct_color_to_cp[c] = _account_cp[name]
+
+        for pname in PALETTE_NAMES:
+            if pname in acct_color_to_cp:
+                _palette_cp[pname] = acct_color_to_cp[pname]
+            else:
+                _, _, text_fg = PALETTE.get(pname, PALETTE["gray"])
+                curses.init_color(color_slot, *_c(*text_fg))
+                curses.init_pair(pair_id, color_slot, -1)
+                curses.init_pair(pair_id + 1, color_slot, sel_bg_slot)
+                _palette_cp[pname] = (pair_id, pair_id + 1)
+                color_slot += 1
+                pair_id += 2
     else:
         # Fallback: cycle through a few basic curses colors
         _FALLBACK_COLORS = [
@@ -108,8 +132,30 @@ def init_colors():
             _account_cp[name] = (pair_id, pair_id + 1)
             pair_id += 2
 
+        acct_color_to_cp_fb: dict[str, tuple[int, int]] = {}
+        for name in _cfg._account_names:
+            c = _cfg._accounts[name]["color"]
+            if c not in acct_color_to_cp_fb:
+                acct_color_to_cp_fb[c] = _account_cp[name]
+
+        for j, pname in enumerate(PALETTE_NAMES):
+            if pname in acct_color_to_cp_fb:
+                _palette_cp[pname] = acct_color_to_cp_fb[pname]
+            else:
+                fg = _FALLBACK_COLORS[j % len(_FALLBACK_COLORS)]
+                curses.init_pair(pair_id, fg, -1)
+                curses.init_pair(pair_id + 1, fg, curses.COLOR_BLACK)
+                _palette_cp[pname] = (pair_id, pair_id + 1)
+                pair_id += 2
+
 
 def _cp_for_account(account, selected=False):
     """Return the curses color pair ID for a given account name."""
     cp_normal, cp_sel = _account_cp.get(account, (CP_NORMAL, CP_NORMAL))
+    return cp_sel if selected else cp_normal
+
+
+def _cp_for_palette_color(color_name, selected=False):
+    """Return the curses color pair ID for a palette color name."""
+    cp_normal, cp_sel = _palette_cp.get(color_name, (CP_NORMAL, CP_NORMAL))
     return cp_sel if selected else cp_normal
