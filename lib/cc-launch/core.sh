@@ -180,7 +180,7 @@ launch_session() {
 
     local shell_cmd="exec claude $effective_flags"
     # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
+    kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
 
     local retry
     for ((retry = 0; retry < 5; retry++)); do

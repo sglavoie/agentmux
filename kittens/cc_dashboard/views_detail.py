@@ -36,16 +36,24 @@ def draw_detail_pane(stdscr, session, detail_y):
     if full_dir.startswith(home):
         full_dir = "~" + full_dir[len(home) :]
 
+    acct_info = _cfg._accounts.get(session["account"], {})
+    acct_config_dir = acct_info.get("config_dir", "")
+
     config_dir = session.get("config_dir", "")
+    config_dir_overridden = bool(
+        config_dir and acct_config_dir and config_dir != acct_config_dir
+    )
     if not config_dir:
-        acct_info = _cfg._accounts.get(session["account"], {})
-        config_dir = acct_info.get("config_dir", "")
+        config_dir = acct_config_dir
     if config_dir and config_dir.startswith(home):
         config_dir = "~" + config_dir[len(home) :]
     if not config_dir:
         config_dir = "~/.claude"
 
-    color_name = _cfg._accounts.get(session["account"], {}).get("color", "gray")
+    cc_flags = session.get("cc_flags", "")
+    flags_overridden = bool(cc_flags and cc_flags != "-")
+
+    color_name = acct_info.get("color", "gray")
     pids_str = ", ".join(str(p) for p in session.get("pids", []))
     window_count = str(session.get("window_count", 1))
 
@@ -84,15 +92,19 @@ def draw_detail_pane(stdscr, session, detail_y):
     )
 
     y += 1
+    override_attr = curses.color_pair(CP_WARN)
     safe_addstr(stdscr, y, lx, " Config dir: ", label_attr)
-    safe_addstr(stdscr, y, lx + 13, config_dir[: mid - lx - 14], val_attr)
+    safe_addstr(
+        stdscr, y, lx + 13, config_dir[: mid - lx - 14],
+        override_attr if config_dir_overridden else val_attr,
+    )
     safe_addstr(stdscr, y, rx, "Flags: ", label_attr)
     safe_addstr(
         stdscr,
         y,
         rx + 7,
         (effective_flags if effective_flags else "none")[: cols - rx - 8],
-        val_attr,
+        override_attr if flags_overridden else val_attr,
     )
 
     y += 1
@@ -141,7 +153,7 @@ def draw_detail_pane(stdscr, session, detail_y):
         y,
         lx + 10,
         (cmdline_display if cmdline_display else "n/a")[: cols - lx - 11],
-        val_attr,
+        override_attr if flags_overridden else val_attr,
     )
 
     activity = session.get("activity")

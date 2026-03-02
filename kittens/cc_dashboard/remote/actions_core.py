@@ -221,6 +221,8 @@ def do_launch(
         else _cfg._accounts.get(account, {}).get("config_dir", "")
     )
 
+    cmd += ["--var", f"cc_config_dir={config_dir}"]
+
     if config_dir and config_dir != default_dir:
         cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
 

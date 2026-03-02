@@ -113,6 +113,7 @@ def query_sessions(socket, managed_only=True):
             cc_flags = user_vars.get("cc_flags", "")
             cc_pw = user_vars.get("cc_pw", "")
             cc_env = user_vars.get("cc_env", "")
+            cc_config_dir = user_vars.get("cc_config_dir", "")
 
             title = _strip_icons(tab.get("title", ""))
             icon_state = _detect_state(tab_title)
@@ -144,7 +145,7 @@ def query_sessions(socket, managed_only=True):
                     "window_count": len(windows),
                     "pids": pids,
                     "cmdlines": cmdlines,
-                    "config_dir": detected_config_dir,
+                    "config_dir": cc_config_dir or detected_config_dir,
                     "activity": activity,
                     "claude_window_id": claude_win_id,
                 }

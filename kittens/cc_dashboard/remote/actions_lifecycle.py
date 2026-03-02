@@ -147,6 +147,7 @@ def _spawn_detached_restart(
         "--var",
         f"cc_env={env_vars}",
     ]
+    launch_cmd += ["--var", f"cc_config_dir={config_dir}"]
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
     if env_vars and env_vars != "-":
@@ -382,6 +383,7 @@ def _spawn_detached_move(
         "--var",
         f"cc_env={env_vars}",
     ]
+    launch_cmd += ["--var", f"cc_config_dir={config_dir}"]
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
     if env_vars and env_vars != "-":
