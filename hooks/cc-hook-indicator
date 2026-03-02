@@ -90,19 +90,38 @@ _matches_ignore_pattern() {
     local patterns="${_DEFAULT_NOTIFY_IGNORE_PATTERNS:-}"
     [[ -n "$patterns" ]] || return 1 # no patterns = don't suppress
 
-    # Brief delay to let the TUI redraw before capturing screen content.
-    sleep 0.5
-
+    # Poll the screen with increasing elapsed time to handle slow TUI redraws
+    # (e.g. /clear on large conversations). Attempts at ~0.3s, 0.8s, 1.3s,
+    # 1.8s, 2.3s — max wait ~2.3s. Returns immediately on first match.
+    local attempt=0
+    local max_attempts=5
+    local initial_delay=0.3
+    local retry_delay=0.5
     local screen_text
-    screen_text=$(kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} get-text --extent screen --match "id:$KITTY_WINDOW_ID" 2>/dev/null) || return 1
-
     local IFS='|'
-    for pattern in $patterns; do
-        [[ -n "$pattern" ]] || continue
-        if echo "$screen_text" | grep -qE "$pattern"; then
-            return 0 # match found = suppress
+
+    while [[ $attempt -lt $max_attempts ]]; do
+        if [[ $attempt -eq 0 ]]; then
+            sleep "$initial_delay"
+        else
+            sleep "$retry_delay"
         fi
+
+        screen_text=$(kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} get-text --extent screen --match "id:$KITTY_WINDOW_ID" 2>/dev/null) || {
+            attempt=$((attempt + 1))
+            continue
+        }
+
+        for pattern in $patterns; do
+            [[ -n "$pattern" ]] || continue
+            if echo "$screen_text" | grep -qE "$pattern"; then
+                return 0 # match found = suppress
+            fi
+        done
+
+        attempt=$((attempt + 1))
     done
+
     return 1
 }
 
