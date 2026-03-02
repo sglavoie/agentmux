@@ -68,6 +68,7 @@ _ccm() {
                             'config[Manage config files]' \
                             'hooks[Manage hooks]' \
                             'logs[Query and manage activity logs]' \
+                            'audit[Check upstream feature compatibility]' \
                             'dashboard[Launch curses dashboard kitten]' \
                             'switch[Quick-switch to a session]' \
                             'idle-watch[Manage background idle watcher]' \
@@ -101,6 +102,20 @@ _ccm() {
             shift words
             (( CURRENT -= 1 ))
             _cc-launch
+            ;;
+        audit)
+            if [[ $CURRENT -eq 3 ]]; then
+                _values 'audit option' \
+                    '--no-cache[Force re-fetch of upstream docs]' \
+                    '--skip-ai[Skip AI analysis, show manifest summary only]' \
+                    '--section[Limit to a section]' \
+                    '--json[Output as JSON]' \
+                    '--quiet[Show only findings]' \
+                    '--update-manifest[Open manifest in editor]'
+            elif [[ "$words[3]" == "--section" && $CURRENT -eq 4 ]]; then
+                _values 'section' \
+                    'claude-hooks' 'claude-cli' 'kitty-remote' 'kitty-launch' 'kitty-match'
+            fi
             ;;
         idle-watch)
             [[ $CURRENT -eq 3 ]] && _values 'idle-watch command' \
@@ -139,7 +154,7 @@ _ccm() {
             ;;
         help)
             [[ $CURRENT -eq 3 ]] && _values 'command' \
-                'launch' 'status' 'star' 'config' 'hooks' 'logs' 'dashboard' 'switch' 'idle-watch'
+                'launch' 'status' 'star' 'config' 'hooks' 'logs' 'audit' 'dashboard' 'switch' 'idle-watch'
             ;;
         *)
             _values 'command' \
@@ -149,6 +164,7 @@ _ccm() {
                 'config[Manage config files]' \
                 'hooks[Manage hooks]' \
                 'logs[Query and manage activity logs]' \
+                'audit[Check upstream feature compatibility]' \
                 'dashboard[Launch curses dashboard kitten]' \
                 'switch[Quick-switch to a session]' \
                 'idle-watch[Manage background idle watcher]' \

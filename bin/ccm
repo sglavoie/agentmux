@@ -780,6 +780,9 @@ Log files are stored in ${CC_MANAGER_LOGS:-~/.local/state/cc-manager/activity/}
 as per-session JSONL files written by the cc-activity-log hook.
 HELP
 		;;
+	audit)
+		exec cc-audit --help
+		;;
 	idle-watch)
 		exec cc-idle-watch --help
 		;;
@@ -811,6 +814,7 @@ Commands:
     dashboard           Launch the curses dashboard kitten
     switch              Quick-switch: fuzzy-find and jump to a session
     notify [flags]      Send a test notification via alerter
+    audit [flags]       Check upstream feature compatibility
     idle-watch <cmd>    Manage background idle notification watcher
 	help [COMMAND]      Show help for ccm or a specific command
     --version           Print version
@@ -880,6 +884,10 @@ main() {
 	logs)
 		shift
 		cmd_logs "$@"
+		;;
+	audit)
+		shift
+		exec cc-audit "$@"
 		;;
 	idle-watch)
 		shift

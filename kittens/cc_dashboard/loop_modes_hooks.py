@@ -1,8 +1,10 @@
 """Mode handlers for hooks management screens in the dashboard loop."""
 
+import contextlib
 import curses
 
 from cc_dashboard import config as _cfg
+from cc_dashboard.config import _FULL_TYPE_EVENTS, HOOK_EVENT_META
 from cc_dashboard.remote import run_hooks_sync
 from cc_dashboard.views import _hooks_event_rows
 from cc_dashboard.views_overlays import (
@@ -44,8 +46,6 @@ def _get_hooks_add_form_state(state):
 
 def _hooks_add_visible_fields(event_name, hook_type):
     """Return ordered list of visible field indices for the current form state."""
-    from cc_dashboard.config import HOOK_EVENT_META, _FULL_TYPE_EVENTS
-
     meta = HOOK_EVENT_META.get(event_name, {})
     has_matcher = meta.get("matcher_desc") is not None
     supports_all_types = event_name in _FULL_TYPE_EVENTS
@@ -95,10 +95,8 @@ def _hooks_add_submit(state):
 
     timeout_str = state["hooks_add_timeout"].strip()
     if timeout_str:
-        try:
+        with contextlib.suppress(ValueError):
             handler["timeout"] = int(timeout_str)
-        except ValueError:
-            pass
 
     matcher = state["hooks_add_matcher"].strip() or None
 
@@ -181,7 +179,11 @@ def handle_hooks_modes(key, state):
             and state["hooks_event_selected"] < len(event_rows)
         ):
             row = event_rows[state["hooks_event_selected"]]
-            target_event = row[1] if row[0] in ("event", "extra", "builtin") else state.get("hooks_target_event", "PreToolUse")
+            target_event = (
+                row[1]
+                if row[0] in ("event", "extra", "builtin")
+                else state.get("hooks_target_event", "PreToolUse")
+            )
             _init_hooks_add_state(state, target_event)
             state["mode"] = "hooks_add"
         elif (
@@ -221,7 +223,15 @@ def handle_hooks_modes(key, state):
                 state["hooks_info_event"] = event_name
                 state["mode"] = "hooks_info"
             elif row[0] == "builtin":
-                _, _event_name, _cmd_idx, cmd_str, is_disabled, is_async, type_str = row
+                (
+                    _,
+                    _event_name,
+                    _cmd_idx,
+                    cmd_str,
+                    _is_disabled,
+                    is_async,
+                    type_str,
+                ) = row
                 state["hooks_info_handler"] = {
                     "type": type_str or "command",
                     "command": cmd_str,
@@ -301,8 +311,13 @@ def handle_hooks_modes(key, state):
         max_visible = 8
         if key in (ord("j"), curses.KEY_DOWN) and options:
             state["hooks_matcher_selected"] = min(sel + 1, len(options) - 1)
-            if state["hooks_matcher_selected"] >= state["hooks_matcher_scroll"] + max_visible:
-                state["hooks_matcher_scroll"] = state["hooks_matcher_selected"] - max_visible + 1
+            if (
+                state["hooks_matcher_selected"]
+                >= state["hooks_matcher_scroll"] + max_visible
+            ):
+                state["hooks_matcher_scroll"] = (
+                    state["hooks_matcher_selected"] - max_visible + 1
+                )
         elif key in (ord("k"), curses.KEY_UP) and options:
             state["hooks_matcher_selected"] = max(sel - 1, 0)
             if state["hooks_matcher_selected"] < state["hooks_matcher_scroll"]:
@@ -345,8 +360,6 @@ def _handle_hooks_add(key, state):
     # Tab / Shift-Tab: cycle fields (or open matcher picker)
     if key == 9:  # Tab
         if active_field == _FIELD_MATCHER:
-            from cc_dashboard.config import HOOK_EVENT_META
-
             examples_str = HOOK_EVENT_META.get(event_name, {}).get("matcher_examples")
             if examples_str:
                 options = examples_str.split("|")
@@ -386,6 +399,7 @@ def _handle_hooks_add(key, state):
     if active_field == _FIELD_TYPE:
         if key in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(" ")):
             from cc_dashboard.config import _FULL_TYPE_EVENTS
+
             if event_name in _FULL_TYPE_EVENTS:
                 idx = _HOOK_TYPES.index(hook_type) if hook_type in _HOOK_TYPES else 0
                 if key == curses.KEY_LEFT:

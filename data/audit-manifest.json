@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "last_audit": "2026-03-02T17:48:20Z",
+  "urls": {
+    "claude_hooks_docs": "https://docs.anthropic.com/en/docs/claude-code/hooks",
+    "claude_cli_reference": "https://docs.anthropic.com/en/docs/claude-code/cli-reference",
+    "claude_settings_docs": "https://docs.anthropic.com/en/docs/claude-code/settings",
+    "kitty_changelog": "https://sw.kovidgoyal.net/kitty/changelog/",
+    "kitty_remote_control": "https://sw.kovidgoyal.net/kitty/remote-control/",
+    "kitty_launch": "https://sw.kovidgoyal.net/kitty/launch/"
+  },
+  "claude_code": {
+    "hook_events": {
+      "description": "Claude Code hook event names from settings.json",
+      "known": [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PermissionRequest",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "Notification",
+        "SubagentStart",
+        "SubagentStop",
+        "Stop",
+        "TeammateIdle",
+        "TaskCompleted",
+        "ConfigChange",
+        "WorktreeCreate",
+        "WorktreeRemove",
+        "PreCompact",
+        "SessionEnd"
+      ],
+      "actively_hooked": [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "PermissionRequest",
+        "Stop",
+        "TaskCompleted",
+        "SessionEnd"
+      ]
+    },
+    "cli_flags": {
+      "description": "Claude CLI flags referenced or used by cc-manager",
+      "used": [
+        "--dangerously-skip-permissions",
+        "-p"
+      ],
+      "known": [
+        "--help",
+        "--version",
+        "--max-turns",
+        "--model",
+        "--output-format",
+        "--verbose",
+        "--allowedTools",
+        "--disallowedTools",
+        "--permission-prompt-tool",
+        "--mcp-config",
+        "--append-system-prompt",
+        "--prefill",
+        "--resume",
+        "--continue"
+      ]
+    },
+    "cli_subcommands": {
+      "description": "Top-level Claude CLI subcommands",
+      "known": [
+        "claude",
+        "claude mcp",
+        "claude doctor",
+        "claude config",
+        "claude update",
+        "claude api-key"
+      ]
+    },
+    "hook_config_format": {
+      "description": "Known fields in hook configuration entries",
+      "known": [
+        "type",
+        "command",
+        "async",
+        "timeout",
+        "hooks",
+        "matcher"
+      ]
+    },
+    "settings_json": {
+      "description": "Known top-level sections in Claude Code settings.json",
+      "known": [
+        "permissions",
+        "hooks",
+        "env",
+        "mcpServers",
+        "allowedTools",
+        "disallowedTools",
+        "projects"
+      ]
+    },
+    "capabilities": {
+      "description": "Broader Claude Code features cc-manager is aware of",
+      "known": [
+        "MCP servers",
+        "hook events",
+        "custom themes",
+        "model selection",
+        "subagents",
+        "worktrees",
+        "teammates",
+        "task tracking",
+        "context compaction",
+        "pipe mode (-p)"
+      ]
+    }
+  },
+  "kitty": {
+    "remote_commands": {
+      "description": "Kitty remote control commands (kitty @)",
+      "used": [
+        "ls",
+        "launch",
+        "set-tab-color",
+        "close-tab",
+        "focus-tab",
+        "set-tab-title",
+        "goto-layout",
+        "get-text",
+        "kitten"
+      ],
+      "known_unused": [
+        "send-text",
+        "resize-window",
+        "resize-os-window",
+        "new-window",
+        "close-window",
+        "detach-window",
+        "detach-tab",
+        "scroll-window",
+        "signal-child",
+        "select-window",
+        "set-colors",
+        "create-marker",
+        "remove-marker"
+      ]
+    },
+    "launch_options": {
+      "description": "Options used with kitty @ launch",
+      "used": [
+        "--to",
+        "--type",
+        "--cwd",
+        "--var",
+        "--env",
+        "--tab-title",
+        "--location",
+        "--allow-remote-control",
+        "--keep-focus",
+        "--match"
+      ]
+    },
+    "match_fields": {
+      "description": "Match expression fields used in kitty @ --match",
+      "used": [
+        "id:",
+        "title:",
+        "var:"
+      ],
+      "known_unused": [
+        "state:",
+        "env:",
+        "pid:",
+        "recent:",
+        "neighbor:"
+      ]
+    }
+  }
+}
