@@ -242,6 +242,16 @@ def _resolve_account_by_config_dir(config_dir):
     return _state._account_names[0] if _state._account_names else "unknown"
 
 
+def _color_for_config_dir(config_dir):
+    """Return the palette color name of the account that owns *config_dir*, or ""."""
+    if not config_dir:
+        return ""
+    for info in _state._accounts.values():
+        if info.get("config_dir") == config_dir:
+            return info.get("color", "")
+    return ""
+
+
 def _unique_config_dirs():
     """Return a deduplicated, ordered list of config_dir paths from all accounts."""
     seen = set()
@@ -421,10 +431,12 @@ def remove_session(title):
     return True
 
 
-def _palette_tab_colors(account, color_override=""):
+def _palette_tab_colors(account, color_override="", config_dir_override=""):
     """Return a list of kitty set-tab-color arguments for the given account."""
     if color_override and color_override in PALETTE:
         color_name = color_override
+    elif config_dir_override:
+        color_name = _color_for_config_dir(config_dir_override) or _state._accounts.get(account, {}).get("color", "gray")
     else:
         color_name = _state._accounts.get(account, {}).get("color", "gray")
     active_bg, inactive_bg, _ = PALETTE.get(color_name, PALETTE["gray"])
