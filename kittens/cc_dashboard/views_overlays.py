@@ -679,10 +679,53 @@ _DRIFT_BADGES = {
     "missing": ("missing", CP_WARN),
 }
 
-type HooksEventRow = tuple[str, str, bool] | tuple[str, str, int, str]
+type HooksEventRow = (
+    tuple[str, str, bool]
+    | tuple[str, str, int, str]
+    | tuple[str, str, int, str, bool, bool, str]
+)
 
 
-def _hooks_event_rows(account_name, hooks_overrides):
+_BUILTIN_DESCRIPTIONS = {
+    "cc-hook-indicator active": "Sets tab icon to active",
+    "cc-hook-indicator stop": "Sets tab stop icon",
+    "cc-hook-indicator permission": "Sets tab permission icon",
+    "cc-hook-indicator failure": "Sets tab error icon",
+    "cc-activity-log tool": "Logs tool use to activity file",
+    "cc-activity-log stop": "Logs stop to activity file",
+    "cc-activity-log end": "Logs session end to activity file",
+}
+
+
+def _describe_builtin(cmd):
+    """Return a human-readable description for a known builtin command."""
+    for prefix, desc in _BUILTIN_DESCRIPTIONS.items():
+        if cmd.startswith(prefix):
+            return desc
+    return ""
+
+
+def _extract_builtin_commands(hooks_global, event_name):
+    """Extract command strings with metadata from hooks_global for a given event.
+
+    Returns a list of (command_str, is_async, type_str) tuples.
+    """
+    commands = []
+    for entry in hooks_global.get(event_name, []):
+        is_async = entry.get("async", False)
+        type_str = entry.get("type", "")
+        for hook in entry.get("hooks", []):
+            cmd = hook.get("command", "")
+            if cmd:
+                # Strip absolute path prefixes for cleaner display
+                parts = cmd.split()
+                if parts:
+                    parts[0] = parts[0].rsplit("/", 1)[-1]
+                    commands.append((" ".join(parts), is_async, type_str))
+    return commands
+
+
+def _hooks_event_rows(account_name, hooks_overrides, hooks_global=None):
     """Build a flat list of rows for the hooks event detail view."""
     from cc_dashboard.config import HOOK_EVENTS
 
@@ -692,7 +735,15 @@ def _hooks_event_rows(account_name, hooks_overrides):
 
     result: list[HooksEventRow] = []
     for event in HOOK_EVENTS:
-        result.append(("event", event, event in disabled_events))
+        is_disabled = event in disabled_events
+        result.append(("event", event, is_disabled))
+        if hooks_global is not None:
+            for i, (cmd, is_async, type_str) in enumerate(
+                _extract_builtin_commands(hooks_global, event)
+            ):
+                result.append(
+                    ("builtin", event, i, cmd, is_disabled, is_async, type_str)
+                )
         for i, cmd_entry in enumerate(extra_commands.get(event, [])):
             result.append(("extra", event, i, str(cmd_entry.get("command", ""))))
     return result
@@ -813,7 +864,7 @@ def draw_hooks_event_view(
         curses.color_pair(badge_cp),
     )
 
-    event_rows = _hooks_event_rows(account_name, hooks_overrides)
+    event_rows = _hooks_event_rows(account_name, hooks_overrides, hooks_global)
     for idx, row in enumerate(event_rows):
         y = 2 + idx
         if y >= rows - 2:
@@ -834,6 +885,18 @@ def draw_hooks_event_view(
             if is_selected:
                 badge_a |= curses.A_REVERSE
             safe_addstr(stdscr, y, 26, badge, badge_a)
+        elif row[0] == "builtin":
+            _, _event_name, _cmd_idx, cmd_str, is_disabled, is_async, _type_str = row
+            marker = "▸ " if is_selected else "  "
+            attr = dim_attr if is_disabled else normal_attr
+            if is_selected:
+                attr |= curses.A_REVERSE
+            safe_addstr(stdscr, y, 2, marker, normal_attr)
+            tag = " async" if is_async else ""
+            desc = _describe_builtin(cmd_str)
+            suffix = f"{tag} | {desc}" if desc else tag
+            display = f"    - {cmd_str}{suffix}"
+            safe_addstr(stdscr, y, 4, display[: (cols - 6)], attr)
         else:
             _, _event_name, _cmd_idx, cmd_str = row
             marker = "▸ " if is_selected else "  "

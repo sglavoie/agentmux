@@ -35,7 +35,9 @@ def handle_hooks_modes(key, state):
         return True
 
     if mode == "hooks_event":
-        event_rows = _hooks_event_rows(state["hooks_account"], _cfg._hooks_overrides)
+        event_rows = _hooks_event_rows(
+            state["hooks_account"], _cfg._hooks_overrides, _cfg._hooks_global
+        )
         if key in (ord("j"), curses.KEY_DOWN) and event_rows:
             state["hooks_event_selected"] = (state["hooks_event_selected"] + 1) % len(
                 event_rows
@@ -65,7 +67,7 @@ def handle_hooks_modes(key, state):
             and state["hooks_event_selected"] < len(event_rows)
         ):
             row = event_rows[state["hooks_event_selected"]]
-            if row[0] == "event" or row[0] == "extra":
+            if row[0] in ("event", "extra", "builtin"):
                 state["hooks_target_event"] = row[1]
             state["hooks_cmd_value"] = ""
             state["hooks_cmd_cursor"] = 0
@@ -83,7 +85,7 @@ def handle_hooks_modes(key, state):
                     state["hooks_account"]
                 )
                 new_rows = _hooks_event_rows(
-                    state["hooks_account"], _cfg._hooks_overrides
+                    state["hooks_account"], _cfg._hooks_overrides, _cfg._hooks_global
                 )
                 state["hooks_event_selected"] = min(
                     state["hooks_event_selected"], max(0, len(new_rows) - 1)
