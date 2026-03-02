@@ -143,8 +143,14 @@ HOOK_EVENT_META = {
 }
 
 _FULL_TYPE_EVENTS = {
-    "PermissionRequest", "PostToolUse", "PostToolUseFailure",
-    "PreToolUse", "Stop", "SubagentStop", "TaskCompleted", "UserPromptSubmit",
+    "PermissionRequest",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PreToolUse",
+    "Stop",
+    "SubagentStop",
+    "TaskCompleted",
+    "UserPromptSubmit",
 }
 
 

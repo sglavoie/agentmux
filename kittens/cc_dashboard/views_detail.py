@@ -9,7 +9,7 @@ from cc_dashboard.colors import CP_DIM, CP_HEADER, CP_NORMAL, CP_WARN, _cp_for_a
 from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.remote.shared import _strip_override_marker, format_duration
 
-DETAIL_PANE_HEIGHT = 14
+DETAIL_PANE_HEIGHT = 15
 
 
 def draw_detail_pane(stdscr, session, detail_y):
@@ -200,6 +200,21 @@ def draw_detail_pane(stdscr, session, detail_y):
             f", {activity['task_completed_count']} tasks",
             val_attr,
         )
+
+        y += 1
+        model_val = session.get("model", "") or "unknown"
+        agent_type_val = session.get("agent_type", "")
+        if agent_type_val:
+            model_val += f" (agent: {agent_type_val})"
+        safe_addstr(stdscr, y, lx, " Model: ", label_attr)
+        safe_addstr(stdscr, y, lx + 8, model_val[: mid - lx - 9], val_attr)
+
+        total_sub = activity.get("total_subagents", 0)
+        if total_sub > 0:
+            active_sub = activity.get("active_subagents", 0)
+            sub_str = f"{active_sub} active / {total_sub} total"
+            safe_addstr(stdscr, y, rx, "Subagents: ", label_attr)
+            safe_addstr(stdscr, y, rx + 11, sub_str, val_attr)
     else:
         y += 1
         safe_addstr(stdscr, y, lx, " No activity data", curses.color_pair(CP_DIM))

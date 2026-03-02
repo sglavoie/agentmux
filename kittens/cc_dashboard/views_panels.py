@@ -137,6 +137,9 @@ def draw_list_view(
             idle_secs = int(time.time()) - activity["last_event_ts"]
             status_text = f"{s['status']} {format_duration(idle_secs)}"
 
+        if activity and activity.get("active_subagents", 0) > 0:
+            status_text += f" +{activity['active_subagents']}ag"
+
         line = f"{mark}{title_padded}{s['account']:<{c_acct}}"
         if multi_instance:
             line += f"{s.get('instance_label', ''):<{c_inst}}"

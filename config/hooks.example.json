@@ -7,6 +7,43 @@
             "type": "command",
             "command": "cc-hook-indicator active prompt",
             "async": true
+          },
+          {
+            "type": "command",
+            "command": "cc-activity-log session_start",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cc-hook-indicator active subagent_start",
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "cc-activity-log subagent_start",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cc-hook-indicator active subagent_stop",
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "cc-activity-log subagent_stop",
+            "async": true
           }
         ]
       }
@@ -82,6 +119,11 @@
           {
             "type": "command",
             "command": "cc-hook-indicator active task_complete",
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "cc-activity-log task",
             "async": true
           }
         ]

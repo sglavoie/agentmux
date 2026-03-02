@@ -222,9 +222,13 @@ def dispatch_mode(
             state[k] = sort_state[k]
 
     elif mode in (
-        "hooks", "hooks_event", "hooks_sync_confirm",
-        "hooks_add", "hooks_info",
-        "hooks_delete_confirm", "hooks_matcher_pick",
+        "hooks",
+        "hooks_event",
+        "hooks_sync_confirm",
+        "hooks_add",
+        "hooks_info",
+        "hooks_delete_confirm",
+        "hooks_matcher_pick",
     ):
         hooks_state: dict[str, Any] = {
             "mode": mode,

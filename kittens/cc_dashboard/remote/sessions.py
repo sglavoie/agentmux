@@ -3,7 +3,12 @@
 import json
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.remote.activity import cleanup_stale_activity, load_activity
+from cc_dashboard.remote.activity import (
+    cleanup_stale_activity,
+    load_activity,
+    load_session_meta,
+    resolve_session_id,
+)
 from cc_dashboard.remote.command import get_all_kitty_sockets, kitty_cmd
 from cc_dashboard.remote.git_ops import _get_git_info
 from cc_dashboard.remote.shared import _MANAGED_TITLE_RE, _detect_state, _strip_icons
@@ -113,6 +118,8 @@ def query_sessions(socket, managed_only=True):
             icon_state = _detect_state(tab_title)
             tab_id = tab.get("id", 0)
             activity = load_activity(tab_id)
+            session_id = resolve_session_id(tab_id)
+            session_meta = load_session_meta(session_id)
             git_info = _get_git_info(cwd) if cwd else None
             sessions.append(
                 {
@@ -124,6 +131,8 @@ def query_sessions(socket, managed_only=True):
                     "cc_pw": cc_pw,
                     "cc_env": cc_env,
                     "git": git_info,
+                    "model": session_meta.get("model", ""),
+                    "agent_type": session_meta.get("agent_type", ""),
                     "status": (
                         "focused"
                         if (os_focused and tab.get("is_focused", False))

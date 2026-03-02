@@ -171,11 +171,13 @@ _update_activity() {
     # Skip tracking for clear/idle actions
     [[ -z "$event_kind" ]] && return 0
 
-    # Read existing counts (10 lines: first_event_ts, last_event_ts,
+    # Read existing counts (12 lines: first_event_ts, last_event_ts,
     # last_event_type, prompt_count, tool_use_count, tool_failure_count,
-    # permission_count, stop_count, last_attention_ts, task_completes)
+    # permission_count, stop_count, last_attention_ts, task_completes,
+    # active_subagents, total_subagents)
     local first_ts="$now" last_ts="$now" last_type="$event_kind"
     local prompts=0 tools=0 failures=0 permissions=0 stops=0 attention_ts=0 task_completes=0
+    local active_subagents=0 total_subagents=0
 
     if [[ -f "$activity_file" ]]; then
         local i=0
@@ -185,6 +187,8 @@ _update_activity() {
             3) prompts="$line" ;; 4) tools="$line" ;; 5) failures="$line" ;;
             6) permissions="$line" ;; 7) stops="$line" ;; 8) attention_ts="$line" ;;
             9) task_completes="$line" ;;
+            10) active_subagents="$line" ;;
+            11) total_subagents="$line" ;;
             esac
             i=$((i + 1))
         done <"$activity_file"
@@ -197,6 +201,8 @@ _update_activity() {
         stops="${stops:-0}"
         attention_ts="${attention_ts:-0}"
         task_completes="${task_completes:-0}"
+        active_subagents="${active_subagents:-0}"
+        total_subagents="${total_subagents:-0}"
     fi
 
     last_ts="$now"
@@ -215,13 +221,15 @@ _update_activity() {
         ;;
     stop) stops=$((stops + 1)) ;;
     task_complete) task_completes=$((task_completes + 1)) ;;
+    subagent_start) active_subagents=$((active_subagents + 1)); total_subagents=$((total_subagents + 1)) ;;
+    subagent_stop) active_subagents=$((active_subagents > 0 ? active_subagents - 1 : 0)) ;;
     esac
 
     local tmpfile="${activity_file}.tmp.$$"
-    printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
         "$first_ts" "$last_ts" "$last_type" \
         "$prompts" "$tools" "$failures" "$permissions" "$stops" "$attention_ts" \
-        "$task_completes" \
+        "$task_completes" "$active_subagents" "$total_subagents" \
         >"$tmpfile" && mv "$tmpfile" "$activity_file"
 }
 

@@ -30,9 +30,37 @@ def load_activity(tab_id):
             "stop_count": int(lines[7]),
             "last_attention_ts": int(lines[8]),
             "task_completed_count": int(lines[9]) if len(lines) > 9 else 0,
+            "active_subagents": int(lines[10]) if len(lines) > 10 else 0,
+            "total_subagents": int(lines[11]) if len(lines) > 11 else 0,
         }
     except (ValueError, IndexError):
         return None
+
+
+def load_session_meta(session_id):
+    """Read session-level metadata from the first line of a JSONL activity log.
+
+    Returns a dict with 'model' and 'agent_type' keys if the first entry
+    is a session_start event, or an empty dict otherwise.
+    """
+    if not session_id:
+        return {}
+    log_dir = _resolve_log_dir()
+    log_path = os.path.join(log_dir, f"{session_id}.jsonl")
+    try:
+        with open(log_path) as f:
+            first_line = f.readline().strip()
+        if not first_line:
+            return {}
+        entry = json.loads(first_line)
+        if entry.get("event") != "session_start":
+            return {}
+        return {
+            "model": entry.get("model", ""),
+            "agent_type": entry.get("agent_type", ""),
+        }
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
 
 
 def cleanup_stale_activity(live_tab_ids):
@@ -116,6 +144,9 @@ def load_activity_log(session_id):
 
     tool_counts: dict[str, int] = {}
     stop_count = 0
+    subagent_start_count = 0
+    subagent_stop_count = 0
+    task_completed_count = 0
     first_ts = None
     last_ts = None
 
@@ -132,6 +163,12 @@ def load_activity_log(session_id):
             tool_counts[tool] = tool_counts.get(tool, 0) + 1
         elif event == "stop":
             stop_count += 1
+        elif event == "subagent_start":
+            subagent_start_count += 1
+        elif event == "subagent_stop":
+            subagent_stop_count += 1
+        elif event == "task_completed":
+            task_completed_count += 1
 
     sorted_tools = sorted(tool_counts.items(), key=lambda x: x[1], reverse=True)
 
@@ -143,6 +180,9 @@ def load_activity_log(session_id):
         "total": len(entries),
         "tool_counts": sorted_tools,
         "stop_count": stop_count,
+        "subagent_start_count": subagent_start_count,
+        "subagent_stop_count": subagent_stop_count,
+        "task_completed_count": task_completed_count,
         "first_ts": first_ts,
         "last_ts": last_ts,
         "duration": duration_str,

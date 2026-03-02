@@ -349,6 +349,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             state["hooks_event_selected"],
         )
         from cc_dashboard.loop_modes_hooks import _get_hooks_add_form_state
+
         draw_hooks_add_form(
             stdscr,
             state["hooks_account"],
@@ -367,6 +368,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             state["hooks_event_selected"],
         )
         from cc_dashboard.loop_modes_hooks import _get_hooks_add_form_state
+
         draw_hooks_add_form(
             stdscr,
             state["hooks_account"],
