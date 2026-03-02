@@ -221,17 +221,37 @@ def dispatch_mode(
         for k in sort_state:
             state[k] = sort_state[k]
 
-    elif mode in ("hooks", "hooks_event", "hooks_sync_confirm", "hooks_cmd_input"):
+    elif mode in (
+        "hooks", "hooks_event", "hooks_sync_confirm",
+        "hooks_add", "hooks_info",
+        "hooks_delete_confirm", "hooks_matcher_pick",
+    ):
         hooks_state: dict[str, Any] = {
             "mode": mode,
             "hooks_drift": state["hooks_drift"],
             "hooks_selected": state["hooks_selected"],
             "hooks_event_selected": state["hooks_event_selected"],
             "hooks_account": state["hooks_account"],
-            "hooks_cmd_value": state["hooks_cmd_value"],
-            "hooks_cmd_cursor": state["hooks_cmd_cursor"],
             "hooks_target_event": state["hooks_target_event"],
             "hooks_sync_scope": state["hooks_sync_scope"],
+            "hooks_add_type": state.get("hooks_add_type", "command"),
+            "hooks_add_matcher": state.get("hooks_add_matcher", ""),
+            "hooks_add_value": state.get("hooks_add_value", ""),
+            "hooks_add_async": state.get("hooks_add_async", True),
+            "hooks_add_timeout": state.get("hooks_add_timeout", ""),
+            "hooks_add_field": state.get("hooks_add_field", 2),
+            "hooks_add_cursor": state.get("hooks_add_cursor", 0),
+            "hooks_add_editing": state.get("hooks_add_editing", False),
+            "hooks_add_edit_idx": state.get("hooks_add_edit_idx"),
+            "hooks_delete_label": state.get("hooks_delete_label", ""),
+            "hooks_delete_event": state.get("hooks_delete_event", ""),
+            "hooks_delete_idx": state.get("hooks_delete_idx", 0),
+            "hooks_matcher_options": state.get("hooks_matcher_options", []),
+            "hooks_matcher_selected": state.get("hooks_matcher_selected", 0),
+            "hooks_matcher_scroll": state.get("hooks_matcher_scroll", 0),
+            "hooks_info_handler": state.get("hooks_info_handler"),
+            "hooks_info_matcher": state.get("hooks_info_matcher"),
+            "hooks_info_event": state.get("hooks_info_event"),
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }

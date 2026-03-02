@@ -21,8 +21,11 @@ from cc_dashboard.views import (
     draw_dir_dropdown,
     draw_filter_bar,
     draw_footer,
-    draw_hooks_cmd_input,
+    draw_hooks_add_form,
+    draw_hooks_delete_confirm,
+    draw_hooks_matcher_picker,
     draw_hooks_event_view,
+    draw_hooks_info,
     draw_hooks_sync_confirm,
     draw_hooks_view,
     draw_list_view,
@@ -322,16 +325,78 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             state["hooks_drift"].get(state["hooks_account"], "missing"),
             state["hooks_event_selected"],
         )
+    elif mode == "hooks_delete_confirm":
+        draw_hooks_event_view(
+            stdscr,
+            state["hooks_account"],
+            state["cfg"]._hooks_global,
+            state["cfg"]._hooks_overrides,
+            state["hooks_drift"].get(state["hooks_account"], "missing"),
+            state["hooks_event_selected"],
+        )
+        draw_hooks_delete_confirm(stdscr, state.get("hooks_delete_label", ""))
+        draw_footer(stdscr, "hooks_delete_confirm")
     elif mode == "hooks_sync_confirm":
         draw_hooks_sync_confirm(stdscr, state["hooks_sync_scope"])
-    elif mode == "hooks_cmd_input":
-        draw_hooks_cmd_input(
+    elif mode == "hooks_add":
+        # Draw the event view underneath, then overlay the form
+        draw_hooks_event_view(
+            stdscr,
+            state["hooks_account"],
+            state["cfg"]._hooks_global,
+            state["cfg"]._hooks_overrides,
+            state["hooks_drift"].get(state["hooks_account"], "missing"),
+            state["hooks_event_selected"],
+        )
+        from cc_dashboard.loop_modes_hooks import _get_hooks_add_form_state
+        draw_hooks_add_form(
             stdscr,
             state["hooks_account"],
             state["hooks_target_event"],
-            state["hooks_cmd_value"],
-            state["hooks_cmd_cursor"],
+            _get_hooks_add_form_state(state),
+            editing=state.get("hooks_add_editing", False),
         )
+        draw_footer(stdscr, "hooks_add")
+    elif mode == "hooks_matcher_pick":
+        draw_hooks_event_view(
+            stdscr,
+            state["hooks_account"],
+            state["cfg"]._hooks_global,
+            state["cfg"]._hooks_overrides,
+            state["hooks_drift"].get(state["hooks_account"], "missing"),
+            state["hooks_event_selected"],
+        )
+        from cc_dashboard.loop_modes_hooks import _get_hooks_add_form_state
+        draw_hooks_add_form(
+            stdscr,
+            state["hooks_account"],
+            state["hooks_target_event"],
+            _get_hooks_add_form_state(state),
+            editing=state.get("hooks_add_editing", False),
+        )
+        draw_hooks_matcher_picker(
+            stdscr,
+            state.get("hooks_matcher_options", []),
+            state.get("hooks_matcher_selected", 0),
+            state.get("hooks_matcher_scroll", 0),
+        )
+        draw_footer(stdscr, "hooks_matcher_pick")
+    elif mode == "hooks_info":
+        draw_hooks_event_view(
+            stdscr,
+            state["hooks_account"],
+            state["cfg"]._hooks_global,
+            state["cfg"]._hooks_overrides,
+            state["hooks_drift"].get(state["hooks_account"], "missing"),
+            state["hooks_event_selected"],
+        )
+        draw_hooks_info(
+            stdscr,
+            state.get("hooks_info_handler", {}),
+            state.get("hooks_info_matcher"),
+            state.get("hooks_info_event", ""),
+        )
+        draw_footer(stdscr, "hooks_info")
     elif mode == "actlog":
         draw_actlog_view(
             stdscr,

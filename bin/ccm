@@ -344,7 +344,7 @@ cmd_hooks_status() {
 		example_hooks="$(jq '.hooks' "$hooks_example")"
 	fi
 
-	local hook_events=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop SessionEnd)
+	local hook_events=(SessionStart UserPromptSubmit PreToolUse PermissionRequest PostToolUse PostToolUseFailure Notification SubagentStart SubagentStop Stop TeammateIdle TaskCompleted ConfigChange WorktreeCreate WorktreeRemove PreCompact SessionEnd)
 
 	printf "%-20s %s\n" "Account" "Status"
 	printf "%-20s %s\n" "-------" "------"
@@ -362,7 +362,16 @@ cmd_hooks_status() {
 			local acct_ov acct_disabled acct_extra
 			acct_ov="$(echo "$account_overrides" | jq --arg name "$acct_name" '.[$name] // {}')"
 			acct_disabled="$(echo "$acct_ov" | jq '.disabled_events // []')"
-			acct_extra="$(echo "$acct_ov" | jq '.extra_commands // {}')"
+			acct_extra="$(echo "$acct_ov" | jq '
+				if .extra_hooks then .extra_hooks
+				elif .extra_commands then
+					.extra_commands | to_entries | map({
+						key: .key,
+						value: [.value[] | {hooks: [.]}]
+					}) | from_entries
+				else {}
+				end
+			')"
 
 			for event in "${hook_events[@]}"; do
 				local is_disabled extra_for_event expected_entries
@@ -370,7 +379,7 @@ cmd_hooks_status() {
 				extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" '(.[$e] // [])')"
 
 				if [[ "$is_disabled" == "true" ]]; then
-					# Expected: extra_commands only (cc-hook-indicator disabled)
+					# Expected: extra_hooks only (cc-hook-indicator disabled)
 					expected_entries="$extra_for_event"
 				else
 					local base_entries
@@ -748,7 +757,7 @@ Subcommands:
 
 The hooks system is configured via ~/.config/cc-manager/hooks.json, which
 defines global hook events and optional per-account overrides (disabled_events,
-extra_commands). Use the dashboard (H key) for interactive management.
+extra_hooks). Use the dashboard (H key) for interactive management.
 HELP
 		;;
 	logs)

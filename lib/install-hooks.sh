@@ -154,22 +154,33 @@ EXAMPLE_HOOKS="$(jq --arg cmd "$HOOK_CMD" --arg logcmd "$LOG_CMD" '
 ' "$HOOKS_EXAMPLE")"
 
 # List of hook events to process
-HOOK_EVENTS=(UserPromptSubmit PostToolUse PostToolUseFailure PermissionRequest Stop TaskCompleted SessionEnd)
+HOOK_EVENTS=(SessionStart UserPromptSubmit PreToolUse PermissionRequest PostToolUse PostToolUseFailure Notification SubagentStart SubagentStop Stop TeammateIdle TaskCompleted ConfigChange WorktreeCreate WorktreeRemove PreCompact SessionEnd)
 
 for i in "${!CONFIG_DIRS[@]}"; do
 	config_dir="${CONFIG_DIRS[$i]}"
 	account_name="${ACCOUNT_NAMES[$i]}"
 	settings_file="$config_dir/settings.json"
 
-	# Look up this account's overrides (disabled_events and extra_commands)
+	# Look up this account's overrides (disabled_events and extra_hooks)
 	acct_overrides="$(echo "$ACCOUNT_OVERRIDES" | jq --arg name "$account_name" '.[$name] // {}')"
 	acct_disabled="$(echo "$acct_overrides" | jq '.disabled_events // []')"
-	acct_extra="$(echo "$acct_overrides" | jq '.extra_commands // {}')"
+	# Read extra_hooks (matcher-group format), falling back to extra_commands (bare handler format)
+	acct_extra="$(echo "$acct_overrides" | jq '
+		if .extra_hooks then .extra_hooks
+		elif .extra_commands then
+			# Convert bare handlers to matcher-group format
+			.extra_commands | to_entries | map({
+				key: .key,
+				value: [.value[] | {hooks: [.]}]
+			}) | from_entries
+		else {}
+		end
+	')"
 
 	# If settings.json doesn't exist, create it with hooks (respecting overrides)
 	if [[ ! -f "$settings_file" ]]; then
 		mkdir -p "$config_dir"
-		# Build a fresh hooks object respecting disabled_events and extra_commands
+		# Build a fresh hooks object respecting disabled_events and extra_hooks
 		create_filter=''
 		for event in "${HOOK_EVENTS[@]}"; do
 			is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')"
@@ -177,7 +188,7 @@ for i in "${!CONFIG_DIRS[@]}"; do
 				(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 			')"
 			if [[ "$is_disabled" == "true" ]]; then
-				# Event disabled: only include extra_commands if any
+				# Event disabled: only include extra_hooks if any
 				if [[ "$(echo "$extra_for_event" | jq 'length')" -gt 0 ]]; then
 					create_filter="$create_filter | .hooks[\"$event\"] = $extra_for_event"
 				fi
@@ -203,7 +214,7 @@ for i in "${!CONFIG_DIRS[@]}"; do
 		')"
 
 		if [[ "$is_disabled" == "true" ]]; then
-			# Event disabled: strip cc-hook-indicator entries, preserve user entries, add extra_commands
+			# Event disabled: strip cc-hook-indicator entries, preserve user entries, add extra_hooks
 			jq_filter="$jq_filter"'
                 | .hooks["'"$event"'"] = (
                     [(.hooks["'"$event"'"] // [])[] |

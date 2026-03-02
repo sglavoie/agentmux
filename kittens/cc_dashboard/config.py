@@ -534,14 +534,51 @@ def _palette_tab_colors(account):
 # ── Hooks configuration ───────────────────────────────────────────────────
 
 HOOK_EVENTS = [
+    "SessionStart",
     "UserPromptSubmit",
+    "PreToolUse",
+    "PermissionRequest",
     "PostToolUse",
     "PostToolUseFailure",
-    "PermissionRequest",
+    "Notification",
+    "SubagentStart",
+    "SubagentStop",
     "Stop",
+    "TeammateIdle",
     "TaskCompleted",
+    "ConfigChange",
+    "WorktreeCreate",
+    "WorktreeRemove",
+    "PreCompact",
     "SessionEnd",
 ]
+
+HOOK_EVENT_META = {
+    "SessionStart":       {"abbr": "Strt", "desc": "Fires when a session starts or resumes", "matcher_desc": "session start type", "matcher_examples": "startup|resume|clear|compact"},
+    "UserPromptSubmit":   {"abbr": "Pmpt", "desc": "Fires when the user submits a prompt", "matcher_desc": None, "matcher_examples": None},
+    "PreToolUse":         {"abbr": "PreT", "desc": "Fires before a tool executes", "matcher_desc": "tool name", "matcher_examples": "Bash|Edit|Write|Read|Glob|Grep|Agent|WebFetch|WebSearch|mcp__.*"},
+    "PermissionRequest":  {"abbr": "Perm", "desc": "Fires when a tool requests permission", "matcher_desc": "tool name", "matcher_examples": "Bash|Edit|Write|Read|Glob|Grep|Agent|WebFetch|WebSearch"},
+    "PostToolUse":        {"abbr": "Tool", "desc": "Fires after a tool executes successfully", "matcher_desc": "tool name", "matcher_examples": "Bash|Edit|Write|Read|Glob|Grep|Agent|WebFetch|WebSearch"},
+    "PostToolUseFailure": {"abbr": "Fail", "desc": "Fires after a tool execution fails", "matcher_desc": "tool name", "matcher_examples": "Bash|Edit|Write|Read|Glob|Grep|Agent|WebFetch|WebSearch"},
+    "Notification":       {"abbr": "Ntfy", "desc": "Fires on permission or idle notifications", "matcher_desc": "notification type", "matcher_examples": "permission_prompt|idle_prompt|auth_success|elicitation_dialog"},
+    "SubagentStart":      {"abbr": "AgSt", "desc": "Fires when a subagent starts", "matcher_desc": "agent type", "matcher_examples": "Bash|Explore|Plan"},
+    "SubagentStop":       {"abbr": "AgSp", "desc": "Fires when a subagent stops", "matcher_desc": "agent type", "matcher_examples": "Bash|Explore|Plan"},
+    "Stop":               {"abbr": "Stop", "desc": "Fires when Claude stops generating", "matcher_desc": None, "matcher_examples": None},
+    "TeammateIdle":       {"abbr": "TmId", "desc": "Fires when a teammate becomes idle", "matcher_desc": None, "matcher_examples": None},
+    "TaskCompleted":      {"abbr": "Task", "desc": "Fires when a task is completed", "matcher_desc": None, "matcher_examples": None},
+    "ConfigChange":       {"abbr": "Conf", "desc": "Fires when settings change", "matcher_desc": "config source", "matcher_examples": "user_settings|project_settings|local_settings|policy_settings|skills"},
+    "WorktreeCreate":     {"abbr": "WkCr", "desc": "Fires when a worktree is created", "matcher_desc": None, "matcher_examples": None},
+    "WorktreeRemove":     {"abbr": "WkRm", "desc": "Fires when a worktree is removed", "matcher_desc": None, "matcher_examples": None},
+    "PreCompact":         {"abbr": "Cmpt", "desc": "Fires before context compaction", "matcher_desc": "trigger type", "matcher_examples": "manual|auto"},
+    "SessionEnd":         {"abbr": "End",  "desc": "Fires when a session ends", "matcher_desc": "exit reason", "matcher_examples": "clear|logout|prompt_input_exit|bypass_permissions_disabled|other"},
+}
+
+# Events that support all 4 hook types (command, http, prompt, agent).
+# All other events only support type: "command".
+_FULL_TYPE_EVENTS = {
+    "PermissionRequest", "PostToolUse", "PostToolUseFailure",
+    "PreToolUse", "Stop", "SubagentStop", "TaskCompleted", "UserPromptSubmit",
+}
 
 
 def _resolve_hooks_example_path():
@@ -652,7 +689,7 @@ def _compute_effective_hooks(account_name, base_hooks=None):
 
     override = _hooks_overrides.get(account_name, {})
     disabled_events = override.get("disabled_events", [])
-    extra_commands = override.get("extra_commands", {})
+    extra_hooks = _get_extra_hooks(override)
     resolved_cmd = _resolve_hook_cmd()
     resolved_log_cmd = _resolve_log_cmd()
 
@@ -685,16 +722,16 @@ def _compute_effective_hooks(account_name, base_hooks=None):
                     cmd = cmd.replace("cc-activity-log", resolved_log_cmd)
                 hook["command"] = cmd
 
-        # Append extra_commands for this event
-        for extra in extra_commands.get(event, []):
-            extra = copy.deepcopy(extra)
-            cmd = extra.get("command", "")
-            if cmd and "cc-hook-indicator" in cmd:
-                cmd = cmd.replace("cc-hook-indicator", resolved_cmd)
-            if cmd and "cc-activity-log" in cmd:
-                cmd = cmd.replace("cc-activity-log", resolved_log_cmd)
-            extra["command"] = cmd
-            entries.append({"hooks": [extra]})
+        # Append extra_hooks for this event (matcher-group format)
+        for group in extra_hooks.get(event, []):
+            group = copy.deepcopy(group)
+            for hook in group.get("hooks", []):
+                cmd = hook.get("command", "")
+                if cmd and "cc-hook-indicator" in cmd:
+                    hook["command"] = cmd.replace("cc-hook-indicator", resolved_cmd)
+                if cmd and "cc-activity-log" in cmd:
+                    hook["command"] = cmd.replace("cc-activity-log", resolved_log_cmd)
+            entries.append(group)
 
         result[event] = entries
 
@@ -729,14 +766,19 @@ def _detect_drift(account_name):
         resolved_log_cmd = _resolve_log_cmd()
 
         override = _hooks_overrides.get(account_name, {})
-        extra_commands = override.get("extra_commands", {})
+        extra_hooks = _get_extra_hooks(override)
 
         for event in HOOK_EVENTS:
             installed_entries = installed_hooks.get(event, [])
             effective_entries = effective.get(event, [])
 
-            # Build set of extra_commands for this event to identify managed entries
-            extra_cmds = {e.get("command", "") for e in extra_commands.get(event, [])}
+            # Build set of extra hook commands for this event to identify managed entries
+            extra_cmds = set()
+            for group in extra_hooks.get(event, []):
+                for hook in group.get("hooks", []):
+                    cmd = hook.get("command", "")
+                    if cmd:
+                        extra_cmds.add(cmd)
 
             # Filter installed entries to only ccm-managed ones
             def _is_managed(entry, extra_cmds=extra_cmds):
@@ -839,8 +881,34 @@ def toggle_hook_event(account_name, event_name):
     return enabled
 
 
-def add_extra_command(account_name, event_name, command_str):
-    """Add an extra command hook for an account and event"""
+def _get_extra_hooks(override):
+    """Read extra_hooks from an override dict, falling back to extra_commands.
+
+    The old format stored bare hook handler dicts under extra_commands:
+        {"event": [{"type": "command", "command": "...", "async": true}]}
+    The new format stores matcher-group objects under extra_hooks:
+        {"event": [{"matcher": "...", "hooks": [{...}]}]}
+    This helper reads extra_hooks first, then falls back to extra_commands
+    and wraps each bare handler into a matcher-group.
+    """
+    if "extra_hooks" in override:
+        return override["extra_hooks"]
+    old = override.get("extra_commands", {})
+    if not old:
+        return {}
+    # Wrap old-format bare handlers into matcher-group objects
+    converted = {}
+    for event, handlers in old.items():
+        converted[event] = [{"hooks": [h]} for h in handlers]
+    return converted
+
+
+def add_extra_hook(account_name, event_name, handler, matcher=None):
+    """Add an extra hook for an account and event.
+
+    handler is a dict like {"type": "command", "command": "...", "async": true}.
+    matcher is an optional string for tool/event matching.
+    """
     if not _hooks_global:
         load_hooks()
 
@@ -848,39 +916,75 @@ def add_extra_command(account_name, event_name, command_str):
         _hooks_overrides[account_name] = {}
     override = _hooks_overrides[account_name]
 
-    if "extra_commands" not in override:
-        override["extra_commands"] = {}
-    if event_name not in override["extra_commands"]:
-        override["extra_commands"][event_name] = []
+    # Migrate extra_commands to extra_hooks if needed
+    if "extra_commands" in override and "extra_hooks" not in override:
+        override["extra_hooks"] = _get_extra_hooks(override)
+        del override["extra_commands"]
 
-    override["extra_commands"][event_name].append(
-        {"type": "command", "command": command_str, "async": True}
-    )
+    if "extra_hooks" not in override:
+        override["extra_hooks"] = {}
+    if event_name not in override["extra_hooks"]:
+        override["extra_hooks"][event_name] = []
+
+    group = {"hooks": [handler]}
+    if matcher:
+        group["matcher"] = matcher
+    override["extra_hooks"][event_name].append(group)
 
     save_hooks(_hooks_global, _hooks_overrides)
 
 
-def remove_extra_command(account_name, event_name, index):
-    """Remove an extra command hook by index for an account and event"""
+def update_extra_hook(account_name, event_name, group_idx, new_handler, new_matcher=None):
+    """Replace an extra hook group at a given index."""
     if not _hooks_global:
         load_hooks()
 
     override = _hooks_overrides.get(account_name, {})
-    extras = override.get("extra_commands", {}).get(event_name, [])
+    if "extra_commands" in override and "extra_hooks" not in override:
+        override["extra_hooks"] = _get_extra_hooks(override)
+        del override["extra_commands"]
 
-    if index < 0 or index >= len(extras):
+    extras = override.get("extra_hooks", {}).get(event_name, [])
+    if group_idx < 0 or group_idx >= len(extras):
         return
 
-    extras.pop(index)
+    group = {"hooks": [new_handler]}
+    if new_matcher:
+        group["matcher"] = new_matcher
+    extras[group_idx] = group
+
+    save_hooks(_hooks_global, _hooks_overrides)
+
+
+def remove_extra_hook(account_name, event_name, group_idx):
+    """Remove an extra hook group by index for an account and event."""
+    if not _hooks_global:
+        load_hooks()
+
+    override = _hooks_overrides.get(account_name, {})
+
+    # Migrate extra_commands to extra_hooks if needed
+    if "extra_commands" in override and "extra_hooks" not in override:
+        override["extra_hooks"] = _get_extra_hooks(override)
+        del override["extra_commands"]
+
+    extras = override.get("extra_hooks", {}).get(event_name, [])
+
+    if group_idx < 0 or group_idx >= len(extras):
+        return
+
+    extras.pop(group_idx)
 
     # Clean up empty structures
     if not extras:
-        del override["extra_commands"][event_name]
-    if not override.get("extra_commands"):
+        del override["extra_hooks"][event_name]
+    if not override.get("extra_hooks"):
         with contextlib.suppress(KeyError):
-            del override["extra_commands"]
+            del override["extra_hooks"]
     if not override:
         with contextlib.suppress(KeyError):
             del _hooks_overrides[account_name]
 
     save_hooks(_hooks_global, _hooks_overrides)
+
+

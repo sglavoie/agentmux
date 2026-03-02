@@ -663,16 +663,6 @@ def draw_peek_overlay(
     draw_footer(stdscr, "peek_search" if search_active else "peek")
 
 
-_HOOK_EVENT_ABBR = {
-    "UserPromptSubmit": "Pmpt",
-    "PostToolUse": "Tool",
-    "PostToolUseFailure": "Fail",
-    "PermissionRequest": "Perm",
-    "Stop": "Stop",
-    "TaskCompleted": "Task",
-    "SessionEnd": "End",
-}
-
 _DRIFT_BADGES = {
     "in_sync": ("synced", CP_DIM),
     "drifted": ("drifted", CP_WARN),
@@ -680,13 +670,16 @@ _DRIFT_BADGES = {
 }
 
 type HooksEventRow = (
-    tuple[str, str, bool]
-    | tuple[str, str, int, str]
-    | tuple[str, str, int, str, bool, bool, str]
+    tuple[str, str, bool]                            # event row
+    | tuple[str, str, int, str, dict, str | None]    # extra row (with handler + matcher)
+    | tuple[str, str, int, str, bool, bool, str]     # builtin row
 )
 
 
 _BUILTIN_DESCRIPTIONS = {
+    "cc-hook-indicator active prompt": "Sets tab icon to active (prompt)",
+    "cc-hook-indicator active tool": "Sets tab icon to active (tool)",
+    "cc-hook-indicator active task_complete": "Sets tab icon to active (task done)",
     "cc-hook-indicator active": "Sets tab icon to active",
     "cc-hook-indicator stop": "Sets tab stop icon",
     "cc-hook-indicator permission": "Sets tab permission icon",
@@ -727,11 +720,11 @@ def _extract_builtin_commands(hooks_global, event_name):
 
 def _hooks_event_rows(account_name, hooks_overrides, hooks_global=None):
     """Build a flat list of rows for the hooks event detail view."""
-    from cc_dashboard.config import HOOK_EVENTS
+    from cc_dashboard.config import HOOK_EVENTS, _get_extra_hooks
 
     override = hooks_overrides.get(account_name, {})
     disabled_events = override.get("disabled_events", [])
-    extra_commands = override.get("extra_commands", {})
+    extra_hooks = _get_extra_hooks(override)
 
     result: list[HooksEventRow] = []
     for event in HOOK_EVENTS:
@@ -744,8 +737,18 @@ def _hooks_event_rows(account_name, hooks_overrides, hooks_global=None):
                 result.append(
                     ("builtin", event, i, cmd, is_disabled, is_async, type_str)
                 )
-        for i, cmd_entry in enumerate(extra_commands.get(event, [])):
-            result.append(("extra", event, i, str(cmd_entry.get("command", ""))))
+        for i, group in enumerate(extra_hooks.get(event, [])):
+            hooks_list = group.get("hooks", [])
+            handler = hooks_list[0] if hooks_list else {}
+            matcher = group.get("matcher")
+            hook_type = handler.get("type", "command")
+            if hook_type == "command":
+                cmd_str = str(handler.get("command", ""))
+            elif hook_type == "http":
+                cmd_str = str(handler.get("url", ""))
+            else:
+                cmd_str = str(handler.get("prompt", ""))
+            result.append(("extra", event, i, cmd_str, handler, matcher))
     return result
 
 
@@ -754,7 +757,7 @@ def draw_hooks_view(
 ):
     """Draw the hooks overview showing all accounts with status."""
     stdscr.clear()
-    rows, _cols = stdscr.getmaxyx()
+    rows, cols = stdscr.getmaxyx()
     header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
     normal_attr = curses.color_pair(CP_NORMAL)
     dim_attr = curses.color_pair(CP_DIM)
@@ -767,76 +770,88 @@ def draw_hooks_view(
         return
 
     account_list = list(accounts)
-    from cc_dashboard.config import HOOK_EVENTS
+    from cc_dashboard.config import HOOK_EVENTS, HOOK_EVENT_META, _get_extra_hooks
 
-    name_w = 15
-    ev_w = 6
+    # Section A: Account summary rows
     col_start = 4
+    name_w = 18
+    counts_x = col_start + name_w
+    custom_x = counts_x + 12
+    status_x = custom_x + 12
 
-    header_y = 2
-    safe_addstr(stdscr, header_y, col_start, "Account".ljust(name_w), dim_attr)
-    for i, event in enumerate(HOOK_EVENTS):
-        abbr = _HOOK_EVENT_ABBR.get(event, event[:4])
-        safe_addstr(
-            stdscr,
-            header_y,
-            col_start + name_w + i * ev_w,
-            abbr.ljust(ev_w),
-            dim_attr,
-        )
-    safe_addstr(
-        stdscr,
-        header_y,
-        col_start + name_w + len(HOOK_EVENTS) * ev_w,
-        "Status",
-        dim_attr,
-    )
+    safe_addstr(stdscr, 2, col_start, "Account".ljust(name_w), dim_attr)
+    safe_addstr(stdscr, 2, counts_x, "Status".ljust(12), dim_attr)
+    safe_addstr(stdscr, 2, custom_x, "Hooks".ljust(12), dim_attr)
+    if status_x + 8 <= cols:
+        safe_addstr(stdscr, 2, status_x, "Sync", dim_attr)
 
     for idx, acct_name in enumerate(account_list):
-        y = header_y + 1 + idx
+        y = 3 + idx
         if y >= rows - 2:
             break
 
         is_selected = idx == selected
         override = hooks_overrides.get(acct_name, {})
         disabled_events = override.get("disabled_events", [])
+        extra_hooks = _get_extra_hooks(override)
 
+        enabled_count = sum(
+            1 for ev in HOOK_EVENTS if ev not in disabled_events
+        )
+        extra_count = sum(len(groups) for groups in extra_hooks.values())
+
+        # Selection marker
+        marker = "\u25b8 " if is_selected else "  "
         name_attr = curses.color_pair(_cp_for_account(acct_name))
         if is_selected:
             name_attr |= curses.A_REVERSE
-
+        display_name = marker + acct_name
         safe_addstr(
-            stdscr,
-            y,
-            col_start,
-            acct_name[: name_w - 1].ljust(name_w),
+            stdscr, y, col_start,
+            display_name[: name_w - 1].ljust(name_w),
             name_attr,
         )
 
-        for i, event in enumerate(HOOK_EVENTS):
-            x = col_start + name_w + i * ev_w
-            if event in disabled_events:
-                label = "off"
-                attr = dim_attr
-            else:
-                label = "on"
-                attr = normal_attr
-            if is_selected:
-                attr |= curses.A_REVERSE
-            safe_addstr(stdscr, y, x, label.ljust(ev_w), attr)
-
-        drift = drift_status.get(acct_name, "missing")
-        badge_text, badge_cp = _DRIFT_BADGES.get(drift, ("?", CP_DIM))
-        badge_attr = curses.color_pair(badge_cp)
+        # Enabled count
+        count_str = f"{enabled_count}/{len(HOOK_EVENTS)} on"
+        count_attr = normal_attr if enabled_count == len(HOOK_EVENTS) else dim_attr
         if is_selected:
-            badge_attr |= curses.A_REVERSE
-        safe_addstr(
-            stdscr,
-            y,
-            col_start + name_w + len(HOOK_EVENTS) * ev_w,
-            badge_text,
-            badge_attr,
-        )
+            count_attr |= curses.A_REVERSE
+        safe_addstr(stdscr, y, counts_x, count_str.ljust(12), count_attr)
+
+        # Custom hooks count
+        custom_str = f"{extra_count} custom"
+        custom_attr = normal_attr if extra_count > 0 else dim_attr
+        if is_selected:
+            custom_attr |= curses.A_REVERSE
+        safe_addstr(stdscr, y, custom_x, custom_str.ljust(12), custom_attr)
+
+        # Drift badge
+        if status_x + 8 <= cols:
+            drift = drift_status.get(acct_name, "missing")
+            badge_text, badge_cp = _DRIFT_BADGES.get(drift, ("?", CP_DIM))
+            badge_attr = curses.color_pair(badge_cp)
+            if is_selected:
+                badge_attr |= curses.A_REVERSE
+            safe_addstr(stdscr, y, status_x, f"[{badge_text}]", badge_attr)
+
+    # Section B: Event reference (if space permits)
+    ref_start_y = 3 + len(account_list) + 1
+    # Need at least a header row + a few events to be useful
+    if ref_start_y + 2 < rows - 2:
+        safe_addstr(stdscr, ref_start_y, col_start, "Hook Events:", dim_attr)
+        event_name_w = 22
+        for i, event in enumerate(HOOK_EVENTS):
+            ey = ref_start_y + 1 + i
+            if ey >= rows - 2:
+                break
+            meta = HOOK_EVENT_META.get(event, {})
+            desc = meta.get("desc", "")
+            safe_addstr(stdscr, ey, col_start, event.ljust(event_name_w), dim_attr)
+            desc_x = col_start + event_name_w
+            max_desc = cols - desc_x - 1
+            if max_desc > 0:
+                safe_addstr(stdscr, ey, desc_x, desc[:max_desc], dim_attr)
 
     draw_footer(stdscr, "hooks")
 
@@ -898,14 +913,51 @@ def draw_hooks_event_view(
             display = f"    - {cmd_str}{suffix}"
             safe_addstr(stdscr, y, 4, display[: (cols - 6)], attr)
         else:
-            _, _event_name, _cmd_idx, cmd_str = row
+            _, _event_name, _cmd_idx, cmd_str, handler, matcher = row
             marker = "▸ " if is_selected else "  "
             attr = dim_attr | (curses.A_REVERSE if is_selected else 0)
             safe_addstr(stdscr, y, 2, marker, normal_attr)
-            display_cmd = cmd_str[: (cols - 12)]
-            safe_addstr(stdscr, y, 4, f"    + {display_cmd}", attr)
+
+            # Build rich display: [type] [matcher] value  props
+            parts = []
+            hook_type = handler.get("type", "command")
+            if hook_type != "command":
+                parts.append(f"[{hook_type}]")
+            if matcher:
+                parts.append(f"[{matcher}]")
+            parts.append(cmd_str)
+
+            # Property tags
+            props = []
+            if hook_type == "command" and handler.get("async"):
+                props.append("async")
+            timeout = handler.get("timeout")
+            if timeout is not None:
+                props.append(f"timeout:{timeout}")
+            if props:
+                parts.append(" ".join(props))
+
+            display = "    + " + " ".join(parts)
+            safe_addstr(stdscr, y, 4, display[: (cols - 6)], attr)
 
     draw_footer(stdscr, "hooks_event")
+
+
+def draw_hooks_delete_confirm(stdscr, hook_label):
+    """Draw an inline delete confirmation prompt at the bottom of the screen."""
+    rows, _cols = stdscr.getmaxyx()
+    attr = curses.color_pair(CP_WARN) | curses.A_BOLD
+    dim_attr = curses.color_pair(CP_DIM)
+
+    safe_addstr(stdscr, rows - 5, 2, f"Delete hook: {hook_label}?", attr)
+    safe_addstr(
+        stdscr,
+        rows - 4,
+        2,
+        "This removes the custom hook from hooks.json.",
+        dim_attr,
+    )
+    safe_addstr(stdscr, rows - 3, 2, "y/n", attr)
 
 
 def draw_hooks_sync_confirm(stdscr, scope_label):
@@ -925,35 +977,271 @@ def draw_hooks_sync_confirm(stdscr, scope_label):
     safe_addstr(stdscr, rows - 3, 2, "y/n", attr)
 
 
-def draw_hooks_cmd_input(stdscr, account_name, event_name, value, cursor_pos):
-    """Draw a text input overlay for entering a custom hook command."""
-    rows, _cols = stdscr.getmaxyx()
+# Hook type options and their value labels
+_HOOK_TYPES = ["command", "http", "prompt", "agent"]
+_HOOK_TYPE_LABELS = {
+    "command": "Command",
+    "http": "URL",
+    "prompt": "Prompt",
+    "agent": "Prompt",
+}
+_HOOK_TYPE_DEFAULTS_TIMEOUT = {
+    "command": 600,
+    "http": 30,
+    "prompt": 30,
+    "agent": 60,
+}
 
-    context = f"Add command for {event_name} ({account_name})"
-    safe_addstr(stdscr, rows - 4, 2, context, curses.color_pair(CP_DIM))
+# Field indices for the add/edit form
+_FIELD_TYPE = 0
+_FIELD_MATCHER = 1
+_FIELD_VALUE = 2
+_FIELD_ASYNC = 3
+_FIELD_TIMEOUT = 4
 
-    prefix = "Command: "
-    before = value[:cursor_pos]
-    after = value[cursor_pos:]
-    cursor_ch = after[0] if after else " "
-    after_rest = after[1:] if len(after) > 1 else ""
 
-    y = rows - 3
-    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
-    x = 2 + len(prefix)
-    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+def _draw_text_field(stdscr, y, x, value, cursor_pos, active, cols):
+    """Draw a text input field with cursor rendering."""
+    max_w = max(0, cols - x - 2)
+    display = value[:max_w]
+    input_attr = curses.color_pair(CP_INPUT_ACTIVE)
+    dim_attr = curses.color_pair(CP_DIM)
+
+    if active:
+        before = display[:cursor_pos]
+        after = display[cursor_pos:]
+        cursor_ch = after[0] if after else " "
+        after_rest = after[1:] if len(after) > 1 else ""
+        safe_addstr(stdscr, y, x, before, input_attr)
+        safe_addstr(stdscr, y, x + len(before), cursor_ch, input_attr | curses.A_REVERSE)
+        if after_rest:
+            safe_addstr(stdscr, y, x + len(before) + 1, after_rest, input_attr)
+    else:
+        safe_addstr(stdscr, y, x, display if display else "(empty)", dim_attr)
+
+
+def draw_hooks_add_form(stdscr, account_name, event_name, form_state, editing=False):
+    """Draw a multi-field form for adding or editing a hook.
+
+    form_state is a dict with keys: type, matcher, value, async_, timeout,
+    field (active field index), cursor (cursor pos in active text field).
+    """
+    rows, cols = stdscr.getmaxyx()
+    dim_attr = curses.color_pair(CP_DIM)
+    warn_attr = curses.color_pair(CP_WARN)
+    input_attr = curses.color_pair(CP_INPUT_ACTIVE)
+
+    from cc_dashboard.config import HOOK_EVENT_META, _FULL_TYPE_EVENTS
+
+    meta = HOOK_EVENT_META.get(event_name, {})
+    has_matcher = meta.get("matcher_desc") is not None
+    supports_all_types = event_name in _FULL_TYPE_EVENTS
+
+    hook_type = form_state.get("type", "command")
+    matcher_val = form_state.get("matcher", "")
+    value_val = form_state.get("value", "")
+    is_async = form_state.get("async_", True)
+    timeout_val = form_state.get("timeout", "")
+    active_field = form_state.get("field", _FIELD_VALUE)
+    cursor = form_state.get("cursor", 0)
+
+    # Build visible fields list (index, label, render_fn)
+    # We always show type, value, timeout. Matcher shown conditionally.
+    # Async shown only for command type.
+    action = "Edit" if editing else "Add"
+    header = f"{action} hook for {event_name} ({account_name})"
+
+    # Calculate form Y position: bottom of screen
+    form_lines = 7
+    base_y = rows - form_lines - 1
+    if base_y < 2:
+        base_y = 2
+
+    # Clear form area
+    for dy in range(form_lines + 1):
+        safe_addstr(stdscr, base_y + dy, 0, " " * (cols - 1), dim_attr)
+
+    safe_addstr(stdscr, base_y, 2, header, warn_attr)
+
+    label_w = 10
+    field_x = 2 + label_w
+    y = base_y + 1
+
+    # Type field
+    is_active = active_field == _FIELD_TYPE
+    type_label = "Type:"
+    safe_addstr(stdscr, y, 2, type_label.ljust(label_w), warn_attr if is_active else dim_attr)
+    if supports_all_types:
+        for i, t in enumerate(_HOOK_TYPES):
+            marker = "[*]" if t == hook_type else "[ ]"
+            attr = input_attr | curses.A_BOLD if (is_active and t == hook_type) else dim_attr
+            safe_addstr(stdscr, y, field_x + i * 12, f"{marker} {t}", attr)
+    else:
+        safe_addstr(stdscr, y, field_x, "command (only type for this event)", dim_attr)
+    y += 1
+
+    # Matcher field (optional)
+    if has_matcher:
+        is_active = active_field == _FIELD_MATCHER
+        matcher_label = "Matcher:"
+        safe_addstr(stdscr, y, 2, matcher_label.ljust(label_w), warn_attr if is_active else dim_attr)
+        _draw_text_field(stdscr, y, field_x, matcher_val, cursor if is_active else 0, is_active, cols)
+        hint = meta.get("matcher_examples", "")
+        if hint and not matcher_val and not is_active:
+            safe_addstr(stdscr, y, field_x, "Tab: pick from examples", dim_attr)
+        y += 1
+
+    # Value field
+    is_active = active_field == _FIELD_VALUE
+    value_label = f"{_HOOK_TYPE_LABELS.get(hook_type, 'Value')}:"
+    safe_addstr(stdscr, y, 2, value_label.ljust(label_w), warn_attr if is_active else dim_attr)
+    _draw_text_field(stdscr, y, field_x, value_val, cursor if is_active else 0, is_active, cols)
+    y += 1
+
+    # Async field (command type only)
+    if hook_type == "command":
+        is_active = active_field == _FIELD_ASYNC
+        async_label = "Async:"
+        safe_addstr(stdscr, y, 2, async_label.ljust(label_w), warn_attr if is_active else dim_attr)
+        marker = "[*]" if is_async else "[ ]"
+        attr = input_attr | curses.A_BOLD if is_active else dim_attr
+        safe_addstr(stdscr, y, field_x, f"{marker} yes   ", attr)
+        marker2 = "[ ]" if is_async else "[*]"
+        safe_addstr(stdscr, y, field_x + 12, f"{marker2} no", attr)
+        y += 1
+
+    # Timeout field
+    is_active = active_field == _FIELD_TIMEOUT
+    timeout_label = "Timeout:"
+    safe_addstr(stdscr, y, 2, timeout_label.ljust(label_w), warn_attr if is_active else dim_attr)
+    default_t = _HOOK_TYPE_DEFAULTS_TIMEOUT.get(hook_type, 30)
+    _draw_text_field(stdscr, y, field_x, timeout_val, cursor if is_active else 0, is_active, cols)
+    if not timeout_val and not is_active:
+        safe_addstr(stdscr, y, field_x, f"(default: {default_t}s)", dim_attr)
+    y += 1
+
+    # Navigation hint
+    safe_addstr(stdscr, y, 2, "Tab next  Shift-Tab prev  Enter submit  Esc cancel", dim_attr)
+
+
+def draw_hooks_matcher_picker(stdscr, options, selected, scroll):
+    """Draw a dropdown picker for matcher examples, anchored above the matcher field."""
+    rows, cols = stdscr.getmaxyx()
+    dim_attr = curses.color_pair(CP_DIM)
+    input_attr = curses.color_pair(CP_INPUT_ACTIVE)
+    normal_attr = curses.color_pair(CP_NORMAL)
+
+    if not options:
+        return
+
+    max_opt_len = max(len(o) for o in options)
+    box_w = min(cols - 16, max(24, max_opt_len + 6))
+
+    # Anchor: the matcher field is at base_y+2 in the form, field_x=12
+    # The form base_y is rows - form_lines - 1 where form_lines=7
+    form_lines = 7
+    base_y = rows - form_lines - 1
+    if base_y < 2:
+        base_y = 2
+    # matcher row is base_y + 2 (after header and type row)
+    anchor_y = base_y + 2
+    field_x = 12
+
+    # Draw above the matcher field, using all available space (row 1 to anchor_y-1)
+    space_above = anchor_y - 1  # rows 1 .. anchor_y-1
+    max_visible = min(len(options), max(1, space_above))
+    box_y = anchor_y - max_visible
+    if box_y < 1:
+        box_y = 1
+        max_visible = anchor_y - 1
+    box_x = field_x
+
+    # Draw the dropdown box
+    visible_options = options[scroll : scroll + max_visible]
+    for i, opt in enumerate(visible_options):
+        y = box_y + i
+        if y >= anchor_y:
+            break
+        is_sel = (scroll + i) == selected
+        text = f" \u25b8 {opt}" if is_sel else f"   {opt}"
+        attr = input_attr | curses.A_BOLD if is_sel else normal_attr
+        padded = text[:box_w].ljust(box_w)
+        safe_addstr(stdscr, y, box_x, padded, attr)
+
+    # Scroll indicator at top if scrolled down, or at bottom if more items below
+    if len(options) > max_visible:
+        indicator = f" [{scroll + 1}-{scroll + len(visible_options)}/{len(options)}]"
+        ind_y = box_y - 1 if box_y > 1 else box_y + len(visible_options)
+        if 0 <= ind_y < rows - 1:
+            safe_addstr(stdscr, ind_y, box_x, indicator[:box_w], dim_attr)
+
+
+def draw_hooks_info(stdscr, handler, matcher, event_name):
+    """Draw a centered popup showing all properties of a hook."""
+    rows, cols = stdscr.getmaxyx()
+    dim_attr = curses.color_pair(CP_DIM)
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+
+    hook_type = handler.get("type", "command")
+
+    # Build property lines
+    lines = []
+    lines.append(("Event", event_name))
+    lines.append(("Type", hook_type))
+    if matcher:
+        lines.append(("Matcher", matcher))
+    if hook_type == "command":
+        lines.append(("Command", handler.get("command", "")))
+        lines.append(("Async", "yes" if handler.get("async") else "no"))
+    elif hook_type == "http":
+        lines.append(("URL", handler.get("url", "")))
+    else:
+        lines.append(("Prompt", handler.get("prompt", "")))
+    timeout = handler.get("timeout")
+    if timeout is not None:
+        lines.append(("Timeout", f"{timeout}s"))
+    status_msg = handler.get("statusMessage")
+    if status_msg:
+        lines.append(("Status msg", status_msg))
+
+    # Calculate box size
+    max_label = max(len(k) for k, _ in lines)
+    max_val = max(len(str(v)) for _, v in lines)
+    content_w = max_label + 2 + max_val
+    box_w = min(cols - 4, max(40, content_w + 6))
+    box_h = len(lines) + 4
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    blank_line = " " * box_w
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    title = "Hook Details"
     safe_addstr(
         stdscr,
-        y,
-        x + len(before),
-        cursor_ch,
-        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        header_attr,
     )
-    if after_rest:
+
+    desc = _describe_builtin(handler.get("command", ""))
+    if desc:
         safe_addstr(
             stdscr,
-            y,
-            x + len(before) + 1,
-            after_rest,
-            curses.color_pair(CP_INPUT_ACTIVE),
+            box_y + 1,
+            box_x + max(0, (box_w - len(desc)) // 2),
+            desc,
+            dim_attr,
         )
+
+    for i, (label, value) in enumerate(lines):
+        y = box_y + 2 + i
+        if y >= rows - 1:
+            break
+        text = f"{label + ':':<{max_label + 2}}{value}"
+        safe_addstr(stdscr, y, box_x + 3, text[: box_w - 6], normal_attr)
+
+    safe_addstr(stdscr, box_y + box_h - 1, box_x + 3, "Esc/q to close", dim_attr)
