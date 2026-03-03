@@ -104,6 +104,7 @@ def build_draw_state(state: dict[str, Any]) -> dict[str, Any]:
         "hooks_info_handler": state.get("hooks_info_handler"),
         "hooks_info_matcher": state.get("hooks_info_matcher"),
         "hooks_info_event": state.get("hooks_info_event", ""),
+        "hooks_example_event": state.get("hooks_example_event", ""),
         "actlog_session_title": state["actlog_session_title"],
         "actlog_lines": state["actlog_lines"],
         "actlog_scroll": state["actlog_scroll"],

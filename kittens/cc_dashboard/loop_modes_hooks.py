@@ -252,6 +252,14 @@ def handle_hooks_modes(key, state):
                 state["hooks_delete_idx"] = cmd_idx
                 state["hooks_delete_label"] = _cmd_str[:60]
                 state["mode"] = "hooks_delete_confirm"
+        elif (
+            key == ord("E")
+            and event_rows
+            and state["hooks_event_selected"] < len(event_rows)
+        ):
+            row = event_rows[state["hooks_event_selected"]]
+            state["hooks_example_event"] = row[1]
+            state["mode"] = "hooks_example"
         elif key == ord("s"):
             state["hooks_sync_scope"] = state["hooks_account"]
             state["mode"] = "hooks_sync_confirm"
@@ -335,6 +343,11 @@ def handle_hooks_modes(key, state):
 
     if mode == "hooks_info":
         if key in (27, ord("q"), ord("i")):
+            state["mode"] = "hooks_event"
+        return True
+
+    if mode == "hooks_example":
+        if key in (27, ord("q"), ord("E")):
             state["mode"] = "hooks_event"
         return True
 

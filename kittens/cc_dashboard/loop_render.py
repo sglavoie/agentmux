@@ -25,6 +25,7 @@ from cc_dashboard.views import (
     draw_hooks_add_form,
     draw_hooks_delete_confirm,
     draw_hooks_event_view,
+    draw_hooks_example,
     draw_hooks_info,
     draw_hooks_matcher_picker,
     draw_hooks_sync_confirm,
@@ -413,6 +414,17 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             state.get("hooks_info_event", ""),
         )
         draw_footer(stdscr, "hooks_info")
+    elif mode == "hooks_example":
+        draw_hooks_event_view(
+            stdscr,
+            state["hooks_account"],
+            state["cfg"]._hooks_global,
+            state["cfg"]._hooks_overrides,
+            state["hooks_drift"].get(state["hooks_account"], "missing"),
+            state["hooks_event_selected"],
+        )
+        draw_hooks_example(stdscr, state.get("hooks_example_event", ""))
+        draw_footer(stdscr, "hooks_example")
     elif mode == "actlog":
         draw_actlog_view(
             stdscr,

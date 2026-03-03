@@ -108,6 +108,7 @@ _FOOTER_HINTS = {
         "e Edit",
         "d Delete",
         "i Info",
+        "E Example",
         "s Sync",
         "q Back",
         "Esc Back",
@@ -117,6 +118,7 @@ _FOOTER_HINTS = {
     "hooks_add": ["Tab Next/Pick", "Shift-Tab Prev", "Enter Submit", "Esc Cancel"],
     "hooks_matcher_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
     "hooks_info": ["Esc Close", "q Close"],
+    "hooks_example": ["Esc Close", "q Close"],
     "actlog": [
         "j/k Scroll",
         "^D/^U Half-page",

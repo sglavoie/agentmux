@@ -142,6 +142,107 @@ HOOK_EVENT_META = {
     },
 }
 
+HOOK_EVENT_EXAMPLES = {
+    "SessionStart": {
+        "type": "command",
+        "command": "echo 'Session started' >> ~/claude-sessions.log",
+        "matcher": "startup",
+        "async": True,
+    },
+    "UserPromptSubmit": {
+        "type": "command",
+        "command": "date +%s > /tmp/claude-last-prompt",
+        "async": True,
+    },
+    "PreToolUse": {
+        "type": "command",
+        "command": "echo 'About to run Bash' >> ~/claude-tools.log",
+        "matcher": "Bash",
+    },
+    "PermissionRequest": {
+        "type": "command",
+        "command": "afplay /System/Library/Sounds/Tink.aiff",
+        "matcher": "Write",
+        "async": True,
+    },
+    "PostToolUse": {
+        "type": "command",
+        "command": 'echo "Tool done: $CLAUDE_TOOL_NAME" >> ~/claude-tools.log',
+        "matcher": "Bash",
+    },
+    "PostToolUseFailure": {
+        "type": "command",
+        "command": (
+            "osascript -e 'display notification \"Tool failed\""
+            " with title \"Claude\"'"
+        ),
+        "async": True,
+    },
+    "Notification": {
+        "type": "command",
+        "command": "cc-hook-indicator permission",
+        "matcher": "permission_prompt",
+    },
+    "SubagentStart": {
+        "type": "command",
+        "command": "echo 'Agent started' >> ~/claude-agents.log",
+        "async": True,
+    },
+    "SubagentStop": {
+        "type": "command",
+        "command": "echo 'Agent stopped' >> ~/claude-agents.log",
+        "async": True,
+    },
+    "Stop": {
+        "type": "command",
+        "command": "cc-hook-indicator idle",
+        "async": True,
+    },
+    "TeammateIdle": {
+        "type": "command",
+        "command": (
+            "osascript -e 'display notification \"Teammate idle\""
+            " with title \"Claude\"'"
+        ),
+        "async": True,
+    },
+    "TaskCompleted": {
+        "type": "command",
+        "command": (
+            "osascript -e 'display notification \"Task done\""
+            " with title \"Claude\"'"
+        ),
+        "async": True,
+    },
+    "ConfigChange": {
+        "type": "command",
+        "command": "echo 'Config changed' >> ~/claude-config.log",
+        "matcher": "user_settings",
+        "async": True,
+    },
+    "WorktreeCreate": {
+        "type": "command",
+        "command": "echo 'Worktree created' >> ~/claude-worktrees.log",
+        "async": True,
+    },
+    "WorktreeRemove": {
+        "type": "command",
+        "command": "echo 'Worktree removed' >> ~/claude-worktrees.log",
+        "async": True,
+    },
+    "PreCompact": {
+        "type": "command",
+        "command": "cp ~/.claude/context.json ~/.claude/context-backup.json",
+        "matcher": "auto",
+        "async": True,
+    },
+    "SessionEnd": {
+        "type": "command",
+        "command": 'echo "Session ended: $(date)" >> ~/claude-sessions.log',
+        "async": True,
+    },
+}
+
 _FULL_TYPE_EVENTS = {
     "PermissionRequest",
     "PostToolUse",

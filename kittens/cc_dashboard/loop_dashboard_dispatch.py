@@ -247,6 +247,7 @@ def dispatch_mode(
     elif mode in (
         "hooks",
         "hooks_event",
+        "hooks_example",
         "hooks_sync_confirm",
         "hooks_add",
         "hooks_info",
@@ -279,6 +280,7 @@ def dispatch_mode(
             "hooks_info_handler": state.get("hooks_info_handler"),
             "hooks_info_matcher": state.get("hooks_info_matcher"),
             "hooks_info_event": state.get("hooks_info_event"),
+            "hooks_example_event": state.get("hooks_example_event", ""),
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }

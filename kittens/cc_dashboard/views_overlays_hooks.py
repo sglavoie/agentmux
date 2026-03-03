@@ -597,3 +597,70 @@ def draw_hooks_info(stdscr, handler, matcher, event_name):
         safe_addstr(stdscr, y, box_x + 3, text[: box_w - 6], normal_attr)
 
     safe_addstr(stdscr, box_y + box_h - 1, box_x + 3, "Esc/q to close", dim_attr)
+
+
+def draw_hooks_example(stdscr, event_name):
+    """Draw a centered popup showing a practical hook example for an event."""
+    from cc_dashboard.config import HOOK_EVENT_EXAMPLES, HOOK_EVENT_META
+
+    rows, cols = stdscr.getmaxyx()
+    dim_attr = curses.color_pair(CP_DIM)
+    header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
+    normal_attr = curses.color_pair(CP_NORMAL)
+
+    meta = HOOK_EVENT_META.get(event_name, {})
+    example = HOOK_EVENT_EXAMPLES.get(event_name, {})
+
+    lines = []
+    lines.append(("Event", event_name))
+    desc = meta.get("desc", "")
+    if desc:
+        lines.append(("Description", desc))
+    lines.append(("Type", example.get("type", "command")))
+    if "command" in example:
+        lines.append(("Command", example["command"]))
+    if "matcher" in example:
+        lines.append(("Matcher", example["matcher"]))
+    lines.append(("Async", "yes" if example.get("async") else "no"))
+    if "timeout" in example:
+        lines.append(("Timeout", f"{example['timeout']}s"))
+
+    matcher_desc = meta.get("matcher_desc")
+    if matcher_desc:
+        examples_str = meta.get("matcher_examples", "")
+        lines.append(("", ""))
+        lines.append(("Matcher matches", matcher_desc))
+        if examples_str:
+            lines.append(("Valid matchers", examples_str))
+
+    max_label = max(len(k) for k, _ in lines)
+    max_val = max(len(str(v)) for _, v in lines)
+    content_w = max_label + 2 + max_val
+    box_w = min(cols - 4, max(44, content_w + 6))
+    box_h = len(lines) + 4
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    blank_line = " " * box_w
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+
+    title = f"Example: {event_name}"
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        header_attr,
+    )
+
+    for i, (label, value) in enumerate(lines):
+        y = box_y + 2 + i
+        if y >= rows - 1:
+            break
+        if not label and not value:
+            continue
+        text = f"{label + ':':<{max_label + 2}}{value}"
+        safe_addstr(stdscr, y, box_x + 3, text[: box_w - 6], normal_attr)
+
+    safe_addstr(stdscr, box_y + box_h - 1, box_x + 3, "Esc/q to close", dim_attr)
