@@ -331,6 +331,7 @@ def main(args=None):
     result = None
 
     def run(stdscr):
+        curses.set_escdelay(25)
         nonlocal result
         result = quick_switch_main(stdscr)
 

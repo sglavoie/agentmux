@@ -99,6 +99,7 @@ def _get_current_session(socket):
 
 def _run(stdscr, session, account_color):
     """Curses event loop for the color picker overlay."""
+    curses.set_escdelay(25)
     curses.curs_set(0)
     init_colors()
     stdscr.timeout(-1)

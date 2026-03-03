@@ -305,6 +305,7 @@ def main():
     selected = []
 
     def run(stdscr):
+        curses.set_escdelay(25)
         nonlocal selected
         selected = picker_main(stdscr, socket)
 

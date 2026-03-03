@@ -64,6 +64,7 @@ from cc_dashboard.views import (
 
 def dashboard(stdscr):
     """Run the interactive dashboard loop."""
+    curses.set_escdelay(25)
     curses.curs_set(0)
     init_colors()
     stdscr.timeout(100)

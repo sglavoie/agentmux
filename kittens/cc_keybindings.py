@@ -164,6 +164,7 @@ def _draw(stdscr, scroll):
 
 def _run(stdscr):
     """Event loop for the keybinding overlay."""
+    curses.set_escdelay(25)
     curses.curs_set(0)
     init_colors()
     stdscr.timeout(-1)
