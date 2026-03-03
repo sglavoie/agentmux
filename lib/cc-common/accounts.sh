@@ -64,17 +64,17 @@ _all_account_names() {
 }
 
 build_accounts_json() {
-	local json="{"
+	local json="["
 	local first=true
 	local i
 	for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
 		[[ "$first" == "true" ]] || json+=","
 		first=false
-		json+="$(printf '%s:%s' \
-			"$(echo "${_ACCOUNT_DIRS[$i]}" | jq -Rs '.[:-1]')" \
-			"$(echo "${_ACCOUNT_NAMES[$i]}" | jq -Rs '.[:-1]')")"
+		json+="$(printf '{"name":%s,"dir":%s}' \
+			"$(echo "${_ACCOUNT_NAMES[$i]}" | jq -Rs '.[:-1]')" \
+			"$(echo "${_ACCOUNT_DIRS[$i]}" | jq -Rs '.[:-1]')")"
 	done
-	json+="}"
+	json+="]"
 	echo "$json"
 }
 

@@ -435,10 +435,12 @@ def _palette_tab_colors(account, color_override="", config_dir_override=""):
     """Return a list of kitty set-tab-color arguments for the given account."""
     if color_override and color_override in PALETTE:
         color_name = color_override
+    elif account and account in _state._accounts:
+        color_name = _state._accounts[account].get("color", "gray")
     elif config_dir_override:
-        color_name = _color_for_config_dir(config_dir_override) or _state._accounts.get(account, {}).get("color", "gray")
+        color_name = _color_for_config_dir(config_dir_override) or "gray"
     else:
-        color_name = _state._accounts.get(account, {}).get("color", "gray")
+        color_name = "gray"
     active_bg, inactive_bg, _ = PALETTE.get(color_name, PALETTE["gray"])
 
     def _hex(rgb):

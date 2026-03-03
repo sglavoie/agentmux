@@ -60,7 +60,7 @@ tab_metadata_by_id() {
 								select(.cmdline | any(test("CLAUDE_CONFIG_DIR"))) |
 								.cmdline[] | capture("CLAUDE_CONFIG_DIR=(?<d>.+)") | .d
 							] | if length > 0 then
-								(.[0] as $config_dir | $accounts[$config_dir] // "unknown")
+								(.[0] as $config_dir | (first($accounts[] | select(.dir == $config_dir) | .name) // "unknown"))
 							else $default_account end
 						)
 					end
