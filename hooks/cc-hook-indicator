@@ -75,6 +75,16 @@ _maybe_notify() {
 # ---------------------------------------------------------------------------
 # Notification suppression helpers
 # ---------------------------------------------------------------------------
+_is_post_permission() {
+    [[ "$ACTION" == "stop" ]] || return 1
+    [[ "$_prev_last_type" == "permission" ]] || return 1
+    [[ "$_prev_last_ts" -gt 0 ]] || return 1
+    local now
+    now=$(date +%s)
+    local elapsed=$((now - _prev_last_ts))
+    ((elapsed < 5))
+}
+
 _is_too_recent() {
     local min_secs="${_DEFAULT_NOTIFY_MIN_SECS:-0}"
     [[ "$min_secs" -gt 0 ]] || return 1      # threshold disabled
@@ -127,6 +137,7 @@ _matches_ignore_pattern() {
 
 _should_suppress_notify() {
     [[ "$_PIPE_MODE" == true ]] && return 0
+    _is_post_permission && return 0
     _is_too_recent && return 0
     _matches_ignore_pattern && return 0
     return 1
@@ -254,6 +265,7 @@ _update_activity() {
 
 # Capture previous last_event_ts before _update_activity overwrites it.
 _prev_last_ts=0
+_prev_last_type=""
 if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission" ]]; then
     _activity_file="/tmp/ccm-activity-${tab_id}.counts"
     if [[ -f "$_activity_file" ]]; then
@@ -261,6 +273,7 @@ if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission"
         while IFS= read -r line; do
             case $_cap_i in
             1) _prev_last_ts="$line" ;;
+            2) _prev_last_type="$line" ;;
             esac
             _cap_i=$((_cap_i + 1))
         done <"$_activity_file"
@@ -290,7 +303,11 @@ active)
     state="bolt"
     ;;
 stop)
-    state="stop"
+    if _is_post_permission; then
+        state=""
+    else
+        state="stop"
+    fi
     ;;
 permission)
     state="key"
@@ -317,7 +334,10 @@ _state_file="/tmp/ccm-state-${tab_id}"
 case "$ACTION" in
 stop|failure|permission)
     # Mark high-priority state so concurrent 'active' calls don't overwrite
-    echo "$ACTION $(date +%s)" > "$_state_file"
+    # Skip for post-permission stops to avoid blocking subsequent active updates
+    if [[ "$ACTION" != "stop" ]] || ! _is_post_permission; then
+        echo "$ACTION $(date +%s)" > "$_state_file"
+    fi
     ;;
 active)
     # Check if a high-priority state was set recently (within 2s)
