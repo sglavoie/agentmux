@@ -13,24 +13,19 @@ load_accounts() {
 	_ACCOUNT_COLORS=()
 
 	if [[ -f "$ACCOUNTS_CONFIG" ]]; then
-		while IFS= read -r line || [[ -n "$line" ]]; do
-			[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-			local name config_dir color
-			IFS='|' read -r name config_dir color <<<"$line"
-			name="$(_trim "$name")"
-			config_dir="$(_trim "$config_dir")"
-			color="$(_trim "$color")"
-			config_dir="$(expand_tilde "$config_dir")"
+		local line
+		while IFS=$'\t' read -r name config_dir color; do
 			[[ -z "$name" ]] && continue
+			config_dir="$(expand_tilde "$config_dir")"
 			_ACCOUNT_NAMES+=("$name")
 			_ACCOUNT_DIRS+=("$config_dir")
 			_ACCOUNT_COLORS+=("${color:-gray}")
-		done <"$ACCOUNTS_CONFIG"
+		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-accounts "$ACCOUNTS_CONFIG")
 	else
 		_ACCOUNT_NAMES=(work personal)
 		_ACCOUNT_DIRS=("$HOME/.claude" "$HOME/.claude-personal")
 		_ACCOUNT_COLORS=(green blue)
-		echo "Note: No accounts.conf found at $ACCOUNTS_CONFIG; using default work/personal accounts." >&2
+		echo "Note: No accounts config found at $ACCOUNTS_CONFIG; using default work/personal accounts." >&2
 	fi
 }
 

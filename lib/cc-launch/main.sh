@@ -33,31 +33,22 @@ Global options:
 	--target-instance LABEL
 						Destination instance label for --move.
 
-Config file (default: ~/.config/cc-manager/sessions.conf):
+Config file (default: ~/.config/cc-manager/sessions.toml):
 	Override with CC_MANAGER_CONFIG env var.
-	Format (pipe-delimited):
-		title | directory | account [| claude_flags [| project_window]]
-	The optional 4th column overrides the global claude_flags from defaults.conf.
-	The optional 5th column overrides the global project_window from defaults.conf.
+	TOML format with [[sessions]] entries. Required keys: title, directory, account.
+	Optional keys: flags, project_window, env.
 	Use "-" to disable global flags/project_window for a specific session.
-	Lines starting with # are comments. Blank lines are ignored.
 
-Accounts (defined in ~/.config/cc-manager/accounts.conf):
-	Each line: name | claude_config_dir | color
+Accounts (defined in ~/.config/cc-manager/accounts.toml):
+	TOML format with [[accounts]] entries. Keys: name, config_dir, color.
 	Colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan
-	If accounts.conf is missing, defaults to work (green) and personal (blue).
+	If accounts.toml is missing, defaults to work (green) and personal (blue).
 
-Defaults (defined in ~/.config/cc-manager/defaults.conf):
-	Key-value pairs (key = value). Supported keys:
-		claude_flags     — Extra flags passed to every Claude session
-		project_window   — Open a shell window alongside Claude in each tab.
-							   Values: (empty) = disabled, stack, vsplit, hsplit, split
-		sort_sessions    — Sort sessions alphabetically by title on launch and
-							   reorder live tabs after creating or restarting sessions.
-							   Values: (empty) = file order, alpha = alphabetical
-		dashboard_refresh — Auto-refresh interval (seconds) for the dashboard.
-							   Values: 0 = disabled, any positive integer = interval.
-							   Default: 3.
+Defaults (defined in ~/.config/cc-manager/defaults.toml):
+	TOML format with [defaults] and [notifications] sections.
+	[defaults] keys: claude_flags, project_window, sort_sessions, dashboard_refresh.
+	[notifications] keys: error, permission, stop, idle (booleans),
+		idle_alert_minutes, min_secs (integers), ignore_patterns (string array).
 
 Environment:
 	KITTY_LISTEN_ON      Kitty remote-control socket (auto-detected if unset)

@@ -199,7 +199,7 @@ def draw_pick_view(stdscr, entries, selected, running_count, marked=None):
             stdscr,
             5,
             3,
-            "Add entries to sessions.conf, then try again.",
+            "Add entries to the sessions config, then try again.",
             curses.color_pair(CP_DIM),
         )
         draw_footer(stdscr, "pick")
@@ -392,7 +392,7 @@ def draw_delete_confirm(stdscr, delete_step, entry, warnings=None):
             stdscr,
             rows - 3,
             2,
-            f'Remove "{title}" from sessions.conf?{warning}  y/n',
+            f'Remove "{title}" from sessions config?{warning}  y/n',
             curses.color_pair(CP_WARN) | curses.A_BOLD,
         )
     elif delete_step == "confirm_data":

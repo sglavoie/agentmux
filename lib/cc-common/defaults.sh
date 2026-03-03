@@ -30,26 +30,49 @@ load_defaults() {
 
 	[[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
-	while IFS= read -r line || [[ -n "$line" ]]; do
-		[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-		local key value
-		IFS='=' read -r key value <<<"$line"
-		key="$(_trim "$key")"
-		value="$(_trim "$value")"
-		case "$key" in
-		claude_flags) _DEFAULT_CLAUDE_FLAGS="$value" ;;
-		project_window) _DEFAULT_PROJECT_WINDOW="$value" ;;
-		sort_sessions) _DEFAULT_SORT_SESSIONS="$value" ;;
-		dashboard_refresh) _DEFAULT_DASHBOARD_REFRESH="$value" ;;
-		notify_error) _DEFAULT_NOTIFY_ERROR="$value" ;;
-		notify_permission) _DEFAULT_NOTIFY_PERMISSION="$value" ;;
-		notify_stop) _DEFAULT_NOTIFY_STOP="$value" ;;
-		idle_alert_minutes) _DEFAULT_IDLE_ALERT_MINUTES="$value" ;;
-		notify_idle) _DEFAULT_NOTIFY_IDLE="$value" ;;
-		notify_min_secs) _DEFAULT_NOTIFY_MIN_SECS="$value" ;;
-		notify_ignore_patterns) _DEFAULT_NOTIFY_IGNORE_PATTERNS="$value" ;;
-		esac
-	done <"$DEFAULTS_CONFIG"
+	# Use a cached sourceable file to avoid python3 overhead on every call.
+	local cache="/tmp/ccm-defaults-cache.sh"
+	local config_mtime
+	config_mtime="$(stat -f '%m' "$DEFAULTS_CONFIG" 2>/dev/null || echo 0)"
+
+	if [[ -f "$cache" ]]; then
+		local cache_mtime
+		cache_mtime="$(head -1 "$cache")"
+		if [[ "$cache_mtime" == "# mtime=$config_mtime" ]]; then
+			# shellcheck disable=SC1090
+			source "$cache"
+			return 0
+		fi
+	fi
+
+	# Regenerate cache from TOML via the Python helper.
+	local key value
+	{
+		echo "# mtime=$config_mtime"
+		while IFS=$'\t' read -r key value; do
+			[[ -z "$key" ]] && continue
+			_assign_default "$key" "$value"
+			# Emit the assignment for the cache file.
+			printf '_DEFAULT_%s=%q\n' "$(echo "$key" | tr '[:lower:]' '[:upper:]')" "$value"
+		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-defaults "$DEFAULTS_CONFIG")
+	} >"$cache"
+}
+
+_assign_default() {
+	local key="$1" value="$2"
+	case "$key" in
+	claude_flags) _DEFAULT_CLAUDE_FLAGS="$value" ;;
+	project_window) _DEFAULT_PROJECT_WINDOW="$value" ;;
+	sort_sessions) _DEFAULT_SORT_SESSIONS="$value" ;;
+	dashboard_refresh) _DEFAULT_DASHBOARD_REFRESH="$value" ;;
+	notify_error) _DEFAULT_NOTIFY_ERROR="$value" ;;
+	notify_permission) _DEFAULT_NOTIFY_PERMISSION="$value" ;;
+	notify_stop) _DEFAULT_NOTIFY_STOP="$value" ;;
+	idle_alert_minutes) _DEFAULT_IDLE_ALERT_MINUTES="$value" ;;
+	notify_idle) _DEFAULT_NOTIFY_IDLE="$value" ;;
+	notify_min_secs) _DEFAULT_NOTIFY_MIN_SECS="$value" ;;
+	notify_ignore_patterns) _DEFAULT_NOTIFY_IGNORE_PATTERNS="$value" ;;
+	esac
 }
 
 resolve_claude_flags() {

@@ -28,58 +28,20 @@ resolve_user_file() {
 	config_dir="$(resolve_config_dir)"
 
 	case "$key" in
-	accounts) echo "${CC_MANAGER_ACCOUNTS:-$config_dir/accounts.conf}" ;;
-	sessions) echo "${CC_MANAGER_CONFIG:-$config_dir/sessions.conf}" ;;
-	defaults) echo "${CC_MANAGER_DEFAULTS:-$config_dir/defaults.conf}" ;;
+	accounts) echo "${CC_MANAGER_ACCOUNTS:-$config_dir/accounts.toml}" ;;
+	sessions) echo "${CC_MANAGER_CONFIG:-$config_dir/sessions.toml}" ;;
+	defaults) echo "${CC_MANAGER_DEFAULTS:-$config_dir/defaults.toml}" ;;
 	esac
 }
 
 # ── Per-file sync ─────────────────────────────────────────────────────────────
 
-# Known last documentation lines for migration (before marker existed).
-# Used to find the insertion point in legacy config files.
-KNOWN_LAST_LINES=(
-	'# Whitespace around the pipe delimiters is trimmed.'
-	'# Whitespace around the = delimiter is trimmed.'
-)
-
-migrate_marker() {
-	local user_file="$1"
-
-	for pattern in "${KNOWN_LAST_LINES[@]}"; do
-		if grep -qF "$pattern" "$user_file"; then
-			# Escape sed BRE address metacharacters using parameter expansion
-			# (backslash must come first to avoid double-escaping)
-			escaped="$pattern"
-			escaped="${escaped//\\/\\\\}"
-			escaped="${escaped//./\\.}"
-			escaped="${escaped//[/\\[}"
-			escaped="${escaped//\*/\\*}"
-			escaped="${escaped//^/\\^}"
-			escaped="${escaped//$/\\$}"
-			escaped="${escaped//(/\\(}"
-			escaped="${escaped//)/\\)}"
-			escaped="${escaped//+/\\+}"
-			escaped="${escaped//?/\\?}"
-			escaped="${escaped//\{/\\{}"
-			escaped="${escaped//|/\\|}"
-			# Insert the marker line after the known last doc line
-			sed -i '' "/^${escaped}$/a\\
-$MARKER
-" "$user_file"
-			echo "  Migrated: inserted marker into $user_file"
-			return 0
-		fi
-	done
-
-	return 1
-}
-
 sync_file() {
 	local key="$1"
-	local example_file="$REPO_DIR/config/${key}.example"
 	local user_file
 	user_file="$(resolve_user_file "$key")"
+
+	local example_file="$REPO_DIR/config/${key}.example.toml"
 
 	# Skip if user file doesn't exist
 	if [[ ! -f "$user_file" ]]; then
@@ -92,14 +54,11 @@ sync_file() {
 		return
 	fi
 
-	# If marker not found in user file, attempt migration
+	# If marker not found in user file, warn and skip
 	if ! grep -qF "$MARKER" "$user_file"; then
-		if ! migrate_marker "$user_file"; then
-			echo "  Warning: cannot sync $user_file — no marker and no known" >&2
-			echo "           last documentation line found. Add the marker manually:" >&2
-			echo "           $MARKER" >&2
-			return
-		fi
+		echo "  Warning: cannot sync $user_file — no marker found. Add the marker manually:" >&2
+		echo "           $MARKER" >&2
+		return
 	fi
 
 	# Extract new preamble (everything up to and including the marker)

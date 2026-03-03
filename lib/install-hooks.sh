@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Usage: bash lib/install-hooks.sh /path/to/config/hooks.example.json
 #
-# Reads account config dirs from accounts.conf (same logic as cc-launch),
+# Reads account config dirs from accounts.toml (same logic as cc-launch),
 # then for each config dir merges the hook entries from hooks.example.json
 # into $config_dir/settings.json without replacing existing hooks.
 
@@ -90,7 +90,15 @@ fi
 
 # ── Load accounts ────────────────────────────────────────────────────────────
 
-ACCOUNTS_CONFIG="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.conf}"
+ACCOUNTS_CONFIG="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.toml}"
+
+# Resolve the TOML helper for reading accounts
+_TOML_HELPER=""
+if [[ -f "$HOME/.local/lib/cc-manager/toml-helper.py" ]]; then
+	_TOML_HELPER="$HOME/.local/lib/cc-manager/toml-helper.py"
+elif [[ -f "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/toml-helper.py" ]]; then
+	_TOML_HELPER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/toml-helper.py"
+fi
 
 expand_tilde() {
 	local path="$1"
@@ -104,13 +112,9 @@ expand_tilde() {
 CONFIG_DIRS=()
 ACCOUNT_NAMES=()
 
-if [[ -f "$ACCOUNTS_CONFIG" ]]; then
-	while IFS= read -r line || [[ -n "$line" ]]; do
-		[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-		_local_name="" local_dir="" _local_color=""
-		IFS='|' read -r _local_name local_dir _local_color <<<"$line"
-		_local_name="$(echo "$_local_name" | xargs)"
-		local_dir="$(echo "$local_dir" | xargs)"
+if [[ -f "$ACCOUNTS_CONFIG" && -n "$_TOML_HELPER" ]]; then
+	while IFS=$'\t' read -r _local_name local_dir _local_color; do
+		[[ -z "$_local_name" ]] && continue
 		local_dir="$(expand_tilde "$local_dir")"
 		[[ -z "$local_dir" ]] && local_dir="$HOME/.claude"
 		# When --account is set, skip non-matching accounts
@@ -119,10 +123,10 @@ if [[ -f "$ACCOUNTS_CONFIG" ]]; then
 		fi
 		ACCOUNT_NAMES+=("$_local_name")
 		CONFIG_DIRS+=("$local_dir")
-	done <"$ACCOUNTS_CONFIG"
+	done < <(python3 "$_TOML_HELPER" read-accounts "$ACCOUNTS_CONFIG")
 fi
 
-# Fallback: if no accounts.conf or no entries found, use the default dir
+# Fallback: if no accounts config or no entries found, use the default dir
 if [[ ${#CONFIG_DIRS[@]} -eq 0 ]]; then
 	if [[ -n "$FILTER_ACCOUNT" ]]; then
 		echo "Error: account '$FILTER_ACCOUNT' not found in $ACCOUNTS_CONFIG" >&2

@@ -26,6 +26,9 @@ SYMLINKS := \
 	$(PREFIX_LIB)/cc-title-icons.sh:lib/cc-title-icons.sh \
 	$(PREFIX_LIB)/palette.json:data/palette.json \
 	$(PREFIX_LIB)/icons.json:data/icons.json \
+	$(PREFIX_LIB)/toml_writer.py:lib/toml_writer.py \
+	$(PREFIX_LIB)/toml_reader.py:lib/toml_reader.py \
+	$(PREFIX_LIB)/toml-helper.py:lib/toml-helper.py \
 	$(PREFIX_KITTY)/cc_dashboard:kittens/cc_dashboard \
 	$(PREFIX_KITTY)/claude_dashboard.py:kittens/claude_dashboard.py \
 	$(PREFIX_KITTY)/cc_session_picker.py:kittens/cc_session_picker.py \

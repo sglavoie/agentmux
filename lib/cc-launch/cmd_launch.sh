@@ -51,10 +51,7 @@ cmd_launch_all() {
     fi
 
     local lines=""
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-        lines+="$line"$'\n'
-    done <"$CONFIG_FILE"
+    lines="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE")"
 
     if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
         lines="$(echo -n "$lines" | sort -f)"
@@ -63,11 +60,8 @@ cmd_launch_all() {
     local launched=0
     local existed=0
 
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-
-        local title dir account flags pw env_vars
-        IFS='|' read -r title dir account flags pw env_vars <<<"$line"
+    while IFS=$'\t' read -r title dir account flags pw env_vars; do
+        [[ -z "$title" ]] && continue
         title="$(_trim "$title")"
         dir="$(_trim "$dir")"
         account="$(_trim "${account:-work}")"

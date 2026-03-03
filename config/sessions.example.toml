@@ -1,0 +1,61 @@
+# cc-manager session definitions
+#
+# Each [[sessions]] entry defines a Claude Code session tab with:
+#   title          — Tab title (convention: prefix with account initial, e.g. W: P: C:)
+#   directory      — Working directory (~ is expanded)
+#   account        — Account name as defined in accounts.toml
+#
+# Optional keys:
+#   flags          — Per-session Claude flags, overriding defaults.toml.
+#                    Use "-" to disable global defaults for this session.
+#   project_window — Per-session layout override for the project window.
+#                    Values: "-" = disable, stack, vsplit, hsplit, split
+#   env            — Space-separated KEY=VALUE pairs injected as environment variables.
+#                    Values must not contain unescaped spaces. Use "-" to disable.
+# --- END OF DOCUMENTATION (do not edit above this line) ---
+
+[[sessions]]
+title = "W:project-alpha"
+directory = "~/projects/project-alpha"
+account = "work"
+
+[[sessions]]
+title = "W:project-beta"
+directory = "~/projects/project-beta"
+account = "work"
+
+[[sessions]]
+title = "W:scratch"
+directory = "~/tmp"
+account = "work"
+
+[[sessions]]
+title = "P:side-project"
+directory = "~/personal/side-project"
+account = "personal"
+
+[[sessions]]
+title = "P:dotfiles"
+directory = "~/dotfiles"
+account = "personal"
+
+# Per-session flag overrides:
+# [[sessions]]
+# title = "W:risky-project"
+# directory = "~/projects/risky"
+# account = "work"
+# flags = "--dangerously-skip-permissions"
+
+# Per-session project_window overrides:
+# [[sessions]]
+# title = "W:with-split"
+# directory = "~/projects/beta"
+# account = "work"
+# project_window = "vsplit"
+
+# Per-session environment variables:
+# [[sessions]]
+# title = "W:api-server"
+# directory = "~/projects/api"
+# account = "work"
+# env = "DATABASE_URL=postgres://localhost/dev NODE_ENV=development"

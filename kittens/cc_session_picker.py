@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Standalone curses session picker for cc-launch.
 
-Displays configured sessions from sessions.conf in a curses UI with
+Displays configured sessions from the sessions config in a curses UI with
 account-colored entries, Running/Stopped sections, search, and multi-select.
 Selected sessions are printed as pipe-delimited lines to stdout.
 
@@ -68,7 +68,7 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
             stdscr,
             5,
             3,
-            "Add entries to sessions.conf, then try again.",
+            "Add entries to the sessions config, then try again.",
             curses.color_pair(CP_DIM),
         )
         draw_picker_footer(stdscr)
@@ -290,7 +290,7 @@ def main():
     load_sessions()
 
     if not _cfg._sessions:
-        print("No sessions configured in sessions.conf", file=sys.stderr)
+        print(f"No sessions configured in {_cfg._sessions_config_filename()}", file=sys.stderr)
         sys.exit(1)
 
     socket = get_kitty_socket()
@@ -328,7 +328,8 @@ def main():
     for entry in selected:
         pw = entry.get("pw", "")
         flags = entry.get("flags", "")
-        print(f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}")
+        env = entry.get("env", "")
+        print(f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}|{env}")
 
 
 if __name__ == "__main__":

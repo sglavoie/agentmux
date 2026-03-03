@@ -387,43 +387,32 @@ cmd_save() {
         echo "Backed up existing config to ${output_file}.bak"
     fi
 
-    local header_lines=""
-    if [[ -f "$output_file" ]]; then
-        while IFS= read -r line || [[ -n "$line" ]]; do
-            if [[ "$line" =~ ^[[:space:]]*# || -z "$line" ]]; then
-                header_lines+="$line"$'\n'
-            else
-                break
-            fi
-        done <"$output_file"
-    fi
-
-    if [[ -z "$header_lines" ]]; then
-        header_lines="# cc-manager session definitions
-# Saved by cc-launch --save on $(date '+%Y-%m-%d %H:%M:%S')
-#
-# Format: title | directory | account [| claude_flags [| project_window [| env_vars]]]
-
-"
-    fi
-
-    {
-        printf '%s' "$header_lines"
-        while IFS=$'\t' read -r title dir account flags pw env_vars; do
-            dir="${dir/#$HOME/\~}"
-            if [[ -n "$env_vars" ]]; then
-                printf "%-20s | %-40s | %-10s | %-30s | %-10s | %s\n" "$title" "$dir" "$account" "$flags" "$pw" "$env_vars"
-            elif [[ -n "$pw" ]]; then
-                printf "%-20s | %-40s | %-10s | %-30s | %s\n" "$title" "$dir" "$account" "$flags" "$pw"
-            elif [[ -n "$flags" ]]; then
-                printf "%-20s | %-40s | %-10s | %s\n" "$title" "$dir" "$account" "$flags"
-            else
-                printf "%-20s | %-40s | %s\n" "$title" "$dir" "$account"
-            fi
-        done <<<"$sessions"
-    } >"$output_file"
+    _save_sessions_toml "$output_file" "$sessions"
 
     local count
     count="$(_trim "$(echo "$sessions" | wc -l)")"
     echo "Saved $count session(s) to $output_file"
 }
+
+_save_sessions_toml() {
+    local output_file="$1"
+    local sessions="$2"
+
+    # Build a JSON array from the TSV session data and pipe to toml-helper.
+    local json_array="["
+    local first=true
+    while IFS=$'\t' read -r title dir account flags pw env_vars; do
+        [[ -z "$title" ]] && continue
+        dir="${dir/#$HOME/\~}"
+        [[ "$first" == "true" ]] || json_array+=","
+        first=false
+        json_array+="$(jq -nc \
+            --arg t "$title" --arg d "$dir" --arg a "$account" \
+            --arg f "$flags" --arg p "$pw" --arg e "$env_vars" \
+            '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e}')"
+    done <<<"$sessions"
+    json_array+="]"
+
+    echo "$json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$output_file"
+}
+

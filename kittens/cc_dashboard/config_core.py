@@ -3,10 +3,32 @@
 import contextlib
 import os
 import shutil
+import sys
+import tomllib
 from datetime import datetime
 
 from cc_dashboard import config_state as _state
 from cc_dashboard.config_data import ACTIVE_FG, INACTIVE_FG, PALETTE
+
+
+def _lib_dir():
+    """Return the ``lib/`` directory containing ``toml_writer``/``toml_reader``.
+
+    Resolves symlinks so this works both in-repo and when installed via
+    ``make install`` (which symlinks ``cc_dashboard/`` into ``~/.config/kitty/``).
+    """
+    here = os.path.dirname(os.path.realpath(__file__))
+    return os.path.join(here, "..", "..", "lib")
+
+
+def _import_toml_writer():
+    """Import and return the ``toml_writer`` module from ``lib/``."""
+    lib = _lib_dir()
+    if lib not in sys.path:
+        sys.path.insert(0, lib)
+    import toml_writer
+
+    return toml_writer
 
 
 def _accounts_config_path():
@@ -16,35 +38,27 @@ def _accounts_config_path():
     xdg = os.environ.get(
         "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
     )
-    return os.path.join(xdg, "cc-manager", "accounts.conf")
+    return os.path.join(xdg, "cc-manager", "accounts.toml")
 
 
 def load_accounts():
-    """Parse accounts.conf into the shared account state.
-
-    Falls back to hardcoded work/personal defaults if the file is missing.
-    """
+    """Parse accounts config into the shared account state."""
     _state._accounts.clear()
     _state._account_names[:] = []
 
     path = _accounts_config_path()
     if os.path.isfile(path):
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                parts = line.split("|")
-                if len(parts) < 2:
-                    continue
-                name = parts[0].strip()
-                config_dir = parts[1].strip() if len(parts) > 1 else ""
-                color = parts[2].strip() if len(parts) > 2 else "gray"
-                if not name:
-                    continue
-                config_dir = os.path.expanduser(config_dir) if config_dir else ""
-                _state._accounts[name] = {"config_dir": config_dir, "color": color}
-                _state._account_names.append(name)
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        for entry in data.get("accounts", []):
+            name = entry.get("name", "")
+            if not name:
+                continue
+            config_dir = entry.get("config_dir", "")
+            config_dir = os.path.expanduser(config_dir) if config_dir else ""
+            color = entry.get("color", "gray")
+            _state._accounts[name] = {"config_dir": config_dir, "color": color}
+            _state._account_names.append(name)
     else:
         home = os.path.expanduser("~")
         _state._accounts["work"] = {
@@ -65,11 +79,11 @@ def _defaults_config_path():
     xdg = os.environ.get(
         "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
     )
-    return os.path.join(xdg, "cc-manager", "defaults.conf")
+    return os.path.join(xdg, "cc-manager", "defaults.toml")
 
 
 def load_defaults():
-    """Parse defaults.conf into the shared default settings."""
+    """Parse defaults config into the shared default settings."""
     _state._default_claude_flags = ""
     _state._default_project_window = ""
     _state._default_sort_sessions = ""
@@ -81,40 +95,40 @@ def load_defaults():
     if not os.path.isfile(path):
         return
 
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip()
-            if key == "claude_flags":
-                _state._default_claude_flags = value
-            elif key == "project_window":
-                _state._default_project_window = value
-            elif key == "sort_sessions":
-                _state._default_sort_sessions = value
-            elif key == "dashboard_refresh":
-                with contextlib.suppress(ValueError):
-                    _state._default_dashboard_refresh = max(0, int(value))
-            elif key == "idle_alert_minutes":
-                with contextlib.suppress(ValueError):
-                    _state._default_idle_alert_minutes = max(0, int(value))
-            elif key == "notify_idle":
-                _state._default_notify_idle = value
+    with open(path, "rb") as f:
+        data = tomllib.load(f)
+    defaults = data.get("defaults", {})
+    notifications = data.get("notifications", {})
+
+    if "claude_flags" in defaults:
+        _state._default_claude_flags = str(defaults["claude_flags"])
+    if "project_window" in defaults:
+        _state._default_project_window = str(defaults["project_window"])
+    if "sort_sessions" in defaults:
+        _state._default_sort_sessions = str(defaults["sort_sessions"])
+    if "dashboard_refresh" in defaults:
+        with contextlib.suppress(ValueError, TypeError):
+            _state._default_dashboard_refresh = max(0, int(defaults["dashboard_refresh"]))
+    if "idle_alert_minutes" in notifications:
+        with contextlib.suppress(ValueError, TypeError):
+            _state._default_idle_alert_minutes = max(
+                0, int(notifications["idle_alert_minutes"])
+            )
+    if "idle" in notifications:
+        val = notifications["idle"]
+        _state._default_notify_idle = "on" if val is True else ("" if val is False else str(val))
 
 
 def _sessions_config_path():
     env = os.environ.get("CC_MANAGER_CONFIG", "")
     if env:
-        return os.path.join(env, "sessions.conf") if os.path.isdir(env) else env
+        if os.path.isdir(env):
+            return os.path.join(env, "sessions.toml")
+        return env
     xdg = os.environ.get(
         "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
     )
-    return os.path.join(xdg, "cc-manager", "sessions.conf")
+    return os.path.join(xdg, "cc-manager", "sessions.toml")
 
 
 def _config_dir():
@@ -129,6 +143,11 @@ def _config_dir():
         "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
     )
     return os.path.join(xdg, "cc-manager")
+
+
+def _sessions_config_filename():
+    """Return the basename of the sessions config file (e.g. ``sessions.toml``)."""
+    return os.path.basename(_sessions_config_path())
 
 
 def _hooks_config_path():
@@ -147,7 +166,7 @@ def _all_config_paths():
 
 
 def load_sessions():
-    """Parse sessions.conf into the shared sessions list."""
+    """Parse sessions config into the shared sessions list."""
     _state._sessions[:] = []
 
     path = _sessions_config_path()
@@ -155,36 +174,22 @@ def load_sessions():
         return
 
     default_account = _state._account_names[0] if _state._account_names else "work"
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split("|")
-            if len(parts) < 2:
-                continue
-            title = parts[0].strip()
-            directory = parts[1].strip()
-            account = (
-                parts[2].strip()
-                if len(parts) > 2 and parts[2].strip()
-                else default_account
-            )
-            flags = parts[3].strip() if len(parts) > 3 else ""
-            pw = parts[4].strip() if len(parts) > 4 else ""
-            env = parts[5].strip() if len(parts) > 5 else ""
-            if not title:
-                continue
-            _state._sessions.append(
-                {
-                    "title": title,
-                    "dir": directory,
-                    "account": account,
-                    "flags": flags,
-                    "pw": pw,
-                    "env": env,
-                }
-            )
+    with open(path, "rb") as f:
+        data = tomllib.load(f)
+    for entry in data.get("sessions", []):
+        title = entry.get("title", "")
+        if not title:
+            continue
+        _state._sessions.append(
+            {
+                "title": title,
+                "dir": entry.get("directory", ""),
+                "account": entry.get("account", "") or default_account,
+                "flags": entry.get("flags", ""),
+                "pw": entry.get("project_window", ""),
+                "env": entry.get("env", ""),
+            }
+        )
 
 
 def _find_config_session(title):
@@ -264,98 +269,118 @@ def _unique_config_dirs():
     return result
 
 
+def _read_header_comments(path):
+    """Extract leading ``#`` comment / blank lines from a config file."""
+    lines = []
+    with open(path) as f:
+        for line in f:
+            stripped = line.strip()
+            if stripped.startswith("#") or not stripped:
+                lines.append(line)
+            else:
+                break
+    return "".join(lines) if lines else ""
+
+
+def _tilde_directory(directory):
+    """Replace ``$HOME`` prefix with ``~`` in *directory*."""
+    home = os.path.expanduser("~")
+    if directory.startswith(home):
+        return "~" + directory[len(home):]
+    return directory
+
+
+def _session_to_toml_entry(title, directory, account, flags="", pw="", env=""):
+    """Build a TOML-serializable dict for one ``[[sessions]]`` entry."""
+    d = {"title": title, "directory": directory}
+    if account:
+        d["account"] = account
+    if flags:
+        d["flags"] = flags
+    if pw:
+        d["project_window"] = pw
+    if env:
+        d["env"] = env
+    return d
+
+
+def _write_sessions_toml(path, sessions_data, header=""):
+    """Serialize *sessions_data* (list of TOML entry dicts) to *path*."""
+    tw = _import_toml_writer()
+    with open(path, "w") as f:
+        f.write(tw.dumps({"sessions": sessions_data}, header=header))
+
+
+def _read_sessions_toml_raw(path):
+    """Return the raw ``[[sessions]]`` list from a TOML file."""
+    with open(path, "rb") as f:
+        data = tomllib.load(f)
+    return data.get("sessions", [])
+
+
 def save_sessions(live_sessions):
-    """Save live sessions to sessions.conf, mirroring cmd_save from cc-launch.
+    """Save live sessions to the sessions config file.
 
     Accepts the sessions list from query_all_sessions (dicts with 'title',
     'cwd', 'account', 'cc_flags', 'cc_pw' keys).
     Returns (count, backup_created).
     """
     path = _sessions_config_path()
-    home = os.path.expanduser("~")
 
-    header_lines = []
+    header = ""
     if os.path.isfile(path):
-        with open(path) as f:
-            for line in f:
-                stripped = line.strip()
-                if stripped.startswith("#") or not stripped:
-                    header_lines.append(line)
-                else:
-                    break
+        header = _read_header_comments(path)
 
     backup_created = False
     if os.path.isfile(path):
         shutil.copy2(path, path + ".bak")
         backup_created = True
 
-    with open(path, "w") as f:
-        if header_lines:
-            for line in header_lines:
-                f.write(line)
-        else:
-            saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            f.write("# cc-manager session definitions\n")
-            f.write(f"# Saved by dashboard on {saved_at}\n")
-            f.write("#\n")
-            f.write(
-                "# Format: title | directory | account"
-                " [| claude_flags [| project_window [| env_vars]]]\n"
+    entries = []
+    for s in live_sessions:
+        directory = _tilde_directory(s.get("cwd", "~/"))
+        entries.append(
+            _session_to_toml_entry(
+                s.get("title", ""),
+                directory,
+                s.get("account", "unknown"),
+                s.get("cc_flags", ""),
+                s.get("cc_pw", ""),
+                s.get("cc_env", ""),
             )
-            f.write("\n")
-        for s in live_sessions:
-            title = s.get("title", "")
-            directory = s.get("cwd", "~/")
-            if directory.startswith(home):
-                directory = "~" + directory[len(home) :]
-            account = s.get("account", "unknown")
-            flags = s.get("cc_flags", "")
-            pw = s.get("cc_pw", "")
-            env = s.get("cc_env", "")
-            base = f"{title:<20s} | {directory:<40s} | {account:<10s}"
-            if env:
-                f.write(f"{base} | {flags:<30s} | {pw:<10s} | {env}\n")
-            elif pw:
-                f.write(f"{base} | {flags:<30s} | {pw}\n")
-            elif flags:
-                f.write(f"{base} | {flags}\n")
-            else:
-                f.write(f"{title:<20s} | {directory:<40s} | {account}\n")
+        )
+    if not header:
+        saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        header = (
+            "# cc-manager session definitions\n"
+            f"# Saved by dashboard on {saved_at}\n"
+        )
+    _write_sessions_toml(path, entries, header=header.rstrip("\n"))
 
     load_sessions()
     return len(live_sessions), backup_created
 
 
 def append_session(title, directory, account, flags="", pw="", env=""):
-    """Append a single session entry to sessions.conf."""
+    """Append a single session entry to the sessions config file."""
     path = _sessions_config_path()
-    home = os.path.expanduser("~")
-    if directory.startswith(home):
-        directory = "~" + directory[len(home) :]
+    directory = _tilde_directory(directory)
 
-    needs_newline = False
-    if os.path.isfile(path) and os.path.getsize(path) > 0:
-        with open(path, "rb") as f:
-            f.seek(-1, 2)
-            needs_newline = f.read(1) != b"\n"
-
-    with open(path, "a") as f:
-        if needs_newline:
-            f.write("\n")
-        line = f"{title:<20s} | {directory:<40s} | {account}"
-        if env:
-            line += f" | {flags:<30s} | {pw:<10s} | {env}"
-        elif pw:
-            line += f" | {flags} | {pw}"
-        elif flags:
-            line += f" | {flags}"
-        f.write(line + "\n")
+    header = ""
+    entries = []
+    if os.path.isfile(path):
+        header = _read_header_comments(path)
+        entries = _read_sessions_toml_raw(path)
+    entries.append(
+        _session_to_toml_entry(title, directory, account, flags, pw, env)
+    )
+    _write_sessions_toml(path, entries, header=header.rstrip("\n") if header else "")
 
     load_sessions()
 
 
 def update_session(original_title, title, directory, account, flags="", pw="", env=""):
-    """Update an existing session entry in sessions.conf by original title.
+    """Update an existing session entry by original title.
 
     Returns True if the entry was found and updated, False otherwise.
     """
@@ -363,70 +388,44 @@ def update_session(original_title, title, directory, account, flags="", pw="", e
     if not os.path.isfile(path):
         return False
 
-    home = os.path.expanduser("~")
-    if directory.startswith(home):
-        directory = "~" + directory[len(home) :]
+    directory = _tilde_directory(directory)
 
-    with open(path) as f:
-        lines = f.readlines()
+    header = _read_header_comments(path)
+    entries = _read_sessions_toml_raw(path)
 
     found = False
-    updated = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            parts = stripped.split("|")
-            if len(parts) >= 2 and parts[0].strip() == original_title:
-                found = True
-                new_line = f"{title:<20s} | {directory:<40s} | {account}"
-                if env:
-                    new_line += f" | {flags:<30s} | {pw:<10s} | {env}"
-                elif pw:
-                    new_line += f" | {flags:<30s} | {pw}"
-                elif flags:
-                    new_line += f" | {flags}"
-                updated.append(new_line + "\n")
-                continue
-        updated.append(line)
+    for i, entry in enumerate(entries):
+        if entry.get("title") == original_title:
+            entries[i] = _session_to_toml_entry(title, directory, account, flags, pw, env)
+            found = True
+            break
 
     if not found:
         return False
 
     shutil.copy2(path, path + ".bak")
-    with open(path, "w") as f:
-        f.writelines(updated)
-
+    _write_sessions_toml(path, entries, header=header.rstrip("\n") if header else "")
     load_sessions()
     return True
 
 
 def remove_session(title):
-    """Remove a session entry from sessions.conf by title. Returns True if found."""
+    """Remove a session entry by title. Returns True if found."""
     path = _sessions_config_path()
     if not os.path.isfile(path):
         return False
 
-    with open(path) as f:
-        lines = f.readlines()
+    header = _read_header_comments(path)
+    entries = _read_sessions_toml_raw(path)
 
-    found = False
-    kept = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            parts = stripped.split("|")
-            if len(parts) >= 2 and parts[0].strip() == title:
-                found = True
-                continue
-        kept.append(line)
+    original_len = len(entries)
+    entries = [e for e in entries if e.get("title") != title]
 
-    if not found:
+    if len(entries) == original_len:
         return False
 
     shutil.copy2(path, path + ".bak")
-    with open(path, "w") as f:
-        f.writelines(kept)
-
+    _write_sessions_toml(path, entries, header=header.rstrip("\n") if header else "")
     load_sessions()
     return True
 

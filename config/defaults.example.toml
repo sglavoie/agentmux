@@ -1,0 +1,44 @@
+# cc-manager global defaults
+#
+# [defaults] keys:
+#   claude_flags      — Extra flags passed to every Claude session
+#                       (e.g. "--dangerously-skip-permissions")
+#   project_window    — Open a shell window alongside Claude in each tab.
+#                       Values: (omitted) = disabled, "stack", "vsplit", "hsplit", "split"
+#                       With "stack", only one window is visible at a time;
+#                       toggle with Kitty shortcuts (e.g. ctrl+shift+]).
+#   sort_sessions     — Sort sessions alphabetically by title on launch.
+#                       Values: (omitted) = preserve file order, "alpha" = alphabetical
+#   dashboard_refresh — Auto-refresh interval (seconds) for the dashboard.
+#                       Values: 0 = disabled, any positive integer = interval. Default: 3
+#
+# [notifications] keys:
+#   error             — Show a macOS notification on tool use failures. Default: false
+#   permission        — Show a macOS notification on permission requests. Default: false
+#   stop              — Show a macOS notification when a session stops. Default: false
+#   idle              — Show a macOS notification when a session exceeds the
+#                       idle_alert_minutes threshold. Default: false
+#   idle_alert_minutes — Highlight sessions idle longer than this threshold
+#                        in the dashboard (yellow). Default: 0 (disabled)
+#   min_secs          — Minimum seconds since last activity before any
+#                       notification fires. Suppresses noise from quick events.
+#                       Default: 0 (disabled)
+#   ignore_patterns   — Array of regex patterns matched against the current
+#                       Kitty screen content. If any pattern matches, the
+#                       notification is suppressed.
+# --- END OF DOCUMENTATION (do not edit above this line) ---
+
+# [defaults]
+# claude_flags = "--dangerously-skip-permissions"
+# project_window = "stack"
+# sort_sessions = "alpha"
+# dashboard_refresh = 3
+
+# [notifications]
+# error = true
+# permission = true
+# stop = false
+# idle = true
+# idle_alert_minutes = 30
+# min_secs = 3
+# ignore_patterns = ["Conversation cleared", "Context compacted"]

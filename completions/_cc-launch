@@ -28,10 +28,12 @@ _cc_launch_sockets() {
 }
 
 _cc_launch_accounts() {
-    local accounts_file="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.conf}"
+    local accounts_toml="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.toml}"
     local -a accts
-    if [[ -f "$accounts_file" ]]; then
-        accts=(${(f)"$(command grep -v '^\s*#' "$accounts_file" | command grep -v '^\s*$' | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"})
+
+    if [[ -f "$accounts_toml" ]]; then
+        local helper="${HOME}/.local/lib/cc-manager/toml-helper.py"
+        accts=(${(f)"$(python3 "$helper" read-accounts "$accounts_toml" | cut -f1)"})
     else
         accts=(work personal)
     fi

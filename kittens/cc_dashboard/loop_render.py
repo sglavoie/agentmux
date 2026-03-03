@@ -121,7 +121,8 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             draw_footer(stdscr, "confirm_batch_restart")
         elif mode == "confirm_save":
             rows_now, _ = stdscr.getmaxyx()
-            prompt = f"Save {len(state['sessions'])} session(s) to sessions.conf? y/n"
+            fname = state["cfg"]._sessions_config_filename()
+            prompt = f"Save {len(state['sessions'])} session(s) to {fname}? y/n"
             safe_addstr(
                 stdscr,
                 rows_now - 3,

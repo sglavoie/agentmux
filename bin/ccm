@@ -36,13 +36,13 @@ resolve_config_file() {
 
 	case "$key" in
 	accounts)
-		echo "${CC_MANAGER_ACCOUNTS:-$config_dir/accounts.conf}"
+		echo "${CC_MANAGER_ACCOUNTS:-$config_dir/accounts.toml}"
 		;;
 	sessions)
-		echo "${CC_MANAGER_CONFIG:-$config_dir/sessions.conf}"
+		echo "${CC_MANAGER_CONFIG:-$config_dir/sessions.toml}"
 		;;
 	defaults)
-		echo "${CC_MANAGER_DEFAULTS:-$config_dir/defaults.conf}"
+		echo "${CC_MANAGER_DEFAULTS:-$config_dir/defaults.toml}"
 		;;
 	hooks)
 		echo "$config_dir/hooks.json"
@@ -125,61 +125,33 @@ cmd_config_path() {
 	fi
 }
 
+_init_config_file() {
+	local src="$1" dest="$2"
+	if [[ -f "$dest" ]]; then
+		echo "Skipping $dest (already exists)"
+		return 1
+	fi
+	if [[ -f "$src" ]]; then
+		cp "$src" "$dest"
+		echo "Created $dest"
+		return 0
+	else
+		echo "Warning: $src not found in repository" >&2
+		return 1
+	fi
+}
+
 cmd_config_init() {
 	local config_dir
 	config_dir="$(resolve_config_dir)"
 	mkdir -p "$config_dir"
 
 	local copied=0
-	local src dest
 
-	src="$REPO_DIR/config/accounts.example"
-	dest="$config_dir/accounts.conf"
-	if [[ -f "$dest" ]]; then
-		echo "Skipping $dest (already exists)"
-	elif [[ -f "$src" ]]; then
-		cp "$src" "$dest"
-		echo "Created $dest"
-		copied=$((copied + 1))
-	else
-		echo "Warning: $src not found in repository" >&2
-	fi
-
-	src="$REPO_DIR/config/sessions.example"
-	dest="$config_dir/sessions.conf"
-	if [[ -f "$dest" ]]; then
-		echo "Skipping $dest (already exists)"
-	elif [[ -f "$src" ]]; then
-		cp "$src" "$dest"
-		echo "Created $dest"
-		copied=$((copied + 1))
-	else
-		echo "Warning: $src not found in repository" >&2
-	fi
-
-	src="$REPO_DIR/config/defaults.example"
-	dest="$config_dir/defaults.conf"
-	if [[ -f "$dest" ]]; then
-		echo "Skipping $dest (already exists)"
-	elif [[ -f "$src" ]]; then
-		cp "$src" "$dest"
-		echo "Created $dest"
-		copied=$((copied + 1))
-	else
-		echo "Warning: $src not found in repository" >&2
-	fi
-
-	src="$REPO_DIR/config/hooks.example.json"
-	dest="$config_dir/hooks.json"
-	if [[ -f "$dest" ]]; then
-		echo "Skipping $dest (already exists)"
-	elif [[ -f "$src" ]]; then
-		cp "$src" "$dest"
-		echo "Created $dest"
-		copied=$((copied + 1))
-	else
-		echo "Warning: $src not found in repository" >&2
-	fi
+	_init_config_file "$REPO_DIR/config/accounts.example.toml" "$config_dir/accounts.toml" && copied=$((copied + 1))
+	_init_config_file "$REPO_DIR/config/sessions.example.toml" "$config_dir/sessions.toml" && copied=$((copied + 1))
+	_init_config_file "$REPO_DIR/config/defaults.example.toml" "$config_dir/defaults.toml" && copied=$((copied + 1))
+	_init_config_file "$REPO_DIR/config/hooks.example.json" "$config_dir/hooks.json" && copied=$((copied + 1))
 
 	if [[ $copied -eq 0 ]]; then
 		echo "All config files already exist."

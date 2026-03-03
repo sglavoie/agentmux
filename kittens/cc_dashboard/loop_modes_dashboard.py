@@ -477,7 +477,7 @@ def handle_confirm_modes(key, state):
     if mode == "confirm_save":
         if key in (ord("y"), ord("Y")):
             count, _ = state["cfg"].save_sessions(state["sessions"])
-            state["msg"] = f"Saved {count} session(s) to sessions.conf"
+            state["msg"] = f"Saved {count} session(s) to {state['cfg']._sessions_config_filename()}"
             state["msg_frames"] = 25
         state["mode"] = "list"
         return True

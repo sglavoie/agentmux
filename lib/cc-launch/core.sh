@@ -125,22 +125,23 @@ lookup_session_overrides() {
 
     if [[ -z "$cfg_flags" && -z "$cfg_pw" && -z "$cfg_env" && -f "$CONFIG_FILE" ]]; then
         local lookup_title="${title%%‾*}"
-        local cfg_line
-        while IFS= read -r cfg_line || [[ -n "$cfg_line" ]]; do
-            [[ -z "$cfg_line" || "$cfg_line" =~ ^[[:space:]]*# ]] && continue
-            local cfg_title cfg_f cfg_p cfg_e
-            IFS='|' read -r cfg_title _ _ cfg_f cfg_p cfg_e <<<"$cfg_line"
-            cfg_title="$(_trim "$cfg_title")"
-            if [[ "$cfg_title" == "$lookup_title" ]]; then
-                cfg_flags="$(_trim "${cfg_f:-}")"
-                cfg_pw="$(_trim "${cfg_p:-}")"
-                cfg_env="$(_trim "${cfg_e:-}")"
-                break
-            fi
-        done <"$CONFIG_FILE"
+        _lookup_session_overrides_toml "$lookup_title"
     fi
 
     printf '%s\t%s\t%s\n' "$cfg_flags" "$cfg_pw" "$cfg_env"
+}
+
+_lookup_session_overrides_toml() {
+    local lookup_title="$1"
+    local cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e
+    while IFS=$'\t' read -r cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e; do
+        if [[ "$cfg_title" == "$lookup_title" ]]; then
+            cfg_flags="$cfg_f"
+            cfg_pw="$cfg_p"
+            cfg_env="$cfg_e"
+            break
+        fi
+    done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE")
 }
 
 launch_session() {

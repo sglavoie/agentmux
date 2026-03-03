@@ -81,7 +81,7 @@ _SECTIONS = [
             ("l", "Launch session from config"),
             ("e", "Edit selected session config entry"),
             ("D", "Delete session from config"),
-            ("S", "Save running sessions to sessions.conf"),
+            ("S", "Save running sessions to config"),
             ("p", "Peek at selected session output"),
         ],
     ),
