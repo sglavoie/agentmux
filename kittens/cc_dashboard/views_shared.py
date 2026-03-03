@@ -50,6 +50,8 @@ _FOOTER_HINTS = {
     ],
     "pick": [
         "Enter Launch",
+        "Space Mark",
+        "U Unmark",
         "i Instance",
         "O CfgDir",
         "/ Search",

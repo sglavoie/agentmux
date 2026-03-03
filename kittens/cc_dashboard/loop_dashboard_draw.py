@@ -68,6 +68,7 @@ def build_draw_state(state: dict[str, Any]) -> dict[str, Any]:
         "pick_filtered": state["pick_filtered"],
         "pick_selected": state["pick_selected"],
         "pick_running_count": state["pick_running_count"],
+        "pick_marked": state.get("pick_marked", set()),
         "pick_search_active": state["pick_search_active"],
         "pick_query": state["pick_query"],
         "pick_cursor": state["pick_cursor"],

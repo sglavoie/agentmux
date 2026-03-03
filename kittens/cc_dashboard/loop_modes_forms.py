@@ -713,6 +713,14 @@ def handle_pick_mode(key, state):
         state["pick_filtered"], state["pick_running_count"] = _sort_pick_entries(
             list(state["cfg"]._sessions), state["pick_running"]
         )
+    elif key == ord(" ") and state["pick_filtered"]:
+        idx = state["pick_selected"]
+        if idx >= state["pick_running_count"]:
+            title = state["pick_filtered"][idx]["title"]
+            state.setdefault("pick_marked", set()).symmetric_difference_update({title})
+        state["pick_selected"] = min(idx + 1, len(state["pick_filtered"]) - 1)
+    elif key == ord("U") and state.get("pick_marked"):
+        state["pick_marked"].clear()
     elif key in (curses.KEY_UP, ord("k"), ord("K")) and state["pick_filtered"]:
         state["pick_selected"] = (state["pick_selected"] - 1) % len(
             state["pick_filtered"]
@@ -746,8 +754,6 @@ def handle_pick_mode(key, state):
                 state["override_selected"] = i
                 break
     elif key in (10, 13, curses.KEY_ENTER) and state["pick_filtered"]:
-        entry = state["pick_filtered"][state["pick_selected"]]
-        pw_val = entry["pw"]
         target_socket = (
             state["instance_socket_map"].get(
                 state["pick_target_instance"], state["home_socket"]
@@ -755,19 +761,38 @@ def handle_pick_mode(key, state):
             if state["multi_instance"]
             else state["home_socket"]
         )
-        loc = state["compute_insert_location"](
-            target_socket, entry["account"], entry["title"]
-        )
-        state["do_launch"](
-            target_socket,
-            entry["title"],
-            entry["dir"],
-            entry["account"],
-            entry["flags"],
-            pw_val,
-            location=loc,
-            env_vars=entry.get("env", ""),
-        )
+        if state.get("pick_marked"):
+            for entry in state["pick_filtered"]:
+                if entry["title"] not in state["pick_marked"]:
+                    continue
+                loc = state["compute_insert_location"](
+                    target_socket, entry["account"], entry["title"]
+                )
+                state["do_launch"](
+                    target_socket,
+                    entry["title"],
+                    entry["dir"],
+                    entry["account"],
+                    entry["flags"],
+                    entry["pw"],
+                    location=loc,
+                    env_vars=entry.get("env", ""),
+                )
+        else:
+            entry = state["pick_filtered"][state["pick_selected"]]
+            loc = state["compute_insert_location"](
+                target_socket, entry["account"], entry["title"]
+            )
+            state["do_launch"](
+                target_socket,
+                entry["title"],
+                entry["dir"],
+                entry["account"],
+                entry["flags"],
+                entry["pw"],
+                location=loc,
+                env_vars=entry.get("env", ""),
+            )
         state["should_exit"] = True
 
     return True

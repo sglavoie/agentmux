@@ -156,6 +156,7 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["pick_query"] = ""
             state["pick_cursor"] = 0
             state["pick_search_active"] = False
+            state["pick_marked"] = set()
             state["pick_target_instance"] = state["home_instance_label"]
         else:
             state["msg"] = "No sessions configured in sessions.conf"

@@ -267,6 +267,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             state["pick_filtered"],
             state["pick_selected"],
             state["pick_running_count"],
+            marked=state.get("pick_marked", set()),
         )
         if state["msg"] and state["msg_frames"] > 0:
             draw_status_message(stdscr, state["msg"])

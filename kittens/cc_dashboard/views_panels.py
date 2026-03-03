@@ -176,12 +176,15 @@ def draw_list_view(
     draw_footer(stdscr, "list", exclude=footer_exclude)
 
 
-def draw_pick_view(stdscr, entries, selected, running_count):
+def draw_pick_view(stdscr, entries, selected, running_count, marked=None):
     """Draw the config session picker list with Running/Stopped sections."""
     rows, cols = stdscr.getmaxyx()
     stdscr.clear()
 
-    title = "Launch from Config"
+    if marked is None:
+        marked = set()
+    mark_count = len(marked)
+    title = f"Launch from Config ({mark_count} marked)" if mark_count else "Launch from Config"
     safe_addstr(
         stdscr,
         1,
@@ -251,8 +254,16 @@ def draw_pick_view(stdscr, entries, selected, running_count):
             entry_idx = row[1]
             entry = entries[entry_idx]
             sel = entry_idx == selected
-            mark = "▸" if sel else " "
+            is_marked = entry["title"] in marked
             is_running = entry_idx < running_count
+            if sel and is_marked:
+                mark = ">*"
+            elif is_marked:
+                mark = " *"
+            elif sel:
+                mark = "> "
+            else:
+                mark = "  "
 
             cp = _cp_for_account(entry["account"], selected=sel)
             short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)

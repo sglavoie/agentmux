@@ -562,6 +562,7 @@ def dispatch_mode(
             "pick_query": state["pick_query"],
             "pick_cursor": state["pick_cursor"],
             "pick_search_active": state["pick_search_active"],
+            "pick_marked": state.get("pick_marked", set()),
             "pick_target_instance": state["pick_target_instance"],
             "override_source": state["override_source"],
             "override_selected": state["override_selected"],
