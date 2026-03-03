@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cc-hook-indicator active prompt",
+            "command": "cc-hook-indicator idle prompt",
             "async": true
           },
           {
