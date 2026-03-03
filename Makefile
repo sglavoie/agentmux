@@ -1,7 +1,7 @@
 PYTHON_SRC    := kittens/
 SHELL_SCRIPTS := bin/cc-launch bin/cc-status bin/cc-toggle-star bin/cc-toggle-flag bin/cc-idle-watch bin/cc-audit bin/ccm \
 				 lib/cc-common.sh lib/cc-common/*.sh lib/cc-title-icons.sh lib/install-hooks.sh \
-				 lib/cc-audit/*.sh \
+				 lib/cc-audit/*.sh lib/ccm.sh lib/ccm/*.sh \
                  lib/sync-preambles.sh hooks/cc-activity-log
 RYE           := $(HOME)/.rye/shims/rye
 SHELLCHECK    := /opt/homebrew/bin/shellcheck
@@ -24,6 +24,14 @@ SYMLINKS := \
 	$(PREFIX_BIN)/cc-activity-log:hooks/cc-activity-log \
 	$(PREFIX_LIB)/cc-common.sh:lib/cc-common.sh \
 	$(PREFIX_LIB)/cc-title-icons.sh:lib/cc-title-icons.sh \
+	$(PREFIX_LIB)/ccm.sh:lib/ccm.sh \
+	$(PREFIX_LIB)/ccm/utils.sh:lib/ccm/utils.sh \
+	$(PREFIX_LIB)/ccm/config.sh:lib/ccm/config.sh \
+	$(PREFIX_LIB)/ccm/notify.sh:lib/ccm/notify.sh \
+	$(PREFIX_LIB)/ccm/hooks.sh:lib/ccm/hooks.sh \
+	$(PREFIX_LIB)/ccm/logs.sh:lib/ccm/logs.sh \
+	$(PREFIX_LIB)/ccm/help.sh:lib/ccm/help.sh \
+	$(PREFIX_LIB)/ccm/main.sh:lib/ccm/main.sh \
 	$(PREFIX_LIB)/palette.json:data/palette.json \
 	$(PREFIX_LIB)/icons.json:data/icons.json \
 	$(PREFIX_LIB)/toml_writer.py:lib/toml_writer.py \
@@ -45,7 +53,7 @@ SYMLINKS := \
 
 install:
 	@find . -name "*.py[co]" -or -name "__pycache__" -exec rm -rf -- {} + 2>/dev/null; true
-	@mkdir -p $(PREFIX_BIN) $(PREFIX_LIB) $(PREFIX_KITTY) $(PREFIX_ZFUNC)
+	@mkdir -p $(PREFIX_BIN) $(PREFIX_LIB) $(PREFIX_LIB)/ccm $(PREFIX_KITTY) $(PREFIX_ZFUNC)
 	@$(foreach pair,$(SYMLINKS),\
 		if [ -d "$(word 1,$(subst :, ,$(pair)))" ] && [ ! -L "$(word 1,$(subst :, ,$(pair)))" ]; then \
 			rm -rf "$(word 1,$(subst :, ,$(pair)))"; \
