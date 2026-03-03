@@ -16,6 +16,29 @@ def safe_addstr(win, y, x, text, attr=0):
         win.addstr(y, x, text, attr)
 
 
+def draw_border(win, y, x, w, h, attr=0):
+    """Draw an ASCII box border one cell outside the content area.
+
+    The border wraps around a rectangle at (y, x) of size (w, h).
+    Total footprint: (w+2) columns x (h+2) rows starting at (y-1, x-1).
+    Off-screen edges are silently clipped by safe_addstr.
+    """
+    TL, TR, BL, BR, H, V = "+", "+", "+", "+", "-", "|"
+    top, bot, left, right = y - 1, y + h, x - 1, x + w
+    # Clear the border cells so characters aren't lost in the background
+    safe_addstr(win, top, left, " " * (w + 2), attr)
+    safe_addstr(win, bot, left, " " * (w + 2), attr)
+    for row in range(y, y + h):
+        safe_addstr(win, row, left, " ", attr)
+        safe_addstr(win, row, right, " ", attr)
+    # Draw the border characters
+    safe_addstr(win, top, left, TL + H * w + TR, attr)
+    safe_addstr(win, bot, left, BL + H * w + BR, attr)
+    for row in range(y, y + h):
+        safe_addstr(win, row, left, V, attr)
+        safe_addstr(win, row, right, V, attr)
+
+
 def _display_width(text):
     """Return the visual display width of text, accounting for wide characters."""
     w = 0

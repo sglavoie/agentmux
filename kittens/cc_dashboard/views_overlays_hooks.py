@@ -4,6 +4,7 @@ import curses
 
 from cc_dashboard.colors import (
     CP_ATTENTION,
+    CP_BORDER,
     CP_DIM,
     CP_HEADER,
     CP_INPUT_ACTIVE,
@@ -11,7 +12,7 @@ from cc_dashboard.colors import (
     CP_WARN,
     _cp_for_account,
 )
-from cc_dashboard.drawing import safe_addstr
+from cc_dashboard.drawing import draw_border, safe_addstr
 from cc_dashboard.views_shared import draw_footer
 
 _DRIFT_BADGES = {
@@ -569,6 +570,7 @@ def draw_hooks_info(stdscr, handler, matcher, event_name):
     blank_line = " " * box_w
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     title = "Hook Details"
     safe_addstr(
@@ -644,6 +646,7 @@ def draw_hooks_example(stdscr, event_name):
     blank_line = " " * box_w
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     title = f"Example: {event_name}"
     safe_addstr(

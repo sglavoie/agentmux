@@ -4,8 +4,8 @@ import curses
 import os
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.colors import CP_DIM, CP_HEADER, CP_NORMAL, _cp_for_palette_color
-from cc_dashboard.drawing import safe_addstr
+from cc_dashboard.colors import CP_BORDER, CP_DIM, CP_HEADER, CP_NORMAL, _cp_for_palette_color
+from cc_dashboard.drawing import draw_border, safe_addstr
 from cc_dashboard.filters import SORT_MODES
 from cc_dashboard.views_shared import _shorten_home
 
@@ -42,6 +42,7 @@ def draw_override_picker(stdscr, session, override_selected):
     dim_attr = curses.color_pair(CP_DIM)
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     title = "Override Config Dir"
     safe_addstr(
@@ -95,6 +96,7 @@ def draw_move_picker(stdscr, session, instance_labels, move_selected, subtitle=N
     dim_attr = curses.color_pair(CP_DIM)
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     title = "Move to Instance"
     safe_addstr(
@@ -144,6 +146,7 @@ def draw_session_action_picker(stdscr, subtitle, action_labels, selected):
     dim_attr = curses.color_pair(CP_DIM)
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     safe_addstr(
         stdscr,
@@ -192,6 +195,7 @@ def draw_config_picker(stdscr, config_entries, selected):
     dim_attr = curses.color_pair(CP_DIM)
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     title = "Config Files"
     safe_addstr(
@@ -258,6 +262,7 @@ def draw_sort_picker(stdscr, selected, current_mode):
     dim_attr = curses.color_pair(CP_DIM)
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     title = "Sort By"
     safe_addstr(
@@ -297,6 +302,7 @@ def draw_color_picker(stdscr, session, palette_names, current_color, account_col
     dim_attr = curses.color_pair(CP_DIM)
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     title = "Set Tab Color"
     safe_addstr(
@@ -358,6 +364,7 @@ def draw_config_action_picker(stdscr, label, path, selected):
     dim_attr = curses.color_pair(CP_DIM)
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
 
     title = f"Config: {label}"
     safe_addstr(

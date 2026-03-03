@@ -44,6 +44,7 @@ SYMLINKS := \
 .PHONY: install uninstall install-hooks sync-preambles lint format format-check typecheck check
 
 install:
+	@find . -name "*.py[co]" -or -name "__pycache__" -exec rm -rf -- {} + 2>/dev/null; true
 	@mkdir -p $(PREFIX_BIN) $(PREFIX_LIB) $(PREFIX_KITTY) $(PREFIX_ZFUNC)
 	@$(foreach pair,$(SYMLINKS),\
 		if [ -d "$(word 1,$(subst :, ,$(pair)))" ] && [ ! -L "$(word 1,$(subst :, ,$(pair)))" ]; then \

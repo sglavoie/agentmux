@@ -15,6 +15,7 @@ CP_INPUT = 5
 CP_INPUT_ACTIVE = 6
 CP_ATTENTION = 7
 CP_MATCH = 8
+CP_BORDER = 9
 
 # Dynamic account color pairs start at this offset.
 # Each account gets two pair IDs: one normal, one selected.
@@ -68,6 +69,7 @@ def init_colors():
         curses.init_pair(CP_INPUT, -1, -1)
         curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, sel_bg_slot)
         curses.init_pair(CP_ATTENTION, attention_slot, -1)
+        curses.init_pair(CP_BORDER, curses.COLOR_GREEN, -1)
 
         curses.init_color(base + 4, *_c(*MATCH_BG))
         match_bg_slot = base + 4
@@ -122,6 +124,7 @@ def init_colors():
         curses.init_pair(CP_INPUT, -1, -1)
         curses.init_pair(CP_INPUT_ACTIVE, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(CP_ATTENTION, curses.COLOR_RED, -1)
+        curses.init_pair(CP_BORDER, curses.COLOR_GREEN, -1)
         curses.init_pair(CP_MATCH, curses.COLOR_WHITE, curses.COLOR_BLACK)
 
         pair_id = _CP_ACCOUNT_BASE
