@@ -189,7 +189,7 @@ def draw_session_list(stdscr, sessions, selected, multi_instance=False):
 def draw_footer(stdscr, sort_mode="default"):
     """Draw the keybinding hints at the bottom."""
     rows, cols = stdscr.getmaxyx()
-    text = "ctrl+p Up  ctrl+n Down  Enter Switch  s Sort"
+    text = "ctrl+p Up  ctrl+n Down  Enter Switch  ctrl+s Sort"
     label = SORT_LABELS.get(sort_mode, "")
     if label:
         text += f" [{label}]"
@@ -274,7 +274,7 @@ def quick_switch_main(stdscr):
             continue
 
         # Sort picker
-        if key == ord("s"):
+        if key == 19:  # ctrl+s
             sort_picking = True
             sort_selected = SORT_MODES.index(sort_mode)
             continue
