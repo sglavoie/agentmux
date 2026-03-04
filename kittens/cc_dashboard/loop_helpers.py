@@ -20,6 +20,19 @@ def _compute_peek_matches(lines, query):
     return [i for i, line in enumerate(lines) if q in line.lower()]
 
 
+def _compute_browse_matches(entries, query):
+    """Return indices of browse entries whose title or session_id contains query."""
+    if not query:
+        return []
+    q = query.lower()
+    return [
+        i
+        for i, e in enumerate(entries)
+        if q in (e.get("title", "") or "").lower()
+        or q in e.get("session_id", "").lower()
+    ]
+
+
 def _rstrip_blank_lines(lines):
     """Remove trailing blank/whitespace-only lines from a list."""
     while lines and not lines[-1].strip():

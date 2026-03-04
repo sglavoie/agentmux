@@ -157,13 +157,28 @@ def draw_actlog_view(
     draw_footer(stdscr, "actlog_search" if search_active else "actlog")
 
 
-def draw_actlog_browse(stdscr, entries, selected, scroll):
+def draw_actlog_browse(
+    stdscr,
+    entries,
+    selected,
+    scroll,
+    search_query="",
+    search_active=False,
+    search_cursor=0,
+    match_line_indices=None,
+    match_index=0,
+):
     """Draw a tabular listing of all activity log files."""
     stdscr.clear()
     rows, cols = stdscr.getmaxyx()
     header_attr = curses.color_pair(CP_HEADER) | curses.A_BOLD
     normal_attr = curses.color_pair(CP_NORMAL)
     dim_attr = curses.color_pair(CP_DIM)
+    match_attr = curses.color_pair(CP_MATCH)
+
+    if match_line_indices is None:
+        match_line_indices = []
+    match_set = set(match_line_indices)
 
     safe_addstr(stdscr, 0, 2, "Activity Logs — Browse All", header_attr)
 
@@ -198,8 +213,15 @@ def draw_actlog_browse(stdscr, entries, selected, scroll):
         if y >= rows - 2:
             break
 
-        is_selected = (scroll + i) == selected
-        attr = normal_attr | (curses.A_REVERSE if is_selected else 0)
+        abs_idx = scroll + i
+        is_selected = abs_idx == selected
+        is_match = abs_idx in match_set
+        if is_selected:
+            attr = normal_attr | curses.A_REVERSE
+        elif is_match:
+            attr = match_attr
+        else:
+            attr = normal_attr
 
         sid_short = entry["session_id"][: id_w - 2]
         title = (entry.get("title", "") or "ended")[: title_w - 2]
@@ -225,8 +247,24 @@ def draw_actlog_browse(stdscr, entries, selected, scroll):
         safe_addstr(stdscr, y, 4, _pad_to_width(row_text[: cols - 5], cols - 5), attr)
 
     total = len(entries)
-    if total > content_height:
+    if search_active:
+        _draw_peek_search_bar(
+            stdscr,
+            search_query,
+            search_cursor,
+            len(match_line_indices),
+        )
+    elif match_line_indices:
+        indicator = f"[match {match_index + 1}/{len(match_line_indices)}]"
+        if total > content_height:
+            pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
+            safe_addstr(stdscr, rows - 2, 2, f"{indicator}  {pos}", dim_attr)
+        else:
+            safe_addstr(stdscr, rows - 2, 2, indicator, dim_attr)
+    elif total > content_height:
         pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
         safe_addstr(stdscr, rows - 2, 2, pos, dim_attr)
 
-    draw_footer(stdscr, "actlog_browse")
+    draw_footer(
+        stdscr, "actlog_browse_search" if search_active else "actlog_browse"
+    )

@@ -2,7 +2,11 @@
 
 import curses
 
-from cc_dashboard.loop_helpers import _compute_peek_matches, _rstrip_blank_lines
+from cc_dashboard.loop_helpers import (
+    _compute_browse_matches,
+    _compute_peek_matches,
+    _rstrip_blank_lines,
+)
 from cc_dashboard.remote.activity import list_activity_logs, load_activity_log
 from cc_dashboard.remote.command import get_window_text
 from cc_dashboard.views import _format_log_entry
@@ -154,50 +158,144 @@ def handle_actlog_mode(stdscr, key, state, sessions):
             state["actlog_browse_entries"] = list_activity_logs(sessions)
             state["actlog_browse_selected"] = 0
             state["actlog_browse_scroll"] = 0
+            state["actlog_browse_search_active"] = False
+            state["actlog_browse_search_query"] = ""
+            state["actlog_browse_search_cursor"] = 0
+            state["actlog_browse_match_lines"] = []
+            state["actlog_browse_match_index"] = 0
             state["mode"] = "actlog_browse"
         return False
 
     if mode == "actlog_browse":
-        if key in (ord("q"), ord("Q"), 27):
-            state["mode"] = "list"
-        elif key in (ord("j"), curses.KEY_DOWN) and state["actlog_browse_entries"]:
-            state["actlog_browse_selected"] = (
-                state["actlog_browse_selected"] + 1
-            ) % len(state["actlog_browse_entries"])
-            browse_content_h = stdscr.getmaxyx()[0] - 5
-            if (
-                state["actlog_browse_selected"]
-                >= state["actlog_browse_scroll"] + browse_content_h
-            ):
-                state["actlog_browse_scroll"] = (
-                    state["actlog_browse_selected"] - browse_content_h + 1
-                )
+        entries = state["actlog_browse_entries"]
+        total = len(entries)
+        browse_content_h = stdscr.getmaxyx()[0] - 5
+
+        def _browse_clamp_scroll():
+            if state["actlog_browse_selected"] >= state["actlog_browse_scroll"] + browse_content_h:
+                state["actlog_browse_scroll"] = state["actlog_browse_selected"] - browse_content_h + 1
             elif state["actlog_browse_selected"] < state["actlog_browse_scroll"]:
                 state["actlog_browse_scroll"] = state["actlog_browse_selected"]
-        elif key in (ord("k"), curses.KEY_UP) and state["actlog_browse_entries"]:
-            state["actlog_browse_selected"] = (
-                state["actlog_browse_selected"] - 1
-            ) % len(state["actlog_browse_entries"])
-            browse_content_h = stdscr.getmaxyx()[0] - 5
-            if (
-                state["actlog_browse_selected"]
-                >= state["actlog_browse_scroll"] + browse_content_h
-            ):
-                state["actlog_browse_scroll"] = (
-                    state["actlog_browse_selected"] - browse_content_h + 1
+
+        # --- Search input mode ---
+        if state["actlog_browse_search_active"]:
+            if key == 27:
+                state["actlog_browse_search_active"] = False
+                state["actlog_browse_search_query"] = ""
+                state["actlog_browse_search_cursor"] = 0
+                state["actlog_browse_match_lines"] = []
+                state["actlog_browse_match_index"] = 0
+            elif key in (10, 13, curses.KEY_ENTER):
+                state["actlog_browse_search_active"] = False
+                if state["actlog_browse_match_lines"]:
+                    state["actlog_browse_selected"] = state["actlog_browse_match_lines"][0]
+                    state["actlog_browse_match_index"] = 0
+                    _browse_clamp_scroll()
+            elif key in (127, 8, curses.KEY_BACKSPACE):
+                if state["actlog_browse_search_cursor"] > 0:
+                    query = state["actlog_browse_search_query"]
+                    cursor = state["actlog_browse_search_cursor"]
+                    state["actlog_browse_search_query"] = query[: cursor - 1] + query[cursor:]
+                    state["actlog_browse_search_cursor"] = cursor - 1
+                    state["actlog_browse_match_lines"] = _compute_browse_matches(
+                        entries, state["actlog_browse_search_query"]
+                    )
+                    state["actlog_browse_match_index"] = 0
+            elif key == curses.KEY_LEFT:
+                state["actlog_browse_search_cursor"] = max(
+                    0, state["actlog_browse_search_cursor"] - 1
                 )
-            elif state["actlog_browse_selected"] < state["actlog_browse_scroll"]:
-                state["actlog_browse_scroll"] = state["actlog_browse_selected"]
-        elif key in (10, 13, curses.KEY_ENTER) and state["actlog_browse_entries"]:
-            chosen = state["actlog_browse_entries"][state["actlog_browse_selected"]]
+            elif key == curses.KEY_RIGHT:
+                state["actlog_browse_search_cursor"] = min(
+                    len(state["actlog_browse_search_query"]),
+                    state["actlog_browse_search_cursor"] + 1,
+                )
+            elif 32 <= key <= 126:
+                ch = chr(key)
+                query = state["actlog_browse_search_query"]
+                cursor = state["actlog_browse_search_cursor"]
+                state["actlog_browse_search_query"] = query[:cursor] + ch + query[cursor:]
+                state["actlog_browse_search_cursor"] = cursor + 1
+                state["actlog_browse_match_lines"] = _compute_browse_matches(
+                    entries, state["actlog_browse_search_query"]
+                )
+                state["actlog_browse_match_index"] = 0
+            return True
+
+        # --- Normal mode ---
+        if key in (27, ord("q"), ord("Q")):
+            if state["actlog_browse_search_query"]:
+                state["actlog_browse_search_query"] = ""
+                state["actlog_browse_match_lines"] = []
+                state["actlog_browse_match_index"] = 0
+            else:
+                state["mode"] = "list"
+        elif key == ord("/"):
+            state["actlog_browse_search_active"] = True
+            state["actlog_browse_search_query"] = ""
+            state["actlog_browse_search_cursor"] = 0
+            state["actlog_browse_match_lines"] = []
+            state["actlog_browse_match_index"] = 0
+        elif key == ord("n"):
+            if state["actlog_browse_match_lines"]:
+                state["actlog_browse_match_index"] = (
+                    state["actlog_browse_match_index"] + 1
+                ) % len(state["actlog_browse_match_lines"])
+                state["actlog_browse_selected"] = state["actlog_browse_match_lines"][
+                    state["actlog_browse_match_index"]
+                ]
+                _browse_clamp_scroll()
+        elif key == ord("N"):
+            if state["actlog_browse_match_lines"]:
+                state["actlog_browse_match_index"] = (
+                    state["actlog_browse_match_index"] - 1
+                ) % len(state["actlog_browse_match_lines"])
+                state["actlog_browse_selected"] = state["actlog_browse_match_lines"][
+                    state["actlog_browse_match_index"]
+                ]
+                _browse_clamp_scroll()
+        elif key in (ord("j"), curses.KEY_DOWN) and total:
+            state["actlog_browse_selected"] = (state["actlog_browse_selected"] + 1) % total
+            _browse_clamp_scroll()
+        elif key in (ord("k"), curses.KEY_UP) and total:
+            state["actlog_browse_selected"] = (state["actlog_browse_selected"] - 1) % total
+            _browse_clamp_scroll()
+        elif key == ord("G") and total:
+            state["actlog_browse_selected"] = total - 1
+            _browse_clamp_scroll()
+        elif key == ord("g") and total:
+            state["actlog_browse_selected"] = 0
+            state["actlog_browse_scroll"] = 0
+        elif key == 4 and total:  # Ctrl+d
+            state["actlog_browse_selected"] = min(
+                state["actlog_browse_selected"] + browse_content_h // 2, total - 1
+            )
+            _browse_clamp_scroll()
+        elif key == 21 and total:  # Ctrl+u
+            state["actlog_browse_selected"] = max(
+                state["actlog_browse_selected"] - browse_content_h // 2, 0
+            )
+            _browse_clamp_scroll()
+        elif key in (6, curses.KEY_NPAGE) and total:  # Ctrl+f / Page Down
+            state["actlog_browse_selected"] = min(
+                state["actlog_browse_selected"] + browse_content_h, total - 1
+            )
+            _browse_clamp_scroll()
+        elif key in (2, curses.KEY_PPAGE) and total:  # Ctrl+b / Page Up
+            state["actlog_browse_selected"] = max(
+                state["actlog_browse_selected"] - browse_content_h, 0
+            )
+            _browse_clamp_scroll()
+        elif key in (10, 13, curses.KEY_ENTER) and total:
+            chosen = entries[state["actlog_browse_selected"]]
             sid = chosen["session_id"]
-            entries, summary = load_activity_log(sid)
-            if entries:
+            log_entries, summary = load_activity_log(sid)
+            if log_entries:
                 state["actlog_session_title"] = chosen.get("title", "") or sid[:12]
                 state["actlog_session_id"] = sid
                 state["actlog_summary"] = summary
                 state["actlog_lines"] = [
-                    _format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries
+                    _format_log_entry(e, stdscr.getmaxyx()[1]) for e in log_entries
                 ]
                 state["actlog_scroll"] = max(
                     0,

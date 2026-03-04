@@ -130,7 +130,16 @@ _FOOTER_HINTS = {
         "q/Esc Close",
     ],
     "actlog_search": ["Enter Confirm", "Esc Cancel"],
-    "actlog_browse": ["j/k Navigate", "Enter View", "q Back", "Esc Back"],
+    "actlog_browse": [
+        "j/k Navigate",
+        "^D/^U Half-page",
+        "G/g Top/Bot",
+        "/ Search",
+        "n/N Next/Prev",
+        "Enter View",
+        "q/Esc Back",
+    ],
+    "actlog_browse_search": ["Enter Confirm", "Esc Cancel"],
 }
 
 _ACTIONS_FOOTER_COMPACT = [

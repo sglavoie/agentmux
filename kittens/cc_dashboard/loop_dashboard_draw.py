@@ -117,6 +117,11 @@ def build_draw_state(state: dict[str, Any]) -> dict[str, Any]:
         "actlog_browse_entries": state["actlog_browse_entries"],
         "actlog_browse_selected": state["actlog_browse_selected"],
         "actlog_browse_scroll": state["actlog_browse_scroll"],
+        "actlog_browse_search_query": state["actlog_browse_search_query"],
+        "actlog_browse_search_active": state["actlog_browse_search_active"],
+        "actlog_browse_search_cursor": state["actlog_browse_search_cursor"],
+        "actlog_browse_match_lines": state["actlog_browse_match_lines"],
+        "actlog_browse_match_index": state["actlog_browse_match_index"],
         "color_selected": state.get("color_selected", 0),
         "palette_names": state.get("palette_names", []),
     }

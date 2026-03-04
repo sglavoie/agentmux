@@ -444,6 +444,11 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             state["actlog_browse_entries"],
             state["actlog_browse_selected"],
             state["actlog_browse_scroll"],
+            search_query=state["actlog_browse_search_query"],
+            search_active=state["actlog_browse_search_active"],
+            search_cursor=state["actlog_browse_search_cursor"],
+            match_line_indices=state["actlog_browse_match_lines"],
+            match_index=state["actlog_browse_match_index"],
         )
         if state["msg"] and state["msg_frames"] > 0:
             draw_status_message(stdscr, state["msg"])

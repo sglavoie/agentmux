@@ -223,7 +223,7 @@ def list_activity_logs(sessions):
             with open(path) as f:
                 for line in f:
                     event_count += 1
-                    if event_count == 1 and not running_ids.get(session_id):
+                    if not first_cwd and event_count <= 5 and not running_ids.get(session_id):
                         with contextlib.suppress(json.JSONDecodeError, ValueError):
                             first_cwd = json.loads(line.strip()).get("cwd", "")
         except OSError:
