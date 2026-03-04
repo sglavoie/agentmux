@@ -249,3 +249,53 @@ def list_activity_logs(sessions):
 
     entries.sort(key=lambda e: e["mtime"], reverse=True)
     return entries
+
+
+def search_all_logs(query, log_index, max_results=200, max_entries_per_file=5000, cols=120):
+    """Search across all activity log files for a case-insensitive substring match.
+
+    Returns a list of result dicts with session_id, title, formatted_line,
+    entry_index (line number within file), and ts.  Iterates log files in
+    log_index order (most-recent first) and stops once max_results is reached.
+    """
+    from cc_dashboard.views_overlays_logs import _format_log_entry
+
+    query_lower = query.lower()
+    results = []
+    total_scanned = 0
+
+    for log_entry in log_index:
+        session_id = log_entry["session_id"]
+        path = log_entry["path"]
+        title = log_entry.get("title", "") or session_id[:12]
+
+        try:
+            with open(path, errors="replace") as f:
+                for entry_index, line in enumerate(f):
+                    if entry_index >= max_entries_per_file:
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+
+                    formatted = _format_log_entry(entry, cols)
+                    total_scanned += 1
+
+                    if query_lower in formatted.lower():
+                        results.append({
+                            "session_id": session_id,
+                            "title": title,
+                            "formatted_line": formatted,
+                            "entry_index": entry_index,
+                            "ts": entry.get("ts"),
+                        })
+                        if len(results) >= max_results:
+                            return results, total_scanned
+        except OSError:
+            continue
+
+    return results, total_scanned

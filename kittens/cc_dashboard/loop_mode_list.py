@@ -3,6 +3,8 @@
 import curses
 from typing import Any
 
+from cc_dashboard.remote.activity import list_activity_logs
+
 
 def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
     """Handle key events while dashboard is in list mode.
@@ -264,6 +266,24 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         state["hooks_drift"] = state["cfg"]._detect_all_drift()
         state["hooks_selected"] = 0
         state["mode"] = "hooks"
+    elif key == 6 and not state["search_active"]:  # Ctrl+F -- global log search
+        log_index = list_activity_logs(state["sessions"])
+        if log_index:
+            state["actlog_gsearch_query"] = ""
+            state["actlog_gsearch_cursor"] = 0
+            state["actlog_gsearch_results"] = []
+            state["actlog_gsearch_selected"] = 0
+            state["actlog_gsearch_scroll"] = 0
+            state["actlog_gsearch_last_query"] = ""
+            state["actlog_gsearch_debounce_ticks"] = 0
+            state["actlog_gsearch_loading"] = False
+            state["actlog_gsearch_total_scanned"] = 0
+            state["actlog_gsearch_log_index"] = log_index
+            state["actlog_gsearch_search_active"] = True
+            state["mode"] = "actlog_gsearch"
+        else:
+            state["msg"] = "No activity logs found"
+            state["msg_frames"] = 20
     elif key == ord("L") and state["filtered"]:
         sess = state["filtered"][state["selected"]]
         sid = state["resolve_session_id"](sess["tab_id"])

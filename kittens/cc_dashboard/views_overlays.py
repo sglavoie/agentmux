@@ -20,6 +20,7 @@ from cc_dashboard.views_overlays_hooks import (
 from cc_dashboard.views_overlays_logs import (
     _format_log_entry,
     draw_actlog_browse,
+    draw_actlog_gsearch,
     draw_actlog_view,
 )
 from cc_dashboard.views_overlays_peek import draw_config_show, draw_peek_overlay
@@ -43,6 +44,7 @@ __all__ = [
     "_format_log_entry",
     "_hooks_event_rows",
     "draw_actlog_browse",
+    "draw_actlog_gsearch",
     "draw_actlog_view",
     "draw_color_picker",
     "draw_config_action_picker",

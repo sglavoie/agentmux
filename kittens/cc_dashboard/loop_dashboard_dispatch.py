@@ -288,7 +288,7 @@ def dispatch_mode(
         for k in hooks_state:
             state[k] = hooks_state[k]
 
-    elif mode in ("actlog", "actlog_browse"):
+    elif mode in ("actlog", "actlog_browse", "actlog_gsearch"):
         actlog_state: dict[str, Any] = {
             "mode": mode,
             "actlog_lines": state["actlog_lines"],
@@ -309,6 +309,17 @@ def dispatch_mode(
             "actlog_browse_search_cursor": state["actlog_browse_search_cursor"],
             "actlog_browse_match_lines": state["actlog_browse_match_lines"],
             "actlog_browse_match_index": state["actlog_browse_match_index"],
+            "actlog_gsearch_query": state["actlog_gsearch_query"],
+            "actlog_gsearch_cursor": state["actlog_gsearch_cursor"],
+            "actlog_gsearch_results": state["actlog_gsearch_results"],
+            "actlog_gsearch_selected": state["actlog_gsearch_selected"],
+            "actlog_gsearch_scroll": state["actlog_gsearch_scroll"],
+            "actlog_gsearch_last_query": state["actlog_gsearch_last_query"],
+            "actlog_gsearch_debounce_ticks": state["actlog_gsearch_debounce_ticks"],
+            "actlog_gsearch_loading": state["actlog_gsearch_loading"],
+            "actlog_gsearch_total_scanned": state["actlog_gsearch_total_scanned"],
+            "actlog_gsearch_log_index": state["actlog_gsearch_log_index"],
+            "actlog_gsearch_search_active": state["actlog_gsearch_search_active"],
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }

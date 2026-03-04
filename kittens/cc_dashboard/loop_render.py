@@ -8,6 +8,7 @@ from cc_dashboard.filters import SORT_LABELS
 from cc_dashboard.views import (
     DETAIL_PANE_HEIGHT,
     draw_actlog_browse,
+    draw_actlog_gsearch,
     draw_actlog_view,
     draw_batch_confirm_prompt,
     draw_clone_input,
@@ -452,3 +453,16 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         )
         if state["msg"] and state["msg_frames"] > 0:
             draw_status_message(stdscr, state["msg"])
+    elif mode == "actlog_gsearch":
+        draw_actlog_gsearch(
+            stdscr,
+            state["actlog_gsearch_query"],
+            state["actlog_gsearch_cursor"],
+            state["actlog_gsearch_results"],
+            state["actlog_gsearch_selected"],
+            state["actlog_gsearch_scroll"],
+            loading=state["actlog_gsearch_loading"],
+            total_scanned=state["actlog_gsearch_total_scanned"],
+            log_index=state["actlog_gsearch_log_index"],
+            search_active=state["actlog_gsearch_search_active"],
+        )

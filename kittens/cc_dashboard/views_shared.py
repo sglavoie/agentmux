@@ -33,6 +33,7 @@ _FOOTER_HINTS = {
         "Space Mark",
         "U Unmark",
         "^r Refresh",
+        "^F Search logs",
     ],
     "rename": ["Enter Confirm", "Esc Cancel"],
     "filter": ["1-N Toggle account", "f Done", "Esc Clear"],
@@ -136,10 +137,23 @@ _FOOTER_HINTS = {
         "G/g Top/Bot",
         "/ Search",
         "n/N Next/Prev",
+        "s Search all",
         "Enter View",
         "q/Esc Back",
     ],
     "actlog_browse_search": ["Enter Confirm", "Esc Cancel"],
+    "actlog_gsearch": [
+        "j/k Navigate",
+        "^D/^U Half-page",
+        "G/g Top/Bot",
+        "/ Search",
+        "Enter View",
+        "Esc Back",
+    ],
+    "actlog_gsearch_search": [
+        "Enter Confirm",
+        "Esc Clear",
+    ],
 }
 
 _ACTIONS_FOOTER_COMPACT = [

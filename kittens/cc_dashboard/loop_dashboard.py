@@ -40,7 +40,11 @@ from cc_dashboard.remote import (
     generate_clone_title,
 )
 from cc_dashboard.remote.actions_core import do_set_color
-from cc_dashboard.remote.activity import load_activity_log, resolve_session_id
+from cc_dashboard.remote.activity import (
+    load_activity_log,
+    resolve_session_id,
+    search_all_logs,
+)
 from cc_dashboard.remote.command import (
     get_all_kitty_sockets,
     get_host_tab_id,
@@ -222,6 +226,17 @@ def dashboard(stdscr):
         "actlog_browse_search_cursor": 0,
         "actlog_browse_match_lines": [],
         "actlog_browse_match_index": 0,
+        "actlog_gsearch_query": "",
+        "actlog_gsearch_cursor": 0,
+        "actlog_gsearch_results": [],
+        "actlog_gsearch_selected": 0,
+        "actlog_gsearch_scroll": 0,
+        "actlog_gsearch_last_query": "",
+        "actlog_gsearch_debounce_ticks": 0,
+        "actlog_gsearch_loading": False,
+        "actlog_gsearch_total_scanned": 0,
+        "actlog_gsearch_log_index": [],
+        "actlog_gsearch_search_active": True,
         "default_account": default_account,
         "default_pw": default_pw,
         "new_fields": {},
@@ -352,6 +367,27 @@ def dashboard(stdscr):
                             state["selected"],
                             max(0, len(state["filtered"]) - 1),
                         )
+            if state["mode"] == "actlog_gsearch":
+                if state["actlog_gsearch_debounce_ticks"] > 0:
+                    state["actlog_gsearch_debounce_ticks"] -= 1
+                    if state["actlog_gsearch_debounce_ticks"] == 0:
+                        query = state["actlog_gsearch_query"]
+                        if (
+                            len(query) >= 3
+                            and query != state["actlog_gsearch_last_query"]
+                        ):
+                            state["actlog_gsearch_loading"] = True
+                            results, total_scanned = search_all_logs(
+                                query,
+                                state["actlog_gsearch_log_index"],
+                                cols=stdscr.getmaxyx()[1],
+                            )
+                            state["actlog_gsearch_results"] = results
+                            state["actlog_gsearch_total_scanned"] = total_scanned
+                            state["actlog_gsearch_selected"] = 0
+                            state["actlog_gsearch_scroll"] = 0
+                            state["actlog_gsearch_last_query"] = query
+                            state["actlog_gsearch_loading"] = False
             continue
 
         state["refresh_ticks"] = 0
