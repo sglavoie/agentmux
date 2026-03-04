@@ -25,6 +25,15 @@ def draw_border(win, y, x, w, h, attr=0):
     """
     TL, TR, BL, BR, H, V = "+", "+", "+", "+", "-", "|"
     top, bot, left, right = y - 1, y + h, x - 1, x + w
+    # Clear 1-cell padding region outside the border
+    pad_top, pad_bot = y - 2, y + h + 1
+    pad_left, pad_right = x - 2, x + w + 1
+    pad_width = w + 4
+    safe_addstr(win, pad_top, pad_left, " " * pad_width, attr)
+    safe_addstr(win, pad_bot, pad_left, " " * pad_width, attr)
+    for row in range(y - 1, y + h + 1):
+        safe_addstr(win, row, pad_left, " ", attr)
+        safe_addstr(win, row, pad_right, " ", attr)
     # Clear the border cells so characters aren't lost in the background
     safe_addstr(win, top, left, " " * (w + 2), attr)
     safe_addstr(win, bot, left, " " * (w + 2), attr)
