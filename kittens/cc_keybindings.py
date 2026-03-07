@@ -47,6 +47,7 @@ _SECTIONS = [
             ("F4", "Clear markers and state icons"),
             ("F5", "Toggle flag on current tab"),
             ("F6", "Set tab color (color picker overlay)"),
+            ("F7", "Set tab status (status overlay)"),
             ("F12", "Broadcast input to all tab windows"),
             ("Cmd+1..0", "Switch to tab 1-10"),
             ("Cmd+L", "Toggle between last two tabs"),

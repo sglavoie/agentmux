@@ -20,3 +20,4 @@ _default_sort_sessions = ""
 _default_dashboard_refresh = 3
 _default_idle_alert_minutes = 0
 _default_notify_idle = ""
+_default_tab_statuses: list[str] = []

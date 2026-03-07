@@ -90,6 +90,7 @@ def load_defaults():
     _state._default_dashboard_refresh = 3
     _state._default_idle_alert_minutes = 0
     _state._default_notify_idle = ""
+    _state._default_tab_statuses = []
 
     path = _defaults_config_path()
     if not os.path.isfile(path):
@@ -117,6 +118,41 @@ def load_defaults():
     if "idle" in notifications:
         val = notifications["idle"]
         _state._default_notify_idle = "on" if val is True else ("" if val is False else str(val))
+    if "tab_statuses" in defaults:
+        val = defaults["tab_statuses"]
+        if isinstance(val, list):
+            _state._default_tab_statuses = [str(s) for s in val]
+
+
+def _save_tab_statuses(statuses):
+    """Write tab_statuses back to defaults.toml, preserving other settings."""
+    path = _defaults_config_path()
+    toml_writer = _import_toml_writer()
+
+    # Read existing data
+    header = ""
+    defaults = {}
+    notifications = {}
+    if os.path.isfile(path):
+        from toml_reader import read_header_comments
+
+        header = read_header_comments(path)
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        defaults = data.get("defaults", {})
+        notifications = data.get("notifications", {})
+
+    defaults["tab_statuses"] = statuses
+    _state._default_tab_statuses = statuses
+
+    out = {}
+    if defaults:
+        out["defaults"] = defaults
+    if notifications:
+        out["notifications"] = notifications
+    with open(path, "w") as f:
+        f.write(toml_writer.dumps(out, header=header))
+        f.write("\n")
 
 
 def _sessions_config_path():

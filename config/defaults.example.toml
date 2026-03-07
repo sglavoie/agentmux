@@ -11,6 +11,9 @@
 #                       Values: (omitted) = preserve file order, "alpha" = alphabetical
 #   dashboard_refresh — Auto-refresh interval (seconds) for the dashboard.
 #                       Values: 0 = disabled, any positive integer = interval. Default: 3
+#   tab_statuses      — Array of status presets shown in the F7 tab status picker.
+#                       Custom values entered via F7 are auto-appended here.
+#                       Default: ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
 #
 # [notifications] keys:
 #   error             — Show a macOS notification on tool use failures. Default: false
@@ -33,6 +36,7 @@
 # project_window = "stack"
 # sort_sessions = "alpha"
 # dashboard_refresh = 3
+# tab_statuses = ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
 
 # [notifications]
 # error = true
