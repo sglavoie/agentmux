@@ -15,6 +15,7 @@ _FOOTER_HINTS = {
     "list": [
         "q Quit",
         "Enter Focus",
+        "x Close",
         "t Actions",
         "e Edit",
         "n New",

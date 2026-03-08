@@ -196,6 +196,17 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         state["msg_frames"] = 20
     elif key == ord("d"):
         state["show_detail"] = not state["show_detail"]
+    elif key == ord("x") and state["filtered"]:
+        if state["marked"]:
+            state["actions_targets"] = [
+                s for s in state["filtered"] if s["tab_id"] in state["marked"]
+            ]
+            state["batch_targets"] = list(state["actions_targets"])
+            state["mode"] = "confirm_batch_close"
+        else:
+            state["actions_targets"] = [state["filtered"][state["selected"]]]
+            state["actions_scope"] = "selected"
+            state["mode"] = "confirm"
     elif key == ord("t") and state["filtered"]:
         state["actions_targets"] = []
         if state["marked"]:
