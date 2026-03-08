@@ -3,6 +3,7 @@
 import json
 
 from cc_dashboard import config as _cfg
+from cc_dashboard.config_core import read_notes
 from cc_dashboard.remote.activity import (
     cleanup_stale_activity,
     load_activity,
@@ -117,6 +118,7 @@ def query_sessions(socket, managed_only=True):
             cc_color = user_vars.get("cc_color", "")
 
             title = _strip_icons(tab.get("title", ""))
+            cc_notes = read_notes(title)
             icon_state = _detect_state(tab_title)
             tab_id = tab.get("id", 0)
             activity = load_activity(tab_id)
@@ -132,6 +134,7 @@ def query_sessions(socket, managed_only=True):
                     "cc_flags": cc_flags,
                     "cc_pw": cc_pw,
                     "cc_env": cc_env,
+                    "cc_notes": cc_notes,
                     "cc_color": cc_color,
                     "git": git_info,
                     "model": session_meta.get("model", ""),

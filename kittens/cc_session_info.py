@@ -42,6 +42,7 @@ from cc_dashboard.colors import (
     _cp_for_account,
 )
 from cc_dashboard.config import load_accounts, load_defaults
+from cc_dashboard.config_core import read_notes
 from cc_dashboard.drawing import safe_addstr, shorten_path
 from cc_dashboard.remote.activity import (
     load_activity,
@@ -191,6 +192,13 @@ def _build_lines(session, info, cols):
     env = session.get("cc_env", "")
     if env:
         lines.append(("kv", "Env vars", env))
+
+    notes_text = read_notes(session["title"])
+    if notes_text:
+        note_lines = notes_text.split("\n")
+        lines.append(("kv", "Notes", note_lines[0]))
+        for nl in note_lines[1:]:
+            lines.append(("kv", "", nl))
 
     if git:
         dirty_str = "dirty" if git["dirty"] else "clean"

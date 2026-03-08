@@ -49,6 +49,7 @@ _SECTIONS = [
             ("F6", "Set tab color (color picker overlay)"),
             ("F7", "Set tab status (status overlay)"),
             ("F8", "Session info overlay"),
+            ("F9", "Edit session notes"),
             ("F12", "Broadcast input to all tab windows"),
             ("Cmd+1..0", "Switch to tab 1-10"),
             ("Cmd+L", "Toggle between last two tabs"),

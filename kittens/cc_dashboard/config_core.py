@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+import re
 import shutil
 import sys
 import tomllib
@@ -91,6 +92,7 @@ def load_defaults():
     _state._default_idle_alert_minutes = 0
     _state._default_notify_idle = ""
     _state._default_tab_statuses = []
+    _state._default_notes_editor = ""
 
     path = _defaults_config_path()
     if not os.path.isfile(path):
@@ -118,6 +120,8 @@ def load_defaults():
     if "idle" in notifications:
         val = notifications["idle"]
         _state._default_notify_idle = "on" if val is True else ("" if val is False else str(val))
+    if "notes_editor" in defaults:
+        _state._default_notes_editor = str(defaults["notes_editor"])
     if "tab_statuses" in defaults:
         val = defaults["tab_statuses"]
         if isinstance(val, list):
@@ -179,6 +183,50 @@ def _config_dir():
         "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
     )
     return os.path.join(xdg, "cc-manager")
+
+
+def _notes_dir():
+    """Return the notes directory, creating it if necessary."""
+    d = os.path.join(_config_dir(), "notes")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _sanitize_title(title):
+    """Sanitize a session title for use as a filename."""
+    name = title.replace(":", "_")
+    name = re.sub(r'[/\x00]', '', name)
+    return name
+
+
+def notes_file_for_title(title):
+    """Return the notes file path for a given session title."""
+    return os.path.join(_notes_dir(), f"{_sanitize_title(title)}.md")
+
+
+def read_notes(title):
+    """Read notes for a session title. Returns '' if no notes file exists."""
+    path = notes_file_for_title(title)
+    if os.path.isfile(path):
+        with open(path) as f:
+            return f.read()
+    return ""
+
+
+def rename_notes(old_title, new_title):
+    """Rename a notes file when a session title changes."""
+    old_path = notes_file_for_title(old_title)
+    if os.path.isfile(old_path):
+        new_path = notes_file_for_title(new_title)
+        os.rename(old_path, new_path)
+
+
+def _resolve_notes_editor():
+    """Return the editor command to use for session notes."""
+    return (_state._default_notes_editor
+            or os.environ.get("EDITOR")
+            or os.environ.get("VISUAL")
+            or "vim")
 
 
 def _sessions_config_filename():
@@ -434,6 +482,8 @@ def update_session(original_title, title, directory, account, flags="", pw="", e
         if entry.get("title") == original_title:
             entries[i] = _session_to_toml_entry(title, directory, account, flags, pw, env)
             found = True
+            if original_title != title:
+                rename_notes(original_title, title)
             break
 
     if not found:

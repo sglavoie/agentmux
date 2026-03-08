@@ -134,6 +134,16 @@ def draw_detail_pane(stdscr, session, detail_y):
         safe_addstr(stdscr, y, lx, " Env vars: ", label_attr)
         safe_addstr(stdscr, y, lx + 11, env_display[: cols - lx - 12], val_attr)
 
+    notes_raw = session.get("cc_notes", "")
+    if notes_raw:
+        note_lines = notes_raw.split("\n")
+        y += 1
+        safe_addstr(stdscr, y, lx, " Notes: ", label_attr)
+        safe_addstr(stdscr, y, lx + 8, note_lines[0][: cols - lx - 9], val_attr)
+        for nl in note_lines[1:]:
+            y += 1
+            safe_addstr(stdscr, y, lx + 8, nl[: cols - lx - 9], val_attr)
+
     y += 1
     git_info = session.get("git")
     safe_addstr(stdscr, y, lx, " Branch: ", label_attr)
