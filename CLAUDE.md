@@ -28,6 +28,8 @@ The codebase has a unified CLI entry point, a shared Bash library, a shared data
 
 ## Key conventions
 
+The curses dashboard (`kittens/`) must use ASCII-only characters for all text output. Curses does not reliably render Unicode symbols (checkmarks, arrows, etc.), so use plain ASCII alternatives (e.g. `Y`/`N`, `*`, `>`).
+
 Account detection uses Kitty user vars (`--var cc_account=NAME` set at launch time) as the primary method, with a fallback to parsing `CLAUDE_CONFIG_DIR` from process cmdlines. Both the shell scripts and the Python kitten implement this two-tier lookup. Additional user vars `cc_flags`, `cc_pw`, and `cc_env` store the per-session flags, project window override, and environment variables respectively for round-trip fidelity with save, restart, clone, and move operations.
 
 Config files use TOML format. New installs use `ccm config init` to create example configs. The config directory defaults to `~/.config/cc-manager/` but can be overridden via `CC_MANAGER_CONFIG` and `CC_MANAGER_ACCOUNTS` environment variables.

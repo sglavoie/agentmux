@@ -77,20 +77,21 @@ def draw_list_view(
 
     c_title = 20
     c_acct = 10
+    c_notes = 6
     c_branch = 24
     c_status = 18
-    c_dir = max(12, cols - c_title - c_acct - c_inst - c_branch - c_status - 8)
+    c_dir = max(12, cols - c_title - c_acct - c_inst - c_notes - c_branch - c_status - 8)
 
     hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}"
     if multi_instance:
         hdr += f"{'Instance':<{c_inst}}"
-    hdr += f"{'Directory':<{c_dir}}{'Branch':<{c_branch}}{'Status'}"
+    hdr += f"{'Directory':<{c_dir}}{'Notes':<{c_notes}}{'Branch':<{c_branch}}{'Status'}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
     sep = f"  {'─' * c_title}{'─' * c_acct}"
     if multi_instance:
         sep += "─" * c_inst
-    sep += f"{'─' * c_dir}{'─' * c_branch}{'─' * c_status}"
+    sep += f"{'─' * c_dir}{'─' * c_notes}{'─' * c_branch}{'─' * c_status}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     avail = rows - 8
@@ -148,7 +149,9 @@ def draw_list_view(
         line = f"{mark}{title_padded}{s['account']:<{c_acct}}"
         if multi_instance:
             line += f"{s.get('instance_label', ''):<{c_inst}}"
+        notes_indicator = "Y" if s.get("cc_notes", "") else " "
         line += f"{short_dir:<{c_dir}}"
+        line += f"{notes_indicator:<{c_notes}}"
         line += f"{branch_display:<{c_branch}}"
 
         row_attr = curses.color_pair(cp)

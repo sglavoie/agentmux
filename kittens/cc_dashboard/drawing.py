@@ -80,10 +80,22 @@ def _pad_to_width(text, width):
 
 
 def shorten_path(path, max_len):
-    """Collapse home prefix to ~ and truncate long paths with a leading ellipsis."""
+    """Collapse home prefix to ~ and truncate long paths with a leading ellipsis.
+
+    After collapsing the home prefix, keeps only the last 2 path segments
+    to save horizontal space (e.g. ~/a/b/c → b/c).
+    """
     home = os.path.expanduser("~")
     if path.startswith(home):
         path = "~" + path[len(home) :]
+    # Keep only the last 2 segments (drop ~ prefix for splitting)
+    if path.startswith("~/"):
+        inner = path[2:]
+        segments = inner.split("/")
+        if len(segments) > 2:
+            path = "/".join(segments[-2:])
+        else:
+            path = inner
     if max_len < 4:
         return path[:max_len]
     if len(path) <= max_len:
