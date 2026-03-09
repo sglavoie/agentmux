@@ -265,7 +265,7 @@ def _draw(
         footer_text = f"Current: {status_display}"
         safe_addstr(stdscr, footer_y, box_x + 2, footer_text, dim_attr)
         if not custom_mode:
-            hint = "d Delete"
+            hint = "c Clear  d Delete"
             hint_x = box_x + box_w - len(hint) - 2
             if hint_x > box_x + 2 + len(footer_text) + 2:
                 safe_addstr(stdscr, footer_y, hint_x, hint, dim_attr)
@@ -374,6 +374,8 @@ def _run(stdscr, session):
                 else:
                     # Clear
                     return ("clear", "")
+            elif key in (ord("c"), ord("C")):
+                return ("clear", "")
             elif key in (ord("d"), ord("x")) and selected < len(statuses):
                 confirm_delete = True
                 delete_target = selected
