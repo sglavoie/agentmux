@@ -139,6 +139,7 @@ def _build_session_actions(sess, scope, multi_instance):
         ("override", "Override config dir"),
         ("rename", "Rename session"),
         ("color", "Set tab color"),
+        ("edit_notes", "Edit notes"),
         ("close", "Close session"),
     ]
     if sess.get("git"):

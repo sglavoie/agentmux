@@ -169,6 +169,8 @@ def dispatch_mode(
                 state["home_socket"],
             ),
             "palette_names": state["palette_names"],
+            "do_edit_notes": state["do_edit_notes"],
+            "home_socket": state["home_socket"],
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }

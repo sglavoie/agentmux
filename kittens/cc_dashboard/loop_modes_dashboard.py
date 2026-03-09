@@ -107,6 +107,15 @@ def handle_actions_mode(key, state, build_session_actions):
                 if name == current_color:
                     state["color_selected"] = i
                     break
+        elif action_id == "edit_notes":
+            sess_socket = sess.get("socket", state.get("home_socket", ""))
+            ok = state["do_edit_notes"](sess_socket, sess["tab_id"], sess["title"])
+            if ok:
+                state["msg"] = "Notes editor opened"
+            else:
+                state["msg"] = "Failed to open notes editor"
+            state["msg_frames"] = 20
+            state["mode"] = "list"
         elif action_id == "rename":
             state["mode"] = "rename"
             title = sess["title"]

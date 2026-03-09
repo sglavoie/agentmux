@@ -7,8 +7,10 @@ import re
 import shlex
 import subprocess
 import time
+from pathlib import Path
 
 from cc_dashboard import config as _cfg
+from cc_dashboard.config_core import _resolve_notes_editor, notes_file_for_title
 from cc_dashboard.remote.command import kitty_cmd
 from cc_dashboard.remote.shared import (
     _ICON_STAR,
@@ -51,6 +53,34 @@ def do_set_color(socket, session, color_name):
             f"cc_color={color_name}",
         )
 
+    return True
+
+
+def do_edit_notes(socket, tab_id, title):
+    """Open the notes editor as an overlay on the target session's tab.
+
+    Returns True on success.
+    """
+    editor = _resolve_notes_editor()
+    filepath = notes_file_for_title(title)
+    Path(filepath).touch()
+    try:
+        subprocess.Popen(
+            [
+                "kitty",
+                "@",
+                "--to",
+                socket,
+                "launch",
+                "--type=overlay",
+                *shlex.split(editor),
+                filepath,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return False
     return True
 
 
