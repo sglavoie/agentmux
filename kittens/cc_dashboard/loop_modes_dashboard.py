@@ -352,10 +352,18 @@ def handle_confirm_modes(key, state):
                 return True
 
             ok = state["do_close"](target_socket, target["tab_id"])
-            state["sessions"] = state["query_all_sessions"](
-                managed_only=(not state["show_all"])
-            )
-            state["refilter"]()
+            if ok:
+                closed_id = target["tab_id"]
+                state["sessions"] = [
+                    s for s in state["sessions"] if s["tab_id"] != closed_id
+                ]
+                state["filtered"] = [
+                    s for s in state["filtered"] if s["tab_id"] != closed_id
+                ]
+                state["marked"].discard(closed_id)
+                state["selected"] = min(
+                    state["selected"], max(0, len(state["filtered"]) - 1)
+                )
             if ok:
                 state["msg"] = "Session closed"
             else:
@@ -413,6 +421,7 @@ def handle_confirm_modes(key, state):
                 ),
             )
             closed = 0
+            closed_ids = set()
             for t in targets_sorted:
                 t_socket = t.get("socket", state["home_socket"])
                 if has_host and t["tab_id"] == state["host_tab_id"]:
@@ -421,12 +430,19 @@ def handle_confirm_modes(key, state):
                     return True
                 if state["do_close"](t_socket, t["tab_id"]):
                     closed += 1
+                    closed_ids.add(t["tab_id"])
 
             state["marked"].clear()
-            state["sessions"] = state["query_all_sessions"](
-                managed_only=(not state["show_all"])
-            )
-            state["refilter"]()
+            if closed_ids:
+                state["sessions"] = [
+                    s for s in state["sessions"] if s["tab_id"] not in closed_ids
+                ]
+                state["filtered"] = [
+                    s for s in state["filtered"] if s["tab_id"] not in closed_ids
+                ]
+                state["selected"] = min(
+                    state["selected"], max(0, len(state["filtered"]) - 1)
+                )
             state["msg"] = f"Closed {closed} session(s)"
             state["msg_frames"] = 20
         state["mode"] = "list"
