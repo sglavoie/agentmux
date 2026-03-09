@@ -5,6 +5,7 @@ Launched via F7, displays an interactive picker to set a status suffix
 like " - reviewing" or " - WIP" on the current tab's title.
 """
 
+import contextlib
 import curses
 import json
 import os
@@ -30,7 +31,15 @@ for _mod in list(sys.modules):
     if _mod.startswith("cc_dashboard"):
         del sys.modules[_mod]
 
-from cc_dashboard.colors import CP_BORDER, CP_DIM, CP_HEADER, CP_INPUT, CP_NORMAL, CP_WARN, init_colors
+from cc_dashboard.colors import (
+    CP_BORDER,
+    CP_DIM,
+    CP_HEADER,
+    CP_INPUT,
+    CP_NORMAL,
+    CP_WARN,
+    init_colors,
+)
 from cc_dashboard.config import load_accounts, load_defaults
 from cc_dashboard.config_core import _save_tab_statuses
 from cc_dashboard.drawing import draw_border, safe_addstr
@@ -42,7 +51,15 @@ from cc_dashboard.remote.shared import (
     _strip_override_marker,
 )
 
-_DEFAULT_STATUSES = ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
+_DEFAULT_STATUSES = [
+    "reviewing",
+    "WIP",
+    "blocked",
+    "testing",
+    "done",
+    "paused",
+    "debugging",
+]
 
 
 def _load_statuses():
@@ -124,14 +141,22 @@ def _get_current_session(socket):
     return None
 
 
-def _draw(stdscr, session, statuses, selected, custom_mode, custom_value, custom_cursor, confirm_delete, delete_target):
+def _draw(
+    stdscr,
+    session,
+    statuses,
+    selected,
+    custom_mode,
+    custom_value,
+    custom_cursor,
+    confirm_delete,
+    delete_target,
+):
     """Render the status picker popup."""
     stdscr.erase()
     rows, cols = stdscr.getmaxyx()
 
-    current_status = _extract_status(
-        _strip_override_marker(session["title"])
-    )[1]
+    current_status = _extract_status(_strip_override_marker(session["title"]))[1]
 
     # Items: presets + Custom... + Clear status
     total_items = len(statuses) + 2
@@ -144,21 +169,29 @@ def _draw(stdscr, session, statuses, selected, custom_mode, custom_value, custom
     blank_line = " " * box_w
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
-    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
+    draw_border(
+        stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD
+    )
 
     # Header
     header = "Set Tab Status"
     safe_addstr(
-        stdscr, box_y, box_x + max(0, (box_w - len(header)) // 2),
-        header, curses.color_pair(CP_HEADER) | curses.A_BOLD,
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(header)) // 2),
+        header,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
     # Subtitle
     base_title = _extract_status(_strip_override_marker(session["title"]))[0]
     sub = f'for "{base_title}"'
     safe_addstr(
-        stdscr, box_y + 1, box_x + max(0, (box_w - len(sub)) // 2),
-        sub, dim_attr,
+        stdscr,
+        box_y + 1,
+        box_x + max(0, (box_w - len(sub)) // 2),
+        sub,
+        dim_attr,
     )
 
     normal_attr = curses.color_pair(CP_NORMAL)
@@ -189,19 +222,25 @@ def _draw(stdscr, session, statuses, selected, custom_mode, custom_value, custom
         if custom_mode:
             prefix = f"{marker}  Custom: "
             input_attr = curses.color_pair(CP_INPUT)
-            safe_addstr(stdscr, custom_y, box_x + 2, prefix, normal_attr | curses.A_BOLD)
+            safe_addstr(
+                stdscr, custom_y, box_x + 2, prefix, normal_attr | curses.A_BOLD
+            )
             # Draw input field
             field_x = box_x + 2 + len(prefix)
             field_w = box_w - len(prefix) - 4
             display = custom_value[:field_w]
-            safe_addstr(stdscr, custom_y, field_x, display + " " * max(0, field_w - len(display)), input_attr)
+            safe_addstr(
+                stdscr,
+                custom_y,
+                field_x,
+                display + " " * max(0, field_w - len(display)),
+                input_attr,
+            )
             # Cursor
             cursor_x = field_x + min(custom_cursor, field_w - 1)
             curses.curs_set(1)
-            try:
+            with contextlib.suppress(curses.error):
                 stdscr.move(custom_y, cursor_x)
-            except curses.error:
-                pass
         else:
             curses.curs_set(0)
             check = "✓ " if current_status and current_status not in statuses else "  "
@@ -241,9 +280,7 @@ def _run(stdscr, session):
 
     statuses = _load_statuses()
 
-    current_status = _extract_status(
-        _strip_override_marker(session["title"])
-    )[1]
+    current_status = _extract_status(_strip_override_marker(session["title"]))[1]
 
     total = len(statuses) + 2  # presets + Custom + Clear
 
@@ -262,7 +299,17 @@ def _run(stdscr, session):
     delete_target = -1
 
     while True:
-        _draw(stdscr, session, statuses, selected, custom_mode, custom_value, custom_cursor, confirm_delete, delete_target)
+        _draw(
+            stdscr,
+            session,
+            statuses,
+            selected,
+            custom_mode,
+            custom_value,
+            custom_cursor,
+            confirm_delete,
+            delete_target,
+        )
         stdscr.refresh()
 
         key = stdscr.getch()
@@ -279,7 +326,9 @@ def _run(stdscr, session):
                     return ("custom", stripped)
             elif key in (127, 8, curses.KEY_BACKSPACE):
                 if custom_cursor > 0:
-                    custom_value = custom_value[:custom_cursor - 1] + custom_value[custom_cursor:]
+                    custom_value = (
+                        custom_value[: custom_cursor - 1] + custom_value[custom_cursor:]
+                    )
                     custom_cursor -= 1
             elif key == curses.KEY_LEFT:
                 if custom_cursor > 0:
@@ -292,7 +341,11 @@ def _run(stdscr, session):
             elif key == curses.KEY_END or key == 5:  # Ctrl+E
                 custom_cursor = len(custom_value)
             elif 32 <= key <= 126:
-                custom_value = custom_value[:custom_cursor] + chr(key) + custom_value[custom_cursor:]
+                custom_value = (
+                    custom_value[:custom_cursor]
+                    + chr(key)
+                    + custom_value[custom_cursor:]
+                )
                 custom_cursor += 1
         elif confirm_delete:
             if key == ord("y"):
@@ -321,10 +374,9 @@ def _run(stdscr, session):
                 else:
                     # Clear
                     return ("clear", "")
-            elif key in (ord("d"), ord("x")):
-                if selected < len(statuses):
-                    confirm_delete = True
-                    delete_target = selected
+            elif key in (ord("d"), ord("x")) and selected < len(statuses):
+                confirm_delete = True
+                delete_target = selected
 
 
 def main(args=None):

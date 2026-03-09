@@ -55,7 +55,7 @@ fi
 # ── Resolve absolute path to cc-hook-indicator ───────────────────────────────
 
 HOOK_CMD=""
-# Try the standard install location first (matches Makefile PREFIX_BIN)
+# Try the standard install location first (matches Justfile prefix_bin)
 if [[ -x "$HOME/.local/bin/cc-hook-indicator" ]]; then
 	HOOK_CMD="$HOME/.local/bin/cc-hook-indicator"
 else

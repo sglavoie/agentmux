@@ -570,7 +570,9 @@ def draw_hooks_info(stdscr, handler, matcher, event_name):
     blank_line = " " * box_w
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
-    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
+    draw_border(
+        stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD
+    )
 
     title = "Hook Details"
     safe_addstr(
@@ -646,7 +648,9 @@ def draw_hooks_example(stdscr, event_name):
     blank_line = " " * box_w
     for dy in range(box_h):
         safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
-    draw_border(stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD)
+    draw_border(
+        stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD
+    )
 
     title = f"Example: {event_name}"
     safe_addstr(

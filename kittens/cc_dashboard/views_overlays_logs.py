@@ -266,9 +266,7 @@ def draw_actlog_browse(
         pos = f"[{scroll + 1}-{min(scroll + content_height, total)}/{total}]"
         safe_addstr(stdscr, rows - 2, 2, pos, dim_attr)
 
-    draw_footer(
-        stdscr, "actlog_browse_search" if search_active else "actlog_browse"
-    )
+    draw_footer(stdscr, "actlog_browse_search" if search_active else "actlog_browse")
 
 
 def draw_actlog_gsearch(
@@ -290,7 +288,6 @@ def draw_actlog_gsearch(
     normal_attr = curses.color_pair(CP_NORMAL)
     dim_attr = curses.color_pair(CP_DIM)
     warn_attr = curses.color_pair(CP_WARN)
-    match_attr = curses.color_pair(CP_MATCH)
     span_attr = curses.color_pair(CP_WARN) | curses.A_BOLD
 
     safe_addstr(stdscr, 0, 2, "Global Log Search", header_attr)
@@ -307,7 +304,9 @@ def draw_actlog_gsearch(
     input_attr = curses.color_pair(CP_INPUT_ACTIVE)
     if search_active:
         safe_addstr(stdscr, 1, x, before, input_attr)
-        safe_addstr(stdscr, 1, x + len(before), cursor_ch, input_attr | curses.A_REVERSE)
+        safe_addstr(
+            stdscr, 1, x + len(before), cursor_ch, input_attr | curses.A_REVERSE
+        )
         if after_rest:
             safe_addstr(stdscr, 1, x + len(before) + 1, after_rest, input_attr)
     else:
@@ -337,7 +336,9 @@ def draw_actlog_gsearch(
     content_start = 4
     content_height = rows - content_start - 2
     if content_height < 1:
-        draw_footer(stdscr, "actlog_gsearch_search" if search_active else "actlog_gsearch")
+        draw_footer(
+            stdscr, "actlog_gsearch_search" if search_active else "actlog_gsearch"
+        )
         return
 
     visible = results[scroll : scroll + content_height]
@@ -349,28 +350,33 @@ def draw_actlog_gsearch(
         abs_idx = scroll + i
         is_selected = abs_idx == selected
 
-        title_short = (result.get("title", "") or "?")[:title_w - 2]
+        title_short = (result.get("title", "") or "?")[: title_w - 2]
         ts = result.get("ts")
         time_str = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "??:??:??"
         detail = result.get("formatted_line", "")
         # Strip the time prefix from formatted_line since we show it separately
         if detail.startswith(time_str):
-            detail = detail[len(time_str):].lstrip()
+            detail = detail[len(time_str) :].lstrip()
 
         row_text = title_short.ljust(title_w) + time_str + "  " + detail
         clipped = row_text[: cols - 5]
 
-        if is_selected:
-            attr = normal_attr | curses.A_REVERSE
-        else:
-            attr = normal_attr
+        attr = normal_attr | curses.A_REVERSE if is_selected else normal_attr
 
         if query and not is_selected:
             # Use _render_peek_line for match highlighting
             _render_peek_line(
-                stdscr, y, " " * 4 + clipped, cols,
-                query, True, False,
-                normal_attr, normal_attr, span_attr, span_attr,
+                stdscr,
+                y,
+                " " * 4 + clipped,
+                cols,
+                query,
+                True,
+                False,
+                normal_attr,
+                normal_attr,
+                span_attr,
+                span_attr,
             )
         else:
             safe_addstr(stdscr, y, 4, _pad_to_width(clipped, cols - 5), attr)

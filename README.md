@@ -17,15 +17,15 @@ You also need `jq` installed (`brew install jq` on macOS).
 
 ### 1. Install
 
-Clone the repo and run `make install`:
+Clone the repo and run `just install`:
 
 ```bash
 git clone <repo-url> ~/path/to/cc-manager-kitty
 cd ~/path/to/cc-manager-kitty
-make install
+just install
 ```
 
-This creates symlinks for the binaries into `~/.local/bin/`, the Kitty kitten and config into `~/.config/kitty/`, and the Zsh completions into `~/.zfunc/`. Running it again is safe (idempotent). To remove everything, run `make uninstall`.
+This creates symlinks for the binaries into `~/.local/bin/`, the Kitty kitten and config into `~/.config/kitty/`, and the Zsh completions into `~/.zfunc/`. Running it again is safe (idempotent). To remove everything, run `just uninstall`.
 
 ### 2. Include the Kitty config snippet
 
@@ -234,7 +234,7 @@ The Kitty socket is auto-detected from `KITTY_LISTEN_ON` or by finding the most 
 
 ## Shell completions
 
-Zsh completions for both `cc-launch` and `cc-status` are installed to `~/.zfunc/` by `make install`. Make sure your `~/.zshrc` includes `~/.zfunc` in `fpath` and calls `compinit`:
+Zsh completions for both `cc-launch` and `cc-status` are installed to `~/.zfunc/` by `just install`. Make sure your `~/.zshrc` includes `~/.zfunc` in `fpath` and calls `compinit`:
 
 ```bash
 fpath=(~/.zfunc $fpath)
@@ -246,7 +246,7 @@ This enables tab completion for all subcommands, tab titles (for `--close`), acc
 ## File layout
 
 ```plaintext
-Makefile                        Install/uninstall symlinks
+Justfile                        Install/uninstall symlinks
 cc-manager.conf                 Kitty config snippet (include from kitty.conf)
 bin/cc-launch                   Session launcher and manager
 bin/cc-status                   Status overview tool

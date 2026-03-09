@@ -29,7 +29,7 @@ When FILE is omitted, edit/show/path operate on all four config files.
 The sync subcommand replaces the documentation header (above the marker line)
 in each user config file with the latest version from the example files, while
 preserving all user data below the marker. This runs automatically during
-'make install' but can also be invoked standalone.
+'just install' but can also be invoked standalone.
 HELP
 		;;
 	notify)

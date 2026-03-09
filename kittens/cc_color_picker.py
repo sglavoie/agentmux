@@ -31,10 +31,9 @@ for _mod in list(sys.modules):
         del sys.modules[_mod]
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.colors import CP_DIM, init_colors
+from cc_dashboard.colors import init_colors
 from cc_dashboard.config import load_accounts, load_defaults
 from cc_dashboard.config_data import PALETTE_NAMES
-from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.remote.actions_core import do_set_color
 from cc_dashboard.remote.command import get_kitty_socket, kitty_cmd
 from cc_dashboard.remote.shared import _strip_icons

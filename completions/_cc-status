@@ -1,7 +1,7 @@
 #compdef cc-status
 
 # Zsh completion for cc-status — Claude Code session status viewer.
-# Installed to ~/.zfunc/ by `make install`.
+# Installed to ~/.zfunc/ by `just install`.
 
 _cc_status_sockets() {
     local -a socks

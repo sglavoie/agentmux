@@ -38,8 +38,8 @@ from cc_dashboard.colors import (
     CP_HEADER,
     CP_NORMAL,
     CP_WARN,
-    init_colors,
     _cp_for_account,
+    init_colors,
 )
 from cc_dashboard.config import load_accounts, load_defaults
 from cc_dashboard.config_core import read_notes
@@ -163,7 +163,7 @@ def _build_lines(session, info, cols):
       ("blank",)                 - empty line
       ("dim", text)              - dim informational text
     """
-    lines = []
+    lines: list[tuple] = []
     account = session.get("account", "")
     account_color = _cfg._accounts.get(account, {}).get("color", "gray")
     activity = info.get("activity")
@@ -174,12 +174,10 @@ def _build_lines(session, info, cols):
 
     # === Session ===
     lines.append(("header", "Session"))
-    lines.append(("kv2", "Account", f"{account} ({account_color})",
-                   "Status", state))
+    lines.append(("kv2", "Account", f"{account} ({account_color})", "Status", state))
     cwd = session.get("cwd", "")
     cwd_display = shorten_path(cwd, cols - 20) if cwd else "(unknown)"
-    lines.append(("kv2", "Directory", cwd_display,
-                   "Tab ID", str(session["tab_id"])))
+    lines.append(("kv2", "Directory", cwd_display, "Tab ID", str(session["tab_id"])))
 
     flags = session.get("cc_flags", "")
     if flags:
@@ -202,8 +200,7 @@ def _build_lines(session, info, cols):
 
     if git:
         dirty_str = "dirty" if git["dirty"] else "clean"
-        lines.append(("kv2", "Branch", git["branch"],
-                       "Worktree", dirty_str))
+        lines.append(("kv2", "Branch", git["branch"], "Worktree", dirty_str))
 
     model = meta.get("model", "")
     if model:
@@ -227,28 +224,49 @@ def _build_lines(session, info, cols):
         age_str = format_duration(now - first_ts) if first_ts else "?"
         idle_str = format_duration(now - last_ts) if last_ts else "?"
 
-        total_events = (activity.get("prompt_count", 0)
-                        + activity.get("tool_use_count", 0)
-                        + activity.get("tool_failure_count", 0)
-                        + activity.get("permission_count", 0)
-                        + activity.get("stop_count", 0))
+        total_events = (
+            activity.get("prompt_count", 0)
+            + activity.get("tool_use_count", 0)
+            + activity.get("tool_failure_count", 0)
+            + activity.get("permission_count", 0)
+            + activity.get("stop_count", 0)
+        )
 
-        lines.append(("kv2", "Session age", age_str,
-                       "Idle time", idle_str))
-        lines.append(("kv2", "Events", str(total_events),
-                       "Stops", str(activity.get("stop_count", 0))))
-        lines.append(("kv2", "Prompts", str(activity.get("prompt_count", 0)),
-                       "Tools", str(activity.get("tool_use_count", 0))))
-        lines.append(("kv2", "Errors", str(activity.get("tool_failure_count", 0)),
-                       "Permissions", str(activity.get("permission_count", 0))))
+        lines.append(("kv2", "Session age", age_str, "Idle time", idle_str))
+        lines.append(
+            (
+                "kv2",
+                "Events",
+                str(total_events),
+                "Stops",
+                str(activity.get("stop_count", 0)),
+            )
+        )
+        lines.append(
+            (
+                "kv2",
+                "Prompts",
+                str(activity.get("prompt_count", 0)),
+                "Tools",
+                str(activity.get("tool_use_count", 0)),
+            )
+        )
+        lines.append(
+            (
+                "kv2",
+                "Errors",
+                str(activity.get("tool_failure_count", 0)),
+                "Permissions",
+                str(activity.get("permission_count", 0)),
+            )
+        )
 
         subagents = activity.get("total_subagents", 0)
         active_sub = activity.get("active_subagents", 0)
         tasks = activity.get("task_completed_count", 0)
         if subagents or tasks:
             sub_str = f"{active_sub} active / {subagents} total" if subagents else "0"
-            lines.append(("kv2", "Subagents", sub_str,
-                           "Tasks done", str(tasks)))
+            lines.append(("kv2", "Subagents", sub_str, "Tasks done", str(tasks)))
     else:
         lines.append(("dim", "No activity data (hooks not installed?)"))
 
@@ -266,8 +284,9 @@ def _build_lines(session, info, cols):
     duration = summary.get("duration", "")
     if duration:
         lines.append(("header", "Log Summary"))
-        lines.append(("kv2", "Duration", duration,
-                       "Total entries", str(summary.get("total", 0))))
+        lines.append(
+            ("kv2", "Duration", duration, "Total entries", str(summary.get("total", 0)))
+        )
         if info.get("session_id"):
             lines.append(("kv", "Session ID", info["session_id"]))
         lines.append(("blank",))
@@ -306,7 +325,7 @@ def _draw(stdscr, session, lines, scroll):
     # Content area
     content_start = 2
     content_height = rows - 4  # leave room for footer
-    visible = lines[scroll:scroll + content_height]
+    visible = lines[scroll : scroll + content_height]
 
     key_col = 4
     val_col = 18
@@ -323,21 +342,25 @@ def _draw(stdscr, session, lines, scroll):
             safe_addstr(stdscr, y, 2, f"=== {line[1]} ===", header_attr)
         elif kind == "kv":
             safe_addstr(stdscr, y, key_col, f"{line[1]}:", dim_attr)
-            safe_addstr(stdscr, y, val_col, str(line[2])[:cols - val_col - 1],
-                        normal_attr)
+            safe_addstr(
+                stdscr, y, val_col, str(line[2])[: cols - val_col - 1], normal_attr
+            )
         elif kind == "kv2":
             safe_addstr(stdscr, y, key_col, f"{line[1]}:", dim_attr)
-            safe_addstr(stdscr, y, val_col,
-                        str(line[2])[:key2_col - val_col - 2], normal_attr)
+            safe_addstr(
+                stdscr, y, val_col, str(line[2])[: key2_col - val_col - 2], normal_attr
+            )
             safe_addstr(stdscr, y, key2_col, f"{line[3]}:", dim_attr)
-            safe_addstr(stdscr, y, val2_col,
-                        str(line[4])[:cols - val2_col - 1], normal_attr)
+            safe_addstr(
+                stdscr, y, val2_col, str(line[4])[: cols - val2_col - 1], normal_attr
+            )
         elif kind == "tool":
             rank_str = f"  {line[3]:>4}x  {line[2]}"
             safe_addstr(stdscr, y, key_col, rank_str, normal_attr)
         elif kind == "log":
-            safe_addstr(stdscr, y, key_col, str(line[1])[:cols - key_col - 1],
-                        dim_attr)
+            safe_addstr(
+                stdscr, y, key_col, str(line[1])[: cols - key_col - 1], dim_attr
+            )
         elif kind == "dim":
             safe_addstr(stdscr, y, key_col, str(line[1]), warn_attr)
         # "blank" -> skip

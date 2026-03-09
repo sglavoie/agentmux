@@ -8,13 +8,13 @@ cc-manager-kitty is a Claude Code session manager for the Kitty terminal. It man
 
 ## Installation and testing
 
-There is no build step or test suite. The project consists of shell scripts and a Python kitten. Install and uninstall via `make install` and `make uninstall`, which create/remove symlinks to `~/.local/bin/`, `~/.config/kitty/`, and `~/.zfunc/`. To verify changes manually, run `cc-launch --help` or `cc-status --help` after installing.
+There is no build step or test suite. The project consists of shell scripts and a Python kitten. Install and uninstall via `just install` and `just uninstall`, which create/remove symlinks to `~/.local/bin/`, `~/.config/kitty/`, and `~/.zfunc/`. To verify changes manually, run `cc-launch --help` or `cc-status --help` after installing.
 
 ## Architecture
 
 The codebase has a unified CLI entry point, a shared Bash library, a shared data layer, and three main components.
 
-`data/` contains the shared JSON data files that serve as the single source of truth for the color palette and icon set. `data/palette.json` defines all 10 named colors with their active/inactive background hex values and text foreground RGB arrays. `data/icons.json` defines the star and state icons (bolt, stop, key, error) along with a `state_order` array for consistent regex construction. Both the Bash library (via `jq`) and the Python kitten code (via `json` stdlib) read from these files at runtime. The JSON files are symlinked into `~/.local/lib/cc-manager/` by `make install`.
+`data/` contains the shared JSON data files that serve as the single source of truth for the color palette and icon set. `data/palette.json` defines all 10 named colors with their active/inactive background hex values and text foreground RGB arrays. `data/icons.json` defines the star and state icons (bolt, stop, key, error) along with a `state_order` array for consistent regex construction. Both the Bash library (via `jq`) and the Python kitten code (via `json` stdlib) read from these files at runtime. The JSON files are symlinked into `~/.local/lib/cc-manager/` by `just install`.
 
 `bin/ccm` is the unified CLI entry point that provides a single `ccm` command with subcommands. It delegates `ccm launch`, `ccm status`, and `ccm star` to the existing scripts via `exec`, and implements `ccm config` subcommands (edit, show, path, init, sync) for managing config files. It also provides `ccm dashboard` to launch the curses kitten and `ccm help` for discoverability.
 
@@ -34,7 +34,7 @@ Config files use TOML format. New installs use `ccm config init` to create examp
 
 `accounts.toml` uses `[[accounts]]` entries with `name`, `config_dir`, and `color` keys. `sessions.toml` uses `[[sessions]]` entries with required `title`, `directory`, `account` keys and optional `flags`, `project_window`, `env` keys. `defaults.toml` has a `[defaults]` section (with `claude_flags`, `project_window`, `sort_sessions`, `dashboard_refresh`) and a `[notifications]` section (with boolean `error`, `permission`, `stop`, `idle`, plus `idle_alert_minutes`, `min_secs`, and `ignore_patterns` as an array of strings).
 
-The TOML infrastructure consists of `lib/toml_reader.py` (uses stdlib `tomllib`), `lib/toml_writer.py` (pure-Python serializer, no third-party deps), and `lib/toml-helper.py` (CLI bridge for Bash scripts, outputting TSV). These are symlinked to `~/.local/lib/cc-manager/` by `make install`.
+The TOML infrastructure consists of `lib/toml_reader.py` (uses stdlib `tomllib`), `lib/toml_writer.py` (pure-Python serializer, no third-party deps), and `lib/toml-helper.py` (CLI bridge for Bash scripts, outputting TSV). These are symlinked to `~/.local/lib/cc-manager/` by `just install`.
 
 Override resolution follows a simple model: if a session's optional key is omitted, the global default applies; if it is `"-"`, the feature is disabled; any other value replaces the global default entirely with no merging. Note that the `--save` command reconstructs `sessions.toml` from live Kitty tab state and cannot recover per-session flag or project_window overrides. The env key is round-tripped via the `cc_env` Kitty user var.
 

@@ -33,8 +33,11 @@ def do_set_color(socket, session, color_name):
     result = kitty_cmd(
         socket,
         "set-tab-color",
-        "--match", f"id:{tab_id}",
-        *_cfg._palette_tab_colors(account, color_override=color_name, config_dir_override=config_dir),
+        "--match",
+        f"id:{tab_id}",
+        *_cfg._palette_tab_colors(
+            account, color_override=color_name, config_dir_override=config_dir
+        ),
     )
     if not result or result.returncode != 0:
         return False
@@ -43,7 +46,8 @@ def do_set_color(socket, session, color_name):
         kitty_cmd(
             socket,
             "set-user-vars",
-            "--match", f"id:{win_id}",
+            "--match",
+            f"id:{win_id}",
             f"cc_color={color_name}",
         )
 
@@ -281,7 +285,9 @@ def do_launch(
             "set-tab-color",
             "--match",
             f"title:^{title}$",
-            *_cfg._palette_tab_colors(account, color_override=color_override, config_dir_override=config_dir),
+            *_cfg._palette_tab_colors(
+                account, color_override=color_override, config_dir_override=config_dir
+            ),
         )
         if result and result.returncode == 0:
             break

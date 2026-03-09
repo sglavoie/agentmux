@@ -161,7 +161,9 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["pick_marked"] = set()
             state["pick_target_instance"] = state["home_instance_label"]
         else:
-            state["msg"] = f"No sessions configured in {state['cfg']._sessions_config_filename()}"
+            state["msg"] = (
+                f"No sessions configured in {state['cfg']._sessions_config_filename()}"
+            )
             state["msg_frames"] = 20
     elif key == ord("D"):
         state["reload_all_config"]()
@@ -183,7 +185,9 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["delete_cursor"] = 0
             state["delete_search_active"] = False
         else:
-            state["msg"] = f"No sessions configured in {state['cfg']._sessions_config_filename()}"
+            state["msg"] = (
+                f"No sessions configured in {state['cfg']._sessions_config_filename()}"
+            )
             state["msg_frames"] = 20
     elif key == ord("a"):
         state["show_all"] = not state["show_all"]

@@ -1,7 +1,7 @@
 #compdef ccm
 
 # Zsh completion for ccm — Claude Code Manager CLI.
-# Installed to ~/.zfunc/ by `make install`.
+# Installed to ~/.zfunc/ by `just install`.
 
 _ccm_config_files() {
     local -a files

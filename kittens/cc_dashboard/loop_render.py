@@ -190,8 +190,12 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             account_color = acct_info.get("color", "gray")
             current_color = sess.get("cc_color", "") or account_color
             draw_color_picker(
-                stdscr, sess, state["palette_names"],
-                current_color, account_color, state["color_selected"],
+                stdscr,
+                sess,
+                state["palette_names"],
+                current_color,
+                account_color,
+                state["color_selected"],
             )
             draw_footer(stdscr, "color_picker")
         elif mode == "actions" and filtered:

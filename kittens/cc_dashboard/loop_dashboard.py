@@ -6,6 +6,7 @@ from typing import Any
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.colors import init_colors
+from cc_dashboard.config_data import PALETTE_NAMES
 from cc_dashboard.filters import _apply_filters, _apply_sort, _sort_pick_entries
 from cc_dashboard.loop_dashboard_dispatch import dispatch_mode
 from cc_dashboard.loop_dashboard_draw import build_draw_state
@@ -27,7 +28,6 @@ from cc_dashboard.loop_helpers import (
     _reload_all_config as _reload_all_config_helper,
 )
 from cc_dashboard.loop_render import draw_dashboard_frame
-from cc_dashboard.config_data import PALETTE_NAMES
 from cc_dashboard.remote import (
     _spawn_detached_close,
     compute_insert_location,
@@ -367,27 +367,26 @@ def dashboard(stdscr):
                             state["selected"],
                             max(0, len(state["filtered"]) - 1),
                         )
-            if state["mode"] == "actlog_gsearch":
-                if state["actlog_gsearch_debounce_ticks"] > 0:
-                    state["actlog_gsearch_debounce_ticks"] -= 1
-                    if state["actlog_gsearch_debounce_ticks"] == 0:
-                        query = state["actlog_gsearch_query"]
-                        if (
-                            len(query) >= 3
-                            and query != state["actlog_gsearch_last_query"]
-                        ):
-                            state["actlog_gsearch_loading"] = True
-                            results, total_scanned = search_all_logs(
-                                query,
-                                state["actlog_gsearch_log_index"],
-                                cols=stdscr.getmaxyx()[1],
-                            )
-                            state["actlog_gsearch_results"] = results
-                            state["actlog_gsearch_total_scanned"] = total_scanned
-                            state["actlog_gsearch_selected"] = 0
-                            state["actlog_gsearch_scroll"] = 0
-                            state["actlog_gsearch_last_query"] = query
-                            state["actlog_gsearch_loading"] = False
+            if (
+                state["mode"] == "actlog_gsearch"
+                and state["actlog_gsearch_debounce_ticks"] > 0
+            ):
+                state["actlog_gsearch_debounce_ticks"] -= 1
+                if state["actlog_gsearch_debounce_ticks"] == 0:
+                    query = state["actlog_gsearch_query"]
+                    if len(query) >= 3 and query != state["actlog_gsearch_last_query"]:
+                        state["actlog_gsearch_loading"] = True
+                        results, total_scanned = search_all_logs(
+                            query,
+                            state["actlog_gsearch_log_index"],
+                            cols=stdscr.getmaxyx()[1],
+                        )
+                        state["actlog_gsearch_results"] = results
+                        state["actlog_gsearch_total_scanned"] = total_scanned
+                        state["actlog_gsearch_selected"] = 0
+                        state["actlog_gsearch_scroll"] = 0
+                        state["actlog_gsearch_last_query"] = query
+                        state["actlog_gsearch_loading"] = False
             continue
 
         state["refresh_ticks"] = 0

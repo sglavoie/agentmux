@@ -290,7 +290,10 @@ def main():
     load_sessions()
 
     if not _cfg._sessions:
-        print(f"No sessions configured in {_cfg._sessions_config_filename()}", file=sys.stderr)
+        print(
+            f"No sessions configured in {_cfg._sessions_config_filename()}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     socket = get_kitty_socket()

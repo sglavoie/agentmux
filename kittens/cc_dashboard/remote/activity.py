@@ -223,7 +223,11 @@ def list_activity_logs(sessions):
             with open(path) as f:
                 for line in f:
                     event_count += 1
-                    if not first_cwd and event_count <= 5 and not running_ids.get(session_id):
+                    if (
+                        not first_cwd
+                        and event_count <= 5
+                        and not running_ids.get(session_id)
+                    ):
                         with contextlib.suppress(json.JSONDecodeError, ValueError):
                             first_cwd = json.loads(line.strip()).get("cwd", "")
         except OSError:
@@ -251,7 +255,9 @@ def list_activity_logs(sessions):
     return entries
 
 
-def search_all_logs(query, log_index, max_results=200, max_entries_per_file=5000, cols=120):
+def search_all_logs(
+    query, log_index, max_results=200, max_entries_per_file=5000, cols=120
+):
     """Search across all activity log files for a case-insensitive substring match.
 
     Returns a list of result dicts with session_id, title, formatted_line,
@@ -286,13 +292,15 @@ def search_all_logs(query, log_index, max_results=200, max_entries_per_file=5000
                     total_scanned += 1
 
                     if query_lower in formatted.lower():
-                        results.append({
-                            "session_id": session_id,
-                            "title": title,
-                            "formatted_line": formatted,
-                            "entry_index": entry_index,
-                            "ts": entry.get("ts"),
-                        })
+                        results.append(
+                            {
+                                "session_id": session_id,
+                                "title": title,
+                                "formatted_line": formatted,
+                                "entry_index": entry_index,
+                                "ts": entry.get("ts"),
+                            }
+                        )
                         if len(results) >= max_results:
                             return results, total_scanned
         except OSError:

@@ -102,7 +102,10 @@ def draw_detail_pane(stdscr, session, detail_y):
     y += 1
     safe_addstr(stdscr, y, lx, " Config dir: ", label_attr)
     safe_addstr(
-        stdscr, y, lx + 13, config_dir[: mid - lx - 14],
+        stdscr,
+        y,
+        lx + 13,
+        config_dir[: mid - lx - 14],
         override_attr if config_dir_overridden else val_attr,
     )
     safe_addstr(stdscr, y, rx, "Flags: ", label_attr)

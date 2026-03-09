@@ -184,7 +184,11 @@ def draw_pick_view(stdscr, entries, selected, running_count, marked=None):
     if marked is None:
         marked = set()
     mark_count = len(marked)
-    title = f"Launch from Config ({mark_count} marked)" if mark_count else "Launch from Config"
+    title = (
+        f"Launch from Config ({mark_count} marked)"
+        if mark_count
+        else "Launch from Config"
+    )
     safe_addstr(
         stdscr,
         1,

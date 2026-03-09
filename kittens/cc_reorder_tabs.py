@@ -19,7 +19,7 @@ def main(args: list[str]) -> None:
 
 
 try:
-    from kittens.tui.handler import result_handler  # type: ignore[import-untyped]
+    from kittens.tui.handler import result_handler
 except ImportError:
 
     def result_handler(*_args: Any, **_kwargs: Any) -> Callable[[Any], Any]:

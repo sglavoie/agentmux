@@ -22,7 +22,7 @@ def _kitten_dir():
 
     When Kitty runs a kitten via ``kitten foo.py``, ``__file__`` may not be
     defined.  Fall back to ``sys.argv[0]`` (which Kitty sets to the script
-    path) and finally to ``~/.config/kitty/`` where ``make install`` symlinks
+    path) and finally to ``~/.config/kitty/`` where ``just install`` symlinks
     the kittens.
     """
     for candidate in (
@@ -65,7 +65,7 @@ def main(args=None):
 # main() returns.  All tab actions are performed from within main() via
 # subprocess calls to kitty @, so handle_result is intentionally a no-op.
 try:
-    from kittens.tui.handler import result_handler  # type: ignore[import-untyped]
+    from kittens.tui.handler import result_handler
 
     @result_handler()
     def handle_result(args, answer, target_window_id, boss):

@@ -16,7 +16,7 @@ def _lib_dir():
     """Return the ``lib/`` directory containing ``toml_writer``/``toml_reader``.
 
     Resolves symlinks so this works both in-repo and when installed via
-    ``make install`` (which symlinks ``cc_dashboard/`` into ``~/.config/kitty/``).
+    ``just install`` (which symlinks ``cc_dashboard/`` into ``~/.config/kitty/``).
     """
     here = os.path.dirname(os.path.realpath(__file__))
     return os.path.join(here, "..", "..", "lib")
@@ -111,7 +111,9 @@ def load_defaults():
         _state._default_sort_sessions = str(defaults["sort_sessions"])
     if "dashboard_refresh" in defaults:
         with contextlib.suppress(ValueError, TypeError):
-            _state._default_dashboard_refresh = max(0, int(defaults["dashboard_refresh"]))
+            _state._default_dashboard_refresh = max(
+                0, int(defaults["dashboard_refresh"])
+            )
     if "idle_alert_minutes" in notifications:
         with contextlib.suppress(ValueError, TypeError):
             _state._default_idle_alert_minutes = max(
@@ -119,7 +121,9 @@ def load_defaults():
             )
     if "idle" in notifications:
         val = notifications["idle"]
-        _state._default_notify_idle = "on" if val is True else ("" if val is False else str(val))
+        _state._default_notify_idle = (
+            "on" if val is True else ("" if val is False else str(val))
+        )
     if "notes_editor" in defaults:
         _state._default_notes_editor = str(defaults["notes_editor"])
     if "tab_statuses" in defaults:
@@ -195,7 +199,7 @@ def _notes_dir():
 def _sanitize_title(title):
     """Sanitize a session title for use as a filename."""
     name = title.replace(":", "_")
-    name = re.sub(r'[/\x00]', '', name)
+    name = re.sub(r"[/\x00]", "", name)
     return name
 
 
@@ -223,10 +227,12 @@ def rename_notes(old_title, new_title):
 
 def _resolve_notes_editor():
     """Return the editor command to use for session notes."""
-    return (_state._default_notes_editor
-            or os.environ.get("EDITOR")
-            or os.environ.get("VISUAL")
-            or "vim")
+    return (
+        _state._default_notes_editor
+        or os.environ.get("EDITOR")
+        or os.environ.get("VISUAL")
+        or "vim"
+    )
 
 
 def _sessions_config_filename():
@@ -370,7 +376,7 @@ def _tilde_directory(directory):
     """Replace ``$HOME`` prefix with ``~`` in *directory*."""
     home = os.path.expanduser("~")
     if directory.startswith(home):
-        return "~" + directory[len(home):]
+        return "~" + directory[len(home) :]
     return directory
 
 
@@ -436,8 +442,7 @@ def save_sessions(live_sessions):
     if not header:
         saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         header = (
-            "# cc-manager session definitions\n"
-            f"# Saved by dashboard on {saved_at}\n"
+            f"# cc-manager session definitions\n# Saved by dashboard on {saved_at}\n"
         )
     _write_sessions_toml(path, entries, header=header.rstrip("\n"))
 
@@ -455,9 +460,7 @@ def append_session(title, directory, account, flags="", pw="", env=""):
     if os.path.isfile(path):
         header = _read_header_comments(path)
         entries = _read_sessions_toml_raw(path)
-    entries.append(
-        _session_to_toml_entry(title, directory, account, flags, pw, env)
-    )
+    entries.append(_session_to_toml_entry(title, directory, account, flags, pw, env))
     _write_sessions_toml(path, entries, header=header.rstrip("\n") if header else "")
 
     load_sessions()
@@ -480,7 +483,9 @@ def update_session(original_title, title, directory, account, flags="", pw="", e
     found = False
     for i, entry in enumerate(entries):
         if entry.get("title") == original_title:
-            entries[i] = _session_to_toml_entry(title, directory, account, flags, pw, env)
+            entries[i] = _session_to_toml_entry(
+                title, directory, account, flags, pw, env
+            )
             found = True
             if original_title != title:
                 rename_notes(original_title, title)

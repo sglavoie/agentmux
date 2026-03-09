@@ -13,7 +13,6 @@ load_accounts() {
 	_ACCOUNT_COLORS=()
 
 	if [[ -f "$ACCOUNTS_CONFIG" ]]; then
-		local line
 		while IFS=$'\t' read -r name config_dir color; do
 			[[ -z "$name" ]] && continue
 			config_dir="$(expand_tilde "$config_dir")"

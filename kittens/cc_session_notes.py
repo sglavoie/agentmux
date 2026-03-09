@@ -9,6 +9,7 @@ plain files in ~/.config/cc-manager/notes/{sanitized_title}.md.
 import os
 import shlex
 import sys
+from pathlib import Path
 
 
 def _kitten_dir():
@@ -30,19 +31,19 @@ for _mod in list(sys.modules):
     if _mod.startswith("cc_dashboard"):
         del sys.modules[_mod]
 
-from cc_dashboard.config import load_accounts, load_defaults  # noqa: E402
-from cc_dashboard.config_core import (  # noqa: E402
+from cc_dashboard.config import load_accounts, load_defaults
+from cc_dashboard.config_core import (
     _resolve_notes_editor,
     notes_file_for_title,
 )
-from cc_dashboard.remote.shared import _strip_icons  # noqa: E402
+from cc_dashboard.remote.shared import _strip_icons
 
 
 def main(args=None):
     pass
 
 
-from kittens.tui.handler import result_handler  # noqa: E402
+from kittens.tui.handler import result_handler
 
 
 @result_handler(no_ui=True)
@@ -79,8 +80,7 @@ def handle_result(args, result, target_window_id, boss):
 
     # Ensure the file exists so the editor opens cleanly
     if not os.path.isfile(filepath):
-        with open(filepath, "w") as f:
-            pass
+        Path(filepath).touch()
 
     boss.call_remote_control(
         None,

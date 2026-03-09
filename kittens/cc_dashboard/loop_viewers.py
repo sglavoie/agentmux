@@ -172,8 +172,13 @@ def handle_actlog_mode(stdscr, key, state, sessions):
         browse_content_h = stdscr.getmaxyx()[0] - 5
 
         def _browse_clamp_scroll():
-            if state["actlog_browse_selected"] >= state["actlog_browse_scroll"] + browse_content_h:
-                state["actlog_browse_scroll"] = state["actlog_browse_selected"] - browse_content_h + 1
+            if (
+                state["actlog_browse_selected"]
+                >= state["actlog_browse_scroll"] + browse_content_h
+            ):
+                state["actlog_browse_scroll"] = (
+                    state["actlog_browse_selected"] - browse_content_h + 1
+                )
             elif state["actlog_browse_selected"] < state["actlog_browse_scroll"]:
                 state["actlog_browse_scroll"] = state["actlog_browse_selected"]
 
@@ -188,14 +193,18 @@ def handle_actlog_mode(stdscr, key, state, sessions):
             elif key in (10, 13, curses.KEY_ENTER):
                 state["actlog_browse_search_active"] = False
                 if state["actlog_browse_match_lines"]:
-                    state["actlog_browse_selected"] = state["actlog_browse_match_lines"][0]
+                    state["actlog_browse_selected"] = state[
+                        "actlog_browse_match_lines"
+                    ][0]
                     state["actlog_browse_match_index"] = 0
                     _browse_clamp_scroll()
             elif key in (127, 8, curses.KEY_BACKSPACE):
                 if state["actlog_browse_search_cursor"] > 0:
                     query = state["actlog_browse_search_query"]
                     cursor = state["actlog_browse_search_cursor"]
-                    state["actlog_browse_search_query"] = query[: cursor - 1] + query[cursor:]
+                    state["actlog_browse_search_query"] = (
+                        query[: cursor - 1] + query[cursor:]
+                    )
                     state["actlog_browse_search_cursor"] = cursor - 1
                     state["actlog_browse_match_lines"] = _compute_browse_matches(
                         entries, state["actlog_browse_search_query"]
@@ -214,7 +223,9 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                 ch = chr(key)
                 query = state["actlog_browse_search_query"]
                 cursor = state["actlog_browse_search_cursor"]
-                state["actlog_browse_search_query"] = query[:cursor] + ch + query[cursor:]
+                state["actlog_browse_search_query"] = (
+                    query[:cursor] + ch + query[cursor:]
+                )
                 state["actlog_browse_search_cursor"] = cursor + 1
                 state["actlog_browse_match_lines"] = _compute_browse_matches(
                     entries, state["actlog_browse_search_query"]
@@ -255,10 +266,14 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                 ]
                 _browse_clamp_scroll()
         elif key in (ord("j"), curses.KEY_DOWN) and total:
-            state["actlog_browse_selected"] = (state["actlog_browse_selected"] + 1) % total
+            state["actlog_browse_selected"] = (
+                state["actlog_browse_selected"] + 1
+            ) % total
             _browse_clamp_scroll()
         elif key in (ord("k"), curses.KEY_UP) and total:
-            state["actlog_browse_selected"] = (state["actlog_browse_selected"] - 1) % total
+            state["actlog_browse_selected"] = (
+                state["actlog_browse_selected"] - 1
+            ) % total
             _browse_clamp_scroll()
         elif key == ord("G") and total:
             state["actlog_browse_selected"] = total - 1
@@ -331,8 +346,13 @@ def handle_actlog_mode(stdscr, key, state, sessions):
         content_height = stdscr.getmaxyx()[0] - 6
 
         def _gsearch_clamp_scroll():
-            if state["actlog_gsearch_selected"] >= state["actlog_gsearch_scroll"] + content_height:
-                state["actlog_gsearch_scroll"] = state["actlog_gsearch_selected"] - content_height + 1
+            if (
+                state["actlog_gsearch_selected"]
+                >= state["actlog_gsearch_scroll"] + content_height
+            ):
+                state["actlog_gsearch_scroll"] = (
+                    state["actlog_gsearch_selected"] - content_height + 1
+                )
             elif state["actlog_gsearch_selected"] < state["actlog_gsearch_scroll"]:
                 state["actlog_gsearch_scroll"] = state["actlog_gsearch_selected"]
 
@@ -358,17 +378,23 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                     state["actlog_gsearch_cursor"] = cursor - 1
                     state["actlog_gsearch_debounce_ticks"] = 3
             elif key == curses.KEY_LEFT:
-                state["actlog_gsearch_cursor"] = max(0, state["actlog_gsearch_cursor"] - 1)
+                state["actlog_gsearch_cursor"] = max(
+                    0, state["actlog_gsearch_cursor"] - 1
+                )
             elif key == curses.KEY_RIGHT:
                 state["actlog_gsearch_cursor"] = min(
                     len(state["actlog_gsearch_query"]),
                     state["actlog_gsearch_cursor"] + 1,
                 )
             elif key in (curses.KEY_DOWN,) and total:
-                state["actlog_gsearch_selected"] = min(state["actlog_gsearch_selected"] + 1, total - 1)
+                state["actlog_gsearch_selected"] = min(
+                    state["actlog_gsearch_selected"] + 1, total - 1
+                )
                 _gsearch_clamp_scroll()
             elif key in (curses.KEY_UP,) and total:
-                state["actlog_gsearch_selected"] = max(state["actlog_gsearch_selected"] - 1, 0)
+                state["actlog_gsearch_selected"] = max(
+                    state["actlog_gsearch_selected"] - 1, 0
+                )
                 _gsearch_clamp_scroll()
             elif 32 <= key <= 126:
                 ch = chr(key)
@@ -409,17 +435,23 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                 state["actlog_match_index"] = 0
                 # Scroll to the entry_index position
                 entry_idx = result.get("entry_index", 0)
-                max_scroll = max(0, len(state["actlog_lines"]) - (stdscr.getmaxyx()[0] - 5))
+                max_scroll = max(
+                    0, len(state["actlog_lines"]) - (stdscr.getmaxyx()[0] - 5)
+                )
                 state["actlog_scroll"] = min(entry_idx, max_scroll)
                 state["mode"] = "actlog"
             else:
                 state["msg"] = "Log file is empty"
                 state["msg_frames"] = 20
         elif key in (curses.KEY_DOWN, ord("j")) and total:
-            state["actlog_gsearch_selected"] = min(state["actlog_gsearch_selected"] + 1, total - 1)
+            state["actlog_gsearch_selected"] = min(
+                state["actlog_gsearch_selected"] + 1, total - 1
+            )
             _gsearch_clamp_scroll()
         elif key in (curses.KEY_UP, ord("k")) and total:
-            state["actlog_gsearch_selected"] = max(state["actlog_gsearch_selected"] - 1, 0)
+            state["actlog_gsearch_selected"] = max(
+                state["actlog_gsearch_selected"] - 1, 0
+            )
             _gsearch_clamp_scroll()
         elif key == 4 and total:  # Ctrl+D
             state["actlog_gsearch_selected"] = min(

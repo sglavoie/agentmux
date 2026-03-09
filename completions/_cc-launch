@@ -1,7 +1,7 @@
 #compdef cc-launch
 
 # Zsh completion for cc-launch — Claude Code session manager for Kitty.
-# Installed to ~/.zfunc/ by `make install`.
+# Installed to ~/.zfunc/ by `just install`.
 
 _cc_launch_tab_titles() {
     local -a titles

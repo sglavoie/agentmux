@@ -173,8 +173,7 @@ HOOK_EVENT_EXAMPLES = {
     "PostToolUseFailure": {
         "type": "command",
         "command": (
-            "osascript -e 'display notification \"Tool failed\""
-            " with title \"Claude\"'"
+            'osascript -e \'display notification "Tool failed" with title "Claude"\''
         ),
         "async": True,
     },
@@ -201,16 +200,14 @@ HOOK_EVENT_EXAMPLES = {
     "TeammateIdle": {
         "type": "command",
         "command": (
-            "osascript -e 'display notification \"Teammate idle\""
-            " with title \"Claude\"'"
+            'osascript -e \'display notification "Teammate idle" with title "Claude"\''
         ),
         "async": True,
     },
     "TaskCompleted": {
         "type": "command",
         "command": (
-            "osascript -e 'display notification \"Task done\""
-            " with title \"Claude\"'"
+            'osascript -e \'display notification "Task done" with title "Claude"\''
         ),
         "async": True,
     },
