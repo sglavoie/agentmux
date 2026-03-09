@@ -92,10 +92,7 @@ def shorten_path(path, max_len):
     if path.startswith("~/"):
         inner = path[2:]
         segments = inner.split("/")
-        if len(segments) > 2:
-            path = "/".join(segments[-2:])
-        else:
-            path = inner
+        path = "/".join(segments[-2:]) if len(segments) > 2 else inner
     if max_len < 4:
         return path[:max_len]
     if len(path) <= max_len:

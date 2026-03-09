@@ -6,6 +6,7 @@ in a scrollable full-screen curses overlay with less-like navigation and
 search.  Dismiss with q or Escape.
 """
 
+import contextlib
 import curses
 import os
 import sys
@@ -37,94 +38,169 @@ from cc_dashboard.colors import (
 )
 from cc_dashboard.config import load_accounts
 from cc_dashboard.drawing import safe_addstr
+from cc_dashboard.views_shared import _FOOTER_HINTS
 
-_SECTIONS = [
-    (
-        "Kitty Global",
-        [
-            ("F1", "Keybinding reference (this overlay)"),
-            ("F2", "Toggle star / pin on current tab"),
-            ("F3", "Toggle error / warning markers"),
-            ("F4", "Clear markers and state icons"),
-            ("F5", "Toggle flag on current tab"),
-            ("F6", "Set tab color (color picker overlay)"),
-            ("F7", "Set tab status (status overlay)"),
-            ("F8", "Session info overlay"),
-            ("F9", "Edit session notes"),
-            ("F12", "Broadcast input to all tab windows"),
-            ("Cmd+1..0", "Switch to tab 1-10"),
-            ("Cmd+L", "Toggle between last two tabs"),
-            ("Ctrl+Shift+D", "Open session dashboard"),
-            ("Ctrl+Shift+P", "Quick-switch overlay"),
-        ],
-    ),
-    (
-        "Dashboard — Navigation",
-        [
-            ("k / Up", "Move selection up"),
-            ("j / Down", "Move selection down"),
-            ("Enter", "Focus & switch to selected tab"),
-            ("q", "Quit dashboard"),
-        ],
-    ),
-    (
-        "Dashboard — Session Actions",
-        [
-            ("t", "Open actions menu for selected/marked sessions"),
-            (
-                "Menu: Restart / Close / Move",
-                "Available for marked sessions (when marks exist)",
-            ),
-            (
-                "Menu: Restart opts / Clone / Override / Rename / Worktree",
-                "Single-session only",
-            ),
-            ("Enter", "Apply selected action in the actions menu"),
-            ("Esc", "Back from the actions menu"),
-            ("n", "Open new session form"),
-            ("l", "Launch session from config"),
-            ("e", "Edit selected session config entry"),
-            ("D", "Delete session from config"),
-            ("S", "Save running sessions to config"),
-            ("p", "Peek at selected session output"),
-        ],
-    ),
-    (
-        "Dashboard — Multi-Select",
-        [
-            ("Space", "Mark / unmark session"),
-            ("U", "Clear all marks"),
-            ("t", "Actions apply to marked sessions when marks exist"),
-        ],
-    ),
-    (
-        "Dashboard — View",
-        [
-            ("d", "Toggle detail pane"),
-            ("a", "Toggle all / managed tabs"),
-            ("Ctrl+r", "Refresh session list"),
-        ],
-    ),
-    (
-        "Dashboard — Search",
-        [
-            ("/", "Start search"),
-            ("Enter", "Accept search query"),
-            ("Esc", "Cancel search"),
-        ],
-    ),
-    (
-        "Dashboard — Account Filter",
-        [
-            ("f", "Enter / exit filter mode"),
-            ("1-9", "Toggle account visibility"),
-            ("Esc", "Clear filter"),
-        ],
-    ),
+# --- Kitty Global section (hardcoded — keys from kitty.conf, not footer hints) ---
+
+_KITTY_GLOBAL_SECTION = (
+    "Kitty Global",
+    [
+        ("F1", "Keybinding reference (this overlay)"),
+        ("F2", "Toggle star / pin on current tab"),
+        ("F3", "Toggle error / warning markers"),
+        ("F4", "Clear markers and state icons"),
+        ("F5", "Toggle flag on current tab"),
+        ("F6", "Set tab color (color picker overlay)"),
+        ("F7", "Set tab status (status overlay)"),
+        ("F8", "Session info overlay"),
+        ("F9", "Edit session notes"),
+        ("F12", "Broadcast input to all tab windows"),
+        ("Cmd+1..0", "Switch to tab 1-10"),
+        ("Cmd+L", "Toggle between last two tabs"),
+        ("Ctrl+Shift+D", "Open session dashboard"),
+        ("Ctrl+Shift+P", "Quick-switch overlay"),
+    ],
+)
+
+# --- Auto-generation configuration ---
+
+_MODE_DISPLAY_NAMES: dict[str, str] = {
+    "list": "Session List",
+    "filter": "Account Filter",
+    "actions": "Session Actions",
+    "sort_pick": "Sort Picker",
+    "color_picker": "Color Picker",
+    "peek": "Session Peek",
+    "actlog": "Activity Log",
+    "actlog_browse": "Log Browser",
+    "actlog_gsearch": "Global Log Search",
+    "config_pick": "Config Browser",
+    "config_action": "Config Action",
+    "new": "New / Edit Session",
+    "new_dir_browse": "Directory Browser",
+    "pick": "Launch from Config",
+    "rename": "Rename Session",
+    "clone": "Clone Session",
+    "worktree": "Create Worktree",
+    "override": "Config Dir Override",
+    "move": "Move to Instance",
+    "restart_options": "Restart Options",
+    "delete": "Delete Session",
+    "hooks": "Hooks Manager",
+    "hooks_event": "Hook Events",
+    "hooks_add": "Add / Edit Hook",
+    "hooks_matcher_pick": "Matcher Picker",
+    "hooks_info": "Hook Info",
+    "hooks_example": "Hook Example",
+}
+
+_MODE_ORDER: list[str] = [
+    # Main list and navigation
+    "list",
+    "filter",
+    # Actions and pickers
+    "actions",
+    "sort_pick",
+    "color_picker",
+    # Viewers
+    "peek",
+    "actlog",
+    "actlog_browse",
+    "actlog_gsearch",
+    # Config management
+    "config_pick",
+    "config_action",
+    # Session forms
+    "new",
+    "new_dir_browse",
+    "pick",
+    "rename",
+    "clone",
+    "worktree",
+    "override",
+    "move",
+    "restart_options",
+    "delete",
+    # Hooks management
+    "hooks",
+    "hooks_event",
+    "hooks_add",
+    "hooks_matcher_pick",
+    "hooks_info",
+    "hooks_example",
 ]
 
+_SKIP_F1_MODES: set[str] = {
+    # Confirmation dialogs (y/n only)
+    "confirm",
+    "confirm_restart",
+    "confirm_batch_close",
+    "confirm_batch_restart",
+    "confirm_save",
+    "delete_confirm",
+    "hooks_delete_confirm",
+    "hooks_sync_confirm",
+    # Search input sub-modes (standard text input)
+    "peek_search",
+    "actlog_search",
+    "actlog_browse_search",
+    "actlog_gsearch_search",
+}
+
+_DESCRIPTION_OVERRIDES: dict[tuple[str, str], str] = {
+    ("list", "Enter"): "Focus & switch to selected tab",
+    ("list", "Ctrl+F"): "Search across all activity logs",
+}
+
+
+def _parse_hint(hint: str) -> tuple[str | None, str]:
+    """Parse a footer hint into (key, description).
+
+    Returns (None, full_text) for descriptive entries (containing ':' before
+    the first space, e.g. "Marked: Restart/Close/Move").
+    """
+    colon = hint.find(":")
+    space = hint.find(" ")
+    if colon != -1 and (space == -1 or colon < space):
+        return (None, hint)
+    if space == -1:
+        return (hint, "")
+    key = hint[:space]
+    desc = hint[space + 1 :]
+    # Convert ^x to Ctrl+x (but not compound ^X/^Y patterns like ^D/^U)
+    if key.startswith("^") and "/" not in key and len(key) == 2:
+        key = f"Ctrl+{key[1]}"
+    return (key, desc)
+
+
+def _build_sections() -> list[tuple[str, list[tuple[str, str]]]]:
+    """Build F1 overlay sections from _FOOTER_HINTS."""
+    sections: list[tuple[str, list[tuple[str, str]]]] = [_KITTY_GLOBAL_SECTION]
+    for mode in _MODE_ORDER:
+        hints = _FOOTER_HINTS.get(mode, [])
+        bindings: list[tuple[str, str]] = []
+        for hint in hints:
+            raw_key, desc = _parse_hint(hint)
+            override = _DESCRIPTION_OVERRIDES.get((mode, raw_key or ""))
+            if override:
+                desc = override
+            bindings.append((raw_key or "", desc))
+        display_name = _MODE_DISPLAY_NAMES.get(mode, mode.replace("_", " ").title())
+        sections.append((display_name, bindings))
+    return sections
+
+
+# Validate: every mode in _FOOTER_HINTS must be in _MODE_ORDER or _SKIP_F1_MODES
+_unregistered = set(_FOOTER_HINTS) - set(_MODE_ORDER) - _SKIP_F1_MODES
+assert not _unregistered, (
+    f"Footer hint modes not registered in _MODE_ORDER or _SKIP_F1_MODES: "
+    f"{sorted(_unregistered)}"
+)
+
+_SECTIONS = _build_sections()
+
 # Pre-build content lines: (kind, text1, text2)
-_LINES = []
+_LINES: list[tuple[str, str, str]] = []
 for _sect_name, _bindings in _SECTIONS:
     _LINES.append(("header", _sect_name, ""))
     for _key, _desc in _bindings:
@@ -169,8 +245,9 @@ def _draw_highlighted(stdscr, y, x, text, base_attr, query, match_attr, max_w):
         pos = idx + len(ql)
 
 
-def _draw(stdscr, scroll, search_query, match_lines, match_index, search_active,
-          search_cursor):
+def _draw(
+    stdscr, scroll, search_query, match_lines, match_index, search_active, search_cursor
+):
     """Render the keybinding reference overlay."""
     stdscr.erase()
     rows, cols = stdscr.getmaxyx()
@@ -197,17 +274,34 @@ def _draw(stdscr, scroll, search_query, match_lines, match_index, search_active,
         if kind == "header":
             if line_idx in match_set and search_query:
                 hi = current_match_attr if is_current else match_attr
-                _draw_highlighted(stdscr, y, 2, text1, header_attr, search_query, hi,
-                                  cols - 3)
+                _draw_highlighted(
+                    stdscr, y, 2, text1, header_attr, search_query, hi, cols - 3
+                )
             else:
                 safe_addstr(stdscr, y, 2, text1, header_attr)
         elif kind == "binding":
             if line_idx in match_set and search_query:
                 hi = current_match_attr if is_current else match_attr
-                _draw_highlighted(stdscr, y, key_col, text1, normal_attr, search_query,
-                                  hi, desc_col - key_col - 1)
-                _draw_highlighted(stdscr, y, desc_col, text2, dim_attr, search_query,
-                                  hi, cols - desc_col - 1)
+                _draw_highlighted(
+                    stdscr,
+                    y,
+                    key_col,
+                    text1,
+                    normal_attr,
+                    search_query,
+                    hi,
+                    desc_col - key_col - 1,
+                )
+                _draw_highlighted(
+                    stdscr,
+                    y,
+                    desc_col,
+                    text2,
+                    dim_attr,
+                    search_query,
+                    hi,
+                    cols - desc_col - 1,
+                )
             else:
                 safe_addstr(stdscr, y, key_col, text1, normal_attr)
                 safe_addstr(stdscr, y, desc_col, text2[: cols - desc_col - 1], dim_attr)
@@ -218,10 +312,8 @@ def _draw(stdscr, scroll, search_query, match_lines, match_index, search_active,
         safe_addstr(stdscr, rows - 1, 2, prompt, curses.color_pair(CP_NORMAL))
         curses.curs_set(1)
         # Position cursor after the search text
-        try:
+        with contextlib.suppress(curses.error):
             stdscr.move(rows - 1, 2 + 1 + search_cursor)
-        except curses.error:
-            pass
     else:
         curses.curs_set(0)
         end = min(scroll + content_height, len(_LINES))
@@ -235,7 +327,9 @@ def _draw(stdscr, scroll, search_query, match_lines, match_index, search_active,
             safe_addstr(stdscr, rows - 1, 2, "No matches", dim_attr)
         elif search_query and match_lines:
             safe_addstr(
-                stdscr, rows - 1, 2,
+                stdscr,
+                rows - 1,
+                2,
                 f"Search: {search_query}  ({match_index + 1}/{len(match_lines)})",
                 dim_attr,
             )
@@ -266,7 +360,7 @@ def _run(stdscr):
     search_active = False
     search_query = ""
     search_cursor = 0
-    match_lines = []
+    match_lines: list[int] = []
     match_index = 0
 
     while True:
@@ -275,8 +369,15 @@ def _run(stdscr):
         max_scroll = max(0, len(_LINES) - content_height)
         scroll = min(scroll, max_scroll)
 
-        _draw(stdscr, scroll, search_query, match_lines, match_index, search_active,
-              search_cursor)
+        _draw(
+            stdscr,
+            scroll,
+            search_query,
+            match_lines,
+            match_index,
+            search_active,
+            search_cursor,
+        )
         stdscr.refresh()
 
         key = stdscr.getch()
@@ -299,8 +400,7 @@ def _run(stdscr):
             elif key in (curses.KEY_BACKSPACE, 127, 8):
                 if search_cursor > 0:
                     search_query = (
-                        search_query[: search_cursor - 1]
-                        + search_query[search_cursor:]
+                        search_query[: search_cursor - 1] + search_query[search_cursor:]
                     )
                     search_cursor -= 1
                     match_lines = _compute_matches(search_query)

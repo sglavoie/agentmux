@@ -80,7 +80,8 @@ def draw_list_view(
     c_notes = 6
     c_branch = 24
     c_status = 18
-    c_dir = max(12, cols - c_title - c_acct - c_inst - c_notes - c_branch - c_status - 8)
+    fixed = c_title + c_acct + c_inst + c_notes + c_branch + c_status + 8
+    c_dir = max(12, cols - fixed)
 
     hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}"
     if multi_instance:

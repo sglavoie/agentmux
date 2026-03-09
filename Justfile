@@ -56,8 +56,12 @@ symlinks := prefix_bin / "ccm:bin/ccm" + "\n" + \
     prefix_zfunc / "_cc-status:completions/_cc-status" + "\n" + \
     prefix_kitty / "cc-manager.conf:cc-manager.conf"
 
+# Audit keybinding documentation completeness
+check-keybindings:
+    @python scripts/check_keybindings.py
+
 # Install symlinks and hooks
-install:
+install: check-keybindings
     @find . -name "*.py[co]" -or -name "__pycache__" -exec rm -rf -- {} + 2>/dev/null; true
     @mkdir -p "{{prefix_bin}}" "{{prefix_lib}}" "{{prefix_lib}}/ccm" "{{prefix_kitty}}" "{{prefix_zfunc}}"
     @echo '{{symlinks}}' | while IFS=: read -r dest src; do \
@@ -120,5 +124,5 @@ format-check:
 typecheck:
     {{rye}} run mypy {{python_src}}
 
-# Run all checks (lint, format-check, typecheck)
-check: lint format-check typecheck
+# Run all checks (lint, format-check, typecheck, keybinding audit)
+check: lint format-check typecheck check-keybindings
