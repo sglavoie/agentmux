@@ -4,13 +4,16 @@ import contextlib
 import glob
 import json
 import os
+import tempfile
 
 from cc_dashboard.remote.shared import format_duration
+
+_CCM_TMPDIR = tempfile.gettempdir()
 
 
 def load_activity(tab_id):
     """Read and parse the activity counts file for a tab, returning a dict or None."""
-    path = f"/tmp/ccm-activity-{tab_id}.counts"
+    path = f"{_CCM_TMPDIR}/ccm-activity-{tab_id}.counts"
     try:
         with open(path) as f:
             lines = f.read().splitlines()
@@ -66,7 +69,7 @@ def load_session_meta(session_id):
 def cleanup_stale_activity(live_tab_ids):
     """Remove orphaned activity files whose tab_id is not in the live set."""
     live = set(str(tid) for tid in live_tab_ids)
-    for path in glob.glob("/tmp/ccm-activity-*.counts"):
+    for path in glob.glob(f"{_CCM_TMPDIR}/ccm-activity-*.counts"):
         fname = os.path.basename(path)
         tab_id_str = fname.replace("ccm-activity-", "").replace(".counts", "")
         if tab_id_str not in live:
@@ -77,12 +80,13 @@ def cleanup_stale_activity(live_tab_ids):
 def resolve_session_id(tab_id):
     """Resolve a Kitty tab_id to a Claude session_id via the tab-id cache files.
 
-    Scans /tmp/ccm-tabid-* files (created by cc-activity-log) to find one
-    whose contents match the given tab_id, then extracts the session_id UUID
-    from the filename. Returns None if no match is found.
+    Scans ccm-tabid-* files in the temp directory (created by
+    cc-activity-log) to find one whose contents match the given
+    tab_id, then extracts the session_id UUID from the filename.
+    Returns None if no match is found.
     """
     tab_id_str = str(tab_id)
-    for path in glob.glob("/tmp/ccm-tabid-*"):
+    for path in glob.glob(f"{_CCM_TMPDIR}/ccm-tabid-*"):
         try:
             with open(path) as f:
                 contents = f.read().strip()

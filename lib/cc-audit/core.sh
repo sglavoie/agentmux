@@ -17,7 +17,7 @@ resolve_repo_dir() {
 
 REPO_DIR="$(resolve_repo_dir)"
 MANIFEST="$REPO_DIR/data/audit-manifest.json"
-CACHE_DIR="/tmp/ccm-audit-cache"
+CACHE_DIR="${TMPDIR:-/tmp}/ccm-audit-cache"
 AI_RESULTS_DIR="$CACHE_DIR/ai-results"
 AI_TIMEOUT=300
 REPORT_FILE="$REPO_DIR/audit-report.txt"

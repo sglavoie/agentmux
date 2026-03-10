@@ -16,7 +16,7 @@ _run_ai_analysis() {
 	local result_ext="json"
 	[[ "$output_mode" == "text" ]] && result_ext="txt"
 	local result_file="$AI_RESULTS_DIR/$section.$result_ext"
-	local debug_file="/tmp/ccm-audit-debug-$section.txt"
+	local debug_file="${TMPDIR:-/tmp}/ccm-audit-debug-$section.txt"
 	local raw_file="$AI_RESULTS_DIR/$section.raw"
 
 	local raw_output="" parsed=""

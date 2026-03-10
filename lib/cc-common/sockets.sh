@@ -14,11 +14,7 @@ discover_socket() {
 	local candidate mtime newest_mtime=0
 	for candidate in /tmp/kitty-*; do
 		[[ -e "$candidate" ]] || continue
-		if mtime="$(stat -f %m "$candidate" 2>/dev/null)"; then
-			:
-		elif mtime="$(stat -c %Y "$candidate" 2>/dev/null)"; then
-			:
-		else
+		if ! mtime="$(_file_mtime "$candidate")"; then
 			continue
 		fi
 		if ((mtime > newest_mtime)); then
@@ -66,11 +62,12 @@ discover_all_sockets() {
 			candidates+=("$sock")
 			seen+=("$sock")
 		fi
-	done < <(find /tmp -maxdepth 1 -name 'kitty-*' -print0 2>/dev/null | xargs -0 -r stat -f '%m %N' 2>/dev/null | sort -rn | while IFS=' ' read -r _ p; do printf '%s\0' "$p"; done)
+	done < <(find /tmp -maxdepth 1 -name 'kitty-*' 2>/dev/null | while IFS= read -r p; do m="$(_file_mtime "$p")" && printf '%s %s\n' "$m" "$p"; done | sort -rn | while IFS=' ' read -r _ p; do printf '%s\0' "$p"; done)
 
 	local candidate
 	for candidate in "${candidates[@]+"${candidates[@]}"}"; do
-		if kitty @ --to "$candidate" ls >/dev/null 2>&1; then
+		local probe_err
+		if probe_err="$(kitty @ --to "$candidate" ls 2>&1 >/dev/null)"; then
 			_INSTANCE_SOCKETS+=("$candidate")
 			local bare="${candidate#unix:}"
 			local base
@@ -80,7 +77,17 @@ discover_all_sockets() {
 				label="K:${BASH_REMATCH[1]}"
 			fi
 			_INSTANCE_LABELS+=("$label")
+		else
+			ccm_debug "socket probe failed for $candidate: $probe_err"
 		fi
 	done
+
+	if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+		if [[ ${#candidates[@]} -gt 0 ]]; then
+			echo "Warning: Found ${#candidates[@]} kitty socket(s) but none responded. Check that remote control is enabled in kitty.conf (allow_remote_control socket-only)." >&2
+		else
+			echo "Warning: No kitty sockets found. Set KITTY_LISTEN_ON or check that Kitty is running." >&2
+		fi
+	fi
 	ccm_debug "Discovered ${#_INSTANCE_SOCKETS[@]} active socket(s)"
 }

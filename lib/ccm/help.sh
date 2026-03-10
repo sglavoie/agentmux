@@ -22,6 +22,7 @@ Subcommands:
     path [FILE]     Print resolved config file path(s)
     init            Copy example configs to ~/.config/cc-manager/ if missing
     sync            Update documentation preambles in existing config files
+    validate        Check all config files for errors and warnings
 
 FILE can be: accounts, sessions, defaults, hooks
 When FILE is omitted, edit/show/path operate on all four config files.
@@ -30,6 +31,10 @@ The sync subcommand replaces the documentation header (above the marker line)
 in each user config file with the latest version from the example files, while
 preserving all user data below the marker. This runs automatically during
 'just install' but can also be invoked standalone.
+
+The validate subcommand checks TOML/JSON syntax, required fields, valid values
+(colors, project_window, hook events), cross-file consistency (sessions
+referencing valid accounts), and duplicates. Exit code 0 means no errors.
 HELP
 		;;
 	notify)

@@ -94,6 +94,23 @@ default_account_name() {
 	echo "work"
 }
 
+# Resolve an account name from the uppercase initial of a tab title.
+# Outputs the matching account name, or "unknown" if no match.
+_resolve_account_from_initial() {
+	local initial="$1"
+	local ai
+	for ((ai = 0; ai < ${#_ACCOUNT_NAMES[@]}; ai++)); do
+		local name_initial="${_ACCOUNT_NAMES[$ai]:0:1}"
+		name_initial="$(echo "$name_initial" | tr '[:lower:]' '[:upper:]')"
+		if [[ "$name_initial" == "$initial" ]]; then
+			echo "${_ACCOUNT_NAMES[$ai]}"
+			return 0
+		fi
+	done
+	echo "unknown"
+	return 1
+}
+
 claude_config_dir_for_account() {
 	local account="$1"
 	local config_dir

@@ -6,8 +6,8 @@ default:
 python_src    := "kittens/"
 shell_scripts := "bin/cc-launch bin/cc-status bin/cc-toggle-star bin/cc-toggle-flag bin/cc-idle-watch bin/cc-audit bin/ccm lib/cc-common.sh lib/cc-common/*.sh lib/cc-title-icons.sh lib/install-hooks.sh lib/cc-audit/*.sh lib/ccm.sh lib/ccm/*.sh lib/sync-preambles.sh hooks/cc-activity-log"
 rye           := home_directory() / ".rye/shims/rye"
-shellcheck    := "/opt/homebrew/bin/shellcheck"
-shfmt         := "/opt/homebrew/bin/shfmt"
+shellcheck    := env("SHELLCHECK", "shellcheck")
+shfmt         := env("SHFMT", "shfmt")
 
 prefix_bin   := home_directory() / ".local/bin"
 prefix_lib   := home_directory() / ".local/lib/cc-manager"
@@ -125,7 +125,7 @@ uninstall:
     @echo ""
     @echo "Other artifacts you may want to remove:"
     @echo "  - Config directory: ~/.config/cc-manager/"
-    @echo "  - Temp files:       /tmp/ccm-*"
+    @echo "  - Temp files:       ${TMPDIR:-/tmp}/ccm-*"
     @echo "  - Activity data:    ~/.local/state/cc-manager/activity/"
 
 # Run tests

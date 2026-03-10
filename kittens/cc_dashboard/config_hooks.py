@@ -5,6 +5,7 @@ import copy
 import json
 import os
 import shutil
+import sys
 
 import cc_dashboard.config_core as _core
 import cc_dashboard.config_state as _state
@@ -495,22 +496,32 @@ def save_hooks(global_hooks, account_overrides):
     """Write hooks configuration to hooks.json.
 
     Creates a .bak copy before overwriting, following the same pattern as
-    save_sessions.
+    save_sessions. Uses an atomic write (write to .tmp then os.replace) so a
+    crash mid-write never leaves a partially-written hooks.json.
+
+    Returns True on success, False on failure.
     """
     path = _core._hooks_config_path()
     if os.path.isfile(path):
         shutil.copy2(path, path + ".bak")
 
-    with open(path, "w") as f:
-        json.dump(
-            {"hooks": global_hooks, "account_overrides": account_overrides},
-            f,
-            indent=2,
-        )
-        f.write("\n")
+    tmp_path = path + ".tmp"
+    try:
+        with open(tmp_path, "w") as f:
+            json.dump(
+                {"hooks": global_hooks, "account_overrides": account_overrides},
+                f,
+                indent=2,
+            )
+            f.write("\n")
+        os.replace(tmp_path, path)
+    except OSError as e:
+        print(f"warning: failed to save hooks.json: {e}", file=sys.stderr)
+        return False
 
     _state._hooks_global = global_hooks
     _state._hooks_overrides = account_overrides
+    return True
 
 
 def toggle_hook_event(account_name, event_name):

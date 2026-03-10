@@ -14,6 +14,7 @@ fi
 ACTION="$1"
 # Debug mode (set CCM_DEBUG=1 to enable)
 CCM_DEBUG="${CCM_DEBUG:-0}"
+_CCM_TMPDIR="${TMPDIR:-/tmp}"
 ccm_debug() { if [[ "$CCM_DEBUG" == "1" ]]; then echo "[DEBUG] $*" >&2; fi; }
 EVENT_KIND=""
 
@@ -60,7 +61,7 @@ _maybe_notify() {
     [[ "$enabled" == "on" ]] || return 0
     command -v alerter >/dev/null 2>&1 || return 0
 
-    local cooldown_file="/tmp/ccm-notify-${ACTION}-${tab_id}"
+    local cooldown_file="${_CCM_TMPDIR}/ccm-notify-${ACTION}-${tab_id}"
     if [[ -f "$cooldown_file" ]]; then
         local now last_time
         now=$(date +%s)
@@ -206,7 +207,7 @@ ccm_debug "hook: action=$ACTION event=$EVENT_KIND tab=$tab_id pipe=$_PIPE_MODE"
 #  11: active_subagents — currently active subagent count
 #  12: total_subagents  — total subagents spawned this session
 _update_activity() {
-    local activity_file="/tmp/ccm-activity-${tab_id}.counts"
+    local activity_file="${_CCM_TMPDIR}/ccm-activity-${tab_id}.counts"
     local now
     now=$(date +%s)
 
@@ -300,7 +301,7 @@ _update_activity() {
 _prev_last_ts=0
 _prev_last_type=""
 if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission" ]]; then
-    _activity_file="/tmp/ccm-activity-${tab_id}.counts"
+    _activity_file="${_CCM_TMPDIR}/ccm-activity-${tab_id}.counts"
     if [[ -f "$_activity_file" ]]; then
         _cap_lines=$(wc -l < "$_activity_file" 2>/dev/null || echo 0)
         _cap_lines="${_cap_lines// /}"
@@ -368,7 +369,7 @@ ccm_debug "hook: state=$state title='$current_title'"
 
 # Priority guard: prevent async 'active' (PostToolUse) from overwriting
 # a high-priority state (stop/failure/permission) that was just set.
-_state_file="/tmp/ccm-state-${tab_id}"
+_state_file="${_CCM_TMPDIR}/ccm-state-${tab_id}"
 
 case "$ACTION" in
 stop|failure|permission)

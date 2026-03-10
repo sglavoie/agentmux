@@ -36,16 +36,11 @@ if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
 fi
 
 # Determine current icon state.
-has_star=false
-has_flag=false
-remaining="$current_title"
-if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
-	has_star=true
-	remaining="${remaining#"$_ICON_STAR"}"
-fi
-if [[ "$remaining" == "${_ICON_FLAG}"* ]]; then
-	has_flag=true
-fi
+{
+	read -r has_star
+	read -r has_flag
+	read -r remaining
+} < <(parse_icon_prefix "$current_title")
 
 state="$(detect_state "$current_title")"
 remaining="$(strip_icons "$remaining")"

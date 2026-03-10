@@ -14,6 +14,23 @@ else
 fi
 _load_icons
 
+# Parse the icon prefix of a title string.
+# Outputs three lines: has_star (true/false), has_flag (true/false), remaining title.
+# Usage: read -r has_star; read -r has_flag; read -r remaining < <(parse_icon_prefix "$title")
+parse_icon_prefix() {
+	local title="$1"
+	local has_star=false
+	local has_flag=false
+	if [[ "$title" == "${_ICON_STAR}"* ]]; then
+		has_star=true
+		title="${title#"$_ICON_STAR"}"
+	fi
+	if [[ "$title" == "${_ICON_FLAG}"* ]]; then
+		has_flag=true
+	fi
+	printf '%s\n%s\n%s\n' "$has_star" "$has_flag" "$title"
+}
+
 # Remove leading ★, ❗, and state icon prefixes from a title string.
 strip_icons() {
 	local title="$1"

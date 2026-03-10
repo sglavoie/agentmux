@@ -4,6 +4,8 @@ Uses ``tomllib`` (stdlib since Python 3.11).  Shared by the Python
 dashboard code and the ``toml-helper.py`` CLI bridge for Bash.
 """
 
+import json
+import os
 import sys
 import tomllib
 
@@ -71,10 +73,29 @@ def read_accounts(path):
     return result
 
 
-_VALID_PALETTE_COLORS = frozenset({
-    "green", "blue", "red", "orange", "purple",
-    "teal", "pink", "yellow", "gray", "cyan",
-})
+def _load_palette_colors():
+    """Load valid palette color names from palette.json."""
+    hardcoded = frozenset({
+        "green", "blue", "red", "orange", "purple",
+        "teal", "pink", "yellow", "gray", "cyan",
+    })
+    # Try repo-relative path first (lib/ -> repo root -> data/)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates = [
+        os.path.join(repo_root, "data", "palette.json"),
+        os.path.expanduser("~/.local/lib/cc-manager/palette.json"),
+    ]
+    for path in candidates:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            return frozenset(data["colors"].keys())
+        except (FileNotFoundError, OSError, json.JSONDecodeError, KeyError, TypeError):
+            continue
+    return hardcoded
+
+
+_VALID_PALETTE_COLORS = _load_palette_colors()
 
 
 def read_sessions(path, known_accounts=None):

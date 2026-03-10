@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 from cc_dashboard import config as _cfg
@@ -79,7 +80,7 @@ def _check_idle_notifications(sessions):
         if idle_secs < threshold:
             continue
 
-        cooldown_file = f"/tmp/ccm-notify-idle-{s['tab_id']}"
+        cooldown_file = f"{tempfile.gettempdir()}/ccm-notify-idle-{s['tab_id']}"
         last_event_ts = activity["last_event_ts"]
 
         if os.path.isfile(cooldown_file):

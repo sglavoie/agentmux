@@ -78,6 +78,13 @@ cmd_config_init() {
 	fi
 }
 
+cmd_config_validate() {
+	local config_dir data_dir
+	config_dir="$(resolve_config_dir)"
+	data_dir="$REPO_DIR/data"
+	python3 "$REPO_DIR/lib/config_validator.py" "$config_dir" "$data_dir"
+}
+
 cmd_config() {
 	case "${1:-}" in
 	edit)
@@ -98,13 +105,16 @@ cmd_config() {
 	sync)
 		bash "$REPO_DIR/lib/sync-preambles.sh" "$REPO_DIR"
 		;;
+	validate)
+		cmd_config_validate
+		;;
 	"")
-		echo "Usage: ccm config <edit|show|path|init|sync> [FILE]" >&2
+		echo "Usage: ccm config <edit|show|path|init|sync|validate> [FILE]" >&2
 		echo "FILE: accounts, sessions, defaults, hooks" >&2
 		return 1
 		;;
 	*)
-		echo "Error: Unknown config subcommand '$1'. Use: edit, show, path, init, sync." >&2
+		echo "Error: Unknown config subcommand '$1'. Use: edit, show, path, init, sync, validate." >&2
 		return 1
 		;;
 	esac

@@ -145,22 +145,32 @@ def _save_tab_statuses(statuses):
         from toml_reader import read_header_comments
 
         header = read_header_comments(path)
-        with open(path, "rb") as f:
-            data = tomllib.load(f)
-        defaults = data.get("defaults", {})
-        notifications = data.get("notifications", {})
+        try:
+            with open(path, "rb") as f:
+                data = tomllib.load(f)
+            defaults = data.get("defaults", {})
+            notifications = data.get("notifications", {})
+        except tomllib.TOMLDecodeError as e:
+            print(f"Warning: failed to parse {path}: {e}", file=sys.stderr)
 
     defaults["tab_statuses"] = statuses
-    _state._default_tab_statuses = statuses
 
     out = {}
     if defaults:
         out["defaults"] = defaults
     if notifications:
         out["notifications"] = notifications
-    with open(path, "w") as f:
-        f.write(toml_writer.dumps(out, header=header))
-        f.write("\n")
+    tmp_path = path + ".tmp"
+    try:
+        with open(tmp_path, "w") as f:
+            f.write(toml_writer.dumps(out, header=header))
+            f.write("\n")
+        os.replace(tmp_path, path)
+    except OSError as e:
+        print(f"Warning: failed to save {path}: {e}", file=sys.stderr)
+        return
+
+    _state._default_tab_statuses = statuses
 
 
 def _sessions_config_path():

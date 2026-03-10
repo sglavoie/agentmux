@@ -16,6 +16,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 ACTION="$1"
+_CCM_TMPDIR="${TMPDIR:-/tmp}"
 
 # Read the full hook event JSON from stdin.
 INPUT="$(cat)"
@@ -36,7 +37,7 @@ NOW="$(date +%s)"
 # Resolve Kitty tab_id (cached per session to avoid repeated kitten @ ls).
 # ---------------------------------------------------------------------------
 _resolve_tab_id() {
-	local cache="/tmp/ccm-tabid-$SESSION_ID"
+	local cache="${_CCM_TMPDIR}/ccm-tabid-$SESSION_ID"
 	if [[ -f "$cache" ]]; then
 		cat "$cache"
 		return

@@ -31,9 +31,9 @@ load_defaults() {
 	[[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
 	# Use a cached sourceable file to avoid python3 overhead on every call.
-	local cache="/tmp/ccm-defaults-cache-$(id -u).sh"
+	local cache="${_CCM_TMPDIR}/ccm-defaults-cache-$(id -u).sh"
 	local config_mtime
-	config_mtime="$(stat -f '%m' "$DEFAULTS_CONFIG" 2>/dev/null || echo 0)"
+	config_mtime="$(_file_mtime "$DEFAULTS_CONFIG" || echo 0)"
 
 	if [[ -f "$cache" ]]; then
 		local cache_mtime
@@ -56,7 +56,14 @@ load_defaults() {
 			# Emit the assignment for the cache file.
 			printf '_DEFAULT_%s=%q\n' "$(echo "$key" | tr '[:lower:]' '[:upper:]')" "$value"
 		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-defaults "$DEFAULTS_CONFIG")
-	} >"$cache_tmp" && mv "$cache_tmp" "$cache"
+	} >"$cache_tmp" || {
+		echo "Error: failed to write defaults cache" >&2
+		return 1
+	}
+	mv "$cache_tmp" "$cache" || {
+		echo "Error: failed to update defaults cache" >&2
+		return 1
+	}
 }
 
 _assign_default() {

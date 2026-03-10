@@ -258,7 +258,8 @@ cmd_clone() {
             {
                 cat "$CONFIG_FILE"
                 echo "$conf_line"
-            } > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+            } > "${CONFIG_FILE}.tmp" || { echo "Error: failed to write config file" >&2; return 1; }
+            mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE" || { echo "Error: failed to update config file" >&2; return 1; }
         fi
         echo "Cloned '$title' as '$clone_title'."
     fi

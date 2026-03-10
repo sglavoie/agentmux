@@ -37,17 +37,7 @@ compute_insert_location() {
 			[[ "$taccount" == "-" ]] && taccount=""
 			local acct="$taccount"
 			if [[ -z "$acct" && "$tstripped" =~ ^[A-Z]: ]]; then
-				local initial="${tstripped:0:1}"
-				local ai
-				for ((ai = 0; ai < ${#_ACCOUNT_NAMES[@]}; ai++)); do
-					local name_initial="${_ACCOUNT_NAMES[$ai]:0:1}"
-					name_initial="$(echo "$name_initial" | tr '[:lower:]' '[:upper:]')"
-					if [[ "$name_initial" == "$initial" ]]; then
-						acct="${_ACCOUNT_NAMES[$ai]}"
-						break
-					fi
-				done
-				[[ -z "$acct" ]] && acct="unknown"
+				acct="$(_resolve_account_from_initial "${tstripped:0:1}")"
 			fi
 
 			local project_name="$tstripped"
@@ -158,18 +148,7 @@ sort_tabs() {
 		if [[ -n "$taccount" ]]; then
 			tab_accounts+=("$taccount")
 		elif [[ "$tstripped" =~ ^[A-Z]: ]]; then
-			local initial="${tstripped:0:1}"
-			local found_account=""
-			local ai
-			for ((ai = 0; ai < ${#_ACCOUNT_NAMES[@]}; ai++)); do
-				local name_initial="${_ACCOUNT_NAMES[$ai]:0:1}"
-				name_initial="$(echo "$name_initial" | tr '[:lower:]' '[:upper:]')"
-				if [[ "$name_initial" == "$initial" ]]; then
-					found_account="${_ACCOUNT_NAMES[$ai]}"
-					break
-				fi
-			done
-			tab_accounts+=("${found_account:-unknown}")
+			tab_accounts+=("$(_resolve_account_from_initial "${tstripped:0:1}")")
 		else
 			tab_accounts+=("")
 		fi

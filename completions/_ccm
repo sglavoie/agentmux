@@ -49,6 +49,7 @@ _ccm() {
                                     'path[Print config file path]' \
                                     'init[Copy example configs if missing]' \
                                     'sync[Update documentation preambles]' \
+                                    'validate[Check config files for errors]' \
                                 return
                                 ;;
                         esac
@@ -93,7 +94,8 @@ _ccm() {
                         'show[Print config file contents]' \
                         'path[Print config file path]' \
                         'init[Copy example configs if missing]' \
-                                    'sync[Update documentation preambles]' \
+                        'sync[Update documentation preambles]' \
+                        'validate[Check config files for errors]' \
                     ;;
             esac
             ;;

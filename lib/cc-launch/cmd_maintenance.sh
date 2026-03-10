@@ -325,7 +325,7 @@ cmd_cleanup() {
     fi
 
     local orphaned=0
-    for f in /tmp/ccm-activity-*.counts /tmp/ccm-notify-*; do
+    for f in "${_CCM_TMPDIR}"/ccm-activity-*.counts "${_CCM_TMPDIR}"/ccm-notify-*; do
         [[ -e "$f" ]] || continue
         local fname="${f##*/}"
         local file_id=""
@@ -425,7 +425,10 @@ cmd_save() {
                 return
             fi
         fi
-        cp "$output_file" "${output_file}.bak"
+        if ! cp "$output_file" "${output_file}.bak"; then
+            echo "Error: backup failed, save aborted. Original file unchanged." >&2
+            return 1
+        fi
         echo "Backed up existing config to ${output_file}.bak"
     fi
 

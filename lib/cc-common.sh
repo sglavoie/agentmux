@@ -8,6 +8,8 @@ _CC_COMMON_LOADED=1
 CCM_DEBUG="${CCM_DEBUG:-0}"
 ccm_debug() { if [[ "$CCM_DEBUG" == "1" ]]; then echo "[DEBUG] $*" >&2; fi; }
 
+_CCM_TMPDIR="${TMPDIR:-/tmp}"
+
 _CC_COMMON_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
 _CC_COMMON_DIR="$(cd "$(dirname "$_CC_COMMON_SCRIPT")" && pwd)"
 
