@@ -70,13 +70,17 @@ def handle_override_mode(key, state):
         if state["override_source"] == "list" and state["filtered"]:
             sess = state["filtered"][state["selected"]]
             sess_socket = sess.get("socket", state["home_socket"])
-            current_dir = (
+            account_default_dir = (
                 state["cfg"]._accounts.get(sess["account"], {}).get("config_dir", "")
             )
-            if selected_path == current_dir:
+            session_dir = sess.get("config_dir", "") or account_default_dir
+            if selected_path == session_dir:
                 state["msg"] = "Same config dir selected, no change"
                 state["msg_frames"] = 20
             else:
+                # Reverting to the account default means no override
+                is_revert = selected_path == account_default_dir
+                config_dir_override = None if is_revert else selected_path
                 if sess["status"] == "stopped":
                     ok = state["do_close"](sess_socket, sess["tab_id"])
                     if not ok:
@@ -86,20 +90,24 @@ def handle_override_mode(key, state):
                         state["mode"] = "list"
                         return True
                     time.sleep(0.3)
-                    new_title = state["append_override_marker"](sess["title"])
+                    title = sess["title"]
+                    if is_revert:
+                        title = state["strip_override_marker"](title)
+                    else:
+                        title = state["append_override_marker"](title)
                     account = sess["account"]
                     location = state["compute_insert_location"](
-                        sess_socket, account, new_title
+                        sess_socket, account, title
                     )
                     state["do_launch"](
                         sess_socket,
-                        new_title,
+                        title,
                         sess["cwd"],
                         account,
                         sess.get("cc_flags", ""),
                         sess.get("cc_pw", ""),
                         location=location,
-                        config_dir_override=selected_path,
+                        config_dir_override=config_dir_override,
                         env_vars=sess.get("cc_env", ""),
                         color_override=sess.get("cc_color", ""),
                     )
@@ -114,7 +122,7 @@ def handle_override_mode(key, state):
                     sess,
                     flags=sess.get("cc_flags", ""),
                     pw_override=sess.get("cc_pw", ""),
-                    config_dir_override=selected_path,
+                    config_dir_override=config_dir_override,
                     host_tab_id=state["host_tab_id"],
                     env_vars=sess.get("cc_env", ""),
                 )
@@ -125,11 +133,14 @@ def handle_override_mode(key, state):
                     managed_only=(not state["show_all"])
                 )
                 state["refilter"]()
-                home = os.path.expanduser("~")
-                display_path = selected_path
-                if display_path.startswith(home):
-                    display_path = "~" + display_path[len(home) :]
-                state["msg"] = f'Config dir overridden to "{display_path}"'
+                if is_revert:
+                    state["msg"] = "Config dir reverted to account default"
+                else:
+                    home = os.path.expanduser("~")
+                    display_path = selected_path
+                    if display_path.startswith(home):
+                        display_path = "~" + display_path[len(home) :]
+                    state["msg"] = f'Config dir overridden to "{display_path}"'
                 state["msg_frames"] = 20
             state["mode"] = "list"
         else:

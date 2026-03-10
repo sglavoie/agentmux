@@ -13,7 +13,7 @@ from cc_dashboard.remote.actions_core import (
     do_close,
     do_launch,
 )
-from cc_dashboard.remote.shared import _append_override_marker
+from cc_dashboard.remote.shared import _append_override_marker, _strip_override_marker
 
 
 def _spawn_detached_close(socket, tab_id):
@@ -266,6 +266,8 @@ def do_restart(
 
     if config_dir_override:
         title = _append_override_marker(title)
+    else:
+        title = _strip_override_marker(title)
 
     tab_id = session["tab_id"]
     cwd = session["cwd"]
