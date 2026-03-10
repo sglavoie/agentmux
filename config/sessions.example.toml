@@ -12,6 +12,7 @@
 #                    Values: "-" = disable, stack, vsplit, hsplit, split
 #   env            — Space-separated KEY=VALUE pairs injected as environment variables.
 #                    Values must not contain unescaped spaces. Use "-" to disable.
+#   group          — Group name for organizing related sessions in the dashboard.
 # --- END OF DOCUMENTATION (do not edit above this line) ---
 
 [[sessions]]
@@ -59,3 +60,10 @@ account = "personal"
 # directory = "~/projects/api"
 # account = "work"
 # env = "DATABASE_URL=postgres://localhost/dev NODE_ENV=development"
+
+# Group sessions for dashboard organization:
+# [[sessions]]
+# title = "W:frontend"
+# directory = "~/projects/frontend"
+# account = "work"
+# group = "webapp"

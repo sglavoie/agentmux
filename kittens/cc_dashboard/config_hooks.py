@@ -9,25 +9,31 @@ import shutil
 import cc_dashboard.config_core as _core
 import cc_dashboard.config_state as _state
 
-HOOK_EVENTS = [
-    "SessionStart",
-    "UserPromptSubmit",
-    "PreToolUse",
-    "PermissionRequest",
-    "PostToolUse",
-    "PostToolUseFailure",
-    "Notification",
-    "SubagentStart",
-    "SubagentStop",
-    "Stop",
-    "TeammateIdle",
-    "TaskCompleted",
-    "ConfigChange",
-    "WorktreeCreate",
-    "WorktreeRemove",
-    "PreCompact",
-    "SessionEnd",
-]
+
+def _load_hook_events() -> list[str]:
+    """Load hook event list from the canonical source (data/icons.json)."""
+    from cc_dashboard.config_data import _resolve_data_path
+    path = _resolve_data_path("icons.json")
+    if path:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            events = data.get("hook_events")
+            if events:
+                return events
+        except (json.JSONDecodeError, OSError):
+            pass
+    # Fallback if icons.json is unavailable
+    return [
+        "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
+        "PostToolUse", "PostToolUseFailure", "Notification",
+        "SubagentStart", "SubagentStop", "Stop", "TeammateIdle",
+        "TaskCompleted", "ConfigChange", "WorktreeCreate", "WorktreeRemove",
+        "PreCompact", "SessionEnd",
+    ]
+
+
+HOOK_EVENTS = _load_hook_events()
 
 HOOK_EVENT_META = {
     "SessionStart": {

@@ -109,7 +109,7 @@ resolve_location_args() {
 
     if [[ -n "$insert_loc" ]]; then
         kitty @ --to "$socket" focus-tab --match "id:$insert_loc" 2>/dev/null
-        sleep 0.1
+        sleep 0.1 # Wait for Kitty to process focus change before inserting tab
         echo "--location after"
         return 0
     fi
@@ -188,20 +188,34 @@ launch_session() {
     # shellcheck disable=SC2086
     kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
 
+    if [[ $? -ne 0 ]]; then
+        echo "Warning: failed to launch tab '$title'" >&2
+        return 1
+    fi
+
     local retry
+    local color_set=false
     for ((retry = 0; retry < 5; retry++)); do
         # shellcheck disable=SC2086
         if kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors 2>/dev/null; then
+            color_set=true
             break
         fi
-        sleep 0.1
+        sleep 0.1 # Wait for Kitty to register the new tab before retrying color set
     done
+
+    if [[ "$color_set" != "true" ]]; then
+        echo "Warning: failed to set tab color for '$title'" >&2
+    fi
 
     local pw_mode
     pw_mode="$(resolve_project_window "$pw_override")"
     if [[ -n "$pw_mode" ]]; then
-        kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus
-        kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode"
+        if ! kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus; then
+            echo "Warning: failed to create project window for '$title'" >&2
+        elif ! kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode"; then
+            echo "Warning: failed to set layout '$pw_mode' for '$title'" >&2
+        fi
     fi
 
     echo "Launched [$title] (account=$account, dir=$dir)"

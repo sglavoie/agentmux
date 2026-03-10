@@ -4,6 +4,10 @@ All symbols that were previously defined here have been moved to focused
 sub-modules (colors, drawing, filters, views, loop).  This file re-exports
 them so that existing ``from cc_dashboard.ui import ...`` statements
 continue to work without modification.
+
+Still imported by external kittens:
+  - kittens/claude_dashboard.py
+  - kittens/cc_session_picker.py
 """
 
 # ── colors ───────────────────────────────────────────────────────────────────

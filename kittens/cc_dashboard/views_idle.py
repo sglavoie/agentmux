@@ -23,11 +23,19 @@ def _find_alerter():
 
 _ALERTER_BIN = _find_alerter()
 _alerter_warned = False
+_active_notifications: list[subprocess.Popen] = []
+
+
+def _reap_notifications():
+    """Reap finished notification subprocesses to avoid zombies."""
+    global _active_notifications
+    _active_notifications = [p for p in _active_notifications if p.poll() is None]
 
 
 def _send_notification(title, subtitle, message, group=None, timeout=10):
     """Send a macOS notification via alerter (non-blocking)."""
     global _alerter_warned
+    _reap_notifications()
     if _ALERTER_BIN is None:
         if not _alerter_warned:
             _alerter_warned = True
@@ -50,7 +58,8 @@ def _send_notification(title, subtitle, message, group=None, timeout=10):
     ]
     if group is not None:
         cmd += ["--group", str(group)]
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _active_notifications.append(proc)
 
 
 def _check_idle_notifications(sessions):

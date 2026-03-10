@@ -127,6 +127,13 @@ Commands:
 Global options:
     --socket SOCKET     Target a specific Kitty socket
 
+Environment variables:
+    CC_MANAGER_CONFIG     Path to sessions.toml. Its parent directory becomes
+                          the config directory for all other config files.
+    CC_MANAGER_ACCOUNTS   Path to accounts.toml (overrides config dir lookup).
+    CC_MANAGER_DEFAULTS   Path to defaults.toml (overrides config dir lookup).
+    CC_MANAGER_LOGS       Activity log directory (default: ~/.local/state/cc-manager/activity/).
+
 Run 'ccm help <command>' for details on a specific command.
 Tip: Run 'ccm help launch' for selector-based destructive launch commands
 	using --instance LABEL and --tab-id ID.

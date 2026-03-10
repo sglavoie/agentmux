@@ -10,6 +10,14 @@ resolve_repo_dir() {
 	cd "$script_dir/.." && pwd
 }
 
+# CC_MANAGER_CONFIG serves a dual purpose:
+#   1. It is the path to the sessions.toml file (used by resolve_config_file).
+#   2. Its parent directory is treated as the config directory (used by
+#      resolve_config_dir), so all other config files (accounts.toml,
+#      defaults.toml, hooks.json) are expected alongside it.
+# Example: CC_MANAGER_CONFIG=~/alt/sessions.toml means the config dir is ~/alt/.
+# CC_MANAGER_ACCOUNTS overrides only the accounts.toml path; its dirname is
+# used as the config dir when CC_MANAGER_CONFIG is unset.
 resolve_config_dir() {
 	if [[ -n "${CC_MANAGER_CONFIG:-}" ]]; then
 		dirname "$CC_MANAGER_CONFIG"

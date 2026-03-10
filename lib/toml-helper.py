@@ -58,7 +58,11 @@ def cmd_read_defaults(path):
 
 def cmd_write_sessions(path):
     """Read JSON array from stdin and write sessions.toml."""
-    raw = json.load(sys.stdin)
+    try:
+        raw = json.load(sys.stdin)
+    except json.JSONDecodeError as e:
+        print(f"Error: invalid JSON on stdin: {e}", file=sys.stderr)
+        sys.exit(1)
     header = ""
     if os.path.isfile(path):
         header = toml_reader.read_header_comments(path)

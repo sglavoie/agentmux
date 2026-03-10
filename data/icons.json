@@ -7,5 +7,12 @@
     "key": "🔑",
     "error": "⚠️"
   },
-  "state_order": ["bolt", "stop", "key", "error"]
+  "state_order": ["bolt", "stop", "key", "error"],
+  "hook_events": [
+    "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
+    "PostToolUse", "PostToolUseFailure", "Notification",
+    "SubagentStart", "SubagentStop", "Stop", "TeammateIdle",
+    "TaskCompleted", "ConfigChange", "WorktreeCreate", "WorktreeRemove",
+    "PreCompact", "SessionEnd"
+  ]
 }

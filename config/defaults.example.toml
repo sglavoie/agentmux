@@ -14,6 +14,8 @@
 #   tab_statuses      — Array of status presets shown in the F7 tab status picker.
 #                       Custom values entered via F7 are auto-appended here.
 #                       Default: ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
+#   notes_editor      — External editor command for session notes.
+#                       Default: "" (uses built-in editor)
 #
 # [notifications] keys:
 #   error             — Show a macOS notification on tool use failures. Default: false
@@ -37,6 +39,7 @@
 # sort_sessions = "alpha"
 # dashboard_refresh = 3
 # tab_statuses = ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
+# notes_editor = "vim"
 
 # [notifications]
 # error = true

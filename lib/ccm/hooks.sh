@@ -80,7 +80,23 @@ cmd_hooks_status() {
 		example_hooks="$(jq '.hooks' "$hooks_example")"
 	fi
 
-	local hook_events=(SessionStart UserPromptSubmit PreToolUse PermissionRequest PostToolUse PostToolUseFailure Notification SubagentStart SubagentStop Stop TeammateIdle TaskCompleted ConfigChange WorktreeCreate WorktreeRemove PreCompact SessionEnd)
+	# Load hook events from canonical source (data/icons.json)
+	local _icons_json=""
+	if [[ -f "$HOME/.local/lib/cc-manager/icons.json" ]]; then
+		_icons_json="$HOME/.local/lib/cc-manager/icons.json"
+	elif [[ -f "$REPO_DIR/data/icons.json" ]]; then
+		_icons_json="$REPO_DIR/data/icons.json"
+	fi
+	local hook_events=()
+	if [[ -n "$_icons_json" ]]; then
+		while IFS= read -r _ev; do
+			hook_events+=("$_ev")
+		done < <(jq -r '.hook_events[]' "$_icons_json")
+	fi
+	if [[ ${#hook_events[@]} -eq 0 ]]; then
+		echo "Error: could not load hook_events from icons.json" >&2
+		return 1
+	fi
 
 	printf "%-20s %s\n" "Account" "Status"
 	printf "%-20s %s\n" "-------" "------"

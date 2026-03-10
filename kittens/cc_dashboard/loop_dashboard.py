@@ -75,6 +75,10 @@ def dashboard(stdscr):
     init_colors()
     stdscr.timeout(100)
 
+    stdscr.erase()
+    stdscr.addstr(0, 0, "Discovering sessions...")
+    stdscr.refresh()
+
     home_socket = os.environ.get("KITTY_LISTEN_ON", "") or get_kitty_socket()
     discovered_sockets = get_all_kitty_sockets()
     instance_labels = [label for _, label in discovered_sockets]
@@ -376,7 +380,25 @@ def dashboard(stdscr):
 
     state["_save_ui_state"] = _save_ui_state
 
+    min_rows, min_cols = 10, 40
+
     while True:
+        rows, cols = stdscr.getmaxyx()
+        if rows < min_rows or cols < min_cols:
+            stdscr.erase()
+            msg = "Terminal too small"
+            try:
+                stdscr.addstr(0, 0, msg[:cols])
+            except curses.error:
+                pass
+            stdscr.refresh()
+            key = stdscr.getch()
+            if key == curses.KEY_RESIZE:
+                continue
+            if key == ord("q"):
+                return
+            continue
+
         draw_dashboard_frame(stdscr, build_draw_state(state), build_session_actions)
         stdscr.refresh()
 

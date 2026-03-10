@@ -1,5 +1,6 @@
 """Low-level kitty command and socket discovery helpers."""
 
+import concurrent.futures
 import glob
 import json
 import os
@@ -54,8 +55,7 @@ def get_all_kitty_sockets():
             candidates.append(sock)
             seen.add(sock)
 
-    active = []
-    for sock in candidates:
+    def _probe(sock):
         try:
             result = subprocess.run(
                 ["kitty", "@", "--to", sock, "ls"],
@@ -64,9 +64,22 @@ def get_all_kitty_sockets():
                 timeout=2,
             )
             if result.returncode == 0:
-                active.append((sock, _socket_label(sock)))
+                return (sock, _socket_label(sock))
         except (subprocess.SubprocessError, OSError):
             pass
+        return None
+
+    active = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(candidates) or 1) as pool:
+        futures = {pool.submit(_probe, sock): sock for sock in candidates}
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result is not None:
+                active.append(result)
+
+    # Preserve original candidate order (env socket first, then by mtime)
+    order = {sock: i for i, sock in enumerate(candidates)}
+    active.sort(key=lambda x: order.get(x[0], 0))
 
     return active
 

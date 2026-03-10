@@ -33,6 +33,7 @@ _cc_launch_accounts() {
 
     if [[ -f "$accounts_toml" ]]; then
         local helper="${HOME}/.local/lib/cc-manager/toml-helper.py"
+        [[ -f "$helper" ]] || { _values 'account' work personal; return; }
         accts=(${(f)"$(python3 "$helper" read-accounts "$accounts_toml" | cut -f1)"})
     else
         accts=(work personal)

@@ -72,7 +72,7 @@ cmd_restart() {
 
     kitty @ --to "$SOCKET" close-tab --match "id:$_TARGET_TAB_ID"
     echo "Closed tab '$title', relaunching..."
-    sleep 0.3
+    sleep 0.3 # Wait for Kitty to fully close the tab before relaunching
 
     local loc_args
     loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
@@ -228,7 +228,7 @@ cmd_move() {
 
     kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"
     echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..."
-    sleep 0.3
+    sleep 0.3 # Wait for Kitty to fully close the tab before relaunching on target
 
     SOCKET="$target_socket"
     local loc_args

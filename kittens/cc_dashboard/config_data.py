@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 
 
 def _resolve_data_path(filename):
@@ -37,8 +38,12 @@ def _load_palette():
     path = _resolve_data_path("palette.json")
     if not path:
         return {}, (255, 255, 255), (170, 170, 170)
-    with open(path) as f:
-        data = json.load(f)
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"Warning: failed to load palette from {path}: {e}", file=sys.stderr)
+        return {}, (255, 255, 255), (170, 170, 170)
     palette = {}
     for name, entry in data.get("colors", {}).items():
         palette[name] = (

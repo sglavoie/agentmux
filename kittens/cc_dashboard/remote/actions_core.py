@@ -65,6 +65,9 @@ def do_edit_notes(socket, tab_id, title):
     filepath = notes_file_for_title(title)
     Path(filepath).touch()
     try:
+        # Intentionally fire-and-forget: Kitty manages the overlay process
+        # lifecycle, so the subprocess exits promptly after launching the
+        # overlay and does not need reaping by the dashboard.
         subprocess.Popen(
             [
                 "kitty",

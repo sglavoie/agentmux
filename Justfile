@@ -60,12 +60,32 @@ symlinks := prefix_bin / "ccm:bin/ccm" + "\n" + \
 check-keybindings:
     @python scripts/check_keybindings.py
 
+# Check required dependencies
+check-deps:
+    @ok=true; \
+    if ! command -v jq >/dev/null 2>&1; then \
+        echo "Error: jq is required but not found." >&2; \
+        ok=false; \
+    fi; \
+    if ! python3 -c "import tomllib" 2>/dev/null; then \
+        echo "Error: Python 3.11+ is required (for tomllib)." >&2; \
+        ok=false; \
+    fi; \
+    if ! command -v kitty >/dev/null 2>&1; then \
+        echo "Error: kitty is required but not found." >&2; \
+        ok=false; \
+    fi; \
+    if [ "$ok" = false ]; then \
+        exit 1; \
+    fi
+
 # Install symlinks and hooks
-install: check-keybindings
+install: check-deps check-keybindings
     @find . -name "*.py[co]" -or -name "__pycache__" -exec rm -rf -- {} + 2>/dev/null; true
     @mkdir -p "{{prefix_bin}}" "{{prefix_lib}}" "{{prefix_lib}}/ccm" "{{prefix_kitty}}" "{{prefix_zfunc}}"
     @echo '{{symlinks}}' | while IFS=: read -r dest src; do \
         if [ -d "$dest" ] && [ ! -L "$dest" ]; then \
+            echo "Warning: removing existing directory $dest (replacing with symlink)" >&2; \
             rm -rf "$dest"; \
         fi; \
         ln -sf "{{root}}/$src" "$dest"; \
@@ -104,6 +124,11 @@ uninstall:
     @echo "Note: Claude Code hooks in settings.json were not removed."
     @echo "To remove them manually, edit each account's settings.json and"
     @echo "delete the cc-hook-indicator entries from the hooks section."
+    @echo ""
+    @echo "Other artifacts you may want to remove:"
+    @echo "  - Config directory: ~/.config/cc-manager/"
+    @echo "  - Temp files:       /tmp/ccm-*"
+    @echo "  - Log directory:    ~/.local/share/cc-manager/logs/"
 
 # Run linters
 lint:

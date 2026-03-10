@@ -157,8 +157,28 @@ EXAMPLE_HOOKS="$(jq --arg cmd "$HOOK_CMD" --arg logcmd "$LOG_CMD" '
     .hooks | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 ' "$HOOKS_EXAMPLE")"
 
-# List of hook events to process
-HOOK_EVENTS=(SessionStart UserPromptSubmit PreToolUse PermissionRequest PostToolUse PostToolUseFailure Notification SubagentStart SubagentStop Stop TeammateIdle TaskCompleted ConfigChange WorktreeCreate WorktreeRemove PreCompact SessionEnd)
+# Load hook events from canonical source (data/icons.json)
+ICONS_JSON=""
+if [[ -f "$HOME/.local/lib/cc-manager/icons.json" ]]; then
+	ICONS_JSON="$HOME/.local/lib/cc-manager/icons.json"
+else
+	_repo_dir="$(cd "$(dirname "$HOOKS_EXAMPLE")/.." 2>/dev/null && pwd)"
+	if [[ -f "$_repo_dir/data/icons.json" ]]; then
+		ICONS_JSON="$_repo_dir/data/icons.json"
+	fi
+fi
+
+HOOK_EVENTS=()
+if [[ -n "$ICONS_JSON" ]]; then
+	while IFS= read -r ev; do
+		HOOK_EVENTS+=("$ev")
+	done < <(jq -r '.hook_events[]' "$ICONS_JSON")
+fi
+
+if [[ ${#HOOK_EVENTS[@]} -eq 0 ]]; then
+	echo "Error: could not load hook_events from icons.json" >&2
+	exit 1
+fi
 
 for i in "${!CONFIG_DIRS[@]}"; do
 	config_dir="${CONFIG_DIRS[$i]}"
@@ -194,12 +214,12 @@ for i in "${!CONFIG_DIRS[@]}"; do
 			if [[ "$is_disabled" == "true" ]]; then
 				# Event disabled: only include extra_hooks if any
 				if [[ "$(echo "$extra_for_event" | jq 'length')" -gt 0 ]]; then
-					create_filter="$create_filter | .hooks[\"$event\"] = $extra_for_event"
+					create_filter="$create_filter | .hooks[$(jq -n --arg e "$event" '$e')] = $extra_for_event"
 				fi
 			else
-				example_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg event "$event" '.[$event] // []')"
+				example_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg e "$event" '.[$e] // []')"
 				combined="$(jq -n --argjson a "$example_entries" --argjson b "$extra_for_event" '$a + $b')"
-				create_filter="$create_filter | .hooks[\"$event\"] = $combined"
+				create_filter="$create_filter | .hooks[$(jq -n --arg e "$event" '$e')] = $combined"
 			fi
 		done
 		jq -n "{ hooks: {} } $create_filter" >"$settings_file"
@@ -217,20 +237,21 @@ for i in "${!CONFIG_DIRS[@]}"; do
 			(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 		')"
 
+		event_json="$(jq -n --arg e "$event" '$e')"
 		if [[ "$is_disabled" == "true" ]]; then
 			# Event disabled: strip cc-hook-indicator entries, preserve user entries, add extra_hooks
 			jq_filter="$jq_filter"'
-                | .hooks["'"$event"'"] = (
-                    [(.hooks["'"$event"'"] // [])[] |
+                | .hooks['"$event_json"'] = (
+                    [(.hooks['"$event_json"'] // [])[] |
                         select([.hooks[]? | .command // "" | test("cc-hook-indicator|cc-activity-log")] | any | not)
                     ] + '"$extra_for_event"'
                 )'
 		else
-			new_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg event "$event" '.[$event] // []')"
+			new_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg e "$event" '.[$e] // []')"
 			combined="$(jq -n --argjson a "$new_entries" --argjson b "$extra_for_event" '$a + $b')"
 			jq_filter="$jq_filter"'
-                | .hooks["'"$event"'"] = (
-                    [(.hooks["'"$event"'"] // [])[] |
+                | .hooks['"$event_json"'] = (
+                    [(.hooks['"$event_json"'] // [])[] |
                         select([.hooks[]? | .command // "" | test("cc-hook-indicator|cc-activity-log")] | any | not)
                     ] + '"$combined"'
                 )'

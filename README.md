@@ -43,64 +43,107 @@ This gives you `cmd+1` through `cmd+0` for tabs 1-10, `cmd+l` to toggle between 
 
 ```bash
 mkdir -p ~/.config/cc-manager
-cp config/accounts.example ~/.config/cc-manager/accounts.conf
+cp config/accounts.example.toml ~/.config/cc-manager/accounts.toml
 ```
 
-Edit `~/.config/cc-manager/accounts.conf` to define your Claude accounts. Each line has three pipe-delimited fields:
+Edit `~/.config/cc-manager/accounts.toml` to define your Claude accounts. Each `[[accounts]]` entry has three keys:
 
-```plaintext
-name | claude_config_dir | color
-```
-
-The `name` is an identifier you reference from `sessions.conf`. The `claude_config_dir` is the path to the Claude config directory for that account (empty or `~/.claude` means the default). The `color` is a name from the built-in palette: green, blue, red, orange, purple, teal, pink, yellow, gray, or cyan.
+- `name` — Identifier you reference from `sessions.toml`
+- `config_dir` — Path to the Claude config directory (`~/.claude` = default)
+- `color` — Tab color from the built-in palette: green, blue, red, orange, purple, teal, pink, yellow, gray, or cyan
 
 Example with three accounts:
 
-```plaintext
-work     | ~/.claude            | green
-personal | ~/.claude-personal   | blue
-client-x | ~/.claude-client-x   | orange
+```toml
+[[accounts]]
+name = "work"
+config_dir = "~/.claude"
+color = "green"
+
+[[accounts]]
+name = "personal"
+config_dir = "~/.claude-personal"
+color = "blue"
+
+[[accounts]]
+name = "client-x"
+config_dir = "~/.claude-client-x"
+color = "orange"
 ```
 
-If `accounts.conf` does not exist, cc-manager falls back to two default accounts: `work` (green, default config) and `personal` (blue, `~/.claude-personal`).
+If `accounts.toml` does not exist, cc-manager falls back to two default accounts: `work` (green, default config) and `personal` (blue, `~/.claude-personal`).
 
 ### 4. Create your sessions config
 
 ```bash
-cp config/sessions.example ~/.config/cc-manager/sessions.conf
+cp config/sessions.example.toml ~/.config/cc-manager/sessions.toml
 ```
 
-Edit `~/.config/cc-manager/sessions.conf` to define your sessions. The format is pipe-delimited:
+Edit `~/.config/cc-manager/sessions.toml` to define your sessions. Each `[[sessions]]` entry has three required keys and several optional ones:
 
-```plaintext
-title | directory | account [| claude_flags]
+- `title` — Tab title (convention: prefix with account initial, e.g. `W:` for work, `P:` for personal)
+- `directory` — Working directory (`~` is expanded)
+- `account` — Account name as defined in `accounts.toml`
+- `flags` — *(optional)* Per-session Claude flags, overriding the global default (see step 5)
+- `project_window` — *(optional)* Per-session layout override (`stack`, `vsplit`, `hsplit`, `split`, or `-` to disable)
+- `env` — *(optional)* Space-separated `KEY=VALUE` pairs injected as environment variables
+- `group` — *(optional)* Group name for organizing related sessions in the dashboard
+
+Example:
+
+```toml
+[[sessions]]
+title = "W:project-alpha"
+directory = "~/projects/alpha"
+account = "work"
+
+[[sessions]]
+title = "P:dotfiles"
+directory = "~/dotfiles"
+account = "personal"
+flags = "--dangerously-skip-permissions"
 ```
 
-The `account` field references an entry from `accounts.conf`. Tab titles are conventionally prefixed with an initial for the account (e.g. `W:` for work, `P:` for personal). The optional 4th column lets you override the global Claude flags for that specific session (see step 5 below).
-
-### 5. (Optional) Set global Claude flags
+### 5. (Optional) Set global defaults
 
 If you want to pass flags like `--dangerously-skip-permissions` to every Claude session by default, create a defaults file:
 
 ```bash
-cp config/defaults.example ~/.config/cc-manager/defaults.conf
+cp config/defaults.example.toml ~/.config/cc-manager/defaults.toml
 ```
 
-Edit `~/.config/cc-manager/defaults.conf` and uncomment the `claude_flags` line:
+Edit `~/.config/cc-manager/defaults.toml` and uncomment the `claude_flags` line:
 
-```plaintext
-claude_flags = --dangerously-skip-permissions
+```toml
+[defaults]
+claude_flags = "--dangerously-skip-permissions"
 ```
 
-This applies to all sessions unless overridden per-session in `sessions.conf`. To override the global flags for a specific session, add a 4th column to that session's line. Use `-` to disable flags entirely for one session:
+This applies to all sessions unless overridden per-session in `sessions.toml`. Use the `flags` key in a session entry to override, or set it to `"-"` to disable flags entirely for that session:
 
-```plaintext
-W:project-alpha  | ~/projects/alpha  | work
-W:project-beta   | ~/projects/beta   | work  | --dangerously-skip-permissions
-W:safe-project   | ~/projects/safe   | work  | -
+```toml
+# Inherits global defaults
+[[sessions]]
+title = "W:project-alpha"
+directory = "~/projects/alpha"
+account = "work"
+
+# Explicit flags regardless of global default
+[[sessions]]
+title = "W:project-beta"
+directory = "~/projects/beta"
+account = "work"
+flags = "--dangerously-skip-permissions"
+
+# No flags even if global default is set
+[[sessions]]
+title = "W:safe-project"
+directory = "~/projects/safe"
+account = "work"
+flags = "-"
 ```
 
-In this example, `project-alpha` inherits whatever is in `defaults.conf`, `project-beta` always gets `--dangerously-skip-permissions` regardless of the global default, and `safe-project` never gets any flags even if the global default is set. There is no merging; the per-session value completely replaces the global default.
+There is no merging; the per-session value completely replaces the global default.
 
 ## Usage
 
@@ -110,7 +153,7 @@ In this example, `project-alpha` inherits whatever is in `defaults.conf`, `proje
 cc-launch
 ```
 
-Reads `~/.config/cc-manager/sessions.conf` and creates a Kitty tab for each entry. Tabs are colored according to the palette color assigned to each account in `accounts.conf`. Running it again is safe since it skips tabs that already exist (idempotent).
+Reads `~/.config/cc-manager/sessions.toml` and creates a Kitty tab for each entry. Tabs are colored according to the palette color assigned to each account in `accounts.toml`. Running it again is safe since it skips tabs that already exist (idempotent).
 
 ### Add an ad-hoc session
 
@@ -157,7 +200,7 @@ Same idea as `cc-launch --list` but with dynamically sized columns for cleaner o
 
 ### Interactive session dashboard
 
-Press `ctrl+shift+d` to open the dashboard as a Kitty overlay. It shows all tabs running Claude Code in a navigable list, color-coded by account using the palette from `accounts.conf`.
+Press `ctrl+shift+d` to open the dashboard as a Kitty overlay. It shows all tabs running Claude Code in a navigable list, color-coded by account using the palette from `accounts.toml`.
 
 Use `F1` for the complete keybinding reference. Core dashboard controls:
 
@@ -173,7 +216,7 @@ Ctrl+r      Refresh the session list
 q / Esc     Dismiss the dashboard
 ```
 
-The new-session form accepts a title, working directory, account type, and optional Claude flags. Press Enter to advance between fields and Tab to cycle through the available accounts. Leave the flags field empty to inherit the global default from `defaults.conf`, or enter `-` to disable flags for that session. The new tab is created immediately with the appropriate Claude command and tab coloring.
+The new-session form accepts a title, working directory, account type, and optional Claude flags. Press Enter to advance between fields and Tab to cycle through the available accounts. Leave the flags field empty to inherit the global default from `defaults.toml`, or enter `-` to disable flags for that session. The new tab is created immediately with the appropriate Claude command and tab coloring.
 
 ### Save current sessions to config
 
@@ -181,10 +224,10 @@ The new-session form accepts a title, working directory, account type, and optio
 cc-launch --save
 ```
 
-Snapshots all currently running Claude sessions back to the config file (`~/.config/cc-manager/sessions.conf` by default). The existing file is backed up with a `.bak` extension before overwriting. Note that per-session flag overrides (the 4th column) are not preserved by `--save` since live Kitty tab state has no knowledge of what flags were used at launch time. You can also save to a specific file:
+Snapshots all currently running Claude sessions back to `~/.config/cc-manager/sessions.toml` (by default). The existing file is backed up with a `.bak` extension before overwriting. Note that per-session flag overrides are not preserved by `--save` since live Kitty tab state has no knowledge of what flags were used at launch time. You can also save to a specific file:
 
 ```bash
-cc-launch --save ~/my-snapshot.conf
+cc-launch --save ~/my-snapshot.toml
 ```
 
 ### Clean up stale sessions
@@ -225,9 +268,9 @@ Copy `sessions/example.conf` and customize it for your projects. This approach i
 All config files live in `~/.config/cc-manager/` by default. Override their locations with environment variables:
 
 ```bash
-CC_MANAGER_CONFIG=~/my-sessions.conf cc-launch
-CC_MANAGER_ACCOUNTS=~/my-accounts.conf cc-launch
-CC_MANAGER_DEFAULTS=~/my-defaults.conf cc-launch
+CC_MANAGER_CONFIG=~/my-sessions.toml cc-launch
+CC_MANAGER_ACCOUNTS=~/my-accounts.toml cc-launch
+CC_MANAGER_DEFAULTS=~/my-defaults.toml cc-launch
 ```
 
 The Kitty socket is auto-detected from `KITTY_LISTEN_ON` or by finding the most recent `/tmp/kitty-*` socket. You can also override it per-command with `--socket` (see "Multiple Kitty instances" above).
@@ -250,9 +293,9 @@ Justfile                        Install/uninstall symlinks
 cc-manager.conf                 Kitty config snippet (include from kitty.conf)
 bin/cc-launch                   Session launcher and manager
 bin/cc-status                   Status overview tool
-config/accounts.example         Example account definitions (colors, config dirs)
-config/sessions.example         Example session definitions (with optional flags column)
-config/defaults.example         Example global defaults (claude_flags)
+config/accounts.example.toml    Example account definitions (colors, config dirs)
+config/sessions.example.toml    Example session definitions (with optional overrides)
+config/defaults.example.toml    Example global defaults (claude_flags, notifications)
 sessions/example.conf           Example Kitty session file for startup
 kittens/claude_dashboard.py     Interactive session picker (overlay kitten)
 completions/_cc-launch          Zsh completion for cc-launch

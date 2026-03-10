@@ -2,6 +2,7 @@
 
 import json
 import re
+import sys
 
 from cc_dashboard.config import _resolve_data_path
 
@@ -15,8 +16,16 @@ def _load_icons():
             "states": {"bolt": "⚡", "stop": "🛑", "key": "🔑", "error": "⚠️"},
             "state_order": ["bolt", "stop", "key", "error"],
         }
-    with open(path) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"Warning: failed to load icons from {path}: {e}", file=sys.stderr)
+        return {
+            "star": "★",
+            "states": {"bolt": "⚡", "stop": "🛑", "key": "🔑", "error": "⚠️"},
+            "state_order": ["bolt", "stop", "key", "error"],
+        }
 
 
 _ICONS = _load_icons()
