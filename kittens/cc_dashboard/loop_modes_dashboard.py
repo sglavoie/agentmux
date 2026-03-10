@@ -67,11 +67,15 @@ def handle_actions_mode(key, state, build_session_actions):
                 state["mode"] = "move_picker"
                 state["move_selected"] = 0
         elif action_id == "clone":
-            state["clone_title"] = state["generate_clone_title"](
-                state["sessions"], sess["title"]
-            )
-            state["clone_cursor"] = len(state["clone_title"])
-            state["mode"] = "clone"
+            if state["actions_scope"] == "marked" and state["actions_targets"]:
+                state["batch_targets"] = list(state["actions_targets"])
+                state["mode"] = "confirm_batch_clone"
+            else:
+                state["clone_title"] = state["generate_clone_title"](
+                    state["sessions"], sess["title"]
+                )
+                state["clone_cursor"] = len(state["clone_title"])
+                state["mode"] = "clone"
         elif action_id == "worktree":
             if not sess.get("git"):
                 state["msg"] = "Not a git repository"
@@ -98,15 +102,25 @@ def handle_actions_mode(key, state, build_session_actions):
                     state["override_selected"] = i
                     break
         elif action_id == "color":
-            acct_info = state["cfg"]._accounts.get(sess.get("account", ""), {})
-            account_color = acct_info.get("color", "gray")
-            current_color = sess.get("cc_color", "") or account_color
             state["mode"] = "color_picker"
-            state["color_selected"] = 0
-            for i, name in enumerate(state["palette_names"]):
-                if name == current_color:
-                    state["color_selected"] = i
-                    break
+            if state["actions_scope"] == "marked":
+                state["color_selected"] = 0
+            else:
+                acct_info = state["cfg"]._accounts.get(sess.get("account", ""), {})
+                account_color = acct_info.get("color", "gray")
+                current_color = sess.get("cc_color", "") or account_color
+                state["color_selected"] = 0
+                for i, name in enumerate(state["palette_names"]):
+                    if name == current_color:
+                        state["color_selected"] = i
+                        break
+        elif action_id == "group":
+            if state["actions_scope"] == "marked" and state["actions_targets"]:
+                state["batch_group_value"] = ""
+                state["batch_group_cursor"] = 0
+                state["mode"] = "batch_group"
+            else:
+                state["mode"] = "list"
         elif action_id == "edit_notes":
             sess_socket = sess.get("socket", state.get("home_socket", ""))
             ok = state["do_edit_notes"](sess_socket, sess["tab_id"], sess["title"])
@@ -499,6 +513,49 @@ def handle_confirm_modes(key, state):
         state["mode"] = "list"
         return True
 
+    if mode == "confirm_batch_clone":
+        if key in (ord("y"), ord("Y")) and state["batch_targets"]:
+            all_title_dicts = [{"title": s["title"]} for s in state["sessions"]]
+            cloned = 0
+            for t in state["batch_targets"]:
+                new_title = state["generate_clone_title"](
+                    all_title_dicts, t["title"]
+                )
+                all_title_dicts.append({"title": new_title})
+                r_flags, r_pw, r_env = _resolve_runtime_options(
+                    t,
+                    state["cfg"],
+                    state["strip_override_marker"],
+                )
+                t_socket = t.get("socket", state["home_socket"])
+                loc = state["compute_insert_location"](
+                    t_socket, t["account"], new_title
+                )
+                clone_group = t.get("group", "")
+                state["do_launch"](
+                    t_socket,
+                    new_title,
+                    t["cwd"],
+                    t["account"],
+                    r_flags,
+                    r_pw,
+                    location=loc,
+                    env_vars=r_env,
+                    color_override=t.get("cc_color", ""),
+                    group=clone_group,
+                )
+                cloned += 1
+
+            state["marked"].clear()
+            state["sessions"] = state["query_all_sessions"](
+                managed_only=(not state["show_all"])
+            )
+            state["refilter"]()
+            state["msg"] = f"Cloned {cloned} session(s)"
+            state["msg_frames"] = 20
+        state["mode"] = "list"
+        return True
+
     if mode == "confirm_save":
         if key in (ord("y"), ord("Y")):
             count, _ = state["cfg"].save_sessions(state["sessions"])
@@ -525,7 +582,6 @@ def handle_color_picker_mode(key, state):
     elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
         state["color_selected"] = (state["color_selected"] + 1) % total
     elif key in (10, 13, curses.KEY_ENTER):
-        sess = state["filtered"][state["selected"]]
         palette_names = state["palette_names"]
 
         if state["color_selected"] < len(palette_names):
@@ -533,24 +589,43 @@ def handle_color_picker_mode(key, state):
         else:
             chosen = ""  # reset
 
-        acct_color = (
-            state["cfg"]._accounts.get(sess.get("account", ""), {}).get("color", "gray")
-        )
-
-        # If chosen matches account default, treat as reset
-        if chosen == acct_color:
-            chosen = ""
-
-        sess_socket = sess.get("socket", state["home_socket"])
-        ok = state["do_set_color"](sess_socket, sess, chosen)
-
-        if ok:
-            label = chosen if chosen else f"default ({acct_color})"
-            state["msg"] = f"Tab color: {label}"
+        if state.get("actions_scope") == "marked":
+            count = 0
+            for t in state["actions_targets"]:
+                acct_color = (
+                    state["cfg"]
+                    ._accounts.get(t.get("account", ""), {})
+                    .get("color", "gray")
+                )
+                color_val = "" if chosen == acct_color else chosen
+                t_socket = t.get("socket", state["home_socket"])
+                if state["do_set_color"](t_socket, t, color_val):
+                    count += 1
+            label = chosen if chosen else "default"
+            state["msg"] = f"Set color to {label} for {count} session(s)"
+            state["marked"] = set()
         else:
-            state["msg"] = "Failed to set tab color"
-        state["msg_frames"] = 20
+            sess = state["filtered"][state["selected"]]
+            acct_color = (
+                state["cfg"]
+                ._accounts.get(sess.get("account", ""), {})
+                .get("color", "gray")
+            )
 
+            # If chosen matches account default, treat as reset
+            if chosen == acct_color:
+                chosen = ""
+
+            sess_socket = sess.get("socket", state["home_socket"])
+            ok = state["do_set_color"](sess_socket, sess, chosen)
+
+            if ok:
+                label = chosen if chosen else f"default ({acct_color})"
+                state["msg"] = f"Tab color: {label}"
+            else:
+                state["msg"] = "Failed to set tab color"
+
+        state["msg_frames"] = 20
         state["sessions"] = state["query_all_sessions"](
             managed_only=(not state["show_all"])
         )

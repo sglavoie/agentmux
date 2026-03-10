@@ -212,6 +212,67 @@ def handle_rename_mode(key, state):
     return True
 
 
+def handle_batch_group_mode(key, state):
+    """Handle key events for batch group assignment mode."""
+    if state["mode"] != "batch_group":
+        return False
+
+    if key == 27:
+        state["mode"] = "list"
+    elif key in (10, 13, curses.KEY_ENTER):
+        group_val = state["batch_group_value"].strip()
+        count = 0
+        for t in state["actions_targets"]:
+            win_id = t.get("claude_window_id", 0)
+            if win_id:
+                t_socket = t.get("socket", state["home_socket"])
+                result = state["kitty_cmd"](
+                    t_socket,
+                    "set-user-vars",
+                    "--match",
+                    f"id:{win_id}",
+                    f"cc_group={group_val}",
+                )
+                if result and result.returncode == 0:
+                    t["group"] = group_val
+                    count += 1
+        state["marked"].clear()
+        state["sessions"] = state["query_all_sessions"](
+            managed_only=(not state["show_all"])
+        )
+        state["refilter"]()
+        if group_val:
+            state["msg"] = f'Set group to "{group_val}" for {count} session(s)'
+        else:
+            state["msg"] = f"Cleared group for {count} session(s)"
+        state["msg_frames"] = 20
+        state["mode"] = "list"
+    elif key in (curses.KEY_BACKSPACE, 127, 8):
+        if state["batch_group_cursor"] > 0:
+            state["batch_group_value"] = (
+                state["batch_group_value"][: state["batch_group_cursor"] - 1]
+                + state["batch_group_value"][state["batch_group_cursor"] :]
+            )
+            state["batch_group_cursor"] -= 1
+    elif key == curses.KEY_LEFT:
+        state["batch_group_cursor"] = max(0, state["batch_group_cursor"] - 1)
+    elif key == curses.KEY_RIGHT:
+        state["batch_group_cursor"] = min(
+            len(state["batch_group_value"]), state["batch_group_cursor"] + 1
+        )
+    elif key == curses.KEY_HOME or key == 1:
+        state["batch_group_cursor"] = 0
+    elif key == curses.KEY_END or key == 5:
+        state["batch_group_cursor"] = len(state["batch_group_value"])
+    elif 32 <= key < 127:
+        before = state["batch_group_value"][: state["batch_group_cursor"]]
+        after = state["batch_group_value"][state["batch_group_cursor"] :]
+        state["batch_group_value"] = before + chr(key) + after
+        state["batch_group_cursor"] += 1
+
+    return True
+
+
 def _resolve_live_or_config_options(sess, cfg, strip_override_marker):
     flags = sess.get("cc_flags", "")
     pw_val = sess.get("cc_pw", "")

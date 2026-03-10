@@ -50,6 +50,7 @@ from cc_dashboard.remote.command import (
     get_host_tab_id,
     get_kitty_socket,
     get_window_text,
+    kitty_cmd,
 )
 from cc_dashboard.remote.git_ops import do_create_worktree
 from cc_dashboard.remote.sessions import query_all_sessions
@@ -120,6 +121,8 @@ def dashboard(stdscr):
         "filtered": sessions,
         "marked": set(),
         "batch_targets": [],
+        "batch_group_value": "",
+        "batch_group_cursor": 0,
         "search_query": "",
         "search_active": False,
         "search_cursor": 0,
@@ -272,6 +275,7 @@ def dashboard(stdscr):
         "palette_names": PALETTE_NAMES,
         "do_set_color": do_set_color,
         "do_edit_notes": do_edit_notes,
+        "kitty_cmd": kitty_cmd,
         "do_create_worktree": do_create_worktree,
         "resolve_session_id": resolve_session_id,
         "load_activity_log": load_activity_log,

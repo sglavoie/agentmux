@@ -355,7 +355,8 @@ def draw_group_picker(stdscr, sessions, group_filter):
 
 
 def draw_color_picker(
-    stdscr, session, palette_names, current_color, account_color, selected
+    stdscr, session, palette_names, current_color, account_color, selected,
+    subtitle=None,
 ):
     """Draw a color selection overlay for tab color override."""
     rows, cols = stdscr.getmaxyx()
@@ -382,7 +383,7 @@ def draw_color_picker(
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
-    sub = f'for "{session["title"]}"'
+    sub = subtitle if subtitle else f'for "{session["title"]}"'
     safe_addstr(
         stdscr,
         box_y + 1,

@@ -18,6 +18,7 @@ from cc_dashboard.loop_modes_dashboard import (
 )
 from cc_dashboard.loop_modes_delete import handle_delete_mode
 from cc_dashboard.loop_modes_forms import (
+    handle_batch_group_mode,
     handle_clone_mode,
     handle_new_mode,
     handle_override_mode,
@@ -220,6 +221,9 @@ def dispatch_mode(
             "selected": state["selected"],
             "color_selected": state["color_selected"],
             "palette_names": state["palette_names"],
+            "actions_scope": state["actions_scope"],
+            "actions_targets": state["actions_targets"],
+            "marked": state["marked"],
             "cfg": state["cfg"],
             "home_socket": state["home_socket"],
             "show_all": state["show_all"],
@@ -385,6 +389,7 @@ def dispatch_mode(
         "confirm_restart",
         "confirm_batch_close",
         "confirm_batch_restart",
+        "confirm_batch_clone",
         "confirm_save",
     ):
         confirm_state: dict[str, Any] = {
@@ -401,7 +406,10 @@ def dispatch_mode(
             "strip_override_marker": state["strip_override_marker"],
             "do_close": state["do_close"],
             "do_restart": state["do_restart"],
+            "do_launch": state["do_launch"],
             "spawn_detached_close": state["spawn_detached_close"],
+            "generate_clone_title": state["generate_clone_title"],
+            "compute_insert_location": state["compute_insert_location"],
             "query_all_sessions": state["query_all_sessions"],
             "refilter": state["refilter"],
             "msg": state["msg"],
@@ -543,6 +551,26 @@ def dispatch_mode(
         handle_clone_mode(key, clone_state)
         for k in clone_state:
             state[k] = clone_state[k]
+
+    elif mode == "batch_group":
+        batch_group_state: dict[str, Any] = {
+            "mode": mode,
+            "batch_group_value": state["batch_group_value"],
+            "batch_group_cursor": state["batch_group_cursor"],
+            "actions_targets": state["actions_targets"],
+            "marked": state["marked"],
+            "home_socket": state["home_socket"],
+            "show_all": state["show_all"],
+            "sessions": state["sessions"],
+            "kitty_cmd": state["kitty_cmd"],
+            "query_all_sessions": state["query_all_sessions"],
+            "refilter": state["refilter"],
+            "msg": state["msg"],
+            "msg_frames": state["msg_frames"],
+        }
+        handle_batch_group_mode(key, batch_group_state)
+        for k in batch_group_state:
+            state[k] = batch_group_state[k]
 
     elif mode == "new":
         new_state: dict[str, Any] = {

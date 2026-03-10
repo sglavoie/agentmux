@@ -46,6 +46,7 @@ _FOOTER_HINTS = {
     "confirm_restart": ["y Confirm restart", "Any other key Cancel"],
     "confirm_batch_close": ["y Confirm close all", "Any other key Cancel"],
     "confirm_batch_restart": ["y Confirm restart all", "Any other key Cancel"],
+    "confirm_batch_clone": ["y Confirm clone all", "Any other key Cancel"],
     "confirm_save": ["y Confirm save", "Any other key Cancel"],
     "new": ["Enter Next/Submit", "Tab Cycle", "Up/Dn Navigate", "Esc Cancel"],
     "new_dir_browse": [
@@ -82,6 +83,7 @@ _FOOTER_HINTS = {
     "config_action": ["j/k Navigate", "Enter Confirm", "Esc Back"],
     "sort_pick": ["j/k Navigate", "Enter Select", "Esc Cancel"],
     "color_picker": ["Esc Cancel", "j/k Navigate", "Enter Select"],
+    "batch_group": ["Enter Apply", "Esc Cancel"],
     "actions": [
         "j/k Navigate",
         "Enter Apply",
@@ -372,6 +374,45 @@ def draw_clone_input(stdscr, session, title_value, cursor_pos):
     prefix = "Title: "
     before = title_value[:cursor_pos]
     after = title_value[cursor_pos:]
+    cursor_ch = after[0] if after else " "
+    after_rest = after[1:] if len(after) > 1 else ""
+
+    y = rows - 3
+    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
+    x = 2 + len(prefix)
+    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+    safe_addstr(
+        stdscr,
+        y,
+        x + len(before),
+        cursor_ch,
+        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+    )
+    if after_rest:
+        safe_addstr(
+            stdscr,
+            y,
+            x + len(before) + 1,
+            after_rest,
+            curses.color_pair(CP_INPUT_ACTIVE),
+        )
+
+
+def draw_batch_group_input(stdscr, targets, group_value, cursor_pos):
+    """Draw a two-line batch group input on the status line area."""
+    rows, _cols = stdscr.getmaxyx()
+
+    safe_addstr(
+        stdscr,
+        rows - 4,
+        2,
+        f"Set group for {len(targets)} marked session(s) (empty to clear)",
+        curses.color_pair(CP_DIM),
+    )
+
+    prefix = "Group: "
+    before = group_value[:cursor_pos]
+    after = group_value[cursor_pos:]
     cursor_ch = after[0] if after else " "
     after_rest = after[1:] if len(after) > 1 else ""
 

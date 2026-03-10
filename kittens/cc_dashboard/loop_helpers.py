@@ -132,6 +132,9 @@ def _build_session_actions(sess, scope, multi_instance):
     if scope == "marked":
         actions = [
             ("restart", "Restart marked sessions"),
+            ("clone", "Clone marked sessions"),
+            ("color", "Set color for marked sessions"),
+            ("group", "Set group for marked sessions"),
             ("close", "Close marked sessions"),
         ]
         if multi_instance:

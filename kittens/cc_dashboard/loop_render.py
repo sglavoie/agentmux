@@ -11,6 +11,7 @@ from cc_dashboard.views import (
     draw_actlog_gsearch,
     draw_actlog_view,
     draw_batch_confirm_prompt,
+    draw_batch_group_input,
     draw_clone_input,
     draw_color_picker,
     draw_config_action_picker,
@@ -22,9 +23,9 @@ from cc_dashboard.views import (
     draw_detail_pane,
     draw_dir_dropdown,
     draw_filter_bar,
+    draw_footer,
     draw_group_filter_bar,
     draw_group_picker,
-    draw_footer,
     draw_hooks_add_form,
     draw_hooks_delete_confirm,
     draw_hooks_event_view,
@@ -61,6 +62,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         "confirm_restart",
         "confirm_batch_close",
         "confirm_batch_restart",
+        "confirm_batch_clone",
         "confirm_save",
         "rename",
         "worktree",
@@ -70,6 +72,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         "config_action",
         "sort_pick",
         "color_picker",
+        "batch_group",
     ) or (mode == "override" and state["override_source"] == "list"):
         rows, _cols = stdscr.getmaxyx()
         filtered = state["filtered"]
@@ -148,6 +151,9 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         elif mode == "confirm_batch_restart":
             draw_batch_confirm_prompt(stdscr, state["batch_targets"], "Restart")
             draw_footer(stdscr, "confirm_batch_restart")
+        elif mode == "confirm_batch_clone":
+            draw_batch_confirm_prompt(stdscr, state["batch_targets"], "Clone")
+            draw_footer(stdscr, "confirm_batch_clone")
         elif mode == "confirm_save":
             rows_now, _ = stdscr.getmaxyx()
             fname = state["cfg"]._sessions_config_filename()
@@ -178,6 +184,14 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
                 state["clone_cursor"],
             )
             draw_footer(stdscr, "clone")
+        elif mode == "batch_group":
+            draw_batch_group_input(
+                stdscr,
+                state["actions_targets"],
+                state["batch_group_value"],
+                state["batch_group_cursor"],
+            )
+            draw_footer(stdscr, "batch_group")
         elif mode == "override" and filtered:
             draw_override_picker(stdscr, filtered[selected], state["override_selected"])
             draw_footer(stdscr, "override")
@@ -216,6 +230,9 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             acct_info = state["cfg"]._accounts.get(sess.get("account", ""), {})
             account_color = acct_info.get("color", "gray")
             current_color = sess.get("cc_color", "") or account_color
+            subtitle = None
+            if state.get("actions_scope") == "marked" and state.get("actions_targets"):
+                subtitle = f"{len(state['actions_targets'])} marked session(s)"
             draw_color_picker(
                 stdscr,
                 sess,
@@ -223,6 +240,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
                 current_color,
                 account_color,
                 state["color_selected"],
+                subtitle=subtitle,
             )
             draw_footer(stdscr, "color_picker")
         elif mode == "actions" and filtered:

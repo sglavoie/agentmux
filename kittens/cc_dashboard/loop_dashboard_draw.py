@@ -136,4 +136,6 @@ def build_draw_state(state: dict[str, Any]) -> dict[str, Any]:
         "actlog_gsearch_search_active": state["actlog_gsearch_search_active"],
         "color_selected": state.get("color_selected", 0),
         "palette_names": state.get("palette_names", []),
+        "batch_group_value": state.get("batch_group_value", ""),
+        "batch_group_cursor": state.get("batch_group_cursor", 0),
     }
