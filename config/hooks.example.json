@@ -129,6 +129,13 @@
         ]
       }
     ],
+    "PreToolUse": [],
+    "Notification": [],
+    "TeammateIdle": [],
+    "ConfigChange": [],
+    "WorktreeCreate": [],
+    "WorktreeRemove": [],
+    "PreCompact": [],
     "SessionEnd": [
       {
         "hooks": [

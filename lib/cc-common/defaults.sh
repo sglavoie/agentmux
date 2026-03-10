@@ -31,7 +31,7 @@ load_defaults() {
 	[[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
 	# Use a cached sourceable file to avoid python3 overhead on every call.
-	local cache="/tmp/ccm-defaults-cache.sh"
+	local cache="/tmp/ccm-defaults-cache-$(id -u).sh"
 	local config_mtime
 	config_mtime="$(stat -f '%m' "$DEFAULTS_CONFIG" 2>/dev/null || echo 0)"
 

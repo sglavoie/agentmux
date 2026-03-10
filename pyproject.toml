@@ -1,6 +1,6 @@
 [project]
 name = "sglavoie-cc-manager-kitty"
-version = "0.1.0"
+version = "0.2.0"
 description = "Claude Code session manager for the Kitty terminal"
 authors = [
     { name = "Sébastien Lavoie", email = "sgdlavoie@gmail.com" }

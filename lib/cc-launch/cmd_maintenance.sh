@@ -313,8 +313,11 @@ cmd_cleanup() {
 
         if [[ "$confirmed" == "true" ]]; then
             while IFS=$'\t' read -r title tab_id sock inst_label; do
-                kitty @ --to "$sock" close-tab --match "id:$tab_id"
-                echo "Closed: $title"
+                if kitty @ --to "$sock" close-tab --match "id:$tab_id"; then
+                    echo "Closed: $title"
+                else
+                    echo "Warning: failed to close '$title' (tab id: $tab_id)." >&2
+                fi
             done <<<"$stale"
         else
             echo "No sessions closed."
@@ -412,6 +415,12 @@ cmd_save() {
     if [[ -f "$output_file" ]]; then
         if [[ "$HAS_GUM" == "true" ]]; then
             if ! gum confirm "Overwrite $output_file? (backup will be created)" --affirmative "Yes" --negative "Cancel"; then
+                echo "Save cancelled."
+                return
+            fi
+        else
+            read -rp "Overwrite $output_file? (backup will be created) [y/N] " answer
+            if [[ ! "$answer" =~ ^[Yy] ]]; then
                 echo "Save cancelled."
                 return
             fi

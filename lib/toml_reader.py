@@ -53,21 +53,38 @@ def read_accounts(path):
                 file=sys.stderr,
             )
             continue
+        color = entry.get("color", "gray")
+        if color not in _VALID_PALETTE_COLORS:
+            print(
+                f"Warning: account '{name}' has unknown color "
+                f"'{color}', falling back to 'gray'.",
+                file=sys.stderr,
+            )
+            color = "gray"
         result.append(
             {
                 "name": name,
                 "config_dir": entry.get("config_dir", ""),
-                "color": entry.get("color", "gray"),
+                "color": color,
             }
         )
     return result
 
 
-def read_sessions(path):
+_VALID_PALETTE_COLORS = frozenset({
+    "green", "blue", "red", "orange", "purple",
+    "teal", "pink", "yellow", "gray", "cyan",
+})
+
+
+def read_sessions(path, known_accounts=None):
     """Parse ``sessions.toml`` and return a list of session dicts.
 
     Each dict has keys: ``title``, ``dir``, ``account``, ``flags``,
     ``pw`` (project_window), ``env``, ``group``.
+
+    If *known_accounts* is provided (a set or list of account name strings),
+    sessions referencing unknown accounts will emit a warning.
     """
     try:
         with open(path, "rb") as f:
@@ -99,6 +116,13 @@ def read_sessions(path):
                 file=sys.stderr,
             )
             continue
+        account = session["account"]
+        if known_accounts is not None and account and account not in known_accounts:
+            print(
+                f"Warning: session '{session['title']}' references "
+                f"unknown account '{account}'.",
+                file=sys.stderr,
+            )
         pw = session["pw"]
         valid_pw = {"", "-", "stack", "vsplit", "hsplit", "split"}
         if pw and pw not in valid_pw:

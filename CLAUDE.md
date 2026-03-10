@@ -8,7 +8,7 @@ cc-manager-kitty is a Claude Code session manager for the Kitty terminal. It man
 
 ## Installation and testing
 
-Requires Python 3.11+ (for `tomllib` stdlib), `jq`, and Kitty. Install and uninstall via `just install` and `just uninstall`, which create/remove symlinks to `~/.local/bin/`, `~/.config/kitty/`, and `~/.zfunc/`. Run `just test` to execute the TOML round-trip tests and `just check` to run the full suite (tests, lint, format-check, typecheck, keybinding audit). To verify changes manually, run `cc-launch --help` or `cc-status --help` after installing.
+Requires Python 3.13+, `jq`, and Kitty. Install and uninstall via `just install` and `just uninstall`, which create/remove symlinks to `~/.local/bin/`, `~/.config/kitty/`, and `~/.zfunc/`. Run `just test` to execute the TOML round-trip tests and `just check` to run the full suite (tests, lint, format-check, typecheck, keybinding audit). To verify changes manually, run `cc-launch --help` or `cc-status --help` after installing.
 
 ## Architecture
 

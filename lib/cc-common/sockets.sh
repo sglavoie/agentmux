@@ -52,8 +52,7 @@ discover_all_sockets() {
 	fi
 
 	local sock_path
-	# shellcheck disable=SC2012,SC2045 # intentional: need newest socket by mtime
-	for sock_path in $(ls -t /tmp/kitty-* 2>/dev/null); do
+	while IFS= read -r -d '' sock_path; do
 		local sock="unix:$sock_path"
 		local already=false
 		local seen_sock
@@ -67,7 +66,7 @@ discover_all_sockets() {
 			candidates+=("$sock")
 			seen+=("$sock")
 		fi
-	done
+	done < <(find /tmp -maxdepth 1 -name 'kitty-*' -print0 2>/dev/null | xargs -0 -r stat -f '%m %N' 2>/dev/null | sort -rn | while IFS=' ' read -r _ p; do printf '%s\0' "$p"; done)
 
 	local candidate
 	for candidate in "${candidates[@]+"${candidates[@]}"}"; do

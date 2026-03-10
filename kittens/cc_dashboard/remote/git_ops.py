@@ -1,5 +1,6 @@
 """Git and worktree helpers for dashboard session operations."""
 
+import atexit
 import concurrent.futures
 import os
 import subprocess
@@ -69,6 +70,7 @@ class _GitCache:
 
 # Module-level cache instance used by sessions.py
 _git_cache = _GitCache()
+atexit.register(_git_cache.shutdown)
 
 
 def get_git_info_cached(cwd):

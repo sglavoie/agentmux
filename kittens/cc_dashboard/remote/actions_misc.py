@@ -37,7 +37,10 @@ def run_hooks_sync(account_name=None):
         cmd += ["--account", account_name]
     cmd.append(example_path)
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        return False, "hooks sync timed out after 10 seconds"
     output = (result.stdout + result.stderr).strip()
     return result.returncode == 0, output
 

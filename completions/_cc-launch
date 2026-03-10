@@ -27,6 +27,18 @@ _cc_launch_sockets() {
     [[ ${#socks} -gt 0 ]] && _describe 'kitty socket' socks
 }
 
+_cc_launch_groups() {
+    local sessions_toml="${CC_MANAGER_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/sessions.toml}"
+    local -a groups
+
+    if [[ -f "$sessions_toml" ]]; then
+        local helper="${HOME}/.local/lib/cc-manager/toml-helper.py"
+        [[ -f "$helper" ]] || return
+        groups=(${(f)"$(python3 "$helper" read-sessions "$sessions_toml" | awk -F'\t' '$7 != "" {print $7}' | sort -u)"})
+    fi
+    [[ ${#groups} -gt 0 ]] && _values 'group' $groups
+}
+
 _cc_launch_accounts() {
     local accounts_toml="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.toml}"
     local -a accts
@@ -93,6 +105,10 @@ _cc-launch() {
                         esac
                         return
                         ;;
+                    --group)
+                        [[ $CURRENT -eq 5 ]] && _cc_launch_groups
+                        return
+                        ;;
                     --save)
                         [[ $CURRENT -eq 5 ]] && _files
                         return
@@ -112,6 +128,7 @@ _cc-launch() {
                             '--instance[Source Kitty instance label]' \
                             '--tab-id[Kitty tab id in selected instance]' \
                             '--target-instance[Destination Kitty instance label for --move]' \
+                            '--group[Target a specific session group]' \
                             '--help[Show help message]'
                         return
                         ;;
@@ -121,6 +138,9 @@ _cc-launch() {
     fi
 
     case "$words[2]" in
+        --group)
+            [[ $CURRENT -eq 3 ]] && _cc_launch_groups
+            ;;
         --add)
             case $CURRENT in
                 3) _message 'title' ;;
@@ -172,7 +192,8 @@ _cc-launch() {
                 '--instance[Source Kitty instance label]' \
                 '--tab-id[Kitty tab id in selected instance]' \
                 '--target-instance[Destination Kitty instance label for --move]' \
-                '--help[Show help message]'
+                '--group[Target a specific session group]' \
+                            '--help[Show help message]'
             ;;
     esac
 }

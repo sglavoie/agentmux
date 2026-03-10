@@ -1,10 +1,12 @@
 """Session lifecycle helpers: detached close/restart/move and in-process wrappers."""
 
+import contextlib
 import json
 import os
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 
 from cc_dashboard import config as _cfg
@@ -42,7 +44,10 @@ for step in steps:
     sleep_after = step.get("sleep", 0)
     if sleep_after:
         time.sleep(sleep_after)
-    subprocess.run(cmd, capture_output=True)
+    try:
+        subprocess.run(cmd, capture_output=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        pass
 """
     env = os.environ.copy()
     env["_CCM_STEPS"] = json.dumps(steps)
@@ -50,13 +55,14 @@ for step in steps:
     python = shutil.which("python3") or shutil.which("python")
     if not python:
         return
-    subprocess.Popen(
-        [python, "-c", script],
-        start_new_session=True,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    with contextlib.suppress(OSError):
+        subprocess.Popen(
+            [python, "-c", script],
+            start_new_session=True,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def _spawn_detached_restart(
@@ -157,7 +163,11 @@ def _spawn_detached_restart(
     if env_vars and env_vars != "-":
         try:
             env_tokens = shlex.split(env_vars)
-        except ValueError:
+        except ValueError as e:
+            print(
+                f"Warning: failed to parse env vars {env_vars!r}: {e}",
+                file=sys.stderr,
+            )
             env_tokens = []
         for token in env_tokens:
             if "=" in token:
@@ -241,14 +251,17 @@ for step in steps:
     retry = step.get("retry", 0)
     retry_sleep = step.get("retry_sleep", 0.1)
     sleep_after = step.get("sleep", 0)
-    if retry:
-        for _ in range(retry + 1):
-            r = subprocess.run(cmd, capture_output=True)
-            if r.returncode == 0:
-                break
-            time.sleep(retry_sleep)
-    else:
-        subprocess.run(cmd, capture_output=True)
+    try:
+        if retry:
+            for _ in range(retry + 1):
+                r = subprocess.run(cmd, capture_output=True, timeout=30)
+                if r.returncode == 0:
+                    break
+                time.sleep(retry_sleep)
+        else:
+            subprocess.run(cmd, capture_output=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        pass
     if sleep_after:
         time.sleep(sleep_after)
 """
@@ -258,13 +271,14 @@ for step in steps:
     python = shutil.which("python3") or shutil.which("python")
     if not python:
         return
-    subprocess.Popen(
-        [python, "-c", script],
-        start_new_session=True,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    with contextlib.suppress(OSError):
+        subprocess.Popen(
+            [python, "-c", script],
+            start_new_session=True,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def do_restart(
@@ -430,7 +444,11 @@ def _spawn_detached_move(
     if env_vars and env_vars != "-":
         try:
             env_tokens = shlex.split(env_vars)
-        except ValueError:
+        except ValueError as e:
+            print(
+                f"Warning: failed to parse env vars {env_vars!r}: {e}",
+                file=sys.stderr,
+            )
             env_tokens = []
         for token in env_tokens:
             if "=" in token:
@@ -514,14 +532,17 @@ for step in steps:
     retry = step.get("retry", 0)
     retry_sleep = step.get("retry_sleep", 0.1)
     sleep_after = step.get("sleep", 0)
-    if retry:
-        for _ in range(retry + 1):
-            r = subprocess.run(cmd, capture_output=True)
-            if r.returncode == 0:
-                break
-            time.sleep(retry_sleep)
-    else:
-        subprocess.run(cmd, capture_output=True)
+    try:
+        if retry:
+            for _ in range(retry + 1):
+                r = subprocess.run(cmd, capture_output=True, timeout=30)
+                if r.returncode == 0:
+                    break
+                time.sleep(retry_sleep)
+        else:
+            subprocess.run(cmd, capture_output=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        pass
     if sleep_after:
         time.sleep(sleep_after)
 """
@@ -531,13 +552,14 @@ for step in steps:
     python = shutil.which("python3") or shutil.which("python")
     if not python:
         return
-    subprocess.Popen(
-        [python, "-c", script],
-        start_new_session=True,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    with contextlib.suppress(OSError):
+        subprocess.Popen(
+            [python, "-c", script],
+            start_new_session=True,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def do_move(

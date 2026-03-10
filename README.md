@@ -190,6 +190,15 @@ cc-launch --clone --instance K:12345 --tab-id 67
 cc-launch --move --instance K:12345 --tab-id 67 --target-instance K:67890
 ```
 
+### Launch or close by group
+
+```bash
+cc-launch --all --group backend
+cc-launch --close --group backend
+```
+
+Launches or closes only sessions belonging to the named group (as defined by the `group` key in `sessions.toml`).
+
 ### Quick status overview
 
 ```bash

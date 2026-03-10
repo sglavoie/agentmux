@@ -52,11 +52,17 @@ def _load_palette():
         return {}, (255, 255, 255), (170, 170, 170)
     palette = {}
     for name, entry in data.get("colors", {}).items():
-        palette[name] = (
-            _hex_to_rgb(entry["active_bg"]),
-            _hex_to_rgb(entry["inactive_bg"]),
-            tuple(entry["text_fg"]),
-        )
+        try:
+            palette[name] = (
+                _hex_to_rgb(entry["active_bg"]),
+                _hex_to_rgb(entry["inactive_bg"]),
+                tuple(entry["text_fg"]),
+            )
+        except (KeyError, ValueError, TypeError) as e:
+            print(
+                f"Warning: skipping palette color '{name}': {e}",
+                file=sys.stderr,
+            )
     return palette, _hex_to_rgb(data["active_fg"]), _hex_to_rgb(data["inactive_fg"])
 
 

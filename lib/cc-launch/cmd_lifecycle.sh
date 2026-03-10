@@ -74,9 +74,12 @@ cmd_close_group() {
     if [[ "$confirmed" == "true" ]]; then
         local closed=0
         while IFS=$'\t' read -r title tab_id sock inst_label; do
-            kitty @ --to "$sock" close-tab --match "id:$tab_id"
-            echo "Closed: $title"
-            closed=$((closed + 1))
+            if kitty @ --to "$sock" close-tab --match "id:$tab_id"; then
+                echo "Closed: $title"
+                closed=$((closed + 1))
+            else
+                echo "Warning: failed to close '$title' (tab id: $tab_id)." >&2
+            fi
         done <<<"$matches"
         echo "Closed $closed session(s) in group '$_TARGET_GROUP'."
     else
@@ -111,7 +114,10 @@ cmd_close() {
     fi
     IFS=$'\t' read -r title _ <<<"$tab_info"
 
-    kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"
+    if ! kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"; then
+        echo "Error: failed to close tab '$title' (tab_id=$_TARGET_TAB_ID)." >&2
+        exit 1
+    fi
     echo "Closed tab '$title' (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID)."
 }
 
@@ -151,7 +157,10 @@ cmd_restart() {
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
     SOCKET="$source_socket"
 
-    kitty @ --to "$SOCKET" close-tab --match "id:$_TARGET_TAB_ID"
+    if ! kitty @ --to "$SOCKET" close-tab --match "id:$_TARGET_TAB_ID"; then
+        echo "Error: failed to close tab '$title' for restart." >&2
+        exit 1
+    fi
     echo "Closed tab '$title', relaunching..."
     sleep 0.3 # Wait for Kitty to fully close the tab before relaunching
 
@@ -317,7 +326,10 @@ cmd_move() {
     local title account dir live_flags live_pw live_env live_group
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
 
-    kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"
+    if ! kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"; then
+        echo "Error: failed to close tab '$title' for move." >&2
+        exit 1
+    fi
     echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..."
     sleep 0.3 # Wait for Kitty to fully close the tab before relaunching on target
 
