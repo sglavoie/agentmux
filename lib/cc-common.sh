@@ -5,8 +5,18 @@
 [[ -n "${_CC_COMMON_LOADED:-}" ]] && return 0
 _CC_COMMON_LOADED=1
 
+CCM_DEBUG="${CCM_DEBUG:-0}"
+ccm_debug() { if [[ "$CCM_DEBUG" == "1" ]]; then echo "[DEBUG] $*" >&2; fi; }
+
 _CC_COMMON_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
 _CC_COMMON_DIR="$(cd "$(dirname "$_CC_COMMON_SCRIPT")" && pwd)"
+
+_require_python3() {
+	if ! command -v python3 >/dev/null 2>&1; then
+		echo "Error: python3 is required but not found." >&2
+		exit 1
+	fi
+}
 
 source "$_CC_COMMON_DIR/cc-common/utils.sh"
 source "$_CC_COMMON_DIR/cc-common/data.sh"

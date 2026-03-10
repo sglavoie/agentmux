@@ -31,7 +31,7 @@ tab_id="$(echo "$info" | head -n1)"
 current_title="$(echo "$info" | tail -n1)"
 
 if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
-	echo "Error: Could not find tab for window $WIN_ID" >&2
+	echo "Error: Could not find tab for window '$WIN_ID'." >&2
 	exit 1
 fi
 

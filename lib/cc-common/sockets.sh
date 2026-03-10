@@ -5,6 +5,7 @@ _CC_COMMON_SOCKETS_LOADED=1
 
 discover_socket() {
 	if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+		ccm_debug "Socket from KITTY_LISTEN_ON: $KITTY_LISTEN_ON"
 		echo "$KITTY_LISTEN_ON"
 		return
 	fi
@@ -27,6 +28,7 @@ discover_socket() {
 	done
 
 	if [[ -n "$latest" ]]; then
+		ccm_debug "Socket from file: unix:$latest"
 		echo "unix:$latest"
 		return
 	fi
@@ -81,4 +83,5 @@ discover_all_sockets() {
 			_INSTANCE_LABELS+=("$label")
 		fi
 	done
+	ccm_debug "Discovered ${#_INSTANCE_SOCKETS[@]} active socket(s)"
 }

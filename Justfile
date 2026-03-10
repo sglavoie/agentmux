@@ -111,8 +111,10 @@ install-hooks:
     @bash "{{root}}/lib/install-hooks.sh" "{{root}}/config/hooks.example.json"
     @echo "Hooks installation complete."
 
-# Remove all symlinks
+# Remove all symlinks and hooks
 uninstall:
+    @echo "Removing Claude Code hooks from account settings..."
+    -@bash "{{root}}/lib/install-hooks.sh" --remove
     @echo '{{symlinks}}' | while IFS=: read -r dest src; do \
         if [ -L "$dest" ] && [ "$(readlink "$dest")" = "{{root}}/$src" ]; then \
             rm "$dest"; \
@@ -121,14 +123,14 @@ uninstall:
     done
     @echo "Done."
     @echo ""
-    @echo "Note: Claude Code hooks in settings.json were not removed."
-    @echo "To remove them manually, edit each account's settings.json and"
-    @echo "delete the cc-hook-indicator entries from the hooks section."
-    @echo ""
     @echo "Other artifacts you may want to remove:"
     @echo "  - Config directory: ~/.config/cc-manager/"
     @echo "  - Temp files:       /tmp/ccm-*"
-    @echo "  - Log directory:    ~/.local/share/cc-manager/logs/"
+    @echo "  - Activity data:    ~/.local/state/cc-manager/activity/"
+
+# Run tests
+test:
+    python3 tests/test_toml_roundtrip.py
 
 # Run linters
 lint:
@@ -149,5 +151,5 @@ format-check:
 typecheck:
     {{rye}} run mypy {{python_src}}
 
-# Run all checks (lint, format-check, typecheck, keybinding audit)
-check: lint format-check typecheck check-keybindings
+# Run all checks (test, lint, format-check, typecheck, keybinding audit)
+check: test lint format-check typecheck check-keybindings

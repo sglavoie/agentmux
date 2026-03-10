@@ -45,10 +45,17 @@ def read_accounts(path):
         print(f"Error: failed to parse {path}: {e}", file=sys.stderr)
         return []
     result = []
-    for entry in data.get("accounts", []):
+    for i, entry in enumerate(data.get("accounts", []), start=1):
+        name = entry.get("name", "")
+        if not name:
+            print(
+                f"Warning: skipping account entry {i} with empty name",
+                file=sys.stderr,
+            )
+            continue
         result.append(
             {
-                "name": entry.get("name", ""),
+                "name": name,
                 "config_dir": entry.get("config_dir", ""),
                 "color": entry.get("color", "gray"),
             }
@@ -81,16 +88,25 @@ def read_sessions(path):
             "env": entry.get("env", ""),
             "group": entry.get("group", ""),
         }
-        if not session["title"]:
+        if not session["title"] or not session["dir"]:
+            missing = []
+            if not session["title"]:
+                missing.append("title")
+            if not session["dir"]:
+                missing.append("directory")
             print(
-                f"Warning: session entry {i} missing required field 'title'",
+                f"Warning: skipping session entry {i} missing required field(s): {', '.join(missing)}",
                 file=sys.stderr,
             )
-        if not session["dir"]:
+            continue
+        pw = session["pw"]
+        valid_pw = {"", "-", "stack", "vsplit", "hsplit", "split"}
+        if pw and pw not in valid_pw:
             print(
-                f"Warning: session entry {i} missing required field 'directory'",
+                f"Warning: session '{session['title']}' has unknown project_window '{pw}', ignoring.",
                 file=sys.stderr,
             )
+            session["pw"] = ""
         result.append(session)
     return result
 

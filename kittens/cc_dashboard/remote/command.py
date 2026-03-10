@@ -70,7 +70,7 @@ def get_all_kitty_sockets():
         return None
 
     active = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(candidates) or 1) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(candidates) or 1, 8)) as pool:
         futures = {pool.submit(_probe, sock): sock for sock in candidates}
         for future in concurrent.futures.as_completed(futures):
             result = future.result()

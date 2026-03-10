@@ -13,13 +13,23 @@ load_accounts() {
 	_ACCOUNT_COLORS=()
 
 	if [[ -f "$ACCOUNTS_CONFIG" ]]; then
+		_require_python3
 		while IFS=$'\t' read -r name config_dir color; do
 			[[ -z "$name" ]] && continue
 			config_dir="$(expand_tilde "$config_dir")"
+			color="${color:-gray}"
+			if ! _palette_has_color "$color"; then
+				echo "Warning: unknown color '$color' for account '$name', falling back to gray." >&2
+				color="gray"
+			fi
 			_ACCOUNT_NAMES+=("$name")
 			_ACCOUNT_DIRS+=("$config_dir")
-			_ACCOUNT_COLORS+=("${color:-gray}")
+			_ACCOUNT_COLORS+=("$color")
 		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-accounts "$ACCOUNTS_CONFIG")
+
+		if [[ ${#_ACCOUNT_NAMES[@]} -eq 0 ]]; then
+			echo "Warning: accounts config exists but produced no accounts. Check $ACCOUNTS_CONFIG for errors." >&2
+		fi
 	else
 		_ACCOUNT_NAMES=(work personal)
 		_ACCOUNT_DIRS=("$HOME/.claude" "$HOME/.claude-personal")
@@ -88,7 +98,7 @@ claude_config_dir_for_account() {
 	local account="$1"
 	local config_dir
 	config_dir="$(_account_dir "$account")" || {
-		echo "Error: Unknown account '$account'. Available: $(_all_account_names)" >&2
+		echo "Error: Unknown account '$account'. Available: $(_all_account_names)." >&2
 		return 1
 	}
 	echo "$config_dir"

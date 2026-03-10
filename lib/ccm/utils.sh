@@ -47,7 +47,7 @@ resolve_config_file() {
 		echo "$config_dir/hooks.json"
 		;;
 	*)
-		echo "Error: Unknown config file '$key'. Use: accounts, sessions, defaults, hooks" >&2
+		echo "Error: Unknown config file '$key'. Use: accounts, sessions, defaults, hooks." >&2
 		return 1
 		;;
 	esac
@@ -74,7 +74,7 @@ _init_config_file() {
 		echo "Created $dest"
 		return 0
 	else
-		echo "Warning: $src not found in repository" >&2
+		echo "Warning: '$src' not found in repository." >&2
 		return 1
 	fi
 }

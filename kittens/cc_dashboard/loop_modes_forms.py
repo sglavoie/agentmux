@@ -34,6 +34,9 @@ def handle_override_mode(key, state):
         selected_path = dirs[state["override_selected"]] if dirs else ""
 
         if state["override_source"] == "pick" and state["pick_filtered"]:
+            if state["pick_selected"] >= len(state["pick_filtered"]):
+                state["mode"] = cancel_mode
+                return True
             entry = state["pick_filtered"][state["pick_selected"]]
             account = entry["account"]
             title = entry["title"]

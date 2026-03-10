@@ -8,18 +8,24 @@ import sys
 def _resolve_data_path(filename):
     """Resolve the path to a shared JSON data file.
 
-    Checks the repo layout first (../../data/ relative to this file), then
-    the installed layout (~/.local/lib/cc-manager/).
+    Mirrors the fallback order in ``lib/cc-common/data.sh`` so both the
+    shell and Python code find data files in the same set of locations:
+
+    1. ``../../data/``  — repo layout (kittens/cc_dashboard/ -> data/)
+    2. ``../data/``     — alternate repo layout
+    3. ``data/``        — flat layout (file next to this package)
+    4. ``~/.local/lib/cc-manager/`` — installed layout (symlinked by just)
     """
     this_dir = os.path.dirname(os.path.realpath(__file__))
-    repo_path = os.path.join(this_dir, "..", "..", "data", filename)
-    if os.path.isfile(repo_path):
-        return os.path.realpath(repo_path)
-    installed_path = os.path.join(
-        os.path.expanduser("~"), ".local", "lib", "cc-manager", filename
-    )
-    if os.path.isfile(installed_path):
-        return installed_path
+    candidates = [
+        os.path.join(this_dir, "..", "..", "data", filename),
+        os.path.join(this_dir, "..", "data", filename),
+        os.path.join(this_dir, "data", filename),
+        os.path.join(os.path.expanduser("~"), ".local", "lib", "cc-manager", filename),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return os.path.realpath(path)
     return None
 
 

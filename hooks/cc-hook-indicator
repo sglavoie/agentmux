@@ -12,6 +12,9 @@ if [[ $# -lt 1 ]]; then
 fi
 
 ACTION="$1"
+# Debug mode (set CCM_DEBUG=1 to enable)
+CCM_DEBUG="${CCM_DEBUG:-0}"
+ccm_debug() { if [[ "$CCM_DEBUG" == "1" ]]; then echo "[DEBUG] $*" >&2; fi; }
 EVENT_KIND=""
 
 # Parse remaining args: $2 can be an event kind (prompt, tool, etc.) or a
@@ -48,7 +51,9 @@ load_defaults
 # ---------------------------------------------------------------------------
 # macOS desktop notification helper (cooldown prevents spam)
 # ---------------------------------------------------------------------------
-_NOTIFY_COOLDOWN=10 # seconds between duplicate notifications
+# Seconds between duplicate macOS notifications for the same action+tab.
+# Prevents notification spam when hooks fire in rapid succession.
+_NOTIFY_COOLDOWN=10
 
 _maybe_notify() {
     local enabled="$1" icon="$2" subtitle="$3" session_label="$4"
@@ -82,6 +87,9 @@ _is_post_permission() {
     local now
     now=$(date +%s)
     local elapsed=$((now - _prev_last_ts))
+    # 5-second grace period: suppress stop notification if a permission event
+    # just resolved (user granted permission → Claude resumes → immediate stop
+    # is a false alarm, not a real stop).
     ((elapsed < 5))
 }
 
@@ -100,13 +108,13 @@ _matches_ignore_pattern() {
     local patterns="${_DEFAULT_NOTIFY_IGNORE_PATTERNS:-}"
     [[ -n "$patterns" ]] || return 1 # no patterns = don't suppress
 
-    # Poll the screen with increasing elapsed time to handle slow TUI redraws
+    # Poll the screen with progressive backoff to handle slow TUI redraws
     # (e.g. /clear on large conversations). Attempts at ~0.3s, 0.8s, 1.3s,
     # 1.8s, 2.3s — max wait ~2.3s. Returns immediately on first match.
     local attempt=0
     local max_attempts=5
-    local initial_delay=0.3
-    local retry_delay=0.5
+    local initial_delay=0.3  # seconds before first screen poll
+    local retry_delay=0.5    # seconds between subsequent retries (progressive backoff)
     local screen_text
     local IFS='|'
 
@@ -146,6 +154,8 @@ _should_suppress_notify() {
 _is_pipe_mode() {
     local pid="$PPID"
     local depth=0
+    # Walk up to 4 levels of the process tree to find a `claude -p` ancestor.
+    # 4 is enough to cover: hook -> bash -> claude -> shell pipeline.
     while [[ "$depth" -lt 4 && "$pid" -gt 1 ]]; do
         local cmd_line
         cmd_line=$(ps -o args= -p "$pid" 2>/dev/null) || return 1
@@ -177,10 +187,24 @@ fi
 # Detect pipe mode early; used later to suppress only notifications.
 _PIPE_MODE=false
 _is_pipe_mode && _PIPE_MODE=true
+ccm_debug "hook: action=$ACTION event=$EVENT_KIND tab=$tab_id pipe=$_PIPE_MODE"
 
 # ---------------------------------------------------------------------------
 # Activity tracking — write compact state file for dashboard consumption
 # ---------------------------------------------------------------------------
+# Activity counts file format (12 lines, one value per line):
+#   1: first_event_ts   — timestamp of first event in this session
+#   2: last_event_ts    — timestamp of most recent event
+#   3: last_event_type  — type of most recent event (prompt/tool/etc.)
+#   4: prompt_count     — number of prompt events
+#   5: tool_use_count   — number of tool use events
+#   6: tool_failure_count — number of tool failure events
+#   7: permission_count — number of permission events
+#   8: stop_count       — number of stop events
+#   9: last_attention_ts — timestamp of last attention-requiring event
+#  10: task_completes   — number of task completion events
+#  11: active_subagents — currently active subagent count
+#  12: total_subagents  — total subagents spawned this session
 _update_activity() {
     local activity_file="/tmp/ccm-activity-${tab_id}.counts"
     local now
@@ -210,6 +234,14 @@ _update_activity() {
     local active_subagents=0 total_subagents=0
 
     if [[ -f "$activity_file" ]]; then
+        # Validate line count (expected: 12 lines for the counts format)
+        local line_count
+        line_count=$(wc -l < "$activity_file" 2>/dev/null || echo 0)
+        line_count="${line_count// /}"  # trim whitespace (macOS wc pads)
+        if [[ "$line_count" -ne 12 ]]; then
+            ccm_debug "Corrupt counts file ($activity_file): expected 12 lines, got $line_count. Resetting."
+            rm -f "$activity_file"
+        else
         local i=0
         while IFS= read -r line; do
             case $i in
@@ -222,6 +254,7 @@ _update_activity() {
             esac
             i=$((i + 1))
         done <"$activity_file"
+        fi
         # Ensure numeric defaults for any missing/corrupt values
         first_ts="${first_ts:-$now}"
         prompts="${prompts:-0}"
@@ -269,6 +302,9 @@ _prev_last_type=""
 if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission" ]]; then
     _activity_file="/tmp/ccm-activity-${tab_id}.counts"
     if [[ -f "$_activity_file" ]]; then
+        _cap_lines=$(wc -l < "$_activity_file" 2>/dev/null || echo 0)
+        _cap_lines="${_cap_lines// /}"
+        if [[ "$_cap_lines" -eq 12 ]]; then
         _cap_i=0
         while IFS= read -r line; do
             case $_cap_i in
@@ -277,6 +313,7 @@ if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission"
             esac
             _cap_i=$((_cap_i + 1))
         done <"$_activity_file"
+        fi
     fi
 fi
 
@@ -327,6 +364,8 @@ clear)
     ;;
 esac
 
+ccm_debug "hook: state=$state title='$current_title'"
+
 # Priority guard: prevent async 'active' (PostToolUse) from overwriting
 # a high-priority state (stop/failure/permission) that was just set.
 _state_file="/tmp/ccm-state-${tab_id}"
@@ -356,6 +395,7 @@ idle|clear)
 esac
 
 new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag")"
+ccm_debug "hook: new_title='$new_title' (was '$current_title')"
 
 # Send macOS desktop notification if enabled for this event type.
 case "$ACTION" in

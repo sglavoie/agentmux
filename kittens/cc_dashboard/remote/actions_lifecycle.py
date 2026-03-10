@@ -154,7 +154,11 @@ def _spawn_detached_restart(
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
     if env_vars and env_vars != "-":
-        for token in shlex.split(env_vars):
+        try:
+            env_tokens = shlex.split(env_vars)
+        except ValueError:
+            env_tokens = []
+        for token in env_tokens:
             if "=" in token:
                 launch_cmd += ["--env", token]
     launch_cmd += [shell, "-lic", shell_cmd]
@@ -404,7 +408,11 @@ def _spawn_detached_move(
     if config_dir and config_dir != default_dir:
         launch_cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
     if env_vars and env_vars != "-":
-        for token in shlex.split(env_vars):
+        try:
+            env_tokens = shlex.split(env_vars)
+        except ValueError:
+            env_tokens = []
+        for token in env_tokens:
             if "=" in token:
                 launch_cmd += ["--env", token]
     launch_cmd += [shell, "-lic", shell_cmd]

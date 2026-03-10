@@ -1,7 +1,79 @@
 """Git and worktree helpers for dashboard session operations."""
 
+import concurrent.futures
 import os
 import subprocess
+import threading
+import time
+
+
+class _GitCache:
+    """Thread-safe cache for git info with background refresh.
+
+    Returns cached results immediately and schedules background updates
+    when the TTL expires, so callers never block on git commands.
+    """
+
+    def __init__(self, ttl=10, max_workers=4):
+        self._ttl = ttl
+        self._lock = threading.Lock()
+        # {cwd: {"result": dict|None, "timestamp": float}}
+        self._cache: dict[str, dict] = {}
+        self._pending: set[str] = set()
+        self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+
+    def get(self, cwd):
+        """Return cached git info for *cwd*, or None if not yet available.
+
+        On first call for a given cwd, schedules a background fetch and
+        returns None.  On subsequent calls, returns the cached result
+        (possibly stale while a refresh is in flight).
+        """
+        now = time.monotonic()
+        with self._lock:
+            entry = self._cache.get(cwd)
+            if entry is not None:
+                age = now - entry["timestamp"]
+                if age < self._ttl:
+                    return entry["result"]
+                # Stale — schedule refresh if not already pending
+                if cwd not in self._pending:
+                    self._pending.add(cwd)
+                    self._pool.submit(self._refresh, cwd)
+                return entry["result"]
+            # First request — schedule and return None
+            if cwd not in self._pending:
+                self._pending.add(cwd)
+                self._pool.submit(self._refresh, cwd)
+            return None
+
+    def _refresh(self, cwd):
+        """Fetch git info synchronously and store in cache."""
+        result = _get_git_info(cwd)
+        with self._lock:
+            self._cache[cwd] = {"result": result, "timestamp": time.monotonic()}
+            self._pending.discard(cwd)
+
+    def invalidate(self, cwd=None):
+        """Clear cache for a specific cwd, or all entries if cwd is None."""
+        with self._lock:
+            if cwd is None:
+                self._cache.clear()
+            else:
+                self._cache.pop(cwd, None)
+
+    def shutdown(self):
+        """Shut down the background thread pool."""
+        self._pool.shutdown(wait=False)
+
+
+# Module-level cache instance used by sessions.py
+_git_cache = _GitCache()
+
+
+def get_git_info_cached(cwd):
+    """Non-blocking git info lookup. Returns cached result or None."""
+    return _git_cache.get(cwd)
 
 
 def _get_git_info(cwd):

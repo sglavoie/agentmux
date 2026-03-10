@@ -227,7 +227,17 @@ cmd_cleanup() {
             initials+="$ch"
         fi
     done
-    [[ -z "$initials" ]] && initials="WP"
+    if [[ -z "$initials" ]]; then
+        # Derive from default account names as fallback
+        local defaults=("work" "personal")
+        local d ch_d
+        for d in "${defaults[@]}"; do
+            ch_d="$(echo "${d:0:1}" | tr '[:lower:]' '[:upper:]')"
+            if [[ "$initials" != *"$ch_d"* ]]; then
+                initials+="$ch_d"
+            fi
+        done
+    fi
     local title_pattern="${_STRIP_RE}[$initials]:"
 
     local stale=""

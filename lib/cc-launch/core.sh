@@ -8,8 +8,14 @@ _TARGET_INSTANCE_LABEL=""
 _TARGET_TAB_ID=""
 _MOVE_TARGET_INSTANCE=""
 
+# NOTE: There is an inherent race between tab_exists and launch_session —
+# a tab could be created by another process between the check and the launch.
+# This is accepted; Kitty will create a duplicate tab, and the user can close
+# the extra one via the dashboard.  A locking mechanism would add complexity
+# disproportionate to the risk.
 tab_exists() {
     local title="$1"
+    ccm_debug "tab_exists check: '$title'"
     local ls_json
     ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
     echo "$ls_json" | jq -e --arg t "$title" --arg strip_re "$_STRIP_RE" '
@@ -160,6 +166,11 @@ launch_session() {
 
     dir="$(expand_tilde "$dir")"
 
+    if [[ ! -d "$dir" ]]; then
+        echo "Error: directory does not exist: $dir" >&2
+        return 1
+    fi
+
     if tab_exists "$title"; then
         echo "Skipping [$title]: already exists"
         return 1
@@ -185,14 +196,16 @@ launch_session() {
     effective_flags="$(resolve_claude_flags "$flags")"
 
     local shell_cmd="exec claude $effective_flags"
+    ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
     # shellcheck disable=SC2086
     kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
 
     if [[ $? -ne 0 ]]; then
-        echo "Warning: failed to launch tab '$title'" >&2
+        echo "Warning: Failed to launch tab '$title' (account=$account, dir=$dir)." >&2
         return 1
     fi
 
+    ccm_debug "Tab '$title' created, setting colors..."
     local retry
     local color_set=false
     for ((retry = 0; retry < 5; retry++)); do
@@ -205,16 +218,16 @@ launch_session() {
     done
 
     if [[ "$color_set" != "true" ]]; then
-        echo "Warning: failed to set tab color for '$title'" >&2
+        echo "Warning: Failed to set tab color for '$title'." >&2
     fi
 
     local pw_mode
     pw_mode="$(resolve_project_window "$pw_override")"
     if [[ -n "$pw_mode" ]]; then
         if ! kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus; then
-            echo "Warning: failed to create project window for '$title'" >&2
+            echo "Warning: Failed to create project window for '$title'." >&2
         elif ! kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode"; then
-            echo "Warning: failed to set layout '$pw_mode' for '$title'" >&2
+            echo "Warning: Failed to set layout '$pw_mode' for '$title'." >&2
         fi
     fi
 

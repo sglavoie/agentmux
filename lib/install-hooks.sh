@@ -13,21 +13,26 @@ set -euo pipefail
 # ── Argument parsing ─────────────────────────────────────────────────────────
 
 FILTER_ACCOUNT=""
+REMOVE_MODE=""
 HOOKS_EXAMPLE=""
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--account)
 		[[ $# -lt 2 ]] && {
-			echo "Error: --account requires a NAME argument" >&2
+			echo "Error: --account requires a NAME argument." >&2
 			exit 1
 		}
 		FILTER_ACCOUNT="$2"
 		shift 2
 		;;
+	--remove)
+		REMOVE_MODE=1
+		shift
+		;;
 	-*)
-		echo "Error: unknown option: $1" >&2
-		echo "Usage: install-hooks.sh [--account NAME] <hooks-example-json>" >&2
+		echo "Error: Unknown option '$1'." >&2
+		echo "Usage: install-hooks.sh [--account NAME] [--remove] <hooks-example-json>" >&2
 		exit 1
 		;;
 	*)
@@ -37,55 +42,62 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-if [[ -z "$HOOKS_EXAMPLE" ]]; then
-	echo "Usage: install-hooks.sh [--account NAME] <hooks-example-json>" >&2
-	exit 1
-fi
-
-if [[ ! -f "$HOOKS_EXAMPLE" ]]; then
-	echo "Error: hooks example file not found: $HOOKS_EXAMPLE" >&2
-	exit 1
-fi
-
 if ! command -v jq >/dev/null 2>&1; then
 	echo "Error: jq is required but not found." >&2
 	exit 1
 fi
 
-# ── Resolve absolute path to cc-hook-indicator ───────────────────────────────
-
-HOOK_CMD=""
-# Try the standard install location first (matches Justfile prefix_bin)
-if [[ -x "$HOME/.local/bin/cc-hook-indicator" ]]; then
-	HOOK_CMD="$HOME/.local/bin/cc-hook-indicator"
-else
-	# Derive from repo layout: lib/install-hooks.sh -> bin/cc-hook-indicator
-	repo_dir="$(cd "$(dirname "$HOOKS_EXAMPLE")/.." 2>/dev/null && pwd)"
-	if [[ -x "$repo_dir/bin/cc-hook-indicator" ]]; then
-		HOOK_CMD="$repo_dir/bin/cc-hook-indicator"
-	fi
-fi
-
-if [[ -z "$HOOK_CMD" ]]; then
-	echo "Error: cc-hook-indicator not found in ~/.local/bin/ or repo bin/." >&2
+if ! command -v python3 >/dev/null 2>&1; then
+	echo "Error: python3 is required but not found." >&2
 	exit 1
 fi
 
-# ── Resolve absolute path to cc-activity-log ─────────────────────────────
-
-LOG_CMD=""
-if [[ -x "$HOME/.local/bin/cc-activity-log" ]]; then
-	LOG_CMD="$HOME/.local/bin/cc-activity-log"
-else
-	repo_dir="$(cd "$(dirname "$HOOKS_EXAMPLE")/.." 2>/dev/null && pwd)"
-	if [[ -x "$repo_dir/hooks/cc-activity-log" ]]; then
-		LOG_CMD="$repo_dir/hooks/cc-activity-log"
+if [[ -z "$REMOVE_MODE" ]]; then
+	if [[ -z "$HOOKS_EXAMPLE" ]]; then
+		echo "Usage: install-hooks.sh [--account NAME] [--remove] <hooks-example-json>" >&2
+		exit 1
 	fi
-fi
 
-if [[ -z "$LOG_CMD" ]]; then
-	echo "Warning: cc-activity-log not found; using bare name." >&2
-	LOG_CMD="cc-activity-log"
+	if [[ ! -f "$HOOKS_EXAMPLE" ]]; then
+		echo "Error: Hooks example file not found: '$HOOKS_EXAMPLE'." >&2
+		exit 1
+	fi
+
+	# ── Resolve absolute path to cc-hook-indicator ───────────────────────────────
+
+	HOOK_CMD=""
+	# Try the standard install location first (matches Justfile prefix_bin)
+	if [[ -x "$HOME/.local/bin/cc-hook-indicator" ]]; then
+		HOOK_CMD="$HOME/.local/bin/cc-hook-indicator"
+	else
+		# Derive from repo layout: lib/install-hooks.sh -> bin/cc-hook-indicator
+		repo_dir="$(cd "$(dirname "$HOOKS_EXAMPLE")/.." 2>/dev/null && pwd)"
+		if [[ -x "$repo_dir/bin/cc-hook-indicator" ]]; then
+			HOOK_CMD="$repo_dir/bin/cc-hook-indicator"
+		fi
+	fi
+
+	if [[ -z "$HOOK_CMD" ]]; then
+		echo "Error: cc-hook-indicator not found in '~/.local/bin/' or repo 'bin/'." >&2
+		exit 1
+	fi
+
+	# ── Resolve absolute path to cc-activity-log ─────────────────────────────
+
+	LOG_CMD=""
+	if [[ -x "$HOME/.local/bin/cc-activity-log" ]]; then
+		LOG_CMD="$HOME/.local/bin/cc-activity-log"
+	else
+		repo_dir="$(cd "$(dirname "$HOOKS_EXAMPLE")/.." 2>/dev/null && pwd)"
+		if [[ -x "$repo_dir/hooks/cc-activity-log" ]]; then
+			LOG_CMD="$repo_dir/hooks/cc-activity-log"
+		fi
+	fi
+
+	if [[ -z "$LOG_CMD" ]]; then
+		echo "Warning: cc-activity-log not found. Using bare name." >&2
+		LOG_CMD="cc-activity-log"
+	fi
 fi
 
 # ── Load accounts ────────────────────────────────────────────────────────────
@@ -129,11 +141,46 @@ fi
 # Fallback: if no accounts config or no entries found, use the default dir
 if [[ ${#CONFIG_DIRS[@]} -eq 0 ]]; then
 	if [[ -n "$FILTER_ACCOUNT" ]]; then
-		echo "Error: account '$FILTER_ACCOUNT' not found in $ACCOUNTS_CONFIG" >&2
+		echo "Error: Account '$FILTER_ACCOUNT' not found in '$ACCOUNTS_CONFIG'." >&2
 		exit 1
 	fi
 	CONFIG_DIRS=("$HOME/.claude")
 	ACCOUNT_NAMES=("default")
+fi
+
+# ── Remove mode: strip ccm hooks and exit ────────────────────────────────────
+
+if [[ -n "$REMOVE_MODE" ]]; then
+	for i in "${!CONFIG_DIRS[@]}"; do
+		config_dir="${CONFIG_DIRS[$i]}"
+		settings_file="$config_dir/settings.json"
+
+		if [[ ! -f "$settings_file" ]]; then
+			continue
+		fi
+
+		tmp_file="${settings_file}.tmp"
+		jq '
+			if .hooks then
+				.hooks |= (to_entries | map(
+					.value |= [.[] | select(
+						[.hooks[]? | .command // "" | test("cc-hook-indicator|cc-activity-log")] | any | not
+					)]
+				) | map(select(.value | length > 0)) | from_entries)
+			else .
+			end
+		' "$settings_file" >"$tmp_file"
+
+		if diff -q "$settings_file" "$tmp_file" >/dev/null 2>&1; then
+			rm "$tmp_file"
+			echo "  Skipped $settings_file (no ccm hooks found)"
+		else
+			cp "$settings_file" "${settings_file}.bak"
+			mv "$tmp_file" "$settings_file"
+			echo "  Removed cc-hook-indicator hooks from $settings_file"
+		fi
+	done
+	exit 0
 fi
 
 # ── Load account overrides from hooks.json ──────────────────────────────────
@@ -176,7 +223,7 @@ if [[ -n "$ICONS_JSON" ]]; then
 fi
 
 if [[ ${#HOOK_EVENTS[@]} -eq 0 ]]; then
-	echo "Error: could not load hook_events from icons.json" >&2
+	echo "Error: Could not load hook_events from icons.json." >&2
 	exit 1
 fi
 

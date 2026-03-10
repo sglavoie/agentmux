@@ -95,6 +95,7 @@ _HINT_KEY_NORMALIZE: dict[str, str] = {
     "dn": "down",
     "down": "down",
     "shift-tab": "shift-tab",
+    "s-tab": "shift-tab",
     "any": "any",
 }
 
@@ -112,11 +113,14 @@ _TEXT_INPUT_KEYS = {
 
 # Modes where printable char input (32-126) is expected text entry
 _TEXT_INPUT_MODES = {
+    "batch_group",
     "rename",
     "clone",
     "worktree",
     "new",
     "new_dir_browse",
+    "prefs",
+    "prefs_array",
     "restart_options",
     "hooks_add",
     "peek_search",
@@ -181,6 +185,7 @@ _HANDLER_FILES = [
     os.path.join(_DASHBOARD_DIR, "loop_modes_hooks.py"),
     os.path.join(_DASHBOARD_DIR, "loop_modes_config.py"),
     os.path.join(_DASHBOARD_DIR, "loop_modes_delete.py"),
+    os.path.join(_DASHBOARD_DIR, "loop_modes_prefs.py"),
     os.path.join(_DASHBOARD_DIR, "loop_viewers.py"),
 ]
 
@@ -193,6 +198,7 @@ _FUNCTION_MODES: dict[str, list[str]] = {
     "handle_confirm_modes": [
         "confirm",
         "confirm_restart",
+        "confirm_batch_clone",
         "confirm_batch_close",
         "confirm_batch_restart",
         "confirm_save",
@@ -202,6 +208,7 @@ _FUNCTION_MODES: dict[str, list[str]] = {
     "handle_override_mode": ["override"],
     "handle_rename_mode": ["rename"],
     "handle_worktree_mode": ["worktree"],
+    "handle_batch_group_mode": ["batch_group"],
     "handle_clone_mode": ["clone"],
     "handle_new_mode": ["new"],
     "handle_pick_mode": ["pick"],
@@ -220,6 +227,8 @@ _FUNCTION_MODES: dict[str, list[str]] = {
     "handle_delete_mode": ["delete", "delete_confirm"],
     "handle_actlog_mode": ["actlog", "actlog_browse", "actlog_gsearch"],
     "handle_peek_mode": ["peek"],
+    "handle_prefs_mode": ["prefs"],
+    "handle_prefs_array_mode": ["prefs_array"],
 }
 
 # Footer hint mode -> code mode name (when they differ)

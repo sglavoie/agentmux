@@ -9,11 +9,11 @@ cmd_hooks_sync() {
 	hooks_example="$REPO_DIR/config/hooks.example.json"
 
 	if [[ ! -f "$install_script" ]]; then
-		echo "Error: install-hooks.sh not found at $install_script" >&2
+		echo "Error: install-hooks.sh not found at '$install_script'." >&2
 		return 1
 	fi
 	if [[ ! -f "$hooks_example" ]]; then
-		echo "Error: hooks.example.json not found at $hooks_example" >&2
+		echo "Error: hooks.example.json not found at '$hooks_example'." >&2
 		return 1
 	fi
 
@@ -67,7 +67,7 @@ cmd_hooks_status() {
 
 	local hooks_example="$REPO_DIR/config/hooks.example.json"
 	if [[ ! -f "$hooks_example" ]]; then
-		echo "Error: hooks.example.json not found" >&2
+		echo "Error: hooks.example.json not found." >&2
 		return 1
 	fi
 
@@ -94,7 +94,7 @@ cmd_hooks_status() {
 		done < <(jq -r '.hook_events[]' "$_icons_json")
 	fi
 	if [[ ${#hook_events[@]} -eq 0 ]]; then
-		echo "Error: could not load hook_events from icons.json" >&2
+		echo "Error: Could not load hook_events from icons.json." >&2
 		return 1
 	fi
 
@@ -195,7 +195,7 @@ cmd_hooks() {
 		return 1
 		;;
 	*)
-		echo "Error: Unknown hooks subcommand '$1'. Use: sync, status" >&2
+		echo "Error: Unknown hooks subcommand '$1'. Use: sync, status." >&2
 		return 1
 		;;
 	esac

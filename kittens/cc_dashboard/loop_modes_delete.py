@@ -2,6 +2,7 @@
 
 import curses
 import os
+import pathlib
 import shutil
 
 from cc_dashboard import config as _cfg
@@ -61,7 +62,11 @@ def handle_delete_mode(key, state):
                 err = do_remove_worktree(main_repo, expanded)
             else:
                 try:
-                    shutil.rmtree(expanded)
+                    target = pathlib.Path(expanded)
+                    if target.is_symlink():
+                        target.unlink()
+                    else:
+                        shutil.rmtree(expanded)
                 except OSError as exc:
                     err = str(exc)
             if err:

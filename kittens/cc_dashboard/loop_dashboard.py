@@ -70,7 +70,7 @@ from cc_dashboard.views import (
 
 def dashboard(stdscr):
     """Run the interactive dashboard loop."""
-    curses.set_escdelay(25)
+    curses.set_escdelay(25)  # ms; reduce Escape key lag (default 1000ms)
     curses.curs_set(0)
     init_colors()
     stdscr.timeout(100)
@@ -141,6 +141,7 @@ def dashboard(stdscr):
         "msg_frames": 0,
         "refresh_interval": refresh_interval,
         "refresh_ticks": 0,
+        # Force a full session reload after 10 refresh intervals of inactivity
         "refresh_threshold": refresh_interval * 10,
         "pick_selected": 0,
         "pick_filtered": list(_cfg._sessions),
@@ -380,7 +381,7 @@ def dashboard(stdscr):
 
     state["_save_ui_state"] = _save_ui_state
 
-    min_rows, min_cols = 10, 40
+    min_rows, min_cols = 10, 40  # minimum terminal size for usable layout
 
     while True:
         rows, cols = stdscr.getmaxyx()

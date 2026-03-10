@@ -302,7 +302,11 @@ def do_launch(
         cmd += ["--env", f"CLAUDE_CONFIG_DIR={config_dir}"]
 
     if env_vars and env_vars != "-":
-        for token in shlex.split(env_vars):
+        try:
+            env_tokens = shlex.split(env_vars)
+        except ValueError:
+            env_tokens = []
+        for token in env_tokens:
             if "=" in token:
                 cmd += ["--env", token]
 

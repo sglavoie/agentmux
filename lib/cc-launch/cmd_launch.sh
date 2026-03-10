@@ -8,7 +8,7 @@ cmd_launch_interactive() {
     picker_script="$(dirname "$(readlink -f "$0")")/../kittens/cc_session_picker.py"
 
     if [[ ! -f "$picker_script" ]]; then
-        echo "Error: Picker script not found: $picker_script" >&2
+        echo "Error: Picker script not found: '$picker_script'." >&2
         exit 1
     fi
 
@@ -47,7 +47,7 @@ cmd_launch_interactive() {
 
 cmd_launch_all() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo "Error: Config file not found: $CONFIG_FILE" >&2
+        echo "Error: Config file not found: '$CONFIG_FILE'." >&2
         exit 1
     fi
 

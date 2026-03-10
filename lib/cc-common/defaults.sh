@@ -46,7 +46,8 @@ load_defaults() {
 	fi
 
 	# Regenerate cache from TOML via the Python helper.
-	local key value
+	_require_python3
+	local key value cache_tmp="${cache}.tmp"
 	{
 		echo "# mtime=$config_mtime"
 		while IFS=$'\t' read -r key value; do
@@ -55,7 +56,7 @@ load_defaults() {
 			# Emit the assignment for the cache file.
 			printf '_DEFAULT_%s=%q\n' "$(echo "$key" | tr '[:lower:]' '[:upper:]')" "$value"
 		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-defaults "$DEFAULTS_CONFIG")
-	} >"$cache"
+	} >"$cache_tmp" && mv "$cache_tmp" "$cache"
 }
 
 _assign_default() {

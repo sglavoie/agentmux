@@ -11,7 +11,7 @@ from cc_dashboard.remote.activity import (
     resolve_session_id,
 )
 from cc_dashboard.remote.command import get_all_kitty_sockets, kitty_cmd
-from cc_dashboard.remote.git_ops import _get_git_info
+from cc_dashboard.remote.git_ops import get_git_info_cached
 from cc_dashboard.remote.shared import (
     _MANAGED_TITLE_RE,
     _detect_state,
@@ -140,7 +140,7 @@ def query_sessions(socket, managed_only=True):
             activity = load_activity(tab_id)
             session_id = resolve_session_id(tab_id)
             session_meta = load_session_meta(session_id)
-            git_info = _get_git_info(cwd) if cwd else None
+            git_info = get_git_info_cached(cwd) if cwd else None
             sessions.append(
                 {
                     "index": idx + 1,

@@ -18,7 +18,7 @@ main() {
 			;;
 		--section)
 			if [[ $# -lt 2 ]]; then
-				echo "Error: --section requires a value" >&2
+				echo "Error: --section requires a value." >&2
 				exit 1
 			fi
 			opt_section="$2"

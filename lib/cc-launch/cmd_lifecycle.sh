@@ -122,15 +122,20 @@ cmd_clone() {
     SOCKET="$source_socket"
 
     local base_title clone_title number
+    local max_clones=100
     base_title="$(echo "$title" | sed 's/-[0-9]*$//')"
     number=2
-    while true; do
+    while [[ $number -le $max_clones ]]; do
         clone_title="${base_title}-${number}"
         if ! tab_exists "$clone_title"; then
             break
         fi
         number=$((number + 1))
     done
+    if [[ $number -gt $max_clones ]]; then
+        echo "Error: too many clones of '$base_title' (max $max_clones)." >&2
+        return 1
+    fi
 
     local loc_args
     loc_args="$(resolve_location_args "$SOCKET" "$account" "$clone_title")"
@@ -158,7 +163,10 @@ cmd_clone() {
                 fi
                 conf_line="$conf_line | $cfg_env"
             fi
-            echo "$conf_line" >>"$CONFIG_FILE"
+            {
+                cat "$CONFIG_FILE"
+                echo "$conf_line"
+            } > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
         fi
         echo "Cloned '$title' as '$clone_title'."
     fi
@@ -219,7 +227,7 @@ cmd_move() {
     fi
 
     if [[ "$source_socket" == "$target_socket" ]]; then
-        echo "Session is already in the target instance." >&2
+        echo "Error: Session is already in the target instance '$_MOVE_TARGET_INSTANCE'." >&2
         exit 1
     fi
 

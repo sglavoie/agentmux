@@ -34,7 +34,7 @@ _resolve_data_dir() {
 	elif [[ -f "$base_dir/palette.json" ]]; then
 		_CC_DATA_DIR="$base_dir"
 	else
-		echo "Error: Cannot find data directory (palette.json) from $base_dir" >&2
+		echo "Error: Cannot find data directory (palette.json) from '$base_dir'." >&2
 		return 1
 	fi
 }
@@ -57,6 +57,12 @@ _load_icons() {
 	_ICON_STOP=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.stop')
 	_ICON_KEY=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.key')
 	_ICON_ERROR=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.error')
+}
+
+_palette_has_color() {
+	local color="$1"
+	_load_palette
+	printf '%s' "$_PALETTE_JSON" | jq -e --arg c "$color" '.colors[$c]' >/dev/null 2>&1
 }
 
 _icon_strip_regex() {

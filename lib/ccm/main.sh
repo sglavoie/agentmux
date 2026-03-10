@@ -3,7 +3,7 @@
 [[ -n "${_CCM_MAIN_LOADED:-}" ]] && return 0
 _CCM_MAIN_LOADED=1
 
-CCM_VERSION="0.1.0"
+CCM_VERSION="$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "0.2.0")"
 
 main() {
 	local SOCKET_ARGS=()
@@ -16,6 +16,11 @@ main() {
 		fi
 		SOCKET_ARGS=("--socket" "$2")
 		shift 2
+	fi
+
+	if [[ "${1:-}" == "--debug" ]]; then
+		export CCM_DEBUG=1
+		shift
 	fi
 
 	case "${1:-}" in

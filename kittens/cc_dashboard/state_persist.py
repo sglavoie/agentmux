@@ -2,6 +2,7 @@
 
 import json
 import os
+import tempfile
 
 
 def _state_file_path():
@@ -58,13 +59,16 @@ def load_ui_state():
 
 
 def save_ui_state(state_dict):
-    """Write UI state to the cache file, creating the directory if needed."""
+    """Write UI state to the cache file atomically, creating the directory if needed."""
     path = _state_file_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dir_ = os.path.dirname(path)
+    os.makedirs(dir_, exist_ok=True)
     try:
-        with open(path, "w") as f:
-            json.dump(state_dict, f, indent=2)
-            f.write("\n")
+        with tempfile.NamedTemporaryFile("w", dir=dir_, delete=False, suffix=".tmp") as tmp:
+            json.dump(state_dict, tmp, indent=2)
+            tmp.write("\n")
+            tmp_path = tmp.name
+        os.replace(tmp_path, path)
     except OSError:
         pass
 

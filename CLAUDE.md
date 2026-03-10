@@ -8,7 +8,7 @@ cc-manager-kitty is a Claude Code session manager for the Kitty terminal. It man
 
 ## Installation and testing
 
-There is no build step or test suite. The project consists of shell scripts and a Python kitten. Install and uninstall via `just install` and `just uninstall`, which create/remove symlinks to `~/.local/bin/`, `~/.config/kitty/`, and `~/.zfunc/`. To verify changes manually, run `cc-launch --help` or `cc-status --help` after installing.
+Requires Python 3.11+ (for `tomllib` stdlib), `jq`, and Kitty. Install and uninstall via `just install` and `just uninstall`, which create/remove symlinks to `~/.local/bin/`, `~/.config/kitty/`, and `~/.zfunc/`. Run `just test` to execute the TOML round-trip tests and `just check` to run the full suite (tests, lint, format-check, typecheck, keybinding audit). To verify changes manually, run `cc-launch --help` or `cc-status --help` after installing.
 
 ## Architecture
 
@@ -28,7 +28,7 @@ The codebase has a unified CLI entry point, a shared Bash library, a shared data
 
 ## Key conventions
 
-The curses dashboard (`kittens/`) must use ASCII-only characters for all text output. Curses does not reliably render Unicode symbols (checkmarks, arrows, etc.), so use plain ASCII alternatives (e.g. `Y`/`N`, `*`, `>`).
+The curses dashboard (`kittens/`) must use ASCII-only characters for its own UI elements. Curses does not reliably render Unicode symbols (checkmarks, arrows, etc.), so use plain ASCII alternatives (e.g. `Y`/`N`, `*`, `>`). Tab titles (rendered by Kitty, not curses) use Unicode icons from `data/icons.json`.
 
 Account detection uses Kitty user vars (`--var cc_account=NAME` set at launch time) as the primary method, with a fallback to parsing `CLAUDE_CONFIG_DIR` from process cmdlines. Both the shell scripts and the Python kitten implement this two-tier lookup. Additional user vars `cc_flags`, `cc_pw`, `cc_env`, and `cc_group` store the per-session flags, project window override, environment variables, and group name respectively for round-trip fidelity with save, restart, clone, and move operations.
 
