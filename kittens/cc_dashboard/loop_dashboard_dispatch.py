@@ -27,6 +27,7 @@ from cc_dashboard.loop_modes_forms import (
     handle_worktree_mode,
 )
 from cc_dashboard.loop_modes_hooks import handle_hooks_modes
+from cc_dashboard.loop_modes_prefs import handle_prefs_array_mode, handle_prefs_mode
 from cc_dashboard.loop_viewers import handle_actlog_mode, handle_peek_mode
 
 
@@ -132,6 +133,7 @@ def dispatch_mode(
             "format_log_entry": state["format_log_entry"],
             "get_window_text": state["get_window_text"],
             "rstrip_blank_lines": state["rstrip_blank_lines"],
+            "_save_ui_state": state.get("_save_ui_state"),
         }
         should_exit = handle_list_mode(stdscr, key, list_state)
         for k in list_state:
@@ -246,12 +248,42 @@ def dispatch_mode(
             "sort_modes": SORT_MODES,
             "sort_labels": SORT_LABELS,
             "refilter": state["refilter"],
+            "_save_ui_state": state.get("_save_ui_state"),
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }
         handle_sort_pick_mode(key, sort_state)
         for k in sort_state:
             state[k] = sort_state[k]
+
+    elif mode in ("prefs", "prefs_array"):
+        prefs_state: dict[str, Any] = {
+            "mode": mode,
+            "prefs_values": state["prefs_values"],
+            "prefs_selected": state["prefs_selected"],
+            "prefs_editing": state["prefs_editing"],
+            "prefs_cursor": state["prefs_cursor"],
+            "prefs_edit_value": state["prefs_edit_value"],
+            "prefs_array_items": state.get("prefs_array_items", []),
+            "prefs_array_selected": state.get("prefs_array_selected", 0),
+            "prefs_array_editing": state.get("prefs_array_editing", False),
+            "prefs_array_cursor": state.get("prefs_array_cursor", 0),
+            "prefs_array_edit_value": state.get("prefs_array_edit_value", ""),
+            "prefs_array_field_key": state.get("prefs_array_field_key", ""),
+            "prefs_ext_edit_path": state.get("prefs_ext_edit_path", ""),
+            "prefs_ext_edit_field": state.get("prefs_ext_edit_field", ""),
+            "home_socket": state["home_socket"],
+            "cfg": state["cfg"],
+            "reload_all_config": state["reload_all_config"],
+            "msg": state["msg"],
+            "msg_frames": state["msg_frames"],
+        }
+        if mode == "prefs":
+            handle_prefs_mode(key, prefs_state)
+        else:
+            handle_prefs_array_mode(key, prefs_state)
+        for k in prefs_state:
+            state[k] = prefs_state[k]
 
     elif mode in (
         "hooks",

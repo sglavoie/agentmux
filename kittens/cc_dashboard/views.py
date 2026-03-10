@@ -45,6 +45,7 @@ from cc_dashboard.views_panels import (
     draw_pick_view,
     draw_restart_options_form,
 )
+from cc_dashboard.views_prefs import draw_prefs_array_editor, draw_prefs_view
 from cc_dashboard.views_shared import (
     _FOOTER_HINTS,
     _shorten_home,
@@ -82,6 +83,8 @@ __all__ = [
     "draw_config_picker",
     "draw_config_show",
     "draw_confirm_prompt",
+    "draw_prefs_array_editor",
+    "draw_prefs_view",
     "draw_delete_confirm",
     "draw_delete_view",
     "draw_detail_pane",

@@ -350,6 +350,8 @@ def handle_sort_pick_mode(key, state):
     elif key in (10, 13, curses.KEY_ENTER):
         state["sort_mode"] = state["sort_modes"][state["sort_selected"]]
         state["refilter"]()
+        if "_save_ui_state" in state:
+            state["_save_ui_state"]()
         label = state["sort_labels"][state["sort_mode"]]
         state["msg"] = f"Sort: {label}" if label else "Sort: default (tab order)"
         state["msg_frames"] = 15

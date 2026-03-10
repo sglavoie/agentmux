@@ -68,6 +68,8 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             else:
                 state["account_filter"].add(name)
             state["refilter"]()
+            if "_save_ui_state" in state:
+                state["_save_ui_state"]()
         return False
 
     if state.get("group_filter_mode") and ord("1") <= key <= ord("9"):
@@ -86,6 +88,8 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             else:
                 state["group_filter"].add(name)
             state["refilter"]()
+            if "_save_ui_state" in state:
+                state["_save_ui_state"]()
             # Force immediate session data refresh on next tick
             state["force_refresh"] = True
         return False
@@ -99,11 +103,15 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["group_filter_mode"] = False
             state["group_filter"] = None
             state["refilter"]()
+            if "_save_ui_state" in state:
+                state["_save_ui_state"]()
             state["force_refresh"] = True
         elif state["account_filter_mode"]:
             state["account_filter_mode"] = False
             state["account_filter"] = None
             state["refilter"]()
+            if "_save_ui_state" in state:
+                state["_save_ui_state"]()
         elif state["search_query"]:
             state["search_query"] = ""
             state["search_cursor"] = 0
@@ -111,10 +119,14 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         elif state.get("group_filter") is not None:
             state["group_filter"] = None
             state["refilter"]()
+            if "_save_ui_state" in state:
+                state["_save_ui_state"]()
             state["force_refresh"] = True
         elif state["account_filter"] is not None:
             state["account_filter"] = None
             state["refilter"]()
+            if "_save_ui_state" in state:
+                state["_save_ui_state"]()
         else:
             return True
     elif key == ord("f"):
@@ -231,11 +243,16 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             managed_only=(not state["show_all"])
         )
         state["refilter"]()
+        if "_save_ui_state" in state:
+            state["_save_ui_state"]()
         label = "all" if state["show_all"] else "managed"
         state["msg"] = f"Showing {label} sessions ({len(state['filtered'])} found)"
         state["msg_frames"] = 20
     elif key == ord("d"):
         state["show_detail"] = not state["show_detail"]
+        if "_save_ui_state" in state:
+            state["_save_ui_state"]()
+
     elif key == ord("x") and state["filtered"]:
         if state["marked"]:
             state["actions_targets"] = [
@@ -284,6 +301,8 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
                 best = min(visible, key=lambda i: abs(i - state["selected"]))
                 state["selected"] = best
         state["collapsed_groups"] = collapsed
+        if "_save_ui_state" in state:
+            state["_save_ui_state"]()
     elif key == ord("*") and state["filtered"] and not state.get("group_filter_mode"):
         sess = state["filtered"][state["selected"]]
         group = sess.get("group", "") or "(ungrouped)"
@@ -343,6 +362,12 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
     elif key == ord("C"):
         state["mode"] = "config_pick"
         state["config_selected"] = 0
+    elif key == ord("P"):
+        from cc_dashboard.loop_modes_prefs import init_prefs_state
+
+        state["reload_all_config"]()
+        init_prefs_state(state)
+        state["mode"] = "prefs"
     elif key == ord("H"):
         state["cfg"].load_hooks()
         state["hooks_drift"] = state["cfg"]._detect_all_drift()

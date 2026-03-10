@@ -59,6 +59,7 @@ from cc_dashboard.remote.shared import (
     _append_override_marker,
     _strip_override_marker,
 )
+from cc_dashboard.state_persist import load_ui_state, prune_stale_entries, save_ui_state
 from cc_dashboard.views import (
     _check_idle_notifications,
     _cycle_instance,
@@ -243,6 +244,19 @@ def dashboard(stdscr):
         "actlog_gsearch_total_scanned": 0,
         "actlog_gsearch_log_index": [],
         "actlog_gsearch_search_active": True,
+        "prefs_values": {},
+        "prefs_selected": 0,
+        "prefs_editing": False,
+        "prefs_cursor": 0,
+        "prefs_edit_value": "",
+        "prefs_array_items": [],
+        "prefs_array_selected": 0,
+        "prefs_array_editing": False,
+        "prefs_array_cursor": 0,
+        "prefs_array_edit_value": "",
+        "prefs_array_field_key": "",
+        "prefs_ext_edit_path": "",
+        "prefs_ext_edit_field": "",
         "default_account": default_account,
         "default_pw": default_pw,
         "new_fields": {},
@@ -319,6 +333,48 @@ def dashboard(stdscr):
     state["reload_all_config"] = reload_all_config
     state["refilter"] = refilter
     state["new_fields"] = make_new_fields()
+
+    # Apply default sort from config (persistence will override below)
+    cfg_sort = _cfg._default_sort_sessions
+    if cfg_sort and cfg_sort in ("default", "name", "account", "group", "status", "idle", "activity"):
+        state["sort_mode"] = cfg_sort
+
+    # Restore persisted UI state
+    persisted = load_ui_state()
+    valid_accounts = set(_cfg._account_names)
+    valid_groups = {s.get("group", "") or "(ungrouped)" for s in sessions}
+    prune_stale_entries(persisted, valid_accounts, valid_groups)
+
+    if persisted.get("sort_mode", "default") != "default":
+        state["sort_mode"] = persisted["sort_mode"]
+    af = persisted.get("account_filter")
+    if isinstance(af, list) and af:
+        state["account_filter"] = set(af)
+    gf = persisted.get("group_filter")
+    if isinstance(gf, list) and gf:
+        state["group_filter"] = set(gf)
+    cg = persisted.get("collapsed_groups")
+    if isinstance(cg, list):
+        state["collapsed_groups"] = set(cg)
+    if persisted.get("show_detail"):
+        state["show_detail"] = True
+    if persisted.get("show_all"):
+        state["show_all"] = True
+        sessions = query_all_sessions(managed_only=False)
+        state["sessions"] = sessions
+    refilter()
+
+    def _save_ui_state():
+        save_ui_state({
+            "sort_mode": state["sort_mode"],
+            "account_filter": sorted(state["account_filter"]) if state["account_filter"] else None,
+            "group_filter": sorted(state["group_filter"]) if state["group_filter"] else None,
+            "collapsed_groups": sorted(state["collapsed_groups"]),
+            "show_detail": state["show_detail"],
+            "show_all": state["show_all"],
+        })
+
+    state["_save_ui_state"] = _save_ui_state
 
     while True:
         draw_dashboard_frame(stdscr, build_draw_state(state), build_session_actions)

@@ -5,6 +5,7 @@ import curses
 from cc_dashboard.colors import CP_NORMAL, CP_WARN
 from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.filters import SORT_LABELS
+from cc_dashboard.loop_modes_prefs import PREF_FIELDS
 from cc_dashboard.views import (
     DETAIL_PANE_HEIGHT,
     draw_actlog_browse,
@@ -40,6 +41,8 @@ from cc_dashboard.views import (
     draw_override_picker,
     draw_peek_overlay,
     draw_pick_view,
+    draw_prefs_array_editor,
+    draw_prefs_view,
     draw_rename_input,
     draw_restart_options_form,
     draw_search_bar,
@@ -502,6 +505,36 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         )
         if state["msg"] and state["msg_frames"] > 0:
             draw_status_message(stdscr, state["msg"])
+    elif mode == "prefs":
+        draw_prefs_view(
+            stdscr,
+            PREF_FIELDS,
+            state["prefs_values"],
+            state["prefs_selected"],
+            state["prefs_editing"],
+            state["prefs_edit_value"],
+            state["prefs_cursor"],
+        )
+        draw_footer(stdscr, "prefs")
+    elif mode == "prefs_array":
+        draw_prefs_view(
+            stdscr,
+            PREF_FIELDS,
+            state["prefs_values"],
+            state["prefs_selected"],
+            False,
+            "",
+            0,
+        )
+        draw_prefs_array_editor(
+            stdscr,
+            state["prefs_array_items"],
+            state["prefs_array_selected"],
+            state["prefs_array_editing"],
+            state["prefs_array_edit_value"],
+            state["prefs_array_cursor"],
+        )
+        draw_footer(stdscr, "prefs_array")
     elif mode == "actlog_gsearch":
         draw_actlog_gsearch(
             stdscr,

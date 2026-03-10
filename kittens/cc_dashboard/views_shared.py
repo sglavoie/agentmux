@@ -36,6 +36,7 @@ _FOOTER_HINTS = {
         "Space Mark",
         "* GroupMark",
         "U Unmark",
+        "P Prefs",
         "^r Refresh",
         "^F Search logs",
     ],
@@ -171,6 +172,8 @@ _FOOTER_HINTS = {
         "Enter Confirm",
         "Esc Clear",
     ],
+    "prefs": ["j/k Navigate", "Enter Edit", "Space Toggle", "Tab Cycle", "Esc Back"],
+    "prefs_array": ["j/k Navigate", "a Add", "d Delete", "e Edit", "Esc Back"],
 }
 
 _ACTIONS_FOOTER_COMPACT = [
