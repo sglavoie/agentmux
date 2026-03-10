@@ -278,6 +278,7 @@ def load_sessions():
                 "flags": entry.get("flags", ""),
                 "pw": entry.get("project_window", ""),
                 "env": entry.get("env", ""),
+                "group": entry.get("group", ""),
             }
         )
 
@@ -380,7 +381,7 @@ def _tilde_directory(directory):
     return directory
 
 
-def _session_to_toml_entry(title, directory, account, flags="", pw="", env=""):
+def _session_to_toml_entry(title, directory, account, flags="", pw="", env="", group=""):
     """Build a TOML-serializable dict for one ``[[sessions]]`` entry."""
     d = {"title": title, "directory": directory}
     if account:
@@ -391,6 +392,8 @@ def _session_to_toml_entry(title, directory, account, flags="", pw="", env=""):
         d["project_window"] = pw
     if env:
         d["env"] = env
+    if group:
+        d["group"] = group
     return d
 
 
@@ -437,6 +440,7 @@ def save_sessions(live_sessions):
                 s.get("cc_flags", ""),
                 s.get("cc_pw", ""),
                 s.get("cc_env", ""),
+                s.get("group", ""),
             )
         )
     if not header:
@@ -450,7 +454,7 @@ def save_sessions(live_sessions):
     return len(live_sessions), backup_created
 
 
-def append_session(title, directory, account, flags="", pw="", env=""):
+def append_session(title, directory, account, flags="", pw="", env="", group=""):
     """Append a single session entry to the sessions config file."""
     path = _sessions_config_path()
     directory = _tilde_directory(directory)
@@ -460,13 +464,13 @@ def append_session(title, directory, account, flags="", pw="", env=""):
     if os.path.isfile(path):
         header = _read_header_comments(path)
         entries = _read_sessions_toml_raw(path)
-    entries.append(_session_to_toml_entry(title, directory, account, flags, pw, env))
+    entries.append(_session_to_toml_entry(title, directory, account, flags, pw, env, group))
     _write_sessions_toml(path, entries, header=header.rstrip("\n") if header else "")
 
     load_sessions()
 
 
-def update_session(original_title, title, directory, account, flags="", pw="", env=""):
+def update_session(original_title, title, directory, account, flags="", pw="", env="", group=""):
     """Update an existing session entry by original title.
 
     Returns True if the entry was found and updated, False otherwise.
@@ -484,7 +488,7 @@ def update_session(original_title, title, directory, account, flags="", pw="", e
     for i, entry in enumerate(entries):
         if entry.get("title") == original_title:
             entries[i] = _session_to_toml_entry(
-                title, directory, account, flags, pw, env
+                title, directory, account, flags, pw, env, group
             )
             found = True
             if original_title != title:

@@ -333,7 +333,8 @@ def main():
         pw = entry.get("pw", "")
         flags = entry.get("flags", "")
         env = entry.get("env", "")
-        print(f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}|{env}")
+        group = entry.get("group", "")
+        print(f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}|{env}|{group}")
 
 
 if __name__ == "__main__":

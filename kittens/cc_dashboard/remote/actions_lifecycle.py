@@ -262,6 +262,7 @@ def do_restart(
     account = session["account"]
     title = session["title"]
     cc_color = session.get("cc_color", "")
+    group = session.get("group", "")
 
     if config_dir_override:
         title = _append_override_marker(title)
@@ -300,6 +301,7 @@ def do_restart(
         config_dir_override=config_dir_override,
         env_vars=env_vars,
         color_override=cc_color,
+        group=group,
     )
 
 
@@ -511,6 +513,7 @@ def do_move(
     tab_id = session["tab_id"]
     cwd = session["cwd"]
     cc_color = session.get("cc_color", "")
+    group = session.get("group", "")
 
     if host_tab_id is not None and tab_id == host_tab_id:
         _spawn_detached_move(
@@ -544,4 +547,5 @@ def do_move(
         config_dir_override=config_dir_override,
         env_vars=env_vars,
         color_override=cc_color,
+        group=group,
     )

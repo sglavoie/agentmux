@@ -176,13 +176,19 @@ for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
                 end
             ) as $status |
 
+            (
+                [$tab.windows[] | .user_vars.cc_group // empty | select(. != "")] |
+                if length > 0 then .[0] else "" end
+            ) as $group |
+
             {
                 tab_index: ($tab_idx + 1),
                 title: ($tab.title | sub($strip_re; "")),
                 account: $account,
                 cwd: $cwd,
                 status: $status,
-                instance: $inst_label
+                instance: $inst_label,
+                group: $group
             }
         ] | .[] | [
             (.tab_index | tostring),
@@ -190,7 +196,8 @@ for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
             .account,
             .cwd,
             .status,
-            .instance
+            .instance,
+            .group
         ] | join("\t")
     ')
 
@@ -220,6 +227,7 @@ header_dir="Directory"
 header_branch="Branch"
 header_status="Status"
 header_inst="Instance"
+header_group="Group"
 
 max_mk=2
 max_tab=${#header_tab}
@@ -229,10 +237,12 @@ max_dir=${#header_dir}
 max_branch=${#header_branch}
 max_status=${#header_status}
 max_inst=${#header_inst}
+max_group=${#header_group}
+has_groups=false
 
 # Pre-process rows: shorten paths, then scan for max widths
 processed_rows=""
-while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst; do
+while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst col_group; do
 	col_branch="$(git -C "$col_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")"
 	if [[ "$col_branch" != "-" ]]; then
 		if [[ -n "$(git -C "$col_dir" status --porcelain 2>/dev/null)" ]]; then
@@ -240,7 +250,7 @@ while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_ins
 		fi
 	fi
 	col_dir="$(shorten_path "$col_dir")"
-	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_branch}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\n'
+	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_branch}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\t'"${col_group}"$'\n'
 	((${#col_tab} > max_tab)) && max_tab=${#col_tab}
 	((${#col_title} > max_title)) && max_title=${#col_title}
 	((${#col_account} > max_account)) && max_account=${#col_account}
@@ -248,25 +258,38 @@ while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_ins
 	((${#col_branch} > max_branch)) && max_branch=${#col_branch}
 	((${#col_status} > max_status)) && max_status=${#col_status}
 	((${#col_inst} > max_inst)) && max_inst=${#col_inst}
+	if [[ -n "$col_group" ]]; then
+		has_groups=true
+		((${#col_group} > max_group)) && max_group=${#col_group}
+	fi
 done <<<"$rows"
 
 # Header
-if [[ "$multi_instance" == "true" ]]; then
-	printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_inst}s  %-${max_dir}s  %-${max_branch}s  %-${max_status}s%s\n" \
-		"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_inst" "$header_dir" "$header_branch" "$header_status" "$RESET"
-	printf "%s%s%s\n" "$DIM" \
-		"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_inst + 2 + max_dir + 2 + max_branch + 2 + max_status)))" \
-		"$RESET"
-else
-	printf "%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s  %-${max_dir}s  %-${max_branch}s  %-${max_status}s%s\n" \
-		"$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account" "$header_dir" "$header_branch" "$header_status" "$RESET"
-	printf "%s%s%s\n" "$DIM" \
-		"$(repeat_char '─' $((max_mk + max_tab + 2 + max_title + 2 + max_account + 2 + max_dir + 2 + max_branch + 2 + max_status)))" \
-		"$RESET"
-fi
+{
+	local hdr_fmt="%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s"
+	local hdr_args=("$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account")
+	local sep_width=$((max_mk + max_tab + 2 + max_title + 2 + max_account))
+
+	if [[ "$has_groups" == "true" ]]; then
+		hdr_fmt+="  %-${max_group}s"
+		hdr_args+=("$header_group")
+		sep_width=$((sep_width + 2 + max_group))
+	fi
+	if [[ "$multi_instance" == "true" ]]; then
+		hdr_fmt+="  %-${max_inst}s"
+		hdr_args+=("$header_inst")
+		sep_width=$((sep_width + 2 + max_inst))
+	fi
+	hdr_fmt+="  %-${max_dir}s  %-${max_branch}s  %-${max_status}s%s\n"
+	hdr_args+=("$header_dir" "$header_branch" "$header_status" "$RESET")
+	sep_width=$((sep_width + 2 + max_dir + 2 + max_branch + 2 + max_status))
+
+	printf "$hdr_fmt" "${hdr_args[@]}"
+	printf "%s%s%s\n" "$DIM" "$(repeat_char '─' "$sep_width")" "$RESET"
+}
 
 # Data rows
-while IFS=$'\t' read -r col_tab col_title col_account col_dir col_branch col_status col_inst; do
+while IFS=$'\t' read -r col_tab col_title col_account col_dir col_branch col_status col_inst col_group; do
 	[[ -z "$col_tab" ]] && continue
 
 	# Focus marker
@@ -294,11 +317,19 @@ while IFS=$'\t' read -r col_tab col_title col_account col_dir col_branch col_sta
 		esac
 	fi
 
-	if [[ "$multi_instance" == "true" ]]; then
-		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_inst + $(extra_bytes "$col_inst")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %-$((max_branch + $(extra_bytes "$col_branch")))s  %s%s\n" \
-			"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_inst" "$col_dir" "$col_branch" "$local_status" "$local_reset"
-	else
-		printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s  %-$((max_dir + $(extra_bytes "$col_dir")))s  %-$((max_branch + $(extra_bytes "$col_branch")))s  %s%s\n" \
-			"$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account" "$col_dir" "$col_branch" "$local_status" "$local_reset"
+	local row_fmt="%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s"
+	local row_args=("$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account")
+
+	if [[ "$has_groups" == "true" ]]; then
+		row_fmt+="  %-$((max_group + $(extra_bytes "$col_group")))s"
+		row_args+=("$col_group")
 	fi
+	if [[ "$multi_instance" == "true" ]]; then
+		row_fmt+="  %-$((max_inst + $(extra_bytes "$col_inst")))s"
+		row_args+=("$col_inst")
+	fi
+	row_fmt+="  %-$((max_dir + $(extra_bytes "$col_dir")))s  %-$((max_branch + $(extra_bytes "$col_branch")))s  %s%s\n"
+	row_args+=("$col_dir" "$col_branch" "$local_status" "$local_reset")
+
+	printf "$row_fmt" "${row_args[@]}"
 done <<<"$processed_rows"

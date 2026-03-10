@@ -126,6 +126,9 @@ def dashboard(stdscr):
         "sort_mode": "default",
         "account_filter": None,
         "account_filter_mode": False,
+        "group_filter": None,
+        "group_filter_mode": False,
+        "collapsed_groups": set(),
         "msg": "",
         "msg_frames": 0,
         "refresh_interval": refresh_interval,
@@ -302,6 +305,7 @@ def dashboard(stdscr):
             state["sort_mode"],
             state["filtered"],
             state["selected"],
+            group_filter=state["group_filter"],
         )
 
     def build_session_actions(sess, scope="selected"):
@@ -345,6 +349,7 @@ def dashboard(stdscr):
                             new_sessions,
                             state["search_query"],
                             state["account_filter"],
+                            state["group_filter"],
                         ),
                         state["sort_mode"],
                     )
@@ -399,5 +404,7 @@ def dashboard(stdscr):
         )
         if should_exit:
             return
+        if state.pop("force_refresh", False):
+            state["refresh_ticks"] = state["refresh_threshold"]
         if should_continue:
             continue

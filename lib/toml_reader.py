@@ -50,7 +50,7 @@ def read_sessions(path):
     """Parse ``sessions.toml`` and return a list of session dicts.
 
     Each dict has keys: ``title``, ``dir``, ``account``, ``flags``,
-    ``pw`` (project_window), ``env``.
+    ``pw`` (project_window), ``env``, ``group``.
     """
     with open(path, "rb") as f:
         data = tomllib.load(f)
@@ -64,6 +64,7 @@ def read_sessions(path):
                 "flags": entry.get("flags", ""),
                 "pw": entry.get("project_window", ""),
                 "env": entry.get("env", ""),
+                "group": entry.get("group", ""),
             }
         )
     return result

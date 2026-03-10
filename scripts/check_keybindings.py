@@ -232,6 +232,7 @@ _MODE_NAME_MAP: dict[str, str] = {
 # by the parent mode's analysis; we skip them in the "no handler found" report.
 _EMBEDDED_SUBMODES: set[str] = {
     "filter",  # in handle_list_mode via account_filter_mode
+    "group_filter",  # in handle_list_mode via group_filter_mode
     "new_dir_browse",  # in handle_new_mode via dir_browse_active
     "peek_search",  # in handle_peek_mode via peek_search_active
     "actlog_search",  # in handle_actlog_mode via actlog_search_active

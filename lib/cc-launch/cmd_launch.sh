@@ -21,7 +21,7 @@ cmd_launch_interactive() {
     local launched=0
     local existed=0
 
-    while IFS='|' read -r title dir account flags pw env_vars; do
+    while IFS='|' read -r title dir account flags pw env_vars group; do
         [[ -z "$title" ]] && continue
         title="$(_trim "$title")"
         dir="$(_trim "$dir")"
@@ -29,12 +29,13 @@ cmd_launch_interactive() {
         flags="$(_trim "${flags:-}")"
         pw="$(_trim "${pw:-}")"
         env_vars="$(_trim "${env_vars:-}")"
+        group="$(_trim "${group:-}")"
         [[ -z "$account" ]] && account="work"
 
         local loc_args
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars"; then
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
@@ -60,7 +61,7 @@ cmd_launch_all() {
     local launched=0
     local existed=0
 
-    while IFS=$'\t' read -r title dir account flags pw env_vars; do
+    while IFS=$'\t' read -r title dir account flags pw env_vars group; do
         [[ -z "$title" ]] && continue
         title="$(_trim "$title")"
         dir="$(_trim "$dir")"
@@ -68,12 +69,13 @@ cmd_launch_all() {
         flags="$(_trim "${flags:-}")"
         pw="$(_trim "${pw:-}")"
         env_vars="$(_trim "${env_vars:-}")"
+        group="$(_trim "${group:-}")"
         [[ -z "$account" ]] && account="work"
 
         local loc_args
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars"; then
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
@@ -91,14 +93,36 @@ cmd_launch_all() {
 }
 
 cmd_add() {
-    local title="${1:-}"
-    local dir="${2:-}"
-    local account="${3:-}"
-    local env_vars="${4:-}"
+    local title=""
+    local dir=""
+    local account=""
+    local env_vars=""
+    local group=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --group)
+            group="${2:-}"
+            shift 2
+            ;;
+        *)
+            if [[ -z "$title" ]]; then
+                title="$1"
+            elif [[ -z "$dir" ]]; then
+                dir="$1"
+            elif [[ -z "$account" ]]; then
+                account="$1"
+            else
+                env_vars="$1"
+            fi
+            shift
+            ;;
+        esac
+    done
 
     if [[ -z "$title" || -z "$dir" ]]; then
         echo "Error: --add requires TITLE and DIR arguments." >&2
-        echo "Usage: cc-launch --add TITLE DIR [ACCOUNT [ENV_VARS]]" >&2
+        echo "Usage: cc-launch --add TITLE DIR [ACCOUNT [ENV_VARS]] [--group GROUP]" >&2
         exit 1
     fi
 
@@ -128,5 +152,5 @@ cmd_add() {
     local loc_args
     loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
-    launch_session "$title" "$dir" "$account" "" "" "$loc_args" "$env_vars"
+    launch_session "$title" "$dir" "$account" "" "" "$loc_args" "$env_vars" "$group"
 }

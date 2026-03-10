@@ -70,11 +70,36 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["refilter"]()
         return False
 
+    if state.get("group_filter_mode") and ord("1") <= key <= ord("9"):
+        groups = sorted(
+            {s.get("group", "") or "(ungrouped)" for s in state["sessions"]}
+        )
+        idx = key - ord("1")
+        if idx < len(groups):
+            name = groups[idx]
+            if state["group_filter"] is None:
+                state["group_filter"] = {name}
+            elif name in state["group_filter"]:
+                state["group_filter"].discard(name)
+                if not state["group_filter"]:
+                    state["group_filter"] = None
+            else:
+                state["group_filter"].add(name)
+            state["refilter"]()
+            # Force immediate session data refresh on next tick
+            state["force_refresh"] = True
+        return False
+
     if key in (ord("q"), ord("Q")):
         return True
     if key == 27:
         if state["marked"]:
             state["marked"].clear()
+        elif state.get("group_filter_mode"):
+            state["group_filter_mode"] = False
+            state["group_filter"] = None
+            state["refilter"]()
+            state["force_refresh"] = True
         elif state["account_filter_mode"]:
             state["account_filter_mode"] = False
             state["account_filter"] = None
@@ -83,6 +108,10 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["search_query"] = ""
             state["search_cursor"] = 0
             state["refilter"]()
+        elif state.get("group_filter") is not None:
+            state["group_filter"] = None
+            state["refilter"]()
+            state["force_refresh"] = True
         elif state["account_filter"] is not None:
             state["account_filter"] = None
             state["refilter"]()
@@ -90,6 +119,12 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             return True
     elif key == ord("f"):
         state["account_filter_mode"] = not state["account_filter_mode"]
+        if state["account_filter_mode"]:
+            state["group_filter_mode"] = False
+    elif key == ord("g"):
+        state["group_filter_mode"] = not state.get("group_filter_mode", False)
+        if state["group_filter_mode"]:
+            state["account_filter_mode"] = False
     elif key == ord("/"):
         state["search_active"] = True
         state["search_query"] = ""
@@ -139,6 +174,7 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
                 "flags": cfg_entry.get("flags", ""),
                 "pw": pw_val if pw_val else "none",
                 "env": cfg_entry.get("env", ""),
+                "group": cfg_entry.get("group", ""),
             }
             state["new_active"] = 0
             state["new_cursor"] = len(state["new_fields"]["title"])
@@ -229,6 +265,37 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         state["mode"] = "actions"
         state["actions_selected"] = 0
         state["msg_frames"] = 18
+    elif key == ord("z") and state["filtered"]:
+        sess = state["filtered"][state["selected"]]
+        group = sess.get("group", "") or "(ungrouped)"
+        collapsed = state.get("collapsed_groups", set())
+        if group in collapsed:
+            collapsed.discard(group)
+        else:
+            collapsed.add(group)
+            # Move selected to nearest visible session if current is now hidden
+            visible = [
+                i
+                for i, s in enumerate(state["filtered"])
+                if (s.get("group", "") or "(ungrouped)") not in collapsed
+            ]
+            if visible:
+                # Find closest visible index
+                best = min(visible, key=lambda i: abs(i - state["selected"]))
+                state["selected"] = best
+        state["collapsed_groups"] = collapsed
+    elif key == ord("*") and state["filtered"] and not state.get("group_filter_mode"):
+        sess = state["filtered"][state["selected"]]
+        group = sess.get("group", "") or "(ungrouped)"
+        group_tids = {
+            s["tab_id"]
+            for s in state["filtered"]
+            if (s.get("group", "") or "(ungrouped)") == group
+        }
+        if group_tids <= state["marked"]:
+            state["marked"] -= group_tids
+        else:
+            state["marked"] |= group_tids
     elif key == ord("s"):
         state["mode"] = "sort_pick"
         state["sort_selected"] = state["sort_modes"].index(state["sort_mode"])

@@ -12,7 +12,12 @@ from cc_dashboard.remote.activity import (
 )
 from cc_dashboard.remote.command import get_all_kitty_sockets, kitty_cmd
 from cc_dashboard.remote.git_ops import _get_git_info
-from cc_dashboard.remote.shared import _MANAGED_TITLE_RE, _detect_state, _strip_icons
+from cc_dashboard.remote.shared import (
+    _MANAGED_TITLE_RE,
+    _detect_state,
+    _strip_icons,
+    _strip_override_marker,
+)
 
 
 def _is_claude_process(cmdline):
@@ -116,8 +121,19 @@ def query_sessions(socket, managed_only=True):
             cc_env = user_vars.get("cc_env", "")
             cc_config_dir = user_vars.get("cc_config_dir", "")
             cc_color = user_vars.get("cc_color", "")
+            cc_group = user_vars.get("cc_group", "")
 
             title = _strip_icons(tab.get("title", ""))
+
+            # Fallback: enrich group from config when user var is missing
+            if not cc_group:
+                cfg_entry = _cfg._find_config_session(title)
+                if cfg_entry is None:
+                    cfg_entry = _cfg._find_config_session(
+                        _strip_override_marker(title)
+                    )
+                if cfg_entry:
+                    cc_group = cfg_entry.get("group", "")
             cc_notes = read_notes(title)
             icon_state = _detect_state(tab_title)
             tab_id = tab.get("id", 0)
@@ -134,6 +150,7 @@ def query_sessions(socket, managed_only=True):
                     "cc_flags": cc_flags,
                     "cc_pw": cc_pw,
                     "cc_env": cc_env,
+                    "group": cc_group,
                     "cc_notes": cc_notes,
                     "cc_color": cc_color,
                     "git": git_info,

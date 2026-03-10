@@ -66,8 +66,8 @@ cmd_restart() {
         exit 1
     fi
 
-    local title account dir live_flags live_pw live_env
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_group
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
     SOCKET="$source_socket"
 
     kitty @ --to "$SOCKET" close-tab --match "id:$_TARGET_TAB_ID"
@@ -82,7 +82,7 @@ cmd_restart() {
     local cfg_flags cfg_pw cfg_env
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
-    launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"
+    launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"
 }
 
 cmd_clone() {
@@ -117,8 +117,8 @@ cmd_clone() {
         exit 1
     fi
 
-    local title account dir live_flags live_pw live_env
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_group
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
     SOCKET="$source_socket"
 
     local base_title clone_title number
@@ -140,7 +140,7 @@ cmd_clone() {
     local cfg_flags cfg_pw cfg_env
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
-    if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"; then
+    if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
         if [[ -f "$CONFIG_FILE" ]]; then
             local conf_line="$clone_title | $dir | $account"
             if [[ -n "$cfg_flags" ]]; then
@@ -223,8 +223,8 @@ cmd_move() {
         exit 1
     fi
 
-    local title account dir live_flags live_pw live_env
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_group
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
 
     kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"
     echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..."
@@ -239,6 +239,6 @@ cmd_move() {
     local cfg_flags cfg_pw cfg_env
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
-    launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env"
+    launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"
     echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE."
 }

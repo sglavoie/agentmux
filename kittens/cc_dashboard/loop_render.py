@@ -22,6 +22,8 @@ from cc_dashboard.views import (
     draw_detail_pane,
     draw_dir_dropdown,
     draw_filter_bar,
+    draw_group_filter_bar,
+    draw_group_picker,
     draw_footer,
     draw_hooks_add_form,
     draw_hooks_delete_confirm,
@@ -80,6 +82,9 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             detail_visible=detail_visible,
             sort_label=SORT_LABELS[state["sort_mode"]],
             marked=state["marked"],
+            collapsed_groups=state.get("collapsed_groups", set()),
+            sort_mode=state["sort_mode"],
+            group_filter=state.get("group_filter"),
         )
         if detail_visible:
             detail_y = rows - 1 - DETAIL_PANE_HEIGHT
@@ -110,6 +115,28 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
                 curses.color_pair(CP_NORMAL),
             )
             draw_footer(stdscr, "filter")
+        if state.get("group_filter") is not None and not state.get("group_filter_mode"):
+            draw_group_filter_bar(
+                stdscr,
+                state["sessions"],
+                state.get("group_filter"),
+                False,
+            )
+        if state.get("group_filter_mode"):
+            draw_group_picker(
+                stdscr,
+                state["sessions"],
+                state.get("group_filter"),
+            )
+            rows_now, cols_now = stdscr.getmaxyx()
+            safe_addstr(
+                stdscr,
+                rows_now - 1,
+                0,
+                " " * (cols_now - 1),
+                curses.color_pair(CP_NORMAL),
+            )
+            draw_footer(stdscr, "group_filter")
 
         if mode == "confirm" and filtered:
             draw_confirm_prompt(stdscr, filtered[selected], "Close")

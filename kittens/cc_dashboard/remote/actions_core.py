@@ -242,6 +242,7 @@ def do_launch(
     config_dir_override=None,
     env_vars="",
     color_override="",
+    group="",
 ):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
@@ -277,6 +278,8 @@ def do_launch(
         f"cc_pw={pw_override}",
         "--var",
         f"cc_env={env_vars}",
+        "--var",
+        f"cc_group={group}",
     ]
 
     if color_override:

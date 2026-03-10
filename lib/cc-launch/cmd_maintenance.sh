@@ -72,10 +72,11 @@ cmd_list() {
 						else "idle"
 						end
 					),
-					instance: $inst_label
+					instance: $inst_label,
+				group: ([$tab.windows[] | .user_vars.cc_group // empty | select(. != "")] | if length > 0 then .[0] else "" end)
 				}
 			] | .[] |
-			[(.index | tostring), (.tab_id | tostring), .title, .account, .dir, .status, .instance] |
+			[(.index | tostring), (.tab_id | tostring), .title, .account, .dir, .status, .instance, .group] |
 			@tsv
 		')"
         if [[ -n "$inst_rows" ]]; then
@@ -95,14 +96,15 @@ cmd_list() {
 
     local header_mk=" " header_idx="Index" header_tab_id="TabID" header_title="Title"
     local header_account="Account" header_dir="Directory" header_status="Status"
-    local header_inst="Instance"
+    local header_inst="Instance" header_group="Group"
     local max_mk=2 w1=${#header_idx} w2=${#header_tab_id} w3=${#header_title} w4=${#header_account} w5=${#header_dir} w6=${#header_status}
-    local w7=${#header_inst}
+    local w7=${#header_inst} w8=${#header_group}
+    local has_groups=false
 
     local -a rows=()
-    while IFS=$'\t' read -r row_idx tab_id title account dir status instance; do
+    while IFS=$'\t' read -r row_idx tab_id title account dir status instance group; do
         dir="$(shorten_path "$dir")"
-        rows+=("$row_idx"$'\t'"$tab_id"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status"$'\t'"$instance")
+        rows+=("$row_idx"$'\t'"$tab_id"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status"$'\t'"$instance"$'\t'"$group")
         ((${#row_idx} > w1)) && w1=${#row_idx}
         ((${#tab_id} > w2)) && w2=${#tab_id}
         ((${#title} > w3)) && w3=${#title}
@@ -110,16 +112,28 @@ cmd_list() {
         ((${#dir} > w5)) && w5=${#dir}
         ((${#status} > w6)) && w6=${#status}
         ((${#instance} > w7)) && w7=${#instance}
+        if [[ -n "$group" ]]; then
+            has_groups=true
+            ((${#group} > w8)) && w8=${#group}
+        fi
     done <<<"$table"
 
-    printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %-${w7}s  %-${w5}s  %-${w6}s%s\n" \
-        "$BOLD" "$header_mk" "$header_idx" "$header_tab_id" "$header_title" "$header_account" "$header_inst" "$header_dir" "$header_status" "$RESET"
-    printf "%s%s%s\n" "$DIM" \
-        "$(repeat_char '─' $((max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w4 + 2 + w7 + 2 + w5 + 2 + w6)))" \
-        "$RESET"
+    if [[ "$has_groups" == "true" ]]; then
+        printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %-${w8}s  %-${w7}s  %-${w5}s  %-${w6}s%s\n" \
+            "$BOLD" "$header_mk" "$header_idx" "$header_tab_id" "$header_title" "$header_account" "$header_group" "$header_inst" "$header_dir" "$header_status" "$RESET"
+        printf "%s%s%s\n" "$DIM" \
+            "$(repeat_char '─' $((max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w4 + 2 + w8 + 2 + w7 + 2 + w5 + 2 + w6)))" \
+            "$RESET"
+    else
+        printf "%s%-${max_mk}s%-${w1}s  %-${w2}s  %-${w3}s  %-${w4}s  %-${w7}s  %-${w5}s  %-${w6}s%s\n" \
+            "$BOLD" "$header_mk" "$header_idx" "$header_tab_id" "$header_title" "$header_account" "$header_inst" "$header_dir" "$header_status" "$RESET"
+        printf "%s%s%s\n" "$DIM" \
+            "$(repeat_char '─' $((max_mk + w1 + 2 + w2 + 2 + w3 + 2 + w4 + 2 + w7 + 2 + w5 + 2 + w6)))" \
+            "$RESET"
+    fi
 
     for row in "${rows[@]}"; do
-        IFS=$'\t' read -r row_idx tab_id title account dir status instance <<<"$row"
+        IFS=$'\t' read -r row_idx tab_id title account dir status instance group <<<"$row"
 
         local local_mk=" "
         if [[ "$status" == "focused" ]]; then
@@ -140,8 +154,13 @@ cmd_list() {
             esac
         fi
 
-        printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$row_idx")))s  %-$((w2 + $(extra_bytes "$tab_id")))s  %-$((w3 + $(extra_bytes "$title")))s  %-$((w4 + $(extra_bytes "$account")))s  %-$((w7 + $(extra_bytes "$instance")))s  %-$((w5 + $(extra_bytes "$dir")))s  %s%s\n" \
-            "$local_color" "$local_mk" "$row_idx" "$tab_id" "$title" "$account" "$instance" "$dir" "$local_status" "$local_reset"
+        if [[ "$has_groups" == "true" ]]; then
+            printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$row_idx")))s  %-$((w2 + $(extra_bytes "$tab_id")))s  %-$((w3 + $(extra_bytes "$title")))s  %-$((w4 + $(extra_bytes "$account")))s  %-$((w8 + $(extra_bytes "$group")))s  %-$((w7 + $(extra_bytes "$instance")))s  %-$((w5 + $(extra_bytes "$dir")))s  %s%s\n" \
+                "$local_color" "$local_mk" "$row_idx" "$tab_id" "$title" "$account" "$group" "$instance" "$dir" "$local_status" "$local_reset"
+        else
+            printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$row_idx")))s  %-$((w2 + $(extra_bytes "$tab_id")))s  %-$((w3 + $(extra_bytes "$title")))s  %-$((w4 + $(extra_bytes "$account")))s  %-$((w7 + $(extra_bytes "$instance")))s  %-$((w5 + $(extra_bytes "$dir")))s  %s%s\n" \
+                "$local_color" "$local_mk" "$row_idx" "$tab_id" "$title" "$account" "$instance" "$dir" "$local_status" "$local_reset"
+        fi
     done
 }
 
@@ -366,9 +385,13 @@ cmd_save() {
 				env: (
 					[.windows[] | .user_vars.cc_env // empty | select(. != "")] |
 					if length > 0 then .[0] else "" end
+				),
+				group: (
+					[.windows[] | .user_vars.cc_group // empty | select(. != "")] |
+					if length > 0 then .[0] else "" end
 				)
 			}
-		] | .[] | [.title, .dir, .account, .flags, .pw, .env] | @tsv
+		] | .[] | [.title, .dir, .account, .flags, .pw, .env, .group] | @tsv
 	')"
 
     if [[ -z "$sessions" ]]; then
@@ -401,7 +424,7 @@ _save_sessions_toml() {
     # Build a JSON array from the TSV session data and pipe to toml-helper.
     local json_array="["
     local first=true
-    while IFS=$'\t' read -r title dir account flags pw env_vars; do
+    while IFS=$'\t' read -r title dir account flags pw env_vars group; do
         [[ -z "$title" ]] && continue
         dir="${dir/#$HOME/\~}"
         [[ "$first" == "true" ]] || json_array+=","
@@ -409,7 +432,8 @@ _save_sessions_toml() {
         json_array+="$(jq -nc \
             --arg t "$title" --arg d "$dir" --arg a "$account" \
             --arg f "$flags" --arg p "$pw" --arg e "$env_vars" \
-            '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e}')"
+            --arg g "$group" \
+            '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
     done <<<"$sessions"
     json_array+="]"
 

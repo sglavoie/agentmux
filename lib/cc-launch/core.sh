@@ -85,9 +85,13 @@ tab_metadata_by_id() {
 				env: (
 					[.windows[] | .user_vars.cc_env // empty | select(. != "")] |
 					if length > 0 then .[0] else "" end
+				),
+				group: (
+					[.windows[] | .user_vars.cc_group // empty | select(. != "")] |
+					if length > 0 then .[0] else "" end
 				)
 			}
-		] | .[0] // empty | [.title, .account, .dir, .flags, .pw, .env] | @tsv
+		] | .[0] // empty | [.title, .account, .dir, .flags, .pw, .env, .group] | @tsv
 	'
 }
 
@@ -133,8 +137,8 @@ lookup_session_overrides() {
 
 _lookup_session_overrides_toml() {
     local lookup_title="$1"
-    local cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e
-    while IFS=$'\t' read -r cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e; do
+    local cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e cfg_g
+    while IFS=$'\t' read -r cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e cfg_g; do
         if [[ "$cfg_title" == "$lookup_title" ]]; then
             cfg_flags="$cfg_f"
             cfg_pw="$cfg_p"
@@ -152,6 +156,7 @@ launch_session() {
     local pw_override="${5:-}"
     local location_args="${6:-}"
     local env_vars="${7:-}"
+    local group="${8:-}"
 
     dir="$(expand_tilde "$dir")"
 
@@ -181,7 +186,7 @@ launch_session() {
 
     local shell_cmd="exec claude $effective_flags"
     # shellcheck disable=SC2086
-    kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
+    kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd"
 
     local retry
     for ((retry = 0; retry < 5; retry++)); do

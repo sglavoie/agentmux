@@ -57,6 +57,7 @@ def _session_fingerprint(sessions):
             (s.get("activity") or {}).get("active_subagents"),
             (s.get("git") or {}).get("branch"),
             (s.get("git") or {}).get("dirty"),
+            s.get("group", ""),
         )
         for s in sessions
     )
@@ -70,6 +71,7 @@ def _make_new_fields(default_account, default_pw, multi_instance, home_instance_
         "flags": "",
         "pw": default_pw,
         "env": "",
+        "group": "",
         "save": "yes",
     }
     if multi_instance:
@@ -91,12 +93,16 @@ def _reload_all_config():
     return default_account, default_pw, refresh_interval, refresh_threshold
 
 
-def _refilter(sessions, search_query, account_filter, sort_mode, filtered, selected):
+def _refilter(
+    sessions, search_query, account_filter, sort_mode, filtered, selected,
+    group_filter=None,
+):
     old_tab_id = (
         filtered[selected]["tab_id"] if filtered and selected < len(filtered) else None
     )
     new_filtered = _apply_sort(
-        _apply_filters(sessions, search_query, account_filter), sort_mode
+        _apply_filters(sessions, search_query, account_filter, group_filter),
+        sort_mode,
     )
     new_selected = selected
     if old_tab_id is not None:

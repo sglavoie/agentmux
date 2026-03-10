@@ -62,6 +62,7 @@ def handle_override_mode(key, state):
                 config_dir_override=cdo,
                 env_vars=entry.get("env", ""),
                 color_override=entry.get("cc_color", ""),
+                group=entry.get("group", ""),
             )
             state["should_exit"] = True
             return True
@@ -266,6 +267,7 @@ def handle_worktree_mode(key, state):
                 loc = state["compute_insert_location"](
                     target_socket, sess["account"], new_title
                 )
+                sess_group = sess.get("group", "")
                 state["do_launch"](
                     target_socket,
                     new_title,
@@ -276,6 +278,7 @@ def handle_worktree_mode(key, state):
                     location=loc,
                     env_vars=env_val,
                     color_override=sess.get("cc_color", ""),
+                    group=sess_group,
                 )
                 state["cfg"].append_session(
                     new_title,
@@ -284,6 +287,7 @@ def handle_worktree_mode(key, state):
                     flags,
                     pw_val,
                     env=env_val,
+                    group=sess_group,
                 )
                 state["sessions"] = state["query_all_sessions"](
                     managed_only=(not state["show_all"])
@@ -340,6 +344,7 @@ def handle_clone_mode(key, state):
             loc = state["compute_insert_location"](
                 target_socket, sess["account"], title
             )
+            clone_group = sess.get("group", "")
             state["do_launch"](
                 target_socket,
                 title,
@@ -350,6 +355,7 @@ def handle_clone_mode(key, state):
                 location=loc,
                 env_vars=env_val,
                 color_override=sess.get("cc_color", ""),
+                group=clone_group,
             )
             state["cfg"].append_session(
                 title,
@@ -358,6 +364,7 @@ def handle_clone_mode(key, state):
                 flags,
                 pw_val,
                 env=env_val,
+                group=clone_group,
             )
             state["sessions"] = state["query_all_sessions"](
                 managed_only=(not state["show_all"])
@@ -398,9 +405,9 @@ def handle_new_mode(stdscr, key, state):
         return False
 
     if state["form_mode"] == "edit":
-        field_keys = ["title", "dir", "account", "flags", "pw", "env"]
+        field_keys = ["title", "dir", "account", "flags", "pw", "env", "group"]
     else:
-        field_keys = ["title", "dir", "account", "flags", "pw", "env", "save"]
+        field_keys = ["title", "dir", "account", "flags", "pw", "env", "group", "save"]
         if state["multi_instance"]:
             field_keys.insert(-1, "instance")
 
@@ -548,6 +555,7 @@ def handle_new_mode(stdscr, key, state):
                     state["msg_frames"] = 20
                 else:
                     edit_env = state["new_fields"].get("env", "")
+                    edit_group = state["new_fields"].get("group", "")
                     state["cfg"].update_session(
                         state["edit_original_title"],
                         t,
@@ -556,6 +564,7 @@ def handle_new_mode(stdscr, key, state):
                         fl,
                         pw_val,
                         env=edit_env,
+                        group=edit_group,
                     )
                     running_titles = {s["title"] for s in state["sessions"]}
                     stripped_running = {
@@ -575,6 +584,7 @@ def handle_new_mode(stdscr, key, state):
                     )
                 if t and d:
                     env_val = state["new_fields"].get("env", "").strip()
+                    group_val = state["new_fields"].get("group", "").strip()
                     loc = state["compute_insert_location"](target_socket, a, t)
                     state["do_launch"](
                         target_socket,
@@ -585,9 +595,12 @@ def handle_new_mode(stdscr, key, state):
                         pw_val,
                         location=loc,
                         env_vars=env_val,
+                        group=group_val,
                     )
                     if state["new_fields"].get("save") == "yes":
-                        state["cfg"].append_session(t, d, a, fl, pw_val, env=env_val)
+                        state["cfg"].append_session(
+                            t, d, a, fl, pw_val, env=env_val, group=group_val
+                        )
                     state["should_exit"] = True
                     return True
                 state["msg"] = "Title and directory are required"
@@ -777,6 +790,7 @@ def handle_pick_mode(key, state):
                     entry["pw"],
                     location=loc,
                     env_vars=entry.get("env", ""),
+                    group=entry.get("group", ""),
                 )
         else:
             entry = state["pick_filtered"][state["pick_selected"]]
@@ -792,6 +806,7 @@ def handle_pick_mode(key, state):
                 entry["pw"],
                 location=loc,
                 env_vars=entry.get("env", ""),
+                group=entry.get("group", ""),
             )
         state["should_exit"] = True
 

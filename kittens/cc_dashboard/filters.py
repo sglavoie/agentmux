@@ -2,7 +2,7 @@
 
 
 def _filter_sessions(sessions, query):
-    """Return sessions matching query against title, cwd, or account."""
+    """Return sessions matching query against title, cwd, account, or group."""
     if not query:
         return sessions
     q = query.lower()
@@ -13,6 +13,7 @@ def _filter_sessions(sessions, query):
         or q in s["cwd"].lower()
         or q in s["account"].lower()
         or q in ((s.get("git") or {}).get("branch", "")).lower()
+        or q in s.get("group", "").lower()
     ]
 
 
@@ -26,9 +27,24 @@ def _filter_by_accounts(sessions, enabled_accounts):
     return [s for s in sessions if s["account"] in enabled_accounts]
 
 
-def _apply_filters(sessions, search_query, account_filter):
-    """Chain account filtering then text search."""
+def _filter_by_groups(sessions, enabled_groups):
+    """Return sessions filtered to only those whose group is in enabled_groups.
+
+    When enabled_groups is None, returns the full list (no filtering).
+    """
+    if enabled_groups is None:
+        return sessions
+    return [
+        s
+        for s in sessions
+        if (s.get("group", "") or "(ungrouped)") in enabled_groups
+    ]
+
+
+def _apply_filters(sessions, search_query, account_filter, group_filter=None):
+    """Chain account filtering, group filtering, then text search."""
     result = _filter_by_accounts(sessions, account_filter)
+    result = _filter_by_groups(result, group_filter)
     return _filter_sessions(result, search_query)
 
 
@@ -56,12 +72,13 @@ def _sort_pick_entries(entries, running_titles):
 
 # ── Sort modes ──────────────────────────────────────────────────────────────
 
-SORT_MODES = ("default", "name", "account", "status", "idle", "activity")
+SORT_MODES = ("default", "name", "account", "group", "status", "idle", "activity")
 
 SORT_LABELS = {
     "default": "",
     "name": "Name",
     "account": "Account",
+    "group": "Group",
     "status": "Status",
     "idle": "Idle",
     "activity": "Activity",
@@ -86,6 +103,14 @@ def _apply_sort(sessions, sort_mode):
     if sort_mode == "account":
         return sorted(
             sessions, key=lambda s: (s["account"].lower(), s["title"].lower())
+        )
+    if sort_mode == "group":
+        return sorted(
+            sessions,
+            key=lambda s: (
+                (s.get("group", "") or "zzz").lower(),
+                s["title"].lower(),
+            ),
         )
     if sort_mode == "status":
         return sorted(sessions, key=lambda s: _STATUS_PRIORITY.get(s["status"], 99))

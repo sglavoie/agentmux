@@ -28,7 +28,15 @@ from cc_dashboard.views_shared import draw_footer
 
 
 def draw_list_view(
-    stdscr, sessions, selected, detail_visible=False, sort_label="", marked=None
+    stdscr,
+    sessions,
+    selected,
+    detail_visible=False,
+    sort_label="",
+    marked=None,
+    collapsed_groups=None,
+    sort_mode="default",
+    group_filter=None,
 ):
     """Draw the main session list with header, rows, and footer."""
     rows, cols = stdscr.getmaxyx()
@@ -49,6 +57,12 @@ def draw_list_view(
         if badge_x + len(indicator) < cols:
             safe_addstr(stdscr, 1, badge_x, indicator, curses.color_pair(CP_DIM))
             badge_x += len(indicator)
+    if group_filter:
+        groups_str = ",".join(sorted(group_filter))
+        group_badge = f" [Group: {groups_str}]"
+        if badge_x + len(group_badge) < cols:
+            safe_addstr(stdscr, 1, badge_x, group_badge, curses.color_pair(CP_DIM))
+            badge_x += len(group_badge)
     if marked:
         mark_badge = f" [{len(marked)} marked]"
         if badge_x + len(mark_badge) < cols:
@@ -99,12 +113,59 @@ def draw_list_view(
     if detail_visible:
         avail -= DETAIL_PANE_HEIGHT
     avail = max(1, avail)
-    if len(sessions) <= avail:
+
+    # Build visual row list: headers + sessions for group sort, flat otherwise
+    show_groups = sort_mode == "group"
+    visual_rows: list[tuple] = []
+    if show_groups:
+        i = 0
+        while i < len(sessions):
+            g = sessions[i].get("group", "") or "(ungrouped)"
+            j = i
+            while (
+                j < len(sessions)
+                and (sessions[j].get("group", "") or "(ungrouped)") == g
+            ):
+                j += 1
+            count = j - i
+            is_collapsed = collapsed_groups is not None and g in collapsed_groups
+            visual_rows.append(("header", g, count, is_collapsed))
+            if not is_collapsed:
+                for k in range(i, j):
+                    visual_rows.append(("session", k))
+            i = j
+    else:
+        for i in range(len(sessions)):
+            visual_rows.append(("session", i))
+
+    # Find selected entry in visual rows for scrolling
+    sel_vi = 0
+    for vi, row in enumerate(visual_rows):
+        if row[0] == "session" and row[1] == selected:
+            sel_vi = vi
+            break
+
+    total_visual = len(visual_rows)
+    if total_visual <= avail:
         offset = 0
     else:
-        offset = max(0, min(selected - avail // 2, len(sessions) - avail))
+        offset = max(0, min(sel_vi - avail // 2, total_visual - avail))
 
-    for vi, si in enumerate(range(offset, min(offset + avail, len(sessions)))):
+    for vi in range(offset, min(offset + avail, total_visual)):
+        row = visual_rows[vi]
+        y = 5 + (vi - offset)
+
+        if row[0] == "header":
+            _, group_name, count, is_collapsed = row
+            prefix = "[+]" if is_collapsed else "[-]"
+            header_text = f"  {prefix} {group_name} ({count}) "
+            remaining = cols - len(header_text) - 2
+            if remaining > 0:
+                header_text += "-" * remaining
+            safe_addstr(stdscr, y, 1, header_text, curses.color_pair(CP_DIM))
+            continue
+
+        si = row[1]
         s = sessions[si]
         sel = si == selected
         is_marked = marked and s["tab_id"] in marked
@@ -158,7 +219,6 @@ def draw_list_view(
         row_attr = curses.color_pair(cp)
         if sel:
             row_attr |= curses.A_BOLD
-        y = 5 + vi
         safe_addstr(stdscr, y, 1, line, row_attr)
 
         status_x = 1 + len(line)
@@ -450,6 +510,38 @@ def draw_filter_bar(stdscr, account_filter, account_filter_mode):
             break
 
 
+def draw_group_filter_bar(stdscr, sessions, group_filter, group_filter_mode):
+    """Draw the group filter bar on row 3 (below account filter bar)."""
+    _, cols = stdscr.getmaxyx()
+    groups = sorted({s.get("group", "") or "(ungrouped)" for s in sessions})
+
+    if group_filter_mode:
+        prefix = "Groups: "
+        prefix_attr = curses.color_pair(CP_WARN)
+    else:
+        prefix = "Groups: "
+        prefix_attr = curses.color_pair(CP_DIM)
+
+    row = 3
+    # Clear the entire row to prevent bleed-through from the table header
+    safe_addstr(stdscr, row, 0, " " * (cols - 1), curses.color_pair(CP_DIM))
+    safe_addstr(stdscr, row, 2, prefix, prefix_attr)
+    x = 2 + len(prefix)
+
+    for i, name in enumerate(groups):
+        if i >= 9:
+            break
+        label = f"{i + 1}:{name}"
+        enabled = group_filter is None or name in group_filter
+        attr = curses.color_pair(CP_DIM)
+        if enabled:
+            attr = curses.color_pair(CP_NORMAL) | curses.A_BOLD
+        safe_addstr(stdscr, row, x, label, attr)
+        x += len(label) + 2
+        if x >= cols - 2:
+            break
+
+
 def draw_new_form(
     stdscr,
     fields,
@@ -470,8 +562,10 @@ def draw_new_form(
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
-    labels = ["Title:", "Directory:", "Account:", "Flags:", "Split:", "Env vars:"]
-    field_keys = ["title", "dir", "account", "flags", "pw", "env"]
+    labels = [
+        "Title:", "Directory:", "Account:", "Flags:", "Split:", "Env vars:", "Group:",
+    ]
+    field_keys = ["title", "dir", "account", "flags", "pw", "env", "group"]
     cycle_fields = {"account", "pw"}
 
     if "save" in fields:

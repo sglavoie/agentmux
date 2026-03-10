@@ -3,7 +3,7 @@
 
 Commands:
     read-accounts <file>   Output TSV: name, config_dir, color
-    read-sessions <file>   Output TSV: title, dir, account, flags, pw, env
+    read-sessions <file>   Output TSV: title, dir, account, flags, pw, env, group
     read-defaults <file>   Output TSV: key, value
     write-sessions <file>  Read JSON from stdin, write sessions.toml
 """
@@ -28,7 +28,7 @@ def cmd_read_sessions(path):
     for s in toml_reader.read_sessions(path):
         print(
             f"{s['title']}\t{s['dir']}\t{s['account']}"
-            f"\t{s['flags']}\t{s['pw']}\t{s['env']}"
+            f"\t{s['flags']}\t{s['pw']}\t{s['env']}\t{s['group']}"
         )
 
 
@@ -74,6 +74,8 @@ def cmd_write_sessions(path):
             d["project_window"] = entry["pw"]
         if entry.get("env"):
             d["env"] = entry["env"]
+        if entry.get("group"):
+            d["group"] = entry["group"]
         sessions.append(d)
 
     with open(path, "w") as f:
