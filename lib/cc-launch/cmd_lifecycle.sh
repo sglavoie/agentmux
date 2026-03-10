@@ -3,6 +3,87 @@
 [[ -n "${_CC_LAUNCH_CMD_LIFECYCLE_LOADED:-}" ]] && return 0
 _CC_LAUNCH_CMD_LIFECYCLE_LOADED=1
 
+cmd_close_group() {
+    if [[ -z "$_TARGET_GROUP" ]]; then
+        echo "Error: --group requires a NAME argument." >&2
+        exit 1
+    fi
+
+    discover_all_sockets
+    if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+        echo "Error: No active Kitty instances found." >&2
+        exit 1
+    fi
+
+    local matches=""
+    local idx
+    for ((idx = 0; idx < ${#_INSTANCE_SOCKETS[@]}; idx++)); do
+        local inst_socket="${_INSTANCE_SOCKETS[$idx]}"
+        local inst_label="${_INSTANCE_LABELS[$idx]}"
+        local ls_json
+        ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+        local inst_matches
+        inst_matches="$(echo "$ls_json" | jq -r --arg group "$_TARGET_GROUP" '
+            [.[] | .tabs[] |
+                select([.windows[] | .user_vars.cc_group // empty
+                        | select(. == $group)] | length > 0) |
+                { title: .title, id: .id }
+            ] | .[] | [.title, (.id | tostring)] | @tsv')"
+
+        if [[ -n "$inst_matches" ]]; then
+            while IFS=$'\t' read -r title tab_id; do
+                [[ -z "$title" ]] && continue
+                [[ -n "$matches" ]] && matches+=$'\n'
+                matches+="${title}"$'\t'"${tab_id}"$'\t'"${inst_socket}"$'\t'"${inst_label}"
+            done <<<"$inst_matches"
+        fi
+    done
+
+    if [[ -z "$matches" ]]; then
+        echo "No running sessions found in group '$_TARGET_GROUP'."
+        return
+    fi
+
+    echo "Sessions in group '$_TARGET_GROUP':"
+    echo ""
+    local multi_instance=false
+    [[ ${#_INSTANCE_SOCKETS[@]} -gt 1 ]] && multi_instance=true
+    while IFS=$'\t' read -r title tab_id sock inst_label; do
+        if [[ "$multi_instance" == "true" ]]; then
+            echo "  $title (tab id: $tab_id, instance: $inst_label)"
+        else
+            echo "  $title (tab id: $tab_id)"
+        fi
+    done <<<"$matches"
+    echo ""
+
+    local confirmed=false
+    if [[ "$HAS_GUM" == "true" ]]; then
+        if gum confirm "Close all sessions in group '$_TARGET_GROUP'?" \
+            --affirmative "Yes, close them" --negative "Cancel"; then
+            confirmed=true
+        fi
+    else
+        read -rp "Close all sessions in group '$_TARGET_GROUP'? [y/N] " answer
+        if [[ "$answer" =~ ^[Yy] ]]; then
+            confirmed=true
+        fi
+    fi
+
+    if [[ "$confirmed" == "true" ]]; then
+        local closed=0
+        while IFS=$'\t' read -r title tab_id sock inst_label; do
+            kitty @ --to "$sock" close-tab --match "id:$tab_id"
+            echo "Closed: $title"
+            closed=$((closed + 1))
+        done <<<"$matches"
+        echo "Closed $closed session(s) in group '$_TARGET_GROUP'."
+    else
+        echo "No sessions closed."
+    fi
+}
+
 cmd_close() {
     if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
         echo "Error: --close requires --instance LABEL and --tab-id ID." >&2

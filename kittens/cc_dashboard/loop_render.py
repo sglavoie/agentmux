@@ -25,6 +25,7 @@ from cc_dashboard.views import (
     draw_dir_dropdown,
     draw_filter_bar,
     draw_footer,
+    draw_group_actions,
     draw_group_filter_bar,
     draw_group_picker,
     draw_hooks_add_form,
@@ -51,7 +52,6 @@ from cc_dashboard.views import (
     draw_status_message,
     draw_worktree_input,
 )
-
 
 MIN_COLS = 40
 MIN_ROWS = 10
@@ -96,6 +96,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         "sort_pick",
         "color_picker",
         "batch_group",
+        "group_actions",
     ) or (mode == "override" and state["override_source"] == "list"):
         rows, _cols = stdscr.getmaxyx()
         filtered = state["filtered"]
@@ -103,7 +104,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         OVERLAY_MODES = {
             "actions", "restart_options", "rename", "worktree", "clone",
             "move_picker", "config_pick", "config_action", "sort_pick",
-            "color_picker", "batch_group", "override",
+            "color_picker", "batch_group", "override", "group_actions",
             "confirm", "confirm_restart", "confirm_batch_close",
             "confirm_batch_restart", "confirm_batch_clone", "confirm_save",
         }
@@ -307,6 +308,9 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
                 state["restart_options_cursor"],
                 multi_instance=state["multi_instance"],
             )
+        elif mode == "group_actions":
+            draw_group_actions(stdscr, state)
+            draw_footer(stdscr, "group_actions")
     elif mode == "config_show":
         draw_config_show(
             stdscr,
@@ -355,6 +359,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             state["pick_selected"],
             state["pick_running_count"],
             marked=state.get("pick_marked", set()),
+            group_filter=state.get("pick_group_filter"),
         )
         if state["msg"] and state["msg_frames"] > 0:
             draw_status_message(stdscr, state["msg"])
@@ -375,6 +380,15 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
                 state["pick_search_active"],
                 len(state["pick_filtered"]),
             )
+        if state.get("pick_group_filter_mode"):
+            from cc_dashboard.views_overlays_pickers import draw_pick_group_picker
+
+            draw_pick_group_picker(
+                stdscr,
+                state["cfg"]._sessions,
+                state.get("pick_group_filter"),
+            )
+            draw_footer(stdscr, "pick_group_filter")
         if mode == "override" and state["pick_filtered"]:
             draw_override_picker(
                 stdscr,

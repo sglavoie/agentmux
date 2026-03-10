@@ -166,6 +166,7 @@ _SEARCH_SUBMODE_IMPLICIT_KEYS = {
 # documented in the "new_dir_browse" footer hints rather than "new".
 _MODE_EXTRA_IGNORE: dict[str, set[str]] = {
     "list": {str(d) for d in range(1, 10)},
+    "pick": {str(d) for d in range(1, 10)},
     "new": {"."},
 }
 
@@ -229,6 +230,7 @@ _FUNCTION_MODES: dict[str, list[str]] = {
     "handle_peek_mode": ["peek"],
     "handle_prefs_mode": ["prefs"],
     "handle_prefs_array_mode": ["prefs_array"],
+    "handle_group_actions_mode": ["group_actions"],
 }
 
 # Footer hint mode -> code mode name (when they differ)
@@ -242,6 +244,7 @@ _MODE_NAME_MAP: dict[str, str] = {
 _EMBEDDED_SUBMODES: set[str] = {
     "filter",  # in handle_list_mode via account_filter_mode
     "group_filter",  # in handle_list_mode via group_filter_mode
+    "pick_group_filter",  # in handle_pick_mode via pick_group_filter_mode
     "new_dir_browse",  # in handle_new_mode via dir_browse_active
     "peek_search",  # in handle_peek_mode via peek_search_active
     "actlog_search",  # in handle_actlog_mode via actlog_search_active

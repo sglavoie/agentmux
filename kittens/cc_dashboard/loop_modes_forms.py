@@ -4,7 +4,11 @@ import curses
 import os
 import time
 
-from cc_dashboard.filters import _filter_config_sessions, _sort_pick_entries
+from cc_dashboard.filters import (
+    _filter_config_sessions,
+    _filter_pick_by_groups,
+    _sort_pick_entries,
+)
 from cc_dashboard.views import (
     _cycle_account,
     _cycle_instance,
@@ -708,6 +712,20 @@ def handle_new_mode(stdscr, key, state):
     return True
 
 
+def _refilter_pick(state):
+    """Re-apply group filter and text search to rebuild pick_filtered."""
+    entries = list(state["cfg"]._sessions)
+    entries = _filter_pick_by_groups(entries, state.get("pick_group_filter"))
+    if state["pick_query"]:
+        entries = _filter_config_sessions(entries, state["pick_query"])
+    state["pick_filtered"], state["pick_running_count"] = _sort_pick_entries(
+        entries, state["pick_running"]
+    )
+    state["pick_selected"] = min(
+        state["pick_selected"], max(0, len(state["pick_filtered"]) - 1)
+    )
+
+
 def handle_pick_mode(key, state):
     """Handle key events for launch-from-config picker mode."""
     if state["mode"] != "pick":
@@ -718,12 +736,7 @@ def handle_pick_mode(key, state):
             state["pick_search_active"] = False
             state["pick_query"] = ""
             state["pick_cursor"] = 0
-            state["pick_filtered"], state["pick_running_count"] = _sort_pick_entries(
-                list(state["cfg"]._sessions), state["pick_running"]
-            )
-            state["pick_selected"] = min(
-                state["pick_selected"], max(0, len(state["pick_filtered"]) - 1)
-            )
+            _refilter_pick(state)
             return True
         if key in (10, 13, curses.KEY_ENTER):
             state["pick_search_active"] = False
@@ -745,15 +758,7 @@ def handle_pick_mode(key, state):
                     + state["pick_query"][state["pick_cursor"] :]
                 )
                 state["pick_cursor"] -= 1
-                state["pick_filtered"] = _filter_config_sessions(
-                    state["cfg"]._sessions, state["pick_query"]
-                )
-                state["pick_filtered"], state["pick_running_count"] = (
-                    _sort_pick_entries(state["pick_filtered"], state["pick_running"])
-                )
-                state["pick_selected"] = min(
-                    state["pick_selected"], max(0, len(state["pick_filtered"]) - 1)
-                )
+                _refilter_pick(state)
             return True
         if key == curses.KEY_LEFT:
             state["pick_cursor"] = max(0, state["pick_cursor"] - 1)
@@ -770,28 +775,42 @@ def handle_pick_mode(key, state):
                 + state["pick_query"][state["pick_cursor"] :]
             )
             state["pick_cursor"] += 1
-            state["pick_filtered"] = _filter_config_sessions(
-                state["cfg"]._sessions, state["pick_query"]
-            )
-            state["pick_filtered"], state["pick_running_count"] = _sort_pick_entries(
-                state["pick_filtered"], state["pick_running"]
-            )
-            state["pick_selected"] = min(
-                state["pick_selected"], max(0, len(state["pick_filtered"]) - 1)
-            )
+            _refilter_pick(state)
             return True
         return True
 
+    if state.get("pick_group_filter_mode") and ord("1") <= key <= ord("9"):
+        groups = sorted(
+            {s.get("group", "") or "(ungrouped)" for s in state["cfg"]._sessions}
+        )
+        idx = key - ord("1")
+        if idx < len(groups):
+            name = groups[idx]
+            pgf = state.get("pick_group_filter")
+            if pgf is None:
+                pgf = set()
+                state["pick_group_filter"] = pgf
+            if name in pgf:
+                pgf.discard(name)
+                if not pgf:
+                    state["pick_group_filter"] = None
+            else:
+                pgf.add(name)
+            _refilter_pick(state)
+        return True
+
     if key in (ord("q"), ord("Q"), 27):
-        if state["pick_query"] and key == 27:
+        if state.get("pick_group_filter_mode") and key == 27:
+            state["pick_group_filter_mode"] = False
+            state["pick_group_filter"] = None
+            _refilter_pick(state)
+        elif state["pick_query"] and key == 27:
             state["pick_query"] = ""
             state["pick_cursor"] = 0
-            state["pick_filtered"], state["pick_running_count"] = _sort_pick_entries(
-                list(state["cfg"]._sessions), state["pick_running"]
-            )
-            state["pick_selected"] = min(
-                state["pick_selected"], max(0, len(state["pick_filtered"]) - 1)
-            )
+            _refilter_pick(state)
+        elif state.get("pick_group_filter") is not None and key == 27:
+            state["pick_group_filter"] = None
+            _refilter_pick(state)
         else:
             state["mode"] = "list"
     elif key == ord("/"):
@@ -821,6 +840,20 @@ def handle_pick_mode(key, state):
         state["pick_target_instance"] = _cycle_instance(
             state["pick_target_instance"], state["instance_labels"]
         )
+    elif key == ord("g"):
+        groups = sorted(
+            {s.get("group", "") or "(ungrouped)" for s in state["cfg"]._sessions}
+        )
+        if len(groups) > 1:
+            state["pick_group_filter_mode"] = not state.get(
+                "pick_group_filter_mode", False
+            )
+            if not state["pick_group_filter_mode"]:
+                # Exiting filter mode — keep current filter active
+                pass
+        else:
+            state["msg"] = "Only one group in config"
+            state["msg_frames"] = 20
     elif key == ord("O") and state["pick_filtered"]:
         state["mode"] = "override"
         state["override_source"] = "pick"

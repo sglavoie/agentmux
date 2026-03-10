@@ -12,6 +12,7 @@ from cc_dashboard.loop_modes_dashboard import (
     handle_actions_mode,
     handle_color_picker_mode,
     handle_confirm_modes,
+    handle_group_actions_mode,
     handle_move_picker_mode,
     handle_restart_options_mode,
     handle_sort_pick_mode,
@@ -89,6 +90,10 @@ def dispatch_mode(
             "group_filter": state["group_filter"],
             "group_filter_mode": state["group_filter_mode"],
             "collapsed_groups": state["collapsed_groups"],
+            "ga_groups": state["ga_groups"],
+            "ga_selected": state["ga_selected"],
+            "ga_step": state["ga_step"],
+            "ga_action_selected": state["ga_action_selected"],
             "sort_mode": state["sort_mode"],
             "sort_modes": SORT_MODES,
             "sort_selected": state["sort_selected"],
@@ -647,6 +652,8 @@ def dispatch_mode(
             "pick_cursor": state["pick_cursor"],
             "pick_search_active": state["pick_search_active"],
             "pick_marked": state.get("pick_marked", set()),
+            "pick_group_filter": state.get("pick_group_filter"),
+            "pick_group_filter_mode": state.get("pick_group_filter_mode", False),
             "pick_target_instance": state["pick_target_instance"],
             "override_source": state["override_source"],
             "override_selected": state["override_selected"],
@@ -657,12 +664,38 @@ def dispatch_mode(
             "home_socket": state["home_socket"],
             "compute_insert_location": state["compute_insert_location"],
             "do_launch": state["do_launch"],
+            "msg": state["msg"],
+            "msg_frames": state["msg_frames"],
             "should_exit": False,
         }
         handle_pick_mode(key, pick_state)
         for k in pick_state:
             state[k] = pick_state[k]
         should_exit = pick_state["should_exit"]
+
+    elif mode == "group_actions":
+        ga_state: dict[str, Any] = {
+            "mode": mode,
+            "ga_groups": state["ga_groups"],
+            "ga_selected": state["ga_selected"],
+            "ga_step": state["ga_step"],
+            "ga_action_selected": state["ga_action_selected"],
+            "sessions": state["sessions"],
+            "cfg": state["cfg"],
+            "home_socket": state["home_socket"],
+            "show_all": state["show_all"],
+            "batch_targets": state["batch_targets"],
+            "compute_insert_location": state["compute_insert_location"],
+            "do_launch": state["do_launch"],
+            "reload_all_config": state["reload_all_config"],
+            "query_all_sessions": state["query_all_sessions"],
+            "refilter": state["refilter"],
+            "msg": state["msg"],
+            "msg_frames": state["msg_frames"],
+        }
+        handle_group_actions_mode(key, ga_state)
+        for k in ga_state:
+            state[k] = ga_state[k]
 
     elif mode == "delete":
         delete_state: dict[str, Any] = {

@@ -12,9 +12,11 @@ Usage:
 
 Commands:
 	(none)                          Interactively select sessions to launch (requires python3)
-	--all                           Launch all sessions defined in the config file
+	--all                           Launch all sessions defined in the config file.
+	                                Accepts --group NAME to launch only sessions in that group.
 	--add TITLE DIR [ACCOUNT [ENV]]  Launch a single ad-hoc session tab (account picker if omitted)
-	--close                         Close a tab by stable selector (requires --instance and --tab-id)
+	--close                         Close a tab by stable selector (requires --instance and --tab-id),
+	                                or close all tabs in a group (with --group NAME, no --instance/--tab-id).
 	--restart                       Restart a session by stable selector (requires --instance and --tab-id)
 	--clone                         Clone a session by stable selector (requires --instance and --tab-id)
 	--move                          Move a session to a different Kitty instance
@@ -30,6 +32,8 @@ Global options:
 	--instance LABEL    Target a specific Kitty instance by label (e.g. K:12345).
 						Use --sockets to list available instances.
 	--tab-id ID         Target tab id within the selected instance.
+	--group NAME        Filter by session group (for --all and --close).
+						Mutually exclusive with --tab-id.
 	--target-instance LABEL
 						Destination instance label for --move.
 
@@ -70,6 +74,7 @@ main() {
     _MOVE_TARGET_INSTANCE=""
     _TARGET_INSTANCE_LABEL=""
     _TARGET_TAB_ID=""
+    _TARGET_GROUP=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -105,12 +110,25 @@ main() {
             target_instance="$2"
             shift 2
             ;;
+        --group)
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: --group requires a NAME argument." >&2
+                exit 1
+            fi
+            _TARGET_GROUP="$2"
+            shift 2
+            ;;
         *) break ;;
         esac
     done
 
     if [[ -n "$tab_id" && ! "$tab_id" =~ ^[0-9]+$ ]]; then
         echo "Error: --tab-id must be a numeric Kitty tab id." >&2
+        exit 1
+    fi
+
+    if [[ -n "$_TARGET_GROUP" && -n "$tab_id" ]]; then
+        echo "Error: --group and --tab-id are mutually exclusive." >&2
         exit 1
     fi
 
@@ -169,7 +187,11 @@ main() {
         ;;
     --close)
         shift
-        cmd_close "$@"
+        if [[ -n "$_TARGET_GROUP" ]]; then
+            cmd_close_group "$@"
+        else
+            cmd_close "$@"
+        fi
         ;;
     --restart)
         shift

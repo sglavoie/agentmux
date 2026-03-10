@@ -749,3 +749,132 @@ def handle_move_picker_mode(key, state):
         state["mode"] = "list"
 
     return True
+
+
+def handle_group_actions_mode(key, state):
+    """Handle key events for the group actions overlay (G key).
+
+    Two-step flow: pick_group -> pick_action (Launch / Close).
+    """
+    if state["mode"] != "group_actions":
+        return False
+
+    step = state["ga_step"]
+
+    if step == "pick_group":
+        groups = state["ga_groups"]
+        if key in (27, ord("q"), ord("Q")):
+            state["mode"] = "list"
+        elif key in (curses.KEY_UP, ord("k"), ord("K")) and groups:
+            state["ga_selected"] = (state["ga_selected"] - 1) % len(groups)
+        elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and groups:
+            state["ga_selected"] = (state["ga_selected"] + 1) % len(groups)
+        elif key in (10, 13, curses.KEY_ENTER) and groups:
+            state["ga_step"] = "pick_action"
+            state["ga_action_selected"] = 0
+
+    elif step == "pick_action":
+        group_name = state["ga_groups"][state["ga_selected"]]
+        actions = _ga_build_actions(state, group_name)
+        if key == 27:
+            state["ga_step"] = "pick_group"
+        elif key in (ord("q"), ord("Q")):
+            state["mode"] = "list"
+        elif key in (curses.KEY_UP, ord("k"), ord("K")) and actions:
+            state["ga_action_selected"] = (state["ga_action_selected"] - 1) % len(
+                actions
+            )
+        elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and actions:
+            state["ga_action_selected"] = (state["ga_action_selected"] + 1) % len(
+                actions
+            )
+        elif key in (10, 13, curses.KEY_ENTER) and actions:
+            action_id = actions[state["ga_action_selected"]][0]
+            if action_id == "launch":
+                _do_group_launch(state, group_name)
+            elif action_id == "close":
+                _do_group_close(state, group_name)
+
+    return True
+
+
+def _ga_build_actions(state, group_name):
+    """Build available actions for a group with counts."""
+    running_titles = {s["title"] for s in state["sessions"]}
+    to_launch = [
+        s
+        for s in state["cfg"]._sessions
+        if (s.get("group", "") or "(ungrouped)") == group_name
+        and s["title"] not in running_titles
+    ]
+    to_close = [
+        s
+        for s in state["sessions"]
+        if (s.get("group", "") or "(ungrouped)") == group_name
+    ]
+    actions = []
+    if to_launch:
+        actions.append(("launch", f"Launch ({len(to_launch)} session(s))"))
+    if to_close:
+        actions.append(("close", f"Close ({len(to_close)} session(s))"))
+    return actions
+
+
+def _do_group_launch(state, group_name):
+    """Launch all config sessions in a group that are not already running."""
+    state["reload_all_config"]()
+    running_titles = {s["title"] for s in state["sessions"]}
+    to_launch = [
+        s
+        for s in state["cfg"]._sessions
+        if (s.get("group", "") or "(ungrouped)") == group_name
+        and s["title"] not in running_titles
+    ]
+    if not to_launch:
+        state["msg"] = f"All sessions in '{group_name}' already running"
+        state["msg_frames"] = 20
+        state["mode"] = "list"
+        return
+
+    launched = 0
+    for entry in to_launch:
+        loc = state["compute_insert_location"](
+            state["home_socket"], entry["account"], entry["title"]
+        )
+        state["do_launch"](
+            state["home_socket"],
+            entry["title"],
+            entry["dir"],
+            entry["account"],
+            entry.get("flags", ""),
+            entry.get("pw", ""),
+            location=loc,
+            env_vars=entry.get("env", ""),
+            group=entry.get("group", ""),
+        )
+        launched += 1
+
+    state["sessions"] = state["query_all_sessions"](
+        managed_only=(not state["show_all"])
+    )
+    state["refilter"]()
+    state["msg"] = f"Launched {launched} session(s) in '{group_name}'"
+    state["msg_frames"] = 20
+    state["mode"] = "list"
+
+
+def _do_group_close(state, group_name):
+    """Transition to batch close confirmation for all running sessions in a group."""
+    targets = [
+        s
+        for s in state["sessions"]
+        if (s.get("group", "") or "(ungrouped)") == group_name
+    ]
+    if not targets:
+        state["msg"] = f"No running sessions in '{group_name}'"
+        state["msg_frames"] = 20
+        state["mode"] = "list"
+        return
+
+    state["batch_targets"] = targets
+    state["mode"] = "confirm_batch_close"

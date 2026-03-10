@@ -48,6 +48,20 @@ def _apply_filters(sessions, search_query, account_filter, group_filter=None):
     return _filter_sessions(result, search_query)
 
 
+def _filter_pick_by_groups(sessions, enabled_groups):
+    """Return config sessions filtered to only those in enabled_groups.
+
+    When enabled_groups is None, returns the full list (no filtering).
+    """
+    if enabled_groups is None:
+        return sessions
+    return [
+        s
+        for s in sessions
+        if (s.get("group", "") or "(ungrouped)") in enabled_groups
+    ]
+
+
 def _filter_config_sessions(sessions, query):
     """Return config sessions matching query against title, dir, or account."""
     if not query:

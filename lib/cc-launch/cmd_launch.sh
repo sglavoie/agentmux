@@ -58,6 +58,22 @@ cmd_launch_all() {
         lines="$(echo -n "$lines" | sort -f)"
     fi
 
+    if [[ -n "${_TARGET_GROUP:-}" ]]; then
+        local filtered=""
+        while IFS=$'\t' read -r title dir account flags pw env_vars group; do
+            [[ -z "$title" ]] && continue
+            if [[ "$(_trim "$group")" == "$_TARGET_GROUP" ]]; then
+                [[ -n "$filtered" ]] && filtered+=$'\n'
+                filtered+="${title}	${dir}	${account}	${flags}	${pw}	${env_vars}	${group}"
+            fi
+        done <<<"$lines"
+        if [[ -z "$filtered" ]]; then
+            echo "No sessions found in group '$_TARGET_GROUP'."
+            return
+        fi
+        lines="$filtered"
+    fi
+
     local launched=0
     local existed=0
 

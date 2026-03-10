@@ -207,6 +207,8 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["pick_cursor"] = 0
             state["pick_search_active"] = False
             state["pick_marked"] = set()
+            state["pick_group_filter"] = None
+            state["pick_group_filter_mode"] = False
             state["pick_target_instance"] = state["home_instance_label"]
         else:
             state["msg"] = (
@@ -368,6 +370,23 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         state["reload_all_config"]()
         init_prefs_state(state)
         state["mode"] = "prefs"
+    elif key == ord("G"):
+        running_groups = {
+            s.get("group", "") or "(ungrouped)" for s in state["sessions"]
+        }
+        config_groups = {
+            s.get("group", "") or "(ungrouped)" for s in state["cfg"]._sessions
+        }
+        groups = sorted(running_groups | config_groups)
+        if len(groups) <= 1 and groups == ["(ungrouped)"]:
+            state["msg"] = "No groups defined"
+            state["msg_frames"] = 20
+        else:
+            state["mode"] = "group_actions"
+            state["ga_groups"] = groups
+            state["ga_selected"] = 0
+            state["ga_step"] = "pick_group"
+            state["ga_action_selected"] = 0
     elif key == ord("H"):
         state["cfg"].load_hooks()
         state["hooks_drift"] = state["cfg"]._detect_all_drift()

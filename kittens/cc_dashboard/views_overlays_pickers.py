@@ -354,6 +354,53 @@ def draw_group_picker(stdscr, sessions, group_filter):
         safe_addstr(stdscr, y, box_x + 2, display[: box_w - 4], attr)
 
 
+def draw_pick_group_picker(stdscr, config_sessions, group_filter):
+    """Draw a centered group filter picker overlay for pick mode."""
+    rows, cols = stdscr.getmaxyx()
+    groups = sorted({s.get("group", "") or "(ungrouped)" for s in config_sessions})
+    if not groups:
+        return
+
+    display_rows = []
+    for i, name in enumerate(groups):
+        if i >= 9:
+            break
+        enabled = group_filter is None or name in group_filter
+        check = "[x] " if enabled else "[ ] "
+        display_rows.append((f"{i + 1}: {check}{name}", enabled))
+
+    max_row_len = max(len(r[0]) for r in display_rows)
+    box_w = min(cols - 4, max(30, max_row_len + 8))
+    box_h = len(display_rows) + 3
+    box_y = max(0, (rows - box_h) // 2)
+    box_x = max(0, (cols - box_w) // 2)
+
+    blank_line = " " * box_w
+    dim_attr = curses.color_pair(CP_DIM)
+    for dy in range(box_h):
+        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+    draw_border(
+        stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD
+    )
+
+    title = "Groups"
+    safe_addstr(
+        stdscr,
+        box_y,
+        box_x + max(0, (box_w - len(title)) // 2),
+        title,
+        curses.color_pair(CP_HEADER) | curses.A_BOLD,
+    )
+
+    normal_attr = curses.color_pair(CP_NORMAL)
+    for i, (display, enabled) in enumerate(display_rows):
+        y = box_y + 2 + i
+        if y >= rows - 1:
+            break
+        attr = normal_attr | curses.A_BOLD if enabled else dim_attr
+        safe_addstr(stdscr, y, box_x + 2, display[: box_w - 4], attr)
+
+
 def draw_color_picker(
     stdscr, session, palette_names, current_color, account_color, selected,
     subtitle=None,
@@ -416,6 +463,151 @@ def draw_color_picker(
         if sel:
             normal_attr |= curses.A_BOLD
         safe_addstr(stdscr, reset_y, box_x + 2, reset_label, normal_attr)
+
+
+def draw_group_actions(stdscr, state):
+    """Draw the group actions overlay (pick group or pick action)."""
+    rows, cols = stdscr.getmaxyx()
+    step = state.get("ga_step", "pick_group")
+    groups = state.get("ga_groups", [])
+    ga_selected = state.get("ga_selected", 0)
+    sessions = state.get("sessions", [])
+    cfg_sessions = state.get("cfg", _cfg)._sessions
+
+    if step == "pick_group":
+        # Build display rows with counts
+        display_rows = []
+        for g in groups:
+            n_running = sum(
+                1 for s in sessions if (s.get("group", "") or "(ungrouped)") == g
+            )
+            n_config = sum(
+                1 for s in cfg_sessions if (s.get("group", "") or "(ungrouped)") == g
+            )
+            display_rows.append(f"{g} ({n_running} running / {n_config} in config)")
+
+        if not display_rows:
+            return
+
+        max_row_len = max(len(r) for r in display_rows)
+        title = "Group Actions"
+        box_w = min(cols - 4, max(42, max_row_len + 10))
+        box_h = len(display_rows) + 3
+        box_y = max(0, (rows - box_h) // 2)
+        box_x = max(0, (cols - box_w) // 2)
+
+        blank_line = " " * box_w
+        dim_attr = curses.color_pair(CP_DIM)
+        for dy in range(box_h):
+            safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+        draw_border(
+            stdscr,
+            box_y,
+            box_x,
+            box_w,
+            box_h,
+            curses.color_pair(CP_BORDER) | curses.A_BOLD,
+        )
+
+        safe_addstr(
+            stdscr,
+            box_y,
+            box_x + max(0, (box_w - len(title)) // 2),
+            title,
+            curses.color_pair(CP_HEADER) | curses.A_BOLD,
+        )
+
+        normal_attr = curses.color_pair(CP_NORMAL)
+        for i, display in enumerate(display_rows):
+            y = box_y + 2 + i
+            if y >= rows - 1:
+                break
+            sel = i == ga_selected
+            marker = ">" if sel else " "
+            attr = normal_attr | (curses.A_BOLD if sel else 0)
+            safe_addstr(
+                stdscr, y, box_x + 2, f"{marker} {display}"[: box_w - 4], attr
+            )
+
+    elif step == "pick_action":
+        from cc_dashboard.loop_modes_dashboard import _ga_build_actions
+
+        group_name = groups[ga_selected] if ga_selected < len(groups) else ""
+        actions = _ga_build_actions(state, group_name)
+
+        if not actions:
+            # No actions available — show message
+            title = f"Group: {group_name}"
+            box_w = min(cols - 4, max(42, len(title) + 10))
+            box_h = 4
+            box_y = max(0, (rows - box_h) // 2)
+            box_x = max(0, (cols - box_w) // 2)
+
+            blank_line = " " * box_w
+            dim_attr = curses.color_pair(CP_DIM)
+            for dy in range(box_h):
+                safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+            draw_border(
+                stdscr,
+                box_y,
+                box_x,
+                box_w,
+                box_h,
+                curses.color_pair(CP_BORDER) | curses.A_BOLD,
+            )
+            safe_addstr(
+                stdscr,
+                box_y,
+                box_x + max(0, (box_w - len(title)) // 2),
+                title,
+                curses.color_pair(CP_HEADER) | curses.A_BOLD,
+            )
+            safe_addstr(
+                stdscr, box_y + 2, box_x + 2, "No actions available", dim_attr
+            )
+            return
+
+        action_labels = [label for _, label in actions]
+        ga_action_selected = state.get("ga_action_selected", 0)
+        max_action_len = max(len(label) for label in action_labels)
+        title = f"Group: {group_name}"
+        box_w = min(cols - 4, max(42, max(max_action_len, len(title)) + 10))
+        box_h = len(action_labels) + 3
+        box_y = max(0, (rows - box_h) // 2)
+        box_x = max(0, (cols - box_w) // 2)
+
+        blank_line = " " * box_w
+        dim_attr = curses.color_pair(CP_DIM)
+        for dy in range(box_h):
+            safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
+        draw_border(
+            stdscr,
+            box_y,
+            box_x,
+            box_w,
+            box_h,
+            curses.color_pair(CP_BORDER) | curses.A_BOLD,
+        )
+
+        safe_addstr(
+            stdscr,
+            box_y,
+            box_x + max(0, (box_w - len(title)) // 2),
+            title,
+            curses.color_pair(CP_HEADER) | curses.A_BOLD,
+        )
+
+        normal_attr = curses.color_pair(CP_NORMAL)
+        for i, label in enumerate(action_labels):
+            y = box_y + 2 + i
+            if y >= rows - 1:
+                break
+            sel = i == ga_action_selected
+            marker = ">" if sel else " "
+            attr = normal_attr | (curses.A_BOLD if sel else 0)
+            safe_addstr(
+                stdscr, y, box_x + 2, f"{marker} {label}"[: box_w - 4], attr
+            )
 
 
 def draw_config_action_picker(stdscr, label, path, selected):

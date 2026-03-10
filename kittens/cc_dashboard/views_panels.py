@@ -240,7 +240,9 @@ def draw_list_view(
     draw_footer(stdscr, "list", exclude=footer_exclude)
 
 
-def draw_pick_view(stdscr, entries, selected, running_count, marked=None):
+def draw_pick_view(
+    stdscr, entries, selected, running_count, marked=None, group_filter=None,
+):
     """Draw the config session picker list with Running/Stopped sections."""
     rows, cols = stdscr.getmaxyx()
     stdscr.clear()
@@ -260,6 +262,16 @@ def draw_pick_view(stdscr, entries, selected, running_count, marked=None):
         title,
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
+
+    if group_filter is not None:
+        filter_label = "Group: " + ", ".join(sorted(group_filter))
+        safe_addstr(
+            stdscr,
+            2,
+            max(0, (cols - len(filter_label)) // 2),
+            filter_label,
+            curses.color_pair(CP_DIM),
+        )
 
     if not entries:
         safe_addstr(stdscr, 4, 3, "No sessions configured.", curses.color_pair(CP_DIM))
