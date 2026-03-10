@@ -13,6 +13,7 @@ from cc_dashboard.remote.actions_core import (
     do_close,
     do_launch,
 )
+from cc_dashboard.remote.actions_sorting import do_sort_tabs
 from cc_dashboard.remote.shared import _append_override_marker, _strip_override_marker
 
 
@@ -219,6 +220,19 @@ def _spawn_detached_restart(
             }
         )
 
+    steps.append(
+        {
+            "cmd": [
+                "bash",
+                "-c",
+                f"source ~/.local/lib/cc-manager/cc-common.sh && "
+                f"load_accounts && load_defaults && "
+                f"sort_tabs {shlex.quote(socket)}",
+            ],
+            "sleep": 0.5,
+        }
+    )
+
     script = """
 import json, os, subprocess, time
 steps = json.loads(os.environ["_CCM_STEPS"])
@@ -268,10 +282,13 @@ def do_restart(
     cc_color = session.get("cc_color", "")
     group = session.get("group", "")
 
-    if config_dir_override:
+    account_config_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
+    if config_dir_override and config_dir_override != account_config_dir:
         title = _append_override_marker(title)
     else:
         title = _strip_override_marker(title)
+        if config_dir_override == account_config_dir:
+            config_dir_override = None
 
     tab_id = session["tab_id"]
     cwd = session["cwd"]
@@ -296,7 +313,7 @@ def do_restart(
         return False
     time.sleep(0.3)
     location = compute_insert_location(socket, account, title)
-    return do_launch(
+    ok = do_launch(
         socket,
         title,
         cwd,
@@ -309,6 +326,9 @@ def do_restart(
         color_override=cc_color,
         group=group,
     )
+    if ok:
+        do_sort_tabs(socket)
+    return ok
 
 
 def _spawn_detached_move(
@@ -473,6 +493,19 @@ def _spawn_detached_move(
             }
         )
 
+    steps.append(
+        {
+            "cmd": [
+                "bash",
+                "-c",
+                f"source ~/.local/lib/cc-manager/cc-common.sh && "
+                f"load_accounts && load_defaults && "
+                f"sort_tabs {shlex.quote(target_socket)}",
+            ],
+            "sleep": 0.5,
+        }
+    )
+
     script = """
 import json, os, subprocess, time
 steps = json.loads(os.environ["_CCM_STEPS"])
@@ -546,7 +579,7 @@ def do_move(
         return False
     time.sleep(0.3)
     location = compute_insert_location(target_socket, account, title)
-    return do_launch(
+    ok = do_launch(
         target_socket,
         title,
         cwd,
@@ -559,3 +592,6 @@ def do_move(
         color_override=cc_color,
         group=group,
     )
+    if ok:
+        do_sort_tabs(target_socket)
+    return ok

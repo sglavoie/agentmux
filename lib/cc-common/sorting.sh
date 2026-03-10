@@ -67,10 +67,6 @@ compute_insert_location() {
 		done <<<"$tab_data"
 	fi
 
-	if [[ "$_DEFAULT_SORT_SESSIONS" != "alpha" && "$has_pinned" == "false" ]]; then
-		return 0
-	fi
-
 	local new_project="$new_title"
 	if [[ "$new_project" =~ ^[A-Z]: ]]; then
 		new_project="${new_project:2}"
@@ -194,10 +190,6 @@ sort_tabs() {
 	[[ $total -le 1 ]] && return 0
 	[[ ${#managed_indices[@]} -le 1 && ${#unmanaged_indices[@]} -eq 0 ]] && return 0
 
-	if [[ "$_DEFAULT_SORT_SESSIONS" != "alpha" && "$has_pinned" == "false" ]]; then
-		return 0
-	fi
-
 	local -a sort_input=()
 	local mi
 	for mi in "${managed_indices[@]}"; do
@@ -215,7 +207,7 @@ sort_tabs() {
 	done
 
 	local -a desired_order=()
-	if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
+	if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]] || [[ "$has_pinned" == "false" ]]; then
 		local -a sorted_managed=()
 		if [[ ${#sort_input[@]} -gt 0 ]]; then
 			while IFS=$'\t' read -r _key si; do

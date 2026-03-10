@@ -164,6 +164,7 @@ cmd_restart() {
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
     launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"
+    sort_tabs "$SOCKET"
 }
 
 cmd_clone() {
@@ -227,6 +228,7 @@ cmd_clone() {
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
     if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
+        sort_tabs "$SOCKET"
         if [[ -f "$CONFIG_FILE" ]]; then
             local conf_line="$clone_title | $dir | $account"
             if [[ -n "$cfg_flags" ]]; then
@@ -329,5 +331,6 @@ cmd_move() {
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
     launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"
+    sort_tabs "$SOCKET"
     echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE."
 }

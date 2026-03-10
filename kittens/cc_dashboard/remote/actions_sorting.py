@@ -75,10 +75,7 @@ def do_sort_tabs(socket):
     if not managed:
         return
 
-    if _cfg._default_sort_sessions != "alpha" and not has_pinned:
-        return
-
-    if _cfg._default_sort_sessions == "alpha":
+    if _cfg._default_sort_sessions == "alpha" or not has_pinned:
         managed.sort(key=lambda x: x[0])
         desired_ids = [m[2] for m in managed] + [u[1] for u in unmanaged]
     else:

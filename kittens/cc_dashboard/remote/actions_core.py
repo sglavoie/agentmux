@@ -186,7 +186,6 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None):
     tabs = data[0].get("tabs", [])
 
     existing = []
-    has_pinned = False
     for tab in tabs:
         tab_id = tab.get("id", 0)
         if exclude_tab_id is not None and tab_id == exclude_tab_id:
@@ -194,8 +193,6 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None):
         tab_title = tab.get("title", "")
         stripped = _strip_icons(tab_title)
         pinned = tab_title.startswith(_ICON_STAR)
-        if pinned:
-            has_pinned = True
 
         cc_account = ""
         for win in tab.get("windows", []):
@@ -214,9 +211,6 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None):
         pin_prefix = 0 if pinned else 1
         sort_key = (pin_prefix, acct.lower(), project_name.lower())
         existing.append((sort_key, tab_id))
-
-    if _cfg._default_sort_sessions != "alpha" and not has_pinned:
-        return (None, None)
 
     existing.sort(key=lambda x: x[0])
     new_project = _strip_account_prefix(title)
