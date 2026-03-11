@@ -8,6 +8,12 @@ _TARGET_INSTANCE_LABEL=""
 _TARGET_TAB_ID=""
 _MOVE_TARGET_INSTANCE=""
 
+# Retry/backoff constants for set-tab-color after tab creation
+_COLOR_MAX_RETRIES=5
+_COLOR_INITIAL_DELAY_MS=100
+_COLOR_BACKOFF_FACTOR_NUM=3   # numerator of 3/2 = 1.5x
+_COLOR_BACKOFF_FACTOR_DEN=2   # denominator
+
 # NOTE: There is an inherent race between tab_exists and launch_session —
 # a tab could be created by another process between the check and the launch.
 # This is accepted; Kitty will create a duplicate tab, and the user can close
@@ -191,7 +197,11 @@ launch_session() {
 
 	if [[ -n "$env_vars" && "$env_vars" != "-" ]]; then
 		local kv
-		for kv in $env_vars; do
+		local _old_IFS="$IFS"
+		IFS=' '
+		read -ra _env_arr <<< "$env_vars"
+		IFS="$_old_IFS"
+		for kv in "${_env_arr[@]}"; do
 			[[ "$kv" == *=* ]] && env_flag="$env_flag --env $kv"
 		done
 	fi
@@ -221,15 +231,15 @@ launch_session() {
 	local retry
 	local color_set=false
 	local color_err=""
-	local delay=100 # milliseconds (multiplied to avoid floating-point in shell)
-	for ((retry = 0; retry < 5; retry++)); do
+	local delay=$_COLOR_INITIAL_DELAY_MS
+	for ((retry = 0; retry < _COLOR_MAX_RETRIES; retry++)); do
 		# shellcheck disable=SC2086
 		if color_err="$(kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors 2>&1)"; then
 			color_set=true
 			break
 		fi
 		sleep "$(awk "BEGIN {printf \"%.2f\", $delay/1000}")" # Wait for Kitty to register the new tab before retrying
-		delay=$((delay * 3 / 2)) # 1.5x backoff: 100ms, 150ms, 225ms, 337ms, 506ms
+		delay=$((delay * _COLOR_BACKOFF_FACTOR_NUM / _COLOR_BACKOFF_FACTOR_DEN))
 	done
 
 	if [[ "$color_set" != "true" ]]; then

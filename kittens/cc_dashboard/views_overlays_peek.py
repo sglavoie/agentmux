@@ -28,7 +28,7 @@ def draw_config_show(stdscr, label, path, lines, scroll):
     dim_attr = curses.color_pair(CP_DIM)
 
     safe_addstr(stdscr, 0, 2, f"{label}: {_shorten_home(path)}", header_attr)
-    content_height = rows - 3
+    content_height = max(1, rows - 3)
 
     if not lines or (len(lines) == 1 and lines[0] == "(file not found)"):
         display_lines = lines if lines else ["(file not found)"]
@@ -78,7 +78,7 @@ def draw_peek_overlay(
     extent_label = "scrollback" if extent == "all" else "screen"
     safe_addstr(stdscr, 0, 2, f"Peek: {session_title} [{extent_label}]", header_attr)
 
-    content_height = rows - 3
+    content_height = max(1, rows - 3)
     if error:
         safe_addstr(stdscr, 2, 2, error, warn_attr)
     elif not lines or (len(lines) == 1 and not lines[0].strip()):

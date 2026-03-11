@@ -89,9 +89,18 @@ def _load_palette_colors():
         try:
             with open(path) as f:
                 data = json.load(f)
-            return frozenset(data["colors"].keys())
-        except (FileNotFoundError, OSError, json.JSONDecodeError, KeyError, TypeError):
+        except (FileNotFoundError, OSError):
             continue
+        except json.JSONDecodeError:
+            continue
+        try:
+            return frozenset(data["colors"].keys())
+        except (KeyError, TypeError):
+            continue
+    print(
+        "Warning: could not load palette.json; using hardcoded fallback colors.",
+        file=sys.stderr,
+    )
     return hardcoded
 
 

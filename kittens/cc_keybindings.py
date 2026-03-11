@@ -262,7 +262,7 @@ def _draw(
 
     safe_addstr(stdscr, 0, 2, "Keybinding Reference", header_attr)
 
-    content_height = rows - 3
+    content_height = max(1, rows - 3)
     visible = _LINES[scroll : scroll + content_height]
     match_set = set(match_lines)
     current_match_line = match_lines[match_index] if match_lines else -1
@@ -353,7 +353,7 @@ def _run(stdscr):
 
     scroll = 0
     rows = stdscr.getmaxyx()[0]
-    content_height = rows - 3
+    content_height = max(1, rows - 3)
     max_scroll = max(0, len(_LINES) - content_height)
 
     # Search state
@@ -365,7 +365,7 @@ def _run(stdscr):
 
     while True:
         rows = stdscr.getmaxyx()[0]
-        content_height = rows - 3
+        content_height = max(1, rows - 3)
         max_scroll = max(0, len(_LINES) - content_height)
         scroll = min(scroll, max_scroll)
 

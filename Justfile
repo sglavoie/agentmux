@@ -147,12 +147,15 @@ uninstall:
     @echo "Other artifacts you may want to remove:"
     @echo "  - Config directory: ~/.config/cc-manager/"
     @echo "  - Temp files:       ${TMPDIR:-/tmp}/ccm-*"
-    @echo "  - Activity data:    ~/.local/state/cc-manager/activity/"
+    @echo "  - State data:       ~/.local/state/cc-manager/"
 
 # Run tests
 test:
     python3 tests/test_toml_roundtrip.py
+    python3 tests/test_toml_writer.py
     python3 tests/test_config_validator.py
+    python3 tests/test_hooks_validator.py
+    python3 tests/test_data_files.py
 
 # Run linters
 lint:

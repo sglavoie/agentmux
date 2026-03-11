@@ -100,7 +100,7 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
             sel_visual = vi
             break
 
-    avail = rows - 8
+    avail = max(1, rows - 8)
     total_visual = len(visual_rows)
     if total_visual <= avail:
         offset = 0
@@ -125,7 +125,7 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
             sel = entry_idx == selected
             is_running = entry_idx < running_count
 
-            cursor_mark = "▸" if sel else " "
+            cursor_mark = ">" if sel else " "
             toggle_mark = "[x]" if entry_idx in toggled else "[ ]"
 
             cp = _cp_for_account(entry["account"], selected=sel)

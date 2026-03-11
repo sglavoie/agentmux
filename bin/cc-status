@@ -241,11 +241,15 @@ fi
 if [[ "$JSON_OUTPUT" == "true" ]]; then
 	enriched=""
 	while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst col_group; do
-		col_branch="$(git -C "$col_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")"
-		if [[ "$col_branch" != "-" ]]; then
-			if [[ -n "$(git -C "$col_dir" status --porcelain 2>/dev/null)" ]]; then
-				col_branch="${col_branch}*"
-			fi
+		# Single git call for branch + dirty status
+		if _git_info="$(git -C "$col_dir" status --porcelain -b 2>/dev/null)"; then
+			col_branch="${_git_info%%$'\n'*}" # first line: ## branch...upstream
+			col_branch="${col_branch#\#\# }"
+			col_branch="${col_branch%%...*}"
+			col_branch="${col_branch%% \[*}"
+			[[ "$_git_info" == *$'\n'* ]] && col_branch="${col_branch}*"
+		else
+			col_branch="-"
 		fi
 		col_dir="$(shorten_path "$col_dir")"
 		[[ -n "$enriched" ]] && enriched+=$'\n'
@@ -295,11 +299,15 @@ has_groups=false
 # Pre-process rows: shorten paths, then scan for max widths
 processed_rows=""
 while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst col_group; do
-	col_branch="$(git -C "$col_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")"
-	if [[ "$col_branch" != "-" ]]; then
-		if [[ -n "$(git -C "$col_dir" status --porcelain 2>/dev/null)" ]]; then
-			col_branch="${col_branch}*"
-		fi
+	# Single git call for branch + dirty status
+	if _git_info="$(git -C "$col_dir" status --porcelain -b 2>/dev/null)"; then
+		col_branch="${_git_info%%$'\n'*}" # first line: ## branch...upstream
+		col_branch="${col_branch#\#\# }"
+		col_branch="${col_branch%%...*}"
+		col_branch="${col_branch%% \[*}"
+		[[ "$_git_info" == *$'\n'* ]] && col_branch="${col_branch}*"
+	else
+		col_branch="-"
 	fi
 	col_dir="$(shorten_path "$col_dir")"
 	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_branch}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\t'"${col_group}"$'\n'

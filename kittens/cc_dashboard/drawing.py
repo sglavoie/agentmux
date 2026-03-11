@@ -9,7 +9,7 @@ import unicodedata
 def safe_addstr(win, y, x, text, attr=0):
     """Write text to the curses window, silently clipping at window boundaries."""
     rows, cols = win.getmaxyx()
-    if y < 0 or y >= rows or x >= cols:
+    if y < 0 or y >= rows or x < 0 or x >= cols:
         return
     text = text[: cols - x]
     with contextlib.suppress(curses.error):
@@ -83,7 +83,7 @@ def shorten_path(path, max_len):
     """Collapse home prefix to ~ and truncate long paths with a leading ellipsis.
 
     After collapsing the home prefix, keeps only the last 2 path segments
-    to save horizontal space (e.g. ~/a/b/c → b/c).
+    to save horizontal space (e.g. ~/a/b/c -> b/c).
     """
     home = os.path.expanduser("~")
     if path.startswith(home):

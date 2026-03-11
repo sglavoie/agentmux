@@ -74,9 +74,7 @@ build_accounts_json() {
 	for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
 		[[ "$first" == "true" ]] || json+=","
 		first=false
-		json+="$(printf '{"name":%s,"dir":%s}' \
-			"$(echo "${_ACCOUNT_NAMES[$i]}" | jq -Rs '.[:-1]')" \
-			"$(echo "${_ACCOUNT_DIRS[$i]}" | jq -Rs '.[:-1]')")"
+		json+="$(jq -n --arg name "${_ACCOUNT_NAMES[$i]}" --arg dir "${_ACCOUNT_DIRS[$i]}" '{name:$name,dir:$dir}')"
 	done
 	json+="]"
 	echo "$json"

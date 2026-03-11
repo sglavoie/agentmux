@@ -148,7 +148,7 @@ def draw_hooks_view(
         enabled_count = sum(1 for ev in HOOK_EVENTS if ev not in disabled_events)
         extra_count = sum(len(groups) for groups in extra_hooks.values())
 
-        marker = "▸ " if is_selected else "  "
+        marker = "> " if is_selected else "  "
         name_attr = curses.color_pair(_cp_for_account(acct_name))
         if is_selected:
             name_attr |= curses.A_REVERSE
@@ -232,7 +232,7 @@ def draw_hooks_event_view(
         is_selected = idx == selected
         if row[0] == "event":
             _, event_name, is_disabled = row
-            marker = "▸ " if is_selected else "  "
+            marker = "> " if is_selected else "  "
             status_attr = dim_attr if is_disabled else normal_attr
             if is_selected:
                 status_attr |= curses.A_REVERSE
@@ -246,7 +246,7 @@ def draw_hooks_event_view(
             safe_addstr(stdscr, y, 26, badge, badge_a)
         elif row[0] == "builtin":
             _, _event_name, _cmd_idx, cmd_str, is_disabled, is_async, _type_str = row
-            marker = "▸ " if is_selected else "  "
+            marker = "> " if is_selected else "  "
             attr = dim_attr if is_disabled else normal_attr
             if is_selected:
                 attr |= curses.A_REVERSE
@@ -258,7 +258,7 @@ def draw_hooks_event_view(
             safe_addstr(stdscr, y, 4, display[: (cols - 6)], attr)
         else:
             _, _event_name, _cmd_idx, cmd_str, handler, matcher = row
-            marker = "▸ " if is_selected else "  "
+            marker = "> " if is_selected else "  "
             attr = dim_attr | (curses.A_REVERSE if is_selected else 0)
             safe_addstr(stdscr, y, 2, marker, normal_attr)
 
@@ -519,7 +519,7 @@ def draw_hooks_matcher_picker(stdscr, options, selected, scroll):
         if y >= anchor_y:
             break
         is_sel = (scroll + i) == selected
-        text = f" ▸ {opt}" if is_sel else f"   {opt}"
+        text = f" > {opt}" if is_sel else f"   {opt}"
         attr = input_attr | curses.A_BOLD if is_sel else normal_attr
         padded = text[:box_w].ljust(box_w)
         safe_addstr(stdscr, y, box_x, padded, attr)

@@ -324,7 +324,7 @@ def _draw(stdscr, session, lines, scroll):
 
     # Content area
     content_start = 2
-    content_height = rows - 4  # leave room for footer
+    content_height = max(1, rows - 4)  # leave room for footer
     visible = lines[scroll : scroll + content_height]
 
     key_col = 4
@@ -386,7 +386,7 @@ def _run(stdscr, session):
     info = _gather_info(session)
     lines = _build_lines(session, info, cols)
     scroll = 0
-    content_height = rows - 4
+    content_height = max(1, rows - 4)
 
     while True:
         max_scroll = max(0, len(lines) - content_height)

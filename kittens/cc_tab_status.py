@@ -207,8 +207,8 @@ def _draw(
             label = f'  Delete "{preset}"? y/n'
             attr = curses.color_pair(CP_WARN) | curses.A_BOLD
         else:
-            marker = "▸ " if sel else "  "
-            check = "✓ " if current_status == preset else "  "
+            marker = "> " if sel else "  "
+            check = "* " if current_status == preset else "  "
             label = f"{marker}{check}{preset}"
             attr = normal_attr | (curses.A_BOLD if sel else 0)
         safe_addstr(stdscr, y, box_x + 2, label, attr)
@@ -218,7 +218,7 @@ def _draw(
     custom_y = item_y + custom_idx
     if custom_y < rows - 1:
         sel = selected == custom_idx
-        marker = "▸ " if sel else "  "
+        marker = "> " if sel else "  "
         if custom_mode:
             prefix = f"{marker}  Custom: "
             input_attr = curses.color_pair(CP_INPUT)
@@ -243,7 +243,7 @@ def _draw(
                 stdscr.move(custom_y, cursor_x)
         else:
             curses.curs_set(0)
-            check = "✓ " if current_status and current_status not in statuses else "  "
+            check = "* " if current_status and current_status not in statuses else "  "
             label = f"{marker}{check}Custom..."
             attr = normal_attr | (curses.A_BOLD if sel else 0)
             safe_addstr(stdscr, custom_y, box_x + 2, label, attr)
@@ -253,7 +253,7 @@ def _draw(
     clear_y = item_y + clear_idx
     if clear_y < rows - 1:
         sel = selected == clear_idx
-        marker = "▸ " if sel else "  "
+        marker = "> " if sel else "  "
         label = f"{marker}  Clear status"
         attr = normal_attr | (curses.A_BOLD if sel else 0)
         safe_addstr(stdscr, clear_y, box_x + 2, label, attr)

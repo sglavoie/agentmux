@@ -48,8 +48,13 @@ def _load_palette_colors(data_dir):
         try:
             with open(path) as f:
                 data = json.load(f)
+        except (FileNotFoundError, OSError):
+            continue
+        except json.JSONDecodeError:
+            continue
+        try:
             return set(data["colors"].keys())
-        except (FileNotFoundError, OSError, json.JSONDecodeError, KeyError, TypeError):
+        except (KeyError, TypeError):
             continue
     return None
 
@@ -316,6 +321,8 @@ def validate_defaults(path, valid_sort=None):
             v.error("kitty_timeout must be an integer")
         elif kitty_timeout < 1:
             v.error("kitty_timeout must be at least 1")
+        elif kitty_timeout > 300:
+            v.error("kitty_timeout must be at most 300")
 
     # Validate [notifications] section
     bool_keys = ("error", "permission", "stop", "idle")

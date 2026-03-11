@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
 ## [0.2.0] - 2026-03-11
 
 ### Added

@@ -12,7 +12,7 @@ discover_socket() {
 
 	local latest=""
 	local candidate mtime newest_mtime=0
-	for candidate in /tmp/kitty-*; do
+	for candidate in "${TMPDIR:-/tmp}"/kitty-*; do
 		[[ -e "$candidate" ]] || continue
 		if ! mtime="$(_file_mtime "$candidate")"; then
 			continue
@@ -62,7 +62,7 @@ discover_all_sockets() {
 			candidates+=("$sock")
 			seen+=("$sock")
 		fi
-	done < <(find /tmp -maxdepth 1 -name 'kitty-*' 2>/dev/null | while IFS= read -r p; do m="$(_file_mtime "$p")" && printf '%s %s\n' "$m" "$p"; done | sort -rn | while IFS=' ' read -r _ p; do printf '%s\0' "$p"; done)
+	done < <(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'kitty-*' 2>/dev/null | while IFS= read -r p; do m="$(_file_mtime "$p")" && printf '%s %s\n' "$m" "$p"; done | sort -rn | while IFS=' ' read -r _ p; do printf '%s\0' "$p"; done)
 
 	local candidate
 	for candidate in "${candidates[@]+"${candidates[@]}"}"; do

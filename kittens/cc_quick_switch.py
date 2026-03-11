@@ -118,7 +118,7 @@ def draw_session_list(stdscr, sessions, selected, multi_instance=False):
     hdr += f"{'Branch':<{c_branch}}{'Status':<{c_status}}{'Directory':<{c_dir}}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
-    avail = rows - 6
+    avail = max(1, rows - 6)
     total = len(sessions)
     now = int(time.time())
     idle_threshold = _cfg._default_idle_alert_minutes * 60

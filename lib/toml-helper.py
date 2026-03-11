@@ -82,8 +82,12 @@ def cmd_write_sessions(path):
             d["group"] = entry["group"]
         sessions.append(d)
 
-    with open(path, "w") as f:
-        f.write(toml_writer.dumps({"sessions": sessions}, header=header))
+    try:
+        with open(path, "w") as f:
+            f.write(toml_writer.dumps({"sessions": sessions}, header=header))
+    except OSError as e:
+        print(f"Error: failed to write {path}: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def main():

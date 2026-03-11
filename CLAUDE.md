@@ -28,7 +28,7 @@ The codebase has a unified CLI entry point, a shared Bash library, a shared data
 
 ## Key conventions
 
-The curses dashboard (`kittens/`) must use ASCII-only characters for its own UI elements. Curses does not reliably render Unicode symbols (checkmarks, arrows, etc.), so use plain ASCII alternatives (e.g. `Y`/`N`, `*`, `>`). Tab titles (rendered by Kitty, not curses) use Unicode icons from `data/icons.json`.
+The curses dashboard (`kittens/`) must use ASCII-only characters for its own UI elements. Curses does not reliably render Unicode symbols (checkmarks, arrows, etc.), so use plain ASCII alternatives: `>` for selection cursor (not `▸`), `*` for checkmark (not `✓`), `->` for arrow (not `→`), `Y`/`N` for yes/no. Tab titles (rendered by Kitty, not curses) use Unicode icons from `data/icons.json`.
 
 Account detection uses Kitty user vars (`--var cc_account=NAME` set at launch time) as the primary method, with a fallback to parsing `CLAUDE_CONFIG_DIR` from process cmdlines. Both the shell scripts and the Python kitten implement this two-tier lookup. Additional user vars `cc_flags`, `cc_pw`, `cc_env`, and `cc_group` store the per-session flags, project window override, environment variables, and group name respectively for round-trip fidelity with save, restart, clone, and move operations.
 
@@ -44,7 +44,9 @@ The color palette has exactly 10 named colors (green, blue, red, orange, purple,
 
 Tab title convention uses an uppercase initial of the account name followed by a colon (e.g., `W:project` for work, `P:dotfiles` for personal). The `--cleanup` command relies on this pattern to identify managed tabs. The star icon (`★`) functions as a pin toggle, bound to F2: pressing F2 stars the tab and moves it to the front of the tab bar, where pinned tabs are sorted alphabetically among themselves. Pressing F2 again unstars the tab and returns it to its natural position. Pinning works regardless of whether `sort_sessions=alpha` is enabled — pinned tabs always reorder to the front.
 
-Kitty socket discovery follows a three-step precedence: explicit `--socket` argument, then `KITTY_LISTEN_ON` environment variable, then the most recent `/tmp/kitty-*` socket file.
+Kitty socket discovery follows a three-step precedence: explicit `--socket` argument, then `KITTY_LISTEN_ON` environment variable, then the most recent `${TMPDIR:-/tmp}/kitty-*` socket file. The `$TMPDIR` variable is respected with a `/tmp` fallback for portability.
+
+Config env var precedence: `CC_MANAGER_CONFIG` overrides the sessions.toml path, `CC_MANAGER_ACCOUNTS` overrides the accounts.toml path, and `CC_MANAGER_DEFAULTS` overrides the defaults.toml path. All default to `~/.config/cc-manager/`.
 
 Shell scripts target Bash 3 compatibility (macOS default), using parallel indexed arrays instead of associative arrays for account storage.
 

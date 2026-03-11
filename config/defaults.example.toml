@@ -35,16 +35,16 @@
 #                       notification is suppressed.
 # --- END OF DOCUMENTATION (do not edit above this line) ---
 
-# [defaults]
+[defaults]
 # claude_flags = "--dangerously-skip-permissions"
 # project_window = "stack"
 # sort_sessions = "alpha"
 # dashboard_refresh = 3
-# tab_statuses = ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
+tab_statuses = ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
 # notes_editor = "vim"
 # kitty_timeout = 5
 
-# [notifications]
+[notifications]
 # error = true
 # permission = true
 # stop = false

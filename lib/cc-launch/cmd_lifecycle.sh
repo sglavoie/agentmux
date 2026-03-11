@@ -3,6 +3,10 @@
 [[ -n "${_CC_LAUNCH_CMD_LIFECYCLE_LOADED:-}" ]] && return 0
 _CC_LAUNCH_CMD_LIFECYCLE_LOADED=1
 
+# Poll constants for waiting on tab closure before relaunch
+_CLOSE_POLL_MAX=5
+_CLOSE_POLL_DELAY=0.1  # seconds
+
 cmd_close_group() {
     if [[ -z "$_TARGET_GROUP" ]]; then
         echo "Error: --group requires a NAME argument." >&2
@@ -172,13 +176,13 @@ cmd_restart() {
         exit 1
     fi
     echo "Closed tab '$title', relaunching..." >&2
-    # Poll for tab closure (max ~500ms) before relaunching
+    # Poll for tab closure before relaunching
     local _poll
-    for ((_poll = 0; _poll < 5; _poll++)); do
+    for ((_poll = 0; _poll < _CLOSE_POLL_MAX; _poll++)); do
         if ! kitty @ --to "$SOCKET" ls 2>/dev/null | jq -e --argjson tid "$_TARGET_TAB_ID" '[.[].tabs[] | select(.id == $tid)] | length > 0' >/dev/null 2>&1; then
             break
         fi
-        sleep 0.1
+        sleep "$_CLOSE_POLL_DELAY"
     done
 
     local loc_args

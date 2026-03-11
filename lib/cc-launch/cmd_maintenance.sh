@@ -8,7 +8,7 @@ cmd_list() {
 
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
         echo "Error: No active Kitty instances found." >&2
-        exit 1
+        return 1
     fi
 
     local accounts_json default_account
@@ -137,7 +137,7 @@ cmd_list() {
 
         local local_mk=" "
         if [[ "$status" == "focused" ]]; then
-            local_mk="▸"
+            local_mk=">"
         fi
 
         local local_color="" local_reset=""
@@ -171,10 +171,10 @@ cmd_sockets() {
     local managed_re="${strip_re}[A-Z]:"
 
     local found=0
-    for sock in /tmp/kitty-*; do
+    for sock in "${TMPDIR:-/tmp}"/kitty-*; do
         [[ -e "$sock" ]] || continue
         found=1
-        local pid="${sock#/tmp/kitty-}"
+        local pid="${sock#"${TMPDIR:-/tmp}"/kitty-}"
         local status="stale"
         local managed_count=""
         local ls_out
@@ -197,7 +197,7 @@ cmd_sockets() {
     done
 
     if [[ $found -eq 0 ]]; then
-        echo "No kitty sockets found in /tmp/" >&2
+        echo "No kitty sockets found in ${TMPDIR:-/tmp}/" >&2
     fi
 
     if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
@@ -210,7 +210,7 @@ cmd_cleanup() {
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
         echo "Error: No active Kitty instances found." >&2
-        exit 1
+        return 1
     fi
 
     local multi_instance=false
@@ -353,7 +353,7 @@ cmd_save() {
     local ls_json
     ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
         echo "Error: Failed to query kitty." >&2
-        exit 1
+        return 1
     }
 
     local accounts_json default_account

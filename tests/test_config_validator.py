@@ -358,6 +358,62 @@ kitty_timeout = 10
         v = cv.validate_defaults(path)
         check("kitty_timeout=10: no errors", len(v.errors) == 0)
 
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "defaults.toml", """\
+[defaults]
+kitty_timeout = 500
+""")
+        v = cv.validate_defaults(path)
+        check("kitty_timeout=500: error (exceeds 300)", len(v.errors) >= 1)
+        check("kitty_timeout=500: mentions 300",
+              any("300" in e for e in v.errors))
+
+
+def test_defaults_idle_alert_minutes():
+    """idle_alert_minutes validation."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "defaults.toml", """\
+[notifications]
+idle_alert_minutes = 10
+""")
+        v = cv.validate_defaults(path)
+        check("idle_alert_minutes=10: no errors", len(v.errors) == 0)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "defaults.toml", """\
+[notifications]
+idle_alert_minutes = -5
+""")
+        v = cv.validate_defaults(path)
+        check("idle_alert_minutes=-5: error", len(v.errors) >= 1)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "defaults.toml", """\
+[notifications]
+idle_alert_minutes = "ten"
+""")
+        v = cv.validate_defaults(path)
+        check("idle_alert_minutes=string: error", len(v.errors) >= 1)
+
+
+def test_defaults_min_secs():
+    """min_secs validation."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "defaults.toml", """\
+[notifications]
+min_secs = 0
+""")
+        v = cv.validate_defaults(path)
+        check("min_secs=0: no errors", len(v.errors) == 0)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "defaults.toml", """\
+[notifications]
+min_secs = -1
+""")
+        v = cv.validate_defaults(path)
+        check("min_secs=-1: error", len(v.errors) >= 1)
+
 
 # ── run all ──────────────────────────────────────────────────────────
 
@@ -392,6 +448,8 @@ if __name__ == "__main__":
     test_defaults_missing_file()
     test_defaults_empty_file()
     test_defaults_kitty_timeout()
+    test_defaults_idle_alert_minutes()
+    test_defaults_min_secs()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:

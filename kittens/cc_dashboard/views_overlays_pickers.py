@@ -79,7 +79,7 @@ def draw_override_picker(stdscr, session, override_selected, batch_count=None):
         if y >= rows - 1:
             break
         sel = i == override_selected
-        marker = "▸ " if sel else "  "
+        marker = "> " if sel else "  "
         suffix = " (current)" if dirs[i] == current_dir else ""
         label = f"{marker}{display}{suffix}"
 
@@ -135,7 +135,7 @@ def draw_move_picker(stdscr, session, instance_labels, move_selected, subtitle=N
         if y >= rows - 1:
             break
         sel = i == move_selected
-        marker = "▸ " if sel else "  "
+        marker = "> " if sel else "  "
         attr = normal_attr | (curses.A_BOLD if sel else 0)
         safe_addstr(stdscr, y, box_x + 2, f"{marker}{lbl}", attr)
 
@@ -184,7 +184,7 @@ def draw_session_action_picker(stdscr, subtitle, action_labels, selected):
         if y >= rows - 1:
             break
         is_selected = i == selected
-        marker = "▸ " if is_selected else "  "
+        marker = "> " if is_selected else "  "
         attr = normal_attr | (curses.A_BOLD if is_selected else 0)
         safe_addstr(stdscr, y, box_x + 2, f"{marker}{label}"[: box_w - 4], attr)
 
@@ -229,7 +229,7 @@ def draw_config_picker(stdscr, config_entries, selected):
         if y >= rows - 1:
             break
         sel = i == selected
-        marker = "▸ " if sel else "  "
+        marker = "> " if sel else "  "
         safe_addstr(
             stdscr,
             y,
@@ -244,7 +244,7 @@ _SORT_DESCRIPTIONS = {
     "name": "Alphabetical by title",
     "account": "Grouped by account, alpha within",
     "group": "Grouped by session group, alpha within",
-    "status": "Error → permission → active → idle → stopped",
+    "status": "Error -> permission -> active -> idle -> stopped",
     "idle": "Most idle first",
     "activity": "Most recently active first",
 }
@@ -267,7 +267,7 @@ def draw_sort_picker(stdscr, selected, current_mode):
 
     display_rows = []
     for mode in SORT_MODES:
-        check = "✓ " if mode == current_mode else "  "
+        check = "* " if mode == current_mode else "  "
         label = _SORT_DISPLAY_LABELS[mode].ljust(label_col)
         display_rows.append(f"{check}{label}{_SORT_DESCRIPTIONS[mode]}")
 
@@ -300,7 +300,7 @@ def draw_sort_picker(stdscr, selected, current_mode):
         if y >= rows - 1:
             break
         sel = i == selected
-        marker = "▸ " if sel else "  "
+        marker = "> " if sel else "  "
         safe_addstr(
             stdscr,
             y,
@@ -452,8 +452,8 @@ def draw_color_picker(
         if y >= rows - 1:
             break
         sel = i == selected
-        marker = "▸ " if sel else "  "
-        check = "✓ " if color_name == current_color else "  "
+        marker = "> " if sel else "  "
+        check = "* " if color_name == current_color else "  "
         label = f"{marker}{check}{color_name}"
 
         attr = curses.color_pair(_cp_for_palette_color(color_name, selected=sel))
@@ -465,7 +465,7 @@ def draw_color_picker(
     reset_y = box_y + 3 + len(palette_names)
     if reset_y < rows - 1:
         sel = selected == len(palette_names)
-        marker = "▸ " if sel else "  "
+        marker = "> " if sel else "  "
         reset_label = f"{marker}  Reset to default ({account_color})"
         normal_attr = curses.color_pair(CP_NORMAL)
         if sel:
@@ -654,7 +654,7 @@ def draw_config_action_picker(stdscr, label, path, selected):
         if y >= rows - 1:
             break
         sel = i == selected
-        marker = "▸ " if sel else "  "
+        marker = "> " if sel else "  "
         safe_addstr(
             stdscr,
             y,

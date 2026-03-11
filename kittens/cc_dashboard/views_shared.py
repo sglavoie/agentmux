@@ -341,7 +341,7 @@ def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
         stdscr,
         rows - 4,
         2,
-        f'Clone "{session["title"]}" → worktree',
+        f'Clone "{session["title"]}" -> worktree',
         curses.color_pair(CP_DIM),
     )
 
@@ -380,7 +380,7 @@ def draw_clone_input(stdscr, session, title_value, cursor_pos):
         stdscr,
         rows - 4,
         2,
-        f'Clone "{session["title"]}" → new session',
+        f'Clone "{session["title"]}" -> new session',
         curses.color_pair(CP_DIM),
     )
 

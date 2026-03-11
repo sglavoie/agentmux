@@ -109,7 +109,7 @@ def draw_list_view(
     sep += f"{'─' * c_dir}{'─' * c_notes}{'─' * c_branch}{'─' * c_status}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
-    avail = rows - 8
+    avail = max(1, rows - 8)
     if detail_visible:
         avail -= DETAIL_PANE_HEIGHT
     avail = max(1, avail)
@@ -316,7 +316,7 @@ def draw_pick_view(
             sel_visual = vi
             break
 
-    avail = rows - 8
+    avail = max(1, rows - 8)
     total_visual = len(visual_rows)
     if total_visual <= avail:
         offset = 0
@@ -418,7 +418,7 @@ def draw_delete_view(stdscr, entries, selected, running_count):
             sel_visual = vi
             break
 
-    avail = rows - 8
+    avail = max(1, rows - 8)
     total_visual = len(visual_rows)
     if total_visual <= avail:
         offset = 0
@@ -441,7 +441,7 @@ def draw_delete_view(stdscr, entries, selected, running_count):
             entry_idx = row[1]
             entry = entries[entry_idx]
             sel = entry_idx == selected
-            mark = "▸" if sel else " "
+            mark = ">" if sel else " "
             is_running = entry_idx < running_count
 
             cp = _cp_for_account(entry["account"], selected=sel)
