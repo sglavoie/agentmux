@@ -21,6 +21,7 @@ from cc_dashboard.loop_modes_delete import handle_delete_mode
 from cc_dashboard.loop_modes_forms import (
     handle_batch_group_mode,
     handle_clone_mode,
+    handle_confirm_mkdir_mode,
     handle_new_mode,
     handle_override_mode,
     handle_pick_mode,
@@ -642,6 +643,26 @@ def dispatch_mode(
         for k in new_state:
             state[k] = new_state[k]
         should_exit = new_state["should_exit"]
+
+    elif mode == "confirm_mkdir":
+        mkdir_state: dict[str, Any] = {
+            "mode": mode,
+            "mkdir_path": state["mkdir_path"],
+            "mkdir_pending": state["mkdir_pending"],
+            "new_fields": state["new_fields"],
+            "new_active": state["new_active"],
+            "new_cursor": state["new_cursor"],
+            "cfg": state["cfg"],
+            "compute_insert_location": state["compute_insert_location"],
+            "do_launch": state["do_launch"],
+            "msg": state["msg"],
+            "msg_frames": state["msg_frames"],
+            "should_exit": False,
+        }
+        handle_confirm_mkdir_mode(key, mkdir_state)
+        for k in mkdir_state:
+            state[k] = mkdir_state[k]
+        should_exit = mkdir_state["should_exit"]
 
     elif mode == "pick":
         pick_state: dict[str, Any] = {

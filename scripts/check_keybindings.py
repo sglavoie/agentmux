@@ -219,6 +219,7 @@ _FUNCTION_MODES: dict[str, list[str]] = {
     "handle_batch_group_mode": ["batch_group"],
     "handle_clone_mode": ["clone"],
     "handle_new_mode": ["new"],
+    "handle_confirm_mkdir_mode": ["confirm_mkdir"],
     "handle_pick_mode": ["pick"],
     "handle_hooks_modes": [
         "hooks",

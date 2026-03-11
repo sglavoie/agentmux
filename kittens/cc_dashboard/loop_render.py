@@ -373,6 +373,36 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
                 state["dir_browse_show_hidden"],
             )
             draw_footer(stdscr, "new_dir_browse")
+    elif mode == "confirm_mkdir":
+        form_title = "New Session"
+        draw_new_form(
+            stdscr,
+            state["new_fields"],
+            state["new_active"],
+            state["new_cursor"],
+            multi_instance=state["multi_instance"],
+            form_title=form_title,
+        )
+        rows_now, cols_now = stdscr.getmaxyx()
+        path = state.get("mkdir_path", "")
+        max_w = cols_now - 6
+        display_path = path if len(path) <= max_w else "..." + path[-(max_w - 3) :]
+        prompt = f'Directory does not exist: {display_path}'
+        safe_addstr(
+            stdscr,
+            rows_now - 4,
+            2,
+            prompt,
+            curses.color_pair(CP_WARN) | curses.A_BOLD,
+        )
+        safe_addstr(
+            stdscr,
+            rows_now - 3,
+            2,
+            "Create it? y/n",
+            curses.color_pair(CP_WARN) | curses.A_BOLD,
+        )
+        draw_footer(stdscr, "confirm_mkdir")
     elif mode == "pick" or (mode == "override" and state["override_source"] == "pick"):
         draw_pick_view(
             stdscr,

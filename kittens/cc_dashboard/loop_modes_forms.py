@@ -707,6 +707,22 @@ def handle_new_mode(stdscr, key, state):
                         state["new_fields"]["instance"], state["home_socket"]
                     )
                 if t and d:
+                    expanded_d = os.path.expanduser(d)
+                    if not os.path.isdir(expanded_d):
+                        state["mode"] = "confirm_mkdir"
+                        state["mkdir_path"] = expanded_d
+                        state["mkdir_pending"] = {
+                            "socket": target_socket,
+                            "title": t,
+                            "dir": d,
+                            "account": a,
+                            "flags": fl,
+                            "pw": pw_val,
+                            "env": state["new_fields"].get("env", "").strip(),
+                            "group": state["new_fields"].get("group", "").strip(),
+                            "save": state["new_fields"].get("save"),
+                        }
+                        return True
                     env_val = state["new_fields"].get("env", "").strip()
                     group_val = state["new_fields"].get("group", "").strip()
                     loc = state["compute_insert_location"](target_socket, a, t)
@@ -754,6 +770,48 @@ def handle_new_mode(stdscr, key, state):
             )
             state["new_cursor"] += 1
 
+    return True
+
+
+def handle_confirm_mkdir_mode(key, state):
+    """Handle key events for directory creation confirmation."""
+    if state["mode"] != "confirm_mkdir":
+        return False
+
+    if key == ord("y") or key == ord("Y"):
+        try:
+            os.makedirs(state["mkdir_path"], exist_ok=True)
+        except OSError as exc:
+            state["msg"] = f"Failed to create directory: {exc}"
+            state["msg_frames"] = 30
+            state["mode"] = "new"
+            return True
+        p = state["mkdir_pending"]
+        loc = state["compute_insert_location"](p["socket"], p["account"], p["title"])
+        state["do_launch"](
+            p["socket"],
+            p["title"],
+            p["dir"],
+            p["account"],
+            p["flags"],
+            p["pw"],
+            location=loc,
+            env_vars=p["env"],
+            group=p["group"],
+        )
+        if p.get("save") == "yes":
+            state["cfg"].append_session(
+                p["title"],
+                p["dir"],
+                p["account"],
+                p["flags"],
+                p["pw"],
+                env=p["env"],
+                group=p["group"],
+            )
+        state["should_exit"] = True
+    else:
+        state["mode"] = "new"
     return True
 
 

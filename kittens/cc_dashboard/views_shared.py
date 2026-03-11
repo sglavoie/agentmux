@@ -50,6 +50,7 @@ _FOOTER_HINTS = {
     "confirm_batch_restart": ["y Confirm restart all", "Any other key Cancel"],
     "confirm_batch_clone": ["y Confirm clone all", "Any other key Cancel"],
     "confirm_save": ["y Confirm save", "Any other key Cancel"],
+    "confirm_mkdir": ["y Create directory", "Any other key Cancel"],
     "new": ["Enter Next/Submit", "Tab Cycle", "Up/Dn Navigate", "Esc Cancel"],
     "new_dir_browse": [
         "Enter Select",
