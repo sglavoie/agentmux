@@ -8,14 +8,25 @@ if command -v gum >/dev/null 2>&1; then
 	HAS_GUM=true
 fi
 
+# die MESSAGE [SUGGESTION]
+# Print a fatal error to stderr and exit 1.
+die() {
+	local msg="$1"
+	local suggestion="${2:-}"
+	echo "Error: $msg" >&2
+	[[ -n "$suggestion" ]] && echo "  $suggestion" >&2
+	exit 1
+}
+
 require_gum() {
 	if [[ "$HAS_GUM" != "true" ]]; then
-		echo "Error: This feature requires gum (charmbracelet/gum)." >&2
-		echo "Install it with: brew install gum" >&2
-		exit 1
+		die "This feature requires gum (charmbracelet/gum)." \
+			"Install it with: brew install gum"
 	fi
 }
 
+# Gum styling constants — muted gray for section headers, dark green for
+# highlighted/selected items. These match the cc-manager palette aesthetic.
 # shellcheck disable=SC2034 # used by scripts that source this library
 GUM_HEADER_COLOR="#aaaaaa"
 # shellcheck disable=SC2034 # used by scripts that source this library

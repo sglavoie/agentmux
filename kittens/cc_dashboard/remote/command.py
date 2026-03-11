@@ -15,7 +15,9 @@ def get_kitty_socket():
     sock = os.environ.get("KITTY_LISTEN_ON", "")
     if sock:
         return sock
-    candidates = sorted(glob.glob("/tmp/kitty-*"), key=os.path.getmtime, reverse=True)
+    tmpdir = os.environ.get("TMPDIR", "/tmp")
+    pattern = os.path.join(tmpdir, "kitty-*")
+    candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     return f"unix:{candidates[0]}" if candidates else ""
 
 
@@ -49,7 +51,9 @@ def get_all_kitty_sockets():
         candidates.append(env_sock)
         seen.add(env_sock)
 
-    for path in sorted(glob.glob("/tmp/kitty-*"), key=os.path.getmtime, reverse=True):
+    tmpdir = os.environ.get("TMPDIR", "/tmp")
+    pattern = os.path.join(tmpdir, "kitty-*")
+    for path in sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True):
         sock = f"unix:{path}"
         if sock not in seen:
             candidates.append(sock)

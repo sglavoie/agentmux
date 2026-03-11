@@ -8,111 +8,67 @@ consistency (e.g. sessions referencing non-existent accounts).
 Exit codes: 0 = all OK (warnings are fine), 1 = errors found.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import sys
 import tomllib
 
+from data_loader import load_hook_events, load_palette_colors, load_sort_modes
 
-def _use_color():
+
+def _use_color() -> bool:
     """Return True if stderr is a terminal (for colored output)."""
     return hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
 
 
-_COLOR = _use_color()
+_COLOR: bool = _use_color()
 
 
-def _green(s):
+def _green(s: str) -> str:
     return f"\033[32m{s}\033[0m" if _COLOR else s
 
 
-def _yellow(s):
+def _yellow(s: str) -> str:
     return f"\033[33m{s}\033[0m" if _COLOR else s
 
 
-def _red(s):
+def _red(s: str) -> str:
     return f"\033[31m{s}\033[0m" if _COLOR else s
 
 
-def _load_palette_colors(data_dir):
-    """Load valid palette color names from palette.json.
-
-    Returns the color set, or None if palette.json cannot be loaded
-    (caller should skip color validation in that case).
-    """
-    candidates = [
-        os.path.join(data_dir, "palette.json"),
-        os.path.expanduser("~/.local/lib/cc-manager/palette.json"),
-    ]
-    for path in candidates:
-        try:
-            with open(path) as f:
-                data = json.load(f)
-        except (FileNotFoundError, OSError):
-            continue
-        except json.JSONDecodeError:
-            continue
-        try:
-            return set(data["colors"].keys())
-        except (KeyError, TypeError):
-            continue
-    return None
+def _load_palette_colors_for_dir(data_dir: str) -> frozenset[str] | None:
+    """Load valid palette color names, preferring *data_dir* then standard paths."""
+    return load_palette_colors(data_dir)
 
 
-def _load_icons_json(data_dir):
-    """Load and return the parsed icons.json data, or None on failure."""
-    candidates = [
-        os.path.join(data_dir, "icons.json"),
-        os.path.expanduser("~/.local/lib/cc-manager/icons.json"),
-    ]
-    for path in candidates:
-        try:
-            with open(path) as f:
-                return json.load(f)
-        except (FileNotFoundError, OSError, json.JSONDecodeError):
-            continue
-    return None
+def _load_hook_events_for_dir(data_dir: str) -> set[str]:
+    """Load valid hook event names, preferring *data_dir* then standard paths."""
+    return load_hook_events(data_dir)
 
 
-def _load_hook_events(data_dir):
-    """Load valid hook event names from icons.json."""
-    data = _load_icons_json(data_dir)
-    if data:
-        try:
-            return set(data["hook_events"])
-        except (KeyError, TypeError):
-            pass
-    return set()
-
-
-def _load_sort_modes(data_dir):
-    """Load valid sort mode names from icons.json."""
-    data = _load_icons_json(data_dir)
-    if data:
-        try:
-            return set(data["sort_modes"])
-        except (KeyError, TypeError):
-            pass
-    return {"default", "alpha", "name", "account",
-            "group", "status", "idle", "activity"}
+def _load_sort_modes_for_dir(data_dir: str) -> set[str]:
+    """Load valid sort mode names, preferring *data_dir* then standard paths."""
+    return load_sort_modes(data_dir)
 
 
 class Validator:
     """Accumulates errors and warnings for a single config file."""
 
-    def __init__(self, label):
-        self.label = label
-        self.errors = []
-        self.warnings = []
+    def __init__(self, label: str) -> None:
+        self.label: str = label
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
-    def error(self, msg):
+    def error(self, msg: str) -> None:
         self.errors.append(msg)
 
-    def warn(self, msg):
+    def warn(self, msg: str) -> None:
         self.warnings.append(msg)
 
-    def summary_line(self):
-        parts = []
+    def summary_line(self) -> str:
+        parts: list[str] = []
         if self.errors:
             parts.append(_red(f"{len(self.errors)} error(s)"))
         if self.warnings:
@@ -120,8 +76,8 @@ class Validator:
         status = ", ".join(parts) if parts else _green("OK")
         return f"  {self.label} ... {status}"
 
-    def detail_lines(self):
-        lines = []
+    def detail_lines(self) -> list[str]:
+        lines: list[str] = []
         for e in self.errors:
             lines.append(f"    {_red('ERROR')}: {e}")
         for w in self.warnings:
@@ -129,7 +85,9 @@ class Validator:
         return lines
 
 
-def validate_accounts(path, palette_colors):
+def validate_accounts(
+    path: str, palette_colors: frozenset[str] | set[str] | None
+) -> tuple[Validator, set[str]]:
     """Validate accounts.toml. Returns (Validator, set of account names)."""
     v = Validator("accounts.toml")
     account_names: set[str] = set()
@@ -187,7 +145,7 @@ def validate_accounts(path, palette_colors):
     return v, account_names
 
 
-def validate_sessions(path, account_names):
+def validate_sessions(path: str, account_names: set[str]) -> Validator:
     """Validate sessions.toml."""
     v = Validator("sessions.toml")
 
@@ -254,7 +212,7 @@ def validate_sessions(path, account_names):
     return v
 
 
-def validate_defaults(path, valid_sort=None):
+def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validator:
     """Validate defaults.toml."""
     v = Validator("defaults.toml")
 
@@ -274,7 +232,8 @@ def validate_defaults(path, valid_sort=None):
 
     known_defaults_keys = {"claude_flags", "project_window", "sort_sessions",
                            "dashboard_refresh", "tab_statuses",
-                           "notes_editor", "kitty_timeout"}
+                           "notes_editor", "kitty_timeout",
+                           "idle_poll_interval"}
     unknown_defaults = set(defaults.keys()) - known_defaults_keys
     if unknown_defaults:
         v.warn(f"[defaults]: unknown key(s): {', '.join(sorted(unknown_defaults))}")
@@ -310,19 +269,28 @@ def validate_defaults(path, valid_sort=None):
 
     refresh = defaults.get("dashboard_refresh")
     if refresh is not None:
-        if not isinstance(refresh, int) or isinstance(refresh, bool):
+        if isinstance(refresh, bool) or not isinstance(refresh, int):
             v.error("dashboard_refresh must be an integer")
         elif refresh < 0:
             v.error("dashboard_refresh must be non-negative")
 
     kitty_timeout = defaults.get("kitty_timeout")
     if kitty_timeout is not None:
-        if not isinstance(kitty_timeout, int) or isinstance(kitty_timeout, bool):
+        if isinstance(kitty_timeout, bool) or not isinstance(kitty_timeout, int):
             v.error("kitty_timeout must be an integer")
         elif kitty_timeout < 1:
             v.error("kitty_timeout must be at least 1")
         elif kitty_timeout > 300:
             v.error("kitty_timeout must be at most 300")
+
+    idle_poll = defaults.get("idle_poll_interval")
+    if idle_poll is not None:
+        if isinstance(idle_poll, bool) or not isinstance(idle_poll, int):
+            v.error("idle_poll_interval must be an integer")
+        elif idle_poll < 5:
+            v.error("idle_poll_interval must be at least 5 (seconds)")
+        elif idle_poll > 3600:
+            v.error("idle_poll_interval must be at most 3600 (seconds)")
 
     # Validate [notifications] section
     bool_keys = ("error", "permission", "stop", "idle")
@@ -334,7 +302,7 @@ def validate_defaults(path, valid_sort=None):
     for key in ("idle_alert_minutes", "min_secs"):
         val = notifications.get(key)
         if val is not None:
-            if not isinstance(val, (int, float)) or isinstance(val, bool):
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
                 v.error(f"notifications.{key} must be a number")
             elif val < 0:
                 v.error(f"notifications.{key} must be non-negative")
@@ -356,7 +324,9 @@ def validate_defaults(path, valid_sort=None):
     return v
 
 
-def validate_hooks(path, valid_events, account_names):
+def validate_hooks(
+    path: str, valid_events: set[str], account_names: set[str]
+) -> Validator:
     """Validate hooks.json."""
     v = Validator("hooks.json")
 
@@ -424,7 +394,43 @@ def validate_hooks(path, valid_events, account_names):
     return v
 
 
-def main():
+def quick_validate(config_dir: str, data_dir: str) -> list[tuple[str, str]]:
+    """Run validation and return a list of (level, message) tuples.
+
+    level is 'error' or 'warning'.  Intended for programmatic callers
+    (e.g. the dashboard) that want to surface config issues without
+    printing directly to stderr.
+    """
+    palette_colors = load_palette_colors(data_dir)
+    valid_events = load_hook_events(data_dir)
+    valid_sort = load_sort_modes(data_dir)
+
+    accounts_path = os.environ.get(
+        "CC_MANAGER_ACCOUNTS", os.path.join(config_dir, "accounts.toml")
+    )
+    sessions_path = os.environ.get(
+        "CC_MANAGER_CONFIG", os.path.join(config_dir, "sessions.toml")
+    )
+    defaults_path = os.environ.get(
+        "CC_MANAGER_DEFAULTS", os.path.join(config_dir, "defaults.toml")
+    )
+    hooks_path = os.path.join(config_dir, "hooks.json")
+
+    v_accounts, account_names = validate_accounts(accounts_path, palette_colors)
+    v_sessions = validate_sessions(sessions_path, account_names)
+    v_defaults = validate_defaults(defaults_path, valid_sort)
+    v_hooks = validate_hooks(hooks_path, valid_events, account_names)
+
+    issues = []
+    for v in [v_accounts, v_sessions, v_defaults, v_hooks]:
+        for e in v.errors:
+            issues.append(("error", f"{v.label}: {e}"))
+        for w in v.warnings:
+            issues.append(("warning", f"{v.label}: {w}"))
+    return issues
+
+
+def main() -> None:
     if len(sys.argv) < 3:
         print(f"Usage: {sys.argv[0]} CONFIG_DIR DATA_DIR", file=sys.stderr)
         sys.exit(2)
@@ -432,12 +438,12 @@ def main():
     config_dir = sys.argv[1]
     data_dir = sys.argv[2]
 
-    palette_colors = _load_palette_colors(data_dir)
+    palette_colors = _load_palette_colors_for_dir(data_dir)
     if palette_colors is None:
         print(_yellow("  WARN") + ": could not load palette.json; "
               "skipping color validation", file=sys.stderr)
-    valid_events = _load_hook_events(data_dir)
-    valid_sort = _load_sort_modes(data_dir)
+    valid_events = _load_hook_events_for_dir(data_dir)
+    valid_sort = _load_sort_modes_for_dir(data_dir)
 
     accounts_path = os.environ.get("CC_MANAGER_ACCOUNTS",
                                    os.path.join(config_dir, "accounts.toml"))

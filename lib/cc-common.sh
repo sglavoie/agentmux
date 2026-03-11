@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # cc-common.sh — shared infrastructure for cc-manager shell scripts.
 # Sourced by cc-launch and cc-status. Do not execute directly.
+#
+# Variable naming conventions:
+#   _UPPER_CASE  — module-private globals (not exported), e.g. _ACCOUNT_NAMES
+#   UPPER_CASE   — public globals / environment variables, e.g. SOCKET, CONFIG_FILE
+#   _lower_case  — function-local temporaries when local is not possible
+#   Source guards use _MODULE_LOADED pattern, e.g. _CC_COMMON_LOADED
 
 [[ -n "${_CC_COMMON_LOADED:-}" ]] && return 0
 _CC_COMMON_LOADED=1

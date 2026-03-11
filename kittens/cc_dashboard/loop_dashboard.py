@@ -1,13 +1,14 @@
 """Main event loop and session fingerprinting for the Claude Code Dashboard."""
 
-import contextlib
 import curses
 import os
+import sys
 from typing import Any
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.colors import init_colors
 from cc_dashboard.config_data import PALETTE_NAMES
+from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.filters import (
     SORT_MODES,
     _apply_filters,
@@ -74,6 +75,33 @@ from cc_dashboard.views import (
 )
 
 
+def _run_startup_validation(state):
+    """Run config validation and surface issues in the status bar."""
+    try:
+        lib_dir = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "..", "..", "lib"
+        )
+        if lib_dir not in sys.path:
+            sys.path.insert(0, lib_dir)
+        from config_validator import quick_validate  # type: ignore[import-not-found]
+
+        config_dir = _cfg._config_dir()
+        data_dir = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "..", "..", "data"
+        )
+        issues = quick_validate(config_dir, data_dir)
+        errors = [msg for level, msg in issues if level == "error"]
+        warnings = [msg for level, msg in issues if level == "warning"]
+        if errors:
+            state["msg"] = f"Config: {len(errors)} error(s) found (ccm config validate)"
+            state["msg_frames"] = 50
+        elif warnings:
+            state["msg"] = f"Config: {len(warnings)} warning(s) (ccm config validate)"
+            state["msg_frames"] = 30
+    except Exception:
+        pass  # validation is advisory; never block dashboard startup
+
+
 def dashboard(stdscr):
     """Run the interactive dashboard loop."""
     curses.set_escdelay(25)  # ms; reduce Escape key lag (default 1000ms)
@@ -82,7 +110,7 @@ def dashboard(stdscr):
     stdscr.timeout(100)
 
     stdscr.erase()
-    stdscr.addstr(0, 0, "Discovering sessions...")
+    safe_addstr(stdscr, 0, 0, "Discovering sessions...")
     stdscr.refresh()
 
     home_socket = os.environ.get("KITTY_LISTEN_ON", "") or get_kitty_socket()
@@ -97,6 +125,11 @@ def dashboard(stdscr):
             break
     if not home_instance_label and instance_labels:
         home_instance_label = instance_labels[0]
+
+    n_inst = len(discovered_sockets)
+    safe_addstr(stdscr, 0, 0, f"Loading sessions ({n_inst} instance(s))...")
+    stdscr.clrtoeol()
+    stdscr.refresh()
 
     sessions = query_all_sessions(managed_only=True)
     selected = 0
@@ -349,6 +382,9 @@ def dashboard(stdscr):
     state["refilter"] = refilter
     state["new_fields"] = make_new_fields()
 
+    # Run lightweight config validation at startup
+    _run_startup_validation(state)
+
     # Apply default sort from config (persistence will override below)
     cfg_sort = _cfg._default_sort_sessions
     if cfg_sort and (cfg_sort in SORT_MODES or cfg_sort == "alpha"):
@@ -403,9 +439,7 @@ def dashboard(stdscr):
         rows, cols = stdscr.getmaxyx()
         if rows < min_rows or cols < min_cols:
             stdscr.erase()
-            msg = "Terminal too small"
-            with contextlib.suppress(curses.error):
-                stdscr.addstr(0, 0, msg[:cols])
+            safe_addstr(stdscr, 0, 0, "Terminal too small")
             stdscr.refresh()
             key = stdscr.getch()
             if key == curses.KEY_RESIZE:

@@ -61,6 +61,11 @@ _ccm() {
                     local groups
                     groups=$(python3 "$helper" read-sessions "$sessions_toml" 2>/dev/null | awk -F'\t' '$7 != "" {print $7}' | sort -u)
                     COMPREPLY=( $(compgen -W "$groups" -- "$cur") )
+                elif [[ -f "$sessions_toml" ]]; then
+                    # Fallback: extract group values with basic grep
+                    local groups
+                    groups=$(grep -oP '^\s*group\s*=\s*"\K[^"]+' "$sessions_toml" 2>/dev/null | sort -u)
+                    COMPREPLY=( $(compgen -W "$groups" -- "$cur") )
                 fi
             elif [[ "$prev" == "--save" ]]; then
                 COMPREPLY=( $(compgen -f -- "$cur") )
@@ -82,12 +87,43 @@ _ccm() {
             local hooks_sub="${COMP_WORDS[$((idx+1))]:-}"
             if [[ $COMP_CWORD -eq $((idx+1)) ]]; then
                 COMPREPLY=( $(compgen -W "sync status" -- "$cur") )
+            elif [[ "$hooks_sub" == "sync" && $COMP_CWORD -eq $((idx+2)) ]]; then
+                # Complete account names for hooks sync
+                local accounts_toml="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.toml}"
+                local helper="$HOME/.local/lib/cc-manager/toml-helper.py"
+                if [[ -f "$accounts_toml" && -f "$helper" ]]; then
+                    local accts
+                    accts=$(python3 "$helper" read-accounts "$accounts_toml" 2>/dev/null | cut -f1)
+                    COMPREPLY=( $(compgen -W "$accts" -- "$cur") )
+                else
+                    COMPREPLY=( $(compgen -W "work personal" -- "$cur") )
+                fi
             fi
             ;;
         logs)
             local logs_sub="${COMP_WORDS[$((idx+1))]:-}"
             if [[ $COMP_CWORD -eq $((idx+1)) ]]; then
                 COMPREPLY=( $(compgen -W "$_ccm_logs_subs" -- "$cur") )
+            elif [[ "$logs_sub" == "show" ]]; then
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=( $(compgen -W "--pretty --tail" -- "$cur") )
+                elif [[ "$prev" != "--tail" ]]; then
+                    # Complete session IDs from log filenames
+                    local log_dir="${CC_MANAGER_LOGS:-${XDG_STATE_HOME:-$HOME/.local/state}/cc-manager/activity}"
+                    if [[ -d "$log_dir" ]]; then
+                        local sessions
+                        sessions=$(ls "$log_dir"/*.jsonl 2>/dev/null | xargs -I{} basename {} .jsonl)
+                        COMPREPLY=( $(compgen -W "$sessions" -- "$cur") )
+                    fi
+                fi
+            elif [[ "$logs_sub" == "summary" && $COMP_CWORD -eq $((idx+2)) ]]; then
+                # Complete session IDs from log filenames
+                local log_dir="${CC_MANAGER_LOGS:-${XDG_STATE_HOME:-$HOME/.local/state}/cc-manager/activity}"
+                if [[ -d "$log_dir" ]]; then
+                    local sessions
+                    sessions=$(ls "$log_dir"/*.jsonl 2>/dev/null | xargs -I{} basename {} .jsonl)
+                    COMPREPLY=( $(compgen -W "$sessions" -- "$cur") )
+                fi
             elif [[ "$logs_sub" == "clean" ]]; then
                 COMPREPLY=( $(compgen -W "--older-than --dry-run" -- "$cur") )
             fi

@@ -1,53 +1,20 @@
 """Hooks configuration helpers for dashboard."""
 
+from __future__ import annotations
+
 import contextlib
 import copy
 import json
 import os
 import shutil
 import sys
+from typing import Any
 
 import cc_dashboard.config_core as _core
 import cc_dashboard.config_state as _state
+from cc_dashboard.config_data import load_hook_events as _load_hook_events
 
-
-def _load_hook_events() -> list[str]:
-    """Load hook event list from the canonical source (data/icons.json)."""
-    from cc_dashboard.config_data import _resolve_data_path
-
-    path = _resolve_data_path("icons.json")
-    if path:
-        try:
-            with open(path) as f:
-                data = json.load(f)
-            events = data.get("hook_events")
-            if isinstance(events, list):
-                return [str(e) for e in events]
-        except (json.JSONDecodeError, OSError):
-            pass
-    # Fallback if icons.json is unavailable
-    return [
-        "SessionStart",
-        "UserPromptSubmit",
-        "PreToolUse",
-        "PermissionRequest",
-        "PostToolUse",
-        "PostToolUseFailure",
-        "Notification",
-        "SubagentStart",
-        "SubagentStop",
-        "Stop",
-        "TeammateIdle",
-        "TaskCompleted",
-        "ConfigChange",
-        "WorktreeCreate",
-        "WorktreeRemove",
-        "PreCompact",
-        "SessionEnd",
-    ]
-
-
-HOOK_EVENTS = _load_hook_events()
+HOOK_EVENTS: list[str] = _load_hook_events()
 
 HOOK_EVENT_META = {
     "SessionStart": {
@@ -272,7 +239,7 @@ _FULL_TYPE_EVENTS = {
 }
 
 
-def _resolve_hooks_example_path():
+def _resolve_hooks_example_path() -> str | None:
     """Check repo layout then installed layout for hooks.example.json"""
     this_dir = os.path.dirname(os.path.realpath(__file__))
     repo_path = os.path.join(this_dir, "..", "..", "config", "hooks.example.json")
@@ -286,7 +253,7 @@ def _resolve_hooks_example_path():
     return None
 
 
-def load_hooks():
+def load_hooks() -> tuple[dict[str, Any], dict[str, Any]]:
     """Parse hooks.json into the shared hooks dicts.
 
     Falls back to hooks.example.json if hooks.json is missing.
@@ -295,8 +262,8 @@ def load_hooks():
     _state._hooks_global = {}
     _state._hooks_overrides = {}
 
-    path = _core._hooks_config_path()
-    if not os.path.isfile(path):
+    path: str | None = _core._hooks_config_path()
+    if not path or not os.path.isfile(path):
         path = _resolve_hooks_example_path()
     if not path or not os.path.isfile(path):
         return _state._hooks_global, _state._hooks_overrides
@@ -310,7 +277,7 @@ def load_hooks():
     return _state._hooks_global, _state._hooks_overrides
 
 
-def _resolve_hook_cmd():
+def _resolve_hook_cmd() -> str:
     """Resolve the absolute path to cc-hook-indicator, with caching"""
     if _state._cached_hook_cmd is not None:
         return _state._cached_hook_cmd
@@ -331,7 +298,7 @@ def _resolve_hook_cmd():
     return _state._cached_hook_cmd
 
 
-def _resolve_log_cmd():
+def _resolve_log_cmd() -> str:
     """Resolve the absolute path to cc-activity-log, with caching"""
     if _state._cached_log_cmd is not None:
         return _state._cached_log_cmd
@@ -352,17 +319,20 @@ def _resolve_log_cmd():
     return _state._cached_log_cmd
 
 
-def _load_example_hooks():
+def _load_example_hooks() -> dict[str, Any]:
     """Load the base hooks from hooks.example.json (what install-hooks.sh uses)."""
     path = _resolve_hooks_example_path()
     if not path:
         return {}
     with contextlib.suppress(json.JSONDecodeError, OSError), open(path) as f:
-        return json.load(f).get("hooks", {})
+        result: dict[str, Any] = json.load(f).get("hooks", {})
+        return result
     return {}
 
 
-def _compute_effective_hooks(account_name, base_hooks=None):
+def _compute_effective_hooks(
+    account_name: str, base_hooks: dict[str, Any] | None = None
+) -> dict[str, list[dict[str, Any]]]:
     """Compute the effective hooks for an account after applying overrides.
 
     Uses base_hooks as the starting point (defaults to _hooks_global).
@@ -423,7 +393,7 @@ def _compute_effective_hooks(account_name, base_hooks=None):
     return result
 
 
-def _detect_drift(account_name):
+def _detect_drift(account_name: str) -> str:
     """Compare installed settings.json hooks against computed effective hooks.
 
     Returns "missing", "drifted", or "in_sync".
@@ -500,12 +470,12 @@ def _detect_drift(account_name):
     return "missing"
 
 
-def _detect_all_drift():
+def _detect_all_drift() -> dict[str, str]:
     """Return {account_name: status} for all configured accounts"""
     return {name: _detect_drift(name) for name in _state._account_names}
 
 
-def save_hooks(global_hooks, account_overrides):
+def save_hooks(global_hooks: dict[str, Any], account_overrides: dict[str, Any]) -> bool:
     """Write hooks configuration to hooks.json.
 
     Creates a .bak copy before overwriting, following the same pattern as
@@ -537,7 +507,7 @@ def save_hooks(global_hooks, account_overrides):
     return True
 
 
-def toggle_hook_event(account_name, event_name):
+def toggle_hook_event(account_name: str, event_name: str) -> bool:
     """Toggle a hook event for an account.
 
     Returns True if the event is now enabled, False if disabled.
@@ -569,7 +539,7 @@ def toggle_hook_event(account_name, event_name):
     return enabled
 
 
-def _get_extra_hooks(override):
+def _get_extra_hooks(override: dict[str, Any]) -> dict[str, Any]:
     """Read extra_hooks from an override dict, falling back to extra_commands.
 
     The old format stored bare hook handler dicts under extra_commands:
@@ -580,17 +550,23 @@ def _get_extra_hooks(override):
     and wraps each bare handler into a matcher-group.
     """
     if "extra_hooks" in override:
-        return override["extra_hooks"]
+        result: dict[str, Any] = override["extra_hooks"]
+        return result
     old = override.get("extra_commands", {})
     if not old:
         return {}
-    converted = {}
+    converted: dict[str, Any] = {}
     for event, handlers in old.items():
         converted[event] = [{"hooks": [h]} for h in handlers]
     return converted
 
 
-def add_extra_hook(account_name, event_name, handler, matcher=None):
+def add_extra_hook(
+    account_name: str,
+    event_name: str,
+    handler: dict[str, Any],
+    matcher: str | None = None,
+) -> None:
     """Add an extra hook for an account and event.
 
     handler is a dict like {"type": "command", "command": "...", "async": true}.
@@ -612,7 +588,7 @@ def add_extra_hook(account_name, event_name, handler, matcher=None):
     if event_name not in override["extra_hooks"]:
         override["extra_hooks"][event_name] = []
 
-    group = {"hooks": [handler]}
+    group: dict[str, Any] = {"hooks": [handler]}
     if matcher:
         group["matcher"] = matcher
     override["extra_hooks"][event_name].append(group)
@@ -621,8 +597,12 @@ def add_extra_hook(account_name, event_name, handler, matcher=None):
 
 
 def update_extra_hook(
-    account_name, event_name, group_idx, new_handler, new_matcher=None
-):
+    account_name: str,
+    event_name: str,
+    group_idx: int,
+    new_handler: dict[str, Any],
+    new_matcher: str | None = None,
+) -> None:
     """Replace an extra hook group at a given index."""
     if not _state._hooks_global:
         load_hooks()
@@ -636,7 +616,7 @@ def update_extra_hook(
     if group_idx < 0 or group_idx >= len(extras):
         return
 
-    group = {"hooks": [new_handler]}
+    group: dict[str, Any] = {"hooks": [new_handler]}
     if new_matcher:
         group["matcher"] = new_matcher
     extras[group_idx] = group
@@ -644,7 +624,7 @@ def update_extra_hook(
     save_hooks(_state._hooks_global, _state._hooks_overrides)
 
 
-def remove_extra_hook(account_name, event_name, group_idx):
+def remove_extra_hook(account_name: str, event_name: str, group_idx: int) -> None:
     """Remove an extra hook group by index for an account and event."""
     if not _state._hooks_global:
         load_hooks()

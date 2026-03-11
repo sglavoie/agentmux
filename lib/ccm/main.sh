@@ -5,7 +5,17 @@ _CCM_MAIN_LOADED=1
 
 CCM_VERSION="$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "0.2.0")"
 
+_check_version_staleness() {
+	local installed_version
+	installed_version="$(cat "$HOME/.local/lib/cc-manager/.version" 2>/dev/null)" || return 0
+	if [[ -n "$installed_version" && "$installed_version" != "$CCM_VERSION" ]]; then
+		echo "Warning: installed version ($installed_version) differs from repo ($CCM_VERSION). Run 'just install' to update." >&2
+	fi
+}
+
 main() {
+	_check_version_staleness
+
 	local SOCKET_ARGS=()
 
 	# Parse global --socket option

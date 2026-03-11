@@ -79,8 +79,7 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	*)
-		echo "Error: Unknown option '$1'. See --help for usage." >&2
-		exit 1
+		die "Unknown option '$1'." "See 'cc-status --help' for usage."
 		;;
 	esac
 done
@@ -112,8 +111,8 @@ else
 fi
 
 if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
-	echo "Error: No active Kitty instances found." >&2
-	exit 1
+	die "No active Kitty instances found." \
+		"Is Kitty running with remote control enabled? (allow_remote_control in kitty.conf)"
 fi
 
 multi_instance=false

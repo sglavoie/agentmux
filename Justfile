@@ -109,6 +109,7 @@ install: check-deps check-keybindings
         fi; \
         ln -sf "{{root}}/$src" "$dest"; \
     done
+    @cp "{{root}}/VERSION" "{{prefix_lib}}/.version"
     @echo "Symlinks created."
     @echo ""
     @echo "If you haven't already, add this line to your kitty.conf:"
@@ -140,8 +141,8 @@ uninstall:
             echo "Removed $dest"; \
         fi; \
     done
-    @rmdir "{{prefix_lib}}/ccm" 2>/dev/null || true
-    @rmdir "{{prefix_lib}}" 2>/dev/null || true
+    @rm -rf "{{prefix_lib}}/ccm" 2>/dev/null || true
+    @rm -rf "{{prefix_lib}}" 2>/dev/null || true
     @echo "Done."
     @echo ""
     @echo "Other artifacts you may want to remove:"
@@ -156,6 +157,7 @@ test:
     python3 tests/test_config_validator.py
     python3 tests/test_hooks_validator.py
     python3 tests/test_data_files.py
+    python3 tests/test_smoke.py
 
 # Run linters
 lint:

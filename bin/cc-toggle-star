@@ -53,7 +53,10 @@ else
 fi
 
 new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag")"
-kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title"
+if ! kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title"; then
+	echo "Error: failed to set tab title for tab $tab_id." >&2
+	exit 1
+fi
 sleep 0.05
 
 # Reorder tabs so pinned tabs move to the front

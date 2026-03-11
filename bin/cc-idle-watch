@@ -13,7 +13,11 @@ source "$(dirname "$(readlink -f "$0")")/../lib/cc-common.sh"
 
 PID_FILE="${_CCM_TMPDIR}/ccm-idle-watch.pid"
 LOG_FILE="${_CCM_TMPDIR}/ccm-idle-watch.log"
-POLL_INTERVAL=30
+# Default poll interval (seconds) for scanning activity files.
+# 30s balances responsiveness with low overhead — idle alerts are not
+# time-critical (threshold is typically minutes), so frequent polling
+# is unnecessary.  Configurable via idle_poll_interval in defaults.toml.
+_DEFAULT_POLL_INTERVAL=30
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -91,6 +95,10 @@ cmd_daemon() {
 		# Re-read config each iteration so live changes take effect
 		load_defaults
 
+		# Use configured poll interval, falling back to default
+		local poll="${_DEFAULT_IDLE_POLL_INTERVAL:-$_DEFAULT_POLL_INTERVAL}"
+		[[ "$poll" -gt 0 ]] 2>/dev/null || poll="$_DEFAULT_POLL_INTERVAL"
+
 		local threshold=0
 		if [[ -n "$_DEFAULT_IDLE_ALERT_MINUTES" ]]; then
 			threshold=$((_DEFAULT_IDLE_ALERT_MINUTES * 60))
@@ -98,7 +106,7 @@ cmd_daemon() {
 
 		# If idle notifications are disabled, sleep and check again
 		if [[ "$threshold" -le 0 || "${_DEFAULT_NOTIFY_IDLE:-}" != "on" ]]; then
-			sleep "$POLL_INTERVAL"
+			sleep "$poll"
 			continue
 		fi
 
@@ -164,7 +172,7 @@ cmd_daemon() {
 			fi
 		done
 
-		sleep "$POLL_INTERVAL"
+		sleep "$poll"
 	done
 }
 
@@ -261,14 +269,15 @@ Commands:
     --stop      Stop a running idle watcher
     --status    Check whether the idle watcher is running
 
-The watcher polls activity files every 30 seconds and fires macOS
-alerter notifications for sessions that have exceeded the configured
+The watcher polls activity files (default: every 30 seconds) and fires
+macOS alerter notifications for sessions that have exceeded the configured
 idle_alert_minutes threshold.  It uses the same cooldown files as the
 dashboard, so duplicate notifications are prevented.
 
-Configure via defaults.conf:
+Configure via defaults.toml:
     notify_idle = on
     idle_alert_minutes = 5
+    idle_poll_interval = 30   # seconds between scans
 HELP
 		;;
 	*)

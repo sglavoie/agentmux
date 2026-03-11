@@ -3,7 +3,10 @@
 [[ -n "${_CC_LAUNCH_CMD_LIFECYCLE_LOADED:-}" ]] && return 0
 _CC_LAUNCH_CMD_LIFECYCLE_LOADED=1
 
-# Poll constants for waiting on tab closure before relaunch
+# Poll constants for waiting on tab closure before relaunch.
+# 5 polls at 100ms intervals = ~500ms max wait. This is enough for Kitty to
+# process a close-tab command; if the tab is still present after 500ms, we
+# warn and proceed anyway (the launch will likely succeed regardless).
 _CLOSE_POLL_MAX=5
 _CLOSE_POLL_DELAY=0.1  # seconds
 
@@ -178,12 +181,17 @@ cmd_restart() {
     echo "Closed tab '$title', relaunching..." >&2
     # Poll for tab closure before relaunching
     local _poll
+    local _tab_gone=false
     for ((_poll = 0; _poll < _CLOSE_POLL_MAX; _poll++)); do
         if ! kitty @ --to "$SOCKET" ls 2>/dev/null | jq -e --argjson tid "$_TARGET_TAB_ID" '[.[].tabs[] | select(.id == $tid)] | length > 0' >/dev/null 2>&1; then
+            _tab_gone=true
             break
         fi
         sleep "$_CLOSE_POLL_DELAY"
     done
+    if [[ "$_tab_gone" != "true" ]]; then
+        echo "Warning: tab '$title' may not have closed (timed out after ${_CLOSE_POLL_MAX} polls). Proceeding with restart." >&2
+    fi
 
     local loc_args
     loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
@@ -234,7 +242,7 @@ cmd_clone() {
     SOCKET="$source_socket"
 
     local base_title clone_title number
-    local max_clones=100
+    local max_clones=100  # Safety cap to prevent runaway loop; 100 clones per session is far beyond practical use
     base_title="$(echo "$title" | sed 's/-[0-9]*$//')"
     number=2
     while [[ $number -le $max_clones ]]; do
@@ -353,14 +361,19 @@ cmd_move() {
         exit 1
     fi
     echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..." >&2
-    # Poll for tab closure (max ~500ms) before relaunching on target
+    # Poll for tab closure before relaunching on target
     local _poll
-    for ((_poll = 0; _poll < 5; _poll++)); do
+    local _tab_gone=false
+    for ((_poll = 0; _poll < _CLOSE_POLL_MAX; _poll++)); do
         if ! kitty @ --to "$source_socket" ls 2>/dev/null | jq -e --argjson tid "$_TARGET_TAB_ID" '[.[].tabs[] | select(.id == $tid)] | length > 0' >/dev/null 2>&1; then
+            _tab_gone=true
             break
         fi
-        sleep 0.1
+        sleep "$_CLOSE_POLL_DELAY"
     done
+    if [[ "$_tab_gone" != "true" ]]; then
+        echo "Warning: tab '$title' may not have closed (timed out after ${_CLOSE_POLL_MAX} polls). Proceeding with move." >&2
+    fi
 
     SOCKET="$target_socket"
     local loc_args

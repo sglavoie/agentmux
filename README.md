@@ -13,6 +13,8 @@ listen_on unix:/tmp/kitty-{kitty_pid}
 
 You also need `jq` installed (`brew install jq` on macOS) and Python 3.13+ (`brew install python` on macOS, or use your preferred Python version manager).
 
+For macOS notifications (idle alerts, error/permission/stop events), install [alerter](https://github.com/vjeantet/alerter): `brew install vjeantet/tap/alerter`. Notifications are optional — everything else works without it.
+
 ## Setup
 
 ### 1. Install
@@ -145,6 +147,14 @@ flags = "-"
 
 There is no merging; the per-session value completely replaces the global default.
 
+Additional defaults options:
+
+- `tab_statuses` — Array of status presets shown in the F7 tab status picker. Custom values entered via F7 are auto-appended. Default: `["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]`
+- `notes_editor` — External editor command for session notes (opened via F9). Leave empty to use the built-in editor.
+- `kitty_timeout` — Timeout in seconds for `kitty @` remote control commands in the dashboard. Default: `5`
+
+See `config/defaults.example.toml` for the full list of options including notification settings.
+
 ## Usage
 
 ### The `ccm` command
@@ -254,6 +264,9 @@ F2          Star/pin the selected session (pinned tabs sort to front)
 g           Filter by group (in pick mode)
 G           Group actions overlay (launch/close entire groups)
 H           Open the hooks manager
+F6          Open color picker to change the current tab's color
+F7          Set a tab status label (e.g. "WIP", "blocked", "done")
+F9          Open session notes editor (attach free-text notes to a tab)
 q / Esc     Dismiss the dashboard
 ```
 
@@ -301,6 +314,7 @@ cc-launch --sockets
 | `CC_MANAGER_CONFIG` | Override config directory (default: `~/.config/cc-manager/`) |
 | `CC_MANAGER_ACCOUNTS` | Override accounts config file path |
 | `CC_MANAGER_DEFAULTS` | Override defaults config file path |
+| `CC_MANAGER_LOGS` | Activity log directory (default: `~/.local/state/cc-manager/activity/`) |
 | `CCM_DEBUG` | Set to `1` to enable debug logging to stderr |
 | `CCM_DEBUG_LOG` | Path to a file for debug log output (used by the dashboard) |
 | `KITTY_LISTEN_ON` | Kitty sets this automatically; used for socket discovery |
@@ -321,6 +335,7 @@ These are typically invoked via Kitty keybindings (defined in `cc-manager.conf`)
 
 - `cc-toggle-star` — Toggle the star/pin icon on the active tab (bound to F2)
 - `cc-toggle-flag` — Toggle a visual flag marker on the active tab
+- `cc-hook-indicator` — Hook script that updates tab title icons on Claude Code events. Automatically detects `claude -p` (pipe mode) and suppresses macOS notifications while still tracking icons and activity.
 - `cc-idle-watch` — Background daemon that monitors sessions and sends idle notifications
 - `cc-activity-log` — Hook script that logs session activity events to JSONL files
 - `cc-audit` — Check which upstream Claude Code features your version supports
@@ -339,14 +354,20 @@ The Kitty socket is auto-detected from `KITTY_LISTEN_ON` or by finding the most 
 
 ## Shell completions
 
-Zsh completions for both `cc-launch` and `cc-status` are installed to `~/.zfunc/` by `just install`. Make sure your `~/.zshrc` includes `~/.zfunc` in `fpath` and calls `compinit`:
+**Zsh**: Completions are installed to `~/.zfunc/` by `just install`. Make sure your `~/.zshrc` includes `~/.zfunc` in `fpath` and calls `compinit`:
 
 ```bash
 fpath=(~/.zfunc $fpath)
 autoload -Uz compinit && compinit
 ```
 
-This enables tab completion for all subcommands, tab titles (for `--close`), account types, socket paths, and file arguments.
+**Bash**: A completion script is installed to `~/.local/share/bash-completion/completions/` by `just install`. If your shell doesn't auto-load from that directory, source it manually:
+
+```bash
+source ~/.local/share/bash-completion/completions/ccm
+```
+
+Both enable tab completion for all subcommands, flags, tab titles, account names, group names, session log IDs, socket paths, and file arguments.
 
 ## File layout
 
@@ -360,6 +381,8 @@ bin/cc-audit                    Upstream feature compatibility checker
 bin/cc-idle-watch               Background idle notification watcher
 bin/cc-toggle-star              Tab star/pin toggle (Kitty keybinding)
 bin/cc-toggle-flag              Tab flag marker toggle (Kitty keybinding)
+hooks/cc-hook-indicator         Tab icon updater and notification hook
+hooks/cc-activity-log           Session activity event logger
 lib/cc-common.sh                Shared Bash library (sourced by cc-launch, cc-status)
 lib/cc-common/                  Modular Bash library components
 lib/cc-launch/                  cc-launch subcommand implementations
@@ -378,6 +401,7 @@ sessions/example.conf           Example Kitty session file for startup
 kittens/claude_dashboard.py     Dashboard entry point (Kitty kitten)
 kittens/cc_dashboard/           Dashboard implementation modules
 completions/_ccm                Zsh completion for ccm
+completions/_ccm.bash           Bash completion for ccm
 completions/_cc-launch          Zsh completion for cc-launch
 completions/_cc-status          Zsh completion for cc-status
 tests/                          Test suite

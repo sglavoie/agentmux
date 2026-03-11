@@ -8,7 +8,11 @@ _TARGET_INSTANCE_LABEL=""
 _TARGET_TAB_ID=""
 _MOVE_TARGET_INSTANCE=""
 
-# Retry/backoff constants for set-tab-color after tab creation
+# Retry/backoff constants for set-tab-color after tab creation.
+# Kitty may not register a new tab immediately, so we retry with exponential
+# backoff: 100ms, 150ms, 225ms, 337ms, 506ms (total ~1.3s worst case).
+# 5 retries is sufficient in practice; failures beyond that indicate a real
+# problem (wrong socket, remote control disabled, etc.).
 _COLOR_MAX_RETRIES=5
 _COLOR_INITIAL_DELAY_MS=100
 _COLOR_BACKOFF_FACTOR_NUM=3   # numerator of 3/2 = 1.5x
@@ -161,7 +165,9 @@ _lookup_session_overrides_toml() {
 			cfg_env="$cfg_e"
 			break
 		fi
-	done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" || echo "")
+	done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>/dev/null || {
+		echo "Warning: failed to parse sessions config '$CONFIG_FILE'." >&2
+	})
 }
 
 launch_session() {

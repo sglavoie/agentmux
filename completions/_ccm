@@ -14,6 +14,20 @@ _ccm_config_files() {
     _describe 'config file' files
 }
 
+_ccm_accounts() {
+    local accounts_toml="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.toml}"
+    local -a accts
+
+    if [[ -f "$accounts_toml" ]]; then
+        local helper="${HOME}/.local/lib/cc-manager/toml-helper.py"
+        [[ -f "$helper" ]] || { _values 'account' work personal; return; }
+        accts=(${(f)"$(python3 "$helper" read-accounts "$accounts_toml" 2>/dev/null | cut -f1)"}) || { _values 'account' work personal; return; }
+    else
+        accts=(work personal)
+    fi
+    [[ ${#accts} -gt 0 ]] && _values 'account' $accts
+}
+
 _ccm_sockets() {
     local -a socks
     socks=(/tmp/kitty-*(N))
@@ -83,6 +97,12 @@ _ccm() {
     fi
 
     case "$words[2]" in
+        status)
+            # Delegate to cc-status completions for remaining args
+            shift words
+            (( CURRENT -= 1 ))
+            _cc-status
+            ;;
         config)
             local config_sub="$words[3]"
             case "$config_sub" in
@@ -120,6 +140,19 @@ _ccm() {
                     'claude-hooks' 'claude-cli' 'kitty-remote' 'kitty-launch' 'kitty-match'
             fi
             ;;
+        hooks)
+            local hooks_sub="$words[3]"
+            case "$hooks_sub" in
+                sync)
+                    [[ $CURRENT -eq 4 ]] && _ccm_accounts
+                    ;;
+                *)
+                    [[ $CURRENT -eq 3 ]] && _values 'hooks subcommand' \
+                        'sync[Sync hooks into account settings.json]' \
+                        'status[Show drift status for all accounts]'
+                    ;;
+            esac
+            ;;
         idle-watch)
             [[ $CURRENT -eq 3 ]] && _values 'idle-watch command' \
                 '--start[Start the background idle watcher]' \
@@ -129,7 +162,22 @@ _ccm() {
         logs)
             local logs_sub="$words[3]"
             case "$logs_sub" in
-                show|summary)
+                show)
+                    if [[ $CURRENT -eq 4 ]]; then
+                        # Complete session IDs from log filenames
+                        local log_dir="${CC_MANAGER_LOGS:-${XDG_STATE_HOME:-$HOME/.local/state}/cc-manager/activity}"
+                        if [[ -d "$log_dir" ]]; then
+                            local -a sessions
+                            sessions=(${log_dir}/*.jsonl(N:t:r))
+                            [[ ${#sessions} -gt 0 ]] && _describe 'session id' sessions
+                        fi
+                    elif [[ $CURRENT -ge 5 ]]; then
+                        _values 'show option' \
+                            '--pretty[Format output with jq]' \
+                            '--tail[Show only the last N entries]'
+                    fi
+                    ;;
+                summary)
                     # Complete session IDs from log filenames.
                     if [[ $CURRENT -eq 4 ]]; then
                         local log_dir="${CC_MANAGER_LOGS:-${XDG_STATE_HOME:-$HOME/.local/state}/cc-manager/activity}"

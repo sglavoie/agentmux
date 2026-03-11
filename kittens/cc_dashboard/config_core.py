@@ -1,18 +1,22 @@
 """Accounts/defaults/sessions configuration helpers for dashboard."""
 
+from __future__ import annotations
+
 import contextlib
 import os
 import re
 import shutil
 import sys
 import tomllib
+import types
 from datetime import datetime
+from typing import Any
 
 from cc_dashboard import config_state as _state
 from cc_dashboard.config_data import ACTIVE_FG, INACTIVE_FG, PALETTE
 
 
-def _lib_dir():
+def _lib_dir() -> str:
     """Return the ``lib/`` directory containing ``toml_writer``/``toml_reader``.
 
     Resolves symlinks so this works both in-repo and when installed via
@@ -22,17 +26,18 @@ def _lib_dir():
     return os.path.join(here, "..", "..", "lib")
 
 
-def _import_toml_writer():
+def _import_toml_writer() -> types.ModuleType:
     """Import and return the ``toml_writer`` module from ``lib/``."""
     lib = _lib_dir()
     if lib not in sys.path:
         sys.path.insert(0, lib)
     import toml_writer
 
-    return toml_writer
+    tw: types.ModuleType = toml_writer
+    return tw
 
 
-def _accounts_config_path():
+def _accounts_config_path() -> str:
     env = os.environ.get("CC_MANAGER_ACCOUNTS", "")
     if env:
         return env
@@ -42,7 +47,7 @@ def _accounts_config_path():
     return os.path.join(xdg, "cc-manager", "accounts.toml")
 
 
-def load_accounts():
+def load_accounts() -> None:
     """Parse accounts config into the shared account state."""
     _state._accounts.clear()
     _state._account_names[:] = []
@@ -77,7 +82,7 @@ def load_accounts():
         _state._account_names[:] = ["work", "personal"]
 
 
-def _defaults_config_path():
+def _defaults_config_path() -> str:
     env = os.environ.get("CC_MANAGER_DEFAULTS", "")
     if env:
         return env
@@ -87,7 +92,7 @@ def _defaults_config_path():
     return os.path.join(xdg, "cc-manager", "defaults.toml")
 
 
-def load_defaults():
+def load_defaults() -> None:
     """Parse defaults config into the shared default settings."""
     _state._default_claude_flags = ""
     _state._default_project_window = ""
@@ -139,7 +144,7 @@ def load_defaults():
             _state._default_tab_statuses = [str(s) for s in val]
 
 
-def _save_tab_statuses(statuses):
+def _save_tab_statuses(statuses: list[str]) -> None:
     """Write tab_statuses back to defaults.toml, preserving other settings."""
     path = _defaults_config_path()
     toml_writer = _import_toml_writer()
@@ -180,7 +185,7 @@ def _save_tab_statuses(statuses):
     _state._default_tab_statuses = statuses
 
 
-def _sessions_config_path():
+def _sessions_config_path() -> str:
     env = os.environ.get("CC_MANAGER_CONFIG", "")
     if env:
         if os.path.isdir(env):
@@ -192,7 +197,7 @@ def _sessions_config_path():
     return os.path.join(xdg, "cc-manager", "sessions.toml")
 
 
-def _config_dir():
+def _config_dir() -> str:
     """Return the base config directory, mirroring resolve_config_dir() from bin/ccm."""
     env_config = os.environ.get("CC_MANAGER_CONFIG", "")
     if env_config:
@@ -206,26 +211,26 @@ def _config_dir():
     return os.path.join(xdg, "cc-manager")
 
 
-def _notes_dir():
+def _notes_dir() -> str:
     """Return the notes directory, creating it if necessary."""
     d = os.path.join(_config_dir(), "notes")
     os.makedirs(d, exist_ok=True)
     return d
 
 
-def _sanitize_title(title):
+def _sanitize_title(title: str) -> str:
     """Sanitize a session title for use as a filename."""
     name = title.replace(":", "_")
     name = re.sub(r"[/\x00]", "", name)
     return name
 
 
-def notes_file_for_title(title):
+def notes_file_for_title(title: str) -> str:
     """Return the notes file path for a given session title."""
     return os.path.join(_notes_dir(), f"{_sanitize_title(title)}.md")
 
 
-def read_notes(title):
+def read_notes(title: str) -> str:
     """Read notes for a session title. Returns '' if no notes file exists."""
     path = notes_file_for_title(title)
     if os.path.isfile(path):
@@ -234,7 +239,7 @@ def read_notes(title):
     return ""
 
 
-def rename_notes(old_title, new_title):
+def rename_notes(old_title: str, new_title: str) -> None:
     """Rename a notes file when a session title changes."""
     old_path = notes_file_for_title(old_title)
     if os.path.isfile(old_path):
@@ -242,7 +247,7 @@ def rename_notes(old_title, new_title):
         os.rename(old_path, new_path)
 
 
-def _resolve_notes_editor():
+def _resolve_notes_editor() -> str:
     """Return the editor command to use for session notes."""
     return (
         _state._default_notes_editor
@@ -252,17 +257,17 @@ def _resolve_notes_editor():
     )
 
 
-def _sessions_config_filename():
+def _sessions_config_filename() -> str:
     """Return the basename of the sessions config file (e.g. ``sessions.toml``)."""
     return os.path.basename(_sessions_config_path())
 
 
-def _hooks_config_path():
+def _hooks_config_path() -> str:
     """Return the path to hooks.json in the config directory."""
     return os.path.join(_config_dir(), "hooks.json")
 
 
-def _all_config_paths():
+def _all_config_paths() -> list[tuple[str, str]]:
     """Return a list of (label, path) tuples for all config files."""
     return [
         ("accounts", _accounts_config_path()),
@@ -272,7 +277,7 @@ def _all_config_paths():
     ]
 
 
-def load_sessions():
+def load_sessions() -> None:
     """Parse sessions config into the shared sessions list."""
     _state._sessions[:] = []
 
@@ -300,7 +305,7 @@ def load_sessions():
         )
 
 
-def _find_config_session(title):
+def _find_config_session(title: str) -> dict[str, str] | None:
     """Find a config session entry matching the given title, or None."""
     for entry in _state._sessions:
         if entry["title"] == title:
@@ -308,7 +313,7 @@ def _find_config_session(title):
     return None
 
 
-def _resolve_claude_flags(override=""):
+def _resolve_claude_flags(override: str = "") -> str:
     """Return the effective claude flags for a session.
 
     Empty override inherits the global default, "-" disables all flags,
@@ -321,7 +326,7 @@ def _resolve_claude_flags(override=""):
     return override
 
 
-def _resolve_project_window(override=""):
+def _resolve_project_window(override: str = "") -> str:
     """Return the effective project window layout for a session.
 
     Empty override inherits the global default, "-" disables the project window,
@@ -334,7 +339,7 @@ def _resolve_project_window(override=""):
     return override
 
 
-def _resolve_account_by_config_dir(config_dir):
+def _resolve_account_by_config_dir(config_dir: str) -> str:
     """Reverse-lookup: find an account name matching the given config directory."""
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
@@ -355,7 +360,7 @@ def _resolve_account_by_config_dir(config_dir):
     return _state._account_names[0] if _state._account_names else "unknown"
 
 
-def _color_for_config_dir(config_dir):
+def _color_for_config_dir(config_dir: str) -> str:
     """Return the palette color name of the account that owns *config_dir*, or ""."""
     if not config_dir:
         return ""
@@ -365,7 +370,7 @@ def _color_for_config_dir(config_dir):
     return ""
 
 
-def _unique_config_dirs():
+def _unique_config_dirs() -> list[str]:
     """Return a deduplicated, ordered list of config_dir paths from all accounts."""
     seen = set()
     result = []
@@ -377,7 +382,7 @@ def _unique_config_dirs():
     return result
 
 
-def _read_header_comments(path):
+def _read_header_comments(path: str) -> str:
     """Extract leading ``#`` comment / blank lines from a config file."""
     lines = []
     with open(path) as f:
@@ -390,7 +395,7 @@ def _read_header_comments(path):
     return "".join(lines) if lines else ""
 
 
-def _tilde_directory(directory):
+def _tilde_directory(directory: str) -> str:
     """Replace ``$HOME`` prefix with ``~`` in *directory*."""
     home = os.path.expanduser("~")
     if directory.startswith(home):
@@ -399,8 +404,14 @@ def _tilde_directory(directory):
 
 
 def _session_to_toml_entry(
-    title, directory, account, flags="", pw="", env="", group=""
-):
+    title: str,
+    directory: str,
+    account: str,
+    flags: str = "",
+    pw: str = "",
+    env: str = "",
+    group: str = "",
+) -> dict[str, str]:
     """Build a TOML-serializable dict for one ``[[sessions]]`` entry."""
     d = {"title": title, "directory": directory}
     if account:
@@ -416,21 +427,24 @@ def _session_to_toml_entry(
     return d
 
 
-def _write_sessions_toml(path, sessions_data, header=""):
+def _write_sessions_toml(
+    path: str, sessions_data: list[dict[str, str]], header: str = ""
+) -> None:
     """Serialize *sessions_data* (list of TOML entry dicts) to *path*."""
     tw = _import_toml_writer()
     with open(path, "w") as f:
         f.write(tw.dumps({"sessions": sessions_data}, header=header))
 
 
-def _read_sessions_toml_raw(path):
+def _read_sessions_toml_raw(path: str) -> list[dict[str, Any]]:
     """Return the raw ``[[sessions]]`` list from a TOML file."""
     with open(path, "rb") as f:
         data = tomllib.load(f)
-    return data.get("sessions", [])
+    result: list[dict[str, Any]] = data.get("sessions", [])
+    return result
 
 
-def save_sessions(live_sessions):
+def save_sessions(live_sessions: list[dict[str, Any]]) -> tuple[int, bool]:
     """Save live sessions to the sessions config file.
 
     Accepts the sessions list from query_all_sessions (dicts with 'title',
@@ -473,7 +487,15 @@ def save_sessions(live_sessions):
     return len(live_sessions), backup_created
 
 
-def append_session(title, directory, account, flags="", pw="", env="", group=""):
+def append_session(
+    title: str,
+    directory: str,
+    account: str,
+    flags: str = "",
+    pw: str = "",
+    env: str = "",
+    group: str = "",
+) -> None:
     """Append a single session entry to the sessions config file."""
     path = _sessions_config_path()
     directory = _tilde_directory(directory)
@@ -492,8 +514,15 @@ def append_session(title, directory, account, flags="", pw="", env="", group="")
 
 
 def update_session(
-    original_title, title, directory, account, flags="", pw="", env="", group=""
-):
+    original_title: str,
+    title: str,
+    directory: str,
+    account: str,
+    flags: str = "",
+    pw: str = "",
+    env: str = "",
+    group: str = "",
+) -> bool:
     """Update an existing session entry by original title.
 
     Returns True if the entry was found and updated, False otherwise.
@@ -527,7 +556,7 @@ def update_session(
     return True
 
 
-def remove_session(title):
+def remove_session(title: str) -> bool:
     """Remove a session entry by title. Returns True if found."""
     path = _sessions_config_path()
     if not os.path.isfile(path):
@@ -548,7 +577,9 @@ def remove_session(title):
     return True
 
 
-def _palette_tab_colors(account, color_override="", config_dir_override=""):
+def _palette_tab_colors(
+    account: str, color_override: str = "", config_dir_override: str = ""
+) -> list[str]:
     """Return a list of kitty set-tab-color arguments for the given account."""
     if color_override and color_override in PALETTE:
         color_name = color_override

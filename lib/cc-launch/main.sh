@@ -181,8 +181,8 @@ main() {
     fi
 
     if [[ -z "$SOCKET" ]]; then
-        echo "Error: No Kitty socket found. Is Kitty running with remote control enabled?" >&2
-        exit 1
+        die "No Kitty socket found." \
+            "Is Kitty running with remote control enabled? (allow_remote_control in kitty.conf)"
     fi
 
     load_accounts
@@ -237,8 +237,7 @@ main() {
         fi
         ;;
     *)
-        echo "Error: Unknown option '$1'. See --help for usage." >&2
-        exit 1
+        die "Unknown option '$1'." "See 'cc-launch --help' for usage."
         ;;
     esac
 }

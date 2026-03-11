@@ -4,7 +4,6 @@ Uses ``tomllib`` (stdlib since Python 3.11).  Shared by the Python
 dashboard code and the ``toml-helper.py`` CLI bridge for Bash.
 """
 
-import json
 import os
 import sys
 import tomllib
@@ -66,7 +65,7 @@ def read_accounts(path):
         result.append(
             {
                 "name": name,
-                "config_dir": os.path.expanduser(entry.get("config_dir", "")),
+                "config_dir": entry.get("config_dir", ""),
                 "color": color,
             }
         )
@@ -75,33 +74,19 @@ def read_accounts(path):
 
 def _load_palette_colors():
     """Load valid palette color names from palette.json."""
-    hardcoded = frozenset({
-        "green", "blue", "red", "orange", "purple",
-        "teal", "pink", "yellow", "gray", "cyan",
-    })
-    # Try repo-relative path first (lib/ -> repo root -> data/)
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    candidates = [
-        os.path.join(repo_root, "data", "palette.json"),
-        os.path.expanduser("~/.local/lib/cc-manager/palette.json"),
-    ]
-    for path in candidates:
-        try:
-            with open(path) as f:
-                data = json.load(f)
-        except (FileNotFoundError, OSError):
-            continue
-        except json.JSONDecodeError:
-            continue
-        try:
-            return frozenset(data["colors"].keys())
-        except (KeyError, TypeError):
-            continue
+    from data_loader import load_palette_colors
+
+    colors = load_palette_colors()
+    if colors is not None:
+        return colors
     print(
         "Warning: could not load palette.json; using hardcoded fallback colors.",
         file=sys.stderr,
     )
-    return hardcoded
+    return frozenset({
+        "green", "blue", "red", "orange", "purple",
+        "teal", "pink", "yellow", "gray", "cyan",
+    })
 
 
 _VALID_PALETTE_COLORS = _load_palette_colors()
