@@ -1,5 +1,6 @@
 """Idle alert notifications for dashboard sessions."""
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -24,16 +25,51 @@ def _find_alerter():
 
 _ALERTER_BIN = _find_alerter()
 _alerter_warned = False
-_active_notifications: list[subprocess.Popen] = []
+_active_notifications: list[tuple[subprocess.Popen, str, str]] = []
 
 
 def _reap_notifications():
-    """Reap finished notification subprocesses to avoid zombies."""
+    """Reap finished notification subprocesses and focus tab on click."""
     global _active_notifications
-    _active_notifications = [p for p in _active_notifications if p.poll() is None]
+    still_running: list[tuple[subprocess.Popen, str, str]] = []
+    for proc, socket, tab_id in _active_notifications:
+        if proc.poll() is None:
+            still_running.append((proc, socket, tab_id))
+            continue
+        # Process finished — check if user clicked the notification
+        if socket and tab_id:
+            try:
+                stdout = proc.stdout.read() if proc.stdout else b""
+                result = stdout.decode().strip()
+            except Exception:
+                result = ""
+            if result and result not in ("@TIMEOUT", "@CLOSED"):
+                with contextlib.suppress(OSError):
+                    subprocess.Popen(
+                        [
+                            "kitty",
+                            "@",
+                            "--to",
+                            socket,
+                            "focus-tab",
+                            "--match",
+                            f"id:{tab_id}",
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+    _active_notifications = still_running
 
 
-def _send_notification(title, subtitle, message, group=None, timeout=10):
+def _send_notification(
+    title,
+    subtitle,
+    message,
+    group=None,
+    timeout=10,
+    socket="",
+    tab_id="",
+):
     """Send a macOS notification via alerter (non-blocking)."""
     global _alerter_warned
     _reap_notifications()
@@ -59,8 +95,8 @@ def _send_notification(title, subtitle, message, group=None, timeout=10):
     ]
     if group is not None:
         cmd += ["--group", str(group)]
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    _active_notifications.append(proc)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    _active_notifications.append((proc, socket, tab_id))
 
 
 def _check_idle_notifications(sessions):
@@ -103,4 +139,6 @@ def _check_idle_notifications(sessions):
             subtitle=f"{_ICON_STATES.get('stop', '')} Session idle",
             message=f"idle for {format_duration(idle_secs)}",
             group=s["tab_id"],
+            socket=s.get("socket", ""),
+            tab_id=str(s.get("tab_id", "")),
         )

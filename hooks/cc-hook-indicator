@@ -72,10 +72,14 @@ _maybe_notify() {
     fi
     touch "$cooldown_file"
 
-    alerter --title "${session_label}" --subtitle "${icon} ${subtitle}" \
-        --message "needs attention" \
-        --group "ccm-${ACTION}-${tab_id}" --timeout 10 \
-        >/dev/null 2>&1 &
+    (
+        result=$(alerter --title "${session_label}" --subtitle "${icon} ${subtitle}" \
+            --message "needs attention" \
+            --group "ccm-${ACTION}-${tab_id}" --timeout 10 2>/dev/null)
+        if [[ "$result" != "@TIMEOUT" && "$result" != "@CLOSED" ]]; then
+            kitty @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} focus-tab --match "id:${tab_id}" 2>/dev/null
+        fi
+    ) &
 }
 
 # ---------------------------------------------------------------------------

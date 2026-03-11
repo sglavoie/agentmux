@@ -54,6 +54,7 @@ _is_running() {
 _build_tab_titles() {
 	_TAB_TITLES=()
 	_TAB_TITLE_IDS=()
+	_TAB_SOCKETS=()
 
 	discover_all_sockets
 
@@ -67,6 +68,7 @@ _build_tab_titles() {
 			[[ -z "$tid" ]] && continue
 			_TAB_TITLE_IDS+=("$tid")
 			_TAB_TITLES+=("$ttitle")
+			_TAB_SOCKETS+=("$socket")
 		done <<<"$pairs"
 	done
 }
@@ -81,6 +83,17 @@ _get_tab_title() {
 		fi
 	done
 	echo "tab-${tab_id}"
+}
+
+_get_tab_socket() {
+	local tab_id="$1"
+	local i
+	for i in "${!_TAB_TITLE_IDS[@]}"; do
+		if [[ "${_TAB_TITLE_IDS[$i]}" == "$tab_id" ]]; then
+			echo "${_TAB_SOCKETS[$i]}"
+			return
+		fi
+	done
 }
 
 # ---------------------------------------------------------------------------
@@ -164,11 +177,17 @@ cmd_daemon() {
 			duration="$(_format_duration "$idle_secs")"
 
 			if command -v alerter >/dev/null 2>&1; then
-				alerter --title "$title" --subtitle "⏸ Session idle" \
-					--message "idle for ${duration}" \
-					--group "ccm-idle-${tab_id}" \
-					--timeout 10 \
-					>/dev/null 2>&1 &
+				local tab_socket
+				tab_socket="$(_get_tab_socket "$tab_id")"
+				(
+					result=$(alerter --title "$title" --subtitle "⏸ Session idle" \
+						--message "idle for ${duration}" \
+						--group "ccm-idle-${tab_id}" \
+						--timeout 10 2>/dev/null)
+					if [[ "$result" != "@TIMEOUT" && "$result" != "@CLOSED" && -n "$tab_socket" ]]; then
+						kitty @ --to "$tab_socket" focus-tab --match "id:${tab_id}" 2>/dev/null
+					fi
+				) &
 			fi
 		done
 
