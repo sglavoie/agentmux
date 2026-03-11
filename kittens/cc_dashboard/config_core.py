@@ -558,7 +558,10 @@ def _palette_tab_colors(account, color_override="", config_dir_override=""):
         color_name = _color_for_config_dir(config_dir_override) or "gray"
     else:
         color_name = "gray"
-    active_bg, inactive_bg, _ = PALETTE.get(color_name, PALETTE["gray"])
+    _FALLBACK_COLOR = ((128, 128, 128), (80, 80, 80), (255, 255, 255))
+    active_bg, inactive_bg, _ = PALETTE.get(
+        color_name, PALETTE.get("gray", _FALLBACK_COLOR)
+    )
 
     def _hex(rgb):
         return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"

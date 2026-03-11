@@ -67,3 +67,14 @@ account = "personal"
 # directory = "~/projects/frontend"
 # account = "work"
 # group = "webapp"
+
+# Combined env + group example:
+# [[sessions]]
+# title = "W:api-server"
+# directory = "~/projects/api"
+# account = "work"
+# group = "backend"
+# env = "DATABASE_URL=localhost:5432 REDIS_HOST=localhost"
+#
+# NOTE: Environment variable values must not contain spaces.
+# "FOO=hello world" will break — use "FOO=hello_world" or similar.

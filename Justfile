@@ -13,6 +13,7 @@ prefix_bin   := home_directory() / ".local/bin"
 prefix_lib   := home_directory() / ".local/lib/cc-manager"
 prefix_kitty := home_directory() / ".config/kitty"
 prefix_zfunc := home_directory() / ".zfunc"
+prefix_bash_comp := home_directory() / ".local/share/bash-completion/completions"
 
 root := justfile_directory()
 
@@ -54,6 +55,7 @@ symlinks := prefix_bin / "ccm:bin/ccm" + "\n" + \
     prefix_zfunc / "_ccm:completions/_ccm" + "\n" + \
     prefix_zfunc / "_cc-launch:completions/_cc-launch" + "\n" + \
     prefix_zfunc / "_cc-status:completions/_cc-status" + "\n" + \
+    prefix_bash_comp / "ccm:completions/_ccm.bash" + "\n" + \
     prefix_kitty / "cc-manager.conf:cc-manager.conf"
 
 # Validate all config files
@@ -99,7 +101,7 @@ check-deps:
 # Install symlinks and hooks
 install: check-deps check-keybindings
     @find . -name "*.py[co]" -or -name "__pycache__" -exec rm -rf -- {} + 2>/dev/null; true
-    @mkdir -p "{{prefix_bin}}" "{{prefix_lib}}" "{{prefix_lib}}/ccm" "{{prefix_kitty}}" "{{prefix_zfunc}}"
+    @mkdir -p "{{prefix_bin}}" "{{prefix_lib}}" "{{prefix_lib}}/ccm" "{{prefix_kitty}}" "{{prefix_zfunc}}" "{{prefix_bash_comp}}"
     @echo '{{symlinks}}' | while IFS=: read -r dest src; do \
         if [ -d "$dest" ] && [ ! -L "$dest" ]; then \
             echo "Warning: removing existing directory $dest (replacing with symlink)" >&2; \
@@ -171,5 +173,9 @@ format-check:
 typecheck:
     {{rye}} run mypy {{python_src}}
 
-# Run all checks (test, lint, format-check, typecheck, keybinding audit)
-check: test lint format-check typecheck check-keybindings
+# Verify VERSION file matches pyproject.toml
+check-version:
+    @python3 -c "import tomllib; v=tomllib.load(open('pyproject.toml','rb'))['project']['version']; f=open('VERSION').read().strip(); assert v==f, f'Version mismatch: pyproject.toml={v} VERSION={f}'; print(f'  Version {v} OK')"
+
+# Run all checks (test, lint, format-check, typecheck, keybinding audit, version)
+check: test lint format-check typecheck check-keybindings check-version

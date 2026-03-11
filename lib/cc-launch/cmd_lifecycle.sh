@@ -172,7 +172,14 @@ cmd_restart() {
         exit 1
     fi
     echo "Closed tab '$title', relaunching..." >&2
-    sleep 0.3 # Wait for Kitty to fully close the tab before relaunching
+    # Poll for tab closure (max ~500ms) before relaunching
+    local _poll
+    for ((_poll = 0; _poll < 5; _poll++)); do
+        if ! kitty @ --to "$SOCKET" ls 2>/dev/null | jq -e --argjson tid "$_TARGET_TAB_ID" '[.[].tabs[] | select(.id == $tid)] | length > 0' >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.1
+    done
 
     local loc_args
     loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
@@ -342,7 +349,14 @@ cmd_move() {
         exit 1
     fi
     echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..." >&2
-    sleep 0.3 # Wait for Kitty to fully close the tab before relaunching on target
+    # Poll for tab closure (max ~500ms) before relaunching on target
+    local _poll
+    for ((_poll = 0; _poll < 5; _poll++)); do
+        if ! kitty @ --to "$source_socket" ls 2>/dev/null | jq -e --argjson tid "$_TARGET_TAB_ID" '[.[].tabs[] | select(.id == $tid)] | length > 0' >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.1
+    done
 
     SOCKET="$target_socket"
     local loc_args

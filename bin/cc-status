@@ -126,11 +126,15 @@ accounts_json="$(build_accounts_json)"
 default_account="$(default_account_name)"
 
 # Query all instances and collect rows
+connection_errors=0
 rows=""
 for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
 	inst_socket="${_INSTANCE_SOCKETS[$si]}"
 	inst_label="${_INSTANCE_LABELS[$si]}"
-	ls_json=$(kitty @ --to "$inst_socket" ls 2>/dev/null) || continue
+	ls_json=$(kitty @ --to "$inst_socket" ls 2>/dev/null) || {
+		connection_errors=$((connection_errors + 1))
+		continue
+	}
 
 	# Bail out if empty
 	if [[ -z "$ls_json" ]] || [[ "$(echo "$ls_json" | jq 'length')" -eq 0 ]]; then
@@ -225,6 +229,9 @@ for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
 done
 
 if [[ -z "$rows" ]]; then
+	if [[ "$connection_errors" -eq "${#_INSTANCE_SOCKETS[@]}" ]]; then
+		echo "Error: could not connect to Kitty (tried $connection_errors socket(s)). Check that remote control is enabled." >&2
+	fi
 	echo "No active Claude Code sessions found."
 	exit 0
 fi
@@ -232,7 +239,7 @@ fi
 # ---- JSON output mode ------------------------------------------------------
 
 if [[ "$JSON_OUTPUT" == "true" ]]; then
-	json_arr="[]"
+	enriched=""
 	while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst col_group; do
 		col_branch="$(git -C "$col_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")"
 		if [[ "$col_branch" != "-" ]]; then
@@ -241,27 +248,21 @@ if [[ "$JSON_OUTPUT" == "true" ]]; then
 			fi
 		fi
 		col_dir="$(shorten_path "$col_dir")"
-		json_arr="$(echo "$json_arr" | jq \
-			--arg tab "$col_tab" \
-			--arg title "$col_title" \
-			--arg account "$col_account" \
-			--arg directory "$col_dir" \
-			--arg branch "$col_branch" \
-			--arg status "$col_status" \
-			--arg instance "$col_inst" \
-			--arg group "$col_group" \
-			'. + [{
-				tab: ($tab | tonumber),
-				title: $title,
-				account: $account,
-				directory: $directory,
-				branch: $branch,
-				status: $status,
-				instance: $instance,
-				group: $group
-			}]')"
+		[[ -n "$enriched" ]] && enriched+=$'\n'
+		enriched+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_branch}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\t'"${col_group}"
 	done <<<"$rows"
-	echo "$json_arr"
+	echo "$enriched" | jq -Rs '
+		[split("\n")[] | select(length > 0) | split("\t") |
+		{
+			tab: (.[0] | tonumber),
+			title: .[1],
+			account: .[2],
+			directory: .[3],
+			branch: .[4],
+			status: .[5],
+			instance: .[6],
+			group: .[7]
+		}]'
 	exit 0
 fi
 

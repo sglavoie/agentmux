@@ -116,7 +116,10 @@ resolve_location_args() {
 	if [[ -n "$insert_loc" ]]; then
 		kitty @ --to "$socket" focus-tab --match "id:$insert_loc" 2>/dev/null \
 			|| ccm_debug "focus-tab failed for id:$insert_loc (cosmetic, continuing)"
-		sleep 0.1 # Wait for Kitty to process focus change before inserting tab
+		# NOTE: Brief delay for Kitty to process the focus change before
+		# inserting the new tab. A polling approach would be more robust but
+		# adds complexity for marginal benefit in practice.
+		sleep 0.1
 		echo "--location after"
 		return 0
 	fi

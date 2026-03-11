@@ -1,16 +1,18 @@
 """Minimal pure-Python TOML serializer for cc-manager config files.
 
 Handles the subset of TOML needed by accounts.toml, sessions.toml, and
-defaults.toml: strings, integers, booleans, arrays of strings, [table],
-and [[array_of_tables]].  No third-party dependencies.
+defaults.toml: strings, integers, floats, booleans, arrays of strings,
+[table], and [[array_of_tables]].  No third-party dependencies.
 """
 
 
-def _format_value(value):
+def _format_value(value, *, key="<unknown>"):
     """Format a single Python value as a TOML value string."""
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
         return str(value)
     if isinstance(value, str):
         escaped = (
@@ -22,9 +24,9 @@ def _format_value(value):
         )
         return f'"{escaped}"'
     if isinstance(value, list):
-        items = ", ".join(_format_value(v) for v in value)
+        items = ", ".join(_format_value(v, key=key) for v in value)
         return f"[{items}]"
-    msg = f"unsupported TOML value type: {type(value).__name__}"
+    msg = f"unsupported TOML value type for key '{key}': {type(value).__name__} (value: {value!r})"
     raise TypeError(msg)
 
 
@@ -50,13 +52,13 @@ def dumps(data, header=""):
             for entry in section_value:
                 parts.append(f"[[{section_name}]]")
                 for key, val in entry.items():
-                    parts.append(f"{key} = {_format_value(val)}")
+                    parts.append(f"{key} = {_format_value(val, key=key)}")
                 parts.append("")
         elif isinstance(section_value, dict):
             # [table]
             parts.append(f"[{section_name}]")
             for key, val in section_value.items():
-                parts.append(f"{key} = {_format_value(val)}")
+                parts.append(f"{key} = {_format_value(val, key=key)}")
             parts.append("")
         else:
             msg = (

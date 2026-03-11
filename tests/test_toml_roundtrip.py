@@ -197,12 +197,40 @@ def test_control_char_escaping():
         os.unlink(path)
 
 
+def test_float_values():
+    print("\n--- float values ---")
+    data = {
+        "defaults": {
+            "refresh_rate": 2.5,
+            "timeout": 30.0,
+            "label": "test",
+        }
+    }
+    toml_str = toml_writer.dumps(data)
+    check("float 2.5 in output", "2.5" in toml_str)
+    check("float 30.0 in output", "30.0" in toml_str)
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write(toml_str)
+        path = f.name
+    try:
+        import tomllib
+
+        with open(path, "rb") as fh:
+            parsed = tomllib.load(fh)
+        check("float round-trip 2.5", parsed["defaults"]["refresh_rate"] == 2.5)
+        check("float round-trip 30.0", parsed["defaults"]["timeout"] == 30.0)
+    finally:
+        os.unlink(path)
+
+
 def main():
     test_accounts_roundtrip()
     test_sessions_roundtrip()
     test_defaults_roundtrip()
     test_writer_escaping()
     test_control_char_escaping()
+    test_float_values()
 
     print(f"\n{'=' * 40}")
     print(f"Results: {PASS} passed, {FAIL} failed")

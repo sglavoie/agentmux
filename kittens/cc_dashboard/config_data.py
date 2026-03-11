@@ -32,6 +32,8 @@ def _resolve_data_path(filename):
 def _hex_to_rgb(hex_str):
     """Convert a hex color string like '#2d7d46' to an (R, G, B) tuple."""
     h = hex_str.lstrip("#")
+    if len(h) != 6:
+        raise ValueError(f"invalid hex color: '{hex_str}' (expected 6 hex digits)")
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
 

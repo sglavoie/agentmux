@@ -11,7 +11,7 @@ allow_remote_control yes
 listen_on unix:/tmp/kitty-{kitty_pid}
 ```
 
-You also need `jq` installed (`brew install jq` on macOS).
+You also need `jq` installed (`brew install jq` on macOS) and Python 3.13+ (`brew install python` on macOS, or use your preferred Python version manager).
 
 ## Setup
 
@@ -293,6 +293,17 @@ To see all available sockets and which ones are responsive:
 ```bash
 cc-launch --sockets
 ```
+
+### Environment variables
+
+| Variable | Description |
+|---|---|
+| `CC_MANAGER_CONFIG` | Override config directory (default: `~/.config/cc-manager/`) |
+| `CC_MANAGER_ACCOUNTS` | Override accounts config file path |
+| `CC_MANAGER_DEFAULTS` | Override defaults config file path |
+| `CCM_DEBUG` | Set to `1` to enable debug logging to stderr |
+| `CCM_DEBUG_LOG` | Path to a file for debug log output (used by the dashboard) |
+| `KITTY_LISTEN_ON` | Kitty sets this automatically; used for socket discovery |
 
 ### Session file for Kitty startup
 
