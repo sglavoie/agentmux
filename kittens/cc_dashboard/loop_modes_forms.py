@@ -23,6 +23,8 @@ def handle_override_mode(key, state):
         return False
 
     cancel_mode = "pick" if state["override_source"] == "pick" else "list"
+    if state["override_source"] == "batch":
+        cancel_mode = "list"
     if key in (27, ord("q"), ord("Q")):
         state["mode"] = cancel_mode
     elif key in (curses.KEY_UP, ord("k"), ord("K")):
@@ -74,7 +76,50 @@ def handle_override_mode(key, state):
             state["should_exit"] = True
             return True
 
-        if state["override_source"] == "list" and state["filtered"]:
+        if state["override_source"] == "batch" and state.get("batch_targets"):
+            has_host = state["host_tab_id"] is not None
+            targets_sorted = sorted(
+                state["batch_targets"],
+                key=lambda s: (
+                    1 if has_host and s["tab_id"] == state["host_tab_id"] else 0
+                ),
+            )
+            overridden = 0
+            skipped = 0
+            for t in targets_sorted:
+                t_socket = t.get("socket", state["home_socket"])
+                account_default_dir = (
+                    state["cfg"]._accounts.get(t["account"], {}).get("config_dir", "")
+                )
+                session_dir = t.get("config_dir", "") or account_default_dir
+                if selected_path == session_dir:
+                    skipped += 1
+                    continue
+                is_revert = selected_path == account_default_dir
+                config_dir_override = None if is_revert else selected_path
+                is_host = has_host and t["tab_id"] == state["host_tab_id"]
+                state["do_restart"](
+                    t_socket,
+                    t,
+                    flags=t.get("cc_flags", ""),
+                    pw_override=t.get("cc_pw", ""),
+                    config_dir_override=config_dir_override,
+                    host_tab_id=state["host_tab_id"],
+                    env_vars=t.get("cc_env", ""),
+                )
+                if is_host:
+                    state["should_exit"] = True
+                    return True
+                overridden += 1
+            state["marked"].clear()
+            state["sessions"] = state["query_all_sessions"](
+                managed_only=(not state["show_all"])
+            )
+            state["refilter"]()
+            state["msg"] = f"Overridden {overridden} session(s), {skipped} skipped"
+            state["msg_frames"] = 20
+            state["mode"] = "list"
+        elif state["override_source"] == "list" and state["filtered"]:
             sess = state["filtered"][state["selected"]]
             sess_socket = sess.get("socket", state["home_socket"])
             account_default_dir = (

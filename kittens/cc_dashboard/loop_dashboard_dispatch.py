@@ -468,6 +468,8 @@ def dispatch_mode(
             "pick_target_instance": state["pick_target_instance"],
             "filtered": state["filtered"],
             "selected": state["selected"],
+            "batch_targets": state["batch_targets"],
+            "marked": state["marked"],
             "cfg": state["cfg"],
             "multi_instance": state["multi_instance"],
             "instance_socket_map": state["instance_socket_map"],

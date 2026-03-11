@@ -97,7 +97,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         "color_picker",
         "batch_group",
         "group_actions",
-    ) or (mode == "override" and state["override_source"] == "list"):
+    ) or (mode == "override" and state["override_source"] in ("list", "batch")):
         rows, _cols = stdscr.getmaxyx()
         filtered = state["filtered"]
         selected = state["selected"]
@@ -243,7 +243,14 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             )
             draw_footer(stdscr, "batch_group")
         elif mode == "override" and filtered:
-            draw_override_picker(stdscr, filtered[selected], state["override_selected"])
+            bc = (
+                len(state.get("batch_targets", []))
+                if state.get("override_source") == "batch"
+                else None
+            )
+            draw_override_picker(
+                stdscr, filtered[selected], state["override_selected"], batch_count=bc
+            )
             draw_footer(stdscr, "override")
         elif mode == "move_picker" and filtered:
             move_subtitle = None

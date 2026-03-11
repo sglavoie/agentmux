@@ -86,21 +86,27 @@ def handle_actions_mode(key, state, build_session_actions):
                 state["worktree_branch"] = ""
                 state["worktree_cursor"] = 0
         elif action_id == "override":
-            state["mode"] = "override"
-            state["override_source"] = "list"
-            current_dir = sess.get("config_dir", "")
-            if not current_dir:
-                current_dir = (
-                    state["cfg"]
-                    ._accounts.get(sess["account"], {})
-                    .get("config_dir", "")
-                )
-            dirs = state["cfg"]._unique_config_dirs()
-            state["override_selected"] = 0
-            for i, d in enumerate(dirs):
-                if d == current_dir:
-                    state["override_selected"] = i
-                    break
+            if state["actions_scope"] == "marked" and state["actions_targets"]:
+                state["batch_targets"] = list(state["actions_targets"])
+                state["mode"] = "override"
+                state["override_source"] = "batch"
+                state["override_selected"] = 0
+            else:
+                state["mode"] = "override"
+                state["override_source"] = "list"
+                current_dir = sess.get("config_dir", "")
+                if not current_dir:
+                    current_dir = (
+                        state["cfg"]
+                        ._accounts.get(sess["account"], {})
+                        .get("config_dir", "")
+                    )
+                dirs = state["cfg"]._unique_config_dirs()
+                state["override_selected"] = 0
+                for i, d in enumerate(dirs):
+                    if d == current_dir:
+                        state["override_selected"] = i
+                        break
         elif action_id == "color":
             state["mode"] = "color_picker"
             if state["actions_scope"] == "marked":

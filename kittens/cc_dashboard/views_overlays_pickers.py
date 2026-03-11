@@ -16,7 +16,7 @@ from cc_dashboard.filters import SORT_MODES
 from cc_dashboard.views_shared import _shorten_home
 
 
-def draw_override_picker(stdscr, session, override_selected):
+def draw_override_picker(stdscr, session, override_selected, batch_count=None):
     """Draw a config-dir selection overlay for override."""
     rows, cols = stdscr.getmaxyx()
     dirs = _cfg._unique_config_dirs()
@@ -61,7 +61,10 @@ def draw_override_picker(stdscr, session, override_selected):
         curses.color_pair(CP_HEADER) | curses.A_BOLD,
     )
 
-    sub = f'for "{session["title"]}"'
+    if batch_count is not None:
+        sub = f"for {batch_count} marked session(s)"
+    else:
+        sub = f'for "{session["title"]}"'
     safe_addstr(
         stdscr,
         box_y + 1,
