@@ -47,7 +47,7 @@ def test_accounts_roundtrip():
         accounts = toml_reader.read_accounts(path)
         check("two accounts read back", len(accounts) == 2)
         check("first name matches", accounts[0]["name"] == "work")
-        check("first config_dir matches", accounts[0]["config_dir"] == "~/.claude")
+        check("first config_dir matches", accounts[0]["config_dir"] == os.path.expanduser("~/.claude"))
         check("first color matches", accounts[0]["color"] == "green")
         check("second name matches", accounts[1]["name"] == "personal")
 

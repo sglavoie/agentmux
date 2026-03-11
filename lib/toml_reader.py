@@ -66,7 +66,7 @@ def read_accounts(path):
         result.append(
             {
                 "name": name,
-                "config_dir": entry.get("config_dir", ""),
+                "config_dir": os.path.expanduser(entry.get("config_dir", "")),
                 "color": color,
             }
         )

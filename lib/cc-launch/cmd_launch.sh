@@ -79,11 +79,18 @@ cmd_launch_all() {
         lines="$filtered"
     fi
 
+    local total=0
+    while IFS= read -r _line; do
+        [[ -n "$_line" ]] && total=$((total + 1))
+    done <<<"$lines"
+    local current=0
+    local skipped=0
     local launched=0
     local existed=0
 
     while IFS=$'\t' read -r title dir account flags pw env_vars group; do
         [[ -z "$title" ]] && continue
+        current=$((current + 1))
         title="$(_trim "$title")"
         dir="$(_trim "$dir")"
         account="$(_trim "${account:-work}")"
@@ -94,13 +101,15 @@ cmd_launch_all() {
         [[ -z "$account" ]] && account="work"
 
         if ! _account_index "$account" >/dev/null 2>&1; then
-            echo "Warning: session '$title' references unknown account '$account', skipping." >&2
+            echo "Warning: [$current/$total] session '$title' references unknown account '$account', skipping." >&2
+            skipped=$((skipped + 1))
             continue
         fi
 
         local loc_args
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
+        echo "[$current/$total] Launching $title..."
         if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group"; then
             launched=$((launched + 1))
         else
@@ -109,6 +118,9 @@ cmd_launch_all() {
     done <<<"$lines"
 
     echo "Launched $launched new session(s), $existed already existed."
+    if [[ "$skipped" -gt 0 ]]; then
+        echo "Skipped $skipped session(s) with unknown accounts." >&2
+    fi
 
     if [[ "${_DEFAULT_NOTIFY_IDLE:-}" == "on" ]] &&
         [[ -n "${_DEFAULT_IDLE_ALERT_MINUTES:-}" ]] &&

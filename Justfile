@@ -85,7 +85,7 @@ check-deps:
         ok=false; \
     fi; \
     if ! python3 -c "import tomllib" 2>/dev/null; then \
-        echo "Error: Python 3.11+ is required (for tomllib)." >&2; \
+        echo "Error: Python 3.13+ is required." >&2; \
         ok=false; \
     fi; \
     if ! command -v kitty >/dev/null 2>&1; then \

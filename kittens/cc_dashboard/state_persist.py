@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import tempfile
 
 
@@ -69,8 +70,8 @@ def save_ui_state(state_dict):
             tmp.write("\n")
             tmp_path = tmp.name
         os.replace(tmp_path, path)
-    except OSError:
-        pass
+    except OSError as exc:
+        print(f"Warning: could not save UI state: {exc}", file=sys.stderr)
 
 
 def prune_stale_entries(persisted, valid_accounts, valid_groups):

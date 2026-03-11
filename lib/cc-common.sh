@@ -20,6 +20,13 @@ _require_python3() {
 	fi
 }
 
+_require_jq() {
+	if ! command -v jq >/dev/null 2>&1; then
+		echo "Error: jq is required but not found. Install with: brew install jq" >&2
+		exit 1
+	fi
+}
+
 source "$_CC_COMMON_DIR/cc-common/utils.sh"
 source "$_CC_COMMON_DIR/cc-common/data.sh"
 source "$_CC_COMMON_DIR/cc-common/sockets.sh"

@@ -147,6 +147,27 @@ There is no merging; the per-session value completely replaces the global defaul
 
 ## Usage
 
+### The `ccm` command
+
+`ccm` is the unified CLI entry point. All functionality is available through subcommands:
+
+| Command | Description |
+|---------|-------------|
+| `ccm launch [args]` | Manage and launch sessions (delegates to `cc-launch`) |
+| `ccm status [args]` | Show active session status (delegates to `cc-status`) |
+| `ccm star` | Toggle star/pin on active tab |
+| `ccm config <subcmd>` | Manage config files (`edit`, `show`, `path`, `init`, `sync`, `validate`) |
+| `ccm hooks <subcmd>` | Manage hooks (`sync`, `status`) |
+| `ccm logs <subcmd>` | Query and manage activity logs (`list`, `show`, `summary`, `clean`, `dir`) |
+| `ccm dashboard` | Launch the curses dashboard |
+| `ccm switch` | Quick-switch: fuzzy-find and jump to a session |
+| `ccm notify` | Send a test notification (requires `alerter`) |
+| `ccm audit` | Check upstream Claude Code feature compatibility |
+| `ccm idle-watch` | Manage background idle notification watcher |
+| `ccm help [cmd]` | Show help for any command |
+
+Run `ccm help <command>` for details on any subcommand. The `cc-launch` and `cc-status` commands also work directly.
+
 ### Launch all configured sessions
 
 ```bash
@@ -207,6 +228,12 @@ cc-status
 
 Same idea as `cc-launch --list` but with dynamically sized columns for cleaner output.
 
+Use `--json` for machine-readable output:
+
+```bash
+cc-status --json
+```
+
 ### Interactive session dashboard
 
 Press `ctrl+shift+d` to open the dashboard as a Kitty overlay. It shows all tabs running Claude Code in a navigable list, color-coded by account using the palette from `accounts.toml`.
@@ -222,6 +249,11 @@ Space       Mark / unmark a session for grouped actions
 U           Clear all marks
 n           Create a new session (opens a title/directory/account form)
 Ctrl+r      Refresh the session list
+s           Toggle sort order (config order / alphabetical / by group)
+F2          Star/pin the selected session (pinned tabs sort to front)
+g           Filter by group (in pick mode)
+G           Group actions overlay (launch/close entire groups)
+H           Open the hooks manager
 q / Esc     Dismiss the dashboard
 ```
 
@@ -272,6 +304,16 @@ kitty --session sessions/example.conf
 
 Copy `sessions/example.conf` and customize it for your projects. This approach is independent of `cc-launch` and uses Kitty's native session format.
 
+### Utility scripts
+
+These are typically invoked via Kitty keybindings (defined in `cc-manager.conf`) rather than directly:
+
+- `cc-toggle-star` — Toggle the star/pin icon on the active tab (bound to F2)
+- `cc-toggle-flag` — Toggle a visual flag marker on the active tab
+- `cc-idle-watch` — Background daemon that monitors sessions and sends idle notifications
+- `cc-activity-log` — Hook script that logs session activity events to JSONL files
+- `cc-audit` — Check which upstream Claude Code features your version supports
+
 ## Configuration
 
 All config files live in `~/.config/cc-manager/` by default. Override their locations with environment variables:
@@ -300,13 +342,33 @@ This enables tab completion for all subcommands, tab titles (for `--close`), acc
 ```plaintext
 Justfile                        Install/uninstall symlinks
 cc-manager.conf                 Kitty config snippet (include from kitty.conf)
+bin/ccm                         Unified CLI entry point
 bin/cc-launch                   Session launcher and manager
 bin/cc-status                   Status overview tool
-config/accounts.example.toml    Example account definitions (colors, config dirs)
-config/sessions.example.toml    Example session definitions (with optional overrides)
-config/defaults.example.toml    Example global defaults (claude_flags, notifications)
+bin/cc-audit                    Upstream feature compatibility checker
+bin/cc-idle-watch               Background idle notification watcher
+bin/cc-toggle-star              Tab star/pin toggle (Kitty keybinding)
+bin/cc-toggle-flag              Tab flag marker toggle (Kitty keybinding)
+lib/cc-common.sh                Shared Bash library (sourced by cc-launch, cc-status)
+lib/cc-common/                  Modular Bash library components
+lib/cc-launch/                  cc-launch subcommand implementations
+lib/ccm/                        ccm subcommand implementations
+lib/toml_reader.py              TOML reader (stdlib tomllib)
+lib/toml_writer.py              TOML serializer (no third-party deps)
+lib/toml-helper.py              CLI bridge for Bash scripts (TSV output)
+lib/config_validator.py         Config file validation
+data/palette.json               Color palette definitions (10 named colors)
+data/icons.json                 Icon and state indicator definitions
+config/accounts.example.toml    Example account definitions
+config/sessions.example.toml    Example session definitions
+config/defaults.example.toml    Example global defaults
+config/hooks.example.json       Example hooks configuration
 sessions/example.conf           Example Kitty session file for startup
-kittens/claude_dashboard.py     Interactive session picker (overlay kitten)
+kittens/claude_dashboard.py     Dashboard entry point (Kitty kitten)
+kittens/cc_dashboard/           Dashboard implementation modules
+completions/_ccm                Zsh completion for ccm
 completions/_cc-launch          Zsh completion for cc-launch
 completions/_cc-status          Zsh completion for cc-status
+tests/                          Test suite
+docs/                           Kitty documentation reference
 ```

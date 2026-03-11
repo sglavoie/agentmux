@@ -71,6 +71,7 @@ USAGE
 }
 
 main() {
+    _require_jq
     local instance_label=""
     local tab_id=""
     local target_instance=""
