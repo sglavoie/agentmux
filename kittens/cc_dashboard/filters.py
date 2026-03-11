@@ -1,5 +1,25 @@
 """Session filtering and sorting helpers."""
 
+import json
+
+from cc_dashboard.config_data import _resolve_data_path
+
+
+def _load_sort_modes():
+    """Load sort modes from icons.json, excluding 'alpha' (legacy alias for 'name')."""
+    path = _resolve_data_path("icons.json")
+    if path:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            modes = data["sort_modes"]
+            # Exclude 'alpha' — it's a legacy alias accepted by the validator
+            # but not shown in the dashboard UI (the dashboard uses 'name').
+            return tuple(m for m in modes if m != "alpha")
+        except (OSError, json.JSONDecodeError, KeyError, TypeError):
+            pass
+    return ("default", "name", "account", "group", "status", "idle", "activity")
+
 
 def _filter_sessions(sessions, query):
     """Return sessions matching query against title, cwd, account, or group."""
@@ -86,7 +106,7 @@ def _sort_pick_entries(entries, running_titles):
 
 # ── Sort modes ──────────────────────────────────────────────────────────────
 
-SORT_MODES = ("default", "name", "account", "group", "status", "idle", "activity")
+SORT_MODES = _load_sort_modes()
 
 SORT_LABELS = {
     "default": "",

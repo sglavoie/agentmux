@@ -162,11 +162,47 @@ def test_writer_escaping():
         os.unlink(path)
 
 
+def test_control_char_escaping():
+    print("\n--- control character escaping ---")
+    data = {
+        "sessions": [
+            {
+                "title": "has\nnewline",
+                "directory": "~/path\twith\ttabs",
+                "account": "work",
+            },
+            {
+                "title": "has\rcarriage\rreturn",
+                "directory": "~/normal/path",
+                "account": "personal",
+            },
+        ]
+    }
+    toml_str = toml_writer.dumps(data)
+    check("newline escaped in output", "\\n" in toml_str)
+    check("tab escaped in output", "\\t" in toml_str)
+    check("cr escaped in output", "\\r" in toml_str)
+    check("no literal newline in value", '\n"has\n' not in toml_str)
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write(toml_str)
+        path = f.name
+    try:
+        sessions = toml_reader.read_sessions(path)
+        check("two sessions read back", len(sessions) == 2)
+        check("newline round-trip", sessions[0]["title"] == "has\nnewline")
+        check("tab round-trip", sessions[0]["dir"] == "~/path\twith\ttabs")
+        check("cr round-trip", sessions[1]["title"] == "has\rcarriage\rreturn")
+    finally:
+        os.unlink(path)
+
+
 def main():
     test_accounts_roundtrip()
     test_sessions_roundtrip()
     test_defaults_roundtrip()
     test_writer_escaping()
+    test_control_char_escaping()
 
     print(f"\n{'=' * 40}")
     print(f"Results: {PASS} passed, {FAIL} failed")

@@ -20,6 +20,7 @@ By default only ccm-managed sessions are shown (those launched via ccm).
 Options:
   --socket SOCKET   Target a specific Kitty socket (e.g. unix:/tmp/kitty-12345)
   --all             Include all Claude tabs, not just ccm-managed ones
+  --json            Output sessions as a JSON array (for scripting)
   --help            Show this help message
 
 Columns:
@@ -37,6 +38,13 @@ Socket discovery:
   1. Uses --socket value if provided (queries only that instance).
   2. Otherwise discovers all active Kitty instances and aggregates sessions.
 
+Environment:
+  KITTY_LISTEN_ON        Kitty socket path (auto-detected if unset)
+  CC_MANAGER_CONFIG      Config directory (default: ~/.config/cc-manager)
+  CC_MANAGER_ACCOUNTS    Accounts file override
+  CC_MANAGER_DEFAULTS    Defaults file override
+  CCM_DEBUG              Set to 1 for debug output
+
 EOF
 	exit 0
 }
@@ -45,6 +53,7 @@ EOF
 
 SOCKET=""
 SHOW_ALL=false
+JSON_OUTPUT=false
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -62,6 +71,10 @@ while [[ $# -gt 0 ]]; do
 		fi
 		SOCKET="$2"
 		shift 2
+		;;
+	--json)
+		JSON_OUTPUT=true
+		shift
 		;;
 	*)
 		echo "Error: Unknown option '$1'. See --help for usage." >&2
@@ -211,6 +224,42 @@ done
 
 if [[ -z "$rows" ]]; then
 	echo "No active Claude Code sessions found."
+	exit 0
+fi
+
+# ---- JSON output mode ------------------------------------------------------
+
+if [[ "$JSON_OUTPUT" == "true" ]]; then
+	json_arr="[]"
+	while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst col_group; do
+		col_branch="$(git -C "$col_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")"
+		if [[ "$col_branch" != "-" ]]; then
+			if [[ -n "$(git -C "$col_dir" status --porcelain 2>/dev/null)" ]]; then
+				col_branch="${col_branch}*"
+			fi
+		fi
+		col_dir="$(shorten_path "$col_dir")"
+		json_arr="$(echo "$json_arr" | jq \
+			--arg tab "$col_tab" \
+			--arg title "$col_title" \
+			--arg account "$col_account" \
+			--arg directory "$col_dir" \
+			--arg branch "$col_branch" \
+			--arg status "$col_status" \
+			--arg instance "$col_inst" \
+			--arg group "$col_group" \
+			'. + [{
+				tab: ($tab | tonumber),
+				title: $title,
+				account: $account,
+				directory: $directory,
+				branch: $branch,
+				status: $status,
+				instance: $instance,
+				group: $group
+			}]')"
+	done <<<"$rows"
+	echo "$json_arr"
 	exit 0
 fi
 

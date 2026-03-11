@@ -58,6 +58,11 @@ cmd_close_group() {
     done <<<"$matches"
     echo ""
 
+    if [[ "$_DRY_RUN" == "true" ]]; then
+        echo "Dry run: no sessions were closed."
+        return
+    fi
+
     local confirmed=false
     if [[ "$HAS_GUM" == "true" ]]; then
         if gum confirm "Close all sessions in group '$_TARGET_GROUP'?" \
@@ -113,6 +118,11 @@ cmd_close() {
         exit 1
     fi
     IFS=$'\t' read -r title _ <<<"$tab_info"
+
+    if [[ "$_DRY_RUN" == "true" ]]; then
+        echo "Would close: $title (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID)"
+        return
+    fi
 
     if ! kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"; then
         echo "Error: failed to close tab '$title' (tab_id=$_TARGET_TAB_ID)." >&2

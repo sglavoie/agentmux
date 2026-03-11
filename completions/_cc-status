@@ -17,6 +17,7 @@ _cc-status() {
         *)
             _values 'option' \
                 '--socket[Target a specific Kitty socket]' \
+                '--json[Output sessions as JSON array]' \
                 '--help[Show help message]'
             ;;
     esac

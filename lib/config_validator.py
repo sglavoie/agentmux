@@ -52,8 +52,8 @@ def _load_palette_colors(data_dir):
     return hardcoded
 
 
-def _load_hook_events(data_dir):
-    """Load valid hook event names from icons.json."""
+def _load_icons_json(data_dir):
+    """Load and return the parsed icons.json data, or None on failure."""
     candidates = [
         os.path.join(data_dir, "icons.json"),
         os.path.expanduser("~/.local/lib/cc-manager/icons.json"),
@@ -61,11 +61,33 @@ def _load_hook_events(data_dir):
     for path in candidates:
         try:
             with open(path) as f:
-                data = json.load(f)
-            return set(data["hook_events"])
-        except (FileNotFoundError, OSError, json.JSONDecodeError, KeyError, TypeError):
+                return json.load(f)
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
             continue
+    return None
+
+
+def _load_hook_events(data_dir):
+    """Load valid hook event names from icons.json."""
+    data = _load_icons_json(data_dir)
+    if data:
+        try:
+            return set(data["hook_events"])
+        except (KeyError, TypeError):
+            pass
     return set()
+
+
+def _load_sort_modes(data_dir):
+    """Load valid sort mode names from icons.json."""
+    data = _load_icons_json(data_dir)
+    if data:
+        try:
+            return set(data["sort_modes"])
+        except (KeyError, TypeError):
+            pass
+    return {"default", "alpha", "name", "account",
+            "group", "status", "idle", "activity"}
 
 
 class Validator:
@@ -203,7 +225,7 @@ def validate_sessions(path, account_names):
     return v
 
 
-def validate_defaults(path):
+def validate_defaults(path, valid_sort=None):
     """Validate defaults.toml."""
     v = Validator("defaults.toml")
 
@@ -223,8 +245,10 @@ def validate_defaults(path):
 
     # Validate [defaults] section
     sort = defaults.get("sort_sessions")
-    valid_sort = {"", "alpha", "default", "name", "account",
-                  "group", "status", "idle", "activity"}
+    if valid_sort is None:
+        valid_sort = {"default", "alpha", "name", "account",
+                      "group", "status", "idle", "activity"}
+    valid_sort = valid_sort | {""}
     if sort is not None and sort not in valid_sort:
         v.error(f"sort_sessions must be one of "
                 f"{', '.join(sorted(valid_sort - {''}))} or omitted, "
@@ -353,6 +377,7 @@ def main():
 
     palette_colors = _load_palette_colors(data_dir)
     valid_events = _load_hook_events(data_dir)
+    valid_sort = _load_sort_modes(data_dir)
 
     accounts_path = os.environ.get("CC_MANAGER_ACCOUNTS",
                                    os.path.join(config_dir, "accounts.toml"))
@@ -364,7 +389,7 @@ def main():
 
     v_accounts, account_names = validate_accounts(accounts_path, palette_colors)
     v_sessions = validate_sessions(sessions_path, account_names)
-    v_defaults = validate_defaults(defaults_path)
+    v_defaults = validate_defaults(defaults_path, valid_sort)
     v_hooks = validate_hooks(hooks_path, valid_events, account_names)
 
     validators = [v_accounts, v_sessions, v_defaults, v_hooks]

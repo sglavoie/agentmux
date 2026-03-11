@@ -17,6 +17,7 @@ Commands:
 	--add TITLE DIR [ACCOUNT [ENV]]  Launch a single ad-hoc session tab (account picker if omitted)
 	--close                         Close a tab by stable selector (requires --instance and --tab-id),
 	                                or close all tabs in a group (with --group NAME, no --instance/--tab-id).
+	                                Use --dry-run to preview without closing.
 	--restart                       Restart a session by stable selector (requires --instance and --tab-id)
 	--clone                         Clone a session by stable selector (requires --instance and --tab-id)
 	--move                          Move a session to a different Kitty instance
@@ -34,6 +35,7 @@ Global options:
 	--tab-id ID         Target tab id within the selected instance.
 	--group NAME        Filter by session group (for --all and --close).
 						Mutually exclusive with --tab-id.
+	--dry-run           Preview what would be closed (for --close).
 	--target-instance LABEL
 						Destination instance label for --move.
 
@@ -59,6 +61,7 @@ Environment:
 	CC_MANAGER_CONFIG    Path to sessions config file
 	CC_MANAGER_ACCOUNTS  Path to accounts config file
 	CC_MANAGER_DEFAULTS  Path to defaults config file
+	CCM_DEBUG            Set to 1 for debug output
 
 Optional dependency:
 	gum (charmbracelet/gum) — enables interactive session picker and confirmation
@@ -75,6 +78,7 @@ main() {
     _TARGET_INSTANCE_LABEL=""
     _TARGET_TAB_ID=""
     _TARGET_GROUP=""
+    _DRY_RUN=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -117,6 +121,10 @@ main() {
             fi
             _TARGET_GROUP="$2"
             shift 2
+            ;;
+        --dry-run)
+            _DRY_RUN="true"
+            shift
             ;;
         *) break ;;
         esac
@@ -169,6 +177,11 @@ main() {
 
     if [[ -z "$SOCKET" ]]; then
         SOCKET="$(discover_socket)"
+    fi
+
+    if [[ -z "$SOCKET" ]]; then
+        echo "Error: No Kitty socket found. Is Kitty running with remote control enabled?" >&2
+        exit 1
     fi
 
     load_accounts

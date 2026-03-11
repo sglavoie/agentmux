@@ -216,9 +216,10 @@ launch_session() {
 	ccm_debug "Tab '$title' created, setting colors..."
 	local retry
 	local color_set=false
+	local color_err=""
 	for ((retry = 0; retry < 5; retry++)); do
 		# shellcheck disable=SC2086
-		if kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors 2>/dev/null; then
+		if color_err="$(kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors 2>&1)"; then
 			color_set=true
 			break
 		fi
@@ -226,16 +227,26 @@ launch_session() {
 	done
 
 	if [[ "$color_set" != "true" ]]; then
-		echo "Warning: Failed to set tab color for '$title'." >&2
+		local color_msg="Warning: Failed to set tab color for '$title'."
+		[[ -n "$color_err" ]] && color_msg="$color_msg Kitty error: $color_err"
+		echo "$color_msg" >&2
 	fi
 
 	local pw_mode
 	pw_mode="$(resolve_project_window "$pw_override")"
 	if [[ -n "$pw_mode" ]]; then
-		if ! kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus; then
-			echo "Warning: Failed to create project window for '$title'." >&2
-		elif ! kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode"; then
-			echo "Warning: Failed to set layout '$pw_mode' for '$title'." >&2
+		local pw_err
+		if ! pw_err="$(kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus 2>&1)"; then
+			local pw_msg="Warning: Failed to create project window for '$title'."
+			[[ -n "$pw_err" ]] && pw_msg="$pw_msg Kitty error: $pw_err"
+			echo "$pw_msg" >&2
+		else
+			local layout_err
+			if ! layout_err="$(kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode" 2>&1)"; then
+				local layout_msg="Warning: Failed to set layout '$pw_mode' for '$title'."
+				[[ -n "$layout_err" ]] && layout_msg="$layout_msg Kitty error: $layout_err"
+				echo "$layout_msg" >&2
+			fi
 		fi
 	fi
 

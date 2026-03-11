@@ -129,6 +129,7 @@ _cc-launch() {
                             '--tab-id[Kitty tab id in selected instance]' \
                             '--target-instance[Destination Kitty instance label for --move]' \
                             '--group[Target a specific session group]' \
+                            '--dry-run[Preview what would be closed]' \
                             '--help[Show help message]'
                         return
                         ;;
@@ -193,6 +194,7 @@ _cc-launch() {
                 '--tab-id[Kitty tab id in selected instance]' \
                 '--target-instance[Destination Kitty instance label for --move]' \
                 '--group[Target a specific session group]' \
+                '--dry-run[Preview what would be closed]' \
                             '--help[Show help message]'
             ;;
     esac

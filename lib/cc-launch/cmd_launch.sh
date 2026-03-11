@@ -32,6 +32,11 @@ cmd_launch_interactive() {
         group="$(_trim "${group:-}")"
         [[ -z "$account" ]] && account="work"
 
+        if ! _account_index "$account" >/dev/null 2>&1; then
+            echo "Warning: session '$title' references unknown account '$account', skipping." >&2
+            continue
+        fi
+
         local loc_args
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
@@ -87,6 +92,11 @@ cmd_launch_all() {
         env_vars="$(_trim "${env_vars:-}")"
         group="$(_trim "${group:-}")"
         [[ -z "$account" ]] && account="work"
+
+        if ! _account_index "$account" >/dev/null 2>&1; then
+            echo "Warning: session '$title' references unknown account '$account', skipping." >&2
+            continue
+        fi
 
         local loc_args
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"

@@ -56,6 +56,23 @@ symlinks := prefix_bin / "ccm:bin/ccm" + "\n" + \
     prefix_zfunc / "_cc-status:completions/_cc-status" + "\n" + \
     prefix_kitty / "cc-manager.conf:cc-manager.conf"
 
+# Validate all config files
+validate:
+    ccm config validate
+
+# Verify installation symlinks and binaries
+check-install:
+    @ok=true; \
+    for cmd in ccm cc-launch cc-status cc-hook-indicator; do \
+        if command -v "$cmd" >/dev/null 2>&1; then \
+            printf "  %-20s OK (%s)\n" "$cmd" "$(command -v "$cmd")"; \
+        else \
+            printf "  %-20s MISSING\n" "$cmd"; \
+            ok=false; \
+        fi; \
+    done; \
+    if [ "$ok" = false ]; then exit 1; fi
+
 # Audit keybinding documentation completeness
 check-keybindings:
     @python scripts/check_keybindings.py

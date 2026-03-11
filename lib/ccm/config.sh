@@ -76,6 +76,10 @@ cmd_config_init() {
 	if [[ $copied -eq 0 ]]; then
 		echo "All config files already exist."
 	fi
+
+	echo ""
+	echo "Validating configuration..."
+	python3 "$REPO_DIR/lib/config_validator.py" "$config_dir" "$REPO_DIR/data"
 }
 
 cmd_config_validate() {

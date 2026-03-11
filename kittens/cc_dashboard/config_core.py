@@ -61,6 +61,11 @@ def load_accounts():
             _state._accounts[name] = {"config_dir": config_dir, "color": color}
             _state._account_names.append(name)
     else:
+        print(
+            "Note: accounts.toml not found, using default accounts"
+            " (work, personal).",
+            file=sys.stderr,
+        )
         home = os.path.expanduser("~")
         _state._accounts["work"] = {
             "config_dir": os.path.join(home, ".claude"),

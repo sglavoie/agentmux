@@ -13,7 +13,13 @@ def _format_value(value):
     if isinstance(value, int):
         return str(value)
     if isinstance(value, str):
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        escaped = (
+            value.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+            .replace("\r", "\\r")
+        )
         return f'"{escaped}"'
     if isinstance(value, list):
         items = ", ".join(_format_value(v) for v in value)

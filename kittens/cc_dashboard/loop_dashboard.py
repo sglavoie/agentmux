@@ -7,7 +7,12 @@ from typing import Any
 from cc_dashboard import config as _cfg
 from cc_dashboard.colors import init_colors
 from cc_dashboard.config_data import PALETTE_NAMES
-from cc_dashboard.filters import _apply_filters, _apply_sort, _sort_pick_entries
+from cc_dashboard.filters import (
+    SORT_MODES,
+    _apply_filters,
+    _apply_sort,
+    _sort_pick_entries,
+)
 from cc_dashboard.loop_dashboard_dispatch import dispatch_mode
 from cc_dashboard.loop_dashboard_draw import build_draw_state
 from cc_dashboard.loop_helpers import (
@@ -345,7 +350,7 @@ def dashboard(stdscr):
 
     # Apply default sort from config (persistence will override below)
     cfg_sort = _cfg._default_sort_sessions
-    if cfg_sort and cfg_sort in ("default", "name", "account", "group", "status", "idle", "activity"):
+    if cfg_sort and (cfg_sort in SORT_MODES or cfg_sort == "alpha"):
         state["sort_mode"] = cfg_sort
 
     # Restore persisted UI state

@@ -8,6 +8,7 @@
     "error": "⚠️"
   },
   "state_order": ["bolt", "stop", "key", "error"],
+  "sort_modes": ["default", "alpha", "name", "account", "group", "status", "idle", "activity"],
   "hook_events": [
     "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
     "PostToolUse", "PostToolUseFailure", "Notification",
