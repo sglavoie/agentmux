@@ -55,7 +55,9 @@ load_defaults() {
 			_assign_default "$key" "$value"
 			# Emit the assignment for the cache file.
 			printf '_DEFAULT_%s=%q\n' "$(echo "$key" | tr '[:lower:]' '[:upper:]')" "$value"
-		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-defaults "$DEFAULTS_CONFIG")
+		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-defaults "$DEFAULTS_CONFIG" 2>&1 || {
+			echo "Warning: failed to parse defaults config '$DEFAULTS_CONFIG'" >&2
+		})
 	} >"$cache_tmp" || {
 		echo "Error: failed to write defaults cache" >&2
 		return 1

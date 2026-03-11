@@ -55,9 +55,7 @@ def _filter_by_groups(sessions, enabled_groups):
     if enabled_groups is None:
         return sessions
     return [
-        s
-        for s in sessions
-        if (s.get("group", "") or "(ungrouped)") in enabled_groups
+        s for s in sessions if (s.get("group", "") or "(ungrouped)") in enabled_groups
     ]
 
 
@@ -76,9 +74,7 @@ def _filter_pick_by_groups(sessions, enabled_groups):
     if enabled_groups is None:
         return sessions
     return [
-        s
-        for s in sessions
-        if (s.get("group", "") or "(ungrouped)") in enabled_groups
+        s for s in sessions if (s.get("group", "") or "(ungrouped)") in enabled_groups
     ]
 
 

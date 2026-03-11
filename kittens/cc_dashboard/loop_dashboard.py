@@ -1,5 +1,6 @@
 """Main event loop and session fingerprinting for the Claude Code Dashboard."""
 
+import contextlib
 import curses
 import os
 from typing import Any
@@ -379,14 +380,20 @@ def dashboard(stdscr):
     refilter()
 
     def _save_ui_state():
-        save_ui_state({
-            "sort_mode": state["sort_mode"],
-            "account_filter": sorted(state["account_filter"]) if state["account_filter"] else None,
-            "group_filter": sorted(state["group_filter"]) if state["group_filter"] else None,
-            "collapsed_groups": sorted(state["collapsed_groups"]),
-            "show_detail": state["show_detail"],
-            "show_all": state["show_all"],
-        })
+        save_ui_state(
+            {
+                "sort_mode": state["sort_mode"],
+                "account_filter": sorted(state["account_filter"])
+                if state["account_filter"]
+                else None,
+                "group_filter": sorted(state["group_filter"])
+                if state["group_filter"]
+                else None,
+                "collapsed_groups": sorted(state["collapsed_groups"]),
+                "show_detail": state["show_detail"],
+                "show_all": state["show_all"],
+            }
+        )
 
     state["_save_ui_state"] = _save_ui_state
 
@@ -397,10 +404,8 @@ def dashboard(stdscr):
         if rows < min_rows or cols < min_cols:
             stdscr.erase()
             msg = "Terminal too small"
-            try:
+            with contextlib.suppress(curses.error):
                 stdscr.addstr(0, 0, msg[:cols])
-            except curses.error:
-                pass
             stdscr.refresh()
             key = stdscr.getch()
             if key == curses.KEY_RESIZE:

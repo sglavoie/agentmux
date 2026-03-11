@@ -176,7 +176,13 @@ _FOOTER_HINTS = {
         "Enter Confirm",
         "Esc Clear",
     ],
-    "prefs": ["j/k Navigate", "Enter Edit", "Space Toggle", "Tab/S-Tab Cycle", "Esc Back"],
+    "prefs": [
+        "j/k Navigate",
+        "Enter Edit",
+        "Space Toggle",
+        "Tab/S-Tab Cycle",
+        "Esc Back",
+    ],
     "prefs_array": ["j/k Navigate", "a Add", "d Delete", "e/Enter Edit", "Esc Back"],
 }
 

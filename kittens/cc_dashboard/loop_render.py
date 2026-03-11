@@ -102,11 +102,25 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         filtered = state["filtered"]
         selected = state["selected"]
         OVERLAY_MODES = {
-            "actions", "restart_options", "rename", "worktree", "clone",
-            "move_picker", "config_pick", "config_action", "sort_pick",
-            "color_picker", "batch_group", "override", "group_actions",
-            "confirm", "confirm_restart", "confirm_batch_close",
-            "confirm_batch_restart", "confirm_batch_clone", "confirm_save",
+            "actions",
+            "restart_options",
+            "rename",
+            "worktree",
+            "clone",
+            "move_picker",
+            "config_pick",
+            "config_action",
+            "sort_pick",
+            "color_picker",
+            "batch_group",
+            "override",
+            "group_actions",
+            "confirm",
+            "confirm_restart",
+            "confirm_batch_close",
+            "confirm_batch_restart",
+            "confirm_batch_clone",
+            "confirm_save",
         }
         detail_visible = (
             state["show_detail"]

@@ -14,23 +14,36 @@ import cc_dashboard.config_state as _state
 def _load_hook_events() -> list[str]:
     """Load hook event list from the canonical source (data/icons.json)."""
     from cc_dashboard.config_data import _resolve_data_path
+
     path = _resolve_data_path("icons.json")
     if path:
         try:
             with open(path) as f:
                 data = json.load(f)
             events = data.get("hook_events")
-            if events:
-                return events
+            if isinstance(events, list):
+                return [str(e) for e in events]
         except (json.JSONDecodeError, OSError):
             pass
     # Fallback if icons.json is unavailable
     return [
-        "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
-        "PostToolUse", "PostToolUseFailure", "Notification",
-        "SubagentStart", "SubagentStop", "Stop", "TeammateIdle",
-        "TaskCompleted", "ConfigChange", "WorktreeCreate", "WorktreeRemove",
-        "PreCompact", "SessionEnd",
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PermissionRequest",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "Notification",
+        "SubagentStart",
+        "SubagentStop",
+        "Stop",
+        "TeammateIdle",
+        "TaskCompleted",
+        "ConfigChange",
+        "WorktreeCreate",
+        "WorktreeRemove",
+        "PreCompact",
+        "SessionEnd",
     ]
 
 

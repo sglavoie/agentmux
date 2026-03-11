@@ -94,7 +94,12 @@ def _reload_all_config():
 
 
 def _refilter(
-    sessions, search_query, account_filter, sort_mode, filtered, selected,
+    sessions,
+    search_query,
+    account_filter,
+    sort_mode,
+    filtered,
+    selected,
     group_filter=None,
 ):
     old_tab_id = (

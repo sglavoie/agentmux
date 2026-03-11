@@ -88,7 +88,7 @@ cmd_list() {
     done
 
     if [[ -z "$table" ]]; then
-        echo "No Claude sessions found."
+        echo "No Claude sessions found." >&2
         return
     fi
 
@@ -197,12 +197,12 @@ cmd_sockets() {
     done
 
     if [[ $found -eq 0 ]]; then
-        echo "No kitty sockets found in /tmp/"
+        echo "No kitty sockets found in /tmp/" >&2
     fi
 
     if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
-        echo ""
-        echo "KITTY_LISTEN_ON=$KITTY_LISTEN_ON"
+        echo "" >&2
+        echo "KITTY_LISTEN_ON=$KITTY_LISTEN_ON" >&2
     fi
 }
 
@@ -286,18 +286,18 @@ cmd_cleanup() {
     done
 
     if [[ -z "$stale" ]]; then
-        echo "No stale sessions found."
+        echo "No stale sessions found." >&2
     else
-        echo "Stale sessions (no Claude process running):"
-        echo ""
+        echo "Stale sessions (no Claude process running):" >&2
+        echo "" >&2
         while IFS=$'\t' read -r title tab_id sock inst_label; do
             if [[ "$multi_instance" == "true" ]]; then
-                echo "  $title (tab id: $tab_id, instance: $inst_label)"
+                echo "  $title (tab id: $tab_id, instance: $inst_label)" >&2
             else
-                echo "  $title (tab id: $tab_id)"
+                echo "  $title (tab id: $tab_id)" >&2
             fi
         done <<<"$stale"
-        echo ""
+        echo "" >&2
 
         local confirmed=false
         if [[ "$HAS_GUM" == "true" ]]; then
@@ -314,13 +314,13 @@ cmd_cleanup() {
         if [[ "$confirmed" == "true" ]]; then
             while IFS=$'\t' read -r title tab_id sock inst_label; do
                 if kitty @ --to "$sock" close-tab --match "id:$tab_id"; then
-                    echo "Closed: $title"
+                    echo "Closed: $title" >&2
                 else
                     echo "Warning: failed to close '$title' (tab id: $tab_id)." >&2
                 fi
             done <<<"$stale"
         else
-            echo "No sessions closed."
+            echo "No sessions closed." >&2
         fi
     fi
 
@@ -343,7 +343,7 @@ cmd_cleanup() {
         fi
     done
     if [[ $orphaned -gt 0 ]]; then
-        echo "Removed $orphaned orphaned activity/notification file(s)."
+        echo "Removed $orphaned orphaned activity/notification file(s)." >&2
     fi
 }
 
@@ -408,20 +408,20 @@ cmd_save() {
 	')"
 
     if [[ -z "$sessions" ]]; then
-        echo "No Claude sessions to save."
+        echo "No Claude sessions to save." >&2
         return
     fi
 
     if [[ -f "$output_file" ]]; then
         if [[ "$HAS_GUM" == "true" ]]; then
             if ! gum confirm "Overwrite $output_file? (backup will be created)" --affirmative "Yes" --negative "Cancel"; then
-                echo "Save cancelled."
+                echo "Save cancelled." >&2
                 return
             fi
         else
             read -rp "Overwrite $output_file? (backup will be created) [y/N] " answer
             if [[ ! "$answer" =~ ^[Yy] ]]; then
-                echo "Save cancelled."
+                echo "Save cancelled." >&2
                 return
             fi
         fi
@@ -429,14 +429,14 @@ cmd_save() {
             echo "Error: backup failed, save aborted. Original file unchanged." >&2
             return 1
         fi
-        echo "Backed up existing config to ${output_file}.bak"
+        echo "Backed up existing config to ${output_file}.bak" >&2
     fi
 
     _save_sessions_toml "$output_file" "$sessions"
 
     local count
     count="$(_trim "$(echo "$sessions" | wc -l)")"
-    echo "Saved $count session(s) to $output_file"
+    echo "Saved $count session(s) to $output_file" >&2
 }
 
 _save_sessions_toml() {
@@ -459,6 +459,9 @@ _save_sessions_toml() {
     done <<<"$sessions"
     json_array+="]"
 
-    echo "$json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$output_file"
+    if ! echo "$json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$output_file"; then
+        echo "Error: Failed to write sessions to '$output_file'." >&2
+        return 1
+    fi
 }
 

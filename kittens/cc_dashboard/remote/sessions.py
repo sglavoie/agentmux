@@ -129,9 +129,7 @@ def query_sessions(socket, managed_only=True):
             if not cc_group:
                 cfg_entry = _cfg._find_config_session(title)
                 if cfg_entry is None:
-                    cfg_entry = _cfg._find_config_session(
-                        _strip_override_marker(title)
-                    )
+                    cfg_entry = _cfg._find_config_session(_strip_override_marker(title))
                 if cfg_entry:
                     cc_group = cfg_entry.get("group", "")
             cc_notes = read_notes(title)

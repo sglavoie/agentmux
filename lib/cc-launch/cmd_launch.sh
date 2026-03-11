@@ -14,7 +14,7 @@ cmd_launch_interactive() {
 
     local picker_output
     picker_output="$(python3 "$picker_script")" || {
-        echo "No sessions selected."
+        echo "No sessions selected." >&2
         return
     }
 
@@ -47,7 +47,7 @@ cmd_launch_interactive() {
         fi
     done <<<"$picker_output"
 
-    echo "Launched $launched new session(s), $existed already existed."
+    echo "Launched $launched new session(s), $existed already existed." >&2
 }
 
 cmd_launch_all() {
@@ -57,7 +57,10 @@ cmd_launch_all() {
     fi
 
     local lines=""
-    lines="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE")"
+    if ! lines="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE")"; then
+        echo "Error: Failed to parse sessions config '$CONFIG_FILE'." >&2
+        exit 1
+    fi
 
     if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
         lines="$(echo -n "$lines" | sort -f)"
@@ -73,7 +76,7 @@ cmd_launch_all() {
             fi
         done <<<"$lines"
         if [[ -z "$filtered" ]]; then
-            echo "No sessions found in group '$_TARGET_GROUP'."
+            echo "No sessions found in group '$_TARGET_GROUP'." >&2
             return
         fi
         lines="$filtered"
@@ -109,7 +112,7 @@ cmd_launch_all() {
         local loc_args
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
-        echo "[$current/$total] Launching $title..."
+        echo "[$current/$total] Launching $title..." >&2
         if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group"; then
             launched=$((launched + 1))
         else
@@ -117,7 +120,7 @@ cmd_launch_all() {
         fi
     done <<<"$lines"
 
-    echo "Launched $launched new session(s), $existed already existed."
+    echo "Launched $launched new session(s), $existed already existed." >&2
     if [[ "$skipped" -gt 0 ]]; then
         echo "Skipped $skipped session(s) with unknown accounts." >&2
     fi
@@ -176,7 +179,7 @@ cmd_add() {
                 --header "Select account:" \
                 --header.foreground "$GUM_HEADER_COLOR" \
                 --cursor.foreground "$GUM_ACCENT_COLOR")" || {
-                echo "No account selected."
+                echo "No account selected." >&2
                 return
             }
             account="${chosen%%  (*}"

@@ -317,9 +317,9 @@ done <<<"$rows"
 
 # Header
 {
-	local hdr_fmt="%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s"
-	local hdr_args=("$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account")
-	local sep_width=$((max_mk + max_tab + 2 + max_title + 2 + max_account))
+	hdr_fmt="%s%-${max_mk}s%-${max_tab}s  %-${max_title}s  %-${max_account}s"
+	hdr_args=("$BOLD" "$header_mk" "$header_tab" "$header_title" "$header_account")
+	sep_width=$((max_mk + max_tab + 2 + max_title + 2 + max_account))
 
 	if [[ "$has_groups" == "true" ]]; then
 		hdr_fmt+="  %-${max_group}s"
@@ -335,6 +335,7 @@ done <<<"$rows"
 	hdr_args+=("$header_dir" "$header_branch" "$header_status" "$RESET")
 	sep_width=$((sep_width + 2 + max_dir + 2 + max_branch + 2 + max_status))
 
+	# shellcheck disable=SC2059  # dynamic format string is intentional
 	printf "$hdr_fmt" "${hdr_args[@]}"
 	printf "%s%s%s\n" "$DIM" "$(repeat_char '─' "$sep_width")" "$RESET"
 }
@@ -368,8 +369,8 @@ while IFS=$'\t' read -r col_tab col_title col_account col_dir col_branch col_sta
 		esac
 	fi
 
-	local row_fmt="%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s"
-	local row_args=("$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account")
+	row_fmt="%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((max_tab + $(extra_bytes "$col_tab")))s  %-$((max_title + $(extra_bytes "$col_title")))s  %-$((max_account + $(extra_bytes "$col_account")))s"
+	row_args=("$local_color" "$local_mk" "$col_tab" "$col_title" "$col_account")
 
 	if [[ "$has_groups" == "true" ]]; then
 		row_fmt+="  %-$((max_group + $(extra_bytes "$col_group")))s"
@@ -382,5 +383,6 @@ while IFS=$'\t' read -r col_tab col_title col_account col_dir col_branch col_sta
 	row_fmt+="  %-$((max_dir + $(extra_bytes "$col_dir")))s  %-$((max_branch + $(extra_bytes "$col_branch")))s  %s%s\n"
 	row_args+=("$col_dir" "$col_branch" "$local_status" "$local_reset")
 
+	# shellcheck disable=SC2059  # dynamic format string is intentional
 	printf "$row_fmt" "${row_args[@]}"
 done <<<"$processed_rows"

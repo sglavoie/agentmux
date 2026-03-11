@@ -138,6 +138,8 @@ uninstall:
             echo "Removed $dest"; \
         fi; \
     done
+    @rmdir "{{prefix_lib}}/ccm" 2>/dev/null || true
+    @rmdir "{{prefix_lib}}" 2>/dev/null || true
     @echo "Done."
     @echo ""
     @echo "Other artifacts you may want to remove:"
@@ -148,6 +150,7 @@ uninstall:
 # Run tests
 test:
     python3 tests/test_toml_roundtrip.py
+    python3 tests/test_config_validator.py
 
 # Run linters
 lint:

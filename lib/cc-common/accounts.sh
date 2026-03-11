@@ -25,7 +25,7 @@ load_accounts() {
 			_ACCOUNT_NAMES+=("$name")
 			_ACCOUNT_DIRS+=("$config_dir")
 			_ACCOUNT_COLORS+=("$color")
-		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-accounts "$ACCOUNTS_CONFIG")
+		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-accounts "$ACCOUNTS_CONFIG" || echo "")
 
 		if [[ ${#_ACCOUNT_NAMES[@]} -eq 0 ]]; then
 			echo "Warning: accounts config exists but produced no accounts. Check $ACCOUNTS_CONFIG for errors." >&2

@@ -5,6 +5,7 @@ import curses
 import os
 import tempfile
 import tomllib
+from typing import Any
 
 from cc_dashboard.config_core import (
     _defaults_config_path,
@@ -14,7 +15,7 @@ from cc_dashboard.filters import SORT_MODES
 from cc_dashboard.loop_modes_hooks import _handle_text_input
 from cc_dashboard.remote import do_open_editor
 
-PREF_FIELDS = [
+PREF_FIELDS: list[dict[str, Any]] = [
     # [defaults] section
     {
         "key": "dashboard_refresh",
@@ -112,7 +113,7 @@ def init_prefs_state(state):
     defaults = data.get("defaults", {})
     notifications = data.get("notifications", {})
 
-    values = {}
+    values: dict[str, Any] = {}
     for field in PREF_FIELDS:
         section = defaults if field["section"] == "defaults" else notifications
         raw = section.get(field["key"])
@@ -120,9 +121,7 @@ def init_prefs_state(state):
             values[field["key"]] = bool(raw) if raw is not None else False
         elif field["type"] == "int":
             values[field["key"]] = int(raw) if raw is not None else 0
-        elif field["type"] == "choice":
-            values[field["key"]] = str(raw) if raw is not None else ""
-        elif field["type"] == "string":
+        elif field["type"] in ("choice", "string"):
             values[field["key"]] = str(raw) if raw is not None else ""
         elif field["type"] == "string_array":
             if isinstance(raw, list):
@@ -181,14 +180,24 @@ def handle_prefs_mode(key, state):
         idx = choices.index(cur) if cur in choices else 0
         state["prefs_values"][field["key"]] = choices[(idx - 1) % len(choices)]
         _save_prefs(state)
-    elif ftype in ("int", "string") and key in (10, 13, curses.KEY_ENTER) and not field.get("ext_edit"):
+    elif (
+        ftype in ("int", "string")
+        and key in (10, 13, curses.KEY_ENTER)
+        and not field.get("ext_edit")
+    ):
         val = state["prefs_values"][field["key"]]
         state["prefs_edit_value"] = str(val)
         state["prefs_cursor"] = len(state["prefs_edit_value"])
         state["prefs_editing"] = True
-    elif key in (10, 13, curses.KEY_ENTER) and (ftype == "string_array" or field.get("ext_edit")):
+    elif key in (10, 13, curses.KEY_ENTER) and (
+        ftype == "string_array" or field.get("ext_edit")
+    ):
         ext = state.get("prefs_ext_edit_path", "")
-        if ext and os.path.isfile(ext) and state.get("prefs_ext_edit_field") == field["key"]:
+        if (
+            ext
+            and os.path.isfile(ext)
+            and state.get("prefs_ext_edit_field") == field["key"]
+        ):
             # Phase 2: read back from temp file, apply, and save
             with open(ext) as f:
                 content = f.read()
@@ -204,7 +213,9 @@ def handle_prefs_mode(key, state):
             state["prefs_ext_edit_field"] = ""
         else:
             # Phase 1: write value to temp file and open in external editor
-            val = state["prefs_values"].get(field["key"], [] if ftype == "string_array" else "")
+            val = state["prefs_values"].get(
+                field["key"], [] if ftype == "string_array" else ""
+            )
             fd, tmp = tempfile.mkstemp(suffix=".txt", prefix="ccm_prefs_")
             with os.fdopen(fd, "w") as f:
                 if ftype == "string_array":
@@ -256,7 +267,9 @@ def handle_prefs_array_mode(key, state):
         if selected >= len(items) and items:
             state["prefs_array_selected"] = len(items) - 1
         _save_array(state)
-    elif key in (ord("e"), 10, 13, curses.KEY_ENTER) and items and selected < len(items):
+    elif (
+        key in (ord("e"), 10, 13, curses.KEY_ENTER) and items and selected < len(items)
+    ):
         state["prefs_array_edit_value"] = items[selected]
         state["prefs_array_cursor"] = len(items[selected])
         state["prefs_array_editing"] = True

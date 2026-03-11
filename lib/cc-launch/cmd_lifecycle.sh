@@ -41,25 +41,25 @@ cmd_close_group() {
     done
 
     if [[ -z "$matches" ]]; then
-        echo "No running sessions found in group '$_TARGET_GROUP'."
+        echo "No running sessions found in group '$_TARGET_GROUP'." >&2
         return
     fi
 
-    echo "Sessions in group '$_TARGET_GROUP':"
-    echo ""
+    echo "Sessions in group '$_TARGET_GROUP':" >&2
+    echo "" >&2
     local multi_instance=false
     [[ ${#_INSTANCE_SOCKETS[@]} -gt 1 ]] && multi_instance=true
     while IFS=$'\t' read -r title tab_id sock inst_label; do
         if [[ "$multi_instance" == "true" ]]; then
-            echo "  $title (tab id: $tab_id, instance: $inst_label)"
+            echo "  $title (tab id: $tab_id, instance: $inst_label)" >&2
         else
-            echo "  $title (tab id: $tab_id)"
+            echo "  $title (tab id: $tab_id)" >&2
         fi
     done <<<"$matches"
-    echo ""
+    echo "" >&2
 
     if [[ "$_DRY_RUN" == "true" ]]; then
-        echo "Dry run: no sessions were closed."
+        echo "Dry run: no sessions were closed." >&2
         return
     fi
 
@@ -80,15 +80,15 @@ cmd_close_group() {
         local closed=0
         while IFS=$'\t' read -r title tab_id sock inst_label; do
             if kitty @ --to "$sock" close-tab --match "id:$tab_id"; then
-                echo "Closed: $title"
+                echo "Closed: $title" >&2
                 closed=$((closed + 1))
             else
                 echo "Warning: failed to close '$title' (tab id: $tab_id)." >&2
             fi
         done <<<"$matches"
-        echo "Closed $closed session(s) in group '$_TARGET_GROUP'."
+        echo "Closed $closed session(s) in group '$_TARGET_GROUP'." >&2
     else
-        echo "No sessions closed."
+        echo "No sessions closed." >&2
     fi
 }
 
@@ -120,7 +120,7 @@ cmd_close() {
     IFS=$'\t' read -r title _ <<<"$tab_info"
 
     if [[ "$_DRY_RUN" == "true" ]]; then
-        echo "Would close: $title (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID)"
+        echo "Would close: $title (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID)" >&2
         return
     fi
 
@@ -128,7 +128,7 @@ cmd_close() {
         echo "Error: failed to close tab '$title' (tab_id=$_TARGET_TAB_ID)." >&2
         exit 1
     fi
-    echo "Closed tab '$title' (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID)."
+    echo "Closed tab '$title' (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID)." >&2
 }
 
 cmd_restart() {
@@ -171,7 +171,7 @@ cmd_restart() {
         echo "Error: failed to close tab '$title' for restart." >&2
         exit 1
     fi
-    echo "Closed tab '$title', relaunching..."
+    echo "Closed tab '$title', relaunching..." >&2
     sleep 0.3 # Wait for Kitty to fully close the tab before relaunching
 
     local loc_args
@@ -271,7 +271,7 @@ cmd_clone() {
             } > "${CONFIG_FILE}.tmp" || { echo "Error: failed to write config file" >&2; return 1; }
             mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE" || { echo "Error: failed to update config file" >&2; return 1; }
         fi
-        echo "Cloned '$title' as '$clone_title'."
+        echo "Cloned '$title' as '$clone_title'." >&2
     fi
 }
 
@@ -341,7 +341,7 @@ cmd_move() {
         echo "Error: failed to close tab '$title' for move." >&2
         exit 1
     fi
-    echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..."
+    echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..." >&2
     sleep 0.3 # Wait for Kitty to fully close the tab before relaunching on target
 
     SOCKET="$target_socket"
@@ -355,5 +355,5 @@ cmd_move() {
 
     launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"
     sort_tabs "$SOCKET"
-    echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE."
+    echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE." >&2
 }

@@ -35,9 +35,11 @@ def _red(s):
 
 
 def _load_palette_colors(data_dir):
-    """Load valid palette color names from palette.json."""
-    hardcoded = {"green", "blue", "red", "orange", "purple",
-                 "teal", "pink", "yellow", "gray", "cyan"}
+    """Load valid palette color names from palette.json.
+
+    Returns the color set, or None if palette.json cannot be loaded
+    (caller should skip color validation in that case).
+    """
     candidates = [
         os.path.join(data_dir, "palette.json"),
         os.path.expanduser("~/.local/lib/cc-manager/palette.json"),
@@ -49,7 +51,7 @@ def _load_palette_colors(data_dir):
             return set(data["colors"].keys())
         except (FileNotFoundError, OSError, json.JSONDecodeError, KeyError, TypeError):
             continue
-    return hardcoded
+    return None
 
 
 def _load_icons_json(data_dir):
@@ -147,7 +149,14 @@ def validate_accounts(path, palette_colors):
         v.error("'accounts' must be an array of tables ([[accounts]])")
         return v, account_names
 
+    known_account_keys = {"name", "config_dir", "color"}
+
     for i, entry in enumerate(accounts, start=1):
+        unknown = set(entry.keys()) - known_account_keys
+        if unknown:
+            label = entry.get("name", f"entry {i}")
+            v.warn(f"account '{label}': unknown key(s): {', '.join(sorted(unknown))}")
+
         name = entry.get("name", "")
         if not name:
             v.error(f"entry {i}: missing or empty 'name'")
@@ -158,10 +167,12 @@ def validate_accounts(path, palette_colors):
         config_dir = entry.get("config_dir", "")
         if not isinstance(config_dir, str):
             v.error(f"account '{name}': 'config_dir' must be a string")
+        elif config_dir and not os.path.isdir(os.path.expanduser(config_dir)):
+            v.warn(f"account '{name}': config_dir '{config_dir}' does not exist")
         color = entry.get("color", "gray")
         if not isinstance(color, str):
             v.error(f"account '{name}': 'color' must be a string")
-        elif color not in palette_colors:
+        elif palette_colors is not None and color not in palette_colors:
             v.error(f"account '{name}': unknown color '{color}' "
                     f"(valid: {', '.join(sorted(palette_colors))})")
         if name in account_names:
@@ -196,9 +207,18 @@ def validate_sessions(path, account_names):
         return v
 
     valid_pw = {"", "-", "stack", "vsplit", "hsplit", "split"}
+    known_session_keys = {
+        "title", "directory", "account", "flags",
+        "project_window", "env", "group",
+    }
     seen_titles = set()
 
     for i, entry in enumerate(sessions, start=1):
+        unknown = set(entry.keys()) - known_session_keys
+        if unknown:
+            label = entry.get("title", f"entry {i}")
+            v.warn(f"session '{label}': unknown key(s): {', '.join(sorted(unknown))}")
+
         title = entry.get("title", "")
         directory = entry.get("directory", "")
 
@@ -206,6 +226,10 @@ def validate_sessions(path, account_names):
             v.error(f"entry {i}: missing or empty 'title'")
         if not directory:
             v.error(f"entry {i}: missing or empty 'directory'")
+        elif not os.path.isdir(os.path.expanduser(directory)):
+            label = title or f"entry {i}"
+            v.warn(f"session '{label}': directory "
+                   f"'{directory}' does not exist")
         if not title:
             continue
 
@@ -243,6 +267,25 @@ def validate_defaults(path, valid_sort=None):
     defaults = data.get("defaults", {})
     notifications = data.get("notifications", {})
 
+    known_defaults_keys = {"claude_flags", "project_window", "sort_sessions",
+                           "dashboard_refresh", "tab_statuses",
+                           "notes_editor", "kitty_timeout"}
+    unknown_defaults = set(defaults.keys()) - known_defaults_keys
+    if unknown_defaults:
+        v.warn(f"[defaults]: unknown key(s): {', '.join(sorted(unknown_defaults))}")
+
+    known_notif_keys = {"error", "permission", "stop", "idle",
+                        "idle_alert_minutes", "min_secs", "ignore_patterns"}
+    unknown_notif = set(notifications.keys()) - known_notif_keys
+    if unknown_notif:
+        v.warn(f"[notifications]: unknown key(s): {', '.join(sorted(unknown_notif))}")
+
+    # Check for unknown top-level sections
+    known_sections = {"defaults", "notifications"}
+    unknown_sections = set(data.keys()) - known_sections
+    if unknown_sections:
+        v.warn(f"unknown top-level section(s): {', '.join(sorted(unknown_sections))}")
+
     # Validate [defaults] section
     sort = defaults.get("sort_sessions")
     if valid_sort is None:
@@ -266,6 +309,13 @@ def validate_defaults(path, valid_sort=None):
             v.error("dashboard_refresh must be an integer")
         elif refresh < 0:
             v.error("dashboard_refresh must be non-negative")
+
+    kitty_timeout = defaults.get("kitty_timeout")
+    if kitty_timeout is not None:
+        if not isinstance(kitty_timeout, int) or isinstance(kitty_timeout, bool):
+            v.error("kitty_timeout must be an integer")
+        elif kitty_timeout < 1:
+            v.error("kitty_timeout must be at least 1")
 
     # Validate [notifications] section
     bool_keys = ("error", "permission", "stop", "idle")
@@ -376,6 +426,9 @@ def main():
     data_dir = sys.argv[2]
 
     palette_colors = _load_palette_colors(data_dir)
+    if palette_colors is None:
+        print(_yellow("  WARN") + ": could not load palette.json; "
+              "skipping color validation", file=sys.stderr)
     valid_events = _load_hook_events(data_dir)
     valid_sort = _load_sort_modes(data_dir)
 

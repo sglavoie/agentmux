@@ -402,7 +402,12 @@ def draw_pick_group_picker(stdscr, config_sessions, group_filter):
 
 
 def draw_color_picker(
-    stdscr, session, palette_names, current_color, account_color, selected,
+    stdscr,
+    session,
+    palette_names,
+    current_color,
+    account_color,
+    selected,
     subtitle=None,
 ):
     """Draw a color selection overlay for tab color override."""
@@ -525,9 +530,7 @@ def draw_group_actions(stdscr, state):
             sel = i == ga_selected
             marker = ">" if sel else " "
             attr = normal_attr | (curses.A_BOLD if sel else 0)
-            safe_addstr(
-                stdscr, y, box_x + 2, f"{marker} {display}"[: box_w - 4], attr
-            )
+            safe_addstr(stdscr, y, box_x + 2, f"{marker} {display}"[: box_w - 4], attr)
 
     elif step == "pick_action":
         from cc_dashboard.loop_modes_dashboard import _ga_build_actions
@@ -562,9 +565,7 @@ def draw_group_actions(stdscr, state):
                 title,
                 curses.color_pair(CP_HEADER) | curses.A_BOLD,
             )
-            safe_addstr(
-                stdscr, box_y + 2, box_x + 2, "No actions available", dim_attr
-            )
+            safe_addstr(stdscr, box_y + 2, box_x + 2, "No actions available", dim_attr)
             return
 
         action_labels = [label for _, label in actions]
@@ -605,9 +606,7 @@ def draw_group_actions(stdscr, state):
             sel = i == ga_action_selected
             marker = ">" if sel else " "
             attr = normal_attr | (curses.A_BOLD if sel else 0)
-            safe_addstr(
-                stdscr, y, box_x + 2, f"{marker} {label}"[: box_w - 4], attr
-            )
+            safe_addstr(stdscr, y, box_x + 2, f"{marker} {label}"[: box_w - 4], attr)
 
 
 def draw_config_action_picker(stdscr, label, path, selected):

@@ -14,7 +14,7 @@ def _state_file_path():
     return os.path.join(cache, "cc-manager", "dashboard_state.json")
 
 
-_DEFAULTS = {
+_DEFAULTS: dict[str, str | list[str] | bool | None] = {
     "sort_mode": "default",
     "account_filter": None,
     "group_filter": None,
@@ -41,7 +41,7 @@ def load_ui_state():
     except (json.JSONDecodeError, OSError):
         return dict(_DEFAULTS)
 
-    result = {}
+    result: dict[str, str | list[str] | bool | None] = {}
     for key, default in _DEFAULTS.items():
         val = data.get(key, default)
         if isinstance(default, bool):
@@ -65,7 +65,9 @@ def save_ui_state(state_dict):
     dir_ = os.path.dirname(path)
     os.makedirs(dir_, exist_ok=True)
     try:
-        with tempfile.NamedTemporaryFile("w", dir=dir_, delete=False, suffix=".tmp") as tmp:
+        with tempfile.NamedTemporaryFile(
+            "w", dir=dir_, delete=False, suffix=".tmp"
+        ) as tmp:
             json.dump(state_dict, tmp, indent=2)
             tmp.write("\n")
             tmp_path = tmp.name

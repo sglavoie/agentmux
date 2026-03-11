@@ -70,7 +70,9 @@ def get_all_kitty_sockets():
         return None
 
     active = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(candidates) or 1, 8)) as pool:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(len(candidates) or 1, 8)
+    ) as pool:
         futures = {pool.submit(_probe, sock): sock for sock in candidates}
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
@@ -84,14 +86,18 @@ def get_all_kitty_sockets():
     return active
 
 
-def kitty_cmd(socket, *args):
+def kitty_cmd(socket, *args, timeout=None):
     """Run a kitty @ remote control command. Returns the CompletedProcess or None."""
+    if timeout is None:
+        from cc_dashboard import config_state as _state
+
+        timeout = getattr(_state, "_default_kitty_timeout", 5)
     try:
         result = subprocess.run(
             ["kitty", "@", "--to", socket, *list(args)],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=timeout,
         )
         if _DEBUG_LOG and result.returncode != 0:
             with open(_DEBUG_LOG, "a") as f:

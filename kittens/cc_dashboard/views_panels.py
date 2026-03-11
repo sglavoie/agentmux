@@ -241,7 +241,12 @@ def draw_list_view(
 
 
 def draw_pick_view(
-    stdscr, entries, selected, running_count, marked=None, group_filter=None,
+    stdscr,
+    entries,
+    selected,
+    running_count,
+    marked=None,
+    group_filter=None,
 ):
     """Draw the config session picker list with Running/Stopped sections."""
     rows, cols = stdscr.getmaxyx()
@@ -575,7 +580,13 @@ def draw_new_form(
     )
 
     labels = [
-        "Title:", "Directory:", "Account:", "Flags:", "Split:", "Env vars:", "Group:",
+        "Title:",
+        "Directory:",
+        "Account:",
+        "Flags:",
+        "Split:",
+        "Env vars:",
+        "Group:",
     ]
     field_keys = ["title", "dir", "account", "flags", "pw", "env", "group"]
     cycle_fields = {"account", "pw"}

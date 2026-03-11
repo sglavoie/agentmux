@@ -62,8 +62,7 @@ def load_accounts():
             _state._account_names.append(name)
     else:
         print(
-            "Note: accounts.toml not found, using default accounts"
-            " (work, personal).",
+            "Note: accounts.toml not found, using default accounts (work, personal).",
             file=sys.stderr,
         )
         home = os.path.expanduser("~")
@@ -131,6 +130,9 @@ def load_defaults():
         )
     if "notes_editor" in defaults:
         _state._default_notes_editor = str(defaults["notes_editor"])
+    if "kitty_timeout" in defaults:
+        with contextlib.suppress(ValueError, TypeError):
+            _state._default_kitty_timeout = max(1, int(defaults["kitty_timeout"]))
     if "tab_statuses" in defaults:
         val = defaults["tab_statuses"]
         if isinstance(val, list):
@@ -396,7 +398,9 @@ def _tilde_directory(directory):
     return directory
 
 
-def _session_to_toml_entry(title, directory, account, flags="", pw="", env="", group=""):
+def _session_to_toml_entry(
+    title, directory, account, flags="", pw="", env="", group=""
+):
     """Build a TOML-serializable dict for one ``[[sessions]]`` entry."""
     d = {"title": title, "directory": directory}
     if account:
@@ -479,13 +483,17 @@ def append_session(title, directory, account, flags="", pw="", env="", group="")
     if os.path.isfile(path):
         header = _read_header_comments(path)
         entries = _read_sessions_toml_raw(path)
-    entries.append(_session_to_toml_entry(title, directory, account, flags, pw, env, group))
+    entries.append(
+        _session_to_toml_entry(title, directory, account, flags, pw, env, group)
+    )
     _write_sessions_toml(path, entries, header=header.rstrip("\n") if header else "")
 
     load_sessions()
 
 
-def update_session(original_title, title, directory, account, flags="", pw="", env="", group=""):
+def update_session(
+    original_title, title, directory, account, flags="", pw="", env="", group=""
+):
     """Update an existing session entry by original title.
 
     Returns True if the entry was found and updated, False otherwise.

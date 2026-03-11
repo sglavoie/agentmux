@@ -320,11 +320,12 @@ def main():
     os.dup2(tty_fd, 1)
     os.close(tty_fd)
 
-    curses.wrapper(run)
-
-    # Restore original stdout so pipe output reaches the caller.
-    os.dup2(saved_stdout, 1)
-    os.close(saved_stdout)
+    try:
+        curses.wrapper(run)
+    finally:
+        # Restore original stdout so pipe output reaches the caller.
+        os.dup2(saved_stdout, 1)
+        os.close(saved_stdout)
 
     if not selected:
         sys.exit(1)
@@ -334,7 +335,9 @@ def main():
         flags = entry.get("flags", "")
         env = entry.get("env", "")
         group = entry.get("group", "")
-        print(f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}|{env}|{group}")
+        print(
+            f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}|{env}|{group}"
+        )
 
 
 if __name__ == "__main__":

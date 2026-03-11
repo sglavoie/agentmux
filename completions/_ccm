@@ -73,6 +73,7 @@ _ccm() {
                             'dashboard[Launch curses dashboard kitten]' \
                             'switch[Quick-switch to a session]' \
                             'idle-watch[Manage background idle watcher]' \
+                            'notify[Send a test notification]' \
                             'help[Show help]'
                         return
                         ;;
@@ -156,7 +157,14 @@ _ccm() {
             ;;
         help)
             [[ $CURRENT -eq 3 ]] && _values 'command' \
-                'launch' 'status' 'star' 'config' 'hooks' 'logs' 'audit' 'dashboard' 'switch' 'idle-watch'
+                'launch' 'status' 'star' 'config' 'hooks' 'logs' 'audit' 'dashboard' 'switch' 'idle-watch' 'notify'
+            ;;
+        notify)
+            [[ $CURRENT -ge 3 ]] && _values 'notify option' \
+                '--title[Notification title]' \
+                '--subtitle[Notification subtitle]' \
+                '--message[Notification body]' \
+                '--timeout[Auto-dismiss after N seconds]'
             ;;
         *)
             _values 'command' \
@@ -170,6 +178,7 @@ _ccm() {
                 'dashboard[Launch curses dashboard kitten]' \
                 'switch[Quick-switch to a session]' \
                 'idle-watch[Manage background idle watcher]' \
+                'notify[Send a test notification]' \
                 'help[Show help]' \
                 '--socket[Target a specific Kitty socket]' \
                 '--version[Print version]'

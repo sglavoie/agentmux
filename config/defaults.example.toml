@@ -16,6 +16,8 @@
 #                       Default: ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
 #   notes_editor      — External editor command for session notes.
 #                       Default: "" (uses built-in editor)
+#   kitty_timeout     — Timeout in seconds for kitty @ remote control
+#                       commands in the dashboard. Default: 5
 #
 # [notifications] keys:
 #   error             — Show a macOS notification on tool use failures. Default: false
@@ -40,6 +42,7 @@
 # dashboard_refresh = 3
 # tab_statuses = ["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]
 # notes_editor = "vim"
+# kitty_timeout = 5
 
 # [notifications]
 # error = true

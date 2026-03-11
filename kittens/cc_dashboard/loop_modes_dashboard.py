@@ -520,9 +520,7 @@ def handle_confirm_modes(key, state):
             all_title_dicts = [{"title": s["title"]} for s in state["sessions"]]
             cloned = 0
             for t in state["batch_targets"]:
-                new_title = state["generate_clone_title"](
-                    all_title_dicts, t["title"]
-                )
+                new_title = state["generate_clone_title"](all_title_dicts, t["title"])
                 all_title_dicts.append({"title": new_title})
                 r_flags, r_pw, r_env = _resolve_runtime_options(
                     t,

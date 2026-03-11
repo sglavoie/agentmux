@@ -127,7 +127,9 @@ def draw_prefs_array_editor(stdscr, items, selected, editing, edit_value, cursor
 
     # Clear interior
     for dy in range(box_h):
-        safe_addstr(stdscr, box_y + dy, box_x, " " * box_w, curses.color_pair(CP_NORMAL))
+        safe_addstr(
+            stdscr, box_y + dy, box_x, " " * box_w, curses.color_pair(CP_NORMAL)
+        )
 
     # Title
     title = " Array Editor "
@@ -153,7 +155,9 @@ def draw_prefs_array_editor(stdscr, items, selected, editing, edit_value, cursor
             ev = edit_value
             input_w = box_w - 4
             display = ev[:input_w]
-            safe_addstr(stdscr, iy, box_x + 2, display, curses.color_pair(CP_INPUT_ACTIVE))
+            safe_addstr(
+                stdscr, iy, box_x + 2, display, curses.color_pair(CP_INPUT_ACTIVE)
+            )
             cx = box_x + 2 + min(cursor, input_w - 1)
             if cx < box_x + box_w - 1:
                 ch = ev[cursor] if cursor < len(ev) else " "
@@ -165,7 +169,7 @@ def draw_prefs_array_editor(stdscr, items, selected, editing, edit_value, cursor
                     curses.color_pair(CP_INPUT_ACTIVE) | curses.A_UNDERLINE,
                 )
         elif idx < len(items):
-            txt = items[idx][:box_w - 4]
+            txt = items[idx][: box_w - 4]
             safe_addstr(stdscr, iy, box_x + 2, txt, attr)
 
     # Hint at bottom
@@ -174,6 +178,6 @@ def draw_prefs_array_editor(stdscr, items, selected, editing, edit_value, cursor
         stdscr,
         box_y + box_h - 1,
         box_x + 2,
-        hint[:box_w - 4],
+        hint[: box_w - 4],
         curses.color_pair(CP_DIM),
     )
