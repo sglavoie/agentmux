@@ -5,7 +5,7 @@ default:
 
 python_src    := "kittens/"
 shell_scripts := "bin/cc-launch bin/cc-status bin/cc-toggle-star bin/cc-toggle-flag bin/cc-idle-watch bin/cc-audit bin/ccm lib/cc-common.sh lib/cc-common/*.sh lib/cc-title-icons.sh lib/install-hooks.sh lib/cc-audit/*.sh lib/ccm.sh lib/ccm/*.sh lib/sync-preambles.sh hooks/cc-activity-log"
-rye           := home_directory() / ".rye/shims/rye"
+uv            := "uv"
 shellcheck    := env("SHELLCHECK", "shellcheck")
 shfmt         := env("SHFMT", "shfmt")
 
@@ -161,22 +161,22 @@ test:
 
 # Run linters
 lint:
-    {{rye}} run ruff check {{python_src}}
+    {{uv}} run ruff check {{python_src}}
     {{shellcheck}} {{shell_scripts}}
 
 # Format code
 format:
-    {{rye}} run ruff format {{python_src}}
+    {{uv}} run ruff format {{python_src}}
     {{shfmt}} -w {{shell_scripts}}
 
 # Check formatting without modifying
 format-check:
-    {{rye}} run ruff format --check {{python_src}}
+    {{uv}} run ruff format --check {{python_src}}
     {{shfmt}} -d {{shell_scripts}}
 
 # Run type checker
 typecheck:
-    {{rye}} run mypy {{python_src}}
+    {{uv}} run mypy {{python_src}}
 
 # Verify VERSION file matches pyproject.toml
 check-version:

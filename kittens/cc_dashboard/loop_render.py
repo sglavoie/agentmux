@@ -387,7 +387,7 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
         path = state.get("mkdir_path", "")
         max_w = cols_now - 6
         display_path = path if len(path) <= max_w else "..." + path[-(max_w - 3) :]
-        prompt = f'Directory does not exist: {display_path}'
+        prompt = f"Directory does not exist: {display_path}"
         safe_addstr(
             stdscr,
             rows_now - 4,

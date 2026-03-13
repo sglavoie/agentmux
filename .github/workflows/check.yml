@@ -12,21 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Install Rye
-        uses: eifinger/setup-rye@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Install Python dev dependencies
-        run: rye sync
+        run: uv sync
 
       - name: Run tests
         run: |
@@ -38,13 +33,13 @@ jobs:
           python3 tests/test_smoke.py
 
       - name: Lint Python
-        run: rye run ruff check kittens/
+        run: uv run ruff check kittens/
 
       - name: Check Python formatting
-        run: rye run ruff format --check kittens/
+        run: uv run ruff format --check kittens/
 
       - name: Typecheck
-        run: rye run mypy kittens/
+        run: uv run mypy kittens/
 
       - name: Check version consistency
         run: |
