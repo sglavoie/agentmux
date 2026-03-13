@@ -195,8 +195,9 @@ launch_session() {
 		return 1
 	fi
 
-	local config_dir colors
+	local config_dir colors color_name
 	config_dir="$(claude_config_dir_for_account "$account")"
+	color_name="$(_account_color "$account")" || color_name=""
 	colors="$(tab_colors_for_account "$account")"
 
 	local env_flag="--env KITTY_LISTEN_ON=$SOCKET"
@@ -222,7 +223,7 @@ launch_session() {
 	ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
 	local launch_err
 	# shellcheck disable=SC2086
-	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
+	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
 		local msg="Warning: Failed to launch tab '$title' (account=$account, dir=$dir, socket=$SOCKET)."
 		if [[ -n "$launch_err" ]]; then
 			msg="$msg Kitty error: $launch_err"

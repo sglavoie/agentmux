@@ -23,3 +23,4 @@ _default_notify_idle = ""
 _default_tab_statuses: list[str] = []
 _default_notes_editor = ""
 _default_kitty_timeout = 5
+_default_dim_after_minutes: int = 0

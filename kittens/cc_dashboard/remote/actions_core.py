@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -52,6 +53,11 @@ def do_set_color(socket, session, color_name):
             f"id:{win_id}",
             f"cc_color={color_name}",
         )
+
+    # Clear dim state when color is explicitly changed
+    dim_file = os.path.join(tempfile.gettempdir(), f"ccm-dim-{tab_id}")
+    if os.path.isfile(dim_file):
+        os.remove(dim_file)
 
     return True
 

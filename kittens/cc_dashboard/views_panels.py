@@ -208,6 +208,10 @@ def draw_list_view(
         if activity and activity.get("active_subagents", 0) > 0:
             status_text += f" +{activity['active_subagents']}ag"
 
+        dimmed = s.get("dimmed")
+        if dimmed:
+            status_text += " [dim]"
+
         line = f"{mark}{title_padded}{s['account']:<{c_acct}}"
         if multi_instance:
             line += f"{s.get('instance_label', ''):<{c_inst}}"
@@ -219,6 +223,8 @@ def draw_list_view(
         row_attr = curses.color_pair(cp)
         if sel:
             row_attr |= curses.A_BOLD
+        if dimmed and not sel:
+            row_attr |= curses.A_DIM
         safe_addstr(stdscr, y, 1, line, row_attr)
 
         status_x = 1 + len(line)
@@ -234,6 +240,8 @@ def draw_list_view(
             status_attr = curses.color_pair(CP_WARN) | curses.A_BOLD
         else:
             status_attr = row_attr
+        if dimmed and not sel:
+            status_attr |= curses.A_DIM
         safe_addstr(stdscr, y, status_x, status_text, status_attr)
 
     footer_exclude = None if multi_instance else {"m Move"}

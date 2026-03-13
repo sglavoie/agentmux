@@ -15,6 +15,7 @@ _DEFAULT_NOTIFY_IDLE=""
 _DEFAULT_NOTIFY_MIN_SECS=""
 _DEFAULT_NOTIFY_IGNORE_PATTERNS=""
 _DEFAULT_IDLE_POLL_INTERVAL=""
+_DEFAULT_DIM_AFTER_MINUTES=""
 
 load_defaults() {
 	_DEFAULT_CLAUDE_FLAGS=""
@@ -29,6 +30,7 @@ load_defaults() {
 	_DEFAULT_NOTIFY_MIN_SECS=""
 	_DEFAULT_NOTIFY_IGNORE_PATTERNS=""
 	_DEFAULT_IDLE_POLL_INTERVAL=""
+	_DEFAULT_DIM_AFTER_MINUTES=""
 
 	[[ -f "$DEFAULTS_CONFIG" ]] || return 0
 
@@ -85,6 +87,7 @@ _assign_default() {
 	notify_min_secs) _DEFAULT_NOTIFY_MIN_SECS="$value" ;;
 	notify_ignore_patterns) _DEFAULT_NOTIFY_IGNORE_PATTERNS="$value" ;;
 	idle_poll_interval) _DEFAULT_IDLE_POLL_INTERVAL="$value" ;;
+	dim_after_minutes) _DEFAULT_DIM_AFTER_MINUTES="$value" ;;
 	esac
 }
 

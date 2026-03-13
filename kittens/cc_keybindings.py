@@ -54,6 +54,7 @@ _KITTY_GLOBAL_SECTION = (
         ("F7", "Set tab status (status overlay)"),
         ("F8", "Session info overlay"),
         ("F9", "Edit session notes"),
+        ("F10", "Toggle dim on current tab"),
         ("F12", "Broadcast input to all tab windows"),
         ("Cmd+1..0", "Switch to tab 1-10"),
         ("Cmd+L", "Toggle between last two tabs"),

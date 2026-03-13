@@ -325,7 +325,7 @@ cmd_cleanup() {
     fi
 
     local orphaned=0
-    for f in "${_CCM_TMPDIR}"/ccm-activity-*.counts "${_CCM_TMPDIR}"/ccm-notify-*; do
+    for f in "${_CCM_TMPDIR}"/ccm-activity-*.counts "${_CCM_TMPDIR}"/ccm-notify-* "${_CCM_TMPDIR}"/ccm-dim-*; do
         [[ -e "$f" ]] || continue
         local fname="${f##*/}"
         local file_id=""
@@ -335,6 +335,7 @@ cmd_cleanup() {
             file_id="${file_id%.counts}"
             ;;
         ccm-notify-*) file_id="${fname##*-}" ;;
+        ccm-dim-*) file_id="${fname#ccm-dim-}" ;;
         esac
         [[ -z "$file_id" ]] && continue
         if ! echo "$live_ids" | grep -qx "$file_id"; then

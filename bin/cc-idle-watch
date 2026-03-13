@@ -191,6 +191,51 @@ cmd_daemon() {
 			fi
 		done
 
+		# --- Auto-dim scan ---
+		local dim_threshold=0
+		if [[ -n "${_DEFAULT_DIM_AFTER_MINUTES:-}" ]]; then
+			dim_threshold=$((_DEFAULT_DIM_AFTER_MINUTES * 60))
+		fi
+
+		if [[ "$dim_threshold" -gt 0 ]]; then
+			for activity_file in "${_CCM_TMPDIR}"/ccm-activity-*.counts; do
+				[[ -e "$activity_file" ]] || continue
+
+				local basename_f
+				basename_f="$(basename "$activity_file")"
+				local tab_id="${basename_f#ccm-activity-}"
+				tab_id="${tab_id%.counts}"
+
+				# Read last_event_ts (line 2 of the activity file)
+				local lines
+				lines="$(cat "$activity_file" 2>/dev/null)" || continue
+				local line_arr=()
+				while IFS= read -r l; do
+					line_arr+=("$l")
+				done <<<"$lines"
+
+				[[ "${#line_arr[@]}" -lt 9 ]] && continue
+
+				local last_event_ts="${line_arr[1]}"
+				[[ -z "$last_event_ts" || "$last_event_ts" == "0" ]] && continue
+
+				local idle_secs=$((now - last_event_ts))
+				[[ "$idle_secs" -lt "$dim_threshold" ]] && continue
+
+				# Skip if already dimmed
+				if is_dimmed "$tab_id" >/dev/null 2>&1; then
+					continue
+				fi
+
+				# Get socket for this tab
+				local tab_socket
+				tab_socket="$(_get_tab_socket "$tab_id")"
+				[[ -z "$tab_socket" ]] && continue
+
+				apply_dim "$tab_socket" "$tab_id" "" auto || true
+			done
+		fi
+
 		sleep "$poll"
 	done
 }

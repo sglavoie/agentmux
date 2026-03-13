@@ -146,6 +146,19 @@ def load_hook_events() -> list[str]:
     ]
 
 
+def dim_hex(hex_str: str) -> str:
+    """Halve the RGB components of a hex color string.
+
+    Python equivalent of ``_dim_hex`` in ``lib/cc-common/dim.sh``.
+    Example: ``dim_hex('#2d7d46')`` returns ``'#163e23'``.
+    """
+    h = hex_str.lstrip("#")
+    if len(h) != 6:
+        return hex_str
+    r, g, b = int(h[0:2], 16) // 2, int(h[2:4], 16) // 2, int(h[4:6], 16) // 2
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def load_sort_modes() -> tuple[str, ...]:
     """Load sort modes from icons.json, excluding 'alpha' (legacy alias).
 

@@ -7,8 +7,8 @@ set -euo pipefail
 # automatically for all processes inside its windows).
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: cc-hook-indicator active|stop|permission|idle|failure|clear [EVENT_KIND] [WINDOW_ID]" >&2
-    exit 1
+	echo "Usage: cc-hook-indicator active|stop|permission|idle|failure|clear [EVENT_KIND] [WINDOW_ID]" >&2
+	exit 1
 fi
 
 ACTION="$1"
@@ -22,20 +22,20 @@ EVENT_KIND=""
 # numeric window ID (backward compat with F4 keybinding).  $3, if present,
 # is always a window ID.
 if [[ $# -ge 3 ]]; then
-    EVENT_KIND="$2"
-    KITTY_WINDOW_ID="$3"
+	EVENT_KIND="$2"
+	KITTY_WINDOW_ID="$3"
 elif [[ $# -ge 2 ]]; then
-    if [[ "$2" =~ ^[0-9]+$ ]]; then
-        # Numeric = window ID (backward compat: "cc-hook-indicator clear <WINDOW_ID>")
-        KITTY_WINDOW_ID="$2"
-    else
-        EVENT_KIND="$2"
-    fi
+	if [[ "$2" =~ ^[0-9]+$ ]]; then
+		# Numeric = window ID (backward compat: "cc-hook-indicator clear <WINDOW_ID>")
+		KITTY_WINDOW_ID="$2"
+	else
+		EVENT_KIND="$2"
+	fi
 fi
 
 if [[ -z "${KITTY_WINDOW_ID:-}" ]]; then
-    echo "Error: KITTY_WINDOW_ID is not set" >&2
-    exit 1
+	echo "Error: KITTY_WINDOW_ID is not set" >&2
+	exit 1
 fi
 
 # Resolve the lib directory by following the symlink.
@@ -57,127 +57,127 @@ load_defaults
 _NOTIFY_COOLDOWN=10
 
 _maybe_notify() {
-    local enabled="$1" icon="$2" subtitle="$3" session_label="$4"
-    [[ "$enabled" == "on" ]] || return 0
-    command -v alerter >/dev/null 2>&1 || return 0
+	local enabled="$1" icon="$2" subtitle="$3" session_label="$4"
+	[[ "$enabled" == "on" ]] || return 0
+	command -v alerter >/dev/null 2>&1 || return 0
 
-    local cooldown_file="${_CCM_TMPDIR}/ccm-notify-${ACTION}-${tab_id}"
-    if [[ -f "$cooldown_file" ]]; then
-        local now last_time
-        now=$(date +%s)
-        last_time=$(stat -f %m "$cooldown_file" 2>/dev/null || echo 0)
-        if ((now - last_time < _NOTIFY_COOLDOWN)); then
-            return 0
-        fi
-    fi
-    touch "$cooldown_file"
+	local cooldown_file="${_CCM_TMPDIR}/ccm-notify-${ACTION}-${tab_id}"
+	if [[ -f "$cooldown_file" ]]; then
+		local now last_time
+		now=$(date +%s)
+		last_time=$(stat -f %m "$cooldown_file" 2>/dev/null || echo 0)
+		if ((now - last_time < _NOTIFY_COOLDOWN)); then
+			return 0
+		fi
+	fi
+	touch "$cooldown_file"
 
-    (
-        result=$(alerter --title "${session_label}" --subtitle "${icon} ${subtitle}" \
-            --message "needs attention" \
-            --group "ccm-${ACTION}-${tab_id}" --timeout 10 2>/dev/null)
-        if [[ "$result" != "@TIMEOUT" && "$result" != "@CLOSED" ]]; then
-            kitty @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} focus-tab --match "id:${tab_id}" 2>/dev/null
-        fi
-    ) &
+	(
+		result=$(alerter --title "${session_label}" --subtitle "${icon} ${subtitle}" \
+			--message "needs attention" \
+			--group "ccm-${ACTION}-${tab_id}" --timeout 10 2>/dev/null)
+		if [[ "$result" != "@TIMEOUT" && "$result" != "@CLOSED" ]]; then
+			kitty @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} focus-tab --match "id:${tab_id}" 2>/dev/null
+		fi
+	) &
 }
 
 # ---------------------------------------------------------------------------
 # Notification suppression helpers
 # ---------------------------------------------------------------------------
 _is_post_permission() {
-    [[ "$ACTION" == "stop" ]] || return 1
-    [[ "$_prev_last_type" == "permission" ]] || return 1
-    [[ "$_prev_last_ts" -gt 0 ]] || return 1
-    local now
-    now=$(date +%s)
-    local elapsed=$((now - _prev_last_ts))
-    # 5-second grace period: suppress stop notification if a permission event
-    # just resolved (user granted permission → Claude resumes → immediate stop
-    # is a false alarm, not a real stop).
-    ((elapsed < 5))
+	[[ "$ACTION" == "stop" ]] || return 1
+	[[ "$_prev_last_type" == "permission" ]] || return 1
+	[[ "$_prev_last_ts" -gt 0 ]] || return 1
+	local now
+	now=$(date +%s)
+	local elapsed=$((now - _prev_last_ts))
+	# 5-second grace period: suppress stop notification if a permission event
+	# just resolved (user granted permission → Claude resumes → immediate stop
+	# is a false alarm, not a real stop).
+	((elapsed < 5))
 }
 
 _is_too_recent() {
-    local min_secs="${_DEFAULT_NOTIFY_MIN_SECS:-0}"
-    [[ "$min_secs" -gt 0 ]] || return 1      # threshold disabled
-    [[ "$_prev_last_ts" -gt 0 ]] || return 0 # no prior activity = suppress
+	local min_secs="${_DEFAULT_NOTIFY_MIN_SECS:-0}"
+	[[ "$min_secs" -gt 0 ]] || return 1      # threshold disabled
+	[[ "$_prev_last_ts" -gt 0 ]] || return 0 # no prior activity = suppress
 
-    local now
-    now=$(date +%s)
-    local elapsed=$((now - _prev_last_ts))
-    ((elapsed < min_secs))
+	local now
+	now=$(date +%s)
+	local elapsed=$((now - _prev_last_ts))
+	((elapsed < min_secs))
 }
 
 _matches_ignore_pattern() {
-    local patterns="${_DEFAULT_NOTIFY_IGNORE_PATTERNS:-}"
-    [[ -n "$patterns" ]] || return 1 # no patterns = don't suppress
+	local patterns="${_DEFAULT_NOTIFY_IGNORE_PATTERNS:-}"
+	[[ -n "$patterns" ]] || return 1 # no patterns = don't suppress
 
-    # Poll the screen with progressive backoff to handle slow TUI redraws
-    # (e.g. /clear on large conversations). Attempts at ~0.3s, 0.8s, 1.3s,
-    # 1.8s, 2.3s — max wait ~2.3s. Returns immediately on first match.
-    local attempt=0
-    local max_attempts=5
-    local initial_delay=0.3  # seconds before first screen poll
-    local retry_delay=0.5    # seconds between subsequent retries (progressive backoff)
-    local screen_text
-    local IFS='|'
+	# Poll the screen with progressive backoff to handle slow TUI redraws
+	# (e.g. /clear on large conversations). Attempts at ~0.3s, 0.8s, 1.3s,
+	# 1.8s, 2.3s — max wait ~2.3s. Returns immediately on first match.
+	local attempt=0
+	local max_attempts=5
+	local initial_delay=0.3 # seconds before first screen poll
+	local retry_delay=0.5   # seconds between subsequent retries (progressive backoff)
+	local screen_text
+	local IFS='|'
 
-    while [[ $attempt -lt $max_attempts ]]; do
-        if [[ $attempt -eq 0 ]]; then
-            sleep "$initial_delay"
-        else
-            sleep "$retry_delay"
-        fi
+	while [[ $attempt -lt $max_attempts ]]; do
+		if [[ $attempt -eq 0 ]]; then
+			sleep "$initial_delay"
+		else
+			sleep "$retry_delay"
+		fi
 
-        screen_text=$(kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} get-text --extent screen --match "id:$KITTY_WINDOW_ID" 2>/dev/null) || {
-            attempt=$((attempt + 1))
-            continue
-        }
+		screen_text=$(kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} get-text --extent screen --match "id:$KITTY_WINDOW_ID" 2>/dev/null) || {
+			attempt=$((attempt + 1))
+			continue
+		}
 
-        for pattern in $patterns; do
-            [[ -n "$pattern" ]] || continue
-            if echo "$screen_text" | grep -qE "$pattern"; then
-                return 0 # match found = suppress
-            fi
-        done
+		for pattern in $patterns; do
+			[[ -n "$pattern" ]] || continue
+			if echo "$screen_text" | grep -qE "$pattern"; then
+				return 0 # match found = suppress
+			fi
+		done
 
-        attempt=$((attempt + 1))
-    done
+		attempt=$((attempt + 1))
+	done
 
-    return 1
+	return 1
 }
 
 _should_suppress_notify() {
-    [[ "$_PIPE_MODE" == true ]] && return 0
-    _is_post_permission && return 0
-    _is_too_recent && return 0
-    _matches_ignore_pattern && return 0
-    return 1
+	[[ "$_PIPE_MODE" == true ]] && return 0
+	_is_post_permission && return 0
+	_is_too_recent && return 0
+	_matches_ignore_pattern && return 0
+	return 1
 }
 
 _is_pipe_mode() {
-    local pid="$PPID"
-    local depth=0
-    # Walk up to 4 levels of the process tree to find a `claude -p` ancestor.
-    # 4 is enough to cover: hook -> bash -> claude -> shell pipeline.
-    while [[ "$depth" -lt 4 && "$pid" -gt 1 ]]; do
-        local cmd_line
-        cmd_line=$(ps -o args= -p "$pid" 2>/dev/null) || return 1
-        if echo "$cmd_line" | grep -qE '(^|/)claude[[:space:]]' &&
-            echo "$cmd_line" | grep -qE '(^|[[:space:]])(-p|--print)([[:space:]]|$)'; then
-            return 0
-        fi
-        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || return 1
-        depth=$((depth + 1))
-    done
-    return 1
+	local pid="$PPID"
+	local depth=0
+	# Walk up to 4 levels of the process tree to find a `claude -p` ancestor.
+	# 4 is enough to cover: hook -> bash -> claude -> shell pipeline.
+	while [[ "$depth" -lt 4 && "$pid" -gt 1 ]]; do
+		local cmd_line
+		cmd_line=$(ps -o args= -p "$pid" 2>/dev/null) || return 1
+		if echo "$cmd_line" | grep -qE '(^|/)claude[[:space:]]' &&
+			echo "$cmd_line" | grep -qE '(^|[[:space:]])(-p|--print)([[:space:]]|$)'; then
+			return 0
+		fi
+		pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || return 1
+		depth=$((depth + 1))
+	done
+	return 1
 }
 
 # Discover the Kitty socket.
 TO_ARGS=()
 if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
-    TO_ARGS=("--to" "$KITTY_LISTEN_ON")
+	TO_ARGS=("--to" "$KITTY_LISTEN_ON")
 fi
 
 # Get current tab info.
@@ -186,7 +186,7 @@ tab_id="$(echo "$info" | head -n1)"
 current_title="$(echo "$info" | tail -n1)"
 
 if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
-    exit 0
+	exit 0
 fi
 
 # Detect pipe mode early; used later to suppress only notifications.
@@ -211,115 +211,118 @@ ccm_debug "hook: action=$ACTION event=$EVENT_KIND tab=$tab_id pipe=$_PIPE_MODE"
 #  11: active_subagents — currently active subagent count
 #  12: total_subagents  — total subagents spawned this session
 _update_activity() {
-    local activity_file="${_CCM_TMPDIR}/ccm-activity-${tab_id}.counts"
-    local now
-    now=$(date +%s)
+	local activity_file="${_CCM_TMPDIR}/ccm-activity-${tab_id}.counts"
+	local now
+	now=$(date +%s)
 
-    # Determine event kind from EVENT_KIND (if present) or derive from ACTION
-    local event_kind="$EVENT_KIND"
-    if [[ -z "$event_kind" ]]; then
-        case "$ACTION" in
-        active) event_kind="prompt" ;;
-        failure) event_kind="failure" ;;
-        permission) event_kind="permission" ;;
-        stop) event_kind="stop" ;;
-        *) event_kind="" ;;
-        esac
-    fi
+	# Determine event kind from EVENT_KIND (if present) or derive from ACTION
+	local event_kind="$EVENT_KIND"
+	if [[ -z "$event_kind" ]]; then
+		case "$ACTION" in
+		active) event_kind="prompt" ;;
+		failure) event_kind="failure" ;;
+		permission) event_kind="permission" ;;
+		stop) event_kind="stop" ;;
+		*) event_kind="" ;;
+		esac
+	fi
 
-    # Skip tracking for clear/idle actions
-    [[ -z "$event_kind" ]] && return 0
+	# Skip tracking for clear/idle actions
+	[[ -z "$event_kind" ]] && return 0
 
-    # Read existing counts (12 lines: first_event_ts, last_event_ts,
-    # last_event_type, prompt_count, tool_use_count, tool_failure_count,
-    # permission_count, stop_count, last_attention_ts, task_completes,
-    # active_subagents, total_subagents)
-    local first_ts="$now" last_ts="$now" last_type="$event_kind"
-    local prompts=0 tools=0 failures=0 permissions=0 stops=0 attention_ts=0 task_completes=0
-    local active_subagents=0 total_subagents=0
+	# Read existing counts (12 lines: first_event_ts, last_event_ts,
+	# last_event_type, prompt_count, tool_use_count, tool_failure_count,
+	# permission_count, stop_count, last_attention_ts, task_completes,
+	# active_subagents, total_subagents)
+	local first_ts="$now" last_ts="$now" last_type="$event_kind"
+	local prompts=0 tools=0 failures=0 permissions=0 stops=0 attention_ts=0 task_completes=0
+	local active_subagents=0 total_subagents=0
 
-    if [[ -f "$activity_file" ]]; then
-        # Validate line count (expected: 12 lines for the counts format)
-        local line_count
-        line_count=$(wc -l < "$activity_file" 2>/dev/null || echo 0)
-        line_count="${line_count// /}"  # trim whitespace (macOS wc pads)
-        if [[ "$line_count" -ne 12 ]]; then
-            ccm_debug "Corrupt counts file ($activity_file): expected 12 lines, got $line_count. Resetting."
-            rm -f "$activity_file"
-        else
-        local i=0
-        while IFS= read -r line; do
-            case $i in
-            0) first_ts="$line" ;; 1) last_ts="$line" ;; 2) last_type="$line" ;;
-            3) prompts="$line" ;; 4) tools="$line" ;; 5) failures="$line" ;;
-            6) permissions="$line" ;; 7) stops="$line" ;; 8) attention_ts="$line" ;;
-            9) task_completes="$line" ;;
-            10) active_subagents="$line" ;;
-            11) total_subagents="$line" ;;
-            esac
-            i=$((i + 1))
-        done <"$activity_file"
-        fi
-        # Ensure numeric defaults for any missing/corrupt values
-        first_ts="${first_ts:-$now}"
-        prompts="${prompts:-0}"
-        tools="${tools:-0}"
-        failures="${failures:-0}"
-        permissions="${permissions:-0}"
-        stops="${stops:-0}"
-        attention_ts="${attention_ts:-0}"
-        task_completes="${task_completes:-0}"
-        active_subagents="${active_subagents:-0}"
-        total_subagents="${total_subagents:-0}"
-    fi
+	if [[ -f "$activity_file" ]]; then
+		# Validate line count (expected: 12 lines for the counts format)
+		local line_count
+		line_count=$(wc -l <"$activity_file" 2>/dev/null || echo 0)
+		line_count="${line_count// /}" # trim whitespace (macOS wc pads)
+		if [[ "$line_count" -ne 12 ]]; then
+			ccm_debug "Corrupt counts file ($activity_file): expected 12 lines, got $line_count. Resetting."
+			rm -f "$activity_file"
+		else
+			local i=0
+			while IFS= read -r line; do
+				case $i in
+				0) first_ts="$line" ;; 1) last_ts="$line" ;; 2) last_type="$line" ;;
+				3) prompts="$line" ;; 4) tools="$line" ;; 5) failures="$line" ;;
+				6) permissions="$line" ;; 7) stops="$line" ;; 8) attention_ts="$line" ;;
+				9) task_completes="$line" ;;
+				10) active_subagents="$line" ;;
+				11) total_subagents="$line" ;;
+				esac
+				i=$((i + 1))
+			done <"$activity_file"
+		fi
+		# Ensure numeric defaults for any missing/corrupt values
+		first_ts="${first_ts:-$now}"
+		prompts="${prompts:-0}"
+		tools="${tools:-0}"
+		failures="${failures:-0}"
+		permissions="${permissions:-0}"
+		stops="${stops:-0}"
+		attention_ts="${attention_ts:-0}"
+		task_completes="${task_completes:-0}"
+		active_subagents="${active_subagents:-0}"
+		total_subagents="${total_subagents:-0}"
+	fi
 
-    last_ts="$now"
-    last_type="$event_kind"
+	last_ts="$now"
+	last_type="$event_kind"
 
-    case "$event_kind" in
-    prompt) prompts=$((prompts + 1)) ;;
-    tool) tools=$((tools + 1)) ;;
-    failure)
-        failures=$((failures + 1))
-        attention_ts="$now"
-        ;;
-    permission)
-        permissions=$((permissions + 1))
-        attention_ts="$now"
-        ;;
-    stop) stops=$((stops + 1)) ;;
-    task_complete) task_completes=$((task_completes + 1)) ;;
-    subagent_start) active_subagents=$((active_subagents + 1)); total_subagents=$((total_subagents + 1)) ;;
-    subagent_stop) active_subagents=$((active_subagents > 0 ? active_subagents - 1 : 0)) ;;
-    esac
+	case "$event_kind" in
+	prompt) prompts=$((prompts + 1)) ;;
+	tool) tools=$((tools + 1)) ;;
+	failure)
+		failures=$((failures + 1))
+		attention_ts="$now"
+		;;
+	permission)
+		permissions=$((permissions + 1))
+		attention_ts="$now"
+		;;
+	stop) stops=$((stops + 1)) ;;
+	task_complete) task_completes=$((task_completes + 1)) ;;
+	subagent_start)
+		active_subagents=$((active_subagents + 1))
+		total_subagents=$((total_subagents + 1))
+		;;
+	subagent_stop) active_subagents=$((active_subagents > 0 ? active_subagents - 1 : 0)) ;;
+	esac
 
-    local tmpfile="${activity_file}.tmp.$$"
-    printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
-        "$first_ts" "$last_ts" "$last_type" \
-        "$prompts" "$tools" "$failures" "$permissions" "$stops" "$attention_ts" \
-        "$task_completes" "$active_subagents" "$total_subagents" \
-        >"$tmpfile" && mv "$tmpfile" "$activity_file"
+	local tmpfile="${activity_file}.tmp.$$"
+	printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+		"$first_ts" "$last_ts" "$last_type" \
+		"$prompts" "$tools" "$failures" "$permissions" "$stops" "$attention_ts" \
+		"$task_completes" "$active_subagents" "$total_subagents" \
+		>"$tmpfile" && mv "$tmpfile" "$activity_file"
 }
 
 # Capture previous last_event_ts before _update_activity overwrites it.
 _prev_last_ts=0
 _prev_last_type=""
 if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission" ]]; then
-    _activity_file="${_CCM_TMPDIR}/ccm-activity-${tab_id}.counts"
-    if [[ -f "$_activity_file" ]]; then
-        _cap_lines=$(wc -l < "$_activity_file" 2>/dev/null || echo 0)
-        _cap_lines="${_cap_lines// /}"
-        if [[ "$_cap_lines" -eq 12 ]]; then
-        _cap_i=0
-        while IFS= read -r line; do
-            case $_cap_i in
-            1) _prev_last_ts="$line" ;;
-            2) _prev_last_type="$line" ;;
-            esac
-            _cap_i=$((_cap_i + 1))
-        done <"$_activity_file"
-        fi
-    fi
+	_activity_file="${_CCM_TMPDIR}/ccm-activity-${tab_id}.counts"
+	if [[ -f "$_activity_file" ]]; then
+		_cap_lines=$(wc -l <"$_activity_file" 2>/dev/null || echo 0)
+		_cap_lines="${_cap_lines// /}"
+		if [[ "$_cap_lines" -eq 12 ]]; then
+			_cap_i=0
+			while IFS= read -r line; do
+				case $_cap_i in
+				1) _prev_last_ts="$line" ;;
+				2) _prev_last_type="$line" ;;
+				esac
+				_cap_i=$((_cap_i + 1))
+			done <"$_activity_file"
+		fi
+	fi
 fi
 
 _update_activity
@@ -329,11 +332,11 @@ has_star=false
 has_flag=false
 remaining="$current_title"
 if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
-    has_star=true
-    remaining="${remaining#"$_ICON_STAR"}"
+	has_star=true
+	remaining="${remaining#"$_ICON_STAR"}"
 fi
 if [[ "$remaining" == "${_ICON_FLAG}"* ]]; then
-    has_flag=true
+	has_flag=true
 fi
 
 # Strip any existing state icon to get the base title.
@@ -342,31 +345,41 @@ remaining="$(strip_icons "$remaining")"
 # Apply the requested action.
 case "$ACTION" in
 active)
-    state="bolt"
-    ;;
+	state="bolt"
+	# Auto-undim: restore colors if tab was auto-dimmed
+	dim_type=""
+	if dim_type="$(is_dimmed "$tab_id")" 2>/dev/null; then
+		if [[ "$dim_type" == "auto" ]]; then
+			_undim_socket="${KITTY_LISTEN_ON:-}"
+			if [[ -n "$_undim_socket" ]]; then
+				apply_undim "$_undim_socket" "$tab_id" "$KITTY_WINDOW_ID" || true
+			fi
+		fi
+	fi
+	;;
 stop)
-    if _is_post_permission; then
-        state=""
-    else
-        state="stop"
-    fi
-    ;;
+	if _is_post_permission; then
+		state=""
+	else
+		state="stop"
+	fi
+	;;
 permission)
-    state="key"
-    ;;
+	state="key"
+	;;
 idle)
-    state=""
-    ;;
+	state=""
+	;;
 failure)
-    state="error"
-    ;;
+	state="error"
+	;;
 clear)
-    state=""
-    ;;
+	state=""
+	;;
 *)
-    echo "Error: unknown action '$ACTION' (expected 'active', 'stop', 'permission', 'idle', 'failure', or 'clear')" >&2
-    exit 1
-    ;;
+	echo "Error: unknown action '$ACTION' (expected 'active', 'stop', 'permission', 'idle', 'failure', or 'clear')" >&2
+	exit 1
+	;;
 esac
 
 ccm_debug "hook: state=$state title='$current_title'"
@@ -376,27 +389,27 @@ ccm_debug "hook: state=$state title='$current_title'"
 _state_file="${_CCM_TMPDIR}/ccm-state-${tab_id}"
 
 case "$ACTION" in
-stop|failure|permission)
-    # Mark high-priority state so concurrent 'active' calls don't overwrite
-    # Skip for post-permission stops to avoid blocking subsequent active updates
-    if [[ "$ACTION" != "stop" ]] || ! _is_post_permission; then
-        echo "$ACTION $(date +%s)" > "$_state_file"
-    fi
-    ;;
+stop | failure | permission)
+	# Mark high-priority state so concurrent 'active' calls don't overwrite
+	# Skip for post-permission stops to avoid blocking subsequent active updates
+	if [[ "$ACTION" != "stop" ]] || ! _is_post_permission; then
+		echo "$ACTION $(date +%s)" >"$_state_file"
+	fi
+	;;
 active)
-    # Check if a high-priority state was set recently (within 2s)
-    if [[ -f "$_state_file" ]]; then
-        _prio_ts=$(awk '{print $2}' "$_state_file")
-        _now=$(date +%s)
-        if ((_now - _prio_ts < 2)); then
-            exit 0
-        fi
-        rm -f "$_state_file"
-    fi
-    ;;
-idle|clear)
-    rm -f "$_state_file"
-    ;;
+	# Check if a high-priority state was set recently (within 2s)
+	if [[ -f "$_state_file" ]]; then
+		_prio_ts=$(awk '{print $2}' "$_state_file")
+		_now=$(date +%s)
+		if ((_now - _prio_ts < 2)); then
+			exit 0
+		fi
+		rm -f "$_state_file"
+	fi
+	;;
+idle | clear)
+	rm -f "$_state_file"
+	;;
 esac
 
 new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag")"
@@ -405,24 +418,24 @@ ccm_debug "hook: new_title='$new_title' (was '$current_title')"
 # Send macOS desktop notification if enabled for this event type.
 case "$ACTION" in
 failure)
-    _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_ERROR" "$_ICON_ERROR" "Error" "$remaining"
-    ;;
+	_should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_ERROR" "$_ICON_ERROR" "Error" "$remaining"
+	;;
 permission)
-    _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_PERMISSION" "$_ICON_KEY" "Permission Required" "$remaining"
-    ;;
+	_should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_PERMISSION" "$_ICON_KEY" "Permission Required" "$remaining"
+	;;
 stop)
-    _should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_STOP" "$_ICON_STOP" "Stopped" "$remaining"
-    ;;
+	_should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_STOP" "$_ICON_STOP" "Stopped" "$remaining"
+	;;
 esac
 
 # Only update if the title actually changed.
 if [[ "$new_title" != "$current_title" ]]; then
-    kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title" 2>/dev/null || true
+	kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} set-tab-title --match "id:$tab_id" "$new_title" 2>/dev/null || true
 fi
 
 # Manage scrollback markers for error states.
 if [[ "$ACTION" == "failure" ]]; then
-    kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} create-marker --match "id:$KITTY_WINDOW_ID" iregex 1 '\bError\b' 2 '\bFailed\b' 3 '\bWarning\b' 3 '\bDEPRECATED\b' 2>/dev/null || true
+	kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} create-marker --match "id:$KITTY_WINDOW_ID" iregex 1 '\bError\b' 2 '\bFailed\b' 3 '\bWarning\b' 3 '\bDEPRECATED\b' 2>/dev/null || true
 elif [[ "$ACTION" == "active" || "$ACTION" == "clear" ]]; then
-    kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} remove-marker --match "id:$KITTY_WINDOW_ID" 2>/dev/null || true
+	kitten @ ${TO_ARGS[@]+"${TO_ARGS[@]}"} remove-marker --match "id:$KITTY_WINDOW_ID" 2>/dev/null || true
 fi

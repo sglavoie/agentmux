@@ -52,3 +52,4 @@ tab_statuses = ["reviewing", "WIP", "blocked", "testing", "done", "paused", "deb
 # idle_alert_minutes = 30
 # min_secs = 3
 # ignore_patterns = ["Conversation cleared", "Context compacted"]
+# dim_after_minutes = 10  # Auto-dim tabs idle longer than this (0 = disabled)

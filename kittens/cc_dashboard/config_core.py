@@ -102,6 +102,7 @@ def load_defaults() -> None:
     _state._default_notify_idle = ""
     _state._default_tab_statuses = []
     _state._default_notes_editor = ""
+    _state._default_dim_after_minutes = 0
 
     path = _defaults_config_path()
     if not os.path.isfile(path):
@@ -127,6 +128,11 @@ def load_defaults() -> None:
         with contextlib.suppress(ValueError, TypeError):
             _state._default_idle_alert_minutes = max(
                 0, int(notifications["idle_alert_minutes"])
+            )
+    if "dim_after_minutes" in notifications:
+        with contextlib.suppress(ValueError, TypeError):
+            _state._default_dim_after_minutes = max(
+                0, int(notifications["dim_after_minutes"])
             )
     if "idle" in notifications:
         val = notifications["idle"]
