@@ -181,7 +181,7 @@ def draw_actlog_browse(
         match_line_indices = []
     match_set = set(match_line_indices)
 
-    safe_addstr(stdscr, 0, 2, "Activity Logs — Browse All", header_attr)
+    safe_addstr(stdscr, 0, 2, "Activity Logs -- Browse All", header_attr)
 
     if not entries:
         safe_addstr(stdscr, 2, 4, "No activity log files found", dim_attr)

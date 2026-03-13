@@ -18,7 +18,7 @@ def draw_detail_pane(stdscr, session, detail_y):
     if detail_y + DETAIL_PANE_HEIGHT > rows:
         return
 
-    sep = "─── Detail " + "─" * max(0, cols - 14)
+    sep = "--- Detail " + "-" * max(0, cols - 14)
     safe_addstr(stdscr, detail_y, 1, sep, curses.color_pair(CP_DIM))
 
     cfg_entry = _cfg._find_config_session(session["title"])

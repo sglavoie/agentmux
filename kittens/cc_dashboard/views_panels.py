@@ -103,10 +103,10 @@ def draw_list_view(
     hdr += f"{'Directory':<{c_dir}}{'Notes':<{c_notes}}{'Branch':<{c_branch}}{'Status'}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
 
-    sep = f"  {'─' * c_title}{'─' * c_acct}"
+    sep = f"  {'-' * c_title}{'-' * c_acct}"
     if multi_instance:
-        sep += "─" * c_inst
-    sep += f"{'─' * c_dir}{'─' * c_notes}{'─' * c_branch}{'─' * c_status}"
+        sep += "-" * c_inst
+    sep += f"{'-' * c_dir}{'-' * c_notes}{'-' * c_branch}{'-' * c_status}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     avail = max(1, rows - 8)
@@ -194,7 +194,7 @@ def draw_list_view(
             if git_info["dirty"]:
                 branch_display += "*"
             if len(branch_display) > c_branch - 1:
-                branch_display = branch_display[: c_branch - 2] + "…"
+                branch_display = branch_display[: c_branch - 2] + "~"
         else:
             branch_display = "-"
 
@@ -296,7 +296,7 @@ def draw_pick_view(
 
     hdr = f"  {'Title':<{c_title}}{'Account':<{c_acct}}{'Directory':<{c_dir}}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
-    sep = f"  {'─' * c_title}{'─' * c_acct}{'─' * c_dir}"
+    sep = f"  {'-' * c_title}{'-' * c_acct}{'-' * c_dir}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     stopped_count = len(entries) - running_count
@@ -398,7 +398,7 @@ def draw_delete_view(stdscr, entries, selected, running_count):
         f"{'Type':<{c_type}}{'Directory':<{c_dir}}"
     )
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
-    sep = f"  {'─' * c_title}{'─' * c_acct}{'─' * c_type}{'─' * c_dir}"
+    sep = f"  {'-' * c_title}{'-' * c_acct}{'-' * c_type}{'-' * c_dir}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     stopped_count = len(entries) - running_count
@@ -491,7 +491,7 @@ def draw_delete_confirm(stdscr, delete_step, entry, warnings=None):
             for i, w in enumerate(warnings):
                 wy = prompt_row - len(warnings) + i
                 if wy >= 1:
-                    safe_addstr(stdscr, wy, 4, f"⚠ {w}", curses.color_pair(CP_WARN))
+                    safe_addstr(stdscr, wy, 4, f"! {w}", curses.color_pair(CP_WARN))
         safe_addstr(
             stdscr,
             prompt_row,
