@@ -43,6 +43,11 @@ for _mod in list(sys.modules):
         del sys.modules[_mod]
 
 from cc_dashboard.config import load_accounts, load_defaults, load_sessions
+from cc_dashboard.remote.command import (
+    find_existing_dashboard,
+    get_kitty_socket,
+    kitty_cmd,
+)
 from cc_dashboard.ui import dashboard
 
 
@@ -53,6 +58,17 @@ def main(args=None):
     function in a child process attached to an overlay window. When run directly,
     ``curses.wrapper`` manages the terminal setup and teardown.
     """
+    socket = get_kitty_socket()
+    if socket:
+        existing = find_existing_dashboard(socket)
+        if existing:
+            kitty_cmd(socket, "focus-tab", "--match", f"id:{existing['tab_id']}")
+            print(
+                "Dashboard already running — focused existing instance.",
+                file=sys.stderr,
+            )
+            return ""
+
     load_accounts()
     load_defaults()
     load_sessions()

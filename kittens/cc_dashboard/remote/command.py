@@ -128,6 +128,44 @@ def get_window_text(socket, window_id, extent="screen"):
     return None
 
 
+def find_existing_dashboard(socket):
+    """Find an already-running dashboard overlay in the current Kitty instance.
+
+    Scans all windows' foreground_processes for a cmdline containing
+    ``claude_dashboard.py``, excluding the caller's own KITTY_WINDOW_ID.
+    Returns ``{"tab_id": ..., "window_id": ...}`` or ``None``.
+    """
+    my_wid = None
+    wid_str = os.environ.get("KITTY_WINDOW_ID")
+    if wid_str:
+        import contextlib
+
+        with contextlib.suppress(ValueError):
+            my_wid = int(wid_str)
+
+    result = kitty_cmd(socket, "ls")
+    if not result or result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    for os_win in data:
+        for tab in os_win.get("tabs", []):
+            for win in tab.get("windows", []):
+                if my_wid is not None and win.get("id") == my_wid:
+                    continue
+                for proc in win.get("foreground_processes", []):
+                    for cmdline_part in proc.get("cmdline", []):
+                        if "claude_dashboard.py" in cmdline_part:
+                            return {
+                                "tab_id": tab.get("id"),
+                                "window_id": win.get("id"),
+                            }
+    return None
+
+
 def get_host_tab_id(socket):
     """Return the tab ID of the tab hosting the current dashboard process.
 
