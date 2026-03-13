@@ -230,7 +230,19 @@ done
 
 if [[ -z "$rows" ]]; then
 	if [[ "$connection_errors" -eq "${#_INSTANCE_SOCKETS[@]}" ]]; then
-		echo "Error: could not connect to Kitty (tried $connection_errors socket(s)). Check that remote control is enabled." >&2
+		# Check whether the socket files exist at all
+		_missing=0
+		for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
+			_sock_path="${_INSTANCE_SOCKETS[$si]#unix:}"
+			[[ ! -S "$_sock_path" ]] && _missing=$((_missing + 1))
+		done
+		if [[ "$_missing" -eq "${#_INSTANCE_SOCKETS[@]}" ]]; then
+			echo "Error: Socket file(s) not found." >&2
+			echo "  Is Kitty running with remote control enabled?" >&2
+		else
+			echo "Error: Cannot connect to Kitty (tried $connection_errors socket(s), connection refused)." >&2
+			echo "  Check that allow_remote_control is set in kitty.conf." >&2
+		fi
 	fi
 	echo "No active Claude Code sessions found."
 	exit 0

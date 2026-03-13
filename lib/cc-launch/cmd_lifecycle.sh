@@ -70,20 +70,7 @@ cmd_close_group() {
         return
     fi
 
-    local confirmed=false
-    if [[ "$HAS_GUM" == "true" ]]; then
-        if gum confirm "Close all sessions in group '$_TARGET_GROUP'?" \
-            --affirmative "Yes, close them" --negative "Cancel"; then
-            confirmed=true
-        fi
-    else
-        read -rp "Close all sessions in group '$_TARGET_GROUP'? [y/N] " answer
-        if [[ "$answer" =~ ^[Yy] ]]; then
-            confirmed=true
-        fi
-    fi
-
-    if [[ "$confirmed" == "true" ]]; then
+    if confirm "Close all sessions in group '$_TARGET_GROUP'?" "Yes, close them"; then
         local closed=0
         while IFS=$'\t' read -r title tab_id sock inst_label; do
             if kitty @ --to "$sock" close-tab --match "id:$tab_id"; then
@@ -107,12 +94,7 @@ cmd_close() {
     fi
 
     local source_socket
-    source_socket="$(resolve_instance_socket "$_TARGET_INSTANCE_LABEL")" || {
-        echo "Error: No active Kitty instance found with label '$_TARGET_INSTANCE_LABEL'." >&2
-        echo "Available instances:" >&2
-        print_available_instances
-        exit 1
-    }
+    source_socket="$(resolve_instance_socket_or_die "$_TARGET_INSTANCE_LABEL")"
 
     local accounts_json default_account
     accounts_json="$(build_accounts_json)"
@@ -146,12 +128,7 @@ cmd_restart() {
     fi
 
     local source_socket
-    source_socket="$(resolve_instance_socket "$_TARGET_INSTANCE_LABEL")" || {
-        echo "Error: No active Kitty instance found with label '$_TARGET_INSTANCE_LABEL'." >&2
-        echo "Available instances:" >&2
-        print_available_instances
-        exit 1
-    }
+    source_socket="$(resolve_instance_socket_or_die "$_TARGET_INSTANCE_LABEL")"
 
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
@@ -213,12 +190,7 @@ cmd_clone() {
     fi
 
     local source_socket
-    source_socket="$(resolve_instance_socket "$_TARGET_INSTANCE_LABEL")" || {
-        echo "Error: No active Kitty instance found with label '$_TARGET_INSTANCE_LABEL'." >&2
-        echo "Available instances:" >&2
-        print_available_instances
-        exit 1
-    }
+    source_socket="$(resolve_instance_socket_or_die "$_TARGET_INSTANCE_LABEL")"
 
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
@@ -314,12 +286,7 @@ cmd_move() {
     fi
 
     local source_socket
-    source_socket="$(resolve_instance_socket "$_TARGET_INSTANCE_LABEL")" || {
-        echo "Error: No active Kitty instance found with label '$_TARGET_INSTANCE_LABEL'." >&2
-        echo "Available instances:" >&2
-        print_available_instances
-        exit 1
-    }
+    source_socket="$(resolve_instance_socket_or_die "$_TARGET_INSTANCE_LABEL")"
 
     local target_socket=""
     local idx

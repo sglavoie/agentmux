@@ -77,6 +77,21 @@ cmd_launch_all() {
         done <<<"$lines"
         if [[ -z "$filtered" ]]; then
             echo "No sessions found in group '$_TARGET_GROUP'." >&2
+            # List available groups from config
+            local available_groups=""
+            while IFS=$'\t' read -r _t _d _a _f _p _e g; do
+                [[ -z "$_t" ]] && continue
+                g="$(_trim "$g")"
+                [[ -z "$g" ]] && continue
+                # Deduplicate: only add if not already present
+                case ",$available_groups," in
+                    *",$g,"*) ;;
+                    *) [[ -n "$available_groups" ]] && available_groups+=", "; available_groups+="$g" ;;
+                esac
+            done <<<"$lines"
+            if [[ -n "$available_groups" ]]; then
+                echo "  Available groups: $available_groups" >&2
+            fi
             return
         fi
         lines="$filtered"

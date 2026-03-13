@@ -311,13 +311,15 @@ cc-launch --sockets
 
 | Variable | Description |
 |---|---|
-| `CC_MANAGER_CONFIG` | Override config directory (default: `~/.config/cc-manager/`) |
-| `CC_MANAGER_ACCOUNTS` | Override accounts config file path |
-| `CC_MANAGER_DEFAULTS` | Override defaults config file path |
+| `CC_MANAGER_CONFIG` | Path to `sessions.toml`. Its parent directory becomes the config directory (default: `~/.config/cc-manager/sessions.toml`) |
+| `CC_MANAGER_ACCOUNTS` | Path to `accounts.toml` (default: `<config-dir>/accounts.toml`) |
+| `CC_MANAGER_DEFAULTS` | Path to `defaults.toml` (default: `<config-dir>/defaults.toml`) |
 | `CC_MANAGER_LOGS` | Activity log directory (default: `~/.local/state/cc-manager/activity/`) |
 | `CCM_DEBUG` | Set to `1` to enable debug logging to stderr |
 | `CCM_DEBUG_LOG` | Path to a file for debug log output (used by the dashboard) |
 | `KITTY_LISTEN_ON` | Kitty sets this automatically; used for socket discovery |
+
+`CC_MANAGER_CONFIG` serves a dual purpose: it sets the sessions config path **and** determines the config directory for other files. For example, `CC_MANAGER_CONFIG=~/alt/sessions.toml` means accounts and defaults are looked up in `~/alt/` unless individually overridden. `CC_MANAGER_ACCOUNTS` and `CC_MANAGER_DEFAULTS` take precedence when set.
 
 ### Session file for Kitty startup
 
@@ -345,10 +347,12 @@ These are typically invoked via Kitty keybindings (defined in `cc-manager.conf`)
 All config files live in `~/.config/cc-manager/` by default. Override their locations with environment variables:
 
 ```bash
-CC_MANAGER_CONFIG=~/my-sessions.toml cc-launch
-CC_MANAGER_ACCOUNTS=~/my-accounts.toml cc-launch
-CC_MANAGER_DEFAULTS=~/my-defaults.toml cc-launch
+CC_MANAGER_CONFIG=~/alt/sessions.toml cc-launch    # also sets config dir to ~/alt/
+CC_MANAGER_ACCOUNTS=~/alt/accounts.toml cc-launch  # overrides accounts path only
+CC_MANAGER_DEFAULTS=~/alt/defaults.toml cc-launch  # overrides defaults path only
 ```
+
+See the [Environment variables](#environment-variables) section for details on precedence.
 
 The Kitty socket is auto-detected from `KITTY_LISTEN_ON` or by finding the most recent `/tmp/kitty-*` socket. You can also override it per-command with `--socket` (see "Multiple Kitty instances" above).
 
@@ -407,3 +411,15 @@ completions/_cc-status          Zsh completion for cc-status
 tests/                          Test suite
 docs/                           Kitty documentation reference
 ```
+
+## Development
+
+### Version bumping
+
+The version is tracked in two places that must stay in sync: `VERSION` (plain text) and `pyproject.toml` (`version` field). Use the `bump` recipe to update both atomically:
+
+```bash
+just bump 0.3.0
+```
+
+This updates both files and runs `check-version` to verify they match. The `just check` suite also verifies version consistency, so CI will catch any drift.

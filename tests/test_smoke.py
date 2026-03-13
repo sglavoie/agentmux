@@ -209,6 +209,35 @@ def test_toml_roundtrip_basic():
           parsed["accounts"][0]["color"] == "green")
 
 
+# ── notes path traversal protection ────────────────────────────────
+
+
+def test_notes_path_traversal():
+    """notes_file_for_title rejects titles that escape notes directory."""
+    print("\n--- notes: path traversal ---")
+    sys.path.insert(0, os.path.join(REPO_ROOT, "kittens"))
+    from cc_dashboard.config_core import notes_file_for_title, _notes_dir
+
+    notes_dir = os.path.realpath(_notes_dir())
+
+    # Normal title stays under notes dir
+    normal = notes_file_for_title("W:myproject")
+    check("normal title under notes dir",
+          os.path.realpath(normal).startswith(notes_dir + os.sep))
+
+    # Titles with traversal-like characters still stay under notes dir
+    tricky_titles = ["../../etc/passwd", "..", "../foo", "a/../../b"]
+    all_safe = True
+    for t in tricky_titles:
+        try:
+            result = notes_file_for_title(t)
+            if not os.path.realpath(result).startswith(notes_dir + os.sep):
+                all_safe = False
+        except ValueError:
+            pass  # ValueError is also acceptable (rejects the title)
+    check("traversal-like titles stay safe", all_safe)
+
+
 # ── quick_validate programmatic API ─────────────────────────────────
 
 
@@ -265,6 +294,7 @@ if __name__ == "__main__":
     test_toml_writer_import()
     test_toml_reader_import()
     test_toml_roundtrip_basic()
+    test_notes_path_traversal()
     test_quick_validate()
 
     print(f"\n{PASS} passed, {FAIL} failed")

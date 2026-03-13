@@ -46,6 +46,18 @@ resolve_instance_socket() {
 	return 1
 }
 
+resolve_instance_socket_or_die() {
+	local label="$1"
+	local result
+	result="$(resolve_instance_socket "$label")" || {
+		echo "Error: No active Kitty instance found with label '$label'." >&2
+		echo "Available instances:" >&2
+		print_available_instances
+		exit 1
+	}
+	echo "$result"
+}
+
 print_available_instances() {
 	discover_all_sockets
 	local idx
@@ -207,13 +219,9 @@ launch_session() {
 
 	if [[ -n "$env_vars" && "$env_vars" != "-" ]]; then
 		local kv
-		local _old_IFS="$IFS"
-		IFS=' '
-		read -ra _env_arr <<< "$env_vars"
-		IFS="$_old_IFS"
-		for kv in "${_env_arr[@]}"; do
-			[[ "$kv" == *=* ]] && env_flag="$env_flag --env $kv"
-		done
+		while IFS= read -r kv; do
+			[[ -n "$kv" && "$kv" == *=* ]] && env_flag="$env_flag --env $kv"
+		done < <(printf '%s' "$env_vars" | python3 -c "import shlex, sys; [print(t) for t in shlex.split(sys.stdin.read())]")
 	fi
 
 	local effective_flags
@@ -238,13 +246,15 @@ launch_session() {
 	fi
 
 	ccm_debug "Tab '$title' created, setting colors..."
+	local title_escaped
+	title_escaped="$(escape_regex "$title")"
 	local retry
 	local color_set=false
 	local color_err=""
 	local delay=$_COLOR_INITIAL_DELAY_MS
 	for ((retry = 0; retry < _COLOR_MAX_RETRIES; retry++)); do
 		# shellcheck disable=SC2086
-		if color_err="$(kitty @ --to "$SOCKET" set-tab-color --match "title:^${title}$" $colors 2>&1)"; then
+		if color_err="$(kitty @ --to "$SOCKET" set-tab-color --match "title:^${title_escaped}$" $colors 2>&1)"; then
 			color_set=true
 			break
 		fi
@@ -262,13 +272,13 @@ launch_session() {
 	pw_mode="$(resolve_project_window "$pw_override")"
 	if [[ -n "$pw_mode" ]]; then
 		local pw_err
-		if ! pw_err="$(kitty @ --to "$SOCKET" launch --type=window --match "title:^${title}$" --cwd "$dir" --keep-focus 2>&1)"; then
+		if ! pw_err="$(kitty @ --to "$SOCKET" launch --type=window --match "title:^${title_escaped}$" --cwd "$dir" --keep-focus 2>&1)"; then
 			local pw_msg="Warning: Failed to create project window for '$title' (socket=$SOCKET)."
 			[[ -n "$pw_err" ]] && pw_msg="$pw_msg Kitty error: $pw_err"
 			echo "$pw_msg" >&2
 		else
 			local layout_err
-			if ! layout_err="$(kitty @ --to "$SOCKET" goto-layout --match "title:^${title}$" "$pw_mode" 2>&1)"; then
+			if ! layout_err="$(kitty @ --to "$SOCKET" goto-layout --match "title:^${title_escaped}$" "$pw_mode" 2>&1)"; then
 				local layout_msg="Warning: Failed to set layout '$pw_mode' for '$title' (socket=$SOCKET)."
 				[[ -n "$layout_err" ]] && layout_msg="$layout_msg Kitty error: $layout_err"
 				echo "$layout_msg" >&2

@@ -324,7 +324,7 @@ def do_launch(
             socket,
             "set-tab-color",
             "--match",
-            f"title:^{title}$",
+            f"title:^{re.escape(title)}$",
             *_cfg._palette_tab_colors(
                 account, color_override=color_override, config_dir_override=config_dir
             ),
@@ -340,7 +340,7 @@ def do_launch(
             "launch",
             "--type=window",
             "--match",
-            f"title:^{title}$",
+            f"title:^{re.escape(title)}$",
             "--cwd",
             directory,
             "--keep-focus",
@@ -349,7 +349,7 @@ def do_launch(
             socket,
             "goto-layout",
             "--match",
-            f"title:^{title}$",
+            f"title:^{re.escape(title)}$",
             pw_mode,
         )
 

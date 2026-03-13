@@ -35,6 +35,10 @@ preserving all user data below the marker. This runs automatically during
 The validate subcommand checks TOML/JSON syntax, required fields, valid values
 (colors, project_window, hook events), cross-file consistency (sessions
 referencing valid accounts), and duplicates. Exit code 0 means no errors.
+
+Examples:
+    ccm config sync         # Update doc headers after upgrading cc-manager
+    ccm config validate     # Check for typos or stale account references
 HELP
 		;;
 	notify)
@@ -68,6 +72,10 @@ Subcommands:
 The hooks system is configured via ~/.config/cc-manager/hooks.json, which
 defines global hook events and optional per-account overrides (disabled_events,
 extra_hooks). Use the dashboard (H key) for interactive management.
+
+Examples:
+    ccm hooks sync          # Sync hooks into all accounts' settings.json
+    ccm hooks sync work     # Sync hooks for the "work" account only
 HELP
 		;;
 	logs)
@@ -88,6 +96,10 @@ Subcommands:
 
 Log files are stored in ${CC_MANAGER_LOGS:-~/.local/state/cc-manager/activity/}
 as per-session JSONL files written by the cc-activity-log hook.
+
+Examples:
+    ccm logs clean --older-than 7   # Remove logs older than 7 days
+    ccm logs summary SESSION_ID     # Show event counts and duration for a session
 HELP
 		;;
 	audit)
@@ -95,6 +107,29 @@ HELP
 		;;
 	idle-watch)
 		exec cc-idle-watch --help
+		;;
+	dashboard)
+		cat <<'HELP'
+Usage: ccm dashboard
+
+Launch the interactive curses dashboard kitten as a Kitty overlay. The
+dashboard shows all running Claude Code sessions with live status updates.
+
+Navigation:
+    j/k or arrows    Move selection up/down
+    Enter            Focus the selected session
+    n                Create a new session
+    c                Close the selected session
+    H                Open the hooks manager
+    G                Open the group actions overlay
+    g (pick mode)    Filter config sessions by group
+    F2               Toggle star (pin) on a tab
+    q / Escape       Quit the dashboard
+
+Examples:
+    ccm dashboard               # Open the dashboard overlay
+    ccm launch --dashboard      # Launch sessions then open dashboard
+HELP
 		;;
 	switch)
 		cat <<'HELP'

@@ -415,6 +415,30 @@ min_secs = -1
         check("min_secs=-1: error", len(v.errors) >= 1)
 
 
+def test_defaults_ignore_patterns_valid_regex():
+    """Valid regex patterns in ignore_patterns produce no errors."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "defaults.toml", """\
+[notifications]
+ignore_patterns = ["Conversation cleared", "Context compacted.*", "^foo\\\\d+$"]
+""")
+        v = cv.validate_defaults(path)
+        check("valid regex patterns: no errors", len(v.errors) == 0)
+
+
+def test_defaults_ignore_patterns_invalid_regex():
+    """Invalid regex in ignore_patterns produces an error."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "defaults.toml", """\
+[notifications]
+ignore_patterns = ["valid", "[unclosed"]
+""")
+        v = cv.validate_defaults(path)
+        check("invalid regex: error", len(v.errors) >= 1)
+        check("invalid regex: mentions pattern",
+              any("[unclosed" in e for e in v.errors))
+
+
 # ── run all ──────────────────────────────────────────────────────────
 
 
@@ -450,6 +474,8 @@ if __name__ == "__main__":
     test_defaults_kitty_timeout()
     test_defaults_idle_alert_minutes()
     test_defaults_min_secs()
+    test_defaults_ignore_patterns_valid_regex()
+    test_defaults_ignore_patterns_invalid_regex()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:

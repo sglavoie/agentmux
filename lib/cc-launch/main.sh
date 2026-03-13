@@ -85,40 +85,35 @@ main() {
         case "$1" in
         --socket)
             if [[ -z "${2:-}" ]]; then
-                echo "Error: --socket requires a SOCKET argument." >&2
-                exit 1
+                die "--socket requires a SOCKET argument."
             fi
             SOCKET="$2"
             shift 2
             ;;
         --instance)
             if [[ -z "${2:-}" ]]; then
-                echo "Error: --instance requires a LABEL argument (e.g. K:12345)." >&2
-                exit 1
+                die "--instance requires a LABEL argument (e.g. K:12345)."
             fi
             instance_label="$2"
             shift 2
             ;;
         --tab-id)
             if [[ -z "${2:-}" ]]; then
-                echo "Error: --tab-id requires an ID argument." >&2
-                exit 1
+                die "--tab-id requires an ID argument."
             fi
             tab_id="$2"
             shift 2
             ;;
         --target-instance)
             if [[ -z "${2:-}" ]]; then
-                echo "Error: --target-instance requires a LABEL argument (e.g. K:12345)." >&2
-                exit 1
+                die "--target-instance requires a LABEL argument (e.g. K:12345)."
             fi
             target_instance="$2"
             shift 2
             ;;
         --group)
             if [[ -z "${2:-}" ]]; then
-                echo "Error: --group requires a NAME argument." >&2
-                exit 1
+                die "--group requires a NAME argument."
             fi
             _TARGET_GROUP="$2"
             shift 2
@@ -132,13 +127,12 @@ main() {
     done
 
     if [[ -n "$tab_id" && ! "$tab_id" =~ ^[0-9]+$ ]]; then
-        echo "Error: --tab-id must be a numeric Kitty tab id." >&2
-        exit 1
+        die "--tab-id must be a numeric Kitty tab id." \
+            "Hint: run 'cc-launch --list' to see tab IDs."
     fi
 
     if [[ -n "$_TARGET_GROUP" && -n "$tab_id" ]]; then
-        echo "Error: --group and --tab-id are mutually exclusive." >&2
-        exit 1
+        die "--group and --tab-id are mutually exclusive."
     fi
 
     _TARGET_INSTANCE_LABEL="$instance_label"
@@ -167,12 +161,12 @@ main() {
             fi
         done
         if [[ "$found" == "false" ]]; then
-            echo "Error: No active Kitty instance found with label '$instance_label'." >&2
-            echo "Available instances:" >&2
+            local avail="Available instances:"
             for ((idx = 0; idx < ${#_INSTANCE_SOCKETS[@]}; idx++)); do
-                echo "  ${_INSTANCE_LABELS[$idx]}  (${_INSTANCE_SOCKETS[$idx]})" >&2
+                avail="${avail}"$'\n'"    ${_INSTANCE_LABELS[$idx]}  (${_INSTANCE_SOCKETS[$idx]})"
             done
-            exit 1
+            die "No active Kitty instance found with label '$instance_label'." \
+                "$avail"
         fi
     fi
 

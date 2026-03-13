@@ -87,8 +87,8 @@ check-deps:
         echo "Error: jq is required but not found." >&2; \
         ok=false; \
     fi; \
-    if ! python3 -c "import tomllib" 2>/dev/null; then \
-        echo "Error: Python 3.13+ is required." >&2; \
+    if ! python3 -c "import sys; assert sys.version_info >= (3, 13), f'Python 3.13+ required, found {sys.version}'" 2>/dev/null; then \
+        echo "Error: Python 3.13+ is required (found: $(python3 --version 2>/dev/null || echo 'none'))." >&2; \
         ok=false; \
     fi; \
     if ! command -v kitty >/dev/null 2>&1; then \
@@ -157,6 +157,7 @@ test:
     python3 tests/test_toml_writer.py
     python3 tests/test_config_validator.py
     python3 tests/test_hooks_validator.py
+    python3 tests/test_hooks_install.py
     python3 tests/test_data_files.py
     python3 tests/test_smoke.py
 
@@ -182,6 +183,19 @@ typecheck:
 # Verify VERSION file matches pyproject.toml
 check-version:
     @python3 -c "import tomllib; v=tomllib.load(open('pyproject.toml','rb'))['project']['version']; f=open('VERSION').read().strip(); assert v==f, f'Version mismatch: pyproject.toml={v} VERSION={f}'; print(f'  Version {v} OK')"
+
+# Bump version in both VERSION and pyproject.toml (e.g. just bump 0.3.0)
+bump version:
+    @echo "{{version}}" > VERSION
+    @python3 -c "\
+    import re, pathlib; \
+    p = pathlib.Path('pyproject.toml'); \
+    t = p.read_text(); \
+    t = re.sub(r'(?m)^version = \".*\"', 'version = \"{{version}}\"', t, count=1); \
+    p.write_text(t); \
+    "
+    @echo "Bumped to {{version}}"
+    @just check-version
 
 # Run all checks (test, lint, format-check, typecheck, keybinding audit, version)
 check: test lint format-check typecheck check-keybindings check-version

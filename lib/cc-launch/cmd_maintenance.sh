@@ -299,19 +299,7 @@ cmd_cleanup() {
         done <<<"$stale"
         echo "" >&2
 
-        local confirmed=false
-        if [[ "$HAS_GUM" == "true" ]]; then
-            if gum confirm "Close all stale sessions?" --affirmative "Yes, close them" --negative "Cancel"; then
-                confirmed=true
-            fi
-        else
-            read -rp "Close all stale sessions? [y/N] " answer
-            if [[ "$answer" =~ ^[Yy] ]]; then
-                confirmed=true
-            fi
-        fi
-
-        if [[ "$confirmed" == "true" ]]; then
+        if confirm "Close all stale sessions?" "Yes, close them"; then
             while IFS=$'\t' read -r title tab_id sock inst_label; do
                 if kitty @ --to "$sock" close-tab --match "id:$tab_id"; then
                     echo "Closed: $title" >&2
@@ -414,17 +402,9 @@ cmd_save() {
     fi
 
     if [[ -f "$output_file" ]]; then
-        if [[ "$HAS_GUM" == "true" ]]; then
-            if ! gum confirm "Overwrite $output_file? (backup will be created)" --affirmative "Yes" --negative "Cancel"; then
-                echo "Save cancelled." >&2
-                return
-            fi
-        else
-            read -rp "Overwrite $output_file? (backup will be created) [y/N] " answer
-            if [[ ! "$answer" =~ ^[Yy] ]]; then
-                echo "Save cancelled." >&2
-                return
-            fi
+        if ! confirm "Overwrite $output_file? (backup will be created)"; then
+            echo "Save cancelled." >&2
+            return
         fi
         if ! cp "$output_file" "${output_file}.bak"; then
             echo "Error: backup failed, save aborted. Original file unchanged." >&2

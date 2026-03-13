@@ -30,7 +30,8 @@ discover_socket() {
 	fi
 
 	echo "Error: No kitty socket found. Set KITTY_LISTEN_ON or ensure kitty is running with remote control enabled." >&2
-	exit 1
+	echo ""
+	return 1
 }
 
 _INSTANCE_SOCKETS=()

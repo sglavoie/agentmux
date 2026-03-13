@@ -13,6 +13,27 @@ _file_mtime() {
 	esac
 }
 
+# Escape regex metacharacters in a string for use in kitty --match patterns.
+escape_regex() {
+	local s="$1"
+	# Escape: . [ ] * + ? { } ( ) | ^ $ backslash
+	s="${s//\\/\\\\}"
+	s="${s//./\\.}"
+	s="${s//\[/\\[}"
+	s="${s//\]/\\]}"
+	s="${s//\*/\\*}"
+	s="${s//+/\\+}"
+	s="${s//\?/\\?}"
+	s="${s//\{/\\{}"
+	s="${s//\}/\\}}"
+	s="${s//\(/\\(}"
+	s="${s//\)/\\)}"
+	s="${s//|/\\|}"
+	s="${s//^/\\^}"
+	s="${s//\$/\\\$}"
+	printf '%s' "$s"
+}
+
 _trim() {
 	local s="$1"
 	s="${s#"${s%%[![:space:]]*}"}"

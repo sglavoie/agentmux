@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 import re
 import shutil
@@ -120,19 +119,34 @@ def load_defaults() -> None:
     if "sort_sessions" in defaults:
         _state._default_sort_sessions = str(defaults["sort_sessions"])
     if "dashboard_refresh" in defaults:
-        with contextlib.suppress(ValueError, TypeError):
+        try:
             _state._default_dashboard_refresh = max(
                 0, int(defaults["dashboard_refresh"])
             )
+        except (ValueError, TypeError) as e:
+            print(
+                f"Warning: ignoring invalid config value for dashboard_refresh: {e}",
+                file=sys.stderr,
+            )
     if "idle_alert_minutes" in notifications:
-        with contextlib.suppress(ValueError, TypeError):
+        try:
             _state._default_idle_alert_minutes = max(
                 0, int(notifications["idle_alert_minutes"])
             )
+        except (ValueError, TypeError) as e:
+            print(
+                f"Warning: ignoring invalid config value for idle_alert_minutes: {e}",
+                file=sys.stderr,
+            )
     if "dim_after_minutes" in notifications:
-        with contextlib.suppress(ValueError, TypeError):
+        try:
             _state._default_dim_after_minutes = max(
                 0, int(notifications["dim_after_minutes"])
+            )
+        except (ValueError, TypeError) as e:
+            print(
+                f"Warning: ignoring invalid config value for dim_after_minutes: {e}",
+                file=sys.stderr,
             )
     if "idle" in notifications:
         val = notifications["idle"]
@@ -142,8 +156,13 @@ def load_defaults() -> None:
     if "notes_editor" in defaults:
         _state._default_notes_editor = str(defaults["notes_editor"])
     if "kitty_timeout" in defaults:
-        with contextlib.suppress(ValueError, TypeError):
+        try:
             _state._default_kitty_timeout = max(1, int(defaults["kitty_timeout"]))
+        except (ValueError, TypeError) as e:
+            print(
+                f"Warning: ignoring invalid config value for kitty_timeout: {e}",
+                file=sys.stderr,
+            )
     if "tab_statuses" in defaults:
         val = defaults["tab_statuses"]
         if isinstance(val, list):
@@ -233,7 +252,12 @@ def _sanitize_title(title: str) -> str:
 
 def notes_file_for_title(title: str) -> str:
     """Return the notes file path for a given session title."""
-    return os.path.join(_notes_dir(), f"{_sanitize_title(title)}.md")
+    notes_dir = os.path.realpath(_notes_dir())
+    filename = f"{_sanitize_title(title)}.md"
+    path = os.path.realpath(os.path.join(notes_dir, filename))
+    if not path.startswith(notes_dir + os.sep):
+        raise ValueError(f"Title would escape notes directory: {title!r}")
+    return path
 
 
 def read_notes(title: str) -> str:

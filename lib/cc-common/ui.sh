@@ -32,6 +32,22 @@ GUM_HEADER_COLOR="#aaaaaa"
 # shellcheck disable=SC2034 # used by scripts that source this library
 GUM_ACCENT_COLOR="#2d7d46"
 
+# confirm PROMPT [AFFIRMATIVE] [NEGATIVE]
+# Prompt the user for yes/no confirmation. Uses gum if available, else read.
+# Returns 0 for yes, 1 for no.
+confirm() {
+	local prompt="$1"
+	local affirmative="${2:-Yes}"
+	local negative="${3:-Cancel}"
+	if [[ "$HAS_GUM" == "true" ]]; then
+		gum confirm "$prompt" --affirmative "$affirmative" --negative "$negative"
+	else
+		local ans
+		read -rp "$prompt [y/N] " ans
+		[[ "$ans" =~ ^[Yy] ]]
+	fi
+}
+
 gum_color_for_account() {
 	local color
 	color="$(_account_color "$1" 2>/dev/null)" || color="gray"

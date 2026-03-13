@@ -313,6 +313,16 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
             v.error("notifications.ignore_patterns must be an array")
         elif not all(isinstance(p, str) for p in patterns):
             v.error("notifications.ignore_patterns entries must be strings")
+        else:
+            import re
+
+            for p in patterns:
+                try:
+                    re.compile(p)
+                except re.error as e:
+                    v.error(
+                        f"notifications.ignore_patterns: invalid regex {p!r}: {e}"
+                    )
 
     statuses = defaults.get("tab_statuses")
     if statuses is not None:

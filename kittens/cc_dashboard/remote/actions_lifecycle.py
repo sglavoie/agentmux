@@ -3,6 +3,7 @@
 import contextlib
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -187,7 +188,7 @@ def _spawn_detached_restart(
                 socket,
                 "set-tab-color",
                 "--match",
-                f"title:^{title}$",
+                f"title:^{re.escape(title)}$",
                 *_cfg._palette_tab_colors(
                     account,
                     color_override=color_override,
@@ -211,7 +212,7 @@ def _spawn_detached_restart(
                     "launch",
                     "--type=window",
                     "--match",
-                    f"title:^{title}$",
+                    f"title:^{re.escape(title)}$",
                     "--cwd",
                     directory,
                     "--keep-focus",
@@ -227,7 +228,7 @@ def _spawn_detached_restart(
                     socket,
                     "goto-layout",
                     "--match",
-                    f"title:^{title}$",
+                    f"title:^{re.escape(title)}$",
                     pw_mode,
                 ]
             }
@@ -468,7 +469,7 @@ def _spawn_detached_move(
                 target_socket,
                 "set-tab-color",
                 "--match",
-                f"title:^{title}$",
+                f"title:^{re.escape(title)}$",
                 *_cfg._palette_tab_colors(
                     account,
                     color_override=color_override,
@@ -492,7 +493,7 @@ def _spawn_detached_move(
                     "launch",
                     "--type=window",
                     "--match",
-                    f"title:^{title}$",
+                    f"title:^{re.escape(title)}$",
                     "--cwd",
                     directory,
                     "--keep-focus",
@@ -508,7 +509,7 @@ def _spawn_detached_move(
                     target_socket,
                     "goto-layout",
                     "--match",
-                    f"title:^{title}$",
+                    f"title:^{re.escape(title)}$",
                     pw_mode,
                 ]
             }

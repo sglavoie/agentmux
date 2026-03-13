@@ -25,8 +25,14 @@ load_accounts() {
 			_ACCOUNT_NAMES+=("$name")
 			_ACCOUNT_DIRS+=("$config_dir")
 			_ACCOUNT_COLORS+=("$color")
-		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-accounts "$ACCOUNTS_CONFIG" 2>/dev/null || {
-			echo "Error: failed to parse accounts config '$ACCOUNTS_CONFIG'. Run 'ccm config validate' for details." >&2
+		done < <({
+			local _parse_stderr _parse_rc=0
+			_parse_stderr="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-accounts "$ACCOUNTS_CONFIG" 2>&1 1>&3)" 3>&1 || _parse_rc=$?
+			if [[ "$_parse_rc" -ne 0 ]]; then
+				echo "Error: failed to parse accounts config '$ACCOUNTS_CONFIG'." >&2
+				[[ -n "$_parse_stderr" ]] && echo "  Detail: $_parse_stderr" >&2
+				echo "  Run 'ccm config validate' for full diagnostics." >&2
+			fi
 		})
 
 		if [[ ${#_ACCOUNT_NAMES[@]} -eq 0 ]]; then
