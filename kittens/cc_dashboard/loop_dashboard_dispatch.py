@@ -483,6 +483,7 @@ def dispatch_mode(
             "do_close": state["do_close"],
             "do_restart": state["do_restart"],
             "append_override_marker": state["append_override_marker"],
+            "append_override_for_dir": state["append_override_for_dir"],
             "strip_override_marker": state["strip_override_marker"],
             "query_all_sessions": state["query_all_sessions"],
             "refilter": state["refilter"],
@@ -537,8 +538,7 @@ def dispatch_mode(
             "query_all_sessions": state["query_all_sessions"],
             "refilter": state["refilter"],
             "do_rename": state["do_rename"],
-            "override_marker": state["override_marker"],
-            "append_override_marker": state["append_override_marker"],
+            "strip_override_marker": state["strip_override_marker"],
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }

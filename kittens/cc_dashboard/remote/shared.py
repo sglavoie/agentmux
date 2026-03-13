@@ -40,15 +40,58 @@ _STATE_NAMES = {
 }
 
 _state_icons_alt = "|".join(re.escape(_ICON_STATES[k]) for k in _ICONS["state_order"])
-_MANAGED_TITLE_RE = re.compile(
-    r"^("
-    + re.escape(_ICON_STAR)
-    + r")?("
-    + re.escape(_ICON_FLAG)
-    + r")?("
-    + _state_icons_alt
-    + r")?[A-Z]:"
-)
+
+
+def _load_override_emojis():
+    """Load the color-to-emoji mapping from palette.json."""
+    path = _resolve_data_path("palette.json")
+    mapping: dict[str, str] = {}
+    if path:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            for color, info in data.get("colors", {}).items():
+                if "emoji" in info:
+                    mapping[color] = info["emoji"]
+        except (json.JSONDecodeError, OSError):
+            pass
+    if not mapping:
+        mapping = {
+            "green": "🟩",
+            "blue": "🟦",
+            "red": "🟥",
+            "orange": "🟧",
+            "purple": "🟪",
+            "teal": "🟢",
+            "pink": "🟣",
+            "yellow": "🟨",
+            "gray": "⬜",
+            "cyan": "🔵",
+        }
+    return mapping
+
+
+_COLOR_TO_EMOJI: dict[str, str] = _load_override_emojis()
+OVERRIDE_EMOJIS: set[str] = set(_COLOR_TO_EMOJI.values())
+
+
+def _build_managed_title_re():
+    """Build the compiled regex for matching managed tab titles."""
+    override_alt = "|".join(re.escape(e) for e in sorted(OVERRIDE_EMOJIS))
+    return re.compile(
+        r"^(?:"
+        + override_alt
+        + r")?("
+        + re.escape(_ICON_STAR)
+        + r")?("
+        + re.escape(_ICON_FLAG)
+        + r")?("
+        + _state_icons_alt
+        + r")?[A-Z]:"
+    )
+
+
+_MANAGED_TITLE_RE = _build_managed_title_re()
 
 
 def _strip_icons(title):
@@ -76,17 +119,58 @@ def _strip_account_prefix(title):
     return title
 
 
-OVERRIDE_MARKER = "\u203e"  # U+203E OVERLINE
+def _strip_override_marker(title, return_emoji=False):
+    """Remove override emoji prefix (and legacy trailing overline) from a title.
+
+    When *return_emoji* is True, returns a ``(stripped_title, emoji)`` tuple
+    so the caller can re-apply the emoji later.
+    """
+    # Legacy: strip trailing U+203E OVERLINE
+    title = title.rstrip("\u203e")
+    # New: strip leading override emoji
+    emoji_found = ""
+    for emoji in OVERRIDE_EMOJIS:
+        if title.startswith(emoji):
+            emoji_found = emoji
+            title = title[len(emoji) :]
+            break
+    if return_emoji:
+        return title, emoji_found
+    return title
 
 
-def _strip_override_marker(title):
-    """Remove trailing override marker(s) from a title."""
-    return title.rstrip(OVERRIDE_MARKER)
+def _append_override_marker(title, color_name=""):
+    """Prepend a colored override emoji to a title (idempotent).
+
+    If *color_name* is empty or unknown, the title is returned with any
+    existing emoji stripped (i.e. no override indicator).
+    """
+    title = _strip_override_marker(title)
+    emoji = _COLOR_TO_EMOJI.get(color_name, "")
+    if emoji:
+        return emoji + title
+    return title
 
 
-def _append_override_marker(title):
-    """Append a single override marker to a title (idempotent)."""
-    return _strip_override_marker(title) + OVERRIDE_MARKER
+def _append_override_for_dir(title, config_dir_override):
+    """Prepend override emoji matching the account that owns *config_dir_override*.
+
+    Looks up which account has *config_dir_override* as its ``config_dir``
+    and uses that account's color to select the emoji.
+    """
+    from cc_dashboard import config as _cfg
+
+    color_name = ""
+    for _acct_name, acct_info in _cfg._accounts.items():
+        if acct_info.get("config_dir", "") == config_dir_override:
+            color_name = acct_info.get("color", "")
+            break
+    return _append_override_marker(title, color_name)
+
+
+def _has_override_emoji(title):
+    """Return True if *title* starts with an override emoji."""
+    return any(title.startswith(e) for e in OVERRIDE_EMOJIS)
 
 
 def _detect_state(title):

@@ -168,7 +168,7 @@ cmd_sockets() {
     _load_icons
     local strip_re
     strip_re="$(_icon_strip_regex)"
-    local managed_re="${strip_re}[A-Z]:"
+    local managed_re="${strip_re}(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?[A-Z]:"
 
     local found=0
     for sock in "${TMPDIR:-/tmp}"/kitty-*; do
@@ -238,7 +238,7 @@ cmd_cleanup() {
             fi
         done
     fi
-    local title_pattern="${_STRIP_RE}[$initials]:"
+    local title_pattern="${_STRIP_RE}${_OVERRIDE_EMOJI_RE}[$initials]:"
 
     local stale=""
     local live_ids=""
@@ -367,7 +367,7 @@ cmd_save() {
 				[.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
 			) |
 			{
-				title: (.title | sub($strip_re; "") | sub("‾$"; "")),
+				title: (.title | sub($strip_re; "") | sub("^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)"; "")),
 				dir: (
 					[.windows[] |
 						select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)

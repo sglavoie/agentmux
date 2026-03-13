@@ -49,7 +49,7 @@ def handle_override_mode(key, state):
             current_dir = state["cfg"]._accounts.get(account, {}).get("config_dir", "")
             cdo = None
             if selected_path != current_dir:
-                title = state["append_override_marker"](title)
+                title = state["append_override_for_dir"](title, selected_path)
                 cdo = selected_path
             pw_val = entry["pw"]
             target_socket = (
@@ -146,7 +146,7 @@ def handle_override_mode(key, state):
                     if is_revert:
                         title = state["strip_override_marker"](title)
                     else:
-                        title = state["append_override_marker"](title)
+                        title = state["append_override_for_dir"](title, selected_path)
                     account = sess["account"]
                     location = state["compute_insert_location"](
                         sess_socket, account, title
@@ -216,17 +216,19 @@ def handle_rename_mode(key, state):
             state["mode"] = "list"
         else:
             orig_title = state["filtered"][state["selected"]]["title"]
-            had_override = orig_title.endswith(state["override_marker"])
+            stripped_orig, override_emoji = state["strip_override_marker"](
+                orig_title, return_emoji=True
+            )
             if (
-                len(orig_title) >= 2
-                and orig_title[0].isupper()
-                and orig_title[1] == ":"
+                len(stripped_orig) >= 2
+                and stripped_orig[0].isupper()
+                and stripped_orig[1] == ":"
             ):
-                full_title = orig_title[:2] + new_name
+                full_title = stripped_orig[:2] + new_name
             else:
                 full_title = new_name
-            if had_override:
-                full_title = state["append_override_marker"](full_title)
+            if override_emoji:
+                full_title = override_emoji + full_title
             old_tab_id = state["filtered"][state["selected"]]["tab_id"]
             rename_socket = state["filtered"][state["selected"]].get(
                 "socket", state["home_socket"]

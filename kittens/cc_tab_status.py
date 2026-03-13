@@ -46,7 +46,6 @@ from cc_dashboard.drawing import draw_border, safe_addstr
 from cc_dashboard.remote.actions_core import do_rename
 from cc_dashboard.remote.command import get_kitty_socket, kitty_cmd
 from cc_dashboard.remote.shared import (
-    _append_override_marker,
     _strip_icons,
     _strip_override_marker,
 )
@@ -392,11 +391,12 @@ def main(args=None):
     result = curses.wrapper(_run, session)
     if result is not None:
         kind, value = result
-        title = _strip_override_marker(session["title"])
-        had_override = session["title"] != title
+        title, override_emoji = _strip_override_marker(
+            session["title"], return_emoji=True
+        )
         new_title = _set_status(title, value if value else None)
-        if had_override:
-            new_title = _append_override_marker(new_title)
+        if override_emoji:
+            new_title = override_emoji + new_title
         do_rename(socket, session["tab_id"], new_title)
 
         # Auto-save custom values to config (deduplicated)

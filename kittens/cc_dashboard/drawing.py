@@ -12,7 +12,7 @@ def safe_addstr(win, y, x, text, attr=0):
     if y < 0 or y >= rows or x < 0 or x >= cols:
         return
     text = text[: cols - x]
-    with contextlib.suppress(curses.error):
+    with contextlib.suppress(curses.error, UnicodeEncodeError):
         win.addstr(y, x, text, attr)
 
 

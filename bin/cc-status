@@ -91,7 +91,8 @@ _load_icons
 
 # Build shell variables for icon-based jq patterns
 _STRIP_RE="$(_icon_strip_regex)"
-_MANAGED_RE="${_STRIP_RE}[A-Z]:"
+_OVERRIDE_EMOJI_RE="(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?"
+_MANAGED_RE="${_STRIP_RE}${_OVERRIDE_EMOJI_RE}[A-Z]:"
 
 # ---- Socket discovery and multi-instance query -----------------------------
 

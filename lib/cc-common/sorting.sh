@@ -23,7 +23,7 @@ compute_insert_location() {
             [.windows[]? | .user_vars.cc_account // empty | select(. != "")] |
             if length > 0 then .[0] else "" end
         ) as $cc_acct |
-        select($cc_acct != "" or ($stripped | test("^[A-Z]:"))) |
+        select($cc_acct != "" or ($stripped | test("^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?[A-Z]:"))) |
         [(.id | tostring), .title, (if $cc_acct == "" then "-" else $cc_acct end), $stripped] | @tsv
     ')"
 
@@ -36,11 +36,13 @@ compute_insert_location() {
 			[[ -z "$tid" ]] && continue
 			[[ "$taccount" == "-" ]] && taccount=""
 			local acct="$taccount"
-			if [[ -z "$acct" && "$tstripped" =~ ^[A-Z]: ]]; then
-				acct="$(_resolve_account_from_initial "${tstripped:0:1}")"
+			local _clean_s
+			_clean_s="$(echo "$tstripped" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
+			if [[ -z "$acct" && "$_clean_s" =~ ^[A-Z]: ]]; then
+				acct="$(_resolve_account_from_initial "${_clean_s:0:1}")"
 			fi
 
-			local project_name="$tstripped"
+			local project_name="$_clean_s"
 			if [[ "$project_name" =~ ^[A-Z]: ]]; then
 				project_name="${project_name:2}"
 			fi
@@ -147,13 +149,15 @@ sort_tabs() {
 
 		if [[ -n "$taccount" ]]; then
 			tab_accounts+=("$taccount")
-		elif [[ "$tstripped" =~ ^[A-Z]: ]]; then
-			tab_accounts+=("$(_resolve_account_from_initial "${tstripped:0:1}")")
+		elif [[ "$tstripped" =~ ^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?[A-Z]: ]]; then
+			local _clean_stripped
+			_clean_stripped="$(echo "$tstripped" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
+			tab_accounts+=("$(_resolve_account_from_initial "${_clean_stripped:0:1}")")
 		else
 			tab_accounts+=("")
 		fi
 
-		if [[ -n "$taccount" ]] || [[ "$tstripped" =~ ^[A-Z]: ]]; then
+		if [[ -n "$taccount" ]] || [[ "$tstripped" =~ ^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?[A-Z]: ]]; then
 			managed_indices+=("$idx")
 		else
 			unmanaged_indices+=("$idx")
@@ -172,7 +176,8 @@ sort_tabs() {
 	local -a sort_input=()
 	local mi
 	for mi in "${managed_indices[@]}"; do
-		local project_name="${tab_stripped[$mi]}"
+		local project_name
+		project_name="$(echo "${tab_stripped[$mi]}" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
 		if [[ "$project_name" =~ ^[A-Z]: ]]; then
 			project_name="${project_name:2}"
 		fi
@@ -201,7 +206,8 @@ sort_tabs() {
 		local -a unpinned_managed=()
 		for mi in "${managed_indices[@]}"; do
 			if [[ "${tab_pinned[$mi]}" == "1" ]]; then
-				local project_name="${tab_stripped[$mi]}"
+				local project_name
+				project_name="$(echo "${tab_stripped[$mi]}" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
 				if [[ "$project_name" =~ ^[A-Z]: ]]; then
 					project_name="${project_name:2}"
 				fi

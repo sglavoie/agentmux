@@ -29,7 +29,7 @@ tab_exists() {
 	local ls_json
 	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
 	echo "$ls_json" | jq -e --arg t "$title" --arg strip_re "$_STRIP_RE" '
-		[.[].tabs[] | select(.title | sub($strip_re; "") | . == $t)] | length > 0
+		[.[].tabs[] | select(.title | sub($strip_re; "") | sub("^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)"; "") | . == $t)] | length > 0
 	' >/dev/null 2>&1
 }
 
@@ -66,7 +66,7 @@ tab_metadata_by_id() {
 		[.[] | .tabs[] |
 			select(.id == $tid) |
 			{
-				title: (.title | sub($strip_re; "")),
+				title: (.title | sub($strip_re; "") | sub("^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)"; "")),
 				account: (
 					[.windows[] | .user_vars.cc_account // empty | select(. != "")] |
 					if length > 0 then .[0]
@@ -148,7 +148,10 @@ lookup_session_overrides() {
 	local cfg_env="$current_env"
 
 	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -z "$cfg_env" && -f "$CONFIG_FILE" ]]; then
-		local lookup_title="${title%%‾*}"
+		local lookup_title
+		lookup_title="$(echo "$title" | sed -E "s/^${_STRIP_RE}//")"
+		# Strip leading override emoji (colored square/circle)
+		lookup_title="$(echo "$lookup_title" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
 		_lookup_session_overrides_toml "$lookup_title"
 	fi
 

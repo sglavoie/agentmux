@@ -123,7 +123,7 @@ def query_sessions(socket, managed_only=True):
             cc_color = user_vars.get("cc_color", "")
             cc_group = user_vars.get("cc_group", "")
 
-            title = _strip_icons(tab.get("title", ""))
+            title = _strip_override_marker(_strip_icons(tab.get("title", "")))
 
             # Fallback: enrich group from config when user var is missing
             if not cc_group:

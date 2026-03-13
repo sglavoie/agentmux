@@ -79,6 +79,21 @@ build_title() {
 	echo "$result"
 }
 
+# Remove a leading override emoji from a title string.
+# This is a separate operation from strip_icons — used only when you need the
+# clean title without the override emoji (config lookup, save, clone).
+strip_override_emoji() {
+	local title="$1"
+	local emojis=("🟩" "🟦" "🟥" "🟧" "🟪" "🟢" "🟣" "🟨" "⬜" "🔵")
+	for e in "${emojis[@]}"; do
+		if [[ "$title" == "${e}"* ]]; then
+			echo "${title#"$e"}"
+			return
+		fi
+	done
+	echo "$title"
+}
+
 # Look up a tab by window ID via kitten @ ls.
 # Outputs two lines: tab_id and current title.
 # Usage: get_tab_info WINDOW_ID [--to SOCKET]

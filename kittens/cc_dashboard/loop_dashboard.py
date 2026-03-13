@@ -62,8 +62,10 @@ from cc_dashboard.remote.command import (
 from cc_dashboard.remote.git_ops import do_create_worktree
 from cc_dashboard.remote.sessions import query_all_sessions
 from cc_dashboard.remote.shared import (
-    OVERRIDE_MARKER,
+    OVERRIDE_EMOJIS,
+    _append_override_for_dir,
     _append_override_marker,
+    _has_override_emoji,
     _strip_override_marker,
 )
 from cc_dashboard.state_persist import load_ui_state, prune_stale_entries, save_ui_state
@@ -324,6 +326,9 @@ def dashboard(stdscr):
         "build_delete_entries": _build_delete_entries,
         "strip_override_marker": _strip_override_marker,
         "append_override_marker": _append_override_marker,
+        "append_override_for_dir": _append_override_for_dir,
+        "has_override_emoji": _has_override_emoji,
+        "override_emojis": OVERRIDE_EMOJIS,
         "spawn_detached_close": _spawn_detached_close,
         "compute_insert_location": compute_insert_location,
         "do_close": do_close,
@@ -344,7 +349,6 @@ def dashboard(stdscr):
         "format_log_entry": _format_log_entry,
         "get_window_text": get_window_text,
         "rstrip_blank_lines": _rstrip_blank_lines,
-        "override_marker": OVERRIDE_MARKER,
     }
 
     def make_new_fields():

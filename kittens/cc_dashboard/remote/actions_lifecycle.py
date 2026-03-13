@@ -16,7 +16,10 @@ from cc_dashboard.remote.actions_core import (
     do_launch,
 )
 from cc_dashboard.remote.actions_sorting import do_sort_tabs
-from cc_dashboard.remote.shared import _append_override_marker, _strip_override_marker
+from cc_dashboard.remote.shared import (
+    _append_override_for_dir,
+    _strip_override_marker,
+)
 
 
 def _spawn_detached_close(socket, tab_id):
@@ -298,7 +301,7 @@ def do_restart(
 
     account_config_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
     if config_dir_override and config_dir_override != account_config_dir:
-        title = _append_override_marker(title)
+        title = _append_override_for_dir(title, config_dir_override)
     else:
         title = _strip_override_marker(title)
         if config_dir_override == account_config_dir:
