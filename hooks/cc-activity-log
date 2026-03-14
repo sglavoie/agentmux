@@ -39,8 +39,17 @@ NOW="$(date +%s)"
 _resolve_tab_id() {
 	local cache="${_CCM_TMPDIR}/ccm-tabid-$SESSION_ID"
 	if [[ -f "$cache" ]]; then
-		cat "$cache"
-		return
+		local cached
+		cached="$(cat "$cache" 2>/dev/null)" || cached=""
+		# Only use cached value if it is a valid numeric tab_id;
+		# a corrupted cache file would cause jq tonumber to fail
+		# and abort the entire script under set -e.
+		if [[ "$cached" =~ ^[0-9]+$ ]]; then
+			echo "$cached"
+			return
+		fi
+		# Corrupted cache — remove and re-resolve below
+		rm -f "$cache"
 	fi
 	local tid=""
 	if [[ -n "${KITTY_WINDOW_ID:-}" ]]; then
@@ -51,7 +60,7 @@ _resolve_tab_id() {
 				[.[] | .tabs[] | select(.windows[]? | .id == ($wid | tonumber)) | .id] | first // empty
 			' 2>/dev/null)" || true
 	fi
-	if [[ -n "$tid" ]]; then
+	if [[ -n "$tid" && "$tid" =~ ^[0-9]+$ ]]; then
 		echo "$tid" >"$cache"
 		echo "$tid"
 	fi
@@ -101,8 +110,8 @@ stop)
 		{ts: $ts, event: "stop", sid: $sid}
 		+ (if $last_msg != "" then {last_msg: $last_msg} else {} end)
 		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
-	')"
-	echo "$ENTRY" >>"$LOG_FILE"
+	' 2>/dev/null)" || true
+	[[ -n "$ENTRY" ]] && echo "$ENTRY" >>"$LOG_FILE"
 	;;
 
 end)
@@ -111,13 +120,13 @@ end)
 	ENTRY="$(jq -n -c --argjson ts "$NOW" --arg sid "$SESSION_ID" --arg reason "$REASON" --arg tid "$TID" '
 		{ts: $ts, event: "session_end", sid: $sid, reason: $reason}
 		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
-	')"
-	echo "$ENTRY" >>"$LOG_FILE"
+	' 2>/dev/null)" || true
+	[[ -n "$ENTRY" ]] && echo "$ENTRY" >>"$LOG_FILE"
 	# Write a summary line with total event count.
 	if [[ -f "$LOG_FILE" ]]; then
 		TOTAL="$(wc -l <"$LOG_FILE" | tr -d ' ')"
 		jq -n -c --argjson ts "$NOW" --arg sid "$SESSION_ID" --argjson total "$TOTAL" \
-			'{ts: $ts, event: "summary", sid: $sid, total_events: $total}' >>"$LOG_FILE"
+			'{ts: $ts, event: "summary", sid: $sid, total_events: $total}' >>"$LOG_FILE" 2>/dev/null || true
 	fi
 	;;
 
@@ -129,8 +138,8 @@ session_start)
 		--arg model "$MODEL" --arg agent_type "$AGENT_TYPE" --arg session_type "$SESSION_TYPE" '
 		{ts: $ts, event: "session_start", sid: $sid, model: $model, agent_type: $agent_type, session_type: $session_type}
 		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
-	')"
-	echo "$ENTRY" >>"$LOG_FILE"
+	' 2>/dev/null)" || true
+	[[ -n "$ENTRY" ]] && echo "$ENTRY" >>"$LOG_FILE"
 	;;
 
 subagent_start)
@@ -138,8 +147,8 @@ subagent_start)
 	ENTRY="$(jq -n -c --argjson ts "$NOW" --arg sid "$SESSION_ID" --arg tid "$TID" --arg agent_type "$AGENT_TYPE" '
 		{ts: $ts, event: "subagent_start", sid: $sid, agent_type: $agent_type}
 		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
-	')"
-	echo "$ENTRY" >>"$LOG_FILE"
+	' 2>/dev/null)" || true
+	[[ -n "$ENTRY" ]] && echo "$ENTRY" >>"$LOG_FILE"
 	;;
 
 subagent_stop)
@@ -147,8 +156,8 @@ subagent_stop)
 	ENTRY="$(jq -n -c --argjson ts "$NOW" --arg sid "$SESSION_ID" --arg tid "$TID" --arg agent_type "$AGENT_TYPE" '
 		{ts: $ts, event: "subagent_stop", sid: $sid, agent_type: $agent_type}
 		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
-	')"
-	echo "$ENTRY" >>"$LOG_FILE"
+	' 2>/dev/null)" || true
+	[[ -n "$ENTRY" ]] && echo "$ENTRY" >>"$LOG_FILE"
 	;;
 
 task)
@@ -162,8 +171,8 @@ task)
 		--arg task_id "$TASK_ID" --arg task_subject "$TASK_SUBJECT" --arg task_desc "$TASK_DESC" '
 		{ts: $ts, event: "task_completed", sid: $sid, task_id: $task_id, task_subject: $task_subject, task_description: $task_desc}
 		+ (if $tid != "" then {tid: ($tid | tonumber)} else {} end)
-	')"
-	echo "$ENTRY" >>"$LOG_FILE"
+	' 2>/dev/null)" || true
+	[[ -n "$ENTRY" ]] && echo "$ENTRY" >>"$LOG_FILE"
 	;;
 
 *)
