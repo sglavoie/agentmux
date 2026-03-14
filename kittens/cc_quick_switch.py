@@ -145,7 +145,7 @@ def draw_session_list(stdscr, sessions, selected, multi_instance=False):
             if git_info["dirty"]:
                 branch_display += "*"
             if len(branch_display) > c_branch - 1:
-                branch_display = branch_display[: c_branch - 2] + "\u2026"
+                branch_display = branch_display[: c_branch - 2] + "~"
         else:
             branch_display = "-"
 
@@ -242,6 +242,11 @@ def quick_switch_main(stdscr):
 
         key = stdscr.getch()
         if key == -1:
+            continue
+
+        # Handle terminal resize
+        if key == curses.KEY_RESIZE:
+            stdscr.clear()
             continue
 
         # Sort picker intercepts all keys when active

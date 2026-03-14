@@ -153,7 +153,7 @@ Commands:
     launch [args]       Manage and launch Claude Code sessions (delegates to cc-launch)
     status [args]       Show active session status table (delegates to cc-status)
     star [args]         Toggle star on active tab (delegates to cc-toggle-star)
-    config <subcmd>     Manage config files (edit, show, path, init)
+    config <subcmd>     Manage config files (edit, show, path, init, sync, validate)
     hooks <subcmd>      Manage hooks (sync, status)
     logs <subcmd>       Query and manage activity logs
     dashboard           Launch the curses dashboard kitten
