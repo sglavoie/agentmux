@@ -76,16 +76,18 @@ _all_account_names() {
 }
 
 build_accounts_json() {
-	local json="["
-	local first=true
 	local i
+	local names="" dirs=""
 	for ((i = 0; i < ${#_ACCOUNT_NAMES[@]}; i++)); do
-		[[ "$first" == "true" ]] || json+=","
-		first=false
-		json+="$(jq -n --arg name "${_ACCOUNT_NAMES[$i]}" --arg dir "${_ACCOUNT_DIRS[$i]}" '{name:$name,dir:$dir}')"
+		[[ -n "$names" ]] && names+=$'\n'
+		names+="${_ACCOUNT_NAMES[$i]}"
+		[[ -n "$dirs" ]] && dirs+=$'\n'
+		dirs+="${_ACCOUNT_DIRS[$i]}"
 	done
-	json+="]"
-	echo "$json"
+	jq -nc --arg names "$names" --arg dirs "$dirs" \
+		'($names | split("\n")) as $n |
+		 ($dirs | split("\n")) as $d |
+		 [range($n | length) | {name: $n[.], dir: $d[.]}]'
 }
 
 default_account_name() {

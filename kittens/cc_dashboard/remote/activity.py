@@ -77,16 +77,60 @@ def cleanup_stale_activity(live_tab_ids):
                 os.remove(path)
 
 
+def _build_tabid_map():
+    """Build a dict mapping tab_id strings to session_id strings.
+
+    Scans all ccm-tabid-* files once and returns the complete mapping,
+    avoiding per-tab file scanning in query_sessions.
+    """
+    mapping: dict[str, str] = {}
+    prefix = "ccm-tabid-"
+    for path in glob.glob(f"{_CCM_TMPDIR}/{prefix}*"):
+        try:
+            with open(path) as f:
+                tab_id_str = f.read().strip()
+        except OSError:
+            continue
+        if tab_id_str:
+            fname = os.path.basename(path)
+            if fname.startswith(prefix):
+                mapping[tab_id_str] = fname[len(prefix):]
+    return mapping
+
+
+# Module-level cache invalidated each time build is called
+_tabid_cache: dict[str, str] = {}
+_tabid_cache_valid = False
+
+
+def invalidate_tabid_cache():
+    """Mark the tabid cache as stale so the next resolve rebuilds it."""
+    global _tabid_cache_valid
+    _tabid_cache_valid = False
+
+
 def resolve_session_id(tab_id):
     """Resolve a Kitty tab_id to a Claude session_id via the tab-id cache files.
 
-    Scans ccm-tabid-* files in the temp directory (created by
-    cc-activity-log) to find one whose contents match the given
-    tab_id, then extracts the session_id UUID from the filename.
-    Returns None if no match is found.
+    Uses a module-level cache that is built on first call and invalidated
+    by calling invalidate_tabid_cache() (done automatically at the start
+    of each query_sessions cycle).  Falls back to a direct file scan on
+    cache miss for tabs created between cache builds.
     """
+    global _tabid_cache, _tabid_cache_valid
     tab_id_str = str(tab_id)
-    for path in glob.glob(f"{_CCM_TMPDIR}/ccm-tabid-*"):
+
+    if not _tabid_cache_valid:
+        _tabid_cache = _build_tabid_map()
+        _tabid_cache_valid = True
+
+    result = _tabid_cache.get(tab_id_str)
+    if result is not None:
+        return result
+
+    # Cache miss: check if a new file appeared since last build
+    prefix = "ccm-tabid-"
+    for path in glob.glob(f"{_CCM_TMPDIR}/{prefix}*"):
         try:
             with open(path) as f:
                 contents = f.read().strip()
@@ -94,9 +138,10 @@ def resolve_session_id(tab_id):
             continue
         if contents == tab_id_str:
             fname = os.path.basename(path)
-            prefix = "ccm-tabid-"
             if fname.startswith(prefix):
-                return fname[len(prefix) :]
+                sid = fname[len(prefix):]
+                _tabid_cache[tab_id_str] = sid
+                return sid
     return None
 
 

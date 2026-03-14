@@ -8,6 +8,7 @@ from cc_dashboard import config as _cfg
 from cc_dashboard.config_core import read_notes
 from cc_dashboard.remote.activity import (
     cleanup_stale_activity,
+    invalidate_tabid_cache,
     load_activity,
     load_session_meta,
     resolve_session_id,
@@ -196,6 +197,7 @@ def query_all_sessions(managed_only=True):
     ``get_all_kitty_sockets`` and injects ``"socket"`` and
     ``"instance_label"`` keys into every session dict.
     """
+    invalidate_tabid_cache()
     sockets = get_all_kitty_sockets()
     all_sessions = []
     for sock, label in sockets:

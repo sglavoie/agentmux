@@ -2,19 +2,9 @@
 
 import curses
 
-
-def _resolve_runtime_options(sess, cfg, strip_override_marker):
-    r_flags = sess.get("cc_flags", "")
-    r_pw = sess.get("cc_pw", "")
-    r_env = sess.get("cc_env", "")
-    if not r_flags and not r_pw and not r_env:
-        cfg_entry = cfg._find_config_session(sess["title"])
-        if cfg_entry is None:
-            cfg_entry = cfg._find_config_session(strip_override_marker(sess["title"]))
-        r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
-        r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
-        r_env = cfg_entry.get("env", "") if cfg_entry else ""
-    return r_flags, r_pw, r_env
+from cc_dashboard.loop_helpers import (
+    _resolve_session_runtime_options,
+)
 
 
 def handle_actions_mode(key, state, build_session_actions):
@@ -411,11 +401,7 @@ def handle_confirm_modes(key, state):
                 state["host_tab_id"] is not None
                 and sess["tab_id"] == state["host_tab_id"]
             )
-            r_flags, r_pw, r_env = _resolve_runtime_options(
-                sess,
-                state["cfg"],
-                state["strip_override_marker"],
-            )
+            r_flags, r_pw, r_env = _resolve_session_runtime_options(sess)
             sess_socket = sess.get("socket", state["home_socket"])
             ok = state["do_restart"](
                 sess_socket,
@@ -490,11 +476,7 @@ def handle_confirm_modes(key, state):
             )
             restarted = 0
             for t in targets_sorted:
-                r_flags, r_pw, r_env = _resolve_runtime_options(
-                    t,
-                    state["cfg"],
-                    state["strip_override_marker"],
-                )
+                r_flags, r_pw, r_env = _resolve_session_runtime_options(t)
                 t_socket = t.get("socket", state["home_socket"])
                 is_host = has_host and t["tab_id"] == state["host_tab_id"]
                 ok = state["do_restart"](
@@ -528,11 +510,7 @@ def handle_confirm_modes(key, state):
             for t in state["batch_targets"]:
                 new_title = state["generate_clone_title"](all_title_dicts, t["title"])
                 all_title_dicts.append({"title": new_title})
-                r_flags, r_pw, r_env = _resolve_runtime_options(
-                    t,
-                    state["cfg"],
-                    state["strip_override_marker"],
-                )
+                r_flags, r_pw, r_env = _resolve_session_runtime_options(t)
                 t_socket = t.get("socket", state["home_socket"])
                 loc = state["compute_insert_location"](
                     t_socket, t["account"], new_title
@@ -686,11 +664,7 @@ def handle_move_picker_mode(key, state):
                 )
                 moved = 0
                 for t in targets_sorted:
-                    r_flags, r_pw, r_env = _resolve_runtime_options(
-                        t,
-                        state["cfg"],
-                        state["strip_override_marker"],
-                    )
+                    r_flags, r_pw, r_env = _resolve_session_runtime_options(t)
                     t_socket = t.get("socket", state["home_socket"])
                     is_host = has_host and t["tab_id"] == state["host_tab_id"]
                     ok = state["do_move"](
@@ -722,11 +696,7 @@ def handle_move_picker_mode(key, state):
             state["host_tab_id"] is not None and sess["tab_id"] == state["host_tab_id"]
         )
         sess_socket = sess.get("socket", state["home_socket"])
-        r_flags, r_pw, r_env = _resolve_runtime_options(
-            sess,
-            state["cfg"],
-            state["strip_override_marker"],
-        )
+        r_flags, r_pw, r_env = _resolve_session_runtime_options(sess)
         ok = state["do_move"](
             sess_socket,
             target_socket,
