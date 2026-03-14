@@ -222,15 +222,15 @@ launch_session() {
 	color_name="$(_account_color "$account")" || color_name=""
 	colors="$(tab_colors_for_account "$account")"
 
-	local env_flag="--env KITTY_LISTEN_ON=$SOCKET"
+	local -a env_flags=("--env" "KITTY_LISTEN_ON=$SOCKET")
 	if [[ -n "$config_dir" && "$config_dir" != "$HOME/.claude" ]]; then
-		env_flag="$env_flag --env CLAUDE_CONFIG_DIR=$config_dir"
+		env_flags+=("--env" "CLAUDE_CONFIG_DIR=$config_dir")
 	fi
 
 	if [[ -n "$env_vars" && "$env_vars" != "-" ]]; then
 		local kv
 		while IFS= read -r kv; do
-			[[ -n "$kv" && "$kv" == *=* ]] && env_flag="$env_flag --env $kv"
+			[[ -n "$kv" && "$kv" == *=* ]] && env_flags+=("--env" "$kv")
 		done < <(printf '%s' "$env_vars" | python3 -c "import shlex, sys; [print(t) for t in shlex.split(sys.stdin.read())]")
 	fi
 
@@ -240,8 +240,7 @@ launch_session() {
 	local shell_cmd="exec claude $effective_flags"
 	ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
 	local launch_err
-	# shellcheck disable=SC2086
-	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
+	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
 		local msg="Warning: Failed to launch tab '$title' (account=$account, dir=$dir, socket=$SOCKET)."
 		if [[ -n "$launch_err" ]]; then
 			msg="$msg Kitty error: $launch_err"

@@ -83,10 +83,14 @@ def _load_palette() -> tuple[dict[str, PaletteEntry], RGBTuple, RGBTuple]:
     palette: dict[str, PaletteEntry] = {}
     for name, entry in data.get("colors", {}).items():
         try:
+            fg_raw = entry["text_fg"]
+            if not isinstance(fg_raw, list) or len(fg_raw) != 3:
+                raise ValueError(f"text_fg must be a 3-element list, got {fg_raw!r}")
+            fg_tuple: RGBTuple = (int(fg_raw[0]), int(fg_raw[1]), int(fg_raw[2]))
             palette[name] = (
                 _hex_to_rgb(entry["active_bg"]),
                 _hex_to_rgb(entry["inactive_bg"]),
-                tuple(entry["text_fg"]),
+                fg_tuple,
             )
         except (KeyError, ValueError, TypeError) as e:
             print(

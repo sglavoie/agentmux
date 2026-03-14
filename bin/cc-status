@@ -315,6 +315,9 @@ max_inst=${#header_inst}
 max_group=${#header_group}
 has_groups=false
 
+# Detect terminal width for column capping
+term_cols="${COLUMNS:-$(tput cols 2>/dev/null || echo 120)}"
+
 # Pre-process rows: shorten paths, then scan for max widths
 processed_rows=""
 while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst col_group; do
@@ -333,6 +336,27 @@ while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_ins
 		((${#col_group} > max_group)) && max_group=${#col_group}
 	fi
 done <<<"$rows"
+
+# Cap title and directory columns to prevent line wrapping on narrow terminals.
+# Calculate fixed-width columns first, then distribute remaining space.
+_fixed_cols=$((max_mk + max_tab + 2 + max_account + 2 + max_branch + 2 + max_status + 4))
+if [[ "$has_groups" == "true" ]]; then
+	_fixed_cols=$((_fixed_cols + 2 + max_group))
+fi
+if [[ "$multi_instance" == "true" ]]; then
+	_fixed_cols=$((_fixed_cols + 2 + max_inst))
+fi
+_flex_budget=$((term_cols - _fixed_cols))
+if [[ "$_flex_budget" -gt 0 ]]; then
+	# Split flexible budget: 40% title, 60% directory (title is usually shorter)
+	_title_cap=$((_flex_budget * 40 / 100))
+	_dir_cap=$((_flex_budget * 60 / 100))
+	# Enforce minimum widths
+	(( _title_cap < 8 )) && _title_cap=8
+	(( _dir_cap < 10 )) && _dir_cap=10
+	(( max_title > _title_cap )) && max_title=$_title_cap
+	(( max_dir > _dir_cap )) && max_dir=$_dir_cap
+fi
 
 # Header
 {
@@ -359,9 +383,21 @@ done <<<"$rows"
 	printf "%s%s%s\n" "$DIM" "$(repeat_char '─' "$sep_width")" "$RESET"
 }
 
+# _truncate STRING MAX — truncate to MAX chars, appending ".." if trimmed
+_truncate() {
+	local s="$1" max="$2"
+	if [[ ${#s} -gt $max && $max -gt 2 ]]; then
+		printf '%s' "${s:0:$((max - 2))}.."
+	else
+		printf '%s' "$s"
+	fi
+}
+
 # Data rows
 while IFS=$'\t' read -r col_tab col_title col_account col_dir col_branch col_status col_inst col_group; do
 	[[ -z "$col_tab" ]] && continue
+	col_title="$(_truncate "$col_title" "$max_title")"
+	col_dir="$(_truncate "$col_dir" "$max_dir")"
 
 	# Focus marker
 	local_mk=" "
