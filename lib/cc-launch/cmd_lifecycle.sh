@@ -246,35 +246,7 @@ cmd_clone() {
     if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
         sort_tabs "$SOCKET"
         if [[ -f "$CONFIG_FILE" ]]; then
-            # Read existing sessions, append the clone, and write back as valid TOML
-            local existing_json
-            existing_json="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>/dev/null)" || existing_json=""
-            local clone_json_array="["
-            local first=true
-            if [[ -n "$existing_json" ]]; then
-                while IFS=$'\t' read -r s_title s_dir s_account s_flags s_pw s_env s_group; do
-                    [[ -z "$s_title" ]] && continue
-                    [[ "$first" == "true" ]] || clone_json_array+=","
-                    first=false
-                    clone_json_array+="$(jq -nc \
-                        --arg t "$s_title" --arg d "$s_dir" --arg a "$s_account" \
-                        --arg f "$s_flags" --arg p "$s_pw" --arg e "$s_env" \
-                        --arg g "$s_group" \
-                        '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
-                done <<<"$existing_json"
-            fi
-            # Append the new clone entry
-            [[ "$first" == "true" ]] || clone_json_array+=","
-            local clone_dir="${dir/#$HOME/\~}"
-            clone_json_array+="$(jq -nc \
-                --arg t "$clone_title" --arg d "$clone_dir" --arg a "$account" \
-                --arg f "$cfg_flags" --arg p "$cfg_pw" --arg e "$cfg_env" \
-                --arg g "$live_group" \
-                '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
-            clone_json_array+="]"
-            if ! echo "$clone_json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$CONFIG_FILE"; then
-                echo "Warning: failed to update config file with cloned session." >&2
-            fi
+            _append_session_to_config "$CONFIG_FILE" "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$cfg_env" "$live_group"
         fi
         echo "Cloned '$title' as '$clone_title'." >&2
     fi

@@ -448,3 +448,45 @@ _save_sessions_toml() {
     fi
 }
 
+_append_session_to_config() {
+    local config_file="$1"
+    local new_title="$2" new_dir="$3" new_account="$4"
+    local new_flags="$5" new_pw="$6" new_env="$7" new_group="$8"
+
+    local json_array="["
+    local first=true
+
+    # Read existing sessions if the config file exists
+    if [[ -f "$config_file" ]]; then
+        local existing
+        existing="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$config_file" 2>/dev/null)" || existing=""
+        if [[ -n "$existing" ]]; then
+            while IFS=$'\t' read -r s_title s_dir s_account s_flags s_pw s_env s_group; do
+                [[ -z "$s_title" ]] && continue
+                [[ "$first" == "true" ]] || json_array+=","
+                first=false
+                json_array+="$(jq -nc \
+                    --arg t "$s_title" --arg d "$s_dir" --arg a "$s_account" \
+                    --arg f "$s_flags" --arg p "$s_pw" --arg e "$s_env" \
+                    --arg g "$s_group" \
+                    '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
+            done <<<"$existing"
+        fi
+    fi
+
+    # Append the new entry
+    [[ "$first" == "true" ]] || json_array+=","
+    new_dir="${new_dir/#$HOME/\~}"
+    json_array+="$(jq -nc \
+        --arg t "$new_title" --arg d "$new_dir" --arg a "$new_account" \
+        --arg f "$new_flags" --arg p "$new_pw" --arg e "$new_env" \
+        --arg g "$new_group" \
+        '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
+    json_array+="]"
+
+    if ! echo "$json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$config_file"; then
+        echo "Warning: failed to update config file with new session." >&2
+        return 1
+    fi
+}
+

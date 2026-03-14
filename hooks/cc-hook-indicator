@@ -273,6 +273,13 @@ _update_activity() {
 		total_subagents="${total_subagents:-0}"
 	fi
 
+	# Capture previous values before overwriting (used by notification
+	# suppression to detect post-permission stops and too-recent events).
+	# This replaces a separate file read that previously duplicated the
+	# parsing above.
+	_prev_last_ts="$last_ts"
+	_prev_last_type="$last_type"
+
 	last_ts="$now"
 	last_type="$event_kind"
 
@@ -304,26 +311,10 @@ _update_activity() {
 		>"$tmpfile" && mv "$tmpfile" "$activity_file"
 }
 
-# Capture previous last_event_ts before _update_activity overwrites it.
+# Initialize previous-state globals; _update_activity populates them from
+# the activity file it already reads, avoiding a redundant second read.
 _prev_last_ts=0
 _prev_last_type=""
-if [[ "$ACTION" == "stop" || "$ACTION" == "failure" || "$ACTION" == "permission" ]]; then
-	_activity_file="${_CCM_TMPDIR}/ccm-activity-${tab_id}.counts"
-	if [[ -f "$_activity_file" ]]; then
-		_cap_lines=$(wc -l <"$_activity_file" 2>/dev/null || echo 0)
-		_cap_lines="${_cap_lines// /}"
-		if [[ "$_cap_lines" -eq 12 ]]; then
-			_cap_i=0
-			while IFS= read -r line; do
-				case $_cap_i in
-				1) _prev_last_ts="$line" ;;
-				2) _prev_last_type="$line" ;;
-				esac
-				_cap_i=$((_cap_i + 1))
-			done <"$_activity_file"
-		fi
-	fi
-fi
 
 _update_activity
 

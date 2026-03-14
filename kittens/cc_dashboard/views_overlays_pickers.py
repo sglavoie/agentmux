@@ -311,56 +311,13 @@ def draw_sort_picker(stdscr, selected, current_mode):
 
 
 def draw_group_picker(stdscr, sessions, group_filter):
-    """Draw a centered group filter picker overlay."""
+    """Draw a centered group filter picker overlay.
+
+    Works for both dashboard sessions and config sessions -- the only
+    requirement is that each item has a "group" key.
+    """
     rows, cols = stdscr.getmaxyx()
     groups = sorted({s.get("group", "") or "(ungrouped)" for s in sessions})
-    if not groups:
-        return
-
-    display_rows = []
-    for i, name in enumerate(groups):
-        if i >= 9:
-            break
-        enabled = group_filter is None or name in group_filter
-        check = "[x] " if enabled else "[ ] "
-        display_rows.append((f"{i + 1}: {check}{name}", enabled))
-
-    max_row_len = max(len(r[0]) for r in display_rows)
-    box_w = min(cols - 4, max(30, max_row_len + 8))
-    box_h = len(display_rows) + 3
-    box_y = max(0, (rows - box_h) // 2)
-    box_x = max(0, (cols - box_w) // 2)
-
-    blank_line = " " * box_w
-    dim_attr = curses.color_pair(CP_DIM)
-    for dy in range(box_h):
-        safe_addstr(stdscr, box_y + dy, box_x, blank_line, dim_attr)
-    draw_border(
-        stdscr, box_y, box_x, box_w, box_h, curses.color_pair(CP_BORDER) | curses.A_BOLD
-    )
-
-    title = "Groups"
-    safe_addstr(
-        stdscr,
-        box_y,
-        box_x + max(0, (box_w - len(title)) // 2),
-        title,
-        curses.color_pair(CP_HEADER) | curses.A_BOLD,
-    )
-
-    normal_attr = curses.color_pair(CP_NORMAL)
-    for i, (display, enabled) in enumerate(display_rows):
-        y = box_y + 2 + i
-        if y >= rows - 1:
-            break
-        attr = normal_attr | curses.A_BOLD if enabled else dim_attr
-        safe_addstr(stdscr, y, box_x + 2, display[: box_w - 4], attr)
-
-
-def draw_pick_group_picker(stdscr, config_sessions, group_filter):
-    """Draw a centered group filter picker overlay for pick mode."""
-    rows, cols = stdscr.getmaxyx()
-    groups = sorted({s.get("group", "") or "(ungrouped)" for s in config_sessions})
     if not groups:
         return
 
