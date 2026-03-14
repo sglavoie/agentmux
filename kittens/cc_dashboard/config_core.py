@@ -446,13 +446,16 @@ def _unique_config_dirs() -> list[str]:
 def _read_header_comments(path: str) -> str:
     """Extract leading ``#`` comment / blank lines from a config file."""
     lines = []
-    with open(path) as f:
-        for line in f:
-            stripped = line.strip()
-            if stripped.startswith("#") or not stripped:
-                lines.append(line)
-            else:
-                break
+    try:
+        with open(path) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("#") or not stripped:
+                    lines.append(line)
+                else:
+                    break
+    except (FileNotFoundError, OSError):
+        return ""
     return "".join(lines) if lines else ""
 
 

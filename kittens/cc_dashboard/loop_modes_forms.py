@@ -462,6 +462,12 @@ def handle_clone_mode(key, state):
             state["msg"] = "Title cannot be empty"
             state["msg_frames"] = 20
             state["mode"] = "list"
+        elif any(s["title"] == title for s in state["sessions"]):
+            state["msg"] = "A session with that title is already running"
+            state["msg_frames"] = 20
+        elif state["cfg"]._find_config_session(title):
+            state["msg"] = "A session with that title already exists in config"
+            state["msg_frames"] = 20
         else:
             sess = state["filtered"][state["selected"]]
             flags, pw_val, env_val = _resolve_live_or_config_options(
@@ -714,6 +720,17 @@ def handle_new_mode(stdscr, key, state):
                         state["new_fields"]["instance"], state["home_socket"]
                     )
                 if t and d:
+                    if any(s["title"] == t for s in state["sessions"]):
+                        state["msg"] = "A session with that title is already running"
+                        state["msg_frames"] = 20
+                        return True
+                    if (
+                        state["new_fields"].get("save") == "yes"
+                        and state["cfg"]._find_config_session(t)
+                    ):
+                        state["msg"] = "Title already exists in config"
+                        state["msg_frames"] = 20
+                        return True
                     expanded_d = os.path.expanduser(d)
                     if not os.path.isdir(expanded_d):
                         state["mode"] = "confirm_mkdir"
