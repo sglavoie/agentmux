@@ -183,7 +183,7 @@ main() {
     load_defaults
     _load_icons
     _STRIP_RE="$(_icon_strip_regex)"
-    _OVERRIDE_EMOJI_RE="(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?"
+    _OVERRIDE_EMOJI_RE="$(_override_emoji_re)?"
     _MANAGED_RE="${_STRIP_RE}${_OVERRIDE_EMOJI_RE}[A-Z]:"
 
     case "${1:-}" in

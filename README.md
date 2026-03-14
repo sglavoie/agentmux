@@ -315,7 +315,7 @@ cc-launch --sockets
 | `CC_MANAGER_ACCOUNTS` | Path to `accounts.toml` (default: `<config-dir>/accounts.toml`) |
 | `CC_MANAGER_DEFAULTS` | Path to `defaults.toml` (default: `<config-dir>/defaults.toml`) |
 | `CC_MANAGER_LOGS` | Activity log directory (default: `~/.local/state/cc-manager/activity/`) |
-| `CCM_DEBUG` | Set to `1` to enable debug logging to stderr |
+| `CCM_DEBUG` | Set to `1` to enable verbose debug output to stderr from all `ccm` commands. Useful for diagnosing launch failures, socket issues, or config loading problems. Example: `CCM_DEBUG=1 cc-launch --all 2>debug.log` |
 | `CCM_DEBUG_LOG` | Path to a file for debug log output (used by the dashboard) |
 | `KITTY_LISTEN_ON` | Kitty sets this automatically; used for socket discovery |
 
@@ -411,6 +411,18 @@ completions/_cc-status          Zsh completion for cc-status
 tests/                          Test suite
 docs/                           Kitty documentation reference
 ```
+
+## Troubleshooting
+
+**Tabs not colored** — Check that the `color` values in `accounts.toml` match the palette names: green, blue, red, orange, purple, teal, pink, yellow, gray, or cyan.
+
+**No sessions found** — Verify the active config path with `ccm config path`. Ensure `sessions.toml` exists in that directory and has valid `[[sessions]]` entries.
+
+**Hooks not running** — Run `ccm hooks status` to check whether hooks are in sync, drifted, or missing. If drifted or missing, run `ccm hooks sync` to install them.
+
+**Socket not found** — Your `kitty.conf` needs `allow_remote_control yes` and `listen_on unix:/tmp/kitty-{kitty_pid}`. Restart Kitty after adding these.
+
+**Dashboard won't start** — The dashboard must be launched from inside Kitty (not another terminal). Use `ctrl+shift+d` or `ccm dashboard`.
 
 ## Development
 

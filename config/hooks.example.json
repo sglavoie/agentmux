@@ -153,5 +153,18 @@
       }
     ]
   },
-  "account_overrides": {}
+  "account_overrides": {
+    "personal": {
+      "disabled_events": ["Notification"],
+      "extra_commands": {
+        "Stop": [
+          {
+            "type": "command",
+            "command": "/path/to/custom-stop-handler.sh",
+            "async": true
+          }
+        ]
+      }
+    }
+  }
 }

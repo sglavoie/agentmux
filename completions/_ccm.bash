@@ -16,6 +16,20 @@ _ccm_audit_sections="claude-hooks claude-cli kitty-remote kitty-launch kitty-mat
 
 _ccm_notify_opts="--title --subtitle --message --timeout"
 
+# Check if cursor is at the account-name position after: launch --add TITLE DIR
+_ccm_prev_is_add_dir() {
+    local i found_add=0 pos_after_add=0
+    for (( i=1; i < COMP_CWORD; i++ )); do
+        if [[ "${COMP_WORDS[$i]}" == "--add" ]]; then
+            found_add=1
+            pos_after_add=0
+        elif [[ $found_add -eq 1 ]]; then
+            (( pos_after_add++ ))
+        fi
+    done
+    [[ $found_add -eq 1 && $pos_after_add -eq 2 ]]
+}
+
 _ccm() {
     local cur prev
     COMPREPLY=()
@@ -76,6 +90,17 @@ _ccm() {
             elif [[ "$prev" == "--add" ]]; then
                 # Title argument — no completion
                 :
+            elif _ccm_prev_is_add_dir; then
+                # Third positional arg after --add TITLE DIR → account name
+                local accounts_toml="${CC_MANAGER_ACCOUNTS:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/accounts.toml}"
+                local helper="$HOME/.local/lib/cc-manager/toml-helper.py"
+                if [[ -f "$accounts_toml" && -f "$helper" ]]; then
+                    local accts
+                    accts=$(python3 "$helper" read-accounts "$accounts_toml" 2>/dev/null | cut -f1)
+                    COMPREPLY=( $(compgen -W "$accts" -- "$cur") )
+                else
+                    COMPREPLY=( $(compgen -W "work personal" -- "$cur") )
+                fi
             else
                 COMPREPLY=( $(compgen -W "$_ccm_launch_flags" -- "$cur") )
             fi

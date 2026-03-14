@@ -52,6 +52,7 @@ load_defaults() {
 	# Regenerate cache from TOML via the Python helper.
 	_require_python3
 	local key value cache_tmp="${cache}.tmp"
+	trap 'rm -f "$cache_tmp"' RETURN
 	{
 		echo "# mtime=$config_mtime"
 		while IFS=$'\t' read -r key value; do

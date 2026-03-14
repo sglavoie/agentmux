@@ -1,34 +1,10 @@
 """Shared constants and helpers for kitty remote integration."""
 
-import json
 import re
-import sys
 
-from cc_dashboard.config import _resolve_data_path
+from cc_dashboard.config_data import load_icons, load_override_emojis
 
-
-def _load_icons():
-    """Load icon definitions from data/icons.json."""
-    path = _resolve_data_path("icons.json")
-    if not path:
-        return {
-            "star": "★",
-            "states": {"bolt": "⚡", "stop": "🛑", "key": "🔑", "error": "⚠️"},
-            "state_order": ["bolt", "stop", "key", "error"],
-        }
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"Warning: failed to load icons from {path}: {e}", file=sys.stderr)
-        return {
-            "star": "★",
-            "states": {"bolt": "⚡", "stop": "🛑", "key": "🔑", "error": "⚠️"},
-            "state_order": ["bolt", "stop", "key", "error"],
-        }
-
-
-_ICONS = _load_icons()
+_ICONS = load_icons()
 _ICON_STAR = _ICONS["star"]
 _ICON_FLAG = _ICONS.get("flag", "❗")
 _ICON_STATES = _ICONS["states"]
@@ -41,38 +17,7 @@ _STATE_NAMES = {
 
 _state_icons_alt = "|".join(re.escape(_ICON_STATES[k]) for k in _ICONS["state_order"])
 
-
-def _load_override_emojis():
-    """Load the color-to-emoji mapping from palette.json."""
-    path = _resolve_data_path("palette.json")
-    mapping: dict[str, str] = {}
-    if path:
-        try:
-            with open(path) as f:
-                data = json.load(f)
-            for color, info in data.get("colors", {}).items():
-                if "emoji" in info:
-                    mapping[color] = info["emoji"]
-        except (json.JSONDecodeError, OSError):
-            pass
-    if not mapping:
-        mapping = {
-            "green": "🟩",
-            "blue": "🟦",
-            "red": "🟥",
-            "orange": "🟧",
-            "purple": "🟪",
-            "teal": "🟢",
-            "pink": "🟣",
-            "yellow": "🟨",
-            "gray": "⬜",
-            "cyan": "🔵",
-        }
-    return mapping
-
-
-_COLOR_TO_EMOJI: dict[str, str] = _load_override_emojis()
-OVERRIDE_EMOJIS: set[str] = set(_COLOR_TO_EMOJI.values())
+_COLOR_TO_EMOJI, OVERRIDE_EMOJIS = load_override_emojis()
 
 
 def _build_managed_title_re():

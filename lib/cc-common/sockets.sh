@@ -30,6 +30,7 @@ discover_socket() {
 	fi
 
 	echo "Error: No kitty socket found. Set KITTY_LISTEN_ON or ensure kitty is running with remote control enabled." >&2
+	echo "  Tip: Add 'allow_remote_control yes' and 'listen_on unix:/tmp/kitty-{kitty_pid}' to kitty.conf." >&2
 	echo ""
 	return 1
 }

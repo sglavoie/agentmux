@@ -34,6 +34,7 @@ cmd_launch_interactive() {
 
         if ! _account_index "$account" >/dev/null 2>&1; then
             echo "Warning: session '$title' references unknown account '$account', skipping." >&2
+            echo "  Available accounts: ${_ACCOUNT_NAMES[*]}" >&2
             continue
         fi
 
@@ -120,6 +121,7 @@ cmd_launch_all() {
 
         if ! _account_index "$account" >/dev/null 2>&1; then
             echo "Warning: [$current/$total] session '$title' references unknown account '$account', skipping." >&2
+            echo "  Available accounts: ${_ACCOUNT_NAMES[*]}" >&2
             skipped=$((skipped + 1))
             continue
         fi

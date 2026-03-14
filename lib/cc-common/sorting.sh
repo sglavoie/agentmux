@@ -11,19 +11,21 @@ compute_insert_location() {
 	_load_icons
 	local strip_re
 	strip_re="$(_icon_strip_regex)"
+	local emoji_re
+	emoji_re="$(_override_emoji_re)"
 
 	local ls_json
 	ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 0
 
 	local tab_data
-	tab_data="$(printf '%s' "$ls_json" | jq -r --arg strip_re "$strip_re" '
+	tab_data="$(printf '%s' "$ls_json" | jq -r --arg strip_re "$strip_re" --arg emoji_re "$emoji_re" '
         .[0].tabs // [] | .[] |
         (.title | sub($strip_re; "")) as $stripped |
         (
             [.windows[]? | .user_vars.cc_account // empty | select(. != "")] |
             if length > 0 then .[0] else "" end
         ) as $cc_acct |
-        select($cc_acct != "" or ($stripped | test("^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?[A-Z]:"))) |
+        select($cc_acct != "" or ($stripped | test("^" + $emoji_re + "?[A-Z]:"))) |
         [(.id | tostring), .title, (if $cc_acct == "" then "-" else $cc_acct end), $stripped] | @tsv
     ')"
 
@@ -37,7 +39,7 @@ compute_insert_location() {
 			[[ "$taccount" == "-" ]] && taccount=""
 			local acct="$taccount"
 			local _clean_s
-			_clean_s="$(echo "$tstripped" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
+			_clean_s="$(echo "$tstripped" | sed -E "s/^${emoji_re}//")"
 			if [[ -z "$acct" && "$_clean_s" =~ ^[A-Z]: ]]; then
 				acct="$(_resolve_account_from_initial "${_clean_s:0:1}")"
 			fi
@@ -101,6 +103,8 @@ sort_tabs() {
 	_load_icons
 	local strip_re
 	strip_re="$(_icon_strip_regex)"
+	local emoji_re
+	emoji_re="$(_override_emoji_re)"
 
 	local ls_json
 	ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 0
@@ -149,15 +153,15 @@ sort_tabs() {
 
 		if [[ -n "$taccount" ]]; then
 			tab_accounts+=("$taccount")
-		elif [[ "$tstripped" =~ ^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?[A-Z]: ]]; then
+		elif [[ "$tstripped" =~ ^${emoji_re}?[A-Z]: ]]; then
 			local _clean_stripped
-			_clean_stripped="$(echo "$tstripped" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
+			_clean_stripped="$(echo "$tstripped" | sed -E "s/^${emoji_re}//")"
 			tab_accounts+=("$(_resolve_account_from_initial "${_clean_stripped:0:1}")")
 		else
 			tab_accounts+=("")
 		fi
 
-		if [[ -n "$taccount" ]] || [[ "$tstripped" =~ ^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?[A-Z]: ]]; then
+		if [[ -n "$taccount" ]] || [[ "$tstripped" =~ ^${emoji_re}?[A-Z]: ]]; then
 			managed_indices+=("$idx")
 		else
 			unmanaged_indices+=("$idx")
@@ -177,7 +181,7 @@ sort_tabs() {
 	local mi
 	for mi in "${managed_indices[@]}"; do
 		local project_name
-		project_name="$(echo "${tab_stripped[$mi]}" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
+		project_name="$(echo "${tab_stripped[$mi]}" | sed -E "s/^${emoji_re}//")"
 		if [[ "$project_name" =~ ^[A-Z]: ]]; then
 			project_name="${project_name:2}"
 		fi
@@ -207,7 +211,7 @@ sort_tabs() {
 		for mi in "${managed_indices[@]}"; do
 			if [[ "${tab_pinned[$mi]}" == "1" ]]; then
 				local project_name
-				project_name="$(echo "${tab_stripped[$mi]}" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
+				project_name="$(echo "${tab_stripped[$mi]}" | sed -E "s/^${emoji_re}//")"
 				if [[ "$project_name" =~ ^[A-Z]: ]]; then
 					project_name="${project_name:2}"
 				fi

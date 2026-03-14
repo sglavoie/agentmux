@@ -43,6 +43,7 @@ fetch_docs() {
 		(
 			url="$(jq -r --arg k "$key" '.urls[$k]' "$MANIFEST")"
 			cache_file="$CACHE_DIR/$key.txt"
+			trap 'rm -f "$cache_file.tmp"' EXIT
 
 			echo "  ${_C_CYAN}fetch${_C_RESET}   $key"
 			local strip_ok=false

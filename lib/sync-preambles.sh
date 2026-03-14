@@ -71,6 +71,7 @@ sync_file() {
 
 	# Write to tmp file
 	local tmp_file="${user_file}.tmp"
+	trap 'rm -f "$tmp_file"' RETURN
 	printf '%s\n%s' "$new_preamble" "$user_data" >"$tmp_file"
 
 	# Compare and replace if changed

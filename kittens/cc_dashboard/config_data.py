@@ -46,22 +46,40 @@ def _hex_to_rgb(hex_str: str) -> RGBTuple:
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
 
+_FALLBACK_PALETTE: dict[str, PaletteEntry] = {
+    "green": ((45, 125, 70), (20, 60, 30), (255, 255, 255)),
+    "blue": ((30, 80, 160), (15, 40, 80), (255, 255, 255)),
+    "red": ((160, 40, 40), (80, 20, 20), (255, 255, 255)),
+    "orange": ((180, 100, 20), (90, 50, 10), (255, 255, 255)),
+    "purple": ((100, 40, 160), (50, 20, 80), (255, 255, 255)),
+    "teal": ((20, 130, 130), (10, 65, 65), (255, 255, 255)),
+    "pink": ((160, 50, 120), (80, 25, 60), (255, 255, 255)),
+    "yellow": ((160, 140, 20), (80, 70, 10), (255, 255, 255)),
+    "gray": ((128, 128, 128), (64, 64, 64), (255, 255, 255)),
+    "cyan": ((20, 120, 180), (10, 60, 90), (255, 255, 255)),
+}
+
+
 def _load_palette() -> tuple[dict[str, PaletteEntry], RGBTuple, RGBTuple]:
     """Load color palette from data/palette.json.
 
     Returns (palette_dict, active_fg_tuple, inactive_fg_tuple) where
     palette_dict maps color names to (active_bg_rgb, inactive_bg_rgb, text_fg_rgb).
+    Falls back to hardcoded defaults for missing colors so the dashboard never crashes.
     """
     path = _resolve_data_path("palette.json")
     if not path:
-        print("Warning: palette.json not found in any data directory", file=sys.stderr)
-        return {}, (255, 255, 255), (170, 170, 170)
+        print(
+            "Warning: palette.json not found, using fallback palette",
+            file=sys.stderr,
+        )
+        return dict(_FALLBACK_PALETTE), (255, 255, 255), (170, 170, 170)
     try:
         with open(path) as f:
             data = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         print(f"Warning: failed to load palette from {path}: {e}", file=sys.stderr)
-        return {}, (255, 255, 255), (170, 170, 170)
+        return dict(_FALLBACK_PALETTE), (255, 255, 255), (170, 170, 170)
     palette: dict[str, PaletteEntry] = {}
     for name, entry in data.get("colors", {}).items():
         try:
@@ -75,6 +93,10 @@ def _load_palette() -> tuple[dict[str, PaletteEntry], RGBTuple, RGBTuple]:
                 f"Warning: skipping palette color '{name}': {e}",
                 file=sys.stderr,
             )
+    # Fill in any missing colors from the fallback palette
+    for name, fallback_entry in _FALLBACK_PALETTE.items():
+        if name not in palette:
+            palette[name] = fallback_entry
     try:
         active_fg = _hex_to_rgb(data["active_fg"])
         inactive_fg = _hex_to_rgb(data["inactive_fg"])
@@ -100,19 +122,81 @@ def load_palette_colors() -> frozenset[str] | None:
     return frozenset(PALETTE.keys()) if PALETTE else None
 
 
+_ICONS_FALLBACK: dict[str, Any] = {
+    "star": "★",
+    "flag": "❗",
+    "states": {"bolt": "⚡", "stop": "🛑", "key": "🔑", "error": "⚠️"},
+    "state_order": ["bolt", "stop", "key", "error"],
+}
+
+_cached_icons: dict[str, Any] | None = None
+
+
 def _load_icons_json() -> dict[str, Any] | None:
-    """Load and return the parsed icons.json data, or None on failure."""
+    """Load and return the parsed icons.json data, or None on failure.
+
+    Results are cached after the first successful load.
+    """
+    global _cached_icons
+    if _cached_icons is not None:
+        return _cached_icons
     path = _resolve_data_path("icons.json")
     if not path:
         print("Warning: icons.json not found in any data directory", file=sys.stderr)
         return None
     try:
         with open(path) as f:
-            result: dict[str, Any] = json.load(f)
-            return result
+            _cached_icons = json.load(f)
+            return _cached_icons
     except (json.JSONDecodeError, OSError) as e:
         print(f"Warning: failed to load icons from {path}: {e}", file=sys.stderr)
         return None
+
+
+def load_icons() -> dict[str, Any]:
+    """Load icon definitions from icons.json with fallback defaults.
+
+    Always returns a complete icon dict, using hardcoded fallbacks if
+    icons.json is missing or malformed.  This is the single authority
+    for icon data — all other modules should import from here.
+    """
+    data = _load_icons_json()
+    if data is not None:
+        return data
+    return dict(_ICONS_FALLBACK)
+
+
+def load_override_emojis() -> tuple[dict[str, str], set[str]]:
+    """Load color-to-emoji mapping from palette.json.
+
+    Returns (color_to_emoji_dict, emoji_set).  Uses the already-loaded
+    PALETTE data to avoid re-reading palette.json.
+    """
+    path = _resolve_data_path("palette.json")
+    mapping: dict[str, str] = {}
+    if path:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            for color, info in data.get("colors", {}).items():
+                if "emoji" in info:
+                    mapping[color] = info["emoji"]
+        except (json.JSONDecodeError, OSError):
+            pass
+    if not mapping:
+        mapping = {
+            "green": "🟩",
+            "blue": "🟦",
+            "red": "🟥",
+            "orange": "🟧",
+            "purple": "🟪",
+            "teal": "🟢",
+            "pink": "🟣",
+            "yellow": "🟨",
+            "gray": "⬜",
+            "cyan": "🔵",
+        }
+    return mapping, set(mapping.values())
 
 
 def load_hook_events() -> list[str]:

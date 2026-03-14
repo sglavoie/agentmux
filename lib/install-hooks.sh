@@ -15,6 +15,8 @@ set -euo pipefail
 FILTER_ACCOUNT=""
 REMOVE_MODE=""
 HOOKS_EXAMPLE=""
+_CLEANUP_TMP=""
+trap 'rm -f "$_CLEANUP_TMP"' EXIT
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -160,6 +162,7 @@ if [[ -n "$REMOVE_MODE" ]]; then
 		fi
 
 		tmp_file="${settings_file}.tmp"
+		_CLEANUP_TMP="$tmp_file"
 		jq '
 			if .hooks then
 				.hooks |= (to_entries | map(
@@ -306,6 +309,7 @@ for i in "${!CONFIG_DIRS[@]}"; do
 	done
 
 	tmp_file="${settings_file}.tmp"
+	_CLEANUP_TMP="$tmp_file"
 	jq "$jq_filter" "$settings_file" >"$tmp_file"
 
 	# Compare to see if anything actually changed

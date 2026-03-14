@@ -168,7 +168,9 @@ cmd_sockets() {
     _load_icons
     local strip_re
     strip_re="$(_icon_strip_regex)"
-    local managed_re="${strip_re}(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)?[A-Z]:"
+    local emoji_re
+    emoji_re="$(_override_emoji_re)"
+    local managed_re="${strip_re}${emoji_re}?[A-Z]:"
 
     local found=0
     for sock in "${TMPDIR:-/tmp}"/kitty-*; do
@@ -350,13 +352,13 @@ cmd_save() {
     default_account="$(default_account_name)"
 
     local sessions
-    sessions="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
+    sessions="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" --arg emoji_re "$_OVERRIDE_EMOJI_RE" '
 		[.[] | .tabs[] |
 			select(
 				[.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
 			) |
 			{
-				title: (.title | sub($strip_re; "") | sub("^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)"; "")),
+				title: (.title | sub($strip_re; "") | sub("^" + $emoji_re; "")),
 				dir: (
 					[.windows[] |
 						select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)

@@ -19,11 +19,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq shellcheck
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install jq
+        run: brew install jq shellcheck
+
+      - name: Install just
+        uses: extractions/setup-just@v3
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -41,14 +44,20 @@ jobs:
           python3 tests/test_data_files.py
           python3 tests/test_smoke.py
 
-      - name: Lint Python
-        run: uv run ruff check kittens/
+      - name: Lint (Python + shell)
+        run: just lint
 
       - name: Check Python formatting
         run: uv run ruff format --check kittens/
 
       - name: Typecheck
         run: uv run mypy kittens/
+
+      - name: Audit keybindings
+        run: python3 scripts/check_keybindings.py
+
+      - name: Validate Bash completion syntax
+        run: bash -n completions/_ccm.bash
 
       - name: Check version consistency
         run: |

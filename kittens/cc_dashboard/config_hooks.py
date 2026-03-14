@@ -500,6 +500,8 @@ def save_hooks(global_hooks: dict[str, Any], account_overrides: dict[str, Any]) 
         os.replace(tmp_path, path)
     except OSError as e:
         print(f"warning: failed to save hooks.json: {e}", file=sys.stderr)
+        with contextlib.suppress(OSError):
+            os.remove(tmp_path)
         return False
 
     _state._hooks_global = global_hooks

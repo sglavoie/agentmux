@@ -1,5 +1,6 @@
 """Persistent UI state for the dashboard (sort, filters, collapsed groups, etc.)."""
 
+import contextlib
 import json
 import os
 import sys
@@ -64,6 +65,7 @@ def save_ui_state(state_dict):
     path = _state_file_path()
     dir_ = os.path.dirname(path)
     os.makedirs(dir_, exist_ok=True)
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(
             "w", dir=dir_, delete=False, suffix=".tmp"
@@ -72,8 +74,12 @@ def save_ui_state(state_dict):
             tmp.write("\n")
             tmp_path = tmp.name
         os.replace(tmp_path, path)
+        tmp_path = None
     except OSError as exc:
         print(f"Warning: could not save UI state: {exc}", file=sys.stderr)
+        if tmp_path:
+            with contextlib.suppress(OSError):
+                os.remove(tmp_path)
 
 
 def prune_stale_entries(persisted, valid_accounts, valid_groups):

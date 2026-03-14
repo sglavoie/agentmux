@@ -101,7 +101,28 @@ def _run_startup_validation(state):
             state["msg"] = f"Config: {len(warnings)} warning(s) (ccm config validate)"
             state["msg_frames"] = 30
     except Exception:
-        pass  # validation is advisory; never block dashboard startup
+        if os.environ.get("CCM_DEBUG") == "1":
+            import traceback
+
+            traceback.print_exc(file=sys.stderr)
+        # validation is advisory; never block dashboard startup
+
+
+def _preflight_check():
+    """Validate config directory and accounts.toml before entering curses.
+
+    Returns None on success, or an error message string on failure.
+    """
+    config_dir = _cfg._config_dir()
+    if not os.path.isdir(config_dir):
+        return (
+            f"Config directory not found: {config_dir}\n"
+            "Run 'ccm config init' to create the default configuration."
+        )
+    accounts_path = os.path.join(config_dir, "accounts.toml")
+    if os.path.exists(accounts_path) and not os.access(accounts_path, os.R_OK):
+        return f"Cannot read accounts config: {accounts_path}"
+    return None
 
 
 def dashboard(stdscr):
@@ -110,6 +131,18 @@ def dashboard(stdscr):
     curses.curs_set(0)
     init_colors()
     stdscr.timeout(100)
+
+    preflight_err = _preflight_check()
+    if preflight_err:
+        stdscr.erase()
+        for i, line in enumerate(preflight_err.split("\n")):
+            safe_addstr(stdscr, i, 0, line)
+        safe_addstr(stdscr, len(preflight_err.split("\n")) + 1, 0, "Press q to exit.")
+        stdscr.refresh()
+        while True:
+            key = stdscr.getch()
+            if key == ord("q"):
+                return
 
     stdscr.erase()
     safe_addstr(stdscr, 0, 0, "Discovering sessions...")

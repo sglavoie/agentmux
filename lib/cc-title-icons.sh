@@ -84,7 +84,9 @@ build_title() {
 # clean title without the override emoji (config lookup, save, clone).
 strip_override_emoji() {
 	local title="$1"
-	local emojis=("🟩" "🟦" "🟥" "🟧" "🟪" "🟢" "🟣" "🟨" "⬜" "🔵")
+	local -a emojis=()
+	# shellcheck disable=SC2207
+	IFS=' ' emojis=($(_override_emoji_list))
 	for e in "${emojis[@]}"; do
 		if [[ "$title" == "${e}"* ]]; then
 			echo "${title#"$e"}"

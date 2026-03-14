@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shutil
@@ -169,8 +170,11 @@ def load_defaults() -> None:
             _state._default_tab_statuses = [str(s) for s in val]
 
 
-def _save_tab_statuses(statuses: list[str]) -> None:
-    """Write tab_statuses back to defaults.toml, preserving other settings."""
+def _save_tab_statuses(statuses: list[str]) -> str:
+    """Write tab_statuses back to defaults.toml, preserving other settings.
+
+    Returns an empty string on success, or an error message on failure.
+    """
     path = _defaults_config_path()
     toml_writer = _import_toml_writer()
 
@@ -205,9 +209,12 @@ def _save_tab_statuses(statuses: list[str]) -> None:
         os.replace(tmp_path, path)
     except OSError as e:
         print(f"Warning: failed to save {path}: {e}", file=sys.stderr)
-        return
+        with contextlib.suppress(OSError):
+            os.remove(tmp_path)
+        return f"Failed to save {os.path.basename(path)}: {e}"
 
     _state._default_tab_statuses = statuses
+    return ""
 
 
 def _sessions_config_path() -> str:

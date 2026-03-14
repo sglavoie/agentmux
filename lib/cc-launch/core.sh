@@ -28,8 +28,8 @@ tab_exists() {
 	ccm_debug "tab_exists check: '$title'"
 	local ls_json
 	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
-	echo "$ls_json" | jq -e --arg t "$title" --arg strip_re "$_STRIP_RE" '
-		[.[].tabs[] | select(.title | sub($strip_re; "") | sub("^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)"; "") | . == $t)] | length > 0
+	echo "$ls_json" | jq -e --arg t "$title" --arg strip_re "$_STRIP_RE" --arg emoji_re "$_OVERRIDE_EMOJI_RE" '
+		[.[].tabs[] | select(.title | sub($strip_re; "") | sub("^" + $emoji_re; "") | . == $t)] | length > 0
 	' >/dev/null 2>&1
 }
 
@@ -74,11 +74,11 @@ tab_metadata_by_id() {
 	local ls_json
 	ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 1
 
-	echo "$ls_json" | jq -r --argjson tid "$tab_id" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" '
+	echo "$ls_json" | jq -r --argjson tid "$tab_id" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" --arg emoji_re "$_OVERRIDE_EMOJI_RE" '
 		[.[] | .tabs[] |
 			select(.id == $tid) |
 			{
-				title: (.title | sub($strip_re; "") | sub("^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)"; "")),
+				title: (.title | sub($strip_re; "") | sub("^" + $emoji_re; "")),
 				account: (
 					[.windows[] | .user_vars.cc_account // empty | select(. != "")] |
 					if length > 0 then .[0]
@@ -163,7 +163,7 @@ lookup_session_overrides() {
 		local lookup_title
 		lookup_title="$(echo "$title" | sed -E "s/^${_STRIP_RE}//")"
 		# Strip leading override emoji (colored square/circle)
-		lookup_title="$(echo "$lookup_title" | sed -E 's/^(🟩|🟦|🟥|🟧|🟪|🟢|🟣|🟨|⬜|🔵)//')"
+		lookup_title="$(echo "$lookup_title" | sed -E "s/^$(_override_emoji_re)//")"
 		_lookup_session_overrides_toml "$lookup_title"
 	fi
 
@@ -180,8 +180,10 @@ _lookup_session_overrides_toml() {
 			cfg_env="$cfg_e"
 			break
 		fi
-	done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>/dev/null || {
+	done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>"${_CCM_TMPDIR}/ccm-parse-err.$$" || {
 		echo "Warning: failed to parse sessions config '$CONFIG_FILE'." >&2
+		[[ -s "${_CCM_TMPDIR}/ccm-parse-err.$$" ]] && sed 's/^/  Detail: /' "${_CCM_TMPDIR}/ccm-parse-err.$$" >&2
+		rm -f "${_CCM_TMPDIR}/ccm-parse-err.$$"
 	})
 }
 
@@ -191,9 +193,13 @@ launch_session() {
 	local account="${3:-work}"
 	local flags="${4:-}"
 	local pw_override="${5:-}"
-	local location_args="${6:-}"
+	local location_args_str="${6:-}"
 	local env_vars="${7:-}"
 	local group="${8:-}"
+	local -a location_args=()
+	if [[ -n "$location_args_str" ]]; then
+		read -ra location_args <<<"$location_args_str"
+	fi
 
 	dir="$(expand_tilde "$dir")"
 
@@ -231,7 +237,7 @@ launch_session() {
 	ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
 	local launch_err
 	# shellcheck disable=SC2086
-	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab $location_args --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
+	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" $env_flag "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
 		local msg="Warning: Failed to launch tab '$title' (account=$account, dir=$dir, socket=$SOCKET)."
 		if [[ -n "$launch_err" ]]; then
 			msg="$msg Kitty error: $launch_err"

@@ -214,5 +214,6 @@ _update_last_audit() {
 	local timestamp
 	timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 	local tmp="$MANIFEST.tmp"
+	trap 'rm -f "$tmp"' RETURN
 	jq --arg ts "$timestamp" '.last_audit = $ts' "$MANIFEST" >"$tmp" && mv "$tmp" "$MANIFEST"
 }

@@ -256,11 +256,13 @@ cmd_clone() {
                 fi
                 conf_line="$conf_line | $cfg_env"
             fi
+            local _clone_tmp="${CONFIG_FILE}.tmp"
+            trap 'rm -f "$_clone_tmp"' RETURN
             {
                 cat "$CONFIG_FILE"
                 echo "$conf_line"
-            } > "${CONFIG_FILE}.tmp" || { echo "Error: failed to write config file" >&2; return 1; }
-            mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE" || { echo "Error: failed to update config file" >&2; return 1; }
+            } > "$_clone_tmp" || { echo "Error: failed to write config file" >&2; return 1; }
+            mv "$_clone_tmp" "$CONFIG_FILE" || { echo "Error: failed to update config file" >&2; return 1; }
         fi
         echo "Cloned '$title' as '$clone_title'." >&2
     fi
