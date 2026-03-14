@@ -6,12 +6,28 @@ import os
 import unicodedata
 
 
+def _clip_to_width(text, max_width):
+    """Clip text so its display width does not exceed *max_width*.
+
+    Unlike a simple slice (``text[:n]``), this respects wide characters
+    that occupy two terminal columns.
+    """
+    w = 0
+    for i, ch in enumerate(text):
+        eaw = unicodedata.east_asian_width(ch)
+        cw = 2 if eaw in ("W", "F") else 1
+        if w + cw > max_width:
+            return text[:i]
+        w += cw
+    return text
+
+
 def safe_addstr(win, y, x, text, attr=0):
     """Write text to the curses window, silently clipping at window boundaries."""
     rows, cols = win.getmaxyx()
     if y < 0 or y >= rows or x < 0 or x >= cols:
         return
-    text = text[: cols - x]
+    text = _clip_to_width(text, cols - x)
     with contextlib.suppress(curses.error, UnicodeEncodeError):
         win.addstr(y, x, text, attr)
 

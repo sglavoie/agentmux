@@ -42,7 +42,12 @@ from cc_dashboard.colors import (
     init_colors,
 )
 from cc_dashboard.config import load_accounts, load_defaults
-from cc_dashboard.drawing import _pad_to_width, safe_addstr, shorten_path
+from cc_dashboard.drawing import (
+    _display_width,
+    _pad_to_width,
+    safe_addstr,
+    shorten_path,
+)
 from cc_dashboard.filters import (
     SORT_LABELS,
     SORT_MODES,
@@ -164,7 +169,7 @@ def draw_session_list(stdscr, sessions, selected, multi_instance=False):
         safe_addstr(stdscr, screen_y, 1, line, row_attr)
 
         # Render status with color highlighting
-        status_x = 1 + len(line)
+        status_x = 1 + _display_width(line)
         if session["status"] in ("permission", "error"):
             status_attr = curses.color_pair(CP_ATTENTION) | curses.A_BOLD
         elif (

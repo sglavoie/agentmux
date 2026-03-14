@@ -329,6 +329,7 @@ def dashboard(stdscr):
         "actlog_gsearch_total_scanned": 0,
         "actlog_gsearch_log_index": [],
         "actlog_gsearch_search_active": True,
+        "actlog_gsearch_parent_mode": "list",
         "prefs_values": {},
         "prefs_selected": 0,
         "prefs_editing": False,

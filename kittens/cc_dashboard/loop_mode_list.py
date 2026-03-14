@@ -410,6 +410,7 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["actlog_gsearch_total_scanned"] = 0
             state["actlog_gsearch_log_index"] = log_index
             state["actlog_gsearch_search_active"] = True
+            state["actlog_gsearch_parent_mode"] = "list"
             state["mode"] = "actlog_gsearch"
         else:
             state["msg"] = "No activity logs found"

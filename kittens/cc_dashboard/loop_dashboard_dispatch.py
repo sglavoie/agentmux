@@ -367,6 +367,7 @@ def dispatch_mode(
             "actlog_gsearch_total_scanned": state["actlog_gsearch_total_scanned"],
             "actlog_gsearch_log_index": state["actlog_gsearch_log_index"],
             "actlog_gsearch_search_active": state["actlog_gsearch_search_active"],
+            "actlog_gsearch_parent_mode": state.get("actlog_gsearch_parent_mode", "list"),
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }

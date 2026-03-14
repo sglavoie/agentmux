@@ -313,6 +313,7 @@ def handle_actlog_mode(stdscr, key, state, sessions):
             state["actlog_gsearch_total_scanned"] = 0
             state["actlog_gsearch_log_index"] = entries
             state["actlog_gsearch_search_active"] = True
+            state["actlog_gsearch_parent_mode"] = "actlog_browse"
             state["mode"] = "actlog_gsearch"
         elif key in (10, 13, curses.KEY_ENTER) and total:
             chosen = entries[state["actlog_browse_selected"]]
@@ -407,7 +408,7 @@ def handle_actlog_mode(stdscr, key, state, sessions):
 
         # --- Normal mode (navigate results) ---
         if key == 27:
-            state["mode"] = "list"
+            state["mode"] = state.get("actlog_gsearch_parent_mode", "list")
         elif key == ord("/"):
             state["actlog_gsearch_search_active"] = True
             state["actlog_gsearch_cursor"] = len(state["actlog_gsearch_query"])

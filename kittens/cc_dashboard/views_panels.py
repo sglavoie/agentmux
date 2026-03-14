@@ -17,6 +17,7 @@ from cc_dashboard.colors import (
     _cp_for_palette_color,
 )
 from cc_dashboard.drawing import (
+    _display_width,
     _pad_to_width,
     _truncate_to_width,
     safe_addstr,
@@ -227,7 +228,7 @@ def draw_list_view(
             row_attr |= curses.A_DIM
         safe_addstr(stdscr, y, 1, line, row_attr)
 
-        status_x = 1 + len(line)
+        status_x = 1 + _display_width(line)
         idle_threshold = _cfg._default_idle_alert_minutes * 60
         if s["status"] in ("permission", "error"):
             status_attr = curses.color_pair(CP_ATTENTION) | curses.A_BOLD

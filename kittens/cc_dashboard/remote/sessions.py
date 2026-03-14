@@ -27,12 +27,18 @@ def _is_claude_process(cmdline):
     """Check if a process cmdline represents the Claude Code CLI.
 
     Returns True for the actual Claude binary (e.g. ["claude", ...] or
-    ["/path/to/claude", ...]) but False for kittens or scripts that
-    merely contain 'claude' in their filename.
+    ["/path/to/claude", ...]) but False for kittens, scripts, or
+    arguments that merely contain 'claude' as a substring (e.g.
+    env vars like CLAUDE_CONFIG_DIR, paths containing 'claude', etc.).
     """
     for arg in cmdline:
+        # Skip env-var-style arguments (e.g. CLAUDE_CONFIG_DIR=...)
+        if "=" in arg:
+            continue
         arg_lower = arg.lower()
-        if "claude" not in arg_lower:
+        # Check the basename of the arg to match the actual binary
+        basename = os.path.basename(arg_lower)
+        if basename != "claude":
             continue
         if arg_lower.endswith(".py"):
             continue

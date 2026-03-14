@@ -277,6 +277,42 @@ def test_quick_validate():
         check("no errors for valid config", error_count == 0)
 
 
+# ── _is_claude_process detection ─────────────────────────────────────
+
+
+def test_is_claude_process():
+    """_is_claude_process correctly identifies Claude CLI processes."""
+    print("\n--- _is_claude_process ---")
+    sys.path.insert(0, os.path.join(REPO_ROOT, "kittens"))
+    from cc_dashboard.remote.sessions import _is_claude_process
+
+    # Should match: bare "claude" binary
+    check("bare claude matches",
+          _is_claude_process(["claude"]))
+    check("claude with flags matches",
+          _is_claude_process(["claude", "--flag"]))
+    check("absolute path claude matches",
+          _is_claude_process(["/usr/local/bin/claude"]))
+    check("relative path claude matches",
+          _is_claude_process(["./bin/claude", "--help"]))
+
+    # Should NOT match: env vars, scripts, kittens
+    check("CLAUDE_CONFIG_DIR env var does not match",
+          not _is_claude_process(["CLAUDE_CONFIG_DIR=/home/.claude"]))
+    check("python script does not match",
+          not _is_claude_process(["python3", "claude_dashboard.py"]))
+    check("kitten does not match",
+          not _is_claude_process(["kitten", "claude_dashboard.py"]))
+    check("empty cmdline does not match",
+          not _is_claude_process([]))
+    check("unrelated process does not match",
+          not _is_claude_process(["bash", "-c", "echo hello"]))
+    check("path containing claude does not match",
+          not _is_claude_process(["bash", "-c", "cd /home/claude-project"]))
+    check("shell wrapper with exec claude matches",
+          _is_claude_process(["bash", "-lic", "exec claude --flag"]) is False)
+
+
 # ── run all ──────────────────────────────────────────────────────────
 
 
@@ -296,6 +332,7 @@ if __name__ == "__main__":
     test_toml_roundtrip_basic()
     test_notes_path_traversal()
     test_quick_validate()
+    test_is_claude_process()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:
