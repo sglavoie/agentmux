@@ -163,7 +163,7 @@ if [[ -n "$REMOVE_MODE" ]]; then
 
 		tmp_file="${settings_file}.tmp"
 		_CLEANUP_TMP="$tmp_file"
-		jq '
+		if ! jq '
 			if .hooks then
 				.hooks |= (to_entries | map(
 					.value |= [.[] | select(
@@ -172,7 +172,11 @@ if [[ -n "$REMOVE_MODE" ]]; then
 				) | map(select(.value | length > 0)) | from_entries)
 			else .
 			end
-		' "$settings_file" >"$tmp_file"
+		' "$settings_file" >"$tmp_file" 2>/dev/null; then
+			rm -f "$tmp_file"
+			echo "  Error: $settings_file contains invalid JSON, skipping." >&2
+			continue
+		fi
 
 		if diff -q "$settings_file" "$tmp_file" >/dev/null 2>&1; then
 			rm "$tmp_file"
@@ -188,7 +192,11 @@ fi
 
 # ── Load account overrides from hooks.json ──────────────────────────────────
 
-CCM_CONFIG_DIR="${CC_MANAGER_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager}"
+if [[ -n "${CC_MANAGER_CONFIG:-}" ]]; then
+	CCM_CONFIG_DIR="$(dirname "$CC_MANAGER_CONFIG")"
+else
+	CCM_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager"
+fi
 HOOKS_JSON="$CCM_CONFIG_DIR/hooks.json"
 
 ACCOUNT_OVERRIDES="{}"
@@ -304,7 +312,11 @@ for i in "${!CONFIG_DIRS[@]}"; do
 
 	tmp_file="${settings_file}.tmp"
 	_CLEANUP_TMP="$tmp_file"
-	jq "$jq_filter" "$settings_file" >"$tmp_file"
+	if ! jq "$jq_filter" "$settings_file" >"$tmp_file" 2>/dev/null; then
+		rm -f "$tmp_file"
+		echo "  Error: $settings_file contains invalid JSON, skipping." >&2
+		continue
+	fi
 
 	# Compare to see if anything actually changed
 	if diff -q "$settings_file" "$tmp_file" >/dev/null 2>&1; then

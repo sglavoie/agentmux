@@ -105,17 +105,24 @@ def main():
         sys.exit(1)
 
     cmd = sys.argv[1]
-    if cmd == "read-accounts" and len(sys.argv) == 3:
-        cmd_read_accounts(sys.argv[2])
-    elif cmd == "read-sessions" and len(sys.argv) == 3:
-        cmd_read_sessions(sys.argv[2])
-    elif cmd == "read-defaults" and len(sys.argv) == 3:
-        cmd_read_defaults(sys.argv[2])
-    elif cmd == "write-sessions" and len(sys.argv) == 3:
-        cmd_write_sessions(sys.argv[2])
-    else:
-        print(__doc__, file=sys.stderr)
+    _COMMANDS = {
+        "read-accounts": cmd_read_accounts,
+        "read-sessions": cmd_read_sessions,
+        "read-defaults": cmd_read_defaults,
+        "write-sessions": cmd_write_sessions,
+    }
+
+    if cmd not in _COMMANDS:
+        print(f"Error: unknown command '{cmd}'.", file=sys.stderr)
+        print(f"Available commands: {', '.join(_COMMANDS)}", file=sys.stderr)
         sys.exit(1)
+
+    if len(sys.argv) != 3:
+        print(f"Error: '{cmd}' requires exactly one FILE argument.", file=sys.stderr)
+        print(f"Usage: toml-helper.py {cmd} <file>", file=sys.stderr)
+        sys.exit(1)
+
+    _COMMANDS[cmd](sys.argv[2])
 
 
 if __name__ == "__main__":
