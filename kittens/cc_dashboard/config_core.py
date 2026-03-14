@@ -491,10 +491,19 @@ def _session_to_toml_entry(
 def _write_sessions_toml(
     path: str, sessions_data: list[dict[str, str]], header: str = ""
 ) -> None:
-    """Serialize *sessions_data* (list of TOML entry dicts) to *path*."""
+    """Serialize *sessions_data* (list of TOML entry dicts) to *path* atomically."""
     tw = _import_toml_writer()
-    with open(path, "w") as f:
-        f.write(tw.dumps({"sessions": sessions_data}, header=header))
+    content = tw.dumps({"sessions": sessions_data}, header=header)
+    tmp_path = path + ".tmp"
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(tmp_path, "w") as f:
+            f.write(content)
+        os.replace(tmp_path, path)
+    except OSError:
+        with contextlib.suppress(OSError):
+            os.remove(tmp_path)
+        raise
 
 
 def _read_sessions_toml_raw(path: str) -> list[dict[str, Any]]:
