@@ -256,40 +256,51 @@ def draw_status_message(stdscr, message):
     safe_addstr(stdscr, rows - 3, 2, clipped, curses.color_pair(CP_WARN))
 
 
+def _draw_text_input_line(stdscr, y, prefix, value, cursor_pos):
+    """Draw a text input with cursor at the given row.
+
+    Renders ``prefix`` in warning color followed by ``value`` with a
+    reverse-video cursor at ``cursor_pos``.  Used by all single-line
+    input prompts (rename, clone title, worktree branch, batch group,
+    peek search).
+    """
+    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
+    x = 2 + len(prefix)
+    before = value[:cursor_pos]
+    after = value[cursor_pos:]
+    cursor_ch = after[0] if after else " "
+    after_rest = after[1:] if len(after) > 1 else ""
+
+    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+    safe_addstr(
+        stdscr,
+        y,
+        x + len(before),
+        cursor_ch,
+        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
+    )
+    if after_rest:
+        safe_addstr(
+            stdscr,
+            y,
+            x + len(before) + 1,
+            after_rest,
+            curses.color_pair(CP_INPUT_ACTIVE),
+        )
+
+
 def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
     """Draw the search/filter bar on the status line."""
     rows, _cols = stdscr.getmaxyx()
     y = rows - 3
 
     if active:
-        prefix = "/ "
-        before = query[:cursor_pos]
-        after = query[cursor_pos:]
-        cursor_ch = after[0] if after else " "
-        after_rest = after[1:] if len(after) > 1 else ""
-
-        safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
-        x = 2 + len(prefix)
-        safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+        _draw_text_input_line(stdscr, y, "/ ", query, cursor_pos)
+        suffix_x = 2 + len("/ ") + len(query) + 1
         safe_addstr(
             stdscr,
             y,
-            x + len(before),
-            cursor_ch,
-            curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
-        )
-        if after_rest:
-            safe_addstr(
-                stdscr,
-                y,
-                x + len(before) + 1,
-                after_rest,
-                curses.color_pair(CP_INPUT_ACTIVE),
-            )
-        safe_addstr(
-            stdscr,
-            y,
-            x + len(query) + 1,
+            suffix_x,
             f"  ({match_count} matches)",
             curses.color_pair(CP_DIM),
         )
@@ -306,32 +317,7 @@ def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
 def draw_rename_input(stdscr, current_value, cursor_pos):
     """Draw a single-line rename input on the status line area."""
     rows, _cols = stdscr.getmaxyx()
-    y = rows - 3
-
-    prefix = "Rename: "
-    before = current_value[:cursor_pos]
-    after = current_value[cursor_pos:]
-    cursor_ch = after[0] if after else " "
-    after_rest = after[1:] if len(after) > 1 else ""
-
-    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
-    x = 2 + len(prefix)
-    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
-    safe_addstr(
-        stdscr,
-        y,
-        x + len(before),
-        cursor_ch,
-        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
-    )
-    if after_rest:
-        safe_addstr(
-            stdscr,
-            y,
-            x + len(before) + 1,
-            after_rest,
-            curses.color_pair(CP_INPUT_ACTIVE),
-        )
+    _draw_text_input_line(stdscr, rows - 3, "Rename: ", current_value, cursor_pos)
 
 
 def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
@@ -345,32 +331,7 @@ def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
         f'Clone "{session["title"]}" -> worktree',
         curses.color_pair(CP_DIM),
     )
-
-    prefix = "Branch: "
-    before = branch_value[:cursor_pos]
-    after = branch_value[cursor_pos:]
-    cursor_ch = after[0] if after else " "
-    after_rest = after[1:] if len(after) > 1 else ""
-
-    y = rows - 3
-    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
-    x = 2 + len(prefix)
-    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
-    safe_addstr(
-        stdscr,
-        y,
-        x + len(before),
-        cursor_ch,
-        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
-    )
-    if after_rest:
-        safe_addstr(
-            stdscr,
-            y,
-            x + len(before) + 1,
-            after_rest,
-            curses.color_pair(CP_INPUT_ACTIVE),
-        )
+    _draw_text_input_line(stdscr, rows - 3, "Branch: ", branch_value, cursor_pos)
 
 
 def draw_clone_input(stdscr, session, title_value, cursor_pos):
@@ -384,32 +345,7 @@ def draw_clone_input(stdscr, session, title_value, cursor_pos):
         f'Clone "{session["title"]}" -> new session',
         curses.color_pair(CP_DIM),
     )
-
-    prefix = "Title: "
-    before = title_value[:cursor_pos]
-    after = title_value[cursor_pos:]
-    cursor_ch = after[0] if after else " "
-    after_rest = after[1:] if len(after) > 1 else ""
-
-    y = rows - 3
-    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
-    x = 2 + len(prefix)
-    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
-    safe_addstr(
-        stdscr,
-        y,
-        x + len(before),
-        cursor_ch,
-        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
-    )
-    if after_rest:
-        safe_addstr(
-            stdscr,
-            y,
-            x + len(before) + 1,
-            after_rest,
-            curses.color_pair(CP_INPUT_ACTIVE),
-        )
+    _draw_text_input_line(stdscr, rows - 3, "Title: ", title_value, cursor_pos)
 
 
 def draw_batch_group_input(stdscr, targets, group_value, cursor_pos):
@@ -423,32 +359,7 @@ def draw_batch_group_input(stdscr, targets, group_value, cursor_pos):
         f"Set group for {len(targets)} marked session(s) (empty to clear)",
         curses.color_pair(CP_DIM),
     )
-
-    prefix = "Group: "
-    before = group_value[:cursor_pos]
-    after = group_value[cursor_pos:]
-    cursor_ch = after[0] if after else " "
-    after_rest = after[1:] if len(after) > 1 else ""
-
-    y = rows - 3
-    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
-    x = 2 + len(prefix)
-    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
-    safe_addstr(
-        stdscr,
-        y,
-        x + len(before),
-        cursor_ch,
-        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
-    )
-    if after_rest:
-        safe_addstr(
-            stdscr,
-            y,
-            x + len(before) + 1,
-            after_rest,
-            curses.color_pair(CP_INPUT_ACTIVE),
-        )
+    _draw_text_input_line(stdscr, rows - 3, "Group: ", group_value, cursor_pos)
 
 
 def _render_peek_line(
@@ -495,34 +406,12 @@ def _draw_peek_search_bar(stdscr, query, cursor_pos, match_count):
     rows, _cols = stdscr.getmaxyx()
     y = rows - 2
 
-    prefix = "/ "
-    before = query[:cursor_pos]
-    after = query[cursor_pos:]
-    cursor_ch = after[0] if after else " "
-    after_rest = after[1:] if len(after) > 1 else ""
-
-    safe_addstr(stdscr, y, 2, prefix, curses.color_pair(CP_WARN))
-    x = 2 + len(prefix)
-    safe_addstr(stdscr, y, x, before, curses.color_pair(CP_INPUT_ACTIVE))
+    _draw_text_input_line(stdscr, y, "/ ", query, cursor_pos)
+    suffix_x = 2 + len("/ ") + len(query) + 1
     safe_addstr(
         stdscr,
         y,
-        x + len(before),
-        cursor_ch,
-        curses.color_pair(CP_INPUT_ACTIVE) | curses.A_REVERSE,
-    )
-    if after_rest:
-        safe_addstr(
-            stdscr,
-            y,
-            x + len(before) + 1,
-            after_rest,
-            curses.color_pair(CP_INPUT_ACTIVE),
-        )
-    safe_addstr(
-        stdscr,
-        y,
-        x + len(query) + 1,
+        suffix_x,
         f"  ({match_count} matches)",
         curses.color_pair(CP_DIM),
     )

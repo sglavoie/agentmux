@@ -164,7 +164,11 @@ lookup_session_overrides() {
 		lookup_title="$(echo "$title" | sed -E "s/^${_STRIP_RE}//")"
 		# Strip leading override emoji (colored square/circle)
 		lookup_title="$(echo "$lookup_title" | sed -E "s/^$(_override_emoji_re)//")"
-		_lookup_session_overrides_toml "$lookup_title"
+		local toml_result
+		toml_result="$(_lookup_session_overrides_toml "$lookup_title")"
+		if [[ -n "$toml_result" ]]; then
+			IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$toml_result"
+		fi
 	fi
 
 	printf '%s\t%s\t%s\n' "$cfg_flags" "$cfg_pw" "$cfg_env"
@@ -176,10 +180,9 @@ _lookup_session_overrides_toml() {
 	local cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e cfg_g
 	while IFS=$'\t' read -r cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e cfg_g; do
 		if [[ "$cfg_title" == "$lookup_title" ]]; then
-			cfg_flags="$cfg_f"
-			cfg_pw="$cfg_p"
-			cfg_env="$cfg_e"
-			break
+			printf '%s\t%s\t%s\n' "$cfg_f" "$cfg_p" "$cfg_e"
+			rm -f "$_parse_err_file"
+			return 0
 		fi
 	done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>"$_parse_err_file" || {
 		echo "Warning: failed to parse sessions config '$CONFIG_FILE'." >&2
