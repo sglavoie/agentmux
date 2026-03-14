@@ -162,6 +162,7 @@ def handle_override_mode(key, state):
                         config_dir_override=config_dir_override,
                         env_vars=sess.get("cc_env", ""),
                         color_override=sess.get("cc_color", ""),
+                        group=sess.get("group", ""),
                     )
                     state["should_exit"] = True
                     return True

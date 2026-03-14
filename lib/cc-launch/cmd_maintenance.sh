@@ -426,21 +426,17 @@ _save_sessions_toml() {
     local output_file="$1"
     local sessions="$2"
 
-    # Build a JSON array from the TSV session data and pipe to toml-helper.
-    local json_array="["
-    local first=true
-    while IFS=$'\t' read -r title dir account flags pw env_vars group; do
-        [[ -z "$title" ]] && continue
-        dir="${dir/#$HOME/\~}"
-        [[ "$first" == "true" ]] || json_array+=","
-        first=false
-        json_array+="$(jq -nc \
-            --arg t "$title" --arg d "$dir" --arg a "$account" \
-            --arg f "$flags" --arg p "$pw" --arg e "$env_vars" \
-            --arg g "$group" \
-            '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
-    done <<<"$sessions"
-    json_array+="]"
+    # Build JSON array from TSV in a single jq invocation (one process
+    # instead of one per session).
+    local json_array
+    json_array="$(echo "$sessions" | jq -Rnc --arg home "$HOME" '
+        [inputs | select(length > 0) | split("\t") |
+         { title: .[0], dir: (.[1] | if startswith($home) then "~" + .[$home | length:] else . end),
+           account: .[2], flags: .[3], pw: .[4], env: .[5], group: .[6] }]
+    ')" || {
+        echo "Error: Failed to build session JSON." >&2
+        return 1
+    }
 
     if ! echo "$json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$output_file"; then
         echo "Error: Failed to write sessions to '$output_file'." >&2
@@ -453,36 +449,31 @@ _append_session_to_config() {
     local new_title="$2" new_dir="$3" new_account="$4"
     local new_flags="$5" new_pw="$6" new_env="$7" new_group="$8"
 
-    local json_array="["
-    local first=true
-
-    # Read existing sessions if the config file exists
+    # Collect all existing sessions plus the new entry as TSV, then convert
+    # to JSON in a single jq invocation.
+    local all_tsv=""
     if [[ -f "$config_file" ]]; then
-        local existing
-        existing="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$config_file" 2>/dev/null)" || existing=""
-        if [[ -n "$existing" ]]; then
-            while IFS=$'\t' read -r s_title s_dir s_account s_flags s_pw s_env s_group; do
-                [[ -z "$s_title" ]] && continue
-                [[ "$first" == "true" ]] || json_array+=","
-                first=false
-                json_array+="$(jq -nc \
-                    --arg t "$s_title" --arg d "$s_dir" --arg a "$s_account" \
-                    --arg f "$s_flags" --arg p "$s_pw" --arg e "$s_env" \
-                    --arg g "$s_group" \
-                    '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
-            done <<<"$existing"
-        fi
+        all_tsv="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$config_file" 2>/dev/null)" || all_tsv=""
     fi
 
-    # Append the new entry
-    [[ "$first" == "true" ]] || json_array+=","
     new_dir="${new_dir/#$HOME/\~}"
-    json_array+="$(jq -nc \
-        --arg t "$new_title" --arg d "$new_dir" --arg a "$new_account" \
-        --arg f "$new_flags" --arg p "$new_pw" --arg e "$new_env" \
-        --arg g "$new_group" \
-        '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
-    json_array+="]"
+    local new_line
+    new_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s' "$new_title" "$new_dir" "$new_account" "$new_flags" "$new_pw" "$new_env" "$new_group")"
+    if [[ -n "$all_tsv" ]]; then
+        all_tsv+=$'\n'"$new_line"
+    else
+        all_tsv="$new_line"
+    fi
+
+    local json_array
+    json_array="$(echo "$all_tsv" | jq -Rnc '
+        [inputs | select(length > 0) | split("\t") |
+         { title: .[0], dir: .[1], account: .[2], flags: .[3],
+           pw: .[4], env: .[5], group: .[6] }]
+    ')" || {
+        echo "Warning: failed to build session JSON." >&2
+        return 1
+    }
 
     if ! echo "$json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$config_file"; then
         echo "Warning: failed to update config file with new session." >&2

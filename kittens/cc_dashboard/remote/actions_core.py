@@ -82,6 +82,8 @@ def do_edit_notes(socket, tab_id, title):
                 socket,
                 "launch",
                 "--type=overlay",
+                "--match",
+                f"id:{tab_id}",
                 *shlex.split(editor),
                 filepath,
             ],
