@@ -184,8 +184,12 @@ cmd_restart() {
     local cfg_flags cfg_pw cfg_env
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
-    launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"
-    sort_tabs "$SOCKET"
+    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
+        sort_tabs "$SOCKET"
+    else
+        echo "Error: Failed to relaunch '$title' after closing for restart. Check the error above." >&2
+        exit 1
+    fi
 }
 
 cmd_clone() {
@@ -325,7 +329,11 @@ cmd_move() {
     local cfg_flags cfg_pw cfg_env
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
-    launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"
-    sort_tabs "$SOCKET"
-    echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE." >&2
+    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
+        sort_tabs "$SOCKET"
+        echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE." >&2
+    else
+        echo "Error: Failed to relaunch '$title' on $_MOVE_TARGET_INSTANCE after closing. Check the error above." >&2
+        exit 1
+    fi
 }

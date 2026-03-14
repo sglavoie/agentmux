@@ -286,10 +286,11 @@ def notes_file_for_title(title: str) -> str:
 def read_notes(title: str) -> str:
     """Read notes for a session title. Returns '' if no notes file exists."""
     path = notes_file_for_title(title)
-    if os.path.isfile(path):
+    try:
         with open(path) as f:
             return f.read()
-    return ""
+    except OSError:
+        return ""
 
 
 def rename_notes(old_title: str, new_title: str) -> None:

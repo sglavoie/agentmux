@@ -235,24 +235,39 @@ def _build_launch_steps(
 
 
 _DETACHED_RUNNER_SCRIPT = """
-import json, os, subprocess, time
+import json, os, subprocess, tempfile, time
 steps = json.loads(os.environ["_CCM_STEPS"])
-for step in steps:
+log_path = os.path.join(tempfile.gettempdir(), "ccm-detached.log")
+def _log(msg):
+    try:
+        with open(log_path, "a") as f:
+            f.write(time.strftime("%H:%M:%S ") + msg + "\\n")
+    except OSError:
+        pass
+for i, step in enumerate(steps):
     cmd = step["cmd"]
     retry = step.get("retry", 0)
     retry_sleep = step.get("retry_sleep", 0.1)
     sleep_after = step.get("sleep", 0)
     try:
         if retry:
-            for _ in range(retry + 1):
+            ok = False
+            for attempt in range(retry + 1):
                 r = subprocess.run(cmd, capture_output=True, timeout=30)
                 if r.returncode == 0:
+                    ok = True
                     break
                 time.sleep(retry_sleep)
+            if not ok:
+                _log(f"step {i} failed after {retry+1} attempts: {cmd[3:6]} rc={r.returncode} err={r.stderr.strip()}")
         else:
-            subprocess.run(cmd, capture_output=True, timeout=30)
+            r = subprocess.run(cmd, capture_output=True, timeout=30)
+            if r.returncode != 0:
+                _log(f"step {i} failed: {cmd[3:6]} rc={r.returncode} err={r.stderr.strip()}")
     except subprocess.TimeoutExpired:
-        pass
+        _log(f"step {i} timed out: {cmd[3:6]}")
+    except OSError as e:
+        _log(f"step {i} OSError: {cmd[3:6]} {e}")
     if sleep_after:
         time.sleep(sleep_after)
 """

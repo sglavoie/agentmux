@@ -141,7 +141,10 @@ def query_sessions(socket, managed_only=True):
                     cfg_entry = _cfg._find_config_session(_strip_override_marker(title))
                 if cfg_entry:
                     cc_group = cfg_entry.get("group", "")
-            cc_notes = read_notes(title)
+            try:
+                cc_notes = read_notes(title)
+            except (ValueError, OSError):
+                cc_notes = ""
             icon_state = _detect_state(tab_title)
             tab_id = tab.get("id", 0)
 
