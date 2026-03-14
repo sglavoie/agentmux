@@ -542,10 +542,14 @@ def handle_confirm_modes(key, state):
 
     if mode == "confirm_save":
         if key in (ord("y"), ord("Y")):
-            count, _ = state["cfg"].save_sessions(state["sessions"])
-            fname = state["cfg"]._sessions_config_filename()
-            state["msg"] = f"Saved {count} session(s) to {fname}"
-            state["msg_frames"] = 25
+            try:
+                count, _ = state["cfg"].save_sessions(state["sessions"])
+                fname = state["cfg"]._sessions_config_filename()
+                state["msg"] = f"Saved {count} session(s) to {fname}"
+                state["msg_frames"] = 25
+            except OSError as e:
+                state["msg"] = f"Save failed: {e}"
+                state["msg_frames"] = 30
         state["mode"] = "list"
         return True
 

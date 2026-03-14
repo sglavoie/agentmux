@@ -338,21 +338,11 @@ cmd_cleanup() {
     fi
 }
 
-cmd_save() {
-    local output_file="${1:-$CONFIG_FILE}"
-
-    local ls_json
-    ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || {
-        echo "Error: Failed to query kitty." >&2
-        return 1
-    }
-
-    local accounts_json default_account
-    accounts_json="$(build_accounts_json)"
-    default_account="$(default_account_name)"
-
-    local sessions
-    sessions="$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" --arg emoji_re "$_OVERRIDE_EMOJI_RE" '
+_extract_sessions_from_ls() {
+    local ls_json="$1"
+    local accounts_json="$2"
+    local default_account="$3"
+    echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" --arg emoji_re "$_OVERRIDE_EMOJI_RE" '
 		[.[] | .tabs[] |
 			select(
 				[.windows[] | .foreground_processes[]?.cmdline[]? | test("claude")] | any
@@ -396,7 +386,38 @@ cmd_save() {
 				)
 			}
 		] | .[] | [.title, .dir, .account, .flags, .pw, .env, .group] | @tsv
-	')"
+	'
+}
+
+cmd_save() {
+    local output_file="${1:-$CONFIG_FILE}"
+
+    discover_all_sockets
+    if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
+        echo "Error: No active Kitty instances found." >&2
+        return 1
+    fi
+
+    local accounts_json default_account
+    accounts_json="$(build_accounts_json)"
+    default_account="$(default_account_name)"
+
+    local sessions=""
+    local idx
+    for ((idx = 0; idx < ${#_INSTANCE_SOCKETS[@]}; idx++)); do
+        local inst_socket="${_INSTANCE_SOCKETS[$idx]}"
+        local ls_json
+        ls_json="$(kitty @ --to "$inst_socket" ls 2>/dev/null)" || continue
+
+        local inst_sessions
+        inst_sessions="$(_extract_sessions_from_ls "$ls_json" "$accounts_json" "$default_account")"
+        if [[ -n "$inst_sessions" ]]; then
+            if [[ -n "$sessions" ]]; then
+                sessions+=$'\n'
+            fi
+            sessions+="$inst_sessions"
+        fi
+    done
 
     if [[ -z "$sessions" ]]; then
         echo "No Claude sessions to save." >&2

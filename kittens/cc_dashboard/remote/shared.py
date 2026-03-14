@@ -21,17 +21,21 @@ _COLOR_TO_EMOJI, OVERRIDE_EMOJIS = load_override_emojis()
 
 
 def _build_managed_title_re():
-    """Build the compiled regex for matching managed tab titles."""
+    """Build the compiled regex for matching managed tab titles.
+
+    The actual title order produced by build_title() in cc-title-icons.sh is:
+    star? flag? state_icon? override_emoji? X:title
+    """
     override_alt = "|".join(re.escape(e) for e in sorted(OVERRIDE_EMOJIS))
     return re.compile(
-        r"^(?:"
-        + override_alt
-        + r")?("
+        r"^("
         + re.escape(_ICON_STAR)
         + r")?("
         + re.escape(_ICON_FLAG)
         + r")?("
         + _state_icons_alt
+        + r")?(?:"
+        + override_alt
         + r")?[A-Z]:"
     )
 
