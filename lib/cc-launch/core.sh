@@ -172,6 +172,7 @@ lookup_session_overrides() {
 
 _lookup_session_overrides_toml() {
 	local lookup_title="$1"
+	local _parse_err_file="${_CCM_TMPDIR}/ccm-parse-err.$$"
 	local cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e cfg_g
 	while IFS=$'\t' read -r cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e cfg_g; do
 		if [[ "$cfg_title" == "$lookup_title" ]]; then
@@ -180,11 +181,11 @@ _lookup_session_overrides_toml() {
 			cfg_env="$cfg_e"
 			break
 		fi
-	done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>"${_CCM_TMPDIR}/ccm-parse-err.$$" || {
+	done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>"$_parse_err_file" || {
 		echo "Warning: failed to parse sessions config '$CONFIG_FILE'." >&2
-		[[ -s "${_CCM_TMPDIR}/ccm-parse-err.$$" ]] && sed 's/^/  Detail: /' "${_CCM_TMPDIR}/ccm-parse-err.$$" >&2
-		rm -f "${_CCM_TMPDIR}/ccm-parse-err.$$"
+		[[ -s "$_parse_err_file" ]] && sed 's/^/  Detail: /' "$_parse_err_file" >&2
 	})
+	rm -f "$_parse_err_file"
 }
 
 launch_session() {

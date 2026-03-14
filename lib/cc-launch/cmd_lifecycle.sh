@@ -10,6 +10,24 @@ _CC_LAUNCH_CMD_LIFECYCLE_LOADED=1
 _CLOSE_POLL_MAX=5
 _CLOSE_POLL_DELAY=0.1  # seconds
 
+# Wait for a tab to disappear from Kitty after a close-tab command.
+# Usage: _wait_for_tab_close SOCKET TAB_ID TITLE ACTION
+#   SOCKET — kitty socket to poll
+#   TAB_ID — numeric tab id to wait for
+#   TITLE  — tab title (for warning messages)
+#   ACTION — verb for the warning message (e.g. "restart", "move")
+_wait_for_tab_close() {
+    local socket="$1" tab_id="$2" title="$3" action="$4"
+    local _poll
+    for ((_poll = 0; _poll < _CLOSE_POLL_MAX; _poll++)); do
+        if ! kitty @ --to "$socket" ls 2>/dev/null | jq -e --argjson tid "$tab_id" '[.[].tabs[] | select(.id == $tid)] | length > 0' >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep "$_CLOSE_POLL_DELAY"
+    done
+    echo "Warning: tab '$title' may not have closed (timed out after ${_CLOSE_POLL_MAX} polls). Proceeding with $action." >&2
+}
+
 cmd_close_group() {
     if [[ -z "$_TARGET_GROUP" ]]; then
         echo "Error: --group requires a NAME argument." >&2
@@ -156,19 +174,7 @@ cmd_restart() {
         exit 1
     fi
     echo "Closed tab '$title', relaunching..." >&2
-    # Poll for tab closure before relaunching
-    local _poll
-    local _tab_gone=false
-    for ((_poll = 0; _poll < _CLOSE_POLL_MAX; _poll++)); do
-        if ! kitty @ --to "$SOCKET" ls 2>/dev/null | jq -e --argjson tid "$_TARGET_TAB_ID" '[.[].tabs[] | select(.id == $tid)] | length > 0' >/dev/null 2>&1; then
-            _tab_gone=true
-            break
-        fi
-        sleep "$_CLOSE_POLL_DELAY"
-    done
-    if [[ "$_tab_gone" != "true" ]]; then
-        echo "Warning: tab '$title' may not have closed (timed out after ${_CLOSE_POLL_MAX} polls). Proceeding with restart." >&2
-    fi
+    _wait_for_tab_close "$SOCKET" "$_TARGET_TAB_ID" "$title" "restart"
 
     local loc_args
     loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
@@ -240,29 +246,35 @@ cmd_clone() {
     if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
         sort_tabs "$SOCKET"
         if [[ -f "$CONFIG_FILE" ]]; then
-            local conf_line="$clone_title | $dir | $account"
-            if [[ -n "$cfg_flags" ]]; then
-                conf_line="$conf_line | $cfg_flags"
+            # Read existing sessions, append the clone, and write back as valid TOML
+            local existing_json
+            existing_json="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>/dev/null)" || existing_json=""
+            local clone_json_array="["
+            local first=true
+            if [[ -n "$existing_json" ]]; then
+                while IFS=$'\t' read -r s_title s_dir s_account s_flags s_pw s_env s_group; do
+                    [[ -z "$s_title" ]] && continue
+                    [[ "$first" == "true" ]] || clone_json_array+=","
+                    first=false
+                    clone_json_array+="$(jq -nc \
+                        --arg t "$s_title" --arg d "$s_dir" --arg a "$s_account" \
+                        --arg f "$s_flags" --arg p "$s_pw" --arg e "$s_env" \
+                        --arg g "$s_group" \
+                        '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
+                done <<<"$existing_json"
             fi
-            if [[ -n "$cfg_pw" || -n "$cfg_env" ]]; then
-                if [[ -z "$cfg_flags" ]]; then
-                    conf_line="$conf_line | "
-                fi
-                conf_line="$conf_line | $cfg_pw"
+            # Append the new clone entry
+            [[ "$first" == "true" ]] || clone_json_array+=","
+            local clone_dir="${dir/#$HOME/\~}"
+            clone_json_array+="$(jq -nc \
+                --arg t "$clone_title" --arg d "$clone_dir" --arg a "$account" \
+                --arg f "$cfg_flags" --arg p "$cfg_pw" --arg e "$cfg_env" \
+                --arg g "$live_group" \
+                '{title:$t, dir:$d, account:$a, flags:$f, pw:$p, env:$e, group:$g}')"
+            clone_json_array+="]"
+            if ! echo "$clone_json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$CONFIG_FILE"; then
+                echo "Warning: failed to update config file with cloned session." >&2
             fi
-            if [[ -n "$cfg_env" ]]; then
-                if [[ -z "$cfg_pw" && -z "$cfg_flags" ]]; then
-                    conf_line="$conf_line | "
-                fi
-                conf_line="$conf_line | $cfg_env"
-            fi
-            local _clone_tmp="${CONFIG_FILE}.tmp"
-            trap 'rm -f "$_clone_tmp"' RETURN
-            {
-                cat "$CONFIG_FILE"
-                echo "$conf_line"
-            } > "$_clone_tmp" || { echo "Error: failed to write config file" >&2; return 1; }
-            mv "$_clone_tmp" "$CONFIG_FILE" || { echo "Error: failed to update config file" >&2; return 1; }
         fi
         echo "Cloned '$title' as '$clone_title'." >&2
     fi
@@ -330,19 +342,7 @@ cmd_move() {
         exit 1
     fi
     echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..." >&2
-    # Poll for tab closure before relaunching on target
-    local _poll
-    local _tab_gone=false
-    for ((_poll = 0; _poll < _CLOSE_POLL_MAX; _poll++)); do
-        if ! kitty @ --to "$source_socket" ls 2>/dev/null | jq -e --argjson tid "$_TARGET_TAB_ID" '[.[].tabs[] | select(.id == $tid)] | length > 0' >/dev/null 2>&1; then
-            _tab_gone=true
-            break
-        fi
-        sleep "$_CLOSE_POLL_DELAY"
-    done
-    if [[ "$_tab_gone" != "true" ]]; then
-        echo "Warning: tab '$title' may not have closed (timed out after ${_CLOSE_POLL_MAX} polls). Proceeding with move." >&2
-    fi
+    _wait_for_tab_close "$source_socket" "$_TARGET_TAB_ID" "$title" "move"
 
     SOCKET="$target_socket"
     local loc_args
