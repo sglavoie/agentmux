@@ -141,66 +141,66 @@ cmd_daemon() {
 
 		# Iterate activity files (idle notifications)
 		if [[ "$idle_notify_enabled" == true ]]; then
-		local activity_file
-		for activity_file in "${_CCM_TMPDIR}"/ccm-activity-*.counts; do
-			[[ -e "$activity_file" ]] || continue
+			local activity_file
+			for activity_file in "${_CCM_TMPDIR}"/ccm-activity-*.counts; do
+				[[ -e "$activity_file" ]] || continue
 
-			# Extract tab_id from filename
-			local basename_f
-			basename_f="$(basename "$activity_file")"
-			local tab_id="${basename_f#ccm-activity-}"
-			tab_id="${tab_id%.counts}"
+				# Extract tab_id from filename
+				local basename_f
+				basename_f="$(basename "$activity_file")"
+				local tab_id="${basename_f#ccm-activity-}"
+				tab_id="${tab_id%.counts}"
 
-			# Read the activity file (9-line format)
-			local lines
-			lines="$(cat "$activity_file" 2>/dev/null)" || continue
-			local line_arr=()
-			while IFS= read -r l; do
-				line_arr+=("$l")
-			done <<<"$lines"
+				# Read the activity file (9-line format)
+				local lines
+				lines="$(cat "$activity_file" 2>/dev/null)" || continue
+				local line_arr=()
+				while IFS= read -r l; do
+					line_arr+=("$l")
+				done <<<"$lines"
 
-			[[ "${#line_arr[@]}" -lt 9 ]] && continue
+				[[ "${#line_arr[@]}" -lt 9 ]] && continue
 
-			local last_event_ts="${line_arr[1]}"
-			[[ -z "$last_event_ts" || "$last_event_ts" == "0" ]] && continue
+				local last_event_ts="${line_arr[1]}"
+				[[ -z "$last_event_ts" || "$last_event_ts" == "0" ]] && continue
 
-			local idle_secs=$((now - last_event_ts))
-			[[ "$idle_secs" -lt "$threshold" ]] && continue
+				local idle_secs=$((now - last_event_ts))
+				[[ "$idle_secs" -lt "$threshold" ]] && continue
 
-			# Check cooldown file
-			local cooldown_file="${_CCM_TMPDIR}/ccm-notify-idle-${tab_id}"
-			if [[ -f "$cooldown_file" ]]; then
-				local cooldown_mtime
-				cooldown_mtime="$(_file_mtime "$cooldown_file")" || cooldown_mtime=0
-				if [[ "$cooldown_mtime" -ge "$last_event_ts" ]]; then
-					continue
-				fi
-			fi
-
-			# Write cooldown file with mtime = last_event_ts
-			touch "$cooldown_file"
-			touch -t "$(date -r "$last_event_ts" '+%Y%m%d%H%M.%S')" "$cooldown_file"
-
-			# Fire notification
-			local title
-			title="$(_get_tab_title "$tab_id")"
-			local duration
-			duration="$(_format_duration "$idle_secs")"
-
-			if command -v alerter >/dev/null 2>&1; then
-				local tab_socket
-				tab_socket="$(_get_tab_socket "$tab_id")"
-				(
-					result=$(alerter --title "$title" --subtitle "⏸ Session idle" \
-						--message "idle for ${duration}" \
-						--group "ccm-idle-${tab_id}" \
-						--timeout 10 2>/dev/null)
-					if [[ "$result" != "@TIMEOUT" && "$result" != "@CLOSED" && -n "$tab_socket" ]]; then
-						kitty @ --to "$tab_socket" focus-tab --match "id:${tab_id}" 2>/dev/null
+				# Check cooldown file
+				local cooldown_file="${_CCM_TMPDIR}/ccm-notify-idle-${tab_id}"
+				if [[ -f "$cooldown_file" ]]; then
+					local cooldown_mtime
+					cooldown_mtime="$(_file_mtime "$cooldown_file")" || cooldown_mtime=0
+					if [[ "$cooldown_mtime" -ge "$last_event_ts" ]]; then
+						continue
 					fi
-				) &
-			fi
-		done
+				fi
+
+				# Write cooldown file with mtime = last_event_ts
+				touch "$cooldown_file"
+				touch -t "$(date -r "$last_event_ts" '+%Y%m%d%H%M.%S')" "$cooldown_file"
+
+				# Fire notification
+				local title
+				title="$(_get_tab_title "$tab_id")"
+				local duration
+				duration="$(_format_duration "$idle_secs")"
+
+				if command -v alerter >/dev/null 2>&1; then
+					local tab_socket
+					tab_socket="$(_get_tab_socket "$tab_id")"
+					(
+						result=$(alerter --title "$title" --subtitle "⏸ Session idle" \
+							--message "idle for ${duration}" \
+							--group "ccm-idle-${tab_id}" \
+							--timeout 10 2>/dev/null)
+						if [[ "$result" != "@TIMEOUT" && "$result" != "@CLOSED" && -n "$tab_socket" ]]; then
+							kitty @ --to "$tab_socket" focus-tab --match "id:${tab_id}" 2>/dev/null
+						fi
+					) &
+				fi
+			done
 		fi # idle_notify_enabled
 
 		# --- Auto-dim scan ---
