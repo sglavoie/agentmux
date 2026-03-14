@@ -770,13 +770,19 @@ def _scan_directories(field_value, max_results=50, show_hidden=False):
     if not os.path.isdir(scan_dir):
         return []
     try:
-        entries = sorted(
-            entry.name
-            for entry in os.scandir(scan_dir)
-            if entry.is_dir(follow_symlinks=True)
-            and (show_hidden or not entry.name.startswith("."))
-            and (not partial or partial.lower() in entry.name.lower())
-        )
+        results = []
+        for entry in os.scandir(scan_dir):
+            try:
+                is_dir = entry.is_dir(follow_symlinks=True)
+            except OSError:
+                continue
+            if (
+                is_dir
+                and (show_hidden or not entry.name.startswith("."))
+                and (not partial or partial.lower() in entry.name.lower())
+            ):
+                results.append(entry.name)
+        entries = sorted(results)
     except OSError:
         return []
     return entries[:max_results]

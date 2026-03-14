@@ -3,7 +3,7 @@
 #
 # Source manually:  source completions/_ccm.bash
 
-_ccm_commands="launch status star config hooks logs audit dashboard switch idle-watch notify help version"
+_ccm_commands="launch status star config hooks logs audit dashboard switch idle-watch notify help"
 _ccm_config_subs="edit show path init sync validate"
 _ccm_config_files="accounts sessions defaults hooks"
 _ccm_logs_subs="list show summary clean dir"

@@ -79,6 +79,8 @@ def _hooks_add_submit(state):
     hook_type = state["hooks_add_type"]
     value = state["hooks_add_value"].strip()
     if not value:
+        state["msg"] = "Command/value cannot be empty"
+        state["msg_frames"] = 15
         state["mode"] = "hooks_event"
         return
 
