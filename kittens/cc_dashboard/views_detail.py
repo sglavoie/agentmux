@@ -140,14 +140,30 @@ def draw_detail_pane(stdscr, session, detail_y):
     notes_raw = session.get("cc_notes", "")
     if notes_raw:
         note_lines = notes_raw.split("\n")
+        # Cap note lines to avoid overflowing the detail pane
+        # Reserve ~8 lines for remaining fields (git, socket, cmdline, activity)
+        max_note_lines = max(1, (detail_y + DETAIL_PANE_HEIGHT) - y - 9)
         y += 1
         safe_addstr(stdscr, y, lx, " Notes: ", label_attr)
         safe_addstr(stdscr, y, lx + 8, note_lines[0][: cols - lx - 9], val_attr)
-        for nl in note_lines[1:]:
+        for nl in note_lines[1:max_note_lines]:
             y += 1
             safe_addstr(stdscr, y, lx + 8, nl[: cols - lx - 9], val_attr)
+        if len(note_lines) > max_note_lines:
+            y += 1
+            safe_addstr(
+                stdscr,
+                y,
+                lx + 8,
+                f"(+{len(note_lines) - max_note_lines} more lines)",
+                curses.color_pair(CP_DIM),
+            )
+
+    max_y = detail_y + DETAIL_PANE_HEIGHT - 1
 
     y += 1
+    if y > max_y:
+        return
     git_info = session.get("git")
     safe_addstr(stdscr, y, lx, " Branch: ", label_attr)
     if git_info:
@@ -161,12 +177,16 @@ def draw_detail_pane(stdscr, session, detail_y):
         safe_addstr(stdscr, y, lx + 9, "not a git repo", curses.color_pair(CP_DIM))
 
     y += 1
+    if y > max_y:
+        return
     safe_addstr(stdscr, y, lx, " Socket: ", label_attr)
     safe_addstr(stdscr, y, lx + 9, session.get("socket", "")[: mid - lx - 10], val_attr)
     safe_addstr(stdscr, y, rx, "Instance: ", label_attr)
     safe_addstr(stdscr, y, rx + 10, session.get("instance_label", ""), val_attr)
 
     y += 1
+    if y > max_y:
+        return
     safe_addstr(stdscr, y, lx, " Cmdline: ", label_attr)
     safe_addstr(
         stdscr,
@@ -185,12 +205,16 @@ def draw_detail_pane(stdscr, session, detail_y):
         )
 
         y += 1
+        if y > max_y:
+            return
         safe_addstr(stdscr, y, lx, " Session age: ", label_attr)
         safe_addstr(stdscr, y, lx + 14, age_str, val_attr)
         safe_addstr(stdscr, y, rx, "Last active: ", label_attr)
         safe_addstr(stdscr, y, rx + 13, last_active_str, val_attr)
 
         y += 1
+        if y > max_y:
+            return
         safe_addstr(stdscr, y, lx, " Events: ", label_attr)
         parts_x = lx + 9
         prompts_str = f"{activity['prompt_count']} prompts, "
@@ -234,6 +258,8 @@ def draw_detail_pane(stdscr, session, detail_y):
         )
 
         y += 1
+        if y > max_y:
+            return
         model_val = session.get("model", "") or "unknown"
         agent_type_val = session.get("agent_type", "")
         if agent_type_val:

@@ -224,8 +224,17 @@ def draw_hooks_event_view(
     )
 
     event_rows = _hooks_event_rows(account_name, hooks_overrides, hooks_global)
-    for idx, row in enumerate(event_rows):
-        y = 2 + idx
+    avail = max(1, rows - 4)  # rows available for event list (header + footer)
+    total = len(event_rows)
+    if total <= avail:
+        scroll_offset = 0
+    else:
+        scroll_offset = max(0, min(selected - avail // 2, total - avail))
+
+    for vi in range(scroll_offset, min(scroll_offset + avail, total)):
+        idx = vi
+        row = event_rows[idx]
+        y = 2 + (vi - scroll_offset)
         if y >= rows - 2:
             break
 
