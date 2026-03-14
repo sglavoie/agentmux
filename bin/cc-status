@@ -352,10 +352,10 @@ if [[ "$_flex_budget" -gt 0 ]]; then
 	_title_cap=$((_flex_budget * 40 / 100))
 	_dir_cap=$((_flex_budget * 60 / 100))
 	# Enforce minimum widths
-	(( _title_cap < 8 )) && _title_cap=8
-	(( _dir_cap < 10 )) && _dir_cap=10
-	(( max_title > _title_cap )) && max_title=$_title_cap
-	(( max_dir > _dir_cap )) && max_dir=$_dir_cap
+	((_title_cap < 8)) && _title_cap=8
+	((_dir_cap < 10)) && _dir_cap=10
+	((max_title > _title_cap)) && max_title=$_title_cap
+	((max_dir > _dir_cap)) && max_dir=$_dir_cap
 fi
 
 # Header

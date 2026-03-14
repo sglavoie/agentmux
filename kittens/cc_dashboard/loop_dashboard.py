@@ -515,16 +515,12 @@ def dashboard(stdscr):
                     new_sockets = get_all_kitty_sockets()
                     if new_sockets:
                         new_labels = [label for _, label in new_sockets]
-                        new_sock_map = {
-                            label: sock for sock, label in new_sockets
-                        }
+                        new_sock_map = {label: sock for sock, label in new_sockets}
                         state["instance_labels"] = new_labels
                         state["instance_socket_map"] = new_sock_map
                         state["multi_instance"] = len(new_sockets) > 1
                         # Update home_socket if the old one is gone
-                        if state["home_socket"] not in {
-                            s for s, _ in new_sockets
-                        }:
+                        if state["home_socket"] not in {s for s, _ in new_sockets}:
                             state["home_socket"] = new_sockets[0][0]
                             state["home_instance_label"] = new_sockets[0][1]
                     new_sessions = query_all_sessions(

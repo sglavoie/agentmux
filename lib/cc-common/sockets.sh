@@ -60,7 +60,6 @@ discover_all_sockets() {
 		sock_entries+=("$mtime"$'\t'"$sock_path")
 	done
 
-	local entry
 	while IFS=$'\t' read -r _ sock_path; do
 		local sock="unix:$sock_path"
 		local already=false

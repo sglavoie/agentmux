@@ -94,7 +94,7 @@ def _build_tabid_map():
         if tab_id_str:
             fname = os.path.basename(path)
             if fname.startswith(prefix):
-                mapping[tab_id_str] = fname[len(prefix):]
+                mapping[tab_id_str] = fname[len(prefix) :]
     return mapping
 
 
@@ -139,7 +139,7 @@ def resolve_session_id(tab_id):
         if contents == tab_id_str:
             fname = os.path.basename(path)
             if fname.startswith(prefix):
-                sid = fname[len(prefix):]
+                sid = fname[len(prefix) :]
                 _tabid_cache[tab_id_str] = sid
                 return sid
     return None

@@ -702,8 +702,7 @@ def handle_new_mode(stdscr, key, state):
                     if updated:
                         running_titles = {s["title"] for s in state["sessions"]}
                         stripped_running = {
-                            state["strip_override_marker"](rt)
-                            for rt in running_titles
+                            state["strip_override_marker"](rt) for rt in running_titles
                         }
                         if state["edit_original_title"] in stripped_running:
                             state["msg"] = "Config updated (restart session to apply)"
@@ -724,10 +723,9 @@ def handle_new_mode(stdscr, key, state):
                         state["msg"] = "A session with that title is already running"
                         state["msg_frames"] = 20
                         return True
-                    if (
-                        state["new_fields"].get("save") == "yes"
-                        and state["cfg"]._find_config_session(t)
-                    ):
+                    if state["new_fields"].get("save") == "yes" and state[
+                        "cfg"
+                    ]._find_config_session(t):
                         state["msg"] = "Title already exists in config"
                         state["msg_frames"] = 20
                         return True

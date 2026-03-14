@@ -259,11 +259,15 @@ for i, step in enumerate(steps):
                     break
                 time.sleep(retry_sleep)
             if not ok:
-                _log(f"step {i} failed after {retry+1} attempts: {cmd[3:6]} rc={r.returncode} err={r.stderr.strip()}")
+                e = r.stderr.strip()
+                _log(f"step {i} failed after {retry+1} attempts: "
+                     f"{cmd[3:6]} rc={r.returncode} err={e}")
         else:
             r = subprocess.run(cmd, capture_output=True, timeout=30)
             if r.returncode != 0:
-                _log(f"step {i} failed: {cmd[3:6]} rc={r.returncode} err={r.stderr.strip()}")
+                e = r.stderr.strip()
+                _log(f"step {i} failed: {cmd[3:6]} "
+                     f"rc={r.returncode} err={e}")
     except subprocess.TimeoutExpired:
         _log(f"step {i} timed out: {cmd[3:6]}")
     except OSError as e:

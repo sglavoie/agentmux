@@ -432,8 +432,6 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
                 len(state["pick_filtered"]),
             )
         if state.get("pick_group_filter_mode"):
-            from cc_dashboard.views_overlays_pickers import draw_group_picker
-
             draw_group_picker(
                 stdscr,
                 state["cfg"]._sessions,
