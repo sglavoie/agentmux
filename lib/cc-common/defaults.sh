@@ -82,7 +82,16 @@ _assign_default() {
 	case "$key" in
 	claude_flags) _DEFAULT_CLAUDE_FLAGS="$value" ;;
 	project_window) _DEFAULT_PROJECT_WINDOW="$value" ;;
-	sort_sessions) _DEFAULT_SORT_SESSIONS="$value" ;;
+	sort_sessions)
+		case "$value" in
+		"" | default | alpha | name | account | group | status | idle | activity)
+			_DEFAULT_SORT_SESSIONS="$value"
+			;;
+		*)
+			echo "Warning: invalid sort_sessions '$value', ignoring" >&2
+			;;
+		esac
+		;;
 	dashboard_refresh)
 		if _is_positive_int "$value"; then
 			_DEFAULT_DASHBOARD_REFRESH="$value"

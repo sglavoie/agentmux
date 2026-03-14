@@ -161,7 +161,7 @@ Commands:
     notify [flags]      Send a test notification via alerter
     audit [flags]       Check upstream feature compatibility
     idle-watch <cmd>    Manage background idle notification watcher
-	help [COMMAND]      Show help for ccm or a specific command
+    help [COMMAND]      Show help for ccm or a specific command
     --version           Print version
 
 Global options:
@@ -176,7 +176,7 @@ Environment variables:
 
 Run 'ccm help <command>' for details on a specific command.
 Tip: Run 'ccm help launch' for selector-based destructive launch commands
-	using --instance LABEL and --tab-id ID.
+    using --instance LABEL and --tab-id ID.
 HELP
 		;;
 	*)

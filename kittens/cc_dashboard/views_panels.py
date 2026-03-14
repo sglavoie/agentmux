@@ -777,7 +777,7 @@ def _scan_directories(field_value, max_results=50, show_hidden=False):
             and (show_hidden or not entry.name.startswith("."))
             and (not partial or partial.lower() in entry.name.lower())
         )
-    except PermissionError:
+    except OSError:
         return []
     return entries[:max_results]
 
