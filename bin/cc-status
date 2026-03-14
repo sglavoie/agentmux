@@ -89,6 +89,22 @@ done
 load_accounts
 _load_icons
 
+# git_branch_info DIR — output branch name (* suffix if dirty), or "-"
+git_branch_info() {
+	local _gbi_dir="$1"
+	local _gbi_info _gbi_branch
+	if _gbi_info="$(git -C "$_gbi_dir" status --porcelain -b 2>/dev/null)"; then
+		_gbi_branch="${_gbi_info%%$'\n'*}" # first line: ## branch...upstream
+		_gbi_branch="${_gbi_branch#\#\# }"
+		_gbi_branch="${_gbi_branch%%...*}"
+		_gbi_branch="${_gbi_branch%% \[*}"
+		[[ "$_gbi_info" == *$'\n'* ]] && _gbi_branch="${_gbi_branch}*"
+		printf '%s' "$_gbi_branch"
+	else
+		printf '%s' "-"
+	fi
+}
+
 # Build shell variables for icon-based jq patterns
 _STRIP_RE="$(_icon_strip_regex)"
 _OVERRIDE_EMOJI_RE="$(_override_emoji_re)?"
@@ -253,16 +269,7 @@ fi
 if [[ "$JSON_OUTPUT" == "true" ]]; then
 	enriched=""
 	while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst col_group; do
-		# Single git call for branch + dirty status
-		if _git_info="$(git -C "$col_dir" status --porcelain -b 2>/dev/null)"; then
-			col_branch="${_git_info%%$'\n'*}" # first line: ## branch...upstream
-			col_branch="${col_branch#\#\# }"
-			col_branch="${col_branch%%...*}"
-			col_branch="${col_branch%% \[*}"
-			[[ "$_git_info" == *$'\n'* ]] && col_branch="${col_branch}*"
-		else
-			col_branch="-"
-		fi
+		col_branch="$(git_branch_info "$col_dir")"
 		col_dir="$(shorten_path "$col_dir")"
 		[[ -n "$enriched" ]] && enriched+=$'\n'
 		enriched+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_branch}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\t'"${col_group}"
@@ -311,16 +318,7 @@ has_groups=false
 # Pre-process rows: shorten paths, then scan for max widths
 processed_rows=""
 while IFS=$'\t' read -r col_tab col_title col_account col_dir col_status col_inst col_group; do
-	# Single git call for branch + dirty status
-	if _git_info="$(git -C "$col_dir" status --porcelain -b 2>/dev/null)"; then
-		col_branch="${_git_info%%$'\n'*}" # first line: ## branch...upstream
-		col_branch="${col_branch#\#\# }"
-		col_branch="${col_branch%%...*}"
-		col_branch="${col_branch%% \[*}"
-		[[ "$_git_info" == *$'\n'* ]] && col_branch="${col_branch}*"
-	else
-		col_branch="-"
-	fi
+	col_branch="$(git_branch_info "$col_dir")"
 	col_dir="$(shorten_path "$col_dir")"
 	processed_rows+="${col_tab}"$'\t'"${col_title}"$'\t'"${col_account}"$'\t'"${col_dir}"$'\t'"${col_branch}"$'\t'"${col_status}"$'\t'"${col_inst}"$'\t'"${col_group}"$'\n'
 	((${#col_tab} > max_tab)) && max_tab=${#col_tab}

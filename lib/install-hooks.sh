@@ -261,16 +261,14 @@ for i in "${!CONFIG_DIRS[@]}"; do
 			extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" --arg logcmd "$LOG_CMD" '
 				(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 			')"
+			# Compute entries: example + extra (enabled) or just extra (disabled)
 			if [[ "$is_disabled" == "true" ]]; then
-				# Event disabled: only include extra_hooks if any
-				if [[ "$(echo "$extra_for_event" | jq 'length')" -gt 0 ]]; then
-					create_filter="$create_filter | .hooks[$(jq -n --arg e "$event" '$e')] = $extra_for_event"
-				fi
+				append_entries="$extra_for_event"
 			else
 				example_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg e "$event" '.[$e] // []')"
-				combined="$(jq -n --argjson a "$example_entries" --argjson b "$extra_for_event" '$a + $b')"
-				create_filter="$create_filter | .hooks[$(jq -n --arg e "$event" '$e')] = $combined"
+				append_entries="$(jq -n --argjson a "$example_entries" --argjson b "$extra_for_event" '$a + $b')"
 			fi
+			create_filter="$create_filter | .hooks[$(jq -n --arg e "$event" '$e')] = $append_entries"
 		done
 		jq -n "{ hooks: {} } $create_filter" >"$settings_file"
 		echo "  Created $settings_file with cc-hook-indicator hooks"
@@ -287,25 +285,21 @@ for i in "${!CONFIG_DIRS[@]}"; do
 			(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 		')"
 
-		event_json="$(jq -n --arg e "$event" '$e')"
+		# Compute entries to append: example + extra (enabled) or just extra (disabled)
 		if [[ "$is_disabled" == "true" ]]; then
-			# Event disabled: strip cc-hook-indicator entries, preserve user entries, add extra_hooks
-			jq_filter="$jq_filter"'
-                | .hooks['"$event_json"'] = (
-                    [(.hooks['"$event_json"'] // [])[] |
-                        select([.hooks[]? | .command // "" | test("(^|/)(cc-hook-indicator|cc-activity-log)( |$)")] | any | not)
-                    ] + '"$extra_for_event"'
-                )'
+			append_entries="$extra_for_event"
 		else
 			new_entries="$(echo "$EXAMPLE_HOOKS" | jq --arg e "$event" '.[$e] // []')"
-			combined="$(jq -n --argjson a "$new_entries" --argjson b "$extra_for_event" '$a + $b')"
-			jq_filter="$jq_filter"'
-                | .hooks['"$event_json"'] = (
-                    [(.hooks['"$event_json"'] // [])[] |
-                        select([.hooks[]? | .command // "" | test("(^|/)(cc-hook-indicator|cc-activity-log)( |$)")] | any | not)
-                    ] + '"$combined"'
-                )'
+			append_entries="$(jq -n --argjson a "$new_entries" --argjson b "$extra_for_event" '$a + $b')"
 		fi
+
+		event_json="$(jq -n --arg e "$event" '$e')"
+		jq_filter="$jq_filter"'
+            | .hooks['"$event_json"'] = (
+                [(.hooks['"$event_json"'] // [])[] |
+                    select([.hooks[]? | .command // "" | test("(^|/)(cc-hook-indicator|cc-activity-log)( |$)")] | any | not)
+                ] + '"$append_entries"'
+            )'
 	done
 
 	tmp_file="${settings_file}.tmp"
