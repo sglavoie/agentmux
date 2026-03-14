@@ -239,7 +239,8 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
         v.warn(f"[defaults]: unknown key(s): {', '.join(sorted(unknown_defaults))}")
 
     known_notif_keys = {"error", "permission", "stop", "idle",
-                        "idle_alert_minutes", "min_secs", "ignore_patterns"}
+                        "idle_alert_minutes", "min_secs", "ignore_patterns",
+                        "dim_after_minutes", "idle_poll_interval"}
     unknown_notif = set(notifications.keys()) - known_notif_keys
     if unknown_notif:
         v.warn(f"[notifications]: unknown key(s): {', '.join(sorted(unknown_notif))}")

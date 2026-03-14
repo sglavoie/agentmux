@@ -45,6 +45,8 @@ def cmd_read_defaults(path):
         "idle_alert_minutes": "idle_alert_minutes",
         "min_secs": "notify_min_secs",
         "ignore_patterns": "notify_ignore_patterns",
+        "dim_after_minutes": "dim_after_minutes",
+        "idle_poll_interval": "idle_poll_interval",
     }
     for key, val in notifications.items():
         bash_key = _notify_key_map.get(key, key)

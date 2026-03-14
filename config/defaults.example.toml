@@ -33,6 +33,11 @@
 #   ignore_patterns   — Array of regex patterns matched against the current
 #                       Kitty screen content. If any pattern matches, the
 #                       notification is suppressed.
+#   dim_after_minutes — Auto-dim tabs idle longer than this many minutes.
+#                       Default: 0 (disabled). Requires cc-idle-watch
+#                       (auto-started on launch when enabled).
+#   idle_poll_interval — Seconds between activity file scans by cc-idle-watch.
+#                        Default: 30
 # --- END OF DOCUMENTATION (do not edit above this line) ---
 
 [defaults]

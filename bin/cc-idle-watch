@@ -342,6 +342,7 @@ Configure via defaults.toml:
     notify_idle = on
     idle_alert_minutes = 5
     idle_poll_interval = 30   # seconds between scans
+    dim_after_minutes = 10    # auto-dim idle tabs (0 = disabled)
 HELP
 		;;
 	*)

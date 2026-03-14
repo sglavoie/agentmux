@@ -140,9 +140,15 @@ cmd_launch_all() {
         echo "Skipped $skipped session(s) with unknown accounts." >&2
     fi
 
+    local _should_start_watcher=""
     if [[ "${_DEFAULT_NOTIFY_IDLE:-}" == "on" ]] &&
-        [[ -n "${_DEFAULT_IDLE_ALERT_MINUTES:-}" ]] &&
-        [[ "${_DEFAULT_IDLE_ALERT_MINUTES:-0}" -gt 0 ]] &&
+        [[ "${_DEFAULT_IDLE_ALERT_MINUTES:-0}" -gt 0 ]]; then
+        _should_start_watcher=1
+    fi
+    if [[ "${_DEFAULT_DIM_AFTER_MINUTES:-0}" -gt 0 ]]; then
+        _should_start_watcher=1
+    fi
+    if [[ -n "$_should_start_watcher" ]] &&
         command -v cc-idle-watch >/dev/null 2>&1; then
         cc-idle-watch --start
     fi
