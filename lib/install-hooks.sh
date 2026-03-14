@@ -70,15 +70,15 @@ if [[ -z "$REMOVE_MODE" ]]; then
 	if [[ -x "$HOME/.local/bin/cc-hook-indicator" ]]; then
 		HOOK_CMD="$HOME/.local/bin/cc-hook-indicator"
 	else
-		# Derive from repo layout: lib/install-hooks.sh -> bin/cc-hook-indicator
+		# Derive from repo layout: lib/install-hooks.sh -> hooks/cc-hook-indicator
 		repo_dir="$(cd "$(dirname "$HOOKS_EXAMPLE")/.." 2>/dev/null && pwd)"
-		if [[ -x "$repo_dir/bin/cc-hook-indicator" ]]; then
-			HOOK_CMD="$repo_dir/bin/cc-hook-indicator"
+		if [[ -x "$repo_dir/hooks/cc-hook-indicator" ]]; then
+			HOOK_CMD="$repo_dir/hooks/cc-hook-indicator"
 		fi
 	fi
 
 	if [[ -z "$HOOK_CMD" ]]; then
-		echo "Error: cc-hook-indicator not found in '~/.local/bin/' or repo 'bin/'." >&2
+		echo "Error: cc-hook-indicator not found in '~/.local/bin/' or repo 'hooks/'." >&2
 		exit 1
 	fi
 
