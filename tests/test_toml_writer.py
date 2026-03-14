@@ -225,6 +225,27 @@ def test_top_level_non_dict_raises():
         check("string top-level raises TypeError", True)
 
 
+def test_float_nan_inf_raises():
+    """Float nan/inf values raise ValueError (invalid in TOML)."""
+    print("\n--- float nan/inf ---")
+    bad_floats = [
+        ("nan", float("nan")),
+        ("inf", float("inf")),
+        ("-inf", float("-inf")),
+    ]
+    for label, val in bad_floats:
+        try:
+            toml_writer.dumps({"defaults": {"bad": val}})
+            check(f"{label} raises ValueError", False)
+        except ValueError:
+            check(f"{label} raises ValueError", True)
+
+    # Normal floats still work
+    data = {"defaults": {"ok": 3.14}}
+    parsed = _roundtrip(data)
+    check("normal float round-trip", abs(parsed["defaults"]["ok"] - 3.14) < 1e-9)
+
+
 # ── header handling ──────────────────────────────────────────────────
 
 
@@ -269,6 +290,7 @@ if __name__ == "__main__":
     test_integer_values()
     test_unsupported_type_raises()
     test_top_level_non_dict_raises()
+    test_float_nan_inf_raises()
     test_header_with_trailing_newlines()
     test_no_header()
 

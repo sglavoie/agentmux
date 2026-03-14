@@ -13,6 +13,14 @@ def _format_value(value, *, key="<unknown>"):
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
+        import math
+
+        if math.isnan(value) or math.isinf(value):
+            msg = (
+                f"unsupported TOML float for key '{key}':"
+                f" {value!r} (TOML does not allow nan/inf)"
+            )
+            raise ValueError(msg)
         return str(value)
     if isinstance(value, str):
         escaped = (

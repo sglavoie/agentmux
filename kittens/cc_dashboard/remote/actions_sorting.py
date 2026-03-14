@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.remote.command import kitty_cmd
@@ -11,6 +12,20 @@ from cc_dashboard.remote.shared import (
     _strip_account_prefix,
     _strip_icons,
 )
+
+
+def _pick_os_window(data):
+    """Pick the best OS window to sort tabs in.
+
+    Prefers the focused OS window; falls back to the first one.
+    Returns the OS window dict, or None if data is empty/malformed.
+    """
+    if not isinstance(data, list) or not data:
+        return None
+    for os_win in data:
+        if isinstance(os_win, dict) and os_win.get("is_focused", False):
+            return os_win
+    return data[0] if isinstance(data[0], dict) else None
 
 
 def do_sort_tabs(socket):
@@ -23,9 +38,10 @@ def do_sort_tabs(socket):
     except json.JSONDecodeError:
         return
 
-    if not data:
+    os_win = _pick_os_window(data)
+    if os_win is None:
         return
-    tabs = data[0].get("tabs", [])
+    tabs = os_win.get("tabs", [])
     if len(tabs) <= 1:
         return
 
@@ -103,8 +119,10 @@ def do_sort_tabs(socket):
     if focused_id is not None:
         cmd.append(f"--focus={focused_id}")
     cmd.extend(str(tid) for tid in desired_ids)
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+    except subprocess.TimeoutExpired:
+        print("reorder_tabs: timed out", file=sys.stderr)
+        return
     if result.returncode != 0:
-        import sys
-
         print(f"reorder_tabs error: {result.stderr}", file=sys.stderr)
