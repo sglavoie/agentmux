@@ -72,13 +72,33 @@ def _filter_config_sessions(sessions, query):
     ]
 
 
-def _sort_pick_entries(entries, running_titles):
-    """Sort entries: running first, stopped second, preserving order.
+def _sort_config_entries(entries, sort_mode):
+    """Sort config session entries by the given mode."""
+    if sort_mode == "default":
+        return entries
+    if sort_mode == "account":
+        return sorted(entries, key=lambda s: (s["account"].lower(), s["title"].lower()))
+    if sort_mode == "group":
+        return sorted(
+            entries,
+            key=lambda s: (
+                (s.get("group", "") or "zzz").lower(),
+                s["title"].lower(),
+            ),
+        )
+    # name sort (also fallback for status/idle/activity which don't apply)
+    return sorted(entries, key=lambda s: s["title"].lower())
+
+
+def _sort_pick_entries(entries, running_titles, sort_mode="name"):
+    """Sort entries: running first, stopped second, sorted within each group.
 
     Returns (sorted_list, running_count).
     """
     running = [e for e in entries if e["title"] in running_titles]
     stopped = [e for e in entries if e["title"] not in running_titles]
+    running = _sort_config_entries(running, sort_mode)
+    stopped = _sort_config_entries(stopped, sort_mode)
     return running + stopped, len(running)
 
 

@@ -42,7 +42,11 @@ def handle_delete_mode(key, state):
                 (
                     state["delete_filtered"],
                     state["delete_running_count"],
-                ) = _sort_pick_entries(state["delete_entries"], state["delete_running"])
+                ) = _sort_pick_entries(
+                    state["delete_entries"],
+                    state["delete_running"],
+                    state["sort_mode"],
+                )
                 state["delete_selected"] = min(
                     state["delete_selected"], max(0, len(state["delete_filtered"]) - 1)
                 )
@@ -82,7 +86,9 @@ def handle_delete_mode(key, state):
         (
             state["delete_filtered"],
             state["delete_running_count"],
-        ) = _sort_pick_entries(state["delete_entries"], state["delete_running"])
+        ) = _sort_pick_entries(
+            state["delete_entries"], state["delete_running"], state["sort_mode"]
+        )
         state["delete_selected"] = min(
             state["delete_selected"], max(0, len(state["delete_filtered"]) - 1)
         )
@@ -97,7 +103,11 @@ def handle_delete_mode(key, state):
             (
                 state["delete_filtered"],
                 state["delete_running_count"],
-            ) = _sort_pick_entries(state["delete_entries"], state["delete_running"])
+            ) = _sort_pick_entries(
+                state["delete_entries"],
+                state["delete_running"],
+                state["sort_mode"],
+            )
             state["delete_selected"] = min(
                 state["delete_selected"], max(0, len(state["delete_filtered"]) - 1)
             )
@@ -129,7 +139,9 @@ def handle_delete_mode(key, state):
                     state["delete_filtered"],
                     state["delete_running_count"],
                 ) = _sort_pick_entries(
-                    state["delete_filtered"], state["delete_running"]
+                    state["delete_filtered"],
+                    state["delete_running"],
+                    state["sort_mode"],
                 )
                 state["delete_selected"] = min(
                     state["delete_selected"], max(0, len(state["delete_filtered"]) - 1)
@@ -156,7 +168,11 @@ def handle_delete_mode(key, state):
             (
                 state["delete_filtered"],
                 state["delete_running_count"],
-            ) = _sort_pick_entries(state["delete_filtered"], state["delete_running"])
+            ) = _sort_pick_entries(
+                state["delete_filtered"],
+                state["delete_running"],
+                state["sort_mode"],
+            )
             state["delete_selected"] = min(
                 state["delete_selected"], max(0, len(state["delete_filtered"]) - 1)
             )
@@ -170,7 +186,11 @@ def handle_delete_mode(key, state):
             (
                 state["delete_filtered"],
                 state["delete_running_count"],
-            ) = _sort_pick_entries(state["delete_entries"], state["delete_running"])
+            ) = _sort_pick_entries(
+                state["delete_entries"],
+                state["delete_running"],
+                state["sort_mode"],
+            )
             state["delete_selected"] = min(
                 state["delete_selected"], max(0, len(state["delete_filtered"]) - 1)
             )
@@ -185,7 +205,9 @@ def handle_delete_mode(key, state):
         (
             state["delete_filtered"],
             state["delete_running_count"],
-        ) = _sort_pick_entries(state["delete_entries"], state["delete_running"])
+        ) = _sort_pick_entries(
+            state["delete_entries"], state["delete_running"], state["sort_mode"]
+        )
         return True
 
     if key in (curses.KEY_UP, ord("k"), ord("K")) and state["delete_filtered"]:

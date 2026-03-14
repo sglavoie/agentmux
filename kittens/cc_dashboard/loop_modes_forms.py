@@ -824,7 +824,7 @@ def _refilter_pick(state):
     if state["pick_query"]:
         entries = _filter_config_sessions(entries, state["pick_query"])
     state["pick_filtered"], state["pick_running_count"] = _sort_pick_entries(
-        entries, state["pick_running"]
+        entries, state["pick_running"], state["sort_mode"]
     )
     state["pick_selected"] = min(
         state["pick_selected"], max(0, len(state["pick_filtered"]) - 1)
@@ -923,7 +923,7 @@ def handle_pick_mode(key, state):
         state["pick_query"] = ""
         state["pick_cursor"] = 0
         state["pick_filtered"], state["pick_running_count"] = _sort_pick_entries(
-            list(state["cfg"]._sessions), state["pick_running"]
+            list(state["cfg"]._sessions), state["pick_running"], state["sort_mode"]
         )
     elif key == ord(" ") and state["pick_filtered"]:
         idx = state["pick_selected"]

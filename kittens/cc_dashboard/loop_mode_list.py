@@ -201,7 +201,9 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
                 state["pick_filtered"],
                 state["pick_running_count"],
             ) = state["sort_pick_entries"](
-                list(state["cfg"]._sessions), state["pick_running"]
+                list(state["cfg"]._sessions),
+                state["pick_running"],
+                state["sort_mode"],
             )
             state["pick_query"] = ""
             state["pick_cursor"] = 0
@@ -228,7 +230,9 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
                 state["delete_filtered"],
                 state["delete_running_count"],
             ) = state["sort_pick_entries"](
-                state["delete_entries"], state["delete_running"]
+                state["delete_entries"],
+                state["delete_running"],
+                state["sort_mode"],
             )
             state["delete_selected"] = 0
             state["delete_query"] = ""
