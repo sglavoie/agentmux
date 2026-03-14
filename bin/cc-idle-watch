@@ -150,7 +150,7 @@ cmd_daemon() {
 			local tab_id="${basename_f#ccm-activity-}"
 			tab_id="${tab_id%.counts}"
 
-			# Read the activity file once (9-line format)
+			# Read the activity file once (12-line format, see cc-hook-indicator)
 			local lines
 			lines="$(cat "$activity_file" 2>/dev/null)" || continue
 			local line_arr=()
@@ -158,7 +158,7 @@ cmd_daemon() {
 				line_arr+=("$l")
 			done <<<"$lines"
 
-			[[ "${#line_arr[@]}" -lt 9 ]] && continue
+			[[ "${#line_arr[@]}" -lt 12 ]] && continue
 
 			local last_event_ts="${line_arr[1]}"
 			[[ -z "$last_event_ts" || "$last_event_ts" == "0" ]] && continue

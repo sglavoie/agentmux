@@ -19,7 +19,7 @@ def load_activity(tab_id):
             lines = f.read().splitlines()
     except OSError:
         return None
-    if len(lines) < 9:
+    if len(lines) < 12:
         return None
     try:
         return {
@@ -32,9 +32,9 @@ def load_activity(tab_id):
             "permission_count": int(lines[6]),
             "stop_count": int(lines[7]),
             "last_attention_ts": int(lines[8]),
-            "task_completed_count": int(lines[9]) if len(lines) > 9 else 0,
-            "active_subagents": int(lines[10]) if len(lines) > 10 else 0,
-            "total_subagents": int(lines[11]) if len(lines) > 11 else 0,
+            "task_completed_count": int(lines[9]),
+            "active_subagents": int(lines[10]),
+            "total_subagents": int(lines[11]),
         }
     except (ValueError, IndexError):
         return None

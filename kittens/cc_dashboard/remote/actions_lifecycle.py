@@ -80,6 +80,7 @@ def _spawn_detached_restart(
     config_dir_override=None,
     env_vars="",
     color_override="",
+    group="",
 ):
     """Spawn a fully detached subprocess to close+relaunch a session."""
     directory = os.path.expanduser(cwd)
@@ -158,6 +159,8 @@ def _spawn_detached_restart(
         f"cc_pw={pw_override}",
         "--var",
         f"cc_env={env_vars}",
+        "--var",
+        f"cc_group={group}",
     ]
     if color_override:
         launch_cmd += ["--var", f"cc_color={color_override}"]
@@ -323,6 +326,7 @@ def do_restart(
             config_dir_override,
             env_vars,
             color_override=cc_color,
+            group=group,
         )
         return True
 
@@ -361,6 +365,7 @@ def _spawn_detached_move(
     config_dir_override=None,
     env_vars="",
     color_override="",
+    group="",
 ):
     """Spawn a detached subprocess to move a session across kitty instances."""
     directory = os.path.expanduser(cwd)
@@ -439,6 +444,8 @@ def _spawn_detached_move(
         f"cc_pw={pw_override}",
         "--var",
         f"cc_env={env_vars}",
+        "--var",
+        f"cc_group={group}",
     ]
     if color_override:
         launch_cmd += ["--var", f"cc_color={color_override}"]
@@ -597,6 +604,7 @@ def do_move(
             config_dir_override,
             env_vars,
             color_override=cc_color,
+            group=group,
         )
         return True
 
