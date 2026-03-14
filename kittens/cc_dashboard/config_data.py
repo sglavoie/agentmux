@@ -161,13 +161,21 @@ def load_icons() -> dict[str, Any]:
     """Load icon definitions from icons.json with fallback defaults.
 
     Always returns a complete icon dict, using hardcoded fallbacks if
-    icons.json is missing or malformed.  This is the single authority
-    for icon data — all other modules should import from here.
+    icons.json is missing or malformed.  Validates that required keys
+    (star, states, state_order) are present and well-typed, falling
+    back per-key so a partially valid file still works.
     """
     data = _load_icons_json()
-    if data is not None:
-        return data
-    return dict(_ICONS_FALLBACK)
+    if data is None:
+        return dict(_ICONS_FALLBACK)
+    result = dict(data)
+    if not isinstance(result.get("star"), str):
+        result["star"] = _ICONS_FALLBACK["star"]
+    if not isinstance(result.get("states"), dict):
+        result["states"] = dict(_ICONS_FALLBACK["states"])
+    if not isinstance(result.get("state_order"), list):
+        result["state_order"] = list(_ICONS_FALLBACK["state_order"])
+    return result
 
 
 def load_override_emojis() -> tuple[dict[str, str], set[str]]:

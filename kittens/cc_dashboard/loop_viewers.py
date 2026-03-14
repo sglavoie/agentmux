@@ -19,7 +19,7 @@ def handle_actlog_mode(stdscr, key, state, sessions):
     """
     mode = state["mode"]
     if mode == "actlog":
-        content_height = stdscr.getmaxyx()[0] - 5
+        content_height = max(1, stdscr.getmaxyx()[0] - 5)
         max_scroll = max(0, len(state["actlog_lines"]) - content_height)
 
         if state["actlog_search_active"]:
@@ -169,7 +169,7 @@ def handle_actlog_mode(stdscr, key, state, sessions):
     if mode == "actlog_browse":
         entries = state["actlog_browse_entries"]
         total = len(entries)
-        browse_content_h = stdscr.getmaxyx()[0] - 5
+        browse_content_h = max(1, stdscr.getmaxyx()[0] - 5)
 
         def _browse_clamp_scroll():
             if (
@@ -328,7 +328,7 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                 ]
                 state["actlog_scroll"] = max(
                     0,
-                    len(state["actlog_lines"]) - (stdscr.getmaxyx()[0] - 5),
+                    len(state["actlog_lines"]) - max(1, stdscr.getmaxyx()[0] - 5),
                 )
                 state["actlog_search_query"] = ""
                 state["actlog_search_active"] = False
@@ -344,7 +344,7 @@ def handle_actlog_mode(stdscr, key, state, sessions):
     if mode == "actlog_gsearch":
         results = state["actlog_gsearch_results"]
         total = len(results)
-        content_height = stdscr.getmaxyx()[0] - 6
+        content_height = max(1, stdscr.getmaxyx()[0] - 6)
 
         def _gsearch_clamp_scroll():
             if (
@@ -437,7 +437,7 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                 # Scroll to the entry_index position
                 entry_idx = result.get("entry_index", 0)
                 max_scroll = max(
-                    0, len(state["actlog_lines"]) - (stdscr.getmaxyx()[0] - 5)
+                    0, len(state["actlog_lines"]) - max(1, stdscr.getmaxyx()[0] - 5)
                 )
                 state["actlog_scroll"] = min(entry_idx, max_scroll)
                 state["mode"] = "actlog"
@@ -493,7 +493,7 @@ def handle_peek_mode(stdscr, key, state, filtered, selected, home_socket):
     if state["mode"] != "peek":
         return False
 
-    content_height = stdscr.getmaxyx()[0] - 3
+    content_height = max(1, stdscr.getmaxyx()[0] - 3)
     max_scroll = max(0, len(state["peek_lines"]) - content_height)
 
     if state["peek_search_active"]:

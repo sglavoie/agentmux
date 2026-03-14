@@ -429,7 +429,7 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
                     state["format_log_entry"](entry, screen_width) for entry in entries
                 ]
                 state["actlog_scroll"] = max(
-                    0, len(state["actlog_lines"]) - (stdscr.getmaxyx()[0] - 5)
+                    0, len(state["actlog_lines"]) - max(1, stdscr.getmaxyx()[0] - 5)
                 )
                 state["actlog_search_query"] = ""
                 state["actlog_search_active"] = False

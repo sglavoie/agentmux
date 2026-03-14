@@ -62,6 +62,8 @@ def query_sessions(socket, managed_only=True):
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
         return []
+    if not isinstance(data, list):
+        return []
 
     sessions = []
     for os_win in data:
