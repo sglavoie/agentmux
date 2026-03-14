@@ -92,6 +92,31 @@ def test_string_with_all_escape_chars():
     check("all escapes round-trip", parsed["defaults"]["messy"] == value)
 
 
+def test_backspace_and_formfeed():
+    """Backspace and form feed are escaped correctly (TOML spec requirement)."""
+    print("\n--- backspace and formfeed ---")
+    value = "before\bafter\fend"
+    data = {"defaults": {"ctrl": value}}
+    toml_str = toml_writer.dumps(data)
+    check("backspace escaped as \\b", "\\b" in toml_str)
+    check("formfeed escaped as \\f", "\\f" in toml_str)
+    parsed = _roundtrip(data)
+    check("backspace+formfeed round-trip", parsed["defaults"]["ctrl"] == value)
+
+
+def test_nul_and_other_control_chars():
+    """Control characters outside the named escapes use \\uXXXX."""
+    print("\n--- NUL and other control chars ---")
+    value = "bell\x07here\x00nul"
+    data = {"defaults": {"ctrl": value}}
+    toml_str = toml_writer.dumps(data)
+    check("BEL escaped as \\u0007", "\\u0007" in toml_str)
+    check("NUL escaped as \\u0000", "\\u0000" in toml_str)
+    check("no literal control chars", all(ord(c) > 0x1F or c == '\n' for c in toml_str))
+    parsed = _roundtrip(data)
+    check("control chars round-trip", parsed["defaults"]["ctrl"] == value)
+
+
 def test_empty_string_value():
     """Empty string value serializes correctly."""
     print("\n--- empty string ---")
@@ -233,6 +258,8 @@ if __name__ == "__main__":
     test_empty_table()
     test_special_chars_in_keys()
     test_string_with_all_escape_chars()
+    test_backspace_and_formfeed()
+    test_nul_and_other_control_chars()
     test_empty_string_value()
     test_string_with_unicode()
     test_list_of_strings()

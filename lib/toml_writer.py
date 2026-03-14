@@ -18,9 +18,19 @@ def _format_value(value, *, key="<unknown>"):
         escaped = (
             value.replace("\\", "\\\\")
             .replace('"', '\\"')
+            .replace("\b", "\\b")
+            .replace("\f", "\\f")
             .replace("\n", "\\n")
             .replace("\t", "\\t")
             .replace("\r", "\\r")
+        )
+        # Escape remaining control characters (U+0000–U+001F) that TOML
+        # does not allow as literal characters in basic strings.  The
+        # named escapes above already handled \b, \t, \n, \f, \r so only
+        # the rarer controls (NUL, BEL, VT, etc.) reach this point.
+        escaped = "".join(
+            f"\\u{ord(c):04X}" if ord(c) <= 0x1F else c
+            for c in escaped
         )
         return f'"{escaped}"'
     if isinstance(value, list):

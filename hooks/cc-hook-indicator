@@ -381,16 +381,21 @@ _state_file="${_CCM_TMPDIR}/ccm-state-${tab_id}"
 
 case "$ACTION" in
 stop | failure | permission)
-	# Mark high-priority state so concurrent 'active' calls don't overwrite
-	# Skip for post-permission stops to avoid blocking subsequent active updates
+	# Mark high-priority state so concurrent 'active' calls don't overwrite.
+	# Skip for post-permission stops to avoid blocking subsequent active updates.
+	# Write atomically via temp file + mv to prevent concurrent hooks from
+	# reading a partially written file.
 	if [[ "$ACTION" != "stop" ]] || ! _is_post_permission; then
-		echo "$ACTION $(date +%s)" >"$_state_file"
+		_tmp_state="${_state_file}.tmp.$$"
+		echo "$ACTION $(date +%s)" >"$_tmp_state" && mv "$_tmp_state" "$_state_file"
 	fi
 	;;
 active)
-	# Check if a high-priority state was set recently (within 2s)
-	if [[ -f "$_state_file" ]]; then
-		_prio_ts=$(awk '{print $2}' "$_state_file")
+	# Check if a high-priority state was set recently (within 2s).
+	# Read in a single step to avoid TOCTOU race where the file
+	# disappears between the -f check and the awk read.
+	_prio_ts=$(awk '{print $2}' "$_state_file" 2>/dev/null) || _prio_ts=""
+	if [[ -n "$_prio_ts" ]]; then
 		_now=$(date +%s)
 		if ((_now - _prio_ts < 2)); then
 			exit 0

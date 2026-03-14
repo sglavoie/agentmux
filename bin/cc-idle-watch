@@ -102,9 +102,15 @@ _get_tab_socket() {
 cmd_daemon() {
 	# Write PID file and arrange cleanup
 	echo $$ >"$PID_FILE"
-	trap 'rm -f "$PID_FILE"' EXIT INT TERM
+	trap 'rm -f "$PID_FILE"' EXIT INT TERM HUP
 
 	while true; do
+		# Reap finished background children (alerter subshells) to
+		# prevent zombie accumulation over long daemon lifetimes.
+		# Plain `wait` (no args) reaps all completed children and is
+		# portable to Bash 3.
+		wait 2>/dev/null || true
+
 		# Re-read config each iteration so live changes take effect
 		load_defaults
 		load_accounts
