@@ -107,6 +107,7 @@ cmd_daemon() {
 	while true; do
 		# Re-read config each iteration so live changes take effect
 		load_defaults
+		load_accounts
 
 		# Use configured poll interval, falling back to default
 		local poll="${_DEFAULT_IDLE_POLL_INTERVAL:-$_DEFAULT_POLL_INTERVAL}"
@@ -116,9 +117,18 @@ cmd_daemon() {
 		if [[ -n "$_DEFAULT_IDLE_ALERT_MINUTES" ]]; then
 			threshold=$((_DEFAULT_IDLE_ALERT_MINUTES * 60))
 		fi
+		local idle_notify_enabled=false
+		if [[ "$threshold" -gt 0 && "${_DEFAULT_NOTIFY_IDLE:-}" == "on" ]]; then
+			idle_notify_enabled=true
+		fi
 
-		# If idle notifications are disabled, sleep and check again
-		if [[ "$threshold" -le 0 || "${_DEFAULT_NOTIFY_IDLE:-}" != "on" ]]; then
+		local dim_threshold=0
+		if [[ -n "${_DEFAULT_DIM_AFTER_MINUTES:-}" ]]; then
+			dim_threshold=$((_DEFAULT_DIM_AFTER_MINUTES * 60))
+		fi
+
+		# If neither feature is active, sleep and check again
+		if [[ "$idle_notify_enabled" == false && "$dim_threshold" -le 0 ]]; then
 			sleep "$poll"
 			continue
 		fi
@@ -129,7 +139,8 @@ cmd_daemon() {
 		local now
 		now="$(date +%s)"
 
-		# Iterate activity files
+		# Iterate activity files (idle notifications)
+		if [[ "$idle_notify_enabled" == true ]]; then
 		local activity_file
 		for activity_file in "${_CCM_TMPDIR}"/ccm-activity-*.counts; do
 			[[ -e "$activity_file" ]] || continue
@@ -190,13 +201,9 @@ cmd_daemon() {
 				) &
 			fi
 		done
+		fi # idle_notify_enabled
 
 		# --- Auto-dim scan ---
-		local dim_threshold=0
-		if [[ -n "${_DEFAULT_DIM_AFTER_MINUTES:-}" ]]; then
-			dim_threshold=$((_DEFAULT_DIM_AFTER_MINUTES * 60))
-		fi
-
 		if [[ "$dim_threshold" -gt 0 ]]; then
 			for activity_file in "${_CCM_TMPDIR}"/ccm-activity-*.counts; do
 				[[ -e "$activity_file" ]] || continue
