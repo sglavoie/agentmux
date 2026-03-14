@@ -167,7 +167,7 @@ if [[ -n "$REMOVE_MODE" ]]; then
 			if .hooks then
 				.hooks |= (to_entries | map(
 					.value |= [.[] | select(
-						[.hooks[]? | .command // "" | test("cc-hook-indicator|cc-activity-log")] | any | not
+						[.hooks[]? | .command // "" | test("(^|/)(cc-hook-indicator|cc-activity-log)( |$)")] | any | not
 					)]
 				) | map(select(.value | length > 0)) | from_entries)
 			else .
@@ -293,7 +293,7 @@ for i in "${!CONFIG_DIRS[@]}"; do
 			jq_filter="$jq_filter"'
                 | .hooks['"$event_json"'] = (
                     [(.hooks['"$event_json"'] // [])[] |
-                        select([.hooks[]? | .command // "" | test("cc-hook-indicator|cc-activity-log")] | any | not)
+                        select([.hooks[]? | .command // "" | test("(^|/)(cc-hook-indicator|cc-activity-log)( |$)")] | any | not)
                     ] + '"$extra_for_event"'
                 )'
 		else
@@ -302,7 +302,7 @@ for i in "${!CONFIG_DIRS[@]}"; do
 			jq_filter="$jq_filter"'
                 | .hooks['"$event_json"'] = (
                     [(.hooks['"$event_json"'] // [])[] |
-                        select([.hooks[]? | .command // "" | test("cc-hook-indicator|cc-activity-log")] | any | not)
+                        select([.hooks[]? | .command // "" | test("(^|/)(cc-hook-indicator|cc-activity-log)( |$)")] | any | not)
                     ] + '"$combined"'
                 )'
 		fi

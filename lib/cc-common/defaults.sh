@@ -60,7 +60,7 @@ load_defaults() {
 			_assign_default "$key" "$value"
 			# Emit the assignment for the cache file.
 			printf '_DEFAULT_%s=%q\n' "$(echo "$key" | tr '[:lower:]' '[:upper:]')" "$value"
-		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-defaults "$DEFAULTS_CONFIG" 2>&1 || {
+		done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-defaults "$DEFAULTS_CONFIG" 2>/dev/null || {
 			echo "Warning: failed to parse defaults config '$DEFAULTS_CONFIG'" >&2
 		})
 	} >"$cache_tmp" || {
@@ -73,22 +73,56 @@ load_defaults() {
 	}
 }
 
+_is_positive_int() {
+	[[ "$1" =~ ^[0-9]+$ ]] && [[ "$1" -gt 0 ]]
+}
+
 _assign_default() {
 	local key="$1" value="$2"
 	case "$key" in
 	claude_flags) _DEFAULT_CLAUDE_FLAGS="$value" ;;
 	project_window) _DEFAULT_PROJECT_WINDOW="$value" ;;
 	sort_sessions) _DEFAULT_SORT_SESSIONS="$value" ;;
-	dashboard_refresh) _DEFAULT_DASHBOARD_REFRESH="$value" ;;
+	dashboard_refresh)
+		if _is_positive_int "$value"; then
+			_DEFAULT_DASHBOARD_REFRESH="$value"
+		else
+			echo "Warning: invalid dashboard_refresh '$value', using default" >&2
+		fi
+		;;
 	notify_error) _DEFAULT_NOTIFY_ERROR="$value" ;;
 	notify_permission) _DEFAULT_NOTIFY_PERMISSION="$value" ;;
 	notify_stop) _DEFAULT_NOTIFY_STOP="$value" ;;
-	idle_alert_minutes) _DEFAULT_IDLE_ALERT_MINUTES="$value" ;;
+	idle_alert_minutes)
+		if _is_positive_int "$value"; then
+			_DEFAULT_IDLE_ALERT_MINUTES="$value"
+		else
+			echo "Warning: invalid idle_alert_minutes '$value', using default" >&2
+		fi
+		;;
 	notify_idle) _DEFAULT_NOTIFY_IDLE="$value" ;;
-	notify_min_secs) _DEFAULT_NOTIFY_MIN_SECS="$value" ;;
+	notify_min_secs)
+		if _is_positive_int "$value"; then
+			_DEFAULT_NOTIFY_MIN_SECS="$value"
+		else
+			echo "Warning: invalid notify_min_secs '$value', using default" >&2
+		fi
+		;;
 	notify_ignore_patterns) _DEFAULT_NOTIFY_IGNORE_PATTERNS="$value" ;;
-	idle_poll_interval) _DEFAULT_IDLE_POLL_INTERVAL="$value" ;;
-	dim_after_minutes) _DEFAULT_DIM_AFTER_MINUTES="$value" ;;
+	idle_poll_interval)
+		if _is_positive_int "$value"; then
+			_DEFAULT_IDLE_POLL_INTERVAL="$value"
+		else
+			echo "Warning: invalid idle_poll_interval '$value', using default" >&2
+		fi
+		;;
+	dim_after_minutes)
+		if _is_positive_int "$value"; then
+			_DEFAULT_DIM_AFTER_MINUTES="$value"
+		else
+			echo "Warning: invalid dim_after_minutes '$value', using default" >&2
+		fi
+		;;
 	esac
 }
 

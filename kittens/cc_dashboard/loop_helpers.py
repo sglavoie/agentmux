@@ -45,11 +45,11 @@ def _session_fingerprint(sessions):
     return tuple(
         (
             s.get("socket", ""),
-            s["tab_id"],
-            s["title"],
-            s["status"],
-            s["cwd"],
-            s["account"],
+            s.get("tab_id", 0),
+            s.get("title", ""),
+            s.get("status", ""),
+            s.get("cwd", ""),
+            s.get("account", ""),
             s.get("window_count", 1),
             (s.get("activity") or {}).get("last_event_ts"),
             (s.get("activity") or {}).get("last_event_type"),

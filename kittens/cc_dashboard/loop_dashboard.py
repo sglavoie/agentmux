@@ -100,7 +100,9 @@ def _run_startup_validation(state):
         elif warnings:
             state["msg"] = f"Config: {len(warnings)} warning(s) (ccm config validate)"
             state["msg_frames"] = 30
-    except Exception:
+    except Exception as e:
+        state["msg"] = f"Config check failed: {e}"
+        state["msg_frames"] = 30
         if os.environ.get("CCM_DEBUG") == "1":
             import traceback
 

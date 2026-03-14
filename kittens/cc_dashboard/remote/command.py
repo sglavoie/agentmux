@@ -150,6 +150,8 @@ def find_existing_dashboard(socket):
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
         return None
+    if not isinstance(data, list):
+        return None
 
     for os_win in data:
         for tab in os_win.get("tabs", []):
@@ -186,6 +188,8 @@ def get_host_tab_id(socket):
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
+        return None
+    if not isinstance(data, list):
         return None
     for os_win in data:
         for tab in os_win.get("tabs", []):

@@ -54,8 +54,16 @@ def load_accounts() -> None:
 
     path = _accounts_config_path()
     if os.path.isfile(path):
-        with open(path, "rb") as f:
-            data = tomllib.load(f)
+        try:
+            with open(path, "rb") as f:
+                data = tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            print(
+                f"Warning: failed to parse {path}: {e}"
+                " (check syntax with: ccm config validate)",
+                file=sys.stderr,
+            )
+            return
         for entry in data.get("accounts", []):
             name = entry.get("name", "")
             if not name:
@@ -108,8 +116,16 @@ def load_defaults() -> None:
     if not os.path.isfile(path):
         return
 
-    with open(path, "rb") as f:
-        data = tomllib.load(f)
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        print(
+            f"Warning: failed to parse {path}: {e}"
+            " (check syntax with: ccm config validate)",
+            file=sys.stderr,
+        )
+        return
     defaults = data.get("defaults", {})
     notifications = data.get("notifications", {})
 
@@ -323,8 +339,16 @@ def load_sessions() -> None:
         return
 
     default_account = _state._account_names[0] if _state._account_names else "work"
-    with open(path, "rb") as f:
-        data = tomllib.load(f)
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        print(
+            f"Warning: failed to parse {path}: {e}"
+            " (check syntax with: ccm config validate)",
+            file=sys.stderr,
+        )
+        return
     for entry in data.get("sessions", []):
         title = entry.get("title", "")
         if not title:

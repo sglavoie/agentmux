@@ -70,7 +70,8 @@ def _truncate_to_width(text, width):
             break
         result.append(ch)
         w += cw
-    return "".join(result) + ".."
+    padding = width - w - 2  # space after content, before ".."
+    return "".join(result) + " " * max(0, padding) + ".."
 
 
 def _pad_to_width(text, width):
