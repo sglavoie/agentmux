@@ -101,7 +101,7 @@ _is_post_permission() {
 _is_too_recent() {
 	local min_secs="${_DEFAULT_NOTIFY_MIN_SECS:-0}"
 	[[ "$min_secs" -gt 0 ]] || return 1      # threshold disabled
-	[[ "$_prev_last_ts" -gt 0 ]] || return 0 # no prior activity = suppress
+	[[ "$_prev_last_ts" -gt 0 ]] || return 1 # no prior activity = don't suppress
 
 	local now
 	now=$(date +%s)
@@ -260,17 +260,21 @@ _update_activity() {
 				i=$((i + 1))
 			done <"$activity_file"
 		fi
-		# Ensure numeric defaults for any missing/corrupt values
-		first_ts="${first_ts:-$now}"
-		prompts="${prompts:-0}"
-		tools="${tools:-0}"
-		failures="${failures:-0}"
-		permissions="${permissions:-0}"
-		stops="${stops:-0}"
-		attention_ts="${attention_ts:-0}"
-		task_completes="${task_completes:-0}"
-		active_subagents="${active_subagents:-0}"
-		total_subagents="${total_subagents:-0}"
+		# Ensure numeric defaults for any missing/corrupt/non-numeric values.
+		# A partial write or race can leave non-numeric strings, which would
+		# crash bash arithmetic under set -e.
+		_ensure_int() { [[ "${1:-}" =~ ^[0-9]+$ ]] && echo "$1" || echo "${2:-0}"; }
+		first_ts="$(_ensure_int "$first_ts" "$now")"
+		last_ts="$(_ensure_int "$last_ts" "$now")"
+		prompts="$(_ensure_int "$prompts")"
+		tools="$(_ensure_int "$tools")"
+		failures="$(_ensure_int "$failures")"
+		permissions="$(_ensure_int "$permissions")"
+		stops="$(_ensure_int "$stops")"
+		attention_ts="$(_ensure_int "$attention_ts")"
+		task_completes="$(_ensure_int "$task_completes")"
+		active_subagents="$(_ensure_int "$active_subagents")"
+		total_subagents="$(_ensure_int "$total_subagents")"
 	fi
 
 	# Capture previous values before overwriting (used by notification

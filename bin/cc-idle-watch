@@ -100,8 +100,20 @@ _get_tab_socket() {
 # Daemon loop
 # ---------------------------------------------------------------------------
 cmd_daemon() {
-	# Write PID file and arrange cleanup
-	echo $$ >"$PID_FILE"
+	# Guard against two daemons starting concurrently: if a PID file
+	# already exists and its process is alive, another daemon won the race.
+	if [[ -f "$PID_FILE" ]]; then
+		local existing_pid
+		existing_pid="$(cat "$PID_FILE" 2>/dev/null)" || existing_pid=""
+		if [[ -n "$existing_pid" && "$existing_pid" != "$$" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+			echo "Another idle watcher is already running (PID $existing_pid). Exiting." >&2
+			exit 0
+		fi
+	fi
+
+	# Write PID file atomically and arrange cleanup
+	local _pid_tmp="${PID_FILE}.tmp.$$"
+	echo $$ >"$_pid_tmp" && mv "$_pid_tmp" "$PID_FILE"
 	trap 'rm -f "$PID_FILE"' EXIT INT TERM HUP
 
 	while true; do
@@ -167,7 +179,9 @@ cmd_daemon() {
 			[[ "${#line_arr[@]}" -lt 12 ]] && continue
 
 			local last_event_ts="${line_arr[1]}"
-			[[ -z "$last_event_ts" || "$last_event_ts" == "0" ]] && continue
+			# Skip if empty, zero, or non-numeric (corrupt partial write)
+			[[ "$last_event_ts" =~ ^[0-9]+$ ]] || continue
+			[[ "$last_event_ts" == "0" ]] && continue
 
 			local idle_secs=$((now - last_event_ts))
 
