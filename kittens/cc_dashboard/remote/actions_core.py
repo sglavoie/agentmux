@@ -151,11 +151,13 @@ def generate_clone_title(sessions, original_title):
     stripped = _strip_override_marker(original_title)
     base = re.sub(r"-(\d+)$", "", stripped)
     n = 2
-    while True:
+    max_clones = 100
+    while n <= max_clones:
         candidate = f"{base}-{n}"
         if candidate not in existing_titles:
             return candidate
         n += 1
+    return f"{base}-{n}"
 
 
 def _resolve_tab_account(tab_title, stripped_title, cc_account):

@@ -49,8 +49,19 @@ discover_all_sockets() {
 		seen+=("$KITTY_LISTEN_ON")
 	fi
 
+	# Collect socket paths with their modification times, then sort by most recent.
+	# Uses a simple glob + array sort instead of a fragile multi-stage pipe chain.
+	local -a sock_entries=()
 	local sock_path
-	while IFS= read -r -d '' sock_path; do
+	for sock_path in "${TMPDIR:-/tmp}"/kitty-*; do
+		[[ -e "$sock_path" ]] || continue
+		local mtime
+		mtime="$(_file_mtime "$sock_path")" || continue
+		sock_entries+=("$mtime"$'\t'"$sock_path")
+	done
+
+	local entry
+	while IFS=$'\t' read -r _ sock_path; do
 		local sock="unix:$sock_path"
 		local already=false
 		local seen_sock
@@ -64,7 +75,7 @@ discover_all_sockets() {
 			candidates+=("$sock")
 			seen+=("$sock")
 		fi
-	done < <(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'kitty-*' 2>/dev/null | while IFS= read -r p; do m="$(_file_mtime "$p")" && printf '%s %s\n' "$m" "$p"; done | sort -rn | while IFS=' ' read -r _ p; do printf '%s\0' "$p"; done)
+	done < <(printf '%s\n' ${sock_entries[@]+"${sock_entries[@]}"} | sort -rn)
 
 	local candidate
 	for candidate in "${candidates[@]+"${candidates[@]}"}"; do

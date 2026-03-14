@@ -65,7 +65,7 @@ _maybe_notify() {
 	if [[ -f "$cooldown_file" ]]; then
 		local now last_time
 		now=$(date +%s)
-		last_time=$(stat -f %m "$cooldown_file" 2>/dev/null || echo 0)
+		last_time=$(_file_mtime "$cooldown_file" || echo 0)
 		if ((now - last_time < _NOTIFY_COOLDOWN)); then
 			return 0
 		fi

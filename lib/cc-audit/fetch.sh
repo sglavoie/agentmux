@@ -24,7 +24,7 @@ fetch_docs() {
 		cache_file="$CACHE_DIR/$key.txt"
 
 		if [[ "$opt_no_cache" == "false" && -f "$cache_file" ]]; then
-			file_age="$(stat -f %m "$cache_file" 2>/dev/null || echo 0)"
+			file_age="$(_file_mtime "$cache_file" || echo 0)"
 			if ((now - file_age < 86400)); then
 				local file_size
 				file_size="$(wc -c <"$cache_file" | tr -d ' ')"
