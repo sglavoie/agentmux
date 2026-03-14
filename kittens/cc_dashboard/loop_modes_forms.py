@@ -683,7 +683,7 @@ def handle_new_mode(stdscr, key, state):
                 else:
                     edit_env = state["new_fields"].get("env", "")
                     edit_group = state["new_fields"].get("group", "")
-                    state["cfg"].update_session(
+                    updated = state["cfg"].update_session(
                         state["edit_original_title"],
                         t,
                         d,
@@ -693,14 +693,18 @@ def handle_new_mode(stdscr, key, state):
                         env=edit_env,
                         group=edit_group,
                     )
-                    running_titles = {s["title"] for s in state["sessions"]}
-                    stripped_running = {
-                        state["strip_override_marker"](rt) for rt in running_titles
-                    }
-                    if state["edit_original_title"] in stripped_running:
-                        state["msg"] = "Config updated (restart session to apply)"
+                    if updated:
+                        running_titles = {s["title"] for s in state["sessions"]}
+                        stripped_running = {
+                            state["strip_override_marker"](rt)
+                            for rt in running_titles
+                        }
+                        if state["edit_original_title"] in stripped_running:
+                            state["msg"] = "Config updated (restart session to apply)"
+                        else:
+                            state["msg"] = "Config updated"
                     else:
-                        state["msg"] = "Config updated"
+                        state["msg"] = "Session not found in config"
                     state["msg_frames"] = 20
                     state["mode"] = "list"
             else:

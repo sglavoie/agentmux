@@ -254,6 +254,9 @@ def do_launch(
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
 
+    if not os.path.isdir(directory):
+        return False
+
     loc_args = []
     if location:
         loc_type, loc_id = location

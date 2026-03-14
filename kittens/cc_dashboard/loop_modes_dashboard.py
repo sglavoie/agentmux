@@ -819,7 +819,7 @@ def _do_group_launch(state, group_name):
         loc = state["compute_insert_location"](
             state["home_socket"], entry["account"], entry["title"]
         )
-        state["do_launch"](
+        ok = state["do_launch"](
             state["home_socket"],
             entry["title"],
             entry["dir"],
@@ -830,13 +830,20 @@ def _do_group_launch(state, group_name):
             env_vars=entry.get("env", ""),
             group=entry.get("group", ""),
         )
-        launched += 1
+        if ok:
+            launched += 1
 
     state["sessions"] = state["query_all_sessions"](
         managed_only=(not state["show_all"])
     )
     state["refilter"]()
-    state["msg"] = f"Launched {launched} session(s) in '{group_name}'"
+    failed = len(to_launch) - launched
+    if failed > 0:
+        state["msg"] = (
+            f"Launched {launched}, failed {failed} session(s) in '{group_name}'"
+        )
+    else:
+        state["msg"] = f"Launched {launched} session(s) in '{group_name}'"
     state["msg_frames"] = 20
     state["mode"] = "list"
 
