@@ -162,24 +162,44 @@ test:
     python3 tests/test_data_files.py
     python3 tests/test_smoke.py
 
-# Run linters
+# Run linters (skips tools that are not installed)
 lint:
-    {{uv}} run ruff check {{python_src}}
-    {{shellcheck}} {{shell_scripts}}
+    @if {{uv}} run ruff --version >/dev/null 2>&1; then \
+        {{uv}} run ruff check {{python_src}}; \
+    else \
+        echo "Skipping ruff (not installed)"; \
+    fi
+    @if command -v {{shellcheck}} >/dev/null 2>&1; then \
+        {{shellcheck}} {{shell_scripts}}; \
+    else \
+        echo "Skipping shellcheck (not installed)"; \
+    fi
 
 # Format code
 format:
     {{uv}} run ruff format {{python_src}}
     {{shfmt}} -w {{shell_scripts}}
 
-# Check formatting without modifying
+# Check formatting without modifying (skips tools that are not installed)
 format-check:
-    {{uv}} run ruff format --check {{python_src}}
-    {{shfmt}} -d {{shell_scripts}}
+    @if {{uv}} run ruff --version >/dev/null 2>&1; then \
+        {{uv}} run ruff format --check {{python_src}}; \
+    else \
+        echo "Skipping ruff format check (not installed)"; \
+    fi
+    @if command -v {{shfmt}} >/dev/null 2>&1; then \
+        {{shfmt}} -d {{shell_scripts}}; \
+    else \
+        echo "Skipping shfmt (not installed)"; \
+    fi
 
-# Run type checker
+# Run type checker (skips if mypy is not installed)
 typecheck:
-    {{uv}} run mypy {{python_src}}
+    @if {{uv}} run mypy --version >/dev/null 2>&1; then \
+        {{uv}} run mypy {{python_src}}; \
+    else \
+        echo "Skipping mypy (not installed)"; \
+    fi
 
 # Verify VERSION file matches pyproject.toml
 check-version:

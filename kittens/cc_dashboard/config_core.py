@@ -71,6 +71,13 @@ def load_accounts() -> None:
             config_dir = entry.get("config_dir", "")
             config_dir = os.path.expanduser(config_dir) if config_dir else ""
             color = entry.get("color", "gray")
+            if color not in PALETTE:
+                print(
+                    f"Warning: unknown color '{color}' for account '{name}',"
+                    " falling back to gray.",
+                    file=sys.stderr,
+                )
+                color = "gray"
             _state._accounts[name] = {"config_dir": config_dir, "color": color}
             _state._account_names.append(name)
     else:

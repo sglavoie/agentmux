@@ -99,8 +99,15 @@ cmd_launch_all() {
     fi
 
     local total=0
-    while IFS= read -r _line; do
-        [[ -n "$_line" ]] && total=$((total + 1))
+    local _dup_titles=""
+    while IFS=$'\t' read -r _t _d _a _f _p _e _g; do
+        [[ -z "$_t" ]] && continue
+        _t="$(_trim "$_t")"
+        total=$((total + 1))
+        case "|${_dup_titles}|" in
+            *"|${_t}|"*) echo "Warning: duplicate session title '$_t' in config; only the first will launch." >&2 ;;
+            *) _dup_titles="${_dup_titles}|${_t}" ;;
+        esac
     done <<<"$lines"
     local current=0
     local skipped=0
