@@ -680,6 +680,7 @@ def dispatch_mode(
             "pick_target_instance": state["pick_target_instance"],
             "override_source": state["override_source"],
             "override_selected": state["override_selected"],
+            "sort_mode": state["sort_mode"],
             "cfg": state["cfg"],
             "multi_instance": state["multi_instance"],
             "instance_labels": state["instance_labels"],
@@ -734,6 +735,7 @@ def dispatch_mode(
             "delete_running_count": state["delete_running_count"],
             "delete_target_entry": state["delete_target_entry"],
             "delete_warnings": state["delete_warnings"],
+            "sort_mode": state["sort_mode"],
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }
