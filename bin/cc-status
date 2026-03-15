@@ -356,6 +356,10 @@ if [[ "$_flex_budget" -gt 0 ]]; then
 	((_dir_cap < 10)) && _dir_cap=10
 	((max_title > _title_cap)) && max_title=$_title_cap
 	((max_dir > _dir_cap)) && max_dir=$_dir_cap
+else
+	# Terminal too narrow for fixed columns; cap flex columns to minimums
+	((max_title > 8)) && max_title=8
+	((max_dir > 10)) && max_dir=10
 fi
 
 # Header

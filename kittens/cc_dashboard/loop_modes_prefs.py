@@ -222,10 +222,14 @@ def handle_prefs_mode(key, state):
                     f.write("\n".join(val) + ("\n" if val else ""))
                 else:
                     f.write(str(val) + "\n")
-            do_open_editor(state["home_socket"], tmp)
-            state["prefs_ext_edit_path"] = tmp
-            state["prefs_ext_edit_field"] = field["key"]
-            state["msg"] = "Editing in external window -- Enter to apply"
+            ok = do_open_editor(state["home_socket"], tmp)
+            if ok:
+                state["prefs_ext_edit_path"] = tmp
+                state["prefs_ext_edit_field"] = field["key"]
+                state["msg"] = "Editing in external window -- Enter to apply"
+            else:
+                os.unlink(tmp)
+                state["msg"] = "Failed to open editor"
             state["msg_frames"] = 30
 
 

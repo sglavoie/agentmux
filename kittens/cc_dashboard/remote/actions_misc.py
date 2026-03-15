@@ -46,20 +46,27 @@ def run_hooks_sync(account_name=None):
 
 
 def do_open_editor(socket, filepath):
-    """Open a file in the user's editor in a new Kitty OS window."""
+    """Open a file in the user's editor in a new Kitty OS window.
+
+    Returns True on success, False if the launch fails.
+    """
     editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
     editor_parts = shlex.split(editor)
-    subprocess.Popen(
-        [
-            "kitty",
-            "@",
-            "--to",
-            socket,
-            "launch",
-            "--type=os-window",
-            *editor_parts,
-            filepath,
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.Popen(
+            [
+                "kitty",
+                "@",
+                "--to",
+                socket,
+                "launch",
+                "--type=os-window",
+                *editor_parts,
+                filepath,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return False
+    return True

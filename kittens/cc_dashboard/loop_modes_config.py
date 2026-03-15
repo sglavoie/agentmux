@@ -58,11 +58,14 @@ def handle_config_modes(key, state, home_socket, reload_all_config):
                 state["config_show_scroll"] = 0
                 state["mode"] = "config_show"
             elif state["config_action_selected"] == 1:
-                do_open_editor(home_socket, state["config_file_path"])
-                state["msg"] = (
-                    f"Opened {state['config_file_label']} in editor — "
-                    "press R to reload config"
-                )
+                ok = do_open_editor(home_socket, state["config_file_path"])
+                if ok:
+                    state["msg"] = (
+                        f"Opened {state['config_file_label']} in editor — "
+                        "press R to reload config"
+                    )
+                else:
+                    state["msg"] = "Failed to open editor"
                 state["msg_frames"] = 30
                 state["mode"] = "config_pick"
             elif state["config_action_selected"] == 2:
