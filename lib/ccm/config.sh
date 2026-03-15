@@ -112,9 +112,11 @@ cmd_config() {
 	validate)
 		cmd_config_validate
 		;;
-	"")
+	"" | --help | -h | help)
 		echo "Usage: ccm config <edit|show|path|init|sync|validate> [FILE]" >&2
 		echo "FILE: accounts, sessions, defaults, hooks" >&2
+		echo "" >&2
+		echo "Run 'ccm help config' for detailed usage." >&2
 		return 1
 		;;
 	*)

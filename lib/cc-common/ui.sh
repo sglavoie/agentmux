@@ -18,13 +18,6 @@ die() {
 	exit 1
 }
 
-require_gum() {
-	if [[ "$HAS_GUM" != "true" ]]; then
-		die "This feature requires gum (charmbracelet/gum)." \
-			"Install it with: brew install gum"
-	fi
-}
-
 # Gum styling constants — muted gray for section headers, dark green for
 # highlighted/selected items. These match the cc-manager palette aesthetic.
 # shellcheck disable=SC2034 # used by scripts that source this library
@@ -46,17 +39,4 @@ confirm() {
 		read -rp "$prompt [y/N] " ans
 		[[ "$ans" =~ ^[Yy] ]]
 	fi
-}
-
-gum_color_for_account() {
-	local color
-	color="$(_account_color "$1" 2>/dev/null)" || color="gray"
-	_load_palette
-	local rgb
-	rgb=$(printf '%s' "$_PALETTE_JSON" | jq -r --arg c "$color" '
-        (.colors[$c] // .colors["gray"]).text_fg | map(tostring) | join(";")
-    ')
-	local r g b_val
-	IFS=';' read -r r g b_val <<<"$rgb"
-	printf '#%02x%02x%02x\n' "$r" "$g" "$b_val"
 }

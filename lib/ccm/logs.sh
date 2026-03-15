@@ -228,7 +228,7 @@ cmd_logs() {
 	dir)
 		_resolve_log_dir
 		;;
-	"")
+	"" | --help | -h | help)
 		echo "Usage: ccm logs <list|show|summary|clean|dir>" >&2
 		echo "" >&2
 		echo "Subcommands:" >&2
@@ -237,6 +237,8 @@ cmd_logs() {
 		echo "    summary SESSION_ID  Print an aggregate summary" >&2
 		echo "    clean             Delete old log files" >&2
 		echo "    dir               Print the log directory path" >&2
+		echo "" >&2
+		echo "Run 'ccm help logs' for detailed usage." >&2
 		return 1
 		;;
 	*)

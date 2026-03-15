@@ -186,12 +186,14 @@ cmd_hooks() {
 	status)
 		cmd_hooks_status
 		;;
-	"")
+	"" | --help | -h | help)
 		echo "Usage: ccm hooks <sync|status> [ACCOUNT]" >&2
 		echo "" >&2
 		echo "Subcommands:" >&2
 		echo "    sync [ACCOUNT]    Sync hooks to settings.json (all accounts or one)" >&2
 		echo "    status            Show drift status for all accounts" >&2
+		echo "" >&2
+		echo "Run 'ccm help hooks' for detailed usage." >&2
 		return 1
 		;;
 	*)
