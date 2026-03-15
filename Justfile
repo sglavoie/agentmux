@@ -160,6 +160,7 @@ test:
     python3 tests/test_hooks_validator.py
     python3 tests/test_hooks_install.py
     python3 tests/test_data_files.py
+    python3 tests/test_toml_helper.py
     python3 tests/test_smoke.py
 
 # Run linters (skips tools that are not installed)
