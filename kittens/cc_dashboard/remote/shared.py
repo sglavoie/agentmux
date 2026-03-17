@@ -7,6 +7,7 @@ from cc_dashboard.config_data import load_icons, load_override_emojis
 _ICONS = load_icons()
 _ICON_STAR = _ICONS["star"]
 _ICON_FLAG = _ICONS.get("flag", "❗")
+_ICON_MUTE = _ICONS.get("mute", "🔇")
 _ICON_STATES = _ICONS["states"]
 _STATE_NAMES = {
     "bolt": "active",
@@ -24,7 +25,7 @@ def _build_managed_title_re():
     """Build the compiled regex for matching managed tab titles.
 
     The actual title order produced by build_title() in cc-title-icons.sh is:
-    star? flag? state_icon? override_emoji? X:title
+    star? flag? mute? state_icon? override_emoji? X:title
     """
     override_alt = "|".join(re.escape(e) for e in sorted(OVERRIDE_EMOJIS))
     return re.compile(
@@ -32,6 +33,8 @@ def _build_managed_title_re():
         + re.escape(_ICON_STAR)
         + r")?("
         + re.escape(_ICON_FLAG)
+        + r")?("
+        + re.escape(_ICON_MUTE)
         + r")?("
         + _state_icons_alt
         + r")?(?:"
@@ -49,6 +52,8 @@ def _strip_icons(title):
         title = title[len(_ICON_STAR) :]
     if title.startswith(_ICON_FLAG):
         title = title[len(_ICON_FLAG) :]
+    if title.startswith(_ICON_MUTE):
+        title = title[len(_ICON_MUTE) :]
     for key in _ICONS["state_order"]:
         icon = _ICON_STATES[key]
         if title.startswith(icon):
@@ -132,6 +137,8 @@ def _detect_state(title):
         title = title[len(_ICON_STAR) :]
     if title.startswith(_ICON_FLAG):
         title = title[len(_ICON_FLAG) :]
+    if title.startswith(_ICON_MUTE):
+        title = title[len(_ICON_MUTE) :]
     for key in _ICONS["state_order"]:
         if title.startswith(_ICON_STATES[key]):
             return _STATE_NAMES[key]

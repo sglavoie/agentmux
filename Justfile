@@ -4,7 +4,7 @@ default:
     @just --list
 
 python_src    := "kittens/"
-shell_scripts := "bin/cc-launch bin/cc-status bin/cc-toggle-star bin/cc-toggle-flag bin/cc-toggle-dim bin/cc-toggle-focus bin/cc-idle-watch bin/cc-audit bin/ccm lib/cc-common.sh lib/cc-common/*.sh lib/cc-title-icons.sh lib/install-hooks.sh lib/cc-audit/*.sh lib/ccm.sh lib/ccm/*.sh lib/sync-preambles.sh hooks/cc-activity-log hooks/cc-hook-indicator"
+shell_scripts := "bin/cc-launch bin/cc-status bin/cc-toggle-star bin/cc-toggle-flag bin/cc-toggle-dim bin/cc-toggle-focus bin/cc-toggle-mute bin/cc-idle-watch bin/cc-audit bin/ccm lib/cc-common.sh lib/cc-common/*.sh lib/cc-title-icons.sh lib/install-hooks.sh lib/cc-audit/*.sh lib/ccm.sh lib/ccm/*.sh lib/sync-preambles.sh hooks/cc-activity-log hooks/cc-hook-indicator"
 uv            := "uv"
 shellcheck    := env("SHELLCHECK", "shellcheck")
 shfmt         := env("SHFMT", "shfmt")
@@ -25,6 +25,7 @@ symlinks := prefix_bin / "ccm:bin/ccm" + "\n" + \
     prefix_bin / "cc-toggle-flag:bin/cc-toggle-flag" + "\n" + \
     prefix_bin / "cc-toggle-dim:bin/cc-toggle-dim" + "\n" + \
     prefix_bin / "cc-toggle-focus:bin/cc-toggle-focus" + "\n" + \
+    prefix_bin / "cc-toggle-mute:bin/cc-toggle-mute" + "\n" + \
     prefix_bin / "cc-idle-watch:bin/cc-idle-watch" + "\n" + \
     prefix_bin / "cc-audit:bin/cc-audit" + "\n" + \
     prefix_bin / "cc-hook-indicator:hooks/cc-hook-indicator" + "\n" + \

@@ -165,8 +165,8 @@ cmd_restart() {
         exit 1
     fi
 
-    local title account dir live_flags live_pw live_env live_group
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_group live_mute
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
     SOCKET="$source_socket"
 
     if [[ "$_DRY_RUN" == "true" ]]; then
@@ -189,7 +189,7 @@ cmd_restart() {
     local cfg_flags cfg_pw cfg_env
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
-    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
+    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group" "$live_mute"; then
         sort_tabs "$SOCKET"
     else
         echo "Error: Failed to relaunch '$title' after closing for restart. Check the error above." >&2
@@ -224,8 +224,8 @@ cmd_clone() {
         exit 1
     fi
 
-    local title account dir live_flags live_pw live_env live_group
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_group live_mute
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
     SOCKET="$source_socket"
 
     if [[ "$_DRY_RUN" == "true" ]]; then
@@ -257,10 +257,10 @@ cmd_clone() {
     local cfg_flags cfg_pw cfg_env
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
-    if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
+    if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group" "$live_mute"; then
         sort_tabs "$SOCKET"
         if [[ -f "$CONFIG_FILE" ]]; then
-            _append_session_to_config "$CONFIG_FILE" "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$cfg_env" "$live_group"
+            _append_session_to_config "$CONFIG_FILE" "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$cfg_env" "$live_group" "$live_mute"
         fi
         echo "Cloned '$title' as '$clone_title'." >&2
     fi
@@ -320,8 +320,8 @@ cmd_move() {
         exit 1
     fi
 
-    local title account dir live_flags live_pw live_env live_group
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_group live_mute
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
 
     if [[ "$_DRY_RUN" == "true" ]]; then
         echo "Would move: $title (from=$_TARGET_INSTANCE_LABEL, to=$_MOVE_TARGET_INSTANCE, tab_id=$_TARGET_TAB_ID)" >&2
@@ -344,7 +344,7 @@ cmd_move() {
     local cfg_flags cfg_pw cfg_env
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$fallback"
 
-    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group"; then
+    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group" "$live_mute"; then
         sort_tabs "$SOCKET"
         echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE." >&2
     else

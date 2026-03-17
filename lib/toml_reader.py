@@ -96,7 +96,7 @@ def read_sessions(path, known_accounts=None):
     """Parse ``sessions.toml`` and return a list of session dicts.
 
     Each dict has keys: ``title``, ``dir``, ``account``, ``flags``,
-    ``pw`` (project_window), ``env``, ``group``.
+    ``pw`` (project_window), ``env``, ``group``, ``mute``.
 
     If *known_accounts* is provided (a set or list of account name strings),
     sessions referencing unknown accounts will emit a warning.
@@ -119,6 +119,7 @@ def read_sessions(path, known_accounts=None):
             "pw": entry.get("project_window", ""),
             "env": entry.get("env", ""),
             "group": entry.get("group", ""),
+            "mute": "true" if entry.get("mute") else "",
         }
         if not session["title"] or not session["dir"]:
             missing = []

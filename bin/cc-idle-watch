@@ -100,6 +100,9 @@ _get_tab_socket() {
 # Daemon loop
 # ---------------------------------------------------------------------------
 cmd_daemon() {
+	# Load icons once (needed for mute icon detection in titles)
+	_load_icons
+
 	# Guard against two daemons starting concurrently: if a PID file
 	# already exists and its process is alive, another daemon won the race.
 	if [[ -f "$PID_FILE" ]]; then
@@ -198,14 +201,15 @@ cmd_daemon() {
 					fi
 				fi
 
+				# Check mute icon in title to suppress notification
+				local title
+				title="$(_get_tab_title "$tab_id")"
+				[[ "$title" == *"$_ICON_MUTE"* ]] && should_notify=false
+
 				if [[ "$should_notify" == true ]]; then
 					# Write cooldown file with mtime = last_event_ts
 					touch "$cooldown_file"
 					touch -t "$(date -r "$last_event_ts" '+%Y%m%d%H%M.%S')" "$cooldown_file"
-
-					# Fire notification
-					local title
-					title="$(_get_tab_title "$tab_id")"
 					local duration
 					duration="$(_format_duration "$idle_secs")"
 

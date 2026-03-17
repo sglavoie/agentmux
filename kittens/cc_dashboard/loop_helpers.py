@@ -140,6 +140,7 @@ def _build_session_actions(sess, scope, multi_instance):
             ("clone", "Clone marked sessions"),
             ("color", "Set color for marked sessions"),
             ("group", "Set group for marked sessions"),
+            ("mute", "Toggle mute for marked sessions"),
             ("override", "Override config dir for marked sessions"),
             ("close", "Close marked sessions"),
         ]
@@ -155,6 +156,7 @@ def _build_session_actions(sess, scope, multi_instance):
         ("rename", "Rename session"),
         ("color", "Set tab color"),
         ("edit_notes", "Edit notes"),
+        ("mute", "Unmute alerts" if sess.get("muted") else "Mute alerts"),
         ("close", "Close session"),
     ]
     if sess.get("git"):

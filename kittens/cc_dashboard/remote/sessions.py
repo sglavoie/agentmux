@@ -16,6 +16,7 @@ from cc_dashboard.remote.activity import (
 from cc_dashboard.remote.command import get_all_kitty_sockets, kitty_cmd
 from cc_dashboard.remote.git_ops import get_git_info_cached
 from cc_dashboard.remote.shared import (
+    _ICON_MUTE,
     _MANAGED_TITLE_RE,
     _detect_state,
     _strip_icons,
@@ -112,6 +113,8 @@ def query_sessions(socket, managed_only=True):
                 continue
 
             tab_title = tab.get("title", "")
+            cc_mute = user_vars.get("cc_mute", "")
+            muted = _ICON_MUTE in tab_title or bool(cc_mute)
             if (
                 managed_only
                 and not has_cc_var
@@ -193,6 +196,7 @@ def query_sessions(socket, managed_only=True):
                     "config_dir": cc_config_dir or detected_config_dir,
                     "activity": activity,
                     "dimmed": dimmed,
+                    "muted": muted,
                     "claude_window_id": claude_win_id,
                 }
             )

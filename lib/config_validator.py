@@ -172,7 +172,7 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
     valid_pw = {"", "-", "stack", "vsplit", "hsplit", "split"}
     known_session_keys = {
         "title", "directory", "account", "flags",
-        "project_window", "env", "group",
+        "project_window", "env", "group", "mute",
     }
     seen_titles = set()
 

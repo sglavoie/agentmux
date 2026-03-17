@@ -214,6 +214,9 @@ def draw_list_view(
         if dimmed:
             status_text += " [dim]"
 
+        if s.get("muted"):
+            status_text += " [mute]"
+
         acct_padded = _pad_to_width(
             _truncate_to_width(s["account"], c_acct - 1), c_acct
         )

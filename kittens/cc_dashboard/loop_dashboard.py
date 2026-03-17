@@ -46,7 +46,7 @@ from cc_dashboard.remote import (
     do_restart,
     generate_clone_title,
 )
-from cc_dashboard.remote.actions_core import do_edit_notes, do_set_color
+from cc_dashboard.remote.actions_core import do_edit_notes, do_set_color, do_toggle_mute
 from cc_dashboard.remote.activity import (
     load_activity_log,
     resolve_session_id,
@@ -378,6 +378,7 @@ def dashboard(stdscr):
         "palette_names": PALETTE_NAMES,
         "do_set_color": do_set_color,
         "do_edit_notes": do_edit_notes,
+        "do_toggle_mute": do_toggle_mute,
         "kitty_cmd": kitty_cmd,
         "do_create_worktree": do_create_worktree,
         "resolve_session_id": resolve_session_id,

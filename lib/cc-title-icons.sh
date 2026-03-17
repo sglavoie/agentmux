@@ -15,12 +15,13 @@ fi
 _load_icons
 
 # Parse the icon prefix of a title string.
-# Outputs three lines: has_star (true/false), has_flag (true/false), remaining title.
-# Usage: read -r has_star; read -r has_flag; read -r remaining < <(parse_icon_prefix "$title")
+# Outputs four lines: has_star, has_flag, has_mute (true/false each), remaining title.
+# Usage: read -r has_star; read -r has_flag; read -r has_mute; read -r remaining < <(parse_icon_prefix "$title")
 parse_icon_prefix() {
 	local title="$1"
 	local has_star=false
 	local has_flag=false
+	local has_mute=false
 	if [[ "$title" == "${_ICON_STAR}"* ]]; then
 		has_star=true
 		title="${title#"$_ICON_STAR"}"
@@ -28,14 +29,18 @@ parse_icon_prefix() {
 	if [[ "$title" == "${_ICON_FLAG}"* ]]; then
 		has_flag=true
 	fi
-	printf '%s\n%s\n%s\n' "$has_star" "$has_flag" "$title"
+	if [[ "$title" == *"${_ICON_MUTE}"* ]]; then
+		has_mute=true
+	fi
+	printf '%s\n%s\n%s\n%s\n' "$has_star" "$has_flag" "$has_mute" "$title"
 }
 
-# Remove leading ★, ❗, and state icon prefixes from a title string.
+# Remove leading ★, ❗, 🔇, and state icon prefixes from a title string.
 strip_icons() {
 	local title="$1"
 	title="${title#"$_ICON_STAR"}"
 	title="${title#"$_ICON_FLAG"}"
+	title="${title#"$_ICON_MUTE"}"
 	title="${title#"$_ICON_BOLT"}"
 	title="${title#"$_ICON_STOP"}"
 	title="${title#"$_ICON_KEY"}"
@@ -49,6 +54,7 @@ detect_state() {
 	local title="$1"
 	title="${title#"$_ICON_STAR"}"
 	title="${title#"$_ICON_FLAG"}"
+	title="${title#"$_ICON_MUTE"}"
 	case "$title" in
 	"$_ICON_BOLT"*) echo "bolt" ;;
 	"$_ICON_STOP"*) echo "stop" ;;
@@ -59,10 +65,10 @@ detect_state() {
 }
 
 # Reconstruct a title from a base string, star flag, flag flag, and state name.
-# Order is always: ★❗<state-icon> base
+# Order is always: ★❗🔇<state-icon> base
 # state is one of: bolt, stop, key, error, or empty string.
 build_title() {
-	local base="$1" has_star="$2" state="$3" has_flag="${4:-}"
+	local base="$1" has_star="$2" state="$3" has_flag="${4:-}" has_mute="${5:-}"
 	local result="$base"
 	case "$state" in
 	bolt) result="${_ICON_BOLT}$result" ;;
@@ -70,6 +76,9 @@ build_title() {
 	key) result="${_ICON_KEY}$result" ;;
 	error) result="${_ICON_ERROR}$result" ;;
 	esac
+	if [[ "$has_mute" == "true" ]]; then
+		result="${_ICON_MUTE}$result"
+	fi
 	if [[ "$has_flag" == "true" ]]; then
 		result="${_ICON_FLAG}$result"
 	fi

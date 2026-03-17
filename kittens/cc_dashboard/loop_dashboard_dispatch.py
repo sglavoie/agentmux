@@ -182,7 +182,12 @@ def dispatch_mode(
             ),
             "palette_names": state["palette_names"],
             "do_edit_notes": state["do_edit_notes"],
+            "do_toggle_mute": state["do_toggle_mute"],
             "home_socket": state["home_socket"],
+            "marked": state["marked"],
+            "query_all_sessions": state["query_all_sessions"],
+            "show_all": state["show_all"],
+            "refilter": state["refilter"],
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }

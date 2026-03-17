@@ -259,6 +259,35 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         if "_save_ui_state" in state:
             state["_save_ui_state"]()
 
+    elif key == ord("m") and state["filtered"]:
+        if state["marked"]:
+            targets = [s for s in state["filtered"] if s["tab_id"] in state["marked"]]
+            count = 0
+            for t in targets:
+                t_socket = t.get("socket", state["home_socket"])
+                if state["do_toggle_mute"](t_socket, t):
+                    count += 1
+            state["marked"].clear()
+            state["sessions"] = state["query_all_sessions"](
+                managed_only=(not state["show_all"])
+            )
+            state["refilter"]()
+            state["msg"] = f"Toggled mute for {count} session(s)"
+        else:
+            sess = state["filtered"][state["selected"]]
+            sess_socket = sess.get("socket", state["home_socket"])
+            ok = state["do_toggle_mute"](sess_socket, sess)
+            state["sessions"] = state["query_all_sessions"](
+                managed_only=(not state["show_all"])
+            )
+            state["refilter"]()
+            if ok:
+                was_muted = sess.get("muted", False)
+                state["msg"] = "Session unmuted" if was_muted else "Session muted"
+            else:
+                state["msg"] = "Failed to toggle mute"
+        state["msg_frames"] = 20
+
     elif key == ord("x") and state["filtered"]:
         if state["marked"]:
             state["actions_targets"] = [

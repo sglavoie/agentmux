@@ -29,6 +29,7 @@ def cmd_read_sessions(path):
         print(
             f"{s['title']}\t{s['dir']}\t{s['account']}"
             f"\t{s['flags']}\t{s['pw']}\t{s['env']}\t{s['group']}"
+            f"\t{s['mute']}"
         )
 
 
@@ -82,6 +83,8 @@ def cmd_write_sessions(path):
             d["env"] = entry["env"]
         if entry.get("group"):
             d["group"] = entry["group"]
+        if entry.get("mute") == "true":
+            d["mute"] = True
         sessions.append(d)
 
     tmp_path = path + ".tmp"

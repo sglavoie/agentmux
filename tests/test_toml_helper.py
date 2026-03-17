@@ -92,7 +92,7 @@ def test_read_accounts():
 
 
 def test_read_sessions():
-    """read-sessions outputs correct 7-column TSV."""
+    """read-sessions outputs correct 8-column TSV."""
     print("\n--- read-sessions ---")
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".toml", delete=False
@@ -116,7 +116,7 @@ def test_read_sessions():
     check("two lines of output", len(lines) == 2)
 
     cols1 = lines[0].split("\t")
-    check("full session: 7 columns", len(cols1) == 7)
+    check("full session: 8 columns", len(cols1) == 8)
     check("title=myproject", cols1[0] == "myproject")
     check("dir=~/code/myproject", cols1[1] == "~/code/myproject")
     check("account=work", cols1[2] == "work")
@@ -124,14 +124,16 @@ def test_read_sessions():
     check("pw=vsplit", cols1[4] == "vsplit")
     check("env=FOO=bar", cols1[5] == "FOO=bar")
     check("group=dev", cols1[6] == "dev")
+    check("mute=empty", cols1[7] == "")
 
     # Minimal session: optional fields are empty strings
     cols2 = lines[1].split("\t")
-    check("minimal session: 7 columns", len(cols2) == 7)
+    check("minimal session: 8 columns", len(cols2) == 8)
     check("minimal: title=notes", cols2[0] == "notes")
     check("minimal: empty flags", cols2[3] == "")
     check("minimal: empty pw", cols2[4] == "")
     check("minimal: empty group", cols2[6] == "")
+    check("minimal: empty mute", cols2[7] == "")
 
 
 # ── read-defaults ────────────────────────────────────────────────

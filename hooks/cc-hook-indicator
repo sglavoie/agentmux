@@ -150,6 +150,7 @@ _matches_ignore_pattern() {
 
 _should_suppress_notify() {
 	[[ "$_PIPE_MODE" == true ]] && return 0
+	[[ "$_MUTED" == true ]] && return 0
 	_is_post_permission && return 0
 	_is_too_recent && return 0
 	_matches_ignore_pattern && return 0
@@ -192,6 +193,7 @@ fi
 # Detect pipe mode early; used later to suppress only notifications.
 _PIPE_MODE=false
 _is_pipe_mode && _PIPE_MODE=true
+_MUTED=false
 ccm_debug "hook: action=$ACTION event=$EVENT_KIND tab=$tab_id pipe=$_PIPE_MODE"
 
 # ---------------------------------------------------------------------------
@@ -325,6 +327,7 @@ _update_activity
 # Determine current icon state.
 has_star=false
 has_flag=false
+has_mute=false
 remaining="$current_title"
 if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
 	has_star=true
@@ -333,6 +336,10 @@ fi
 if [[ "$remaining" == "${_ICON_FLAG}"* ]]; then
 	has_flag=true
 fi
+if [[ "$remaining" == *"${_ICON_MUTE}"* ]]; then
+	has_mute=true
+fi
+[[ "$has_mute" == true ]] && _MUTED=true
 
 # Strip any existing state icon to get the base title.
 remaining="$(strip_icons "$remaining")"
@@ -415,7 +422,7 @@ idle | clear)
 	;;
 esac
 
-new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag")"
+new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag" "$has_mute")"
 ccm_debug "hook: new_title='$new_title' (was '$current_title')"
 
 # Send macOS desktop notification if enabled for this event type.

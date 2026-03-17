@@ -10,6 +10,7 @@ _PALETTE_ACTIVE_FG=""
 _PALETTE_INACTIVE_FG=""
 _ICON_STAR=""
 _ICON_FLAG=""
+_ICON_MUTE=""
 _ICON_BOLT=""
 _ICON_STOP=""
 _ICON_KEY=""
@@ -53,6 +54,7 @@ _load_icons() {
 	_ICONS_JSON="$(<"$_CC_DATA_DIR/icons.json")"
 	_ICON_STAR=$(printf '%s' "$_ICONS_JSON" | jq -r '.star')
 	_ICON_FLAG=$(printf '%s' "$_ICONS_JSON" | jq -r '.flag')
+	_ICON_MUTE=$(printf '%s' "$_ICONS_JSON" | jq -r '.mute')
 	_ICON_BOLT=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.bolt')
 	_ICON_STOP=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.stop')
 	_ICON_KEY=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.key')
@@ -98,5 +100,5 @@ _icon_strip_regex() {
 	states=$(printf '%s' "$_ICONS_JSON" | jq -r '
         [.state_order[] as $k | .states[$k]] | join("|")
     ')
-	printf '^(%s)?(%s)?(%s)?' "$_ICON_STAR" "$_ICON_FLAG" "$states"
+	printf '^(%s)?(%s)?(%s)?(%s)?' "$_ICON_STAR" "$_ICON_FLAG" "$_ICON_MUTE" "$states"
 }

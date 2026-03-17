@@ -335,8 +335,9 @@ def main():
         flags = entry.get("flags", "")
         env = entry.get("env", "")
         group = entry.get("group", "")
+        mute = entry.get("mute", "")
         print(
-            f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}|{env}|{group}"
+            f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}|{env}|{group}|{mute}"
         )
 
 

@@ -126,6 +126,29 @@ def handle_actions_mode(key, state, build_session_actions):
                 state["msg"] = "Failed to open notes editor"
             state["msg_frames"] = 20
             state["mode"] = "list"
+        elif action_id == "mute":
+            if state["actions_scope"] == "marked" and state["actions_targets"]:
+                count = 0
+                for t in state["actions_targets"]:
+                    t_socket = t.get("socket", state["home_socket"])
+                    if state["do_toggle_mute"](t_socket, t):
+                        count += 1
+                state["marked"].clear()
+                state["msg"] = f"Toggled mute for {count} session(s)"
+            else:
+                sess_socket = sess.get("socket", state["home_socket"])
+                ok = state["do_toggle_mute"](sess_socket, sess)
+                was_muted = sess.get("muted", False)
+                if ok:
+                    state["msg"] = "Session unmuted" if was_muted else "Session muted"
+                else:
+                    state["msg"] = "Failed to toggle mute"
+            state["msg_frames"] = 20
+            state["sessions"] = state["query_all_sessions"](
+                managed_only=(not state["show_all"])
+            )
+            state["refilter"]()
+            state["mode"] = "list"
         elif action_id == "rename":
             state["mode"] = "rename"
             title = sess["title"]

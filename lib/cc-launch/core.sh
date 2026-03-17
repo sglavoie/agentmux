@@ -117,9 +117,13 @@ tab_metadata_by_id() {
 				group: (
 					[.windows[] | .user_vars.cc_group // empty | select(. != "")] |
 					if length > 0 then .[0] else "" end
+				),
+				mute: (
+					[.windows[] | .user_vars.cc_mute // empty | select(. == "1")] |
+					if length > 0 then "true" else "" end
 				)
 			}
-		] | .[0] // empty | [.title, .account, .dir, .flags, .pw, .env, .group] | @tsv
+		] | .[0] // empty | [.title, .account, .dir, .flags, .pw, .env, .group, .mute] | @tsv
 	'
 }
 
@@ -200,6 +204,7 @@ launch_session() {
 	local location_args_str="${6:-}"
 	local env_vars="${7:-}"
 	local group="${8:-}"
+	local mute="${9:-}"
 	local -a location_args=()
 	if [[ -n "$location_args_str" ]]; then
 		read -ra location_args <<<"$location_args_str"
@@ -237,13 +242,22 @@ launch_session() {
 		done < <(printf '%s' "$env_vars" | python3 -c "import shlex, sys; [print(t) for t in shlex.split(sys.stdin.read())]")
 	fi
 
+	# Handle mute: prepend icon and add user var
+	local -a mute_args=()
+	if [[ "$mute" == "true" ]]; then
+		if [[ "$title" != *"$_ICON_MUTE"* ]]; then
+			title="${_ICON_MUTE}${title}"
+		fi
+		mute_args=(--var "cc_mute=1")
+	fi
+
 	local effective_flags
 	effective_flags="$(resolve_claude_flags "$flags")"
 
 	local shell_cmd="exec claude $effective_flags"
 	ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
 	local launch_err
-	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
+	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" ${mute_args[@]+"${mute_args[@]}"} "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
 		local msg="Warning: Failed to launch tab '$title' (account=$account, dir=$dir, socket=$SOCKET)."
 		if [[ -n "$launch_err" ]]; then
 			msg="$msg Kitty error: $launch_err"

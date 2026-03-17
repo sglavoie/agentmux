@@ -26,6 +26,7 @@ _FOOTER_HINTS = {
         "H Hooks",
         "L Log",
         "d Detail",
+        "m Mute",
         "p Peek",
         "/ Search",
         "a All",

@@ -13,7 +13,11 @@ from cc_dashboard import config as _cfg
 from cc_dashboard.config_core import _resolve_notes_editor, notes_file_for_title
 from cc_dashboard.remote.command import kitty_cmd
 from cc_dashboard.remote.shared import (
+    _ICON_FLAG,
+    _ICON_MUTE,
     _ICON_STAR,
+    _ICON_STATES,
+    _ICONS,
     _MANAGED_TITLE_RE,
     _strip_account_prefix,
     _strip_icons,
@@ -255,12 +259,17 @@ def do_launch(
     env_vars="",
     color_override="",
     group="",
+    mute="",
 ):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
 
     if not os.path.isdir(directory):
         return False
+
+    # Prepend mute icon to title when launching a muted session
+    if mute == "1" and _ICON_MUTE not in title:
+        title = _ICON_MUTE + title
 
     loc_args = []
     if location:
@@ -299,6 +308,9 @@ def do_launch(
 
     if color_override:
         cmd += ["--var", f"cc_color={color_override}"]
+
+    if mute == "1":
+        cmd += ["--var", "cc_mute=1"]
 
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
@@ -363,6 +375,87 @@ def do_launch(
             "--match",
             f"title:^{re.escape(title)}$",
             pw_mode,
+        )
+
+    return True
+
+
+def do_toggle_mute(socket, session):
+    """Toggle the mute icon on a session's tab title.
+
+    Returns True on success.
+    """
+    tab_id = session["tab_id"]
+    win_id = session.get("claude_window_id", 0)
+
+    # Get current tab title from kitty
+    result = kitty_cmd(socket, "ls")
+    if not result or result.returncode != 0:
+        return False
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False
+
+    tab_title = ""
+    for os_win in data:
+        for tab in os_win.get("tabs", []):
+            if tab.get("id") == tab_id:
+                tab_title = tab.get("title", "")
+                break
+
+    if not tab_title:
+        return False
+
+    # Parse current icon state
+    has_star = tab_title.startswith(_ICON_STAR)
+    rest = tab_title
+    if has_star:
+        rest = rest[len(_ICON_STAR) :]
+
+    has_flag = rest.startswith(_ICON_FLAG)
+    if has_flag:
+        rest = rest[len(_ICON_FLAG) :]
+
+    has_mute = rest.startswith(_ICON_MUTE)
+    if has_mute:
+        rest = rest[len(_ICON_MUTE) :]
+
+    # Detect and strip state icon
+    state_icon = ""
+    for key in _ICONS["state_order"]:
+        icon = _ICON_STATES[key]
+        if rest.startswith(icon):
+            state_icon = icon
+            rest = rest[len(icon) :]
+            break
+
+    # Toggle mute
+    has_mute = not has_mute
+
+    # Rebuild title: star? flag? mute? state? base
+    new_title = ""
+    if has_star:
+        new_title += _ICON_STAR
+    if has_flag:
+        new_title += _ICON_FLAG
+    if has_mute:
+        new_title += _ICON_MUTE
+    new_title += state_icon + rest
+
+    result = kitty_cmd(socket, "set-tab-title", "--match", f"id:{tab_id}", new_title)
+    if not result or result.returncode != 0:
+        return False
+
+    # Persist mute state as user var
+    if win_id:
+        mute_val = "1" if has_mute else ""
+        kitty_cmd(
+            socket,
+            "set-user-vars",
+            "--match",
+            f"id:{win_id}",
+            f"cc_mute={mute_val}",
         )
 
     return True

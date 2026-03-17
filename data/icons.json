@@ -1,6 +1,7 @@
 {
   "star": "★",
   "flag": "❗",
+  "mute": "🔇",
   "states": {
     "bolt": "⚡",
     "stop": "🛑",

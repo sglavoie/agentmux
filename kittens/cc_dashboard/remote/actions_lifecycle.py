@@ -18,6 +18,7 @@ from cc_dashboard.remote.actions_core import (
 )
 from cc_dashboard.remote.actions_sorting import do_sort_tabs
 from cc_dashboard.remote.shared import (
+    _ICON_MUTE,
     _append_override_for_dir,
     _strip_override_marker,
 )
@@ -56,6 +57,7 @@ def _build_launch_steps(
     color_override="",
     group="",
     exclude_tab_id_for_location=None,
+    mute="",
 ):
     """Build the list of detached steps for close+relaunch (restart or move).
 
@@ -70,6 +72,10 @@ def _build_launch_steps(
         if config_dir_override
         else _cfg._accounts.get(account, {}).get("config_dir", "")
     )
+    # Prepend mute icon to title when relaunching a muted session
+    if mute == "1" and _ICON_MUTE not in title:
+        title = _ICON_MUTE + title
+
     shell = os.environ.get("SHELL", "/bin/zsh")
     effective_flags = _cfg._resolve_claude_flags(flags)
     shell_cmd = f"exec claude {effective_flags}" if effective_flags else "exec claude"
@@ -143,6 +149,8 @@ def _build_launch_steps(
         "--var",
         f"cc_group={group}",
     ]
+    if mute == "1":
+        launch_cmd += ["--var", "cc_mute=1"]
     if color_override:
         launch_cmd += ["--var", f"cc_color={color_override}"]
     launch_cmd += ["--var", f"cc_config_dir={config_dir}"]
@@ -307,6 +315,7 @@ def _spawn_detached_restart(
     env_vars="",
     color_override="",
     group="",
+    mute="",
 ):
     """Spawn a fully detached subprocess to close+relaunch a session."""
     steps = _build_launch_steps(
@@ -323,6 +332,7 @@ def _spawn_detached_restart(
         color_override=color_override,
         group=group,
         exclude_tab_id_for_location=tab_id,
+        mute=mute,
     )
     _run_detached_steps(steps)
 
@@ -341,6 +351,7 @@ def do_restart(
     title = session["title"]
     cc_color = session.get("cc_color", "")
     group = session.get("group", "")
+    mute = "1" if session.get("muted") else ""
 
     account_config_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
     if config_dir_override and config_dir_override != account_config_dir:
@@ -366,6 +377,7 @@ def do_restart(
             env_vars,
             color_override=cc_color,
             group=group,
+            mute=mute,
         )
         return True
 
@@ -386,6 +398,7 @@ def do_restart(
         env_vars=env_vars,
         color_override=cc_color,
         group=group,
+        mute=mute,
     )
     if ok:
         do_sort_tabs(socket)
@@ -405,6 +418,7 @@ def _spawn_detached_move(
     env_vars="",
     color_override="",
     group="",
+    mute="",
 ):
     """Spawn a detached subprocess to move a session across kitty instances."""
     steps = _build_launch_steps(
@@ -420,6 +434,7 @@ def _spawn_detached_move(
         env_vars=env_vars,
         color_override=color_override,
         group=group,
+        mute=mute,
     )
     _run_detached_steps(steps)
 
@@ -441,6 +456,7 @@ def do_move(
     cwd = session["cwd"]
     cc_color = session.get("cc_color", "")
     group = session.get("group", "")
+    mute = "1" if session.get("muted") else ""
 
     if host_tab_id is not None and tab_id == host_tab_id:
         _spawn_detached_move(
@@ -456,6 +472,7 @@ def do_move(
             env_vars,
             color_override=cc_color,
             group=group,
+            mute=mute,
         )
         return True
 
@@ -476,6 +493,7 @@ def do_move(
         env_vars=env_vars,
         color_override=cc_color,
         group=group,
+        mute=mute,
     )
     if ok:
         do_sort_tabs(target_socket)

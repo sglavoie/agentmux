@@ -21,7 +21,7 @@ cmd_launch_interactive() {
     local launched=0
     local existed=0
 
-    while IFS='|' read -r title dir account flags pw env_vars group; do
+    while IFS='|' read -r title dir account flags pw env_vars group mute; do
         [[ -z "$title" ]] && continue
         title="$(_trim "$title")"
         dir="$(_trim "$dir")"
@@ -30,6 +30,7 @@ cmd_launch_interactive() {
         pw="$(_trim "${pw:-}")"
         env_vars="$(_trim "${env_vars:-}")"
         group="$(_trim "${group:-}")"
+        mute="$(_trim "${mute:-}")"
         [[ -z "$account" ]] && account="work"
 
         if ! _account_index "$account" >/dev/null 2>&1; then
@@ -41,7 +42,7 @@ cmd_launch_interactive() {
         local loc_args
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group"; then
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group" "$mute"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
@@ -69,18 +70,18 @@ cmd_launch_all() {
 
     if [[ -n "${_TARGET_GROUP:-}" ]]; then
         local filtered=""
-        while IFS=$'\t' read -r title dir account flags pw env_vars group; do
+        while IFS=$'\t' read -r title dir account flags pw env_vars group mute; do
             [[ -z "$title" ]] && continue
             if [[ "$(_trim "$group")" == "$_TARGET_GROUP" ]]; then
                 [[ -n "$filtered" ]] && filtered+=$'\n'
-                filtered+="${title}	${dir}	${account}	${flags}	${pw}	${env_vars}	${group}"
+                filtered+="${title}	${dir}	${account}	${flags}	${pw}	${env_vars}	${group}	${mute}"
             fi
         done <<<"$lines"
         if [[ -z "$filtered" ]]; then
             echo "No sessions found in group '$_TARGET_GROUP'." >&2
             # List available groups from config
             local available_groups=""
-            while IFS=$'\t' read -r _t _d _a _f _p _e g; do
+            while IFS=$'\t' read -r _t _d _a _f _p _e g _m; do
                 [[ -z "$_t" ]] && continue
                 g="$(_trim "$g")"
                 [[ -z "$g" ]] && continue
@@ -100,7 +101,7 @@ cmd_launch_all() {
 
     local total=0
     local _dup_titles=""
-    while IFS=$'\t' read -r _t _d _a _f _p _e _g; do
+    while IFS=$'\t' read -r _t _d _a _f _p _e _g _m; do
         [[ -z "$_t" ]] && continue
         _t="$(_trim "$_t")"
         total=$((total + 1))
@@ -114,7 +115,7 @@ cmd_launch_all() {
     local launched=0
     local existed=0
 
-    while IFS=$'\t' read -r title dir account flags pw env_vars group; do
+    while IFS=$'\t' read -r title dir account flags pw env_vars group mute; do
         [[ -z "$title" ]] && continue
         current=$((current + 1))
         title="$(_trim "$title")"
@@ -124,6 +125,7 @@ cmd_launch_all() {
         pw="$(_trim "${pw:-}")"
         env_vars="$(_trim "${env_vars:-}")"
         group="$(_trim "${group:-}")"
+        mute="$(_trim "${mute:-}")"
         [[ -z "$account" ]] && account="work"
 
         if ! _account_index "$account" >/dev/null 2>&1; then
@@ -137,7 +139,7 @@ cmd_launch_all() {
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
         echo "[$current/$total] Launching $title..." >&2
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group"; then
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group" "$mute"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
