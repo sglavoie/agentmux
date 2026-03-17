@@ -6,12 +6,18 @@ import os
 import unicodedata
 
 
+def _to_ascii(text):
+    """Strip non-ASCII characters for safe curses rendering."""
+    return "".join(ch for ch in text if "\x20" <= ch <= "\x7e")
+
+
 def _clip_to_width(text, max_width):
     """Clip text so its display width does not exceed *max_width*.
 
     Unlike a simple slice (``text[:n]``), this respects wide characters
     that occupy two terminal columns.
     """
+    text = _to_ascii(text)
     w = 0
     for i, ch in enumerate(text):
         eaw = unicodedata.east_asian_width(ch)
@@ -27,6 +33,7 @@ def safe_addstr(win, y, x, text, attr=0):
     rows, cols = win.getmaxyx()
     if y < 0 or y >= rows or x < 0 or x >= cols:
         return
+    text = _to_ascii(text)
     text = _clip_to_width(text, cols - x)
     with contextlib.suppress(curses.error, UnicodeEncodeError):
         win.addstr(y, x, text, attr)
@@ -66,6 +73,7 @@ def draw_border(win, y, x, w, h, attr=0):
 
 def _display_width(text):
     """Return the visual display width of text, accounting for wide characters."""
+    text = _to_ascii(text)
     w = 0
     for ch in text:
         eaw = unicodedata.east_asian_width(ch)
@@ -75,6 +83,7 @@ def _display_width(text):
 
 def _truncate_to_width(text, width):
     """Truncate text with a trailing '..' when it exceeds the target width."""
+    text = _to_ascii(text)
     if width < 2 or _display_width(text) <= width:
         return text
     result = []
@@ -92,6 +101,7 @@ def _truncate_to_width(text, width):
 
 def _pad_to_width(text, width):
     """Pad text with spaces to reach the target visual width."""
+    text = _to_ascii(text)
     current = _display_width(text)
     return text + " " * max(0, width - current)
 
