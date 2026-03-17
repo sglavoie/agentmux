@@ -209,6 +209,27 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
             v.error(f"session '{title}': invalid project_window '{pw}' "
                     f"(valid: -, stack, vsplit, hsplit, split)")
 
+        # 1a: Warn if env values contain spaces (breaks Claude invocations)
+        env = entry.get("env", "")
+        if env and env != "-":
+            for pair in env.split():
+                if "=" not in pair:
+                    label = title or f"entry {i}"
+                    v.warn(f"session '{label}': env token '{pair}' "
+                           f"is not a KEY=VALUE pair")
+
+    # 1b: Warn about group names used by only one session (possible typos)
+    group_counts: dict[str, int] = {}
+    for entry in sessions:
+        g = entry.get("group", "")
+        if g:
+            group_counts[g] = group_counts.get(g, 0) + 1
+    if len(group_counts) >= 2:
+        for g, count in group_counts.items():
+            if count == 1:
+                v.warn(f"group '{g}' is used by only 1 session "
+                       f"— possible typo?")
+
     return v
 
 

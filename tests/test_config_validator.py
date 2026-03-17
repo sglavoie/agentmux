@@ -233,6 +233,94 @@ project_window = "invalid"
               any("project_window" in e for e in v.errors))
 
 
+def test_sessions_env_with_spaces():
+    """Env value that splits into non-KEY=VALUE tokens produces a warning."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+env = "FOO=hello world BAR=ok"
+""")
+        v = cv.validate_sessions(path, set())
+        check("env with spaces: warning",
+              any("world" in w and "KEY=VALUE" in w for w in v.warnings))
+
+    # Valid env should produce no warnings
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+env = "FOO=hello BAR=ok"
+""")
+        v = cv.validate_sessions(path, set())
+        check("valid env: no warnings about env",
+              not any("KEY=VALUE" in w for w in v.warnings))
+
+    # env = "-" (disable) should produce no warnings
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+env = "-"
+""")
+        v = cv.validate_sessions(path, set())
+        check("env disabled: no warnings about env",
+              not any("KEY=VALUE" in w for w in v.warnings))
+
+    # KEY= (empty value) is valid
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+env = "KEY= MULTI=a,b,c"
+""")
+        v = cv.validate_sessions(path, set())
+        check("empty value env: no warnings about env",
+              not any("KEY=VALUE" in w for w in v.warnings))
+
+
+def test_sessions_single_use_group():
+    """Group name used by only 1 session gets a typo warning (when >=2 groups)."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "a"
+directory = "~"
+group = "backend"
+
+[[sessions]]
+title = "b"
+directory = "~"
+group = "backend"
+
+[[sessions]]
+title = "c"
+directory = "~"
+group = "bckend"
+""")
+        v = cv.validate_sessions(path, set())
+        check("single-use group: warning about 'bckend'",
+              any("bckend" in w and "typo" in w for w in v.warnings))
+        check("single-use group: no warning about 'backend'",
+              not any("backend" in w and "typo" in w for w in v.warnings))
+
+    # Only 1 group total — no warning
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "a"
+directory = "~"
+group = "solo"
+""")
+        v = cv.validate_sessions(path, set())
+        check("single group total: no typo warning",
+              not any("typo" in w for w in v.warnings))
+
+
 # ── defaults.toml ────────────────────────────────────────────────────
 
 
@@ -461,6 +549,8 @@ if __name__ == "__main__":
     test_sessions_nonexistent_dir()
     test_sessions_unknown_key()
     test_sessions_invalid_project_window()
+    test_sessions_env_with_spaces()
+    test_sessions_single_use_group()
 
     test_valid_defaults()
     test_defaults_unknown_key()

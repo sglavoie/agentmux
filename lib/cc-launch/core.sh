@@ -27,7 +27,7 @@ tab_exists() {
 	local title="$1"
 	ccm_debug "tab_exists check: '$title'"
 	local ls_json
-	ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || return 1
+	ls_json="$(_suppress_stderr kitty @ --to "$SOCKET" ls)" || return 1
 	echo "$ls_json" | jq -e --arg t "$title" --arg strip_re "$_STRIP_RE" --arg emoji_re "$_OVERRIDE_EMOJI_RE" '
 		[.[].tabs[] | select(.title | sub($strip_re; "") | sub("^" + $emoji_re; "") | . == $t)] | length > 0
 	' >/dev/null 2>&1
@@ -72,7 +72,7 @@ tab_metadata_by_id() {
 	local accounts_json="$3"
 	local default_account="$4"
 	local ls_json
-	ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 1
+	ls_json="$(_suppress_stderr kitty @ --to "$socket" ls)" || return 1
 
 	echo "$ls_json" | jq -r --argjson tid "$tab_id" --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg strip_re "$_STRIP_RE" --arg emoji_re "$_OVERRIDE_EMOJI_RE" '
 		[.[] | .tabs[] |
@@ -136,7 +136,7 @@ resolve_location_args() {
 	fi
 
 	if [[ -n "$insert_loc" ]]; then
-		kitty @ --to "$socket" focus-tab --match "id:$insert_loc" 2>/dev/null \
+		_suppress_stderr kitty @ --to "$socket" focus-tab --match "id:$insert_loc" \
 			|| ccm_debug "focus-tab failed for id:$insert_loc (cosmetic, continuing)"
 		# NOTE: Brief delay for Kitty to process the focus change before
 		# inserting the new tab. A polling approach would be more robust but
@@ -218,7 +218,10 @@ launch_session() {
 	fi
 
 	local config_dir colors color_name
-	config_dir="$(claude_config_dir_for_account "$account")"
+	if ! config_dir="$(claude_config_dir_for_account "$account")"; then
+		echo "  Hint: Check the account name in sessions.toml or add '$account' to accounts.toml (session='$title')." >&2
+		return 1
+	fi
 	color_name="$(_account_color "$account")" || color_name=""
 	colors="$(tab_colors_for_account "$account")"
 

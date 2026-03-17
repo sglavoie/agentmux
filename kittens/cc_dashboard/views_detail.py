@@ -6,7 +6,7 @@ import time
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.colors import CP_DIM, CP_HEADER, CP_NORMAL, CP_WARN, _cp_for_account
-from cc_dashboard.drawing import safe_addstr
+from cc_dashboard.drawing import _truncate_to_width, safe_addstr
 from cc_dashboard.remote.shared import _strip_override_marker, format_duration
 
 DETAIL_PANE_HEIGHT = 15
@@ -68,13 +68,15 @@ def draw_detail_pane(stdscr, session, detail_y):
     acct_attr = curses.color_pair(_cp_for_account(session["account"]))
     override_attr = curses.color_pair(CP_WARN)
 
+    _trunc = _truncate_to_width
     mid = max(cols // 2, 40)
     lx = 2
     rx = mid
 
     y = detail_y + 1
     safe_addstr(stdscr, y, lx, " Title: ", label_attr)
-    safe_addstr(stdscr, y, lx + 8, session["title"], val_attr)
+    title_w = mid - lx - 9
+    safe_addstr(stdscr, y, lx + 8, _trunc(session["title"], title_w), val_attr)
     safe_addstr(stdscr, y, rx, "Tab ID: ", label_attr)
     safe_addstr(stdscr, y, rx + 8, str(session.get("tab_id", "")), val_attr)
 
@@ -87,33 +89,44 @@ def draw_detail_pane(stdscr, session, detail_y):
     else:
         acct_display = f"{session['account']} ({color_name})"
         acct_display_attr = acct_attr
-    safe_addstr(stdscr, y, lx + 10, acct_display, acct_display_attr)
+    acct_w = mid - lx - 11
+    safe_addstr(
+        stdscr,
+        y,
+        lx + 10,
+        _trunc(acct_display, acct_w),
+        acct_display_attr,
+    )
     safe_addstr(stdscr, y, rx, "Windows: ", label_attr)
     safe_addstr(stdscr, y, rx + 9, window_count, val_attr)
 
     y += 1
     safe_addstr(stdscr, y, lx, " Directory: ", label_attr)
-    safe_addstr(stdscr, y, lx + 12, full_dir[: mid - lx - 13], val_attr)
+    dir_w = mid - lx - 13
+    safe_addstr(stdscr, y, lx + 12, _trunc(full_dir, dir_w), val_attr)
     safe_addstr(stdscr, y, rx, "PIDs: ", label_attr)
-    safe_addstr(
-        stdscr, y, rx + 6, pids_str[: cols - rx - 7] if pids_str else "n/a", val_attr
-    )
+    pids_w = cols - rx - 7
+    pids_display = _trunc(pids_str, pids_w) if pids_str else "n/a"
+    safe_addstr(stdscr, y, rx + 6, pids_display, val_attr)
 
     y += 1
     safe_addstr(stdscr, y, lx, " Config dir: ", label_attr)
+    cdir_w = mid - lx - 14
     safe_addstr(
         stdscr,
         y,
         lx + 13,
-        config_dir[: mid - lx - 14],
+        _trunc(config_dir, cdir_w),
         override_attr if config_dir_overridden else val_attr,
     )
     safe_addstr(stdscr, y, rx, "Flags: ", label_attr)
+    flags_w = cols - rx - 8
+    flags_display = effective_flags if effective_flags else "none"
     safe_addstr(
         stdscr,
         y,
         rx + 7,
-        (effective_flags if effective_flags else "none")[: cols - rx - 8],
+        _trunc(flags_display, flags_w),
         override_attr if flags_overridden else val_attr,
     )
 
@@ -135,20 +148,40 @@ def draw_detail_pane(stdscr, session, detail_y):
     if env_display and env_display != "-":
         y += 1
         safe_addstr(stdscr, y, lx, " Env vars: ", label_attr)
-        safe_addstr(stdscr, y, lx + 11, env_display[: cols - lx - 12], val_attr)
+        env_w = cols - lx - 12
+        safe_addstr(
+            stdscr,
+            y,
+            lx + 11,
+            _trunc(env_display, env_w),
+            val_attr,
+        )
 
     notes_raw = session.get("cc_notes", "")
     if notes_raw:
         note_lines = notes_raw.split("\n")
         # Cap note lines to avoid overflowing the detail pane
-        # Reserve ~8 lines for remaining fields (git, socket, cmdline, activity)
+        # Reserve ~8 lines for remaining fields
         max_note_lines = max(1, (detail_y + DETAIL_PANE_HEIGHT) - y - 9)
+        note_w = cols - lx - 9
         y += 1
         safe_addstr(stdscr, y, lx, " Notes: ", label_attr)
-        safe_addstr(stdscr, y, lx + 8, note_lines[0][: cols - lx - 9], val_attr)
+        safe_addstr(
+            stdscr,
+            y,
+            lx + 8,
+            _trunc(note_lines[0], note_w),
+            val_attr,
+        )
         for nl in note_lines[1:max_note_lines]:
             y += 1
-            safe_addstr(stdscr, y, lx + 8, nl[: cols - lx - 9], val_attr)
+            safe_addstr(
+                stdscr,
+                y,
+                lx + 8,
+                _trunc(nl, note_w),
+                val_attr,
+            )
         if len(note_lines) > max_note_lines:
             y += 1
             safe_addstr(
@@ -167,32 +200,66 @@ def draw_detail_pane(stdscr, session, detail_y):
     git_info = session.get("git")
     safe_addstr(stdscr, y, lx, " Branch: ", label_attr)
     if git_info:
-        safe_addstr(stdscr, y, lx + 9, git_info["branch"][: mid - lx - 10], val_attr)
+        branch_w = mid - lx - 10
+        safe_addstr(
+            stdscr,
+            y,
+            lx + 9,
+            _trunc(git_info["branch"], branch_w),
+            val_attr,
+        )
         safe_addstr(stdscr, y, rx, "Working tree: ", label_attr)
         if git_info["dirty"]:
-            safe_addstr(stdscr, y, rx + 14, "dirty", curses.color_pair(CP_WARN))
+            safe_addstr(
+                stdscr,
+                y,
+                rx + 14,
+                "dirty",
+                curses.color_pair(CP_WARN),
+            )
         else:
             safe_addstr(stdscr, y, rx + 14, "clean", val_attr)
     else:
-        safe_addstr(stdscr, y, lx + 9, "not a git repo", curses.color_pair(CP_DIM))
+        safe_addstr(
+            stdscr,
+            y,
+            lx + 9,
+            "not a git repo",
+            curses.color_pair(CP_DIM),
+        )
 
     y += 1
     if y > max_y:
         return
     safe_addstr(stdscr, y, lx, " Socket: ", label_attr)
-    safe_addstr(stdscr, y, lx + 9, session.get("socket", "")[: mid - lx - 10], val_attr)
+    sock_w = mid - lx - 10
+    safe_addstr(
+        stdscr,
+        y,
+        lx + 9,
+        _trunc(session.get("socket", ""), sock_w),
+        val_attr,
+    )
     safe_addstr(stdscr, y, rx, "Instance: ", label_attr)
-    safe_addstr(stdscr, y, rx + 10, session.get("instance_label", ""), val_attr)
+    safe_addstr(
+        stdscr,
+        y,
+        rx + 10,
+        session.get("instance_label", ""),
+        val_attr,
+    )
 
     y += 1
     if y > max_y:
         return
     safe_addstr(stdscr, y, lx, " Cmdline: ", label_attr)
+    cmd_w = cols - lx - 11
+    cmd_text = cmdline_display if cmdline_display else "n/a"
     safe_addstr(
         stdscr,
         y,
         lx + 10,
-        (cmdline_display if cmdline_display else "n/a")[: cols - lx - 11],
+        _trunc(cmd_text, cmd_w),
         override_attr if flags_overridden else val_attr,
     )
 
@@ -265,7 +332,14 @@ def draw_detail_pane(stdscr, session, detail_y):
         if agent_type_val:
             model_val += f" (agent: {agent_type_val})"
         safe_addstr(stdscr, y, lx, " Model: ", label_attr)
-        safe_addstr(stdscr, y, lx + 8, model_val[: mid - lx - 9], val_attr)
+        model_w = mid - lx - 9
+        safe_addstr(
+            stdscr,
+            y,
+            lx + 8,
+            _trunc(model_val, model_w),
+            val_attr,
+        )
 
         total_sub = activity.get("total_subagents", 0)
         if total_sub > 0:
@@ -275,4 +349,10 @@ def draw_detail_pane(stdscr, session, detail_y):
             safe_addstr(stdscr, y, rx + 11, sub_str, val_attr)
     else:
         y += 1
-        safe_addstr(stdscr, y, lx, " No activity data", curses.color_pair(CP_DIM))
+        safe_addstr(
+            stdscr,
+            y,
+            lx,
+            " No activity data",
+            curses.color_pair(CP_DIM),
+        )

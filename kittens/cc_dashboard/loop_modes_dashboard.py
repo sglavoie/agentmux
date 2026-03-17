@@ -516,7 +516,7 @@ def handle_confirm_modes(key, state):
                     t_socket, t["account"], new_title
                 )
                 clone_group = t.get("group", "")
-                state["do_launch"](
+                ok = state["do_launch"](
                     t_socket,
                     new_title,
                     t["cwd"],
@@ -528,14 +528,19 @@ def handle_confirm_modes(key, state):
                     color_override=t.get("cc_color", ""),
                     group=clone_group,
                 )
-                cloned += 1
+                if ok:
+                    cloned += 1
 
             state["marked"].clear()
             state["sessions"] = state["query_all_sessions"](
                 managed_only=(not state["show_all"])
             )
             state["refilter"]()
-            state["msg"] = f"Cloned {cloned} session(s)"
+            failed = len(state["batch_targets"]) - cloned
+            if failed > 0:
+                state["msg"] = f"Cloned {cloned}, failed {failed} session(s)"
+            else:
+                state["msg"] = f"Cloned {cloned} session(s)"
             state["msg_frames"] = 20
         state["mode"] = "list"
         return True

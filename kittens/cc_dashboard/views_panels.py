@@ -60,7 +60,8 @@ def draw_list_view(
             badge_x += len(indicator)
     if group_filter:
         groups_str = ",".join(sorted(group_filter))
-        group_badge = f" [Group: {groups_str}]"
+        max_badge = cols - badge_x - 1
+        group_badge = _truncate_to_width(f" [Group: {groups_str}]", max_badge)
         if badge_x + len(group_badge) < cols:
             safe_addstr(stdscr, 1, badge_x, group_badge, curses.color_pair(CP_DIM))
             badge_x += len(group_badge)
@@ -213,9 +214,15 @@ def draw_list_view(
         if dimmed:
             status_text += " [dim]"
 
-        line = f"{mark}{title_padded}{s['account']:<{c_acct}}"
+        acct_padded = _pad_to_width(
+            _truncate_to_width(s["account"], c_acct - 1), c_acct
+        )
+        line = f"{mark}{title_padded}{acct_padded}"
         if multi_instance:
-            line += f"{s.get('instance_label', ''):<{c_inst}}"
+            inst_padded = _pad_to_width(
+                _truncate_to_width(s.get("instance_label", ""), c_inst - 1), c_inst
+            )
+            line += inst_padded
         notes_indicator = "Y" if s.get("cc_notes", "") else " "
         line += f"{short_dir:<{c_dir}}"
         line += f"{notes_indicator:<{c_notes}}"
@@ -364,9 +371,10 @@ def draw_pick_view(
             title_padded = _pad_to_width(
                 _truncate_to_width(entry["title"], c_title - 1), c_title
             )
-            line = (
-                f"{mark} {title_padded}{entry['account']:<{c_acct}}{short_dir:<{c_dir}}"
+            acct_padded = _pad_to_width(
+                _truncate_to_width(entry["account"], c_acct - 1), c_acct
             )
+            line = f"{mark} {title_padded}{acct_padded}{short_dir:<{c_dir}}"
 
             attr = curses.color_pair(cp)
             if sel:
@@ -459,8 +467,11 @@ def draw_delete_view(stdscr, entries, selected, running_count):
                 _truncate_to_width(entry["title"], c_title - 1), c_title
             )
             type_tag = entry.get("type_tag", "[dir]")
+            acct_padded = _pad_to_width(
+                _truncate_to_width(entry["account"], c_acct - 1), c_acct
+            )
             line = (
-                f"{mark} {title_padded}{entry['account']:<{c_acct}}"
+                f"{mark} {title_padded}{acct_padded}"
                 f"{type_tag:<{c_type}}{short_dir:<{c_dir}}"
             )
 

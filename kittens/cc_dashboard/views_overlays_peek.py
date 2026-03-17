@@ -10,7 +10,7 @@ from cc_dashboard.colors import (
     CP_NORMAL,
     CP_WARN,
 )
-from cc_dashboard.drawing import safe_addstr
+from cc_dashboard.drawing import _truncate_to_width, safe_addstr
 from cc_dashboard.views_shared import (
     _draw_peek_search_bar,
     _render_peek_line,
@@ -76,7 +76,11 @@ def draw_peek_overlay(
     current_line_idx = match_line_indices[match_index] if match_line_indices else -1
 
     extent_label = "scrollback" if extent == "all" else "screen"
-    safe_addstr(stdscr, 0, 2, f"Peek: {session_title} [{extent_label}]", header_attr)
+    # Reserve space for "Peek: " + " [screen/scrollback]" + margin
+    suffix = f" [{extent_label}]"
+    max_title = max(4, cols - len(suffix) - 8)
+    peek_title = _truncate_to_width(session_title, max_title)
+    safe_addstr(stdscr, 0, 2, f"Peek: {peek_title}{suffix}", header_attr)
 
     content_height = max(1, rows - 3)
     if error:

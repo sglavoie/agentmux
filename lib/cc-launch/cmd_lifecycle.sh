@@ -169,6 +169,11 @@ cmd_restart() {
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
     SOCKET="$source_socket"
 
+    if [[ "$_DRY_RUN" == "true" ]]; then
+        echo "Would restart: $title (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID, dir=$dir, account=$account)" >&2
+        return
+    fi
+
     if ! kitty @ --to "$SOCKET" close-tab --match "id:$_TARGET_TAB_ID"; then
         echo "Error: failed to close tab '$title' for restart." >&2
         exit 1
@@ -222,6 +227,11 @@ cmd_clone() {
     local title account dir live_flags live_pw live_env live_group
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
     SOCKET="$source_socket"
+
+    if [[ "$_DRY_RUN" == "true" ]]; then
+        echo "Would clone: $title (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID, dir=$dir, account=$account)" >&2
+        return
+    fi
 
     local base_title clone_title number
     local max_clones=100  # Safety cap to prevent runaway loop; 100 clones per session is far beyond practical use
@@ -312,6 +322,11 @@ cmd_move() {
 
     local title account dir live_flags live_pw live_env live_group
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group <<<"$tab_info"
+
+    if [[ "$_DRY_RUN" == "true" ]]; then
+        echo "Would move: $title (from=$_TARGET_INSTANCE_LABEL, to=$_MOVE_TARGET_INSTANCE, tab_id=$_TARGET_TAB_ID)" >&2
+        return
+    fi
 
     if ! kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"; then
         echo "Error: failed to close tab '$title' for move." >&2

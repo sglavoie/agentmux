@@ -14,6 +14,16 @@ _CC_COMMON_LOADED=1
 CCM_DEBUG="${CCM_DEBUG:-0}"
 ccm_debug() { if [[ "$CCM_DEBUG" == "1" ]]; then echo "[DEBUG $(date +%H:%M:%S)] $*" >&2; fi; }
 
+# Run a command, suppressing stderr unless CCM_DEBUG is enabled.
+# Usage: _suppress_stderr kitty @ --to "$SOCKET" ls
+_suppress_stderr() {
+	if [[ "$CCM_DEBUG" == "1" ]]; then
+		"$@"
+	else
+		"$@" 2>/dev/null
+	fi
+}
+
 _CCM_TMPDIR="${TMPDIR:-/tmp}"
 
 _CC_COMMON_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"

@@ -9,7 +9,7 @@ from cc_dashboard.colors import (
     CP_NORMAL,
     CP_WARN,
 )
-from cc_dashboard.drawing import safe_addstr
+from cc_dashboard.drawing import _truncate_to_width, safe_addstr
 
 _FOOTER_HINTS = {
     "list": [
@@ -229,9 +229,20 @@ def draw_footer(stdscr, mode, exclude=None):
 
 def draw_confirm_prompt(stdscr, session, action="Close"):
     """Draw a confirmation prompt above the footer."""
-    rows, _ = stdscr.getmaxyx()
-    msg = f'{action} session "{session["title"]}"?  y/n'
-    safe_addstr(stdscr, rows - 3, 2, msg, curses.color_pair(CP_WARN) | curses.A_BOLD)
+    rows, cols = stdscr.getmaxyx()
+    title = session["title"]
+    # Reserve space for: action + ' session "' + '"?  y/n' + margin
+    prefix_len = len(action) + len(' session "') + len('"?  y/n')
+    max_title = max(4, cols - prefix_len - 4)
+    title = _truncate_to_width(title, max_title)
+    msg = f'{action} session "{title}"?  y/n'
+    safe_addstr(
+        stdscr,
+        rows - 3,
+        2,
+        msg,
+        curses.color_pair(CP_WARN) | curses.A_BOLD,
+    )
 
 
 def draw_batch_confirm_prompt(stdscr, sessions, action="Close"):
@@ -322,13 +333,14 @@ def draw_rename_input(stdscr, current_value, cursor_pos):
 
 def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
     """Draw a two-line worktree input on the status line area."""
-    rows, _cols = stdscr.getmaxyx()
+    rows, cols = stdscr.getmaxyx()
+    title = _truncate_to_width(session["title"], max(4, cols - 28))
 
     safe_addstr(
         stdscr,
         rows - 4,
         2,
-        f'Clone "{session["title"]}" -> worktree',
+        f'Clone "{title}" -> worktree',
         curses.color_pair(CP_DIM),
     )
     _draw_text_input_line(stdscr, rows - 3, "Branch: ", branch_value, cursor_pos)
@@ -336,13 +348,14 @@ def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
 
 def draw_clone_input(stdscr, session, title_value, cursor_pos):
     """Draw a two-line clone input on the status line area."""
-    rows, _cols = stdscr.getmaxyx()
+    rows, cols = stdscr.getmaxyx()
+    title = _truncate_to_width(session["title"], max(4, cols - 32))
 
     safe_addstr(
         stdscr,
         rows - 4,
         2,
-        f'Clone "{session["title"]}" -> new session',
+        f'Clone "{title}" -> new session',
         curses.color_pair(CP_DIM),
     )
     _draw_text_input_line(stdscr, rows - 3, "Title: ", title_value, cursor_pos)

@@ -4,6 +4,12 @@
 _CCM_CONFIG_LOADED=1
 
 cmd_config_edit() {
+	if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+		echo "Usage: ccm config edit [FILE]" >&2
+		echo "Open config file(s) in your editor. FILE: accounts, sessions, defaults, hooks" >&2
+		return 0
+	fi
+
 	local editor
 	editor="$(resolve_editor)"
 
@@ -26,6 +32,12 @@ cmd_config_edit() {
 }
 
 cmd_config_show() {
+	if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+		echo "Usage: ccm config show [FILE]" >&2
+		echo "Display config file contents. FILE: accounts, sessions, defaults, hooks" >&2
+		return 0
+	fi
+
 	if [[ $# -eq 0 ]]; then
 		local f
 		for key in accounts sessions defaults hooks; do
@@ -51,6 +63,12 @@ cmd_config_show() {
 }
 
 cmd_config_path() {
+	if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+		echo "Usage: ccm config path [FILE]" >&2
+		echo "Print config file path(s). FILE: accounts, sessions, defaults, hooks" >&2
+		return 0
+	fi
+
 	if [[ $# -eq 0 ]]; then
 		resolve_config_file accounts
 		resolve_config_file sessions

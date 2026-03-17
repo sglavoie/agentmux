@@ -284,6 +284,27 @@ def test_malformed_hooks_json():
         check("settings.json not created", not os.path.isfile(settings_path))
 
 
+def test_invalid_settings_json_exit_code():
+    """Installer exits non-zero when an account has invalid settings.json."""
+    print("\n--- invalid settings.json exit code ---")
+    with tempfile.TemporaryDirectory() as tmp:
+        acct_dir = os.path.join(tmp, "claude-config")
+        os.makedirs(acct_dir)
+        config_dir = _make_accounts_toml(tmp, [("badacct", acct_dir)])
+
+        # Pre-populate settings.json with invalid JSON
+        with open(os.path.join(acct_dir, "settings.json"), "w") as f:
+            f.write("{this is not valid json!!")
+
+        result = _run_installer(tmp, config_dir, expect_fail=True)
+
+        check("non-zero exit for invalid settings.json", result.returncode != 0)
+        check("error mentions account name",
+              "badacct" in result.stderr or "badacct" in result.stdout)
+        check("error mentions invalid JSON",
+              "invalid JSON" in result.stderr or "invalid JSON" in result.stdout)
+
+
 # ── run all ──────────────────────────────────────────────────────────
 
 
@@ -304,6 +325,7 @@ if __name__ == "__main__":
     test_backup_created()
     test_remove_mode()
     test_malformed_hooks_json()
+    test_invalid_settings_json_exit_code()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:

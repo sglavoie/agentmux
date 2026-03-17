@@ -33,10 +33,15 @@ confirm() {
 	local affirmative="${2:-Yes}"
 	local negative="${3:-Cancel}"
 	if [[ "$HAS_GUM" == "true" ]]; then
-		gum confirm "$prompt" --affirmative "$affirmative" --negative "$negative"
-	else
-		local ans
-		read -rp "$prompt [y/N] " ans
-		[[ "$ans" =~ ^[Yy] ]]
+		local rc=0
+		gum confirm "$prompt" --affirmative "$affirmative" --negative "$negative" || rc=$?
+		# 0 = yes, 1 = no, 130 = Ctrl-C — all valid gum responses.
+		# Anything else means gum crashed; fall through to read fallback.
+		if [[ $rc -le 130 ]]; then
+			return $rc
+		fi
 	fi
+	local ans
+	read -rp "$prompt [y/N] " ans
+	[[ "$ans" =~ ^[Yy] ]]
 }

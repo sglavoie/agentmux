@@ -163,6 +163,7 @@ if [[ -n "$REMOVE_MODE" ]]; then
 
 		tmp_file="${settings_file}.tmp"
 		_CLEANUP_TMP="$tmp_file"
+		_rm_account_name="${ACCOUNT_NAMES[$i]}"
 		if ! jq '
 			if .hooks then
 				.hooks |= (to_entries | map(
@@ -174,7 +175,7 @@ if [[ -n "$REMOVE_MODE" ]]; then
 			end
 		' "$settings_file" >"$tmp_file" 2>/dev/null; then
 			rm -f "$tmp_file"
-			echo "  Error: $settings_file contains invalid JSON, skipping." >&2
+			echo "  Error: Account '$_rm_account_name' — $settings_file contains invalid JSON, skipping." >&2
 			continue
 		fi
 
@@ -238,6 +239,7 @@ if [[ ${#HOOK_EVENTS[@]} -eq 0 ]]; then
 	exit 1
 fi
 
+_any_failures=0
 for i in "${!CONFIG_DIRS[@]}"; do
 	config_dir="${CONFIG_DIRS[$i]}"
 	account_name="${ACCOUNT_NAMES[$i]}"
@@ -288,10 +290,16 @@ for i in "${!CONFIG_DIRS[@]}"; do
 	# User-defined hook entries (those without cc-hook-indicator) are preserved.
 	jq_filter='.hooks //= {}'
 	for event in "${HOOK_EVENTS[@]}"; do
-		is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')"
+		is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')" || {
+			echo "  Warning: Account '$account_name' — failed to check disabled_events for event '$event', treating as enabled." >&2
+			is_disabled="false"
+		}
 		extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" --arg logcmd "$LOG_CMD" '
 			(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
-		')"
+		')" || {
+			echo "  Warning: Account '$account_name' — failed to process extra_hooks for event '$event', skipping extras." >&2
+			extra_for_event="[]"
+		}
 
 		# Compute entries to append: example + extra (enabled) or just extra (disabled)
 		if [[ "$is_disabled" == "true" ]]; then
@@ -314,7 +322,8 @@ for i in "${!CONFIG_DIRS[@]}"; do
 	_CLEANUP_TMP="$tmp_file"
 	if ! jq "$jq_filter" "$settings_file" >"$tmp_file" 2>/dev/null; then
 		rm -f "$tmp_file"
-		echo "  Error: $settings_file contains invalid JSON, skipping." >&2
+		echo "  Error: Account '$account_name' — $settings_file contains invalid JSON, skipping." >&2
+		_any_failures=1
 		continue
 	fi
 
@@ -328,3 +337,5 @@ for i in "${!CONFIG_DIRS[@]}"; do
 		echo "  Updated cc-hook-indicator hooks in $settings_file"
 	fi
 done
+
+exit "$_any_failures"
