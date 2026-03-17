@@ -79,8 +79,10 @@ def _get_current_session(socket):
     if target_tab is None:
         return None
 
-    # Scan all windows in the tab for the one with cc_account user vars
+    # Scan all windows in the tab for the one with cc_account user vars.
+    # If no window has cc_account (unmanaged tab), use the first window.
     title = _strip_icons(target_tab.get("title", ""))
+    best_win = None
     for win in target_tab.get("windows", []):
         uv = win.get("user_vars", {})
         if uv.get("cc_account"):
@@ -92,6 +94,19 @@ def _get_current_session(socket):
                 "cc_config_dir": uv.get("cc_config_dir", ""),
                 "claude_window_id": win.get("id", 0),
             }
+        if best_win is None:
+            best_win = win
+
+    # Unmanaged tab — return session with empty account
+    if best_win is not None:
+        return {
+            "tab_id": target_tab.get("id", 0),
+            "title": title,
+            "account": "",
+            "cc_color": "",
+            "cc_config_dir": "",
+            "claude_window_id": best_win.get("id", 0),
+        }
 
     return None
 
@@ -154,10 +169,10 @@ def main(args=None):
         return ""
 
     account = session["account"]
-    if not account:
-        return ""
-
-    account_color = _cfg._accounts.get(account, {}).get("color", "gray")
+    if account:
+        account_color = _cfg._accounts.get(account, {}).get("color", "gray")
+    else:
+        account_color = ""
 
     result = curses.wrapper(_run, session, account_color)
     if result is not None:

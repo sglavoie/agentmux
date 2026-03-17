@@ -342,12 +342,15 @@ case "$ACTION" in
 active)
 	state="bolt"
 	# Auto-undim: restore colors if tab was auto-dimmed
-	dim_type=""
-	if dim_type="$(is_dimmed "$tab_id")" 2>/dev/null; then
-		if [[ "$dim_type" == "auto" ]]; then
-			_undim_socket="${KITTY_LISTEN_ON:-}"
-			if [[ -n "$_undim_socket" ]]; then
-				apply_undim "$_undim_socket" "$tab_id" "$KITTY_WINDOW_ID" || true
+	_undim_socket="${KITTY_LISTEN_ON:-}"
+	if [[ -n "$_undim_socket" ]]; then
+		_undim_ls="$(kitty @ --to "$_undim_socket" ls 2>/dev/null)" || _undim_ls=""
+		if [[ -n "$_undim_ls" ]]; then
+			dim_type=""
+			if dim_type="$(is_dimmed "$tab_id" "$_undim_ls")" 2>/dev/null; then
+				if [[ "$dim_type" == "auto" ]]; then
+					apply_undim "$_undim_socket" "$tab_id" "$KITTY_WINDOW_ID" "$_undim_ls" || true
+				fi
 			fi
 		fi
 	fi

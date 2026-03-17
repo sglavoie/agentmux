@@ -227,12 +227,15 @@ cmd_daemon() {
 
 			# --- Auto-dim ---
 			if [[ "$dim_threshold" -gt 0 && "$idle_secs" -ge "$dim_threshold" ]]; then
-				# Skip if already dimmed
-				if ! is_dimmed "$tab_id" >/dev/null 2>&1; then
-					local tab_socket
-					tab_socket="$(_get_tab_socket "$tab_id")"
-					if [[ -n "$tab_socket" ]]; then
-						apply_dim "$tab_socket" "$tab_id" "" auto || true
+				local tab_socket
+				tab_socket="$(_get_tab_socket "$tab_id")"
+				if [[ -n "$tab_socket" ]]; then
+					# Get ls JSON for this socket to check dim state
+					local dim_ls_json
+					dim_ls_json="$(kitty @ --to "$tab_socket" ls 2>/dev/null)" || dim_ls_json=""
+					# Skip if already dimmed
+					if [[ -n "$dim_ls_json" ]] && ! is_dimmed "$tab_id" "$dim_ls_json" >/dev/null 2>&1; then
+						apply_dim "$tab_socket" "$tab_id" "" auto "$dim_ls_json" || true
 					fi
 				fi
 			fi

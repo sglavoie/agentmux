@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# cc-toggle-focus — Toggle focus mode: dim all OTHER managed tabs.
+# cc-toggle-focus — Toggle focus mode: dim all OTHER tabs (managed + unmanaged).
 # Called from a Kitty keybinding with @active-kitty-window-id as $1.
 # Press F11 to dim everything except the current tab.
 # Press F11 again (same tab) to restore all focus-dimmed tabs.
@@ -44,59 +44,40 @@ if [[ -z "$current_tab_id" || "$current_tab_id" == "null" ]]; then
 	exit 1
 fi
 
-# Enumerate all managed tabs (those with a cc_account user var).
-# Output: tab_id \t win_id \t cc_color \t cc_account
-managed_tabs="$(
+# Enumerate ALL tabs in the OS window (not just managed ones).
+# Output: tab_id \t win_id
+all_tabs="$(
 	printf '%s' "$ls_json" | jq -r '
 	[.[] | .tabs[] |
-		select([.windows[] | .user_vars.cc_account // "" | select(. != "")] | length > 0) |
-		{ tab_id: .id, win_id: .windows[0].id,
-		  cc_color: (.windows[0].user_vars.cc_color // ""),
-		  cc_account: (.windows[0].user_vars.cc_account // "") }
-	] | .[] | [.tab_id, .win_id, .cc_color, .cc_account] | @tsv'
+		{ tab_id: .id, win_id: .windows[0].id }
+	] | .[] | [.tab_id, .win_id] | @tsv'
 )"
 
 # Undim all focus-dimmed tabs.
 _undim_all_focus() {
-	local dim_file dim_type tab_id
-	for dim_file in "${_CCM_TMPDIR}"/ccm-dim-*; do
-		[[ -f "$dim_file" ]] || continue
-		dim_type="$(head -n1 "$dim_file")"
+	local tab_id win_id dim_type
+	while IFS=$'\t' read -r tab_id win_id; do
+		[[ -n "$tab_id" ]] || continue
+		dim_type="$(is_dimmed "$tab_id" "$ls_json" 2>/dev/null)" || continue
 		[[ "$dim_type" == "focus" ]] || continue
-		tab_id="${dim_file##*ccm-dim-}"
-		apply_undim "$SOCKET" "$tab_id" "" 2>/dev/null || true
-	done
+		apply_undim "$SOCKET" "$tab_id" "$win_id" "$ls_json" 2>/dev/null || true
+	done <<<"$all_tabs"
 }
 
-# Dim all managed tabs except the given tab ID.
+# Dim all tabs except the given tab ID.
 _dim_others() {
 	local skip_tab="$1"
-	local tab_id win_id cc_color cc_account color_args
-	while IFS=$'\t' read -r tab_id win_id cc_color cc_account; do
+	local tab_id win_id
+	while IFS=$'\t' read -r tab_id win_id; do
 		[[ -n "$tab_id" ]] || continue
 		# Skip the focused tab.
 		[[ "$tab_id" != "$skip_tab" ]] || continue
 		# Skip tabs that are already dimmed (manual or auto).
-		if is_dimmed "$tab_id" >/dev/null 2>&1; then
+		if is_dimmed "$tab_id" "$ls_json" >/dev/null 2>&1; then
 			continue
 		fi
-		# Resolve color args from cc_color user var.
-		color_args=""
-		if [[ -n "$cc_color" ]]; then
-			color_args="$(resolve_palette_color "$cc_color")"
-		elif [[ -n "$cc_account" ]]; then
-			load_accounts 2>/dev/null || true
-			local color_name
-			color_name="$(_account_color "$cc_account" 2>/dev/null)" || color_name=""
-			if [[ -n "$color_name" ]]; then
-				color_args="$(resolve_palette_color "$color_name")"
-			else
-				color_args="$(resolve_palette_color "gray")"
-			fi
-		fi
-		[[ -n "$color_args" ]] || continue
-		apply_dim "$SOCKET" "$tab_id" "$win_id" focus "$color_args"
-	done <<<"$managed_tabs"
+		apply_dim "$SOCKET" "$tab_id" "$win_id" focus "$ls_json"
+	done <<<"$all_tabs"
 }
 
 if [[ -f "$FOCUS_FILE" ]]; then

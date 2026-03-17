@@ -21,15 +21,19 @@ LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
 source "$LIB_DIR/cc-title-icons.sh"
 
 # Discover the Kitty socket.
-TO_ARGS=()
-if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
-	TO_ARGS=("--to" "$KITTY_LISTEN_ON")
-fi
 SOCKET="${KITTY_LISTEN_ON:-$(discover_socket)}"
 
-# Get current tab info.
-info="$(get_tab_info "$WIN_ID" ${TO_ARGS[@]+"${TO_ARGS[@]}"})"
-tab_id="$(echo "$info" | head -n1)"
+# Get full ls JSON once.
+ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || ls_json=""
+if [[ -z "$ls_json" ]]; then
+	echo "Error: Could not query Kitty." >&2
+	exit 1
+fi
+
+# Find the current tab ID for this window.
+tab_id="$(printf '%s' "$ls_json" | jq -r --argjson wid "$WIN_ID" '
+	[.[] | .tabs[] | select(.windows[] | .id == $wid) | .id] | first // ""
+')"
 
 if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
 	echo "Error: Could not find tab for window '$WIN_ID'." >&2
@@ -37,55 +41,10 @@ if [[ -z "$tab_id" || "$tab_id" == "null" ]]; then
 fi
 
 # Check if already dimmed — toggle off.
-if is_dimmed "$tab_id" >/dev/null 2>&1; then
-	apply_undim "$SOCKET" "$tab_id" "$WIN_ID"
+if is_dimmed "$tab_id" "$ls_json" >/dev/null 2>&1; then
+	apply_undim "$SOCKET" "$tab_id" "$WIN_ID" "$ls_json"
 	exit 0
 fi
 
-# Not dimmed — resolve current colors and apply dim.
-# Read user vars: cc_color (palette color name) and cc_account.
-ls_json="$(kitty @ --to "$SOCKET" ls 2>/dev/null)" || ls_json=""
-account=""
-cc_color=""
-if [[ -n "$ls_json" ]]; then
-	uv_json="$(printf '%s' "$ls_json" | jq --argjson wid "$WIN_ID" '
-		[.[] | .tabs[] | .windows[] | select(.id == $wid) | .user_vars] | first // {}
-	' 2>/dev/null)" || uv_json="{}"
-	account="$(printf '%s' "$uv_json" | jq -r '.cc_account // ""')"
-	cc_color="$(printf '%s' "$uv_json" | jq -r '.cc_color // ""')"
-fi
-
-# Resolve color_args: prefer cc_color user var (direct palette lookup, no
-# load_accounts needed), then fall back to account-based resolution.
-color_args=""
-if [[ -n "$cc_color" ]]; then
-	color_args="$(resolve_palette_color "$cc_color")"
-elif [[ -n "$account" ]]; then
-	# Try load_accounts first (works in interactive shells).
-	load_accounts 2>/dev/null || true
-	color_name="$(_account_color "$account" 2>/dev/null)" || color_name=""
-
-	if [[ -z "$color_name" && -f "$ACCOUNTS_CONFIG" ]]; then
-		# Fallback: extract color directly from accounts TOML without python3.
-		# The --type=background process may lack python3 in PATH.
-		color_name="$(awk -v name="$account" '
-			/^\[\[accounts\]\]/ { n=""; c="" }
-			/^name[[:space:]]*=/ { gsub(/[" ]/, ""); split($0,a,"="); n=a[2] }
-			/^color[[:space:]]*=/ { gsub(/[" ]/, ""); split($0,a,"="); c=a[2] }
-			n == name && c != "" { print c; exit }
-		' "$ACCOUNTS_CONFIG" 2>/dev/null)" || color_name=""
-	fi
-
-	if [[ -n "$color_name" ]]; then
-		color_args="$(resolve_palette_color "$color_name")"
-	else
-		color_args="$(resolve_palette_color "gray")"
-	fi
-fi
-
-if [[ -z "$color_args" ]]; then
-	echo "Error: Cannot determine tab colors for window '$WIN_ID'." >&2
-	exit 1
-fi
-
-apply_dim "$SOCKET" "$tab_id" "$WIN_ID" manual "$color_args"
+# Not dimmed — apply dim. apply_dim handles all color resolution internally.
+apply_dim "$SOCKET" "$tab_id" "$WIN_ID" manual "$ls_json"
