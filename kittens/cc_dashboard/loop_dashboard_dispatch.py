@@ -134,6 +134,7 @@ def dispatch_mode(
             "sort_pick_entries": state["sort_pick_entries"],
             "build_delete_entries": state["build_delete_entries"],
             "do_cross_instance_focus": state["do_cross_instance_focus"],
+            "do_toggle_mute": state["do_toggle_mute"],
             "resolve_session_id": state["resolve_session_id"],
             "load_activity_log": state["load_activity_log"],
             "format_log_entry": state["format_log_entry"],
