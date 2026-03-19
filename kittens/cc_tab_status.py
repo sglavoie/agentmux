@@ -9,6 +9,7 @@ import contextlib
 import curses
 import json
 import os
+import subprocess
 import sys
 
 
@@ -41,9 +42,9 @@ from cc_dashboard.colors import (
     init_colors,
 )
 from cc_dashboard.config import load_accounts, load_defaults
-from cc_dashboard.config_core import _save_tab_statuses
+from cc_dashboard.config_core import _palette_tab_colors, _save_tab_statuses
 from cc_dashboard.drawing import draw_border, safe_addstr
-from cc_dashboard.remote.actions_core import do_rename, do_set_color
+from cc_dashboard.remote.actions_core import do_rename
 from cc_dashboard.remote.command import get_kitty_socket, kitty_cmd
 from cc_dashboard.remote.shared import (
     _strip_icons,
@@ -383,6 +384,85 @@ def _run(stdscr, session):
                 delete_target = selected
 
 
+def _schedule_color_restore(socket, tab_id, cc_color, cc_account, cc_config_dir):
+    """Spawn a detached Python process to re-apply tab colors after overlay closes.
+
+    Completely self-contained: reads palette.json and accounts.toml from disk
+    to resolve the correct color, with zero dependency on in-process state
+    (which may be stale or empty after the cc_dashboard module flush).
+    """
+    # Build the restore script as a standalone Python program.
+    # It sleeps to let Kitty finish overlay teardown, then resolves and applies.
+    script = (
+        "import json, os, subprocess, sys, time, tomllib\n"
+        "time.sleep(0.5)\n"
+        f"tab_id = {tab_id!r}\n"
+        f"socket = {socket!r}\n"
+        f"cc_color = {cc_color!r}\n"
+        f"cc_account = {cc_account!r}\n"
+        f"cc_config_dir = {cc_config_dir!r}\n"
+        "to_args = ['--to', socket] if socket else []\n"
+        "# Find palette.json\n"
+        "palette = None\n"
+        "for d in [\n"
+        "    os.path.join(os.path.dirname(os.path.realpath(sys.argv[0] "
+        "if sys.argv else __file__)), '..', '..', 'data'),\n"
+        "    os.path.expanduser('~/.local/lib/cc-manager'),\n"
+        "]:\n"
+        "    p = os.path.join(d, 'palette.json')\n"
+        "    if os.path.isfile(p):\n"
+        "        with open(p) as f: palette = json.load(f)\n"
+        "        break\n"
+        "if not palette: sys.exit(1)\n"
+        "# Resolve color name\n"
+        "color_name = 'gray'\n"
+        "colors = palette.get('colors', {})\n"
+        "if cc_color and cc_color in colors:\n"
+        "    color_name = cc_color\n"
+        "elif cc_account:\n"
+        "    for ap in [\n"
+        "        os.environ.get('CC_MANAGER_ACCOUNTS', ''),\n"
+        "        os.path.join(os.environ.get('XDG_CONFIG_HOME', "
+        "os.path.expanduser('~/.config')), 'cc-manager', 'accounts.toml'),\n"
+        "    ]:\n"
+        "        if ap and os.path.isfile(ap):\n"
+        "            with open(ap, 'rb') as f: accts = tomllib.load(f)\n"
+        "            for e in accts.get('accounts', []):\n"
+        "                if e.get('name') == cc_account:\n"
+        "                    color_name = e.get('color', 'gray')\n"
+        "                    break\n"
+        "            break\n"
+        "elif cc_config_dir:\n"
+        "    for ap in [\n"
+        "        os.environ.get('CC_MANAGER_ACCOUNTS', ''),\n"
+        "        os.path.join(os.environ.get('XDG_CONFIG_HOME', "
+        "os.path.expanduser('~/.config')), 'cc-manager', 'accounts.toml'),\n"
+        "    ]:\n"
+        "        if ap and os.path.isfile(ap):\n"
+        "            with open(ap, 'rb') as f: accts = tomllib.load(f)\n"
+        "            for e in accts.get('accounts', []):\n"
+        "                d = os.path.expanduser(e.get('config_dir', ''))\n"
+        "                if d == cc_config_dir:\n"
+        "                    color_name = e.get('color', 'gray')\n"
+        "                    break\n"
+        "            break\n"
+        "c = colors.get(color_name, colors.get('gray', {}))\n"
+        "afg = palette.get('active_fg', '#ffffff')\n"
+        "ifg = palette.get('inactive_fg', '#aaaaaa')\n"
+        "subprocess.run(['kitten', '@'] + to_args + [\n"
+        "    'set-tab-color', '--match', f'id:{tab_id}',\n"
+        "    f'active_bg={c[\"active_bg\"]}', f'active_fg={afg}',\n"
+        "    f'inactive_bg={c[\"inactive_bg\"]}', f'inactive_fg={ifg}',\n"
+        "])\n"
+    )
+    subprocess.Popen(
+        [sys.executable, "-c", script],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
 def main(args=None):
     load_accounts()
     load_defaults()
@@ -401,8 +481,6 @@ def main(args=None):
         if override_emoji:
             new_title = override_emoji + new_title
         do_rename(socket, session["tab_id"], new_title)
-        # Re-apply tab colors (title changes can lose color overrides)
-        do_set_color(socket, session, session.get("cc_color", ""))
 
         # Auto-save custom values to config (deduplicated)
         if kind == "custom" and value:
@@ -410,7 +488,50 @@ def main(args=None):
             if value not in statuses:
                 statuses.append(value)
                 _save_tab_statuses(statuses)
+
+        # Kitty resets per-tab color overrides when the overlay tears down.
+        # Spawn a self-contained detached process that waits for teardown,
+        # resolves colors from source files, and re-applies them.
+        _schedule_color_restore(
+            socket,
+            session["tab_id"],
+            session.get("cc_color", ""),
+            session.get("account", ""),
+            session.get("cc_config_dir", ""),
+        )
+
+        # Also return color data for handle_result (backup mechanism).
+        color_args = _palette_tab_colors(
+            session.get("account", ""),
+            color_override=session.get("cc_color", ""),
+            config_dir_override=session.get("cc_config_dir", ""),
+        )
+        return json.dumps({"tab_id": session["tab_id"], "color_args": color_args})
     return ""
+
+
+try:
+    from kittens.tui.handler import result_handler
+
+    @result_handler()
+    def handle_result(args, answer, target_window_id, boss):
+        """Backup: re-apply tab colors after overlay closes via the boss object."""
+        if not answer:
+            return
+        try:
+            data = json.loads(answer)
+        except (json.JSONDecodeError, TypeError):
+            return
+        tab_id = data.get("tab_id")
+        color_args = data.get("color_args", [])
+        if tab_id and color_args:
+            boss.call_remote_control(
+                None,
+                ("set-tab-color", "--match", f"id:{tab_id}", *color_args),
+            )
+
+except ImportError:
+    pass
 
 
 if __name__ == "__main__":

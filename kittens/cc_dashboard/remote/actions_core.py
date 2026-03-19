@@ -398,10 +398,20 @@ def do_toggle_mute(socket, session):
         return False
 
     tab_title = ""
+    fresh_cc_color = ""
+    fresh_account = ""
+    fresh_config_dir = ""
     for os_win in data:
         for tab in os_win.get("tabs", []):
             if tab.get("id") == tab_id:
                 tab_title = tab.get("title", "")
+                for win in tab.get("windows", []):
+                    uv = win.get("user_vars", {})
+                    if uv.get("cc_account") or uv.get("cc_color"):
+                        fresh_cc_color = uv.get("cc_color", "")
+                        fresh_account = uv.get("cc_account", "")
+                        fresh_config_dir = uv.get("cc_config_dir", "")
+                        break
                 break
 
     if not tab_title:
@@ -458,7 +468,19 @@ def do_toggle_mute(socket, session):
             f"cc_mute={mute_val}",
         )
 
-    # Re-apply tab colors (title changes can lose color overrides)
-    do_set_color(socket, session, session.get("cc_color", ""))
+    # Re-apply tab colors (title changes can lose color overrides).
+    # Use fresh user vars from the ls data above instead of the session dict,
+    # which may be stale.
+    kitty_cmd(
+        socket,
+        "set-tab-color",
+        "--match",
+        f"id:{tab_id}",
+        *_cfg._palette_tab_colors(
+            fresh_account,
+            color_override=fresh_cc_color,
+            config_dir_override=fresh_config_dir,
+        ),
+    )
 
     return True

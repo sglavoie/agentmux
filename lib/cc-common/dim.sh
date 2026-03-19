@@ -104,11 +104,16 @@ apply_dim() {
 	# Resolve original colors from cc_color/cc_account user vars.
 	# Kitty does not expose per-tab color overrides in `kitty @ ls`, so we
 	# rely on the user vars that cc-manager sets at launch time.
+	# Try the specific window first, then fall back to any window in the tab
+	# that has cc_account (handles splits/overlays where the active window
+	# isn't the Claude session window).
 	local color_args="" color_source="none"
 	local uv_json cc_color="" account=""
 	if [[ -n "$ls_json" ]]; then
-		uv_json="$(printf '%s' "$ls_json" | jq --argjson wid "$win_id" '
-			[.[] | .tabs[] | .windows[] | select(.id == $wid) | .user_vars] | first // {}
+		uv_json="$(printf '%s' "$ls_json" | jq --argjson wid "$win_id" --argjson tid "$tab_id" '
+			([.[] | .tabs[] | select(.id == $tid) | .windows[] | select(.id == $wid) | .user_vars] | first)
+			// ([.[] | .tabs[] | select(.id == $tid) | .windows[] | select(.user_vars.cc_account != null and .user_vars.cc_account != "") | .user_vars] | first)
+			// {}
 		' 2>/dev/null)" || uv_json="{}"
 		cc_color="$(printf '%s' "$uv_json" | jq -r '.cc_color // ""')"
 		account="$(printf '%s' "$uv_json" | jq -r '.cc_account // ""')"
@@ -223,12 +228,46 @@ apply_undim() {
 	fi
 
 	if [[ "$encoded_orig" == "none" ]]; then
-		# Tab had no managed colors before dim — reset to kitty.conf defaults
-		kitty @ --to "$socket" set-tab-color --match "id:$tab_id" \
-			active_bg=none active_fg=none inactive_bg=none inactive_fg=none || {
-			ccm_debug "apply_undim: set-tab-color reset failed for tab $tab_id"
-			return 1
-		}
+		# Tab had no managed colors at dim time — try fresh resolution from
+		# user vars in case the lookup was wrong at dim time.
+		local fresh_colors=""
+		local _uv _cc _acct
+		if [[ -n "$ls_json" ]]; then
+			_uv="$(printf '%s' "$ls_json" | jq --argjson tid "$tab_id" '
+				([.[] | .tabs[] | select(.id == $tid) | .windows[] | select(.user_vars.cc_account != null and .user_vars.cc_account != "") | .user_vars] | first)
+				// ([.[] | .tabs[] | select(.id == $tid) | .windows[0].user_vars] | first)
+				// {}
+			' 2>/dev/null)" || _uv="{}"
+			_cc="$(printf '%s' "$_uv" | jq -r '.cc_color // ""')"
+			_acct="$(printf '%s' "$_uv" | jq -r '.cc_account // ""')"
+			if [[ -n "$_cc" ]]; then
+				fresh_colors="$(resolve_palette_color "$_cc")"
+			elif [[ -n "$_acct" ]]; then
+				load_accounts 2>/dev/null || true
+				local _cn=""
+				_cn="$(_account_color "$_acct" 2>/dev/null)" || _cn=""
+				if [[ -z "$_cn" && -f "$ACCOUNTS_CONFIG" ]]; then
+					_cn="$(awk -v name="$_acct" '
+						/^\[\[accounts\]\]/ { n=""; c="" }
+						/^name[[:space:]]*=/ { gsub(/[" ]/, ""); split($0,a,"="); n=a[2] }
+						/^color[[:space:]]*=/ { gsub(/[" ]/, ""); split($0,a,"="); c=a[2] }
+						n == name && c != "" { print c; exit }
+					' "$ACCOUNTS_CONFIG" 2>/dev/null)" || _cn=""
+				fi
+				[[ -n "$_cn" ]] && fresh_colors="$(resolve_palette_color "$_cn")"
+			fi
+		fi
+		if [[ -n "$fresh_colors" ]]; then
+			# shellcheck disable=SC2086
+			kitty @ --to "$socket" set-tab-color --match "id:$tab_id" $fresh_colors
+		else
+			# Truly unmanaged — reset to kitty.conf defaults
+			kitty @ --to "$socket" set-tab-color --match "id:$tab_id" \
+				active_bg=none active_fg=none inactive_bg=none inactive_fg=none || {
+				ccm_debug "apply_undim: set-tab-color reset failed for tab $tab_id"
+				return 1
+			}
+		fi
 	else
 		# Restore saved original colors
 		local color_args
