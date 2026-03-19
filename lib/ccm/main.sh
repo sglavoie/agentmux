@@ -9,7 +9,7 @@ _check_version_staleness() {
 	local installed_version
 	installed_version="$(cat "$HOME/.local/lib/cc-manager/.version" 2>/dev/null)" || return 0
 	if [[ -n "$installed_version" && "$installed_version" != "$CCM_VERSION" ]]; then
-		echo "Warning: installed version ($installed_version) differs from repo ($CCM_VERSION). Run 'just install' to update." >&2
+		warn "installed version ($installed_version) differs from repo ($CCM_VERSION). Run 'just install' to update."
 	fi
 }
 
@@ -21,8 +21,7 @@ main() {
 	# Parse global --socket option
 	if [[ "${1:-}" == "--socket" ]]; then
 		if [[ -z "${2:-}" ]]; then
-			echo "Error: --socket requires a SOCKET argument." >&2
-			exit 1
+			die "--socket requires a SOCKET argument."
 		fi
 		SOCKET_ARGS=("--socket" "$2")
 		shift 2
@@ -90,8 +89,7 @@ main() {
 		cmd_help
 		;;
 	*)
-		echo "Error: Unknown command '$1'. Run 'ccm help' for usage." >&2
-		exit 1
+		die "Unknown command '$1'." "Run 'ccm help' for usage."
 		;;
 	esac
 }

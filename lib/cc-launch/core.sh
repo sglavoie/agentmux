@@ -50,7 +50,7 @@ resolve_instance_socket_or_die() {
 	local label="$1"
 	local result
 	result="$(resolve_instance_socket "$label")" || {
-		echo "Error: No active Kitty instance found with label '$label'." >&2
+		err "No active Kitty instance found with label '$label'."
 		echo "Available instances:" >&2
 		print_available_instances
 		exit 1
@@ -189,7 +189,7 @@ _lookup_session_overrides_toml() {
 			return 0
 		fi
 	done < <(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE" 2>"$_parse_err_file" || {
-		echo "Warning: failed to parse sessions config '$CONFIG_FILE'." >&2
+		warn "failed to parse sessions config '$CONFIG_FILE'."
 		[[ -s "$_parse_err_file" ]] && sed 's/^/  Detail: /' "$_parse_err_file" >&2
 	})
 	rm -f "$_parse_err_file"
@@ -213,7 +213,7 @@ launch_session() {
 	dir="$(expand_tilde "$dir")"
 
 	if [[ ! -d "$dir" ]]; then
-		echo "Error: directory does not exist: $dir (session='$title', account=$account)" >&2
+		err "directory does not exist: $dir (session='$title', account=$account)"
 		return 1
 	fi
 
@@ -258,7 +258,7 @@ launch_session() {
 	ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
 	local launch_err
 	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" ${mute_args[@]+"${mute_args[@]}"} "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
-		local msg="Warning: Failed to launch tab '$title' (account=$account, dir=$dir, socket=$SOCKET)."
+		local msg="Failed to launch tab '$title' (account=$account, dir=$dir, socket=$SOCKET)."
 		if [[ -n "$launch_err" ]]; then
 			msg="$msg Kitty error: $launch_err"
 			if [[ "$launch_err" == *"Connection refused"* ]]; then
@@ -267,7 +267,7 @@ launch_session() {
 				msg="$msg (Check that the working directory exists)"
 			fi
 		fi
-		echo "$msg" >&2
+		warn "$msg"
 		return 1
 	fi
 
@@ -289,9 +289,9 @@ launch_session() {
 	done
 
 	if [[ "$color_set" != "true" ]]; then
-		local color_msg="Warning: Failed to set tab color for '$title' (socket=$SOCKET)."
+		local color_msg="Failed to set tab color for '$title' (socket=$SOCKET)."
 		[[ -n "$color_err" ]] && color_msg="$color_msg Kitty error: $color_err"
-		echo "$color_msg" >&2
+		warn "$color_msg"
 	fi
 
 	local pw_mode
@@ -299,15 +299,15 @@ launch_session() {
 	if [[ -n "$pw_mode" ]]; then
 		local pw_err
 		if ! pw_err="$(kitty @ --to "$SOCKET" launch --type=window --match "title:^${title_escaped}$" --cwd "$dir" --keep-focus 2>&1)"; then
-			local pw_msg="Warning: Failed to create project window for '$title' (socket=$SOCKET)."
+			local pw_msg="Failed to create project window for '$title' (socket=$SOCKET)."
 			[[ -n "$pw_err" ]] && pw_msg="$pw_msg Kitty error: $pw_err"
-			echo "$pw_msg" >&2
+			warn "$pw_msg"
 		else
 			local layout_err
 			if ! layout_err="$(kitty @ --to "$SOCKET" goto-layout --match "title:^${title_escaped}$" "$pw_mode" 2>&1)"; then
-				local layout_msg="Warning: Failed to set layout '$pw_mode' for '$title' (socket=$SOCKET)."
+				local layout_msg="Failed to set layout '$pw_mode' for '$title' (socket=$SOCKET)."
 				[[ -n "$layout_err" ]] && layout_msg="$layout_msg Kitty error: $layout_err"
-				echo "$layout_msg" >&2
+				warn "$layout_msg"
 			fi
 		fi
 	fi

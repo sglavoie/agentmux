@@ -19,7 +19,7 @@ load_accounts() {
 			config_dir="$(expand_tilde "$config_dir")"
 			color="${color:-gray}"
 			if ! _palette_has_color "$color"; then
-				echo "Warning: unknown color '$color' for account '$name', falling back to gray." >&2
+				warn "unknown color '$color' for account '$name', falling back to gray."
 				color="gray"
 			fi
 			_ACCOUNT_NAMES+=("$name")
@@ -29,14 +29,14 @@ load_accounts() {
 			local _parse_stderr _parse_rc=0
 			_parse_stderr="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-accounts "$ACCOUNTS_CONFIG" 2>&1 1>&3)" 3>&1 || _parse_rc=$?
 			if [[ "$_parse_rc" -ne 0 ]]; then
-				echo "Error: failed to parse accounts config '$ACCOUNTS_CONFIG'." >&2
+				err "failed to parse accounts config '$ACCOUNTS_CONFIG'."
 				[[ -n "$_parse_stderr" ]] && echo "  Detail: $_parse_stderr" >&2
 				echo "  Run 'ccm config validate' for full diagnostics." >&2
 			fi
 		})
 
 		if [[ ${#_ACCOUNT_NAMES[@]} -eq 0 ]]; then
-			echo "Warning: accounts config exists but produced no accounts. Check $ACCOUNTS_CONFIG for errors." >&2
+			warn "accounts config exists but produced no accounts. Check $ACCOUNTS_CONFIG for errors."
 		fi
 	else
 		_ACCOUNT_NAMES=(work personal)
@@ -123,7 +123,7 @@ claude_config_dir_for_account() {
 	local account="$1"
 	local config_dir
 	config_dir="$(_account_dir "$account")" || {
-		echo "Error: Unknown account '$account'. Available: $(_all_account_names)." >&2
+		err "Unknown account '$account'. Available: $(_all_account_names)."
 		return 1
 	}
 	echo "$config_dir"

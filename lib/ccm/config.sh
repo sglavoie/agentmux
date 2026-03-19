@@ -25,7 +25,7 @@ cmd_config_edit() {
 		local f
 		f="$(resolve_config_file "$1")"
 		if [[ ! -f "$f" ]]; then
-			echo "Warning: '$f' does not exist yet. Run 'ccm config init' to create it." >&2
+			warn "'$f' does not exist yet. Run 'ccm config init' to create it."
 		fi
 		$editor "$f"
 	fi
@@ -56,7 +56,7 @@ cmd_config_show() {
 		if [[ -f "$f" ]]; then
 			cat "$f"
 		else
-			echo "Error: '$f' not found. Run 'ccm config init' to create default configs." >&2
+			err "'$f' not found. Run 'ccm config init' to create default configs."
 			return 1
 		fi
 	fi
@@ -138,7 +138,7 @@ cmd_config() {
 		return 1
 		;;
 	*)
-		echo "Error: Unknown config subcommand '$1'. Use: edit, show, path, init, sync, validate." >&2
+		err "Unknown config subcommand '$1'. Use: edit, show, path, init, sync, validate."
 		return 1
 		;;
 	esac

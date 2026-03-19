@@ -8,8 +8,7 @@ cmd_launch_interactive() {
     picker_script="$(dirname "$(readlink -f "$0")")/../kittens/cc_session_picker.py"
 
     if [[ ! -f "$picker_script" ]]; then
-        echo "Error: Picker script not found: '$picker_script'." >&2
-        exit 1
+        die "Picker script not found: '$picker_script'."
     fi
 
     local picker_output
@@ -34,7 +33,7 @@ cmd_launch_interactive() {
         [[ -z "$account" ]] && account="work"
 
         if ! _account_index "$account" >/dev/null 2>&1; then
-            echo "Warning: session '$title' references unknown account '$account', skipping." >&2
+            warn "session '$title' references unknown account '$account', skipping."
             echo "  Available accounts: ${_ACCOUNT_NAMES[*]}" >&2
             continue
         fi
@@ -54,14 +53,12 @@ cmd_launch_interactive() {
 
 cmd_launch_all() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo "Error: Config file not found: '$CONFIG_FILE'." >&2
-        exit 1
+        die "Config file not found: '$CONFIG_FILE'."
     fi
 
     local lines=""
     if ! lines="$(python3 "$_CC_COMMON_DIR/toml-helper.py" read-sessions "$CONFIG_FILE")"; then
-        echo "Error: Failed to parse sessions config '$CONFIG_FILE'." >&2
-        exit 1
+        die "Failed to parse sessions config '$CONFIG_FILE'."
     fi
 
     if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
@@ -106,7 +103,7 @@ cmd_launch_all() {
         _t="$(_trim "$_t")"
         total=$((total + 1))
         case "|${_dup_titles}|" in
-            *"|${_t}|"*) echo "Warning: duplicate session title '$_t' in config; only the first will launch." >&2 ;;
+            *"|${_t}|"*) warn "duplicate session title '$_t' in config; only the first will launch." ;;
             *) _dup_titles="${_dup_titles}|${_t}" ;;
         esac
     done <<<"$lines"
@@ -129,7 +126,7 @@ cmd_launch_all() {
         [[ -z "$account" ]] && account="work"
 
         if ! _account_index "$account" >/dev/null 2>&1; then
-            echo "Warning: [$current/$total] session '$title' references unknown account '$account', skipping." >&2
+            warn "[$current/$total] session '$title' references unknown account '$account', skipping."
             echo "  Available accounts: ${_ACCOUNT_NAMES[*]}" >&2
             skipped=$((skipped + 1))
             continue
@@ -194,9 +191,8 @@ cmd_add() {
     done
 
     if [[ -z "$title" || -z "$dir" ]]; then
-        echo "Error: --add requires TITLE and DIR arguments." >&2
-        echo "Usage: cc-launch --add TITLE DIR [ACCOUNT [ENV_VARS]] [--group GROUP]" >&2
-        exit 1
+        die "--add requires TITLE and DIR arguments." \
+            "Usage: cc-launch --add TITLE DIR [ACCOUNT [ENV_VARS]] [--group GROUP]"
     fi
 
     if [[ -z "$account" ]]; then

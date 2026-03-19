@@ -209,6 +209,11 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
             v.error(f"session '{title}': invalid project_window '{pw}' "
                     f"(valid: -, stack, vsplit, hsplit, split)")
 
+        mute = entry.get("mute")
+        if mute is not None:
+            if not isinstance(mute, bool) and mute != "-":
+                v.warn(f"session '{title}': 'mute' should be true, false, or \"-\", got {mute!r}")
+
         # 1a: Warn if env values contain spaces (breaks Claude invocations)
         env = entry.get("env", "")
         if env and env != "-":
@@ -275,8 +280,7 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
     # Validate [defaults] section
     sort = defaults.get("sort_sessions")
     if valid_sort is None:
-        valid_sort = {"default", "alpha", "name", "account",
-                      "group", "status", "idle", "activity"}
+        valid_sort = load_sort_modes()
     valid_sort = valid_sort | {""}
     if sort is not None and sort not in valid_sort:
         v.error(f"sort_sessions must be one of "

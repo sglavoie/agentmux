@@ -83,6 +83,7 @@ def _load_palette_colors():
         "Warning: could not load palette.json; using hardcoded fallback colors.",
         file=sys.stderr,
     )
+    # Canonical color names — keep in sync with data/palette.json.
     return frozenset({
         "green", "blue", "red", "orange", "purple",
         "teal", "pink", "yellow", "gray", "cyan",

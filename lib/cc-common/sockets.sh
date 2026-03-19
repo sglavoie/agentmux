@@ -29,7 +29,7 @@ discover_socket() {
 		return
 	fi
 
-	echo "Error: No kitty socket found." >&2
+	err "No kitty socket found."
 	echo "  Possible fixes:" >&2
 	echo "    1. Check that Kitty is running (pgrep -x kitty)" >&2
 	echo "    2. Add 'allow_remote_control socket-only' to kitty.conf" >&2
@@ -99,11 +99,11 @@ discover_all_sockets() {
 
 	if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
 		if [[ ${#candidates[@]} -gt 0 ]]; then
-			echo "Warning: Found ${#candidates[@]} kitty socket(s) but none responded." >&2
+			warn "Found ${#candidates[@]} kitty socket(s) but none responded."
 			echo "  Check that 'allow_remote_control socket-only' is set in kitty.conf." >&2
 			echo "  If Kitty was recently restarted, stale sockets may linger in ${TMPDIR:-/tmp}/." >&2
 		else
-			echo "Warning: No kitty sockets found." >&2
+			warn "No kitty sockets found."
 			echo "  Check that Kitty is running (pgrep -x kitty) and that" >&2
 			echo "  'listen_on unix:/tmp/kitty-{kitty_pid}' is set in kitty.conf." >&2
 		fi

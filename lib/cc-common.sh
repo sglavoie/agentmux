@@ -31,15 +31,13 @@ _CC_COMMON_DIR="$(cd "$(dirname "$_CC_COMMON_SCRIPT")" && pwd)"
 
 _require_python3() {
 	if ! command -v python3 >/dev/null 2>&1; then
-		echo "Error: python3 is required but not found." >&2
-		exit 1
+		die "python3 is required but not found."
 	fi
 }
 
 _require_jq() {
 	if ! command -v jq >/dev/null 2>&1; then
-		echo "Error: jq is required but not found. Install with: brew install jq" >&2
-		exit 1
+		die "jq is required but not found." "Install with: brew install jq"
 	fi
 }
 

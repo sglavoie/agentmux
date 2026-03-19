@@ -71,7 +71,7 @@ cmd_logs_show() {
 			shift 2
 			;;
 		-*)
-			echo "Error: Unknown flag '$1'. Run 'ccm help logs' for usage." >&2
+			err "Unknown flag '$1'. Run 'ccm help logs' for usage."
 			return 1
 			;;
 		*)
@@ -91,7 +91,7 @@ cmd_logs_show() {
 	log_file="$log_dir/$session_id.jsonl"
 
 	if [[ ! -f "$log_file" ]]; then
-		echo "Error: Log file not found: '$log_file'." >&2
+		err "Log file not found: '$log_file'."
 		return 1
 	fi
 
@@ -121,7 +121,7 @@ cmd_logs_summary() {
 	log_file="$log_dir/$session_id.jsonl"
 
 	if [[ ! -f "$log_file" ]]; then
-		echo "Error: Log file not found: '$log_file'." >&2
+		err "Log file not found: '$log_file'."
 		return 1
 	fi
 
@@ -167,11 +167,11 @@ cmd_logs_clean() {
 			shift
 			;;
 		-*)
-			echo "Error: Unknown flag '$1'. Run 'ccm help logs' for usage." >&2
+			err "Unknown flag '$1'. Run 'ccm help logs' for usage."
 			return 1
 			;;
 		*)
-			echo "Error: Unexpected argument '$1'. Run 'ccm help logs' for usage." >&2
+			err "Unexpected argument '$1'. Run 'ccm help logs' for usage."
 			return 1
 			;;
 		esac
@@ -242,7 +242,7 @@ cmd_logs() {
 		return 1
 		;;
 	*)
-		echo "Error: Unknown logs subcommand '$1'. Use: list, show, summary, clean, dir." >&2
+		err "Unknown logs subcommand '$1'. Use: list, show, summary, clean, dir."
 		return 1
 		;;
 	esac

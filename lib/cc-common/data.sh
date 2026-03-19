@@ -35,7 +35,7 @@ _resolve_data_dir() {
 	elif [[ -f "$base_dir/palette.json" ]]; then
 		_CC_DATA_DIR="$base_dir"
 	else
-		echo "Error: Cannot find data directory (palette.json) from '$base_dir'." >&2
+		err "Cannot find data directory (palette.json) from '$base_dir'."
 		return 1
 	fi
 }
@@ -45,7 +45,7 @@ _load_palette() {
 	_resolve_data_dir
 	_PALETTE_JSON="$(<"$_CC_DATA_DIR/palette.json")"
 	if ! printf '%s' "$_PALETTE_JSON" | jq empty 2>/dev/null; then
-		echo "Error: palette.json is not valid JSON: $_CC_DATA_DIR/palette.json" >&2
+		err "palette.json is not valid JSON: $_CC_DATA_DIR/palette.json"
 		_PALETTE_JSON=""
 		return 1
 	fi
@@ -58,7 +58,7 @@ _load_icons() {
 	_resolve_data_dir
 	_ICONS_JSON="$(<"$_CC_DATA_DIR/icons.json")"
 	if ! printf '%s' "$_ICONS_JSON" | jq empty 2>/dev/null; then
-		echo "Error: icons.json is not valid JSON: $_CC_DATA_DIR/icons.json" >&2
+		err "icons.json is not valid JSON: $_CC_DATA_DIR/icons.json"
 		_ICONS_JSON=""
 		return 1
 	fi

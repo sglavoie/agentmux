@@ -104,17 +104,23 @@ def kitty_cmd(socket, *args, timeout=None):
             timeout=timeout,
         )
         if _DEBUG_LOG and result.returncode != 0:
-            with open(_DEBUG_LOG, "a") as f:
-                f.write(
-                    f"FAIL rc={result.returncode} cmd={list(args)}\n"
-                    f"  stdout={result.stdout!r}\n"
-                    f"  stderr={result.stderr!r}\n"
-                )
+            try:
+                with open(_DEBUG_LOG, "a") as f:
+                    f.write(
+                        f"FAIL rc={result.returncode} cmd={list(args)}\n"
+                        f"  stdout={result.stdout!r}\n"
+                        f"  stderr={result.stderr!r}\n"
+                    )
+            except OSError:
+                pass
         return result
     except (subprocess.SubprocessError, OSError) as exc:
         if _DEBUG_LOG:
-            with open(_DEBUG_LOG, "a") as f:
-                f.write(f"EXCEPTION cmd={list(args)} exc={exc}\n")
+            try:
+                with open(_DEBUG_LOG, "a") as f:
+                    f.write(f"EXCEPTION cmd={list(args)} exc={exc}\n")
+            except OSError:
+                pass
         return None
 
 

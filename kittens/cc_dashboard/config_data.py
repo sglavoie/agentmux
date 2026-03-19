@@ -46,6 +46,8 @@ def _hex_to_rgb(hex_str: str) -> RGBTuple:
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
 
+# Canonical fallbacks — keep in sync with lib/data_loader.py (which the
+# kitten cannot import due to a different sys.path at runtime).
 _FALLBACK_PALETTE: dict[str, PaletteEntry] = {
     "green": ((45, 125, 70), (20, 60, 30), (255, 255, 255)),
     "blue": ((30, 80, 160), (15, 40, 80), (255, 255, 255)),
@@ -118,6 +120,7 @@ PALETTE, ACTIVE_FG, INACTIVE_FG = _load_palette()
 PALETTE_NAMES: list[str] = list(PALETTE.keys())
 
 
+# Canonical fallbacks — keep in sync with data/icons.json.
 _ICONS_FALLBACK: dict[str, Any] = {
     "star": "★",
     "flag": "❗",
@@ -188,6 +191,7 @@ def load_override_emojis() -> tuple[dict[str, str], set[str]]:
         except (json.JSONDecodeError, OSError):
             pass
     if not mapping:
+        # Canonical fallbacks — keep in sync with data/palette.json emoji fields.
         mapping = {
             "green": "🟩",
             "blue": "🟦",
@@ -213,6 +217,7 @@ def load_hook_events() -> list[str]:
         events = data.get("hook_events")
         if isinstance(events, list):
             return [str(e) for e in events]
+    # Canonical fallbacks — keep in sync with data/icons.json hook_events.
     return [
         "SessionStart",
         "UserPromptSubmit",
@@ -246,4 +251,5 @@ def load_sort_modes() -> tuple[str, ...]:
             return tuple(m for m in modes if m != "alpha")
         except (KeyError, TypeError):
             pass
+    # Canonical fallbacks — keep in sync with data/icons.json sort_modes.
     return ("default", "name", "account", "group", "status", "idle", "activity")

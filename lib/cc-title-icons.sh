@@ -107,7 +107,7 @@ toggle_preamble() {
 	current_title="$(echo "$info" | tail -n1)"
 
 	if [[ -z "$_TGL_TAB_ID" || "$_TGL_TAB_ID" == "null" ]]; then
-		echo "Error: Could not find tab for window '$win_id'." >&2
+		err "Could not find tab for window '$win_id'."
 		return 1
 	fi
 

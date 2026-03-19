@@ -7,7 +7,7 @@ cmd_list() {
     discover_all_sockets
 
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
-        echo "Error: No active Kitty instances found." >&2
+        err "No active Kitty instances found."
         return 1
     fi
 
@@ -78,7 +78,7 @@ cmd_list() {
 			] | .[] |
 			[(.index | tostring), (.tab_id | tostring), .title, .account, .dir, .status, .instance, .group] |
 			@tsv
-		')"
+		')" || continue
         if [[ -n "$inst_rows" ]]; then
             if [[ -n "$table" ]]; then
                 table+=$'\n'
@@ -211,7 +211,7 @@ cmd_sockets() {
 cmd_cleanup() {
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
-        echo "Error: No active Kitty instances found." >&2
+        err "No active Kitty instances found."
         return 1
     fi
 
@@ -259,7 +259,7 @@ cmd_cleanup() {
 				) |
 				{ title: .title, id: .id }
 			] | .[] | [.title, (.id | tostring)] | @tsv
-		')"
+		')" || continue
 
         if [[ -n "$inst_stale" ]]; then
             while IFS=$'\t' read -r title tab_id; do
@@ -278,7 +278,7 @@ cmd_cleanup() {
 					([.windows[] | .user_vars.cc_account // empty | select(. != "")] | length > 0)
 				) | .id
 			] | .[]
-		')"
+		')" || true
         if [[ -n "$inst_live" ]]; then
             if [[ -n "$live_ids" ]]; then
                 live_ids+=$'\n'
@@ -306,7 +306,7 @@ cmd_cleanup() {
                 if kitty @ --to "$sock" close-tab --match "id:$tab_id"; then
                     echo "Closed: $title" >&2
                 else
-                    echo "Warning: failed to close '$title' (tab id: $tab_id)." >&2
+                    warn "failed to close '$title' (tab id: $tab_id)."
                 fi
             done <<<"$stale"
         else
@@ -397,7 +397,7 @@ cmd_save() {
 
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
-        echo "Error: No active Kitty instances found." >&2
+        err "No active Kitty instances found."
         return 1
     fi
 
@@ -433,7 +433,7 @@ cmd_save() {
             return
         fi
         if ! cp "$output_file" "${output_file}.bak"; then
-            echo "Error: backup failed, save aborted. Original file unchanged." >&2
+            err "backup failed, save aborted. Original file unchanged."
             return 1
         fi
         echo "Backed up existing config to ${output_file}.bak" >&2
@@ -458,12 +458,12 @@ _save_sessions_toml() {
          { title: .[0], dir: (.[1] | if startswith($home) then "~" + .[$home | length:] else . end),
            account: .[2], flags: .[3], pw: .[4], env: .[5], group: .[6], mute: .[7] }]
     ')" || {
-        echo "Error: Failed to build session JSON." >&2
+        err "Failed to build session JSON."
         return 1
     }
 
     if ! echo "$json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$output_file"; then
-        echo "Error: Failed to write sessions to '$output_file'." >&2
+        err "Failed to write sessions to '$output_file'."
         return 1
     fi
 }
@@ -496,12 +496,12 @@ _append_session_to_config() {
          { title: .[0], dir: .[1], account: .[2], flags: .[3],
            pw: .[4], env: .[5], group: .[6], mute: .[7] }]
     ')" || {
-        echo "Warning: failed to build session JSON." >&2
+        warn "failed to build session JSON."
         return 1
     }
 
     if ! echo "$json_array" | python3 "$_CC_COMMON_DIR/toml-helper.py" write-sessions "$config_file"; then
-        echo "Warning: failed to update config file with new session." >&2
+        warn "failed to update config file with new session."
         return 1
     fi
 }

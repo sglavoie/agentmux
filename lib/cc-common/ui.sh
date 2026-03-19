@@ -8,12 +8,24 @@ if command -v gum >/dev/null 2>&1; then
 	HAS_GUM=true
 fi
 
+# warn MESSAGE
+# Print a warning to stderr and continue.
+warn() {
+	echo "ccm: warning: $1" >&2
+}
+
+# err MESSAGE
+# Print a non-fatal error to stderr (caller decides whether to return).
+err() {
+	echo "ccm: error: $1" >&2
+}
+
 # die MESSAGE [SUGGESTION]
 # Print a fatal error to stderr and exit 1.
 die() {
 	local msg="$1"
 	local suggestion="${2:-}"
-	echo "Error: $msg" >&2
+	echo "ccm: error: $msg" >&2
 	[[ -n "$suggestion" ]] && echo "  $suggestion" >&2
 	exit 1
 }

@@ -57,7 +57,7 @@ def load_accounts() -> None:
         try:
             with open(path, "rb") as f:
                 data = tomllib.load(f)
-        except tomllib.TOMLDecodeError as e:
+        except (tomllib.TOMLDecodeError, OSError) as e:
             print(
                 f"Warning: failed to parse {path}: {e}"
                 " (check syntax with: ccm config validate)",
@@ -127,7 +127,7 @@ def load_defaults() -> None:
     try:
         with open(path, "rb") as f:
             data = tomllib.load(f)
-    except tomllib.TOMLDecodeError as e:
+    except (tomllib.TOMLDecodeError, OSError) as e:
         print(
             f"Warning: failed to parse {path}: {e}"
             " (check syntax with: ccm config validate)",
@@ -352,7 +352,7 @@ def load_sessions() -> None:
     try:
         with open(path, "rb") as f:
             data = tomllib.load(f)
-    except tomllib.TOMLDecodeError as e:
+    except (tomllib.TOMLDecodeError, OSError) as e:
         print(
             f"Warning: failed to parse {path}: {e}"
             " (check syntax with: ccm config validate)",

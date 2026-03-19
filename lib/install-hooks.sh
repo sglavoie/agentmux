@@ -22,7 +22,7 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--account)
 		[[ $# -lt 2 ]] && {
-			echo "Error: --account requires a NAME argument." >&2
+			echo "ccm: error: --account requires a NAME argument." >&2
 			exit 1
 		}
 		FILTER_ACCOUNT="$2"
@@ -33,7 +33,7 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-*)
-		echo "Error: Unknown option '$1'." >&2
+		echo "ccm: error: Unknown option '$1'." >&2
 		echo "Usage: install-hooks.sh [--account NAME] [--remove] <hooks-example-json>" >&2
 		exit 1
 		;;
@@ -45,12 +45,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 if ! command -v jq >/dev/null 2>&1; then
-	echo "Error: jq is required but not found." >&2
+	echo "ccm: error: jq is required but not found." >&2
 	exit 1
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
-	echo "Error: python3 is required but not found." >&2
+	echo "ccm: error: python3 is required but not found." >&2
 	exit 1
 fi
 
@@ -61,7 +61,7 @@ if [[ -z "$REMOVE_MODE" ]]; then
 	fi
 
 	if [[ ! -f "$HOOKS_EXAMPLE" ]]; then
-		echo "Error: Hooks example file not found: '$HOOKS_EXAMPLE'." >&2
+		echo "ccm: error: Hooks example file not found: '$HOOKS_EXAMPLE'." >&2
 		exit 1
 	fi
 
@@ -80,7 +80,7 @@ if [[ -z "$REMOVE_MODE" ]]; then
 	fi
 
 	if [[ -z "$HOOK_CMD" ]]; then
-		echo "Error: cc-hook-indicator not found in '~/.local/bin/' or repo 'hooks/'." >&2
+		echo "ccm: error: cc-hook-indicator not found in '~/.local/bin/' or repo 'hooks/'." >&2
 		exit 1
 	fi
 
@@ -97,7 +97,7 @@ if [[ -z "$REMOVE_MODE" ]]; then
 	fi
 
 	if [[ -z "$LOG_CMD" ]]; then
-		echo "Warning: cc-activity-log not found. Using bare name." >&2
+		echo "ccm: warning: cc-activity-log not found. Using bare name." >&2
 		LOG_CMD="cc-activity-log"
 	fi
 fi
@@ -143,7 +143,7 @@ fi
 # Fallback: if no accounts config or no entries found, use the default dir
 if [[ ${#CONFIG_DIRS[@]} -eq 0 ]]; then
 	if [[ -n "$FILTER_ACCOUNT" ]]; then
-		echo "Error: Account '$FILTER_ACCOUNT' not found in '$ACCOUNTS_CONFIG'." >&2
+		echo "ccm: error: Account '$FILTER_ACCOUNT' not found in '$ACCOUNTS_CONFIG'." >&2
 		exit 1
 	fi
 	CONFIG_DIRS=("$HOME/.claude")
@@ -175,7 +175,7 @@ if [[ -n "$REMOVE_MODE" ]]; then
 			end
 		' "$settings_file" >"$tmp_file" 2>/dev/null; then
 			rm -f "$tmp_file"
-			echo "  Error: Account '$_rm_account_name' — $settings_file contains invalid JSON, skipping." >&2
+			echo "  ccm: error: Account '$_rm_account_name' — $settings_file contains invalid JSON, skipping." >&2
 			continue
 		fi
 
@@ -235,7 +235,7 @@ if [[ -n "$ICONS_JSON" ]]; then
 fi
 
 if [[ ${#HOOK_EVENTS[@]} -eq 0 ]]; then
-	echo "Error: Could not load hook_events from icons.json." >&2
+	echo "ccm: error: Could not load hook_events from icons.json." >&2
 	exit 1
 fi
 
@@ -291,13 +291,13 @@ for i in "${!CONFIG_DIRS[@]}"; do
 	jq_filter='.hooks //= {}'
 	for event in "${HOOK_EVENTS[@]}"; do
 		is_disabled="$(echo "$acct_disabled" | jq --arg e "$event" 'map(. == $e) | any')" || {
-			echo "  Warning: Account '$account_name' — failed to check disabled_events for event '$event', treating as enabled." >&2
+			echo "  ccm: warning: Account '$account_name' — failed to check disabled_events for event '$event', treating as enabled." >&2
 			is_disabled="false"
 		}
 		extra_for_event="$(echo "$acct_extra" | jq --arg e "$event" --arg cmd "$HOOK_CMD" --arg logcmd "$LOG_CMD" '
 			(.[$e] // []) | walk(if type == "string" then gsub("cc-hook-indicator"; $cmd) | gsub("cc-activity-log"; $logcmd) else . end)
 		')" || {
-			echo "  Warning: Account '$account_name' — failed to process extra_hooks for event '$event', skipping extras." >&2
+			echo "  ccm: warning: Account '$account_name' — failed to process extra_hooks for event '$event', skipping extras." >&2
 			extra_for_event="[]"
 		}
 
@@ -322,7 +322,7 @@ for i in "${!CONFIG_DIRS[@]}"; do
 	_CLEANUP_TMP="$tmp_file"
 	if ! jq "$jq_filter" "$settings_file" >"$tmp_file" 2>/dev/null; then
 		rm -f "$tmp_file"
-		echo "  Error: Account '$account_name' — $settings_file contains invalid JSON, skipping." >&2
+		echo "  ccm: error: Account '$account_name' — $settings_file contains invalid JSON, skipping." >&2
 		_any_failures=1
 		continue
 	fi

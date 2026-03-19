@@ -95,8 +95,11 @@ def _send_notification(
     ]
     if group is not None:
         cmd += ["--group", str(group)]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    _active_notifications.append((proc, socket, tab_id))
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        _active_notifications.append((proc, socket, tab_id))
+    except OSError:
+        pass
 
 
 def _check_idle_notifications(sessions):

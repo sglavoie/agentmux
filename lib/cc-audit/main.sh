@@ -18,7 +18,7 @@ main() {
 			;;
 		--section)
 			if [[ $# -lt 2 ]]; then
-				echo "Error: --section requires a value." >&2
+				echo "ccm: error: --section requires a value." >&2
 				exit 1
 			fi
 			opt_section="$2"
@@ -41,7 +41,7 @@ main() {
 			exit 0
 			;;
 		*)
-			echo "Error: Unknown option '$1'. Run 'cc-audit --help' for usage." >&2
+			echo "ccm: error: Unknown option '$1'. Run 'cc-audit --help' for usage." >&2
 			exit 1
 			;;
 		esac

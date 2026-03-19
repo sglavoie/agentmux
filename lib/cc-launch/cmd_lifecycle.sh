@@ -25,19 +25,17 @@ _wait_for_tab_close() {
         fi
         sleep "$_CLOSE_POLL_DELAY"
     done
-    echo "Warning: tab '$title' may not have closed (timed out after ${_CLOSE_POLL_MAX} polls). Proceeding with $action." >&2
+    warn "tab '$title' may not have closed (timed out after ${_CLOSE_POLL_MAX} polls). Proceeding with $action."
 }
 
 cmd_close_group() {
     if [[ -z "$_TARGET_GROUP" ]]; then
-        echo "Error: --group requires a NAME argument." >&2
-        exit 1
+        die "--group requires a NAME argument."
     fi
 
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
-        echo "Error: No active Kitty instances found." >&2
-        exit 1
+        die "No active Kitty instances found."
     fi
 
     local matches=""
@@ -54,7 +52,7 @@ cmd_close_group() {
                 select([.windows[] | .user_vars.cc_group // empty
                         | select(. == $group)] | length > 0) |
                 { title: .title, id: .id }
-            ] | .[] | [.title, (.id | tostring)] | @tsv')"
+            ] | .[] | [.title, (.id | tostring)] | @tsv')" || continue
 
         if [[ -n "$inst_matches" ]]; then
             while IFS=$'\t' read -r title tab_id; do
@@ -95,7 +93,7 @@ cmd_close_group() {
                 echo "Closed: $title" >&2
                 closed=$((closed + 1))
             else
-                echo "Warning: failed to close '$title' (tab id: $tab_id)." >&2
+                warn "failed to close '$title' (tab id: $tab_id)."
             fi
         done <<<"$matches"
         echo "Closed $closed session(s) in group '$_TARGET_GROUP'." >&2
@@ -106,9 +104,8 @@ cmd_close_group() {
 
 cmd_close() {
     if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
-        echo "Error: --close requires --instance LABEL and --tab-id ID." >&2
-        echo "Usage: cc-launch --close --instance LABEL --tab-id ID" >&2
-        exit 1
+        die "--close requires --instance LABEL and --tab-id ID." \
+            "Usage: cc-launch --close --instance LABEL --tab-id ID"
     fi
 
     local source_socket
@@ -121,8 +118,7 @@ cmd_close() {
     local tab_info title
     tab_info="$(tab_metadata_by_id "$source_socket" "$_TARGET_TAB_ID" "$accounts_json" "$default_account")"
     if [[ -z "$tab_info" ]]; then
-        echo "Error: No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'." >&2
-        exit 1
+        die "No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'."
     fi
     IFS=$'\t' read -r title _ <<<"$tab_info"
 
@@ -132,17 +128,15 @@ cmd_close() {
     fi
 
     if ! kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"; then
-        echo "Error: failed to close tab '$title' (tab_id=$_TARGET_TAB_ID)." >&2
-        exit 1
+        die "failed to close tab '$title' (tab_id=$_TARGET_TAB_ID)."
     fi
     echo "Closed tab '$title' (instance=$_TARGET_INSTANCE_LABEL, tab_id=$_TARGET_TAB_ID)." >&2
 }
 
 cmd_restart() {
     if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
-        echo "Error: --restart requires --instance LABEL and --tab-id ID." >&2
-        echo "Usage: cc-launch --restart --instance LABEL --tab-id ID" >&2
-        exit 1
+        die "--restart requires --instance LABEL and --tab-id ID." \
+            "Usage: cc-launch --restart --instance LABEL --tab-id ID"
     fi
 
     local source_socket
@@ -150,8 +144,7 @@ cmd_restart() {
 
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
-        echo "Error: No active Kitty instances found." >&2
-        exit 1
+        die "No active Kitty instances found."
     fi
 
     local accounts_json default_account
@@ -161,15 +154,13 @@ cmd_restart() {
     local tab_info
     tab_info="$(tab_metadata_by_id "$source_socket" "$_TARGET_TAB_ID" "$accounts_json" "$default_account")"
     if [[ -z "$tab_info" ]]; then
-        echo "Error: No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'." >&2
-        exit 1
+        die "No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'."
     fi
 
     local title account dir live_flags live_pw live_env live_group live_mute
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
     if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
-        echo "Error: incomplete tab metadata for tab '$_TARGET_TAB_ID'." >&2
-        exit 1
+        die "incomplete tab metadata for tab '$_TARGET_TAB_ID'."
     fi
     SOCKET="$source_socket"
 
@@ -179,8 +170,7 @@ cmd_restart() {
     fi
 
     if ! kitty @ --to "$SOCKET" close-tab --match "id:$_TARGET_TAB_ID"; then
-        echo "Error: failed to close tab '$title' for restart." >&2
-        exit 1
+        die "failed to close tab '$title' for restart."
     fi
     echo "Closed tab '$title', relaunching..." >&2
     _wait_for_tab_close "$SOCKET" "$_TARGET_TAB_ID" "$title" "restart"
@@ -196,16 +186,14 @@ cmd_restart() {
     if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group" "$live_mute"; then
         sort_tabs "$SOCKET"
     else
-        echo "Error: Failed to relaunch '$title' after closing for restart. Check the error above." >&2
-        exit 1
+        die "Failed to relaunch '$title' after closing for restart. Check the error above."
     fi
 }
 
 cmd_clone() {
     if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
-        echo "Error: --clone requires --instance LABEL and --tab-id ID." >&2
-        echo "Usage: cc-launch --clone --instance LABEL --tab-id ID" >&2
-        exit 1
+        die "--clone requires --instance LABEL and --tab-id ID." \
+            "Usage: cc-launch --clone --instance LABEL --tab-id ID"
     fi
 
     local source_socket
@@ -213,8 +201,7 @@ cmd_clone() {
 
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
-        echo "Error: No active Kitty instances found." >&2
-        exit 1
+        die "No active Kitty instances found."
     fi
 
     local accounts_json default_account
@@ -224,15 +211,13 @@ cmd_clone() {
     local tab_info
     tab_info="$(tab_metadata_by_id "$source_socket" "$_TARGET_TAB_ID" "$accounts_json" "$default_account")"
     if [[ -z "$tab_info" ]]; then
-        echo "Error: No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'." >&2
-        exit 1
+        die "No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'."
     fi
 
     local title account dir live_flags live_pw live_env live_group live_mute
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
     if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
-        echo "Error: incomplete tab metadata for tab '$_TARGET_TAB_ID'." >&2
-        exit 1
+        die "incomplete tab metadata for tab '$_TARGET_TAB_ID'."
     fi
     SOCKET="$source_socket"
 
@@ -253,7 +238,7 @@ cmd_clone() {
         number=$((number + 1))
     done
     if [[ $number -gt $max_clones ]]; then
-        echo "Error: too many clones of '$base_title' (max $max_clones)." >&2
+        err "too many clones of '$base_title' (max $max_clones)."
         return 1
     fi
 
@@ -276,21 +261,18 @@ cmd_clone() {
 
 cmd_move() {
     if [[ -z "$_TARGET_INSTANCE_LABEL" || -z "$_TARGET_TAB_ID" ]]; then
-        echo "Error: --move requires --instance LABEL and --tab-id ID for the source tab." >&2
-        echo "Usage: cc-launch --move --instance SOURCE --tab-id ID --target-instance TARGET" >&2
-        exit 1
+        die "--move requires --instance LABEL and --tab-id ID for the source tab." \
+            "Usage: cc-launch --move --instance SOURCE --tab-id ID --target-instance TARGET"
     fi
 
     if [[ -z "$_MOVE_TARGET_INSTANCE" ]]; then
-        echo "Error: --move requires --target-instance TARGET to specify the destination." >&2
-        echo "Usage: cc-launch --move --instance SOURCE --tab-id ID --target-instance TARGET" >&2
-        exit 1
+        die "--move requires --target-instance TARGET to specify the destination." \
+            "Usage: cc-launch --move --instance SOURCE --tab-id ID --target-instance TARGET"
     fi
 
     discover_all_sockets
     if [[ ${#_INSTANCE_SOCKETS[@]} -eq 0 ]]; then
-        echo "Error: No active Kitty instances found." >&2
-        exit 1
+        die "No active Kitty instances found."
     fi
 
     local source_socket
@@ -306,7 +288,7 @@ cmd_move() {
     done
 
     if [[ -z "$target_socket" ]]; then
-        echo "Error: No active Kitty instance found with label '$_MOVE_TARGET_INSTANCE'." >&2
+        err "No active Kitty instance found with label '$_MOVE_TARGET_INSTANCE'."
         echo "Available instances:" >&2
         print_available_instances
         exit 1
@@ -319,20 +301,17 @@ cmd_move() {
     local tab_info
     tab_info="$(tab_metadata_by_id "$source_socket" "$_TARGET_TAB_ID" "$accounts_json" "$default_account")"
     if [[ -z "$tab_info" ]]; then
-        echo "Error: No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'." >&2
-        exit 1
+        die "No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'."
     fi
 
     if [[ "$source_socket" == "$target_socket" ]]; then
-        echo "Error: Session is already in the target instance '$_MOVE_TARGET_INSTANCE'." >&2
-        exit 1
+        die "Session is already in the target instance '$_MOVE_TARGET_INSTANCE'."
     fi
 
     local title account dir live_flags live_pw live_env live_group live_mute
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
     if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
-        echo "Error: incomplete tab metadata for tab '$_TARGET_TAB_ID'." >&2
-        exit 1
+        die "incomplete tab metadata for tab '$_TARGET_TAB_ID'."
     fi
 
     if [[ "$_DRY_RUN" == "true" ]]; then
@@ -341,8 +320,7 @@ cmd_move() {
     fi
 
     if ! kitty @ --to "$source_socket" close-tab --match "id:$_TARGET_TAB_ID"; then
-        echo "Error: failed to close tab '$title' for move." >&2
-        exit 1
+        die "failed to close tab '$title' for move."
     fi
     echo "Closed tab '$title' on source instance, relaunching on $_MOVE_TARGET_INSTANCE..." >&2
     _wait_for_tab_close "$source_socket" "$_TARGET_TAB_ID" "$title" "move"
@@ -360,7 +338,6 @@ cmd_move() {
         sort_tabs "$SOCKET"
         echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE." >&2
     else
-        echo "Error: Failed to relaunch '$title' on $_MOVE_TARGET_INSTANCE after closing. Check the error above." >&2
-        exit 1
+        die "Failed to relaunch '$title' on $_MOVE_TARGET_INSTANCE after closing. Check the error above."
     fi
 }

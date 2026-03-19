@@ -20,7 +20,7 @@ expand_tilde() {
 	if [[ "$path" == "~/"* || "$path" == "~" ]]; then
 		echo "${HOME}${path:1}"
 	elif [[ "$path" == "~"* ]]; then
-		echo "Warning: ~user/ paths are not supported, returning as-is: $path" >&2
+		warn "~user/ paths are not supported, returning as-is: $path"
 		echo "$path"
 	else
 		echo "$path"

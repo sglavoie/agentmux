@@ -154,12 +154,19 @@ for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
 	}
 
 	# Bail out if empty
-	if [[ -z "$ls_json" ]] || [[ "$(echo "$ls_json" | jq 'length')" -eq 0 ]]; then
+	if [[ -z "$ls_json" ]]; then
+		continue
+	fi
+	_jq_len="$(echo "$ls_json" | jq 'length')" || continue
+	if [[ "$_jq_len" -eq 0 ]]; then
 		continue
 	fi
 
 	# Count all tabs (for diagnostic messaging when no sessions match)
-	inst_tab_count=$(echo "$ls_json" | jq '[.[] | .tabs | length] | add // 0')
+	inst_tab_count=$(echo "$ls_json" | jq '[.[] | .tabs | length] | add // 0') || {
+		warn "Failed to parse Kitty session data"
+		continue
+	}
 	total_tabs=$((total_tabs + inst_tab_count))
 
 	inst_rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg show_all "$SHOW_ALL" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" --arg icon_flag "$_ICON_FLAG" --arg inst_label "$inst_label" '
@@ -239,7 +246,7 @@ for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
             .instance,
             .group
         ] | join("\t")
-    ')
+    ') || continue
 
 	if [[ -n "$inst_rows" ]]; then
 		if [[ -n "$rows" ]]; then

@@ -28,14 +28,14 @@ cmd_notify() {
 			shift 2
 			;;
 		*)
-			echo "Error: Unknown flag '$1'. Run 'ccm help notify' for usage." >&2
+			err "Unknown flag '$1'. Run 'ccm help notify' for usage."
 			return 1
 			;;
 		esac
 	done
 
 	if ! command -v alerter >/dev/null 2>&1; then
-		echo "Error: alerter is not installed." >&2
+		err "alerter is not installed."
 		echo "Install with: brew install vjeantet/tap/alerter" >&2
 		return 1
 	fi
