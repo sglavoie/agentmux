@@ -40,3 +40,24 @@ fi
 
 # Persist mute state as a Kitty user var for round-trip fidelity.
 kitten @ ${_TGL_TO_ARGS[@]+"${_TGL_TO_ARGS[@]}"} set-user-vars --match "id:$WIN_ID" "cc_mute=${cc_mute_val}" 2>/dev/null || true
+
+# Re-apply tab colors (title changes can lose color overrides).
+_ls_json="$(kitten @ ${_TGL_TO_ARGS[@]+"${_TGL_TO_ARGS[@]}"} ls 2>/dev/null)" || _ls_json=""
+if [[ -n "$_ls_json" ]]; then
+	_uv_json="$(printf '%s' "$_ls_json" | jq --argjson wid "$WIN_ID" '
+		[.[] | .tabs[] | .windows[] | select(.id == $wid) | .user_vars] | first // {}
+	' 2>/dev/null)" || _uv_json="{}"
+	_cc_color="$(printf '%s' "$_uv_json" | jq -r '.cc_color // ""')"
+	_cc_account="$(printf '%s' "$_uv_json" | jq -r '.cc_account // ""')"
+	_colors=""
+	if [[ -n "$_cc_color" ]]; then
+		_colors="$(resolve_palette_color "$_cc_color")"
+	elif [[ -n "$_cc_account" ]]; then
+		load_accounts 2>/dev/null || true
+		_colors="$(tab_colors_for_account "$_cc_account")" 2>/dev/null || _colors=""
+	fi
+	if [[ -n "$_colors" ]]; then
+		# shellcheck disable=SC2086
+		kitten @ ${_TGL_TO_ARGS[@]+"${_TGL_TO_ARGS[@]}"} set-tab-color --match "id:$_TGL_TAB_ID" $_colors 2>/dev/null || true
+	fi
+fi

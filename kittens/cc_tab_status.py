@@ -43,7 +43,7 @@ from cc_dashboard.colors import (
 from cc_dashboard.config import load_accounts, load_defaults
 from cc_dashboard.config_core import _save_tab_statuses
 from cc_dashboard.drawing import draw_border, safe_addstr
-from cc_dashboard.remote.actions_core import do_rename
+from cc_dashboard.remote.actions_core import do_rename, do_set_color
 from cc_dashboard.remote.command import get_kitty_socket, kitty_cmd
 from cc_dashboard.remote.shared import (
     _strip_icons,
@@ -135,6 +135,9 @@ def _get_current_session(socket):
                 "title": title,
                 "raw_title": raw_title,
                 "account": uv.get("cc_account", ""),
+                "cc_color": uv.get("cc_color", ""),
+                "claude_window_id": win.get("id", 0),
+                "cc_config_dir": uv.get("cc_config_dir", ""),
             }
 
     return None
@@ -398,6 +401,8 @@ def main(args=None):
         if override_emoji:
             new_title = override_emoji + new_title
         do_rename(socket, session["tab_id"], new_title)
+        # Re-apply tab colors (title changes can lose color overrides)
+        do_set_color(socket, session, session.get("cc_color", ""))
 
         # Auto-save custom values to config (deduplicated)
         if kind == "custom" and value:

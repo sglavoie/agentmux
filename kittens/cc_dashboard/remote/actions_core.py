@@ -458,4 +458,7 @@ def do_toggle_mute(socket, session):
             f"cc_mute={mute_val}",
         )
 
+    # Re-apply tab colors (title changes can lose color overrides)
+    do_set_color(socket, session, session.get("cc_color", ""))
+
     return True
