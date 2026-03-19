@@ -167,6 +167,10 @@ cmd_restart() {
 
     local title account dir live_flags live_pw live_env live_group live_mute
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
+    if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
+        echo "Error: incomplete tab metadata for tab '$_TARGET_TAB_ID'." >&2
+        exit 1
+    fi
     SOCKET="$source_socket"
 
     if [[ "$_DRY_RUN" == "true" ]]; then
@@ -226,6 +230,10 @@ cmd_clone() {
 
     local title account dir live_flags live_pw live_env live_group live_mute
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
+    if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
+        echo "Error: incomplete tab metadata for tab '$_TARGET_TAB_ID'." >&2
+        exit 1
+    fi
     SOCKET="$source_socket"
 
     if [[ "$_DRY_RUN" == "true" ]]; then
@@ -322,6 +330,10 @@ cmd_move() {
 
     local title account dir live_flags live_pw live_env live_group live_mute
     IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute <<<"$tab_info"
+    if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
+        echo "Error: incomplete tab metadata for tab '$_TARGET_TAB_ID'." >&2
+        exit 1
+    fi
 
     if [[ "$_DRY_RUN" == "true" ]]; then
         echo "Would move: $title (from=$_TARGET_INSTANCE_LABEL, to=$_MOVE_TARGET_INSTANCE, tab_id=$_TARGET_TAB_ID)" >&2

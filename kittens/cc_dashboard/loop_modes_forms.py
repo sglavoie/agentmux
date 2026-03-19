@@ -17,6 +17,16 @@ from cc_dashboard.views import (
 )
 
 
+def _get_pick_entry(state: dict) -> dict | None:
+    """Return the currently selected pick entry, or None if list is empty."""
+    filtered: list = state.get("pick_filtered", [])
+    idx: int = state.get("pick_selected", 0)
+    if not filtered or idx < 0 or idx >= len(filtered):
+        return None
+    result: dict = filtered[idx]
+    return result
+
+
 def handle_override_mode(key, state):
     """Handle key events for account override picker mode."""
     if state["mode"] != "override":
@@ -40,10 +50,10 @@ def handle_override_mode(key, state):
         selected_path = dirs[state["override_selected"]] if dirs else ""
 
         if state["override_source"] == "pick" and state["pick_filtered"]:
-            if state["pick_selected"] >= len(state["pick_filtered"]):
+            entry = _get_pick_entry(state)
+            if entry is None:
                 state["mode"] = cancel_mode
                 return True
-            entry = state["pick_filtered"][state["pick_selected"]]
             account = entry["account"]
             title = entry["title"]
             current_dir = state["cfg"]._accounts.get(account, {}).get("config_dir", "")
@@ -980,18 +990,15 @@ def handle_pick_mode(key, state):
             state["msg"] = "Only one group in config"
             state["msg_frames"] = 20
     elif key == ord("O") and state["pick_filtered"]:
+        entry = _get_pick_entry(state)
+        if entry is None:
+            return True
         state["mode"] = "override"
         state["override_source"] = "pick"
-        current_dir = state["pick_filtered"][state["pick_selected"]].get(
-            "config_dir", ""
-        )
+        current_dir = entry.get("config_dir", "")
         if not current_dir:
             current_dir = (
-                state["cfg"]
-                ._accounts.get(
-                    state["pick_filtered"][state["pick_selected"]]["account"], {}
-                )
-                .get("config_dir", "")
+                state["cfg"]._accounts.get(entry["account"], {}).get("config_dir", "")
             )
         dirs = state["cfg"]._unique_config_dirs()
         state["override_selected"] = 0
@@ -1026,7 +1033,9 @@ def handle_pick_mode(key, state):
                     group=entry.get("group", ""),
                 )
         else:
-            entry = state["pick_filtered"][state["pick_selected"]]
+            entry = _get_pick_entry(state)
+            if entry is None:
+                return True
             loc = state["compute_insert_location"](
                 target_socket, entry["account"], entry["title"]
             )

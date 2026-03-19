@@ -65,7 +65,7 @@ class _GitCache:
 
     def shutdown(self):
         """Shut down the background thread pool."""
-        self._pool.shutdown(wait=False)
+        self._pool.shutdown(wait=True, cancel_futures=True)
 
 
 # Module-level cache instance used by sessions.py

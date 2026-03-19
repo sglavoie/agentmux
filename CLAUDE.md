@@ -30,7 +30,7 @@ The codebase has a unified CLI entry point, a shared Bash library, a shared data
 
 The curses dashboard (`kittens/`) must use ASCII-only characters for its own UI elements. Curses does not reliably render Unicode symbols (checkmarks, arrows, etc.), so use plain ASCII alternatives: `>` for selection cursor (not `▸`), `*` for checkmark (not `✓`), `->` for arrow (not `→`), `Y`/`N` for yes/no. Tab titles (rendered by Kitty, not curses) use Unicode icons from `data/icons.json`.
 
-Account detection uses Kitty user vars (`--var cc_account=NAME` set at launch time) as the primary method, with a fallback to parsing `CLAUDE_CONFIG_DIR` from process cmdlines. Both the shell scripts and the Python kitten implement this two-tier lookup. Additional user vars `cc_flags`, `cc_pw`, `cc_env`, and `cc_group` store the per-session flags, project window override, environment variables, and group name respectively for round-trip fidelity with save, restart, clone, and move operations.
+Account detection uses Kitty user vars (`--var cc_account=NAME` set at launch time) as the primary method, with a fallback to parsing `CLAUDE_CONFIG_DIR` from process cmdlines. Both the shell scripts and the Python kitten implement this two-tier lookup. Additional user vars `cc_flags`, `cc_pw`, `cc_env`, `cc_group`, and `cc_mute` store the per-session flags, project window override, environment variables, group name, and mute state respectively for round-trip fidelity with save, restart, clone, and move operations.
 
 Config files use TOML format. New installs use `ccm config init` to create example configs. The config directory defaults to `~/.config/cc-manager/` but can be overridden via `CC_MANAGER_CONFIG` and `CC_MANAGER_ACCOUNTS` environment variables.
 
@@ -43,6 +43,8 @@ Override resolution follows a simple model: if a session's optional key is omitt
 The color palette has exactly 10 named colors (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan), each with active/inactive background hex values and text foreground RGB values. The palette and icon set are defined once in `data/palette.json` and `data/icons.json` respectively, and read at runtime by both the Bash library (via `jq`) and the Python kitten code (via `json` stdlib). To change a color or icon, edit the corresponding JSON file — no synchronization across files is needed.
 
 Tab title convention uses an uppercase initial of the account name followed by a colon (e.g., `W:project` for work, `P:dotfiles` for personal). The `--cleanup` command relies on this pattern to identify managed tabs. The star icon (`★`) functions as a pin toggle, bound to F2: pressing F2 stars the tab and moves it to the front of the tab bar, where pinned tabs are sorted alphabetically among themselves. Pressing F2 again unstars the tab and returns it to its natural position. Pinning works regardless of whether `sort_sessions=alpha` is enabled — pinned tabs always reorder to the front.
+
+The mute toggle (`bin/cc-toggle-mute`) adds a 🔇 icon to the tab title and persists state via the `cc_mute` Kitty user var. When muted, `cc-hook-indicator` suppresses macOS desktop notifications but icon changes and activity tracking still function normally. Mute state is round-tripped through save, restart, clone, and move operations.
 
 Kitty socket discovery follows a three-step precedence: explicit `--socket` argument, then `KITTY_LISTEN_ON` environment variable, then the most recent `${TMPDIR:-/tmp}/kitty-*` socket file. The `$TMPDIR` variable is respected with a `/tmp` fallback for portability.
 

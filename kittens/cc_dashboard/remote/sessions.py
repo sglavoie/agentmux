@@ -2,7 +2,6 @@
 
 import json
 import os
-import tempfile
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.config_core import read_notes
@@ -153,15 +152,7 @@ def query_sessions(socket, managed_only=True):
             icon_state = _detect_state(tab_title)
             tab_id = tab.get("id", 0)
 
-            # Check dim state from temp file
-            dimmed = None
-            dim_file = os.path.join(tempfile.gettempdir(), f"ccm-dim-{tab_id}")
-            if os.path.isfile(dim_file):
-                try:
-                    with open(dim_file) as df:
-                        dimmed = df.readline().strip() or None
-                except OSError:
-                    pass
+            dimmed = user_vars.get("cc_dim_type") or None
 
             activity = load_activity(tab_id)
             session_id = resolve_session_id(tab_id)

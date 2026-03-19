@@ -439,12 +439,16 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
             )
             draw_footer(stdscr, "pick_group_filter")
         if mode == "override" and state["pick_filtered"]:
-            draw_override_picker(
-                stdscr,
-                state["pick_filtered"][state["pick_selected"]],
-                state["override_selected"],
-            )
-            draw_footer(stdscr, "override")
+            from cc_dashboard.loop_modes_forms import _get_pick_entry
+
+            _pick_entry = _get_pick_entry(state)
+            if _pick_entry is not None:
+                draw_override_picker(
+                    stdscr,
+                    _pick_entry,
+                    state["override_selected"],
+                )
+                draw_footer(stdscr, "override")
     elif mode == "delete":
         draw_delete_view(
             stdscr,

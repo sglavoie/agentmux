@@ -143,6 +143,7 @@ default_account="$(default_account_name)"
 
 # Query all instances and collect rows
 connection_errors=0
+total_tabs=0
 rows=""
 for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
 	inst_socket="${_INSTANCE_SOCKETS[$si]}"
@@ -156,6 +157,10 @@ for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
 	if [[ -z "$ls_json" ]] || [[ "$(echo "$ls_json" | jq 'length')" -eq 0 ]]; then
 		continue
 	fi
+
+	# Count all tabs (for diagnostic messaging when no sessions match)
+	inst_tab_count=$(echo "$ls_json" | jq '[.[] | .tabs | length] | add // 0')
+	total_tabs=$((total_tabs + inst_tab_count))
 
 	inst_rows=$(echo "$ls_json" | jq -r --argjson accounts "$accounts_json" --arg default_account "$default_account" --arg show_all "$SHOW_ALL" --arg managed_re "$_MANAGED_RE" --arg strip_re "$_STRIP_RE" --arg icon_bolt "$_ICON_BOLT" --arg icon_stop "$_ICON_STOP" --arg icon_key "$_ICON_KEY" --arg icon_error "$_ICON_ERROR" --arg icon_star "$_ICON_STAR" --arg icon_flag "$_ICON_FLAG" --arg inst_label "$inst_label" '
         [.[] | . as $os |
@@ -260,7 +265,11 @@ if [[ -z "$rows" ]]; then
 			echo "  Check that allow_remote_control is set in kitty.conf." >&2
 		fi
 	fi
-	echo "No active Claude Code sessions found."
+	if [[ "$total_tabs" -gt 0 ]]; then
+		echo "No active Claude Code sessions found ($total_tabs tab(s) found but none match a managed session pattern)."
+	else
+		echo "No active Claude Code sessions found."
+	fi
 	exit 0
 fi
 

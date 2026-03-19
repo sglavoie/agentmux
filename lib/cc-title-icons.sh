@@ -88,6 +88,44 @@ build_title() {
 	echo "$result"
 }
 
+# Shared preamble for toggle scripts. Call after sourcing this file.
+# Sets: _TGL_TAB_ID, _TGL_HAS_STAR, _TGL_HAS_FLAG, _TGL_HAS_MUTE,
+#        _TGL_REMAINING, _TGL_STATE, _TGL_TO_ARGS
+# Usage: toggle_preamble WINDOW_ID
+toggle_preamble() {
+	local win_id="$1"
+
+	_TGL_TO_ARGS=()
+	if [[ -n "${KITTY_LISTEN_ON:-}" ]]; then
+		_TGL_TO_ARGS=("--to" "$KITTY_LISTEN_ON")
+	fi
+
+	local info
+	info="$(get_tab_info "$win_id" ${_TGL_TO_ARGS[@]+"${_TGL_TO_ARGS[@]}"})"
+	_TGL_TAB_ID="$(echo "$info" | head -n1)"
+	local current_title
+	current_title="$(echo "$info" | tail -n1)"
+
+	if [[ -z "$_TGL_TAB_ID" || "$_TGL_TAB_ID" == "null" ]]; then
+		echo "Error: Could not find tab for window '$win_id'." >&2
+		return 1
+	fi
+
+	local _has_star _has_flag _has_mute _remaining
+	{
+		read -r _has_star
+		read -r _has_flag
+		read -r _has_mute
+		read -r _remaining
+	} < <(parse_icon_prefix "$current_title")
+
+	_TGL_HAS_STAR="$_has_star"
+	_TGL_HAS_FLAG="$_has_flag"
+	_TGL_HAS_MUTE="$_has_mute"
+	_TGL_STATE="$(detect_state "$current_title")"
+	_TGL_REMAINING="$(strip_icons "$_remaining")"
+}
+
 # Remove a leading override emoji from a title string.
 # This is a separate operation from strip_icons — used only when you need the
 # clean title without the override emoji (config lookup, save, clone).

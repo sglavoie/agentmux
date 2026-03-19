@@ -44,6 +44,11 @@ _load_palette() {
 	[[ -n "$_PALETTE_JSON" ]] && return 0
 	_resolve_data_dir
 	_PALETTE_JSON="$(<"$_CC_DATA_DIR/palette.json")"
+	if ! printf '%s' "$_PALETTE_JSON" | jq empty 2>/dev/null; then
+		echo "Error: palette.json is not valid JSON: $_CC_DATA_DIR/palette.json" >&2
+		_PALETTE_JSON=""
+		return 1
+	fi
 	_PALETTE_ACTIVE_FG=$(printf '%s' "$_PALETTE_JSON" | jq -r '.active_fg')
 	_PALETTE_INACTIVE_FG=$(printf '%s' "$_PALETTE_JSON" | jq -r '.inactive_fg')
 }
@@ -52,6 +57,11 @@ _load_icons() {
 	[[ -n "$_ICONS_JSON" ]] && return 0
 	_resolve_data_dir
 	_ICONS_JSON="$(<"$_CC_DATA_DIR/icons.json")"
+	if ! printf '%s' "$_ICONS_JSON" | jq empty 2>/dev/null; then
+		echo "Error: icons.json is not valid JSON: $_CC_DATA_DIR/icons.json" >&2
+		_ICONS_JSON=""
+		return 1
+	fi
 	_ICON_STAR=$(printf '%s' "$_ICONS_JSON" | jq -r '.star')
 	_ICON_FLAG=$(printf '%s' "$_ICONS_JSON" | jq -r '.flag')
 	_ICON_MUTE=$(printf '%s' "$_ICONS_JSON" | jq -r '.mute')

@@ -40,7 +40,7 @@ def _import_toml_writer() -> types.ModuleType:
 def _accounts_config_path() -> str:
     env = os.environ.get("CC_MANAGER_ACCOUNTS", "")
     if env:
-        return env
+        return os.path.expanduser(env)
     xdg = os.environ.get(
         "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
     )
@@ -82,7 +82,8 @@ def load_accounts() -> None:
             _state._account_names.append(name)
     else:
         print(
-            "Note: accounts.toml not found, using default accounts (work, personal).",
+            f"Note: accounts.toml not found at {path}, using defaults."
+            " Run 'ccm config init' to create.",
             file=sys.stderr,
         )
         home = os.path.expanduser("~")
@@ -100,7 +101,7 @@ def load_accounts() -> None:
 def _defaults_config_path() -> str:
     env = os.environ.get("CC_MANAGER_DEFAULTS", "")
     if env:
-        return env
+        return os.path.expanduser(env)
     xdg = os.environ.get(
         "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
     )
@@ -243,6 +244,7 @@ def _save_tab_statuses(statuses: list[str]) -> str:
 def _sessions_config_path() -> str:
     env = os.environ.get("CC_MANAGER_CONFIG", "")
     if env:
+        env = os.path.expanduser(env)
         if os.path.isdir(env):
             return os.path.join(env, "sessions.toml")
         return env

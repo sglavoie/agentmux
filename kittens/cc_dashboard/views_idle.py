@@ -41,7 +41,7 @@ def _reap_notifications():
             try:
                 stdout = proc.stdout.read() if proc.stdout else b""
                 result = stdout.decode().strip()
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 result = ""
             if result and result not in ("@TIMEOUT", "@CLOSED"):
                 with contextlib.suppress(OSError):
