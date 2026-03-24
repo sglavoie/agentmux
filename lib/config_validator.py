@@ -136,8 +136,10 @@ def validate_accounts(
         if not isinstance(color, str):
             v.error(f"account '{name}': 'color' must be a string")
         elif palette_colors is not None and color not in palette_colors:
-            v.error(f"account '{name}': unknown color '{color}' "
-                    f"(valid: {', '.join(sorted(palette_colors))})")
+            v.error(
+                f"account '{name}': unknown color '{color}' "
+                f"(valid: {', '.join(sorted(palette_colors))})"
+            )
         if name in account_names:
             v.error(f"duplicate account name '{name}'")
         account_names.add(name)
@@ -171,8 +173,15 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
 
     valid_pw = {"", "-", "stack", "vsplit", "hsplit", "split"}
     known_session_keys = {
-        "title", "directory", "account", "flags",
-        "project_window", "env", "group", "mute", "commands",
+        "title",
+        "directory",
+        "account",
+        "flags",
+        "project_window",
+        "env",
+        "group",
+        "mute",
+        "commands",
     }
     seen_titles = set()
 
@@ -191,8 +200,7 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
             v.error(f"entry {i}: missing or empty 'directory'")
         elif not os.path.isdir(os.path.expanduser(directory)):
             label = title or f"entry {i}"
-            v.warn(f"session '{label}': directory "
-                   f"'{directory}' does not exist")
+            v.warn(f"session '{label}': directory '{directory}' does not exist")
         if not title:
             continue
 
@@ -206,29 +214,39 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
 
         pw = entry.get("project_window", "")
         if pw and pw not in valid_pw:
-            v.error(f"session '{title}': invalid project_window '{pw}' "
-                    f"(valid: -, stack, vsplit, hsplit, split)")
+            v.error(
+                f"session '{title}': invalid project_window '{pw}' "
+                f"(valid: -, stack, vsplit, hsplit, split)"
+            )
 
         mute = entry.get("mute")
         if mute is not None:
             if not isinstance(mute, bool) and mute != "-":
-                v.warn(f"session '{title}': 'mute' should be true, false, or \"-\", got {mute!r}")
+                v.warn(
+                    f"session '{title}': 'mute' should be true, false, or \"-\", got {mute!r}"
+                )
 
         commands = entry.get("commands")
         if commands is not None:
             if not isinstance(commands, list):
-                v.warn(f"session '{title}': 'commands' must be an array, got {type(commands).__name__} — ignoring")
+                v.warn(
+                    f"session '{title}': 'commands' must be an array, got {type(commands).__name__} — ignoring"
+                )
             else:
                 for j, cmd in enumerate(commands):
                     if not isinstance(cmd, str):
-                        v.warn(f"session '{title}': 'commands' entry {j} must be a string, got {type(cmd).__name__} — skipping")
+                        v.warn(
+                            f"session '{title}': 'commands' entry {j} must be a string, got {type(cmd).__name__} — skipping"
+                        )
                     elif "\t" in cmd or "\n" in cmd or "\r" in cmd:
                         v.warn(
                             f"session '{title}': 'commands' entry {j} contains a tab or newline, which is not supported by the current transport — ignoring"
                         )
                 pw_raw = entry.get("project_window", "")
                 if isinstance(commands, list) and commands and pw_raw == "-":
-                    v.warn(f"session '{title}': 'commands' is set but 'project_window = \"-\"' disables the project window — commands will be ignored")
+                    v.warn(
+                        f"session '{title}': 'commands' is set but 'project_window = \"-\"' disables the project window — commands will be ignored"
+                    )
 
         # 1a: Warn if env values contain spaces (breaks Claude invocations)
         env = entry.get("env", "")
@@ -236,8 +254,9 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
             for pair in env.split():
                 if "=" not in pair:
                     label = title or f"entry {i}"
-                    v.warn(f"session '{label}': env token '{pair}' "
-                           f"is not a KEY=VALUE pair")
+                    v.warn(
+                        f"session '{label}': env token '{pair}' is not a KEY=VALUE pair"
+                    )
 
     # 1b: Warn about group names used by only one session (possible typos)
     group_counts: dict[str, int] = {}
@@ -248,8 +267,7 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
     if len(group_counts) >= 2:
         for g, count in group_counts.items():
             if count == 1:
-                v.warn(f"group '{g}' is used by only 1 session "
-                       f"— possible typo?")
+                v.warn(f"group '{g}' is used by only 1 session — possible typo?")
 
     return v
 
@@ -272,17 +290,31 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
     defaults = data.get("defaults", {})
     notifications = data.get("notifications", {})
 
-    known_defaults_keys = {"claude_flags", "project_window", "sort_sessions",
-                           "dashboard_refresh", "tab_statuses",
-                           "notes_editor", "kitty_timeout",
-                           "idle_poll_interval"}
+    known_defaults_keys = {
+        "claude_flags",
+        "project_window",
+        "sort_sessions",
+        "dashboard_refresh",
+        "tab_statuses",
+        "notes_editor",
+        "kitty_timeout",
+        "idle_poll_interval",
+    }
     unknown_defaults = set(defaults.keys()) - known_defaults_keys
     if unknown_defaults:
         v.warn(f"[defaults]: unknown key(s): {', '.join(sorted(unknown_defaults))}")
 
-    known_notif_keys = {"error", "permission", "stop", "idle",
-                        "idle_alert_minutes", "min_secs", "ignore_patterns",
-                        "dim_after_minutes", "idle_poll_interval"}
+    known_notif_keys = {
+        "error",
+        "permission",
+        "stop",
+        "idle",
+        "idle_alert_minutes",
+        "min_secs",
+        "ignore_patterns",
+        "dim_after_minutes",
+        "idle_poll_interval",
+    }
     unknown_notif = set(notifications.keys()) - known_notif_keys
     if unknown_notif:
         v.warn(f"[notifications]: unknown key(s): {', '.join(sorted(unknown_notif))}")
@@ -299,15 +331,18 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
         valid_sort = load_sort_modes()
     valid_sort = valid_sort | {""}
     if sort is not None and sort not in valid_sort:
-        v.error(f"sort_sessions must be one of "
-                f"{', '.join(sorted(valid_sort - {''}))} or omitted, "
-                f"got '{sort}'")
+        v.error(
+            f"sort_sessions must be one of "
+            f"{', '.join(sorted(valid_sort - {''}))} or omitted, "
+            f"got '{sort}'"
+        )
 
     pw = defaults.get("project_window")
     valid_pw = {"", "-", "stack", "vsplit", "hsplit", "split"}
     if pw is not None and pw not in valid_pw:
-        v.error(f"project_window '{pw}' is invalid "
-                f"(valid: -, stack, vsplit, hsplit, split)")
+        v.error(
+            f"project_window '{pw}' is invalid (valid: -, stack, vsplit, hsplit, split)"
+        )
 
     refresh = defaults.get("dashboard_refresh")
     if refresh is not None:
@@ -362,9 +397,7 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
                 try:
                     re.compile(p)
                 except re.error as e:
-                    v.error(
-                        f"notifications.ignore_patterns: invalid regex {p!r}: {e}"
-                    )
+                    v.error(f"notifications.ignore_patterns: invalid regex {p!r}: {e}")
 
     statuses = defaults.get("tab_statuses")
     if statuses is not None:
@@ -407,8 +440,10 @@ def validate_hooks(
         if valid_events:
             for event_name in hooks:
                 if event_name not in valid_events:
-                    v.warn(f"unknown hook event '{event_name}' "
-                           f"(not in icons.json hook_events)")
+                    v.warn(
+                        f"unknown hook event '{event_name}' "
+                        f"(not in icons.json hook_events)"
+                    )
 
     # Validate account_overrides
     overrides = data.get("account_overrides")
@@ -425,23 +460,29 @@ def validate_hooks(
                 disabled = override.get("disabled_events")
                 if disabled is not None:
                     if not isinstance(disabled, list):
-                        v.error(f"account_overrides.{acct}"
-                                ".disabled_events must be an array")
+                        v.error(
+                            f"account_overrides.{acct}.disabled_events must be an array"
+                        )
                     elif valid_events:
                         for ev in disabled:
                             if ev not in valid_events:
-                                v.warn(f"account_overrides.{acct}: "
-                                       f"unknown disabled event '{ev}'")
+                                v.warn(
+                                    f"account_overrides.{acct}: "
+                                    f"unknown disabled event '{ev}'"
+                                )
                 extra = override.get("extra_commands") or override.get("extra_hooks")
                 if extra is not None:
                     if not isinstance(extra, dict):
-                        v.error(f"account_overrides.{acct}"
-                                ".extra_commands must be an object")
+                        v.error(
+                            f"account_overrides.{acct}.extra_commands must be an object"
+                        )
                     elif valid_events:
                         for ev in extra:
                             if ev not in valid_events:
-                                v.warn(f"account_overrides.{acct}: "
-                                       f"unknown extra_commands event '{ev}'")
+                                v.warn(
+                                    f"account_overrides.{acct}: "
+                                    f"unknown extra_commands event '{ev}'"
+                                )
 
     return v
 
@@ -492,17 +533,23 @@ def main() -> None:
 
     palette_colors = _load_palette_colors_for_dir(data_dir)
     if palette_colors is None:
-        print(_yellow("  WARN") + ": could not load palette.json; "
-              "skipping color validation", file=sys.stderr)
+        print(
+            _yellow("  WARN") + ": could not load palette.json; "
+            "skipping color validation",
+            file=sys.stderr,
+        )
     valid_events = _load_hook_events_for_dir(data_dir)
     valid_sort = _load_sort_modes_for_dir(data_dir)
 
-    accounts_path = os.environ.get("CC_MANAGER_ACCOUNTS",
-                                   os.path.join(config_dir, "accounts.toml"))
-    sessions_path = os.environ.get("CC_MANAGER_CONFIG",
-                                   os.path.join(config_dir, "sessions.toml"))
-    defaults_path = os.environ.get("CC_MANAGER_DEFAULTS",
-                                   os.path.join(config_dir, "defaults.toml"))
+    accounts_path = os.environ.get(
+        "CC_MANAGER_ACCOUNTS", os.path.join(config_dir, "accounts.toml")
+    )
+    sessions_path = os.environ.get(
+        "CC_MANAGER_CONFIG", os.path.join(config_dir, "sessions.toml")
+    )
+    defaults_path = os.environ.get(
+        "CC_MANAGER_DEFAULTS", os.path.join(config_dir, "defaults.toml")
+    )
     hooks_path = os.path.join(config_dir, "hooks.json")
 
     v_accounts, account_names = validate_accounts(accounts_path, palette_colors)
@@ -523,8 +570,10 @@ def main() -> None:
 
     print()
     if total_errors:
-        print(_red(f"Found {total_errors} error(s)") +
-              (f" and {total_warnings} warning(s)." if total_warnings else "."))
+        print(
+            _red(f"Found {total_errors} error(s)")
+            + (f" and {total_warnings} warning(s)." if total_warnings else ".")
+        )
         sys.exit(1)
     elif total_warnings:
         print(_yellow(f"All clear with {total_warnings} warning(s)."))

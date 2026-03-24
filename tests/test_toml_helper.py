@@ -59,9 +59,7 @@ def tsv_lines(stdout):
 def test_read_accounts():
     """read-accounts outputs correct TSV columns."""
     print("\n--- read-accounts ---")
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write(
             '[[accounts]]\nname = "work"\n'
             'config_dir = "~/.claude-work"\ncolor = "blue"\n\n'
@@ -94,9 +92,7 @@ def test_read_accounts():
 def test_read_sessions():
     """read-sessions outputs correct 9-column TSV."""
     print("\n--- read-sessions ---")
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write(
             '[[sessions]]\ntitle = "myproject"\n'
             'directory = "~/code/myproject"\naccount = "work"\n'
@@ -142,9 +138,7 @@ def test_read_sessions():
 def test_read_sessions_sanitizes_invalid_commands():
     """read-sessions drops invalid and transport-unsafe commands."""
     print("\n--- read-sessions invalid commands ---")
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write(
             '[[sessions]]\ntitle = "valid"\n'
             'directory = "~/code/valid"\n'
@@ -176,14 +170,12 @@ def test_read_sessions_sanitizes_invalid_commands():
 def test_read_defaults():
     """read-defaults outputs TSV for defaults and notifications."""
     print("\n--- read-defaults ---")
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write(
             '[defaults]\nclaude_flags = "--verbose"\n'
             'sort_sessions = "alpha"\ndashboard_refresh = 3\n\n'
-            '[notifications]\nerror = true\nstop = false\n'
-            'idle_alert_minutes = 30\n'
+            "[notifications]\nerror = true\nstop = false\n"
+            "idle_alert_minutes = 30\n"
             'ignore_patterns = ["test", "debug"]\n'
         )
         f.flush()
@@ -210,8 +202,10 @@ def test_read_defaults():
     check("notify_stop=empty", kv.get("notify_stop") == "")
     check("idle_alert_minutes=30", kv.get("idle_alert_minutes") == "30")
     # List → pipe-separated
-    check("ignore_patterns pipe-separated",
-          kv.get("notify_ignore_patterns") == "test|debug")
+    check(
+        "ignore_patterns pipe-separated",
+        kv.get("notify_ignore_patterns") == "test|debug",
+    )
 
 
 # ── write-sessions ───────────────────────────────────────────────
@@ -220,38 +214,36 @@ def test_read_defaults():
 def test_write_sessions():
     """write-sessions creates valid TOML from JSON stdin."""
     print("\n--- write-sessions ---")
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write("# My sessions config\n")
         f.flush()
         path = f.name
 
-    sessions_json = json.dumps([
-        {
-            "title": "myproject",
-            "dir": "~/code/myproject",
-            "account": "work",
-            "flags": "--verbose",
-            "pw": "vsplit",
-            "env": "FOO=bar",
-            "group": "dev",
-            "commands": ["npm run dev", "shell"],
-        },
-        {
-            "title": "notes",
-            "dir": "~/notes",
-            "account": "",
-            "flags": "",
-            "pw": "",
-            "env": "",
-            "group": "",
-        },
-    ])
-
-    stdout, stderr, rc = run_helper(
-        "write-sessions", path, stdin_data=sessions_json
+    sessions_json = json.dumps(
+        [
+            {
+                "title": "myproject",
+                "dir": "~/code/myproject",
+                "account": "work",
+                "flags": "--verbose",
+                "pw": "vsplit",
+                "env": "FOO=bar",
+                "group": "dev",
+                "commands": ["npm run dev", "shell"],
+            },
+            {
+                "title": "notes",
+                "dir": "~/notes",
+                "account": "",
+                "flags": "",
+                "pw": "",
+                "env": "",
+                "group": "",
+            },
+        ]
     )
+
+    stdout, stderr, rc = run_helper("write-sessions", path, stdin_data=sessions_json)
 
     check("exit code 0", rc == 0)
 
@@ -322,9 +314,7 @@ def test_write_read_roundtrip():
     ]
 
     # Write
-    _, _, rc = run_helper(
-        "write-sessions", path, stdin_data=json.dumps(original)
-    )
+    _, _, rc = run_helper("write-sessions", path, stdin_data=json.dumps(original))
     check("write exit code 0", rc == 0)
 
     # Read back
@@ -375,8 +365,7 @@ def test_error_handling():
 
     # write-sessions with invalid JSON
     _, stderr, rc = run_helper(
-        "write-sessions", "/tmp/test-out.toml",
-        stdin_data="not json"
+        "write-sessions", "/tmp/test-out.toml", stdin_data="not json"
     )
     check("bad JSON: non-zero exit", rc != 0)
     check("bad JSON: error message", "json" in stderr.lower())

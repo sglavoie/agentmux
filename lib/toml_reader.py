@@ -17,7 +17,12 @@ def _normalize_commands(raw_commands):
         return []
     result = []
     for command in raw_commands:
-        if isinstance(command, str) and "\t" not in command and "\n" not in command and "\r" not in command:
+        if (
+            isinstance(command, str)
+            and "\t" not in command
+            and "\n" not in command
+            and "\r" not in command
+        ):
             result.append(command)
     return result
 
@@ -97,10 +102,20 @@ def _load_palette_colors():
         file=sys.stderr,
     )
     # Canonical color names — keep in sync with data/palette.json.
-    return frozenset({
-        "green", "blue", "red", "orange", "purple",
-        "teal", "pink", "yellow", "gray", "cyan",
-    })
+    return frozenset(
+        {
+            "green",
+            "blue",
+            "red",
+            "orange",
+            "purple",
+            "teal",
+            "pink",
+            "yellow",
+            "gray",
+            "cyan",
+        }
+    )
 
 
 _VALID_PALETTE_COLORS = _load_palette_colors()

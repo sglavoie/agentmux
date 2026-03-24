@@ -51,7 +51,9 @@ def test_python_launch_explicit_disable():
         return SimpleNamespace(returncode=0, stdout="[]")
 
     cfg._accounts = {"work": {"config_dir": ""}}
-    cfg._resolve_project_window = lambda override="": "stack" if not override else ("" if override == "-" else override)
+    cfg._resolve_project_window = lambda override="": (
+        "stack" if not override else ("" if override == "-" else override)
+    )
     cfg._resolve_claude_flags = lambda override="": override
     cfg._palette_tab_colors = lambda *args, **kwargs: ["active_bg=#000000"]
     actions_core.kitty_cmd = fake_kitty_cmd
@@ -88,7 +90,9 @@ def test_detached_steps_explicit_disable():
     original_compute_location = actions_lifecycle.compute_insert_location
 
     cfg._accounts = {"work": {"config_dir": ""}}
-    cfg._resolve_project_window = lambda override="": "stack" if not override else ("" if override == "-" else override)
+    cfg._resolve_project_window = lambda override="": (
+        "stack" if not override else ("" if override == "-" else override)
+    )
     cfg._resolve_claude_flags = lambda override="": override
     cfg._palette_tab_colors = lambda *args, **kwargs: ["active_bg=#000000"]
     actions_lifecycle.compute_insert_location = lambda *args, **kwargs: (None, None)
@@ -122,7 +126,15 @@ def test_override_restart_uses_config_commands():
     captured = {}
 
     class Cfg:
-        _sessions = [{"title": "proj", "flags": "", "pw": "", "env": "", "commands": ["npm run dev"]}]
+        _sessions = [
+            {
+                "title": "proj",
+                "flags": "",
+                "pw": "",
+                "env": "",
+                "commands": ["npm run dev"],
+            }
+        ]
         _accounts = {"work": {"config_dir": "/cfg/work"}}
 
         @staticmethod
@@ -138,20 +150,22 @@ def test_override_restart_uses_config_commands():
         "override_source": "list",
         "override_selected": 0,
         "cfg": Cfg(),
-        "filtered": [{
-            "title": "proj",
-            "account": "work",
-            "tab_id": 7,
-            "socket": "unix:/tmp/home",
-            "status": "idle",
-            "cwd": "/tmp",
-            "cc_flags": "--danger",
-            "cc_pw": "",
-            "cc_env": "",
-            "cc_commands": [],
-            "group": "",
-            "config_dir": "/cfg/work",
-        }],
+        "filtered": [
+            {
+                "title": "proj",
+                "account": "work",
+                "tab_id": 7,
+                "socket": "unix:/tmp/home",
+                "status": "idle",
+                "cwd": "/tmp",
+                "cc_flags": "--danger",
+                "cc_pw": "",
+                "cc_env": "",
+                "cc_commands": [],
+                "group": "",
+                "config_dir": "/cfg/work",
+            }
+        ],
         "selected": 0,
         "home_socket": "unix:/tmp/home",
         "host_tab_id": None,
@@ -165,7 +179,10 @@ def test_override_restart_uses_config_commands():
 
     handled = handle_override_mode(10, state)
     check("override restart handled", handled is True)
-    check("override restart passes config commands", captured.get("commands") == ["npm run dev"])
+    check(
+        "override restart passes config commands",
+        captured.get("commands") == ["npm run dev"],
+    )
 
 
 def test_override_stopped_launch_uses_config_commands():
@@ -175,7 +192,9 @@ def test_override_stopped_launch_uses_config_commands():
     original_sleep = loop_modes_forms.time.sleep
 
     class Cfg:
-        _sessions = [{"title": "proj", "flags": "", "pw": "", "env": "", "commands": ["shell"]}]
+        _sessions = [
+            {"title": "proj", "flags": "", "pw": "", "env": "", "commands": ["shell"]}
+        ]
         _accounts = {"work": {"config_dir": "/cfg/work"}}
 
         @staticmethod
@@ -191,20 +210,22 @@ def test_override_stopped_launch_uses_config_commands():
         "override_source": "list",
         "override_selected": 0,
         "cfg": Cfg(),
-        "filtered": [{
-            "title": "proj",
-            "account": "work",
-            "tab_id": 7,
-            "socket": "unix:/tmp/home",
-            "status": "stopped",
-            "cwd": "/tmp",
-            "cc_flags": "--danger",
-            "cc_pw": "",
-            "cc_env": "",
-            "cc_commands": [],
-            "group": "",
-            "config_dir": "/cfg/work",
-        }],
+        "filtered": [
+            {
+                "title": "proj",
+                "account": "work",
+                "tab_id": 7,
+                "socket": "unix:/tmp/home",
+                "status": "stopped",
+                "cwd": "/tmp",
+                "cc_flags": "--danger",
+                "cc_pw": "",
+                "cc_env": "",
+                "cc_commands": [],
+                "group": "",
+                "config_dir": "/cfg/work",
+            }
+        ],
         "selected": 0,
         "home_socket": "unix:/tmp/home",
         "host_tab_id": None,
@@ -222,7 +243,10 @@ def test_override_stopped_launch_uses_config_commands():
     handled = handle_override_mode(10, state)
     loop_modes_forms.time.sleep = original_sleep
     check("override stopped launch handled", handled is True)
-    check("override stopped launch passes config commands", captured.get("commands") == ["shell"])
+    check(
+        "override stopped launch passes config commands",
+        captured.get("commands") == ["shell"],
+    )
 
 
 def test_bash_launch_explicit_disable():
@@ -262,7 +286,7 @@ _COLOR_INITIAL_DELAY_MS=0
 _COLOR_BACKOFF_FACTOR_NUM=1
 _COLOR_BACKOFF_FACTOR_DEN=1
 
-source {str(REPO_ROOT / 'lib' / 'cc-launch' / 'core.sh')!r}
+source {str(REPO_ROOT / "lib" / "cc-launch" / "core.sh")!r}
 launch_session 'test' {tmpdir!r} 'work' '' '' '' '' '' '' '-'
 """
         result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)

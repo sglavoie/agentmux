@@ -27,7 +27,12 @@ def _normalize_commands(raw_commands):
         return []
     result = []
     for command in raw_commands:
-        if isinstance(command, str) and "\t" not in command and "\n" not in command and "\r" not in command:
+        if (
+            isinstance(command, str)
+            and "\t" not in command
+            and "\n" not in command
+            and "\r" not in command
+        ):
             result.append(command)
     return result
 
