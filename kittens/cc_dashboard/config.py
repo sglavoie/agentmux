@@ -9,7 +9,7 @@ The original monolithic implementation has been split across smaller modules:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from cc_dashboard import config_core as _core
 from cc_dashboard import config_data as _data
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     # config_state exports
     _accounts: dict[str, dict[str, str]]
     _account_names: list[str]
-    _sessions: list[dict[str, str]]
+    _sessions: list[dict[str, Any]]
     _hooks_global: dict
     _hooks_overrides: dict
     _cached_hook_cmd: str | None

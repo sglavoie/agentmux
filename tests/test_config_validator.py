@@ -283,6 +283,84 @@ env = "KEY= MULTI=a,b,c"
               not any("KEY=VALUE" in w for w in v.warnings))
 
 
+def test_sessions_commands_valid():
+    """Valid commands array produces no errors or warnings."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+commands = ["npm run dev", "shell"]
+""")
+        v = cv.validate_sessions(path, set())
+        check("valid commands: no errors", len(v.errors) == 0)
+        check("valid commands: no unknown-key warning",
+              not any("commands" in w for w in v.warnings))
+
+
+def test_sessions_commands_not_list():
+    """Non-list commands value produces a warning."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+commands = "npm run dev"
+""")
+        v = cv.validate_sessions(path, set())
+        check("non-list commands: warning", len(v.warnings) >= 1)
+        check("non-list commands: mentions 'commands'",
+              any("commands" in w for w in v.warnings))
+
+
+def test_sessions_commands_mixed_types():
+    """Commands list with non-string entries produces a warning per bad entry."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+commands = ["shell", 123]
+""")
+        v = cv.validate_sessions(path, set())
+        check("mixed-type commands: warning", len(v.warnings) >= 1)
+        check("mixed-type commands: mentions 'commands'",
+              any("commands" in w for w in v.warnings))
+
+
+def test_sessions_commands_with_pw_disabled():
+    """commands + project_window='-' produces a warning about contradictory config."""
+    with tempfile.TemporaryDirectory() as d:
+        path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+project_window = "-"
+commands = ["npm run dev"]
+""")
+        v = cv.validate_sessions(path, set())
+        check("commands + pw='-': warning", len(v.warnings) >= 1)
+        check("commands + pw='-': mentions 'commands' or 'project_window'",
+              any("commands" in w or "project_window" in w for w in v.warnings))
+
+
+def test_sessions_commands_transport_unsafe():
+        """Commands with tabs/newlines produce a warning."""
+        with tempfile.TemporaryDirectory() as d:
+                path = _write(d, "sessions.toml", """\
+[[sessions]]
+title = "test"
+directory = "~"
+commands = ["safe", "bad\\tcmd", "bad\\ncmd"]
+""")
+                v = cv.validate_sessions(path, set())
+                check("transport-unsafe commands: warning", len(v.warnings) >= 1)
+                check(
+                        "transport-unsafe commands: mentions tab or newline",
+                        any("tab or newline" in w for w in v.warnings),
+                )
+
+
 def test_sessions_single_use_group():
     """Group name used by only 1 session gets a typo warning (when >=2 groups)."""
     with tempfile.TemporaryDirectory() as d:
@@ -531,42 +609,47 @@ ignore_patterns = ["valid", "[unclosed"]
 
 
 if __name__ == "__main__":
-    print("config_validator tests\n")
+        print("config_validator tests\n")
 
-    test_valid_accounts()
-    test_accounts_missing_name()
-    test_accounts_invalid_color()
-    test_accounts_unknown_key()
-    test_accounts_nonexistent_config_dir()
-    test_accounts_duplicate()
-    test_accounts_missing_file()
-    test_accounts_bad_toml()
+        test_valid_accounts()
+        test_accounts_missing_name()
+        test_accounts_invalid_color()
+        test_accounts_unknown_key()
+        test_accounts_nonexistent_config_dir()
+        test_accounts_duplicate()
+        test_accounts_missing_file()
+        test_accounts_bad_toml()
 
-    test_valid_sessions()
-    test_sessions_missing_title()
-    test_sessions_missing_directory()
-    test_sessions_unknown_account()
-    test_sessions_nonexistent_dir()
-    test_sessions_unknown_key()
-    test_sessions_invalid_project_window()
-    test_sessions_env_with_spaces()
-    test_sessions_single_use_group()
+        test_valid_sessions()
+        test_sessions_missing_title()
+        test_sessions_missing_directory()
+        test_sessions_unknown_account()
+        test_sessions_nonexistent_dir()
+        test_sessions_unknown_key()
+        test_sessions_invalid_project_window()
+        test_sessions_env_with_spaces()
+        test_sessions_commands_valid()
+        test_sessions_commands_not_list()
+        test_sessions_commands_mixed_types()
+        test_sessions_commands_with_pw_disabled()
+        test_sessions_commands_transport_unsafe()
+        test_sessions_single_use_group()
 
-    test_valid_defaults()
-    test_defaults_unknown_key()
-    test_defaults_invalid_sort()
-    test_defaults_negative_refresh()
-    test_defaults_notification_types()
-    test_defaults_unknown_notification_key()
-    test_defaults_unknown_section()
-    test_defaults_missing_file()
-    test_defaults_empty_file()
-    test_defaults_kitty_timeout()
-    test_defaults_idle_alert_minutes()
-    test_defaults_min_secs()
-    test_defaults_ignore_patterns_valid_regex()
-    test_defaults_ignore_patterns_invalid_regex()
+        test_valid_defaults()
+        test_defaults_unknown_key()
+        test_defaults_invalid_sort()
+        test_defaults_negative_refresh()
+        test_defaults_notification_types()
+        test_defaults_unknown_notification_key()
+        test_defaults_unknown_section()
+        test_defaults_missing_file()
+        test_defaults_empty_file()
+        test_defaults_kitty_timeout()
+        test_defaults_idle_alert_minutes()
+        test_defaults_min_secs()
+        test_defaults_ignore_patterns_valid_regex()
+        test_defaults_ignore_patterns_invalid_regex()
 
-    print(f"\n{PASS} passed, {FAIL} failed")
-    if FAIL:
-        sys.exit(1)
+        print(f"\n{PASS} passed, {FAIL} failed")
+        if FAIL:
+                sys.exit(1)

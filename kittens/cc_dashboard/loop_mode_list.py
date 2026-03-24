@@ -179,6 +179,7 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["form_mode"] = "edit"
             state["edit_original_title"] = cfg_entry["title"]
             pw_val = cfg_entry.get("pw", "")
+            cmds_list = cfg_entry.get("commands", [])
             state["new_fields"] = {
                 "title": cfg_entry["title"],
                 "dir": cfg_entry["dir"],
@@ -187,6 +188,7 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
                 "pw": pw_val if pw_val else "none",
                 "env": cfg_entry.get("env", ""),
                 "group": cfg_entry.get("group", ""),
+                "commands": " ;; ".join(cmds_list),
             }
             state["new_active"] = 0
             state["new_cursor"] = len(state["new_fields"]["title"])

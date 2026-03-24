@@ -1,11 +1,13 @@
 """Shared mutable state for dashboard configuration."""
 
+from typing import Any
+
 # Account configuration
 _accounts: dict[str, dict[str, str]] = {}
 _account_names: list[str] = []
 
 # Session configuration
-_sessions: list[dict[str, str]] = []
+_sessions: list[dict[str, Any]] = []
 
 # Hooks configuration
 _hooks_global: dict = {}

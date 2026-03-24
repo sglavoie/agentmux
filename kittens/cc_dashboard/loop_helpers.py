@@ -72,6 +72,7 @@ def _make_new_fields(default_account, default_pw, multi_instance, home_instance_
         "pw": default_pw,
         "env": "",
         "group": "",
+        "commands": "",
         "save": "yes",
     }
     if multi_instance:
@@ -120,17 +121,21 @@ def _refilter(
 
 
 def _resolve_session_runtime_options(sess):
-    r_flags = sess.get("cc_flags", "")
-    r_pw = sess.get("cc_pw", "")
-    r_env = sess.get("cc_env", "")
-    if not r_flags and not r_pw and not r_env:
-        cfg_entry = _cfg._find_config_session(sess["title"])
-        if cfg_entry is None:
-            cfg_entry = _cfg._find_config_session(_strip_override_marker(sess["title"]))
-        r_flags = cfg_entry.get("flags", "") if cfg_entry else ""
-        r_pw = cfg_entry.get("pw", "") if cfg_entry else ""
-        r_env = cfg_entry.get("env", "") if cfg_entry else ""
-    return r_flags, r_pw, r_env
+    cfg_entry = _cfg._find_config_session(sess["title"])
+    if cfg_entry is None:
+        cfg_entry = _cfg._find_config_session(_strip_override_marker(sess["title"]))
+
+    cfg_flags = cfg_entry.get("flags", "") if cfg_entry else ""
+    cfg_pw = cfg_entry.get("pw", "") if cfg_entry else ""
+    cfg_env = cfg_entry.get("env", "") if cfg_entry else ""
+    _raw_cfg_cmds: object = cfg_entry.get("commands", []) if cfg_entry else []
+    cfg_commands: list = _raw_cfg_cmds if isinstance(_raw_cfg_cmds, list) else []
+    r_flags = sess.get("cc_flags", "") or cfg_flags
+    r_pw = sess.get("cc_pw", "") or cfg_pw
+    r_env = sess.get("cc_env", "") or cfg_env
+    raw_cmds = sess.get("cc_commands", [])
+    r_commands = raw_cmds if raw_cmds else cfg_commands
+    return r_flags, r_pw, r_env, r_commands
 
 
 def _build_session_actions(sess, scope, multi_instance):
@@ -173,7 +178,7 @@ def _begin_restart_options(
     restart_default_config_label,
     home_socket,
 ):
-    flags, pw_override, env_vars = _resolve_session_runtime_options(sess)
+    flags, pw_override, env_vars, commands = _resolve_session_runtime_options(sess)
     account = sess.get("account", "")
     default_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
     current_dir = sess.get("config_dir", "") or default_dir
@@ -197,6 +202,7 @@ def _begin_restart_options(
         "restart_options_fields": restart_options_fields,
         "restart_options_active": 0,
         "restart_options_cursor": len(restart_options_fields["flags"]),
+        "restart_options_commands": commands,
         "restart_target_socket": sess.get("socket", home_socket),
         "restart_target_tab_id": sess.get("tab_id", 0),
         "mode": "restart_options",

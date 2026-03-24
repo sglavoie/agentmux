@@ -172,7 +172,7 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
     valid_pw = {"", "-", "stack", "vsplit", "hsplit", "split"}
     known_session_keys = {
         "title", "directory", "account", "flags",
-        "project_window", "env", "group", "mute",
+        "project_window", "env", "group", "mute", "commands",
     }
     seen_titles = set()
 
@@ -213,6 +213,22 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
         if mute is not None:
             if not isinstance(mute, bool) and mute != "-":
                 v.warn(f"session '{title}': 'mute' should be true, false, or \"-\", got {mute!r}")
+
+        commands = entry.get("commands")
+        if commands is not None:
+            if not isinstance(commands, list):
+                v.warn(f"session '{title}': 'commands' must be an array, got {type(commands).__name__} — ignoring")
+            else:
+                for j, cmd in enumerate(commands):
+                    if not isinstance(cmd, str):
+                        v.warn(f"session '{title}': 'commands' entry {j} must be a string, got {type(cmd).__name__} — skipping")
+                    elif "\t" in cmd or "\n" in cmd or "\r" in cmd:
+                        v.warn(
+                            f"session '{title}': 'commands' entry {j} contains a tab or newline, which is not supported by the current transport — ignoring"
+                        )
+                pw_raw = entry.get("project_window", "")
+                if isinstance(commands, list) and commands and pw_raw == "-":
+                    v.warn(f"session '{title}': 'commands' is set but 'project_window = \"-\"' disables the project window — commands will be ignored")
 
         # 1a: Warn if env values contain spaces (breaks Claude invocations)
         env = entry.get("env", "")

@@ -386,9 +386,13 @@ _extract_sessions_from_ls() {
 				mute: (
 					[.windows[] | .user_vars.cc_mute // empty | select(. == "1")] |
 					if length > 0 then "true" else "" end
+				),
+				commands: (
+					[.windows[] | .user_vars.cc_commands // empty | select(. != "")] |
+					if length > 0 then .[0] else "" end
 				)
 			}
-		] | .[] | [.title, .dir, .account, .flags, .pw, .env, .group, .mute] | @tsv
+		] | .[] | [.title, .dir, .account, .flags, .pw, .env, .group, .mute, .commands] | @tsv
 	'
 }
 
@@ -456,7 +460,8 @@ _save_sessions_toml() {
     json_array="$(echo "$sessions" | jq -Rnc --arg home "$HOME" '
         [inputs | select(length > 0) | split("\t") |
          { title: .[0], dir: (.[1] | if startswith($home) then "~" + .[$home | length:] else . end),
-           account: .[2], flags: .[3], pw: .[4], env: .[5], group: .[6], mute: .[7] }]
+           account: .[2], flags: .[3], pw: .[4], env: .[5], group: .[6], mute: .[7],
+           commands: (.[8] // "" | if . == "" then [] else split("\u001f") end) }]
     ')" || {
         err "Failed to build session JSON."
         return 1
@@ -473,6 +478,7 @@ _append_session_to_config() {
     local new_title="$2" new_dir="$3" new_account="$4"
     local new_flags="$5" new_pw="$6" new_env="$7" new_group="$8"
     local new_mute="${9:-}"
+    local new_commands="${10:-}"
 
     # Collect all existing sessions plus the new entry as TSV, then convert
     # to JSON in a single jq invocation.
@@ -483,7 +489,7 @@ _append_session_to_config() {
 
     new_dir="${new_dir/#$HOME/\~}"
     local new_line
-    new_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$new_title" "$new_dir" "$new_account" "$new_flags" "$new_pw" "$new_env" "$new_group" "$new_mute")"
+    new_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$new_title" "$new_dir" "$new_account" "$new_flags" "$new_pw" "$new_env" "$new_group" "$new_mute" "$new_commands")"
     if [[ -n "$all_tsv" ]]; then
         all_tsv+=$'\n'"$new_line"
     else
@@ -494,7 +500,8 @@ _append_session_to_config() {
     json_array="$(echo "$all_tsv" | jq -Rnc '
         [inputs | select(length > 0) | split("\t") |
          { title: .[0], dir: .[1], account: .[2], flags: .[3],
-           pw: .[4], env: .[5], group: .[6], mute: .[7] }]
+           pw: .[4], env: .[5], group: .[6], mute: .[7],
+           commands: (.[8] // "" | if . == "" then [] else split("\u001f") end) }]
     ')" || {
         warn "failed to build session JSON."
         return 1

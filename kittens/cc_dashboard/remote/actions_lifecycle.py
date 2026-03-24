@@ -12,6 +12,7 @@ import time
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.remote.actions_core import (
+    _normalize_commands,
     compute_insert_location,
     do_close,
     do_launch,
@@ -58,6 +59,7 @@ def _build_launch_steps(
     group="",
     exclude_tab_id_for_location=None,
     mute="",
+    commands=None,
 ):
     """Build the list of detached steps for close+relaunch (restart or move).
 
@@ -65,6 +67,7 @@ def _build_launch_steps(
     the new tab should be launched (same socket for restart, different for move).
     """
     directory = os.path.expanduser(cwd)
+    commands = _normalize_commands(commands)
     home = os.path.expanduser("~")
     default_dir = os.path.join(home, ".claude")
     config_dir = (
@@ -148,6 +151,8 @@ def _build_launch_steps(
         f"cc_env={env_vars}",
         "--var",
         f"cc_group={group}",
+        "--var",
+        f"cc_commands={chr(0x1F).join(commands)}",
     ]
     if mute == "1":
         launch_cmd += ["--var", "cc_mute=1"]
@@ -192,25 +197,77 @@ def _build_launch_steps(
         }
     )
 
+    # Auto-enable stack layout when commands present but no explicit pw set (C1)
+    if commands and commands != ["-"] and not pw_override:
+        pw_override = "stack"
+
     pw_mode = _cfg._resolve_project_window(pw_override)
     if pw_mode:
-        steps.append(
-            {
-                "cmd": [
-                    "kitty",
-                    "@",
-                    "--to",
-                    target_socket,
-                    "launch",
-                    "--type=window",
-                    "--match",
-                    f"title:^{re.escape(title)}$",
-                    "--cwd",
-                    directory,
-                    "--keep-focus",
-                ]
-            }
-        )
+        shell = os.environ.get("SHELL", "/bin/zsh")
+        if commands == ["-"]:
+            pass
+        elif commands:
+            for cmd_entry in commands:
+                if cmd_entry == "shell":
+                    steps.append(
+                        {
+                            "cmd": [
+                                "kitty",
+                                "@",
+                                "--to",
+                                target_socket,
+                                "launch",
+                                "--type=window",
+                                "--match",
+                                f"title:^{re.escape(title)}$",
+                                "--cwd",
+                                directory,
+                                "--keep-focus",
+                            ]
+                        }
+                    )
+                elif cmd_entry:
+                    steps.append(
+                        {
+                            "cmd": [
+                                "kitty",
+                                "@",
+                                "--to",
+                                target_socket,
+                                "launch",
+                                "--type=window",
+                                "--match",
+                                f"title:^{re.escape(title)}$",
+                                "--cwd",
+                                directory,
+                                "--keep-focus",
+                                "--hold",
+                                "--",
+                                shell,
+                                "-lic",
+                                cmd_entry,
+                            ]
+                        }
+                    )
+        else:
+            # Legacy: plain shell window
+            steps.append(
+                {
+                    "cmd": [
+                        "kitty",
+                        "@",
+                        "--to",
+                        target_socket,
+                        "launch",
+                        "--type=window",
+                        "--match",
+                        f"title:^{re.escape(title)}$",
+                        "--cwd",
+                        directory,
+                        "--keep-focus",
+                    ]
+                }
+            )
         steps.append(
             {
                 "cmd": [
@@ -316,6 +373,7 @@ def _spawn_detached_restart(
     color_override="",
     group="",
     mute="",
+    commands=None,
 ):
     """Spawn a fully detached subprocess to close+relaunch a session."""
     steps = _build_launch_steps(
@@ -333,6 +391,7 @@ def _spawn_detached_restart(
         group=group,
         exclude_tab_id_for_location=tab_id,
         mute=mute,
+        commands=commands,
     )
     _run_detached_steps(steps)
 
@@ -345,6 +404,7 @@ def do_restart(
     config_dir_override=None,
     host_tab_id=None,
     env_vars="",
+    commands=None,
 ):
     """Close and relaunch a session with the same title, directory, and account."""
     account = session["account"]
@@ -352,6 +412,12 @@ def do_restart(
     cc_color = session.get("cc_color", "")
     group = session.get("group", "")
     mute = "1" if session.get("muted") else ""
+
+    # Extract commands from session if not explicitly provided
+    if commands is None:
+        commands = _normalize_commands(session.get("cc_commands"))
+    else:
+        commands = _normalize_commands(commands)
 
     account_config_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
     if config_dir_override and config_dir_override != account_config_dir:
@@ -378,6 +444,7 @@ def do_restart(
             color_override=cc_color,
             group=group,
             mute=mute,
+            commands=commands,
         )
         return True
 
@@ -399,6 +466,7 @@ def do_restart(
         color_override=cc_color,
         group=group,
         mute=mute,
+        commands=commands,
     )
     if ok:
         do_sort_tabs(socket)
@@ -419,6 +487,7 @@ def _spawn_detached_move(
     color_override="",
     group="",
     mute="",
+    commands=None,
 ):
     """Spawn a detached subprocess to move a session across kitty instances."""
     steps = _build_launch_steps(
@@ -435,6 +504,7 @@ def _spawn_detached_move(
         color_override=color_override,
         group=group,
         mute=mute,
+        commands=commands,
     )
     _run_detached_steps(steps)
 
@@ -448,6 +518,7 @@ def do_move(
     config_dir_override=None,
     host_tab_id=None,
     env_vars="",
+    commands=None,
 ):
     """Move a session from one Kitty instance to another (close + relaunch)."""
     account = session["account"]
@@ -457,6 +528,12 @@ def do_move(
     cc_color = session.get("cc_color", "")
     group = session.get("group", "")
     mute = "1" if session.get("muted") else ""
+
+    # Extract commands from session if not explicitly provided
+    if commands is None:
+        commands = _normalize_commands(session.get("cc_commands"))
+    else:
+        commands = _normalize_commands(commands)
 
     if host_tab_id is not None and tab_id == host_tab_id:
         _spawn_detached_move(
@@ -473,6 +550,7 @@ def do_move(
             color_override=cc_color,
             group=group,
             mute=mute,
+            commands=commands,
         )
         return True
 
@@ -494,6 +572,7 @@ def do_move(
         color_override=cc_color,
         group=group,
         mute=mute,
+        commands=commands,
     )
     if ok:
         do_sort_tabs(target_socket)

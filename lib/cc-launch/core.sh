@@ -121,9 +121,13 @@ tab_metadata_by_id() {
 				mute: (
 					[.windows[] | .user_vars.cc_mute // empty | select(. == "1")] |
 					if length > 0 then "true" else "" end
+				),
+				commands: (
+					[.windows[] | .user_vars.cc_commands // empty | select(. != "")] |
+					if length > 0 then .[0] else "" end
 				)
 			}
-		] | .[0] // empty | [.title, .account, .dir, .flags, .pw, .env, .group, .mute] | @tsv
+		] | .[0] // empty | [.title, .account, .dir, .flags, .pw, .env, .group, .mute, .commands] | @tsv
 	'
 }
 
@@ -158,12 +162,11 @@ lookup_session_overrides() {
 	local current_flags="$2"
 	local current_pw="$3"
 	local current_env="$4"
+	local current_commands="$5"
 
-	local cfg_flags="$current_flags"
-	local cfg_pw="$current_pw"
-	local cfg_env="$current_env"
-
-	if [[ -z "$cfg_flags" && -z "$cfg_pw" && -z "$cfg_env" && -f "$CONFIG_FILE" ]]; then
+	# Always attempt config lookup
+	local toml_flags="" toml_pw="" toml_env="" toml_commands=""
+	if [[ -f "$CONFIG_FILE" ]]; then
 		local lookup_title
 		lookup_title="$(echo "$title" | sed -E "s/^${_STRIP_RE}//")"
 		# Strip leading override emoji (colored square/circle)
@@ -171,20 +174,26 @@ lookup_session_overrides() {
 		local toml_result
 		toml_result="$(_lookup_session_overrides_toml "$lookup_title")"
 		if [[ -n "$toml_result" ]]; then
-			IFS=$'\t' read -r cfg_flags cfg_pw cfg_env <<<"$toml_result"
+			IFS=$'\t' read -r toml_flags toml_pw toml_env toml_commands <<<"$toml_result"
 		fi
 	fi
 
-	printf '%s\t%s\t%s\n' "$cfg_flags" "$cfg_pw" "$cfg_env"
+	# Per-field: use live value if present, else config value
+	local cfg_flags="${current_flags:-$toml_flags}"
+	local cfg_pw="${current_pw:-$toml_pw}"
+	local cfg_env="${current_env:-$toml_env}"
+	local cfg_commands="${current_commands:-$toml_commands}"
+
+	printf '%s\t%s\t%s\t%s\n' "$cfg_flags" "$cfg_pw" "$cfg_env" "$cfg_commands"
 }
 
 _lookup_session_overrides_toml() {
 	local lookup_title="$1"
 	local _parse_err_file="${_CCM_TMPDIR}/ccm-parse-err.$$"
-	local cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e cfg_g
-	while IFS=$'\t' read -r cfg_title cfg_dir cfg_acct cfg_f cfg_p cfg_e cfg_g; do
+	local cfg_title cfg_f cfg_p cfg_e cfg_commands
+	while IFS=$'\t' read -r cfg_title _ _ cfg_f cfg_p cfg_e _ _ cfg_commands; do
 		if [[ "$cfg_title" == "$lookup_title" ]]; then
-			printf '%s\t%s\t%s\n' "$cfg_f" "$cfg_p" "$cfg_e"
+			printf '%s\t%s\t%s\t%s\n' "$cfg_f" "$cfg_p" "$cfg_e" "$cfg_commands"
 			rm -f "$_parse_err_file"
 			return 0
 		fi
@@ -205,6 +214,7 @@ launch_session() {
 	local env_vars="${7:-}"
 	local group="${8:-}"
 	local mute="${9:-}"
+	local commands_str="${10:-}"
 	local -a location_args=()
 	if [[ -n "$location_args_str" ]]; then
 		read -ra location_args <<<"$location_args_str"
@@ -257,7 +267,7 @@ launch_session() {
 	local shell_cmd="exec claude $effective_flags"
 	ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
 	local launch_err
-	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" ${mute_args[@]+"${mute_args[@]}"} "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
+	if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" --var cc_commands="$commands_str" ${mute_args[@]+"${mute_args[@]}"} "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
 		local msg="Failed to launch tab '$title' (account=$account, dir=$dir, socket=$SOCKET)."
 		if [[ -n "$launch_err" ]]; then
 			msg="$msg Kitty error: $launch_err"
@@ -294,22 +304,39 @@ launch_session() {
 		warn "$color_msg"
 	fi
 
+	# Auto-enable stack layout if commands set and no pw_override (C1)
+	if [[ -n "$commands_str" && "$commands_str" != "-" && -z "$pw_override" ]]; then
+		pw_override="stack"
+	fi
+
 	local pw_mode
 	pw_mode="$(resolve_project_window "$pw_override")"
 	if [[ -n "$pw_mode" ]]; then
-		local pw_err
-		if ! pw_err="$(kitty @ --to "$SOCKET" launch --type=window --match "title:^${title_escaped}$" --cwd "$dir" --keep-focus 2>&1)"; then
-			local pw_msg="Failed to create project window for '$title' (socket=$SOCKET)."
-			[[ -n "$pw_err" ]] && pw_msg="$pw_msg Kitty error: $pw_err"
-			warn "$pw_msg"
+		if [[ "$commands_str" == "-" ]]; then
+			:
+		elif [[ -n "$commands_str" ]]; then
+			local -a cmds=()
+			IFS=$'\x1f' read -ra cmds <<< "$commands_str"
+			for cmd_entry in "${cmds[@]}"; do
+				if [[ "$cmd_entry" == "shell" ]]; then
+					kitty @ --to "$SOCKET" launch --type=window \
+						--match "title:^${title_escaped}$" \
+						--cwd "$dir" --keep-focus
+				elif [[ -n "$cmd_entry" ]]; then
+					kitty @ --to "$SOCKET" launch --type=window \
+						--match "title:^${title_escaped}$" \
+						--cwd "$dir" --keep-focus --hold \
+						-- "${SHELL:-/bin/zsh}" -lic "$cmd_entry"
+				fi
+			done
 		else
-			local layout_err
-			if ! layout_err="$(kitty @ --to "$SOCKET" goto-layout --match "title:^${title_escaped}$" "$pw_mode" 2>&1)"; then
-				local layout_msg="Failed to set layout '$pw_mode' for '$title' (socket=$SOCKET)."
-				[[ -n "$layout_err" ]] && layout_msg="$layout_msg Kitty error: $layout_err"
-				warn "$layout_msg"
-			fi
+			# Legacy: no commands, just a plain shell window
+			kitty @ --to "$SOCKET" launch --type=window \
+				--match "title:^${title_escaped}$" \
+				--cwd "$dir" --keep-focus
 		fi
+		kitty @ --to "$SOCKET" goto-layout \
+			--match "title:^${title_escaped}$" "$pw_mode"
 	fi
 
 	echo "Launched [$title] (account=$account, dir=$dir)" >&2

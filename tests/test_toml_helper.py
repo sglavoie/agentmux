@@ -92,7 +92,7 @@ def test_read_accounts():
 
 
 def test_read_sessions():
-    """read-sessions outputs correct 8-column TSV."""
+    """read-sessions outputs correct 9-column TSV."""
     print("\n--- read-sessions ---")
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".toml", delete=False
@@ -101,7 +101,8 @@ def test_read_sessions():
             '[[sessions]]\ntitle = "myproject"\n'
             'directory = "~/code/myproject"\naccount = "work"\n'
             'flags = "--verbose"\nproject_window = "vsplit"\n'
-            'env = "FOO=bar"\ngroup = "dev"\n\n'
+            'env = "FOO=bar"\ngroup = "dev"\n'
+            'commands = ["npm run dev", "shell"]\n\n'
             '[[sessions]]\ntitle = "notes"\n'
             'directory = "~/notes"\naccount = "personal"\n'
         )
@@ -116,7 +117,7 @@ def test_read_sessions():
     check("two lines of output", len(lines) == 2)
 
     cols1 = lines[0].split("\t")
-    check("full session: 8 columns", len(cols1) == 8)
+    check("full session: 9 columns", len(cols1) == 9)
     check("title=myproject", cols1[0] == "myproject")
     check("dir=~/code/myproject", cols1[1] == "~/code/myproject")
     check("account=work", cols1[2] == "work")
@@ -125,15 +126,48 @@ def test_read_sessions():
     check("env=FOO=bar", cols1[5] == "FOO=bar")
     check("group=dev", cols1[6] == "dev")
     check("mute=empty", cols1[7] == "")
+    check("commands=npm run dev\x1fshell", cols1[8] == "npm run dev\x1fshell")
 
     # Minimal session: optional fields are empty strings
     cols2 = lines[1].split("\t")
-    check("minimal session: 8 columns", len(cols2) == 8)
+    check("minimal session: 9 columns", len(cols2) == 9)
     check("minimal: title=notes", cols2[0] == "notes")
     check("minimal: empty flags", cols2[3] == "")
     check("minimal: empty pw", cols2[4] == "")
     check("minimal: empty group", cols2[6] == "")
     check("minimal: empty mute", cols2[7] == "")
+    check("minimal: empty commands", cols2[8] == "")
+
+
+def test_read_sessions_sanitizes_invalid_commands():
+    """read-sessions drops invalid and transport-unsafe commands."""
+    print("\n--- read-sessions invalid commands ---")
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".toml", delete=False
+    ) as f:
+        f.write(
+            '[[sessions]]\ntitle = "valid"\n'
+            'directory = "~/code/valid"\n'
+            'commands = ["npm run dev", 123, "bad\\tcmd"]\n\n'
+            '[[sessions]]\ntitle = "invalid-shape"\n'
+            'directory = "~/code/invalid"\n'
+            'commands = "npm run dev"\n'
+        )
+        f.flush()
+        path = f.name
+
+    stdout, stderr, rc = run_helper("read-sessions", path)
+    os.unlink(path)
+
+    lines = tsv_lines(stdout)
+    check("invalid commands: exit code 0", rc == 0)
+    check("invalid commands: two lines", len(lines) == 2)
+
+    cols1 = lines[0].split("\t")
+    check("mixed commands: keep valid string", cols1[8] == "npm run dev")
+
+    cols2 = lines[1].split("\t")
+    check("scalar commands: dropped", cols2[8] == "")
 
 
 # ── read-defaults ────────────────────────────────────────────────
@@ -202,6 +236,7 @@ def test_write_sessions():
             "pw": "vsplit",
             "env": "FOO=bar",
             "group": "dev",
+            "commands": ["npm run dev", "shell"],
         },
         {
             "title": "notes",
@@ -235,6 +270,7 @@ def test_write_sessions():
     check("project_window preserved", s1["project_window"] == "vsplit")
     check("env preserved", s1["env"] == "FOO=bar")
     check("group preserved", s1["group"] == "dev")
+    check("commands preserved", s1["commands"] == ["npm run dev", "shell"])
 
     # Minimal session: empty optional fields should be omitted
     s2 = data["sessions"][1]
@@ -245,6 +281,7 @@ def test_write_sessions():
     check("minimal: no pw key", "project_window" not in s2)
     check("minimal: no env key", "env" not in s2)
     check("minimal: no group key", "group" not in s2)
+    check("minimal: no commands key", "commands" not in s2)
 
     # Header comment preserved
     with open(path) as f:
@@ -271,6 +308,7 @@ def test_write_read_roundtrip():
             "pw": "hsplit",
             "env": "DEBUG=1",
             "group": "backend",
+            "commands": ["npm run dev", "shell"],
         },
         {
             "title": "project-b",
@@ -304,10 +342,12 @@ def test_write_read_roundtrip():
     check("roundtrip: pw matches", cols1[4] == "hsplit")
     check("roundtrip: env matches", cols1[5] == "DEBUG=1")
     check("roundtrip: group matches", cols1[6] == "backend")
+    check("roundtrip: commands matches", cols1[8] == "npm run dev\x1fshell")
 
     cols2 = lines[1].split("\t")
     check("roundtrip: minimal title", cols2[0] == "project-b")
     check("roundtrip: minimal empty flags", cols2[3] == "")
+    check("roundtrip: minimal empty commands", cols2[8] == "")
 
     os.unlink(path)
 
@@ -355,6 +395,7 @@ if __name__ == "__main__":
 
     test_read_accounts()
     test_read_sessions()
+    test_read_sessions_sanitizes_invalid_commands()
     test_read_defaults()
     test_write_sessions()
     test_write_read_roundtrip()

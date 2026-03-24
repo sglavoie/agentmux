@@ -372,11 +372,12 @@ def load_sessions() -> None:
                 "pw": entry.get("project_window", ""),
                 "env": entry.get("env", ""),
                 "group": entry.get("group", ""),
+                "commands": _normalize_commands(entry.get("commands")),
             }
         )
 
 
-def _find_config_session(title: str) -> dict[str, str] | None:
+def _find_config_session(title: str) -> dict[str, Any] | None:
     """Find a config session entry matching the given title, or None."""
     for entry in _state._sessions:
         if entry["title"] == title:
@@ -477,6 +478,26 @@ def _tilde_directory(directory: str) -> str:
     return directory
 
 
+def _normalize_commands(raw_commands: Any) -> list[str]:
+    """Return a sanitized list of command strings."""
+    if raw_commands is None:
+        return []
+    if isinstance(raw_commands, str):
+        return raw_commands.split("\x1f") if raw_commands else []
+    if not isinstance(raw_commands, list):
+        return []
+    result: list[str] = []
+    for command in raw_commands:
+        if (
+            isinstance(command, str)
+            and "\t" not in command
+            and "\n" not in command
+            and "\r" not in command
+        ):
+            result.append(command)
+    return result
+
+
 def _session_to_toml_entry(
     title: str,
     directory: str,
@@ -485,9 +506,10 @@ def _session_to_toml_entry(
     pw: str = "",
     env: str = "",
     group: str = "",
-) -> dict[str, str]:
+    commands: list[str] | None = None,
+) -> dict[str, Any]:
     """Build a TOML-serializable dict for one ``[[sessions]]`` entry."""
-    d = {"title": title, "directory": directory}
+    d: dict[str, Any] = {"title": title, "directory": directory}
     if account:
         d["account"] = account
     if flags:
@@ -498,11 +520,13 @@ def _session_to_toml_entry(
         d["env"] = env
     if group:
         d["group"] = group
+    if commands:
+        d["commands"] = commands
     return d
 
 
 def _write_sessions_toml(
-    path: str, sessions_data: list[dict[str, str]], header: str = ""
+    path: str, sessions_data: list[dict[str, Any]], header: str = ""
 ) -> None:
     """Serialize *sessions_data* (list of TOML entry dicts) to *path* atomically."""
     tw = _import_toml_writer()
@@ -548,6 +572,7 @@ def save_sessions(live_sessions: list[dict[str, Any]]) -> tuple[int, bool]:
     entries = []
     for s in live_sessions:
         directory = _tilde_directory(s.get("cwd", "~/"))
+        commands = _normalize_commands(s.get("cc_commands"))
         entries.append(
             _session_to_toml_entry(
                 s.get("title", ""),
@@ -557,6 +582,7 @@ def save_sessions(live_sessions: list[dict[str, Any]]) -> tuple[int, bool]:
                 s.get("cc_pw", ""),
                 s.get("cc_env", ""),
                 s.get("group", ""),
+                commands or None,
             )
         )
     if not header:
@@ -578,6 +604,7 @@ def append_session(
     pw: str = "",
     env: str = "",
     group: str = "",
+    commands: list[str] | None = None,
 ) -> None:
     """Append a single session entry to the sessions config file."""
     path = _sessions_config_path()
@@ -589,7 +616,9 @@ def append_session(
         header = _read_header_comments(path)
         entries = _read_sessions_toml_raw(path)
     entries.append(
-        _session_to_toml_entry(title, directory, account, flags, pw, env, group)
+        _session_to_toml_entry(
+            title, directory, account, flags, pw, env, group, commands
+        )
     )
     _write_sessions_toml(path, entries, header=header.rstrip("\n") if header else "")
 
@@ -605,6 +634,7 @@ def update_session(
     pw: str = "",
     env: str = "",
     group: str = "",
+    commands: list[str] | None = None,
 ) -> bool:
     """Update an existing session entry by original title.
 
@@ -623,7 +653,7 @@ def update_session(
     for i, entry in enumerate(entries):
         if entry.get("title") == original_title:
             entries[i] = _session_to_toml_entry(
-                title, directory, account, flags, pw, env, group
+                title, directory, account, flags, pw, env, group, commands
             )
             found = True
             if original_title != title:

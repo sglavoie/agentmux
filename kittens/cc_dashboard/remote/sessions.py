@@ -135,6 +135,8 @@ def query_sessions(socket, managed_only=True):
             cc_config_dir = user_vars.get("cc_config_dir", "")
             cc_color = user_vars.get("cc_color", "")
             cc_group = user_vars.get("cc_group", "")
+            raw_cmds = user_vars.get("cc_commands", "")
+            cc_commands = raw_cmds.split("\x1f") if raw_cmds else []
 
             title = _strip_override_marker(_strip_icons(tab.get("title", "")))
 
@@ -189,6 +191,7 @@ def query_sessions(socket, managed_only=True):
                     "dimmed": dimmed,
                     "muted": muted,
                     "claude_window_id": claude_win_id,
+                    "cc_commands": cc_commands,
                 }
             )
 

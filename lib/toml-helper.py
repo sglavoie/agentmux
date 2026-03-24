@@ -19,6 +19,19 @@ import toml_reader
 import toml_writer
 
 
+def _normalize_commands(raw_commands):
+    """Return a sanitized list of command strings for CLI transport."""
+    if raw_commands is None:
+        return []
+    if not isinstance(raw_commands, list):
+        return []
+    result = []
+    for command in raw_commands:
+        if isinstance(command, str) and "\t" not in command and "\n" not in command and "\r" not in command:
+            result.append(command)
+    return result
+
+
 def cmd_read_accounts(path):
     for acct in toml_reader.read_accounts(path):
         print(f"{acct['name']}\t{acct['config_dir']}\t{acct['color']}")
@@ -26,10 +39,11 @@ def cmd_read_accounts(path):
 
 def cmd_read_sessions(path):
     for s in toml_reader.read_sessions(path):
+        cmds = "\x1f".join(_normalize_commands(s.get("commands")))
         print(
             f"{s['title']}\t{s['dir']}\t{s['account']}"
             f"\t{s['flags']}\t{s['pw']}\t{s['env']}\t{s['group']}"
-            f"\t{s['mute']}"
+            f"\t{s['mute']}\t{cmds}"
         )
 
 
@@ -85,6 +99,9 @@ def cmd_write_sessions(path):
             d["group"] = entry["group"]
         if entry.get("mute") == "true":
             d["mute"] = True
+        commands = _normalize_commands(entry.get("commands"))
+        if commands:
+            d["commands"] = commands
         sessions.append(d)
 
     tmp_path = path + ".tmp"

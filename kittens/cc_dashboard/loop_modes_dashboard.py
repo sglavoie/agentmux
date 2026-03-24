@@ -45,6 +45,9 @@ def handle_actions_mode(key, state, build_session_actions):
             state["restart_options_fields"] = restart_state["restart_options_fields"]
             state["restart_options_active"] = restart_state["restart_options_active"]
             state["restart_options_cursor"] = restart_state["restart_options_cursor"]
+            state["restart_options_commands"] = restart_state.get(
+                "restart_options_commands", []
+            )
             state["restart_target_socket"] = restart_state["restart_target_socket"]
             state["restart_target_tab_id"] = restart_state["restart_target_tab_id"]
             state["mode"] = restart_state["mode"]
@@ -281,6 +284,7 @@ def handle_restart_options_mode(key, state):
                 state["host_tab_id"] is not None
                 and sess["tab_id"] == state["host_tab_id"]
             )
+            commands = state.get("restart_options_commands", [])
             if target_socket != sess_socket:
                 ok = state["do_move"](
                     sess_socket,
@@ -291,6 +295,7 @@ def handle_restart_options_mode(key, state):
                     config_dir_override=config_dir_override,
                     host_tab_id=state["host_tab_id"],
                     env_vars=env_vars,
+                    commands=commands,
                 )
                 success_msg = (
                     "Session restarted in "
@@ -305,6 +310,7 @@ def handle_restart_options_mode(key, state):
                     config_dir_override=config_dir_override,
                     host_tab_id=state["host_tab_id"],
                     env_vars=env_vars,
+                    commands=commands,
                 )
                 success_msg = "Session restarted"
 
@@ -424,7 +430,7 @@ def handle_confirm_modes(key, state):
                 state["host_tab_id"] is not None
                 and sess["tab_id"] == state["host_tab_id"]
             )
-            r_flags, r_pw, r_env = _resolve_session_runtime_options(sess)
+            r_flags, r_pw, r_env, r_commands = _resolve_session_runtime_options(sess)
             sess_socket = sess.get("socket", state["home_socket"])
             ok = state["do_restart"](
                 sess_socket,
@@ -433,6 +439,7 @@ def handle_confirm_modes(key, state):
                 pw_override=r_pw,
                 host_tab_id=state["host_tab_id"],
                 env_vars=r_env,
+                commands=r_commands,
             )
             if is_host:
                 state["should_exit"] = True
@@ -499,7 +506,7 @@ def handle_confirm_modes(key, state):
             )
             restarted = 0
             for t in targets_sorted:
-                r_flags, r_pw, r_env = _resolve_session_runtime_options(t)
+                r_flags, r_pw, r_env, r_commands = _resolve_session_runtime_options(t)
                 t_socket = t.get("socket", state["home_socket"])
                 is_host = has_host and t["tab_id"] == state["host_tab_id"]
                 ok = state["do_restart"](
@@ -509,6 +516,7 @@ def handle_confirm_modes(key, state):
                     pw_override=r_pw,
                     host_tab_id=state["host_tab_id"],
                     env_vars=r_env,
+                    commands=r_commands,
                 )
                 if is_host:
                     state["should_exit"] = True
@@ -533,7 +541,7 @@ def handle_confirm_modes(key, state):
             for t in state["batch_targets"]:
                 new_title = state["generate_clone_title"](all_title_dicts, t["title"])
                 all_title_dicts.append({"title": new_title})
-                r_flags, r_pw, r_env = _resolve_session_runtime_options(t)
+                r_flags, r_pw, r_env, r_commands = _resolve_session_runtime_options(t)
                 t_socket = t.get("socket", state["home_socket"])
                 loc = state["compute_insert_location"](
                     t_socket, t["account"], new_title
@@ -550,6 +558,7 @@ def handle_confirm_modes(key, state):
                     env_vars=r_env,
                     color_override=t.get("cc_color", ""),
                     group=clone_group,
+                    commands=r_commands,
                 )
                 if ok:
                     cloned += 1
@@ -696,7 +705,9 @@ def handle_move_picker_mode(key, state):
                 )
                 moved = 0
                 for t in targets_sorted:
-                    r_flags, r_pw, r_env = _resolve_session_runtime_options(t)
+                    r_flags, r_pw, r_env, r_commands = _resolve_session_runtime_options(
+                        t
+                    )
                     t_socket = t.get("socket", state["home_socket"])
                     is_host = has_host and t["tab_id"] == state["host_tab_id"]
                     ok = state["do_move"](
@@ -707,6 +718,7 @@ def handle_move_picker_mode(key, state):
                         pw_override=r_pw,
                         host_tab_id=state["host_tab_id"],
                         env_vars=r_env,
+                        commands=r_commands,
                     )
                     if is_host:
                         state["should_exit"] = True
@@ -728,7 +740,7 @@ def handle_move_picker_mode(key, state):
             state["host_tab_id"] is not None and sess["tab_id"] == state["host_tab_id"]
         )
         sess_socket = sess.get("socket", state["home_socket"])
-        r_flags, r_pw, r_env = _resolve_session_runtime_options(sess)
+        r_flags, r_pw, r_env, r_commands = _resolve_session_runtime_options(sess)
         ok = state["do_move"](
             sess_socket,
             target_socket,
@@ -737,6 +749,7 @@ def handle_move_picker_mode(key, state):
             pw_override=r_pw,
             host_tab_id=state["host_tab_id"],
             env_vars=r_env,
+            commands=r_commands,
         )
         if is_host:
             state["should_exit"] = True
@@ -857,6 +870,7 @@ def _do_group_launch(state, group_name):
             location=loc,
             env_vars=entry.get("env", ""),
             group=entry.get("group", ""),
+            commands=entry.get("commands", []),
         )
         if ok:
             launched += 1

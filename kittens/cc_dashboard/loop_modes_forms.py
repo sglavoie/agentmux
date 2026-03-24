@@ -82,6 +82,7 @@ def handle_override_mode(key, state):
                 env_vars=entry.get("env", ""),
                 color_override=entry.get("cc_color", ""),
                 group=entry.get("group", ""),
+                commands=entry.get("commands", []),
             )
             state["should_exit"] = True
             return True
@@ -98,6 +99,13 @@ def handle_override_mode(key, state):
             skipped = 0
             for t in targets_sorted:
                 t_socket = t.get("socket", state["home_socket"])
+                r_flags, r_pw, r_env, r_commands = state[
+                    "resolve_live_or_config_options"
+                ](
+                    t,
+                    state["cfg"],
+                    state["strip_override_marker"],
+                )
                 account_default_dir = (
                     state["cfg"]._accounts.get(t["account"], {}).get("config_dir", "")
                 )
@@ -111,11 +119,12 @@ def handle_override_mode(key, state):
                 state["do_restart"](
                     t_socket,
                     t,
-                    flags=t.get("cc_flags", ""),
-                    pw_override=t.get("cc_pw", ""),
+                    flags=r_flags,
+                    pw_override=r_pw,
                     config_dir_override=config_dir_override,
                     host_tab_id=state["host_tab_id"],
-                    env_vars=t.get("cc_env", ""),
+                    env_vars=r_env,
+                    commands=r_commands,
                 )
                 if is_host:
                     state["should_exit"] = True
@@ -158,6 +167,13 @@ def handle_override_mode(key, state):
                     else:
                         title = state["append_override_for_dir"](title, selected_path)
                     account = sess["account"]
+                    r_flags, r_pw, r_env, r_commands = state[
+                        "resolve_live_or_config_options"
+                    ](
+                        sess,
+                        state["cfg"],
+                        state["strip_override_marker"],
+                    )
                     location = state["compute_insert_location"](
                         sess_socket, account, title
                     )
@@ -166,13 +182,14 @@ def handle_override_mode(key, state):
                         title,
                         sess["cwd"],
                         account,
-                        sess.get("cc_flags", ""),
-                        sess.get("cc_pw", ""),
+                        r_flags,
+                        r_pw,
                         location=location,
                         config_dir_override=config_dir_override,
-                        env_vars=sess.get("cc_env", ""),
+                        env_vars=r_env,
                         color_override=sess.get("cc_color", ""),
                         group=sess.get("group", ""),
+                        commands=r_commands,
                     )
                     state["should_exit"] = True
                     return True
@@ -180,14 +197,22 @@ def handle_override_mode(key, state):
                     state["host_tab_id"] is not None
                     and sess["tab_id"] == state["host_tab_id"]
                 )
+                r_flags, r_pw, r_env, r_commands = state[
+                    "resolve_live_or_config_options"
+                ](
+                    sess,
+                    state["cfg"],
+                    state["strip_override_marker"],
+                )
                 state["do_restart"](
                     sess_socket,
                     sess,
-                    flags=sess.get("cc_flags", ""),
-                    pw_override=sess.get("cc_pw", ""),
+                    flags=r_flags,
+                    pw_override=r_pw,
                     config_dir_override=config_dir_override,
                     host_tab_id=state["host_tab_id"],
-                    env_vars=sess.get("cc_env", ""),
+                    env_vars=r_env,
+                    commands=r_commands,
                 )
                 if is_host:
                     state["should_exit"] = True
@@ -350,19 +375,23 @@ def handle_batch_group_mode(key, state):
 
 
 def _resolve_live_or_config_options(sess, cfg, strip_override_marker):
-    flags = sess.get("cc_flags", "")
-    pw_val = sess.get("cc_pw", "")
-    env_val = sess.get("cc_env", "")
-    if not flags and not pw_val and not env_val:
-        orig_title = sess["title"]
-        stripped = strip_override_marker(orig_title)
-        if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
-            stripped = stripped[2:]
-        src_cfg = next((s for s in cfg._sessions if s["title"] == stripped), None)
-        flags = src_cfg["flags"] if src_cfg else ""
-        pw_val = src_cfg["pw"] if src_cfg else ""
-        env_val = src_cfg["env"] if src_cfg else ""
-    return flags, pw_val, env_val
+    orig_title = sess["title"]
+    stripped = strip_override_marker(orig_title)
+    if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+        stripped = stripped[2:]
+    src_cfg = next((s for s in cfg._sessions if s["title"] == stripped), None)
+
+    flags = sess.get("cc_flags", "") or (src_cfg["flags"] if src_cfg else "")
+    pw_val = sess.get("cc_pw", "") or (src_cfg["pw"] if src_cfg else "")
+    env_val = sess.get("cc_env", "") or (src_cfg["env"] if src_cfg else "")
+    raw_cmds = sess.get("cc_commands", [])
+    cfg_commands = src_cfg.get("commands", []) if src_cfg else []
+    if not isinstance(cfg_commands, list):
+        cfg_commands = []
+    else:
+        cfg_commands = [cmd for cmd in cfg_commands if isinstance(cmd, str)]
+    commands = raw_cmds if raw_cmds else cfg_commands
+    return flags, pw_val, env_val, commands
 
 
 def handle_worktree_mode(key, state):
@@ -397,7 +426,7 @@ def handle_worktree_mode(key, state):
                     new_title = orig_title[:2] + f"{proj}-{branch}"
                 else:
                     new_title = f"{proj}-{branch}"
-                flags, pw_val, env_val = _resolve_live_or_config_options(
+                flags, pw_val, env_val, commands = _resolve_live_or_config_options(
                     sess, state["cfg"], state["strip_override_marker"]
                 )
                 target_socket = sess.get("socket", state["home_socket"])
@@ -416,6 +445,7 @@ def handle_worktree_mode(key, state):
                     env_vars=env_val,
                     color_override=sess.get("cc_color", ""),
                     group=sess_group,
+                    commands=commands,
                 )
                 state["cfg"].append_session(
                     new_title,
@@ -425,6 +455,7 @@ def handle_worktree_mode(key, state):
                     pw_val,
                     env=env_val,
                     group=sess_group,
+                    commands=commands,
                 )
                 state["sessions"] = state["query_all_sessions"](
                     managed_only=(not state["show_all"])
@@ -480,7 +511,7 @@ def handle_clone_mode(key, state):
             state["msg_frames"] = 20
         else:
             sess = state["filtered"][state["selected"]]
-            flags, pw_val, env_val = _resolve_live_or_config_options(
+            flags, pw_val, env_val, commands = _resolve_live_or_config_options(
                 sess, state["cfg"], state["strip_override_marker"]
             )
             target_socket = sess.get("socket", state["home_socket"])
@@ -499,6 +530,7 @@ def handle_clone_mode(key, state):
                 env_vars=env_val,
                 color_override=sess.get("cc_color", ""),
                 group=clone_group,
+                commands=commands,
             )
             state["cfg"].append_session(
                 title,
@@ -508,6 +540,7 @@ def handle_clone_mode(key, state):
                 pw_val,
                 env=env_val,
                 group=clone_group,
+                commands=commands,
             )
             state["sessions"] = state["query_all_sessions"](
                 managed_only=(not state["show_all"])
@@ -547,10 +580,11 @@ def handle_new_mode(stdscr, key, state):
     if state["mode"] != "new":
         return False
 
+    _base_keys = ["title", "dir", "account", "flags", "pw", "env", "group", "commands"]
     if state["form_mode"] == "edit":
-        field_keys = ["title", "dir", "account", "flags", "pw", "env", "group"]
+        field_keys = _base_keys
     else:
-        field_keys = ["title", "dir", "account", "flags", "pw", "env", "group", "save"]
+        field_keys = [*_base_keys, "save"]
         if state["multi_instance"]:
             field_keys.insert(-1, "instance")
 
@@ -699,6 +733,10 @@ def handle_new_mode(stdscr, key, state):
                 else:
                     edit_env = state["new_fields"].get("env", "")
                     edit_group = state["new_fields"].get("group", "")
+                    raw_cmds_str = state["new_fields"].get("commands", "")
+                    edit_commands = [
+                        c.strip() for c in raw_cmds_str.split(";;") if c.strip()
+                    ]
                     updated = state["cfg"].update_session(
                         state["edit_original_title"],
                         t,
@@ -708,6 +746,7 @@ def handle_new_mode(stdscr, key, state):
                         pw_val,
                         env=edit_env,
                         group=edit_group,
+                        commands=edit_commands,
                     )
                     if updated:
                         running_titles = {s["title"] for s in state["sessions"]}
@@ -740,6 +779,10 @@ def handle_new_mode(stdscr, key, state):
                         state["msg_frames"] = 20
                         return True
                     expanded_d = os.path.expanduser(d)
+                    raw_cmds_str = state["new_fields"].get("commands", "")
+                    cmds_list = [
+                        c.strip() for c in raw_cmds_str.split(";;") if c.strip()
+                    ]
                     if not os.path.isdir(expanded_d):
                         state["mode"] = "confirm_mkdir"
                         state["mkdir_path"] = expanded_d
@@ -752,6 +795,7 @@ def handle_new_mode(stdscr, key, state):
                             "pw": pw_val,
                             "env": state["new_fields"].get("env", "").strip(),
                             "group": state["new_fields"].get("group", "").strip(),
+                            "commands": cmds_list,
                             "save": state["new_fields"].get("save"),
                         }
                         return True
@@ -768,10 +812,18 @@ def handle_new_mode(stdscr, key, state):
                         location=loc,
                         env_vars=env_val,
                         group=group_val,
+                        commands=cmds_list,
                     )
                     if state["new_fields"].get("save") == "yes":
                         state["cfg"].append_session(
-                            t, d, a, fl, pw_val, env=env_val, group=group_val
+                            t,
+                            d,
+                            a,
+                            fl,
+                            pw_val,
+                            env=env_val,
+                            group=group_val,
+                            commands=cmds_list,
                         )
                     state["should_exit"] = True
                     return True
@@ -830,6 +882,7 @@ def handle_confirm_mkdir_mode(key, state):
             location=loc,
             env_vars=p["env"],
             group=p["group"],
+            commands=p.get("commands", []),
         )
         if p.get("save") == "yes":
             state["cfg"].append_session(
@@ -840,6 +893,7 @@ def handle_confirm_mkdir_mode(key, state):
                 p["pw"],
                 env=p["env"],
                 group=p["group"],
+                commands=p.get("commands", []),
             )
         state["should_exit"] = True
     else:
@@ -1031,6 +1085,7 @@ def handle_pick_mode(key, state):
                     location=loc,
                     env_vars=entry.get("env", ""),
                     group=entry.get("group", ""),
+                    commands=entry.get("commands", []),
                 )
         else:
             entry = _get_pick_entry(state)
@@ -1049,6 +1104,7 @@ def handle_pick_mode(key, state):
                 location=loc,
                 env_vars=entry.get("env", ""),
                 group=entry.get("group", ""),
+                commands=entry.get("commands", []),
             )
         state["should_exit"] = True
 

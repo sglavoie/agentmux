@@ -610,8 +610,9 @@ def draw_new_form(
         "Split:",
         "Env vars:",
         "Group:",
+        "Commands:",
     ]
-    field_keys = ["title", "dir", "account", "flags", "pw", "env", "group"]
+    field_keys = ["title", "dir", "account", "flags", "pw", "env", "group", "commands"]
     cycle_fields = {"account", "pw"}
 
     if "save" in fields:
@@ -672,6 +673,13 @@ def draw_new_form(
         hint_y,
         17,
         'Flags/Split: empty = inherit global, "-" = disable  |  Env: KEY=VAL KEY2=VAL2',
+        curses.color_pair(CP_DIM),
+    )
+    safe_addstr(
+        stdscr,
+        hint_y + 1,
+        17,
+        "Commands: ;; separated, 'shell' for terminal  |  auto-enables stack layout",
         curses.color_pair(CP_DIM),
     )
 

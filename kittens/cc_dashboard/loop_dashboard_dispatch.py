@@ -209,6 +209,7 @@ def dispatch_mode(
             "restart_options_fields": state["restart_options_fields"],
             "restart_options_active": state["restart_options_active"],
             "restart_options_cursor": state["restart_options_cursor"],
+            "restart_options_commands": state.get("restart_options_commands", []),
             "restart_target_socket": state["restart_target_socket"],
             "restart_target_tab_id": state["restart_target_tab_id"],
             "restart_default_config_label": state["restart_default_config_label"],

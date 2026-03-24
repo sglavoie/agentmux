@@ -3,7 +3,7 @@
 
 Displays configured sessions from the sessions config in a curses UI with
 account-colored entries, Running/Stopped sections, search, and multi-select.
-Selected sessions are printed as pipe-delimited lines to stdout.
+Selected sessions are printed as tab-delimited lines to stdout.
 
 Exit code 0 means selections were made, exit code 1 means user quit.
 """
@@ -46,6 +46,24 @@ from cc_dashboard.ui import (
     safe_addstr,
     shorten_path,
 )
+
+
+def _normalize_commands(raw_commands):
+    """Return a sanitized list of command strings for picker output."""
+    if raw_commands is None:
+        return []
+    if not isinstance(raw_commands, list):
+        return []
+    result = []
+    for command in raw_commands:
+        if (
+            isinstance(command, str)
+            and "\t" not in command
+            and "\n" not in command
+            and "\r" not in command
+        ):
+            result.append(command)
+    return result
 
 
 def draw_picker_view(stdscr, entries, selected, running_count, toggled):
@@ -281,8 +299,6 @@ def picker_main(stdscr, socket):
             else:
                 return [pick_filtered[pick_selected]]
 
-    return []
-
 
 def main():
     load_accounts()
@@ -336,8 +352,9 @@ def main():
         env = entry.get("env", "")
         group = entry.get("group", "")
         mute = entry.get("mute", "")
+        cmds = "\x1f".join(_normalize_commands(entry.get("commands")))
         print(
-            f"{entry['title']}|{entry['dir']}|{entry['account']}|{flags}|{pw}|{env}|{group}|{mute}"
+            f"{entry['title']}\t{entry['dir']}\t{entry['account']}\t{flags}\t{pw}\t{env}\t{group}\t{mute}\t{cmds}"
         )
 
 

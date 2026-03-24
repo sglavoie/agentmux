@@ -255,6 +255,7 @@ def dashboard(stdscr):
         },
         "restart_options_active": 0,
         "restart_options_cursor": 0,
+        "restart_options_commands": [],
         "delete_entries": [],
         "delete_selected": 0,
         "delete_step": "select",

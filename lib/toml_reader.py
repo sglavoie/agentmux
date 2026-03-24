@@ -9,6 +9,19 @@ import sys
 import tomllib
 
 
+def _normalize_commands(raw_commands):
+    """Return a sanitized list of command strings from a TOML value."""
+    if raw_commands is None:
+        return []
+    if not isinstance(raw_commands, list):
+        return []
+    result = []
+    for command in raw_commands:
+        if isinstance(command, str) and "\t" not in command and "\n" not in command and "\r" not in command:
+            result.append(command)
+    return result
+
+
 def read_header_comments(path):
     """Extract the leading comment block from a TOML file.
 
@@ -97,7 +110,7 @@ def read_sessions(path, known_accounts=None):
     """Parse ``sessions.toml`` and return a list of session dicts.
 
     Each dict has keys: ``title``, ``dir``, ``account``, ``flags``,
-    ``pw`` (project_window), ``env``, ``group``, ``mute``.
+    ``pw`` (project_window), ``env``, ``group``, ``mute``, ``commands``.
 
     If *known_accounts* is provided (a set or list of account name strings),
     sessions referencing unknown accounts will emit a warning.
@@ -121,6 +134,7 @@ def read_sessions(path, known_accounts=None):
             "env": entry.get("env", ""),
             "group": entry.get("group", ""),
             "mute": "true" if entry.get("mute") else "",
+            "commands": _normalize_commands(entry.get("commands")),
         }
         if not session["title"] or not session["dir"]:
             missing = []

@@ -25,6 +25,26 @@ from cc_dashboard.remote.shared import (
 )
 
 
+def _normalize_commands(raw_commands):
+    """Return a sanitized list of command strings for launch operations."""
+    if raw_commands is None:
+        return []
+    if isinstance(raw_commands, str):
+        return raw_commands.split("\x1f") if raw_commands else []
+    if not isinstance(raw_commands, list):
+        return []
+    result = []
+    for command in raw_commands:
+        if (
+            isinstance(command, str)
+            and "\t" not in command
+            and "\n" not in command
+            and "\r" not in command
+        ):
+            result.append(command)
+    return result
+
+
 def do_set_color(socket, session, color_name):
     """Apply a color override to a session's tab and persist via user var.
 
@@ -260,9 +280,11 @@ def do_launch(
     color_override="",
     group="",
     mute="",
+    commands=None,
 ):
     """Create a new Claude session tab with the given title, directory, and account."""
     directory = os.path.expanduser(directory)
+    commands = _normalize_commands(commands)
 
     if not os.path.isdir(directory):
         return False
@@ -304,6 +326,8 @@ def do_launch(
         f"cc_env={env_vars}",
         "--var",
         f"cc_group={group}",
+        "--var",
+        f"cc_commands={chr(0x1F).join(commands)}",
     ]
 
     if color_override:
@@ -357,18 +381,56 @@ def do_launch(
             break
         time.sleep(0.1)
 
+    # Auto-enable stack layout when commands present but no explicit pw set (C1)
+    if commands and commands != ["-"] and not pw_override:
+        pw_override = "stack"
+
     pw_mode = _cfg._resolve_project_window(pw_override)
     if pw_mode:
-        kitty_cmd(
-            socket,
-            "launch",
-            "--type=window",
-            "--match",
-            f"title:^{re.escape(title)}$",
-            "--cwd",
-            directory,
-            "--keep-focus",
-        )
+        shell = os.environ.get("SHELL", "/bin/zsh")
+        if commands == ["-"]:
+            pass
+        elif commands:
+            for cmd_entry in commands:
+                if cmd_entry == "shell":
+                    kitty_cmd(
+                        socket,
+                        "launch",
+                        "--type=window",
+                        "--match",
+                        f"title:^{re.escape(title)}$",
+                        "--cwd",
+                        directory,
+                        "--keep-focus",
+                    )
+                elif cmd_entry:
+                    kitty_cmd(
+                        socket,
+                        "launch",
+                        "--type=window",
+                        "--match",
+                        f"title:^{re.escape(title)}$",
+                        "--cwd",
+                        directory,
+                        "--keep-focus",
+                        "--hold",
+                        "--",
+                        shell,
+                        "-lic",
+                        cmd_entry,
+                    )
+        else:
+            # Legacy: plain shell window
+            kitty_cmd(
+                socket,
+                "launch",
+                "--type=window",
+                "--match",
+                f"title:^{re.escape(title)}$",
+                "--cwd",
+                directory,
+                "--keep-focus",
+            )
         kitty_cmd(
             socket,
             "goto-layout",
