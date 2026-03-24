@@ -328,15 +328,21 @@ _update_activity
 has_star=false
 has_flag=false
 has_mute=false
+has_dashboard=false
 remaining="$current_title"
+if [[ "$remaining" == "${_ICON_DASHBOARD}"* ]]; then
+	has_dashboard=true
+	remaining="${remaining#"$_ICON_DASHBOARD"}"
+fi
 if [[ "$remaining" == "${_ICON_STAR}"* ]]; then
 	has_star=true
 	remaining="${remaining#"$_ICON_STAR"}"
 fi
 if [[ "$remaining" == "${_ICON_FLAG}"* ]]; then
 	has_flag=true
+	remaining="${remaining#"$_ICON_FLAG"}"
 fi
-if [[ "$remaining" == *"${_ICON_MUTE}"* ]]; then
+if [[ "$remaining" == "${_ICON_MUTE}"* ]]; then
 	has_mute=true
 fi
 [[ "$has_mute" == true ]] && _MUTED=true
@@ -422,7 +428,7 @@ idle | clear)
 	;;
 esac
 
-new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag" "$has_mute")"
+new_title="$(build_title "$remaining" "$has_star" "$state" "$has_flag" "$has_mute" "$has_dashboard")"
 ccm_debug "hook: new_title='$new_title' (was '$current_title')"
 
 # Send macOS desktop notification if enabled for this event type.

@@ -13,6 +13,7 @@ from cc_dashboard import config as _cfg
 from cc_dashboard.config_core import _resolve_notes_editor, notes_file_for_title
 from cc_dashboard.remote.command import kitty_cmd
 from cc_dashboard.remote.shared import (
+    _ICON_DASHBOARD,
     _ICON_FLAG,
     _ICON_MUTE,
     _ICON_STAR,
@@ -479,6 +480,11 @@ def do_toggle_mute(socket, session):
     if not tab_title:
         return False
 
+    # Strip dashboard marker before parsing icons
+    had_dashboard = tab_title.startswith(_ICON_DASHBOARD)
+    if had_dashboard:
+        tab_title = tab_title[len(_ICON_DASHBOARD) :]
+
     # Parse current icon state
     has_star = tab_title.startswith(_ICON_STAR)
     rest = tab_title
@@ -505,8 +511,10 @@ def do_toggle_mute(socket, session):
     # Toggle mute
     has_mute = not has_mute
 
-    # Rebuild title: star? flag? mute? state? base
+    # Rebuild title: dashboard? star? flag? mute? state? base
     new_title = ""
+    if had_dashboard:
+        new_title += _ICON_DASHBOARD
     if has_star:
         new_title += _ICON_STAR
     if has_flag:

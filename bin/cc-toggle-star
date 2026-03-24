@@ -28,7 +28,7 @@ else
 	_TGL_HAS_STAR=true
 fi
 
-new_title="$(build_title "$_TGL_REMAINING" "$_TGL_HAS_STAR" "$_TGL_STATE" "$_TGL_HAS_FLAG" "$_TGL_HAS_MUTE")"
+new_title="$(build_title "$_TGL_REMAINING" "$_TGL_HAS_STAR" "$_TGL_STATE" "$_TGL_HAS_FLAG" "$_TGL_HAS_MUTE" "$_TGL_HAS_DASHBOARD")"
 if ! kitten @ ${_TGL_TO_ARGS[@]+"${_TGL_TO_ARGS[@]}"} set-tab-title --match "id:$_TGL_TAB_ID" "$new_title"; then
 	echo "Error: failed to set tab title for tab $_TGL_TAB_ID." >&2
 	exit 1

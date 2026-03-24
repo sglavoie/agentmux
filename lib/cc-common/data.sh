@@ -65,6 +65,7 @@ _load_icons() {
 	_ICON_STAR=$(printf '%s' "$_ICONS_JSON" | jq -r '.star')
 	_ICON_FLAG=$(printf '%s' "$_ICONS_JSON" | jq -r '.flag')
 	_ICON_MUTE=$(printf '%s' "$_ICONS_JSON" | jq -r '.mute')
+	_ICON_DASHBOARD=$(printf '%s' "$_ICONS_JSON" | jq -r '.dashboard')
 	_ICON_BOLT=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.bolt')
 	_ICON_STOP=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.stop')
 	_ICON_KEY=$(printf '%s' "$_ICONS_JSON" | jq -r '.states.key')

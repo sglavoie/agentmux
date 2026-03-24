@@ -15,29 +15,38 @@ fi
 _load_icons
 
 # Parse the icon prefix of a title string.
-# Outputs four lines: has_star, has_flag, has_mute (true/false each), remaining title.
-# Usage: read -r has_star; read -r has_flag; read -r has_mute; read -r remaining < <(parse_icon_prefix "$title")
+# Outputs five lines: has_star, has_flag, has_mute, has_dashboard (true/false each),
+# remaining title (with all prefix icons stripped).
+# Usage: read -r has_star; read -r has_flag; read -r has_mute; read -r has_dashboard; read -r remaining < <(parse_icon_prefix "$title")
 parse_icon_prefix() {
 	local title="$1"
 	local has_star=false
 	local has_flag=false
 	local has_mute=false
+	local has_dashboard=false
+	if [[ "$title" == "${_ICON_DASHBOARD}"* ]]; then
+		has_dashboard=true
+		title="${title#"$_ICON_DASHBOARD"}"
+	fi
 	if [[ "$title" == "${_ICON_STAR}"* ]]; then
 		has_star=true
 		title="${title#"$_ICON_STAR"}"
 	fi
 	if [[ "$title" == "${_ICON_FLAG}"* ]]; then
 		has_flag=true
+		title="${title#"$_ICON_FLAG"}"
 	fi
-	if [[ "$title" == *"${_ICON_MUTE}"* ]]; then
+	if [[ "$title" == "${_ICON_MUTE}"* ]]; then
 		has_mute=true
+		title="${title#"$_ICON_MUTE"}"
 	fi
-	printf '%s\n%s\n%s\n%s\n' "$has_star" "$has_flag" "$has_mute" "$title"
+	printf '%s\n%s\n%s\n%s\n%s\n' "$has_star" "$has_flag" "$has_mute" "$has_dashboard" "$title"
 }
 
-# Remove leading ★, ❗, 🔇, and state icon prefixes from a title string.
+# Remove leading 🚗, ★, ❗, 🔇, and state icon prefixes from a title string.
 strip_icons() {
 	local title="$1"
+	title="${title#"$_ICON_DASHBOARD"}"
 	title="${title#"$_ICON_STAR"}"
 	title="${title#"$_ICON_FLAG"}"
 	title="${title#"$_ICON_MUTE"}"
@@ -48,10 +57,11 @@ strip_icons() {
 	echo "$title"
 }
 
-# Detect which state icon is currently present (after stripping ★ and ❗).
+# Detect which state icon is currently present (after stripping prefix icons).
 # Outputs one of: bolt, stop, key, error, or empty string.
 detect_state() {
 	local title="$1"
+	title="${title#"$_ICON_DASHBOARD"}"
 	title="${title#"$_ICON_STAR"}"
 	title="${title#"$_ICON_FLAG"}"
 	title="${title#"$_ICON_MUTE"}"
@@ -65,10 +75,10 @@ detect_state() {
 }
 
 # Reconstruct a title from a base string, star flag, flag flag, and state name.
-# Order is always: ★❗🔇<state-icon> base
+# Order is always: 🚗?★?❗?🔇?<state-icon>? base
 # state is one of: bolt, stop, key, error, or empty string.
 build_title() {
-	local base="$1" has_star="$2" state="$3" has_flag="${4:-}" has_mute="${5:-}"
+	local base="$1" has_star="$2" state="$3" has_flag="${4:-}" has_mute="${5:-}" has_dashboard="${6:-}"
 	local result="$base"
 	case "$state" in
 	bolt) result="${_ICON_BOLT}$result" ;;
@@ -85,12 +95,15 @@ build_title() {
 	if [[ "$has_star" == "true" ]]; then
 		result="${_ICON_STAR}$result"
 	fi
+	if [[ "$has_dashboard" == "true" ]]; then
+		result="${_ICON_DASHBOARD}$result"
+	fi
 	echo "$result"
 }
 
 # Shared preamble for toggle scripts. Call after sourcing this file.
 # Sets: _TGL_TAB_ID, _TGL_HAS_STAR, _TGL_HAS_FLAG, _TGL_HAS_MUTE,
-#        _TGL_REMAINING, _TGL_STATE, _TGL_TO_ARGS
+#        _TGL_HAS_DASHBOARD, _TGL_REMAINING, _TGL_STATE, _TGL_TO_ARGS
 # Usage: toggle_preamble WINDOW_ID
 toggle_preamble() {
 	local win_id="$1"
@@ -111,17 +124,19 @@ toggle_preamble() {
 		return 1
 	fi
 
-	local _has_star _has_flag _has_mute _remaining
+	local _has_star _has_flag _has_mute _has_dashboard _remaining
 	{
 		read -r _has_star
 		read -r _has_flag
 		read -r _has_mute
+		read -r _has_dashboard
 		read -r _remaining
 	} < <(parse_icon_prefix "$current_title")
 
 	_TGL_HAS_STAR="$_has_star"
 	_TGL_HAS_FLAG="$_has_flag"
 	_TGL_HAS_MUTE="$_has_mute"
+	_TGL_HAS_DASHBOARD="$_has_dashboard"
 	_TGL_STATE="$(detect_state "$current_title")"
 	_TGL_REMAINING="$(strip_icons "$_remaining")"
 }

@@ -5,7 +5,7 @@ import re
 from cc_dashboard.config_data import load_icons, load_override_emojis
 
 _ICONS = load_icons()
-_ICON_DASHBOARD = "🚗"
+_ICON_DASHBOARD = _ICONS.get("dashboard", "🚗")
 _ICON_STAR = _ICONS["star"]
 _ICON_FLAG = _ICONS.get("flag", "❗")
 _ICON_MUTE = _ICONS.get("mute", "🔇")
