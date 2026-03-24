@@ -181,6 +181,19 @@ def get_host_tab_id(socket):
     to a tab ID by walking the kitty @ ls output. Returns None when the
     window ID is unavailable or the lookup fails.
     """
+    host_info = get_host_tab_info(socket)
+    if host_info is None:
+        return None
+    return host_info.get("tab_id")
+
+
+def get_host_tab_info(socket):
+    """Return info for the tab hosting the current dashboard process.
+
+    The result contains the tab ID, current tab title, and whether the tab is
+    managed by cc-manager. Returns None when KITTY_WINDOW_ID is unavailable or
+    the lookup fails.
+    """
     wid_str = os.environ.get("KITTY_WINDOW_ID")
     if not wid_str:
         return None
@@ -197,9 +210,22 @@ def get_host_tab_id(socket):
         return None
     if not isinstance(data, list):
         return None
+
+    from cc_dashboard.remote.shared import _MANAGED_TITLE_RE
+
     for os_win in data:
         for tab in os_win.get("tabs", []):
-            for win in tab.get("windows", []):
-                if win.get("id") == wid:
-                    return tab.get("id")
+            windows = tab.get("windows", [])
+            has_cc_var = any(
+                isinstance(win.get("user_vars", {}), dict)
+                and win.get("user_vars", {}).get("cc_account")
+                for win in windows
+            )
+            if any(win.get("id") == wid for win in windows):
+                title = tab.get("title", "")
+                return {
+                    "tab_id": tab.get("id"),
+                    "title": title,
+                    "is_managed": has_cc_var or bool(_MANAGED_TITLE_RE.match(title)),
+                }
     return None

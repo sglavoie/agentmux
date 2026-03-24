@@ -5,6 +5,7 @@ import re
 from cc_dashboard.config_data import load_icons, load_override_emojis
 
 _ICONS = load_icons()
+_ICON_DASHBOARD = "🚗"
 _ICON_STAR = _ICONS["star"]
 _ICON_FLAG = _ICONS.get("flag", "❗")
 _ICON_MUTE = _ICONS.get("mute", "🔇")
@@ -29,7 +30,9 @@ def _build_managed_title_re():
     """
     override_alt = "|".join(re.escape(e) for e in sorted(OVERRIDE_EMOJIS))
     return re.compile(
-        r"^("
+        r"^(?:"
+        + re.escape(_ICON_DASHBOARD)
+        + r")?("
         + re.escape(_ICON_STAR)
         + r")?("
         + re.escape(_ICON_FLAG)
@@ -46,8 +49,16 @@ def _build_managed_title_re():
 _MANAGED_TITLE_RE = _build_managed_title_re()
 
 
+def _strip_dashboard_marker(title):
+    """Remove the leading dashboard marker from a tab title."""
+    if title.startswith(_ICON_DASHBOARD):
+        return title[len(_ICON_DASHBOARD) :]
+    return title
+
+
 def _strip_icons(title):
     """Remove leading star, flag, and state icon prefixes from a tab title."""
+    title = _strip_dashboard_marker(title)
     if title.startswith(_ICON_STAR):
         title = title[len(_ICON_STAR) :]
     if title.startswith(_ICON_FLAG):
@@ -133,6 +144,7 @@ def _detect_state(title):
     Returns one of: "active", "stopped", "permission", "error", or "".
     The star and flag prefixes are skipped before checking.
     """
+    title = _strip_dashboard_marker(title)
     if title.startswith(_ICON_STAR):
         title = title[len(_ICON_STAR) :]
     if title.startswith(_ICON_FLAG):
