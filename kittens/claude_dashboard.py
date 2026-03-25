@@ -139,6 +139,7 @@ def main(args=None):
                     _dashboard_title(title),
                 )
 
+    restored = False
     try:
         load_accounts()
         load_defaults()
@@ -147,7 +148,7 @@ def main(args=None):
         curses.wrapper(dashboard)
     finally:
         if socket and host_tab_id is not None:
-            _restore_host_title(socket, host_tab_id, host_was_managed)
+            restored = _restore_host_title(socket, host_tab_id, host_was_managed)
 
     if host_tab_id is not None:
         return json.dumps(
@@ -155,6 +156,7 @@ def main(args=None):
                 "host_tab_id": host_tab_id,
                 "host_original_title": host_original_title,
                 "was_managed": host_was_managed,
+                "restored": restored,
             }
         )
     return ""
@@ -173,6 +175,8 @@ try:
             return
         tab_id = data.get("host_tab_id")
         if not tab_id:
+            return
+        if data.get("restored"):
             return
         was_managed = data.get("was_managed", False)
         # Backup cleanup if the subprocess-based restore in main() does not
