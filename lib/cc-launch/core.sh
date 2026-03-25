@@ -321,10 +321,12 @@ launch_session() {
                 if [[ "$cmd_entry" == "shell" ]]; then
                     kitty @ --to "$SOCKET" launch --type=window \
                         --match "title:^${title_escaped}$" \
+                        --title "shell" \
                         --cwd "$dir" --keep-focus
                 elif [[ -n "$cmd_entry" ]]; then
                     kitty @ --to "$SOCKET" launch --type=window \
                         --match "title:^${title_escaped}$" \
+                        --title "$cmd_entry" \
                         --cwd "$dir" --keep-focus --hold \
                         -- "${SHELL:-/bin/zsh}" -lic "$cmd_entry"
                 fi
