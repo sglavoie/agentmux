@@ -19,6 +19,7 @@ from cc_dashboard.loop_modes_dashboard import (
 )
 from cc_dashboard.loop_modes_delete import handle_delete_mode
 from cc_dashboard.loop_modes_forms import (
+    _resolve_live_or_config_options,
     handle_batch_group_mode,
     handle_clone_mode,
     handle_confirm_mkdir_mode,
@@ -495,6 +496,7 @@ def dispatch_mode(
             "append_override_marker": state["append_override_marker"],
             "append_override_for_dir": state["append_override_for_dir"],
             "strip_override_marker": state["strip_override_marker"],
+            "resolve_live_or_config_options": _resolve_live_or_config_options,
             "query_all_sessions": state["query_all_sessions"],
             "refilter": state["refilter"],
             "msg": state["msg"],
