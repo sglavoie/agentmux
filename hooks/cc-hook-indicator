@@ -353,16 +353,23 @@ remaining="$(strip_icons "$remaining")"
 # Apply the requested action.
 case "$ACTION" in
 active)
-	state="bolt"
-	# Auto-undim: restore colors if tab was auto-dimmed
-	_undim_socket="${KITTY_LISTEN_ON:-}"
-	if [[ -n "$_undim_socket" ]]; then
-		_undim_ls="$(kitty @ --to "$_undim_socket" ls 2>/dev/null)" || _undim_ls=""
-		if [[ -n "$_undim_ls" ]]; then
-			dim_type=""
-			if dim_type="$(is_dimmed "$tab_id" "$_undim_ls")" 2>/dev/null; then
-				if [[ "$dim_type" == "auto" ]]; then
-					apply_undim "$_undim_socket" "$tab_id" "$KITTY_WINDOW_ID" "$_undim_ls" || true
+	if [[ "$EVENT_KIND" == "subagent_stop" || "$EVENT_KIND" == "task_complete" ]]; then
+		# Completion events: preserve current state icon, don't overwrite
+		# stop/error/key with bolt. These events indicate something FINISHED,
+		# not that Claude is actively working.
+		state="$(detect_state "$current_title")"
+	else
+		state="bolt"
+		# Auto-undim: restore colors if tab was auto-dimmed
+		_undim_socket="${KITTY_LISTEN_ON:-}"
+		if [[ -n "$_undim_socket" ]]; then
+			_undim_ls="$(kitty @ --to "$_undim_socket" ls 2>/dev/null)" || _undim_ls=""
+			if [[ -n "$_undim_ls" ]]; then
+				dim_type=""
+				if dim_type="$(is_dimmed "$tab_id" "$_undim_ls")" 2>/dev/null; then
+					if [[ "$dim_type" == "auto" ]]; then
+						apply_undim "$_undim_socket" "$tab_id" "$KITTY_WINDOW_ID" "$_undim_ls" || true
+					fi
 				fi
 			fi
 		fi
