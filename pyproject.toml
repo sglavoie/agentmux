@@ -45,6 +45,9 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 "cc_session_notes.py" = ["E402"]
 "cc_reorder_tabs.py" = ["E402"]
 
+[tool.pyright]
+extraPaths = ["kittens"]
+
 [tool.mypy]
 python_version = "3.13"
 mypy_path = "kittens"
