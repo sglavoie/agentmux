@@ -370,7 +370,6 @@ def draw_dashboard_frame(stdscr, state, build_session_actions):
                 state["dir_browse_entries"],
                 state["dir_browse_selected"],
                 state["dir_browse_scroll"],
-                state["dir_browse_show_hidden"],
             )
             draw_footer(stdscr, "new_dir_browse")
     elif mode == "confirm_mkdir":

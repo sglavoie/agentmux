@@ -810,7 +810,7 @@ def _scan_directories(field_value, max_results=50, show_hidden=False):
     return entries[:max_results]
 
 
-def draw_dir_dropdown(stdscr, entries, selected, scroll, show_hidden=False):
+def draw_dir_dropdown(stdscr, entries, selected, scroll):
     """Draw a directory autocomplete dropdown below the dir field."""
     rows, cols = stdscr.getmaxyx()
     dropdown_y = 7
