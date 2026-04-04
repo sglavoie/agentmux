@@ -16,14 +16,9 @@ _dim_hex() {
 }
 
 # Dim a foreground color to 70% brightness.
+# Identical operation to _dim_hex; kept as a semantic alias.
 _dim_fg() {
-	local hex="$1"
-	hex="${hex#\#}"
-	local r g b
-	r=$((16#${hex:0:2} * 7 / 10))
-	g=$((16#${hex:2:2} * 7 / 10))
-	b=$((16#${hex:4:2} * 7 / 10))
-	printf '#%02x%02x%02x' "$r" "$g" "$b"
+	_dim_hex "$1"
 }
 
 # Encode space-separated color args to +-separated format for user var storage.
