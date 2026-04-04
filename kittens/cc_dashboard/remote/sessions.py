@@ -42,8 +42,6 @@ def _is_claude_process(cmdline):
             continue
         if arg_lower.endswith(".py"):
             continue
-        if arg_lower == "kitten" or arg_lower.endswith("/kitten"):
-            continue
         return True
     return False
 
