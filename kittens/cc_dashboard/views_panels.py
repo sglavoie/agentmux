@@ -377,7 +377,7 @@ def draw_pick_view(
             acct_padded = _pad_to_width(
                 _truncate_to_width(entry["account"], c_acct - 1), c_acct
             )
-            line = f"{mark} {title_padded}{acct_padded}{short_dir:<{c_dir}}"
+            line = f"{mark}{title_padded}{acct_padded}{short_dir:<{c_dir}}"
 
             attr = curses.color_pair(cp)
             if sel:
