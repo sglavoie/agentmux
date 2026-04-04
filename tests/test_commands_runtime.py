@@ -4,7 +4,6 @@
 Run: python3 tests/test_commands_runtime.py
 """
 
-import os
 import subprocess
 import sys
 import tempfile
@@ -118,6 +117,58 @@ def test_detached_steps_explicit_disable():
     layout_calls = [step for step in steps if "goto-layout" in step["cmd"]]
     check("detached steps: no extra windows", len(window_launches) == 0)
     check("detached steps: layout retained", len(layout_calls) == 1)
+
+
+def test_detached_steps_command_window_titles():
+    """Detached restart/move steps set --title on command windows."""
+    print("\n--- detached launch steps command window titles ---")
+    original_accounts = cfg._accounts
+    original_resolve_pw = cfg._resolve_project_window
+    original_resolve_flags = cfg._resolve_claude_flags
+    original_palette = cfg._palette_tab_colors
+    original_compute_location = actions_lifecycle.compute_insert_location
+
+    cfg._accounts = {"work": {"config_dir": ""}}
+    cfg._resolve_project_window = lambda override="": (
+        "stack" if not override else ("" if override == "-" else override)
+    )
+    cfg._resolve_claude_flags = lambda override="": override
+    cfg._palette_tab_colors = lambda *args, **kwargs: ["active_bg=#000000"]
+    actions_lifecycle.compute_insert_location = lambda *args, **kwargs: (None, None)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        steps = actions_lifecycle._build_launch_steps(
+            "unix:/tmp/src",
+            "unix:/tmp/dst",
+            1,
+            "test",
+            tmpdir,
+            "work",
+            commands=["npm run dev", "shell"],
+        )
+
+    cfg._accounts = original_accounts
+    cfg._resolve_project_window = original_resolve_pw
+    cfg._resolve_claude_flags = original_resolve_flags
+    cfg._palette_tab_colors = original_palette
+    actions_lifecycle.compute_insert_location = original_compute_location
+
+    window_launches = [step for step in steps if "--type=window" in step["cmd"]]
+    check("detached steps: two command windows launched", len(window_launches) == 2)
+
+    # First window: "npm run dev" command
+    cmd0 = window_launches[0]["cmd"]
+    check(
+        "detached steps: command window has --title",
+        "--title" in cmd0 and cmd0[cmd0.index("--title") + 1] == "npm run dev",
+    )
+
+    # Second window: "shell" literal
+    cmd1 = window_launches[1]["cmd"]
+    check(
+        "detached steps: shell window has --title",
+        "--title" in cmd1 and cmd1[cmd1.index("--title") + 1] == "shell",
+    )
 
 
 def test_override_restart_uses_config_commands():
@@ -377,6 +428,7 @@ if __name__ == "__main__":
 
     test_python_launch_explicit_disable()
     test_detached_steps_explicit_disable()
+    test_detached_steps_command_window_titles()
     test_override_restart_uses_config_commands()
     test_override_stopped_launch_uses_config_commands()
     test_bash_launch_explicit_disable()
