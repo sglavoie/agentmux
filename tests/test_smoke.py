@@ -301,8 +301,10 @@ def test_is_claude_process():
           not _is_claude_process(["CLAUDE_CONFIG_DIR=/home/.claude"]))
     check("python script does not match",
           not _is_claude_process(["python3", "claude_dashboard.py"]))
-    check("kitten does not match",
+    check("kitten does not match (basename != claude)",
           not _is_claude_process(["kitten", "claude_dashboard.py"]))
+    check("absolute path kitten does not match",
+          not _is_claude_process(["/usr/bin/kitten", "claude_dashboard.py"]))
     check("empty cmdline does not match",
           not _is_claude_process([]))
     check("unrelated process does not match",
@@ -311,6 +313,34 @@ def test_is_claude_process():
           not _is_claude_process(["bash", "-c", "cd /home/claude-project"]))
     check("shell wrapper with exec claude matches",
           _is_claude_process(["bash", "-lic", "exec claude --flag"]) is False)
+
+
+# ── _strip_override_marker return types ──────────────────────────────
+
+
+def test_strip_override_marker_types():
+    """_strip_override_marker returns correct types based on return_emoji flag."""
+    print("\n--- _strip_override_marker return types ---")
+    sys.path.insert(0, os.path.join(REPO_ROOT, "kittens"))
+    from cc_dashboard.remote.shared import _strip_override_marker
+
+    # Default (return_emoji=False) returns str
+    result = _strip_override_marker("W:project")
+    check("default returns str", isinstance(result, str))
+
+    # return_emoji=True returns tuple
+    result_tuple = _strip_override_marker("W:project", return_emoji=True)
+    check("return_emoji=True returns tuple", isinstance(result_tuple, tuple))
+    check("tuple has two elements", len(result_tuple) == 2)
+    check("tuple first element is str", isinstance(result_tuple[0], str))
+    check("tuple second element is str", isinstance(result_tuple[1], str))
+
+    # Plain title without override marker
+    plain = _strip_override_marker("plain_title")
+    check("plain title unchanged", plain == "plain_title")
+
+    plain_tuple = _strip_override_marker("plain_title", return_emoji=True)
+    check("plain title tuple has empty emoji", plain_tuple[1] == "")
 
 
 # ── run all ──────────────────────────────────────────────────────────
@@ -333,6 +363,7 @@ if __name__ == "__main__":
     test_notes_path_traversal()
     test_quick_validate()
     test_is_claude_process()
+    test_strip_override_marker_types()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:
