@@ -141,8 +141,6 @@ def query_sessions(socket, managed_only=True):
             # Fallback: enrich group from config when user var is missing
             if not cc_group:
                 cfg_entry = _cfg._find_config_session(title)
-                if cfg_entry is None:
-                    cfg_entry = _cfg._find_config_session(_strip_override_marker(title))
                 if cfg_entry:
                     cc_group = cfg_entry.get("group", "")
             try:
