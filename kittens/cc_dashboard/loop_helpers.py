@@ -123,7 +123,13 @@ def _refilter(
 def _resolve_session_runtime_options(sess):
     cfg_entry = _cfg._find_config_session(sess["title"])
     if cfg_entry is None:
-        cfg_entry = _cfg._find_config_session(_strip_override_marker(sess["title"]))
+        stripped = _strip_override_marker(sess["title"])
+        cfg_entry = _cfg._find_config_session(stripped)
+    if cfg_entry is None:
+        # Fallback: strip X: account prefix for configs that omit it
+        stripped = _strip_override_marker(sess["title"])
+        if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+            cfg_entry = _cfg._find_config_session(stripped[2:])
 
     cfg_flags = cfg_entry.get("flags", "") if cfg_entry else ""
     cfg_pw = cfg_entry.get("pw", "") if cfg_entry else ""

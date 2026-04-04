@@ -15,6 +15,9 @@ sys.path.insert(0, str(REPO_ROOT / "kittens"))
 
 from cc_dashboard import config as cfg
 import cc_dashboard.loop_modes_forms as loop_modes_forms  # noqa: E402
+from cc_dashboard.loop_helpers import (  # noqa: E402
+    _resolve_session_runtime_options,
+)
 from cc_dashboard.loop_modes_forms import (  # noqa: E402
     _resolve_live_or_config_options,
     handle_override_mode,
@@ -45,7 +48,7 @@ def test_python_launch_explicit_disable():
     original_resolve_flags = cfg._resolve_claude_flags
     original_palette = cfg._palette_tab_colors
 
-    def fake_kitty_cmd(socket, *args):
+    def fake_kitty_cmd(_socket, *args):
         calls.append(args)
         return SimpleNamespace(returncode=0, stdout="[]")
 
@@ -192,7 +195,7 @@ def test_override_restart_uses_config_commands():
         def _unique_config_dirs():
             return ["/cfg/other"]
 
-    def fake_restart(socket, sess, **kwargs):
+    def fake_restart(socket, _sess, **kwargs):
         captured["socket"] = socket
         captured["commands"] = kwargs.get("commands")
 
@@ -252,7 +255,7 @@ def test_override_stopped_launch_uses_config_commands():
         def _unique_config_dirs():
             return ["/cfg/other"]
 
-    def fake_launch(socket, title, directory, account, flags, pw_override, **kwargs):
+    def fake_launch(_socket, _title, _directory, _account, _flags, _pw_override, **kwargs):
         captured["commands"] = kwargs.get("commands")
 
     loop_modes_forms.time.sleep = lambda _secs: None
@@ -423,6 +426,48 @@ def test_resolve_config_lookup_fallback_without_prefix():
     check("fallback lookup commands", commands == ["shell"])
 
 
+def test_runtime_options_fallback_without_prefix():
+    """_resolve_session_runtime_options falls back to bare title."""
+    print("\n--- runtime options fallback without prefix ---")
+    original_sessions = cfg._sessions
+    original_find = cfg._find_config_session
+
+    cfg._sessions = [
+        {
+            "title": "proj",
+            "flags": "--from-config",
+            "pw": "stack",
+            "env": "FOO=1",
+            "commands": ["npm run dev"],
+        }
+    ]
+
+    def _find(title):
+        for s in cfg._sessions:
+            if s["title"] == title:
+                return s
+        return None
+
+    cfg._find_config_session = _find
+
+    sess = {
+        "title": "W:proj",
+        "cc_flags": "",
+        "cc_pw": "",
+        "cc_env": "",
+        "cc_commands": [],
+    }
+    flags, pw, env, commands = _resolve_session_runtime_options(sess)
+
+    cfg._sessions = original_sessions
+    cfg._find_config_session = original_find
+
+    check("runtime options fallback flags", flags == "--from-config")
+    check("runtime options fallback pw", pw == "stack")
+    check("runtime options fallback env", env == "FOO=1")
+    check("runtime options fallback commands", commands == ["npm run dev"])
+
+
 if __name__ == "__main__":
     print("commands runtime tests")
 
@@ -434,6 +479,7 @@ if __name__ == "__main__":
     test_bash_launch_explicit_disable()
     test_resolve_config_lookup_with_account_prefix()
     test_resolve_config_lookup_fallback_without_prefix()
+    test_runtime_options_fallback_without_prefix()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:
