@@ -1,6 +1,9 @@
 """Shared constants and helpers for kitty remote integration."""
 
+from __future__ import annotations
+
 import re
+from typing import Literal, overload
 
 from cc_dashboard.config_data import load_icons, load_override_emojis
 
@@ -84,7 +87,19 @@ def _strip_account_prefix(title):
     return title
 
 
-def _strip_override_marker(title, return_emoji=False):
+@overload
+def _strip_override_marker(title: str, return_emoji: Literal[False] = ...) -> str: ...
+
+
+@overload
+def _strip_override_marker(
+    title: str, return_emoji: Literal[True] = ...
+) -> tuple[str, str]: ...
+
+
+def _strip_override_marker(
+    title: str, return_emoji: bool = False
+) -> str | tuple[str, str]:
     """Remove override emoji prefix (and legacy trailing overline) from a title.
 
     When *return_emoji* is True, returns a ``(stripped_title, emoji)`` tuple
