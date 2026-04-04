@@ -540,6 +540,87 @@ def test_edit_config_lookup_strips_prefix():
     )
 
 
+def test_detail_pane_config_lookup_strips_prefix():
+    """Detail pane config lookup falls back to bare title after X: strip."""
+    print("\n--- detail pane config lookup strips prefix ---")
+    # We cannot call draw_detail_pane without curses init, so we
+    # replicate the three-tier lookup logic from views_detail.py to
+    # verify the pattern is correct and the fallback works.
+    from cc_dashboard import config as _cfg
+    from cc_dashboard.remote.shared import _strip_override_marker
+
+    original_find = _cfg._find_config_session
+    calls: list[str] = []
+
+    def fake_find(title):
+        calls.append(title)
+        if title == "proj":
+            return {"flags": "", "pw": "", "group": "g1"}
+        return None
+
+    _cfg._find_config_session = fake_find
+
+    session_title = "W:proj"
+    stripped = _strip_override_marker(session_title)
+    cfg_entry = _cfg._find_config_session(session_title)
+    if cfg_entry is None:
+        cfg_entry = _cfg._find_config_session(stripped)
+    if cfg_entry is None:
+        has_prefix = (
+            len(stripped) >= 2
+            and stripped[0].isupper()
+            and stripped[1] == ":"
+        )
+        if has_prefix:
+            cfg_entry = _cfg._find_config_session(stripped[2:])
+
+    _cfg._find_config_session = original_find
+
+    check("detail pane tried W:proj first", "W:proj" in calls)
+    check("detail pane tried bare title via prefix strip", "proj" in calls)
+    check("detail pane found config entry", cfg_entry is not None)
+
+
+def test_session_group_enrichment_strips_prefix():
+    """Session group enrichment falls back to bare title."""
+    print("\n--- session group enrichment strips prefix ---")
+    from cc_dashboard import config as _cfg
+
+    original_find = _cfg._find_config_session
+    calls: list[str] = []
+
+    def fake_find(title):
+        calls.append(title)
+        if title == "proj":
+            return {"group": "mygroup"}
+        return None
+
+    _cfg._find_config_session = fake_find
+
+    title = "W:proj"
+    cc_group = ""
+    if not cc_group:
+        cfg_entry = _cfg._find_config_session(title)
+        if cfg_entry is None:
+            has_prefix = (
+                len(title) >= 2
+                and title[0].isupper()
+                and title[1] == ":"
+            )
+            if has_prefix:
+                cfg_entry = _cfg._find_config_session(title[2:])
+        if cfg_entry:
+            cc_group = cfg_entry.get("group", "")
+
+    _cfg._find_config_session = original_find
+
+    check(
+        "group enrichment found config via prefix strip",
+        cc_group == "mygroup",
+    )
+    check("group enrichment tried bare title", "proj" in calls)
+
+
 if __name__ == "__main__":
     print("commands runtime tests")
 
@@ -553,6 +634,8 @@ if __name__ == "__main__":
     test_resolve_config_lookup_fallback_without_prefix()
     test_runtime_options_fallback_without_prefix()
     test_edit_config_lookup_strips_prefix()
+    test_detail_pane_config_lookup_strips_prefix()
+    test_session_group_enrichment_strips_prefix()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:

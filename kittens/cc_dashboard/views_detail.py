@@ -21,9 +21,18 @@ def draw_detail_pane(stdscr, session, detail_y):
     sep = "--- Detail " + "-" * max(0, cols - 14)
     safe_addstr(stdscr, detail_y, 1, sep, curses.color_pair(CP_DIM))
 
+    stripped = _strip_override_marker(session["title"])
     cfg_entry = _cfg._find_config_session(session["title"])
     if cfg_entry is None:
-        cfg_entry = _cfg._find_config_session(_strip_override_marker(session["title"]))
+        cfg_entry = _cfg._find_config_session(stripped)
+    if cfg_entry is None:
+        has_prefix = (
+            len(stripped) >= 2
+            and stripped[0].isupper()
+            and stripped[1] == ":"
+        )
+        if has_prefix:
+            cfg_entry = _cfg._find_config_session(stripped[2:])
     if cfg_entry:
         effective_flags = _cfg._resolve_claude_flags(cfg_entry.get("flags", ""))
         effective_split = _cfg._resolve_project_window(cfg_entry.get("pw", ""))
