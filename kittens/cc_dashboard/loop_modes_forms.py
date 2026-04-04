@@ -377,9 +377,10 @@ def handle_batch_group_mode(key, state):
 def _resolve_live_or_config_options(sess, cfg, strip_override_marker):
     orig_title = sess["title"]
     stripped = strip_override_marker(orig_title)
-    if len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
-        stripped = stripped[2:]
     src_cfg = next((s for s in cfg._sessions if s["title"] == stripped), None)
+    if src_cfg is None and len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+        bare = stripped[2:]
+        src_cfg = next((s for s in cfg._sessions if s["title"] == bare), None)
 
     flags = sess.get("cc_flags", "") or (src_cfg["flags"] if src_cfg else "")
     pw_val = sess.get("cc_pw", "") or (src_cfg["pw"] if src_cfg else "")

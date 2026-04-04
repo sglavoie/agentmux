@@ -297,6 +297,81 @@ launch_session 'test' {tmpdir!r} 'work' '' '' '' '' '' '' '-'
     check("bash launch: no extra windows", len(window_calls) == 0)
 
 
+def test_resolve_config_lookup_with_account_prefix():
+    """Config lookup matches titles with X: account prefix (e.g. W:proj)."""
+    print("\n--- resolve config lookup with account prefix ---")
+
+    class Cfg:
+        _sessions = [
+            {
+                "title": "W:proj",
+                "flags": "--verbose",
+                "pw": "stack",
+                "env": "FOO=bar",
+                "commands": ["npm run dev"],
+            }
+        ]
+
+    # Session title includes account prefix, matching config title
+    sess = {
+        "title": "W:proj",
+        "cc_flags": "",
+        "cc_pw": "",
+        "cc_env": "",
+        "cc_commands": [],
+    }
+    flags, pw, env, commands = _resolve_live_or_config_options(
+        sess, Cfg(), lambda t: t
+    )
+    check("config lookup matches W:proj title", flags == "--verbose")
+    check("config lookup pw with prefix", pw == "stack")
+    check("config lookup env with prefix", env == "FOO=bar")
+    check("config lookup commands with prefix", commands == ["npm run dev"])
+
+    # Session title has override emoji stripped, but X: prefix preserved
+    sess2 = {
+        "title": "W:proj",
+        "cc_flags": "",
+        "cc_pw": "",
+        "cc_env": "",
+        "cc_commands": [],
+    }
+    flags2, pw2, env2, commands2 = _resolve_live_or_config_options(
+        sess2, Cfg(), lambda t: t
+    )
+    check("config lookup still works after emoji strip", flags2 == "--verbose")
+    check("config lookup commands after emoji strip", commands2 == ["npm run dev"])
+
+
+def test_resolve_config_lookup_fallback_without_prefix():
+    """Config lookup falls back to bare title when config omits X: prefix."""
+    print("\n--- resolve config lookup fallback without prefix ---")
+
+    class Cfg:
+        _sessions = [
+            {
+                "title": "proj",
+                "flags": "--fallback",
+                "pw": "",
+                "env": "",
+                "commands": ["shell"],
+            }
+        ]
+
+    sess = {
+        "title": "W:proj",
+        "cc_flags": "",
+        "cc_pw": "",
+        "cc_env": "",
+        "cc_commands": [],
+    }
+    flags, pw, env, commands = _resolve_live_or_config_options(
+        sess, Cfg(), lambda t: t
+    )
+    check("fallback lookup matches bare title", flags == "--fallback")
+    check("fallback lookup commands", commands == ["shell"])
+
+
 if __name__ == "__main__":
     print("commands runtime tests")
 
@@ -305,6 +380,8 @@ if __name__ == "__main__":
     test_override_restart_uses_config_commands()
     test_override_stopped_launch_uses_config_commands()
     test_bash_launch_explicit_disable()
+    test_resolve_config_lookup_with_account_prefix()
+    test_resolve_config_lookup_fallback_without_prefix()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:
