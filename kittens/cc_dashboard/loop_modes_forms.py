@@ -378,7 +378,8 @@ def _resolve_live_or_config_options(sess, cfg, strip_override_marker):
     orig_title = sess["title"]
     stripped = strip_override_marker(orig_title)
     src_cfg = next((s for s in cfg._sessions if s["title"] == stripped), None)
-    if src_cfg is None and len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":":
+    has_prefix = len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":"
+    if src_cfg is None and has_prefix:
         bare = stripped[2:]
         src_cfg = next((s for s in cfg._sessions if s["title"] == bare), None)
 
