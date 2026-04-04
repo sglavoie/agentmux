@@ -322,7 +322,7 @@ for i, step in enumerate(steps):
         if retry:
             ok = False
             for attempt in range(retry + 1):
-                r = subprocess.run(cmd, capture_output=True, timeout=30)
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                 if r.returncode == 0:
                     ok = True
                     break
@@ -332,7 +332,7 @@ for i, step in enumerate(steps):
                 _log(f"step {i} failed after {retry+1} attempts: "
                      f"{cmd[3:6]} rc={r.returncode} err={e}")
         else:
-            r = subprocess.run(cmd, capture_output=True, timeout=30)
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if r.returncode != 0:
                 e = r.stderr.strip()
                 _log(f"step {i} failed: {cmd[3:6]} "
