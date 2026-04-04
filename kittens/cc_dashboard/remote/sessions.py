@@ -143,9 +143,7 @@ def query_sessions(socket, managed_only=True):
                 cfg_entry = _cfg._find_config_session(title)
                 if cfg_entry is None:
                     has_prefix = (
-                        len(title) >= 2
-                        and title[0].isupper()
-                        and title[1] == ":"
+                        len(title) >= 2 and title[0].isupper() and title[1] == ":"
                     )
                     if has_prefix:
                         cfg_entry = _cfg._find_config_session(title[2:])

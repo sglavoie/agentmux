@@ -88,12 +88,13 @@ def _strip_account_prefix(title):
 
 
 @overload
-def _strip_override_marker(title: str, return_emoji: Literal[False] = ...) -> str: ...
+def _strip_override_marker(title: str, return_emoji: Literal[False] = False) -> str: ...
 
 
 @overload
 def _strip_override_marker(
-    title: str, return_emoji: Literal[True] = ...
+    title: str,
+    return_emoji: Literal[True],
 ) -> tuple[str, str]: ...
 
 

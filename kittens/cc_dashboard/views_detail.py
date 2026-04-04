@@ -26,11 +26,7 @@ def draw_detail_pane(stdscr, session, detail_y):
     if cfg_entry is None:
         cfg_entry = _cfg._find_config_session(stripped)
     if cfg_entry is None:
-        has_prefix = (
-            len(stripped) >= 2
-            and stripped[0].isupper()
-            and stripped[1] == ":"
-        )
+        has_prefix = len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":"
         if has_prefix:
             cfg_entry = _cfg._find_config_session(stripped[2:])
     if cfg_entry:
