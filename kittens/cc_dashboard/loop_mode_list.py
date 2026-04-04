@@ -171,6 +171,9 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         sess = state["filtered"][state["selected"]]
         stripped = state["strip_override_marker"](sess["title"])
         cfg_entry = state["cfg"]._find_config_session(stripped)
+        has_prefix = len(stripped) >= 2 and stripped[0].isupper() and stripped[1] == ":"
+        if cfg_entry is None and has_prefix:
+            cfg_entry = state["cfg"]._find_config_session(stripped[2:])
         if cfg_entry is None:
             state["msg"] = "Session not in config (use S to save first)"
             state["msg_frames"] = 20

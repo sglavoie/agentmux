@@ -18,6 +18,7 @@ import cc_dashboard.loop_modes_forms as loop_modes_forms  # noqa: E402
 from cc_dashboard.loop_helpers import (  # noqa: E402
     _resolve_session_runtime_options,
 )
+from cc_dashboard.loop_mode_list import handle_list_mode  # noqa: E402
 from cc_dashboard.loop_modes_forms import (  # noqa: E402
     _resolve_live_or_config_options,
     handle_override_mode,
@@ -468,6 +469,77 @@ def test_runtime_options_fallback_without_prefix():
     check("runtime options fallback commands", commands == ["npm run dev"])
 
 
+def test_edit_config_lookup_strips_prefix():
+    """Edit mode (e key) finds config when title has X: prefix but config omits it."""
+    print("\n--- edit config lookup strips prefix ---")
+
+    class FakeStdscr:
+        def getmaxyx(self):
+            return (40, 120)
+
+    class Cfg:
+        _sessions = [
+            {
+                "title": "proj",
+                "dir": "~/code/proj",
+                "account": "work",
+                "flags": "",
+                "pw": "",
+                "env": "",
+                "group": "",
+                "commands": [],
+            }
+        ]
+        _account_names = ["work"]
+
+        @staticmethod
+        def _find_config_session(title):
+            for s in Cfg._sessions:
+                if s["title"] == title:
+                    return s
+            return None
+
+    state = {
+        "mode": "list",
+        "search_active": False,
+        "account_filter_mode": False,
+        "group_filter_mode": False,
+        "filtered": [
+            {
+                "title": "W:proj",
+                "cwd": "/tmp",
+                "account": "work",
+                "tab_id": 1,
+                "status": "idle",
+            }
+        ],
+        "selected": 0,
+        "marked": set(),
+        "search_query": "",
+        "cfg": Cfg(),
+        "strip_override_marker": lambda t, **kw: t,
+        "msg": "",
+        "msg_frames": 0,
+        "show_all": False,
+        "sessions": [],
+    }
+
+    handle_list_mode(FakeStdscr(), ord("e"), state)
+
+    check(
+        "edit enters new mode on prefix fallback",
+        state["mode"] == "new",
+    )
+    check(
+        "edit form_mode is edit",
+        state.get("form_mode") == "edit",
+    )
+    check(
+        "edit original title is bare config title",
+        state.get("edit_original_title") == "proj",
+    )
+
+
 if __name__ == "__main__":
     print("commands runtime tests")
 
@@ -480,6 +552,7 @@ if __name__ == "__main__":
     test_resolve_config_lookup_with_account_prefix()
     test_resolve_config_lookup_fallback_without_prefix()
     test_runtime_options_fallback_without_prefix()
+    test_edit_config_lookup_strips_prefix()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:
