@@ -422,11 +422,19 @@ active)
 	# only a new user prompt may clear it. All other active events
 	# (tool, subagent, task_complete) are potentially late arrivals from
 	# the previous turn and must defer unconditionally.
+	# Exception: permission is a blocking state (Claude waits for user
+	# input), so the next PostToolUse is always from the same turn —
+	# no race possible. Allow active-tool events to clear it.
 	if [[ -f "$_state_file" ]]; then
 		if [[ "$EVENT_KIND" == "prompt" ]]; then
 			rm -f "$_state_file"
 		else
-			exit 0
+			_guard_action=$(awk '{print $1}' "$_state_file" 2>/dev/null) || _guard_action=""
+			if [[ "$_guard_action" == "permission" ]]; then
+				rm -f "$_state_file"
+			else
+				exit 0
+			fi
 		fi
 	fi
 	;;
@@ -456,7 +464,10 @@ esac
 # initial check above.
 if [[ "$ACTION" == "active" && "$EVENT_KIND" != "prompt" ]]; then
 	if [[ -f "$_state_file" ]]; then
-		exit 0
+		_guard_action=$(awk '{print $1}' "$_state_file" 2>/dev/null) || _guard_action=""
+		if [[ "$_guard_action" != "permission" ]]; then
+			exit 0
+		fi
 	fi
 fi
 
