@@ -378,6 +378,7 @@ active)
 stop)
 	if _is_post_permission; then
 		state=""
+		rm -f "$_state_file"
 	else
 		state="stop"
 	fi
@@ -427,6 +428,16 @@ active)
 	# no race possible. Allow active-tool events to clear it.
 	if [[ -f "$_state_file" ]]; then
 		if [[ "$EVENT_KIND" == "prompt" ]]; then
+			# Grace period: block prompt events within 2s of a high-priority
+			# state to prevent system-generated prompts (plan approval,
+			# AskUserQuestion) from immediately clearing stop/failure icons.
+			_guard_ts=$(awk '{print $2}' "$_state_file" 2>/dev/null) || _guard_ts=""
+			if [[ -n "$_guard_ts" ]]; then
+				_now=$(date +%s)
+				if ((_now - _guard_ts < 2)); then
+					exit 0
+				fi
+			fi
 			rm -f "$_state_file"
 		else
 			_guard_action=$(awk '{print $1}' "$_state_file" 2>/dev/null) || _guard_action=""
@@ -462,11 +473,21 @@ esac
 # Final guard recheck for non-prompt active events: catches the narrow
 # TOCTOU window where stop/failure/permission wrote the guard after our
 # initial check above.
-if [[ "$ACTION" == "active" && "$EVENT_KIND" != "prompt" ]]; then
+if [[ "$ACTION" == "active" ]]; then
 	if [[ -f "$_state_file" ]]; then
-		_guard_action=$(awk '{print $1}' "$_state_file" 2>/dev/null) || _guard_action=""
-		if [[ "$_guard_action" != "permission" ]]; then
-			exit 0
+		if [[ "$EVENT_KIND" == "prompt" ]]; then
+			_guard_ts=$(awk '{print $2}' "$_state_file" 2>/dev/null) || _guard_ts=""
+			if [[ -n "$_guard_ts" ]]; then
+				_now=$(date +%s)
+				if ((_now - _guard_ts < 2)); then
+					exit 0
+				fi
+			fi
+		else
+			_guard_action=$(awk '{print $1}' "$_state_file" 2>/dev/null) || _guard_action=""
+			if [[ "$_guard_action" != "permission" ]]; then
+				exit 0
+			fi
 		fi
 	fi
 fi
