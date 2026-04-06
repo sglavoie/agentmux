@@ -350,6 +350,10 @@ fi
 # Strip any existing state icon to get the base title.
 remaining="$(strip_icons "$remaining")"
 
+# Priority guard state file — defined here so it's available in the ACTION
+# case block (post-permission stop needs to clear it).
+_state_file="${_CCM_TMPDIR}/ccm-state-${tab_id}"
+
 # Apply the requested action.
 case "$ACTION" in
 active)
@@ -377,6 +381,7 @@ active)
 	;;
 stop)
 	if _is_post_permission; then
+		ccm_debug "hook: post-permission stop suppressed, clearing guard"
 		state=""
 		rm -f "$_state_file"
 	else
@@ -405,8 +410,6 @@ ccm_debug "hook: state=$state title='$current_title'"
 
 # Priority guard: prevent async 'active' (PostToolUse) from overwriting
 # a high-priority state (stop/failure/permission) that was just set.
-_state_file="${_CCM_TMPDIR}/ccm-state-${tab_id}"
-
 case "$ACTION" in
 stop | failure | permission)
 	# Mark high-priority state so concurrent 'active' calls don't overwrite.
@@ -475,6 +478,7 @@ esac
 # initial check above.
 if [[ "$ACTION" == "active" ]]; then
 	if [[ -f "$_state_file" ]]; then
+		ccm_debug "hook: TOCTOU guard detected action=$ACTION event=$EVENT_KIND"
 		if [[ "$EVENT_KIND" == "prompt" ]]; then
 			_guard_ts=$(awk '{print $2}' "$_state_file" 2>/dev/null) || _guard_ts=""
 			if [[ -n "$_guard_ts" ]]; then
@@ -483,11 +487,13 @@ if [[ "$ACTION" == "active" ]]; then
 					exit 0
 				fi
 			fi
+			rm -f "$_state_file"
 		else
 			_guard_action=$(awk '{print $1}' "$_state_file" 2>/dev/null) || _guard_action=""
 			if [[ "$_guard_action" != "permission" ]]; then
 				exit 0
 			fi
+			rm -f "$_state_file"
 		fi
 	fi
 fi
