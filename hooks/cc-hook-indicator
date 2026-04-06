@@ -418,16 +418,16 @@ stop | failure | permission)
 	fi
 	;;
 active)
-	# Check if a high-priority state was set recently (within 2s).
-	# Read in a single step to avoid TOCTOU race where the file
-	# disappears between the -f check and the awk read.
-	_prio_ts=$(awk '{print $2}' "$_state_file" 2>/dev/null) || _prio_ts=""
-	if [[ -n "$_prio_ts" ]]; then
-		_now=$(date +%s)
-		if ((_now - _prio_ts < 2)); then
+	# If a high-priority state (stop/failure/permission) guard exists,
+	# only a new user prompt may clear it. All other active events
+	# (tool, subagent, task_complete) are potentially late arrivals from
+	# the previous turn and must defer unconditionally.
+	if [[ -f "$_state_file" ]]; then
+		if [[ "$EVENT_KIND" == "prompt" ]]; then
+			rm -f "$_state_file"
+		else
 			exit 0
 		fi
-		rm -f "$_state_file"
 	fi
 	;;
 idle | clear)
@@ -450,6 +450,15 @@ stop)
 	_should_suppress_notify || _maybe_notify "$_DEFAULT_NOTIFY_STOP" "$_ICON_STOP" "Stopped" "$remaining"
 	;;
 esac
+
+# Final guard recheck for non-prompt active events: catches the narrow
+# TOCTOU window where stop/failure/permission wrote the guard after our
+# initial check above.
+if [[ "$ACTION" == "active" && "$EVENT_KIND" != "prompt" ]]; then
+	if [[ -f "$_state_file" ]]; then
+		exit 0
+	fi
+fi
 
 # Only update if the title actually changed.
 if [[ "$new_title" != "$current_title" ]]; then
