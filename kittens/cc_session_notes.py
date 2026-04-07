@@ -32,7 +32,7 @@ for _mod in list(sys.modules):
         del sys.modules[_mod]
 
 from cc_dashboard.config import load_accounts, load_defaults
-from cc_dashboard.config_core import (
+from cc_dashboard.config_notes import (
     _resolve_notes_editor,
     notes_file_for_title,
 )

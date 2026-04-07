@@ -42,7 +42,7 @@ from cc_dashboard.colors import (
     init_colors,
 )
 from cc_dashboard.config import load_accounts, load_defaults
-from cc_dashboard.config_core import read_notes
+from cc_dashboard.config_notes import read_notes
 from cc_dashboard.drawing import safe_addstr, shorten_path
 from cc_dashboard.remote.activity import (
     load_activity,

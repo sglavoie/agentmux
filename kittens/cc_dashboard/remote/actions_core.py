@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.config_core import _resolve_notes_editor, notes_file_for_title
+from cc_dashboard.config_notes import _resolve_notes_editor, notes_file_for_title
 from cc_dashboard.remote.command import kitty_cmd
 from cc_dashboard.remote.shared import (
     _ICON_DASHBOARD,

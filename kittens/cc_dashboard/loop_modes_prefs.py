@@ -7,7 +7,7 @@ import tempfile
 import tomllib
 from typing import Any
 
-from cc_dashboard.config_core import (
+from cc_dashboard.config_defaults import (
     _defaults_config_path,
     _import_toml_writer,
 )

@@ -4,7 +4,7 @@ import json
 import os
 
 from cc_dashboard import config as _cfg
-from cc_dashboard.config_core import read_notes
+from cc_dashboard.config_notes import read_notes
 from cc_dashboard.remote.activity import (
     cleanup_stale_activity,
     invalidate_tabid_cache,

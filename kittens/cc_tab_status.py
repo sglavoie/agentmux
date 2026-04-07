@@ -42,7 +42,8 @@ from cc_dashboard.colors import (
     init_colors,
 )
 from cc_dashboard.config import load_accounts, load_defaults
-from cc_dashboard.config_core import _palette_tab_colors, _save_tab_statuses
+from cc_dashboard.config_accounts import _palette_tab_colors
+from cc_dashboard.config_defaults import _save_tab_statuses
 from cc_dashboard.drawing import draw_border, safe_addstr
 from cc_dashboard.remote.actions_core import do_rename
 from cc_dashboard.remote.command import get_kitty_socket, kitty_cmd

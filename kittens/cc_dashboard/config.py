@@ -1,8 +1,12 @@
 """Compatibility facade for dashboard configuration.
 
 The original monolithic implementation has been split across smaller modules:
+- config_accounts.py: account loading and tab colors
+- config_defaults.py: defaults.toml loading and persistence
+- config_notes.py: session notes path/editor helpers
+- config_paths.py: config path resolution and TOML import helpers
+- config_sessions.py: sessions.toml loading and persistence
 - config_data.py: shared JSON/palette loading
-- config_core.py: accounts/defaults/sessions logic
 - config_hooks.py: hooks config logic
 - config_state.py: shared mutable state
 """
