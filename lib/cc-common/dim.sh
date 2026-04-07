@@ -35,6 +35,19 @@ _decode_color_args() {
 	printf '%s' "${encoded//+/ }"
 }
 
+# Find the canonical Claude window in a tab (the one with cc_account).
+# Falls back to windows[0].id if no cc_account window found.
+# Usage: _resolve_claude_win_id TAB_ID LS_JSON
+_resolve_claude_win_id() {
+	local tab_id="$1" ls_json="$2"
+	printf '%s' "$ls_json" | jq -r --argjson tid "$tab_id" '
+		([.[] | .tabs[] | select(.id == $tid) | .windows[]
+		  | select(.user_vars.cc_account != null and .user_vars.cc_account != "") | .id] | first)
+		// ([.[] | .tabs[] | select(.id == $tid) | .windows[0].id] | first)
+		// ""
+	' 2>/dev/null
+}
+
 # Get kitty default tab colors from kitty @ get-colors.
 # Returns color args string for tabs with no per-tab overrides.
 _get_kitty_default_tab_colors() {
@@ -60,7 +73,7 @@ is_dimmed() {
 	local tab_id="$1" ls_json="$2"
 	local dim_type
 	dim_type="$(printf '%s' "$ls_json" | jq -r --argjson tid "$tab_id" '
-		[.[] | .tabs[] | select(.id == $tid) | .windows[0].user_vars.cc_dim_type // ""] | first // ""
+		[.[] | .tabs[] | select(.id == $tid) | .windows[] | .user_vars.cc_dim_type // empty] | first // ""
 	' 2>/dev/null)"
 	if [[ -n "$dim_type" ]]; then
 		echo "$dim_type"
@@ -86,9 +99,7 @@ apply_dim() {
 
 	# Resolve win_id if not provided
 	if [[ -z "$win_id" && -n "$ls_json" ]]; then
-		win_id="$(printf '%s' "$ls_json" | jq -r --argjson tid "$tab_id" '
-			[.[] | .tabs[] | select(.id == $tid) | .windows[0].id] | first // ""
-		' 2>/dev/null)" || win_id=""
+		win_id="$(_resolve_claude_win_id "$tab_id" "$ls_json")" || win_id=""
 	fi
 
 	if [[ -z "$win_id" ]]; then
@@ -99,15 +110,14 @@ apply_dim() {
 	# Resolve original colors from cc_color/cc_account user vars.
 	# Kitty does not expose per-tab color overrides in `kitty @ ls`, so we
 	# rely on the user vars that cc-manager sets at launch time.
-	# Try the specific window first, then fall back to any window in the tab
-	# that has cc_account (handles splits/overlays where the active window
-	# isn't the Claude session window).
+	# Prioritize the window with cc_account (the Claude session window),
+	# then fall back to the specific active window (handles unmanaged tabs).
 	local color_args="" color_source="none"
 	local uv_json cc_color="" account=""
 	if [[ -n "$ls_json" ]]; then
 		uv_json="$(printf '%s' "$ls_json" | jq --argjson wid "$win_id" --argjson tid "$tab_id" '
-			([.[] | .tabs[] | select(.id == $tid) | .windows[] | select(.id == $wid) | .user_vars] | first)
-			// ([.[] | .tabs[] | select(.id == $tid) | .windows[] | select(.user_vars.cc_account != null and .user_vars.cc_account != "") | .user_vars] | first)
+			([.[] | .tabs[] | select(.id == $tid) | .windows[] | select(.user_vars.cc_account != null and .user_vars.cc_account != "") | .user_vars] | first)
+			// ([.[] | .tabs[] | select(.id == $tid) | .windows[] | select(.id == $wid) | .user_vars] | first)
 			// {}
 		' 2>/dev/null)" || uv_json="{}"
 		cc_color="$(printf '%s' "$uv_json" | jq -r '.cc_color // ""')"
@@ -185,10 +195,12 @@ apply_dim() {
 		return 1
 	}
 
-	# Store dim state in user vars
+	# Store dim state in user vars on the canonical Claude window
 	local encoded_orig
 	encoded_orig="$(_encode_color_args "$orig_for_storage")"
-	kitty @ --to "$socket" set-user-vars --match "id:$win_id" \
+	local claude_win_id
+	claude_win_id="$(_resolve_claude_win_id "$tab_id" "$ls_json")" || claude_win_id="$win_id"
+	kitty @ --to "$socket" set-user-vars --match "id:$claude_win_id" \
 		"cc_dim_type=$dim_type" "cc_dim_orig=$encoded_orig" 2>/dev/null || true
 }
 
@@ -204,16 +216,14 @@ apply_undim() {
 
 	# Resolve win_id if not provided
 	if [[ -z "$win_id" && -n "$ls_json" ]]; then
-		win_id="$(printf '%s' "$ls_json" | jq -r --argjson tid "$tab_id" '
-			[.[] | .tabs[] | select(.id == $tid) | .windows[0].id] | first // ""
-		' 2>/dev/null)" || win_id=""
+		win_id="$(_resolve_claude_win_id "$tab_id" "$ls_json")" || win_id=""
 	fi
 
-	# Read cc_dim_orig from user vars
+	# Read cc_dim_orig from user vars (search all windows in the tab)
 	local encoded_orig=""
-	if [[ -n "$ls_json" && -n "$win_id" ]]; then
-		encoded_orig="$(printf '%s' "$ls_json" | jq -r --argjson wid "$win_id" '
-			[.[] | .tabs[] | .windows[] | select(.id == $wid) | .user_vars.cc_dim_orig // ""] | first // ""
+	if [[ -n "$ls_json" ]]; then
+		encoded_orig="$(printf '%s' "$ls_json" | jq -r --argjson tid "$tab_id" '
+			[.[] | .tabs[] | select(.id == $tid) | .windows[] | .user_vars.cc_dim_orig // empty] | first // ""
 		' 2>/dev/null)" || encoded_orig=""
 	fi
 
@@ -274,9 +284,17 @@ apply_undim() {
 		}
 	fi
 
-	# Clear dim user vars
-	if [[ -n "$win_id" ]]; then
-		kitty @ --to "$socket" set-user-vars --match "id:$win_id" \
+	# Clear dim user vars from whichever window has them
+	local dim_var_win_id=""
+	if [[ -n "$ls_json" ]]; then
+		dim_var_win_id="$(printf '%s' "$ls_json" | jq -r --argjson tid "$tab_id" '
+			[.[] | .tabs[] | select(.id == $tid) | .windows[]
+			  | select(.user_vars.cc_dim_type != null and .user_vars.cc_dim_type != "") | .id] | first // ""
+		' 2>/dev/null)" || dim_var_win_id=""
+	fi
+	dim_var_win_id="${dim_var_win_id:-$win_id}"
+	if [[ -n "$dim_var_win_id" ]]; then
+		kitty @ --to "$socket" set-user-vars --match "id:$dim_var_win_id" \
 			"cc_dim_type=" "cc_dim_orig=" 2>/dev/null || true
 	fi
 }
