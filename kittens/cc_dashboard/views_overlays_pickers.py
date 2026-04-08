@@ -493,7 +493,7 @@ def draw_group_actions(stdscr, state):
             safe_addstr(stdscr, y, box_x + 2, f"{marker} {display}"[: box_w - 4], attr)
 
     elif step == "pick_action":
-        from cc_dashboard.loop_modes_dashboard import _ga_build_actions
+        from cc_dashboard.loop_modes_dashboard_ops import _ga_build_actions
 
         group_name = groups[ga_selected] if ga_selected < len(groups) else ""
         actions = _ga_build_actions(state, group_name)

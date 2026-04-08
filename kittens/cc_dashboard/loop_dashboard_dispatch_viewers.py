@@ -92,7 +92,7 @@ def dispatch_viewer_modes(
         _merge_state(state, hooks_state)
         return False, False
 
-    if mode in ("actlog", "actlog_browse", "actlog_gsearch"):
+    if mode in ("actlog", "actlog_browse", "actlog_gsearch", "actlog_detail"):
         actlog_state: dict[str, Any] = {
             "mode": mode,
             "actlog_lines": state["actlog_lines"],
@@ -127,6 +127,9 @@ def dispatch_viewer_modes(
             "actlog_gsearch_parent_mode": state.get(
                 "actlog_gsearch_parent_mode", "list"
             ),
+            "actlog_entries": state.get("actlog_entries", []),
+            "actlog_selected": state.get("actlog_selected", 0),
+            "actlog_detail_entry": state.get("actlog_detail_entry", {}),
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
         }

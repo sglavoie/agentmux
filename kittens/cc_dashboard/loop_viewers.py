@@ -18,9 +18,21 @@ def handle_actlog_mode(stdscr, key, state, sessions):
     Returns True when the caller should continue to the next loop iteration.
     """
     mode = state["mode"]
+    if mode == "actlog_detail":
+        if key in (27, ord("q"), ord("Q"), 10, 13, curses.KEY_ENTER):
+            state["mode"] = "actlog"
+        return False
+
     if mode == "actlog":
         content_height = max(1, stdscr.getmaxyx()[0] - 5)
-        max_scroll = max(0, len(state["actlog_lines"]) - content_height)
+        total = len(state["actlog_lines"])
+        max_scroll = max(0, total - content_height)
+
+        def _actlog_clamp_scroll():
+            if state["actlog_selected"] >= state["actlog_scroll"] + content_height:
+                state["actlog_scroll"] = state["actlog_selected"] - content_height + 1
+            elif state["actlog_selected"] < state["actlog_scroll"]:
+                state["actlog_scroll"] = state["actlog_selected"]
 
         if state["actlog_search_active"]:
             if key == 27:
@@ -112,31 +124,43 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                     state["actlog_scroll"] - content_height // 2,
                     0,
                 )
-        elif key in (curses.KEY_DOWN, ord("j"), ord("J")):
-            state["actlog_scroll"] = min(state["actlog_scroll"] + 1, max_scroll)
-        elif key in (curses.KEY_UP, ord("k"), ord("K")):
-            state["actlog_scroll"] = max(state["actlog_scroll"] - 1, 0)
-        elif key == ord("G"):
-            state["actlog_scroll"] = max_scroll
-        elif key == ord("g"):
+        elif key in (curses.KEY_DOWN, ord("j"), ord("J")) and total:
+            state["actlog_selected"] = min(state["actlog_selected"] + 1, total - 1)
+            _actlog_clamp_scroll()
+        elif key in (curses.KEY_UP, ord("k"), ord("K")) and total:
+            state["actlog_selected"] = max(state["actlog_selected"] - 1, 0)
+            _actlog_clamp_scroll()
+        elif key == ord("G") and total:
+            state["actlog_selected"] = total - 1
+            _actlog_clamp_scroll()
+        elif key == ord("g") and total:
+            state["actlog_selected"] = 0
             state["actlog_scroll"] = 0
-        elif key == 4:
-            state["actlog_scroll"] = min(
-                state["actlog_scroll"] + content_height // 2,
-                max_scroll,
+        elif key == 4 and total:  # Ctrl+D
+            state["actlog_selected"] = min(
+                state["actlog_selected"] + content_height // 2, total - 1
             )
-        elif key == 21:
-            state["actlog_scroll"] = max(
-                state["actlog_scroll"] - content_height // 2,
-                0,
+            _actlog_clamp_scroll()
+        elif key == 21 and total:  # Ctrl+U
+            state["actlog_selected"] = max(
+                state["actlog_selected"] - content_height // 2, 0
             )
-        elif key in (6, curses.KEY_NPAGE):
-            state["actlog_scroll"] = min(
-                state["actlog_scroll"] + content_height,
-                max_scroll,
+            _actlog_clamp_scroll()
+        elif key in (6, curses.KEY_NPAGE) and total:  # Ctrl+F / Page Down
+            state["actlog_selected"] = min(
+                state["actlog_selected"] + content_height, total - 1
             )
-        elif key in (2, curses.KEY_PPAGE):
-            state["actlog_scroll"] = max(state["actlog_scroll"] - content_height, 0)
+            _actlog_clamp_scroll()
+        elif key in (2, curses.KEY_PPAGE) and total:  # Ctrl+B / Page Up
+            state["actlog_selected"] = max(
+                state["actlog_selected"] - content_height, 0
+            )
+            _actlog_clamp_scroll()
+        elif key in (10, 13, curses.KEY_ENTER) and total:
+            entries = state.get("actlog_entries", [])
+            if entries and 0 <= state["actlog_selected"] < len(entries):
+                state["actlog_detail_entry"] = entries[state["actlog_selected"]]
+                state["mode"] = "actlog_detail"
         elif key == ord("r"):
             if state["actlog_session_id"]:
                 entries, summary = load_activity_log(state["actlog_session_id"])
@@ -145,6 +169,10 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                     state["actlog_lines"] = [
                         _format_log_entry(e, stdscr.getmaxyx()[1]) for e in entries
                     ]
+                    state["actlog_entries"] = entries
+                    state["actlog_selected"] = min(
+                        state["actlog_selected"], len(entries) - 1
+                    )
                     state["actlog_scroll"] = min(
                         state["actlog_scroll"],
                         max(0, len(state["actlog_lines"]) - content_height),
@@ -326,6 +354,8 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                 state["actlog_lines"] = [
                     _format_log_entry(e, stdscr.getmaxyx()[1]) for e in log_entries
                 ]
+                state["actlog_entries"] = log_entries
+                state["actlog_selected"] = max(0, len(log_entries) - 1)
                 state["actlog_scroll"] = max(
                     0,
                     len(state["actlog_lines"]) - max(1, stdscr.getmaxyx()[0] - 5),
@@ -425,6 +455,8 @@ def handle_actlog_mode(stdscr, key, state, sessions):
                 state["actlog_lines"] = [
                     _format_log_entry(e, cols) for e in log_entries
                 ]
+                state["actlog_entries"] = log_entries
+                state["actlog_selected"] = result.get("entry_index", 0)
                 # Carry over search query for highlighting
                 state["actlog_search_query"] = state["actlog_gsearch_query"]
                 state["actlog_search_active"] = False

@@ -139,7 +139,7 @@ def render_form_modes(stdscr, state):
             )
             draw_footer(stdscr, "pick_group_filter")
         if mode == "override" and state["pick_filtered"]:
-            from cc_dashboard.loop_modes_forms import _get_pick_entry
+            from cc_dashboard.loop_modes_forms_shared import _get_pick_entry
 
             pick_entry = _get_pick_entry(state)
             if pick_entry is not None:

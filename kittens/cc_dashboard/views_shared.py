@@ -150,8 +150,10 @@ _FOOTER_HINTS = {
         "n/N Next/Prev",
         "b Browse all",
         "r Refresh",
+        "Enter Detail",
         "q/Esc Close",
     ],
+    "actlog_detail": ["Enter Close", "Esc Close", "q Close"],
     "actlog_search": ["Enter Confirm", "Esc Cancel"],
     "actlog_browse": [
         "j/k Navigate",

@@ -3,6 +3,7 @@
 from cc_dashboard.loop_modes_prefs import PREF_FIELDS
 from cc_dashboard.views import (
     draw_actlog_browse,
+    draw_actlog_detail,
     draw_actlog_gsearch,
     draw_actlog_view,
     draw_footer,
@@ -28,7 +29,21 @@ def render_activity_modes(stdscr, state):
             search_cursor=state["actlog_search_cursor"],
             match_line_indices=state["actlog_match_lines"],
             match_index=state["actlog_match_index"],
+            selected=state.get("actlog_selected", -1),
         )
+        return True
+
+    if mode == "actlog_detail":
+        draw_actlog_view(
+            stdscr,
+            state["actlog_session_title"],
+            state["actlog_lines"],
+            state["actlog_scroll"],
+            state["actlog_summary"],
+            selected=state.get("actlog_selected", -1),
+        )
+        draw_actlog_detail(stdscr, state.get("actlog_detail_entry", {}))
+        draw_footer(stdscr, "actlog_detail")
         return True
 
     if mode == "actlog_browse":
