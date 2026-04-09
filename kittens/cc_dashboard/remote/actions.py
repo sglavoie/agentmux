@@ -1,11 +1,10 @@
 """Compatibility facade for split tab action helpers."""
 
-from cc_dashboard.remote.actions_core import (
-    compute_insert_location,
+from cc_dashboard.remote.actions_launch import compute_insert_location, do_launch
+from cc_dashboard.remote.actions_tabs import (
     do_close,
     do_cross_instance_focus,
     do_focus,
-    do_launch,
     do_rename,
     generate_clone_title,
 )
