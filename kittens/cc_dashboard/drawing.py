@@ -1,17 +1,19 @@
 """Low-level curses utilities and shared drawing primitives."""
 
+from __future__ import annotations
+
 import contextlib
 import curses
 import os
 import unicodedata
 
 
-def _to_ascii(text):
+def _to_ascii(text: str) -> str:
     """Strip non-ASCII characters for safe curses rendering."""
     return "".join(ch for ch in text if "\x20" <= ch <= "\x7e")
 
 
-def _clip_to_width(text, max_width):
+def _clip_to_width(text: str, max_width: int) -> str:
     """Clip text so its display width does not exceed *max_width*.
 
     Unlike a simple slice (``text[:n]``), this respects wide characters
@@ -28,7 +30,7 @@ def _clip_to_width(text, max_width):
     return text
 
 
-def safe_addstr(win, y, x, text, attr=0):
+def safe_addstr(win: curses.window, y: int, x: int, text: str, attr: int = 0) -> None:
     """Write text to the curses window, silently clipping at window boundaries."""
     rows, cols = win.getmaxyx()
     if y < 0 or y >= rows or x < 0 or x >= cols:
@@ -39,7 +41,9 @@ def safe_addstr(win, y, x, text, attr=0):
         win.addstr(y, x, text, attr)
 
 
-def draw_border(win, y, x, w, h, attr=0):
+def draw_border(
+    win: curses.window, y: int, x: int, w: int, h: int, attr: int = 0
+) -> None:
     """Draw an ASCII box border one cell outside the content area.
 
     The border wraps around a rectangle at (y, x) of size (w, h).
@@ -71,7 +75,7 @@ def draw_border(win, y, x, w, h, attr=0):
         safe_addstr(win, row, right, V, attr)
 
 
-def _display_width(text):
+def _display_width(text: str) -> int:
     """Return the visual display width of text, accounting for wide characters."""
     text = _to_ascii(text)
     w = 0
@@ -81,7 +85,7 @@ def _display_width(text):
     return w
 
 
-def _truncate_to_width(text, width):
+def _truncate_to_width(text: str, width: int) -> str:
     """Truncate text with a trailing '..' when it exceeds the target width."""
     text = _to_ascii(text)
     if width < 2 or _display_width(text) <= width:
@@ -99,14 +103,14 @@ def _truncate_to_width(text, width):
     return "".join(result) + " " * max(0, padding) + ".."
 
 
-def _pad_to_width(text, width):
+def _pad_to_width(text: str, width: int) -> str:
     """Pad text with spaces to reach the target visual width."""
     text = _to_ascii(text)
     current = _display_width(text)
     return text + " " * max(0, width - current)
 
 
-def shorten_path(path, max_len):
+def shorten_path(path: str, max_len: int) -> str:
     """Collapse home prefix to ~ and truncate long paths with a leading ellipsis.
 
     After collapsing the home prefix, keeps only the last 2 path segments

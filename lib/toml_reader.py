@@ -4,7 +4,6 @@ Uses ``tomllib`` (stdlib since Python 3.11).  Shared by the Python
 dashboard code and the ``toml-helper.py`` CLI bridge for Bash.
 """
 
-import os
 import sys
 import tomllib
 
