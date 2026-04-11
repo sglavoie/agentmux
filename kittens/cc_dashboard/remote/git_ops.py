@@ -1,5 +1,7 @@
 """Git and worktree helpers for dashboard session operations."""
 
+from __future__ import annotations
+
 import atexit
 import concurrent.futures
 import os
@@ -15,7 +17,7 @@ class _GitCache:
     when the TTL expires, so callers never block on git commands.
     """
 
-    def __init__(self, ttl=10, max_workers=4):
+    def __init__(self, ttl: int = 10, max_workers: int = 4) -> None:
         self._ttl = ttl
         self._lock = threading.Lock()
         # {cwd: {"result": dict|None, "timestamp": float}}
@@ -23,7 +25,7 @@ class _GitCache:
         self._pending: set[str] = set()
         self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
-    def get(self, cwd):
+    def get(self, cwd: str) -> dict[str, str | bool] | None:
         """Return cached git info for *cwd*, or None if not yet available.
 
         On first call for a given cwd, schedules a background fetch and
@@ -48,14 +50,14 @@ class _GitCache:
                 self._pool.submit(self._refresh, cwd)
             return None
 
-    def _refresh(self, cwd):
+    def _refresh(self, cwd: str) -> None:
         """Fetch git info synchronously and store in cache."""
         result = _get_git_info(cwd)
         with self._lock:
             self._cache[cwd] = {"result": result, "timestamp": time.monotonic()}
             self._pending.discard(cwd)
 
-    def invalidate(self, cwd=None):
+    def invalidate(self, cwd: str | None = None) -> None:
         """Clear cache for a specific cwd, or all entries if cwd is None."""
         with self._lock:
             if cwd is None:
@@ -63,7 +65,7 @@ class _GitCache:
             else:
                 self._cache.pop(cwd, None)
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shut down the background thread pool."""
         self._pool.shutdown(wait=True, cancel_futures=True)
 
@@ -73,12 +75,12 @@ _git_cache = _GitCache()
 atexit.register(_git_cache.shutdown)
 
 
-def get_git_info_cached(cwd):
+def get_git_info_cached(cwd: str) -> dict[str, str | bool] | None:
     """Non-blocking git info lookup. Returns cached result or None."""
     return _git_cache.get(cwd)
 
 
-def _get_git_info(cwd):
+def _get_git_info(cwd: str) -> dict[str, str | bool] | None:
     """Return git branch and dirty state for a directory, or None if not a git repo.
 
     Returns {"branch": str, "dirty": bool} on success, None otherwise.
@@ -113,7 +115,7 @@ def _get_git_info(cwd):
     return {"branch": branch, "dirty": dirty}
 
 
-def do_create_worktree(cwd, branch_name):
+def do_create_worktree(cwd: str, branch_name: str) -> dict[str, str] | str:
     """Create a git worktree for the given branch.
 
     Returns a dict on success: {"worktree_path": str, "project_name": str}
@@ -199,7 +201,7 @@ def do_create_worktree(cwd, branch_name):
     return {"worktree_path": worktree_path, "project_name": project_name}
 
 
-def detect_worktree(cwd):
+def detect_worktree(cwd: str) -> dict[str, bool | str]:
     """Check if a directory is a git worktree (not a normal repo or non-git dir).
 
     Returns {"is_worktree": bool, "main_repo": str} where main_repo is the
@@ -234,7 +236,7 @@ def detect_worktree(cwd):
     return {"is_worktree": False, "main_repo": ""}
 
 
-def check_git_safety(path):
+def check_git_safety(path: str) -> list[str]:
     """Check a git repo for uncommitted changes, untracked files, and unpushed commits.
 
     Returns a list of warning strings. Empty list means the repo is clean.
@@ -278,7 +280,7 @@ def check_git_safety(path):
     return warnings
 
 
-def do_remove_worktree(main_repo, worktree_path):
+def do_remove_worktree(main_repo: str, worktree_path: str) -> str | None:
     """Remove a git worktree cleanly. Returns None on success or error string."""
     try:
         result = subprocess.run(
