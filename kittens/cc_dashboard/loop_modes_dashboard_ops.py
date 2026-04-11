@@ -1,13 +1,16 @@
 """Mode handlers for dashboard color, move, and group operations."""
 
+from __future__ import annotations
+
 import curses
+from typing import Any
 
 from cc_dashboard.loop_helpers import (
     _resolve_session_runtime_options,
 )
 
 
-def handle_color_picker_mode(key, state):
+def handle_color_picker_mode(key: int, state: dict[str, Any]) -> bool:
     """Handle key events for the color picker mode."""
     if state["mode"] != "color_picker":
         return False
@@ -73,7 +76,7 @@ def handle_color_picker_mode(key, state):
     return True
 
 
-def handle_move_picker_mode(key, state):
+def handle_move_picker_mode(key: int, state: dict[str, Any]) -> bool:
     """Handle key events for move picker mode."""
     if state["mode"] != "move_picker":
         return False
@@ -183,7 +186,7 @@ def handle_move_picker_mode(key, state):
     return True
 
 
-def handle_group_actions_mode(key, state):
+def handle_group_actions_mode(key: int, state: dict[str, Any]) -> bool:
     """Handle key events for the group actions overlay (G key).
 
     Two-step flow: pick_group -> pick_action (Launch / Close).
@@ -230,7 +233,7 @@ def handle_group_actions_mode(key, state):
     return True
 
 
-def _ga_build_actions(state, group_name):
+def _ga_build_actions(state: dict[str, Any], group_name: str) -> list[tuple[str, str]]:
     """Build available actions for a group with counts."""
     running_titles = {s["title"] for s in state["sessions"]}
     to_launch = [
@@ -252,7 +255,7 @@ def _ga_build_actions(state, group_name):
     return actions
 
 
-def _do_group_launch(state, group_name):
+def _do_group_launch(state: dict[str, Any], group_name: str) -> None:
     """Launch all config sessions in a group that are not already running."""
     state["reload_all_config"]()
     running_titles = {s["title"] for s in state["sessions"]}
@@ -303,7 +306,7 @@ def _do_group_launch(state, group_name):
     state["mode"] = "list"
 
 
-def _do_group_close(state, group_name):
+def _do_group_close(state: dict[str, Any], group_name: str) -> None:
     """Transition to batch close confirmation for all running sessions in a group."""
     targets = [
         s
