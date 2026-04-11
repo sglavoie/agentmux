@@ -1,7 +1,10 @@
 """Activity log overlay views."""
 
+from __future__ import annotations
+
 import curses
 import time
+from typing import Any
 
 from cc_dashboard.colors import (
     CP_ATTENTION,
@@ -22,7 +25,7 @@ from cc_dashboard.views_shared import (
 )
 
 
-def _format_log_entry(entry, cols):
+def _format_log_entry(entry: dict[str, Any], cols: int) -> str:
     """Format a single JSONL activity log entry into a display string."""
     import time as _time
 
@@ -72,18 +75,18 @@ def _format_log_entry(entry, cols):
 
 
 def draw_actlog_view(
-    stdscr,
-    title,
-    lines,
-    scroll,
-    summary,
-    search_query="",
-    search_active=False,
-    search_cursor=0,
-    match_line_indices=None,
-    match_index=0,
-    selected=-1,
-):
+    stdscr: curses.window,
+    title: str,
+    lines: list[str],
+    scroll: int,
+    summary: dict[str, Any] | None,
+    search_query: str = "",
+    search_active: bool = False,
+    search_cursor: int = 0,
+    match_line_indices: list[int] | None = None,
+    match_index: int = 0,
+    selected: int = -1,
+) -> None:
     """Draw a full-screen scrollable activity log viewer."""
     stdscr.clear()
     rows, cols = stdscr.getmaxyx()
@@ -170,16 +173,16 @@ def draw_actlog_view(
 
 
 def draw_actlog_browse(
-    stdscr,
-    entries,
-    selected,
-    scroll,
-    search_query="",
-    search_active=False,
-    search_cursor=0,
-    match_line_indices=None,
-    match_index=0,
-):
+    stdscr: curses.window,
+    entries: list[dict[str, Any]],
+    selected: int,
+    scroll: int,
+    search_query: str = "",
+    search_active: bool = False,
+    search_cursor: int = 0,
+    match_line_indices: list[int] | None = None,
+    match_index: int = 0,
+) -> None:
     """Draw a tabular listing of all activity log files."""
     stdscr.clear()
     rows, cols = stdscr.getmaxyx()
@@ -281,17 +284,17 @@ def draw_actlog_browse(
 
 
 def draw_actlog_gsearch(
-    stdscr,
-    query,
-    cursor,
-    results,
-    selected,
-    scroll,
-    loading=False,
-    total_scanned=0,
-    log_index=None,
-    search_active=True,
-):
+    stdscr: curses.window,
+    query: str,
+    cursor: int,
+    results: list[dict[str, Any]],
+    selected: int,
+    scroll: int,
+    loading: bool = False,
+    total_scanned: int = 0,
+    log_index: list[dict[str, Any]] | None = None,
+    search_active: bool = True,
+) -> None:
     """Draw the global activity log search view."""
     stdscr.clear()
     rows, cols = stdscr.getmaxyx()
@@ -401,7 +404,7 @@ def draw_actlog_gsearch(
     draw_footer(stdscr, "actlog_gsearch_search" if search_active else "actlog_gsearch")
 
 
-def draw_actlog_detail(stdscr, entry):
+def draw_actlog_detail(stdscr: curses.window, entry: dict[str, Any]) -> None:
     """Draw a centered popup showing all fields of an activity log entry."""
     if not entry:
         return
