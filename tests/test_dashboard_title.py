@@ -126,7 +126,7 @@ def test_restore_host_title_strips_only_dashboard_marker():
             return SimpleNamespace(returncode=0, stdout="")
 
         claude_dashboard.kitty_cmd = fake_kitty_cmd
-        restored = claude_dashboard._restore_host_title("unix:/tmp/kitty-test", 23)
+        restored = claude_dashboard._restore_host_title("unix:/tmp/kitty-test", 23, True)
         check("restore succeeds", restored is True)
         check(
             "set-tab-title keeps managed icons",

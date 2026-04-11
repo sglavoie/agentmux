@@ -338,7 +338,7 @@ def main(args=None):
     load_defaults()
 
     home_socket = os.environ.get("KITTY_LISTEN_ON", "") or get_kitty_socket()
-    result = None
+    result: tuple[str, int] | None = None
 
     def run(stdscr):
         curses.set_escdelay(25)

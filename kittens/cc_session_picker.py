@@ -134,7 +134,7 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
                 stdscr,
                 screen_y,
                 2,
-                row[1],
+                str(row[1]),
                 curses.color_pair(CP_DIM) | curses.A_BOLD,
             )
         else:

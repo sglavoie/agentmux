@@ -105,7 +105,7 @@ def draw_pick_view(
                 stdscr,
                 screen_y,
                 2,
-                row[1],
+                str(row[1]),
                 curses.color_pair(CP_DIM) | curses.A_BOLD,
             )
             continue
@@ -209,7 +209,7 @@ def draw_delete_view(stdscr, entries, selected, running_count):
                 stdscr,
                 screen_y,
                 2,
-                row[1],
+                str(row[1]),
                 curses.color_pair(CP_DIM) | curses.A_BOLD,
             )
             continue

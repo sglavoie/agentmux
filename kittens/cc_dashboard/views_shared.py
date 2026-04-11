@@ -211,7 +211,7 @@ def _shorten_home(path: str) -> str:
 
 
 def draw_footer(
-    stdscr: curses.window, mode: str, exclude: list[str] | None = None
+    stdscr: curses.window, mode: str, exclude: set[str] | None = None
 ) -> None:
     """Draw the help-key footer at the bottom of the screen."""
     rows, cols = stdscr.getmaxyx()
