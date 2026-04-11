@@ -4,7 +4,10 @@ This module intentionally contains pure or near-pure helpers used by
 `cc_dashboard.loop` to keep the main event loop file smaller.
 """
 
+from __future__ import annotations
+
 import os
+from typing import Any
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.filters import _apply_filters, _apply_sort
@@ -12,7 +15,7 @@ from cc_dashboard.remote.git_ops import detect_worktree
 from cc_dashboard.remote.shared import _strip_override_marker
 
 
-def _compute_peek_matches(lines, query):
+def _compute_peek_matches(lines: list[str], query: str) -> list[int]:
     """Return sorted list of line indices containing query (case-insensitive)."""
     if not query:
         return []
@@ -20,7 +23,9 @@ def _compute_peek_matches(lines, query):
     return [i for i, line in enumerate(lines) if q in line.lower()]
 
 
-def _compute_browse_matches(entries, query):
+def _compute_browse_matches(
+    entries: list[dict[str, Any]], query: str
+) -> list[int]:
     """Return indices of browse entries whose title or session_id contains query."""
     if not query:
         return []
@@ -33,14 +38,16 @@ def _compute_browse_matches(entries, query):
     ]
 
 
-def _rstrip_blank_lines(lines):
+def _rstrip_blank_lines(lines: list[str]) -> list[str]:
     """Remove trailing blank/whitespace-only lines from a list."""
     while lines and not lines[-1].strip():
         lines.pop()
     return lines
 
 
-def _session_fingerprint(sessions):
+def _session_fingerprint(
+    sessions: list[dict[str, Any]],
+) -> tuple[tuple[Any, ...], ...]:
     """Return a hashable fingerprint of session state for change detection."""
     return tuple(
         (
@@ -63,7 +70,12 @@ def _session_fingerprint(sessions):
     )
 
 
-def _make_new_fields(default_account, default_pw, multi_instance, home_instance_label):
+def _make_new_fields(
+    default_account: str,
+    default_pw: str,
+    multi_instance: bool,
+    home_instance_label: str,
+) -> dict[str, str]:
     fields = {
         "title": "",
         "dir": "~/",
@@ -80,7 +92,7 @@ def _make_new_fields(default_account, default_pw, multi_instance, home_instance_
     return fields
 
 
-def _reload_all_config():
+def _reload_all_config() -> tuple[str, str, float, float]:
     """Re-read all config files from disk and return refreshed defaults."""
     _cfg.load_accounts()
     _cfg.load_defaults()
@@ -95,14 +107,14 @@ def _reload_all_config():
 
 
 def _refilter(
-    sessions,
-    search_query,
-    account_filter,
-    sort_mode,
-    filtered,
-    selected,
-    group_filter=None,
-):
+    sessions: list[dict[str, Any]],
+    search_query: str,
+    account_filter: str,
+    sort_mode: str,
+    filtered: list[dict[str, Any]],
+    selected: int,
+    group_filter: str | None = None,
+) -> tuple[list[dict[str, Any]], int]:
     old_tab_id = (
         filtered[selected]["tab_id"] if filtered and selected < len(filtered) else None
     )
@@ -120,7 +132,9 @@ def _refilter(
     return new_filtered, new_selected
 
 
-def _resolve_session_runtime_options(sess):
+def _resolve_session_runtime_options(
+    sess: dict[str, Any],
+) -> tuple[str, str, str, list[str]]:
     cfg_entry = _cfg._find_config_session(sess["title"])
     if cfg_entry is None:
         stripped = _strip_override_marker(sess["title"])
@@ -135,7 +149,7 @@ def _resolve_session_runtime_options(sess):
     cfg_pw = cfg_entry.get("pw", "") if cfg_entry else ""
     cfg_env = cfg_entry.get("env", "") if cfg_entry else ""
     _raw_cfg_cmds: object = cfg_entry.get("commands", []) if cfg_entry else []
-    cfg_commands: list = _raw_cfg_cmds if isinstance(_raw_cfg_cmds, list) else []
+    cfg_commands: list[str] = _raw_cfg_cmds if isinstance(_raw_cfg_cmds, list) else []
     r_flags = sess.get("cc_flags", "") or cfg_flags
     r_pw = sess.get("cc_pw", "") or cfg_pw
     r_env = sess.get("cc_env", "") or cfg_env
@@ -144,7 +158,9 @@ def _resolve_session_runtime_options(sess):
     return r_flags, r_pw, r_env, r_commands
 
 
-def _build_session_actions(sess, scope, multi_instance):
+def _build_session_actions(
+    sess: dict[str, Any], scope: str, multi_instance: bool
+) -> list[tuple[str, str]]:
     if scope == "marked":
         actions = [
             ("restart", "Restart marked sessions"),
@@ -178,12 +194,12 @@ def _build_session_actions(sess, scope, multi_instance):
 
 
 def _begin_restart_options(
-    sess,
-    multi_instance,
-    home_instance_label,
-    restart_default_config_label,
-    home_socket,
-):
+    sess: dict[str, Any],
+    multi_instance: bool,
+    home_instance_label: str,
+    restart_default_config_label: str,
+    home_socket: str,
+) -> dict[str, Any]:
     flags, pw_override, env_vars, commands = _resolve_session_runtime_options(sess)
     account = sess.get("account", "")
     default_dir = _cfg._accounts.get(account, {}).get("config_dir", "")
@@ -215,8 +231,10 @@ def _begin_restart_options(
     }
 
 
-def _build_delete_entries(config_sessions):
-    entries = []
+def _build_delete_entries(
+    config_sessions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
     for entry in config_sessions:
         e = dict(entry)
         expanded = e.get("expanded_dir", "")
