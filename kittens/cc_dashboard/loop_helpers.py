@@ -107,11 +107,11 @@ def _reload_all_config() -> tuple[str, str, float, float]:
 def _refilter(
     sessions: list[dict[str, Any]],
     search_query: str,
-    account_filter: str,
+    account_filter: set[str] | None,
     sort_mode: str,
     filtered: list[dict[str, Any]],
     selected: int,
-    group_filter: str | None = None,
+    group_filter: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     old_tab_id = (
         filtered[selected]["tab_id"] if filtered and selected < len(filtered) else None

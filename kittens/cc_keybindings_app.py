@@ -6,7 +6,6 @@ import curses
 
 from cc_dashboard.colors import init_colors
 from cc_dashboard.config import load_accounts
-
 from cc_keybindings_data import LINES, compute_matches, scroll_to_line
 from cc_keybindings_ui import draw_overlay
 

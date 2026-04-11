@@ -21,8 +21,16 @@ PASS = 0
 FAIL = 0
 
 EXPECTED_COLORS = {
-    "green", "blue", "red", "orange", "purple",
-    "teal", "pink", "yellow", "gray", "cyan",
+    "green",
+    "blue",
+    "red",
+    "orange",
+    "purple",
+    "teal",
+    "pink",
+    "yellow",
+    "gray",
+    "cyan",
 }
 
 
@@ -56,8 +64,13 @@ def test_fallback_on_missing_file():
 
     check("palette is a dict", isinstance(palette, dict))
     check("palette has all 10 colors", set(palette.keys()) == EXPECTED_COLORS)
-    check("active_fg is RGB tuple", isinstance(active_fg, tuple) and len(active_fg) == 3)
-    check("inactive_fg is RGB tuple", isinstance(inactive_fg, tuple) and len(inactive_fg) == 3)
+    check(
+        "active_fg is RGB tuple", isinstance(active_fg, tuple) and len(active_fg) == 3
+    )
+    check(
+        "inactive_fg is RGB tuple",
+        isinstance(inactive_fg, tuple) and len(inactive_fg) == 3,
+    )
 
 
 def test_fallback_entries_are_valid_tuples():
@@ -80,16 +93,17 @@ def test_fallback_entries_are_valid_tuples():
 def test_fallback_on_corrupted_json():
     """_load_palette() returns fallback when palette.json is invalid JSON."""
     print("\n--- fallback on corrupted palette.json ---")
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         f.write("{not valid json!!!")
         tmp_path = f.name
     try:
         palette, active_fg, _ = _reload_palette(lambda _: tmp_path)
         check("palette is a dict", isinstance(palette, dict))
         check("palette has all 10 colors", set(palette.keys()) == EXPECTED_COLORS)
-        check("active_fg is RGB tuple", isinstance(active_fg, tuple) and len(active_fg) == 3)
+        check(
+            "active_fg is RGB tuple",
+            isinstance(active_fg, tuple) and len(active_fg) == 3,
+        )
     finally:
         os.unlink(tmp_path)
 
@@ -104,9 +118,7 @@ def test_fallback_on_malformed_structure():
         "active_fg": "#ffffff",
         "inactive_fg": "#aaaaaa",
     }
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(malformed, f)
         tmp_path = f.name
     try:

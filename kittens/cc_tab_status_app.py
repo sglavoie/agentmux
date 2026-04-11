@@ -6,7 +6,6 @@ from cc_dashboard.config_defaults import _save_tab_statuses
 from cc_dashboard.remote.actions_core import do_rename
 from cc_dashboard.remote.command import get_kitty_socket
 from cc_dashboard.remote.shared import _strip_override_marker
-
 from cc_tab_status_restore import build_restore_payload, schedule_color_restore
 from cc_tab_status_state import get_current_session, load_statuses, set_status
 from cc_tab_status_ui import run_status_picker

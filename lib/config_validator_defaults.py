@@ -3,13 +3,12 @@
 
 from __future__ import annotations
 
-import re
 import os
+import re
 import tomllib
 
-from data_loader import load_sort_modes
-
 from config_validator_shared import Validator
+from data_loader import load_sort_modes
 
 
 def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validator:
@@ -60,7 +59,8 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
     unknown_notifications = set(notifications.keys()) - known_notification_keys
     if unknown_notifications:
         validator.warn(
-            f"[notifications]: unknown key(s): {', '.join(sorted(unknown_notifications))}"
+            "[notifications]: unknown key(s): "
+            f"{', '.join(sorted(unknown_notifications))}"
         )
 
     known_sections = {"defaults", "notifications"}
@@ -85,7 +85,8 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
     valid_project_window = {"", "-", "stack", "vsplit", "hsplit", "split"}
     if project_window is not None and project_window not in valid_project_window:
         validator.error(
-            f"project_window '{project_window}' is invalid (valid: -, stack, vsplit, hsplit, split)"
+            f"project_window '{project_window}' is invalid "
+            "(valid: -, stack, vsplit, hsplit, split)"
         )
 
     dashboard_refresh = defaults.get("dashboard_refresh")
@@ -144,7 +145,8 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
                     re.compile(pattern)
                 except re.error as exc:
                     validator.error(
-                        f"notifications.ignore_patterns: invalid regex {pattern!r}: {exc}"
+                        "notifications.ignore_patterns: "
+                        f"invalid regex {pattern!r}: {exc}"
                     )
 
     tab_statuses = defaults.get("tab_statuses")

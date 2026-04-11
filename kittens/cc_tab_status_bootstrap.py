@@ -4,7 +4,6 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-
 try:
     result_handler = importlib.import_module("kittens.tui.handler").result_handler
 except ImportError:

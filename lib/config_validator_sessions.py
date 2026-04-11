@@ -88,29 +88,38 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
         mute = entry.get("mute")
         if mute is not None and not isinstance(mute, bool) and mute != "-":
             validator.warn(
-                f"session '{title}': 'mute' should be true, false, or \"-\", got {mute!r}"
+                f"session '{title}': 'mute' should be "
+                f'true, false, or "-", got {mute!r}'
             )
 
         commands = entry.get("commands")
         if commands is not None:
             if not isinstance(commands, list):
                 validator.warn(
-                    f"session '{title}': 'commands' must be an array, got {type(commands).__name__} — ignoring"
+                    f"session '{title}': 'commands' must be an array, "
+                    f"got {type(commands).__name__} — ignoring"
                 )
             else:
                 for command_index, command in enumerate(commands):
                     if not isinstance(command, str):
                         validator.warn(
-                            f"session '{title}': 'commands' entry {command_index} must be a string, got {type(command).__name__} — skipping"
+                            f"session '{title}': 'commands' entry "
+                            f"{command_index} must be a string, "
+                            f"got {type(command).__name__} — skipping"
                         )
                     elif "\t" in command or "\n" in command or "\r" in command:
                         validator.warn(
-                            f"session '{title}': 'commands' entry {command_index} contains a tab or newline, which is not supported by the current transport — ignoring"
+                            f"session '{title}': 'commands' entry "
+                            f"{command_index} contains a tab or newline, "
+                            "which is not supported by the current "
+                            "transport — ignoring"
                         )
                 project_window_raw = entry.get("project_window", "")
                 if commands and project_window_raw == "-":
                     validator.warn(
-                        f"session '{title}': 'commands' is set but 'project_window = \"-\"' disables the project window — commands will be ignored"
+                        f"session '{title}': 'commands' is set but "
+                        "'project_window = \"-\"' disables the project "
+                        "window — commands will be ignored"
                     )
 
         env = entry.get("env", "")

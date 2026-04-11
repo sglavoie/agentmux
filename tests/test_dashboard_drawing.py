@@ -10,7 +10,9 @@ Run: python3 tests/test_dashboard_drawing.py
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "kittens", "cc_dashboard"))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(__file__), "..", "kittens", "cc_dashboard")
+)
 
 from drawing import (
     _clip_to_width,
@@ -42,7 +44,9 @@ def test_to_ascii():
     check("pure ascii unchanged", _to_ascii("hello world") == "hello world")
     check("empty string", _to_ascii("") == "")
     check("emoji stripped", _to_ascii("\U0001f431ccm") == "ccm")
-    check("multiple emoji stripped", _to_ascii("\U0001f916sloppy-paste") == "sloppy-paste")
+    check(
+        "multiple emoji stripped", _to_ascii("\U0001f916sloppy-paste") == "sloppy-paste"
+    )
     check("bullet stripped", _to_ascii("\u2022dotfiles") == "dotfiles")
     check("cjk stripped", _to_ascii("\u4e16\u754c") == "")
     check("mixed ascii+cjk", _to_ascii("ab\u4e16c") == "abc")
@@ -99,14 +103,10 @@ def test_truncate_to_width_ascii():
     """Truncate ASCII strings with '..' suffix."""
     check("ascii shorter than limit", _truncate_to_width("abc", 10) == "abc")
     check("ascii equal to limit", _truncate_to_width("abc", 3) == "abc")
-    check("ascii longer: 6 chars, limit 5",
-          _truncate_to_width("abcdef", 5) == "abc..")
-    check("ascii longer: 6 chars, limit 4",
-          _truncate_to_width("abcdef", 4) == "ab..")
-    check("ascii longer: 6 chars, limit 3",
-          _truncate_to_width("abcdef", 3) == "a..")
-    check("ascii longer: 6 chars, limit 2",
-          _truncate_to_width("abcdef", 2) == "..")
+    check("ascii longer: 6 chars, limit 5", _truncate_to_width("abcdef", 5) == "abc..")
+    check("ascii longer: 6 chars, limit 4", _truncate_to_width("abcdef", 4) == "ab..")
+    check("ascii longer: 6 chars, limit 3", _truncate_to_width("abcdef", 3) == "a..")
+    check("ascii longer: 6 chars, limit 2", _truncate_to_width("abcdef", 2) == "..")
 
 
 def test_truncate_to_width_edge_cases():
@@ -125,7 +125,9 @@ def test_truncate_to_width_nonascii():
     check("cjk stripped fits 2", _truncate_to_width("\u4e16\u754c\u4f60", 2) == "")
     # Emoji prefix stripped, then normal truncation
     check("emoji stripped fits", _truncate_to_width("\U0001f431ccm", 5) == "ccm")
-    check("emoji stripped truncate", _truncate_to_width("\U0001f431abcdef", 5) == "abc..")
+    check(
+        "emoji stripped truncate", _truncate_to_width("\U0001f431abcdef", 5) == "abc.."
+    )
 
 
 # ── _pad_to_width ─────────────────────────────────────────────────────

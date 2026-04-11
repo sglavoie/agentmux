@@ -5,13 +5,13 @@ import os
 
 from cc_dashboard import config as _cfg
 from cc_dashboard.colors import CP_NORMAL
+from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.views_overlays_pickers_shared import (
     centered_box,
     draw_overlay_box,
     draw_overlay_title,
 )
 from cc_dashboard.views_shared import _shorten_home
-from cc_dashboard.drawing import safe_addstr
 
 
 def draw_override_picker(stdscr, session, override_selected, batch_count=None):

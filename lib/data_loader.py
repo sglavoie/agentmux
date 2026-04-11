@@ -85,5 +85,13 @@ def load_sort_modes(data_dir: str | None = None) -> set[str]:
             return set(data["sort_modes"])
         except (KeyError, TypeError):
             pass
-    return {"default", "alpha", "name", "account",
-            "group", "status", "idle", "activity"}
+    return {
+        "default",
+        "alpha",
+        "name",
+        "account",
+        "group",
+        "status",
+        "idle",
+        "activity",
+    }

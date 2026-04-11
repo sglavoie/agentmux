@@ -160,7 +160,7 @@ def query_sessions(socket, managed_only=True):
 
             activity = load_activity(tab_id)
             session_id = resolve_session_id(tab_id)
-            session_meta = load_session_meta(session_id)
+            session_meta = load_session_meta(session_id) if session_id else {}
             git_info = get_git_info_cached(cwd) if cwd else None
             sessions.append(
                 {
@@ -197,7 +197,7 @@ def query_sessions(socket, managed_only=True):
                 }
             )
 
-    cleanup_stale_activity(s["tab_id"] for s in sessions)
+    cleanup_stale_activity([s["tab_id"] for s in sessions])
     return sessions
 
 

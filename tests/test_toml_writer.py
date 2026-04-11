@@ -112,7 +112,7 @@ def test_nul_and_other_control_chars():
     toml_str = toml_writer.dumps(data)
     check("BEL escaped as \\u0007", "\\u0007" in toml_str)
     check("NUL escaped as \\u0000", "\\u0000" in toml_str)
-    check("no literal control chars", all(ord(c) > 0x1F or c == '\n' for c in toml_str))
+    check("no literal control chars", all(ord(c) > 0x1F or c == "\n" for c in toml_str))
     parsed = _roundtrip(data)
     check("control chars round-trip", parsed["defaults"]["ctrl"] == value)
 
@@ -151,11 +151,15 @@ def test_list_of_strings():
 def test_list_with_special_strings():
     """Array with strings needing escaping."""
     print("\n--- list with special strings ---")
-    data = {"defaults": {"patterns": ['has "quotes"', "has\\backslash", "has\nnewline"]}}
+    data = {
+        "defaults": {"patterns": ['has "quotes"', "has\\backslash", "has\nnewline"]}
+    }
     parsed = _roundtrip(data)
-    check("list special strings round-trip", parsed["defaults"]["patterns"] == [
-        'has "quotes"', "has\\backslash", "has\nnewline"
-    ])
+    check(
+        "list special strings round-trip",
+        parsed["defaults"]["patterns"]
+        == ['has "quotes"', "has\\backslash", "has\nnewline"],
+    )
 
 
 def test_mixed_type_array_of_tables():
@@ -164,8 +168,13 @@ def test_mixed_type_array_of_tables():
     data = {
         "sessions": [
             {"title": "minimal", "directory": "~"},
-            {"title": "full", "directory": "~/proj", "flags": "--verbose",
-             "env": "FOO=bar", "group": "dev"},
+            {
+                "title": "full",
+                "directory": "~/proj",
+                "flags": "--verbose",
+                "env": "FOO=bar",
+                "group": "dev",
+            },
         ]
     }
     parsed = _roundtrip(data)

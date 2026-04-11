@@ -99,9 +99,9 @@ def _as_extra_row(row: HooksEventRow) -> HooksExtraRow:
 
 
 __all__ = [
+    "_DRIFT_BADGES",
     "HookHandler",
     "HooksEventRow",
-    "_DRIFT_BADGES",
     "_as_builtin_row",
     "_as_event_row",
     "_as_extra_row",

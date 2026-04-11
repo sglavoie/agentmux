@@ -50,8 +50,18 @@ def test_palette_has_10_colors():
     print("\n--- palette color count ---")
     data = _load_json("palette.json")
     colors = data["colors"]
-    expected = {"green", "blue", "red", "orange", "purple",
-                "teal", "pink", "yellow", "gray", "cyan"}
+    expected = {
+        "green",
+        "blue",
+        "red",
+        "orange",
+        "purple",
+        "teal",
+        "pink",
+        "yellow",
+        "gray",
+        "cyan",
+    }
     check("exactly 10 colors", len(colors) == 10)
     check("all expected names present", set(colors.keys()) == expected)
 
@@ -71,12 +81,11 @@ def test_palette_hex_format():
     print("\n--- palette hex format ---")
     data = _load_json("palette.json")
     import re
+
     hex_re = re.compile(r"^#[0-9a-fA-F]{6}$")
     for name, color in data["colors"].items():
-        check(f"{name}: active_bg is hex",
-              bool(hex_re.match(color["active_bg"])))
-        check(f"{name}: inactive_bg is hex",
-              bool(hex_re.match(color["inactive_bg"])))
+        check(f"{name}: active_bg is hex", bool(hex_re.match(color["active_bg"])))
+        check(f"{name}: inactive_bg is hex", bool(hex_re.match(color["inactive_bg"])))
 
 
 def test_palette_text_fg_rgb():
@@ -86,8 +95,10 @@ def test_palette_text_fg_rgb():
     for name, color in data["colors"].items():
         fg = color["text_fg"]
         check(f"{name}: text_fg is list of 3", isinstance(fg, list) and len(fg) == 3)
-        check(f"{name}: text_fg values 0-255",
-              all(isinstance(v, int) and 0 <= v <= 255 for v in fg))
+        check(
+            f"{name}: text_fg values 0-255",
+            all(isinstance(v, int) and 0 <= v <= 255 for v in fg),
+        )
 
 
 def test_palette_fg_strings():
@@ -95,6 +106,7 @@ def test_palette_fg_strings():
     print("\n--- palette fg strings ---")
     data = _load_json("palette.json")
     import re
+
     hex_re = re.compile(r"^#[0-9a-fA-F]{6}$")
     check("active_fg is hex", bool(hex_re.match(data["active_fg"])))
     check("inactive_fg is hex", bool(hex_re.match(data["inactive_fg"])))
@@ -121,8 +133,7 @@ def test_icons_state_order_consistency():
     state_keys = set(data["states"].keys())
     order_set = set(data["state_order"])
     check("state_order matches states keys", state_keys == order_set)
-    check("no duplicates in state_order",
-          len(data["state_order"]) == len(order_set))
+    check("no duplicates in state_order", len(data["state_order"]) == len(order_set))
 
 
 def test_icons_states_are_strings():
@@ -139,10 +150,8 @@ def test_icons_hook_events_are_strings():
     print("\n--- hook_events ---")
     data = _load_json("icons.json")
     events = data["hook_events"]
-    check("hook_events is non-empty list",
-          isinstance(events, list) and len(events) > 0)
-    check("all events are strings",
-          all(isinstance(e, str) for e in events))
+    check("hook_events is non-empty list", isinstance(events, list) and len(events) > 0)
+    check("all events are strings", all(isinstance(e, str) for e in events))
     check("no duplicate events", len(events) == len(set(events)))
 
 
@@ -151,10 +160,8 @@ def test_icons_sort_modes_are_strings():
     print("\n--- sort_modes ---")
     data = _load_json("icons.json")
     modes = data["sort_modes"]
-    check("sort_modes is non-empty list",
-          isinstance(modes, list) and len(modes) > 0)
-    check("all modes are strings",
-          all(isinstance(m, str) for m in modes))
+    check("sort_modes is non-empty list", isinstance(modes, list) and len(modes) > 0)
+    check("all modes are strings", all(isinstance(m, str) for m in modes))
 
 
 # ── cross-file consistency ───────────────────────────────────────────
@@ -171,8 +178,7 @@ def test_hook_events_match_example():
 
     icon_events = set(icons["hook_events"])
     example_events = set(example["hooks"].keys())
-    check("icons hook_events == example hooks keys",
-          icon_events == example_events)
+    check("icons hook_events == example hooks keys", icon_events == example_events)
 
     if icon_events != example_events:
         missing_from_example = icon_events - example_events

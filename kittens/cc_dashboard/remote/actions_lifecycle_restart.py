@@ -3,13 +3,13 @@
 import time
 
 from cc_dashboard.remote.actions_launch import compute_insert_location, do_launch
-from cc_dashboard.remote.actions_tabs import do_close
 from cc_dashboard.remote.actions_lifecycle_detached import _run_detached_steps
 from cc_dashboard.remote.actions_lifecycle_shared import (
     _build_launch_steps,
     _prepare_relaunch_session,
 )
 from cc_dashboard.remote.actions_sorting import do_sort_tabs
+from cc_dashboard.remote.actions_tabs import do_close
 
 
 def _spawn_detached_restart(

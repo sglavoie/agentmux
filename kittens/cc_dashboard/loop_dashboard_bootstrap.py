@@ -160,7 +160,9 @@ def build_session_actions(
     return _build_session_actions_helper(sess, scope, state["multi_instance"])
 
 
-def _resolve_home_instance_label(discovered_sockets, home_socket: str) -> str:
+def _resolve_home_instance_label(
+    discovered_sockets: list[tuple[str, str]], home_socket: str
+) -> str:
     for sock, label in discovered_sockets:
         if sock == home_socket:
             return label

@@ -13,9 +13,9 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 sys.path.insert(0, os.path.join(REPO_ROOT, "kittens"))
 
-import claude_dashboard
-from cc_dashboard.remote import command
-from cc_dashboard.remote.shared import _MANAGED_TITLE_RE, _strip_icons
+import claude_dashboard  # noqa: E402
+from cc_dashboard.remote import command  # noqa: E402
+from cc_dashboard.remote.shared import _MANAGED_TITLE_RE, _strip_icons  # noqa: E402
 
 PASS = 0
 FAIL = 0
@@ -126,7 +126,9 @@ def test_restore_host_title_strips_only_dashboard_marker():
             return SimpleNamespace(returncode=0, stdout="")
 
         claude_dashboard.kitty_cmd = fake_kitty_cmd
-        restored = claude_dashboard._restore_host_title("unix:/tmp/kitty-test", 23, True)
+        restored = claude_dashboard._restore_host_title(
+            "unix:/tmp/kitty-test", 23, True
+        )
         check("restore succeeds", restored is True)
         check(
             "set-tab-title keeps managed icons",

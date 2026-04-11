@@ -45,7 +45,10 @@ def _format_value(value, *, key="<unknown>"):
     if isinstance(value, list):
         items = ", ".join(_format_value(v, key=key) for v in value)
         return f"[{items}]"
-    msg = f"unsupported TOML value type for key '{key}': {type(value).__name__} (value: {value!r})"
+    msg = (
+        f"unsupported TOML value type for key '{key}': "
+        f"{type(value).__name__} (value: {value!r})"
+    )
     raise TypeError(msg)
 
 

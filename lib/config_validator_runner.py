@@ -5,13 +5,12 @@ from __future__ import annotations
 
 import os
 
-from data_loader import load_hook_events, load_palette_colors, load_sort_modes
-
 from config_validator_accounts import validate_accounts
 from config_validator_defaults import validate_defaults
 from config_validator_hooks import validate_hooks
 from config_validator_sessions import validate_sessions
 from config_validator_shared import Validator
+from data_loader import load_hook_events, load_palette_colors, load_sort_modes
 
 
 def resolve_config_paths(config_dir: str) -> tuple[str, str, str, str]:

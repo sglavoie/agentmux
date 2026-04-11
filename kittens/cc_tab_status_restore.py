@@ -4,7 +4,6 @@ import sys
 from typing import Any
 
 from cc_dashboard.config_accounts import _palette_tab_colors
-
 from cc_tab_status_state import SessionInfo
 
 
@@ -27,7 +26,9 @@ def schedule_color_restore(
         "to_args = ['--to', socket] if socket else []\n"
         "palette = None\n"
         "for d in [\n"
-        "    os.path.join(os.path.dirname(os.path.realpath(sys.argv[0] if sys.argv else __file__)), '..', '..', 'data'),\n"
+        "    os.path.join(os.path.dirname(os.path.realpath(\n"
+        "        sys.argv[0] if sys.argv else __file__)),\n"
+        "        '..', '..', 'data'),\n"
         "    os.path.expanduser('~/.local/lib/cc-manager'),\n"
         "]:\n"
         "    p = os.path.join(d, 'palette.json')\n"
@@ -42,7 +43,10 @@ def schedule_color_restore(
         "elif cc_account:\n"
         "    for ap in [\n"
         "        os.environ.get('CC_MANAGER_ACCOUNTS', ''),\n"
-        "        os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')), 'cc-manager', 'accounts.toml'),\n"
+        "        os.path.join(os.environ.get(\n"
+        "            'XDG_CONFIG_HOME',\n"
+        "            os.path.expanduser('~/.config')),\n"
+        "            'cc-manager', 'accounts.toml'),\n"
         "    ]:\n"
         "        if ap and os.path.isfile(ap):\n"
         "            with open(ap, 'rb') as f: accts = tomllib.load(f)\n"
@@ -54,7 +58,10 @@ def schedule_color_restore(
         "elif cc_config_dir:\n"
         "    for ap in [\n"
         "        os.environ.get('CC_MANAGER_ACCOUNTS', ''),\n"
-        "        os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')), 'cc-manager', 'accounts.toml'),\n"
+        "        os.path.join(os.environ.get(\n"
+        "            'XDG_CONFIG_HOME',\n"
+        "            os.path.expanduser('~/.config')),\n"
+        "            'cc-manager', 'accounts.toml'),\n"
         "    ]:\n"
         "        if ap and os.path.isfile(ap):\n"
         "            with open(ap, 'rb') as f: accts = tomllib.load(f)\n"

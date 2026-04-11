@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import time
+from typing import Any
 
 
 def _kitten_dir():
@@ -105,7 +106,7 @@ def _get_current_session(socket):
 
 def _gather_info(session):
     """Collect supplementary data for the session."""
-    info = {}
+    info: dict[str, Any] = {}
     tab_id = session["tab_id"]
 
     # Activity counters

@@ -8,6 +8,12 @@ import os
 import subprocess
 import threading
 import time
+from typing import TypedDict
+
+
+class _CacheEntry(TypedDict):
+    result: dict[str, str | bool] | None
+    timestamp: float
 
 
 class _GitCache:
@@ -21,7 +27,7 @@ class _GitCache:
         self._ttl = ttl
         self._lock = threading.Lock()
         # {cwd: {"result": dict|None, "timestamp": float}}
-        self._cache: dict[str, dict] = {}
+        self._cache: dict[str, _CacheEntry] = {}
         self._pending: set[str] = set()
         self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 

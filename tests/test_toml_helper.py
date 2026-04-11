@@ -69,7 +69,7 @@ def test_read_accounts():
         f.flush()
         path = f.name
 
-    stdout, stderr, rc = run_helper("read-accounts", path)
+    stdout, _stderr, rc = run_helper("read-accounts", path)
     os.unlink(path)
 
     lines = tsv_lines(stdout)
@@ -105,7 +105,7 @@ def test_read_sessions():
         f.flush()
         path = f.name
 
-    stdout, stderr, rc = run_helper("read-sessions", path)
+    stdout, _stderr, rc = run_helper("read-sessions", path)
     os.unlink(path)
 
     lines = tsv_lines(stdout)
@@ -150,7 +150,7 @@ def test_read_sessions_sanitizes_invalid_commands():
         f.flush()
         path = f.name
 
-    stdout, stderr, rc = run_helper("read-sessions", path)
+    stdout, _stderr, rc = run_helper("read-sessions", path)
     os.unlink(path)
 
     lines = tsv_lines(stdout)
@@ -181,7 +181,7 @@ def test_read_defaults():
         f.flush()
         path = f.name
 
-    stdout, stderr, rc = run_helper("read-defaults", path)
+    stdout, _stderr, rc = run_helper("read-defaults", path)
     os.unlink(path)
 
     check("exit code 0", rc == 0)
@@ -243,7 +243,7 @@ def test_write_sessions():
         ]
     )
 
-    stdout, stderr, rc = run_helper("write-sessions", path, stdin_data=sessions_json)
+    _stdout, _stderr, rc = run_helper("write-sessions", path, stdin_data=sessions_json)
 
     check("exit code 0", rc == 0)
 

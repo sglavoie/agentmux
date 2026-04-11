@@ -66,7 +66,8 @@ def validate_hooks(
                 for event_name in disabled_events:
                     if event_name not in valid_events:
                         validator.warn(
-                            f"account_overrides.{account_name}: unknown disabled event '{event_name}'"
+                            f"account_overrides.{account_name}: "
+                            f"unknown disabled event '{event_name}'"
                         )
 
         extra_commands = override.get("extra_commands") or override.get("extra_hooks")
@@ -81,7 +82,8 @@ def validate_hooks(
             for event_name in extra_commands:
                 if event_name not in valid_events:
                     validator.warn(
-                        f"account_overrides.{account_name}: unknown extra_commands event '{event_name}'"
+                        f"account_overrides.{account_name}: "
+                        f"unknown extra_commands event '{event_name}'"
                     )
 
     return validator

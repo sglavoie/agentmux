@@ -8,10 +8,8 @@ TOML infrastructure.
 Run: python3 tests/test_smoke.py
 """
 
-import importlib
 import json
 import os
-import subprocess
 import sys
 import tempfile
 import tomllib
@@ -41,16 +39,13 @@ def test_validator_rejects_bad_accounts():
     sys.path.insert(0, os.path.join(REPO_ROOT, "lib"))
     import config_validator as cv
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write('[[accounts]]\nconfig_dir = "~/.claude"\n')
         f.flush()
-        v, names = cv.validate_accounts(f.name, None)
+        v, _names = cv.validate_accounts(f.name, None)
     os.unlink(f.name)
     check("missing name -> error", len(v.errors) > 0)
-    check("error mentions 'name'",
-          any("name" in e for e in v.errors))
+    check("error mentions 'name'", any("name" in e for e in v.errors))
 
 
 def test_validator_rejects_bad_sessions():
@@ -59,16 +54,13 @@ def test_validator_rejects_bad_sessions():
     sys.path.insert(0, os.path.join(REPO_ROOT, "lib"))
     import config_validator as cv
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write('[[sessions]]\ndirectory = "~/code"\n')
         f.flush()
         v = cv.validate_sessions(f.name, set())
     os.unlink(f.name)
     check("missing title -> error", len(v.errors) > 0)
-    check("error mentions 'title'",
-          any("title" in e for e in v.errors))
+    check("error mentions 'title'", any("title" in e for e in v.errors))
 
 
 def test_validator_rejects_bad_defaults():
@@ -77,16 +69,13 @@ def test_validator_rejects_bad_defaults():
     sys.path.insert(0, os.path.join(REPO_ROOT, "lib"))
     import config_validator as cv
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write('[defaults]\nsort_sessions = "bogus"\n')
         f.flush()
         v = cv.validate_defaults(f.name)
     os.unlink(f.name)
     check("invalid sort -> error", len(v.errors) > 0)
-    check("error mentions sort_sessions",
-          any("sort_sessions" in e for e in v.errors))
+    check("error mentions sort_sessions", any("sort_sessions" in e for e in v.errors))
 
 
 def test_validator_rejects_bad_hooks():
@@ -95,9 +84,7 @@ def test_validator_rejects_bad_hooks():
     sys.path.insert(0, os.path.join(REPO_ROOT, "lib"))
     import config_validator as cv
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump({"not_hooks": {}}, f)
         f.flush()
         v = cv.validate_hooks(f.name, set(), set())
@@ -111,16 +98,23 @@ def test_validator_accepts_good_config():
     sys.path.insert(0, os.path.join(REPO_ROOT, "lib"))
     import config_validator as cv
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", delete=False
-    ) as f:
-        f.write(
-            '[[accounts]]\nname = "test"\n'
-            'config_dir = "/tmp"\ncolor = "green"\n'
-        )
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write('[[accounts]]\nname = "test"\nconfig_dir = "/tmp"\ncolor = "green"\n')
         f.flush()
-        palette = frozenset(["green", "blue", "red", "orange", "purple",
-                             "teal", "pink", "yellow", "gray", "cyan"])
+        palette = frozenset(
+            [
+                "green",
+                "blue",
+                "red",
+                "orange",
+                "purple",
+                "teal",
+                "pink",
+                "yellow",
+                "gray",
+                "cyan",
+            ]
+        )
         v, names = cv.validate_accounts(f.name, palette)
     os.unlink(f.name)
     check("valid accounts -> no errors", len(v.errors) == 0)
@@ -184,10 +178,8 @@ def test_toml_reader_import():
     sys.path.insert(0, os.path.join(REPO_ROOT, "lib"))
     import toml_reader
 
-    check("toml_reader has read_accounts",
-          hasattr(toml_reader, "read_accounts"))
-    check("toml_reader has read_sessions",
-          hasattr(toml_reader, "read_sessions"))
+    check("toml_reader has read_accounts", hasattr(toml_reader, "read_accounts"))
+    check("toml_reader has read_sessions", hasattr(toml_reader, "read_sessions"))
 
 
 def test_toml_roundtrip_basic():
@@ -203,10 +195,8 @@ def test_toml_roundtrip_basic():
     }
     output = toml_writer.dumps(data)
     parsed = tomllib.loads(output)
-    check("roundtrip preserves structure",
-          parsed["accounts"][0]["name"] == "work")
-    check("roundtrip preserves color",
-          parsed["accounts"][0]["color"] == "green")
+    check("roundtrip preserves structure", parsed["accounts"][0]["name"] == "work")
+    check("roundtrip preserves color", parsed["accounts"][0]["color"] == "green")
 
 
 # ── notes path traversal protection ────────────────────────────────
@@ -216,14 +206,16 @@ def test_notes_path_traversal():
     """notes_file_for_title rejects titles that escape notes directory."""
     print("\n--- notes: path traversal ---")
     sys.path.insert(0, os.path.join(REPO_ROOT, "kittens"))
-    from cc_dashboard.config_core import notes_file_for_title, _notes_dir
+    from cc_dashboard.config_core import _notes_dir, notes_file_for_title
 
     notes_dir = os.path.realpath(_notes_dir())
 
     # Normal title stays under notes dir
     normal = notes_file_for_title("W:myproject")
-    check("normal title under notes dir",
-          os.path.realpath(normal).startswith(notes_dir + os.sep))
+    check(
+        "normal title under notes dir",
+        os.path.realpath(normal).startswith(notes_dir + os.sep),
+    )
 
     # Titles with traversal-like characters still stay under notes dir
     tricky_titles = ["../../etc/passwd", "..", "../foo", "a/../../b"]
@@ -252,14 +244,12 @@ def test_quick_validate():
         accounts_path = os.path.join(tmpdir, "accounts.toml")
         with open(accounts_path, "w") as f:
             f.write(
-                '[[accounts]]\nname = "test"\n'
-                'config_dir = "/tmp"\ncolor = "green"\n'
+                '[[accounts]]\nname = "test"\nconfig_dir = "/tmp"\ncolor = "green"\n'
             )
         sessions_path = os.path.join(tmpdir, "sessions.toml")
         with open(sessions_path, "w") as f:
             f.write(
-                '[[sessions]]\ntitle = "test"\n'
-                'directory = "/tmp"\naccount = "test"\n'
+                '[[sessions]]\ntitle = "test"\ndirectory = "/tmp"\naccount = "test"\n'
             )
         defaults_path = os.path.join(tmpdir, "defaults.toml")
         with open(defaults_path, "w") as f:
@@ -271,8 +261,10 @@ def test_quick_validate():
         data_dir = os.path.join(REPO_ROOT, "data")
         issues = cv.quick_validate(tmpdir, data_dir)
         check("returns list", isinstance(issues, list))
-        check("all tuples of (level, msg)",
-              all(isinstance(i, tuple) and len(i) == 2 for i in issues))
+        check(
+            "all tuples of (level, msg)",
+            all(isinstance(i, tuple) and len(i) == 2 for i in issues),
+        )
         error_count = sum(1 for level, _ in issues if level == "error")
         check("no errors for valid config", error_count == 0)
 
@@ -287,32 +279,43 @@ def test_is_claude_process():
     from cc_dashboard.remote.sessions import _is_claude_process
 
     # Should match: bare "claude" binary
-    check("bare claude matches",
-          _is_claude_process(["claude"]))
-    check("claude with flags matches",
-          _is_claude_process(["claude", "--flag"]))
-    check("absolute path claude matches",
-          _is_claude_process(["/usr/local/bin/claude"]))
-    check("relative path claude matches",
-          _is_claude_process(["./bin/claude", "--help"]))
+    check("bare claude matches", _is_claude_process(["claude"]))
+    check("claude with flags matches", _is_claude_process(["claude", "--flag"]))
+    check("absolute path claude matches", _is_claude_process(["/usr/local/bin/claude"]))
+    check(
+        "relative path claude matches", _is_claude_process(["./bin/claude", "--help"])
+    )
 
     # Should NOT match: env vars, scripts, kittens
-    check("CLAUDE_CONFIG_DIR env var does not match",
-          not _is_claude_process(["CLAUDE_CONFIG_DIR=/home/.claude"]))
-    check("python script does not match",
-          not _is_claude_process(["python3", "claude_dashboard.py"]))
-    check("kitten does not match (basename != claude)",
-          not _is_claude_process(["kitten", "claude_dashboard.py"]))
-    check("absolute path kitten does not match",
-          not _is_claude_process(["/usr/bin/kitten", "claude_dashboard.py"]))
-    check("empty cmdline does not match",
-          not _is_claude_process([]))
-    check("unrelated process does not match",
-          not _is_claude_process(["bash", "-c", "echo hello"]))
-    check("path containing claude does not match",
-          not _is_claude_process(["bash", "-c", "cd /home/claude-project"]))
-    check("shell wrapper with exec claude matches",
-          _is_claude_process(["bash", "-lic", "exec claude --flag"]) is False)
+    check(
+        "CLAUDE_CONFIG_DIR env var does not match",
+        not _is_claude_process(["CLAUDE_CONFIG_DIR=/home/.claude"]),
+    )
+    check(
+        "python script does not match",
+        not _is_claude_process(["python3", "claude_dashboard.py"]),
+    )
+    check(
+        "kitten does not match (basename != claude)",
+        not _is_claude_process(["kitten", "claude_dashboard.py"]),
+    )
+    check(
+        "absolute path kitten does not match",
+        not _is_claude_process(["/usr/bin/kitten", "claude_dashboard.py"]),
+    )
+    check("empty cmdline does not match", not _is_claude_process([]))
+    check(
+        "unrelated process does not match",
+        not _is_claude_process(["bash", "-c", "echo hello"]),
+    )
+    check(
+        "path containing claude does not match",
+        not _is_claude_process(["bash", "-c", "cd /home/claude-project"]),
+    )
+    check(
+        "shell wrapper with exec claude matches",
+        _is_claude_process(["bash", "-lic", "exec claude --flag"]) is False,
+    )
 
 
 # ── _strip_override_marker return types ──────────────────────────────

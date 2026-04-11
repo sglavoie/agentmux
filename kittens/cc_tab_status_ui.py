@@ -13,9 +13,7 @@ from cc_dashboard.colors import (
 from cc_dashboard.config_defaults import _save_tab_statuses
 from cc_dashboard.drawing import draw_border, safe_addstr
 from cc_dashboard.remote.shared import _strip_override_marker
-
 from cc_tab_status_state import SessionInfo, extract_status, load_statuses
-
 
 StatusSelection = tuple[str, str] | None
 

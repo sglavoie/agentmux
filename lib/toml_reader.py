@@ -157,7 +157,8 @@ def read_sessions(path, known_accounts=None):
             if not session["dir"]:
                 missing.append("directory")
             print(
-                f"Warning: skipping session entry {i} missing required field(s): {', '.join(missing)}",
+                f"Warning: skipping session entry {i} "
+                f"missing required field(s): {', '.join(missing)}",
                 file=sys.stderr,
             )
             continue
@@ -172,7 +173,8 @@ def read_sessions(path, known_accounts=None):
         valid_pw = {"", "-", "stack", "vsplit", "hsplit", "split"}
         if pw and pw not in valid_pw:
             print(
-                f"Warning: session '{session['title']}' has unknown project_window '{pw}', ignoring.",
+                f"Warning: session '{session['title']}' has "
+                f"unknown project_window '{pw}', ignoring.",
                 file=sys.stderr,
             )
             session["pw"] = ""

@@ -8,6 +8,7 @@ Commands:
     write-sessions <file>  Read JSON from stdin, write sessions.toml
 """
 
+import contextlib
 import json
 import os
 import sys
@@ -116,10 +117,8 @@ def cmd_write_sessions(path):
         os.replace(tmp_path, path)
     except OSError as e:
         # Clean up temp file on failure
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass
         print(f"Error: failed to write {path}: {e}", file=sys.stderr)
         sys.exit(1)
 

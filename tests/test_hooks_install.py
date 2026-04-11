@@ -39,10 +39,7 @@ def check(label, condition):
 
 def _has_deps():
     """Check if jq and python3 are available."""
-    for cmd in ("jq", "python3"):
-        if shutil.which(cmd) is None:
-            return False
-    return True
+    return all(shutil.which(cmd) is not None for cmd in ("jq", "python3"))
 
 
 def _make_accounts_toml(tmp_dir, accounts):
@@ -122,8 +119,10 @@ def test_fresh_install():
         for entry in session_start:
             for hook in entry.get("hooks", []):
                 commands.append(hook.get("command", ""))
-        check("contains cc-hook-indicator",
-              any("cc-hook-indicator" in c for c in commands))
+        check(
+            "contains cc-hook-indicator",
+            any("cc-hook-indicator" in c for c in commands),
+        )
 
 
 def test_idempotency():
@@ -141,7 +140,10 @@ def test_idempotency():
         # Second run
         result = _run_installer(tmp, config_dir)
         check("exit code 0", result.returncode == 0)
-        check("reports skipped", "Skipped" in result.stdout or "already up to date" in result.stdout)
+        check(
+            "reports skipped",
+            "Skipped" in result.stdout or "already up to date" in result.stdout,
+        )
 
         second = _load_settings(acct_dir)
         check("identical output", first == second)
@@ -176,10 +178,10 @@ def test_preserves_user_hooks():
             for hook in entry.get("hooks", []):
                 all_commands.append(hook.get("command", ""))
 
-        check("user hook preserved",
-              "my-custom-hook start" in all_commands)
-        check("ccm hook also present",
-              any("cc-hook-indicator" in c for c in all_commands))
+        check("user hook preserved", "my-custom-hook start" in all_commands)
+        check(
+            "ccm hook also present", any("cc-hook-indicator" in c for c in all_commands)
+        )
 
 
 def test_backup_created():
@@ -244,10 +246,11 @@ def test_remove_mode():
                 for hook in entry.get("hooks", []):
                     all_commands.append(hook.get("command", ""))
 
-        check("cc-hook-indicator removed",
-              not any("cc-hook-indicator" in c for c in all_commands))
-        check("user hook preserved after remove",
-              "my-user-hook" in all_commands)
+        check(
+            "cc-hook-indicator removed",
+            not any("cc-hook-indicator" in c for c in all_commands),
+        )
+        check("user hook preserved after remove", "my-user-hook" in all_commands)
 
 
 def test_malformed_hooks_json():
@@ -299,10 +302,14 @@ def test_invalid_settings_json_exit_code():
         result = _run_installer(tmp, config_dir, expect_fail=True)
 
         check("non-zero exit for invalid settings.json", result.returncode != 0)
-        check("error mentions account name",
-              "badacct" in result.stderr or "badacct" in result.stdout)
-        check("error mentions invalid JSON",
-              "invalid JSON" in result.stderr or "invalid JSON" in result.stdout)
+        check(
+            "error mentions account name",
+            "badacct" in result.stderr or "badacct" in result.stdout,
+        )
+        check(
+            "error mentions invalid JSON",
+            "invalid JSON" in result.stderr or "invalid JSON" in result.stdout,
+        )
 
 
 # ── run all ──────────────────────────────────────────────────────────

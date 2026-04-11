@@ -56,7 +56,7 @@ def draw_hooks_add_form(stdscr, account_name, event_name, form_state, editing=Fa
     warn_attr = curses.color_pair(CP_WARN)
     input_attr = curses.color_pair(CP_INPUT_ACTIVE)
 
-    from cc_dashboard.config import HOOK_EVENT_META, _FULL_TYPE_EVENTS
+    from cc_dashboard.config import _FULL_TYPE_EVENTS, HOOK_EVENT_META
 
     meta = HOOK_EVENT_META.get(event_name, {})
     has_matcher = meta.get("matcher_desc") is not None

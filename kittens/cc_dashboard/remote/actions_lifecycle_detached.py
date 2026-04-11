@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 
-
 _DETACHED_RUNNER_SCRIPT = """
 import json, os, subprocess, tempfile, time
 steps = json.loads(os.environ["_CCM_STEPS"])
