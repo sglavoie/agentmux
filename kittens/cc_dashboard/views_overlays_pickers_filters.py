@@ -2,7 +2,7 @@
 
 import curses
 
-from cc_dashboard.colors import CP_DIM, CP_NORMAL
+from cc_dashboard.colors import CP_NORMAL
 from cc_dashboard.drawing import safe_addstr
 from cc_dashboard.filters import SORT_MODES
 from cc_dashboard.views_overlays_pickers_shared import (

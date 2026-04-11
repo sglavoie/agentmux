@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
+import sys
 import tomllib
 from datetime import datetime
 from typing import Any
@@ -12,10 +13,10 @@ from typing import Any
 from cc_dashboard import config_state as _state
 from cc_dashboard.config_notes import rename_notes
 from cc_dashboard.config_paths import (
+    _import_toml_writer,
     _read_header_comments,
     _sessions_config_path,
     _tilde_directory,
-    _import_toml_writer,
 )
 
 
