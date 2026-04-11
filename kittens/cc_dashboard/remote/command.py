@@ -1,16 +1,19 @@
 """Low-level kitty command and socket discovery helpers."""
 
+from __future__ import annotations
+
 import concurrent.futures
 import glob
 import json
 import os
 import re
 import subprocess
+from typing import Any
 
 _DEBUG_LOG = os.environ.get("CCM_DEBUG_LOG", "")
 
 
-def get_kitty_socket():
+def get_kitty_socket() -> str:
     """Discover the Kitty remote control socket."""
     sock = os.environ.get("KITTY_LISTEN_ON", "")
     if sock:
@@ -21,7 +24,7 @@ def get_kitty_socket():
     return f"unix:{candidates[0]}" if candidates else ""
 
 
-def _socket_label(socket_path):
+def _socket_label(socket_path: str) -> str:
     """Derive a short instance label from a socket path.
 
     Extracts the PID from filenames like /tmp/kitty-12345-... and returns
@@ -36,7 +39,7 @@ def _socket_label(socket_path):
     return socket_path
 
 
-def get_all_kitty_sockets():
+def get_all_kitty_sockets() -> list[tuple[str, str]]:
     """Discover all active Kitty remote control sockets.
 
     Collects all /tmp/kitty-* sockets plus KITTY_LISTEN_ON, probes each
@@ -59,7 +62,7 @@ def get_all_kitty_sockets():
             candidates.append(sock)
             seen.add(sock)
 
-    def _probe(sock):
+    def _probe(sock: str) -> tuple[str, str] | None:
         try:
             result = subprocess.run(
                 ["kitty", "@", "--to", sock, "ls"],
@@ -90,7 +93,9 @@ def get_all_kitty_sockets():
     return active
 
 
-def kitty_cmd(socket, *args, timeout=None):
+def kitty_cmd(
+    socket: str, *args: str, timeout: int | None = None
+) -> subprocess.CompletedProcess[str] | None:
     """Run a kitty @ remote control command. Returns the CompletedProcess or None."""
     if timeout is None:
         from cc_dashboard import config_state as _state
@@ -124,7 +129,7 @@ def kitty_cmd(socket, *args, timeout=None):
         return None
 
 
-def get_window_text(socket, window_id, extent="screen"):
+def get_window_text(socket: str, window_id: int, extent: str = "screen") -> str | None:
     """Capture text from a Kitty window. Returns text string or None."""
     result = kitty_cmd(
         socket, "get-text", "--extent", extent, "--match", f"id:{window_id}"
@@ -134,7 +139,7 @@ def get_window_text(socket, window_id, extent="screen"):
     return None
 
 
-def find_existing_dashboard(socket):
+def find_existing_dashboard(socket: str) -> dict[str, Any] | None:
     """Find an already-running dashboard overlay in the current Kitty instance.
 
     Scans all windows' foreground_processes for a cmdline containing
@@ -174,7 +179,7 @@ def find_existing_dashboard(socket):
     return None
 
 
-def get_host_tab_id(socket):
+def get_host_tab_id(socket: str) -> int | None:
     """Return the tab ID of the tab hosting the current dashboard process.
 
     Reads KITTY_WINDOW_ID (set by Kitty for all child processes) and maps it
@@ -187,7 +192,7 @@ def get_host_tab_id(socket):
     return host_info.get("tab_id")
 
 
-def get_host_tab_info(socket):
+def get_host_tab_info(socket: str) -> dict[str, Any] | None:
     """Return info for the tab hosting the current dashboard process.
 
     The result contains the tab ID, current tab title, and whether the tab is

@@ -26,7 +26,7 @@ _state_icons_alt = "|".join(re.escape(_ICON_STATES[k]) for k in _ICONS["state_or
 _COLOR_TO_EMOJI, OVERRIDE_EMOJIS = load_override_emojis()
 
 
-def _build_managed_title_re():
+def _build_managed_title_re() -> re.Pattern[str]:
     """Build the compiled regex for matching managed tab titles.
 
     The actual title order produced by build_title() in cc-title-icons.sh is:
@@ -53,14 +53,14 @@ def _build_managed_title_re():
 _MANAGED_TITLE_RE = _build_managed_title_re()
 
 
-def _strip_dashboard_marker(title):
+def _strip_dashboard_marker(title: str) -> str:
     """Remove the leading dashboard marker from a tab title."""
     if title.startswith(_ICON_DASHBOARD):
         return title[len(_ICON_DASHBOARD) :]
     return title
 
 
-def _strip_icons(title):
+def _strip_icons(title: str) -> str:
     """Remove leading star, flag, and state icon prefixes from a tab title."""
     title = _strip_dashboard_marker(title)
     if title.startswith(_ICON_STAR):
@@ -77,7 +77,7 @@ def _strip_icons(title):
     return title
 
 
-def _strip_account_prefix(title):
+def _strip_account_prefix(title: str) -> str:
     """Remove the leading 'X:' account initial prefix from a stripped title.
 
     E.g. 'P:ccm' -> 'ccm', 'T:Excel' -> 'Excel'. Titles without the prefix
@@ -121,7 +121,7 @@ def _strip_override_marker(
     return title
 
 
-def _append_override_marker(title, color_name=""):
+def _append_override_marker(title: str, color_name: str = "") -> str:
     """Prepend a colored override emoji to a title (idempotent).
 
     If *color_name* is empty or unknown, the title is returned with any
@@ -134,7 +134,7 @@ def _append_override_marker(title, color_name=""):
     return title
 
 
-def _append_override_for_dir(title, config_dir_override):
+def _append_override_for_dir(title: str, config_dir_override: str) -> str:
     """Prepend override emoji matching the account that owns *config_dir_override*.
 
     Looks up which account has *config_dir_override* as its ``config_dir``
@@ -150,12 +150,12 @@ def _append_override_for_dir(title, config_dir_override):
     return _append_override_marker(title, color_name)
 
 
-def _has_override_emoji(title):
+def _has_override_emoji(title: str) -> bool:
     """Return True if *title* starts with an override emoji."""
     return any(title.startswith(e) for e in OVERRIDE_EMOJIS)
 
 
-def _detect_state(title):
+def _detect_state(title: str) -> str:
     """Detect the state icon in a tab title, returning a status string.
 
     Returns one of: "active", "stopped", "permission", "error", or "".
@@ -220,7 +220,7 @@ def find_current_tab(
     return target_tab, cc_window
 
 
-def format_duration(seconds):
+def format_duration(seconds: int | float) -> str:
     """Format a duration in seconds into a compact human-readable string."""
     seconds = max(0, int(seconds))
     if seconds < 60:
