@@ -7,7 +7,7 @@ import sys
 import tempfile
 
 
-def _state_file_path():
+def _state_file_path() -> str:
     """Return the path to the dashboard state cache file."""
     cache = os.environ.get(
         "XDG_CACHE_HOME", os.path.join(os.path.expanduser("~"), ".cache")
@@ -25,7 +25,7 @@ _DEFAULTS: dict[str, str | list[str] | bool | None] = {
 }
 
 
-def load_ui_state():
+def load_ui_state() -> dict[str, str | list[str] | bool | None]:
     """Load persisted UI state from disk.
 
     Returns a dict with all expected keys, falling back to defaults for
@@ -60,7 +60,7 @@ def load_ui_state():
     return result
 
 
-def save_ui_state(state_dict):
+def save_ui_state(state_dict: dict[str, str | list[str] | bool | None]) -> None:
     """Write UI state to the cache file atomically, creating the directory if needed."""
     path = _state_file_path()
     dir_ = os.path.dirname(path)
@@ -82,7 +82,11 @@ def save_ui_state(state_dict):
                 os.remove(tmp_path)
 
 
-def prune_stale_entries(persisted, valid_accounts, valid_groups):
+def prune_stale_entries(
+    persisted: dict[str, str | list[str] | bool | None],
+    valid_accounts: set[str],
+    valid_groups: set[str],
+) -> None:
     """Remove references to deleted accounts or groups from persisted state.
 
     Modifies *persisted* in place.
