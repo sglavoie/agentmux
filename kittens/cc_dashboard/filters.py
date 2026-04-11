@@ -1,9 +1,15 @@
 """Session filtering and sorting helpers."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from cc_dashboard.config_data import load_sort_modes as _load_sort_modes
 
 
-def _filter_sessions(sessions, query):
+def _filter_sessions(
+    sessions: list[dict[str, Any]], query: str
+) -> list[dict[str, Any]]:
     """Return sessions matching query against title, cwd, account, or group."""
     if not query:
         return sessions
@@ -19,7 +25,9 @@ def _filter_sessions(sessions, query):
     ]
 
 
-def _filter_by_accounts(sessions, enabled_accounts):
+def _filter_by_accounts(
+    sessions: list[dict[str, Any]], enabled_accounts: set[str] | None
+) -> list[dict[str, Any]]:
     """Return sessions filtered to only those whose account is in enabled_accounts.
 
     When enabled_accounts is None, returns the full list (no filtering).
@@ -29,7 +37,9 @@ def _filter_by_accounts(sessions, enabled_accounts):
     return [s for s in sessions if s["account"] in enabled_accounts]
 
 
-def _filter_by_groups(sessions, enabled_groups):
+def _filter_by_groups(
+    sessions: list[dict[str, Any]], enabled_groups: set[str] | None
+) -> list[dict[str, Any]]:
     """Return sessions filtered to only those whose group is in enabled_groups.
 
     When enabled_groups is None, returns the full list (no filtering).
@@ -41,14 +51,21 @@ def _filter_by_groups(sessions, enabled_groups):
     ]
 
 
-def _apply_filters(sessions, search_query, account_filter, group_filter=None):
+def _apply_filters(
+    sessions: list[dict[str, Any]],
+    search_query: str,
+    account_filter: set[str] | None,
+    group_filter: set[str] | None = None,
+) -> list[dict[str, Any]]:
     """Chain account filtering, group filtering, then text search."""
     result = _filter_by_accounts(sessions, account_filter)
     result = _filter_by_groups(result, group_filter)
     return _filter_sessions(result, search_query)
 
 
-def _filter_pick_by_groups(sessions, enabled_groups):
+def _filter_pick_by_groups(
+    sessions: list[dict[str, Any]], enabled_groups: set[str] | None
+) -> list[dict[str, Any]]:
     """Return config sessions filtered to only those in enabled_groups.
 
     When enabled_groups is None, returns the full list (no filtering).
@@ -60,7 +77,9 @@ def _filter_pick_by_groups(sessions, enabled_groups):
     ]
 
 
-def _filter_config_sessions(sessions, query):
+def _filter_config_sessions(
+    sessions: list[dict[str, Any]], query: str
+) -> list[dict[str, Any]]:
     """Return config sessions matching query against title, dir, or account."""
     if not query:
         return sessions
@@ -72,7 +91,9 @@ def _filter_config_sessions(sessions, query):
     ]
 
 
-def _sort_config_entries(entries, sort_mode):
+def _sort_config_entries(
+    entries: list[dict[str, Any]], sort_mode: str
+) -> list[dict[str, Any]]:
     """Sort config session entries by the given mode."""
     if sort_mode == "default":
         return entries
@@ -90,7 +111,11 @@ def _sort_config_entries(entries, sort_mode):
     return sorted(entries, key=lambda s: s["title"].lower())
 
 
-def _sort_pick_entries(entries, running_titles, sort_mode="name"):
+def _sort_pick_entries(
+    entries: list[dict[str, Any]],
+    running_titles: set[str],
+    sort_mode: str = "name",
+) -> tuple[list[dict[str, Any]], int]:
     """Sort entries: running first, stopped second, sorted within each group.
 
     Returns (sorted_list, running_count).
@@ -126,7 +151,9 @@ _STATUS_PRIORITY = {
 }
 
 
-def _apply_sort(sessions, sort_mode):
+def _apply_sort(
+    sessions: list[dict[str, Any]], sort_mode: str
+) -> list[dict[str, Any]]:
     """Return a new list of sessions sorted by the given mode."""
     if sort_mode == "default":
         return list(sessions)
