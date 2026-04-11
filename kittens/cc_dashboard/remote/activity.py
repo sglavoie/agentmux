@@ -1,17 +1,20 @@
 """Activity counters and JSONL activity log helpers."""
 
+from __future__ import annotations
+
 import contextlib
 import glob
 import json
 import os
 import tempfile
+from typing import Any
 
 from cc_dashboard.remote.shared import format_duration
 
 _CCM_TMPDIR = tempfile.gettempdir()
 
 
-def load_activity(tab_id):
+def load_activity(tab_id: int | str) -> dict[str, int | str] | None:
     """Read and parse the activity counts file for a tab, returning a dict or None."""
     path = f"{_CCM_TMPDIR}/ccm-activity-{tab_id}.counts"
     try:
@@ -40,7 +43,7 @@ def load_activity(tab_id):
         return None
 
 
-def load_session_meta(session_id):
+def load_session_meta(session_id: str) -> dict[str, str]:
     """Read session-level metadata from the first line of a JSONL activity log.
 
     Returns a dict with 'model' and 'agent_type' keys if the first entry
@@ -66,7 +69,7 @@ def load_session_meta(session_id):
         return {}
 
 
-def cleanup_stale_activity(live_tab_ids):
+def cleanup_stale_activity(live_tab_ids: list[int] | list[str]) -> None:
     """Remove orphaned activity files whose tab_id is not in the live set."""
     live = set(str(tid) for tid in live_tab_ids)
     for path in glob.glob(f"{_CCM_TMPDIR}/ccm-activity-*.counts"):
@@ -77,7 +80,7 @@ def cleanup_stale_activity(live_tab_ids):
                 os.remove(path)
 
 
-def _build_tabid_map():
+def _build_tabid_map() -> dict[str, str]:
     """Build a dict mapping tab_id strings to session_id strings.
 
     Scans all ccm-tabid-* files once and returns the complete mapping,
@@ -103,13 +106,13 @@ _tabid_cache: dict[str, str] = {}
 _tabid_cache_valid = False
 
 
-def invalidate_tabid_cache():
+def invalidate_tabid_cache() -> None:
     """Mark the tabid cache as stale so the next resolve rebuilds it."""
     global _tabid_cache_valid
     _tabid_cache_valid = False
 
 
-def resolve_session_id(tab_id):
+def resolve_session_id(tab_id: int | str | None) -> str | None:
     """Resolve a Kitty tab_id to a Claude session_id via the tab-id cache files.
 
     Uses a module-level cache that is built on first call and invalidated
@@ -145,7 +148,7 @@ def resolve_session_id(tab_id):
     return None
 
 
-def _resolve_log_dir():
+def _resolve_log_dir() -> str:
     """Return the activity log directory path, matching cc-activity-log's logic."""
     return os.environ.get(
         "CC_MANAGER_LOGS",
@@ -160,7 +163,7 @@ def _resolve_log_dir():
     )
 
 
-def load_activity_log(session_id):
+def load_activity_log(session_id: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Load and parse a session's JSONL activity log file.
 
     Returns (entries, summary) where entries is a list of parsed JSON dicts
@@ -240,7 +243,7 @@ def load_activity_log(session_id):
     return entries, summary
 
 
-def list_activity_logs(sessions):
+def list_activity_logs(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """List all JSONL activity log files sorted by mtime descending.
 
     Returns a list of dicts with session_id, path, mtime, size, event_count,
@@ -305,8 +308,12 @@ def list_activity_logs(sessions):
 
 
 def search_all_logs(
-    query, log_index, max_results=200, max_entries_per_file=5000, cols=120
-):
+    query: str,
+    log_index: list[dict[str, Any]],
+    max_results: int = 200,
+    max_entries_per_file: int = 5000,
+    cols: int = 120,
+) -> tuple[list[dict[str, Any]], int]:
     """Search across all activity log files for a case-insensitive substring match.
 
     Returns a list of result dicts with session_id, title, formatted_line,
