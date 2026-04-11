@@ -35,12 +35,12 @@ _account_cp: dict[str, tuple[int, int]] = {}
 _palette_cp: dict[str, tuple[int, int]] = {}
 
 
-def _c(r, g, b):
+def _c(r: int, g: int, b: int) -> tuple[int, int, int]:
     """Convert 0-255 RGB to curses 0-1000 range."""
     return int(r * 1000 / 255), int(g * 1000 / 255), int(b * 1000 / 255)
 
 
-def init_colors():
+def init_colors() -> None:
     """Set up curses color pairs dynamically based on loaded accounts."""
     global _account_cp, _palette_cp
     curses.start_color()
@@ -152,13 +152,13 @@ def init_colors():
                 pair_id += 2
 
 
-def _cp_for_account(account, selected=False):
+def _cp_for_account(account: str, selected: bool = False) -> int:
     """Return the curses color pair ID for a given account name."""
     cp_normal, cp_sel = _account_cp.get(account, (CP_NORMAL, CP_NORMAL))
     return cp_sel if selected else cp_normal
 
 
-def _cp_for_palette_color(color_name, selected=False):
+def _cp_for_palette_color(color_name: str, selected: bool = False) -> int:
     """Return the curses color pair ID for a palette color name."""
     cp_normal, cp_sel = _palette_cp.get(color_name, (CP_NORMAL, CP_NORMAL))
     return cp_sel if selected else cp_normal
