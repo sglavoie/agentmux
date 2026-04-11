@@ -52,19 +52,16 @@ from cc_dashboard.remote.activity import (
 )
 from cc_dashboard.remote.command import get_kitty_socket, kitty_cmd
 from cc_dashboard.remote.git_ops import _get_git_info
-from cc_dashboard.remote.shared import _detect_state, _strip_icons, format_duration
+from cc_dashboard.remote.shared import (
+    _detect_state,
+    _strip_icons,
+    find_current_tab,
+    format_duration,
+)
 
 
 def _get_current_session(socket):
     """Look up the current tab's session info via KITTY_WINDOW_ID."""
-    win_id_str = os.environ.get("KITTY_WINDOW_ID", "")
-    if not win_id_str:
-        return None
-    try:
-        target_win_id = int(win_id_str)
-    except ValueError:
-        return None
-
     result = kitty_cmd(socket, "ls")
     if not result or result.returncode != 0:
         return None
@@ -73,48 +70,37 @@ def _get_current_session(socket):
     except (json.JSONDecodeError, TypeError):
         return None
 
-    target_tab = None
-    for os_win in data:
-        for tab in os_win.get("tabs", []):
-            for win in tab.get("windows", []):
-                if win.get("id") == target_win_id:
-                    target_tab = tab
-                    break
-            if target_tab:
-                break
-        if target_tab:
-            break
-
-    if target_tab is None:
+    found = find_current_tab(data)
+    if found is None:
+        return None
+    tab, cc_win = found
+    if cc_win is None:
         return None
 
-    title = _strip_icons(target_tab.get("title", ""))
-    window_count = len(target_tab.get("windows", []))
+    title = _strip_icons(str(tab.get("title", "")))
+    windows = tab.get("windows", [])
+    window_count = len(windows)
 
-    for win in target_tab.get("windows", []):
-        uv = win.get("user_vars", {})
-        if uv.get("cc_account"):
-            cwd = ""
-            for fg in win.get("foreground_processes", []):
-                c = fg.get("cwd", "")
-                if c:
-                    cwd = c
-                    break
-            return {
-                "tab_id": target_tab.get("id", 0),
-                "title": title,
-                "full_title": target_tab.get("title", ""),
-                "account": uv.get("cc_account", ""),
-                "cc_flags": uv.get("cc_flags", ""),
-                "cc_pw": uv.get("cc_pw", ""),
-                "cc_env": uv.get("cc_env", ""),
-                "cc_color": uv.get("cc_color", ""),
-                "cc_config_dir": uv.get("cc_config_dir", ""),
-                "cwd": cwd,
-                "window_count": window_count,
-            }
-
-    return None
+    uv = cc_win.get("user_vars", {})
+    cwd = ""
+    for fg in cc_win.get("foreground_processes", []):
+        c = fg.get("cwd", "")
+        if c:
+            cwd = c
+            break
+    return {
+        "tab_id": tab.get("id", 0),
+        "title": title,
+        "full_title": str(tab.get("title", "")),
+        "account": uv.get("cc_account", ""),
+        "cc_flags": uv.get("cc_flags", ""),
+        "cc_pw": uv.get("cc_pw", ""),
+        "cc_env": uv.get("cc_env", ""),
+        "cc_color": uv.get("cc_color", ""),
+        "cc_config_dir": uv.get("cc_config_dir", ""),
+        "cwd": cwd,
+        "window_count": window_count,
+    }
 
 
 def _gather_info(session):

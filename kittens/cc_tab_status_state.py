@@ -1,9 +1,8 @@
 import json
-import os
 from typing import TypedDict
 
 from cc_dashboard.remote.command import kitty_cmd
-from cc_dashboard.remote.shared import _strip_icons
+from cc_dashboard.remote.shared import _strip_icons, find_current_tab
 
 
 class SessionInfo(TypedDict):
@@ -60,14 +59,6 @@ def set_status(title: str, status: str | None) -> str:
 
 def get_current_session(socket: str) -> SessionInfo | None:
     """Look up the current tab's session info via KITTY_WINDOW_ID."""
-    win_id_str = os.environ.get("KITTY_WINDOW_ID", "")
-    if not win_id_str:
-        return None
-    try:
-        target_win_id = int(win_id_str)
-    except ValueError:
-        return None
-
     result = kitty_cmd(socket, "ls")
     if not result or result.returncode != 0:
         return None
@@ -76,34 +67,22 @@ def get_current_session(socket: str) -> SessionInfo | None:
     except (json.JSONDecodeError, TypeError):
         return None
 
-    target_tab: dict[str, object] | None = None
-    for os_window in data:
-        for tab in os_window.get("tabs", []):
-            for win in tab.get("windows", []):
-                if win.get("id") == target_win_id:
-                    target_tab = tab
-                    break
-            if target_tab:
-                break
-        if target_tab:
-            break
-
-    if target_tab is None:
+    found = find_current_tab(data)
+    if found is None:
+        return None
+    tab, cc_win = found
+    if cc_win is None:
         return None
 
-    raw_title = target_tab.get("title", "")
-    title = _strip_icons(raw_title)
-    for win in target_tab.get("windows", []):
-        user_vars = win.get("user_vars", {})
-        if user_vars.get("cc_account"):
-            return {
-                "tab_id": target_tab.get("id", 0),
-                "title": title,
-                "raw_title": raw_title,
-                "account": user_vars.get("cc_account", ""),
-                "cc_color": user_vars.get("cc_color", ""),
-                "claude_window_id": win.get("id", 0),
-                "cc_config_dir": user_vars.get("cc_config_dir", ""),
-            }
-
-    return None
+    raw_title = tab.get("title", "")
+    title = _strip_icons(str(raw_title))
+    user_vars = cc_win.get("user_vars", {})
+    return {
+        "tab_id": tab.get("id", 0),
+        "title": title,
+        "raw_title": str(raw_title),
+        "account": user_vars.get("cc_account", ""),
+        "cc_color": user_vars.get("cc_color", ""),
+        "claude_window_id": cc_win.get("id", 0),
+        "cc_config_dir": user_vars.get("cc_config_dir", ""),
+    }

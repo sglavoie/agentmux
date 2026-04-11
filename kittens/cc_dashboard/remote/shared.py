@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
-from typing import Literal, overload
+from typing import Any, Literal, overload
 
 from cc_dashboard.config_data import load_icons, load_override_emojis
 
@@ -171,6 +172,52 @@ def _detect_state(title):
         if title.startswith(_ICON_STATES[key]):
             return _STATE_NAMES[key]
     return ""
+
+
+def find_current_tab(
+    os_windows: list[dict[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any] | None] | None:
+    """Locate the tab containing the current overlay window.
+
+    Searches *os_windows* (the parsed output of ``kitty @ ls``) for the tab
+    that contains the window whose id matches ``KITTY_WINDOW_ID``.  Then
+    scans that tab's windows for one with a ``cc_account`` user var.
+
+    Returns ``(tab_dict, cc_window_or_None)`` on success, or ``None`` if the
+    tab cannot be found.  *cc_window* is ``None`` when the tab exists but has
+    no window with ``cc_account`` set (i.e. an unmanaged tab).
+    """
+    win_id_str = os.environ.get("KITTY_WINDOW_ID", "")
+    if not win_id_str:
+        return None
+    try:
+        target_win_id = int(win_id_str)
+    except ValueError:
+        return None
+
+    target_tab: dict[str, Any] | None = None
+    for os_win in os_windows:
+        for tab in os_win.get("tabs", []):
+            for win in tab.get("windows", []):
+                if win.get("id") == target_win_id:
+                    target_tab = tab
+                    break
+            if target_tab:
+                break
+        if target_tab:
+            break
+
+    if target_tab is None:
+        return None
+
+    cc_window: dict[str, Any] | None = None
+    for win in target_tab.get("windows", []):
+        user_vars = win.get("user_vars", {})
+        if user_vars.get("cc_account"):
+            cc_window = win
+            break
+
+    return target_tab, cc_window
 
 
 def format_duration(seconds):

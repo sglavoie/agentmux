@@ -36,7 +36,7 @@ from cc_dashboard.config import load_accounts, load_defaults
 from cc_dashboard.config_data import PALETTE_NAMES
 from cc_dashboard.remote.actions_core import do_set_color
 from cc_dashboard.remote.command import get_kitty_socket, kitty_cmd
-from cc_dashboard.remote.shared import _strip_icons
+from cc_dashboard.remote.shared import _strip_icons, find_current_tab
 
 
 def _get_current_session(socket):
@@ -47,14 +47,6 @@ def _get_current_session(socket):
     We first locate the tab, then scan all windows in that tab for the
     cc_account user var to find the actual Claude session window.
     """
-    win_id_str = os.environ.get("KITTY_WINDOW_ID", "")
-    if not win_id_str:
-        return None
-    try:
-        target_win_id = int(win_id_str)
-    except ValueError:
-        return None
-
     result = kitty_cmd(socket, "ls")
     if not result or result.returncode != 0:
         return None
@@ -63,49 +55,35 @@ def _get_current_session(socket):
     except (json.JSONDecodeError, TypeError):
         return None
 
-    # Find the tab containing the overlay window
-    target_tab = None
-    for os_win in data:
-        for tab in os_win.get("tabs", []):
-            for win in tab.get("windows", []):
-                if win.get("id") == target_win_id:
-                    target_tab = tab
-                    break
-            if target_tab:
-                break
-        if target_tab:
-            break
-
-    if target_tab is None:
+    found = find_current_tab(data)
+    if found is None:
         return None
+    tab, cc_win = found
 
-    # Scan all windows in the tab for the one with cc_account user vars.
-    # If no window has cc_account (unmanaged tab), use the first window.
-    title = _strip_icons(target_tab.get("title", ""))
-    best_win = None
-    for win in target_tab.get("windows", []):
-        uv = win.get("user_vars", {})
-        if uv.get("cc_account"):
-            return {
-                "tab_id": target_tab.get("id", 0),
-                "title": title,
-                "account": uv.get("cc_account", ""),
-                "cc_color": uv.get("cc_color", ""),
-                "cc_config_dir": uv.get("cc_config_dir", ""),
-                "claude_window_id": win.get("id", 0),
-            }
-        if best_win is None:
-            best_win = win
+    title = _strip_icons(str(tab.get("title", "")))
 
-    # Unmanaged tab — return session with empty account
-    if best_win is not None:
+    if cc_win is not None:
+        uv = cc_win.get("user_vars", {})
         return {
-            "tab_id": target_tab.get("id", 0),
+            "tab_id": tab.get("id", 0),
+            "title": title,
+            "account": uv.get("cc_account", ""),
+            "cc_color": uv.get("cc_color", ""),
+            "cc_config_dir": uv.get("cc_config_dir", ""),
+            "claude_window_id": cc_win.get("id", 0),
+        }
+
+    # Unmanaged tab — use the first window as fallback
+    windows = tab.get("windows", [])
+    first_win = windows[0] if windows else None
+    if first_win is not None:
+        return {
+            "tab_id": tab.get("id", 0),
             "title": title,
             "account": "",
             "cc_color": "",
             "cc_config_dir": "",
-            "claude_window_id": best_win.get("id", 0),
+            "claude_window_id": first_win.get("id", 0),
         }
 
     return None
