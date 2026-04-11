@@ -1,7 +1,10 @@
 """Shared helpers and footer/status rendering for dashboard views."""
 
+from __future__ import annotations
+
 import curses
 import os
+from typing import Any
 
 from cc_dashboard.colors import (
     CP_DIM,
@@ -199,7 +202,7 @@ _ACTIONS_FOOTER_COMPACT = [
 ]
 
 
-def _shorten_home(path):
+def _shorten_home(path: str) -> str:
     """Replace the home directory prefix with ~ for display."""
     home = os.path.expanduser("~")
     if path.startswith(home):
@@ -207,7 +210,9 @@ def _shorten_home(path):
     return path
 
 
-def draw_footer(stdscr, mode, exclude=None):
+def draw_footer(
+    stdscr: curses.window, mode: str, exclude: list[str] | None = None
+) -> None:
     """Draw the help-key footer at the bottom of the screen."""
     rows, cols = stdscr.getmaxyx()
     sep = "  "
@@ -230,7 +235,9 @@ def draw_footer(stdscr, mode, exclude=None):
     safe_addstr(stdscr, rows - 1, 2, sep.join(parts), curses.color_pair(CP_DIM))
 
 
-def draw_confirm_prompt(stdscr, session, action="Close"):
+def draw_confirm_prompt(
+    stdscr: curses.window, session: dict[str, Any], action: str = "Close"
+) -> None:
     """Draw a confirmation prompt above the footer."""
     rows, cols = stdscr.getmaxyx()
     title = session["title"]
@@ -248,7 +255,9 @@ def draw_confirm_prompt(stdscr, session, action="Close"):
     )
 
 
-def draw_batch_confirm_prompt(stdscr, sessions, action="Close"):
+def draw_batch_confirm_prompt(
+    stdscr: curses.window, sessions: list[dict[str, Any]], action: str = "Close"
+) -> None:
     """Draw a batch confirmation prompt listing affected sessions."""
     rows, cols = stdscr.getmaxyx()
     attr = curses.color_pair(CP_WARN) | curses.A_BOLD
@@ -260,7 +269,7 @@ def draw_batch_confirm_prompt(stdscr, sessions, action="Close"):
     safe_addstr(stdscr, rows - 3, 4, titles, curses.color_pair(CP_DIM))
 
 
-def draw_status_message(stdscr, message):
+def draw_status_message(stdscr: curses.window, message: str) -> None:
     """Draw a transient status message above the footer."""
     rows, cols = stdscr.getmaxyx()
     max_w = max(0, cols - 4)
@@ -270,7 +279,9 @@ def draw_status_message(stdscr, message):
     safe_addstr(stdscr, rows - 3, 2, clipped, curses.color_pair(CP_WARN))
 
 
-def _draw_text_input_line(stdscr, y, prefix, value, cursor_pos):
+def _draw_text_input_line(
+    stdscr: curses.window, y: int, prefix: str, value: str, cursor_pos: int
+) -> None:
     """Draw a text input with cursor at the given row.
 
     Renders ``prefix`` in warning color followed by ``value`` with a
@@ -303,7 +314,9 @@ def _draw_text_input_line(stdscr, y, prefix, value, cursor_pos):
         )
 
 
-def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
+def draw_search_bar(
+    stdscr: curses.window, query: str, cursor_pos: int, active: bool, match_count: int
+) -> None:
     """Draw the search/filter bar on the status line."""
     rows, _cols = stdscr.getmaxyx()
     y = rows - 3
@@ -328,13 +341,20 @@ def draw_search_bar(stdscr, query, cursor_pos, active, match_count):
         )
 
 
-def draw_rename_input(stdscr, current_value, cursor_pos):
+def draw_rename_input(
+    stdscr: curses.window, current_value: str, cursor_pos: int
+) -> None:
     """Draw a single-line rename input on the status line area."""
     rows, _cols = stdscr.getmaxyx()
     _draw_text_input_line(stdscr, rows - 3, "Rename: ", current_value, cursor_pos)
 
 
-def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
+def draw_worktree_input(
+    stdscr: curses.window,
+    session: dict[str, Any],
+    branch_value: str,
+    cursor_pos: int,
+) -> None:
     """Draw a two-line worktree input on the status line area."""
     rows, cols = stdscr.getmaxyx()
     title = _truncate_to_width(session["title"], max(4, cols - 28))
@@ -349,7 +369,12 @@ def draw_worktree_input(stdscr, session, branch_value, cursor_pos):
     _draw_text_input_line(stdscr, rows - 3, "Branch: ", branch_value, cursor_pos)
 
 
-def draw_clone_input(stdscr, session, title_value, cursor_pos):
+def draw_clone_input(
+    stdscr: curses.window,
+    session: dict[str, Any],
+    title_value: str,
+    cursor_pos: int,
+) -> None:
     """Draw a two-line clone input on the status line area."""
     rows, cols = stdscr.getmaxyx()
     title = _truncate_to_width(session["title"], max(4, cols - 32))
@@ -364,7 +389,12 @@ def draw_clone_input(stdscr, session, title_value, cursor_pos):
     _draw_text_input_line(stdscr, rows - 3, "Title: ", title_value, cursor_pos)
 
 
-def draw_batch_group_input(stdscr, targets, group_value, cursor_pos):
+def draw_batch_group_input(
+    stdscr: curses.window,
+    targets: list[dict[str, Any]],
+    group_value: str,
+    cursor_pos: int,
+) -> None:
     """Draw a two-line batch group input on the status line area."""
     rows, _cols = stdscr.getmaxyx()
 
@@ -379,18 +409,18 @@ def draw_batch_group_input(stdscr, targets, group_value, cursor_pos):
 
 
 def _render_peek_line(
-    stdscr,
-    row,
-    line,
-    cols,
-    query,
-    is_match,
-    is_current,
-    normal_attr,
-    match_attr,
-    span_attr,
-    current_attr,
-):
+    stdscr: curses.window,
+    row: int,
+    line: str,
+    cols: int,
+    query: str,
+    is_match: bool,
+    is_current: bool,
+    normal_attr: int,
+    match_attr: int,
+    span_attr: int,
+    current_attr: int,
+) -> None:
     """Render a single peek line with optional match-span highlighting."""
     clipped = line[: cols - 1]
     if not query or not is_match:
@@ -417,7 +447,9 @@ def _render_peek_line(
         pos = idx + q_len
 
 
-def _draw_peek_search_bar(stdscr, query, cursor_pos, match_count):
+def _draw_peek_search_bar(
+    stdscr: curses.window, query: str, cursor_pos: int, match_count: int
+) -> None:
     """Draw the peek search input bar at rows - 2."""
     rows, _cols = stdscr.getmaxyx()
     y = rows - 2
