@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
+import shutil
 
 from cc_dashboard import config_state as _state
 from cc_dashboard.config_paths import _config_dir, _notes_dir
@@ -45,13 +47,37 @@ def rename_notes(old_title: str, new_title: str) -> None:
 
 
 def _resolve_notes_editor() -> str:
-    """Return the editor command to use for session notes."""
-    return (
+    """Return the editor command to use for session notes.
+
+    Resolves the binary to an absolute path so Kitty's ``launch`` command
+    (which executes directly, without a shell) can find editors installed
+    outside Kitty's restricted PATH (e.g. /opt/homebrew/bin).
+    """
+    editor = (
         _state._default_notes_editor
         or os.environ.get("EDITOR")
         or os.environ.get("VISUAL")
         or "vim"
     )
+    parts = shlex.split(editor)
+    # Kitty's process has a restricted PATH that excludes common install
+    # locations like /opt/homebrew/bin.  Augment the search path so
+    # shutil.which() can find editors installed there.
+    search_path = os.pathsep.join(
+        filter(
+            None,
+            [
+                os.environ.get("PATH", ""),
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                os.path.expanduser("~/.local/bin"),
+            ],
+        )
+    )
+    resolved = shutil.which(parts[0], path=search_path)
+    if resolved:
+        parts[0] = resolved
+    return shlex.join(parts)
 
 
 __all__ = [
