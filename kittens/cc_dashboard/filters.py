@@ -151,9 +151,7 @@ _STATUS_PRIORITY = {
 }
 
 
-def _apply_sort(
-    sessions: list[dict[str, Any]], sort_mode: str
-) -> list[dict[str, Any]]:
+def _apply_sort(sessions: list[dict[str, Any]], sort_mode: str) -> list[dict[str, Any]]:
     """Return a new list of sessions sorted by the given mode."""
     if sort_mode == "default":
         return list(sessions)

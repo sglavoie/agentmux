@@ -23,9 +23,7 @@ def _compute_peek_matches(lines: list[str], query: str) -> list[int]:
     return [i for i, line in enumerate(lines) if q in line.lower()]
 
 
-def _compute_browse_matches(
-    entries: list[dict[str, Any]], query: str
-) -> list[int]:
+def _compute_browse_matches(entries: list[dict[str, Any]], query: str) -> list[int]:
     """Return indices of browse entries whose title or session_id contains query."""
     if not query:
         return []

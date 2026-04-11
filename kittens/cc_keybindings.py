@@ -10,11 +10,11 @@ from cc_keybindings_bootstrap import prepare_cc_dashboard_imports
 
 prepare_cc_dashboard_imports()
 
+from cc_keybindings_app import main as _app_main
+
 
 def main(args=None):
-    from cc_keybindings_app import main as run_main
-
-    run_main(args)
+    _app_main(args)
 
 
 if __name__ == "__main__":

@@ -50,8 +50,17 @@ symlinks := prefix_bin / "ccm:bin/ccm" + "\n" + \
     prefix_kitty / "cc_session_picker.py:kittens/cc_session_picker.py" + "\n" + \
     prefix_kitty / "cc_quick_switch.py:kittens/cc_quick_switch.py" + "\n" + \
     prefix_kitty / "cc_keybindings.py:kittens/cc_keybindings.py" + "\n" + \
+    prefix_kitty / "cc_keybindings_bootstrap.py:kittens/cc_keybindings_bootstrap.py" + "\n" + \
+    prefix_kitty / "cc_keybindings_app.py:kittens/cc_keybindings_app.py" + "\n" + \
+    prefix_kitty / "cc_keybindings_data.py:kittens/cc_keybindings_data.py" + "\n" + \
+    prefix_kitty / "cc_keybindings_ui.py:kittens/cc_keybindings_ui.py" + "\n" + \
     prefix_kitty / "cc_color_picker.py:kittens/cc_color_picker.py" + "\n" + \
     prefix_kitty / "cc_tab_status.py:kittens/cc_tab_status.py" + "\n" + \
+    prefix_kitty / "cc_tab_status_bootstrap.py:kittens/cc_tab_status_bootstrap.py" + "\n" + \
+    prefix_kitty / "cc_tab_status_app.py:kittens/cc_tab_status_app.py" + "\n" + \
+    prefix_kitty / "cc_tab_status_ui.py:kittens/cc_tab_status_ui.py" + "\n" + \
+    prefix_kitty / "cc_tab_status_restore.py:kittens/cc_tab_status_restore.py" + "\n" + \
+    prefix_kitty / "cc_tab_status_state.py:kittens/cc_tab_status_state.py" + "\n" + \
     prefix_kitty / "cc_session_info.py:kittens/cc_session_info.py" + "\n" + \
     prefix_kitty / "cc_session_notes.py:kittens/cc_session_notes.py" + "\n" + \
     prefix_kitty / "cc_reorder_tabs.py:kittens/cc_reorder_tabs.py" + "\n" + \
