@@ -2,7 +2,6 @@
 
 import json
 import os
-import re
 import shlex
 import time
 
@@ -211,13 +210,14 @@ def do_launch(
     result = kitty_cmd(socket, *cmd)
     if not result or result.returncode != 0:
         return False
+    window_id = result.stdout.strip()
 
     for _ in range(5):
         result = kitty_cmd(
             socket,
             "set-tab-color",
             "--match",
-            f"title:^{re.escape(title)}$",
+            f"window_id:{window_id}",
             *_cfg._palette_tab_colors(
                 account,
                 color_override=color_override,
@@ -244,7 +244,7 @@ def do_launch(
                         "launch",
                         "--type=window",
                         "--match",
-                        f"title:^{re.escape(title)}$",
+                        f"window_id:{window_id}",
                         "--title",
                         "shell",
                         "--cwd",
@@ -257,7 +257,7 @@ def do_launch(
                         "launch",
                         "--type=window",
                         "--match",
-                        f"title:^{re.escape(title)}$",
+                        f"window_id:{window_id}",
                         "--title",
                         cmd_entry,
                         "--cwd",
@@ -275,7 +275,7 @@ def do_launch(
                 "launch",
                 "--type=window",
                 "--match",
-                f"title:^{re.escape(title)}$",
+                f"window_id:{window_id}",
                 "--cwd",
                 directory,
                 "--keep-focus",
@@ -284,7 +284,7 @@ def do_launch(
             socket,
             "goto-layout",
             "--match",
-            f"title:^{re.escape(title)}$",
+            f"window_id:{window_id}",
             pw_mode,
         )
 

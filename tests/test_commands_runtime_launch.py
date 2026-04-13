@@ -27,7 +27,8 @@ def test_python_launch_explicit_disable() -> None:
 
     def fake_kitty_cmd(_socket, *args):
         calls.append(args)
-        return SimpleNamespace(returncode=0, stdout="[]")
+        stdout = "42" if args and args[0] == "launch" else "[]"
+        return SimpleNamespace(returncode=0, stdout=stdout)
 
     cfg._accounts = {"work": {"config_dir": ""}}
     cfg._resolve_project_window = lambda override="": (
@@ -159,6 +160,9 @@ set -euo pipefail
 
 kitty() {{
     printf '%s\n' "$*" >> {str(call_log)!r}
+    if [[ "$*" == *"launch --type=tab"* ]]; then
+        printf '42\n'
+    fi
     return 0
 }}
 
@@ -181,6 +185,7 @@ resolve_project_window() {{
 }}
 
 SOCKET='unix:/tmp/fake'
+_CCM_TMPDIR="${{TMPDIR:-/tmp}}"
 _COLOR_MAX_RETRIES=1
 _COLOR_INITIAL_DELAY_MS=0
 _COLOR_BACKOFF_FACTOR_NUM=1

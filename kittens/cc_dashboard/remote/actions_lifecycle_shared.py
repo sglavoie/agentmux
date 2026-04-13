@@ -1,7 +1,6 @@
 """Shared relaunch helpers for lifecycle actions."""
 
 import os
-import re
 import shlex
 import sys
 
@@ -181,7 +180,7 @@ def _build_launch_steps(
                 target_socket,
                 "set-tab-color",
                 "--match",
-                f"title:^{re.escape(title)}$",
+                "window_id:__WINDOW_ID__",
                 *_cfg._palette_tab_colors(
                     account,
                     color_override=color_override,
@@ -214,7 +213,7 @@ def _build_launch_steps(
                                 "launch",
                                 "--type=window",
                                 "--match",
-                                f"title:^{re.escape(title)}$",
+                                "window_id:__WINDOW_ID__",
                                 "--title",
                                 "shell",
                                 "--cwd",
@@ -234,7 +233,7 @@ def _build_launch_steps(
                                 "launch",
                                 "--type=window",
                                 "--match",
-                                f"title:^{re.escape(title)}$",
+                                "window_id:__WINDOW_ID__",
                                 "--title",
                                 cmd_entry,
                                 "--cwd",
@@ -259,7 +258,7 @@ def _build_launch_steps(
                         "launch",
                         "--type=window",
                         "--match",
-                        f"title:^{re.escape(title)}$",
+                        "window_id:__WINDOW_ID__",
                         "--cwd",
                         directory,
                         "--keep-focus",
@@ -275,7 +274,7 @@ def _build_launch_steps(
                     target_socket,
                     "goto-layout",
                     "--match",
-                    f"title:^{re.escape(title)}$",
+                    "window_id:__WINDOW_ID__",
                     pw_mode,
                 ]
             }

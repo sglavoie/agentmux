@@ -266,8 +266,12 @@ launch_session() {
 
     local shell_cmd="exec claude $effective_flags"
     ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
-    local launch_err
-    if ! launch_err="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" --var cc_commands="$commands_str" ${mute_args[@]+"${mute_args[@]}"} "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>&1 >/dev/null)"; then
+    local _launch_err_file="${_CCM_TMPDIR}/launch-err.$$"
+    local window_id
+    if ! window_id="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" --var cc_commands="$commands_str" ${mute_args[@]+"${mute_args[@]}"} "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>"$_launch_err_file")"; then
+        local launch_err
+        launch_err="$(<"$_launch_err_file" 2>/dev/null)"
+        rm -f "$_launch_err_file"
         local msg="Failed to launch tab '$title' (account=$account, dir=$dir, socket=$SOCKET)."
         if [[ -n "$launch_err" ]]; then
             msg="$msg Kitty error: $launch_err"
@@ -280,17 +284,17 @@ launch_session() {
         warn "$msg"
         return 1
     fi
+    rm -f "$_launch_err_file"
+    window_id="${window_id%%[[:space:]]*}"
 
-    ccm_debug "Tab '$title' created, setting colors..."
-    local title_escaped
-    title_escaped="$(escape_regex "$title")"
+    ccm_debug "Tab '$title' created (window_id=$window_id), setting colors..."
     local retry
     local color_set=false
     local color_err=""
     local delay=$_COLOR_INITIAL_DELAY_MS
     for ((retry = 0; retry < _COLOR_MAX_RETRIES; retry++)); do
         # shellcheck disable=SC2086
-        if color_err="$(kitty @ --to "$SOCKET" set-tab-color --match "title:^${title_escaped}$" $colors 2>&1)"; then
+        if color_err="$(kitty @ --to "$SOCKET" set-tab-color --match "window_id:$window_id" $colors 2>&1)"; then
             color_set=true
             break
         fi
@@ -320,12 +324,12 @@ launch_session() {
             for cmd_entry in "${cmds[@]}"; do
                 if [[ "$cmd_entry" == "shell" ]]; then
                     kitty @ --to "$SOCKET" launch --type=window \
-                        --match "title:^${title_escaped}$" \
+                        --match "window_id:$window_id" \
                         --title "shell" \
                         --cwd "$dir" --keep-focus
                 elif [[ -n "$cmd_entry" ]]; then
                     kitty @ --to "$SOCKET" launch --type=window \
-                        --match "title:^${title_escaped}$" \
+                        --match "window_id:$window_id" \
                         --title "$cmd_entry" \
                         --cwd "$dir" --keep-focus --hold \
                         -- "${SHELL:-/bin/zsh}" -lic "$cmd_entry"
@@ -334,11 +338,11 @@ launch_session() {
         else
             # Legacy: no commands, just a plain shell window
             kitty @ --to "$SOCKET" launch --type=window \
-                --match "title:^${title_escaped}$" \
+                --match "window_id:$window_id" \
                 --cwd "$dir" --keep-focus
         fi
         kitty @ --to "$SOCKET" goto-layout \
-            --match "title:^${title_escaped}$" "$pw_mode"
+            --match "window_id:$window_id" "$pw_mode"
     fi
 
     echo "Launched [$title] (account=$account, dir=$dir)" >&2
