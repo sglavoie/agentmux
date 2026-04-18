@@ -291,8 +291,51 @@ def do_launch(
     return True
 
 
+def open_terminal(socket, directory, account, location=None, color_override=""):
+    """Open a bare terminal tab in the given directory with account colors."""
+    directory = os.path.expanduser(directory)
+    if not os.path.isdir(directory):
+        return False
+
+    dir_name = os.path.basename(directory.rstrip("/"))
+    initial = account[0].upper() if account else "?"
+    title = f"{initial}:{dir_name}"
+
+    loc_args = []
+    if location:
+        loc_type, loc_id = location
+        if loc_type == "first":
+            loc_args = ["--location", "first"]
+        elif loc_type == "after" and loc_id is not None:
+            kitty_cmd(socket, "focus-tab", "--match", f"id:{loc_id}")
+            time.sleep(0.1)
+            loc_args = ["--location", "after"]
+
+    cmd = ["launch", "--type=tab", *loc_args, "--tab-title", title, "--cwd", directory]
+
+    result = kitty_cmd(socket, *cmd)
+    if not result or result.returncode != 0:
+        return False
+    window_id = result.stdout.strip()
+
+    for _ in range(5):
+        result = kitty_cmd(
+            socket,
+            "set-tab-color",
+            "--match",
+            f"window_id:{window_id}",
+            *_cfg._palette_tab_colors(account, color_override=color_override),
+        )
+        if result and result.returncode == 0:
+            break
+        time.sleep(0.1)
+
+    return True
+
+
 __all__ = [
     "_normalize_commands",
     "compute_insert_location",
     "do_launch",
+    "open_terminal",
 ]

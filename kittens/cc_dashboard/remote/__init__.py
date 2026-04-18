@@ -1,6 +1,10 @@
 """Remote-control helpers split from cc_dashboard.kitty_remote."""
 
-from cc_dashboard.remote.actions_launch import compute_insert_location, do_launch
+from cc_dashboard.remote.actions_launch import (
+    compute_insert_location,
+    do_launch,
+    open_terminal,
+)
 from cc_dashboard.remote.actions_lifecycle import (
     _spawn_detached_close,
     do_move,
@@ -29,5 +33,6 @@ __all__ = [
     "do_restart",
     "do_sort_tabs",
     "generate_clone_title",
+    "open_terminal",
     "run_hooks_sync",
 ]

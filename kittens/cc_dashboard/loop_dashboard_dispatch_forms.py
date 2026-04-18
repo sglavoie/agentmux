@@ -224,6 +224,7 @@ def dispatch_form_modes(
             "home_socket": state["home_socket"],
             "compute_insert_location": state["compute_insert_location"],
             "do_launch": state["do_launch"],
+            "open_terminal": state["open_terminal"],
             "msg": state["msg"],
             "msg_frames": state["msg_frames"],
             "should_exit": False,

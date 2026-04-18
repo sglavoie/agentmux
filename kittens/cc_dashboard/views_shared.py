@@ -68,6 +68,7 @@ _FOOTER_HINTS = {
         "U Unmark",
         "g Group",
         "i Instance",
+        "o Open",
         "O CfgDir",
         "/ Search",
         "Esc Back",

@@ -149,6 +149,24 @@ def handle_pick_mode(key, state):
             if d == current_dir:
                 state["override_selected"] = i
                 break
+    elif key == ord("o") and state["pick_filtered"]:
+        entry = _get_pick_entry(state)
+        if entry is None:
+            return True
+        target_socket = (
+            state["instance_socket_map"].get(
+                state["pick_target_instance"], state["home_socket"]
+            )
+            if state["multi_instance"]
+            else state["home_socket"]
+        )
+        loc = state["compute_insert_location"](
+            target_socket, entry["account"], entry["title"]
+        )
+        state["open_terminal"](
+            target_socket, entry["dir"], entry["account"], location=loc
+        )
+        state["should_exit"] = True
     elif key in (10, 13, curses.KEY_ENTER) and state["pick_filtered"]:
         target_socket = (
             state["instance_socket_map"].get(

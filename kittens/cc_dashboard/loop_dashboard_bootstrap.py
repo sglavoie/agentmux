@@ -34,6 +34,7 @@ from cc_dashboard.remote import (
     do_rename,
     do_restart,
     generate_clone_title,
+    open_terminal,
 )
 from cc_dashboard.remote.actions_tab_ui import (
     do_edit_notes,
@@ -384,6 +385,7 @@ def _build_initial_state(
         "do_cross_instance_focus": do_cross_instance_focus,
         "do_launch": do_launch,
         "do_move": do_move,
+        "open_terminal": open_terminal,
         "do_restart": do_restart,
         "generate_clone_title": generate_clone_title,
         "do_rename": do_rename,
