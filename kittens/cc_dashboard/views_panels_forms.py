@@ -35,10 +35,10 @@ def draw_new_form(
         "Flags:",
         "Split:",
         "Env vars:",
-        "Group:",
+        "Groups:",
         "Commands:",
     ]
-    field_keys = ["title", "dir", "account", "flags", "pw", "env", "group", "commands"]
+    field_keys = ["title", "dir", "account", "flags", "pw", "env", "groups", "commands"]
     cycle_fields = {"account", "pw"}
 
     if "save" in fields:

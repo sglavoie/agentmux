@@ -238,25 +238,25 @@ def test_session_group_enrichment_strips_prefix() -> None:
     def fake_find(title):
         calls.append(title)
         if title == "proj":
-            return {"group": "mygroup"}
+            return {"groups": ["mygroup"]}
         return None
 
     dashboard_cfg._find_config_session = fake_find
 
     title = "W:proj"
-    cc_group = ""
-    if not cc_group:
+    cc_groups: list[str] = []
+    if not cc_groups:
         cfg_entry = dashboard_cfg._find_config_session(title)
         if cfg_entry is None:
             has_prefix = len(title) >= 2 and title[0].isupper() and title[1] == ":"
             if has_prefix:
                 cfg_entry = dashboard_cfg._find_config_session(title[2:])
         if cfg_entry:
-            cc_group = cfg_entry.get("group", "")
+            cc_groups = cfg_entry.get("groups", [])
 
     dashboard_cfg._find_config_session = original_find
 
-    check("group enrichment found config via prefix strip", cc_group == "mygroup")
+    check("group enrichment found config via prefix strip", cc_groups == ["mygroup"])
     check("group enrichment tried bare title", "proj" in calls)
 
 

@@ -166,7 +166,7 @@ def handle_confirm_modes(key, state):
                 loc = state["compute_insert_location"](
                     t_socket, t["account"], new_title
                 )
-                clone_group = t.get("group", "")
+                clone_groups = t.get("groups", [])
                 ok = state["do_launch"](
                     t_socket,
                     new_title,
@@ -177,7 +177,7 @@ def handle_confirm_modes(key, state):
                     location=loc,
                     env_vars=r_env,
                     color_override=t.get("cc_color", ""),
-                    group=clone_group,
+                    groups=clone_groups,
                     commands=r_commands,
                 )
                 if ok:

@@ -20,6 +20,7 @@ from cc_dashboard.drawing import (
     safe_addstr,
     shorten_path,
 )
+from cc_dashboard.filters import _session_groups
 from cc_dashboard.remote.shared import format_duration
 from cc_dashboard.views_detail import DETAIL_PANE_HEIGHT
 from cc_dashboard.views_shared import draw_footer
@@ -116,24 +117,19 @@ def draw_list_view(
     show_groups = sort_mode == "group"
     visual_rows: list[tuple] = []
     if show_groups:
-        i = 0
-        while i < len(sessions):
-            group_name = sessions[i].get("group", "") or "(ungrouped)"
-            j = i
-            while (
-                j < len(sessions)
-                and (sessions[j].get("group", "") or "(ungrouped)") == group_name
-            ):
-                j += 1
-            count = j - i
-            is_collapsed = (
-                collapsed_groups is not None and group_name in collapsed_groups
-            )
-            visual_rows.append(("header", group_name, count, is_collapsed))
+        group_map: dict[str, list[int]] = {}
+        for i, s in enumerate(sessions):
+            for g in _session_groups(s):
+                group_map.setdefault(g, []).append(i)
+        for gn in sorted(
+            group_map, key=lambda g: g.lower() if g != "(ungrouped)" else "zzz"
+        ):
+            indices = group_map[gn]
+            is_collapsed = collapsed_groups is not None and gn in collapsed_groups
+            visual_rows.append(("header", gn, len(indices), is_collapsed))
             if not is_collapsed:
-                for k in range(i, j):
-                    visual_rows.append(("session", k))
-            i = j
+                for idx in indices:
+                    visual_rows.append(("session", idx))
     else:
         for i in range(len(sessions)):
             visual_rows.append(("session", i))
@@ -286,7 +282,10 @@ def draw_filter_bar(stdscr, account_filter, account_filter_mode):
 def draw_group_filter_bar(stdscr, sessions, group_filter, group_filter_mode):
     """Draw the group filter bar on row 3 (below account filter bar)."""
     _, cols = stdscr.getmaxyx()
-    groups = sorted({s.get("group", "") or "(ungrouped)" for s in sessions})
+    all_groups: set[str] = set()
+    for s in sessions:
+        all_groups.update(_session_groups(s))
+    groups = sorted(all_groups)
 
     prefix = "Groups: "
     prefix_attr = (

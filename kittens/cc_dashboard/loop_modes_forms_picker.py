@@ -2,7 +2,7 @@
 
 import curses
 
-from cc_dashboard.filters import _sort_pick_entries
+from cc_dashboard.filters import _session_groups, _sort_pick_entries
 from cc_dashboard.loop_modes_forms_shared import _get_pick_entry, _refilter_pick
 from cc_dashboard.views import _cycle_instance
 
@@ -61,9 +61,10 @@ def handle_pick_mode(key, state):
         return True
 
     if state.get("pick_group_filter_mode") and ord("1") <= key <= ord("9"):
-        groups = sorted(
-            {s.get("group", "") or "(ungrouped)" for s in state["cfg"]._sessions}
-        )
+        all_groups: set[str] = set()
+        for s in state["cfg"]._sessions:
+            all_groups.update(_session_groups(s))
+        groups = sorted(all_groups)
         idx = key - ord("1")
         if idx < len(groups):
             name = groups[idx]
@@ -122,9 +123,10 @@ def handle_pick_mode(key, state):
             state["pick_target_instance"], state["instance_labels"]
         )
     elif key == ord("g"):
-        groups = sorted(
-            {s.get("group", "") or "(ungrouped)" for s in state["cfg"]._sessions}
-        )
+        pick_all_groups: set[str] = set()
+        for s in state["cfg"]._sessions:
+            pick_all_groups.update(_session_groups(s))
+        groups = sorted(pick_all_groups)
         if len(groups) > 1:
             state["pick_group_filter_mode"] = not state.get(
                 "pick_group_filter_mode", False
@@ -191,7 +193,7 @@ def handle_pick_mode(key, state):
                     entry["pw"],
                     location=loc,
                     env_vars=entry.get("env", ""),
-                    group=entry.get("group", ""),
+                    groups=entry.get("groups", []),
                     commands=entry.get("commands", []),
                 )
         else:
@@ -210,7 +212,7 @@ def handle_pick_mode(key, state):
                 entry["pw"],
                 location=loc,
                 env_vars=entry.get("env", ""),
-                group=entry.get("group", ""),
+                groups=entry.get("groups", []),
                 commands=entry.get("commands", []),
             )
         state["should_exit"] = True

@@ -69,6 +69,7 @@ def test_sessions_roundtrip():
                 "flags": "--dangerously-skip-permissions",
                 "project_window": "vsplit",
                 "env": "DB=postgres://localhost/dev",
+                "groups": ["backend", "api"],
                 "commands": ["npm run dev", "shell"],
             },
         ]
@@ -85,6 +86,7 @@ def test_sessions_roundtrip():
         check("simple session dir", sessions[0]["dir"] == "~/projects/alpha")
         check("simple session has no flags", sessions[0]["flags"] == "")
         check("simple session has no commands", sessions[0]["commands"] == [])
+        check("simple session has empty groups", sessions[0]["groups"] == [])
         check(
             "complex session flags",
             sessions[1]["flags"] == "--dangerously-skip-permissions",
@@ -96,6 +98,10 @@ def test_sessions_roundtrip():
         check(
             "complex session commands",
             sessions[1]["commands"] == ["npm run dev", "shell"],
+        )
+        check(
+            "complex session groups",
+            sessions[1]["groups"] == ["backend", "api"],
         )
     finally:
         os.unlink(path)

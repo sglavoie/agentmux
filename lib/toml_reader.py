@@ -8,6 +8,13 @@ import sys
 import tomllib
 
 
+def _normalize_groups(raw_groups):
+    """Return a sanitized list of group strings from a TOML value."""
+    if not isinstance(raw_groups, list):
+        return []
+    return [g for g in raw_groups if isinstance(g, str)]
+
+
 def _normalize_commands(raw_commands):
     """Return a sanitized list of command strings from a TOML value."""
     if raw_commands is None:
@@ -124,7 +131,7 @@ def read_sessions(path, known_accounts=None):
     """Parse ``sessions.toml`` and return a list of session dicts.
 
     Each dict has keys: ``title``, ``dir``, ``account``, ``flags``,
-    ``pw`` (project_window), ``env``, ``group``, ``mute``, ``commands``.
+    ``pw`` (project_window), ``env``, ``groups``, ``mute``, ``commands``.
 
     If *known_accounts* is provided (a set or list of account name strings),
     sessions referencing unknown accounts will emit a warning.
@@ -146,7 +153,7 @@ def read_sessions(path, known_accounts=None):
             "flags": entry.get("flags", ""),
             "pw": entry.get("project_window", ""),
             "env": entry.get("env", ""),
-            "group": entry.get("group", ""),
+            "groups": _normalize_groups(entry.get("groups")),
             "mute": "true" if entry.get("mute") else "",
             "commands": _normalize_commands(entry.get("commands")),
         }

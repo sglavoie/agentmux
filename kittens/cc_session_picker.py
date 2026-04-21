@@ -350,11 +350,11 @@ def main():
         pw = entry.get("pw", "")
         flags = entry.get("flags", "")
         env = entry.get("env", "")
-        group = entry.get("group", "")
+        groups = "\x1f".join(entry.get("groups", []))
         mute = entry.get("mute", "")
         cmds = "\x1f".join(_normalize_commands(entry.get("commands")))
         print(
-            f"{entry['title']}\t{entry['dir']}\t{entry['account']}\t{flags}\t{pw}\t{env}\t{group}\t{mute}\t{cmds}"
+            f"{entry['title']}\t{entry['dir']}\t{entry['account']}\t{flags}\t{pw}\t{env}\t{groups}\t{mute}\t{cmds}"
         )
 
 

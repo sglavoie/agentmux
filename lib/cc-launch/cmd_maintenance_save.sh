@@ -45,8 +45,8 @@ _extract_sessions_from_ls() {
 					[.windows[] | .user_vars.cc_env // empty | select(. != "")] |
 					if length > 0 then .[0] else "" end
 				),
-				group: (
-					[.windows[] | .user_vars.cc_group // empty | select(. != "")] |
+				groups: (
+					[.windows[] | .user_vars.cc_groups // empty | select(. != "")] |
 					if length > 0 then .[0] else "" end
 				),
 				mute: (
@@ -58,7 +58,7 @@ _extract_sessions_from_ls() {
 					if length > 0 then .[0] else "" end
 				)
 			}
-		] | .[] | [.title, .dir, .account, .flags, .pw, .env, .group, .mute, .commands] | @tsv
+		] | .[] | [.title, .dir, .account, .flags, .pw, .env, .groups, .mute, .commands] | @tsv
 	'
 }
 
@@ -124,7 +124,8 @@ _save_sessions_toml() {
     json_array="$(echo "$sessions" | jq -Rnc --arg home "$HOME" '
         [inputs | select(length > 0) | split("\t") |
          { title: .[0], dir: (.[1] | if startswith($home) then "~" + .[$home | length:] else . end),
-           account: .[2], flags: .[3], pw: .[4], env: .[5], group: .[6], mute: .[7],
+           account: .[2], flags: .[3], pw: .[4], env: .[5],
+           groups: (.[6] | if . == "" then [] else split("\u001f") end), mute: .[7],
            commands: (.[8] // "" | if . == "" then [] else split("\u001f") end) }]
     ')" || {
         err "Failed to build session JSON."
@@ -140,7 +141,7 @@ _save_sessions_toml() {
 _append_session_to_config() {
     local config_file="$1"
     local new_title="$2" new_dir="$3" new_account="$4"
-    local new_flags="$5" new_pw="$6" new_env="$7" new_group="$8"
+    local new_flags="$5" new_pw="$6" new_env="$7" new_groups="$8"
     local new_mute="${9:-}"
     local new_commands="${10:-}"
 
@@ -151,7 +152,7 @@ _append_session_to_config() {
 
     new_dir="${new_dir/#$HOME/\~}"
     local new_line
-    new_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$new_title" "$new_dir" "$new_account" "$new_flags" "$new_pw" "$new_env" "$new_group" "$new_mute" "$new_commands")"
+    new_line="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$new_title" "$new_dir" "$new_account" "$new_flags" "$new_pw" "$new_env" "$new_groups" "$new_mute" "$new_commands")"
     if [[ -n "$all_tsv" ]]; then
         all_tsv+=$'\n'"$new_line"
     else
@@ -162,7 +163,8 @@ _append_session_to_config() {
     json_array="$(echo "$all_tsv" | jq -Rnc '
         [inputs | select(length > 0) | split("\t") |
          { title: .[0], dir: .[1], account: .[2], flags: .[3],
-           pw: .[4], env: .[5], group: .[6], mute: .[7],
+           pw: .[4], env: .[5],
+           groups: (.[6] | if . == "" then [] else split("\u001f") end), mute: .[7],
            commands: (.[8] // "" | if . == "" then [] else split("\u001f") end) }]
     ')" || {
         warn "failed to build session JSON."

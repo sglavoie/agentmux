@@ -16,7 +16,7 @@ def handle_new_mode(stdscr, key, state):
     if state["mode"] != "new":
         return False
 
-    _base_keys = ["title", "dir", "account", "flags", "pw", "env", "group", "commands"]
+    _base_keys = ["title", "dir", "account", "flags", "pw", "env", "groups", "commands"]
     if state["form_mode"] == "edit":
         field_keys = _base_keys
     else:
@@ -168,7 +168,11 @@ def handle_new_mode(stdscr, key, state):
                     state["msg_frames"] = 20
                 else:
                     edit_env = state["new_fields"].get("env", "")
-                    edit_group = state["new_fields"].get("group", "")
+                    edit_groups = [
+                        g.strip()
+                        for g in state["new_fields"].get("groups", "").split(",")
+                        if g.strip()
+                    ]
                     raw_cmds_str = state["new_fields"].get("commands", "")
                     edit_commands = [
                         c.strip() for c in raw_cmds_str.split(";;") if c.strip()
@@ -181,7 +185,7 @@ def handle_new_mode(stdscr, key, state):
                         fl,
                         pw_val,
                         env=edit_env,
-                        group=edit_group,
+                        groups=edit_groups,
                         commands=edit_commands,
                     )
                     if updated:
@@ -230,13 +234,23 @@ def handle_new_mode(stdscr, key, state):
                             "flags": fl,
                             "pw": pw_val,
                             "env": state["new_fields"].get("env", "").strip(),
-                            "group": state["new_fields"].get("group", "").strip(),
+                            "groups": [
+                                g.strip()
+                                for g in state["new_fields"]
+                                .get("groups", "")
+                                .split(",")
+                                if g.strip()
+                            ],
                             "commands": cmds_list,
                             "save": state["new_fields"].get("save"),
                         }
                         return True
                     env_val = state["new_fields"].get("env", "").strip()
-                    group_val = state["new_fields"].get("group", "").strip()
+                    groups_val = [
+                        g.strip()
+                        for g in state["new_fields"].get("groups", "").split(",")
+                        if g.strip()
+                    ]
                     loc = state["compute_insert_location"](target_socket, a, t)
                     state["do_launch"](
                         target_socket,
@@ -247,7 +261,7 @@ def handle_new_mode(stdscr, key, state):
                         pw_val,
                         location=loc,
                         env_vars=env_val,
-                        group=group_val,
+                        groups=groups_val,
                         commands=cmds_list,
                     )
                     if state["new_fields"].get("save") == "yes":
@@ -258,7 +272,7 @@ def handle_new_mode(stdscr, key, state):
                             fl,
                             pw_val,
                             env=env_val,
-                            group=group_val,
+                            groups=groups_val,
                             commands=cmds_list,
                         )
                     state["should_exit"] = True
@@ -317,7 +331,7 @@ def handle_confirm_mkdir_mode(key, state):
             p["pw"],
             location=loc,
             env_vars=p["env"],
-            group=p["group"],
+            groups=p.get("groups", []),
             commands=p.get("commands", []),
         )
         if p.get("save") == "yes":
@@ -328,7 +342,7 @@ def handle_confirm_mkdir_mode(key, state):
                 p["flags"],
                 p["pw"],
                 env=p["env"],
-                group=p["group"],
+                groups=p.get("groups", []),
                 commands=p.get("commands", []),
             )
         state["should_exit"] = True

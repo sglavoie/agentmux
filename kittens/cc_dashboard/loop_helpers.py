@@ -62,7 +62,7 @@ def _session_fingerprint(
             (s.get("activity") or {}).get("active_subagents"),
             (s.get("git") or {}).get("branch"),
             (s.get("git") or {}).get("dirty"),
-            s.get("group", ""),
+            tuple(s.get("groups", [])),
         )
         for s in sessions
     )
@@ -81,7 +81,7 @@ def _make_new_fields(
         "flags": "",
         "pw": default_pw,
         "env": "",
-        "group": "",
+        "groups": "",
         "commands": "",
         "save": "yes",
     }

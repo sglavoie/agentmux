@@ -87,7 +87,9 @@ def handle_batch_group_mode(key, state):
     if key == 27:
         state["mode"] = "list"
     elif key in (10, 13, curses.KEY_ENTER):
-        group_val = state["batch_group_value"].strip()
+        raw_val = state["batch_group_value"].strip()
+        groups_list = [g.strip() for g in raw_val.split(",") if g.strip()]
+        cc_groups_str = "\x1f".join(groups_list)
         count = 0
         for t in state["actions_targets"]:
             win_id = t.get("claude_window_id", 0)
@@ -98,20 +100,20 @@ def handle_batch_group_mode(key, state):
                     "set-user-vars",
                     "--match",
                     f"id:{win_id}",
-                    f"cc_group={group_val}",
+                    f"cc_groups={cc_groups_str}",
                 )
                 if result and result.returncode == 0:
-                    t["group"] = group_val
+                    t["groups"] = groups_list
                     count += 1
         state["marked"].clear()
         state["sessions"] = state["query_all_sessions"](
             managed_only=(not state["show_all"])
         )
         state["refilter"]()
-        if group_val:
-            state["msg"] = f'Set group to "{group_val}" for {count} session(s)'
+        if groups_list:
+            state["msg"] = f'Set groups to "{raw_val}" for {count} session(s)'
         else:
-            state["msg"] = f"Cleared group for {count} session(s)"
+            state["msg"] = f"Cleared groups for {count} session(s)"
         state["msg_frames"] = 20
         state["mode"] = "list"
     elif key in (curses.KEY_BACKSPACE, 127, 8):

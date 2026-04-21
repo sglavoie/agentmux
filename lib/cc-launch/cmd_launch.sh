@@ -20,7 +20,7 @@ cmd_launch_interactive() {
     local launched=0
     local existed=0
 
-    while IFS=$'\t' read -r title dir account flags pw env_vars group mute commands; do
+    while IFS=$'\t' read -r title dir account flags pw env_vars groups mute commands; do
         [[ -z "$title" ]] && continue
         title="$(_trim "$title")"
         dir="$(_trim "$dir")"
@@ -28,7 +28,7 @@ cmd_launch_interactive() {
         flags="$(_trim "${flags:-}")"
         pw="$(_trim "${pw:-}")"
         env_vars="$(_trim "${env_vars:-}")"
-        group="$(_trim "${group:-}")"
+        groups="$(_trim "${groups:-}")"
         mute="$(_trim "${mute:-}")"
         commands="$(_trim "${commands:-}")"
         [[ -z "$account" ]] && account="work"
@@ -42,7 +42,7 @@ cmd_launch_interactive() {
         local loc_args
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group" "$mute" "$commands"; then
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$groups" "$mute" "$commands"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
@@ -68,11 +68,21 @@ cmd_launch_all() {
 
     if [[ -n "${_TARGET_GROUP:-}" ]]; then
         local filtered=""
-        while IFS=$'\t' read -r title dir account flags pw env_vars group mute commands; do
+        while IFS=$'\t' read -r title dir account flags pw env_vars groups mute commands; do
             [[ -z "$title" ]] && continue
-            if [[ "$(_trim "$group")" == "$_TARGET_GROUP" ]]; then
+            local _grp_matched=false
+            local -a _grp_arr=()
+            IFS=$'\x1f' read -ra _grp_arr <<< "$(_trim "$groups")"
+            local _g
+            for _g in "${_grp_arr[@]}"; do
+                if [[ "$_g" == "$_TARGET_GROUP" ]]; then
+                    _grp_matched=true
+                    break
+                fi
+            done
+            if [[ "$_grp_matched" == "true" ]]; then
                 [[ -n "$filtered" ]] && filtered+=$'\n'
-                filtered+="${title}	${dir}	${account}	${flags}	${pw}	${env_vars}	${group}	${mute}	${commands}"
+                filtered+="${title}	${dir}	${account}	${flags}	${pw}	${env_vars}	${groups}	${mute}	${commands}"
             fi
         done <<<"$lines"
         if [[ -z "$filtered" ]]; then
@@ -83,11 +93,17 @@ cmd_launch_all() {
                 [[ -z "$_t" ]] && continue
                 g="$(_trim "$g")"
                 [[ -z "$g" ]] && continue
-                # Deduplicate: only add if not already present
-                case ",$available_groups," in
-                    *",$g,"*) ;;
-                    *) [[ -n "$available_groups" ]] && available_groups+=", "; available_groups+="$g" ;;
-                esac
+                # Split by \x1f and add each group
+                local -a _gg_arr=()
+                IFS=$'\x1f' read -ra _gg_arr <<< "$g"
+                local _gg
+                for _gg in "${_gg_arr[@]}"; do
+                    [[ -z "$_gg" ]] && continue
+                    case ",$available_groups," in
+                        *",$_gg,"*) ;;
+                        *) [[ -n "$available_groups" ]] && available_groups+=", "; available_groups+="$_gg" ;;
+                    esac
+                done
             done <<<"$lines"
             if [[ -n "$available_groups" ]]; then
                 echo "  Available groups: $available_groups" >&2
@@ -113,7 +129,7 @@ cmd_launch_all() {
     local launched=0
     local existed=0
 
-    while IFS=$'\t' read -r title dir account flags pw env_vars group mute commands; do
+    while IFS=$'\t' read -r title dir account flags pw env_vars groups mute commands; do
         [[ -z "$title" ]] && continue
         current=$((current + 1))
         title="$(_trim "$title")"
@@ -122,7 +138,7 @@ cmd_launch_all() {
         flags="$(_trim "${flags:-}")"
         pw="$(_trim "${pw:-}")"
         env_vars="$(_trim "${env_vars:-}")"
-        group="$(_trim "${group:-}")"
+        groups="$(_trim "${groups:-}")"
         mute="$(_trim "${mute:-}")"
         commands="$(_trim "${commands:-}")"
         [[ -z "$account" ]] && account="work"
@@ -138,7 +154,7 @@ cmd_launch_all() {
         loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
         echo "[$current/$total] Launching $title..." >&2
-        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$group" "$mute" "$commands"; then
+        if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$groups" "$mute" "$commands"; then
             launched=$((launched + 1))
         else
             existed=$((existed + 1))
@@ -169,12 +185,12 @@ cmd_add() {
     local dir=""
     local account=""
     local env_vars=""
-    local group=""
+    local groups=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --group)
-            group="${2:-}"
+            groups="${2:-}"
             shift 2
             ;;
         *)
@@ -223,5 +239,5 @@ cmd_add() {
     local loc_args
     loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
 
-    launch_session "$title" "$dir" "$account" "" "" "$loc_args" "$env_vars" "$group"
+    launch_session "$title" "$dir" "$account" "" "" "$loc_args" "$env_vars" "$groups"
 }

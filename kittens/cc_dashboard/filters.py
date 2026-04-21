@@ -7,6 +7,12 @@ from typing import Any
 from cc_dashboard.config_data import load_sort_modes as _load_sort_modes
 
 
+def _session_groups(session: dict[str, Any]) -> list[str]:
+    """Return groups for a session, defaulting to ["(ungrouped)"]."""
+    gs = session.get("groups", [])
+    return gs if gs else ["(ungrouped)"]
+
+
 def _filter_sessions(
     sessions: list[dict[str, Any]], query: str
 ) -> list[dict[str, Any]]:
@@ -21,7 +27,7 @@ def _filter_sessions(
         or q in s["cwd"].lower()
         or q in s["account"].lower()
         or q in ((s.get("git") or {}).get("branch", "")).lower()
-        or q in s.get("group", "").lower()
+        or any(q in g.lower() for g in _session_groups(s))
     ]
 
 
@@ -46,9 +52,7 @@ def _filter_by_groups(
     """
     if enabled_groups is None:
         return sessions
-    return [
-        s for s in sessions if (s.get("group", "") or "(ungrouped)") in enabled_groups
-    ]
+    return [s for s in sessions if any(g in enabled_groups for g in _session_groups(s))]
 
 
 def _apply_filters(
@@ -72,9 +76,7 @@ def _filter_pick_by_groups(
     """
     if enabled_groups is None:
         return sessions
-    return [
-        s for s in sessions if (s.get("group", "") or "(ungrouped)") in enabled_groups
-    ]
+    return [s for s in sessions if any(g in enabled_groups for g in _session_groups(s))]
 
 
 def _filter_config_sessions(
@@ -103,7 +105,7 @@ def _sort_config_entries(
         return sorted(
             entries,
             key=lambda s: (
-                (s.get("group", "") or "zzz").lower(),
+                (s.get("groups") or ["zzz"])[0].lower(),
                 s["title"].lower(),
             ),
         )
@@ -165,7 +167,7 @@ def _apply_sort(sessions: list[dict[str, Any]], sort_mode: str) -> list[dict[str
         return sorted(
             sessions,
             key=lambda s: (
-                (s.get("group", "") or "zzz").lower(),
+                (s.get("groups") or ["zzz"])[0].lower(),
                 s["title"].lower(),
             ),
         )

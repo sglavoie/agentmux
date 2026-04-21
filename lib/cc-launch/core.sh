@@ -114,8 +114,8 @@ tab_metadata_by_id() {
 					[.windows[] | .user_vars.cc_env // empty | select(. != "")] |
 					if length > 0 then .[0] else "" end
 				),
-				group: (
-					[.windows[] | .user_vars.cc_group // empty | select(. != "")] |
+				groups: (
+					[.windows[] | .user_vars.cc_groups // empty | select(. != "")] |
 					if length > 0 then .[0] else "" end
 				),
 				mute: (
@@ -127,7 +127,7 @@ tab_metadata_by_id() {
 					if length > 0 then .[0] else "" end
 				)
 			}
-		] | .[0] // empty | [.title, .account, .dir, .flags, .pw, .env, .group, .mute, .commands] | @tsv
+		] | .[0] // empty | [.title, .account, .dir, .flags, .pw, .env, .groups, .mute, .commands] | @tsv
 	'
 }
 
@@ -212,7 +212,7 @@ launch_session() {
     local pw_override="${5:-}"
     local location_args_str="${6:-}"
     local env_vars="${7:-}"
-    local group="${8:-}"
+    local groups="${8:-}"
     local mute="${9:-}"
     local commands_str="${10:-}"
     local -a location_args=()
@@ -268,7 +268,7 @@ launch_session() {
     ccm_debug "kitty @ launch: title=$title dir=$dir account=$account flags=$effective_flags"
     local _launch_err_file="${_CCM_TMPDIR}/launch-err.$$"
     local window_id
-    if ! window_id="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_group="$group" --var cc_commands="$commands_str" ${mute_args[@]+"${mute_args[@]}"} "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>"$_launch_err_file")"; then
+    if ! window_id="$(kitty @ --to "$SOCKET" launch --type=tab ${location_args[@]+"${location_args[@]}"} --allow-remote-control --tab-title "$title" --cwd "$dir" --var cc_account="$account" --var cc_color="$color_name" --var cc_cwd="$dir" --var cc_flags="$flags" --var cc_pw="$pw_override" --var cc_env="$env_vars" --var cc_config_dir="$config_dir" --var cc_groups="$groups" --var cc_commands="$commands_str" ${mute_args[@]+"${mute_args[@]}"} "${env_flags[@]}" "${SHELL:-/bin/zsh}" -lic "$shell_cmd" 2>"$_launch_err_file")"; then
         local launch_err
         launch_err="$(<"$_launch_err_file" 2>/dev/null)"
         rm -f "$_launch_err_file"

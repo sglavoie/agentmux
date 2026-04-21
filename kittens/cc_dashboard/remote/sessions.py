@@ -132,14 +132,15 @@ def query_sessions(socket, managed_only=True):
             cc_env = user_vars.get("cc_env", "")
             cc_config_dir = user_vars.get("cc_config_dir", "")
             cc_color = user_vars.get("cc_color", "")
-            cc_group = user_vars.get("cc_group", "")
+            raw_groups = user_vars.get("cc_groups", "")
+            cc_groups: list[str] = raw_groups.split("\x1f") if raw_groups else []
             raw_cmds = user_vars.get("cc_commands", "")
             cc_commands = raw_cmds.split("\x1f") if raw_cmds else []
 
             title = _strip_override_marker(_strip_icons(tab.get("title", "")))
 
-            # Fallback: enrich group from config when user var is missing
-            if not cc_group:
+            # Fallback: enrich groups from config when user var is missing
+            if not cc_groups:
                 cfg_entry = _cfg._find_config_session(title)
                 if cfg_entry is None:
                     has_prefix = (
@@ -148,7 +149,7 @@ def query_sessions(socket, managed_only=True):
                     if has_prefix:
                         cfg_entry = _cfg._find_config_session(title[2:])
                 if cfg_entry:
-                    cc_group = cfg_entry.get("group", "")
+                    cc_groups = cfg_entry.get("groups", [])
             try:
                 cc_notes = read_notes(title)
             except (ValueError, OSError):
@@ -171,7 +172,7 @@ def query_sessions(socket, managed_only=True):
                     "cc_flags": cc_flags,
                     "cc_pw": cc_pw,
                     "cc_env": cc_env,
-                    "group": cc_group,
+                    "groups": cc_groups,
                     "cc_notes": cc_notes,
                     "cc_color": cc_color,
                     "git": git_info,

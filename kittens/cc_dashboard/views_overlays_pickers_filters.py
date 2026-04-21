@@ -4,7 +4,7 @@ import curses
 
 from cc_dashboard.colors import CP_NORMAL
 from cc_dashboard.drawing import safe_addstr
-from cc_dashboard.filters import SORT_MODES
+from cc_dashboard.filters import SORT_MODES, _session_groups
 from cc_dashboard.views_overlays_pickers_shared import (
     centered_box,
     draw_overlay_box,
@@ -68,7 +68,10 @@ def draw_group_picker(stdscr, sessions, group_filter):
     requirement is that each item has a "group" key.
     """
     rows, cols = stdscr.getmaxyx()
-    groups = sorted({session.get("group", "") or "(ungrouped)" for session in sessions})
+    all_groups: set[str] = set()
+    for session in sessions:
+        all_groups.update(_session_groups(session))
+    groups = sorted(all_groups)
     if not groups:
         return
 

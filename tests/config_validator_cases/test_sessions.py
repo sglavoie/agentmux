@@ -312,17 +312,17 @@ def test_sessions_single_use_group() -> None:
 [[sessions]]
 title = "a"
 directory = "~"
-group = "backend"
+groups = ["backend"]
 
 [[sessions]]
 title = "b"
 directory = "~"
-group = "backend"
+groups = ["backend"]
 
 [[sessions]]
 title = "c"
 directory = "~"
-group = "bckend"
+groups = ["bckend"]
 """,
         )
         v = cv.validate_sessions(path, set())
@@ -343,7 +343,7 @@ group = "bckend"
 [[sessions]]
 title = "a"
 directory = "~"
-group = "solo"
+groups = ["solo"]
 """,
         )
         v = cv.validate_sessions(path, set())

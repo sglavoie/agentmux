@@ -51,7 +51,7 @@ def load_sessions() -> None:
                 "flags": entry.get("flags", ""),
                 "pw": entry.get("project_window", ""),
                 "env": entry.get("env", ""),
-                "group": entry.get("group", ""),
+                "groups": _normalize_groups(entry.get("groups")),
                 "commands": _normalize_commands(entry.get("commands")),
             }
         )
@@ -111,6 +111,13 @@ def _normalize_commands(raw_commands: Any) -> list[str]:
     return result
 
 
+def _normalize_groups(raw_groups: Any) -> list[str]:
+    """Return a sanitized list of group strings."""
+    if not isinstance(raw_groups, list):
+        return []
+    return [g for g in raw_groups if isinstance(g, str)]
+
+
 def _session_to_toml_entry(
     title: str,
     directory: str,
@@ -118,7 +125,7 @@ def _session_to_toml_entry(
     flags: str = "",
     pw: str = "",
     env: str = "",
-    group: str = "",
+    groups: list[str] | None = None,
     commands: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build a TOML-serializable dict for one ``[[sessions]]`` entry."""
@@ -131,8 +138,8 @@ def _session_to_toml_entry(
         entry["project_window"] = pw
     if env:
         entry["env"] = env
-    if group:
-        entry["group"] = group
+    if groups:
+        entry["groups"] = groups
     if commands:
         entry["commands"] = commands
     return entry
@@ -194,7 +201,7 @@ def save_sessions(live_sessions: list[dict[str, Any]]) -> tuple[int, bool]:
                 session.get("cc_flags", ""),
                 session.get("cc_pw", ""),
                 session.get("cc_env", ""),
-                session.get("group", ""),
+                session.get("groups", []) or None,
                 commands or None,
             )
         )
@@ -216,7 +223,7 @@ def append_session(
     flags: str = "",
     pw: str = "",
     env: str = "",
-    group: str = "",
+    groups: list[str] | None = None,
     commands: list[str] | None = None,
 ) -> None:
     """Append a single session entry to the sessions config file."""
@@ -230,7 +237,7 @@ def append_session(
         entries = _read_sessions_toml_raw(path)
     entries.append(
         _session_to_toml_entry(
-            title, directory, account, flags, pw, env, group, commands
+            title, directory, account, flags, pw, env, groups, commands
         )
     )
     _write_sessions_toml(path, entries, header=header.rstrip("\n") if header else "")
@@ -246,7 +253,7 @@ def update_session(
     flags: str = "",
     pw: str = "",
     env: str = "",
-    group: str = "",
+    groups: list[str] | None = None,
     commands: list[str] | None = None,
 ) -> bool:
     """Update an existing session entry by original title.
@@ -266,7 +273,7 @@ def update_session(
     for index, entry in enumerate(entries):
         if entry.get("title") == original_title:
             entries[index] = _session_to_toml_entry(
-                title, directory, account, flags, pw, env, group, commands
+                title, directory, account, flags, pw, env, groups, commands
             )
             found = True
             if original_title != title:
@@ -306,6 +313,7 @@ def remove_session(title: str) -> bool:
 __all__ = [
     "_find_config_session",
     "_normalize_commands",
+    "_normalize_groups",
     "_read_sessions_toml_raw",
     "_resolve_claude_flags",
     "_resolve_project_window",

@@ -97,7 +97,7 @@ def test_read_sessions():
             '[[sessions]]\ntitle = "myproject"\n'
             'directory = "~/code/myproject"\naccount = "work"\n'
             'flags = "--verbose"\nproject_window = "vsplit"\n'
-            'env = "FOO=bar"\ngroup = "dev"\n'
+            'env = "FOO=bar"\ngroups = ["dev"]\n'
             'commands = ["npm run dev", "shell"]\n\n'
             '[[sessions]]\ntitle = "notes"\n'
             'directory = "~/notes"\naccount = "personal"\n'
@@ -120,7 +120,7 @@ def test_read_sessions():
     check("flags=--verbose", cols1[3] == "--verbose")
     check("pw=vsplit", cols1[4] == "vsplit")
     check("env=FOO=bar", cols1[5] == "FOO=bar")
-    check("group=dev", cols1[6] == "dev")
+    check("groups=dev (single group)", cols1[6] == "dev")
     check("mute=empty", cols1[7] == "")
     check("commands=npm run dev\x1fshell", cols1[8] == "npm run dev\x1fshell")
 
@@ -130,9 +130,33 @@ def test_read_sessions():
     check("minimal: title=notes", cols2[0] == "notes")
     check("minimal: empty flags", cols2[3] == "")
     check("minimal: empty pw", cols2[4] == "")
-    check("minimal: empty group", cols2[6] == "")
+    check("minimal: empty groups", cols2[6] == "")
     check("minimal: empty mute", cols2[7] == "")
     check("minimal: empty commands", cols2[8] == "")
+
+
+def test_read_sessions_multi_group():
+    """read-sessions encodes multiple groups as \x1f-joined in TSV column 7."""
+    print("\n--- read-sessions multi-group ---")
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write(
+            '[[sessions]]\ntitle = "api"\n'
+            'directory = "~/projects/api"\naccount = "work"\n'
+            'groups = ["webapp", "backend"]\n'
+        )
+        f.flush()
+        path = f.name
+
+    stdout, _stderr, rc = run_helper("read-sessions", path)
+    os.unlink(path)
+
+    lines = tsv_lines(stdout)
+    check("multi-group: exit code 0", rc == 0)
+    check("multi-group: one line", len(lines) == 1)
+
+    cols = lines[0].split("\t")
+    check("multi-group: 9 columns", len(cols) == 9)
+    check("multi-group: groups joined by \\x1f", cols[6] == "webapp\x1fbackend")
 
 
 def test_read_sessions_sanitizes_invalid_commands():
@@ -228,7 +252,7 @@ def test_write_sessions():
                 "flags": "--verbose",
                 "pw": "vsplit",
                 "env": "FOO=bar",
-                "group": "dev",
+                "groups": ["dev"],
                 "commands": ["npm run dev", "shell"],
             },
             {
@@ -238,7 +262,7 @@ def test_write_sessions():
                 "flags": "",
                 "pw": "",
                 "env": "",
-                "group": "",
+                "groups": [],
             },
         ]
     )
@@ -261,7 +285,7 @@ def test_write_sessions():
     check("flags preserved", s1["flags"] == "--verbose")
     check("project_window preserved", s1["project_window"] == "vsplit")
     check("env preserved", s1["env"] == "FOO=bar")
-    check("group preserved", s1["group"] == "dev")
+    check("groups preserved", s1["groups"] == ["dev"])
     check("commands preserved", s1["commands"] == ["npm run dev", "shell"])
 
     # Minimal session: empty optional fields should be omitted
@@ -272,7 +296,7 @@ def test_write_sessions():
     check("minimal: no flags key", "flags" not in s2)
     check("minimal: no pw key", "project_window" not in s2)
     check("minimal: no env key", "env" not in s2)
-    check("minimal: no group key", "group" not in s2)
+    check("minimal: no groups key", "groups" not in s2)
     check("minimal: no commands key", "commands" not in s2)
 
     # Header comment preserved
@@ -299,7 +323,7 @@ def test_write_read_roundtrip():
             "flags": "--model opus",
             "pw": "hsplit",
             "env": "DEBUG=1",
-            "group": "backend",
+            "groups": ["backend"],
             "commands": ["npm run dev", "shell"],
         },
         {
@@ -309,7 +333,7 @@ def test_write_read_roundtrip():
             "flags": "",
             "pw": "",
             "env": "",
-            "group": "",
+            "groups": [],
         },
     ]
 
@@ -331,7 +355,7 @@ def test_write_read_roundtrip():
     check("roundtrip: flags matches", cols1[3] == "--model opus")
     check("roundtrip: pw matches", cols1[4] == "hsplit")
     check("roundtrip: env matches", cols1[5] == "DEBUG=1")
-    check("roundtrip: group matches", cols1[6] == "backend")
+    check("roundtrip: groups matches (single)", cols1[6] == "backend")
     check("roundtrip: commands matches", cols1[8] == "npm run dev\x1fshell")
 
     cols2 = lines[1].split("\t")
@@ -384,6 +408,7 @@ if __name__ == "__main__":
 
     test_read_accounts()
     test_read_sessions()
+    test_read_sessions_multi_group()
     test_read_sessions_sanitizes_invalid_commands()
     test_read_defaults()
     test_write_sessions()

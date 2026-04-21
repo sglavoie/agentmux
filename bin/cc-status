@@ -224,8 +224,8 @@ for ((si = 0; si < ${#_INSTANCE_SOCKETS[@]}; si++)); do
             ) as $status |
 
             (
-                [$tab.windows[] | .user_vars.cc_group // empty | select(. != "")] |
-                if length > 0 then .[0] else "" end
+                [$tab.windows[] | .user_vars.cc_groups // empty | select(. != "")] |
+                if length > 0 then (.[0] | split("\u001f") | join(", ")) else "" end
             ) as $group |
 
             {

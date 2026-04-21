@@ -5,6 +5,7 @@ import curses
 from cc_dashboard import config as _cfg
 from cc_dashboard.colors import CP_NORMAL, _cp_for_palette_color
 from cc_dashboard.drawing import safe_addstr
+from cc_dashboard.filters import _session_groups
 from cc_dashboard.views_overlays_pickers_shared import (
     centered_box,
     draw_overlay_box,
@@ -126,14 +127,10 @@ def draw_group_actions(stdscr, state):
         display_rows = []
         for group_name in groups:
             n_running = sum(
-                1
-                for session in sessions
-                if (session.get("group", "") or "(ungrouped)") == group_name
+                1 for session in sessions if group_name in _session_groups(session)
             )
             n_config = sum(
-                1
-                for session in cfg_sessions
-                if (session.get("group", "") or "(ungrouped)") == group_name
+                1 for session in cfg_sessions if group_name in _session_groups(session)
             )
             display_rows.append(
                 f"{group_name} ({n_running} running / {n_config} in config)"

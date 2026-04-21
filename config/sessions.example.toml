@@ -12,7 +12,8 @@
 #                    Values: "-" = disable, stack, vsplit, hsplit, split
 #   env            — Space-separated KEY=VALUE pairs injected as environment variables.
 #                    Values must not contain unescaped spaces. Use "-" to disable.
-#   group          — Group name for organizing related sessions in the dashboard.
+#   groups         — Array of group names for organizing related sessions in the dashboard.
+#                    A session can belong to multiple groups.
 #   commands       — Array of commands to run in separate windows alongside Claude.
 #                    Use "shell" for a plain terminal. Auto-enables stack layout if
 #                    project_window is not set. Command windows use --hold.
@@ -69,7 +70,14 @@ account = "personal"
 # title = "W:frontend"
 # directory = "~/projects/frontend"
 # account = "work"
-# group = "webapp"
+# groups = ["webapp"]
+#
+# Sessions can belong to multiple groups:
+# [[sessions]]
+# title = "W:api"
+# directory = "~/projects/api"
+# account = "work"
+# groups = ["webapp", "backend"]
 
 # Run commands alongside Claude in the same tab:
 # [[sessions]]
@@ -78,13 +86,13 @@ account = "personal"
 # account = "work"
 # commands = ["npm run dev", "shell"]
 
-# Combined env + group + flags example:
+# Combined env + groups + flags example:
 # [[sessions]]
 # title = "W:api-server"
 # directory = "~/projects/api"
 # account = "work"
 # flags = "--dangerously-skip-permissions"
-# group = "backend"
+# groups = ["backend"]
 # env = "DATABASE_URL=localhost:5432 REDIS_HOST=localhost"
 #
 # NOTE: Environment variable values must not contain spaces.

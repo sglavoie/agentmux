@@ -123,7 +123,7 @@ def do_launch(
     config_dir_override=None,
     env_vars="",
     color_override="",
-    group="",
+    groups=None,
     mute="",
     commands=None,
 ):
@@ -169,7 +169,7 @@ def do_launch(
         "--var",
         f"cc_env={env_vars}",
         "--var",
-        f"cc_group={group}",
+        f"cc_groups={chr(0x1F).join(groups or [])}",
         "--var",
         f"cc_commands={chr(0x1F).join(commands)}",
     ]

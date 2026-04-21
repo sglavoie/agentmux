@@ -64,7 +64,7 @@ def handle_override_mode(key, state):
                 config_dir_override=cdo,
                 env_vars=entry.get("env", ""),
                 color_override=entry.get("cc_color", ""),
-                group=entry.get("group", ""),
+                groups=entry.get("groups", []),
                 commands=entry.get("commands", []),
             )
             state["should_exit"] = True
@@ -170,7 +170,7 @@ def handle_override_mode(key, state):
                         config_dir_override=config_dir_override,
                         env_vars=r_env,
                         color_override=sess.get("cc_color", ""),
-                        group=sess.get("group", ""),
+                        groups=sess.get("groups", []),
                         commands=r_commands,
                     )
                     state["should_exit"] = True
@@ -258,7 +258,7 @@ def handle_worktree_mode(key, state):
                 loc = state["compute_insert_location"](
                     target_socket, sess["account"], new_title
                 )
-                sess_group = sess.get("group", "")
+                sess_groups = sess.get("groups", [])
                 state["do_launch"](
                     target_socket,
                     new_title,
@@ -269,7 +269,7 @@ def handle_worktree_mode(key, state):
                     location=loc,
                     env_vars=env_val,
                     color_override=sess.get("cc_color", ""),
-                    group=sess_group,
+                    groups=sess_groups,
                     commands=commands,
                 )
                 state["cfg"].append_session(
@@ -279,7 +279,7 @@ def handle_worktree_mode(key, state):
                     flags,
                     pw_val,
                     env=env_val,
-                    group=sess_group,
+                    groups=sess_groups,
                     commands=commands,
                 )
                 state["sessions"] = state["query_all_sessions"](
@@ -343,7 +343,7 @@ def handle_clone_mode(key, state):
             loc = state["compute_insert_location"](
                 target_socket, sess["account"], title
             )
-            clone_group = sess.get("group", "")
+            clone_groups = sess.get("groups", [])
             state["do_launch"](
                 target_socket,
                 title,
@@ -354,7 +354,7 @@ def handle_clone_mode(key, state):
                 location=loc,
                 env_vars=env_val,
                 color_override=sess.get("cc_color", ""),
-                group=clone_group,
+                groups=clone_groups,
                 commands=commands,
             )
             state["cfg"].append_session(
@@ -364,7 +364,7 @@ def handle_clone_mode(key, state):
                 flags,
                 pw_val,
                 env=env_val,
-                group=clone_group,
+                groups=clone_groups,
                 commands=commands,
             )
             state["sessions"] = state["query_all_sessions"](

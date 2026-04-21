@@ -49,8 +49,8 @@ cmd_close_group() {
         local inst_matches
         inst_matches="$(echo "$ls_json" | jq -r --arg group "$_TARGET_GROUP" '
             [.[] | .tabs[] |
-                select([.windows[] | .user_vars.cc_group // empty
-                        | select(. == $group)] | length > 0) |
+                select([.windows[] | .user_vars.cc_groups // empty | select(. != "")
+                        | split("\u001f")[] | select(. == $group)] | length > 0) |
                 { title: .title, id: .id }
             ] | .[] | [.title, (.id | tostring)] | @tsv')" || continue
 
@@ -157,8 +157,8 @@ cmd_restart() {
         die "No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'."
     fi
 
-    local title account dir live_flags live_pw live_env live_group live_mute live_commands
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute live_commands <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_groups live_mute live_commands
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_groups live_mute live_commands <<<"$tab_info"
     if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
         die "incomplete tab metadata for tab '$_TARGET_TAB_ID'."
     fi
@@ -183,7 +183,7 @@ cmd_restart() {
     local cfg_flags cfg_pw cfg_env cfg_commands
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env cfg_commands <<<"$fallback"
 
-    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group" "$live_mute" "$cfg_commands"; then
+    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_groups" "$live_mute" "$cfg_commands"; then
         sort_tabs "$SOCKET"
     else
         die "Failed to relaunch '$title' after closing for restart. Check the error above."
@@ -214,8 +214,8 @@ cmd_clone() {
         die "No tab found with id '$_TARGET_TAB_ID' in instance '$_TARGET_INSTANCE_LABEL'."
     fi
 
-    local title account dir live_flags live_pw live_env live_group live_mute live_commands
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute live_commands <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_groups live_mute live_commands
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_groups live_mute live_commands <<<"$tab_info"
     if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
         die "incomplete tab metadata for tab '$_TARGET_TAB_ID'."
     fi
@@ -250,10 +250,10 @@ cmd_clone() {
     local cfg_flags cfg_pw cfg_env cfg_commands
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env cfg_commands <<<"$fallback"
 
-    if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group" "$live_mute" "$cfg_commands"; then
+    if launch_session "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_groups" "$live_mute" "$cfg_commands"; then
         sort_tabs "$SOCKET"
         if [[ -f "$CONFIG_FILE" ]]; then
-            _append_session_to_config "$CONFIG_FILE" "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$cfg_env" "$live_group" "$live_mute" "$cfg_commands"
+            _append_session_to_config "$CONFIG_FILE" "$clone_title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$cfg_env" "$live_groups" "$live_mute" "$cfg_commands"
         fi
         echo "Cloned '$title' as '$clone_title'." >&2
     fi
@@ -308,8 +308,8 @@ cmd_move() {
         die "Session is already in the target instance '$_MOVE_TARGET_INSTANCE'."
     fi
 
-    local title account dir live_flags live_pw live_env live_group live_mute live_commands
-    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_group live_mute live_commands <<<"$tab_info"
+    local title account dir live_flags live_pw live_env live_groups live_mute live_commands
+    IFS=$'\t' read -r title account dir live_flags live_pw live_env live_groups live_mute live_commands <<<"$tab_info"
     if [[ -z "$title" || -z "$account" || -z "$dir" ]]; then
         die "incomplete tab metadata for tab '$_TARGET_TAB_ID'."
     fi
@@ -334,7 +334,7 @@ cmd_move() {
     local cfg_flags cfg_pw cfg_env cfg_commands
     IFS=$'\t' read -r cfg_flags cfg_pw cfg_env cfg_commands <<<"$fallback"
 
-    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_group" "$live_mute" "$cfg_commands"; then
+    if launch_session "$title" "$dir" "$account" "$cfg_flags" "$cfg_pw" "$loc_args" "$cfg_env" "$live_groups" "$live_mute" "$cfg_commands"; then
         sort_tabs "$SOCKET"
         echo "Session '$title' moved to $_MOVE_TARGET_INSTANCE." >&2
     else

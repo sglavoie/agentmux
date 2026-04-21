@@ -73,10 +73,11 @@ cmd_list() {
 						end
 					),
 					instance: $inst_label,
-					group: ([$tab.windows[] | .user_vars.cc_group // empty | select(. != "")] | if length > 0 then .[0] else "" end)
+					groups: ([$tab.windows[] | .user_vars.cc_groups // empty | select(. != "")] |
+					if length > 0 then (.[0] | split("\u001f") | join(", ")) else "" end)
 				}
 			] | .[] |
-			[(.index | tostring), (.tab_id | tostring), .title, .account, .dir, .status, .instance, .group] |
+			[(.index | tostring), (.tab_id | tostring), .title, .account, .dir, .status, .instance, .groups] |
 			@tsv
 		')" || continue
         if [[ -n "$inst_rows" ]]; then
@@ -102,9 +103,9 @@ cmd_list() {
     local has_groups=false
 
     local -a rows=()
-    while IFS=$'\t' read -r row_idx tab_id title account dir status instance group; do
+    while IFS=$'\t' read -r row_idx tab_id title account dir status instance groups; do
         dir="$(shorten_path "$dir")"
-        rows+=("$row_idx"$'\t'"$tab_id"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status"$'\t'"$instance"$'\t'"$group")
+        rows+=("$row_idx"$'\t'"$tab_id"$'\t'"$title"$'\t'"$account"$'\t'"$dir"$'\t'"$status"$'\t'"$instance"$'\t'"$groups")
         ((${#row_idx} > w1)) && w1=${#row_idx}
         ((${#tab_id} > w2)) && w2=${#tab_id}
         ((${#title} > w3)) && w3=${#title}
@@ -112,9 +113,9 @@ cmd_list() {
         ((${#dir} > w5)) && w5=${#dir}
         ((${#status} > w6)) && w6=${#status}
         ((${#instance} > w7)) && w7=${#instance}
-        if [[ -n "$group" ]]; then
+        if [[ -n "$groups" ]]; then
             has_groups=true
-            ((${#group} > w8)) && w8=${#group}
+            ((${#groups} > w8)) && w8=${#groups}
         fi
     done <<<"$table"
 
@@ -133,7 +134,7 @@ cmd_list() {
     fi
 
     for row in "${rows[@]}"; do
-        IFS=$'\t' read -r row_idx tab_id title account dir status instance group <<<"$row"
+        IFS=$'\t' read -r row_idx tab_id title account dir status instance groups <<<"$row"
 
         local local_mk=" "
         if [[ "$status" == "focused" ]]; then
@@ -155,8 +156,8 @@ cmd_list() {
         fi
 
         if [[ "$has_groups" == "true" ]]; then
-            printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$row_idx")))s  %-$((w2 + $(extra_bytes "$tab_id")))s  %-$((w3 + $(extra_bytes "$title")))s  %-$((w4 + $(extra_bytes "$account")))s  %-$((w8 + $(extra_bytes "$group")))s  %-$((w7 + $(extra_bytes "$instance")))s  %-$((w5 + $(extra_bytes "$dir")))s  %s%s\n" \
-                "$local_color" "$local_mk" "$row_idx" "$tab_id" "$title" "$account" "$group" "$instance" "$dir" "$local_status" "$local_reset"
+            printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$row_idx")))s  %-$((w2 + $(extra_bytes "$tab_id")))s  %-$((w3 + $(extra_bytes "$title")))s  %-$((w4 + $(extra_bytes "$account")))s  %-$((w8 + $(extra_bytes "$groups")))s  %-$((w7 + $(extra_bytes "$instance")))s  %-$((w5 + $(extra_bytes "$dir")))s  %s%s\n" \
+                "$local_color" "$local_mk" "$row_idx" "$tab_id" "$title" "$account" "$groups" "$instance" "$dir" "$local_status" "$local_reset"
         else
             printf "%s%-$((max_mk + $(extra_bytes "$local_mk")))s%-$((w1 + $(extra_bytes "$row_idx")))s  %-$((w2 + $(extra_bytes "$tab_id")))s  %-$((w3 + $(extra_bytes "$title")))s  %-$((w4 + $(extra_bytes "$account")))s  %-$((w7 + $(extra_bytes "$instance")))s  %-$((w5 + $(extra_bytes "$dir")))s  %s%s\n" \
                 "$local_color" "$local_mk" "$row_idx" "$tab_id" "$title" "$account" "$instance" "$dir" "$local_status" "$local_reset"

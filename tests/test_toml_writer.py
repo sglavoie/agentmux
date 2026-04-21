@@ -173,14 +173,14 @@ def test_mixed_type_array_of_tables():
                 "directory": "~/proj",
                 "flags": "--verbose",
                 "env": "FOO=bar",
-                "group": "dev",
+                "groups": ["dev"],
             },
         ]
     }
     parsed = _roundtrip(data)
     check("minimal entry has 2 keys", len(parsed["sessions"][0]) == 2)
     check("full entry has 5 keys", len(parsed["sessions"][1]) == 5)
-    check("group round-trip", parsed["sessions"][1]["group"] == "dev")
+    check("groups round-trip", parsed["sessions"][1]["groups"] == ["dev"])
 
 
 # ── type handling ────────────────────────────────────────────────────

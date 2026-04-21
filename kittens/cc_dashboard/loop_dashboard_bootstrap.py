@@ -7,7 +7,7 @@ from typing import Any
 from cc_dashboard import config as _cfg
 from cc_dashboard.config_data import PALETTE_NAMES
 from cc_dashboard.drawing import safe_addstr
-from cc_dashboard.filters import SORT_MODES, _sort_pick_entries
+from cc_dashboard.filters import SORT_MODES, _session_groups, _sort_pick_entries
 from cc_dashboard.loop_helpers import (
     _build_delete_entries,
     _rstrip_blank_lines,
@@ -464,7 +464,9 @@ def _apply_default_sort(state: dict[str, Any]) -> None:
 def _restore_persisted_ui_state(state: dict[str, Any]) -> None:
     persisted = load_ui_state()
     valid_accounts = set(_cfg._account_names)
-    valid_groups = {s.get("group", "") or "(ungrouped)" for s in state["sessions"]}
+    valid_groups: set[str] = set()
+    for s in state["sessions"]:
+        valid_groups.update(_session_groups(s))
     prune_stale_entries(persisted, valid_accounts, valid_groups)
 
     if persisted.get("sort_mode", "default") != "default":

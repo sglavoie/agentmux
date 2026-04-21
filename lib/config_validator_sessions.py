@@ -41,7 +41,7 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
         "flags",
         "project_window",
         "env",
-        "group",
+        "groups",
         "mute",
         "commands",
     }
@@ -133,9 +133,11 @@ def validate_sessions(path: str, account_names: set[str]) -> Validator:
 
     group_counts: dict[str, int] = {}
     for entry in sessions:
-        group = entry.get("group", "")
-        if group:
-            group_counts[group] = group_counts.get(group, 0) + 1
+        groups = entry.get("groups", [])
+        if isinstance(groups, list):
+            for group in groups:
+                if isinstance(group, str) and group:
+                    group_counts[group] = group_counts.get(group, 0) + 1
 
     if len(group_counts) >= 2:
         for group, count in group_counts.items():

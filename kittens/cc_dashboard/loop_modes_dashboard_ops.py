@@ -5,6 +5,7 @@ from __future__ import annotations
 import curses
 from typing import Any
 
+from cc_dashboard.filters import _session_groups
 from cc_dashboard.loop_helpers import (
     _resolve_session_runtime_options,
 )
@@ -239,14 +240,9 @@ def _ga_build_actions(state: dict[str, Any], group_name: str) -> list[tuple[str,
     to_launch = [
         s
         for s in state["cfg"]._sessions
-        if (s.get("group", "") or "(ungrouped)") == group_name
-        and s["title"] not in running_titles
+        if group_name in _session_groups(s) and s["title"] not in running_titles
     ]
-    to_close = [
-        s
-        for s in state["sessions"]
-        if (s.get("group", "") or "(ungrouped)") == group_name
-    ]
+    to_close = [s for s in state["sessions"] if group_name in _session_groups(s)]
     actions = []
     if to_launch:
         actions.append(("launch", f"Launch ({len(to_launch)} session(s))"))
@@ -262,8 +258,7 @@ def _do_group_launch(state: dict[str, Any], group_name: str) -> None:
     to_launch = [
         s
         for s in state["cfg"]._sessions
-        if (s.get("group", "") or "(ungrouped)") == group_name
-        and s["title"] not in running_titles
+        if group_name in _session_groups(s) and s["title"] not in running_titles
     ]
     if not to_launch:
         state["msg"] = f"All sessions in '{group_name}' already running"
@@ -285,7 +280,7 @@ def _do_group_launch(state: dict[str, Any], group_name: str) -> None:
             entry.get("pw", ""),
             location=loc,
             env_vars=entry.get("env", ""),
-            group=entry.get("group", ""),
+            groups=entry.get("groups", []),
             commands=entry.get("commands", []),
         )
         if ok:
@@ -308,11 +303,7 @@ def _do_group_launch(state: dict[str, Any], group_name: str) -> None:
 
 def _do_group_close(state: dict[str, Any], group_name: str) -> None:
     """Transition to batch close confirmation for all running sessions in a group."""
-    targets = [
-        s
-        for s in state["sessions"]
-        if (s.get("group", "") or "(ungrouped)") == group_name
-    ]
+    targets = [s for s in state["sessions"] if group_name in _session_groups(s)]
     if not targets:
         state["msg"] = f"No running sessions in '{group_name}'"
         state["msg_frames"] = 20

@@ -3,6 +3,7 @@
 import curses
 from typing import Any
 
+from cc_dashboard.filters import _session_groups
 from cc_dashboard.remote.activity import list_activity_logs
 
 
@@ -73,9 +74,10 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         return False
 
     if state.get("group_filter_mode") and ord("1") <= key <= ord("9"):
-        groups = sorted(
-            {s.get("group", "") or "(ungrouped)" for s in state["sessions"]}
-        )
+        all_groups: set[str] = set()
+        for s in state["sessions"]:
+            all_groups.update(_session_groups(s))
+        groups = sorted(all_groups)
         idx = key - ord("1")
         if idx < len(groups):
             name = groups[idx]
@@ -190,7 +192,7 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
                 "flags": cfg_entry.get("flags", ""),
                 "pw": pw_val if pw_val else "none",
                 "env": cfg_entry.get("env", ""),
-                "group": cfg_entry.get("group", ""),
+                "groups": ", ".join(cfg_entry.get("groups", [])),
                 "commands": " ;; ".join(cmds_list),
             }
             state["new_active"] = 0
@@ -345,11 +347,9 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
             state["_save_ui_state"]()
     elif key == ord("*") and state["filtered"] and not state.get("group_filter_mode"):
         sess = state["filtered"][state["selected"]]
-        group = sess.get("group", "") or "(ungrouped)"
+        group = _session_groups(sess)[0]
         group_tids = {
-            s["tab_id"]
-            for s in state["filtered"]
-            if (s.get("group", "") or "(ungrouped)") == group
+            s["tab_id"] for s in state["filtered"] if group in _session_groups(s)
         }
         if group_tids <= state["marked"]:
             state["marked"] -= group_tids
@@ -409,12 +409,12 @@ def handle_list_mode(stdscr, key: int, state: dict[str, Any]) -> bool:
         init_prefs_state(state)
         state["mode"] = "prefs"
     elif key == ord("G"):
-        running_groups = {
-            s.get("group", "") or "(ungrouped)" for s in state["sessions"]
-        }
-        config_groups = {
-            s.get("group", "") or "(ungrouped)" for s in state["cfg"]._sessions
-        }
+        running_groups: set[str] = set()
+        for s in state["sessions"]:
+            running_groups.update(_session_groups(s))
+        config_groups: set[str] = set()
+        for s in state["cfg"]._sessions:
+            config_groups.update(_session_groups(s))
         groups = sorted(running_groups | config_groups)
         if len(groups) <= 1 and groups == ["(ungrouped)"]:
             state["msg"] = "No groups defined"

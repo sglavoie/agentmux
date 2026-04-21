@@ -24,7 +24,7 @@ def _spawn_detached_move(
     config_dir_override=None,
     env_vars="",
     color_override="",
-    group="",
+    groups=None,
     mute="",
     commands=None,
 ):
@@ -41,7 +41,7 @@ def _spawn_detached_move(
         config_dir_override=config_dir_override,
         env_vars=env_vars,
         color_override=color_override,
-        group=group,
+        groups=groups,
         mute=mute,
         commands=commands,
     )
@@ -79,7 +79,7 @@ def do_move(
             relaunch["config_dir_override"],
             env_vars,
             color_override=relaunch["cc_color"],
-            group=relaunch["group"],
+            groups=relaunch["groups"],
             mute=relaunch["mute"],
             commands=relaunch["commands"],
         )
@@ -105,7 +105,7 @@ def do_move(
         config_dir_override=relaunch["config_dir_override"],
         env_vars=env_vars,
         color_override=relaunch["cc_color"],
-        group=relaunch["group"],
+        groups=relaunch["groups"],
         mute=relaunch["mute"],
         commands=relaunch["commands"],
     )

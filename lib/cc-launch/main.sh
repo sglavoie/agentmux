@@ -33,7 +33,8 @@ Global options:
 	--instance LABEL    Target a specific Kitty instance by label (e.g. K:12345).
 						Use --sockets to list available instances.
 	--tab-id ID         Target tab id within the selected instance.
-	--group NAME        Filter by session group (for --all and --close).
+	--group NAME        Filter by session group (for --all and --close). Sessions
+						match if NAME is any of their groups (ANY match).
 						Mutually exclusive with --tab-id.
 	--dry-run           Preview what would be closed (for --close).
 	--target-instance LABEL
@@ -42,7 +43,7 @@ Global options:
 Config file (default: ~/.config/cc-manager/sessions.toml):
 	Override with CC_MANAGER_CONFIG env var.
 	TOML format with [[sessions]] entries. Required keys: title, directory, account.
-	Optional keys: flags, project_window, env.
+	Optional keys: flags, project_window, env, groups (array of strings).
 	Use "-" to disable global flags/project_window for a specific session.
 
 Accounts (defined in ~/.config/cc-manager/accounts.toml):

@@ -3,7 +3,7 @@
 
 Commands:
     read-accounts <file>   Output TSV: name, config_dir, color
-    read-sessions <file>   Output TSV: title, dir, account, flags, pw, env, group
+    read-sessions <file>   Output TSV: title, dir, account, flags, pw, env, groups, mute, cmds
     read-defaults <file>   Output TSV: key, value
     write-sessions <file>  Read JSON from stdin, write sessions.toml
 """
@@ -46,9 +46,10 @@ def cmd_read_accounts(path):
 def cmd_read_sessions(path):
     for s in toml_reader.read_sessions(path):
         cmds = "\x1f".join(_normalize_commands(s.get("commands")))
+        groups = "\x1f".join(s.get("groups", []))
         print(
             f"{s['title']}\t{s['dir']}\t{s['account']}"
-            f"\t{s['flags']}\t{s['pw']}\t{s['env']}\t{s['group']}"
+            f"\t{s['flags']}\t{s['pw']}\t{s['env']}\t{groups}"
             f"\t{s['mute']}\t{cmds}"
         )
 
@@ -101,8 +102,11 @@ def cmd_write_sessions(path):
             d["project_window"] = entry["pw"]
         if entry.get("env"):
             d["env"] = entry["env"]
-        if entry.get("group"):
-            d["group"] = entry["group"]
+        groups_val = entry.get("groups", [])
+        if isinstance(groups_val, str):
+            groups_val = [g for g in groups_val.split("\x1f") if g]
+        if groups_val:
+            d["groups"] = groups_val
         if entry.get("mute") == "true":
             d["mute"] = True
         commands = _normalize_commands(entry.get("commands"))
