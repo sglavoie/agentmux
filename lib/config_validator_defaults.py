@@ -95,8 +95,8 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
             dashboard_refresh, int
         ):
             validator.error("dashboard_refresh must be an integer")
-        elif dashboard_refresh < 0:
-            validator.error("dashboard_refresh must be non-negative")
+        elif dashboard_refresh <= 0:
+            validator.error("dashboard_refresh must be a positive integer")
 
     kitty_timeout = defaults.get("kitty_timeout")
     if kitty_timeout is not None:

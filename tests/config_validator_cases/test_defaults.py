@@ -72,6 +72,18 @@ dashboard_refresh = -1
         v = cv.validate_defaults(path)
         check("negative refresh: error", len(v.errors) >= 1)
 
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[defaults]
+dashboard_refresh = 0
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("zero refresh: error", len(v.errors) >= 1)
+
 
 def test_defaults_notification_types() -> None:
     """Non-boolean notification key produces an error."""
@@ -190,6 +202,18 @@ idle_alert_minutes = 10
         )
         v = cv.validate_defaults(path)
         check("idle_alert_minutes=10: no errors", len(v.errors) == 0)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+idle_alert_minutes = 0
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("idle_alert_minutes=0: no errors", len(v.errors) == 0)
 
     with tempfile.TemporaryDirectory() as d:
         path = write_file(

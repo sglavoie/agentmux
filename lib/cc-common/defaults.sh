@@ -78,6 +78,10 @@ _is_positive_int() {
 	[[ "$1" =~ ^[0-9]+$ ]] && [[ "$1" -gt 0 ]]
 }
 
+_is_nonnegative_int() {
+	[[ "$1" =~ ^[0-9]+$ ]]
+}
+
 _assign_default() {
 	local key="$1" value="$2"
 	case "$key" in
@@ -104,7 +108,7 @@ _assign_default() {
 	notify_permission) _DEFAULT_NOTIFY_PERMISSION="$value" ;;
 	notify_stop) _DEFAULT_NOTIFY_STOP="$value" ;;
 	idle_alert_minutes)
-		if _is_positive_int "$value"; then
+		if _is_nonnegative_int "$value"; then
 			_DEFAULT_IDLE_ALERT_MINUTES="$value"
 		else
 			warn "invalid idle_alert_minutes '$value', using default"
@@ -112,7 +116,7 @@ _assign_default() {
 		;;
 	notify_idle) _DEFAULT_NOTIFY_IDLE="$value" ;;
 	notify_min_secs)
-		if _is_positive_int "$value"; then
+		if _is_nonnegative_int "$value"; then
 			_DEFAULT_NOTIFY_MIN_SECS="$value"
 		else
 			warn "invalid notify_min_secs '$value', using default"
