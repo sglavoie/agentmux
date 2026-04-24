@@ -2,6 +2,7 @@
 """Launch-related runtime regression tests for the commands feature."""
 
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -202,8 +203,98 @@ launch_session 'test' {tmpdir!r} 'work' '' '' '' '' '' '' '-'
     check("bash launch: no extra windows", len(window_calls) == 0)
 
 
+def test_detached_runner_no_crash_on_exception() -> None:
+    """Detached runner script does not crash when a step raises an exception.
+
+    Regression test: the runner referenced `r` (subprocess result) after
+    the try/except block, but `r` was undefined when TimeoutExpired or
+    OSError was caught, causing a NameError that aborted remaining steps.
+    """
+    print("\n--- detached runner no crash on exception ---")
+    from cc_dashboard.remote.actions_lifecycle_detached import _DETACHED_RUNNER_SCRIPT
+
+    # Build a steps list where step 0 will fail with OSError (bad command),
+    # and step 1 is a harmless echo that should still run.
+    import json
+    import os
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        marker = os.path.join(tmpdir, "step1_ran")
+        steps = [
+            {
+                "cmd": ["/nonexistent/binary/that/does/not/exist"],
+                "sleep": 0,
+            },
+            {
+                "cmd": ["touch", marker],
+                "sleep": 0,
+            },
+        ]
+        env = os.environ.copy()
+        env["_CCM_STEPS"] = json.dumps(steps)
+        result = subprocess.run(
+            [sys.executable, "-c", _DETACHED_RUNNER_SCRIPT],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+        check(
+            "runner does not crash on OSError",
+            result.returncode == 0,
+        )
+        check(
+            "subsequent step still runs after OSError",
+            os.path.exists(marker),
+        )
+
+
+def test_detached_runner_window_id_substitution() -> None:
+    """Detached runner substitutes __WINDOW_ID__ only on successful launch."""
+    print("\n--- detached runner window id substitution ---")
+    from cc_dashboard.remote.actions_lifecycle_detached import _DETACHED_RUNNER_SCRIPT
+
+    import json
+    import os
+
+    # Simulate a failed launch step (exit code 1) — __WINDOW_ID__ should
+    # NOT be replaced in subsequent steps.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        steps = [
+            {
+                "cmd": [
+                    "bash",
+                    "-c",
+                    "echo 99; exit 1",
+                    "launch",
+                    "--type=tab",
+                ],
+                "sleep": 0,
+            },
+            {
+                "cmd": ["echo", "__WINDOW_ID__"],
+                "sleep": 0,
+            },
+        ]
+        env = os.environ.copy()
+        env["_CCM_STEPS"] = json.dumps(steps)
+        result = subprocess.run(
+            [sys.executable, "-c", _DETACHED_RUNNER_SCRIPT],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+        check(
+            "runner completes without crash on failed launch",
+            result.returncode == 0,
+        )
+
+
 def run_tests() -> None:
     test_python_launch_explicit_disable()
     test_detached_steps_explicit_disable()
     test_detached_steps_command_window_titles()
     test_bash_launch_explicit_disable()
+    test_detached_runner_no_crash_on_exception()
+    test_detached_runner_window_id_substitution()

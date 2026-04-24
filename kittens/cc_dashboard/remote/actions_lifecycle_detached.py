@@ -21,6 +21,7 @@ for i, step in enumerate(steps):
     retry = step.get("retry", 0)
     retry_sleep = step.get("retry_sleep", 0.1)
     sleep_after = step.get("sleep", 0)
+    r = None
     try:
         if retry:
             ok = False
@@ -44,7 +45,7 @@ for i, step in enumerate(steps):
         _log(f"step {i} timed out: {cmd[3:6]}")
     except OSError as e:
         _log(f"step {i} OSError: {cmd[3:6]} {e}")
-    if "launch" in cmd and "--type=tab" in cmd and r.returncode == 0:
+    if r is not None and "launch" in cmd and "--type=tab" in cmd and r.returncode == 0:
         wid = r.stdout.strip()
         if wid:
             for fs in steps[i+1:]:
