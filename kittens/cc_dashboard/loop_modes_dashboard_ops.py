@@ -281,6 +281,7 @@ def _do_group_launch(state: dict[str, Any], group_name: str) -> None:
             location=loc,
             env_vars=entry.get("env", ""),
             groups=entry.get("groups", []),
+            mute=entry.get("mute", ""),
             commands=entry.get("commands", []),
         )
         if ok:

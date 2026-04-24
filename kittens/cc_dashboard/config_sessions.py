@@ -52,6 +52,7 @@ def load_sessions() -> None:
                 "pw": entry.get("project_window", ""),
                 "env": entry.get("env", ""),
                 "groups": _normalize_groups(entry.get("groups")),
+                "mute": "1" if entry.get("mute") else "",
                 "commands": _normalize_commands(entry.get("commands")),
             }
         )
@@ -127,6 +128,7 @@ def _session_to_toml_entry(
     env: str = "",
     groups: list[str] | None = None,
     commands: list[str] | None = None,
+    mute: bool = False,
 ) -> dict[str, Any]:
     """Build a TOML-serializable dict for one ``[[sessions]]`` entry."""
     entry: dict[str, Any] = {"title": title, "directory": directory}
@@ -142,6 +144,8 @@ def _session_to_toml_entry(
         entry["groups"] = groups
     if commands:
         entry["commands"] = commands
+    if mute:
+        entry["mute"] = True
     return entry
 
 
@@ -203,6 +207,7 @@ def save_sessions(live_sessions: list[dict[str, Any]]) -> tuple[int, bool]:
                 session.get("cc_env", ""),
                 session.get("groups", []) or None,
                 commands or None,
+                mute=bool(session.get("muted")),
             )
         )
     if not header:

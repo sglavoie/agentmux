@@ -194,6 +194,7 @@ def handle_pick_mode(key, state):
                     location=loc,
                     env_vars=entry.get("env", ""),
                     groups=entry.get("groups", []),
+                    mute=entry.get("mute", ""),
                     commands=entry.get("commands", []),
                 )
         else:
@@ -213,6 +214,7 @@ def handle_pick_mode(key, state):
                 location=loc,
                 env_vars=entry.get("env", ""),
                 groups=entry.get("groups", []),
+                mute=entry.get("mute", ""),
                 commands=entry.get("commands", []),
             )
         state["should_exit"] = True

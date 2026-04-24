@@ -209,6 +209,74 @@ def test_control_char_escaping():
         os.unlink(path)
 
 
+def test_mute_roundtrip():
+    print("\n--- mute flag roundtrip ---")
+    data = {
+        "sessions": [
+            {
+                "title": "W:muted-session",
+                "directory": "~/projects/muted",
+                "account": "work",
+                "mute": True,
+            },
+            {
+                "title": "W:normal-session",
+                "directory": "~/projects/normal",
+                "account": "work",
+            },
+        ]
+    }
+    toml_str = toml_writer.dumps(data)
+    check("mute = true in output", "mute = true" in toml_str)
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write(toml_str)
+        path = f.name
+    try:
+        sessions = toml_reader.read_sessions(path)
+        check("two sessions read back", len(sessions) == 2)
+        check("muted session has mute=true", sessions[0]["mute"] == "true")
+        check("normal session has mute=empty", sessions[1]["mute"] == "")
+    finally:
+        os.unlink(path)
+
+
+def test_session_to_toml_entry_mute():
+    print("\n--- _session_to_toml_entry mute parameter ---")
+    kitten_path = os.path.join(
+        os.path.dirname(__file__), "..", "kittens"
+    )
+    sys.path.insert(0, kitten_path)
+    from cc_dashboard.config_sessions import _session_to_toml_entry
+
+    entry_muted = _session_to_toml_entry(
+        "W:test", "~/proj", "work", mute=True
+    )
+    check("muted entry has mute key", "mute" in entry_muted)
+    check("muted entry mute is True", entry_muted["mute"] is True)
+
+    entry_not_muted = _session_to_toml_entry(
+        "W:test", "~/proj", "work", mute=False
+    )
+    check("non-muted entry omits mute key", "mute" not in entry_not_muted)
+
+    entry_default = _session_to_toml_entry("W:test", "~/proj", "work")
+    check("default entry omits mute key", "mute" not in entry_default)
+
+    # Verify full round-trip: entry -> TOML -> parse
+    full_data = {"sessions": [entry_muted, entry_not_muted]}
+    toml_str = toml_writer.dumps(full_data)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write(toml_str)
+        path = f.name
+    try:
+        sessions = toml_reader.read_sessions(path)
+        check("muted session round-trips mute=true", sessions[0]["mute"] == "true")
+        check("non-muted session round-trips mute=empty", sessions[1]["mute"] == "")
+    finally:
+        os.unlink(path)
+
+
 def test_float_values():
     print("\n--- float values ---")
     data = {
@@ -242,6 +310,8 @@ def main():
     test_defaults_roundtrip()
     test_writer_escaping()
     test_control_char_escaping()
+    test_mute_roundtrip()
+    test_session_to_toml_entry_mute()
     test_float_values()
 
     print(f"\n{'=' * 40}")

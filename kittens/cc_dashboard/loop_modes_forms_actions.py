@@ -65,6 +65,7 @@ def handle_override_mode(key, state):
                 env_vars=entry.get("env", ""),
                 color_override=entry.get("cc_color", ""),
                 groups=entry.get("groups", []),
+                mute=entry.get("mute", ""),
                 commands=entry.get("commands", []),
             )
             state["should_exit"] = True
