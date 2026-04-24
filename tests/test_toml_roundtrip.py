@@ -277,6 +277,96 @@ def test_session_to_toml_entry_mute():
         os.unlink(path)
 
 
+def test_update_session_preserves_mute():
+    print("\n--- update_session preserves mute ---")
+    kitten_path = os.path.join(
+        os.path.dirname(__file__), "..", "kittens"
+    )
+    if kitten_path not in sys.path:
+        sys.path.insert(0, kitten_path)
+    from cc_dashboard.config_sessions import (
+        _session_to_toml_entry,
+    )
+    from cc_dashboard import config_state as _state
+    import cc_dashboard.config_sessions as _csess
+
+    # Build a sessions.toml with one muted session
+    entry_muted = _session_to_toml_entry(
+        "W:muted-proj", "~/projects/muted", "work", mute=True
+    )
+    entry_normal = _session_to_toml_entry(
+        "W:normal-proj", "~/projects/normal", "work", flags="--verbose"
+    )
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".toml", delete=False, dir=tempfile.gettempdir()
+    ) as f:
+        f.write(toml_writer.dumps({"sessions": [entry_muted, entry_normal]}))
+        path = f.name
+
+    # Patch config path at the config_sessions module level (where it's imported)
+    orig_path_fn = _csess._sessions_config_path
+    _csess._sessions_config_path = lambda: path
+    orig_sessions = list(_state._sessions)
+    orig_account_names = list(_state._account_names)
+    _state._sessions = []
+    _state._account_names = ["work"]
+
+    try:
+        # Simulate an edit: change title and flags, but don't pass mute
+        ok = _csess.update_session(
+            "W:muted-proj",
+            "W:muted-proj-renamed",
+            "~/projects/muted",
+            "work",
+            flags="--new-flag",
+        )
+        check("update_session found the entry", ok)
+
+        # Re-read the file and verify mute was preserved
+        sessions = toml_reader.read_sessions(path)
+        check("two sessions after update", len(sessions) == 2)
+        check(
+            "updated session title changed",
+            sessions[0]["title"] == "W:muted-proj-renamed",
+        )
+        check(
+            "updated session flags changed",
+            sessions[0]["flags"] == "--new-flag",
+        )
+        check(
+            "mute preserved through update",
+            sessions[0]["mute"] == "true",
+        )
+        check(
+            "normal session mute still empty",
+            sessions[1]["mute"] == "",
+        )
+
+        # Verify explicit mute=False override works
+        ok2 = _csess.update_session(
+            "W:muted-proj-renamed",
+            "W:muted-proj-renamed",
+            "~/projects/muted",
+            "work",
+            mute=False,
+        )
+        check("update_session explicit mute=False", ok2)
+        sessions2 = toml_reader.read_sessions(path)
+        check(
+            "explicit mute=False clears mute",
+            sessions2[0]["mute"] == "",
+        )
+    finally:
+        _csess._sessions_config_path = orig_path_fn
+        _state._sessions = orig_sessions
+        _state._account_names = orig_account_names
+        os.unlink(path)
+        # Clean up backup file if created
+        bak = path + ".bak"
+        if os.path.exists(bak):
+            os.unlink(bak)
+
+
 def test_float_values():
     print("\n--- float values ---")
     data = {
@@ -312,6 +402,7 @@ def main():
     test_control_char_escaping()
     test_mute_roundtrip()
     test_session_to_toml_entry_mute()
+    test_update_session_preserves_mute()
     test_float_values()
 
     print(f"\n{'=' * 40}")

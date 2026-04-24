@@ -260,10 +260,15 @@ def update_session(
     env: str = "",
     groups: list[str] | None = None,
     commands: list[str] | None = None,
+    mute: bool | None = None,
 ) -> bool:
     """Update an existing session entry by original title.
 
     Returns True if the entry was found and updated, False otherwise.
+
+    When *mute* is ``None`` (the default), the existing mute value from
+    the TOML file is preserved.  Pass ``True`` or ``False`` explicitly to
+    change it.
     """
     path = _sessions_config_path()
     if not os.path.isfile(path):
@@ -277,8 +282,19 @@ def update_session(
     found = False
     for index, entry in enumerate(entries):
         if entry.get("title") == original_title:
+            # Preserve the existing mute flag when the caller does not
+            # explicitly override it (mute=None).
+            effective_mute = bool(entry.get("mute")) if mute is None else mute
             entries[index] = _session_to_toml_entry(
-                title, directory, account, flags, pw, env, groups, commands
+                title,
+                directory,
+                account,
+                flags,
+                pw,
+                env,
+                groups,
+                commands,
+                mute=effective_mute,
             )
             found = True
             if original_title != title:
