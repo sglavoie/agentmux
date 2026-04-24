@@ -177,6 +177,7 @@ def handle_pick_mode(key, state):
             if state["multi_instance"]
             else state["home_socket"]
         )
+        running_count = state["pick_running_count"]
         if state.get("pick_marked"):
             for entry in state["pick_filtered"]:
                 if entry["title"] not in state["pick_marked"]:
@@ -200,6 +201,11 @@ def handle_pick_mode(key, state):
         else:
             entry = _get_pick_entry(state)
             if entry is None:
+                return True
+            # Skip launching sessions that are already running
+            if state["pick_selected"] < running_count:
+                state["msg"] = "Session is already running"
+                state["msg_frames"] = 20
                 return True
             loc = state["compute_insert_location"](
                 target_socket, entry["account"], entry["title"]

@@ -346,6 +346,68 @@ def test_strip_override_marker_types():
     check("plain title tuple has empty emoji", plain_tuple[1] == "")
 
 
+# ── _config_dir tilde expansion ──────────────────────────────────────
+
+
+def test_config_dir_tilde_expansion():
+    """_config_dir correctly expands ~ in CC_MANAGER_CONFIG and CC_MANAGER_ACCOUNTS."""
+    print("\n--- _config_dir tilde expansion ---")
+    sys.path.insert(0, os.path.join(REPO_ROOT, "kittens"))
+    from cc_dashboard.config_paths import _config_dir
+
+    home = os.path.expanduser("~")
+    saved_config = os.environ.get("CC_MANAGER_CONFIG")
+    saved_accounts = os.environ.get("CC_MANAGER_ACCOUNTS")
+
+    try:
+        # CC_MANAGER_CONFIG with ~ pointing to a file
+        # Since the file won't exist, _config_dir treats it as a directory path.
+        # But the key is that ~ gets expanded.
+        os.environ["CC_MANAGER_CONFIG"] = "~/cc-manager/sessions.toml"
+        os.environ.pop("CC_MANAGER_ACCOUNTS", None)
+        result = _config_dir()
+        check(
+            "CC_MANAGER_CONFIG tilde expanded (no literal ~)",
+            "~" not in result,
+        )
+        check(
+            "CC_MANAGER_CONFIG result contains home",
+            result.startswith(home),
+        )
+
+        # CC_MANAGER_ACCOUNTS with ~
+        os.environ.pop("CC_MANAGER_CONFIG", None)
+        os.environ["CC_MANAGER_ACCOUNTS"] = "~/cc-manager/accounts.toml"
+        result = _config_dir()
+        check(
+            "CC_MANAGER_ACCOUNTS tilde expanded (no literal ~)",
+            "~" not in result,
+        )
+        check(
+            "CC_MANAGER_ACCOUNTS result contains home",
+            result.startswith(home),
+        )
+
+        # Neither set — should use XDG default
+        os.environ.pop("CC_MANAGER_CONFIG", None)
+        os.environ.pop("CC_MANAGER_ACCOUNTS", None)
+        result = _config_dir()
+        check(
+            "default config dir ends with cc-manager",
+            result.endswith("cc-manager"),
+        )
+    finally:
+        # Restore env
+        if saved_config is not None:
+            os.environ["CC_MANAGER_CONFIG"] = saved_config
+        else:
+            os.environ.pop("CC_MANAGER_CONFIG", None)
+        if saved_accounts is not None:
+            os.environ["CC_MANAGER_ACCOUNTS"] = saved_accounts
+        else:
+            os.environ.pop("CC_MANAGER_ACCOUNTS", None)
+
+
 # ── run all ──────────────────────────────────────────────────────────
 
 
@@ -367,6 +429,7 @@ if __name__ == "__main__":
     test_quick_validate()
     test_is_claude_process()
     test_strip_override_marker_types()
+    test_config_dir_tilde_expansion()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:

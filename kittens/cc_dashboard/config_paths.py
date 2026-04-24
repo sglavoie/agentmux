@@ -65,10 +65,11 @@ def _config_dir() -> str:
     """Return the base config directory, mirroring resolve_config_dir() from bin/ccm."""
     env_config = os.environ.get("CC_MANAGER_CONFIG", "")
     if env_config:
-        return os.path.dirname(env_config) if os.path.isfile(env_config) else env_config
+        expanded = os.path.expanduser(env_config)
+        return os.path.dirname(expanded) if os.path.isfile(expanded) else expanded
     env_accounts = os.environ.get("CC_MANAGER_ACCOUNTS", "")
     if env_accounts:
-        return os.path.dirname(env_accounts)
+        return os.path.dirname(os.path.expanduser(env_accounts))
     xdg = os.environ.get(
         "XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config")
     )
