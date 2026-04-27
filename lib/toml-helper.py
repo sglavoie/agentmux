@@ -114,7 +114,7 @@ def cmd_write_sessions(path):
             d["commands"] = commands
         sessions.append(d)
 
-    tmp_path = path + ".tmp"
+    tmp_path = f"{path}.tmp.{os.getpid()}"
     try:
         with open(tmp_path, "w") as f:
             f.write(toml_writer.dumps({"sessions": sessions}, header=header))

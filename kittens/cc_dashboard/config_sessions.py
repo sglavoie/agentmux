@@ -155,7 +155,7 @@ def _write_sessions_toml(
     """Serialize *sessions_data* (list of TOML entry dicts) to *path* atomically."""
     toml_writer = _import_toml_writer()
     content = toml_writer.dumps({"sessions": sessions_data}, header=header)
-    tmp_path = path + ".tmp"
+    tmp_path = f"{path}.tmp.{os.getpid()}"
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(tmp_path, "w") as f:

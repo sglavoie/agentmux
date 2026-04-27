@@ -117,7 +117,7 @@ def save_hooks(global_hooks: dict[str, Any], account_overrides: dict[str, Any]) 
     if os.path.isfile(path):
         shutil.copy2(path, path + ".bak")
 
-    tmp_path = path + ".tmp"
+    tmp_path = f"{path}.tmp.{os.getpid()}"
     try:
         with open(tmp_path, "w") as f:
             json.dump(

@@ -127,7 +127,7 @@ def _save_tab_statuses(statuses: list[str]) -> str:
         out["defaults"] = defaults
     if notifications:
         out["notifications"] = notifications
-    tmp_path = path + ".tmp"
+    tmp_path = f"{path}.tmp.{os.getpid()}"
     try:
         with open(tmp_path, "w") as f:
             f.write(toml_writer.dumps(out, header=header))
