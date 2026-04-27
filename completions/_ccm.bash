@@ -69,7 +69,7 @@ _ccm() {
         launch)
             if [[ "$prev" == "--group" ]]; then
                 # Try to get groups from sessions.toml
-                local sessions_toml="${CC_MANAGER_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager}/sessions.toml"
+                local sessions_toml="${CC_MANAGER_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/cc-manager/sessions.toml}"
                 local helper="$HOME/.local/lib/cc-manager/toml-helper.py"
                 if [[ -f "$sessions_toml" && -f "$helper" ]]; then
                     local groups

@@ -128,7 +128,6 @@ Navigation:
 
 Examples:
     ccm dashboard               # Open the dashboard overlay
-    ccm launch --dashboard      # Launch sessions then open dashboard
 HELP
 		;;
 	switch)

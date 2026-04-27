@@ -467,6 +467,76 @@ def test_picker_mute_output():
         os.unlink(path)
 
 
+# ── shell CONFIG_FILE respects XDG_CONFIG_HOME ─────────────────────
+
+
+def test_shell_config_file_xdg():
+    """CONFIG_FILE in cc-common/config.sh respects XDG_CONFIG_HOME."""
+    print("\n--- shell CONFIG_FILE XDG_CONFIG_HOME ---")
+    import subprocess
+
+    lib_dir = os.path.join(REPO_ROOT, "lib")
+    config_sh = os.path.join(lib_dir, "cc-common", "config.sh")
+
+    # Verify the shell file exists
+    check("config.sh exists", os.path.isfile(config_sh))
+
+    # Verify all three config paths use XDG_CONFIG_HOME by reading file content
+    with open(config_sh) as f:
+        content = f.read()
+
+    # All three paths should reference XDG_CONFIG_HOME in their defaults
+    check(
+        "CONFIG_FILE uses XDG_CONFIG_HOME",
+        "XDG_CONFIG_HOME" in content.split("CONFIG_FILE=")[1].split("\n")[0],
+    )
+    check(
+        "ACCOUNTS_CONFIG uses XDG_CONFIG_HOME",
+        "XDG_CONFIG_HOME" in content.split("ACCOUNTS_CONFIG=")[1].split("\n")[0],
+    )
+    check(
+        "DEFAULTS_CONFIG uses XDG_CONFIG_HOME",
+        "XDG_CONFIG_HOME" in content.split("DEFAULTS_CONFIG=")[1].split("\n")[0],
+    )
+
+    # Use bash to evaluate the paths with a custom XDG_CONFIG_HOME and verify
+    # all three resolve to the same directory
+    custom_xdg = "/tmp/test-xdg-config-home"
+    script = f"""
+        export XDG_CONFIG_HOME="{custom_xdg}"
+        unset CC_MANAGER_CONFIG CC_MANAGER_ACCOUNTS CC_MANAGER_DEFAULTS
+        # Define stubs for functions sourced by config.sh's parent modules
+        warn() {{ :; }}
+        err() {{ :; }}
+        die() {{ echo "FATAL: $*" >&2; exit 1; }}
+        source "{config_sh}"
+        echo "$CONFIG_FILE"
+        echo "$ACCOUNTS_CONFIG"
+        echo "$DEFAULTS_CONFIG"
+    """
+    result = subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        lines = result.stdout.strip().split("\n")
+        check("three config paths emitted", len(lines) == 3)
+        if len(lines) == 3:
+            config_dir_session = os.path.dirname(lines[0])
+            config_dir_accounts = os.path.dirname(lines[1])
+            config_dir_defaults = os.path.dirname(lines[2])
+            check(
+                "CONFIG_FILE dir matches custom XDG",
+                config_dir_session == f"{custom_xdg}/cc-manager",
+            )
+            check(
+                "all three share same config directory",
+                config_dir_session == config_dir_accounts == config_dir_defaults,
+            )
+    else:
+        check("bash evaluation succeeded", False)
+
+
 # ── run all ──────────────────────────────────────────────────────────
 
 
@@ -490,6 +560,7 @@ if __name__ == "__main__":
     test_strip_override_marker_types()
     test_config_dir_tilde_expansion()
     test_picker_mute_output()
+    test_shell_config_file_xdg()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:
