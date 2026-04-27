@@ -15,9 +15,13 @@ _extract_sessions_from_ls() {
 			{
 				title: (.title | sub($strip_re; "") | sub("^" + $emoji_re; "")),
 				dir: (
-					[.windows[] |
-						select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
-					] | if length > 0 then .[0].cwd else .windows[0].cwd end
+					[.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
+					if length > 0 then .[0]
+					else
+						([.windows[] |
+							select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+						] | if length > 0 then .[0].cwd else .windows[0].cwd end)
+					end
 				),
 				account: (
 					[.windows[] | .user_vars.cc_account // empty | select(. != "")] |

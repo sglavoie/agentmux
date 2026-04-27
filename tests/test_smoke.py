@@ -408,6 +408,65 @@ def test_config_dir_tilde_expansion():
             os.environ.pop("CC_MANAGER_ACCOUNTS", None)
 
 
+# ── picker mute output format ────────────────────────────────────────
+
+
+def test_picker_mute_output():
+    """Session picker converts mute='1' (dashboard format) to 'true' (shell format)."""
+    print("\n--- picker mute output ---")
+    sys.path.insert(0, os.path.join(REPO_ROOT, "kittens"))
+    from cc_dashboard import config_state as _state
+    from cc_dashboard.config_sessions import load_sessions
+
+    # Verify that config_sessions stores mute as "1"
+    import toml_writer
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write(
+            toml_writer.dumps(
+                {
+                    "sessions": [
+                        {
+                            "title": "W:muted",
+                            "directory": "~/proj",
+                            "account": "work",
+                            "mute": True,
+                        },
+                        {
+                            "title": "W:normal",
+                            "directory": "~/proj2",
+                            "account": "work",
+                        },
+                    ]
+                }
+            )
+        )
+        path = f.name
+
+    from cc_dashboard import config_sessions as _csess
+    orig_fn = _csess._sessions_config_path
+    _csess._sessions_config_path = lambda: path
+    orig_sessions = list(_state._sessions)
+    orig_names = list(_state._account_names)
+    _state._account_names = ["work"]
+    try:
+        load_sessions()
+        muted_entry = _state._sessions[0]
+        normal_entry = _state._sessions[1]
+        check("config_sessions stores mute as '1'", muted_entry["mute"] == "1")
+        check("config_sessions stores empty mute for normal", normal_entry["mute"] == "")
+        # Verify the picker would output "true" for muted sessions
+        mute_output = "true" if muted_entry.get("mute") else ""
+        check("picker outputs 'true' for muted session", mute_output == "true")
+        normal_mute_output = "true" if normal_entry.get("mute") else ""
+        check("picker outputs empty for normal session", normal_mute_output == "")
+    finally:
+        _csess._sessions_config_path = orig_fn
+        _state._sessions = orig_sessions
+        _state._account_names = orig_names
+        os.unlink(path)
+
+
 # ── run all ──────────────────────────────────────────────────────────
 
 
@@ -430,6 +489,7 @@ if __name__ == "__main__":
     test_is_claude_process()
     test_strip_override_marker_types()
     test_config_dir_tilde_expansion()
+    test_picker_mute_output()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:

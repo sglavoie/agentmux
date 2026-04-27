@@ -54,9 +54,13 @@ cmd_list() {
 						end
 					),
 					dir: (
-						[$tab.windows[] |
-							select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
-						] | if length > 0 then .[0].cwd else ($tab.windows[0].cwd // "unknown") end
+						[$tab.windows[] | .user_vars.cc_cwd // empty | select(. != "")] |
+						if length > 0 then .[0]
+						else
+							([$tab.windows[] |
+								select([.foreground_processes[]?.cmdline[]? | test("claude")] | any)
+							] | if length > 0 then .[0].cwd else ($tab.windows[0].cwd // "unknown") end)
+						end
 					),
 					status: (
 						if ($os.is_focused and $tab.is_focused)

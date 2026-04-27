@@ -351,7 +351,7 @@ def main():
         flags = entry.get("flags", "")
         env = entry.get("env", "")
         groups = "\x1f".join(entry.get("groups", []))
-        mute = entry.get("mute", "")
+        mute = "true" if entry.get("mute") else ""
         cmds = "\x1f".join(_normalize_commands(entry.get("commands")))
         print(
             f"{entry['title']}\t{entry['dir']}\t{entry['account']}\t{flags}\t{pw}\t{env}\t{groups}\t{mute}\t{cmds}"
