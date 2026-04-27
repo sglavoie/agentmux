@@ -131,7 +131,7 @@ _assign_default() {
 		fi
 		;;
 	dim_after_minutes)
-		if _is_positive_int "$value"; then
+		if _is_nonnegative_int "$value"; then
 			_DEFAULT_DIM_AFTER_MINUTES="$value"
 		else
 			warn "invalid dim_after_minutes '$value', using default"

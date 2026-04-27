@@ -7,6 +7,7 @@ import sys
 from cc_dashboard import config as _cfg
 from cc_dashboard.remote.command import kitty_cmd
 from cc_dashboard.remote.shared import (
+    _ICON_DASHBOARD,
     _ICON_STAR,
     _MANAGED_TITLE_RE,
     _strip_account_prefix,
@@ -54,7 +55,10 @@ def do_sort_tabs(socket):
         tab_id = tab.get("id", 0)
         title = tab.get("title", "")
         stripped = _strip_icons(title)
-        pinned = title.startswith(_ICON_STAR)
+        _pin_title = title
+        if _pin_title.startswith(_ICON_DASHBOARD):
+            _pin_title = _pin_title[len(_ICON_DASHBOARD) :]
+        pinned = _pin_title.startswith(_ICON_STAR)
         if pinned:
             has_pinned = True
 

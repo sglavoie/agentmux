@@ -50,7 +50,9 @@ compute_insert_location() {
 			fi
 
 			local pin_prefix="1"
-			if [[ "$traw" == "${_ICON_STAR}"* ]]; then
+			local _pin_check="$traw"
+			_pin_check="${_pin_check#"$_ICON_DASHBOARD"}"
+			if [[ "$_pin_check" == "${_ICON_STAR}"* ]]; then
 				pin_prefix="0"
 				has_pinned=true
 			fi
@@ -144,7 +146,9 @@ sort_tabs() {
 		tab_stripped+=("$tstripped")
 		tab_focused+=("$tfocused")
 
-		if [[ "$ttitle" == "${_ICON_STAR}"* ]]; then
+		local _pin_title="$ttitle"
+		_pin_title="${_pin_title#"$_ICON_DASHBOARD"}"
+		if [[ "$_pin_title" == "${_ICON_STAR}"* ]]; then
 			tab_pinned+=("1")
 			has_pinned=true
 		else

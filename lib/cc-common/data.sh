@@ -111,5 +111,5 @@ _icon_strip_regex() {
 	states=$(printf '%s' "$_ICONS_JSON" | jq -r '
         [.state_order[] as $k | .states[$k]] | join("|")
     ')
-	printf '^(%s)?(%s)?(%s)?(%s)?' "$_ICON_STAR" "$_ICON_FLAG" "$_ICON_MUTE" "$states"
+	printf '^(%s)?(%s)?(%s)?(%s)?(%s)?' "$_ICON_DASHBOARD" "$_ICON_STAR" "$_ICON_FLAG" "$_ICON_MUTE" "$states"
 }
