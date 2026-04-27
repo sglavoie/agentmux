@@ -37,7 +37,6 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
         "tab_statuses",
         "notes_editor",
         "kitty_timeout",
-        "idle_poll_interval",
     }
     unknown_defaults = set(defaults.keys()) - known_defaults_keys
     if unknown_defaults:
@@ -107,17 +106,6 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
         elif kitty_timeout > 300:
             validator.error("kitty_timeout must be at most 300")
 
-    idle_poll_interval = defaults.get("idle_poll_interval")
-    if idle_poll_interval is not None:
-        if isinstance(idle_poll_interval, bool) or not isinstance(
-            idle_poll_interval, int
-        ):
-            validator.error("idle_poll_interval must be an integer")
-        elif idle_poll_interval < 5:
-            validator.error("idle_poll_interval must be at least 5 (seconds)")
-        elif idle_poll_interval > 3600:
-            validator.error("idle_poll_interval must be at most 3600 (seconds)")
-
     for key in ("error", "permission", "stop", "idle"):
         value = notifications.get(key)
         if value is not None and not isinstance(value, bool):
@@ -148,6 +136,30 @@ def validate_defaults(path: str, valid_sort: set[str] | None = None) -> Validato
                         "notifications.ignore_patterns: "
                         f"invalid regex {pattern!r}: {exc}"
                     )
+
+    dim_after_minutes = notifications.get("dim_after_minutes")
+    if dim_after_minutes is not None:
+        if isinstance(dim_after_minutes, bool) or not isinstance(
+            dim_after_minutes, (int, float)
+        ):
+            validator.error("notifications.dim_after_minutes must be a number")
+        elif dim_after_minutes < 0:
+            validator.error("notifications.dim_after_minutes must be non-negative")
+
+    idle_poll_interval = notifications.get("idle_poll_interval")
+    if idle_poll_interval is not None:
+        if isinstance(idle_poll_interval, bool) or not isinstance(
+            idle_poll_interval, int
+        ):
+            validator.error("notifications.idle_poll_interval must be an integer")
+        elif idle_poll_interval < 5:
+            validator.error(
+                "notifications.idle_poll_interval must be at least 5 (seconds)"
+            )
+        elif idle_poll_interval > 3600:
+            validator.error(
+                "notifications.idle_poll_interval must be at most 3600 (seconds)"
+            )
 
     tab_statuses = defaults.get("tab_statuses")
     if tab_statuses is not None:

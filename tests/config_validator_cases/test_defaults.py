@@ -21,6 +21,8 @@ dashboard_refresh = 5
 [notifications]
 error = true
 idle_alert_minutes = 10
+dim_after_minutes = 10
+idle_poll_interval = 30
 """,
         )
         v = cv.validate_defaults(path)
@@ -301,6 +303,112 @@ ignore_patterns = ["valid", "[unclosed"]
         )
 
 
+def test_defaults_dim_after_minutes() -> None:
+    """dim_after_minutes validation (in [notifications])."""
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+dim_after_minutes = 10
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("dim_after_minutes=10: no errors", len(v.errors) == 0)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+dim_after_minutes = 0
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("dim_after_minutes=0: no errors", len(v.errors) == 0)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+dim_after_minutes = -5
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("dim_after_minutes=-5: error", len(v.errors) >= 1)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+dim_after_minutes = "ten"
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("dim_after_minutes=string: error", len(v.errors) >= 1)
+
+
+def test_defaults_idle_poll_interval() -> None:
+    """idle_poll_interval validation (in [notifications])."""
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+idle_poll_interval = 30
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("idle_poll_interval=30: no errors", len(v.errors) == 0)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+idle_poll_interval = 3
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("idle_poll_interval=3: error (below 5)", len(v.errors) >= 1)
+
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+idle_poll_interval = 5000
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("idle_poll_interval=5000: error (above 3600)", len(v.errors) >= 1)
+
+    # idle_poll_interval under [defaults] should warn as unknown key
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[defaults]
+idle_poll_interval = 30
+""",
+        )
+        v = cv.validate_defaults(path)
+        check(
+            "idle_poll_interval under [defaults]: unknown key warning",
+            any("idle_poll_interval" in w for w in v.warnings),
+        )
+
+
 def run() -> None:
     test_valid_defaults()
     test_defaults_unknown_key()
@@ -316,3 +424,5 @@ def run() -> None:
     test_defaults_min_secs()
     test_defaults_ignore_patterns_valid_regex()
     test_defaults_ignore_patterns_invalid_regex()
+    test_defaults_dim_after_minutes()
+    test_defaults_idle_poll_interval()
