@@ -14,6 +14,8 @@
 #                    Values must not contain unescaped spaces. Use "-" to disable.
 #   groups         — Array of group names for organizing related sessions in the dashboard.
 #                    A session can belong to multiple groups.
+#   mute           — Suppress macOS desktop notifications for this session.
+#                    Values: true = muted, false or omitted = normal
 #   commands       — Array of commands to run in separate windows alongside Claude.
 #                    Use "shell" for a plain terminal. Auto-enables stack layout if
 #                    project_window is not set. Command windows use --hold.

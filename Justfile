@@ -173,6 +173,8 @@ test:
     python3 tests/test_toml_helper.py
     python3 tests/test_commands_runtime.py
     python3 tests/test_dashboard_drawing.py
+    python3 tests/test_dashboard_title.py
+    python3 tests/test_palette_fallback.py
     python3 tests/test_override_resolution.py
     python3 tests/test_smoke.py
 

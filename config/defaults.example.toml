@@ -58,3 +58,4 @@ tab_statuses = ["reviewing", "WIP", "blocked", "testing", "done", "paused", "deb
 # min_secs = 3
 # ignore_patterns = ["Conversation cleared", "Context compacted"]
 # dim_after_minutes = 10  # Auto-dim tabs idle longer than this (0 = disabled)
+# idle_poll_interval = 30  # Seconds between activity file scans

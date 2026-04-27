@@ -353,6 +353,137 @@ groups = ["solo"]
         )
 
 
+def test_sessions_duplicate_title() -> None:
+    """Duplicate session titles produce a warning."""
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "sessions.toml",
+            """\
+[[sessions]]
+title = "dupe"
+directory = "~"
+
+[[sessions]]
+title = "dupe"
+directory = "~"
+""",
+        )
+        v = cv.validate_sessions(path, set())
+        check(
+            "duplicate title: warning",
+            any("duplicate" in w and "dupe" in w for w in v.warnings),
+        )
+
+
+def test_sessions_mute_validation() -> None:
+    """mute key validates accepted values."""
+    # Valid: true
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "sessions.toml",
+            """\
+[[sessions]]
+title = "test"
+directory = "~"
+mute = true
+""",
+        )
+        v = cv.validate_sessions(path, set())
+        check(
+            "mute=true: no warnings about mute",
+            not any("mute" in w for w in v.warnings),
+        )
+
+    # Valid: false
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "sessions.toml",
+            """\
+[[sessions]]
+title = "test"
+directory = "~"
+mute = false
+""",
+        )
+        v = cv.validate_sessions(path, set())
+        check(
+            "mute=false: no warnings about mute",
+            not any("mute" in w for w in v.warnings),
+        )
+
+    # Invalid: string "yes"
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "sessions.toml",
+            """\
+[[sessions]]
+title = "test"
+directory = "~"
+mute = "yes"
+""",
+        )
+        v = cv.validate_sessions(path, set())
+        check(
+            "mute='yes': warning",
+            any("mute" in w for w in v.warnings),
+        )
+
+    # Valid: "-" (disable)
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "sessions.toml",
+            """\
+[[sessions]]
+title = "test"
+directory = "~"
+mute = "-"
+""",
+        )
+        v = cv.validate_sessions(path, set())
+        check(
+            "mute='-': no warnings about mute",
+            not any("mute" in w for w in v.warnings),
+        )
+
+
+def test_sessions_missing_file() -> None:
+    """Missing sessions file produces a warning, not a crash."""
+    v = cv.validate_sessions("/no/such/sessions.toml", set())
+    check("missing sessions file: no errors", len(v.errors) == 0)
+    check("missing sessions file: warning", len(v.warnings) == 1)
+
+
+def test_sessions_bad_toml() -> None:
+    """Invalid TOML syntax produces an error."""
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(d, "sessions.toml", "this is [[[bad toml")
+        v = cv.validate_sessions(path, set())
+        check("bad toml: error", len(v.errors) == 1)
+
+
+def test_sessions_not_array() -> None:
+    """sessions key that is not an array produces an error."""
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "sessions.toml",
+            """\
+[sessions]
+title = "test"
+""",
+        )
+        v = cv.validate_sessions(path, set())
+        check(
+            "sessions not array: error",
+            any("array" in e for e in v.errors),
+        )
+
+
 def run() -> None:
     test_valid_sessions()
     test_sessions_missing_title()
@@ -368,3 +499,8 @@ def run() -> None:
     test_sessions_commands_with_pw_disabled()
     test_sessions_commands_transport_unsafe()
     test_sessions_single_use_group()
+    test_sessions_duplicate_title()
+    test_sessions_mute_validation()
+    test_sessions_missing_file()
+    test_sessions_bad_toml()
+    test_sessions_not_array()

@@ -409,6 +409,151 @@ idle_poll_interval = 30
         )
 
 
+def test_defaults_tab_statuses() -> None:
+    """tab_statuses validation."""
+    # Valid array of strings
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[defaults]
+tab_statuses = ["reviewing", "WIP", "blocked"]
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("tab_statuses valid array: no errors", len(v.errors) == 0)
+
+    # Not an array
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[defaults]
+tab_statuses = "reviewing"
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("tab_statuses string: error", any("tab_statuses" in e for e in v.errors))
+
+    # Array with non-string entries
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[defaults]
+tab_statuses = ["ok", 123]
+""",
+        )
+        v = cv.validate_defaults(path)
+        check(
+            "tab_statuses mixed types: error",
+            any("tab_statuses" in e for e in v.errors),
+        )
+
+    # Empty array is valid
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[defaults]
+tab_statuses = []
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("tab_statuses empty array: no errors", len(v.errors) == 0)
+
+
+def test_defaults_dashboard_refresh_bool() -> None:
+    """dashboard_refresh = true should be rejected (bool is not int in TOML)."""
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[defaults]
+dashboard_refresh = true
+""",
+        )
+        v = cv.validate_defaults(path)
+        check("dashboard_refresh=true: error", len(v.errors) >= 1)
+        check(
+            "dashboard_refresh=true: mentions integer",
+            any("integer" in e for e in v.errors),
+        )
+
+
+def test_defaults_ignore_patterns_not_array() -> None:
+    """ignore_patterns as a non-array produces an error."""
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+ignore_patterns = "just a string"
+""",
+        )
+        v = cv.validate_defaults(path)
+        check(
+            "ignore_patterns string: error",
+            any("ignore_patterns" in e and "array" in e for e in v.errors),
+        )
+
+
+def test_defaults_ignore_patterns_non_string_entries() -> None:
+    """ignore_patterns with non-string entries produces an error."""
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[notifications]
+ignore_patterns = ["valid", 123]
+""",
+        )
+        v = cv.validate_defaults(path)
+        check(
+            "ignore_patterns non-string entries: error",
+            any("ignore_patterns" in e and "strings" in e for e in v.errors),
+        )
+
+
+def test_defaults_project_window_valid() -> None:
+    """Valid project_window values produce no errors."""
+    for pw_val in ["-", "stack", "vsplit", "hsplit", "split"]:
+        with tempfile.TemporaryDirectory() as d:
+            path = write_file(
+                d,
+                "defaults.toml",
+                f"""\
+[defaults]
+project_window = "{pw_val}"
+""",
+            )
+            v = cv.validate_defaults(path)
+            check(f"project_window={pw_val}: no errors", len(v.errors) == 0)
+
+    # Invalid
+    with tempfile.TemporaryDirectory() as d:
+        path = write_file(
+            d,
+            "defaults.toml",
+            """\
+[defaults]
+project_window = "tabbed"
+""",
+        )
+        v = cv.validate_defaults(path)
+        check(
+            "project_window=tabbed: error",
+            any("project_window" in e for e in v.errors),
+        )
+
+
 def run() -> None:
     test_valid_defaults()
     test_defaults_unknown_key()
@@ -426,3 +571,8 @@ def run() -> None:
     test_defaults_ignore_patterns_invalid_regex()
     test_defaults_dim_after_minutes()
     test_defaults_idle_poll_interval()
+    test_defaults_tab_statuses()
+    test_defaults_dashboard_refresh_bool()
+    test_defaults_ignore_patterns_not_array()
+    test_defaults_ignore_patterns_non_string_entries()
+    test_defaults_project_window_valid()
