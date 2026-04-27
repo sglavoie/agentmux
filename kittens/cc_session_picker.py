@@ -41,6 +41,7 @@ from cc_dashboard.ui import (
     _filter_config_sessions,
     _pad_to_width,
     _sort_pick_entries,
+    _truncate_to_width,
     draw_search_bar,
     init_colors,
     safe_addstr,
@@ -98,7 +99,7 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
 
     hdr = f"      {'Title':<{c_title}}{'Account':<{c_acct}}{'Directory':<{c_dir}}"
     safe_addstr(stdscr, 3, 1, hdr, curses.color_pair(CP_HEADER) | curses.A_BOLD)
-    sep = f"      {'─' * c_title}{'─' * c_acct}{'─' * c_dir}"
+    sep = f"      {'-' * c_title}{'-' * c_acct}{'-' * c_dir}"
     safe_addstr(stdscr, 4, 1, sep, curses.color_pair(CP_DIM))
 
     stopped_count = len(entries) - running_count
@@ -148,7 +149,9 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
 
             cp = _cp_for_account(entry["account"], selected=sel)
             short_dir = shorten_path(os.path.expanduser(entry["dir"]), c_dir - 1)
-            title_padded = _pad_to_width(entry["title"], c_title)
+            title_padded = _pad_to_width(
+                _truncate_to_width(entry["title"], c_title - 1), c_title
+            )
             acct = f"{entry['account']:<{c_acct}}"
             sdir = f"{short_dir:<{c_dir}}"
             line = f"{cursor_mark} {toggle_mark} {title_padded}{acct}{sdir}"
@@ -166,7 +169,7 @@ def draw_picker_view(stdscr, entries, selected, running_count, toggled):
 def draw_picker_footer(stdscr):
     """Draw the help-key footer for the picker."""
     rows, cols = stdscr.getmaxyx()
-    text = "↑/k Up  ↓/j Down  Space/x Toggle  Enter Launch  / Search  q Quit"
+    text = "k Up  j Down  Space/x Toggle  Enter Launch  / Search  q Quit"
     safe_addstr(stdscr, rows - 1, 2, text[: cols - 3], curses.color_pair(CP_DIM))
 
 

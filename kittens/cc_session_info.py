@@ -307,7 +307,7 @@ def _draw(stdscr, session, lines, scroll):
     # Title row
     title_text = f"Session Info: {session.get('title', '')}"
     safe_addstr(stdscr, 0, 2, title_text, account_attr)
-    safe_addstr(stdscr, 1, 2, "\u2500" * min(cols - 4, len(title_text) + 4), dim_attr)
+    safe_addstr(stdscr, 1, 2, "-" * min(cols - 4, len(title_text) + 4), dim_attr)
 
     # Content area
     content_start = 2

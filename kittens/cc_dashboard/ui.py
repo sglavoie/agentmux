@@ -27,6 +27,7 @@ from cc_dashboard.colors import (  # noqa: F401
 from cc_dashboard.drawing import (  # noqa: F401
     _display_width,
     _pad_to_width,
+    _truncate_to_width,
     safe_addstr,
     shorten_path,
 )
