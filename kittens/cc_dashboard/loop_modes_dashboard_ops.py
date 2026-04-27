@@ -269,7 +269,10 @@ def _do_group_launch(state: dict[str, Any], group_name: str) -> None:
     launched = 0
     for entry in to_launch:
         loc = state["compute_insert_location"](
-            state["home_socket"], entry["account"], entry["title"]
+            state["home_socket"],
+            entry["account"],
+            entry["title"],
+            groups=entry.get("groups", []),
         )
         ok = state["do_launch"](
             state["home_socket"],

@@ -80,7 +80,11 @@ def _build_launch_steps(
     shell_cmd = f"exec claude {effective_flags}" if effective_flags else "exec claude"
 
     location = compute_insert_location(
-        target_socket, account, title, exclude_tab_id=exclude_tab_id_for_location
+        target_socket,
+        account,
+        title,
+        exclude_tab_id=exclude_tab_id_for_location,
+        groups=groups,
     )
     loc_type, loc_id = location
     loc_args: list[str] = []

@@ -50,7 +50,24 @@ def _resolve_tab_account(tab_title, stripped_title, cc_account):
     return account
 
 
-def compute_insert_location(socket, account, title, exclude_tab_id=None):
+def _sort_key_for_tab(pin_prefix, account, project_name, groups, use_group):
+    """Build a sort key tuple, using group or account as the secondary key."""
+    if use_group:
+        first_group = groups[0].lower() if groups else "zzz"
+        return (pin_prefix, first_group, project_name.lower())
+    return (pin_prefix, account.lower(), project_name.lower())
+
+
+def _parse_tab_groups(tab):
+    """Extract parsed groups list from a tab's user vars."""
+    for win in tab.get("windows", []):
+        raw = win.get("user_vars", {}).get("cc_groups", "")
+        if raw:
+            return raw.split("\x1f")
+    return []
+
+
+def compute_insert_location(socket, account, title, exclude_tab_id=None, groups=None):
     """Compute where to insert a new tab to maintain sorted order.
 
     Returns ("first", None) if the tab should be first,
@@ -68,6 +85,8 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None):
     if not data:
         return (None, None)
     tabs = data[0].get("tabs", [])
+
+    use_group = _cfg._default_sort_sessions == "group"
 
     existing = []
     for tab in tabs:
@@ -93,12 +112,15 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None):
         acct = _resolve_tab_account(tab_title, stripped, cc_account)
         project_name = _strip_account_prefix(stripped)
         pin_prefix = 0 if pinned else 1
-        sort_key = (pin_prefix, acct.lower(), project_name.lower())
+        tab_groups = _parse_tab_groups(tab) if use_group else []
+        sort_key = _sort_key_for_tab(
+            pin_prefix, acct, project_name, tab_groups, use_group
+        )
         existing.append((sort_key, tab_id))
 
     existing.sort(key=lambda item: item[0])
     new_project = _strip_account_prefix(title)
-    new_key = (1, account.lower(), new_project.lower())
+    new_key = _sort_key_for_tab(1, account, new_project, groups or [], use_group)
 
     prev_id = None
     for sort_key, tab_id in existing:
@@ -335,6 +357,8 @@ def open_terminal(socket, directory, account, location=None, color_override=""):
 
 __all__ = [
     "_normalize_commands",
+    "_parse_tab_groups",
+    "_sort_key_for_tab",
     "compute_insert_location",
     "do_launch",
     "open_terminal",

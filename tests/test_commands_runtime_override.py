@@ -134,7 +134,7 @@ def test_override_stopped_launch_uses_config_commands() -> None:
         "host_tab_id": None,
         "do_close": lambda socket, tab_id: True,
         "do_launch": fake_launch,
-        "compute_insert_location": lambda socket, account, title: (None, None),
+        "compute_insert_location": lambda socket, account, title, **kw: (None, None),
         "append_override_for_dir": lambda title, path: f"{title}@{path}",
         "strip_override_marker": lambda title: title,
         "query_all_sessions": lambda managed_only=True: [],

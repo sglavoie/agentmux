@@ -135,9 +135,10 @@ resolve_location_args() {
     local socket="$1"
     local account="$2"
     local title="$3"
+    local groups="${4:-}"
 
     local insert_loc
-    insert_loc="$(compute_insert_location "$socket" "$account" "$title")"
+    insert_loc="$(compute_insert_location "$socket" "$account" "$title" "$groups")"
     if [[ "$insert_loc" == "first" ]]; then
         echo "--location first"
         return 0

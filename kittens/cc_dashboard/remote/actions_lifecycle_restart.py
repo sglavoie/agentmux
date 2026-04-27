@@ -87,7 +87,9 @@ def do_restart(
     if not ok:
         return False
     time.sleep(0.3)
-    location = compute_insert_location(socket, relaunch["account"], relaunch["title"])
+    location = compute_insert_location(
+        socket, relaunch["account"], relaunch["title"], groups=relaunch["groups"]
+    )
     ok = do_launch(
         socket,
         relaunch["title"],

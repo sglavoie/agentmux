@@ -52,7 +52,9 @@ def handle_override_mode(key, state):
                 if state["multi_instance"]
                 else state["home_socket"]
             )
-            loc = state["compute_insert_location"](target_socket, account, title)
+            loc = state["compute_insert_location"](
+                target_socket, account, title, groups=entry.get("groups", [])
+            )
             state["do_launch"](
                 target_socket,
                 title,
@@ -158,7 +160,10 @@ def handle_override_mode(key, state):
                         state["strip_override_marker"],
                     )
                     location = state["compute_insert_location"](
-                        sess_socket, account, title
+                        sess_socket,
+                        account,
+                        title,
+                        groups=sess.get("groups", []),
                     )
                     state["do_launch"](
                         sess_socket,
@@ -256,10 +261,13 @@ def handle_worktree_mode(key, state):
                     sess, state["cfg"], state["strip_override_marker"]
                 )
                 target_socket = sess.get("socket", state["home_socket"])
-                loc = state["compute_insert_location"](
-                    target_socket, sess["account"], new_title
-                )
                 sess_groups = sess.get("groups", [])
+                loc = state["compute_insert_location"](
+                    target_socket,
+                    sess["account"],
+                    new_title,
+                    groups=sess_groups,
+                )
                 state["do_launch"](
                     target_socket,
                     new_title,
@@ -341,10 +349,13 @@ def handle_clone_mode(key, state):
                 sess, state["cfg"], state["strip_override_marker"]
             )
             target_socket = sess.get("socket", state["home_socket"])
-            loc = state["compute_insert_location"](
-                target_socket, sess["account"], title
-            )
             clone_groups = sess.get("groups", [])
+            loc = state["compute_insert_location"](
+                target_socket,
+                sess["account"],
+                title,
+                groups=clone_groups,
+            )
             state["do_launch"](
                 target_socket,
                 title,

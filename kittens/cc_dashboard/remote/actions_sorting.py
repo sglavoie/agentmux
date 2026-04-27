@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 from cc_dashboard import config as _cfg
+from cc_dashboard.remote.actions_launch import _parse_tab_groups, _sort_key_for_tab
 from cc_dashboard.remote.command import kitty_cmd
 from cc_dashboard.remote.shared import (
     _ICON_DASHBOARD,
@@ -50,6 +51,7 @@ def do_sort_tabs(socket):
     unmanaged = []
     focused_id = None
     has_pinned = False
+    use_group = _cfg._default_sort_sessions == "group"
 
     for pos, tab in enumerate(tabs):
         tab_id = tab.get("id", 0)
@@ -87,7 +89,10 @@ def do_sort_tabs(socket):
                     account = "unknown"
             project_name = _strip_account_prefix(stripped)
             pin_prefix = 0 if pinned else 1
-            sort_key = (pin_prefix, account.lower(), project_name.lower())
+            tab_groups = _parse_tab_groups(tab) if use_group else []
+            sort_key = _sort_key_for_tab(
+                pin_prefix, account, project_name, tab_groups, use_group
+            )
             managed.append((sort_key, pos, tab_id, pinned))
         else:
             unmanaged.append((pos, tab_id))
@@ -95,7 +100,7 @@ def do_sort_tabs(socket):
     if not managed:
         return
 
-    if _cfg._default_sort_sessions == "alpha" or not has_pinned:
+    if _cfg._default_sort_sessions in ("alpha", "group") or not has_pinned:
         managed.sort(key=lambda x: x[0])
         desired_ids = [m[2] for m in managed] + [u[1] for u in unmanaged]
     else:

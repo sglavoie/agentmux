@@ -176,7 +176,7 @@ cmd_restart() {
     _wait_for_tab_close "$SOCKET" "$_TARGET_TAB_ID" "$title" "restart"
 
     local loc_args
-    loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
+    loc_args="$(resolve_location_args "$SOCKET" "$account" "$title" "$live_groups")"
 
     local fallback
     fallback="$(lookup_session_overrides "$title" "$live_flags" "$live_pw" "$live_env" "$live_commands")"
@@ -243,7 +243,7 @@ cmd_clone() {
     fi
 
     local loc_args
-    loc_args="$(resolve_location_args "$SOCKET" "$account" "$clone_title")"
+    loc_args="$(resolve_location_args "$SOCKET" "$account" "$clone_title" "$live_groups")"
 
     local fallback
     fallback="$(lookup_session_overrides "$title" "$live_flags" "$live_pw" "$live_env" "$live_commands")"
@@ -327,7 +327,7 @@ cmd_move() {
 
     SOCKET="$target_socket"
     local loc_args
-    loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
+    loc_args="$(resolve_location_args "$SOCKET" "$account" "$title" "$live_groups")"
 
     local fallback
     fallback="$(lookup_session_overrides "$title" "$live_flags" "$live_pw" "$live_env" "$live_commands")"

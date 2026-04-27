@@ -163,10 +163,13 @@ def handle_confirm_modes(key, state):
                 all_title_dicts.append({"title": new_title})
                 r_flags, r_pw, r_env, r_commands = _resolve_session_runtime_options(t)
                 t_socket = t.get("socket", state["home_socket"])
-                loc = state["compute_insert_location"](
-                    t_socket, t["account"], new_title
-                )
                 clone_groups = t.get("groups", [])
+                loc = state["compute_insert_location"](
+                    t_socket,
+                    t["account"],
+                    new_title,
+                    groups=clone_groups,
+                )
                 ok = state["do_launch"](
                     t_socket,
                     new_title,

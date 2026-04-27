@@ -93,6 +93,7 @@ def do_move(
         target_socket,
         relaunch["account"],
         relaunch["title"],
+        groups=relaunch["groups"],
     )
     ok = do_launch(
         target_socket,

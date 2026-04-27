@@ -183,7 +183,10 @@ def handle_pick_mode(key, state):
                 if entry["title"] not in state["pick_marked"]:
                     continue
                 loc = state["compute_insert_location"](
-                    target_socket, entry["account"], entry["title"]
+                    target_socket,
+                    entry["account"],
+                    entry["title"],
+                    groups=entry.get("groups", []),
                 )
                 state["do_launch"](
                     target_socket,
@@ -208,7 +211,10 @@ def handle_pick_mode(key, state):
                 state["msg_frames"] = 20
                 return True
             loc = state["compute_insert_location"](
-                target_socket, entry["account"], entry["title"]
+                target_socket,
+                entry["account"],
+                entry["title"],
+                groups=entry.get("groups", []),
             )
             state["do_launch"](
                 target_socket,

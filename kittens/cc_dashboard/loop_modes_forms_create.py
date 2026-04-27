@@ -251,7 +251,9 @@ def handle_new_mode(stdscr, key, state):
                         for g in state["new_fields"].get("groups", "").split(",")
                         if g.strip()
                     ]
-                    loc = state["compute_insert_location"](target_socket, a, t)
+                    loc = state["compute_insert_location"](
+                        target_socket, a, t, groups=groups_val
+                    )
                     state["do_launch"](
                         target_socket,
                         t,
@@ -321,7 +323,9 @@ def handle_confirm_mkdir_mode(key, state):
             state["mode"] = "new"
             return True
         p = state["mkdir_pending"]
-        loc = state["compute_insert_location"](p["socket"], p["account"], p["title"])
+        loc = state["compute_insert_location"](
+            p["socket"], p["account"], p["title"], groups=p.get("groups", [])
+        )
         state["do_launch"](
             p["socket"],
             p["title"],

@@ -40,7 +40,7 @@ cmd_launch_interactive() {
         fi
 
         local loc_args
-        loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
+        loc_args="$(resolve_location_args "$SOCKET" "$account" "$title" "$groups")"
 
         if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$groups" "$mute" "$commands"; then
             launched=$((launched + 1))
@@ -64,6 +64,8 @@ cmd_launch_all() {
 
     if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
         lines="$(echo -n "$lines" | sort -f)"
+    elif [[ "$_DEFAULT_SORT_SESSIONS" == "group" ]]; then
+        lines="$(echo -n "$lines" | sort -f -t $'\t' -k7,7)"
     fi
 
     if [[ -n "${_TARGET_GROUP:-}" ]]; then
@@ -151,7 +153,7 @@ cmd_launch_all() {
         fi
 
         local loc_args
-        loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
+        loc_args="$(resolve_location_args "$SOCKET" "$account" "$title" "$groups")"
 
         echo "[$current/$total] Launching $title..." >&2
         if launch_session "$title" "$dir" "$account" "$flags" "$pw" "$loc_args" "$env_vars" "$groups" "$mute" "$commands"; then
@@ -237,7 +239,7 @@ cmd_add() {
     fi
 
     local loc_args
-    loc_args="$(resolve_location_args "$SOCKET" "$account" "$title")"
+    loc_args="$(resolve_location_args "$SOCKET" "$account" "$title" "$groups")"
 
     launch_session "$title" "$dir" "$account" "" "" "$loc_args" "$env_vars" "$groups"
 }

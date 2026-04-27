@@ -3,16 +3,48 @@
 [[ -n "${_CC_COMMON_SORTING_LOADED:-}" ]] && return 0
 _CC_COMMON_SORTING_LOADED=1
 
+_first_group() {
+	# Extract the first group from a \x1f-delimited groups string.
+	# Returns "zzz" if empty (sorts ungrouped to end).
+	local raw="$1"
+	if [[ -z "$raw" ]]; then
+		echo "zzz"
+		return
+	fi
+	local -a arr=()
+	IFS=$'\x1f' read -ra arr <<<"$raw"
+	if [[ -n "${arr[0]:-}" ]]; then
+		echo "${arr[0]}"
+	else
+		echo "zzz"
+	fi
+}
+
+_build_sort_key() {
+	local pin_prefix="$1" account="$2" project_name="$3" groups="$4" use_group="$5"
+	if [[ "$use_group" == "true" ]]; then
+		local fg
+		fg="$(_first_group "$groups")"
+		echo "${pin_prefix}:${fg}:${project_name}" | tr '[:upper:]' '[:lower:]'
+	else
+		echo "${pin_prefix}:${account}:${project_name}" | tr '[:upper:]' '[:lower:]'
+	fi
+}
+
 compute_insert_location() {
 	local socket="$1"
 	local new_account="$2"
 	local new_title="$3"
+	local new_groups="${4:-}"
 
 	_load_icons
 	local strip_re
 	strip_re="$(_icon_strip_regex)"
 	local emoji_re
 	emoji_re="$(_override_emoji_re)"
+
+	local use_group=false
+	[[ "$_DEFAULT_SORT_SESSIONS" == "group" ]] && use_group=true
 
 	local ls_json
 	ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 0
@@ -25,8 +57,12 @@ compute_insert_location() {
             [.windows[]? | .user_vars.cc_account // empty | select(. != "")] |
             if length > 0 then .[0] else "" end
         ) as $cc_acct |
+        (
+            [.windows[]? | .user_vars.cc_groups // empty | select(. != "")] |
+            if length > 0 then .[0] else "" end
+        ) as $cc_groups |
         select($cc_acct != "" or ($stripped | test("^" + $emoji_re + "?[A-Z]:"))) |
-        [(.id | tostring), .title, (if $cc_acct == "" then "-" else $cc_acct end), $stripped] | @tsv
+        [(.id | tostring), .title, (if $cc_acct == "" then "-" else $cc_acct end), $stripped, $cc_groups] | @tsv
     ')"
 
 	local -a existing_keys=()
@@ -34,7 +70,7 @@ compute_insert_location() {
 	local has_pinned=false
 
 	if [[ -n "$tab_data" ]]; then
-		while IFS=$'\t' read -r tid traw taccount tstripped; do
+		while IFS=$'\t' read -r tid traw taccount tstripped tgroups; do
 			[[ -z "$tid" ]] && continue
 			[[ "$taccount" == "-" ]] && taccount=""
 			local acct="$taccount"
@@ -57,7 +93,7 @@ compute_insert_location() {
 				has_pinned=true
 			fi
 			local sort_key
-			sort_key="$(echo "${pin_prefix}:${acct}:${project_name}" | tr '[:upper:]' '[:lower:]')"
+			sort_key="$(_build_sort_key "$pin_prefix" "$acct" "$project_name" "$tgroups" "$use_group")"
 			existing_keys+=("$sort_key")
 			existing_ids+=("$tid")
 		done <<<"$tab_data"
@@ -68,7 +104,7 @@ compute_insert_location() {
 		new_project="${new_project:2}"
 	fi
 	local new_key
-	new_key="$(echo "1:${new_account}:${new_project}" | tr '[:upper:]' '[:lower:]')"
+	new_key="$(_build_sort_key "1" "$new_account" "$new_project" "$new_groups" "$use_group")"
 
 	local -a all_entries=()
 	local i
@@ -108,6 +144,9 @@ sort_tabs() {
 	local emoji_re
 	emoji_re="$(_override_emoji_re)"
 
+	local use_group=false
+	[[ "$_DEFAULT_SORT_SESSIONS" == "group" ]] && use_group=true
+
 	local ls_json
 	ls_json="$(kitty @ --to "$socket" ls 2>/dev/null)" || return 0
 
@@ -120,31 +159,37 @@ sort_tabs() {
             [$tab.windows[]? | .user_vars.cc_account // empty | select(. != "")] |
             if length > 0 then .[0] else "" end
         ) as $cc_acct |
+        (
+            [$tab.windows[]? | .user_vars.cc_groups // empty | select(. != "")] |
+            if length > 0 then .[0] else "" end
+        ) as $cc_groups |
         [
             ($tab.id | tostring),
             $tab.title,
             $stripped,
             (if $cc_acct == "" then "-" else $cc_acct end),
-            (if $tab.is_focused then "1" else "0" end)
+            (if $tab.is_focused then "1" else "0" end),
+            $cc_groups
         ] | @tsv
     ')"
 
 	[[ -z "$tab_data" ]] && return 0
 
 	local -a tab_ids=() tab_titles=() tab_stripped=() tab_accounts=() tab_focused=()
-	local -a tab_pinned=()
+	local -a tab_pinned=() tab_groups=()
 	local -a managed_indices=() unmanaged_indices=()
 	local focused_id=""
 	local idx=0
 	local has_pinned=false
 
-	while IFS=$'\t' read -r tid ttitle tstripped taccount tfocused; do
+	while IFS=$'\t' read -r tid ttitle tstripped taccount tfocused tgroups; do
 		[[ -z "$tid" ]] && continue
 		[[ "$taccount" == "-" ]] && taccount=""
 		tab_ids+=("$tid")
 		tab_titles+=("$ttitle")
 		tab_stripped+=("$tstripped")
 		tab_focused+=("$tfocused")
+		tab_groups+=("$tgroups")
 
 		local _pin_title="$ttitle"
 		_pin_title="${_pin_title#"$_ICON_DASHBOARD"}"
@@ -194,12 +239,12 @@ sort_tabs() {
 			pin_prefix="0"
 		fi
 		local sort_key
-		sort_key="$(echo "${pin_prefix}:${tab_accounts[$mi]}:${project_name}" | tr '[:upper:]' '[:lower:]')"
+		sort_key="$(_build_sort_key "$pin_prefix" "${tab_accounts[$mi]}" "$project_name" "${tab_groups[$mi]}" "$use_group")"
 		sort_input+=("${sort_key}"$'\t'"${mi}")
 	done
 
 	local -a desired_order=()
-	if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]] || [[ "$has_pinned" == "false" ]]; then
+	if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]] || [[ "$_DEFAULT_SORT_SESSIONS" == "group" ]] || [[ "$has_pinned" == "false" ]]; then
 		local -a sorted_managed=()
 		if [[ ${#sort_input[@]} -gt 0 ]]; then
 			while IFS=$'\t' read -r _key si; do
