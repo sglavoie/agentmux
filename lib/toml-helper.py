@@ -75,7 +75,7 @@ def cmd_read_defaults(path):
         if isinstance(val, bool):
             print(f"{bash_key}\t{'on' if val else ''}")
         elif isinstance(val, list):
-            print(f"{bash_key}\t{'|'.join(str(v) for v in val)}")
+            print(f"{bash_key}\t{chr(0x1f).join(str(v) for v in val)}")
         else:
             print(f"{bash_key}\t{val}")
 

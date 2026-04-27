@@ -63,7 +63,7 @@ cchi_matches_ignore_pattern() {
 	local initial_delay=0.3
 	local retry_delay=0.5
 	local screen_text
-	local IFS='|'
+	local IFS=$'\x1f'
 
 	while [[ $attempt -lt $max_attempts ]]; do
 		if [[ $attempt -eq 0 ]]; then

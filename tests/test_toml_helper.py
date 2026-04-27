@@ -225,10 +225,10 @@ def test_read_defaults():
     check("notify_error=on", kv.get("notify_error") == "on")
     check("notify_stop=empty", kv.get("notify_stop") == "")
     check("idle_alert_minutes=30", kv.get("idle_alert_minutes") == "30")
-    # List → pipe-separated
+    # List → unit-separator-separated
     check(
-        "ignore_patterns pipe-separated",
-        kv.get("notify_ignore_patterns") == "test|debug",
+        "ignore_patterns unit-separator-separated",
+        kv.get("notify_ignore_patterns") == "test\x1fdebug",
     )
 
 
