@@ -9,6 +9,7 @@ from cc_dashboard.filters import _session_groups
 from cc_dashboard.loop_helpers import (
     _resolve_session_runtime_options,
 )
+from cc_dashboard.remote.actions_sorting import do_sort_tabs
 
 
 def handle_color_picker_mode(key: int, state: dict[str, Any]) -> bool:
@@ -290,6 +291,7 @@ def _do_group_launch(state: dict[str, Any], group_name: str) -> None:
         if ok:
             launched += 1
 
+    do_sort_tabs(state["home_socket"])
     state["sessions"] = state["query_all_sessions"](
         managed_only=(not state["show_all"])
     )

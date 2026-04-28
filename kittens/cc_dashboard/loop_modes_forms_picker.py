@@ -4,6 +4,7 @@ import curses
 
 from cc_dashboard.filters import _session_groups, _sort_pick_entries
 from cc_dashboard.loop_modes_forms_shared import _get_pick_entry, _refilter_pick
+from cc_dashboard.remote.actions_sorting import do_sort_tabs
 from cc_dashboard.views import _cycle_instance
 
 
@@ -201,6 +202,7 @@ def handle_pick_mode(key, state):
                     mute=entry.get("mute", ""),
                     commands=entry.get("commands", []),
                 )
+            do_sort_tabs(target_socket)
         else:
             entry = _get_pick_entry(state)
             if entry is None:

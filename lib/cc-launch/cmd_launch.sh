@@ -49,6 +49,8 @@ cmd_launch_interactive() {
         fi
     done <<<"$picker_output"
 
+    sort_tabs "$SOCKET"
+
     echo "Launched $launched new session(s), $existed already existed." >&2
 }
 
@@ -65,7 +67,10 @@ cmd_launch_all() {
     if [[ "$_DEFAULT_SORT_SESSIONS" == "alpha" ]]; then
         lines="$(echo -n "$lines" | sort -f)"
     elif [[ "$_DEFAULT_SORT_SESSIONS" == "group" ]]; then
-        lines="$(echo -n "$lines" | sort -f -t $'\t' -k7,7)"
+        lines="$(printf '%s' "$lines" | awk -F'\t' 'BEGIN{OFS="\t"} {
+            g=$7; sub(/\x1f.*/, "", g); if(g=="") g="zzz";
+            print g, $0
+        }' | sort -f -t "$(printf '\t')" -k1,1 -k2,2 | cut -f2-)"
     fi
 
     if [[ -n "${_TARGET_GROUP:-}" ]]; then
@@ -162,6 +167,8 @@ cmd_launch_all() {
             existed=$((existed + 1))
         fi
     done <<<"$lines"
+
+    sort_tabs "$SOCKET"
 
     echo "Launched $launched new session(s), $existed already existed." >&2
     if [[ "$skipped" -gt 0 ]]; then
