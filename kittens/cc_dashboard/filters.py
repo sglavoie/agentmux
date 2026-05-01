@@ -13,6 +13,14 @@ def _session_groups(session: dict[str, Any]) -> list[str]:
     return gs if gs else ["(ungrouped)"]
 
 
+def _primary_group(groups: list[str] | None) -> str:
+    """Return the alphabetically-first group name (lowercased) for sorting.
+
+    Sorting ensures a stable key regardless of TOML array order.
+    """
+    return sorted(groups, key=str.lower)[0].lower() if groups else "zzz"
+
+
 def _filter_sessions(
     sessions: list[dict[str, Any]], query: str
 ) -> list[dict[str, Any]]:
@@ -105,7 +113,7 @@ def _sort_config_entries(
         return sorted(
             entries,
             key=lambda s: (
-                (s.get("groups") or ["zzz"])[0].lower(),
+                _primary_group(s.get("groups")),
                 s["title"].lower(),
             ),
         )
@@ -167,7 +175,7 @@ def _apply_sort(sessions: list[dict[str, Any]], sort_mode: str) -> list[dict[str
         return sorted(
             sessions,
             key=lambda s: (
-                (s.get("groups") or ["zzz"])[0].lower(),
+                _primary_group(s.get("groups")),
                 s["title"].lower(),
             ),
         )

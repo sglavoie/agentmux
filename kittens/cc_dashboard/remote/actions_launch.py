@@ -53,7 +53,7 @@ def _resolve_tab_account(tab_title, stripped_title, cc_account):
 def _sort_key_for_tab(pin_prefix, account, project_name, groups, use_group):
     """Build a sort key tuple, using group or account as the secondary key."""
     if use_group:
-        first_group = groups[0].lower() if groups else "zzz"
+        first_group = sorted(groups, key=str.lower)[0].lower() if groups else "zzz"
         return (pin_prefix, first_group, project_name.lower())
     return (pin_prefix, account.lower(), project_name.lower())
 

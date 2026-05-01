@@ -4,7 +4,8 @@
 _CC_COMMON_SORTING_LOADED=1
 
 _first_group() {
-	# Extract the first group from a \x1f-delimited groups string.
+	# Extract the alphabetically-first group from a \x1f-delimited groups string.
+	# Sorting ensures a stable key regardless of TOML array order.
 	# Returns "zzz" if empty (sorts ungrouped to end).
 	local raw="$1"
 	if [[ -z "$raw" ]]; then
@@ -13,11 +14,12 @@ _first_group() {
 	fi
 	local -a arr=()
 	IFS=$'\x1f' read -ra arr <<<"$raw"
-	if [[ -n "${arr[0]:-}" ]]; then
-		echo "${arr[0]}"
-	else
+	if [[ ${#arr[@]} -eq 0 || -z "${arr[0]:-}" ]]; then
 		echo "zzz"
+		return
 	fi
+	IFS=$'\n' read -rd '' -a arr < <(printf '%s\n' "${arr[@]}" | sort -f) || true
+	echo "${arr[0]}"
 }
 
 _build_sort_key() {
