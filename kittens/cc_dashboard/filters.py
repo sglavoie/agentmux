@@ -5,6 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from cc_dashboard.config_data import load_sort_modes as _load_sort_modes
+from cc_dashboard.remote.shared import _strip_override_marker
+
+
+def _sort_title(title: str) -> str:
+    """Return a sort-safe lowercased title with override emojis stripped."""
+    return _strip_override_marker(title).lower()
 
 
 def _session_groups(session: dict[str, Any]) -> list[str]:
@@ -108,17 +114,19 @@ def _sort_config_entries(
     if sort_mode == "default":
         return entries
     if sort_mode == "account":
-        return sorted(entries, key=lambda s: (s["account"].lower(), s["title"].lower()))
+        return sorted(
+            entries, key=lambda s: (s["account"].lower(), _sort_title(s["title"]))
+        )
     if sort_mode == "group":
         return sorted(
             entries,
             key=lambda s: (
                 _primary_group(s.get("groups")),
-                s["title"].lower(),
+                _sort_title(s["title"]),
             ),
         )
     # name sort (also fallback for status/idle/activity which don't apply)
-    return sorted(entries, key=lambda s: s["title"].lower())
+    return sorted(entries, key=lambda s: _sort_title(s["title"]))
 
 
 def _sort_pick_entries(
@@ -166,17 +174,17 @@ def _apply_sort(sessions: list[dict[str, Any]], sort_mode: str) -> list[dict[str
     if sort_mode == "default":
         return list(sessions)
     if sort_mode == "name":
-        return sorted(sessions, key=lambda s: s["title"].lower())
+        return sorted(sessions, key=lambda s: _sort_title(s["title"]))
     if sort_mode == "account":
         return sorted(
-            sessions, key=lambda s: (s["account"].lower(), s["title"].lower())
+            sessions, key=lambda s: (s["account"].lower(), _sort_title(s["title"]))
         )
     if sort_mode == "group":
         return sorted(
             sessions,
             key=lambda s: (
                 _primary_group(s.get("groups")),
-                s["title"].lower(),
+                _sort_title(s["title"]),
             ),
         )
     if sort_mode == "status":

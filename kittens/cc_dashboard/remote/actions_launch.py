@@ -13,6 +13,7 @@ from cc_dashboard.remote.shared import (
     _MANAGED_TITLE_RE,
     _strip_account_prefix,
     _strip_icons,
+    _strip_override_marker,
 )
 
 
@@ -110,7 +111,7 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None, groups=
             continue
 
         acct = _resolve_tab_account(tab_title, stripped, cc_account)
-        project_name = _strip_account_prefix(stripped)
+        project_name = _strip_account_prefix(_strip_override_marker(stripped))
         pin_prefix = 0 if pinned else 1
         tab_groups = _parse_tab_groups(tab) if use_group else []
         sort_key = _sort_key_for_tab(
@@ -119,7 +120,7 @@ def compute_insert_location(socket, account, title, exclude_tab_id=None, groups=
         existing.append((sort_key, tab_id))
 
     existing.sort(key=lambda item: item[0])
-    new_project = _strip_account_prefix(title)
+    new_project = _strip_account_prefix(_strip_override_marker(title))
     new_key = _sort_key_for_tab(1, account, new_project, groups or [], use_group)
 
     prev_id = None

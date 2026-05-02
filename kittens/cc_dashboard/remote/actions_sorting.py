@@ -13,6 +13,7 @@ from cc_dashboard.remote.shared import (
     _MANAGED_TITLE_RE,
     _strip_account_prefix,
     _strip_icons,
+    _strip_override_marker,
 )
 
 
@@ -87,7 +88,7 @@ def do_sort_tabs(socket):
                         break
                 if not account:
                     account = "unknown"
-            project_name = _strip_account_prefix(stripped)
+            project_name = _strip_account_prefix(_strip_override_marker(stripped))
             pin_prefix = 0 if pinned else 1
             tab_groups = _parse_tab_groups(tab) if use_group else []
             sort_key = _sort_key_for_tab(
