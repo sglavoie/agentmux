@@ -15,6 +15,8 @@ r to refresh, q/Esc to dismiss.
 import curses
 import json
 import os
+import shutil
+import subprocess
 import sys
 
 
@@ -70,18 +72,18 @@ def _restore_host_title(socket, tab_id, was_managed):
     """
     if not was_managed:
         # Reset to dynamic title by clearing the user-set tab name.
-        restore = kitty_cmd(socket, "set-tab-title", "--match", f"id:{tab_id}", "")
-        return restore is not None and restore.returncode == 0
+        kitty_cmd(socket, "set-tab-title", "--match", f"id:{tab_id}", "")
+        return ""
 
     result = kitty_cmd(socket, "ls")
     if not result or result.returncode != 0:
-        return False
+        return ""
     try:
         data = json.loads(result.stdout)
     except (json.JSONDecodeError, TypeError):
-        return False
+        return ""
     if not isinstance(data, list):
-        return False
+        return ""
 
     for os_win in data:
         for tab in os_win.get("tabs", []):
@@ -90,7 +92,7 @@ def _restore_host_title(socket, tab_id, was_managed):
             title = tab.get("title", "")
             cleaned_title = _strip_dashboard_marker(title)
             if cleaned_title == title:
-                return True
+                return cleaned_title
             restore = kitty_cmd(
                 socket,
                 "set-tab-title",
@@ -98,8 +100,38 @@ def _restore_host_title(socket, tab_id, was_managed):
                 f"id:{tab_id}",
                 cleaned_title,
             )
-            return restore is not None and restore.returncode == 0
-    return False
+            if restore is not None and restore.returncode == 0:
+                return cleaned_title
+            return ""
+    return ""
+
+
+def _schedule_title_restore(socket, tab_id, was_managed, original_title):
+    """Spawn a detached process to restore the host tab title after overlay teardown.
+
+    Kitty resets the tab title when an overlay window is torn down, *after*
+    both the subprocess finally block and handle_result() have already run.
+    This mirrors the pattern in cc_tab_status_restore.py for color restores.
+    """
+    script = (
+        "import subprocess, time\n"
+        "time.sleep(0.5)\n"
+        f"tab_id = {tab_id!r}\n"
+        f"socket = {socket!r}\n"
+        f"was_managed = {was_managed!r}\n"
+        f"original_title = {original_title!r}\n"
+        "to_args = ['--to', socket] if socket else []\n"
+        "title = original_title if was_managed else ''\n"
+        "subprocess.run(['kitten', '@'] + to_args + [\n"
+        "    'set-tab-title', '--match', f'id:{tab_id}', title])\n"
+    )
+    python = shutil.which("python3") or "python3"
+    subprocess.Popen(
+        [python, "-c", script],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
 
 
 def main(args=None):
@@ -139,7 +171,7 @@ def main(args=None):
                     _dashboard_title(title),
                 )
 
-    restored = False
+    cleaned_title = ""
     try:
         load_accounts()
         load_defaults()
@@ -148,7 +180,10 @@ def main(args=None):
         curses.wrapper(dashboard)
     finally:
         if socket and host_tab_id is not None:
-            restored = _restore_host_title(socket, host_tab_id, host_was_managed)
+            cleaned_title = _restore_host_title(socket, host_tab_id, host_was_managed)
+            _schedule_title_restore(
+                socket, host_tab_id, host_was_managed, host_original_title
+            )
 
     if host_tab_id is not None:
         return json.dumps(
@@ -156,10 +191,35 @@ def main(args=None):
                 "host_tab_id": host_tab_id,
                 "host_original_title": host_original_title,
                 "was_managed": host_was_managed,
-                "restored": restored,
+                "host_cleaned_title": cleaned_title,
             }
         )
     return ""
+
+
+def _handle_result_impl(answer, boss):
+    if not answer:
+        return
+    try:
+        data = json.loads(answer)
+    except (json.JSONDecodeError, TypeError):
+        return
+    tab_id = data.get("host_tab_id")
+    if not tab_id:
+        return
+    was_managed = data.get("was_managed", False)
+    if was_managed:
+        title = data.get("host_cleaned_title") or data.get("host_original_title", "")
+        if title:
+            boss.call_remote_control(
+                None,
+                ("set-tab-title", "--match", f"id:{tab_id}", title),
+            )
+    else:
+        boss.call_remote_control(
+            None,
+            ("set-tab-title", "--match", f"id:{tab_id}", ""),
+        )
 
 
 try:
@@ -167,36 +227,12 @@ try:
 
     @result_handler()
     def handle_result(args, answer, target_window_id, boss):
-        if not answer:
-            return
-        try:
-            data = json.loads(answer)
-        except (json.JSONDecodeError, TypeError):
-            return
-        tab_id = data.get("host_tab_id")
-        if not tab_id:
-            return
-        if data.get("restored"):
-            return
-        was_managed = data.get("was_managed", False)
-        # Backup cleanup if the subprocess-based restore in main() does not
-        # land before overlay teardown completes.
-        if was_managed:
-            original_title = data.get("host_original_title", "")
-            if original_title:
-                boss.call_remote_control(
-                    None,
-                    ("set-tab-title", "--match", f"id:{tab_id}", original_title),
-                )
-        else:
-            # Reset to dynamic title for unmanaged tabs.
-            boss.call_remote_control(
-                None,
-                ("set-tab-title", "--match", f"id:{tab_id}", ""),
-            )
+        _handle_result_impl(answer, boss)
 
 except ImportError:
-    pass
+
+    def handle_result(args, answer, target_window_id, boss):
+        _handle_result_impl(answer, boss)
 
 
 if __name__ == "__main__":

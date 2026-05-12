@@ -89,7 +89,7 @@ check-install:
 
 # Audit keybinding documentation completeness
 check-keybindings:
-    @python scripts/check_keybindings.py
+    @python3 scripts/check_keybindings.py
 
 # Check required dependencies
 check-deps:

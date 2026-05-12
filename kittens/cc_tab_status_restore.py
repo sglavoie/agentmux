@@ -1,6 +1,6 @@
 import json
+import shutil
 import subprocess
-import sys
 from typing import Any
 
 from cc_dashboard.config_accounts import _palette_tab_colors
@@ -80,8 +80,9 @@ def schedule_color_restore(
         "    f'inactive_bg={c[\"inactive_bg\"]}', f'inactive_fg={ifg}',\n"
         "])\n"
     )
+    python = shutil.which("python3") or "python3"
     subprocess.Popen(
-        [sys.executable, "-c", script],
+        [python, "-c", script],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,

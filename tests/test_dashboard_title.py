@@ -129,7 +129,7 @@ def test_restore_host_title_strips_only_dashboard_marker():
         restored = claude_dashboard._restore_host_title(
             "unix:/tmp/kitty-test", 23, True
         )
-        check("restore succeeds", restored is True)
+        check("restore returns cleaned title", restored == "★⚡W:project")
         check(
             "set-tab-title keeps managed icons",
             calls[1] == ("set-tab-title", "--match", "id:23", "★⚡W:project"),
@@ -155,6 +155,143 @@ def test_managed_title_helpers_accept_dashboard_marker():
     )
 
 
+def test_handle_result_always_restores():
+    print("\n--- handle_result always restores ---")
+    calls = []
+
+    class FakeBoss:
+        def call_remote_control(self, window, cmd_tuple):
+            calls.append(cmd_tuple)
+
+    boss = FakeBoss()
+
+    calls.clear()
+    answer = json.dumps(
+        {
+            "host_tab_id": 10,
+            "host_original_title": "⚡W:project",
+            "was_managed": True,
+            "host_cleaned_title": "★⚡W:project",
+        }
+    )
+    claude_dashboard.handle_result([], answer, 0, boss)
+    check(
+        "prefers host_cleaned_title",
+        calls == [("set-tab-title", "--match", "id:10", "★⚡W:project")],
+    )
+
+    calls.clear()
+    answer = json.dumps(
+        {
+            "host_tab_id": 10,
+            "host_original_title": "⚡W:project",
+            "was_managed": True,
+            "host_cleaned_title": "",
+        }
+    )
+    claude_dashboard.handle_result([], answer, 0, boss)
+    check(
+        "falls back to host_original_title",
+        calls == [("set-tab-title", "--match", "id:10", "⚡W:project")],
+    )
+
+    calls.clear()
+    answer = json.dumps(
+        {
+            "host_tab_id": 10,
+            "host_original_title": "",
+            "was_managed": False,
+            "host_cleaned_title": "",
+        }
+    )
+    claude_dashboard.handle_result([], answer, 0, boss)
+    check(
+        "unmanaged clears title",
+        calls == [("set-tab-title", "--match", "id:10", "")],
+    )
+
+
+def test_schedule_title_restore_spawns_process():
+    print("\n--- schedule_title_restore spawns detached process ---")
+    import subprocess as sp
+
+    original_popen = sp.Popen
+    spawn_calls = []
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            spawn_calls.append({"args": args, "kwargs": kwargs})
+
+    sp.Popen = FakePopen
+    try:
+        claude_dashboard._schedule_title_restore(
+            "unix:/tmp/kitty-test", 42, True, "⚡W:project"
+        )
+        check("spawns exactly one process", len(spawn_calls) == 1)
+        call = spawn_calls[0]
+        check(
+            "uses python3 not sys.executable",
+            call["args"][0] != sys.executable or "python" in sys.executable,
+        )
+        check(
+            "uses python -c",
+            len(call["args"]) == 3 and call["args"][1] == "-c",
+        )
+        script = call["args"][2]
+        check(
+            "script contains tab_id",
+            "tab_id = 42" in script,
+        )
+        check(
+            "script contains original_title",
+            "original_title = '⚡W:project'" in script,
+        )
+        check(
+            "script does not query kitty ls",
+            "kitty @ ls" not in script and "'ls'" not in script,
+        )
+        check(
+            "script contains time.sleep",
+            "time.sleep(0.5)" in script,
+        )
+        check(
+            "detached via start_new_session",
+            call["kwargs"].get("start_new_session") is True,
+        )
+    finally:
+        sp.Popen = original_popen
+
+
+def test_schedule_title_restore_unmanaged():
+    print("\n--- schedule_title_restore unmanaged tab ---")
+    import subprocess as sp
+
+    original_popen = sp.Popen
+    spawn_calls = []
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            spawn_calls.append({"args": args, "kwargs": kwargs})
+
+    sp.Popen = FakePopen
+    try:
+        claude_dashboard._schedule_title_restore(
+            "unix:/tmp/kitty-test", 99, False, ""
+        )
+        check("spawns process for unmanaged", len(spawn_calls) == 1)
+        script = spawn_calls[0]["args"][2]
+        check(
+            "script sets was_managed = False",
+            "was_managed = False" in script,
+        )
+        check(
+            "script resets title to empty for unmanaged",
+            "set-tab-title" in script,
+        )
+    finally:
+        sp.Popen = original_popen
+
+
 if __name__ == "__main__":
     print("dashboard title tests\n")
 
@@ -163,6 +300,9 @@ if __name__ == "__main__":
     test_dashboard_title_prefix_idempotent()
     test_restore_host_title_strips_only_dashboard_marker()
     test_managed_title_helpers_accept_dashboard_marker()
+    test_handle_result_always_restores()
+    test_schedule_title_restore_spawns_process()
+    test_schedule_title_restore_unmanaged()
 
     print(f"\n{PASS} passed, {FAIL} failed")
     if FAIL:
