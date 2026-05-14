@@ -13,6 +13,10 @@ var (
 	styleSearch   = lipgloss.NewStyle().Bold(true)
 	styleFooter   = lipgloss.NewStyle().Faint(true)
 	styleHeader   = lipgloss.NewStyle().Bold(true)
+
+	styleAttentionDivider = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleActiveDivider    = lipgloss.NewStyle()
+	styleIdleDivider      = lipgloss.NewStyle().Faint(true)
 )
 
 // accountStyle returns a Lipgloss style with the account's foreground color.

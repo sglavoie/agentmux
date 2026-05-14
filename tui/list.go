@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	runewidth "github.com/mattn/go-runewidth"
@@ -39,11 +40,20 @@ func renderList(m Model) string {
 		return styleDim.Render("  (no sessions)") + "\n"
 	}
 
-	// Find the account color lookup map for this render.
 	acctColor := buildAccountColorMap(m)
 
+	groupCounts := countGroups(m.filtered)
+	multiGroup := groupCounts > 1
+
 	var sb strings.Builder
+	prevGroup := -1
 	for i, s := range m.filtered {
+		g := stateGroup(s)
+		if multiGroup && g != prevGroup {
+			sb.WriteString(renderDivider(g, countInGroup(m.filtered, g)))
+			sb.WriteByte('\n')
+			prevGroup = g
+		}
 		row := formatRow(s, acctColor, m.width)
 		if i == m.cursor {
 			sb.WriteString(styleSelected.Render(row))
@@ -55,9 +65,61 @@ func renderList(m Model) string {
 	return sb.String()
 }
 
+func stateGroup(s session.RunningSession) int {
+	switch s.State {
+	case "key", "stop":
+		return 0
+	case "bolt":
+		return 1
+	default:
+		return 2
+	}
+}
+
+func countGroups(sessions []session.RunningSession) int {
+	seen := make(map[int]bool)
+	for _, s := range sessions {
+		seen[stateGroup(s)] = true
+	}
+	return len(seen)
+}
+
+func countInGroup(sessions []session.RunningSession, group int) int {
+	n := 0
+	for _, s := range sessions {
+		if stateGroup(s) == group {
+			n++
+		}
+	}
+	return n
+}
+
+var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}
+
+func renderDivider(group, count int) string {
+	label := fmt.Sprintf(" ── %s (%d) ──", groupLabels[group], count)
+	switch group {
+	case 0:
+		return styleAttentionDivider.Render(label)
+	case 1:
+		return styleActiveDivider.Render(label)
+	default:
+		return styleIdleDivider.Render(label)
+	}
+}
+
 // formatRow formats a single session row.
-// Format: account_prefix | title | directory | state_icon
+// Format: state_icon | account_prefix | title | directory
 func formatRow(s session.RunningSession, acctColor map[string]string, width int) string {
+	// State icon at the start for instant scanning.
+	iconCol := "  "
+	if s.State != "" {
+		icon := palette.StateIcon(s.State)
+		iconW := runewidth.StringWidth(icon)
+		icon += strings.Repeat(" ", 2-iconW)
+		iconCol = icon
+	}
+
 	// Account prefix badge (first char of account, uppercased).
 	acctBadge := " "
 	if len(s.Account) > 0 {
@@ -77,9 +139,8 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int)
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		// Use remaining width dynamically.
-		used := 4 + titleColWidth + 3 // badge + title + separators
-		available := width - used - 4  // leave space for state icon + padding
+		used := 3 + 4 + titleColWidth + 3 // icon+space + badge + title + separators
+		available := width - used
 		if available > 10 {
 			maxDir = available
 		}
@@ -93,13 +154,7 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int)
 	}
 	dir = styleDim.Render(dir)
 
-	// State icon.
-	stateIcon := ""
-	if s.State != "" {
-		stateIcon = " " + palette.StateIcon(s.State)
-	}
-
-	return badge + " " + title + "  " + dir + stateIcon
+	return iconCol + " " + badge + " " + title + "  " + dir
 }
 
 // buildAccountColorMap maps account name → palette color name from config.

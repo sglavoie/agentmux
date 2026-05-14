@@ -60,6 +60,10 @@ func keyPress(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: 'e', Text: "e"})
 	case "o":
 		return tea.KeyPressMsg(tea.Key{Code: 'o', Text: "o"})
+	case "x":
+		return tea.KeyPressMsg(tea.Key{Code: 'x', Text: "x"})
+	case "r":
+		return tea.KeyPressMsg(tea.Key{Code: 'r', Text: "r"})
 	case "p":
 		return tea.KeyPressMsg(tea.Key{Code: 'p', Text: "p"})
 	case "y":
@@ -334,8 +338,9 @@ func TestEnterOpensActions(t *testing.T) {
 	if m.mode != ModeActions {
 		t.Fatalf("expected ModeActions after enter, got %d", m.mode)
 	}
-	if m.actionTarget.Base != "W:api" {
-		t.Fatalf("expected actionTarget=W:api, got %q", m.actionTarget.Base)
+	// After state-group sort, active (bolt) comes first: W:backend.
+	if m.actionTarget.Base != "W:backend" {
+		t.Fatalf("expected actionTarget=W:backend, got %q", m.actionTarget.Base)
 	}
 }
 
@@ -590,11 +595,46 @@ func TestFooterPickerHint(t *testing.T) {
 func TestFooterListHintIncludesActionsAndPicker(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	footer := renderFooter(m)
-	if !strings.Contains(footer, "enter/a: actions") {
+	if !strings.Contains(footer, "a: more actions") {
 		t.Errorf("list footer missing actions hint, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "l: pick & launch") {
-		t.Errorf("list footer missing picker hint, got:\n%s", footer)
+	if !strings.Contains(footer, "l: launch") {
+		t.Errorf("list footer missing launch hint, got:\n%s", footer)
+	}
+}
+
+func TestFooterIncludesDirectKeys(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	footer := renderFooter(m)
+	for _, key := range []string{"x: close", "r: restart"} {
+		if !strings.Contains(footer, key) {
+			t.Errorf("list footer missing direct key %q, got:\n%s", key, footer)
+		}
+	}
+	lines := strings.Split(footer, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2-line footer, got %d lines", len(lines))
+	}
+	if !strings.Contains(lines[0], "x: close") {
+		t.Error("expected actions on line 1")
+	}
+	if !strings.Contains(lines[1], "j/k: up/down") {
+		t.Error("expected navigation on line 2")
+	}
+}
+
+func TestFooterEscHintShownWhenFiltered(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.activeSearch = "test"
+	footer := renderFooter(m)
+	if !strings.Contains(footer, "esc: clear filters") {
+		t.Errorf("expected esc hint when filters active, got:\n%s", footer)
+	}
+
+	m2 := loadSessions(testModel(), makeSessions())
+	footer2 := renderFooter(m2)
+	if strings.Contains(footer2, "esc: clear filters") {
+		t.Errorf("esc hint should not appear without active filters, got:\n%s", footer2)
 	}
 }
 
@@ -773,5 +813,182 @@ func TestFooterPickerOpenDirHint(t *testing.T) {
 	footer := renderFooter(m)
 	if !strings.Contains(footer, "o: open dir") {
 		t.Errorf("picker footer missing open dir hint, got:\n%s", footer)
+	}
+}
+
+// ---- Direct-action shortcut tests ----
+
+func TestXKeyDirectClose(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "x")
+	if m.mode != ModeConfirm {
+		t.Fatalf("expected ModeConfirm after x, got %d", m.mode)
+	}
+	if m.confirmAction != "close" {
+		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
+	}
+	// After state-group sort, cursor=0 is W:backend (active).
+	if m.actionTarget.Base != "W:backend" {
+		t.Fatalf("expected actionTarget=W:backend, got %q", m.actionTarget.Base)
+	}
+}
+
+func TestRKeyDirectRestart(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "j") // move to second session
+	m = pressKey(m, "r")
+	if m.mode != ModeConfirm {
+		t.Fatalf("expected ModeConfirm after r, got %d", m.mode)
+	}
+	if m.confirmAction != "restart" {
+		t.Fatalf("expected confirmAction=restart, got %q", m.confirmAction)
+	}
+	// After state-group sort: [W:backend(bolt), W:api(idle), P:dotfiles(idle)]; j→cursor=1→W:api.
+	if m.actionTarget.Base != "W:api" {
+		t.Fatalf("expected actionTarget=W:api, got %q", m.actionTarget.Base)
+	}
+}
+
+func TestDirectKeyEmptyListNoOp(t *testing.T) {
+	m := loadSessions(testModel(), nil)
+
+	mx := pressKey(m, "x")
+	if mx.mode != ModeList {
+		t.Fatalf("expected ModeList after x on empty list, got %d", mx.mode)
+	}
+
+	mr := pressKey(m, "r")
+	if mr.mode != ModeList {
+		t.Fatalf("expected ModeList after r on empty list, got %d", mr.mode)
+	}
+}
+
+// ---- Icon-first row layout tests ----
+
+func TestFormatRowIconFirst(t *testing.T) {
+	acctColor := map[string]string{"work": "blue"}
+	s := session.RunningSession{
+		TabID: 1, Base: "W:api", Account: "work",
+		Directory: "/home/user/api", State: "bolt",
+	}
+	row := formatRow(s, acctColor, 120)
+	// The bolt icon (⚡) should appear before the badge [W].
+	boltIdx := strings.Index(row, "⚡")
+	badgeIdx := strings.Index(row, "[W]")
+	if boltIdx < 0 {
+		t.Fatalf("expected bolt icon in row, got: %q", row)
+	}
+	if badgeIdx < 0 {
+		t.Fatalf("expected [W] badge in row, got: %q", row)
+	}
+	if boltIdx > badgeIdx {
+		t.Errorf("expected icon before badge: icon@%d badge@%d in %q", boltIdx, badgeIdx, row)
+	}
+}
+
+// ---- State group sorting tests ----
+
+func TestStateGroupSorting(t *testing.T) {
+	m := testModel()
+	sessions := []session.RunningSession{
+		{TabID: 1, Base: "idle1", Account: "work", State: ""},
+		{TabID: 2, Base: "active1", Account: "work", State: "bolt"},
+		{TabID: 3, Base: "attention1", Account: "personal", State: "key"},
+		{TabID: 4, Base: "attention2", Account: "personal", State: "stop"},
+		{TabID: 5, Base: "idle2", Account: "work", State: "error"},
+	}
+	m = loadSessions(m, sessions)
+
+	// Attention (key, stop) should come first, then active (bolt), then idle ("", error).
+	expected := []string{"attention1", "attention2", "active1", "idle1", "idle2"}
+	if len(m.filtered) != len(expected) {
+		t.Fatalf("expected %d filtered sessions, got %d", len(expected), len(m.filtered))
+	}
+	for i, want := range expected {
+		if m.filtered[i].Base != want {
+			t.Errorf("filtered[%d]: expected %q, got %q", i, want, m.filtered[i].Base)
+		}
+	}
+}
+
+func TestRenderListGroupDividers(t *testing.T) {
+	m := testModel()
+	m.width, m.height = 120, 40
+	sessions := []session.RunningSession{
+		{TabID: 1, Base: "api", Account: "work", State: "key"},
+		{TabID: 2, Base: "backend", Account: "work", State: "bolt"},
+		{TabID: 3, Base: "docs", Account: "work", State: ""},
+	}
+	m = loadSessions(m, sessions)
+	output := renderList(m)
+	if !strings.Contains(output, "Needs Attention (1)") {
+		t.Errorf("expected attention divider, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Active (1)") {
+		t.Errorf("expected active divider, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Idle (1)") {
+		t.Errorf("expected idle divider, got:\n%s", output)
+	}
+}
+
+func TestSingleGroupNoDivider(t *testing.T) {
+	m := testModel()
+	m.width, m.height = 120, 40
+	sessions := []session.RunningSession{
+		{TabID: 1, Base: "api", Account: "work", State: ""},
+		{TabID: 2, Base: "backend", Account: "work", State: "error"},
+	}
+	m = loadSessions(m, sessions)
+	output := renderList(m)
+	if strings.Contains(output, "──") {
+		t.Errorf("expected no dividers when all sessions are in one group, got:\n%s", output)
+	}
+}
+
+func TestDetailLineShowsAccountAndGroups(t *testing.T) {
+	m := testModel()
+	m.width, m.height = 120, 40
+	sessions := []session.RunningSession{
+		{TabID: 1, Base: "W:api", Account: "work", Directory: "/home/user/api", Groups: []string{"api", "backend"}},
+	}
+	m = loadSessions(m, sessions)
+	content := m.render()
+	if !strings.Contains(content, "[work]") {
+		t.Errorf("expected [work] in detail line, got:\n%s", content)
+	}
+	if !strings.Contains(content, "groups: api,backend") {
+		t.Errorf("expected groups in detail line, got:\n%s", content)
+	}
+
+	// No groups: should omit the groups segment.
+	m2 := testModel()
+	m2.width, m2.height = 120, 40
+	noGroupSessions := []session.RunningSession{
+		{TabID: 1, Base: "W:api", Account: "work", Directory: "/home/user/api"},
+	}
+	m2 = loadSessions(m2, noGroupSessions)
+	content2 := m2.render()
+	if !strings.Contains(content2, "[work]") {
+		t.Errorf("expected [work] in detail line without groups, got:\n%s", content2)
+	}
+	if strings.Contains(content2, "groups:") {
+		t.Errorf("expected no groups segment when groups is empty, got:\n%s", content2)
+	}
+}
+
+func TestFormatRowNoStateIcon(t *testing.T) {
+	acctColor := map[string]string{"work": "blue"}
+	s := session.RunningSession{
+		TabID: 1, Base: "W:api", Account: "work",
+		Directory: "/home/user/api", State: "",
+	}
+	row := formatRow(s, acctColor, 120)
+	// No state icon, but row should start with 2-space placeholder then space then badge.
+	if !strings.HasPrefix(row, "   ") {
+		t.Errorf("expected row to start with placeholder spaces, got: %q", row)
+	}
+	if !strings.Contains(row, "[W]") {
+		t.Errorf("expected [W] badge in row, got: %q", row)
 	}
 }

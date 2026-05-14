@@ -21,5 +21,7 @@ const (
 	keyQ         = "q"
 	keyCtrlC     = "ctrl+c"
 	keyE         = "e"
+	keyX         = "x"
+	keyR         = "r"
 	keyBackspace = "backspace"
 )

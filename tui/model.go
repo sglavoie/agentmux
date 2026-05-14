@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -118,6 +119,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessions = msg.sessions
 		m.accounts = uniqueAccounts(m.sessions)
 		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
+		sortByStateGroup(m.filtered)
 		m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
 		return m, nil
 
@@ -227,6 +229,22 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.mode = ModeActions
 		}
 
+	case keyX:
+		if len(m.filtered) > 0 {
+			m.actionTarget = m.filtered[m.cursor]
+			m.confirmAction = "close"
+			m.actionErr = nil
+			m.mode = ModeConfirm
+		}
+
+	case keyR:
+		if len(m.filtered) > 0 {
+			m.actionTarget = m.filtered[m.cursor]
+			m.confirmAction = "restart"
+			m.actionErr = nil
+			m.mode = ModeConfirm
+		}
+
 	case keyL:
 		m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
 		m.pickerRunning = buildPickerRunning(m.sessions)
@@ -239,6 +257,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activeSearch = ""
 		m.activeAccount = ""
 		m.filtered = applyFilter(m.sessions, "", "")
+		sortByStateGroup(m.filtered)
 		m.cursor = 0
 	}
 
@@ -256,6 +275,7 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Apply: commit the live text as the active search.
 		m.activeSearch = m.searchText
 		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
+		sortByStateGroup(m.filtered)
 		m.cursor = 0
 		m.mode = ModeList
 
@@ -290,6 +310,7 @@ func (m Model) handleAccountFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			m.activeAccount = m.accounts[m.acctCursor-1]
 		}
 		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
+		sortByStateGroup(m.filtered)
 		m.cursor = 0
 		m.mode = ModeList
 
@@ -436,7 +457,15 @@ func (m Model) render() string {
 	// Selected session directory between list and footer (not in picker).
 	dirLine := ""
 	if m.mode != ModePicker && len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		dirLine = styleDir.Render(" " + m.filtered[m.cursor].Directory)
+		s := m.filtered[m.cursor]
+		detail := " " + s.Directory
+		if s.Account != "" {
+			detail += "  [" + s.Account + "]"
+		}
+		if len(s.Groups) > 0 {
+			detail += "  groups: " + strings.Join(s.Groups, ",")
+		}
+		dirLine = styleDir.Render(detail)
 	}
 	sb.WriteString("\n" + dirLine + "\n")
 
@@ -602,6 +631,14 @@ func peekCmd(client kitty.KittyClient, windowID int) tea.Cmd {
 	return func() tea.Msg {
 		return peekDoneMsg{err: client.LaunchOverlayPager(kitty.MatchWindowByID(windowID))}
 	}
+}
+
+// sortByStateGroup applies a stable sort so attention items come first,
+// then active, then idle — preserving existing order within each group.
+func sortByStateGroup(sessions []session.RunningSession) {
+	sort.SliceStable(sessions, func(i, j int) bool {
+		return stateGroup(sessions[i]) < stateGroup(sessions[j])
+	})
 }
 
 // clamp constrains v to [lo, hi]. Returns lo when hi < lo.
