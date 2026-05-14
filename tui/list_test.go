@@ -1,8 +1,12 @@
 package tui
 
 import (
+	"regexp"
+	"strings"
 	"testing"
 	"time"
+
+	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sglavoie/cc-manager-kitty/internal/session"
 )
@@ -67,10 +71,10 @@ func TestStateGroupClassification(t *testing.T) {
 			want:     1,
 		},
 		{
-			name:     "unknown legacy state falls through to Idle",
+			name:     "error state classified as Active",
 			state:    "error",
 			windowID: 8,
-			want:     2,
+			want:     1,
 		},
 	}
 
@@ -93,5 +97,55 @@ func TestStateGroupZeroThreshold(t *testing.T) {
 	got := stateGroup(s, activity, 0)
 	if got != 1 {
 		t.Errorf("expected Active (1) with zero threshold, got %d", got)
+	}
+}
+
+// ansiRE strips ANSI CSI escape sequences from a Lipgloss-rendered row so
+// we can compare visual offsets independent of styling.
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// terminalWidth approximates how many cells a string consumes when
+// printed to a real terminal. go-runewidth treats U+FE0F as zero-width
+// even though it forces emoji presentation (2 cells) on the preceding
+// base character, so we add 1 per variation selector to compensate.
+func terminalWidth(s string) int {
+	w := runewidth.StringWidth(s)
+	for _, r := range s {
+		if r == '️' {
+			w++
+		}
+	}
+	return w
+}
+
+// idxBadge returns the visual cell offset of the first '[' character (the
+// account badge opener) in a rendered row. Returns -1 if no '[' is found.
+func idxBadge(row string) int {
+	plain := ansiRE.ReplaceAllString(row, "")
+	i := strings.IndexByte(plain, '[')
+	if i < 0 {
+		return -1
+	}
+	return terminalWidth(plain[:i])
+}
+
+// TestFormatRowIconColumnAlignment locks in that a row carrying the ⚠️
+// failure icon aligns its account badge at the same visual column as a
+// row carrying the ⚡ bolt icon. Without iconDisplayWidth's U+FE0F
+// handling, ⚠️ would be measured as 1 cell and over-padded, shifting
+// every following column right by one.
+func TestFormatRowIconColumnAlignment(t *testing.T) {
+	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "x"}
+	sErr := session.RunningSession{State: "error", Account: "p", Base: "x"}
+	rowBolt := formatRow(sBolt, nil, 0)
+	rowErr := formatRow(sErr, nil, 0)
+
+	iBolt := idxBadge(rowBolt)
+	iErr := idxBadge(rowErr)
+	if iBolt < 0 || iErr < 0 {
+		t.Fatalf("badge '[' not found: bolt=%d err=%d (rows: %q / %q)", iBolt, iErr, rowBolt, rowErr)
+	}
+	if iBolt != iErr {
+		t.Errorf("badge column misaligned: bolt=%d, error=%d", iBolt, iErr)
 	}
 }

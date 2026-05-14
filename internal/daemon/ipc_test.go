@@ -75,12 +75,12 @@ func TestIPC_JSONRoundTrip(t *testing.T) {
 	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "failure"}); err != nil {
 		t.Fatalf("Send failure: %v", err)
 	}
-	resp, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "active"})
+	resp, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "permission"})
 	if err != nil {
-		t.Fatalf("Send active: %v", err)
+		t.Fatalf("Send permission: %v", err)
 	}
 	if resp.Allowed {
-		t.Fatal("expected active to be blocked by failure guard")
+		t.Fatal("expected permission to be blocked by failure guard")
 	}
 }
 

@@ -1,6 +1,9 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 func renderFooter(m Model) string {
 	var sb strings.Builder
@@ -26,18 +29,30 @@ func renderFooter(m Model) string {
 		line1 = styleFooter.Render("  esc/?/q: close help")
 		line2 = ""
 	default: // ModeList
-		line1 = listFooterLine1(m)
-		nav := "  j/k: up/down  /: search  f: filter  q: quit"
-		if m.activeSearch != "" || m.activeAccount != "" {
-			nav += "  esc: clear filters"
+		if m.previewEnabled {
+			// In preview mode the only binding shown is `p: hide preview`,
+			// which is rendered right-aligned in the title row.
+			line1 = ""
+			line2 = ""
+		} else {
+			line1 = listFooterLine1(m)
+			nav := "  j/k: up/down  /: search  f: filter  q: quit  p: preview"
+			if m.activeSearch != "" || m.activeAccount != "" {
+				nav += "  esc: clear filters"
+			}
+			line2 = styleFooter.Render(nav)
 		}
-		line2 = styleFooter.Render(nav)
 	}
 
 	sb.WriteString(line1)
 	if line2 != "" {
 		sb.WriteString("\n")
 		sb.WriteString(line2)
+	}
+	if m.mode == ModeList && m.previewNotice != "" &&
+		(m.previewNoticeExpires.IsZero() || time.Now().Before(m.previewNoticeExpires)) {
+		sb.WriteString("\n")
+		sb.WriteString(styleError.Render("  " + m.previewNotice))
 	}
 	return sb.String()
 }

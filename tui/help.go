@@ -28,6 +28,7 @@ func renderHelp(m Model) string {
 			"  /    search sessions",
 			"  f    filter by account",
 			"  l    launch sessions (picker)",
+			"  p    toggle preview pane",
 			"  ?    show / hide this help",
 		}},
 		{"Global", []string{

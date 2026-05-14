@@ -42,6 +42,10 @@ func NewStateGuard(duration time.Duration) *StateGuard {
 //     the guard is cleared so the active state breaks through immediately.
 //     This handles the common flow where a tool executes right after permission
 //     approval — without it the key icon would persist through long thinking phases.
+//   - If the current guard is "failure" and the incoming action is "active",
+//     the guard is cleared so the active state breaks through immediately.
+//     Failure is transient: the next active event means Claude is back to work,
+//     so the ✗/⚠ icon should not strand across long tool calls.
 //   - If the current guard is "stop" and isPrompt is true, the guard is cleared
 //     so the prompt's active state breaks through immediately.
 //   - All other actions are blocked if Priority(new) < Priority(current) and
@@ -68,6 +72,10 @@ func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allo
 		}
 		if entry.action == "permission" && action == "active" {
 			// Post-permission active: permission resolved, allow active through.
+			delete(g.entries, windowID)
+		} else if entry.action == "failure" && action == "active" {
+			// Failure is transient: the next active event means Claude is back to
+			// work, so let it overwrite the ✗ immediately.
 			delete(g.entries, windowID)
 		} else if entry.action == "stop" && isPrompt {
 			// Prompt bypasses stop guard — fall through to set new guard.

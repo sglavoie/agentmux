@@ -7,6 +7,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/cc-manager-kitty/internal/config"
 	"github.com/sglavoie/cc-manager-kitty/internal/daemon"
 	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
@@ -83,6 +85,14 @@ type Model struct {
 	// Empty when the daemon is unreachable; treated as "Active" by stateGroup.
 	lastActivity  map[int]time.Time
 	idleThreshold time.Duration
+
+	// preview pane
+	previewEnabled       bool
+	previewWindowID      int
+	previewText          string
+	previewError         string
+	previewNotice        string
+	previewNoticeExpires time.Time
 }
 
 // NewModel creates a dashboard model.
@@ -120,10 +130,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.previewEnabled {
+			cfg := m.cfg.Defaults.Preview
+			if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+				m.disablePreviewWithNotice("preview disabled: terminal too small")
+			}
+		}
 		return m, nil
 
 	case tickMsg:
 		return m, tea.Batch(fetchCmd(m.client, m.sortMode), tickCmd(m.interval))
+
+	case previewTickMsg:
+		if !m.previewEnabled {
+			return m, nil
+		}
+		d := time.Duration(m.cfg.Defaults.Preview.RefreshMs) * time.Millisecond
+		return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+
+	case previewContentMsg:
+		if !m.previewEnabled || msg.windowID != m.previewWindowID {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.previewError = msg.err.Error()
+		} else {
+			m.previewError = ""
+			m.previewText = msg.text
+		}
+		return m, nil
 
 	case sessionsMsg:
 		m.err = nil
@@ -201,17 +236,32 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case keyJ, keyDown:
 		m.cursor = clamp(m.cursor+1, 0, len(m.filtered)-1)
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
 
 	case keyK, keyUp:
 		m.cursor = clamp(m.cursor-1, 0, len(m.filtered)-1)
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
+
+	case keyTogglePreview:
+		return m.togglePreview()
 
 	case keyG:
 		m.cursor = 0
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
 
 	case keyGG:
 		m.cursor = len(m.filtered) - 1
 		if m.cursor < 0 {
 			m.cursor = 0
+		}
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
 		}
 
 	case keySlash:
@@ -461,7 +511,11 @@ func (m Model) render() string {
 		default:
 			sb.WriteString(renderHeader(m))
 		}
-		sb.WriteString(renderList(m))
+		if m.mode == ModeList && m.previewEnabled {
+			sb.WriteString(renderSplit(m))
+		} else {
+			sb.WriteString(renderList(m))
+		}
 	}
 
 	sb.WriteByte('\n')
@@ -469,6 +523,146 @@ func (m Model) render() string {
 	sb.WriteString(renderFooter(m))
 
 	return sb.String()
+}
+
+// renderSplit renders the list and preview pane side-by-side or stacked
+// according to the configured direction. Falls back to the plain list when
+// dimensions or selection make the preview unusable.
+func renderSplit(m Model) string {
+	cfg := m.cfg.Defaults.Preview
+	footerLines := previewFooterLines(m)
+	// Vertical space available for the list+preview area (header consumes 1
+	// line, then a blank line separates the content from the footer).
+	paneHeight := m.height - 1 - 1 - footerLines
+	if paneHeight < 4 || m.width < 20 {
+		return renderList(m)
+	}
+
+	var sess session.RunningSession
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		sess = m.filtered[m.cursor]
+	}
+	acctColor := buildAccountColorMap(m)
+
+	if cfg.Direction == "vertical" {
+		previewHeight := int(float64(paneHeight) * cfg.Ratio)
+		if previewHeight < 3 {
+			previewHeight = 3
+		}
+		if previewHeight > paneHeight-2 {
+			previewHeight = paneHeight - 2
+		}
+		listHeight := paneHeight - previewHeight - 1
+		listView := clipHeight(renderListAt(m, m.width), listHeight)
+		divider := styleDim.Render(strings.Repeat("─", m.width))
+		previewView := renderPreview(m.width, previewHeight, sess, m.previewText, m.previewError, acctColor)
+		return lipgloss.JoinVertical(lipgloss.Left, listView, divider, previewView) + "\n"
+	}
+
+	previewWidth := int(float64(m.width) * cfg.Ratio)
+	if previewWidth < 20 {
+		previewWidth = 20
+	}
+	if previewWidth > m.width-20 {
+		previewWidth = m.width - 20
+	}
+	listWidth := m.width - previewWidth - 1
+	listView := clipHeight(renderListAt(m, listWidth), paneHeight)
+	previewView := renderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor)
+	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
+	divider = strings.TrimRight(divider, "\n")
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
+}
+
+// clipHeight forces s to exactly n visual lines: extra lines are dropped and
+// missing lines are padded with empty strings.
+func clipHeight(s string, n int) string {
+	s = strings.TrimRight(s, "\n")
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	for len(lines) < n {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// previewFooterLines returns the number of lines the footer will occupy in
+// ModeList (used for layout math).
+func previewFooterLines(m Model) int {
+	noticeActive := m.previewNotice != "" &&
+		(m.previewNoticeExpires.IsZero() || time.Now().Before(m.previewNoticeExpires))
+	if m.previewEnabled {
+		// Footer keybindings are suppressed; only the notice (if any) takes a line.
+		if noticeActive {
+			return 1
+		}
+		return 0
+	}
+	if noticeActive {
+		return 3
+	}
+	return 2
+}
+
+// togglePreview flips the preview pane on/off. Returns the model and any cmd
+// (immediate fetch + ticker) to dispatch on enable.
+func (m Model) togglePreview() (tea.Model, tea.Cmd) {
+	if m.previewEnabled {
+		m.previewEnabled = false
+		m.previewText = ""
+		m.previewError = ""
+		m.previewWindowID = 0
+		return m, nil
+	}
+	cfg := m.cfg.Defaults.Preview
+	if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+		m.previewNotice = "preview unavailable: terminal too small"
+		m.previewNoticeExpires = time.Now().Add(2 * time.Second)
+		return m, nil
+	}
+	m.previewEnabled = true
+	m.previewText = ""
+	m.previewError = ""
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		m.previewWindowID = m.filtered[m.cursor].WindowID
+	} else {
+		m.previewWindowID = 0
+	}
+	d := time.Duration(cfg.RefreshMs) * time.Millisecond
+	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+}
+
+// refreshPreviewForCursor returns an immediate fetch cmd when the cursor
+// has moved to a session backed by a different window. Returns nil when
+// preview is off or the selection still points at the same window.
+func (m *Model) refreshPreviewForCursor() tea.Cmd {
+	if !m.previewEnabled {
+		return nil
+	}
+	var winID int
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		winID = m.filtered[m.cursor].WindowID
+	}
+	if winID == m.previewWindowID {
+		return nil
+	}
+	m.previewWindowID = winID
+	m.previewText = ""
+	m.previewError = ""
+	return fetchPreviewCmd(m.client, winID)
+}
+
+// disablePreviewWithNotice turns the preview off and shows a transient footer
+// notice. Used both by the resize guard and any other auto-disable path.
+func (m *Model) disablePreviewWithNotice(msg string) {
+	m.previewEnabled = false
+	m.previewText = ""
+	m.previewError = ""
+	m.previewWindowID = 0
+	m.previewNotice = msg
+	m.previewNoticeExpires = time.Now().Add(2 * time.Second)
 }
 
 // fetchCmd queries Kitty for running sessions and the daemon for per-window

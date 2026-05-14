@@ -9,6 +9,13 @@ error = false
 permission = true
 stop = true
 
+[defaults.preview]
+direction = "horizontal"   # "horizontal" | "vertical"
+ratio = 0.5                # fraction of width (horizontal) or height (vertical) given to preview
+refresh_ms = 500           # tick interval while preview is open
+min_cols = 100             # below this, horizontal split is disabled
+min_rows = 30              # below this, vertical split is disabled
+
 [[accounts]]
 name = "work"
 config_dir = "~/.config/claude-work"

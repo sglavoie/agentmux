@@ -17,7 +17,7 @@ func TestGuard_BlocksLowerPriority(t *testing.T) {
 	g := NewStateGuard(time.Hour)
 	g.TryUpdate(1, "failure", false) // priority 4
 
-	ok, eff := g.TryUpdate(1, "active", false) // priority 1 — should be blocked
+	ok, eff := g.TryUpdate(1, "stop", false) // priority 2 — should be blocked
 	if ok || eff != "" {
 		t.Fatalf("want (false, \"\"), got (%v, %q)", ok, eff)
 	}
@@ -74,14 +74,21 @@ func TestGuard_PromptBypassesStopGuard(t *testing.T) {
 	}
 }
 
-func TestGuard_PromptDoesNotBypassFailureGuard(t *testing.T) {
-	g := NewStateGuard(time.Hour)
-	g.TryUpdate(1, "failure", false) // priority 4
+func TestGuard_ActiveBypassesFailureGuard(t *testing.T) {
+	// Failure is transient: any subsequent active event clears the guard,
+	// regardless of isPrompt. Covers both the prompt-triggered active and
+	// the post-tool active that follows a failed PostToolUse.
+	for _, isPrompt := range []bool{false, true} {
+		g := NewStateGuard(time.Hour)
+		g.TryUpdate(1, "failure", false) // priority 4
 
-	// Prompt only bypasses "stop" guards, not higher ones.
-	ok, eff := g.TryUpdate(1, "active", true)
-	if ok || eff != "" {
-		t.Fatalf("want (false, \"\") for prompt vs failure guard, got (%v, %q)", ok, eff)
+		ok, eff := g.TryUpdate(1, "active", isPrompt)
+		if !ok || eff != "active" {
+			t.Fatalf("isPrompt=%v: want (true, active) for post-failure active, got (%v, %q)", isPrompt, ok, eff)
+		}
+		if cur := g.Current(1); cur != "active" {
+			t.Fatalf("isPrompt=%v: want guard=active after failure bypass, got %q", isPrompt, cur)
+		}
 	}
 }
 
@@ -167,10 +174,10 @@ func TestGuard_SamePriorityAllowed(t *testing.T) {
 func TestGuard_AllPriorityCombo(t *testing.T) {
 	// Pairs where the guard SHOULD block: higher-priority guard vs lower-priority action.
 	// Excludes: idle/clear (always succeed), permission→stop (post-permission suppression),
-	// and stop→active via UserPromptSubmit (prompt bypass).
+	// permission→active and failure→active (both clear the guard), and stop→active via
+	// UserPromptSubmit (prompt bypass).
 	blocked := []struct{ guard, action string }{
 		{"stop", "active"},
-		{"failure", "active"},
 		{"failure", "stop"},
 		{"failure", "permission"},
 	}
@@ -201,5 +208,13 @@ func TestGuard_AllPriorityCombo(t *testing.T) {
 	ok, eff := g.TryUpdate(1, "active", true)
 	if !ok || eff != "active" {
 		t.Errorf("prompt should bypass stop guard, got (%v, %q)", ok, eff)
+	}
+
+	// failure → active always succeeds (independent of isPrompt).
+	g2 := NewStateGuard(time.Hour)
+	g2.TryUpdate(1, "failure", false)
+	ok, eff = g2.TryUpdate(1, "active", false)
+	if !ok || eff != "active" {
+		t.Errorf("active should bypass failure guard, got (%v, %q)", ok, eff)
 	}
 }

@@ -34,6 +34,21 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.IdleThreshold == 0 {
 		cfg.Defaults.IdleThreshold = 300
 	}
+	if cfg.Defaults.Preview.Direction == "" {
+		cfg.Defaults.Preview.Direction = "horizontal"
+	}
+	if cfg.Defaults.Preview.Ratio == 0 {
+		cfg.Defaults.Preview.Ratio = 0.5
+	}
+	if cfg.Defaults.Preview.RefreshMs == 0 {
+		cfg.Defaults.Preview.RefreshMs = 500
+	}
+	if cfg.Defaults.Preview.MinCols == 0 {
+		cfg.Defaults.Preview.MinCols = 100
+	}
+	if cfg.Defaults.Preview.MinRows == 0 {
+		cfg.Defaults.Preview.MinRows = 30
+	}
 }
 
 // ExampleConfig is the content written by ccm config init.

@@ -50,7 +50,7 @@ func TestHandler_StateUpdateBlocked(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("want {ok:true, allowed:false}, got %+v", resp)
 	}
@@ -108,7 +108,7 @@ func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
 	delete(h.activity, 1)
 	h.activityMu.Unlock()
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("expected blocked update, got %+v", resp)
 	}

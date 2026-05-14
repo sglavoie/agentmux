@@ -37,6 +37,27 @@ func validateDefaults(d *Defaults) []string {
 	if d.IdleThreshold < 0 {
 		errs = append(errs, "defaults.idle_threshold must be >= 0")
 	}
+	if d.Preview.Direction != "" && !ValidPreviewDirection(d.Preview.Direction) {
+		errs = append(errs, fmt.Sprintf(
+			"invalid defaults.preview.direction %q: must be one of horizontal, vertical",
+			d.Preview.Direction,
+		))
+	}
+	if d.Preview.Ratio != 0 && (d.Preview.Ratio <= 0 || d.Preview.Ratio >= 1) {
+		errs = append(errs, fmt.Sprintf(
+			"defaults.preview.ratio must be > 0 and < 1 (got %v)",
+			d.Preview.Ratio,
+		))
+	}
+	if d.Preview.RefreshMs != 0 && d.Preview.RefreshMs < 50 {
+		errs = append(errs, "defaults.preview.refresh_ms must be >= 50")
+	}
+	if d.Preview.MinCols < 0 {
+		errs = append(errs, "defaults.preview.min_cols must be > 0")
+	}
+	if d.Preview.MinRows < 0 {
+		errs = append(errs, "defaults.preview.min_rows must be > 0")
+	}
 	return errs
 }
 

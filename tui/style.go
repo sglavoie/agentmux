@@ -9,7 +9,6 @@ var (
 	styleSelected = lipgloss.NewStyle().Bold(true).Reverse(true)
 	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
 	styleDim      = lipgloss.NewStyle().Faint(true)
-	styleDir      = lipgloss.NewStyle().Faint(true)
 	styleSearch   = lipgloss.NewStyle().Bold(true)
 	styleFooter   = lipgloss.NewStyle().Faint(true)
 	styleHeader   = lipgloss.NewStyle().Bold(true)

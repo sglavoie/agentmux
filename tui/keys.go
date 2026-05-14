@@ -27,4 +27,6 @@ const (
 	keyQuestion    = "?" // opens ModeHelp overlay
 	keyC           = "c" // opens ModeConfigPicker from ModeList
 	keyClearStatus = "C" // clears the highlighted session's icon
+
+	keyTogglePreview = "p" // toggles the split-pane live preview
 )
