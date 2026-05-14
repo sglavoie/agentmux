@@ -72,15 +72,15 @@ func TestIPC_JSONRoundTrip(t *testing.T) {
 	c := NewClientWithSocket(sock)
 
 	// Guard blocks lower-priority update across round-trips.
-	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "permission"}); err != nil {
-		t.Fatalf("Send permission: %v", err)
+	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "failure"}); err != nil {
+		t.Fatalf("Send failure: %v", err)
 	}
 	resp, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "active"})
 	if err != nil {
 		t.Fatalf("Send active: %v", err)
 	}
 	if resp.Allowed {
-		t.Fatal("expected active to be blocked by permission guard")
+		t.Fatal("expected active to be blocked by failure guard")
 	}
 }
 

@@ -15,7 +15,7 @@ func TestGuard_AllowsInitialUpdate(t *testing.T) {
 
 func TestGuard_BlocksLowerPriority(t *testing.T) {
 	g := NewStateGuard(time.Hour)
-	g.TryUpdate(1, "permission", false) // priority 3
+	g.TryUpdate(1, "failure", false) // priority 4
 
 	ok, eff := g.TryUpdate(1, "active", false) // priority 1 — should be blocked
 	if ok || eff != "" {
@@ -74,14 +74,27 @@ func TestGuard_PromptBypassesStopGuard(t *testing.T) {
 	}
 }
 
-func TestGuard_PromptDoesNotBypassHigherGuard(t *testing.T) {
+func TestGuard_PromptDoesNotBypassFailureGuard(t *testing.T) {
 	g := NewStateGuard(time.Hour)
-	g.TryUpdate(1, "permission", false) // priority 3
+	g.TryUpdate(1, "failure", false) // priority 4
 
 	// Prompt only bypasses "stop" guards, not higher ones.
 	ok, eff := g.TryUpdate(1, "active", true)
 	if ok || eff != "" {
-		t.Fatalf("want (false, \"\") for prompt vs permission guard, got (%v, %q)", ok, eff)
+		t.Fatalf("want (false, \"\") for prompt vs failure guard, got (%v, %q)", ok, eff)
+	}
+}
+
+func TestGuard_ActiveBypassesPermissionGuard(t *testing.T) {
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "permission", false) // priority 3
+
+	ok, eff := g.TryUpdate(1, "active", false) // should bypass permission guard
+	if !ok || eff != "active" {
+		t.Fatalf("want (true, active) for post-permission active, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "active" {
+		t.Fatalf("want guard=active after permission bypass, got %q", cur)
 	}
 }
 
@@ -142,7 +155,6 @@ func TestGuard_AllPriorityCombo(t *testing.T) {
 	// and stop→active via UserPromptSubmit (prompt bypass).
 	blocked := []struct{ guard, action string }{
 		{"stop", "active"},
-		{"permission", "active"},
 		{"failure", "active"},
 		{"failure", "stop"},
 		{"failure", "permission"},

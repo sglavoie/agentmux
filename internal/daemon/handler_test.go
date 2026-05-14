@@ -48,7 +48,7 @@ func TestHandler_StateUpdateAllowed(t *testing.T) {
 
 func TestHandler_StateUpdateBlocked(t *testing.T) {
 	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
 
 	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
 	if !resp.OK || resp.Allowed {
