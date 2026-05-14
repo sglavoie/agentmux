@@ -1,0 +1,11 @@
+[defaults]
+
+[[accounts]]
+name = "work"
+config_dir = "~/.config/claude-work"
+color = "magenta"
+
+[[sessions]]
+title = "W:api"
+directory = "~/projects/api"
+account = "work"

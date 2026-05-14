@@ -1,0 +1,58 @@
+[
+  {
+    "id": 1,
+    "is_active": true,
+    "is_focused": true,
+    "last_focused": true,
+    "tabs": [
+      {
+        "id": 2,
+        "is_active": true,
+        "title": "P:dotfiles",
+        "windows": [
+          {
+            "id": 3,
+            "is_active": true,
+            "title": "P:dotfiles",
+            "cwd": "/Users/user/dotfiles",
+            "cmdline": ["claude"],
+            "user_vars": {
+              "cc_account": "personal",
+              "cc_config_dir": "~/.config/claude",
+              "cc_flags": "",
+              "cc_pw": "",
+              "cc_env": "",
+              "cc_groups": "",
+              "cc_mute": "",
+              "cc_cwd": "/Users/user/dotfiles"
+            }
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "is_active": false,
+        "title": "W:api",
+        "windows": [
+          {
+            "id": 5,
+            "is_active": true,
+            "title": "W:api",
+            "cwd": "/Users/user/projects/api",
+            "cmdline": ["claude", "--dangerously-skip-permissions"],
+            "user_vars": {
+              "cc_account": "work",
+              "cc_config_dir": "~/.config/claude-work",
+              "cc_flags": "--dangerously-skip-permissions",
+              "cc_pw": "",
+              "cc_env": "",
+              "cc_groups": "backend",
+              "cc_mute": "",
+              "cc_cwd": "/Users/user/projects/api"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

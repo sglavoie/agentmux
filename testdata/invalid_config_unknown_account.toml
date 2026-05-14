@@ -1,0 +1,12 @@
+[defaults]
+sort = "alpha"
+
+[[accounts]]
+name = "personal"
+config_dir = "~/.config/claude"
+color = "green"
+
+[[sessions]]
+title = "W:api"
+directory = "~/projects/api"
+account = "work"

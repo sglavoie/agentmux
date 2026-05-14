@@ -1,0 +1,183 @@
+package session_test
+
+import (
+	"testing"
+
+	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
+	"github.com/sglavoie/cc-manager-kitty/internal/session"
+)
+
+// sequentialLSRunner returns different kitten @ ls responses on successive
+// calls. All other commands get an empty successful response.
+type sequentialLSRunner struct {
+	lsResponses [][]byte
+	lsCallIdx   int
+	Calls       []kitty.MockCall
+}
+
+func (r *sequentialLSRunner) Run(name string, args ...string) ([]byte, []byte, error) {
+	r.Calls = append(r.Calls, kitty.MockCall{Name: name, Args: args})
+	for _, a := range args {
+		if a == "ls" {
+			if r.lsCallIdx < len(r.lsResponses) {
+				resp := r.lsResponses[r.lsCallIdx]
+				r.lsCallIdx++
+				return resp, nil, nil
+			}
+			// Past the end: return last response.
+			return r.lsResponses[len(r.lsResponses)-1], nil, nil
+		}
+	}
+	return []byte{}, nil, nil
+}
+
+func buildTestConfig() *config.Config {
+	return &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"},
+			{Name: "personal", ConfigDir: "~/.config/claude", Color: "green"},
+		},
+		Sessions: []config.Session{},
+	}
+}
+
+// TestLaunch_DedupSkipsExisting verifies that launching an already-running
+// session does not call kitten @ launch.
+func TestLaunch_DedupSkipsExisting(t *testing.T) {
+	existing := loadFixture(t, "kitty_ls.json") // has P:dotfiles and W:api
+	runner := kitty.NewMockRunner(map[string][]byte{
+		"kitten @ ls": existing,
+	})
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+
+	sess := config.Session{Title: "api", Account: "work", Directory: "/tmp"}
+	acc := cfg.Accounts[0]
+
+	err := session.Launch(client, sess, acc, cfg)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	for _, c := range runner.Calls {
+		for _, a := range c.Args {
+			if a == "launch" {
+				t.Error("expected no kitten @ launch call for dedup, but got one")
+			}
+		}
+	}
+}
+
+// TestLaunch_CallsKittenWithCorrectArgs verifies that Launch calls kitten @ launch
+// with the correct tab title and user vars.
+func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		// All ls calls return empty — no existing sessions.
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+
+	sess := config.Session{
+		Title:       "newproject",
+		Account:     "work",
+		Directory:   "/tmp/newproject",
+		ClaudeFlags: []string{"--dangerously-skip-permissions"},
+		Env:         map[string]string{"DEBUG": "1"},
+	}
+	acc := cfg.Accounts[0]
+
+	err := session.Launch(client, sess, acc, cfg)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	// Verify kitten @ launch was called.
+	launchCalled := false
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		hasLaunch := false
+		for _, a := range c.Args {
+			if a == "launch" {
+				hasLaunch = true
+			}
+		}
+		if !hasLaunch {
+			continue
+		}
+		launchCalled = true
+
+		// Check expected args are present.
+		argMap := make(map[string]bool)
+		for _, a := range c.Args {
+			argMap[a] = true
+		}
+		if !argMap["--tab-title=W:newproject"] {
+			t.Errorf("expected --tab-title=W:newproject in args: %v", c.Args)
+		}
+		if !argMap["--var=cc_account=work"] {
+			t.Errorf("expected --var=cc_account=work in args: %v", c.Args)
+		}
+		if !argMap["--var=cc_flags=--dangerously-skip-permissions"] {
+			t.Errorf("expected cc_flags arg in args: %v", c.Args)
+		}
+		if !argMap["--location=first"] {
+			t.Errorf("expected --location=first for empty kitty in args: %v", c.Args)
+		}
+	}
+	if !launchCalled {
+		t.Error("expected kitten @ launch to be called")
+	}
+}
+
+// TestLaunch_ColorRetryApplied verifies that SetTabColor is called when the
+// new tab appears in a post-launch ls response.
+func TestLaunch_ColorRetryApplied(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+
+	// Post-launch fixture: W:newproject tab with ID 100 (not in pre-launch IDs).
+	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
+		`{"id":100,"is_active":true,"title":"W:newproject","windows":[` +
+		`{"id":101,"is_active":true,"title":"W:newproject","cwd":"/tmp/newproject","cmdline":["claude"],` +
+		`"user_vars":{"cc_account":"work","cc_config_dir":"","cc_flags":"","cc_pw":"","cc_env":"","cc_groups":"","cc_mute":"","cc_cwd":"/tmp/newproject"}}` +
+		`]}]}]`)
+
+	runner := &sequentialLSRunner{
+		// ls calls: empty (dedup), empty (compute insert), then post-launch (color retry)
+		lsResponses: [][]byte{empty, empty, postLaunch, postLaunch, postLaunch},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+
+	sess := config.Session{
+		Title:     "newproject",
+		Account:   "work",
+		Directory: "/tmp/newproject",
+	}
+	acc := cfg.Accounts[0]
+
+	err := session.Launch(client, sess, acc, cfg)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	colorCalled := false
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		for _, a := range c.Args {
+			if a == "set-tab-color" {
+				colorCalled = true
+				break
+			}
+		}
+	}
+	if !colorCalled {
+		t.Error("expected kitten @ set-tab-color to be called after color retry found new tab")
+	}
+}

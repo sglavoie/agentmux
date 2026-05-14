@@ -1,0 +1,33 @@
+[defaults]
+sort = "alpha"
+refresh_interval = 2
+guard_duration = 1
+
+[defaults.notifications]
+error = false
+permission = true
+stop = true
+
+[[accounts]]
+name = "work"
+config_dir = "~/.config/claude-work"
+color = "blue"
+
+[[accounts]]
+name = "personal"
+config_dir = "~/.config/claude"
+color = "green"
+
+[[sessions]]
+title = "W:api"
+directory = "~/projects/api"
+account = "work"
+claude_flags = []
+
+[[sessions]]
+title = "P:dotfiles"
+directory = "~"
+account = "personal"
+
+[hooks.overrides.personal]
+disabled_events = []

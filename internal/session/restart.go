@@ -1,0 +1,107 @@
+package session
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
+)
+
+var debugLog = newFileLogger("/tmp/ccm-debug.log", "[restart] ")
+
+// Restart closes a running session and relaunches it, preserving metadata
+// from the running tab's user vars (account, directory, flags, env, groups).
+func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Config) error {
+	acc, found := findAccount(cfg, running.Account)
+	if !found {
+		return fmt.Errorf("account %q not found in config", running.Account)
+	}
+
+	sess := sessionFromRunning(running)
+
+	closeErr := Close(client, running.TabID)
+	// ErrCloseTimeout is non-fatal — the tab likely closed shortly after.
+	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
+		return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
+	}
+
+	return Launch(client, sess, acc, cfg, LaunchOpt{SkipDedup: true})
+}
+
+// RestartWithAccount closes a running session and relaunches it using a
+// different account's config. Title prefix and tab color update to match the
+// target account. If the target account is already the current one, it is a
+// no-op.
+func RestartWithAccount(client kitty.KittyClient, running RunningSession, targetAcc config.Account, cfg *config.Config) error {
+	debugLog.Printf("RestartWithAccount: running=%+v targetAcc=%+v", running, targetAcc)
+	if running.Account == targetAcc.Name {
+		debugLog.Printf("RestartWithAccount: same account, no-op")
+		return nil
+	}
+
+	sess := sessionFromRunning(running)
+	sess.Account = targetAcc.Name
+	debugLog.Printf("RestartWithAccount: session=%+v", sess)
+
+	closeErr := Close(client, running.TabID)
+	debugLog.Printf("RestartWithAccount: Close err=%v", closeErr)
+	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
+		return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
+	}
+
+	launchErr := Launch(client, sess, targetAcc, cfg, LaunchOpt{SkipDedup: true})
+	debugLog.Printf("RestartWithAccount: Launch err=%v", launchErr)
+	return launchErr
+}
+
+func findAccount(cfg *config.Config, name string) (config.Account, bool) {
+	for _, acc := range cfg.Accounts {
+		if acc.Name == name {
+			return acc, true
+		}
+	}
+	return config.Account{}, false
+}
+
+// sessionFromRunning reconstructs a config.Session from a running tab's
+// user vars. This preserves runtime overrides not written back to config.
+func sessionFromRunning(rs RunningSession) config.Session {
+	return config.Session{
+		Title:       projectName(rs.Base),
+		Directory:   rs.Directory,
+		Account:     rs.Account,
+		ClaudeFlags: parseFlags(rs.Flags),
+		Env:         deserializeEnv(rs.Env),
+		Groups:      rs.Groups,
+	}
+}
+
+// parseFlags splits a space-separated flags string into a slice.
+func parseFlags(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	return strings.Fields(raw)
+}
+
+// deserializeEnv reverses SerializeSessionEnv: splits by "\x1f" and parses
+// KEY=VALUE pairs into a map.
+func deserializeEnv(raw string) map[string]string {
+	if raw == "" {
+		return nil
+	}
+	out := make(map[string]string)
+	for _, pair := range strings.Split(raw, "\x1f") {
+		k, v, ok := strings.Cut(pair, "=")
+		if ok && k != "" {
+			out[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}

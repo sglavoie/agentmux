@@ -1,0 +1,100 @@
+[
+  {
+    "id": 1,
+    "is_active": true,
+    "is_focused": true,
+    "last_focused": true,
+    "tabs": [
+      {
+        "id": 10,
+        "is_active": true,
+        "title": "dashboard",
+        "windows": [
+          {
+            "id": 100,
+            "is_active": true,
+            "title": "dashboard",
+            "cwd": "/Users/user",
+            "cmdline": ["zsh"],
+            "user_vars": {},
+            "foreground_processes": [
+              {
+                "pid": 1001,
+                "cmdline": ["ccm"],
+                "cwd": "/Users/user"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 20,
+        "is_active": false,
+        "title": "daemon",
+        "windows": [
+          {
+            "id": 200,
+            "is_active": true,
+            "title": "daemon",
+            "cwd": "/Users/user",
+            "cmdline": ["zsh"],
+            "user_vars": {},
+            "foreground_processes": [
+              {
+                "pid": 2001,
+                "cmdline": ["ccm", "daemon", "start"],
+                "cwd": "/Users/user"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 30,
+        "is_active": false,
+        "title": "P:dotfiles",
+        "windows": [
+          {
+            "id": 300,
+            "is_active": true,
+            "title": "P:dotfiles",
+            "cwd": "/Users/user/dotfiles",
+            "cmdline": ["claude"],
+            "user_vars": {
+              "cc_account": "personal"
+            },
+            "foreground_processes": [
+              {
+                "pid": 3001,
+                "cmdline": ["claude"],
+                "cwd": "/Users/user/dotfiles"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 40,
+        "is_active": false,
+        "title": "shell",
+        "windows": [
+          {
+            "id": 400,
+            "is_active": true,
+            "title": "shell",
+            "cwd": "/Users/user",
+            "cmdline": ["zsh"],
+            "user_vars": {},
+            "foreground_processes": [
+              {
+                "pid": 4001,
+                "cmdline": ["zsh"],
+                "cwd": "/Users/user"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
