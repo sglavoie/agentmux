@@ -34,19 +34,38 @@ func Run(eventOrAction string, windowID int, ccmBin string) error {
 	pipeMode := IsPipeMode()
 	slog.Debug("indicator", "action", action, "window_id", windowID, "pipe_mode", pipeMode)
 
-	// Contact daemon for guard decision (auto-start if not running).
+	runner := kitty.NewRealRunner()
+	client := kitty.NewClient(runner)
+	windows, err := client.ListWindows()
+
+	var tab *kitty.Tab
+	var sessionTitle string
+	if err == nil {
+		t, _, found := kitty.FindTabByWindowID(windows, windowID)
+		if found {
+			tab = t
+			base, _, _ := palette.ParseTitle(tab.Title)
+			sessionTitle = base
+		}
+	} else {
+		slog.Debug("indicator: kitty lookup failed", "err", err)
+	}
+
 	dc := daemon.NewClient()
 	resp, err := dc.SendWithAutoStart(daemon.Request{
-		Type:     daemon.TypeStateUpdate,
-		WindowID: windowID,
-		Action:   action,
-		Event:    eventOrAction,
-		PipeMode: pipeMode,
+		Type:         daemon.TypeStateUpdate,
+		WindowID:     windowID,
+		Action:       action,
+		Event:        eventOrAction,
+		PipeMode:     pipeMode,
+		SessionTitle: sessionTitle,
 	}, ccmBin)
 	if err != nil {
-		// Daemon unavailable: fall back to best-effort title update with no guard.
 		slog.Debug("indicator: daemon unavailable, updating title without guard", "err", err)
-		return updateTitle(windowID, daemon.IconState(action))
+		if tab == nil {
+			return fmt.Errorf("indicator: window %d not found and daemon unavailable", windowID)
+		}
+		return updateTitle(windowID, daemon.IconState(action), client, tab)
 	}
 	if !resp.OK {
 		return fmt.Errorf("indicator: daemon error: %s", resp.Error)
@@ -60,30 +79,18 @@ func Run(eventOrAction string, windowID int, ccmBin string) error {
 		return nil
 	}
 
-	return updateTitle(windowID, resp.IconState)
-}
-
-// updateTitle finds the tab containing windowID, builds the new title, and
-// sets it via the Kitty remote-control API.
-func updateTitle(windowID int, iconState string) error {
-	runner := kitty.NewRealRunner()
-	client := kitty.NewClient(runner)
-
-	windows, err := client.ListWindows()
-	if err != nil {
-		return fmt.Errorf("indicator: listing windows: %w", err)
-	}
-
-	tab, _, found := kitty.FindTabByWindowID(windows, windowID)
-	if !found {
+	if tab == nil {
 		return fmt.Errorf("indicator: window %d not found in Kitty tab list", windowID)
 	}
+	return updateTitle(windowID, resp.IconState, client, tab)
+}
 
+func updateTitle(windowID int, iconState string, client kitty.KittyClient, tab *kitty.Tab) error {
 	base, _, starred := palette.ParseTitle(tab.Title)
 	newTitle := palette.BuildTitle(base, iconState, starred)
 
 	if newTitle == tab.Title {
-		return nil // no change needed
+		return nil
 	}
 
 	matchExpr := kitty.MatchTabByWindowID(windowID)

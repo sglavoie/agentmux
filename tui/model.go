@@ -227,7 +227,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.mode = ModeActions
 		}
 
-	case keyP:
+	case keyL:
 		m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
 		m.pickerRunning = buildPickerRunning(m.sessions)
 		m.pickerSelected = make(map[int]bool)

@@ -53,7 +53,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if req.Event == "SubagentStop" || req.Event == "TaskCompleted" {
 		iconState = IconStatePreserve
 	}
-	h.notifier.MaybeNotify(req.WindowID, req.Account, effective, req.PipeMode)
+	h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, effective, req.PipeMode)
 
 	return Response{OK: true, Allowed: true, IconState: iconState}
 }

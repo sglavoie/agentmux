@@ -26,7 +26,7 @@ func renderFooter(m Model) string {
 		actions = styleFooter.Render("  enter: select  esc: cancel")
 	default:
 		// ModeList — show what actions are available.
-		hint := "  space: focus  e: peek  enter/a: actions  p: pick & launch  /: search  f: filter"
+		hint := "  space: focus  e: peek  enter/a: actions  l: pick & launch  /: search  f: filter"
 		if m.activeSearch != "" || m.activeAccount != "" {
 			hint += "  esc: clear filters"
 		}

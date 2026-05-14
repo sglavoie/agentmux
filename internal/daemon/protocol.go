@@ -19,8 +19,9 @@ type Request struct {
 	WindowID int         `json:"window_id,omitempty"` // KITTY_WINDOW_ID
 	Action   string      `json:"action,omitempty"`    // active|stop|permission|failure|idle|clear
 	Event    string      `json:"event,omitempty"`     // raw Claude hook event name (e.g. UserPromptSubmit)
-	Account  string      `json:"account,omitempty"`
-	PipeMode bool        `json:"pipe_mode,omitempty"` // suppress notifications when claude -p
+	Account      string      `json:"account,omitempty"`
+	SessionTitle string      `json:"session_title,omitempty"` // tab base title (e.g. "W:api")
+	PipeMode     bool        `json:"pipe_mode,omitempty"`     // suppress notifications when claude -p
 }
 
 // Response is a JSON message sent by the daemon back to the client.

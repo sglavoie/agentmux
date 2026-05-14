@@ -50,7 +50,7 @@ func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 //   - the corresponding config flag is enabled
 //   - the 10s cooldown has elapsed since the last notification for this window
 //   - pipeMode is false (claude -p suppresses notifications)
-func (n *Notifier) MaybeNotify(windowID int, account, action string, pipeMode bool) {
+func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMode bool) {
 	if pipeMode {
 		return
 	}
@@ -70,13 +70,12 @@ func (n *Notifier) MaybeNotify(windowID int, account, action string, pipeMode bo
 	}
 	n.last[windowID] = now
 
-	title := notificationLabels[action]
-	body := account
-	if body == "" {
-		body = "Claude Code"
+	title := sessionTitle
+	if title == "" {
+		title = "Claude Code"
 	}
-	// Fire asynchronously so the IPC response isn't delayed.
-	go func() { _ = n.osascript(title, body) }()
+	subtitle := notificationLabels[action]
+	go func() { _ = n.osascript(title, subtitle) }()
 }
 
 func (n *Notifier) actionEnabled(action string) bool {
@@ -91,10 +90,10 @@ func (n *Notifier) actionEnabled(action string) bool {
 	return false
 }
 
-func (n *Notifier) runOsascript(title, body string) error {
+func (n *Notifier) runOsascript(title, subtitle string) error {
 	script := fmt.Sprintf(
-		`display notification %q with title %q`,
-		body, title,
+		`display notification "" with title %q subtitle %q`,
+		title, subtitle,
 	)
 	return exec.Command("osascript", "-e", script).Run()
 }

@@ -12,7 +12,7 @@ const (
 	keyF         = "f"
 	keyA         = "a"
 	keyO         = "o"
-	keyP         = "p"
+	keyL         = "l"
 	keyY         = "y"
 	keyN         = "n"
 	keySpace     = "space"
