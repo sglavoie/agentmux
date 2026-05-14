@@ -47,25 +47,3 @@ uninstall:
 bump version:
     @sed -i '' 's/const version = ".*"/const version = "{{version}}"/' cmd/root.go
     @grep 'const version' cmd/root.go
-
-# Remove stale symlinks left by the old Bash/Python installation
-clean-legacy:
-    @echo "Removing stale shell scripts from ~/.local/bin/..."
-    rm -f "{{prefix_bin}}/cc-launch" "{{prefix_bin}}/cc-status"
-    rm -f "{{prefix_bin}}/cc-toggle-star" "{{prefix_bin}}/cc-toggle-flag"
-    rm -f "{{prefix_bin}}/cc-toggle-dim" "{{prefix_bin}}/cc-toggle-focus"
-    rm -f "{{prefix_bin}}/cc-toggle-mute"
-    rm -f "{{prefix_bin}}/cc-idle-watch" "{{prefix_bin}}/cc-audit"
-    rm -f "{{prefix_bin}}/cc-hook-indicator" "{{prefix_bin}}/cc-activity-log"
-    @echo "Removing stale Python kittens from ~/.config/kitty/..."
-    rm -f "{{prefix_kitty}}"/cc_*.py
-    rm -f "{{prefix_kitty}}/claude_dashboard.py"
-    rm -rf "{{prefix_kitty}}/cc_dashboard"
-    @echo "Removing stale library directory..."
-    rm -rf {{home_directory()}}/.local/lib/cc-manager
-    @echo "Removing stale completions..."
-    rm -f {{home_directory()}}/.zfunc/_ccm {{home_directory()}}/.zfunc/_cc-launch {{home_directory()}}/.zfunc/_cc-status
-    rm -f {{home_directory()}}/.local/share/bash-completion/completions/cc-launch
-    rm -f {{home_directory()}}/.local/share/bash-completion/completions/cc-status
-    rm -f {{home_directory()}}/.local/share/bash-completion/completions/ccm
-    @echo "Legacy cleanup complete."

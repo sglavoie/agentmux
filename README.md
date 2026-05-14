@@ -1,25 +1,21 @@
 # cc-manager-kitty
 
-Opinionated Claude Code session manager with support for multiple accounts using Kitty terminal tabs with direct tab switching, color-coded accounts, and a status overview.
+Claude Code session manager for the Kitty terminal. Manages multiple Claude Code sessions as Kitty tabs with color-coded accounts and an interactive dashboard.
 
 ## Prerequisites
 
-Kitty must be running with remote control enabled. Your `kitty.conf` should include:
+- Go 1.22+ (to build)
+- Kitty with remote control enabled
+- [`alerter`](https://github.com/vjeantet/alerter) for macOS notifications (optional)
 
-```plaintext
+Your `kitty.conf` must include:
+
+```
 allow_remote_control yes
 listen_on unix:/tmp/kitty-{kitty_pid}
 ```
 
-You also need `jq` installed (`brew install jq` on macOS) and Python 3.13+ (`brew install python` on macOS, or use your preferred Python version manager).
-
-For macOS notifications (idle alerts, error/permission/stop events), install [alerter](https://github.com/vjeantet/alerter): `brew install vjeantet/tap/alerter`. Notifications are optional — everything else works without it.
-
-## Setup
-
-### 1. Install
-
-Clone the repo and run `just install`:
+## Install
 
 ```bash
 git clone <repo-url> ~/path/to/cc-manager-kitty
@@ -27,411 +23,160 @@ cd ~/path/to/cc-manager-kitty
 just install
 ```
 
-This creates symlinks for the binaries into `~/.local/bin/`, the Kitty kitten and config into `~/.config/kitty/`, and the Zsh completions into `~/.zfunc/`. Running it again is safe (idempotent). To remove everything, run `just uninstall`.
+This builds the `ccm` binary, copies it to `~/.local/bin/ccm`, and symlinks `cc-manager.conf` to `~/.config/kitty/`. Running again is safe (idempotent). To remove everything: `just uninstall`.
 
-### 2. Include the Kitty config snippet
+Then add to your `kitty.conf`:
 
-Add this line to your `kitty.conf`:
-
-```plaintext
+```
 include cc-manager.conf
 ```
 
-Then reload Kitty config with `ctrl+shift+f5`.
+Reload with `ctrl+shift+f5`. This gives you `cmd+1`–`cmd+0` for tab switching, `cmd+l` to toggle last two tabs, and `ctrl+shift+d` to open the dashboard.
 
-This gives you `cmd+1` through `cmd+0` for tabs 1-10, `cmd+l` to toggle between the last two tabs, error marker highlighting on `f3`, a keybinding quick-reference on `f1`, broadcast input on `f12`, and `ctrl+shift+d` to open the interactive session dashboard.
+## Setup
 
-### 3. Define your accounts
+Create a config file:
 
 ```bash
-mkdir -p ~/.config/cc-manager
-cp config/accounts.example.toml ~/.config/cc-manager/accounts.toml
+ccm config init
 ```
 
-Edit `~/.config/cc-manager/accounts.toml` to define your Claude accounts. Each `[[accounts]]` entry has three keys:
-
-- `name` — Identifier you reference from `sessions.toml`
-- `config_dir` — Path to the Claude config directory (`~/.claude` = default)
-- `color` — Tab color from the built-in palette: green, blue, red, orange, purple, teal, pink, yellow, gray, or cyan
-
-Example with three accounts:
+This writes an example `~/.config/cc-manager/config.toml`. Edit it to define your accounts and sessions:
 
 ```toml
-[[accounts]]
-name = "work"
-config_dir = "~/.claude"
-color = "green"
+[defaults]
+sort = "alpha"
+
+[defaults.notifications]
+permission = true
+stop = true
 
 [[accounts]]
-name = "personal"
-config_dir = "~/.claude-personal"
+name = "work"
+config_dir = "~/.config/claude-work"
 color = "blue"
 
 [[accounts]]
-name = "client-x"
-config_dir = "~/.claude-client-x"
-color = "orange"
-```
+name = "personal"
+config_dir = "~/.config/claude"
+color = "green"
 
-If `accounts.toml` does not exist, cc-manager falls back to two default accounts: `work` (green, default config) and `personal` (blue, `~/.claude-personal`).
-
-### 4. Create your sessions config
-
-```bash
-cp config/sessions.example.toml ~/.config/cc-manager/sessions.toml
-```
-
-Edit `~/.config/cc-manager/sessions.toml` to define your sessions. Each `[[sessions]]` entry has three required keys and several optional ones:
-
-- `title` — Tab title (convention: prefix with account initial, e.g. `W:` for work, `P:` for personal)
-- `directory` — Working directory (`~` is expanded)
-- `account` — Account name as defined in `accounts.toml`
-- `flags` — *(optional)* Per-session Claude flags, overriding the global default (see step 5)
-- `project_window` — *(optional)* Per-session layout override (`stack`, `vsplit`, `hsplit`, `split`, or `-` to disable)
-- `env` — *(optional)* Space-separated `KEY=VALUE` pairs injected as environment variables
-- `group` — *(optional)* Group name for organizing related sessions in the dashboard
-
-Example:
-
-```toml
 [[sessions]]
-title = "W:project-alpha"
-directory = "~/projects/alpha"
+title = "W:api"
+directory = "~/projects/api"
 account = "work"
 
 [[sessions]]
 title = "P:dotfiles"
-directory = "~/dotfiles"
+directory = "~"
 account = "personal"
-flags = "--dangerously-skip-permissions"
 ```
 
-### 5. (Optional) Set global defaults
+**Colors**: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan
 
-If you want to pass flags like `--dangerously-skip-permissions` to every Claude session by default, create a defaults file:
-
-```bash
-cp config/defaults.example.toml ~/.config/cc-manager/defaults.toml
-```
-
-Edit `~/.config/cc-manager/defaults.toml` and uncomment the `claude_flags` line:
-
-```toml
-[defaults]
-claude_flags = "--dangerously-skip-permissions"
-```
-
-This applies to all sessions unless overridden per-session in `sessions.toml`. Use the `flags` key in a session entry to override, or set it to `"-"` to disable flags entirely for that session:
-
-```toml
-# Inherits global defaults
-[[sessions]]
-title = "W:project-alpha"
-directory = "~/projects/alpha"
-account = "work"
-
-# Explicit flags regardless of global default
-[[sessions]]
-title = "W:project-beta"
-directory = "~/projects/beta"
-account = "work"
-flags = "--dangerously-skip-permissions"
-
-# No flags even if global default is set
-[[sessions]]
-title = "W:safe-project"
-directory = "~/projects/safe"
-account = "work"
-flags = "-"
-```
-
-There is no merging; the per-session value completely replaces the global default.
-
-Additional defaults options:
-
-- `tab_statuses` — Array of status presets shown in the F7 tab status picker. Custom values entered via F7 are auto-appended. Default: `["reviewing", "WIP", "blocked", "testing", "done", "paused", "debugging"]`
-- `notes_editor` — External editor command for session notes (opened via F9). Leave empty to use the built-in editor.
-- `kitty_timeout` — Timeout in seconds for `kitty @` remote control commands in the dashboard. Default: `5`
-
-See `config/defaults.example.toml` for the full list of options including notification settings.
+After editing, validate with `ccm config validate`.
 
 ## Usage
 
-### The `ccm` command
+### Dashboard
 
-`ccm` is the unified CLI entry point. All functionality is available through subcommands:
+```bash
+ccm
+```
+
+Launches the interactive Bubble Tea dashboard. If a dashboard is already open, focuses it instead. Use `ctrl+shift+d` from inside Kitty to open it as an overlay.
+
+Core keybindings:
+
+```
+↑ / k       Move up
+↓ / j       Move down
+Enter       Focus selected session
+/           Search sessions
+a           Filter by account
+t           Actions menu (close, restart, config override)
+Space       Mark / unmark for grouped actions
+n           Launch new session (from config)
+q / Esc     Quit
+```
+
+### Session launch
+
+New sessions are launched from the dashboard. The TUI reads your `config.toml` sessions list, lets you pick one or more, and creates the Kitty tabs.
+
+### Config management
 
 | Command | Description |
 |---------|-------------|
-| `ccm launch [args]` | Manage and launch sessions (delegates to `cc-launch`) |
-| `ccm status [args]` | Show active session status (delegates to `cc-status`) |
-| `ccm star` | Toggle star/pin on active tab |
-| `ccm config <subcmd>` | Manage config files (`edit`, `show`, `path`, `init`, `sync`, `validate`) |
-| `ccm hooks <subcmd>` | Manage hooks (`sync`, `status`) |
-| `ccm logs <subcmd>` | Query and manage activity logs (`list`, `show`, `summary`, `clean`, `dir`) |
-| `ccm dashboard` | Launch the curses dashboard |
-| `ccm switch` | Quick-switch: fuzzy-find and jump to a session |
-| `ccm notify` | Send a test notification (requires `alerter`) |
-| `ccm audit` | Check upstream Claude Code feature compatibility |
-| `ccm idle-watch` | Manage background idle notification watcher |
-| `ccm help [cmd]` | Show help for any command |
+| `ccm config init` | Create example config |
+| `ccm config edit` | Open config in `$EDITOR` |
+| `ccm config show` | Print current config |
+| `ccm config path` | Print config file path |
+| `ccm config validate` | Validate config |
+| `ccm config hooks-sync` | Install hooks into all account `settings.json` files |
+| `ccm config hooks-status` | Show per-account hook sync status |
 
-Run `ccm help <command>` for details on any subcommand. The `cc-launch` and `cc-status` commands also work directly.
+### Daemon
 
-### Launch all configured sessions
+The daemon manages tab icon state and macOS notifications:
 
 ```bash
-cc-launch
+ccm daemon start
+ccm daemon status
+ccm daemon stop
 ```
 
-Reads `~/.config/cc-manager/sessions.toml` and creates a Kitty tab for each entry. Tabs are colored according to the palette color assigned to each account in `accounts.toml`. Running it again is safe since it skips tabs that already exist (idempotent).
+The daemon starts automatically when the first hook event arrives. It communicates via a Unix socket at `~/.cache/cc-manager/daemon.sock`.
 
-### Add an ad-hoc session
+### Hooks
+
+Install hooks for all accounts:
 
 ```bash
-cc-launch --add "W:hotfix" ~/projects/hotfix work
-cc-launch --add "P:experiment" ~/scratch personal
+ccm config hooks-sync
 ```
 
-The account argument defaults to `work` if omitted.
+This writes `ccm hook-indicator <event>` entries into each account's Claude Code `settings.json`. Check drift with `ccm config hooks-status`.
 
-### Close a session
+## Config reference
 
-```bash
-cc-launch --close --instance K:12345 --tab-id 67
-```
+```toml
+[defaults]
+sort = "alpha"           # "alpha" or "account"
+refresh_interval = 2     # TUI refresh seconds
+guard_duration = 1       # state-guard seconds
+claude_flags = []        # global Claude flags for all sessions
 
-Destructive operations now use stable Kitty selectors to avoid title-collision mistakes.
+[defaults.notifications]
+error = false
+permission = true
+stop = true
 
-### List active Claude sessions
+[[accounts]]
+name = "work"            # required
+config_dir = "~/.config/claude-work"  # required, tilde-expanded
+color = "blue"           # required
 
-```bash
-cc-launch --list
-```
+[[sessions]]
+title = "W:api"          # required (tab-initial:name convention)
+directory = "~/projects/api"  # required
+account = "work"         # required, must match an account name
+claude_flags = []        # optional; omit to inherit defaults
+env = {}                 # optional; key=value env vars injected at launch
+groups = []              # optional; for filtering in dashboard
 
-Shows a table of all Kitty tabs currently running Claude, with index, tab id, title, account, instance, directory, and focus status.
-
-Use the `Instance` + `TabID` columns as inputs to destructive commands.
-
-### Restart, clone, or move a session safely
-
-```bash
-cc-launch --restart --instance K:12345 --tab-id 67
-cc-launch --clone --instance K:12345 --tab-id 67
-cc-launch --move --instance K:12345 --tab-id 67 --target-instance K:67890
-```
-
-### Launch or close by group
-
-```bash
-cc-launch --all --group backend
-cc-launch --close --group backend
-```
-
-Launches or closes only sessions belonging to the named group (as defined by the `group` key in `sessions.toml`).
-
-### Quick status overview
-
-```bash
-cc-status
-```
-
-Same idea as `cc-launch --list` but with dynamically sized columns for cleaner output.
-
-Use `--json` for machine-readable output:
-
-```bash
-cc-status --json
-```
-
-### Interactive session dashboard
-
-Press `ctrl+shift+d` to open the dashboard as a Kitty overlay. It shows all tabs running Claude Code in a navigable list, color-coded by account using the palette from `accounts.toml`.
-
-Use `F1` for the complete keybinding reference. Core dashboard controls:
-
-```plaintext
-↑ / k       Move selection up
-↓ / j       Move selection down
-Enter       Focus the selected tab (closes the dashboard)
-t           Open session actions menu (selected tab or all marked tabs)
-Space       Mark / unmark a session for grouped actions
-U           Clear all marks
-n           Create a new session (opens a title/directory/account form)
-Ctrl+r      Refresh the session list
-s           Toggle sort order (config order / alphabetical / by group)
-F2          Star/pin the selected session (pinned tabs sort to front)
-g           Filter by group (in pick mode)
-G           Group actions overlay (launch/close entire groups)
-H           Open the hooks manager
-F6          Open color picker to change the current tab's color
-F7          Set a tab status label (e.g. "WIP", "blocked", "done")
-F9          Open session notes editor (attach free-text notes to a tab)
-q / Esc     Dismiss the dashboard
-```
-
-The new-session form accepts a title, working directory, account type, and optional Claude flags. Press Enter to advance between fields and Tab to cycle through the available accounts. Leave the flags field empty to inherit the global default from `defaults.toml`, or enter `-` to disable flags for that session. The new tab is created immediately with the appropriate Claude command and tab coloring.
-
-### Save current sessions to config
-
-```bash
-cc-launch --save
-```
-
-Snapshots all currently running Claude sessions back to `~/.config/cc-manager/sessions.toml` (by default). The existing file is backed up with a `.bak` extension before overwriting. Note that per-session flag overrides are not preserved by `--save` since live Kitty tab state has no knowledge of what flags were used at launch time. You can also save to a specific file:
-
-```bash
-cc-launch --save ~/my-snapshot.toml
-```
-
-### Clean up stale sessions
-
-```bash
-cc-launch --cleanup
-```
-
-Finds tabs whose title follows the `W:`/`P:` naming convention but no longer have a Claude process running (the session exited or crashed). Lists the stale tabs and asks for confirmation before closing them.
-
-### Multiple Kitty instances
-
-When running multiple Kitty windows, auto-detection picks the most recently created socket. To target a specific instance, pass `--socket` to either command:
-
-```bash
-cc-launch --socket unix:/tmp/kitty-12345 --list
-cc-status --socket unix:/tmp/kitty-12345
-```
-
-To see all available sockets and which ones are responsive:
-
-```bash
-cc-launch --sockets
-```
-
-### Environment variables
-
-| Variable | Description |
-|---|---|
-| `CC_MANAGER_CONFIG` | Path to `sessions.toml`. Its parent directory becomes the config directory (default: `~/.config/cc-manager/sessions.toml`) |
-| `CC_MANAGER_ACCOUNTS` | Path to `accounts.toml` (default: `<config-dir>/accounts.toml`) |
-| `CC_MANAGER_DEFAULTS` | Path to `defaults.toml` (default: `<config-dir>/defaults.toml`) |
-| `CC_MANAGER_LOGS` | Activity log directory (default: `~/.local/state/cc-manager/activity/`) |
-| `CCM_DEBUG` | Set to `1` to enable verbose debug output to stderr from all `ccm` commands. Useful for diagnosing launch failures, socket issues, or config loading problems. Example: `CCM_DEBUG=1 cc-launch --all 2>debug.log` |
-| `CCM_DEBUG_LOG` | Path to a file for debug log output (used by the dashboard) |
-| `KITTY_LISTEN_ON` | Kitty sets this automatically; used for socket discovery |
-
-`CC_MANAGER_CONFIG` serves a dual purpose: it sets the sessions config path **and** determines the config directory for other files. For example, `CC_MANAGER_CONFIG=~/alt/sessions.toml` means accounts and defaults are looked up in `~/alt/` unless individually overridden. `CC_MANAGER_ACCOUNTS` and `CC_MANAGER_DEFAULTS` take precedence when set.
-
-### Session file for Kitty startup
-
-If you want sessions to launch automatically when Kitty starts, use a Kitty session file:
-
-```bash
-kitty --session sessions/example.conf
-```
-
-Copy `sessions/example.conf` and customize it for your projects. This approach is independent of `cc-launch` and uses Kitty's native session format.
-
-### Utility scripts
-
-These are typically invoked via Kitty keybindings (defined in `cc-manager.conf`) rather than directly:
-
-- `cc-toggle-star` — Toggle the star/pin icon on the active tab (bound to F2)
-- `cc-toggle-flag` — Toggle a visual flag marker on the active tab
-- `cc-hook-indicator` — Hook script that updates tab title icons on Claude Code events. Automatically detects `claude -p` (pipe mode) and suppresses macOS notifications while still tracking icons and activity.
-- `cc-idle-watch` — Background daemon that monitors sessions and sends idle notifications
-- `cc-activity-log` — Hook script that logs session activity events to JSONL files
-- `cc-audit` — Check which upstream Claude Code features your version supports
-
-## Configuration
-
-All config files live in `~/.config/cc-manager/` by default. Override their locations with environment variables:
-
-```bash
-CC_MANAGER_CONFIG=~/alt/sessions.toml cc-launch    # also sets config dir to ~/alt/
-CC_MANAGER_ACCOUNTS=~/alt/accounts.toml cc-launch  # overrides accounts path only
-CC_MANAGER_DEFAULTS=~/alt/defaults.toml cc-launch  # overrides defaults path only
-```
-
-See the [Environment variables](#environment-variables) section for details on precedence.
-
-The Kitty socket is auto-detected from `KITTY_LISTEN_ON` or by finding the most recent `/tmp/kitty-*` socket. You can also override it per-command with `--socket` (see "Multiple Kitty instances" above).
-
-## Shell completions
-
-**Zsh**: Completions are installed to `~/.zfunc/` by `just install`. Make sure your `~/.zshrc` includes `~/.zfunc` in `fpath` and calls `compinit`:
-
-```bash
-fpath=(~/.zfunc $fpath)
-autoload -Uz compinit && compinit
-```
-
-**Bash**: A completion script is installed to `~/.local/share/bash-completion/completions/` by `just install`. If your shell doesn't auto-load from that directory, source it manually:
-
-```bash
-source ~/.local/share/bash-completion/completions/ccm
-```
-
-Both enable tab completion for all subcommands, flags, tab titles, account names, group names, session log IDs, socket paths, and file arguments.
-
-## File layout
-
-```plaintext
-Justfile                        Install/uninstall symlinks
-cc-manager.conf                 Kitty config snippet (include from kitty.conf)
-bin/ccm                         Unified CLI entry point
-bin/cc-launch                   Session launcher and manager
-bin/cc-status                   Status overview tool
-bin/cc-audit                    Upstream feature compatibility checker
-bin/cc-idle-watch               Background idle notification watcher
-bin/cc-toggle-star              Tab star/pin toggle (Kitty keybinding)
-bin/cc-toggle-flag              Tab flag marker toggle (Kitty keybinding)
-hooks/cc-hook-indicator         Tab icon updater and notification hook
-hooks/cc-activity-log           Session activity event logger
-lib/cc-common.sh                Shared Bash library (sourced by cc-launch, cc-status)
-lib/cc-common/                  Modular Bash library components
-lib/cc-launch/                  cc-launch subcommand implementations
-lib/ccm/                        ccm subcommand implementations
-lib/toml_reader.py              TOML reader (stdlib tomllib)
-lib/toml_writer.py              TOML serializer (no third-party deps)
-lib/toml-helper.py              CLI bridge for Bash scripts (TSV output)
-lib/config_validator.py         Config file validation
-data/palette.json               Color palette definitions (10 named colors)
-data/icons.json                 Icon and state indicator definitions
-config/accounts.example.toml    Example account definitions
-config/sessions.example.toml    Example session definitions
-config/defaults.example.toml    Example global defaults
-config/hooks.example.json       Example hooks configuration
-sessions/example.conf           Example Kitty session file for startup
-kittens/claude_dashboard.py     Dashboard entry point (Kitty kitten)
-kittens/cc_dashboard/           Dashboard implementation modules
-completions/_ccm                Zsh completion for ccm
-completions/_ccm.bash           Bash completion for ccm
-completions/_cc-launch          Zsh completion for cc-launch
-completions/_cc-status          Zsh completion for cc-status
-tests/                          Test suite
-docs/                           Kitty documentation reference
+[hooks.overrides.work]
+disabled_events = ["Stop"]   # suppress events for this account
 ```
 
 ## Troubleshooting
 
-**Tabs not colored** — Check that the `color` values in `accounts.toml` match the palette names: green, blue, red, orange, purple, teal, pink, yellow, gray, or cyan.
+**Tabs not colored** — Verify `color` values match the palette names (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan).
 
-**No sessions found** — Verify the active config path with `ccm config path`. Ensure `sessions.toml` exists in that directory and has valid `[[sessions]]` entries.
+**No sessions found** — Run `ccm config path` to confirm the config path. Run `ccm config validate` to check for errors.
 
-**Hooks not running** — Run `ccm hooks status` to check whether hooks are in sync, drifted, or missing. If drifted or missing, run `ccm hooks sync` to install them.
+**Hooks not running** — Run `ccm config hooks-status`. If drifted or missing, run `ccm config hooks-sync`.
 
-**Socket not found** — Your `kitty.conf` needs `allow_remote_control yes` and `listen_on unix:/tmp/kitty-{kitty_pid}`. Restart Kitty after adding these.
+**Socket not found** — Confirm `kitty.conf` has `allow_remote_control yes` and `listen_on unix:/tmp/kitty-{kitty_pid}`. Restart Kitty after adding.
 
-**Dashboard won't start** — The dashboard must be launched from inside Kitty (not another terminal). Use `ctrl+shift+d` or `ccm dashboard`.
-
-## Development
-
-### Version bumping
-
-The version is tracked in two places that must stay in sync: `VERSION` (plain text) and `pyproject.toml` (`version` field). Use the `bump` recipe to update both atomically:
-
-```bash
-just bump 0.3.0
-```
-
-This updates both files and runs `check-version` to verify they match. The `just check` suite also verifies version consistency, so CI will catch any drift.
+**Debug output** — Run with `--debug` or set `CCM_DEBUG=1`.

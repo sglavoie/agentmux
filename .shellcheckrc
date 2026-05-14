@@ -1,3 +1,0 @@
-shell=bash
-external-sources=true
-disable=SC1091,SC2155

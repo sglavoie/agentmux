@@ -4,68 +4,178 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-cc-manager-kitty is a Claude Code session manager for the Kitty terminal. It manages multiple Claude Code sessions as Kitty tabs, with support for multiple accounts (each with its own `CLAUDE_CONFIG_DIR`), color-coded tab bars, and an interactive curses-based dashboard. The tool relies on Kitty's remote control protocol (`kitty @`) and `jq` for JSON processing.
+cc-manager-kitty is a Claude Code session manager for the Kitty terminal. It manages multiple Claude Code sessions as Kitty tabs, with support for multiple accounts (each with its own `CLAUDE_CONFIG_DIR`), color-coded tab bars, and an interactive Bubble Tea TUI dashboard. The tool is a single Go binary (`ccm`) that uses Kitty's remote control protocol (`kitten @`) for all terminal interactions.
 
-## Installation and testing
+## Build and install
 
-Requires Python 3.13+, `jq`, and Kitty. Install and uninstall via `just install` and `just uninstall`, which create/remove symlinks to `~/.local/bin/`, `~/.config/kitty/`, and `~/.zfunc/`. Run `just test` to execute the TOML round-trip tests and `just check` to run the full suite (tests, lint, format-check, typecheck, keybinding audit). To verify changes manually, run `cc-launch --help` or `cc-status --help` after installing.
+Requires Go 1.22+ and Kitty. Build targets are defined in the `Justfile`:
+
+- `just build` — compile `./ccm` binary
+- `just install` — build and copy binary to `~/.local/bin/ccm`, symlink `cc-manager.conf` to `~/.config/kitty/`
+- `just uninstall` — remove binary and config symlink
+- `just test` — run `go test ./...`
+- `just check` — full suite: test + vet + lint (requires `golangci-lint`)
+- `just bump VERSION` — update version constant in `cmd/root.go`
+
+To verify a change manually, run `ccm --version` or `ccm --help` after `just install`.
 
 ## Architecture
 
-The codebase has a unified CLI entry point, a shared Bash library, a shared data layer, and three main components.
+The codebase is a standard Go module. All functionality lives in the `ccm` binary built from `main.go`.
 
-`data/` contains the shared JSON data files that serve as the single source of truth for the color palette and icon set. `data/palette.json` defines all 10 named colors with their active/inactive background hex values and text foreground RGB arrays. `data/icons.json` defines the star and state icons (bolt, stop, key, error) along with a `state_order` array for consistent regex construction. Both the Bash library (via `jq`) and the Python kitten code (via `json` stdlib) read from these files at runtime. The JSON files are symlinked into `~/.local/lib/cc-manager/` by `just install`.
+### Package structure
 
-`bin/ccm` is the unified CLI entry point that provides a single `ccm` command with subcommands. It delegates `ccm launch`, `ccm status`, and `ccm star` to the existing scripts via `exec`, and implements `ccm config` subcommands (edit, show, path, init, sync) for managing config files. It also provides `ccm dashboard` to launch the curses kitten and `ccm help` for discoverability.
+**`cmd/`** — Cobra CLI commands
 
-`lib/cc-common.sh` is the shared Bash library sourced by both `cc-launch` and `cc-status`. It contains socket discovery, gum detection and styling, config file path resolution, tilde expansion, account loading (parallel indexed arrays), defaults loading, flag/project-window resolution, the 10-color palette, account-to-color mapping, and the `build_accounts_json`/`default_account_name` utilities. It has a source guard to prevent double-sourcing and does not call any functions at source time; callers invoke `load_accounts`, `load_defaults`, etc. explicitly.
+- `root.go` — `ccm` default command: loads config, checks for existing dashboard, launches TUI. Version constant is here.
+- `config.go` — `ccm config` subcommands: `init`, `edit`, `show`, `path`, `validate`, `hooks-sync`, `hooks-status`
+- `daemon.go` — `ccm daemon` subcommands: `start`, `stop`, `status`
+- `hook_indicator.go` — `ccm hook-indicator <event>`: internal command invoked by Claude Code hooks
 
-`bin/cc-launch` is a thin wrapper (~20 lines) that sources `lib/cc-launch/main.sh`, which dispatches to modular command files in `lib/cc-launch/` (`cmd_launch.sh`, `cmd_lifecycle.sh`, `cmd_maintenance.sh`, `core.sh`). It handles session lifecycle: launching tabs from `sessions.toml`, adding/closing individual tabs, listing active sessions, saving current state back to config, and cleaning up stale tabs. It uses `kitty @ launch`, `kitty @ ls`, and `kitty @ set-tab-color` for all Kitty interactions, and optionally uses `gum` (charmbracelet/gum) for interactive TUI prompts. The dispatch is a case-match in `main()` routing `--all`, `--add`, `--close`, `--list`, `--save`, `--cleanup`, and `--sockets` to their respective `cmd_*` functions.
+**`internal/config/`** — Configuration loading and validation
 
-`bin/cc-status` is a smaller Bash script that queries `kitty @ ls` and prints a dynamically-sized table of active Claude sessions. It sources `lib/cc-common.sh` for account loading and utility functions.
+- `types.go` — TOML struct definitions: `Config`, `Defaults`, `Account`, `Session`, `HooksConfig`, `AccountHookOverride`
+- `config.go` — `Load()` reads and defaults-fills `config.toml`
+- `validate.go` — cross-section validation (accounts exist, colors valid, sort values valid)
+- `paths.go` — `DefaultConfigPath()` → `~/.config/cc-manager/config.toml`
 
-`kittens/claude_dashboard.py` is a Python curses application that runs as a Kitty overlay kitten (via `kitten claude_dashboard.py`). It provides an interactive session list with navigation, close-confirmation, and a new-session creation form. It loads the color palette and icon set from the shared JSON data files in `data/`, implements account loading in Python, and calls `kitty @` commands via `subprocess.run`.
+**`internal/kitty/`** — Kitty remote control
+
+- `client.go` — `KittyClient` interface + `SubprocessClient` implementation using `kitten @` subprocess calls
+- `exec.go` — low-level command execution
+- `types.go` — `OSWindow`, `Tab`, `Window` structs (from `kitten @ ls` JSON)
+- `match.go` — match expression builders (`MatchTabByID`, `MatchWindowByID`, etc.)
+
+**`internal/palette/`** — Color and icon management
+
+- `palette.go` — `Lookup(name)`, `Names()` — color lookups from embedded JSON
+- `icons.go` — icon definitions and state mapping
+- `embed.go` — `//go:embed` for palette and icon JSON data
+
+**`internal/session/`** — Session query and lifecycle
+
+- `query.go` — `List()`, `Find()` — enumerate running sessions from Kitty
+- `launch.go` — `Launch()` — create tab with dedup, color application, sorted insertion
+- `close.go` — `Close()` — close a running session
+- `restart.go` — `Restart()` — close and relaunch
+- `title.go` — `FormatTitle()`, `ParseTitle()` — tab title manipulation
+- `sort.go` — session sort by account or alphabetically
+- `env.go` — build environment variables for launch
+
+**`internal/daemon/`** — IPC and state guarding
+
+- `daemon.go` — main daemon loop (Unix socket, 30-min idle timeout)
+- `server.go` / `client.go` — socket server and client (auto-start capable)
+- `handler.go` — request processing and notification dispatch
+- `guard.go` — `StateGuard` prevents rapid icon state transitions
+- `notify.go` — macOS notification dispatch via `alerter`
+- `protocol.go` — message types: `TypeStateUpdate`, `TypeStateQuery`, `TypeShutdown`
+
+Socket path: `~/.cache/cc-manager/daemon.sock`
+
+**`internal/indicator/`** — Hook integration
+
+- `indicator.go` — entry point: resolves event → action, sends to daemon, updates tab title
+- `events.go` — `ResolveAction()` maps Claude Code event names to actions (`active`, `stop`, `permission`, `failure`, `idle`, `clear`)
+- `pipe.go` — pipe mode detection (suppresses macOS notifications for `claude -p`)
+
+**`internal/hooks/`** — Claude settings integration
+
+- `merge.go` — merge `ccm hook-indicator <event>` hooks into each account's `settings.json`
+- `status.go` — report per-account hook sync status (`in_sync`, `drifted`, `missing`)
+
+**`tui/`** — Bubble Tea v2 TUI dashboard
+
+- `app.go` — `Run()` entry point
+- `model.go` — root state machine; modes: `ModeList`, `ModeSearch`, `ModeAccountFilter`, `ModeActions`, `ModeConfirm`, `ModePicker`, `ModeConfigPicker`
+- `list.go`, `search.go`, `picker.go`, `actions.go`, `confirm.go`, `config_picker.go` — per-mode logic
+- `keys.go` — keyboard bindings
+- `style.go` — Lipgloss color scheme
+- `footer.go`, `tick.go`, `msg.go` — help bar, timer, message types
+
+**`embed/`** — Embedded files
+
+- `embed.go` — `//go:embed` directives
+- `example_config.toml` — template written by `ccm config init`
+
+## CLI commands
+
+| Command | Description |
+|---------|-------------|
+| `ccm` | Launch TUI dashboard (focuses existing dashboard if already open) |
+| `ccm config init` | Write example `config.toml` to `~/.config/cc-manager/` |
+| `ccm config edit` | Open `config.toml` in `$EDITOR` |
+| `ccm config show` | Print current config as TOML |
+| `ccm config path` | Print config file path |
+| `ccm config validate` | Validate config and report errors |
+| `ccm config hooks-sync [ACCOUNT]` | Merge hooks into account `settings.json` files |
+| `ccm config hooks-status` | Show per-account hook sync status |
+| `ccm daemon start` | Start background daemon |
+| `ccm daemon stop` | Stop background daemon |
+| `ccm daemon status` | Check daemon status |
+| `ccm hook-indicator <event>` | Handle a Claude Code hook event (called by hooks) |
+
+## Config format
+
+Single file: `~/.config/cc-manager/config.toml`
+
+```toml
+[defaults]
+sort = "alpha"              # "alpha" or "account"
+refresh_interval = 2        # TUI refresh in seconds
+guard_duration = 1          # state-guard window in seconds
+claude_flags = []           # global flags applied to all sessions
+
+[defaults.notifications]
+error = false
+permission = true
+stop = true
+
+[[accounts]]
+name = "work"
+config_dir = "~/.config/claude-work"
+color = "blue"              # one of 10 named colors
+
+[[sessions]]
+title = "W:api"             # convention: account-initial prefix
+directory = "~/projects/api"
+account = "work"
+claude_flags = []           # per-session override; omit to inherit defaults
+env = {}                    # environment variables injected at launch
+groups = []                 # organizational groups
+
+[hooks.overrides.work]
+disabled_events = ["Stop"]  # suppress hook events for this account
+```
+
+**Colors**: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan
+
+**Session `claude_flags`**: omit to inherit `defaults.claude_flags`; set to `[]` to run with no flags.
+
+The config path defaults to `~/.config/cc-manager/config.toml` and can be overridden with `CCM_CONFIG` environment variable.
 
 ## Key conventions
 
-The curses dashboard (`kittens/`) must use ASCII-only characters for its own UI elements. Curses does not reliably render Unicode symbols (checkmarks, arrows, etc.), so use plain ASCII alternatives: `>` for selection cursor (not `▸`), `*` for checkmark (not `✓`), `->` for arrow (not `→`), `Y`/`N` for yes/no. Tab titles (rendered by Kitty, not curses) use Unicode icons from `data/icons.json`.
+Account detection reads the `cc_account` Kitty user var set at launch time (`--var cc_account=NAME`). This is the only method — no fallback to process cmdlines in the Go implementation.
 
-Account detection uses Kitty user vars (`--var cc_account=NAME` set at launch time) as the primary method, with a fallback to parsing `CLAUDE_CONFIG_DIR` from process cmdlines. Both the shell scripts and the Python kitten implement this two-tier lookup. Additional user vars `cc_flags`, `cc_pw`, `cc_env`, `cc_groups`, `cc_mute`, and `cc_commands` store the per-session flags, project window override, environment variables, groups array, mute state, and commands array respectively for round-trip fidelity with save, restart, clone, and move operations. Both `cc_groups` and `cc_commands` are `\x1f`-joined strings of their respective arrays.
+Tab title convention: uppercase account initial followed by colon (e.g., `W:project` for work, `P:dotfiles` for personal). State icons (bolt `⚡`, stop `⏹`, key `🔑`, error `✗`) and the star marker (`★`) are prepended to the base title by `palette.BuildTitle()`.
 
-Config files use TOML format. New installs use `ccm config init` to create example configs. The config directory defaults to `~/.config/cc-manager/` but can be overridden via `CC_MANAGER_CONFIG` and `CC_MANAGER_ACCOUNTS` environment variables.
+The palette and icon set are embedded at compile time in `internal/palette/` via `//go:embed`. To change a color or icon, edit the embedded JSON and rebuild.
 
-`accounts.toml` uses `[[accounts]]` entries with `name`, `config_dir`, and `color` keys. `sessions.toml` uses `[[sessions]]` entries with required `title`, `directory`, `account` keys and optional `flags`, `project_window`, `env`, `groups`, `commands` keys. `groups` is a TOML array of strings (e.g., `groups = ["webapp", "backend"]`); a session can belong to multiple groups. Sessions with groups are organized under each of their group headers in dashboard group sort mode (sessions are duplicated under each group they belong to); sessions without groups appear under "(ungrouped)". Groups are also actionable: `cc-launch --all --group NAME` launches sessions that have NAME in their groups array (ANY-match), `cc-launch --close --group NAME` closes matching running tabs, `G` in the dashboard opens a group actions overlay for launching or closing entire groups, and `g` in pick mode filters config sessions by group. The `cc_groups` Kitty user var stores the groups array as a `\x1f`-joined string. In dashboard create/edit forms, groups are entered as a comma-separated string (e.g., `webapp, backend`). `defaults.toml` has a `[defaults]` section (with `claude_flags`, `project_window`, `sort_sessions`, `dashboard_refresh`) and a `[notifications]` section (with boolean `error`, `permission`, `stop`, `idle`, plus `idle_alert_minutes`, `min_secs`, and `ignore_patterns` as an array of strings).
+Socket discovery uses `KITTY_LISTEN_ON` environment variable only. Kitty must be configured with `allow_remote_control yes` and `listen_on unix:/tmp/kitty-{kitty_pid}`.
 
-The `commands` key is a TOML array of strings, each spawning an additional window in the same tab alongside Claude. Use `"shell"` as a literal entry to get a plain terminal window; all other entries run via `${SHELL} -lic "$cmd"` so shell operators (`|`, `&&`, `>`) and aliases work. Non-shell command windows use `--hold` so output stays visible after exit. If `commands` is set and `project_window` is absent, stack layout is auto-enabled; if `project_window = "-"` (explicit disable), commands are skipped entirely. `commands` is persisted via the `cc_commands` Kitty user var, serialized with `\x1f` (ASCII Unit Separator) as delimiter. In the dashboard edit/new form, commands are entered as a ` ;; `-separated single line (e.g., `npm run dev ;; shell`).
+Debug logging uses `slog` and is enabled with `--debug` flag or `CCM_DEBUG=1`.
 
-The TOML infrastructure consists of `lib/toml_reader.py` (uses stdlib `tomllib`), `lib/toml_writer.py` (pure-Python serializer, no third-party deps), and `lib/toml-helper.py` (CLI bridge for Bash scripts, outputting TSV). These are symlinked to `~/.local/lib/cc-manager/` by `just install`.
+Hook events installed by `ccm config hooks-sync`: `SessionStart`, `UserPromptSubmit`, `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `Stop`, `TaskCompleted`, `SessionEnd`, `Notification`. Each hook entry calls `ccm hook-indicator <EVENT>`.
 
-Override resolution follows a simple model: if a session's optional key is omitted, the global default applies; if it is `"-"`, the feature is disabled; any other value replaces the global default entirely with no merging. Note that the `--save` command reconstructs `sessions.toml` from live Kitty tab state and cannot recover per-session flag or project_window overrides. The env key is round-tripped via the `cc_env` Kitty user var.
-
-The color palette has exactly 10 named colors (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan), each with active/inactive background hex values and text foreground RGB values. Each color entry also has an `emoji` field (e.g., `🟩` for green) used by the dashboard's color picker UI. The palette and icon set are defined once in `data/palette.json` and `data/icons.json` respectively, and read at runtime by both the Bash library (via `jq`) and the Python kitten code (via `json` stdlib). To change a color or icon, edit the corresponding JSON file — no synchronization across files is needed.
-
-Tab title convention uses an uppercase initial of the account name followed by a colon (e.g., `W:project` for work, `P:dotfiles` for personal). The `--cleanup` command relies on this pattern to identify managed tabs. The star icon (`★`) functions as a pin toggle, bound to F2: pressing F2 stars the tab and moves it to the front of the tab bar, where pinned tabs are sorted alphabetically among themselves. Pressing F2 again unstars the tab and returns it to its natural position. Pinning works regardless of whether `sort_sessions=alpha` is enabled — pinned tabs always reorder to the front.
-
-The mute toggle (`bin/cc-toggle-mute`) adds a 🔇 icon to the tab title and persists state via the `cc_mute` Kitty user var. When muted, `cc-hook-indicator` suppresses macOS desktop notifications but icon changes and activity tracking still function normally. Mute state is round-tripped through save, restart, clone, and move operations.
-
-Kitty socket discovery follows a three-step precedence: explicit `--socket` argument, then `KITTY_LISTEN_ON` environment variable, then the most recent `${TMPDIR:-/tmp}/kitty-*` socket file. The `$TMPDIR` variable is respected with a `/tmp` fallback for portability.
-
-Config env var precedence: `CC_MANAGER_CONFIG` overrides the sessions.toml path, `CC_MANAGER_ACCOUNTS` overrides the accounts.toml path, and `CC_MANAGER_DEFAULTS` overrides the defaults.toml path. All default to `~/.config/cc-manager/`.
-
-Shell scripts target Bash 3 compatibility (macOS default), using parallel indexed arrays instead of associative arrays for account storage.
-
-`cc-hook-indicator` automatically detects `claude -p` (pipe mode) invocations by walking the process tree. When pipe mode is detected, macOS notifications are suppressed, but icon changes and activity tracking still function normally.
-
-Hooks are managed through `~/.config/cc-manager/hooks.json`, which has two top-level keys: `hooks` (the global defaults defining which `cc-hook-indicator` commands run for each of the 6 Claude Code hook events) and `account_overrides` (per-account customizations). The `account_overrides` object is keyed by account name and supports `disabled_events` (an array of event names to suppress the built-in `cc-hook-indicator` entry for that account), `extra_commands` (a dict mapping event names to arrays of additional hook entries appended after the built-in ones, using bare handler format), and `extra_hooks` (a newer matcher-group format for additional hooks). When both are present, `extra_hooks` takes precedence over `extra_commands`. A file without `account_overrides` behaves identically to one with an empty `account_overrides` object, preserving backward compatibility.
-
-The `ccm hooks` CLI subcommand provides two operations: `ccm hooks sync [ACCOUNT]` runs `install-hooks.sh` to merge the computed effective hooks into each account's `settings.json` (or a single account when specified), and `ccm hooks status` prints a table showing whether each account's installed hooks are `in_sync`, `drifted`, or `missing` relative to the current `hooks.json` configuration. The dashboard provides an interactive hooks manager accessible via the `H` key from the session list, where users can navigate accounts, toggle events on/off per account, add or remove custom hook commands, and trigger sync operations with visual drift feedback.
+Version is tracked as a constant in `cmd/root.go`; update with `just bump VERSION`.
 
 ## Kitty documentation reference
 
-The `docs/` directory contains concise reference documents extracted from the official Kitty documentation at https://sw.kovidgoyal.net/kitty/. Consult these when working on Kitty-specific functionality:
+The `docs/` directory contains concise reference documents extracted from the official Kitty documentation. Consult these when working on Kitty-specific functionality:
 
-- `docs/kitty_remote_control.md` covers the `kitten @` remote control protocol, including how to enable it, socket discovery, the `--to` flag, and summaries of all commands used by this project (`ls`, `launch`, `set-tab-color`, `close-tab`, `set-tab-title`, `focus-tab`).
-- `docs/kitty_launch.md` details the launch command's options for creating tabs, setting environment variables, user variables (`--var`), working directories, focus control, and process lifecycle.
-- `docs/kitty_kittens.md` explains how to write custom Kitty kittens in Python, including the `main()` / `handle_result()` entry points, the `boss` object, remote control from within kittens, and how `claude_dashboard.py` diverges from the standard pattern.
-- `docs/kitty_tab_bar.md` covers tab bar configuration in `kitty.conf` (position, style, title templates, colors) and per-tab color overrides via `kitten @ set-tab-color`, which is how cc-manager applies account-specific colors.
-- `docs/kitty_match_syntax.md` documents the `--match` expression syntax used across all `kitten @` commands, including available fields, query types, Boolean operators, and how cc-manager uses `var:cc_account` matching.
+- `docs/kitty_remote_control.md` — `kitten @` protocol, socket discovery, command summaries (`ls`, `launch`, `set-tab-color`, `close-tab`, `set-tab-title`, `focus-tab`)
+- `docs/kitty_launch.md` — launch options: tabs, env vars, user variables (`--var`), working directories, focus, process lifecycle
+- `docs/kitty_kittens.md` — custom Kitty kittens in Python (reference only; the Go TUI is not a kitten)
+- `docs/kitty_tab_bar.md` — tab bar configuration and per-tab color overrides via `kitten @ set-tab-color`
+- `docs/kitty_match_syntax.md` — `--match` expression syntax, including `var:cc_account` matching used by this project
