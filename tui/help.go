@@ -22,6 +22,7 @@ func renderHelp(m Model) string {
 			"  x              close session (confirm)",
 			"  r              restart session (confirm)",
 			"  c              override config account",
+			"  C              clear session icon",
 		}},
 		{"Modes", []string{
 			"  /    search sessions",

@@ -46,6 +46,20 @@ func TestLoad_AppliesDefaults(t *testing.T) {
 	if cfg.Defaults.GuardDuration != 1 {
 		t.Errorf("default guard_duration: got %d, want 1", cfg.Defaults.GuardDuration)
 	}
+	if cfg.Defaults.IdleThreshold != 300 {
+		t.Errorf("default idle_threshold: got %d, want 300", cfg.Defaults.IdleThreshold)
+	}
+}
+
+func TestValidate_NegativeIdleThreshold(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{IdleThreshold: -1},
+		Accounts: []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"}},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for negative idle_threshold, got nil")
+	}
 }
 
 func TestLoad_NonexistentFile(t *testing.T) {

@@ -8,7 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/cc-manager-kitty/internal/daemon"
 	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
+	"github.com/sglavoie/cc-manager-kitty/internal/palette"
 	"github.com/sglavoie/cc-manager-kitty/internal/session"
 )
 
@@ -76,6 +78,11 @@ type Model struct {
 	configPickerAccounts []config.Account
 	configPickerCursor   int
 	configPickerCurrent  string
+
+	// activity tracking: window_id → last activity time, sourced from daemon.
+	// Empty when the daemon is unreachable; treated as "Active" by stateGroup.
+	lastActivity  map[int]time.Time
+	idleThreshold time.Duration
 }
 
 // NewModel creates a dashboard model.
@@ -88,11 +95,16 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 	if sort == "" {
 		sort = "alpha"
 	}
+	idle := time.Duration(cfg.Defaults.IdleThreshold) * time.Second
+	if idle <= 0 {
+		idle = 5 * time.Minute
+	}
 	return Model{
-		client:   client,
-		cfg:      cfg,
-		interval: interval,
-		sortMode: sort,
+		client:        client,
+		cfg:           cfg,
+		interval:      interval,
+		sortMode:      sort,
+		idleThreshold: idle,
 	}
 }
 
@@ -115,10 +127,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionsMsg:
 		m.err = nil
+		m.lastActivity = msg.activity
 		m.sessions = msg.sessions
 		m.accounts = uniqueAccounts(m.sessions)
 		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
-		sortByStateGroup(m.filtered)
+		m.sortFiltered()
 		m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
 		return m, nil
 
@@ -246,6 +259,13 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.mode = ModeConfigPicker
 		}
 
+	case keyClearStatus:
+		if len(m.filtered) > 0 {
+			s := m.filtered[m.cursor]
+			m.actionErr = nil
+			return m, clearStatusCmd(m.client, s)
+		}
+
 	case keyQuestion:
 		m.mode = ModeHelp
 
@@ -261,7 +281,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activeSearch = ""
 		m.activeAccount = ""
 		m.filtered = applyFilter(m.sessions, "", "")
-		sortByStateGroup(m.filtered)
+		m.sortFiltered()
 		m.cursor = 0
 	}
 
@@ -279,7 +299,7 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Apply: commit the live text as the active search.
 		m.activeSearch = m.searchText
 		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
-		sortByStateGroup(m.filtered)
+		m.sortFiltered()
 		m.cursor = 0
 		m.mode = ModeList
 
@@ -314,7 +334,7 @@ func (m Model) handleAccountFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			m.activeAccount = m.accounts[m.acctCursor-1]
 		}
 		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
-		sortByStateGroup(m.filtered)
+		m.sortFiltered()
 		m.cursor = 0
 		m.mode = ModeList
 
@@ -451,14 +471,51 @@ func (m Model) render() string {
 	return sb.String()
 }
 
-// fetchCmd queries Kitty for running sessions and returns sessionsMsg or errMsg.
+// fetchCmd queries Kitty for running sessions and the daemon for per-window
+// last-activity timestamps. Daemon errors are non-fatal — when unreachable
+// the activity map is nil and stateGroup treats every session as Active.
 func fetchCmd(client kitty.KittyClient, sortMode string) tea.Cmd {
 	return func() tea.Msg {
 		sessions, err := session.List(client)
 		if err != nil {
 			return errMsg{err: err}
 		}
-		return sessionsMsg{sessions: session.SortRunning(sessions, sortMode)}
+		return sessionsMsg{
+			sessions: session.SortRunning(sessions, sortMode),
+			activity: fetchActivity(),
+		}
+	}
+}
+
+// fetchActivity queries the daemon for last-activity timestamps. Returns nil
+// when the daemon is unreachable or the query fails — callers must tolerate.
+func fetchActivity() map[int]time.Time {
+	resp, err := daemon.NewClient().Send(daemon.Request{Type: daemon.TypeStateQuery})
+	if err != nil || resp.Activity == nil {
+		return nil
+	}
+	out := make(map[int]time.Time, len(resp.Activity))
+	for id, secs := range resp.Activity {
+		out[id] = time.Unix(secs, 0)
+	}
+	return out
+}
+
+// clearStatusCmd wipes a session's tab-title icon (via Kitty) and asks the
+// daemon to drop its guard via the user_clear action. The Kitty title write
+// is the user-visible result; daemon errors are swallowed because the
+// dashboard already updated the title directly.
+func clearStatusCmd(client kitty.KittyClient, s session.RunningSession) tea.Cmd {
+	return func() tea.Msg {
+		newTitle := palette.BuildTitle(s.Base, "", s.Starred)
+		err := client.SetTabTitle(kitty.MatchTabByWindowID(s.WindowID), newTitle)
+		_, _ = daemon.NewClient().Send(daemon.Request{
+			Type:         daemon.TypeStateUpdate,
+			Action:       "user_clear",
+			WindowID:     s.WindowID,
+			SessionTitle: s.Base,
+		})
+		return actionDoneMsg{err: err}
 	}
 }
 
@@ -610,11 +667,15 @@ func peekCmd(client kitty.KittyClient, windowID int) tea.Cmd {
 	}
 }
 
-// sortByStateGroup applies a stable sort so attention items come first,
-// then active, then idle — preserving existing order within each group.
-func sortByStateGroup(sessions []session.RunningSession) {
-	sort.SliceStable(sessions, func(i, j int) bool {
-		return stateGroup(sessions[i]) < stateGroup(sessions[j])
+// sortFiltered applies a stable sort to m.filtered so attention items come
+// first, then active, then idle — preserving existing order within each
+// group. Uses the model's activity map + idle threshold to bucket sessions
+// with no state icon.
+func (m Model) sortFiltered() {
+	sort.SliceStable(m.filtered, func(i, j int) bool {
+		gi := stateGroup(m.filtered[i], m.lastActivity, m.idleThreshold)
+		gj := stateGroup(m.filtered[j], m.lastActivity, m.idleThreshold)
+		return gi < gj
 	})
 }
 

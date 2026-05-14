@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/cc-manager-kitty/internal/config"
@@ -74,6 +75,8 @@ func keyPress(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: '?', Text: "?"})
 	case "c":
 		return tea.KeyPressMsg(tea.Key{Code: 'c', Text: "c"})
+	case "C":
+		return tea.KeyPressMsg(tea.Key{Code: 'C', Text: "C"})
 	case " ":
 		return tea.KeyPressMsg(tea.Key{Code: ' '}) // no Text: String() returns "space"
 	case "enter":
@@ -684,6 +687,9 @@ func TestPeekDoneMsgErrorSetsActionErr(t *testing.T) {
 
 func TestFooterListHintIncludesPeek(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
+	// Order after sort: W:api(""), W:backend(bolt), P:dotfiles("") — move
+	// cursor onto the bolt session so the active footer branch fires.
+	m = pressKey(m, "j")
 	footer := renderFooter(m)
 	if !strings.Contains(footer, "e: peek") {
 		t.Errorf("list footer missing peek hint, got:\n%s", footer)
@@ -710,9 +716,10 @@ func TestXKeyDirectClose(t *testing.T) {
 	if m.confirmAction != "close" {
 		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
 	}
-	// After state-group sort, cursor=0 is W:backend (active).
-	if m.targetSession.Base != "W:backend" {
-		t.Fatalf("expected actionTarget=W:backend, got %q", m.targetSession.Base)
+	// Empty-state sessions with no activity record bucket as Active, so the
+	// stable sort preserves the input order: W:api, W:backend, P:dotfiles.
+	if m.targetSession.Base != "W:api" {
+		t.Fatalf("expected actionTarget=W:api, got %q", m.targetSession.Base)
 	}
 }
 
@@ -726,9 +733,9 @@ func TestRKeyDirectRestart(t *testing.T) {
 	if m.confirmAction != "restart" {
 		t.Fatalf("expected confirmAction=restart, got %q", m.confirmAction)
 	}
-	// After state-group sort: [W:backend(bolt), W:api(idle), P:dotfiles(idle)]; j→cursor=1→W:api.
-	if m.targetSession.Base != "W:api" {
-		t.Fatalf("expected actionTarget=W:api, got %q", m.targetSession.Base)
+	// Order after sort: W:api, W:backend, P:dotfiles → j moves cursor to 1.
+	if m.targetSession.Base != "W:backend" {
+		t.Fatalf("expected actionTarget=W:backend, got %q", m.targetSession.Base)
 	}
 }
 
@@ -782,8 +789,10 @@ func TestStateGroupSorting(t *testing.T) {
 	}
 	m = loadSessions(m, sessions)
 
-	// Attention (key, stop) should come first, then active (bolt), then idle ("", error).
-	expected := []string{"attention1", "attention2", "active1", "idle1", "idle2"}
+	// Attention (key, stop) comes first; then Active — including empty-state
+	// sessions with no activity record (per the no-record→Active design);
+	// then Idle (the unknown "error" state).
+	expected := []string{"attention1", "attention2", "idle1", "active1", "idle2"}
 	if len(m.filtered) != len(expected) {
 		t.Fatalf("expected %d filtered sessions, got %d", len(expected), len(m.filtered))
 	}
@@ -798,11 +807,15 @@ func TestRenderListGroupDividers(t *testing.T) {
 	m := testModel()
 	m.width, m.height = 120, 40
 	sessions := []session.RunningSession{
-		{TabID: 1, Base: "api", Account: "work", State: "key"},
-		{TabID: 2, Base: "backend", Account: "work", State: "bolt"},
-		{TabID: 3, Base: "docs", Account: "work", State: ""},
+		{TabID: 1, WindowID: 11, Base: "api", Account: "work", State: "key"},
+		{TabID: 2, WindowID: 12, Base: "backend", Account: "work", State: "bolt"},
+		{TabID: 3, WindowID: 13, Base: "docs", Account: "work", State: ""},
 	}
 	m = loadSessions(m, sessions)
+	// Mark docs as stale so it lands in Idle rather than the default Active
+	// no-record bucket.
+	m.idleThreshold = time.Second
+	m.lastActivity = map[int]time.Time{13: time.Now().Add(-time.Hour)}
 	output := renderList(m)
 	if !strings.Contains(output, "Needs Attention (1)") {
 		t.Errorf("expected attention divider, got:\n%s", output)
@@ -818,9 +831,11 @@ func TestRenderListGroupDividers(t *testing.T) {
 func TestSingleGroupNoDivider(t *testing.T) {
 	m := testModel()
 	m.width, m.height = 120, 40
+	// Both empty-state with no activity record → both go to the Active bucket,
+	// so the renderer should omit the group divider entirely.
 	sessions := []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: ""},
-		{TabID: 2, Base: "backend", Account: "work", State: "error"},
+		{TabID: 2, Base: "backend", Account: "work", State: ""},
 	}
 	m = loadSessions(m, sessions)
 	output := renderList(m)
@@ -959,4 +974,156 @@ func TestRenderListAttentionRowDoesNotPanic(t *testing.T) {
 	}
 	m = loadSessions(m, sessions)
 	_ = renderList(m) // should not panic; attention row gets orange style
+}
+
+// ---- Activity map + Idle-threshold tests ----
+
+func TestSessionsMsgStoresActivity(t *testing.T) {
+	m := testModel()
+	now := time.Now()
+	activity := map[int]time.Time{42: now}
+	updated, _ := m.Update(sessionsMsg{
+		sessions: makeSessions(),
+		activity: activity,
+	})
+	m2 := updated.(Model)
+	if m2.lastActivity == nil {
+		t.Fatal("expected lastActivity to be set after sessionsMsg")
+	}
+	if !m2.lastActivity[42].Equal(now) {
+		t.Errorf("expected activity[42]=%v, got %v", now, m2.lastActivity[42])
+	}
+}
+
+func TestSessionsMsgNilActivityClassifiesAsActive(t *testing.T) {
+	// With no activity map, an empty-state session must not flip to Idle.
+	m := testModel()
+	sessions := []session.RunningSession{
+		{TabID: 1, WindowID: 1, Base: "fresh", Account: "work", State: ""},
+	}
+	m = loadSessions(m, sessions)
+	if g := stateGroup(m.filtered[0], m.lastActivity, m.idleThreshold); g != 1 {
+		t.Errorf("expected fresh empty-state session to be Active (1), got %d", g)
+	}
+}
+
+func TestSessionsMsgStaleActivityFlipsToIdle(t *testing.T) {
+	m := testModel()
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 1, WindowID: 9, Base: "stale", Account: "work", State: ""},
+	})
+	// Force a tight threshold and a stale timestamp.
+	m.idleThreshold = time.Second
+	m.lastActivity = map[int]time.Time{9: time.Now().Add(-time.Hour)}
+	if g := stateGroup(m.filtered[0], m.lastActivity, m.idleThreshold); g != 2 {
+		t.Errorf("expected stale empty-state session to be Idle (2), got %d", g)
+	}
+}
+
+func TestNewModelDefaultsIdleThreshold(t *testing.T) {
+	// Zero IdleThreshold in config should still produce a non-zero duration —
+	// otherwise stateGroup's threshold check disables itself.
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 0},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	if m.idleThreshold <= 0 {
+		t.Errorf("expected non-zero idleThreshold default, got %v", m.idleThreshold)
+	}
+}
+
+func TestNewModelHonorsConfiguredIdleThreshold(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 42},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	if want := 42 * time.Second; m.idleThreshold != want {
+		t.Errorf("expected idleThreshold=%v, got %v", want, m.idleThreshold)
+	}
+}
+
+// ---- C key (clear status) tests ----
+
+func TestCapitalCKeyReturnsClearCmd(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	updated, cmd := m.Update(keyPress("C"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList to remain after C, got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd from C key with sessions present")
+	}
+}
+
+func TestCapitalCKeyEmptyListIsNoOp(t *testing.T) {
+	m := loadSessions(testModel(), nil)
+	updated, cmd := m.Update(keyPress("C"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after C on empty list, got %d", updated.(Model).mode)
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd after C with no sessions")
+	}
+}
+
+func TestCapitalCDoesNotEnterConfigPicker(t *testing.T) {
+	// Confirm the case-sensitive split: uppercase C must not be aliased to
+	// lowercase c (which opens the config picker).
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "C")
+	if m.mode == ModeConfigPicker {
+		t.Fatal("uppercase C should not open ModeConfigPicker")
+	}
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after C, got %d", m.mode)
+	}
+}
+
+func TestClearStatusCmdSetsTabTitle(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 300},
+		Accounts: []config.Account{{Name: "work", Color: "blue"}},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+
+	target := session.RunningSession{
+		TabID: 7, WindowID: 99, Base: "W:api", Account: "work", Starred: false,
+	}
+	msg := clearStatusCmd(client, target)()
+	done, ok := msg.(actionDoneMsg)
+	if !ok {
+		t.Fatalf("expected actionDoneMsg, got %T", msg)
+	}
+	if done.err != nil {
+		t.Errorf("expected nil error from mock Kitty client, got %v", done.err)
+	}
+	// Confirm the mock saw a kitten set-tab-title call scoped to the window.
+	found := false
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		hasCmd, hasMatch := false, false
+		for _, a := range c.Args {
+			if a == "set-tab-title" {
+				hasCmd = true
+			}
+			if a == "--match=window_id:99" {
+				hasMatch = true
+			}
+		}
+		if hasCmd && hasMatch {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected kitten set-tab-title call with --match=window_id:99, got calls: %v", runner.Calls)
+	}
+	_ = cfg // cfg is built to mirror real model construction; only the runner is asserted
 }

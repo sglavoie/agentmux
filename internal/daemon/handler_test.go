@@ -65,8 +65,12 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 		{"stop", "stop"},
 		{"permission", "key"},
 		{"failure", "error"},
-		{"idle", ""},
-		{"clear", ""},
+		// idle and clear preserve the current icon (event-driven cleanup must
+		// not wipe a sticky permission/stop icon).
+		{"idle", IconStatePreserve},
+		{"clear", IconStatePreserve},
+		// user_clear is the TUI-initiated true wipe — icon goes empty.
+		{"user_clear", ""},
 	}
 	for _, tc := range cases {
 		h := newTestHandler()
@@ -74,6 +78,46 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 		if !resp.OK || !resp.Allowed || resp.IconState != tc.iconState {
 			t.Errorf("action %q: want icon_state=%q, got %+v", tc.action, tc.iconState, resp)
 		}
+	}
+}
+
+func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
+	h := newTestHandler()
+	before := time.Now()
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active"})
+	if !resp.OK || !resp.Allowed {
+		t.Fatalf("want allowed update, got %+v", resp)
+	}
+
+	h.activityMu.Lock()
+	got, ok := h.activity[42]
+	h.activityMu.Unlock()
+	if !ok {
+		t.Fatalf("expected activity[42] to be recorded")
+	}
+	if got.Before(before) {
+		t.Fatalf("activity time %v is before request time %v", got, before)
+	}
+}
+
+func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
+
+	h.activityMu.Lock()
+	delete(h.activity, 1)
+	h.activityMu.Unlock()
+
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("expected blocked update, got %+v", resp)
+	}
+
+	h.activityMu.Lock()
+	_, ok := h.activity[1]
+	h.activityMu.Unlock()
+	if ok {
+		t.Fatalf("blocked update should not record activity")
 	}
 }
 
@@ -100,6 +144,29 @@ func TestHandler_StateQuery(t *testing.T) {
 	resp := h.Handle(Request{Type: TypeStateQuery})
 	if !resp.OK {
 		t.Fatalf("want ok=true for state_query, got %+v", resp)
+	}
+	if resp.Activity == nil {
+		t.Fatalf("want non-nil Activity map, got %+v", resp)
+	}
+	if len(resp.Activity) != 0 {
+		t.Fatalf("want empty Activity map for fresh handler, got %+v", resp.Activity)
+	}
+}
+
+func TestHandler_StateQueryReturnsActivity(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "active"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 9, Action: "permission"})
+
+	resp := h.Handle(Request{Type: TypeStateQuery})
+	if !resp.OK {
+		t.Fatalf("want ok=true, got %+v", resp)
+	}
+	if _, ok := resp.Activity[7]; !ok {
+		t.Errorf("expected Activity[7], got %+v", resp.Activity)
+	}
+	if _, ok := resp.Activity[9]; !ok {
+		t.Errorf("expected Activity[9], got %+v", resp.Activity)
 	}
 }
 

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	runewidth "github.com/mattn/go-runewidth"
 
@@ -42,22 +43,22 @@ func renderList(m Model) string {
 
 	acctColor := buildAccountColorMap(m)
 
-	groupCounts := countGroups(m.filtered)
+	groupCounts := countGroups(m.filtered, m.lastActivity, m.idleThreshold)
 	multiGroup := groupCounts > 1
 
 	var sb strings.Builder
 	prevGroup := -1
 	for i, s := range m.filtered {
-		g := stateGroup(s)
+		g := stateGroup(s, m.lastActivity, m.idleThreshold)
 		if multiGroup && g != prevGroup {
-			sb.WriteString(renderDivider(g, countInGroup(m.filtered, g)))
+			sb.WriteString(renderDivider(g, countInGroup(m.filtered, g, m.lastActivity, m.idleThreshold)))
 			sb.WriteByte('\n')
 			prevGroup = g
 		}
 		row := formatRow(s, acctColor, m.width)
 		if i == m.cursor {
 			sb.WriteString(styleSelected.Render(row))
-		} else if stateGroup(s) == 0 {
+		} else if g == 0 {
 			sb.WriteString(styleAttentionRow.Render(row))
 		} else {
 			sb.WriteString(row)
@@ -67,29 +68,49 @@ func renderList(m Model) string {
 	return sb.String()
 }
 
-func stateGroup(s session.RunningSession) int {
+// stateGroup classifies a session into one of three buckets:
+//
+//	0 → Needs Attention (key, stop)
+//	1 → Active (bolt, or empty state within the idle threshold,
+//	    or empty state with no activity record)
+//	2 → Idle (empty state with stale activity, beyond the threshold)
+//
+// Without a daemon-recorded activity timestamp a session is treated as
+// Active rather than Idle so a fresh session does not flicker into the
+// Idle bucket the moment it appears.
+func stateGroup(s session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) int {
 	switch s.State {
 	case "key", "stop":
 		return 0
 	case "bolt":
 		return 1
-	default:
+	}
+	if s.State != "" {
+		// Unknown/legacy state names — keep the previous behavior (Idle).
 		return 2
 	}
+	ts, ok := lastActivity[s.WindowID]
+	if !ok {
+		return 1
+	}
+	if threshold > 0 && time.Since(ts) >= threshold {
+		return 2
+	}
+	return 1
 }
 
-func countGroups(sessions []session.RunningSession) int {
+func countGroups(sessions []session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) int {
 	seen := make(map[int]bool)
 	for _, s := range sessions {
-		seen[stateGroup(s)] = true
+		seen[stateGroup(s, lastActivity, threshold)] = true
 	}
 	return len(seen)
 }
 
-func countInGroup(sessions []session.RunningSession, group int) int {
+func countInGroup(sessions []session.RunningSession, group int, lastActivity map[int]time.Time, threshold time.Duration) int {
 	n := 0
 	for _, s := range sessions {
-		if stateGroup(s) == group {
+		if stateGroup(s, lastActivity, threshold) == group {
 			n++
 		}
 	}

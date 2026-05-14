@@ -34,6 +34,9 @@ func validateDefaults(d *Defaults) []string {
 	if d.GuardDuration < 0 {
 		errs = append(errs, "defaults.guard_duration must be >= 0")
 	}
+	if d.IdleThreshold < 0 {
+		errs = append(errs, "defaults.idle_threshold must be >= 0")
+	}
 	return errs
 }
 

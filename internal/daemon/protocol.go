@@ -33,11 +33,14 @@ type Response struct {
 	// Fields populated for TypeStateUpdate:
 	Allowed   bool   `json:"allowed,omitempty"`   // whether guard permitted the transition
 	IconState string `json:"icon_state,omitempty"` // icon name to show ("bolt","stop","key","error","")
+	// Fields populated for TypeStateQuery:
+	Activity map[int]int64 `json:"activity,omitempty"` // window_id → unix seconds of last activity
 }
 
 // actionPriority maps each action name to its guard priority.
 // Higher priority states block lower priority state updates.
 var actionPriority = map[string]int{
+	"user_clear": -1,
 	"clear":      -1,
 	"idle":       0,
 	"active":     1,
@@ -54,6 +57,7 @@ var actionIconState = map[string]string{
 	"failure":    "error",
 	"idle":       "",
 	"clear":      "",
+	"user_clear": "",
 }
 
 // Priority returns the priority for an action, or 0 for unknown actions.

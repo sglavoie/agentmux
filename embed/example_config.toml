@@ -2,6 +2,7 @@
 sort = "alpha"
 refresh_interval = 2
 guard_duration = 1
+idle_threshold = 300  # seconds of inactivity before a session is grouped as Idle in the dashboard
 
 [defaults.notifications]
 error = false

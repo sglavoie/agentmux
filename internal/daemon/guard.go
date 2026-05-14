@@ -52,8 +52,8 @@ func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allo
 
 	now := time.Now()
 
-	// idle and clear always remove the guard regardless of what's active.
-	if action == "idle" || action == "clear" {
+	// idle, clear, and user_clear always remove the guard regardless of what's active.
+	if action == "idle" || action == "clear" || action == "user_clear" {
 		delete(g.entries, windowID)
 		return true, action
 	}

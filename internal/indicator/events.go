@@ -37,10 +37,12 @@ var eventToAction = map[string]string{
 	"WorktreeRemove": "clear",
 }
 
-// validActions is the set of the 6 canonical action names.
+// validActions is the set of canonical action names accepted from CLI callers.
+// user_clear is included so the TUI can request a true icon wipe (event-driven
+// idle/clear now preserve the current icon).
 var validActions = map[string]bool{
 	"active": true, "stop": true, "permission": true,
-	"failure": true, "idle": true, "clear": true,
+	"failure": true, "idle": true, "clear": true, "user_clear": true,
 }
 
 // ResolveAction maps an event name or action name to a canonical action.

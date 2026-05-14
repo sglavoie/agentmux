@@ -31,6 +31,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.GuardDuration == 0 {
 		cfg.Defaults.GuardDuration = 1
 	}
+	if cfg.Defaults.IdleThreshold == 0 {
+		cfg.Defaults.IdleThreshold = 300
+	}
 }
 
 // ExampleConfig is the content written by ccm config init.

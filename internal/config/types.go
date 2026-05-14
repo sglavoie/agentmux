@@ -13,6 +13,7 @@ type Defaults struct {
 	Sort            string              `toml:"sort"`
 	RefreshInterval int                 `toml:"refresh_interval"`
 	GuardDuration   int                 `toml:"guard_duration"`
+	IdleThreshold   int                 `toml:"idle_threshold"` // seconds before a session is considered idle; 0 → default (300)
 	ClaudeFlags     []string            `toml:"claude_flags"`
 	Notifications   NotificationConfig  `toml:"notifications"`
 }

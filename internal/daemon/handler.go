@@ -1,9 +1,20 @@
 package daemon
 
+import (
+	"sync"
+	"time"
+)
+
 // Handler processes daemon requests.
 type Handler struct {
 	guard    *StateGuard
 	notifier *Notifier
+
+	// activity tracks the unix-time of the last successful state update per
+	// Kitty window. The dashboard reads this via TypeStateQuery to decide
+	// whether a session is "Active" (recent) or "Idle" (over threshold).
+	activityMu sync.Mutex
+	activity   map[int]time.Time
 
 	// onActivity is called on every successfully handled request.
 	// The daemon uses this to reset the idle timer.
@@ -15,7 +26,11 @@ type Handler struct {
 
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
-	return &Handler{guard: guard, notifier: notifier}
+	return &Handler{
+		guard:    guard,
+		notifier: notifier,
+		activity: make(map[int]time.Time),
+	}
 }
 
 // Handle processes a Request and returns a Response.
@@ -49,8 +64,16 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: true, Allowed: false}
 	}
 
+	h.activityMu.Lock()
+	h.activity[req.WindowID] = time.Now()
+	h.activityMu.Unlock()
+
 	iconState := IconState(effective)
-	if req.PreservesIcon {
+	// Event-driven idle/clear must NOT wipe the title — a fresh permission/stop
+	// icon should persist until the next real action (active/stop/permission/
+	// failure) overwrites it. user_clear (TUI-initiated) is the only path that
+	// actually empties the icon.
+	if req.PreservesIcon || effective == "idle" || effective == "clear" {
 		iconState = IconStatePreserve
 	}
 	h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, effective, req.PipeMode)
@@ -59,7 +82,13 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 }
 
 func (h *Handler) handleStateQuery() Response {
-	return Response{OK: true}
+	h.activityMu.Lock()
+	snapshot := make(map[int]int64, len(h.activity))
+	for id, t := range h.activity {
+		snapshot[id] = t.Unix()
+	}
+	h.activityMu.Unlock()
+	return Response{OK: true, Activity: snapshot}
 }
 
 func (h *Handler) handleShutdown() Response {

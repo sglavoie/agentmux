@@ -1,13 +1,19 @@
 package tui
 
-import "github.com/sglavoie/cc-manager-kitty/internal/session"
+import (
+	"time"
+
+	"github.com/sglavoie/cc-manager-kitty/internal/session"
+)
 
 // tickMsg is sent by the refresh ticker on each interval.
 type tickMsg struct{}
 
-// sessionsMsg carries a fresh session list from Kitty.
+// sessionsMsg carries a fresh session list from Kitty plus the daemon's
+// per-window last-activity timestamps (nil if the daemon is unreachable).
 type sessionsMsg struct {
 	sessions []session.RunningSession
+	activity map[int]time.Time
 }
 
 // errMsg carries an error from a Kitty query.

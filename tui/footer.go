@@ -48,8 +48,8 @@ func listFooterLine1(m Model) string {
 	}
 	s := m.filtered[m.cursor]
 	switch {
-	case stateGroup(s) == 0: // needs attention (key / stop)
-		return styleFooter.Render("  space: focus  x: close  r: restart  c: config  ?: more")
+	case stateGroup(s, m.lastActivity, m.idleThreshold) == 0: // needs attention (key / stop)
+		return styleFooter.Render("  space: focus  x: close  r: restart  c: config  C: clear  ?: more")
 	case s.State == "bolt": // active
 		return styleFooter.Render("  space: focus  e: peek  r: restart  x: close  ?: more")
 	default: // idle / stopped / unknown

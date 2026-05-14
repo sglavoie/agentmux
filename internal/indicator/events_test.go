@@ -3,7 +3,7 @@ package indicator
 import "testing"
 
 func TestResolveAction_DirectActions(t *testing.T) {
-	for _, action := range []string{"active", "stop", "permission", "failure", "idle", "clear"} {
+	for _, action := range []string{"active", "stop", "permission", "failure", "idle", "clear", "user_clear"} {
 		got, ok := ResolveAction(action)
 		if !ok || got != action {
 			t.Errorf("ResolveAction(%q) = (%q, %v), want (%q, true)", action, got, ok, action)
