@@ -19,6 +19,9 @@ func renderPicker(m Model) string {
 		}
 	}
 	header := "Launch Sessions"
+	if m.pickerActiveSearch != "" {
+		header += fmt.Sprintf("  [search: %s]", m.pickerActiveSearch)
+	}
 	if selectedCount > 0 {
 		header += fmt.Sprintf("  [%d selected]", selectedCount)
 	}
@@ -28,15 +31,20 @@ func renderPicker(m Model) string {
 		sb.WriteString(styleDim.Render("  (no sessions in config)") + "\n")
 		return sb.String()
 	}
+	if len(m.pickerFilteredIdx) == 0 {
+		sb.WriteString(styleDim.Render("  (no sessions match)") + "\n")
+		return sb.String()
+	}
 
 	acctColor := buildAccountColorMap(m)
 
-	for i, sess := range m.pickerSessions {
+	for cursor, origIdx := range m.pickerFilteredIdx {
+		sess := m.pickerSessions[origIdx]
 		baseTitle := session.FormatTitle(sess)
 		running := m.pickerRunning[baseTitle]
 
 		prefix := "[ ] "
-		if m.pickerSelected[i] {
+		if m.pickerSelected[origIdx] {
 			prefix = "[*] "
 		}
 
@@ -46,7 +54,7 @@ func renderPicker(m Model) string {
 			line += "  " + styleDim.Render("(running)")
 		}
 
-		if i == m.pickerCursor {
+		if cursor == m.pickerCursor {
 			sb.WriteString(styleSelected.Render(line))
 		} else {
 			sb.WriteString(line)
@@ -54,6 +62,14 @@ func renderPicker(m Model) string {
 		sb.WriteByte('\n')
 	}
 	return sb.String()
+}
+
+// renderPickerWithSearch renders the picker with the live search prompt at the
+// top. The list below reflects the currently committed pickerActiveSearch —
+// typing does not filter live; filtering happens on enter.
+func renderPickerWithSearch(m Model) string {
+	prompt := styleSearch.Render("/") + m.pickerSearchText + "█"
+	return prompt + "\n" + renderPicker(m)
 }
 
 // sortPickerSessions returns a sorted copy: by account name, then by title.

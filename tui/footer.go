@@ -20,7 +20,10 @@ func renderFooter(m Model) string {
 		line1 = styleFooter.Render("  y: yes  n/esc: cancel")
 		line2 = ""
 	case ModePicker:
-		line1 = styleFooter.Render("  space: toggle  enter: launch  o: open dir  esc: cancel")
+		line1 = styleFooter.Render("  space: toggle  enter: launch  o: open dir  /: search  esc: clear/exit")
+		line2 = styleFooter.Render("  j/k: up/down")
+	case ModePickerSearch:
+		line1 = styleFooter.Render("  enter: apply  esc: cancel")
 		line2 = styleFooter.Render("  j/k: up/down")
 	case ModeConfigPicker:
 		line1 = styleFooter.Render("  enter: select  esc: cancel")

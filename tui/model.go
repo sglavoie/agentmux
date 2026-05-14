@@ -27,6 +27,7 @@ const (
 	ModePicker             // multi-select session launcher
 	ModeConfigPicker       // account picker for config override
 	ModeHelp               // help overlay
+	ModePickerSearch       // typing a search query inside the picker
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -68,10 +69,13 @@ type Model struct {
 	confirmAction string
 
 	// picker mode
-	pickerSessions []config.Session
-	pickerRunning  map[string]bool
-	pickerSelected map[int]bool
-	pickerCursor   int
+	pickerSessions     []config.Session
+	pickerRunning      map[string]bool
+	pickerSelected     map[int]bool
+	pickerCursor       int
+	pickerSearchText   string // live input while in ModePickerSearch
+	pickerActiveSearch string // committed query applied to the picker
+	pickerFilteredIdx  []int  // indices into pickerSessions for the filtered view
 
 	// last error from a close/restart action
 	actionErr error
@@ -220,6 +224,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleConfirmKey(msg)
 	case ModePicker:
 		return m.handlePickerKey(msg)
+	case ModePickerSearch:
+		return m.handlePickerSearchKey(msg)
 	case ModeConfigPicker:
 		return m.handleConfigPickerKey(msg)
 	case ModeHelp:
@@ -324,6 +330,9 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerRunning = buildPickerRunning(m.sessions)
 		m.pickerSelected = make(map[int]bool)
 		m.pickerCursor = 0
+		m.pickerSearchText = ""
+		m.pickerActiveSearch = ""
+		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
 		m.mode = ModePicker
 
 	case keyEsc:
@@ -454,22 +463,40 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case keyEsc, keyQ:
+	case keyEsc:
+		// If a query is active, the first esc clears it; a subsequent esc exits.
+		if m.pickerActiveSearch != "" {
+			m.pickerActiveSearch = ""
+			m.pickerSearchText = ""
+			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
+			m.pickerCursor = 0
+			return m, nil
+		}
+		m.mode = ModeList
+	case keyQ:
 		m.mode = ModeList
 	case keyCtrlC:
 		return m, tea.Quit
+	case keySlash:
+		m.pickerSearchText = m.pickerActiveSearch
+		m.mode = ModePickerSearch
 	case keyJ, keyDown:
-		m.pickerCursor = clamp(m.pickerCursor+1, 0, len(m.pickerSessions)-1)
+		m.pickerCursor = clamp(m.pickerCursor+1, 0, len(m.pickerFilteredIdx)-1)
 	case keyK, keyUp:
-		m.pickerCursor = clamp(m.pickerCursor-1, 0, len(m.pickerSessions)-1)
+		m.pickerCursor = clamp(m.pickerCursor-1, 0, len(m.pickerFilteredIdx)-1)
 	case keySpace:
+		if len(m.pickerFilteredIdx) == 0 {
+			return m, nil
+		}
 		if m.pickerSelected == nil {
 			m.pickerSelected = make(map[int]bool)
 		}
-		m.pickerSelected[m.pickerCursor] = !m.pickerSelected[m.pickerCursor]
+		origIdx := m.pickerFilteredIdx[m.pickerCursor]
+		m.pickerSelected[origIdx] = !m.pickerSelected[origIdx]
 	case keyO:
-		if len(m.pickerSessions) > 0 {
-			return m, pickerOpenCmd(m)
+		if len(m.pickerFilteredIdx) > 0 {
+			origIdx := m.pickerFilteredIdx[m.pickerCursor]
+			return m, pickerOpenCmd(m, m.pickerSessions[origIdx])
 		}
 	case keyEnter:
 		cmd := pickerLaunchCmd(m)
@@ -477,6 +504,35 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerSelected = nil
 		return m, cmd
 	}
+	return m, nil
+}
+
+func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case keyEsc:
+		// Cancel: restore previous query without applying new text.
+		m.pickerSearchText = m.pickerActiveSearch
+		m.mode = ModePicker
+
+	case keyEnter:
+		// Apply: commit the live text as the active query.
+		m.pickerActiveSearch = m.pickerSearchText
+		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerActiveSearch)
+		m.pickerCursor = 0
+		m.mode = ModePicker
+
+	case keyBackspace:
+		if len(m.pickerSearchText) > 0 {
+			m.pickerSearchText = m.pickerSearchText[:len(m.pickerSearchText)-1]
+		}
+
+	default:
+		// Append printable character.
+		if t := msg.Key().Text; t != "" {
+			m.pickerSearchText += t
+		}
+	}
+
 	return m, nil
 }
 
@@ -492,10 +548,13 @@ func (m Model) View() tea.View {
 func (m Model) render() string {
 	var sb strings.Builder
 
-	if m.mode == ModePicker {
+	switch m.mode {
+	case ModePicker:
 		// Picker replaces both header and list.
 		sb.WriteString(renderPicker(m))
-	} else {
+	case ModePickerSearch:
+		sb.WriteString(renderPickerWithSearch(m))
+	default:
 		// Header area varies by mode; list is always shown below.
 		switch m.mode {
 		case ModeSearch:
@@ -780,9 +839,8 @@ func pickerLaunchCmd(m Model) tea.Cmd {
 	}
 }
 
-// pickerOpenCmd opens the cursored session's directory in a plain shell tab.
-func pickerOpenCmd(m Model) tea.Cmd {
-	sess := m.pickerSessions[m.pickerCursor]
+// pickerOpenCmd opens the given session's directory in a plain shell tab.
+func pickerOpenCmd(m Model, sess config.Session) tea.Cmd {
 	accounts := m.cfg.Accounts
 	client := m.client
 	cfg := m.cfg
@@ -814,6 +872,25 @@ func applyFilter(sessions []session.RunningSession, query, account string) []ses
 			}
 		}
 		out = append(out, s)
+	}
+	return out
+}
+
+// applyPickerFilter returns indices into sessions whose formatted title or
+// account contains the (case-insensitive) query. An empty query returns the
+// full index range so callers can use a single code path.
+func applyPickerFilter(sessions []config.Session, query string) []int {
+	query = strings.ToLower(query)
+	out := make([]int, 0, len(sessions))
+	for i, sess := range sessions {
+		if query != "" {
+			title := strings.ToLower(session.FormatTitle(sess))
+			account := strings.ToLower(sess.Account)
+			if !strings.Contains(title, query) && !strings.Contains(account, query) {
+				continue
+			}
+		}
+		out = append(out, i)
 	}
 	return out
 }

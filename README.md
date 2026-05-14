@@ -90,7 +90,7 @@ Footer hints adapt to the selected row's state. Press `?` for the full keymap.
 
 ### Session launch
 
-New sessions are launched from the dashboard. The TUI reads your `config.toml` sessions list, lets you pick one or more, and creates the Kitty tabs.
+New sessions are launched from the dashboard. The TUI reads your `config.toml` sessions list, lets you pick one or more, and creates the Kitty tabs. Inside the picker, press `/` to filter the list by title or account (case-insensitive substring); `esc` clears an active query, and a second `esc` exits the picker.
 
 ### Config management
 
