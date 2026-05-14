@@ -71,7 +71,7 @@ The codebase is a standard Go module. All functionality lives in the `ccm` binar
 - `notify.go` — macOS notification dispatch via `alerter` when installed, falling back to `osascript`
 - `protocol.go` — message types: `TypeStateUpdate`, `TypeStateQuery`, `TypeShutdown`
 
-Socket path: `~/.cache/cc-manager/daemon.sock`
+Socket path: `~/.local/share/cc-manager/daemon.sock`
 
 **`internal/indicator/`** — Hook integration
 
@@ -110,8 +110,9 @@ Socket path: `~/.cache/cc-manager/daemon.sock`
 | `ccm config validate` | Validate config and report errors |
 | `ccm config hooks-sync [ACCOUNT]` | Merge hooks into account `settings.json` files |
 | `ccm config hooks-status` | Show per-account hook sync status |
-| `ccm daemon start` | Start background daemon |
-| `ccm daemon stop` | Stop background daemon |
+| `ccm daemon start` | Start daemon in foreground (blocks; use `--debug` for live logs) |
+| `ccm daemon restart` | Stop existing daemon and relaunch detached in background |
+| `ccm daemon stop` | Stop running daemon |
 | `ccm daemon status` | Check daemon status |
 | `ccm hook-indicator <event>` | Handle a Claude Code hook event (called by hooks) |
 

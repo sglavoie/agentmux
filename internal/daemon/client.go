@@ -72,15 +72,9 @@ func (c *Client) SendWithAutoStart(req Request, ccmBin string) (Response, error)
 		return resp, nil
 	}
 
-	// Daemon not running — try to start it.
-	cmd := exec.Command(ccmBin, "daemon", "start")
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.SysProcAttr = detachSysProcAttr()
-	if startErr := cmd.Start(); startErr != nil {
+	if startErr := SpawnDetached(ccmBin); startErr != nil {
 		return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
 	}
-	// Do not Wait(); leave the daemon running.
 
 	// Retry for up to 1s.
 	for i := 0; i < 5; i++ {
@@ -91,4 +85,16 @@ func (c *Client) SendWithAutoStart(req Request, ccmBin string) (Response, error)
 		}
 	}
 	return Response{}, fmt.Errorf("daemon did not start in time: %w", err)
+}
+
+// SpawnDetached starts `ccmBin daemon start` in a new session with stdio
+// detached, freeing the calling terminal immediately. The spawned process
+// survives the parent's termination. Does not wait for the daemon socket
+// to become reachable.
+func SpawnDetached(ccmBin string) error {
+	cmd := exec.Command(ccmBin, "daemon", "start")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.SysProcAttr = detachSysProcAttr()
+	return cmd.Start()
 }

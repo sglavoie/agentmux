@@ -109,12 +109,13 @@ New sessions are launched from the dashboard. The TUI reads your `config.toml` s
 The daemon manages tab icon state and macOS notifications:
 
 ```bash
-ccm daemon start
+ccm daemon start     # foreground, blocks the tab (useful with --debug)
+ccm daemon restart   # stop + relaunch detached, returns immediately
 ccm daemon status
 ccm daemon stop
 ```
 
-The daemon starts automatically when the first hook event arrives. It communicates via a Unix socket at `~/.cache/cc-manager/daemon.sock`.
+The daemon starts automatically when the first hook event arrives. It communicates via a Unix socket at `~/.local/share/cc-manager/daemon.sock`.
 
 ### Hooks
 
