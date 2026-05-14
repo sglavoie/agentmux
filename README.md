@@ -10,7 +10,7 @@ Claude Code session manager for the Kitty terminal. Manages multiple Claude Code
 
 Your `kitty.conf` must include:
 
-```
+```plaintext
 allow_remote_control yes
 listen_on unix:/tmp/kitty-{kitty_pid}
 ```
@@ -27,7 +27,7 @@ This builds the `ccm` binary, copies it to `~/.local/bin/ccm`, and symlinks `cc-
 
 Then add to your `kitty.conf`:
 
-```
+```plaintext
 include cc-manager.conf
 ```
 
@@ -86,19 +86,7 @@ ccm
 
 Launches the interactive Bubble Tea dashboard. If a dashboard is already open, focuses it instead. Use `ctrl+shift+d` from inside Kitty to open it as an overlay.
 
-Core keybindings:
-
-```
-↑ / k       Move up
-↓ / j       Move down
-Enter       Focus selected session
-/           Search sessions
-a           Filter by account
-t           Actions menu (close, restart, config override)
-Space       Mark / unmark for grouped actions
-n           Launch new session (from config)
-q / Esc     Quit
-```
+Footer hints adapt to the selected row's state. Press `?` for the full keymap.
 
 ### Session launch
 
@@ -106,15 +94,15 @@ New sessions are launched from the dashboard. The TUI reads your `config.toml` s
 
 ### Config management
 
-| Command | Description |
-|---------|-------------|
-| `ccm config init` | Create example config |
-| `ccm config edit` | Open config in `$EDITOR` |
-| `ccm config show` | Print current config |
-| `ccm config path` | Print config file path |
-| `ccm config validate` | Validate config |
-| `ccm config hooks-sync` | Install hooks into all account `settings.json` files |
-| `ccm config hooks-status` | Show per-account hook sync status |
+| Command                   | Description                                          |
+| ------------------------- | ---------------------------------------------------- |
+| `ccm config init`         | Create example config                                |
+| `ccm config edit`         | Open config in `$EDITOR`                             |
+| `ccm config show`         | Print current config                                 |
+| `ccm config path`         | Print config file path                               |
+| `ccm config validate`     | Validate config                                      |
+| `ccm config hooks-sync`   | Install hooks into all account `settings.json` files |
+| `ccm config hooks-status` | Show per-account hook sync status                    |
 
 ### Daemon
 
@@ -145,12 +133,20 @@ This writes `ccm hook-indicator <event>` entries into each account's Claude Code
 sort = "alpha"           # "alpha" or "account"
 refresh_interval = 2     # TUI refresh seconds
 guard_duration = 1       # state-guard seconds
+idle_threshold = 300     # seconds of inactivity before a session is grouped as Idle
 claude_flags = []        # global Claude flags for all sessions
 
 [defaults.notifications]
 error = false
 permission = true
 stop = true
+
+[defaults.preview]
+direction = "horizontal" # "horizontal" | "vertical"
+ratio = 0.5              # fraction of width (horizontal) or height (vertical) given to preview
+refresh_ms = 500         # tick interval while preview is open
+min_cols = 100           # below this, horizontal split is disabled
+min_rows = 30            # below this, vertical split is disabled
 
 [[accounts]]
 name = "work"            # required
