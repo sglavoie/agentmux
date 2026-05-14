@@ -11,8 +11,11 @@ import (
 
 var debugLog = newFileLogger("/tmp/ccm-debug.log", "[restart] ")
 
-// Restart closes a running session and relaunches it, preserving metadata
-// from the running tab's user vars (account, directory, flags, env, groups).
+// Restart relaunches a running session and then closes the original tab,
+// preserving metadata from the running tab's user vars (account, directory,
+// flags, env, groups). Launch happens before Close so that when the
+// dashboard overlay is on top of the tab being closed, the new tab is
+// already committed in Kitty before the dashboard process is torn down.
 func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Config) error {
 	acc, found := findAccount(cfg, running.Account)
 	if !found {
@@ -21,19 +24,22 @@ func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Confi
 
 	sess := sessionFromRunning(running)
 
+	if err := Launch(client, sess, acc, cfg, LaunchOpt{SkipDedup: true}); err != nil {
+		return err
+	}
+
 	closeErr := Close(client, running.TabID)
 	// ErrCloseTimeout is non-fatal — the tab likely closed shortly after.
 	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
 		return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
 	}
-
-	return Launch(client, sess, acc, cfg, LaunchOpt{SkipDedup: true})
+	return nil
 }
 
-// RestartWithAccount closes a running session and relaunches it using a
-// different account's config. Title prefix and tab color update to match the
-// target account. If the target account is already the current one, it is a
-// no-op.
+// RestartWithAccount relaunches a running session under a different account's
+// config and then closes the original tab. Title prefix and tab color update
+// to match the target account. If the target account is already the current
+// one, it is a no-op. Launch precedes Close for the same reason as Restart.
 func RestartWithAccount(client kitty.KittyClient, running RunningSession, targetAcc config.Account, cfg *config.Config) error {
 	debugLog.Printf("RestartWithAccount: running=%+v targetAcc=%+v", running, targetAcc)
 	if running.Account == targetAcc.Name {
@@ -45,15 +51,18 @@ func RestartWithAccount(client kitty.KittyClient, running RunningSession, target
 	sess.Account = targetAcc.Name
 	debugLog.Printf("RestartWithAccount: session=%+v", sess)
 
+	launchErr := Launch(client, sess, targetAcc, cfg, LaunchOpt{SkipDedup: true})
+	debugLog.Printf("RestartWithAccount: Launch err=%v", launchErr)
+	if launchErr != nil {
+		return launchErr
+	}
+
 	closeErr := Close(client, running.TabID)
 	debugLog.Printf("RestartWithAccount: Close err=%v", closeErr)
 	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
 		return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
 	}
-
-	launchErr := Launch(client, sess, targetAcc, cfg, LaunchOpt{SkipDedup: true})
-	debugLog.Printf("RestartWithAccount: Launch err=%v", launchErr)
-	return launchErr
+	return nil
 }
 
 func findAccount(cfg *config.Config, name string) (config.Account, bool) {

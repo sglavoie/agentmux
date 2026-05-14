@@ -112,7 +112,7 @@ func (c *SubprocessClient) LaunchTab(opts LaunchOpts) error {
 }
 
 func (c *SubprocessClient) CloseTab(matchExpr string) error {
-	_, err := c.kitten("close-tab", "--match="+matchExpr)
+	_, err := c.kitten("close-tab", "--no-response", "--match="+matchExpr)
 	return err
 }
 
