@@ -38,11 +38,11 @@ func NewStateGuard(duration time.Duration) *StateGuard {
 //   - If the current guard is "permission" and the incoming action is "stop",
 //     stop is suppressed as "clear" to avoid a spurious stop icon after the user
 //     approves a permission request.
-//   - If the current guard is "stop" and event is "UserPromptSubmit", the guard
-//     is cleared so the prompt's active state breaks through immediately.
+//   - If the current guard is "stop" and isPrompt is true, the guard is cleared
+//     so the prompt's active state breaks through immediately.
 //   - All other actions are blocked if Priority(new) < Priority(current) and
 //     the guard has not yet expired.
-func (g *StateGuard) TryUpdate(windowID int, action, event string) (allowed bool, effectiveAction string) {
+func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allowed bool, effectiveAction string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -62,7 +62,7 @@ func (g *StateGuard) TryUpdate(windowID int, action, event string) (allowed bool
 			delete(g.entries, windowID)
 			return true, "clear"
 		}
-		if entry.action == "stop" && event == "UserPromptSubmit" {
+		if entry.action == "stop" && isPrompt {
 			// Prompt bypasses stop guard — fall through to set new guard.
 			delete(g.entries, windowID)
 		} else if Priority(action) < entry.priority {

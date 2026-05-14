@@ -53,12 +53,14 @@ func Run(eventOrAction string, windowID int, ccmBin string) error {
 
 	dc := daemon.NewClient()
 	resp, err := dc.SendWithAutoStart(daemon.Request{
-		Type:         daemon.TypeStateUpdate,
-		WindowID:     windowID,
-		Action:       action,
-		Event:        eventOrAction,
-		PipeMode:     pipeMode,
-		SessionTitle: sessionTitle,
+		Type:          daemon.TypeStateUpdate,
+		WindowID:      windowID,
+		Action:        action,
+		Event:         eventOrAction,
+		IsPrompt:      IsPromptEvent(eventOrAction),
+		PreservesIcon: PreservesCurrent(eventOrAction),
+		PipeMode:      pipeMode,
+		SessionTitle:  sessionTitle,
 	}, ccmBin)
 	if err != nil {
 		slog.Debug("indicator: daemon unavailable, updating title without guard", "err", err)

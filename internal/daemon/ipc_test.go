@@ -91,7 +91,7 @@ func TestIPC_PromptBypassesStopGuard(t *testing.T) {
 	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 3, Action: "stop"}); err != nil {
 		t.Fatalf("Send stop: %v", err)
 	}
-	resp, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "UserPromptSubmit"})
+	resp, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", IsPrompt: true})
 	if err != nil {
 		t.Fatalf("Send active+UserPromptSubmit: %v", err)
 	}

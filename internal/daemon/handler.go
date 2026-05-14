@@ -44,13 +44,13 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
 	}
 
-	allowed, effective := h.guard.TryUpdate(req.WindowID, req.Action, req.Event)
+	allowed, effective := h.guard.TryUpdate(req.WindowID, req.Action, req.IsPrompt)
 	if !allowed {
 		return Response{OK: true, Allowed: false}
 	}
 
 	iconState := IconState(effective)
-	if req.Event == "SubagentStop" || req.Event == "TaskCompleted" {
+	if req.PreservesIcon {
 		iconState = IconStatePreserve
 	}
 	h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, effective, req.PipeMode)

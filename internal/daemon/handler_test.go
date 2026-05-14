@@ -77,13 +77,11 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 	}
 }
 
-func TestHandler_PreserveCurrentEvents(t *testing.T) {
-	for _, event := range []string{"SubagentStop", "TaskCompleted"} {
-		h := newTestHandler()
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: event})
-		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
-			t.Errorf("event %q: want icon_state=%q, got %+v", event, IconStatePreserve, resp)
-		}
+func TestHandler_PreserveCurrentIcon(t *testing.T) {
+	h := newTestHandler()
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", PreservesIcon: true})
+	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+		t.Errorf("PreservesIcon: want icon_state=%q, got %+v", IconStatePreserve, resp)
 	}
 }
 
@@ -91,7 +89,7 @@ func TestHandler_PromptBypassesStopGuard(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "UserPromptSubmit"})
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("want {ok:true, allowed:true, icon_state:bolt} for prompt bypass, got %+v", resp)
 	}

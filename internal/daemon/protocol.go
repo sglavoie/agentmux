@@ -17,9 +17,11 @@ const (
 type Request struct {
 	Type     MessageType `json:"type"`
 	WindowID int         `json:"window_id,omitempty"` // KITTY_WINDOW_ID
-	Action   string      `json:"action,omitempty"`    // active|stop|permission|failure|idle|clear
-	Event    string      `json:"event,omitempty"`     // raw Claude hook event name (e.g. UserPromptSubmit)
-	Account      string      `json:"account,omitempty"`
+	Action        string      `json:"action,omitempty"`         // active|stop|permission|failure|idle|clear
+	Event         string      `json:"event,omitempty"`          // raw Claude hook event name (e.g. UserPromptSubmit)
+	IsPrompt      bool        `json:"is_prompt,omitempty"`      // true if event is a user prompt submission
+	PreservesIcon bool        `json:"preserves_icon,omitempty"` // true if event should keep current icon
+	Account       string      `json:"account,omitempty"`
 	SessionTitle string      `json:"session_title,omitempty"` // tab base title (e.g. "W:api")
 	PipeMode     bool        `json:"pipe_mode,omitempty"`     // suppress notifications when claude -p
 }
