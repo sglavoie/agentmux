@@ -24,4 +24,6 @@ const (
 	keyX         = "x"
 	keyR         = "r"
 	keyBackspace = "backspace"
+	keyQuestion  = "?"   // opens ModeHelp overlay
+	keyC         = "c"   // opens ModeConfigPicker from ModeList
 )

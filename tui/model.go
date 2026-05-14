@@ -19,10 +19,10 @@ const (
 	ModeList          Mode = iota
 	ModeSearch             // typing a search query
 	ModeAccountFilter      // picking an account filter
-	ModeActions            // action overlay (close / restart / override config)
 	ModeConfirm            // y/n confirmation for a destructive action
 	ModePicker             // multi-select session launcher
 	ModeConfigPicker       // account picker for config override
+	ModeHelp               // help overlay
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -57,9 +57,8 @@ type Model struct {
 	// last error from Kitty query
 	err error
 
-	// actions mode
-	actionCursor int
-	actionTarget session.RunningSession
+	// confirm / config-picker target
+	targetSession session.RunningSession
 
 	// confirm mode
 	confirmAction string
@@ -169,14 +168,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleSearchKey(msg)
 	case ModeAccountFilter:
 		return m.handleAccountFilterKey(msg)
-	case ModeActions:
-		return m.handleActionsKey(msg)
 	case ModeConfirm:
 		return m.handleConfirmKey(msg)
 	case ModePicker:
 		return m.handlePickerKey(msg)
 	case ModeConfigPicker:
 		return m.handleConfigPickerKey(msg)
+	case ModeHelp:
+		return m.handleHelpKey(msg)
 	default:
 		return m.handleListKey(msg)
 	}
@@ -216,22 +215,14 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, peekCmd(m.client, s.WindowID)
 		}
 
-	case keySpace:
+	case keySpace, keyEnter:
 		if len(m.filtered) > 0 {
 			return m, focusCmd(m.client, m.filtered[m.cursor].TabID)
 		}
 
-	case keyEnter, keyA:
-		if len(m.filtered) > 0 {
-			m.actionTarget = m.filtered[m.cursor]
-			m.actionCursor = 0
-			m.actionErr = nil
-			m.mode = ModeActions
-		}
-
 	case keyX:
 		if len(m.filtered) > 0 {
-			m.actionTarget = m.filtered[m.cursor]
+			m.targetSession = m.filtered[m.cursor]
 			m.confirmAction = "close"
 			m.actionErr = nil
 			m.mode = ModeConfirm
@@ -239,11 +230,24 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case keyR:
 		if len(m.filtered) > 0 {
-			m.actionTarget = m.filtered[m.cursor]
+			m.targetSession = m.filtered[m.cursor]
 			m.confirmAction = "restart"
 			m.actionErr = nil
 			m.mode = ModeConfirm
 		}
+
+	case keyC:
+		if len(m.filtered) > 0 {
+			m.targetSession = m.filtered[m.cursor]
+			m.configPickerAccounts = m.cfg.Accounts
+			m.configPickerCurrent = m.targetSession.Account
+			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.Account)
+			m.actionErr = nil
+			m.mode = ModeConfigPicker
+		}
+
+	case keyQuestion:
+		m.mode = ModeHelp
 
 	case keyL:
 		m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
@@ -327,30 +331,6 @@ func (m Model) handleAccountFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	return m, nil
 }
 
-func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case keyEsc, keyQ:
-		m.mode = ModeList
-	case keyCtrlC:
-		return m, tea.Quit
-	case keyJ, keyDown:
-		m.actionCursor = clamp(m.actionCursor+1, 0, len(actionLabels)-1)
-	case keyK, keyUp:
-		m.actionCursor = clamp(m.actionCursor-1, 0, len(actionLabels)-1)
-	case keyEnter:
-		if actionLabels[m.actionCursor] == "override config" {
-			m.configPickerAccounts = m.cfg.Accounts
-			m.configPickerCurrent = m.actionTarget.Account
-			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.actionTarget.Account)
-			m.mode = ModeConfigPicker
-		} else {
-			m.confirmAction = actionLabels[m.actionCursor]
-			m.mode = ModeConfirm
-		}
-	}
-	return m, nil
-}
-
 func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyEsc, keyQ:
@@ -374,15 +354,25 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case keyEsc, keyQuestion, keyQ:
+		m.mode = ModeList
+	case keyCtrlC:
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
 func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyY:
 		m.mode = ModeList
 		switch m.confirmAction {
 		case "close":
-			return m, closeCmd(m.client, m.actionTarget.TabID)
+			return m, closeCmd(m.client, m.targetSession.TabID)
 		case "restart":
-			return m, restartCmd(m.client, m.actionTarget, m.cfg)
+			return m, restartCmd(m.client, m.targetSession, m.cfg)
 		}
 	case keyN, keyEsc:
 		m.mode = ModeList
@@ -442,32 +432,19 @@ func (m Model) render() string {
 			sb.WriteString(renderSearch(m))
 		case ModeAccountFilter:
 			sb.WriteString(renderAccountFilter(m))
-		case ModeActions:
-			sb.WriteString(renderActions(m))
 		case ModeConfirm:
 			sb.WriteString(renderConfirm(m))
 		case ModeConfigPicker:
 			sb.WriteString(renderConfigPicker(m))
+		case ModeHelp:
+			sb.WriteString(renderHelp(m))
 		default:
 			sb.WriteString(renderHeader(m))
 		}
 		sb.WriteString(renderList(m))
 	}
 
-	// Selected session directory between list and footer (not in picker).
-	dirLine := ""
-	if m.mode != ModePicker && len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		s := m.filtered[m.cursor]
-		detail := " " + s.Directory
-		if s.Account != "" {
-			detail += "  [" + s.Account + "]"
-		}
-		if len(s.Groups) > 0 {
-			detail += "  groups: " + strings.Join(s.Groups, ",")
-		}
-		dirLine = styleDir.Render(detail)
-	}
-	sb.WriteString("\n" + dirLine + "\n")
+	sb.WriteByte('\n')
 
 	sb.WriteString(renderFooter(m))
 
@@ -514,7 +491,7 @@ func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
 				msg = actionDoneMsg{err: fmt.Errorf("panic in restartWithAccount: %v", r)}
 			}
 		}()
-		return actionDoneMsg{err: session.RestartWithAccount(m.client, m.actionTarget, acc, m.cfg)}
+		return actionDoneMsg{err: session.RestartWithAccount(m.client, m.targetSession, acc, m.cfg)}
 	}
 }
 

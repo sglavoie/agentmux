@@ -15,6 +15,7 @@ var (
 	styleHeader   = lipgloss.NewStyle().Bold(true)
 
 	styleAttentionDivider = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleAttentionRow     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	styleActiveDivider    = lipgloss.NewStyle()
 	styleIdleDivider      = lipgloss.NewStyle().Faint(true)
 )

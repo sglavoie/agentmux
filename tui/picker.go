@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -11,7 +12,17 @@ import (
 // renderPicker renders the session picker with multi-select and running status.
 func renderPicker(m Model) string {
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("Launch Sessions") + "\n\n")
+	selectedCount := 0
+	for _, v := range m.pickerSelected {
+		if v {
+			selectedCount++
+		}
+	}
+	header := "Launch Sessions"
+	if selectedCount > 0 {
+		header += fmt.Sprintf("  [%d selected]", selectedCount)
+	}
+	sb.WriteString(styleHeader.Render(header) + "\n\n")
 
 	if len(m.pickerSessions) == 0 {
 		sb.WriteString(styleDim.Render("  (no sessions in config)") + "\n")

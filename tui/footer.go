@@ -13,9 +13,6 @@ func renderFooter(m Model) string {
 	case ModeAccountFilter:
 		line1 = styleFooter.Render("  enter: select  esc: cancel")
 		line2 = styleFooter.Render("  j/k: up/down")
-	case ModeActions:
-		line1 = styleFooter.Render("  enter: confirm action  esc: back")
-		line2 = styleFooter.Render("  j/k: up/down")
 	case ModeConfirm:
 		line1 = styleFooter.Render("  y: yes  n/esc: cancel")
 		line2 = ""
@@ -25,9 +22,12 @@ func renderFooter(m Model) string {
 	case ModeConfigPicker:
 		line1 = styleFooter.Render("  enter: select  esc: cancel")
 		line2 = styleFooter.Render("  j/k: up/down")
-	default:
-		line1 = styleFooter.Render("  x: close  r: restart  space: focus  e: peek  a: more actions  l: launch")
-		nav := "  j/k: up/down  g/G: top/end  /: search  f: filter  q: quit"
+	case ModeHelp:
+		line1 = styleFooter.Render("  esc/?/q: close help")
+		line2 = ""
+	default: // ModeList
+		line1 = listFooterLine1(m)
+		nav := "  j/k: up/down  /: search  f: filter  q: quit"
 		if m.activeSearch != "" || m.activeAccount != "" {
 			nav += "  esc: clear filters"
 		}
@@ -40,4 +40,19 @@ func renderFooter(m Model) string {
 		sb.WriteString(line2)
 	}
 	return sb.String()
+}
+
+func listFooterLine1(m Model) string {
+	if len(m.filtered) == 0 {
+		return styleFooter.Render("  l: launch  /: search  q: quit  ?: more")
+	}
+	s := m.filtered[m.cursor]
+	switch {
+	case stateGroup(s) == 0: // needs attention (key / stop)
+		return styleFooter.Render("  space: focus  x: close  r: restart  c: config  ?: more")
+	case s.State == "bolt": // active
+		return styleFooter.Render("  space: focus  e: peek  r: restart  x: close  ?: more")
+	default: // idle / stopped / unknown
+		return styleFooter.Render("  space: focus  r: restart  x: close  l: launch  ?: more")
+	}
 }

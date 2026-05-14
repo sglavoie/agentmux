@@ -57,6 +57,8 @@ func renderList(m Model) string {
 		row := formatRow(s, acctColor, m.width)
 		if i == m.cursor {
 			sb.WriteString(styleSelected.Render(row))
+		} else if stateGroup(s) == 0 {
+			sb.WriteString(styleAttentionRow.Render(row))
 		} else {
 			sb.WriteString(row)
 		}

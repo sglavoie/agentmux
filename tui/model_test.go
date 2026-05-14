@@ -70,6 +70,10 @@ func keyPress(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: 'y', Text: "y"})
 	case "n":
 		return tea.KeyPressMsg(tea.Key{Code: 'n', Text: "n"})
+	case "?":
+		return tea.KeyPressMsg(tea.Key{Code: '?', Text: "?"})
+	case "c":
+		return tea.KeyPressMsg(tea.Key{Code: 'c', Text: "c"})
 	case " ":
 		return tea.KeyPressMsg(tea.Key{Code: ' '}) // no Text: String() returns "space"
 	case "enter":
@@ -319,108 +323,12 @@ func TestFooterChangesWithMode(t *testing.T) {
 	}
 }
 
-// ---- Session directory display test ----
-
-func TestSelectedDirectoryDisplayed(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	m.width, m.height = 120, 40
-	content := m.render()
-	if !strings.Contains(content, "/home/user/api") {
-		t.Errorf("expected selected session directory in view, got:\n%s", content)
-	}
-}
-
-// ---- Actions mode tests ----
-
-func TestEnterOpensActions(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter")
-	if m.mode != ModeActions {
-		t.Fatalf("expected ModeActions after enter, got %d", m.mode)
-	}
-	// After state-group sort, active (bolt) comes first: W:backend.
-	if m.actionTarget.Base != "W:backend" {
-		t.Fatalf("expected actionTarget=W:backend, got %q", m.actionTarget.Base)
-	}
-}
-
-func TestAKeyOpensActions(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "a")
-	if m.mode != ModeActions {
-		t.Fatalf("expected ModeActions after a, got %d", m.mode)
-	}
-}
-
-func TestActionsEscReturnsToList(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter")
-	m = pressKey(m, "esc")
-	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after esc from actions, got %d", m.mode)
-	}
-}
-
-func TestActionsNavigation(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // open actions, cursor=0 (close)
-	if m.actionCursor != 0 {
-		t.Fatalf("expected actionCursor=0, got %d", m.actionCursor)
-	}
-	m = pressKey(m, "j") // move to restart
-	if m.actionCursor != 1 {
-		t.Fatalf("expected actionCursor=1 after j, got %d", m.actionCursor)
-	}
-	m = pressKey(m, "j") // move to override config
-	if m.actionCursor != 2 {
-		t.Fatalf("expected actionCursor=2 after second j, got %d", m.actionCursor)
-	}
-	m = pressKey(m, "j") // clamp at bottom
-	if m.actionCursor != 2 {
-		t.Fatalf("expected actionCursor clamped at 2, got %d", m.actionCursor)
-	}
-	m = pressKey(m, "k") // back to restart
-	if m.actionCursor != 1 {
-		t.Fatalf("expected actionCursor=1 after k, got %d", m.actionCursor)
-	}
-	m = pressKey(m, "k") // back to close
-	if m.actionCursor != 0 {
-		t.Fatalf("expected actionCursor=0 after second k, got %d", m.actionCursor)
-	}
-}
-
-func TestActionsEnterOpensConfirm(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // open actions (cursor=0: close)
-	m = pressKey(m, "enter") // confirm close
-	if m.mode != ModeConfirm {
-		t.Fatalf("expected ModeConfirm after enter in actions, got %d", m.mode)
-	}
-	if m.confirmAction != "close" {
-		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
-	}
-}
-
-func TestActionsEnterRestartOpensConfirm(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // open actions
-	m = pressKey(m, "j")     // select restart
-	m = pressKey(m, "enter") // confirm restart
-	if m.mode != ModeConfirm {
-		t.Fatalf("expected ModeConfirm, got %d", m.mode)
-	}
-	if m.confirmAction != "restart" {
-		t.Fatalf("expected confirmAction=restart, got %q", m.confirmAction)
-	}
-}
-
 // ---- Confirm mode tests ----
 
 func TestConfirmNReturnsToList(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // → ModeActions
-	m = pressKey(m, "enter") // → ModeConfirm (close)
-	m = pressKey(m, "n")     // cancel
+	m = pressKey(m, "x") // → ModeConfirm (close)
+	m = pressKey(m, "n") // cancel
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after n in confirm, got %d", m.mode)
 	}
@@ -428,9 +336,8 @@ func TestConfirmNReturnsToList(t *testing.T) {
 
 func TestConfirmEscReturnsToList(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // → ModeActions
-	m = pressKey(m, "enter") // → ModeConfirm
-	m = pressKey(m, "esc")   // cancel
+	m = pressKey(m, "x") // → ModeConfirm
+	m = pressKey(m, "esc")
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after esc in confirm, got %d", m.mode)
 	}
@@ -438,8 +345,7 @@ func TestConfirmEscReturnsToList(t *testing.T) {
 
 func TestConfirmYEmitsCloseCmd(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // → ModeActions
-	m = pressKey(m, "enter") // → ModeConfirm (close)
+	m = pressKey(m, "x") // → ModeConfirm (close)
 	updated, cmd := m.Update(keyPress("y"))
 	if updated.(Model).mode != ModeList {
 		t.Fatalf("expected ModeList after y, got %d", updated.(Model).mode)
@@ -451,9 +357,7 @@ func TestConfirmYEmitsCloseCmd(t *testing.T) {
 
 func TestConfirmYEmitsRestartCmd(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // → ModeActions
-	m = pressKey(m, "j")     // select restart
-	m = pressKey(m, "enter") // → ModeConfirm (restart)
+	m = pressKey(m, "r") // → ModeConfirm (restart)
 	updated, cmd := m.Update(keyPress("y"))
 	if updated.(Model).mode != ModeList {
 		t.Fatalf("expected ModeList after y, got %d", updated.(Model).mode)
@@ -565,15 +469,6 @@ func TestBuildPickerRunning(t *testing.T) {
 
 // ---- Footer hints for new modes ----
 
-func TestFooterActionsHint(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	m.mode = ModeActions
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "enter: confirm action") {
-		t.Errorf("actions footer missing confirm hint, got:\n%s", footer)
-	}
-}
-
 func TestFooterConfirmHint(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeConfirm
@@ -592,14 +487,14 @@ func TestFooterPickerHint(t *testing.T) {
 	}
 }
 
-func TestFooterListHintIncludesActionsAndPicker(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
+func TestFooterListHintNoSessions(t *testing.T) {
+	m := loadSessions(testModel(), nil) // empty list
 	footer := renderFooter(m)
-	if !strings.Contains(footer, "a: more actions") {
-		t.Errorf("list footer missing actions hint, got:\n%s", footer)
-	}
 	if !strings.Contains(footer, "l: launch") {
-		t.Errorf("list footer missing launch hint, got:\n%s", footer)
+		t.Errorf("expected l: launch in no-session footer, got:\n%s", footer)
+	}
+	if !strings.Contains(footer, "?: more") {
+		t.Errorf("expected ?: more in no-session footer, got:\n%s", footer)
 	}
 }
 
@@ -621,6 +516,9 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 	if !strings.Contains(lines[1], "j/k: up/down") {
 		t.Error("expected navigation on line 2")
 	}
+	if strings.Contains(footer, "a: more actions") {
+		t.Error("actions menu hint should not appear in footer")
+	}
 }
 
 func TestFooterEscHintShownWhenFiltered(t *testing.T) {
@@ -640,14 +538,11 @@ func TestFooterEscHintShownWhenFiltered(t *testing.T) {
 
 // ---- Config picker mode tests ----
 
-func TestActionsOverrideOpensConfigPicker(t *testing.T) {
+func TestCKeyOpensConfigPicker(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // → ModeActions (cursor=0: close)
-	m = pressKey(m, "j")     // cursor=1: restart
-	m = pressKey(m, "j")     // cursor=2: override config
-	m = pressKey(m, "enter") // → ModeConfigPicker
+	m = pressKey(m, "c")
 	if m.mode != ModeConfigPicker {
-		t.Fatalf("expected ModeConfigPicker after selecting override config, got %d", m.mode)
+		t.Fatalf("expected ModeConfigPicker after c, got %d", m.mode)
 	}
 	if len(m.configPickerAccounts) != 2 {
 		t.Fatalf("expected 2 accounts in picker, got %d", len(m.configPickerAccounts))
@@ -656,10 +551,7 @@ func TestActionsOverrideOpensConfigPicker(t *testing.T) {
 
 func TestConfigPickerEscReturnsToList(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // → ModeActions
-	m = pressKey(m, "j")
-	m = pressKey(m, "j")
-	m = pressKey(m, "enter") // → ModeConfigPicker
+	m = pressKey(m, "c")
 	m = pressKey(m, "esc")
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after esc from config picker, got %d", m.mode)
@@ -668,10 +560,7 @@ func TestConfigPickerEscReturnsToList(t *testing.T) {
 
 func TestConfigPickerNavigation(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter")
-	m = pressKey(m, "j")
-	m = pressKey(m, "j")
-	m = pressKey(m, "enter") // → ModeConfigPicker, cursor=0
+	m = pressKey(m, "c") // → ModeConfigPicker, cursor=0
 	if m.configPickerCursor != 0 {
 		t.Fatalf("expected configPickerCursor=0, got %d", m.configPickerCursor)
 	}
@@ -691,12 +580,9 @@ func TestConfigPickerNavigation(t *testing.T) {
 
 func TestConfigPickerSameAccountNoOp(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// First session is W:api with account "work", which is index 0 in testModel accounts.
-	m = pressKey(m, "enter") // → ModeActions
-	m = pressKey(m, "j")
-	m = pressKey(m, "j")
-	m = pressKey(m, "enter") // → ModeConfigPicker
-	// configPickerCurrent = "work", cursor should be at index 0 (work)
+	m = pressKey(m, "c") // → ModeConfigPicker
+	// After state-group sort cursor=0 is W:backend (bolt), account="work".
+	// configPickerCurrent should be "work", cursor at index 0 (work).
 	if m.configPickerCurrent != "work" {
 		t.Fatalf("expected configPickerCurrent=work, got %q", m.configPickerCurrent)
 	}
@@ -711,10 +597,7 @@ func TestConfigPickerSameAccountNoOp(t *testing.T) {
 
 func TestConfigPickerDifferentAccountEmitsCmd(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "enter") // → ModeActions
-	m = pressKey(m, "j")
-	m = pressKey(m, "j")
-	m = pressKey(m, "enter") // → ModeConfigPicker (current=work, cursor=0)
+	m = pressKey(m, "c")     // → ModeConfigPicker (current=work, cursor=0)
 	m = pressKey(m, "j")     // cursor=1 (personal)
 	updated, cmd := m.Update(keyPress("enter"))
 	if updated.(Model).mode != ModeList {
@@ -828,8 +711,8 @@ func TestXKeyDirectClose(t *testing.T) {
 		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
 	}
 	// After state-group sort, cursor=0 is W:backend (active).
-	if m.actionTarget.Base != "W:backend" {
-		t.Fatalf("expected actionTarget=W:backend, got %q", m.actionTarget.Base)
+	if m.targetSession.Base != "W:backend" {
+		t.Fatalf("expected actionTarget=W:backend, got %q", m.targetSession.Base)
 	}
 }
 
@@ -844,8 +727,8 @@ func TestRKeyDirectRestart(t *testing.T) {
 		t.Fatalf("expected confirmAction=restart, got %q", m.confirmAction)
 	}
 	// After state-group sort: [W:backend(bolt), W:api(idle), P:dotfiles(idle)]; j→cursor=1→W:api.
-	if m.actionTarget.Base != "W:api" {
-		t.Fatalf("expected actionTarget=W:api, got %q", m.actionTarget.Base)
+	if m.targetSession.Base != "W:api" {
+		t.Fatalf("expected actionTarget=W:api, got %q", m.targetSession.Base)
 	}
 }
 
@@ -946,36 +829,6 @@ func TestSingleGroupNoDivider(t *testing.T) {
 	}
 }
 
-func TestDetailLineShowsAccountAndGroups(t *testing.T) {
-	m := testModel()
-	m.width, m.height = 120, 40
-	sessions := []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", Directory: "/home/user/api", Groups: []string{"api", "backend"}},
-	}
-	m = loadSessions(m, sessions)
-	content := m.render()
-	if !strings.Contains(content, "[work]") {
-		t.Errorf("expected [work] in detail line, got:\n%s", content)
-	}
-	if !strings.Contains(content, "groups: api,backend") {
-		t.Errorf("expected groups in detail line, got:\n%s", content)
-	}
-
-	// No groups: should omit the groups segment.
-	m2 := testModel()
-	m2.width, m2.height = 120, 40
-	noGroupSessions := []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", Directory: "/home/user/api"},
-	}
-	m2 = loadSessions(m2, noGroupSessions)
-	content2 := m2.render()
-	if !strings.Contains(content2, "[work]") {
-		t.Errorf("expected [work] in detail line without groups, got:\n%s", content2)
-	}
-	if strings.Contains(content2, "groups:") {
-		t.Errorf("expected no groups segment when groups is empty, got:\n%s", content2)
-	}
-}
 
 func TestFormatRowNoStateIcon(t *testing.T) {
 	acctColor := map[string]string{"work": "blue"}
@@ -991,4 +844,119 @@ func TestFormatRowNoStateIcon(t *testing.T) {
 	if !strings.Contains(row, "[W]") {
 		t.Errorf("expected [W] badge in row, got: %q", row)
 	}
+}
+
+// ---- Enter key focus tests ----
+
+func TestEnterFocusesTab(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	updated, cmd := m.Update(keyPress("enter"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after enter (focus), got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil focusCmd after enter")
+	}
+}
+
+// ---- Help mode tests ----
+
+func TestQuestionMarkOpensModeHelp(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "?")
+	if m.mode != ModeHelp {
+		t.Fatalf("expected ModeHelp after ?, got %d", m.mode)
+	}
+}
+
+func TestHelpEscReturnsToList(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "?")
+	m = pressKey(m, "esc")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after esc from help, got %d", m.mode)
+	}
+}
+
+func TestHelpQuestionMarkToggles(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "?") // open
+	m = pressKey(m, "?") // close
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after second ?, got %d", m.mode)
+	}
+}
+
+func TestFooterHelp(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.mode = ModeHelp
+	footer := renderFooter(m)
+	if !strings.Contains(footer, "esc") {
+		t.Errorf("help footer missing esc hint, got:\n%s", footer)
+	}
+}
+
+// ---- Context-aware footer tests ----
+
+func TestFooterListContextAwareAttention(t *testing.T) {
+	sessions := []session.RunningSession{
+		{TabID: 1, Base: "W:api", Account: "work", State: "key"},
+	}
+	m := loadSessions(testModel(), sessions)
+	footer := renderFooter(m)
+	if !strings.Contains(footer, "c: config") {
+		t.Errorf("attention footer missing c: config, got:\n%s", footer)
+	}
+}
+
+func TestFooterListContextAwareActive(t *testing.T) {
+	sessions := []session.RunningSession{
+		{TabID: 1, Base: "W:api", Account: "work", State: "bolt"},
+	}
+	m := loadSessions(testModel(), sessions)
+	footer := renderFooter(m)
+	if !strings.Contains(footer, "e: peek") {
+		t.Errorf("active footer missing e: peek, got:\n%s", footer)
+	}
+}
+
+// ---- Picker count tests ----
+
+func TestPickerSelectedCountInHeader(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m = pressKey(m, "l") // → ModePicker
+
+	// Nothing selected: header should not contain count.
+	output := renderPicker(m)
+	if strings.Contains(output, "selected]") {
+		t.Errorf("expected no selected count when none selected, got:\n%s", output)
+	}
+
+	// Select one.
+	m = pressKey(m, " ")
+	output = renderPicker(m)
+	if !strings.Contains(output, "[1 selected]") {
+		t.Errorf("expected [1 selected] after selecting one, got:\n%s", output)
+	}
+
+	// Select a second.
+	m = pressKey(m, "j")
+	m = pressKey(m, " ")
+	output = renderPicker(m)
+	if !strings.Contains(output, "[2 selected]") {
+		t.Errorf("expected [2 selected] after selecting two, got:\n%s", output)
+	}
+}
+
+// ---- Attention row smoke test ----
+
+func TestRenderListAttentionRowDoesNotPanic(t *testing.T) {
+	m := testModel()
+	m.width, m.height = 120, 40
+	sessions := []session.RunningSession{
+		{TabID: 1, Base: "api", Account: "work", State: "key"},
+		{TabID: 2, Base: "backend", Account: "work", State: "bolt"},
+	}
+	m = loadSessions(m, sessions)
+	_ = renderList(m) // should not panic; attention row gets orange style
 }
