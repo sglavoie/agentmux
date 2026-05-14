@@ -68,7 +68,7 @@ The codebase is a standard Go module. All functionality lives in the `ccm` binar
 - `server.go` / `client.go` — socket server and client (auto-start capable)
 - `handler.go` — request processing and notification dispatch
 - `guard.go` — `StateGuard` prevents rapid icon state transitions
-- `notify.go` — macOS notification dispatch via `alerter`
+- `notify.go` — macOS notification dispatch via `alerter` when installed, falling back to `osascript`
 - `protocol.go` — message types: `TypeStateUpdate`, `TypeStateQuery`, `TypeShutdown`
 
 Socket path: `~/.cache/cc-manager/daemon.sock`

@@ -23,7 +23,7 @@ func startTestServer(t *testing.T) string {
 
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.osascript = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_, _ string) error { return nil }
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)
@@ -156,7 +156,7 @@ func TestIPC_IdleShutdown(t *testing.T) {
 	// the unit level via daemon_test.go).
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.osascript = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_, _ string) error { return nil }
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"sync"
 	"time"
@@ -25,24 +26,35 @@ var notificationLabels = map[string]string{
 	"failure":    "Tool failure",
 }
 
-// Notifier tracks per-window cooldowns and fires osascript notifications.
+// Notifier tracks per-window cooldowns and fires macOS notifications via
+// the selected backend (alerter when installed, osascript otherwise).
 type Notifier struct {
-	mu      sync.Mutex
-	last    map[int]time.Time // last notification time per window_id
-	cfg     *config.NotificationConfig
-	now     func() time.Time // injectable for tests
-	osascript func(title, msg string) error // injectable for tests
+	mu       sync.Mutex
+	last     map[int]time.Time // last notification time per window_id
+	cfg      *config.NotificationConfig
+	now      func() time.Time              // injectable for tests
+	dispatch func(title, subtitle string) error // injectable for tests
 }
 
 // NewNotifier creates a Notifier with the given notification config.
 func NewNotifier(cfg *config.NotificationConfig) *Notifier {
-	n := &Notifier{
-		last: make(map[int]time.Time),
-		cfg:  cfg,
-		now:  time.Now,
+	return &Notifier{
+		last:     make(map[int]time.Time),
+		cfg:      cfg,
+		now:      time.Now,
+		dispatch: selectDispatcher(),
 	}
-	n.osascript = n.runOsascript
-	return n
+}
+
+// selectDispatcher picks the macOS notification backend once at construction.
+// alerter is preferred when available; otherwise osascript is used.
+func selectDispatcher() func(title, subtitle string) error {
+	if _, err := exec.LookPath("alerter"); err == nil {
+		slog.Info("notifier: using alerter backend")
+		return runAlerter
+	}
+	slog.Info("notifier: using osascript backend (alerter not found in PATH)")
+	return runOsascript
 }
 
 // MaybeNotify fires a notification for the given window if:
@@ -75,7 +87,7 @@ func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMo
 		title = "Claude Code"
 	}
 	subtitle := notificationLabels[action]
-	go func() { _ = n.osascript(title, subtitle) }()
+	go func() { _ = n.dispatch(title, subtitle) }()
 }
 
 func (n *Notifier) actionEnabled(action string) bool {
@@ -90,12 +102,21 @@ func (n *Notifier) actionEnabled(action string) bool {
 	return false
 }
 
-func (n *Notifier) runOsascript(title, subtitle string) error {
+func runOsascript(title, subtitle string) error {
 	script := fmt.Sprintf(
 		`display notification "" with title %q subtitle %q`,
 		title, subtitle,
 	)
 	return exec.Command("osascript", "-e", script).Run()
+}
+
+func runAlerter(title, subtitle string) error {
+	return exec.Command(
+		"alerter",
+		"-title", title,
+		"-subtitle", subtitle,
+		"-message", "",
+	).Run()
 }
 
 // ResetCooldown clears the cooldown for windowID (for testing).

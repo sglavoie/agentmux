@@ -10,7 +10,7 @@ import (
 func newTestHandler() *Handler {
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.osascript = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_, _ string) error { return nil }
 	return NewHandler(guard, notifier)
 }
 

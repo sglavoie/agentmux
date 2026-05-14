@@ -17,7 +17,7 @@ func newTestNotifier(cfg *config.NotificationConfig) (*Notifier, *[]notifyCall) 
 	n := NewNotifier(cfg)
 	var mu sync.Mutex
 	var calls []notifyCall
-	n.osascript = func(title, subtitle string) error {
+	n.dispatch = func(title, subtitle string) error {
 		mu.Lock()
 		calls = append(calls, notifyCall{title, subtitle})
 		mu.Unlock()

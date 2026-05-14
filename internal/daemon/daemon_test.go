@@ -27,7 +27,7 @@ func runWithSocket(t *testing.T, idle time.Duration) (socketPath string, cancel 
 
 	guard := NewStateGuard(time.Duration(cfg.Defaults.GuardDuration) * time.Second)
 	notifier := NewNotifier(&cfg.Defaults.Notifications)
-	notifier.osascript = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_, _ string) error { return nil }
 	handler := NewHandler(guard, notifier)
 
 	ctx, cancelFn := context.WithCancel(context.Background())
@@ -92,7 +92,7 @@ func TestDaemon_IdleShutdown(t *testing.T) {
 
 	guard := NewStateGuard(time.Second)
 	notifier := NewNotifier(&cfg.Defaults.Notifications)
-	notifier.osascript = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_, _ string) error { return nil }
 	handler := NewHandler(guard, notifier)
 
 	ctx, cancel := context.WithCancel(context.Background())
