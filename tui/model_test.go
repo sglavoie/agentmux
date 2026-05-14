@@ -478,11 +478,11 @@ func testModelWithSessions() Model {
 	return NewModel(cfg, client)
 }
 
-func TestPKeyOpensPicker(t *testing.T) {
+func TestLKeyOpensPicker(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	m = pressKey(m, "p")
+	m = pressKey(m, "l")
 	if m.mode != ModePicker {
-		t.Fatalf("expected ModePicker after p, got %d", m.mode)
+		t.Fatalf("expected ModePicker after l, got %d", m.mode)
 	}
 	if len(m.pickerSessions) != 3 {
 		t.Fatalf("expected 3 picker sessions (from config), got %d", len(m.pickerSessions))
@@ -491,7 +491,7 @@ func TestPKeyOpensPicker(t *testing.T) {
 
 func TestPickerEscReturnsToList(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	m = pressKey(m, "p")
+	m = pressKey(m, "l")
 	m = pressKey(m, "esc")
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after esc from picker, got %d", m.mode)
@@ -500,7 +500,7 @@ func TestPickerEscReturnsToList(t *testing.T) {
 
 func TestPickerSpaceTogglesSelection(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	m = pressKey(m, "p")
+	m = pressKey(m, "l")
 	// pickerCursor=0, not selected yet
 	if m.pickerSelected[0] {
 		t.Fatal("expected session not selected initially")
@@ -517,7 +517,7 @@ func TestPickerSpaceTogglesSelection(t *testing.T) {
 
 func TestPickerEnterEmitsLaunchCmd(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	m = pressKey(m, "p")
+	m = pressKey(m, "l")
 	m = pressKey(m, " ") // select first session
 	updated, cmd := m.Update(keyPress("enter"))
 	if updated.(Model).mode != ModeList {
@@ -531,7 +531,7 @@ func TestPickerEnterEmitsLaunchCmd(t *testing.T) {
 func TestPickerRunningStatus(t *testing.T) {
 	running := makeSessions() // W:api, W:backend, P:dotfiles
 	m := loadSessions(testModelWithSessions(), running)
-	m = pressKey(m, "p")
+	m = pressKey(m, "l")
 	// All 3 config sessions match the running sessions.
 	for _, sess := range m.cfg.Sessions {
 		baseTitle := session.FormatTitle(sess)
@@ -593,7 +593,7 @@ func TestFooterListHintIncludesActionsAndPicker(t *testing.T) {
 	if !strings.Contains(footer, "enter/a: actions") {
 		t.Errorf("list footer missing actions hint, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "p: pick & launch") {
+	if !strings.Contains(footer, "l: pick & launch") {
 		t.Errorf("list footer missing picker hint, got:\n%s", footer)
 	}
 }
@@ -701,7 +701,7 @@ func TestFooterConfigPickerHint(t *testing.T) {
 
 func TestPickerOKeyEmitsCmd(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	m = pressKey(m, "p")
+	m = pressKey(m, "l")
 	updated, cmd := m.Update(keyPress("o"))
 	if updated.(Model).mode != ModePicker {
 		t.Fatalf("expected ModePicker after o (stays in picker), got %d", updated.(Model).mode)
@@ -723,7 +723,7 @@ func TestPickerOKeyEmptyIsNoOp(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
-	m = pressKey(m, "p")
+	m = pressKey(m, "l")
 	updated, cmd := m.Update(keyPress("o"))
 	if updated.(Model).mode != ModePicker {
 		t.Fatalf("expected ModePicker after o on empty picker, got %d", updated.(Model).mode)
