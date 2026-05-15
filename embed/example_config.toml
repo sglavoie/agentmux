@@ -17,20 +17,61 @@
 # Paths in this file (home_dir, directory) support `~` for $HOME.
 
 [defaults]
+
+# Sort order for sessions in the TUI list.
+# "alpha" sorts by title alphabetically; "account" groups sessions by profile.
 sort = "alpha"
+
+# How often the TUI polls for session state changes, in seconds.
 refresh_interval = 2
+
+# Minimum time between icon state transitions, in seconds.
+# Prevents rapid flickering when a harness emits bursts of hook events.
 guard_duration = 1
+
+# Seconds of inactivity after which a session is considered idle.
 idle_threshold = 300
-# Shared defaults only; keep harness-specific flags on the profiles below.
+
+# Flags passed to every harness session, regardless of profile.
+# Use this only for harness-neutral flags (e.g. a wrapper script flag).
+# Put harness-specific flags (e.g. --dangerously-skip-permissions) on the
+# relevant profile instead, so they do not bleed into other harnesses.
+# Args resolve with this precedence (highest first):
+#   project args → profile args → defaults.args
 args = []
 
 [defaults.notifications]
+
+# Notify when a session is waiting for your permission to use a tool.
 permission = true
+
+# Notify when a session stops or exits.
 stop = true
-# Delay permission notifications by this many milliseconds; cancelled if the
-# harness auto-approves the request before the window expires. Set to 1 to
-# disable the debounce.
+
+# Delay permission notifications by this many milliseconds.
+# The notification is cancelled if the harness auto-approves the request before
+# the window expires (e.g. when a PreToolUse hook grants permission silently).
+# Set to 1 to disable the debounce and notify immediately.
 permission_debounce_ms = 500
+
+
+# ── Profiles ──────────────────────────────────────────────────────────────────
+# A profile ties a harness to an isolated home directory and a tab color.
+# You can define as many profiles as you like and mix harnesses freely.
+#
+# Required fields:
+#   name      Unique identifier used to reference this profile from projects.
+#   harness   Which agent CLI to launch. Supported: "claude", "copilot".
+#   home_dir  Isolated config/auth directory for this profile.
+#             Claude exports CLAUDE_CONFIG_DIR=<home_dir>.
+#             Copilot exports COPILOT_HOME=<home_dir>.
+#   color     Tab bar accent color for sessions using this profile.
+#             One of: green, blue, red, orange, purple, teal, pink, yellow,
+#             gray, cyan.
+#
+# Optional fields:
+#   args      Flags passed to every session launched under this profile.
+#             These override defaults.args; project args override these.
 
 # Example Claude profile:
 # [[profiles]]
@@ -48,6 +89,24 @@ permission_debounce_ms = 500
 # color = "green"
 # args = ["--model", "gpt-5"]
 
+
+# ── Projects ──────────────────────────────────────────────────────────────────
+# A project is a launchable session template: a title, a working directory,
+# and the profile to use by default.
+#
+# Required fields:
+#   title      Display name shown in the dashboard and used as the tab title.
+#   directory  Working directory the session opens in. Supports `~`.
+#   profile    Name of the profile to launch this project with by default.
+#              Can be overridden at launch time from the TUI without changing
+#              this file.
+#
+# Optional fields:
+#   args       Flags passed to this session only. Override profile args.
+#              Omit to inherit the profile's args; set to [] to pass none.
+#   env        Key/value pairs injected into the session's environment.
+#   groups     Arbitrary labels for filtering in the dashboard and launcher.
+
 # Example project:
 # [[projects]]
 # title = "dotfiles"
@@ -55,6 +114,27 @@ permission_debounce_ms = 500
 # profile = "claude-work"
 # groups = ["config"]
 
+
+# ── Hook overrides ────────────────────────────────────────────────────────────
+# By default, amx installs hook commands for all events into every profile's
+# settings file. Use this section to suppress specific events per profile.
+#
+# disabled_events accepts any of the hook event names that amx installs:
+#   SessionStart, UserPromptSubmit, PreToolUse, SubagentStart, SubagentStop,
+#   PostToolUse, PostToolUseFailure, PermissionRequest, Stop, TaskCompleted,
+#   SessionEnd, Notification.
+
 # Optional per-profile hook overrides:
 # [hooks.overrides.claude-work]
 # disabled_events = []
+
+
+# ── Legacy field names (migration) ────────────────────────────────────────────
+# The following field names from earlier versions still load without error but
+# are deprecated. New configs should use the current names shown above.
+#
+#   accounts    → profiles
+#   sessions    → projects
+#   config_dir  → home_dir   (on profiles)
+#   account     → profile    (on projects)
+#   claude_flags → args
