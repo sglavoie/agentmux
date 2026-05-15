@@ -11,11 +11,14 @@ type Handler struct {
 	guard    *StateGuard
 	notifier *Notifier
 
-	// activity tracks the unix-time of the last successful state update per
-	// Kitty window. The dashboard reads this via TypeStateQuery to decide
-	// whether a session is "Active" (recent) or "Idle" (over threshold).
-	activityMu sync.Mutex
-	activity   map[int]time.Time
+	// stateMu protects activity and lastAction.
+	stateMu  sync.Mutex
+	activity map[int]time.Time
+
+	// lastAction records the most recent non-idle/clear action per window.
+	// It outlives the state guard so that an idle event arriving after the
+	// guard expires can still detect a stale bolt and clear it.
+	lastAction map[int]string
 
 	// onActivity is called on every successfully handled request.
 	// The daemon uses this to reset the idle timer.
@@ -28,9 +31,10 @@ type Handler struct {
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 	return &Handler{
-		guard:    guard,
-		notifier: notifier,
-		activity: make(map[int]time.Time),
+		guard:      guard,
+		notifier:   notifier,
+		activity:   make(map[int]time.Time),
+		lastAction: make(map[int]string),
 	}
 }
 
@@ -78,17 +82,45 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.notifier.CancelPending(req.WindowID)
 	}
 
-	h.activityMu.Lock()
+	h.stateMu.Lock()
 	h.activity[req.WindowID] = time.Now()
-	h.activityMu.Unlock()
+	// Record the last substantive action so idle/clear can detect a stale bolt
+	// even after the state guard has expired.
+	if effective != "idle" && effective != "clear" && effective != "user_clear" {
+		h.lastAction[req.WindowID] = effective
+	}
+	h.stateMu.Unlock()
 
 	iconState := IconState(effective)
-	// Event-driven idle/clear must NOT wipe the title — a fresh permission/stop
-	// icon should persist until the next real action (active/stop/permission/
-	// failure) overwrites it. user_clear (TUI-initiated) is the only path that
-	// actually empties the icon.
-	if req.PreservesIcon || effective == "idle" || effective == "clear" {
+	if req.PreservesIcon {
 		iconState = IconStatePreserve
+	} else if effective == "idle" || effective == "clear" {
+		// Prefer prevGuard (still within the guard window); fall back to
+		// lastAction for the common case where the guard already expired but
+		// the bolt icon is still showing in the title.
+		prev := prevGuard
+		if prev == "" {
+			h.stateMu.Lock()
+			prev = h.lastAction[req.WindowID]
+			h.stateMu.Unlock()
+		}
+		switch IconState(prev) {
+		case "bolt", "compact", "subagent":
+			// Agent finished — clear the active indicator and reset tracking.
+			iconState = ""
+			h.stateMu.Lock()
+			delete(h.lastAction, req.WindowID)
+			h.stateMu.Unlock()
+		default:
+			// stop/permission/failure icons persist until the user notices them.
+			iconState = IconStatePreserve
+		}
+	} else if effective == "user_clear" {
+		// TUI-initiated wipe — reset lastAction so a future idle doesn't try
+		// to clear an icon that no longer exists.
+		h.stateMu.Lock()
+		delete(h.lastAction, req.WindowID)
+		h.stateMu.Unlock()
 	}
 	h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, effective, req.PipeMode)
 
@@ -96,12 +128,12 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 }
 
 func (h *Handler) handleStateQuery() Response {
-	h.activityMu.Lock()
+	h.stateMu.Lock()
 	snapshot := make(map[int]int64, len(h.activity))
 	for id, t := range h.activity {
 		snapshot[id] = t.Unix()
 	}
-	h.activityMu.Unlock()
+	h.stateMu.Unlock()
 	return Response{OK: true, Activity: snapshot}
 }
 

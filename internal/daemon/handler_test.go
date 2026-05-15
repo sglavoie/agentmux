@@ -65,8 +65,8 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 		{"stop", "stop"},
 		{"permission", "key"},
 		{"failure", "error"},
-		// idle and clear preserve the current icon (event-driven cleanup must
-		// not wipe a sticky permission/stop icon).
+		// idle and clear with no prior guard preserve whatever icon is already
+		// in the title (nothing to clear).
 		{"idle", IconStatePreserve},
 		{"clear", IconStatePreserve},
 		// user_clear is the TUI-initiated true wipe — icon goes empty.
@@ -81,6 +81,51 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 	}
 }
 
+// TestHandler_IdleClearsActiveIcon verifies that an idle event clears the bolt
+// when the previous guard was active/subagent/compact, but preserves stop/
+// permission/failure icons (the user still needs to see them).
+// Both the within-guard-window case (prevGuard set) and the expired-guard case
+// (lastAction fallback) are covered.
+func TestHandler_IdleClearsActiveIcon(t *testing.T) {
+	cases := []struct {
+		prev      string
+		wantIcon  string
+		wantLabel string
+	}{
+		{"active", "", "idle after active clears bolt"},
+		{"subagent", "", "idle after subagent clears icon"},
+		{"compact", "", "idle after compact clears icon"},
+		{"stop", IconStatePreserve, "idle after stop preserves stop icon"},
+		{"permission", IconStatePreserve, "idle after permission preserves key icon"},
+		{"failure", IconStatePreserve, "idle after failure preserves error icon"},
+	}
+	// Test with a long guard (prevGuard still set when idle arrives).
+	for _, tc := range cases {
+		h := newTestHandler()
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+		if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
+			t.Errorf("%s (guard active): want icon_state=%q, got %+v", tc.wantLabel, tc.wantIcon, resp)
+		}
+	}
+
+	// Test with an expired guard (idle arrives after guard_duration; must use
+	// lastAction fallback — this was the stale-bolt bug on Claude sessions).
+	for _, tc := range cases {
+		guard := NewStateGuard(time.Nanosecond) // expires immediately
+		notifier := NewNotifier(&config.NotificationConfig{})
+		notifier.dispatch = func(_, _ string) error { return nil }
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
+		time.Sleep(5 * time.Millisecond) // let the guard expire
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+		if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
+			t.Errorf("%s (guard expired): want icon_state=%q, got %+v", tc.wantLabel, tc.wantIcon, resp)
+		}
+	}
+}
+
 func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
 	h := newTestHandler()
 	before := time.Now()
@@ -89,9 +134,9 @@ func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
 		t.Fatalf("want allowed update, got %+v", resp)
 	}
 
-	h.activityMu.Lock()
+	h.stateMu.Lock()
 	got, ok := h.activity[42]
-	h.activityMu.Unlock()
+	h.stateMu.Unlock()
 	if !ok {
 		t.Fatalf("expected activity[42] to be recorded")
 	}
@@ -104,18 +149,18 @@ func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
 
-	h.activityMu.Lock()
+	h.stateMu.Lock()
 	delete(h.activity, 1)
-	h.activityMu.Unlock()
+	h.stateMu.Unlock()
 
 	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("expected blocked update, got %+v", resp)
 	}
 
-	h.activityMu.Lock()
+	h.stateMu.Lock()
 	_, ok := h.activity[1]
-	h.activityMu.Unlock()
+	h.stateMu.Unlock()
 	if ok {
 		t.Fatalf("blocked update should not record activity")
 	}
