@@ -33,10 +33,16 @@ var hookEvents = []string{
 	"PostToolUse",
 	"PostToolUseFailure",
 	"PermissionRequest",
+	"PermissionDenied",
 	"Stop",
+	"StopFailure",
 	"TaskCompleted",
 	"SessionEnd",
 	"Notification",
+	"PreCompact",
+	"PostCompact",
+	"Elicitation",
+	"ElicitationResult",
 }
 
 // MergeStatus describes the outcome of a merge operation for one account.

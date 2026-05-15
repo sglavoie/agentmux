@@ -14,7 +14,19 @@ type guardEntry struct {
 
 // StateGuard enforces priority-based state transition blocking per window.
 // A higher-priority state blocks lower-priority updates until the guard expires.
-// Priority order: error(4) > permission(3) > stop(2) > active(1) > idle(0) > clear(-1).
+// Priority order:
+//   failure / stop_failure (4) > permission (3) > stop / subagent (2) >
+//   active / compact (1) > idle (0) > clear / user_clear (-1).
+//
+// Notes on equal-priority pairs:
+//   - subagent (2) outranks active (1), so the 🤖 icon survives interleaved
+//     parent `active` events; it loses to stop, permission, failure, and
+//     stop_failure.
+//   - compact (1) is informational — equal to active, so any other active-tier
+//     state overwrites it via the same-priority fall-through.
+//   - stop_failure (4) is terminal: equal in priority to failure but, unlike
+//     failure, never cleared by a follow-up active (the only path that clears
+//     failure is the string-exact `entry.action == "failure"` branch below).
 type StateGuard struct {
 	mu       sync.Mutex
 	entries  map[int]*guardEntry // keyed by window_id
@@ -45,11 +57,18 @@ func NewStateGuard(duration time.Duration) *StateGuard {
 //   - If the current guard is "failure" and the incoming action is "active",
 //     the guard is cleared so the active state breaks through immediately.
 //     Failure is transient: the next active event means Claude is back to work,
-//     so the ✗/⚠ icon should not strand across long tool calls.
+//     so the ❗ icon should not strand across long tool calls. The check is
+//     string-exact on "failure" so it does NOT apply to "stop_failure", which
+//     is terminal and must persist until the user explicitly clears it.
 //   - If the current guard is "stop" and isPrompt is true, the guard is cleared
-//     so the prompt's active state breaks through immediately.
+//     so the prompt's active state breaks through immediately. The check is
+//     string-exact on "stop" so a prompt after a "stop_failure" still falls
+//     through to the priority check below, which blocks it (the user has not
+//     yet acknowledged the failure).
 //   - All other actions are blocked if Priority(new) < Priority(current) and
-//     the guard has not yet expired.
+//     the guard has not yet expired. This is what makes "subagent" (priority 2)
+//     survive interleaved "active" (priority 1) events; no special-case branch
+//     is needed because the priority check at the end of the chain handles it.
 func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allowed bool, effectiveAction string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

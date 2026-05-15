@@ -55,13 +55,80 @@ func TestMergeFreshWrite(t *testing.T) {
 		t.Fatal("hooks key missing or wrong type")
 	}
 
-	// Should have entries for all 12 events.
-	if got := len(hooks); got != 12 {
-		t.Errorf("expected 12 hook events, got %d", got)
+	// Should have entries for all 18 events.
+	if got := len(hooks); got != 18 {
+		t.Errorf("expected 18 hook events, got %d", got)
 	}
 
 	// Verify UserPromptSubmit uses event-name format.
 	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit")
+}
+
+func TestMergeInstallsNewEvents(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(accountDir, "settings.json"))
+	if err != nil {
+		t.Fatalf("reading settings.json: %v", err)
+	}
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("parsing settings.json: %v", err)
+	}
+	hooks := s["hooks"].(map[string]any)
+
+	for _, event := range []string{
+		"StopFailure",
+		"PreCompact",
+		"PostCompact",
+		"PermissionDenied",
+		"Elicitation",
+		"ElicitationResult",
+	} {
+		checkHookCommand(t, hooks, event, testBin+" hook-indicator "+event)
+	}
+}
+
+func TestMergeDisabledNewEvent(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+
+	cfg := makeConfig(
+		[]config.Account{{Name: "work", ConfigDir: accountDir, Color: "blue"}},
+		map[string]config.AccountHookOverride{
+			"work": {DisabledEvents: []string{"StopFailure"}},
+		},
+	)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll error: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(accountDir, "settings.json"))
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	hooks := s["hooks"].(map[string]any)
+
+	if _, ok := hooks["StopFailure"]; ok {
+		t.Error("StopFailure should be absent (disabled)")
+	}
+	// Sibling new events remain installed.
+	for _, event := range []string{"PreCompact", "PostCompact", "PermissionDenied", "Elicitation", "ElicitationResult"} {
+		if _, ok := hooks[event]; !ok {
+			t.Errorf("%s should still be present when only StopFailure is disabled", event)
+		}
+	}
 }
 
 func TestMergePreservesUserHooks(t *testing.T) {

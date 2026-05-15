@@ -49,6 +49,10 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.Preview.MinRows == 0 {
 		cfg.Defaults.Preview.MinRows = 30
 	}
+	// StopFailure defaults to true so configs predating this field still
+	// surface terminal-failure notifications. See NotificationConfig docs for
+	// the opt-out path (per-account hooks override).
+	cfg.Defaults.Notifications.StopFailure = true
 }
 
 // ExampleConfig is the content written by ccm config init.

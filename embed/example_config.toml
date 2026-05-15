@@ -29,6 +29,10 @@ claude_flags = []        # Flags appended to every `claude` invocation. Per-sess
 error = false            # Notification on session error.
 permission = true        # Notification on PermissionRequest events.
 stop = true              # Notification when a session stops.
+stop_failure = true      # Notification when a turn ends abnormally
+                         # (API error or context-limit-induced stop).
+                         # Defaults to true at load time; to suppress, disable
+                         # the StopFailure event in [hooks.overrides.<account>].
 
 # Dashboard split-pane live preview.
 [defaults.preview]

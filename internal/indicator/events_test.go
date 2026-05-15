@@ -3,7 +3,7 @@ package indicator
 import "testing"
 
 func TestResolveAction_DirectActions(t *testing.T) {
-	for _, action := range []string{"active", "stop", "permission", "failure", "idle", "clear", "user_clear"} {
+	for _, action := range []string{"active", "stop", "permission", "failure", "stop_failure", "subagent", "compact", "idle", "clear", "user_clear"} {
 		got, ok := ResolveAction(action)
 		if !ok || got != action {
 			t.Errorf("ResolveAction(%q) = (%q, %v), want (%q, true)", action, got, ok, action)
@@ -19,14 +19,19 @@ func TestResolveAction_AllEvents(t *testing.T) {
 		{"SessionStart", "idle"},
 		{"UserPromptSubmit", "active"},
 		{"PreToolUse", "active"},
-		{"SubagentStart", "active"},
-		{"PreCompact", "active"},
+		{"SubagentStart", "subagent"},
+		{"PreCompact", "compact"},
+		{"PostCompact", "active"},
 		{"PostToolUse", "active"},
 		{"SubagentStop", "active"},
 		{"TaskCompleted", "active"},
+		{"ElicitationResult", "active"},
 		{"Stop", "stop"},
 		{"SessionEnd", "stop"},
+		{"StopFailure", "stop_failure"},
 		{"PermissionRequest", "permission"},
+		{"PermissionDenied", "permission"},
+		{"Elicitation", "permission"},
 		{"PostToolUseFailure", "failure"},
 		{"Notification", "idle"},
 		{"TeammateIdle", "idle"},
@@ -62,7 +67,7 @@ func TestPreservesCurrent(t *testing.T) {
 		event string
 		want  bool
 	}{
-		{"SubagentStop", true},
+		{"SubagentStop", false},
 		{"TaskCompleted", true},
 		{"UserPromptSubmit", false},
 		{"Stop", false},

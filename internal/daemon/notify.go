@@ -14,16 +14,18 @@ const cooldownDuration = 10 * time.Second
 
 // notifyableActions lists the actions that may produce macOS notifications.
 var notifyableActions = map[string]bool{
-	"stop":       true,
-	"permission": true,
-	"failure":    true,
+	"stop":         true,
+	"permission":   true,
+	"failure":      true,
+	"stop_failure": true,
 }
 
 // notificationLabels maps action names to human-readable notification titles.
 var notificationLabels = map[string]string{
-	"stop":       "Claude stopped",
-	"permission": "Permission requested",
-	"failure":    "Tool failure",
+	"stop":         "Claude stopped",
+	"permission":   "Permission requested",
+	"failure":      "Tool failure",
+	"stop_failure": "Claude stopped (failure)",
 }
 
 // Notifier tracks per-window cooldowns and fires macOS notifications via
@@ -102,6 +104,8 @@ func (n *Notifier) actionEnabled(action string) bool {
 		return n.cfg.Permission
 	case "failure":
 		return n.cfg.Error
+	case "stop_failure":
+		return n.cfg.StopFailure
 	}
 	return false
 }

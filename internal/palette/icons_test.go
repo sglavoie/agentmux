@@ -9,7 +9,7 @@ func TestStarIcon(t *testing.T) {
 }
 
 func TestStateIconAllStates(t *testing.T) {
-	states := []string{"bolt", "stop", "key", "error"}
+	states := []string{"bolt", "stop", "key", "error", "subagent", "compact"}
 	for _, s := range states {
 		if got := StateIcon(s); got == "" {
 			t.Errorf("StateIcon(%q) is empty", s)
@@ -39,7 +39,7 @@ func TestParseTitleStarred(t *testing.T) {
 }
 
 func TestParseTitleWithState(t *testing.T) {
-	states := []string{"bolt", "stop", "key", "error"}
+	states := []string{"bolt", "stop", "key", "error", "subagent", "compact"}
 	for _, want := range states {
 		title := BuildTitle("P:api", want, false)
 		base, state, starred := ParseTitle(title)
@@ -99,7 +99,7 @@ func TestStripIcons(t *testing.T) {
 }
 
 func TestDetectState(t *testing.T) {
-	states := []string{"bolt", "stop", "key", "error"}
+	states := []string{"bolt", "stop", "key", "error", "subagent", "compact"}
 	for _, want := range states {
 		title := BuildTitle("W:x", want, false)
 		if got := DetectState(title); got != want {
@@ -116,5 +116,59 @@ func TestDetectState(t *testing.T) {
 func TestDetectStateNone(t *testing.T) {
 	if got := DetectState("W:project"); got != "" {
 		t.Errorf("DetectState(no state) = %q, want empty", got)
+	}
+}
+
+func TestBuildParseSubagent(t *testing.T) {
+	title := BuildTitle("base", "subagent", false)
+	if title != "🤖base" {
+		t.Errorf("BuildTitle(subagent) = %q, want %q", title, "🤖base")
+	}
+	base, state, starred := ParseTitle("🤖base")
+	if base != "base" || state != "subagent" || starred {
+		t.Errorf("ParseTitle(🤖base) = (%q, %q, %v), want (base, subagent, false)", base, state, starred)
+	}
+}
+
+func TestBuildParseCompact(t *testing.T) {
+	title := BuildTitle("base", "compact", false)
+	if title != "🌀base" {
+		t.Errorf("BuildTitle(compact) = %q, want %q", title, "🌀base")
+	}
+	base, state, starred := ParseTitle("🌀base")
+	if base != "base" || state != "compact" || starred {
+		t.Errorf("ParseTitle(🌀base) = (%q, %q, %v), want (base, compact, false)", base, state, starred)
+	}
+}
+
+func TestParseTitleErrorGlyphSwap(t *testing.T) {
+	// Regression: ❗ is the new "error" glyph (was ⚠️).
+	base, state, starred := ParseTitle("❗base")
+	if base != "base" || state != "error" || starred {
+		t.Errorf("ParseTitle(❗base) = (%q, %q, %v), want (base, error, false)", base, state, starred)
+	}
+}
+
+func TestStateOrderExtended(t *testing.T) {
+	want := []string{"bolt", "stop", "key", "error", "subagent", "compact"}
+	got := StateOrder()
+	if len(got) != len(want) {
+		t.Fatalf("StateOrder() len = %d, want %d (got %v)", len(got), len(want), got)
+	}
+	for i, name := range want {
+		if got[i] != name {
+			t.Errorf("StateOrder()[%d] = %q, want %q", i, got[i], name)
+		}
+	}
+}
+
+func TestBuildParseStarredSubagent(t *testing.T) {
+	title := BuildTitle("base", "subagent", true)
+	if title != "★🤖base" {
+		t.Errorf("BuildTitle(starred+subagent) = %q, want %q", title, "★🤖base")
+	}
+	base, state, starred := ParseTitle(title)
+	if base != "base" || state != "subagent" || !starred {
+		t.Errorf("ParseTitle(★🤖base) = (%q, %q, %v), want (base, subagent, true)", base, state, starred)
 	}
 }

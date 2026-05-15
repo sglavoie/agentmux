@@ -171,6 +171,82 @@ func TestGuard_SamePriorityAllowed(t *testing.T) {
 	}
 }
 
+func TestGuard_SubagentSurvivesActive(t *testing.T) {
+	// subagent (priority 2) outranks active (priority 1), so an interleaved
+	// parent `active` event must not displace 🤖.
+	g := NewStateGuard(time.Hour)
+	if ok, eff := g.TryUpdate(1, "subagent", false); !ok || eff != "subagent" {
+		t.Fatalf("want initial (true, subagent), got (%v, %q)", ok, eff)
+	}
+	if ok, eff := g.TryUpdate(1, "active", false); ok || eff != "" {
+		t.Fatalf("want active to be blocked by subagent, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "subagent" {
+		t.Fatalf("want guard=subagent, got %q", cur)
+	}
+}
+
+func TestGuard_SubagentLosesToStop(t *testing.T) {
+	// subagent (2) and stop (2) are equal-priority — stop falls through to the
+	// new-guard write at the bottom of TryUpdate and replaces the guard.
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "subagent", false)
+	if ok, eff := g.TryUpdate(1, "stop", false); !ok || eff != "stop" {
+		t.Fatalf("want stop to replace subagent, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "stop" {
+		t.Fatalf("want guard=stop, got %q", cur)
+	}
+}
+
+func TestGuard_SubagentLosesToPermission(t *testing.T) {
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "subagent", false)
+	if ok, eff := g.TryUpdate(1, "permission", false); !ok || eff != "permission" {
+		t.Fatalf("want permission to override subagent, got (%v, %q)", ok, eff)
+	}
+}
+
+func TestGuard_SubagentLosesToFailure(t *testing.T) {
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "subagent", false)
+	if ok, eff := g.TryUpdate(1, "failure", false); !ok || eff != "failure" {
+		t.Fatalf("want failure to override subagent, got (%v, %q)", ok, eff)
+	}
+}
+
+func TestGuard_StopFailureTerminal_NotClearedByActive(t *testing.T) {
+	// stop_failure is terminal: a follow-up active must NOT clear the guard.
+	// The clearing branch in TryUpdate is string-exact on "failure", so
+	// stop_failure must fall through to the priority check and be blocked
+	// (Priority(active)=1 < Priority(stop_failure)=4).
+	for _, isPrompt := range []bool{false, true} {
+		g := NewStateGuard(time.Hour)
+		if ok, eff := g.TryUpdate(1, "stop_failure", false); !ok || eff != "stop_failure" {
+			t.Fatalf("isPrompt=%v: want initial (true, stop_failure), got (%v, %q)", isPrompt, ok, eff)
+		}
+		if ok, eff := g.TryUpdate(1, "active", isPrompt); ok || eff != "" {
+			t.Fatalf("isPrompt=%v: want active to be blocked by stop_failure, got (%v, %q)", isPrompt, ok, eff)
+		}
+		if cur := g.Current(1); cur != "stop_failure" {
+			t.Fatalf("isPrompt=%v: want guard=stop_failure, got %q", isPrompt, cur)
+		}
+	}
+}
+
+func TestGuard_CompactOverwrittenByActive(t *testing.T) {
+	// compact (1) is equal-priority to active (1); the same-priority path
+	// allows the new guard to replace it.
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "compact", false)
+	if ok, eff := g.TryUpdate(1, "active", false); !ok || eff != "active" {
+		t.Fatalf("want active to overwrite compact, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "active" {
+		t.Fatalf("want guard=active, got %q", cur)
+	}
+}
+
 func TestGuard_AllPriorityCombo(t *testing.T) {
 	// Pairs where the guard SHOULD block: higher-priority guard vs lower-priority action.
 	// Excludes: idle/clear (always succeed), permission→stop (post-permission suppression),

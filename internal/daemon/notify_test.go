@@ -64,6 +64,54 @@ func TestNotifier_FiresForFailure(t *testing.T) {
 	}
 }
 
+func TestNotifier_FiresForStopFailure(t *testing.T) {
+	cfg := &config.NotificationConfig{StopFailure: true}
+	n, calls := newTestNotifier(cfg)
+	n.MaybeNotify(1, "W:api", "stop_failure", false)
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected notification for stop_failure")
+	}
+	if (*calls)[0].subtitle != "Claude stopped (failure)" {
+		t.Errorf("subtitle = %q, want %q", (*calls)[0].subtitle, "Claude stopped (failure)")
+	}
+}
+
+func TestNotifier_StopFailureSuppressedByConfig(t *testing.T) {
+	cfg := &config.NotificationConfig{StopFailure: false}
+	n, calls := newTestNotifier(cfg)
+	n.MaybeNotify(1, "W:api", "stop_failure", false)
+	time.Sleep(50 * time.Millisecond)
+	if len(*calls) > 0 {
+		t.Fatal("stop_failure should be suppressed when StopFailure=false")
+	}
+}
+
+func TestNotifier_StopFailureSuppressedByPipeMode(t *testing.T) {
+	cfg := &config.NotificationConfig{StopFailure: true}
+	n, calls := newTestNotifier(cfg)
+	n.MaybeNotify(1, "W:api", "stop_failure", true)
+	time.Sleep(50 * time.Millisecond)
+	if len(*calls) > 0 {
+		t.Fatal("stop_failure should be suppressed in pipe mode")
+	}
+}
+
+func TestNotifier_StopFailureCooldown(t *testing.T) {
+	cfg := &config.NotificationConfig{StopFailure: true}
+	n, calls := newTestNotifier(cfg)
+
+	n.MaybeNotify(1, "W:api", "stop_failure", false)
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("first stop_failure notification should fire")
+	}
+
+	n.MaybeNotify(1, "W:api", "stop_failure", false)
+	time.Sleep(50 * time.Millisecond)
+	if len(*calls) != 1 {
+		t.Fatalf("second stop_failure within cooldown should be suppressed, got %d calls", len(*calls))
+	}
+}
+
 func TestNotifier_SuppressedByPipeMode(t *testing.T) {
 	cfg := &config.NotificationConfig{Stop: true, Permission: true, Error: true}
 	n, calls := newTestNotifier(cfg)

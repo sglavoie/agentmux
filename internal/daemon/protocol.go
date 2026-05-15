@@ -40,24 +40,32 @@ type Response struct {
 // actionPriority maps each action name to its guard priority.
 // Higher priority states block lower priority state updates.
 var actionPriority = map[string]int{
-	"user_clear": -1,
-	"clear":      -1,
-	"idle":       0,
-	"active":     1,
-	"stop":       2,
-	"permission": 3,
-	"failure":    4,
+	"user_clear":   -1,
+	"clear":        -1,
+	"idle":         0,
+	"active":       1,
+	"compact":      1,
+	"subagent":     2,
+	"stop":         2,
+	"permission":   3,
+	"failure":      4,
+	"stop_failure": 4,
 }
 
 // actionIconState maps each action to the palette icon state name.
+// stop_failure deliberately reuses the "error" glyph (shared with failure);
+// the two actions differ only in priority transition logic and notification flag.
 var actionIconState = map[string]string{
-	"active":     "bolt",
-	"stop":       "stop",
-	"permission": "key",
-	"failure":    "error",
-	"idle":       "",
-	"clear":      "",
-	"user_clear": "",
+	"active":       "bolt",
+	"compact":      "compact",
+	"subagent":     "subagent",
+	"stop":         "stop",
+	"permission":   "key",
+	"failure":      "error",
+	"stop_failure": "error",
+	"idle":         "",
+	"clear":        "",
+	"user_clear":   "",
 }
 
 // Priority returns the priority for an action, or 0 for unknown actions.

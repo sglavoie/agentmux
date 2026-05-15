@@ -2,27 +2,38 @@
 // state resolution, title updates, and daemon communication.
 package indicator
 
-// eventToAction maps all 17 Claude Code hook event names to the 6 ccm actions.
+// eventToAction maps Claude Code hook event names to ccm actions.
 // Unknown events are silently ignored (return "").
 var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.
 	"SessionStart": "idle",
 
 	// Active: Claude is processing.
-	"UserPromptSubmit": "active",
-	"PreToolUse":       "active",
-	"SubagentStart":    "active",
-	"PreCompact":       "active",
-	"PostToolUse":      "active",
-	"SubagentStop":     "active",
-	"TaskCompleted":    "active",
+	"UserPromptSubmit":   "active",
+	"PreToolUse":         "active",
+	"PostToolUse":        "active",
+	"SubagentStop":       "active",
+	"TaskCompleted":      "active",
+	"PostCompact":        "active",
+	"ElicitationResult":  "active",
+
+	// Subagent: subagent is running.
+	"SubagentStart": "subagent",
+
+	// Compact: context compaction in progress.
+	"PreCompact": "compact",
 
 	// Stop: session/subagent completed.
 	"Stop":       "stop",
 	"SessionEnd": "stop",
 
+	// Stop-failure: terminal failure (API error, context-limit stop).
+	"StopFailure": "stop_failure",
+
 	// Permission: user approval required.
 	"PermissionRequest": "permission",
+	"PermissionDenied":  "permission",
+	"Elicitation":       "permission",
 
 	// Failure: tool execution failed.
 	"PostToolUseFailure": "failure",
@@ -42,7 +53,9 @@ var eventToAction = map[string]string{
 // idle/clear now preserve the current icon).
 var validActions = map[string]bool{
 	"active": true, "stop": true, "permission": true,
-	"failure": true, "idle": true, "clear": true, "user_clear": true,
+	"failure": true, "stop_failure": true,
+	"subagent": true, "compact": true,
+	"idle": true, "clear": true, "user_clear": true,
 }
 
 // ResolveAction maps an event name or action name to a canonical action.
@@ -63,7 +76,7 @@ func ResolveAction(input string) (action string, ok bool) {
 // while the parent session remains active. The daemon should keep whatever
 // icon is currently showing rather than forcing "active".
 func PreservesCurrent(event string) bool {
-	return event == "SubagentStop" || event == "TaskCompleted"
+	return event == "TaskCompleted"
 }
 
 // IsPromptEvent reports whether event is a direct user prompt submission,

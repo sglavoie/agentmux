@@ -170,6 +170,23 @@ ccm config hooks-sync
 
 This writes `ccm hook-indicator <event>` entries into each account's Claude Code `settings.json`. Check drift with `ccm config hooks-status`.
 
+Installed events: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `PermissionDenied`, `Stop`, `StopFailure`, `TaskCompleted`, `SessionEnd`, `Notification`, `PreCompact`, `PostCompact`, `Elicitation`, `ElicitationResult`. `StopFailure` covers turns that end abnormally (API error or context-limit stop); `PreCompact`/`PostCompact` bracket auto/manual context compaction; `Elicitation` and `PermissionDenied` extend the existing permission-request flow to MCP elicitations and auto-mode denials. Suppress per-account with `hooks.overrides.<account>.disabled_events`.
+
+### Tab icons
+
+The tab title is prefixed with a state icon driven by the most recent hook event:
+
+| Icon | State          | Trigger                                                  |
+| ---- | -------------- | -------------------------------------------------------- |
+| ⚡   | active         | Claude is processing                                     |
+| 🤖   | subagent       | A subagent / Task is running                             |
+| 🌀   | compact        | Context compaction in progress                           |
+| 🛑   | stop           | Turn or session ended cleanly                            |
+| 🔑   | permission     | Approval or MCP elicitation needed                       |
+| ❗   | failure        | Tool failure mid-turn OR terminal stop (API / context)   |
+
+The ❗ icon is shared by transient tool failures (cleared by the next `active` event) and terminal stop-failures (terminal — survives until the next prompt that you yourself drive).
+
 ## Config reference
 
 ```toml
@@ -184,6 +201,9 @@ claude_flags = []        # global Claude flags for all sessions
 error = false
 permission = true
 stop = true
+stop_failure = true       # fire macOS notification when a turn ends abnormally
+                          # (API error or context-limit stop); opt out per-account
+                          # via hooks.overrides.<account>.disabled_events = ["StopFailure"]
 
 [defaults.preview]
 direction = "horizontal" # "horizontal" | "vertical"
