@@ -998,7 +998,7 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 		})
 	}
-	return tea.Batch(cmds...)
+	return tea.Sequence(cmds...)
 }
 
 // handleLaunchProgress updates the progress toast for a finished
