@@ -126,6 +126,43 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 	}
 }
 
+// TestHandler_AutoApprovedPermission verifies that when permissionRequest fires
+// while an active guard is still live (preToolUse preceded the permission — the
+// auto-approved pattern), the key icon does NOT override the bolt, and a
+// subsequent idle clears the icon rather than preserving the key.
+// When the active guard has already expired, permissionRequest follows the
+// normal path and shows the key icon.
+func TestHandler_AutoApprovedPermission(t *testing.T) {
+	// --- Case 1: active guard still live → permission is auto-approved ---
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+		t.Fatalf("auto-approved permission (guard live): want icon_state=%q, got %+v", IconStatePreserve, resp)
+	}
+
+	// idle after auto-approved permission should clear (not preserve key).
+	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+	if !resp.OK || !resp.Allowed || resp.IconState != "" {
+		t.Fatalf("idle after auto-approved permission: want icon_state=\"\", got %+v", resp)
+	}
+
+	// --- Case 2: active guard expired → manual-permission path, key shows ---
+	guard := NewStateGuard(time.Nanosecond)
+	notifier := NewNotifier(&config.NotificationConfig{})
+	notifier.dispatch = func(_, _ string) error { return nil }
+	h2 := NewHandler(guard, notifier)
+
+	h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	time.Sleep(5 * time.Millisecond) // let the guard expire
+
+	resp = h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+		t.Fatalf("manual permission (guard expired): want icon_state=\"key\", got %+v", resp)
+	}
+}
+
 func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
 	h := newTestHandler()
 	before := time.Now()

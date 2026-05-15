@@ -82,17 +82,27 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.notifier.CancelPending(req.WindowID)
 	}
 
+	// Auto-approved permission: preToolUse fired before permissionRequest, so the
+	// tool is already running. The key icon should not override the active bolt —
+	// there is nothing for the user to approve.
+	isAutoApprovedPerm := effective == "permission" && prevGuard == "active"
+
 	h.stateMu.Lock()
 	h.activity[req.WindowID] = time.Now()
 	// Record the last substantive action so idle/clear can detect a stale bolt
 	// even after the state guard has expired.
-	if effective != "idle" && effective != "clear" && effective != "user_clear" {
+	if effective != "idle" && effective != "clear" && effective != "user_clear" && !isAutoApprovedPerm {
 		h.lastAction[req.WindowID] = effective
 	}
 	h.stateMu.Unlock()
 
 	iconState := IconState(effective)
 	if req.PreservesIcon {
+		iconState = IconStatePreserve
+	} else if isAutoApprovedPerm {
+		// Clear the permission guard immediately — it was auto-resolved, so a
+		// subsequent idle can fall back to lastAction ("active") and clear the bolt.
+		h.guard.Clear(req.WindowID)
 		iconState = IconStatePreserve
 	} else if effective == "idle" || effective == "clear" {
 		// Prefer prevGuard (still within the guard window); fall back to
