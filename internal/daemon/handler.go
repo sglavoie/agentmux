@@ -20,6 +20,11 @@ type Handler struct {
 	// guard expires can still detect a stale bolt and clear it.
 	lastAction map[int]string
 
+	// lastActiveEvent records the hook event name that last set the "active"
+	// state, so isAutoApprovedPerm can distinguish PreToolUse (same-tool
+	// auto-approval) from PostToolUse (prior tool completed).
+	lastActiveEvent map[int]string
+
 	// onActivity is called on every successfully handled request.
 	// The daemon uses this to reset the idle timer.
 	onActivity func()
@@ -31,10 +36,11 @@ type Handler struct {
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 	return &Handler{
-		guard:      guard,
-		notifier:   notifier,
-		activity:   make(map[int]time.Time),
-		lastAction: make(map[int]string),
+		guard:           guard,
+		notifier:        notifier,
+		activity:        make(map[int]time.Time),
+		lastAction:      make(map[int]string),
+		lastActiveEvent: make(map[int]string),
 	}
 }
 
@@ -85,10 +91,20 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// Auto-approved permission: preToolUse fired before permissionRequest, so the
 	// tool is already running. The key icon should not override the active bolt —
 	// there is nothing for the user to approve.
-	isAutoApprovedPerm := effective == "permission" && prevGuard == "active"
+	// Only treat it as auto-approved when the active guard was specifically set by
+	// a PreToolUse hook event (not by PostToolUse of a prior tool).
+	h.stateMu.Lock()
+	prevEvent := h.lastActiveEvent[req.WindowID]
+	h.stateMu.Unlock()
+	isAutoApprovedPerm := effective == "permission" &&
+		prevGuard == "active" &&
+		(prevEvent == "PreToolUse" || prevEvent == "preToolUse")
 
 	h.stateMu.Lock()
 	h.activity[req.WindowID] = time.Now()
+	if effective == "active" {
+		h.lastActiveEvent[req.WindowID] = req.Event
+	}
 	// Record the last substantive action so idle/clear can detect a stale bolt
 	// even after the state guard has expired.
 	if effective != "idle" && effective != "clear" && effective != "user_clear" && !isAutoApprovedPerm {
@@ -120,6 +136,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			iconState = ""
 			h.stateMu.Lock()
 			delete(h.lastAction, req.WindowID)
+			delete(h.lastActiveEvent, req.WindowID)
 			h.stateMu.Unlock()
 		default:
 			// stop/permission/failure icons persist until the user notices them.
@@ -130,6 +147,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		// to clear an icon that no longer exists.
 		h.stateMu.Lock()
 		delete(h.lastAction, req.WindowID)
+		delete(h.lastActiveEvent, req.WindowID)
 		h.stateMu.Unlock()
 	}
 	h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, effective, req.PipeMode)
