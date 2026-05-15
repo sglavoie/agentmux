@@ -105,8 +105,9 @@ type Model struct {
 
 	// toast strip + launch-progress bookkeeping
 	toasts          []Toast
-	launchBatchID   int
-	launchBatchDone int
+	launchBatchID     int
+	launchBatchDone   int
+	launchBatchErrors int
 }
 
 // NewModel creates a dashboard model.
@@ -1098,6 +1099,7 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 	batchID := m.launchBatchID
 	total := len(todo)
 	m.launchBatchDone = 0
+	m.launchBatchErrors = 0
 
 	cmds := make([]tea.Cmd, 0, total+1)
 	startText := fmt.Sprintf("Launching %d session(s)…", total)
@@ -1139,6 +1141,7 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	m.launchBatchDone++
 	var cmds []tea.Cmd
 	if msg.err != nil {
+		m.launchBatchErrors++
 		if c := m.pushToast(Toast{
 			Severity: toastError,
 			Text:     fmt.Sprintf("launch failed: %s — %s", msg.title, msg.err),
@@ -1146,13 +1149,14 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 			cmds = append(cmds, c)
 		}
 	}
+	batchDone := m.launchBatchDone >= msg.total
 	severity := toastInfo
-	if m.launchBatchDone >= msg.total {
+	if batchDone {
 		severity = toastSuccess
 	}
 	text := fmt.Sprintf("Launched %d/%d · %s", m.launchBatchDone, msg.total, msg.title)
 	expires := time.Now().Add(progressToastTTL)
-	if m.launchBatchDone >= msg.total {
+	if batchDone {
 		expires = time.Now().Add(defaultToastTTL)
 	}
 	if c := m.replaceToastByID(msg.batchID, Toast{
@@ -1162,7 +1166,11 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	}); c != nil {
 		cmds = append(cmds, c)
 	}
-	cmds = append(cmds, fetchCmd(m.client, m.sortMode))
+	if batchDone && m.launchBatchErrors == 0 {
+		cmds = append(cmds, tea.Quit)
+	} else {
+		cmds = append(cmds, fetchCmd(m.client, m.sortMode))
+	}
 	return m, tea.Batch(cmds...)
 }
 
