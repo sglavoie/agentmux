@@ -1,21 +1,51 @@
+# cc-manager-kitty configuration file.
+#
+# Default location: ~/.config/cc-manager/config.toml
+# Override with the CCM_CONFIG environment variable.
+#
+# Useful commands:
+#   ccm config init      Write this example to the default config path.
+#   ccm config path      Print the resolved config file path.
+#   ccm config edit      Open the config in $EDITOR.
+#   ccm config show      Print the parsed config back as TOML.
+#   ccm config validate  Validate the config and report errors.
+#
+# Paths in this file (config_dir, directory) support `~` for $HOME.
+
+# ---------------------------------------------------------------------------
+# [defaults] — global behavior. All fields are optional.
+# ---------------------------------------------------------------------------
 [defaults]
-sort = "alpha"
-refresh_interval = 2
-guard_duration = 1
-idle_threshold = 300  # seconds of inactivity before a session is grouped as Idle in the dashboard
+sort = "alpha"           # "alpha" | "account". Sort order in the TUI dashboard.
+refresh_interval = 2     # Seconds between dashboard auto-refreshes.
+guard_duration = 1       # Seconds the state-guard debounces hook-driven icon transitions.
+idle_threshold = 300     # Seconds of inactivity before a session is grouped under "Idle". 0 → 300.
+claude_flags = []        # Flags appended to every `claude` invocation. Per-session
+                         # `claude_flags` overrides this list; set per-session to []
+                         # to explicitly clear inherited flags.
 
+# macOS notifications fired by the daemon in response to hook events.
 [defaults.notifications]
-error = false
-permission = true
-stop = true
+error = false            # Notification on session error.
+permission = true        # Notification on PermissionRequest events.
+stop = true              # Notification when a session stops.
 
+# Dashboard split-pane live preview.
 [defaults.preview]
-direction = "horizontal"   # "horizontal" | "vertical"
-ratio = 0.5                # fraction of width (horizontal) or height (vertical) given to preview
-refresh_ms = 500           # tick interval while preview is open
-min_cols = 100             # below this, horizontal split is disabled
-min_rows = 30              # below this, vertical split is disabled
+direction = "horizontal" # "horizontal" | "vertical".
+ratio = 0.5              # Fraction (0 < ratio < 1) of width (horizontal) or height (vertical) given to preview.
+refresh_ms = 500         # Tick interval (ms, ≥ 50) while preview is open.
+min_cols = 100           # Below this terminal width, horizontal split is disabled.
+min_rows = 30            # Below this terminal height, vertical split is disabled.
 
+# ---------------------------------------------------------------------------
+# [[accounts]] — at least one is required. Each account maps to a separate
+# CLAUDE_CONFIG_DIR and gets a unique tab color.
+#
+# Valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan
+# `name` must be unique and is referenced by [[sessions]].account and by
+# [hooks.overrides.<name>].
+# ---------------------------------------------------------------------------
 [[accounts]]
 name = "work"
 config_dir = "~/.config/claude-work"
@@ -26,16 +56,38 @@ name = "personal"
 config_dir = "~/.config/claude"
 color = "green"
 
+# ---------------------------------------------------------------------------
+# [[sessions]] — zero or more pre-configured session tabs. Optional.
+#
+# Required fields: title (unique), directory, account (must match an account name above).
+# Convention: prefix title with the uppercase account initial, e.g. `W:api`, `P:dotfiles`.
+# Optional fields:
+#   claude_flags = ["--flag", ...]   Override defaults.claude_flags. Omit to inherit;
+#                                    set to [] to explicitly run with no flags.
+#   env = { KEY = "value", ... }     Environment variables injected at launch.
+#   groups = ["group1", ...]         Organizational tags shown in the dashboard.
+# ---------------------------------------------------------------------------
 [[sessions]]
 title = "W:api"
 directory = "~/projects/api"
 account = "work"
-claude_flags = []
+claude_flags = []                                # Override: run with no flags even if defaults set some.
 
 [[sessions]]
 title = "P:dotfiles"
 directory = "~"
 account = "personal"
+env = { DEBUG = "1" }                            # Example: inject environment variables.
+groups = ["personal", "config"]                  # Example: tag for dashboard grouping.
 
+# ---------------------------------------------------------------------------
+# [hooks.overrides.<account>] — optional per-account hook customizations.
+#
+# `disabled_events` suppresses the listed Claude Code hook events for the
+# given account during `ccm config hooks-sync`. Valid event names:
+#   SessionStart, UserPromptSubmit, SubagentStart, SubagentStop, PostToolUse,
+#   PostToolUseFailure, PermissionRequest, Stop, TaskCompleted, SessionEnd,
+#   Notification
+# ---------------------------------------------------------------------------
 [hooks.overrides.personal]
-disabled_events = []
+disabled_events = []                             # e.g. ["Stop", "Notification"] to silence those for `personal`.
