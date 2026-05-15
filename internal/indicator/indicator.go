@@ -32,24 +32,40 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 	}
 
 	pipeMode := IsPipeMode()
-	slog.Debug("indicator", "action", action, "window_id", windowID, "pipe_mode", pipeMode)
 
 	runner := kitty.NewRealRunner()
 	client := kitty.NewClient(runner)
 	windows, err := client.ListWindows()
 
 	var tab *kitty.Tab
+	var win *kitty.Window
 	var sessionTitle string
 	if err == nil {
-		t, _, found := kitty.FindTabByWindowID(windows, windowID)
+		t, w, found := kitty.FindTabByWindowID(windows, windowID)
 		if found {
 			tab = t
+			win = w
 			base, _, _ := palette.ParseTitle(tab.Title)
 			sessionTitle = base
 		}
 	} else {
 		slog.Debug("indicator: kitty lookup failed", "err", err)
 	}
+
+	var profile, harness string
+	if win != nil {
+		profile = win.UserVars.EffectiveProfile()
+		harness = win.UserVars.EffectiveHarness()
+	}
+	log := slog.With(
+		"window_id", windowID,
+		"profile", profile,
+		"harness", harness,
+		"event", eventOrAction,
+		"action", action,
+		"pipe_mode", pipeMode,
+	)
+	log.Debug("indicator")
 
 	dc := daemon.NewClient()
 	resp, err := dc.SendWithAutoStart(daemon.Request{
@@ -61,9 +77,10 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		PreservesIcon: PreservesCurrent(eventOrAction),
 		PipeMode:      pipeMode,
 		SessionTitle:  sessionTitle,
+		Account:       profile,
 	}, amxBin)
 	if err != nil {
-		slog.Debug("indicator: daemon unavailable, updating title without guard", "err", err)
+		log.Debug("indicator: daemon unavailable, updating title without guard", "err", err)
 		if tab == nil {
 			return fmt.Errorf("indicator: window %d not found and daemon unavailable", windowID)
 		}
@@ -73,11 +90,11 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		return fmt.Errorf("indicator: daemon error: %s", resp.Error)
 	}
 	if !resp.Allowed {
-		slog.Debug("indicator: guard blocked transition", "action", action, "window_id", windowID)
+		log.Debug("indicator: guard blocked transition")
 		return nil
 	}
 	if resp.IconState == daemon.IconStatePreserve {
-		slog.Debug("indicator: preserve current icon", "action", action, "window_id", windowID)
+		log.Debug("indicator: preserve current icon")
 		return nil
 	}
 

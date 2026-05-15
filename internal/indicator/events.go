@@ -2,7 +2,13 @@
 // state resolution, title updates, and daemon communication.
 package indicator
 
-// eventToAction maps supported harness hook event names to amx actions.
+// eventToAction is a shared map covering both Claude (PascalCase) and Copilot
+// (camelCase) hook event names. The two harnesses use disjoint name spaces
+// by convention (Claude uses PascalCase; Copilot uses camelCase), so there is
+// no collision risk with the current harness set. If a future harness reuses a
+// name with a different semantic, the map must be split into per-harness maps
+// and resolved after determining the harness from the window's amx_harness var.
+//
 // Unknown events are silently ignored (return "").
 var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.

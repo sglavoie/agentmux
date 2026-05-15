@@ -238,3 +238,53 @@ func TestFormatRowIconColumnAlignment(t *testing.T) {
 		t.Errorf("badge column misaligned: bolt=%d, error=%d", iBolt, iErr)
 	}
 }
+
+// TestFormatRowHarnessBadge asserts that [cl] appears for claude sessions,
+// [cp] for copilot sessions, and nothing harness-related for empty harness.
+func TestFormatRowHarnessBadge(t *testing.T) {
+	sClaude := session.RunningSession{Base: "W:api", Account: "work", Harness: "claude"}
+	sCopilot := session.RunningSession{Base: "W:api", Account: "work", Harness: "copilot"}
+	sNone := session.RunningSession{Base: "W:api", Account: "work", Harness: ""}
+
+	rowClaude := stripAnsi(formatRow(sClaude, nil, 0))
+	rowCopilot := stripAnsi(formatRow(sCopilot, nil, 0))
+	rowNone := stripAnsi(formatRow(sNone, nil, 0))
+
+	if !strings.Contains(rowClaude, "[cl]") {
+		t.Errorf("expected [cl] badge for claude harness; got %q", rowClaude)
+	}
+	if strings.Contains(rowClaude, "[cp]") {
+		t.Errorf("unexpected [cp] badge in claude row; got %q", rowClaude)
+	}
+	if !strings.Contains(rowCopilot, "[cp]") {
+		t.Errorf("expected [cp] badge for copilot harness; got %q", rowCopilot)
+	}
+	if strings.Contains(rowCopilot, "[cl]") {
+		t.Errorf("unexpected [cl] badge in copilot row; got %q", rowCopilot)
+	}
+	if strings.Contains(rowNone, "[cl]") || strings.Contains(rowNone, "[cp]") {
+		t.Errorf("expected no harness badge for empty harness; got %q", rowNone)
+	}
+}
+
+// TestHarnessAbbrev verifies the two-letter abbreviations and the empty fallback.
+func TestHarnessAbbrev(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"claude", "cl"},
+		{"Claude", "cl"},
+		{"CLAUDE", "cl"},
+		{"copilot", "cp"},
+		{"Copilot", "cp"},
+		{"", ""},
+		{"unknown", ""},
+	}
+	for _, tc := range cases {
+		got := harnessAbbrev(tc.input)
+		if got != tc.want {
+			t.Errorf("harnessAbbrev(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}

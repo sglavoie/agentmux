@@ -1,8 +1,6 @@
 package harness
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -37,37 +35,15 @@ func Names() []string {
 }
 
 // Executable returns the CLI executable used to launch the harness.
-func Executable(name string) string {
-	switch Normalize(name) {
-	case Copilot:
-		return "copilot"
-	default:
-		return "claude"
-	}
-}
+func Executable(name string) string { return Lookup(name).Executable() }
 
 // EnvVar returns the harness-specific env var used to override its home/config
 // directory.
-func EnvVar(name string) string {
-	switch Normalize(name) {
-	case Copilot:
-		return "COPILOT_HOME"
-	default:
-		return "CLAUDE_CONFIG_DIR"
-	}
-}
+func EnvVar(name string) string { return Lookup(name).ConfigEnvVar() }
 
 // DefaultHomeDir returns the default per-user home/config directory for the
 // harness.
-func DefaultHomeDir(name string) string {
-	home, _ := os.UserHomeDir()
-	switch Normalize(name) {
-	case Copilot:
-		return filepath.Join(home, ".copilot")
-	default:
-		return filepath.Join(home, ".claude")
-	}
-}
+func DefaultHomeDir(name string) string { return Lookup(name).DefaultHomeDir() }
 
 // HookFileName is the generated Copilot hook config filename.
 func HookFileName() string {

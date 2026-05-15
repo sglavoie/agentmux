@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -126,5 +127,38 @@ func TestResolveEnv_SessionOverrides(t *testing.T) {
 	}
 	if env["NODE_ENV"] != "development" {
 		t.Errorf("NODE_ENV: got %q, want %q", env["NODE_ENV"], "development")
+	}
+}
+
+func TestResolveEnv_CopilotSetsCorrectEnvVar(t *testing.T) {
+	acc := config.Account{
+		Name:    "copilot-work",
+		Harness: "copilot",
+		HomeDir: "/tmp/copilot-custom",
+		Color:   "blue",
+	}
+	sess := config.Session{Profile: "copilot-work"}
+	env := session.ResolveEnv(sess, acc)
+	got, ok := env["COPILOT_HOME"]
+	if !ok {
+		t.Fatal("expected COPILOT_HOME to be set for non-default copilot home_dir")
+	}
+	if got != "/tmp/copilot-custom" {
+		t.Errorf("COPILOT_HOME: got %q, want %q", got, "/tmp/copilot-custom")
+	}
+}
+
+func TestResolveEnv_CopilotDefaultHomeDirSetsNoEnvVar(t *testing.T) {
+	defaultDir := harness.DefaultHomeDir("copilot")
+	acc := config.Account{
+		Name:    "copilot-default",
+		Harness: "copilot",
+		HomeDir: defaultDir,
+		Color:   "blue",
+	}
+	sess := config.Session{Profile: "copilot-default"}
+	env := session.ResolveEnv(sess, acc)
+	if _, ok := env["COPILOT_HOME"]; ok {
+		t.Errorf("COPILOT_HOME should not be set when HomeDir equals the harness default")
 	}
 }

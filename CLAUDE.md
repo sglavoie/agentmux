@@ -98,6 +98,14 @@ Socket path: `~/.local/share/cc-manager/daemon.sock`
 - `embed.go` — `//go:embed` directives
 - `example_config.toml` — template written by `amx config init`
 
+### Adding a new harness
+
+1. Create `internal/harness/<name>.go` implementing `harness.Impl` and `harness.HookContract`.
+2. Register the implementation in `internal/harness/registry.go` (`registry[name] = ...`).
+3. Add event name mappings (if any) to `internal/indicator/events.go`.
+4. Add a test fixture in `testdata/` with the new harness and extend `config_test.go`.
+5. Run `just check` — the compiler will flag any `Impl` methods you missed.
+
 ## CLI commands
 
 | Command | Description |

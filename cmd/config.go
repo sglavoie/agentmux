@@ -150,9 +150,9 @@ var configHooksStatusCmd = &cobra.Command{
 			ccerrors.Print(err)
 			return err
 		}
-		fmt.Printf("%-20s %-10s %s\n", "ACCOUNT", "STATUS", "PATH")
+		fmt.Printf("%-20s %-10s %-10s %s\n", "ACCOUNT", "HARNESS", "STATUS", "PATH")
 		for _, s := range statuses {
-			fmt.Printf("%-20s %-10s %s\n", s.Account, s.Status, s.Path)
+			fmt.Printf("%-20s %-10s %-10s %s\n", s.Account, s.Harness, s.Status, s.Path)
 		}
 		return nil
 	},

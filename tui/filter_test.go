@@ -264,3 +264,91 @@ func TestMatchEscapedSubstring(t *testing.T) {
 		t.Error("expected escaped @ to match literal substring")
 	}
 }
+
+func TestParseHarness(t *testing.T) {
+	f := Parse("%claude")
+	if f.Harness != "claude" {
+		t.Errorf("expected Harness=claude, got %q", f.Harness)
+	}
+	if len(f.Substrings) != 0 || f.Account != "" || f.State != "" {
+		t.Errorf("expected only harness, got %+v", f)
+	}
+}
+
+func TestParseHarnessUppercaseNormalized(t *testing.T) {
+	f := Parse("%Copilot")
+	if f.Harness != "copilot" {
+		t.Errorf("expected Harness normalized to lowercase, got %q", f.Harness)
+	}
+}
+
+func TestParseLoneHarnessMarkerLenient(t *testing.T) {
+	f := Parse("% api")
+	if f.Harness != "" {
+		t.Errorf("lone harness marker should not set Harness, got %q", f.Harness)
+	}
+	if !reflect.DeepEqual(f.Substrings, []string{"api"}) {
+		t.Errorf("expected [api] substring, got %v", f.Substrings)
+	}
+}
+
+func TestIsEmptyHarness(t *testing.T) {
+	if !Parse("%").IsEmpty() {
+		t.Error("lone harness marker should produce an empty filter")
+	}
+	if Parse("%claude").IsEmpty() {
+		t.Error("harness filter should not be empty")
+	}
+}
+
+func TestMatchHarnessClaude(t *testing.T) {
+	f := Parse("%claude")
+	good := session.RunningSession{Harness: "claude"}
+	bad := session.RunningSession{Harness: "copilot"}
+	empty := session.RunningSession{Harness: ""}
+	if !f.Match(good, nil, 0) {
+		t.Error("expected harness:claude filter to match claude session")
+	}
+	if f.Match(bad, nil, 0) {
+		t.Error("expected harness:claude filter to reject copilot session")
+	}
+	if f.Match(empty, nil, 0) {
+		t.Error("expected harness:claude filter to reject empty-harness session")
+	}
+}
+
+func TestMatchHarnessCopilot(t *testing.T) {
+	f := Parse("%copilot")
+	good := session.RunningSession{Harness: "copilot"}
+	bad := session.RunningSession{Harness: "claude"}
+	if !f.Match(good, nil, 0) {
+		t.Error("expected harness:copilot filter to match copilot session")
+	}
+	if f.Match(bad, nil, 0) {
+		t.Error("expected harness:copilot filter to reject claude session")
+	}
+}
+
+func TestMatchHarnessCaseInsensitive(t *testing.T) {
+	f := Parse("%Claude")
+	s := session.RunningSession{Harness: "claude"}
+	if !f.Match(s, nil, 0) {
+		t.Error("expected case-insensitive harness match")
+	}
+}
+
+func TestMatchHarnessCombinedWithAccount(t *testing.T) {
+	f := Parse("@work %claude")
+	good := session.RunningSession{Account: "work", Harness: "claude"}
+	wrongHarness := session.RunningSession{Account: "work", Harness: "copilot"}
+	wrongAccount := session.RunningSession{Account: "personal", Harness: "claude"}
+	if !f.Match(good, nil, 0) {
+		t.Error("expected account+harness filter to match work+claude session")
+	}
+	if f.Match(wrongHarness, nil, 0) {
+		t.Error("expected account+harness filter to reject work+copilot session")
+	}
+	if f.Match(wrongAccount, nil, 0) {
+		t.Error("expected account+harness filter to reject personal+claude session")
+	}
+}

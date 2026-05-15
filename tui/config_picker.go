@@ -10,6 +10,15 @@ func renderConfigPicker(m Model) string {
 		header = "Launch profile"
 	}
 	sb.WriteString(styleHeader.Render(header + ": " + m.targetSession.Base) + "\n\n")
+
+	if m.configPickerCursor >= 0 && m.configPickerCursor < len(m.configPickerAccounts) {
+		selectedHarness := m.configPickerAccounts[m.configPickerCursor].EffectiveHarness()
+		currentHarness := m.targetSession.Harness
+		if currentHarness != "" && selectedHarness != "" && !strings.EqualFold(currentHarness, selectedHarness) {
+			warning := "⚠  Switching harness: " + currentHarness + " → " + selectedHarness + ". Session will restart."
+			sb.WriteString(styleAttentionRow.Render(warning) + "\n\n")
+		}
+	}
 	for i, acc := range m.configPickerAccounts {
 		line := "  " + acc.Name + "  " + styleDim.Render(acc.EffectiveHarness())
 		if home := acc.EffectiveHomeDir(); home != "" {

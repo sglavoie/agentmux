@@ -130,8 +130,9 @@ func tabToRunningSession(tab kitty.Tab) (RunningSession, bool) {
 	return RunningSession{}, false
 }
 
-// SessionKey returns the logical identity of a configured project under a
-// profile. It is used for dedup and launch-time running detection.
+// SessionKey builds the dedup key for a running session. The separator (\x1f,
+// ASCII Unit Separator) is chosen because it cannot appear in Kitty user var
+// values (Kitty strips control characters from --var values).
 func SessionKey(profileName, projectTitle string) string {
 	return strings.ToLower(profileName) + "\x1f" + strings.ToLower(projectTitle)
 }

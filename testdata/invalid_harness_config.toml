@@ -1,0 +1,8 @@
+[defaults]
+sort = "alpha"
+
+[[profiles]]
+name = "bad"
+harness = "gemini"
+home_dir = "~/.gemini"
+color = "blue"

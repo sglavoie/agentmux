@@ -186,6 +186,19 @@ func TestHandler_Shutdown(t *testing.T) {
 	}
 }
 
+func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
+	h := newTestHandler()
+	resp := h.Handle(Request{
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
+		Account:  "claude-work",
+	})
+	if !resp.OK {
+		t.Fatalf("expected ok=true for state_update with Account set, got %+v", resp)
+	}
+}
+
 func TestHandler_OnActivityCalled(t *testing.T) {
 	h := newTestHandler()
 	called := 0

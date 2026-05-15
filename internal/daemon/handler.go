@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -60,6 +61,12 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	}
 
 	allowed, effective := h.guard.TryUpdate(req.WindowID, req.Action, req.IsPrompt)
+	slog.Debug("state transition",
+		"window_id", req.WindowID,
+		"profile", req.Account,
+		"action", req.Action,
+		"allowed", allowed,
+	)
 	if !allowed {
 		return Response{OK: true, Allowed: false}
 	}

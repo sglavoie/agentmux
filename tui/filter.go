@@ -12,6 +12,7 @@ import (
 // Grammar (tokens are whitespace-separated, AND semantics):
 //
 //	@<account>   exact account match (case-insensitive)
+//	%<harness>   exact harness match (case-insensitive); e.g. %claude, %copilot
 //	!<state>     state filter; recognized: active, idle, bolt, key, stop, error
 //	<word>       case-insensitive substring against title, directory, or account
 //	\@foo / \!x  literal leading @ or ! (lenient: also accepted bare in titles)
@@ -21,6 +22,7 @@ import (
 type Filter struct {
 	Substrings []string
 	Account    string
+	Harness    string
 	State      string
 	Raw        string
 }
@@ -33,10 +35,12 @@ func Parse(input string) Filter {
 		switch {
 		case len(tok) >= 2 && tok[0] == '\\' && (tok[1] == '@' || tok[1] == '!'):
 			f.Substrings = append(f.Substrings, tok[1:])
-		case tok == "@" || tok == "!":
+		case tok == "@" || tok == "!" || tok == "%":
 			// Lone marker — lenient: ignore.
 		case tok[0] == '@':
 			f.Account = tok[1:]
+		case tok[0] == '%':
+			f.Harness = strings.ToLower(tok[1:])
 		case tok[0] == '!':
 			f.State = tok[1:]
 		default:
@@ -48,7 +52,7 @@ func Parse(input string) Filter {
 
 // IsEmpty reports whether the filter would match every session.
 func (f Filter) IsEmpty() bool {
-	return len(f.Substrings) == 0 && f.Account == "" && f.State == ""
+	return len(f.Substrings) == 0 && f.Account == "" && f.Harness == "" && f.State == ""
 }
 
 // Match reports whether a session passes the filter. lastActivity and idle
@@ -56,6 +60,9 @@ func (f Filter) IsEmpty() bool {
 // stateGroup classification.
 func (f Filter) Match(s session.RunningSession, lastActivity map[int]time.Time, idle time.Duration) bool {
 	if f.Account != "" && !strings.EqualFold(s.Account, f.Account) {
+		return false
+	}
+	if f.Harness != "" && !strings.EqualFold(s.Harness, f.Harness) {
 		return false
 	}
 	if f.State != "" && !matchState(s, f.State, lastActivity, idle) {
@@ -83,6 +90,7 @@ type chipKind int
 const (
 	chipSubstring chipKind = iota
 	chipAccount
+	chipHarness
 	chipState
 )
 
@@ -107,6 +115,9 @@ func (f Filter) Components() []chipComponent {
 	if f.Account != "" {
 		out = append(out, chipComponent{kind: chipAccount, label: "@" + f.Account, raw: f.Account})
 	}
+	if f.Harness != "" {
+		out = append(out, chipComponent{kind: chipHarness, label: "%" + f.Harness, raw: f.Harness})
+	}
 	if f.State != "" {
 		out = append(out, chipComponent{kind: chipState, label: "!" + f.State, raw: f.State})
 	}
@@ -124,6 +135,7 @@ func (f Filter) RemoveComponent(idx int) Filter {
 	out := Filter{
 		Substrings: append([]string(nil), f.Substrings...),
 		Account:    f.Account,
+		Harness:    f.Harness,
 		State:      f.State,
 	}
 	target := comps[idx]
@@ -134,6 +146,8 @@ func (f Filter) RemoveComponent(idx int) Filter {
 		out.Substrings = append(out.Substrings[:idx], out.Substrings[idx+1:]...)
 	case chipAccount:
 		out.Account = ""
+	case chipHarness:
+		out.Harness = ""
 	case chipState:
 		out.State = ""
 	}
@@ -155,6 +169,9 @@ func serializeFilter(f Filter) string {
 	}
 	if f.Account != "" {
 		parts = append(parts, "@"+f.Account)
+	}
+	if f.Harness != "" {
+		parts = append(parts, "%"+f.Harness)
 	}
 	if f.State != "" {
 		parts = append(parts, "!"+f.State)

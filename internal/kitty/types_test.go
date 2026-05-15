@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 func loadDashboardFixture(t *testing.T) []OSWindow {
@@ -90,6 +92,72 @@ func TestIsDashboardCmdline(t *testing.T) {
 			got := isDashboardCmdline(tt.cmdline)
 			if got != tt.want {
 				t.Errorf("isDashboardCmdline(%v) = %v, want %v", tt.cmdline, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUserVars_EffectiveHarness(t *testing.T) {
+	tests := []struct {
+		name    string
+		u       UserVars
+		want    string
+	}{
+		{
+			name: "explicit harness set",
+			u:    UserVars{Harness: "copilot"},
+			want: "copilot",
+		},
+		{
+			name: "legacy cc_account with no harness",
+			u:    UserVars{Account: "work"},
+			want: harness.Claude,
+		},
+		{
+			name: "both empty",
+			u:    UserVars{},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.u.EffectiveHarness()
+			if got != tt.want {
+				t.Errorf("EffectiveHarness() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUserVars_EffectiveProfile(t *testing.T) {
+	tests := []struct {
+		name string
+		u    UserVars
+		want string
+	}{
+		{
+			name: "amx_profile set",
+			u:    UserVars{Profile: "claude-work"},
+			want: "claude-work",
+		},
+		{
+			name: "legacy cc_account fallback",
+			u:    UserVars{Account: "work"},
+			want: "work",
+		},
+		{
+			name: "amx_profile takes precedence over cc_account",
+			u:    UserVars{Profile: "claude-work", Account: "work"},
+			want: "claude-work",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.u.EffectiveProfile()
+			if got != tt.want {
+				t.Errorf("EffectiveProfile() = %q, want %q", got, tt.want)
 			}
 		})
 	}

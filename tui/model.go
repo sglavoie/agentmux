@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -387,7 +389,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
 		m.pickerRunning = buildPickerRunning(m.sessions)
 		m.pickerSelected = make(map[int]bool)
-		m.pickerProfileOverride = make(map[int]string)
+		m.pickerProfileOverride = loadPickerOverrides(m.pickerSessions)
 		m.pickerCursor = 0
 		m.pickerFilter = ""
 		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
@@ -495,6 +497,7 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					}
 					m.pickerProfileOverride[m.configPickerProjectIdx] = acc.Name
 				}
+				m.savePickerOverrides()
 				if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 					return m, cmd
 				}
@@ -1222,4 +1225,55 @@ func clamp(v, lo, hi int) int {
 		return hi
 	}
 	return v
+}
+
+// loadPickerOverrides loads persisted profile overrides from disk and maps
+// them to the current pickerSessions by title. Stale entries (titles no
+// longer in the session list) are pruned and the file is re-saved.
+func loadPickerOverrides(sessions []config.Session) map[int]string {
+	out := make(map[int]string)
+	f, err := overrides.Load()
+	if err != nil {
+		slog.Debug("overrides: load error", "err", err)
+		return out
+	}
+	titleIdx := make(map[string]int, len(sessions))
+	for i, s := range sessions {
+		titleIdx[s.Title] = i
+	}
+	var pruned bool
+	var fresh []overrides.Entry
+	for _, e := range f.Entries {
+		idx, ok := titleIdx[e.ProjectTitle]
+		if !ok {
+			slog.Debug("overrides: pruning stale entry", "title", e.ProjectTitle)
+			pruned = true
+			continue
+		}
+		fresh = append(fresh, e)
+		out[idx] = e.ProfileName
+	}
+	if pruned {
+		f.Entries = fresh
+		if err := overrides.Save(f); err != nil {
+			slog.Debug("overrides: save after prune error", "err", err)
+		}
+	}
+	return out
+}
+
+// savePickerOverrides writes the current pickerProfileOverride map to disk.
+func (m Model) savePickerOverrides() {
+	f := overrides.File{Version: 1}
+	for idx, profile := range m.pickerProfileOverride {
+		if idx >= 0 && idx < len(m.pickerSessions) {
+			f.Entries = append(f.Entries, overrides.Entry{
+				ProjectTitle: m.pickerSessions[idx].Title,
+				ProfileName:  profile,
+			})
+		}
+	}
+	if err := overrides.Save(f); err != nil {
+		slog.Debug("overrides: save error", "err", err)
+	}
 }

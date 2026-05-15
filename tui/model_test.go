@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -1134,6 +1136,43 @@ func TestCapitalCDoesNotEnterConfigPicker(t *testing.T) {
 	}
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after C, got %d", m.mode)
+	}
+}
+
+// ---- Profile override persistence tests ----
+
+func TestPickerProfileOverride_Persists(t *testing.T) {
+	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "overrides.json"))
+
+	// testModelWithSessions has: work/api, work/backend, personal/dotfiles.
+	// sortPickerSessions sorts by account then title:
+	//   [0] personal/dotfiles  [1] work/api  [2] work/backend
+	m := testModelWithSessions()
+	m = pressKey(m, "l") // open picker; cursor=0 → dotfiles (personal)
+
+	// Open config picker for dotfiles. Accounts: [work(0), personal(1)].
+	// configPickerCursor starts at 1 (personal matches dotfiles' default profile).
+	m = pressKey(m, "C")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after C in picker, got %d", m.mode)
+	}
+
+	// Move cursor to work (index 0) and confirm.
+	m = pressKey(m, "k")
+	m = pressKey(m, "enter")
+
+	if m.mode != ModePicker {
+		t.Fatalf("expected to return to ModePicker, got %d", m.mode)
+	}
+	if m.pickerProfileOverride[0] != "work" {
+		t.Fatalf("expected in-memory override[0]=work, got %q", m.pickerProfileOverride[0])
+	}
+
+	// Simulate a fresh dashboard: new model, open picker — override must reload from disk.
+	m2 := testModelWithSessions()
+	m2 = pressKey(m2, "l")
+	if m2.pickerProfileOverride[0] != "work" {
+		t.Fatalf("expected persisted override[0]=work after reload, got %q", m2.pickerProfileOverride[0])
 	}
 }
 

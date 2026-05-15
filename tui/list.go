@@ -282,8 +282,20 @@ func countInGroup(sessions []session.RunningSession, group int, lastActivity map
 
 var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}
 
+// harnessAbbrev returns a two-letter lowercase abbreviation for the harness
+// name, or "" when the harness is unknown/empty.
+func harnessAbbrev(h string) string {
+	switch strings.ToLower(h) {
+	case "claude":
+		return "cl"
+	case "copilot":
+		return "cp"
+	}
+	return ""
+}
+
 // formatRow formats a single session row.
-// Format: state_icon | account_prefix | title | directory
+// Format: state_icon | account_prefix | [harness] | title | directory
 func formatRow(s session.RunningSession, acctColor map[string]string, width int) string {
 	// State icon at the start for instant scanning.
 	iconCol := "  "
@@ -307,6 +319,12 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int)
 
 	badge := style.Render("[" + acctBadge + "]")
 
+	// Optional harness badge.
+	harnessBadge := ""
+	if abbrev := harnessAbbrev(s.Harness); abbrev != "" {
+		harnessBadge = styleDim.Render("[" + abbrev + "]")
+	}
+
 	// Title: use Base (stripped of icons) padded to titleColWidth.
 	title := runewidth.Truncate(s.Base, titleColWidth, "…")
 	title = title + strings.Repeat(" ", titleColWidth-runewidth.StringWidth(title))
@@ -315,7 +333,11 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int)
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		used := 3 + 4 + titleColWidth + 3 // icon+space + badge + title + separators
+		harnessW := 0
+		if harnessBadge != "" {
+			harnessW = 5 // "[cl] " = 4 chars + 1 space
+		}
+		used := 3 + 4 + titleColWidth + 3 + harnessW // icon+space + badge + title + separators + harness
 		available := width - used
 		if available > 10 {
 			maxDir = available
@@ -330,6 +352,9 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int)
 	}
 	dir = styleDim.Render(dir)
 
+	if harnessBadge != "" {
+		return iconCol + " " + badge + " " + harnessBadge + " " + title + "  " + dir
+	}
 	return iconCol + " " + badge + " " + title + "  " + dir
 }
 
