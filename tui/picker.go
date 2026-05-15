@@ -23,7 +23,7 @@ const pickerRunningPeekLines = 20
 func renderPicker(m Model) string {
 	listText := renderPickerList(m)
 
-	if !m.previewEnabled {
+	if !m.pickerPreviewEnabled {
 		return listText
 	}
 
@@ -71,7 +71,14 @@ func renderPickerList(m Model) string {
 		header += fmt.Sprintf("  [%d selected]", selectedCount)
 	}
 	sb.WriteString(styleHeader.Render(header) + "\n")
-	sb.WriteString(styleSearch.Render("/") + m.pickerFilter + "█" + "\n\n")
+	switch {
+	case m.pickerSearchMode:
+		sb.WriteString(styleSearch.Render("/") + m.pickerFilter + "█" + "\n\n")
+	case m.pickerFilter != "":
+		sb.WriteString(styleSearch.Render("/") + m.pickerFilter + "\n\n")
+	default:
+		sb.WriteString(styleDim.Render("press / to filter") + "\n\n")
+	}
 
 	if len(m.pickerSessions) == 0 {
 		sb.WriteString(styleDim.Render("  (no sessions in config)") + "\n")

@@ -72,8 +72,10 @@ type Model struct {
 	pickerRunning     map[string]bool
 	pickerSelected    map[int]bool
 	pickerCursor      int
-	pickerFilter      string // live filter buffer (DSL); always active in ModePicker
-	pickerFilteredIdx []int  // indices into pickerSessions for the filtered view
+	pickerFilter        string // live filter buffer (DSL)
+	pickerFilteredIdx   []int  // indices into pickerSessions for the filtered view
+	pickerSearchMode    bool   // true while / is active and filter input is open
+	pickerPreviewEnabled bool  // picker-local preview toggle, independent of ModeList
 
 	// last error from a close/restart action
 	actionErr error
@@ -143,10 +145,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		cfg := m.cfg.Defaults.Preview
 		if m.previewEnabled {
-			cfg := m.cfg.Defaults.Preview
 			if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
 				m.disablePreviewWithNotice("preview disabled: terminal too small")
+			}
+		}
+		if m.pickerPreviewEnabled {
+			if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+				m.pickerPreviewEnabled = false
+				m.previewText = ""
+				m.previewError = ""
+				m.previewWindowID = 0
+				m.previewNotice = "preview disabled: terminal too small"
+				m.previewNoticeExpires = time.Now().Add(2 * time.Second)
 			}
 		}
 		return m, nil
@@ -155,14 +167,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(fetchCmd(m.client, m.sortMode), tickCmd(m.interval))
 
 	case previewTickMsg:
-		if !m.previewEnabled {
+		if !m.activePreviewEnabled() {
 			return m, nil
 		}
 		d := time.Duration(m.cfg.Defaults.Preview.RefreshMs) * time.Millisecond
 		return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
 
 	case previewContentMsg:
-		if !m.previewEnabled || msg.windowID != m.previewWindowID {
+		if !m.activePreviewEnabled() || msg.windowID != m.previewWindowID {
 			return m, nil
 		}
 		if msg.err != nil {
@@ -392,6 +404,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerProfileOverride = loadPickerOverrides(m.pickerSessions)
 		m.pickerCursor = 0
 		m.pickerFilter = ""
+		m.pickerSearchMode = false
 		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
 		m.mode = ModePicker
 		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
@@ -565,9 +578,54 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.pickerSearchMode {
+		return m.handlePickerSearchKey(msg)
+	}
+	return m.handlePickerNavKey(msg)
+}
+
+// handlePickerSearchKey handles input while the picker is in search mode
+// (activated by pressing `/`). Only esc, enter, and backspace have special
+// meaning; every other printable character (including j, k, space, p, etc.)
+// is appended to the filter buffer so the user can type freely.
+func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case keyEsc, keyEnter:
+		m.pickerSearchMode = false
+		return m, nil
+	case keyBackspace:
+		if r := []rune(m.pickerFilter); len(r) > 0 {
+			m.pickerFilter = string(r[:len(r)-1])
+			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerCursor = 0
+			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+				return m, cmd
+			}
+		}
+		return m, nil
+	default:
+		if t := msg.Key().Text; t != "" {
+			m.pickerFilter += t
+			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerCursor = 0
+			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+				return m, cmd
+			}
+		}
+		return m, nil
+	}
+}
+
+// handlePickerNavKey handles input while the picker is in navigation mode
+// (the default). Printable characters other than recognised shortcuts are
+// silently ignored; press `/` to enter search mode and type a filter.
+func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case keySlash:
+		m.pickerSearchMode = true
+		return m, nil
 	case keyEsc:
-		// Two-stage Esc: first clears a non-empty buffer; second exits.
+		// Two-stage Esc: first clears a non-empty filter; second exits picker.
 		if m.pickerFilter != "" {
 			m.pickerFilter = ""
 			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
@@ -583,7 +641,7 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
-	case keyCtrlC:
+	case keyCtrlC, keyQ:
 		return m, tea.Quit
 	case keyJ, keyDown:
 		m.pickerCursor = clamp(m.pickerCursor+1, 0, len(m.pickerFilteredIdx)-1)
@@ -598,7 +656,7 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case keyTogglePreview:
-		return m.togglePreview()
+		return m.togglePickerPreview()
 	case keySpace:
 		if len(m.pickerFilteredIdx) == 0 {
 			return m, nil
@@ -649,20 +707,9 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	default:
+		return m, nil
 	}
-
-	// Default: live-append printable characters to the filter buffer. The
-	// always-on filter means typing has no other meaning in the picker
-	// (toggle is space, navigation is j/k, launch is enter, preview is p).
-	if t := msg.Key().Text; t != "" {
-		m.pickerFilter += t
-		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
-		m.pickerCursor = 0
-		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
-			return m, cmd
-		}
-	}
-	return m, nil
 }
 
 // View renders the full dashboard.
@@ -827,6 +874,16 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
 }
 
+// activePreviewEnabled reports whether the preview pane is enabled for the
+// currently active mode. ModePicker has its own independent flag so that
+// toggling preview inside the picker does not disturb the list's preview state.
+func (m Model) activePreviewEnabled() bool {
+	if m.mode == ModePicker {
+		return m.pickerPreviewEnabled
+	}
+	return m.previewEnabled
+}
+
 // currentPreviewWindowID returns the window ID the preview should track for
 // the current cursor in the active mode. ModePicker resolves through the
 // picker cursor (matching the highlighted config session to a running one);
@@ -862,7 +919,7 @@ func (m Model) pickerCurrentWindowID() int {
 // picker cursor now points at a different running session (or none).
 // Returns nil when preview is off or the window hasn't changed.
 func (m *Model) refreshPreviewForPickerCursor() tea.Cmd {
-	if !m.previewEnabled {
+	if !m.pickerPreviewEnabled {
 		return nil
 	}
 	winID := m.pickerCurrentWindowID()
@@ -893,6 +950,30 @@ func (m *Model) refreshPreviewForCursor() tea.Cmd {
 	m.previewText = ""
 	m.previewError = ""
 	return fetchPreviewCmd(m.client, winID)
+}
+
+// togglePickerPreview flips the picker's own preview pane on/off, independent
+// of m.previewEnabled (the list's preview flag).
+func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
+	if m.pickerPreviewEnabled {
+		m.pickerPreviewEnabled = false
+		m.previewText = ""
+		m.previewError = ""
+		m.previewWindowID = 0
+		return m, nil
+	}
+	cfg := m.cfg.Defaults.Preview
+	if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+		m.previewNotice = "preview unavailable: terminal too small"
+		m.previewNoticeExpires = time.Now().Add(2 * time.Second)
+		return m, nil
+	}
+	m.pickerPreviewEnabled = true
+	m.previewText = ""
+	m.previewError = ""
+	m.previewWindowID = m.pickerCurrentWindowID()
+	d := time.Duration(cfg.RefreshMs) * time.Millisecond
+	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
 }
 
 // disablePreviewWithNotice turns the preview off and shows a transient footer

@@ -43,7 +43,11 @@ func TestPickerTypingNarrowsLive(t *testing.T) {
 	if len(m.pickerFilteredIdx) != 4 {
 		t.Fatalf("expected 4 picker sessions initially, got %d", len(m.pickerFilteredIdx))
 	}
-	// Use "tes" (substring of "notes" only) — j/k/o/p are picker shortcuts.
+	// Press / to enter search mode, then type "tes" (substring of "notes" only).
+	m = pressKey(m, "/")
+	if !m.pickerSearchMode {
+		t.Fatal("expected pickerSearchMode=true after /")
+	}
 	m = pressKey(m, "t")
 	m = pressKey(m, "e")
 	m = pressKey(m, "s")
@@ -60,6 +64,7 @@ func TestPickerTypingNarrowsLive(t *testing.T) {
 
 func TestPickerBackspaceShrinksBuffer(t *testing.T) {
 	m := pickerModel(t)
+	m = pressKey(m, "/") // enter search mode
 	for _, k := range []string{"t", "e", "s"} {
 		m = pressKey(m, k)
 	}
@@ -71,12 +76,21 @@ func TestPickerBackspaceShrinksBuffer(t *testing.T) {
 	if len(m.pickerFilteredIdx) != 1 {
 		t.Fatalf("expected 1 match for 'te', got %d", len(m.pickerFilteredIdx))
 	}
-	// Backspace on empty buffer is a no-op (does not exit).
+	// Over-backspace empties the buffer but stays in search mode.
 	for i := 0; i < 5; i++ {
 		m = pressKey(m, "backspace")
 	}
 	if m.pickerFilter != "" {
 		t.Fatalf("expected empty pickerFilter after over-backspace, got %q", m.pickerFilter)
+	}
+	// Exit search mode, then verify backspace in nav mode on empty buffer is a no-op.
+	m = pressKey(m, "esc") // search → nav (filter already "")
+	if m.pickerSearchMode {
+		t.Fatal("expected pickerSearchMode=false after esc in search mode")
+	}
+	m = pressKey(m, "backspace") // nav mode, empty buffer — no-op
+	if m.pickerFilter != "" {
+		t.Fatalf("expected empty pickerFilter after backspace on empty in nav mode, got %q", m.pickerFilter)
 	}
 	if m.mode != ModePicker {
 		t.Fatalf("backspace on empty buffer must not exit picker, mode=%d", m.mode)
@@ -85,40 +99,56 @@ func TestPickerBackspaceShrinksBuffer(t *testing.T) {
 
 func TestPickerEscClearsBufferThenExits(t *testing.T) {
 	m := pickerModel(t)
+
+	// Enter search mode and type a filter.
+	m = pressKey(m, "/")
 	m = pressKey(m, "t")
 	m = pressKey(m, "e")
 	if m.pickerFilter == "" {
 		t.Fatal("expected buffer populated before esc")
 	}
-	// First esc clears the buffer but stays in picker.
+
+	// Esc in search mode → exits search mode, filter KEPT, stays in picker.
 	m = pressKey(m, "esc")
-	if m.pickerFilter != "" {
-		t.Fatalf("expected buffer cleared after first esc, got %q", m.pickerFilter)
+	if m.pickerSearchMode {
+		t.Fatal("expected pickerSearchMode=false after esc in search mode")
+	}
+	if m.pickerFilter != "te" {
+		t.Fatalf("expected filter 'te' kept after esc from search mode, got %q", m.pickerFilter)
 	}
 	if m.mode != ModePicker {
-		t.Fatalf("expected to stay in ModePicker after first esc, got %d", m.mode)
+		t.Fatalf("expected to stay in ModePicker after esc from search mode, got %d", m.mode)
+	}
+
+	// Esc in nav mode with non-empty filter → clears filter, stays in picker.
+	m = pressKey(m, "esc")
+	if m.pickerFilter != "" {
+		t.Fatalf("expected buffer cleared after esc in nav mode, got %q", m.pickerFilter)
+	}
+	if m.mode != ModePicker {
+		t.Fatalf("expected to stay in ModePicker after filter-clear esc, got %d", m.mode)
 	}
 	if len(m.pickerFilteredIdx) != 4 {
 		t.Fatalf("expected all 4 sessions visible after clear, got %d", len(m.pickerFilteredIdx))
 	}
-	// Second esc exits to list.
+
+	// Esc in nav mode with empty filter → exit to ModeList.
 	m = pressKey(m, "esc")
 	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after second esc, got %d", m.mode)
+		t.Fatalf("expected ModeList after esc with empty filter, got %d", m.mode)
 	}
 }
 
 func TestPickerSelectionPersistsAcrossFilterChanges(t *testing.T) {
 	m := pickerModel(t)
-	// Default sort: personal, then work — so cursor=0 is the first personal
-	// session ("dotfiles"). Just toggle whatever is at cursor=0.
+	// Default sort: personal, then work — cursor=0 is "dotfiles".
 	first := m.pickerFilteredIdx[m.pickerCursor]
 	m = pressKey(m, " ")
 	if !m.pickerSelected[first] {
 		t.Fatal("expected first row selected after space")
 	}
-	// Type a filter that hides the selected row. Buffer ends as "ac"
-	// (the trailing 'k' is a picker shortcut and doesn't get appended).
+	// Enter search mode and type a filter that hides the selected row.
+	m = pressKey(m, "/")
 	for _, k := range []string{"a", "c"} {
 		m = pressKey(m, k)
 	}
@@ -131,22 +161,29 @@ func TestPickerSelectionPersistsAcrossFilterChanges(t *testing.T) {
 	if !m.pickerSelected[first] {
 		t.Fatal("selection must persist even when the row is filtered out")
 	}
-	// Clear the filter — the row reappears, still selected.
-	m = pressKey(m, "esc")
+	// Exit search mode (filter kept), then clear filter.
+	m = pressKey(m, "esc") // search → nav, filter "ac" kept
+	m = pressKey(m, "esc") // nav + "ac" filter → clear filter
 	if !m.pickerSelected[first] {
 		t.Fatal("selection lost after clearing filter")
+	}
+	if len(m.pickerFilteredIdx) != 4 {
+		t.Fatalf("expected all 4 sessions after filter cleared, got %d", len(m.pickerFilteredIdx))
 	}
 }
 
 func TestPickerEnterLaunchesWhileFiltered(t *testing.T) {
 	m := pickerModel(t)
+	// Enter search mode, filter to one row, then exit search mode.
+	m = pressKey(m, "/")
 	for _, k := range []string{"t", "e", "s"} {
 		m = pressKey(m, k)
 	}
 	if len(m.pickerFilteredIdx) != 1 {
 		t.Fatalf("expected 1 visible row, got %d", len(m.pickerFilteredIdx))
 	}
-	m = pressKey(m, " ") // select the visible row
+	m = pressKey(m, "esc") // exit search mode → nav (filter kept)
+	m = pressKey(m, " ")   // select the visible row
 	updated, cmd := m.Update(keyPress("enter"))
 	if updated.(Model).mode != ModeList {
 		t.Fatalf("expected ModeList after enter, got %d", updated.(Model).mode)
@@ -157,10 +194,8 @@ func TestPickerEnterLaunchesWhileFiltered(t *testing.T) {
 }
 
 func TestPickerDSLAccountFilter(t *testing.T) {
-	// The picker reserves j/k/o/space/enter/esc/backspace as shortcuts, so
-	// typing "@personal" through pressKey would lose `o`. Drive the DSL
-	// filter via applyPickerFilter directly to verify the underlying
-	// semantics — the live-typing path is covered by TestPickerTypingNarrowsLive.
+	// Drive the DSL filter via applyPickerFilter directly to verify the underlying
+	// semantics — the live-typing path (in search mode) is covered by TestPickerTypingNarrowsLive.
 	sessions := []config.Session{
 		{Title: "api", Account: "work"},
 		{Title: "dotfiles", Account: "personal"},
@@ -174,29 +209,61 @@ func TestPickerDSLAccountFilter(t *testing.T) {
 
 func TestPickerStickyInputRendered(t *testing.T) {
 	m := pickerModel(t)
+
+	// Initial state: nav mode, empty filter → hint text, no cursor.
 	out := stripAnsi(renderPicker(m))
+	if strings.Contains(out, "/█") {
+		t.Errorf("expected no cursor block in initial render (not yet in search mode), got:\n%s", out)
+	}
+	if !strings.Contains(out, "press / to filter") {
+		t.Errorf("expected hint 'press / to filter' in initial render, got:\n%s", out)
+	}
+
+	// After pressing `/`: search mode active → prompt with cursor.
+	m = pressKey(m, "/")
+	out = stripAnsi(renderPicker(m))
 	if !strings.Contains(out, "/█") {
-		t.Errorf("expected sticky `/` prompt with cursor in render, got:\n%s", out)
+		t.Errorf("expected '/█' prompt after entering search mode, got:\n%s", out)
 	}
-	for _, k := range []string{"t", "e"} {
-		m = pressKey(m, k)
-	}
+
+	// After typing "te": buffer shown with cursor.
+	m = pressKey(m, "t")
+	m = pressKey(m, "e")
 	out = stripAnsi(renderPicker(m))
 	if !strings.Contains(out, "/te█") {
 		t.Errorf("expected buffer 'te' rendered next to the prompt, got:\n%s", out)
 	}
 }
 
-func TestPickerSlashIsAppendedToBuffer(t *testing.T) {
-	// `/` is a printable char with no special meaning in the picker now —
-	// it should land in the buffer like any other character.
+func TestPickerSlashEntersSearchMode(t *testing.T) {
 	m := pickerModel(t)
+	if m.pickerSearchMode {
+		t.Fatal("expected pickerSearchMode=false initially")
+	}
 	m = pressKey(m, "/")
-	if m.pickerFilter != "/" {
-		t.Fatalf("expected pickerFilter=/, got %q", m.pickerFilter)
+	if !m.pickerSearchMode {
+		t.Fatal("expected pickerSearchMode=true after /")
+	}
+	// The slash itself must NOT be added to the filter buffer.
+	if m.pickerFilter != "" {
+		t.Fatalf("expected empty pickerFilter after /, got %q", m.pickerFilter)
 	}
 	if m.mode != ModePicker {
-		t.Fatalf("expected to stay in ModePicker, got mode=%d", m.mode)
+		t.Fatalf("expected to stay in ModePicker after /, got mode=%d", m.mode)
+	}
+}
+
+func TestPickerNavModeIgnoresPrintableChars(t *testing.T) {
+	m := pickerModel(t)
+	// In nav mode, printable chars other than known shortcuts are silently ignored.
+	m = pressKey(m, "t")
+	m = pressKey(m, "e")
+	m = pressKey(m, "s")
+	if m.pickerFilter != "" {
+		t.Fatalf("expected empty filter in nav mode after typing, got %q", m.pickerFilter)
+	}
+	if len(m.pickerFilteredIdx) != 4 {
+		t.Fatalf("expected all 4 sessions unfiltered in nav mode, got %d", len(m.pickerFilteredIdx))
 	}
 }
 
@@ -261,20 +328,29 @@ func TestPickerPreviewToggleP(t *testing.T) {
 	m := pickerModel(t)
 	m.width, m.height = 120, 40
 	m.cfg.Defaults.Preview = pickerPreviewCfg()
+	if m.pickerPreviewEnabled {
+		t.Fatal("picker preview should start disabled")
+	}
 	if m.previewEnabled {
-		t.Fatal("preview should start disabled")
+		t.Fatal("list preview should start disabled")
 	}
 	m = pressKey(m, "p")
-	if !m.previewEnabled {
-		t.Fatal("expected preview enabled after p in picker")
+	if !m.pickerPreviewEnabled {
+		t.Fatal("expected pickerPreviewEnabled=true after p in picker")
+	}
+	if m.previewEnabled {
+		t.Fatal("p in picker must not touch m.previewEnabled")
 	}
 	// `p` should not have landed in the filter buffer.
 	if strings.Contains(m.pickerFilter, "p") {
 		t.Errorf("expected p to act as toggle, not buffer append; pickerFilter=%q", m.pickerFilter)
 	}
 	m = pressKey(m, "p")
+	if m.pickerPreviewEnabled {
+		t.Fatal("expected pickerPreviewEnabled=false after second p in picker")
+	}
 	if m.previewEnabled {
-		t.Fatal("expected preview disabled after second p in picker")
+		t.Fatal("second p in picker must not touch m.previewEnabled")
 	}
 }
 
@@ -282,7 +358,7 @@ func TestPickerPreviewRenderShowsConfigBlock(t *testing.T) {
 	m := pickerModel(t)
 	m.width, m.height = 120, 40
 	m.cfg.Defaults.Preview = pickerPreviewCfg()
-	m.previewEnabled = true
+	m.pickerPreviewEnabled = true
 	out := stripAnsi(renderPicker(m))
 	// pickerCursor=0 → first sorted row: "dotfiles" (personal).
 	if !strings.Contains(out, "dotfiles") {
@@ -324,7 +400,7 @@ func TestPickerProfileOverrideUpdatesLaunchProfile(t *testing.T) {
 
 	m.width, m.height = 120, 40
 	m.cfg.Defaults.Preview = pickerPreviewCfg()
-	m.previewEnabled = true
+	m.pickerPreviewEnabled = true
 	out := stripAnsi(renderPicker(m))
 	if !strings.Contains(out, "(override)") {
 		t.Errorf("expected picker row to show override marker, got:\n%s", out)
@@ -339,7 +415,7 @@ func TestPickerPreviewRenderAutoDisableNarrow(t *testing.T) {
 	cfg := pickerPreviewCfg()
 	m.cfg.Defaults.Preview = cfg
 	m.width, m.height = 30, 40 // below MinCols (40)
-	m.previewEnabled = true
+	m.pickerPreviewEnabled = true
 	out := stripAnsi(renderPicker(m))
 	if strings.Contains(out, "dir:") {
 		t.Errorf("expected preview pane to auto-disable at narrow width, got:\n%s", out)
@@ -362,7 +438,7 @@ func TestPickerPreviewRunningPeek(t *testing.T) {
 	})
 	m = pressKey(m, "l")
 	m.width, m.height = 120, 40
-	m.previewEnabled = true
+	m.pickerPreviewEnabled = true
 	m.previewWindowID = 99
 	m.previewText = "alpha\nbeta\ngamma"
 	out := stripAnsi(renderPicker(m))
@@ -393,7 +469,7 @@ func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 	m.width, m.height = 120, 40
 	m = pressKey(m, "l")
 	// Sorted: personal first ("notes") then work ("api"). Cursor=0 → notes.
-	if !m.previewEnabled {
+	if !m.pickerPreviewEnabled {
 		// Enable preview from within the picker.
 		m = pressKey(m, "p")
 	}
