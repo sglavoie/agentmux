@@ -126,8 +126,11 @@ func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
 		if !argMap["--var=cc_flags=--dangerously-skip-permissions"] {
 			t.Errorf("expected cc_flags arg in args: %v", c.Args)
 		}
-		if !argMap["--location=first"] {
-			t.Errorf("expected --location=first for empty kitty in args: %v", c.Args)
+		// Empty Kitty: no --location flag, Kitty uses its default placement.
+		for _, a := range c.Args {
+			if strings.HasPrefix(a, "--location") {
+				t.Errorf("expected no --location arg for empty kitty, got %q", a)
+			}
 		}
 	}
 	if !launchCalled {

@@ -27,7 +27,7 @@ func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Acc
 		prevTabID = 0
 	}
 
-	if loc == "after" && prevTabID != 0 {
+	if (loc == "after" || loc == "before") && prevTabID != 0 {
 		_ = client.FocusTab(kitty.MatchTabByID(prevTabID))
 		time.Sleep(100 * time.Millisecond)
 	}

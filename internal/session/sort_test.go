@@ -83,32 +83,34 @@ func TestComputeInsertLocation_Account(t *testing.T) {
 	}
 }
 
-// TestComputeInsertLocation_First verifies that a tab that sorts before all
-// existing ones returns location "first".
-func TestComputeInsertLocation_First(t *testing.T) {
+// TestComputeInsertLocation_Before verifies that a tab that sorts before all
+// existing ones returns location "before" with the first session tab's ID.
+// Fixture has P:dotfiles (id=2) as the first sorted session tab.
+func TestComputeInsertLocation_Before(t *testing.T) {
 	client := newClientWithFixture(t, "kitty_ls_multi.json")
 	// "A:aardvark" sorts before "P:dotfiles" in alpha mode.
 	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "personal", "A:aardvark")
 	if err != nil {
 		t.Fatalf("ComputeInsertLocation: %v", err)
 	}
-	if loc != "first" {
-		t.Errorf("location: got %q, want %q", loc, "first")
+	if loc != "before" {
+		t.Errorf("location: got %q, want %q", loc, "before")
 	}
-	if tabID != 0 {
-		t.Errorf("tabID for 'first': got %d, want 0", tabID)
+	if tabID != 2 {
+		t.Errorf("tabID: got %d, want 2 (P:dotfiles)", tabID)
 	}
 }
 
-// TestComputeInsertLocation_EmptyKitty verifies first insertion into empty Kitty.
+// TestComputeInsertLocation_EmptyKitty verifies first insertion into empty Kitty
+// uses default Kitty placement (no --location flag).
 func TestComputeInsertLocation_EmptyKitty(t *testing.T) {
 	client := newClientWithFixture(t, "kitty_ls_empty.json")
 	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "work", "W:api")
 	if err != nil {
 		t.Fatalf("ComputeInsertLocation: %v", err)
 	}
-	if loc != "first" {
-		t.Errorf("location: got %q, want %q", loc, "first")
+	if loc != "" {
+		t.Errorf("location: got %q, want %q", loc, "")
 	}
 	if tabID != 0 {
 		t.Errorf("tabID: got %d, want 0", tabID)

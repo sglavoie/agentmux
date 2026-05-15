@@ -61,8 +61,8 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 		prevTabID = 0
 	}
 
-	// Focus the preceding tab so Kitty inserts the new tab after it.
-	if loc == "after" && prevTabID != 0 {
+	// Focus the reference tab so Kitty inserts relative to it.
+	if (loc == "after" || loc == "before") && prevTabID != 0 {
 		_ = client.FocusTab(kitty.MatchTabByID(prevTabID))
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -133,11 +133,11 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	return nil
 }
 
-// locationArg converts a logical location ("first"/"after"/"") to the
-// kitten @ launch --location value. Returns "" for default behavior.
+// locationArg converts a logical location to the kitten @ launch --location
+// value. Returns "" for default behavior.
 func locationArg(loc string) string {
 	switch loc {
-	case "first", "after":
+	case "first", "after", "before":
 		return loc
 	default:
 		return ""

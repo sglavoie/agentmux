@@ -63,7 +63,11 @@ func ComputeInsertLocation(client kitty.KittyClient, mode, account, baseTitle st
 	}
 
 	if prevID == 0 {
-		return "first", 0, nil
+		if len(entries) == 0 {
+			return "", 0, nil
+		}
+		// New tab sorts before all existing session tabs; insert before the first one.
+		return "before", entries[0].tabID, nil
 	}
 	return "after", prevID, nil
 }
