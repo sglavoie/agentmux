@@ -27,6 +27,7 @@ type hookGroup struct {
 var hookEvents = []string{
 	"SessionStart",
 	"UserPromptSubmit",
+	"PreToolUse",
 	"SubagentStart",
 	"SubagentStop",
 	"PostToolUse",

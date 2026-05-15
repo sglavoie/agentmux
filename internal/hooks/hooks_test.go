@@ -55,9 +55,9 @@ func TestMergeFreshWrite(t *testing.T) {
 		t.Fatal("hooks key missing or wrong type")
 	}
 
-	// Should have entries for all 11 events.
-	if got := len(hooks); got != 11 {
-		t.Errorf("expected 11 hook events, got %d", got)
+	// Should have entries for all 12 events.
+	if got := len(hooks); got != 12 {
+		t.Errorf("expected 12 hook events, got %d", got)
 	}
 
 	// Verify UserPromptSubmit uses event-name format.

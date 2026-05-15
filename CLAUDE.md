@@ -167,7 +167,7 @@ Socket discovery uses `KITTY_LISTEN_ON` environment variable only. Kitty must be
 
 Debug logging uses `slog` and is enabled with `--debug` flag or `CCM_DEBUG=1`.
 
-Hook events installed by `ccm config hooks-sync`: `SessionStart`, `UserPromptSubmit`, `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `Stop`, `TaskCompleted`, `SessionEnd`, `Notification`. Each hook entry calls `ccm hook-indicator <EVENT>`.
+Hook events installed by `ccm config hooks-sync`: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `Stop`, `TaskCompleted`, `SessionEnd`, `Notification`. Each hook entry calls `ccm hook-indicator <EVENT>`.
 
 Version is tracked as a constant in `cmd/root.go`; update with `just bump VERSION`.
 
