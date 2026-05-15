@@ -5,32 +5,32 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	ccerrors "github.com/sglavoie/cc-manager-kitty/internal/errors"
-	"github.com/sglavoie/cc-manager-kitty/internal/indicator"
+	ccerrors "github.com/sglavoie/agentmux/internal/errors"
+	"github.com/sglavoie/agentmux/internal/indicator"
 )
 
 var hookWindowID int
 
 var hookIndicatorCmd = &cobra.Command{
 	Use:   "hook-indicator <event>",
-	Short: "Update Kitty tab state from a Claude Code hook (internal)",
-	Long: `Called by Claude Code hooks to update the Kitty tab title and trigger
+	Short: "Update Kitty tab state from a harness hook (internal)",
+	Long: `Called by supported harness hooks to update the Kitty tab title and trigger
 notifications based on the current session state.
 
-The first argument must be a Claude Code event name (e.g. Stop, PermissionRequest,
+The first argument must be a harness event name (e.g. Stop, PermissionRequest,
 UserPromptSubmit). Unknown events are silently ignored.
 
 KITTY_WINDOW_ID must be set in the environment (provided automatically
-by Claude Code hooks), or supplied via --window-id.`,
+by harness hooks), or supplied via --window-id.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ccmBin, err := os.Executable()
+		amxBin, err := os.Executable()
 		if err != nil {
-			ccerrors.Print(fmt.Errorf("resolving ccm binary: %w", err))
+			ccerrors.Print(fmt.Errorf("resolving amx binary: %w", err))
 			// Non-fatal: proceed without auto-start.
-			ccmBin = "ccm"
+			amxBin = "amx"
 		}
-		return indicator.Run(args[0], hookWindowID, ccmBin)
+		return indicator.Run(args[0], hookWindowID, amxBin)
 	},
 }
 

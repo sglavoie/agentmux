@@ -57,7 +57,7 @@ jobs:
         run: python3 scripts/check_keybindings.py
 
       - name: Validate Bash completion syntax
-        run: bash -n completions/_ccm.bash
+        run: bash -n completions/_amx.bash
 
       - name: Check version consistency
         run: |

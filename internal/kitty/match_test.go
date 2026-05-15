@@ -3,7 +3,7 @@ package kitty_test
 import (
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func TestMatchTabByID(t *testing.T) {

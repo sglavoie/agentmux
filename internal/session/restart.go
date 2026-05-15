@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-var debugLog = newFileLogger("/tmp/ccm-debug.log", "[restart] ")
+var debugLog = newFileLogger("/tmp/amx-debug.log", "[restart] ")
 
 // Restart relaunches a running session and then closes the original tab,
-// preserving metadata from the running tab's user vars (account, directory,
-// flags, env, groups). Launch happens before Close so that when the
+// preserving metadata from the running tab's user vars (profile, directory,
+// args, env, groups). Launch happens before Close so that when the
 // dashboard overlay is on top of the tab being closed, the new tab is
 // already committed in Kitty before the dashboard process is torn down.
 func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Config) error {
-	acc, found := findAccount(cfg, running.Account)
+	acc, found := findAccount(cfg, running.EffectiveProfile())
 	if !found {
-		return fmt.Errorf("account %q not found in config", running.Account)
+		return fmt.Errorf("profile %q not found in config", running.EffectiveProfile())
 	}
 
 	sess := sessionFromRunning(running)
@@ -36,18 +36,19 @@ func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Confi
 	return nil
 }
 
-// RestartWithAccount relaunches a running session under a different account's
-// config and then closes the original tab. Title prefix and tab color update
-// to match the target account. If the target account is already the current
+// RestartWithAccount relaunches a running session under a different profile's
+// harness config and then closes the original tab. Title prefix and tab color
+// update to match the target profile. If the target profile is already the current
 // one, it is a no-op. Launch precedes Close for the same reason as Restart.
 func RestartWithAccount(client kitty.KittyClient, running RunningSession, targetAcc config.Account, cfg *config.Config) error {
 	debugLog.Printf("RestartWithAccount: running=%+v targetAcc=%+v", running, targetAcc)
-	if running.Account == targetAcc.Name {
+	if running.EffectiveProfile() == targetAcc.Name {
 		debugLog.Printf("RestartWithAccount: same account, no-op")
 		return nil
 	}
 
 	sess := sessionFromRunning(running)
+	sess.Profile = targetAcc.Name
 	sess.Account = targetAcc.Name
 	debugLog.Printf("RestartWithAccount: session=%+v", sess)
 
@@ -77,11 +78,18 @@ func findAccount(cfg *config.Config, name string) (config.Account, bool) {
 // sessionFromRunning reconstructs a config.Session from a running tab's
 // user vars. This preserves runtime overrides not written back to config.
 func sessionFromRunning(rs RunningSession) config.Session {
+	projectArgs := rs.ExplicitFlags
+	if !rs.ExplicitFlagsSet && projectArgs == "" {
+		projectArgs = rs.EffectiveArgs()
+	}
+
 	return config.Session{
-		Title:       projectName(rs.Base),
+		Title:       rs.EffectiveProject(),
 		Directory:   rs.Directory,
-		Account:     rs.Account,
-		ClaudeFlags: parseFlags(rs.Flags),
+		Profile:     rs.EffectiveProfile(),
+		Account:     rs.EffectiveProfile(),
+		Args:        parseFlags(projectArgs),
+		ClaudeFlags: parseFlags(projectArgs),
 		Env:         deserializeEnv(rs.Env),
 		Groups:      rs.Groups,
 	}

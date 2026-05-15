@@ -6,9 +6,9 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/tui"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/tui"
 )
 
 const version = "0.3.0"
@@ -16,11 +16,11 @@ const version = "0.3.0"
 var debug bool
 
 var rootCmd = &cobra.Command{
-	Use:   "ccm",
-	Short: "Claude Code session manager for Kitty terminal",
-	Long:  "ccm manages Claude Code sessions as Kitty tabs with color-coded accounts and an interactive dashboard.",
+	Use:   "amx",
+	Short: "Agent Mux multi-harness session manager for Kitty",
+	Long:  "amx manages Claude Code, Copilot, and other supported harness sessions as Kitty tabs with color-coded profiles and an interactive dashboard.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(config.DefaultConfigPath())
+		cfg, err := config.LoadDefault()
 		if err != nil {
 			return err
 		}
@@ -52,7 +52,7 @@ func focusExistingDashboard(client kitty.KittyClient) bool {
 		return false
 	}
 	_ = client.FocusWindow(kitty.MatchWindowByID(loc.WindowID))
-	fmt.Fprintln(os.Stderr, "Dashboard already running — focused existing tab.")
+	fmt.Fprintln(os.Stderr, "Agent Mux dashboard already running — focused existing tab.")
 	return true
 }
 

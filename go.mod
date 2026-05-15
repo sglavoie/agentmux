@@ -1,4 +1,4 @@
-module github.com/sglavoie/cc-manager-kitty
+module github.com/sglavoie/agentmux
 
 go 1.26.2
 

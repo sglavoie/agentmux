@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 type notifyCall struct {
@@ -71,8 +71,8 @@ func TestNotifier_FiresForStopFailure(t *testing.T) {
 	if !waitCalls(calls, 1, time.Second) {
 		t.Fatal("expected notification for stop_failure")
 	}
-	if (*calls)[0].subtitle != "Claude stopped (failure)" {
-		t.Errorf("subtitle = %q, want %q", (*calls)[0].subtitle, "Claude stopped (failure)")
+	if (*calls)[0].subtitle != "Session stopped (failure)" {
+		t.Errorf("subtitle = %q, want %q", (*calls)[0].subtitle, "Session stopped (failure)")
 	}
 }
 
@@ -196,14 +196,14 @@ func TestNotifier_SessionTitleInNotification(t *testing.T) {
 	if (*calls)[0].title != "W:api" {
 		t.Errorf("title = %q, want %q", (*calls)[0].title, "W:api")
 	}
-	if (*calls)[0].subtitle != "Claude stopped" {
-		t.Errorf("subtitle = %q, want %q", (*calls)[0].subtitle, "Claude stopped")
+	if (*calls)[0].subtitle != "Session stopped" {
+		t.Errorf("subtitle = %q, want %q", (*calls)[0].subtitle, "Session stopped")
 	}
 }
 
 func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
-	got := alerterArgs("W:api", "Claude stopped")
-	want := []string{"--title", "W:api", "--subtitle", "Claude stopped", "--message", ""}
+	got := alerterArgs("W:api", "Session stopped")
+	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", ""}
 	if len(got) != len(want) {
 		t.Fatalf("alerterArgs len = %d, want %d (%v)", len(got), len(want), got)
 	}
@@ -221,7 +221,7 @@ func TestNotifier_EmptySessionTitleFallback(t *testing.T) {
 	if !waitCalls(calls, 1, time.Second) {
 		t.Fatal("expected notification")
 	}
-	if (*calls)[0].title != "Claude Code" {
-		t.Errorf("title = %q, want %q", (*calls)[0].title, "Claude Code")
+	if (*calls)[0].title != "Agent Mux" {
+		t.Errorf("title = %q, want %q", (*calls)[0].title, "Agent Mux")
 	}
 }

@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 func loadFixture(t *testing.T, name string) []byte {

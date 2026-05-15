@@ -1,17 +1,20 @@
 package kitty
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // OSWindow is the top-level object returned by kitten @ ls.
 type OSWindow struct {
-	ID              int    `json:"id"`
-	IsActive        bool   `json:"is_active"`
-	IsFocused       bool   `json:"is_focused"`
-	LastFocused     bool   `json:"last_focused"`
-	Tabs            []Tab  `json:"tabs"`
+	ID          int   `json:"id"`
+	IsActive    bool  `json:"is_active"`
+	IsFocused   bool  `json:"is_focused"`
+	LastFocused bool  `json:"last_focused"`
+	Tabs        []Tab `json:"tabs"`
 }
 
 // Tab is a Kitty tab.
@@ -24,9 +27,9 @@ type Tab struct {
 
 // Window is a Kitty window (pane) within a tab.
 type Window struct {
-	ID       int      `json:"id"`
-	IsActive bool     `json:"is_active"`
-	Title    string   `json:"title"`
+	ID                  int                 `json:"id"`
+	IsActive            bool                `json:"is_active"`
+	Title               string              `json:"title"`
 	CWD                 string              `json:"cwd"`
 	Cmdline             []string            `json:"cmdline"`
 	UserVars            UserVars            `json:"user_vars"`
@@ -63,7 +66,7 @@ type DashboardLocation struct {
 }
 
 // FindDashboardWindow scans all OS windows for a window whose foreground
-// process is a ccm dashboard (ccm with no subcommand). excludeWindowID is
+// process is an amx dashboard (amx with no subcommand). excludeWindowID is
 // skipped to avoid self-detection (pass the current KITTY_WINDOW_ID).
 func FindDashboardWindow(osWindows []OSWindow, excludeWindowID int) (*DashboardLocation, bool) {
 	for i := range osWindows {
@@ -90,7 +93,7 @@ func isDashboardCmdline(cmdline []string) bool {
 		return false
 	}
 	base := filepath.Base(cmdline[0])
-	if base != "ccm" {
+	if base != "amx" {
 		return false
 	}
 	for _, arg := range cmdline[1:] {
@@ -101,14 +104,101 @@ func isDashboardCmdline(cmdline []string) bool {
 	return true
 }
 
-// UserVars holds cc-manager user variables stored on a Kitty window.
+// UserVars holds Agent Mux user variables stored on a Kitty window.
 type UserVars struct {
-	Account   string `json:"cc_account"`
-	ConfigDir string `json:"cc_config_dir"`
-	Flags     string `json:"cc_flags"`
-	PW        string `json:"cc_pw"`
-	Env       string `json:"cc_env"`
-	Groups    string `json:"cc_groups"`
-	Mute      string `json:"cc_mute"`
-	CWD       string `json:"cc_cwd"`
+	Profile      string `json:"amx_profile"`
+	Harness      string `json:"amx_harness"`
+	HomeDir      string `json:"amx_home_dir"`
+	Project      string `json:"amx_project"`
+	Args         string `json:"amx_args"`
+	AMXEnv       string `json:"amx_env"`
+	AMXGroups    string `json:"amx_groups"`
+	AMXDirectory string `json:"amx_directory"`
+	Account      string `json:"cc_account"`
+	ConfigDir    string `json:"cc_config_dir"`
+	Flags        string `json:"cc_flags"`
+	ExplicitFlags string `json:"cc_explicit_flags"`
+	ExplicitFlagsSet bool `json:"-"`
+	PW           string `json:"cc_pw"`
+	Env          string `json:"cc_env"`
+	Groups       string `json:"cc_groups"`
+	Mute         string `json:"cc_mute"`
+	CWD          string `json:"cc_cwd"`
+}
+
+func (u *UserVars) UnmarshalJSON(data []byte) error {
+	type alias UserVars
+
+	var decoded alias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*u = UserVars(decoded)
+	_, u.ExplicitFlagsSet = raw["cc_explicit_flags"]
+	return nil
+}
+
+func (u UserVars) EffectiveProfile() string {
+	if u.Profile != "" {
+		return u.Profile
+	}
+	return u.Account
+}
+
+func (u UserVars) EffectiveHarness() string {
+	if u.Harness != "" {
+		return harness.Normalize(u.Harness)
+	}
+	if u.Account != "" {
+		return harness.Claude
+	}
+	return ""
+}
+
+func (u UserVars) EffectiveHomeDir() string {
+	if u.HomeDir != "" {
+		return u.HomeDir
+	}
+	return u.ConfigDir
+}
+
+func (u UserVars) EffectiveProject(baseTitle string) string {
+	if u.Project != "" {
+		return u.Project
+	}
+	return baseTitle
+}
+
+func (u UserVars) EffectiveArgs() string {
+	if u.Args != "" {
+		return u.Args
+	}
+	return u.Flags
+}
+
+func (u UserVars) EffectiveDirectory() string {
+	if u.AMXDirectory != "" {
+		return u.AMXDirectory
+	}
+	return u.CWD
+}
+
+func (u UserVars) EffectiveEnv() string {
+	if u.AMXEnv != "" {
+		return u.AMXEnv
+	}
+	return u.Env
+}
+
+func (u UserVars) EffectiveGroups() string {
+	if u.AMXGroups != "" {
+		return u.AMXGroups
+	}
+	return u.Groups
 }

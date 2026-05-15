@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func loadFixture(t *testing.T, name string) []byte {
@@ -169,5 +169,30 @@ func TestUserVarsUnmarshal(t *testing.T) {
 	}
 	if uv.Groups != "backend" {
 		t.Errorf("Groups: got %q, want %q", uv.Groups, "backend")
+	}
+}
+
+func TestUserVarsUnmarshal_ExplicitFlagsPresence(t *testing.T) {
+	raw := `{"cc_account":"work","cc_flags":"--account-flag","cc_explicit_flags":"","cc_cwd":"/home/user/api"}`
+	var uv kitty.UserVars
+	if err := json.Unmarshal([]byte(raw), &uv); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if uv.ExplicitFlags != "" {
+		t.Errorf("ExplicitFlags: got %q, want empty", uv.ExplicitFlags)
+	}
+	if !uv.ExplicitFlagsSet {
+		t.Error("expected ExplicitFlagsSet to be true when cc_explicit_flags is present")
+	}
+}
+
+func TestUserVarsUnmarshal_ExplicitFlagsAbsent(t *testing.T) {
+	raw := `{"cc_account":"work","cc_flags":"--legacy-flag","cc_cwd":"/home/user/api"}`
+	var uv kitty.UserVars
+	if err := json.Unmarshal([]byte(raw), &uv); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if uv.ExplicitFlagsSet {
+		t.Error("expected ExplicitFlagsSet to be false when cc_explicit_flags is absent")
 	}
 }

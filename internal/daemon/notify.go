@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 const cooldownDuration = 10 * time.Second
@@ -22,10 +22,10 @@ var notifyableActions = map[string]bool{
 
 // notificationLabels maps action names to human-readable notification titles.
 var notificationLabels = map[string]string{
-	"stop":         "Claude stopped",
+	"stop":         "Session stopped",
 	"permission":   "Permission requested",
 	"failure":      "Tool failure",
-	"stop_failure": "Claude stopped (failure)",
+	"stop_failure": "Session stopped (failure)",
 }
 
 // Notifier tracks per-window cooldowns and fires macOS notifications via
@@ -63,7 +63,7 @@ func selectDispatcher() func(title, subtitle string) error {
 //   - the action is notifyable (stop/permission/failure)
 //   - the corresponding config flag is enabled
 //   - the 10s cooldown has elapsed since the last notification for this window
-//   - pipeMode is false (claude -p suppresses notifications)
+//   - pipeMode is false (non-interactive Claude/Copilot runs suppress notifications)
 func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMode bool) {
 	if pipeMode {
 		return
@@ -86,7 +86,7 @@ func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMo
 
 	title := sessionTitle
 	if title == "" {
-		title = "Claude Code"
+		title = "Agent Mux"
 	}
 	subtitle := notificationLabels[action]
 	go func() {

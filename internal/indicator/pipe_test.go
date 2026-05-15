@@ -27,7 +27,7 @@ func TestWalkTree_ClaudeWithDashP(t *testing.T) {
 	// Tree: 1002 (hook) → 1001 (shell) → 1000 (claude -p)
 	cmd, ppid := fakeTree(
 		map[int]string{
-			1002: "ccm hook-indicator active",
+			1002: "amx hook-indicator active",
 			1001: "/bin/zsh",
 			1000: "node /usr/local/bin/claude -p 'summarize'",
 		},
@@ -41,7 +41,7 @@ func TestWalkTree_ClaudeWithDashP(t *testing.T) {
 func TestWalkTree_ClaudeWithPrint(t *testing.T) {
 	cmd, ppid := fakeTree(
 		map[int]string{
-			1001: "ccm hook-indicator stop",
+			1001: "amx hook-indicator stop",
 			1000: "node /usr/local/bin/claude --print",
 		},
 		map[int]int{1001: 1000, 1000: 1},

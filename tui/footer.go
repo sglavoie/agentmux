@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/palette"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 func renderFooter(m Model) string {
@@ -14,14 +14,14 @@ func renderFooter(m Model) string {
 	var line1, line2 string
 	switch m.mode {
 	case ModeSearch:
-		line1 = styleFooter.Render("  filter: @account · !state · word · \\@/\\! literal")
+		line1 = styleFooter.Render("  filter: @profile · !state · word · \\@/\\! literal")
 		line2 = styleFooter.Render("  enter: apply  esc: cancel")
 	case ModeConfirm:
 		line1 = styleFooter.Render("  [y]es   [n]o   [esc] cancel")
 		line2 = ""
 	case ModePicker:
-		line1 = styleFooter.Render("  space: toggle  enter: launch  o: open dir  p: preview  esc: clear/exit")
-		line2 = styleFooter.Render("  type to filter (DSL: @account, word)  j/k: up/down")
+		line1 = styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  p: preview  esc: clear/exit")
+		line2 = styleFooter.Render("  type to filter (DSL: @profile, word)  j/k: up/down")
 	case ModeConfigPicker:
 		line1 = styleFooter.Render("  enter: select  esc: cancel")
 		line2 = styleFooter.Render("  j/k: up/down")
@@ -103,7 +103,7 @@ var listFooterPalette = []footerEntry{
 	}},
 	{"r", "restart", hasRow},
 	{"x", "close", hasRow},
-	{"c", "config", hasRow},
+	{"c", "profile", hasRow},
 	{"C", "clear", func(m Model) bool {
 		if !hasRow(m) {
 			return false
@@ -114,7 +114,8 @@ var listFooterPalette = []footerEntry{
 		if !hasRow(m) {
 			return false
 		}
-		_, ok := findConfigSessionByBase(m.cfg, m.filtered[m.cursor].Base)
+		s := m.filtered[m.cursor]
+		_, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
 		return ok
 	}},
 	{"y", "copy title", hasRow},

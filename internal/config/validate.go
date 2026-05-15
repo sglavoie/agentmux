@@ -3,16 +3,19 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // Validate performs cross-section validation on a loaded Config.
 // Returns a combined error if any rules are violated.
 func Validate(cfg *Config) error {
 	var errs []string
+	normalizeAliases(cfg)
 
 	errs = append(errs, validateDefaults(&cfg.Defaults)...)
-	errs = append(errs, validateAccounts(cfg.Accounts)...)
-	errs = append(errs, validateSessions(cfg.Sessions, cfg.Accounts)...)
+	errs = append(errs, validateAccounts(cfg.Profiles)...)
+	errs = append(errs, validateSessions(cfg.Projects, cfg.Profiles)...)
 
 	if len(errs) > 0 {
 		return fmt.Errorf("%s", strings.Join(errs, "\n"))
@@ -66,21 +69,27 @@ func validateAccounts(accounts []Account) []string {
 	seen := map[string]bool{}
 	for i, a := range accounts {
 		if a.Name == "" {
-			errs = append(errs, fmt.Sprintf("account[%d]: name is required", i))
+			errs = append(errs, fmt.Sprintf("profile[%d]: name is required", i))
 		}
-		if a.ConfigDir == "" {
-			errs = append(errs, fmt.Sprintf("account %q: config_dir is required", a.Name))
+		if !harness.Valid(a.Harness) {
+			errs = append(errs, fmt.Sprintf(
+				"profile %q: invalid harness %q\n  → valid harnesses: %s",
+				a.Name, a.Harness, strings.Join(harness.Names(), ", "),
+			))
+		}
+		if a.HomeDir == "" {
+			errs = append(errs, fmt.Sprintf("profile %q: home_dir is required", a.Name))
 		}
 		if a.Color == "" {
-			errs = append(errs, fmt.Sprintf("account %q: color is required", a.Name))
+			errs = append(errs, fmt.Sprintf("profile %q: color is required", a.Name))
 		} else if !ValidColor(a.Color) {
 			errs = append(errs, fmt.Sprintf(
-				"account %q: invalid color %q\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
+				"profile %q: invalid color %q\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
 				a.Name, a.Color,
 			))
 		}
 		if seen[a.Name] {
-			errs = append(errs, fmt.Sprintf("duplicate account name %q", a.Name))
+			errs = append(errs, fmt.Sprintf("duplicate profile name %q", a.Name))
 		}
 		seen[a.Name] = true
 	}
@@ -95,17 +104,17 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 	}
 	for i, s := range sessions {
 		if s.Title == "" {
-			errs = append(errs, fmt.Sprintf("session[%d]: title is required", i))
+			errs = append(errs, fmt.Sprintf("project[%d]: title is required", i))
 		}
 		if s.Directory == "" {
-			errs = append(errs, fmt.Sprintf("session %q: directory is required", s.Title))
+			errs = append(errs, fmt.Sprintf("project %q: directory is required", s.Title))
 		}
-		if s.Account == "" {
-			errs = append(errs, fmt.Sprintf("session %q: account is required", s.Title))
-		} else if !accountNames[s.Account] {
+		if s.Profile == "" {
+			errs = append(errs, fmt.Sprintf("project %q: profile is required", s.Title))
+		} else if !accountNames[s.Profile] {
 			errs = append(errs, fmt.Sprintf(
-				"session %q references unknown account %q\n  → check config.toml for valid account names",
-				s.Title, s.Account,
+				"project %q references unknown profile %q\n  → check config.toml for valid profile names",
+				s.Title, s.Profile,
 			))
 		}
 	}

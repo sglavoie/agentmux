@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 func TestPushToastAppendsNewestOnTop(t *testing.T) {

@@ -57,7 +57,7 @@ func TestFindDashboardWindow(t *testing.T) {
 				Windows: []Window{{
 					ID: 1,
 					ForegroundProcesses: []ForegroundProcess{
-						{Cmdline: []string{"ccm", "daemon", "start"}},
+						{Cmdline: []string{"amx", "daemon", "start"}},
 					},
 				}},
 			}},
@@ -75,11 +75,11 @@ func TestIsDashboardCmdline(t *testing.T) {
 		cmdline []string
 		want    bool
 	}{
-		{"bare ccm", []string{"ccm"}, true},
-		{"full path", []string{"/usr/local/bin/ccm"}, true},
-		{"with debug flag", []string{"ccm", "--debug"}, true},
-		{"config subcommand", []string{"ccm", "config"}, false},
-		{"daemon start", []string{"ccm", "daemon", "start"}, false},
+		{"bare amx", []string{"amx"}, true},
+		{"full path", []string{"/usr/local/bin/amx"}, true},
+		{"with debug flag", []string{"amx", "--debug"}, true},
+		{"config subcommand", []string{"amx", "config"}, false},
+		{"daemon start", []string{"amx", "daemon", "start"}, false},
 		{"different binary", []string{"claude"}, false},
 		{"empty", []string{}, false},
 		{"nil", nil, false},

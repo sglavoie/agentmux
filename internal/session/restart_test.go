@@ -1,11 +1,12 @@
 package session_test
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // TestRestart_ClosesAndRelaunches verifies that Restart sends close-tab
@@ -139,6 +140,57 @@ func TestRestart_PreservesEnvAndGroups(t *testing.T) {
 	}
 }
 
+// TestRestart_NewSessionUsesAccountArgs verifies that when a session stores an
+// explicit-args marker with no project args, restart recomputes inherited
+// profile args instead of pinning the previous effective args as project args.
+func TestRestart_NewSessionUsesAccountArgs(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--account-flag"}},
+		},
+	}
+
+	running := session.RunningSession{
+		TabID:            42,
+		Base:             "W:api",
+		Account:          "work",
+		Directory:        "/tmp/api",
+		Flags:            "--account-flag",
+		ExplicitFlags:    "",
+		ExplicitFlagsSet: true,
+	}
+
+	err := session.Restart(client, running, cfg)
+	if err != nil {
+		t.Fatalf("Restart: %v", err)
+	}
+
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		for _, a := range c.Args {
+			if a != "launch" {
+				continue
+			}
+			for _, arg := range c.Args {
+				if arg == "--var=cc_flags=--account-flag" {
+					return
+				}
+			}
+			t.Errorf("expected --var=cc_flags=--account-flag in launch args: %v", c.Args)
+			return
+		}
+	}
+	t.Error("expected kitten @ launch to be called")
+}
+
 // TestRestartWithAccount_SwitchesAccount verifies that RestartWithAccount
 // relaunches with the target account's prefix and user var.
 func TestRestartWithAccount_SwitchesAccount(t *testing.T) {
@@ -197,6 +249,202 @@ func TestRestartWithAccount_SwitchesAccount(t *testing.T) {
 	if !argSet["--var=cc_account=personal"] {
 		t.Errorf("expected --var=cc_account=personal in launch args: %v", launchArgs)
 	}
+}
+
+// TestRestartWithAccount_NewSessionPicksUpTargetAccountArgs verifies that
+// switching profiles recomputes inherited profile args when the running session
+// has no project-explicit args.
+func TestRestartWithAccount_NewSessionPicksUpTargetAccountArgs(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--work-flag"}},
+			{Name: "personal", ConfigDir: "~/.config/claude", Color: "green", Args: []string{"--personal-flag"}},
+		},
+	}
+
+	running := session.RunningSession{
+		TabID:            42,
+		Base:             "W:api",
+		Account:          "work",
+		Directory:        "/tmp/api",
+		Flags:            "--work-flag",
+		ExplicitFlags:    "",
+		ExplicitFlagsSet: true,
+	}
+	targetAcc := cfg.Accounts[1] // personal
+
+	err := session.RestartWithAccount(client, running, targetAcc, cfg)
+	if err != nil {
+		t.Fatalf("RestartWithAccount: %v", err)
+	}
+
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		for _, a := range c.Args {
+			if a != "launch" {
+				continue
+			}
+			for _, arg := range c.Args {
+				if arg == "--var=cc_flags=--personal-flag" {
+					return
+				}
+			}
+			t.Errorf("expected --var=cc_flags=--personal-flag in launch args: %v", c.Args)
+			return
+		}
+	}
+	t.Error("expected kitten @ launch to be called")
+}
+
+func TestRestartWithAccount_MixedHarnessRecomputesTargetProfileArgs(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			Sort: "alpha",
+			Args: []string{"--shared-default"},
+		},
+		Accounts: []config.Account{
+			{
+				Name:    "claude-work",
+				Harness: "claude",
+				HomeDir: "~/.config/claude-work",
+				Color:   "blue",
+				Args:    []string{"--dangerously-skip-permissions"},
+			},
+			{
+				Name:    "copilot-work",
+				Harness: "copilot",
+				HomeDir: "~/.copilot-work",
+				Color:   "green",
+				Args:    []string{"--model", "gpt-5"},
+			},
+		},
+	}
+
+	running := session.RunningSession{
+		TabID:            42,
+		Base:             "W:docs",
+		Account:          "claude-work",
+		Profile:          "claude-work",
+		Harness:          "claude",
+		Directory:        "/tmp/docs",
+		Flags:            "--dangerously-skip-permissions",
+		ExplicitFlags:    "",
+		ExplicitFlagsSet: true,
+	}
+	targetAcc := cfg.Accounts[1]
+
+	err := session.RestartWithAccount(client, running, targetAcc, cfg)
+	if err != nil {
+		t.Fatalf("RestartWithAccount: %v", err)
+	}
+
+	expectedHome := "--env=COPILOT_HOME=" + config.ExpandTilde("~/.copilot-work")
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		for _, a := range c.Args {
+			if a != "launch" {
+				continue
+			}
+			argSet := make(map[string]bool)
+			for _, arg := range c.Args {
+				argSet[arg] = true
+			}
+			if !argSet["--var=amx_harness=copilot"] {
+				t.Errorf("expected amx_harness=copilot in args: %v", c.Args)
+			}
+			if !argSet["--var=cc_flags=--model gpt-5"] {
+				t.Errorf("expected cc_flags=--model gpt-5 in args: %v", c.Args)
+			}
+			if !argSet[expectedHome] {
+				t.Errorf("expected %q in args: %v", expectedHome, c.Args)
+			}
+
+			sawCopilot := false
+			for _, arg := range c.Args {
+				if strings.Contains(arg, "exec copilot --model gpt-5") {
+					sawCopilot = true
+				}
+				if strings.Contains(arg, "--dangerously-skip-permissions") {
+					t.Errorf("unexpected Claude-only flag in Copilot restart args: %v", c.Args)
+				}
+				if strings.Contains(arg, "--shared-default") {
+					t.Errorf("unexpected shared defaults override in Copilot restart args: %v", c.Args)
+				}
+			}
+			if !sawCopilot {
+				t.Errorf("expected Copilot executable in launch args: %v", c.Args)
+			}
+			return
+		}
+	}
+	t.Error("expected kitten @ launch to be called")
+}
+
+func TestRestartWithAccount_LegacySessionPreservesEffectiveArgs(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--work-flag"}},
+			{Name: "personal", ConfigDir: "~/.config/claude-personal", Color: "green", Args: []string{"--personal-flag"}},
+		},
+	}
+
+	running := session.RunningSession{
+		TabID:     42,
+		Base:      "W:api",
+		Account:   "work",
+		Directory: "/tmp/api",
+		Flags:     "--work-flag",
+	}
+	targetAcc := cfg.Accounts[1]
+
+	err := session.RestartWithAccount(client, running, targetAcc, cfg)
+	if err != nil {
+		t.Fatalf("RestartWithAccount: %v", err)
+	}
+
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		for _, a := range c.Args {
+			if a != "launch" {
+				continue
+			}
+			argSet := make(map[string]bool)
+			for _, arg := range c.Args {
+				argSet[arg] = true
+			}
+			if !argSet["--var=cc_flags=--work-flag"] {
+				t.Errorf("expected legacy effective args to be preserved: %v", c.Args)
+			}
+			if argSet["--var=cc_flags=--personal-flag"] {
+				t.Errorf("expected target profile args to be ignored for legacy sessions: %v", c.Args)
+			}
+			return
+		}
+	}
+	t.Error("expected kitten @ launch to be called")
 }
 
 // TestRestartWithAccount_SameAccountNoOp verifies that selecting the same account

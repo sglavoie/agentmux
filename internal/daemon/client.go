@@ -14,7 +14,7 @@ import (
 // SocketPath returns the Unix socket path for the daemon.
 func SocketPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "cc-manager", "daemon.sock")
+	return filepath.Join(home, ".local", "share", "agent-mux", "daemon.sock")
 }
 
 // Client connects to the daemon socket and sends single request/response pairs.
@@ -65,14 +65,14 @@ func (c *Client) Send(req Request) (Response, error) {
 }
 
 // SendWithAutoStart sends req to the daemon, auto-starting it if not running.
-// ccmBin is the path to the ccm binary used for auto-start.
-func (c *Client) SendWithAutoStart(req Request, ccmBin string) (Response, error) {
+// amxBin is the path to the amx binary used for auto-start.
+func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error) {
 	resp, err := c.Send(req)
 	if err == nil {
 		return resp, nil
 	}
 
-	if startErr := SpawnDetached(ccmBin); startErr != nil {
+	if startErr := SpawnDetached(amxBin); startErr != nil {
 		return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
 	}
 
@@ -87,12 +87,12 @@ func (c *Client) SendWithAutoStart(req Request, ccmBin string) (Response, error)
 	return Response{}, fmt.Errorf("daemon did not start in time: %w", err)
 }
 
-// SpawnDetached starts `ccmBin daemon start` in a new session with stdio
+// SpawnDetached starts `amxBin daemon start` in a new session with stdio
 // detached, freeing the calling terminal immediately. The spawned process
 // survives the parent's termination. Does not wait for the daemon socket
 // to become reachable.
-func SpawnDetached(ccmBin string) error {
-	cmd := exec.Command(ccmBin, "daemon", "start")
+func SpawnDetached(amxBin string) error {
+	cmd := exec.Command(amxBin, "daemon", "start")
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.SysProcAttr = detachSysProcAttr()

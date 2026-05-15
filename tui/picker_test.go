@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // pickerModel returns a model preloaded with a picker open and seeded with a
@@ -291,11 +291,46 @@ func TestPickerPreviewRenderShowsConfigBlock(t *testing.T) {
 	if !strings.Contains(out, "dir:") {
 		t.Errorf("expected dir label in preview pane, got:\n%s", out)
 	}
-	if !strings.Contains(out, "account:") {
-		t.Errorf("expected account label in preview pane, got:\n%s", out)
+	if !strings.Contains(out, "profile:") {
+		t.Errorf("expected profile label in preview pane, got:\n%s", out)
 	}
 	if !strings.Contains(out, "personal") {
-		t.Errorf("expected account value in preview pane, got:\n%s", out)
+		t.Errorf("expected profile value in preview pane, got:\n%s", out)
+	}
+	if !strings.Contains(out, "harness:") {
+		t.Errorf("expected harness label in preview pane, got:\n%s", out)
+	}
+}
+
+func TestPickerProfileOverrideUpdatesLaunchProfile(t *testing.T) {
+	m := pickerModel(t)
+	m = pressKey(m, "C")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after C in picker, got %d", m.mode)
+	}
+	if m.configPickerReturnMode != ModePicker {
+		t.Fatalf("expected config picker to return to ModePicker, got %d", m.configPickerReturnMode)
+	}
+
+	// Picker starts on "dotfiles" with default profile "personal". Move to work.
+	m = pressKey(m, "k")
+	m = pressKey(m, "enter")
+	if m.mode != ModePicker {
+		t.Fatalf("expected ModePicker after choosing override profile, got %d", m.mode)
+	}
+	if got := m.pickerEffectiveProfile(0); got != "work" {
+		t.Fatalf("expected picker override to switch launch profile to work, got %q", got)
+	}
+
+	m.width, m.height = 120, 40
+	m.cfg.Defaults.Preview = pickerPreviewCfg()
+	m.previewEnabled = true
+	out := stripAnsi(renderPicker(m))
+	if !strings.Contains(out, "(override)") {
+		t.Errorf("expected picker row to show override marker, got:\n%s", out)
+	}
+	if !strings.Contains(out, "launch profile: work") {
+		t.Errorf("expected preview to show launch profile after override, got:\n%s", out)
 	}
 }
 

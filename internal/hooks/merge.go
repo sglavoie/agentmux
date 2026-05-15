@@ -8,7 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // hookEntry is a single hook command inside a matcher group.
@@ -23,8 +24,8 @@ type hookGroup struct {
 	Hooks []hookEntry `json:"hooks"`
 }
 
-// hookEvents lists all Claude Code events that ccm installs hooks for.
-var hookEvents = []string{
+// claudeHookEvents lists the Claude Code events Agent Mux installs hooks for.
+var claudeHookEvents = []string{
 	"SessionStart",
 	"UserPromptSubmit",
 	"PreToolUse",
@@ -45,6 +46,34 @@ var hookEvents = []string{
 	"ElicitationResult",
 }
 
+// copilotHookEvents lists the GitHub Copilot CLI hook events Agent Mux installs.
+var copilotHookEvents = []string{
+	"sessionStart",
+	"sessionEnd",
+	"userPromptSubmitted",
+	"preToolUse",
+	"postToolUse",
+	"postToolUseFailure",
+	"permissionRequest",
+	"agentStop",
+	"subagentStart",
+	"subagentStop",
+	"errorOccurred",
+	"preCompact",
+	"notification",
+}
+
+type copilotHooksFile struct {
+	Version int                         `json:"version"`
+	Hooks   map[string][]copilotHookDef `json:"hooks"`
+}
+
+type copilotHookDef struct {
+	Type       string `json:"type"`
+	Command    string `json:"command,omitempty"`
+	TimeoutSec int    `json:"timeoutSec,omitempty"`
+}
+
 // MergeStatus describes the outcome of a merge operation for one account.
 type MergeStatus string
 
@@ -62,10 +91,10 @@ type MergeResult struct {
 	Err     error
 }
 
-// MergeAll merges ccm hooks into each account's Claude settings.json.
-// filter restricts to a single account name (empty = all accounts).
-// ccmBin is the absolute path to the ccm binary used in hook commands.
-func MergeAll(cfg *config.Config, filter, ccmBin string) ([]MergeResult, error) {
+// MergeAll syncs Agent Mux hooks for each configured profile.
+// filter restricts to a single profile name (empty = all profiles).
+// amxBin is the absolute path to the amx binary used in hook commands.
+func MergeAll(cfg *config.Config, filter, amxBin string) ([]MergeResult, error) {
 	var results []MergeResult
 	matched := false
 	for _, account := range cfg.Accounts {
@@ -74,7 +103,7 @@ func MergeAll(cfg *config.Config, filter, ccmBin string) ([]MergeResult, error) 
 		}
 		matched = true
 		override := accountOverride(cfg, account.Name)
-		result, err := mergeAccount(account, override, ccmBin)
+		result, err := mergeAccount(account, override, amxBin)
 		if err != nil {
 			result = MergeResult{Account: account.Name, Err: err}
 		}
@@ -95,11 +124,20 @@ func accountOverride(cfg *config.Config, name string) config.AccountHookOverride
 	return config.AccountHookOverride{}
 }
 
-func mergeAccount(account config.Account, override config.AccountHookOverride, ccmBin string) (MergeResult, error) {
-	dir := config.ExpandTilde(account.ConfigDir)
+func mergeAccount(account config.Account, override config.AccountHookOverride, amxBin string) (MergeResult, error) {
+	switch account.EffectiveHarness() {
+	case harness.Copilot:
+		return mergeCopilotProfile(account, override, amxBin)
+	default:
+		return mergeClaudeProfile(account, override, amxBin)
+	}
+}
+
+func mergeClaudeProfile(account config.Account, override config.AccountHookOverride, amxBin string) (MergeResult, error) {
+	dir := config.ExpandTilde(account.EffectiveHomeDir())
 	settingsPath := filepath.Join(dir, "settings.json")
 
-	expected := buildExpectedHooks(override.DisabledEvents, ccmBin)
+	expected := buildExpectedClaudeHooks(override.DisabledEvents, amxBin)
 
 	// Load existing settings as raw JSON map to preserve all keys.
 	existingRaw := make(map[string]json.RawMessage)
@@ -124,8 +162,8 @@ func mergeAccount(account config.Account, override config.AccountHookOverride, c
 		}
 	}
 
-	// Strip existing ccm hook groups from all events, then append expected.
-	merged := stripCcmGroups(existing)
+	// Strip existing amx hook groups from all events, then append expected.
+	merged := stripAmxGroups(existing)
 	for event, groups := range expected {
 		merged[event] = append(merged[event], groups...)
 	}
@@ -173,22 +211,65 @@ func mergeAccount(account config.Account, override config.AccountHookOverride, c
 	return MergeResult{Account: account.Name, Path: settingsPath, Status: status}, nil
 }
 
-// buildExpectedHooks returns the hook groups ccm should install,
+func mergeCopilotProfile(account config.Account, override config.AccountHookOverride, amxBin string) (MergeResult, error) {
+	dir := config.ExpandTilde(account.EffectiveHomeDir())
+	hooksPath := filepath.Join(dir, "hooks", harness.HookFileName())
+	expected := buildExpectedCopilotHooks(override.DisabledEvents, amxBin)
+
+	newData, err := json.MarshalIndent(expected, "", "  ")
+	if err != nil {
+		return MergeResult{}, fmt.Errorf("encoding hooks file: %w", err)
+	}
+	newData = append(newData, '\n')
+
+	originalData, err := os.ReadFile(hooksPath)
+	fileExisted := true
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return MergeResult{}, fmt.Errorf("reading %s: %w", hooksPath, err)
+		}
+		fileExisted = false
+	}
+
+	if fileExisted && bytes.Equal(originalData, newData) {
+		return MergeResult{Account: account.Name, Path: hooksPath, Status: MergeSkipped}, nil
+	}
+
+	if fileExisted {
+		if err := os.WriteFile(hooksPath+".bak", originalData, 0o644); err != nil {
+			return MergeResult{}, fmt.Errorf("creating backup %s.bak: %w", hooksPath, err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(hooksPath), 0o755); err != nil {
+		return MergeResult{}, fmt.Errorf("creating directory %s: %w", filepath.Dir(hooksPath), err)
+	}
+	if err := os.WriteFile(hooksPath, newData, 0o644); err != nil {
+		return MergeResult{}, fmt.Errorf("writing %s: %w", hooksPath, err)
+	}
+
+	status := MergeUpdated
+	if !fileExisted {
+		status = MergeCreated
+	}
+	return MergeResult{Account: account.Name, Path: hooksPath, Status: status}, nil
+}
+
+// buildExpectedClaudeHooks returns the hook groups Agent Mux should install,
 // excluding events in disabledEvents.
-func buildExpectedHooks(disabledEvents []string, ccmBin string) map[string][]hookGroup {
+func buildExpectedClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookGroup {
 	disabled := make(map[string]bool, len(disabledEvents))
 	for _, e := range disabledEvents {
 		disabled[e] = true
 	}
 	hooks := make(map[string][]hookGroup)
-	for _, event := range hookEvents {
+	for _, event := range claudeHookEvents {
 		if disabled[event] {
 			continue
 		}
 		hooks[event] = []hookGroup{
 			{Hooks: []hookEntry{{
 				Type:    "command",
-				Command: ccmBin + " hook-indicator " + event,
+				Command: amxBin + " hook-indicator " + event,
 				Async:   true,
 			}}},
 		}
@@ -196,14 +277,36 @@ func buildExpectedHooks(disabledEvents []string, ccmBin string) map[string][]hoo
 	return hooks
 }
 
-// stripCcmGroups returns a copy of hooks with all ccm-managed matcher groups removed.
-// A group is ccm-managed if any of its entries has a command containing "hook-indicator".
-func stripCcmGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
+func buildExpectedCopilotHooks(disabledEvents []string, amxBin string) copilotHooksFile {
+	disabled := make(map[string]bool, len(disabledEvents))
+	for _, e := range disabledEvents {
+		disabled[e] = true
+	}
+	hooks := make(map[string][]copilotHookDef)
+	for _, event := range copilotHookEvents {
+		if disabled[event] {
+			continue
+		}
+		hooks[event] = []copilotHookDef{{
+			Type:       "command",
+			Command:    amxBin + " hook-indicator " + event,
+			TimeoutSec: 5,
+		}}
+	}
+	return copilotHooksFile{
+		Version: 1,
+		Hooks:   hooks,
+	}
+}
+
+// stripAmxGroups returns a copy of hooks with all amx-managed matcher groups removed.
+// A group is amx-managed if any of its entries has a command containing "hook-indicator".
+func stripAmxGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
 	out := make(map[string][]hookGroup, len(hooks))
 	for event, groups := range hooks {
 		var kept []hookGroup
 		for _, g := range groups {
-			if !isCcmGroup(g) {
+			if !isAmxGroup(g) {
 				kept = append(kept, g)
 			}
 		}
@@ -214,7 +317,7 @@ func stripCcmGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
 	return out
 }
 
-func isCcmGroup(g hookGroup) bool {
+func isAmxGroup(g hookGroup) bool {
 	for _, e := range g.Hooks {
 		if strings.Contains(e.Command, "hook-indicator") {
 			return true

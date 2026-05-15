@@ -7,8 +7,9 @@ import (
 	"strings"
 )
 
-// IsPipeMode reports whether the current process tree contains a `claude -p`
-// or `claude --print` invocation (i.e., Claude is running in pipe/non-interactive
+// IsPipeMode reports whether the current process tree contains a non-interactive
+// Claude or Copilot invocation (e.g. `claude -p`, `claude --print`,
+// `copilot -p`, or `copilot --prompt`)
 // mode). When true, desktop notifications should be suppressed.
 func IsPipeMode() bool {
 	return walkTree(os.Getpid(), psCommandLine, psParentPID)
@@ -24,7 +25,7 @@ func walkTree(pid int, cmdline func(int) string, ppid func(int) int) bool {
 		}
 		visited[pid] = true
 
-		if looksLikeClaudePipe(cmdline(pid)) {
+		if looksLikePipeMode(cmdline(pid)) {
 			return true
 		}
 
@@ -37,16 +38,36 @@ func walkTree(pid int, cmdline func(int) string, ppid func(int) int) bool {
 	return false
 }
 
-func looksLikeClaudePipe(cmdline string) bool {
-	if !strings.Contains(cmdline, "claude") {
+func looksLikePipeMode(cmdline string) bool {
+	fields := strings.Fields(cmdline)
+	if len(fields) == 0 {
 		return false
 	}
-	for _, field := range strings.Fields(cmdline) {
-		if field == "-p" || field == "--print" {
+
+	containsClaude := strings.Contains(cmdline, "claude")
+	containsCopilot := strings.Contains(cmdline, "copilot")
+	if !containsClaude && !containsCopilot {
+		return false
+	}
+
+	for _, field := range fields {
+		if field == "-p" {
+			return true
+		}
+		if containsClaude && field == "--print" {
+			return true
+		}
+		if containsCopilot && field == "--prompt" {
 			return true
 		}
 	}
 	return false
+}
+
+// looksLikeClaudePipe is kept as a compatibility alias for older tests while
+// the implementation now supports both Claude and Copilot non-interactive runs.
+func looksLikeClaudePipe(cmdline string) bool {
+	return looksLikePipeMode(cmdline)
 }
 
 // psCommandLine returns the full command line for pid using `ps`.

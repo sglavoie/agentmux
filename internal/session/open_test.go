@@ -3,9 +3,9 @@ package session_test
 import (
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // TestOpenDirectory_LaunchesWithCorrectArgs verifies that OpenDirectory calls

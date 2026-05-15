@@ -6,18 +6,18 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/daemon"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/palette"
+	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // Run is the core hook-indicator entry point. It resolves the action, contacts
 // the daemon for a guard decision, then updates the Kitty tab title if allowed.
 //
-//   - eventOrAction: Claude event name (e.g. "Stop") or ccm action (e.g. "stop")
+//   - eventOrAction: harness event name (e.g. "Stop", "agentStop") or amx action (e.g. "stop")
 //   - windowID: 0 means read from $KITTY_WINDOW_ID
-//   - ccmBin: absolute path to the ccm binary, used for daemon auto-start
-func Run(eventOrAction string, windowID int, ccmBin string) error {
+//   - amxBin: absolute path to the amx binary, used for daemon auto-start
+func Run(eventOrAction string, windowID int, amxBin string) error {
 	action, ok := ResolveAction(eventOrAction)
 	if !ok {
 		slog.Debug("indicator: unknown event/action, ignoring", "input", eventOrAction)
@@ -61,7 +61,7 @@ func Run(eventOrAction string, windowID int, ccmBin string) error {
 		PreservesIcon: PreservesCurrent(eventOrAction),
 		PipeMode:      pipeMode,
 		SessionTitle:  sessionTitle,
-	}, ccmBin)
+	}, amxBin)
 	if err != nil {
 		slog.Debug("indicator: daemon unavailable, updating title without guard", "err", err)
 		if tab == nil {

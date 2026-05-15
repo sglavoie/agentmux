@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 // runWithSocket starts a daemon on an isolated socket path for testing.
@@ -15,7 +15,7 @@ import (
 func runWithSocket(t *testing.T, idle time.Duration) (socketPath string, cancel context.CancelFunc) {
 	t.Helper()
 	// Use /tmp directly to avoid macOS sun_path 104-byte limit on long t.TempDir() paths.
-	dir, err := os.MkdirTemp("/tmp", "ccm-test-*")
+	dir, err := os.MkdirTemp("/tmp", "amx-test-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)
 	}
@@ -80,7 +80,7 @@ func runWithSocket(t *testing.T, idle time.Duration) (socketPath string, cancel 
 }
 
 func TestDaemon_IdleShutdown(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "ccm-idle-*")
+	dir, err := os.MkdirTemp("/tmp", "amx-idle-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)
 	}

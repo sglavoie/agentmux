@@ -2,14 +2,18 @@ package tui
 
 import "strings"
 
-// renderConfigPicker renders the account picker overlay for config override.
+// renderConfigPicker renders the profile picker overlay for restart/launch overrides.
 func renderConfigPicker(m Model) string {
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("Override config: "+m.targetSession.Base) + "\n\n")
+	header := "Choose profile"
+	if m.configPickerReturnMode == ModePicker {
+		header = "Launch profile"
+	}
+	sb.WriteString(styleHeader.Render(header + ": " + m.targetSession.Base) + "\n\n")
 	for i, acc := range m.configPickerAccounts {
-		line := "  " + acc.Name
-		if acc.ConfigDir != "" {
-			line += "  " + styleDim.Render(acc.ConfigDir)
+		line := "  " + acc.Name + "  " + styleDim.Render(acc.EffectiveHarness())
+		if home := acc.EffectiveHomeDir(); home != "" {
+			line += "  " + styleDim.Render(home)
 		}
 		if acc.Name == m.configPickerCurrent {
 			line += styleDim.Render(" (current)")

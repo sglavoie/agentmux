@@ -9,21 +9,21 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/daemon"
-	ccerrors "github.com/sglavoie/cc-manager-kitty/internal/errors"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
+	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 )
 
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
-	Short: "Manage the ccm daemon",
+	Short: "Manage the amx daemon",
 }
 
 var daemonStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the daemon (blocks until shutdown)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(config.DefaultConfigPath())
+		cfg, err := config.LoadDefault()
 		if err != nil {
 			ccerrors.Print(err)
 			return fmt.Errorf("loading config: %w", err)
@@ -84,11 +84,11 @@ var daemonRestartCmd = &cobra.Command{
 			time.Sleep(50 * time.Millisecond)
 		}
 
-		ccmBin, err := os.Executable()
+		amxBin, err := os.Executable()
 		if err != nil {
-			ccmBin = "ccm"
+			amxBin = "amx"
 		}
-		if err := daemon.SpawnDetached(ccmBin); err != nil {
+		if err := daemon.SpawnDetached(amxBin); err != nil {
 			return fmt.Errorf("spawn daemon: %w", err)
 		}
 		fmt.Println("daemon restarted")

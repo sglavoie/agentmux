@@ -2,7 +2,7 @@ package tui
 
 import (
 	"charm.land/lipgloss/v2"
-	"github.com/sglavoie/cc-manager-kitty/internal/palette"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 var (

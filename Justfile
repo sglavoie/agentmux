@@ -5,11 +5,12 @@ default:
 
 prefix_bin := home_directory() / ".local/bin"
 prefix_kitty := home_directory() / ".config/kitty"
+prefix_config := home_directory() / ".config/agent-mux"
 root := justfile_directory()
 
-# Build the ccm binary
+# Build the amx binary
 build:
-    go build -o ccm .
+    go build -o amx .
 
 # Run all tests
 test:
@@ -26,22 +27,23 @@ lint:
 # Run full check suite (test + vet + lint)
 check: test vet lint
 
-# Install binary and config
+# Install binary, Kitty config, and a starter app config if missing
 install: build
     @mkdir -p "{{prefix_bin}}"
-    rm -f "{{prefix_bin}}/ccm"
-    cp ccm "{{prefix_bin}}/ccm"
+    rm -f "{{prefix_bin}}/amx"
+    cp amx "{{prefix_bin}}/amx"
     @mkdir -p "{{prefix_kitty}}"
-    ln -sf "{{root}}/cc-manager.conf" "{{prefix_kitty}}/cc-manager.conf"
-    @echo "Installed {{prefix_bin}}/ccm"
-    @echo "Symlinked {{prefix_kitty}}/cc-manager.conf"
+    ln -sf "{{root}}/agent-mux.conf" "{{prefix_kitty}}/agent-mux.conf"
+    @if [ ! -f "{{prefix_config}}/config.toml" ]; then "{{prefix_bin}}/amx" config init >/dev/null; echo "Seeded {{prefix_config}}/config.toml"; fi
+    @echo "Installed {{prefix_bin}}/amx"
+    @echo "Symlinked {{prefix_kitty}}/agent-mux.conf"
 
 # Remove binary and config
 uninstall:
-    rm -f "{{prefix_bin}}/ccm"
-    rm -f "{{prefix_kitty}}/cc-manager.conf"
-    @echo "Removed {{prefix_bin}}/ccm"
-    @echo "Removed {{prefix_kitty}}/cc-manager.conf"
+    rm -f "{{prefix_bin}}/amx"
+    rm -f "{{prefix_kitty}}/agent-mux.conf"
+    @echo "Removed {{prefix_bin}}/amx"
+    @echo "Removed {{prefix_kitty}}/agent-mux.conf"
 
 # Bump version in cmd/root.go (e.g. just bump 0.4.0)
 bump version:

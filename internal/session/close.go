@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 // window. The close command was still sent; the tab likely closed shortly after.
 var ErrCloseTimeout = errors.New("tab close timed out; proceeding anyway")
 
-var closeDebug = newFileLogger("/tmp/ccm-debug.log", "[close] ")
+var closeDebug = newFileLogger("/tmp/amx-debug.log", "[close] ")
 
 // Close closes the tab with the given ID and polls until it disappears.
 // Returns ErrCloseTimeout (non-fatal) if the tab is still present after

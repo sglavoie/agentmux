@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	ccerrors "github.com/sglavoie/cc-manager-kitty/internal/errors"
+	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 )
 
 // KittyClient is the interface for all Kitty remote-control operations.

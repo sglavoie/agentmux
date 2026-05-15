@@ -1,0 +1,13 @@
+[defaults]
+claude_flags = ["--shared-legacy"]
+
+[[accounts]]
+name = "work"
+config_dir = "~/.config/claude-work"
+color = "blue"
+
+[[sessions]]
+title = "api"
+directory = "~/projects/api"
+account = "work"
+claude_flags = ["--project-legacy"]

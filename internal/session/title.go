@@ -3,20 +3,29 @@ package session
 import (
 	"strings"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
-// AccountPrefix returns the tab title prefix for an account.
-// e.g., "work" → "W:", "personal" → "P:"
-func AccountPrefix(accountName string) string {
-	if accountName == "" {
+// ProfilePrefix returns the tab title prefix for a profile.
+func ProfilePrefix(profileName string) string {
+	if profileName == "" {
 		return ""
 	}
-	return strings.ToUpper(accountName[:1]) + ":"
+	return strings.ToUpper(profileName[:1]) + ":"
+}
+
+// AccountPrefix is kept as a compatibility alias while the codebase moves from
+// account terminology to profile terminology.
+func AccountPrefix(accountName string) string {
+	return ProfilePrefix(accountName)
 }
 
 // FormatTitle returns the Kitty tab title for a session.
-// Format: "<AccountInitial>:<session-title>"  e.g., "W:api"
+// Format: "<ProfileInitial>:<project-title>".
 func FormatTitle(sess config.Session) string {
-	return AccountPrefix(sess.Account) + sess.Title
+	profile := sess.Profile
+	if profile == "" {
+		profile = sess.Account
+	}
+	return ProfilePrefix(profile) + sess.Title
 }

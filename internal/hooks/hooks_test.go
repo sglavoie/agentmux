@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
-const testBin = "/usr/local/bin/ccm"
+const testBin = "/usr/local/bin/amx"
 
 func makeConfig(accounts []config.Account, overrides map[string]config.AccountHookOverride) *config.Config {
 	cfg := &config.Config{Accounts: accounts}
@@ -174,7 +174,7 @@ func TestMergePreservesUserHooks(t *testing.T) {
 	hooks := s["hooks"].(map[string]any)
 	ups := hooks["UserPromptSubmit"].([]any)
 
-	// Should have 2 groups: user hook + ccm hook.
+	// Should have 2 groups: user hook + amx hook.
 	if len(ups) != 2 {
 		t.Errorf("expected 2 hook groups for UserPromptSubmit, got %d", len(ups))
 	}
@@ -256,7 +256,7 @@ func TestMergeBakBackupCreated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write existing settings.json with stale ccm hooks.
+	// Write existing settings.json with stale amx hooks.
 	existing := map[string]any{
 		"hooks": map[string]any{
 			"UserPromptSubmit": []any{
@@ -264,7 +264,7 @@ func TestMergeBakBackupCreated(t *testing.T) {
 					"hooks": []any{
 						map[string]any{
 							"type":    "command",
-							"command": "/old/ccm hook-indicator active",
+							"command": "/old/amx hook-indicator active",
 							"async":   true,
 						},
 					},
@@ -336,7 +336,7 @@ func TestStatusMissingNoFile(t *testing.T) {
 	}
 }
 
-func TestStatusMissingNoCcmHooks(t *testing.T) {
+func TestStatusMissingNoamxHooks(t *testing.T) {
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "claude")
 	if err := os.MkdirAll(accountDir, 0o755); err != nil {
@@ -384,7 +384,7 @@ func TestStatusDrifted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write settings.json with stale ccm hook (old binary path).
+	// Write settings.json with stale amx hook (old binary path).
 	writeJSON(t, filepath.Join(accountDir, "settings.json"), map[string]any{
 		"hooks": map[string]any{
 			"UserPromptSubmit": []any{
@@ -392,7 +392,7 @@ func TestStatusDrifted(t *testing.T) {
 					"hooks": []any{
 						map[string]any{
 							"type":    "command",
-							"command": "/old/path/ccm hook-indicator active",
+							"command": "/old/path/amx hook-indicator active",
 							"async":   true,
 						},
 					},
@@ -422,7 +422,7 @@ func TestMergeUpdatesStaleHooks(t *testing.T) {
 	}
 
 	// Install with old binary path.
-	oldBin := "/old/ccm"
+	oldBin := "/old/amx"
 	cfgOld := makeConfig([]config.Account{
 		{Name: "personal", ConfigDir: accountDir, Color: "green"},
 	}, nil)
@@ -482,5 +482,5 @@ func checkHookCommand(t *testing.T, hooks map[string]any, event, wantCmd string)
 			}
 		}
 	}
-	t.Errorf("no ccm hook found for event %q", event)
+	t.Errorf("no amx hook found for event %q", event)
 }

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // TestClose_CallsCloseTab verifies that Close sends kitten @ close-tab.

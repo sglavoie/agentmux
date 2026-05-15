@@ -6,19 +6,19 @@ import (
 	"os/exec"
 
 	"github.com/spf13/cobra"
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	ccerrors "github.com/sglavoie/cc-manager-kitty/internal/errors"
-	"github.com/sglavoie/cc-manager-kitty/internal/hooks"
+	"github.com/sglavoie/agentmux/internal/config"
+	ccerrors "github.com/sglavoie/agentmux/internal/errors"
+	"github.com/sglavoie/agentmux/internal/hooks"
 )
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage ccm configuration",
+	Short: "Manage amx configuration",
 }
 
 var configInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Create an example config.toml",
+	Short: "Create a starter config.toml",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := config.DefaultConfigPath()
 		if _, err := os.Stat(path); err == nil {
@@ -56,8 +56,7 @@ var configShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Display config.toml contents",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path := config.DefaultConfigPath()
-		data, err := os.ReadFile(path)
+		data, err := config.ReadDefault()
 		if err != nil {
 			return fmt.Errorf("reading config: %w", err)
 		}
@@ -78,8 +77,7 @@ var configValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate config.toml",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path := config.DefaultConfigPath()
-		cfg, err := config.Load(path)
+		cfg, err := config.LoadDefault()
 		if err != nil {
 			ccerrors.Print(err)
 			return fmt.Errorf("loading config: %w", err)
@@ -94,18 +92,18 @@ var configValidateCmd = &cobra.Command{
 }
 
 var configHooksSyncCmd = &cobra.Command{
-	Use:   "hooks-sync [ACCOUNT]",
-	Short: "Merge ccm hooks into Claude settings.json",
+	Use:   "hooks-sync [PROFILE]",
+	Short: "Sync Agent Mux hooks for configured harness profiles",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(config.DefaultConfigPath())
+		cfg, err := config.LoadDefault()
 		if err != nil {
 			ccerrors.Print(err)
 			return fmt.Errorf("loading config: %w", err)
 		}
 		bin, err := os.Executable()
 		if err != nil {
-			return fmt.Errorf("resolving ccm binary: %w", err)
+			return fmt.Errorf("resolving amx binary: %w", err)
 		}
 		filter := ""
 		if len(args) > 0 {
@@ -136,16 +134,16 @@ var configHooksSyncCmd = &cobra.Command{
 
 var configHooksStatusCmd = &cobra.Command{
 	Use:   "hooks-status",
-	Short: "Show hooks sync status per account",
+	Short: "Show hooks sync status per profile",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(config.DefaultConfigPath())
+		cfg, err := config.LoadDefault()
 		if err != nil {
 			ccerrors.Print(err)
 			return fmt.Errorf("loading config: %w", err)
 		}
 		bin, err := os.Executable()
 		if err != nil {
-			return fmt.Errorf("resolving ccm binary: %w", err)
+			return fmt.Errorf("resolving amx binary: %w", err)
 		}
 		statuses, err := hooks.StatusAll(cfg, bin)
 		if err != nil {

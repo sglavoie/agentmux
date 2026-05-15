@@ -7,9 +7,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // testModel returns a Model with a minimal config and mock client.
@@ -351,7 +351,7 @@ func TestFooterChangesWithMode(t *testing.T) {
 	if !strings.Contains(searchFooter, "enter: apply") {
 		t.Errorf("filter footer missing apply hint, got:\n%s", searchFooter)
 	}
-	if !strings.Contains(searchFooter, "@account") {
+	if !strings.Contains(searchFooter, "@profile") {
 		t.Errorf("filter footer missing DSL hint, got:\n%s", searchFooter)
 	}
 }
@@ -479,9 +479,9 @@ func TestPickerRunningStatus(t *testing.T) {
 	m = pressKey(m, "l")
 	// All 3 config sessions match the running sessions.
 	for _, sess := range m.cfg.Sessions {
-		baseTitle := session.FormatTitle(sess)
-		if !m.pickerRunning[baseTitle] {
-			t.Errorf("expected %q to be marked as running in picker", baseTitle)
+		key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
+		if !m.pickerRunning[key] {
+			t.Errorf("expected %q to be marked as running in picker", key)
 		}
 	}
 }
@@ -489,17 +489,17 @@ func TestPickerRunningStatus(t *testing.T) {
 func TestBuildPickerRunning(t *testing.T) {
 	running := makeSessions()
 	got := buildPickerRunning(running)
-	if !got["W:api"] {
-		t.Error("expected W:api in running set")
+	if !got[session.SessionKey("work", "api")] {
+		t.Error("expected work/api in running set")
 	}
-	if !got["W:backend"] {
-		t.Error("expected W:backend in running set")
+	if !got[session.SessionKey("work", "backend")] {
+		t.Error("expected work/backend in running set")
 	}
-	if !got["P:dotfiles"] {
-		t.Error("expected P:dotfiles in running set")
+	if !got[session.SessionKey("personal", "dotfiles")] {
+		t.Error("expected personal/dotfiles in running set")
 	}
-	if got["W:other"] {
-		t.Error("expected W:other NOT in running set")
+	if got[session.SessionKey("work", "other")] {
+		t.Error("expected work/other NOT in running set")
 	}
 }
 
@@ -970,8 +970,8 @@ func TestFooterListContextAwareAttention(t *testing.T) {
 	}
 	m := loadSessions(testModel(), sessions)
 	footer := stripAnsi(renderFooter(m))
-	if !strings.Contains(footer, "c config") {
-		t.Errorf("attention footer missing c config, got:\n%s", footer)
+	if !strings.Contains(footer, "c profile") {
+		t.Errorf("attention footer missing c profile, got:\n%s", footer)
 	}
 	if !strings.Contains(footer, "C clear") {
 		t.Errorf("attention footer missing C clear, got:\n%s", footer)

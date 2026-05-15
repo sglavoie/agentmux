@@ -18,7 +18,7 @@ func TestCopyDarwinSmoke(t *testing.T) {
 	if _, err := exec.LookPath("pbpaste"); err != nil {
 		t.Skip("pbpaste not available")
 	}
-	want := "ccm-clipboard-test-token"
+	want := "amx-clipboard-test-token"
 	if err := Copy(want); err != nil {
 		t.Fatalf("Copy: %v", err)
 	}

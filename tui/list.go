@@ -8,8 +8,8 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/palette"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 const (
@@ -43,7 +43,7 @@ func StateGloss(state string) string {
 // as chips below the header via renderChips, so this line only carries the
 // title plus any error indicators (kitty / action) and the preview hint.
 func renderHeader(m Model) string {
-	title := styleHeader.Render("CCM Dashboard")
+	title := styleHeader.Render("amx Dashboard")
 	info := ""
 	if m.err != nil {
 		info += "  " + styleError.Render("kitty: "+m.err.Error())

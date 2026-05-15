@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/palette"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
-var launchDebug = newFileLogger("/tmp/ccm-debug.log", "[launch] ")
+var launchDebug = newFileLogger("/tmp/amx-debug.log", "[launch] ")
 
 const (
 	colorMaxRetries   = 5
@@ -41,7 +42,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 
 	skipDedup := len(opts) > 0 && opts[0].SkipDedup
 	if !skipDedup {
-		if _, exists := Find(running, formattedTitle); exists {
+		if _, exists := FindByKey(running, SessionKey(acc.Name, sess.Title)); exists {
 			launchDebug.Printf("Launch: dedup hit, returning nil")
 			return nil
 		}
@@ -68,22 +69,39 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 
 	// Build env, user vars, and shell command.
 	env := ResolveEnv(sess, acc)
-	flags := ResolveFlags(sess, cfg.Defaults)
+	args := ResolveArgs(sess, acc, cfg.Defaults)
+	explicitArgs := strings.Join(sess.EffectiveArgs(), " ")
 	groups := strings.Join(sess.Groups, "\x1f")
 	ccEnv := SerializeSessionEnv(sess.Env)
+	profileName := sess.EffectiveProfile()
+	if profileName == "" {
+		profileName = acc.Name
+	}
+	homeDir := config.ExpandTilde(acc.EffectiveHomeDir())
+	projectDir := config.ExpandTilde(sess.Directory)
+	harnessName := acc.EffectiveHarness()
 
 	userVars := map[string]string{
-		"cc_account":    acc.Name,
-		"cc_config_dir": config.ExpandTilde(acc.ConfigDir),
-		"cc_cwd":        config.ExpandTilde(sess.Directory),
-		"cc_flags":      flags,
+		"amx_profile":   profileName,
+		"amx_harness":   harnessName,
+		"amx_home_dir":  homeDir,
+		"amx_project":   sess.Title,
+		"amx_directory": projectDir,
+		"amx_args":      args,
+		"amx_env":       ccEnv,
+		"amx_groups":    groups,
+		"cc_account":    profileName,
+		"cc_config_dir": homeDir,
+		"cc_cwd":        projectDir,
+		"cc_flags":      args,
+		"cc_explicit_flags": explicitArgs,
 		"cc_env":        ccEnv,
 		"cc_groups":     groups,
 	}
 
-	shellCmd := "exec claude"
-	if flags != "" {
-		shellCmd += " " + flags
+	shellCmd := "exec " + harness.Executable(harnessName)
+	if args != "" {
+		shellCmd += " " + args
 	}
 	shell := os.Getenv("SHELL")
 	if shell == "" {
@@ -92,14 +110,14 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 
 	launchOpts := kitty.LaunchOpts{
 		Title:     formattedTitle,
-		Directory: config.ExpandTilde(sess.Directory),
+		Directory: projectDir,
 		Location:  locationArg(loc),
 		Env:       env,
 		UserVars:  userVars,
 		Cmdline:   []string{shell, "-lic", shellCmd},
 	}
 
-	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q loc=%q env=%v cmd=%v", launchOpts.Title, launchOpts.Directory, launchOpts.Location, launchOpts.Env, launchOpts.Cmdline)
+	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q harness=%q loc=%q env=%v cmd=%v", launchOpts.Title, launchOpts.Directory, harnessName, launchOpts.Location, launchOpts.Env, launchOpts.Cmdline)
 	if err := client.LaunchTab(launchOpts); err != nil {
 		launchDebug.Printf("Launch: LaunchTab error: %v", err)
 		return fmt.Errorf("launching session %q: %w", formattedTitle, err)

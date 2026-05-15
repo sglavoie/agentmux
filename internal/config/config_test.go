@@ -2,9 +2,10 @@ package config_test
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 const testdataDir = "../../testdata"
@@ -48,6 +49,122 @@ func TestLoad_AppliesDefaults(t *testing.T) {
 	}
 	if cfg.Defaults.IdleThreshold != 300 {
 		t.Errorf("default idle_threshold: got %d, want 300", cfg.Defaults.IdleThreshold)
+	}
+}
+
+func TestLoad_NormalizesProfileArgsAndClonesAliases(t *testing.T) {
+	path := filepath.Join(testdataDir, "profile_args_config.toml")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if len(cfg.Profiles) != 2 {
+		t.Fatalf("profiles: got %d, want 2", len(cfg.Profiles))
+	}
+	if len(cfg.Accounts) != 2 {
+		t.Fatalf("accounts: got %d, want 2", len(cfg.Accounts))
+	}
+
+	wantProfileArgs := []string{"--model", "gpt-5"}
+	if !reflect.DeepEqual(cfg.Profiles[1].Args, wantProfileArgs) {
+		t.Errorf("Profiles[1].Args: got %v, want %v", cfg.Profiles[1].Args, wantProfileArgs)
+	}
+	if !reflect.DeepEqual(cfg.Accounts[1].Args, wantProfileArgs) {
+		t.Errorf("Accounts[1].Args: got %v, want %v", cfg.Accounts[1].Args, wantProfileArgs)
+	}
+
+	if got := cfg.Projects[0].Profile; got != "copilot-work" {
+		t.Errorf("Projects[0].Profile: got %q, want %q", got, "copilot-work")
+	}
+	if got := cfg.Sessions[0].Account; got != "copilot-work" {
+		t.Errorf("Sessions[0].Account: got %q, want %q", got, "copilot-work")
+	}
+
+	wantProjectArgs := []string{"--project-flag"}
+	if !reflect.DeepEqual(cfg.Projects[0].Args, wantProjectArgs) {
+		t.Errorf("Projects[0].Args: got %v, want %v", cfg.Projects[0].Args, wantProjectArgs)
+	}
+	if !reflect.DeepEqual(cfg.Sessions[0].Args, wantProjectArgs) {
+		t.Errorf("Sessions[0].Args: got %v, want %v", cfg.Sessions[0].Args, wantProjectArgs)
+	}
+
+	cfg.Accounts[1].Args[0] = "--changed-account"
+	if got := cfg.Profiles[1].Args[0]; got != "--model" {
+		t.Errorf("Profiles[1].Args shared backing array: got %q, want %q", got, "--model")
+	}
+
+	cfg.Sessions[0].Args[0] = "--changed-project"
+	if got := cfg.Projects[0].Args[0]; got != "--project-flag" {
+		t.Errorf("Projects[0].Args shared backing array: got %q, want %q", got, "--project-flag")
+	}
+}
+
+func TestLoad_NormalizesLegacyClaudeFlags(t *testing.T) {
+	path := filepath.Join(testdataDir, "legacy_flags_config.toml")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	wantDefaults := []string{"--shared-legacy"}
+	if !reflect.DeepEqual(cfg.Defaults.Args, wantDefaults) {
+		t.Errorf("Defaults.Args: got %v, want %v", cfg.Defaults.Args, wantDefaults)
+	}
+	if !reflect.DeepEqual(cfg.Defaults.ClaudeFlags, wantDefaults) {
+		t.Errorf("Defaults.ClaudeFlags: got %v, want %v", cfg.Defaults.ClaudeFlags, wantDefaults)
+	}
+
+	wantProject := []string{"--project-legacy"}
+	if !reflect.DeepEqual(cfg.Projects[0].Args, wantProject) {
+		t.Errorf("Projects[0].Args: got %v, want %v", cfg.Projects[0].Args, wantProject)
+	}
+	if !reflect.DeepEqual(cfg.Sessions[0].ClaudeFlags, wantProject) {
+		t.Errorf("Sessions[0].ClaudeFlags: got %v, want %v", cfg.Sessions[0].ClaudeFlags, wantProject)
+	}
+}
+
+func TestLoad_AccountArgs(t *testing.T) {
+	cfg := &config.Config{
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--dangerously-skip-permissions"}},
+		},
+	}
+	acc := cfg.Accounts[0]
+	if len(acc.Args) != 1 || acc.Args[0] != "--dangerously-skip-permissions" {
+		t.Errorf("Account.Args: got %v, want [--dangerously-skip-permissions]", acc.Args)
+	}
+}
+
+func TestEffectiveArgs_PrefersArgsOverClaudeFlags(t *testing.T) {
+	sess := config.Session{
+		ClaudeFlags: []string{"--legacy"},
+		Args:        []string{"--new"},
+	}
+	got := sess.EffectiveArgs()
+	if len(got) != 1 || got[0] != "--new" {
+		t.Errorf("EffectiveArgs: got %v, want [--new]", got)
+	}
+}
+
+func TestEffectiveArgs_FallsBackToClaudeFlags(t *testing.T) {
+	sess := config.Session{
+		ClaudeFlags: []string{"--legacy"},
+	}
+	got := sess.EffectiveArgs()
+	if len(got) != 1 || got[0] != "--legacy" {
+		t.Errorf("EffectiveArgs fallback: got %v, want [--legacy]", got)
+	}
+}
+
+func TestDefaultsEffectiveArgs_PrefersArgsOverClaudeFlags(t *testing.T) {
+	d := config.Defaults{
+		ClaudeFlags: []string{"--legacy"},
+		Args:        []string{"--new"},
+	}
+	got := d.EffectiveArgs()
+	if len(got) != 1 || got[0] != "--new" {
+		t.Errorf("Defaults.EffectiveArgs: got %v, want [--new]", got)
 	}
 }
 

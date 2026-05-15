@@ -3,7 +3,7 @@ package session_test
 import (
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // TestSortKey_Alpha verifies that alpha mode sorts by full base title.

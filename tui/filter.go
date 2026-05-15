@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // Filter is the parsed representation of a dashboard filter expression.

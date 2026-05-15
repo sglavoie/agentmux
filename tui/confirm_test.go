@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // TestRenderConfirmClose locks in the two-line layout for the close prompt:

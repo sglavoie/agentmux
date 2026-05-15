@@ -20,7 +20,7 @@
             "foreground_processes": [
               {
                 "pid": 1001,
-                "cmdline": ["ccm"],
+                "cmdline": ["amx"],
                 "cwd": "/Users/user"
               }
             ]
@@ -42,7 +42,7 @@
             "foreground_processes": [
               {
                 "pid": 2001,
-                "cmdline": ["ccm", "daemon", "start"],
+                "cmdline": ["amx", "daemon", "start"],
                 "cwd": "/Users/user"
               }
             ]

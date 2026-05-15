@@ -4,33 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-cc-manager-kitty is a Claude Code session manager for the Kitty terminal. It manages multiple Claude Code sessions as Kitty tabs, with support for multiple accounts (each with its own `CLAUDE_CONFIG_DIR`), color-coded tab bars, and an interactive Bubble Tea TUI dashboard. The tool is a single Go binary (`ccm`) that uses Kitty's remote control protocol (`kitten @`) for all terminal interactions.
+cc-manager-kitty is a Claude Code session manager for the Kitty terminal. It manages multiple Claude Code sessions as Kitty tabs, with support for multiple accounts (each with its own `CLAUDE_CONFIG_DIR`), color-coded tab bars, and an interactive Bubble Tea TUI dashboard. The tool is a single Go binary (`amx`) that uses Kitty's remote control protocol (`kitten @`) for all terminal interactions.
 
 ## Build and install
 
 Requires Go 1.22+ and Kitty. Build targets are defined in the `Justfile`:
 
-- `just build` — compile `./ccm` binary
-- `just install` — build and copy binary to `~/.local/bin/ccm`, symlink `cc-manager.conf` to `~/.config/kitty/`
+- `just build` — compile `./amx` binary
+- `just install` — build and copy binary to `~/.local/bin/amx`, symlink `cc-manager.conf` to `~/.config/kitty/`
 - `just uninstall` — remove binary and config symlink
 - `just test` — run `go test ./...`
 - `just check` — full suite: test + vet + lint (requires `golangci-lint`)
 - `just bump VERSION` — update version constant in `cmd/root.go`
 
-To verify a change manually, run `ccm --version` or `ccm --help` after `just install`.
+To verify a change manually, run `amx --version` or `amx --help` after `just install`.
 
 ## Architecture
 
-The codebase is a standard Go module. All functionality lives in the `ccm` binary built from `main.go`.
+The codebase is a standard Go module. All functionality lives in the `amx` binary built from `main.go`.
 
 ### Package structure
 
 **`cmd/`** — Cobra CLI commands
 
-- `root.go` — `ccm` default command: loads config, checks for existing dashboard, launches TUI. Version constant is here.
-- `config.go` — `ccm config` subcommands: `init`, `edit`, `show`, `path`, `validate`, `hooks-sync`, `hooks-status`
-- `daemon.go` — `ccm daemon` subcommands: `start`, `stop`, `status`
-- `hook_indicator.go` — `ccm hook-indicator <event>`: internal command invoked by Claude Code hooks
+- `root.go` — `amx` default command: loads config, checks for existing dashboard, launches TUI. Version constant is here.
+- `config.go` — `amx config` subcommands: `init`, `edit`, `show`, `path`, `validate`, `hooks-sync`, `hooks-status`
+- `daemon.go` — `amx daemon` subcommands: `start`, `stop`, `status`
+- `hook_indicator.go` — `amx hook-indicator <event>`: internal command invoked by Claude Code hooks
 
 **`internal/config/`** — Configuration loading and validation
 
@@ -81,7 +81,7 @@ Socket path: `~/.local/share/cc-manager/daemon.sock`
 
 **`internal/hooks/`** — Claude settings integration
 
-- `merge.go` — merge `ccm hook-indicator <event>` hooks into each account's `settings.json`
+- `merge.go` — merge `amx hook-indicator <event>` hooks into each account's `settings.json`
 - `status.go` — report per-account hook sync status (`in_sync`, `drifted`, `missing`)
 
 **`tui/`** — Bubble Tea v2 TUI dashboard
@@ -96,25 +96,25 @@ Socket path: `~/.local/share/cc-manager/daemon.sock`
 **`embed/`** — Embedded files
 
 - `embed.go` — `//go:embed` directives
-- `example_config.toml` — template written by `ccm config init`
+- `example_config.toml` — template written by `amx config init`
 
 ## CLI commands
 
 | Command | Description |
 |---------|-------------|
-| `ccm` | Launch TUI dashboard (focuses existing dashboard if already open) |
-| `ccm config init` | Write example `config.toml` to `~/.config/cc-manager/` |
-| `ccm config edit` | Open `config.toml` in `$EDITOR` |
-| `ccm config show` | Print current config as TOML |
-| `ccm config path` | Print config file path |
-| `ccm config validate` | Validate config and report errors |
-| `ccm config hooks-sync [ACCOUNT]` | Merge hooks into account `settings.json` files |
-| `ccm config hooks-status` | Show per-account hook sync status |
-| `ccm daemon start` | Start daemon in foreground (blocks; use `--debug` for live logs) |
-| `ccm daemon restart` | Stop existing daemon and relaunch detached in background |
-| `ccm daemon stop` | Stop running daemon |
-| `ccm daemon status` | Check daemon status |
-| `ccm hook-indicator <event>` | Handle a Claude Code hook event (called by hooks) |
+| `amx` | Launch TUI dashboard (focuses existing dashboard if already open) |
+| `amx config init` | Write example `config.toml` to `~/.config/cc-manager/` |
+| `amx config edit` | Open `config.toml` in `$EDITOR` |
+| `amx config show` | Print current config as TOML |
+| `amx config path` | Print config file path |
+| `amx config validate` | Validate config and report errors |
+| `amx config hooks-sync [ACCOUNT]` | Merge hooks into account `settings.json` files |
+| `amx config hooks-status` | Show per-account hook sync status |
+| `amx daemon start` | Start daemon in foreground (blocks; use `--debug` for live logs) |
+| `amx daemon restart` | Stop existing daemon and relaunch detached in background |
+| `amx daemon stop` | Stop running daemon |
+| `amx daemon status` | Check daemon status |
+| `amx hook-indicator <event>` | Handle a Claude Code hook event (called by hooks) |
 
 ## Config format
 
@@ -153,7 +153,7 @@ disabled_events = ["Stop"]  # suppress hook events for this account
 
 **Session `claude_flags`**: omit to inherit `defaults.claude_flags`; set to `[]` to run with no flags.
 
-The config path defaults to `~/.config/cc-manager/config.toml` and can be overridden with `CCM_CONFIG` environment variable.
+The config path defaults to `~/.config/cc-manager/config.toml` and can be overridden with `amx_CONFIG` environment variable.
 
 ## Key conventions
 
@@ -165,9 +165,9 @@ The palette and icon set are embedded at compile time in `internal/palette/` via
 
 Socket discovery uses `KITTY_LISTEN_ON` environment variable only. Kitty must be configured with `allow_remote_control yes` and `listen_on unix:/tmp/kitty-{kitty_pid}`.
 
-Debug logging uses `slog` and is enabled with `--debug` flag or `CCM_DEBUG=1`.
+Debug logging uses `slog` and is enabled with `--debug` flag or `amx_DEBUG=1`.
 
-Hook events installed by `ccm config hooks-sync`: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `Stop`, `TaskCompleted`, `SessionEnd`, `Notification`. Each hook entry calls `ccm hook-indicator <EVENT>`.
+Hook events installed by `amx config hooks-sync`: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `Stop`, `TaskCompleted`, `SessionEnd`, `Notification`. Each hook entry calls `amx hook-indicator <EVENT>`.
 
 Version is tracked as a constant in `cmd/root.go`; update with `just bump VERSION`.
 

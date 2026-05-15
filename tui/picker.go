@@ -9,8 +9,8 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // pickerRunningPeekLines caps the scrollback tail rendered below the
@@ -48,10 +48,9 @@ func renderPicker(m Model) string {
 	listWidth := m.width - previewWidth - 1
 
 	origIdx := m.pickerFilteredIdx[m.pickerCursor]
-	sess := m.pickerSessions[origIdx]
 
 	listView := clipHeight(listText, paneHeight)
-	previewView := renderPickerPreview(m, sess, previewWidth, paneHeight)
+	previewView := renderPickerPreview(m, origIdx, previewWidth, paneHeight)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
 	divider = strings.TrimRight(divider, "\n")
 	_ = listWidth // picker rows are short; no per-row truncation needed
@@ -86,17 +85,24 @@ func renderPickerList(m Model) string {
 	acctColor := buildAccountColorMap(m)
 
 	for cursor, origIdx := range m.pickerFilteredIdx {
-		sess := m.pickerSessions[origIdx]
-		baseTitle := session.FormatTitle(sess)
-		running := m.pickerRunning[baseTitle]
+		sess := m.pickerSessionWithResolvedProfile(origIdx)
+		defaultProfile := m.pickerSessions[origIdx].EffectiveProfile()
+		running := m.pickerRunning[session.SessionKey(sess.EffectiveProfile(), sess.Title)]
 
 		prefix := "[ ] "
 		if m.pickerSelected[origIdx] {
 			prefix = "[*] "
 		}
 
-		coloredTitle := accountStyle(acctColor[sess.Account]).Render(baseTitle)
+		baseTitle := session.FormatTitle(sess)
+		coloredTitle := accountStyle(acctColor[sess.EffectiveProfile()]).Render(baseTitle)
 		line := "  " + prefix + coloredTitle
+		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
+			line += "  " + styleDim.Render("["+acc.Name+"/"+acc.EffectiveHarness()+"]")
+		}
+		if sess.EffectiveProfile() != defaultProfile {
+			line += "  " + styleDim.Render("(override)")
+		}
 		if running {
 			line += "  " + styleDim.Render("(running)")
 		}
@@ -114,14 +120,16 @@ func renderPickerList(m Model) string {
 // renderPickerPreview renders the right-hand pane for the picker: a labeled
 // config block, then (if the highlighted session is currently running) a
 // divider and the tail of its scrollback. Output is exactly height lines.
-func renderPickerPreview(m Model, sess config.Session, width, height int) string {
+func renderPickerPreview(m Model, origIdx, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
+	sess := m.pickerSessionWithResolvedProfile(origIdx)
+	defaultProfile := m.pickerSessions[origIdx].EffectiveProfile()
 	acctColor := buildAccountColorMap(m)
 
 	lines := make([]string, 0, height)
-	header := accountStyle(acctColor[sess.Account]).Render(
+	header := accountStyle(acctColor[sess.EffectiveProfile()]).Render(
 		runewidth.Truncate(session.FormatTitle(sess), width, "…"),
 	)
 	lines = append(lines, header)
@@ -135,9 +143,17 @@ func renderPickerPreview(m Model, sess config.Session, width, height int) string
 	}
 	addField("title", sess.Title)
 	addField("dir", sess.Directory)
-	addField("account", sess.Account)
-	if len(sess.ClaudeFlags) > 0 {
-		addField("flags", strings.Join(sess.ClaudeFlags, " "))
+	if sess.EffectiveProfile() != defaultProfile {
+		addField("default profile", defaultProfile)
+		addField("launch profile", sess.EffectiveProfile())
+	} else {
+		addField("profile", sess.EffectiveProfile())
+	}
+	if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
+		addField("harness", acc.EffectiveHarness())
+	}
+	if len(sess.Args) > 0 {
+		addField("args", strings.Join(sess.Args, " "))
 	}
 	if len(sess.Env) > 0 {
 		keys := make([]string, 0, len(sess.Env))
@@ -155,8 +171,7 @@ func renderPickerPreview(m Model, sess config.Session, width, height int) string
 		addField("groups", strings.Join(sess.Groups, ", "))
 	}
 
-	baseTitle := session.FormatTitle(sess)
-	if m.pickerRunning[baseTitle] {
+	if m.pickerRunning[session.SessionKey(sess.EffectiveProfile(), sess.Title)] {
 		lines = append(lines, styleDim.Render("── running ──"))
 		remaining := height - len(lines)
 		if remaining > pickerRunningPeekLines {
@@ -205,8 +220,8 @@ func sortPickerSessions(sessions []config.Session) []config.Session {
 	sorted := slices.Clone(sessions)
 	slices.SortStableFunc(sorted, func(a, b config.Session) int {
 		if c := strings.Compare(
-			strings.ToLower(a.Account),
-			strings.ToLower(b.Account),
+			strings.ToLower(a.EffectiveProfile()),
+			strings.ToLower(b.EffectiveProfile()),
 		); c != 0 {
 			return c
 		}
@@ -218,11 +233,18 @@ func sortPickerSessions(sessions []config.Session) []config.Session {
 	return sorted
 }
 
-// buildPickerRunning returns a set of Base titles for all currently running sessions.
+// buildPickerRunning returns a set of logical session keys for all currently running sessions.
 func buildPickerRunning(sessions []session.RunningSession) map[string]bool {
 	m := make(map[string]bool, len(sessions))
 	for _, s := range sessions {
-		m[s.Base] = true
+		m[runningSessionKey(s)] = true
 	}
 	return m
+}
+
+func runningSessionKey(sess session.RunningSession) string {
+	if sess.Key != "" {
+		return sess.Key
+	}
+	return session.SessionKey(sess.EffectiveProfile(), sess.EffectiveProject())
 }

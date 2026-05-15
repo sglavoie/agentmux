@@ -3,7 +3,7 @@ package tui
 import (
 	"time"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // tickMsg is sent by the refresh ticker on each interval.

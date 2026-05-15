@@ -3,13 +3,13 @@ package session_test
 import (
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 func TestResolveFlags_Empty(t *testing.T) {
 	sess := config.Session{ClaudeFlags: nil}
-	if got := session.ResolveFlags(sess, config.Defaults{}); got != "" {
+	if got := session.ResolveFlags(sess, config.Account{}, config.Defaults{}); got != "" {
 		t.Errorf("ResolveFlags(nil) = %q, want %q", got, "")
 	}
 }
@@ -17,7 +17,7 @@ func TestResolveFlags_Empty(t *testing.T) {
 func TestResolveFlags_Single(t *testing.T) {
 	sess := config.Session{ClaudeFlags: []string{"--dangerously-skip-permissions"}}
 	want := "--dangerously-skip-permissions"
-	if got := session.ResolveFlags(sess, config.Defaults{}); got != want {
+	if got := session.ResolveFlags(sess, config.Account{}, config.Defaults{}); got != want {
 		t.Errorf("ResolveFlags = %q, want %q", got, want)
 	}
 }
@@ -25,7 +25,7 @@ func TestResolveFlags_Single(t *testing.T) {
 func TestResolveFlags_Multiple(t *testing.T) {
 	sess := config.Session{ClaudeFlags: []string{"--flag-a", "--flag-b"}}
 	want := "--flag-a --flag-b"
-	if got := session.ResolveFlags(sess, config.Defaults{}); got != want {
+	if got := session.ResolveFlags(sess, config.Account{}, config.Defaults{}); got != want {
 		t.Errorf("ResolveFlags = %q, want %q", got, want)
 	}
 }
@@ -34,8 +34,44 @@ func TestResolveFlags_DefaultsFallback(t *testing.T) {
 	sess := config.Session{ClaudeFlags: nil}
 	defaults := config.Defaults{ClaudeFlags: []string{"--dangerously-skip-permissions"}}
 	want := "--dangerously-skip-permissions"
-	if got := session.ResolveFlags(sess, defaults); got != want {
+	if got := session.ResolveFlags(sess, config.Account{}, defaults); got != want {
 		t.Errorf("ResolveFlags fallback = %q, want %q", got, want)
+	}
+}
+
+func TestResolveFlags_AccountFallback(t *testing.T) {
+	sess := config.Session{}
+	acc := config.Account{Args: []string{"--account-flag"}}
+	want := "--account-flag"
+	if got := session.ResolveFlags(sess, acc, config.Defaults{}); got != want {
+		t.Errorf("ResolveFlags account fallback = %q, want %q", got, want)
+	}
+}
+
+func TestResolveFlags_ProjectOverridesAccount(t *testing.T) {
+	sess := config.Session{Args: []string{"--project-flag"}}
+	acc := config.Account{Args: []string{"--account-flag"}}
+	want := "--project-flag"
+	if got := session.ResolveFlags(sess, acc, config.Defaults{}); got != want {
+		t.Errorf("ResolveFlags project over account = %q, want %q", got, want)
+	}
+}
+
+func TestResolveFlags_AccountOverridesDefaults(t *testing.T) {
+	sess := config.Session{}
+	acc := config.Account{Args: []string{"--account-flag"}}
+	defaults := config.Defaults{ClaudeFlags: []string{"--defaults-flag"}}
+	want := "--account-flag"
+	if got := session.ResolveFlags(sess, acc, defaults); got != want {
+		t.Errorf("ResolveFlags account over defaults = %q, want %q", got, want)
+	}
+}
+
+func TestResolveFlags_LegacyClaudeFlagsSession(t *testing.T) {
+	sess := config.Session{ClaudeFlags: []string{"--legacy-flag"}}
+	want := "--legacy-flag"
+	if got := session.ResolveFlags(sess, config.Account{}, config.Defaults{}); got != want {
+		t.Errorf("ResolveFlags legacy ClaudeFlags = %q, want %q", got, want)
 	}
 }
 

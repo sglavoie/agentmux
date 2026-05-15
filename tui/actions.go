@@ -6,9 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/clipboard"
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/clipboard"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // action describes one entry in the per-row actions overlay. keyDisplay is
@@ -85,13 +85,15 @@ func actionsFor(_ Model) []action {
 		{
 			keyDisplay:  "c",
 			keyMatch:    keyC,
-			label:       "override account",
-			description: "restart under a different Claude config dir",
+			label:       "override profile",
+			description: "restart under a different harness profile",
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
 				m.configPickerAccounts = m.cfg.Accounts
-				m.configPickerCurrent = m.targetSession.Account
-				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.Account)
+				m.configPickerCurrent = m.targetSession.EffectiveProfile()
+				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
+				m.configPickerReturnMode = ModeList
+				m.configPickerProjectIdx = -1
 				m.actionErr = nil
 				m.mode = ModeConfigPicker
 				return m, nil
@@ -118,11 +120,11 @@ func actionsFor(_ Model) []action {
 			label:       "open dir in shell",
 			description: "spawn a plain shell tab at the session's directory",
 			available: func(m Model) bool {
-				_, ok := findConfigSessionByBase(m.cfg, m.targetSession.Base)
+				_, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
 				return ok
 			},
 			run: func(m Model) (Model, tea.Cmd) {
-				cs, ok := findConfigSessionByBase(m.cfg, m.targetSession.Base)
+				cs, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
 				m.mode = ModeList
 				if !ok {
 					return m, nil
@@ -166,18 +168,35 @@ func renderActions(m Model) string {
 	return sb.String()
 }
 
-// findConfigSessionByBase resolves a running session's Base title back to its
-// configured config.Session entry, by re-deriving the formatted title.
-func findConfigSessionByBase(cfg *config.Config, base string) (config.Session, bool) {
+// findConfigSession resolves a running session back to its configured project
+// entry using the logical project title + profile identity rather than the
+// rendered tab title, which may collide across harnesses.
+func findConfigSession(cfg *config.Config, profileName, projectTitle string) (config.Session, bool) {
 	if cfg == nil {
 		return config.Session{}, false
 	}
 	for _, cs := range cfg.Sessions {
-		if session.FormatTitle(cs) == base {
+		if cs.Title == projectTitle && cs.EffectiveProfile() == profileName {
 			return cs, true
 		}
 	}
 	return config.Session{}, false
+}
+
+func findAccountByName(accounts []config.Account, name string) (config.Account, bool) {
+	for _, a := range accounts {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return config.Account{}, false
+}
+
+func sessionWithProfile(sess config.Session, profileName string) config.Session {
+	out := sess
+	out.Profile = profileName
+	out.Account = profileName
+	return out
 }
 
 // openDirActionCmd opens a config session's directory in a plain shell tab,
@@ -187,12 +206,9 @@ func openDirActionCmd(m Model, cs config.Session) tea.Cmd {
 	client := m.client
 	cfg := m.cfg
 	return func() tea.Msg {
-		var acc config.Account
-		for _, a := range accounts {
-			if a.Name == cs.Account {
-				acc = a
-				break
-			}
+		acc, ok := findAccountByName(accounts, cs.EffectiveProfile())
+		if !ok {
+			return pickerOpenDoneMsg{err: nil}
 		}
 		return pickerOpenDoneMsg{err: session.OpenDirectory(client, cs, acc, cfg)}
 	}

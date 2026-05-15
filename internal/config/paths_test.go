@@ -1,12 +1,13 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 func TestExpandTilde_Home(t *testing.T) {
@@ -36,7 +37,7 @@ func TestExpandTilde_NoTilde(t *testing.T) {
 func TestDefaultConfigDir(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	got := config.DefaultConfigDir()
-	want := filepath.Join(home, ".config", "cc-manager")
+	want := filepath.Join(home, ".config", "agent-mux")
 	if got != want {
 		t.Errorf("DefaultConfigDir: got %q, want %q", got, want)
 	}
@@ -46,5 +47,52 @@ func TestDefaultConfigPath(t *testing.T) {
 	got := config.DefaultConfigPath()
 	if !strings.HasSuffix(got, "config.toml") {
 		t.Errorf("DefaultConfigPath: got %q, expected suffix config.toml", got)
+	}
+}
+
+func TestReadDefault_MissingConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	_, err := config.ReadDefault()
+	if err == nil {
+		t.Fatal("expected error for missing default config, got nil")
+	}
+
+	var missing *config.MissingConfigError
+	if !errors.As(err, &missing) {
+		t.Fatalf("expected MissingConfigError, got %T", err)
+	}
+
+	want := filepath.Join(home, ".config", "agent-mux", "config.toml")
+	if missing.Path != want {
+		t.Errorf("missing config path: got %q, want %q", missing.Path, want)
+	}
+	if !strings.Contains(err.Error(), "amx config init") {
+		t.Errorf("missing config error: got %q, expected amx config init hint", err.Error())
+	}
+}
+
+func TestLoadDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	path := filepath.Join(home, ".config", "agent-mux", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("[defaults]\nsort = \"alpha\"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := config.LoadDefault()
+	if err != nil {
+		t.Fatalf("LoadDefault: %v", err)
+	}
+	if cfg.Defaults.Sort != "alpha" {
+		t.Errorf("sort: got %q, want %q", cfg.Defaults.Sort, "alpha")
+	}
+	if cfg.Defaults.RefreshInterval != 2 {
+		t.Errorf("refresh_interval: got %d, want 2", cfg.Defaults.RefreshInterval)
 	}
 }

@@ -30,7 +30,7 @@ func renderHelp(m Model) string {
 			"  e         peek scrollback (active rows only)",
 			"  r         restart session (confirm)",
 			"  x         close session (confirm)",
-			"  c         override config account",
+			"  c         override session profile",
 			"  C         clear session icon",
 		}},
 		{"Launch / open", []string{
@@ -40,8 +40,8 @@ func renderHelp(m Model) string {
 			"  p         toggle preview pane (also active in launcher)",
 		}},
 		{"Filter", []string{
-			"  /         filter (DSL: @account, !state, word)",
-			"  f         filter pre-filled with @ (account)",
+			"  /         filter (DSL: @profile, !state, word)",
+			"  f         filter pre-filled with @ (profile)",
 			"  1 – 9     remove filter chip at that position",
 		}},
 		{"App", []string{

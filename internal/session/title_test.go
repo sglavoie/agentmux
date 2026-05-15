@@ -3,8 +3,8 @@ package session_test
 import (
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 func TestAccountPrefix(t *testing.T) {

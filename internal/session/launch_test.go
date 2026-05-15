@@ -1,11 +1,12 @@
 package session_test
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // sequentialLSRunner returns different kitten @ ls responses on successive
@@ -179,5 +180,152 @@ func TestLaunch_ColorRetryApplied(t *testing.T) {
 	}
 	if !colorCalled {
 		t.Error("expected kitten @ set-tab-color to be called after color retry found new tab")
+	}
+}
+
+// TestLaunch_StoresExplicitFlags verifies that Launch stores project-explicit
+// args separately from the effective launch args.
+func TestLaunch_StoresExplicitFlags(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--account-flag"}},
+		},
+	}
+
+	sess := config.Session{
+		Title:     "explicit",
+		Account:   "work",
+		Directory: "/tmp/explicit",
+		Args:      []string{"--project-flag"},
+	}
+	acc := cfg.Accounts[0]
+
+	err := session.Launch(client, sess, acc, cfg)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		for _, a := range c.Args {
+			if a != "launch" {
+				continue
+			}
+			argSet := make(map[string]bool)
+			for _, arg := range c.Args {
+				argSet[arg] = true
+			}
+			if !argSet["--var=cc_flags=--project-flag"] {
+				t.Errorf("expected cc_flags=--project-flag, args: %v", c.Args)
+			}
+			if !argSet["--var=cc_explicit_flags=--project-flag"] {
+				t.Errorf("expected cc_explicit_flags=--project-flag, args: %v", c.Args)
+			}
+			return
+		}
+	}
+	t.Error("expected kitten @ launch to be called")
+}
+
+func TestLaunch_MixedHarnessUsesProfileArgs(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			Sort: "alpha",
+			Args: []string{"--shared-default"},
+		},
+		Accounts: []config.Account{
+			{
+				Name:    "claude-work",
+				Harness: "claude",
+				HomeDir: "~/.config/claude-work",
+				Color:   "blue",
+				Args:    []string{"--dangerously-skip-permissions"},
+			},
+			{
+				Name:    "copilot-work",
+				Harness: "copilot",
+				HomeDir: "~/.copilot-work",
+				Color:   "green",
+				Args:    []string{"--model", "gpt-5"},
+			},
+		},
+	}
+
+	sess := config.Session{
+		Title:     "docs",
+		Profile:   "copilot-work",
+		Account:   "copilot-work",
+		Directory: "/tmp/docs",
+	}
+	acc := cfg.Accounts[1]
+
+	err := session.Launch(client, sess, acc, cfg)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	expectedHome := "--env=COPILOT_HOME=" + config.ExpandTilde("~/.copilot-work")
+	launchFound := false
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		hasLaunch := false
+		for _, a := range c.Args {
+			if a == "launch" {
+				hasLaunch = true
+				break
+			}
+		}
+		if !hasLaunch {
+			continue
+		}
+		launchFound = true
+
+		argSet := make(map[string]bool)
+		for _, a := range c.Args {
+			argSet[a] = true
+		}
+		if !argSet["--var=amx_harness=copilot"] {
+			t.Errorf("expected amx_harness=copilot in args: %v", c.Args)
+		}
+		if !argSet["--var=cc_flags=--model gpt-5"] {
+			t.Errorf("expected cc_flags=--model gpt-5 in args: %v", c.Args)
+		}
+		if !argSet[expectedHome] {
+			t.Errorf("expected %q in args: %v", expectedHome, c.Args)
+		}
+
+		sawCopilot := false
+		for _, arg := range c.Args {
+			if strings.Contains(arg, "exec copilot --model gpt-5") {
+				sawCopilot = true
+			}
+			if strings.Contains(arg, "--dangerously-skip-permissions") {
+				t.Errorf("unexpected Claude-only flag in Copilot launch args: %v", c.Args)
+			}
+			if strings.Contains(arg, "--shared-default") {
+				t.Errorf("unexpected shared defaults override in Copilot launch args: %v", c.Args)
+			}
+		}
+		if !sawCopilot {
+			t.Errorf("expected Copilot executable in launch args: %v", c.Args)
+		}
+	}
+	if !launchFound {
+		t.Error("expected kitten @ launch to be called")
 	}
 }

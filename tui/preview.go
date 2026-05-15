@@ -7,8 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	runewidth "github.com/mattn/go-runewidth"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // previewTickMsg is sent by the preview ticker while preview is enabled.

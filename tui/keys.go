@@ -25,7 +25,7 @@ const (
 	keyR           = "r"
 	keyBackspace   = "backspace"
 	keyQuestion    = "?" // opens ModeHelp overlay
-	keyC           = "c" // opens ModeConfigPicker from ModeList
+	keyC           = "c" // opens ModeConfigPicker for profile override
 	keyClearStatus = "C" // clears the highlighted session's icon
 
 	keyTogglePreview = "p" // toggles the split-pane live preview

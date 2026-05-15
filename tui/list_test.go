@@ -8,8 +8,8 @@ import (
 
 	runewidth "github.com/mattn/go-runewidth"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 func TestStateGroupClassification(t *testing.T) {

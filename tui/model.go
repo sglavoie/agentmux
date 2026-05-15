@@ -9,11 +9,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
-	"github.com/sglavoie/cc-manager-kitty/internal/daemon"
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
-	"github.com/sglavoie/cc-manager-kitty/internal/palette"
-	"github.com/sglavoie/cc-manager-kitty/internal/session"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // Mode represents the current UI mode.
@@ -80,6 +80,11 @@ type Model struct {
 	configPickerAccounts []config.Account
 	configPickerCursor   int
 	configPickerCurrent  string
+	configPickerReturnMode Mode
+	configPickerProjectIdx int
+
+	// picker launch overrides: project index -> profile name
+	pickerProfileOverride map[int]string
 
 	// activity tracking: window_id → last activity time, sourced from daemon.
 	// Empty when the daemon is unreachable; treated as "Active" by stateGroup.
@@ -309,7 +314,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyO:
 		if len(m.filtered) > 0 {
 			s := m.filtered[m.cursor]
-			if cs, ok := findConfigSessionByBase(m.cfg, s.Base); ok {
+			if cs, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
 				m.targetSession = s
 				m.actionErr = nil
 				return m, openDirActionCmd(m, cs)
@@ -360,8 +365,10 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.filtered) > 0 {
 			m.targetSession = m.filtered[m.cursor]
 			m.configPickerAccounts = m.cfg.Accounts
-			m.configPickerCurrent = m.targetSession.Account
-			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.Account)
+			m.configPickerCurrent = m.targetSession.EffectiveProfile()
+			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
+			m.configPickerReturnMode = ModeList
+			m.configPickerProjectIdx = -1
 			m.actionErr = nil
 			m.mode = ModeConfigPicker
 		}
@@ -380,6 +387,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
 		m.pickerRunning = buildPickerRunning(m.sessions)
 		m.pickerSelected = make(map[int]bool)
+		m.pickerProfileOverride = make(map[int]string)
 		m.pickerCursor = 0
 		m.pickerFilter = ""
 		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
@@ -466,7 +474,7 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyEsc, keyQ:
-		m.mode = ModeList
+		m.mode = m.configPickerReturnMode
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyJ, keyDown:
@@ -476,7 +484,22 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyEnter:
 		if m.configPickerCursor < len(m.configPickerAccounts) {
 			acc := m.configPickerAccounts[m.configPickerCursor]
-			m.mode = ModeList
+			m.mode = m.configPickerReturnMode
+			if m.configPickerReturnMode == ModePicker && m.configPickerProjectIdx >= 0 {
+				defaultProfile := m.pickerSessions[m.configPickerProjectIdx].EffectiveProfile()
+				if acc.Name == defaultProfile {
+					delete(m.pickerProfileOverride, m.configPickerProjectIdx)
+				} else {
+					if m.pickerProfileOverride == nil {
+						m.pickerProfileOverride = make(map[int]string)
+					}
+					m.pickerProfileOverride[m.configPickerProjectIdx] = acc.Name
+				}
+				if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+					return m, cmd
+				}
+				return m, nil
+			}
 			if acc.Name == m.configPickerCurrent {
 				return m, nil
 			}
@@ -552,6 +575,7 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.mode = ModeList
+		m.pickerProfileOverride = nil
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
@@ -585,13 +609,32 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyO:
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]
-			return m, pickerOpenCmd(m, m.pickerSessions[origIdx])
+			return m, pickerOpenCmd(m, m.pickerSessionWithResolvedProfile(origIdx))
+		}
+		return m, nil
+	case keyClearStatus:
+		if len(m.pickerFilteredIdx) > 0 {
+			origIdx := m.pickerFilteredIdx[m.pickerCursor]
+			sess := m.pickerSessionWithResolvedProfile(origIdx)
+			m.targetSession = session.RunningSession{
+				Base:    session.FormatTitle(sess),
+				Project: m.pickerSessions[origIdx].Title,
+				Profile: m.pickerEffectiveProfile(origIdx),
+				Account: m.pickerEffectiveProfile(origIdx),
+			}
+			m.configPickerAccounts = m.cfg.Accounts
+			m.configPickerCurrent = m.pickerEffectiveProfile(origIdx)
+			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.configPickerCurrent)
+			m.configPickerReturnMode = ModePicker
+			m.configPickerProjectIdx = origIdx
+			m.mode = ModeConfigPicker
 		}
 		return m, nil
 	case keyEnter:
 		cmd := m.dispatchPickerLaunch()
 		m.mode = ModeList
 		m.pickerSelected = nil
+		m.pickerProfileOverride = nil
 		return m, cmd
 	case keyBackspace:
 		if r := []rune(m.pickerFilter); len(r) > 0 {
@@ -802,10 +845,10 @@ func (m Model) pickerCurrentWindowID() int {
 		return 0
 	}
 	origIdx := m.pickerFilteredIdx[m.pickerCursor]
-	sess := m.pickerSessions[origIdx]
-	baseTitle := session.FormatTitle(sess)
+	sess := m.pickerSessionWithResolvedProfile(origIdx)
+	key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
 	for _, rs := range m.sessions {
-		if rs.Base == baseTitle {
+		if runningSessionKey(rs) == key {
 			return rs.WindowID
 		}
 	}
@@ -955,8 +998,10 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 		if !m.pickerSelected[i] {
 			continue
 		}
+		sess = m.pickerSessionWithResolvedProfile(i)
+		key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
 		baseTitle := session.FormatTitle(sess)
-		if m.pickerRunning[baseTitle] {
+		if m.pickerRunning[key] {
 			continue // dedup: skip already-running sessions
 		}
 		todo = append(todo, queued{sess: sess, title: baseTitle})
@@ -987,12 +1032,9 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 		sess := q.sess
 		title := q.title
 		cmds = append(cmds, func() tea.Msg {
-			var acc config.Account
-			for _, a := range accounts {
-				if a.Name == sess.Account {
-					acc = a
-					break
-				}
+			acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
+			if !ok {
+				return launchProgressMsg{batchID: batchID, total: total, title: title, err: nil}
 			}
 			err := session.Launch(client, sess, acc, cfg)
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
@@ -1069,12 +1111,9 @@ func pickerOpenCmd(m Model, sess config.Session) tea.Cmd {
 	client := m.client
 	cfg := m.cfg
 	return func() tea.Msg {
-		var acc config.Account
-		for _, a := range accounts {
-			if a.Name == sess.Account {
-				acc = a
-				break
-			}
+		acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
+		if !ok {
+			return pickerOpenDoneMsg{err: nil}
 		}
 		return pickerOpenDoneMsg{err: session.OpenDirectory(client, sess, acc, cfg)}
 	}
@@ -1113,7 +1152,9 @@ func applyPickerFilter(sessions []config.Session, query string) []int {
 	for i, cs := range sessions {
 		synthetic := session.RunningSession{
 			Base:      session.FormatTitle(cs),
-			Account:   cs.Account,
+			Account:   cs.EffectiveProfile(),
+			Profile:   cs.EffectiveProfile(),
+			Project:   cs.Title,
 			Directory: cs.Directory,
 		}
 		if f.Match(synthetic, nil, 0) {
@@ -1131,6 +1172,23 @@ func pickerAccountIndex(accounts []config.Account, name string) int {
 		}
 	}
 	return 0
+}
+
+func (m Model) pickerEffectiveProfile(origIdx int) string {
+	if name := m.pickerProfileOverride[origIdx]; name != "" {
+		return name
+	}
+	if origIdx >= 0 && origIdx < len(m.pickerSessions) {
+		return m.pickerSessions[origIdx].EffectiveProfile()
+	}
+	return ""
+}
+
+func (m Model) pickerSessionWithResolvedProfile(origIdx int) config.Session {
+	if origIdx < 0 || origIdx >= len(m.pickerSessions) {
+		return config.Session{}
+	}
+	return sessionWithProfile(m.pickerSessions[origIdx], m.pickerEffectiveProfile(origIdx))
 }
 
 // peekCmd launches a Kitty overlay pager for the given window's scrollback.

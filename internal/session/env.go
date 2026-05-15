@@ -5,11 +5,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/config"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // ResolveEnv builds the env map passed as --env flags to kitten @ launch.
-// It includes KITTY_LISTEN_ON, CLAUDE_CONFIG_DIR (when non-default), and
+// It includes KITTY_LISTEN_ON, a harness-specific home/config env var when
+// non-default, and
 // session-level overrides from sess.Env.
 func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 	env := make(map[string]string)
@@ -18,11 +20,12 @@ func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 		env["KITTY_LISTEN_ON"] = socket
 	}
 
-	configDir := config.ExpandTilde(acc.ConfigDir)
-	home, _ := os.UserHomeDir()
-	defaultDir := home + "/.claude"
-	if configDir != "" && configDir != defaultDir {
-		env["CLAUDE_CONFIG_DIR"] = configDir
+	homeDir := config.ExpandTilde(acc.EffectiveHomeDir())
+	defaultDir := harness.DefaultHomeDir(acc.EffectiveHarness())
+	if homeDir != "" && homeDir != defaultDir {
+		if envVar := harness.EnvVar(acc.EffectiveHarness()); envVar != "" {
+			env[envVar] = homeDir
+		}
 	}
 
 	for k, v := range sess.Env {
@@ -32,14 +35,21 @@ func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 	return env
 }
 
-// ResolveFlags returns the effective claude flags string for a session,
-// falling back to defaults.ClaudeFlags when the session has none.
-func ResolveFlags(sess config.Session, defaults config.Defaults) string {
-	flags := sess.ClaudeFlags
-	if len(flags) == 0 {
-		flags = defaults.ClaudeFlags
+// ResolveArgs returns the effective CLI args string for a session.
+// Precedence: project args > profile args > shared defaults args.
+func ResolveArgs(sess config.Session, acc config.Account, defaults config.Defaults) string {
+	if args := sess.EffectiveArgs(); len(args) > 0 {
+		return strings.Join(args, " ")
 	}
-	return strings.Join(flags, " ")
+	if len(acc.Args) > 0 {
+		return strings.Join(acc.Args, " ")
+	}
+	return strings.Join(defaults.EffectiveArgs(), " ")
+}
+
+// ResolveFlags is kept as a compatibility alias for older Claude-oriented code.
+func ResolveFlags(sess config.Session, acc config.Account, defaults config.Defaults) string {
+	return ResolveArgs(sess, acc, defaults)
 }
 
 // SerializeSessionEnv serializes sess.Env as KEY=VALUE pairs joined by "\x1f"

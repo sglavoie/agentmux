@@ -1,0 +1,23 @@
+[defaults]
+args = ["--shared-default"]
+
+[[profiles]]
+name = "claude-work"
+harness = "claude"
+home_dir = "~/.config/claude-work"
+color = "blue"
+args = ["--dangerously-skip-permissions"]
+
+[[profiles]]
+name = "copilot-work"
+harness = "copilot"
+home_dir = "~/.copilot-work"
+color = "green"
+args = ["--model", "gpt-5"]
+
+[[projects]]
+title = "docs"
+directory = "~/projects/docs"
+profile = "copilot-work"
+args = ["--project-flag"]
+groups = ["work"]

@@ -1,10 +1,14 @@
 package config
 
+import "github.com/sglavoie/agentmux/internal/harness"
+
 // Config is the top-level structure for config.toml.
 type Config struct {
 	Defaults Defaults             `toml:"defaults"`
-	Accounts []Account            `toml:"accounts"`
-	Sessions []Session            `toml:"sessions"`
+	Profiles []Account            `toml:"profiles"`
+	Accounts []Account            `toml:"accounts"` // deprecated alias; mirrored from Profiles on load
+	Projects []Session            `toml:"projects"`
+	Sessions []Session            `toml:"sessions"` // deprecated alias; mirrored from Projects on load
 	Hooks    HooksConfig          `toml:"hooks"`
 }
 
@@ -14,7 +18,8 @@ type Defaults struct {
 	RefreshInterval int                 `toml:"refresh_interval"`
 	GuardDuration   int                 `toml:"guard_duration"`
 	IdleThreshold   int                 `toml:"idle_threshold"` // seconds before a session is considered idle; 0 → default (300)
-	ClaudeFlags     []string            `toml:"claude_flags"`
+	Args            []string            `toml:"args"`         // preferred shared launch args
+	ClaudeFlags     []string            `toml:"claude_flags"` // legacy alias for args
 	Notifications   NotificationConfig  `toml:"notifications"`
 	Preview         PreviewConfig       `toml:"preview"`
 }
@@ -42,19 +47,28 @@ type PreviewConfig struct {
 	MinRows   int     `toml:"min_rows"`   // below this, vertical split is disabled
 }
 
-// Account defines a Claude account.
+// Account defines a launch profile. Accounts remain as a deprecated internal
+// type name because much of the codebase still uses it while the user-facing
+// config is moving to `profiles`.
 type Account struct {
 	Name      string `toml:"name"`
+	Harness   string `toml:"harness"`
+	HomeDir   string `toml:"home_dir"`
 	ConfigDir string `toml:"config_dir"`
 	Color     string `toml:"color"`
+	Args      []string `toml:"args"`
 }
 
-// Session defines a single Claude Code session tab.
+// Session defines a configured project / launch template. Sessions remain as a
+// deprecated internal type name because much of the codebase still uses it
+// while the user-facing config is moving to `projects`.
 type Session struct {
 	Title          string            `toml:"title"`
 	Directory      string            `toml:"directory"`
+	Profile        string            `toml:"profile"`
 	Account        string            `toml:"account"`
-	ClaudeFlags    []string          `toml:"claude_flags"`
+	Args           []string          `toml:"args"`          // preferred per-project args
+	ClaudeFlags    []string          `toml:"claude_flags"` // legacy alias for args
 	Env            map[string]string `toml:"env"`
 	Groups         []string          `toml:"groups"`
 }
@@ -94,3 +108,45 @@ func ValidSort(s string) bool { return validSorts[s] }
 
 // ValidPreviewDirection reports whether s is a valid preview direction.
 func ValidPreviewDirection(s string) bool { return validPreviewDirections[s] }
+
+// EffectiveArgs returns the normalized default args, preserving legacy
+// claude_flags behavior when args is unset.
+func (d Defaults) EffectiveArgs() []string {
+	if len(d.Args) > 0 {
+		return d.Args
+	}
+	return d.ClaudeFlags
+}
+
+// EffectiveHarness returns the normalized harness for the profile.
+func (a Account) EffectiveHarness() string {
+	return harness.Normalize(a.Harness)
+}
+
+// EffectiveHomeDir returns the normalized profile home/config directory.
+func (a Account) EffectiveHomeDir() string {
+	if a.HomeDir != "" {
+		return a.HomeDir
+	}
+	if a.ConfigDir != "" {
+		return a.ConfigDir
+	}
+	return harness.DefaultHomeDir(a.EffectiveHarness())
+}
+
+// EffectiveProfile returns the normalized profile name for the project.
+func (s Session) EffectiveProfile() string {
+	if s.Profile != "" {
+		return s.Profile
+	}
+	return s.Account
+}
+
+// EffectiveArgs returns the normalized per-project args, preferring args over
+// legacy claude_flags.
+func (s Session) EffectiveArgs() []string {
+	if len(s.Args) > 0 {
+		return s.Args
+	}
+	return s.ClaudeFlags
+}

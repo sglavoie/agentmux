@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/cc-manager-kitty/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // SortKey computes the sort key for a tab with the given account, base title,

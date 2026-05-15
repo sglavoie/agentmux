@@ -2,28 +2,37 @@
 // state resolution, title updates, and daemon communication.
 package indicator
 
-// eventToAction maps Claude Code hook event names to ccm actions.
+// eventToAction maps supported harness hook event names to amx actions.
 // Unknown events are silently ignored (return "").
 var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.
+	"sessionStart": "idle",
 	"SessionStart": "idle",
 
-	// Active: Claude is processing.
+	// Active: the harness is processing.
+	"userPromptSubmitted": "active",
 	"UserPromptSubmit":   "active",
+	"preToolUse":         "active",
 	"PreToolUse":         "active",
+	"postToolUse":        "active",
 	"PostToolUse":        "active",
+	"subagentStop":       "active",
 	"SubagentStop":       "active",
 	"TaskCompleted":      "active",
 	"PostCompact":        "active",
 	"ElicitationResult":  "active",
 
 	// Subagent: subagent is running.
+	"subagentStart": "subagent",
 	"SubagentStart": "subagent",
 
 	// Compact: context compaction in progress.
+	"preCompact": "compact",
 	"PreCompact": "compact",
 
 	// Stop: session/subagent completed.
+	"agentStop":   "stop",
+	"sessionEnd":  "stop",
 	"Stop":       "stop",
 	"SessionEnd": "stop",
 
@@ -31,14 +40,19 @@ var eventToAction = map[string]string{
 	"StopFailure": "stop_failure",
 
 	// Permission: user approval required.
+	"permissionRequest": "permission",
 	"PermissionRequest": "permission",
 	"PermissionDenied":  "permission",
 	"Elicitation":       "permission",
 
 	// Failure: tool execution failed.
+	"postToolUseFailure": "failure",
 	"PostToolUseFailure": "failure",
+	"errorOccurred":      "failure",
+	"ErrorOccurred":      "failure",
 
-	// Idle: Claude wants to notify (task done, waiting for user).
+	// Idle: the harness wants to notify (task done, waiting for user).
+	"notification": "idle",
 	"Notification": "idle",
 	"TeammateIdle": "idle",
 
@@ -82,5 +96,5 @@ func PreservesCurrent(event string) bool {
 // IsPromptEvent reports whether event is a direct user prompt submission,
 // which should break through stop-guards regardless of the guard window.
 func IsPromptEvent(event string) bool {
-	return event == "UserPromptSubmit"
+	return event == "UserPromptSubmit" || event == "userPromptSubmitted"
 }
