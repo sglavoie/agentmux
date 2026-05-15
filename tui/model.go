@@ -20,14 +20,13 @@ import (
 type Mode int
 
 const (
-	ModeList          Mode = iota
-	ModeSearch             // typing a search query
-	ModeAccountFilter      // picking an account filter
-	ModeConfirm            // y/n confirmation for a destructive action
-	ModePicker             // multi-select session launcher
-	ModeConfigPicker       // account picker for config override
-	ModeHelp               // help overlay
-	ModePickerSearch       // typing a search query inside the picker
+	ModeList         Mode = iota
+	ModeSearch            // typing a filter expression (DSL)
+	ModeConfirm           // y/n confirmation for a destructive action
+	ModePicker            // multi-select session launcher
+	ModeConfigPicker      // account picker for config override
+	ModeHelp              // help overlay
+	ModeActions           // per-row actions overlay
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -46,14 +45,11 @@ type Model struct {
 	// mode
 	mode Mode
 
-	// search
-	searchText   string // live input while in ModeSearch
-	activeSearch string // committed search applied to filtered
-
-	// account filter
-	accounts      []string // unique account names in current sessions
-	acctCursor    int      // cursor within accounts slice (ModeAccountFilter)
-	activeAccount string   // "" = all, else filter by this account name
+	// filter (unified search + account + state DSL)
+	filterText      string // live input while in ModeSearch
+	activeFilter    Filter // committed filter applied to filtered
+	savedFilter     Filter // snapshot taken on enter; restored on Esc
+	focusedChipIdx  int    // -1 when no chip focused; otherwise index into Components()
 
 	// terminal dimensions
 	width  int
@@ -66,16 +62,16 @@ type Model struct {
 	targetSession session.RunningSession
 
 	// confirm mode
-	confirmAction string
+	confirmAction      string
+	confirmConsequence string
 
 	// picker mode
-	pickerSessions     []config.Session
-	pickerRunning      map[string]bool
-	pickerSelected     map[int]bool
-	pickerCursor       int
-	pickerSearchText   string // live input while in ModePickerSearch
-	pickerActiveSearch string // committed query applied to the picker
-	pickerFilteredIdx  []int  // indices into pickerSessions for the filtered view
+	pickerSessions    []config.Session
+	pickerRunning     map[string]bool
+	pickerSelected    map[int]bool
+	pickerCursor      int
+	pickerFilter      string // live filter buffer (DSL); always active in ModePicker
+	pickerFilteredIdx []int  // indices into pickerSessions for the filtered view
 
 	// last error from a close/restart action
 	actionErr error
@@ -97,6 +93,11 @@ type Model struct {
 	previewError         string
 	previewNotice        string
 	previewNoticeExpires time.Time
+
+	// toast strip + launch-progress bookkeeping
+	toasts          []Toast
+	launchBatchID   int
+	launchBatchDone int
 }
 
 // NewModel creates a dashboard model.
@@ -114,11 +115,12 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 		idle = 5 * time.Minute
 	}
 	return Model{
-		client:        client,
-		cfg:           cfg,
-		interval:      interval,
-		sortMode:      sort,
-		idleThreshold: idle,
+		client:         client,
+		cfg:            cfg,
+		interval:       interval,
+		sortMode:       sort,
+		idleThreshold:  idle,
+		focusedChipIdx: -1,
 	}
 }
 
@@ -166,12 +168,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionsMsg:
 		m.err = nil
+		// Capture the prior cursor's row identity before the list is
+		// rebuilt so we can restore it post-refresh. Empty list → no
+		// prior selection to preserve.
+		var priorBase string
+		if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
+			priorBase = m.filtered[m.cursor].Base
+		}
 		m.lastActivity = msg.activity
 		m.sessions = msg.sessions
-		m.accounts = uniqueAccounts(m.sessions)
-		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
+		m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 		m.sortFiltered()
-		m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
+		m.cursor = restoreCursor(m.filtered, priorBase, m.lastActivity, m.idleThreshold)
 		return m, nil
 
 	case errMsg:
@@ -183,9 +191,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Trigger a refresh so the list reflects the new state.
 		return m, fetchCmd(m.client, m.sortMode)
 
-	case pickerLaunchDoneMsg:
-		// Trigger a refresh so newly launched sessions appear.
-		return m, fetchCmd(m.client, m.sortMode)
+	case launchProgressMsg:
+		return m.handleLaunchProgress(msg)
+
+	case toastTickMsg:
+		return m, m.sweepToasts()
 
 	case pickerOpenDoneMsg:
 		if msg.err != nil {
@@ -218,18 +228,16 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case ModeSearch:
 		return m.handleSearchKey(msg)
-	case ModeAccountFilter:
-		return m.handleAccountFilterKey(msg)
 	case ModeConfirm:
 		return m.handleConfirmKey(msg)
 	case ModePicker:
 		return m.handlePickerKey(msg)
-	case ModePickerSearch:
-		return m.handlePickerSearchKey(msg)
 	case ModeConfigPicker:
 		return m.handleConfigPickerKey(msg)
 	case ModeHelp:
 		return m.handleHelpKey(msg)
+	case ModeActions:
+		return m.handleActionsKey(msg)
 	default:
 		return m.handleListKey(msg)
 	}
@@ -271,12 +279,10 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case keySlash:
-		m.mode = ModeSearch
-		m.searchText = m.activeSearch // pre-populate with current search
+		m.enterFilter("")
 
 	case keyF:
-		m.mode = ModeAccountFilter
-		m.acctCursor = accountIndex(m.accounts, m.activeAccount)
+		m.enterFilter("@")
 
 	case keyE:
 		if len(m.filtered) > 0 {
@@ -284,15 +290,59 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, peekCmd(m.client, s.WindowID)
 		}
 
-	case keySpace, keyEnter:
+	case keyEnter:
+		if m.focusedChipIdx >= 0 {
+			m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
+			return m, nil
+		}
+		if len(m.filtered) > 0 {
+			m.targetSession = m.filtered[m.cursor]
+			m.actionErr = nil
+			m.mode = ModeActions
+		}
+
+	case keySpace:
 		if len(m.filtered) > 0 {
 			return m, focusCmd(m.client, m.filtered[m.cursor].TabID)
+		}
+
+	case keyO:
+		if len(m.filtered) > 0 {
+			s := m.filtered[m.cursor]
+			if cs, ok := findConfigSessionByBase(m.cfg, s.Base); ok {
+				m.targetSession = s
+				m.actionErr = nil
+				return m, openDirActionCmd(m, cs)
+			}
+		}
+
+	case keyY:
+		if len(m.filtered) > 0 {
+			title := m.filtered[m.cursor].Base
+			m.actionErr = nil
+			return m, copyTitleCmd(title)
+		}
+
+	case keyTab:
+		if n := len(m.activeFilter.Components()); n > 0 {
+			if m.focusedChipIdx < 0 {
+				m.focusedChipIdx = 0
+			} else {
+				m.focusedChipIdx = (m.focusedChipIdx + 1) % n
+			}
+		}
+
+	case key1, key2, key3, key4, key5, key6, key7, key8, key9:
+		idx := int(msg.String()[0] - '1')
+		if idx < len(m.activeFilter.Components()) {
+			m.applyFilterChange(m.activeFilter.RemoveComponent(idx))
 		}
 
 	case keyX:
 		if len(m.filtered) > 0 {
 			m.targetSession = m.filtered[m.cursor]
 			m.confirmAction = "close"
+			m.confirmConsequence = closeConsequence
 			m.actionErr = nil
 			m.mode = ModeConfirm
 		}
@@ -301,6 +351,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.filtered) > 0 {
 			m.targetSession = m.filtered[m.cursor]
 			m.confirmAction = "restart"
+			m.confirmConsequence = restartConsequence
 			m.actionErr = nil
 			m.mode = ModeConfirm
 		}
@@ -330,81 +381,83 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerRunning = buildPickerRunning(m.sessions)
 		m.pickerSelected = make(map[int]bool)
 		m.pickerCursor = 0
-		m.pickerSearchText = ""
-		m.pickerActiveSearch = ""
+		m.pickerFilter = ""
 		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
 		m.mode = ModePicker
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
 
 	case keyEsc:
-		// Clear active filters.
-		m.activeSearch = ""
-		m.activeAccount = ""
-		m.filtered = applyFilter(m.sessions, "", "")
-		m.sortFiltered()
-		m.cursor = 0
+		// Clear active filter (and any chip focus).
+		m.applyFilterChange(Filter{})
 	}
 
 	return m, nil
+}
+
+// applyFilterChange swaps in a new active filter, re-applies it to the
+// session list, and resets cursor + chip focus. Used by chip removal and
+// the Esc "clear all" path so they share the bookkeeping.
+func (m *Model) applyFilterChange(f Filter) {
+	m.activeFilter = f
+	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	m.sortFiltered()
+	m.cursor = 0
+	m.focusedChipIdx = -1
+}
+
+// enterFilter switches into ModeSearch with the given pre-filled buffer and
+// snapshots the current filter so Esc can restore it. The pre-fill is parsed
+// and live-applied immediately so the list reflects the buffer on entry.
+func (m *Model) enterFilter(prefill string) {
+	m.savedFilter = m.activeFilter
+	m.filterText = prefill
+	m.activeFilter = Parse(prefill)
+	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	m.sortFiltered()
+	m.cursor = 0
+	m.focusedChipIdx = -1
+	m.mode = ModeSearch
+}
+
+// reapplyFilterLive parses filterText and refreshes the list. Used by every
+// keystroke handler in ModeSearch to provide live filtering.
+func (m *Model) reapplyFilterLive() {
+	m.activeFilter = Parse(m.filterText)
+	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	m.sortFiltered()
+	m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
+	m.focusedChipIdx = -1
 }
 
 func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyEsc:
-		// Cancel: restore previous search without applying new text.
-		m.searchText = m.activeSearch
+		// Cancel: restore the snapshot taken on entry and recompute.
+		m.activeFilter = m.savedFilter
+		m.filterText = m.savedFilter.Raw
+		m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+		m.sortFiltered()
+		m.cursor = 0
+		m.focusedChipIdx = -1
 		m.mode = ModeList
 
 	case keyEnter:
-		// Apply: commit the live text as the active search.
-		m.activeSearch = m.searchText
-		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
-		m.sortFiltered()
-		m.cursor = 0
+		// Live-applied already — just exit the input.
 		m.mode = ModeList
 
 	case keyBackspace:
-		if len(m.searchText) > 0 {
-			m.searchText = m.searchText[:len(m.searchText)-1]
+		if r := []rune(m.filterText); len(r) > 0 {
+			m.filterText = string(r[:len(r)-1])
 		}
+		m.reapplyFilterLive()
 
 	default:
-		// Append printable character.
 		if t := msg.Key().Text; t != "" {
-			m.searchText += t
+			m.filterText += t
+			m.reapplyFilterLive()
 		}
-	}
-
-	return m, nil
-}
-
-func (m Model) handleAccountFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	// accounts list has a virtual "All" entry at index -1 mapped to index 0.
-	// acctCursor: 0 = All, 1..N = accounts[0..N-1]
-	total := len(m.accounts) + 1 // +1 for "All"
-
-	switch msg.String() {
-	case keyEsc:
-		m.mode = ModeList
-
-	case keyEnter:
-		if m.acctCursor == 0 {
-			m.activeAccount = ""
-		} else {
-			m.activeAccount = m.accounts[m.acctCursor-1]
-		}
-		m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
-		m.sortFiltered()
-		m.cursor = 0
-		m.mode = ModeList
-
-	case keyJ, keyDown:
-		m.acctCursor = clamp(m.acctCursor+1, 0, total-1)
-
-	case keyK, keyUp:
-		m.acctCursor = clamp(m.acctCursor-1, 0, total-1)
-
-	case keyCtrlC, keyQ:
-		return m, tea.Quit
 	}
 
 	return m, nil
@@ -429,6 +482,30 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.restartWithAccountCmd(acc)
 		}
+	}
+	return m, nil
+}
+
+// handleActionsKey dispatches the per-row actions overlay. Esc/q close the
+// overlay without side effects; any other key that matches an available
+// action's keyMatch runs it. Unavailable or unknown keys are ignored.
+func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	s := msg.String()
+	switch s {
+	case keyEsc, keyQ:
+		m.mode = ModeList
+		return m, nil
+	case keyCtrlC:
+		return m, tea.Quit
+	}
+	for _, a := range actionsFor(m) {
+		if s != a.keyMatch {
+			continue
+		}
+		if !a.available(m) {
+			return m, nil
+		}
+		return a.run(m)
 	}
 	return m, nil
 }
@@ -464,26 +541,37 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyEsc:
-		// If a query is active, the first esc clears it; a subsequent esc exits.
-		if m.pickerActiveSearch != "" {
-			m.pickerActiveSearch = ""
-			m.pickerSearchText = ""
+		// Two-stage Esc: first clears a non-empty buffer; second exits.
+		if m.pickerFilter != "" {
+			m.pickerFilter = ""
 			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
 			m.pickerCursor = 0
+			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+				return m, cmd
+			}
 			return m, nil
 		}
 		m.mode = ModeList
-	case keyQ:
-		m.mode = ModeList
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
-	case keySlash:
-		m.pickerSearchText = m.pickerActiveSearch
-		m.mode = ModePickerSearch
 	case keyJ, keyDown:
 		m.pickerCursor = clamp(m.pickerCursor+1, 0, len(m.pickerFilteredIdx)-1)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
 	case keyK, keyUp:
 		m.pickerCursor = clamp(m.pickerCursor-1, 0, len(m.pickerFilteredIdx)-1)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyTogglePreview:
+		return m.togglePreview()
 	case keySpace:
 		if len(m.pickerFilteredIdx) == 0 {
 			return m, nil
@@ -493,46 +581,41 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		origIdx := m.pickerFilteredIdx[m.pickerCursor]
 		m.pickerSelected[origIdx] = !m.pickerSelected[origIdx]
+		return m, nil
 	case keyO:
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]
 			return m, pickerOpenCmd(m, m.pickerSessions[origIdx])
 		}
+		return m, nil
 	case keyEnter:
-		cmd := pickerLaunchCmd(m)
+		cmd := m.dispatchPickerLaunch()
 		m.mode = ModeList
 		m.pickerSelected = nil
 		return m, cmd
-	}
-	return m, nil
-}
-
-func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case keyEsc:
-		// Cancel: restore previous query without applying new text.
-		m.pickerSearchText = m.pickerActiveSearch
-		m.mode = ModePicker
-
-	case keyEnter:
-		// Apply: commit the live text as the active query.
-		m.pickerActiveSearch = m.pickerSearchText
-		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerActiveSearch)
-		m.pickerCursor = 0
-		m.mode = ModePicker
-
 	case keyBackspace:
-		if len(m.pickerSearchText) > 0 {
-			m.pickerSearchText = m.pickerSearchText[:len(m.pickerSearchText)-1]
+		if r := []rune(m.pickerFilter); len(r) > 0 {
+			m.pickerFilter = string(r[:len(r)-1])
+			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerCursor = 0
+			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+				return m, cmd
+			}
 		}
-
-	default:
-		// Append printable character.
-		if t := msg.Key().Text; t != "" {
-			m.pickerSearchText += t
-		}
+		return m, nil
 	}
 
+	// Default: live-append printable characters to the filter buffer. The
+	// always-on filter means typing has no other meaning in the picker
+	// (toggle is space, navigation is j/k, launch is enter, preview is p).
+	if t := msg.Key().Text; t != "" {
+		m.pickerFilter += t
+		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+		m.pickerCursor = 0
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+	}
 	return m, nil
 }
 
@@ -552,23 +635,24 @@ func (m Model) render() string {
 	case ModePicker:
 		// Picker replaces both header and list.
 		sb.WriteString(renderPicker(m))
-	case ModePickerSearch:
-		sb.WriteString(renderPickerWithSearch(m))
 	default:
 		// Header area varies by mode; list is always shown below.
 		switch m.mode {
 		case ModeSearch:
 			sb.WriteString(renderSearch(m))
-		case ModeAccountFilter:
-			sb.WriteString(renderAccountFilter(m))
 		case ModeConfirm:
 			sb.WriteString(renderConfirm(m))
 		case ModeConfigPicker:
 			sb.WriteString(renderConfigPicker(m))
 		case ModeHelp:
 			sb.WriteString(renderHelp(m))
+		case ModeActions:
+			sb.WriteString(renderActions(m))
 		default:
 			sb.WriteString(renderHeader(m))
+		}
+		if m.mode == ModeList {
+			sb.WriteString(renderChips(m, m.width))
 		}
 		if m.mode == ModeList && m.previewEnabled {
 			sb.WriteString(renderSplit(m))
@@ -579,6 +663,7 @@ func (m Model) render() string {
 
 	sb.WriteByte('\n')
 
+	sb.WriteString(renderToasts(m))
 	sb.WriteString(renderFooter(m))
 
 	return sb.String()
@@ -648,8 +733,15 @@ func clipHeight(s string, n int) string {
 }
 
 // previewFooterLines returns the number of lines the footer will occupy in
-// ModeList (used for layout math).
+// the current mode (used for layout math and resize fits-check).
 func previewFooterLines(m Model) int {
+	if m.mode == ModePicker {
+		// Picker footer is always two lines regardless of preview state.
+		return 2
+	}
+	if m.mode != ModeList {
+		return 2
+	}
 	noticeActive := m.previewNotice != "" &&
 		(m.previewNoticeExpires.IsZero() || time.Now().Before(m.previewNoticeExpires))
 	if m.previewEnabled {
@@ -684,13 +776,57 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	m.previewEnabled = true
 	m.previewText = ""
 	m.previewError = ""
-	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		m.previewWindowID = m.filtered[m.cursor].WindowID
-	} else {
-		m.previewWindowID = 0
-	}
+	m.previewWindowID = m.currentPreviewWindowID()
 	d := time.Duration(cfg.RefreshMs) * time.Millisecond
 	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+}
+
+// currentPreviewWindowID returns the window ID the preview should track for
+// the current cursor in the active mode. ModePicker resolves through the
+// picker cursor (matching the highlighted config session to a running one);
+// every other mode uses the dashboard cursor.
+func (m Model) currentPreviewWindowID() int {
+	if m.mode == ModePicker {
+		return m.pickerCurrentWindowID()
+	}
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		return m.filtered[m.cursor].WindowID
+	}
+	return 0
+}
+
+// pickerCurrentWindowID returns the WindowID of the running session matching
+// the picker's highlighted config row, or 0 when nothing matches.
+func (m Model) pickerCurrentWindowID() int {
+	if len(m.pickerFilteredIdx) == 0 || m.pickerCursor >= len(m.pickerFilteredIdx) {
+		return 0
+	}
+	origIdx := m.pickerFilteredIdx[m.pickerCursor]
+	sess := m.pickerSessions[origIdx]
+	baseTitle := session.FormatTitle(sess)
+	for _, rs := range m.sessions {
+		if rs.Base == baseTitle {
+			return rs.WindowID
+		}
+	}
+	return 0
+}
+
+// refreshPreviewForPickerCursor returns an immediate fetch cmd when the
+// picker cursor now points at a different running session (or none).
+// Returns nil when preview is off or the window hasn't changed.
+func (m *Model) refreshPreviewForPickerCursor() tea.Cmd {
+	if !m.previewEnabled {
+		return nil
+	}
+	winID := m.pickerCurrentWindowID()
+	if winID == m.previewWindowID {
+		return nil
+	}
+	m.previewWindowID = winID
+	m.previewText = ""
+	m.previewError = ""
+	return fetchPreviewCmd(m.client, winID)
 }
 
 // refreshPreviewForCursor returns an immediate fetch cmd when the cursor
@@ -805,25 +941,52 @@ func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
 	}
 }
 
-// pickerLaunchCmd launches all selected non-running sessions and returns pickerLaunchDoneMsg.
-func pickerLaunchCmd(m Model) tea.Cmd {
-	// Capture only what we need so we don't close over the full model.
-	sessions := m.pickerSessions
-	selected := m.pickerSelected
-	running := m.pickerRunning
+// dispatchPickerLaunch starts a multi-session launch and returns a batch of
+// per-session commands. Each command emits a launchProgressMsg the model
+// uses to drive the progress toast (1/N, 2/N, …). Returns nil when no
+// non-running session is selected so the caller doesn't dispatch a dud cmd.
+func (m *Model) dispatchPickerLaunch() tea.Cmd {
+	type queued struct {
+		sess  config.Session
+		title string
+	}
+	var todo []queued
+	for i, sess := range m.pickerSessions {
+		if !m.pickerSelected[i] {
+			continue
+		}
+		baseTitle := session.FormatTitle(sess)
+		if m.pickerRunning[baseTitle] {
+			continue // dedup: skip already-running sessions
+		}
+		todo = append(todo, queued{sess: sess, title: baseTitle})
+	}
+	if len(todo) == 0 {
+		return nil
+	}
+
+	m.launchBatchID++
+	batchID := m.launchBatchID
+	total := len(todo)
+	m.launchBatchDone = 0
+
+	cmds := make([]tea.Cmd, 0, total+1)
+	startText := fmt.Sprintf("Launching %d session(s)…", total)
+	if c := m.replaceToastByID(batchID, Toast{
+		Severity: toastInfo,
+		Text:     startText,
+		Expires:  time.Now().Add(progressToastTTL),
+	}); c != nil {
+		cmds = append(cmds, c)
+	}
+
 	accounts := m.cfg.Accounts
 	client := m.client
 	cfg := m.cfg
-	return func() tea.Msg {
-		var errs []error
-		for i, sess := range sessions {
-			if !selected[i] {
-				continue
-			}
-			baseTitle := session.FormatTitle(sess)
-			if running[baseTitle] {
-				continue // dedup: skip already-running sessions
-			}
+	for _, q := range todo {
+		sess := q.sess
+		title := q.title
+		cmds = append(cmds, func() tea.Msg {
 			var acc config.Account
 			for _, a := range accounts {
 				if a.Name == sess.Account {
@@ -831,12 +994,73 @@ func pickerLaunchCmd(m Model) tea.Cmd {
 					break
 				}
 			}
-			if err := session.Launch(client, sess, acc, cfg); err != nil {
-				errs = append(errs, err)
+			err := session.Launch(client, sess, acc, cfg)
+			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
+		})
+	}
+	return tea.Batch(cmds...)
+}
+
+// handleLaunchProgress updates the progress toast for a finished
+// per-session launch and triggers a session list refresh so the newly
+// running session appears.
+func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) {
+	if msg.batchID != m.launchBatchID {
+		// Stale launch from a prior batch; ignore so we don't clobber a
+		// fresh batch's toast.
+		return m, fetchCmd(m.client, m.sortMode)
+	}
+	m.launchBatchDone++
+	var cmds []tea.Cmd
+	if msg.err != nil {
+		if c := m.pushToast(Toast{
+			Severity: toastError,
+			Text:     fmt.Sprintf("launch failed: %s — %s", msg.title, msg.err),
+		}); c != nil {
+			cmds = append(cmds, c)
+		}
+	}
+	severity := toastInfo
+	if m.launchBatchDone >= msg.total {
+		severity = toastSuccess
+	}
+	text := fmt.Sprintf("Launched %d/%d · %s", m.launchBatchDone, msg.total, msg.title)
+	expires := time.Now().Add(progressToastTTL)
+	if m.launchBatchDone >= msg.total {
+		expires = time.Now().Add(defaultToastTTL)
+	}
+	if c := m.replaceToastByID(msg.batchID, Toast{
+		Severity: severity,
+		Text:     text,
+		Expires:  expires,
+	}); c != nil {
+		cmds = append(cmds, c)
+	}
+	cmds = append(cmds, fetchCmd(m.client, m.sortMode))
+	return m, tea.Batch(cmds...)
+}
+
+// restoreCursor picks the cursor row after the session list is rebuilt.
+// Preference order: (1) the row whose Base matches priorBase, (2) the
+// first attention-state row (orange band), (3) row 0. Returns 0 for an
+// empty list so callers can use the result directly without clamping.
+func restoreCursor(filtered []session.RunningSession, priorBase string, lastActivity map[int]time.Time, idle time.Duration) int {
+	if len(filtered) == 0 {
+		return 0
+	}
+	if priorBase != "" {
+		for i, s := range filtered {
+			if s.Base == priorBase {
+				return i
 			}
 		}
-		return pickerLaunchDoneMsg{errs: errs}
 	}
+	for i, s := range filtered {
+		if stateGroup(s, lastActivity, idle) == 0 {
+			return i
+		}
+	}
+	return 0
 }
 
 // pickerOpenCmd opens the given session's directory in a plain shell tab.
@@ -856,56 +1080,47 @@ func pickerOpenCmd(m Model, sess config.Session) tea.Cmd {
 	}
 }
 
-// applyFilter returns sessions matching the search query and account filter.
-func applyFilter(sessions []session.RunningSession, query, account string) []session.RunningSession {
-	query = strings.ToLower(query)
+// applyFilter returns sessions that pass the active Filter.
+func applyFilter(sessions []session.RunningSession, f Filter, lastActivity map[int]time.Time, idle time.Duration) []session.RunningSession {
+	if f.IsEmpty() {
+		out := make([]session.RunningSession, len(sessions))
+		copy(out, sessions)
+		return out
+	}
 	var out []session.RunningSession
 	for _, s := range sessions {
-		if account != "" && s.Account != account {
-			continue
+		if f.Match(s, lastActivity, idle) {
+			out = append(out, s)
 		}
-		if query != "" {
-			if !strings.Contains(strings.ToLower(s.Base), query) &&
-				!strings.Contains(strings.ToLower(s.Directory), query) &&
-				!strings.Contains(strings.ToLower(s.Account), query) {
-				continue
-			}
-		}
-		out = append(out, s)
 	}
 	return out
 }
 
-// applyPickerFilter returns indices into sessions whose formatted title or
-// account contains the (case-insensitive) query. An empty query returns the
-// full index range so callers can use a single code path.
+// applyPickerFilter returns indices into sessions matching the DSL query.
+// Reuses the list-filter DSL (@account, !state, substring) so the same
+// shortcut behaves the same in both contexts. An empty query returns the full
+// index range. Config sessions are matched as synthetic running sessions —
+// !state filters won't match anything since config rows have no live state.
 func applyPickerFilter(sessions []config.Session, query string) []int {
-	query = strings.ToLower(query)
 	out := make([]int, 0, len(sessions))
-	for i, sess := range sessions {
-		if query != "" {
-			title := strings.ToLower(session.FormatTitle(sess))
-			account := strings.ToLower(sess.Account)
-			if !strings.Contains(title, query) && !strings.Contains(account, query) {
-				continue
-			}
+	if strings.TrimSpace(query) == "" {
+		for i := range sessions {
+			out = append(out, i)
 		}
-		out = append(out, i)
+		return out
+	}
+	f := Parse(query)
+	for i, cs := range sessions {
+		synthetic := session.RunningSession{
+			Base:      session.FormatTitle(cs),
+			Account:   cs.Account,
+			Directory: cs.Directory,
+		}
+		if f.Match(synthetic, nil, 0) {
+			out = append(out, i)
+		}
 	}
 	return out
-}
-
-// uniqueAccounts returns sorted unique account names from sessions.
-func uniqueAccounts(sessions []session.RunningSession) []string {
-	seen := make(map[string]bool)
-	var accounts []string
-	for _, s := range sessions {
-		if !seen[s.Account] {
-			seen[s.Account] = true
-			accounts = append(accounts, s.Account)
-		}
-	}
-	return accounts
 }
 
 // pickerAccountIndex returns the index of the named account in the slice, or 0 if not found.
@@ -913,19 +1128,6 @@ func pickerAccountIndex(accounts []config.Account, name string) int {
 	for i, a := range accounts {
 		if a.Name == name {
 			return i
-		}
-	}
-	return 0
-}
-
-// accountIndex returns the acctCursor value (0=All, 1..N=accounts) for the given account name.
-func accountIndex(accounts []string, name string) int {
-	if name == "" {
-		return 0
-	}
-	for i, a := range accounts {
-		if a == name {
-			return i + 1
 		}
 	}
 	return 0

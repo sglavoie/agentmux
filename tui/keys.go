@@ -29,4 +29,18 @@ const (
 	keyClearStatus = "C" // clears the highlighted session's icon
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
+
+	keyTab = "tab"
+
+	// Numeric chip-removal keys (ModeList only). 1 removes the first chip,
+	// 2 the second, and so on up to 9.
+	key1 = "1"
+	key2 = "2"
+	key3 = "3"
+	key4 = "4"
+	key5 = "5"
+	key6 = "6"
+	key7 = "7"
+	key8 = "8"
+	key9 = "9"
 )

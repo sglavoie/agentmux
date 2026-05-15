@@ -86,11 +86,54 @@ ccm
 
 Launches the interactive Bubble Tea dashboard. If a dashboard is already open, focuses it instead. Use `ctrl+shift+d` from inside Kitty to open it as an overlay.
 
-Footer hints adapt to the selected row's state. Press `?` for the full keymap.
+The footer shows a stable key palette (`space focus · e peek · r restart · x close · c config · C clear · o open dir · y copy title · l launch · / filter · p preview · ? help`); entries that don't apply to the cursor row dim instead of disappearing, so positions never shift. Press `?` for the full keymap.
+
+#### Actions overlay
+
+Press `enter` on a row to open a centered Actions overlay listing every per-row action next to its keybinding (focus tab, peek, restart, close, override account, clear icon, open dir, copy title). Press the action's key to run it; press `esc` or `q` to back out. Unavailable actions render dim — for example, "peek" is dim on non-active rows, and "clear icon" is dim unless the row carries an attention badge. The overlay exists for discoverability; direct shortcuts (`r`, `x`, `c`, `C`, `o`, `y`, …) keep working from the list without opening it.
+
+#### Filter DSL
+
+Press `/` to open the filter input, or `f` to open it pre-filled with `@` for an account match. The filter applies live as you type; `enter` keeps the filter, `esc` discards your in-progress edit and restores the prior filter. From the list, `esc` clears the active filter.
+
+| Token            | Meaning                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| `word`           | Case-insensitive substring against title, directory, or account                    |
+| `@account`       | Account match (case-insensitive)                                                   |
+| `!state`         | State filter — accepts `active`, `idle`, `bolt`, `key`, `stop`, `error`            |
+| `\@foo` / `\!x`  | Literal leading `@` or `!` in a substring token                                    |
+
+Tokens are whitespace-separated and AND-combined. Examples:
+
+- `api` — sessions whose title, directory, or account contains "api"
+- `@work !key` — work-account sessions awaiting permission
+- `api @work` — equivalent to "title contains api AND account is work"
+- `!active` — every session in the Active group (bolt + recent empty-state rows)
+
+##### Filter chips
+
+While a filter is active, each component renders as a removable chip beneath the header — substring chips read `▌/api ✕`, account chips inherit the account's palette color (`▌@work ✕`), and attention-state chips render in orange (`▌!key ✕`).
+
+| Key       | Effect                                                       |
+| --------- | ------------------------------------------------------------ |
+| `1`–`9`   | Remove the chip at that position (1 = leftmost)              |
+| `tab`     | Cycle focus through the chips (focused chip is underlined)   |
+| `enter`   | Remove the focused chip (falls through to focus tab if none) |
+| `esc`     | Clear every chip and the filter                              |
 
 ### Session launch
 
-New sessions are launched from the dashboard. The TUI reads your `config.toml` sessions list, lets you pick one or more, and creates the Kitty tabs. Inside the picker, press `/` to filter the list by title or account (case-insensitive substring); `esc` clears an active query, and a second `esc` exits the picker.
+New sessions are launched from the dashboard. The TUI reads your `config.toml` sessions list, lets you pick one or more, and creates the Kitty tabs.
+
+Inside the picker, a sticky `/<buffer>█` prompt is always visible at the top — start typing to filter live (no `/` keystroke needed). The buffer accepts the same filter DSL as the list (`@account`, `!state`, substring), so `@work` narrows to a single account and `api` filters by substring. Backspace edits the buffer; `esc` clears a non-empty buffer (keeps the picker open), and a second `esc` exits the picker. Selections are keyed by the original session index, so toggled rows stay selected even if the filter hides them.
+
+Picker shortcuts that stay live during filtering: `space` toggle, `enter` launch, `o` open dir, `p` preview, `j`/`k` (or arrows) navigate.
+
+Press `p` to toggle the same preview pane the dashboard uses. In the picker the right pane shows the highlighted session's config (title, directory, account, flags, env, groups) and, if a session with the same title is currently running, a `── running ──` divider followed by the tail of its scrollback. The pane auto-disables when the terminal width drops below `defaults.preview.min_cols`. The `p` flag is shared with the dashboard — toggling it in either context applies everywhere.
+
+#### Launch progress
+
+When a multi-session launch is dispatched from the picker, a transient toast above the footer reports progress (`Launched 1/3 · W:api`, then `2/3 …`, finishing in green at `N/N`). Per-session failures push a separate red toast naming the failed session so successes keep counting. Toasts auto-expire after a few seconds.
 
 ### Config management
 

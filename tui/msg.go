@@ -24,9 +24,6 @@ func (e errMsg) Error() string { return e.err.Error() }
 // actionDoneMsg is sent when a close or restart action completes.
 type actionDoneMsg struct{ err error }
 
-// pickerLaunchDoneMsg is sent when picker launch completes (one or more sessions).
-type pickerLaunchDoneMsg struct{ errs []error }
-
 // pickerOpenDoneMsg is sent when a picker open-directory action completes.
 type pickerOpenDoneMsg struct{ err error }
 

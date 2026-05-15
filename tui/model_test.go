@@ -85,6 +85,10 @@ func keyPress(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc})
 	case "backspace":
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyBackspace})
+	case "tab":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyTab})
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		return tea.KeyPressMsg(tea.Key{Code: rune(key[0]), Text: key})
 	default:
 		return tea.KeyPressMsg(tea.Key{Code: rune(key[0]), Text: key})
 	}
@@ -130,43 +134,70 @@ func TestModeSearchEnterAppliesAndReturnsToList(t *testing.T) {
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after Enter, got %d", m.mode)
 	}
-	if m.activeSearch != "api" {
-		t.Fatalf("expected activeSearch=api, got %q", m.activeSearch)
+	if m.activeFilter.Raw != "api" {
+		t.Fatalf("expected activeFilter.Raw=api, got %q", m.activeFilter.Raw)
 	}
 }
 
-func TestModeListToAccountFilter(t *testing.T) {
+func TestModeSearchLiveAppliesEachKeystroke(t *testing.T) {
+	// Each keystroke should narrow the list before Enter is pressed.
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "f")
-	if m.mode != ModeAccountFilter {
-		t.Fatalf("expected ModeAccountFilter after f, got %d", m.mode)
+	m = pressKey(m, "/")
+	m = pressKey(m, "a")
+	m = pressKey(m, "p")
+	m = pressKey(m, "i")
+	if m.mode != ModeSearch {
+		t.Fatalf("expected ModeSearch while typing, got %d", m.mode)
+	}
+	if len(m.filtered) != 1 || m.filtered[0].Base != "W:api" {
+		t.Fatalf("expected live-filtered list to contain only W:api, got %v", m.filtered)
 	}
 }
 
-func TestModeAccountFilterEscReturnsToList(t *testing.T) {
+func TestFKeyEntersFilterWithAccountPrefill(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "f")
+	if m.mode != ModeSearch {
+		t.Fatalf("expected ModeSearch (unified filter) after f, got %d", m.mode)
+	}
+	if m.filterText != "@" {
+		t.Fatalf("expected filterText=@, got %q", m.filterText)
+	}
+}
+
+func TestFilterEscRestoresSavedFilter(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	// Commit a filter first.
+	m = pressKey(m, "/")
+	m = pressKey(m, "a")
+	m = pressKey(m, "p")
+	m = pressKey(m, "i")
+	m = pressKey(m, "enter")
+	// Re-enter filter, type something else, then Esc.
+	m = pressKey(m, "/")
+	m = pressKey(m, "b")
 	m = pressKey(m, "esc")
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after Esc, got %d", m.mode)
 	}
+	if m.activeFilter.Raw != "api" {
+		t.Fatalf("expected previous filter restored, got %q", m.activeFilter.Raw)
+	}
 }
 
-func TestModeAccountFilterEnterAppliesFilter(t *testing.T) {
+func TestFKeyTypingNarrowsByAccount(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "f")
-	// acctCursor starts at 0 (All); press j to move to first account.
-	m = pressKey(m, "j")
-	m = pressKey(m, "enter")
-	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after Enter, got %d", m.mode)
-	}
-	if m.activeAccount == "" {
-		t.Fatal("expected activeAccount to be set after filter selection")
+	m = pressKey(m, "f") // filterText="@"
+	m = pressKey(m, "w")
+	m = pressKey(m, "o")
+	m = pressKey(m, "r")
+	m = pressKey(m, "k")
+	if m.activeFilter.Account != "work" {
+		t.Fatalf("expected Account=work, got %q", m.activeFilter.Account)
 	}
 	for _, s := range m.filtered {
-		if s.Account != m.activeAccount {
-			t.Fatalf("filtered session %q has wrong account %q, want %q", s.Base, s.Account, m.activeAccount)
+		if s.Account != "work" {
+			t.Fatalf("filtered session %q has wrong account %q", s.Base, s.Account)
 		}
 	}
 }
@@ -227,8 +258,8 @@ func TestNavClampAtBounds(t *testing.T) {
 
 func TestSearchFilterByTitle(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m.activeSearch = "api"
-	m.filtered = applyFilter(m.sessions, m.activeSearch, m.activeAccount)
+	m.activeFilter = Parse("api")
+	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	if len(m.filtered) != 1 {
 		t.Fatalf("expected 1 result for 'api', got %d", len(m.filtered))
 	}
@@ -239,23 +270,25 @@ func TestSearchFilterByTitle(t *testing.T) {
 
 func TestSearchFilterByDirectory(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m.filtered = applyFilter(m.sessions, "dotfiles", "")
+	m.filtered = applyFilter(m.sessions, Parse("dotfiles"), m.lastActivity, m.idleThreshold)
 	if len(m.filtered) != 1 {
 		t.Fatalf("expected 1 result for 'dotfiles' dir, got %d", len(m.filtered))
 	}
 }
 
-func TestSearchFilterByAccount(t *testing.T) {
+func TestSearchFilterByAccountSubstring(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m.filtered = applyFilter(m.sessions, "work", "")
+	// Bare-token 'work' matches both Account field and Base prefix W: lowercase 'w'... actually
+	// substring scans Base/Directory/Account so 'work' hits two work sessions via account match.
+	m.filtered = applyFilter(m.sessions, Parse("work"), m.lastActivity, m.idleThreshold)
 	if len(m.filtered) != 2 {
-		t.Fatalf("expected 2 results for account search 'work', got %d", len(m.filtered))
+		t.Fatalf("expected 2 results for substring 'work', got %d", len(m.filtered))
 	}
 }
 
 func TestAccountFilterNarrowsList(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m.filtered = applyFilter(m.sessions, "", "personal")
+	m.filtered = applyFilter(m.sessions, Parse("@personal"), m.lastActivity, m.idleThreshold)
 	if len(m.filtered) != 1 {
 		t.Fatalf("expected 1 personal session, got %d", len(m.filtered))
 	}
@@ -263,7 +296,7 @@ func TestAccountFilterNarrowsList(t *testing.T) {
 
 func TestSearchCombinedWithAccountFilter(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m.filtered = applyFilter(m.sessions, "api", "work")
+	m.filtered = applyFilter(m.sessions, Parse("api @work"), m.lastActivity, m.idleThreshold)
 	if len(m.filtered) != 1 || m.filtered[0].Base != "W:api" {
 		t.Fatalf("unexpected combined filter result: %v", m.filtered)
 	}
@@ -309,20 +342,17 @@ func TestFooterChangesWithMode(t *testing.T) {
 	m.width, m.height = 120, 40
 
 	listFooter := renderFooter(m)
-	if !strings.Contains(listFooter, "/: search") {
-		t.Errorf("list footer missing search hint, got:\n%s", listFooter)
+	if !strings.Contains(listFooter, "/, f: filter") {
+		t.Errorf("list footer missing unified filter hint, got:\n%s", listFooter)
 	}
 
 	m.mode = ModeSearch
 	searchFooter := renderFooter(m)
 	if !strings.Contains(searchFooter, "enter: apply") {
-		t.Errorf("search footer missing apply hint, got:\n%s", searchFooter)
+		t.Errorf("filter footer missing apply hint, got:\n%s", searchFooter)
 	}
-
-	m.mode = ModeAccountFilter
-	filterFooter := renderFooter(m)
-	if !strings.Contains(filterFooter, "enter: select") {
-		t.Errorf("account filter footer missing select hint, got:\n%s", filterFooter)
+	if !strings.Contains(searchFooter, "@account") {
+		t.Errorf("filter footer missing DSL hint, got:\n%s", searchFooter)
 	}
 }
 
@@ -428,7 +458,10 @@ func TestPickerSpaceTogglesSelection(t *testing.T) {
 }
 
 func TestPickerEnterEmitsLaunchCmd(t *testing.T) {
-	m := loadSessions(testModelWithSessions(), makeSessions())
+	// No running sessions so every config row is a launch candidate. With
+	// the new per-launch progress flow, dedup of already-running rows
+	// would return nil — this test asserts the launch path itself.
+	m := loadSessions(testModelWithSessions(), nil)
 	m = pressKey(m, "l")
 	m = pressKey(m, " ") // select first session
 	updated, cmd := m.Update(keyPress("enter"))
@@ -476,8 +509,11 @@ func TestFooterConfirmHint(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeConfirm
 	footer := renderFooter(m)
-	if !strings.Contains(footer, "y: yes") {
-		t.Errorf("confirm footer missing y hint, got:\n%s", footer)
+	if !strings.Contains(footer, "[y]es") {
+		t.Errorf("confirm footer missing [y]es hint, got:\n%s", footer)
+	}
+	if !strings.Contains(footer, "[esc] cancel") {
+		t.Errorf("confirm footer missing [esc] cancel hint, got:\n%s", footer)
 	}
 }
 
@@ -492,28 +528,28 @@ func TestFooterPickerHint(t *testing.T) {
 
 func TestFooterListHintNoSessions(t *testing.T) {
 	m := loadSessions(testModel(), nil) // empty list
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "l: launch") {
-		t.Errorf("expected l: launch in no-session footer, got:\n%s", footer)
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "l launch") {
+		t.Errorf("expected l launch in no-session footer, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "?: more") {
-		t.Errorf("expected ?: more in no-session footer, got:\n%s", footer)
+	if !strings.Contains(footer, "? help") {
+		t.Errorf("expected ? help in no-session footer, got:\n%s", footer)
 	}
 }
 
 func TestFooterIncludesDirectKeys(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	footer := renderFooter(m)
-	for _, key := range []string{"x: close", "r: restart"} {
-		if !strings.Contains(footer, key) {
-			t.Errorf("list footer missing direct key %q, got:\n%s", key, footer)
+	footer := stripAnsi(renderFooter(m))
+	for _, frag := range []string{"x close", "r restart"} {
+		if !strings.Contains(footer, frag) {
+			t.Errorf("list footer missing direct key %q, got:\n%s", frag, footer)
 		}
 	}
 	lines := strings.Split(footer, "\n")
 	if len(lines) != 2 {
 		t.Fatalf("expected 2-line footer, got %d lines", len(lines))
 	}
-	if !strings.Contains(lines[0], "x: close") {
+	if !strings.Contains(lines[0], "x close") {
 		t.Error("expected actions on line 1")
 	}
 	if !strings.Contains(lines[1], "j/k: up/down") {
@@ -526,7 +562,7 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 
 func TestFooterEscHintShownWhenFiltered(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m.activeSearch = "test"
+	m.activeFilter = Parse("test")
 	footer := renderFooter(m)
 	if !strings.Contains(footer, "esc: clear filters") {
 		t.Errorf("expected esc hint when filters active, got:\n%s", footer)
@@ -690,8 +726,8 @@ func TestFooterListHintIncludesPeek(t *testing.T) {
 	// Order after sort: W:api(""), W:backend(bolt), P:dotfiles("") — move
 	// cursor onto the bolt session so the active footer branch fires.
 	m = pressKey(m, "j")
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "e: peek") {
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "e peek") {
 		t.Errorf("list footer missing peek hint, got:\n%s", footer)
 	}
 }
@@ -861,16 +897,31 @@ func TestFormatRowNoStateIcon(t *testing.T) {
 	}
 }
 
-// ---- Enter key focus tests ----
+// ---- Enter key actions overlay tests ----
 
-func TestEnterFocusesTab(t *testing.T) {
+func TestEnterOpensActionsOverlay(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	updated, cmd := m.Update(keyPress("enter"))
+	m2 := updated.(Model)
+	if m2.mode != ModeActions {
+		t.Fatalf("expected ModeActions after enter, got %d", m2.mode)
+	}
+	if cmd != nil {
+		t.Errorf("expected no immediate cmd; opening the overlay should not dispatch one")
+	}
+	if m2.targetSession.TabID == 0 {
+		t.Error("expected targetSession populated when entering actions overlay")
+	}
+}
+
+func TestSpaceFocusesTab(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	updated, cmd := m.Update(keyPress(" "))
 	if updated.(Model).mode != ModeList {
-		t.Fatalf("expected ModeList after enter (focus), got %d", updated.(Model).mode)
+		t.Fatalf("expected ModeList after space, got %d", updated.(Model).mode)
 	}
 	if cmd == nil {
-		t.Fatal("expected non-nil focusCmd after enter")
+		t.Fatal("expected non-nil focusCmd after space")
 	}
 }
 
@@ -918,9 +969,12 @@ func TestFooterListContextAwareAttention(t *testing.T) {
 		{TabID: 1, Base: "W:api", Account: "work", State: "key"},
 	}
 	m := loadSessions(testModel(), sessions)
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "c: config") {
-		t.Errorf("attention footer missing c: config, got:\n%s", footer)
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "c config") {
+		t.Errorf("attention footer missing c config, got:\n%s", footer)
+	}
+	if !strings.Contains(footer, "C clear") {
+		t.Errorf("attention footer missing C clear, got:\n%s", footer)
 	}
 }
 
@@ -929,9 +983,9 @@ func TestFooterListContextAwareActive(t *testing.T) {
 		{TabID: 1, Base: "W:api", Account: "work", State: "bolt"},
 	}
 	m := loadSessions(testModel(), sessions)
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "e: peek") {
-		t.Errorf("active footer missing e: peek, got:\n%s", footer)
+	footer := stripAnsi(renderFooter(m))
+	if !strings.Contains(footer, "e peek") {
+		t.Errorf("active footer missing e peek, got:\n%s", footer)
 	}
 }
 

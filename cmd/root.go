@@ -11,7 +11,7 @@ import (
 	"github.com/sglavoie/cc-manager-kitty/tui"
 )
 
-const version = "0.3.0-dev"
+const version = "0.3.0"
 
 var debug bool
 

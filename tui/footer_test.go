@@ -1,0 +1,178 @@
+package tui
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/sglavoie/cc-manager-kitty/internal/session"
+)
+
+// TestListFooterPaletteOrder asserts that the palette is rendered in its
+// declaration order regardless of the cursor row's state. The test
+// reconstructs the expected fragment positions and verifies each entry's
+// `key label` substring appears in order on the stripped line.
+func TestListFooterPaletteOrder(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{
+			name: "empty list",
+			m:    Model{},
+		},
+		{
+			name: "attention row",
+			m: Model{
+				filtered: []session.RunningSession{{Base: "a", State: "key", Account: "w"}},
+			},
+		},
+		{
+			name: "active row",
+			m: Model{
+				filtered: []session.RunningSession{{Base: "a", State: "bolt", Account: "w"}},
+			},
+		},
+		{
+			name: "idle row",
+			m: Model{
+				filtered: []session.RunningSession{{Base: "a", State: "", Account: "w"}},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := stripAnsi(listFooterLine1(tc.m))
+			prev := -1
+			for _, e := range listFooterPalette {
+				frag := e.key + " " + e.label
+				idx := strings.Index(out, frag)
+				if idx < 0 {
+					t.Errorf("expected fragment %q in footer; got %q", frag, out)
+					continue
+				}
+				if idx <= prev {
+					t.Errorf("fragment %q out of order (idx=%d, prev=%d) in %q", frag, idx, prev, out)
+				}
+				prev = idx
+			}
+		})
+	}
+}
+
+// TestListFooterEAndCAlwaysPresent locks in the discoverability requirement
+// from the brief: `e` (peek) and `C` (clear) must appear in the footer in
+// every state group, even when dimmed.
+func TestListFooterEAndCAlwaysPresent(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{
+			name: "empty list",
+			m:    Model{},
+		},
+		{
+			name: "attention",
+			m: Model{
+				filtered: []session.RunningSession{{State: "key"}},
+			},
+		},
+		{
+			name: "active",
+			m: Model{
+				filtered: []session.RunningSession{{State: "bolt"}},
+			},
+		},
+		{
+			name: "idle",
+			m: Model{
+				filtered: []session.RunningSession{{State: ""}},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := stripAnsi(listFooterLine1(tc.m))
+			if !strings.Contains(out, "e peek") {
+				t.Errorf("expected `e peek` in footer; got %q", out)
+			}
+			if !strings.Contains(out, "C clear") {
+				t.Errorf("expected `C clear` in footer; got %q", out)
+			}
+		})
+	}
+}
+
+// TestListFooterAvailability verifies the per-entry availability rules: rows
+// in the attention group activate `C`; bolt rows activate `e`; empty lists
+// keep every row-targeted entry unavailable.
+func TestListFooterAvailability(t *testing.T) {
+	cases := []struct {
+		name  string
+		m     Model
+		want  map[string]bool // expected availability per entry key
+		extra map[string]bool // optional additional checks not driven by the map default
+	}{
+		{
+			name: "empty list — only global actions available",
+			m:    Model{},
+			want: map[string]bool{
+				"space": false, "e": false, "r": false, "x": false,
+				"c": false, "C": false,
+				"o": false, "y": false,
+				"l": true, "/": true, "p": true, "?": true,
+			},
+		},
+		{
+			name: "attention row — C active, e unavailable",
+			m: Model{
+				filtered: []session.RunningSession{{State: "key"}},
+			},
+			want: map[string]bool{
+				"space": true, "e": false, "r": true, "x": true,
+				"c": true, "C": true,
+				"o": false, "y": true,
+				"l": true, "/": true, "p": true, "?": true,
+			},
+		},
+		{
+			name: "active row — e active, C unavailable",
+			m: Model{
+				filtered: []session.RunningSession{{State: "bolt"}},
+			},
+			want: map[string]bool{
+				"space": true, "e": true, "r": true, "x": true,
+				"c": true, "C": false,
+				"o": false, "y": true,
+				"l": true, "/": true, "p": true, "?": true,
+			},
+		},
+		{
+			name: "idle row — neither e nor C available",
+			m: Model{
+				filtered: []session.RunningSession{{State: ""}},
+			},
+			want: map[string]bool{
+				"space": true, "e": false, "r": true, "x": true,
+				"c": true, "C": false,
+				"o": false, "y": true,
+				"l": true, "/": true, "p": true, "?": true,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, e := range listFooterPalette {
+				want, ok := tc.want[e.key]
+				if !ok {
+					t.Fatalf("test case missing entry for key %q", e.key)
+				}
+				got := e.availFn(tc.m)
+				if got != want {
+					t.Errorf("availability for %q (%s): got %v, want %v", e.key, e.label, got, want)
+				}
+			}
+		})
+	}
+}

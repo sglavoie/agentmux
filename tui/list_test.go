@@ -8,6 +8,7 @@ import (
 
 	runewidth "github.com/mattn/go-runewidth"
 
+	"github.com/sglavoie/cc-manager-kitty/internal/config"
 	"github.com/sglavoie/cc-manager-kitty/internal/session"
 )
 
@@ -127,6 +128,94 @@ func idxBadge(row string) int {
 		return -1
 	}
 	return terminalWidth(plain[:i])
+}
+
+// stripAnsi removes ANSI CSI escape sequences from a Lipgloss-rendered
+// string so tests can assert against the visible content.
+func stripAnsi(s string) string {
+	return ansiRE.ReplaceAllString(s, "")
+}
+
+// TestRenderListEmptyHeroNoSessions covers the case where no sessions are
+// running at all: the hero should advertise the `l` launch shortcut.
+func TestRenderListEmptyHeroNoSessions(t *testing.T) {
+	m := Model{width: 60}
+	out := stripAnsi(renderList(m))
+	if !strings.Contains(out, "No running sessions.") {
+		t.Errorf("expected title; got %q", out)
+	}
+	if !strings.Contains(out, "press  l  to launch") {
+		t.Errorf("expected launch hint; got %q", out)
+	}
+	if strings.Contains(out, "esc") {
+		t.Errorf("zero-running hint should not mention esc; got %q", out)
+	}
+}
+
+// TestRenderListEmptyHeroFilteredOut covers the case where sessions exist
+// but the active filter rules every one of them out: the hero should hint
+// at `esc` to clear the filter.
+func TestRenderListEmptyHeroFilteredOut(t *testing.T) {
+	m := Model{
+		width:        60,
+		sessions:     []session.RunningSession{{Base: "x", State: "bolt"}},
+		filtered:     nil,
+		activeFilter: Parse("nomatch"),
+	}
+	out := stripAnsi(renderList(m))
+	if !strings.Contains(out, "No sessions match the active filter.") {
+		t.Errorf("expected filtered-out title; got %q", out)
+	}
+	if !strings.Contains(out, "press  esc  to clear filters") {
+		t.Errorf("expected esc hint; got %q", out)
+	}
+}
+
+// TestRenderListMixedGroupBorders covers a list with two state groups
+// (Needs Attention and Active) and asserts each row carries the left
+// border glyph and that group labels are emitted above each band.
+func TestRenderListMixedGroupBorders(t *testing.T) {
+	m := Model{
+		cfg:   &config.Config{},
+		width: 80,
+		sessions: []session.RunningSession{
+			{Base: "a", State: "key", Account: "w"},
+			{Base: "b", State: "bolt", Account: "w"},
+		},
+	}
+	m.filtered = m.sessions
+	out := stripAnsi(renderList(m))
+	if !strings.Contains(out, "Needs Attention (1)") {
+		t.Errorf("expected attention label; got %q", out)
+	}
+	if !strings.Contains(out, "Active (1)") {
+		t.Errorf("expected active label; got %q", out)
+	}
+	if !strings.Contains(out, groupBorderGlyph) {
+		t.Errorf("expected border glyph %q in output %q", groupBorderGlyph, out)
+	}
+}
+
+// TestRenderListSingleGroupNoBorder asserts that when every row falls into
+// the same state group, neither the group label nor the left border is
+// drawn — the visual chrome is reserved for multi-group lists.
+func TestRenderListSingleGroupNoBorder(t *testing.T) {
+	m := Model{
+		cfg:   &config.Config{},
+		width: 80,
+		sessions: []session.RunningSession{
+			{Base: "a", State: "bolt", Account: "w"},
+			{Base: "b", State: "bolt", Account: "w"},
+		},
+	}
+	m.filtered = m.sessions
+	out := stripAnsi(renderList(m))
+	if strings.Contains(out, "Active (") {
+		t.Errorf("single-group list should not render label; got %q", out)
+	}
+	if strings.Contains(out, groupBorderGlyph) {
+		t.Errorf("single-group list should not render border; got %q", out)
+	}
 }
 
 // TestFormatRowIconColumnAlignment locks in that a row carrying the ⚠️
