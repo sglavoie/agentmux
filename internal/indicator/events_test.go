@@ -31,7 +31,7 @@ func TestResolveAction_AllEvents(t *testing.T) {
 		{"StopFailure", "stop_failure"},
 		{"PermissionRequest", "permission"},
 		{"PermissionDenied", "permission"},
-		{"Elicitation", "permission"},
+		{"Elicitation", "elicitation"},
 		{"PostToolUseFailure", "failure"},
 		{"Notification", "idle"},
 		{"TeammateIdle", "idle"},

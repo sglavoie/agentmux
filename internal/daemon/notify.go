@@ -18,6 +18,7 @@ var notifyableActions = map[string]bool{
 	"permission":   true,
 	"failure":      true,
 	"stop_failure": true,
+	"elicitation":  true,
 }
 
 // notificationLabels maps action names to human-readable notification titles.
@@ -26,6 +27,7 @@ var notificationLabels = map[string]string{
 	"permission":   "Permission requested",
 	"failure":      "Tool failure",
 	"stop_failure": "Session stopped (failure)",
+	"elicitation":  "Claude is asking",
 }
 
 // Notifier tracks per-window cooldowns and fires macOS notifications via
@@ -140,6 +142,8 @@ func (n *Notifier) actionEnabled(action string) bool {
 	case "stop":
 		return n.cfg.Stop
 	case "permission":
+		return n.cfg.Permission
+	case "elicitation":
 		return n.cfg.Permission
 	case "failure":
 		return n.cfg.Error

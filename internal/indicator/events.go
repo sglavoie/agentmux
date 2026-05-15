@@ -49,7 +49,7 @@ var eventToAction = map[string]string{
 	"permissionRequest": "permission",
 	"PermissionRequest": "permission",
 	"PermissionDenied":  "permission",
-	"Elicitation":       "permission",
+	"Elicitation":       "elicitation",
 
 	// Failure: tool execution failed.
 	"postToolUseFailure": "failure",
@@ -74,7 +74,7 @@ var eventToAction = map[string]string{
 var validActions = map[string]bool{
 	"active": true, "stop": true, "permission": true,
 	"failure": true, "stop_failure": true,
-	"subagent": true, "compact": true,
+	"subagent": true, "compact": true, "elicitation": true,
 	"idle": true, "clear": true, "user_clear": true,
 }
 

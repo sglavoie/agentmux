@@ -9,15 +9,16 @@
     "key": "🔑",
     "error": "❗",
     "subagent": "🤖",
-    "compact": "🌀"
+    "compact": "🌀",
+    "question": "❓"
   },
-  "state_order": ["bolt", "stop", "key", "error", "subagent", "compact"],
+  "state_order": ["bolt", "stop", "key", "error", "subagent", "compact", "question"],
   "sort_modes": ["default", "alpha", "name", "account", "group", "status", "idle", "activity"],
   "hook_events": [
     "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
-    "PostToolUse", "PostToolUseFailure", "Notification",
-    "SubagentStart", "SubagentStop", "Stop", "TeammateIdle",
+    "PermissionDenied", "PostToolUse", "PostToolUseFailure", "Notification",
+    "SubagentStart", "SubagentStop", "Stop", "StopFailure", "TeammateIdle",
     "TaskCompleted", "ConfigChange", "WorktreeCreate", "WorktreeRemove",
-    "PreCompact", "SessionEnd"
+    "PreCompact", "PostCompact", "Elicitation", "ElicitationResult", "SessionEnd"
   ]
 }

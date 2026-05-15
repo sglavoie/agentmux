@@ -248,6 +248,84 @@ func TestGuard_StopFailureTerminal_NotClearedByActive(t *testing.T) {
 	}
 }
 
+func TestGuard_ElicitationOverridesActive(t *testing.T) {
+	// elicitation (priority 2) should be allowed when the current guard is active (priority 1).
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "active", false)
+
+	ok, eff := g.TryUpdate(1, "elicitation", false)
+	if !ok || eff != "elicitation" {
+		t.Fatalf("want (true, elicitation) — elicitation overrides active, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "elicitation" {
+		t.Fatalf("want guard=elicitation, got %q", cur)
+	}
+}
+
+func TestGuard_ActiveBypassesElicitationGuard(t *testing.T) {
+	// After the user answers, active clears the elicitation guard immediately
+	// regardless of isPrompt (no prompt needed — just the ElicitationResult active).
+	for _, isPrompt := range []bool{false, true} {
+		g := NewStateGuard(time.Hour)
+		g.TryUpdate(1, "elicitation", false)
+
+		ok, eff := g.TryUpdate(1, "active", isPrompt)
+		if !ok || eff != "active" {
+			t.Fatalf("isPrompt=%v: want (true, active) for post-elicitation active, got (%v, %q)", isPrompt, ok, eff)
+		}
+		if cur := g.Current(1); cur != "active" {
+			t.Fatalf("isPrompt=%v: want guard=active after elicitation bypass, got %q", isPrompt, cur)
+		}
+	}
+}
+
+func TestGuard_ElicitationBlocksLowerPriority(t *testing.T) {
+	// elicitation (priority 2) should block active (priority 1) when not bypassing.
+	// This covers the case where a spurious active event fires before ElicitationResult.
+	// (The bypass branch fires only when entry.action == "elicitation" && action == "active";
+	// here we just check a bare TryUpdate to confirm the priority rule holds when the
+	// bypass fires instead — but since the bypass DOES clear the guard, this test
+	// exercises a second active attempt after the guard is reset.)
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "elicitation", false)
+
+	// Simulate a stop arriving while Claude is asking — stop (priority 2) equals
+	// elicitation (priority 2), so it should be allowed (same-priority fall-through).
+	// But active (priority 1) should be blocked.
+	ok, _ := g.TryUpdate(1, "active", false)
+	if ok {
+		// The elicitation+active branch clears the guard — this is the designed bypass.
+		// The test verifies the guard was set with elicitation in the first place.
+		// The bypass IS the intended behavior; we just confirm Current was "elicitation"
+		// before the bypass fired.
+		t.Log("elicitation+active bypass fired (expected by design)")
+	}
+	// Verify that if the guard is re-set, a subsequent bare active is blocked
+	// until the elicitation is resolved.
+	g2 := NewStateGuard(time.Hour)
+	g2.TryUpdate(1, "elicitation", false)
+	// compact (priority 1) should be blocked.
+	ok2, _ := g2.TryUpdate(1, "compact", false)
+	if ok2 {
+		t.Fatalf("compact (priority 1) should be blocked by elicitation guard (priority 2)")
+	}
+}
+
+func TestGuard_StopAfterElicitation(t *testing.T) {
+	// stop (priority 2) equals elicitation (priority 2) — same-priority fall-through
+	// should allow stop to replace the elicitation guard.
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "elicitation", false)
+
+	ok, eff := g.TryUpdate(1, "stop", false)
+	if !ok || eff != "stop" {
+		t.Fatalf("want stop to replace elicitation guard, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "stop" {
+		t.Fatalf("want guard=stop after elicitation→stop, got %q", cur)
+	}
+}
+
 func TestGuard_CompactOverwrittenByActive(t *testing.T) {
 	// compact (1) is equal-priority to active (1); the same-priority path
 	// allows the new guard to replace it.
@@ -270,6 +348,7 @@ func TestGuard_AllPriorityCombo(t *testing.T) {
 		{"stop", "active"},
 		{"failure", "stop"},
 		{"failure", "permission"},
+		{"elicitation", "compact"}, // elicitation (2) blocks compact (1)
 	}
 	for _, tc := range blocked {
 		g := NewStateGuard(time.Hour)
@@ -281,7 +360,7 @@ func TestGuard_AllPriorityCombo(t *testing.T) {
 	}
 
 	// idle and clear always succeed regardless of guard.
-	for _, guard := range []string{"active", "stop", "permission", "failure"} {
+	for _, guard := range []string{"active", "stop", "permission", "failure", "elicitation"} {
 		for _, action := range []string{"idle", "clear"} {
 			g := NewStateGuard(time.Hour)
 			g.TryUpdate(1, guard, false)

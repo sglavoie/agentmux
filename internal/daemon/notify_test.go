@@ -270,6 +270,37 @@ func TestNotifier_PermissionNoDebounce(t *testing.T) {
 	}
 }
 
+func TestNotifier_ElicitationFiresWhenPermissionEnabled(t *testing.T) {
+	cfg := &config.NotificationConfig{Permission: true}
+	n, calls := newTestNotifier(cfg)
+	n.MaybeNotify(1, "W:api", "elicitation", false)
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected notification for elicitation when Permission=true")
+	}
+}
+
+func TestNotifier_ElicitationSilencedWhenPermissionDisabled(t *testing.T) {
+	cfg := &config.NotificationConfig{Permission: false}
+	n, calls := newTestNotifier(cfg)
+	n.MaybeNotify(1, "W:api", "elicitation", false)
+	time.Sleep(50 * time.Millisecond)
+	if len(*calls) > 0 {
+		t.Fatal("elicitation should be suppressed when Permission=false")
+	}
+}
+
+func TestNotifier_ElicitationLabel(t *testing.T) {
+	cfg := &config.NotificationConfig{Permission: true}
+	n, calls := newTestNotifier(cfg)
+	n.MaybeNotify(1, "W:api", "elicitation", false)
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected notification for elicitation")
+	}
+	if (*calls)[0].subtitle != "Claude is asking" {
+		t.Errorf("subtitle = %q, want %q", (*calls)[0].subtitle, "Claude is asking")
+	}
+}
+
 func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 	got := alerterArgs("W:api", "Session stopped")
 	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", ""}

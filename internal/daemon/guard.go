@@ -95,6 +95,9 @@ func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allo
 			// Failure is transient: the next active event means Claude is back to
 			// work, so let it overwrite the ✗ immediately.
 			delete(g.entries, windowID)
+		case entry.action == "elicitation" && action == "active":
+			// User answered the question; let active through immediately.
+			delete(g.entries, windowID)
 		case entry.action == "stop" && isPrompt:
 			// Prompt bypasses stop guard — fall through to set new guard.
 			delete(g.entries, windowID)
