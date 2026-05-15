@@ -87,7 +87,11 @@ func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMo
 		title = "Claude Code"
 	}
 	subtitle := notificationLabels[action]
-	go func() { _ = n.dispatch(title, subtitle) }()
+	go func() {
+		if err := n.dispatch(title, subtitle); err != nil {
+			slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
+		}
+	}()
 }
 
 func (n *Notifier) actionEnabled(action string) bool {
@@ -110,13 +114,12 @@ func runOsascript(title, subtitle string) error {
 	return exec.Command("osascript", "-e", script).Run()
 }
 
+func alerterArgs(title, subtitle string) []string {
+	return []string{"--title", title, "--subtitle", subtitle, "--message", ""}
+}
+
 func runAlerter(title, subtitle string) error {
-	return exec.Command(
-		"alerter",
-		"-title", title,
-		"-subtitle", subtitle,
-		"-message", "",
-	).Run()
+	return exec.Command("alerter", alerterArgs(title, subtitle)...).Run()
 }
 
 // ResetCooldown clears the cooldown for windowID (for testing).

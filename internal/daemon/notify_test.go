@@ -153,6 +153,19 @@ func TestNotifier_SessionTitleInNotification(t *testing.T) {
 	}
 }
 
+func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
+	got := alerterArgs("W:api", "Claude stopped")
+	want := []string{"--title", "W:api", "--subtitle", "Claude stopped", "--message", ""}
+	if len(got) != len(want) {
+		t.Fatalf("alerterArgs len = %d, want %d (%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("alerterArgs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestNotifier_EmptySessionTitleFallback(t *testing.T) {
 	cfg := &config.NotificationConfig{Stop: true}
 	n, calls := newTestNotifier(cfg)
