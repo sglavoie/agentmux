@@ -27,6 +27,10 @@ args = []
 [defaults.notifications]
 permission = true
 stop = true
+# Delay permission notifications by this many milliseconds; cancelled if the
+# harness auto-approves the request before the window expires. Set to 1 to
+# disable the debounce.
+permission_debounce_ms = 500
 
 # Example Claude profile:
 # [[profiles]]

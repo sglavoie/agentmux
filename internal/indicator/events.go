@@ -25,7 +25,7 @@ var eventToAction = map[string]string{
 	"subagentStop":       "active",
 	"SubagentStop":       "active",
 	"TaskCompleted":      "active",
-	"PostCompact":        "active",
+	"PostCompact":        "stop",
 	"ElicitationResult":  "active",
 
 	// Subagent: subagent is running.

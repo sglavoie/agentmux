@@ -186,6 +186,30 @@ func TestHandler_Shutdown(t *testing.T) {
 	}
 }
 
+func TestHandler_AutoApprovedPermissionNoNotification(t *testing.T) {
+	// Auto-approval sequence: permission → active. The pending permission
+	// notification should be cancelled before it fires.
+	guard := NewStateGuard(time.Hour)
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
+	notifier := NewNotifier(cfg)
+	var calls []string
+	notifier.dispatch = func(_, subtitle string) error {
+		calls = append(calls, subtitle)
+		return nil
+	}
+	h := NewHandler(guard, notifier)
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	// Simulate auto-approval arriving within the debounce window.
+	time.Sleep(20 * time.Millisecond)
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+
+	time.Sleep(300 * time.Millisecond) // wait past the debounce window
+	if len(calls) > 0 {
+		t.Fatalf("expected no permission notification for auto-approved permission, got %v", calls)
+	}
+}
+
 func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
 	h := newTestHandler()
 	resp := h.Handle(Request{

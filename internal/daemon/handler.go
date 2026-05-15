@@ -60,6 +60,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
 	}
 
+	prevGuard := h.guard.Current(req.WindowID)
 	allowed, effective := h.guard.TryUpdate(req.WindowID, req.Action, req.IsPrompt)
 	slog.Debug("state transition",
 		"window_id", req.WindowID,
@@ -69,6 +70,12 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	)
 	if !allowed {
 		return Response{OK: true, Allowed: false}
+	}
+
+	// Cancel any pending debounced permission notification when the session
+	// moves past the permission state (auto-approved or session ended).
+	if prevGuard == "permission" && effective != "permission" {
+		h.notifier.CancelPending(req.WindowID)
 	}
 
 	h.activityMu.Lock()

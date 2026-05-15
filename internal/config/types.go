@@ -32,10 +32,11 @@ type Defaults struct {
 // rather than setting `stop_failure = false` (which applyDefaults will flip
 // back to true on load).
 type NotificationConfig struct {
-	Error       bool `toml:"error"`
-	Permission  bool `toml:"permission"`
-	Stop        bool `toml:"stop"`
-	StopFailure bool `toml:"stop_failure"`
+	Error                bool `toml:"error"`
+	Permission           bool `toml:"permission"`
+	Stop                 bool `toml:"stop"`
+	StopFailure          bool `toml:"stop_failure"`
+	PermissionDebounceMs int  `toml:"permission_debounce_ms"`
 }
 
 // PreviewConfig controls the dashboard split-pane live preview.

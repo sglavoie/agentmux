@@ -48,8 +48,8 @@ func NewStateGuard(duration time.Duration) *StateGuard {
 // Special rules:
 //   - idle and clear ALWAYS succeed and clear the guard (cleanup states).
 //   - If the current guard is "permission" and the incoming action is "stop",
-//     stop is suppressed as "clear" to avoid a spurious stop icon after the user
-//     approves a permission request.
+//     the permission guard is cleared and stop takes its place. This covers
+//     the case where a session ends while a permission prompt is still pending.
 //   - If the current guard is "permission" and the incoming action is "active",
 //     the guard is cleared so the active state breaks through immediately.
 //     This handles the common flow where a tool executes right after permission
@@ -84,22 +84,21 @@ func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allo
 	entry, exists := g.entries[windowID]
 	if exists && !now.After(entry.expiresAt) {
 		// Guard is still active.
-		if entry.action == "permission" && action == "stop" {
-			// Post-permission stop suppression.
+		switch {
+		case entry.action == "permission" && action == "stop":
+			// Session ended while permission was pending; let stop through.
 			delete(g.entries, windowID)
-			return true, "clear"
-		}
-		if entry.action == "permission" && action == "active" {
+		case entry.action == "permission" && action == "active":
 			// Post-permission active: permission resolved, allow active through.
 			delete(g.entries, windowID)
-		} else if entry.action == "failure" && action == "active" {
+		case entry.action == "failure" && action == "active":
 			// Failure is transient: the next active event means Claude is back to
 			// work, so let it overwrite the ✗ immediately.
 			delete(g.entries, windowID)
-		} else if entry.action == "stop" && isPrompt {
+		case entry.action == "stop" && isPrompt:
 			// Prompt bypasses stop guard — fall through to set new guard.
 			delete(g.entries, windowID)
-		} else if Priority(action) < entry.priority {
+		case Priority(action) < entry.priority:
 			return false, ""
 		}
 	}

@@ -32,9 +32,11 @@ var notificationLabels = map[string]string{
 // the selected backend (alerter when installed, osascript otherwise).
 type Notifier struct {
 	mu       sync.Mutex
-	last     map[int]time.Time // last notification time per window_id
+	last     map[int]time.Time   // last notification time per window_id
+	pending  map[int]*time.Timer // pending permission timers per window_id
+	debounce time.Duration
 	cfg      *config.NotificationConfig
-	now      func() time.Time              // injectable for tests
+	now      func() time.Time               // injectable for tests
 	dispatch func(title, subtitle string) error // injectable for tests
 }
 
@@ -42,6 +44,8 @@ type Notifier struct {
 func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 	return &Notifier{
 		last:     make(map[int]time.Time),
+		pending:  make(map[int]*time.Timer),
+		debounce: time.Duration(cfg.PermissionDebounceMs) * time.Millisecond,
 		cfg:      cfg,
 		now:      time.Now,
 		dispatch: selectDispatcher(),
@@ -64,6 +68,10 @@ func selectDispatcher() func(title, subtitle string) error {
 //   - the corresponding config flag is enabled
 //   - the 10s cooldown has elapsed since the last notification for this window
 //   - pipeMode is false (non-interactive Claude/Copilot runs suppress notifications)
+//
+// Permission notifications are delayed by the configured debounce window and
+// cancelled if CancelPending is called before the window expires. This avoids
+// spurious notifications when a harness auto-approves the request.
 func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMode bool) {
 	if pipeMode {
 		return
@@ -82,18 +90,49 @@ func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMo
 	if last, ok := n.last[windowID]; ok && now.Sub(last) < cooldownDuration {
 		return
 	}
-	n.last[windowID] = now
 
 	title := sessionTitle
 	if title == "" {
 		title = "Agent Mux"
 	}
 	subtitle := notificationLabels[action]
+
+	if action == "permission" && n.debounce > 0 {
+		// Cancel any existing pending timer for this window.
+		if t, ok := n.pending[windowID]; ok {
+			t.Stop()
+		}
+		// Lock in the cooldown now to prevent duplicate scheduling during the window.
+		n.last[windowID] = now
+		n.pending[windowID] = time.AfterFunc(n.debounce, func() {
+			n.mu.Lock()
+			delete(n.pending, windowID)
+			n.mu.Unlock()
+			if err := n.dispatch(title, subtitle); err != nil {
+				slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
+			}
+		})
+		return
+	}
+
+	n.last[windowID] = now
 	go func() {
 		if err := n.dispatch(title, subtitle); err != nil {
 			slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
 		}
 	}()
+}
+
+// CancelPending cancels any pending permission notification for windowID.
+// The cooldown is reset so the next real permission notification is not suppressed.
+func (n *Notifier) CancelPending(windowID int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if t, ok := n.pending[windowID]; ok {
+		t.Stop()
+		delete(n.pending, windowID)
+		delete(n.last, windowID)
+	}
 }
 
 func (n *Notifier) actionEnabled(action string) bool {

@@ -201,6 +201,75 @@ func TestNotifier_SessionTitleInNotification(t *testing.T) {
 	}
 }
 
+func TestNotifier_PermissionDebounceFires(t *testing.T) {
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
+	n, calls := newTestNotifier(cfg)
+
+	n.MaybeNotify(1, "W:api", "permission", false)
+	// Should not fire immediately.
+	time.Sleep(10 * time.Millisecond)
+	if len(*calls) > 0 {
+		t.Fatal("permission notification should be debounced, not immediate")
+	}
+	// Should fire after the debounce window.
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected debounced notification to fire")
+	}
+}
+
+func TestNotifier_PermissionDebounceCancelledByActive(t *testing.T) {
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
+	n, calls := newTestNotifier(cfg)
+
+	n.MaybeNotify(1, "W:api", "permission", false)
+	time.Sleep(20 * time.Millisecond)
+	n.CancelPending(1) // simulates auto-approval (active transition)
+
+	time.Sleep(300 * time.Millisecond) // wait past the debounce window
+	if len(*calls) > 0 {
+		t.Fatal("permission notification should have been cancelled")
+	}
+}
+
+func TestNotifier_PermissionDebounceFiresWhenNoCancel(t *testing.T) {
+	// Without cancellation the notification fires after the debounce expires.
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
+	n, calls := newTestNotifier(cfg)
+
+	n.MaybeNotify(1, "W:api", "permission", false)
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected notification to fire when not cancelled")
+	}
+}
+
+func TestNotifier_CancelPendingResetsNextCooldown(t *testing.T) {
+	// After CancelPending, the next permission notification should not be
+	// suppressed by the cooldown that was locked in for the cancelled event.
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
+	n, calls := newTestNotifier(cfg)
+
+	n.MaybeNotify(1, "W:api", "permission", false)
+	n.CancelPending(1)
+
+	// Immediately re-schedule (no cooldown should block this).
+	n.MaybeNotify(1, "W:api", "permission", false)
+	n.CancelPending(1) // cancel again
+	if len(*calls) > 0 {
+		t.Fatal("second permission should also be cancelled")
+	}
+}
+
+func TestNotifier_PermissionNoDebounce(t *testing.T) {
+	// When PermissionDebounceMs is 0 the notification fires immediately.
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 0}
+	n, calls := newTestNotifier(cfg)
+
+	n.MaybeNotify(1, "W:api", "permission", false)
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected immediate notification when debounce is 0")
+	}
+}
+
 func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 	got := alerterArgs("W:api", "Session stopped")
 	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", ""}

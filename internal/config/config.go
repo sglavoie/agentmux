@@ -68,6 +68,9 @@ func applyDefaults(cfg *Config) {
 	// surface terminal-failure notifications. See NotificationConfig docs for
 	// the opt-out path (per-account hooks override).
 	cfg.Defaults.Notifications.StopFailure = true
+	if cfg.Defaults.Notifications.PermissionDebounceMs == 0 {
+		cfg.Defaults.Notifications.PermissionDebounceMs = 500
+	}
 
 	normalizeAliases(cfg)
 }
