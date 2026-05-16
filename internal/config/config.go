@@ -32,8 +32,64 @@ func parseConfig(data []byte) (*Config, error) {
 	if _, err := toml.Decode(string(data), &cfg); err != nil {
 		return nil, err
 	}
+	cfg.Deprecations = collectDeprecations(&cfg)
 	applyDefaults(&cfg)
 	return &cfg, nil
+}
+
+// collectDeprecations inspects the raw decoded config and records any
+// legacy TOML keys present. Must be called before normalizeAliases, which
+// mirrors deprecated/canonical fields and erases the distinction.
+func collectDeprecations(cfg *Config) []Deprecation {
+	var deps []Deprecation
+	if len(cfg.Accounts) > 0 && len(cfg.Profiles) == 0 {
+		deps = append(deps, Deprecation{
+			Key:         "accounts",
+			Replacement: "profiles",
+			Location:    "[[accounts]]",
+		})
+	}
+	if len(cfg.Sessions) > 0 && len(cfg.Projects) == 0 {
+		deps = append(deps, Deprecation{
+			Key:         "sessions",
+			Replacement: "projects",
+			Location:    "[[sessions]]",
+		})
+	}
+	if len(cfg.Defaults.ClaudeFlags) > 0 && len(cfg.Defaults.Args) == 0 {
+		deps = append(deps, Deprecation{
+			Key:         "defaults.claude_flags",
+			Replacement: "defaults.args",
+			Location:    "[defaults]",
+		})
+	}
+	// Per-project: scan both Projects and Sessions for legacy claude_flags
+	// and account keys. Only report when the canonical field is unset.
+	projectSeen := false
+	accountSeen := false
+	scan := func(items []Session, table string) {
+		for _, p := range items {
+			if !projectSeen && len(p.ClaudeFlags) > 0 && len(p.Args) == 0 {
+				deps = append(deps, Deprecation{
+					Key:         table + ".claude_flags",
+					Replacement: table + ".args",
+					Location:    table + " " + p.Title,
+				})
+				projectSeen = true
+			}
+			if !accountSeen && p.Account != "" && p.Profile == "" {
+				deps = append(deps, Deprecation{
+					Key:         table + ".account",
+					Replacement: table + ".profile",
+					Location:    table + " " + p.Title,
+				})
+				accountSeen = true
+			}
+		}
+	}
+	scan(cfg.Projects, "[[projects]]")
+	scan(cfg.Sessions, "[[sessions]]")
+	return deps
 }
 
 func applyDefaults(cfg *Config) {

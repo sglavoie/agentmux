@@ -284,6 +284,82 @@ color = "green"
 	}
 }
 
+func TestLoad_PopulatesDeprecations(t *testing.T) {
+	content := `
+[defaults]
+claude_flags = ["--shared-legacy"]
+
+[[accounts]]
+name = "work"
+config_dir = "~/.config/claude-work"
+color = "blue"
+
+[[sessions]]
+title = "api"
+directory = "~/projects/api"
+account = "work"
+claude_flags = ["--project-legacy"]
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	keys := make(map[string]config.Deprecation, len(cfg.Deprecations))
+	for _, d := range cfg.Deprecations {
+		keys[d.Key] = d
+	}
+	for _, want := range []string{
+		"accounts",
+		"sessions",
+		"defaults.claude_flags",
+		"[[sessions]].claude_flags",
+		"[[sessions]].account",
+	} {
+		if _, ok := keys[want]; !ok {
+			t.Errorf("Deprecations missing key %q (got %+v)", want, cfg.Deprecations)
+		}
+	}
+	if got := keys["accounts"].Replacement; got != "profiles" {
+		t.Errorf("Replacement for accounts: got %q, want %q", got, "profiles")
+	}
+}
+
+func TestLoad_CanonicalKeysHaveNoDeprecations(t *testing.T) {
+	content := `
+[defaults]
+args = ["--shared"]
+
+[[profiles]]
+name = "work"
+home_dir = "~/.config/claude-work"
+color = "blue"
+
+[[projects]]
+title = "api"
+directory = "~/projects/api"
+profile = "work"
+args = ["--project"]
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Deprecations) != 0 {
+		t.Errorf("Deprecations: got %+v, want empty", cfg.Deprecations)
+	}
+}
+
 func TestLoad_NormalizesLegacyAccountsToProfiles(t *testing.T) {
 	path := filepath.Join(testdataDir, "legacy_flags_config.toml")
 	cfg, err := config.Load(path)

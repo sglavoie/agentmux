@@ -204,6 +204,62 @@ func TestTabNoFiltersNoOp(t *testing.T) {
 	}
 }
 
+func TestXRemovesFocusedChip(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.activeFilter = Parse("api @work")
+	m = pressKey(m, "tab") // focus /api
+	if m.focusedChipIdx != 0 {
+		t.Fatalf("setup: expected focus=0, got %d", m.focusedChipIdx)
+	}
+	m = pressKey(m, "x")
+	if len(m.activeFilter.Substrings) != 0 {
+		t.Errorf("expected substring removed, got %v", m.activeFilter.Substrings)
+	}
+	if m.activeFilter.Account != "work" {
+		t.Errorf("expected account preserved, got %q", m.activeFilter.Account)
+	}
+	if m.mode == ModeConfirm {
+		t.Errorf("expected x to remove chip, not open close-confirm overlay")
+	}
+}
+
+func TestBackspaceRemovesFocusedChip(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.activeFilter = Parse("api @work")
+	m = pressKey(m, "tab") // focus /api
+	m = pressKey(m, "backspace")
+	if len(m.activeFilter.Substrings) != 0 {
+		t.Errorf("expected substring removed via backspace, got %v", m.activeFilter.Substrings)
+	}
+}
+
+func TestXWithoutFocusedChipOpensConfirm(t *testing.T) {
+	// Postel: x retains its existing close-session behavior when no chip is focused.
+	// Tested under the legacy confirm flow so the assertion checks ModeConfirm;
+	// the toast/undo default is exercised in undo_test.go.
+	m := loadSessions(modalConfirmModel(), makeSessions())
+	m.activeFilter = Parse("api")
+	// No tab pressed → focusedChipIdx remains -1.
+	updated, _ := m.Update(keyPress("x"))
+	m2 := updated.(Model)
+	if m2.mode != ModeConfirm {
+		t.Errorf("expected x to open close-confirm, got mode=%d", m2.mode)
+	}
+}
+
+func TestRenderFocusedChipShowsBracketedRemove(t *testing.T) {
+	m := chipTestModel()
+	m.activeFilter = Parse("api @work")
+	m.focusedChipIdx = 1 // focus @work
+	out := stripAnsi(renderChips(m, m.width))
+	if !strings.Contains(out, "▌@work [✕]") {
+		t.Errorf("expected focused chip to show [✕], got %q", out)
+	}
+	if !strings.Contains(out, "▌/api ✕") {
+		t.Errorf("expected unfocused chip to retain plain ✕, got %q", out)
+	}
+}
+
 func TestEnterOnFocusedChipRemoves(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = Parse("api @work")
@@ -224,19 +280,19 @@ func TestEnterOnFocusedChipRemoves(t *testing.T) {
 	}
 }
 
-func TestEnterWithoutFocusedChipOpensActionsOverlay(t *testing.T) {
-	// Enter is no longer a focus shortcut on the list — it opens the actions
-	// overlay so every per-row keybinding is discoverable. The direct focus
-	// path moved to `space` (asserted in TestSpaceFocusesTab).
+func TestEnterWithoutFocusedChipFocusesTab(t *testing.T) {
+	// Enter on a row focuses the session's tab. The actions overlay moved to
+	// `a` (asserted in TestAOpensActionsOverlay) — chip-focus enter still
+	// removes the focused chip (asserted in TestEnterOnFocusedChipRemoves).
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = Parse("api")
-	updated, _ := m.Update(keyPress("enter"))
+	updated, cmd := m.Update(keyPress("enter"))
 	m2 := updated.(Model)
-	if m2.mode != ModeActions {
-		t.Fatalf("expected ModeActions after enter, got %d", m2.mode)
+	if m2.mode != ModeList {
+		t.Fatalf("expected ModeList after enter, got %d", m2.mode)
 	}
-	if m2.targetSession.Base == "" {
-		t.Error("expected targetSession to be set when entering actions overlay")
+	if cmd == nil {
+		t.Fatal("expected non-nil focusCmd after enter")
 	}
 }
 

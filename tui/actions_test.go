@@ -14,7 +14,7 @@ import (
 
 func openActionsOverlay(t *testing.T, m Model) Model {
 	t.Helper()
-	updated, _ := m.Update(keyPress("enter"))
+	updated, _ := m.Update(keyPress("a"))
 	out := updated.(Model)
 	if out.mode != ModeActions {
 		t.Fatalf("expected ModeActions, got %d", out.mode)
@@ -134,10 +134,12 @@ func TestActionsOverlayQReturnsToList(t *testing.T) {
 	}
 }
 
-// TestActionsOverlayDispatchClose verifies pressing `x` from the overlay
-// flips to ModeConfirm with the close action prepared.
+// TestActionsOverlayDispatchClose verifies that pressing `x` from the
+// overlay under the legacy confirm flow flips to ModeConfirm. The default
+// toast/undo path is covered by undo_test.go.
 func TestActionsOverlayDispatchClose(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
+	m.cfg.Defaults.ConfirmDestructive = true
 	m = openActionsOverlay(t, m)
 	m = pressKey(m, "x")
 	if m.mode != ModeConfirm {
@@ -148,10 +150,11 @@ func TestActionsOverlayDispatchClose(t *testing.T) {
 	}
 }
 
-// TestActionsOverlayDispatchRestart verifies `r` flips to ModeConfirm with
-// the restart action prepared.
+// TestActionsOverlayDispatchRestart verifies that `r` from the overlay
+// under the legacy confirm flow flips to ModeConfirm.
 func TestActionsOverlayDispatchRestart(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
+	m.cfg.Defaults.ConfirmDestructive = true
 	m = openActionsOverlay(t, m)
 	m = pressKey(m, "r")
 	if m.mode != ModeConfirm {

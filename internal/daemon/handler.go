@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 )
@@ -10,6 +11,10 @@ import (
 type Handler struct {
 	guard    *StateGuard
 	notifier *Notifier
+
+	// startedAt records the daemon start time so health queries can report
+	// uptime. Zero value means uptime should be reported as 0.
+	startedAt time.Time
 
 	// stateMu protects activity and lastAction.
 	stateMu  sync.Mutex
@@ -44,6 +49,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 	return &Handler{
 		guard:           guard,
 		notifier:        notifier,
+		startedAt:       time.Now(),
 		activity:        make(map[int]time.Time),
 		lastAction:      make(map[int]string),
 		lastActiveEvent: make(map[int]string),
@@ -62,11 +68,21 @@ func (h *Handler) Handle(req Request) Response {
 		return h.handleStateUpdate(req)
 	case TypeStateQuery:
 		return h.handleStateQuery()
+	case TypeHealth:
+		return h.handleHealth()
 	case TypeShutdown:
 		return h.handleShutdown()
 	default:
 		return Response{OK: false, Error: "unknown request type: " + string(req.Type)}
 	}
+}
+
+func (h *Handler) handleHealth() Response {
+	var uptime int64
+	if !h.startedAt.IsZero() {
+		uptime = int64(time.Since(h.startedAt).Seconds())
+	}
+	return Response{OK: true, PID: os.Getpid(), UptimeSeconds: uptime}
 }
 
 func (h *Handler) lastKnownAction(windowID int, currentIconState string) string {

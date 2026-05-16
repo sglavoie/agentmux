@@ -360,8 +360,18 @@ func TestFooterChangesWithMode(t *testing.T) {
 
 // ---- Confirm mode tests ----
 
+// modalConfirmModel mirrors testModel but opts into the legacy y/n confirm
+// flow via defaults.confirm_destructive=true. Used by the confirm-mode
+// tests below so they keep exercising the modal path now that toast+undo
+// is the default for x/r.
+func modalConfirmModel() Model {
+	m := testModel()
+	m.cfg.Defaults.ConfirmDestructive = true
+	return m
+}
+
 func TestConfirmNReturnsToList(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
+	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressKey(m, "x") // → ModeConfirm (close)
 	m = pressKey(m, "n") // cancel
 	if m.mode != ModeList {
@@ -370,7 +380,7 @@ func TestConfirmNReturnsToList(t *testing.T) {
 }
 
 func TestConfirmEscReturnsToList(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
+	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressKey(m, "x") // → ModeConfirm
 	m = pressKey(m, "esc")
 	if m.mode != ModeList {
@@ -379,7 +389,7 @@ func TestConfirmEscReturnsToList(t *testing.T) {
 }
 
 func TestConfirmYEmitsCloseCmd(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
+	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressKey(m, "x") // → ModeConfirm (close)
 	updated, cmd := m.Update(keyPress("y"))
 	if updated.(Model).mode != ModeList {
@@ -391,7 +401,7 @@ func TestConfirmYEmitsCloseCmd(t *testing.T) {
 }
 
 func TestConfirmYEmitsRestartCmd(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
+	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressKey(m, "r") // → ModeConfirm (restart)
 	updated, cmd := m.Update(keyPress("y"))
 	if updated.(Model).mode != ModeList {
@@ -746,7 +756,7 @@ func TestFooterPickerOpenDirHint(t *testing.T) {
 // ---- Direct-action shortcut tests ----
 
 func TestXKeyDirectClose(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
+	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressKey(m, "x")
 	if m.mode != ModeConfirm {
 		t.Fatalf("expected ModeConfirm after x, got %d", m.mode)
@@ -762,7 +772,7 @@ func TestXKeyDirectClose(t *testing.T) {
 }
 
 func TestRKeyDirectRestart(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
+	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressKey(m, "j") // move to second session
 	m = pressKey(m, "r")
 	if m.mode != ModeConfirm {
@@ -898,14 +908,26 @@ func TestFormatRowNoStateIcon(t *testing.T) {
 	}
 }
 
-// ---- Enter key actions overlay tests ----
+// ---- Enter / actions overlay tests ----
 
-func TestEnterOpensActionsOverlay(t *testing.T) {
+func TestEnterFocusesTab(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	updated, cmd := m.Update(keyPress("enter"))
 	m2 := updated.(Model)
+	if m2.mode != ModeList {
+		t.Fatalf("expected ModeList after enter, got %d", m2.mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil focusCmd after enter")
+	}
+}
+
+func TestAOpensActionsOverlay(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	updated, cmd := m.Update(keyPress("a"))
+	m2 := updated.(Model)
 	if m2.mode != ModeActions {
-		t.Fatalf("expected ModeActions after enter, got %d", m2.mode)
+		t.Fatalf("expected ModeActions after a, got %d", m2.mode)
 	}
 	if cmd != nil {
 		t.Errorf("expected no immediate cmd; opening the overlay should not dispatch one")

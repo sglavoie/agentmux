@@ -40,6 +40,11 @@ idle_threshold = 300
 #   project args → profile args → defaults.args
 args = []
 
+# When true, close (x) and restart (r) prompt for confirmation with a modal
+# y/n overlay. When false (default), the action runs immediately and a toast
+# offers `u` to undo within a few seconds.
+confirm_destructive = false
+
 [defaults.notifications]
 
 # Notify when a session is waiting for your permission to use a tool.

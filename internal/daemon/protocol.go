@@ -7,6 +7,7 @@ const (
 	TypeStateUpdate MessageType = "state_update"
 	TypeStateQuery  MessageType = "state_query"
 	TypeShutdown    MessageType = "shutdown"
+	TypeHealth      MessageType = "health"
 
 	// IconStatePreserve signals the client to keep the current icon unchanged.
 	IconStatePreserve = "preserve"
@@ -36,6 +37,9 @@ type Response struct {
 	IconState string `json:"icon_state,omitempty"` // icon name to show ("bolt","stop","key","error","")
 	// Fields populated for TypeStateQuery:
 	Activity map[int]int64 `json:"activity,omitempty"` // window_id → unix seconds of last activity
+	// Fields populated for TypeHealth:
+	PID           int   `json:"pid,omitempty"`
+	UptimeSeconds int64 `json:"uptime_seconds,omitempty"`
 }
 
 // actionPriority maps each action name to its guard priority.

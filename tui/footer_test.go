@@ -44,7 +44,16 @@ func TestListFooterPaletteOrder(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			out := stripAnsi(listFooterLine1(tc.m))
 			prev := -1
+			rowCount := 0
 			for _, e := range listFooterPalette {
+				if e.section == footerSectionRow {
+					rowCount++
+					if rowCount > listFooterRowCap {
+						// Entry collapsed into the overflow indicator;
+						// not expected to appear verbatim in the line.
+						continue
+					}
+				}
 				frag := e.key + " " + e.label
 				idx := strings.Index(out, frag)
 				if idx < 0 {
@@ -57,6 +66,41 @@ func TestListFooterPaletteOrder(t *testing.T) {
 				prev = idx
 			}
 		})
+	}
+}
+
+// TestListFooterSections asserts the section separator glyph appears between
+// each rendered section group, and that the row-section overflow indicator
+// appears whenever the row palette exceeds the visible cap.
+func TestListFooterSections(t *testing.T) {
+	out := stripAnsi(listFooterLine1(Model{
+		filtered: []session.RunningSession{{State: "bolt"}},
+	}))
+
+	sepCount := strings.Count(out, strings.TrimSpace(listFooterSectionSeparator))
+	wantSeps := len(listFooterSectionOrder) - 1
+	if sepCount != wantSeps {
+		t.Errorf("expected %d section separators, got %d in %q", wantSeps, sepCount, out)
+	}
+
+	rowEntries := footerEntriesForSection(footerSectionRow)
+	if len(rowEntries) > listFooterRowCap && !strings.Contains(out, "…") {
+		t.Errorf("expected overflow indicator '…' in %q", out)
+	}
+
+	// Section breaks must come after the row section's last visible entry
+	// and before the launch entry.
+	rowLast := rowEntries[listFooterRowCap-1]
+	rowLastIdx := strings.Index(out, rowLast.key+" "+rowLast.label)
+	launchIdx := strings.Index(out, "l launch")
+	sepIdx := strings.Index(out, strings.TrimSpace(listFooterSectionSeparator))
+	if rowLastIdx < 0 || launchIdx < 0 || sepIdx < 0 {
+		t.Fatalf("missing landmark fragments in %q (rowLast=%d, launch=%d, sep=%d)",
+			out, rowLastIdx, launchIdx, sepIdx)
+	}
+	if rowLastIdx >= sepIdx || sepIdx >= launchIdx {
+		t.Errorf("section separator out of place between row and launch: rowLast=%d sep=%d launch=%d in %q",
+			rowLastIdx, sepIdx, launchIdx, out)
 	}
 }
 
@@ -118,7 +162,7 @@ func TestListFooterAvailability(t *testing.T) {
 			name: "empty list — only global actions available",
 			m:    Model{},
 			want: map[string]bool{
-				"space": false, "e": false, "r": false, "x": false,
+				"enter": false, "a": false, "e": false, "r": false, "x": false,
 				"c": false, "C": false,
 				"o": false, "y": false,
 				"l": true, "/": true, "p": true, "?": true,
@@ -130,7 +174,7 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: "key"}},
 			},
 			want: map[string]bool{
-				"space": true, "e": false, "r": true, "x": true,
+				"enter": true, "a": true, "e": false, "r": true, "x": true,
 				"c": true, "C": true,
 				"o": false, "y": true,
 				"l": true, "/": true, "p": true, "?": true,
@@ -142,7 +186,7 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: "bolt"}},
 			},
 			want: map[string]bool{
-				"space": true, "e": true, "r": true, "x": true,
+				"enter": true, "a": true, "e": true, "r": true, "x": true,
 				"c": true, "C": false,
 				"o": false, "y": true,
 				"l": true, "/": true, "p": true, "?": true,
@@ -154,9 +198,22 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: ""}},
 			},
 			want: map[string]bool{
-				"space": true, "e": false, "r": true, "x": true,
+				"enter": true, "a": true, "e": false, "r": true, "x": true,
 				"c": true, "C": false,
 				"o": false, "y": true,
+				"l": true, "/": true, "p": true, "?": true,
+			},
+		},
+		{
+			name: "type-to-filter active — row actions dimmed",
+			m: Model{
+				filtered:   []session.RunningSession{{State: "bolt"}},
+				typeBuffer: "ap",
+			},
+			want: map[string]bool{
+				"enter": false, "a": false, "e": false, "r": false, "x": false,
+				"c": false, "C": false,
+				"o": false, "y": false,
 				"l": true, "/": true, "p": true, "?": true,
 			},
 		},

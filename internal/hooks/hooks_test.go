@@ -789,3 +789,84 @@ func checkHookCommand(t *testing.T, hooks map[string]any, event, wantCmd string)
 	}
 	t.Errorf("no amx hook found for event %q", event)
 }
+
+func TestOverallHookHealth_BucketsByStatus(t *testing.T) {
+	dir := t.TempDir()
+
+	inSyncDir := filepath.Join(dir, "in-sync")
+	driftedDir := filepath.Join(dir, "drifted")
+	missingDir := filepath.Join(dir, "missing")
+
+	cfg := makeConfig([]config.Account{
+		{Name: "in", ConfigDir: inSyncDir, Color: "green"},
+		{Name: "drifted", ConfigDir: driftedDir, Color: "blue"},
+		{Name: "missing", ConfigDir: missingDir, Color: "red"},
+	}, nil)
+
+	// in-sync: a successful merge installs the correct hooks.
+	inSyncOnly := makeConfig([]config.Account{
+		{Name: "in", ConfigDir: inSyncDir, Color: "green"},
+	}, nil)
+	if _, err := MergeAll(inSyncOnly, "", testBin); err != nil {
+		t.Fatalf("seed in-sync: %v", err)
+	}
+
+	// drifted: write a settings.json with a stale binary path.
+	if err := os.MkdirAll(driftedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(driftedDir, "settings.json"), map[string]any{
+		"hooks": map[string]any{
+			"UserPromptSubmit": []any{
+				map[string]any{
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": "/old/path/amx hook-indicator active",
+							"async":   true,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	// missing: no settings.json at all (directory absent is fine).
+
+	summary, err := OverallHookHealth(cfg, testBin)
+	if err != nil {
+		t.Fatalf("OverallHookHealth: %v", err)
+	}
+	if len(summary.InSync) != 1 || summary.InSync[0] != "in" {
+		t.Errorf("InSync: got %v, want [in]", summary.InSync)
+	}
+	if len(summary.Drifted) != 1 || summary.Drifted[0] != "drifted" {
+		t.Errorf("Drifted: got %v, want [drifted]", summary.Drifted)
+	}
+	if len(summary.Missing) != 1 || summary.Missing[0] != "missing" {
+		t.Errorf("Missing: got %v, want [missing]", summary.Missing)
+	}
+	if summary.Healthy() {
+		t.Error("Healthy: got true, want false (drifted+missing present)")
+	}
+}
+
+func TestOverallHookHealth_AllInSyncIsHealthy(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+
+	summary, err := OverallHookHealth(cfg, testBin)
+	if err != nil {
+		t.Fatalf("OverallHookHealth: %v", err)
+	}
+	if !summary.Healthy() {
+		t.Errorf("Healthy: got false, want true (summary=%+v)", summary)
+	}
+}

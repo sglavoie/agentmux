@@ -64,6 +64,28 @@ func (c *Client) Send(req Request) (Response, error) {
 	return resp, nil
 }
 
+// Health is the result of a TypeHealth query. Alive is false when the
+// daemon is unreachable; in that case PID and Uptime are zero.
+type Health struct {
+	Alive  bool
+	PID    int
+	Uptime time.Duration
+}
+
+// Health pings the daemon and returns its liveness, PID and uptime. Never
+// returns an error — an unreachable daemon yields Health{Alive: false}.
+func (c *Client) Health() Health {
+	resp, err := c.Send(Request{Type: TypeHealth})
+	if err != nil || !resp.OK {
+		return Health{}
+	}
+	return Health{
+		Alive:  true,
+		PID:    resp.PID,
+		Uptime: time.Duration(resp.UptimeSeconds) * time.Second,
+	}
+}
+
 // SendWithAutoStart sends req to the daemon, auto-starting it if not running.
 // amxBin is the path to the amx binary used for auto-start.
 func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error) {

@@ -32,3 +32,30 @@ type focusDoneMsg struct{ err error }
 
 // peekDoneMsg is sent when the overlay pager launch completes.
 type peekDoneMsg struct{ err error }
+
+// healthMsg carries the result of a daemon/hooks health refresh. Each
+// section is only populated when the corresponding flag was set on the
+// dispatching command, so partial refreshes (daemon-only or hooks-only)
+// don't clobber the cached value of the other section.
+type healthMsg struct {
+	daemonChecked bool
+	daemonAlive   bool
+
+	hookChecked bool
+	hookSummary HookHealth
+	hookErr     error
+}
+
+// HookHealth is the TUI-local mirror of hooks.HookHealthSummary, kept in
+// this package so model.go and list.go can refer to it without importing
+// internal/hooks transitively in every test file.
+type HookHealth struct {
+	InSync  []string
+	Drifted []string
+	Missing []string
+}
+
+// Healthy reports whether every profile is in sync.
+func (h HookHealth) Healthy() bool {
+	return len(h.Drifted) == 0 && len(h.Missing) == 0
+}

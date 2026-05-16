@@ -23,10 +23,12 @@ const (
 	keyE           = "e"
 	keyX           = "x"
 	keyR           = "r"
+	keyU           = "u" // undo the most recent destructive action
 	keyBackspace   = "backspace"
 	keyQuestion    = "?" // opens ModeHelp overlay
 	keyC           = "c" // opens ModeConfigPicker for profile override
 	keyClearStatus = "C" // clears the highlighted session's icon
+	keyD           = "d" // dismisses the config deprecation banner
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
 

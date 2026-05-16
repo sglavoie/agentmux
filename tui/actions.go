@@ -61,11 +61,16 @@ func actionsFor(_ Model) []action {
 			description: "close and relaunch the session",
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
-				m.confirmAction = "restart"
-				m.confirmConsequence = restartConsequence
 				m.actionErr = nil
-				m.mode = ModeConfirm
-				return m, nil
+				if m.cfg.Defaults.ConfirmDestructive {
+					m.confirmAction = "restart"
+					m.confirmConsequence = restartConsequence
+					m.mode = ModeConfirm
+					return m, nil
+				}
+				m.mode = ModeList
+				cmd := m.restartWithToast(m.targetSession)
+				return m, cmd
 			},
 		},
 		{
@@ -75,11 +80,16 @@ func actionsFor(_ Model) []action {
 			description: "exit the Claude process; transcript persists",
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
-				m.confirmAction = "close"
-				m.confirmConsequence = closeConsequence
 				m.actionErr = nil
-				m.mode = ModeConfirm
-				return m, nil
+				if m.cfg.Defaults.ConfirmDestructive {
+					m.confirmAction = "close"
+					m.confirmConsequence = closeConsequence
+					m.mode = ModeConfirm
+					return m, nil
+				}
+				m.mode = ModeList
+				cmd := m.closeWithToast(m.targetSession)
+				return m, cmd
 			},
 		},
 		{

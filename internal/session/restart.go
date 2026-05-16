@@ -22,7 +22,7 @@ func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Confi
 		return fmt.Errorf("profile %q not found in config", running.EffectiveProfile())
 	}
 
-	sess := sessionFromRunning(running)
+	sess := SessionFromRunning(running)
 
 	if err := Launch(client, sess, acc, cfg, LaunchOpt{SkipDedup: true}); err != nil {
 		return err
@@ -47,7 +47,7 @@ func RestartWithAccount(client kitty.KittyClient, running RunningSession, target
 		return nil
 	}
 
-	sess := sessionFromRunning(running)
+	sess := SessionFromRunning(running)
 	sess.Profile = targetAcc.Name
 	sess.Account = targetAcc.Name
 	debugLog.Printf("RestartWithAccount: session=%+v", sess)
@@ -75,9 +75,9 @@ func findAccount(cfg *config.Config, name string) (config.Account, bool) {
 	return config.Account{}, false
 }
 
-// sessionFromRunning reconstructs a config.Session from a running tab's
+// SessionFromRunning reconstructs a config.Session from a running tab's
 // user vars. This preserves runtime overrides not written back to config.
-func sessionFromRunning(rs RunningSession) config.Session {
+func SessionFromRunning(rs RunningSession) config.Session {
 	projectArgs := rs.ExplicitFlags
 	if !rs.ExplicitFlagsSet && projectArgs == "" {
 		projectArgs = rs.EffectiveArgs()

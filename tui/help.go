@@ -25,8 +25,9 @@ func renderHelp(m Model) string {
 			"  esc       clear filter / back out of overlay",
 		}},
 		{"Act on row", []string{
-			"  space     focus the session's tab",
-			"  enter     open actions overlay (lists every key below)",
+			"  enter     focus the session's tab",
+			"  space     focus the session's tab (alternate path)",
+			"  a         open actions overlay (lists every key below)",
 			"  e         peek scrollback (active rows only)",
 			"  r         restart session (confirm)",
 			"  x         close session (confirm)",
@@ -40,8 +41,10 @@ func renderHelp(m Model) string {
 			"  p         toggle preview pane (also active in launcher)",
 		}},
 		{"Filter", []string{
+			"  any key   type-to-filter (live narrowing without /)",
 			"  /         filter (DSL: @profile, !state, word)",
 			"  f         filter pre-filled with @ (profile)",
+			"  esc       clear type-buffer / clear filter chips",
 			"  1 – 9     remove filter chip at that position",
 		}},
 		{"App", []string{
@@ -58,5 +61,6 @@ func renderHelp(m Model) string {
 		}
 		sb.WriteByte('\n')
 	}
+	sb.WriteString(styleDim.Render("  …         footer overflow — least-frequent row actions (y)") + "\n")
 	return sb.String()
 }

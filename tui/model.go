@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -12,10 +13,19 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
+)
+
+// Health-pip refresh cadences. Daemon checks are a cheap socket round-trip
+// (5s), hook checks read each profile's settings.json so they run on a
+// longer interval (15s).
+const (
+	daemonHealthInterval = 5 * time.Second
+	hookHealthInterval   = 15 * time.Second
 )
 
 // Mode represents the current UI mode.
@@ -49,9 +59,11 @@ type Model struct {
 
 	// filter (unified search + account + state DSL)
 	filterText      string // live input while in ModeSearch
+	typeBuffer      string // live input from ModeList's type-to-filter dispatch
 	activeFilter    Filter // committed filter applied to filtered
 	savedFilter     Filter // snapshot taken on enter; restored on Esc
 	focusedChipIdx  int    // -1 when no chip focused; otherwise index into Components()
+	completion      completionState // sigil-aware popup state for ModeSearch / type-to-filter
 
 	// terminal dimensions
 	width  int
@@ -95,6 +107,27 @@ type Model struct {
 	lastActivity  map[int]time.Time
 	idleThreshold time.Duration
 
+	// recency-pulse bookkeeping. lastSeenStates is the snapshot of every
+	// session's state at the last user input in ModeList (or the first
+	// refresh after startup). recentTransitions records when a session's
+	// state was first observed to differ from lastSeenStates so the list
+	// can highlight it for a short window — see pulseDecay.
+	lastSeenStates    map[int]string
+	recentTransitions map[int]time.Time
+
+	// health pip + deprecation banner bookkeeping. daemonAlive and
+	// hookHealth are refreshed at the daemonHealthInterval /
+	// hookHealthInterval cadences via healthCmd; deprecations is captured
+	// once at startup from cfg.Deprecations.
+	amxBin              string
+	daemonAlive         bool
+	daemonHealthCheckedAt time.Time
+	hookHealth          HookHealth
+	hookHealthErr       error
+	hookHealthCheckedAt time.Time
+	deprecations         []config.Deprecation
+	deprecationDismissed bool
+
 	// preview pane
 	previewEnabled       bool
 	previewWindowID      int
@@ -108,6 +141,11 @@ type Model struct {
 	launchBatchID     int
 	launchBatchDone   int
 	launchBatchErrors int
+
+	// pendingUndo stacks the most recent destructive actions eligible for
+	// `u`-driven undo. Entries expire at their deadline; sweepUndo trims
+	// them on toast ticks so memory stays bounded.
+	pendingUndo []undoEntry
 }
 
 // NewModel creates a dashboard model.
@@ -124,6 +162,10 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 	if idle <= 0 {
 		idle = 5 * time.Minute
 	}
+	amxBin, err := os.Executable()
+	if err != nil {
+		amxBin = "amx"
+	}
 	return Model{
 		client:         client,
 		cfg:            cfg,
@@ -131,12 +173,18 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 		sortMode:       sort,
 		idleThreshold:  idle,
 		focusedChipIdx: -1,
+		amxBin:         amxBin,
+		deprecations:   cfg.Deprecations,
 	}
 }
 
 // Init starts the refresh ticker and fetches the first session list.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(fetchCmd(m.client, m.sortMode), tickCmd(m.interval))
+	return tea.Batch(
+		fetchCmd(m.client, m.sortMode),
+		tickCmd(m.interval),
+		healthCmd(m.cfg, m.amxBin, true, true),
+	)
 }
 
 // Update handles incoming messages.
@@ -165,7 +213,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		return m, tea.Batch(fetchCmd(m.client, m.sortMode), tickCmd(m.interval))
+		m.sweepRecentTransitions()
+		cmds := []tea.Cmd{fetchCmd(m.client, m.sortMode), tickCmd(m.interval)}
+		now := time.Now()
+		checkDaemon := now.Sub(m.daemonHealthCheckedAt) >= daemonHealthInterval
+		checkHooks := now.Sub(m.hookHealthCheckedAt) >= hookHealthInterval
+		if checkDaemon || checkHooks {
+			cmds = append(cmds, healthCmd(m.cfg, m.amxBin, checkDaemon, checkHooks))
+		}
+		return m, tea.Batch(cmds...)
+
+	case healthMsg:
+		now := time.Now()
+		if msg.daemonChecked {
+			m.daemonAlive = msg.daemonAlive
+			m.daemonHealthCheckedAt = now
+		}
+		if msg.hookChecked {
+			m.hookHealth = msg.hookSummary
+			m.hookHealthErr = msg.hookErr
+			m.hookHealthCheckedAt = now
+		}
+		return m, nil
 
 	case previewTickMsg:
 		if !m.activePreviewEnabled() {
@@ -197,6 +266,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.lastActivity = msg.activity
 		m.sessions = msg.sessions
+		m.recordTransitions()
 		m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 		m.sortFiltered()
 		m.cursor = restoreCursor(m.filtered, priorBase, m.lastActivity, m.idleThreshold)
@@ -215,6 +285,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleLaunchProgress(msg)
 
 	case toastTickMsg:
+		m.sweepUndo()
 		return m, m.sweepToasts()
 
 	case pickerOpenDoneMsg:
@@ -264,7 +335,33 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
+	m.snapshotSeenStates()
+	key := msg.String()
+
+	// Completion popup (active over the type-to-filter buffer) intercepts a
+	// fixed key set before the normal dispatcher runs. Mirrors handleSearchKey.
+	if m.completion.Visible {
+		switch key {
+		case keyEsc:
+			m.closeCompletion()
+			return m, nil
+		case keyEnter:
+			m.insertCompletionInto(&m.typeBuffer)
+			m.applyTypeBuffer()
+			m.recomputeCompletionFor(m.typeBuffer)
+			return m, nil
+		case keyTab, keyDown:
+			m.cycleCompletion(1)
+			return m, nil
+		case keyUp:
+			m.cycleCompletion(-1)
+			return m, nil
+		}
+	}
+
+	bufferActive := m.typeBuffer != ""
+
+	switch key {
 	case keyCtrlC, keyQ:
 		return m, tea.Quit
 
@@ -279,9 +376,6 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
-
-	case keyTogglePreview:
-		return m.togglePreview()
 
 	case keyG:
 		m.cursor = 0
@@ -299,48 +393,39 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case keySlash:
-		m.enterFilter("")
+		// Carry an in-progress type-to-filter buffer over to ModeSearch so
+		// users escalating to the full DSL don't lose what they've typed.
+		prefill := ""
+		if m.typeBuffer != "" {
+			prefill = m.typeBuffer
+			m.typeBuffer = ""
+		}
+		m.enterFilter(prefill)
 
 	case keyF:
+		m.typeBuffer = ""
 		m.enterFilter("@")
 
-	case keyE:
-		if len(m.filtered) > 0 {
-			s := m.filtered[m.cursor]
-			return m, peekCmd(m.client, s.WindowID)
-		}
-
 	case keyEnter:
+		if m.typeBuffer != "" {
+			// Commit the type-to-filter buffer: the filter is already
+			// live-applied; clearing the buffer returns row-action keys to
+			// service while the chips above the list reflect the commit.
+			m.typeBuffer = ""
+			m.closeCompletion()
+			return m, nil
+		}
 		if m.focusedChipIdx >= 0 {
 			m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
 			return m, nil
 		}
 		if len(m.filtered) > 0 {
-			m.targetSession = m.filtered[m.cursor]
-			m.actionErr = nil
-			m.mode = ModeActions
+			return m, focusCmd(m.client, m.filtered[m.cursor].TabID)
 		}
 
 	case keySpace:
 		if len(m.filtered) > 0 {
 			return m, focusCmd(m.client, m.filtered[m.cursor].TabID)
-		}
-
-	case keyO:
-		if len(m.filtered) > 0 {
-			s := m.filtered[m.cursor]
-			if cs, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
-				m.targetSession = s
-				m.actionErr = nil
-				return m, openDirActionCmd(m, cs)
-			}
-		}
-
-	case keyY:
-		if len(m.filtered) > 0 {
-			title := m.filtered[m.cursor].Base
-			m.actionErr = nil
-			return m, copyTitleCmd(title)
 		}
 
 	case keyTab:
@@ -353,47 +438,33 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case key1, key2, key3, key4, key5, key6, key7, key8, key9:
-		idx := int(msg.String()[0] - '1')
+		idx := int(key[0] - '1')
 		if idx < len(m.activeFilter.Components()) {
 			m.applyFilterChange(m.activeFilter.RemoveComponent(idx))
 		}
 
-	case keyX:
-		if len(m.filtered) > 0 {
-			m.targetSession = m.filtered[m.cursor]
-			m.confirmAction = "close"
-			m.confirmConsequence = closeConsequence
-			m.actionErr = nil
-			m.mode = ModeConfirm
+	case keyBackspace:
+		if m.typeBuffer != "" {
+			if r := []rune(m.typeBuffer); len(r) > 0 {
+				m.typeBuffer = string(r[:len(r)-1])
+			}
+			m.applyTypeBuffer()
+			m.recomputeCompletionFor(m.typeBuffer)
+			return m, nil
+		}
+		if m.focusedChipIdx >= 0 {
+			m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
 		}
 
-	case keyR:
-		if len(m.filtered) > 0 {
-			m.targetSession = m.filtered[m.cursor]
-			m.confirmAction = "restart"
-			m.confirmConsequence = restartConsequence
-			m.actionErr = nil
-			m.mode = ModeConfirm
+	case keyEsc:
+		if m.typeBuffer != "" {
+			m.typeBuffer = ""
+			m.closeCompletion()
 		}
-
-	case keyC:
-		if len(m.filtered) > 0 {
-			m.targetSession = m.filtered[m.cursor]
-			m.configPickerAccounts = m.cfg.Accounts
-			m.configPickerCurrent = m.targetSession.EffectiveProfile()
-			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-			m.configPickerReturnMode = ModeList
-			m.configPickerProjectIdx = -1
-			m.actionErr = nil
-			m.mode = ModeConfigPicker
-		}
-
-	case keyClearStatus:
-		if len(m.filtered) > 0 {
-			s := m.filtered[m.cursor]
-			m.actionErr = nil
-			return m, clearStatusCmd(m.client, s)
-		}
+		// Clear active filter (and any chip focus) regardless. After a
+		// type-buffer was cleared above, this also clears the now-committed
+		// filter chips so a single esc returns the user to a clean list.
+		m.applyFilterChange(Filter{})
 
 	case keyQuestion:
 		m.mode = ModeHelp
@@ -412,12 +483,121 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case keyEsc:
-		// Clear active filter (and any chip focus).
-		m.applyFilterChange(Filter{})
+	default:
+		// Row-action keys: handled normally when the type buffer is empty;
+		// diverted into the buffer once it has at least one character.
+		if !bufferActive {
+			switch key {
+			case keyTogglePreview:
+				return m.togglePreview()
+			case keyA:
+				if len(m.filtered) > 0 {
+					m.targetSession = m.filtered[m.cursor]
+					m.actionErr = nil
+					m.mode = ModeActions
+				}
+				return m, nil
+			case keyE:
+				if len(m.filtered) > 0 {
+					s := m.filtered[m.cursor]
+					return m, peekCmd(m.client, s.WindowID)
+				}
+				return m, nil
+			case keyR:
+				if len(m.filtered) > 0 {
+					m.targetSession = m.filtered[m.cursor]
+					m.actionErr = nil
+					if m.cfg.Defaults.ConfirmDestructive {
+						m.confirmAction = "restart"
+						m.confirmConsequence = restartConsequence
+						m.mode = ModeConfirm
+						return m, nil
+					}
+					return m, m.restartWithToast(m.targetSession)
+				}
+				return m, nil
+			case keyX:
+				if m.focusedChipIdx >= 0 {
+					m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
+					return m, nil
+				}
+				if len(m.filtered) > 0 {
+					m.targetSession = m.filtered[m.cursor]
+					m.actionErr = nil
+					if m.cfg.Defaults.ConfirmDestructive {
+						m.confirmAction = "close"
+						m.confirmConsequence = closeConsequence
+						m.mode = ModeConfirm
+						return m, nil
+					}
+					return m, m.closeWithToast(m.targetSession)
+				}
+				return m, nil
+			case keyU:
+				return m, m.undoLastCmd()
+			case keyC:
+				if len(m.filtered) > 0 {
+					m.targetSession = m.filtered[m.cursor]
+					m.configPickerAccounts = m.cfg.Accounts
+					m.configPickerCurrent = m.targetSession.EffectiveProfile()
+					m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
+					m.configPickerReturnMode = ModeList
+					m.configPickerProjectIdx = -1
+					m.actionErr = nil
+					m.mode = ModeConfigPicker
+				}
+				return m, nil
+			case keyClearStatus:
+				if len(m.filtered) > 0 {
+					s := m.filtered[m.cursor]
+					m.actionErr = nil
+					return m, clearStatusCmd(m.client, s)
+				}
+				return m, nil
+			case keyO:
+				if len(m.filtered) > 0 {
+					s := m.filtered[m.cursor]
+					if cs, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
+						m.targetSession = s
+						m.actionErr = nil
+						return m, openDirActionCmd(m, cs)
+					}
+				}
+				return m, nil
+			case keyY:
+				if len(m.filtered) > 0 {
+					title := m.filtered[m.cursor].Base
+					m.actionErr = nil
+					return m, copyTitleCmd(title)
+				}
+				return m, nil
+			case keyD:
+				if !m.deprecationDismissed && len(m.deprecations) > 0 {
+					m.deprecationDismissed = true
+				}
+				return m, nil
+			}
+		}
+		// Fall through: anything else printable goes into the type buffer.
+		if t := msg.Key().Text; t != "" {
+			m.typeBuffer += t
+			m.applyTypeBuffer()
+			m.recomputeCompletionFor(m.typeBuffer)
+		}
 	}
 
 	return m, nil
+}
+
+// applyTypeBuffer parses the current type-to-filter buffer and re-applies the
+// resulting Filter to the session list. Mirrors reapplyFilterLive for the
+// ModeList code path.
+func (m *Model) applyTypeBuffer() {
+	m.activeFilter = Parse(m.typeBuffer)
+	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	m.sortFiltered()
+	m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
+	m.focusedChipIdx = -1
 }
 
 // applyFilterChange swaps in a new active filter, re-applies it to the
@@ -443,6 +623,7 @@ func (m *Model) enterFilter(prefill string) {
 	m.cursor = 0
 	m.focusedChipIdx = -1
 	m.mode = ModeSearch
+	m.recomputeCompletion()
 }
 
 // reapplyFilterLive parses filterText and refreshes the list. Used by every
@@ -456,7 +637,27 @@ func (m *Model) reapplyFilterLive() {
 }
 
 func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
+	key := msg.String()
+	if m.completion.Visible {
+		switch key {
+		case keyEsc:
+			m.closeCompletion()
+			return m, nil
+		case keyEnter:
+			m.insertCompletion()
+			m.reapplyFilterLive()
+			m.recomputeCompletion()
+			return m, nil
+		case keyTab, keyDown:
+			m.cycleCompletion(1)
+			return m, nil
+		case keyUp:
+			m.cycleCompletion(-1)
+			return m, nil
+		}
+	}
+
+	switch key {
 	case keyEsc:
 		// Cancel: restore the snapshot taken on entry and recompute.
 		m.activeFilter = m.savedFilter
@@ -465,10 +666,12 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.sortFiltered()
 		m.cursor = 0
 		m.focusedChipIdx = -1
+		m.closeCompletion()
 		m.mode = ModeList
 
 	case keyEnter:
 		// Live-applied already — just exit the input.
+		m.closeCompletion()
 		m.mode = ModeList
 
 	case keyBackspace:
@@ -476,11 +679,13 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.filterText = string(r[:len(r)-1])
 		}
 		m.reapplyFilterLive()
+		m.recomputeCompletion()
 
 	default:
 		if t := msg.Key().Text; t != "" {
 			m.filterText += t
 			m.reapplyFilterLive()
+			m.recomputeCompletion()
 		}
 	}
 
@@ -746,7 +951,10 @@ func (m Model) render() string {
 			sb.WriteString(renderHeader(m))
 		}
 		if m.mode == ModeList {
+			sb.WriteString(renderDeprecationBanner(m))
+			sb.WriteString(renderLegend(m))
 			sb.WriteString(renderChips(m, m.width))
+			sb.WriteString(renderInlineFilter(m))
 		}
 		if m.mode == ModeList && m.previewEnabled {
 			sb.WriteString(renderSplit(m))
@@ -986,6 +1194,34 @@ func (m *Model) disablePreviewWithNotice(msg string) {
 	m.previewWindowID = 0
 	m.previewNotice = msg
 	m.previewNoticeExpires = time.Now().Add(2 * time.Second)
+}
+
+// healthCmd refreshes the daemon and/or hook health cached on the model.
+// Each section is only re-queried when the corresponding flag is set so
+// the cheap daemon ping doesn't pull in the more expensive hooks scan on
+// every tick. Errors are non-fatal — they collapse into the "degraded"
+// pip rendering rather than tearing down the dashboard.
+func healthCmd(cfg *config.Config, amxBin string, checkDaemon, checkHooks bool) tea.Cmd {
+	return func() tea.Msg {
+		msg := healthMsg{daemonChecked: checkDaemon, hookChecked: checkHooks}
+		if checkDaemon {
+			h := daemon.NewClient().Health()
+			msg.daemonAlive = h.Alive
+		}
+		if checkHooks {
+			summary, err := hooks.OverallHookHealth(cfg, amxBin)
+			if err != nil {
+				msg.hookErr = err
+			} else {
+				msg.hookSummary = HookHealth{
+					InSync:  summary.InSync,
+					Drifted: summary.Drifted,
+					Missing: summary.Missing,
+				}
+			}
+		}
+		return msg
+	}
 }
 
 // fetchCmd queries Kitty for running sessions and the daemon for per-window
@@ -1360,6 +1596,85 @@ func loadPickerOverrides(sessions []config.Session) map[int]string {
 		}
 	}
 	return out
+}
+
+// pulseDecay is how long a recorded state transition keeps pulsing in the
+// list before it's swept off.
+const pulseDecay = 5 * time.Second
+
+// recordTransitions diffs the current m.sessions against m.lastSeenStates
+// and records any state change in m.recentTransitions. On the very first
+// refresh (lastSeenStates is nil) the snapshot is seeded silently so the
+// initial list does not pulse every row.
+func (m *Model) recordTransitions() {
+	if m.lastSeenStates == nil {
+		m.lastSeenStates = make(map[int]string, len(m.sessions))
+		for _, s := range m.sessions {
+			m.lastSeenStates[s.WindowID] = s.State
+		}
+		return
+	}
+	for _, s := range m.sessions {
+		prev, ok := m.lastSeenStates[s.WindowID]
+		if !ok {
+			// New session since last snapshot — treat as no-op so a freshly
+			// launched tab does not pulse on its first appearance.
+			m.lastSeenStates[s.WindowID] = s.State
+			continue
+		}
+		if prev == s.State {
+			continue
+		}
+		if m.recentTransitions == nil {
+			m.recentTransitions = make(map[int]time.Time)
+		}
+		if _, already := m.recentTransitions[s.WindowID]; !already {
+			m.recentTransitions[s.WindowID] = time.Now()
+		}
+	}
+}
+
+// sweepRecentTransitions drops entries older than pulseDecay so the maps
+// stay bounded and stale pulses do not linger after their visual window.
+func (m *Model) sweepRecentTransitions() {
+	if len(m.recentTransitions) == 0 {
+		return
+	}
+	cutoff := time.Now().Add(-pulseDecay)
+	for id, t := range m.recentTransitions {
+		if t.Before(cutoff) {
+			delete(m.recentTransitions, id)
+		}
+	}
+}
+
+// snapshotSeenStates refreshes the per-session state snapshot to match the
+// current view and clears any in-flight pulses. Called on every ModeList
+// key press so the pulse layer surfaces only changes the user has not yet
+// seen.
+func (m *Model) snapshotSeenStates() {
+	if m.lastSeenStates == nil {
+		m.lastSeenStates = make(map[int]string, len(m.sessions))
+	}
+	for _, s := range m.sessions {
+		m.lastSeenStates[s.WindowID] = s.State
+	}
+	if len(m.recentTransitions) > 0 {
+		m.recentTransitions = nil
+	}
+}
+
+// hasActivePulse reports whether windowID has a recent-transition record
+// that has not yet decayed past pulseDecay.
+func (m Model) hasActivePulse(windowID int) bool {
+	if len(m.recentTransitions) == 0 {
+		return false
+	}
+	t, ok := m.recentTransitions[windowID]
+	if !ok {
+		return false
+	}
+	return time.Since(t) < pulseDecay
 }
 
 // savePickerOverrides writes the current pickerProfileOverride map to disk.

@@ -28,6 +28,43 @@ type AccountStatus struct {
 	Status  SyncStatus
 }
 
+// HookHealthSummary aggregates hook sync status across all profiles,
+// bucketing profile names by their current state. Each slice holds the
+// profile names whose hooks are in the matching state; absent profiles
+// are not represented.
+type HookHealthSummary struct {
+	InSync  []string
+	Drifted []string
+	Missing []string
+}
+
+// Healthy reports whether every profile is in sync (i.e. no drift or
+// missing hooks). An empty summary (no profiles) is considered healthy.
+func (s HookHealthSummary) Healthy() bool {
+	return len(s.Drifted) == 0 && len(s.Missing) == 0
+}
+
+// OverallHookHealth returns the aggregated hook sync status across every
+// profile in the config. amxBin is the absolute path to the amx binary.
+func OverallHookHealth(cfg *config.Config, amxBin string) (HookHealthSummary, error) {
+	statuses, err := StatusAll(cfg, amxBin)
+	if err != nil {
+		return HookHealthSummary{}, err
+	}
+	var summary HookHealthSummary
+	for _, s := range statuses {
+		switch s.Status {
+		case SyncInSync:
+			summary.InSync = append(summary.InSync, s.Account)
+		case SyncDrifted:
+			summary.Drifted = append(summary.Drifted, s.Account)
+		case SyncMissing:
+			summary.Missing = append(summary.Missing, s.Account)
+		}
+	}
+	return summary, nil
+}
+
 // StatusAll returns the hooks sync status for every configured profile.
 // amxBin is the absolute path to the amx binary (used to determine expected commands).
 func StatusAll(cfg *config.Config, amxBin string) ([]AccountStatus, error) {

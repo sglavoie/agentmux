@@ -179,6 +179,37 @@ func serializeFilter(f Filter) string {
 	return strings.Join(parts, " ")
 }
 
+// TokenAtCaret inspects input around caretPos and reports whether the caret
+// sits in a sigil-led token (`@`, `!`, `%`). When it does, prefix is the text
+// already typed after the sigil and replaceFrom..replaceTo are the byte
+// indices a completion should overwrite. sigil is 0 when the caret is not in
+// a sigil token (or the input is malformed) — callers should hide the popup.
+func TokenAtCaret(input string, caretPos int) (sigil byte, prefix string, replaceFrom, replaceTo int) {
+	if caretPos < 0 {
+		caretPos = 0
+	}
+	if caretPos > len(input) {
+		caretPos = len(input)
+	}
+	start := caretPos
+	for start > 0 {
+		c := input[start-1]
+		if c == ' ' || c == '\t' || c == '\n' {
+			break
+		}
+		start--
+	}
+	if start == caretPos {
+		return 0, "", caretPos, caretPos
+	}
+	tok := input[start:caretPos]
+	switch tok[0] {
+	case '@', '!', '%':
+		return tok[0], tok[1:], start, caretPos
+	}
+	return 0, "", start, caretPos
+}
+
 // matchState applies the !<state> filter, including the active/idle aliases
 // that fan out to stateGroup buckets.
 func matchState(s session.RunningSession, state string, lastActivity map[int]time.Time, idle time.Duration) bool {

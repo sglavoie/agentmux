@@ -10,18 +10,34 @@ type Config struct {
 	Projects []Session            `toml:"projects"`
 	Sessions []Session            `toml:"sessions"` // deprecated alias; mirrored from Projects on load
 	Hooks    HooksConfig          `toml:"hooks"`
+
+	// Deprecations records any legacy TOML keys encountered during Load.
+	// Populated from the raw decoded struct before normalizeAliases erases
+	// the distinction between deprecated and canonical fields. Surfaced by
+	// the TUI as a one-line banner pointing the user at the migration.
+	Deprecations []Deprecation `toml:"-"`
+}
+
+// Deprecation captures a single legacy TOML key that the user's config
+// relies on. Location is a short pointer to where the key was used
+// (e.g. "[defaults]" or "[[sessions]] api") so the user can find it.
+type Deprecation struct {
+	Key         string
+	Replacement string
+	Location    string
 }
 
 // Defaults holds global default settings.
 type Defaults struct {
-	Sort            string              `toml:"sort"`
-	RefreshInterval int                 `toml:"refresh_interval"`
-	GuardDuration   int                 `toml:"guard_duration"`
-	IdleThreshold   int                 `toml:"idle_threshold"` // seconds before a session is considered idle; 0 → default (300)
-	Args            []string            `toml:"args"`         // preferred shared launch args
-	ClaudeFlags     []string            `toml:"claude_flags"` // legacy alias for args
-	Notifications   NotificationConfig  `toml:"notifications"`
-	Preview         PreviewConfig       `toml:"preview"`
+	Sort               string             `toml:"sort"`
+	RefreshInterval    int                `toml:"refresh_interval"`
+	GuardDuration      int                `toml:"guard_duration"`
+	IdleThreshold      int                `toml:"idle_threshold"` // seconds before a session is considered idle; 0 → default (300)
+	Args               []string           `toml:"args"`         // preferred shared launch args
+	ClaudeFlags        []string           `toml:"claude_flags"` // legacy alias for args
+	ConfirmDestructive bool               `toml:"confirm_destructive"` // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
+	Notifications      NotificationConfig `toml:"notifications"`
+	Preview            PreviewConfig      `toml:"preview"`
 }
 
 // NotificationConfig controls which macOS notifications fire.
