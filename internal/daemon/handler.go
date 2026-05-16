@@ -134,6 +134,18 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: true, Allowed: false}
 	}
 
+	// Block non-prompt active events from overwriting a terminal stop state.
+	// PostToolBatch can race with Stop in async execution; once the stop guard
+	// expires, lastAction is the only remaining barrier.
+	if effective == "active" && !req.IsPrompt {
+		h.stateMu.Lock()
+		prev := h.lastAction[req.WindowID]
+		h.stateMu.Unlock()
+		if prev == "stop" || prev == "stop_failure" {
+			return Response{OK: true, Allowed: false}
+		}
+	}
+
 	// Auto-approved permission: preToolUse fired before permissionRequest, so the
 	// tool is already running. The key icon should not override the active bolt —
 	// there is nothing for the user to approve.

@@ -105,6 +105,7 @@ func TestIsIgnoredEvent(t *testing.T) {
 	}{
 		{"InstructionsLoaded", HookPayload{}, true},
 		{"CwdChanged", HookPayload{}, true},
+		{"FileChanged", HookPayload{}, true},
 		{"Notification", HookPayload{NotificationType: "shell_completed"}, true},
 		{"Notification", HookPayload{NotificationType: "agent_idle"}, false},
 		{"Notification", HookPayload{}, false},

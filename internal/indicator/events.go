@@ -77,6 +77,9 @@ var eventToAction = map[string]string{
 var ignoredEvents = map[string]bool{
 	"InstructionsLoaded": true,
 	"CwdChanged":         true,
+	// FileChanged requires a per-hook matcher field; amx does not configure any
+	// matchers so Claude Code will never fire it, but recognize it defensively.
+	"FileChanged": true,
 }
 
 // validActions is the set of canonical action names accepted from CLI callers.
