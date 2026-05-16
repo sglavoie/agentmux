@@ -25,6 +25,12 @@ type Handler struct {
 	// auto-approval) from PostToolUse (prior tool completed).
 	lastActiveEvent map[int]string
 
+	// subagentCount tracks the number of active sub-agents per window.
+	// It is incremented on SubagentStart and decremented on SubagentStop.
+	// While the count is > 0, SubagentStop events are suppressed so the
+	// robot icon persists until all concurrent agents finish.
+	subagentCount map[int]int
+
 	// onActivity is called on every successfully handled request.
 	// The daemon uses this to reset the idle timer.
 	onActivity func()
@@ -41,6 +47,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		activity:        make(map[int]time.Time),
 		lastAction:      make(map[int]string),
 		lastActiveEvent: make(map[int]string),
+		subagentCount:   make(map[int]int),
 	}
 }
 
@@ -68,6 +75,45 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	}
 	if _, ok := actionPriority[req.Action]; !ok {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
+	}
+
+	// SubagentStart: increment reference count so the robot icon persists
+	// even when interleaved parent "active" events arrive.
+	if req.Action == "subagent" {
+		h.stateMu.Lock()
+		h.subagentCount[req.WindowID]++
+		h.stateMu.Unlock()
+	}
+
+	// SubagentStop: decrement counter; suppress "active" while other agents run.
+	if req.Event == "SubagentStop" || req.Event == "subagentStop" {
+		h.stateMu.Lock()
+		wasTracked := h.subagentCount[req.WindowID] > 0
+		if wasTracked {
+			h.subagentCount[req.WindowID]--
+		}
+		remaining := h.subagentCount[req.WindowID]
+		h.stateMu.Unlock()
+
+		if wasTracked && remaining > 0 {
+			// More agents still running — refresh the subagent guard (reset expiry)
+			// and suppress this "active" transition.
+			h.guard.TryUpdate(req.WindowID, "subagent", false)
+			return Response{OK: true, Allowed: false}
+		}
+		if wasTracked && remaining == 0 {
+			// Last agent finished — clear guard so the "active" below is allowed
+			// immediately rather than waiting for the guard TTL to expire.
+			h.guard.Clear(req.WindowID)
+		}
+	}
+
+	// Terminal / cleanup states reset the subagent counter.
+	if req.Action == "stop" || req.Action == "stop_failure" || req.Action == "failure" ||
+		req.Action == "idle" || req.Action == "clear" || req.Action == "user_clear" {
+		h.stateMu.Lock()
+		delete(h.subagentCount, req.WindowID)
+		h.stateMu.Unlock()
 	}
 
 	prevGuard := h.guard.Current(req.WindowID)
