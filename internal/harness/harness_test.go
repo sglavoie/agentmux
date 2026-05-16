@@ -3,6 +3,7 @@ package harness
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -71,7 +72,7 @@ func TestLookup(t *testing.T) {
 		{"Claude", "claude"},
 		{"copilot", "copilot"},
 		{"COPILOT", "copilot"},
-		{"", "claude"},      // unknown defaults to claude
+		{"", "claude"},        // unknown defaults to claude
 		{"unknown", "claude"}, // unknown defaults to claude
 	}
 	for _, tc := range cases {
@@ -145,11 +146,11 @@ func TestPipeModeFlags(t *testing.T) {
 
 type fakeHarness struct{ name string }
 
-func (f fakeHarness) Name() string             { return f.name }
-func (f fakeHarness) Executable() string       { return "fake" }
-func (f fakeHarness) ConfigEnvVar() string     { return "FAKE_DIR" }
-func (f fakeHarness) DefaultHomeDir() string   { return "/fake/home" }
-func (f fakeHarness) PipeModeFlags() []string  { return []string{"--fake"} }
+func (f fakeHarness) Name() string               { return f.name }
+func (f fakeHarness) Executable() string         { return "fake" }
+func (f fakeHarness) ConfigEnvVar() string       { return "FAKE_DIR" }
+func (f fakeHarness) DefaultHomeDir() string     { return "/fake/home" }
+func (f fakeHarness) PipeModeFlags() []string    { return []string{"--fake"} }
 func (f fakeHarness) HookContract() HookContract { return fakeHookContract{} }
 
 type fakeHookContract struct{}
@@ -178,5 +179,29 @@ func TestRegister(t *testing.T) {
 	}
 	if got.Executable() != "fake" {
 		t.Errorf("post-register: Executable() = %q, want %q", got.Executable(), "fake")
+	}
+}
+
+func TestClaudeHooksIncludeCompletionSignals(t *testing.T) {
+	hooks := buildClaudeHooks(nil, "amx")
+	for _, event := range []string{"Stop", "SessionEnd", "Notification", "TeammateIdle"} {
+		if !slices.Contains(claudeHookEvents, event) {
+			t.Fatalf("claudeHookEvents missing %q", event)
+		}
+		if _, ok := hooks[event]; !ok {
+			t.Fatalf("buildClaudeHooks missing %q", event)
+		}
+	}
+}
+
+func TestCopilotHooksIncludeCompletionSignals(t *testing.T) {
+	hooks := buildCopilotHooks(nil, "amx")
+	for _, event := range []string{"agentStop", "sessionEnd", "notification"} {
+		if !slices.Contains(copilotHookEvents, event) {
+			t.Fatalf("copilotHookEvents missing %q", event)
+		}
+		if _, ok := hooks.Hooks[event]; !ok {
+			t.Fatalf("buildCopilotHooks missing %q", event)
+		}
 	}
 }

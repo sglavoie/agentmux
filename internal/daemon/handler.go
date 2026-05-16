@@ -69,6 +69,37 @@ func (h *Handler) Handle(req Request) Response {
 	}
 }
 
+func (h *Handler) lastKnownAction(windowID int, currentIconState string) string {
+	h.stateMu.Lock()
+	last := h.lastAction[windowID]
+	h.stateMu.Unlock()
+	if last != "" {
+		return last
+	}
+	return actionFromIconState(currentIconState)
+}
+
+func actionFromIconState(iconState string) string {
+	switch iconState {
+	case "bolt":
+		return "active"
+	case "compact":
+		return "compact"
+	case "subagent":
+		return "subagent"
+	case "stop":
+		return "stop"
+	case "key":
+		return "permission"
+	case "error":
+		return "failure"
+	case "question":
+		return "elicitation"
+	default:
+		return ""
+	}
+}
+
 func (h *Handler) handleStateUpdate(req Request) Response {
 	if req.Action == "" {
 		return Response{OK: false, Error: "action is required for state_update"}
@@ -138,11 +169,10 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 
 	// Block non-prompt active events from overwriting a terminal stop state.
 	// PostToolBatch can race with Stop in async execution; once the stop guard
-	// expires, lastAction is the only remaining barrier.
+	// expires, lastAction is the main barrier, with the current title icon as a
+	// restart-safe fallback after daemon auto-starts or restarts.
 	if effective == "active" && !req.IsPrompt {
-		h.stateMu.Lock()
-		prev := h.lastAction[req.WindowID]
-		h.stateMu.Unlock()
+		prev := h.lastKnownAction(req.WindowID, req.CurrentIconState)
 		if prev == "stop" || prev == "stop_failure" {
 			return Response{OK: true, Allowed: false}
 		}
@@ -182,16 +212,15 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		iconState = IconStatePreserve
 	} else if effective == "idle" || effective == "clear" {
 		// Prefer prevGuard (still within the guard window); fall back to
-		// lastAction for the common case where the guard already expired but
-		// the bolt icon is still showing in the title.
+		// lastAction, then the currently displayed title icon, for the common case
+		// where the guard already expired or the daemon restarted while the bolt
+		// icon is still showing in the title.
 		prev := prevGuard
 		if prev == "" {
-			h.stateMu.Lock()
-			prev = h.lastAction[req.WindowID]
-			h.stateMu.Unlock()
+			prev = h.lastKnownAction(req.WindowID, req.CurrentIconState)
 		}
-		switch IconState(prev) {
-		case "bolt", "compact", "subagent":
+		switch prev {
+		case "active", "compact", "subagent":
 			// Agent finished — clear the active indicator and reset tracking.
 			iconState = ""
 			h.stateMu.Lock()

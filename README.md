@@ -205,7 +205,8 @@ just test
 - **Hooks are missing**: run `amx config hooks-status`, then
   `amx config hooks-sync`.
 - **The bolt icon stays after the agent is done**: run `amx config hooks-status`
-  and `amx config hooks-sync` to restore completion hooks. For Copilot, also
+  and `amx config hooks-sync` to restore completion hooks. Current releases also
+  recover across daemon restarts on the next cleanup event. For Copilot, also
   upgrade to version `1.0.45` or newer, because older releases had `agentStop`
   hook issues.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching

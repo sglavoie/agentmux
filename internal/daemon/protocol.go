@@ -15,23 +15,24 @@ const (
 // Request is a JSON message sent by a client to the daemon over the Unix socket.
 // One request per connection; the connection is closed after the response.
 type Request struct {
-	Type     MessageType `json:"type"`
-	WindowID int         `json:"window_id,omitempty"` // KITTY_WINDOW_ID
-	Action        string      `json:"action,omitempty"`         // active|stop|permission|failure|idle|clear
-	Event         string      `json:"event,omitempty"`          // raw Claude hook event name (e.g. UserPromptSubmit)
-	IsPrompt      bool        `json:"is_prompt,omitempty"`      // true if event is a user prompt submission
-	PreservesIcon bool        `json:"preserves_icon,omitempty"` // true if event should keep current icon
-	Account       string      `json:"account,omitempty"`       // profile name from amx_profile or cc_account
-	SessionTitle string      `json:"session_title,omitempty"` // tab base title (e.g. "W:api")
-	PipeMode     bool        `json:"pipe_mode,omitempty"`     // suppress notifications when claude -p
+	Type             MessageType `json:"type"`
+	WindowID         int         `json:"window_id,omitempty"`          // KITTY_WINDOW_ID
+	Action           string      `json:"action,omitempty"`             // active|stop|permission|failure|idle|clear
+	Event            string      `json:"event,omitempty"`              // raw Claude hook event name (e.g. UserPromptSubmit)
+	IsPrompt         bool        `json:"is_prompt,omitempty"`          // true if event is a user prompt submission
+	PreservesIcon    bool        `json:"preserves_icon,omitempty"`     // true if event should keep current icon
+	Account          string      `json:"account,omitempty"`            // profile name from amx_profile or cc_account
+	SessionTitle     string      `json:"session_title,omitempty"`      // tab base title (e.g. "W:api")
+	PipeMode         bool        `json:"pipe_mode,omitempty"`          // suppress notifications when claude -p
+	CurrentIconState string      `json:"current_icon_state,omitempty"` // icon currently shown in the tab title
 }
 
 // Response is a JSON message sent by the daemon back to the client.
 type Response struct {
-	OK        bool   `json:"ok"`
-	Error     string `json:"error,omitempty"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
 	// Fields populated for TypeStateUpdate:
-	Allowed   bool   `json:"allowed,omitempty"`   // whether guard permitted the transition
+	Allowed   bool   `json:"allowed,omitempty"`    // whether guard permitted the transition
 	IconState string `json:"icon_state,omitempty"` // icon name to show ("bolt","stop","key","error","")
 	// Fields populated for TypeStateQuery:
 	Activity map[int]int64 `json:"activity,omitempty"` // window_id → unix seconds of last activity

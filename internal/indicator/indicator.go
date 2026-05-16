@@ -52,13 +52,15 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 	var tab *kitty.Tab
 	var win *kitty.Window
 	var sessionTitle string
+	var currentIconState string
 	if err == nil {
 		t, w, found := kitty.FindTabByWindowID(windows, windowID)
 		if found {
 			tab = t
 			win = w
-			base, _, _ := palette.ParseTitle(tab.Title)
+			base, state, _ := palette.ParseTitle(tab.Title)
 			sessionTitle = base
+			currentIconState = state
 		}
 	} else {
 		slog.Debug("indicator: kitty lookup failed", "err", err)
@@ -85,15 +87,16 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 
 	dc := daemon.NewClient()
 	resp, err := dc.SendWithAutoStart(daemon.Request{
-		Type:          daemon.TypeStateUpdate,
-		WindowID:      windowID,
-		Action:        action,
-		Event:         eventOrAction,
-		IsPrompt:      IsPromptEvent(eventOrAction),
-		PreservesIcon: PreservesCurrent(eventOrAction),
-		PipeMode:      pipeMode,
-		SessionTitle:  sessionTitle,
-		Account:       profile,
+		Type:             daemon.TypeStateUpdate,
+		WindowID:         windowID,
+		Action:           action,
+		Event:            eventOrAction,
+		IsPrompt:         IsPromptEvent(eventOrAction),
+		PreservesIcon:    PreservesCurrent(eventOrAction),
+		PipeMode:         pipeMode,
+		SessionTitle:     sessionTitle,
+		Account:          profile,
+		CurrentIconState: currentIconState,
 	}, amxBin)
 	if err != nil {
 		log.Debug("indicator: daemon unavailable, updating title without guard", "err", err)

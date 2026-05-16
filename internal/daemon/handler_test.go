@@ -127,6 +127,38 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 	}
 }
 
+func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {
+	cases := []struct {
+		name     string
+		cleanup  string
+		current  string
+		wantIcon string
+	}{
+		{"idle clears stale bolt", "idle", "bolt", ""},
+		{"idle clears stale compact", "idle", "compact", ""},
+		{"idle clears stale subagent", "idle", "subagent", ""},
+		{"clear clears stale bolt", "clear", "bolt", ""},
+		{"clear preserves stop icon", "clear", "stop", IconStatePreserve},
+		{"idle preserves permission icon", "idle", "key", IconStatePreserve},
+		{"idle preserves error icon", "idle", "error", IconStatePreserve},
+		{"idle preserves elicitation icon", "idle", "question", IconStatePreserve},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHandler()
+			resp := h.Handle(Request{
+				Type:             TypeStateUpdate,
+				WindowID:         1,
+				Action:           tc.cleanup,
+				CurrentIconState: tc.current,
+			})
+			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
+				t.Fatalf("want icon_state=%q, got %+v", tc.wantIcon, resp)
+			}
+		})
+	}
+}
+
 // TestHandler_AutoApprovedPermission verifies that when permissionRequest fires
 // while an active guard is still live and it was set by PreToolUse (the
 // auto-approved pattern), the key icon does NOT override the bolt, and a
@@ -412,6 +444,31 @@ func TestHandler_ActiveBlockedAfterStopGuardExpiry(t *testing.T) {
 	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("prompt active after expired stop guard: want icon_state=bolt, got %+v", resp)
+	}
+}
+
+func TestHandler_ActiveBlockedByCurrentStopIconAfterDaemonRestart(t *testing.T) {
+	h := newTestHandler()
+
+	resp := h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "active",
+		CurrentIconState: "stop",
+	})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("non-prompt active with current stop icon: want allowed=false, got %+v", resp)
+	}
+
+	resp = h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "active",
+		IsPrompt:         true,
+		CurrentIconState: "stop",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+		t.Fatalf("prompt active with current stop icon: want icon_state=bolt, got %+v", resp)
 	}
 }
 
