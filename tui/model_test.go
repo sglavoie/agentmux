@@ -754,10 +754,10 @@ func TestXKeyDirectClose(t *testing.T) {
 	if m.confirmAction != "close" {
 		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
 	}
-	// Empty-state sessions with no activity record bucket as Active, so the
-	// stable sort preserves the input order: W:api, W:backend, P:dotfiles.
-	if m.targetSession.Base != "W:api" {
-		t.Fatalf("expected actionTarget=W:api, got %q", m.targetSession.Base)
+	// Bolt sessions sort before empty-state sessions within Active, so W:backend
+	// (bolt) is first, then W:api, P:dotfiles.
+	if m.targetSession.Base != "W:backend" {
+		t.Fatalf("expected actionTarget=W:backend, got %q", m.targetSession.Base)
 	}
 }
 
@@ -771,9 +771,9 @@ func TestRKeyDirectRestart(t *testing.T) {
 	if m.confirmAction != "restart" {
 		t.Fatalf("expected confirmAction=restart, got %q", m.confirmAction)
 	}
-	// Order after sort: W:api, W:backend, P:dotfiles → j moves cursor to 1.
-	if m.targetSession.Base != "W:backend" {
-		t.Fatalf("expected actionTarget=W:backend, got %q", m.targetSession.Base)
+	// Order after sort: W:backend (bolt), W:api, P:dotfiles → j moves cursor to 1.
+	if m.targetSession.Base != "W:api" {
+		t.Fatalf("expected actionTarget=W:api, got %q", m.targetSession.Base)
 	}
 }
 
@@ -827,10 +827,9 @@ func TestStateGroupSorting(t *testing.T) {
 	}
 	m = loadSessions(m, sessions)
 
-	// Attention (key, stop) comes first; then Active — including empty-state
-	// sessions with no activity record (per the no-record→Active design);
-	// then Idle (the unknown "error" state).
-	expected := []string{"attention1", "attention2", "idle1", "active1", "idle2"}
+	// Attention (key, stop) comes first; then Active with icon (bolt, error)
+	// before empty-state Active sessions (per the no-record→Active design).
+	expected := []string{"attention1", "attention2", "active1", "idle2", "idle1"}
 	if len(m.filtered) != len(expected) {
 		t.Fatalf("expected %d filtered sessions, got %d", len(expected), len(m.filtered))
 	}

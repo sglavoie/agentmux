@@ -1298,7 +1298,18 @@ func (m Model) sortFiltered() {
 	sort.SliceStable(m.filtered, func(i, j int) bool {
 		gi := stateGroup(m.filtered[i], m.lastActivity, m.idleThreshold)
 		gj := stateGroup(m.filtered[j], m.lastActivity, m.idleThreshold)
-		return gi < gj
+		if gi != gj {
+			return gi < gj
+		}
+		// Within Active (group 1), sessions with an explicit state icon sort before those without.
+		if gi == 1 {
+			si := m.filtered[i].State != ""
+			sj := m.filtered[j].State != ""
+			if si != sj {
+				return si
+			}
+		}
+		return false
 	})
 }
 

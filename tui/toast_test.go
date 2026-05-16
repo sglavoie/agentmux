@@ -227,20 +227,20 @@ func TestRestoreCursorEmptyListReturnsZero(t *testing.T) {
 
 func TestSessionsMsgRestoresCursorByBase(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Move cursor to W:backend.
+	// With bolt-first ordering, W:backend (bolt) is at index 0; j moves to W:api.
 	m = pressKey(m, "j")
 	priorBase := m.filtered[m.cursor].Base
-	if priorBase != "W:backend" {
-		t.Fatalf("setup expected W:backend at cursor, got %q", priorBase)
+	if priorBase != "W:api" {
+		t.Fatalf("setup expected W:api at cursor, got %q", priorBase)
 	}
-	// Reorder list (remove W:api so cursor index would shift if not restored).
+	// Reorder list (remove W:backend so cursor index would shift if not restored).
 	newSessions := []session.RunningSession{
-		{TabID: 2, Base: "W:backend", Account: "work", Directory: "/x", State: "bolt"},
+		{TabID: 1, Base: "W:api", Account: "work", Directory: "/x", State: ""},
 		{TabID: 3, Base: "P:dotfiles", Account: "personal", Directory: "/y", State: ""},
 	}
 	m = loadSessions(m, newSessions)
-	if m.filtered[m.cursor].Base != "W:backend" {
-		t.Errorf("expected cursor restored to W:backend, got %q", m.filtered[m.cursor].Base)
+	if m.filtered[m.cursor].Base != "W:api" {
+		t.Errorf("expected cursor restored to W:api, got %q", m.filtered[m.cursor].Base)
 	}
 }
 
