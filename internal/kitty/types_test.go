@@ -97,6 +97,31 @@ func TestIsDashboardCmdline(t *testing.T) {
 	}
 }
 
+func TestIsKeybindingsCmdline(t *testing.T) {
+	tests := []struct {
+		name    string
+		cmdline []string
+		want    bool
+	}{
+		{"bare amx keybindings", []string{"amx", "keybindings"}, true},
+		{"full path", []string{"/usr/local/bin/amx", "keybindings"}, true},
+		{"bare amx", []string{"amx"}, false},
+		{"different subcommand", []string{"amx", "daemon"}, false},
+		{"empty", []string{}, false},
+		{"nil", nil, false},
+		{"different binary", []string{"claude", "keybindings"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isKeybindingsCmdline(tt.cmdline)
+			if got != tt.want {
+				t.Errorf("isKeybindingsCmdline(%v) = %v, want %v", tt.cmdline, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUserVars_EffectiveHarness(t *testing.T) {
 	tests := []struct {
 		name    string

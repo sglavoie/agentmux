@@ -76,6 +76,7 @@
       {
         "id": 40,
         "is_active": false,
+        "needs_attention": true,
         "title": "shell",
         "windows": [
           {

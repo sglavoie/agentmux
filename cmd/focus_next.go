@@ -15,7 +15,8 @@ var focusNextCmd = &cobra.Command{
 	Use:   "focus-next",
 	Short: "Focus the next tab requiring attention",
 	Long: `Cycles focus to the next Kitty tab whose state requires user interaction
-(stop, permission, error, or elicitation). Wraps around from the end.
+(stop, permission, error, or elicitation) or that has a Kitty bell notification (🔔).
+Wraps around from the end.
 
 KITTY_WINDOW_ID must be set (provided automatically by harness hooks),
 or supply --window-id explicitly.`,
@@ -85,7 +86,7 @@ func runFocusNext(_ *cobra.Command, _ []string) error {
 		if idx == currentTabIdx {
 			continue
 		}
-		if attentionStates[palette.DetectState(tabs[idx].Title)] {
+		if attentionStates[palette.DetectState(tabs[idx].Title)] || tabs[idx].NeedsAttention {
 			return client.FocusTab(kitty.MatchTabByID(tabs[idx].ID))
 		}
 	}

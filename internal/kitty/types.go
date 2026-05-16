@@ -19,10 +19,11 @@ type OSWindow struct {
 
 // Tab is a Kitty tab.
 type Tab struct {
-	ID       int      `json:"id"`
-	IsActive bool     `json:"is_active"`
-	Title    string   `json:"title"`
-	Windows  []Window `json:"windows"`
+	ID             int      `json:"id"`
+	IsActive       bool     `json:"is_active"`
+	NeedsAttention bool     `json:"needs_attention"`
+	Title          string   `json:"title"`
+	Windows        []Window `json:"windows"`
 }
 
 // Window is a Kitty window (pane) within a tab.
@@ -102,6 +103,36 @@ func isDashboardCmdline(cmdline []string) bool {
 		}
 	}
 	return true
+}
+
+// FindKeybindingsWindow scans all OS windows for a window whose foreground
+// process is amx keybindings. excludeWindowID is skipped to avoid
+// self-detection (pass the current KITTY_WINDOW_ID).
+func FindKeybindingsWindow(osWindows []OSWindow, excludeWindowID int) (*DashboardLocation, bool) {
+	for i := range osWindows {
+		for j := range osWindows[i].Tabs {
+			tab := &osWindows[i].Tabs[j]
+			for k := range tab.Windows {
+				w := &tab.Windows[k]
+				if w.ID == excludeWindowID {
+					continue
+				}
+				for _, fp := range w.ForegroundProcesses {
+					if isKeybindingsCmdline(fp.Cmdline) {
+						return &DashboardLocation{TabID: tab.ID, WindowID: w.ID}, true
+					}
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+func isKeybindingsCmdline(cmdline []string) bool {
+	if len(cmdline) < 2 {
+		return false
+	}
+	return filepath.Base(cmdline[0]) == "amx" && cmdline[1] == "keybindings"
 }
 
 // UserVars holds Agent Mux user variables stored on a Kitty window.

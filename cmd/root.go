@@ -103,5 +103,5 @@ func configureLogging(enabled bool) {
 func init() {
 	rootCmd.Version = version
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug output")
-	rootCmd.AddCommand(configCmd, daemonCmd, hookIndicatorCmd)
+	rootCmd.AddCommand(configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd)
 }
