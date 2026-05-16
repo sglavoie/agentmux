@@ -48,11 +48,11 @@ permission = true
 # Notify when a session stops or exits.
 stop = true
 
-# Delay permission notifications by this many milliseconds.
-# The notification is cancelled if the harness auto-approves the request before
-# the window expires (e.g. when a PreToolUse hook grants permission silently).
+# Delay permission notifications by this many milliseconds. The window
+# coalesces rapid duplicate hooks; the notification is only cancelled when the
+# session reaches a terminal/idle state before the window expires.
 # Set to 1 to disable the debounce and notify immediately.
-permission_debounce_ms = 3000
+permission_debounce_ms = 500
 
 
 # ── Profiles ──────────────────────────────────────────────────────────────────

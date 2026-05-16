@@ -329,6 +329,26 @@ func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 	}
 }
 
+func TestNotifier_StopCooldownDoesNotSuppressPermission(t *testing.T) {
+	// The cooldown is per-(window, action). A recent stop notification must
+	// not silently suppress a subsequent permission notification.
+	cfg := &config.NotificationConfig{Permission: true, Stop: true, PermissionDebounceMs: 50}
+	n, calls := newTestNotifier(cfg)
+
+	n.MaybeNotify(1, "W:api", "stop", false)
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected stop notification to fire")
+	}
+
+	n.MaybeNotify(1, "W:api", "permission", false)
+	if !waitCalls(calls, 2, time.Second) {
+		t.Fatal("expected permission notification to fire despite recent stop")
+	}
+	if (*calls)[1].subtitle != "Permission requested" {
+		t.Fatalf("second call subtitle = %q, want %q", (*calls)[1].subtitle, "Permission requested")
+	}
+}
+
 func TestNotifier_EmptySessionTitleFallback(t *testing.T) {
 	cfg := &config.NotificationConfig{Stop: true}
 	n, calls := newTestNotifier(cfg)

@@ -43,7 +43,7 @@ func StateGloss(state string) string {
 // as chips below the header via renderChips, so this line only carries the
 // title plus any error indicators (kitty / action) and the preview hint.
 func renderHeader(m Model) string {
-	title := styleHeader.Render("amx Dashboard")
+	title := styleHeader.Render("Agent Mux")
 	info := ""
 	if m.err != nil {
 		info += "  " + styleError.Render("kitty: "+m.err.Error())

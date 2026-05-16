@@ -35,11 +35,19 @@ type pendingNotification struct {
 	seq   uint64
 }
 
+// notifyKey scopes the cooldown to a single (window, action) pair so a
+// recent stop/failure notification cannot silently suppress a subsequent
+// permission notification (and vice versa).
+type notifyKey struct {
+	windowID int
+	action   string
+}
+
 // Notifier tracks per-window cooldowns and fires macOS notifications via
 // the selected backend (alerter when installed, osascript otherwise).
 type Notifier struct {
 	mu             sync.Mutex
-	last           map[int]time.Time // last dispatched notification time per window_id
+	last           map[notifyKey]time.Time // last dispatched notification time per (window_id, action)
 	pending        map[int]pendingNotification
 	nextPendingSeq uint64
 	debounce       time.Duration
@@ -51,7 +59,7 @@ type Notifier struct {
 // NewNotifier creates a Notifier with the given notification config.
 func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 	return &Notifier{
-		last:     make(map[int]time.Time),
+		last:     make(map[notifyKey]time.Time),
 		pending:  make(map[int]pendingNotification),
 		debounce: time.Duration(cfg.PermissionDebounceMs) * time.Millisecond,
 		cfg:      cfg,
@@ -106,19 +114,20 @@ func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMo
 		n.cancelPendingLocked(windowID)
 	}
 
+	key := notifyKey{windowID: windowID, action: action}
 	now := n.now()
 	if action == "permission" && n.debounce > 0 {
-		if last, ok := n.last[windowID]; ok && now.Sub(last) < cooldownDuration {
+		if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
 			return
 		}
 		n.schedulePermissionLocked(windowID, title, subtitle)
 		return
 	}
 
-	if last, ok := n.last[windowID]; ok && now.Sub(last) < cooldownDuration {
+	if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
 		return
 	}
-	n.last[windowID] = now
+	n.last[key] = now
 	go func() {
 		if err := n.dispatch(title, subtitle); err != nil {
 			slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
@@ -140,12 +149,13 @@ func (n *Notifier) schedulePermissionLocked(windowID int, title, subtitle string
 		}
 		delete(n.pending, windowID)
 
+		key := notifyKey{windowID: windowID, action: "permission"}
 		now := n.now()
-		if last, ok := n.last[windowID]; ok && now.Sub(last) < cooldownDuration {
+		if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
 			n.mu.Unlock()
 			return
 		}
-		n.last[windowID] = now
+		n.last[key] = now
 		n.mu.Unlock()
 
 		if err := n.dispatch(title, subtitle); err != nil {
@@ -201,9 +211,13 @@ func runAlerter(title, subtitle string) error {
 	return exec.Command("alerter", alerterArgs(title, subtitle)...).Run()
 }
 
-// ResetCooldown clears the cooldown for windowID (for testing).
+// ResetCooldown clears all per-action cooldowns for windowID (for testing).
 func (n *Notifier) ResetCooldown(windowID int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	delete(n.last, windowID)
+	for k := range n.last {
+		if k.windowID == windowID {
+			delete(n.last, k)
+		}
+	}
 }

@@ -77,9 +77,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
 	}
 
-	// Any non-permission follow-up event makes a pending permission
-	// notification stale, even if the state guard later blocks the transition.
-	if req.Action != "permission" {
+	// Only terminal/idle transitions invalidate a pending permission notification.
+	// PostToolUse/active/subagent events are normal companions to a real
+	// permission_prompt and must not cancel the notification.
+	switch req.Action {
+	case "idle", "clear", "user_clear", "stop", "stop_failure":
 		h.notifier.CancelPending(req.WindowID)
 	}
 

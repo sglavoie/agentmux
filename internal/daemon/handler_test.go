@@ -327,11 +327,13 @@ func TestHandler_Shutdown(t *testing.T) {
 	}
 }
 
-func TestHandler_AutoApprovedPermissionNoNotification(t *testing.T) {
-	// Auto-approval sequence: permission → active. The pending permission
-	// notification should be cancelled before it fires.
+func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
+	// Claude Code's real prompt sequence is PreToolUse → Notification
+	// permission_prompt → (user approves) → PostToolUse. The PostToolUse
+	// arrives as action="active" and must not cancel the pending notification;
+	// otherwise the user never sees it.
 	guard := NewStateGuard(time.Hour)
-	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 	notifier := NewNotifier(cfg)
 	var calls []string
 	notifier.dispatch = func(_, subtitle string) error {
@@ -340,45 +342,20 @@ func TestHandler_AutoApprovedPermissionNoNotification(t *testing.T) {
 	}
 	h := NewHandler(guard, notifier)
 
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	// Simulate auto-approval arriving within the debounce window.
 	time.Sleep(20 * time.Millisecond)
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
-
-	time.Sleep(300 * time.Millisecond) // wait past the debounce window
-	if len(calls) > 0 {
-		t.Fatalf("expected no permission notification for auto-approved permission, got %v", calls)
-	}
-}
-
-func TestHandler_PermissionFollowUpCancelsPendingAfterGuardExpiry(t *testing.T) {
-	guard := NewStateGuard(time.Nanosecond)
-	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
-	notifier := NewNotifier(cfg)
-	var calls []string
-	notifier.dispatch = func(_, subtitle string) error {
-		calls = append(calls, subtitle)
-		return nil
-	}
-	h := NewHandler(guard, notifier)
-
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	time.Sleep(5 * time.Millisecond) // let the permission guard expire
-
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
-	if !resp.OK || !resp.Allowed {
-		t.Fatalf("expected follow-up active to be allowed, got %+v", resp)
-	}
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 
 	time.Sleep(150 * time.Millisecond)
-	if len(calls) > 0 {
-		t.Fatalf("expected expired-guard follow-up to cancel pending permission, got %v", calls)
+	if len(calls) != 1 || calls[0] != "Permission requested" {
+		t.Fatalf("expected permission notification to fire despite active follow-up, got %v", calls)
 	}
 }
 
-func TestHandler_BlockedFollowUpCancelsPendingPermission(t *testing.T) {
+func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 	guard := NewStateGuard(time.Hour)
-	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
+	cfg := &config.NotificationConfig{Permission: true, Stop: true, PermissionDebounceMs: 100}
 	notifier := NewNotifier(cfg)
 	var calls []string
 	notifier.dispatch = func(_, subtitle string) error {
@@ -388,14 +365,14 @@ func TestHandler_BlockedFollowUpCancelsPendingPermission(t *testing.T) {
 	h := NewHandler(guard, notifier)
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "compact"})
-	if !resp.OK || resp.Allowed {
-		t.Fatalf("expected compact follow-up to be blocked by permission guard, got %+v", resp)
-	}
+	time.Sleep(20 * time.Millisecond)
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
 
 	time.Sleep(150 * time.Millisecond)
-	if len(calls) > 0 {
-		t.Fatalf("expected blocked follow-up to cancel pending permission, got %v", calls)
+	for _, c := range calls {
+		if c == "Permission requested" {
+			t.Fatalf("expected stop to cancel pending permission, got %v", calls)
+		}
 	}
 }
 
