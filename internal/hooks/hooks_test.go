@@ -56,9 +56,9 @@ func TestMergeFreshWrite(t *testing.T) {
 		t.Fatal("hooks key missing or wrong type")
 	}
 
-	// Should have entries for all 18 events.
-	if got := len(hooks); got != 18 {
-		t.Errorf("expected 18 hook events, got %d", got)
+	// Should have entries for all installed Claude icon-relevant events.
+	if got := len(hooks); got != 26 {
+		t.Errorf("expected 26 hook events, got %d", got)
 	}
 
 	// Verify UserPromptSubmit uses event-name format.
@@ -88,7 +88,15 @@ func TestMergeInstallsNewEvents(t *testing.T) {
 	hooks := s["hooks"].(map[string]any)
 
 	for _, event := range []string{
+		"Setup",
+		"UserPromptExpansion",
+		"PostToolBatch",
 		"StopFailure",
+		"TaskCreated",
+		"TeammateIdle",
+		"ConfigChange",
+		"WorktreeCreate",
+		"WorktreeRemove",
 		"PreCompact",
 		"PostCompact",
 		"PermissionDenied",
@@ -125,7 +133,20 @@ func TestMergeDisabledNewEvent(t *testing.T) {
 		t.Error("StopFailure should be absent (disabled)")
 	}
 	// Sibling new events remain installed.
-	for _, event := range []string{"PreCompact", "PostCompact", "PermissionDenied", "Elicitation", "ElicitationResult"} {
+	for _, event := range []string{
+		"Setup",
+		"PostToolBatch",
+		"TaskCreated",
+		"TeammateIdle",
+		"ConfigChange",
+		"WorktreeCreate",
+		"WorktreeRemove",
+		"PreCompact",
+		"PostCompact",
+		"PermissionDenied",
+		"Elicitation",
+		"ElicitationResult",
+	} {
 		if _, ok := hooks[event]; !ok {
 			t.Errorf("%s should still be present when only StopFailure is disabled", event)
 		}
@@ -186,6 +207,54 @@ func TestMergePreservesUserHooks(t *testing.T) {
 	entry0 := inner0[0].(map[string]any)
 	if entry0["command"] != "my-custom-script" {
 		t.Errorf("user hook not preserved: %v", entry0["command"])
+	}
+}
+
+func TestMergePreservesUserMatcher(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	existing := map[string]any{
+		"hooks": map[string]any{
+			"Notification": []any{
+				map[string]any{
+					"matcher": "permission_prompt",
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": "my-notification-hook",
+							"async":   false,
+						},
+					},
+				},
+			},
+		},
+	}
+	writeJSON(t, filepath.Join(accountDir, "settings.json"), existing)
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll error: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(accountDir, "settings.json"))
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+
+	notifs := s["hooks"].(map[string]any)["Notification"].([]any)
+	if len(notifs) != 2 {
+		t.Fatalf("expected 2 hook groups for Notification, got %d", len(notifs))
+	}
+	if matcher := notifs[0].(map[string]any)["matcher"]; matcher != "permission_prompt" {
+		t.Fatalf("expected matcher permission_prompt to be preserved, got %v", matcher)
 	}
 }
 

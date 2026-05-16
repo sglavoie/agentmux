@@ -18,7 +18,19 @@ import (
 //   - windowID: 0 means read from $KITTY_WINDOW_ID
 //   - amxBin: absolute path to the amx binary, used for daemon auto-start
 func Run(eventOrAction string, windowID int, amxBin string) error {
-	action, ok := ResolveAction(eventOrAction)
+	payload, payloadErr := ReadHookPayload(os.Stdin)
+	if payloadErr != nil {
+		slog.Warn("indicator: ignoring unreadable hook payload", "event", eventOrAction, "err", payloadErr)
+	}
+	if IsIgnoredEvent(eventOrAction, payload) {
+		slog.Debug("indicator: event intentionally ignored",
+			"event", eventOrAction,
+			"notification_type", payload.EffectiveNotificationType(),
+		)
+		return nil
+	}
+
+	action, ok := ResolveAction(eventOrAction, payload)
 	if !ok {
 		slog.Debug("indicator: unknown event/action, ignoring", "input", eventOrAction)
 		return nil
@@ -63,6 +75,10 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		"harness", harness,
 		"event", eventOrAction,
 		"action", action,
+		"notification_type", payload.EffectiveNotificationType(),
+		"stop_reason", payload.EffectiveStopReason(),
+		"notification_title", payload.Title,
+		"notification_message", payload.Message,
 		"pipe_mode", pipeMode,
 	)
 	log.Debug("indicator")

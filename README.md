@@ -204,6 +204,10 @@ just test
   at `~/.config/agent-mux/config.toml`.
 - **Hooks are missing**: run `amx config hooks-status`, then
   `amx config hooks-sync`.
+- **The bolt icon stays after the agent is done**: run `amx config hooks-status`
+  and `amx config hooks-sync` to restore completion hooks. For Copilot, also
+  upgrade to version `1.0.45` or newer, because older releases had `agentStop`
+  hook issues.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

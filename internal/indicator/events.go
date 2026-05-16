@@ -2,31 +2,32 @@
 // state resolution, title updates, and daemon communication.
 package indicator
 
-// eventToAction is a shared map covering both Claude (PascalCase) and Copilot
-// (camelCase) hook event names. The two harnesses use disjoint name spaces
-// by convention (Claude uses PascalCase; Copilot uses camelCase), so there is
-// no collision risk with the current harness set. If a future harness reuses a
-// name with a different semantic, the map must be split into per-harness maps
-// and resolved after determining the harness from the window's amx_harness var.
-//
-// Unknown events are silently ignored (return "").
+// eventToAction is a shared map covering Claude (PascalCase) and Copilot
+// (camelCase) hook event names that directly map to a visible tab-state change.
+// Notification hooks are resolved separately because their payload subtype is
+// needed to decide whether they mean "permission", "elicitation", "stop", or
+// "ignore".
 var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.
 	"sessionStart": "idle",
 	"SessionStart": "idle",
 
 	// Active: the harness is processing.
+	"Setup":               "active",
 	"userPromptSubmitted": "active",
-	"UserPromptSubmit":   "active",
-	"preToolUse":         "active",
-	"PreToolUse":         "active",
-	"postToolUse":        "active",
-	"PostToolUse":        "active",
-	"subagentStop":       "active",
-	"SubagentStop":       "active",
-	"TaskCompleted":      "active",
-	"PostCompact":        "stop",
-	"ElicitationResult":  "active",
+	"UserPromptSubmit":    "active",
+	"UserPromptExpansion": "active",
+	"preToolUse":          "active",
+	"PreToolUse":          "active",
+	"postToolUse":         "active",
+	"PostToolUse":         "active",
+	"PostToolBatch":       "active",
+	"subagentStop":        "active",
+	"SubagentStop":        "active",
+	"TaskCreated":         "active",
+	"TaskCompleted":       "active",
+	"PostCompact":         "stop",
+	"ElicitationResult":   "active",
 
 	// Subagent: subagent is running.
 	"subagentStart": "subagent",
@@ -37,8 +38,8 @@ var eventToAction = map[string]string{
 	"PreCompact": "compact",
 
 	// Stop: session/subagent completed.
-	"agentStop":   "stop",
-	"sessionEnd":  "stop",
+	"agentStop":  "stop",
+	"sessionEnd": "stop",
 	"Stop":       "stop",
 	"SessionEnd": "stop",
 
@@ -57,15 +58,25 @@ var eventToAction = map[string]string{
 	"errorOccurred":      "failure",
 	"ErrorOccurred":      "failure",
 
-	// Idle: the harness wants to notify (task done, waiting for user).
+	// Idle fallback: generic notifications without a typed payload still clear
+	// the bolt. Typed notifications are resolved in resolveNotificationAction.
 	"notification": "idle",
 	"Notification": "idle",
-	"TeammateIdle": "idle",
+	"TeammateIdle": "stop",
 
 	// Clear: state reset.
 	"ConfigChange":   "clear",
 	"WorktreeCreate": "clear",
 	"WorktreeRemove": "clear",
+}
+
+// ignoredEvents are known hook events that Agent Mux currently does not map to
+// tab-state changes. They are intentionally ignored rather than treated as
+// unknown so new Claude releases do not produce misleading debug logs when
+// these hooks are installed for other purposes.
+var ignoredEvents = map[string]bool{
+	"InstructionsLoaded": true,
+	"CwdChanged":         true,
 }
 
 // validActions is the set of canonical action names accepted from CLI callers.
@@ -80,16 +91,60 @@ var validActions = map[string]bool{
 
 // ResolveAction maps an event name or action name to a canonical action.
 // If input is already a valid action name, it is returned as-is.
-// If input is a known event name, it is mapped to an action.
+// If input is a known event name, it is mapped to an action, using hook payload
+// when needed (e.g. typed Notification hooks).
 // Unknown inputs return ("", false).
-func ResolveAction(input string) (action string, ok bool) {
+func ResolveAction(input string, payload HookPayload) (action string, ok bool) {
 	if validActions[input] {
 		return input, true
+	}
+	if IsIgnoredEvent(input, payload) {
+		return "", false
+	}
+	if action, ok := resolveNotificationAction(input, payload); ok {
+		return action, true
 	}
 	if a, found := eventToAction[input]; found {
 		return a, true
 	}
 	return "", false
+}
+
+// IsIgnoredEvent reports whether an event is recognized but intentionally has no
+// tab-icon effect.
+func IsIgnoredEvent(input string, payload HookPayload) bool {
+	if ignoredEvents[input] {
+		return true
+	}
+	if !isNotificationEvent(input) {
+		return false
+	}
+	switch payload.EffectiveNotificationType() {
+	case "shell_completed", "shell_detached_completed", "agent_completed":
+		return true
+	default:
+		return false
+	}
+}
+
+func resolveNotificationAction(input string, payload HookPayload) (string, bool) {
+	if !isNotificationEvent(input) {
+		return "", false
+	}
+	switch payload.EffectiveNotificationType() {
+	case "permission_prompt":
+		return "permission", true
+	case "elicitation_dialog":
+		return "elicitation", true
+	case "agent_idle":
+		return "stop", true
+	default:
+		return "", false
+	}
+}
+
+func isNotificationEvent(input string) bool {
+	return input == "notification" || input == "Notification"
 }
 
 // PreservesCurrent reports whether event represents a sub-unit completing
@@ -102,5 +157,7 @@ func PreservesCurrent(event string) bool {
 // IsPromptEvent reports whether event is a direct user prompt submission,
 // which should break through stop-guards regardless of the guard window.
 func IsPromptEvent(event string) bool {
-	return event == "UserPromptSubmit" || event == "userPromptSubmitted"
+	return event == "UserPromptSubmit" ||
+		event == "userPromptSubmitted" ||
+		event == "UserPromptExpansion"
 }

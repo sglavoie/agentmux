@@ -17,25 +17,34 @@ type hookEntry struct {
 
 // hookGroup is a matcher group with one or more hook entries.
 type hookGroup struct {
-	Hooks []hookEntry `json:"hooks"`
+	Matcher string      `json:"matcher,omitempty"`
+	Hooks   []hookEntry `json:"hooks"`
 }
 
 // claudeHookEvents lists the Claude Code events Agent Mux installs hooks for.
 var claudeHookEvents = []string{
 	"SessionStart",
+	"Setup",
 	"UserPromptSubmit",
+	"UserPromptExpansion",
 	"PreToolUse",
 	"SubagentStart",
 	"SubagentStop",
 	"PostToolUse",
 	"PostToolUseFailure",
+	"PostToolBatch",
 	"PermissionRequest",
 	"PermissionDenied",
 	"Stop",
 	"StopFailure",
+	"TaskCreated",
 	"TaskCompleted",
+	"TeammateIdle",
 	"SessionEnd",
 	"Notification",
+	"ConfigChange",
+	"WorktreeCreate",
+	"WorktreeRemove",
 	"PreCompact",
 	"PostCompact",
 	"Elicitation",

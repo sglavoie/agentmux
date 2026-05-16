@@ -175,7 +175,7 @@ Socket discovery uses `KITTY_LISTEN_ON` environment variable only. Kitty must be
 
 Debug logging uses `slog` and is enabled with `--debug` flag or `amx_DEBUG=1`.
 
-Hook events installed by `amx config hooks-sync`: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `Stop`, `TaskCompleted`, `SessionEnd`, `Notification`. Each hook entry calls `amx hook-indicator <EVENT>`.
+Hook events installed by `amx config hooks-sync`: `SessionStart`, `Setup`, `UserPromptSubmit`, `UserPromptExpansion`, `PreToolUse`, `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch`, `PermissionRequest`, `PermissionDenied`, `Stop`, `StopFailure`, `TaskCreated`, `TaskCompleted`, `TeammateIdle`, `SessionEnd`, `Notification`, `ConfigChange`, `WorktreeCreate`, `WorktreeRemove`, `PreCompact`, `PostCompact`, `Elicitation`, `ElicitationResult`. Each hook entry calls `amx hook-indicator <EVENT>`.
 
 Version is tracked as a constant in `cmd/root.go`; update with `just bump VERSION`.
 

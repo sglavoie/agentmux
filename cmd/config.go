@@ -5,10 +5,10 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/spf13/cobra"
 	"github.com/sglavoie/agentmux/internal/config"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/hooks"
+	"github.com/spf13/cobra"
 )
 
 var configCmd = &cobra.Command{
@@ -151,8 +151,16 @@ var configHooksStatusCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("%-20s %-10s %-10s %s\n", "ACCOUNT", "HARNESS", "STATUS", "PATH")
+		needsResync := false
 		for _, s := range statuses {
 			fmt.Printf("%-20s %-10s %-10s %s\n", s.Account, s.Harness, s.Status, s.Path)
+			if s.Status != hooks.SyncInSync {
+				needsResync = true
+			}
+		}
+		if needsResync {
+			fmt.Println()
+			fmt.Println("hint: drifted or missing hooks can strand tab icons; run `amx config hooks-sync` to restore completion events like Stop, TeammateIdle, agentStop, and typed notifications.")
 		}
 		return nil
 	},

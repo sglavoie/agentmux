@@ -2,13 +2,15 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui"
+	"github.com/spf13/cobra"
 )
 
 const version = "0.4.0"
@@ -19,6 +21,9 @@ var rootCmd = &cobra.Command{
 	Use:   "amx",
 	Short: "Agent Mux multi-harness session manager for Kitty",
 	Long:  "amx manages Claude Code, Copilot, and other supported harness sessions as Kitty tabs with color-coded profiles and an interactive dashboard.",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		configureLogging(debugEnabled())
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.LoadDefault()
 		if err != nil {
@@ -66,6 +71,33 @@ func windowIDFromEnv() int {
 		return 0
 	}
 	return id
+}
+
+func debugEnabled() bool {
+	if debug {
+		return true
+	}
+	for _, key := range []string{"amx_DEBUG", "AMX_DEBUG"} {
+		if value, ok := os.LookupEnv(key); ok {
+			switch strings.ToLower(strings.TrimSpace(value)) {
+			case "1", "true", "yes", "on":
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func configureLogging(enabled bool) {
+	level := slog.LevelInfo
+	if enabled {
+		level = slog.LevelDebug
+	}
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level:     level,
+		AddSource: enabled,
+	})
+	slog.SetDefault(slog.New(handler))
 }
 
 func init() {
