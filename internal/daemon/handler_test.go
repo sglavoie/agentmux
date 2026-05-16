@@ -351,6 +351,54 @@ func TestHandler_AutoApprovedPermissionNoNotification(t *testing.T) {
 	}
 }
 
+func TestHandler_PermissionFollowUpCancelsPendingAfterGuardExpiry(t *testing.T) {
+	guard := NewStateGuard(time.Nanosecond)
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
+	notifier := NewNotifier(cfg)
+	var calls []string
+	notifier.dispatch = func(_, subtitle string) error {
+		calls = append(calls, subtitle)
+		return nil
+	}
+	h := NewHandler(guard, notifier)
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	time.Sleep(5 * time.Millisecond) // let the permission guard expire
+
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	if !resp.OK || !resp.Allowed {
+		t.Fatalf("expected follow-up active to be allowed, got %+v", resp)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+	if len(calls) > 0 {
+		t.Fatalf("expected expired-guard follow-up to cancel pending permission, got %v", calls)
+	}
+}
+
+func TestHandler_BlockedFollowUpCancelsPendingPermission(t *testing.T) {
+	guard := NewStateGuard(time.Hour)
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
+	notifier := NewNotifier(cfg)
+	var calls []string
+	notifier.dispatch = func(_, subtitle string) error {
+		calls = append(calls, subtitle)
+		return nil
+	}
+	h := NewHandler(guard, notifier)
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "compact"})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("expected compact follow-up to be blocked by permission guard, got %+v", resp)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+	if len(calls) > 0 {
+		t.Fatalf("expected blocked follow-up to cancel pending permission, got %v", calls)
+	}
+}
+
 func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
 	h := newTestHandler()
 	resp := h.Handle(Request{

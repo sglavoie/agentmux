@@ -52,7 +52,7 @@ stop = true
 # The notification is cancelled if the harness auto-approves the request before
 # the window expires (e.g. when a PreToolUse hook grants permission silently).
 # Set to 1 to disable the debounce and notify immediately.
-permission_debounce_ms = 500
+permission_debounce_ms = 3000
 
 
 # ── Profiles ──────────────────────────────────────────────────────────────────

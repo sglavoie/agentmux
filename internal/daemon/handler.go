@@ -77,6 +77,12 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
 	}
 
+	// Any non-permission follow-up event makes a pending permission
+	// notification stale, even if the state guard later blocks the transition.
+	if req.Action != "permission" {
+		h.notifier.CancelPending(req.WindowID)
+	}
+
 	// SubagentStart: increment reference count so the robot icon persists
 	// even when interleaved parent "active" events arrive.
 	if req.Action == "subagent" {
@@ -126,12 +132,6 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	)
 	if !allowed {
 		return Response{OK: true, Allowed: false}
-	}
-
-	// Cancel any pending debounced permission notification when the session
-	// moves past the permission state (auto-approved or session ended).
-	if prevGuard == "permission" && effective != "permission" {
-		h.notifier.CancelPending(req.WindowID)
 	}
 
 	// Auto-approved permission: preToolUse fired before permissionRequest, so the

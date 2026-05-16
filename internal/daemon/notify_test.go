@@ -242,20 +242,35 @@ func TestNotifier_PermissionDebounceFiresWhenNoCancel(t *testing.T) {
 	}
 }
 
-func TestNotifier_CancelPendingResetsNextCooldown(t *testing.T) {
-	// After CancelPending, the next permission notification should not be
-	// suppressed by the cooldown that was locked in for the cancelled event.
+func TestNotifier_PermissionDebounceRefreshesOnRepeat(t *testing.T) {
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 80}
+	n, calls := newTestNotifier(cfg)
+
+	n.MaybeNotify(1, "W:api", "permission", false)
+	time.Sleep(50 * time.Millisecond)
+	n.MaybeNotify(1, "W:api", "permission", false)
+
+	time.Sleep(40 * time.Millisecond)
+	if len(*calls) > 0 {
+		t.Fatal("repeat permission should refresh the debounce window")
+	}
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected refreshed permission notification to fire")
+	}
+}
+
+func TestNotifier_CancelPendingAllowsNextPermission(t *testing.T) {
+	// After CancelPending, the next permission notification should still be able
+	// to schedule and fire immediately after the configured debounce.
 	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
 	n, calls := newTestNotifier(cfg)
 
 	n.MaybeNotify(1, "W:api", "permission", false)
 	n.CancelPending(1)
 
-	// Immediately re-schedule (no cooldown should block this).
 	n.MaybeNotify(1, "W:api", "permission", false)
-	n.CancelPending(1) // cancel again
-	if len(*calls) > 0 {
-		t.Fatal("second permission should also be cancelled")
+	if !waitCalls(calls, 1, time.Second) {
+		t.Fatal("expected second permission to fire after cancellation")
 	}
 }
 

@@ -51,6 +51,9 @@ func TestLoad_AppliesDefaults(t *testing.T) {
 	if cfg.Defaults.IdleThreshold != 300 {
 		t.Errorf("default idle_threshold: got %d, want 300", cfg.Defaults.IdleThreshold)
 	}
+	if cfg.Defaults.Notifications.PermissionDebounceMs != 3000 {
+		t.Errorf("default permission_debounce_ms: got %d, want 3000", cfg.Defaults.Notifications.PermissionDebounceMs)
+	}
 }
 
 func TestLoad_NormalizesProfileArgsAndClonesAliases(t *testing.T) {

@@ -69,7 +69,7 @@ func applyDefaults(cfg *Config) {
 	// the opt-out path (per-account hooks override).
 	cfg.Defaults.Notifications.StopFailure = true
 	if cfg.Defaults.Notifications.PermissionDebounceMs == 0 {
-		cfg.Defaults.Notifications.PermissionDebounceMs = 500
+		cfg.Defaults.Notifications.PermissionDebounceMs = 3000
 	}
 
 	normalizeAliases(cfg)
