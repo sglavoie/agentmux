@@ -617,3 +617,34 @@ func TestHandler_SubagentReferenceCount(t *testing.T) {
 		}
 	})
 }
+
+// TestHandler_SubagentCounterRecoversAfterTerminalAction locks in the
+// self-healing property of subagentCount: if any SubagentStop events are lost
+// (daemon restart, crashed subprocess, dropped IPC frame), a subsequent
+// terminal action must reset the counter so future SubagentStop → active
+// transitions are not permanently suppressed.
+func TestHandler_SubagentCounterRecoversAfterTerminalAction(t *testing.T) {
+	h := newTestHandler()
+
+	// Two SubagentStarts → counter=2. The matching SubagentStops never arrive
+	// (simulating lost IPC frames).
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
+
+	// Terminal action arrives — counter must reset to 0.
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
+
+	// New prompt breaks through the stop guard.
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
+
+	// A fresh subagent starts → counter should now be 1 (not 3 from the stuck state).
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
+
+	// The matching SubagentStop should be treated as the last agent finishing
+	// (counter 1→0) and allow the resulting "active" with bolt icon. If the
+	// counter had not been reset, this would still be > 0 and suppressed.
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "SubagentStop"})
+	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+		t.Fatalf("active after subagent-counter recovery: want icon_state=bolt, got %+v", resp)
+	}
+}
