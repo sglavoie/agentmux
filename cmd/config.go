@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
@@ -115,9 +116,11 @@ var configHooksSyncCmd = &cobra.Command{
 			ccerrors.Print(err)
 			return err
 		}
+		var failed []string
 		for _, r := range results {
 			if r.Err != nil {
 				fmt.Fprintf(os.Stderr, "  error (%s): %v\n", r.Account, r.Err)
+				failed = append(failed, r.Account)
 				continue
 			}
 			switch r.Status {
@@ -128,6 +131,13 @@ var configHooksSyncCmd = &cobra.Command{
 			case hooks.MergeSkipped:
 				fmt.Printf("  skipped  %s (already up to date)\n", r.Path)
 			}
+		}
+		// Surface partial-failure scenarios with a non-zero exit code so callers
+		// (humans and CI) notice that one or more profiles' hooks were not
+		// updated. Previously the per-account error was only printed to stderr
+		// and the process exited 0, masking the failure.
+		if len(failed) > 0 {
+			return fmt.Errorf("hooks-sync failed for %d profile(s): %s", len(failed), strings.Join(failed, ", "))
 		}
 		return nil
 	},

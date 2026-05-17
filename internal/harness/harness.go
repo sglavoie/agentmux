@@ -50,3 +50,21 @@ func HookFileName() string {
 	return "agent-mux.json"
 }
 
+// KnownEvents returns the set of hook event names that the named harness
+// installs. Used by config.Validate to surface typos in
+// hooks.overrides.<profile>.disabled_events before they become silent no-ops.
+// Returns nil for unknown harness names.
+func KnownEvents(name string) []string {
+	switch Normalize(name) {
+	case Claude:
+		out := make([]string, len(claudeHookEvents))
+		copy(out, claudeHookEvents)
+		return out
+	case Copilot:
+		out := make([]string, len(copilotHookEvents))
+		copy(out, copilotHookEvents)
+		return out
+	}
+	return nil
+}
+

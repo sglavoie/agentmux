@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -16,6 +17,7 @@ func Validate(cfg *Config) error {
 	errs = append(errs, validateDefaults(&cfg.Defaults)...)
 	errs = append(errs, validateAccounts(cfg.Profiles)...)
 	errs = append(errs, validateSessions(cfg.Projects, cfg.Profiles)...)
+	errs = append(errs, validateHookOverrides(cfg.Hooks, cfg.Profiles)...)
 
 	if len(errs) > 0 {
 		return fmt.Errorf("%s", strings.Join(errs, "\n"))
@@ -102,6 +104,11 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 	for _, a := range accounts {
 		accountNames[a.Name] = true
 	}
+	// Track (profile, title) pairs to surface duplicates: launch dedup keys on
+	// SessionKey(account, title), so two projects sharing both fields would
+	// silently overwrite one another at runtime.
+	type projectKey struct{ profile, title string }
+	seenProject := map[projectKey]bool{}
 	for i, s := range sessions {
 		if s.Title == "" {
 			errs = append(errs, fmt.Sprintf("project[%d]: title is required", i))
@@ -116,6 +123,70 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 				"project %q references unknown profile %q\n  → check config.toml for valid profile names",
 				s.Title, s.Profile,
 			))
+		}
+		if s.Title != "" && s.Profile != "" {
+			k := projectKey{profile: s.Profile, title: s.Title}
+			if seenProject[k] {
+				errs = append(errs, fmt.Sprintf(
+					"duplicate project title %q under profile %q\n  → titles must be unique per profile (launch dedup keys on this pair)",
+					s.Title, s.Profile,
+				))
+			}
+			seenProject[k] = true
+		}
+	}
+	return errs
+}
+
+func validateHookOverrides(hooks HooksConfig, accounts []Account) []string {
+	if len(hooks.Overrides) == 0 {
+		return nil
+	}
+	// Build name → harness lookup so each override can be validated against
+	// the events its specific harness installs.
+	profileHarness := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		profileHarness[a.Name] = a.EffectiveHarness()
+	}
+	var errs []string
+	// Sort keys so the error order is deterministic for tests and users.
+	names := make([]string, 0, len(hooks.Overrides))
+	for name := range hooks.Overrides {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		override := hooks.Overrides[name]
+		harnessName, ok := profileHarness[name]
+		if !ok {
+			errs = append(errs, fmt.Sprintf(
+				"hooks.overrides references unknown profile %q\n  → no profile by that name is defined; rename or remove the override",
+				name,
+			))
+			continue
+		}
+		known := harness.KnownEvents(harnessName)
+		if len(known) == 0 {
+			continue
+		}
+		knownSet := make(map[string]bool, len(known))
+		for _, e := range known {
+			knownSet[e] = true
+		}
+		for _, e := range override.DisabledEvents {
+			if e == "" {
+				errs = append(errs, fmt.Sprintf(
+					"hooks.overrides.%s.disabled_events contains an empty entry",
+					name,
+				))
+				continue
+			}
+			if !knownSet[e] {
+				errs = append(errs, fmt.Sprintf(
+					"hooks.overrides.%s.disabled_events: unknown %s event %q\n  → valid events: %s",
+					name, harnessName, e, strings.Join(known, ", "),
+				))
+			}
 		}
 	}
 	return errs
