@@ -2,6 +2,8 @@ package hooks
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"os"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -20,12 +22,15 @@ const (
 	SyncMissing SyncStatus = "missing"
 )
 
-// AccountStatus holds the sync status for one account.
+// AccountStatus holds the sync status for one account. Err is non-nil when
+// the per-account check itself failed (e.g. permission denied reading the
+// settings file); Status is undefined in that case.
 type AccountStatus struct {
 	Account string
 	Harness string
 	Path    string
 	Status  SyncStatus
+	Err     error
 }
 
 // HookHealthSummary aggregates hook sync status across all profiles,
@@ -46,13 +51,16 @@ func (s HookHealthSummary) Healthy() bool {
 
 // OverallHookHealth returns the aggregated hook sync status across every
 // profile in the config. amxBin is the absolute path to the amx binary.
+// When StatusAll reports per-account failures, the corresponding accounts
+// are omitted from the buckets and the joined error is returned alongside
+// the partial summary so callers can decide whether to degrade or surface.
 func OverallHookHealth(cfg *config.Config, amxBin string) (HookHealthSummary, error) {
 	statuses, err := StatusAll(cfg, amxBin)
-	if err != nil {
-		return HookHealthSummary{}, err
-	}
 	var summary HookHealthSummary
 	for _, s := range statuses {
+		if s.Err != nil {
+			continue
+		}
 		switch s.Status {
 		case SyncInSync:
 			summary.InSync = append(summary.InSync, s.Account)
@@ -62,22 +70,38 @@ func OverallHookHealth(cfg *config.Config, amxBin string) (HookHealthSummary, er
 			summary.Missing = append(summary.Missing, s.Account)
 		}
 	}
-	return summary, nil
+	return summary, err
 }
 
 // StatusAll returns the hooks sync status for every configured profile.
 // amxBin is the absolute path to the amx binary (used to determine expected commands).
+//
+// Per-account failures do not short-circuit the loop: the failing entry is
+// returned with Err populated, and the joined error covers every account
+// that errored. This lets the hooks-status command and the TUI health pip
+// surface every reachable profile even when one account's settings file
+// is unreadable.
 func StatusAll(cfg *config.Config, amxBin string) ([]AccountStatus, error) {
 	results := make([]AccountStatus, 0, len(cfg.Accounts))
+	var errs []error
 	for _, account := range cfg.Accounts {
 		override := accountOverride(cfg, account.Name)
 		status, err := checkStatus(account, override, amxBin)
 		if err != nil {
-			return nil, err
+			harnessName := account.EffectiveHarness()
+			if harnessName == "" {
+				harnessName = "claude"
+			}
+			status = AccountStatus{
+				Account: account.Name,
+				Harness: harnessName,
+				Err:     err,
+			}
+			errs = append(errs, fmt.Errorf("%s: %w", account.Name, err))
 		}
 		results = append(results, status)
 	}
-	return results, nil
+	return results, errors.Join(errs...)
 }
 
 func checkStatus(account config.Account, override config.AccountHookOverride, amxBin string) (AccountStatus, error) {

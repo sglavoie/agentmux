@@ -24,14 +24,19 @@ func (e *MissingConfigError) Error() string {
 	)
 }
 
-// DefaultConfigDir returns ~/.config/agent-mux (fixed path, no env override).
+// DefaultConfigDir returns ~/.config/agent-mux.
 func DefaultConfigDir() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "agent-mux")
 }
 
-// DefaultConfigPath returns the fixed path to config.toml.
+// DefaultConfigPath returns the path to config.toml. When amx_CONFIG is set
+// to a non-empty value, that path (with leading ~ expanded) is returned;
+// otherwise the default <DefaultConfigDir>/config.toml is used.
 func DefaultConfigPath() string {
+	if v := os.Getenv("amx_CONFIG"); v != "" {
+		return ExpandTilde(v)
+	}
 	return filepath.Join(DefaultConfigDir(), configFileName)
 }
 

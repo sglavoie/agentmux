@@ -1,6 +1,9 @@
 package daemon
 
 import (
+	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,7 +13,7 @@ import (
 func newTestHandler() *Handler {
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
 	return NewHandler(guard, notifier)
 }
 
@@ -115,7 +118,7 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 	for _, tc := range cases {
 		guard := NewStateGuard(time.Nanosecond) // expires immediately
 		notifier := NewNotifier(&config.NotificationConfig{})
-		notifier.dispatch = func(_, _ string) error { return nil }
+		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
 		h := NewHandler(guard, notifier)
 
 		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
@@ -185,7 +188,7 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 	// --- Case 2: active guard expired → manual-permission path, key shows ---
 	guard := NewStateGuard(time.Nanosecond)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
 	h2 := NewHandler(guard, notifier)
 
 	h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
@@ -359,6 +362,44 @@ func TestHandler_Shutdown(t *testing.T) {
 	}
 }
 
+// TestHandler_ShutdownInvokedOnce locks in that back-to-back (or concurrent)
+// shutdown requests invoke onShutdown exactly once. Today this is backed by
+// sync.Once around the goroutine spawn — a defence-in-depth guard so callers
+// cannot rely on context.CancelFunc's idempotence alone.
+func TestHandler_ShutdownInvokedOnce(t *testing.T) {
+	h := newTestHandler()
+	var count atomic.Int32
+	h.onShutdown = func() { count.Add(1) }
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp := h.Handle(Request{Type: TypeShutdown})
+			if !resp.OK {
+				t.Errorf("want ok=true, got %+v", resp)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Wait for the single dispatched goroutine to run (and observe a non-zero
+	// count) without giving up early. 250ms is generous compared to the
+	// near-instant work each onShutdown does.
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) && count.Load() == 0 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	// Allow any *extra* concurrently-scheduled goroutines to finish so the
+	// assertion sees the final count, not a transient mid-race value.
+	time.Sleep(50 * time.Millisecond)
+
+	if got := count.Load(); got != 1 {
+		t.Fatalf("onShutdown should fire exactly once across concurrent shutdown requests, got %d", got)
+	}
+}
+
 func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 	// Claude Code's real prompt sequence is PreToolUse → Notification
 	// permission_prompt → (user approves) → PostToolUse. The PostToolUse
@@ -367,9 +408,12 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 	guard := NewStateGuard(time.Hour)
 	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 	notifier := NewNotifier(cfg)
+	var mu sync.Mutex
 	var calls []string
-	notifier.dispatch = func(_, subtitle string) error {
+	notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		mu.Lock()
 		calls = append(calls, subtitle)
+		mu.Unlock()
 		return nil
 	}
 	h := NewHandler(guard, notifier)
@@ -380,6 +424,8 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 
 	time.Sleep(150 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
 	if len(calls) != 1 || calls[0] != "Permission requested" {
 		t.Fatalf("expected permission notification to fire despite active follow-up, got %v", calls)
 	}
@@ -389,9 +435,12 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 	guard := NewStateGuard(time.Hour)
 	cfg := &config.NotificationConfig{Permission: true, Stop: true, PermissionDebounceMs: 100}
 	notifier := NewNotifier(cfg)
+	var mu sync.Mutex
 	var calls []string
-	notifier.dispatch = func(_, subtitle string) error {
+	notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		mu.Lock()
 		calls = append(calls, subtitle)
+		mu.Unlock()
 		return nil
 	}
 	h := NewHandler(guard, notifier)
@@ -401,10 +450,59 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
 
 	time.Sleep(150 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
 	for _, c := range calls {
 		if c == "Permission requested" {
 			t.Fatalf("expected stop to cancel pending permission, got %v", calls)
 		}
+	}
+}
+
+// TestHandler_ElicitationCancelsPendingPermission locks in that an elicitation
+// event arriving while a permission notification is still pending (in its
+// debounce window) supersedes that notification — the user should see the
+// elicitation prompt, not a stale "Permission requested" toast.
+//
+// This is currently handled at the notify layer: MaybeNotify cancels the
+// pending entry for any non-permission action that survives the early-return
+// gates. The test pins that contract so a future refactor cannot quietly
+// reintroduce the missed-cancel bug.
+func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
+	guard := NewStateGuard(time.Hour)
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
+	notifier := NewNotifier(cfg)
+	var mu sync.Mutex
+	var calls []string
+	notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		mu.Lock()
+		calls = append(calls, subtitle)
+		mu.Unlock()
+		return nil
+	}
+	h := NewHandler(guard, notifier)
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	time.Sleep(20 * time.Millisecond)
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
+
+	// Wait well past the original debounce window so the permission timer
+	// would have fired if it had not been cancelled.
+	time.Sleep(300 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	sawElicitation := false
+	for _, c := range calls {
+		if c == "Permission requested" {
+			t.Fatalf("elicitation should cancel pending permission, got %v", calls)
+		}
+		if c == "Claude is asking" {
+			sawElicitation = true
+		}
+	}
+	if !sawElicitation {
+		t.Fatalf("expected elicitation notification to fire, got %v", calls)
 	}
 }
 
@@ -416,9 +514,12 @@ func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
 	guard := NewStateGuard(time.Hour)
 	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
 	notifier := NewNotifier(cfg)
+	var mu sync.Mutex
 	var calls []string
-	notifier.dispatch = func(_, subtitle string) error {
+	notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		mu.Lock()
 		calls = append(calls, subtitle)
+		mu.Unlock()
 		return nil
 	}
 	h := NewHandler(guard, notifier)
@@ -433,6 +534,8 @@ func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
 	}
 
 	time.Sleep(150 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
 	for _, c := range calls {
 		if c == "Permission requested" {
 			return
@@ -461,7 +564,7 @@ func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
 func TestHandler_ActiveBlockedAfterStopGuardExpiry(t *testing.T) {
 	guard := NewStateGuard(time.Nanosecond) // expires immediately
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
 	h := NewHandler(guard, notifier)
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
@@ -511,7 +614,7 @@ func TestHandler_ActiveBlockedByCurrentStopIconAfterDaemonRestart(t *testing.T) 
 func TestHandler_ActiveBlockedAfterStopFailureGuardExpiry(t *testing.T) {
 	guard := NewStateGuard(time.Nanosecond)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
 	h := NewHandler(guard, notifier)
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop_failure"})

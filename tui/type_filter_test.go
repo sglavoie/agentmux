@@ -241,3 +241,182 @@ func TestRenderInlineFilterSuppressedOutsideModeList(t *testing.T) {
 	}
 }
 
+// ---- Type-buffer policy across mode transitions ----
+//
+// Policy (documented near the keyQuestion / keyL handlers in model.go):
+//   `/` carries typeBuffer forward as ModeSearch prefill.
+//   `f` clears typeBuffer (entering search with an `@` prefill instead).
+//   `?` (help) and `l` (picker) *preserve* typeBuffer + completion state
+//   so returning to ModeList resumes the user's in-progress narrow.
+//   `Esc` and `Enter` (in ModeList) clear typeBuffer.
+
+// TestTypeBufferPersistsAcrossHelp verifies that entering ModeHelp leaves
+// the type buffer and live-applied activeFilter untouched, and that the
+// state survives a round trip back to ModeList via esc.
+func TestTypeBufferPersistsAcrossHelp(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "b") // start type buffer (b is unbound)
+	m = pressKey(m, "a") // diverts into buffer since non-empty
+	if m.typeBuffer != "ba" {
+		t.Fatalf("setup: expected typeBuffer=ba, got %q", m.typeBuffer)
+	}
+	priorFilterRaw := m.activeFilter.Raw
+
+	m = pressKey(m, "?")
+	if m.mode != ModeHelp {
+		t.Fatalf("expected ModeHelp after ?, got %d", m.mode)
+	}
+	if m.typeBuffer != "ba" {
+		t.Errorf("expected typeBuffer preserved in ModeHelp, got %q", m.typeBuffer)
+	}
+	if m.activeFilter.Raw != priorFilterRaw {
+		t.Errorf("expected activeFilter preserved in ModeHelp: was %q, got %q",
+			priorFilterRaw, m.activeFilter.Raw)
+	}
+
+	m = pressKey(m, "esc")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after esc from help, got %d", m.mode)
+	}
+	if m.typeBuffer != "ba" {
+		t.Errorf("expected typeBuffer preserved on return from help, got %q", m.typeBuffer)
+	}
+	if m.activeFilter.Raw != priorFilterRaw {
+		t.Errorf("expected activeFilter preserved on return: was %q, got %q",
+			priorFilterRaw, m.activeFilter.Raw)
+	}
+}
+
+// TestTypeBufferPersistsAcrossPicker verifies that opening the picker
+// preserves the user's in-progress ModeList type buffer and that exiting
+// the picker via esc restores the buffer + filter unchanged.
+func TestTypeBufferPersistsAcrossPicker(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m = pressKey(m, "b") // start type buffer
+	m = pressKey(m, "a")
+	if m.typeBuffer != "ba" {
+		t.Fatalf("setup: expected typeBuffer=ba, got %q", m.typeBuffer)
+	}
+	priorFilterRaw := m.activeFilter.Raw
+
+	m = pressKey(m, "l")
+	if m.mode != ModePicker {
+		t.Fatalf("expected ModePicker after l, got %d", m.mode)
+	}
+	if m.typeBuffer != "ba" {
+		t.Errorf("expected typeBuffer preserved when entering picker, got %q", m.typeBuffer)
+	}
+	if m.activeFilter.Raw != priorFilterRaw {
+		t.Errorf("expected activeFilter preserved when entering picker: was %q, got %q",
+			priorFilterRaw, m.activeFilter.Raw)
+	}
+
+	m = pressKey(m, "esc")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after esc from picker, got %d", m.mode)
+	}
+	if m.typeBuffer != "ba" {
+		t.Errorf("expected typeBuffer preserved on return from picker, got %q", m.typeBuffer)
+	}
+	if m.activeFilter.Raw != priorFilterRaw {
+		t.Errorf("expected activeFilter preserved on return from picker: was %q, got %q",
+			priorFilterRaw, m.activeFilter.Raw)
+	}
+}
+
+// TestCompletionPopupSurvivesHelpRoundTrip locks in that the completion
+// popup state is preserved across a ModeHelp round trip — consistent with
+// typeBuffer preservation since the popup is computed from the buffer.
+// Without this, pressing `?` while a sigil completion is active would
+// silently drop the popup and require the user to re-trigger it.
+func TestCompletionPopupSurvivesHelpRoundTrip(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "@") // sigil opens completion popup
+	if !m.completion.Visible {
+		t.Fatalf("setup: expected completion popup visible after @")
+	}
+	priorCands := append([]string(nil), m.completion.Candidates...)
+
+	m = pressKey(m, "?")
+	if m.mode != ModeHelp {
+		t.Fatalf("expected ModeHelp after ?, got %d", m.mode)
+	}
+	if !m.completion.Visible {
+		t.Errorf("expected completion popup state preserved in ModeHelp")
+	}
+
+	m = pressKey(m, "esc")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after esc, got %d", m.mode)
+	}
+	if !m.completion.Visible {
+		t.Errorf("expected completion popup visible on return from help")
+	}
+	if len(m.completion.Candidates) != len(priorCands) {
+		t.Errorf("expected %d candidates preserved, got %d",
+			len(priorCands), len(m.completion.Candidates))
+	}
+}
+
+// TestCompletionPopupSurvivesPickerRoundTrip mirrors the help round-trip
+// for the picker — the popup state must be consistent when control
+// returns to ModeList because it's tied to the preserved typeBuffer.
+func TestCompletionPopupSurvivesPickerRoundTrip(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m = pressKey(m, "@")
+	if !m.completion.Visible {
+		t.Fatalf("setup: expected completion popup visible after @")
+	}
+
+	m = pressKey(m, "l")
+	if m.mode != ModePicker {
+		t.Fatalf("expected ModePicker after l, got %d", m.mode)
+	}
+	if !m.completion.Visible {
+		t.Errorf("expected completion popup state preserved in ModePicker")
+	}
+
+	m = pressKey(m, "esc")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after esc, got %d", m.mode)
+	}
+	if !m.completion.Visible {
+		t.Errorf("expected completion popup visible on return from picker")
+	}
+}
+
+// TestCompletionPopupClearedOnEnterCommit asserts the documented clearing
+// behavior: pressing Enter while the type buffer is non-empty commits the
+// filter, empties the buffer, AND closes the popup so subsequent row-action
+// keys are routed normally.
+func TestCompletionPopupClearedOnEnterCommit(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "b")
+	m = pressKey(m, "a")
+	if m.typeBuffer == "" {
+		t.Fatalf("setup: expected non-empty typeBuffer")
+	}
+	m = pressKey(m, "enter")
+	if m.typeBuffer != "" {
+		t.Errorf("expected typeBuffer cleared after enter commit, got %q", m.typeBuffer)
+	}
+	if m.completion.Visible {
+		t.Errorf("expected completion popup closed after enter commit")
+	}
+}
+
+// TestCompletionPopupClearedOnEscClear asserts that Esc in ModeList with a
+// non-empty type buffer clears both the buffer and the completion popup.
+func TestCompletionPopupClearedOnEscClear(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "@") // opens completion popup
+	if !m.completion.Visible {
+		t.Fatalf("setup: expected completion popup visible")
+	}
+	// Esc on the popup branch (line 346) closes it but keeps the buffer.
+	m = pressKey(m, "esc")
+	if m.completion.Visible {
+		t.Errorf("expected completion popup closed after esc on popup, got visible")
+	}
+}
+

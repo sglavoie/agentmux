@@ -44,15 +44,65 @@ func TestDefaultConfigDir(t *testing.T) {
 }
 
 func TestDefaultConfigPath(t *testing.T) {
+	t.Setenv("amx_CONFIG", "")
 	got := config.DefaultConfigPath()
 	if !strings.HasSuffix(got, "config.toml") {
 		t.Errorf("DefaultConfigPath: got %q, expected suffix config.toml", got)
 	}
 }
 
+func TestDefaultConfigPath_EnvUnset(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.Unsetenv("amx_CONFIG"); err != nil {
+		t.Fatalf("unsetting amx_CONFIG: %v", err)
+	}
+
+	got := config.DefaultConfigPath()
+	want := filepath.Join(home, ".config", "agent-mux", "config.toml")
+	if got != want {
+		t.Errorf("DefaultConfigPath (env unset): got %q, want %q", got, want)
+	}
+}
+
+func TestDefaultConfigPath_EnvOverride(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "custom.toml")
+	t.Setenv("amx_CONFIG", override)
+
+	got := config.DefaultConfigPath()
+	if got != override {
+		t.Errorf("DefaultConfigPath (env override): got %q, want %q", got, override)
+	}
+}
+
+func TestDefaultConfigPath_EnvOverrideTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("amx_CONFIG", "~/bar/baz.toml")
+
+	got := config.DefaultConfigPath()
+	want := filepath.Join(home, "bar", "baz.toml")
+	if got != want {
+		t.Errorf("DefaultConfigPath (~ expansion): got %q, want %q", got, want)
+	}
+}
+
+func TestDefaultConfigPath_EnvEmpty(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("amx_CONFIG", "")
+
+	got := config.DefaultConfigPath()
+	want := filepath.Join(home, ".config", "agent-mux", "config.toml")
+	if got != want {
+		t.Errorf("DefaultConfigPath (env empty): got %q, want %q", got, want)
+	}
+}
+
 func TestReadDefault_MissingConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("amx_CONFIG", "")
 
 	_, err := config.ReadDefault()
 	if err == nil {
@@ -76,6 +126,7 @@ func TestReadDefault_MissingConfig(t *testing.T) {
 func TestLoadDefault(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("amx_CONFIG", "")
 
 	path := filepath.Join(home, ".config", "agent-mux", "config.toml")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

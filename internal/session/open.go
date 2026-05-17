@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -43,7 +44,13 @@ func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Acc
 	}
 
 	if color, err := palette.Lookup(acc.Color); err == nil {
-		applyColorWithRetry(client, beforeIDs, formattedTitle, color)
+		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
+			slog.Warn("applying tab color after open",
+				"title", formattedTitle,
+				"account", acc.Name,
+				"error", colorErr,
+			)
+		}
 	}
 
 	return nil

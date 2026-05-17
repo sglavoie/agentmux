@@ -42,6 +42,11 @@ type Handler struct {
 
 	// onShutdown is called when a TypeShutdown request is received.
 	onShutdown func()
+
+	// shutdownOnce gates onShutdown so back-to-back shutdown requests cannot
+	// race the daemon's cancel func. context.CancelFunc is already idempotent,
+	// so this is a defence-in-depth guard rather than a correctness fix.
+	shutdownOnce sync.Once
 }
 
 // NewHandler creates a Handler with the given guard and notifier.
@@ -127,6 +132,10 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// Only terminal/idle transitions invalidate a pending permission notification.
 	// PostToolUse/active/subagent events are normal companions to a real
 	// permission_prompt and must not cancel the notification.
+	// elicitation and failure are intentionally omitted: they are mid-session
+	// states, not terminal, so they don't *invalidate* a permission here. When
+	// either of them does fire a notification of its own, the notify layer's
+	// cancelPendingLocked supersedes the pending entry (see notify.go MaybeNotify).
 	switch req.Action {
 	case "idle", "clear", "user_clear", "stop", "stop_failure":
 		h.notifier.CancelPending(req.WindowID)
@@ -164,6 +173,12 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	}
 
 	// Terminal / cleanup states reset the subagent counter.
+	// This list intentionally includes "failure" even though the cancel-switch
+	// above does not: counter cleanup is safe (losing the count just clears the
+	// 🤖 over-suppression), but cancelling a pending permission is unsafe (the
+	// user may never see the prompt). A tool failure is a strong signal that any
+	// in-flight subagent bookkeeping is stale, hence reset; but it doesn't make
+	// a pending permission stale, hence no cancel.
 	if req.Action == "stop" || req.Action == "stop_failure" || req.Action == "failure" ||
 		req.Action == "idle" || req.Action == "clear" || req.Action == "user_clear" {
 		h.stateMu.Lock()
@@ -277,7 +292,7 @@ func (h *Handler) handleStateQuery() Response {
 
 func (h *Handler) handleShutdown() Response {
 	if h.onShutdown != nil {
-		go h.onShutdown()
+		h.shutdownOnce.Do(func() { go h.onShutdown() })
 	}
 	return Response{OK: true}
 }

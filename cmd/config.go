@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
@@ -24,7 +25,7 @@ var configInitCmd = &cobra.Command{
 		if _, err := os.Stat(path); err == nil {
 			return fmt.Errorf("config already exists at %s", path)
 		}
-		if err := os.MkdirAll(config.DefaultConfigDir(), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return fmt.Errorf("creating config directory: %w", err)
 		}
 		if err := os.WriteFile(path, []byte(config.ExampleConfig), 0o644); err != nil {
@@ -145,22 +146,30 @@ var configHooksStatusCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("resolving amx binary: %w", err)
 		}
-		statuses, err := hooks.StatusAll(cfg, bin)
-		if err != nil {
-			ccerrors.Print(err)
-			return err
-		}
+		statuses, statusErr := hooks.StatusAll(cfg, bin)
 		fmt.Printf("%-20s %-10s %-10s %s\n", "ACCOUNT", "HARNESS", "STATUS", "PATH")
 		needsResync := false
 		for _, s := range statuses {
+			if s.Err != nil {
+				fmt.Printf("%-20s %-10s %-10s %s\n", s.Account, s.Harness, "error", s.Err.Error())
+				needsResync = true
+				continue
+			}
 			fmt.Printf("%-20s %-10s %-10s %s\n", s.Account, s.Harness, s.Status, s.Path)
 			if s.Status != hooks.SyncInSync {
 				needsResync = true
 			}
 		}
+		if statusErr != nil {
+			fmt.Fprintln(os.Stderr)
+			ccerrors.Print(statusErr)
+		}
 		if needsResync {
 			fmt.Println()
 			fmt.Println("hint: drifted or missing hooks can strand tab icons; run `amx config hooks-sync` to restore completion events like Stop, TeammateIdle, agentStop, and typed notifications.")
+		}
+		if statusErr != nil {
+			return statusErr
 		}
 		return nil
 	},

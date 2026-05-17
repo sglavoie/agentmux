@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -14,7 +15,9 @@ import (
 
 var launchDebug = newFileLogger("/tmp/amx-debug.log", "[launch] ")
 
-const (
+// Color-retry tuning is exposed as package-level vars (not consts) so tests
+// can shrink the delays without sleeping for ~1.3s of real time.
+var (
 	colorMaxRetries   = 5
 	colorInitialDelay = 100 * time.Millisecond
 	colorBackoffMul   = 1.5
@@ -127,7 +130,16 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	// Apply tab color with exponential backoff retry.
 	// Kitty may not register the new tab immediately for color changes.
 	if color, err := palette.Lookup(acc.Color); err == nil {
-		applyColorWithRetry(client, beforeIDs, formattedTitle, color)
+		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
+			// Tab color is cosmetic — degrade to a Warn-level log so the
+			// failure is visible in `amx daemon start --debug` output
+			// rather than silently swallowed. The session itself is fine.
+			slog.Warn("applying tab color after launch",
+				"title", formattedTitle,
+				"account", acc.Name,
+				"error", colorErr,
+			)
+		}
 	}
 
 	return nil
@@ -155,18 +167,25 @@ func tabIDSet(sessions []RunningSession) map[int]bool {
 
 // applyColorWithRetry polls for the newly created tab and sets its color.
 // It retries with exponential backoff to handle Kitty's registration delay.
-func applyColorWithRetry(client kitty.KittyClient, beforeIDs map[int]bool, formattedTitle string, color palette.Color) {
+// Returns nil once the color is applied or the last error encountered if
+// every retry attempt fails; callers should treat the error as cosmetic.
+func applyColorWithRetry(client kitty.KittyClient, beforeIDs map[int]bool, formattedTitle string, color palette.Color) error {
 	delay := colorInitialDelay
+	var lastErr error
 	for range colorMaxRetries {
 		osWindows, err := client.ListWindows()
-		if err == nil {
+		if err != nil {
+			lastErr = fmt.Errorf("listing windows for color apply: %w", err)
+		} else {
+			lastErr = fmt.Errorf("new tab %q not visible in any kitty window", formattedTitle)
 			for _, osw := range osWindows {
 				for _, tab := range osw.Tabs {
 					if !beforeIDs[tab.ID] && palette.StripIcons(tab.Title) == formattedTitle {
 						matchExpr := kitty.MatchTabByID(tab.ID)
-						err := client.SetTabColor(matchExpr, color.ActiveBg, color.InactiveBg, palette.ActiveFg, palette.InactiveFg)
-						if err == nil {
-							return
+						if setErr := client.SetTabColor(matchExpr, color.ActiveBg, color.InactiveBg, palette.ActiveFg, palette.InactiveFg); setErr != nil {
+							lastErr = fmt.Errorf("setting tab color: %w", setErr)
+						} else {
+							return nil
 						}
 					}
 				}
@@ -175,4 +194,5 @@ func applyColorWithRetry(client kitty.KittyClient, beforeIDs map[int]bool, forma
 		time.Sleep(delay)
 		delay = time.Duration(float64(delay) * colorBackoffMul)
 	}
+	return lastErr
 }

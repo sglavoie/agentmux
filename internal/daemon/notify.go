@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -11,6 +12,13 @@ import (
 )
 
 const cooldownDuration = 10 * time.Second
+
+// notifyDispatchTimeout caps how long a single notification dispatch can run.
+// macOS notification backends (osascript, alerter) can block under user-mode
+// pressure (e.g. Notification Center unresponsive, UI server restart), so the
+// goroutine wrapping every dispatch must enforce its own deadline rather than
+// trusting the external process to return promptly.
+const notifyDispatchTimeout = 5 * time.Second
 
 // notifyableActions lists the actions that may produce macOS notifications.
 var notifyableActions = map[string]bool{
@@ -46,31 +54,33 @@ type notifyKey struct {
 // Notifier tracks per-window cooldowns and fires macOS notifications via
 // the selected backend (alerter when installed, osascript otherwise).
 type Notifier struct {
-	mu             sync.Mutex
-	last           map[notifyKey]time.Time // last dispatched notification time per (window_id, action)
-	pending        map[int]pendingNotification
-	nextPendingSeq uint64
-	debounce       time.Duration
-	cfg            *config.NotificationConfig
-	now            func() time.Time                   // injectable for tests
-	dispatch       func(title, subtitle string) error // injectable for tests
+	mu              sync.Mutex
+	last            map[notifyKey]time.Time // last dispatched notification time per (window_id, action)
+	pending         map[int]pendingNotification
+	nextPendingSeq  uint64
+	debounce        time.Duration
+	dispatchTimeout time.Duration
+	cfg             *config.NotificationConfig
+	now             func() time.Time                                        // injectable for tests
+	dispatch        func(ctx context.Context, title, subtitle string) error // injectable for tests
 }
 
 // NewNotifier creates a Notifier with the given notification config.
 func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 	return &Notifier{
-		last:     make(map[notifyKey]time.Time),
-		pending:  make(map[int]pendingNotification),
-		debounce: time.Duration(cfg.PermissionDebounceMs) * time.Millisecond,
-		cfg:      cfg,
-		now:      time.Now,
-		dispatch: selectDispatcher(),
+		last:            make(map[notifyKey]time.Time),
+		pending:         make(map[int]pendingNotification),
+		debounce:        time.Duration(cfg.PermissionDebounceMs) * time.Millisecond,
+		dispatchTimeout: notifyDispatchTimeout,
+		cfg:             cfg,
+		now:             time.Now,
+		dispatch:        selectDispatcher(),
 	}
 }
 
 // selectDispatcher picks the macOS notification backend once at construction.
 // alerter is preferred when available; otherwise osascript is used.
-func selectDispatcher() func(title, subtitle string) error {
+func selectDispatcher() func(ctx context.Context, title, subtitle string) error {
 	if _, err := exec.LookPath("alerter"); err == nil {
 		slog.Info("notifier: using alerter backend")
 		return runAlerter
@@ -128,11 +138,18 @@ func (n *Notifier) MaybeNotify(windowID int, sessionTitle, action string, pipeMo
 		return
 	}
 	n.last[key] = now
-	go func() {
-		if err := n.dispatch(title, subtitle); err != nil {
-			slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
-		}
-	}()
+	go n.runDispatch(title, subtitle)
+}
+
+// runDispatch invokes the configured dispatcher under a bounded context. The
+// dispatcher's underlying process (or test stub) is responsible for honoring
+// ctx.Done — the real osascript/alerter backends do via exec.CommandContext.
+func (n *Notifier) runDispatch(title, subtitle string) {
+	ctx, cancel := context.WithTimeout(context.Background(), n.dispatchTimeout)
+	defer cancel()
+	if err := n.dispatch(ctx, title, subtitle); err != nil {
+		slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
+	}
 }
 
 func (n *Notifier) schedulePermissionLocked(windowID int, title, subtitle string) {
@@ -158,9 +175,7 @@ func (n *Notifier) schedulePermissionLocked(windowID int, title, subtitle string
 		n.last[key] = now
 		n.mu.Unlock()
 
-		if err := n.dispatch(title, subtitle); err != nil {
-			slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
-		}
+		n.runDispatch(title, subtitle)
 	})
 	n.pending[windowID] = entry
 }
@@ -195,20 +210,20 @@ func (n *Notifier) actionEnabled(action string) bool {
 	return false
 }
 
-func runOsascript(title, subtitle string) error {
+func runOsascript(ctx context.Context, title, subtitle string) error {
 	script := fmt.Sprintf(
 		`display notification "" with title %q subtitle %q`,
 		title, subtitle,
 	)
-	return exec.Command("osascript", "-e", script).Run()
+	return exec.CommandContext(ctx, "osascript", "-e", script).Run()
 }
 
 func alerterArgs(title, subtitle string) []string {
 	return []string{"--title", title, "--subtitle", subtitle, "--message", ""}
 }
 
-func runAlerter(title, subtitle string) error {
-	return exec.Command("alerter", alerterArgs(title, subtitle)...).Run()
+func runAlerter(ctx context.Context, title, subtitle string) error {
+	return exec.CommandContext(ctx, "alerter", alerterArgs(title, subtitle)...).Run()
 }
 
 // ResetCooldown clears all per-action cooldowns for windowID (for testing).

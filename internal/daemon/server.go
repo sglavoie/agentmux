@@ -8,17 +8,25 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"sync/atomic"
 )
 
 // maxPayloadLogLen caps the number of payload bytes recorded in error logs to
 // keep a single malformed request from spamming the log.
 const maxPayloadLogLen = 256
 
+// badPayloadLogInterval controls how often a cumulative malformed-payload
+// milestone is logged at info level. Per-payload diagnostics already log at
+// debug; the milestone surfaces sustained noise from a misbehaving client
+// (e.g. a hook script emitting garbage) without spamming the log.
+const badPayloadLogInterval = 100
+
 // Server listens on a Unix domain socket and dispatches requests to a Handler.
 // Each connection carries exactly one request/response pair.
 type Server struct {
-	handler *Handler
-	ln      net.Listener
+	handler     *Handler
+	ln          net.Listener
+	badPayloads atomic.Uint64
 }
 
 // NewServer creates a Server bound to socketPath.
@@ -77,7 +85,11 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 	}
 	payload := scanner.Bytes()
 	if err := json.Unmarshal(payload, &req); err != nil {
-		slog.Debug("daemon: bad request JSON", "err", err, "payload", truncateForLog(payload, maxPayloadLogLen))
+		count := s.badPayloads.Add(1)
+		slog.Debug("daemon: bad request JSON", "err", err, "payload", truncateForLog(payload, maxPayloadLogLen), "bad_payload_count", count)
+		if count%badPayloadLogInterval == 0 {
+			slog.Info("daemon: cumulative malformed payloads received", "count", count)
+		}
 		writeResponse(w, Response{OK: false, Error: "invalid JSON"})
 		return
 	}

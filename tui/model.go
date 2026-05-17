@@ -467,9 +467,17 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.applyFilterChange(Filter{})
 
 	case keyQuestion:
+		// typeBuffer policy on mode transitions: `?` (help) and `l` (picker)
+		// both *preserve* the buffer and any visible completion popup so
+		// returning to ModeList resumes exactly where the user left off.
+		// `/` carries the buffer forward as prefill (above); `f`/`esc`/`enter`
+		// each clear it explicitly. ModeHelp and ModePicker have their own
+		// render paths, so the popup state lives dormant until ModeList
+		// becomes active again.
 		m.mode = ModeHelp
 
 	case keyL:
+		// See typeBuffer policy comment on the `?` case above.
 		m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
 		m.pickerRunning = buildPickerRunning(m.sessions)
 		m.pickerSelected = make(map[int]bool)
