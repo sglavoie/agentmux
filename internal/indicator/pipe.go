@@ -3,6 +3,7 @@ package indicator
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -38,27 +39,32 @@ func walkTree(pid int, cmdline func(int) string, ppid func(int) int) bool {
 	return false
 }
 
+// pipeFlagsByCommand maps the supported command basenames to the set of flags
+// that imply non-interactive (pipe) mode for that command.
+var pipeFlagsByCommand = map[string]map[string]bool{
+	"claude":  {"-p": true, "--print": true},
+	"copilot": {"-p": true, "--prompt": true},
+}
+
 func looksLikePipeMode(cmdline string) bool {
 	fields := strings.Fields(cmdline)
 	if len(fields) == 0 {
 		return false
 	}
 
-	containsClaude := strings.Contains(cmdline, "claude")
-	containsCopilot := strings.Contains(cmdline, "copilot")
-	if !containsClaude && !containsCopilot {
-		return false
-	}
-
-	for _, field := range fields {
-		if field == "-p" {
-			return true
+	// Require an argv field whose basename is exactly "claude" or "copilot"
+	// (so claude-lint and /opt/claude-tools/foo do NOT match) and a pipe flag
+	// in the fields *after* it (so an unrelated -p earlier in the cmdline
+	// doesn't trigger).
+	for i, field := range fields {
+		flags, ok := pipeFlagsByCommand[filepath.Base(field)]
+		if !ok {
+			continue
 		}
-		if containsClaude && field == "--print" {
-			return true
-		}
-		if containsCopilot && field == "--prompt" {
-			return true
+		for _, after := range fields[i+1:] {
+			if flags[after] {
+				return true
+			}
 		}
 	}
 	return false

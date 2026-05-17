@@ -61,6 +61,24 @@ func TestWalkTree_StopsAtRoot(t *testing.T) {
 	}
 }
 
+// TestWalkTree_FlagPositionMatters verifies that a -p flag belonging to an
+// unrelated ancestor command (e.g. `claude-lint -p`) does not trigger pipe
+// mode for an interactive child claude session. Under the old substring-based
+// check, the parent's "claude" substring + "-p" was enough to flag the whole
+// tree as pipe mode.
+func TestWalkTree_FlagPositionMatters(t *testing.T) {
+	cmd, ppid := fakeTree(
+		map[int]string{
+			1001: "claude",         // interactive child, no pipe flag
+			1000: "claude-lint -p", // unrelated ancestor with its own -p flag
+		},
+		map[int]int{1001: 1000, 1000: 1},
+	)
+	if walkTree(1001, cmd, ppid) {
+		t.Error("expected pipe_mode=false: ancestor's -p must not propagate to a child interactive claude")
+	}
+}
+
 func TestWalkTree_CycleProtection(t *testing.T) {
 	count := 0
 	cmd := func(_ int) string {
@@ -90,6 +108,20 @@ func TestLooksLikeClaudePipe(t *testing.T) {
 		{"claude -p", true},
 		{"claude --print", true},
 		{"claude --print-output", false}, // --print-output is not --print
+		// Exact-command match: basename must equal "claude" or "copilot".
+		{"claude-lint", false},
+		{"claude-lint -p", false},          // basename is claude-lint, not claude
+		{"/opt/claude-tools/foo", false},   // basename is foo, not claude
+		{"/opt/claude-tools/foo -p", false},
+		{"/usr/bin/claude -p", true},                // path-prefixed claude is fine
+		{"/usr/local/bin/copilot --prompt", true},   // path-prefixed copilot is fine
+		{"copilot", false},
+		{"copilot -p", true},
+		{"copilot --prompt", true},
+		{"copilot --print", false}, // --print is claude-only; copilot uses --prompt
+		// Flag must follow the command in the same cmdline.
+		{"-p claude", false},        // -p before claude
+		{"some-tool -p claude", false},
 	}
 	for _, tc := range cases {
 		got := looksLikeClaudePipe(tc.cmd)

@@ -180,6 +180,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		"allowed", allowed,
 	)
 	if !allowed {
+		// The guard suppressed the icon transition, but the user's intent may
+		// still warrant a notification (permission/stop/failure/elicitation).
+		// Pass req.Action — the notifier filters by its own per-action config and
+		// cooldown, so this cannot double-fire with the success path below.
+		h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Action, req.PipeMode)
 		return Response{OK: true, Allowed: false}
 	}
 

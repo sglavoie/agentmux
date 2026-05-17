@@ -408,6 +408,39 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 	}
 }
 
+// TestHandler_PermissionNotificationFiresWhenGuardBlocks verifies that when a
+// higher-priority guard (failure, p=4) blocks a permission event (p=3), the
+// icon transition is suppressed but the user-facing notification still fires —
+// the guard only governs visual state, not whether the user gets alerted.
+func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
+	guard := NewStateGuard(time.Hour)
+	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
+	notifier := NewNotifier(cfg)
+	var calls []string
+	notifier.dispatch = func(_, subtitle string) error {
+		calls = append(calls, subtitle)
+		return nil
+	}
+	h := NewHandler(guard, notifier)
+
+	// Prime with failure so the guard sits at priority 4.
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
+
+	// Permission is blocked by the failure guard.
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("permission blocked by failure guard: want allowed=false, got %+v", resp)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+	for _, c := range calls {
+		if c == "Permission requested" {
+			return
+		}
+	}
+	t.Fatalf("expected permission notification to fire when guard blocks transition, got %v", calls)
+}
+
 func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
 	h := newTestHandler()
 	resp := h.Handle(Request{
