@@ -42,17 +42,15 @@ type Defaults struct {
 
 // NotificationConfig controls which macOS notifications fire.
 //
-// StopFailure is defaulted to true at load time so existing user configs that
-// predate this field still get terminal-failure notifications. To suppress
-// it, disable the StopFailure hook event in `[hooks.overrides.<account>]`
-// rather than setting `stop_failure = false` (which applyDefaults will flip
-// back to true on load).
+// StopFailure is *bool so the load path can distinguish "user omitted the key"
+// (nil → defaults to true so pre-existing configs still get terminal-failure
+// notifications) from "user set stop_failure = false" (&false → suppressed).
 type NotificationConfig struct {
-	Error                bool `toml:"error"`
-	Permission           bool `toml:"permission"`
-	Stop                 bool `toml:"stop"`
-	StopFailure          bool `toml:"stop_failure"`
-	PermissionDebounceMs int  `toml:"permission_debounce_ms"`
+	Error                bool  `toml:"error"`
+	Permission           bool  `toml:"permission"`
+	Stop                 bool  `toml:"stop"`
+	StopFailure          *bool `toml:"stop_failure"`
+	PermissionDebounceMs int   `toml:"permission_debounce_ms"`
 }
 
 // PreviewConfig controls the dashboard split-pane live preview.

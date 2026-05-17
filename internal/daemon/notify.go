@@ -190,7 +190,7 @@ func (n *Notifier) actionEnabled(action string) bool {
 	case "failure":
 		return n.cfg.Error
 	case "stop_failure":
-		return n.cfg.StopFailure
+		return n.cfg.StopFailure == nil || *n.cfg.StopFailure
 	}
 	return false
 }

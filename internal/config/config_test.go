@@ -360,6 +360,59 @@ args = ["--project"]
 	}
 }
 
+func TestLoad_StopFailureDefaultsTrueWhenAbsent(t *testing.T) {
+	content := `
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got := cfg.Defaults.Notifications.StopFailure
+	if got == nil {
+		t.Fatal("StopFailure: got nil, want non-nil pointer to true")
+	}
+	if !*got {
+		t.Fatalf("StopFailure default: got %v, want true", *got)
+	}
+}
+
+func TestLoad_UserCanDisableStopFailureNotification(t *testing.T) {
+	content := `
+[defaults.notifications]
+stop_failure = false
+
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got := cfg.Defaults.Notifications.StopFailure
+	if got == nil {
+		t.Fatal("StopFailure: got nil, want non-nil pointer to false")
+	}
+	if *got {
+		t.Fatalf("StopFailure user-disabled: got true, want false (stop_failure = false in config should be respected)")
+	}
+}
+
 func TestLoad_NormalizesLegacyAccountsToProfiles(t *testing.T) {
 	path := filepath.Join(testdataDir, "legacy_flags_config.toml")
 	cfg, err := config.Load(path)

@@ -65,7 +65,8 @@ func TestNotifier_FiresForFailure(t *testing.T) {
 }
 
 func TestNotifier_FiresForStopFailure(t *testing.T) {
-	cfg := &config.NotificationConfig{StopFailure: true}
+	enabled := true
+	cfg := &config.NotificationConfig{StopFailure: &enabled}
 	n, calls := newTestNotifier(cfg)
 	n.MaybeNotify(1, "W:api", "stop_failure", false)
 	if !waitCalls(calls, 1, time.Second) {
@@ -77,17 +78,19 @@ func TestNotifier_FiresForStopFailure(t *testing.T) {
 }
 
 func TestNotifier_StopFailureSuppressedByConfig(t *testing.T) {
-	cfg := &config.NotificationConfig{StopFailure: false}
+	disabled := false
+	cfg := &config.NotificationConfig{StopFailure: &disabled}
 	n, calls := newTestNotifier(cfg)
 	n.MaybeNotify(1, "W:api", "stop_failure", false)
 	time.Sleep(50 * time.Millisecond)
 	if len(*calls) > 0 {
-		t.Fatal("stop_failure should be suppressed when StopFailure=false")
+		t.Fatal("stop_failure should be suppressed when StopFailure=&false")
 	}
 }
 
 func TestNotifier_StopFailureSuppressedByPipeMode(t *testing.T) {
-	cfg := &config.NotificationConfig{StopFailure: true}
+	enabled := true
+	cfg := &config.NotificationConfig{StopFailure: &enabled}
 	n, calls := newTestNotifier(cfg)
 	n.MaybeNotify(1, "W:api", "stop_failure", true)
 	time.Sleep(50 * time.Millisecond)
@@ -97,7 +100,8 @@ func TestNotifier_StopFailureSuppressedByPipeMode(t *testing.T) {
 }
 
 func TestNotifier_StopFailureCooldown(t *testing.T) {
-	cfg := &config.NotificationConfig{StopFailure: true}
+	enabled := true
+	cfg := &config.NotificationConfig{StopFailure: &enabled}
 	n, calls := newTestNotifier(cfg)
 
 	n.MaybeNotify(1, "W:api", "stop_failure", false)
