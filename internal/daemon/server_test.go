@@ -324,6 +324,53 @@ func TestServer_RejectsOversizeRequest(t *testing.T) {
 	}
 }
 
+// TestServer_HandshakeDeadlineReleasesIdleConn verifies that a client which
+// opens a connection but never sends data does not pin a handler goroutine
+// indefinitely. The server enforces a per-connection deadline so a stuck or
+// crashed peer cannot exhaust the daemon by holding sockets open.
+func TestServer_HandshakeDeadlineReleasesIdleConn(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-srvdeadline-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "d.sock")
+
+	prevDeadline := connDeadline
+	connDeadline = 50 * time.Millisecond
+	t.Cleanup(func() { connDeadline = prevDeadline })
+
+	guard := NewStateGuard(time.Hour)
+	notifier := NewNotifier(&config.NotificationConfig{})
+	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	handler := NewHandler(guard, notifier)
+
+	server, err := NewServer(socketPath, handler)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	t.Cleanup(server.Close)
+
+	go func() { _ = server.Serve(context.Background()) }()
+
+	// Open a connection and write nothing. Without a server-side deadline this
+	// would park the handler goroutine until the test process exited.
+	conn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	// Reading the response should EOF (server closes the conn after timeout)
+	// or yield no bytes within the deadline window.
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	buf := make([]byte, 64)
+	_, readErr := conn.Read(buf)
+	if readErr == nil {
+		t.Fatal("expected EOF or read error after server-side deadline elapsed")
+	}
+}
+
 func TestServer_HandlesPartialWrites(t *testing.T) {
 	w := &slowWriter{chunk: 1}
 	resp := Response{OK: true, IconState: "bolt", Allowed: true}

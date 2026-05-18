@@ -11,6 +11,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // maxPayloadLogLen caps the number of payload bytes recorded in error logs to
@@ -30,6 +31,15 @@ const maxRequestPayloadBytes = 1 << 20
 // debug; the milestone surfaces sustained noise from a misbehaving client
 // (e.g. a hook script emitting garbage) without spamming the log.
 const badPayloadLogInterval = 100
+
+// connDeadline bounds a single request/response handshake on the server side.
+// Without it, a client that opens a connection but never sends data (slow
+// loris, crashed hook script holding the fd open via inheritance, etc.) ties
+// up a handler goroutine indefinitely, since Unix sockets do not time out
+// quiescent peers. The window covers the client's full sendDeadline plus a
+// margin for IPC scheduling. Exposed as a var so tests can shrink it without
+// sleeping for production duration.
+var connDeadline = 10 * time.Second
 
 // Server listens on a Unix domain socket and dispatches requests to a Handler.
 // Each connection carries exactly one request/response pair.
@@ -101,6 +111,10 @@ func (s *Server) handleConn(conn net.Conn) {
 	if s.onConnStart != nil {
 		s.onConnStart()
 	}
+	// Bound the entire request/response handshake so a client that connects
+	// without sending data (or stops reading mid-response) cannot pin this
+	// goroutine for the daemon's lifetime.
+	_ = conn.SetDeadline(time.Now().Add(connDeadline))
 	s.serveConn(conn, conn)
 }
 
