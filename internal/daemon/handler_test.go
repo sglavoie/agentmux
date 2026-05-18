@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -429,6 +430,45 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 	if len(calls) != 1 || calls[0] != "Permission requested" {
 		t.Fatalf("expected permission notification to fire despite active follow-up, got %v", calls)
 	}
+}
+
+// TestHandler_CopilotAutoApprovedPermissionSuppressesNotification verifies that
+// Copilot's preToolUse → permissionRequest → postToolUse sequence does NOT fire
+// a "Permission requested" notification. Copilot emits permissionRequest as a
+// speculative pre-tool hook even when no user input is required, which made the
+// debounce timer fire 500 ms later despite the bolt icon already showing.
+//
+// The companion test TestHandler_PermissionSurvivesActiveFollowUp pins that
+// Claude's PascalCase PreToolUse → permission → PostToolUse sequence still
+// fires its notification (real user-facing prompt). Event-name casing is the
+// harness signal that separates the two.
+func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
+		notifier := NewNotifier(cfg)
+		var calls []string
+		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+			calls = append(calls, subtitle)
+			return nil
+		}
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "preToolUse"})
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "postToolUse"})
+
+		// Advance fake time well past the debounce window; a leaked AfterFunc
+		// would fire here, and synctest.Wait then drains its dispatch goroutine.
+		time.Sleep(time.Second)
+		synctest.Wait()
+
+		for _, c := range calls {
+			if c == "Permission requested" {
+				t.Fatalf("Copilot auto-approved permission should not notify, got %v", calls)
+			}
+		}
+	})
 }
 
 func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {

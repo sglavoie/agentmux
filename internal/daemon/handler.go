@@ -235,6 +235,16 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		prevGuard == "active" &&
 		(prevEvent == "PreToolUse" || prevEvent == "preToolUse")
 
+	// Copilot's preToolUse → permissionRequest sequence is speculative: it
+	// fires even for tools that auto-approve, producing a spurious "Permission
+	// requested" notification when no user input is required. Claude's
+	// PreToolUse → permission sequence is a *real* user-facing prompt and its
+	// notification must still fire (TestHandler_PermissionSurvivesActiveFollowUp).
+	// Event-name casing is the harness signal here: Claude declares PascalCase
+	// hooks, Copilot declares camelCase hooks, and req.Event preserves the
+	// original casing.
+	isCopilotAutoApprovedPerm := isAutoApprovedPerm && prevEvent == "preToolUse"
+
 	h.stateMu.Lock()
 	h.activity[req.WindowID] = time.Now()
 	if effective == "active" {
@@ -284,7 +294,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		delete(h.lastActiveEvent, req.WindowID)
 		h.stateMu.Unlock()
 	}
-	h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, effective, req.PipeMode)
+	if isCopilotAutoApprovedPerm {
+		h.notifier.CancelPending(req.WindowID)
+	} else {
+		h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, effective, req.PipeMode)
+	}
 
 	return Response{OK: true, Allowed: true, IconState: iconState}
 }
