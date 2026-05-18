@@ -73,7 +73,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	// Build env, user vars, and shell command.
 	env := ResolveEnv(sess, acc)
 	args := ResolveArgs(sess, acc, cfg.Defaults)
-	explicitArgs := strings.Join(sess.EffectiveArgs(), " ")
+	explicitArgs := shellQuoteArgs(sess.EffectiveArgs())
 	groups := strings.Join(sess.Groups, "\x1f")
 	ccEnv := SerializeSessionEnv(sess.Env)
 	profileName := sess.EffectiveProfile()
@@ -85,24 +85,24 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	harnessName := acc.EffectiveHarness()
 
 	userVars := map[string]string{
-		"amx_profile":   profileName,
-		"amx_harness":   harnessName,
-		"amx_home_dir":  homeDir,
-		"amx_project":   sess.Title,
-		"amx_directory": projectDir,
-		"amx_args":      args,
-		"amx_env":       ccEnv,
-		"amx_groups":    groups,
-		"cc_account":    profileName,
-		"cc_config_dir": homeDir,
-		"cc_cwd":        projectDir,
-		"cc_flags":      args,
+		"amx_profile":       profileName,
+		"amx_harness":       harnessName,
+		"amx_home_dir":      homeDir,
+		"amx_project":       sess.Title,
+		"amx_directory":     projectDir,
+		"amx_args":          args,
+		"amx_env":           ccEnv,
+		"amx_groups":        groups,
+		"cc_account":        profileName,
+		"cc_config_dir":     homeDir,
+		"cc_cwd":            projectDir,
+		"cc_flags":          args,
 		"cc_explicit_flags": explicitArgs,
-		"cc_env":        ccEnv,
-		"cc_groups":     groups,
+		"cc_env":            ccEnv,
+		"cc_groups":         groups,
 	}
 
-	shellCmd := "exec " + harness.Executable(harnessName)
+	shellCmd := "exec " + shellQuoteWord(harness.Executable(harnessName))
 	if args != "" {
 		shellCmd += " " + args
 	}

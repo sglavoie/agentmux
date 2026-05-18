@@ -95,13 +95,17 @@ func SessionFromRunning(rs RunningSession) config.Session {
 	}
 }
 
-// parseFlags splits a space-separated flags string into a slice.
+// parseFlags splits a shell-quoted flags string into a slice.
 func parseFlags(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
 	}
-	return strings.Fields(raw)
+	args, err := splitShellArgs(raw)
+	if err != nil {
+		return strings.Fields(raw)
+	}
+	return args
 }
 
 // deserializeEnv reverses SerializeSessionEnv: splits by "\x1f" and parses

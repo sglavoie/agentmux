@@ -653,3 +653,68 @@ func TestRestart_OverrideResolution(t *testing.T) {
 		}
 	}
 }
+
+func TestRestart_QuotedExplicitArgsRoundTrip(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+
+	quoted := "--prompt 'hello world' '--literal=$HOME' 'semi;colon'"
+	running := session.RunningSession{
+		TabID:            61,
+		Base:             "W:quoted",
+		Account:          "work",
+		Directory:        "/tmp/quoted",
+		ExplicitFlags:    quoted,
+		ExplicitFlagsSet: true,
+	}
+
+	err := session.Restart(client, running, cfg)
+	if err != nil {
+		t.Fatalf("Restart: %v", err)
+	}
+
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		hasLaunch := false
+		for _, arg := range c.Args {
+			if arg == "launch" {
+				hasLaunch = true
+				break
+			}
+		}
+		if !hasLaunch {
+			continue
+		}
+
+		argSet := make(map[string]bool)
+		for _, arg := range c.Args {
+			argSet[arg] = true
+		}
+		if !argSet["--var=cc_flags="+quoted] {
+			t.Errorf("expected quoted cc_flags to survive restart: %v", c.Args)
+		}
+		if !argSet["--var=cc_explicit_flags="+quoted] {
+			t.Errorf("expected quoted cc_explicit_flags to survive restart: %v", c.Args)
+		}
+
+		sawQuotedShellCmd := false
+		for _, arg := range c.Args {
+			if arg == "exec claude "+quoted {
+				sawQuotedShellCmd = true
+				break
+			}
+		}
+		if !sawQuotedShellCmd {
+			t.Errorf("expected quoted shell command in restart args: %v", c.Args)
+		}
+		return
+	}
+
+	t.Error("expected kitten @ launch to be called")
+}

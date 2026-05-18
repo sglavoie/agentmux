@@ -332,3 +332,67 @@ func TestLaunch_MixedHarnessUsesProfileArgs(t *testing.T) {
 		t.Error("expected kitten @ launch to be called")
 	}
 }
+
+func TestLaunch_QuotesArgsWithSpacesAndMetacharacters(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+
+	sess := config.Session{
+		Title:     "quoted",
+		Account:   "work",
+		Directory: "/tmp/quoted",
+		Args:      []string{"--prompt", "hello world", "--literal=$HOME", "semi;colon"},
+	}
+	acc := cfg.Accounts[0]
+
+	err := session.Launch(client, sess, acc, cfg)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	wantArgs := "--prompt 'hello world' '--literal=$HOME' 'semi;colon'"
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		hasLaunch := false
+		for _, a := range c.Args {
+			if a == "launch" {
+				hasLaunch = true
+				break
+			}
+		}
+		if !hasLaunch {
+			continue
+		}
+
+		argSet := make(map[string]bool)
+		for _, arg := range c.Args {
+			argSet[arg] = true
+		}
+		if !argSet["--var=cc_flags="+wantArgs] {
+			t.Errorf("expected quoted cc_flags in args: %v", c.Args)
+		}
+		if !argSet["--var=cc_explicit_flags="+wantArgs] {
+			t.Errorf("expected quoted cc_explicit_flags in args: %v", c.Args)
+		}
+
+		sawQuotedShellCmd := false
+		for _, arg := range c.Args {
+			if arg == "exec claude "+wantArgs {
+				sawQuotedShellCmd = true
+				break
+			}
+		}
+		if !sawQuotedShellCmd {
+			t.Errorf("expected quoted shell command in args: %v", c.Args)
+		}
+		return
+	}
+
+	t.Error("expected kitten @ launch to be called")
+}

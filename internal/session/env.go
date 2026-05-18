@@ -35,16 +35,11 @@ func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 	return env
 }
 
-// ResolveArgs returns the effective CLI args string for a session.
+// ResolveArgs returns the effective CLI args string for a session, quoted so it
+// can round-trip through Kitty user vars and shell -c launch commands.
 // Precedence: project args > profile args > shared defaults args.
 func ResolveArgs(sess config.Session, acc config.Account, defaults config.Defaults) string {
-	if args := sess.EffectiveArgs(); len(args) > 0 {
-		return strings.Join(args, " ")
-	}
-	if len(acc.Args) > 0 {
-		return strings.Join(acc.Args, " ")
-	}
-	return strings.Join(defaults.EffectiveArgs(), " ")
+	return shellQuoteArgs(resolveArgv(sess, acc, defaults))
 }
 
 // ResolveFlags is kept as a compatibility alias for older Claude-oriented code.
