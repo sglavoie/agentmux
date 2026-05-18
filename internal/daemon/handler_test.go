@@ -784,3 +784,77 @@ func TestHandler_SubagentCounterRecoversAfterTerminalAction(t *testing.T) {
 		t.Fatalf("active after subagent-counter recovery: want icon_state=bolt, got %+v", resp)
 	}
 }
+
+// TestHandler_IdleAfterSuppressedActivePreservesStopIcon verifies that when a
+// non-prompt "active" event is suppressed because the previous state was
+// "stop"/"stop_failure", a subsequent idle does not clear the stop icon. The
+// bug: TryUpdate runs before the lastKnownAction check, so when we early-out
+// for the suppressed active, the guard map still records "active" with a
+// fresh TTL. A later idle within that TTL sees prevGuard="active", classifies
+// prev as a runnable state, and asks the indicator to clear the icon — wiping
+// the stop indicator that should persist until the user acknowledges it.
+func TestHandler_IdleAfterSuppressedActivePreservesStopIcon(t *testing.T) {
+	cases := []struct {
+		name       string
+		prevAction string
+	}{
+		{"stop", "stop"},
+		{"stop_failure", "stop_failure"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Use a tiny but real guard duration so the first action's guard
+			// expires before "active" arrives, but the suppressed "active"
+			// re-arms a fresh guard whose TTL is still in effect when "idle"
+			// arrives shortly after.
+			guard := NewStateGuard(50 * time.Millisecond)
+			notifier := NewNotifier(&config.NotificationConfig{})
+			notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+			h := NewHandler(guard, notifier)
+
+			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
+			time.Sleep(60 * time.Millisecond) // let the prev guard expire
+
+			// Non-prompt active arrives after guard expired — must be suppressed
+			// because lastAction is "stop"/"stop_failure".
+			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+			if !resp.OK || resp.Allowed {
+				t.Fatalf("non-prompt active after %s: want allowed=false, got %+v", tc.prevAction, resp)
+			}
+
+			// A follow-up idle within the new guard TTL must preserve the
+			// stop icon, NOT clear it. Without the fix, the suppressed
+			// "active" leaves the guard armed at "active", and this idle
+			// sees prevGuard="active" → iconState="" → stop icon erased.
+			resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+			if !resp.OK || !resp.Allowed {
+				t.Fatalf("idle after suppressed active: want allowed=true, got %+v", resp)
+			}
+			if resp.IconState != IconStatePreserve {
+				t.Fatalf("idle after suppressed active must preserve %s icon: want icon_state=%q, got %q",
+					tc.prevAction, IconStatePreserve, resp.IconState)
+			}
+		})
+	}
+}
+
+// TestHandler_SubagentCountCleanedUpAfterLastStop verifies that the per-window
+// subagentCount map entry is deleted when the count reaches zero via a normal
+// SubagentStop, rather than being left as a zero-valued entry that survives
+// until a terminal event. Without the cleanup, a long-running daemon
+// processing many subagent cycles across many windows accumulates stale
+// entries indefinitely (slow but real memory leak).
+func TestHandler_SubagentCountCleanedUpAfterLastStop(t *testing.T) {
+	h := newTestHandler()
+
+	for windowID := 1; windowID <= 10; windowID++ {
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: windowID, Action: "subagent", Event: "SubagentStart"})
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: windowID, Action: "active", Event: "SubagentStop"})
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	if got := len(h.subagentCount); got != 0 {
+		t.Fatalf("subagentCount has %d residual entries after normal stop cycles; want 0", got)
+	}
+}

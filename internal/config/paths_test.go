@@ -99,6 +99,38 @@ func TestDefaultConfigPath_EnvEmpty(t *testing.T) {
 	}
 }
 
+// TestDefaultConfigPath_UppercaseEnvOverride pins the contract that AMX_CONFIG
+// (uppercase) is honored as a fallback when the lowercase amx_CONFIG is
+// unset. The amx_DEBUG/AMX_DEBUG pair already accepts both casings, and a
+// user setting one but not the other previously caused the config override to
+// be silently ignored.
+func TestDefaultConfigPath_UppercaseEnvOverride(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "custom.toml")
+	t.Setenv("amx_CONFIG", "")
+	t.Setenv("AMX_CONFIG", override)
+
+	got := config.DefaultConfigPath()
+	if got != override {
+		t.Errorf("DefaultConfigPath (AMX_CONFIG override): got %q, want %q", got, override)
+	}
+}
+
+// TestDefaultConfigPath_LowercaseTakesPrecedence pins that when both casings
+// are set, the lowercase form wins. This matches the lookup order documented
+// on DefaultConfigPath and preserves backwards compatibility with configs
+// that already rely on amx_CONFIG.
+func TestDefaultConfigPath_LowercaseTakesPrecedence(t *testing.T) {
+	lower := filepath.Join(t.TempDir(), "lower.toml")
+	upper := filepath.Join(t.TempDir(), "upper.toml")
+	t.Setenv("amx_CONFIG", lower)
+	t.Setenv("AMX_CONFIG", upper)
+
+	got := config.DefaultConfigPath()
+	if got != lower {
+		t.Errorf("DefaultConfigPath (both env set): got %q, want %q (lowercase precedence)", got, lower)
+	}
+}
+
 func TestReadDefault_MissingConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

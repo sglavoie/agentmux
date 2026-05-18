@@ -157,6 +157,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			h.subagentCount[req.WindowID]--
 		}
 		remaining := h.subagentCount[req.WindowID]
+		if wasTracked && remaining == 0 {
+			// Drop the zero-valued entry so per-window state cannot accumulate
+			// indefinitely across many sessions that never hit a terminal event.
+			delete(h.subagentCount, req.WindowID)
+		}
 		h.stateMu.Unlock()
 
 		if wasTracked && remaining > 0 {
@@ -186,6 +191,21 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.stateMu.Unlock()
 	}
 
+	// Block non-prompt active events from overwriting a terminal stop state.
+	// PostToolBatch can race with Stop in async execution; once the stop guard
+	// expires, lastAction is the main barrier, with the current title icon as a
+	// restart-safe fallback after daemon auto-starts or restarts. This check
+	// runs BEFORE TryUpdate so a suppressed "active" cannot leave the guard
+	// armed at "active" — otherwise a subsequent idle would see prevGuard
+	// "active" and ask the indicator to clear the persisting stop icon.
+	if req.Action == "active" && !req.IsPrompt {
+		prev := h.lastKnownAction(req.WindowID, req.CurrentIconState)
+		if prev == "stop" || prev == "stop_failure" {
+			h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Action, req.PipeMode)
+			return Response{OK: true, Allowed: false}
+		}
+	}
+
 	prevGuard := h.guard.Current(req.WindowID)
 	allowed, effective := h.guard.TryUpdate(req.WindowID, req.Action, req.IsPrompt)
 	slog.Debug("state transition",
@@ -201,17 +221,6 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		// cooldown, so this cannot double-fire with the success path below.
 		h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Action, req.PipeMode)
 		return Response{OK: true, Allowed: false}
-	}
-
-	// Block non-prompt active events from overwriting a terminal stop state.
-	// PostToolBatch can race with Stop in async execution; once the stop guard
-	// expires, lastAction is the main barrier, with the current title icon as a
-	// restart-safe fallback after daemon auto-starts or restarts.
-	if effective == "active" && !req.IsPrompt {
-		prev := h.lastKnownAction(req.WindowID, req.CurrentIconState)
-		if prev == "stop" || prev == "stop_failure" {
-			return Response{OK: true, Allowed: false}
-		}
 	}
 
 	// Auto-approved permission: preToolUse fired before permissionRequest, so the

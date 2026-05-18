@@ -30,12 +30,17 @@ func DefaultConfigDir() string {
 	return filepath.Join(home, ".config", "agent-mux")
 }
 
-// DefaultConfigPath returns the path to config.toml. When amx_CONFIG is set
-// to a non-empty value, that path (with leading ~ expanded) is returned;
-// otherwise the default <DefaultConfigDir>/config.toml is used.
+// DefaultConfigPath returns the path to config.toml. When amx_CONFIG or
+// AMX_CONFIG is set to a non-empty value, that path (with leading ~ expanded)
+// is returned; otherwise the default <DefaultConfigDir>/config.toml is used.
+// Both casings are accepted to match the amx_DEBUG/AMX_DEBUG convention; the
+// lowercase form is checked first so existing configs that rely on it keep
+// working.
 func DefaultConfigPath() string {
-	if v := os.Getenv("amx_CONFIG"); v != "" {
-		return ExpandTilde(v)
+	for _, key := range []string{"amx_CONFIG", "AMX_CONFIG"} {
+		if v := os.Getenv(key); v != "" {
+			return ExpandTilde(v)
+		}
 	}
 	return filepath.Join(DefaultConfigDir(), configFileName)
 }
