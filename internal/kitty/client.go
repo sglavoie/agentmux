@@ -16,6 +16,9 @@ type KittyClient interface {
 	LaunchTab(opts LaunchOpts) error
 	// CloseTab closes the tab matched by matchExpr.
 	CloseTab(matchExpr string) error
+	// DetachTab moves the tab matched by matchExpr to sit immediately after
+	// the tab matched by targetMatchExpr in the same OS window.
+	DetachTab(matchExpr, targetMatchExpr string) error
 	// SetTabColor sets foreground/background colors on a matched tab.
 	SetTabColor(matchExpr, activeBg, inactiveBg, activeFg, inactiveFg string) error
 	// SetTabTitle sets the title of a matched tab.
@@ -113,6 +116,11 @@ func (c *SubprocessClient) LaunchTab(opts LaunchOpts) error {
 
 func (c *SubprocessClient) CloseTab(matchExpr string) error {
 	_, err := c.kitten("close-tab", "--no-response", "--match="+matchExpr)
+	return err
+}
+
+func (c *SubprocessClient) DetachTab(matchExpr, targetMatchExpr string) error {
+	_, err := c.kitten("detach-tab", "--no-response", "--match="+matchExpr, "--target-tab="+targetMatchExpr)
 	return err
 }
 

@@ -1,0 +1,106 @@
+[
+  {
+    "id": 1,
+    "is_active": true,
+    "is_focused": true,
+    "last_focused": true,
+    "tabs": [
+      {
+        "id": 2,
+        "is_active": false,
+        "title": "P:📝tt",
+        "windows": [
+          {
+            "id": 3,
+            "is_active": true,
+            "title": "P:📝tt",
+            "cwd": "/Users/user/projects/tt",
+            "cmdline": ["claude"],
+            "user_vars": {
+              "cc_account": "personal",
+              "cc_config_dir": "~/.config/claude",
+              "cc_flags": "",
+              "cc_pw": "",
+              "cc_env": "",
+              "cc_groups": "",
+              "cc_mute": "",
+              "cc_cwd": "/Users/user/projects/tt"
+            }
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "is_active": false,
+        "title": "T:Katana",
+        "windows": [
+          {
+            "id": 5,
+            "is_active": true,
+            "title": "T:Katana",
+            "cwd": "/Users/user/projects/katana",
+            "cmdline": ["claude"],
+            "user_vars": {
+              "cc_account": "tools",
+              "cc_config_dir": "~/.config/claude-tools",
+              "cc_flags": "",
+              "cc_pw": "",
+              "cc_env": "",
+              "cc_groups": "",
+              "cc_mute": "",
+              "cc_cwd": "/Users/user/projects/katana"
+            }
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "is_active": false,
+        "title": "V:sis",
+        "windows": [
+          {
+            "id": 7,
+            "is_active": true,
+            "title": "V:sis",
+            "cwd": "/Users/user/projects/sis",
+            "cmdline": ["claude"],
+            "user_vars": {
+              "cc_account": "vtacyber",
+              "cc_config_dir": "~/.config/claude-vtacyber",
+              "cc_flags": "",
+              "cc_pw": "",
+              "cc_env": "",
+              "cc_groups": "",
+              "cc_mute": "",
+              "cc_cwd": "/Users/user/projects/sis"
+            }
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "is_active": true,
+        "title": "V:🎵muse",
+        "windows": [
+          {
+            "id": 9,
+            "is_active": true,
+            "title": "V:🎵muse",
+            "cwd": "/Users/user/projects/muse",
+            "cmdline": ["claude"],
+            "user_vars": {
+              "cc_account": "vtacyber",
+              "cc_config_dir": "~/.config/claude-vtacyber",
+              "cc_flags": "",
+              "cc_pw": "",
+              "cc_env": "",
+              "cc_groups": "",
+              "cc_mute": "",
+              "cc_cwd": "/Users/user/projects/muse"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

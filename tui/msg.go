@@ -24,6 +24,9 @@ func (e errMsg) Error() string { return e.err.Error() }
 // actionDoneMsg is sent when a close or restart action completes.
 type actionDoneMsg struct{ err error }
 
+// resortDoneMsg is sent when a session.Resort call completes.
+type resortDoneMsg struct{ err error }
+
 // pickerOpenDoneMsg is sent when a picker open-directory action completes.
 type pickerOpenDoneMsg struct{ err error }
 

@@ -114,6 +114,38 @@ func TestCloseTab_MatchExpr(t *testing.T) {
 	}
 }
 
+func TestDetachTab_CallsKitten(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.DetachTab("id:3", "id:1"); err != nil {
+		t.Fatalf("DetachTab: %v", err)
+	}
+	if len(runner.Calls) == 0 {
+		t.Fatal("expected kitten to be called")
+	}
+	if runner.Calls[0].Name != "kitten" {
+		t.Errorf("expected 'kitten', got %q", runner.Calls[0].Name)
+	}
+
+	want := map[string]bool{
+		"detach-tab":        false,
+		"--no-response":     false,
+		"--match=id:3":      false,
+		"--target-tab=id:1": false,
+	}
+	for _, a := range runner.Calls[0].Args {
+		if _, ok := want[a]; ok {
+			want[a] = true
+		}
+	}
+	for arg, found := range want {
+		if !found {
+			t.Errorf("expected %q in kitten @ detach-tab args, got %v", arg, runner.Calls[0].Args)
+		}
+	}
+}
+
 func TestLaunchOverlayPager_Args(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")

@@ -28,6 +28,7 @@ const (
 	keyQuestion    = "?" // opens ModeHelp overlay
 	keyC           = "c" // opens ModeConfigPicker for profile override
 	keyClearStatus = "C" // clears the highlighted session's icon
+	keyResort      = "R" // re-sort tabs in Kitty to repair drifted physical order
 	keyD           = "d" // dismisses the config deprecation banner
 
 	keyTogglePreview = "p" // toggles the split-pane live preview

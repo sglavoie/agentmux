@@ -20,11 +20,19 @@ func SortKey(account, baseTitle string, starred bool, mode string) string {
 		pin = "0"
 	}
 	proj := projectName(baseTitle)
+	projKey := projectSortKey(proj)
 	switch mode {
 	case "account":
-		return pin + ":" + strings.ToLower(account) + ":" + strings.ToLower(proj)
+		return pin + ":" + strings.ToLower(account) + ":" + projKey
 	default: // "alpha"
-		return pin + ":" + strings.ToLower(baseTitle)
+		// Preserve the rendered "<initial>:" profile prefix from baseTitle
+		// so alpha mode still groups by tab-prefix when present, but
+		// normalize the project portion (drop leading emoji/symbols).
+		var prefix string
+		if len(baseTitle) > len(proj) {
+			prefix = strings.ToLower(baseTitle[:len(baseTitle)-len(proj)])
+		}
+		return pin + ":" + prefix + projKey
 	}
 }
 
@@ -111,4 +119,27 @@ func projectName(base string) string {
 		return base
 	}
 	return base[size+1:]
+}
+
+// projectSortKey returns the lowercased project name with leading
+// non-letter, non-digit runes (emoji, punctuation, symbols, combining
+// marks) stripped. Intra-word characters are preserved. When stripping
+// would leave an empty string, the full lowercased input is returned
+// so a title made entirely of symbols still has a stable key.
+func projectSortKey(project string) string {
+	i := 0
+	for i < len(project) {
+		r, size := utf8.DecodeRuneInString(project[i:])
+		if r == utf8.RuneError {
+			break
+		}
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			break
+		}
+		i += size
+	}
+	if i >= len(project) {
+		return strings.ToLower(project)
+	}
+	return strings.ToLower(project[i:])
 }

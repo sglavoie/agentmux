@@ -281,6 +281,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Trigger a refresh so the list reflects the new state.
 		return m, fetchCmd(m.client, m.sortMode)
 
+	case resortDoneMsg:
+		m.actionErr = msg.err
+		var cmds []tea.Cmd
+		var t Toast
+		if msg.err != nil {
+			t = Toast{Severity: toastError, Text: "Resort failed: " + msg.err.Error()}
+		} else {
+			t = Toast{Severity: toastSuccess, Text: "Tabs resorted"}
+		}
+		if c := m.pushToast(t); c != nil {
+			cmds = append(cmds, c)
+		}
+		cmds = append(cmds, fetchCmd(m.client, m.sortMode))
+		return m, tea.Batch(cmds...)
+
 	case launchProgressMsg:
 		return m.handleLaunchProgress(msg)
 
@@ -490,6 +505,20 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 			return m, cmd
 		}
+
+	case keyResort:
+		// Resort is a global, top-level action — kept above `default:` so the
+		// keystroke can't be diverted into the type-to-filter buffer.
+		m.actionErr = nil
+		cmds := []tea.Cmd{resortCmd(m.client, m.sortMode)}
+		if c := m.pushToast(Toast{
+			Severity: toastInfo,
+			Text:     "Resorting tabs…",
+			Expires:  time.Now().Add(progressToastTTL),
+		}); c != nil {
+			cmds = append(cmds, c)
+		}
+		return m, tea.Batch(cmds...)
 
 	default:
 		// Row-action keys: handled normally when the type buffer is empty;
@@ -1298,6 +1327,14 @@ func closeCmd(client kitty.KittyClient, tabID int) tea.Cmd {
 func restartCmd(client kitty.KittyClient, running session.RunningSession, cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
 		return actionDoneMsg{err: session.Restart(client, running, cfg)}
+	}
+}
+
+// resortCmd reorders managed Kitty tabs to match SortRunning's expected
+// order and returns resortDoneMsg.
+func resortCmd(client kitty.KittyClient, sortMode string) tea.Cmd {
+	return func() tea.Msg {
+		return resortDoneMsg{err: session.Resort(client, sortMode)}
 	}
 }
 

@@ -123,6 +123,7 @@ Socket path: `~/.local/share/cc-manager/daemon.sock`
 | `amx daemon stop` | Stop running daemon |
 | `amx daemon status` | Check daemon status |
 | `amx hook-indicator <event>` | Handle a Claude Code hook event (called by hooks) |
+| `amx resort` | Reorder Kitty tabs to match the configured sort |
 
 ## Config format
 

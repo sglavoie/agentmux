@@ -161,6 +161,7 @@ var listFooterPalette = []footerEntry{
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
 	{"/", "filter", footerSectionFilter, func(Model) bool { return true }},
 	{"p", "preview", footerSectionApp, func(Model) bool { return true }},
+	{"R", "resort", footerSectionApp, func(Model) bool { return true }},
 	{"?", "help", footerSectionApp, func(Model) bool { return true }},
 }
 

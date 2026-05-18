@@ -50,6 +50,50 @@ func TestSortKey_StarredFirst(t *testing.T) {
 	}
 }
 
+// TestSortKey_AccountEmojiOrdering pins the screenshot scenario at the
+// sort-key level: emoji-prefixed projects must sort by their first
+// alphabetic rune, and personal < tools < vtacyber must hold across
+// the whole tab set so accounts stay grouped.
+func TestSortKey_AccountEmojiOrdering(t *testing.T) {
+	ordered := []struct {
+		account, base string
+	}{
+		{"personal", "P:🐱amx"},
+		{"personal", "P:📝tt"},
+		{"tools", "T:Katana"},
+		{"vtacyber", "V:🎵muse"},
+		{"vtacyber", "V:sis"},
+	}
+	for i := 1; i < len(ordered); i++ {
+		prev := session.SortKey(ordered[i-1].account, ordered[i-1].base, false, "account")
+		curr := session.SortKey(ordered[i].account, ordered[i].base, false, "account")
+		if prev >= curr {
+			t.Errorf("expected %q (%s/%s) < %q (%s/%s)",
+				prev, ordered[i-1].account, ordered[i-1].base,
+				curr, ordered[i].account, ordered[i].base)
+		}
+	}
+}
+
+// TestComputeInsertLocation_EmojiScreenshot reproduces the bug from the
+// user-supplied screenshot: launching P:🐱amx (personal) into a tab set of
+// [P:📝tt, T:Katana, V:sis, V:🎵muse] must land before P:📝tt (tab id 2),
+// not between V:sis and V:🎵muse as the original byte-level comparison
+// produced.
+func TestComputeInsertLocation_EmojiScreenshot(t *testing.T) {
+	client := newClientWithFixture(t, "kitty_ls_emoji.json")
+	loc, tabID, err := session.ComputeInsertLocation(client, "account", "personal", "P:🐱amx")
+	if err != nil {
+		t.Fatalf("ComputeInsertLocation: %v", err)
+	}
+	if loc != "before" {
+		t.Errorf("location: got %q, want %q", loc, "before")
+	}
+	if tabID != 2 {
+		t.Errorf("tabID: got %d, want 2 (P:📝tt)", tabID)
+	}
+}
+
 // TestComputeInsertLocation_Alpha verifies sorted insertion in alpha mode.
 // Fixture has: P:dotfiles (id=2), W:api (id=4), W:dashboard (id=6).
 // Inserting W:backend (work) should go after W:api (id=4).

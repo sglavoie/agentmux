@@ -43,6 +43,35 @@ func TestProjectName_Unicode(t *testing.T) {
 	}
 }
 
+// TestProjectSortKey verifies the leading-non-alphanumeric stripping
+// contract: emoji, punctuation, and symbol runes at the start of a
+// project name must not contribute to the sort key, but intra-word
+// punctuation must be preserved, and an all-symbol title must collapse
+// to its lowercased self (rather than the empty string) so it still
+// has a stable, comparable key.
+func TestProjectSortKey(t *testing.T) {
+	cases := []struct {
+		project string
+		want    string
+	}{
+		{"🐱amx", "amx"},
+		{"📝tt", "tt"},
+		{"🎵muse", "muse"},
+		{"🐱", "🐱"},
+		{"a-b", "a-b"},
+		{"API", "api"},
+		{"", ""},
+		{"   leading-space", "leading-space"},
+		{"---only-symbols---", "only-symbols---"},
+		{"🐱📝amx", "amx"},
+	}
+	for _, tc := range cases {
+		if got := projectSortKey(tc.project); got != tc.want {
+			t.Errorf("projectSortKey(%q) = %q, want %q", tc.project, got, tc.want)
+		}
+	}
+}
+
 // TestSortKey_UnicodePrefix verifies that account-mode sort keys for
 // Unicode-prefixed titles use the project portion (not the prefix) as the
 // inner sort component, matching the ASCII behavior. Two sessions on the
