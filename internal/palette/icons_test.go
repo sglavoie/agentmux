@@ -104,6 +104,18 @@ func TestStripIcons(t *testing.T) {
 	}
 }
 
+func TestStripIcons_StopsAfterFirstStateIcon(t *testing.T) {
+	title := StateIcon("bolt") + StateIcon("stop") + "W:project"
+	if got := StripIcons(title); got != StateIcon("stop")+"W:project" {
+		t.Errorf("StripIcons(%q) = %q, want %q", title, got, StateIcon("stop")+"W:project")
+	}
+
+	base, _, _ := ParseTitle(title)
+	if got := StripIcons(title); got != base {
+		t.Errorf("StripIcons(%q) = %q, want ParseTitle base %q", title, got, base)
+	}
+}
+
 func TestDetectState(t *testing.T) {
 	states := []string{"bolt", "stop", "key", "error", "subagent", "compact", "question"}
 	for _, want := range states {

@@ -58,15 +58,7 @@ func List(client kitty.KittyClient) ([]RunningSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	var sessions []RunningSession
-	for _, osw := range osWindows {
-		for _, tab := range osw.Tabs {
-			if rs, ok := tabToRunningSession(tab); ok {
-				sessions = append(sessions, rs)
-			}
-		}
-	}
-	return sessions, nil
+	return runningSessionsFromOSWindows(osWindows), nil
 }
 
 // Find returns the first running session whose Base title equals baseTitle.
@@ -143,6 +135,60 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 		Env:              win.UserVars.EffectiveEnv(),
 		Groups:           decodeGroups(win.UserVars.EffectiveGroups()),
 	}
+}
+
+func runningSessionsFromOSWindows(osWindows []kitty.OSWindow) []RunningSession {
+	var sessions []RunningSession
+	for _, osw := range osWindows {
+		sessions = append(sessions, runningSessionsFromTabs(osw.Tabs)...)
+	}
+	return sessions
+}
+
+func runningSessionsFromTabs(tabs []kitty.Tab) []RunningSession {
+	sessions := make([]RunningSession, 0, len(tabs))
+	for _, tab := range tabs {
+		if rs, ok := tabToRunningSession(tab); ok {
+			sessions = append(sessions, rs)
+		}
+	}
+	return sessions
+}
+
+func targetOSWindow(osWindows []kitty.OSWindow) *kitty.OSWindow {
+	for _, match := range []func(kitty.OSWindow) bool{
+		func(osw kitty.OSWindow) bool { return osw.IsFocused },
+		func(osw kitty.OSWindow) bool { return osw.IsActive },
+		func(osw kitty.OSWindow) bool { return osw.LastFocused },
+	} {
+		for i := range osWindows {
+			if match(osWindows[i]) {
+				return &osWindows[i]
+			}
+		}
+	}
+	if len(osWindows) == 0 {
+		return nil
+	}
+	return &osWindows[0]
+}
+
+func focusedTabID(osWindows []kitty.OSWindow) int {
+	if osw := targetOSWindow(osWindows); osw != nil {
+		for _, tab := range osw.Tabs {
+			if tab.IsActive {
+				return tab.ID
+			}
+		}
+	}
+	for _, osw := range osWindows {
+		for _, tab := range osw.Tabs {
+			if tab.IsActive {
+				return tab.ID
+			}
+		}
+	}
+	return 0
 }
 
 // SessionKey builds the dedup key for a running session. The separator (\x1f,

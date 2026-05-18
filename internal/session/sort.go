@@ -36,16 +36,23 @@ func SortKey(account, baseTitle string, starred bool, mode string) string {
 	}
 }
 
-// ComputeInsertLocation determines where a new tab should be inserted to
-// maintain sorted order. New tabs are never pinned (starred=false).
+// ComputeInsertLocation determines where a new tab should be inserted within
+// the target Kitty OS window to maintain sorted order. New tabs are never
+// pinned (starred=false).
 //
-// Returns ("first", 0) when the new tab sorts before all existing ones, or
-// ("after", tabID) where tabID is the tab the new tab should follow.
+// Returns ("before", tabID) when the new tab sorts before all existing managed
+// tabs in that window, ("after", tabID) when it should follow tabID, or
+// ("", 0) when the target window has no managed tabs yet.
 func ComputeInsertLocation(client kitty.KittyClient, mode, account, baseTitle string) (string, int, error) {
-	running, err := List(client)
+	osWindows, err := client.ListWindows()
 	if err != nil {
 		return "", 0, err
 	}
+	target := targetOSWindow(osWindows)
+	if target == nil {
+		return "", 0, nil
+	}
+	running := runningSessionsFromTabs(target.Tabs)
 
 	newKey := SortKey(account, baseTitle, false, mode)
 

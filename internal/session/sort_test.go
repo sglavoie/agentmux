@@ -161,6 +161,20 @@ func TestComputeInsertLocation_EmptyKitty(t *testing.T) {
 	}
 }
 
+func TestComputeInsertLocation_UsesFocusedWindow(t *testing.T) {
+	client := newClientWithFixture(t, "kitty_ls_two_windows.json")
+	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "work", "W:beta")
+	if err != nil {
+		t.Fatalf("ComputeInsertLocation: %v", err)
+	}
+	if loc != "before" {
+		t.Errorf("location: got %q, want %q", loc, "before")
+	}
+	if tabID != 4 {
+		t.Errorf("tabID: got %d, want 4 (W:zeta in focused window)", tabID)
+	}
+}
+
 // TestSortRunning_Alpha verifies alphabetical sort.
 func TestSortRunning_Alpha(t *testing.T) {
 	client := newClientWithFixture(t, "kitty_ls_multi.json")

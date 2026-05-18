@@ -6,26 +6,32 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// Resort moves every managed Kitty tab into the order produced by
-// SortRunning(mode). Tabs already in the correct relative position are
-// skipped. Unmanaged tabs may shift slots as managed tabs slide past them via
-// adjacent swaps, but their contents (windows, processes, user vars) are
+// Resort moves managed Kitty tabs within each OS window into the order
+// produced by SortRunning(mode). Tabs already in the correct relative position
+// are skipped. Unmanaged tabs may shift slots as managed tabs slide past them
+// via adjacent swaps, but their contents (windows, processes, user vars) are
 // preserved. Returns the first error encountered; partial progress is kept.
 func Resort(client kitty.KittyClient, mode string) error {
 	osWindows, err := client.ListWindows()
 	if err != nil {
 		return err
 	}
+	origFocusedTabID := focusedTabID(osWindows)
 
-	var sessions []RunningSession
 	for _, osw := range osWindows {
-		for _, tab := range osw.Tabs {
-			if rs, ok := tabToRunningSession(tab); ok {
-				sessions = append(sessions, rs)
-			}
+		if err := resortWindow(client, osw.Tabs, mode); err != nil {
+			return err
 		}
 	}
-	desired := SortRunning(sessions, mode)
+
+	if origFocusedTabID != 0 {
+		_ = client.FocusTab(kitty.MatchTabByID(origFocusedTabID))
+	}
+	return nil
+}
+
+func resortWindow(client kitty.KittyClient, tabs []kitty.Tab, mode string) error {
+	desired := SortRunning(runningSessionsFromTabs(tabs), mode)
 	if len(desired) < 2 {
 		return nil
 	}
@@ -37,24 +43,8 @@ func Resort(client kitty.KittyClient, mode string) error {
 		managedSet[s.TabID] = true
 	}
 
-	var targetOSW *kitty.OSWindow
-	for i := range osWindows {
-		for _, tab := range osWindows[i].Tabs {
-			if managedSet[tab.ID] {
-				targetOSW = &osWindows[i]
-				break
-			}
-		}
-		if targetOSW != nil {
-			break
-		}
-	}
-	if targetOSW == nil {
-		return nil
-	}
-
-	allTabs := make([]kitty.Tab, len(targetOSW.Tabs))
-	copy(allTabs, targetOSW.Tabs)
+	allTabs := make([]kitty.Tab, len(tabs))
+	copy(allTabs, tabs)
 
 	managedSlots := make([]int, 0, len(desired))
 	for i, t := range allTabs {
@@ -64,14 +54,6 @@ func Resort(client kitty.KittyClient, mode string) error {
 	}
 	if len(managedSlots) != len(desired) {
 		return fmt.Errorf("session: Resort found %d managed tabs in OS window but %d desired", len(managedSlots), len(desired))
-	}
-
-	origFocusedTabID := 0
-	for _, t := range allTabs {
-		if t.IsActive {
-			origFocusedTabID = t.ID
-			break
-		}
 	}
 
 	maxMoves := 2 * len(desired)
@@ -95,10 +77,6 @@ func Resort(client kitty.KittyClient, mode string) error {
 		}
 		moves++
 		rotateTab(allTabs, curIdx, targetIdx)
-	}
-
-	if origFocusedTabID != 0 {
-		_ = client.FocusTab(kitty.MatchTabByID(origFocusedTabID))
 	}
 	return nil
 }

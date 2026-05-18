@@ -396,3 +396,62 @@ func TestLaunch_QuotesArgsWithSpacesAndMetacharacters(t *testing.T) {
 
 	t.Error("expected kitten @ launch to be called")
 }
+
+func TestLaunch_InsertsRelativeToFocusedWindow(t *testing.T) {
+	twoWindows := loadFixture(t, "kitty_ls_two_windows.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{twoWindows, twoWindows},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+
+	sess := config.Session{
+		Title:     "beta",
+		Account:   "work",
+		Directory: "/Users/user/projects/beta",
+	}
+	acc := cfg.Accounts[0]
+	acc.Color = ""
+
+	err := session.Launch(client, sess, acc, cfg)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	var sawLaunch bool
+	var sawFocusedWindowRef bool
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+
+		argSet := make(map[string]bool)
+		for _, arg := range c.Args {
+			argSet[arg] = true
+		}
+
+		if argSet["focus-tab"] {
+			if argSet["--match=id:4"] {
+				sawFocusedWindowRef = true
+			}
+			if argSet["--match=id:2"] {
+				t.Fatalf("Launch focused a tab in another OS window: %v", c.Args)
+			}
+		}
+
+		if !argSet["launch"] {
+			continue
+		}
+		sawLaunch = true
+		if !argSet["--location=before"] {
+			t.Errorf("expected --location=before in launch args: %v", c.Args)
+		}
+	}
+
+	if !sawFocusedWindowRef {
+		t.Error("expected Launch to focus the in-window reference tab before launching")
+	}
+	if !sawLaunch {
+		t.Error("expected kitten @ launch to be called")
+	}
+}

@@ -16,13 +16,14 @@ type moveCall struct {
 	Delta int
 }
 
-// fakeKittyClient is a test double satisfying kitty.KittyClient. It models a
-// single OS window with an ordered tab list and mutates that list via
-// MoveTab (the only mutator Resort needs), simulating Kitty's
+// fakeKittyClient is a test double satisfying kitty.KittyClient. It can model
+// either a single OS window via tabs or multiple OS windows via windows. It
+// mutates the containing window's tab list via MoveTab, simulating Kitty's
 // move_tab_forward / move_tab_backward chain of adjacent swaps that preserve
-// tab IDs. FocusTab updates the focused-tab marker so focus restoration can
-// be asserted.
+// tab IDs. FocusTab updates the focused-tab marker so focus restoration can be
+// asserted.
 type fakeKittyClient struct {
+	windows    []kitty.OSWindow
 	tabs       []kitty.Tab
 	focused    int
 	moveCalls  []moveCall
@@ -30,12 +31,20 @@ type fakeKittyClient struct {
 }
 
 func (f *fakeKittyClient) ListWindows() ([]kitty.OSWindow, error) {
-	tabsCopy := make([]kitty.Tab, len(f.tabs))
-	copy(tabsCopy, f.tabs)
-	for i := range tabsCopy {
-		tabsCopy[i].IsActive = (tabsCopy[i].ID == f.focused)
+	windows := f.snapshotWindows()
+	focusedWindowID := 0
+	if wi, _, ok := f.findTab(f.focused); ok {
+		focusedWindowID = windows[wi].ID
 	}
-	return []kitty.OSWindow{{ID: 1, Tabs: tabsCopy}}, nil
+	for i := range windows {
+		windows[i].IsFocused = windows[i].ID == focusedWindowID
+		windows[i].IsActive = windows[i].ID == focusedWindowID
+		windows[i].LastFocused = windows[i].ID == focusedWindowID
+		for j := range windows[i].Tabs {
+			windows[i].Tabs[j].IsActive = windows[i].Tabs[j].ID == f.focused
+		}
+	}
+	return windows, nil
 }
 
 func (f *fakeKittyClient) MoveTab(matchExpr string, delta int) error {
@@ -46,14 +55,8 @@ func (f *fakeKittyClient) MoveTab(matchExpr string, delta int) error {
 	if err != nil {
 		return err
 	}
-	idx := -1
-	for i, t := range f.tabs {
-		if t.ID == id {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 {
+	wi, idx, ok := f.findTab(id)
+	if !ok {
 		return fmt.Errorf("fakeKittyClient: tab %d not found", id)
 	}
 	f.focused = id
@@ -64,12 +67,13 @@ func (f *fakeKittyClient) MoveTab(matchExpr string, delta int) error {
 		step = -1
 		delta = -delta
 	}
+	tabs := f.tabsForWindow(wi)
 	for k := 0; k < delta; k++ {
 		next := idx + step
-		if next < 0 || next >= len(f.tabs) {
+		if next < 0 || next >= len(tabs) {
 			return fmt.Errorf("fakeKittyClient: MoveTab swap out of bounds")
 		}
-		f.tabs[idx], f.tabs[next] = f.tabs[next], f.tabs[idx]
+		tabs[idx], tabs[next] = tabs[next], tabs[idx]
 		idx = next
 	}
 	return nil
@@ -85,13 +89,13 @@ func (f *fakeKittyClient) FocusTab(matchExpr string) error {
 	return nil
 }
 
-func (f *fakeKittyClient) LaunchTab(kitty.LaunchOpts) error                          { return nil }
-func (f *fakeKittyClient) CloseTab(string) error                                     { return nil }
+func (f *fakeKittyClient) LaunchTab(kitty.LaunchOpts) error                         { return nil }
+func (f *fakeKittyClient) CloseTab(string) error                                    { return nil }
 func (f *fakeKittyClient) SetTabColor(string, string, string, string, string) error { return nil }
-func (f *fakeKittyClient) SetTabTitle(string, string) error                          { return nil }
-func (f *fakeKittyClient) FocusWindow(string) error                                  { return nil }
-func (f *fakeKittyClient) GetText(string, string) (string, error)                    { return "", nil }
-func (f *fakeKittyClient) LaunchOverlayPager(string) error                           { return nil }
+func (f *fakeKittyClient) SetTabTitle(string, string) error                         { return nil }
+func (f *fakeKittyClient) FocusWindow(string) error                                 { return nil }
+func (f *fakeKittyClient) GetText(string, string) (string, error)                   { return "", nil }
+func (f *fakeKittyClient) LaunchOverlayPager(string) error                          { return nil }
 
 func parseIDMatch(matchExpr string) (int, error) {
 	rest, ok := strings.CutPrefix(matchExpr, "id:")
@@ -99,6 +103,49 @@ func parseIDMatch(matchExpr string) (int, error) {
 		return 0, fmt.Errorf("fakeKittyClient: expected id: match expression, got %q", matchExpr)
 	}
 	return strconv.Atoi(rest)
+}
+
+func (f *fakeKittyClient) snapshotWindows() []kitty.OSWindow {
+	if len(f.windows) == 0 {
+		tabsCopy := make([]kitty.Tab, len(f.tabs))
+		copy(tabsCopy, f.tabs)
+		return []kitty.OSWindow{{ID: 1, Tabs: tabsCopy}}
+	}
+
+	windowsCopy := make([]kitty.OSWindow, len(f.windows))
+	for i := range f.windows {
+		windowsCopy[i] = f.windows[i]
+		windowsCopy[i].Tabs = make([]kitty.Tab, len(f.windows[i].Tabs))
+		copy(windowsCopy[i].Tabs, f.windows[i].Tabs)
+	}
+	return windowsCopy
+}
+
+func (f *fakeKittyClient) findTab(id int) (int, int, bool) {
+	if len(f.windows) == 0 {
+		for i, t := range f.tabs {
+			if t.ID == id {
+				return 0, i, true
+			}
+		}
+		return 0, 0, false
+	}
+
+	for wi := range f.windows {
+		for ti, t := range f.windows[wi].Tabs {
+			if t.ID == id {
+				return wi, ti, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+func (f *fakeKittyClient) tabsForWindow(windowIndex int) []kitty.Tab {
+	if len(f.windows) == 0 {
+		return f.tabs
+	}
+	return f.windows[windowIndex].Tabs
 }
 
 func managedTab(id int, account, title string) kitty.Tab {
@@ -174,7 +221,7 @@ func TestResort(t *testing.T) {
 			name: "screenshot scenario in account mode",
 			mode: "account",
 			initial: []kitty.Tab{
-				managedTab(1, "personal", "P:\U0001F4DDtt"),   // 📝tt
+				managedTab(1, "personal", "P:\U0001F4DDtt"), // 📝tt
 				managedTab(2, "tech", "T:Katana"),
 				managedTab(3, "vtacyber", "V:sis"),
 				managedTab(4, "personal", "P:\U0001F431amx"),  // 🐱amx
@@ -299,6 +346,46 @@ func TestResort_UnmanagedTabContentsPreserved(t *testing.T) {
 	}
 	if len(unmanaged.Windows) != 1 || unmanaged.Windows[0].ID != 2000 || unmanaged.Title != "scratch" {
 		t.Errorf("unmanaged tab contents disturbed: %+v", unmanaged)
+	}
+}
+
+func TestResort_SortsEachOSWindowIndependently(t *testing.T) {
+	fake := &fakeKittyClient{
+		windows: []kitty.OSWindow{
+			{
+				ID: 1,
+				Tabs: []kitty.Tab{
+					managedTab(10, "personal", "P:b"),
+					managedTab(11, "personal", "P:a"),
+				},
+			},
+			{
+				ID: 2,
+				Tabs: []kitty.Tab{
+					unmanagedTab(20, "shell"),
+					managedTab(30, "work", "W:z"),
+					managedTab(40, "work", "W:a"),
+				},
+			},
+		},
+		focused: 30,
+	}
+
+	if err := session.Resort(fake, "alpha"); err != nil {
+		t.Fatalf("Resort: %v", err)
+	}
+
+	if got := tabIDs(fake.windows[0].Tabs); !equalInts(got, []int{11, 10}) {
+		t.Errorf("window 1 tab order = %v, want %v", got, []int{11, 10})
+	}
+	if got := tabIDs(fake.windows[1].Tabs); !equalInts(got, []int{20, 40, 30}) {
+		t.Errorf("window 2 tab order = %v, want %v", got, []int{20, 40, 30})
+	}
+	if fake.focused != 30 {
+		t.Errorf("expected focus restored to tab 30, got %d", fake.focused)
+	}
+	if len(fake.moveCalls) != 2 {
+		t.Errorf("MoveTab call count = %d, want 2 (calls: %v)", len(fake.moveCalls), fake.moveCalls)
 	}
 }
 

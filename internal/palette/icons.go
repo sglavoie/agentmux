@@ -77,7 +77,13 @@ func BuildTitle(base, state string, starred bool) string {
 func StripIcons(title string) string {
 	title = strings.TrimPrefix(title, ico.Star)
 	for _, name := range ico.StateOrder {
-		title = strings.TrimPrefix(title, ico.States[name])
+		icon := ico.States[name]
+		if icon == "" {
+			continue
+		}
+		if strings.HasPrefix(title, icon) {
+			return title[len(icon):]
+		}
 	}
 	return title
 }
