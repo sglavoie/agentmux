@@ -16,9 +16,11 @@ type KittyClient interface {
 	LaunchTab(opts LaunchOpts) error
 	// CloseTab closes the tab matched by matchExpr.
 	CloseTab(matchExpr string) error
-	// DetachTab moves the tab matched by matchExpr to sit immediately after
-	// the tab matched by targetMatchExpr in the same OS window.
-	DetachTab(matchExpr, targetMatchExpr string) error
+	// MoveTab focuses the tab matched by matchExpr and slides it |delta|
+	// positions in the tab bar. Positive delta moves the tab forward (toward
+	// the end of the bar); negative moves it backward. Tab IDs are preserved.
+	// A delta of zero is a no-op.
+	MoveTab(matchExpr string, delta int) error
 	// SetTabColor sets foreground/background colors on a matched tab.
 	SetTabColor(matchExpr, activeBg, inactiveBg, activeFg, inactiveFg string) error
 	// SetTabTitle sets the title of a matched tab.
@@ -119,9 +121,24 @@ func (c *SubprocessClient) CloseTab(matchExpr string) error {
 	return err
 }
 
-func (c *SubprocessClient) DetachTab(matchExpr, targetMatchExpr string) error {
-	_, err := c.kitten("detach-tab", "--no-response", "--match="+matchExpr, "--target-tab="+targetMatchExpr)
-	return err
+func (c *SubprocessClient) MoveTab(matchExpr string, delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	if err := c.FocusTab(matchExpr); err != nil {
+		return err
+	}
+	action := "move_tab_forward"
+	if delta < 0 {
+		action = "move_tab_backward"
+		delta = -delta
+	}
+	for i := 0; i < delta; i++ {
+		if _, err := c.kitten("action", action); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *SubprocessClient) SetTabColor(matchExpr, activeBg, inactiveBg, activeFg, inactiveFg string) error {

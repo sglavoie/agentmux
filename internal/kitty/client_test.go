@@ -114,36 +114,74 @@ func TestCloseTab_MatchExpr(t *testing.T) {
 	}
 }
 
-func TestDetachTab_CallsKitten(t *testing.T) {
+func TestMoveTab_CallsKitten(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 
-	if err := client.DetachTab("id:3", "id:1"); err != nil {
-		t.Fatalf("DetachTab: %v", err)
+	if err := client.MoveTab("id:5", -2); err != nil {
+		t.Fatalf("MoveTab: %v", err)
 	}
-	if len(runner.Calls) == 0 {
-		t.Fatal("expected kitten to be called")
-	}
-	if runner.Calls[0].Name != "kitten" {
-		t.Errorf("expected 'kitten', got %q", runner.Calls[0].Name)
+	if len(runner.Calls) != 3 {
+		t.Fatalf("expected 3 kitten calls, got %d: %v", len(runner.Calls), runner.Calls)
 	}
 
-	want := map[string]bool{
-		"detach-tab":        false,
-		"--no-response":     false,
-		"--match=id:3":      false,
-		"--target-tab=id:1": false,
+	// First call: focus-tab --match=id:5
+	focus := runner.Calls[0]
+	if focus.Name != "kitten" {
+		t.Errorf("call 0: expected 'kitten', got %q", focus.Name)
 	}
-	for _, a := range runner.Calls[0].Args {
-		if _, ok := want[a]; ok {
-			want[a] = true
+	if !containsArg(focus.Args, "focus-tab") || !containsArg(focus.Args, "--match=id:5") {
+		t.Errorf("call 0: expected focus-tab --match=id:5, got %v", focus.Args)
+	}
+
+	// Calls 1 and 2: action move_tab_backward
+	for i := 1; i <= 2; i++ {
+		c := runner.Calls[i]
+		if c.Name != "kitten" {
+			t.Errorf("call %d: expected 'kitten', got %q", i, c.Name)
+		}
+		if !containsArg(c.Args, "action") || !containsArg(c.Args, "move_tab_backward") {
+			t.Errorf("call %d: expected action move_tab_backward, got %v", i, c.Args)
 		}
 	}
-	for arg, found := range want {
-		if !found {
-			t.Errorf("expected %q in kitten @ detach-tab args, got %v", arg, runner.Calls[0].Args)
+}
+
+func TestMoveTab_ZeroDelta_NoCalls(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.MoveTab("id:5", 0); err != nil {
+		t.Fatalf("MoveTab: %v", err)
+	}
+	if len(runner.Calls) != 0 {
+		t.Errorf("expected 0 kitten calls for delta=0, got %d: %v", len(runner.Calls), runner.Calls)
+	}
+}
+
+func TestMoveTab_PositiveDelta_ForwardAction(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.MoveTab("id:7", 3); err != nil {
+		t.Fatalf("MoveTab: %v", err)
+	}
+	if len(runner.Calls) != 4 {
+		t.Fatalf("expected 4 kitten calls, got %d", len(runner.Calls))
+	}
+	for i := 1; i <= 3; i++ {
+		if !containsArg(runner.Calls[i].Args, "move_tab_forward") {
+			t.Errorf("call %d: expected move_tab_forward, got %v", i, runner.Calls[i].Args)
 		}
 	}
+}
+
+func containsArg(args []string, want string) bool {
+	for _, a := range args {
+		if a == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestLaunchOverlayPager_Args(t *testing.T) {

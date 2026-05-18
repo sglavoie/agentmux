@@ -10,79 +10,88 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// detachCall records one DetachTab invocation against fakeKittyClient.
-type detachCall struct {
-	Source string
-	Target string
+// moveCall records one MoveTab invocation against fakeKittyClient.
+type moveCall struct {
+	Match string
+	Delta int
 }
 
 // fakeKittyClient is a test double satisfying kitty.KittyClient. It models a
-// single OS window with an ordered tab list and mutates that list in response
-// to DetachTab calls (the only mutator Resort needs). All other interface
-// methods are stubbed.
+// single OS window with an ordered tab list and mutates that list via
+// MoveTab (the only mutator Resort needs), simulating Kitty's
+// move_tab_forward / move_tab_backward chain of adjacent swaps that preserve
+// tab IDs. FocusTab updates the focused-tab marker so focus restoration can
+// be asserted.
 type fakeKittyClient struct {
-	tabs  []kitty.Tab
-	calls []detachCall
+	tabs       []kitty.Tab
+	focused    int
+	moveCalls  []moveCall
+	focusCalls []string
 }
 
 func (f *fakeKittyClient) ListWindows() ([]kitty.OSWindow, error) {
 	tabsCopy := make([]kitty.Tab, len(f.tabs))
 	copy(tabsCopy, f.tabs)
+	for i := range tabsCopy {
+		tabsCopy[i].IsActive = (tabsCopy[i].ID == f.focused)
+	}
 	return []kitty.OSWindow{{ID: 1, Tabs: tabsCopy}}, nil
 }
 
-func (f *fakeKittyClient) DetachTab(matchExpr, targetMatchExpr string) error {
-	src, err := parseIDMatch(matchExpr)
+func (f *fakeKittyClient) MoveTab(matchExpr string, delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	id, err := parseIDMatch(matchExpr)
 	if err != nil {
 		return err
 	}
-	dst, err := parseIDMatch(targetMatchExpr)
+	idx := -1
+	for i, t := range f.tabs {
+		if t.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return fmt.Errorf("fakeKittyClient: tab %d not found", id)
+	}
+	f.focused = id
+	f.moveCalls = append(f.moveCalls, moveCall{Match: matchExpr, Delta: delta})
+
+	step := 1
+	if delta < 0 {
+		step = -1
+		delta = -delta
+	}
+	for k := 0; k < delta; k++ {
+		next := idx + step
+		if next < 0 || next >= len(f.tabs) {
+			return fmt.Errorf("fakeKittyClient: MoveTab swap out of bounds")
+		}
+		f.tabs[idx], f.tabs[next] = f.tabs[next], f.tabs[idx]
+		idx = next
+	}
+	return nil
+}
+
+func (f *fakeKittyClient) FocusTab(matchExpr string) error {
+	id, err := parseIDMatch(matchExpr)
 	if err != nil {
 		return err
 	}
-	f.calls = append(f.calls, detachCall{Source: matchExpr, Target: targetMatchExpr})
-
-	srcIdx := -1
-	for i, t := range f.tabs {
-		if t.ID == src {
-			srcIdx = i
-			break
-		}
-	}
-	if srcIdx < 0 {
-		return fmt.Errorf("fakeKittyClient: source tab %d not found", src)
-	}
-	srcTab := f.tabs[srcIdx]
-	f.tabs = append(f.tabs[:srcIdx], f.tabs[srcIdx+1:]...)
-
-	dstIdx := -1
-	for i, t := range f.tabs {
-		if t.ID == dst {
-			dstIdx = i
-			break
-		}
-	}
-	if dstIdx < 0 {
-		return fmt.Errorf("fakeKittyClient: target tab %d not found", dst)
-	}
-	newTabs := make([]kitty.Tab, 0, len(f.tabs)+1)
-	newTabs = append(newTabs, f.tabs[:dstIdx+1]...)
-	newTabs = append(newTabs, srcTab)
-	newTabs = append(newTabs, f.tabs[dstIdx+1:]...)
-	f.tabs = newTabs
+	f.focusCalls = append(f.focusCalls, matchExpr)
+	f.focused = id
 	return nil
 }
 
-func (f *fakeKittyClient) LaunchTab(kitty.LaunchOpts) error               { return nil }
-func (f *fakeKittyClient) CloseTab(string) error                          { return nil }
-func (f *fakeKittyClient) SetTabColor(string, string, string, string, string) error {
-	return nil
-}
-func (f *fakeKittyClient) SetTabTitle(string, string) error      { return nil }
-func (f *fakeKittyClient) FocusTab(string) error                 { return nil }
-func (f *fakeKittyClient) FocusWindow(string) error              { return nil }
-func (f *fakeKittyClient) GetText(string, string) (string, error) { return "", nil }
-func (f *fakeKittyClient) LaunchOverlayPager(string) error       { return nil }
+func (f *fakeKittyClient) LaunchTab(kitty.LaunchOpts) error                          { return nil }
+func (f *fakeKittyClient) CloseTab(string) error                                     { return nil }
+func (f *fakeKittyClient) SetTabColor(string, string, string, string, string) error { return nil }
+func (f *fakeKittyClient) SetTabTitle(string, string) error                          { return nil }
+func (f *fakeKittyClient) FocusWindow(string) error                                  { return nil }
+func (f *fakeKittyClient) GetText(string, string) (string, error)                    { return "", nil }
+func (f *fakeKittyClient) LaunchOverlayPager(string) error                           { return nil }
 
 func parseIDMatch(matchExpr string) (int, error) {
 	rest, ok := strings.CutPrefix(matchExpr, "id:")
@@ -106,8 +115,8 @@ func managedTab(id int, account, title string) kitty.Tab {
 
 func unmanagedTab(id int, title string) kitty.Tab {
 	return kitty.Tab{
-		ID:    id,
-		Title: title,
+		ID:      id,
+		Title:   title,
 		Windows: []kitty.Window{{ID: id * 100, Title: title}},
 	}
 }
@@ -165,28 +174,29 @@ func TestResort(t *testing.T) {
 			name: "screenshot scenario in account mode",
 			mode: "account",
 			initial: []kitty.Tab{
-				managedTab(1, "personal", "P:\U0001F4DDtt"),     // 📝tt
+				managedTab(1, "personal", "P:\U0001F4DDtt"),   // 📝tt
 				managedTab(2, "tech", "T:Katana"),
 				managedTab(3, "vtacyber", "V:sis"),
-				managedTab(4, "personal", "P:\U0001F431amx"),    // 🐱amx
-				managedTab(5, "vtacyber", "V:\U0001F3B5muse"),   // 🎵muse
+				managedTab(4, "personal", "P:\U0001F431amx"),  // 🐱amx
+				managedTab(5, "vtacyber", "V:\U0001F3B5muse"), // 🎵muse
 			},
 			wantOrder: []int{4, 1, 2, 5, 3},
-			wantMoves: 6,
+			wantMoves: 2,
 		},
 		{
-			name: "unmanaged tab interleaved stays in the list",
+			name: "unmanaged tab shifts when managed tab slides past",
 			mode: "alpha",
 			initial: []kitty.Tab{
 				managedTab(10, "personal", "P:zeta"),
 				unmanagedTab(20, "scratch"),
 				managedTab(30, "personal", "P:alpha"),
 			},
-			// Order of managed tabs after resort: 30, 10. Unmanaged tab is
-			// never moved directly but shifts relative position as a side
-			// effect of moving 10 to after 30.
-			wantOrder: []int{20, 30, 10},
-			wantMoves: 1,
+			// M30 slides from idx 2 to 0 (delta=-2), shifting M10 and U20
+			// right by one. M10 then slides from idx 1 to 2 (delta=+1),
+			// swapping past U20. Final managed order: [30, 10]; U20 sits
+			// between them — the documented trade-off.
+			wantOrder: []int{30, 20, 10},
+			wantMoves: 2,
 		},
 	}
 
@@ -204,13 +214,12 @@ func TestResort(t *testing.T) {
 			if !equalInts(gotOrder, tc.wantOrder) {
 				t.Errorf("final tab order = %v, want %v", gotOrder, tc.wantOrder)
 			}
-			if len(fake.calls) != tc.wantMoves {
-				t.Errorf("DetachTab call count = %d, want %d (calls: %v)", len(fake.calls), tc.wantMoves, fake.calls)
+			if len(fake.moveCalls) != tc.wantMoves {
+				t.Errorf("MoveTab call count = %d, want %d (calls: %v)", len(fake.moveCalls), tc.wantMoves, fake.moveCalls)
 			}
-			// Sanity: every detach call must use id: match expressions.
-			for _, c := range fake.calls {
-				if !strings.HasPrefix(c.Source, "id:") || !strings.HasPrefix(c.Target, "id:") {
-					t.Errorf("expected id: match expressions, got source=%q target=%q", c.Source, c.Target)
+			for _, c := range fake.moveCalls {
+				if !strings.HasPrefix(c.Match, "id:") {
+					t.Errorf("expected id: match expression, got %q", c.Match)
 				}
 			}
 		})
@@ -224,8 +233,8 @@ func TestResort_NoOpWhenSingleTab(t *testing.T) {
 	if err := session.Resort(fake, "alpha"); err != nil {
 		t.Fatalf("Resort: %v", err)
 	}
-	if len(fake.calls) != 0 {
-		t.Errorf("expected no DetachTab calls for single tab, got %d", len(fake.calls))
+	if len(fake.moveCalls) != 0 {
+		t.Errorf("expected no MoveTab calls for single tab, got %d", len(fake.moveCalls))
 	}
 }
 
@@ -236,8 +245,60 @@ func TestResort_NoOpWhenNoManagedTabs(t *testing.T) {
 	if err := session.Resort(fake, "alpha"); err != nil {
 		t.Fatalf("Resort: %v", err)
 	}
-	if len(fake.calls) != 0 {
-		t.Errorf("expected no DetachTab calls when nothing is managed, got %d", len(fake.calls))
+	if len(fake.moveCalls) != 0 {
+		t.Errorf("expected no MoveTab calls when nothing is managed, got %d", len(fake.moveCalls))
+	}
+}
+
+func TestResort_RestoresFocus(t *testing.T) {
+	fake := &fakeKittyClient{
+		tabs: []kitty.Tab{
+			managedTab(1, "personal", "P:c"),
+			managedTab(2, "personal", "P:b"),
+			managedTab(3, "personal", "P:a"),
+		},
+		focused: 2,
+	}
+	if err := session.Resort(fake, "alpha"); err != nil {
+		t.Fatalf("Resort: %v", err)
+	}
+	if fake.focused != 2 {
+		t.Errorf("expected focus restored to tab 2, got %d", fake.focused)
+	}
+	found := false
+	for _, fc := range fake.focusCalls {
+		if fc == "id:2" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected FocusTab(id:2) to be called for restore, got focusCalls=%v", fake.focusCalls)
+	}
+}
+
+func TestResort_UnmanagedTabContentsPreserved(t *testing.T) {
+	fake := &fakeKittyClient{
+		tabs: []kitty.Tab{
+			managedTab(10, "personal", "P:zeta"),
+			unmanagedTab(20, "scratch"),
+			managedTab(30, "personal", "P:alpha"),
+		},
+	}
+	if err := session.Resort(fake, "alpha"); err != nil {
+		t.Fatalf("Resort: %v", err)
+	}
+	var unmanaged *kitty.Tab
+	for i := range fake.tabs {
+		if fake.tabs[i].ID == 20 {
+			unmanaged = &fake.tabs[i]
+			break
+		}
+	}
+	if unmanaged == nil {
+		t.Fatalf("unmanaged tab id=20 missing from final tab list: %v", tabIDs(fake.tabs))
+	}
+	if len(unmanaged.Windows) != 1 || unmanaged.Windows[0].ID != 2000 || unmanaged.Title != "scratch" {
+		t.Errorf("unmanaged tab contents disturbed: %+v", unmanaged)
 	}
 }
 
