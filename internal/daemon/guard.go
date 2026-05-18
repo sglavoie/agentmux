@@ -54,12 +54,18 @@ func NewStateGuard(duration time.Duration) *StateGuard {
 //     the guard is cleared so the active state breaks through immediately.
 //     This handles the common flow where a tool executes right after permission
 //     approval — without it the key icon would persist through long thinking phases.
+//   - If the current guard is "permission" and the incoming action is "subagent",
+//     the guard is cleared so the 🤖 icon shows. A subagent starting means the
+//     agent is actively doing work; the pending permission is resolved.
 //   - If the current guard is "failure" and the incoming action is "active",
 //     the guard is cleared so the active state breaks through immediately.
 //     Failure is transient: the next active event means Claude is back to work,
 //     so the ❗ icon should not strand across long tool calls. The check is
 //     string-exact on "failure" so it does NOT apply to "stop_failure", which
 //     is terminal and must persist until the user explicitly clears it.
+//   - If the current guard is "failure" and the incoming action is "subagent",
+//     the guard is cleared so the 🤖 icon shows. This mirrors the failure→active
+//     bypass: a subagent starting has the same semantic — the agent is back to work.
 //   - If the current guard is "stop" and isPrompt is true, the guard is cleared
 //     so the prompt's active state breaks through immediately. The check is
 //     string-exact on "stop" so a prompt after a "stop_failure" still falls
@@ -91,9 +97,17 @@ func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allo
 		case entry.action == "permission" && action == "active":
 			// Post-permission active: permission resolved, allow active through.
 			delete(g.entries, windowID)
+		case entry.action == "permission" && action == "subagent":
+			// Subagent starting while permission was pending: the agent is
+			// actively running work, so the 🤖 icon should supersede the 🔑.
+			delete(g.entries, windowID)
 		case entry.action == "failure" && action == "active":
 			// Failure is transient: the next active event means Claude is back to
 			// work, so let it overwrite the ✗ immediately.
+			delete(g.entries, windowID)
+		case entry.action == "failure" && action == "subagent":
+			// Failure is transient: a subagent starting has the same meaning as
+			// a follow-up active — the agent is back to work. Let 🤖 show.
 			delete(g.entries, windowID)
 		case entry.action == "elicitation" && action == "active":
 			// User answered the question; let active through immediately.

@@ -232,6 +232,54 @@ func TestGuard_SubagentLosesToFailure(t *testing.T) {
 	}
 }
 
+func TestGuard_SubagentClearsPermissionGuard(t *testing.T) {
+	// When a permission guard is active, a subagentStart should clear it so the
+	// 🤖 icon shows. This mirrors the permission→active bypass: once the agent
+	// is doing work (launching a subagent), the pending permission is resolved.
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "permission", false)
+
+	ok, eff := g.TryUpdate(1, "subagent", false)
+	if !ok || eff != "subagent" {
+		t.Fatalf("want subagent to clear permission guard, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "subagent" {
+		t.Fatalf("want guard=subagent after permission→subagent, got %q", cur)
+	}
+}
+
+func TestGuard_SubagentClearsFailureGuard(t *testing.T) {
+	// When a failure guard is active, a subagentStart should clear it so the
+	// 🤖 icon shows. This mirrors the failure→active bypass: failure is
+	// transient and a subagent starting means the agent is back to work.
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "failure", false)
+
+	ok, eff := g.TryUpdate(1, "subagent", false)
+	if !ok || eff != "subagent" {
+		t.Fatalf("want subagent to clear failure guard, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "subagent" {
+		t.Fatalf("want guard=subagent after failure→subagent, got %q", cur)
+	}
+}
+
+func TestGuard_StopFailureNotClearedBySubagent(t *testing.T) {
+	// stop_failure is terminal and must NOT be cleared by subagent (unlike
+	// failure which is transient). The error icon must persist until the user
+	// explicitly acknowledges it, even if a spurious subagent event fires.
+	g := NewStateGuard(time.Hour)
+	g.TryUpdate(1, "stop_failure", false)
+
+	ok, eff := g.TryUpdate(1, "subagent", false)
+	if ok || eff != "" {
+		t.Fatalf("want stop_failure to block subagent, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "stop_failure" {
+		t.Fatalf("want guard=stop_failure, got %q", cur)
+	}
+}
+
 func TestGuard_StopFailureTerminal_NotClearedByActive(t *testing.T) {
 	// stop_failure is terminal: a follow-up active must NOT clear the guard.
 	// The clearing branch in TryUpdate is string-exact on "failure", so

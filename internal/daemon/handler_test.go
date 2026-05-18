@@ -1100,3 +1100,101 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 		}
 	})
 }
+
+// TestHandler_SubagentClearsHighPriorityGuard verifies the fix for the Copilot
+// icon-persistence bug: when a permission or failure guard is active and
+// subagentStart fires, the 🤖 icon must appear immediately instead of being
+// blocked by the higher-priority guard.
+//
+// Real scenario: Copilot fires permissionRequest (speculative, or real) before
+// subagentStart. Without the fix, the permission guard (priority 3) blocks the
+// subagent icon (priority 2), leaving the 🔑 showing while a subagent runs.
+func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
+	t.Run("subagentStart clears permission guard and shows robot icon", func(t *testing.T) {
+		h := newTestHandler()
+
+		// Establish a permission guard (key icon showing).
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+			t.Fatalf("setup: want key icon, got %+v", resp)
+		}
+
+		// SubagentStart must clear the permission guard and show the robot.
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "subagent" {
+			t.Fatalf("subagentStart after permission: want icon_state=subagent, got %+v", resp)
+		}
+		if cur := h.guard.Current(1); cur != "subagent" {
+			t.Fatalf("guard should be subagent after subagentStart, got %q", cur)
+		}
+
+		// Mid-subagent permissionRequest must be suppressed (counter > 0).
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("mid-subagent permissionRequest: want allowed=false, got %+v", resp)
+		}
+
+		// subagentStop (last) must clear guard and show bolt.
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "subagentStop"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+			t.Fatalf("subagentStop: want icon_state=bolt, got %+v", resp)
+		}
+	})
+
+	t.Run("subagentStart clears failure guard and shows robot icon", func(t *testing.T) {
+		h := newTestHandler()
+
+		// Establish a failure guard (error icon showing).
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure", Event: "postToolUseFailure"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "error" {
+			t.Fatalf("setup: want error icon, got %+v", resp)
+		}
+
+		// SubagentStart must clear the failure guard and show the robot.
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "subagent" {
+			t.Fatalf("subagentStart after failure: want icon_state=subagent, got %+v", resp)
+		}
+		if cur := h.guard.Current(1); cur != "subagent" {
+			t.Fatalf("guard should be subagent after subagentStart, got %q", cur)
+		}
+
+		// subagentStop (last) must clear guard and show bolt.
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "subagentStop"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+			t.Fatalf("subagentStop: want icon_state=bolt, got %+v", resp)
+		}
+	})
+
+	t.Run("stop_failure guard is NOT cleared by subagentStart", func(t *testing.T) {
+		// stop_failure is terminal; a spurious subagentStart must not hide the
+		// error icon — the user must explicitly acknowledge a terminal failure.
+		h := newTestHandler()
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop_failure"})
+
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("subagentStart after stop_failure: want allowed=false, got %+v", resp)
+		}
+	})
+
+	t.Run("Copilot sequence: speculative permissionRequest before subagentStart shows robot", func(t *testing.T) {
+		// Reproduces the reported Copilot bug: active (postToolUse) →
+		// permissionRequest (speculative; isAutoApprovedPerm=false because
+		// prevEvent is postToolUse, not preToolUse) → subagentStart.
+		// The robot must appear instead of the key persisting.
+		h := newTestHandler()
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "postToolUse"})
+		// permissionRequest with PostToolUse active guard → NOT auto-approved → key
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+			t.Fatalf("setup: want key icon, got %+v", resp)
+		}
+		// subagentStart must override the key icon with the robot.
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "subagent" {
+			t.Fatalf("subagentStart: want icon_state=subagent, got %+v", resp)
+		}
+	})
+}
