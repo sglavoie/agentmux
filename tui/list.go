@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
@@ -513,10 +514,12 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int)
 		iconCol = icon
 	}
 
-	// Account prefix badge (first char of account, uppercased).
+	// Account prefix badge (first rune of account, uppercased). Use the first
+	// rune rather than the first byte so a multibyte account name produces a
+	// valid UTF-8 badge instead of a truncated invalid byte.
 	acctBadge := " "
-	if len(s.Account) > 0 {
-		acctBadge = strings.ToUpper(s.Account[:1])
+	if r, sz := utf8.DecodeRuneInString(s.Account); sz > 0 && r != utf8.RuneError {
+		acctBadge = strings.ToUpper(string(r))
 	}
 
 	colorName := acctColor[s.Account]

@@ -90,10 +90,15 @@ func validateAccounts(accounts []Account) []string {
 				a.Name, a.Color,
 			))
 		}
-		if seen[a.Name] {
-			errs = append(errs, fmt.Sprintf("duplicate profile name %q", a.Name))
+		// Only check duplicates for named profiles. Otherwise a config with
+		// two unnamed entries reports a misleading 'duplicate profile name ""'
+		// on top of the per-entry "name is required" error.
+		if a.Name != "" {
+			if seen[a.Name] {
+				errs = append(errs, fmt.Sprintf("duplicate profile name %q", a.Name))
+			}
+			seen[a.Name] = true
 		}
-		seen[a.Name] = true
 	}
 	return errs
 }

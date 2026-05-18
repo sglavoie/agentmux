@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	runewidth "github.com/mattn/go-runewidth"
 
@@ -264,6 +265,30 @@ func TestFormatRowHarnessBadge(t *testing.T) {
 	}
 	if strings.Contains(rowNone, "[cl]") || strings.Contains(rowNone, "[cp]") {
 		t.Errorf("expected no harness badge for empty harness; got %q", rowNone)
+	}
+}
+
+// TestFormatRowAcctBadgeUnicode pins the contract that multibyte account
+// names produce a valid UTF-8 badge taken from the first rune, not a
+// truncated invalid byte that lipgloss would render as a replacement glyph.
+func TestFormatRowAcctBadgeUnicode(t *testing.T) {
+	cases := []struct {
+		account string
+		want    string
+	}{
+		{"éscriba", "[É]"},
+		{"中文", "[中]"},
+		{"🐙ctopus", "[🐙]"},
+	}
+	for _, tc := range cases {
+		s := session.RunningSession{Base: "x", Account: tc.account}
+		row := stripAnsi(formatRow(s, nil, 0))
+		if !strings.Contains(row, tc.want) {
+			t.Errorf("account %q: row %q does not contain expected badge %q", tc.account, row, tc.want)
+		}
+		if !utf8.ValidString(row) {
+			t.Errorf("account %q: rendered row is not valid UTF-8: %q", tc.account, row)
+		}
 	}
 }
 

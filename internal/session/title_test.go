@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"testing"
+	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -21,6 +22,30 @@ func TestAccountPrefix(t *testing.T) {
 		got := session.AccountPrefix(tc.account)
 		if got != tc.want {
 			t.Errorf("AccountPrefix(%q) = %q, want %q", tc.account, got, tc.want)
+		}
+	}
+}
+
+// TestProfilePrefix_Unicode pins the multibyte-first-rune contract: a profile
+// name whose first character spans more than one UTF-8 byte must yield a
+// valid UTF-8 prefix, not a truncated invalid byte that corrupts the tab
+// title rendered by Kitty.
+func TestProfilePrefix_Unicode(t *testing.T) {
+	cases := []struct {
+		profile string
+		want    string
+	}{
+		{"éscriba", "É:"},   // 2-byte rune
+		{"中文", "中:"},        // 3-byte rune; ToUpper is a no-op
+		{"🐙ctopus", "🐙:"},  // 4-byte rune
+	}
+	for _, tc := range cases {
+		got := session.ProfilePrefix(tc.profile)
+		if got != tc.want {
+			t.Errorf("ProfilePrefix(%q) = %q, want %q", tc.profile, got, tc.want)
+		}
+		if !utf8.ValidString(got) {
+			t.Errorf("ProfilePrefix(%q) returned invalid UTF-8 %q", tc.profile, got)
 		}
 	}
 }

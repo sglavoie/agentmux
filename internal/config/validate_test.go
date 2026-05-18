@@ -146,6 +146,31 @@ func TestValidate_UnknownHookDisabledEvent(t *testing.T) {
 	}
 }
 
+// TestValidate_EmptyNamesNotReportedAsDuplicate pins the contract that
+// multiple unnamed profiles surface as "name is required" only, not as a
+// misleading 'duplicate profile name ""' on top. The duplicate check must
+// skip the empty-name case so the user sees the real fix (name the
+// profiles) instead of a phantom duplicate report.
+func TestValidate_EmptyNamesNotReportedAsDuplicate(t *testing.T) {
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Harness: "claude", HomeDir: "/tmp/a", Color: "blue"},
+			{Harness: "claude", HomeDir: "/tmp/b", Color: "green"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for unnamed profiles, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "name is required") {
+		t.Errorf("expected per-entry 'name is required' error, got %q", msg)
+	}
+	if strings.Contains(msg, "duplicate profile name") {
+		t.Errorf("validation must not report duplicates for empty names; got %q", msg)
+	}
+}
+
 func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.
