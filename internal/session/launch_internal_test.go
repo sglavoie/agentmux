@@ -183,6 +183,45 @@ func TestLaunch_LogsWarnWhenColorRetryFails(t *testing.T) {
 	}
 }
 
+// TestApplyColorWithRetry_NoSleepAfterFinalAttempt verifies that the retry
+// loop returns immediately after the last failed attempt rather than burning
+// one final backoff sleep. Prior behavior padded every failed launch with
+// ~500 ms of wall time the caller could not reclaim, slowing both interactive
+// launches and the test suite. Uses a deliberately long backoff to make the
+// regression obvious if it returns: 3 retries × 100 ms (no growth) means the
+// pre-fix loop would have slept ~300 ms while the fixed loop sleeps ~200 ms.
+func TestApplyColorWithRetry_NoSleepAfterFinalAttempt(t *testing.T) {
+	origDelay, origMul, origRetries := colorInitialDelay, colorBackoffMul, colorMaxRetries
+	t.Cleanup(func() {
+		colorInitialDelay = origDelay
+		colorBackoffMul = origMul
+		colorMaxRetries = origRetries
+	})
+	colorInitialDelay = 100 * time.Millisecond
+	colorBackoffMul = 1.0
+	colorMaxRetries = 3
+
+	runner := &colorFailRunner{
+		lsResponse: []byte(`[]`), // tab never appears, force every retry path
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+
+	start := time.Now()
+	err := applyColorWithRetry(client, map[int]bool{}, "W:absent", palette.Color{})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected error when tab never appears")
+	}
+	// We sleep between attempts (N-1) but not after the last attempt:
+	// 3 retries with 100 ms backoff = 2 sleeps = ~200 ms total.
+	// Allow generous headroom (≤ 280 ms) for CI noise but tight enough to
+	// catch a regression where every iteration sleeps (would be ~300 ms).
+	if elapsed > 280*time.Millisecond {
+		t.Errorf("retry loop slept too long: %v (should be ~200 ms with 3 retries × 100 ms backoff and no final sleep)", elapsed)
+	}
+}
+
 // TestApplyColorWithRetry_ReturnsNilOnSuccess guards the happy path so the
 // new return-error refactor doesn't accidentally start surfacing nil.err
 // (e.g. by stamping lastErr before the success break).

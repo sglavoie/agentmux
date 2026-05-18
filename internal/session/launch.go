@@ -172,7 +172,7 @@ func tabIDSet(sessions []RunningSession) map[int]bool {
 func applyColorWithRetry(client kitty.KittyClient, beforeIDs map[int]bool, formattedTitle string, color palette.Color) error {
 	delay := colorInitialDelay
 	var lastErr error
-	for range colorMaxRetries {
+	for i := range colorMaxRetries {
 		osWindows, err := client.ListWindows()
 		if err != nil {
 			lastErr = fmt.Errorf("listing windows for color apply: %w", err)
@@ -190,6 +190,13 @@ func applyColorWithRetry(client kitty.KittyClient, beforeIDs map[int]bool, forma
 					}
 				}
 			}
+		}
+		// Skip the sleep on the final iteration — we're about to return.
+		// Previously the function slept the full backoff after the last attempt
+		// (~500 ms at default tuning) before returning, padding every failed
+		// launch with wasted wall time the caller cannot reclaim.
+		if i == colorMaxRetries-1 {
+			break
 		}
 		time.Sleep(delay)
 		delay = time.Duration(float64(delay) * colorBackoffMul)

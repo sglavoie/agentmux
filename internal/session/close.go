@@ -33,9 +33,15 @@ func Close(client kitty.KittyClient, tabID int) error {
 
 // PollClosed waits for the tab with tabID to disappear from kitten @ ls.
 // Returns nil once the tab is gone, ErrCloseTimeout after closePollMax polls.
+//
+// The first poll runs immediately so callers do not pay closePollDelay of
+// wall-time when the tab has already disappeared by the time we ask. Subsequent
+// polls sleep first so Kitty has a chance to actually process the close-tab.
 func PollClosed(client kitty.KittyClient, tabID int) error {
 	for i := range closePollMax {
-		time.Sleep(closePollDelay)
+		if i > 0 {
+			time.Sleep(closePollDelay)
+		}
 		closeDebug.Printf("PollClosed: poll %d/%d for tabID=%d", i+1, closePollMax, tabID)
 		osWindows, err := client.ListWindows()
 		if err != nil {
