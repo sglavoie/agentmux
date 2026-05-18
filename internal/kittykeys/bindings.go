@@ -21,6 +21,8 @@ var Actions = []Action{
 	{Key: "f3", Section: "Scrollback", Description: "toggle error/warning markers"},
 	{Key: "f12", Section: "Scrollback", Description: "broadcast input to all windows in tab"},
 	// Tab navigation
+	{Key: "f7", Section: "Navigation", Description: "focus previous managed tab", AmxCommand: "focus-prev-managed", LaunchType: "background"},
+	{Key: "f9", Section: "Navigation", Description: "focus next managed tab", AmxCommand: "focus-next-managed", LaunchType: "background"},
 	{Key: "cmd+1 – cmd+0", Section: "Navigation", Description: "switch to tab 1–10"},
 	{Key: "cmd+l", Section: "Navigation", Description: "toggle between two most recently used tabs"},
 }
