@@ -7,6 +7,9 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -180,6 +183,92 @@ func TestServer_BadPayloadCounterRaceFree(t *testing.T) {
 	want := uint64(goroutines * perGoroutine)
 	if got := srv.badPayloads.Load(); got != want {
 		t.Fatalf("concurrent bad payloads: counter = %d, want %d", got, want)
+	}
+}
+
+// TestServer_CloseWaitsForInflightHandlers verifies that Server.Close blocks
+// until every spawned handleConn goroutine has returned. A client opens a
+// connection and stalls without sending a complete request, leaving the
+// handler parked inside bufio.Scanner.Scan. We assert that Close does not
+// return while the handler is parked, and unblocks once the client closes.
+//
+// Synchronization between the test and the handler uses two unbuffered
+// channels (started, closed via onConnStart; serveDone, closed when Serve
+// returns) rather than sleeps to avoid flakes under load.
+func TestServer_CloseWaitsForInflightHandlers(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-srvclose-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "d.sock")
+
+	guard := NewStateGuard(time.Hour)
+	notifier := NewNotifier(&config.NotificationConfig{})
+	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	handler := NewHandler(guard, notifier)
+
+	server, err := NewServer(socketPath, handler)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	started := make(chan struct{})
+	server.onConnStart = func() { close(started) }
+
+	serveDone := make(chan struct{})
+	go func() {
+		_ = server.Serve(context.Background())
+		close(serveDone)
+	}()
+
+	// Open a connection and write a partial request with no trailing newline,
+	// so the server-side scanner blocks waiting for more data.
+	conn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	if _, err := conn.Write([]byte("{\"type\":\"state_query\"")); err != nil {
+		t.Fatalf("partial write: %v", err)
+	}
+
+	// Wait deterministically until the handler goroutine has registered.
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleConn goroutine never started")
+	}
+
+	// Close the listener; Close must NOT return until the in-flight handler
+	// finishes, which requires the client connection to be closed.
+	closeReturned := make(chan struct{})
+	go func() {
+		server.Close()
+		close(closeReturned)
+	}()
+
+	select {
+	case <-closeReturned:
+		t.Fatal("Close returned while a handler was still in flight")
+	case <-time.After(50 * time.Millisecond):
+		// Expected: Close is parked on wg.Wait().
+	}
+
+	// Releasing the client unblocks the handler's scanner; Close must now return.
+	_ = conn.Close()
+
+	select {
+	case <-closeReturned:
+		// Good.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not return after in-flight handler completed")
+	}
+
+	// Serve must also have returned now (listener closed, handlers drained).
+	select {
+	case <-serveDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return after Close")
 	}
 }
 

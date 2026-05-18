@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"sync"
 	"sync/atomic"
 )
 
@@ -27,6 +28,14 @@ type Server struct {
 	handler     *Handler
 	ln          net.Listener
 	badPayloads atomic.Uint64
+	// wg tracks in-flight handleConn goroutines so shutdown can wait for them
+	// to finish draining instead of returning while a request is still being
+	// processed.
+	wg sync.WaitGroup
+	// onConnStart, when non-nil, is invoked synchronously inside handleConn
+	// before any I/O occurs. Test-only hook used to deterministically observe
+	// that a handler goroutine has registered with wg without polling.
+	onConnStart func()
 }
 
 // NewServer creates a Server bound to socketPath.
@@ -44,11 +53,16 @@ func NewServer(socketPath string, handler *Handler) (*Server, error) {
 }
 
 // Serve accepts connections until ctx is cancelled or the listener is closed.
+// On return, Serve blocks until every in-flight handleConn goroutine has
+// finished so callers can rely on the daemon being fully drained before the
+// socket file is removed.
 func (s *Server) Serve(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		_ = s.ln.Close()
 	}()
+
+	defer s.wg.Wait()
 
 	for {
 		conn, err := s.ln.Accept()
@@ -60,15 +74,24 @@ func (s *Server) Serve(ctx context.Context) error {
 				return err
 			}
 		}
+		s.wg.Add(1)
 		go s.handleConn(conn)
 	}
 }
 
-// Close shuts down the listener.
-func (s *Server) Close() { _ = s.ln.Close() }
+// Close shuts down the listener and waits for any in-flight handlers to
+// finish. It is safe to call Close after Serve has already returned.
+func (s *Server) Close() {
+	_ = s.ln.Close()
+	s.wg.Wait()
+}
 
 func (s *Server) handleConn(conn net.Conn) {
+	defer s.wg.Done()
 	defer func() { _ = conn.Close() }()
+	if s.onConnStart != nil {
+		s.onConnStart()
+	}
 	s.serveConn(conn, conn)
 }
 
