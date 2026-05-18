@@ -50,8 +50,8 @@ include agent-mux.conf
 ```
 
 Reload Kitty. The bundled config keeps the dashboard hotkey and tab-navigation
-bindings, including `F5` for the next attention tab and `F7`/`F9` for previous
-or next managed tabs.
+bindings, including `F5` for the next attention tab, `F8` to clear the current
+tab's markers and state icons, and `F7`/`F9` for previous or next managed tabs.
 
 ## Harness profiles
 
