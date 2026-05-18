@@ -82,6 +82,36 @@ func TestParseEscapes(t *testing.T) {
 	}
 }
 
+// TestParseEscapesHarnessSigil pins parity between the parsed sigil set and
+// the escape set. The harness sigil "%" was previously parseable but not
+// escapable, so a literal "%foo" substring round-tripping through
+// RemoveComponent/serializeFilter would silently flip into a Harness filter.
+func TestParseEscapesHarnessSigil(t *testing.T) {
+	f := Parse(`\%opt`)
+	if !reflect.DeepEqual(f.Substrings, []string{"%opt"}) {
+		t.Errorf("expected escaped substring [%%opt], got %v", f.Substrings)
+	}
+	if f.Harness != "" {
+		t.Errorf("escape should not populate Harness, got %q", f.Harness)
+	}
+}
+
+// TestSerializeFilter_EscapesHarnessLeadingPercent locks in the round-trip
+// invariant: a substring starting with "%" must be re-emitted with a
+// backslash escape so a subsequent Parse cannot reinterpret it as a harness
+// filter.
+func TestSerializeFilter_EscapesHarnessLeadingPercent(t *testing.T) {
+	f := Filter{Substrings: []string{"%opt", "plain"}}
+	out := serializeFilter(f)
+	reparsed := Parse(out)
+	if !reflect.DeepEqual(reparsed.Substrings, []string{"%opt", "plain"}) {
+		t.Errorf("round-trip lost %%-prefixed substring: serialized=%q reparsed=%+v", out, reparsed)
+	}
+	if reparsed.Harness != "" {
+		t.Errorf("round-trip leaked Harness=%q, expected empty", reparsed.Harness)
+	}
+}
+
 func TestParseLoneMarkersLenient(t *testing.T) {
 	f := Parse("@ ! api")
 	if !reflect.DeepEqual(f.Substrings, []string{"api"}) {

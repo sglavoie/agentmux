@@ -33,7 +33,11 @@ func Parse(input string) Filter {
 	f := Filter{Raw: input}
 	for _, tok := range strings.Fields(input) {
 		switch {
-		case len(tok) >= 2 && tok[0] == '\\' && (tok[1] == '@' || tok[1] == '!'):
+		case len(tok) >= 2 && tok[0] == '\\' && (tok[1] == '@' || tok[1] == '!' || tok[1] == '%'):
+			// Backslash-escape lets the user type a literal leading sigil
+			// (e.g. "\%opt" matches a title containing "%opt"). The
+			// supported set tracks the sigil set parsed below — escaping
+			// %, @, and ! all need to round-trip through serializeFilter.
 			f.Substrings = append(f.Substrings, tok[1:])
 		case tok == "@" || tok == "!" || tok == "%":
 			// Lone marker — lenient: ignore.
@@ -157,11 +161,12 @@ func (f Filter) RemoveComponent(idx int) Filter {
 
 // serializeFilter rebuilds a DSL string from a Filter so its Raw stays in
 // sync after components are removed. Bare substrings that would otherwise
-// be misparsed as @account / !state get an escape prefix.
+// be misparsed as @account / %harness / !state get an escape prefix; the
+// escape set must mirror the sigil set Parse recognizes.
 func serializeFilter(f Filter) string {
 	var parts []string
 	for _, s := range f.Substrings {
-		if len(s) > 0 && (s[0] == '@' || s[0] == '!') {
+		if len(s) > 0 && (s[0] == '@' || s[0] == '!' || s[0] == '%') {
 			parts = append(parts, "\\"+s)
 		} else {
 			parts = append(parts, s)

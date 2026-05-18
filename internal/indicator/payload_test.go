@@ -41,3 +41,41 @@ func TestDecodeHookPayload_InvalidJSON(t *testing.T) {
 		t.Fatal("DecodeHookPayload(invalid JSON) error = nil, want non-nil")
 	}
 }
+
+// TestDecodeHookPayload_RejectsOversizedInput pins the upper bound on the
+// hook payload reader. The daemon already caps requests at 1 MiB and a hook
+// script feeding multi-GiB JSON would otherwise force the indicator process
+// to buffer the whole stream before that limit could trigger.
+func TestDecodeHookPayload_RejectsOversizedInput(t *testing.T) {
+	// Craft a payload that is just over the limit by padding the "message"
+	// field. Even though the JSON is structurally valid, the byte size
+	// alone should trigger rejection before we attempt to unmarshal.
+	padding := strings.Repeat("a", maxHookPayloadBytes)
+	oversized := `{"message":"` + padding + `"}`
+	if len(oversized) <= maxHookPayloadBytes {
+		t.Fatalf("test setup: oversized payload (%d bytes) not above limit (%d)", len(oversized), maxHookPayloadBytes)
+	}
+	if _, err := DecodeHookPayload(strings.NewReader(oversized)); err == nil {
+		t.Fatal("DecodeHookPayload(oversized) error = nil, want non-nil")
+	}
+}
+
+// TestDecodeHookPayload_AcceptsLargeButValidInput is the matching positive
+// case: a payload right at the edge of the limit must still parse, so the
+// rejection threshold does not creep down accidentally.
+func TestDecodeHookPayload_AcceptsLargeButValidInput(t *testing.T) {
+	// Pick a message that, together with the surrounding JSON skeleton,
+	// totals less than maxHookPayloadBytes by a comfortable margin.
+	padding := strings.Repeat("b", maxHookPayloadBytes-64)
+	body := `{"message":"` + padding + `"}`
+	if len(body) > maxHookPayloadBytes {
+		t.Fatalf("test setup: body (%d) exceeds limit (%d)", len(body), maxHookPayloadBytes)
+	}
+	p, err := DecodeHookPayload(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(near-limit) error: %v", err)
+	}
+	if len(p.Message) != len(padding) {
+		t.Fatalf("Message len = %d, want %d", len(p.Message), len(padding))
+	}
+}

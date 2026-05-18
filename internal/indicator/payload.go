@@ -8,6 +8,15 @@ import (
 	"os"
 )
 
+// maxHookPayloadBytes caps the size of a hook payload we are willing to read
+// from stdin. The daemon already rejects requests above 1 MiB, so reading
+// more here would be wasted work — and a misbehaving (or malicious) hook
+// that piped a multi-GiB JSON blob into stdin would force the hook script to
+// buffer the whole stream in memory before we could reject it. Cap at the
+// daemon's ceiling so the two limits stay in sync; anything beyond is
+// truncated and surfaces as a JSON parse error from the leftover bytes.
+const maxHookPayloadBytes = 1 << 20
+
 // HookPayload captures the hook fields Agent Mux currently needs for icon logic
 // and debug traces. Unknown fields are ignored.
 type HookPayload struct {
@@ -39,11 +48,19 @@ func ReadHookPayload(stdin *os.File) (HookPayload, error) {
 }
 
 // DecodeHookPayload decodes a hook payload from r. Empty input yields a zero
-// payload without error.
+// payload without error. Reads are bounded by maxHookPayloadBytes so a hook
+// upstream cannot force this process to buffer unbounded memory before the
+// daemon's own limit would reject the request anyway.
 func DecodeHookPayload(r io.Reader) (HookPayload, error) {
-	data, err := io.ReadAll(r)
+	// Read one extra byte past the cap so we can distinguish "exactly at
+	// the limit" (allowed) from "exceeded the limit" (rejected) without
+	// silently truncating mid-token.
+	data, err := io.ReadAll(io.LimitReader(r, maxHookPayloadBytes+1))
 	if err != nil {
 		return HookPayload{}, fmt.Errorf("read hook payload: %w", err)
+	}
+	if len(data) > maxHookPayloadBytes {
+		return HookPayload{}, fmt.Errorf("hook payload exceeds %d bytes", maxHookPayloadBytes)
 	}
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {

@@ -74,3 +74,30 @@ func TestSaveAtomic(t *testing.T) {
 		t.Errorf("unexpected entries after Save: %v", got.Entries)
 	}
 }
+
+// TestSaveCleansUpTempOnRenameFailure pins the post-failure invariant: when
+// the final rename cannot complete (here because the destination path is
+// already occupied by a directory), the Save call must report the error and
+// must not leave a "<name>.tmp" sibling on disk for the next caller to step
+// on. Regression guard against the previous os.WriteFile-based path that
+// left orphaned .tmp files behind whenever the rename failed.
+func TestSaveCleansUpTempOnRenameFailure(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "overrides.json")
+	// Occupy the destination with a non-empty directory so os.Rename fails.
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("seed directory at destination: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "blocker"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed blocker file: %v", err)
+	}
+	t.Setenv(overrides.PathEnvVar, path)
+
+	err := overrides.Save(overrides.File{Version: 1})
+	if err == nil {
+		t.Fatal("Save should have failed; destination is a non-empty directory")
+	}
+	if _, statErr := os.Stat(path + ".tmp"); !os.IsNotExist(statErr) {
+		t.Fatalf("expected .tmp cleaned up after rename failure, stat err=%v", statErr)
+	}
+}
