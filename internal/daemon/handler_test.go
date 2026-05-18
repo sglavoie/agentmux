@@ -92,43 +92,45 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 // Both the within-guard-window case (prevGuard set) and the expired-guard case
 // (lastAction fallback) are covered.
 func TestHandler_IdleClearsActiveIcon(t *testing.T) {
-	cases := []struct {
-		prev      string
-		wantIcon  string
-		wantLabel string
-	}{
-		{"active", "", "idle after active clears bolt"},
-		{"subagent", "", "idle after subagent clears icon"},
-		{"compact", "", "idle after compact clears icon"},
-		{"stop", IconStatePreserve, "idle after stop preserves stop icon"},
-		{"permission", IconStatePreserve, "idle after permission preserves key icon"},
-		{"failure", IconStatePreserve, "idle after failure preserves error icon"},
-	}
-	// Test with a long guard (prevGuard still set when idle arrives).
-	for _, tc := range cases {
-		h := newTestHandler()
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
-		if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
-			t.Errorf("%s (guard active): want icon_state=%q, got %+v", tc.wantLabel, tc.wantIcon, resp)
+	synctest.Test(t, func(t *testing.T) {
+		cases := []struct {
+			prev      string
+			wantIcon  string
+			wantLabel string
+		}{
+			{"active", "", "idle after active clears bolt"},
+			{"subagent", "", "idle after subagent clears icon"},
+			{"compact", "", "idle after compact clears icon"},
+			{"stop", IconStatePreserve, "idle after stop preserves stop icon"},
+			{"permission", IconStatePreserve, "idle after permission preserves key icon"},
+			{"failure", IconStatePreserve, "idle after failure preserves error icon"},
 		}
-	}
-
-	// Test with an expired guard (idle arrives after guard_duration; must use
-	// lastAction fallback — this was the stale-bolt bug on Claude sessions).
-	for _, tc := range cases {
-		guard := NewStateGuard(time.Nanosecond) // expires immediately
-		notifier := NewNotifier(&config.NotificationConfig{})
-		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
-		h := NewHandler(guard, notifier)
-
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
-		time.Sleep(5 * time.Millisecond) // let the guard expire
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
-		if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
-			t.Errorf("%s (guard expired): want icon_state=%q, got %+v", tc.wantLabel, tc.wantIcon, resp)
+		// Test with a long guard (prevGuard still set when idle arrives).
+		for _, tc := range cases {
+			h := newTestHandler()
+			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
+			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
+				t.Errorf("%s (guard active): want icon_state=%q, got %+v", tc.wantLabel, tc.wantIcon, resp)
+			}
 		}
-	}
+
+		// Test with an expired guard (idle arrives after guard_duration; must use
+		// lastAction fallback — this was the stale-bolt bug on Claude sessions).
+		for _, tc := range cases {
+			guard := NewStateGuard(time.Nanosecond) // expires immediately
+			notifier := NewNotifier(&config.NotificationConfig{})
+			notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+			h := NewHandler(guard, notifier)
+
+			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
+			time.Sleep(5 * time.Millisecond) // let the guard expire
+			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
+				t.Errorf("%s (guard expired): want icon_state=%q, got %+v", tc.wantLabel, tc.wantIcon, resp)
+			}
+		}
+	})
 }
 
 func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {
@@ -171,46 +173,48 @@ func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {
 // when the guard has already expired, permissionRequest follows the normal path
 // and shows the key icon.
 func TestHandler_AutoApprovedPermission(t *testing.T) {
-	// --- Case 1: PreToolUse guard live → permission is auto-approved ---
-	h := newTestHandler()
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+	synctest.Test(t, func(t *testing.T) {
+		// --- Case 1: PreToolUse guard live → permission is auto-approved ---
+		h := newTestHandler()
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
-		t.Fatalf("auto-approved permission (PreToolUse guard live): want icon_state=%q, got %+v", IconStatePreserve, resp)
-	}
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+			t.Fatalf("auto-approved permission (PreToolUse guard live): want icon_state=%q, got %+v", IconStatePreserve, resp)
+		}
 
-	// idle after auto-approved permission should clear (not preserve key).
-	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
-	if !resp.OK || !resp.Allowed || resp.IconState != "" {
-		t.Fatalf("idle after auto-approved permission: want icon_state=\"\", got %+v", resp)
-	}
+		// idle after auto-approved permission should clear (not preserve key).
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "" {
+			t.Fatalf("idle after auto-approved permission: want icon_state=\"\", got %+v", resp)
+		}
 
-	// --- Case 2: active guard expired → manual-permission path, key shows ---
-	guard := NewStateGuard(time.Nanosecond)
-	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
-	h2 := NewHandler(guard, notifier)
+		// --- Case 2: active guard expired → manual-permission path, key shows ---
+		guard := NewStateGuard(time.Nanosecond)
+		notifier := NewNotifier(&config.NotificationConfig{})
+		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+		h2 := NewHandler(guard, notifier)
 
-	h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
-	time.Sleep(5 * time.Millisecond) // let the guard expire
+		h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+		time.Sleep(5 * time.Millisecond) // let the guard expire
 
-	resp = h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	if !resp.OK || !resp.Allowed || resp.IconState != "key" {
-		t.Fatalf("manual permission (guard expired): want icon_state=\"key\", got %+v", resp)
-	}
+		resp = h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+			t.Fatalf("manual permission (guard expired): want icon_state=\"key\", got %+v", resp)
+		}
 
-	// --- Case 3: PostToolUse guard live → NOT auto-approved, key must show ---
-	// This is the bug scenario: Tool A's PostToolUse renews the active guard,
-	// then Tool B's PermissionRequest fires while that guard is still live.
-	// The key icon must appear because the user needs to approve Tool B.
-	h3 := newTestHandler()
-	h3.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		// --- Case 3: PostToolUse guard live → NOT auto-approved, key must show ---
+		// This is the bug scenario: Tool A's PostToolUse renews the active guard,
+		// then Tool B's PermissionRequest fires while that guard is still live.
+		// The key icon must appear because the user needs to approve Tool B.
+		h3 := newTestHandler()
+		h3.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
 
-	resp = h3.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	if !resp.OK || !resp.Allowed || resp.IconState != "key" {
-		t.Fatalf("manual permission (PostToolUse guard live): want icon_state=\"key\", got %+v", resp)
-	}
+		resp = h3.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+			t.Fatalf("manual permission (PostToolUse guard live): want icon_state=\"key\", got %+v", resp)
+		}
+	})
 }
 
 func TestHandler_ElicitationShowsQuestionIcon(t *testing.T) {
@@ -368,37 +372,29 @@ func TestHandler_Shutdown(t *testing.T) {
 // sync.Once around the goroutine spawn — a defence-in-depth guard so callers
 // cannot rely on context.CancelFunc's idempotence alone.
 func TestHandler_ShutdownInvokedOnce(t *testing.T) {
-	h := newTestHandler()
-	var count atomic.Int32
-	h.onShutdown = func() { count.Add(1) }
+	synctest.Test(t, func(t *testing.T) {
+		h := newTestHandler()
+		var count atomic.Int32
+		h.onShutdown = func() { count.Add(1) }
 
-	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			resp := h.Handle(Request{Type: TypeShutdown})
-			if !resp.OK {
-				t.Errorf("want ok=true, got %+v", resp)
-			}
-		}()
-	}
-	wg.Wait()
+		var wg sync.WaitGroup
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				resp := h.Handle(Request{Type: TypeShutdown})
+				if !resp.OK {
+					t.Errorf("want ok=true, got %+v", resp)
+				}
+			}()
+		}
+		wg.Wait()
+		synctest.Wait() // drain the single onShutdown goroutine
 
-	// Wait for the single dispatched goroutine to run (and observe a non-zero
-	// count) without giving up early. 250ms is generous compared to the
-	// near-instant work each onShutdown does.
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) && count.Load() == 0 {
-		time.Sleep(5 * time.Millisecond)
-	}
-	// Allow any *extra* concurrently-scheduled goroutines to finish so the
-	// assertion sees the final count, not a transient mid-race value.
-	time.Sleep(50 * time.Millisecond)
-
-	if got := count.Load(); got != 1 {
-		t.Fatalf("onShutdown should fire exactly once across concurrent shutdown requests, got %d", got)
-	}
+		if got := count.Load(); got != 1 {
+			t.Fatalf("onShutdown should fire exactly once across concurrent shutdown requests, got %d", got)
+		}
+	})
 }
 
 func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
@@ -406,30 +402,33 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 	// permission_prompt → (user approves) → PostToolUse. The PostToolUse
 	// arrives as action="active" and must not cancel the pending notification;
 	// otherwise the user never sees it.
-	guard := NewStateGuard(time.Hour)
-	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
-	notifier := NewNotifier(cfg)
-	var mu sync.Mutex
-	var calls []string
-	notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
+		notifier := NewNotifier(cfg)
+		var mu sync.Mutex
+		var calls []string
+		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+			mu.Lock()
+			calls = append(calls, subtitle)
+			mu.Unlock()
+			return nil
+		}
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		time.Sleep(20 * time.Millisecond)
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+
+		time.Sleep(time.Second)
+		synctest.Wait()
 		mu.Lock()
-		calls = append(calls, subtitle)
-		mu.Unlock()
-		return nil
-	}
-	h := NewHandler(guard, notifier)
-
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	time.Sleep(20 * time.Millisecond)
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
-
-	time.Sleep(150 * time.Millisecond)
-	mu.Lock()
-	defer mu.Unlock()
-	if len(calls) != 1 || calls[0] != "Permission requested" {
-		t.Fatalf("expected permission notification to fire despite active follow-up, got %v", calls)
-	}
+		defer mu.Unlock()
+		if len(calls) != 1 || calls[0] != "Permission requested" {
+			t.Fatalf("expected permission notification to fire despite active follow-up, got %v", calls)
+		}
+	})
 }
 
 // TestHandler_CopilotAutoApprovedPermissionSuppressesNotification verifies that
@@ -472,31 +471,34 @@ func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.
 }
 
 func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
-	guard := NewStateGuard(time.Hour)
-	cfg := &config.NotificationConfig{Permission: true, Stop: true, PermissionDebounceMs: 100}
-	notifier := NewNotifier(cfg)
-	var mu sync.Mutex
-	var calls []string
-	notifier.dispatch = func(_ context.Context, _, subtitle string) error {
-		mu.Lock()
-		calls = append(calls, subtitle)
-		mu.Unlock()
-		return nil
-	}
-	h := NewHandler(guard, notifier)
-
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	time.Sleep(20 * time.Millisecond)
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
-
-	time.Sleep(150 * time.Millisecond)
-	mu.Lock()
-	defer mu.Unlock()
-	for _, c := range calls {
-		if c == "Permission requested" {
-			t.Fatalf("expected stop to cancel pending permission, got %v", calls)
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		cfg := &config.NotificationConfig{Permission: true, Stop: true, PermissionDebounceMs: 100}
+		notifier := NewNotifier(cfg)
+		var mu sync.Mutex
+		var calls []string
+		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+			mu.Lock()
+			calls = append(calls, subtitle)
+			mu.Unlock()
+			return nil
 		}
-	}
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		time.Sleep(20 * time.Millisecond)
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range calls {
+			if c == "Permission requested" {
+				t.Fatalf("expected stop to cancel pending permission, got %v", calls)
+			}
+		}
+	})
 }
 
 // TestHandler_ElicitationCancelsPendingPermission locks in that an elicitation
@@ -509,41 +511,44 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 // gates. The test pins that contract so a future refactor cannot quietly
 // reintroduce the missed-cancel bug.
 func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
-	guard := NewStateGuard(time.Hour)
-	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
-	notifier := NewNotifier(cfg)
-	var mu sync.Mutex
-	var calls []string
-	notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
+		notifier := NewNotifier(cfg)
+		var mu sync.Mutex
+		var calls []string
+		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+			mu.Lock()
+			calls = append(calls, subtitle)
+			mu.Unlock()
+			return nil
+		}
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		time.Sleep(20 * time.Millisecond)
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
+
+		// Wait well past the original debounce window so the permission timer
+		// would have fired if it had not been cancelled.
+		time.Sleep(time.Second)
+		synctest.Wait()
+
 		mu.Lock()
-		calls = append(calls, subtitle)
-		mu.Unlock()
-		return nil
-	}
-	h := NewHandler(guard, notifier)
-
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	time.Sleep(20 * time.Millisecond)
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
-
-	// Wait well past the original debounce window so the permission timer
-	// would have fired if it had not been cancelled.
-	time.Sleep(300 * time.Millisecond)
-
-	mu.Lock()
-	defer mu.Unlock()
-	sawElicitation := false
-	for _, c := range calls {
-		if c == "Permission requested" {
-			t.Fatalf("elicitation should cancel pending permission, got %v", calls)
+		defer mu.Unlock()
+		sawElicitation := false
+		for _, c := range calls {
+			if c == "Permission requested" {
+				t.Fatalf("elicitation should cancel pending permission, got %v", calls)
+			}
+			if c == "Claude is asking" {
+				sawElicitation = true
+			}
 		}
-		if c == "Claude is asking" {
-			sawElicitation = true
+		if !sawElicitation {
+			t.Fatalf("expected elicitation notification to fire, got %v", calls)
 		}
-	}
-	if !sawElicitation {
-		t.Fatalf("expected elicitation notification to fire, got %v", calls)
-	}
+	})
 }
 
 // TestHandler_PermissionNotificationFiresWhenGuardBlocks verifies that when a
@@ -551,37 +556,40 @@ func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
 // icon transition is suppressed but the user-facing notification still fires —
 // the guard only governs visual state, not whether the user gets alerted.
 func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
-	guard := NewStateGuard(time.Hour)
-	cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
-	notifier := NewNotifier(cfg)
-	var mu sync.Mutex
-	var calls []string
-	notifier.dispatch = func(_ context.Context, _, subtitle string) error {
-		mu.Lock()
-		calls = append(calls, subtitle)
-		mu.Unlock()
-		return nil
-	}
-	h := NewHandler(guard, notifier)
-
-	// Prime with failure so the guard sits at priority 4.
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
-
-	// Permission is blocked by the failure guard.
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
-	if !resp.OK || resp.Allowed {
-		t.Fatalf("permission blocked by failure guard: want allowed=false, got %+v", resp)
-	}
-
-	time.Sleep(150 * time.Millisecond)
-	mu.Lock()
-	defer mu.Unlock()
-	for _, c := range calls {
-		if c == "Permission requested" {
-			return
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
+		notifier := NewNotifier(cfg)
+		var mu sync.Mutex
+		var calls []string
+		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+			mu.Lock()
+			calls = append(calls, subtitle)
+			mu.Unlock()
+			return nil
 		}
-	}
-	t.Fatalf("expected permission notification to fire when guard blocks transition, got %v", calls)
+		h := NewHandler(guard, notifier)
+
+		// Prime with failure so the guard sits at priority 4.
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
+
+		// Permission is blocked by the failure guard.
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("permission blocked by failure guard: want allowed=false, got %+v", resp)
+		}
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range calls {
+			if c == "Permission requested" {
+				return
+			}
+		}
+		t.Fatalf("expected permission notification to fire when guard blocks transition, got %v", calls)
+	})
 }
 
 func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
@@ -602,25 +610,27 @@ func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
 // revive the bolt after Stop, even after the stop guard has expired. An explicit
 // prompt event must still be able to break through.
 func TestHandler_ActiveBlockedAfterStopGuardExpiry(t *testing.T) {
-	guard := NewStateGuard(time.Nanosecond) // expires immediately
-	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
-	h := NewHandler(guard, notifier)
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Nanosecond) // expires immediately
+		notifier := NewNotifier(&config.NotificationConfig{})
+		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+		h := NewHandler(guard, notifier)
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
-	time.Sleep(5 * time.Millisecond) // let the guard expire
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
+		time.Sleep(5 * time.Millisecond) // let the guard expire
 
-	// Non-prompt active (e.g. PostToolBatch) must not revive the bolt.
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
-	if !resp.OK || resp.Allowed {
-		t.Fatalf("non-prompt active after expired stop guard: want allowed=false, got %+v", resp)
-	}
+		// Non-prompt active (e.g. PostToolBatch) must not revive the bolt.
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("non-prompt active after expired stop guard: want allowed=false, got %+v", resp)
+		}
 
-	// A prompt event (UserPromptSubmit) must still break through.
-	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
-	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
-		t.Fatalf("prompt active after expired stop guard: want icon_state=bolt, got %+v", resp)
-	}
+		// A prompt event (UserPromptSubmit) must still break through.
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
+		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+			t.Fatalf("prompt active after expired stop guard: want icon_state=bolt, got %+v", resp)
+		}
+	})
 }
 
 func TestHandler_ActiveBlockedByCurrentStopIconAfterDaemonRestart(t *testing.T) {
@@ -652,23 +662,25 @@ func TestHandler_ActiveBlockedByCurrentStopIconAfterDaemonRestart(t *testing.T) 
 // also permanently blocks non-prompt active events after guard expiry, since it is
 // a terminal state. Prompts still break through so the user can retry.
 func TestHandler_ActiveBlockedAfterStopFailureGuardExpiry(t *testing.T) {
-	guard := NewStateGuard(time.Nanosecond)
-	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
-	h := NewHandler(guard, notifier)
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Nanosecond)
+		notifier := NewNotifier(&config.NotificationConfig{})
+		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+		h := NewHandler(guard, notifier)
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop_failure"})
-	time.Sleep(5 * time.Millisecond)
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop_failure"})
+		time.Sleep(5 * time.Millisecond)
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
-	if !resp.OK || resp.Allowed {
-		t.Fatalf("non-prompt active after expired stop_failure guard: want allowed=false, got %+v", resp)
-	}
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("non-prompt active after expired stop_failure guard: want allowed=false, got %+v", resp)
+		}
 
-	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
-	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
-		t.Fatalf("prompt active after expired stop_failure guard: want icon_state=bolt, got %+v", resp)
-	}
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", IsPrompt: true})
+		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+			t.Fatalf("prompt active after expired stop_failure guard: want icon_state=bolt, got %+v", resp)
+		}
+	})
 }
 
 func TestHandler_OnActivityCalled(t *testing.T) {
@@ -843,37 +855,39 @@ func TestHandler_IdleAfterSuppressedActivePreservesStopIcon(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Use a tiny but real guard duration so the first action's guard
-			// expires before "active" arrives, but the suppressed "active"
-			// re-arms a fresh guard whose TTL is still in effect when "idle"
-			// arrives shortly after.
-			guard := NewStateGuard(50 * time.Millisecond)
-			notifier := NewNotifier(&config.NotificationConfig{})
-			notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
-			h := NewHandler(guard, notifier)
+			synctest.Test(t, func(t *testing.T) {
+				// Use a tiny but real guard duration so the first action's guard
+				// expires before "active" arrives, but the suppressed "active"
+				// re-arms a fresh guard whose TTL is still in effect when "idle"
+				// arrives shortly after.
+				guard := NewStateGuard(50 * time.Millisecond)
+				notifier := NewNotifier(&config.NotificationConfig{})
+				notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+				h := NewHandler(guard, notifier)
 
-			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
-			time.Sleep(60 * time.Millisecond) // let the prev guard expire
+				h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
+				time.Sleep(60 * time.Millisecond) // let the prev guard expire
 
-			// Non-prompt active arrives after guard expired — must be suppressed
-			// because lastAction is "stop"/"stop_failure".
-			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
-			if !resp.OK || resp.Allowed {
-				t.Fatalf("non-prompt active after %s: want allowed=false, got %+v", tc.prevAction, resp)
-			}
+				// Non-prompt active arrives after guard expired — must be suppressed
+				// because lastAction is "stop"/"stop_failure".
+				resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+				if !resp.OK || resp.Allowed {
+					t.Fatalf("non-prompt active after %s: want allowed=false, got %+v", tc.prevAction, resp)
+				}
 
-			// A follow-up idle within the new guard TTL must preserve the
-			// stop icon, NOT clear it. Without the fix, the suppressed
-			// "active" leaves the guard armed at "active", and this idle
-			// sees prevGuard="active" → iconState="" → stop icon erased.
-			resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
-			if !resp.OK || !resp.Allowed {
-				t.Fatalf("idle after suppressed active: want allowed=true, got %+v", resp)
-			}
-			if resp.IconState != IconStatePreserve {
-				t.Fatalf("idle after suppressed active must preserve %s icon: want icon_state=%q, got %q",
-					tc.prevAction, IconStatePreserve, resp.IconState)
-			}
+				// A follow-up idle within the new guard TTL must preserve the
+				// stop icon, NOT clear it. Without the fix, the suppressed
+				// "active" leaves the guard armed at "active", and this idle
+				// sees prevGuard="active" → iconState="" → stop icon erased.
+				resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "idle"})
+				if !resp.OK || !resp.Allowed {
+					t.Fatalf("idle after suppressed active: want allowed=true, got %+v", resp)
+				}
+				if resp.IconState != IconStatePreserve {
+					t.Fatalf("idle after suppressed active must preserve %s icon: want icon_state=%q, got %q",
+						tc.prevAction, IconStatePreserve, resp.IconState)
+				}
+			})
 		})
 	}
 }

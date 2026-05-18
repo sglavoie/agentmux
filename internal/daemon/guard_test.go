@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -34,15 +35,17 @@ func TestGuard_AllowsHigherPriority(t *testing.T) {
 }
 
 func TestGuard_AllowsAfterExpiry(t *testing.T) {
-	g := NewStateGuard(1 * time.Millisecond)
-	g.TryUpdate(1, "permission", false)
+	synctest.Test(t, func(t *testing.T) {
+		g := NewStateGuard(1 * time.Millisecond)
+		g.TryUpdate(1, "permission", false)
 
-	time.Sleep(5 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 
-	ok, eff := g.TryUpdate(1, "active", false)
-	if !ok || eff != "active" {
-		t.Fatalf("want (true, active) after expiry, got (%v, %q)", ok, eff)
-	}
+		ok, eff := g.TryUpdate(1, "active", false)
+		if !ok || eff != "active" {
+			t.Fatalf("want (true, active) after expiry, got (%v, %q)", ok, eff)
+		}
+	})
 }
 
 func TestGuard_PostPermissionStopAllowed(t *testing.T) {
