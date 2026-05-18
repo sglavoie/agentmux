@@ -177,6 +177,43 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		}
 	}
 
+	// Copilot mid-subagent suppression: while background subagents are running,
+	// Copilot fires agentStop (per-turn signal) and speculative permissionRequest
+	// events that would otherwise overwrite the 🤖 guard. Suppress them here so
+	// the reference-counted subagent state remains the source of truth.
+	//
+	// Event-name match (not action) ensures only Copilot's specific events
+	// trigger suppression; Claude's Stop / SessionEnd / PermissionRequest fall
+	// through to the normal path. sessionEnd (also action "stop") is
+	// intentionally NOT in this list so a real session end still clears state.
+	//
+	// permissionRequest is suppressed via CancelPending rather than MaybeNotify:
+	// once subagents are running, the parent prompt has been approved and any
+	// permissionRequest is for an auto-executing background tool. The existing
+	// debounce cannot cancel itself here — postToolUse (action "active") returns
+	// early from MaybeNotify before reaching cancelPendingLocked, and the
+	// auto-approved-permission cancel path requires prevGuard == "active", not
+	// "subagent". So we drop any pending permission entry outright.
+	if req.Event == "agentStop" || req.Event == "permissionRequest" {
+		h.stateMu.Lock()
+		running := h.subagentCount[req.WindowID] > 0
+		count := h.subagentCount[req.WindowID]
+		h.stateMu.Unlock()
+		if running {
+			// Refresh the subagent guard so it does not expire while agents run.
+			h.guard.TryUpdate(req.WindowID, "subagent", false)
+			if req.Event == "permissionRequest" {
+				h.notifier.CancelPending(req.WindowID)
+			}
+			slog.Debug("copilot mid-subagent suppression",
+				"window_id", req.WindowID,
+				"event", req.Event,
+				"subagent_count", count,
+			)
+			return Response{OK: true, Allowed: false}
+		}
+	}
+
 	// Terminal / cleanup states reset the subagent counter.
 	// This list intentionally includes "failure" even though the cancel-switch
 	// above does not: counter cleanup is safe (losing the count just clears the

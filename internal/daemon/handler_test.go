@@ -912,3 +912,191 @@ func TestHandler_SubagentCountCleanedUpAfterLastStop(t *testing.T) {
 		t.Fatalf("subagentCount has %d residual entries after normal stop cycles; want 0", got)
 	}
 }
+
+// TestHandler_CopilotMidSubagentSuppression pins the contract for the Copilot
+// mid-subagent gate in handleStateUpdate: while subagentCount[windowID] > 0,
+// agentStop (Copilot's per-turn signal) and permissionRequest (speculative,
+// fires for every tool call) must not overwrite the 🤖 guard, and any pending
+// permission notification scheduled before the gate fires must be cleared.
+// sessionEnd is intentionally excluded so a real session end still resets
+// state. Each subtest stands alone — they share no handler state.
+func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
+	t.Run("agentStop during subagent suppressed", func(t *testing.T) {
+		h := newTestHandler()
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+
+		// agentStop (action stop) is Copilot's per-turn signal; while a
+		// subagent is running it must be suppressed entirely — no icon
+		// change, no counter clear.
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("agentStop during subagent: want allowed=false, got %+v", resp)
+		}
+		h.stateMu.Lock()
+		count := h.subagentCount[1]
+		h.stateMu.Unlock()
+		if count != 1 {
+			t.Fatalf("agentStop must not clear subagentCount; want 1, got %d", count)
+		}
+
+		// Counter still 1 — a second subagentStart pushes it to 2, then
+		// two subagentStops must drain to bolt (proves the gate left the
+		// reference counter intact).
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "subagentStop"})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("first subagentStop after gated agentStop: want allowed=false, got %+v", resp)
+		}
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "subagentStop"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+			t.Fatalf("last subagentStop after gated agentStop: want icon_state=bolt, got %+v", resp)
+		}
+	})
+
+	// Reframed from the original session-3 plan ("notification fires"):
+	// Session 2 chose CancelPending over MaybeNotify for the permission branch
+	// (see session-2.md handoff and session-2.expand.md ISSUE-1). The contract
+	// is therefore "no notification surfaces", not "notification fires after
+	// debounce".
+	t.Run("permissionRequest during subagent suppresses notification", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			guard := NewStateGuard(time.Hour)
+			cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
+			notifier := NewNotifier(cfg)
+			var mu sync.Mutex
+			var calls []string
+			notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+				mu.Lock()
+				calls = append(calls, subtitle)
+				mu.Unlock()
+				return nil
+			}
+			h := NewHandler(guard, notifier)
+
+			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+
+			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+			if !resp.OK || resp.Allowed {
+				t.Fatalf("permissionRequest during subagent: want allowed=false, got %+v", resp)
+			}
+
+			// Drain any AfterFunc that might have been scheduled by the
+			// normal path — none should exist because the gate returned
+			// before MaybeNotify could schedule anything.
+			time.Sleep(time.Second)
+			synctest.Wait()
+
+			mu.Lock()
+			defer mu.Unlock()
+			for _, c := range calls {
+				if c == "Permission requested" {
+					t.Fatalf("permissionRequest during subagent must not notify, got %v", calls)
+				}
+			}
+		})
+	})
+
+	// Per session-2 handoff: the gate must also clear a pending permission
+	// notification that was scheduled BEFORE subagents started. The
+	// permissionRequest arriving mid-subagent invokes CancelPending and the
+	// previously-scheduled AfterFunc must not fire.
+	t.Run("permissionRequest during subagent clears previously-pending notification", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			guard := NewStateGuard(time.Hour)
+			cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
+			notifier := NewNotifier(cfg)
+			var mu sync.Mutex
+			var calls []string
+			notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+				mu.Lock()
+				calls = append(calls, subtitle)
+				mu.Unlock()
+				return nil
+			}
+			h := NewHandler(guard, notifier)
+
+			// Schedule a real pending permission notification first
+			// (debounced AfterFunc registered against window 1).
+			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+
+			// Subagent begins (action subagent is not notifyable, so the
+			// pending permission is NOT cancelled by the normal path).
+			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+
+			// permissionRequest during subagent hits the gate, which must
+			// call CancelPending and stop the pending AfterFunc.
+			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+			if !resp.OK || resp.Allowed {
+				t.Fatalf("permissionRequest during subagent: want allowed=false, got %+v", resp)
+			}
+
+			time.Sleep(time.Second)
+			synctest.Wait()
+
+			mu.Lock()
+			defer mu.Unlock()
+			for _, c := range calls {
+				if c == "Permission requested" {
+					t.Fatalf("gate must clear previously-pending permission, got %v", calls)
+				}
+			}
+		})
+	})
+
+	t.Run("sessionEnd during subagent is NOT suppressed", func(t *testing.T) {
+		h := newTestHandler()
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+
+		// sessionEnd shares action "stop" with agentStop but is intentionally
+		// excluded from the gate — a real session end must take effect.
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "sessionEnd"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+			t.Fatalf("sessionEnd during subagent: want icon_state=stop allowed=true, got %+v", resp)
+		}
+
+		h.stateMu.Lock()
+		_, present := h.subagentCount[1]
+		h.stateMu.Unlock()
+		if present {
+			t.Fatalf("sessionEnd must clear subagentCount entry; map still has window 1")
+		}
+	})
+
+	t.Run("agentStop after subagent drains is allowed", func(t *testing.T) {
+		h := newTestHandler()
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+		// subagentStop drains counter to 0 and clears the guard.
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "subagentStop"})
+
+		// agentStop now arrives with no subagents running — gate falls
+		// through, normal stop transition applies.
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+			t.Fatalf("agentStop after drained subagents: want icon_state=stop, got %+v", resp)
+		}
+	})
+
+	t.Run("gate is no-op when no subagent is running", func(t *testing.T) {
+		// agentStop on a fresh handler must behave exactly like a normal
+		// stop transition — proves the gate cannot misfire when
+		// subagentCount[windowID] == 0.
+		h := newTestHandler()
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+			t.Fatalf("agentStop with no subagent: want icon_state=stop, got %+v", resp)
+		}
+
+		// permissionRequest on a fresh handler must still flip to the key
+		// icon — Claude's PermissionRequest and Copilot's
+		// non-mid-subagent permissionRequest both rely on this.
+		h2 := newTestHandler()
+		resp = h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+			t.Fatalf("permissionRequest with no subagent: want icon_state=key, got %+v", resp)
+		}
+	})
+}
