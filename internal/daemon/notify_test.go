@@ -457,3 +457,34 @@ func TestNotifier_EmptySessionTitleFallback(t *testing.T) {
 		t.Errorf("title = %q, want %q", calls.snapshot()[0].title, "Agent Mux")
 	}
 }
+
+// TestQuoteAppleScript covers AppleScript-safe escaping for the osascript
+// dispatcher. The previous implementation used Go's %q verb, which can emit
+// \uXXXX / \xNN sequences (e.g. for the Unicode line separator U+2028) that
+// AppleScript treats as a syntax error, causing the notification to silently
+// fail. quoteAppleScript must only emit AppleScript's recognized escapes
+// (\\, \", \n, \r, \t) and pass every other rune through verbatim.
+func TestQuoteAppleScript(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"", `""`},
+		{"hello", `"hello"`},
+		{`"`, `"\""`},
+		{`back\slash`, `"back\\slash"`},
+		{"tab\there", `"tab\there"`},
+		{"line1\nline2", `"line1\nline2"`},
+		{"carriage\rreturn", `"carriage\rreturn"`},
+		// Non-ASCII printable characters must pass through verbatim — Go's %q
+		// would have re-encoded the line-separator and confused AppleScript.
+		{"  sep", `"` + "  sep" + `"`},
+		{"café", `"café"`},
+	}
+	for _, tc := range cases {
+		got := quoteAppleScript(tc.in)
+		if got != tc.want {
+			t.Errorf("quoteAppleScript(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

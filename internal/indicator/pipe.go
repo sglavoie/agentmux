@@ -1,12 +1,21 @@
 package indicator
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// psCommandTimeout bounds each `ps` invocation used during process-tree
+// walking. The indicator runs synchronously inside every hook invocation, so
+// a wedged or paused `ps` (e.g. swapped out under heavy load, audit-locked
+// on macOS) must surface as a missing parent rather than hang the hook
+// script. Exposed as a var so tests can shrink it without sleeping.
+var psCommandTimeout = 2 * time.Second
 
 // IsPipeMode reports whether the current process tree contains a non-interactive
 // Claude or Copilot invocation (e.g. `claude -p`, `claude --print`,
@@ -78,7 +87,9 @@ func looksLikeClaudePipe(cmdline string) bool {
 
 // psCommandLine returns the full command line for pid using `ps`.
 func psCommandLine(pid int) string {
-	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "command=").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), psCommandTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-p", strconv.Itoa(pid), "-o", "command=").Output()
 	if err != nil {
 		return ""
 	}
@@ -87,7 +98,9 @@ func psCommandLine(pid int) string {
 
 // psParentPID returns the parent PID of pid using `ps`.
 func psParentPID(pid int) int {
-	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "ppid=").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), psCommandTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-p", strconv.Itoa(pid), "-o", "ppid=").Output()
 	if err != nil {
 		return -1
 	}

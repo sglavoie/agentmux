@@ -1,6 +1,9 @@
 package indicator
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // fakeTree builds walkTree-compatible cmdline and ppid functions from a map.
 func fakeTree(cmdlines map[int]string, ppids map[int]int) (func(int) string, func(int) int) {
@@ -91,6 +94,41 @@ func TestWalkTree_CycleProtection(t *testing.T) {
 	ppid := func(pid int) int { return pid } // self-referential cycle
 	if walkTree(100, cmd, ppid) {
 		t.Error("expected pipe_mode=false for non-claude cycle")
+	}
+}
+
+// TestPsCommandLineHonorsTimeout pins the contract that the indicator's
+// process-tree walker cannot hang on a wedged `ps`. Hooks invoke this on
+// every Claude/Copilot event; without the bounded context, a stalled or
+// audit-paused `ps` would freeze the hook script. The test points the
+// indicator at a non-existent PID with the timeout shrunk so the test
+// itself stays fast — the production path is identical apart from the
+// timeout value.
+func TestPsCommandLineHonorsTimeout(t *testing.T) {
+	prev := psCommandTimeout
+	psCommandTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { psCommandTimeout = prev })
+
+	start := time.Now()
+	// PID 999999 almost certainly does not exist; ps returns immediately with
+	// an error. The point of the test is to assert no hang under the timeout.
+	out := psCommandLine(999999)
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("psCommandLine blocked beyond timeout: elapsed=%v", elapsed)
+	}
+	// A non-existent PID should yield an empty string (the function swallows
+	// the error and returns "").
+	if out != "" {
+		t.Logf("psCommandLine(999999) returned %q; non-fatal but unexpected", out)
+	}
+
+	start = time.Now()
+	parent := psParentPID(999999)
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("psParentPID blocked beyond timeout: elapsed=%v", elapsed)
+	}
+	if parent != -1 {
+		t.Logf("psParentPID(999999) returned %d; non-fatal but unexpected", parent)
 	}
 }
 

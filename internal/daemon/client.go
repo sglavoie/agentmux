@@ -3,6 +3,7 @@ package daemon
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -70,6 +71,9 @@ func (c *Client) Send(req Request) (Response, error) {
 	scanner.Buffer(make([]byte, 0, 64*1024), maxResponseBytes)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
+			if errors.Is(err, bufio.ErrTooLong) {
+				return Response{}, fmt.Errorf("daemon response exceeds %d bytes", maxResponseBytes)
+			}
 			return Response{}, fmt.Errorf("reading response: %w", err)
 		}
 		return Response{}, fmt.Errorf("daemon closed connection without responding")

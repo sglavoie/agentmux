@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -212,10 +213,41 @@ func (n *Notifier) actionEnabled(action string) bool {
 
 func runOsascript(ctx context.Context, title, subtitle string) error {
 	script := fmt.Sprintf(
-		`display notification "" with title %q subtitle %q`,
-		title, subtitle,
+		`display notification "" with title %s subtitle %s`,
+		quoteAppleScript(title), quoteAppleScript(subtitle),
 	)
 	return exec.CommandContext(ctx, "osascript", "-e", script).Run()
+}
+
+// quoteAppleScript wraps s in a double-quoted AppleScript string literal.
+// AppleScript only recognizes \", \\, \n, \r, and \t as string escapes; Go's
+// %q can emit \uXXXX / \xNN forms (e.g. for U+2028) that AppleScript treats
+// as a syntax error, dropping the notification silently. This routine
+// escapes only the characters AppleScript understands and passes every other
+// rune through verbatim — including any non-ASCII printable characters
+// commonly found in session titles.
+func quoteAppleScript(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 2)
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 func alerterArgs(title, subtitle string) []string {

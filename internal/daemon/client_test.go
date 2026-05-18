@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -66,5 +67,50 @@ func TestClient_SendHonorsDeadline(t *testing.T) {
 	}
 	if elapsed > 2*time.Second {
 		t.Fatalf("Send blocked beyond deadline (elapsed=%v); deadline=%v", elapsed, sendDeadline)
+	}
+}
+
+// TestClient_RejectsOversizeResponse pins the client-side ceiling: a daemon
+// response that exceeds maxResponseBytes must surface as an explicit error
+// (not be silently truncated by bufio.Scanner's default behavior). The bug
+// path is a server that writes a payload longer than the client's scanner
+// buffer ceiling but never newline-terminates within the limit — the
+// scanner returns bufio.ErrTooLong which we must translate into a
+// human-readable error rather than a generic "reading response" wrap.
+func TestClient_RejectsOversizeResponse(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-client-oversize-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	sockPath := filepath.Join(dir, "d.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	// Server: emit a payload larger than maxResponseBytes with no newline so the
+	// client-side scanner exhausts its buffer.
+	huge := strings.Repeat("A", maxResponseBytes+128)
+	go func() {
+		conn, acceptErr := ln.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		buf := make([]byte, 1024)
+		_, _ = conn.Read(buf)
+		_, _ = conn.Write([]byte(huge))
+	}()
+
+	c := NewClientWithSocket(sockPath)
+	_, sendErr := c.Send(Request{Type: TypeStateQuery})
+	if sendErr == nil {
+		t.Fatal("expected Send to fail on oversize daemon response")
+	}
+	if !strings.Contains(sendErr.Error(), "exceeds") {
+		t.Fatalf("expected explicit oversize error, got: %v", sendErr)
 	}
 }
