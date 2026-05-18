@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -15,6 +16,14 @@ import (
 // maxPayloadLogLen caps the number of payload bytes recorded in error logs to
 // keep a single malformed request from spamming the log.
 const maxPayloadLogLen = 256
+
+// maxRequestPayloadBytes bounds the size of a single newline-delimited JSON
+// request the daemon will accept. Requests larger than this are rejected with a
+// "request too large" response rather than triggering bufio.Scanner's silent
+// truncation (its default 64KB ceiling). 1 MiB is well above any realistic hook
+// payload while still preventing a buggy or malicious client from forcing the
+// daemon to buffer unbounded memory.
+const maxRequestPayloadBytes = 1 << 20
 
 // badPayloadLogInterval controls how often a cumulative malformed-payload
 // milestone is logged at info level. Per-payload diagnostics already log at
@@ -100,8 +109,18 @@ func (s *Server) handleConn(conn net.Conn) {
 func (s *Server) serveConn(r io.Reader, w io.Writer) {
 	var req Request
 	scanner := bufio.NewScanner(r)
+	// Raise the scan buffer ceiling above bufio's 64 KiB default so larger
+	// hook payloads (e.g. long notification messages) do not silently fail
+	// with bufio.ErrTooLong. Oversize requests surface explicitly below.
+	scanner.Buffer(make([]byte, 0, 64*1024), maxRequestPayloadBytes)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
+			if errors.Is(err, bufio.ErrTooLong) {
+				count := s.badPayloads.Add(1)
+				slog.Warn("daemon: request payload exceeds limit", "limit", maxRequestPayloadBytes, "bad_payload_count", count)
+				writeResponse(w, Response{OK: false, Error: "request payload exceeds limit"})
+				return
+			}
 			slog.Warn("daemon: read failed", "err", err)
 		}
 		return

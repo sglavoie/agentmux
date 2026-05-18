@@ -40,6 +40,44 @@ func TestValidate_MissingHomeDirAfterNormalization(t *testing.T) {
 	}
 }
 
+// TestValidate_PreviewMinDimensions exercises the boundary cases for the
+// preview.min_cols / preview.min_rows checks. The previous error message
+// claimed "must be > 0" but the predicate only rejected negative values, so
+// zero (which applyDefaults rewrites to the package default) was allowed.
+// Validation must accept zero, reject negative values, and report the lower
+// bound that actually matches the predicate.
+func TestValidate_PreviewMinDimensions(t *testing.T) {
+	zero := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	zero.Defaults.Preview.MinCols = 0
+	zero.Defaults.Preview.MinRows = 0
+	if err := config.Validate(zero); err != nil && (strings.Contains(err.Error(), "min_cols") || strings.Contains(err.Error(), "min_rows")) {
+		t.Fatalf("zero min dimensions must be accepted (filled by applyDefaults later), got: %v", err)
+	}
+
+	neg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	neg.Defaults.Preview.MinCols = -1
+	neg.Defaults.Preview.MinRows = -2
+	err := config.Validate(neg)
+	if err == nil {
+		t.Fatal("expected validation error for negative min dimensions")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "min_cols must be >= 0") {
+		t.Errorf("expected min_cols error to say '>= 0' (matches predicate), got: %s", msg)
+	}
+	if !strings.Contains(msg, "min_rows must be >= 0") {
+		t.Errorf("expected min_rows error to say '>= 0' (matches predicate), got: %s", msg)
+	}
+}
+
 func TestValidate_DuplicateProjectTitlePerProfile(t *testing.T) {
 	// Two projects with the same (profile, title) pair are ambiguous: launch dedup
 	// keys on this pair, so duplicates would mask one of them and silently confuse

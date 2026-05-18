@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+// amxHookCommandIdentifier matches the executable basenames Agent Mux uses for
+// its hook command. The merge logic detects amx-owned hook groups so they can
+// be replaced atomically; anything else is preserved verbatim.
+const amxHookCommandIdentifier = "amx"
+
 // hookEntry is a single hook command inside a matcher group.
 type hookEntry struct {
 	Type    string `json:"type"`
@@ -167,9 +172,22 @@ func stripAmxGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
 	return out
 }
 
+// isAmxGroup reports whether g was installed by Agent Mux. The check inspects
+// the command's first token (the executable) and requires its basename to be
+// "amx" with a "hook-indicator" subcommand argument. Substring matching on
+// "hook-indicator" alone would misclassify unrelated user tools that happen to
+// share that token (e.g. a path like /opt/hook-indicator-helper/run) and
+// silently wipe them on every sync.
 func isAmxGroup(g hookGroup) bool {
 	for _, e := range g.Hooks {
-		if strings.Contains(e.Command, "hook-indicator") {
+		fields := strings.Fields(e.Command)
+		if len(fields) < 2 {
+			continue
+		}
+		if filepath.Base(fields[0]) != amxHookCommandIdentifier {
+			continue
+		}
+		if fields[1] == "hook-indicator" {
 			return true
 		}
 	}

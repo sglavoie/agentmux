@@ -58,10 +58,10 @@ func validateDefaults(d *Defaults) []string {
 		errs = append(errs, "defaults.preview.refresh_ms must be >= 50")
 	}
 	if d.Preview.MinCols < 0 {
-		errs = append(errs, "defaults.preview.min_cols must be > 0")
+		errs = append(errs, "defaults.preview.min_cols must be >= 0")
 	}
 	if d.Preview.MinRows < 0 {
-		errs = append(errs, "defaults.preview.min_rows must be > 0")
+		errs = append(errs, "defaults.preview.min_rows must be >= 0")
 	}
 	return errs
 }

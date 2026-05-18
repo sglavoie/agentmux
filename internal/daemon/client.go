@@ -32,6 +32,18 @@ func NewClientWithSocket(path string) *Client {
 	return &Client{socketPath: path}
 }
 
+// sendDeadline bounds total request/response time so a wedged or crashed
+// daemon cannot hang a hook script indefinitely. Hook commands are invoked
+// per Claude event and must return promptly. Exposed as a var (not const) so
+// tests can shrink it without sleeping for several seconds.
+var sendDeadline = 5 * time.Second
+
+// maxResponseBytes caps the response payload size the client will buffer.
+// It mirrors the server's request ceiling (1 MiB) so an oversize or
+// malformed response triggers an explicit error rather than bufio.Scanner's
+// silent 64 KiB truncation.
+const maxResponseBytes = 1 << 20
+
 // Send sends req to the daemon and returns the response.
 // Returns an error if the daemon is not reachable.
 func (c *Client) Send(req Request) (Response, error) {
@@ -40,6 +52,9 @@ func (c *Client) Send(req Request) (Response, error) {
 		return Response{}, fmt.Errorf("connecting to daemon: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
+
+	// Bound the whole exchange so a stuck daemon cannot hang the caller.
+	_ = conn.SetDeadline(time.Now().Add(sendDeadline))
 
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -52,6 +67,7 @@ func (c *Client) Send(req Request) (Response, error) {
 
 	var resp Response
 	scanner := bufio.NewScanner(conn)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxResponseBytes)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			return Response{}, fmt.Errorf("reading response: %w", err)

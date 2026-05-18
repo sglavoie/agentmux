@@ -517,6 +517,67 @@ func TestMergeUpdatesStaleHooks(t *testing.T) {
 	}
 }
 
+// TestMergePreservesThirdPartyHookIndicatorSubstring asserts that a non-amx
+// hook whose command merely contains the substring "hook-indicator" is left
+// in place by MergeData. The previous (loose) detection wiped any command
+// containing that substring, including tools whose path happened to include
+// it (e.g. a third-party "hook-indicator-helper").
+func TestMergePreservesThirdPartyHookIndicatorSubstring(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	thirdPartyCmd := "/opt/hook-indicator-helper/run --notify"
+	existing := map[string]any{
+		"hooks": map[string]any{
+			"Notification": []any{
+				map[string]any{
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": thirdPartyCmd,
+							"async":   false,
+						},
+					},
+				},
+			},
+		},
+	}
+	writeJSON(t, filepath.Join(accountDir, "settings.json"), existing)
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll error: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(accountDir, "settings.json"))
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+
+	notifs := s["hooks"].(map[string]any)["Notification"].([]any)
+	foundThirdParty := false
+	for _, g := range notifs {
+		group := g.(map[string]any)
+		inner := group["hooks"].([]any)
+		for _, h := range inner {
+			entry := h.(map[string]any)
+			if entry["command"] == thirdPartyCmd {
+				foundThirdParty = true
+			}
+		}
+	}
+	if !foundThirdParty {
+		t.Fatalf("third-party hook with 'hook-indicator' substring was wiped: %v", notifs)
+	}
+}
+
 // helpers
 
 func writeJSON(t *testing.T, path string, v any) {
