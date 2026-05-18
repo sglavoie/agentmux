@@ -104,6 +104,9 @@ func ResolveAction(input string, payload HookPayload) (action string, ok bool) {
 	if IsIgnoredEvent(input, payload) {
 		return "", false
 	}
+	if action, ok := resolveFailureAction(input, payload); ok {
+		return action, true
+	}
 	if action, ok := resolveNotificationAction(input, payload); ok {
 		return action, true
 	}
@@ -128,6 +131,26 @@ func IsIgnoredEvent(input string, payload HookPayload) bool {
 	default:
 		return false
 	}
+}
+
+func resolveFailureAction(input string, payload HookPayload) (string, bool) {
+	if payloadHasContextLimit(payload) {
+		return "stop_failure", true
+	}
+
+	switch input {
+	case "SessionEnd", "sessionEnd":
+		if payload.Reason == "error" || payload.Reason == "timeout" {
+			return "stop_failure", true
+		}
+	case "Stop", "agentStop", "SubagentStop", "subagentStop":
+		stopReason := payload.EffectiveStopReason()
+		if stopReason != "" && stopReason != "end_turn" {
+			return "stop_failure", true
+		}
+	}
+
+	return "", false
 }
 
 func resolveNotificationAction(input string, payload HookPayload) (string, bool) {

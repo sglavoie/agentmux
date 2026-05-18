@@ -25,6 +25,7 @@ type HookPayload struct {
 	NotificationTypeCamel string `json:"notificationType"`
 	StopReason            string `json:"stop_reason"`
 	StopReasonCamel       string `json:"stopReason"`
+	Reason                string `json:"reason"`
 	Title                 string `json:"title"`
 	Message               string `json:"message"`
 }

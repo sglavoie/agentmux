@@ -44,6 +44,7 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 	}
 
 	pipeMode := IsPipeMode()
+	preservesIcon := PreservesCurrent(eventOrAction) && action == "active"
 
 	runner := kitty.NewRealRunner()
 	client := kitty.NewClient(runner)
@@ -66,6 +67,18 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		slog.Debug("indicator: kitty lookup failed", "err", err)
 	}
 
+	contextLimitDetected := payloadHasContextLimit(payload)
+	if !contextLimitDetected && shouldProbeWindowForContextLimit(eventOrAction, action) {
+		text, textErr := client.GetText(kitty.MatchWindowByID(windowID), "screen")
+		if textErr != nil {
+			slog.Debug("indicator: context-limit probe failed", "window_id", windowID, "event", eventOrAction, "err", textErr)
+		} else if screenShowsContextLimit(text) {
+			action = "stop_failure"
+			preservesIcon = false
+			contextLimitDetected = true
+		}
+	}
+
 	var profile, harness string
 	if win != nil {
 		profile = win.UserVars.EffectiveProfile()
@@ -77,8 +90,10 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		"harness", harness,
 		"event", eventOrAction,
 		"action", action,
+		"session_reason", payload.Reason,
 		"notification_type", payload.EffectiveNotificationType(),
 		"stop_reason", payload.EffectiveStopReason(),
+		"context_limit", contextLimitDetected,
 		"notification_title", payload.Title,
 		"notification_message", payload.Message,
 		"pipe_mode", pipeMode,
@@ -92,7 +107,7 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		Action:           action,
 		Event:            eventOrAction,
 		IsPrompt:         IsPromptEvent(eventOrAction),
-		PreservesIcon:    PreservesCurrent(eventOrAction),
+		PreservesIcon:    preservesIcon,
 		PipeMode:         pipeMode,
 		SessionTitle:     sessionTitle,
 		Account:          profile,

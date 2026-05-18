@@ -90,6 +90,31 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 	}
 }
 
+func TestResolveAction_ContextLimitNotificationShowsStopFailure(t *testing.T) {
+	payload := HookPayload{
+		Title:   "Context limit reached",
+		Message: "/compact or /clear to continue",
+	}
+	got, ok := ResolveAction("notification", payload)
+	if !ok || got != "stop_failure" {
+		t.Fatalf("ResolveAction(notification, %+v) = (%q, %v), want (stop_failure, true)", payload, got, ok)
+	}
+}
+
+func TestResolveAction_SessionEndErrorShowsStopFailure(t *testing.T) {
+	got, ok := ResolveAction("sessionEnd", HookPayload{Reason: "error"})
+	if !ok || got != "stop_failure" {
+		t.Fatalf("ResolveAction(sessionEnd, error) = (%q, %v), want (stop_failure, true)", got, ok)
+	}
+}
+
+func TestResolveAction_AgentStopNonEndTurnShowsStopFailure(t *testing.T) {
+	got, ok := ResolveAction("agentStop", HookPayload{StopReasonCamel: "context_limit_reached"})
+	if !ok || got != "stop_failure" {
+		t.Fatalf("ResolveAction(agentStop, non-end_turn) = (%q, %v), want (stop_failure, true)", got, ok)
+	}
+}
+
 func TestResolveAction_UnknownEventIgnored(t *testing.T) {
 	_, ok := ResolveAction("BogusEvent", HookPayload{})
 	if ok {
@@ -157,6 +182,84 @@ func TestIsPromptEvent(t *testing.T) {
 	for _, tc := range cases {
 		if got := IsPromptEvent(tc.event); got != tc.want {
 			t.Errorf("IsPromptEvent(%q) = %v, want %v", tc.event, got, tc.want)
+		}
+	}
+}
+
+func TestHasContextLimitMarker(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{
+			name: "exact message",
+			text: "Context limit reached · /compact or /clear to continue",
+			want: true,
+		},
+		{
+			name: "window full variant",
+			text: "Context window is full\n/compact or /clear to continue",
+			want: true,
+		},
+		{
+			name: "missing recovery hint",
+			text: "Context limit reached",
+			want: false,
+		},
+		{
+			name: "unrelated text",
+			text: "All good here",
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		if got := hasContextLimitMarker(tc.text); got != tc.want {
+			t.Errorf("%s: hasContextLimitMarker(%q) = %v, want %v", tc.name, tc.text, got, tc.want)
+		}
+	}
+}
+
+func TestScreenShowsContextLimit(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{
+			name: "warning at screen tail",
+			text: "earlier line\n\nContext limit reached · /compact or /clear to continue\n\n✻ Cooked for 17m 6s\n",
+			want: true,
+		},
+		{
+			name: "quoted text earlier in scrollback does not trip fallback",
+			text: "Context limit reached · /compact or /clear to continue\nuser was discussing the warning\n\nnormal latest output\nstill running fine\n",
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		if got := screenShowsContextLimit(tc.text); got != tc.want {
+			t.Errorf("%s: screenShowsContextLimit(%q) = %v, want %v", tc.name, tc.text, got, tc.want)
+		}
+	}
+}
+
+func TestShouldProbeWindowForContextLimit(t *testing.T) {
+	cases := []struct {
+		event  string
+		action string
+		want   bool
+	}{
+		{"TaskCompleted", "active", true},
+		{"agentStop", "stop", true},
+		{"notification", "idle", true},
+		{"UserPromptSubmit", "active", false},
+		{"StopFailure", "stop_failure", false},
+		{"stop_failure", "stop_failure", false},
+	}
+	for _, tc := range cases {
+		if got := shouldProbeWindowForContextLimit(tc.event, tc.action); got != tc.want {
+			t.Errorf("shouldProbeWindowForContextLimit(%q, %q) = %v, want %v", tc.event, tc.action, got, tc.want)
 		}
 	}
 }

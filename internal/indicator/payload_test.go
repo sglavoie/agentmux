@@ -36,6 +36,23 @@ func TestDecodeHookPayload_ParsesNotificationFields(t *testing.T) {
 	}
 }
 
+func TestDecodeHookPayload_ParsesReasonFields(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"hook_event_name": "SessionEnd",
+		"reason": "error",
+		"stop_reason": "context_limit_reached"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(reason fields) error: %v", err)
+	}
+	if payload.Reason != "error" {
+		t.Fatalf("Reason = %q, want error", payload.Reason)
+	}
+	if payload.EffectiveStopReason() != "context_limit_reached" {
+		t.Fatalf("EffectiveStopReason = %q, want context_limit_reached", payload.EffectiveStopReason())
+	}
+}
+
 func TestDecodeHookPayload_InvalidJSON(t *testing.T) {
 	if _, err := DecodeHookPayload(strings.NewReader("{")); err == nil {
 		t.Fatal("DecodeHookPayload(invalid JSON) error = nil, want non-nil")
