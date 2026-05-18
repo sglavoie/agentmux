@@ -3,6 +3,8 @@ package session
 import (
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -84,11 +86,29 @@ func SortRunning(sessions []RunningSession, mode string) []RunningSession {
 	return sorted
 }
 
-// projectName strips the leading "X:" account prefix from a base title.
-// e.g., "W:api" → "api", "myproject" → "myproject"
+// projectName strips the leading "<rune>:" profile prefix from a base title.
+// The prefix is a single letter rune (uppercase or caseless) followed by a
+// colon, matching the output of ProfilePrefix. Unicode profile initials such
+// as "É:project" or "中:project" are handled in addition to plain ASCII
+// like "W:api". Returns base unchanged when no such prefix is present.
 func projectName(base string) string {
-	if len(base) >= 2 && base[1] == ':' && base[0] >= 'A' && base[0] <= 'Z' {
-		return base[2:]
+	r, size := utf8.DecodeRuneInString(base)
+	if r == utf8.RuneError {
+		return base
 	}
-	return base
+	if len(base) < size+1 || base[size] != ':' {
+		return base
+	}
+	// The rune must be a letter; reject numeric or punctuation prefixes
+	// (e.g. "1:foo" or "?:foo") that ProfilePrefix would never produce.
+	if !unicode.IsLetter(r) {
+		return base
+	}
+	// For cased scripts (Latin, Cyrillic, Greek), the rune must already be
+	// uppercase — lowercase prefixes like "w:api" do not come from
+	// ProfilePrefix and should not be treated as a profile prefix.
+	if unicode.IsLower(r) {
+		return base
+	}
+	return base[size+1:]
 }
