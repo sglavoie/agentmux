@@ -131,7 +131,10 @@ func TestMergeViaContract_FaultLeavesOriginalAndBackupIntact(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	settingsPath := filepath.Join(accountDir, "settings.json")
-	original := []byte(`{"hooks":{"prior":true}}`)
+	// Seed with a valid hooks-shaped settings.json so MergeData reaches the
+	// atomic-write step. The shape matters: a malformed hooks value now
+	// short-circuits MergeData with a parse error before the write runs.
+	original := []byte(`{"hooks":{"PriorEvent":[{"hooks":[{"type":"command","command":"prior-script"}]}]}}`)
 	if err := os.WriteFile(settingsPath, original, 0o644); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

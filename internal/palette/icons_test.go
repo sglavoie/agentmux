@@ -179,6 +179,43 @@ func TestStateOrderExtended(t *testing.T) {
 	}
 }
 
+// TestParseTitleIgnoresEmptyStateIcon ensures that a state_order entry whose
+// state name has no matching glyph in `states` cannot prefix-match every
+// title and report a phantom state. strings.HasPrefix(s, "") is true, so the
+// pre-fix iteration would incorrectly label any title as carrying that state
+// and leave the title bytes untouched, breaking ParseTitle's base extraction.
+func TestParseTitleIgnoresEmptyStateIcon(t *testing.T) {
+	prevOrder := ico.StateOrder
+	prevStates := ico.States
+	t.Cleanup(func() {
+		ico.StateOrder = prevOrder
+		ico.States = prevStates
+	})
+
+	// Prepend a state with no glyph; the real "bolt" entry follows.
+	ico.StateOrder = append([]string{"phantom"}, prevOrder...)
+	ico.States = make(map[string]string, len(prevStates))
+	for k, v := range prevStates {
+		ico.States[k] = v
+	}
+	// "phantom" deliberately absent from States — its lookup returns "".
+
+	base, state, starred := ParseTitle("W:project")
+	if base != "W:project" || state != "" || starred {
+		t.Fatalf("ParseTitle(plain with phantom state) = (%q, %q, %v), want (W:project, , false)", base, state, starred)
+	}
+
+	boltTitle := BuildTitle("W:project", "bolt", false)
+	base, state, starred = ParseTitle(boltTitle)
+	if base != "W:project" || state != "bolt" || starred {
+		t.Fatalf("ParseTitle(bolt with phantom state) = (%q, %q, %v), want (W:project, bolt, false)", base, state, starred)
+	}
+
+	if got := DetectState("W:project"); got != "" {
+		t.Fatalf("DetectState(plain with phantom state) = %q, want empty", got)
+	}
+}
+
 func TestBuildParseStarredSubagent(t *testing.T) {
 	title := BuildTitle("base", "subagent", true)
 	if title != "★🤖base" {

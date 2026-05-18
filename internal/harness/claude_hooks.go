@@ -74,8 +74,12 @@ func (claudeHookContract) MergeData(existingData []byte, disabledEvents []string
 
 	existing := make(map[string][]hookGroup)
 	if raw, ok := existingRaw["hooks"]; ok {
+		// Bail out rather than overwrite a malformed `hooks` value: silently
+		// resetting would destroy the user's pre-existing entries (the
+		// in-flight merge writes a fresh hooks map back over the top), which
+		// is unrecoverable for anyone whose .bak rotation missed the change.
 		if err := json.Unmarshal(raw, &existing); err != nil {
-			existing = make(map[string][]hookGroup)
+			return nil, fmt.Errorf("parsing settings.json hooks section: %w", err)
 		}
 	}
 

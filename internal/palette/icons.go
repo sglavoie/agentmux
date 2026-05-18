@@ -43,6 +43,11 @@ func ParseTitle(title string) (base, state string, starred bool) {
 	}
 	for _, name := range ico.StateOrder {
 		icon := ico.States[name]
+		// Skip empty icons so a stale entry in state_order without a matching
+		// glyph cannot prefix-match every title and report a phantom state.
+		if icon == "" {
+			continue
+		}
 		if strings.HasPrefix(title, icon) {
 			state = name
 			title = title[len(icon):]
@@ -81,7 +86,11 @@ func StripIcons(title string) string {
 func DetectState(title string) string {
 	title = strings.TrimPrefix(title, ico.Star)
 	for _, name := range ico.StateOrder {
-		if strings.HasPrefix(title, ico.States[name]) {
+		icon := ico.States[name]
+		if icon == "" {
+			continue
+		}
+		if strings.HasPrefix(title, icon) {
 			return name
 		}
 	}

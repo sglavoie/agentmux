@@ -578,6 +578,49 @@ func TestMergePreservesThirdPartyHookIndicatorSubstring(t *testing.T) {
 	}
 }
 
+// TestMergeRefusesMalformedHooksValue locks in the guarantee that a Claude
+// settings.json whose top-level "hooks" field is not an object of hookGroup
+// arrays surfaces a parse error rather than being silently overwritten.
+// Previously MergeData reset `existing = make(...)` on unmarshal failure,
+// which discarded the user's malformed (but recoverable) entries on the
+// next sync and replaced them with only amx-managed groups.
+func TestMergeRefusesMalformedHooksValue(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(accountDir, "settings.json")
+
+	// Top-level JSON is valid, but `hooks` is a string instead of the
+	// expected object — the kind of mistake a hand-edit can introduce.
+	bad := []byte(`{"hooks": "broken"}`)
+	if err := os.WriteFile(settingsPath, bad, 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	results, err := MergeAll(cfg, "", testBin)
+	if err != nil {
+		t.Fatalf("MergeAll outer error: %v", err)
+	}
+	if len(results) != 1 || results[0].Err == nil {
+		t.Fatalf("expected per-account error for malformed hooks, got: %+v", results)
+	}
+
+	// The on-disk file must be untouched so the user can recover by hand.
+	got, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("read settings: %v", err)
+	}
+	if string(got) != string(bad) {
+		t.Fatalf("settings.json was overwritten despite parse error\n got: %q\nwant: %q", got, bad)
+	}
+}
+
 // helpers
 
 func writeJSON(t *testing.T, path string, v any) {

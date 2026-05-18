@@ -363,7 +363,9 @@ func TestServer_HandshakeDeadlineReleasesIdleConn(t *testing.T) {
 
 	// Reading the response should EOF (server closes the conn after timeout)
 	// or yield no bytes within the deadline window.
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if err := conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
 	buf := make([]byte, 64)
 	_, readErr := conn.Read(buf)
 	if readErr == nil {
