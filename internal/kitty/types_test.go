@@ -105,8 +105,11 @@ func TestIsKeybindingsCmdline(t *testing.T) {
 	}{
 		{"bare amx keybindings", []string{"amx", "keybindings"}, true},
 		{"full path", []string{"/usr/local/bin/amx", "keybindings"}, true},
+		{"with debug flag", []string{"amx", "--debug", "keybindings"}, true},
+		{"with multiple flags", []string{"amx", "--debug", "-v", "keybindings"}, true},
 		{"bare amx", []string{"amx"}, false},
 		{"different subcommand", []string{"amx", "daemon"}, false},
+		{"flag-only no subcommand", []string{"amx", "--debug"}, false},
 		{"empty", []string{}, false},
 		{"nil", nil, false},
 		{"different binary", []string{"claude", "keybindings"}, false},

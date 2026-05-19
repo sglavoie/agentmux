@@ -132,7 +132,19 @@ func isKeybindingsCmdline(cmdline []string) bool {
 	if len(cmdline) < 2 {
 		return false
 	}
-	return filepath.Base(cmdline[0]) == "amx" && cmdline[1] == "keybindings"
+	if filepath.Base(cmdline[0]) != "amx" {
+		return false
+	}
+	// Tolerate global flags like `--debug` before the subcommand. Without this,
+	// `amx --debug keybindings` would be missed by the dedup detector and a
+	// second overlay window would be opened.
+	for _, arg := range cmdline[1:] {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return arg == "keybindings"
+	}
+	return false
 }
 
 // UserVars holds Agent Mux user variables stored on a Kitty window.
