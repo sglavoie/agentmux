@@ -96,6 +96,10 @@ func (f *fakeFocusManagedClient) LaunchOverlayPager(string) error {
 	return nil
 }
 
+func (f *fakeFocusManagedClient) SetUserVars(string, map[string]string) error {
+	return nil
+}
+
 func testManagedTab(tabID, windowID int, title string) kitty.Tab {
 	return kitty.Tab{
 		ID:    tabID,

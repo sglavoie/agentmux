@@ -96,6 +96,7 @@ func (f *fakeKittyClient) SetTabTitle(string, string) error                     
 func (f *fakeKittyClient) FocusWindow(string) error                                 { return nil }
 func (f *fakeKittyClient) GetText(string, string) (string, error)                   { return "", nil }
 func (f *fakeKittyClient) LaunchOverlayPager(string) error                          { return nil }
+func (f *fakeKittyClient) SetUserVars(string, map[string]string) error              { return nil }
 
 func parseIDMatch(matchExpr string) (int, error) {
 	rest, ok := strings.CutPrefix(matchExpr, "id:")

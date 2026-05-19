@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 )
@@ -25,6 +26,9 @@ type KittyClient interface {
 	SetTabColor(matchExpr, activeBg, inactiveBg, activeFg, inactiveFg string) error
 	// SetTabTitle sets the title of a matched tab.
 	SetTabTitle(matchExpr, title string) error
+	// SetUserVars writes user variables onto an existing window matched by
+	// matchExpr (use MatchWindowByID). An empty vars map is a no-op.
+	SetUserVars(matchExpr string, vars map[string]string) error
 	// FocusTab focuses the matched tab.
 	FocusTab(matchExpr string) error
 	// FocusWindow focuses the matched window.
@@ -161,6 +165,23 @@ func (c *SubprocessClient) SetTabColor(matchExpr, activeBg, inactiveBg, activeFg
 
 func (c *SubprocessClient) SetTabTitle(matchExpr, title string) error {
 	_, err := c.kitten("set-tab-title", "--match="+matchExpr, title)
+	return err
+}
+
+func (c *SubprocessClient) SetUserVars(matchExpr string, vars map[string]string) error {
+	if len(vars) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(vars))
+	for k := range vars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	args := []string{"set-user-vars", "--match=" + matchExpr}
+	for _, k := range keys {
+		args = append(args, k+"="+vars[k])
+	}
+	_, err := c.kitten(args...)
 	return err
 }
 

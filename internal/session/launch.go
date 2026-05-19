@@ -28,6 +28,42 @@ type LaunchOpt struct {
 	SkipDedup bool // skip duplicate-session check (used by restart)
 }
 
+// BuildUserVars constructs the user-var map written onto a launched (or
+// re-anchored) tab's window. The same map shape must be produced by both
+// Launch and any future re-anchoring helper so hook-side consumers
+// (EffectiveProfile, EffectiveHarness, ...) see a consistent contract.
+func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defaults) map[string]string {
+	args := ResolveArgs(sess, acc, defaults)
+	explicitArgs := shellQuoteArgs(sess.EffectiveArgs())
+	groups := strings.Join(sess.Groups, "\x1f")
+	ccEnv := SerializeSessionEnv(sess.Env)
+	profileName := sess.EffectiveProfile()
+	if profileName == "" {
+		profileName = acc.Name
+	}
+	homeDir := config.ExpandTilde(acc.EffectiveHomeDir())
+	projectDir := config.ExpandTilde(sess.Directory)
+	harnessName := acc.EffectiveHarness()
+
+	return map[string]string{
+		"amx_profile":       profileName,
+		"amx_harness":       harnessName,
+		"amx_home_dir":      homeDir,
+		"amx_project":       sess.Title,
+		"amx_directory":     projectDir,
+		"amx_args":          args,
+		"amx_env":           ccEnv,
+		"amx_groups":        groups,
+		"cc_account":        profileName,
+		"cc_config_dir":     homeDir,
+		"cc_cwd":            projectDir,
+		"cc_flags":          args,
+		"cc_explicit_flags": explicitArgs,
+		"cc_env":            ccEnv,
+		"cc_groups":         groups,
+	}
+}
+
 // Launch launches a single session from config.
 // Returns nil silently if the session is already running (dedup).
 func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, opts ...LaunchOpt) error {
@@ -73,34 +109,9 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	// Build env, user vars, and shell command.
 	env := ResolveEnv(sess, acc)
 	args := ResolveArgs(sess, acc, cfg.Defaults)
-	explicitArgs := shellQuoteArgs(sess.EffectiveArgs())
-	groups := strings.Join(sess.Groups, "\x1f")
-	ccEnv := SerializeSessionEnv(sess.Env)
-	profileName := sess.EffectiveProfile()
-	if profileName == "" {
-		profileName = acc.Name
-	}
-	homeDir := config.ExpandTilde(acc.EffectiveHomeDir())
 	projectDir := config.ExpandTilde(sess.Directory)
 	harnessName := acc.EffectiveHarness()
-
-	userVars := map[string]string{
-		"amx_profile":       profileName,
-		"amx_harness":       harnessName,
-		"amx_home_dir":      homeDir,
-		"amx_project":       sess.Title,
-		"amx_directory":     projectDir,
-		"amx_args":          args,
-		"amx_env":           ccEnv,
-		"amx_groups":        groups,
-		"cc_account":        profileName,
-		"cc_config_dir":     homeDir,
-		"cc_cwd":            projectDir,
-		"cc_flags":          args,
-		"cc_explicit_flags": explicitArgs,
-		"cc_env":            ccEnv,
-		"cc_groups":         groups,
-	}
+	userVars := BuildUserVars(sess, acc, cfg.Defaults)
 
 	shellCmd := "exec " + shellQuoteWord(harness.Executable(harnessName))
 	if args != "" {

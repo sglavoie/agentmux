@@ -1,8 +1,10 @@
 package session
 
 import (
+	"log/slog"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -51,14 +53,37 @@ func (rs RunningSession) EffectiveArgs() string {
 	return rs.Flags
 }
 
+// GhostTab is a managed tab whose anchor window (the one bearing amx user vars)
+// no longer exists, but whose tab title still matches a unique (profile,
+// project) pair in the loaded config. Callers can use the WindowID to re-stamp
+// user vars onto the surviving window and restore normal detection.
+type GhostTab struct {
+	TabID    int
+	WindowID int
+	Profile  string
+	Project  string
+	Account  config.Account
+	Session  config.Session
+}
+
 // List returns all managed running sessions from Kitty.
 // A tab is "managed" if any of its windows has cc_account set (non-empty).
 func List(client kitty.KittyClient) ([]RunningSession, error) {
+	sessions, _, err := ListWithConfig(client, nil)
+	return sessions, err
+}
+
+// ListWithConfig returns running sessions plus any "ghost" tabs whose anchor
+// window is gone but whose tab title resolves unambiguously to a configured
+// (profile, project) pair. When cfg is nil, no fallback occurs and ghosts is
+// always empty — behavior is identical to List.
+func ListWithConfig(client kitty.KittyClient, cfg *config.Config) (sessions []RunningSession, ghosts []GhostTab, err error) {
 	osWindows, err := client.ListWindows()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return runningSessionsFromOSWindows(osWindows), nil
+	sessions, ghosts = runningSessionsFromOSWindows(osWindows, cfg)
+	return sessions, ghosts, nil
 }
 
 // Find returns the first running session whose Base title equals baseTitle.
@@ -81,7 +106,7 @@ func FindByKey(sessions []RunningSession, key string) (RunningSession, bool) {
 	return RunningSession{}, false
 }
 
-func tabToRunningSession(tab kitty.Tab) (RunningSession, bool) {
+func tabToRunningSession(tab kitty.Tab, cfg *config.Config) (rs RunningSession, ghost *GhostTab, ok bool) {
 	var fallback *kitty.Window
 	for i := range tab.Windows {
 		win := &tab.Windows[i]
@@ -89,16 +114,117 @@ func tabToRunningSession(tab kitty.Tab) (RunningSession, bool) {
 			continue
 		}
 		if win.IsActive {
-			return runningSessionFromWindow(tab, *win), true
+			return runningSessionFromWindow(tab, *win), nil, true
 		}
 		if fallback == nil {
 			fallback = win
 		}
 	}
 	if fallback != nil {
-		return runningSessionFromWindow(tab, *fallback), true
+		return runningSessionFromWindow(tab, *fallback), nil, true
 	}
-	return RunningSession{}, false
+	if cfg != nil {
+		if rs, ghost, ok := titleFallback(tab, cfg); ok {
+			return rs, ghost, true
+		}
+	}
+	return RunningSession{}, nil, false
+}
+
+// titleFallback recognizes a tab by its title even when no window carries amx
+// user vars (the anchor harness window was closed). It returns a fabricated
+// RunningSession and a GhostTab pointing at the window that should be
+// re-stamped. The match must be unique — ambiguous or unconfigured titles are
+// skipped.
+func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab, bool) {
+	if len(tab.Windows) == 0 {
+		return RunningSession{}, nil, false
+	}
+	base, state, starred := palette.ParseTitle(tab.Title)
+	prefix, project, ok := strings.Cut(base, ":")
+	if !ok || prefix == "" || project == "" {
+		return RunningSession{}, nil, false
+	}
+	wantPrefix := prefix + ":"
+
+	type match struct {
+		acc  config.Account
+		sess config.Session
+	}
+	var matches []match
+	for _, acc := range cfg.Accounts {
+		if ProfilePrefix(acc.Name) != wantPrefix {
+			continue
+		}
+		for _, sess := range cfg.Sessions {
+			if sess.EffectiveProfile() != acc.Name {
+				continue
+			}
+			if sess.Title != project {
+				continue
+			}
+			matches = append(matches, match{acc: acc, sess: sess})
+		}
+	}
+	if len(matches) != 1 {
+		slog.Debug("title fallback skipped",
+			"tab_id", tab.ID,
+			"title", tab.Title,
+			"matches", len(matches),
+		)
+		return RunningSession{}, nil, false
+	}
+	m := matches[0]
+
+	winID := tab.Windows[0].ID
+	for i := range tab.Windows {
+		if tab.Windows[i].IsActive {
+			winID = tab.Windows[i].ID
+			break
+		}
+	}
+
+	profile := m.sess.EffectiveProfile()
+	if profile == "" {
+		profile = m.acc.Name
+	}
+	homeDir := config.ExpandTilde(m.acc.EffectiveHomeDir())
+	projectDir := config.ExpandTilde(m.sess.Directory)
+	args := ResolveArgs(m.sess, m.acc, cfg.Defaults)
+	explicitArgs := shellQuoteArgs(m.sess.EffectiveArgs())
+	ccEnv := SerializeSessionEnv(m.sess.Env)
+	groups := append([]string(nil), m.sess.Groups...)
+
+	rs := RunningSession{
+		TabID:            tab.ID,
+		WindowID:         winID,
+		Key:              SessionKey(profile, m.sess.Title),
+		Title:            tab.Title,
+		Base:             base,
+		State:            state,
+		Starred:          starred,
+		Project:          m.sess.Title,
+		Profile:          profile,
+		Account:          profile,
+		Harness:          m.acc.EffectiveHarness(),
+		HomeDir:          homeDir,
+		Directory:        projectDir,
+		Args:             args,
+		Flags:            args,
+		ExplicitFlags:    explicitArgs,
+		ExplicitFlagsSet: len(m.sess.EffectiveArgs()) > 0,
+		Env:              ccEnv,
+		Groups:           groups,
+	}
+	ghost := &GhostTab{
+		TabID:    tab.ID,
+		WindowID: winID,
+		Profile:  profile,
+		Project:  m.sess.Title,
+		Account:  m.acc,
+		Session:  m.sess,
+	}
+	return rs, ghost, true
 }
 
 func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
@@ -137,22 +263,31 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 	}
 }
 
-func runningSessionsFromOSWindows(osWindows []kitty.OSWindow) []RunningSession {
+func runningSessionsFromOSWindows(osWindows []kitty.OSWindow, cfg *config.Config) ([]RunningSession, []GhostTab) {
 	var sessions []RunningSession
+	var ghosts []GhostTab
 	for _, osw := range osWindows {
-		sessions = append(sessions, runningSessionsFromTabs(osw.Tabs)...)
+		s, g := runningSessionsFromTabs(osw.Tabs, cfg)
+		sessions = append(sessions, s...)
+		ghosts = append(ghosts, g...)
 	}
-	return sessions
+	return sessions, ghosts
 }
 
-func runningSessionsFromTabs(tabs []kitty.Tab) []RunningSession {
+func runningSessionsFromTabs(tabs []kitty.Tab, cfg *config.Config) ([]RunningSession, []GhostTab) {
 	sessions := make([]RunningSession, 0, len(tabs))
+	var ghosts []GhostTab
 	for _, tab := range tabs {
-		if rs, ok := tabToRunningSession(tab); ok {
-			sessions = append(sessions, rs)
+		rs, ghost, ok := tabToRunningSession(tab, cfg)
+		if !ok {
+			continue
+		}
+		sessions = append(sessions, rs)
+		if ghost != nil {
+			ghosts = append(ghosts, *ghost)
 		}
 	}
-	return sessions
+	return sessions, ghosts
 }
 
 func targetOSWindow(osWindows []kitty.OSWindow) *kitty.OSWindow {

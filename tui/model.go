@@ -181,7 +181,7 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 // Init starts the refresh ticker and fetches the first session list.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
-		fetchCmd(m.client, m.sortMode),
+		fetchCmd(m.client, m.cfg, m.sortMode),
 		tickCmd(m.interval),
 		healthCmd(m.cfg, m.amxBin, true, true),
 	)
@@ -214,7 +214,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		m.sweepRecentTransitions()
-		cmds := []tea.Cmd{fetchCmd(m.client, m.sortMode), tickCmd(m.interval)}
+		cmds := []tea.Cmd{fetchCmd(m.client, m.cfg, m.sortMode), tickCmd(m.interval)}
 		now := time.Now()
 		checkDaemon := now.Sub(m.daemonHealthCheckedAt) >= daemonHealthInterval
 		checkHooks := now.Sub(m.hookHealthCheckedAt) >= hookHealthInterval
@@ -279,7 +279,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionDoneMsg:
 		m.actionErr = msg.err
 		// Trigger a refresh so the list reflects the new state.
-		return m, fetchCmd(m.client, m.sortMode)
+		return m, fetchCmd(m.client, m.cfg, m.sortMode)
 
 	case resortDoneMsg:
 		m.actionErr = msg.err
@@ -293,7 +293,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if c := m.pushToast(t); c != nil {
 			cmds = append(cmds, c)
 		}
-		cmds = append(cmds, fetchCmd(m.client, m.sortMode))
+		cmds = append(cmds, fetchCmd(m.client, m.cfg, m.sortMode))
 		return m, tea.Batch(cmds...)
 
 	case launchProgressMsg:
@@ -307,7 +307,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.actionErr = msg.err
 		}
-		return m, fetchCmd(m.client, m.sortMode)
+		return m, fetchCmd(m.client, m.cfg, m.sortMode)
 
 	case focusDoneMsg:
 		if msg.err != nil {
@@ -1264,11 +1264,20 @@ func healthCmd(cfg *config.Config, amxBin string, checkDaemon, checkHooks bool) 
 // fetchCmd queries Kitty for running sessions and the daemon for per-window
 // last-activity timestamps. Daemon errors are non-fatal — when unreachable
 // the activity map is nil and stateGroup treats every session as Active.
-func fetchCmd(client kitty.KittyClient, sortMode string) tea.Cmd {
+//
+// Any "ghost" tabs surfaced by ListWithConfig (managed tabs whose anchor
+// window vanished but whose title still resolves uniquely in cfg) are
+// re-stamped with their user vars in the same tick. A failed re-stamp is
+// silently retried on the next tick because the title fallback re-detects
+// the same tab.
+func fetchCmd(client kitty.KittyClient, cfg *config.Config, sortMode string) tea.Cmd {
 	return func() tea.Msg {
-		sessions, err := session.List(client)
+		sessions, ghosts, err := session.ListWithConfig(client, cfg)
 		if err != nil {
 			return errMsg{err: err}
+		}
+		if len(ghosts) > 0 {
+			session.ReanchorAll(client, ghosts, cfg.Defaults)
 		}
 		return sessionsMsg{
 			sessions: session.SortRunning(sessions, sortMode),
@@ -1417,7 +1426,7 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	if msg.batchID != m.launchBatchID {
 		// Stale launch from a prior batch; ignore so we don't clobber a
 		// fresh batch's toast.
-		return m, fetchCmd(m.client, m.sortMode)
+		return m, fetchCmd(m.client, m.cfg, m.sortMode)
 	}
 	m.launchBatchDone++
 	var cmds []tea.Cmd
@@ -1450,7 +1459,7 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	if batchDone && m.launchBatchErrors == 0 {
 		cmds = append(cmds, tea.Quit)
 	} else {
-		cmds = append(cmds, fetchCmd(m.client, m.sortMode))
+		cmds = append(cmds, fetchCmd(m.client, m.cfg, m.sortMode))
 	}
 	return m, tea.Batch(cmds...)
 }

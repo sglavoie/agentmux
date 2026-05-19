@@ -52,7 +52,7 @@ func ComputeInsertLocation(client kitty.KittyClient, mode, account, baseTitle st
 	if target == nil {
 		return "", 0, nil
 	}
-	running := runningSessionsFromTabs(target.Tabs)
+	running, _ := runningSessionsFromTabs(target.Tabs, nil)
 
 	newKey := SortKey(account, baseTitle, false, mode)
 

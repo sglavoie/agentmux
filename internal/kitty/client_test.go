@@ -211,6 +211,47 @@ func TestLaunchOverlayPager_Args(t *testing.T) {
 	}
 }
 
+func TestSetUserVars_Argv(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	err := client.SetUserVars("id:7", map[string]string{
+		"cc_account": "work",
+		"amx_profile": "work",
+	})
+	if err != nil {
+		t.Fatalf("SetUserVars: %v", err)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+	got := runner.Calls[0].Args
+	want := []string{"@", "set-user-vars", "--match=id:7", "amx_profile=work", "cc_account=work"}
+	if len(got) != len(want) {
+		t.Fatalf("argv length: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("argv[%d]: got %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestSetUserVars_EmptyIsNoOp(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.SetUserVars("id:7", nil); err != nil {
+		t.Fatalf("SetUserVars(nil): %v", err)
+	}
+	if err := client.SetUserVars("id:7", map[string]string{}); err != nil {
+		t.Fatalf("SetUserVars(empty): %v", err)
+	}
+	if len(runner.Calls) != 0 {
+		t.Errorf("expected 0 kitten calls for empty vars, got %d: %v", len(runner.Calls), runner.Calls)
+	}
+}
+
 func TestGetText_ReturnsText(t *testing.T) {
 	want := "Hello from terminal\nLine 2\n"
 	runner := kitty.NewMockRunner(map[string][]byte{
