@@ -578,6 +578,72 @@ func TestMergePreservesThirdPartyHookIndicatorSubstring(t *testing.T) {
 	}
 }
 
+// TestMergePreservesUserHookColocatedInAmxGroup verifies that a user-added
+// hook entry placed (by hand-edit) inside the same matcher group as the
+// amx-installed hook is preserved across a sync. Previously the group was
+// dropped wholesale if any entry was amx-owned, silently wiping the user's
+// command.
+func TestMergePreservesUserHookColocatedInAmxGroup(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	userCmd := "/usr/local/bin/notify-user-stop"
+	existing := map[string]any{
+		"hooks": map[string]any{
+			"Stop": []any{
+				map[string]any{
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": testBin + " hook-indicator Stop",
+							"async":   true,
+						},
+						map[string]any{
+							"type":    "command",
+							"command": userCmd,
+							"async":   false,
+						},
+					},
+				},
+			},
+		},
+	}
+	writeJSON(t, filepath.Join(accountDir, "settings.json"), existing)
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll error: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(accountDir, "settings.json"))
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+
+	stops := s["hooks"].(map[string]any)["Stop"].([]any)
+	foundUser := false
+	for _, g := range stops {
+		group := g.(map[string]any)
+		inner := group["hooks"].([]any)
+		for _, h := range inner {
+			entry := h.(map[string]any)
+			if entry["command"] == userCmd {
+				foundUser = true
+			}
+		}
+	}
+	if !foundUser {
+		t.Fatalf("user hook colocated in amx group was wiped: %v", stops)
+	}
+}
+
 // TestMergeRefusesMalformedHooksValue locks in the guarantee that a Claude
 // settings.json whose top-level "hooks" field is not an object of hookGroup
 // arrays surfaces a parse error rather than being silently overwritten.

@@ -165,9 +165,20 @@ func stripAmxGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
 	for event, groups := range hooks {
 		var kept []hookGroup
 		for _, g := range groups {
-			if !isAmxGroup(g) {
-				kept = append(kept, g)
+			// Drop only the amx-installed entries within the group so any
+			// user-added hooks colocated by hand-editing survive the sync.
+			// A pure-amx group leaves nothing behind and is dropped entirely.
+			var keptHooks []hookEntry
+			for _, e := range g.Hooks {
+				if !isAmxHookEntry(e) {
+					keptHooks = append(keptHooks, e)
+				}
 			}
+			if len(keptHooks) == 0 {
+				continue
+			}
+			g.Hooks = keptHooks
+			kept = append(kept, g)
 		}
 		if len(kept) > 0 {
 			out[event] = kept
@@ -184,16 +195,21 @@ func stripAmxGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
 // silently wipe them on every sync.
 func isAmxGroup(g hookGroup) bool {
 	for _, e := range g.Hooks {
-		fields := strings.Fields(e.Command)
-		if len(fields) < 2 {
-			continue
-		}
-		if filepath.Base(fields[0]) != amxHookCommandIdentifier {
-			continue
-		}
-		if fields[1] == "hook-indicator" {
+		if isAmxHookEntry(e) {
 			return true
 		}
 	}
 	return false
+}
+
+// isAmxHookEntry reports whether a single hookEntry was installed by Agent Mux.
+func isAmxHookEntry(e hookEntry) bool {
+	fields := strings.Fields(e.Command)
+	if len(fields) < 2 {
+		return false
+	}
+	if filepath.Base(fields[0]) != amxHookCommandIdentifier {
+		return false
+	}
+	return fields[1] == "hook-indicator"
 }

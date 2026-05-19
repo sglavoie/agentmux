@@ -683,6 +683,39 @@ func TestHandler_ActiveBlockedAfterStopFailureGuardExpiry(t *testing.T) {
 	})
 }
 
+// TestHandler_ActiveBlockedByCurrentErrorIconAfterDaemonRestart pins that a
+// fresh daemon restart preserving the ❗ glyph in the tab title treats the
+// reconstructed state as terminal stop_failure, so a benign non-prompt
+// "active" event cannot clear an unacknowledged stop_failure. The error glyph
+// is shared between failure and stop_failure; the conservative choice on
+// ambiguous reconstruction is stop_failure (over-preserving a transient
+// failure is far less harmful than wiping a terminal stop_failure).
+func TestHandler_ActiveBlockedByCurrentErrorIconAfterDaemonRestart(t *testing.T) {
+	h := newTestHandler()
+
+	resp := h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "active",
+		CurrentIconState: "error",
+	})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("non-prompt active with current error icon: want allowed=false, got %+v", resp)
+	}
+
+	// A prompt event still breaks through.
+	resp = h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "active",
+		IsPrompt:         true,
+		CurrentIconState: "error",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+		t.Fatalf("prompt active with current error icon: want icon_state=bolt, got %+v", resp)
+	}
+}
+
 func TestHandler_OnActivityCalled(t *testing.T) {
 	h := newTestHandler()
 	called := 0
