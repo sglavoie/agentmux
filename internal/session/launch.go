@@ -70,10 +70,11 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	formattedTitle := FormatTitle(sess)
 	launchDebug.Printf("Launch: title=%q acc=%q dir=%q opts=%+v", formattedTitle, acc.Name, sess.Directory, opts)
 
-	running, err := List(client)
+	osWindows, err := client.ListWindows()
 	if err != nil {
 		return fmt.Errorf("listing running sessions: %w", err)
 	}
+	running, _ := runningSessionsFromOSWindows(osWindows, nil)
 	launchDebug.Printf("Launch: %d running sessions", len(running))
 	for _, r := range running {
 		launchDebug.Printf("  running: base=%q account=%q tabID=%d", r.Base, r.Account, r.TabID)
@@ -89,8 +90,11 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 		launchDebug.Printf("Launch: dedup skipped")
 	}
 
-	// Record pre-launch tab IDs for color retry later.
-	beforeIDs := tabIDSet(running)
+	// Record pre-launch tab IDs for color retry later. We include *every* tab
+	// (managed and unmanaged) so a pre-existing tab whose title coincides with
+	// formattedTitle cannot be misidentified as the newly launched tab and
+	// repainted by applyColorWithRetry.
+	beforeIDs := allTabIDs(osWindows)
 
 	// Compute insert location for sorted insertion.
 	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, acc.Name, formattedTitle)
@@ -167,11 +171,16 @@ func locationArg(loc string) string {
 	}
 }
 
-// tabIDSet returns the set of tab IDs from running sessions.
-func tabIDSet(sessions []RunningSession) map[int]bool {
-	ids := make(map[int]bool, len(sessions))
-	for _, s := range sessions {
-		ids[s.TabID] = true
+// allTabIDs returns the set of every tab ID present in osWindows, including
+// unmanaged tabs. The color-retry path uses this set to detect "tabs that
+// existed before Launch" so it never repaints a pre-existing tab whose title
+// happens to match the new session's formattedTitle.
+func allTabIDs(osWindows []kitty.OSWindow) map[int]bool {
+	ids := make(map[int]bool)
+	for _, osw := range osWindows {
+		for _, tab := range osw.Tabs {
+			ids[tab.ID] = true
+		}
 	}
 	return ids
 }

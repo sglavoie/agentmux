@@ -16,11 +16,14 @@ import (
 func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config) error {
 	formattedTitle := FormatTitle(sess)
 
-	running, err := List(client)
+	osWindows, err := client.ListWindows()
 	if err != nil {
 		return fmt.Errorf("listing running sessions: %w", err)
 	}
-	beforeIDs := tabIDSet(running)
+	// Include every tab (managed and unmanaged) so the color retry below
+	// cannot repaint a pre-existing tab whose title coincides with
+	// formattedTitle.
+	beforeIDs := allTabIDs(osWindows)
 
 	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, acc.Name, formattedTitle)
 	if err != nil {

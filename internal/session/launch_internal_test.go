@@ -248,3 +248,44 @@ func TestApplyColorWithRetry_ReturnsNilOnSuccess(t *testing.T) {
 		t.Errorf("expected exactly one set-tab-color attempt on success, got %d", runner.setCalls)
 	}
 }
+
+// TestApplyColorWithRetry_DoesNotPaintPreexistingTab guards against the
+// regression where beforeIDs was built from managed running sessions only.
+// If a pre-existing (unmanaged) tab happened to have a title matching the
+// new session's formattedTitle, its ID was missing from beforeIDs and the
+// retry loop would happily repaint it. Building beforeIDs from *every* tab
+// returned by ListWindows fixes the mis-targeting, so this test pins the
+// new contract: the retry must skip the pre-existing tab and fail with
+// "not visible" rather than coloring the wrong tab.
+func TestApplyColorWithRetry_DoesNotPaintPreexistingTab(t *testing.T) {
+	defer shortColorRetries(t, 2)()
+
+	// One pre-existing unmanaged tab with the same title as the launch target.
+	lsResp := []byte(`[{"id":1,"is_active":true,"tabs":[` +
+		`{"id":42,"is_active":true,"title":"W:newproject","windows":[` +
+		`{"id":43,"is_active":true,"title":"W:newproject"}` +
+		`]}]}]`)
+	runner := &colorFailRunner{
+		lsResponse:  lsResp,
+		setColorErr: nil,
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+
+	// beforeIDs already contains tab 42 — i.e. the caller built it from the
+	// full set of pre-launch tabs, not just managed ones. The retry loop
+	// must NOT call SetTabColor on tab 42 and must report the new tab as
+	// missing instead.
+	beforeIDs := map[int]bool{42: true}
+	err := applyColorWithRetry(client, beforeIDs, "W:newproject", palette.Color{
+		ActiveBg: "#000000", InactiveBg: "#ffffff",
+	})
+	if err == nil {
+		t.Fatal("expected error when only pre-existing tab matches the title")
+	}
+	if !strings.Contains(err.Error(), "not visible") {
+		t.Errorf("expected 'not visible' error, got %v", err)
+	}
+	if runner.setCalls != 0 {
+		t.Errorf("expected zero SetTabColor calls (pre-existing tab must not be repainted), got %d", runner.setCalls)
+	}
+}

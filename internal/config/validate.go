@@ -130,7 +130,11 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 			))
 		}
 		if s.Title != "" && s.Profile != "" {
-			k := projectKey{profile: s.Profile, title: s.Title}
+			// SessionKey lowercases both fields, so the duplicate check must
+			// match that contract — otherwise two projects whose titles or
+			// profiles differ only in case would pass validation here and then
+			// collide silently at launch-time dedup.
+			k := projectKey{profile: strings.ToLower(s.Profile), title: strings.ToLower(s.Title)}
 			if seenProject[k] {
 				errs = append(errs, fmt.Sprintf(
 					"duplicate project title %q under profile %q\n  → titles must be unique per profile (launch dedup keys on this pair)",
