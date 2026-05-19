@@ -223,7 +223,7 @@ func matchState(s session.RunningSession, state string, lastActivity map[int]tim
 		return stateGroup(s, lastActivity, idle) == 1
 	case "idle":
 		return stateGroup(s, lastActivity, idle) == 2
-	case "bolt", "key", "stop", "error":
+	case "bolt", "key", "stop", "error", "subagent", "compact", "question":
 		return s.State == strings.ToLower(state)
 	}
 	// Unknown state name — lenient: pass everything through so the user can

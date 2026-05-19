@@ -90,16 +90,21 @@ func (m *Model) pushToast(t Toast) tea.Cmd {
 
 // replaceToastByID replaces (or pushes) a toast carrying the given id.
 // Used for progress toasts so successive "Launched 1/N · …" updates
-// occupy the same slot rather than stacking.
+// occupy the same slot rather than stacking. id == 0 means "not addressable"
+// so the toast is appended as a fresh transient entry instead of merging
+// with whatever happens to sit in the slot — a stray zero would otherwise
+// clobber a recent unrelated info toast (whose id field defaults to 0).
 func (m *Model) replaceToastByID(id int, t Toast) tea.Cmd {
 	if t.Expires.IsZero() {
 		t.Expires = time.Now().Add(defaultToastTTL)
 	}
 	t.id = id
-	for i := range m.toasts {
-		if m.toasts[i].id == id {
-			m.toasts[i] = t
-			return nil
+	if id != 0 {
+		for i := range m.toasts {
+			if m.toasts[i].id == id {
+				m.toasts[i] = t
+				return nil
+			}
 		}
 	}
 	return m.pushToast(t)

@@ -254,6 +254,28 @@ func TestMatchStateKeyStopError(t *testing.T) {
 	}
 }
 
+// Regression: subagent/compact/question were emitted by the daemon but the
+// filter's matchState whitelist did not include them, so e.g. !subagent fell
+// through to the lenient-unknown branch and silently matched every row.
+func TestMatchStateSubagentCompactQuestion(t *testing.T) {
+	cases := map[string]string{
+		"!subagent": "subagent",
+		"!compact":  "compact",
+		"!question": "question",
+	}
+	for expr, st := range cases {
+		f := Parse(expr)
+		good := session.RunningSession{State: st}
+		bad := session.RunningSession{State: "bolt"}
+		if !f.Match(good, nil, 0) {
+			t.Errorf("expected %s to match state=%s", expr, st)
+		}
+		if f.Match(bad, nil, 0) {
+			t.Errorf("expected %s to reject state=bolt", expr)
+		}
+	}
+}
+
 func TestMatchStateActiveAlias(t *testing.T) {
 	f := Parse("!active")
 	bolt := session.RunningSession{State: "bolt", WindowID: 1}

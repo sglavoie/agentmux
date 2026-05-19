@@ -78,6 +78,30 @@ func TestStateGroupClassification(t *testing.T) {
 			windowID: 8,
 			want:     1,
 		},
+		{
+			// Regression: subagent (🤖) used to fall into the "unknown" branch
+			// and end up in Idle, hiding actively-running sessions.
+			name:     "subagent state classified as Active",
+			state:    "subagent",
+			windowID: 9,
+			want:     1,
+		},
+		{
+			// Regression: compact (🌀) used to fall into the "unknown" branch
+			// and end up in Idle, hiding sessions mid-context-compaction.
+			name:     "compact state classified as Active",
+			state:    "compact",
+			windowID: 10,
+			want:     1,
+		},
+		{
+			// Regression: question (❓) is an elicitation prompt and the user
+			// must respond — it belongs in Needs Attention, not Idle.
+			name:     "question state classified as Needs Attention",
+			state:    "question",
+			windowID: 11,
+			want:     0,
+		},
 	}
 
 	for _, tc := range cases {
