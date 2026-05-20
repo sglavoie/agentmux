@@ -16,7 +16,7 @@ var Actions = []Action{
 	{Key: "ctrl+shift+d", Section: "Overlays", Description: "open Agent Mux dashboard", LaunchType: "overlay"},
 	// Session management
 	{Key: "f8", Section: "Sessions", Description: "clear markers and state icons from tab", AmxCommand: "hook-indicator user_clear", LaunchType: "background"},
-	{Key: "f5", Section: "Sessions", Description: "focus next tab needing attention", AmxCommand: "focus-next", LaunchType: "background"},
+	{Key: "f4", Section: "Sessions", Description: "focus next tab needing attention", AmxCommand: "focus-next", LaunchType: "background"},
 	// Scrollback / terminal
 	{Key: "f3", Section: "Scrollback", Description: "toggle error/warning markers"},
 	{Key: "f12", Section: "Scrollback", Description: "broadcast input to all windows in tab"},
