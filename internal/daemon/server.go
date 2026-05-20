@@ -76,9 +76,14 @@ func NewServer(socketPath string, handler *Handler) (*Server, error) {
 // finished so callers can rely on the daemon being fully drained before the
 // socket file is removed.
 func (s *Server) Serve(ctx context.Context) error {
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		<-ctx.Done()
-		_ = s.ln.Close()
+		select {
+		case <-ctx.Done():
+			_ = s.ln.Close()
+		case <-done:
+		}
 	}()
 
 	defer s.wg.Wait()

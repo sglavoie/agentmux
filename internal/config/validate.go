@@ -93,11 +93,16 @@ func validateAccounts(accounts []Account) []string {
 		// Only check duplicates for named profiles. Otherwise a config with
 		// two unnamed entries reports a misleading 'duplicate profile name ""'
 		// on top of the per-entry "name is required" error.
+		// SessionKey lowercases the profile name, so the duplicate check must
+		// match that contract — otherwise two profiles differing only in case
+		// would pass validation here and then collide silently at launch-time
+		// dedup.
 		if a.Name != "" {
-			if seen[a.Name] {
+			key := strings.ToLower(a.Name)
+			if seen[key] {
 				errs = append(errs, fmt.Sprintf("duplicate profile name %q", a.Name))
 			}
-			seen[a.Name] = true
+			seen[key] = true
 		}
 	}
 	return errs

@@ -108,6 +108,23 @@ func TestCandidatesForSigil_State(t *testing.T) {
 	}
 }
 
+// TestCandidatesForSigil_StateMirrorsMatchState pins the completion popup to
+// the full set of state names that matchState in filter.go actually
+// recognizes. Without subagent/compact/question, typing "!s" would suggest
+// only "stop" even though "!subagent" is a real, working filter.
+func TestCandidatesForSigil_StateMirrorsMatchState(t *testing.T) {
+	got := candidatesForSigil('!', nil)
+	have := map[string]bool{}
+	for _, g := range got {
+		have[g] = true
+	}
+	for _, want := range []string{"subagent", "compact", "question"} {
+		if !have[want] {
+			t.Errorf("expected state %q (matchState accepts it) in candidates, got %v", want, got)
+		}
+	}
+}
+
 func TestCandidatesForSigil_HarnessFromRegistry(t *testing.T) {
 	got := candidatesForSigil('%', nil)
 	if len(got) == 0 {

@@ -118,7 +118,11 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		if tab == nil {
 			return fmt.Errorf("indicator: window %d not found and daemon unavailable", windowID)
 		}
-		return updateTitle(windowID, daemon.IconState(action), client, tab)
+		nextIcon, skip := daemonDownIconState(action, currentIconState)
+		if skip {
+			return nil
+		}
+		return updateTitle(windowID, nextIcon, client, tab)
 	}
 	if !resp.OK {
 		return fmt.Errorf("indicator: daemon error: %s", resp.Error)
@@ -136,6 +140,23 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		return fmt.Errorf("indicator: window %d not found in Kitty tab list", windowID)
 	}
 	return updateTitle(windowID, resp.IconState, client, tab)
+}
+
+// daemonDownIconState mirrors the daemon's idle/clear handling for the
+// daemon-unavailable fallback: a bare idle/clear must not wipe a still-relevant
+// stop/permission/error/elicitation icon the user has not yet acknowledged.
+// Only icons that represent an in-flight agent (bolt/compact/subagent) are
+// cleared by idle/clear; everything else is left untouched.
+func daemonDownIconState(action, currentIconState string) (next string, skip bool) {
+	if action == "idle" || action == "clear" {
+		switch currentIconState {
+		case "bolt", "compact", "subagent":
+			return "", false
+		default:
+			return "", true
+		}
+	}
+	return daemon.IconState(action), false
 }
 
 func updateTitle(windowID int, iconState string, client kitty.KittyClient, tab *kitty.Tab) error {

@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -391,4 +392,60 @@ func TestServer_HandlesPartialWrites(t *testing.T) {
 	if decoded.OK != resp.OK || decoded.Allowed != resp.Allowed || decoded.IconState != resp.IconState {
 		t.Fatalf("response round-trip mismatch: got %+v want %+v", decoded, resp)
 	}
+}
+
+// TestServer_ServeDoesNotLeakWatchdogOnCloseWithoutCancel verifies that the
+// listener-closer goroutine started inside Serve exits when Serve returns,
+// even if the caller shuts the server down via Close without ever cancelling
+// the context originally passed to Serve. Before the fix, the watchdog parked
+// forever on <-ctx.Done(), leaking one goroutine per Server instance.
+func TestServer_ServeDoesNotLeakWatchdogOnCloseWithoutCancel(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-watchdog-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	baseline := runtime.NumGoroutine()
+
+	const iterations = 16
+	for i := 0; i < iterations; i++ {
+		socketPath := filepath.Join(dir, "d.sock")
+
+		guard := NewStateGuard(time.Hour)
+		notifier := NewNotifier(&config.NotificationConfig{})
+		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+		handler := NewHandler(guard, notifier)
+
+		server, err := NewServer(socketPath, handler)
+		if err != nil {
+			t.Fatalf("NewServer: %v", err)
+		}
+
+		serveDone := make(chan struct{})
+		go func() {
+			_ = server.Serve(context.Background())
+			close(serveDone)
+		}()
+
+		server.Close()
+
+		select {
+		case <-serveDone:
+		case <-time.After(2 * time.Second):
+			t.Fatal("Serve did not return after Close")
+		}
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	var final int
+	for time.Now().Before(deadline) {
+		runtime.GC()
+		final = runtime.NumGoroutine()
+		if final <= baseline+2 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("goroutine count grew without bound: baseline=%d after %d iterations=%d", baseline, iterations, final)
 }

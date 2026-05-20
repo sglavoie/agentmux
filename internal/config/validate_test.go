@@ -219,6 +219,28 @@ func TestValidate_EmptyNamesNotReportedAsDuplicate(t *testing.T) {
 	}
 }
 
+// TestValidate_DuplicateProfileNameCaseInsensitive pins the dedup contract on
+// profile names: SessionKey lowercases the profile name when building dedup
+// keys, so two profiles whose names differ only in case ("work" and "Work")
+// share a runtime namespace. Without overlapping project titles the project-
+// side dedup check wouldn't fire, so validation must catch the profile-level
+// collision directly.
+func TestValidate_DuplicateProfileNameCaseInsensitive(t *testing.T) {
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/a", Color: "blue"},
+			{Name: "Work", Harness: "claude", HomeDir: "/tmp/b", Color: "green"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for case-insensitive duplicate profile name, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate profile name") {
+		t.Errorf("expected 'duplicate profile name' in error, got %q", err.Error())
+	}
+}
+
 func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.
