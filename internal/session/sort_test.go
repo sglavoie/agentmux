@@ -127,6 +127,27 @@ func TestComputeInsertLocation_Account(t *testing.T) {
 	}
 }
 
+// TestComputeInsertLocation_DuplicateKeyInsertsAfter verifies that when the
+// new tab's sort key equals an existing entry's key, insertion lands AFTER the
+// equal entry rather than before it. Previously the loop used `>=`, which
+// broke immediately on the equal entry and left prevID=0, mis-routing the new
+// tab to "before the first" — i.e. before the very tab it duplicates.
+// Fixture has P:dotfiles (id=2), W:api (id=4), W:dashboard (id=6); inserting
+// a second W:api must return ("after", 4).
+func TestComputeInsertLocation_DuplicateKeyInsertsAfter(t *testing.T) {
+	client := newClientWithFixture(t, "kitty_ls_multi.json")
+	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "work", "W:api")
+	if err != nil {
+		t.Fatalf("ComputeInsertLocation: %v", err)
+	}
+	if loc != "after" {
+		t.Errorf("location: got %q, want %q", loc, "after")
+	}
+	if tabID != 4 {
+		t.Errorf("tabID: got %d, want 4 (existing W:api)", tabID)
+	}
+}
+
 // TestComputeInsertLocation_Before verifies that a tab that sorts before all
 // existing ones returns location "before" with the first session tab's ID.
 // Fixture has P:dotfiles (id=2) as the first sorted session tab.

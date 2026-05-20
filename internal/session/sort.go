@@ -73,7 +73,7 @@ func ComputeInsertLocation(client kitty.KittyClient, mode, account, baseTitle st
 
 	prevID := 0
 	for _, e := range entries {
-		if e.key >= newKey {
+		if e.key > newKey {
 			break
 		}
 		prevID = e.tabID
