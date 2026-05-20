@@ -152,6 +152,10 @@ type Model struct {
 	// `u`-driven undo. Entries expire at their deadline; sweepUndo trims
 	// them on toast ticks so memory stays bounded.
 	pendingUndo []undoEntry
+
+	// helpOffset is the first visible line index in the scrollable help
+	// overlay (ModeHelp). Reset to 0 whenever the overlay is opened or closed.
+	helpOffset int
 }
 
 // NewModel creates a dashboard model.
@@ -518,6 +522,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// each clear it explicitly. ModeHelp and ModePicker have their own
 		// render paths, so the popup state lives dormant until ModeList
 		// becomes active again.
+		m.helpOffset = 0
 		m.mode = ModeHelp
 
 	case keyL:
@@ -828,11 +833,28 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	total, visible := helpScrollBounds(m)
 	switch msg.String() {
 	case keyEsc, keyQuestion, keyQ:
 		m.mode = ModeList
+		m.helpOffset = 0
 	case keyCtrlC:
 		return m, tea.Quit
+	case keyJ, keyDown:
+		if m.helpOffset+visible < total {
+			m.helpOffset++
+		}
+	case keyK, keyUp:
+		if m.helpOffset > 0 {
+			m.helpOffset--
+		}
+	case keyG:
+		m.helpOffset = 0
+	case keyGG:
+		m.helpOffset = total - visible
+		if m.helpOffset < 0 {
+			m.helpOffset = 0
+		}
 	}
 	return m, nil
 }

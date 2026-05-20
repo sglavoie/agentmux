@@ -26,7 +26,7 @@ func renderFooter(m Model) string {
 		line1 = styleFooter.Render("  enter: select  esc: cancel")
 		line2 = styleFooter.Render("  j/k: up/down")
 	case ModeHelp:
-		line1 = styleFooter.Render("  esc/?/q: close help")
+		line1 = styleFooter.Render("  j/k: up/down  g/G: top/bottom  esc/?/q: close help")
 		line2 = ""
 	case ModeActions:
 		line1 = styleFooter.Render("  <key>: run action  esc/q: back")

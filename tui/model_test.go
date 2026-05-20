@@ -984,6 +984,9 @@ func TestFooterHelp(t *testing.T) {
 	if !strings.Contains(footer, "esc") {
 		t.Errorf("help footer missing esc hint, got:\n%s", footer)
 	}
+	if !strings.Contains(footer, "j/k") {
+		t.Errorf("help footer missing j/k scroll hint, got:\n%s", footer)
+	}
 }
 
 // ---- Context-aware footer tests ----
