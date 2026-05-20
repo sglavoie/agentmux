@@ -73,6 +73,15 @@ var (
 	// reads as auxiliary UI rather than competing with the input bar.
 	styleCompletionPopup    = lipgloss.NewStyle().Faint(true)
 	styleCompletionSelected = lipgloss.NewStyle().Bold(true).Reverse(true)
+
+	// Detail-pane styles (ModeDetail). detailRowStyle is intentionally
+	// neutral so row text inherits the terminal's default foreground;
+	// keeping the call site explicit makes it easy to recolor every row
+	// later without hunting through detail.go. detailToolStyle picks up the
+	// active-teal already established for `bolt` so the tool-name column
+	// reads as an accent without introducing a new palette color.
+	detailRowStyle  = lipgloss.NewStyle()
+	detailToolStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
 )
 
 // chipStyle returns the rendering style for a chip, layering the focus

@@ -38,6 +38,7 @@ const (
 	ModePicker            // multi-select session launcher
 	ModeConfigPicker      // account picker for config override
 	ModeHelp              // help overlay
+	ModeDetail            // detail pane: per-session hook event log
 	ModeActions           // per-row actions overlay
 )
 
@@ -156,6 +157,14 @@ type Model struct {
 	// helpOffset is the first visible line index in the scrollable help
 	// overlay (ModeHelp). Reset to 0 whenever the overlay is opened or closed.
 	helpOffset int
+
+	// detail pane state (ModeDetail). Fields are zeroed when the pane is
+	// closed so the placeholder render reads as a fresh state.
+	detailWindowID int                   // 0 when pane is closed
+	detailEvents   []daemon.SessionEvent // events from the daemon for detailWindowID
+	detailScroll   int                   // top row index for the scrollable view
+	detailLoading  bool                  // true while the daemon query is in flight
+	detailErr      error                 // last error from the daemon query
 }
 
 // NewModel creates a dashboard model.
@@ -230,6 +239,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		checkHooks := now.Sub(m.hookHealthCheckedAt) >= hookHealthInterval
 		if checkDaemon || checkHooks {
 			cmds = append(cmds, healthCmd(m.cfg, m.amxBin, checkDaemon, checkHooks))
+		}
+		if m.mode == ModeDetail && m.detailWindowID != 0 {
+			cmds = append(cmds, sessionDetailCmd(m.detailWindowID))
 		}
 		return m, tea.Batch(cmds...)
 
@@ -333,6 +345,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case detailEventsMsg:
+		// Stale responses (mode changed or different window than the one
+		// currently shown in the pane) are dropped silently so a slow
+		// daemon roundtrip cannot overwrite a fresh request's loading
+		// state or repopulate the pane after the user closed it.
+		if m.mode != ModeDetail || msg.windowID != m.detailWindowID {
+			return m, nil
+		}
+		m.detailEvents = msg.events
+		m.detailErr = msg.err
+		m.detailLoading = false
+		return m, nil
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
@@ -353,6 +378,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleConfigPickerKey(msg)
 	case ModeHelp:
 		return m.handleHelpKey(msg)
+	case ModeDetail:
+		return m.handleDetailKey(msg)
 	case ModeActions:
 		return m.handleActionsKey(msg)
 	default:
@@ -644,9 +671,16 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case keyD:
 				if !m.deprecationDismissed && len(m.deprecations) > 0 {
+					// Banner dismissal first when one is visible; the detail
+					// pane is opened on a subsequent press once the banner
+					// is gone.
 					m.deprecationDismissed = true
+					return m, nil
 				}
-				return m, nil
+				if len(m.filtered) == 0 {
+					return m, nil
+				}
+				return m.enterDetailMode(m.filtered[m.cursor].WindowID)
 			}
 		}
 		// Fall through: anything else printable goes into the type buffer.
@@ -830,6 +864,86 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.run(m)
 	}
 	return m, nil
+}
+
+// enterDetailMode switches to ModeDetail for the given window, marks the
+// pane as loading, and returns a command that fetches the event ring from
+// the daemon. Callers must guard against an empty session list.
+func (m Model) enterDetailMode(windowID int) (tea.Model, tea.Cmd) {
+	m.mode = ModeDetail
+	m.detailWindowID = windowID
+	m.detailEvents = nil
+	m.detailScroll = 0
+	m.detailLoading = true
+	m.detailErr = nil
+	return m, sessionDetailCmd(windowID)
+}
+
+// exitDetailMode returns to ModeList and clears every detail-pane field so
+// the next entry starts from a clean state. No-op when the model is not in
+// ModeDetail.
+func (m *Model) exitDetailMode() {
+	m.mode = ModeList
+	m.detailWindowID = 0
+	m.detailEvents = nil
+	m.detailScroll = 0
+	m.detailLoading = false
+	m.detailErr = nil
+}
+
+func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	total, visible := detailScrollBounds(m)
+	maxOffset := total - visible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	switch msg.String() {
+	case keyEsc, keyQ, keyD:
+		m.exitDetailMode()
+		return m, nil
+	case keyCtrlC:
+		return m, tea.Quit
+	case keyJ, keyDown:
+		if m.detailScroll < maxOffset {
+			m.detailScroll++
+		}
+	case keyK, keyUp:
+		if m.detailScroll > 0 {
+			m.detailScroll--
+		}
+	case keyPgDown:
+		m.detailScroll += visible
+		if m.detailScroll > maxOffset {
+			m.detailScroll = maxOffset
+		}
+	case keyPgUp:
+		m.detailScroll -= visible
+		if m.detailScroll < 0 {
+			m.detailScroll = 0
+		}
+	case keyG:
+		m.detailScroll = 0
+	case keyGG:
+		m.detailScroll = maxOffset
+	}
+	return m, nil
+}
+
+// sessionDetailCmd queries the daemon for a window's hook event ring
+// buffer. Errors from a missing or unreachable daemon are captured on the
+// returned msg so the detail pane can surface them rather than blocking
+// indefinitely.
+func sessionDetailCmd(windowID int) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := daemon.NewClient().Send(daemon.Request{
+			Type:     daemon.TypeSessionDetail,
+			WindowID: windowID,
+		})
+		if err != nil {
+			return detailEventsMsg{windowID: windowID, err: err}
+		}
+		return detailEventsMsg{windowID: windowID, events: resp.Events}
+	}
 }
 
 func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -1043,6 +1157,8 @@ func (m Model) render() string {
 			sb.WriteString(renderConfigPicker(m))
 		case ModeHelp:
 			sb.WriteString(renderHelp(m))
+		case ModeDetail:
+			sb.WriteString(renderDetail(m))
 		case ModeActions:
 			sb.WriteString(renderActions(m))
 		default:

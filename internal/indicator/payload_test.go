@@ -36,6 +36,32 @@ func TestDecodeHookPayload_ParsesNotificationFields(t *testing.T) {
 	}
 }
 
+func TestDecodeHookPayload_ParsesToolName(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"hook_event_name": "PreToolUse",
+		"tool_name": "Bash"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(pretooluse) error: %v", err)
+	}
+	if payload.HookEventName != "PreToolUse" {
+		t.Fatalf("HookEventName = %q, want PreToolUse", payload.HookEventName)
+	}
+	if payload.ToolName != "Bash" {
+		t.Fatalf("ToolName = %q, want Bash", payload.ToolName)
+	}
+}
+
+func TestDecodeHookPayload_OmittedToolNameIsEmpty(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{"hook_event_name": "SessionStart"}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(session_start) error: %v", err)
+	}
+	if payload.ToolName != "" {
+		t.Fatalf("ToolName = %q, want empty", payload.ToolName)
+	}
+}
+
 func TestDecodeHookPayload_ParsesReasonFields(t *testing.T) {
 	payload, err := DecodeHookPayload(strings.NewReader(`{
 		"hook_event_name": "SessionEnd",

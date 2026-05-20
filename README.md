@@ -89,6 +89,7 @@ Key flows:
 - `c`: restart the selected running session under another profile
 - `o`: open the selected project's directory in a plain shell tab
 - `p`: toggle the preview pane
+- `d`: show the per-session hook event log (scrollable detail pane)
 - `?`: show the full keymap
 
 ### Launcher

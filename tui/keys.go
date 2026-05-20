@@ -29,7 +29,10 @@ const (
 	keyC           = "c" // opens ModeConfigPicker for profile override
 	keyClearStatus = "C" // clears the highlighted session's icon
 	keyResort      = "R" // re-sort tabs in Kitty to repair drifted physical order
-	keyD           = "d" // dismisses the config deprecation banner
+	keyD           = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
+
+	keyPgUp   = "pgup"   // scroll detail pane up by one page
+	keyPgDown = "pgdown" // scroll detail pane down by one page
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
 

@@ -28,6 +28,7 @@ type HookPayload struct {
 	Reason                string `json:"reason"`
 	Title                 string `json:"title"`
 	Message               string `json:"message"`
+	ToolName              string `json:"tool_name"`
 }
 
 // ReadHookPayload decodes hook JSON from stdin when stdin is piped. Interactive

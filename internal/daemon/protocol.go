@@ -4,10 +4,11 @@ package daemon
 type MessageType string
 
 const (
-	TypeStateUpdate MessageType = "state_update"
-	TypeStateQuery  MessageType = "state_query"
-	TypeShutdown    MessageType = "shutdown"
-	TypeHealth      MessageType = "health"
+	TypeStateUpdate   MessageType = "state_update"
+	TypeStateQuery    MessageType = "state_query"
+	TypeSessionDetail MessageType = "session_detail"
+	TypeShutdown      MessageType = "shutdown"
+	TypeHealth        MessageType = "health"
 
 	// IconStatePreserve signals the client to keep the current icon unchanged.
 	IconStatePreserve = "preserve"
@@ -20,6 +21,7 @@ type Request struct {
 	WindowID         int         `json:"window_id,omitempty"`          // KITTY_WINDOW_ID
 	Action           string      `json:"action,omitempty"`             // active|stop|permission|failure|idle|clear
 	Event            string      `json:"event,omitempty"`              // raw Claude hook event name (e.g. UserPromptSubmit)
+	ToolName         string      `json:"tool_name,omitempty"`          // tool name from PreToolUse/PostToolUse hook payloads
 	IsPrompt         bool        `json:"is_prompt,omitempty"`          // true if event is a user prompt submission
 	PreservesIcon    bool        `json:"preserves_icon,omitempty"`     // true if event should keep current icon
 	Account          string      `json:"account,omitempty"`            // profile name from amx_profile or cc_account
@@ -38,6 +40,8 @@ type Response struct {
 	// Fields populated for TypeStateQuery:
 	Activity map[int]int64         `json:"activity,omitempty"` // window_id → unix seconds of last activity
 	Watchdog map[int]WatchdogState `json:"watchdog,omitempty"` // window_id → watchdog state for age-aware TUI rendering
+	// Fields populated for TypeSessionDetail:
+	Events []SessionEvent `json:"events,omitempty"` // per-window hook event ring buffer (oldest first)
 	// Fields populated for TypeHealth:
 	PID           int   `json:"pid,omitempty"`
 	UptimeSeconds int64 `json:"uptime_seconds,omitempty"`
@@ -51,6 +55,17 @@ type WatchdogState struct {
 	LastAction   string `json:"last_action"`             // "active", "subagent", or "compact"
 	LastEventAt  int64  `json:"last_event_at"`           // unix seconds of last activity for this window
 	ThresholdSec int    `json:"threshold_sec,omitempty"` // resolved sweep threshold in seconds (0 if no threshold configured)
+}
+
+// SessionEvent is one entry in a window's hook event ring buffer. The daemon
+// appends one of these per Request it processes (both allowed and suppressed),
+// and serves the buffer back to the TUI on TypeSessionDetail queries.
+type SessionEvent struct {
+	At         int64  `json:"at"`                   // unix seconds when the daemon received the event
+	Event      string `json:"event"`                // raw hook event name (e.g. PreToolUse)
+	Action     string `json:"action"`               // resolved action (active, stop, …)
+	ToolName   string `json:"tool_name,omitempty"`  // tool name when event carries one
+	Suppressed bool   `json:"suppressed,omitempty"` // true when the guard blocked the transition
 }
 
 // actionPriority maps each action name to its guard priority.

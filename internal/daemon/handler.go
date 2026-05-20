@@ -110,6 +110,11 @@ type Handler struct {
 	// so stale notifications honor the same silence rule.
 	lastPipeMode map[int]bool
 
+	// eventLog stores a per-window ring buffer of recent state events. Bounded
+	// by maxEventsPerWindow; older entries are dropped from the front. Cleared
+	// on terminal/cleanup transitions alongside other per-window state.
+	eventLog map[int][]SessionEvent
+
 	// onActivity is called on every successfully handled request.
 	// The daemon uses this to reset the idle timer.
 	onActivity func()
@@ -122,6 +127,10 @@ type Handler struct {
 	// so this is a defence-in-depth guard rather than a correctness fix.
 	shutdownOnce sync.Once
 }
+
+// maxEventsPerWindow caps the per-window ring buffer used by handleSessionDetail.
+// At ~50 windows × ~200 B/event, the upper bound stays well under 1 MB.
+const maxEventsPerWindow = 50
 
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
@@ -142,6 +151,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		notifiedHookSilence:  make(map[string]bool),
 		lastSessionTitle:     make(map[int]string),
 		lastPipeMode:         make(map[int]bool),
+		eventLog:             make(map[int][]SessionEvent),
 	}
 }
 
@@ -267,6 +277,8 @@ func (h *Handler) Handle(req Request) Response {
 		return h.handleStateUpdate(req)
 	case TypeStateQuery:
 		return h.handleStateQuery()
+	case TypeSessionDetail:
+		return h.handleSessionDetail(req)
 	case TypeHealth:
 		return h.handleHealth()
 	case TypeShutdown:
@@ -320,6 +332,24 @@ func actionFromIconState(iconState string) string {
 	}
 }
 
+// appendEventLocked records an event into the per-window ring buffer. The
+// caller must hold stateMu. Older entries are dropped from the front once the
+// slice would exceed maxEventsPerWindow.
+func (h *Handler) appendEventLocked(req Request, action string, suppressed bool) {
+	buf := h.eventLog[req.WindowID]
+	buf = append(buf, SessionEvent{
+		At:         time.Now().Unix(),
+		Event:      req.Event,
+		Action:     action,
+		ToolName:   req.ToolName,
+		Suppressed: suppressed,
+	})
+	if len(buf) > maxEventsPerWindow {
+		buf = buf[len(buf)-maxEventsPerWindow:]
+	}
+	h.eventLog[req.WindowID] = buf
+}
+
 func (h *Handler) handleStateUpdate(req Request) Response {
 	if req.Action == "" {
 		return Response{OK: false, Error: "action is required for state_update"}
@@ -370,6 +400,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			// e.g. stopReason = "error" / "max_tokens") must surface so the user
 			// sees the failure even when sibling agents are still running.
 			h.guard.TryUpdate(req.WindowID, "subagent", false)
+			h.stateMu.Lock()
+			h.appendEventLocked(req, req.Action, true)
+			h.stateMu.Unlock()
 			return Response{OK: true, Allowed: false}
 		}
 		if wasTracked && remaining == 0 {
@@ -422,6 +455,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 				"event", req.Event,
 				"subagent_count", count,
 			)
+			h.stateMu.Lock()
+			h.appendEventLocked(req, req.Action, true)
+			h.stateMu.Unlock()
 			return Response{OK: true, Allowed: false}
 		}
 	}
@@ -441,6 +477,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		delete(h.lastSessionTitle, req.WindowID)
 		delete(h.lastPipeMode, req.WindowID)
 		delete(h.lastAccount, req.WindowID)
+		delete(h.eventLog, req.WindowID)
 		h.stateMu.Unlock()
 	}
 
@@ -473,6 +510,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		// Pass req.Action — the notifier filters by its own per-action config and
 		// cooldown, so this cannot double-fire with the success path below.
 		h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Action, req.PipeMode)
+		h.stateMu.Lock()
+		h.appendEventLocked(req, req.Action, true)
+		h.stateMu.Unlock()
 		return Response{OK: true, Allowed: false}
 	}
 
@@ -518,6 +558,16 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if effective != "idle" && effective != "clear" && effective != "user_clear" && !isAutoApprovedPerm {
 		h.lastAction[req.WindowID] = effective
 		delete(h.notifiedStale, req.WindowID)
+	}
+	// Append this transition into the per-window ring buffer. Terminal actions
+	// skip the append: the cleanup block above just wiped the buffer for them,
+	// so re-adding the terminal event itself would leave a one-element residue
+	// that contradicts the "session ended → history reset" contract.
+	switch req.Action {
+	case "stop", "stop_failure", "failure", "idle", "clear", "user_clear":
+		// Buffer was wiped in the terminal cleanup block above; do not re-seed.
+	default:
+		h.appendEventLocked(req, effective, false)
 	}
 	h.stateMu.Unlock()
 
@@ -591,6 +641,18 @@ func (h *Handler) handleStateQuery() Response {
 	return Response{OK: true, Activity: snapshot, Watchdog: watchdog}
 }
 
+// handleSessionDetail returns the per-window event ring buffer for req.WindowID.
+// An unknown window yields a non-nil empty slice rather than nil so the TUI can
+// distinguish "no daemon error" from "no events yet" without a nil check.
+func (h *Handler) handleSessionDetail(req Request) Response {
+	h.stateMu.Lock()
+	src := h.eventLog[req.WindowID]
+	events := make([]SessionEvent, len(src))
+	copy(events, src)
+	h.stateMu.Unlock()
+	return Response{OK: true, Events: events}
+}
+
 func (h *Handler) handleShutdown() Response {
 	if h.onShutdown != nil {
 		h.shutdownOnce.Do(func() { go h.onShutdown() })
@@ -644,6 +706,7 @@ func (h *Handler) SweepStale(now time.Time) {
 		delete(h.lastAction, windowID)
 		delete(h.lastActiveEvent, windowID)
 		delete(h.subagentCount, windowID)
+		delete(h.eventLog, windowID)
 		stale = append(stale, staleEntry{windowID, title, pipe, notify})
 	}
 	h.stateMu.Unlock()

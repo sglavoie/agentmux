@@ -58,6 +58,7 @@ var helpSections = []struct {
 	}},
 	{"App", []string{
 		"  ?         show / hide this help",
+		"  d         show session detail (hook event log)",
 		"  q         quit",
 		"  ctrl+c    quit",
 	}},

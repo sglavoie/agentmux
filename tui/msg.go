@@ -39,6 +39,16 @@ type focusDoneMsg struct{ err error }
 // peekDoneMsg is sent when the overlay pager launch completes.
 type peekDoneMsg struct{ err error }
 
+// detailEventsMsg carries the per-window hook event ring buffer fetched
+// from the daemon. windowID identifies which window the query was for so
+// the Update path can drop stale responses (e.g. the user closed the
+// detail pane before the round-trip completed).
+type detailEventsMsg struct {
+	windowID int
+	events   []daemon.SessionEvent
+	err      error
+}
+
 // healthMsg carries the result of a daemon/hooks health refresh. Each
 // section is only populated when the corresponding flag was set on the
 // dispatching command, so partial refreshes (daemon-only or hooks-only)
