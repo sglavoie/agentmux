@@ -26,10 +26,12 @@ type colorPickerItem struct {
 }
 
 type colorPickerModel struct {
-	ctx    ColorPickerContext
-	cursor int
-	items  []colorPickerItem
-	err    error
+	ctx     ColorPickerContext
+	cursor  int
+	offset  int
+	items   []colorPickerItem
+	height  int
+	err     error
 	applied bool
 }
 
@@ -52,7 +54,8 @@ func newColorPickerModel(ctx ColorPickerContext) colorPickerModel {
 			initialCursor = i
 		}
 	}
-	items = append(items, colorPickerItem{name: "reset to default", emoji: "↩", isReset: true})
+	resetLabel := fmt.Sprintf("reset to default (%s)", ctx.DefaultColor)
+	items = append(items, colorPickerItem{name: resetLabel, emoji: "↩", isReset: true})
 	return colorPickerModel{ctx: ctx, cursor: initialCursor, items: items}
 }
 
@@ -60,6 +63,8 @@ func (m colorPickerModel) Init() tea.Cmd { return nil }
 
 func (m colorPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.height = msg.Height
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "q", "esc":
@@ -73,7 +78,48 @@ func (m colorPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	}
+	m.scrollToCursor()
 	return m, nil
+}
+
+// header + top divider + scroll-up indicator + scroll-down indicator +
+// reset divider + reset item + bottom divider + footer = 8.
+const colorPickerChrome = 8
+
+func (m *colorPickerModel) visibleColorCount() int {
+	avail := m.height - colorPickerChrome
+	if m.err != nil {
+		avail--
+	}
+	if avail < 1 {
+		avail = 1
+	}
+	if avail > len(colorPickerOrder) {
+		avail = len(colorPickerOrder)
+	}
+	return avail
+}
+
+func (m *colorPickerModel) scrollToCursor() {
+	if m.height == 0 {
+		return
+	}
+	vis := m.visibleColorCount()
+	if m.cursor < len(colorPickerOrder) {
+		if m.cursor < m.offset {
+			m.offset = m.cursor
+		}
+		if m.cursor >= m.offset+vis {
+			m.offset = m.cursor - vis + 1
+		}
+	} else {
+		if m.offset+vis > len(colorPickerOrder) {
+			m.offset = len(colorPickerOrder) - vis
+		}
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
 }
 
 func (m *colorPickerModel) apply() {
@@ -120,37 +166,58 @@ func (m colorPickerModel) View() tea.View {
 	sb.WriteString(styleHeader.Render("Set Tab Color") + "\n")
 	sb.WriteString(styleDim.Render(divider) + "\n")
 
-	for i, item := range m.items {
-		if item.isReset {
-			sb.WriteString(styleDim.Render(divider) + "\n")
+	maxNameLen := 0
+	for _, name := range colorPickerOrder {
+		if len(name) > maxNameLen {
+			maxNameLen = len(name)
 		}
+	}
 
+	vis := m.visibleColorCount()
+	end := m.offset + vis
+	if end > len(colorPickerOrder) {
+		end = len(colorPickerOrder)
+	}
+
+	if m.offset > 0 {
+		sb.WriteString(styleDim.Render("      ▲") + "\n")
+	} else {
+		sb.WriteString("\n")
+	}
+
+	for i := m.offset; i < end; i++ {
+		item := m.items[i]
 		prefix := "  "
 		suffix := ""
-
-		if !item.isReset {
-			c, err := palette.Lookup(item.name)
-			if err == nil {
-				colorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(c.ForegroundHex()))
-				label := fmt.Sprintf("%s  %s  %s", prefix, item.emoji, colorStyle.Render(item.name))
-				if item.name == m.ctx.DefaultColor {
-					suffix = "  ←"
-				}
-				if i == m.cursor {
-					sb.WriteString(styleSelected.Render(label+suffix) + "\n")
-				} else {
-					sb.WriteString(label + suffix + "\n")
-				}
-				continue
+		c, err := palette.Lookup(item.name)
+		if err == nil {
+			padded := item.name + strings.Repeat(" ", maxNameLen-len(item.name))
+			colorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(c.ForegroundHex()))
+			label := fmt.Sprintf("%s  %s  %s", prefix, item.emoji, colorStyle.Render(padded))
+			if item.name == m.ctx.DefaultColor {
+				suffix = " ←"
+			}
+			if i == m.cursor {
+				sb.WriteString(styleSelected.Render(label+suffix) + "\n")
+			} else {
+				sb.WriteString(label + suffix + "\n")
 			}
 		}
+	}
 
-		label := fmt.Sprintf("%s  %s  %s", prefix, item.emoji, item.name)
-		if i == m.cursor {
-			sb.WriteString(styleSelected.Render(label+suffix) + "\n")
-		} else {
-			sb.WriteString(label + suffix + "\n")
-		}
+	if end < len(colorPickerOrder) {
+		sb.WriteString(styleDim.Render("      ▼") + "\n")
+	} else {
+		sb.WriteString("\n")
+	}
+
+	resetItem := m.items[len(m.items)-1]
+	sb.WriteString(styleDim.Render(divider) + "\n")
+	resetLabel := fmt.Sprintf("  %s  %s", resetItem.emoji, resetItem.name)
+	if m.cursor == len(m.items)-1 {
+		sb.WriteString(styleSelected.Render(resetLabel) + "\n")
+	} else {
+		sb.WriteString(resetLabel + "\n")
 	}
 
 	sb.WriteString(styleDim.Render(divider) + "\n")
