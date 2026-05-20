@@ -125,6 +125,32 @@ func TestIsKeybindingsCmdline(t *testing.T) {
 	}
 }
 
+func TestIsColorPickerCmdline(t *testing.T) {
+	tests := []struct {
+		name    string
+		cmdline []string
+		want    bool
+	}{
+		{"bare amx color-picker", []string{"amx", "color-picker"}, true},
+		{"full path", []string{"/usr/local/bin/amx", "color-picker"}, true},
+		{"with debug flag", []string{"amx", "--debug", "color-picker"}, true},
+		{"wrong subcommand", []string{"amx", "keybindings"}, false},
+		{"wrong binary", []string{"claude", "color-picker"}, false},
+		{"empty", []string{}, false},
+		{"nil", nil, false},
+		{"bare amx", []string{"amx"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isColorPickerCmdline(tt.cmdline)
+			if got != tt.want {
+				t.Errorf("isColorPickerCmdline(%v) = %v, want %v", tt.cmdline, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUserVars_EffectiveHarness(t *testing.T) {
 	tests := []struct {
 		name    string

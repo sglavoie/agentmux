@@ -147,6 +147,45 @@ func isKeybindingsCmdline(cmdline []string) bool {
 	return false
 }
 
+// FindColorPickerWindow scans all OS windows for a window whose foreground
+// process is amx color-picker. excludeWindowID is skipped to avoid
+// self-detection (pass the current KITTY_WINDOW_ID).
+func FindColorPickerWindow(osWindows []OSWindow, excludeWindowID int) (*DashboardLocation, bool) {
+	for i := range osWindows {
+		for j := range osWindows[i].Tabs {
+			tab := &osWindows[i].Tabs[j]
+			for k := range tab.Windows {
+				w := &tab.Windows[k]
+				if w.ID == excludeWindowID {
+					continue
+				}
+				for _, fp := range w.ForegroundProcesses {
+					if isColorPickerCmdline(fp.Cmdline) {
+						return &DashboardLocation{TabID: tab.ID, WindowID: w.ID}, true
+					}
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+func isColorPickerCmdline(cmdline []string) bool {
+	if len(cmdline) < 2 {
+		return false
+	}
+	if filepath.Base(cmdline[0]) != "amx" {
+		return false
+	}
+	for _, arg := range cmdline[1:] {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return arg == "color-picker"
+	}
+	return false
+}
+
 // UserVars holds Agent Mux user variables stored on a Kitty window.
 type UserVars struct {
 	Profile      string `json:"amx_profile"`
