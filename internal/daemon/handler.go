@@ -169,16 +169,25 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		}
 		h.stateMu.Unlock()
 
-		if wasTracked && remaining > 0 {
+		if wasTracked && remaining > 0 && req.Action == "active" {
 			// More agents still running — refresh the subagent guard (reset expiry)
-			// and suppress this "active" transition.
+			// and suppress this "active" transition. Only "active" is suppressed:
+			// a SubagentStop carrying a real failure (action == "stop_failure",
+			// e.g. stopReason = "error" / "max_tokens") must surface so the user
+			// sees the failure even when sibling agents are still running.
 			h.guard.TryUpdate(req.WindowID, "subagent", false)
 			return Response{OK: true, Allowed: false}
 		}
 		if wasTracked && remaining == 0 {
-			// Last agent finished — clear guard so the "active" below is allowed
-			// immediately rather than waiting for the guard TTL to expire.
-			h.guard.Clear(req.WindowID)
+			// Last agent finished — clear the subagent guard so the "active" below
+			// is allowed immediately rather than waiting for the guard TTL to
+			// expire. Only clear when the guard is still "subagent": a failure or
+			// permission may have legitimately superseded it (e.g. one subagent
+			// stop_failure while a sibling was still running), and that terminal
+			// state must persist until the user acknowledges it.
+			if h.guard.Current(req.WindowID) == "subagent" {
+				h.guard.Clear(req.WindowID)
+			}
 		}
 	}
 

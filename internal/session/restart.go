@@ -42,7 +42,11 @@ func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Confi
 // one, it is a no-op. Launch precedes Close for the same reason as Restart.
 func RestartWithAccount(client kitty.KittyClient, running RunningSession, targetAcc config.Account, cfg *config.Config) error {
 	debugLog.Printf("RestartWithAccount: running=%+v targetAcc=%+v", running, targetAcc)
-	if running.EffectiveProfile() == targetAcc.Name {
+	// Case-insensitive compare: profile names get lowercased in SessionKey and
+	// duplicates differing only in case are rejected by config validation, so a
+	// case-sensitive equality check here would re-launch the session needlessly
+	// when the user var case differs from the config name.
+	if strings.EqualFold(running.EffectiveProfile(), targetAcc.Name) {
 		debugLog.Printf("RestartWithAccount: same account, no-op")
 		return nil
 	}
@@ -67,8 +71,13 @@ func RestartWithAccount(client kitty.KittyClient, running RunningSession, target
 }
 
 func findAccount(cfg *config.Config, name string) (config.Account, bool) {
+	// SessionKey lowercases profile names at runtime and config validation
+	// rejects case-only duplicates (see internal/config/validate.go), so a
+	// case-insensitive match here is consistent with the rest of the codebase.
+	// Without this fold, a user var like "Work" would fail to resolve when the
+	// config was renamed to "work" (or vice versa) between launch and restart.
 	for _, acc := range cfg.Accounts {
-		if acc.Name == name {
+		if strings.EqualFold(acc.Name, name) {
 			return acc, true
 		}
 	}

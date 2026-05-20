@@ -1231,3 +1231,36 @@ func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
 		}
 	})
 }
+
+// TestHandler_SubagentStopFailureSurfacesWhileSiblingsRun verifies that a
+// SubagentStop carrying a real failure (action == "stop_failure") is NOT
+// silently suppressed even when sibling subagents are still running. The
+// "decrement and suppress" logic exists to hide benign per-agent completions
+// under the parent 🤖 icon — applying it to failures would hide a child
+// crash from the user. The error icon must appear; the sibling subagent must
+// keep running; and when the surviving sibling later finishes successfully,
+// the stop_failure guard must persist (the user has not acknowledged it).
+func TestHandler_SubagentStopFailureSurfacesWhileSiblingsRun(t *testing.T) {
+	h := newTestHandler()
+
+	// Two concurrent subagents start.
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
+
+	// One subagent fails (e.g. SubagentStop with stopReason == "error" maps to
+	// action stop_failure via ResolveAction). With sibling still running, the
+	// failure must surface, not be suppressed.
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop_failure", Event: "SubagentStop"})
+	if !resp.OK || !resp.Allowed || resp.IconState != "error" {
+		t.Fatalf("subagent stop_failure with sibling running: want allowed=true icon=error, got %+v", resp)
+	}
+
+	// Sibling finishes normally. The decrement brings count to 0, but the
+	// guard.Clear must NOT wipe the stop_failure guard the user has not yet
+	// acknowledged. The follow-up "active" carried by SubagentStop must be
+	// blocked by the stop_failure (priority 4) guard.
+	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "SubagentStop"})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("active after sibling drain must be blocked by stop_failure, got %+v", resp)
+	}
+}

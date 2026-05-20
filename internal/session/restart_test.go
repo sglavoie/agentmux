@@ -470,6 +470,56 @@ func TestRestartWithAccount_SameAccountNoOp(t *testing.T) {
 	}
 }
 
+// TestRestart_CaseInsensitiveProfileLookup verifies that Restart resolves a
+// profile name that differs only in case from the config-declared name.
+// SessionKey lowercases profile names and config validation rejects case-only
+// duplicates, so a running tab whose user var case has drifted from the config
+// must still restart cleanly rather than failing with "profile not found".
+func TestRestart_CaseInsensitiveProfileLookup(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig() // declares profile "work" (lowercase)
+
+	// Running tab carries the profile name with different case ("WORK").
+	running := session.RunningSession{
+		TabID:     42,
+		Base:      "W:api",
+		Account:   "WORK",
+		Directory: "/tmp/api",
+	}
+
+	if err := session.Restart(client, running, cfg); err != nil {
+		t.Fatalf("Restart with case-mismatched profile: %v", err)
+	}
+}
+
+// TestRestartWithAccount_CaseInsensitiveSameAccountNoOp verifies that the
+// no-op short-circuit when restarting under the same profile is case-insensitive.
+// Without this, a running tab whose user var case drifted from the config
+// would trigger a needless relaunch+close even though the profile is the same.
+func TestRestartWithAccount_CaseInsensitiveSameAccountNoOp(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig() // profile "work"
+
+	running := session.RunningSession{
+		TabID:   42,
+		Base:    "W:api",
+		Account: "WORK", // user var case differs from config
+	}
+	sameAcc := cfg.Accounts[0] // Name: "work"
+
+	if err := session.RestartWithAccount(client, running, sameAcc, cfg); err != nil {
+		t.Fatalf("RestartWithAccount case-insensitive no-op: %v", err)
+	}
+	if len(runner.Calls) != 0 {
+		t.Errorf("expected no kitten calls for case-insensitive no-op, got: %v", runner.Calls)
+	}
+}
+
 // TestRestartWithAccount_PreservesMetadata verifies that directory, flags, env,
 // and groups survive an account switch.
 func TestRestartWithAccount_PreservesMetadata(t *testing.T) {
