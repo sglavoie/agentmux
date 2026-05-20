@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -261,5 +262,33 @@ func TestListONoOpWithoutMatchingConfig(t *testing.T) {
 	_, cmd := m.Update(keyPress("o"))
 	if cmd != nil {
 		t.Error("expected no cmd when no config session matches")
+	}
+}
+
+// TestFindAccountByNameCaseInsensitive verifies that account lookup folds
+// case when matching a running session's profile user var against the
+// configured profile list. Without this fold, a session launched as
+// "Work" (from a prior config) cannot be resolved after the config is
+// renamed to "work", and every per-row action that resolves an account
+// (close-with-undo, restart, open dir, …) silently degrades — the close
+// fires but the undo affordance is dropped because hasAcc is false.
+// Mirrors the contract enforced by session.findAccount.
+func TestFindAccountByNameCaseInsensitive(t *testing.T) {
+	accounts := []config.Account{
+		{Name: "work", Color: "blue"},
+		{Name: "personal", Color: "green"},
+	}
+	for _, name := range []string{"work", "Work", "WORK"} {
+		got, ok := findAccountByName(accounts, name)
+		if !ok {
+			t.Errorf("findAccountByName(%q): not found", name)
+			continue
+		}
+		if got.Name != "work" {
+			t.Errorf("findAccountByName(%q): resolved to %q, want %q", name, got.Name, "work")
+		}
+	}
+	if _, ok := findAccountByName(accounts, "unknown"); ok {
+		t.Error("findAccountByName(unknown): unexpectedly found")
 	}
 }

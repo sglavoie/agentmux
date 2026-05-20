@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -34,7 +35,12 @@ func MergeAll(cfg *config.Config, filter, amxBin string) ([]MergeResult, error) 
 	var results []MergeResult
 	matched := false
 	for _, account := range cfg.Accounts {
-		if filter != "" && account.Name != filter {
+		// Case-insensitive compare: SessionKey lowercases profile names at
+		// runtime and config validation rejects case-only duplicates, so the
+		// CLI filter (`amx config hooks-sync NAME`) should accept any casing
+		// the user types — mirroring session.findAccount and
+		// session.RestartWithAccount.
+		if filter != "" && !strings.EqualFold(account.Name, filter) {
 			continue
 		}
 		matched = true

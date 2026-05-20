@@ -194,8 +194,13 @@ func findConfigSession(cfg *config.Config, profileName, projectTitle string) (co
 }
 
 func findAccountByName(accounts []config.Account, name string) (config.Account, bool) {
+	// Case-insensitive compare: SessionKey lowercases profile names at
+	// runtime and config validation rejects case-only duplicates, so a
+	// user var like "Work" (from a launch before a config rename) must
+	// still resolve to the "work" profile. Matches the contract enforced
+	// by session.findAccount and session.RestartWithAccount.
 	for _, a := range accounts {
-		if a.Name == name {
+		if strings.EqualFold(a.Name, name) {
 			return a, true
 		}
 	}

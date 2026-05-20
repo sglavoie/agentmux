@@ -387,6 +387,29 @@ func TestMergeFilterUnknownAccount(t *testing.T) {
 	}
 }
 
+// TestMergeFilterByAccountCaseInsensitive verifies that the CLI filter
+// (`amx config hooks-sync NAME`) accepts any casing — matching the
+// case-insensitive contract enforced elsewhere (config validation rejects
+// case-only duplicates and session.findAccount / session.RestartWithAccount
+// already fold). Previously a user typing "Work" when the config had
+// "work" got "account not found" and the hook merge silently skipped.
+func TestMergeFilterByAccountCaseInsensitive(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg := makeConfig([]config.Account{
+		{Name: "work", ConfigDir: filepath.Join(dir, "work"), Color: "blue"},
+		{Name: "personal", ConfigDir: filepath.Join(dir, "personal"), Color: "green"},
+	}, nil)
+
+	results, err := MergeAll(cfg, "WORK", testBin)
+	if err != nil {
+		t.Fatalf("MergeAll(filter=WORK) error: %v", err)
+	}
+	if len(results) != 1 || results[0].Account != "work" {
+		t.Fatalf("expected only work matched by case-folded filter, got %+v", results)
+	}
+}
+
 // Status tests
 
 func TestStatusMissingNoFile(t *testing.T) {
