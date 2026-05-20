@@ -214,6 +214,46 @@ func TestMaybeNotify_StaleCooldownPerWindow(t *testing.T) {
 	})
 }
 
+func TestMaybeNotify_HookSilenceFiresWhenEnabled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{}
+		n, calls := newTestNotifier(cfg)
+		n.MaybeNotify(1, "work", "hook_silence", false)
+		synctest.Wait()
+		if calls.len() < 1 {
+			t.Fatal("expected notification for hook_silence")
+		}
+		if calls.snapshot()[0].subtitle != "Hook silence detected" {
+			t.Errorf("subtitle = %q, want %q", calls.snapshot()[0].subtitle, "Hook silence detected")
+		}
+	})
+}
+
+func TestMaybeNotify_HookSilenceSuppressedWhenDisabled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		disabled := false
+		cfg := &config.NotificationConfig{HookSilence: &disabled}
+		n, calls := newTestNotifier(cfg)
+		n.MaybeNotify(1, "work", "hook_silence", false)
+		synctest.Wait()
+		if calls.len() > 0 {
+			t.Fatal("hook_silence should be suppressed when HookSilence=&false")
+		}
+	})
+}
+
+func TestMaybeNotify_HookSilenceSuppressedInPipeMode(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{}
+		n, calls := newTestNotifier(cfg)
+		n.MaybeNotify(1, "work", "hook_silence", true)
+		synctest.Wait()
+		if calls.len() > 0 {
+			t.Fatal("hook_silence should be suppressed in pipe mode")
+		}
+	})
+}
+
 func TestNotifier_SuppressedByPipeMode(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true, Permission: true, Error: true}

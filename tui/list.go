@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 
+	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -297,6 +298,17 @@ func renderList(m Model) string {
 // current view has an active pulse.
 const pulseColumnWidth = 2
 
+// ageColumnWidth is the visual width consumed by the per-row age column
+// (5 cells of text + 1 trailing space). Sized to fit a warning cell like
+// "9m ⏳"; only reserved when at least one row carries a sweep-eligible
+// LastAction in m.watchdog.
+const ageColumnWidth = 6
+
+// ageWarningGlyph is appended to the age text once the elapsed time has
+// crossed the 80% warning band. Rendered in styleAgeWarning so it reads as
+// "approaching stale" without competing with the row's icon column.
+const ageWarningGlyph = "⏳"
+
 // renderListAt renders the session list with an explicit width budget. Used
 // when the preview pane consumes part of the row so only the directory column
 // shrinks instead of the icon/badge/title columns.
@@ -310,6 +322,8 @@ func renderListAt(m Model, width int) string {
 	groupCounts := countGroups(m.filtered, m.lastActivity, m.idleThreshold)
 	multiGroup := groupCounts > 1
 	pulseActive := anyRowHasActivePulse(m)
+	ageActive := anyRowHasAge(m)
+	now := time.Now()
 
 	var sb strings.Builder
 	prevGroup := -1
@@ -327,7 +341,14 @@ func renderListAt(m Model, width int) string {
 		if pulseActive && rowWidth > 0 {
 			rowWidth -= pulseColumnWidth
 		}
-		row := formatRow(s, acctColor, rowWidth)
+		if ageActive && rowWidth > 0 {
+			rowWidth -= ageColumnWidth
+		}
+		var ageCell string
+		if ageActive {
+			ageCell = renderAgeCell(m.watchdog[s.WindowID], now)
+		}
+		row := formatRow(s, acctColor, rowWidth, ageCell)
 		var styledRow string
 		switch {
 		case i == m.cursor:
@@ -359,6 +380,71 @@ func anyRowHasActivePulse(m Model) bool {
 		}
 	}
 	return false
+}
+
+// anyRowHasAge reports whether any filtered row carries a sweep-eligible
+// watchdog entry. Mirrors anyRowHasActivePulse: the age column is reserved
+// for the entire render pass when at least one row has a non-empty
+// LastAction, otherwise the column is omitted so rows recover their full
+// directory budget.
+func anyRowHasAge(m Model) bool {
+	if len(m.watchdog) == 0 {
+		return false
+	}
+	for _, s := range m.filtered {
+		if ws, ok := m.watchdog[s.WindowID]; ok && ws.LastAction != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// formatAge returns the per-row age label and the warning flag for a single
+// watchdog entry. The text is `—` for rows with no LastAction; otherwise a
+// coarsely rounded duration (`<n>m` under one hour, `<n>h` beyond). warning
+// is true once the elapsed time has reached 80% of the resolved threshold,
+// so the caller can flip the cell to styleAgeWarning. ThresholdSec ≤ 0
+// disables the warning (no threshold configured for that window).
+func formatAge(ws daemon.WatchdogState, now time.Time) (text string, warning bool) {
+	if ws.LastAction == "" {
+		return "—", false
+	}
+	elapsed := now.Sub(time.Unix(ws.LastEventAt, 0))
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	if elapsed < time.Hour {
+		text = fmt.Sprintf("%dm", int(elapsed/time.Minute))
+	} else {
+		text = fmt.Sprintf("%dh", int(elapsed/time.Hour))
+	}
+	if ws.ThresholdSec > 0 {
+		threshold := time.Duration(ws.ThresholdSec) * time.Second
+		if elapsed*5 >= threshold*4 {
+			warning = true
+		}
+	}
+	return text, warning
+}
+
+// renderAgeCell builds a fixed-width age cell sized to ageColumnWidth. The
+// trailing space is part of the cell so callers can concatenate it before
+// the directory without an extra separator. Warning rows get the warning
+// glyph appended and the whole text styled in styleAgeWarning.
+func renderAgeCell(ws daemon.WatchdogState, now time.Time) string {
+	text, warning := formatAge(ws, now)
+	if warning {
+		text = text + " " + ageWarningGlyph
+	}
+	pad := ageColumnWidth - 1 - runewidth.StringWidth(text)
+	if pad < 0 {
+		pad = 0
+	}
+	cell := text + strings.Repeat(" ", pad)
+	if warning {
+		cell = styleAgeWarning.Render(cell)
+	}
+	return cell + " "
 }
 
 // pulsePrefix returns the colored glyph (+ trailing space) for a pulsing
@@ -507,8 +593,11 @@ func harnessAbbrev(h string) string {
 }
 
 // formatRow formats a single session row.
-// Format: state_icon | account_prefix | [harness] | title | directory
-func formatRow(s session.RunningSession, acctColor map[string]string, width int) string {
+// Format: state_icon | account_prefix | [harness] | title | [age] | directory
+// ageCell is empty when no row in the current view carries a watchdog entry;
+// otherwise it is a pre-rendered fixed-width cell (ageColumnWidth cells,
+// trailing space included) inserted immediately before the directory column.
+func formatRow(s session.RunningSession, acctColor map[string]string, width int, ageCell string) string {
 	// State icon at the start for instant scanning.
 	iconCol := "  "
 	if s.State != "" {
@@ -567,9 +656,9 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int)
 	dir = styleDim.Render(dir)
 
 	if harnessBadge != "" {
-		return iconCol + " " + badge + " " + harnessBadge + " " + title + "  " + dir
+		return iconCol + " " + badge + " " + harnessBadge + " " + title + "  " + ageCell + dir
 	}
-	return iconCol + " " + badge + " " + title + "  " + dir
+	return iconCol + " " + badge + " " + title + "  " + ageCell + dir
 }
 
 // iconDisplayWidth returns the visual cell width of a state icon, with a

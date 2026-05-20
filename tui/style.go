@@ -21,6 +21,12 @@ var (
 
 	styleAttentionRow = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 
+	// styleAgeWarning colors the per-row age cell when a sweep-eligible
+	// session has been silent for ≥ 80% of its resolved threshold. Reuses
+	// the attention amber so the cue reads as "approaching stale" without
+	// the full alarm weight of styleError.
+	styleAgeWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+
 	// Per-state accent styles used by the footer gloss. bolt picks up the
 	// success/active teal; key/stop/error reuse the attention orange so the
 	// gloss text matches the icon family the user already associates with

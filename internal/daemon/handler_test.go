@@ -1370,14 +1370,21 @@ func TestHandler_CleanupOnTerminalAction(t *testing.T) {
 
 // newSweepTestHandler builds a Handler wired with a notifier that records
 // dispatches and a fake Kitty client whose SetTabTitle calls are recorded.
-// Threshold zero leaves the sweep disabled — used by the no-op test.
+// Threshold zero leaves the sweep disabled — used by the no-op test. The
+// same threshold is applied to all three watchdog states so legacy tests
+// that pre-date per-state thresholds continue to exercise the sweep
+// uniformly; per-state behavior is covered by newSweepTestHandlerWithMap.
 func newSweepTestHandler(threshold time.Duration) (*Handler, *fakeKittyClient, *callRecorder) {
 	guard := NewStateGuard(time.Hour)
 	notifier, rec := newTestNotifier(&config.NotificationConfig{})
 	h := NewHandler(guard, notifier)
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
-	h.SetStaleThreshold(threshold)
+	h.SetStaleThresholds(map[string]time.Duration{
+		"active":   threshold,
+		"subagent": threshold,
+		"compact":  threshold,
+	}, nil)
 	return h, fake, rec
 }
 
@@ -1732,7 +1739,7 @@ func TestSweepStale_NilKittyClient(t *testing.T) {
 		guard := NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{})
 		h := NewHandler(guard, notifier)
-		h.SetStaleThreshold(10 * time.Minute)
+		h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Minute}, nil)
 		// Deliberately do NOT call SetKittyClient — h.kittyClient is nil.
 
 		now := time.Now()
@@ -1822,4 +1829,860 @@ func TestSweepStale_ListWindowsErrorIsTolerated(t *testing.T) {
 			t.Fatalf("notifiedStale[42] = false; want true")
 		}
 	})
+}
+
+// newSweepTestHandlerWithMap is a sibling of newSweepTestHandler that takes
+// per-action thresholds so per-state tests can configure different durations
+// for active/subagent/compact independently.
+func newSweepTestHandlerWithMap(global map[string]time.Duration, perAccount map[string]map[string]time.Duration) (*Handler, *fakeKittyClient, *callRecorder) {
+	guard := NewStateGuard(time.Hour)
+	notifier, rec := newTestNotifier(&config.NotificationConfig{})
+	h := NewHandler(guard, notifier)
+	fake := &fakeKittyClient{}
+	h.SetKittyClient(fake)
+	h.SetStaleThresholds(global, perAccount)
+	return h, fake, rec
+}
+
+// TestSweepStale_PerStateThresholds verifies that per-action thresholds are
+// honored independently: with compact = 30s and subagent = 30m, a 5-minute
+// idle compact session is swept while a 5-minute idle subagent is left alone.
+func TestSweepStale_PerStateThresholds(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		global := map[string]time.Duration{
+			"active":   10 * time.Minute,
+			"subagent": 30 * time.Minute,
+			"compact":  30 * time.Second,
+		}
+		h, fake, rec := newSweepTestHandlerWithMap(global, nil)
+		fake.windows = []kitty.OSWindow{
+			{
+				ID: 1,
+				Tabs: []kitty.Tab{
+					{ID: 100, Title: palette.BuildTitle("W:compact", "compact", false), Windows: []kitty.Window{{ID: 42}}},
+					{ID: 101, Title: palette.BuildTitle("W:subagent", "subagent", false), Windows: []kitty.Window{{ID: 43}}},
+				},
+			},
+		}
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.activity[42] = now.Add(-5 * time.Minute)
+		h.lastAction[42] = "compact"
+		h.lastSessionTitle[42] = "W:compact"
+		h.activity[43] = now.Add(-5 * time.Minute)
+		h.lastAction[43] = "subagent"
+		h.lastSessionTitle[43] = "W:subagent"
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("dispatches = %d; want 1 (compact only)", got)
+		}
+		calls := rec.snapshot()
+		if calls[0].title != "W:compact" {
+			t.Fatalf("dispatch title = %q; want W:compact", calls[0].title)
+		}
+
+		titles := fake.titleCalls()
+		if len(titles) != 1 {
+			t.Fatalf("SetTabTitle calls = %d; want 1", len(titles))
+		}
+
+		h.stateMu.Lock()
+		_, compactStillTracked := h.lastAction[42]
+		subagentAction := h.lastAction[43]
+		h.stateMu.Unlock()
+		if compactStillTracked {
+			t.Fatalf("lastAction[42] still present after sweep (compact should be cleared)")
+		}
+		if subagentAction != "subagent" {
+			t.Fatalf("lastAction[43] = %q; want subagent (left alone)", subagentAction)
+		}
+	})
+}
+
+// TestSweepStale_PerAccountOverrideBeatsGlobal verifies that a per-account
+// override duration is consulted instead of the global default. The global
+// "active" threshold is 10 minutes, but the "work" account overrides it to
+// 30 seconds, so a 2-minute idle active session under "work" is swept.
+func TestSweepStale_PerAccountOverrideBeatsGlobal(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		global := map[string]time.Duration{"active": 10 * time.Minute}
+		perAccount := map[string]map[string]time.Duration{
+			"work": {"active": 30 * time.Second},
+		}
+		h, fake, rec := newSweepTestHandlerWithMap(global, perAccount)
+		fake.windows = fakeOSWindowsWithTab(42, palette.BuildTitle("W:api", "bolt", false))
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.activity[42] = now.Add(-2 * time.Minute)
+		h.lastAction[42] = "active"
+		h.lastAccount[42] = "work"
+		h.lastSessionTitle[42] = "W:api"
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("dispatches = %d; want 1 (per-account override should fire)", got)
+		}
+		h.stateMu.Lock()
+		_, has := h.lastAction[42]
+		h.stateMu.Unlock()
+		if has {
+			t.Fatalf("lastAction[42] still present after sweep")
+		}
+	})
+}
+
+// TestSweepStale_PerAccountOverrideCaseInsensitive verifies that per-account
+// lookups normalize the account name before comparison (matching the rest of
+// the config package's case-insensitive treatment of profile names).
+func TestSweepStale_PerAccountOverrideCaseInsensitive(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		global := map[string]time.Duration{"active": 10 * time.Minute}
+		// Account stored uppercase in the request; override registered
+		// lowercase via SetStaleThresholds.
+		perAccount := map[string]map[string]time.Duration{
+			"WORK": {"active": 30 * time.Second},
+		}
+		h, fake, rec := newSweepTestHandlerWithMap(global, perAccount)
+		fake.windows = fakeOSWindowsWithTab(42, palette.BuildTitle("W:api", "bolt", false))
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.activity[42] = now.Add(-2 * time.Minute)
+		h.lastAction[42] = "active"
+		h.lastAccount[42] = "Work"
+		h.lastSessionTitle[42] = "W:api"
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("dispatches = %d; want 1 (case-insensitive match should fire)", got)
+		}
+	})
+}
+
+// TestSweepStale_MissingAccountOverrideFallsBackToGlobal verifies that a
+// session whose account has no override uses the global default threshold.
+func TestSweepStale_MissingAccountOverrideFallsBackToGlobal(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		global := map[string]time.Duration{"active": 1 * time.Minute}
+		perAccount := map[string]map[string]time.Duration{
+			"other": {"active": 1 * time.Hour},
+		}
+		h, fake, rec := newSweepTestHandlerWithMap(global, perAccount)
+		fake.windows = fakeOSWindowsWithTab(42, palette.BuildTitle("P:dotfiles", "bolt", false))
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.activity[42] = now.Add(-5 * time.Minute)
+		h.lastAction[42] = "active"
+		h.lastAccount[42] = "personal"
+		h.lastSessionTitle[42] = "P:dotfiles"
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("dispatches = %d; want 1 (global fallback should fire)", got)
+		}
+	})
+}
+
+// TestSweepStale_PerAccountZeroFallsBackToGlobal verifies that a per-account
+// override with a zero/missing inner entry falls back to the global default
+// rather than disabling sweeping for that action.
+func TestSweepStale_PerAccountZeroFallsBackToGlobal(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		global := map[string]time.Duration{
+			"active":   1 * time.Minute,
+			"subagent": 1 * time.Minute,
+		}
+		// "work" overrides subagent only; active should fall back to global.
+		perAccount := map[string]map[string]time.Duration{
+			"work": {"subagent": 1 * time.Hour},
+		}
+		h, fake, rec := newSweepTestHandlerWithMap(global, perAccount)
+		fake.windows = fakeOSWindowsWithTab(42, palette.BuildTitle("W:api", "bolt", false))
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.activity[42] = now.Add(-5 * time.Minute)
+		h.lastAction[42] = "active"
+		h.lastAccount[42] = "work"
+		h.lastSessionTitle[42] = "W:api"
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("dispatches = %d; want 1 (active should fall back to global)", got)
+		}
+	})
+}
+
+// TestSweepStale_AllZeroThresholdsDisablesSweep verifies that the early-exit
+// guard fires when every configured threshold is zero, preserving the
+// existing "negative/zero global value disables sweep" behavior.
+func TestSweepStale_AllZeroThresholdsDisablesSweep(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		global := map[string]time.Duration{
+			"active":   0,
+			"subagent": 0,
+			"compact":  0,
+		}
+		h, fake, rec := newSweepTestHandlerWithMap(global, nil)
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.activity[42] = now.Add(-15 * time.Minute)
+		h.lastAction[42] = "active"
+		h.lastSessionTitle[42] = "W:api"
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0", got)
+		}
+		if got := len(fake.titleCalls()); got != 0 {
+			t.Fatalf("SetTabTitle calls = %d; want 0", got)
+		}
+		h.stateMu.Lock()
+		action := h.lastAction[42]
+		h.stateMu.Unlock()
+		if action != "active" {
+			t.Fatalf("lastAction[42] = %q; want active (untouched)", action)
+		}
+	})
+}
+
+// TestHandler_TracksLastAccount verifies that handleStateUpdate records the
+// account name so the sweep can resolve per-account threshold overrides.
+func TestHandler_TracksLastAccount(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+
+	h.stateMu.Lock()
+	got := h.lastAccount[42]
+	h.stateMu.Unlock()
+	if got != "work" {
+		t.Fatalf("lastAccount[42] = %q; want work", got)
+	}
+}
+
+// TestHandler_LastAccountClearedOnTerminal verifies that terminal actions
+// remove the per-window account entry so the maps cannot grow unbounded.
+func TestHandler_LastAccountClearedOnTerminal(t *testing.T) {
+	h := newTestHandler()
+
+	h.stateMu.Lock()
+	h.lastAccount[42] = "work"
+	h.stateMu.Unlock()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop"})
+
+	h.stateMu.Lock()
+	_, present := h.lastAccount[42]
+	h.stateMu.Unlock()
+	if present {
+		t.Fatalf("lastAccount[42] still present after stop")
+	}
+}
+
+// TestHandler_StateQueryPopulatesWatchdogGlobalDefault verifies that
+// handleStateQuery returns the global threshold when no per-account override
+// is configured. Both the action name and the resolved threshold are
+// included so the TUI can render an age column without re-reading config.
+func TestHandler_StateQueryPopulatesWatchdogGlobalDefault(t *testing.T) {
+	h := newTestHandler()
+	h.SetStaleThresholds(map[string]time.Duration{
+		"active":   10 * time.Minute,
+		"subagent": 30 * time.Minute,
+		"compact":  30 * time.Second,
+	}, nil)
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "personal"})
+
+	resp := h.Handle(Request{Type: TypeStateQuery})
+	if !resp.OK {
+		t.Fatalf("want ok=true, got %+v", resp)
+	}
+	entry, ok := resp.Watchdog[42]
+	if !ok {
+		t.Fatalf("Watchdog[42] missing; got %+v", resp.Watchdog)
+	}
+	if entry.LastAction != "active" {
+		t.Errorf("LastAction = %q; want active", entry.LastAction)
+	}
+	if entry.ThresholdSec != int((10 * time.Minute).Seconds()) {
+		t.Errorf("ThresholdSec = %d; want %d (global active)", entry.ThresholdSec, int((10*time.Minute).Seconds()))
+	}
+	if entry.LastEventAt == 0 {
+		t.Errorf("LastEventAt = 0; want non-zero unix timestamp")
+	}
+}
+
+// TestHandler_StateQueryWatchdogHonorsPerAccountOverride verifies that the
+// per-account override wins over the global default, matching SweepStale's
+// resolution logic.
+func TestHandler_StateQueryWatchdogHonorsPerAccountOverride(t *testing.T) {
+	h := newTestHandler()
+	h.SetStaleThresholds(
+		map[string]time.Duration{"active": 10 * time.Minute},
+		map[string]map[string]time.Duration{
+			"work": {"active": 30 * time.Second},
+		},
+	)
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+
+	resp := h.Handle(Request{Type: TypeStateQuery})
+	entry, ok := resp.Watchdog[42]
+	if !ok {
+		t.Fatalf("Watchdog[42] missing; got %+v", resp.Watchdog)
+	}
+	if entry.ThresholdSec != 30 {
+		t.Errorf("ThresholdSec = %d; want 30 (per-account override)", entry.ThresholdSec)
+	}
+}
+
+// TestHandler_StateQueryWatchdogSkipsNonActiveActions verifies that only the
+// three sweep-eligible actions (active/subagent/compact) appear in the
+// watchdog map. Stop/permission/failure-class windows are tracked in
+// lastAction but should not surface here — they don't have an age budget.
+func TestHandler_StateQueryWatchdogSkipsNonActiveActions(t *testing.T) {
+	h := newTestHandler()
+	h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Minute}, nil)
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "permission"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 43, Action: "failure"})
+
+	resp := h.Handle(Request{Type: TypeStateQuery})
+	if _, ok := resp.Watchdog[42]; ok {
+		t.Errorf("Watchdog[42] should be absent for permission action; got %+v", resp.Watchdog[42])
+	}
+	if _, ok := resp.Watchdog[43]; ok {
+		t.Errorf("Watchdog[43] should be absent for failure action; got %+v", resp.Watchdog[43])
+	}
+}
+
+// TestHandler_TracksLastSeenEventAt verifies that handleStateUpdate records
+// the most recent event timestamp per account. The hook-silence sweep (S6)
+// will compare this against the configured threshold.
+func TestHandler_TracksLastSeenEventAt(t *testing.T) {
+	h := newTestHandler()
+
+	before := time.Now()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+	after := time.Now()
+
+	h.stateMu.Lock()
+	got, present := h.lastSeenEventAt["work"]
+	h.stateMu.Unlock()
+	if !present {
+		t.Fatalf("lastSeenEventAt[work] missing after state update")
+	}
+	if got.Before(before) || got.After(after) {
+		t.Fatalf("lastSeenEventAt[work] = %v; want between %v and %v", got, before, after)
+	}
+}
+
+// TestHandler_LastSeenEventAtIsolatedPerAccount verifies that an event for
+// account A does not touch account B's timestamp. The hook-silence detector
+// needs strict per-account isolation to detect single-account hook drift.
+func TestHandler_LastSeenEventAtIsolatedPerAccount(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+
+	h.stateMu.Lock()
+	workBefore := h.lastSeenEventAt["work"]
+	h.stateMu.Unlock()
+
+	// Advance an event for a different account.
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 43, Action: "active", Account: "personal"})
+
+	h.stateMu.Lock()
+	workAfter := h.lastSeenEventAt["work"]
+	_, personalPresent := h.lastSeenEventAt["personal"]
+	h.stateMu.Unlock()
+
+	if !workAfter.Equal(workBefore) {
+		t.Errorf("personal event mutated lastSeenEventAt[work]: before=%v after=%v", workBefore, workAfter)
+	}
+	if !personalPresent {
+		t.Errorf("lastSeenEventAt[personal] missing after personal event")
+	}
+}
+
+// TestHandler_LastSeenEventAtSkippedWhenAccountEmpty verifies that events
+// without an account name (e.g. synthetic probes) do not seed the per-account
+// map. The map is keyed by real account names only.
+func TestHandler_LastSeenEventAtSkippedWhenAccountEmpty(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active"})
+
+	h.stateMu.Lock()
+	_, emptyKeyPresent := h.lastSeenEventAt[""]
+	mapLen := len(h.lastSeenEventAt)
+	h.stateMu.Unlock()
+
+	if emptyKeyPresent {
+		t.Errorf("lastSeenEventAt[\"\"] should not be populated for account-less events")
+	}
+	if mapLen != 0 {
+		t.Errorf("lastSeenEventAt has %d entries; want 0 for account-less event", mapLen)
+	}
+}
+
+// TestHandler_LastSeenEventAtSurvivesTerminal verifies that the per-account
+// map outlives terminal actions on a window. Per-window state is cleared on
+// stop/failure/idle/clear, but the per-account map must persist so the
+// hook-silence detector can still observe activity from the account.
+func TestHandler_LastSeenEventAtSurvivesTerminal(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+
+	h.stateMu.Lock()
+	before, present := h.lastSeenEventAt["work"]
+	h.stateMu.Unlock()
+	if !present {
+		t.Fatalf("lastSeenEventAt[work] missing before terminal action")
+	}
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop"})
+
+	h.stateMu.Lock()
+	after, stillPresent := h.lastSeenEventAt["work"]
+	h.stateMu.Unlock()
+	if !stillPresent {
+		t.Fatalf("lastSeenEventAt[work] cleared by terminal action; should persist across sessions")
+	}
+	if !after.Equal(before) {
+		t.Errorf("lastSeenEventAt[work] mutated by terminal action: before=%v after=%v", before, after)
+	}
+}
+
+// TestHandler_NotifiedHookSilenceLatchReArmed verifies that a fresh event for
+// an account clears the one-shot hook-silence latch so a future silence
+// stretch can produce another notification.
+func TestHandler_NotifiedHookSilenceLatchReArmed(t *testing.T) {
+	h := newTestHandler()
+
+	h.stateMu.Lock()
+	h.notifiedHookSilence["work"] = true
+	h.stateMu.Unlock()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+
+	h.stateMu.Lock()
+	_, latched := h.notifiedHookSilence["work"]
+	h.stateMu.Unlock()
+	if latched {
+		t.Fatalf("notifiedHookSilence[work] should be cleared by a fresh event for the account")
+	}
+}
+
+// TestHandler_NotifiedHookSilenceUntouchedByOtherAccount verifies that a
+// fresh event for one account does not re-arm the latch for another. The
+// latch is strictly per-account.
+func TestHandler_NotifiedHookSilenceUntouchedByOtherAccount(t *testing.T) {
+	h := newTestHandler()
+
+	h.stateMu.Lock()
+	h.notifiedHookSilence["work"] = true
+	h.stateMu.Unlock()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 43, Action: "active", Account: "personal"})
+
+	h.stateMu.Lock()
+	stillLatched := h.notifiedHookSilence["work"]
+	h.stateMu.Unlock()
+	if !stillLatched {
+		t.Fatalf("notifiedHookSilence[work] should not be touched by personal event")
+	}
+}
+
+// TestHandler_HookSilenceNotificationDispatches verifies that the notifier
+// dispatches the "hook_silence" action through MaybeNotify when enabled,
+// using the new label.
+func TestHandler_HookSilenceNotificationDispatches(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{}
+		n, calls := newTestNotifier(cfg)
+		n.MaybeNotify(1, "work", "hook_silence", false)
+		synctest.Wait()
+		if calls.len() < 1 {
+			t.Fatalf("expected hook_silence notification to fire")
+		}
+		got := calls.snapshot()[0]
+		if got.title != "work" {
+			t.Errorf("title = %q; want %q", got.title, "work")
+		}
+		if got.subtitle != "Hook silence detected" {
+			t.Errorf("subtitle = %q; want %q", got.subtitle, "Hook silence detected")
+		}
+	})
+}
+
+// TestHandler_HookSilenceNotificationSuppressedByConfig verifies that the
+// notifier honors NotificationConfig.HookSilence = &false.
+func TestHandler_HookSilenceNotificationSuppressedByConfig(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		disabled := false
+		cfg := &config.NotificationConfig{HookSilence: &disabled}
+		n, calls := newTestNotifier(cfg)
+		n.MaybeNotify(1, "work", "hook_silence", false)
+		synctest.Wait()
+		if calls.len() > 0 {
+			t.Fatalf("hook_silence should be suppressed when HookSilence=&false")
+		}
+	})
+}
+
+// newHookSilenceTestHandler builds a Handler wired with a recording notifier
+// and a fake Kitty client. The global / perAccount thresholds drive
+// SweepHookSilence; tests populate fake.windows to control which accounts the
+// sweep considers "running" and seed h.lastSeenEventAt under stateMu.
+func newHookSilenceTestHandler(global time.Duration, perAccount map[string]time.Duration) (*Handler, *fakeKittyClient, *callRecorder) {
+	guard := NewStateGuard(time.Hour)
+	notifier, rec := newTestNotifier(&config.NotificationConfig{})
+	h := NewHandler(guard, notifier)
+	fake := &fakeKittyClient{}
+	h.SetKittyClient(fake)
+	h.SetHookSilenceThresholds(global, perAccount)
+	return h, fake, rec
+}
+
+// fakeWindowsForAccount builds a kitten-@-ls-shaped windows list with a
+// single tab whose only window carries the given cc_account user var.
+// Mirrors fakeOSWindowsWithTab but populates UserVars.Account so the
+// hook-silence sweep can enumerate the account.
+func fakeWindowsForAccount(account string) []kitty.OSWindow {
+	return []kitty.OSWindow{
+		{
+			ID: 1,
+			Tabs: []kitty.Tab{
+				{
+					ID: 100,
+					Windows: []kitty.Window{
+						{ID: 42, UserVars: kitty.UserVars{Account: account}},
+					},
+				},
+			},
+		},
+	}
+}
+
+// TestSweepHookSilence_SilentAccountNotifiesOnce covers the happy path: an
+// account whose last event predates the threshold fires exactly one
+// notification on the first sweep, and the latch prevents re-firing on a
+// subsequent sweep within the same silence stretch.
+func TestSweepHookSilence_SilentAccountNotifiesOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, nil)
+		fake.windows = fakeWindowsForAccount("work")
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = now.Add(-2 * time.Hour)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("first sweep dispatches = %d; want 1", got)
+		}
+		got := rec.snapshot()[0]
+		if got.title != "work" {
+			t.Errorf("dispatch title = %q; want work", got.title)
+		}
+		if got.subtitle != "Hook silence detected" {
+			t.Errorf("dispatch subtitle = %q; want %q", got.subtitle, "Hook silence detected")
+		}
+
+		// Latch suppresses subsequent ticks within the same stretch.
+		h.SweepHookSilence(now)
+		synctest.Wait()
+		if got := rec.len(); got != 1 {
+			t.Fatalf("after second sweep total dispatches = %d; want 1 (latch should suppress)", got)
+		}
+
+		h.stateMu.Lock()
+		latched := h.notifiedHookSilence["work"]
+		h.stateMu.Unlock()
+		if !latched {
+			t.Fatalf("notifiedHookSilence[work] = false; want true after sweep fired")
+		}
+	})
+}
+
+// TestSweepHookSilence_LatchClearsOnFreshEventThenReFires verifies the full
+// cycle: sweep → notify → fresh event clears latch → re-stall → sweep
+// produces a second notification. The 10s per-(synthetic-window, action)
+// cooldown is reset between stretches so it cannot suppress the second
+// dispatch (the production 5-min cadence makes the cooldown irrelevant in
+// real-world use, but tests advance time virtually).
+func TestSweepHookSilence_LatchClearsOnFreshEventThenReFires(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, nil)
+		fake.windows = fakeWindowsForAccount("work")
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = now.Add(-2 * time.Hour)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(now)
+		synctest.Wait()
+		if got := rec.len(); got != 1 {
+			t.Fatalf("first sweep dispatches = %d; want 1", got)
+		}
+
+		// Fresh event for "work" — S5 invariant: re-arms the latch.
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+
+		h.stateMu.Lock()
+		_, latched := h.notifiedHookSilence["work"]
+		h.stateMu.Unlock()
+		if latched {
+			t.Fatalf("notifiedHookSilence[work] should be cleared by a fresh event")
+		}
+
+		// Bypass the notifier's per-(windowID, action) cooldown so a re-stall
+		// produces a new dispatch. Reset against the same synthetic ID the
+		// sweep uses internally.
+		h.notifier.ResetCooldown(hookSilenceWindowID("work"))
+
+		// Re-stall: backdate the per-account timestamp and sweep again.
+		now2 := time.Now()
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = now2.Add(-2 * time.Hour)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(now2)
+		synctest.Wait()
+
+		if got := rec.len(); got != 2 {
+			t.Fatalf("after re-stall total dispatches = %d; want 2", got)
+		}
+	})
+}
+
+// TestSweepHookSilence_ZeroThresholdSkipped verifies that a stale account is
+// skipped when neither the global nor a per-account override supplies a
+// positive threshold — even though "work" is running and its lastSeenEventAt
+// entry is well past any reasonable bound.
+func TestSweepHookSilence_ZeroThresholdSkipped(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(0, nil)
+		fake.windows = fakeWindowsForAccount("work")
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = now.Add(-2 * time.Hour)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 (zero threshold disables)", got)
+		}
+		h.stateMu.Lock()
+		_, latched := h.notifiedHookSilence["work"]
+		h.stateMu.Unlock()
+		if latched {
+			t.Fatalf("notifiedHookSilence[work] should not be set when threshold is zero")
+		}
+	})
+}
+
+// TestSweepHookSilence_NotRunningSkipped verifies the running-window gate:
+// an account whose lastSeenEventAt is stale but which has no live Kitty
+// window carrying its cc_account user var is silently skipped. This avoids
+// spurious notifications for accounts the user has not launched today.
+func TestSweepHookSilence_NotRunningSkipped(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, nil)
+		// Only "personal" is running; "work" is silent but not launched.
+		fake.windows = fakeWindowsForAccount("personal")
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = now.Add(-2 * time.Hour)
+		h.lastSeenEventAt["personal"] = now.Add(-1 * time.Minute)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 (work is silent but not running; personal is fresh)", got)
+		}
+	})
+}
+
+// TestSweepHookSilence_SuppressedByConfig verifies the notifier still
+// honors NotificationConfig.HookSilence = &false even when the sweep
+// detects a real silence stretch. The latch is still set (the sweep does
+// not consult notification config) so the user never gets a stale-state
+// notification storm if they later toggle the flag back on.
+func TestSweepHookSilence_SuppressedByConfig(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		disabled := false
+		notifier, rec := newTestNotifier(&config.NotificationConfig{HookSilence: &disabled})
+		h := NewHandler(guard, notifier)
+		fake := &fakeKittyClient{}
+		h.SetKittyClient(fake)
+		h.SetHookSilenceThresholds(1*time.Hour, nil)
+		fake.windows = fakeWindowsForAccount("work")
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = now.Add(-2 * time.Hour)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 (HookSilence config = &false)", got)
+		}
+	})
+}
+
+// TestSweepHookSilence_PerAccountOverride verifies that a positive per-account
+// override wins over the global default. With global = 1h and "work" = 30s,
+// a 5-minute stale "work" fires while a 5-minute stale "personal" (still
+// under the global) is left alone.
+func TestSweepHookSilence_PerAccountOverride(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, map[string]time.Duration{
+			"work": 30 * time.Second,
+		})
+		fake.windows = []kitty.OSWindow{
+			{
+				ID: 1,
+				Tabs: []kitty.Tab{
+					{ID: 100, Windows: []kitty.Window{{ID: 42, UserVars: kitty.UserVars{Account: "work"}}}},
+					{ID: 101, Windows: []kitty.Window{{ID: 43, UserVars: kitty.UserVars{Account: "personal"}}}},
+				},
+			},
+		}
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = now.Add(-5 * time.Minute)
+		h.lastSeenEventAt["personal"] = now.Add(-5 * time.Minute)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("dispatches = %d; want 1 (work fires; personal still under global)", got)
+		}
+		if title := rec.snapshot()[0].title; title != "work" {
+			t.Errorf("dispatch title = %q; want work", title)
+		}
+	})
+}
+
+// TestSweepHookSilence_NoEventEverSkipped verifies that a running account
+// with no entry in lastSeenEventAt is skipped: the daemon has not seen any
+// event for that account yet (e.g. just-started daemon), so there is no
+// baseline to measure silence against.
+func TestSweepHookSilence_NoEventEverSkipped(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, nil)
+		fake.windows = fakeWindowsForAccount("work")
+		// Intentionally do not seed h.lastSeenEventAt["work"].
+
+		h.SweepHookSilence(time.Now())
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 (no baseline for work)", got)
+		}
+	})
+}
+
+// TestSweepHookSilence_NilKittyClient verifies the no-op when no Kitty
+// client has been injected (test environments without Kitty). The sweep
+// short-circuits before any lock acquisition.
+func TestSweepHookSilence_NilKittyClient(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{})
+		h := NewHandler(guard, notifier)
+		h.SetHookSilenceThresholds(1*time.Hour, nil)
+		// Deliberately do NOT call SetKittyClient.
+
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = time.Now().Add(-2 * time.Hour)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(time.Now())
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 (nil kitty client)", got)
+		}
+	})
+}
+
+// TestSweepHookSilence_ListWindowsErrorTolerated verifies that a ListWindows
+// failure is logged at debug and swallowed; the sweep does not panic and
+// fires no notifications (it has no running-account set to compare against).
+func TestSweepHookSilence_ListWindowsErrorTolerated(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, nil)
+		fake.listErr = errors.New("kitten unavailable")
+
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = time.Now().Add(-2 * time.Hour)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(time.Now())
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 (list-windows error swallowed)", got)
+		}
+	})
+}
+
+// TestHookSilenceWindowID_StableAndNegative verifies the synthetic window-ID
+// scheme used for notifier dedup: same account → same ID across calls,
+// different accounts → different IDs, and every ID is negative so it cannot
+// collide with any real Kitty window ID (always positive).
+func TestHookSilenceWindowID_StableAndNegative(t *testing.T) {
+	a1 := hookSilenceWindowID("work")
+	a2 := hookSilenceWindowID("work")
+	b1 := hookSilenceWindowID("personal")
+	if a1 != a2 {
+		t.Errorf("hookSilenceWindowID(work) not stable: %d vs %d", a1, a2)
+	}
+	if a1 == b1 {
+		t.Errorf("hookSilenceWindowID(work) collided with personal: %d", a1)
+	}
+	if a1 >= 0 || b1 >= 0 {
+		t.Errorf("synthetic IDs should be negative; got work=%d personal=%d", a1, b1)
+	}
+	// Case-insensitive — the per-account threshold lookup lowercases too.
+	if hookSilenceWindowID("work") != hookSilenceWindowID("WORK") {
+		t.Errorf("hookSilenceWindowID should be case-insensitive")
+	}
 }

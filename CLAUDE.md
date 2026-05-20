@@ -140,6 +140,14 @@ claude_flags = []           # global flags applied to all sessions
 error = false
 permission = true
 stop = true
+stale_active = true         # per-state stale sweep one-shot notification
+hook_silence = true         # account-level "no hook event in N hours" notification
+
+[defaults.watchdog]          # per-state stale + account-level silence
+active = 600                 # seconds before a bolt-icon session is flagged stale
+subagent = 1800              # seconds before a robot-icon (subagent) is flagged
+compact = 180                # seconds before a compaction icon is flagged
+hook_silence = 14400         # seconds without any hook event for a profile
 
 [[accounts]]
 name = "work"
@@ -161,6 +169,8 @@ disabled_events = ["Stop"]  # suppress hook events for this account
 **Colors**: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan
 
 **Session `claude_flags`**: omit to inherit `defaults.claude_flags`; set to `[]` to run with no flags.
+
+**Deprecation**: `stale_active_threshold` is replaced by `[defaults.watchdog].active`. The legacy key still loads and is mirrored into `Watchdog.Active` when the new field is unset; both surface in `amx config show` via `Deprecations`.
 
 The config path defaults to `~/.config/cc-manager/config.toml` and can be overridden with `amx_CONFIG` environment variable.
 

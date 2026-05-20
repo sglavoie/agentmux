@@ -107,6 +107,12 @@ type Model struct {
 	lastActivity  map[int]time.Time
 	idleThreshold time.Duration
 
+	// watchdog snapshot: window_id → last sweep-eligible action plus the
+	// resolved threshold for that window. Populated alongside lastActivity
+	// from the same TypeStateQuery round-trip; nil when the daemon is
+	// unreachable. Drives the per-row age column in renderListAt.
+	watchdog map[int]daemon.WatchdogState
+
 	// recency-pulse bookkeeping. lastSeenStates is the snapshot of every
 	// session's state at the last user input in ModeList (or the first
 	// refresh after startup). recentTransitions records when a session's
@@ -265,6 +271,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			priorBase = m.filtered[m.cursor].Base
 		}
 		m.lastActivity = msg.activity
+		m.watchdog = msg.watchdog
 		m.sessions = msg.sessions
 		m.recordTransitions()
 		m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
@@ -1311,25 +1318,31 @@ func fetchCmd(client kitty.KittyClient, cfg *config.Config, sortMode string) tea
 		if len(ghosts) > 0 {
 			session.ReanchorAll(client, ghosts, cfg.Defaults)
 		}
+		activity, watchdog := fetchDaemonState()
 		return sessionsMsg{
 			sessions: session.SortRunning(sessions, sortMode),
-			activity: fetchActivity(),
+			activity: activity,
+			watchdog: watchdog,
 		}
 	}
 }
 
-// fetchActivity queries the daemon for last-activity timestamps. Returns nil
-// when the daemon is unreachable or the query fails — callers must tolerate.
-func fetchActivity() map[int]time.Time {
+// fetchDaemonState queries the daemon once for both last-activity timestamps
+// and the watchdog snapshot. Both maps are nil when the daemon is unreachable
+// or the query fails — callers must tolerate.
+func fetchDaemonState() (map[int]time.Time, map[int]daemon.WatchdogState) {
 	resp, err := daemon.NewClient().Send(daemon.Request{Type: daemon.TypeStateQuery})
-	if err != nil || resp.Activity == nil {
-		return nil
+	if err != nil {
+		return nil, nil
 	}
-	out := make(map[int]time.Time, len(resp.Activity))
-	for id, secs := range resp.Activity {
-		out[id] = time.Unix(secs, 0)
+	var activity map[int]time.Time
+	if resp.Activity != nil {
+		activity = make(map[int]time.Time, len(resp.Activity))
+		for id, secs := range resp.Activity {
+			activity[id] = time.Unix(secs, 0)
+		}
 	}
-	return out
+	return activity, resp.Watchdog
 }
 
 // clearStatusCmd wipes a session's tab-title icon (via Kitty) and asks the

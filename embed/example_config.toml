@@ -32,10 +32,30 @@ guard_duration = 1
 # Seconds of inactivity after which a session is considered idle.
 idle_threshold = 300
 
-# Seconds after which a session showing an active icon (bolt/subagent/compact)
-# but receiving no new events is flagged as stale. The daemon clears the icon
-# and (optionally) fires a one-shot notification.
-stale_active_threshold = 600
+# Watchdog: per-state thresholds (in seconds) after which a session showing
+# the corresponding active icon but receiving no new events is flagged as
+# stale. The daemon clears the icon and (optionally) fires a one-shot
+# notification. Each sub-field independently falls back to the value shown
+# when set to 0.
+#
+# Replaces the older `stale_active_threshold = N` key, which still loads but
+# mirrors into `watchdog.active` for backward compatibility.
+[defaults.watchdog]
+# Active sessions (PostToolUse-driven bolt icon). Bursty tool loops still
+# settle within ~10 minutes; raise this if a long-running tool legitimately
+# stays active longer.
+active = 600
+# Subagent sessions (SubagentStart-driven icon). Long agentic workflows can
+# legitimately span half an hour; the higher threshold avoids false stales.
+subagent = 1800
+# Compact passes (PreCompact-driven icon). Compaction should always finish
+# within a few minutes; a sub-3-minute threshold catches stuck compactions
+# quickly.
+compact = 180
+# Account-level hook-silence: how long an entire profile can produce zero
+# hook events before the watchdog reports the account is likely
+# misconfigured. Defaults to 4 hours (14400 seconds).
+hook_silence = 14400
 
 # Flags passed to every harness session, regardless of profile.
 # Use this only for harness-neutral flags (e.g. a wrapper script flag).
@@ -59,8 +79,14 @@ permission = true
 stop = true
 
 # Notify (one-shot) when a session is detected as stale-active and its icon is
-# auto-cleared. See defaults.stale_active_threshold for the trigger.
+# auto-cleared. See defaults.watchdog.active for the trigger.
 stale_active = true
+
+# Notify (one-shot) when a profile has produced zero hook events for the
+# duration set in defaults.watchdog.hook_silence — useful for catching a
+# misconfigured settings.json or a daemon-down window where every session
+# silently looks idle.
+hook_silence = true
 
 # Delay permission notifications by this many milliseconds. The window
 # coalesces rapid duplicate hooks; the notification is only cancelled when the
@@ -86,6 +112,10 @@ permission_debounce_ms = 500
 # Optional fields:
 #   args      Flags passed to every session launched under this profile.
 #             These override defaults.args; project args override these.
+#   watchdog  Per-profile override of defaults.watchdog. Any sub-field set
+#             to 0 (or omitted) falls back to the corresponding default.
+#             Example:
+#               watchdog = { active = 300, subagent = 2400 }
 
 # Example Claude profile:
 # [[profiles]]
@@ -147,8 +177,9 @@ permission_debounce_ms = 500
 # The following field names from earlier versions still load without error but
 # are deprecated. New configs should use the current names shown above.
 #
-#   accounts    → profiles
-#   sessions    → projects
-#   config_dir  → home_dir   (on profiles)
-#   account     → profile    (on projects)
-#   claude_flags → args
+#   accounts              → profiles
+#   sessions              → projects
+#   config_dir            → home_dir   (on profiles)
+#   account               → profile    (on projects)
+#   claude_flags          → args
+#   stale_active_threshold → [defaults.watchdog].active

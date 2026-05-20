@@ -140,6 +140,65 @@ func TestIPC_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestIPC_StateQueryWatchdogRoundtrip verifies that the Watchdog map encodes
+// cleanly across a real Unix-socket roundtrip and that the resolved
+// threshold survives JSON serialization.
+func TestIPC_StateQueryWatchdogRoundtrip(t *testing.T) {
+	// Use /tmp to avoid macOS sun_path 104-byte limit on long t.TempDir() paths.
+	dir, err := os.MkdirTemp("/tmp", "amx-ipc-wd-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "d.sock")
+
+	guard := NewStateGuard(time.Hour)
+	notifier := NewNotifier(&config.NotificationConfig{})
+	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	handler := NewHandler(guard, notifier)
+	handler.SetStaleThresholds(map[string]time.Duration{
+		"active":   10 * time.Minute,
+		"subagent": 30 * time.Minute,
+		"compact":  30 * time.Second,
+	}, nil)
+
+	server, err := NewServer(socketPath, handler)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = server.Serve(ctx) }()
+
+	c := NewClientWithSocket(socketPath)
+
+	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "personal"}); err != nil {
+		t.Fatalf("state_update: %v", err)
+	}
+
+	resp, err := c.Send(Request{Type: TypeStateQuery})
+	if err != nil {
+		t.Fatalf("state_query: %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("state_query response: %+v", resp)
+	}
+
+	entry, ok := resp.Watchdog[42]
+	if !ok {
+		t.Fatalf("Watchdog[42] missing after roundtrip; got %+v", resp.Watchdog)
+	}
+	if entry.LastAction != "active" {
+		t.Errorf("LastAction = %q; want active", entry.LastAction)
+	}
+	if entry.LastEventAt == 0 {
+		t.Errorf("LastEventAt = 0; want non-zero unix timestamp")
+	}
+	if entry.ThresholdSec != int((10 * time.Minute).Seconds()) {
+		t.Errorf("ThresholdSec = %d; want %d (global active)", entry.ThresholdSec, int((10*time.Minute).Seconds()))
+	}
+}
+
 func TestIPC_IdleShutdown(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "amx-idle2-*")
 	if err != nil {

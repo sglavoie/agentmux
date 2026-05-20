@@ -29,16 +29,33 @@ type Deprecation struct {
 
 // Defaults holds global default settings.
 type Defaults struct {
-	Sort               string             `toml:"sort"`
-	RefreshInterval    int                `toml:"refresh_interval"`
-	GuardDuration      int                `toml:"guard_duration"`
-	IdleThreshold      int                `toml:"idle_threshold"` // seconds before a session is considered idle; 0 → default (300)
-	StaleActiveThreshold int              `toml:"stale_active_threshold"` // seconds before an active session is flagged as stale; 0 → default (600)
-	Args               []string           `toml:"args"`         // preferred shared launch args
-	ClaudeFlags        []string           `toml:"claude_flags"` // legacy alias for args
-	ConfirmDestructive bool               `toml:"confirm_destructive"` // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
-	Notifications      NotificationConfig `toml:"notifications"`
-	Preview            PreviewConfig      `toml:"preview"`
+	Sort                 string             `toml:"sort"`
+	RefreshInterval      int                `toml:"refresh_interval"`
+	GuardDuration        int                `toml:"guard_duration"`
+	IdleThreshold        int                `toml:"idle_threshold"`         // seconds before a session is considered idle; 0 → default (300)
+	StaleActiveThreshold int                `toml:"stale_active_threshold"` // deprecated: use [defaults.watchdog].active; mirrored on load
+	Watchdog             WatchdogConfig     `toml:"watchdog"`               // per-state stale-detection thresholds (seconds)
+	Args                 []string           `toml:"args"`                   // preferred shared launch args
+	ClaudeFlags          []string           `toml:"claude_flags"`           // legacy alias for args
+	ConfirmDestructive   bool               `toml:"confirm_destructive"`    // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
+	Notifications        NotificationConfig `toml:"notifications"`
+	Preview              PreviewConfig      `toml:"preview"`
+}
+
+// WatchdogConfig holds per-state stale-detection thresholds, in seconds. A
+// zero value means "use the default" — applyDefaults populates each field
+// independently so users can override any subset. The legacy
+// `defaults.stale_active_threshold` mirrors into Active when [defaults.watchdog]
+// is absent.
+//
+// HookSilence is the per-account "no hook event at all" threshold consumed by
+// the hook-silence sweep added in session 5; values < HookSilence are still
+// accepted but cause noisy detection.
+type WatchdogConfig struct {
+	Active      int `toml:"active"`       // PostToolUse-driven active icon; 0 → default (600)
+	Subagent    int `toml:"subagent"`     // SubagentStart-driven active icon; 0 → default (1800)
+	Compact     int `toml:"compact"`      // PreCompact-driven active icon; 0 → default (180)
+	HookSilence int `toml:"hook_silence"` // account-level hook-silence threshold; 0 → default (14400)
 }
 
 // NotificationConfig controls which macOS notifications fire.
@@ -52,6 +69,7 @@ type NotificationConfig struct {
 	Stop                 bool  `toml:"stop"`
 	StopFailure          *bool `toml:"stop_failure"`
 	StaleActive          *bool `toml:"stale_active"` // notify on stale-active detection; nil → default true
+	HookSilence          *bool `toml:"hook_silence"` // notify on hook-silence detection; nil → default true
 	PermissionDebounceMs int   `toml:"permission_debounce_ms"`
 }
 
@@ -68,12 +86,13 @@ type PreviewConfig struct {
 // type name because much of the codebase still uses it while the user-facing
 // config is moving to `profiles`.
 type Account struct {
-	Name      string `toml:"name"`
-	Harness   string `toml:"harness"`
-	HomeDir   string `toml:"home_dir"`
-	ConfigDir string `toml:"config_dir"`
-	Color     string `toml:"color"`
-	Args      []string `toml:"args"`
+	Name      string         `toml:"name"`
+	Harness   string         `toml:"harness"`
+	HomeDir   string         `toml:"home_dir"`
+	ConfigDir string         `toml:"config_dir"`
+	Color     string         `toml:"color"`
+	Args      []string       `toml:"args"`
+	Watchdog  WatchdogConfig `toml:"watchdog"` // per-profile override; zero fields fall back to defaults at read time
 }
 
 // Session defines a configured project / launch template. Sessions remain as a

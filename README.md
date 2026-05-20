@@ -167,6 +167,63 @@ It listens on:
 ~/.local/share/agent-mux/daemon.sock
 ```
 
+## Watchdog
+
+The daemon includes a watchdog that turns three independent signals into a
+"can I trust my icons?" guarantee:
+
+1. **Per-state stale thresholds.** Each active-class icon (⚡ active, 🤖
+   subagent, 🌀 compact) has its own grace period. When a session displays
+   one of those icons but the daemon stops receiving fresh hook events for
+   longer than the threshold, the daemon clears the icon and (optionally)
+   fires a one-shot notification.
+2. **Glanceable age column in the dashboard.** The list shows how long ago
+   the most recent hook event was for each active-class row. As the age
+   approaches the configured threshold the cell shifts into a warning
+   style, so a stuck session is visible before it becomes stale.
+3. **Account-level hook silence.** A separate sweep watches whether each
+   profile is producing _any_ hook events at all. If an entire profile
+   goes silent for longer than the hook-silence threshold (default 4
+   hours), the watchdog fires a single notification — useful for catching
+   a misconfigured `settings.json` or a daemon-down window where every
+   session simply looks idle.
+
+Configure the four thresholds under `[defaults.watchdog]`:
+
+```toml
+[defaults.watchdog]
+active = 600           # bolt icon; bursty tool loops settle within ~10 min
+subagent = 1800        # robot icon; agentic workflows can legitimately last ~30 min
+compact = 180          # compaction icon; should always finish within minutes
+hook_silence = 14400   # account-level silence; default 4 hours
+```
+
+Each field independently falls back to the value above when set to `0`.
+The legacy `stale_active_threshold = N` key still loads and is mirrored
+into `[defaults.watchdog].active` for backward compatibility.
+
+Per-profile overrides live on the profile itself:
+
+```toml
+[[profiles]]
+name = "claude-work"
+harness = "claude"
+home_dir = "~/.config/claude-work"
+color = "blue"
+watchdog = { active = 300, subagent = 2400, hook_silence = 0 }
+```
+
+`hook_silence = 0` on a per-profile override disables the silence sweep
+for that profile only.
+
+The notifications themselves are gated by `[defaults.notifications]`:
+
+```toml
+[defaults.notifications]
+stale_active = true
+hook_silence = true
+```
+
 ## Tab icons
 
 The tab title is prefixed with an icon based on the latest hook event:

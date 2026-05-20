@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -31,7 +32,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	handler := NewHandler(guard, notifier)
 	kittyRunner := kitty.NewRealRunner()
 	handler.SetKittyClient(kitty.NewClient(kittyRunner))
-	handler.SetStaleThreshold(time.Duration(cfg.Defaults.StaleActiveThreshold) * time.Second)
+	global, perAccount := buildStaleThresholds(cfg)
+	handler.SetStaleThresholds(global, perAccount)
+	hsGlobal, hsPerAccount := buildHookSilenceThresholds(cfg)
+	handler.SetHookSilenceThresholds(hsGlobal, hsPerAccount)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -44,6 +48,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	sweepInterval := 30 * time.Second
 	sweepTicker := time.NewTicker(sweepInterval)
 	defer sweepTicker.Stop()
+
+	// Hook-silence ticker: account-level "no hook event in N hours" detector.
+	// Cadence is intentionally slower than the per-window sweep because hook
+	// silence is measured in hours, not seconds — a 5-min lag at the tail of a
+	// 4-hour threshold is acceptable.
+	hookSilenceInterval := 5 * time.Minute
+	hookSilenceTicker := time.NewTicker(hookSilenceInterval)
+	defer hookSilenceTicker.Stop()
 
 	// activityCh receives a signal on every handled request.
 	activityCh := make(chan struct{}, 1)
@@ -90,6 +102,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			// idleTimeout governs external request inactivity only.
 			handler.SweepStale(time.Now())
 
+		case <-hookSilenceTicker.C:
+			// Hook-silence sweep is also internal — same activityCh
+			// discipline as the per-window sweep.
+			handler.SweepHookSilence(time.Now())
+
 		case err := <-serveErr:
 			return err
 
@@ -105,4 +122,54 @@ func Ping() error {
 	c := NewClient()
 	_, err := c.Send(Request{Type: TypeStateQuery})
 	return err
+}
+
+// buildStaleThresholds projects cfg.Defaults.Watchdog and each per-profile
+// watchdog override into the (global, perAccount) maps consumed by
+// Handler.SetStaleThresholds. Per-profile entries are keyed by lowercased
+// profile name to match the case-insensitive lookup used in the rest of the
+// config package.
+func buildStaleThresholds(cfg *config.Config) (map[string]time.Duration, map[string]map[string]time.Duration) {
+	wd := cfg.Defaults.Watchdog
+	global := map[string]time.Duration{
+		"active":   time.Duration(wd.Active) * time.Second,
+		"subagent": time.Duration(wd.Subagent) * time.Second,
+		"compact":  time.Duration(wd.Compact) * time.Second,
+	}
+
+	perAccount := make(map[string]map[string]time.Duration)
+	for _, p := range cfg.Profiles {
+		pwd := p.Watchdog
+		if pwd.Active == 0 && pwd.Subagent == 0 && pwd.Compact == 0 {
+			continue
+		}
+		inner := make(map[string]time.Duration, 3)
+		if pwd.Active > 0 {
+			inner["active"] = time.Duration(pwd.Active) * time.Second
+		}
+		if pwd.Subagent > 0 {
+			inner["subagent"] = time.Duration(pwd.Subagent) * time.Second
+		}
+		if pwd.Compact > 0 {
+			inner["compact"] = time.Duration(pwd.Compact) * time.Second
+		}
+		perAccount[strings.ToLower(p.Name)] = inner
+	}
+	return global, perAccount
+}
+
+// buildHookSilenceThresholds projects cfg.Defaults.Watchdog.HookSilence and
+// each per-profile HookSilence override into the (global, perAccount) pair
+// consumed by Handler.SetHookSilenceThresholds. Per-profile keys are
+// lowercased to match the case-insensitive lookup used everywhere else in
+// the config package.
+func buildHookSilenceThresholds(cfg *config.Config) (time.Duration, map[string]time.Duration) {
+	global := time.Duration(cfg.Defaults.Watchdog.HookSilence) * time.Second
+	perAccount := make(map[string]time.Duration)
+	for _, p := range cfg.Profiles {
+		if p.Watchdog.HookSilence > 0 {
+			perAccount[strings.ToLower(p.Name)] = time.Duration(p.Watchdog.HookSilence) * time.Second
+		}
+	}
+	return global, perAccount
 }

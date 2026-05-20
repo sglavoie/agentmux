@@ -3,6 +3,7 @@ package tui
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -10,10 +11,12 @@ import (
 type tickMsg struct{}
 
 // sessionsMsg carries a fresh session list from Kitty plus the daemon's
-// per-window last-activity timestamps (nil if the daemon is unreachable).
+// per-window last-activity timestamps and watchdog snapshot (nil if the
+// daemon is unreachable).
 type sessionsMsg struct {
 	sessions []session.RunningSession
 	activity map[int]time.Time
+	watchdog map[int]daemon.WatchdogState
 }
 
 // errMsg carries an error from a Kitty query.

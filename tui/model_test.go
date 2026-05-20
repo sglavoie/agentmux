@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -809,7 +810,7 @@ func TestFormatRowIconFirst(t *testing.T) {
 		TabID: 1, Base: "W:api", Account: "work",
 		Directory: "/home/user/api", State: "bolt",
 	}
-	row := formatRow(s, acctColor, 120)
+	row := formatRow(s, acctColor, 120, "")
 	// The bolt icon (⚡) should appear before the badge [W].
 	boltIdx := strings.Index(row, "⚡")
 	badgeIdx := strings.Index(row, "[W]")
@@ -898,7 +899,7 @@ func TestFormatRowNoStateIcon(t *testing.T) {
 		TabID: 1, Base: "W:api", Account: "work",
 		Directory: "/home/user/api", State: "",
 	}
-	row := formatRow(s, acctColor, 120)
+	row := formatRow(s, acctColor, 120, "")
 	// No state icon, but row should start with 2-space placeholder then space then badge.
 	if !strings.HasPrefix(row, "   ") {
 		t.Errorf("expected row to start with placeholder spaces, got: %q", row)
@@ -1069,6 +1070,31 @@ func TestSessionsMsgStoresActivity(t *testing.T) {
 	}
 	if !m2.lastActivity[42].Equal(now) {
 		t.Errorf("expected activity[42]=%v, got %v", now, m2.lastActivity[42])
+	}
+}
+
+// TestSessionsMsgStoresWatchdog asserts that the watchdog snapshot rides on
+// sessionsMsg alongside the existing activity map and is stored on the model
+// for the next render pass to consume.
+func TestSessionsMsgStoresWatchdog(t *testing.T) {
+	m := testModel()
+	wd := map[int]daemon.WatchdogState{
+		7: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
+	}
+	updated, _ := m.Update(sessionsMsg{
+		sessions: makeSessions(),
+		watchdog: wd,
+	})
+	m2 := updated.(Model)
+	if m2.watchdog == nil {
+		t.Fatal("expected watchdog to be set after sessionsMsg")
+	}
+	got, ok := m2.watchdog[7]
+	if !ok {
+		t.Fatal("expected watchdog entry for window 7")
+	}
+	if got.LastAction != "active" || got.ThresholdSec != 600 {
+		t.Errorf("watchdog entry mismatch: %+v", got)
 	}
 }
 

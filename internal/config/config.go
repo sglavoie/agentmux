@@ -68,6 +68,17 @@ func collectDeprecations(cfg *Config) []Deprecation {
 			Location:    "[defaults]",
 		})
 	}
+	// Surface the legacy stale_active_threshold regardless of whether the
+	// user also wrote [defaults.watchdog]: when both are present the new
+	// block wins (per applyDefaults), and the user should still be told the
+	// legacy key has moved so they can drop it on their next edit.
+	if cfg.Defaults.StaleActiveThreshold > 0 {
+		deps = append(deps, Deprecation{
+			Key:         "defaults.stale_active_threshold",
+			Replacement: "defaults.watchdog.active",
+			Location:    "[defaults]",
+		})
+	}
 	// Per-project: scan both Projects and Sessions for legacy claude_flags
 	// and account keys. Only report when the canonical field is unset.
 	projectSeen := false
@@ -113,6 +124,25 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.StaleActiveThreshold == 0 {
 		cfg.Defaults.StaleActiveThreshold = 600
 	}
+	// Mirror legacy stale_active_threshold into Watchdog.Active when the new
+	// block omits the field. Done per-field so a user who writes
+	// `[defaults.watchdog]` for just `subagent` still inherits their legacy
+	// active value rather than getting silently reset to 600.
+	if cfg.Defaults.Watchdog.Active == 0 && cfg.Defaults.StaleActiveThreshold > 0 {
+		cfg.Defaults.Watchdog.Active = cfg.Defaults.StaleActiveThreshold
+	}
+	if cfg.Defaults.Watchdog.Active == 0 {
+		cfg.Defaults.Watchdog.Active = 600
+	}
+	if cfg.Defaults.Watchdog.Subagent == 0 {
+		cfg.Defaults.Watchdog.Subagent = 1800
+	}
+	if cfg.Defaults.Watchdog.Compact == 0 {
+		cfg.Defaults.Watchdog.Compact = 180
+	}
+	if cfg.Defaults.Watchdog.HookSilence == 0 {
+		cfg.Defaults.Watchdog.HookSilence = 14400
+	}
 	if cfg.Defaults.Preview.Direction == "" {
 		cfg.Defaults.Preview.Direction = "horizontal"
 	}
@@ -135,6 +165,10 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.Notifications.StaleActive == nil {
 		t := true
 		cfg.Defaults.Notifications.StaleActive = &t
+	}
+	if cfg.Defaults.Notifications.HookSilence == nil {
+		t := true
+		cfg.Defaults.Notifications.HookSilence = &t
 	}
 	if cfg.Defaults.Notifications.PermissionDebounceMs == 0 {
 		cfg.Defaults.Notifications.PermissionDebounceMs = 500

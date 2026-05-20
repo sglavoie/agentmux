@@ -10,6 +10,11 @@ import (
 
 // Validate performs cross-section validation on a loaded Config.
 // Returns a combined error if any rules are violated.
+//
+// Validate also appends advisory entries to cfg.Deprecations for watchdog
+// thresholds that are set to a sub-30s value: those are accepted (no error)
+// but very likely a misconfiguration, so the TUI banner surfaces them next
+// to the legacy-key deprecations.
 func Validate(cfg *Config) error {
 	var errs []string
 	normalizeAliases(cfg)
@@ -18,6 +23,8 @@ func Validate(cfg *Config) error {
 	errs = append(errs, validateAccounts(cfg.Profiles)...)
 	errs = append(errs, validateSessions(cfg.Projects, cfg.Profiles)...)
 	errs = append(errs, validateHookOverrides(cfg.Hooks, cfg.Profiles)...)
+
+	cfg.Deprecations = append(cfg.Deprecations, collectWatchdogWarnings(cfg)...)
 
 	if len(errs) > 0 {
 		return fmt.Errorf("%s", strings.Join(errs, "\n"))
@@ -44,6 +51,18 @@ func validateDefaults(d *Defaults) []string {
 	}
 	if d.StaleActiveThreshold < 0 {
 		errs = append(errs, "defaults.stale_active_threshold must be >= 0")
+	}
+	if d.Watchdog.Active < 0 {
+		errs = append(errs, "defaults.watchdog.active must be >= 0")
+	}
+	if d.Watchdog.Subagent < 0 {
+		errs = append(errs, "defaults.watchdog.subagent must be >= 0")
+	}
+	if d.Watchdog.Compact < 0 {
+		errs = append(errs, "defaults.watchdog.compact must be >= 0")
+	}
+	if d.Watchdog.HookSilence < 0 {
+		errs = append(errs, "defaults.watchdog.hook_silence must be >= 0")
 	}
 	if d.Preview.Direction != "" && !ValidPreviewDirection(d.Preview.Direction) {
 		errs = append(errs, fmt.Sprintf(
@@ -107,8 +126,49 @@ func validateAccounts(accounts []Account) []string {
 			}
 			seen[key] = true
 		}
+		if a.Watchdog.Active < 0 {
+			errs = append(errs, fmt.Sprintf("profile %q: watchdog.active must be >= 0", a.Name))
+		}
+		if a.Watchdog.Subagent < 0 {
+			errs = append(errs, fmt.Sprintf("profile %q: watchdog.subagent must be >= 0", a.Name))
+		}
+		if a.Watchdog.Compact < 0 {
+			errs = append(errs, fmt.Sprintf("profile %q: watchdog.compact must be >= 0", a.Name))
+		}
+		if a.Watchdog.HookSilence < 0 {
+			errs = append(errs, fmt.Sprintf("profile %q: watchdog.hook_silence must be >= 0", a.Name))
+		}
 	}
 	return errs
+}
+
+// collectWatchdogWarnings flags any watchdog threshold that is set to a
+// non-zero value below 30s. The daemon accepts the value (no error), but a
+// 5s active threshold will fire false stales constantly — so the user gets
+// a banner pointing them at the suspicious key without blocking the load.
+func collectWatchdogWarnings(cfg *Config) []Deprecation {
+	var ws []Deprecation
+	check := func(key, location string, value int) {
+		if value > 0 && value < 30 {
+			ws = append(ws, Deprecation{
+				Key:         key,
+				Replacement: "a value >= 30 seconds (or 0 to inherit the default)",
+				Location:    location,
+			})
+		}
+	}
+	check("defaults.watchdog.active", "[defaults.watchdog]", cfg.Defaults.Watchdog.Active)
+	check("defaults.watchdog.subagent", "[defaults.watchdog]", cfg.Defaults.Watchdog.Subagent)
+	check("defaults.watchdog.compact", "[defaults.watchdog]", cfg.Defaults.Watchdog.Compact)
+	check("defaults.watchdog.hook_silence", "[defaults.watchdog]", cfg.Defaults.Watchdog.HookSilence)
+	for _, p := range cfg.Profiles {
+		loc := fmt.Sprintf("[[profiles]] %s", p.Name)
+		check(fmt.Sprintf("profiles.%s.watchdog.active", p.Name), loc, p.Watchdog.Active)
+		check(fmt.Sprintf("profiles.%s.watchdog.subagent", p.Name), loc, p.Watchdog.Subagent)
+		check(fmt.Sprintf("profiles.%s.watchdog.compact", p.Name), loc, p.Watchdog.Compact)
+		check(fmt.Sprintf("profiles.%s.watchdog.hook_silence", p.Name), loc, p.Watchdog.HookSilence)
+	}
+	return ws
 }
 
 func validateSessions(sessions []Session, accounts []Account) []string {

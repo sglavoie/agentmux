@@ -36,10 +36,21 @@ type Response struct {
 	Allowed   bool   `json:"allowed,omitempty"`    // whether guard permitted the transition
 	IconState string `json:"icon_state,omitempty"` // icon name to show ("bolt","stop","key","error","")
 	// Fields populated for TypeStateQuery:
-	Activity map[int]int64 `json:"activity,omitempty"` // window_id → unix seconds of last activity
+	Activity map[int]int64         `json:"activity,omitempty"` // window_id → unix seconds of last activity
+	Watchdog map[int]WatchdogState `json:"watchdog,omitempty"` // window_id → watchdog state for age-aware TUI rendering
 	// Fields populated for TypeHealth:
 	PID           int   `json:"pid,omitempty"`
 	UptimeSeconds int64 `json:"uptime_seconds,omitempty"`
+}
+
+// WatchdogState describes a single window's last-known active-class action
+// and the resolved sweep threshold the daemon would apply to it. The TUI
+// uses these to render an age column with a warning style as the window
+// approaches its threshold.
+type WatchdogState struct {
+	LastAction   string `json:"last_action"`             // "active", "subagent", or "compact"
+	LastEventAt  int64  `json:"last_event_at"`           // unix seconds of last activity for this window
+	ThresholdSec int    `json:"threshold_sec,omitempty"` // resolved sweep threshold in seconds (0 if no threshold configured)
 }
 
 // actionPriority maps each action name to its guard priority.
