@@ -160,6 +160,11 @@ func TestLooksLikeClaudePipe(t *testing.T) {
 		// Flag must follow the command in the same cmdline.
 		{"-p claude", false},        // -p before claude
 		{"some-tool -p claude", false},
+		// POSIX `--` terminator stops the option scan so positional `-p` after
+		// `--` is not treated as a pipe-mode flag.
+		{"claude -- -p", false},
+		{"claude -- --print", false},
+		{"copilot -- -p prompt", false},
 	}
 	for _, tc := range cases {
 		got := looksLikeClaudePipe(tc.cmd)

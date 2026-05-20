@@ -449,3 +449,36 @@ func TestServer_ServeDoesNotLeakWatchdogOnCloseWithoutCancel(t *testing.T) {
 	}
 	t.Fatalf("goroutine count grew without bound: baseline=%d after %d iterations=%d", baseline, iterations, final)
 }
+
+// TestNewServer_SocketIsOwnerOnly pins the Unix socket file mode to 0600 so
+// that other local users cannot connect to the daemon and inject state
+// updates for arbitrary Kitty windows. net.Listen("unix") applies the
+// process umask, which typically yields a world-accessible 0755 socket; the
+// daemon must override that explicitly.
+func TestNewServer_SocketIsOwnerOnly(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-srvperm-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "d.sock")
+
+	guard := NewStateGuard(time.Hour)
+	notifier := NewNotifier(&config.NotificationConfig{})
+	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	handler := NewHandler(guard, notifier)
+
+	server, err := NewServer(socketPath, handler)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	t.Cleanup(server.Close)
+
+	info, err := os.Stat(socketPath)
+	if err != nil {
+		t.Fatalf("stat socket: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("socket perm = %o, want 0600", perm)
+	}
+}

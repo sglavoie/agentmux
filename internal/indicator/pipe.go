@@ -64,13 +64,18 @@ func looksLikePipeMode(cmdline string) bool {
 	// Require an argv field whose basename is exactly "claude" or "copilot"
 	// (so claude-lint and /opt/claude-tools/foo do NOT match) and a pipe flag
 	// in the fields *after* it (so an unrelated -p earlier in the cmdline
-	// doesn't trigger).
+	// doesn't trigger). Scanning stops at the POSIX `--` option terminator so
+	// `claude -- -p` (where `-p` is a positional argument) does not falsely
+	// trigger pipe mode.
 	for i, field := range fields {
 		flags, ok := pipeFlagsByCommand[filepath.Base(field)]
 		if !ok {
 			continue
 		}
 		for _, after := range fields[i+1:] {
+			if after == "--" {
+				break
+			}
 			if flags[after] {
 				return true
 			}

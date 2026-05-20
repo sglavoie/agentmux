@@ -68,6 +68,15 @@ func NewServer(socketPath string, handler *Handler) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	// net.Listen applies umask to the socket file (typically yielding 0755),
+	// which lets any local user connect and inject state updates for arbitrary
+	// Kitty windows. Restrict to owner-only so only the daemon's user can talk
+	// to it.
+	if err := os.Chmod(socketPath, 0o600); err != nil {
+		_ = ln.Close()
+		_ = os.Remove(socketPath)
+		return nil, err
+	}
 	return &Server{handler: handler, ln: ln}, nil
 }
 
