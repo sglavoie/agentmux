@@ -241,6 +241,25 @@ func TestValidate_DuplicateProfileNameCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestValidate_ProjectProfileReferenceCaseInsensitive pins the contract that
+// project.profile references resolve case-insensitively: runtime findAccount
+// uses strings.EqualFold, so a project listing profile = "Work" against a
+// configured profile name "work" works at launch time and validation must not
+// reject it as unknown.
+func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Directory: "/tmp/a", Profile: "Work"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("unexpected error for case-insensitive profile reference: %v", err)
+	}
+}
+
 func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.

@@ -1098,6 +1098,22 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 		}
 	})
 
+	t.Run("agentStop with stop_failure surfaces mid-subagent", func(t *testing.T) {
+		// Mirrors the SubagentStop failure-surfacing rule: when Copilot's
+		// agentStop carries a real failure (stopReason yielding action
+		// stop_failure), the error icon must surface even while subagents are
+		// still running. Without the carve-out, the gate would suppress the
+		// crash and the user would never see it.
+		h := newTestHandler()
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop_failure", Event: "agentStop"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "error" {
+			t.Fatalf("agentStop with stop_failure mid-subagent: want icon_state=error allowed=true, got %+v", resp)
+		}
+	})
+
 	t.Run("agentStop after subagent drains is allowed", func(t *testing.T) {
 		h := newTestHandler()
 

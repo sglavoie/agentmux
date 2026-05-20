@@ -208,7 +208,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// early from MaybeNotify before reaching cancelPendingLocked, and the
 	// auto-approved-permission cancel path requires prevGuard == "active", not
 	// "subagent". So we drop any pending permission entry outright.
-	if req.Event == "agentStop" || req.Event == "permissionRequest" {
+	// stop_failure carries a real Copilot crash and must surface even mid-subagent,
+	// mirroring the SubagentStop failure-surfacing rule above. Only the benign
+	// per-turn agentStop (action stop) and speculative permissionRequest are
+	// suppressed by this gate.
+	if (req.Event == "agentStop" && req.Action != "stop_failure") || req.Event == "permissionRequest" {
 		h.stateMu.Lock()
 		running := h.subagentCount[req.WindowID] > 0
 		count := h.subagentCount[req.WindowID]

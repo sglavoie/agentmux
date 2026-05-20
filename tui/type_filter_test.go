@@ -420,3 +420,61 @@ func TestCompletionPopupClearedOnEscClear(t *testing.T) {
 	}
 }
 
+// TestDigitsAppendToTypeBufferOnceActive verifies that once the user has
+// started typing into the type-to-filter buffer, the digit keys 1..9 stop
+// behaving as chip-removal shortcuts and instead append to the buffer.
+// Otherwise titles containing digits (e.g. "v2", "py3") could not be
+// matched mid-typing — the keystroke would silently no-op when no chip
+// occupies that slot, or worse, delete a chip the user did not intend
+// to remove.
+func TestDigitsAppendToTypeBufferOnceActive(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "z") // start buffer with an unbound printable
+	if m.typeBuffer != "z" {
+		t.Fatalf("setup: expected typeBuffer=z, got %q", m.typeBuffer)
+	}
+	m = pressKey(m, "2") // digit should divert into the buffer
+	if m.typeBuffer != "z2" {
+		t.Errorf("expected typeBuffer=z2 after digit divert, got %q", m.typeBuffer)
+	}
+	if m.mode != ModeList {
+		t.Errorf("expected to stay in ModeList, got %d", m.mode)
+	}
+}
+
+// TestDigitsRemoveChipsWhenBufferEmpty pins down the dual role of the digit
+// keys: when the buffer is empty they still remove the Nth chip from the
+// active filter, so the documented shortcut keeps working.
+func TestDigitsRemoveChipsWhenBufferEmpty(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	// Install a two-component filter by going through ModeSearch so the
+	// activeFilter exposes two removable chips.
+	m = pressKey(m, "/")
+	for _, ch := range "@work" {
+		m = pressKey(m, string(ch))
+	}
+	// Insert an account completion if a popup is open.
+	if m.completion.Visible {
+		m = pressKey(m, "enter")
+	}
+	// Add a substring chip too.
+	for _, ch := range "api" {
+		m = pressKey(m, string(ch))
+	}
+	m = pressKey(m, "enter") // commit, back to ModeList
+	if m.mode != ModeList {
+		t.Fatalf("setup: expected ModeList after enter, got %d", m.mode)
+	}
+	before := len(m.activeFilter.Components())
+	if before < 1 {
+		t.Fatalf("setup: expected at least one chip, got %d", before)
+	}
+	if m.typeBuffer != "" {
+		t.Fatalf("setup: expected empty typeBuffer, got %q", m.typeBuffer)
+	}
+	m = pressKey(m, "1") // remove first chip
+	if got := len(m.activeFilter.Components()); got != before-1 {
+		t.Errorf("expected chip count to drop from %d to %d, got %d", before, before-1, got)
+	}
+}
+

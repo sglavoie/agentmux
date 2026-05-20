@@ -110,9 +110,12 @@ func validateAccounts(accounts []Account) []string {
 
 func validateSessions(sessions []Session, accounts []Account) []string {
 	var errs []string
+	// Key by lowercased profile name: runtime findAccount uses
+	// strings.EqualFold, so validation must accept the same set of references
+	// or it will reject configs that work fine at launch.
 	accountNames := map[string]bool{}
 	for _, a := range accounts {
-		accountNames[a.Name] = true
+		accountNames[strings.ToLower(a.Name)] = true
 	}
 	// Track (profile, title) pairs to surface duplicates: launch dedup keys on
 	// SessionKey(account, title), so two projects sharing both fields would
@@ -128,7 +131,7 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 		}
 		if s.Profile == "" {
 			errs = append(errs, fmt.Sprintf("project %q: profile is required", s.Title))
-		} else if !accountNames[s.Profile] {
+		} else if !accountNames[strings.ToLower(s.Profile)] {
 			errs = append(errs, fmt.Sprintf(
 				"project %q references unknown profile %q\n  → check config.toml for valid profile names",
 				s.Title, s.Profile,

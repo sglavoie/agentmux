@@ -453,6 +453,18 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case key1, key2, key3, key4, key5, key6, key7, key8, key9:
+		// Digits are chip-removal shortcuts only when no type-to-filter
+		// buffer is open. Once the user is actively typing a filter,
+		// the digit appends to the buffer so titles like "v2" / "h2"
+		// remain matchable mid-typing.
+		if bufferActive {
+			if t := msg.Key().Text; t != "" {
+				m.typeBuffer += t
+				m.applyTypeBuffer()
+				m.recomputeCompletionFor(m.typeBuffer)
+			}
+			return m, nil
+		}
 		idx := int(key[0] - '1')
 		if idx < len(m.activeFilter.Components()) {
 			m.applyFilterChange(m.activeFilter.RemoveComponent(idx))

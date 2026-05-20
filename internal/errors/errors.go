@@ -33,8 +33,9 @@ type KittyError struct {
 
 func (e *KittyError) Error() string {
 	cmd := strings.Join(e.Command, " ")
-	if e.Output != "" {
-		return fmt.Sprintf("kitty command failed: %s\n  output: %s", cmd, strings.TrimSpace(e.Output))
+	trimmed := strings.TrimSpace(e.Output)
+	if trimmed != "" {
+		return fmt.Sprintf("kitty command failed: %s\n  output: %s", cmd, trimmed)
 	}
 	if e.Err != nil {
 		return fmt.Sprintf("kitty command failed: %s\n  error: %s", cmd, e.Err)

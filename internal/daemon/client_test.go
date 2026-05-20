@@ -10,6 +10,26 @@ import (
 	"time"
 )
 
+// TestSocketPath_FallsBackWhenHomeMissing pins that SocketPath returns an
+// absolute path even when the user's home directory cannot be resolved (e.g.
+// HOME is unset). The previous implementation discarded the error and
+// produced a relative path that net.Listen would resolve against the current
+// working directory — silently creating the socket in unpredictable
+// locations and breaking client/daemon agreement on the address.
+func TestSocketPath_FallsBackWhenHomeMissing(t *testing.T) {
+	// Force os.UserHomeDir to fail by clearing the relevant env vars.
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "") // Windows; harmless on darwin/linux
+
+	got := SocketPath()
+	if !filepath.IsAbs(got) {
+		t.Fatalf("SocketPath() returned a relative path with HOME unset: %q", got)
+	}
+	if !strings.HasSuffix(got, "daemon.sock") {
+		t.Fatalf("SocketPath() = %q; expected suffix daemon.sock", got)
+	}
+}
+
 // TestClient_SendHonorsDeadline asserts that Send returns within sendDeadline
 // when a server accepts the connection but never replies. Without an explicit
 // SetDeadline on the conn, a wedged daemon would hang the hook script

@@ -12,9 +12,16 @@ import (
 	"time"
 )
 
-// SocketPath returns the Unix socket path for the daemon.
+// SocketPath returns the Unix socket path for the daemon. If the user's home
+// directory cannot be determined (e.g. empty HOME), fall back to a path under
+// os.TempDir() rather than returning a relative path that would silently
+// create the socket in the current working directory — producing a
+// client/daemon mismatch when their cwds differ.
 func SocketPath() string {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return filepath.Join(os.TempDir(), "agent-mux", "daemon.sock")
+	}
 	return filepath.Join(home, ".local", "share", "agent-mux", "daemon.sock")
 }
 
