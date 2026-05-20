@@ -41,17 +41,38 @@ var configEditCmd = &cobra.Command{
 	Use:   "edit",
 	Short: "Open config.toml in $EDITOR",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		editor := os.Getenv("EDITOR")
-		if editor == "" {
-			editor = "vi"
-		}
 		path := config.DefaultConfigPath()
-		c := exec.Command(editor, path)
+		name, editorArgs, err := resolveEditorCommand(os.Getenv("EDITOR"), path)
+		if err != nil {
+			return err
+		}
+		c := exec.Command(name, editorArgs...)
 		c.Stdin = os.Stdin
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
 		return c.Run()
 	},
+}
+
+// resolveEditorCommand turns the user's $EDITOR value into a program name and
+// argument list suitable for exec.Command, with the target file path appended.
+//
+// $EDITOR commonly includes flags (e.g. "code --wait", "emacs -nw"). The
+// previous implementation passed the whole string as the program name to
+// exec.Command, which caused exec to look up a binary literally named
+// "code --wait" and fail. Splitting on whitespace is the same behavior most
+// shells and other CLI tools apply for $EDITOR.
+func resolveEditorCommand(editor, path string) (string, []string, error) {
+	if strings.TrimSpace(editor) == "" {
+		editor = "vi"
+	}
+	parts := strings.Fields(editor)
+	if len(parts) == 0 {
+		return "", nil, fmt.Errorf("invalid EDITOR value: %q", editor)
+	}
+	editorArgs := append([]string{}, parts[1:]...)
+	editorArgs = append(editorArgs, path)
+	return parts[0], editorArgs, nil
 }
 
 var configShowCmd = &cobra.Command{

@@ -7,7 +7,12 @@ func MatchTabByID(id int) string {
 	return fmt.Sprintf("id:%d", id)
 }
 
-// MatchTabByTitle returns a match expression that selects a tab by exact title.
+// MatchTabByTitle returns a match expression that selects tabs by title.
+//
+// Per Kitty's match syntax, text fields like `title` interpret the query as a
+// regular expression, so callers must escape regex metacharacters themselves
+// if they need an exact-match lookup. The expression is intentionally not
+// anchored so partial matches work for callers that want substring semantics.
 func MatchTabByTitle(title string) string {
 	return fmt.Sprintf("title:%s", title)
 }

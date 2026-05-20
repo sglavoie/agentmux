@@ -5,9 +5,82 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+// TestResolveEditorCommand_SplitsEditorArguments locks in the fix for the
+// `amx config edit` bug where exec.Command treats the entire $EDITOR string as
+// a single program name. Real-world EDITOR values like "code --wait" or
+// "emacs -nw" must be split so the flags are passed as arguments, not as part
+// of the binary name.
+func TestResolveEditorCommand_SplitsEditorArguments(t *testing.T) {
+	cases := []struct {
+		name       string
+		editor     string
+		path       string
+		wantName   string
+		wantArgs   []string
+		wantErr    bool
+	}{
+		{
+			name:     "single binary uses it directly",
+			editor:   "vim",
+			path:     "/tmp/config.toml",
+			wantName: "vim",
+			wantArgs: []string{"/tmp/config.toml"},
+		},
+		{
+			name:     "editor with flags is split",
+			editor:   "code --wait",
+			path:     "/tmp/config.toml",
+			wantName: "code",
+			wantArgs: []string{"--wait", "/tmp/config.toml"},
+		},
+		{
+			name:     "editor with multiple flags is split",
+			editor:   "emacs -nw --no-splash",
+			path:     "/tmp/config.toml",
+			wantName: "emacs",
+			wantArgs: []string{"-nw", "--no-splash", "/tmp/config.toml"},
+		},
+		{
+			name:     "empty EDITOR falls back to vi",
+			editor:   "",
+			path:     "/tmp/config.toml",
+			wantName: "vi",
+			wantArgs: []string{"/tmp/config.toml"},
+		},
+		{
+			name:     "whitespace-only EDITOR falls back to vi",
+			editor:   "   ",
+			path:     "/tmp/config.toml",
+			wantName: "vi",
+			wantArgs: []string{"/tmp/config.toml"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			name, args, err := resolveEditorCommand(tc.editor, tc.path)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if name != tc.wantName {
+				t.Errorf("name: got %q, want %q", name, tc.wantName)
+			}
+			if !reflect.DeepEqual(args, tc.wantArgs) {
+				t.Errorf("args: got %#v, want %#v", args, tc.wantArgs)
+			}
+		})
+	}
+}
 
 // TestConfigHooksSync_ReturnsErrorOnPartialFailure pins the contract that the
 // hooks-sync command exits non-zero when any per-profile merge fails. Earlier

@@ -330,6 +330,54 @@ claude_flags = ["--project-legacy"]
 	}
 }
 
+// TestLoad_ReportsLegacyEvenWhenCanonicalAlsoSet pins that a config mixing
+// [[profiles]] and [[accounts]] (or [[projects]] and [[sessions]]) surfaces the
+// legacy keys as deprecations. normalizeAliases silently drops the deprecated
+// entries when the canonical form is also populated, so a silent report would
+// mean the user's [[accounts]] section is effectively a no-op without any
+// signal. Reporting both lets the TUI banner surface the lost data.
+func TestLoad_ReportsLegacyEvenWhenCanonicalAlsoSet(t *testing.T) {
+	content := `
+[[profiles]]
+name = "primary"
+home_dir = "~/.config/claude-primary"
+color = "blue"
+
+[[accounts]]
+name = "legacy"
+config_dir = "~/.config/claude-legacy"
+color = "green"
+
+[[projects]]
+title = "api"
+directory = "~/projects/api"
+profile = "primary"
+
+[[sessions]]
+title = "old"
+directory = "~/projects/old"
+account = "legacy"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	keys := make(map[string]bool, len(cfg.Deprecations))
+	for _, d := range cfg.Deprecations {
+		keys[d.Key] = true
+	}
+	for _, want := range []string{"accounts", "sessions"} {
+		if !keys[want] {
+			t.Errorf("Deprecations missing key %q (got %+v)", want, cfg.Deprecations)
+		}
+	}
+}
+
 func TestLoad_CanonicalKeysHaveNoDeprecations(t *testing.T) {
 	content := `
 [defaults]

@@ -184,6 +184,90 @@ func containsArg(args []string, want string) bool {
 	return false
 }
 
+// TestLaunchTab_SeparatesCmdlineWithDashDash guards the contract that the
+// Cmdline tokens are passed after a `--` end-of-options marker. Without the
+// marker, a Cmdline whose first token begins with a dash (or contains a
+// kitten-recognised flag) would be silently consumed by `kitten @ launch`'s
+// argument parser instead of being passed to the launched program.
+func TestLaunchTab_SeparatesCmdlineWithDashDash(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	err := client.LaunchTab(kitty.LaunchOpts{
+		Title:   "W:api",
+		Cmdline: []string{"--weird-shell", "-lic", "exec claude"},
+	})
+	if err != nil {
+		t.Fatalf("LaunchTab: %v", err)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+
+	args := runner.Calls[0].Args
+	sepIdx := -1
+	for i, a := range args {
+		if a == "--" {
+			sepIdx = i
+			break
+		}
+	}
+	if sepIdx == -1 {
+		t.Fatalf("expected `--` separator in argv, got %v", args)
+	}
+	rest := args[sepIdx+1:]
+	want := []string{"--weird-shell", "-lic", "exec claude"}
+	if len(rest) != len(want) {
+		t.Fatalf("argv after --: got %v, want %v", rest, want)
+	}
+	for i := range want {
+		if rest[i] != want[i] {
+			t.Errorf("argv[after --][%d]: got %q, want %q", i, rest[i], want[i])
+		}
+	}
+}
+
+// TestLaunchTab_NoCmdlineSkipsSeparator confirms we do not emit a trailing
+// `--` when there is nothing positional to pass; doing so would be harmless
+// to kitten but would clutter the argv used by command-key based mock lookups
+// and make debug logs noisier than necessary.
+func TestLaunchTab_NoCmdlineSkipsSeparator(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.LaunchTab(kitty.LaunchOpts{Title: "W:api"}); err != nil {
+		t.Fatalf("LaunchTab: %v", err)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+	for _, a := range runner.Calls[0].Args {
+		if a == "--" {
+			t.Errorf("did not expect a trailing `--` when Cmdline is empty, args=%v", runner.Calls[0].Args)
+		}
+	}
+}
+
+// TestSetTabTitle_UsesDashDashSeparator verifies that the title is passed
+// after `--` so that a leading-dash title is not parsed by kitten as a flag.
+func TestSetTabTitle_UsesDashDashSeparator(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.SetTabTitle("id:7", "--definitely-a-title"); err != nil {
+		t.Fatalf("SetTabTitle: %v", err)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+
+	args := runner.Calls[0].Args
+	// The argv must be: @ set-tab-title --match=id:7 -- --definitely-a-title
+	if len(args) < 2 || args[len(args)-2] != "--" || args[len(args)-1] != "--definitely-a-title" {
+		t.Fatalf("expected trailing `-- --definitely-a-title`, got %v", args)
+	}
+}
+
 func TestLaunchOverlayPager_Args(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")

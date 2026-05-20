@@ -115,7 +115,13 @@ func (c *SubprocessClient) LaunchTab(opts LaunchOpts) error {
 	for k, v := range opts.UserVars {
 		args = append(args, "--var="+k+"="+v)
 	}
-	args = append(args, opts.Cmdline...)
+	// Use a `--` separator so that a Cmdline whose first token begins with a
+	// dash (e.g. an opaque shell wrapper passed in by callers) cannot be
+	// misinterpreted by kitten as a flag belonging to `kitten @ launch`.
+	if len(opts.Cmdline) > 0 {
+		args = append(args, "--")
+		args = append(args, opts.Cmdline...)
+	}
 	_, err := c.kitten(args...)
 	return err
 }
@@ -164,7 +170,10 @@ func (c *SubprocessClient) SetTabColor(matchExpr, activeBg, inactiveBg, activeFg
 }
 
 func (c *SubprocessClient) SetTabTitle(matchExpr, title string) error {
-	_, err := c.kitten("set-tab-title", "--match="+matchExpr, title)
+	// `--` ensures a title that happens to start with a dash (e.g. user typed
+	// "-- scratch" or "-foo") is treated as the positional title argument
+	// rather than being parsed as a kitten flag.
+	_, err := c.kitten("set-tab-title", "--match="+matchExpr, "--", title)
 	return err
 }
 

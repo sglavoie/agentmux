@@ -42,14 +42,19 @@ func parseConfig(data []byte) (*Config, error) {
 // mirrors deprecated/canonical fields and erases the distinction.
 func collectDeprecations(cfg *Config) []Deprecation {
 	var deps []Deprecation
-	if len(cfg.Accounts) > 0 && len(cfg.Profiles) == 0 {
+	// Report the deprecated key whenever it is populated. When the canonical
+	// form is *also* populated, normalizeAliases silently discards the
+	// deprecated entries (canonical wins), so users need to know their
+	// [[accounts]] / [[sessions]] data is being ignored — not only when they
+	// use the legacy form exclusively.
+	if len(cfg.Accounts) > 0 {
 		deps = append(deps, Deprecation{
 			Key:         "accounts",
 			Replacement: "profiles",
 			Location:    "[[accounts]]",
 		})
 	}
-	if len(cfg.Sessions) > 0 && len(cfg.Projects) == 0 {
+	if len(cfg.Sessions) > 0 {
 		deps = append(deps, Deprecation{
 			Key:         "sessions",
 			Replacement: "projects",

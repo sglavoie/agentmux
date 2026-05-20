@@ -439,6 +439,16 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case keySpace:
+		// Space is a row-action shortcut (focus tab) only while the
+		// type-to-filter buffer is empty. Once the user is typing a filter,
+		// pressing space must advance to the next DSL token — otherwise
+		// multi-word filters like "foo bar" silently lose the separator.
+		if bufferActive {
+			m.typeBuffer += " "
+			m.applyTypeBuffer()
+			m.recomputeCompletionFor(m.typeBuffer)
+			return m, nil
+		}
 		if len(m.filtered) > 0 {
 			return m, focusCmd(m.client, m.filtered[m.cursor].TabID)
 		}
@@ -707,6 +717,12 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch key {
+	case keyCtrlC:
+		// ctrl+c must quit from every mode. ModeSearch's default branch
+		// would otherwise swallow it (msg.Text is empty for ctrl combos)
+		// so the user gets no exit affordance from inside the input.
+		return m, tea.Quit
+
 	case keyEsc:
 		// Cancel: restore the snapshot taken on entry and recompute.
 		m.activeFilter = m.savedFilter
@@ -755,7 +771,7 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.configPickerCursor < len(m.configPickerAccounts) {
 			acc := m.configPickerAccounts[m.configPickerCursor]
 			m.mode = m.configPickerReturnMode
-			if m.configPickerReturnMode == ModePicker && m.configPickerProjectIdx >= 0 {
+			if m.configPickerReturnMode == ModePicker && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
 				defaultProfile := m.pickerSessions[m.configPickerProjectIdx].EffectiveProfile()
 				if acc.Name == defaultProfile {
 					delete(m.pickerProfileOverride, m.configPickerProjectIdx)
@@ -845,6 +861,10 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // is appended to the filter buffer so the user can type freely.
 func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case keyCtrlC:
+		// ctrl+c quits from every mode. The default branch below would
+		// otherwise swallow it (msg.Text is empty for ctrl combos).
+		return m, tea.Quit
 	case keyEsc, keyEnter:
 		m.pickerSearchMode = false
 		return m, nil
@@ -1403,23 +1423,28 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 	m.launchBatchDone = 0
 	m.launchBatchErrors = 0
 
-	cmds := make([]tea.Cmd, 0, total+1)
+	// The toast-tick cmd (returned by replaceToastByID when the toast strip
+	// was empty) is a tea.Tick that blocks for toastTickInterval before it
+	// emits. Keeping it OUTSIDE tea.Sequence below is critical: inside the
+	// sequence it would gate the first launch on the tick's 250ms timer.
+	var toastCmd tea.Cmd
 	startText := fmt.Sprintf("Launching %d session(s)…", total)
 	if c := m.replaceToastByID(batchID, Toast{
 		Severity: toastInfo,
 		Text:     startText,
 		Expires:  time.Now().Add(progressToastTTL),
 	}); c != nil {
-		cmds = append(cmds, c)
+		toastCmd = c
 	}
 
+	launchCmds := make([]tea.Cmd, 0, total)
 	accounts := m.cfg.Accounts
 	client := m.client
 	cfg := m.cfg
 	for _, q := range todo {
 		sess := q.sess
 		title := q.title
-		cmds = append(cmds, func() tea.Msg {
+		launchCmds = append(launchCmds, func() tea.Msg {
 			acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
 			if !ok {
 				return launchProgressMsg{batchID: batchID, total: total, title: title, err: nil}
@@ -1428,7 +1453,11 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 		})
 	}
-	return tea.Sequence(cmds...)
+	seq := tea.Sequence(launchCmds...)
+	if toastCmd != nil {
+		return tea.Batch(toastCmd, seq)
+	}
+	return seq
 }
 
 // handleLaunchProgress updates the progress toast for a finished

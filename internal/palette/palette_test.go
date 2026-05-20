@@ -65,3 +65,23 @@ func TestNamesCount(t *testing.T) {
 		t.Errorf("Names() returned %d colors, want 10", got)
 	}
 }
+
+// TestLookupEmptyStringErrors guards against silently returning a zero-value
+// Color for an empty config value: callers that ignore the error would then
+// apply a black-on-black tab color, which is impossible to read.
+func TestLookupEmptyStringErrors(t *testing.T) {
+	c, err := Lookup("")
+	if err == nil {
+		t.Fatalf("Lookup(\"\") should error, got %+v", c)
+	}
+}
+
+// TestLookupCaseSensitive locks in the current (case-sensitive) contract so a
+// regression toward case-insensitive lookups cannot land silently — there are
+// downstream config validators (internal/config) that enforce the lowercase
+// names and would need to be updated in lockstep.
+func TestLookupCaseSensitive(t *testing.T) {
+	if _, err := Lookup("Blue"); err == nil {
+		t.Error("Lookup(\"Blue\") expected error (lookup is case-sensitive), got nil")
+	}
+}

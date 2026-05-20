@@ -174,6 +174,24 @@ func validateHookOverrides(hooks HooksConfig, accounts []Account) []string {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	// Detect case-only duplicate override keys. accountOverride at merge time
+	// returns whichever case-folded entry the Go map iterator visits first,
+	// which is non-deterministic — so two overrides like [hooks.overrides.work]
+	// and [hooks.overrides.Work] silently apply one or the other on a per-run
+	// basis. Surface this as a config error rather than wait for the user to
+	// notice that disabled_events appears to come and go between syncs.
+	seenLower := make(map[string]string, len(names))
+	for _, name := range names {
+		key := strings.ToLower(name)
+		if prior, ok := seenLower[key]; ok {
+			errs = append(errs, fmt.Sprintf(
+				"duplicate hooks.overrides key %q and %q\n  → keys differ only in case; merge-time lookup is case-insensitive, so pick one",
+				prior, name,
+			))
+			continue
+		}
+		seenLower[key] = name
+	}
 	for _, name := range names {
 		override := hooks.Overrides[name]
 		harnessName, ok := profileHarness[strings.ToLower(name)]

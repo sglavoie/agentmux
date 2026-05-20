@@ -281,6 +281,33 @@ func TestValidate_HookOverrideKeyCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestValidate_DuplicateHookOverrideKeyCaseInsensitive pins the contract that
+// two [hooks.overrides.NAME] entries differing only in case are reported as a
+// config error. At merge time, hooks.accountOverride iterates the map and
+// returns whichever case-folded entry the Go map iterator visits first — a
+// random choice — so the user would silently get one set of disabled events or
+// the other on a per-run basis. Surface it instead.
+func TestValidate_DuplicateHookOverrideKeyCaseInsensitive(t *testing.T) {
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+		Hooks: config.HooksConfig{
+			Overrides: map[string]config.AccountHookOverride{
+				"work": {DisabledEvents: []string{"Stop"}},
+				"Work": {DisabledEvents: []string{"PreToolUse"}},
+			},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for case-only duplicate override key, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate hooks.overrides key") {
+		t.Errorf("expected 'duplicate hooks.overrides key' in error, got %q", err.Error())
+	}
+}
+
 func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.
