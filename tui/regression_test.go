@@ -381,11 +381,7 @@ func TestHandleKeyDispatchByMode(t *testing.T) {
 			// ctrl+c must always quit, regardless of mode. Use as a
 			// uniform dispatch probe — if the handler is wrong, ctrl+c
 			// won't produce tea.Quit.
-			updated, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}))
-			if updated.(Model).mode != mode {
-				// ctrl+c is allowed to mutate (the program ends), but
-				// the synchronous response keeps mode where it was.
-			}
+			_, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}))
 			if cmd == nil {
 				t.Fatalf("ctrl+c in mode %d returned nil cmd; expected tea.Quit", mode)
 			}
