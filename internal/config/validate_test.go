@@ -260,6 +260,27 @@ func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestValidate_HookOverrideKeyCaseInsensitive pins the contract that
+// [hooks.overrides.NAME] keys resolve to profiles case-insensitively, matching
+// hooks.accountOverride at merge time. Before the fix, validation rejected a
+// [hooks.overrides.Work] entry against profile "work" as "unknown profile",
+// even though the override would be applied correctly at merge time.
+func TestValidate_HookOverrideKeyCaseInsensitive(t *testing.T) {
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+		Hooks: config.HooksConfig{
+			Overrides: map[string]config.AccountHookOverride{
+				"Work": {DisabledEvents: []string{"Stop"}},
+			},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("unexpected error for case-insensitive override key: %v", err)
+	}
+}
+
 func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.

@@ -298,6 +298,37 @@ func TestMergeDisabledEvents(t *testing.T) {
 	}
 }
 
+// TestMergeOverrideKeyCaseInsensitive pins that a [hooks.overrides.NAME] entry
+// is matched to its profile case-insensitively, mirroring session.findAccount
+// and the hooks-sync filter. Before the fix, accountOverride did an exact-case
+// map lookup, so [hooks.overrides.Work] against profile "work" silently
+// produced no override and the disabled events were still installed.
+func TestMergeOverrideKeyCaseInsensitive(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+
+	cfg := makeConfig(
+		[]config.Account{{Name: "work", ConfigDir: accountDir, Color: "blue"}},
+		map[string]config.AccountHookOverride{
+			"Work": {DisabledEvents: []string{"Stop"}},
+		},
+	)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll error: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(accountDir, "settings.json"))
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	hooks := s["hooks"].(map[string]any)
+	if _, ok := hooks["Stop"]; ok {
+		t.Error("Stop should be absent — override is case-insensitive")
+	}
+}
+
 func TestMergeSkippedWhenUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "claude")

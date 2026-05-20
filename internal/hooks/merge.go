@@ -58,9 +58,13 @@ func MergeAll(cfg *config.Config, filter, amxBin string) ([]MergeResult, error) 
 }
 
 func accountOverride(cfg *config.Config, name string) config.AccountHookOverride {
-	if cfg.Hooks.Overrides != nil {
-		if o, ok := cfg.Hooks.Overrides[name]; ok {
-			return o
+	// Match the case-insensitive contract used everywhere else (session.findAccount,
+	// the hooks-sync filter above, project profile references). A user writing
+	// [hooks.overrides.Work] against profile "work" should get the override applied,
+	// not silently dropped.
+	for key, override := range cfg.Hooks.Overrides {
+		if strings.EqualFold(key, name) {
+			return override
 		}
 	}
 	return config.AccountHookOverride{}

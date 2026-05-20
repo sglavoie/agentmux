@@ -161,9 +161,11 @@ func validateHookOverrides(hooks HooksConfig, accounts []Account) []string {
 	}
 	// Build name → harness lookup so each override can be validated against
 	// the events its specific harness installs.
+	// Key by lowercased profile name to match the case-insensitive lookup
+	// performed by hooks.accountOverride at merge time.
 	profileHarness := make(map[string]string, len(accounts))
 	for _, a := range accounts {
-		profileHarness[a.Name] = a.EffectiveHarness()
+		profileHarness[strings.ToLower(a.Name)] = a.EffectiveHarness()
 	}
 	var errs []string
 	// Sort keys so the error order is deterministic for tests and users.
@@ -174,7 +176,7 @@ func validateHookOverrides(hooks HooksConfig, accounts []Account) []string {
 	sort.Strings(names)
 	for _, name := range names {
 		override := hooks.Overrides[name]
-		harnessName, ok := profileHarness[name]
+		harnessName, ok := profileHarness[strings.ToLower(name)]
 		if !ok {
 			errs = append(errs, fmt.Sprintf(
 				"hooks.overrides references unknown profile %q\n  → no profile by that name is defined; rename or remove the override",
