@@ -33,6 +33,7 @@ type Defaults struct {
 	RefreshInterval    int                `toml:"refresh_interval"`
 	GuardDuration      int                `toml:"guard_duration"`
 	IdleThreshold      int                `toml:"idle_threshold"` // seconds before a session is considered idle; 0 → default (300)
+	StaleActiveThreshold int              `toml:"stale_active_threshold"` // seconds before an active session is flagged as stale; 0 → default (600)
 	Args               []string           `toml:"args"`         // preferred shared launch args
 	ClaudeFlags        []string           `toml:"claude_flags"` // legacy alias for args
 	ConfirmDestructive bool               `toml:"confirm_destructive"` // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
@@ -50,6 +51,7 @@ type NotificationConfig struct {
 	Permission           bool  `toml:"permission"`
 	Stop                 bool  `toml:"stop"`
 	StopFailure          *bool `toml:"stop_failure"`
+	StaleActive          *bool `toml:"stale_active"` // notify on stale-active detection; nil → default true
 	PermissionDebounceMs int   `toml:"permission_debounce_ms"`
 }
 

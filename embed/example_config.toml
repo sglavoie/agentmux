@@ -32,6 +32,11 @@ guard_duration = 1
 # Seconds of inactivity after which a session is considered idle.
 idle_threshold = 300
 
+# Seconds after which a session showing an active icon (bolt/subagent/compact)
+# but receiving no new events is flagged as stale. The daemon clears the icon
+# and (optionally) fires a one-shot notification.
+stale_active_threshold = 600
+
 # Flags passed to every harness session, regardless of profile.
 # Use this only for harness-neutral flags (e.g. a wrapper script flag).
 # Put harness-specific flags (e.g. --dangerously-skip-permissions) on the
@@ -52,6 +57,10 @@ permission = true
 
 # Notify when a session stops or exits.
 stop = true
+
+# Notify (one-shot) when a session is detected as stale-active and its icon is
+# auto-cleared. See defaults.stale_active_threshold for the trigger.
+stale_active = true
 
 # Delay permission notifications by this many milliseconds. The window
 # coalesces rapid duplicate hooks; the notification is only cancelled when the

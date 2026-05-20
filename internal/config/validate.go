@@ -42,6 +42,9 @@ func validateDefaults(d *Defaults) []string {
 	if d.IdleThreshold < 0 {
 		errs = append(errs, "defaults.idle_threshold must be >= 0")
 	}
+	if d.StaleActiveThreshold < 0 {
+		errs = append(errs, "defaults.stale_active_threshold must be >= 0")
+	}
 	if d.Preview.Direction != "" && !ValidPreviewDirection(d.Preview.Direction) {
 		errs = append(errs, fmt.Sprintf(
 			"invalid defaults.preview.direction %q: must be one of horizontal, vertical",

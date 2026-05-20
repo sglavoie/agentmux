@@ -110,6 +110,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.IdleThreshold == 0 {
 		cfg.Defaults.IdleThreshold = 300
 	}
+	if cfg.Defaults.StaleActiveThreshold == 0 {
+		cfg.Defaults.StaleActiveThreshold = 600
+	}
 	if cfg.Defaults.Preview.Direction == "" {
 		cfg.Defaults.Preview.Direction = "horizontal"
 	}
@@ -128,6 +131,10 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.Notifications.StopFailure == nil {
 		t := true
 		cfg.Defaults.Notifications.StopFailure = &t
+	}
+	if cfg.Defaults.Notifications.StaleActive == nil {
+		t := true
+		cfg.Defaults.Notifications.StaleActive = &t
 	}
 	if cfg.Defaults.Notifications.PermissionDebounceMs == 0 {
 		cfg.Defaults.Notifications.PermissionDebounceMs = 500

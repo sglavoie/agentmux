@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 const idleTimeout = 30 * time.Minute
@@ -28,6 +29,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	guard := NewStateGuard(guardDur)
 	notifier := NewNotifier(&cfg.Defaults.Notifications)
 	handler := NewHandler(guard, notifier)
+	kittyRunner := kitty.NewRealRunner()
+	handler.SetKittyClient(kitty.NewClient(kittyRunner))
+	handler.SetStaleThreshold(time.Duration(cfg.Defaults.StaleActiveThreshold) * time.Second)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -35,6 +39,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	// Idle timer: shut down after 30 minutes of no requests.
 	idleTimer := time.NewTimer(idleTimeout)
 	defer idleTimer.Stop()
+
+	// Sweep ticker: periodically clear stranded active-class icons.
+	sweepInterval := 30 * time.Second
+	sweepTicker := time.NewTicker(sweepInterval)
+	defer sweepTicker.Stop()
 
 	// activityCh receives a signal on every handled request.
 	activityCh := make(chan struct{}, 1)
@@ -75,6 +84,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			slog.Info("daemon: idle timeout, shutting down")
 			cancel()
 			return nil
+
+		case <-sweepTicker.C:
+			// Sweep is internal — it must not signal activityCh, since
+			// idleTimeout governs external request inactivity only.
+			handler.SweepStale(time.Now())
 
 		case err := <-serveErr:
 			return err

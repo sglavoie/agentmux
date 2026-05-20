@@ -51,6 +51,15 @@ func TestLoad_AppliesDefaults(t *testing.T) {
 	if cfg.Defaults.IdleThreshold != 300 {
 		t.Errorf("default idle_threshold: got %d, want 300", cfg.Defaults.IdleThreshold)
 	}
+	if cfg.Defaults.StaleActiveThreshold != 600 {
+		t.Errorf("default stale_active_threshold: got %d, want 600", cfg.Defaults.StaleActiveThreshold)
+	}
+	if cfg.Defaults.Notifications.StaleActive == nil {
+		t.Fatal("default Notifications.StaleActive: got nil, want non-nil pointer to true")
+	}
+	if !*cfg.Defaults.Notifications.StaleActive {
+		t.Errorf("default Notifications.StaleActive: got false, want true")
+	}
 	if cfg.Defaults.Notifications.PermissionDebounceMs != 500 {
 		t.Errorf("default permission_debounce_ms: got %d, want 500", cfg.Defaults.Notifications.PermissionDebounceMs)
 	}
@@ -180,6 +189,69 @@ func TestValidate_NegativeIdleThreshold(t *testing.T) {
 	err := config.Validate(cfg)
 	if err == nil {
 		t.Fatal("expected validation error for negative idle_threshold, got nil")
+	}
+}
+
+func TestValidate_NegativeStaleActiveThreshold(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{StaleActiveThreshold: -1},
+		Accounts: []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"}},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for negative stale_active_threshold, got nil")
+	}
+}
+
+func TestLoad_StaleActiveThresholdUserValuePreserved(t *testing.T) {
+	content := `
+[defaults]
+stale_active_threshold = 5
+
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Defaults.StaleActiveThreshold; got != 5 {
+		t.Errorf("StaleActiveThreshold: got %d, want 5", got)
+	}
+}
+
+func TestLoad_UserCanDisableStaleActiveNotification(t *testing.T) {
+	content := `
+[defaults.notifications]
+stale_active = false
+
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got := cfg.Defaults.Notifications.StaleActive
+	if got == nil {
+		t.Fatal("StaleActive: got nil, want non-nil pointer to false")
+	}
+	if *got {
+		t.Fatalf("StaleActive user-disabled: got true, want false (stale_active = false in config should be respected)")
 	}
 }
 

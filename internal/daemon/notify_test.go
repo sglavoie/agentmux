@@ -155,6 +155,65 @@ func TestNotifier_StopFailureCooldown(t *testing.T) {
 	})
 }
 
+func TestMaybeNotify_StaleFiresWhenEnabled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{}
+		n, calls := newTestNotifier(cfg)
+		n.MaybeNotify(1, "W:api", "stale", false)
+		synctest.Wait()
+		if calls.len() < 1 {
+			t.Fatal("expected notification for stale")
+		}
+		if calls.snapshot()[0].subtitle != "Session idle" {
+			t.Errorf("subtitle = %q, want %q", calls.snapshot()[0].subtitle, "Session idle")
+		}
+	})
+}
+
+func TestMaybeNotify_StaleSuppressedWhenDisabled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		disabled := false
+		cfg := &config.NotificationConfig{StaleActive: &disabled}
+		n, calls := newTestNotifier(cfg)
+		n.MaybeNotify(1, "W:api", "stale", false)
+		synctest.Wait()
+		if calls.len() > 0 {
+			t.Fatal("stale should be suppressed when StaleActive=&false")
+		}
+	})
+}
+
+func TestMaybeNotify_StaleSuppressedInPipeMode(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{}
+		n, calls := newTestNotifier(cfg)
+		n.MaybeNotify(1, "W:api", "stale", true)
+		synctest.Wait()
+		if calls.len() > 0 {
+			t.Fatal("stale should be suppressed in pipe mode")
+		}
+	})
+}
+
+func TestMaybeNotify_StaleCooldownPerWindow(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{}
+		n, calls := newTestNotifier(cfg)
+
+		n.MaybeNotify(1, "W:api", "stale", false)
+		synctest.Wait()
+		if calls.len() < 1 {
+			t.Fatal("first stale notification should fire")
+		}
+
+		n.MaybeNotify(1, "W:api", "stale", false)
+		synctest.Wait()
+		if calls.len() != 1 {
+			t.Fatalf("second stale within cooldown should be suppressed, got %d calls", calls.len())
+		}
+	})
+}
+
 func TestNotifier_SuppressedByPipeMode(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true, Permission: true, Error: true}

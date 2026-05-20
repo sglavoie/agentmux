@@ -5,7 +5,19 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
+
+// kittyTitleClient is the narrow subset of kitty.KittyClient that the stale
+// sweep needs. Declaring it locally lets tests provide a fake with just two
+// methods instead of all ten on kitty.KittyClient. kitty.SubprocessClient
+// satisfies this interface implicitly.
+type kittyTitleClient interface {
+	ListWindows() ([]kitty.OSWindow, error)
+	SetTabTitle(matchExpr, title string) error
+}
 
 // Handler processes daemon requests.
 type Handler struct {
@@ -15,6 +27,15 @@ type Handler struct {
 	// startedAt records the daemon start time so health queries can report
 	// uptime. Zero value means uptime should be reported as 0.
 	startedAt time.Time
+
+	// kittyClient is used by the stale sweep to clear stranded tab-title icons.
+	// Injected by daemon.Run; nil in unit tests that don't exercise the
+	// title-clear path.
+	kittyClient kittyTitleClient
+
+	// staleThreshold is the duration after which an "active"-class session
+	// with no incoming events is treated as stalled. Zero disables the sweep.
+	staleThreshold time.Duration
 
 	// stateMu protects activity and lastAction.
 	stateMu  sync.Mutex
@@ -36,6 +57,19 @@ type Handler struct {
 	// robot icon persists until all concurrent agents finish.
 	subagentCount map[int]int
 
+	// notifiedStale tracks windows for which a stale-active notification has
+	// already fired in the current stall. Cleared on the next real state update
+	// for that window so a future stall produces a fresh notification.
+	notifiedStale map[int]bool
+
+	// lastSessionTitle records the session title from the most recent state
+	// update. Used by the sweep as a fallback if the live kitten lookup fails.
+	lastSessionTitle map[int]string
+
+	// lastPipeMode tracks whether the latest event for a window was pipe-mode
+	// so stale notifications honor the same silence rule.
+	lastPipeMode map[int]bool
+
 	// onActivity is called on every successfully handled request.
 	// The daemon uses this to reset the idle timer.
 	onActivity func()
@@ -52,14 +86,31 @@ type Handler struct {
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 	return &Handler{
-		guard:           guard,
-		notifier:        notifier,
-		startedAt:       time.Now(),
-		activity:        make(map[int]time.Time),
-		lastAction:      make(map[int]string),
-		lastActiveEvent: make(map[int]string),
-		subagentCount:   make(map[int]int),
+		guard:            guard,
+		notifier:         notifier,
+		startedAt:        time.Now(),
+		activity:         make(map[int]time.Time),
+		lastAction:       make(map[int]string),
+		lastActiveEvent:  make(map[int]string),
+		subagentCount:    make(map[int]int),
+		notifiedStale:    make(map[int]bool),
+		lastSessionTitle: make(map[int]string),
+		lastPipeMode:     make(map[int]bool),
 	}
+}
+
+// SetKittyClient injects the Kitty client used by the stale sweep to clear
+// stranded tab-title icons. Passing nil disables the title-clear step
+// (notifications still fire). Safe to call once before the sweep runs.
+func (h *Handler) SetKittyClient(client kittyTitleClient) {
+	h.kittyClient = client
+}
+
+// SetStaleThreshold configures the duration after which an "active"-class
+// session with no incoming events is treated as stalled. A value of zero
+// disables the sweep entirely.
+func (h *Handler) SetStaleThreshold(d time.Duration) {
+	h.staleThreshold = d
 }
 
 // Handle processes a Request and returns a Response.
@@ -243,6 +294,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		req.Action == "idle" || req.Action == "clear" || req.Action == "user_clear" {
 		h.stateMu.Lock()
 		delete(h.subagentCount, req.WindowID)
+		delete(h.notifiedStale, req.WindowID)
+		delete(h.lastSessionTitle, req.WindowID)
+		delete(h.lastPipeMode, req.WindowID)
 		h.stateMu.Unlock()
 	}
 
@@ -302,6 +356,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 
 	h.stateMu.Lock()
 	h.activity[req.WindowID] = time.Now()
+	h.lastSessionTitle[req.WindowID] = req.SessionTitle
+	h.lastPipeMode[req.WindowID] = req.PipeMode
 	if effective == "active" {
 		h.lastActiveEvent[req.WindowID] = req.Event
 	}
@@ -309,6 +365,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// even after the state guard has expired.
 	if effective != "idle" && effective != "clear" && effective != "user_clear" && !isAutoApprovedPerm {
 		h.lastAction[req.WindowID] = effective
+		delete(h.notifiedStale, req.WindowID)
 	}
 	h.stateMu.Unlock()
 
@@ -373,4 +430,88 @@ func (h *Handler) handleShutdown() Response {
 		h.shutdownOnce.Do(func() { go h.onShutdown() })
 	}
 	return Response{OK: true}
+}
+
+// SweepStale detects "active"-class sessions whose last incoming event predates
+// staleThreshold and resolves them: it fires a single-shot "Session idle"
+// notification, clears the in-memory state so future events restart cleanly,
+// and clears the stale icon in the tab title.
+//
+// Behavior is gated on h.staleThreshold > 0. The "stale" action is
+// daemon-internal: it never crosses the IPC wire and is not present in
+// actionPriority or actionIconState. The notifier is the only subsystem that
+// recognizes it as an action name.
+func (h *Handler) SweepStale(now time.Time) {
+	if h.staleThreshold <= 0 {
+		return
+	}
+	type staleEntry struct {
+		windowID int
+		title    string
+		pipeMode bool
+		notify   bool
+	}
+	var stale []staleEntry
+
+	h.stateMu.Lock()
+	for windowID, last := range h.activity {
+		if now.Sub(last) < h.staleThreshold {
+			continue
+		}
+		action := h.lastAction[windowID]
+		if action != "active" && action != "subagent" && action != "compact" {
+			continue
+		}
+		title := h.lastSessionTitle[windowID]
+		pipe := h.lastPipeMode[windowID]
+		notify := !h.notifiedStale[windowID]
+		if notify {
+			h.notifiedStale[windowID] = true
+		}
+		// Reset so the next idle/clear/active does not try to re-clear an icon
+		// we just cleared, and so the lastKnownAction fallback returns "".
+		delete(h.lastAction, windowID)
+		delete(h.lastActiveEvent, windowID)
+		delete(h.subagentCount, windowID)
+		stale = append(stale, staleEntry{windowID, title, pipe, notify})
+	}
+	h.stateMu.Unlock()
+
+	for _, s := range stale {
+		h.guard.Clear(s.windowID)
+		if s.notify {
+			h.notifier.MaybeNotify(s.windowID, s.title, "stale", s.pipeMode)
+		}
+		if h.kittyClient != nil {
+			h.clearStaleTitle(s.windowID, s.title)
+		}
+	}
+}
+
+// clearStaleTitle removes any state icon from the tab containing windowID
+// while preserving the star glyph and base title. Best-effort: errors from
+// the Kitty client are logged at debug and swallowed so the sweep continues
+// to handle other windows.
+func (h *Handler) clearStaleTitle(windowID int, fallbackTitle string) {
+	windows, err := h.kittyClient.ListWindows()
+	if err != nil {
+		slog.Debug("sweep: list windows failed", "window_id", windowID, "err", err)
+		return
+	}
+	tab, _, ok := kitty.FindTabByWindowID(windows, windowID)
+	if !ok {
+		return
+	}
+	base, _, starred := palette.ParseTitle(tab.Title)
+	newTitle := palette.BuildTitle(base, "", starred)
+	if newTitle == tab.Title {
+		return
+	}
+	if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
+		slog.Debug("sweep: set tab title failed",
+			"window_id", windowID,
+			"fallback_title", fallbackTitle,
+			"err", err,
+		)
+	}
 }

@@ -28,6 +28,7 @@ var notifyableActions = map[string]bool{
 	"failure":      true,
 	"stop_failure": true,
 	"elicitation":  true,
+	"stale":        true,
 }
 
 // notificationLabels maps action names to human-readable notification titles.
@@ -37,6 +38,7 @@ var notificationLabels = map[string]string{
 	"failure":      "Tool failure",
 	"stop_failure": "Session stopped (failure)",
 	"elicitation":  "Claude is asking",
+	"stale":        "Session idle",
 }
 
 type pendingNotification struct {
@@ -207,6 +209,8 @@ func (n *Notifier) actionEnabled(action string) bool {
 		return n.cfg.Error
 	case "stop_failure":
 		return n.cfg.StopFailure == nil || *n.cfg.StopFailure
+	case "stale":
+		return n.cfg.StaleActive == nil || *n.cfg.StaleActive
 	}
 	return false
 }
