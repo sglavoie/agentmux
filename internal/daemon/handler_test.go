@@ -2773,10 +2773,11 @@ func TestHandler_EventLog_TrimsAtMax(t *testing.T) {
 	}
 }
 
-// TestHandler_EventLog_CleanupOnStop pushes two non-terminal events and then a
-// terminal "stop"; the buffer must be empty afterwards because terminal events
-// trigger the cleanup block and do not re-seed the ring.
-func TestHandler_EventLog_CleanupOnStop(t *testing.T) {
+// TestHandler_EventLog_PreservedAcrossTerminalActions pushes two non-terminal
+// events and then a terminal "stop"; the buffer must retain all three
+// (including the terminal hook) so the detail pane can show the session's
+// history after it ends.
+func TestHandler_EventLog_PreservedAcrossTerminalActions(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
@@ -2787,17 +2788,29 @@ func TestHandler_EventLog_CleanupOnStop(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("session detail: want OK=true, got %+v", resp)
 	}
-	if len(resp.Events) != 0 {
-		t.Fatalf("events after stop = %d; want 0 (%+v)", len(resp.Events), resp.Events)
+	if len(resp.Events) != 3 {
+		t.Fatalf("events after stop = %d; want 3 (%+v)", len(resp.Events), resp.Events)
+	}
+	if resp.Events[0].Event != "PreToolUse" || resp.Events[1].Event != "PostToolUse" || resp.Events[2].Event != "Stop" {
+		t.Errorf("events out of order: %+v", resp.Events)
+	}
+	if resp.Events[2].Action != "stop" {
+		t.Errorf("terminal event action = %q; want %q", resp.Events[2].Action, "stop")
 	}
 }
 
-// TestHandler_EventLog_CleanupOnSweepStale verifies that SweepStale clears the
-// per-window ring alongside the other per-window maps. Without this, a swept
-// window's history would persist in memory indefinitely.
-func TestHandler_EventLog_CleanupOnSweepStale(t *testing.T) {
+// TestHandler_EventLog_PreservedAcrossStaleSweep verifies that SweepStale leaves
+// the per-window ring untouched while the underlying Kitty window is still
+// live: the detail pane must continue serving history after the bolt icon has
+// been swept.
+func TestHandler_EventLog_PreservedAcrossStaleSweep(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		h, _, _ := newSweepTestHandler(10 * time.Minute)
+		h, fake, _ := newSweepTestHandler(10 * time.Minute)
+		// Tell the fake Kitty client that window 1 is still alive so the new
+		// window-existence GC at the top of SweepStale does not drop the buffer.
+		fake.mu.Lock()
+		fake.windows = fakeOSWindowsWithTab(1, "W:api")
+		fake.mu.Unlock()
 
 		h.Handle(Request{
 			Type:         TypeStateUpdate,
@@ -2820,10 +2833,77 @@ func TestHandler_EventLog_CleanupOnSweepStale(t *testing.T) {
 		if !resp.OK {
 			t.Fatalf("session detail: want OK=true, got %+v", resp)
 		}
-		if len(resp.Events) != 0 {
-			t.Fatalf("events after SweepStale = %d; want 0 (%+v)", len(resp.Events), resp.Events)
+		if len(resp.Events) != 1 {
+			t.Fatalf("events after SweepStale = %d; want 1 (%+v)", len(resp.Events), resp.Events)
+		}
+		if resp.Events[0].Event != "PreToolUse" {
+			t.Errorf("event = %+v; want PreToolUse", resp.Events[0])
 		}
 	})
+}
+
+// TestHandler_EventLog_GCDropsClosedWindows seeds event-log entries for two
+// windows, configures the fake Kitty client to report only one of them as
+// live, runs SweepStale, and asserts that the closed window's entry is
+// pruned while the live window's entry survives.
+func TestHandler_EventLog_GCDropsClosedWindows(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, _ := newSweepTestHandler(10 * time.Minute)
+		fake.mu.Lock()
+		fake.windows = fakeOSWindowsWithTab(1, "W:api")
+		fake.mu.Unlock()
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.eventLog[1] = []SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
+		h.eventLog[2] = []SessionEvent{{At: now.Unix(), Event: "PreToolUse", Action: "active"}}
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		resp1 := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+		if !resp1.OK {
+			t.Fatalf("session detail w1: want OK=true, got %+v", resp1)
+		}
+		if len(resp1.Events) != 1 {
+			t.Fatalf("window 1 events = %d; want 1 (%+v)", len(resp1.Events), resp1.Events)
+		}
+
+		resp2 := h.Handle(Request{Type: TypeSessionDetail, WindowID: 2})
+		if !resp2.OK {
+			t.Fatalf("session detail w2: want OK=true, got %+v", resp2)
+		}
+		if len(resp2.Events) != 0 {
+			t.Fatalf("window 2 events = %d; want 0 — closed-window GC should drop it (%+v)", len(resp2.Events), resp2.Events)
+		}
+	})
+}
+
+// TestHandler_EventLog_CapAt5000 hard-codes the 5000-event cap so a future
+// change to maxEventsPerWindow trips this assertion and forces an explicit
+// decision about whether the contract still holds.
+func TestHandler_EventLog_CapAt5000(t *testing.T) {
+	h := newTestHandler()
+
+	const cap5k = 5000
+	for i := 0; i < cap5k+1; i++ {
+		h.Handle(Request{
+			Type:     TypeStateUpdate,
+			WindowID: 1,
+			Action:   "active",
+			Event:    "PreToolUse",
+			ToolName: "tool",
+		})
+	}
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	if !resp.OK {
+		t.Fatalf("session detail: want OK=true, got %+v", resp)
+	}
+	if len(resp.Events) != cap5k {
+		t.Fatalf("events = %d; want %d (drop-oldest cap)", len(resp.Events), cap5k)
+	}
 }
 
 // TestHandler_SessionDetail_UnknownWindow asserts that querying detail for a

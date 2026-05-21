@@ -129,8 +129,8 @@ type Handler struct {
 }
 
 // maxEventsPerWindow caps the per-window ring buffer used by handleSessionDetail.
-// At ~50 windows × ~200 B/event, the upper bound stays well under 1 MB.
-const maxEventsPerWindow = 50
+// At ~50 windows × ~200 B/event, the upper bound stays around ~5 MB worst case.
+const maxEventsPerWindow = 5000
 
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
@@ -332,6 +332,19 @@ func actionFromIconState(iconState string) string {
 	}
 }
 
+// pruneClosedWindows drops eventLog entries for windows that Kitty no longer
+// reports as live. Called from SweepStale once the live set has been
+// materialised from kitty.ListWindows().
+func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
+	h.stateMu.Lock()
+	for windowID := range h.eventLog {
+		if !liveIDs[windowID] {
+			delete(h.eventLog, windowID)
+		}
+	}
+	h.stateMu.Unlock()
+}
+
 // appendEventLocked records an event into the per-window ring buffer. The
 // caller must hold stateMu. Older entries are dropped from the front once the
 // slice would exceed maxEventsPerWindow.
@@ -469,6 +482,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// user may never see the prompt). A tool failure is a strong signal that any
 	// in-flight subagent bookkeeping is stale, hence reset; but it doesn't make
 	// a pending permission stale, hence no cancel.
+	//
+	// eventLog is intentionally preserved across terminal actions so the detail
+	// pane can still surface the session's history after the session ends.
+	// Window-existence GC in SweepStale drops the entry once Kitty closes the
+	// window.
 	if req.Action == "stop" || req.Action == "stop_failure" || req.Action == "failure" ||
 		req.Action == "idle" || req.Action == "clear" || req.Action == "user_clear" {
 		h.stateMu.Lock()
@@ -477,7 +495,6 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		delete(h.lastSessionTitle, req.WindowID)
 		delete(h.lastPipeMode, req.WindowID)
 		delete(h.lastAccount, req.WindowID)
-		delete(h.eventLog, req.WindowID)
 		h.stateMu.Unlock()
 	}
 
@@ -560,15 +577,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		delete(h.notifiedStale, req.WindowID)
 	}
 	// Append this transition into the per-window ring buffer. Terminal actions
-	// skip the append: the cleanup block above just wiped the buffer for them,
-	// so re-adding the terminal event itself would leave a one-element residue
-	// that contradicts the "session ended → history reset" contract.
-	switch req.Action {
-	case "stop", "stop_failure", "failure", "idle", "clear", "user_clear":
-		// Buffer was wiped in the terminal cleanup block above; do not re-seed.
-	default:
-		h.appendEventLocked(req, effective, false)
-	}
+	// are recorded normally so the terminal hook itself is the last visible row
+	// in the detail pane.
+	h.appendEventLocked(req, effective, false)
 	h.stateMu.Unlock()
 
 	iconState := IconState(effective)
@@ -671,6 +682,25 @@ func (h *Handler) handleShutdown() Response {
 // actionIconState. The notifier is the only subsystem that recognizes it as
 // an action name.
 func (h *Handler) SweepStale(now time.Time) {
+	// Prune eventLog entries for windows that Kitty no longer reports as live.
+	// Runs before the staleness scan so an event-log GC happens every sweep
+	// regardless of whether anyStaleThresholdSet() is true below.
+	if h.kittyClient != nil {
+		if windows, err := h.kittyClient.ListWindows(); err == nil {
+			liveIDs := make(map[int]bool)
+			for _, ow := range windows {
+				for _, tab := range ow.Tabs {
+					for _, w := range tab.Windows {
+						liveIDs[w.ID] = true
+					}
+				}
+			}
+			h.pruneClosedWindows(liveIDs)
+		} else {
+			slog.Debug("sweep: list windows failed for GC prune", "err", err)
+		}
+	}
+
 	if !h.anyStaleThresholdSet() {
 		return
 	}
@@ -703,10 +733,11 @@ func (h *Handler) SweepStale(now time.Time) {
 		}
 		// Reset so the next idle/clear/active does not try to re-clear an icon
 		// we just cleared, and so the lastKnownAction fallback returns "".
+		// eventLog is intentionally preserved across the sweep so detail-pane
+		// history survives until the underlying Kitty window actually closes.
 		delete(h.lastAction, windowID)
 		delete(h.lastActiveEvent, windowID)
 		delete(h.subagentCount, windowID)
-		delete(h.eventLog, windowID)
 		stale = append(stale, staleEntry{windowID, title, pipe, notify})
 	}
 	h.stateMu.Unlock()

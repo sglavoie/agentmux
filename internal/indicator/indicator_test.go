@@ -2,6 +2,21 @@ package indicator
 
 import "testing"
 
+// TestIndicator_ReturnsNilWhenTabMissingButDaemonSucceeded locks in the
+// contract that, once the daemon has recorded the event and resolved guard
+// state, a missing Kitty tab is not an error from the indicator's perspective.
+// Prior to this, the indicator returned an error when the tab lookup came up
+// empty post-daemon-update, which Copilot CLI surfaced as
+// `Hook execution failed: HookExitCodeError` on every such call — noisy for
+// any event and outright harmful for permissionRequest, where a non-zero exit
+// could be treated as deny. The title update is purely cosmetic at that point
+// and is safe to skip.
+func TestIndicator_ReturnsNilWhenTabMissingButDaemonSucceeded(t *testing.T) {
+	if err := finalizeTitleUpdate(nil, 42, "bolt", nil); err != nil {
+		t.Errorf("expected nil error when tab is missing, got %v", err)
+	}
+}
+
 // TestDaemonDownIconState_PreservesUnacknowledgedIcons locks in the daemon-down
 // fallback contract: a bare idle/clear hook must not wipe a still-relevant
 // permission/stop/error/elicitation icon when the daemon is unreachable. The

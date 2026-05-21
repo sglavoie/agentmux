@@ -60,6 +60,35 @@ func detailScrollBounds(m Model) (total, visible int) {
 	return total, visible
 }
 
+// isTerminalAction reports whether an event action marks the end of a
+// session run. Session 1 of the persistence work made these actions
+// append to the per-window event log instead of wiping it; the detail
+// pane uses this predicate to mark the boundary between live and
+// historical entries.
+func isTerminalAction(action string) bool {
+	switch action {
+	case "stop", "stop_failure", "failure":
+		return true
+	}
+	return false
+}
+
+// sessionEndedSeparator renders a centered, dim "session ended" divider
+// padded to width with horizontal-rule characters. The separator is
+// emitted after each terminal event row so the user can see where the
+// session ended in the most-recent-first event list.
+func sessionEndedSeparator(width int) string {
+	const label = " session ended "
+	labelW := runewidth.StringWidth(label)
+	if width <= labelW {
+		return styleDim.Render(strings.TrimSpace(label))
+	}
+	remaining := width - labelW
+	left := remaining / 2
+	right := remaining - left
+	return styleDim.Render(strings.Repeat("─", left) + label + strings.Repeat("─", right))
+}
+
 // formatRelativeAge renders a compact "N{unit} ago" label for an event
 // timestamp. Negative durations clamp to zero so a clock skew between the
 // daemon and the TUI does not surface a misleading negative count.
@@ -145,6 +174,9 @@ func detailHeader(m Model) string {
 		meta = append(meta, fmt.Sprintf("age=%s", ageText))
 	}
 	meta = append(meta, fmt.Sprintf("%d events", len(m.detailEvents)))
+	if n := len(m.detailEvents); n > 0 && isTerminalAction(m.detailEvents[n-1].Action) {
+		meta = append(meta, "session ended")
+	}
 
 	return styleHeader.Render(line1) + "\n" + styleDim.Render(strings.Join(meta, " · "))
 }
@@ -282,6 +314,10 @@ func renderDetail(m Model) string {
 	for _, ev := range reversed[offset:end] {
 		sb.WriteString(detailRow(ev, now, rowWidth))
 		sb.WriteByte('\n')
+		if isTerminalAction(ev.Action) {
+			sb.WriteString(sessionEndedSeparator(rowWidth))
+			sb.WriteByte('\n')
+		}
 	}
 
 	if end < total {

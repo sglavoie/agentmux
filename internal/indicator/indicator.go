@@ -138,10 +138,22 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		return nil
 	}
 
+	return finalizeTitleUpdate(tab, windowID, resp.IconState, client)
+}
+
+// finalizeTitleUpdate applies the daemon-resolved icon state to the Kitty tab,
+// or no-ops if the tab is no longer present. The daemon has already recorded
+// the event and resolved any guard transition by the time this runs, so a
+// missing tab is not an error — returning one previously caused Copilot CLI to
+// log every such call as `Hook execution failed: HookExitCodeError` even when
+// the event was captured correctly (and, on permissionRequest hooks, could be
+// treated as a deny).
+func finalizeTitleUpdate(tab *kitty.Tab, windowID int, iconState string, client kitty.KittyClient) error {
 	if tab == nil {
-		return fmt.Errorf("indicator: window %d not found in Kitty tab list", windowID)
+		slog.Debug("indicator: tab not found after daemon update; skipping title update", "window_id", windowID)
+		return nil
 	}
-	return updateTitle(windowID, resp.IconState, client, tab)
+	return updateTitle(windowID, iconState, client, tab)
 }
 
 // daemonDownIconState mirrors the daemon's idle/clear handling for the

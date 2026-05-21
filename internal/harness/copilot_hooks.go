@@ -15,7 +15,8 @@ type copilotHooksFile struct {
 
 type copilotHookDef struct {
 	Type       string `json:"type"`
-	Command    string `json:"command,omitempty"`
+	Bash       string `json:"bash,omitempty"`
+	Powershell string `json:"powershell,omitempty"`
 	TimeoutSec int    `json:"timeoutSec,omitempty"`
 }
 
@@ -96,9 +97,11 @@ func buildCopilotHooks(disabledEvents []string, amxBin string) copilotHooksFile 
 		if disabled[event] {
 			continue
 		}
+		cmd := amxBin + " hook-indicator " + event
 		hooks[event] = []copilotHookDef{{
 			Type:       "command",
-			Command:    amxBin + " hook-indicator " + event,
+			Bash:       cmd,
+			Powershell: cmd,
 			TimeoutSec: 5,
 		}}
 	}

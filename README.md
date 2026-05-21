@@ -92,6 +92,12 @@ Key flows:
 - `d`: show the per-session hook event log (scrollable detail pane)
 - `?`: show the full keymap
 
+The detail pane's event history persists through terminal hooks (`Stop`,
+`SessionEnd`, etc.) and through the watchdog's stale sweep, so you can still
+review what a session did after its icon clears. History is held in memory per
+Kitty window and capped at 5 000 events (oldest dropped); it is released only
+when the window closes or the daemon restarts.
+
 ### Launcher
 
 The launcher reads configured `projects`, shows their default profile/harness,
@@ -132,6 +138,11 @@ Hook installation is harness-aware:
 - **Copilot**: writes `$COPILOT_HOME/hooks/agent-mux.json`
 
 The hook command is `amx hook-indicator <event>`.
+
+Copilot hook entries use the documented `{"bash": ..., "powershell": ...}`
+schema. If you installed hooks with an older Agent Mux build that wrote a
+`command` field instead, re-run `amx config hooks-sync` once; the drift
+detector backs up the old file as `agent-mux.json.bak`.
 
 Current Copilot events mapped by Agent Mux include:
 

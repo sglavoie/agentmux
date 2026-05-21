@@ -70,6 +70,16 @@ func TestRenderDetailPopulatedMostRecentFirst(t *testing.T) {
 	if stopIdx >= startIdx {
 		t.Errorf("expected Stop (newest) before SessionStart (oldest); stopIdx=%d startIdx=%d output:\n%s", stopIdx, startIdx, out)
 	}
+	// A terminal event in the buffer must emit a "session ended" separator
+	// between the terminal row and the older (post-mortem) rows below it.
+	// The separator's trailing horizontal-rule glyph distinguishes it from
+	// the header's "session ended" meta tag.
+	sepIdx := strings.Index(out, "session ended ─")
+	if sepIdx < 0 {
+		t.Errorf("expected `session ended` separator after Stop row, got:\n%s", out)
+	} else if stopIdx >= sepIdx || sepIdx >= startIdx {
+		t.Errorf("expected order Stop < separator < SessionStart; got stopIdx=%d sepIdx=%d startIdx=%d output:\n%s", stopIdx, sepIdx, startIdx, out)
+	}
 }
 
 func TestRenderDetailSuppressedRow(t *testing.T) {
@@ -254,4 +264,58 @@ func TestDetailPageScrollKeys(t *testing.T) {
 			t.Errorf("expected detailScroll to stay at maxOffset=%d, got %d", maxOffset, mm.detailScroll)
 		}
 	})
+}
+
+func TestRenderDetail_HeaderShowsSessionEnded(t *testing.T) {
+	m := detailModel(t)
+	m.detailEvents = []daemon.SessionEvent{
+		{At: 100, Event: "SessionStart", Action: "active"},
+		{At: 200, Event: "Stop", Action: "stop"},
+	}
+
+	header := stripAnsi(detailHeader(m))
+
+	if !strings.Contains(header, "session ended") {
+		t.Errorf("expected `session ended` in header meta line, got:\n%s", header)
+	}
+}
+
+func TestRenderDetail_SessionEndedSeparatorRendered(t *testing.T) {
+	m := detailModel(t)
+	m.detailEvents = []daemon.SessionEvent{
+		{At: 100, Event: "SessionStart", Action: "active"},
+		{At: 200, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
+		{At: 300, Event: "Stop", Action: "stop"},
+	}
+
+	out := stripAnsi(renderDetail(m))
+
+	// "session ended ─" only appears in the separator (the header suffix
+	// has no trailing horizontal rule).
+	sepIdx := strings.Index(out, "session ended ─")
+	stopIdx := strings.LastIndex(out, "Stop")
+	startIdx := strings.Index(out, "SessionStart")
+	if sepIdx < 0 {
+		t.Fatalf("expected separator with horizontal rule in output, got:\n%s", out)
+	}
+	if stopIdx < 0 || startIdx < 0 {
+		t.Fatalf("expected Stop and SessionStart in output, got stopIdx=%d startIdx=%d:\n%s", stopIdx, startIdx, out)
+	}
+	if stopIdx >= sepIdx || sepIdx >= startIdx {
+		t.Errorf("expected separator between Stop and SessionStart; stopIdx=%d sepIdx=%d startIdx=%d output:\n%s", stopIdx, sepIdx, startIdx, out)
+	}
+}
+
+func TestRenderDetail_NoSeparatorForActiveSession(t *testing.T) {
+	m := detailModel(t)
+	m.detailEvents = []daemon.SessionEvent{
+		{At: 100, Event: "SessionStart", Action: "active"},
+		{At: 200, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
+	}
+
+	out := stripAnsi(renderDetail(m))
+
+	if strings.Contains(out, "session ended") {
+		t.Errorf("expected no `session ended` marker for an active session, got:\n%s", out)
+	}
 }

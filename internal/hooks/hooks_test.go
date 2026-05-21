@@ -818,6 +818,66 @@ func TestMergeCopilotFirstInstall(t *testing.T) {
 	}
 }
 
+// TestCopilotHookContract_HookEntrySchema pins the Copilot CLI hook entry
+// schema: each entry must carry the command under "bash" (Unix) and
+// "powershell" (Windows), never under the undocumented "command" fallback. The
+// regression scenario this guards against is older Copilot CLI versions that
+// reject any entry missing both "bash" and "powershell" with
+// `Hook execution failed: Neither 'bash' nor 'powershell' specified`, which
+// blocks every event from reaching the daemon's event log.
+func TestCopilotHookContract_HookEntrySchema(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "copilot")
+
+	cfg := makeCopilotConfig([]config.Account{makeCopilotAccount("work", accountDir)}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+
+	hooksPath := filepath.Join(accountDir, "hooks", "agent-mux.json")
+	data, err := os.ReadFile(hooksPath)
+	if err != nil {
+		t.Fatalf("reading hooks file: %v", err)
+	}
+
+	var f struct {
+		Hooks map[string][]map[string]any `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &f); err != nil {
+		t.Fatalf("parsing hooks file: %v", err)
+	}
+	if len(f.Hooks) == 0 {
+		t.Fatal("expected non-empty hooks map")
+	}
+
+	for event, entries := range f.Hooks {
+		if len(entries) == 0 {
+			t.Errorf("event %q has no entries", event)
+			continue
+		}
+		entry := entries[0]
+
+		bash, _ := entry["bash"].(string)
+		if bash == "" {
+			t.Errorf("event %q first entry: expected non-empty bash field, got %v", event, entry["bash"])
+		}
+		ps, _ := entry["powershell"].(string)
+		if ps == "" {
+			t.Errorf("event %q first entry: expected non-empty powershell field, got %v", event, entry["powershell"])
+		}
+		if _, present := entry["command"]; present {
+			t.Errorf("event %q first entry: legacy command field must be absent, got %v", event, entry["command"])
+		}
+		if typ, _ := entry["type"].(string); typ != "command" {
+			t.Errorf("event %q first entry: type = %q, want %q", event, typ, "command")
+		}
+		if !strings.Contains(bash, "hook-indicator "+event) {
+			t.Errorf("event %q first entry: bash = %q, expected to invoke hook-indicator %s", event, bash, event)
+		}
+	}
+}
+
 func TestMergeCopilotResync(t *testing.T) {
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "copilot")
