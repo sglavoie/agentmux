@@ -1,0 +1,400 @@
+package tui
+
+import (
+	"fmt"
+	"log/slog"
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/overrides"
+	"github.com/sglavoie/agentmux/internal/session"
+)
+
+func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.pickerSearchMode {
+		return m.handlePickerSearchKey(msg)
+	}
+	return m.handlePickerNavKey(msg)
+}
+
+// handlePickerSearchKey handles input while the picker is in search mode
+// (activated by pressing `/`). Only esc, enter, and backspace have special
+// meaning; every other printable character (including j, k, space, p, etc.)
+// is appended to the filter buffer so the user can type freely.
+func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case keyCtrlC:
+		// ctrl+c quits from every mode. The default branch below would
+		// otherwise swallow it (msg.Text is empty for ctrl combos).
+		return m, tea.Quit
+	case keyEsc, keyEnter:
+		m.pickerSearchMode = false
+		return m, nil
+	case keyBackspace:
+		if r := []rune(m.pickerFilter); len(r) > 0 {
+			m.pickerFilter = string(r[:len(r)-1])
+			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerCursor = 0
+			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+				return m, cmd
+			}
+		}
+		return m, nil
+	default:
+		if t := msg.Key().Text; t != "" {
+			m.pickerFilter += t
+			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerCursor = 0
+			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+				return m, cmd
+			}
+		}
+		return m, nil
+	}
+}
+
+// handlePickerNavKey handles input while the picker is in navigation mode
+// (the default). Printable characters other than recognised shortcuts are
+// silently ignored; press `/` to enter search mode and type a filter.
+func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case keySlash:
+		m.pickerSearchMode = true
+		return m, nil
+	case keyEsc:
+		// Two-stage Esc: first clears a non-empty filter; second exits picker.
+		if m.pickerFilter != "" {
+			m.pickerFilter = ""
+			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
+			m.pickerCursor = 0
+			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+				return m, cmd
+			}
+			return m, nil
+		}
+		m.mode = ModeList
+		m.pickerProfileOverride = nil
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyCtrlC, keyQ:
+		return m, tea.Quit
+	case keyJ, keyDown:
+		m.pickerCursor = clamp(m.pickerCursor+1, 0, len(m.pickerFilteredIdx)-1)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyK, keyUp:
+		m.pickerCursor = clamp(m.pickerCursor-1, 0, len(m.pickerFilteredIdx)-1)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyTogglePreview:
+		return m.togglePickerPreview()
+	case keySpace:
+		if len(m.pickerFilteredIdx) == 0 {
+			return m, nil
+		}
+		if m.pickerSelected == nil {
+			m.pickerSelected = make(map[int]bool)
+		}
+		origIdx := m.pickerFilteredIdx[m.pickerCursor]
+		m.pickerSelected[origIdx] = !m.pickerSelected[origIdx]
+		return m, nil
+	case keyO:
+		if len(m.pickerFilteredIdx) > 0 {
+			origIdx := m.pickerFilteredIdx[m.pickerCursor]
+			return m, pickerOpenCmd(m, m.pickerSessionWithResolvedProfile(origIdx))
+		}
+		return m, nil
+	case keyClearStatus:
+		if len(m.pickerFilteredIdx) > 0 {
+			origIdx := m.pickerFilteredIdx[m.pickerCursor]
+			sess := m.pickerSessionWithResolvedProfile(origIdx)
+			m.targetSession = session.RunningSession{
+				Base:    session.FormatTitle(sess),
+				Project: m.pickerSessions[origIdx].Title,
+				Profile: m.pickerEffectiveProfile(origIdx),
+				Account: m.pickerEffectiveProfile(origIdx),
+			}
+			m.configPickerAccounts = m.cfg.Accounts
+			m.configPickerCurrent = m.pickerEffectiveProfile(origIdx)
+			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.configPickerCurrent)
+			m.configPickerReturnMode = ModePicker
+			m.configPickerProjectIdx = origIdx
+			m.mode = ModeConfigPicker
+		}
+		return m, nil
+	case keyEnter:
+		cmd := m.dispatchPickerLaunch()
+		m.mode = ModeList
+		m.pickerSelected = nil
+		m.pickerProfileOverride = nil
+		return m, cmd
+	case keyBackspace:
+		if r := []rune(m.pickerFilter); len(r) > 0 {
+			m.pickerFilter = string(r[:len(r)-1])
+			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerCursor = 0
+			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+				return m, cmd
+			}
+		}
+		return m, nil
+	default:
+		return m, nil
+	}
+}
+
+// restartWithAccountCmd closes and relaunches a session under a different account.
+func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
+	return func() (msg tea.Msg) {
+		defer func() {
+			if r := recover(); r != nil {
+				msg = actionDoneMsg{err: fmt.Errorf("panic in restartWithAccount: %v", r)}
+			}
+		}()
+		return actionDoneMsg{err: session.RestartWithAccount(m.client, m.targetSession, acc, m.cfg)}
+	}
+}
+
+// dispatchPickerLaunch starts a multi-session launch and returns a batch of
+// per-session commands. Each command emits a launchProgressMsg the model
+// uses to drive the progress toast (1/N, 2/N, …). Returns nil when no
+// non-running session is selected so the caller doesn't dispatch a dud cmd.
+func (m *Model) dispatchPickerLaunch() tea.Cmd {
+	type queued struct {
+		sess  config.Session
+		title string
+	}
+	var todo []queued
+	for i, sess := range m.pickerSessions {
+		if !m.pickerSelected[i] {
+			continue
+		}
+		sess = m.pickerSessionWithResolvedProfile(i)
+		key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
+		baseTitle := session.FormatTitle(sess)
+		if m.pickerRunning[key] {
+			continue // dedup: skip already-running sessions
+		}
+		todo = append(todo, queued{sess: sess, title: baseTitle})
+	}
+	if len(todo) == 0 {
+		return nil
+	}
+
+	m.launchBatchID++
+	batchID := m.launchBatchID
+	total := len(todo)
+	m.launchBatchDone = 0
+	m.launchBatchErrors = 0
+
+	// The toast-tick cmd (returned by replaceToastByID when the toast strip
+	// was empty) is a tea.Tick that blocks for toastTickInterval before it
+	// emits. Keeping it OUTSIDE tea.Sequence below is critical: inside the
+	// sequence it would gate the first launch on the tick's 250ms timer.
+	var toastCmd tea.Cmd
+	startText := fmt.Sprintf("Launching %d session(s)…", total)
+	if c := m.replaceToastByID(batchID, Toast{
+		Severity: toastInfo,
+		Text:     startText,
+		Expires:  time.Now().Add(progressToastTTL),
+	}); c != nil {
+		toastCmd = c
+	}
+
+	launchCmds := make([]tea.Cmd, 0, total)
+	accounts := m.cfg.Accounts
+	client := m.client
+	cfg := m.cfg
+	for _, q := range todo {
+		sess := q.sess
+		title := q.title
+		launchCmds = append(launchCmds, func() tea.Msg {
+			acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
+			if !ok {
+				return launchProgressMsg{batchID: batchID, total: total, title: title, err: nil}
+			}
+			err := session.Launch(client, sess, acc, cfg)
+			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
+		})
+	}
+	seq := tea.Sequence(launchCmds...)
+	if toastCmd != nil {
+		return tea.Batch(toastCmd, seq)
+	}
+	return seq
+}
+
+// handleLaunchProgress updates the progress toast for a finished
+// per-session launch and triggers a session list refresh so the newly
+// running session appears.
+func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) {
+	if msg.batchID != m.launchBatchID {
+		// Stale launch from a prior batch; ignore so we don't clobber a
+		// fresh batch's toast.
+		return m, fetchCmd(m.client, m.cfg, m.sortMode)
+	}
+	m.launchBatchDone++
+	var cmds []tea.Cmd
+	if msg.err != nil {
+		m.launchBatchErrors++
+		if c := m.pushToast(Toast{
+			Severity: toastError,
+			Text:     fmt.Sprintf("launch failed: %s — %s", msg.title, msg.err),
+		}); c != nil {
+			cmds = append(cmds, c)
+		}
+	}
+	batchDone := m.launchBatchDone >= msg.total
+	severity := toastInfo
+	if batchDone {
+		severity = toastSuccess
+	}
+	text := fmt.Sprintf("Launched %d/%d · %s", m.launchBatchDone, msg.total, msg.title)
+	expires := time.Now().Add(progressToastTTL)
+	if batchDone {
+		expires = time.Now().Add(defaultToastTTL)
+	}
+	if c := m.replaceToastByID(msg.batchID, Toast{
+		Severity: severity,
+		Text:     text,
+		Expires:  expires,
+	}); c != nil {
+		cmds = append(cmds, c)
+	}
+	if batchDone && m.launchBatchErrors == 0 {
+		cmds = append(cmds, tea.Quit)
+	} else {
+		cmds = append(cmds, fetchCmd(m.client, m.cfg, m.sortMode))
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// pickerOpenCmd opens the given session's directory in a plain shell tab.
+func pickerOpenCmd(m Model, sess config.Session) tea.Cmd {
+	accounts := m.cfg.Accounts
+	client := m.client
+	cfg := m.cfg
+	return func() tea.Msg {
+		acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
+		if !ok {
+			return pickerOpenDoneMsg{err: nil}
+		}
+		return pickerOpenDoneMsg{err: session.OpenDirectory(client, sess, acc, cfg)}
+	}
+}
+
+// applyPickerFilter returns indices into sessions matching the DSL query.
+// Reuses the list-filter DSL (@account, !state, substring) so the same
+// shortcut behaves the same in both contexts. An empty query returns the full
+// index range. Config sessions are matched as synthetic running sessions —
+// !state filters won't match anything since config rows have no live state.
+func applyPickerFilter(sessions []config.Session, query string) []int {
+	out := make([]int, 0, len(sessions))
+	if strings.TrimSpace(query) == "" {
+		for i := range sessions {
+			out = append(out, i)
+		}
+		return out
+	}
+	f := Parse(query)
+	for i, cs := range sessions {
+		synthetic := session.RunningSession{
+			Base:      session.FormatTitle(cs),
+			Account:   cs.EffectiveProfile(),
+			Profile:   cs.EffectiveProfile(),
+			Project:   cs.Title,
+			Directory: cs.Directory,
+		}
+		if f.Match(synthetic, nil, 0) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// pickerAccountIndex returns the index of the named account in the slice, or 0 if not found.
+func pickerAccountIndex(accounts []config.Account, name string) int {
+	for i, a := range accounts {
+		if a.Name == name {
+			return i
+		}
+	}
+	return 0
+}
+
+func (m Model) pickerEffectiveProfile(origIdx int) string {
+	if name := m.pickerProfileOverride[origIdx]; name != "" {
+		return name
+	}
+	if origIdx >= 0 && origIdx < len(m.pickerSessions) {
+		return m.pickerSessions[origIdx].EffectiveProfile()
+	}
+	return ""
+}
+
+func (m Model) pickerSessionWithResolvedProfile(origIdx int) config.Session {
+	if origIdx < 0 || origIdx >= len(m.pickerSessions) {
+		return config.Session{}
+	}
+	return sessionWithProfile(m.pickerSessions[origIdx], m.pickerEffectiveProfile(origIdx))
+}
+
+// loadPickerOverrides loads persisted profile overrides from disk and maps
+// them to the current pickerSessions by title. Stale entries (titles no
+// longer in the session list) are pruned and the file is re-saved.
+func loadPickerOverrides(sessions []config.Session) map[int]string {
+	out := make(map[int]string)
+	f, err := overrides.Load()
+	if err != nil {
+		slog.Debug("overrides: load error", "err", err)
+		return out
+	}
+	titleIdx := make(map[string]int, len(sessions))
+	for i, s := range sessions {
+		titleIdx[s.Title] = i
+	}
+	var pruned bool
+	var fresh []overrides.Entry
+	for _, e := range f.Entries {
+		idx, ok := titleIdx[e.ProjectTitle]
+		if !ok {
+			slog.Debug("overrides: pruning stale entry", "title", e.ProjectTitle)
+			pruned = true
+			continue
+		}
+		fresh = append(fresh, e)
+		out[idx] = e.ProfileName
+	}
+	if pruned {
+		f.Entries = fresh
+		if err := overrides.Save(f); err != nil {
+			slog.Debug("overrides: save after prune error", "err", err)
+		}
+	}
+	return out
+}
+
+// savePickerOverrides writes the current pickerProfileOverride map to disk.
+func (m Model) savePickerOverrides() {
+	f := overrides.File{Version: 1}
+	for idx, profile := range m.pickerProfileOverride {
+		if idx >= 0 && idx < len(m.pickerSessions) {
+			f.Entries = append(f.Entries, overrides.Entry{
+				ProjectTitle: m.pickerSessions[idx].Title,
+				ProfileName:  profile,
+			})
+		}
+	}
+	if err := overrides.Save(f); err != nil {
+		slog.Debug("overrides: save error", "err", err)
+	}
+}

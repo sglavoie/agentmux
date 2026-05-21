@@ -1,0 +1,305 @@
+package tui
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+// ---- Mode transition tests ----
+
+func TestModeListToSearch(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	if m.mode != ModeList {
+		t.Fatal("expected ModeList initially")
+	}
+	m = pressKey(m, "/")
+	if m.mode != ModeSearch {
+		t.Fatalf("expected ModeSearch after /, got %d", m.mode)
+	}
+}
+
+func TestModeSearchEscReturnsToList(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "/")
+	m = pressKey(m, "esc")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after Esc, got %d", m.mode)
+	}
+}
+
+func TestModeSearchEnterAppliesAndReturnsToList(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "/")
+	m = pressKey(m, "a")
+	m = pressKey(m, "p")
+	m = pressKey(m, "i")
+	m = pressKey(m, "enter")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after Enter, got %d", m.mode)
+	}
+	if m.activeFilter.Raw != "api" {
+		t.Fatalf("expected activeFilter.Raw=api, got %q", m.activeFilter.Raw)
+	}
+}
+
+func TestModeSearchLiveAppliesEachKeystroke(t *testing.T) {
+	// Each keystroke should narrow the list before Enter is pressed.
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "/")
+	m = pressKey(m, "a")
+	m = pressKey(m, "p")
+	m = pressKey(m, "i")
+	if m.mode != ModeSearch {
+		t.Fatalf("expected ModeSearch while typing, got %d", m.mode)
+	}
+	if len(m.filtered) != 1 || m.filtered[0].Base != "W:api" {
+		t.Fatalf("expected live-filtered list to contain only W:api, got %v", m.filtered)
+	}
+}
+
+func TestFKeyEntersFilterWithAccountPrefill(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "f")
+	if m.mode != ModeSearch {
+		t.Fatalf("expected ModeSearch (unified filter) after f, got %d", m.mode)
+	}
+	if m.filterText != "@" {
+		t.Fatalf("expected filterText=@, got %q", m.filterText)
+	}
+}
+
+func TestFilterEscRestoresSavedFilter(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	// Commit a filter first.
+	m = pressKey(m, "/")
+	m = pressKey(m, "a")
+	m = pressKey(m, "p")
+	m = pressKey(m, "i")
+	m = pressKey(m, "enter")
+	// Re-enter filter, type something else, then Esc.
+	m = pressKey(m, "/")
+	m = pressKey(m, "b")
+	m = pressKey(m, "esc")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after Esc, got %d", m.mode)
+	}
+	if m.activeFilter.Raw != "api" {
+		t.Fatalf("expected previous filter restored, got %q", m.activeFilter.Raw)
+	}
+}
+
+func TestFKeyTypingNarrowsByAccount(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "f") // filterText="@"
+	m = pressKey(m, "w")
+	m = pressKey(m, "o")
+	m = pressKey(m, "r")
+	m = pressKey(m, "k")
+	if m.activeFilter.Account != "work" {
+		t.Fatalf("expected Account=work, got %q", m.activeFilter.Account)
+	}
+	for _, s := range m.filtered {
+		if s.Account != "work" {
+			t.Fatalf("filtered session %q has wrong account %q", s.Base, s.Account)
+		}
+	}
+}
+
+// ---- Vim navigation tests ----
+
+func TestNavJK(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	if m.cursor != 0 {
+		t.Fatal("expected cursor=0 initially")
+	}
+	m = pressKey(m, "j")
+	if m.cursor != 1 {
+		t.Fatalf("expected cursor=1 after j, got %d", m.cursor)
+	}
+	m = pressKey(m, "k")
+	if m.cursor != 0 {
+		t.Fatalf("expected cursor=0 after k, got %d", m.cursor)
+	}
+}
+
+func TestNavGTop(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "j")
+	m = pressKey(m, "j")
+	m = pressKey(m, "g")
+	if m.cursor != 0 {
+		t.Fatalf("expected cursor=0 after g, got %d", m.cursor)
+	}
+}
+
+func TestNavGBottom(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "G")
+	want := len(m.filtered) - 1
+	if m.cursor != want {
+		t.Fatalf("expected cursor=%d after G, got %d", want, m.cursor)
+	}
+}
+
+func TestNavClampAtBounds(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	// Pressing k at top should stay at 0.
+	m = pressKey(m, "k")
+	if m.cursor != 0 {
+		t.Fatalf("expected cursor=0 after k at top, got %d", m.cursor)
+	}
+	// Pressing j past bottom should stay at last.
+	m = pressKey(m, "G")
+	last := m.cursor
+	m = pressKey(m, "j")
+	if m.cursor != last {
+		t.Fatalf("expected cursor to stay at %d after j at bottom, got %d", last, m.cursor)
+	}
+}
+
+// ---- Search filtering tests ----
+
+func TestSearchFilterByTitle(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.activeFilter = Parse("api")
+	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
+	if len(m.filtered) != 1 {
+		t.Fatalf("expected 1 result for 'api', got %d", len(m.filtered))
+	}
+	if m.filtered[0].Base != "W:api" {
+		t.Fatalf("wrong session: %q", m.filtered[0].Base)
+	}
+}
+
+func TestSearchFilterByDirectory(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.filtered = applyFilter(m.sessions, Parse("dotfiles"), m.lastActivity, m.idleThreshold)
+	if len(m.filtered) != 1 {
+		t.Fatalf("expected 1 result for 'dotfiles' dir, got %d", len(m.filtered))
+	}
+}
+
+func TestSearchFilterByAccountSubstring(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	// Bare-token 'work' matches both Account field and Base prefix W: lowercase 'w'... actually
+	// substring scans Base/Directory/Account so 'work' hits two work sessions via account match.
+	m.filtered = applyFilter(m.sessions, Parse("work"), m.lastActivity, m.idleThreshold)
+	if len(m.filtered) != 2 {
+		t.Fatalf("expected 2 results for substring 'work', got %d", len(m.filtered))
+	}
+}
+
+func TestAccountFilterNarrowsList(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.filtered = applyFilter(m.sessions, Parse("@personal"), m.lastActivity, m.idleThreshold)
+	if len(m.filtered) != 1 {
+		t.Fatalf("expected 1 personal session, got %d", len(m.filtered))
+	}
+}
+
+func TestSearchCombinedWithAccountFilter(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.filtered = applyFilter(m.sessions, Parse("api @work"), m.lastActivity, m.idleThreshold)
+	if len(m.filtered) != 1 || m.filtered[0].Base != "W:api" {
+		t.Fatalf("unexpected combined filter result: %v", m.filtered)
+	}
+}
+
+// ---- Refresh tick test ----
+
+func TestTickTriggersRefetch(t *testing.T) {
+	m := testModel()
+	updated, cmd := m.Update(tickMsg{})
+	if updated.(Model).err != nil {
+		t.Fatal("unexpected error after tick")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd after tickMsg (should re-schedule fetch + tick)")
+	}
+}
+
+// ---- Error display test ----
+
+func TestErrMsgSetsErr(t *testing.T) {
+	m := testModel()
+	updated, _ := m.Update(errMsg{err: errors.New("kitty offline")})
+	if updated.(Model).err == nil {
+		t.Fatal("expected err to be set after errMsg")
+	}
+}
+
+func TestSessionsMsgClearsErr(t *testing.T) {
+	m := testModel()
+	updated, _ := m.Update(errMsg{err: errors.New("kitty offline")})
+	m = updated.(Model)
+	m = loadSessions(m, makeSessions())
+	if m.err != nil {
+		t.Fatalf("expected err cleared after sessionsMsg, got %v", m.err)
+	}
+}
+
+// ---- Footer content test ----
+
+func TestFooterChangesWithMode(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.width, m.height = 120, 40
+
+	listFooter := renderFooter(m)
+	if !strings.Contains(listFooter, "/, f: filter") {
+		t.Errorf("list footer missing unified filter hint, got:\n%s", listFooter)
+	}
+
+	m.mode = ModeSearch
+	searchFooter := renderFooter(m)
+	if !strings.Contains(searchFooter, "enter: apply") {
+		t.Errorf("filter footer missing apply hint, got:\n%s", searchFooter)
+	}
+	if !strings.Contains(searchFooter, "@profile") {
+		t.Errorf("filter footer missing DSL hint, got:\n%s", searchFooter)
+	}
+}
+
+// ---- Confirm mode tests ----
+
+func TestConfirmNReturnsToList(t *testing.T) {
+	m := loadSessions(modalConfirmModel(), makeSessions())
+	m = pressKey(m, "x") // → ModeConfirm (close)
+	m = pressKey(m, "n") // cancel
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after n in confirm, got %d", m.mode)
+	}
+}
+
+func TestConfirmEscReturnsToList(t *testing.T) {
+	m := loadSessions(modalConfirmModel(), makeSessions())
+	m = pressKey(m, "x") // → ModeConfirm
+	m = pressKey(m, "esc")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after esc in confirm, got %d", m.mode)
+	}
+}
+
+func TestConfirmYEmitsCloseCmd(t *testing.T) {
+	m := loadSessions(modalConfirmModel(), makeSessions())
+	m = pressKey(m, "x") // → ModeConfirm (close)
+	updated, cmd := m.Update(keyPress("y"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after y, got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd after y in confirm (close)")
+	}
+}
+
+func TestConfirmYEmitsRestartCmd(t *testing.T) {
+	m := loadSessions(modalConfirmModel(), makeSessions())
+	m = pressKey(m, "r") // → ModeConfirm (restart)
+	updated, cmd := m.Update(keyPress("y"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after y, got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd after y in confirm (restart)")
+	}
+}

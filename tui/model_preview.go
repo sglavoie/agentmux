@@ -1,0 +1,291 @@
+package tui
+
+import (
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
+	"github.com/sglavoie/agentmux/internal/session"
+)
+
+// View renders the full dashboard.
+func (m Model) View() tea.View {
+	content := m.render()
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
+}
+
+// render builds the string content for View.
+func (m Model) render() string {
+	var sb strings.Builder
+
+	switch m.mode {
+	case ModePicker:
+		// Picker replaces both header and list.
+		sb.WriteString(renderPicker(m))
+	default:
+		// Header area varies by mode; list is always shown below.
+		switch m.mode {
+		case ModeSearch:
+			sb.WriteString(renderSearch(m))
+		case ModeConfirm:
+			sb.WriteString(renderConfirm(m))
+		case ModeConfigPicker:
+			sb.WriteString(renderConfigPicker(m))
+		case ModeHelp:
+			sb.WriteString(renderHelp(m))
+		case ModeDetail:
+			sb.WriteString(renderDetail(m))
+		case ModeActions:
+			sb.WriteString(renderActions(m))
+		default:
+			sb.WriteString(renderHeader(m))
+		}
+		if m.mode == ModeList {
+			sb.WriteString(renderDeprecationBanner(m))
+			sb.WriteString(renderLegend(m))
+			sb.WriteString(renderChips(m, m.width))
+			sb.WriteString(renderInlineFilter(m))
+		}
+		if m.mode == ModeList && m.previewEnabled {
+			sb.WriteString(renderSplit(m))
+		} else {
+			sb.WriteString(renderList(m))
+		}
+	}
+
+	sb.WriteByte('\n')
+
+	sb.WriteString(renderToasts(m))
+	sb.WriteString(renderFooter(m))
+
+	return sb.String()
+}
+
+// renderSplit renders the list and preview pane side-by-side or stacked
+// according to the configured direction. Falls back to the plain list when
+// dimensions or selection make the preview unusable.
+func renderSplit(m Model) string {
+	cfg := m.cfg.Defaults.Preview
+	footerLines := previewFooterLines(m)
+	// Vertical space available for the list+preview area (header consumes 1
+	// line, then a blank line separates the content from the footer).
+	paneHeight := m.height - 1 - 1 - footerLines
+	if paneHeight < 4 || m.width < 20 {
+		return renderList(m)
+	}
+
+	var sess session.RunningSession
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		sess = m.filtered[m.cursor]
+	}
+	acctColor := buildAccountColorMap(m)
+
+	if cfg.Direction == "vertical" {
+		previewHeight := int(float64(paneHeight) * cfg.Ratio)
+		if previewHeight < 3 {
+			previewHeight = 3
+		}
+		if previewHeight > paneHeight-2 {
+			previewHeight = paneHeight - 2
+		}
+		listHeight := paneHeight - previewHeight - 1
+		listView := clipHeight(renderListAt(m, m.width), listHeight)
+		divider := styleDim.Render(strings.Repeat("─", m.width))
+		previewView := renderPreview(m.width, previewHeight, sess, m.previewText, m.previewError, acctColor)
+		return lipgloss.JoinVertical(lipgloss.Left, listView, divider, previewView) + "\n"
+	}
+
+	previewWidth := int(float64(m.width) * cfg.Ratio)
+	if previewWidth < 20 {
+		previewWidth = 20
+	}
+	if previewWidth > m.width-20 {
+		previewWidth = m.width - 20
+	}
+	listWidth := m.width - previewWidth - 1
+	listView := clipHeight(renderListAt(m, listWidth), paneHeight)
+	previewView := renderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor)
+	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
+	divider = strings.TrimRight(divider, "\n")
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
+}
+
+// clipHeight forces s to exactly n visual lines: extra lines are dropped and
+// missing lines are padded with empty strings.
+func clipHeight(s string, n int) string {
+	s = strings.TrimRight(s, "\n")
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	for len(lines) < n {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// previewFooterLines returns the number of lines the footer will occupy in
+// the current mode (used for layout math and resize fits-check).
+func previewFooterLines(m Model) int {
+	if m.mode == ModePicker {
+		// Picker footer is always two lines regardless of preview state.
+		return 2
+	}
+	if m.mode != ModeList {
+		return 2
+	}
+	noticeActive := m.previewNotice != "" &&
+		(m.previewNoticeExpires.IsZero() || time.Now().Before(m.previewNoticeExpires))
+	if m.previewEnabled {
+		// Footer keybindings are suppressed; only the notice (if any) takes a line.
+		if noticeActive {
+			return 1
+		}
+		return 0
+	}
+	if noticeActive {
+		return 3
+	}
+	return 2
+}
+
+// togglePreview flips the preview pane on/off. Returns the model and any cmd
+// (immediate fetch + ticker) to dispatch on enable.
+func (m Model) togglePreview() (tea.Model, tea.Cmd) {
+	if m.previewEnabled {
+		m.previewEnabled = false
+		m.previewText = ""
+		m.previewError = ""
+		m.previewWindowID = 0
+		return m, nil
+	}
+	cfg := m.cfg.Defaults.Preview
+	if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+		m.previewNotice = "preview unavailable: terminal too small"
+		m.previewNoticeExpires = time.Now().Add(2 * time.Second)
+		return m, nil
+	}
+	m.previewEnabled = true
+	m.previewText = ""
+	m.previewError = ""
+	m.previewWindowID = m.currentPreviewWindowID()
+	d := time.Duration(cfg.RefreshMs) * time.Millisecond
+	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+}
+
+// activePreviewEnabled reports whether the preview pane is enabled for the
+// currently active mode. ModePicker has its own independent flag so that
+// toggling preview inside the picker does not disturb the list's preview state.
+func (m Model) activePreviewEnabled() bool {
+	if m.mode == ModePicker {
+		return m.pickerPreviewEnabled
+	}
+	return m.previewEnabled
+}
+
+// currentPreviewWindowID returns the window ID the preview should track for
+// the current cursor in the active mode. ModePicker resolves through the
+// picker cursor (matching the highlighted config session to a running one);
+// every other mode uses the dashboard cursor.
+func (m Model) currentPreviewWindowID() int {
+	if m.mode == ModePicker {
+		return m.pickerCurrentWindowID()
+	}
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		return m.filtered[m.cursor].WindowID
+	}
+	return 0
+}
+
+// pickerCurrentWindowID returns the WindowID of the running session matching
+// the picker's highlighted config row, or 0 when nothing matches.
+func (m Model) pickerCurrentWindowID() int {
+	if len(m.pickerFilteredIdx) == 0 || m.pickerCursor >= len(m.pickerFilteredIdx) {
+		return 0
+	}
+	origIdx := m.pickerFilteredIdx[m.pickerCursor]
+	sess := m.pickerSessionWithResolvedProfile(origIdx)
+	key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
+	for _, rs := range m.sessions {
+		if runningSessionKey(rs) == key {
+			return rs.WindowID
+		}
+	}
+	return 0
+}
+
+// refreshPreviewForPickerCursor returns an immediate fetch cmd when the
+// picker cursor now points at a different running session (or none).
+// Returns nil when preview is off or the window hasn't changed.
+func (m *Model) refreshPreviewForPickerCursor() tea.Cmd {
+	if !m.pickerPreviewEnabled {
+		return nil
+	}
+	winID := m.pickerCurrentWindowID()
+	if winID == m.previewWindowID {
+		return nil
+	}
+	m.previewWindowID = winID
+	m.previewText = ""
+	m.previewError = ""
+	return fetchPreviewCmd(m.client, winID)
+}
+
+// refreshPreviewForCursor returns an immediate fetch cmd when the cursor
+// has moved to a session backed by a different window. Returns nil when
+// preview is off or the selection still points at the same window.
+func (m *Model) refreshPreviewForCursor() tea.Cmd {
+	if !m.previewEnabled {
+		return nil
+	}
+	var winID int
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		winID = m.filtered[m.cursor].WindowID
+	}
+	if winID == m.previewWindowID {
+		return nil
+	}
+	m.previewWindowID = winID
+	m.previewText = ""
+	m.previewError = ""
+	return fetchPreviewCmd(m.client, winID)
+}
+
+// togglePickerPreview flips the picker's own preview pane on/off, independent
+// of m.previewEnabled (the list's preview flag).
+func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
+	if m.pickerPreviewEnabled {
+		m.pickerPreviewEnabled = false
+		m.previewText = ""
+		m.previewError = ""
+		m.previewWindowID = 0
+		return m, nil
+	}
+	cfg := m.cfg.Defaults.Preview
+	if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+		m.previewNotice = "preview unavailable: terminal too small"
+		m.previewNoticeExpires = time.Now().Add(2 * time.Second)
+		return m, nil
+	}
+	m.pickerPreviewEnabled = true
+	m.previewText = ""
+	m.previewError = ""
+	m.previewWindowID = m.pickerCurrentWindowID()
+	d := time.Duration(cfg.RefreshMs) * time.Millisecond
+	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+}
+
+// disablePreviewWithNotice turns the preview off and shows a transient footer
+// notice. Used both by the resize guard and any other auto-disable path.
+func (m *Model) disablePreviewWithNotice(msg string) {
+	m.previewEnabled = false
+	m.previewText = ""
+	m.previewError = ""
+	m.previewWindowID = 0
+	m.previewNotice = msg
+	m.previewNoticeExpires = time.Now().Add(2 * time.Second)
+}

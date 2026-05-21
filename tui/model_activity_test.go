@@ -1,0 +1,225 @@
+package tui
+
+import (
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/overrides"
+	"github.com/sglavoie/agentmux/internal/session"
+)
+
+func TestSessionsMsgStoresActivity(t *testing.T) {
+	m := testModel()
+	now := time.Now()
+	activity := map[int]time.Time{42: now}
+	updated, _ := m.Update(sessionsMsg{
+		sessions: makeSessions(),
+		activity: activity,
+	})
+	m2 := updated.(Model)
+	if m2.lastActivity == nil {
+		t.Fatal("expected lastActivity to be set after sessionsMsg")
+	}
+	if !m2.lastActivity[42].Equal(now) {
+		t.Errorf("expected activity[42]=%v, got %v", now, m2.lastActivity[42])
+	}
+}
+
+// TestSessionsMsgStoresWatchdog asserts that the watchdog snapshot rides on
+// sessionsMsg alongside the existing activity map and is stored on the model
+// for the next render pass to consume.
+func TestSessionsMsgStoresWatchdog(t *testing.T) {
+	m := testModel()
+	wd := map[int]daemon.WatchdogState{
+		7: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
+	}
+	updated, _ := m.Update(sessionsMsg{
+		sessions: makeSessions(),
+		watchdog: wd,
+	})
+	m2 := updated.(Model)
+	if m2.watchdog == nil {
+		t.Fatal("expected watchdog to be set after sessionsMsg")
+	}
+	got, ok := m2.watchdog[7]
+	if !ok {
+		t.Fatal("expected watchdog entry for window 7")
+	}
+	if got.LastAction != "active" || got.ThresholdSec != 600 {
+		t.Errorf("watchdog entry mismatch: %+v", got)
+	}
+}
+
+func TestSessionsMsgNilActivityClassifiesAsActive(t *testing.T) {
+	// With no activity map, an empty-state session must not flip to Idle.
+	m := testModel()
+	sessions := []session.RunningSession{
+		{TabID: 1, WindowID: 1, Base: "fresh", Account: "work", State: ""},
+	}
+	m = loadSessions(m, sessions)
+	if g := stateGroup(m.filtered[0], m.lastActivity, m.idleThreshold); g != 1 {
+		t.Errorf("expected fresh empty-state session to be Active (1), got %d", g)
+	}
+}
+
+func TestSessionsMsgStaleActivityFlipsToIdle(t *testing.T) {
+	m := testModel()
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 1, WindowID: 9, Base: "stale", Account: "work", State: ""},
+	})
+	// Force a tight threshold and a stale timestamp.
+	m.idleThreshold = time.Second
+	m.lastActivity = map[int]time.Time{9: time.Now().Add(-time.Hour)}
+	if g := stateGroup(m.filtered[0], m.lastActivity, m.idleThreshold); g != 2 {
+		t.Errorf("expected stale empty-state session to be Idle (2), got %d", g)
+	}
+}
+
+func TestNewModelDefaultsIdleThreshold(t *testing.T) {
+	// Zero IdleThreshold in config should still produce a non-zero duration —
+	// otherwise stateGroup's threshold check disables itself.
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 0},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	if m.idleThreshold <= 0 {
+		t.Errorf("expected non-zero idleThreshold default, got %v", m.idleThreshold)
+	}
+}
+
+func TestNewModelHonorsConfiguredIdleThreshold(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 42},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	if want := 42 * time.Second; m.idleThreshold != want {
+		t.Errorf("expected idleThreshold=%v, got %v", want, m.idleThreshold)
+	}
+}
+
+// ---- C key (clear status) tests ----
+
+func TestCapitalCKeyReturnsClearCmd(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	updated, cmd := m.Update(keyPress("C"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList to remain after C, got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd from C key with sessions present")
+	}
+}
+
+func TestCapitalCKeyEmptyListIsNoOp(t *testing.T) {
+	m := loadSessions(testModel(), nil)
+	updated, cmd := m.Update(keyPress("C"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after C on empty list, got %d", updated.(Model).mode)
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd after C with no sessions")
+	}
+}
+
+func TestCapitalCDoesNotEnterConfigPicker(t *testing.T) {
+	// Confirm the case-sensitive split: uppercase C must not be aliased to
+	// lowercase c (which opens the config picker).
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "C")
+	if m.mode == ModeConfigPicker {
+		t.Fatal("uppercase C should not open ModeConfigPicker")
+	}
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after C, got %d", m.mode)
+	}
+}
+
+// ---- Profile override persistence tests ----
+
+func TestPickerProfileOverride_Persists(t *testing.T) {
+	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "overrides.json"))
+
+	// testModelWithSessions has: work/api, work/backend, personal/dotfiles.
+	// sortPickerSessions sorts by account then title:
+	//   [0] personal/dotfiles  [1] work/api  [2] work/backend
+	m := testModelWithSessions()
+	m = pressKey(m, "l") // open picker; cursor=0 → dotfiles (personal)
+
+	// Open config picker for dotfiles. Accounts: [work(0), personal(1)].
+	// configPickerCursor starts at 1 (personal matches dotfiles' default profile).
+	m = pressKey(m, "C")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after C in picker, got %d", m.mode)
+	}
+
+	// Move cursor to work (index 0) and confirm.
+	m = pressKey(m, "k")
+	m = pressKey(m, "enter")
+
+	if m.mode != ModePicker {
+		t.Fatalf("expected to return to ModePicker, got %d", m.mode)
+	}
+	if m.pickerProfileOverride[0] != "work" {
+		t.Fatalf("expected in-memory override[0]=work, got %q", m.pickerProfileOverride[0])
+	}
+
+	// Simulate a fresh dashboard: new model, open picker — override must reload from disk.
+	m2 := testModelWithSessions()
+	m2 = pressKey(m2, "l")
+	if m2.pickerProfileOverride[0] != "work" {
+		t.Fatalf("expected persisted override[0]=work after reload, got %q", m2.pickerProfileOverride[0])
+	}
+}
+
+func TestClearStatusCmdSetsTabTitle(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 300},
+		Accounts: []config.Account{{Name: "work", Color: "blue"}},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+
+	target := session.RunningSession{
+		TabID: 7, WindowID: 99, Base: "W:api", Account: "work", Starred: false,
+	}
+	msg := clearStatusCmd(client, target)()
+	done, ok := msg.(actionDoneMsg)
+	if !ok {
+		t.Fatalf("expected actionDoneMsg, got %T", msg)
+	}
+	if done.err != nil {
+		t.Errorf("expected nil error from mock Kitty client, got %v", done.err)
+	}
+	// Confirm the mock saw a kitten set-tab-title call scoped to the window.
+	found := false
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		hasCmd, hasMatch := false, false
+		for _, a := range c.Args {
+			if a == "set-tab-title" {
+				hasCmd = true
+			}
+			if a == "--match=window_id:99" {
+				hasMatch = true
+			}
+		}
+		if hasCmd && hasMatch {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected kitten set-tab-title call with --match=window_id:99, got calls: %v", runner.Calls)
+	}
+	_ = cfg // cfg is built to mirror real model construction; only the runner is asserted
+}
