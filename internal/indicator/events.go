@@ -5,8 +5,8 @@ package indicator
 // eventToAction is a shared map covering Claude (PascalCase) and Copilot
 // (camelCase) hook event names that directly map to a visible tab-state change.
 // Notification hooks are resolved separately because their payload subtype is
-// needed to decide whether they mean "permission", "elicitation", "stop", or
-// "ignore".
+// needed to decide whether they mean "permission", "elicitation",
+// child-complete "active", or "ignore".
 var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.
 	"sessionStart": "idle",
@@ -26,6 +26,8 @@ var eventToAction = map[string]string{
 	"SubagentStop":        "active",
 	"TaskCreated":         "active",
 	"TaskCompleted":       "active",
+	"agentStop":           "active",
+	"TeammateIdle":        "active",
 	"PostCompact":         "stop",
 	"ElicitationResult":   "active",
 
@@ -37,8 +39,7 @@ var eventToAction = map[string]string{
 	"preCompact": "compact",
 	"PreCompact": "compact",
 
-	// Stop: session/subagent completed.
-	"agentStop":  "stop",
+	// Stop: parent session completed.
 	"sessionEnd": "stop",
 	"Stop":       "stop",
 	"SessionEnd": "stop",
@@ -62,7 +63,6 @@ var eventToAction = map[string]string{
 	// the bolt. Typed notifications are resolved in resolveNotificationAction.
 	"notification": "idle",
 	"Notification": "idle",
-	"TeammateIdle": "stop",
 
 	// Clear: state reset.
 	"ConfigChange":   "clear",
@@ -163,7 +163,7 @@ func resolveNotificationAction(input string, payload HookPayload) (string, bool)
 	case "elicitation_dialog":
 		return "elicitation", true
 	case "agent_idle":
-		return "stop", true
+		return "active", true
 	default:
 		return "", false
 	}
@@ -173,11 +173,18 @@ func isNotificationEvent(input string) bool {
 	return input == "notification" || input == "Notification"
 }
 
-// PreservesCurrent reports whether event represents a sub-unit completing
-// while the parent session remains active. The daemon should keep whatever
-// icon is currently showing rather than forcing "active".
-func PreservesCurrent(event string) bool {
-	return event == "TaskCompleted"
+// PreservesCurrent reports whether event represents a child or turn completing
+// while the parent session remains alive. The daemon should preserve the
+// currently visible icon instead of drawing a new one for the synthesized
+// non-terminal "active" action.
+func PreservesCurrent(event string, payload HookPayload) bool {
+	switch event {
+	case "TaskCompleted", "agentStop", "TeammateIdle":
+		return true
+	default:
+		return isNotificationEvent(event) &&
+			payload.EffectiveNotificationType() == "agent_idle"
+	}
 }
 
 // IsPromptEvent reports whether event is a direct user prompt submission,

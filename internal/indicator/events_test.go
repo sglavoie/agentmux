@@ -38,7 +38,7 @@ func TestResolveAction_AllEvents(t *testing.T) {
 		{"Elicitation", "elicitation"},
 		{"PostToolUseFailure", "failure"},
 		{"Notification", "idle"},
-		{"TeammateIdle", "stop"},
+		{"TeammateIdle", "active"},
 		{"ConfigChange", "clear"},
 		{"WorktreeCreate", "clear"},
 		{"WorktreeRemove", "clear"},
@@ -71,9 +71,9 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 			ok:      true,
 		},
 		{
-			name:    "agent idle notification maps to stop",
+			name:    "agent idle notification preserves current icon",
 			payload: HookPayload{NotificationType: "agent_idle"},
-			want:    "stop",
+			want:    "active",
 			ok:      true,
 		},
 		{
@@ -152,18 +152,23 @@ func TestResolveAction_AllEventsHaveValidActions(t *testing.T) {
 
 func TestPreservesCurrent(t *testing.T) {
 	cases := []struct {
-		event string
-		want  bool
+		event   string
+		payload HookPayload
+		want    bool
 	}{
-		{"SubagentStop", false},
-		{"TaskCompleted", true},
-		{"UserPromptSubmit", false},
-		{"Stop", false},
-		{"PostToolUse", false},
+		{"SubagentStop", HookPayload{}, false},
+		{"TaskCompleted", HookPayload{}, true},
+		{"agentStop", HookPayload{}, true},
+		{"TeammateIdle", HookPayload{}, true},
+		{"Notification", HookPayload{NotificationType: "agent_idle"}, true},
+		{"Notification", HookPayload{NotificationType: "permission_prompt"}, false},
+		{"UserPromptSubmit", HookPayload{}, false},
+		{"Stop", HookPayload{}, false},
+		{"PostToolUse", HookPayload{}, false},
 	}
 	for _, tc := range cases {
-		if got := PreservesCurrent(tc.event); got != tc.want {
-			t.Errorf("PreservesCurrent(%q) = %v, want %v", tc.event, got, tc.want)
+		if got := PreservesCurrent(tc.event, tc.payload); got != tc.want {
+			t.Errorf("PreservesCurrent(%q, %+v) = %v, want %v", tc.event, tc.payload, got, tc.want)
 		}
 	}
 }
@@ -251,7 +256,7 @@ func TestShouldProbeWindowForContextLimit(t *testing.T) {
 		want   bool
 	}{
 		{"TaskCompleted", "active", true},
-		{"agentStop", "stop", true},
+		{"agentStop", "active", true},
 		{"notification", "idle", true},
 		{"UserPromptSubmit", "active", false},
 		{"StopFailure", "stop_failure", false},

@@ -23,7 +23,7 @@ type Request struct {
 	Event            string      `json:"event,omitempty"`              // raw Claude hook event name (e.g. UserPromptSubmit)
 	ToolName         string      `json:"tool_name,omitempty"`          // tool name from PreToolUse/PostToolUse hook payloads
 	IsPrompt         bool        `json:"is_prompt,omitempty"`          // true if event is a user prompt submission
-	PreservesIcon    bool        `json:"preserves_icon,omitempty"`     // true if event should keep current icon
+	PreservesIcon    bool        `json:"preserves_icon,omitempty"`     // true if a non-terminal child-complete event should preserve current icon/guard semantics
 	Account          string      `json:"account,omitempty"`            // profile name from amx_profile or cc_account
 	SessionTitle     string      `json:"session_title,omitempty"`      // tab base title (e.g. "W:api")
 	PipeMode         bool        `json:"pipe_mode,omitempty"`          // suppress notifications when claude -p

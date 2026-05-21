@@ -28,33 +28,35 @@ func TestIndicator_ReturnsNilWhenTabMissingButDaemonSucceeded(t *testing.T) {
 // represent an in-flight agent that has now finished.
 func TestDaemonDownIconState_PreservesUnacknowledgedIcons(t *testing.T) {
 	cases := []struct {
-		name        string
-		action      string
-		current     string
-		wantNext    string
-		wantSkip    bool
+		name      string
+		action    string
+		current   string
+		preserves bool
+		wantNext  string
+		wantSkip  bool
 	}{
-		{"idle clears bolt", "idle", "bolt", "", false},
-		{"idle clears compact", "idle", "compact", "", false},
-		{"idle clears subagent", "idle", "subagent", "", false},
-		{"idle preserves key", "idle", "key", "", true},
-		{"idle preserves stop", "idle", "stop", "", true},
-		{"idle preserves error", "idle", "error", "", true},
-		{"idle preserves question", "idle", "question", "", true},
-		{"clear preserves key", "clear", "key", "", true},
-		{"clear clears bolt", "clear", "bolt", "", false},
-		{"active writes bolt regardless of current", "active", "key", "bolt", false},
-		{"permission writes key", "permission", "", "key", false},
-		{"stop_failure writes error", "stop_failure", "bolt", "error", false},
-		{"failure writes error", "failure", "", "error", false},
-		{"idle with no current icon is a no-op", "idle", "", "", true},
+		{"idle clears bolt", "idle", "bolt", false, "", false},
+		{"idle clears compact", "idle", "compact", false, "", false},
+		{"idle clears subagent", "idle", "subagent", false, "", false},
+		{"idle preserves key", "idle", "key", false, "", true},
+		{"idle preserves stop", "idle", "stop", false, "", true},
+		{"idle preserves error", "idle", "error", false, "", true},
+		{"idle preserves question", "idle", "question", false, "", true},
+		{"clear preserves key", "clear", "key", false, "", true},
+		{"clear clears bolt", "clear", "bolt", false, "", false},
+		{"preserve-current child completion is a no-op", "active", "bolt", true, "", true},
+		{"active writes bolt regardless of current", "active", "key", false, "bolt", false},
+		{"permission writes key", "permission", "", false, "key", false},
+		{"stop_failure writes error", "stop_failure", "bolt", false, "error", false},
+		{"failure writes error", "failure", "", false, "error", false},
+		{"idle with no current icon is a no-op", "idle", "", false, "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			next, skip := daemonDownIconState(tc.action, tc.current)
+			next, skip := daemonDownIconState(tc.action, tc.current, tc.preserves)
 			if next != tc.wantNext || skip != tc.wantSkip {
-				t.Errorf("daemonDownIconState(%q, %q) = (%q, %v), want (%q, %v)",
-					tc.action, tc.current, next, skip, tc.wantNext, tc.wantSkip)
+				t.Errorf("daemonDownIconState(%q, %q, %v) = (%q, %v), want (%q, %v)",
+					tc.action, tc.current, tc.preserves, next, skip, tc.wantNext, tc.wantSkip)
 			}
 		})
 	}

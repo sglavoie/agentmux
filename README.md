@@ -160,7 +160,14 @@ Current Copilot events mapped by Agent Mux include:
 - `preCompact`
 - `notification`
 
-Claude hook support remains in place alongside Copilot.
+`sessionEnd` is the terminal Copilot completion hook. `agentStop` and
+`notification` payloads with `notification_type = agent_idle` are treated as
+non-terminal child/turn-complete signals, so they preserve the parent
+session's current icon instead of showing stop.
+
+Claude hook support remains in place alongside Copilot; `Stop` and
+`SessionEnd` are terminal, while `TeammateIdle` and `Notification{agent_idle}`
+follow the same non-terminal child-complete path.
 
 ## Daemon
 
@@ -275,10 +282,11 @@ just test
 - **Hooks are missing**: run `amx config hooks-status`, then
   `amx config hooks-sync`.
 - **The bolt icon stays after the agent is done**: run `amx config hooks-status`
-  and `amx config hooks-sync` to restore completion hooks. Current releases also
-  recover across daemon restarts on the next cleanup event. For Copilot, also
-  upgrade to version `1.0.45` or newer, because older releases had `agentStop`
-  hook issues.
+  and `amx config hooks-sync` to restore terminal hooks like `sessionEnd`/`Stop`
+  and child-complete hooks like `agentStop`, `TeammateIdle`, and typed
+  `notification` events. Current releases also recover across daemon restarts
+  on the next cleanup event. For Copilot, also upgrade to version `1.0.45` or
+  newer, because older releases had `agentStop` hook issues.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

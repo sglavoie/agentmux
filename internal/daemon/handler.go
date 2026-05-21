@@ -135,23 +135,23 @@ const maxEventsPerWindow = 5000
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 	return &Handler{
-		guard:                guard,
-		notifier:             notifier,
-		startedAt:            time.Now(),
+		guard:                 guard,
+		notifier:              notifier,
+		startedAt:             time.Now(),
 		staleThresholds:       make(map[string]time.Duration),
 		perAccountThresholds:  make(map[string]map[string]time.Duration),
 		perAccountHookSilence: make(map[string]time.Duration),
-		activity:             make(map[int]time.Time),
-		lastAction:           make(map[int]string),
-		lastAccount:          make(map[int]string),
-		lastActiveEvent:      make(map[int]string),
-		subagentCount:        make(map[int]int),
-		notifiedStale:        make(map[int]bool),
-		lastSeenEventAt:      make(map[string]time.Time),
-		notifiedHookSilence:  make(map[string]bool),
-		lastSessionTitle:     make(map[int]string),
-		lastPipeMode:         make(map[int]bool),
-		eventLog:             make(map[int][]SessionEvent),
+		activity:              make(map[int]time.Time),
+		lastAction:            make(map[int]string),
+		lastAccount:           make(map[int]string),
+		lastActiveEvent:       make(map[int]string),
+		subagentCount:         make(map[int]int),
+		notifiedStale:         make(map[int]bool),
+		lastSeenEventAt:       make(map[string]time.Time),
+		notifiedHookSilence:   make(map[string]bool),
+		lastSessionTitle:      make(map[int]string),
+		lastPipeMode:          make(map[int]bool),
+		eventLog:              make(map[int][]SessionEvent),
 	}
 }
 
@@ -432,9 +432,10 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	}
 
 	// Copilot mid-subagent suppression: while background subagents are running,
-	// Copilot fires agentStop (per-turn signal) and speculative permissionRequest
-	// events that would otherwise overwrite the 🤖 guard. Suppress them here so
-	// the reference-counted subagent state remains the source of truth.
+	// Copilot fires agentStop (a preserve-current child-complete signal) and
+	// speculative permissionRequest events that would otherwise overwrite the 🤖
+	// guard. Suppress them here so the reference-counted subagent state remains
+	// the source of truth.
 	//
 	// Event-name match (not action) ensures only Copilot's specific events
 	// trigger suppression; Claude's Stop / SessionEnd / PermissionRequest fall
@@ -450,8 +451,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// "subagent". So we drop any pending permission entry outright.
 	// stop_failure carries a real Copilot crash and must surface even mid-subagent,
 	// mirroring the SubagentStop failure-surfacing rule above. Only the benign
-	// per-turn agentStop (action stop) and speculative permissionRequest are
-	// suppressed by this gate.
+	// per-turn agentStop (resolved as active + preserve-current) and speculative
+	// permissionRequest are suppressed by this gate.
 	if (req.Event == "agentStop" && req.Action != "stop_failure") || req.Event == "permissionRequest" {
 		h.stateMu.Lock()
 		running := h.subagentCount[req.WindowID] > 0
@@ -514,6 +515,17 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	}
 
 	prevGuard := h.guard.Current(req.WindowID)
+	preservedAction := ""
+	if req.PreservesIcon {
+		// Child-complete events reuse the non-terminal "active" action to refresh
+		// activity bookkeeping without surfacing a new icon. Preserve whichever
+		// state the user was already seeing so a follow-up idle/clear keeps the
+		// same terminal-vs-active semantics instead of acting like a fresh bolt.
+		preservedAction = prevGuard
+		if preservedAction == "" {
+			preservedAction = h.lastKnownAction(req.WindowID, req.CurrentIconState)
+		}
+	}
 	allowed, effective := h.guard.TryUpdate(req.WindowID, req.Action, req.IsPrompt)
 	slog.Debug("state transition",
 		"window_id", req.WindowID,
@@ -571,9 +583,14 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.lastActiveEvent[req.WindowID] = req.Event
 	}
 	// Record the last substantive action so idle/clear can detect a stale bolt
-	// even after the state guard has expired.
-	if effective != "idle" && effective != "clear" && effective != "user_clear" && !isAutoApprovedPerm {
-		h.lastAction[req.WindowID] = effective
+	// even after the state guard has expired. Preserve-current events keep the
+	// prior state semantics instead of rewriting them to a synthesized "active".
+	recordedAction := effective
+	if req.PreservesIcon {
+		recordedAction = preservedAction
+	}
+	if recordedAction != "" && recordedAction != "idle" && recordedAction != "clear" && recordedAction != "user_clear" && !isAutoApprovedPerm {
+		h.lastAction[req.WindowID] = recordedAction
 		delete(h.notifiedStale, req.WindowID)
 	}
 	// Append this transition into the per-window ring buffer. Terminal actions
@@ -581,6 +598,14 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// in the detail pane.
 	h.appendEventLocked(req, effective, false)
 	h.stateMu.Unlock()
+
+	if req.PreservesIcon {
+		if preservedAction == "" {
+			h.guard.Clear(req.WindowID)
+		} else {
+			h.guard.TryUpdate(req.WindowID, preservedAction, false)
+		}
+	}
 
 	iconState := IconState(effective)
 	if req.PreservesIcon {
