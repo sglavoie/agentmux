@@ -47,11 +47,12 @@ func actionFromIconState(iconState string) string {
 func (h *Handler) appendEventLocked(req Request, action string, suppressed bool) {
 	buf := h.eventLog[req.WindowID]
 	buf = append(buf, SessionEvent{
-		At:         time.Now().Unix(),
-		Event:      req.Event,
-		Action:     action,
-		ToolName:   req.ToolName,
-		Suppressed: suppressed,
+		At:            time.Now().Unix(),
+		Event:         req.Event,
+		Action:        action,
+		ToolName:      req.ToolName,
+		Suppressed:    suppressed,
+		PreservesIcon: req.PreservesIcon,
 	})
 	if len(buf) > maxEventsPerWindow {
 		buf = buf[len(buf)-maxEventsPerWindow:]
@@ -66,6 +67,14 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if _, ok := actionPriority[req.Action]; !ok {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
 	}
+
+	slog.Debug("hook event received",
+		"window_id", req.WindowID,
+		"account", req.Account,
+		"event", req.Event,
+		"action", req.Action,
+		"preserves_icon", req.PreservesIcon,
+	)
 
 	// Only terminal/idle transitions invalidate a pending permission notification.
 	// PostToolUse/active/subagent events are normal companions to a real
@@ -163,6 +172,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			slog.Debug("copilot mid-subagent suppression",
 				"window_id", req.WindowID,
 				"event", req.Event,
+				"action", req.Action,
 				"subagent_count", count,
 			)
 			h.stateMu.Lock()

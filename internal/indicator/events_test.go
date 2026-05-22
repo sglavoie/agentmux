@@ -153,23 +153,21 @@ func TestResolveAction_AllEventsHaveValidActions(t *testing.T) {
 
 func TestPreservesCurrent(t *testing.T) {
 	cases := []struct {
-		event   string
-		payload HookPayload
-		want    bool
+		event string
+		want  bool
 	}{
-		{"SubagentStop", HookPayload{}, false},
-		{"TaskCompleted", HookPayload{}, true},
-		{"agentStop", HookPayload{}, false},
-		{"TeammateIdle", HookPayload{}, true},
-		{"Notification", HookPayload{NotificationType: "agent_idle"}, false},
-		{"Notification", HookPayload{NotificationType: "permission_prompt"}, false},
-		{"UserPromptSubmit", HookPayload{}, false},
-		{"Stop", HookPayload{}, false},
-		{"PostToolUse", HookPayload{}, false},
+		{"SubagentStop", false},
+		{"TaskCompleted", true},
+		{"agentStop", false},
+		{"TeammateIdle", true},
+		{"Notification", false},
+		{"UserPromptSubmit", false},
+		{"Stop", false},
+		{"PostToolUse", false},
 	}
 	for _, tc := range cases {
-		if got := PreservesCurrent(tc.event, tc.payload); got != tc.want {
-			t.Errorf("PreservesCurrent(%q, %+v) = %v, want %v", tc.event, tc.payload, got, tc.want)
+		if got := PreservesCurrent(tc.event); got != tc.want {
+			t.Errorf("PreservesCurrent(%q) = %v, want %v", tc.event, got, tc.want)
 		}
 	}
 }
@@ -259,8 +257,8 @@ func TestResolveAction_CopilotTurnEndIsStop(t *testing.T) {
 	if !ok || got != "stop" {
 		t.Fatalf("ResolveAction(agentStop, end_turn) = (%q, %v), want (stop, true)", got, ok)
 	}
-	if PreservesCurrent("agentStop", HookPayload{StopReasonCamel: "end_turn"}) {
-		t.Error("PreservesCurrent(agentStop, end_turn) = true, want false")
+	if PreservesCurrent("agentStop") {
+		t.Error("PreservesCurrent(agentStop) = true, want false")
 	}
 }
 

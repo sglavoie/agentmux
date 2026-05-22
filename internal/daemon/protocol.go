@@ -61,11 +61,12 @@ type WatchdogState struct {
 // appends one of these per Request it processes (both allowed and suppressed),
 // and serves the buffer back to the TUI on TypeSessionDetail queries.
 type SessionEvent struct {
-	At         int64  `json:"at"`                   // unix seconds when the daemon received the event
-	Event      string `json:"event"`                // raw hook event name (e.g. PreToolUse)
-	Action     string `json:"action"`               // resolved action (active, stop, …)
-	ToolName   string `json:"tool_name,omitempty"`  // tool name when event carries one
-	Suppressed bool   `json:"suppressed,omitempty"` // true when the guard blocked the transition
+	At            int64  `json:"at"`                       // unix seconds when the daemon received the event
+	Event         string `json:"event"`                    // raw hook event name (e.g. PreToolUse)
+	Action        string `json:"action"`                   // resolved action (active, stop, …)
+	ToolName      string `json:"tool_name,omitempty"`      // tool name when event carries one
+	Suppressed    bool   `json:"suppressed,omitempty"`     // true when the guard blocked the transition
+	PreservesIcon bool   `json:"preserves_icon,omitempty"` // true when the event preserved the current icon (child-complete signals)
 }
 
 // actionPriority maps each action name to its guard priority.

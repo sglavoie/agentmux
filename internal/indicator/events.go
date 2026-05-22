@@ -173,11 +173,11 @@ func isNotificationEvent(input string) bool {
 	return input == "notification" || input == "Notification"
 }
 
-// PreservesCurrent reports whether event represents a child or turn completing
-// while the parent session remains alive. The daemon should preserve the
-// currently visible icon instead of drawing a new one for the synthesized
-// non-terminal "active" action.
-func PreservesCurrent(event string, payload HookPayload) bool {
+// PreservesCurrent reports whether event represents a child completing while
+// the parent session remains alive. The daemon should preserve the currently
+// visible icon instead of drawing a new one for the synthesized non-terminal
+// "active" action.
+func PreservesCurrent(event string) bool {
 	switch event {
 	case "TaskCompleted", "TeammateIdle":
 		return true

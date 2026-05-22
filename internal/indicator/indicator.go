@@ -44,7 +44,7 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 	}
 
 	pipeMode := IsPipeMode()
-	preservesIcon := PreservesCurrent(eventOrAction, payload) && action == "active"
+	preservesIcon := PreservesCurrent(eventOrAction) && action == "active"
 
 	runner := kitty.NewRealRunner()
 	client := kitty.NewClient(runner)
