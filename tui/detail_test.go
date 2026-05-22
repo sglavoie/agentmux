@@ -319,3 +319,17 @@ func TestRenderDetail_NoSeparatorForActiveSession(t *testing.T) {
 		t.Errorf("expected no `session ended` marker for an active session, got:\n%s", out)
 	}
 }
+
+func TestRenderDetail_FailureDoesNotMarkSessionEnded(t *testing.T) {
+	m := detailModel(t)
+	m.detailEvents = []daemon.SessionEvent{
+		{At: 100, Event: "SessionStart", Action: "active"},
+		{At: 200, Event: "PostToolUseFailure", Action: "failure", ToolName: "Bash"},
+	}
+
+	out := stripAnsi(renderDetail(m))
+
+	if strings.Contains(out, "session ended") {
+		t.Errorf("expected no `session ended` marker for a recoverable failure, got:\n%s", out)
+	}
+}

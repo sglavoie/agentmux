@@ -28,13 +28,13 @@ var (
 	styleAgeWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 
 	// Per-state accent styles used by the footer gloss. bolt picks up the
-	// success/active teal; key/stop/error reuse the attention orange so the
-	// gloss text matches the icon family the user already associates with
-	// each state.
-	styleStateBolt  = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-	styleStateStop  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleStateKey   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
-	styleStateError = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
+	// success/active teal; stop/key/warning reuse the attention orange; terminal
+	// error stays on the stronger red accent.
+	styleStateBolt    = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
+	styleStateStop    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleStateKey     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleStateWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleStateError   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
 
 	styleGroupBorderAttention = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 	styleGroupBorderActive    = lipgloss.NewStyle()
@@ -48,8 +48,8 @@ var (
 
 	// styleChip is the neutral base for substring chips. Account chips use
 	// accountStyle(colorName) on top; state chips with attention semantics
-	// (key/stop/error) reuse styleAttentionRow. Focused chips overlay an
-	// underline regardless of the base color.
+	// (key/stop/warning/error) pick up their state accent. Focused chips overlay
+	// an underline regardless of the base color.
 	styleChip = lipgloss.NewStyle()
 
 	// Toast severity styles. Info is neutral foreground (no styling so it
@@ -93,8 +93,12 @@ func chipStyle(c chipComponent, acctColor map[string]string, focused bool) lipgl
 		base = accountStyle(acctColor[c.raw])
 	case chipState:
 		switch c.raw {
-		case "key", "stop", "error":
+		case "key", "stop":
 			base = styleAttentionRow
+		case "warning":
+			base = styleStateWarning
+		case "error":
+			base = styleStateError
 		default:
 			base = styleChip
 		}
@@ -118,6 +122,8 @@ func stateAccentStyle(state string) lipgloss.Style {
 		return styleStateStop
 	case "key":
 		return styleStateKey
+	case "warning":
+		return styleStateWarning
 	case "error":
 		return styleStateError
 	default:

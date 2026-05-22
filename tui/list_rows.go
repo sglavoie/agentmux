@@ -251,26 +251,27 @@ func renderGroupLabel(group, count int) string {
 
 // stateGroup classifies a session into one of three buckets:
 //
-//	0 → Needs Attention (key, stop, question)
-//	1 → Active (bolt, error, subagent, compact, or empty state within the
+//	0 → Needs Attention (key, stop, error, question)
+//	1 → Active (bolt, warning, subagent, compact, or empty state within the
 //	    idle threshold, or empty state with no activity record)
 //	2 → Idle (empty state with stale activity, beyond the threshold)
 //
-// The error state is grouped under Active so a session whose last tool
+// The warning state is grouped under Active so a session whose last tool
 // call failed (carrying the ⚠️ icon) stays visible alongside bolt rows
-// instead of hiding under Idle — the icon itself remains the cue.
-// subagent and compact are mid-task states the daemon emits while work is
-// in progress, so they classify alongside bolt; question is the elicitation
-// prompt, which requires user input and so groups under Needs Attention.
+// instead of hiding under Idle. The terminal error state (❗) stays under
+// Needs Attention so stop failures remain high-signal. subagent and compact
+// are mid-task states the daemon emits while work is in progress, so they
+// classify alongside bolt; question is the elicitation prompt, which requires
+// user input and so groups under Needs Attention.
 //
 // Without a daemon-recorded activity timestamp a session is treated as
 // Active rather than Idle so a fresh session does not flicker into the
 // Idle bucket the moment it appears.
 func stateGroup(s session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) int {
 	switch s.State {
-	case "key", "stop", "question":
+	case "key", "stop", "error", "question":
 		return 0
-	case "bolt", "error", "subagent", "compact":
+	case "bolt", "warning", "subagent", "compact":
 		return 1
 	}
 	if s.State != "" {

@@ -239,11 +239,12 @@ func TestMatchStateBolt(t *testing.T) {
 	}
 }
 
-func TestMatchStateKeyStopError(t *testing.T) {
+func TestMatchStateKeyStopWarningError(t *testing.T) {
 	cases := map[string]string{
-		"!key":   "key",
-		"!stop":  "stop",
-		"!error": "error",
+		"!key":     "key",
+		"!stop":    "stop",
+		"!warning": "warning",
+		"!error":   "error",
 	}
 	for expr, st := range cases {
 		f := Parse(expr)

@@ -15,8 +15,9 @@ type guardEntry struct {
 // StateGuard enforces priority-based state transition blocking per window.
 // A higher-priority state blocks lower-priority updates until the guard expires.
 // Priority order:
-//   failure / stop_failure (4) > permission (3) > stop / subagent (2) >
-//   active / compact (1) > idle (0) > clear / user_clear (-1).
+//
+//	failure / stop_failure (4) > permission (3) > stop / subagent (2) >
+//	active / compact (1) > idle (0) > clear / user_clear (-1).
 //
 // Notes on equal-priority pairs:
 //   - subagent (2) outranks active (1), so the 🤖 icon survives interleaved
@@ -60,7 +61,7 @@ func NewStateGuard(duration time.Duration) *StateGuard {
 //   - If the current guard is "failure" and the incoming action is "active",
 //     the guard is cleared so the active state breaks through immediately.
 //     Failure is transient: the next active event means Claude is back to work,
-//     so the ❗ icon should not strand across long tool calls. The check is
+//     so the ⚠️ icon should not strand across long tool calls. The check is
 //     string-exact on "failure" so it does NOT apply to "stop_failure", which
 //     is terminal and must persist until the user explicitly clears it.
 //   - If the current guard is "failure" and the incoming action is "subagent",

@@ -94,7 +94,7 @@ func TestCandidatesForSigil_AccountDedupesLegacyAlias(t *testing.T) {
 
 func TestCandidatesForSigil_State(t *testing.T) {
 	got := candidatesForSigil('!', nil)
-	for _, want := range []string{"active", "idle", "bolt", "key", "stop", "error"} {
+	for _, want := range []string{"active", "idle", "bolt", "key", "stop", "warning", "error"} {
 		found := false
 		for _, g := range got {
 			if g == want {

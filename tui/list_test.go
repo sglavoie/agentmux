@@ -73,10 +73,16 @@ func TestStateGroupClassification(t *testing.T) {
 			want:     1,
 		},
 		{
-			name:     "error state classified as Active",
-			state:    "error",
+			name:     "warning state classified as Active",
+			state:    "warning",
 			windowID: 8,
 			want:     1,
+		},
+		{
+			name:     "error state classified as Needs Attention",
+			state:    "error",
+			windowID: 12,
+			want:     0,
 		},
 		{
 			// Regression: subagent (🤖) used to fall into the "unknown" branch
@@ -244,23 +250,23 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 }
 
 // TestFormatRowIconColumnAlignment locks in that a row carrying the ⚠️
-// failure icon aligns its account badge at the same visual column as a
+// warning icon aligns its account badge at the same visual column as a
 // row carrying the ⚡ bolt icon. Without iconDisplayWidth's U+FE0F
 // handling, ⚠️ would be measured as 1 cell and over-padded, shifting
 // every following column right by one.
 func TestFormatRowIconColumnAlignment(t *testing.T) {
 	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "x"}
-	sErr := session.RunningSession{State: "error", Account: "p", Base: "x"}
+	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "x"}
 	rowBolt := formatRow(sBolt, nil, 0, "")
-	rowErr := formatRow(sErr, nil, 0, "")
+	rowWarn := formatRow(sWarn, nil, 0, "")
 
 	iBolt := idxBadge(rowBolt)
-	iErr := idxBadge(rowErr)
-	if iBolt < 0 || iErr < 0 {
-		t.Fatalf("badge '[' not found: bolt=%d err=%d (rows: %q / %q)", iBolt, iErr, rowBolt, rowErr)
+	iWarn := idxBadge(rowWarn)
+	if iBolt < 0 || iWarn < 0 {
+		t.Fatalf("badge '[' not found: bolt=%d warning=%d (rows: %q / %q)", iBolt, iWarn, rowBolt, rowWarn)
 	}
-	if iBolt != iErr {
-		t.Errorf("badge column misaligned: bolt=%d, error=%d", iBolt, iErr)
+	if iBolt != iWarn {
+		t.Errorf("badge column misaligned: bolt=%d, warning=%d", iBolt, iWarn)
 	}
 }
 

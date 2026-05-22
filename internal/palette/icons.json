@@ -7,12 +7,13 @@
     "bolt": "⚡",
     "stop": "🛑",
     "key": "🔑",
+    "warning": "⚠️",
     "error": "❗",
     "subagent": "🤖",
     "compact": "🌀",
     "question": "❓"
   },
-  "state_order": ["bolt", "stop", "key", "error", "subagent", "compact", "question"],
+  "state_order": ["bolt", "stop", "key", "warning", "error", "subagent", "compact", "question"],
   "sort_modes": ["default", "alpha", "name", "account", "group", "status", "idle", "activity"],
   "hook_events": [
     "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",

@@ -20,7 +20,7 @@ const (
 type Request struct {
 	Type             MessageType `json:"type"`
 	WindowID         int         `json:"window_id,omitempty"`          // KITTY_WINDOW_ID
-	Action           string      `json:"action,omitempty"`             // active|stop|permission|failure|idle|clear
+	Action           string      `json:"action,omitempty"`             // active|stop|permission|failure|stop_failure|idle|clear
 	Event            string      `json:"event,omitempty"`              // raw Claude hook event name (e.g. UserPromptSubmit)
 	ToolName         string      `json:"tool_name,omitempty"`          // tool name from PreToolUse/PostToolUse hook payloads
 	IsPrompt         bool        `json:"is_prompt,omitempty"`          // true if event is a user prompt submission
@@ -42,7 +42,7 @@ type Response struct {
 	Error string `json:"error,omitempty"`
 	// Fields populated for TypeStateUpdate:
 	Allowed   bool   `json:"allowed,omitempty"`    // whether guard permitted the transition
-	IconState string `json:"icon_state,omitempty"` // icon name to show ("bolt","stop","key","error","")
+	IconState string `json:"icon_state,omitempty"` // icon name to show ("bolt","stop","key","warning","error","")
 	// Fields populated for TypeStateQuery:
 	Activity map[int]int64         `json:"activity,omitempty"` // window_id → unix seconds of last activity
 	Watchdog map[int]WatchdogState `json:"watchdog,omitempty"` // window_id → watchdog state for age-aware TUI rendering
@@ -190,8 +190,8 @@ var actionPriority = map[string]int{
 }
 
 // actionIconState maps each action to the palette icon state name.
-// stop_failure deliberately reuses the "error" glyph (shared with failure);
-// the two actions differ only in priority transition logic and notification flag.
+// Recoverable tool failures render as "warning"; terminal stop failures stay on
+// the sticky "error" icon.
 var actionIconState = map[string]string{
 	"active":       "bolt",
 	"compact":      "compact",
@@ -199,7 +199,7 @@ var actionIconState = map[string]string{
 	"stop":         "stop",
 	"elicitation":  "question",
 	"permission":   "key",
-	"failure":      "error",
+	"failure":      "warning",
 	"stop_failure": "error",
 	"idle":         "",
 	"clear":        "",

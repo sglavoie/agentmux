@@ -257,10 +257,10 @@ func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
 	t.Run("subagentStart clears failure guard and shows robot icon", func(t *testing.T) {
 		h := newTestHandler()
 
-		// Establish a failure guard (error icon showing).
+		// Establish a failure guard (warning icon showing).
 		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure", Event: "postToolUseFailure"})
-		if !resp.OK || !resp.Allowed || resp.IconState != "error" {
-			t.Fatalf("setup: want error icon, got %+v", resp)
+		if !resp.OK || !resp.Allowed || resp.IconState != "warning" {
+			t.Fatalf("setup: want warning icon, got %+v", resp)
 		}
 
 		// SubagentStart must clear the failure guard and show the robot.

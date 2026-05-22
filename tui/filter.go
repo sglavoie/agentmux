@@ -13,7 +13,8 @@ import (
 //
 //	@<account>   exact account match (case-insensitive)
 //	%<harness>   exact harness match (case-insensitive); e.g. %claude, %copilot
-//	!<state>     state filter; recognized: active, idle, bolt, key, stop, error
+//	!<state>     state filter; recognized: active, idle, bolt, key, stop,
+//	             warning, error, subagent, compact, question
 //	<word>       case-insensitive substring against title, directory, or account
 //	\@foo / \!x  literal leading @ or ! (lenient: also accepted bare in titles)
 //
@@ -223,7 +224,7 @@ func matchState(s session.RunningSession, state string, lastActivity map[int]tim
 		return stateGroup(s, lastActivity, idle) == 1
 	case "idle":
 		return stateGroup(s, lastActivity, idle) == 2
-	case "bolt", "key", "stop", "error", "subagent", "compact", "question":
+	case "bolt", "key", "stop", "warning", "error", "subagent", "compact", "question":
 		return s.State == strings.ToLower(state)
 	}
 	// Unknown state name — lenient: pass everything through so the user can

@@ -125,7 +125,7 @@ The list and launcher share the same filter DSL:
 | --- | --- |
 | `word` | case-insensitive substring against title, directory, or profile |
 | `@profile` | exact profile match |
-| `!state` | state match: `active`, `idle`, `bolt`, `key`, `stop`, `error` |
+| `!state` | state match: `active`, `idle`, `bolt`, `key`, `stop`, `warning`, `error`, `subagent`, `compact`, `question` |
 | `\@foo`, `\!x` | literal leading `@` or `!` |
 
 ## Hooks
@@ -318,7 +318,8 @@ The tab title is prefixed with an icon based on the latest hook event:
 | 🌀 | compaction running |
 | 🛑 | stopped |
 | 🔑 | permission needed |
-| ❗ | failure |
+| ⚠️ | tool failed (recoverable) |
+| ❗ | stopped with failure |
 
 ## Config commands
 

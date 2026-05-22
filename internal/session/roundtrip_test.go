@@ -26,6 +26,7 @@ func TestTitleRoundTrip_FormatPalettePalette(t *testing.T) {
 		{"ascii bolt", config.Session{Title: "api", Account: "work"}, "bolt", false},
 		{"ascii stop", config.Session{Title: "api", Account: "work"}, "stop", false},
 		{"ascii key", config.Session{Title: "api", Account: "work"}, "key", false},
+		{"ascii warning", config.Session{Title: "api", Account: "work"}, "warning", false},
 		{"ascii error", config.Session{Title: "api", Account: "work"}, "error", false},
 		{"ascii starred no state", config.Session{Title: "api", Account: "work"}, "", true},
 		{"ascii starred bolt", config.Session{Title: "api", Account: "work"}, "bolt", true},

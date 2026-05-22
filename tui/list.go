@@ -26,7 +26,8 @@ var stateGlosses = map[string]string{
 	"bolt":     "active",
 	"stop":     "stopped",
 	"key":      "needs permission",
-	"error":    "last tool failed",
+	"warning":  "last tool failed",
+	"error":    "stopped with failure",
 	"subagent": "subagent running",
 	"compact":  "compacting context",
 	"question": "awaiting response",
@@ -251,7 +252,7 @@ const legendMinHeight = 20
 
 // legendStates lists the state names rendered in the legend strip, in the
 // order they appear. Mirrors stateGlosses; idle/unknown states have no entry.
-var legendStates = []string{"bolt", "stop", "key", "error"}
+var legendStates = []string{"bolt", "stop", "key", "warning", "error"}
 
 // renderLegend returns the icon→meaning legend strip drawn above the list.
 // Returns "" when the terminal is too short to spare a line, when the model

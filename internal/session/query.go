@@ -16,7 +16,7 @@ type RunningSession struct {
 	Key              string
 	Title            string // raw Kitty tab title (may include icons)
 	Base             string // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
-	State            string // "bolt", "stop", "key", "error", or ""
+	State            string // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
 	Starred          bool
 	Project          string   // configured project title
 	Profile          string   // from amx_profile / legacy cc_account user vars

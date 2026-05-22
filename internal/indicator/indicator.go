@@ -225,7 +225,8 @@ func finalizeTitleUpdate(tab *kitty.Tab, windowID int, iconState string, client 
 // daemonDownIconState mirrors the daemon's preserve-current and idle/clear
 // handling for the daemon-unavailable fallback: child-complete events keep the
 // current icon unchanged, and a bare idle/clear must not wipe a still-relevant
-// stop/permission/error/elicitation icon the user has not yet acknowledged.
+// stop/permission/warning/error/elicitation icon the user has not yet
+// acknowledged.
 // Copilot also lacks a documented postCompact hook, so an idle/clear arriving
 // while the compact icon is still visible must synthesize a stop icon instead of
 // silently clearing it. Other active-like icons are still cleared normally.

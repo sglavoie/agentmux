@@ -60,14 +60,13 @@ func detailScrollBounds(m Model) (total, visible int) {
 	return total, visible
 }
 
-// isTerminalAction reports whether an event action marks the end of a
-// session run. Session 1 of the persistence work made these actions
-// append to the per-window event log instead of wiping it; the detail
-// pane uses this predicate to mark the boundary between live and
-// historical entries.
+// isTerminalAction reports whether an event action marks the end of a session
+// run. Recoverable tool failures (`failure`) are intentionally excluded: they
+// should stay visible in the log without drawing a false "session ended"
+// separator.
 func isTerminalAction(action string) bool {
 	switch action {
-	case "stop", "stop_failure", "failure":
+	case "stop", "stop_failure":
 		return true
 	}
 	return false

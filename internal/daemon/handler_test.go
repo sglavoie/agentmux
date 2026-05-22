@@ -58,10 +58,13 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 		iconState string
 	}{
 		{"active", "bolt"},
+		{"compact", "compact"},
+		{"subagent", "subagent"},
 		{"stop", "stop"},
 		{"permission", "key"},
+		{"failure", "warning"},
+		{"stop_failure", "error"},
 		{"elicitation", "question"},
-		{"failure", "error"},
 		// idle and clear with no prior guard preserve whatever icon is already
 		// in the title (nothing to clear).
 		{"idle", IconStatePreserve},
@@ -95,7 +98,7 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 			{"compact", "", "idle after compact clears icon"},
 			{"stop", IconStatePreserve, "idle after stop preserves stop icon"},
 			{"permission", IconStatePreserve, "idle after permission preserves key icon"},
-			{"failure", IconStatePreserve, "idle after failure preserves error icon"},
+			{"failure", IconStatePreserve, "idle after failure preserves warning icon"},
 		}
 		// Test with a long guard (prevGuard still set when idle arrives).
 		for _, tc := range cases {
@@ -141,6 +144,7 @@ func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {
 		{"clear clears stale bolt", "clear", "bolt", "", ""},
 		{"clear preserves stop icon", "clear", "stop", "", IconStatePreserve},
 		{"idle preserves permission icon", "idle", "key", "", IconStatePreserve},
+		{"idle preserves warning icon", "idle", "warning", "", IconStatePreserve},
 		{"idle preserves error icon", "idle", "error", "", IconStatePreserve},
 		{"idle preserves elicitation icon", "idle", "question", "", IconStatePreserve},
 	}

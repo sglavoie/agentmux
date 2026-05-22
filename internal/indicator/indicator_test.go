@@ -109,13 +109,13 @@ func TestIndicator_ReturnsNilWhenTabMissingButDaemonSucceeded(t *testing.T) {
 
 // TestDaemonDownIconState_PreservesUnacknowledgedIcons locks in the daemon-down
 // fallback contract: a bare idle/clear hook must not wipe a still-relevant
-// permission/stop/error/elicitation icon when the daemon is unreachable. The
-// regression scenario this guards against is a tab showing the permission key
-// after Claude asks for approval, then the user's daemon being down when the
-// next Notification (empty type → idle) fires — under the previous code the
-// key icon was wiped and the user lost the visual cue that approval was
-// needed. Active/compact/subagent icons still clear on idle because they
-// represent an in-flight agent that has now finished.
+// permission/stop/warning/error/elicitation icon when the daemon is
+// unreachable. The regression scenario this guards against is a tab showing the
+// permission key after Claude asks for approval, then the user's daemon being
+// down when the next Notification (empty type → idle) fires — under the
+// previous code the key icon was wiped and the user lost the visual cue that
+// approval was needed. Active/compact/subagent icons still clear on idle
+// because they represent an in-flight agent that has now finished.
 func TestDaemonDownIconState_PreservesUnacknowledgedIcons(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -133,6 +133,7 @@ func TestDaemonDownIconState_PreservesUnacknowledgedIcons(t *testing.T) {
 		{"idle clears subagent", "idle", "subagent", "", false, "", false},
 		{"idle preserves key", "idle", "key", "", false, "", true},
 		{"idle preserves stop", "idle", "stop", "", false, "", true},
+		{"idle preserves warning", "idle", "warning", "", false, "", true},
 		{"idle preserves error", "idle", "error", "", false, "", true},
 		{"idle preserves question", "idle", "question", "", false, "", true},
 		{"clear preserves key", "clear", "key", "", false, "", true},
@@ -141,7 +142,7 @@ func TestDaemonDownIconState_PreservesUnacknowledgedIcons(t *testing.T) {
 		{"active writes bolt regardless of current", "active", "key", "", false, "bolt", false},
 		{"permission writes key", "permission", "", "", false, "key", false},
 		{"stop_failure writes error", "stop_failure", "bolt", "", false, "error", false},
-		{"failure writes error", "failure", "", "", false, "error", false},
+		{"failure writes warning", "failure", "", "", false, "warning", false},
 		{"idle with no current icon is a no-op", "idle", "", "", false, "", true},
 	}
 	for _, tc := range cases {

@@ -29,12 +29,9 @@ func actionFromIconState(iconState string) string {
 		return "stop"
 	case "key":
 		return "permission"
+	case "warning":
+		return "failure"
 	case "error":
-		// The "error" glyph is shared by failure and stop_failure. Without a
-		// daemon-side lastAction record (e.g. fresh daemon restart), we cannot
-		// tell them apart from the title alone, so prefer the terminal
-		// stop_failure: clearing a real stop_failure on a benign follow-up is
-		// worse than over-preserving a transient failure.
 		return "stop_failure"
 	case "question":
 		return "elicitation"

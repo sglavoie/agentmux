@@ -173,13 +173,13 @@ func TestStateGroupSorting(t *testing.T) {
 		{TabID: 2, Base: "active1", Account: "work", State: "bolt"},
 		{TabID: 3, Base: "attention1", Account: "personal", State: "key"},
 		{TabID: 4, Base: "attention2", Account: "personal", State: "stop"},
-		{TabID: 5, Base: "idle2", Account: "work", State: "error"},
+		{TabID: 5, Base: "attention3", Account: "work", State: "error"},
 	}
 	m = loadSessions(m, sessions)
 
-	// Attention (key, stop) comes first; then Active with icon (bolt, error)
+	// Attention (key, stop, error) comes first; then Active with icon (bolt)
 	// before empty-state Active sessions (per the no-record→Active design).
-	expected := []string{"attention1", "attention2", "active1", "idle2", "idle1"}
+	expected := []string{"attention1", "attention2", "attention3", "active1", "idle1"}
 	if len(m.filtered) != len(expected) {
 		t.Fatalf("expected %d filtered sessions, got %d", len(expected), len(m.filtered))
 	}

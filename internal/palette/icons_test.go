@@ -9,7 +9,7 @@ func TestStarIcon(t *testing.T) {
 }
 
 func TestStateIconAllStates(t *testing.T) {
-	states := []string{"bolt", "stop", "key", "error", "subagent", "compact", "question"}
+	states := []string{"bolt", "stop", "key", "warning", "error", "subagent", "compact", "question"}
 	for _, s := range states {
 		if got := StateIcon(s); got == "" {
 			t.Errorf("StateIcon(%q) is empty", s)
@@ -45,7 +45,7 @@ func TestParseTitleStarred(t *testing.T) {
 }
 
 func TestParseTitleWithState(t *testing.T) {
-	states := []string{"bolt", "stop", "key", "error", "subagent", "compact", "question"}
+	states := []string{"bolt", "stop", "key", "warning", "error", "subagent", "compact", "question"}
 	for _, want := range states {
 		title := BuildTitle("P:api", want, false)
 		base, state, starred := ParseTitle(title)
@@ -73,6 +73,7 @@ func TestBuildTitleRoundTrip(t *testing.T) {
 		{"W:project", "", true},
 		{"P:dotfiles", "bolt", false},
 		{"P:dotfiles", "bolt", true},
+		{"W:api", "warning", true},
 		{"W:api", "error", true},
 	}
 	for _, tc := range cases {
@@ -94,6 +95,7 @@ func TestStripIcons(t *testing.T) {
 		{BuildTitle("W:project", "", true), "W:project"},
 		{BuildTitle("W:project", "bolt", false), "W:project"},
 		{BuildTitle("W:project", "bolt", true), "W:project"},
+		{BuildTitle("P:api", "warning", true), "P:api"},
 		{BuildTitle("P:api", "error", true), "P:api"},
 	}
 	for _, tc := range cases {
@@ -117,7 +119,7 @@ func TestStripIcons_StopsAfterFirstStateIcon(t *testing.T) {
 }
 
 func TestDetectState(t *testing.T) {
-	states := []string{"bolt", "stop", "key", "error", "subagent", "compact", "question"}
+	states := []string{"bolt", "stop", "key", "warning", "error", "subagent", "compact", "question"}
 	for _, want := range states {
 		title := BuildTitle("W:x", want, false)
 		if got := DetectState(title); got != want {
@@ -170,8 +172,20 @@ func TestBuildParseQuestion(t *testing.T) {
 	}
 }
 
-func TestParseTitleErrorGlyphSwap(t *testing.T) {
-	// Regression: ❗ is the new "error" glyph (was ⚠️).
+func TestBuildParseWarning(t *testing.T) {
+	title := BuildTitle("base", "warning", false)
+	if title != "⚠️base" {
+		t.Errorf("BuildTitle(warning) = %q, want %q", title, "⚠️base")
+	}
+	base, state, starred := ParseTitle("⚠️base")
+	if base != "base" || state != "warning" || starred {
+		t.Errorf("ParseTitle(⚠️base) = (%q, %q, %v), want (base, warning, false)", base, state, starred)
+	}
+}
+
+func TestParseTitleErrorGlyph(t *testing.T) {
+	// Regression: terminal failures keep the ❗ error glyph after warning was
+	// split back out into its own ⚠️ state.
 	base, state, starred := ParseTitle("❗base")
 	if base != "base" || state != "error" || starred {
 		t.Errorf("ParseTitle(❗base) = (%q, %q, %v), want (base, error, false)", base, state, starred)
@@ -179,7 +193,7 @@ func TestParseTitleErrorGlyphSwap(t *testing.T) {
 }
 
 func TestStateOrderExtended(t *testing.T) {
-	want := []string{"bolt", "stop", "key", "error", "subagent", "compact", "question"}
+	want := []string{"bolt", "stop", "key", "warning", "error", "subagent", "compact", "question"}
 	got := StateOrder()
 	if len(got) != len(want) {
 		t.Fatalf("StateOrder() len = %d, want %d (got %v)", len(got), len(want), got)

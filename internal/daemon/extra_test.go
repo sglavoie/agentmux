@@ -44,6 +44,7 @@ func TestActionFromIconState(t *testing.T) {
 		{"subagent", "subagent"},
 		{"stop", "stop"},
 		{"key", "permission"},
+		{"warning", "failure"},
 		{"error", "stop_failure"},
 		{"question", "elicitation"},
 		{"", ""},

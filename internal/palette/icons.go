@@ -23,7 +23,8 @@ func init() {
 func StarIcon() string { return ico.Star }
 
 // StateIcon returns the icon character for a named state ("bolt", "stop", "key",
-// "error", "subagent", "compact"), or "" if the state name is unknown.
+// "warning", "error", "subagent", "compact"), or "" if the state name is
+// unknown.
 func StateIcon(state string) string { return ico.States[state] }
 
 // StateOrder returns the canonical state-detection priority order.
@@ -35,7 +36,9 @@ func StateOrder() []string {
 
 // ParseTitle parses a tab title into its components.
 // Tab title format: [★][<state-icon>]<base>
-// Returns base title, state name ("bolt"/"stop"/"key"/"error"/"subagent"/"compact"/""), and starred flag.
+// Returns base title, state name
+// ("bolt"/"stop"/"key"/"warning"/"error"/"subagent"/"compact"/"question"/""),
+// and starred flag.
 func ParseTitle(title string) (base, state string, starred bool) {
 	if strings.HasPrefix(title, ico.Star) {
 		starred = true
