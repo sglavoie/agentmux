@@ -136,6 +136,22 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 	return Response{}, fmt.Errorf("daemon did not start in time: %w", err)
 }
 
+// ExportEvents returns the per-window hook-event ring buffers from the
+// running daemon. Existing TypeSessionDetail callers build the request inline
+// and call Send directly (see tui/model_modes.go); ExportEvents is the typed
+// helper for the multi-window export so the new CLI does not have to know
+// about the message-type constant.
+func (c *Client) ExportEvents() (map[int][]SessionEvent, error) {
+	resp, err := c.Send(Request{Type: TypeEventsExport})
+	if err != nil {
+		return nil, err
+	}
+	if !resp.OK {
+		return nil, fmt.Errorf("daemon error: %s", resp.Error)
+	}
+	return resp.EventsByWindow, nil
+}
+
 // SpawnDetached starts `amxBin daemon start` in a new session with stdio
 // detached, freeing the calling terminal immediately. The spawned process
 // survives the parent's termination. Does not wait for the daemon socket

@@ -265,3 +265,78 @@ func TestHandler_SessionDetail_UnknownWindow(t *testing.T) {
 		t.Fatalf("events = %d; want 0", len(resp.Events))
 	}
 }
+
+// TestHandler_EventsExport_ReturnsAllWindows seeds three windows with distinct
+// event counts and asserts the export returns every window keyed by its ID
+// with the right per-window count. This pins the multi-window aggregation that
+// the new `amx daemon export-events` CLI depends on.
+func TestHandler_EventsExport_ReturnsAllWindows(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 2, Action: "active", Event: "PreToolUse"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 2, Action: "stop", Event: "Stop"})
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "PreToolUse"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "PostToolUse"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "stop", Event: "Stop"})
+
+	resp := h.Handle(Request{Type: TypeEventsExport})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	if got := len(resp.EventsByWindow); got != 3 {
+		t.Fatalf("len(EventsByWindow) = %d; want 3 (%+v)", got, resp.EventsByWindow)
+	}
+	want := map[int]int{1: 1, 2: 2, 3: 3}
+	for id, n := range want {
+		got := len(resp.EventsByWindow[id])
+		if got != n {
+			t.Errorf("window %d events = %d; want %d", id, got, n)
+		}
+	}
+}
+
+// TestHandler_EventsExport_EmptyWhenNoEvents asserts the export succeeds when
+// no events have ever been buffered. The map may be nil or empty — both
+// encode the same "no investigation surface yet" semantics on the wire.
+func TestHandler_EventsExport_EmptyWhenNoEvents(t *testing.T) {
+	h := newTestHandler()
+
+	resp := h.Handle(Request{Type: TypeEventsExport})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	if len(resp.EventsByWindow) != 0 {
+		t.Fatalf("EventsByWindow = %+v; want empty", resp.EventsByWindow)
+	}
+}
+
+// TestHandler_EventsExport_DoesNotMutateOriginal pins the defensive copy in
+// handleEventsExport: a caller that mutates the returned slice must not be
+// able to corrupt the daemon's internal ring buffer. Without the per-window
+// `make+copy`, the returned slice header would alias the buffer and any
+// in-place write would leak back into subsequent exports.
+func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", ToolName: "Bash"})
+
+	first := h.Handle(Request{Type: TypeEventsExport})
+	if !first.OK || len(first.EventsByWindow[1]) != 1 {
+		t.Fatalf("first export: want one event for window 1, got %+v", first)
+	}
+
+	// Tamper with the returned slice. If the handler aliases its internal
+	// buffer, the next export will reflect this mutation.
+	first.EventsByWindow[1][0].Event = "TAMPERED"
+
+	second := h.Handle(Request{Type: TypeEventsExport})
+	if !second.OK || len(second.EventsByWindow[1]) != 1 {
+		t.Fatalf("second export: want one event for window 1, got %+v", second)
+	}
+	if got := second.EventsByWindow[1][0].Event; got != "PreToolUse" {
+		t.Fatalf("internal buffer mutated: event = %q; want %q", got, "PreToolUse")
+	}
+}

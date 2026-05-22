@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -108,5 +109,53 @@ func TestSessionEvent_OmitsZeroOptionalFields(t *testing.T) {
 func TestTypeSessionDetail_Const(t *testing.T) {
 	if string(TypeSessionDetail) != "session_detail" {
 		t.Fatalf("TypeSessionDetail = %q, want %q", TypeSessionDetail, "session_detail")
+	}
+}
+
+// TestResponse_RoundtripCarriesEventsByWindow pins that the per-window export
+// map survives JSON roundtrip with every nested SessionEvent field intact,
+// including the new PreservesIcon flag added in Session 3. Session 4's
+// TypeEventsExport returns this map, so a tag typo would silently empty the
+// investigator's view.
+func TestResponse_RoundtripCarriesEventsByWindow(t *testing.T) {
+	in := Response{
+		OK: true,
+		EventsByWindow: map[int][]SessionEvent{
+			1: {
+				{At: 1700000000, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
+				{At: 1700000001, Event: "agentStop", Action: "active", PreservesIcon: true},
+			},
+			2: {
+				{At: 1700000010, Event: "Stop", Action: "stop", Suppressed: true},
+			},
+		},
+	}
+
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("Marshal(Response): %v", err)
+	}
+
+	var out Response
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("Unmarshal(Response): %v", err)
+	}
+
+	if !reflect.DeepEqual(out.EventsByWindow, in.EventsByWindow) {
+		t.Fatalf("EventsByWindow roundtrip mismatch:\nin=%#v\nout=%#v", in.EventsByWindow, out.EventsByWindow)
+	}
+}
+
+// TestResponse_OmittedEventsByWindowMarshalsClean pins that omitempty fires on
+// the new field so a TypeSessionDetail response does not waste bytes on an
+// empty map.
+func TestResponse_OmittedEventsByWindowMarshalsClean(t *testing.T) {
+	in := Response{OK: true, Events: []SessionEvent{{At: 1, Event: "Stop", Action: "stop"}}}
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("Marshal(Response): %v", err)
+	}
+	if got := string(data); strings.Contains(got, "events_by_window") {
+		t.Fatalf("expected events_by_window to be omitted, got: %s", got)
 	}
 }

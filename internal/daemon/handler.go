@@ -164,6 +164,8 @@ func (h *Handler) Handle(req Request) Response {
 		return h.handleStateQuery()
 	case TypeSessionDetail:
 		return h.handleSessionDetail(req)
+	case TypeEventsExport:
+		return h.handleEventsExport()
 	case TypeHealth:
 		return h.handleHealth()
 	case TypeShutdown:
@@ -215,6 +217,21 @@ func (h *Handler) handleSessionDetail(req Request) Response {
 	copy(events, src)
 	h.stateMu.Unlock()
 	return Response{OK: true, Events: events}
+}
+
+// handleEventsExport returns a deep copy of every window's event ring buffer
+// in a single response. Mirrors handleSessionDetail's locking and defensive
+// slice copy so callers cannot mutate the daemon's internal state.
+func (h *Handler) handleEventsExport() Response {
+	h.stateMu.Lock()
+	out := make(map[int][]SessionEvent, len(h.eventLog))
+	for id, src := range h.eventLog {
+		cp := make([]SessionEvent, len(src))
+		copy(cp, src)
+		out[id] = cp
+	}
+	h.stateMu.Unlock()
+	return Response{OK: true, EventsByWindow: out}
 }
 
 func (h *Handler) handleShutdown() Response {

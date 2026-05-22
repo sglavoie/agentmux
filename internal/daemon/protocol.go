@@ -7,6 +7,7 @@ const (
 	TypeStateUpdate   MessageType = "state_update"
 	TypeStateQuery    MessageType = "state_query"
 	TypeSessionDetail MessageType = "session_detail"
+	TypeEventsExport  MessageType = "events_export"
 	TypeShutdown      MessageType = "shutdown"
 	TypeHealth        MessageType = "health"
 
@@ -42,6 +43,10 @@ type Response struct {
 	Watchdog map[int]WatchdogState `json:"watchdog,omitempty"` // window_id → watchdog state for age-aware TUI rendering
 	// Fields populated for TypeSessionDetail:
 	Events []SessionEvent `json:"events,omitempty"` // per-window hook event ring buffer (oldest first)
+	// Fields populated for TypeEventsExport. Mutually exclusive with Events:
+	// TypeSessionDetail returns one window's buffer in Events, TypeEventsExport
+	// returns every window's buffer keyed by window ID.
+	EventsByWindow map[int][]SessionEvent `json:"events_by_window,omitempty"`
 	// Fields populated for TypeHealth:
 	PID           int   `json:"pid,omitempty"`
 	UptimeSeconds int64 `json:"uptime_seconds,omitempty"`
