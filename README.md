@@ -160,14 +160,14 @@ Current Copilot events mapped by Agent Mux include:
 - `preCompact`
 - `notification`
 
-`sessionEnd` is the terminal Copilot completion hook. `agentStop` and
-`notification` payloads with `notification_type = agent_idle` are treated as
-non-terminal child/turn-complete signals, so they preserve the parent
-session's current icon instead of showing stop.
+`agentStop` is the terminal Copilot turn-end hook — the direct analogue of
+Claude's `Stop` event — and resolves to the stop action (⏹ icon).
+`notification` payloads with `notification_type = agent_idle` also resolve to
+the stop action. `sessionEnd` remains the session-level terminal hook.
 
 Claude hook support remains in place alongside Copilot; `Stop` and
-`SessionEnd` are terminal, while `TeammateIdle` and `Notification{agent_idle}`
-follow the same non-terminal child-complete path.
+`SessionEnd` are terminal. `TeammateIdle` is the lone non-terminal
+child-complete signal that preserves the parent session's current icon.
 
 ## Daemon
 
@@ -178,6 +178,7 @@ amx daemon start
 amx daemon restart
 amx daemon status
 amx daemon stop
+amx daemon export-events
 ```
 
 It listens on:
@@ -185,6 +186,21 @@ It listens on:
 ```text
 ~/.local/share/agent-mux/daemon.sock
 ```
+
+### Investigating hook event flow
+
+`amx daemon export-events` dumps the daemon's in-memory per-window hook event
+buffer as JSON. Combine with `jq` to filter for the events relevant to a bug
+report:
+
+```bash
+amx daemon export-events | jq '.windows[] | .[] | select(.event == "agentStop")'
+```
+
+Pass `--window ID` to restrict the dump to one Kitty window, or `--output
+PATH` to write to a file instead of stdout. The export is read-only and does
+not auto-start the daemon, so the buffer of a still-running investigation
+session is never replaced.
 
 ## Watchdog
 
@@ -282,11 +298,11 @@ just test
 - **Hooks are missing**: run `amx config hooks-status`, then
   `amx config hooks-sync`.
 - **The bolt icon stays after the agent is done**: run `amx config hooks-status`
-  and `amx config hooks-sync` to restore terminal hooks like `sessionEnd`/`Stop`
-  and child-complete hooks like `agentStop`, `TeammateIdle`, and typed
-  `notification` events. Current releases also recover across daemon restarts
-  on the next cleanup event. For Copilot, also upgrade to version `1.0.45` or
-  newer, because older releases had `agentStop` hook issues.
+  and `amx config hooks-sync` to restore terminal hooks like
+  `sessionEnd`/`Stop`/`agentStop` and the child-complete `TeammateIdle` hook.
+  Current releases also recover across daemon restarts on the next cleanup
+  event. For Copilot, also upgrade to version `1.0.45` or newer, because
+  older releases had `agentStop` hook issues.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

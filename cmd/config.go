@@ -197,7 +197,7 @@ var configHooksStatusCmd = &cobra.Command{
 		}
 		if needsResync {
 			fmt.Println()
-			fmt.Println("hint: drifted or missing hooks can strand tab icons; run `amx config hooks-sync` to restore terminal hooks like Stop/SessionEnd and child-complete hooks like TeammateIdle, agentStop, and typed notifications.")
+			fmt.Println("hint: drifted or missing hooks can strand tab icons; run `amx config hooks-sync` to restore terminal hooks like Stop/SessionEnd/agentStop and child-complete hooks like TeammateIdle.")
 		}
 		if statusErr != nil {
 			return statusErr
