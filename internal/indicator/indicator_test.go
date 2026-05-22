@@ -35,29 +35,32 @@ func TestDaemonDownIconState_PreservesUnacknowledgedIcons(t *testing.T) {
 		name      string
 		action    string
 		current   string
+		harness   string
 		preserves bool
 		wantNext  string
 		wantSkip  bool
 	}{
-		{"idle clears bolt", "idle", "bolt", false, "", false},
-		{"idle clears compact", "idle", "compact", false, "", false},
-		{"idle clears subagent", "idle", "subagent", false, "", false},
-		{"idle preserves key", "idle", "key", false, "", true},
-		{"idle preserves stop", "idle", "stop", false, "", true},
-		{"idle preserves error", "idle", "error", false, "", true},
-		{"idle preserves question", "idle", "question", false, "", true},
-		{"clear preserves key", "clear", "key", false, "", true},
-		{"clear clears bolt", "clear", "bolt", false, "", false},
-		{"preserve-current child completion is a no-op", "active", "bolt", true, "", true},
-		{"active writes bolt regardless of current", "active", "key", false, "bolt", false},
-		{"permission writes key", "permission", "", false, "key", false},
-		{"stop_failure writes error", "stop_failure", "bolt", false, "error", false},
-		{"failure writes error", "failure", "", false, "error", false},
-		{"idle with no current icon is a no-op", "idle", "", false, "", true},
+		{"idle clears bolt", "idle", "bolt", "", false, "", false},
+		{"idle clears compact for Claude", "idle", "compact", "claude", false, "", false},
+		{"idle promotes Copilot compact to stop", "idle", "compact", "copilot", false, "stop", false},
+		{"clear promotes Copilot compact to stop", "clear", "compact", "copilot", false, "stop", false},
+		{"idle clears subagent", "idle", "subagent", "", false, "", false},
+		{"idle preserves key", "idle", "key", "", false, "", true},
+		{"idle preserves stop", "idle", "stop", "", false, "", true},
+		{"idle preserves error", "idle", "error", "", false, "", true},
+		{"idle preserves question", "idle", "question", "", false, "", true},
+		{"clear preserves key", "clear", "key", "", false, "", true},
+		{"clear clears bolt", "clear", "bolt", "", false, "", false},
+		{"preserve-current child completion is a no-op", "active", "bolt", "", true, "", true},
+		{"active writes bolt regardless of current", "active", "key", "", false, "bolt", false},
+		{"permission writes key", "permission", "", "", false, "key", false},
+		{"stop_failure writes error", "stop_failure", "bolt", "", false, "error", false},
+		{"failure writes error", "failure", "", "", false, "error", false},
+		{"idle with no current icon is a no-op", "idle", "", "", false, "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			next, skip := daemonDownIconState(tc.action, tc.current, tc.preserves)
+			next, skip := daemonDownIconState(tc.action, tc.current, tc.preserves, tc.harness)
 			if next != tc.wantNext || skip != tc.wantSkip {
 				t.Errorf("daemonDownIconState(%q, %q, %v) = (%q, %v), want (%q, %v)",
 					tc.action, tc.current, tc.preserves, next, skip, tc.wantNext, tc.wantSkip)

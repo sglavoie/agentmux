@@ -114,6 +114,60 @@ func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.
 	})
 }
 
+func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing.T) {
+	h := newTestHandler()
+
+	resp := h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "permission",
+		Event:            "notification",
+		NotificationType: "elicitation_dialog",
+		CurrentIconState: "bolt",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+		t.Fatalf("Copilot plan prompt: want key icon, got %+v", resp)
+	}
+
+	resp = h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "stop",
+		Event:            "agentStop",
+		CurrentIconState: "key",
+	})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("Copilot agentStop while prompt pending: want allowed=false, got %+v", resp)
+	}
+
+	resp = h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "active",
+		Event:            "postToolUse",
+		CurrentIconState: "key",
+	})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("Copilot trailing active while prompt pending: want allowed=false, got %+v", resp)
+	}
+
+	resp = h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "active",
+		Event:            "userPromptSubmitted",
+		IsPrompt:         true,
+		CurrentIconState: "key",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+		t.Fatalf("Copilot user response should clear prompt icon, got %+v", resp)
+	}
+}
+
 func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		guard := NewStateGuard(time.Hour)

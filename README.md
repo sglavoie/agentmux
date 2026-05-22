@@ -169,7 +169,13 @@ Current Copilot events mapped by Agent Mux include:
 `agentStop` is the terminal Copilot turn-end hook — the direct analogue of
 Claude's `Stop` event — and resolves to the stop action (⏹ icon).
 `notification` payloads with `notification_type = agent_idle` also resolve to
-the stop action. `sessionEnd` remains the session-level terminal hook.
+the stop action. `notification_type = permission_prompt` and
+`notification_type = elicitation_dialog` both resolve to the permission-needed
+key icon (🔑), because both mean Copilot is waiting on user input.
+`sessionEnd` remains the session-level terminal hook. Copilot still does not
+document a `postCompact` hook; if a compaction run ends with only an
+idle/cleanup follow-up after `preCompact`, Agent Mux promotes the compact state
+to ⏹ instead of silently clearing the tab icon.
 
 Claude hook support remains in place alongside Copilot; `Stop` and
 `SessionEnd` are terminal. `TeammateIdle` is the lone non-terminal

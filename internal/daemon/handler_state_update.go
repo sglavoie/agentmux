@@ -47,8 +47,59 @@ const (
 	suppressionReasonGuardBlocked         = "guard_blocked"
 	suppressionReasonSubagentStillRunning = "subagent_still_running"
 	suppressionReasonCopilotMidSubagent   = "copilot_mid_subagent"
+	suppressionReasonCopilotPendingPrompt = "copilot_pending_prompt"
 	suppressionReasonActiveAfterTerminal  = "active_after_terminal"
 )
+
+func isCopilotRequest(req Request) bool {
+	if harness.Normalize(req.Harness) == "copilot" {
+		return true
+	}
+	switch req.Event {
+	case "sessionStart", "sessionEnd", "userPromptSubmitted", "preToolUse",
+		"postToolUse", "postToolUseFailure", "permissionRequest", "agentStop",
+		"subagentStart", "subagentStop", "errorOccurred", "preCompact",
+		"notification":
+		return true
+	default:
+		return false
+	}
+}
+
+func isCopilotPermissionResolutionEvent(req Request) bool {
+	if req.IsPrompt {
+		return true
+	}
+	switch req.Event {
+	case "preToolUse", "PreToolUse":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldSuppressCopilotPendingPrompt(req Request, prevAction string) bool {
+	if !isCopilotRequest(req) || prevAction != "permission" {
+		return false
+	}
+	switch {
+	case req.Action == "stop" && req.Event == "agentStop":
+		return true
+	case req.Action == "active" && !isCopilotPermissionResolutionEvent(req):
+		return true
+	default:
+		return false
+	}
+}
+
+// Copilot exposes preCompact but not a documented postCompact hook. If the
+// first follow-up is only an idle/cleanup event, preserve the compaction
+// context long enough to surface a stop icon instead of silently clearing it.
+func shouldSynthesizeCopilotCompactStop(req Request, prevAction string) bool {
+	return isCopilotRequest(req) &&
+		prevAction == "compact" &&
+		(req.Action == "idle" || req.Action == "clear")
+}
 
 func sessionEventFromRequest(req Request, action, resultIconState string) SessionEvent {
 	return SessionEvent{
@@ -133,6 +184,21 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	h.stateMu.Lock()
 	h.touchWindowMetadataLocked(req)
 	h.stateMu.Unlock()
+
+	prevAction := h.lastKnownAction(req.WindowID, req.CurrentIconState)
+	syntheticStop := shouldSynthesizeCopilotCompactStop(req, prevAction)
+	if shouldSuppressCopilotPendingPrompt(req, prevAction) {
+		h.guard.TryUpdate(req.WindowID, "permission", false)
+		slog.Debug("copilot pending prompt suppression",
+			"window_id", req.WindowID,
+			"event", req.Event,
+			"action", req.Action,
+		)
+		h.stateMu.Lock()
+		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotPendingPrompt))
+		h.stateMu.Unlock()
+		return Response{OK: true, Allowed: false}
+	}
 
 	// Only terminal/idle transitions invalidate a pending permission notification.
 	// PostToolUse/active/subagent events are normal companions to a real
@@ -273,8 +339,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// armed at "active" — otherwise a subsequent idle would see prevGuard
 	// "active" and ask the indicator to clear the persisting stop icon.
 	if req.Action == "active" && !req.IsPrompt {
-		prev := h.lastKnownAction(req.WindowID, req.CurrentIconState)
-		if prev == "stop" || prev == "stop_failure" {
+		if prevAction == "stop" || prevAction == "stop_failure" {
 			h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Action, req.PipeMode)
 			h.stateMu.Lock()
 			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonActiveAfterTerminal))
@@ -292,7 +357,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		// same terminal-vs-active semantics instead of acting like a fresh bolt.
 		preservedAction = prevGuard
 		if preservedAction == "" {
-			preservedAction = h.lastKnownAction(req.WindowID, req.CurrentIconState)
+			preservedAction = prevAction
 		}
 	}
 	allowed, effective := h.guard.TryUpdate(req.WindowID, req.Action, req.IsPrompt)
@@ -357,6 +422,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	recordedAction := effective
 	if req.PreservesIcon {
 		recordedAction = preservedAction
+	} else if syntheticStop {
+		recordedAction = "stop"
 	}
 	if recordedAction != "" && recordedAction != "idle" && recordedAction != "clear" && recordedAction != "user_clear" && !isAutoApprovedPerm {
 		h.lastAction[req.WindowID] = recordedAction
@@ -390,22 +457,32 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.guard.Clear(req.WindowID)
 		iconState = IconStatePreserve
 	} else if effective == "idle" || effective == "clear" {
-		// Prefer prevGuard (still within the guard window); fall back to
-		// lastAction, then the currently displayed title icon, for the common case
-		// where the guard already expired or the daemon restarted while the bolt
-		// icon is still showing in the title.
+		// Prefer prevGuard (still within the guard window); fall back to the
+		// pre-update lastAction/current title icon snapshot captured in prevAction.
+		// This keeps cleanup decisions tied to the state the user was actually
+		// seeing before the current hook arrived.
 		prev := prevGuard
 		if prev == "" {
-			prev = h.lastKnownAction(req.WindowID, req.CurrentIconState)
+			prev = prevAction
 		}
 		switch prev {
-		case "active", "compact", "subagent":
+		case "active", "subagent":
 			// Agent finished — clear the active indicator and reset tracking.
 			iconState = ""
 			h.stateMu.Lock()
 			delete(h.lastAction, req.WindowID)
 			delete(h.lastActiveEvent, req.WindowID)
 			h.stateMu.Unlock()
+		case "compact":
+			if syntheticStop {
+				iconState = IconState("stop")
+			} else {
+				iconState = ""
+				h.stateMu.Lock()
+				delete(h.lastAction, req.WindowID)
+				delete(h.lastActiveEvent, req.WindowID)
+				h.stateMu.Unlock()
+			}
 		default:
 			// stop/permission/failure icons persist until the user notices them.
 			iconState = IconStatePreserve
@@ -425,7 +502,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	}
 
 	h.stateMu.Lock()
-	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, effective, iconState))
+	loggedAction := effective
+	if syntheticStop {
+		loggedAction = "stop"
+	}
+	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, loggedAction, iconState))
 	h.stateMu.Unlock()
 
 	return Response{OK: true, Allowed: true, IconState: iconState}

@@ -130,16 +130,19 @@ func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {
 		name     string
 		cleanup  string
 		current  string
+		harness  string
 		wantIcon string
 	}{
-		{"idle clears stale bolt", "idle", "bolt", ""},
-		{"idle clears stale compact", "idle", "compact", ""},
-		{"idle clears stale subagent", "idle", "subagent", ""},
-		{"clear clears stale bolt", "clear", "bolt", ""},
-		{"clear preserves stop icon", "clear", "stop", IconStatePreserve},
-		{"idle preserves permission icon", "idle", "key", IconStatePreserve},
-		{"idle preserves error icon", "idle", "error", IconStatePreserve},
-		{"idle preserves elicitation icon", "idle", "question", IconStatePreserve},
+		{"idle clears stale bolt", "idle", "bolt", "", ""},
+		{"idle clears stale compact", "idle", "compact", "", ""},
+		{"idle promotes stale Copilot compact to stop", "idle", "compact", "copilot", "stop"},
+		{"clear promotes stale Copilot compact to stop", "clear", "compact", "copilot", "stop"},
+		{"idle clears stale subagent", "idle", "subagent", "", ""},
+		{"clear clears stale bolt", "clear", "bolt", "", ""},
+		{"clear preserves stop icon", "clear", "stop", "", IconStatePreserve},
+		{"idle preserves permission icon", "idle", "key", "", IconStatePreserve},
+		{"idle preserves error icon", "idle", "error", "", IconStatePreserve},
+		{"idle preserves elicitation icon", "idle", "question", "", IconStatePreserve},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -148,6 +151,7 @@ func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {
 				Type:             TypeStateUpdate,
 				WindowID:         1,
 				Action:           tc.cleanup,
+				Harness:          tc.harness,
 				CurrentIconState: tc.current,
 			})
 			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
@@ -207,6 +211,45 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 			t.Fatalf("manual permission (PostToolUse guard live): want icon_state=\"key\", got %+v", resp)
 		}
 	})
+}
+
+func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
+	h := newTestHandler()
+
+	resp := h.Handle(Request{
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Harness:  "copilot",
+		Action:   "compact",
+		Event:    "preCompact",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "compact" {
+		t.Fatalf("Copilot preCompact should show compact icon, got %+v", resp)
+	}
+
+	resp = h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "idle",
+		Event:            "notification",
+		CurrentIconState: "compact",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+		t.Fatalf("Copilot compaction cleanup should synthesize stop icon, got %+v", resp)
+	}
+
+	resp = h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "active",
+		Event:            "postToolUse",
+		CurrentIconState: "stop",
+	})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("Copilot post-compaction stop should block non-prompt active follow-up, got %+v", resp)
+	}
 }
 
 func TestHandler_ElicitationShowsQuestionIcon(t *testing.T) {

@@ -108,6 +108,102 @@ func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 	}
 }
 
+func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "permission",
+		Event:            "notification",
+		NotificationType: "elicitation_dialog",
+		CurrentIconState: "bolt",
+	})
+	h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "stop",
+		Event:            "agentStop",
+		CurrentIconState: "key",
+	})
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	if !resp.OK {
+		t.Fatalf("session detail: want OK=true, got %+v", resp)
+	}
+	if len(resp.Events) != 2 {
+		t.Fatalf("events = %d; want 2 (%+v)", len(resp.Events), resp.Events)
+	}
+	ev := resp.Events[1]
+	if ev.Event != "agentStop" || !ev.Suppressed {
+		t.Fatalf("second event = %+v; want event=agentStop suppressed=true", ev)
+	}
+	if ev.SuppressionReason != suppressionReasonCopilotPendingPrompt {
+		t.Fatalf("suppression_reason = %q; want %q", ev.SuppressionReason, suppressionReasonCopilotPendingPrompt)
+	}
+	if ev.ResultIconState != IconStatePreserve {
+		t.Fatalf("result_icon_state = %q; want %q", ev.ResultIconState, IconStatePreserve)
+	}
+	if ev.CurrentIconState != "key" {
+		t.Fatalf("current_icon_state = %q; want key", ev.CurrentIconState)
+	}
+}
+
+func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "compact",
+		Event:            "preCompact",
+		SessionTitle:     "W:api",
+		Account:          "work",
+		CurrentIconState: "bolt",
+	})
+	h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "idle",
+		Event:            "notification",
+		SessionTitle:     "W:api",
+		Account:          "work",
+		CurrentIconState: "compact",
+	})
+
+	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 1})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	if len(resp.EventsByWindow[1]) != 2 {
+		t.Fatalf("events = %d; want 2 (%+v)", len(resp.EventsByWindow[1]), resp.EventsByWindow[1])
+	}
+	ev := resp.EventsByWindow[1][1]
+	if ev.Event != "notification" {
+		t.Fatalf("event = %q; want notification", ev.Event)
+	}
+	if ev.Action != "stop" {
+		t.Fatalf("action = %q; want stop", ev.Action)
+	}
+	if ev.ResultIconState != "stop" {
+		t.Fatalf("result_icon_state = %q; want stop", ev.ResultIconState)
+	}
+	if ev.CurrentIconState != "compact" {
+		t.Fatalf("current_icon_state = %q; want compact", ev.CurrentIconState)
+	}
+	meta := resp.WindowMetadata[1]
+	if meta.Durable.LastAction != "stop" {
+		t.Fatalf("last_action = %q; want stop", meta.Durable.LastAction)
+	}
+	if meta.Durable.Harness != "copilot" {
+		t.Fatalf("harness = %q; want copilot", meta.Durable.Harness)
+	}
+}
+
 func TestHandler_EventLog_AppendOnActiveAfterTerminalSuppression(t *testing.T) {
 	h := newTestHandler()
 

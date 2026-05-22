@@ -66,9 +66,9 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 			ok:      true,
 		},
 		{
-			name:    "elicitation notification shows question icon",
+			name:    "elicitation notification shows key icon",
 			payload: HookPayload{NotificationType: "elicitation_dialog"},
-			want:    "elicitation",
+			want:    "permission",
 			ok:      true,
 		},
 		{

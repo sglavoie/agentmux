@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -120,7 +121,7 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		if tab == nil {
 			return fmt.Errorf("indicator: window %d not found and daemon unavailable", windowID)
 		}
-		nextIcon, skip := daemonDownIconState(action, currentIconState, preservesIcon)
+		nextIcon, skip := daemonDownIconState(action, currentIconState, preservesIcon, harness)
 		if skip {
 			return nil
 		}
@@ -193,13 +194,17 @@ func finalizeTitleUpdate(tab *kitty.Tab, windowID int, iconState string, client 
 // handling for the daemon-unavailable fallback: child-complete events keep the
 // current icon unchanged, and a bare idle/clear must not wipe a still-relevant
 // stop/permission/error/elicitation icon the user has not yet acknowledged.
-// Only icons that represent an in-flight agent (bolt/compact/subagent) are
-// cleared by idle/clear; everything else is left untouched.
-func daemonDownIconState(action, currentIconState string, preservesIcon bool) (next string, skip bool) {
+// Copilot also lacks a documented postCompact hook, so an idle/clear arriving
+// while the compact icon is still visible must synthesize a stop icon instead of
+// silently clearing it. Other active-like icons are still cleared normally.
+func daemonDownIconState(action, currentIconState string, preservesIcon bool, harnessName string) (next string, skip bool) {
 	if preservesIcon {
 		return "", true
 	}
 	if action == "idle" || action == "clear" {
+		if currentIconState == "compact" && harness.Normalize(harnessName) == "copilot" {
+			return "stop", false
+		}
 		switch currentIconState {
 		case "bolt", "compact", "subagent":
 			return "", false

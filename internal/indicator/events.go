@@ -5,8 +5,8 @@ package indicator
 // eventToAction is a shared map covering Claude (PascalCase) and Copilot
 // (camelCase) hook event names that directly map to a visible tab-state change.
 // Notification hooks are resolved separately because their payload subtype is
-// needed to decide whether they mean "permission", "elicitation", "stop",
-// or "ignore".
+// needed to decide whether they mean "permission", "stop", or "ignore".
+// Claude's explicit Elicitation hook still maps directly via eventToAction.
 var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.
 	"sessionStart": "idle",
@@ -161,7 +161,10 @@ func resolveNotificationAction(input string, payload HookPayload) (string, bool)
 	case "permission_prompt":
 		return "permission", true
 	case "elicitation_dialog":
-		return "elicitation", true
+		// Copilot uses elicitation_dialog for plan approvals and other
+		// user-input-needed prompts. Surface the same key icon as a permission
+		// prompt so the tab consistently signals "waiting on you".
+		return "permission", true
 	case "agent_idle":
 		return "stop", true
 	default:
