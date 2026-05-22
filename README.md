@@ -137,6 +137,12 @@ amx config hooks-sync
 amx config hooks-status
 ```
 
+Managed hook files embed the absolute `amx` path returned by the binary that ran
+`hooks-sync`. Re-run `amx config hooks-sync` when that path changes (for example,
+when switching from a repo-local binary to `~/.local/bin/amx`). If you rebuilt
+or reinstalled the same binary path and only changed Go logic, hook sync is not
+needed.
+
 Hook installation is harness-aware:
 
 - **Claude**: merges Agent Mux hook commands into that profile's
@@ -186,17 +192,25 @@ Claude hook support remains in place alongside Copilot; `Stop` and
 `SessionEnd` are terminal. `TeammateIdle` is the lone non-terminal
 child-complete signal that preserves the parent session's current icon.
 
-Agent Mux classifies reset flows from the documented hook contracts instead of
-synthetic prompt/session-start mixes. Claude `/clear` is detected from
+Agent Mux classifies reset flows from the harness lifecycle it actually sees at
+runtime instead of from prompt-only heuristics. Claude `/clear` is detected from
 `SessionEnd.reason = clear` and the follow-up `SessionStart.source = clear`.
-Copilot reset commands are detected from `userPromptSubmitted.prompt` when the
-first token is `/clear`, `/reset`, or `/new`, plus the documented
-`sessionStart.source = new` lifecycle hint. Terminal stop hooks pause briefly
-before reaching the daemon so late reset markers can win, and the daemon then
-rewrites the follow-up stop/idle cleanup path to `user_clear` so reset flows
-clear the tab without surfacing a stop icon or stop notification. If runtime
-behavior still diverges, inspect `amx daemon export-events --window <id>`
-before changing the delay heuristic.
+Copilot reset commands are still detected from `userPromptSubmitted.prompt`
+when the first token is `/clear`, `/reset`, or `/new`, plus the documented
+`sessionStart.source = new` lifecycle hint, but interactive Copilot sessions can
+also emit `/clear` first as `sessionEnd.reason = user_exit` and only start the
+next session on the next prompt. Agent Mux treats that user-driven session end
+as reset cleanup too. Terminal stop hooks pause briefly before reaching the
+daemon so late reset markers can win, and the daemon then rewrites the
+follow-up stop/idle cleanup path to `user_clear` so reset flows clear the tab
+without surfacing a stop icon or stop notification. If runtime behavior still
+diverges, inspect `amx daemon export-events --window <id>` before changing the
+delay heuristic.
+
+If the managed hook binary is newer than the running daemon, the next hook event
+from that binary automatically restarts the daemon so new indicator/daemon logic
+takes effect without a manual restart. Use `amx daemon restart` when you want to
+force that refresh immediately, or when debugging a hook path mismatch.
 
 ## Daemon
 

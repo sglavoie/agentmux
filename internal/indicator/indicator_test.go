@@ -430,6 +430,41 @@ func TestRunWithDeps_CopilotClearSequenceUsesPromptAndSessionStartResetSignals(t
 	}
 }
 
+func TestRunWithDeps_CopilotUserExitSessionEndClearsImmediately(t *testing.T) {
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+
+	boltTitle := palette.BuildTitle("api", "bolt", false)
+	stopTitle := palette.BuildTitle("api", "stop", false)
+	clearTitle := palette.BuildTitle("api", "", false)
+
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, boltTitle, "work", "copilot"),
+	}
+
+	if err := runWithDeps("sessionEnd", 42, "/tmp/amx", HookPayload{Reason: "user_exit"}, false, kittyClient, daemonClient); err != nil {
+		t.Fatalf("sessionEnd(user_exit) error = %v", err)
+	}
+
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 1 {
+		t.Fatalf("daemon requests = %d, want 1 (%+v)", len(reqs), reqs)
+	}
+	if reqs[0].Event != "sessionEnd" || !reqs[0].ResetFlow {
+		t.Fatalf("request = %+v, want event=sessionEnd reset_flow=true", reqs[0])
+	}
+
+	if len(kittyClient.setTitleCalls) != 1 {
+		t.Fatalf("title updates = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+	}
+	if got := kittyClient.setTitleCalls[0].title; got != clearTitle {
+		t.Fatalf("sessionEnd(user_exit) title = %q, want %q (and never %q)", got, clearTitle, stopTitle)
+	}
+}
+
 func TestBuildStateUpdateRequest_CarriesResetFlow(t *testing.T) {
 	req := buildStateUpdateRequest(
 		42,

@@ -115,12 +115,14 @@ func (p HookPayload) EffectiveToolName() string {
 	return p.ToolNameCamel
 }
 
-// payloadHasResetFlow classifies documented user-initiated reset flows from the
-// harness hook payload. The daemon only needs a boolean marker, but the
-// indicator must respect the two harness contracts:
+// payloadHasResetFlow classifies user-initiated reset flows from the harness
+// hook payload. The daemon only needs a boolean marker, but the indicator must
+// respect the two harness contracts:
 //   - Claude: `/clear` is exposed through lifecycle payloads.
-//   - Copilot: reset slash commands arrive on userPromptSubmitted and the new
-//     session is flagged with sessionStart.source == "new".
+//   - Copilot: documented reset markers are slash-command prompts and
+//     sessionStart.source == "new", but the interactive CLI can also terminate
+//     the current session with sessionEnd.reason == "user_exit" before the next
+//     session starts.
 func payloadHasResetFlow(harnessName, event string, payload HookPayload) bool {
 	switch strings.ToLower(strings.TrimSpace(harnessName)) {
 	case harness.Claude:
@@ -162,6 +164,8 @@ func copilotPayloadHasResetFlow(event string, payload HookPayload) bool {
 		return hasResetPromptCommand(payload.EffectivePrompt())
 	case "sessionStart":
 		return normalizeLifecycleValue(payload.Source) == "new"
+	case "sessionEnd":
+		return normalizeLifecycleValue(payload.Reason) == "user_exit"
 	default:
 		return false
 	}

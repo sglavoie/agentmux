@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -45,6 +46,14 @@ func NewClientWithSocket(path string) *Client {
 // per Claude event and must return promptly. Exposed as a var (not const) so
 // tests can shrink it without sleeping for several seconds.
 var sendDeadline = 5 * time.Second
+
+var autoStartRetryDelay = 200 * time.Millisecond
+var spawnDetached = SpawnDetached
+
+const autoStartRetryCount = 5
+const restartSocketPollCount = 20
+
+var restartSocketPollDelay = 50 * time.Millisecond
 
 // maxResponseBytes caps the response payload size the client will buffer.
 // It mirrors the server's request ceiling (1 MiB) so an oversize or
@@ -113,21 +122,82 @@ func (c *Client) Health() Health {
 	}
 }
 
+func daemonSocketOlderThanBinary(socketPath, amxBin string) bool {
+	if amxBin == "" {
+		return false
+	}
+	socketInfo, err := os.Stat(socketPath)
+	if err != nil {
+		return false
+	}
+	binInfo, err := os.Stat(amxBin)
+	if err != nil {
+		return false
+	}
+	return binInfo.ModTime().After(socketInfo.ModTime())
+}
+
+func waitForSocketRemoval(socketPath string) {
+	for i := 0; i < restartSocketPollCount; i++ {
+		if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+			return
+		}
+		time.Sleep(restartSocketPollDelay)
+	}
+}
+
+// RestartDetached stops the current daemon if it is running, then starts a new
+// detached daemon using amxBin. It does not wait for the new socket to become
+// reachable; callers that need a live server should retry with Send afterward.
+func (c *Client) RestartDetached(amxBin string) error {
+	return c.restartDetached(amxBin, c.Health().Alive)
+}
+
+func (c *Client) restartDetached(amxBin string, daemonAlive bool) error {
+	if daemonAlive {
+		resp, err := c.Send(Request{Type: TypeShutdown})
+		if err != nil {
+			return fmt.Errorf("shutting down daemon: %w", err)
+		}
+		if !resp.OK {
+			return fmt.Errorf("daemon error: %s", resp.Error)
+		}
+		waitForSocketRemoval(c.socketPath)
+	}
+	if err := spawnDetached(amxBin); err != nil {
+		return fmt.Errorf("spawn daemon: %w", err)
+	}
+	return nil
+}
+
 // SendWithAutoStart sends req to the daemon, auto-starting it if not running.
 // amxBin is the path to the amx binary used for auto-start.
 func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error) {
+	if daemonSocketOlderThanBinary(c.socketPath, amxBin) {
+		if health := c.Health(); health.Alive {
+			slog.Debug("daemon client: restarting stale daemon for newer amx binary",
+				"socket_path", c.socketPath,
+				"amx_bin", amxBin,
+				"daemon_pid", health.PID,
+			)
+			if err := c.restartDetached(amxBin, true); err != nil {
+				return Response{}, fmt.Errorf("daemon auto-restart failed: %w", err)
+			}
+		}
+	}
+
 	resp, err := c.Send(req)
 	if err == nil {
 		return resp, nil
 	}
 
-	if startErr := SpawnDetached(amxBin); startErr != nil {
+	if startErr := spawnDetached(amxBin); startErr != nil {
 		return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
 	}
 
 	// Retry for up to 1s.
-	for i := 0; i < 5; i++ {
-		time.Sleep(200 * time.Millisecond)
+	for i := 0; i < autoStartRetryCount; i++ {
+		time.Sleep(autoStartRetryDelay)
 		resp, err = c.Send(req)
 		if err == nil {
 			return resp, nil

@@ -145,6 +145,7 @@ func TestPayloadHasResetFlow(t *testing.T) {
 		{name: "copilot reset command with label", harness: "copilot", event: "userPromptSubmitted", payload: HookPayload{Prompt: "/reset worktree cleanup"}, want: true},
 		{name: "copilot new command with trailing text", harness: "copilot", event: "userPromptSubmitted", payload: HookPayload{Prompt: " /new scratch session "}, want: true},
 		{name: "copilot new session start", harness: "copilot", event: "sessionStart", payload: HookPayload{Source: "new"}, want: true},
+		{name: "copilot user exit session end", harness: "copilot", event: "sessionEnd", payload: HookPayload{Reason: "user_exit"}, want: true},
 		{name: "claude compact source does not match", harness: "claude", event: "SessionStart", payload: HookPayload{Source: "compact"}, want: false},
 		{name: "claude synthetic initial prompt no longer matches", harness: "claude", event: "SessionStart", payload: HookPayload{InitialPromptCamel: "/new scratch"}, want: false},
 		{name: "copilot session end reason clear does not match", harness: "copilot", event: "sessionEnd", payload: HookPayload{Reason: "clear"}, want: false},

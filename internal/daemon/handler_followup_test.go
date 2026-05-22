@@ -413,6 +413,34 @@ func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T
 	})
 }
 
+func TestHandler_CopilotUserExitSessionEndClearsWithoutNotification(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
+		h := NewHandler(guard, notifier)
+
+		resp := h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "stop",
+			Event:            "sessionEnd",
+			Reason:           "user_exit",
+			ResetFlow:        true,
+			CurrentIconState: "bolt",
+			SessionTitle:     "W:api",
+		})
+		if !resp.OK || !resp.Allowed || resp.IconState != "" {
+			t.Fatalf("sessionEnd(user_exit) should clear without notifying, got %+v", resp)
+		}
+
+		synctest.Wait()
+		if calls := rec.snapshot(); len(calls) != 0 {
+			t.Fatalf("sessionEnd(user_exit) should suppress stop notifications, got %v", calls)
+		}
+	})
+}
+
 // TestHandler_ElicitationCancelsPendingPermission locks in that an elicitation
 // event arriving while a permission notification is still pending (in its
 // debounce window) supersedes that notification — the user should see the

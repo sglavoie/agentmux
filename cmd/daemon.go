@@ -77,24 +77,12 @@ var daemonRestartCmd = &cobra.Command{
 	Short: "Restart the daemon detached in the background",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := daemon.NewClient()
-		if resp, err := c.Send(daemon.Request{Type: daemon.TypeShutdown}); err == nil && !resp.OK {
-			return fmt.Errorf("daemon error: %s", resp.Error)
-		}
-
-		socket := daemon.SocketPath()
-		for i := 0; i < 20; i++ {
-			if _, err := os.Stat(socket); os.IsNotExist(err) {
-				break
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-
 		amxBin, err := os.Executable()
 		if err != nil {
 			amxBin = "amx"
 		}
-		if err := daemon.SpawnDetached(amxBin); err != nil {
-			return fmt.Errorf("spawn daemon: %w", err)
+		if err := c.RestartDetached(amxBin); err != nil {
+			return err
 		}
 		fmt.Println("daemon restarted")
 		return nil
