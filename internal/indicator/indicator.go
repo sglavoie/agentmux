@@ -12,6 +12,20 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
+type indicatorKittyClient interface {
+	ListWindows() ([]kitty.OSWindow, error)
+	GetText(matchExpr, extent string) (string, error)
+	SetTabTitle(matchExpr, title string) error
+}
+
+type indicatorDaemonClient interface {
+	SendWithAutoStart(req daemon.Request, amxBin string) (daemon.Response, error)
+}
+
+type kittyTitleSetter interface {
+	SetTabTitle(matchExpr, title string) error
+}
+
 // Run is the core hook-indicator entry point. It resolves the action, contacts
 // the daemon for a guard decision, then updates the Kitty tab title if allowed.
 //
@@ -23,6 +37,24 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 	if payloadErr != nil {
 		slog.Warn("indicator: ignoring unreadable hook payload", "event", eventOrAction, "err", payloadErr)
 	}
+	runner := kitty.NewRealRunner()
+	client := kitty.NewClient(runner)
+	dc := daemon.NewClient()
+	return runWithDeps(eventOrAction, windowID, amxBin, payload, IsPipeMode(), client, dc)
+}
+
+// runWithDeps contains the indicator transition logic with injectable Kitty and
+// daemon clients so tests can exercise full screen-probe flows without reaching
+// real subprocesses or sockets.
+func runWithDeps(
+	eventOrAction string,
+	windowID int,
+	amxBin string,
+	payload HookPayload,
+	pipeMode bool,
+	client indicatorKittyClient,
+	dc indicatorDaemonClient,
+) error {
 	if IsIgnoredEvent(eventOrAction, payload) {
 		slog.Debug("indicator: event intentionally ignored",
 			"event", eventOrAction,
@@ -44,11 +76,8 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 		return fmt.Errorf("indicator: KITTY_WINDOW_ID is not set")
 	}
 
-	pipeMode := IsPipeMode()
 	preservesIcon := PreservesCurrent(eventOrAction) && action == "active"
 
-	runner := kitty.NewRealRunner()
-	client := kitty.NewClient(runner)
 	windows, err := client.ListWindows()
 
 	var tab *kitty.Tab
@@ -102,7 +131,6 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 	)
 	log.Debug("indicator")
 
-	dc := daemon.NewClient()
 	resp, err := dc.SendWithAutoStart(buildStateUpdateRequest(
 		windowID,
 		action,
@@ -182,7 +210,7 @@ func buildStateUpdateRequest(
 // log every such call as `Hook execution failed: HookExitCodeError` even when
 // the event was captured correctly (and, on permissionRequest hooks, could be
 // treated as a deny).
-func finalizeTitleUpdate(tab *kitty.Tab, windowID int, iconState string, client kitty.KittyClient) error {
+func finalizeTitleUpdate(tab *kitty.Tab, windowID int, iconState string, client kittyTitleSetter) error {
 	if tab == nil {
 		slog.Debug("indicator: tab not found after daemon update; skipping title update", "window_id", windowID)
 		return nil
@@ -215,7 +243,7 @@ func daemonDownIconState(action, currentIconState string, preservesIcon bool, ha
 	return daemon.IconState(action), false
 }
 
-func updateTitle(windowID int, iconState string, client kitty.KittyClient, tab *kitty.Tab) error {
+func updateTitle(windowID int, iconState string, client kittyTitleSetter, tab *kitty.Tab) error {
 	base, _, starred := palette.ParseTitle(tab.Title)
 	newTitle := palette.BuildTitle(base, iconState, starred)
 
