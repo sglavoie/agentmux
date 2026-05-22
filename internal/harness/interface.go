@@ -24,9 +24,11 @@ type Impl interface {
 	ConfigEnvVar() string
 	// DefaultHomeDir is the default per-user config/home directory.
 	DefaultHomeDir() string
-	// PipeModeFlags returns the set of CLI flags that indicate non-interactive
-	// (pipe/batch) invocation for this harness. Used by pipe-mode detection.
-	PipeModeFlags() []string
+	// PipeModeTokens returns the CLI tokens that indicate non-interactive
+	// (pipe/batch) invocation for this harness when they appear after the
+	// executable in argv. Depending on the harness, these may be flags or
+	// subcommands.
+	PipeModeTokens() []string
 	// HookContract returns the harness-specific hook installation contract.
 	HookContract() HookContract
 }

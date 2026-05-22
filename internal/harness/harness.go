@@ -7,11 +7,13 @@ import (
 const (
 	Claude  = "claude"
 	Copilot = "copilot"
+	Codex   = "codex"
 )
 
 var known = map[string]bool{
 	Claude:  true,
 	Copilot: true,
+	Codex:   true,
 }
 
 // Normalize returns a lowercase harness name. Empty values default to Claude
@@ -31,7 +33,7 @@ func Valid(name string) bool {
 
 // Names returns the supported harness names in stable order.
 func Names() []string {
-	return []string{Claude, Copilot}
+	return []string{Claude, Copilot, Codex}
 }
 
 // Executable returns the CLI executable used to launch the harness.
@@ -64,7 +66,10 @@ func KnownEvents(name string) []string {
 		out := make([]string, len(copilotHookEvents))
 		copy(out, copilotHookEvents)
 		return out
+	case Codex:
+		out := make([]string, len(codexHookEvents))
+		copy(out, codexHookEvents)
+		return out
 	}
 	return nil
 }
-

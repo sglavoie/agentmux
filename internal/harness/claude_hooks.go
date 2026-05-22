@@ -13,11 +13,14 @@ import (
 // be replaced atomically; anything else is preserved verbatim.
 const amxHookCommandIdentifier = "amx"
 
-// hookEntry is a single hook command inside a matcher group.
+// hookEntry is a single hook handler inside a matcher group.
 type hookEntry struct {
-	Type    string `json:"type"`
-	Command string `json:"command"`
-	Async   bool   `json:"async"`
+	Type           string `json:"type"`
+	Command        string `json:"command,omitempty"`
+	CommandWindows string `json:"commandWindows,omitempty"`
+	Async          *bool  `json:"async,omitempty"`
+	Timeout        int    `json:"timeout,omitempty"`
+	StatusMessage  string `json:"statusMessage,omitempty"`
 }
 
 // hookGroup is a matcher group with one or more hook entries.
@@ -153,12 +156,14 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 			{Hooks: []hookEntry{{
 				Type:    "command",
 				Command: amxBin + " hook-indicator " + event,
-				Async:   true,
+				Async:   boolPtr(true),
 			}}},
 		}
 	}
 	return hooks
 }
+
+func boolPtr(v bool) *bool { return &v }
 
 func stripAmxGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
 	out := make(map[string][]hookGroup, len(hooks))
@@ -204,12 +209,17 @@ func isAmxGroup(g hookGroup) bool {
 
 // isAmxHookEntry reports whether a single hookEntry was installed by Agent Mux.
 func isAmxHookEntry(e hookEntry) bool {
-	fields := strings.Fields(e.Command)
-	if len(fields) < 2 {
-		return false
+	for _, candidate := range []string{e.Command, e.CommandWindows} {
+		fields := strings.Fields(candidate)
+		if len(fields) < 2 {
+			continue
+		}
+		if filepath.Base(fields[0]) != amxHookCommandIdentifier {
+			continue
+		}
+		if fields[1] == "hook-indicator" {
+			return true
+		}
 	}
-	if filepath.Base(fields[0]) != amxHookCommandIdentifier {
-		return false
-	}
-	return fields[1] == "hook-indicator"
+	return false
 }

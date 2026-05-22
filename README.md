@@ -1,8 +1,9 @@
 # Agent Mux
 
-Kitty-based session manager for agent harnesses such as **Claude Code** and
-**GitHub Copilot CLI**. It launches projects as Kitty tabs, keeps per-profile
-isolated homes (`CLAUDE_CONFIG_DIR`, `COPILOT_HOME`), and updates tab titles
+Kitty-based session manager for agent harnesses such as **Claude Code**,
+**GitHub Copilot CLI**, and **OpenAI Codex**. It launches projects as Kitty
+tabs, keeps per-profile isolated homes (`CLAUDE_CONFIG_DIR`, `COPILOT_HOME`,
+`CODEX_HOME`), and updates tab titles
 with hook-driven status emojis through a small local daemon.
 
 The binary is **`amx`**.
@@ -74,6 +75,15 @@ COPILOT_HOME=~/.copilot-work copilot login
 
 That keeps auth, settings, hooks, permissions, and session history isolated per
 profile.
+
+### OpenAI Codex
+
+Codex profiles launch `codex` and export `CODEX_HOME=<home_dir>`.
+
+Agent Mux syncs Codex lifecycle hooks into `$CODEX_HOME/hooks.json`. The sample
+Codex profile in `amx config init` includes
+`--dangerously-bypass-hook-trust` so Codex will run the managed hook commands;
+remove or override it if you prefer a different trust flow.
 
 ## Usage
 
@@ -151,10 +161,11 @@ Hook installation is harness-aware:
 - **Claude**: merges Agent Mux hook commands into that profile's
   `settings.json`
 - **Copilot**: writes `$COPILOT_HOME/hooks/agent-mux.json`
+- **Codex**: writes `$CODEX_HOME/hooks.json`
 
 The hook command is `amx hook-indicator <event>`.
 
-Copilot hook files are user-level for a given `COPILOT_HOME`, so any Copilot CLI
+Copilot and Codex hook files are user-level for a given harness home, so any CLI
 surface that reuses that home — including VS Code or another non-Kitty session
 — will run the same hook commands. Agent Mux treats those non-Kitty invocations
 as silent no-ops; only Kitty-backed sessions update tab state.
@@ -163,6 +174,28 @@ Copilot hook entries use the documented `{"bash": ..., "powershell": ...}`
 schema. If you installed hooks with an older Agent Mux build that wrote a
 `command` field instead, re-run `amx config hooks-sync` once; the drift
 detector backs up the old file as `agent-mux.json.bak`.
+
+Codex hook entries use Codex's grouped `{"hooks": { ... }}` JSON shape. Agent
+Mux preserves non-Agent-Mux hooks already present in `hooks.json`, replaces only
+its prior hook entries, writes synchronous command hooks (no `async` field), and
+sets `timeout: 5` so `hook-indicator` does not inherit Codex's long default
+hook timeout.
+
+Current Codex events mapped by Agent Mux include:
+
+- `SessionStart`
+- `UserPromptSubmit`
+- `PreToolUse`
+- `PermissionRequest`
+- `PostToolUse`
+- `PreCompact`
+- `PostCompact`
+- `SubagentStart`
+- `SubagentStop`
+- `Stop`
+
+Codex's `PostCompact` hook is treated as terminal, so a completed compaction
+run lands on the same stop icon (⏹) path as `Stop`.
 
 Current Copilot events mapped by Agent Mux include:
 

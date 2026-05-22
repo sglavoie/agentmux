@@ -96,6 +96,34 @@ func TestDecodeHookPayload_ParsesPromptAndSource(t *testing.T) {
 	}
 }
 
+func TestDecodeHookPayload_PreservesCodexFields(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"hook_event_name": "Stop",
+		"tool_name": "Bash",
+		"source": "startup",
+		"prompt": "/compact now",
+		"stop_reason": "end_turn"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(codex fields) error: %v", err)
+	}
+	if payload.HookEventName != "Stop" {
+		t.Fatalf("HookEventName = %q, want Stop", payload.HookEventName)
+	}
+	if payload.EffectiveToolName() != "Bash" {
+		t.Fatalf("EffectiveToolName = %q, want Bash", payload.EffectiveToolName())
+	}
+	if payload.Source != "startup" {
+		t.Fatalf("Source = %q, want startup", payload.Source)
+	}
+	if payload.EffectivePrompt() != "/compact now" {
+		t.Fatalf("EffectivePrompt = %q, want /compact now", payload.EffectivePrompt())
+	}
+	if payload.EffectiveStopReason() != "end_turn" {
+		t.Fatalf("EffectiveStopReason = %q, want end_turn", payload.EffectiveStopReason())
+	}
+}
+
 func TestHookPayload_EffectivePrompt(t *testing.T) {
 	cases := []struct {
 		name    string

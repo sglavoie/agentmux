@@ -3,6 +3,7 @@ package harness
 var registry = map[string]Impl{
 	Claude:  claudeHarness{},
 	Copilot: copilotHarness{},
+	Codex:   codexHarness{},
 }
 
 // Lookup returns the Impl for name, defaulting to Claude for unknown/empty values.

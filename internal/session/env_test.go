@@ -162,3 +162,36 @@ func TestResolveEnv_CopilotDefaultHomeDirSetsNoEnvVar(t *testing.T) {
 		t.Errorf("COPILOT_HOME should not be set when HomeDir equals the harness default")
 	}
 }
+
+func TestResolveEnv_CodexSetsCorrectEnvVar(t *testing.T) {
+	acc := config.Account{
+		Name:    "codex-work",
+		Harness: "codex",
+		HomeDir: "/tmp/codex-custom",
+		Color:   "purple",
+	}
+	sess := config.Session{Profile: "codex-work"}
+	env := session.ResolveEnv(sess, acc)
+	got, ok := env["CODEX_HOME"]
+	if !ok {
+		t.Fatal("expected CODEX_HOME to be set for non-default codex home_dir")
+	}
+	if got != "/tmp/codex-custom" {
+		t.Errorf("CODEX_HOME: got %q, want %q", got, "/tmp/codex-custom")
+	}
+}
+
+func TestResolveEnv_CodexDefaultHomeDirSetsNoEnvVar(t *testing.T) {
+	defaultDir := harness.DefaultHomeDir("codex")
+	acc := config.Account{
+		Name:    "codex-default",
+		Harness: "codex",
+		HomeDir: defaultDir,
+		Color:   "purple",
+	}
+	sess := config.Session{Profile: "codex-default"}
+	env := session.ResolveEnv(sess, acc)
+	if _, ok := env["CODEX_HOME"]; ok {
+		t.Errorf("CODEX_HOME should not be set when HomeDir equals the harness default")
+	}
+}

@@ -101,10 +101,11 @@ permission_debounce_ms = 500
 #
 # Required fields:
 #   name      Unique identifier used to reference this profile from projects.
-#   harness   Which agent CLI to launch. Supported: "claude", "copilot".
+#   harness   Which agent CLI to launch. Supported: "claude", "copilot", "codex".
 #   home_dir  Isolated config/auth directory for this profile.
 #             Claude exports CLAUDE_CONFIG_DIR=<home_dir>.
 #             Copilot exports COPILOT_HOME=<home_dir>.
+#             Codex exports CODEX_HOME=<home_dir>.
 #   color     Tab bar accent color for sessions using this profile.
 #             One of: green, blue, red, orange, purple, teal, pink, yellow,
 #             gray, cyan.
@@ -132,6 +133,14 @@ permission_debounce_ms = 500
 # home_dir = "~/.copilot-work"
 # color = "green"
 # args = ["--model", "gpt-5"]
+
+# Example Codex profile:
+# [[profiles]]
+# name = "codex-work"
+# harness = "codex"
+# home_dir = "~/.codex-work"
+# color = "purple"
+# args = ["--dangerously-bypass-hook-trust"]
 
 
 # ── Projects ──────────────────────────────────────────────────────────────────
@@ -161,12 +170,18 @@ permission_debounce_ms = 500
 
 # ── Hook overrides ────────────────────────────────────────────────────────────
 # By default, amx installs hook commands for all events into every profile's
-# settings file. Use this section to suppress specific events per profile.
+# hook file. Use this section to suppress specific events per profile.
 #
-# disabled_events accepts any of the hook event names that amx installs:
-#   SessionStart, UserPromptSubmit, PreToolUse, SubagentStart, SubagentStop,
-#   PostToolUse, PostToolUseFailure, PermissionRequest, Stop, TaskCompleted,
-#   SessionEnd, Notification.
+# disabled_events accepts any of the hook event names that amx installs for the
+# selected harness.
+#   Claude examples: SessionStart, UserPromptSubmit, PreToolUse, SubagentStart,
+#     SubagentStop, PostToolUse, PostToolUseFailure, PermissionRequest, Stop,
+#     TaskCompleted, SessionEnd, Notification.
+#   Copilot examples: sessionStart, userPromptSubmitted, preToolUse,
+#     postToolUse, permissionRequest, agentStop, notification.
+#   Codex examples: SessionStart, UserPromptSubmit, PreToolUse,
+#     PermissionRequest, PostToolUse, PreCompact, PostCompact, SubagentStart,
+#     SubagentStop, Stop.
 
 # Optional per-profile hook overrides:
 # [hooks.overrides.claude-work]

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // psCommandTimeout bounds each `ps` invocation used during process-tree
@@ -18,9 +20,8 @@ import (
 var psCommandTimeout = 2 * time.Second
 
 // IsPipeMode reports whether the current process tree contains a non-interactive
-// Claude or Copilot invocation (e.g. `claude -p`, `claude --print`,
-// `copilot -p`, or `copilot --prompt`)
-// mode). When true, desktop notifications should be suppressed.
+// harness invocation such as `claude -p`, `copilot --prompt`, or `codex exec`.
+// When true, desktop notifications should be suppressed.
 func IsPipeMode() bool {
 	return walkTree(os.Getpid(), psCommandLine, psParentPID)
 }
@@ -48,35 +49,36 @@ func walkTree(pid int, cmdline func(int) string, ppid func(int) int) bool {
 	return false
 }
 
-// pipeFlagsByCommand maps the supported command basenames to the set of flags
-// that imply non-interactive (pipe) mode for that command.
-var pipeFlagsByCommand = map[string]map[string]bool{
-	"claude":  {"-p": true, "--print": true},
-	"copilot": {"-p": true, "--prompt": true},
-}
-
 func looksLikePipeMode(cmdline string) bool {
 	fields := strings.Fields(cmdline)
 	if len(fields) == 0 {
 		return false
 	}
 
-	// Require an argv field whose basename is exactly "claude" or "copilot"
-	// (so claude-lint and /opt/claude-tools/foo do NOT match) and a pipe flag
-	// in the fields *after* it (so an unrelated -p earlier in the cmdline
-	// doesn't trigger). Scanning stops at the POSIX `--` option terminator so
-	// `claude -- -p` (where `-p` is a positional argument) does not falsely
-	// trigger pipe mode.
+	// Require an argv field whose basename is exactly a supported harness
+	// executable (so claude-lint and /opt/codex-tools/foo do NOT match) and a
+	// pipe-mode token in the fields *after* it (so an unrelated token earlier
+	// in the cmdline doesn't trigger). Scanning stops at the POSIX `--` option
+	// terminator so `claude -- -p` (where `-p` is a positional argument) and
+	// `codex -- review` do not falsely trigger pipe mode.
 	for i, field := range fields {
-		flags, ok := pipeFlagsByCommand[filepath.Base(field)]
-		if !ok {
+		base := filepath.Base(field)
+		if !harness.Valid(base) {
 			continue
+		}
+		tokens := harness.Lookup(base).PipeModeTokens()
+		if len(tokens) == 0 {
+			continue
+		}
+		tokenSet := make(map[string]bool, len(tokens))
+		for _, token := range tokens {
+			tokenSet[token] = true
 		}
 		for _, after := range fields[i+1:] {
 			if after == "--" {
 				break
 			}
-			if flags[after] {
+			if tokenSet[after] {
 				return true
 			}
 		}
@@ -85,7 +87,7 @@ func looksLikePipeMode(cmdline string) bool {
 }
 
 // looksLikeClaudePipe is kept as a compatibility alias for older tests while
-// the implementation now supports both Claude and Copilot non-interactive runs.
+// the implementation now supports Claude, Copilot, and Codex non-interactive runs.
 func looksLikeClaudePipe(cmdline string) bool {
 	return looksLikePipeMode(cmdline)
 }

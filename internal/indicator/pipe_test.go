@@ -54,6 +54,19 @@ func TestWalkTree_ClaudeWithPrint(t *testing.T) {
 	}
 }
 
+func TestWalkTree_CodexExec(t *testing.T) {
+	cmd, ppid := fakeTree(
+		map[int]string{
+			1001: "amx hook-indicator Stop",
+			1000: "/usr/local/bin/codex exec --json",
+		},
+		map[int]int{1001: 1000, 1000: 1},
+	)
+	if !walkTree(1001, cmd, ppid) {
+		t.Error("expected pipe_mode=true when ancestor has codex exec")
+	}
+}
+
 func TestWalkTree_StopsAtRoot(t *testing.T) {
 	cmd, ppid := fakeTree(
 		map[int]string{1: "launchd"},
@@ -148,23 +161,31 @@ func TestLooksLikeClaudePipe(t *testing.T) {
 		{"claude --print-output", false}, // --print-output is not --print
 		// Exact-command match: basename must equal "claude" or "copilot".
 		{"claude-lint", false},
-		{"claude-lint -p", false},          // basename is claude-lint, not claude
-		{"/opt/claude-tools/foo", false},   // basename is foo, not claude
+		{"claude-lint -p", false},        // basename is claude-lint, not claude
+		{"/opt/claude-tools/foo", false}, // basename is foo, not claude
 		{"/opt/claude-tools/foo -p", false},
-		{"/usr/bin/claude -p", true},                // path-prefixed claude is fine
-		{"/usr/local/bin/copilot --prompt", true},   // path-prefixed copilot is fine
+		{"/usr/bin/claude -p", true},              // path-prefixed claude is fine
+		{"/usr/local/bin/copilot --prompt", true}, // path-prefixed copilot is fine
+		{"/usr/local/bin/codex review", true},     // path-prefixed codex is fine
 		{"copilot", false},
 		{"copilot -p", true},
 		{"copilot --prompt", true},
 		{"copilot --print", false}, // --print is claude-only; copilot uses --prompt
+		{"codex", false},
+		{"codex exec", true},
+		{"codex e", true},
+		{"codex review", true},
+		{"codex run", false},
+		{"codex-exec", false},
 		// Flag must follow the command in the same cmdline.
-		{"-p claude", false},        // -p before claude
+		{"-p claude", false}, // -p before claude
 		{"some-tool -p claude", false},
 		// POSIX `--` terminator stops the option scan so positional `-p` after
 		// `--` is not treated as a pipe-mode flag.
 		{"claude -- -p", false},
 		{"claude -- --print", false},
 		{"copilot -- -p prompt", false},
+		{"codex -- review", false},
 	}
 	for _, tc := range cases {
 		got := looksLikeClaudePipe(tc.cmd)

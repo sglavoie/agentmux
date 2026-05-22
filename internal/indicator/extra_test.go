@@ -78,6 +78,30 @@ func TestResolveAction_CopilotCamelCaseParity(t *testing.T) {
 	}
 }
 
+func TestResolveAction_CodexPascalCaseParity(t *testing.T) {
+	cases := []struct {
+		event  string
+		action string
+	}{
+		{"SessionStart", "idle"},
+		{"UserPromptSubmit", "active"},
+		{"PreToolUse", "active"},
+		{"PermissionRequest", "permission"},
+		{"PostToolUse", "active"},
+		{"PreCompact", "compact"},
+		{"PostCompact", "stop"},
+		{"SubagentStart", "subagent"},
+		{"SubagentStop", "active"},
+		{"Stop", "stop"},
+	}
+	for _, tc := range cases {
+		got, ok := ResolveAction(tc.event, HookPayload{})
+		if !ok || got != tc.action {
+			t.Errorf("ResolveAction(%q) = (%q, %v), want (%q, true)", tc.event, got, ok, tc.action)
+		}
+	}
+}
+
 // TestEventToAction_AllValuesAreValidActions enforces that every action listed
 // in eventToAction is itself an entry in validActions. A drift between the
 // two — e.g. renaming "stop_failure" without updating both — would let
