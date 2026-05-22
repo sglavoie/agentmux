@@ -6,12 +6,20 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
+
+// resetFlowStopDelay gives late reset markers — especially Claude's
+// SessionEnd.reason=clear lifecycle event — a brief chance to reach the daemon
+// before an ordinary terminal stop hook turns into a visible stop icon or
+// notification.
+// Exposed as a var so tests can shrink it.
+var resetFlowStopDelay = 500 * time.Millisecond
 
 type indicatorKittyClient interface {
 	ListWindows() ([]kitty.OSWindow, error)
@@ -113,22 +121,26 @@ func runWithDeps(
 		}
 	}
 
-	var profile, harness string
+	var profile, harnessName string
 	if win != nil {
 		profile = win.UserVars.EffectiveProfile()
-		harness = win.UserVars.EffectiveHarness()
+		harnessName = win.UserVars.EffectiveHarness()
 	}
+	resetFlowDetected := payloadHasResetFlow(harnessName, eventOrAction, payload)
+	toolName := payload.EffectiveToolName()
+	maybeDelayResetSensitiveStop(eventOrAction, action, payload, contextLimitDetected, resetFlowDetected)
 	log := slog.With(
 		"window_id", windowID,
 		"profile", profile,
-		"harness", harness,
+		"harness", harnessName,
 		"event", eventOrAction,
 		"action", action,
-		"tool_name", payload.ToolName,
+		"tool_name", toolName,
 		"session_reason", payload.Reason,
 		"notification_type", payload.EffectiveNotificationType(),
 		"stop_reason", payload.EffectiveStopReason(),
 		"context_limit", contextLimitDetected,
+		"reset_flow", resetFlowDetected,
 		"notification_title", payload.Title,
 		"notification_message", payload.Message,
 		"pipe_mode", pipeMode,
@@ -142,18 +154,19 @@ func runWithDeps(
 		payload,
 		sessionTitle,
 		profile,
-		harness,
+		harnessName,
 		currentIconState,
 		pipeMode,
 		preservesIcon,
 		contextLimitDetected,
+		resetFlowDetected,
 	), amxBin)
 	if err != nil {
 		log.Debug("indicator: daemon unavailable, updating title without guard", "err", err)
 		if tab == nil {
 			return fmt.Errorf("indicator: window %d not found and daemon unavailable", windowID)
 		}
-		nextIcon, skip := daemonDownIconState(action, currentIconState, preservesIcon, harness)
+		nextIcon, skip := daemonDownIconState(action, currentIconState, preservesIcon, harnessName, resetFlowDetected)
 		if skip {
 			return nil
 		}
@@ -186,13 +199,14 @@ func buildStateUpdateRequest(
 	pipeMode bool,
 	preservesIcon bool,
 	contextLimitDetected bool,
+	resetFlowDetected bool,
 ) daemon.Request {
 	return daemon.Request{
 		Type:             daemon.TypeStateUpdate,
 		WindowID:         windowID,
 		Action:           action,
 		Event:            eventOrAction,
-		ToolName:         payload.ToolName,
+		ToolName:         payload.EffectiveToolName(),
 		IsPrompt:         IsPromptEvent(eventOrAction),
 		PreservesIcon:    preservesIcon,
 		PipeMode:         pipeMode,
@@ -204,6 +218,28 @@ func buildStateUpdateRequest(
 		StopReason:       payload.EffectiveStopReason(),
 		Reason:           payload.Reason,
 		ContextLimit:     contextLimitDetected,
+		ResetFlow:        resetFlowDetected,
+	}
+}
+
+func maybeDelayResetSensitiveStop(eventOrAction, action string, payload HookPayload, contextLimitDetected, resetFlowDetected bool) {
+	if !shouldDelayResetSensitiveStop(eventOrAction, action, payload, contextLimitDetected, resetFlowDetected) {
+		return
+	}
+	time.Sleep(resetFlowStopDelay)
+}
+
+func shouldDelayResetSensitiveStop(eventOrAction, action string, payload HookPayload, contextLimitDetected, resetFlowDetected bool) bool {
+	if resetFlowStopDelay <= 0 || action != "stop" || contextLimitDetected || resetFlowDetected {
+		return false
+	}
+	switch eventOrAction {
+	case "Stop", "SessionEnd", "agentStop", "sessionEnd":
+		return true
+	case "Notification", "notification":
+		return payload.EffectiveNotificationType() == "agent_idle"
+	default:
+		return false
 	}
 }
 
@@ -230,7 +266,13 @@ func finalizeTitleUpdate(tab *kitty.Tab, windowID int, iconState string, client 
 // Copilot also lacks a documented postCompact hook, so an idle/clear arriving
 // while the compact icon is still visible must synthesize a stop icon instead of
 // silently clearing it. Other active-like icons are still cleared normally.
-func daemonDownIconState(action, currentIconState string, preservesIcon bool, harnessName string) (next string, skip bool) {
+func daemonDownIconState(action, currentIconState string, preservesIcon bool, harnessName string, resetFlow bool) (next string, skip bool) {
+	if resetFlow {
+		switch action {
+		case "stop", "idle", "clear", "user_clear":
+			action = "user_clear"
+		}
+	}
 	if preservesIcon {
 		return "", true
 	}

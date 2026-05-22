@@ -129,6 +129,7 @@ func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 	for windowID := range h.eventLog {
 		if !liveIDs[windowID] {
 			delete(h.eventLog, windowID)
+			delete(h.pendingReset, windowID)
 		}
 	}
 	h.stateMu.Unlock()

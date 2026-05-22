@@ -309,6 +309,110 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 	})
 }
 
+func TestHandler_ResetFlowSuppressesStopNotification(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{
+			Type:         TypeStateUpdate,
+			WindowID:     1,
+			Action:       "active",
+			Event:        "UserPromptSubmit",
+			IsPrompt:     true,
+			ResetFlow:    true,
+			SessionTitle: "W:api",
+		})
+
+		resp := h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Action:           "stop",
+			Event:            "Stop",
+			CurrentIconState: "bolt",
+			SessionTitle:     "W:api",
+		})
+		if !resp.OK || !resp.Allowed || resp.IconState != "" {
+			t.Fatalf("reset stop should clear without notifying, got %+v", resp)
+		}
+
+		synctest.Wait()
+		if calls := rec.snapshot(); len(calls) != 0 {
+			t.Fatalf("reset flow should suppress stop notifications, got %v", calls)
+		}
+	})
+}
+
+func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{
+			Type:         TypeStateUpdate,
+			WindowID:     1,
+			Harness:      "copilot",
+			Action:       "active",
+			Event:        "userPromptSubmitted",
+			IsPrompt:     true,
+			ResetFlow:    true,
+			SessionTitle: "W:api",
+		})
+
+		for _, req := range []Request{
+			{
+				Type:             TypeStateUpdate,
+				WindowID:         1,
+				Harness:          "copilot",
+				Action:           "stop",
+				Event:            "agentStop",
+				CurrentIconState: "bolt",
+				SessionTitle:     "W:api",
+			},
+			{
+				Type:             TypeStateUpdate,
+				WindowID:         1,
+				Harness:          "copilot",
+				Action:           "stop",
+				Event:            "sessionEnd",
+				CurrentIconState: "",
+				SessionTitle:     "W:api",
+			},
+			{
+				Type:             TypeStateUpdate,
+				WindowID:         1,
+				Harness:          "copilot",
+				Action:           "idle",
+				Event:            "sessionStart",
+				CurrentIconState: "",
+				SessionTitle:     "W:api",
+			},
+			{
+				Type:             TypeStateUpdate,
+				WindowID:         1,
+				Harness:          "copilot",
+				Action:           "stop",
+				Event:            "notification",
+				NotificationType: "agent_idle",
+				CurrentIconState: "",
+				SessionTitle:     "W:api",
+			},
+		} {
+			resp := h.Handle(req)
+			if !resp.OK || !resp.Allowed || resp.IconState != "" {
+				t.Fatalf("%s during reset follow-up should stay cleared, got %+v", req.Event, resp)
+			}
+		}
+
+		synctest.Wait()
+		if calls := rec.snapshot(); len(calls) != 0 {
+			t.Fatalf("reset follow-up should suppress trailing stop notifications, got %v", calls)
+		}
+	})
+}
+
 // TestHandler_ElicitationCancelsPendingPermission locks in that an elicitation
 // event arriving while a permission notification is still pending (in its
 // debounce window) supersedes that notification — the user should see the

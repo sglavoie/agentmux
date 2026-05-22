@@ -79,6 +79,88 @@ func TestDecodeHookPayload_ParsesReasonFields(t *testing.T) {
 	}
 }
 
+func TestDecodeHookPayload_ParsesPromptAndSource(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"hook_event_name": "SessionStart",
+		"prompt": "/clear workspace",
+		"source": "clear"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(prompt/source) error: %v", err)
+	}
+	if payload.Prompt != "/clear workspace" {
+		t.Fatalf("Prompt = %q, want /clear workspace", payload.Prompt)
+	}
+	if payload.Source != "clear" {
+		t.Fatalf("Source = %q, want clear", payload.Source)
+	}
+}
+
+func TestHookPayload_EffectivePrompt(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload HookPayload
+		want    string
+	}{
+		{name: "prompt wins", payload: HookPayload{Prompt: "/clear"}, want: "/clear"},
+		{name: "snake initial prompt fallback", payload: HookPayload{InitialPrompt: "/reset"}, want: "/reset"},
+		{name: "camel initial prompt fallback", payload: HookPayload{InitialPromptCamel: "/new"}, want: "/new"},
+		{name: "empty prompt", payload: HookPayload{}, want: ""},
+	}
+	for _, tc := range cases {
+		if got := tc.payload.EffectivePrompt(); got != tc.want {
+			t.Errorf("%s: EffectivePrompt() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestHookPayload_EffectiveToolName(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload HookPayload
+		want    string
+	}{
+		{name: "snake case tool name", payload: HookPayload{ToolName: "Bash"}, want: "Bash"},
+		{name: "camel case tool name", payload: HookPayload{ToolNameCamel: "bash"}, want: "bash"},
+		{name: "empty tool name", payload: HookPayload{}, want: ""},
+	}
+	for _, tc := range cases {
+		if got := tc.payload.EffectiveToolName(); got != tc.want {
+			t.Errorf("%s: EffectiveToolName() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestPayloadHasResetFlow(t *testing.T) {
+	cases := []struct {
+		name    string
+		harness string
+		event   string
+		payload HookPayload
+		want    bool
+	}{
+		{name: "claude clear session end", harness: "claude", event: "SessionEnd", payload: HookPayload{Reason: "clear"}, want: true},
+		{name: "claude clear session start", harness: "claude", event: "SessionStart", payload: HookPayload{Source: "clear"}, want: true},
+		{name: "copilot clear command", harness: "copilot", event: "userPromptSubmitted", payload: HookPayload{Prompt: "/clear"}, want: true},
+		{name: "copilot reset command with label", harness: "copilot", event: "userPromptSubmitted", payload: HookPayload{Prompt: "/reset worktree cleanup"}, want: true},
+		{name: "copilot new command with trailing text", harness: "copilot", event: "userPromptSubmitted", payload: HookPayload{Prompt: " /new scratch session "}, want: true},
+		{name: "copilot new session start", harness: "copilot", event: "sessionStart", payload: HookPayload{Source: "new"}, want: true},
+		{name: "claude compact source does not match", harness: "claude", event: "SessionStart", payload: HookPayload{Source: "compact"}, want: false},
+		{name: "claude synthetic initial prompt no longer matches", harness: "claude", event: "SessionStart", payload: HookPayload{InitialPromptCamel: "/new scratch"}, want: false},
+		{name: "copilot session end reason clear does not match", harness: "copilot", event: "sessionEnd", payload: HookPayload{Reason: "clear"}, want: false},
+		{name: "notification source clear does not match", harness: "copilot", event: "notification", payload: HookPayload{Source: "clear"}, want: false},
+		{name: "partial command does not match", harness: "copilot", event: "userPromptSubmitted", payload: HookPayload{Prompt: "/clearer"}, want: false},
+		{name: "inline mention does not match", harness: "copilot", event: "userPromptSubmitted", payload: HookPayload{Prompt: "please /clear this"}, want: false},
+		{name: "normal prompt", harness: "copilot", event: "userPromptSubmitted", payload: HookPayload{Prompt: "summarize this diff"}, want: false},
+		{name: "normal end reason", harness: "claude", event: "SessionEnd", payload: HookPayload{Reason: "user_exit"}, want: false},
+	}
+	for _, tc := range cases {
+		if got := payloadHasResetFlow(tc.harness, tc.event, tc.payload); got != tc.want {
+			t.Errorf("%s: payloadHasResetFlow(%q, %q, %+v) = %v, want %v", tc.name, tc.harness, tc.event, tc.payload, got, tc.want)
+		}
+	}
+}
+
 func TestDecodeHookPayload_InvalidJSON(t *testing.T) {
 	if _, err := DecodeHookPayload(strings.NewReader("{")); err == nil {
 		t.Fatal("DecodeHookPayload(invalid JSON) error = nil, want non-nil")

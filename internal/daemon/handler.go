@@ -87,6 +87,14 @@ type Handler struct {
 	// robot icon persists until all concurrent agents finish.
 	subagentCount map[int]int
 
+	// pendingReset tracks short-lived user-initiated session reset flows.
+	// requested means a slash-command reset was submitted and we are waiting for
+	// the stop/cleanup lifecycle; clearing means we have already translated at
+	// least one stop-like event to user_clear and are holding the marker long
+	// enough to absorb any late cleanup noise before the next normal turn clears
+	// it.
+	pendingReset map[int]resetFlowState
+
 	// notifiedStale tracks windows for which a stale-active notification has
 	// already fired in the current stall. Cleared on the next real state update
 	// for that window so a future stall produces a fresh notification.
@@ -157,6 +165,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		lastActiveEvent:               make(map[int]string),
 		copilotAutoApprovedToolPrompt: make(map[int]bool),
 		subagentCount:                 make(map[int]int),
+		pendingReset:                  make(map[int]resetFlowState),
 		notifiedStale:                 make(map[int]bool),
 		lastSeenEventAt:               make(map[string]time.Time),
 		notifiedHookSilence:           make(map[string]bool),

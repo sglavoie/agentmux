@@ -139,6 +139,70 @@ func shouldSynthesizeCopilotCompactStop(req Request, prevAction string) bool {
 		(req.Action == "idle" || req.Action == "clear")
 }
 
+type resetFlowState uint8
+
+const (
+	resetFlowNone resetFlowState = iota
+	resetFlowRequested
+	resetFlowClearing
+)
+
+func isResetCleanupAction(action string) bool {
+	switch action {
+	case "stop", "idle", "clear", "user_clear":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldClearPendingReset(req Request, state resetFlowState) bool {
+	if state == resetFlowNone || req.ResetFlow {
+		return false
+	}
+	if req.IsPrompt {
+		return true
+	}
+	if isResetCleanupAction(req.Action) {
+		return false
+	}
+	return state != resetFlowRequested || req.Action != "active"
+}
+
+// applyResetFlowLocked maintains the short-lived per-window reset marker and
+// rewrites reset-related cleanup into user_clear so stop icons/notifications do
+// not surface during /clear, /reset, or /new flows. Caller must hold stateMu.
+func (h *Handler) applyResetFlowLocked(req Request) Request {
+	state := h.pendingReset[req.WindowID]
+	if req.ResetFlow {
+		if req.IsPrompt || state == resetFlowNone {
+			state = resetFlowRequested
+		}
+		h.pendingReset[req.WindowID] = state
+	} else if shouldClearPendingReset(req, state) {
+		delete(h.pendingReset, req.WindowID)
+		state = resetFlowNone
+	}
+
+	if state == resetFlowNone || !isResetCleanupAction(req.Action) {
+		return req
+	}
+
+	originalAction := req.Action
+	req.Action = "user_clear"
+	req.ResetFlow = true
+	switch originalAction {
+	case "user_clear":
+		delete(h.pendingReset, req.WindowID)
+	default:
+		// Keep the clearing marker through later idle/sessionStart/notification
+		// noise from the same reset flow; the next non-reset prompt or activity
+		// will clear it via shouldClearPendingReset.
+		h.pendingReset[req.WindowID] = resetFlowClearing
+	}
+	return req
+}
+
 func sessionEventFromRequest(req Request, action, resultIconState string) SessionEvent {
 	return SessionEvent{
 		At:               time.Now().Unix(),
@@ -152,6 +216,7 @@ func sessionEventFromRequest(req Request, action, resultIconState string) Sessio
 		StopReason:       req.StopReason,
 		Reason:           req.Reason,
 		ContextLimit:     req.ContextLimit,
+		ResetFlow:        req.ResetFlow,
 	}
 }
 
@@ -211,17 +276,19 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
 	}
 
+	h.stateMu.Lock()
+	req = h.applyResetFlowLocked(req)
+	h.touchWindowMetadataLocked(req)
+	h.stateMu.Unlock()
+
 	slog.Debug("hook event received",
 		"window_id", req.WindowID,
 		"account", req.Account,
 		"event", req.Event,
 		"action", req.Action,
 		"preserves_icon", req.PreservesIcon,
+		"reset_flow", req.ResetFlow,
 	)
-
-	h.stateMu.Lock()
-	h.touchWindowMetadataLocked(req)
-	h.stateMu.Unlock()
 
 	prevAction := h.lastKnownAction(req.WindowID, req.CurrentIconState)
 	h.stateMu.Lock()
@@ -371,6 +438,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.stateMu.Lock()
 		delete(h.copilotAutoApprovedToolPrompt, req.WindowID)
 		delete(h.subagentCount, req.WindowID)
+		if req.Action != "user_clear" {
+			delete(h.pendingReset, req.WindowID)
+		}
 		delete(h.notifiedStale, req.WindowID)
 		delete(h.lastSessionTitle, req.WindowID)
 		delete(h.lastPipeMode, req.WindowID)
@@ -538,8 +608,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			iconState = IconStatePreserve
 		}
 	} else if effective == "user_clear" {
-		// TUI-initiated wipe — reset lastAction so a future idle doesn't try
-		// to clear an icon that no longer exists.
+		// Explicit wipe (from the TUI or a reset flow) — reset lastAction so a
+		// future idle doesn't try to clear an icon that no longer exists.
 		h.stateMu.Lock()
 		delete(h.lastAction, req.WindowID)
 		delete(h.lastActiveEvent, req.WindowID)

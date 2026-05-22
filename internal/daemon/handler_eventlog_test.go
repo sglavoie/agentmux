@@ -281,6 +281,46 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 	}
 }
 
+func TestHandler_EventLog_RewrittenResetStopCarriesResetFlow(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{
+		Type:      TypeStateUpdate,
+		WindowID:  1,
+		Harness:   "copilot",
+		Action:    "active",
+		Event:     "userPromptSubmitted",
+		IsPrompt:  true,
+		ResetFlow: true,
+	})
+	h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "stop",
+		Event:            "agentStop",
+		CurrentIconState: "bolt",
+	})
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	if !resp.OK {
+		t.Fatalf("session detail: want OK=true, got %+v", resp)
+	}
+	if len(resp.Events) != 2 {
+		t.Fatalf("events = %d; want 2 (%+v)", len(resp.Events), resp.Events)
+	}
+	ev := resp.Events[1]
+	if ev.Action != "user_clear" {
+		t.Fatalf("action = %q; want user_clear", ev.Action)
+	}
+	if !ev.ResetFlow {
+		t.Fatal("reset_flow = false; want true")
+	}
+	if ev.ResultIconState != "" {
+		t.Fatalf("result_icon_state = %q; want empty icon", ev.ResultIconState)
+	}
+}
+
 // TestHandler_EventLog_TrimsAtMax pushes maxEventsPerWindow + 5 events through
 // the allowed path and asserts the buffer retains exactly maxEventsPerWindow
 // (oldest dropped from the front).

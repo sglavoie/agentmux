@@ -2,8 +2,11 @@ package indicator
 
 import (
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -69,6 +72,27 @@ func (f *fakeIndicatorDaemonClient) SendWithAutoStart(req daemon.Request, amxBin
 	return f.resp, nil
 }
 
+type handlerBackedIndicatorDaemonClient struct {
+	mu   sync.Mutex
+	h    *daemon.Handler
+	reqs []daemon.Request
+}
+
+func (f *handlerBackedIndicatorDaemonClient) SendWithAutoStart(req daemon.Request, amxBin string) (daemon.Response, error) {
+	f.mu.Lock()
+	f.reqs = append(f.reqs, req)
+	f.mu.Unlock()
+	return f.h.Handle(req), nil
+}
+
+func (f *handlerBackedIndicatorDaemonClient) snapshot() []daemon.Request {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]daemon.Request, len(f.reqs))
+	copy(out, f.reqs)
+	return out
+}
+
 func fakeIndicatorWindows(windowID int, tabTitle, profile, harnessName string) []kitty.OSWindow {
 	return []kitty.OSWindow{
 		{
@@ -123,31 +147,33 @@ func TestDaemonDownIconState_PreservesUnacknowledgedIcons(t *testing.T) {
 		current   string
 		harness   string
 		preserves bool
+		resetFlow bool
 		wantNext  string
 		wantSkip  bool
 	}{
-		{"idle clears bolt", "idle", "bolt", "", false, "", false},
-		{"idle clears compact for Claude", "idle", "compact", "claude", false, "", false},
-		{"idle promotes Copilot compact to stop", "idle", "compact", "copilot", false, "stop", false},
-		{"clear promotes Copilot compact to stop", "clear", "compact", "copilot", false, "stop", false},
-		{"idle clears subagent", "idle", "subagent", "", false, "", false},
-		{"idle preserves key", "idle", "key", "", false, "", true},
-		{"idle preserves stop", "idle", "stop", "", false, "", true},
-		{"idle preserves warning", "idle", "warning", "", false, "", true},
-		{"idle preserves error", "idle", "error", "", false, "", true},
-		{"idle preserves question", "idle", "question", "", false, "", true},
-		{"clear preserves key", "clear", "key", "", false, "", true},
-		{"clear clears bolt", "clear", "bolt", "", false, "", false},
-		{"preserve-current child completion is a no-op", "active", "bolt", "", true, "", true},
-		{"active writes bolt regardless of current", "active", "key", "", false, "bolt", false},
-		{"permission writes key", "permission", "", "", false, "key", false},
-		{"stop_failure writes error", "stop_failure", "bolt", "", false, "error", false},
-		{"failure writes warning", "failure", "", "", false, "warning", false},
-		{"idle with no current icon is a no-op", "idle", "", "", false, "", true},
+		{"idle clears bolt", "idle", "bolt", "", false, false, "", false},
+		{"idle clears compact for Claude", "idle", "compact", "claude", false, false, "", false},
+		{"idle promotes Copilot compact to stop", "idle", "compact", "copilot", false, false, "stop", false},
+		{"clear promotes Copilot compact to stop", "clear", "compact", "copilot", false, false, "stop", false},
+		{"idle clears subagent", "idle", "subagent", "", false, false, "", false},
+		{"idle preserves key", "idle", "key", "", false, false, "", true},
+		{"idle preserves stop", "idle", "stop", "", false, false, "", true},
+		{"idle preserves warning", "idle", "warning", "", false, false, "", true},
+		{"idle preserves error", "idle", "error", "", false, false, "", true},
+		{"idle preserves question", "idle", "question", "", false, false, "", true},
+		{"clear preserves key", "clear", "key", "", false, false, "", true},
+		{"clear clears bolt", "clear", "bolt", "", false, false, "", false},
+		{"reset stop clears sticky icon", "stop", "stop", "", false, true, "", false},
+		{"preserve-current child completion is a no-op", "active", "bolt", "", true, false, "", true},
+		{"active writes bolt regardless of current", "active", "key", "", false, false, "bolt", false},
+		{"permission writes key", "permission", "", "", false, false, "key", false},
+		{"stop_failure writes error", "stop_failure", "bolt", "", false, false, "error", false},
+		{"failure writes warning", "failure", "", "", false, false, "warning", false},
+		{"idle with no current icon is a no-op", "idle", "", "", false, false, "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			next, skip := daemonDownIconState(tc.action, tc.current, tc.preserves, tc.harness)
+			next, skip := daemonDownIconState(tc.action, tc.current, tc.preserves, tc.harness, tc.resetFlow)
 			if next != tc.wantNext || skip != tc.wantSkip {
 				t.Errorf("daemonDownIconState(%q, %q, %v) = (%q, %v), want (%q, %v)",
 					tc.action, tc.current, tc.preserves, next, skip, tc.wantNext, tc.wantSkip)
@@ -165,7 +191,7 @@ func TestBuildStateUpdateRequest_CarriesNormalizedDebugContext(t *testing.T) {
 			NotificationTypeCamel: "permission_prompt",
 			StopReasonCamel:       "context_limit_reached",
 			Reason:                "error",
-			ToolName:              "Bash",
+			ToolNameCamel:         "Bash",
 		},
 		"W:api",
 		"work",
@@ -174,6 +200,7 @@ func TestBuildStateUpdateRequest_CarriesNormalizedDebugContext(t *testing.T) {
 		true,
 		false,
 		true,
+		false,
 	)
 
 	want := daemon.Request{
@@ -193,9 +220,234 @@ func TestBuildStateUpdateRequest_CarriesNormalizedDebugContext(t *testing.T) {
 		StopReason:       "context_limit_reached",
 		Reason:           "error",
 		ContextLimit:     true,
+		ResetFlow:        false,
 	}
 	if req != want {
 		t.Fatalf("buildStateUpdateRequest() = %+v, want %+v", req, want)
+	}
+}
+
+func TestShouldDelayResetSensitiveStop(t *testing.T) {
+	cases := []struct {
+		name        string
+		event       string
+		action      string
+		payload     HookPayload
+		contextStop bool
+		resetFlow   bool
+		want        bool
+	}{
+		{name: "claude stop waits", event: "Stop", action: "stop", want: true},
+		{name: "copilot agent stop waits", event: "agentStop", action: "stop", want: true},
+		{name: "session end waits", event: "sessionEnd", action: "stop", want: true},
+		{name: "agent idle notification waits", event: "notification", action: "stop", payload: HookPayload{NotificationType: "agent_idle"}, want: true},
+		{name: "post compact does not wait", event: "PostCompact", action: "stop", want: false},
+		{name: "failure stop does not wait", event: "Stop", action: "stop", contextStop: true, want: false},
+		{name: "known reset stop does not wait", event: "Stop", action: "stop", resetFlow: true, want: false},
+		{name: "non-stop action does not wait", event: "userPromptSubmitted", action: "active", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldDelayResetSensitiveStop(tc.event, tc.action, tc.payload, tc.contextStop, tc.resetFlow)
+			if got != tc.want {
+				t.Fatalf("shouldDelayResetSensitiveStop(%q, %q, %+v, %v, %v) = %v, want %v", tc.event, tc.action, tc.payload, tc.contextStop, tc.resetFlow, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRunWithDeps_ClaudeClearSequenceUsesLifecycleResetSignals(t *testing.T) {
+	oldDelay := resetFlowStopDelay
+	resetFlowStopDelay = 40 * time.Millisecond
+	t.Cleanup(func() {
+		resetFlowStopDelay = oldDelay
+	})
+
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+
+	boltTitle := palette.BuildTitle("api", "bolt", false)
+	stopTitle := palette.BuildTitle("api", "stop", false)
+	clearTitle := palette.BuildTitle("api", "", false)
+
+	stopKitty := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, boltTitle, "work", "claude"),
+	}
+	sessionEndKitty := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, boltTitle, "work", "claude"),
+	}
+	sessionStartKitty := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, clearTitle, "work", "claude"),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runWithDeps("Stop", 42, "/tmp/amx", HookPayload{}, false, stopKitty, daemonClient)
+	}()
+
+	time.Sleep(resetFlowStopDelay / 4)
+	if err := runWithDeps("SessionEnd", 42, "/tmp/amx", HookPayload{Reason: "clear"}, false, sessionEndKitty, daemonClient); err != nil {
+		t.Fatalf("SessionEnd(reset) error = %v", err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("Stop error = %v", err)
+	}
+	if err := runWithDeps("SessionStart", 42, "/tmp/amx", HookPayload{Source: "clear"}, false, sessionStartKitty, daemonClient); err != nil {
+		t.Fatalf("SessionStart(clear) error = %v", err)
+	}
+
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 3 {
+		t.Fatalf("daemon requests = %d, want 3 (%+v)", len(reqs), reqs)
+	}
+	wantReqs := []struct {
+		event string
+		reset bool
+	}{
+		{event: "SessionEnd", reset: true},
+		{event: "Stop", reset: false},
+		{event: "SessionStart", reset: true},
+	}
+	for i, want := range wantReqs {
+		if reqs[i].Event != want.event || reqs[i].ResetFlow != want.reset {
+			t.Fatalf("request[%d] = %+v, want event=%q reset_flow=%v", i, reqs[i], want.event, want.reset)
+		}
+	}
+
+	calls := append([]setTitleCall{}, stopKitty.setTitleCalls...)
+	calls = append(calls, sessionEndKitty.setTitleCalls...)
+	calls = append(calls, sessionStartKitty.setTitleCalls...)
+	if len(calls) == 0 {
+		t.Fatal("expected at least one title update")
+	}
+	for _, call := range calls {
+		if call.title == stopTitle {
+			t.Fatalf("Claude /clear should suppress stop title, got %+v", calls)
+		}
+		if call.title != clearTitle {
+			t.Fatalf("unexpected Claude /clear title update %q, want only %q", call.title, clearTitle)
+		}
+	}
+}
+
+func TestRunWithDeps_CopilotClearSequenceUsesPromptAndSessionStartResetSignals(t *testing.T) {
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+
+	stopTitle := palette.BuildTitle("api", "stop", false)
+	boltTitle := palette.BuildTitle("api", "bolt", false)
+	clearTitle := palette.BuildTitle("api", "", false)
+
+	promptKitty := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, stopTitle, "work", "copilot"),
+	}
+	agentStopKitty := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, boltTitle, "work", "copilot"),
+	}
+	sessionEndKitty := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, clearTitle, "work", "copilot"),
+	}
+	sessionStartKitty := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, clearTitle, "work", "copilot"),
+	}
+
+	for _, step := range []struct {
+		event   string
+		payload HookPayload
+		kitty   *fakeIndicatorKittyClient
+	}{
+		{
+			event:   "userPromptSubmitted",
+			payload: HookPayload{Prompt: "/clear workspace"},
+			kitty:   promptKitty,
+		},
+		{
+			event: "agentStop",
+			kitty: agentStopKitty,
+		},
+		{
+			event: "sessionEnd",
+			kitty: sessionEndKitty,
+		},
+		{
+			event:   "sessionStart",
+			payload: HookPayload{Source: "new"},
+			kitty:   sessionStartKitty,
+		},
+	} {
+		if err := runWithDeps(step.event, 42, "/tmp/amx", step.payload, false, step.kitty, daemonClient); err != nil {
+			t.Fatalf("%s error = %v", step.event, err)
+		}
+	}
+
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 4 {
+		t.Fatalf("daemon requests = %d, want 4 (%+v)", len(reqs), reqs)
+	}
+	wantReqs := []struct {
+		event string
+		reset bool
+	}{
+		{event: "userPromptSubmitted", reset: true},
+		{event: "agentStop", reset: false},
+		{event: "sessionEnd", reset: false},
+		{event: "sessionStart", reset: true},
+	}
+	for i, want := range wantReqs {
+		if reqs[i].Event != want.event || reqs[i].ResetFlow != want.reset {
+			t.Fatalf("request[%d] = %+v, want event=%q reset_flow=%v", i, reqs[i], want.event, want.reset)
+		}
+	}
+
+	calls := append([]setTitleCall{}, promptKitty.setTitleCalls...)
+	calls = append(calls, agentStopKitty.setTitleCalls...)
+	calls = append(calls, sessionEndKitty.setTitleCalls...)
+	calls = append(calls, sessionStartKitty.setTitleCalls...)
+	if len(calls) == 0 {
+		t.Fatal("expected Copilot /clear to update the title")
+	}
+	var sawBolt, sawClear bool
+	for _, call := range calls {
+		switch call.title {
+		case boltTitle:
+			sawBolt = true
+		case clearTitle:
+			sawClear = true
+		case stopTitle:
+			t.Fatalf("Copilot /clear should suppress stop title, got %+v", calls)
+		default:
+			t.Fatalf("unexpected Copilot /clear title update %q", call.title)
+		}
+	}
+	if !sawBolt || !sawClear {
+		t.Fatalf("expected Copilot /clear to show activity then clear, got %+v", calls)
+	}
+}
+
+func TestBuildStateUpdateRequest_CarriesResetFlow(t *testing.T) {
+	req := buildStateUpdateRequest(
+		42,
+		"active",
+		"userPromptSubmitted",
+		HookPayload{Prompt: "/clear worktree"},
+		"W:api",
+		"work",
+		"copilot",
+		"stop",
+		false,
+		false,
+		false,
+		true,
+	)
+
+	if !req.ResetFlow {
+		t.Fatalf("buildStateUpdateRequest() reset_flow = false, want true: %+v", req)
 	}
 }
 

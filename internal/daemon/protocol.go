@@ -20,7 +20,7 @@ const (
 type Request struct {
 	Type             MessageType `json:"type"`
 	WindowID         int         `json:"window_id,omitempty"`          // KITTY_WINDOW_ID
-	Action           string      `json:"action,omitempty"`             // active|stop|permission|failure|stop_failure|idle|clear
+	Action           string      `json:"action,omitempty"`             // active|stop|permission|failure|stop_failure|idle|clear|user_clear
 	Event            string      `json:"event,omitempty"`              // raw Claude hook event name (e.g. UserPromptSubmit)
 	ToolName         string      `json:"tool_name,omitempty"`          // tool name from PreToolUse/PostToolUse hook payloads
 	IsPrompt         bool        `json:"is_prompt,omitempty"`          // true if event is a user prompt submission
@@ -34,6 +34,7 @@ type Request struct {
 	StopReason       string      `json:"stop_reason,omitempty"`        // normalized stop_reason / stopReason payload field
 	Reason           string      `json:"reason,omitempty"`             // normalized reason payload field
 	ContextLimit     bool        `json:"context_limit,omitempty"`      // true when indicator detected a context-limit stop/failure
+	ResetFlow        bool        `json:"reset_flow,omitempty"`         // true when the event belongs to a user-initiated session reset flow
 }
 
 // Response is a JSON message sent by the daemon back to the client.
@@ -171,6 +172,7 @@ type SessionEvent struct {
 	StopReason        string `json:"stop_reason,omitempty"`        // normalized stop_reason / stopReason payload field
 	Reason            string `json:"reason,omitempty"`             // normalized reason payload field
 	ContextLimit      bool   `json:"context_limit,omitempty"`      // true when indicator detected a context-limit stop/failure
+	ResetFlow         bool   `json:"reset_flow,omitempty"`         // true when the daemon treated the event as part of a reset flow
 }
 
 // actionPriority maps each action name to its guard priority.

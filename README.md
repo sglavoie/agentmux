@@ -186,6 +186,18 @@ Claude hook support remains in place alongside Copilot; `Stop` and
 `SessionEnd` are terminal. `TeammateIdle` is the lone non-terminal
 child-complete signal that preserves the parent session's current icon.
 
+Agent Mux classifies reset flows from the documented hook contracts instead of
+synthetic prompt/session-start mixes. Claude `/clear` is detected from
+`SessionEnd.reason = clear` and the follow-up `SessionStart.source = clear`.
+Copilot reset commands are detected from `userPromptSubmitted.prompt` when the
+first token is `/clear`, `/reset`, or `/new`, plus the documented
+`sessionStart.source = new` lifecycle hint. Terminal stop hooks pause briefly
+before reaching the daemon so late reset markers can win, and the daemon then
+rewrites the follow-up stop/idle cleanup path to `user_clear` so reset flows
+clear the tab without surfacing a stop icon or stop notification. If runtime
+behavior still diverges, inspect `amx daemon export-events --window <id>`
+before changing the delay heuristic.
+
 ## Daemon
 
 The daemon owns tab-state transitions and notifications:
@@ -352,6 +364,10 @@ just test
   Current releases also recover across daemon restarts on the next cleanup
   event. For Copilot, also upgrade to version `1.0.45` or newer, because
   older releases had `agentStop` hook issues.
+- **`/clear` still shows a stop icon or stop notification**: inspect
+  `amx daemon export-events --window <id>` and confirm the reset sequence is
+  arriving with the documented hook payloads for your harness before tuning
+  reset-flow timing.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

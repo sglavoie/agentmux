@@ -24,6 +24,7 @@ func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 		StopReason:       "context_limit_reached",
 		Reason:           "error",
 		ContextLimit:     true,
+		ResetFlow:        true,
 	}
 
 	data, err := json.Marshal(in)
@@ -43,7 +44,7 @@ func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 		t.Fatalf("Harness = %q, want %q", out.Harness, "copilot")
 	}
 	if out.CurrentIconState != "bolt" || out.NotificationType != "permission_prompt" ||
-		out.StopReason != "context_limit_reached" || out.Reason != "error" || !out.ContextLimit {
+		out.StopReason != "context_limit_reached" || out.Reason != "error" || !out.ContextLimit || !out.ResetFlow {
 		t.Fatalf("debug context mismatch: in=%+v out=%+v", in, out)
 	}
 	if out.Type != in.Type || out.WindowID != in.WindowID || out.Action != in.Action || out.Event != in.Event {
@@ -94,6 +95,7 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 				StopReason:        "context_limit_reached",
 				Reason:            "error",
 				ContextLimit:      true,
+				ResetFlow:         true,
 			},
 		},
 	}
@@ -131,6 +133,7 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 		StopReason:        "context_limit_reached",
 		Reason:            "error",
 		ContextLimit:      true,
+		ResetFlow:         true,
 	}) {
 		t.Fatalf("Events[1] = %+v", out.Events[1])
 	}
@@ -162,6 +165,7 @@ func TestSessionEvent_OmitsZeroOptionalFields(t *testing.T) {
 		"stop_reason",
 		"reason",
 		"context_limit",
+		"reset_flow",
 	} {
 		if strings.Contains(got, field) {
 			t.Fatalf("expected %s to be omitted, got: %s", field, got)

@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // maxHookPayloadBytes caps the size of a hook payload we are willing to read
@@ -26,9 +29,14 @@ type HookPayload struct {
 	StopReason            string `json:"stop_reason"`
 	StopReasonCamel       string `json:"stopReason"`
 	Reason                string `json:"reason"`
+	Source                string `json:"source"`
+	Prompt                string `json:"prompt"`
+	InitialPrompt         string `json:"initial_prompt"`
+	InitialPromptCamel    string `json:"initialPrompt"`
 	Title                 string `json:"title"`
 	Message               string `json:"message"`
 	ToolName              string `json:"tool_name"`
+	ToolNameCamel         string `json:"toolName"`
 }
 
 // ReadHookPayload decodes hook JSON from stdin when stdin is piped. Interactive
@@ -88,4 +96,77 @@ func (p HookPayload) EffectiveStopReason() string {
 		return p.StopReason
 	}
 	return p.StopReasonCamel
+}
+
+func (p HookPayload) EffectivePrompt() string {
+	if p.Prompt != "" {
+		return p.Prompt
+	}
+	if p.InitialPrompt != "" {
+		return p.InitialPrompt
+	}
+	return p.InitialPromptCamel
+}
+
+func (p HookPayload) EffectiveToolName() string {
+	if p.ToolName != "" {
+		return p.ToolName
+	}
+	return p.ToolNameCamel
+}
+
+// payloadHasResetFlow classifies documented user-initiated reset flows from the
+// harness hook payload. The daemon only needs a boolean marker, but the
+// indicator must respect the two harness contracts:
+//   - Claude: `/clear` is exposed through lifecycle payloads.
+//   - Copilot: reset slash commands arrive on userPromptSubmitted and the new
+//     session is flagged with sessionStart.source == "new".
+func payloadHasResetFlow(harnessName, event string, payload HookPayload) bool {
+	switch strings.ToLower(strings.TrimSpace(harnessName)) {
+	case harness.Claude:
+		return claudePayloadHasResetFlow(event, payload)
+	case harness.Copilot:
+		return copilotPayloadHasResetFlow(event, payload)
+	default:
+		return claudePayloadHasResetFlow(event, payload) || copilotPayloadHasResetFlow(event, payload)
+	}
+}
+
+func hasResetPromptCommand(prompt string) bool {
+	fields := strings.Fields(strings.TrimSpace(prompt))
+	if len(fields) == 0 {
+		return false
+	}
+	switch strings.ToLower(fields[0]) {
+	case "/clear", "/reset", "/new":
+		return true
+	default:
+		return false
+	}
+}
+
+func claudePayloadHasResetFlow(event string, payload HookPayload) bool {
+	switch event {
+	case "SessionEnd":
+		return normalizeLifecycleValue(payload.Reason) == "clear"
+	case "SessionStart":
+		return normalizeLifecycleValue(payload.Source) == "clear"
+	default:
+		return false
+	}
+}
+
+func copilotPayloadHasResetFlow(event string, payload HookPayload) bool {
+	switch event {
+	case "userPromptSubmitted":
+		return hasResetPromptCommand(payload.EffectivePrompt())
+	case "sessionStart":
+		return normalizeLifecycleValue(payload.Source) == "new"
+	default:
+		return false
+	}
+}
+
+func normalizeLifecycleValue(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
