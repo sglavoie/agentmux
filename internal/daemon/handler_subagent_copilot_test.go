@@ -23,10 +23,10 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 
 		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
 
-		// agentStop resolves to a preserve-current active update. While a
-		// subagent is running it must still be suppressed entirely — no
-		// icon change, no counter clear.
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "agentStop", PreservesIcon: true})
+		// agentStop resolves to a terminal stop action. While a subagent is
+		// running the mid-subagent gate must suppress it entirely — no icon
+		// change, no counter clear.
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
 		if !resp.OK || resp.Allowed {
 			t.Fatalf("agentStop during subagent: want allowed=false, got %+v", resp)
 		}
@@ -178,7 +178,7 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 		}
 	})
 
-	t.Run("agentStop after subagent drains preserves bolt", func(t *testing.T) {
+	t.Run("agentStop after subagent drains transitions to stop", func(t *testing.T) {
 		h := newTestHandler()
 
 		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
@@ -186,21 +186,21 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "subagentStop"})
 
 		// agentStop now arrives with no subagents running — gate falls
-		// through, but the child-complete event must preserve the parent bolt.
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "agentStop", PreservesIcon: true})
-		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
-			t.Fatalf("agentStop after drained subagents: want icon_state=%q, got %+v", IconStatePreserve, resp)
+		// through and the terminal stop action surfaces the ⏹ icon.
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+			t.Fatalf("agentStop after drained subagents: want icon_state=stop, got %+v", resp)
 		}
 	})
 
 	t.Run("gate is no-op when no subagent is running", func(t *testing.T) {
-		// agentStop on a fresh handler must remain a no-op preserve-current
-		// update — proves the gate cannot misfire when subagentCount[windowID]
-		// == 0.
+		// agentStop on a fresh handler must fall through the gate and surface
+		// the terminal stop icon — proves the gate cannot misfire when
+		// subagentCount[windowID] == 0.
 		h := newTestHandler()
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "agentStop", PreservesIcon: true})
-		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
-			t.Fatalf("agentStop with no subagent: want icon_state=%q, got %+v", IconStatePreserve, resp)
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+			t.Fatalf("agentStop with no subagent: want icon_state=stop, got %+v", resp)
 		}
 
 		// permissionRequest on a fresh handler must still flip to the key

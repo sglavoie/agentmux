@@ -75,7 +75,7 @@ func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "agentStop", PreservesIcon: true})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
