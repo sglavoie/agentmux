@@ -75,45 +75,63 @@ func isCopilotPermissionResolutionEvent(req Request) bool {
 	}
 }
 
-func isCopilotAutoApprovedToolPermission(req Request) bool {
-	if !isCopilotRequest(req) || req.Action != "permission" {
-		return false
-	}
-	if req.Event == "permissionRequest" {
-		return true
-	}
-	return (req.Event == "notification" || req.Event == "Notification") &&
+func isCopilotPermissionRequest(req Request) bool {
+	return isCopilotRequest(req) &&
+		req.Action == "permission" &&
+		req.Event == "permissionRequest"
+}
+
+func isCopilotPermissionPromptNotification(req Request) bool {
+	return isCopilotRequest(req) &&
+		req.Action == "permission" &&
+		(req.Event == "notification" || req.Event == "Notification") &&
 		req.NotificationType == "permission_prompt"
 }
 
-func isCopilotTrailingAutoApprovedToolPermission(req Request, priorAutoApproved bool, prevActiveEvent string) bool {
-	if !priorAutoApproved || !isCopilotAutoApprovedToolPermission(req) {
-		return false
-	}
-	switch prevActiveEvent {
-	case "postToolUse", "PostToolUse":
-		return true
-	default:
-		return false
-	}
+func isCopilotElicitationPrompt(req Request) bool {
+	return isCopilotRequest(req) &&
+		req.Action == "permission" &&
+		(req.Event == "notification" || req.Event == "Notification") &&
+		req.NotificationType == "elicitation_dialog"
 }
 
-func shouldResetCopilotAutoApprovedToolPrompt(req Request) bool {
+func isCopilotAutoApprovedToolPermission(req Request) bool {
+	return isCopilotPermissionPromptNotification(req)
+}
+
+func isCopilotTrailingAutoApprovedToolPermission(req Request, priorAutoApproved bool) bool {
+	return priorAutoApproved && isCopilotAutoApprovedToolPermission(req)
+}
+
+type copilotToolPermissionState uint8
+
+const (
+	copilotToolPermissionNone copilotToolPermissionState = iota
+	copilotToolPermissionPending
+	copilotToolPermissionAutoApproved
+)
+
+func shouldResetCopilotToolPermissionState(req Request) bool {
 	if !isCopilotRequest(req) {
 		return false
 	}
 	if req.IsPrompt {
 		return true
 	}
-	if req.Event == "preToolUse" {
+	switch req.Event {
+	case "sessionStart", "SessionStart":
 		return true
 	}
 	switch req.Action {
-	case "idle", "clear", "user_clear", "stop", "stop_failure", "failure":
+	case "clear", "user_clear":
 		return true
 	default:
 		return false
 	}
+}
+
+func shouldConfirmCopilotAutoApprovedToolPermission(req Request) bool {
+	return isCopilotRequest(req) && req.Action != "permission"
 }
 
 func shouldSuppressCopilotPendingPrompt(req Request, prevAction string) bool {
@@ -295,11 +313,21 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	prevAction := h.lastKnownAction(req.WindowID, req.CurrentIconState)
 	h.stateMu.Lock()
 	prevActiveEvent := h.lastActiveEvent[req.WindowID]
-	priorAutoApprovedToolPrompt := h.copilotAutoApprovedToolPrompt[req.WindowID]
-	if shouldResetCopilotAutoApprovedToolPrompt(req) {
-		delete(h.copilotAutoApprovedToolPrompt, req.WindowID)
-		priorAutoApprovedToolPrompt = false
+	copilotPermissionState := h.copilotToolPermissionState[req.WindowID]
+	if shouldResetCopilotToolPermissionState(req) {
+		delete(h.copilotToolPermissionState, req.WindowID)
+		copilotPermissionState = copilotToolPermissionNone
 	}
+	if isCopilotElicitationPrompt(req) ||
+		(copilotPermissionState == copilotToolPermissionPending && isCopilotPermissionPromptNotification(req)) {
+		delete(h.copilotToolPermissionState, req.WindowID)
+		copilotPermissionState = copilotToolPermissionNone
+	} else if copilotPermissionState == copilotToolPermissionPending &&
+		shouldConfirmCopilotAutoApprovedToolPermission(req) {
+		h.copilotToolPermissionState[req.WindowID] = copilotToolPermissionAutoApproved
+		copilotPermissionState = copilotToolPermissionAutoApproved
+	}
+	priorAutoApprovedToolPrompt := copilotPermissionState == copilotToolPermissionAutoApproved
 	h.stateMu.Unlock()
 	syntheticStop := shouldSynthesizeCopilotCompactStop(req, prevAction)
 	if shouldSuppressCopilotPendingPrompt(req, prevAction) {
@@ -423,6 +451,33 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		}
 	}
 
+	// Copilot permissionRequest fires before the permission service decides
+	// whether the tool call is auto-allowed or needs a real user prompt. Keep the
+	// current icon on this pre-permission signal and wait for either later tool
+	// progress (auto-approved) or notification.permission_prompt
+	// (user-blocking prompt).
+	if isCopilotPermissionRequest(req) {
+		h.notifier.CancelPending(req.WindowID)
+		h.stateMu.Lock()
+		now := time.Now()
+		h.copilotToolPermissionState[req.WindowID] = copilotToolPermissionPending
+		h.activity[req.WindowID] = now
+		h.lastSessionTitle[req.WindowID] = req.SessionTitle
+		h.lastPipeMode[req.WindowID] = req.PipeMode
+		delete(h.notifiedStale, req.WindowID)
+		if req.Account != "" {
+			h.lastAccount[req.WindowID] = req.Account
+			h.lastSeenEventAt[req.Account] = now
+			delete(h.notifiedHookSilence, req.Account)
+		}
+		meta := h.windowMetadata[req.WindowID]
+		meta.Durable.ActivityAt = now.Unix()
+		h.windowMetadata[req.WindowID] = meta
+		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve))
+		h.stateMu.Unlock()
+		return Response{OK: true, Allowed: true, IconState: IconStatePreserve}
+	}
+
 	// Terminal / cleanup states reset the subagent counter.
 	// This list intentionally includes "failure" even though the cancel-switch
 	// above does not: counter cleanup is safe (losing the count just clears the
@@ -438,7 +493,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if req.Action == "stop" || req.Action == "stop_failure" || req.Action == "failure" ||
 		req.Action == "idle" || req.Action == "clear" || req.Action == "user_clear" {
 		h.stateMu.Lock()
-		delete(h.copilotAutoApprovedToolPrompt, req.WindowID)
+		if req.Action == "clear" || req.Action == "user_clear" {
+			delete(h.copilotToolPermissionState, req.WindowID)
+		}
 		delete(h.subagentCount, req.WindowID)
 		if req.Action != "user_clear" {
 			delete(h.pendingReset, req.WindowID)
@@ -498,22 +555,18 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: true, Allowed: false}
 	}
 
-	// Auto-approved permission: preToolUse fired before permissionRequest, so the
-	// tool is already running. The key icon should not override the active bolt —
-	// there is nothing for the user to approve. Copilot can also emit a trailing
-	// notification.permission_prompt after postToolUse for the same already-running
-	// tool, so carry a short-lived auto-approved marker across that follow-up.
+	// Auto-approved permission: Claude can emit PermissionRequest after PreToolUse
+	// for a tool that is already running, and Copilot can later emit a trailing
+	// notification.permission_prompt even after the turn already continued. In
+	// both cases there is nothing left for the user to approve, so preserve the
+	// current icon instead of surfacing the key.
 	isAutoApprovedPerm := effective == "permission" &&
 		((prevGuard == "active" &&
 			(prevActiveEvent == "PreToolUse" || prevActiveEvent == "preToolUse")) ||
-			isCopilotTrailingAutoApprovedToolPermission(req, priorAutoApprovedToolPrompt, prevActiveEvent))
+			isCopilotTrailingAutoApprovedToolPermission(req, priorAutoApprovedToolPrompt))
 
-	// Copilot's preToolUse → permissionRequest sequence is speculative: it
-	// fires even for tools that auto-approve, producing a spurious "Permission
-	// requested" notification when no user input is required. The same flow can
-	// later emit notification.permission_prompt after postToolUse, which must also
-	// preserve the bolt instead of surfacing the key. Restrict this to Copilot's
-	// tool-approval signals so real Copilot prompts like elicitation_dialog still
+	// Restrict the Copilot special-case to trailing notification.permission_prompt
+	// noise. Explicit user-blocking prompts like elicitation_dialog must still
 	// show the key icon.
 	isCopilotAutoApprovedPerm := isAutoApprovedPerm &&
 		isCopilotAutoApprovedToolPermission(req)
@@ -534,9 +587,10 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.lastActiveEvent[req.WindowID] = req.Event
 	}
 	if isCopilotAutoApprovedPerm {
-		h.copilotAutoApprovedToolPrompt[req.WindowID] = true
-	} else if effective == "permission" && isCopilotRequest(req) {
-		delete(h.copilotAutoApprovedToolPrompt, req.WindowID)
+		h.copilotToolPermissionState[req.WindowID] = copilotToolPermissionAutoApproved
+	} else if effective == "permission" && isCopilotRequest(req) &&
+		(isCopilotPermissionPromptNotification(req) || isCopilotElicitationPrompt(req)) {
+		delete(h.copilotToolPermissionState, req.WindowID)
 	}
 	// Record the last substantive action so idle/clear can detect a stale bolt
 	// even after the state guard has expired. Preserve-current events keep the

@@ -203,13 +203,21 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 			t.Fatalf("agentStop with no subagent: want icon_state=stop, got %+v", resp)
 		}
 
-		// permissionRequest on a fresh handler must still flip to the key
-		// icon — Claude's PermissionRequest and Copilot's
-		// non-mid-subagent permissionRequest both rely on this.
+		// Copilot permissionRequest is a pre-permission signal: outside the
+		// mid-subagent gate it should still be handled, but it now preserves the
+		// current icon until a later notification.permission_prompt confirms that
+		// user approval is actually required.
 		h2 := newTestHandler()
-		resp = h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
-		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
-			t.Fatalf("permissionRequest with no subagent: want icon_state=key, got %+v", resp)
+		resp = h2.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "permission",
+			Event:            "permissionRequest",
+			CurrentIconState: "bolt",
+		})
+		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+			t.Fatalf("permissionRequest with no subagent: want icon_state=%q, got %+v", IconStatePreserve, resp)
 		}
 	})
 }
@@ -223,11 +231,19 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 // subagentStart. Without the fix, the permission guard (priority 3) blocks the
 // subagent icon (priority 2), leaving the 🔑 showing while a subagent runs.
 func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
-	t.Run("subagentStart clears permission guard and shows robot icon", func(t *testing.T) {
+	t.Run("subagentStart clears real permission prompt and shows robot icon", func(t *testing.T) {
 		h := newTestHandler()
 
-		// Establish a permission guard (key icon showing).
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
+		// Establish a real Copilot permission guard (key icon showing).
+		resp := h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "permission",
+			Event:            "notification",
+			NotificationType: "permission_prompt",
+			CurrentIconState: "bolt",
+		})
 		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
 			t.Fatalf("setup: want key icon, got %+v", resp)
 		}
@@ -294,18 +310,37 @@ func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
 
 	t.Run("Copilot sequence: speculative permissionRequest before subagentStart shows robot", func(t *testing.T) {
 		// Reproduces the reported Copilot bug: active (postToolUse) →
-		// permissionRequest (speculative; isAutoApprovedPerm=false because
-		// prevEvent is postToolUse, not preToolUse) → subagentStart.
-		// The robot must appear instead of the key persisting.
+		// permissionRequest (pre-permission only, still ambiguous) →
+		// subagentStart. The speculative permission signal must preserve the bolt,
+		// and the robot must appear once the subagent actually starts running.
 		h := newTestHandler()
-		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "postToolUse"})
-		// permissionRequest with PostToolUse active guard → NOT auto-approved → key
-		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission", Event: "permissionRequest"})
-		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
-			t.Fatalf("setup: want key icon, got %+v", resp)
+		h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "active",
+			Event:            "postToolUse",
+			CurrentIconState: "bolt",
+		})
+		resp := h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "permission",
+			Event:            "permissionRequest",
+			CurrentIconState: "bolt",
+		})
+		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+			t.Fatalf("setup: want icon_state=%q, got %+v", IconStatePreserve, resp)
 		}
-		// subagentStart must override the key icon with the robot.
-		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
+		resp = h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "subagent",
+			Event:            "subagentStart",
+			CurrentIconState: "bolt",
+		})
 		if !resp.OK || !resp.Allowed || resp.IconState != "subagent" {
 			t.Fatalf("subagentStart: want icon_state=subagent, got %+v", resp)
 		}

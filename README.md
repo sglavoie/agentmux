@@ -180,9 +180,16 @@ Current Copilot events mapped by Agent Mux include:
 `agentStop` is the terminal Copilot turn-end hook — the direct analogue of
 Claude's `Stop` event — and resolves to the stop action (⏹ icon).
 `notification` payloads with `notification_type = agent_idle` also resolve to
-the stop action. `notification_type = permission_prompt` and
-`notification_type = elicitation_dialog` both resolve to the permission-needed
-key icon (🔑), because both mean Copilot is waiting on user input.
+the stop action. Copilot `permissionRequest` fires earlier, before the
+permission service decides whether a tool call is auto-allowed, denied by rules,
+or escalated to a real user prompt, so Agent Mux treats that hook as
+pre-permission activity and preserves the current icon until the outcome is
+clearer. `notification_type = permission_prompt` and
+`notification_type = elicitation_dialog` are the explicit user-blocking signals
+and resolve to the permission-needed key icon (🔑). If Copilot has already
+continued the turn after a speculative `permissionRequest`, a later trailing
+`notification.permission_prompt` is treated as stale noise and does not replace
+the current icon.
 `sessionEnd` remains the session-level terminal hook. Copilot still does not
 document a `postCompact` hook; if a compaction run ends with only an
 idle/cleanup follow-up after `preCompact`, Agent Mux promotes the compact state

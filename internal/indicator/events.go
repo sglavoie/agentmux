@@ -47,7 +47,9 @@ var eventToAction = map[string]string{
 	// Stop-failure: terminal failure (API error, context-limit stop).
 	"StopFailure": "stop_failure",
 
-	// Permission: user approval required.
+	// Permission / waiting-on-you states. Copilot's permissionRequest is only a
+	// pre-permission lifecycle signal; the daemon decides later whether it should
+	// stay non-blocking or surface the key icon once an explicit prompt arrives.
 	"permissionRequest": "permission",
 	"PermissionRequest": "permission",
 	"PermissionDenied":  "permission",

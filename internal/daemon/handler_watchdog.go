@@ -201,6 +201,7 @@ func (h *Handler) SweepStale(now time.Time) {
 		// history survives until the underlying Kitty window actually closes.
 		delete(h.lastAction, windowID)
 		delete(h.lastActiveEvent, windowID)
+		delete(h.copilotToolPermissionState, windowID)
 		delete(h.subagentCount, windowID)
 		stale = append(stale, staleEntry{windowID, title, pipe, notify})
 	}

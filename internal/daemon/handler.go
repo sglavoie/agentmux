@@ -74,12 +74,16 @@ type Handler struct {
 	// auto-approval) from PostToolUse (prior tool completed).
 	lastActiveEvent map[int]string
 
-	// copilotAutoApprovedToolPrompt tracks windows where Copilot already emitted
-	// an auto-approved tool-permission signal for the current tool flow. Copilot
-	// can later send a trailing notification.permission_prompt after postToolUse;
-	// this marker lets the daemon preserve the bolt for that follow-up noise
-	// without weakening true user-blocking prompt handling.
-	copilotAutoApprovedToolPrompt map[int]bool
+	// copilotToolPermissionState tracks Copilot's tool-permission lifecycle per
+	// window. permissionRequest fires before Copilot decides whether a tool call
+	// is auto-allowed or needs a real prompt, so the daemon keeps a short-lived
+	// state machine:
+	//   - pending: permissionRequest fired; wait for either a real prompt or
+	//     later tool progress.
+	//   - autoApproved: the turn continued without user input, so any later
+	//     notification.permission_prompt is stale noise and should not replace the
+	//     current icon.
+	copilotToolPermissionState map[int]copilotToolPermissionState
 
 	// subagentCount tracks the number of active sub-agents per window.
 	// It is incremented on SubagentStart and decremented on SubagentStop.
@@ -153,26 +157,26 @@ const maxEventsPerWindow = 5000
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 	return &Handler{
-		guard:                         guard,
-		notifier:                      notifier,
-		startedAt:                     time.Now(),
-		staleThresholds:               make(map[string]time.Duration),
-		perAccountThresholds:          make(map[string]map[string]time.Duration),
-		perAccountHookSilence:         make(map[string]time.Duration),
-		activity:                      make(map[int]time.Time),
-		lastAction:                    make(map[int]string),
-		lastAccount:                   make(map[int]string),
-		lastActiveEvent:               make(map[int]string),
-		copilotAutoApprovedToolPrompt: make(map[int]bool),
-		subagentCount:                 make(map[int]int),
-		pendingReset:                  make(map[int]resetFlowState),
-		notifiedStale:                 make(map[int]bool),
-		lastSeenEventAt:               make(map[string]time.Time),
-		notifiedHookSilence:           make(map[string]bool),
-		lastSessionTitle:              make(map[int]string),
-		lastPipeMode:                  make(map[int]bool),
-		eventLog:                      make(map[int][]SessionEvent),
-		windowMetadata:                make(map[int]WindowDebugMetadata),
+		guard:                      guard,
+		notifier:                   notifier,
+		startedAt:                  time.Now(),
+		staleThresholds:            make(map[string]time.Duration),
+		perAccountThresholds:       make(map[string]map[string]time.Duration),
+		perAccountHookSilence:      make(map[string]time.Duration),
+		activity:                   make(map[int]time.Time),
+		lastAction:                 make(map[int]string),
+		lastAccount:                make(map[int]string),
+		lastActiveEvent:            make(map[int]string),
+		copilotToolPermissionState: make(map[int]copilotToolPermissionState),
+		subagentCount:              make(map[int]int),
+		pendingReset:               make(map[int]resetFlowState),
+		notifiedStale:              make(map[int]bool),
+		lastSeenEventAt:            make(map[string]time.Time),
+		notifiedHookSilence:        make(map[string]bool),
+		lastSessionTitle:           make(map[int]string),
+		lastPipeMode:               make(map[int]bool),
+		eventLog:                   make(map[int][]SessionEvent),
+		windowMetadata:             make(map[int]WindowDebugMetadata),
 	}
 }
 
