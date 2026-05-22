@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -30,7 +31,7 @@ type kittyTitleSetter interface {
 // the daemon for a guard decision, then updates the Kitty tab title if allowed.
 //
 //   - eventOrAction: harness event name (e.g. "Stop", "agentStop") or amx action (e.g. "stop")
-//   - windowID: 0 means read from $KITTY_WINDOW_ID
+//   - windowID: 0 means resolve the Kitty window ID from the current hook env
 //   - amxBin: absolute path to the amx binary, used for daemon auto-start
 func Run(eventOrAction string, windowID int, amxBin string) error {
 	payload, payloadErr := ReadHookPayload(os.Stdin)
@@ -69,12 +70,15 @@ func runWithDeps(
 		return nil
 	}
 
-	if windowID == 0 {
-		windowID = windowIDFromEnv()
+	resolvedWindowID, insideKitty, err := resolveHookWindowID(windowID)
+	if err != nil {
+		return err
 	}
-	if windowID == 0 {
-		return fmt.Errorf("indicator: KITTY_WINDOW_ID is not set")
+	if !insideKitty {
+		slog.Debug("indicator: hook invoked outside Kitty, ignoring", "event", eventOrAction)
+		return nil
 	}
+	windowID = resolvedWindowID
 
 	preservesIcon := PreservesCurrent(eventOrAction) && action == "active"
 
@@ -259,11 +263,39 @@ func updateTitle(windowID int, iconState string, client kittyTitleSetter, tab *k
 	return nil
 }
 
-func windowIDFromEnv() int {
-	s := os.Getenv("KITTY_WINDOW_ID")
-	if s == "" {
-		return 0
+// resolveHookWindowID distinguishes a genuine Kitty hook invocation from a
+// shared-home hook firing in a non-Kitty surface such as VS Code. Those
+// outside-Kitty calls must succeed quietly, while a broken Kitty env should
+// still fail loudly so regressions remain visible.
+func resolveHookWindowID(windowID int) (int, bool, error) {
+	switch {
+	case windowID < 0:
+		return 0, true, fmt.Errorf("indicator: invalid window ID %d", windowID)
+	case windowID > 0:
+		return windowID, true, nil
+	case !runningInsideKitty():
+		return 0, false, nil
+	default:
+		id, err := windowIDFromEnv()
+		if err != nil {
+			return 0, true, err
+		}
+		return id, true, nil
 	}
-	id, _ := strconv.Atoi(s)
-	return id
+}
+
+func runningInsideKitty() bool {
+	return strings.TrimSpace(os.Getenv("KITTY_LISTEN_ON")) != ""
+}
+
+func windowIDFromEnv() (int, error) {
+	s := strings.TrimSpace(os.Getenv("KITTY_WINDOW_ID"))
+	if s == "" {
+		return 0, fmt.Errorf("indicator: KITTY_WINDOW_ID is not set")
+	}
+	id, err := strconv.Atoi(s)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("indicator: invalid KITTY_WINDOW_ID %q", s)
+	}
+	return id, nil
 }

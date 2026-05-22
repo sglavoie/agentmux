@@ -12,6 +12,7 @@ import (
 type fakeIndicatorKittyClient struct {
 	windows       []kitty.OSWindow
 	listErr       error
+	listCalls     int
 	screenText    string
 	getTextErr    error
 	setTitleErr   error
@@ -30,6 +31,7 @@ type setTitleCall struct {
 }
 
 func (f *fakeIndicatorKittyClient) ListWindows() ([]kitty.OSWindow, error) {
+	f.listCalls++
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
@@ -193,6 +195,99 @@ func TestBuildStateUpdateRequest_CarriesNormalizedDebugContext(t *testing.T) {
 	}
 	if req != want {
 		t.Fatalf("buildStateUpdateRequest() = %+v, want %+v", req, want)
+	}
+}
+
+func TestRunWithDeps_NonKittyHookIsSilentNoOp(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "")
+	t.Setenv("KITTY_WINDOW_ID", "")
+
+	kittyClient := &fakeIndicatorKittyClient{}
+	daemonClient := &fakeIndicatorDaemonClient{}
+
+	err := runWithDeps(
+		"sessionStart",
+		0,
+		"/tmp/amx",
+		HookPayload{},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v, want nil", err)
+	}
+	if kittyClient.listCalls != 0 {
+		t.Fatalf("ListWindows calls = %d, want 0", kittyClient.listCalls)
+	}
+	if len(kittyClient.getTextCalls) != 0 {
+		t.Fatalf("GetText calls = %d, want 0", len(kittyClient.getTextCalls))
+	}
+	if len(kittyClient.setTitleCalls) != 0 {
+		t.Fatalf("SetTabTitle calls = %d, want 0", len(kittyClient.setTitleCalls))
+	}
+	if len(daemonClient.reqs) != 0 {
+		t.Fatalf("daemon requests = %d, want 0", len(daemonClient.reqs))
+	}
+}
+
+func TestRunWithDeps_MissingWindowIDInsideKittyErrors(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
+	t.Setenv("KITTY_WINDOW_ID", "")
+
+	kittyClient := &fakeIndicatorKittyClient{}
+	daemonClient := &fakeIndicatorDaemonClient{}
+
+	err := runWithDeps(
+		"sessionStart",
+		0,
+		"/tmp/amx",
+		HookPayload{},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err == nil {
+		t.Fatal("runWithDeps() error = nil, want missing KITTY_WINDOW_ID error")
+	}
+	if got := err.Error(); got != "indicator: KITTY_WINDOW_ID is not set" {
+		t.Fatalf("runWithDeps() error = %q, want %q", got, "indicator: KITTY_WINDOW_ID is not set")
+	}
+	if kittyClient.listCalls != 0 {
+		t.Fatalf("ListWindows calls = %d, want 0", kittyClient.listCalls)
+	}
+	if len(daemonClient.reqs) != 0 {
+		t.Fatalf("daemon requests = %d, want 0", len(daemonClient.reqs))
+	}
+}
+
+func TestRunWithDeps_InvalidWindowIDInsideKittyErrors(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
+	t.Setenv("KITTY_WINDOW_ID", "not-a-number")
+
+	kittyClient := &fakeIndicatorKittyClient{}
+	daemonClient := &fakeIndicatorDaemonClient{}
+
+	err := runWithDeps(
+		"sessionStart",
+		0,
+		"/tmp/amx",
+		HookPayload{},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err == nil {
+		t.Fatal("runWithDeps() error = nil, want invalid KITTY_WINDOW_ID error")
+	}
+	if got := err.Error(); got != `indicator: invalid KITTY_WINDOW_ID "not-a-number"` {
+		t.Fatalf("runWithDeps() error = %q, want %q", got, `indicator: invalid KITTY_WINDOW_ID "not-a-number"`)
+	}
+	if kittyClient.listCalls != 0 {
+		t.Fatalf("ListWindows calls = %d, want 0", kittyClient.listCalls)
+	}
+	if len(daemonClient.reqs) != 0 {
+		t.Fatalf("daemon requests = %d, want 0", len(daemonClient.reqs))
 	}
 }
 

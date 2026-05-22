@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/indicator"
+	"github.com/spf13/cobra"
 )
 
 var hookWindowID int
@@ -20,8 +20,11 @@ notifications based on the current session state.
 The first argument must be a harness event name (e.g. Stop, PermissionRequest,
 UserPromptSubmit). Unknown events are silently ignored.
 
-KITTY_WINDOW_ID must be set in the environment (provided automatically
-by harness hooks), or supplied via --window-id.`,
+Hooks that fire outside Kitty (for example from another Copilot CLI surface
+sharing the same COPILOT_HOME) are treated as successful no-ops.
+
+For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
+(provided automatically by harness hooks), or supplied via --window-id.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		amxBin, err := os.Executable()

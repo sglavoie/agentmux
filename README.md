@@ -145,6 +145,11 @@ Hook installation is harness-aware:
 
 The hook command is `amx hook-indicator <event>`.
 
+Copilot hook files are user-level for a given `COPILOT_HOME`, so any Copilot CLI
+surface that reuses that home — including VS Code or another non-Kitty session
+— will run the same hook commands. Agent Mux treats those non-Kitty invocations
+as silent no-ops; only Kitty-backed sessions update tab state.
+
 Copilot hook entries use the documented `{"bash": ..., "powershell": ...}`
 schema. If you installed hooks with an older Agent Mux build that wrote a
 `command` field instead, re-run `amx config hooks-sync` once; the drift
