@@ -102,19 +102,19 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 	log.Debug("indicator")
 
 	dc := daemon.NewClient()
-	resp, err := dc.SendWithAutoStart(daemon.Request{
-		Type:             daemon.TypeStateUpdate,
-		WindowID:         windowID,
-		Action:           action,
-		Event:            eventOrAction,
-		ToolName:         payload.ToolName,
-		IsPrompt:         IsPromptEvent(eventOrAction),
-		PreservesIcon:    preservesIcon,
-		PipeMode:         pipeMode,
-		SessionTitle:     sessionTitle,
-		Account:          profile,
-		CurrentIconState: currentIconState,
-	}, amxBin)
+	resp, err := dc.SendWithAutoStart(buildStateUpdateRequest(
+		windowID,
+		action,
+		eventOrAction,
+		payload,
+		sessionTitle,
+		profile,
+		harness,
+		currentIconState,
+		pipeMode,
+		preservesIcon,
+		contextLimitDetected,
+	), amxBin)
 	if err != nil {
 		log.Debug("indicator: daemon unavailable, updating title without guard", "err", err)
 		if tab == nil {
@@ -139,6 +139,39 @@ func Run(eventOrAction string, windowID int, amxBin string) error {
 	}
 
 	return finalizeTitleUpdate(tab, windowID, resp.IconState, client)
+}
+
+func buildStateUpdateRequest(
+	windowID int,
+	action string,
+	eventOrAction string,
+	payload HookPayload,
+	sessionTitle string,
+	profile string,
+	harness string,
+	currentIconState string,
+	pipeMode bool,
+	preservesIcon bool,
+	contextLimitDetected bool,
+) daemon.Request {
+	return daemon.Request{
+		Type:             daemon.TypeStateUpdate,
+		WindowID:         windowID,
+		Action:           action,
+		Event:            eventOrAction,
+		ToolName:         payload.ToolName,
+		IsPrompt:         IsPromptEvent(eventOrAction),
+		PreservesIcon:    preservesIcon,
+		PipeMode:         pipeMode,
+		SessionTitle:     sessionTitle,
+		Account:          profile,
+		Harness:          harness,
+		CurrentIconState: currentIconState,
+		NotificationType: payload.EffectiveNotificationType(),
+		StopReason:       payload.EffectiveStopReason(),
+		Reason:           payload.Reason,
+		ContextLimit:     contextLimitDetected,
+	}
 }
 
 // finalizeTitleUpdate applies the daemon-resolved icon state to the Kitty tab,

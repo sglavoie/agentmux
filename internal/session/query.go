@@ -73,6 +73,14 @@ func List(client kitty.KittyClient) ([]RunningSession, error) {
 	return sessions, err
 }
 
+// ListFromOSWindows returns all managed running sessions from an already-fetched
+// kitten-@-ls payload. This avoids a second Kitty roundtrip for callers that
+// already have the raw window list and only need session reconstruction.
+func ListFromOSWindows(osWindows []kitty.OSWindow) []RunningSession {
+	sessions, _ := runningSessionsFromOSWindows(osWindows, nil)
+	return sessions
+}
+
 // ListWithConfig returns running sessions plus any "ghost" tabs whose anchor
 // window is gone but whose tab title resolves unambiguously to a configured
 // (profile, project) pair. When cfg is nil, no fallback occurs and ghosts is
@@ -100,6 +108,16 @@ func Find(sessions []RunningSession, baseTitle string) (RunningSession, bool) {
 func FindByKey(sessions []RunningSession, key string) (RunningSession, bool) {
 	for _, s := range sessions {
 		if s.Key == key {
+			return s, true
+		}
+	}
+	return RunningSession{}, false
+}
+
+// FindByWindowID returns the running session anchored to windowID.
+func FindByWindowID(sessions []RunningSession, windowID int) (RunningSession, bool) {
+	for _, s := range sessions {
+		if s.WindowID == windowID {
 			return s, true
 		}
 	}

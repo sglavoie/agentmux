@@ -47,17 +47,24 @@ type ForegroundProcess struct {
 // FindTabByWindowID searches all OS windows for the tab containing the window
 // with the given ID. Returns the tab, the window, and true if found.
 func FindTabByWindowID(osWindows []OSWindow, windowID int) (*Tab, *Window, bool) {
+	_, tab, win, ok := FindWindowLocationByID(osWindows, windowID)
+	return tab, win, ok
+}
+
+// FindWindowLocationByID searches all OS windows for the window with the given
+// ID. Returns the containing OS window, tab, and window if found.
+func FindWindowLocationByID(osWindows []OSWindow, windowID int) (*OSWindow, *Tab, *Window, bool) {
 	for i := range osWindows {
 		for j := range osWindows[i].Tabs {
 			tab := &osWindows[i].Tabs[j]
 			for k := range tab.Windows {
 				if tab.Windows[k].ID == windowID {
-					return tab, &tab.Windows[k], true
+					return &osWindows[i], tab, &tab.Windows[k], true
 				}
 			}
 		}
 	}
-	return nil, nil, false
+	return nil, nil, nil, false
 }
 
 // DashboardLocation identifies where an existing dashboard is running.
@@ -188,24 +195,24 @@ func isColorPickerCmdline(cmdline []string) bool {
 
 // UserVars holds Agent Mux user variables stored on a Kitty window.
 type UserVars struct {
-	Profile      string `json:"amx_profile"`
-	Harness      string `json:"amx_harness"`
-	HomeDir      string `json:"amx_home_dir"`
-	Project      string `json:"amx_project"`
-	Args         string `json:"amx_args"`
-	AMXEnv       string `json:"amx_env"`
-	AMXGroups    string `json:"amx_groups"`
-	AMXDirectory string `json:"amx_directory"`
-	Account      string `json:"cc_account"`
-	ConfigDir    string `json:"cc_config_dir"`
-	Flags        string `json:"cc_flags"`
-	ExplicitFlags string `json:"cc_explicit_flags"`
-	ExplicitFlagsSet bool `json:"-"`
-	PW           string `json:"cc_pw"`
-	Env          string `json:"cc_env"`
-	Groups       string `json:"cc_groups"`
-	Mute         string `json:"cc_mute"`
-	CWD          string `json:"cc_cwd"`
+	Profile          string `json:"amx_profile"`
+	Harness          string `json:"amx_harness"`
+	HomeDir          string `json:"amx_home_dir"`
+	Project          string `json:"amx_project"`
+	Args             string `json:"amx_args"`
+	AMXEnv           string `json:"amx_env"`
+	AMXGroups        string `json:"amx_groups"`
+	AMXDirectory     string `json:"amx_directory"`
+	Account          string `json:"cc_account"`
+	ConfigDir        string `json:"cc_config_dir"`
+	Flags            string `json:"cc_flags"`
+	ExplicitFlags    string `json:"cc_explicit_flags"`
+	ExplicitFlagsSet bool   `json:"-"`
+	PW               string `json:"cc_pw"`
+	Env              string `json:"cc_env"`
+	Groups           string `json:"cc_groups"`
+	Mute             string `json:"cc_mute"`
+	CWD              string `json:"cc_cwd"`
 }
 
 func (u *UserVars) UnmarshalJSON(data []byte) error {

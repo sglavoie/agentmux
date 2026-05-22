@@ -13,11 +13,12 @@ func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{
-		Type:     TypeStateUpdate,
-		WindowID: 1,
-		Action:   "active",
-		Event:    "PreToolUse",
-		ToolName: "Bash",
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "active",
+		Event:            "PreToolUse",
+		ToolName:         "Bash",
+		CurrentIconState: "key",
 	})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
@@ -34,6 +35,12 @@ func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
 	if ev.Action != "active" || ev.Event != "PreToolUse" || ev.ToolName != "Bash" {
 		t.Errorf("event = %+v; want action=active event=PreToolUse tool_name=Bash", ev)
 	}
+	if ev.ResultIconState != "bolt" {
+		t.Errorf("event result_icon_state = %q; want bolt", ev.ResultIconState)
+	}
+	if ev.CurrentIconState != "key" {
+		t.Errorf("event current_icon_state = %q; want key", ev.CurrentIconState)
+	}
 	if ev.At <= 0 {
 		t.Errorf("event At = %d; want > 0", ev.At)
 	}
@@ -47,7 +54,7 @@ func TestHandler_EventLog_AppendOnGuardSuppressed(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse", ToolName: "Read"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse", ToolName: "Read", CurrentIconState: "subagent"})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
@@ -65,6 +72,12 @@ func TestHandler_EventLog_AppendOnGuardSuppressed(t *testing.T) {
 	if resp.Events[1].Action != "active" || resp.Events[1].ToolName != "Read" {
 		t.Errorf("second event = %+v; want action=active tool_name=Read", resp.Events[1])
 	}
+	if resp.Events[1].ResultIconState != IconStatePreserve || resp.Events[1].SuppressionReason != suppressionReasonGuardBlocked {
+		t.Errorf("second event = %+v; want result_icon_state=preserve suppression_reason=%q", resp.Events[1], suppressionReasonGuardBlocked)
+	}
+	if resp.Events[1].CurrentIconState != "subagent" {
+		t.Errorf("second event current_icon_state = %q; want subagent", resp.Events[1].CurrentIconState)
+	}
 }
 
 // TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression confirms that the
@@ -75,7 +88,7 @@ func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop", CurrentIconState: "subagent"})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
@@ -86,6 +99,89 @@ func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 	}
 	if resp.Events[1].Event != "agentStop" || !resp.Events[1].Suppressed {
 		t.Errorf("second event = %+v; want event=agentStop suppressed=true", resp.Events[1])
+	}
+	if resp.Events[1].SuppressionReason != suppressionReasonCopilotMidSubagent || resp.Events[1].ResultIconState != IconStatePreserve {
+		t.Errorf("second event = %+v; want suppression_reason=%q result_icon_state=preserve", resp.Events[1], suppressionReasonCopilotMidSubagent)
+	}
+	if resp.Events[1].CurrentIconState != "subagent" {
+		t.Errorf("second event current_icon_state = %q; want subagent", resp.Events[1].CurrentIconState)
+	}
+}
+
+func TestHandler_EventLog_AppendOnActiveAfterTerminalSuppression(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop"})
+	h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "active",
+		Event:            "PostToolUse",
+		CurrentIconState: "stop",
+	})
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	if !resp.OK {
+		t.Fatalf("session detail: want OK=true, got %+v", resp)
+	}
+	if len(resp.Events) != 2 {
+		t.Fatalf("events = %d; want 2 (%+v)", len(resp.Events), resp.Events)
+	}
+	ev := resp.Events[1]
+	if !ev.Suppressed {
+		t.Fatalf("active-after-terminal event suppressed=false; want true (%+v)", ev)
+	}
+	if ev.SuppressionReason != suppressionReasonActiveAfterTerminal {
+		t.Fatalf("suppression_reason = %q; want %q", ev.SuppressionReason, suppressionReasonActiveAfterTerminal)
+	}
+	if ev.ResultIconState != IconStatePreserve {
+		t.Fatalf("result_icon_state = %q; want %q", ev.ResultIconState, IconStatePreserve)
+	}
+	if ev.CurrentIconState != "stop" {
+		t.Fatalf("current_icon_state = %q; want stop", ev.CurrentIconState)
+	}
+}
+
+func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "stop_failure",
+		Event:            "SessionEnd",
+		CurrentIconState: "bolt",
+		NotificationType: "agent_idle",
+		StopReason:       "context_limit_reached",
+		Reason:           "error",
+		ContextLimit:     true,
+	})
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	if !resp.OK {
+		t.Fatalf("session detail: want OK=true, got %+v", resp)
+	}
+	if len(resp.Events) != 1 {
+		t.Fatalf("events = %d; want 1 (%+v)", len(resp.Events), resp.Events)
+	}
+	ev := resp.Events[0]
+	if ev.ResultIconState != "error" {
+		t.Fatalf("result_icon_state = %q; want error", ev.ResultIconState)
+	}
+	if ev.CurrentIconState != "bolt" {
+		t.Fatalf("current_icon_state = %q; want bolt", ev.CurrentIconState)
+	}
+	if ev.NotificationType != "agent_idle" {
+		t.Fatalf("notification_type = %q; want agent_idle", ev.NotificationType)
+	}
+	if ev.StopReason != "context_limit_reached" {
+		t.Fatalf("stop_reason = %q; want context_limit_reached", ev.StopReason)
+	}
+	if ev.Reason != "error" {
+		t.Fatalf("reason = %q; want error", ev.Reason)
+	}
+	if !ev.ContextLimit {
+		t.Fatal("context_limit = false; want true")
 	}
 }
 
@@ -273,14 +369,14 @@ func TestHandler_SessionDetail_UnknownWindow(t *testing.T) {
 func TestHandler_EventsExport_ReturnsAllWindows(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"})
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 2, Action: "active", Event: "PreToolUse"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 2, Action: "stop", Event: "Stop"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 2, Action: "active", Event: "PreToolUse", SessionTitle: "W:two"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 2, Action: "stop", Event: "Stop", SessionTitle: "W:two"})
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "PreToolUse"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "PostToolUse"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "stop", Event: "Stop"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "PreToolUse", SessionTitle: "W:three"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "active", Event: "PostToolUse", SessionTitle: "W:three"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 3, Action: "stop", Event: "Stop", SessionTitle: "W:three"})
 
 	resp := h.Handle(Request{Type: TypeEventsExport})
 	if !resp.OK {
@@ -295,6 +391,53 @@ func TestHandler_EventsExport_ReturnsAllWindows(t *testing.T) {
 		if got != n {
 			t.Errorf("window %d events = %d; want %d", id, got, n)
 		}
+	}
+	if got := len(resp.WindowMetadata); got != 3 {
+		t.Fatalf("len(WindowMetadata) = %d; want 3 (%+v)", got, resp.WindowMetadata)
+	}
+}
+
+func TestHandler_EventsExport_WindowFilterReturnsOneWindow(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"})
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     2,
+		Action:       "active",
+		Event:        "PreToolUse",
+		SessionTitle: "W:two",
+		Account:      "work",
+		Harness:      "copilot",
+	})
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     2,
+		Action:       "stop",
+		Event:        "Stop",
+		SessionTitle: "W:two",
+		Account:      "work",
+		Harness:      "copilot",
+	})
+
+	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 2})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	if got := len(resp.EventsByWindow); got != 1 {
+		t.Fatalf("len(EventsByWindow) = %d; want 1 (%+v)", got, resp.EventsByWindow)
+	}
+	if got := len(resp.WindowMetadata); got != 1 {
+		t.Fatalf("len(WindowMetadata) = %d; want 1 (%+v)", got, resp.WindowMetadata)
+	}
+	if got := len(resp.EventsByWindow[2]); got != 2 {
+		t.Fatalf("window 2 events = %d; want 2", got)
+	}
+	if _, ok := resp.EventsByWindow[1]; ok {
+		t.Fatalf("unexpected window 1 events in filtered export: %+v", resp.EventsByWindow)
+	}
+	if meta := resp.WindowMetadata[2]; meta.Durable.SessionTitle != "W:two" || meta.Durable.Harness != "copilot" {
+		t.Fatalf("window 2 metadata = %+v; want durable session title/harness", meta)
 	}
 }
 
@@ -311,6 +454,9 @@ func TestHandler_EventsExport_EmptyWhenNoEvents(t *testing.T) {
 	if len(resp.EventsByWindow) != 0 {
 		t.Fatalf("EventsByWindow = %+v; want empty", resp.EventsByWindow)
 	}
+	if len(resp.WindowMetadata) != 0 {
+		t.Fatalf("WindowMetadata = %+v; want empty", resp.WindowMetadata)
+	}
 }
 
 // TestHandler_EventsExport_DoesNotMutateOriginal pins the defensive copy in
@@ -321,7 +467,16 @@ func TestHandler_EventsExport_EmptyWhenNoEvents(t *testing.T) {
 func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 	h := newTestHandler()
 
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", ToolName: "Bash"})
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Action:       "active",
+		Event:        "PreToolUse",
+		ToolName:     "Bash",
+		SessionTitle: "W:api",
+		Account:      "work",
+		Harness:      "copilot",
+	})
 
 	first := h.Handle(Request{Type: TypeEventsExport})
 	if !first.OK || len(first.EventsByWindow[1]) != 1 {
@@ -331,6 +486,9 @@ func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 	// Tamper with the returned slice. If the handler aliases its internal
 	// buffer, the next export will reflect this mutation.
 	first.EventsByWindow[1][0].Event = "TAMPERED"
+	meta := first.WindowMetadata[1]
+	meta.Durable.SessionTitle = "TAMPERED"
+	first.WindowMetadata[1] = meta
 
 	second := h.Handle(Request{Type: TypeEventsExport})
 	if !second.OK || len(second.EventsByWindow[1]) != 1 {
@@ -338,5 +496,169 @@ func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 	}
 	if got := second.EventsByWindow[1][0].Event; got != "PreToolUse" {
 		t.Fatalf("internal buffer mutated: event = %q; want %q", got, "PreToolUse")
+	}
+	if got := second.WindowMetadata[1].Durable.SessionTitle; got != "W:api" {
+		t.Fatalf("metadata mutated: session_title = %q; want %q", got, "W:api")
+	}
+}
+
+func TestHandler_EventsExport_IncludesDurableMetadata(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Action:       "active",
+		Event:        "PreToolUse",
+		SessionTitle: "W:api",
+		Account:      "work",
+		Harness:      "Copilot",
+		PipeMode:     true,
+	})
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Action:       "idle",
+		Event:        "TeammateIdle",
+		SessionTitle: "W:api",
+		Account:      "work",
+		Harness:      "Copilot",
+		PipeMode:     true,
+	})
+	// Simulate a degraded terminal hook where the daemon no longer gets live
+	// Kitty identity strings. The durable snapshot must keep the prior values.
+	h.Handle(Request{
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "stop",
+		Event:    "Stop",
+		PipeMode: true,
+	})
+
+	resp := h.Handle(Request{Type: TypeEventsExport})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	meta, ok := resp.WindowMetadata[1]
+	if !ok {
+		t.Fatalf("WindowMetadata[1] missing; got %+v", resp.WindowMetadata)
+	}
+	if meta.Stats.EventCount != 3 {
+		t.Fatalf("event_count = %d; want 3", meta.Stats.EventCount)
+	}
+	if meta.Stats.FirstEventAt == 0 || meta.Stats.LastEventAt == 0 {
+		t.Fatalf("stats timestamps = %+v; want non-zero first/last", meta.Stats)
+	}
+	if meta.Durable.SessionTitle != "W:api" {
+		t.Fatalf("session_title = %q; want %q", meta.Durable.SessionTitle, "W:api")
+	}
+	if meta.Durable.Profile != "work" {
+		t.Fatalf("profile = %q; want %q", meta.Durable.Profile, "work")
+	}
+	if meta.Durable.Harness != "copilot" {
+		t.Fatalf("harness = %q; want %q", meta.Durable.Harness, "copilot")
+	}
+	if !meta.Durable.PipeMode {
+		t.Fatal("pipe_mode = false; want true")
+	}
+	if meta.Durable.ActivityAt == 0 {
+		t.Fatal("activity_at = 0; want non-zero")
+	}
+	if meta.Durable.LastAction != "stop" {
+		t.Fatalf("last_action = %q; want %q", meta.Durable.LastAction, "stop")
+	}
+	if meta.Durable.LastActiveEvent != "PreToolUse" {
+		t.Fatalf("last_active_event = %q; want %q", meta.Durable.LastActiveEvent, "PreToolUse")
+	}
+}
+
+func TestHandler_EventsExport_DurableActiveMetadataSurvivesIdleCleanup(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Action:       "active",
+		Event:        "PreToolUse",
+		SessionTitle: "W:api",
+		Account:      "work",
+		Harness:      "claude",
+	})
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Action:       "idle",
+		Event:        "TeammateIdle",
+		SessionTitle: "W:api",
+		Account:      "work",
+		Harness:      "claude",
+	})
+
+	resp := h.Handle(Request{Type: TypeEventsExport})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	meta := resp.WindowMetadata[1]
+	if meta.Durable.LastAction != "active" {
+		t.Fatalf("last_action after idle = %q; want active", meta.Durable.LastAction)
+	}
+	if meta.Durable.LastActiveEvent != "PreToolUse" {
+		t.Fatalf("last_active_event after idle = %q; want PreToolUse", meta.Durable.LastActiveEvent)
+	}
+}
+
+func TestHandler_EventsExport_DurableSubagentCountPreservedOnTerminalCleanup(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart", SessionTitle: "W:api"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart", SessionTitle: "W:api"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop", SessionTitle: "W:api"})
+
+	resp := h.Handle(Request{Type: TypeEventsExport})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	if got := resp.WindowMetadata[1].Durable.SubagentCount; got != 2 {
+		t.Fatalf("subagent_count after terminal cleanup = %d; want 2 (preserve last known in-flight count)", got)
+	}
+}
+
+func TestHandler_EventsExport_PreservesMetadataAfterClosedWindowGC(t *testing.T) {
+	h, fake, _ := newSweepTestHandler(0)
+	fake.mu.Lock()
+	fake.windows = fakeOSWindowsWithTab(1, "W:api")
+	fake.mu.Unlock()
+
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Action:       "active",
+		Event:        "PreToolUse",
+		SessionTitle: "W:api",
+		Account:      "work",
+		Harness:      "copilot",
+	})
+
+	fake.mu.Lock()
+	fake.windows = nil
+	fake.mu.Unlock()
+	h.SweepStale(time.Now())
+
+	resp := h.Handle(Request{Type: TypeEventsExport})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	if len(resp.EventsByWindow) != 0 {
+		t.Fatalf("EventsByWindow = %+v; want empty after closed-window GC", resp.EventsByWindow)
+	}
+	meta, ok := resp.WindowMetadata[1]
+	if !ok {
+		t.Fatalf("WindowMetadata[1] missing after closed-window GC; got %+v", resp.WindowMetadata)
+	}
+	if meta.Stats.EventCount != 1 {
+		t.Fatalf("event_count after closed-window GC = %d; want 1", meta.Stats.EventCount)
+	}
+	if meta.Durable.SessionTitle != "W:api" || meta.Durable.Profile != "work" || meta.Durable.Harness != "copilot" {
+		t.Fatalf("durable metadata after closed-window GC = %+v", meta.Durable)
 	}
 }

@@ -67,6 +67,41 @@ func TestIPC_StateQuery(t *testing.T) {
 	}
 }
 
+func TestIPC_EventsExportWindowFilter(t *testing.T) {
+	sock := startTestServer(t)
+	c := NewClientWithSocket(sock)
+
+	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"}); err != nil {
+		t.Fatalf("window 1 update: %v", err)
+	}
+	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "active", Event: "PreToolUse", SessionTitle: "W:two", Account: "work", Harness: "copilot"}); err != nil {
+		t.Fatalf("window 2 active: %v", err)
+	}
+	if _, err := c.Send(Request{Type: TypeStateUpdate, WindowID: 2, Action: "stop", Event: "Stop", SessionTitle: "W:two", Account: "work", Harness: "copilot"}); err != nil {
+		t.Fatalf("window 2 stop: %v", err)
+	}
+
+	exported, err := c.ExportEvents(2)
+	if err != nil {
+		t.Fatalf("ExportEvents: %v", err)
+	}
+	if got := len(exported.EventsByWindow); got != 1 {
+		t.Fatalf("len(EventsByWindow) = %d; want 1 (%+v)", got, exported.EventsByWindow)
+	}
+	if got := len(exported.WindowMetadata); got != 1 {
+		t.Fatalf("len(WindowMetadata) = %d; want 1 (%+v)", got, exported.WindowMetadata)
+	}
+	if got := len(exported.EventsByWindow[2]); got != 2 {
+		t.Fatalf("window 2 events = %d; want 2", got)
+	}
+	if _, ok := exported.EventsByWindow[1]; ok {
+		t.Fatalf("unexpected window 1 events in filtered export: %+v", exported.EventsByWindow)
+	}
+	if got := exported.WindowMetadata[2].Durable.Harness; got != "copilot" {
+		t.Fatalf("window 2 harness = %q; want copilot", got)
+	}
+}
+
 func TestIPC_JSONRoundTrip(t *testing.T) {
 	sock := startTestServer(t)
 	c := NewClientWithSocket(sock)
@@ -195,7 +230,7 @@ func TestIPC_StateQueryWatchdogRoundtrip(t *testing.T) {
 		t.Errorf("LastEventAt = 0; want non-zero unix timestamp")
 	}
 	if entry.ThresholdSec != int((10 * time.Minute).Seconds()) {
-		t.Errorf("ThresholdSec = %d; want %d (global active)", entry.ThresholdSec, int((10*time.Minute).Seconds()))
+		t.Errorf("ThresholdSec = %d; want %d (global active)", entry.ThresholdSec, int((10 * time.Minute).Seconds()))
 	}
 }
 

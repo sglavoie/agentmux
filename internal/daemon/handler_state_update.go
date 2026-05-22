@@ -3,6 +3,8 @@ package daemon
 import (
 	"log/slog"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 func (h *Handler) lastKnownAction(windowID int, currentIconState string) string {
@@ -41,23 +43,75 @@ func actionFromIconState(iconState string) string {
 	}
 }
 
+const (
+	suppressionReasonGuardBlocked         = "guard_blocked"
+	suppressionReasonSubagentStillRunning = "subagent_still_running"
+	suppressionReasonCopilotMidSubagent   = "copilot_mid_subagent"
+	suppressionReasonActiveAfterTerminal  = "active_after_terminal"
+)
+
+func sessionEventFromRequest(req Request, action, resultIconState string) SessionEvent {
+	return SessionEvent{
+		At:               time.Now().Unix(),
+		Event:            req.Event,
+		Action:           action,
+		ToolName:         req.ToolName,
+		PreservesIcon:    req.PreservesIcon,
+		ResultIconState:  resultIconState,
+		CurrentIconState: req.CurrentIconState,
+		NotificationType: req.NotificationType,
+		StopReason:       req.StopReason,
+		Reason:           req.Reason,
+		ContextLimit:     req.ContextLimit,
+	}
+}
+
+func suppressedSessionEvent(req Request, action, suppressionReason string) SessionEvent {
+	ev := sessionEventFromRequest(req, action, IconStatePreserve)
+	ev.Suppressed = true
+	ev.SuppressionReason = suppressionReason
+	return ev
+}
+
+func (h *Handler) touchWindowMetadataLocked(req Request) {
+	meta := h.windowMetadata[req.WindowID]
+	if req.SessionTitle != "" {
+		meta.Durable.SessionTitle = req.SessionTitle
+	}
+	if req.Account != "" {
+		meta.Durable.Profile = req.Account
+	}
+	if req.Harness != "" {
+		meta.Durable.Harness = harness.Normalize(req.Harness)
+	}
+	meta.Durable.PipeMode = req.PipeMode
+	h.windowMetadata[req.WindowID] = meta
+}
+
+func (h *Handler) updateDurableSubagentCountLocked(windowID int) {
+	meta := h.windowMetadata[windowID]
+	meta.Durable.SubagentCount = h.subagentCount[windowID]
+	h.windowMetadata[windowID] = meta
+}
+
 // appendEventLocked records an event into the per-window ring buffer. The
 // caller must hold stateMu. Older entries are dropped from the front once the
 // slice would exceed maxEventsPerWindow.
-func (h *Handler) appendEventLocked(req Request, action string, suppressed bool) {
-	buf := h.eventLog[req.WindowID]
-	buf = append(buf, SessionEvent{
-		At:            time.Now().Unix(),
-		Event:         req.Event,
-		Action:        action,
-		ToolName:      req.ToolName,
-		Suppressed:    suppressed,
-		PreservesIcon: req.PreservesIcon,
-	})
+func (h *Handler) appendEventLocked(windowID int, event SessionEvent) {
+	meta := h.windowMetadata[windowID]
+	meta.Stats.EventCount++
+	if meta.Stats.FirstEventAt == 0 {
+		meta.Stats.FirstEventAt = event.At
+	}
+	meta.Stats.LastEventAt = event.At
+	h.windowMetadata[windowID] = meta
+
+	buf := h.eventLog[windowID]
+	buf = append(buf, event)
 	if len(buf) > maxEventsPerWindow {
 		buf = buf[len(buf)-maxEventsPerWindow:]
 	}
-	h.eventLog[req.WindowID] = buf
+	h.eventLog[windowID] = buf
 }
 
 func (h *Handler) handleStateUpdate(req Request) Response {
@@ -76,6 +130,10 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		"preserves_icon", req.PreservesIcon,
 	)
 
+	h.stateMu.Lock()
+	h.touchWindowMetadataLocked(req)
+	h.stateMu.Unlock()
+
 	// Only terminal/idle transitions invalidate a pending permission notification.
 	// PostToolUse/active/subagent events are normal companions to a real
 	// permission_prompt and must not cancel the notification.
@@ -93,6 +151,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if req.Action == "subagent" {
 		h.stateMu.Lock()
 		h.subagentCount[req.WindowID]++
+		h.updateDurableSubagentCountLocked(req.WindowID)
 		h.stateMu.Unlock()
 	}
 
@@ -109,6 +168,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			// indefinitely across many sessions that never hit a terminal event.
 			delete(h.subagentCount, req.WindowID)
 		}
+		h.updateDurableSubagentCountLocked(req.WindowID)
 		h.stateMu.Unlock()
 
 		if wasTracked && remaining > 0 && req.Action == "active" {
@@ -119,7 +179,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			// sees the failure even when sibling agents are still running.
 			h.guard.TryUpdate(req.WindowID, "subagent", false)
 			h.stateMu.Lock()
-			h.appendEventLocked(req, req.Action, true)
+			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonSubagentStillRunning))
 			h.stateMu.Unlock()
 			return Response{OK: true, Allowed: false}
 		}
@@ -176,7 +236,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 				"subagent_count", count,
 			)
 			h.stateMu.Lock()
-			h.appendEventLocked(req, req.Action, true)
+			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotMidSubagent))
 			h.stateMu.Unlock()
 			return Response{OK: true, Allowed: false}
 		}
@@ -216,6 +276,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		prev := h.lastKnownAction(req.WindowID, req.CurrentIconState)
 		if prev == "stop" || prev == "stop_failure" {
 			h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Action, req.PipeMode)
+			h.stateMu.Lock()
+			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonActiveAfterTerminal))
+			h.stateMu.Unlock()
 			return Response{OK: true, Allowed: false}
 		}
 	}
@@ -246,7 +309,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		// cooldown, so this cannot double-fire with the success path below.
 		h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Action, req.PipeMode)
 		h.stateMu.Lock()
-		h.appendEventLocked(req, req.Action, true)
+		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked))
 		h.stateMu.Unlock()
 		return Response{OK: true, Allowed: false}
 	}
@@ -299,10 +362,15 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.lastAction[req.WindowID] = recordedAction
 		delete(h.notifiedStale, req.WindowID)
 	}
-	// Append this transition into the per-window ring buffer. Terminal actions
-	// are recorded normally so the terminal hook itself is the last visible row
-	// in the detail pane.
-	h.appendEventLocked(req, effective, false)
+	meta := h.windowMetadata[req.WindowID]
+	meta.Durable.ActivityAt = now.Unix()
+	if effective == "active" {
+		meta.Durable.LastActiveEvent = req.Event
+	}
+	if recordedAction != "" && recordedAction != "idle" && recordedAction != "clear" && recordedAction != "user_clear" && !isAutoApprovedPerm {
+		meta.Durable.LastAction = recordedAction
+	}
+	h.windowMetadata[req.WindowID] = meta
 	h.stateMu.Unlock()
 
 	if req.PreservesIcon {
@@ -355,6 +423,10 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	} else {
 		h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, effective, req.PipeMode)
 	}
+
+	h.stateMu.Lock()
+	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, effective, iconState))
+	h.stateMu.Unlock()
 
 	return Response{OK: true, Allowed: true, IconState: iconState}
 }

@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -104,6 +105,26 @@ func TestFind_ByBaseTitle(t *testing.T) {
 	}
 	if s.Account != "work" {
 		t.Errorf("account: got %q, want %q", s.Account, "work")
+	}
+}
+
+func TestListFromOSWindows_AndFindByWindowID(t *testing.T) {
+	var osWindows []kitty.OSWindow
+	if err := json.Unmarshal(loadFixture(t, "kitty_ls.json"), &osWindows); err != nil {
+		t.Fatalf("Unmarshal fixture: %v", err)
+	}
+
+	sessions := session.ListFromOSWindows(osWindows)
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 sessions, got %d", len(sessions))
+	}
+
+	rs, found := session.FindByWindowID(sessions, 5)
+	if !found {
+		t.Fatal("expected to find window 5")
+	}
+	if rs.Base != "W:api" || rs.Profile != "work" || rs.Harness != "claude" {
+		t.Fatalf("session = %+v; want work/claude W:api", rs)
 	}
 }
 

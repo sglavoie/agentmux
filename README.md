@@ -189,12 +189,43 @@ It listens on:
 
 ### Investigating hook event flow
 
-`amx daemon export-events` dumps the daemon's in-memory per-window hook event
-buffer as JSON. Combine with `jq` to filter for the events relevant to a bug
-report:
+`amx daemon export-events` writes a schema-v2 JSON snapshot for investigation.
+Top-level fields describe the export (`schema_version`, `exported_at`,
+`daemon_pid`, `daemon_uptime_seconds`); `windows` keeps the legacy
+`window_id -> []SessionEvent` map, and `window_meta` adds per-window `stats`,
+durable session identity, and best-effort live Kitty/session metadata:
+
+```json
+{
+  "schema_version": 2,
+  "windows": {"42": [ ... ]},
+  "window_meta": {
+    "42": {
+      "stats": { ... },
+      "durable": { ... },
+      "live": { "found": true, ... }
+    }
+  }
+}
+```
+
+Durable metadata can outlive the legacy `windows` buffer after a tab closes;
+`live.found` flips to `false` when Kitty/session lookups are no longer
+available. Event rows keep the raw `event`/`action` fields plus normalized
+debug fields such as `tool_name`, `result_icon_state`, `current_icon_state`,
+`notification_type`, `stop_reason`, `reason`, and
+`suppressed`/`suppression_reason` when present.
+
+Combine with `jq` to filter for the events relevant to a bug report:
 
 ```bash
 amx daemon export-events | jq '.windows[] | .[] | select(.event == "agentStop")'
+```
+
+Inspect the richer metadata for one window:
+
+```bash
+amx daemon export-events | jq '.window_meta["42"]'
 ```
 
 Pass `--window ID` to restrict the dump to one Kitty window, or `--output

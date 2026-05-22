@@ -7,17 +7,23 @@ import (
 	"testing"
 )
 
-// TestRequest_RoundtripCarriesToolName pins that the new ToolName field
-// survives a JSON marshal/unmarshal cycle on the wire. Sessions 2+ rely on
-// this field being non-empty when the indicator forwards a PreToolUse /
-// PostToolUse payload, so a typo or missing tag would silently drop the data.
-func TestRequest_RoundtripCarriesToolName(t *testing.T) {
+// TestRequest_RoundtripCarriesDebugContext pins that normalized hook payload
+// fields survive a JSON marshal/unmarshal cycle on the wire. The indicator
+// forwards these to the daemon for event-log enrichment, so a tag typo would
+// silently drop investigation context from export-events output.
+func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 	in := Request{
-		Type:     TypeStateUpdate,
-		WindowID: 42,
-		Action:   "active",
-		Event:    "PreToolUse",
-		ToolName: "Bash",
+		Type:             TypeStateUpdate,
+		WindowID:         42,
+		Action:           "active",
+		Event:            "PreToolUse",
+		ToolName:         "Bash",
+		Harness:          "copilot",
+		CurrentIconState: "bolt",
+		NotificationType: "permission_prompt",
+		StopReason:       "context_limit_reached",
+		Reason:           "error",
+		ContextLimit:     true,
 	}
 
 	data, err := json.Marshal(in)
@@ -32,6 +38,13 @@ func TestRequest_RoundtripCarriesToolName(t *testing.T) {
 
 	if out.ToolName != "Bash" {
 		t.Fatalf("ToolName = %q, want %q", out.ToolName, "Bash")
+	}
+	if out.Harness != "copilot" {
+		t.Fatalf("Harness = %q, want %q", out.Harness, "copilot")
+	}
+	if out.CurrentIconState != "bolt" || out.NotificationType != "permission_prompt" ||
+		out.StopReason != "context_limit_reached" || out.Reason != "error" || !out.ContextLimit {
+		t.Fatalf("debug context mismatch: in=%+v out=%+v", in, out)
 	}
 	if out.Type != in.Type || out.WindowID != in.WindowID || out.Action != in.Action || out.Event != in.Event {
 		t.Fatalf("Request roundtrip mismatch: in=%+v out=%+v", in, out)
@@ -50,6 +63,9 @@ func TestRequest_OmittedToolNameMarshalsClean(t *testing.T) {
 	if got := string(data); strings.Contains(got, "tool_name") {
 		t.Fatalf("expected tool_name to be omitted, got: %s", got)
 	}
+	if got := string(data); strings.Contains(got, "harness") {
+		t.Fatalf("expected harness to be omitted, got: %s", got)
+	}
 }
 
 // TestResponse_RoundtripCarriesEvents pins that SessionEvent slices survive
@@ -60,8 +76,25 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 	in := Response{
 		OK: true,
 		Events: []SessionEvent{
-			{At: 1700000000, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
-			{At: 1700000001, Event: "Stop", Action: "stop", Suppressed: true},
+			{
+				At:               1700000000,
+				Event:            "PreToolUse",
+				Action:           "active",
+				ToolName:         "Bash",
+				ResultIconState:  "bolt",
+				CurrentIconState: "key",
+			},
+			{
+				At:                1700000001,
+				Event:             "Stop",
+				Action:            "stop",
+				Suppressed:        true,
+				ResultIconState:   IconStatePreserve,
+				SuppressionReason: "guard_blocked",
+				StopReason:        "context_limit_reached",
+				Reason:            "error",
+				ContextLimit:      true,
+			},
 		},
 	}
 
@@ -78,16 +111,34 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 	if len(out.Events) != 2 {
 		t.Fatalf("len(Events) = %d, want 2", len(out.Events))
 	}
-	if out.Events[0] != (SessionEvent{At: 1700000000, Event: "PreToolUse", Action: "active", ToolName: "Bash"}) {
+	if out.Events[0] != (SessionEvent{
+		At:               1700000000,
+		Event:            "PreToolUse",
+		Action:           "active",
+		ToolName:         "Bash",
+		ResultIconState:  "bolt",
+		CurrentIconState: "key",
+	}) {
 		t.Fatalf("Events[0] = %+v", out.Events[0])
 	}
-	if out.Events[1] != (SessionEvent{At: 1700000001, Event: "Stop", Action: "stop", Suppressed: true}) {
+	if out.Events[1] != (SessionEvent{
+		At:                1700000001,
+		Event:             "Stop",
+		Action:            "stop",
+		Suppressed:        true,
+		ResultIconState:   IconStatePreserve,
+		SuppressionReason: "guard_blocked",
+		StopReason:        "context_limit_reached",
+		Reason:            "error",
+		ContextLimit:      true,
+	}) {
 		t.Fatalf("Events[1] = %+v", out.Events[1])
 	}
 }
 
-// TestSessionEvent_OmitsZeroOptionalFields confirms that omitempty fires on
-// ToolName and Suppressed so a wire payload for a minimal event stays compact.
+// TestSessionEvent_OmitsZeroOptionalFields confirms that omitempty still fires
+// on the optional enrichment fields. result_icon_state is intentionally always
+// present so export-events can distinguish "clear icon" from "field omitted".
 func TestSessionEvent_OmitsZeroOptionalFields(t *testing.T) {
 	e := SessionEvent{At: 1, Event: "Stop", Action: "stop"}
 	data, err := json.Marshal(e)
@@ -100,6 +151,21 @@ func TestSessionEvent_OmitsZeroOptionalFields(t *testing.T) {
 	}
 	if strings.Contains(got, "suppressed") {
 		t.Fatalf("expected suppressed to be omitted, got: %s", got)
+	}
+	if !strings.Contains(got, `"result_icon_state":""`) {
+		t.Fatalf("expected result_icon_state to be present, got: %s", got)
+	}
+	for _, field := range []string{
+		"suppression_reason",
+		"current_icon_state",
+		"notification_type",
+		"stop_reason",
+		"reason",
+		"context_limit",
+	} {
+		if strings.Contains(got, field) {
+			t.Fatalf("expected %s to be omitted, got: %s", field, got)
+		}
 	}
 }
 
@@ -122,11 +188,19 @@ func TestResponse_RoundtripCarriesEventsByWindow(t *testing.T) {
 		OK: true,
 		EventsByWindow: map[int][]SessionEvent{
 			1: {
-				{At: 1700000000, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
-				{At: 1700000001, Event: "agentStop", Action: "active", PreservesIcon: true},
+				{At: 1700000000, Event: "PreToolUse", Action: "active", ToolName: "Bash", ResultIconState: "bolt"},
+				{At: 1700000001, Event: "agentStop", Action: "active", PreservesIcon: true, ResultIconState: IconStatePreserve},
 			},
 			2: {
-				{At: 1700000010, Event: "Stop", Action: "stop", Suppressed: true},
+				{
+					At:                1700000010,
+					Event:             "Stop",
+					Action:            "stop",
+					Suppressed:        true,
+					ResultIconState:   IconStatePreserve,
+					SuppressionReason: "active_after_terminal",
+					CurrentIconState:  "stop",
+				},
 			},
 		},
 	}
@@ -146,6 +220,45 @@ func TestResponse_RoundtripCarriesEventsByWindow(t *testing.T) {
 	}
 }
 
+func TestResponse_RoundtripCarriesWindowMetadata(t *testing.T) {
+	in := Response{
+		OK: true,
+		WindowMetadata: map[int]WindowDebugMetadata{
+			1: {
+				Stats: WindowDebugStats{
+					EventCount:   7,
+					FirstEventAt: 1700000000,
+					LastEventAt:  1700000006,
+				},
+				Durable: WindowDebugDurable{
+					SessionTitle:    "W:api",
+					Profile:         "work",
+					Harness:         "copilot",
+					PipeMode:        true,
+					ActivityAt:      1700000006,
+					LastAction:      "stop",
+					LastActiveEvent: "PreToolUse",
+					SubagentCount:   2,
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("Marshal(Response): %v", err)
+	}
+
+	var out Response
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("Unmarshal(Response): %v", err)
+	}
+
+	if !reflect.DeepEqual(out.WindowMetadata, in.WindowMetadata) {
+		t.Fatalf("WindowMetadata roundtrip mismatch:\nin=%#v\nout=%#v", in.WindowMetadata, out.WindowMetadata)
+	}
+}
+
 // TestResponse_OmittedEventsByWindowMarshalsClean pins that omitempty fires on
 // the new field so a TypeSessionDetail response does not waste bytes on an
 // empty map.
@@ -157,5 +270,8 @@ func TestResponse_OmittedEventsByWindowMarshalsClean(t *testing.T) {
 	}
 	if got := string(data); strings.Contains(got, "events_by_window") {
 		t.Fatalf("expected events_by_window to be omitted, got: %s", got)
+	}
+	if got := string(data); strings.Contains(got, "window_metadata") {
+		t.Fatalf("expected window_metadata to be omitted, got: %s", got)
 	}
 }

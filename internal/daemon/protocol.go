@@ -26,9 +26,14 @@ type Request struct {
 	IsPrompt         bool        `json:"is_prompt,omitempty"`          // true if event is a user prompt submission
 	PreservesIcon    bool        `json:"preserves_icon,omitempty"`     // true if a non-terminal child-complete event should preserve current icon/guard semantics
 	Account          string      `json:"account,omitempty"`            // profile name from amx_profile or cc_account
+	Harness          string      `json:"harness,omitempty"`            // normalized harness name from amx_harness
 	SessionTitle     string      `json:"session_title,omitempty"`      // tab base title (e.g. "W:api")
 	PipeMode         bool        `json:"pipe_mode,omitempty"`          // suppress notifications when claude -p
 	CurrentIconState string      `json:"current_icon_state,omitempty"` // icon currently shown in the tab title
+	NotificationType string      `json:"notification_type,omitempty"`  // normalized notification_type / notificationType payload field
+	StopReason       string      `json:"stop_reason,omitempty"`        // normalized stop_reason / stopReason payload field
+	Reason           string      `json:"reason,omitempty"`             // normalized reason payload field
+	ContextLimit     bool        `json:"context_limit,omitempty"`      // true when indicator detected a context-limit stop/failure
 }
 
 // Response is a JSON message sent by the daemon back to the client.
@@ -45,11 +50,98 @@ type Response struct {
 	Events []SessionEvent `json:"events,omitempty"` // per-window hook event ring buffer (oldest first)
 	// Fields populated for TypeEventsExport. Mutually exclusive with Events:
 	// TypeSessionDetail returns one window's buffer in Events, TypeEventsExport
-	// returns every window's buffer keyed by window ID.
+	// returns every exported window's buffer keyed by window ID. When
+	// Request.WindowID is non-zero, the daemon filters both maps to that single
+	// window instead of returning every window.
 	EventsByWindow map[int][]SessionEvent `json:"events_by_window,omitempty"`
+	// WindowMetadata carries durable debug state for export consumers. It is
+	// returned by TypeEventsExport alongside EventsByWindow so future exports can
+	// identify windows even after live Kitty lookups stop working.
+	WindowMetadata map[int]WindowDebugMetadata `json:"window_metadata,omitempty"`
 	// Fields populated for TypeHealth:
 	PID           int   `json:"pid,omitempty"`
 	UptimeSeconds int64 `json:"uptime_seconds,omitempty"`
+}
+
+// WindowDebugMetadata is the daemon's per-window export snapshot. The live
+// Kitty-joined section is added later; for now exports can rely on the durable
+// fields below even after a session ends or the tab disappears.
+type WindowDebugMetadata struct {
+	Stats   WindowDebugStats   `json:"stats"`
+	Durable WindowDebugDurable `json:"durable"`
+}
+
+// EventsExport is the typed daemon snapshot returned by Client.ExportEvents.
+// The CLI enriches this with top-level health data and live Kitty metadata
+// before writing the final JSON payload.
+type EventsExport struct {
+	EventsByWindow map[int][]SessionEvent
+	WindowMetadata map[int]WindowDebugMetadata
+}
+
+// EventsExportSchemaVersion is the current JSON schema version emitted by
+// `amx daemon export-events`.
+const EventsExportSchemaVersion = 2
+
+// ExportEventsPayload is the CLI JSON envelope written by
+// `amx daemon export-events`. The legacy per-window SessionEvent arrays stay in
+// Windows for backward compatibility; richer metadata lives alongside them in
+// WindowMeta.
+type ExportEventsPayload struct {
+	SchemaVersion       int                             `json:"schema_version"`
+	ExportedAt          int64                           `json:"exported_at"`
+	DaemonPID           int                             `json:"daemon_pid"`
+	DaemonUptimeSeconds int64                           `json:"daemon_uptime_seconds"`
+	Windows             map[string][]SessionEvent       `json:"windows"`
+	WindowMeta          map[string]ExportWindowMetadata `json:"window_meta"`
+}
+
+// ExportWindowMetadata is the richer per-window metadata exported alongside the
+// legacy SessionEvent arrays. Durable fields come from the daemon; Live is
+// joined at export time from Kitty/session lookups on a best-effort basis.
+type ExportWindowMetadata struct {
+	Stats   WindowDebugStats   `json:"stats"`
+	Durable WindowDebugDurable `json:"durable"`
+	Live    WindowLiveMetadata `json:"live"`
+}
+
+// WindowLiveMetadata is the best-effort Kitty/session join captured at export
+// time. Found is false when the window no longer exists or Kitty is
+// unreachable; the remaining fields are then left at their zero values.
+type WindowLiveMetadata struct {
+	Found       bool   `json:"found"`
+	TabID       int    `json:"tab_id"`
+	OSWindowID  int    `json:"os_window_id"`
+	TabTitle    string `json:"tab_title"`
+	BaseTitle   string `json:"base_title"`
+	IconState   string `json:"icon_state"`
+	Starred     bool   `json:"starred"`
+	WindowTitle string `json:"window_title"`
+	Project     string `json:"project"`
+	Profile     string `json:"profile"`
+	Harness     string `json:"harness"`
+	Directory   string `json:"directory"`
+}
+
+// WindowDebugStats summarizes the daemon's observed event history for a window.
+// event_count is cumulative, not bounded by the ring buffer size.
+type WindowDebugStats struct {
+	EventCount   int   `json:"event_count"`
+	FirstEventAt int64 `json:"first_event_at"`
+	LastEventAt  int64 `json:"last_event_at"`
+}
+
+// WindowDebugDurable holds the per-window/session identity that must survive
+// terminal cleanup so post-mortem exports still show where events came from.
+type WindowDebugDurable struct {
+	SessionTitle    string `json:"session_title"`
+	Profile         string `json:"profile"`
+	Harness         string `json:"harness"`
+	PipeMode        bool   `json:"pipe_mode"`
+	ActivityAt      int64  `json:"activity_at"`
+	LastAction      string `json:"last_action"`
+	LastActiveEvent string `json:"last_active_event"`
+	SubagentCount   int    `json:"subagent_count"`
 }
 
 // WatchdogState describes a single window's last-known active-class action
@@ -66,12 +158,19 @@ type WatchdogState struct {
 // appends one of these per Request it processes (both allowed and suppressed),
 // and serves the buffer back to the TUI on TypeSessionDetail queries.
 type SessionEvent struct {
-	At            int64  `json:"at"`                       // unix seconds when the daemon received the event
-	Event         string `json:"event"`                    // raw hook event name (e.g. PreToolUse)
-	Action        string `json:"action"`                   // resolved action (active, stop, …)
-	ToolName      string `json:"tool_name,omitempty"`      // tool name when event carries one
-	Suppressed    bool   `json:"suppressed,omitempty"`     // true when the guard blocked the transition
-	PreservesIcon bool   `json:"preserves_icon,omitempty"` // true when the event preserved the current icon (child-complete signals)
+	At                int64  `json:"at"`                           // unix seconds when the daemon received the event
+	Event             string `json:"event"`                        // raw hook event name (e.g. PreToolUse)
+	Action            string `json:"action"`                       // resolved action (active, stop, …)
+	ToolName          string `json:"tool_name,omitempty"`          // tool name when event carries one
+	Suppressed        bool   `json:"suppressed,omitempty"`         // true when the daemon blocked the transition
+	PreservesIcon     bool   `json:"preserves_icon,omitempty"`     // true when the event preserved the current icon (child-complete signals)
+	ResultIconState   string `json:"result_icon_state"`            // daemon-resolved icon outcome: "", "preserve", or a concrete icon state
+	SuppressionReason string `json:"suppression_reason,omitempty"` // normalized daemon-side reason for a blocked transition
+	CurrentIconState  string `json:"current_icon_state,omitempty"` // icon shown in the tab title when the daemon received the event
+	NotificationType  string `json:"notification_type,omitempty"`  // normalized notification_type / notificationType payload field
+	StopReason        string `json:"stop_reason,omitempty"`        // normalized stop_reason / stopReason payload field
+	Reason            string `json:"reason,omitempty"`             // normalized reason payload field
+	ContextLimit      bool   `json:"context_limit,omitempty"`      // true when indicator detected a context-limit stop/failure
 }
 
 // actionPriority maps each action name to its guard priority.

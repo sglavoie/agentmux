@@ -107,9 +107,16 @@ type Handler struct {
 	lastPipeMode map[int]bool
 
 	// eventLog stores a per-window ring buffer of recent state events. Bounded
-	// by maxEventsPerWindow; older entries are dropped from the front. Cleared
-	// on terminal/cleanup transitions alongside other per-window state.
+	// by maxEventsPerWindow; older entries are dropped from the front. Preserved
+	// across terminal transitions so export-events can inspect ended sessions;
+	// SweepStale drops entries once Kitty no longer reports the window.
 	eventLog map[int][]SessionEvent
+
+	// windowMetadata stores the durable per-window export snapshot. Unlike the
+	// live watchdog maps, terminal cleanup and closed-window GC intentionally do
+	// not clear this so post-mortem exports still have identity/context even
+	// after the original Kitty tab is gone.
+	windowMetadata map[int]WindowDebugMetadata
 
 	// onActivity is called on every successfully handled request.
 	// The daemon uses this to reset the idle timer.
@@ -148,6 +155,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		lastSessionTitle:      make(map[int]string),
 		lastPipeMode:          make(map[int]bool),
 		eventLog:              make(map[int][]SessionEvent),
+		windowMetadata:        make(map[int]WindowDebugMetadata),
 	}
 }
 
@@ -165,7 +173,7 @@ func (h *Handler) Handle(req Request) Response {
 	case TypeSessionDetail:
 		return h.handleSessionDetail(req)
 	case TypeEventsExport:
-		return h.handleEventsExport()
+		return h.handleEventsExport(req)
 	case TypeHealth:
 		return h.handleHealth()
 	case TypeShutdown:
@@ -219,19 +227,38 @@ func (h *Handler) handleSessionDetail(req Request) Response {
 	return Response{OK: true, Events: events}
 }
 
-// handleEventsExport returns a deep copy of every window's event ring buffer
-// in a single response. Mirrors handleSessionDetail's locking and defensive
-// slice copy so callers cannot mutate the daemon's internal state.
-func (h *Handler) handleEventsExport() Response {
+// handleEventsExport returns a deep copy of the requested window's event ring
+// buffer plus the durable per-window export snapshot. When req.WindowID is
+// zero, every exported window is returned. Mirrors handleSessionDetail's
+// locking and defensive copies so callers cannot mutate the daemon's internal
+// state.
+func (h *Handler) handleEventsExport(req Request) Response {
 	h.stateMu.Lock()
-	out := make(map[int][]SessionEvent, len(h.eventLog))
-	for id, src := range h.eventLog {
-		cp := make([]SessionEvent, len(src))
-		copy(cp, src)
-		out[id] = cp
+	out := make(map[int][]SessionEvent)
+	meta := make(map[int]WindowDebugMetadata)
+	if req.WindowID != 0 {
+		if src, ok := h.eventLog[req.WindowID]; ok {
+			cp := make([]SessionEvent, len(src))
+			copy(cp, src)
+			out[req.WindowID] = cp
+		}
+		if snapshot, ok := h.windowMetadata[req.WindowID]; ok {
+			meta[req.WindowID] = snapshot
+		}
+	} else {
+		out = make(map[int][]SessionEvent, len(h.eventLog))
+		for id, src := range h.eventLog {
+			cp := make([]SessionEvent, len(src))
+			copy(cp, src)
+			out[id] = cp
+		}
+		meta = make(map[int]WindowDebugMetadata, len(h.windowMetadata))
+		for id, snapshot := range h.windowMetadata {
+			meta[id] = snapshot
+		}
 	}
 	h.stateMu.Unlock()
-	return Response{OK: true, EventsByWindow: out}
+	return Response{OK: true, EventsByWindow: out, WindowMetadata: meta}
 }
 
 func (h *Handler) handleShutdown() Response {

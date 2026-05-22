@@ -1,6 +1,10 @@
 package indicator
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/sglavoie/agentmux/internal/daemon"
+)
 
 // TestIndicator_ReturnsNilWhenTabMissingButDaemonSucceeded locks in the
 // contract that, once the daemon has recorded the event and resolved guard
@@ -59,5 +63,48 @@ func TestDaemonDownIconState_PreservesUnacknowledgedIcons(t *testing.T) {
 					tc.action, tc.current, tc.preserves, next, skip, tc.wantNext, tc.wantSkip)
 			}
 		})
+	}
+}
+
+func TestBuildStateUpdateRequest_CarriesNormalizedDebugContext(t *testing.T) {
+	req := buildStateUpdateRequest(
+		42,
+		"stop_failure",
+		"notification",
+		HookPayload{
+			NotificationTypeCamel: "permission_prompt",
+			StopReasonCamel:       "context_limit_reached",
+			Reason:                "error",
+			ToolName:              "Bash",
+		},
+		"W:api",
+		"work",
+		"copilot",
+		"bolt",
+		true,
+		false,
+		true,
+	)
+
+	want := daemon.Request{
+		Type:             daemon.TypeStateUpdate,
+		WindowID:         42,
+		Action:           "stop_failure",
+		Event:            "notification",
+		ToolName:         "Bash",
+		IsPrompt:         false,
+		PreservesIcon:    false,
+		Account:          "work",
+		Harness:          "copilot",
+		SessionTitle:     "W:api",
+		PipeMode:         true,
+		CurrentIconState: "bolt",
+		NotificationType: "permission_prompt",
+		StopReason:       "context_limit_reached",
+		Reason:           "error",
+		ContextLimit:     true,
+	}
+	if req != want {
+		t.Fatalf("buildStateUpdateRequest() = %+v, want %+v", req, want)
 	}
 }

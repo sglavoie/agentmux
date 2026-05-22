@@ -71,6 +71,32 @@ func TestFindDashboardWindow(t *testing.T) {
 	})
 }
 
+func TestFindWindowLocationByID(t *testing.T) {
+	osWindows := []OSWindow{{
+		ID: 1,
+		Tabs: []Tab{{
+			ID:    10,
+			Title: "W:api",
+			Windows: []Window{{
+				ID:    100,
+				Title: "shell",
+			}},
+		}},
+	}}
+
+	osw, tab, win, found := FindWindowLocationByID(osWindows, 100)
+	if !found {
+		t.Fatal("expected to find window 100")
+	}
+	if osw.ID != 1 || tab.ID != 10 || win.ID != 100 {
+		t.Fatalf("location = osw:%d tab:%d win:%d; want 1/10/100", osw.ID, tab.ID, win.ID)
+	}
+
+	if _, _, _, found := FindWindowLocationByID(osWindows, 999); found {
+		t.Fatal("unexpected match for missing window")
+	}
+}
+
 func TestIsDashboardCmdline(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -153,9 +179,9 @@ func TestIsColorPickerCmdline(t *testing.T) {
 
 func TestUserVars_EffectiveHarness(t *testing.T) {
 	tests := []struct {
-		name    string
-		u       UserVars
-		want    string
+		name string
+		u    UserVars
+		want string
 	}{
 		{
 			name: "explicit harness set",
