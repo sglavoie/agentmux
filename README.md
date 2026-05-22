@@ -204,8 +204,8 @@ as reset cleanup too. Terminal stop hooks pause briefly before reaching the
 daemon so late reset markers can win, and the daemon then rewrites the
 follow-up stop/idle cleanup path to `user_clear` so reset flows clear the tab
 without surfacing a stop icon or stop notification. If runtime behavior still
-diverges, inspect `amx daemon export-events --window <id>` before changing the
-delay heuristic.
+diverges, inspect `amx daemon export-events --current-window --last 50` from
+the live tab before changing the delay heuristic.
 
 If the managed hook binary is newer than the running daemon, the next hook event
 from that binary automatically restarts the daemon so new indicator/daemon logic
@@ -232,49 +232,61 @@ It listens on:
 
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema-v2 JSON snapshot for investigation.
-Top-level fields describe the export (`schema_version`, `exported_at`,
-`daemon_pid`, `daemon_uptime_seconds`); `windows` keeps the legacy
-`window_id -> []SessionEvent` map, and `window_meta` adds per-window `stats`,
-durable session identity, and best-effort live Kitty/session metadata:
+`amx daemon export-events` writes a schema-v3 JSON snapshot for investigation.
+Top-level fields describe the export timestamp and daemon health; `windows` is
+an array of per-window entries, each carrying its own `stats`, `durable`,
+`live`, and `events` fields so a single window can be inspected without paired
+map lookups:
 
 ```json
 {
-  "schema_version": 2,
-  "windows": {"42": [ ... ]},
-  "window_meta": {
-    "42": {
+  "schema_version": 3,
+  "daemon": { "pid": 1234, "uptime_seconds": 97 },
+  "windows": [
+    {
+      "window_id": 42,
       "stats": { ... },
       "durable": { ... },
-      "live": { "found": true, ... }
+      "live": { "found": true, ... },
+      "events": [ ... ]
     }
-  }
+  ]
 }
 ```
 
-Durable metadata can outlive the legacy `windows` buffer after a tab closes;
+Durable metadata can outlive the live Kitty join after a tab closes;
 `live.found` flips to `false` when Kitty/session lookups are no longer
-available. Event rows keep the raw `event`/`action` fields plus normalized
-debug fields such as `tool_name`, `result_icon_state`, `current_icon_state`,
-`notification_type`, `stop_reason`, `reason`, and
-`suppressed`/`suppression_reason` when present.
+available. Event rows keep the raw `event`/`action` fields plus lifecycle
+context such as `tool_name`, `source`, `result_icon_state`,
+`current_icon_state`, `notification_type`, `stop_reason`, `reason`,
+`reset_flow`, and `suppressed`/`suppression_reason` when present.
 
-Combine with `jq` to filter for the events relevant to a bug report:
-
-```bash
-amx daemon export-events | jq '.windows[] | .[] | select(.event == "agentStop")'
-```
-
-Inspect the richer metadata for one window:
+The primary live-debug workflow is the current tab:
 
 ```bash
-amx daemon export-events | jq '.window_meta["42"]'
+amx daemon export-events --current-window
+amx daemon export-events --current-window --last 25
 ```
 
-Pass `--window ID` to restrict the dump to one Kitty window, or `--output
-PATH` to write to a file instead of stdout. The export is read-only and does
-not auto-start the daemon, so the buffer of a still-running investigation
-session is never replaced.
+Trim every exported window to its trailing events without changing cumulative
+`stats`:
+
+```bash
+amx daemon export-events --last 50
+```
+
+Inspect reset/session provenance directly from the exported events:
+
+```bash
+amx daemon export-events --current-window --last 20 \
+  | jq '.windows[0].events[] | {at, event, action, source, reason, stop_reason, notification_type, reset_flow}'
+```
+
+`--current-window` resolves the target from `KITTY_WINDOW_ID` and errors when
+run outside Kitty (or when combined with `--window`). `--window ID` still works
+for explicit targeting, and `--output PATH` writes the JSON to a file instead of
+stdout. The export is read-only and does not auto-start the daemon, so the
+buffer of a still-running investigation session is never replaced.
 
 ## Watchdog
 

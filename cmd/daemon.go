@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"syscall"
 	"time"
@@ -90,12 +91,14 @@ var daemonRestartCmd = &cobra.Command{
 }
 
 var (
-	daemonExportEventsWindow int
-	daemonExportEventsOutput string
-	daemonExportEventsPretty bool
-	newDaemonExportClient    = func() daemonExportClient { return daemon.NewClient() }
-	newDaemonExportKitty     = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
-	daemonExportNow          = time.Now
+	daemonExportEventsWindow        int
+	daemonExportEventsCurrentWindow bool
+	daemonExportEventsLast          int
+	daemonExportEventsOutput        string
+	daemonExportEventsPretty        bool
+	newDaemonExportClient           = func() daemonExportClient { return daemon.NewClient() }
+	newDaemonExportKitty            = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
+	daemonExportNow                 = time.Now
 )
 
 type daemonExportClient interface {
@@ -107,17 +110,27 @@ type kittyWindowLister interface {
 	ListWindows() ([]kitty.OSWindow, error)
 }
 
-func daemonExportWindowIDs(snapshot daemon.EventsExport, requestedWindowID int) map[int]struct{} {
-	ids := make(map[int]struct{}, len(snapshot.EventsByWindow)+len(snapshot.WindowMetadata)+1)
+func daemonExportWindowIDs(snapshot daemon.EventsExport, requestedWindowID int) []int {
+	seen := make(map[int]struct{}, len(snapshot.EventsByWindow)+len(snapshot.WindowMetadata)+1)
+	ids := make([]int, 0, len(snapshot.EventsByWindow)+len(snapshot.WindowMetadata)+1)
+	add := func(id int) {
+		if id == 0 {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
 	for id := range snapshot.EventsByWindow {
-		ids[id] = struct{}{}
+		add(id)
 	}
 	for id := range snapshot.WindowMetadata {
-		ids[id] = struct{}{}
+		add(id)
 	}
-	if requestedWindowID != 0 {
-		ids[requestedWindowID] = struct{}{}
-	}
+	add(requestedWindowID)
+	sort.Ints(ids)
 	return ids
 }
 
@@ -129,7 +142,7 @@ func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot daemon.Events
 
 	sessions := session.ListFromOSWindows(osWindows)
 	out := make(map[int]daemon.WindowLiveMetadata, len(ids))
-	for id := range ids {
+	for _, id := range ids {
 		live := daemon.WindowLiveMetadata{}
 		osw, tab, win, ok := kitty.FindWindowLocationByID(osWindows, id)
 		if !ok {
@@ -164,70 +177,107 @@ func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot daemon.Events
 	return out
 }
 
-func buildDaemonExportPayload(snapshot daemon.EventsExport, health daemon.Health, osWindows []kitty.OSWindow, requestedWindowID int, exportedAt time.Time) daemon.ExportEventsPayload {
-	windows := make(map[string][]daemon.SessionEvent, len(snapshot.EventsByWindow)+1)
-	for id, evs := range snapshot.EventsByWindow {
-		cp := make([]daemon.SessionEvent, len(evs))
-		copy(cp, evs)
-		windows[strconv.Itoa(id)] = cp
+func daemonExportTrimEvents(events []daemon.SessionEvent, last int) []daemon.SessionEvent {
+	if last > 0 && len(events) > last {
+		events = events[len(events)-last:]
 	}
-	if requestedWindowID != 0 {
-		key := strconv.Itoa(requestedWindowID)
-		if _, ok := windows[key]; !ok {
-			windows[key] = []daemon.SessionEvent{}
-		}
-	}
+	out := make([]daemon.SessionEvent, len(events))
+	copy(out, events)
+	return out
+}
 
+func buildDaemonExportPayload(snapshot daemon.EventsExport, health daemon.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) daemon.ExportEventsPayload {
 	liveByID := daemonExportLiveMetadata(osWindows, snapshot, requestedWindowID)
-	metaIDs := daemonExportWindowIDs(snapshot, requestedWindowID)
-	windowMeta := make(map[string]daemon.ExportWindowMetadata, len(metaIDs))
-	for id := range metaIDs {
-		meta := daemon.ExportWindowMetadata{
-			Live: liveByID[id],
+	ids := daemonExportWindowIDs(snapshot, requestedWindowID)
+	windows := make([]daemon.ExportWindow, 0, len(ids))
+	for _, id := range ids {
+		window := daemon.ExportWindow{
+			WindowID: id,
+			Live:     liveByID[id],
+			Events:   []daemon.SessionEvent{},
 		}
 		if durable, ok := snapshot.WindowMetadata[id]; ok {
-			meta.Stats = durable.Stats
-			meta.Durable = durable.Durable
+			window.Stats = durable.Stats
+			window.Durable = durable.Durable
 		}
-		windowMeta[strconv.Itoa(id)] = meta
+		if events, ok := snapshot.EventsByWindow[id]; ok {
+			window.Events = daemonExportTrimEvents(events, last)
+		}
+		windows = append(windows, window)
 	}
 
 	return daemon.ExportEventsPayload{
-		SchemaVersion:       daemon.EventsExportSchemaVersion,
-		ExportedAt:          exportedAt.Unix(),
-		DaemonPID:           health.PID,
-		DaemonUptimeSeconds: int64(health.Uptime / time.Second),
-		Windows:             windows,
-		WindowMeta:          windowMeta,
+		SchemaVersion: daemon.EventsExportSchemaVersion,
+		ExportedAt:    exportedAt.Unix(),
+		Daemon: daemon.ExportDaemonMetadata{
+			PID:           health.PID,
+			UptimeSeconds: int64(health.Uptime / time.Second),
+		},
+		Windows: windows,
 	}
+}
+
+func daemonExportCurrentWindowID() (int, error) {
+	s := os.Getenv("KITTY_WINDOW_ID")
+	if s == "" {
+		return 0, fmt.Errorf("--current-window requires KITTY_WINDOW_ID to be set")
+	}
+	id, err := strconv.Atoi(s)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("--current-window requires a valid KITTY_WINDOW_ID, got %q", s)
+	}
+	return id, nil
+}
+
+func resolveDaemonExportWindowID(cmd *cobra.Command) (int, error) {
+	if daemonExportEventsCurrentWindow && (daemonExportEventsWindow != 0 || cmd.Flags().Changed("window")) {
+		return 0, fmt.Errorf("--window and --current-window cannot be used together")
+	}
+	if daemonExportEventsWindow < 0 {
+		return 0, fmt.Errorf("--window must be >= 0")
+	}
+	if daemonExportEventsCurrentWindow {
+		return daemonExportCurrentWindowID()
+	}
+	return daemonExportEventsWindow, nil
 }
 
 var daemonExportEventsCmd = &cobra.Command{
 	Use:   "export-events",
-	Short: "Dump schema-v2 hook event history as JSON for investigation",
-	Long: `Export the daemon's schema-v2 investigation snapshot as JSON.
+	Short: "Dump schema-v3 hook event history as JSON for investigation",
+	Long: `Export the daemon's schema-v3 investigation snapshot as JSON.
 
-The payload includes top-level export metadata, the legacy windows map of
-SessionEvent arrays, and window_meta entries with event stats, durable session
-identity, and best-effort live Kitty/session metadata.`,
+The payload is organized as a per-window array so each entry carries its own
+event list, durable daemon metadata, and best-effort live Kitty/session
+metadata without paired map lookups.`,
 	Example: `  amx daemon export-events
+  amx daemon export-events --current-window
+  amx daemon export-events --current-window --last 25
   amx daemon export-events --window 42
   amx daemon export-events --pretty=false --output events.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if daemonExportEventsLast < 0 {
+			return fmt.Errorf("--last must be >= 0")
+		}
+		requestedWindowID, err := resolveDaemonExportWindowID(cmd)
+		if err != nil {
+			return err
+		}
+
 		c := newDaemonExportClient()
-		snapshot, err := c.ExportEvents(daemonExportEventsWindow)
+		snapshot, err := c.ExportEvents(requestedWindowID)
 		if err != nil {
 			return fmt.Errorf("daemon not running: %w", err)
 		}
 
 		var osWindows []kitty.OSWindow
-		if ids := daemonExportWindowIDs(snapshot, daemonExportEventsWindow); len(ids) > 0 {
+		if ids := daemonExportWindowIDs(snapshot, requestedWindowID); len(ids) > 0 {
 			if liveWindows, liveErr := newDaemonExportKitty().ListWindows(); liveErr == nil {
 				osWindows = liveWindows
 			}
 		}
 
-		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, daemonExportEventsWindow, daemonExportNow())
+		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, requestedWindowID, daemonExportEventsLast, daemonExportNow())
 
 		var (
 			data      []byte
@@ -253,6 +303,8 @@ identity, and best-effort live Kitty/session metadata.`,
 
 func init() {
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsWindow, "window", 0, "Restrict export to a single Kitty window ID")
+	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsCurrentWindow, "current-window", false, "Resolve the target window from $KITTY_WINDOW_ID")
+	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "Keep only the last N events per exported window (0 = no limit)")
 	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "Write JSON to this file instead of stdout")
 	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "Pretty-print JSON with 2-space indent")
 

@@ -209,6 +209,7 @@ func sessionEventFromRequest(req Request, action, resultIconState string) Sessio
 		Event:            req.Event,
 		Action:           action,
 		ToolName:         req.ToolName,
+		Source:           req.Source,
 		PreservesIcon:    req.PreservesIcon,
 		ResultIconState:  resultIconState,
 		CurrentIconState: req.CurrentIconState,
@@ -286,6 +287,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		"account", req.Account,
 		"event", req.Event,
 		"action", req.Action,
+		"source", req.Source,
 		"preserves_icon", req.PreservesIcon,
 		"reset_flow", req.ResetFlow,
 	)

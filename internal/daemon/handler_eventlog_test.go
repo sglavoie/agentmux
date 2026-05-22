@@ -246,6 +246,7 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 		WindowID:         1,
 		Action:           "stop_failure",
 		Event:            "SessionEnd",
+		Source:           "clear",
 		CurrentIconState: "bolt",
 		NotificationType: "agent_idle",
 		StopReason:       "context_limit_reached",
@@ -275,6 +276,9 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 	}
 	if ev.Reason != "error" {
 		t.Fatalf("reason = %q; want error", ev.Reason)
+	}
+	if ev.Source != "clear" {
+		t.Fatalf("source = %q; want clear", ev.Source)
 	}
 	if !ev.ContextLimit {
 		t.Fatal("context_limit = false; want true")
@@ -635,6 +639,30 @@ func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 	}
 	if got := second.WindowMetadata[1].Durable.SessionTitle; got != "W:api" {
 		t.Fatalf("metadata mutated: session_title = %q; want %q", got, "W:api")
+	}
+}
+
+func TestHandler_EventsExport_CarriesSource(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Action:       "active",
+		Event:        "SessionStart",
+		Source:       "new",
+		SessionTitle: "W:api",
+	})
+
+	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 1})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	if len(resp.EventsByWindow[1]) != 1 {
+		t.Fatalf("window 1 events = %d; want 1 (%+v)", len(resp.EventsByWindow[1]), resp.EventsByWindow[1])
+	}
+	if got := resp.EventsByWindow[1][0].Source; got != "new" {
+		t.Fatalf("source = %q; want new", got)
 	}
 }
 

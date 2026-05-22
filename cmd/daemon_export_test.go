@@ -47,6 +47,8 @@ func resetDaemonExportTestState(t *testing.T) {
 	oldKitty := newDaemonExportKitty
 	oldNow := daemonExportNow
 	oldWindow := daemonExportEventsWindow
+	oldCurrentWindow := daemonExportEventsCurrentWindow
+	oldLast := daemonExportEventsLast
 	oldOutput := daemonExportEventsOutput
 	oldPretty := daemonExportEventsPretty
 	oldOut := daemonExportEventsCmd.OutOrStdout()
@@ -56,13 +58,26 @@ func resetDaemonExportTestState(t *testing.T) {
 		newDaemonExportKitty = oldKitty
 		daemonExportNow = oldNow
 		daemonExportEventsWindow = oldWindow
+		daemonExportEventsCurrentWindow = oldCurrentWindow
+		daemonExportEventsLast = oldLast
 		daemonExportEventsOutput = oldOutput
 		daemonExportEventsPretty = oldPretty
 		daemonExportEventsCmd.SetOut(oldOut)
 	})
 }
 
-func TestDaemonExportEventsCommand_AllWindowsIncludesWindowMeta(t *testing.T) {
+func findExportWindow(t *testing.T, payload daemon.ExportEventsPayload, id int) daemon.ExportWindow {
+	t.Helper()
+	for _, window := range payload.Windows {
+		if window.WindowID == id {
+			return window
+		}
+	}
+	t.Fatalf("window %d missing from payload: %+v", id, payload.Windows)
+	return daemon.ExportWindow{}
+}
+
+func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV3Payload(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	now := time.Unix(1_700_000_100, 0)
@@ -75,7 +90,7 @@ func TestDaemonExportEventsCommand_AllWindowsIncludesWindowMeta(t *testing.T) {
 			return daemon.EventsExport{
 				EventsByWindow: map[int][]daemon.SessionEvent{
 					42: {
-						{At: 1_700_000_000, Event: "PreToolUse", Action: "active", ResultIconState: "bolt"},
+						{At: 1_700_000_000, Event: "PreToolUse", Action: "active", Source: "new", ResultIconState: "bolt"},
 					},
 					77: {
 						{At: 1_700_000_005, Event: "Stop", Action: "stop", ResultIconState: "stop"},
@@ -143,6 +158,8 @@ func TestDaemonExportEventsCommand_AllWindowsIncludesWindowMeta(t *testing.T) {
 	}
 	daemonExportNow = func() time.Time { return now }
 	daemonExportEventsWindow = 0
+	daemonExportEventsCurrentWindow = false
+	daemonExportEventsLast = 0
 	daemonExportEventsOutput = ""
 	daemonExportEventsPretty = false
 
@@ -164,33 +181,44 @@ func TestDaemonExportEventsCommand_AllWindowsIncludesWindowMeta(t *testing.T) {
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())
 	}
-	if payload.DaemonPID != 4321 || payload.DaemonUptimeSeconds != 120 {
-		t.Fatalf("health = pid:%d uptime:%d; want 4321/120", payload.DaemonPID, payload.DaemonUptimeSeconds)
+	if payload.Daemon.PID != 4321 || payload.Daemon.UptimeSeconds != 120 {
+		t.Fatalf("daemon = %+v; want pid=4321 uptime_seconds=120", payload.Daemon)
 	}
-	if got := payload.Windows["42"][0].ResultIconState; got != "bolt" {
-		t.Fatalf("windows[42][0].result_icon_state = %q; want bolt", got)
+	if len(payload.Windows) != 3 {
+		t.Fatalf("len(windows) = %d; want 3 (%+v)", len(payload.Windows), payload.Windows)
 	}
-	if got := payload.WindowMeta["42"].Durable.SessionTitle; got != "W:api" {
-		t.Fatalf("window_meta[42].durable.session_title = %q; want W:api", got)
+
+	window42 := findExportWindow(t, payload, 42)
+	if len(window42.Events) != 1 || window42.Events[0].ResultIconState != "bolt" {
+		t.Fatalf("window 42 events = %+v; want one bolt event", window42.Events)
 	}
-	if got := payload.WindowMeta["88"].Durable.SessionTitle; got != "W:stale" {
-		t.Fatalf("window_meta[88].durable.session_title = %q; want W:stale", got)
+	if window42.Events[0].Source != "new" {
+		t.Fatalf("window 42 source = %q; want new", window42.Events[0].Source)
 	}
-	live := payload.WindowMeta["42"].Live
-	if !live.Found || live.TabID != 91 || live.OSWindowID != 900 || live.TabTitle != "⚡W:api" ||
-		live.BaseTitle != "W:api" || live.IconState != "bolt" || live.WindowTitle != "api window" ||
-		live.Project != "api" || live.Profile != "work" || live.Harness != "claude" ||
-		live.Directory != "/work/api" {
-		t.Fatalf("window_meta[42].live = %+v", live)
+	if window42.Durable.SessionTitle != "W:api" {
+		t.Fatalf("window 42 durable.session_title = %q; want W:api", window42.Durable.SessionTitle)
 	}
-	if payload.WindowMeta["77"].Live.Found {
-		t.Fatalf("window_meta[77].live.found = true; want false")
+	if !window42.Live.Found || window42.Live.TabID != 91 || window42.Live.OSWindowID != 900 || window42.Live.TabTitle != "⚡W:api" ||
+		window42.Live.BaseTitle != "W:api" || window42.Live.IconState != "bolt" || window42.Live.WindowTitle != "api window" ||
+		window42.Live.Project != "api" || window42.Live.Profile != "work" || window42.Live.Harness != "claude" ||
+		window42.Live.Directory != "/work/api" {
+		t.Fatalf("window 42 live = %+v", window42.Live)
 	}
-	if payload.WindowMeta["88"].Live.Found {
-		t.Fatalf("window_meta[88].live.found = true; want false")
+
+	window77 := findExportWindow(t, payload, 77)
+	if window77.Live.Found {
+		t.Fatalf("window 77 live.found = true; want false")
 	}
-	if _, ok := payload.Windows["88"]; ok {
-		t.Fatalf("windows unexpectedly includes metadata-only key 88: %+v", payload.Windows["88"])
+
+	window88 := findExportWindow(t, payload, 88)
+	if window88.Durable.SessionTitle != "W:stale" {
+		t.Fatalf("window 88 durable.session_title = %q; want W:stale", window88.Durable.SessionTitle)
+	}
+	if window88.Live.Found {
+		t.Fatalf("window 88 live.found = true; want false")
+	}
+	if len(window88.Events) != 0 {
+		t.Fatalf("window 88 events = %+v; want empty", window88.Events)
 	}
 }
 
@@ -246,6 +274,8 @@ func TestDaemonExportEventsCommand_SingleWindowUsesFilteredExportShape(t *testin
 	}
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 42
+	daemonExportEventsCurrentWindow = false
+	daemonExportEventsLast = 0
 	daemonExportEventsOutput = ""
 	daemonExportEventsPretty = false
 
@@ -264,18 +294,15 @@ func TestDaemonExportEventsCommand_SingleWindowUsesFilteredExportShape(t *testin
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
 	}
-	if len(payload.Windows) != 1 || len(payload.WindowMeta) != 1 {
-		t.Fatalf("payload window counts = %d/%d; want 1/1", len(payload.Windows), len(payload.WindowMeta))
+	if len(payload.Windows) != 1 {
+		t.Fatalf("len(windows) = %d; want 1 (%+v)", len(payload.Windows), payload.Windows)
 	}
-	if _, ok := payload.Windows["42"]; !ok {
-		t.Fatalf("windows missing requested key 42: %+v", payload.Windows)
-	}
-	if _, ok := payload.WindowMeta["42"]; !ok {
-		t.Fatalf("window_meta missing requested key 42: %+v", payload.WindowMeta)
+	if window := findExportWindow(t, payload, 42); len(window.Events) != 1 || window.Durable.SessionTitle != "W:api" {
+		t.Fatalf("window 42 = %+v; want one event and durable metadata", window)
 	}
 }
 
-func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyWindowsArray(t *testing.T) {
+func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	client := &fakeDaemonExportClient{
@@ -307,6 +334,8 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyWindowsArray(t *testing
 	}
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 42
+	daemonExportEventsCurrentWindow = false
+	daemonExportEventsLast = 0
 	daemonExportEventsOutput = ""
 	daemonExportEventsPretty = false
 
@@ -321,14 +350,158 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyWindowsArray(t *testing
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
 	}
-	events, ok := payload.Windows["42"]
-	if !ok {
-		t.Fatalf("windows missing requested key 42: %+v", payload.Windows)
+	window42 := findExportWindow(t, payload, 42)
+	if len(window42.Events) != 0 {
+		t.Fatalf("window 42 events len = %d; want 0", len(window42.Events))
 	}
-	if len(events) != 0 {
-		t.Fatalf("windows[42] len = %d; want 0", len(events))
+	if !window42.Live.Found {
+		t.Fatalf("window 42 live.found = false; want true")
 	}
-	if !payload.WindowMeta["42"].Live.Found {
-		t.Fatalf("window_meta[42].live.found = false; want true")
+}
+
+func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
+	resetDaemonExportTestState(t)
+	t.Setenv("KITTY_WINDOW_ID", "77")
+
+	client := &fakeDaemonExportClient{
+		health: daemon.Health{Alive: true, PID: 7, Uptime: 7 * time.Second},
+		export: func(windowID int) (daemon.EventsExport, error) {
+			if windowID != 77 {
+				return daemon.EventsExport{}, fmt.Errorf("windowID = %d; want 77", windowID)
+			}
+			return daemon.EventsExport{
+				EventsByWindow: map[int][]daemon.SessionEvent{
+					77: {{At: 7, Event: "Stop", Action: "stop", ResultIconState: "stop"}},
+				},
+			}, nil
+		},
+	}
+
+	newDaemonExportClient = func() daemonExportClient { return client }
+	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	daemonExportNow = func() time.Time { return time.Unix(700, 0) }
+	daemonExportEventsWindow = 0
+	daemonExportEventsCurrentWindow = true
+	daemonExportEventsLast = 0
+	daemonExportEventsOutput = ""
+	daemonExportEventsPretty = false
+
+	var out bytes.Buffer
+	daemonExportEventsCmd.SetOut(&out)
+
+	if err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	if len(client.calls) != 1 || client.calls[0] != 77 {
+		t.Fatalf("ExportEvents calls = %v; want [77]", client.calls)
+	}
+
+	var payload daemon.ExportEventsPayload
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
+	}
+	if len(payload.Windows) != 1 || payload.Windows[0].WindowID != 77 {
+		t.Fatalf("payload windows = %+v; want one window_id=77", payload.Windows)
+	}
+}
+
+func TestDaemonExportEventsCommand_CurrentWindowRejectsExplicitWindow(t *testing.T) {
+	resetDaemonExportTestState(t)
+	t.Setenv("KITTY_WINDOW_ID", "77")
+
+	daemonExportEventsWindow = 42
+	daemonExportEventsCurrentWindow = true
+	daemonExportEventsLast = 0
+	daemonExportEventsOutput = ""
+	daemonExportEventsPretty = false
+
+	err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil)
+	if err == nil {
+		t.Fatal("RunE error = nil; want conflict error")
+	}
+	if got := err.Error(); got != "--window and --current-window cannot be used together" {
+		t.Fatalf("RunE error = %q; want conflict error", got)
+	}
+}
+
+func TestDaemonExportEventsCommand_CurrentWindowRequiresKittyWindowID(t *testing.T) {
+	resetDaemonExportTestState(t)
+	t.Setenv("KITTY_WINDOW_ID", "")
+
+	daemonExportEventsWindow = 0
+	daemonExportEventsCurrentWindow = true
+	daemonExportEventsLast = 0
+	daemonExportEventsOutput = ""
+	daemonExportEventsPretty = false
+
+	err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil)
+	if err == nil {
+		t.Fatal("RunE error = nil; want KITTY_WINDOW_ID error")
+	}
+	if got := err.Error(); got != "--current-window requires KITTY_WINDOW_ID to be set" {
+		t.Fatalf("RunE error = %q; want missing KITTY_WINDOW_ID error", got)
+	}
+}
+
+func TestDaemonExportEventsCommand_LastTrimsPerWindowEvents(t *testing.T) {
+	resetDaemonExportTestState(t)
+
+	client := &fakeDaemonExportClient{
+		health: daemon.Health{Alive: true, PID: 42, Uptime: 42 * time.Second},
+		export: func(windowID int) (daemon.EventsExport, error) {
+			if windowID != 0 {
+				return daemon.EventsExport{}, fmt.Errorf("windowID = %d; want 0", windowID)
+			}
+			return daemon.EventsExport{
+				EventsByWindow: map[int][]daemon.SessionEvent{
+					42: {
+						{At: 1, Event: "PreToolUse", Action: "active", ResultIconState: "bolt"},
+						{At: 2, Event: "PostToolUse", Action: "active", ResultIconState: "bolt"},
+						{At: 3, Event: "Stop", Action: "stop", ResultIconState: "stop"},
+					},
+				},
+				WindowMetadata: map[int]daemon.WindowDebugMetadata{
+					42: {
+						Stats: daemon.WindowDebugStats{EventCount: 3, FirstEventAt: 1, LastEventAt: 3},
+						Durable: daemon.WindowDebugDurable{
+							SessionTitle: "W:api",
+						},
+					},
+				},
+			}, nil
+		},
+	}
+
+	newDaemonExportClient = func() daemonExportClient { return client }
+	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
+	daemonExportEventsWindow = 0
+	daemonExportEventsCurrentWindow = false
+	daemonExportEventsLast = 2
+	daemonExportEventsOutput = ""
+	daemonExportEventsPretty = false
+
+	var out bytes.Buffer
+	daemonExportEventsCmd.SetOut(&out)
+
+	if err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	var payload daemon.ExportEventsPayload
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
+	}
+
+	window42 := findExportWindow(t, payload, 42)
+	if window42.Stats.EventCount != 3 {
+		t.Fatalf("window 42 stats.event_count = %d; want 3", window42.Stats.EventCount)
+	}
+	if len(window42.Events) != 2 {
+		t.Fatalf("window 42 events len = %d; want 2", len(window42.Events))
+	}
+	if window42.Events[0].At != 2 || window42.Events[1].At != 3 {
+		t.Fatalf("window 42 events = %+v; want trailing events at 2 and 3", window42.Events)
 	}
 }

@@ -23,6 +23,7 @@ type Request struct {
 	Action           string      `json:"action,omitempty"`             // active|stop|permission|failure|stop_failure|idle|clear|user_clear
 	Event            string      `json:"event,omitempty"`              // raw Claude hook event name (e.g. UserPromptSubmit)
 	ToolName         string      `json:"tool_name,omitempty"`          // tool name from PreToolUse/PostToolUse hook payloads
+	Source           string      `json:"source,omitempty"`             // raw source payload field
 	IsPrompt         bool        `json:"is_prompt,omitempty"`          // true if event is a user prompt submission
 	PreservesIcon    bool        `json:"preserves_icon,omitempty"`     // true if a non-terminal child-complete event should preserve current icon/guard semantics
 	Account          string      `json:"account,omitempty"`            // profile name from amx_profile or cc_account
@@ -82,28 +83,32 @@ type EventsExport struct {
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
 // `amx daemon export-events`.
-const EventsExportSchemaVersion = 2
+const EventsExportSchemaVersion = 3
 
 // ExportEventsPayload is the CLI JSON envelope written by
-// `amx daemon export-events`. The legacy per-window SessionEvent arrays stay in
-// Windows for backward compatibility; richer metadata lives alongside them in
-// WindowMeta.
+// `amx daemon export-events`.
 type ExportEventsPayload struct {
-	SchemaVersion       int                             `json:"schema_version"`
-	ExportedAt          int64                           `json:"exported_at"`
-	DaemonPID           int                             `json:"daemon_pid"`
-	DaemonUptimeSeconds int64                           `json:"daemon_uptime_seconds"`
-	Windows             map[string][]SessionEvent       `json:"windows"`
-	WindowMeta          map[string]ExportWindowMetadata `json:"window_meta"`
+	SchemaVersion int                  `json:"schema_version"`
+	ExportedAt    int64                `json:"exported_at"`
+	Daemon        ExportDaemonMetadata `json:"daemon"`
+	Windows       []ExportWindow       `json:"windows"`
 }
 
-// ExportWindowMetadata is the richer per-window metadata exported alongside the
-// legacy SessionEvent arrays. Durable fields come from the daemon; Live is
-// joined at export time from Kitty/session lookups on a best-effort basis.
-type ExportWindowMetadata struct {
-	Stats   WindowDebugStats   `json:"stats"`
-	Durable WindowDebugDurable `json:"durable"`
-	Live    WindowLiveMetadata `json:"live"`
+// ExportDaemonMetadata describes the daemon that produced this export.
+type ExportDaemonMetadata struct {
+	PID           int   `json:"pid"`
+	UptimeSeconds int64 `json:"uptime_seconds"`
+}
+
+// ExportWindow is one per-window investigation entry in the schema-v3 payload.
+// Durable fields come from the daemon; Live is joined at export time from
+// Kitty/session lookups on a best-effort basis.
+type ExportWindow struct {
+	WindowID int                `json:"window_id"`
+	Stats    WindowDebugStats   `json:"stats"`
+	Durable  WindowDebugDurable `json:"durable"`
+	Live     WindowLiveMetadata `json:"live"`
+	Events   []SessionEvent     `json:"events"`
 }
 
 // WindowLiveMetadata is the best-effort Kitty/session join captured at export
@@ -163,6 +168,7 @@ type SessionEvent struct {
 	Event             string `json:"event"`                        // raw hook event name (e.g. PreToolUse)
 	Action            string `json:"action"`                       // resolved action (active, stop, …)
 	ToolName          string `json:"tool_name,omitempty"`          // tool name when event carries one
+	Source            string `json:"source,omitempty"`             // raw source payload field
 	Suppressed        bool   `json:"suppressed,omitempty"`         // true when the daemon blocked the transition
 	PreservesIcon     bool   `json:"preserves_icon,omitempty"`     // true when the event preserved the current icon (child-complete signals)
 	ResultIconState   string `json:"result_icon_state"`            // daemon-resolved icon outcome: "", "preserve", or a concrete icon state

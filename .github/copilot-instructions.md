@@ -67,6 +67,8 @@ manages Claude Code and GitHub Copilot CLI sessions as Kitty tabs.
   behavior, and the related tests together.
 - Hook storage differs by harness: Claude merges hooks into
   `<home_dir>/settings.json`; Copilot writes `<home_dir>/hooks/agent-mux.json`.
+- Use `amx daemon export-events` when debugging hook behavior or unexpected
+  event sequences; it dumps the recorded per-window event history as JSON.
 - The daemon intentionally preserves attention states. `TaskCompleted` keeps the
   current icon, `idle`/`clear` only clear active-like icons, and stop,
   permission, and failure states persist until the user clears them.

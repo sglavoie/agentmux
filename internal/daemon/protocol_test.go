@@ -18,6 +18,7 @@ func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 		Action:           "active",
 		Event:            "PreToolUse",
 		ToolName:         "Bash",
+		Source:           "clear",
 		Harness:          "copilot",
 		CurrentIconState: "bolt",
 		NotificationType: "permission_prompt",
@@ -39,6 +40,9 @@ func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 
 	if out.ToolName != "Bash" {
 		t.Fatalf("ToolName = %q, want %q", out.ToolName, "Bash")
+	}
+	if out.Source != "clear" {
+		t.Fatalf("Source = %q, want %q", out.Source, "clear")
 	}
 	if out.Harness != "copilot" {
 		t.Fatalf("Harness = %q, want %q", out.Harness, "copilot")
@@ -67,6 +71,9 @@ func TestRequest_OmittedToolNameMarshalsClean(t *testing.T) {
 	if got := string(data); strings.Contains(got, "harness") {
 		t.Fatalf("expected harness to be omitted, got: %s", got)
 	}
+	if got := string(data); strings.Contains(got, "source") {
+		t.Fatalf("expected source to be omitted, got: %s", got)
+	}
 }
 
 // TestResponse_RoundtripCarriesEvents pins that SessionEvent slices survive
@@ -82,6 +89,7 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 				Event:            "PreToolUse",
 				Action:           "active",
 				ToolName:         "Bash",
+				Source:           "new",
 				ResultIconState:  "bolt",
 				CurrentIconState: "key",
 			},
@@ -118,6 +126,7 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 		Event:            "PreToolUse",
 		Action:           "active",
 		ToolName:         "Bash",
+		Source:           "new",
 		ResultIconState:  "bolt",
 		CurrentIconState: "key",
 	}) {
@@ -164,6 +173,7 @@ func TestSessionEvent_OmitsZeroOptionalFields(t *testing.T) {
 		"notification_type",
 		"stop_reason",
 		"reason",
+		"source",
 		"context_limit",
 		"reset_flow",
 	} {
@@ -192,7 +202,7 @@ func TestResponse_RoundtripCarriesEventsByWindow(t *testing.T) {
 		OK: true,
 		EventsByWindow: map[int][]SessionEvent{
 			1: {
-				{At: 1700000000, Event: "PreToolUse", Action: "active", ToolName: "Bash", ResultIconState: "bolt"},
+				{At: 1700000000, Event: "PreToolUse", Action: "active", ToolName: "Bash", Source: "clear", ResultIconState: "bolt"},
 				{At: 1700000001, Event: "agentStop", Action: "active", PreservesIcon: true, ResultIconState: IconStatePreserve},
 			},
 			2: {
