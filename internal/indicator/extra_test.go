@@ -63,7 +63,7 @@ func TestResolveAction_CopilotCamelCaseParity(t *testing.T) {
 		{"subagentStart", "subagent"},
 		{"subagentStop", "active"},
 		{"preCompact", "compact"},
-		{"agentStop", "active"},
+		{"agentStop", "stop"},
 		{"sessionEnd", "stop"},
 		{"permissionRequest", "permission"},
 		{"postToolUseFailure", "failure"},

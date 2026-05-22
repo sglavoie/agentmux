@@ -5,8 +5,8 @@ package indicator
 // eventToAction is a shared map covering Claude (PascalCase) and Copilot
 // (camelCase) hook event names that directly map to a visible tab-state change.
 // Notification hooks are resolved separately because their payload subtype is
-// needed to decide whether they mean "permission", "elicitation",
-// child-complete "active", or "ignore".
+// needed to decide whether they mean "permission", "elicitation", "stop",
+// or "ignore".
 var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.
 	"sessionStart": "idle",
@@ -26,7 +26,6 @@ var eventToAction = map[string]string{
 	"SubagentStop":        "active",
 	"TaskCreated":         "active",
 	"TaskCompleted":       "active",
-	"agentStop":           "active",
 	"TeammateIdle":        "active",
 	"PostCompact":         "stop",
 	"ElicitationResult":   "active",
@@ -39,7 +38,8 @@ var eventToAction = map[string]string{
 	"preCompact": "compact",
 	"PreCompact": "compact",
 
-	// Stop: parent session completed.
+	// Stop: session or turn completed. The agent stopped working; user sees ⏹.
+	"agentStop":  "stop",
 	"sessionEnd": "stop",
 	"Stop":       "stop",
 	"SessionEnd": "stop",
@@ -163,7 +163,7 @@ func resolveNotificationAction(input string, payload HookPayload) (string, bool)
 	case "elicitation_dialog":
 		return "elicitation", true
 	case "agent_idle":
-		return "active", true
+		return "stop", true
 	default:
 		return "", false
 	}
@@ -179,11 +179,10 @@ func isNotificationEvent(input string) bool {
 // non-terminal "active" action.
 func PreservesCurrent(event string, payload HookPayload) bool {
 	switch event {
-	case "TaskCompleted", "agentStop", "TeammateIdle":
+	case "TaskCompleted", "TeammateIdle":
 		return true
 	default:
-		return isNotificationEvent(event) &&
-			payload.EffectiveNotificationType() == "agent_idle"
+		return false
 	}
 }
 

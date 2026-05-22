@@ -32,6 +32,7 @@ func TestResolveAction_AllEvents(t *testing.T) {
 		{"ElicitationResult", "active"},
 		{"Stop", "stop"},
 		{"SessionEnd", "stop"},
+		{"agentStop", "stop"},
 		{"StopFailure", "stop_failure"},
 		{"PermissionRequest", "permission"},
 		{"PermissionDenied", "permission"},
@@ -71,9 +72,9 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 			ok:      true,
 		},
 		{
-			name:    "agent idle notification preserves current icon",
+			name:    "agent idle notification shows stop icon",
 			payload: HookPayload{NotificationType: "agent_idle"},
-			want:    "active",
+			want:    "stop",
 			ok:      true,
 		},
 		{
@@ -158,9 +159,9 @@ func TestPreservesCurrent(t *testing.T) {
 	}{
 		{"SubagentStop", HookPayload{}, false},
 		{"TaskCompleted", HookPayload{}, true},
-		{"agentStop", HookPayload{}, true},
+		{"agentStop", HookPayload{}, false},
 		{"TeammateIdle", HookPayload{}, true},
-		{"Notification", HookPayload{NotificationType: "agent_idle"}, true},
+		{"Notification", HookPayload{NotificationType: "agent_idle"}, false},
 		{"Notification", HookPayload{NotificationType: "permission_prompt"}, false},
 		{"UserPromptSubmit", HookPayload{}, false},
 		{"Stop", HookPayload{}, false},
@@ -246,6 +247,20 @@ func TestScreenShowsContextLimit(t *testing.T) {
 		if got := screenShowsContextLimit(tc.text); got != tc.want {
 			t.Errorf("%s: screenShowsContextLimit(%q) = %v, want %v", tc.name, tc.text, got, tc.want)
 		}
+	}
+}
+
+func TestResolveAction_CopilotTurnEndIsStop(t *testing.T) {
+	// Regression: commit 5858318 had reclassified agentStop as a non-terminal
+	// active+preserve-current event. That broke the icon transition because
+	// agentStop is in fact Copilot's "main agent finishes a turn" — the
+	// direct analogue of Claude's Stop. Pin the correct mapping.
+	got, ok := ResolveAction("agentStop", HookPayload{StopReasonCamel: "end_turn"})
+	if !ok || got != "stop" {
+		t.Fatalf("ResolveAction(agentStop, end_turn) = (%q, %v), want (stop, true)", got, ok)
+	}
+	if PreservesCurrent("agentStop", HookPayload{StopReasonCamel: "end_turn"}) {
+		t.Error("PreservesCurrent(agentStop, end_turn) = true, want false")
 	}
 }
 
