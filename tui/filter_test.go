@@ -165,7 +165,7 @@ func TestMatchEmptyFilter(t *testing.T) {
 
 func TestMatchSubstringTitle(t *testing.T) {
 	f := Parse("api")
-	s := session.RunningSession{Base: "W:api", Account: "work"}
+	s := session.RunningSession{Base: "api", Account: "work"}
 	if !f.Match(s, nil, 0) {
 		t.Error("expected substring match against Base")
 	}
@@ -173,7 +173,7 @@ func TestMatchSubstringTitle(t *testing.T) {
 
 func TestMatchSubstringDirectory(t *testing.T) {
 	f := Parse("dotfiles")
-	s := session.RunningSession{Base: "W:home", Account: "work", Directory: "/home/user/dotfiles"}
+	s := session.RunningSession{Base: "home", Account: "work", Directory: "/home/user/dotfiles"}
 	if !f.Match(s, nil, 0) {
 		t.Error("expected substring match against Directory")
 	}
@@ -189,7 +189,7 @@ func TestMatchSubstringAccount(t *testing.T) {
 
 func TestMatchSubstringCaseInsensitive(t *testing.T) {
 	f := Parse("API")
-	s := session.RunningSession{Base: "w:api"}
+	s := session.RunningSession{Base: "api"}
 	if !f.Match(s, nil, 0) {
 		t.Error("expected case-insensitive substring match")
 	}
@@ -197,8 +197,8 @@ func TestMatchSubstringCaseInsensitive(t *testing.T) {
 
 func TestMatchMultipleSubstringsAND(t *testing.T) {
 	f := Parse("api work")
-	good := session.RunningSession{Base: "W:api", Account: "work"}
-	bad := session.RunningSession{Base: "W:api", Account: "personal"}
+	good := session.RunningSession{Base: "api", Account: "work"}
+	bad := session.RunningSession{Base: "api", Account: "personal"}
 	if !f.Match(good, nil, 0) {
 		t.Error("expected match when both substrings present (across columns)")
 	}

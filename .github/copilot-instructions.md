@@ -55,10 +55,10 @@ manages Claude Code and GitHub Copilot CLI sessions as Kitty tabs.
 - Managed sessions are identified by Kitty user vars, not by process inspection.
   Launch code writes both current `amx_*` vars and legacy `cc_*` vars, and
   query/restart logic rebuilds session state from those vars later.
-- Base tab titles use `<ProfileInitial>:<project>`. Star and state icons are
-  prepended by `internal/palette`. Use `session.FormatTitle`,
-  `palette.BuildTitle`, and `palette.ParseTitle` instead of manual title
-  string handling.
+- Base tab titles use the project title only. Profile identity stays in Kitty
+  user vars and the dashboard badge. Star and state icons are prepended by
+  `internal/palette`. Use `session.FormatTitle`, `palette.BuildTitle`, and
+  `palette.ParseTitle` instead of manual title string handling.
 - Args precedence is `project args -> profile args -> defaults.args`. Home-dir
   precedence is `profile.home_dir -> config_dir -> harness default`. Restart
   behavior depends on the user-var snapshot preserving those effective values.

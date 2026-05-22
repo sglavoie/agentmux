@@ -162,7 +162,7 @@ func detailHeader(m Model) string {
 		icon = palette.StateIcon(s.State) + " "
 	}
 
-	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, s.Base, s.WindowID)
+	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, runningSessionDisplayTitle(s), s.WindowID)
 
 	state := s.State
 	if state == "" {

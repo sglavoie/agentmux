@@ -149,7 +149,7 @@ func actionsFor(_ Model) []action {
 			description: "copy the session title to the system clipboard",
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
-				title := m.targetSession.Base
+				title := runningSessionDisplayTitle(m.targetSession)
 				m.mode = ModeList
 				return m, copyTitleCmd(title)
 			},
@@ -161,7 +161,7 @@ func actionsFor(_ Model) []action {
 // actions render in default text; unavailable ones render dim.
 func renderActions(m Model) string {
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("Actions for "+m.targetSession.Base) + "\n\n")
+	sb.WriteString(styleHeader.Render("Actions for "+runningSessionDisplayTitle(m.targetSession)) + "\n\n")
 	for _, a := range actionsFor(m) {
 		avail := a.available(m)
 		// Display column: <2-cell key>  <label, padded>

@@ -37,9 +37,10 @@ func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Confi
 }
 
 // RestartWithAccount relaunches a running session under a different profile's
-// harness config and then closes the original tab. Title prefix and tab color
-// update to match the target profile. If the target profile is already the current
-// one, it is a no-op. Launch precedes Close for the same reason as Restart.
+// harness config and then closes the original tab. The managed Kitty tab keeps
+// the same project-only base title while user vars and tab color update to
+// match the target profile. If the target profile is already the current one,
+// it is a no-op. Launch precedes Close for the same reason as Restart.
 func RestartWithAccount(client kitty.KittyClient, running RunningSession, targetAcc config.Account, cfg *config.Config) error {
 	debugLog.Printf("RestartWithAccount: running=%+v targetAcc=%+v", running, targetAcc)
 	// Case-insensitive compare: profile names get lowercased in SessionKey and

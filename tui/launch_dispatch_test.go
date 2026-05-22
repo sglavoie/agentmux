@@ -123,8 +123,8 @@ func TestDispatchPickerLaunch_BothQueuedWhenNoneRunning(t *testing.T) {
 	for _, lp := range got {
 		titles[lp.title] = true
 	}
-	if !titles["W:api"] || !titles["W:backend"] {
-		t.Errorf("expected W:api and W:backend titles, got %v", titles)
+	if !titles["api"] || !titles["backend"] {
+		t.Errorf("expected api and backend titles, got %v", titles)
 	}
 }
 
@@ -134,8 +134,8 @@ func TestDispatchPickerLaunch_BothQueuedWhenNoneRunning(t *testing.T) {
 // emitting an empty progress toast.
 func TestDispatchPickerLaunch_AllDedupedReturnsNil(t *testing.T) {
 	running := []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work"},
-		{TabID: 2, Base: "W:backend", Account: "work"},
+		{TabID: 1, Base: "api", Account: "work"},
+		{TabID: 2, Base: "backend", Account: "work"},
 	}
 	m := launchDispatchModel(t, running)
 	selectByTitle(&m, "api", "backend")
@@ -155,7 +155,7 @@ func TestDispatchPickerLaunch_AllDedupedReturnsNil(t *testing.T) {
 // queued. Regression guard for the dedup branch in dispatchPickerLaunch.
 func TestDispatchPickerLaunch_OnlyNonRunningIsQueued(t *testing.T) {
 	running := []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work"},
+		{TabID: 1, Base: "api", Account: "work"},
 	}
 	m := launchDispatchModel(t, running)
 	selectByTitle(&m, "api", "backend")
@@ -173,8 +173,8 @@ func TestDispatchPickerLaunch_OnlyNonRunningIsQueued(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 launchProgressMsg (backend only), got %d (%+v)", len(got), got)
 	}
-	if got[0].title != "W:backend" {
-		t.Errorf("expected queued title W:backend, got %q", got[0].title)
+	if got[0].title != "backend" {
+		t.Errorf("expected queued title backend, got %q", got[0].title)
 	}
 	if got[0].total != 1 {
 		t.Errorf("expected total=1 in launchProgressMsg, got %d", got[0].total)
@@ -205,7 +205,7 @@ func TestDispatchPickerLaunch_RunningSnapshotIsStable(t *testing.T) {
 	m.pickerRunning[session.SessionKey("work", "api")] = true
 	m.pickerRunning[session.SessionKey("work", "backend")] = true
 	m.sessions = append(m.sessions, session.RunningSession{
-		TabID: 99, Base: "W:api", Account: "work",
+		TabID: 99, Base: "api", Account: "work",
 	})
 
 	got := countLaunchProgress(collectLeafMsgs(t, cmd))

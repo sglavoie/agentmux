@@ -15,7 +15,7 @@ type RunningSession struct {
 	WindowID         int
 	Key              string
 	Title            string // raw Kitty tab title (may include icons)
-	Base             string // title with all icons stripped (e.g., "W:api")
+	Base             string // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
 	State            string // "bolt", "stop", "key", "error", or ""
 	Starred          bool
 	Project          string   // configured project title
@@ -43,7 +43,7 @@ func (rs RunningSession) EffectiveProject() string {
 	if rs.Project != "" {
 		return rs.Project
 	}
-	return projectName(rs.Base)
+	return projectNameForProfile(rs.Base, rs.EffectiveProfile())
 }
 
 func (rs RunningSession) EffectiveArgs() string {
@@ -54,9 +54,9 @@ func (rs RunningSession) EffectiveArgs() string {
 }
 
 // GhostTab is a managed tab whose anchor window (the one bearing amx user vars)
-// no longer exists, but whose tab title still matches a unique (profile,
-// project) pair in the loaded config. Callers can use the WindowID to re-stamp
-// user vars onto the surviving window and restore normal detection.
+// no longer exists, but whose tab title still matches a unique configured
+// project. Callers can use the WindowID to re-stamp user vars onto the
+// surviving window and restore normal detection.
 type GhostTab struct {
 	TabID    int
 	WindowID int
@@ -64,6 +64,11 @@ type GhostTab struct {
 	Project  string
 	Account  config.Account
 	Session  config.Session
+}
+
+type titleFallbackMatch struct {
+	acc  config.Account
+	sess config.Session
 }
 
 // List returns all managed running sessions from Kitty.
@@ -83,8 +88,9 @@ func ListFromOSWindows(osWindows []kitty.OSWindow) []RunningSession {
 
 // ListWithConfig returns running sessions plus any "ghost" tabs whose anchor
 // window is gone but whose tab title resolves unambiguously to a configured
-// (profile, project) pair. When cfg is nil, no fallback occurs and ghosts is
-// always empty — behavior is identical to List.
+// project title. Legacy "<initial>:<project>" ghost titles are still supported
+// as a fallback when no exact project-title match exists. When cfg is nil, no
+// fallback occurs and ghosts is always empty — behavior is identical to List.
 func ListWithConfig(client kitty.KittyClient, cfg *config.Config) (sessions []RunningSession, ghosts []GhostTab, err error) {
 	osWindows, err := client.ListWindows()
 	if err != nil {
@@ -153,41 +159,21 @@ func tabToRunningSession(tab kitty.Tab, cfg *config.Config) (rs RunningSession, 
 // user vars (the anchor harness window was closed). It returns a fabricated
 // RunningSession and a GhostTab pointing at the window that should be
 // re-stamped. The match must be unique — ambiguous or unconfigured titles are
-// skipped.
+// skipped. Exact project-title matches are preferred; legacy
+// "<initial>:<project>" titles are only considered when no exact match exists.
 func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab, bool) {
 	if len(tab.Windows) == 0 {
 		return RunningSession{}, nil, false
 	}
 	base, state, starred := palette.ParseTitle(tab.Title)
-	prefix, project, ok := strings.Cut(base, ":")
-	if !ok || prefix == "" || project == "" {
-		return RunningSession{}, nil, false
-	}
-	wantPrefix := prefix + ":"
 
-	type match struct {
-		acc  config.Account
-		sess config.Session
-	}
-	var matches []match
-	for _, acc := range cfg.Accounts {
-		if ProfilePrefix(acc.Name) != wantPrefix {
-			continue
-		}
-		for _, sess := range cfg.Sessions {
-			if sess.EffectiveProfile() != acc.Name {
-				continue
-			}
-			if sess.Title != project {
-				continue
-			}
-			matches = append(matches, match{acc: acc, sess: sess})
-		}
-	}
+	matches, strategy := titleFallbackMatches(cfg, base)
 	if len(matches) != 1 {
 		slog.Debug("title fallback skipped",
 			"tab_id", tab.ID,
 			"title", tab.Title,
+			"base", base,
+			"strategy", strategy,
 			"matches", len(matches),
 		)
 		return RunningSession{}, nil, false
@@ -252,9 +238,9 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 	if dir == "" {
 		dir = win.CWD
 	}
-	project := projectName(base)
-	if uvProject := win.UserVars.EffectiveProject(project); uvProject != "" {
-		project = uvProject
+	project := win.UserVars.EffectiveProject(base)
+	if win.UserVars.Project == "" {
+		project = projectNameForProfile(project, profile)
 	}
 	args := win.UserVars.EffectiveArgs()
 
@@ -306,6 +292,32 @@ func runningSessionsFromTabs(tabs []kitty.Tab, cfg *config.Config) ([]RunningSes
 		}
 	}
 	return sessions, ghosts
+}
+
+func titleFallbackMatches(cfg *config.Config, base string) ([]titleFallbackMatch, string) {
+	exact := configuredTitleMatches(cfg, func(acc config.Account, sess config.Session) bool {
+		return sess.EffectiveProfile() == acc.Name && sess.Title == base
+	})
+	if len(exact) > 0 {
+		return exact, "exact-title"
+	}
+	legacy := configuredTitleMatches(cfg, func(acc config.Account, sess config.Session) bool {
+		project, ok := legacyProjectName(base, acc.Name)
+		return ok && sess.EffectiveProfile() == acc.Name && sess.Title == project
+	})
+	return legacy, "legacy-prefix"
+}
+
+func configuredTitleMatches(cfg *config.Config, matchFn func(config.Account, config.Session) bool) []titleFallbackMatch {
+	var matches []titleFallbackMatch
+	for _, acc := range cfg.Accounts {
+		for _, sess := range cfg.Sessions {
+			if matchFn(acc, sess) {
+				matches = append(matches, titleFallbackMatch{acc: acc, sess: sess})
+			}
+		}
+	}
+	return matches
 }
 
 func targetOSWindow(osWindows []kitty.OSWindow) *kitty.OSWindow {

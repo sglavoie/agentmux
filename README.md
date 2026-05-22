@@ -92,6 +92,9 @@ Key flows:
 - `d`: show the per-session hook event log (scrollable detail pane)
 - `?`: show the full keymap
 
+The dashboard keeps the profile badge and harness metadata separate from the
+title column, so visible titles are just the project name.
+
 The detail pane's event history persists through terminal hooks (`Stop`,
 `SessionEnd`, etc.) and through the watchdog's stale sweep, so you can still
 review what a session did after its icon clears. History is held in memory per
@@ -102,6 +105,9 @@ when the window closes or the daemon restarts.
 
 The launcher reads configured `projects`, shows their default profile/harness,
 and lets you multi-select launches.
+
+Launcher rows likewise show the project title only; profile information stays in
+its own badge/metadata columns.
 
 - type to filter live,
 - `space` toggles selection,

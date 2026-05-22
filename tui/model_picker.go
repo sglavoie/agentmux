@@ -118,7 +118,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]
 			sess := m.pickerSessionWithResolvedProfile(origIdx)
 			m.targetSession = session.RunningSession{
-				Base:    session.FormatTitle(sess),
+				Base:    configSessionDisplayTitle(sess),
 				Project: m.pickerSessions[origIdx].Title,
 				Profile: m.pickerEffectiveProfile(origIdx),
 				Account: m.pickerEffectiveProfile(origIdx),
@@ -180,11 +180,10 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 		}
 		sess = m.pickerSessionWithResolvedProfile(i)
 		key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
-		baseTitle := session.FormatTitle(sess)
 		if m.pickerRunning[key] {
 			continue // dedup: skip already-running sessions
 		}
-		todo = append(todo, queued{sess: sess, title: baseTitle})
+		todo = append(todo, queued{sess: sess, title: configSessionDisplayTitle(sess)})
 	}
 	if len(todo) == 0 {
 		return nil
@@ -308,7 +307,7 @@ func applyPickerFilter(sessions []config.Session, query string) []int {
 	f := Parse(query)
 	for i, cs := range sessions {
 		synthetic := session.RunningSession{
-			Base:      session.FormatTitle(cs),
+			Base:      configSessionDisplayTitle(cs),
 			Account:   cs.EffectiveProfile(),
 			Profile:   cs.EffectiveProfile(),
 			Project:   cs.Title,

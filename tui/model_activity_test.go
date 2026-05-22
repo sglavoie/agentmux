@@ -188,7 +188,7 @@ func TestClearStatusCmdSetsTabTitle(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 
 	target := session.RunningSession{
-		TabID: 7, WindowID: 99, Base: "W:api", Account: "work", Starred: false,
+		TabID: 7, WindowID: 99, Base: "api", Account: "work", Starred: false,
 	}
 	msg := clearStatusCmd(client, target)()
 	done, ok := msg.(actionDoneMsg)

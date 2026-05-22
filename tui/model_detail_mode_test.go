@@ -15,9 +15,9 @@ import (
 // the makeSessions() zero-value WindowID field.
 func detailSessions() []session.RunningSession {
 	return []session.RunningSession{
-		{TabID: 1, WindowID: 101, Base: "W:api", Account: "work", Directory: "/home/user/api"},
-		{TabID: 2, WindowID: 102, Base: "W:backend", Account: "work", Directory: "/home/user/backend", State: "bolt"},
-		{TabID: 3, WindowID: 103, Base: "P:dotfiles", Account: "personal", Directory: "/home/user/dotfiles"},
+		{TabID: 1, WindowID: 101, Base: "api", Account: "work", Directory: "/home/user/api"},
+		{TabID: 2, WindowID: 102, Base: "backend", Account: "work", Directory: "/home/user/backend", State: "bolt"},
+		{TabID: 3, WindowID: 103, Base: "dotfiles", Account: "personal", Directory: "/home/user/dotfiles"},
 	}
 }
 

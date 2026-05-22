@@ -28,12 +28,8 @@ func AccountPrefix(accountName string) string {
 	return ProfilePrefix(accountName)
 }
 
-// FormatTitle returns the Kitty tab title for a session.
-// Format: "<ProfileInitial>:<project-title>".
+// FormatTitle returns the managed Kitty tab base title for a session.
+// Palette icons and the star marker are layered on top of this base title.
 func FormatTitle(sess config.Session) string {
-	profile := sess.Profile
-	if profile == "" {
-		profile = sess.Account
-	}
-	return ProfilePrefix(profile) + sess.Title
+	return sess.Title
 }

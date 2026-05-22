@@ -53,8 +53,8 @@ func TestModeSearchLiveAppliesEachKeystroke(t *testing.T) {
 	if m.mode != ModeSearch {
 		t.Fatalf("expected ModeSearch while typing, got %d", m.mode)
 	}
-	if len(m.filtered) != 1 || m.filtered[0].Base != "W:api" {
-		t.Fatalf("expected live-filtered list to contain only W:api, got %v", m.filtered)
+	if len(m.filtered) != 1 || m.filtered[0].Base != "api" {
+		t.Fatalf("expected live-filtered list to contain only api, got %v", m.filtered)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestSearchFilterByTitle(t *testing.T) {
 	if len(m.filtered) != 1 {
 		t.Fatalf("expected 1 result for 'api', got %d", len(m.filtered))
 	}
-	if m.filtered[0].Base != "W:api" {
+	if m.filtered[0].Base != "api" {
 		t.Fatalf("wrong session: %q", m.filtered[0].Base)
 	}
 }
@@ -182,8 +182,8 @@ func TestSearchFilterByDirectory(t *testing.T) {
 
 func TestSearchFilterByAccountSubstring(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Bare-token 'work' matches both Account field and Base prefix W: lowercase 'w'... actually
-	// substring scans Base/Directory/Account so 'work' hits two work sessions via account match.
+	// Bare-token 'work' matches the Account field, so both work sessions survive
+	// even though the visible title column is project-only.
 	m.filtered = applyFilter(m.sessions, Parse("work"), m.lastActivity, m.idleThreshold)
 	if len(m.filtered) != 2 {
 		t.Fatalf("expected 2 results for substring 'work', got %d", len(m.filtered))
@@ -201,7 +201,7 @@ func TestAccountFilterNarrowsList(t *testing.T) {
 func TestSearchCombinedWithAccountFilter(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.filtered = applyFilter(m.sessions, Parse("api @work"), m.lastActivity, m.idleThreshold)
-	if len(m.filtered) != 1 || m.filtered[0].Base != "W:api" {
+	if len(m.filtered) != 1 || m.filtered[0].Base != "api" {
 		t.Fatalf("unexpected combined filter result: %v", m.filtered)
 	}
 }

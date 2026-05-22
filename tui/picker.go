@@ -101,8 +101,8 @@ func renderPickerList(m Model) string {
 			prefix = "[*] "
 		}
 
-		baseTitle := session.FormatTitle(sess)
-		coloredTitle := accountStyle(acctColor[sess.EffectiveProfile()]).Render(baseTitle)
+		title := configSessionDisplayTitle(sess)
+		coloredTitle := accountStyle(acctColor[sess.EffectiveProfile()]).Render(title)
 		line := "  " + prefix + coloredTitle
 		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
 			line += "  " + styleDim.Render("["+acc.Name+"/"+acc.EffectiveHarness()+"]")
@@ -137,7 +137,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 
 	lines := make([]string, 0, height)
 	header := accountStyle(acctColor[sess.EffectiveProfile()]).Render(
-		runewidth.Truncate(session.FormatTitle(sess), width, "…"),
+		runewidth.Truncate(configSessionDisplayTitle(sess), width, "…"),
 	)
 	lines = append(lines, header)
 

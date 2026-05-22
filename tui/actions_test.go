@@ -25,14 +25,19 @@ func openActionsOverlay(t *testing.T, m Model) Model {
 
 // TestRenderActionsOverlayHeader checks the header carries the row's title.
 func TestRenderActionsOverlayHeader(t *testing.T) {
-	m := loadSessions(testModelWithSessions(), makeSessions())
+	m := loadSessions(testModelWithSessions(), []session.RunningSession{
+		{TabID: 1, Base: "W:api", Account: "work", State: "bolt", WindowID: 10},
+	})
 	m = openActionsOverlay(t, m)
 	out := stripAnsi(renderActions(m))
 	if !strings.Contains(out, "Actions for ") {
 		t.Errorf("expected header prefix; got %q", out)
 	}
-	if !strings.Contains(out, m.targetSession.Base) {
-		t.Errorf("expected target title %q in header; got %q", m.targetSession.Base, out)
+	if !strings.Contains(out, "Actions for api") {
+		t.Errorf("expected project-only title in header, got %q", out)
+	}
+	if strings.Contains(out, "W:api") {
+		t.Errorf("expected header to strip legacy title prefix, got %q", out)
 	}
 }
 
@@ -41,7 +46,7 @@ func TestRenderActionsOverlayHeader(t *testing.T) {
 // is available (open dir requires a matching config session).
 func TestActionAvailabilityActiveRow(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: "bolt", WindowID: 10},
+		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10},
 	})
 	m = openActionsOverlay(t, m)
 	avail := map[string]bool{}
@@ -63,7 +68,7 @@ func TestActionAvailabilityActiveRow(t *testing.T) {
 // (key) row: peek is unavailable, clear is available.
 func TestActionAvailabilityAttentionRow(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: "key", WindowID: 10},
+		{TabID: 1, Base: "api", Account: "work", State: "key", WindowID: 10},
 	})
 	m = openActionsOverlay(t, m)
 	avail := map[string]bool{}
@@ -85,7 +90,7 @@ func TestActionAvailabilityIdleRow(t *testing.T) {
 	m.idleThreshold = time.Minute
 	m.lastActivity = map[int]time.Time{10: time.Now().Add(-time.Hour)}
 	m = loadSessions(m, []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: "", WindowID: 10},
+		{TabID: 1, Base: "api", Account: "work", State: "", WindowID: 10},
 	})
 	m = openActionsOverlay(t, m)
 	avail := map[string]bool{}
@@ -101,11 +106,11 @@ func TestActionAvailabilityIdleRow(t *testing.T) {
 }
 
 // TestOpenDirActionUnavailableWithoutConfig verifies the `o` action falls
-// back to unavailable when no config.Session matches the row's Base title.
+// back to unavailable when no config.Session matches the row's project title.
 func TestOpenDirActionUnavailableWithoutConfig(t *testing.T) {
 	m := testModel() // no Sessions in cfg
 	m = loadSessions(m, []session.RunningSession{
-		{TabID: 1, Base: "W:nosuch", Account: "work", State: "bolt"},
+		{TabID: 1, Base: "nosuch", Account: "work", State: "bolt"},
 	})
 	m = openActionsOverlay(t, m)
 	for _, a := range actionsFor(m) {
@@ -180,7 +185,7 @@ func TestActionsOverlayDispatchConfigPicker(t *testing.T) {
 // closes the overlay and returns a non-nil peek cmd.
 func TestActionsOverlayDispatchPeek(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: "bolt", WindowID: 42},
+		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 42},
 	})
 	m = openActionsOverlay(t, m)
 	updated, cmd := m.Update(keyPress("e"))
@@ -197,7 +202,7 @@ func TestActionsOverlayDispatchPeek(t *testing.T) {
 // non-bolt row is a no-op (overlay stays open, no cmd).
 func TestActionsOverlayPeekUnavailableNoDispatch(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: "", WindowID: 42},
+		{TabID: 1, Base: "api", Account: "work", State: "", WindowID: 42},
 	})
 	m = openActionsOverlay(t, m)
 	updated, cmd := m.Update(keyPress("e"))
@@ -242,7 +247,7 @@ func TestListYCopiesTitleDirectly(t *testing.T) {
 // the cursor's config session and dispatches an open-dir cmd.
 func TestListODirectOpensWhenConfigMatches(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: "bolt"},
+		{TabID: 1, Base: "api", Account: "work", State: "bolt"},
 	})
 	updated, cmd := m.Update(keyPress("o"))
 	if updated.(Model).mode != ModeList {
@@ -257,7 +262,7 @@ func TestListODirectOpensWhenConfigMatches(t *testing.T) {
 // title isn't in the config.
 func TestListONoOpWithoutMatchingConfig(t *testing.T) {
 	m := loadSessions(testModel(), []session.RunningSession{
-		{TabID: 1, Base: "W:orphan", Account: "work", State: "bolt"},
+		{TabID: 1, Base: "orphan", Account: "work", State: "bolt"},
 	})
 	_, cmd := m.Update(keyPress("o"))
 	if cmd != nil {

@@ -27,7 +27,7 @@ type undoEntry struct {
 	snapshot config.Session
 	account  config.Account
 	deadline time.Time
-	label    string // short label for the toast (typically the row's Base)
+	label    string // short label for the toast (typically the row's project title)
 }
 
 // closeWithToast snapshots rs, dispatches the close, and pushes an
@@ -41,7 +41,7 @@ func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
 	cmds := []tea.Cmd{closeCmd(m.client, rs.TabID)}
 
 	if !hasAcc {
-		text := fmt.Sprintf("closed %s", rs.Base)
+		text := fmt.Sprintf("closed %s", runningSessionDisplayTitle(rs))
 		if c := m.pushToast(Toast{Severity: toastInfo, Text: text}); c != nil {
 			cmds = append(cmds, c)
 		}
@@ -52,7 +52,7 @@ func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
 		snapshot: snapshot,
 		account:  acc,
 		deadline: time.Now().Add(undoWindow),
-		label:    rs.Base,
+		label:    runningSessionDisplayTitle(rs),
 	})
 
 	if c := m.replaceToastByID(undoCloseToastID, Toast{
@@ -70,7 +70,7 @@ func (m *Model) closeWithToast(rs session.RunningSession) tea.Cmd {
 // is internally close+launch — there is no separate state to roll back.
 func (m *Model) restartWithToast(rs session.RunningSession) tea.Cmd {
 	cmds := []tea.Cmd{restartCmd(m.client, rs, m.cfg)}
-	text := fmt.Sprintf("restarted %s", rs.Base)
+	text := fmt.Sprintf("restarted %s", runningSessionDisplayTitle(rs))
 	if c := m.pushToast(Toast{Severity: toastInfo, Text: text}); c != nil {
 		cmds = append(cmds, c)
 	}

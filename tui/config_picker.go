@@ -9,7 +9,7 @@ func renderConfigPicker(m Model) string {
 	if m.configPickerReturnMode == ModePicker {
 		header = "Launch profile"
 	}
-	sb.WriteString(styleHeader.Render(header + ": " + m.targetSession.Base) + "\n\n")
+	sb.WriteString(styleHeader.Render(header+": "+runningSessionDisplayTitle(m.targetSession)) + "\n\n")
 
 	if m.configPickerCursor >= 0 && m.configPickerCursor < len(m.configPickerAccounts) {
 		selectedHarness := m.configPickerAccounts[m.configPickerCursor].EffectiveHarness()

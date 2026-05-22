@@ -12,9 +12,9 @@ import (
 // TestTitleRoundTrip_FormatPalettePalette verifies that a config.Session's
 // FormatTitle output, wrapped with palette icons via BuildTitle, parses back
 // to the same base title via palette.ParseTitle. This pins the contract that
-// session.FormatTitle and palette.BuildTitle/ParseTitle are interoperable for
-// the full set of (profile, state, starred) combinations — including unicode
-// profile initials whose prefix is more than one byte.
+// session.FormatTitle and palette.BuildTitle/ParseTitle remain interoperable
+// even when session metadata includes profile/account combinations and unicode
+// values that no longer appear in the visible Kitty tab base title.
 func TestTitleRoundTrip_FormatPalettePalette(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -58,22 +58,12 @@ func TestTitleRoundTrip_FormatPalettePalette(t *testing.T) {
 	}
 }
 
-// TestFormatTitle_ProfileOverridesAccount verifies that when both Profile and
-// Account are set, Profile wins (the alias path used by older configs must not
-// take precedence over the canonical Profile field).
-func TestFormatTitle_ProfileOverridesAccount(t *testing.T) {
+// TestFormatTitle_IgnoresProfileAndAccount verifies that managed Kitty tab
+// base titles come entirely from the project title.
+func TestFormatTitle_IgnoresProfileAndAccount(t *testing.T) {
 	sess := config.Session{Title: "api", Profile: "alpha", Account: "beta"}
-	if got := session.FormatTitle(sess); got != "A:api" {
-		t.Errorf("FormatTitle(Profile=alpha, Account=beta) = %q, want %q", got, "A:api")
-	}
-}
-
-// TestFormatTitle_AccountFallback verifies that when only Account is set,
-// the prefix is derived from Account.
-func TestFormatTitle_AccountFallback(t *testing.T) {
-	sess := config.Session{Title: "api", Account: "work"}
-	if got := session.FormatTitle(sess); got != "W:api" {
-		t.Errorf("FormatTitle(Account=work) = %q, want %q", got, "W:api")
+	if got := session.FormatTitle(sess); got != "api" {
+		t.Errorf("FormatTitle(Profile=alpha, Account=beta) = %q, want %q", got, "api")
 	}
 }
 
@@ -209,23 +199,42 @@ func TestSessionFromRunning_LegacyNoExplicitFlagsPin(t *testing.T) {
 	}
 }
 
-// TestRunningSessionEffectiveProject_FallsBackToBaseStrip verifies that
-// when Project is empty in user vars, EffectiveProject derives the project
-// name by stripping the profile prefix from Base. This matches Launch's
-// title-format contract and keeps SessionFromRunning's Title accurate.
-func TestRunningSessionEffectiveProject_FallsBackToBaseStrip(t *testing.T) {
-	rs := session.RunningSession{Base: "W:api", Project: ""}
+// TestRunningSessionEffectiveProject_UsesProjectOnlyBase verifies that when
+// Project is empty in user vars, EffectiveProject treats the stripped Kitty
+// base title as the project title under the new project-only contract.
+func TestRunningSessionEffectiveProject_UsesProjectOnlyBase(t *testing.T) {
+	rs := session.RunningSession{Base: "api", Project: ""}
 	if got := rs.EffectiveProject(); got != "api" {
-		t.Errorf("EffectiveProject base-strip: got %q, want %q", got, "api")
+		t.Errorf("EffectiveProject base: got %q, want %q", got, "api")
+	}
+}
+
+// TestRunningSessionEffectiveProject_LegacyPrefixFallbackUsesProfile keeps the
+// old prefix-stripping behavior as a compatibility path when the profile is
+// known but the explicit amx_project user var is missing.
+func TestRunningSessionEffectiveProject_LegacyPrefixFallbackUsesProfile(t *testing.T) {
+	rs := session.RunningSession{Base: "W:api", Profile: "work", Project: ""}
+	if got := rs.EffectiveProject(); got != "api" {
+		t.Errorf("EffectiveProject legacy fallback: got %q, want %q", got, "api")
+	}
+}
+
+// TestRunningSessionEffectiveProject_ProjectOnlyColonTitleNotStripped verifies
+// that a project-only title that happens to contain a colon is preserved when
+// it does not match the current profile's legacy prefix.
+func TestRunningSessionEffectiveProject_ProjectOnlyColonTitleNotStripped(t *testing.T) {
+	rs := session.RunningSession{Base: "A:b:c", Profile: "work", Project: ""}
+	if got := rs.EffectiveProject(); got != "A:b:c" {
+		t.Errorf("EffectiveProject colon title: got %q, want %q", got, "A:b:c")
 	}
 }
 
 // TestRunningSessionEffectiveProject_PrefersUserVar verifies the override
-// path: when user vars include amx_project, it wins over the base-strip
-// fallback (so a session whose tab title was renamed by the user still
-// reports the configured project name).
+// path: when user vars include amx_project, it wins over the base fallback
+// (so a session whose tab title was renamed by the user still reports the
+// configured project name).
 func TestRunningSessionEffectiveProject_PrefersUserVar(t *testing.T) {
-	rs := session.RunningSession{Base: "W:other", Project: "api"}
+	rs := session.RunningSession{Base: "other", Project: "api"}
 	if got := rs.EffectiveProject(); got != "api" {
 		t.Errorf("EffectiveProject user-var: got %q, want %q", got, "api")
 	}

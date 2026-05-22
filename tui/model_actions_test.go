@@ -75,7 +75,7 @@ func TestPeekDoneMsgErrorSetsActionErr(t *testing.T) {
 
 func TestFooterListHintIncludesPeek(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Order after sort: W:api(""), W:backend(bolt), P:dotfiles("") — move
+	// Order after sort: api(""), backend(bolt), dotfiles("") — move
 	// cursor onto the bolt session so the active footer branch fires.
 	m = pressKey(m, "j")
 	footer := stripAnsi(renderFooter(m))
@@ -104,10 +104,10 @@ func TestXKeyDirectClose(t *testing.T) {
 	if m.confirmAction != "close" {
 		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
 	}
-	// Bolt sessions sort before empty-state sessions within Active, so W:backend
-	// (bolt) is first, then W:api, P:dotfiles.
-	if m.targetSession.Base != "W:backend" {
-		t.Fatalf("expected actionTarget=W:backend, got %q", m.targetSession.Base)
+	// Bolt sessions sort before empty-state sessions within Active, so backend
+	// (bolt) is first, then api, dotfiles.
+	if m.targetSession.Base != "backend" {
+		t.Fatalf("expected actionTarget=backend, got %q", m.targetSession.Base)
 	}
 }
 
@@ -121,9 +121,9 @@ func TestRKeyDirectRestart(t *testing.T) {
 	if m.confirmAction != "restart" {
 		t.Fatalf("expected confirmAction=restart, got %q", m.confirmAction)
 	}
-	// Order after sort: W:backend (bolt), W:api, P:dotfiles → j moves cursor to 1.
-	if m.targetSession.Base != "W:api" {
-		t.Fatalf("expected actionTarget=W:api, got %q", m.targetSession.Base)
+	// Order after sort: backend (bolt), api, dotfiles → j moves cursor to 1.
+	if m.targetSession.Base != "api" {
+		t.Fatalf("expected actionTarget=api, got %q", m.targetSession.Base)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestDirectKeyEmptyListNoOp(t *testing.T) {
 func TestFormatRowIconFirst(t *testing.T) {
 	acctColor := map[string]string{"work": "blue"}
 	s := session.RunningSession{
-		TabID: 1, Base: "W:api", Account: "work",
+		TabID: 1, Base: "api", Account: "work",
 		Directory: "/home/user/api", State: "bolt",
 	}
 	row := formatRow(s, acctColor, 120, "")
@@ -234,7 +234,7 @@ func TestSingleGroupNoDivider(t *testing.T) {
 func TestFormatRowNoStateIcon(t *testing.T) {
 	acctColor := map[string]string{"work": "blue"}
 	s := session.RunningSession{
-		TabID: 1, Base: "W:api", Account: "work",
+		TabID: 1, Base: "api", Account: "work",
 		Directory: "/home/user/api", State: "",
 	}
 	row := formatRow(s, acctColor, 120, "")
@@ -331,7 +331,7 @@ func TestFooterHelp(t *testing.T) {
 
 func TestFooterListContextAwareAttention(t *testing.T) {
 	sessions := []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: "key"},
+		{TabID: 1, Base: "api", Account: "work", State: "key"},
 	}
 	m := loadSessions(testModel(), sessions)
 	footer := stripAnsi(renderFooter(m))
@@ -345,7 +345,7 @@ func TestFooterListContextAwareAttention(t *testing.T) {
 
 func TestFooterListContextAwareActive(t *testing.T) {
 	sessions := []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: "bolt"},
+		{TabID: 1, Base: "api", Account: "work", State: "bolt"},
 	}
 	m := loadSessions(testModel(), sessions)
 	footer := stripAnsi(renderFooter(m))

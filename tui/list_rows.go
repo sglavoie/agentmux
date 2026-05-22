@@ -355,8 +355,8 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int,
 		harnessBadge = styleDim.Render("[" + abbrev + "]")
 	}
 
-	// Title: use Base (stripped of icons) padded to titleColWidth.
-	title := runewidth.Truncate(s.Base, titleColWidth, "…")
+	// Title: use the project title padded to titleColWidth.
+	title := runewidth.Truncate(runningSessionDisplayTitle(s), titleColWidth, "…")
 	title = title + strings.Repeat(" ", titleColWidth-runewidth.StringWidth(title))
 
 	// Directory: truncated.

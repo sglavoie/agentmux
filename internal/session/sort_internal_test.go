@@ -2,43 +2,51 @@ package session
 
 import "testing"
 
-// TestProjectName_Unicode pins the Unicode-prefix contract for projectName:
-// the helper must strip profile initials produced by ProfilePrefix, which
-// can be any uppercase or caseless letter rune (Latin, CJK, etc.), not only
-// ASCII A–Z. Prior versions matched a byte-level [A-Z] which broke sort
-// keys and EffectiveProject() for non-ASCII profile names.
-func TestProjectName_Unicode(t *testing.T) {
+// TestProjectName_ProjectOnlyContract pins the new base-title contract:
+// projectName treats the stripped Kitty title as an exact project title and
+// does not try to infer or remove a profile prefix on its own.
+func TestProjectName_ProjectOnlyContract(t *testing.T) {
 	cases := []struct {
 		base string
 		want string
 	}{
-		// ASCII profile prefixes still strip.
-		{"W:api", "api"},
-		{"P:dotfiles", "dotfiles"},
-
-		// Multibyte uppercase Latin prefix.
-		{"É:scriba", "scriba"},
-		// CJK profile prefix (caseless rune; treated as profile initial).
-		{"中:project", "project"},
-
-		// Lowercase ASCII prefix is NOT produced by ProfilePrefix and must
-		// not be treated as a profile prefix.
+		{"api", "api"},
+		{"A:b:c", "A:b:c"},
 		{"w:api", "w:api"},
-
-		// Non-letter leading runes must not be stripped.
-		{"1:foo", "1:foo"},
-		{"?:foo", "?:foo"},
-
-		// No colon → unchanged.
-		{"myproject", "myproject"},
+		{"W:api", "W:api"},
 		{"", ""},
-
-		// Single-rune base ("W:" with nothing after) collapses to "".
-		{"W:", ""},
 	}
 	for _, tc := range cases {
 		if got := projectName(tc.base); got != tc.want {
 			t.Errorf("projectName(%q) = %q, want %q", tc.base, got, tc.want)
+		}
+	}
+}
+
+// TestLegacyProjectName_ProfileAware keeps the old prefix-stripping logic as an
+// explicit compatibility path. Prefixes only strip when they match the known
+// profile/account for the tab.
+func TestLegacyProjectName_ProfileAware(t *testing.T) {
+	cases := []struct {
+		base     string
+		profile  string
+		want     string
+		stripped bool
+	}{
+		{"W:api", "work", "api", true},
+		{"É:scriba", "éscriba", "scriba", true},
+		{"中:project", "中文", "project", true},
+		{"A:b:c", "alpha", "b:c", true},
+		{"W:api", "personal", "W:api", false},
+		{"w:api", "work", "w:api", false},
+		{"1:foo", "work", "1:foo", false},
+		{"api", "work", "api", false},
+	}
+	for _, tc := range cases {
+		got, stripped := legacyProjectName(tc.base, tc.profile)
+		if got != tc.want || stripped != tc.stripped {
+			t.Errorf("legacyProjectName(%q, %q) = (%q, %v), want (%q, %v)",
+				tc.base, tc.profile, got, stripped, tc.want, tc.stripped)
 		}
 	}
 }
@@ -72,11 +80,9 @@ func TestProjectSortKey(t *testing.T) {
 	}
 }
 
-// TestSortKey_UnicodePrefix verifies that account-mode sort keys for
-// Unicode-prefixed titles use the project portion (not the prefix) as the
-// inner sort component, matching the ASCII behavior. Two sessions on the
-// same profile should sort by project name regardless of the prefix's
-// underlying byte length.
+// TestSortKey_UnicodePrefix verifies that legacy Unicode profile prefixes still
+// normalize to the project portion when the caller supplies the matching
+// account/profile.
 func TestSortKey_UnicodePrefix(t *testing.T) {
 	// Same profile "中文", two projects "alpha" and "beta".
 	keyAlpha := SortKey("中文", "中:alpha", false, "account")

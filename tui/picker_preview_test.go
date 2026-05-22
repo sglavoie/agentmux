@@ -130,7 +130,7 @@ func TestPickerPreviewRunningPeek(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	m := NewModel(cfg, client)
 	m = loadSessions(m, []session.RunningSession{
-		{TabID: 1, WindowID: 99, Base: "W:api", Account: "work"},
+		{TabID: 1, WindowID: 99, Base: "api", Account: "work"},
 	})
 	m = pressKey(m, "l")
 	m.width, m.height = 120, 40
@@ -159,8 +159,8 @@ func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	m := NewModel(cfg, client)
 	m = loadSessions(m, []session.RunningSession{
-		{TabID: 1, WindowID: 11, Base: "W:api", Account: "work"},
-		{TabID: 2, WindowID: 22, Base: "P:notes", Account: "personal"},
+		{TabID: 1, WindowID: 11, Base: "api", Account: "work"},
+		{TabID: 2, WindowID: 22, Base: "notes", Account: "personal"},
 	})
 	m.width, m.height = 120, 40
 	m = pressKey(m, "l")

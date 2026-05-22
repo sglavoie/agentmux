@@ -58,8 +58,8 @@ func TestApplyColorWithRetry_PropagatesSetTabColorFailure(t *testing.T) {
 	defer shortColorRetries(t, 3)()
 
 	lsResp := []byte(`[{"id":1,"is_active":true,"tabs":[` +
-		`{"id":100,"is_active":true,"title":"W:newproject","windows":[` +
-		`{"id":101,"is_active":true,"title":"W:newproject"}` +
+		`{"id":100,"is_active":true,"title":"newproject","windows":[` +
+		`{"id":101,"is_active":true,"title":"newproject"}` +
 		`]}]}]`)
 	runner := &colorFailRunner{
 		lsResponse:  lsResp,
@@ -67,7 +67,7 @@ func TestApplyColorWithRetry_PropagatesSetTabColorFailure(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := applyColorWithRetry(client, map[int]bool{}, "W:newproject", palette.Color{
+	err := applyColorWithRetry(client, map[int]bool{}, "newproject", palette.Color{
 		ActiveBg: "#000000", InactiveBg: "#ffffff",
 	})
 	if err == nil {
@@ -93,11 +93,11 @@ func TestApplyColorWithRetry_ReportsMissingTab(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := applyColorWithRetry(client, map[int]bool{}, "W:absent", palette.Color{})
+	err := applyColorWithRetry(client, map[int]bool{}, "absent", palette.Color{})
 	if err == nil {
 		t.Fatal("expected non-nil error when the tab never appears")
 	}
-	if !strings.Contains(err.Error(), "W:absent") || !strings.Contains(err.Error(), "not visible") {
+	if !strings.Contains(err.Error(), "absent") || !strings.Contains(err.Error(), "not visible") {
 		t.Errorf("expected error to name the missing tab, got %v", err)
 	}
 	if runner.setCalls != 0 {
@@ -142,8 +142,8 @@ func TestLaunch_LogsWarnWhenColorRetryFails(t *testing.T) {
 
 	emptyLS := []byte(`[]`)
 	postLaunch := []byte(`[{"id":1,"is_active":true,"tabs":[` +
-		`{"id":100,"is_active":true,"title":"W:newproject","windows":[` +
-		`{"id":101,"is_active":true,"title":"W:newproject"}` +
+		`{"id":100,"is_active":true,"title":"newproject","windows":[` +
+		`{"id":101,"is_active":true,"title":"newproject"}` +
 		`]}]}]`)
 	runner := &sequentialColorFailRunner{
 		// ls calls: dedup-check, compute-insert, then color-retry attempts.
@@ -172,7 +172,7 @@ func TestLaunch_LogsWarnWhenColorRetryFails(t *testing.T) {
 	if !strings.Contains(out, "applying tab color after launch") {
 		t.Errorf("expected Warn log about color application, got %q", out)
 	}
-	if !strings.Contains(out, "W:newproject") {
+	if !strings.Contains(out, "newproject") {
 		t.Errorf("expected Warn log to include the tab title, got %q", out)
 	}
 	if !strings.Contains(out, "level=WARN") {
@@ -207,7 +207,7 @@ func TestApplyColorWithRetry_NoSleepAfterFinalAttempt(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 
 	start := time.Now()
-	err := applyColorWithRetry(client, map[int]bool{}, "W:absent", palette.Color{})
+	err := applyColorWithRetry(client, map[int]bool{}, "absent", palette.Color{})
 	elapsed := time.Since(start)
 
 	if err == nil {
@@ -229,8 +229,8 @@ func TestApplyColorWithRetry_ReturnsNilOnSuccess(t *testing.T) {
 	defer shortColorRetries(t, 3)()
 
 	lsResp := []byte(`[{"id":1,"is_active":true,"tabs":[` +
-		`{"id":100,"is_active":true,"title":"W:newproject","windows":[` +
-		`{"id":101,"is_active":true,"title":"W:newproject"}` +
+		`{"id":100,"is_active":true,"title":"newproject","windows":[` +
+		`{"id":101,"is_active":true,"title":"newproject"}` +
 		`]}]}]`)
 	runner := &colorFailRunner{
 		lsResponse:  lsResp,
@@ -238,7 +238,7 @@ func TestApplyColorWithRetry_ReturnsNilOnSuccess(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 
-	err := applyColorWithRetry(client, map[int]bool{}, "W:newproject", palette.Color{
+	err := applyColorWithRetry(client, map[int]bool{}, "newproject", palette.Color{
 		ActiveBg: "#000000", InactiveBg: "#ffffff",
 	})
 	if err != nil {
@@ -262,8 +262,8 @@ func TestApplyColorWithRetry_DoesNotPaintPreexistingTab(t *testing.T) {
 
 	// One pre-existing unmanaged tab with the same title as the launch target.
 	lsResp := []byte(`[{"id":1,"is_active":true,"tabs":[` +
-		`{"id":42,"is_active":true,"title":"W:newproject","windows":[` +
-		`{"id":43,"is_active":true,"title":"W:newproject"}` +
+		`{"id":42,"is_active":true,"title":"newproject","windows":[` +
+		`{"id":43,"is_active":true,"title":"newproject"}` +
 		`]}]}]`)
 	runner := &colorFailRunner{
 		lsResponse:  lsResp,
@@ -276,7 +276,7 @@ func TestApplyColorWithRetry_DoesNotPaintPreexistingTab(t *testing.T) {
 	// must NOT call SetTabColor on tab 42 and must report the new tab as
 	// missing instead.
 	beforeIDs := map[int]bool{42: true}
-	err := applyColorWithRetry(client, beforeIDs, "W:newproject", palette.Color{
+	err := applyColorWithRetry(client, beforeIDs, "newproject", palette.Color{
 		ActiveBg: "#000000", InactiveBg: "#ffffff",
 	})
 	if err == nil {

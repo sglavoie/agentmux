@@ -50,8 +50,8 @@ func TestOpenDirectory_LaunchesWithCorrectArgs(t *testing.T) {
 		for _, a := range c.Args {
 			argMap[a] = true
 		}
-		if !argMap["--tab-title=W:myproject"] {
-			t.Errorf("expected --tab-title=W:myproject in args: %v", c.Args)
+		if !argMap["--tab-title=myproject"] {
+			t.Errorf("expected --tab-title=myproject in args: %v", c.Args)
 		}
 		if !argMap["--cwd=/tmp/myproject"] {
 			t.Errorf("expected --cwd=/tmp/myproject in args: %v", c.Args)
@@ -80,8 +80,8 @@ func TestOpenDirectory_ColorApplied(t *testing.T) {
 	empty := loadFixture(t, "kitty_ls_empty.json")
 
 	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
-		`{"id":200,"is_active":true,"title":"W:myproject","windows":[` +
-		`{"id":201,"is_active":true,"title":"W:myproject","cwd":"/tmp/myproject","cmdline":["zsh"],` +
+		`{"id":200,"is_active":true,"title":"myproject","windows":[` +
+		`{"id":201,"is_active":true,"title":"myproject","cwd":"/tmp/myproject","cmdline":["zsh"],` +
 		`"user_vars":{}}` +
 		`]}]}]`)
 

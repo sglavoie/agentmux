@@ -50,7 +50,9 @@ func renderPreview(width, height int, sess session.RunningSession, text, errText
 	}
 	// One-line header with account-colored title.
 	colorName := acctColor[sess.Account]
-	header := accountStyle(colorName).Render(runewidth.Truncate(sess.Base, width, "…"))
+	header := accountStyle(colorName).Render(
+		runewidth.Truncate(runningSessionDisplayTitle(sess), width, "…"),
+	)
 
 	body := previewBody(width, height-1, sess, text, errText)
 	return header + "\n" + body

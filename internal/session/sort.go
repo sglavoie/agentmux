@@ -13,26 +13,23 @@ import (
 // and starred flag. mode is "alpha" or "account".
 //
 // Pinned (starred) tabs sort before non-pinned via a "0:" vs "1:" prefix.
-// Alpha mode sorts by full base title; account mode groups by account name first.
+// Alpha mode sorts by project title first; account mode groups by account name
+// first. Legacy "<initial>:<project>" titles are normalized to their project
+// portion when the prefix matches the supplied account/profile.
 func SortKey(account, baseTitle string, starred bool, mode string) string {
 	pin := "1"
 	if starred {
 		pin = "0"
 	}
-	proj := projectName(baseTitle)
+	proj := projectNameForProfile(baseTitle, account)
 	projKey := projectSortKey(proj)
+	accountKey := strings.ToLower(account)
+	projectKey := strings.ToLower(proj)
 	switch mode {
 	case "account":
-		return pin + ":" + strings.ToLower(account) + ":" + projKey
+		return pin + ":" + accountKey + ":" + projKey + ":" + projectKey
 	default: // "alpha"
-		// Preserve the rendered "<initial>:" profile prefix from baseTitle
-		// so alpha mode still groups by tab-prefix when present, but
-		// normalize the project portion (drop leading emoji/symbols).
-		var prefix string
-		if len(baseTitle) > len(proj) {
-			prefix = strings.ToLower(baseTitle[:len(baseTitle)-len(proj)])
-		}
-		return pin + ":" + prefix + projKey
+		return pin + ":" + projKey + ":" + accountKey + ":" + projectKey
 	}
 }
 
@@ -101,31 +98,29 @@ func SortRunning(sessions []RunningSession, mode string) []RunningSession {
 	return sorted
 }
 
-// projectName strips the leading "<rune>:" profile prefix from a base title.
-// The prefix is a single letter rune (uppercase or caseless) followed by a
-// colon, matching the output of ProfilePrefix. Unicode profile initials such
-// as "É:project" or "中:project" are handled in addition to plain ASCII
-// like "W:api". Returns base unchanged when no such prefix is present.
+// projectName returns the project portion of a modern base title. Managed Kitty
+// tabs now use project-only base titles, so the raw base string is already the
+// project name. Legacy prefix stripping lives in projectNameForProfile.
 func projectName(base string) string {
-	r, size := utf8.DecodeRuneInString(base)
-	if r == utf8.RuneError {
-		return base
+	return base
+}
+
+// legacyProjectName strips the old "<ProfileInitial>:" prefix when it matches
+// the supplied profile/account. The boolean reports whether the prefix was
+// recognized and removed.
+func legacyProjectName(base, profile string) (string, bool) {
+	prefix := ProfilePrefix(profile)
+	if prefix == "" || !strings.HasPrefix(base, prefix) {
+		return base, false
 	}
-	if len(base) < size+1 || base[size] != ':' {
-		return base
+	return base[len(prefix):], true
+}
+
+func projectNameForProfile(base, profile string) string {
+	if project, ok := legacyProjectName(base, profile); ok {
+		return project
 	}
-	// The rune must be a letter; reject numeric or punctuation prefixes
-	// (e.g. "1:foo" or "?:foo") that ProfilePrefix would never produce.
-	if !unicode.IsLetter(r) {
-		return base
-	}
-	// For cased scripts (Latin, Cyrillic, Greek), the rune must already be
-	// uppercase — lowercase prefixes like "w:api" do not come from
-	// ProfilePrefix and should not be treated as a profile prefix.
-	if unicode.IsLower(r) {
-		return base
-	}
-	return base[size+1:]
+	return projectName(base)
 }
 
 // projectSortKey returns the lowercased project name with leading

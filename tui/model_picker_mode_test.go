@@ -61,7 +61,7 @@ func TestPickerEnterEmitsLaunchCmd(t *testing.T) {
 }
 
 func TestPickerRunningStatus(t *testing.T) {
-	running := makeSessions() // W:api, W:backend, P:dotfiles
+	running := makeSessions() // api, backend, dotfiles
 	m := loadSessions(testModelWithSessions(), running)
 	m = pressKey(m, "l")
 	// All 3 config sessions match the running sessions.
@@ -207,7 +207,7 @@ func TestConfigPickerNavigation(t *testing.T) {
 func TestConfigPickerSameAccountNoOp(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "c") // → ModeConfigPicker
-	// After state-group sort cursor=0 is W:backend (bolt), account="work".
+	// After state-group sort cursor=0 is backend (bolt), account="work".
 	// configPickerCurrent should be "work", cursor at index 0 (work).
 	if m.configPickerCurrent != "work" {
 		t.Fatalf("expected configPickerCurrent=work, got %q", m.configPickerCurrent)

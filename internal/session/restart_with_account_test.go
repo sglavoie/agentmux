@@ -10,7 +10,7 @@ import (
 )
 
 // TestRestartWithAccount_SwitchesAccount verifies that RestartWithAccount
-// relaunches with the target account's prefix and user var.
+// relaunches with the same project title and the target account user var.
 func TestRestartWithAccount_SwitchesAccount(t *testing.T) {
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
@@ -61,8 +61,8 @@ func TestRestartWithAccount_SwitchesAccount(t *testing.T) {
 	for _, a := range launchArgs {
 		argSet[a] = true
 	}
-	if !argSet["--tab-title=P:api"] {
-		t.Errorf("expected --tab-title=P:api in launch args: %v", launchArgs)
+	if !argSet["--tab-title=api"] {
+		t.Errorf("expected --tab-title=api in launch args: %v", launchArgs)
 	}
 	if !argSet["--var=cc_account=personal"] {
 		t.Errorf("expected --var=cc_account=personal in launch args: %v", launchArgs)

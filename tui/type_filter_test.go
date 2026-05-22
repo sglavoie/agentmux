@@ -21,7 +21,7 @@ func TestUnboundPrintableStartsTypeBuffer(t *testing.T) {
 }
 
 func TestTypeBufferNarrowsList(t *testing.T) {
-	// makeSessions has W:api, W:backend, P:dotfiles. We can't lead with "a"
+	// makeSessions has api, backend, dotfiles. We can't lead with "a"
 	// (opens the actions overlay) so we type "bac" — `b` is unbound and
 	// starts the buffer, then `a` and `c` divert into the buffer since it's
 	// non-empty.
@@ -131,9 +131,9 @@ func TestNavigationLiveDuringTypeBuffer(t *testing.T) {
 	// Use sessions whose Base shares a substring "wo" (matching their account
 	// "work") so the buffer leaves multiple rows visible to navigate.
 	m := loadSessions(testModel(), []session.RunningSession{
-		{TabID: 1, Base: "W:alpha", Account: "work"},
-		{TabID: 2, Base: "W:beta", Account: "work"},
-		{TabID: 3, Base: "W:gamma", Account: "work"},
+		{TabID: 1, Base: "alpha", Account: "work"},
+		{TabID: 2, Base: "beta", Account: "work"},
+		{TabID: 3, Base: "gamma", Account: "work"},
 	})
 	m = pressKey(m, "w") // unbound; starts buffer
 	m = pressKey(m, "o")
@@ -477,4 +477,3 @@ func TestDigitsRemoveChipsWhenBufferEmpty(t *testing.T) {
 		t.Errorf("expected chip count to drop from %d to %d, got %d", before, before-1, got)
 	}
 }
-

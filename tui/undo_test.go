@@ -13,7 +13,7 @@ import (
 // profile, env, groups) of the running session.
 func TestSessionFromRunningSnapshotMatchesRunning(t *testing.T) {
 	rs := session.RunningSession{
-		Base:      "W:api",
+		Base:      "api",
 		Project:   "api",
 		Profile:   "work",
 		Account:   "work",
@@ -193,7 +193,7 @@ func TestExpiredUndoEntryRejectedOnU(t *testing.T) {
 // there's no relaunch path without the account.
 func TestTransientCloseSkipsUndo(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
-		{TabID: 99, Base: "X:orphan", Account: "unknown", Profile: "unknown"},
+		{TabID: 99, Base: "orphan", Account: "unknown", Profile: "unknown"},
 	})
 	updated, cmd := m.Update(keyPress("x"))
 	m2 := updated.(Model)

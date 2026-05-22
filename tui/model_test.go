@@ -96,9 +96,9 @@ func keyPress(key string) tea.KeyPressMsg {
 
 func makeSessions() []session.RunningSession {
 	return []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", Directory: "/home/user/api", State: ""},
-		{TabID: 2, Base: "W:backend", Account: "work", Directory: "/home/user/backend", State: "bolt"},
-		{TabID: 3, Base: "P:dotfiles", Account: "personal", Directory: "/home/user/dotfiles", State: ""},
+		{TabID: 1, Base: "api", Account: "work", Directory: "/home/user/api", State: ""},
+		{TabID: 2, Base: "backend", Account: "work", Directory: "/home/user/backend", State: "bolt"},
+		{TabID: 3, Base: "dotfiles", Account: "personal", Directory: "/home/user/dotfiles", State: ""},
 	}
 }
 

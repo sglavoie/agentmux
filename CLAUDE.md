@@ -156,7 +156,7 @@ config_dir = "~/.config/claude-work"
 color = "blue"              # one of 10 named colors
 
 [[sessions]]
-title = "W:api"             # convention: account-initial prefix
+title = "api"               # project title; profile shows separately in the dashboard
 directory = "~/projects/api"
 account = "work"
 claude_flags = []           # per-session override; omit to inherit defaults
@@ -179,7 +179,10 @@ The config path defaults to `~/.config/cc-manager/config.toml` and can be overri
 
 Account detection reads the `cc_account` Kitty user var set at launch time (`--var cc_account=NAME`). This is the only method — no fallback to process cmdlines in the Go implementation.
 
-Tab title convention: uppercase account initial followed by colon (e.g., `W:project` for work, `P:dotfiles` for personal). State icons (bolt `⚡`, stop `⏹`, key `🔑`, error `✗`) and the star marker (`★`) are prepended to the base title by `palette.BuildTitle()`.
+Tab titles use the project title only. The dashboard shows the profile
+separately via its badge (`[W]`, `[P]`, etc.), while state icons (bolt `⚡`,
+stop `⏹`, key `🔑`, error `✗`) and the star marker (`★`) are prepended to the
+base title by `palette.BuildTitle()`.
 
 The palette and icon set are embedded at compile time in `internal/palette/` via `//go:embed`. To change a color or icon, edit the embedded JSON and rebuild.
 

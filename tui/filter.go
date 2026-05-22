@@ -73,7 +73,7 @@ func (f Filter) Match(s session.RunningSession, lastActivity map[int]time.Time, 
 		return false
 	}
 	if len(f.Substrings) > 0 {
-		title := strings.ToLower(s.Base)
+		title := strings.ToLower(runningSessionDisplayTitle(s))
 		dir := strings.ToLower(s.Directory)
 		acct := strings.ToLower(s.Account)
 		for _, sub := range f.Substrings {

@@ -267,9 +267,9 @@ func TestFormatRowIconColumnAlignment(t *testing.T) {
 // TestFormatRowHarnessBadge asserts that [cl] appears for claude sessions,
 // [cp] for copilot sessions, and nothing harness-related for empty harness.
 func TestFormatRowHarnessBadge(t *testing.T) {
-	sClaude := session.RunningSession{Base: "W:api", Account: "work", Harness: "claude"}
-	sCopilot := session.RunningSession{Base: "W:api", Account: "work", Harness: "copilot"}
-	sNone := session.RunningSession{Base: "W:api", Account: "work", Harness: ""}
+	sClaude := session.RunningSession{Base: "api", Account: "work", Harness: "claude"}
+	sCopilot := session.RunningSession{Base: "api", Account: "work", Harness: "copilot"}
+	sNone := session.RunningSession{Base: "api", Account: "work", Harness: ""}
 
 	rowClaude := stripAnsi(formatRow(sClaude, nil, 0, ""))
 	rowCopilot := stripAnsi(formatRow(sCopilot, nil, 0, ""))

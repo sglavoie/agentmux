@@ -64,8 +64,8 @@ func TestRestart_ClosesAndRelaunches(t *testing.T) {
 	for _, a := range launchArgs {
 		argSet[a] = true
 	}
-	if !argSet["--tab-title=W:api"] {
-		t.Errorf("expected --tab-title=W:api in launch args: %v", launchArgs)
+	if !argSet["--tab-title=api"] {
+		t.Errorf("expected --tab-title=api in launch args: %v", launchArgs)
 	}
 	if !argSet["--var=cc_account=work"] {
 		t.Errorf("expected --var=cc_account=work in launch args: %v", launchArgs)

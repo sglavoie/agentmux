@@ -117,8 +117,8 @@ func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
 		for _, a := range c.Args {
 			argMap[a] = true
 		}
-		if !argMap["--tab-title=W:newproject"] {
-			t.Errorf("expected --tab-title=W:newproject in args: %v", c.Args)
+		if !argMap["--tab-title=newproject"] {
+			t.Errorf("expected --tab-title=newproject in args: %v", c.Args)
 		}
 		if !argMap["--var=cc_account=work"] {
 			t.Errorf("expected --var=cc_account=work in args: %v", c.Args)
@@ -143,10 +143,10 @@ func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
 func TestLaunch_ColorRetryApplied(t *testing.T) {
 	empty := loadFixture(t, "kitty_ls_empty.json")
 
-	// Post-launch fixture: W:newproject tab with ID 100 (not in pre-launch IDs).
+	// Post-launch fixture: newproject tab with ID 100 (not in pre-launch IDs).
 	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
-		`{"id":100,"is_active":true,"title":"W:newproject","windows":[` +
-		`{"id":101,"is_active":true,"title":"W:newproject","cwd":"/tmp/newproject","cmdline":["claude"],` +
+		`{"id":100,"is_active":true,"title":"newproject","windows":[` +
+		`{"id":101,"is_active":true,"title":"newproject","cwd":"/tmp/newproject","cmdline":["claude"],` +
 		`"user_vars":{"cc_account":"work","cc_config_dir":"","cc_flags":"","cc_pw":"","cc_env":"","cc_groups":"","cc_mute":"","cc_cwd":"/tmp/newproject"}}` +
 		`]}]}]`)
 

@@ -305,7 +305,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case keyY:
 				if len(m.filtered) > 0 {
-					title := m.filtered[m.cursor].Base
+					title := runningSessionDisplayTitle(m.filtered[m.cursor])
 					m.actionErr = nil
 					return m, copyTitleCmd(title)
 				}

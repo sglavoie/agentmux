@@ -103,9 +103,9 @@ func TestRenderToastsEmpty(t *testing.T) {
 func TestRenderToastsIncludesText(t *testing.T) {
 	m := testModel()
 	m.width = 80
-	m.pushToast(Toast{Severity: toastSuccess, Text: "Launched 1/3 · W:api"})
+	m.pushToast(Toast{Severity: toastSuccess, Text: "Launched 1/3 · api"})
 	out := renderToasts(m)
-	if !strings.Contains(stripAnsi(out), "Launched 1/3 · W:api") {
+	if !strings.Contains(stripAnsi(out), "Launched 1/3 · api") {
 		t.Errorf("expected toast text in render, got %q", out)
 	}
 }
@@ -113,7 +113,7 @@ func TestRenderToastsIncludesText(t *testing.T) {
 func TestLaunchProgressIncrementsCounter(t *testing.T) {
 	m := testModel()
 	m.launchBatchID = 1
-	updated, _ := m.Update(launchProgressMsg{batchID: 1, total: 3, title: "W:api"})
+	updated, _ := m.Update(launchProgressMsg{batchID: 1, total: 3, title: "api"})
 	m = updated.(Model)
 	if m.launchBatchDone != 1 {
 		t.Errorf("expected launchBatchDone=1, got %d", m.launchBatchDone)
@@ -130,7 +130,7 @@ func TestLaunchProgressErrorPushesErrorToast(t *testing.T) {
 	m := testModel()
 	m.launchBatchID = 5
 	updated, _ := m.Update(launchProgressMsg{
-		batchID: 5, total: 2, title: "W:api", err: errors.New("boom"),
+		batchID: 5, total: 2, title: "api", err: errors.New("boom"),
 	})
 	m = updated.(Model)
 	// First (newest) should be the progress toast; the second the error.
@@ -153,13 +153,13 @@ func TestLaunchProgressFinalIsSuccess(t *testing.T) {
 	m := testModel()
 	m.launchBatchID = 7
 	// First of two.
-	updated, _ := m.Update(launchProgressMsg{batchID: 7, total: 2, title: "W:api"})
+	updated, _ := m.Update(launchProgressMsg{batchID: 7, total: 2, title: "api"})
 	m = updated.(Model)
 	if m.toasts[0].Severity != toastInfo {
 		t.Errorf("expected info severity mid-batch, got %v", m.toasts[0].Severity)
 	}
 	// Second/final.
-	updated2, _ := m.Update(launchProgressMsg{batchID: 7, total: 2, title: "W:db"})
+	updated2, _ := m.Update(launchProgressMsg{batchID: 7, total: 2, title: "db"})
 	m = updated2.(Model)
 	if m.toasts[0].Severity != toastSuccess {
 		t.Errorf("expected success severity on final progress, got %v", m.toasts[0].Severity)
@@ -186,12 +186,12 @@ func TestLaunchProgressStaleBatchIgnored(t *testing.T) {
 
 func TestRestoreCursorPreservesPriorBase(t *testing.T) {
 	sessions := []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", State: ""},
-		{TabID: 2, Base: "W:db", Account: "work", State: ""},
+		{TabID: 1, Base: "api", Account: "work", State: ""},
+		{TabID: 2, Base: "db", Account: "work", State: ""},
 	}
-	i := restoreCursor(sessions, "W:db", nil, 0)
+	i := restoreCursor(sessions, "db", nil, 0)
 	if i != 1 {
-		t.Errorf("expected cursor on W:db (index 1), got %d", i)
+		t.Errorf("expected cursor on db (index 1), got %d", i)
 	}
 }
 
@@ -227,33 +227,33 @@ func TestRestoreCursorEmptyListReturnsZero(t *testing.T) {
 
 func TestSessionsMsgRestoresCursorByBase(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// With bolt-first ordering, W:backend (bolt) is at index 0; j moves to W:api.
+	// With bolt-first ordering, backend (bolt) is at index 0; j moves to api.
 	m = pressKey(m, "j")
 	priorBase := m.filtered[m.cursor].Base
-	if priorBase != "W:api" {
-		t.Fatalf("setup expected W:api at cursor, got %q", priorBase)
+	if priorBase != "api" {
+		t.Fatalf("setup expected api at cursor, got %q", priorBase)
 	}
-	// Reorder list (remove W:backend so cursor index would shift if not restored).
+	// Reorder list (remove backend so cursor index would shift if not restored).
 	newSessions := []session.RunningSession{
-		{TabID: 1, Base: "W:api", Account: "work", Directory: "/x", State: ""},
-		{TabID: 3, Base: "P:dotfiles", Account: "personal", Directory: "/y", State: ""},
+		{TabID: 1, Base: "api", Account: "work", Directory: "/x", State: ""},
+		{TabID: 3, Base: "dotfiles", Account: "personal", Directory: "/y", State: ""},
 	}
 	m = loadSessions(m, newSessions)
-	if m.filtered[m.cursor].Base != "W:api" {
-		t.Errorf("expected cursor restored to W:api, got %q", m.filtered[m.cursor].Base)
+	if m.filtered[m.cursor].Base != "api" {
+		t.Errorf("expected cursor restored to api, got %q", m.filtered[m.cursor].Base)
 	}
 }
 
 func TestSessionsMsgMovesCursorToAttentionRowWhenPriorRowGone(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Replace list with no W:api/W:backend, plus an attention row.
+	// Replace list with no api/backend, plus an attention row.
 	newSessions := []session.RunningSession{
-		{TabID: 4, Base: "Z:other", Account: "work", Directory: "/o", State: ""},
-		{TabID: 5, Base: "Z:perm", Account: "work", Directory: "/p", State: "key"},
+		{TabID: 4, Base: "other", Account: "work", Directory: "/o", State: ""},
+		{TabID: 5, Base: "perm", Account: "work", Directory: "/p", State: "key"},
 	}
 	m = loadSessions(m, newSessions)
-	if m.filtered[m.cursor].Base != "Z:perm" {
-		t.Errorf("expected cursor to land on attention row Z:perm, got %q at index %d",
+	if m.filtered[m.cursor].Base != "perm" {
+		t.Errorf("expected cursor to land on attention row perm, got %q at index %d",
 			m.filtered[m.cursor].Base, m.cursor)
 	}
 }
