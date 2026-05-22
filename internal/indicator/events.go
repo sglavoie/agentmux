@@ -164,9 +164,9 @@ func resolveNotificationAction(input string, payload HookPayload) (string, bool)
 		return "permission", true
 	case "elicitation_dialog":
 		// Copilot uses elicitation_dialog for plan approvals and other
-		// user-input-needed prompts. Surface the same key icon as a permission
-		// prompt so the tab consistently signals "waiting on you".
-		return "permission", true
+		// user-input-needed prompts. Surface the question icon so the tab
+		// distinguishes open user questions from permission gates.
+		return "elicitation", true
 	case "agent_idle":
 		return "stop", true
 	default:

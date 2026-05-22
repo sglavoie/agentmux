@@ -243,13 +243,13 @@ func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing
 		Type:             TypeStateUpdate,
 		WindowID:         1,
 		Harness:          "copilot",
-		Action:           "permission",
+		Action:           "elicitation",
 		Event:            "notification",
 		NotificationType: "elicitation_dialog",
 		CurrentIconState: "bolt",
 	})
-	if !resp.OK || !resp.Allowed || resp.IconState != "key" {
-		t.Fatalf("Copilot plan prompt: want key icon, got %+v", resp)
+	if !resp.OK || !resp.Allowed || resp.IconState != "question" {
+		t.Fatalf("Copilot plan prompt: want question icon, got %+v", resp)
 	}
 
 	resp = h.Handle(Request{
@@ -258,7 +258,7 @@ func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing
 		Harness:          "copilot",
 		Action:           "stop",
 		Event:            "agentStop",
-		CurrentIconState: "key",
+		CurrentIconState: "question",
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("Copilot agentStop while prompt pending: want allowed=false, got %+v", resp)
@@ -270,7 +270,7 @@ func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing
 		Harness:          "copilot",
 		Action:           "active",
 		Event:            "postToolUse",
-		CurrentIconState: "key",
+		CurrentIconState: "question",
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("Copilot trailing active while prompt pending: want allowed=false, got %+v", resp)
@@ -283,7 +283,7 @@ func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing
 		Action:           "active",
 		Event:            "userPromptSubmitted",
 		IsPrompt:         true,
-		CurrentIconState: "key",
+		CurrentIconState: "question",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("Copilot user response should clear prompt icon, got %+v", resp)
@@ -493,7 +493,7 @@ func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
 			if c == "Permission requested" {
 				t.Fatalf("elicitation should cancel pending permission, got %v", calls)
 			}
-			if c == "Claude is asking" {
+			if c == "User input requested" {
 				sawElicitation = true
 			}
 		}

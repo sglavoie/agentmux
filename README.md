@@ -52,6 +52,9 @@ include agent-mux.conf
 Reload Kitty. The bundled config keeps the dashboard hotkey and tab-navigation
 bindings, including `F5` for the next attention tab, `F8` to clear the current
 tab's markers and state icons, and `F7`/`F9` for previous or next managed tabs.
+It also disables Kitty tab bell markers and audible bells for any Kitty
+instance that includes the snippet, so Agent Mux's tab icons remain the
+attention signal.
 
 ## Harness profiles
 
@@ -186,10 +189,14 @@ or escalated to a real user prompt, so Agent Mux treats that hook as
 pre-permission activity and preserves the current icon until the outcome is
 clearer. `notification_type = permission_prompt` and
 `notification_type = elicitation_dialog` are the explicit user-blocking signals
-and resolve to the permission-needed key icon (🔑). If Copilot has already
-continued the turn after a speculative `permissionRequest`, a later trailing
-`notification.permission_prompt` is treated as stale noise and does not replace
-the current icon.
+that resolve to different sticky icons: `permission_prompt` uses the
+permission-needed key icon (🔑), while `elicitation_dialog` uses the question
+icon (❓) for plan approvals and similar user-input prompts. Because the managed
+Kitty snippet disables tab bell markers and audible bells globally, these icons
+become the visible attention signal instead of Kitty's bell state. If Copilot
+has already continued the turn after a speculative `permissionRequest`, a later
+trailing `notification.permission_prompt` is treated as stale noise and does
+not replace the current icon.
 `sessionEnd` remains the session-level terminal hook. Copilot still does not
 document a `postCompact` hook; if a compaction run ends with only an
 idle/cleanup follow-up after `preCompact`, Agent Mux promotes the compact state

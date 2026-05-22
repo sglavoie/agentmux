@@ -90,7 +90,7 @@ func isCopilotPermissionPromptNotification(req Request) bool {
 
 func isCopilotElicitationPrompt(req Request) bool {
 	return isCopilotRequest(req) &&
-		req.Action == "permission" &&
+		req.Action == "elicitation" &&
 		(req.Event == "notification" || req.Event == "Notification") &&
 		req.NotificationType == "elicitation_dialog"
 }
@@ -135,7 +135,7 @@ func shouldConfirmCopilotAutoApprovedToolPermission(req Request) bool {
 }
 
 func shouldSuppressCopilotPendingPrompt(req Request, prevAction string) bool {
-	if !isCopilotRequest(req) || prevAction != "permission" {
+	if !isCopilotRequest(req) || (prevAction != "permission" && prevAction != "elicitation") {
 		return false
 	}
 	switch {
@@ -454,8 +454,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// Copilot permissionRequest fires before the permission service decides
 	// whether the tool call is auto-allowed or needs a real user prompt. Keep the
 	// current icon on this pre-permission signal and wait for either later tool
-	// progress (auto-approved) or notification.permission_prompt
-	// (user-blocking prompt).
+	// progress (auto-approved) or a later explicit prompt notification
+	// (permission_prompt or elicitation_dialog).
 	if isCopilotPermissionRequest(req) {
 		h.notifier.CancelPending(req.WindowID)
 		h.stateMu.Lock()
@@ -567,7 +567,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 
 	// Restrict the Copilot special-case to trailing notification.permission_prompt
 	// noise. Explicit user-blocking prompts like elicitation_dialog must still
-	// show the key icon.
+	// show the question icon.
 	isCopilotAutoApprovedPerm := isAutoApprovedPerm &&
 		isCopilotAutoApprovedToolPermission(req)
 
@@ -589,7 +589,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if isCopilotAutoApprovedPerm {
 		h.copilotToolPermissionState[req.WindowID] = copilotToolPermissionAutoApproved
 	} else if effective == "permission" && isCopilotRequest(req) &&
-		(isCopilotPermissionPromptNotification(req) || isCopilotElicitationPrompt(req)) {
+		isCopilotPermissionPromptNotification(req) {
 		delete(h.copilotToolPermissionState, req.WindowID)
 	}
 	// Record the last substantive action so idle/clear can detect a stale bolt

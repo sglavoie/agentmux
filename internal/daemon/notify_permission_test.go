@@ -149,8 +149,8 @@ func TestNotifier_ElicitationLabel(t *testing.T) {
 		if calls.len() < 1 {
 			t.Fatal("expected notification for elicitation")
 		}
-		if calls.snapshot()[0].subtitle != "Claude is asking" {
-			t.Errorf("subtitle = %q, want %q", calls.snapshot()[0].subtitle, "Claude is asking")
+		if calls.snapshot()[0].subtitle != "User input requested" {
+			t.Errorf("subtitle = %q, want %q", calls.snapshot()[0].subtitle, "User input requested")
 		}
 	})
 }

@@ -115,7 +115,7 @@ func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) 
 		Type:             TypeStateUpdate,
 		WindowID:         1,
 		Harness:          "copilot",
-		Action:           "permission",
+		Action:           "elicitation",
 		Event:            "notification",
 		NotificationType: "elicitation_dialog",
 		CurrentIconState: "bolt",
@@ -126,7 +126,7 @@ func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) 
 		Harness:          "copilot",
 		Action:           "stop",
 		Event:            "agentStop",
-		CurrentIconState: "key",
+		CurrentIconState: "question",
 	})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
@@ -146,8 +146,8 @@ func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) 
 	if ev.ResultIconState != IconStatePreserve {
 		t.Fatalf("result_icon_state = %q; want %q", ev.ResultIconState, IconStatePreserve)
 	}
-	if ev.CurrentIconState != "key" {
-		t.Fatalf("current_icon_state = %q; want key", ev.CurrentIconState)
+	if ev.CurrentIconState != "question" {
+		t.Fatalf("current_icon_state = %q; want question", ev.CurrentIconState)
 	}
 }
 

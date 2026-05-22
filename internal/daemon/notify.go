@@ -38,7 +38,7 @@ var notificationLabels = map[string]string{
 	"permission":   "Permission requested",
 	"failure":      "Tool failure",
 	"stop_failure": "Session stopped (failure)",
-	"elicitation":  "Claude is asking",
+	"elicitation":  "User input requested",
 	"stale":        "Session idle",
 	"hook_silence": "Hook silence detected",
 }

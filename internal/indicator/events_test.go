@@ -3,7 +3,7 @@ package indicator
 import "testing"
 
 func TestResolveAction_DirectActions(t *testing.T) {
-	for _, action := range []string{"active", "stop", "permission", "failure", "stop_failure", "subagent", "compact", "idle", "clear", "user_clear"} {
+	for _, action := range []string{"active", "stop", "permission", "failure", "stop_failure", "subagent", "compact", "elicitation", "idle", "clear", "user_clear"} {
 		got, ok := ResolveAction(action, HookPayload{})
 		if !ok || got != action {
 			t.Errorf("ResolveAction(%q) = (%q, %v), want (%q, true)", action, got, ok, action)
@@ -66,9 +66,9 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 			ok:      true,
 		},
 		{
-			name:    "elicitation notification shows key icon",
+			name:    "elicitation notification shows question icon",
 			payload: HookPayload{NotificationType: "elicitation_dialog"},
-			want:    "permission",
+			want:    "elicitation",
 			ok:      true,
 		},
 		{
