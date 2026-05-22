@@ -114,6 +114,116 @@ func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.
 	})
 }
 
+func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
+		notifier := NewNotifier(cfg)
+		var calls []string
+		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+			calls = append(calls, subtitle)
+			return nil
+		}
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "active",
+			Event:            "preToolUse",
+			CurrentIconState: "bolt",
+		})
+
+		resp := h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "permission",
+			Event:            "permissionRequest",
+			CurrentIconState: "bolt",
+		})
+		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+			t.Fatalf("Copilot permissionRequest auto-approval: want preserve, got %+v", resp)
+		}
+
+		resp = h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "active",
+			Event:            "postToolUse",
+			CurrentIconState: "bolt",
+		})
+		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+			t.Fatalf("Copilot postToolUse after auto-approved prompt: want bolt, got %+v", resp)
+		}
+
+		resp = h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "permission",
+			Event:            "notification",
+			NotificationType: "permission_prompt",
+			CurrentIconState: "bolt",
+		})
+		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
+			t.Fatalf("late Copilot permission_prompt after auto-approved tool use: want preserve, got %+v", resp)
+		}
+
+		resp = h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         1,
+			Harness:          "copilot",
+			Action:           "stop",
+			Event:            "agentStop",
+			CurrentIconState: "bolt",
+		})
+		if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+			t.Fatalf("agentStop after suppressed late permission prompt: want stop, got %+v", resp)
+		}
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+
+		for _, c := range calls {
+			if c == "Permission requested" {
+				t.Fatalf("late auto-approved Copilot permission_prompt should not notify, got %v", calls)
+			}
+		}
+	})
+}
+
+func TestHandler_CopilotPermissionPromptWithoutAutoApprovedFlowShowsKey(t *testing.T) {
+	h := newTestHandler()
+
+	resp := h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "active",
+		Event:            "postToolUse",
+		CurrentIconState: "bolt",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+		t.Fatalf("setup postToolUse: want bolt, got %+v", resp)
+	}
+
+	resp = h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Harness:          "copilot",
+		Action:           "permission",
+		Event:            "notification",
+		NotificationType: "permission_prompt",
+		CurrentIconState: "bolt",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+		t.Fatalf("Copilot permission_prompt without auto-approved flow: want key, got %+v", resp)
+	}
+}
+
 func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing.T) {
 	h := newTestHandler()
 
