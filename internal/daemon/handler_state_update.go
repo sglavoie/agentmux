@@ -63,6 +63,14 @@ func isCopilotRequest(req Request) bool {
 	}
 }
 
+// isClaudeRequest reports whether the request originated from the Claude
+// harness. Empty Harness is treated as Claude for backward compatibility with
+// hook payloads emitted before per-harness routing existed.
+func isClaudeRequest(req Request) bool {
+	norm := harness.Normalize(req.Harness)
+	return norm == "" || norm == harness.Claude
+}
+
 func isCopilotPermissionResolutionEvent(req Request) bool {
 	if req.IsPrompt {
 		return true
@@ -555,13 +563,15 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: true, Allowed: false}
 	}
 
-	// Auto-approved permission: Claude can emit PermissionRequest after PreToolUse
-	// for a tool that is already running, and Copilot can later emit a trailing
-	// notification.permission_prompt even after the turn already continued. In
-	// both cases there is nothing left for the user to approve, so preserve the
-	// current icon instead of surfacing the key.
+	// Auto-approved permission: the Claude harness can emit PermissionRequest
+	// after PreToolUse for a tool that is already running, and Copilot can later
+	// emit a trailing notification.permission_prompt even after the turn already
+	// continued. In both cases there is nothing left for the user to approve, so
+	// preserve the current icon instead of surfacing the key. Other harnesses
+	// (e.g. Codex) use PreToolUse → PermissionRequest as the normal real
+	// permission flow and must not be caught by this heuristic.
 	isAutoApprovedPerm := effective == "permission" &&
-		((prevGuard == "active" &&
+		((isClaudeRequest(req) && prevGuard == "active" &&
 			(prevActiveEvent == "PreToolUse" || prevActiveEvent == "preToolUse")) ||
 			isCopilotTrailingAutoApprovedToolPermission(req, priorAutoApprovedToolPrompt))
 

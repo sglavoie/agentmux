@@ -214,6 +214,17 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
 			t.Fatalf("manual permission (PostToolUse guard live): want icon_state=\"key\", got %+v", resp)
 		}
+
+		// --- Case 4: Codex PreToolUse → PermissionRequest is a real prompt ---
+		// The Claude-only auto-approval heuristic must not apply to Codex, whose
+		// normal real-permission flow is PreToolUse followed by PermissionRequest.
+		h4 := newTestHandler()
+		h4.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "codex", Action: "active", Event: "PreToolUse"})
+
+		resp = h4.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "codex", Action: "permission", Event: "PermissionRequest"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
+			t.Fatalf("codex permission (PreToolUse guard live): want icon_state=\"key\", got %+v", resp)
+		}
 	})
 }
 
