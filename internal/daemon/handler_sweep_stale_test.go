@@ -17,6 +17,10 @@ import (
 func TestSweepStale_NoOpWhenThresholdZero(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		h, fake, rec := newSweepTestHandler(0)
+		// Seed the live window set so pruneClosedWindows treats 42 as live and
+		// does not GC the seeded per-window state under test. The threshold
+		// itself is what gates the sweep; the GC is unrelated.
+		fake.windows = fakeOSWindowsWithTab(42, "W:api")
 		now := time.Now()
 
 		h.stateMu.Lock()

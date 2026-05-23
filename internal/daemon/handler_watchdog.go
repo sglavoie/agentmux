@@ -121,18 +121,83 @@ func (h *Handler) anyStaleThresholdSet() bool {
 	return false
 }
 
-// pruneClosedWindows drops eventLog entries for windows that Kitty no longer
+// pruneClosedWindows drops per-window state for windows that Kitty no longer
 // reports as live. Called from SweepStale once the live set has been
 // materialised from kitty.ListWindows().
+//
+// windowMetadata is intentionally preserved across closes so post-mortem
+// `amx daemon export-events` invocations still have identity/context for
+// sessions whose tabs have already disappeared. Every other per-window map
+// must be GC'd here — a session that closes without a terminal hook event
+// (e.g. user closes the tab with Cmd+W, daemon misses the SessionEnd) would
+// otherwise leak an entry per killed window for the daemon's lifetime, which
+// can also let notifiedStale latches survive into a hypothetical future
+// Kitty-ID reuse and silently suppress a notification.
 func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 	h.stateMu.Lock()
-	for windowID := range h.eventLog {
-		if !liveIDs[windowID] {
-			delete(h.eventLog, windowID)
-			delete(h.pendingReset, windowID)
+	closed := make(map[int]struct{})
+	collect := func(id int) {
+		if !liveIDs[id] {
+			closed[id] = struct{}{}
 		}
 	}
+	for id := range h.eventLog {
+		collect(id)
+	}
+	for id := range h.activity {
+		collect(id)
+	}
+	for id := range h.lastAction {
+		collect(id)
+	}
+	for id := range h.lastAccount {
+		collect(id)
+	}
+	for id := range h.lastActiveEvent {
+		collect(id)
+	}
+	for id := range h.copilotToolPermissionState {
+		collect(id)
+	}
+	for id := range h.subagentCount {
+		collect(id)
+	}
+	for id := range h.notifiedStale {
+		collect(id)
+	}
+	for id := range h.lastSessionTitle {
+		collect(id)
+	}
+	for id := range h.lastPipeMode {
+		collect(id)
+	}
+	for id := range h.pendingReset {
+		collect(id)
+	}
+	for id := range closed {
+		delete(h.eventLog, id)
+		delete(h.activity, id)
+		delete(h.lastAction, id)
+		delete(h.lastAccount, id)
+		delete(h.lastActiveEvent, id)
+		delete(h.copilotToolPermissionState, id)
+		delete(h.subagentCount, id)
+		delete(h.notifiedStale, id)
+		delete(h.lastSessionTitle, id)
+		delete(h.lastPipeMode, id)
+		delete(h.pendingReset, id)
+	}
 	h.stateMu.Unlock()
+	// Notifier cooldown/pending entries are keyed by window ID too. Without
+	// cleanup the notifier's per-(window, action) cooldown map grows linearly
+	// with closed windows, and a stale pending permission timer for a dead
+	// window would fire (and harmlessly dispatch under the old session title)
+	// well after the window itself is gone.
+	if h.notifier != nil {
+		for id := range closed {
+			h.notifier.PurgeWindow(id)
+		}
+	}
 }
 
 // SweepStale detects "active"-class sessions whose last incoming event predates

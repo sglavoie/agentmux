@@ -276,3 +276,18 @@ func (n *Notifier) ResetCooldown(windowID int) {
 		}
 	}
 }
+
+// PurgeWindow drops every cooldown entry and any pending permission timer for
+// windowID. Called by the daemon's per-sweep closed-window GC so the notifier's
+// bookkeeping cannot accumulate dead entries (or fire a long-debounced
+// permission notification for a window that no longer exists).
+func (n *Notifier) PurgeWindow(windowID int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for k := range n.last {
+		if k.windowID == windowID {
+			delete(n.last, k)
+		}
+	}
+	n.cancelPendingLocked(windowID)
+}

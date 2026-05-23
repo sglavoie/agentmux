@@ -208,6 +208,10 @@ func TestSweepStale_AllZeroThresholdsDisablesSweep(t *testing.T) {
 			"compact":  0,
 		}
 		h, fake, rec := newSweepTestHandlerWithMap(global, nil)
+		// Seed the live window set so pruneClosedWindows treats 42 as live and
+		// does not GC the seeded per-window state under test. This test is
+		// about threshold semantics, not the closed-window GC.
+		fake.windows = fakeOSWindowsWithTab(42, "W:api")
 
 		now := time.Now()
 		h.stateMu.Lock()
