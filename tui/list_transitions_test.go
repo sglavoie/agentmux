@@ -71,6 +71,38 @@ func TestRecordTransitionsNewSessionNoPulse(t *testing.T) {
 	}
 }
 
+// TestRecordTransitionsDoesNotRePulseStableState verifies that after a
+// session transitions once, repeated refreshes (without further state
+// changes) do not re-record a pulse once the prior one has decayed.
+// Without advancing lastSeenStates inside recordTransitions, the stale
+// snapshot would keep mismatching the current state and a fresh pulse
+// would fire forever every pulseDecay seconds.
+func TestRecordTransitionsDoesNotRePulseStableState(t *testing.T) {
+	m := Model{
+		lastSeenStates: map[int]string{1: "bolt"},
+		sessions:       []session.RunningSession{{WindowID: 1, State: "key"}},
+	}
+	// First refresh records the transition.
+	m.recordTransitions()
+	if _, ok := m.recentTransitions[1]; !ok {
+		t.Fatalf("setup: expected pulse on first transition; got %v", m.recentTransitions)
+	}
+	if got := m.lastSeenStates[1]; got != "key" {
+		t.Fatalf("expected lastSeenStates advanced to %q after transition; got %q", "key", got)
+	}
+
+	// Simulate the pulse decaying past its window: the sweeper removes
+	// the entry while the session state has not changed since.
+	delete(m.recentTransitions, 1)
+
+	// A subsequent refresh with the same session state must not record
+	// a new pulse — the change has already been surfaced.
+	m.recordTransitions()
+	if _, ok := m.recentTransitions[1]; ok {
+		t.Errorf("expected no new pulse for stable state after decay; got %v", m.recentTransitions)
+	}
+}
+
 // TestSweepRecentTransitionsDecay asserts entries older than pulseDecay are
 // dropped while fresh entries survive.
 func TestSweepRecentTransitionsDecay(t *testing.T) {

@@ -35,6 +35,14 @@ func (m *Model) recordTransitions() {
 		if _, already := m.recentTransitions[s.WindowID]; !already {
 			m.recentTransitions[s.WindowID] = time.Now()
 		}
+		// Advance the snapshot to the new state. Without this, a session
+		// that changed once and remained stable would re-pulse forever:
+		// after sweepRecentTransitions drops the entry past pulseDecay,
+		// the next refresh still sees prev != s.State and would record a
+		// fresh pulse. Updating here ties the pulse strictly to the
+		// observed change rather than the persistent mismatch between
+		// the (stale) snapshot and current state.
+		m.lastSeenStates[s.WindowID] = s.State
 	}
 }
 
