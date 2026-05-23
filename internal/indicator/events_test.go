@@ -116,6 +116,41 @@ func TestResolveAction_AgentStopNonEndTurnShowsStopFailure(t *testing.T) {
 	}
 }
 
+// TestResolveAction_NormalizesStopReasonAndReason locks in the contract that
+// the failure-promotion checks tolerate the casing and whitespace harnesses
+// occasionally include in JSON lifecycle fields. Without normalization, a
+// stop event carrying a trailing-space "end_turn " — which is structurally a
+// clean turn end — was being promoted to stop_failure and painting the error
+// icon on top of every successful Codex/Claude completion that round-tripped
+// through such a payload. The matching SessionEnd path normalizes "Error"
+// and " timeout " the same way so the icon transitions stay consistent.
+func TestResolveAction_NormalizesStopReasonAndReason(t *testing.T) {
+	cases := []struct {
+		name    string
+		event   string
+		payload HookPayload
+		want    string
+	}{
+		{name: "stop with trailing whitespace end_turn stays stop", event: "Stop", payload: HookPayload{StopReason: "end_turn "}, want: "stop"},
+		{name: "stop with mixed case end_turn stays stop", event: "Stop", payload: HookPayload{StopReason: "End_Turn"}, want: "stop"},
+		{name: "agentStop with whitespace end_turn stays stop", event: "agentStop", payload: HookPayload{StopReasonCamel: " end_turn "}, want: "stop"},
+		{name: "stop with non-end_turn whitespace still promotes", event: "Stop", payload: HookPayload{StopReason: " context_limit_reached "}, want: "stop_failure"},
+		{name: "session end uppercase Error promotes", event: "SessionEnd", payload: HookPayload{Reason: "Error"}, want: "stop_failure"},
+		{name: "session end padded timeout promotes", event: "sessionEnd", payload: HookPayload{Reason: " timeout "}, want: "stop_failure"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveAction(tc.event, tc.payload)
+			if !ok {
+				t.Fatalf("ResolveAction(%q, %+v) = ok=false, want %q", tc.event, tc.payload, tc.want)
+			}
+			if got != tc.want {
+				t.Fatalf("ResolveAction(%q, %+v) = %q, want %q", tc.event, tc.payload, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestResolveAction_UnknownEventIgnored(t *testing.T) {
 	_, ok := ResolveAction("BogusEvent", HookPayload{})
 	if ok {

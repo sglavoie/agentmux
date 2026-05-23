@@ -142,11 +142,16 @@ func resolveFailureAction(input string, payload HookPayload) (string, bool) {
 
 	switch input {
 	case "SessionEnd", "sessionEnd":
-		if payload.Reason == "error" || payload.Reason == "timeout" {
+		reason := normalizeLifecycleValue(payload.Reason)
+		if reason == "error" || reason == "timeout" {
 			return "stop_failure", true
 		}
 	case "Stop", "agentStop", "SubagentStop", "subagentStop":
-		stopReason := payload.EffectiveStopReason()
+		// Normalize the harness-reported stop reason: trailing whitespace
+		// or unusual casing on a benign "end_turn" must not be promoted to
+		// stop_failure (which would surface the error icon on every clean
+		// turn end).
+		stopReason := normalizeLifecycleValue(payload.EffectiveStopReason())
 		if stopReason != "" && stopReason != "end_turn" {
 			return "stop_failure", true
 		}
