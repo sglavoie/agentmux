@@ -173,6 +173,7 @@ func (c *Client) restartDetached(amxBin string, daemonAlive bool) error {
 // SendWithAutoStart sends req to the daemon, auto-starting it if not running.
 // amxBin is the path to the amx binary used for auto-start.
 func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error) {
+	restarted := false
 	if daemonSocketOlderThanBinary(c.socketPath, amxBin) {
 		if health := c.Health(); health.Alive {
 			slog.Debug("daemon client: restarting stale daemon for newer amx binary",
@@ -183,6 +184,7 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 			if err := c.restartDetached(amxBin, true); err != nil {
 				return Response{}, fmt.Errorf("daemon auto-restart failed: %w", err)
 			}
+			restarted = true
 		}
 	}
 
@@ -191,8 +193,16 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 		return resp, nil
 	}
 
-	if startErr := spawnDetached(amxBin); startErr != nil {
-		return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
+	// If we just restarted the daemon, restartDetached has already spawned the
+	// replacement process — it just hasn't bound the socket yet. Spawning again
+	// here would create a second daemon process whose NewServer races with the
+	// first by removing the socket file out from under it, potentially leaving
+	// behind a ghost daemon listening on no filesystem entry. Skip the
+	// spawnDetached and fall straight into the retry loop instead.
+	if !restarted {
+		if startErr := spawnDetached(amxBin); startErr != nil {
+			return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
+		}
 	}
 
 	// Retry for up to 1s.

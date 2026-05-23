@@ -280,6 +280,115 @@ func TestClient_SendWithAutoStart_RestartsDaemonWhenBinaryIsNewer(t *testing.T) 
 	}
 }
 
+// TestClient_SendWithAutoStart_NoDoubleSpawnAfterRestart pins that after the
+// stale-binary restart path spawns a replacement daemon, a transient connect
+// failure during the brief window before the new daemon binds the socket does
+// NOT cause SendWithAutoStart to spawn a second daemon process. Two concurrent
+// daemons race in NewServer (each removes the socket file and rebinds),
+// leaving the loser running but unreachable as a ghost process. The test
+// drives that exact race: the spawn callback delays the new server's bind
+// until after the first post-restart Send attempt would have completed, so
+// the only way the test daemon comes up is if the retry loop (not a fresh
+// spawnDetached) reaches it.
+func TestClient_SendWithAutoStart_NoDoubleSpawnAfterRestart(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-client-no-double-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	socketPath := filepath.Join(dir, "daemon.sock")
+	amxBin := filepath.Join(dir, "amx")
+	if err := os.WriteFile(amxBin, []byte("binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile(binary): %v", err)
+	}
+
+	oldStop := startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
+		switch req.Type {
+		case TypeHealth:
+			return Response{OK: true, PID: 1234, UptimeSeconds: 3600}, true
+		case TypeShutdown:
+			return Response{OK: true}, false
+		default:
+			return Response{OK: true}, true
+		}
+	})
+	t.Cleanup(oldStop)
+
+	oldTime := time.Now().Add(-2 * time.Hour)
+	newTime := time.Now()
+	if err := os.Chtimes(socketPath, oldTime, oldTime); err != nil {
+		t.Fatalf("Chtimes(socket): %v", err)
+	}
+	if err := os.Chtimes(amxBin, newTime, newTime); err != nil {
+		t.Fatalf("Chtimes(binary): %v", err)
+	}
+
+	prevRetryDelay := autoStartRetryDelay
+	autoStartRetryDelay = 20 * time.Millisecond
+	t.Cleanup(func() { autoStartRetryDelay = prevRetryDelay })
+
+	prevPollDelay := restartSocketPollDelay
+	restartSocketPollDelay = 10 * time.Millisecond
+	t.Cleanup(func() { restartSocketPollDelay = prevPollDelay })
+
+	var spawnMu sync.Mutex
+	spawnCalls := 0
+	var newStop func()
+	prevSpawn := spawnDetached
+	spawnDetached = func(path string) error {
+		spawnMu.Lock()
+		spawnCalls++
+		spawnMu.Unlock()
+		if path != amxBin {
+			t.Errorf("spawn path = %q, want %q", path, amxBin)
+		}
+		// Bring up the replacement daemon asynchronously so the first
+		// post-restart Send observes "no such file or directory" — the
+		// real-world race the fix targets. Without the fix, the caller
+		// would spawnDetached again here and the counter would tick to 2.
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			stop := startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
+				return Response{OK: true, Allowed: true, IconState: "bolt"}, true
+			})
+			spawnMu.Lock()
+			newStop = stop
+			spawnMu.Unlock()
+		}()
+		return nil
+	}
+	t.Cleanup(func() {
+		spawnDetached = prevSpawn
+		spawnMu.Lock()
+		stop := newStop
+		spawnMu.Unlock()
+		if stop != nil {
+			stop()
+		}
+	})
+
+	c := NewClientWithSocket(socketPath)
+	resp, err := c.SendWithAutoStart(Request{
+		Type:     TypeStateUpdate,
+		WindowID: 9,
+		Action:   "active",
+	}, amxBin)
+	if err != nil {
+		t.Fatalf("SendWithAutoStart: %v", err)
+	}
+	if !resp.OK || resp.IconState != "bolt" {
+		t.Fatalf("response = %+v, want OK/bolt from restarted daemon", resp)
+	}
+
+	spawnMu.Lock()
+	got := spawnCalls
+	spawnMu.Unlock()
+	if got != 1 {
+		t.Fatalf("spawn calls = %d, want 1 (restart-then-spawn-again would double-up daemons)", got)
+	}
+}
+
 func startTestDaemonServer(t *testing.T, socketPath string, handler func(Request) (Response, bool)) func() {
 	t.Helper()
 
