@@ -24,6 +24,11 @@ func Validate(cfg *Config) error {
 	errs = append(errs, validateSessions(cfg.Projects, cfg.Profiles)...)
 	errs = append(errs, validateHookOverrides(cfg.Hooks, cfg.Profiles)...)
 
+	// Strip any watchdog warnings appended by a prior Validate call before
+	// re-appending the current set: Validate may be called more than once on
+	// the same *Config (e.g. revalidating after an edit), and without this
+	// step every advisory would surface N times in cfg.Deprecations.
+	cfg.Deprecations = stripWatchdogWarnings(cfg.Deprecations)
 	cfg.Deprecations = append(cfg.Deprecations, collectWatchdogWarnings(cfg)...)
 
 	if len(errs) > 0 {
@@ -142,6 +147,28 @@ func validateAccounts(accounts []Account) []string {
 	return errs
 }
 
+// watchdogWarningReplacement is the marker placed on advisory entries
+// emitted by collectWatchdogWarnings; stripWatchdogWarnings keys off the
+// exact text to filter them out on re-validation.
+const watchdogWarningReplacement = "a value >= 30 seconds (or 0 to inherit the default)"
+
+// stripWatchdogWarnings returns deps with all sub-30s watchdog advisory
+// entries removed. Used by Validate to keep the warning set idempotent
+// across multiple invocations.
+func stripWatchdogWarnings(deps []Deprecation) []Deprecation {
+	if len(deps) == 0 {
+		return deps
+	}
+	out := make([]Deprecation, 0, len(deps))
+	for _, d := range deps {
+		if d.Replacement == watchdogWarningReplacement {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
+}
+
 // collectWatchdogWarnings flags any watchdog threshold that is set to a
 // non-zero value below 30s. The daemon accepts the value (no error), but a
 // 5s active threshold will fire false stales constantly — so the user gets
@@ -152,7 +179,7 @@ func collectWatchdogWarnings(cfg *Config) []Deprecation {
 		if value > 0 && value < 30 {
 			ws = append(ws, Deprecation{
 				Key:         key,
-				Replacement: "a value >= 30 seconds (or 0 to inherit the default)",
+				Replacement: watchdogWarningReplacement,
 				Location:    location,
 			})
 		}
@@ -191,6 +218,18 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 		}
 		if s.Directory == "" {
 			errs = append(errs, fmt.Sprintf("project %q: directory is required", s.Title))
+		}
+		// normalizeProjects mirrors profile↔account when one is empty, but
+		// silently keeps both when the user wrote two different values. That
+		// would route launch (Account) and dashboard (Profile via
+		// EffectiveProfile) to different profiles for the same project —
+		// surface the conflict here instead of letting the user wonder why
+		// their session ends up under the wrong profile.
+		if s.Profile != "" && s.Account != "" && !strings.EqualFold(s.Profile, s.Account) {
+			errs = append(errs, fmt.Sprintf(
+				"project %q sets both profile=%q and account=%q with different values\n  → account is the deprecated alias for profile; remove one or make them match",
+				s.Title, s.Profile, s.Account,
+			))
 		}
 		if s.Profile == "" {
 			errs = append(errs, fmt.Sprintf("project %q: profile is required", s.Title))

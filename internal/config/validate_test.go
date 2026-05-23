@@ -404,6 +404,126 @@ func TestValidate_SubThirtyWatchdogWarns(t *testing.T) {
 	}
 }
 
+// TestValidate_WatchdogWarningsIdempotent pins that calling Validate multiple
+// times on the same *Config doesn't duplicate the sub-30s advisory entries in
+// cfg.Deprecations. Validate appends watchdog warnings on every call, so
+// without dedup the TUI banner would show the same key 2x, 3x, ... each time
+// the user revalidates after an edit.
+func TestValidate_WatchdogWarningsIdempotent(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue", Watchdog: config.WatchdogConfig{Subagent: 10}},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("first Validate: %v", err)
+	}
+	first := append([]config.Deprecation(nil), cfg.Deprecations...)
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("second Validate: %v", err)
+	}
+	if len(cfg.Deprecations) != len(first) {
+		t.Fatalf("Deprecations grew across Validate calls: got %d, want %d (first=%+v, after=%+v)",
+			len(cfg.Deprecations), len(first), first, cfg.Deprecations)
+	}
+	// Count occurrences of each key — none should appear more than once.
+	counts := map[string]int{}
+	for _, d := range cfg.Deprecations {
+		counts[d.Key]++
+	}
+	for k, n := range counts {
+		if n > 1 {
+			t.Errorf("Deprecation key %q appears %d times after re-validate; want 1", k, n)
+		}
+	}
+}
+
+// TestValidate_StripsStaleWatchdogWarningsOnRevalidate pins that when the user
+// fixes a sub-30s watchdog value and revalidates, the prior advisory for that
+// key is dropped — the banner reflects the current config, not historical
+// state. Before the fix, stripWatchdogWarnings cleared only when collecting
+// fresh entries, so a fixed key would still surface a stale warning from the
+// previous Validate call.
+func TestValidate_StripsStaleWatchdogWarningsOnRevalidate(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("first Validate: %v", err)
+	}
+	found := false
+	for _, d := range cfg.Deprecations {
+		if d.Key == "defaults.watchdog.active" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("first Validate did not emit watchdog warning (got %+v)", cfg.Deprecations)
+	}
+	// User edits the config to a sane threshold and revalidates.
+	cfg.Defaults.Watchdog.Active = 600
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("second Validate: %v", err)
+	}
+	for _, d := range cfg.Deprecations {
+		if d.Key == "defaults.watchdog.active" {
+			t.Errorf("stale watchdog warning persisted after threshold was fixed: %+v", d)
+		}
+	}
+}
+
+// TestValidate_ProjectProfileAccountConflict pins that a project specifying
+// both profile and account with non-matching values is reported as an error.
+// normalizeProjects only mirrors profile↔account when one of them is empty,
+// so two different values would be silently retained — runtime paths read
+// Profile (via EffectiveProfile) for dashboard display and Account for sort/
+// launch context, so a mismatch would split the same project across two
+// profiles. The user must collapse them to one value or use only profile.
+func TestValidate_ProjectProfileAccountConflict(t *testing.T) {
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "X", Harness: "claude", HomeDir: "/tmp/x", Color: "blue"},
+			{Name: "Y", Harness: "claude", HomeDir: "/tmp/y", Color: "green"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Directory: "/tmp/a", Profile: "X", Account: "Y"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for conflicting profile/account on project, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "profile") || !strings.Contains(msg, "account") {
+		t.Errorf("error %q must mention both profile and account", msg)
+	}
+	if !strings.Contains(msg, "api") {
+		t.Errorf("error %q must mention the offending project title", msg)
+	}
+}
+
+// TestValidate_ProjectProfileAccountMatchingAccepted pins the matching case:
+// when profile and account are equal (case-insensitively), validation must
+// accept the duplication — it's redundant but unambiguous, and many legacy
+// configs were written with both keys set to the same value.
+func TestValidate_ProjectProfileAccountMatchingAccepted(t *testing.T) {
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Directory: "/tmp/a", Profile: "work", Account: "Work"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("matching profile/account (case-insensitively) must validate: %v", err)
+	}
+}
+
 func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.
