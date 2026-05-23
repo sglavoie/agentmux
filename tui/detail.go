@@ -41,6 +41,25 @@ const (
 // chrome-vs-flex maths in detailRow easier to reason about.
 const detailColumnGap = 1
 
+// clampDetailScroll pins m.detailScroll to the [0, maxOffset] range at the
+// model's current dimensions. Called from the WindowSizeMsg handler so a
+// resize that shrinks the viewport doesn't leave a stale offset above
+// maxOffset — without the clamp the next j/k keypress would have to chew
+// through the dead rows before the visible window reacts.
+func clampDetailScroll(m *Model) {
+	total, visible := detailScrollBounds(*m)
+	maxOffset := total - visible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.detailScroll > maxOffset {
+		m.detailScroll = maxOffset
+	}
+	if m.detailScroll < 0 {
+		m.detailScroll = 0
+	}
+}
+
 // detailScrollBounds returns the total number of events and the visible
 // page size at the model's current height. Pre-WindowSizeMsg the visible
 // page equals the total so scroll keys are no-ops; this mirrors the

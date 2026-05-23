@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/daemon"
 )
 
@@ -331,5 +333,56 @@ func TestRenderDetail_FailureDoesNotMarkSessionEnded(t *testing.T) {
 
 	if strings.Contains(out, "session ended") {
 		t.Errorf("expected no `session ended` marker for a recoverable failure, got:\n%s", out)
+	}
+}
+
+// TestDetailScrollClampsOnResize verifies that a viewport expansion via a
+// WindowSizeMsg drops m.detailScroll into the new [0, maxOffset] range.
+// When the terminal grows taller, visible grows and maxOffset shrinks; the
+// pre-clamp bug left m.detailScroll above the new maxOffset so the next
+// j/k press had to scroll up through dead rows before the viewport reacted.
+func TestDetailScrollClampsOnResize(t *testing.T) {
+	m := detailModel(t)
+	m.detailEvents = makeEvents(20)
+
+	// Small viewport: scroll to bottom (maxOffset is large).
+	m.height = detailChrome + detailMinVisible // visible == detailMinVisible == 3
+	_, visible := detailScrollBounds(m)
+	maxOffset := len(m.detailEvents) - visible
+	if maxOffset <= 0 {
+		t.Fatalf("setup: expected non-zero maxOffset at small height, got %d", maxOffset)
+	}
+	m.detailScroll = maxOffset
+
+	// Grow the viewport — visible expands, maxOffset shrinks. The stale
+	// offset must be clamped to the new maxOffset.
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: detailChrome + 15})
+	m2 := updated.(Model)
+
+	_, visible2 := detailScrollBounds(m2)
+	maxOffset2 := len(m2.detailEvents) - visible2
+	if maxOffset2 < 0 {
+		maxOffset2 = 0
+	}
+	if maxOffset2 >= maxOffset {
+		t.Fatalf("setup: expected resize to shrink maxOffset, was %d still %d", maxOffset, maxOffset2)
+	}
+	if m2.detailScroll > maxOffset2 {
+		t.Fatalf("expected detailScroll clamped to <= %d after resize, got %d", maxOffset2, m2.detailScroll)
+	}
+	if m2.detailScroll < 0 {
+		t.Errorf("expected detailScroll non-negative, got %d", m2.detailScroll)
+	}
+
+	// Sanity: pressing k now should immediately move the viewport (the
+	// pre-fix bug would have required N stale-state keypresses before k
+	// produced any visible change).
+	if m2.detailScroll == 0 {
+		return
+	}
+	before := m2.detailScroll
+	m3 := pressKey(m2, "k")
+	if m3.detailScroll != before-1 {
+		t.Errorf("expected k to decrement to %d, got %d", before-1, m3.detailScroll)
 	}
 }

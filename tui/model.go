@@ -221,6 +221,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.previewNoticeExpires = time.Now().Add(2 * time.Second)
 			}
 		}
+		// Clamp scroll offsets to the new viewport. Without this, a resize
+		// that shrinks the visible window leaves the persisted offset above
+		// maxOffset; the renderer clamps for display but the next j/k press
+		// operates on the stale value, so the user has to scroll through
+		// dead rows before the viewport reacts.
+		clampDetailScroll(&m)
+		clampHelpOffset(&m)
 		return m, nil
 
 	case tickMsg:

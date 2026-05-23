@@ -85,6 +85,24 @@ func helpContentLines() []string {
 	return lines
 }
 
+// clampHelpOffset pins m.helpOffset to the [0, maxOffset] range at the
+// model's current dimensions. Mirrors clampDetailScroll: called from the
+// WindowSizeMsg handler so a viewport shrink doesn't leave a stale offset
+// the user has to scroll through before help reacts to j/k.
+func clampHelpOffset(m *Model) {
+	total, visible := helpScrollBounds(*m)
+	maxOffset := total - visible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.helpOffset > maxOffset {
+		m.helpOffset = maxOffset
+	}
+	if m.helpOffset < 0 {
+		m.helpOffset = 0
+	}
+}
+
 // helpScrollBounds returns the total number of scrollable content lines
 // and the number of those lines visible at the model's current height.
 // When the model has no height yet (pre-WindowSizeMsg) the visible window

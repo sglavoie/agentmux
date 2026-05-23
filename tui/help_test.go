@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestRenderHelpNoHeightShowsAll(t *testing.T) {
@@ -118,4 +120,54 @@ func TestHelpScrollKeys(t *testing.T) {
 			t.Fatalf("expected helpOffset to stay at %d, got %d", maxOffset, m.helpOffset)
 		}
 	})
+}
+
+// TestHelpOffsetClampsOnResize verifies a viewport expansion drops
+// m.helpOffset into the new [0, maxOffset] range. When the terminal grows
+// taller, more content fits on-screen and maxOffset shrinks; without the
+// clamp the persisted offset would still point past the bottom of the
+// scrollable region and j/k would have to scroll up through dead rows.
+func TestHelpOffsetClampsOnResize(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.mode = ModeHelp
+
+	// Small viewport: maxOffset is large; scroll to bottom.
+	m.height = 12
+	total, visible := helpScrollBounds(m)
+	maxOffset := total - visible
+	if maxOffset <= 0 {
+		t.Skipf("help content too short at height=12 (maxOffset=%d)", maxOffset)
+	}
+	m.helpOffset = maxOffset
+
+	// Grow the viewport — visible expands, maxOffset shrinks. The stale
+	// helpOffset now sits past the bottom of the scroll region.
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 60})
+	m2 := updated.(Model)
+
+	total2, visible2 := helpScrollBounds(m2)
+	maxOffset2 := total2 - visible2
+	if maxOffset2 < 0 {
+		maxOffset2 = 0
+	}
+	if maxOffset2 >= maxOffset {
+		t.Skipf("resize did not shrink maxOffset (was %d, now %d) — nothing to clamp", maxOffset, maxOffset2)
+	}
+	if m2.helpOffset > maxOffset2 {
+		t.Fatalf("expected helpOffset clamped to <= %d after resize, got %d", maxOffset2, m2.helpOffset)
+	}
+	if m2.helpOffset < 0 {
+		t.Errorf("expected helpOffset non-negative after resize, got %d", m2.helpOffset)
+	}
+
+	// After clamping, pressing k must decrement by exactly 1 — confirming
+	// the offset is in sync with the renderer.
+	if m2.helpOffset == 0 {
+		return
+	}
+	before := m2.helpOffset
+	m3 := pressKey(m2, "k")
+	if m3.helpOffset != before-1 {
+		t.Errorf("expected k to decrement to %d, got %d", before-1, m3.helpOffset)
+	}
 }
