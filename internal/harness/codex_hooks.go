@@ -35,6 +35,12 @@ func (codexHookContract) MergeData(existingData []byte, disabledEvents []string,
 		if err := json.Unmarshal(existingData, &existingRaw); err != nil {
 			return nil, fmt.Errorf("parsing hooks.json: %w", err)
 		}
+		// Unmarshaling JSON `null` into a map sets it to nil rather than
+		// erroring. Re-initialize so the later `existingRaw["hooks"] = ...`
+		// assignment does not panic on a nil map.
+		if existingRaw == nil {
+			existingRaw = make(map[string]json.RawMessage)
+		}
 	}
 
 	hooksRaw := make(map[string]json.RawMessage)

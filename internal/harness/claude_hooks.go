@@ -71,6 +71,12 @@ func (claudeHookContract) MergeData(existingData []byte, disabledEvents []string
 		if err := json.Unmarshal(existingData, &existingRaw); err != nil {
 			return nil, fmt.Errorf("parsing settings.json: %w", err)
 		}
+		// Unmarshaling JSON `null` into a map sets it to nil rather than
+		// erroring. Re-initialize so the later `existingRaw["hooks"] = ...`
+		// assignment does not panic on a nil map.
+		if existingRaw == nil {
+			existingRaw = make(map[string]json.RawMessage)
+		}
 	}
 
 	existing := make(map[string][]hookGroup)
