@@ -352,3 +352,93 @@ func TestMergeUpdatesStaleHooks(t *testing.T) {
 		t.Errorf("expected in_sync after update, got %q", statuses[0].Status)
 	}
 }
+
+// TestMergePreservesRestrictiveFilePerms pins the security contract:
+// when the user has tightened the existing settings.json to a restrictive
+// mode (e.g. 0o600 to keep tokens or env secrets out of group/other
+// readers), the merge must preserve that mode on both the rewritten
+// settings.json and its .bak. Previously both writes hard-coded 0o644 and
+// silently widened the permissions on every sync, leaking sensitive
+// contents to anyone with local shell access.
+func TestMergePreservesRestrictiveFilePerms(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(accountDir, "settings.json")
+
+	// Seed with a non-empty settings.json carrying stale amx hooks so the
+	// merge produces a real rewrite (and therefore a .bak).
+	existing := map[string]any{
+		"hooks": map[string]any{
+			"UserPromptSubmit": []any{
+				map[string]any{
+					"hooks": []any{
+						map[string]any{
+							"type":    "command",
+							"command": "/old/amx hook-indicator UserPromptSubmit",
+							"async":   true,
+						},
+					},
+				},
+			},
+		},
+	}
+	writeJSON(t, settingsPath, existing)
+	if err := os.Chmod(settingsPath, 0o600); err != nil {
+		t.Fatalf("chmod seed: %v", err)
+	}
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+
+	info, err := os.Stat(settingsPath)
+	if err != nil {
+		t.Fatalf("stat settings: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("settings.json perms widened: got %o, want 0600", got)
+	}
+
+	bakInfo, err := os.Stat(settingsPath + ".bak")
+	if err != nil {
+		t.Fatalf("stat .bak: %v", err)
+	}
+	if got := bakInfo.Mode().Perm(); got != 0o600 {
+		t.Errorf(".bak perms widened: got %o, want 0600", got)
+	}
+}
+
+// TestMergeFreshWriteUsesDefaultPerm pins the fallback contract: when no
+// existing settings.json is on disk, the merge writes the new file with
+// the conventional 0o644 default (subject to the process umask). This
+// guards the case where a user has not seeded any settings file at all,
+// so there is no prior mode to inherit.
+func TestMergeFreshWriteUsesDefaultPerm(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(accountDir, "settings.json"))
+	if err != nil {
+		t.Fatalf("stat settings: %v", err)
+	}
+	// Mask against the umask: compare to 0o644 & ^umask.
+	want := os.FileMode(0o644) &^ currentUmask()
+	if got := info.Mode().Perm(); got != want {
+		t.Errorf("fresh-write perms: got %o, want %o", got, want)
+	}
+}

@@ -31,6 +31,14 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) 
 	if err != nil {
 		return fmt.Errorf("creating temp file %s: %w", tmpPath, err)
 	}
+	// Force the requested mode explicitly: O_CREATE only applies perm when
+	// the file is newly created, so a leftover .tmp from a prior crashed
+	// write could otherwise retain stale (and possibly broader) permissions
+	// before being renamed over the destination.
+	if err := f.Chmod(perm); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("chmod temp file %s: %w", tmpPath, err)
+	}
 
 	// Ensure the temp file is removed on any failure path. On the happy path
 	// the rename consumes it, so Remove will be a no-op error we ignore.

@@ -90,6 +90,19 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 		existingData = nil
 	}
 
+	// Preserve the existing file's permission bits across the rewrite. Hooks
+	// files may legitimately be tightened to 0o600 by users (the harness
+	// settings can carry tokens or environment secrets); a hardcoded 0o644
+	// silently widens the mode and leaks contents to other local users. When
+	// the file does not yet exist, fall back to the standard 0o644 default
+	// and let the umask narrow it.
+	perm := os.FileMode(0o644)
+	if fileExisted {
+		if info, statErr := os.Stat(path); statErr == nil {
+			perm = info.Mode().Perm()
+		}
+	}
+
 	newData, err := contract.MergeData(existingData, override.DisabledEvents, amxBin)
 	if err != nil {
 		return MergeResult{}, fmt.Errorf("computing hooks for %s: %w", path, err)
@@ -100,14 +113,14 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 	}
 
 	if fileExisted {
-		if err := os.WriteFile(path+".bak", existingData, 0o644); err != nil {
+		if err := os.WriteFile(path+".bak", existingData, perm); err != nil {
 			return MergeResult{}, fmt.Errorf("creating backup %s.bak: %w", path, err)
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return MergeResult{}, fmt.Errorf("creating directory %s: %w", filepath.Dir(path), err)
 	}
-	if err := atomicWriteFile(path, newData, 0o644); err != nil {
+	if err := atomicWriteFile(path, newData, perm); err != nil {
 		return MergeResult{}, fmt.Errorf("writing %s: %w", path, err)
 	}
 

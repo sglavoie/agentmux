@@ -4,10 +4,21 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
 )
+
+// currentUmask reads (and restores) the process umask so a fresh-write
+// permissions test can predict the actual mode that os.OpenFile applied.
+// Tests should call this from a single goroutine since umask is a
+// process-wide setting.
+func currentUmask() os.FileMode {
+	u := syscall.Umask(0)
+	syscall.Umask(u)
+	return os.FileMode(u)
+}
 
 const testBin = "/usr/local/bin/amx"
 
