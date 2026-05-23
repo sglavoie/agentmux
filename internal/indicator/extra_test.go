@@ -33,8 +33,6 @@ func TestResolveAction_CLAUDEMdEventCoverage(t *testing.T) {
 		"SessionEnd",
 		"Notification",
 		"ConfigChange",
-		"WorktreeCreate",
-		"WorktreeRemove",
 		"PreCompact",
 		"PostCompact",
 		"Elicitation",

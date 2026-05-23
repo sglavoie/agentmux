@@ -51,8 +51,6 @@ var claudeHookEvents = []string{
 	"SessionEnd",
 	"Notification",
 	"ConfigChange",
-	"WorktreeCreate",
-	"WorktreeRemove",
 	"PreCompact",
 	"PostCompact",
 	"Elicitation",

@@ -45,8 +45,8 @@ func TestMergeFreshWrite(t *testing.T) {
 	}
 
 	// Should have entries for all installed Claude icon-relevant events.
-	if got := len(hooks); got != 26 {
-		t.Errorf("expected 26 hook events, got %d", got)
+	if got := len(hooks); got != 24 {
+		t.Errorf("expected 24 hook events, got %d", got)
 	}
 
 	// Verify UserPromptSubmit uses event-name format.
@@ -83,8 +83,6 @@ func TestMergeInstallsNewEvents(t *testing.T) {
 		"TaskCreated",
 		"TeammateIdle",
 		"ConfigChange",
-		"WorktreeCreate",
-		"WorktreeRemove",
 		"PreCompact",
 		"PostCompact",
 		"PermissionDenied",
@@ -127,8 +125,6 @@ func TestMergeDisabledNewEvent(t *testing.T) {
 		"TaskCreated",
 		"TeammateIdle",
 		"ConfigChange",
-		"WorktreeCreate",
-		"WorktreeRemove",
 		"PreCompact",
 		"PostCompact",
 		"PermissionDenied",
