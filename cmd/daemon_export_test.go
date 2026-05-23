@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -441,6 +443,59 @@ func TestDaemonExportEventsCommand_CurrentWindowRequiresKittyWindowID(t *testing
 	}
 	if got := err.Error(); got != "--current-window requires KITTY_WINDOW_ID to be set" {
 		t.Fatalf("RunE error = %q; want missing KITTY_WINDOW_ID error", got)
+	}
+}
+
+// TestDaemonExportEventsCommand_OutputExpandsTilde pins the fix for the
+// `--output` bug where a leading "~/" was treated as a literal path
+// component. Users typing `amx daemon export-events --output ~/events.json`
+// previously got a file named "~/events.json" under cwd instead of one in
+// their home directory.
+func TestDaemonExportEventsCommand_OutputExpandsTilde(t *testing.T) {
+	resetDaemonExportTestState(t)
+
+	// Point HOME at a temp dir so the test can assert on the expansion target
+	// without touching the real home directory.
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	client := &fakeDaemonExportClient{
+		health: daemon.Health{Alive: true, PID: 1, Uptime: time.Second},
+		export: func(windowID int) (daemon.EventsExport, error) {
+			return daemon.EventsExport{}, nil
+		},
+	}
+
+	newDaemonExportClient = func() daemonExportClient { return client }
+	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
+	daemonExportEventsWindow = 0
+	daemonExportEventsCurrentWindow = false
+	daemonExportEventsLast = 0
+	daemonExportEventsOutput = "~/events.json"
+	daemonExportEventsPretty = false
+
+	var out bytes.Buffer
+	daemonExportEventsCmd.SetOut(&out)
+
+	if err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	// The file must land in the expanded home directory, not in cwd.
+	expandedPath := filepath.Join(tempHome, "events.json")
+	if _, err := os.Stat(expandedPath); err != nil {
+		t.Fatalf("expected output at %s, stat err: %v", expandedPath, err)
+	}
+
+	// And there must NOT be a literal "~/events.json" file relative to cwd.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	literalPath := filepath.Join(cwd, "~", "events.json")
+	if _, err := os.Stat(literalPath); err == nil {
+		t.Fatalf("found literal tilde path at %s; tilde was not expanded", literalPath)
 	}
 }
 

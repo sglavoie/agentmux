@@ -297,7 +297,11 @@ metadata without paired map lookups.`,
 			_, err = cmd.OutOrStdout().Write(data)
 			return err
 		}
-		return os.WriteFile(daemonExportEventsOutput, data, 0o600)
+		// Expand a leading ~/ so users can pass shell-style paths via flags.
+		// Without this, --output ~/events.json would write a literal
+		// "~/events.json" file in the current working directory instead of the
+		// user's home directory.
+		return os.WriteFile(config.ExpandTilde(daemonExportEventsOutput), data, 0o600)
 	},
 }
 
