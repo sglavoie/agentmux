@@ -213,15 +213,17 @@ func isAmxGroup(g hookGroup) bool {
 
 // isAmxHookEntry reports whether a single hookEntry was installed by Agent Mux.
 func isAmxHookEntry(e hookEntry) bool {
+	const marker = " hook-indicator "
 	for _, candidate := range []string{e.Command, e.CommandWindows} {
-		fields := strings.Fields(candidate)
-		if len(fields) < 2 {
+		idx := strings.Index(candidate, marker)
+		if idx <= 0 {
 			continue
 		}
-		if filepath.Base(fields[0]) != amxHookCommandIdentifier {
+		prefix := strings.TrimRight(candidate[:idx], " \t")
+		if prefix == "" {
 			continue
 		}
-		if fields[1] == "hook-indicator" {
+		if filepath.Base(prefix) == amxHookCommandIdentifier {
 			return true
 		}
 	}

@@ -113,7 +113,7 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 	}
 
 	if fileExisted {
-		if err := os.WriteFile(path+".bak", existingData, perm); err != nil {
+		if err := writeBackup(path+".bak", existingData, perm); err != nil {
 			return MergeResult{}, fmt.Errorf("creating backup %s.bak: %w", path, err)
 		}
 	}

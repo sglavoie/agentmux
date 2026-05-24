@@ -198,6 +198,14 @@ func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 			h.notifier.PurgeWindow(id)
 		}
 	}
+	// State-guard entries are keyed by window ID and otherwise only removed by
+	// idle/clear/user_clear events. A window closed without firing a terminal
+	// hook would leak its guardEntry for the daemon's lifetime.
+	if h.guard != nil {
+		for id := range closed {
+			h.guard.Clear(id)
+		}
+	}
 }
 
 // SweepStale detects "active"-class sessions whose last incoming event predates
@@ -361,7 +369,8 @@ func (h *Handler) SweepHookSilence(now time.Time) {
 		if threshold <= 0 {
 			continue
 		}
-		last, ok := h.lastSeenEventAt[account]
+		accountKey := strings.ToLower(account)
+		last, ok := h.lastSeenEventAt[accountKey]
 		if !ok {
 			// No event has ever been seen for this account during the
 			// daemon's lifetime — skip. The first event from this account
@@ -371,10 +380,10 @@ func (h *Handler) SweepHookSilence(now time.Time) {
 		if now.Sub(last) < threshold {
 			continue
 		}
-		if h.notifiedHookSilence[account] {
+		if h.notifiedHookSilence[accountKey] {
 			continue
 		}
-		h.notifiedHookSilence[account] = true
+		h.notifiedHookSilence[accountKey] = true
 		silent = append(silent, silentEntry{account: account})
 	}
 	h.stateMu.Unlock()

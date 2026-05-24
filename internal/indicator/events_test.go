@@ -158,6 +158,69 @@ func TestResolveAction_UnknownEventIgnored(t *testing.T) {
 	}
 }
 
+// TestResolveAction_ContextLimitOnlyPromotesForFailureCarriers locks in the
+// rule that the "context limit reached" string in a payload only promotes the
+// action to stop_failure for events that legitimately describe a stop
+// condition. A stray copy of the recovery hint in an unrelated event's title
+// or message (Setup, PreToolUse, ConfigChange, or an unknown event) must not
+// flip the icon to the sticky error state.
+func TestResolveAction_ContextLimitOnlyPromotesForFailureCarriers(t *testing.T) {
+	ctxPayload := HookPayload{
+		Title:   "Context limit reached",
+		Message: "/compact or /clear to continue",
+	}
+	cases := []struct {
+		name      string
+		event     string
+		wantOK    bool
+		wantValue string
+	}{
+		{name: "notification still promotes", event: "notification", wantOK: true, wantValue: "stop_failure"},
+		{name: "Stop still promotes", event: "Stop", wantOK: true, wantValue: "stop_failure"},
+		{name: "SessionEnd still promotes", event: "SessionEnd", wantOK: true, wantValue: "stop_failure"},
+		{name: "Setup keeps active", event: "Setup", wantOK: true, wantValue: "active"},
+		{name: "PreToolUse keeps active", event: "PreToolUse", wantOK: true, wantValue: "active"},
+		{name: "ConfigChange keeps clear", event: "ConfigChange", wantOK: true, wantValue: "clear"},
+		{name: "unknown event stays unknown", event: "BogusEvent", wantOK: false, wantValue: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveAction(tc.event, ctxPayload)
+			if ok != tc.wantOK || got != tc.wantValue {
+				t.Fatalf("ResolveAction(%q, ctxPayload) = (%q, %v), want (%q, %v)", tc.event, got, ok, tc.wantValue, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestIsContextLimitCarrier(t *testing.T) {
+	carriers := []string{
+		"Notification", "notification",
+		"Stop", "agentStop",
+		"SubagentStop", "subagentStop",
+		"SessionEnd", "sessionEnd",
+		"StopFailure",
+		"PostToolUseFailure", "postToolUseFailure",
+		"ErrorOccurred", "errorOccurred",
+	}
+	nonCarriers := []string{
+		"Setup", "PreToolUse", "PostToolUse", "UserPromptSubmit",
+		"ConfigChange", "PreCompact", "PostCompact",
+		"SessionStart", "sessionStart",
+		"BogusEvent", "",
+	}
+	for _, e := range carriers {
+		if !isContextLimitCarrier(e) {
+			t.Errorf("isContextLimitCarrier(%q) = false, want true", e)
+		}
+	}
+	for _, e := range nonCarriers {
+		if isContextLimitCarrier(e) {
+			t.Errorf("isContextLimitCarrier(%q) = true, want false", e)
+		}
+	}
+}
+
 func TestIsIgnoredEvent(t *testing.T) {
 	cases := []struct {
 		event   string

@@ -3,6 +3,7 @@ package kitty_test
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -378,6 +379,99 @@ func TestUserVarsUnmarshal_ExplicitFlagsPresence(t *testing.T) {
 	}
 	if !uv.ExplicitFlagsSet {
 		t.Error("expected ExplicitFlagsSet to be true when cc_explicit_flags is present")
+	}
+}
+
+// TestLaunchTab_DeterministicArgvOrder pins that --env and --var arguments are
+// emitted in sorted key order. Map iteration order in Go is randomized, so
+// without sorting, two LaunchTab invocations with identical opts would emit
+// different argv sequences — which would break command-key based mock lookups
+// and make debug logs harder to diff across runs.
+func TestLaunchTab_DeterministicArgvOrder(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	err := client.LaunchTab(kitty.LaunchOpts{
+		Title: "W:api",
+		Env: map[string]string{
+			"ZED":   "z",
+			"ALPHA": "a",
+			"MID":   "m",
+		},
+		UserVars: map[string]string{
+			"cc_account":  "work",
+			"amx_profile": "work",
+			"amx_harness": "claude",
+		},
+	})
+	if err != nil {
+		t.Fatalf("LaunchTab: %v", err)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+
+	args := runner.Calls[0].Args
+	var envArgs, varArgs []string
+	for _, a := range args {
+		switch {
+		case strings.HasPrefix(a, "--env="):
+			envArgs = append(envArgs, a)
+		case strings.HasPrefix(a, "--var="):
+			varArgs = append(varArgs, a)
+		}
+	}
+	wantEnv := []string{"--env=ALPHA=a", "--env=MID=m", "--env=ZED=z"}
+	wantVars := []string{"--var=amx_harness=claude", "--var=amx_profile=work", "--var=cc_account=work"}
+	if len(envArgs) != len(wantEnv) {
+		t.Fatalf("env args: got %v, want %v", envArgs, wantEnv)
+	}
+	for i := range wantEnv {
+		if envArgs[i] != wantEnv[i] {
+			t.Errorf("env arg %d: got %q, want %q", i, envArgs[i], wantEnv[i])
+		}
+	}
+	if len(varArgs) != len(wantVars) {
+		t.Fatalf("var args: got %v, want %v", varArgs, wantVars)
+	}
+	for i := range wantVars {
+		if varArgs[i] != wantVars[i] {
+			t.Errorf("var arg %d: got %q, want %q", i, varArgs[i], wantVars[i])
+		}
+	}
+}
+
+// TestSetTabColor_AllEmptyIsNoOp pins that passing four empty color strings
+// does not result in a kitten invocation. The previous behavior emitted
+// `kitten @ set-tab-color --match=...` with no color args, which kitten
+// rejects with an error — a silent waste of a subprocess that surfaces as a
+// confusing failure to the caller.
+func TestSetTabColor_AllEmptyIsNoOp(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.SetTabColor("id:7", "", "", "", ""); err != nil {
+		t.Fatalf("SetTabColor: %v", err)
+	}
+	if len(runner.Calls) != 0 {
+		t.Errorf("expected 0 kitten calls when all colors empty, got %d: %v", len(runner.Calls), runner.Calls)
+	}
+}
+
+// TestSetTabColor_PartialColorsStillCalls confirms a single non-empty color
+// still triggers the kitten invocation.
+func TestSetTabColor_PartialColorsStillCalls(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.SetTabColor("id:7", "#abcdef", "", "", ""); err != nil {
+		t.Fatalf("SetTabColor: %v", err)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+	if !containsArg(runner.Calls[0].Args, "active_bg=#abcdef") {
+		t.Errorf("expected active_bg=#abcdef in args, got %v", runner.Calls[0].Args)
 	}
 }
 

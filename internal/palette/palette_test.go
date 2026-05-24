@@ -76,6 +76,27 @@ func TestLookupEmptyStringErrors(t *testing.T) {
 	}
 }
 
+// TestNamesReturnsFreshSlice ensures callers can sort/mutate the slice
+// returned by Names() without affecting subsequent calls.
+func TestNamesReturnsFreshSlice(t *testing.T) {
+	first := Names()
+	if len(first) == 0 {
+		t.Fatal("Names() returned empty slice")
+	}
+	for i := range first {
+		first[i] = "MUTATED"
+	}
+	second := Names()
+	for _, name := range second {
+		if name == "MUTATED" {
+			t.Fatalf("Names() returned mutated value %q; slice must not alias prior return", name)
+		}
+		if _, err := Lookup(name); err != nil {
+			t.Errorf("Lookup(%q) from Names() failed: %v", name, err)
+		}
+	}
+}
+
 // TestLookupCaseSensitive locks in the current (case-sensitive) contract so a
 // regression toward case-insensitive lookups cannot land silently — there are
 // downstream config validators (internal/config) that enforce the lowercase

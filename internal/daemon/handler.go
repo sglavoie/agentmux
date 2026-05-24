@@ -107,14 +107,15 @@ type Handler struct {
 	// lastSeenEventAt records the most recent event timestamp per account
 	// (any action, any window). The hook-silence sweep compares this against
 	// the configured threshold to detect accounts whose hooks have stopped
-	// reaching the daemon entirely. Keyed by the raw req.Account value;
-	// lookups happen case-insensitively at the sweep layer (S6).
+	// reaching the daemon entirely. Keys are lowercased account names so that
+	// hook payloads and cc_account user vars with differing case still match.
 	lastSeenEventAt map[string]time.Time
 
 	// notifiedHookSilence is a one-shot latch per account: once the
 	// hook-silence sweep fires for an account, this prevents re-notification
 	// until a fresh event for that account re-arms the entry by deleting it
-	// in handleStateUpdate.
+	// in handleStateUpdate. Keys are lowercased account names — see
+	// lastSeenEventAt for rationale.
 	notifiedHookSilence map[string]bool
 
 	// lastSessionTitle records the session title from the most recent state

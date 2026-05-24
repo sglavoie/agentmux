@@ -63,8 +63,11 @@ func ComputeInsertLocation(client kitty.KittyClient, mode, account, baseTitle st
 		entries = append(entries, entry{key: k, tabID: s.TabID})
 	}
 
-	// Sort existing entries by key to find insertion point.
-	sort.Slice(entries, func(i, j int) bool {
+	// Sort existing entries by key to find insertion point. Stable so ties
+	// preserve original order (matters for ComputeInsertLocation determinism
+	// when multiple tabs share a sort key — without stability, the chosen
+	// prevID drifts between calls).
+	sort.SliceStable(entries, func(i, j int) bool {
 		return entries[i].key < entries[j].key
 	})
 

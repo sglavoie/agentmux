@@ -1,6 +1,9 @@
 package kitty
 
-import "fmt"
+import (
+	"fmt"
+	"regexp"
+)
 
 // MatchTabByID returns a match expression that selects a tab by numeric ID.
 func MatchTabByID(id int) string {
@@ -18,8 +21,13 @@ func MatchTabByTitle(title string) string {
 }
 
 // MatchWindowByVar returns a match expression selecting windows with a specific user var value.
+//
+// Kitty interprets the value portion of `var:NAME=VALUE` as a Python regex
+// applied unanchored. Callers passing literal account/profile names expect
+// exact equality, so the value is escaped and anchored with `^...$` to
+// prevent prefix bleed (e.g. account "work" inadvertently matching "workshop").
 func MatchWindowByVar(varName, value string) string {
-	return fmt.Sprintf("var:%s=%s", varName, value)
+	return fmt.Sprintf("var:%s=^%s$", varName, regexp.QuoteMeta(value))
 }
 
 // MatchAccountWindows returns a match expression for all windows belonging to an account.

@@ -90,6 +90,9 @@ func validateDefaults(d *Defaults) []string {
 	if d.Preview.MinRows < 0 {
 		errs = append(errs, "defaults.preview.min_rows must be >= 0")
 	}
+	if d.Notifications.PermissionDebounceMs < 0 {
+		errs = append(errs, "defaults.notifications.permission_debounce_ms must be >= 0")
+	}
 	return errs
 }
 

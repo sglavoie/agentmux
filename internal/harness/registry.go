@@ -16,5 +16,5 @@ func Lookup(name string) Impl {
 
 // Register adds or replaces a harness implementation. Intended for tests.
 func Register(impl Impl) {
-	registry[impl.Name()] = impl
+	registry[Normalize(impl.Name())] = impl
 }

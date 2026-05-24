@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -475,8 +476,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		delete(h.notifiedStale, req.WindowID)
 		if req.Account != "" {
 			h.lastAccount[req.WindowID] = req.Account
-			h.lastSeenEventAt[req.Account] = now
-			delete(h.notifiedHookSilence, req.Account)
+			accountKey := strings.ToLower(req.Account)
+			h.lastSeenEventAt[accountKey] = now
+			delete(h.notifiedHookSilence, accountKey)
 		}
 		meta := h.windowMetadata[req.WindowID]
 		meta.Durable.ActivityAt = now.Unix()
@@ -590,8 +592,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.lastAccount[req.WindowID] = req.Account
 		// Per-account event tracking for the hook-silence watchdog. Re-arms
 		// the one-shot latch so a future silence stretch can notify again.
-		h.lastSeenEventAt[req.Account] = now
-		delete(h.notifiedHookSilence, req.Account)
+		accountKey := strings.ToLower(req.Account)
+		h.lastSeenEventAt[accountKey] = now
+		delete(h.notifiedHookSilence, accountKey)
 	}
 	if effective == "active" {
 		h.lastActiveEvent[req.WindowID] = req.Event

@@ -355,6 +355,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailEvents = msg.events
 		m.detailErr = msg.err
 		m.detailLoading = false
+		// A refresh that shrinks the event ring (daemon GC, or an empty
+		// reply) can leave detailScroll above the new maxOffset. The
+		// renderer clamps for display, but the next j/k/pgup/pgdn press
+		// would operate on the stale offset and chew through dead rows
+		// before the viewport reacts — mirror the WindowSizeMsg clamp.
+		clampDetailScroll(&m)
 		return m, nil
 
 	case tea.KeyPressMsg:

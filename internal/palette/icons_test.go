@@ -242,6 +242,54 @@ func TestParseTitleIgnoresEmptyStateIcon(t *testing.T) {
 	}
 }
 
+// TestParseTitleIgnoresEmptyStar guards against an empty star glyph causing
+// every title to be reported as starred — strings.HasPrefix(s, "") is true, so
+// the naive prefix check would otherwise set starred unconditionally.
+func TestParseTitleIgnoresEmptyStar(t *testing.T) {
+	prevStar := ico.Star
+	t.Cleanup(func() { ico.Star = prevStar })
+	ico.Star = ""
+
+	base, state, starred := ParseTitle("W:project")
+	if base != "W:project" || state != "" || starred {
+		t.Errorf("ParseTitle(plain w/ empty star) = (%q, %q, %v), want (W:project, , false)", base, state, starred)
+	}
+	if got := StripIcons("W:project"); got != "W:project" {
+		t.Errorf("StripIcons(plain w/ empty star) = %q, want %q", got, "W:project")
+	}
+	if got := DetectState("W:project"); got != "" {
+		t.Errorf("DetectState(plain w/ empty star) = %q, want empty", got)
+	}
+
+	boltTitle := StateIcon("bolt") + "W:project"
+	base, state, starred = ParseTitle(boltTitle)
+	if base != "W:project" || state != "bolt" || starred {
+		t.Errorf("ParseTitle(bolt w/ empty star) = (%q, %q, %v), want (W:project, bolt, false)", base, state, starred)
+	}
+	if got := StripIcons(boltTitle); got != "W:project" {
+		t.Errorf("StripIcons(bolt w/ empty star) = %q, want %q", got, "W:project")
+	}
+	if got := DetectState(boltTitle); got != "bolt" {
+		t.Errorf("DetectState(bolt w/ empty star) = %q, want bolt", got)
+	}
+}
+
+// TestStateOrderReturnsCopy ensures mutating the returned slice cannot corrupt
+// the package-internal state-detection order shared by ParseTitle, StripIcons,
+// and DetectState.
+func TestStateOrderReturnsCopy(t *testing.T) {
+	first := StateOrder()
+	if len(first) == 0 {
+		t.Fatal("StateOrder() returned empty slice")
+	}
+	original := first[0]
+	first[0] = "MUTATED"
+	second := StateOrder()
+	if second[0] != original {
+		t.Errorf("StateOrder()[0] = %q after caller mutation, want %q (returned slice must be a copy)", second[0], original)
+	}
+}
+
 func TestBuildParseStarredSubagent(t *testing.T) {
 	title := BuildTitle("base", "subagent", true)
 	if title != "★🤖base" {

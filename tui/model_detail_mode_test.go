@@ -258,6 +258,41 @@ func TestTickInDetailModePreservesPaneState(t *testing.T) {
 	}
 }
 
+// TestDetailEventsMsgClampsScrollOnShrink pins the clamp added so that a
+// refresh which shrinks the event ring (daemon GC, or an empty reply)
+// cannot leave detailScroll above the new maxOffset. Without the clamp,
+// the next j/k press would have to chew through dead rows before the
+// viewport reacts.
+func TestDetailEventsMsgClampsScrollOnShrink(t *testing.T) {
+	m := loadSessions(testModel(), detailSessions())
+	{
+		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+		m = mm.(Model)
+	}
+	m.height = detailChrome + detailMinVisible // visible == 3
+	m.width = 100
+	m.detailEvents = makeEvents(60)
+	_, visible := detailScrollBounds(m)
+	m.detailScroll = len(m.detailEvents) - visible // park at bottom
+
+	// Now deliver a tiny event ring — the daemon GC'd most entries.
+	small := makeEvents(2)
+	updated, _ := m.Update(detailEventsMsg{windowID: m.detailWindowID, events: small})
+	got := updated.(Model)
+
+	total, vis := detailScrollBounds(got)
+	maxOffset := total - vis
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if got.detailScroll > maxOffset {
+		t.Fatalf("expected detailScroll clamped to maxOffset=%d after shrink, got %d", maxOffset, got.detailScroll)
+	}
+	if got.detailScroll < 0 {
+		t.Fatalf("expected detailScroll >= 0 after shrink, got %d", got.detailScroll)
+	}
+}
+
 // TestDetailEventsMsgIgnoredOutsideDetailMode pins the mode guard added in
 // Session 5: a slow daemon roundtrip arriving after the pane was closed
 // must not repopulate detailEvents. Sets detailWindowID directly so the

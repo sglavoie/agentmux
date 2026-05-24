@@ -10,12 +10,6 @@ const (
 	Codex   = "codex"
 )
 
-var known = map[string]bool{
-	Claude:  true,
-	Copilot: true,
-	Codex:   true,
-}
-
 // Normalize returns a lowercase harness name. Empty values default to Claude
 // so legacy configs keep working.
 func Normalize(name string) string {
@@ -28,7 +22,8 @@ func Normalize(name string) string {
 
 // Valid reports whether name identifies a supported harness.
 func Valid(name string) bool {
-	return known[Normalize(name)]
+	_, ok := registry[Normalize(name)]
+	return ok
 }
 
 // Names returns the supported harness names in stable order.

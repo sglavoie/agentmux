@@ -40,7 +40,7 @@ func StateOrder() []string {
 // ("bolt"/"stop"/"key"/"warning"/"error"/"subagent"/"compact"/"question"/""),
 // and starred flag.
 func ParseTitle(title string) (base, state string, starred bool) {
-	if strings.HasPrefix(title, ico.Star) {
+	if ico.Star != "" && strings.HasPrefix(title, ico.Star) {
 		starred = true
 		title = title[len(ico.Star):]
 	}
@@ -78,7 +78,9 @@ func BuildTitle(base, state string, starred bool) string {
 // StripIcons removes the star prefix and any state icon from a title,
 // returning the plain base title.
 func StripIcons(title string) string {
-	title = strings.TrimPrefix(title, ico.Star)
+	if ico.Star != "" {
+		title = strings.TrimPrefix(title, ico.Star)
+	}
 	for _, name := range ico.StateOrder {
 		icon := ico.States[name]
 		if icon == "" {
@@ -93,7 +95,9 @@ func StripIcons(title string) string {
 
 // DetectState returns the state name present in a title, or "" if none.
 func DetectState(title string) string {
-	title = strings.TrimPrefix(title, ico.Star)
+	if ico.Star != "" {
+		title = strings.TrimPrefix(title, ico.Star)
+	}
 	for _, name := range ico.StateOrder {
 		icon := ico.States[name]
 		if icon == "" {

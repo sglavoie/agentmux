@@ -136,7 +136,7 @@ func IsIgnoredEvent(input string, payload HookPayload) bool {
 }
 
 func resolveFailureAction(input string, payload HookPayload) (string, bool) {
-	if payloadHasContextLimit(payload) {
+	if payloadHasContextLimit(payload) && isContextLimitCarrier(input) {
 		return "stop_failure", true
 	}
 
@@ -158,6 +158,26 @@ func resolveFailureAction(input string, payload HookPayload) (string, bool) {
 	}
 
 	return "", false
+}
+
+// isContextLimitCarrier reports whether input names an event that can legitimately
+// carry a "context limit reached" payload. Unknown events and lifecycle hooks
+// that never describe a stop condition (Setup, PreToolUse, ConfigChange, etc.)
+// should not be silently promoted to stop_failure just because their title or
+// message happened to contain the recovery hint string.
+func isContextLimitCarrier(input string) bool {
+	switch input {
+	case "Notification", "notification",
+		"Stop", "agentStop",
+		"SubagentStop", "subagentStop",
+		"SessionEnd", "sessionEnd",
+		"StopFailure",
+		"PostToolUseFailure", "postToolUseFailure",
+		"ErrorOccurred", "errorOccurred":
+		return true
+	default:
+		return false
+	}
 }
 
 func resolveNotificationAction(input string, payload HookPayload) (string, bool) {

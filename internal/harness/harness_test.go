@@ -287,6 +287,110 @@ func TestMergeDataNullJSONNoPanic(t *testing.T) {
 	}
 }
 
+func TestRegisterNormalizesName(t *testing.T) {
+	const rawName = "MixedCase-Harness"
+	const normalized = "mixedcase-harness"
+
+	t.Cleanup(func() {
+		delete(registry, rawName)
+		delete(registry, normalized)
+	})
+
+	Register(fakeHarness{name: rawName})
+
+	if got := Lookup(rawName); got.Name() != rawName {
+		t.Errorf("Lookup(%q).Name() = %q, want %q", rawName, got.Name(), rawName)
+	}
+	if got := Lookup(normalized); got.Name() != rawName {
+		t.Errorf("Lookup(%q).Name() = %q, want %q", normalized, got.Name(), rawName)
+	}
+	if got := Lookup("MIXEDCASE-HARNESS"); got.Name() != rawName {
+		t.Errorf("Lookup(upper).Name() = %q, want %q", got.Name(), rawName)
+	}
+	if _, ok := registry[rawName]; ok {
+		t.Errorf("registry should not contain non-normalized key %q", rawName)
+	}
+	if _, ok := registry[normalized]; !ok {
+		t.Errorf("registry missing normalized key %q", normalized)
+	}
+}
+
+func TestValidRecognizesRegisteredHarness(t *testing.T) {
+	const name = "synthetic-harness"
+
+	t.Cleanup(func() { delete(registry, name) })
+
+	if Valid(name) {
+		t.Fatalf("pre-register: Valid(%q) = true, want false", name)
+	}
+
+	Register(fakeHarness{name: name})
+
+	if !Valid(name) {
+		t.Errorf("post-register: Valid(%q) = false, want true", name)
+	}
+	if !Valid("SYNTHETIC-HARNESS") {
+		t.Errorf("post-register: Valid uppercase should be true")
+	}
+}
+
+func TestValidBuiltins(t *testing.T) {
+	for _, name := range []string{Claude, Copilot, Codex} {
+		if !Valid(name) {
+			t.Errorf("Valid(%q) = false, want true", name)
+		}
+	}
+	if Valid("nope") {
+		t.Errorf("Valid(\"nope\") = true, want false")
+	}
+}
+
+func TestIsAmxHookEntryHandlesPathWithSpaces(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{"simple basename", "amx hook-indicator Stop", true},
+		{"absolute path", "/usr/local/bin/amx hook-indicator Stop", true},
+		{"path with spaces", "/Users/foo bar/bin/amx hook-indicator Stop", true},
+		{"different binary", "/usr/local/bin/notamx hook-indicator Stop", false},
+		{"unrelated path", "/opt/hook-indicator-helper/run --start", false},
+		{"missing subcommand", "amx", false},
+		{"empty", "", false},
+		{"sibling name", "/usr/bin/amxhelper hook-indicator Stop", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isAmxHookEntry(hookEntry{Type: "command", Command: tc.command})
+			if got != tc.want {
+				t.Errorf("isAmxHookEntry(%q) = %v, want %v", tc.command, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestStripAmxGroupsRemovesPathWithSpaces(t *testing.T) {
+	in := map[string][]hookGroup{
+		"Stop": {{Hooks: []hookEntry{{
+			Type:    "command",
+			Command: "/Users/foo bar/bin/amx hook-indicator Stop",
+			Async:   boolPtr(true),
+		}}}},
+		"PreToolUse": {{Hooks: []hookEntry{{
+			Type:    "command",
+			Command: "/usr/local/bin/user-tool --do-stuff",
+		}}}},
+	}
+	out := stripAmxGroups(in)
+	if _, ok := out["Stop"]; ok {
+		t.Errorf("Stop hook with spaced amx path should have been stripped; got %+v", out["Stop"])
+	}
+	if _, ok := out["PreToolUse"]; !ok {
+		t.Errorf("user-managed PreToolUse should have survived; got %+v", out)
+	}
+}
+
 // TestMergeDataHooksNullNoPanic verifies that MergeData handles `{"hooks": null}`
 // without panicking. This is a separate code path from a top-level null because
 // the existing object is non-nil; only the inner hooks field unmarshals to nil.

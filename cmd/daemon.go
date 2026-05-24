@@ -267,7 +267,10 @@ metadata without paired map lookups.`,
 		c := newDaemonExportClient()
 		snapshot, err := c.ExportEvents(requestedWindowID)
 		if err != nil {
-			return fmt.Errorf("daemon not running: %w", err)
+			if !c.Health().Alive {
+				return fmt.Errorf("daemon not running: %w", err)
+			}
+			return fmt.Errorf("export events: %w", err)
 		}
 
 		var osWindows []kitty.OSWindow

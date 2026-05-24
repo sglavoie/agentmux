@@ -313,3 +313,47 @@ func TestHookSilenceWindowID_StableAndNegative(t *testing.T) {
 		t.Errorf("hookSilenceWindowID should be case-insensitive")
 	}
 }
+
+// TestSweepHookSilence_AccountKeyCaseInsensitive verifies that an event
+// recorded with one casing for req.Account (e.g. "Work") and a Kitty user var
+// with a different casing (e.g. "work") still match in the hook-silence
+// sweep. Without case-folding, the sweep would never find a baseline for
+// the running account and would silently skip notifications.
+func TestSweepHookSilence_AccountKeyCaseInsensitive(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, nil)
+		// Kitty user var uses lowercase "work".
+		fake.windows = fakeWindowsForAccount("work")
+
+		now := time.Now()
+		// Hook payload arrived with mixed-case "Work" — seeded via Handle so the
+		// real code path normalizes the key.
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "Work"})
+
+		h.stateMu.Lock()
+		// Backdate the event so the threshold trips.
+		if _, ok := h.lastSeenEventAt["work"]; !ok {
+			h.stateMu.Unlock()
+			t.Fatalf("lastSeenEventAt should contain lowercased key 'work'; got %v", h.lastSeenEventAt)
+		}
+		h.lastSeenEventAt["work"] = now.Add(-2 * time.Hour)
+		h.stateMu.Unlock()
+
+		h.SweepHookSilence(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("dispatches = %d; want 1 (case mismatch must not skip)", got)
+		}
+
+		// Latch must be keyed by the lowercased account too so a fresh event
+		// (in either case) clears it.
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "WORK"})
+		h.stateMu.Lock()
+		_, latched := h.notifiedHookSilence["work"]
+		h.stateMu.Unlock()
+		if latched {
+			t.Fatalf("notifiedHookSilence['work'] should be cleared by a case-different fresh event")
+		}
+	})
+}

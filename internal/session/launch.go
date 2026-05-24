@@ -82,7 +82,11 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 
 	skipDedup := len(opts) > 0 && opts[0].SkipDedup
 	if !skipDedup {
-		if _, exists := FindByKey(running, SessionKey(acc.Name, sess.Title)); exists {
+		profileName := sess.EffectiveProfile()
+		if profileName == "" {
+			profileName = acc.Name
+		}
+		if _, exists := FindByKey(running, SessionKey(profileName, sess.Title)); exists {
 			launchDebug.Printf("Launch: dedup hit, returning nil")
 			return nil
 		}

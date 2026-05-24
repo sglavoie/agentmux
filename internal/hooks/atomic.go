@@ -73,3 +73,16 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) 
 // errInjectedFault is the sentinel returned by tests that fault-inject into
 // atomicWriteFn. Exported only via the test build path.
 var errInjectedFault = errors.New("hooks: injected write fault")
+
+// writeBackup writes data to path with permissions perm, ensuring perm is
+// enforced even when path already exists. os.WriteFile only applies perm on
+// creation: an existing file keeps its previous mode, which can leave a
+// stale-permission .bak after the user tightens the original settings file
+// to 0o600. We chmod after the write so the backup mode always tracks the
+// caller-provided perm.
+func writeBackup(path string, data []byte, perm os.FileMode) error {
+	if err := os.WriteFile(path, data, perm); err != nil {
+		return err
+	}
+	return os.Chmod(path, perm)
+}

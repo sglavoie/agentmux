@@ -70,6 +70,47 @@ func TestLaunch_DedupSkipsExisting(t *testing.T) {
 	}
 }
 
+// TestLaunch_DedupUsesEffectiveProfile verifies that Launch dedups against the
+// session's effective profile name rather than the account record's Name. A
+// running tab anchored to `amx_profile=claude-prod` must be detected as a
+// duplicate when relaunching a project whose Session.Profile is "claude-prod"
+// even if the matching config.Account uses a different Name (e.g. when callers
+// pass the profile's account record but Session.Profile takes precedence per
+// the rest of the codebase).
+func TestLaunch_DedupUsesEffectiveProfile(t *testing.T) {
+	// Existing tab uses amx_profile=claude-prod (matches sess.Profile below).
+	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
+		`{"id":10,"is_active":true,"title":"api","windows":[` +
+		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{` +
+		`"amx_profile":"claude-prod","amx_project":"api","amx_directory":"/tmp/api"` +
+		`}}]}]}]`)
+	runner := kitty.NewMockRunner(map[string][]byte{
+		"kitten @ ls": fixture,
+	})
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "claude", ConfigDir: "~/.config/claude", Color: "blue"},
+		},
+	}
+
+	// Session.Profile differs from Account.Name; effective profile = claude-prod.
+	sess := config.Session{Title: "api", Profile: "claude-prod", Directory: "/tmp/api"}
+	acc := cfg.Accounts[0]
+
+	if err := session.Launch(client, sess, acc, cfg); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	for _, c := range runner.Calls {
+		for _, a := range c.Args {
+			if a == "launch" {
+				t.Errorf("expected dedup hit (Session.Profile matches existing tab amx_profile); got kitten @ launch call: %v", c.Args)
+			}
+		}
+	}
+}
+
 // TestLaunch_CallsKittenWithCorrectArgs verifies that Launch calls kitten @ launch
 // with the correct tab title and user vars.
 func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {

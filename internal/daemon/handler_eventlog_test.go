@@ -635,6 +635,41 @@ func TestHandler_PruneClosedWindows_PurgesNotifierState(t *testing.T) {
 	})
 }
 
+// TestHandler_PruneClosedWindows_PurgesGuardEntries verifies that the
+// state-guard map is also GC'd when Kitty no longer reports a window. The
+// guard is keyed by window ID and is otherwise only cleared by idle/clear/
+// user_clear events; a window closed forcefully (Cmd+W, crash) without a
+// terminal hook would leak its guardEntry indefinitely. The live window's
+// guard must remain intact.
+func TestHandler_PruneClosedWindows_PurgesGuardEntries(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, _ := newSweepTestHandler(10 * time.Minute)
+		fake.mu.Lock()
+		fake.windows = fakeOSWindowsWithTab(1, "W:live")
+		fake.mu.Unlock()
+
+		// Seed guard entries for both a live and a closed window.
+		h.guard.TryUpdate(1, "permission", false)
+		h.guard.TryUpdate(2, "permission", false)
+
+		// Seed an eventLog entry for window 2 so pruneClosedWindows sees it as
+		// a candidate to GC.
+		h.stateMu.Lock()
+		h.eventLog[2] = []SessionEvent{{At: time.Now().Unix(), Event: "Stop", Action: "stop"}}
+		h.stateMu.Unlock()
+
+		h.SweepStale(time.Now())
+		synctest.Wait()
+
+		if cur := h.guard.Current(1); cur != "permission" {
+			t.Errorf("guard[1] = %q; want preserved 'permission' for live window", cur)
+		}
+		if cur := h.guard.Current(2); cur != "" {
+			t.Errorf("guard[2] = %q; want cleared for closed window", cur)
+		}
+	})
+}
+
 // TestHandler_EventLog_CapAt5000 hard-codes the 5000-event cap so a future
 // change to maxEventsPerWindow trips this assertion and forces an explicit
 // decision about whether the contract still holds.

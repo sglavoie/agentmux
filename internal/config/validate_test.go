@@ -524,6 +524,29 @@ func TestValidate_ProjectProfileAccountMatchingAccepted(t *testing.T) {
 	}
 }
 
+// TestValidate_NegativePermissionDebounce pins that a negative
+// permission_debounce_ms is rejected at validate time. Without this check the
+// value flows through unchanged and is later interpreted as a duration in the
+// daemon's debounce path, where a negative debounce yields confusing
+// instant-fire behavior with no signal to the user.
+func TestValidate_NegativePermissionDebounce(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			Notifications: config.NotificationConfig{PermissionDebounceMs: -1},
+		},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for negative permission_debounce_ms, got nil")
+	}
+	if !strings.Contains(err.Error(), "permission_debounce_ms must be >= 0") {
+		t.Errorf("error %q does not mention permission_debounce_ms bound", err.Error())
+	}
+}
+
 func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.

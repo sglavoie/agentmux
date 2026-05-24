@@ -53,6 +53,91 @@ func TestMergeFreshWrite(t *testing.T) {
 	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit")
 }
 
+// TestMergeExcludesWorktreeHooks pins the CLAUDE.md guarantee that the
+// WorktreeCreate and WorktreeRemove control hooks are never installed:
+// these hooks must print the worktree path on stdout, which amx hook-indicator
+// does not, and installing them breaks subagent spawning with
+// "WorktreeCreate hook failed: no successful output".
+func TestMergeExcludesWorktreeHooks(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(accountDir, "settings.json"))
+	if err != nil {
+		t.Fatalf("read settings: %v", err)
+	}
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	hooks := s["hooks"].(map[string]any)
+	for _, banned := range []string{"WorktreeCreate", "WorktreeRemove"} {
+		if _, ok := hooks[banned]; ok {
+			t.Errorf("%s must never be installed (would break subagent spawning)", banned)
+		}
+	}
+}
+
+// TestMergePreservesNonHooksTopLevelKeys ensures that a settings.json
+// carrying user-defined top-level keys (model, env, permissions, etc.) is
+// rewritten without losing those keys when the merge updates only the
+// hooks section.
+func TestMergePreservesNonHooksTopLevelKeys(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(accountDir, "settings.json")
+
+	original := map[string]any{
+		"model":       "claude-opus",
+		"env":         map[string]any{"CUSTOM": "value"},
+		"permissions": map[string]any{"allow": []any{"npm"}},
+	}
+	writeJSON(t, settingsPath, original)
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	if got := s["model"]; got != "claude-opus" {
+		t.Errorf("model lost across merge: got %v", got)
+	}
+	envMap, ok := s["env"].(map[string]any)
+	if !ok || envMap["CUSTOM"] != "value" {
+		t.Errorf("env lost across merge: got %v", s["env"])
+	}
+	permMap, ok := s["permissions"].(map[string]any)
+	if !ok {
+		t.Errorf("permissions lost across merge: got %v", s["permissions"])
+	} else if allow, _ := permMap["allow"].([]any); len(allow) != 1 || allow[0] != "npm" {
+		t.Errorf("permissions.allow lost: got %v", permMap["allow"])
+	}
+	if _, ok := s["hooks"]; !ok {
+		t.Errorf("expected hooks key to be added by merge")
+	}
+}
+
 func TestMergeInstallsNewEvents(t *testing.T) {
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "claude")
@@ -412,6 +497,59 @@ func TestMergePreservesRestrictiveFilePerms(t *testing.T) {
 	}
 	if got := bakInfo.Mode().Perm(); got != 0o600 {
 		t.Errorf(".bak perms widened: got %o, want 0600", got)
+	}
+}
+
+// TestMergePreservesRestrictiveFilePermsAfterTightening pins the .bak side of
+// the perm-preservation contract when a stale .bak already exists from a
+// prior, less-restrictive sync. os.WriteFile only applies the requested mode
+// when the destination is newly created — an existing .bak silently kept its
+// previous (looser) perms while being overwritten with potentially
+// secret-bearing content, leaking it to other local users.
+func TestMergePreservesRestrictiveFilePermsAfterTightening(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(accountDir, "settings.json")
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+	}, nil)
+
+	// First merge installs the hooks with default 0o644 perms.
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("first MergeAll: %v", err)
+	}
+
+	// Pre-create a stale .bak with looser perms to mimic a prior run where
+	// the original was 0o644. A future merge after the user tightens the
+	// settings.json must still publish a .bak honoring the restrictive mode.
+	if err := os.WriteFile(settingsPath+".bak", []byte(`{"old":true}`), 0o644); err != nil {
+		t.Fatalf("seed stale .bak: %v", err)
+	}
+
+	// Tighten settings.json to 0o600 and dirty its contents so the next merge
+	// rewrites the file (and therefore the .bak).
+	dirty := []byte(`{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"/old/amx hook-indicator UserPromptSubmit","async":true}]}]}}`)
+	if err := os.WriteFile(settingsPath, dirty, 0o600); err != nil {
+		t.Fatalf("seed tightened settings: %v", err)
+	}
+	if err := os.Chmod(settingsPath, 0o600); err != nil {
+		t.Fatalf("chmod tightened settings: %v", err)
+	}
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("second MergeAll: %v", err)
+	}
+
+	bakInfo, err := os.Stat(settingsPath + ".bak")
+	if err != nil {
+		t.Fatalf("stat .bak: %v", err)
+	}
+	if got := bakInfo.Mode().Perm(); got != 0o600 {
+		t.Errorf(".bak perms not narrowed across rewrite: got %o, want 0600", got)
 	}
 }
 

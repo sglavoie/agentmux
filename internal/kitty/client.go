@@ -109,11 +109,11 @@ func (c *SubprocessClient) LaunchTab(opts LaunchOpts) error {
 	if opts.Location != "" {
 		args = append(args, "--location="+opts.Location)
 	}
-	for k, v := range opts.Env {
-		args = append(args, "--env="+k+"="+v)
+	for _, k := range sortedKeys(opts.Env) {
+		args = append(args, "--env="+k+"="+opts.Env[k])
 	}
-	for k, v := range opts.UserVars {
-		args = append(args, "--var="+k+"="+v)
+	for _, k := range sortedKeys(opts.UserVars) {
+		args = append(args, "--var="+k+"="+opts.UserVars[k])
 	}
 	// Use a `--` separator so that a Cmdline whose first token begins with a
 	// dash (e.g. an opaque shell wrapper passed in by callers) cannot be
@@ -152,6 +152,9 @@ func (c *SubprocessClient) MoveTab(matchExpr string, delta int) error {
 }
 
 func (c *SubprocessClient) SetTabColor(matchExpr, activeBg, inactiveBg, activeFg, inactiveFg string) error {
+	if activeBg == "" && inactiveBg == "" && activeFg == "" && inactiveFg == "" {
+		return nil
+	}
 	args := []string{"set-tab-color", "--match=" + matchExpr}
 	if activeBg != "" {
 		args = append(args, "active_bg="+activeBg)
@@ -181,17 +184,24 @@ func (c *SubprocessClient) SetUserVars(matchExpr string, vars map[string]string)
 	if len(vars) == 0 {
 		return nil
 	}
-	keys := make([]string, 0, len(vars))
-	for k := range vars {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
 	args := []string{"set-user-vars", "--match=" + matchExpr}
-	for _, k := range keys {
+	for _, k := range sortedKeys(vars) {
 		args = append(args, k+"="+vars[k])
 	}
 	_, err := c.kitten(args...)
 	return err
+}
+
+func sortedKeys(m map[string]string) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func (c *SubprocessClient) FocusTab(matchExpr string) error {
