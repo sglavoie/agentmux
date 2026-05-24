@@ -36,6 +36,11 @@ const ageColumnWidth = 6
 // "approaching stale" without competing with the row's icon column.
 const ageWarningGlyph = "⏳"
 
+// harnessColWidth is the visual width of the harness badge text
+// ("[copilot]" = 9 cells). The column is always reserved so rows stay
+// aligned regardless of which harness (or none) a session uses.
+const harnessColWidth = 9
+
 // renderListAt renders the session list with an explicit width budget. Used
 // when the preview pane consumes part of the row so only the directory column
 // shrinks instead of the icon/badge/title columns.
@@ -308,14 +313,16 @@ func countInGroup(sessions []session.RunningSession, group int, lastActivity map
 
 var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}
 
-// harnessAbbrev returns a two-letter lowercase abbreviation for the harness
-// name, or "" when the harness is unknown/empty.
-func harnessAbbrev(h string) string {
+// harnessLabel returns the lowercase harness display name used in the
+// badge column, or "" when the harness is unknown/empty.
+func harnessLabel(h string) string {
 	switch strings.ToLower(h) {
 	case "claude":
-		return "cl"
+		return "claude"
+	case "codex":
+		return "codex"
 	case "copilot":
-		return "cp"
+		return "copilot"
 	}
 	return ""
 }
@@ -350,10 +357,18 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int,
 
 	badge := style.Render("[" + acctBadge + "]")
 
-	// Optional harness badge.
-	harnessBadge := ""
-	if abbrev := harnessAbbrev(s.Harness); abbrev != "" {
-		harnessBadge = styleDim.Render("[" + abbrev + "]")
+	// Harness badge column, always reserved so rows stay aligned regardless
+	// of which harness (or none) the session uses.
+	var harnessCell string
+	if label := harnessLabel(s.Harness); label != "" {
+		text := "[" + label + "]"
+		pad := harnessColWidth - runewidth.StringWidth(text)
+		if pad < 0 {
+			pad = 0
+		}
+		harnessCell = styleDim.Render(text) + strings.Repeat(" ", pad)
+	} else {
+		harnessCell = strings.Repeat(" ", harnessColWidth)
 	}
 
 	// Title: use the project title padded to titleColWidth.
@@ -364,11 +379,9 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int,
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		harnessW := 0
-		if harnessBadge != "" {
-			harnessW = 5 // "[cl] " = 4 chars + 1 space
-		}
-		used := 3 + 4 + titleColWidth + 3 + harnessW // icon+space + badge + title + separators + harness
+		used := 3 + 4 + harnessColWidth + 1 + titleColWidth + 3
+		// icon+space (3) + "[X] " badge (4) + harness (9) + space (1)
+		//   + title (20) + separators before dir (3)
 		available := width - used
 		if available > 10 {
 			maxDir = available
@@ -383,29 +396,20 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int,
 	}
 	dir = styleDim.Render(dir)
 
-	if harnessBadge != "" {
-		return iconCol + " " + badge + " " + harnessBadge + " " + title + "  " + ageCell + dir
-	}
-	return iconCol + " " + badge + " " + title + "  " + ageCell + dir
+	return iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
 }
 
-// iconDisplayWidth returns the visual cell width of a state icon, with a
-// fix-up for emoji-presentation sequences. go-runewidth measures rune by
-// rune and treats the U+FE0F variation selector as zero-width, so glyphs
-// like "⚠️" come out as 1 cell even though Kitty renders them as 2 cells.
-// When we see U+FE0F and a sub-2 measurement, we treat the icon as 2 cells
-// to keep the icon column aligned.
+// iconDisplayWidth returns the visual cell width of a state icon. We rely
+// on go-runewidth's measurement; FE0F variation selectors are reported as
+// zero-width which matches how Kitty actually renders these glyphs as a
+// single cell. The caller (padIconCell / formatRow) is responsible for
+// padding to the 2-cell icon column.
 func iconDisplayWidth(icon string) int {
-	w := runewidth.StringWidth(icon)
-	if w < 2 && strings.ContainsRune(icon, '️') {
-		return 2
-	}
-	return w
+	return runewidth.StringWidth(icon)
 }
 
-// padIconCell returns icon padded to exactly 2 visual cells. Used where
-// runewidth and the terminal disagree on emoji width (notably ⚡ vs 🛑) so
-// downstream layout stays stable across frame diffs.
+// padIconCell returns icon padded to exactly 2 visual cells so the icon
+// column stays a stable width regardless of which state glyph is rendered.
 func padIconCell(icon string) string {
 	w := iconDisplayWidth(icon)
 	if w >= 2 {

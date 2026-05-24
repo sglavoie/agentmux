@@ -137,17 +137,11 @@ func TestStateGroupZeroThreshold(t *testing.T) {
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 // terminalWidth approximates how many cells a string consumes when
-// printed to a real terminal. go-runewidth treats U+FE0F as zero-width
-// even though it forces emoji presentation (2 cells) on the preceding
-// base character, so we add 1 per variation selector to compensate.
+// printed to a real terminal. Kitty renders FE0F-bearing glyphs like
+// "⚠️" as a single cell (matching go-runewidth's measurement), so a
+// straight StringWidth call is what we want here.
 func terminalWidth(s string) int {
-	w := runewidth.StringWidth(s)
-	for _, r := range s {
-		if r == '️' {
-			w++
-		}
-	}
-	return w
+	return runewidth.StringWidth(s)
 }
 
 // idxBadge returns the visual cell offset of the first '[' character (the
@@ -249,52 +243,95 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 	}
 }
 
-// TestFormatRowIconColumnAlignment locks in that a row carrying the ⚠️
-// warning icon aligns its account badge at the same visual column as a
-// row carrying the ⚡ bolt icon. Without iconDisplayWidth's U+FE0F
-// handling, ⚠️ would be measured as 1 cell and over-padded, shifting
-// every following column right by one.
-func TestFormatRowIconColumnAlignment(t *testing.T) {
-	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "x"}
-	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "x"}
+// TestFormatRowWarningIconAlignment locks in that a row carrying the ⚠️
+// warning icon aligns column-for-column with a row carrying the ⚡ bolt
+// icon. Kitty renders ⚠️ as a single cell, so iconDisplayWidth must
+// report 1 (not 2) and formatRow must pad the icon column with a
+// trailing space — otherwise every column after the icon shifts left by
+// one on warning-state rows. We assert alignment at both the account
+// badge and the title so the check covers the full row tail.
+func TestFormatRowWarningIconAlignment(t *testing.T) {
+	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "api"}
+	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "api"}
 	rowBolt := formatRow(sBolt, nil, 0, "")
 	rowWarn := formatRow(sWarn, nil, 0, "")
 
-	iBolt := idxBadge(rowBolt)
-	iWarn := idxBadge(rowWarn)
-	if iBolt < 0 || iWarn < 0 {
-		t.Fatalf("badge '[' not found: bolt=%d warning=%d (rows: %q / %q)", iBolt, iWarn, rowBolt, rowWarn)
+	iBoltBadge := idxBadge(rowBolt)
+	iWarnBadge := idxBadge(rowWarn)
+	if iBoltBadge < 0 || iWarnBadge < 0 {
+		t.Fatalf("badge '[' not found: bolt=%d warning=%d (rows: %q / %q)", iBoltBadge, iWarnBadge, rowBolt, rowWarn)
 	}
-	if iBolt != iWarn {
-		t.Errorf("badge column misaligned: bolt=%d, warning=%d", iBolt, iWarn)
+	if iBoltBadge != iWarnBadge {
+		t.Errorf("badge column misaligned: bolt=%d, warning=%d", iBoltBadge, iWarnBadge)
+	}
+
+	iBoltTitle := idxTitle(stripAnsi(rowBolt), "api")
+	iWarnTitle := idxTitle(stripAnsi(rowWarn), "api")
+	if iBoltTitle < 0 || iWarnTitle < 0 {
+		t.Fatalf("title not found: bolt=%d warning=%d (rows: %q / %q)", iBoltTitle, iWarnTitle, rowBolt, rowWarn)
+	}
+	if iBoltTitle != iWarnTitle {
+		t.Errorf("title column misaligned: bolt=%d, warning=%d", iBoltTitle, iWarnTitle)
 	}
 }
 
-// TestFormatRowHarnessBadge asserts that [cl] appears for claude sessions,
-// [cp] for copilot sessions, and nothing harness-related for empty harness.
+// idxTitle returns the visual cell offset of the first occurrence of the
+// given title text in a rendered row. Returns -1 if not found.
+func idxTitle(row, title string) int {
+	plain := ansiRE.ReplaceAllString(row, "")
+	i := strings.Index(plain, title)
+	if i < 0 {
+		return -1
+	}
+	return terminalWidth(plain[:i])
+}
+
+// TestFormatRowHarnessBadge asserts that [claude], [codex], and [copilot]
+// appear for their respective harnesses, that empty-harness rows show no
+// harness brackets, and that the title column lands at the same visual
+// offset across all four cases (always-reserved harness column).
 func TestFormatRowHarnessBadge(t *testing.T) {
 	sClaude := session.RunningSession{Base: "api", Account: "work", Harness: "claude"}
+	sCodex := session.RunningSession{Base: "api", Account: "work", Harness: "codex"}
 	sCopilot := session.RunningSession{Base: "api", Account: "work", Harness: "copilot"}
 	sNone := session.RunningSession{Base: "api", Account: "work", Harness: ""}
 
 	rowClaude := stripAnsi(formatRow(sClaude, nil, 0, ""))
+	rowCodex := stripAnsi(formatRow(sCodex, nil, 0, ""))
 	rowCopilot := stripAnsi(formatRow(sCopilot, nil, 0, ""))
 	rowNone := stripAnsi(formatRow(sNone, nil, 0, ""))
 
-	if !strings.Contains(rowClaude, "[cl]") {
-		t.Errorf("expected [cl] badge for claude harness; got %q", rowClaude)
+	if !strings.Contains(rowClaude, "[claude]") {
+		t.Errorf("expected [claude] badge for claude harness; got %q", rowClaude)
 	}
-	if strings.Contains(rowClaude, "[cp]") {
-		t.Errorf("unexpected [cp] badge in claude row; got %q", rowClaude)
+	if strings.Contains(rowClaude, "[codex]") || strings.Contains(rowClaude, "[copilot]") {
+		t.Errorf("unexpected non-claude badge in claude row; got %q", rowClaude)
 	}
-	if !strings.Contains(rowCopilot, "[cp]") {
-		t.Errorf("expected [cp] badge for copilot harness; got %q", rowCopilot)
+	if !strings.Contains(rowCodex, "[codex]") {
+		t.Errorf("expected [codex] badge for codex harness; got %q", rowCodex)
 	}
-	if strings.Contains(rowCopilot, "[cl]") {
-		t.Errorf("unexpected [cl] badge in copilot row; got %q", rowCopilot)
+	if strings.Contains(rowCodex, "[claude]") || strings.Contains(rowCodex, "[copilot]") {
+		t.Errorf("unexpected non-codex badge in codex row; got %q", rowCodex)
 	}
-	if strings.Contains(rowNone, "[cl]") || strings.Contains(rowNone, "[cp]") {
+	if !strings.Contains(rowCopilot, "[copilot]") {
+		t.Errorf("expected [copilot] badge for copilot harness; got %q", rowCopilot)
+	}
+	if strings.Contains(rowCopilot, "[claude]") || strings.Contains(rowCopilot, "[codex]") {
+		t.Errorf("unexpected non-copilot badge in copilot row; got %q", rowCopilot)
+	}
+	if strings.Contains(rowNone, "[claude]") || strings.Contains(rowNone, "[codex]") || strings.Contains(rowNone, "[copilot]") {
 		t.Errorf("expected no harness badge for empty harness; got %q", rowNone)
+	}
+
+	iClaude := idxTitle(rowClaude, "api")
+	iCodex := idxTitle(rowCodex, "api")
+	iCopilot := idxTitle(rowCopilot, "api")
+	iNone := idxTitle(rowNone, "api")
+	if iClaude < 0 || iCodex < 0 || iCopilot < 0 || iNone < 0 {
+		t.Fatalf("title not found: claude=%d codex=%d copilot=%d none=%d", iClaude, iCodex, iCopilot, iNone)
+	}
+	if iClaude != iCodex || iClaude != iCopilot || iClaude != iNone {
+		t.Errorf("title column misaligned: claude=%d codex=%d copilot=%d none=%d", iClaude, iCodex, iCopilot, iNone)
 	}
 }
 

@@ -336,24 +336,26 @@ func TestRenderListAgeColumnRendersDashForRowsWithoutWatchdog(t *testing.T) {
 	}
 }
 
-// TestHarnessAbbrev verifies the two-letter abbreviations and the empty fallback.
-func TestHarnessAbbrev(t *testing.T) {
+// TestHarnessLabel verifies the full-name labels and the empty fallback.
+func TestHarnessLabel(t *testing.T) {
 	cases := []struct {
 		input string
 		want  string
 	}{
-		{"claude", "cl"},
-		{"Claude", "cl"},
-		{"CLAUDE", "cl"},
-		{"copilot", "cp"},
-		{"Copilot", "cp"},
+		{"claude", "claude"},
+		{"Claude", "claude"},
+		{"CLAUDE", "claude"},
+		{"codex", "codex"},
+		{"Codex", "codex"},
+		{"copilot", "copilot"},
+		{"Copilot", "copilot"},
 		{"", ""},
 		{"unknown", ""},
 	}
 	for _, tc := range cases {
-		got := harnessAbbrev(tc.input)
+		got := harnessLabel(tc.input)
 		if got != tc.want {
-			t.Errorf("harnessAbbrev(%q) = %q, want %q", tc.input, got, tc.want)
+			t.Errorf("harnessLabel(%q) = %q, want %q", tc.input, got, tc.want)
 		}
 	}
 }
