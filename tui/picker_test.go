@@ -14,10 +14,11 @@ import (
 func pickerModel(t *testing.T) Model {
 	t.Helper()
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", Color: "blue"},
-			{Name: "personal", Color: "green"},
+			{Name: "work"},
+			{Name: "personal"},
 		},
 		Sessions: []config.Session{
 			{Title: "api", Directory: "/home/user/api", Account: "work"},

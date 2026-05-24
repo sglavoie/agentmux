@@ -44,7 +44,7 @@ func renderListAt(m Model, width int) string {
 		return renderEmptyHero(m, width)
 	}
 
-	acctColor := buildAccountColorMap(m)
+	acctColor := buildProfileColorMap(m)
 
 	groupCounts := countGroups(m.filtered, m.lastActivity, m.idleThreshold)
 	multiGroup := groupCounts > 1
@@ -414,11 +414,12 @@ func padIconCell(icon string) string {
 	return icon + strings.Repeat(" ", 2-w)
 }
 
-// buildAccountColorMap maps account name → palette color name from config.
-func buildAccountColorMap(m Model) map[string]string {
-	result := make(map[string]string)
+// buildProfileColorMap maps profile name → palette color name resolved via
+// the profile's harness.
+func buildProfileColorMap(m Model) map[string]string {
+	result := make(map[string]string, len(m.cfg.Accounts))
 	for _, acc := range m.cfg.Accounts {
-		result[acc.Name] = acc.Color
+		result[acc.Name] = m.cfg.HarnessColor(acc.EffectiveHarness())
 	}
 	return result
 }

@@ -35,10 +35,11 @@ func (r *sequentialLSRunner) Run(name string, args ...string) ([]byte, []byte, e
 
 func buildTestConfig() *config.Config {
 	return &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"},
-			{Name: "personal", ConfigDir: "~/.config/claude", Color: "green"},
+			{Name: "work", ConfigDir: "~/.config/claude-work"},
+			{Name: "personal", ConfigDir: "~/.config/claude"},
 		},
 		Sessions: []config.Session{},
 	}
@@ -89,9 +90,10 @@ func TestLaunch_DedupUsesEffectiveProfile(t *testing.T) {
 	})
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "claude", ConfigDir: "~/.config/claude", Color: "blue"},
+			{Name: "claude", ConfigDir: "~/.config/claude"},
 		},
 	}
 
@@ -236,9 +238,10 @@ func TestLaunch_StoresExplicitFlags(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--account-flag"}},
+			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--account-flag"}},
 		},
 	}
 
@@ -452,7 +455,6 @@ func TestLaunch_InsertsRelativeToFocusedWindow(t *testing.T) {
 		Directory: "/Users/user/projects/beta",
 	}
 	acc := cfg.Accounts[0]
-	acc.Color = ""
 
 	err := session.Launch(client, sess, acc, cfg)
 	if err != nil {

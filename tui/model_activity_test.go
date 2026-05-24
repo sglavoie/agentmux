@@ -181,8 +181,9 @@ func TestPickerProfileOverride_Persists(t *testing.T) {
 
 func TestClearStatusCmdSetsTabTitle(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 300},
-		Accounts: []config.Account{{Name: "work", Color: "blue"}},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 300},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts:      []config.Account{{Name: "work"}},
 	}
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")

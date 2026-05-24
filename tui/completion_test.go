@@ -176,9 +176,10 @@ func TestFilterCandidates_EmptyPrefixReturnsAll(t *testing.T) {
 
 func completionTestModel() Model {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Color: "blue"},
-			{Name: "personal", Color: "green"},
+			{Name: "work"},
+			{Name: "personal"},
 		},
 	}
 	return Model{cfg: cfg, focusedChipIdx: -1}

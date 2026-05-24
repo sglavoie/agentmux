@@ -22,7 +22,7 @@ func makeCopilotConfig(accounts []config.Account, overrides map[string]config.Ac
 }
 
 func makeCopilotAccount(name, dir string) config.Account {
-	return config.Account{Name: name, ConfigDir: dir, Harness: "copilot", Color: "blue"}
+	return config.Account{Name: name, ConfigDir: dir, Harness: "copilot"}
 }
 
 func TestCopilotHookContract_InstallPath(t *testing.T) {

@@ -81,10 +81,11 @@ func TestDispatchPickerLaunch_NoToastWhenAlreadyAlive(t *testing.T) {
 // treated as a no-op that returns the user to the return mode.
 func TestConfigPickerEnterProjectIdxOOBSafe(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", Color: "blue"},
-			{Name: "personal", Color: "green"},
+			{Name: "work"},
+			{Name: "personal"},
 		},
 		Sessions: []config.Session{
 			{Title: "api", Directory: "/api", Account: "work"},
@@ -185,9 +186,10 @@ func TestModeRoundTripBackToList(t *testing.T) {
 // ModeList. Regression guard against either stage swallowing the wrong key.
 func TestPickerEscClearsThenExits(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", Color: "blue"},
+			{Name: "work"},
 		},
 		Sessions: []config.Session{
 			{Title: "api", Account: "work"},
@@ -233,9 +235,10 @@ func TestPickerEscClearsThenExits(t *testing.T) {
 // panic on an out-of-range pickerCursor and does not mutate selection.
 func TestPickerSpaceWithEmptyFilteredIdxIsSafe(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		Accounts: []config.Account{{Name: "work", Color: "blue"}},
-		Sessions: []config.Session{{Title: "api", Account: "work"}},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts:      []config.Account{{Name: "work"}},
+		Sessions:      []config.Session{{Title: "api", Account: "work"}},
 	}
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
@@ -448,9 +451,10 @@ func TestCtrlCQuitsFromSearchMode(t *testing.T) {
 // search submode. Same handler shape, same bug, same fix.
 func TestCtrlCQuitsFromPickerSearchMode(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		Accounts: []config.Account{{Name: "work", Color: "blue"}},
-		Sessions: []config.Session{{Title: "api", Account: "work"}},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts:      []config.Account{{Name: "work"}},
+		Sessions:      []config.Session{{Title: "api", Account: "work"}},
 	}
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")

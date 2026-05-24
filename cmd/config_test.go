@@ -108,17 +108,18 @@ func TestConfigHooksSync_ReturnsErrorOnPartialFailure(t *testing.T) {
 [defaults]
 sort = "alpha"
 
+[harness_colors]
+claude = "blue"
+
 [[profiles]]
 name = "good"
 harness = "claude"
 home_dir = "` + goodHome + `"
-color = "blue"
 
 [[profiles]]
 name = "bad"
 harness = "claude"
 home_dir = "` + badHome + `"
-color = "green"
 `
 	if err := os.WriteFile(cfgPath, []byte(cfgBody), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)

@@ -82,7 +82,7 @@ func renderSplit(m Model) string {
 	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
 		sess = m.filtered[m.cursor]
 	}
-	acctColor := buildAccountColorMap(m)
+	acctColor := buildProfileColorMap(m)
 
 	if cfg.Direction == "vertical" {
 		previewHeight := int(float64(paneHeight) * cfg.Ratio)

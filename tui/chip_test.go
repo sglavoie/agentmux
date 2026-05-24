@@ -90,9 +90,10 @@ func TestSerializeFilterEscapesLeadingMarkers(t *testing.T) {
 
 func chipTestModel() Model {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", Color: "blue"},
-			{Name: "personal", Color: "green"},
+			{Name: "work"},
+			{Name: "personal"},
 		},
 	}
 	m := Model{cfg: cfg, width: 120, focusedChipIdx: -1}

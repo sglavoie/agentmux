@@ -95,9 +95,20 @@ hook_silence = true
 permission_debounce_ms = 500
 
 
+# ── Harness colors ────────────────────────────────────────────────────────────
+# Tab bar accent color per harness. Every harness referenced by a profile
+# below must have an entry here. Valid colors: green, blue, red, orange,
+# purple, teal, pink, yellow, gray, cyan.
+[harness_colors]
+claude  = "blue"
+copilot = "green"
+codex   = "purple"
+
+
 # ── Profiles ──────────────────────────────────────────────────────────────────
-# A profile ties a harness to an isolated home directory and a tab color.
+# A profile ties a harness to an isolated home directory.
 # You can define as many profiles as you like and mix harnesses freely.
+# Tab color is now per-harness (see [harness_colors] above), not per-profile.
 #
 # Required fields:
 #   name      Unique identifier used to reference this profile from projects.
@@ -106,9 +117,6 @@ permission_debounce_ms = 500
 #             Claude exports CLAUDE_CONFIG_DIR=<home_dir>.
 #             Copilot exports COPILOT_HOME=<home_dir>.
 #             Codex exports CODEX_HOME=<home_dir>.
-#   color     Tab bar accent color for sessions using this profile.
-#             One of: green, blue, red, orange, purple, teal, pink, yellow,
-#             gray, cyan.
 #
 # Optional fields:
 #   args      Flags passed to every session launched under this profile.
@@ -123,7 +131,6 @@ permission_debounce_ms = 500
 # name = "claude-work"
 # harness = "claude"
 # home_dir = "~/.config/claude-work"
-# color = "blue"
 # args = ["--dangerously-skip-permissions"]
 
 # Example Copilot profile:
@@ -131,7 +138,6 @@ permission_debounce_ms = 500
 # name = "copilot-work"
 # harness = "copilot"
 # home_dir = "~/.copilot-work"
-# color = "green"
 # args = ["--model", "gpt-5"]
 
 # Example Codex profile:
@@ -139,7 +145,6 @@ permission_debounce_ms = 500
 # name = "codex-work"
 # harness = "codex"
 # home_dir = "~/.codex-work"
-# color = "purple"
 # args = ["--dangerously-bypass-hook-trust"]
 
 
@@ -198,3 +203,5 @@ permission_debounce_ms = 500
 #   account               → profile    (on projects)
 #   claude_flags          → args
 #   stale_active_threshold → [defaults.watchdog].active
+#   profiles[].color      → [harness_colors] (now per-harness, not per-profile)
+#     NOTE: this is a hard error, not a soft migration — old configs must be updated.

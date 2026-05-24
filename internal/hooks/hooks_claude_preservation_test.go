@@ -35,7 +35,7 @@ func TestMergePreservesUserHooks(t *testing.T) {
 	writeJSON(t, filepath.Join(accountDir, "settings.json"), existing)
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	_, err := MergeAll(cfg, "", testBin)
@@ -92,7 +92,7 @@ func TestMergePreservesUserMatcher(t *testing.T) {
 	writeJSON(t, filepath.Join(accountDir, "settings.json"), existing)
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
@@ -145,7 +145,7 @@ func TestMergePreservesThirdPartyHookIndicatorSubstring(t *testing.T) {
 	writeJSON(t, filepath.Join(accountDir, "settings.json"), existing)
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
@@ -211,7 +211,7 @@ func TestMergePreservesUserHookColocatedInAmxGroup(t *testing.T) {
 	writeJSON(t, filepath.Join(accountDir, "settings.json"), existing)
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
@@ -263,7 +263,7 @@ func TestMergeRefusesMalformedHooksValue(t *testing.T) {
 	}
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	results, err := MergeAll(cfg, "", testBin)

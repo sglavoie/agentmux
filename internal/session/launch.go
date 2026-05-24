@@ -148,7 +148,8 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 
 	// Apply tab color with exponential backoff retry.
 	// Kitty may not register the new tab immediately for color changes.
-	if color, err := palette.Lookup(acc.Color); err == nil {
+	colorName := cfg.HarnessColor(acc.EffectiveHarness())
+	if color, err := palette.Lookup(colorName); err == nil {
 		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
 			// Tab color is cosmetic — degrade to a Warn-level log so the
 			// failure is visible in `amx daemon start --debug` output
@@ -156,6 +157,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 			slog.Warn("applying tab color after launch",
 				"title", formattedTitle,
 				"account", acc.Name,
+				"harness", acc.EffectiveHarness(),
 				"error", colorErr,
 			)
 		}

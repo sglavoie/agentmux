@@ -149,9 +149,10 @@ func TestRestart_NewSessionUsesAccountArgs(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--account-flag"}},
+			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--account-flag"}},
 		},
 	}
 
@@ -270,9 +271,10 @@ func TestRestart_OverrideResolution(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"},
+			{Name: "work", ConfigDir: "~/.config/claude-work"},
 		},
 	}
 

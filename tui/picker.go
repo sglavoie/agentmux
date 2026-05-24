@@ -89,7 +89,7 @@ func renderPickerList(m Model) string {
 		return sb.String()
 	}
 
-	acctColor := buildAccountColorMap(m)
+	acctColor := buildProfileColorMap(m)
 
 	for cursor, origIdx := range m.pickerFilteredIdx {
 		sess := m.pickerSessionWithResolvedProfile(origIdx)
@@ -133,7 +133,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 	}
 	sess := m.pickerSessionWithResolvedProfile(origIdx)
 	defaultProfile := m.pickerSessions[origIdx].EffectiveProfile()
-	acctColor := buildAccountColorMap(m)
+	acctColor := buildProfileColorMap(m)
 
 	lines := make([]string, 0, height)
 	header := accountStyle(acctColor[sess.EffectiveProfile()]).Render(

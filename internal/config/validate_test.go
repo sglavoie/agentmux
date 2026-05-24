@@ -28,8 +28,9 @@ func TestValidate_MissingHomeDirAfterNormalization(t *testing.T) {
 	// so a profile with no home_dir or config_dir specified does not fail validation
 	// for home_dir. This test documents that invariant.
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "belt", Harness: "claude", Color: "blue"},
+			{Name: "belt", Harness: "claude"},
 		},
 	}
 	err := config.Validate(cfg)
@@ -48,8 +49,9 @@ func TestValidate_MissingHomeDirAfterNormalization(t *testing.T) {
 // bound that actually matches the predicate.
 func TestValidate_PreviewMinDimensions(t *testing.T) {
 	zero := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 	}
 	zero.Defaults.Preview.MinCols = 0
@@ -59,8 +61,9 @@ func TestValidate_PreviewMinDimensions(t *testing.T) {
 	}
 
 	neg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 	}
 	neg.Defaults.Preview.MinCols = -1
@@ -83,8 +86,9 @@ func TestValidate_DuplicateProjectTitlePerProfile(t *testing.T) {
 	// keys on this pair, so duplicates would mask one of them and silently confuse
 	// the user. Validation must surface this rather than wait for runtime confusion.
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "work"},
@@ -107,8 +111,9 @@ func TestValidate_DuplicateProjectTitlePerProfile(t *testing.T) {
 // validation only checked exact-case equality.
 func TestValidate_DuplicateProjectTitleCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "work"},
@@ -130,9 +135,10 @@ func TestValidate_DuplicateProjectTitleCaseInsensitive(t *testing.T) {
 // surface the collision rather than wait for confusing launch behavior.
 func TestValidate_DuplicateProjectTitleProfileCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
-			{Name: "Work", Harness: "claude", HomeDir: "/tmp/h2", Color: "green"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+			{Name: "Work", Harness: "claude", HomeDir: "/tmp/h2"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "work"},
@@ -152,9 +158,10 @@ func TestValidate_DuplicateProjectTitleAcrossProfilesAllowed(t *testing.T) {
 	// Same title under different profiles is allowed: launch dedup keys on
 	// (account, title), so they are distinct sessions.
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
-			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p", Color: "green"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w"},
+			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "work"},
@@ -172,8 +179,9 @@ func TestValidate_UnknownHookDisabledEvent(t *testing.T) {
 	// disabled and the user wonders why their hook still fires. Validation must
 	// catch this and report the typo with a hint to the valid set.
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 		Hooks: config.HooksConfig{
 			Overrides: map[string]config.AccountHookOverride{
@@ -201,9 +209,10 @@ func TestValidate_UnknownHookDisabledEvent(t *testing.T) {
 // profiles) instead of a phantom duplicate report.
 func TestValidate_EmptyNamesNotReportedAsDuplicate(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Harness: "claude", HomeDir: "/tmp/a", Color: "blue"},
-			{Harness: "claude", HomeDir: "/tmp/b", Color: "green"},
+			{Harness: "claude", HomeDir: "/tmp/a"},
+			{Harness: "claude", HomeDir: "/tmp/b"},
 		},
 	}
 	err := config.Validate(cfg)
@@ -227,9 +236,10 @@ func TestValidate_EmptyNamesNotReportedAsDuplicate(t *testing.T) {
 // collision directly.
 func TestValidate_DuplicateProfileNameCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/a", Color: "blue"},
-			{Name: "Work", Harness: "claude", HomeDir: "/tmp/b", Color: "green"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/a"},
+			{Name: "Work", Harness: "claude", HomeDir: "/tmp/b"},
 		},
 	}
 	err := config.Validate(cfg)
@@ -248,8 +258,9 @@ func TestValidate_DuplicateProfileNameCaseInsensitive(t *testing.T) {
 // reject it as unknown.
 func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "Work"},
@@ -267,8 +278,9 @@ func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
 // even though the override would be applied correctly at merge time.
 func TestValidate_HookOverrideKeyCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 		Hooks: config.HooksConfig{
 			Overrides: map[string]config.AccountHookOverride{
@@ -289,8 +301,9 @@ func TestValidate_HookOverrideKeyCaseInsensitive(t *testing.T) {
 // the other on a per-run basis. Surface it instead.
 func TestValidate_DuplicateHookOverrideKeyCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 		Hooks: config.HooksConfig{
 			Overrides: map[string]config.AccountHookOverride{
@@ -326,7 +339,8 @@ func TestValidate_NegativeWatchdogThresholds(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.Config{
-				Profiles: []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"}},
+				HarnessColors: map[string]string{"claude": "blue"},
+				Profiles:      []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h"}},
 			}
 			tc.mut(&cfg.Defaults)
 			err := config.Validate(cfg)
@@ -346,8 +360,9 @@ func TestValidate_NegativeWatchdogThresholds(t *testing.T) {
 // error so the user can locate it.
 func TestValidate_PerProfileNegativeWatchdog(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue", Watchdog: config.WatchdogConfig{Active: -5}},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Watchdog: config.WatchdogConfig{Active: -5}},
 		},
 	}
 	err := config.Validate(cfg)
@@ -365,8 +380,9 @@ func TestValidate_PerProfileNegativeWatchdog(t *testing.T) {
 // the zero-value Defaults struct used by tests; either way 0 is benign.
 func TestValidate_ZeroWatchdogAccepted(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Watchdog: config.WatchdogConfig{Active: 0, Subagent: 0, Compact: 0, HookSilence: 0}},
-		Profiles: []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"}},
+		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 0, Subagent: 0, Compact: 0, HookSilence: 0}},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles:      []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h"}},
 	}
 	if err := config.Validate(cfg); err != nil {
 		t.Fatalf("zero watchdog values must validate cleanly: %v", err)
@@ -384,9 +400,10 @@ func TestValidate_ZeroWatchdogAccepted(t *testing.T) {
 // both default-scope and per-profile keys.
 func TestValidate_SubThirtyWatchdogWarns(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
+		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue", Watchdog: config.WatchdogConfig{Subagent: 10}},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Watchdog: config.WatchdogConfig{Subagent: 10}},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {
@@ -411,9 +428,10 @@ func TestValidate_SubThirtyWatchdogWarns(t *testing.T) {
 // the user revalidates after an edit.
 func TestValidate_WatchdogWarningsIdempotent(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
+		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue", Watchdog: config.WatchdogConfig{Subagent: 10}},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Watchdog: config.WatchdogConfig{Subagent: 10}},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {
@@ -447,9 +465,10 @@ func TestValidate_WatchdogWarningsIdempotent(t *testing.T) {
 // previous Validate call.
 func TestValidate_StripsStaleWatchdogWarningsOnRevalidate(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
+		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {
@@ -485,9 +504,10 @@ func TestValidate_StripsStaleWatchdogWarningsOnRevalidate(t *testing.T) {
 // profiles. The user must collapse them to one value or use only profile.
 func TestValidate_ProjectProfileAccountConflict(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "X", Harness: "claude", HomeDir: "/tmp/x", Color: "blue"},
-			{Name: "Y", Harness: "claude", HomeDir: "/tmp/y", Color: "green"},
+			{Name: "X", Harness: "claude", HomeDir: "/tmp/x"},
+			{Name: "Y", Harness: "claude", HomeDir: "/tmp/y"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "X", Account: "Y"},
@@ -512,8 +532,9 @@ func TestValidate_ProjectProfileAccountConflict(t *testing.T) {
 // configs were written with both keys set to the same value.
 func TestValidate_ProjectProfileAccountMatchingAccepted(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "work", Account: "Work"},
@@ -534,8 +555,9 @@ func TestValidate_NegativePermissionDebounce(t *testing.T) {
 		Defaults: config.Defaults{
 			Notifications: config.NotificationConfig{PermissionDebounceMs: -1},
 		},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 	}
 	err := config.Validate(cfg)
@@ -551,8 +573,9 @@ func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
 		Hooks: config.HooksConfig{
 			Overrides: map[string]config.AccountHookOverride{
@@ -566,5 +589,136 @@ func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "worrk") {
 		t.Errorf("expected error to mention the unknown profile %q, got %q", "worrk", err.Error())
+	}
+}
+
+// TestValidate_LegacyPerProfileColorRejected pins that the deprecated
+// per-profile `color` key is reported as a hard error with a migration hint
+// pointing at [harness_colors]. The old single-color-per-profile model has
+// been replaced by harness-keyed colors; any config still carrying the legacy
+// key must surface a clear migration message rather than silently mirroring
+// the value.
+func TestValidate_LegacyPerProfileColorRejected(t *testing.T) {
+	// This test deliberately exercises the deprecated Account.Color field
+	// to verify Validate rejects it; the staticcheck SA1019 hit is expected.
+	legacy := config.Account{Name: "work", Harness: "claude", HomeDir: "/tmp/h"}
+	legacy.Color = "blue" //nolint:staticcheck // intentional: validator regression for deprecated key
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles:      []config.Account{legacy},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for legacy per-profile color, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "'color' has moved to [harness_colors]") {
+		t.Errorf("expected migration message in error, got %q", msg)
+	}
+	if !strings.Contains(msg, "work") {
+		t.Errorf("expected error to name the offending profile %q, got %q", "work", msg)
+	}
+}
+
+// TestValidate_MissingHarnessColorListsReferringProfiles pins that the
+// validator reports a missing [harness_colors] entry for any harness used by
+// at least one profile, and the message names every profile referencing the
+// harness in sorted order so the user can locate them.
+func TestValidate_MissingHarnessColorListsReferringProfiles(t *testing.T) {
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w"},
+			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for missing harness color, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "[harness_colors] is missing color for harness \"claude\"") {
+		t.Errorf("expected missing-harness error, got %q", msg)
+	}
+	if !strings.Contains(msg, "personal, work") {
+		t.Errorf("expected sorted profile list in error, got %q", msg)
+	}
+}
+
+// TestValidate_HarnessColorsUnknownHarnessRejected pins that an entry in
+// [harness_colors] keyed by an unknown harness name is reported with the set
+// of valid harnesses appended for guidance.
+func TestValidate_HarnessColorsUnknownHarnessRejected(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue", "bogus": "red"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for unknown harness key, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "[harness_colors] unknown harness \"bogus\"") {
+		t.Errorf("expected unknown-harness error, got %q", msg)
+	}
+	if !strings.Contains(msg, "valid harnesses:") {
+		t.Errorf("expected message to list valid harnesses, got %q", msg)
+	}
+}
+
+// TestValidate_HarnessColorsInvalidColorRejected pins that a [harness_colors]
+// value that is not in the palette is rejected with a per-harness location and
+// the palette list appended.
+func TestValidate_HarnessColorsInvalidColorRejected(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "magenta"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for invalid harness color, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "[harness_colors].claude") {
+		t.Errorf("expected per-harness location in error, got %q", msg)
+	}
+	if !strings.Contains(msg, "magenta") {
+		t.Errorf("expected offending color in error, got %q", msg)
+	}
+}
+
+// TestValidate_HarnessColorsExtraEntryForUnusedHarnessAllowed pins that
+// supplying a [harness_colors] entry for a harness no profile references is
+// allowed — the user may be staging a future profile, and the entry is inert
+// until referenced.
+func TestValidate_HarnessColorsExtraEntryForUnusedHarnessAllowed(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue", "copilot": "purple"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("extra harness_colors entry for unused harness must validate cleanly: %v", err)
+	}
+}
+
+// TestValidate_HarnessColorsTwoProfilesShareOneEntry pins that two profiles
+// backed by the same harness require only one [harness_colors] entry — the
+// whole point of the migration is that color is keyed by harness, not by
+// profile.
+func TestValidate_HarnessColorsTwoProfilesShareOneEntry(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w"},
+			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("two profiles sharing a harness must validate with one entry: %v", err)
 	}
 }

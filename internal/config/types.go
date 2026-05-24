@@ -4,12 +4,17 @@ import "github.com/sglavoie/agentmux/internal/harness"
 
 // Config is the top-level structure for config.toml.
 type Config struct {
-	Defaults Defaults             `toml:"defaults"`
-	Profiles []Account            `toml:"profiles"`
-	Accounts []Account            `toml:"accounts"` // deprecated alias; mirrored from Profiles on load
-	Projects []Session            `toml:"projects"`
-	Sessions []Session            `toml:"sessions"` // deprecated alias; mirrored from Projects on load
-	Hooks    HooksConfig          `toml:"hooks"`
+	Defaults Defaults    `toml:"defaults"`
+	Profiles []Account   `toml:"profiles"`
+	Accounts []Account   `toml:"accounts"` // deprecated alias; mirrored from Profiles on load
+	Projects []Session   `toml:"projects"`
+	Sessions []Session   `toml:"sessions"` // deprecated alias; mirrored from Projects on load
+	Hooks    HooksConfig `toml:"hooks"`
+
+	// HarnessColors maps a harness name (normalized) to a palette color
+	// name. Looked up by Config.HarnessColor. Replaces the per-profile
+	// Account.Color field, which is being phased out.
+	HarnessColors map[string]string `toml:"harness_colors"`
 
 	// Deprecations records any legacy TOML keys encountered during Load.
 	// Populated from the raw decoded struct before normalizeAliases erases
@@ -86,27 +91,30 @@ type PreviewConfig struct {
 // type name because much of the codebase still uses it while the user-facing
 // config is moving to `profiles`.
 type Account struct {
-	Name      string         `toml:"name"`
-	Harness   string         `toml:"harness"`
-	HomeDir   string         `toml:"home_dir"`
-	ConfigDir string         `toml:"config_dir"`
-	Color     string         `toml:"color"`
-	Args      []string       `toml:"args"`
-	Watchdog  WatchdogConfig `toml:"watchdog"` // per-profile override; zero fields fall back to defaults at read time
+	Name      string `toml:"name"`
+	Harness   string `toml:"harness"`
+	HomeDir   string `toml:"home_dir"`
+	ConfigDir string `toml:"config_dir"`
+	// Deprecated: per-profile tab color was replaced by the top-level
+	// [harness_colors] table. The field is retained only so config Load
+	// can detect the legacy key and emit a migration error via Validate.
+	Color    string         `toml:"color"`
+	Args     []string       `toml:"args"`
+	Watchdog WatchdogConfig `toml:"watchdog"` // per-profile override; zero fields fall back to defaults at read time
 }
 
 // Session defines a configured project / launch template. Sessions remain as a
 // deprecated internal type name because much of the codebase still uses it
 // while the user-facing config is moving to `projects`.
 type Session struct {
-	Title          string            `toml:"title"`
-	Directory      string            `toml:"directory"`
-	Profile        string            `toml:"profile"`
-	Account        string            `toml:"account"`
-	Args           []string          `toml:"args"`          // preferred per-project args
-	ClaudeFlags    []string          `toml:"claude_flags"` // legacy alias for args
-	Env            map[string]string `toml:"env"`
-	Groups         []string          `toml:"groups"`
+	Title       string            `toml:"title"`
+	Directory   string            `toml:"directory"`
+	Profile     string            `toml:"profile"`
+	Account     string            `toml:"account"`
+	Args        []string          `toml:"args"`         // preferred per-project args
+	ClaudeFlags []string          `toml:"claude_flags"` // legacy alias for args
+	Env         map[string]string `toml:"env"`
+	Groups      []string          `toml:"groups"`
 }
 
 // HooksConfig is the top-level [hooks] table.
@@ -157,6 +165,16 @@ func (d Defaults) EffectiveArgs() []string {
 // EffectiveHarness returns the normalized harness for the profile.
 func (a Account) EffectiveHarness() string {
 	return harness.Normalize(a.Harness)
+}
+
+// HarnessColor returns the configured tab color for the named harness,
+// or "" if none is set. Normalizes the harness name so callers can pass
+// raw or effective harness names interchangeably.
+func (c *Config) HarnessColor(name string) string {
+	if c == nil {
+		return ""
+	}
+	return c.HarnessColors[harness.Normalize(name)]
 }
 
 // EffectiveHomeDir returns the normalized profile home/config directory.

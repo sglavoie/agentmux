@@ -199,7 +199,7 @@ func renderChips(m Model, width int) string {
 		return ""
 	}
 	comps := m.activeFilter.Components()
-	acctColor := buildAccountColorMap(m)
+	acctColor := buildProfileColorMap(m)
 
 	const chipSep = "  "
 	sepW := lipgloss.Width(chipSep)

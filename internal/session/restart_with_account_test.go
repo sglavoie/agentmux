@@ -79,10 +79,11 @@ func TestRestartWithAccount_NewSessionPicksUpTargetAccountArgs(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--work-flag"}},
-			{Name: "personal", ConfigDir: "~/.config/claude", Color: "green", Args: []string{"--personal-flag"}},
+			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--work-flag"}},
+			{Name: "personal", ConfigDir: "~/.config/claude", Args: []string{"--personal-flag"}},
 		},
 	}
 
@@ -220,10 +221,11 @@ func TestRestartWithAccount_LegacySessionPreservesEffectiveArgs(t *testing.T) {
 	}
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--work-flag"}},
-			{Name: "personal", ConfigDir: "~/.config/claude-personal", Color: "green", Args: []string{"--personal-flag"}},
+			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--work-flag"}},
+			{Name: "personal", ConfigDir: "~/.config/claude-personal", Args: []string{"--personal-flag"}},
 		},
 	}
 

@@ -280,8 +280,8 @@ func TestListONoOpWithoutMatchingConfig(t *testing.T) {
 // Mirrors the contract enforced by session.findAccount.
 func TestFindAccountByNameCaseInsensitive(t *testing.T) {
 	accounts := []config.Account{
-		{Name: "work", Color: "blue"},
-		{Name: "personal", Color: "green"},
+		{Name: "work"},
+		{Name: "personal"},
 	}
 	for _, name := range []string{"work", "Work", "WORK"} {
 		got, ok := findAccountByName(accounts, name)

@@ -20,6 +20,7 @@ func Validate(cfg *Config) error {
 	normalizeAliases(cfg)
 
 	errs = append(errs, validateDefaults(&cfg.Defaults)...)
+	errs = append(errs, validateHarnessColors(cfg)...)
 	errs = append(errs, validateAccounts(cfg.Profiles)...)
 	errs = append(errs, validateSessions(cfg.Projects, cfg.Profiles)...)
 	errs = append(errs, validateHookOverrides(cfg.Hooks, cfg.Profiles)...)
@@ -112,12 +113,11 @@ func validateAccounts(accounts []Account) []string {
 		if a.HomeDir == "" {
 			errs = append(errs, fmt.Sprintf("profile %q: home_dir is required", a.Name))
 		}
-		if a.Color == "" {
-			errs = append(errs, fmt.Sprintf("profile %q: color is required", a.Name))
-		} else if !ValidColor(a.Color) {
+		if a.Color != "" {
 			errs = append(errs, fmt.Sprintf(
-				"profile %q: invalid color %q\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
-				a.Name, a.Color,
+				"profile %q: 'color' has moved to [harness_colors] "+
+					"(one entry per harness, e.g. claude=\"blue\"); remove this field",
+				a.Name,
 			))
 		}
 		// Only check duplicates for named profiles. Otherwise a config with
@@ -146,6 +146,52 @@ func validateAccounts(accounts []Account) []string {
 		if a.Watchdog.HookSilence < 0 {
 			errs = append(errs, fmt.Sprintf("profile %q: watchdog.hook_silence must be >= 0", a.Name))
 		}
+	}
+	return errs
+}
+
+func validateHarnessColors(cfg *Config) []string {
+	var errs []string
+	keys := make([]string, 0, len(cfg.HarnessColors))
+	for k := range cfg.HarnessColors {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := cfg.HarnessColors[k]
+		if !harness.Valid(k) {
+			errs = append(errs, fmt.Sprintf(
+				"[harness_colors] unknown harness %q\n  → valid harnesses: %s",
+				k, strings.Join(harness.Names(), ", "),
+			))
+			continue
+		}
+		if v == "" || !ValidColor(v) {
+			errs = append(errs, fmt.Sprintf(
+				"[harness_colors].%s: invalid color %q\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
+				k, v,
+			))
+		}
+	}
+	used := map[string][]string{}
+	for _, p := range cfg.Profiles {
+		h := p.EffectiveHarness()
+		used[h] = append(used[h], p.Name)
+	}
+	harnessKeys := make([]string, 0, len(used))
+	for h := range used {
+		harnessKeys = append(harnessKeys, h)
+	}
+	sort.Strings(harnessKeys)
+	for _, h := range harnessKeys {
+		if _, ok := cfg.HarnessColors[h]; ok {
+			continue
+		}
+		sort.Strings(used[h])
+		errs = append(errs, fmt.Sprintf(
+			"[harness_colors] is missing color for harness %q (used by profile(s): %s)",
+			h, strings.Join(used[h], ", "),
+		))
 	}
 	return errs
 }

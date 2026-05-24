@@ -46,11 +46,13 @@ func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Acc
 		return fmt.Errorf("opening directory for %q: %w", formattedTitle, err)
 	}
 
-	if color, err := palette.Lookup(acc.Color); err == nil {
+	colorName := cfg.HarnessColor(acc.EffectiveHarness())
+	if color, err := palette.Lookup(colorName); err == nil {
 		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
 			slog.Warn("applying tab color after open",
 				"title", formattedTitle,
 				"account", acc.Name,
+				"harness", acc.EffectiveHarness(),
 				"error", colorErr,
 			)
 		}

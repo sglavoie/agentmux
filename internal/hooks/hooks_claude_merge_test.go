@@ -14,7 +14,7 @@ func TestMergeFreshWrite(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	results, err := MergeAll(cfg, "", testBin)
@@ -63,7 +63,7 @@ func TestMergeExcludesWorktreeHooks(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
@@ -105,7 +105,7 @@ func TestMergePreservesNonHooksTopLevelKeys(t *testing.T) {
 	writeJSON(t, settingsPath, original)
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
@@ -143,7 +143,7 @@ func TestMergeInstallsNewEvents(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
@@ -183,7 +183,7 @@ func TestMergeDisabledNewEvent(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig(
-		[]config.Account{{Name: "work", ConfigDir: accountDir, Color: "blue"}},
+		[]config.Account{{Name: "work", ConfigDir: accountDir}},
 		map[string]config.AccountHookOverride{
 			"work": {DisabledEvents: []string{"StopFailure"}},
 		},
@@ -227,7 +227,7 @@ func TestMergeDisabledEvents(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig(
-		[]config.Account{{Name: "work", ConfigDir: accountDir, Color: "blue"}},
+		[]config.Account{{Name: "work", ConfigDir: accountDir}},
 		map[string]config.AccountHookOverride{
 			"work": {DisabledEvents: []string{"UserPromptSubmit", "Stop"}},
 		},
@@ -272,7 +272,7 @@ func TestMergeOverrideKeyCaseInsensitive(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig(
-		[]config.Account{{Name: "work", ConfigDir: accountDir, Color: "blue"}},
+		[]config.Account{{Name: "work", ConfigDir: accountDir}},
 		map[string]config.AccountHookOverride{
 			"Work": {DisabledEvents: []string{"Stop"}},
 		},
@@ -298,7 +298,7 @@ func TestMergeSkippedWhenUnchanged(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	// First merge creates the file.
@@ -340,7 +340,7 @@ func TestMergeBakBackupCreated(t *testing.T) {
 	writeJSON(t, filepath.Join(accountDir, "settings.json"), existing)
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	results, _ := MergeAll(cfg, "", testBin)
@@ -358,8 +358,8 @@ func TestMergeFilterByAccount(t *testing.T) {
 	dir := t.TempDir()
 
 	cfg := makeConfig([]config.Account{
-		{Name: "work", ConfigDir: filepath.Join(dir, "work"), Color: "blue"},
-		{Name: "personal", ConfigDir: filepath.Join(dir, "personal"), Color: "green"},
+		{Name: "work", ConfigDir: filepath.Join(dir, "work")},
+		{Name: "personal", ConfigDir: filepath.Join(dir, "personal")},
 	}, nil)
 
 	results, err := MergeAll(cfg, "work", testBin)
@@ -373,7 +373,7 @@ func TestMergeFilterByAccount(t *testing.T) {
 
 func TestMergeFilterUnknownAccount(t *testing.T) {
 	cfg := makeConfig([]config.Account{
-		{Name: "work", ConfigDir: t.TempDir(), Color: "blue"},
+		{Name: "work", ConfigDir: t.TempDir()},
 	}, nil)
 
 	_, err := MergeAll(cfg, "nobody", testBin)
@@ -392,8 +392,8 @@ func TestMergeFilterByAccountCaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
 
 	cfg := makeConfig([]config.Account{
-		{Name: "work", ConfigDir: filepath.Join(dir, "work"), Color: "blue"},
-		{Name: "personal", ConfigDir: filepath.Join(dir, "personal"), Color: "green"},
+		{Name: "work", ConfigDir: filepath.Join(dir, "work")},
+		{Name: "personal", ConfigDir: filepath.Join(dir, "personal")},
 	}, nil)
 
 	results, err := MergeAll(cfg, "WORK", testBin)
@@ -415,13 +415,13 @@ func TestMergeUpdatesStaleHooks(t *testing.T) {
 	// Install with old binary path.
 	oldBin := "/old/amx"
 	cfgOld := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 	_, _ = MergeAll(cfgOld, "", oldBin)
 
 	// Now merge with new binary.
 	cfgNew := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 	results, err := MergeAll(cfgNew, "", testBin)
 	if err != nil {
@@ -476,7 +476,7 @@ func TestMergePreservesRestrictiveFilePerms(t *testing.T) {
 	}
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
@@ -515,7 +515,7 @@ func TestMergePreservesRestrictiveFilePermsAfterTightening(t *testing.T) {
 	settingsPath := filepath.Join(accountDir, "settings.json")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	// First merge installs the hooks with default 0o644 perms.
@@ -563,7 +563,7 @@ func TestMergeFreshWriteUsesDefaultPerm(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {

@@ -98,7 +98,7 @@ func TestMergeViaContract_PreservesBackup(t *testing.T) {
 	}
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
@@ -147,7 +147,7 @@ func TestMergeViaContract_FaultLeavesOriginalAndBackupIntact(t *testing.T) {
 	}
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	results, err := MergeAll(cfg, "", testBin)

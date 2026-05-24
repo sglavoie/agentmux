@@ -16,7 +16,7 @@ func TestStatusMissingNoFile(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	results, err := StatusAll(cfg, testBin)
@@ -40,7 +40,7 @@ func TestStatusMissingNoamxHooks(t *testing.T) {
 	})
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	results, _ := StatusAll(cfg, testBin)
@@ -54,7 +54,7 @@ func TestStatusInSync(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	// Merge to install correct hooks.
@@ -94,7 +94,7 @@ func TestStatusDrifted(t *testing.T) {
 	})
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 
 	results, err := StatusAll(cfg, testBin)
@@ -114,14 +114,14 @@ func TestOverallHookHealth_BucketsByStatus(t *testing.T) {
 	missingDir := filepath.Join(dir, "missing")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "in", ConfigDir: inSyncDir, Color: "green"},
-		{Name: "drifted", ConfigDir: driftedDir, Color: "blue"},
-		{Name: "missing", ConfigDir: missingDir, Color: "red"},
+		{Name: "in", ConfigDir: inSyncDir},
+		{Name: "drifted", ConfigDir: driftedDir},
+		{Name: "missing", ConfigDir: missingDir},
 	}, nil)
 
 	// in-sync: a successful merge installs the correct hooks.
 	inSyncOnly := makeConfig([]config.Account{
-		{Name: "in", ConfigDir: inSyncDir, Color: "green"},
+		{Name: "in", ConfigDir: inSyncDir},
 	}, nil)
 	if _, err := MergeAll(inSyncOnly, "", testBin); err != nil {
 		t.Fatalf("seed in-sync: %v", err)
@@ -172,7 +172,7 @@ func TestOverallHookHealth_AllInSyncIsHealthy(t *testing.T) {
 	accountDir := filepath.Join(dir, "claude")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "personal", ConfigDir: accountDir, Color: "green"},
+		{Name: "personal", ConfigDir: accountDir},
 	}, nil)
 	if _, err := MergeAll(cfg, "", testBin); err != nil {
 		t.Fatalf("MergeAll: %v", err)
@@ -206,13 +206,13 @@ func TestStatusAll_ContinuesPastPerAccountError(t *testing.T) {
 	missingDir := filepath.Join(dir, "missing")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "broken", ConfigDir: brokenDir, Color: "red"},
-		{Name: "in", ConfigDir: inSyncDir, Color: "green"},
-		{Name: "missing", ConfigDir: missingDir, Color: "blue"},
+		{Name: "broken", ConfigDir: brokenDir},
+		{Name: "in", ConfigDir: inSyncDir},
+		{Name: "missing", ConfigDir: missingDir},
 	}, nil)
 
 	inSyncOnly := makeConfig([]config.Account{
-		{Name: "in", ConfigDir: inSyncDir, Color: "green"},
+		{Name: "in", ConfigDir: inSyncDir},
 	}, nil)
 	if _, err := MergeAll(inSyncOnly, "", testBin); err != nil {
 		t.Fatalf("seed in-sync: %v", err)
@@ -264,12 +264,12 @@ func TestOverallHookHealth_ReturnsPartialBucketsOnError(t *testing.T) {
 	inSyncDir := filepath.Join(dir, "in-sync")
 
 	cfg := makeConfig([]config.Account{
-		{Name: "broken", ConfigDir: brokenDir, Color: "red"},
-		{Name: "in", ConfigDir: inSyncDir, Color: "green"},
+		{Name: "broken", ConfigDir: brokenDir},
+		{Name: "in", ConfigDir: inSyncDir},
 	}, nil)
 
 	inSyncOnly := makeConfig([]config.Account{
-		{Name: "in", ConfigDir: inSyncDir, Color: "green"},
+		{Name: "in", ConfigDir: inSyncDir},
 	}, nil)
 	if _, err := MergeAll(inSyncOnly, "", testBin); err != nil {
 		t.Fatalf("seed in-sync: %v", err)

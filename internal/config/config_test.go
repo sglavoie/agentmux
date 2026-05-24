@@ -137,7 +137,7 @@ func TestLoad_NormalizesLegacyClaudeFlags(t *testing.T) {
 func TestLoad_AccountArgs(t *testing.T) {
 	cfg := &config.Config{
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue", Args: []string{"--dangerously-skip-permissions"}},
+			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--dangerously-skip-permissions"}},
 		},
 	}
 	acc := cfg.Accounts[0]
@@ -180,8 +180,9 @@ func TestDefaultsEffectiveArgs_PrefersArgsOverClaudeFlags(t *testing.T) {
 
 func TestValidate_NegativeIdleThreshold(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{IdleThreshold: -1},
-		Accounts: []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"}},
+		Defaults:      config.Defaults{IdleThreshold: -1},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts:      []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work"}},
 	}
 	err := config.Validate(cfg)
 	if err == nil {
@@ -191,8 +192,9 @@ func TestValidate_NegativeIdleThreshold(t *testing.T) {
 
 func TestValidate_NegativeStaleActiveThreshold(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{StaleActiveThreshold: -1},
-		Accounts: []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"}},
+		Defaults:      config.Defaults{StaleActiveThreshold: -1},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts:      []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work"}},
 	}
 	err := config.Validate(cfg)
 	if err == nil {
@@ -244,8 +246,9 @@ func TestValidate_BadColor(t *testing.T) {
 
 func TestValidate_MissingTitle(t *testing.T) {
 	cfg := &config.Config{
-		Accounts: []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"}},
-		Sessions: []config.Session{{Title: "", Directory: "~/projects", Account: "work"}},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts:      []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work"}},
+		Sessions:      []config.Session{{Title: "", Directory: "~/projects", Account: "work"}},
 	}
 	err := config.Validate(cfg)
 	if err == nil {
@@ -255,9 +258,10 @@ func TestValidate_MissingTitle(t *testing.T) {
 
 func TestValidate_DuplicateAccountName(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"},
-			{Name: "work", ConfigDir: "~/.config/claude-work2", Color: "green"},
+			{Name: "work", ConfigDir: "~/.config/claude-work"},
+			{Name: "work", ConfigDir: "~/.config/claude-work2"},
 		},
 	}
 	err := config.Validate(cfg)
@@ -268,8 +272,9 @@ func TestValidate_DuplicateAccountName(t *testing.T) {
 
 func TestValidate_InvalidSort(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "random"},
-		Accounts: []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"}},
+		Defaults:      config.Defaults{Sort: "random"},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts:      []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work"}},
 	}
 	err := config.Validate(cfg)
 	if err == nil {

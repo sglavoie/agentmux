@@ -8,15 +8,16 @@ error = false
 permission = true
 stop = true
 
+[harness_colors]
+claude = "blue"
+
 [[accounts]]
 name = "work"
 config_dir = "~/.config/claude-work"
-color = "blue"
 
 [[accounts]]
 name = "personal"
 config_dir = "~/.config/claude"
-color = "green"
 
 [[sessions]]
 title = "W:api"

@@ -157,9 +157,10 @@ func TestLaunch_LogsWarnWhenColorRetryFails(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work", Color: "blue"},
+			{Name: "work", ConfigDir: "~/.config/claude-work"},
 		},
 	}
 	sess := config.Session{Title: "newproject", Account: "work", Directory: "/tmp/newproject"}

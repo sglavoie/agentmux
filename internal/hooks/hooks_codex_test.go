@@ -20,7 +20,7 @@ func makeCodexConfig(accounts []config.Account, overrides map[string]config.Acco
 }
 
 func makeCodexAccount(name, dir string) config.Account {
-	return config.Account{Name: name, HomeDir: dir, Harness: "codex", Color: "purple"}
+	return config.Account{Name: name, HomeDir: dir, Harness: "codex"}
 }
 
 func TestCodexHookContract_InstallPath(t *testing.T) {

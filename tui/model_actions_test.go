@@ -27,9 +27,10 @@ func TestPickerOKeyEmitsCmd(t *testing.T) {
 
 func TestPickerOKeyEmptyIsNoOp(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work", Color: "blue"},
+			{Name: "work"},
 		},
 		Sessions: []config.Session{},
 	}
