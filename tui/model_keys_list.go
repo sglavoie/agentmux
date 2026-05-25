@@ -61,18 +61,21 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case keyJ, keyDown:
 		m.cursor = clamp(m.cursor+1, 0, len(m.filtered)-1)
+		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
 
 	case keyK, keyUp:
 		m.cursor = clamp(m.cursor-1, 0, len(m.filtered)-1)
+		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
 
 	case keyG:
 		m.cursor = 0
+		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
@@ -82,6 +85,51 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < 0 {
 			m.cursor = 0
 		}
+		scrollListToCursor(&m)
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
+
+	case keyCtrlD:
+		step := listVisibleHeight(m) / 2
+		if step < 1 {
+			step = 1
+		}
+		m.cursor = clamp(m.cursor+step, 0, len(m.filtered)-1)
+		scrollListToCursor(&m)
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
+
+	case keyCtrlU:
+		step := listVisibleHeight(m) / 2
+		if step < 1 {
+			step = 1
+		}
+		m.cursor = clamp(m.cursor-step, 0, len(m.filtered)-1)
+		scrollListToCursor(&m)
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
+
+	case keyPgDown:
+		step := listVisibleHeight(m) - 1
+		if step < 1 {
+			step = 1
+		}
+		m.cursor = clamp(m.cursor+step, 0, len(m.filtered)-1)
+		scrollListToCursor(&m)
+		if cmd := m.refreshPreviewForCursor(); cmd != nil {
+			return m, cmd
+		}
+
+	case keyPgUp:
+		step := listVisibleHeight(m) - 1
+		if step < 1 {
+			step = 1
+		}
+		m.cursor = clamp(m.cursor-step, 0, len(m.filtered)-1)
+		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}

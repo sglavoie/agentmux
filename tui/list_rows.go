@@ -15,9 +15,14 @@ import (
 )
 
 // renderList renders the session list for the current model state at the
-// model's terminal width.
+// model's terminal width, bounded by listVisibleHeight so the windowed walk
+// honors the current viewport. Pre-WindowSizeMsg (height==0) the budget is
+// unbounded so tests and the first paint render every row.
 func renderList(m Model) string {
-	return renderListAt(m, m.width)
+	if m.height == 0 {
+		return renderListAt(m, m.width, 0)
+	}
+	return renderListAt(m, m.width, listVisibleHeight(m))
 }
 
 // pulseColumnWidth is the visual width consumed by the recency-pulse column
@@ -41,10 +46,13 @@ const ageWarningGlyph = "⏳"
 // aligned regardless of which harness (or none) a session uses.
 const harnessColWidth = 9
 
-// renderListAt renders the session list with an explicit width budget. Used
-// when the preview pane consumes part of the row so only the directory column
-// shrinks instead of the icon/badge/title columns.
-func renderListAt(m Model, width int) string {
+// renderListAt renders the session list with explicit width and height
+// budgets. The width budget controls per-row column truncation; the height
+// budget caps the number of lines emitted by the windowed walk. A non-positive
+// height means "unbounded": every row in m.filtered is rendered and the
+// ▲/▼ scroll indicators are suppressed. This preserves the historical
+// behavior for callers (and tests) that do not yet care about windowing.
+func renderListAt(m Model, width, height int) string {
 	if len(m.filtered) == 0 {
 		return renderEmptyHero(m, width)
 	}
@@ -57,9 +65,56 @@ func renderListAt(m Model, width int) string {
 	ageActive := anyRowHasAge(m)
 	now := time.Now()
 
+	total := len(m.filtered)
+	startIdx := 0
+	endIdx := total
+	showTop := false
+	showBottom := false
+
+	if height > 0 {
+		// Defensive clamp for a stale offset (e.g. after a refresh shrank
+		// m.filtered). Mirrors the offset+visible>total clamp in
+		// renderDetail (detail.go:310-316).
+		offset := m.listOffset
+		if offset < 0 {
+			offset = 0
+		}
+		if offset > total {
+			offset = total
+		}
+		startIdx = offset
+
+		budget := height
+		if startIdx > 0 {
+			showTop = true
+			budget--
+		}
+		if budget < 0 {
+			budget = 0
+		}
+
+		// Two-pass fit: first see how many rows land inside the budget
+		// without reserving the bottom indicator. If rows still remain after
+		// the fit, re-fit with one fewer line so the ▼ slot is reserved.
+		endIdx = fitListRows(m, startIdx, budget, multiGroup)
+		if endIdx < total {
+			showBottom = true
+			if budget > 0 {
+				budget--
+			}
+			endIdx = fitListRows(m, startIdx, budget, multiGroup)
+		}
+	}
+
 	var sb strings.Builder
+	if showTop {
+		sb.WriteString(styleDim.Render("  ▲"))
+		sb.WriteByte('\n')
+	}
+
 	prevGroup := -1
-	for i, s := range m.filtered {
+	for i := startIdx; i < endIdx; i++ {
+		s := m.filtered[i]
 		g := stateGroup(s, m.lastActivity, m.idleThreshold)
 		if multiGroup && g != prevGroup {
 			sb.WriteString(renderGroupLabel(g, countInGroup(m.filtered, g, m.lastActivity, m.idleThreshold)))
@@ -99,7 +154,48 @@ func renderListAt(m Model, width int) string {
 		sb.WriteString(styledRow)
 		sb.WriteByte('\n')
 	}
+
+	if showBottom {
+		sb.WriteString(styleDim.Render("  ▼"))
+		sb.WriteByte('\n')
+	}
+
 	return sb.String()
+}
+
+// fitListRows returns the exclusive end index such that rendering rows
+// [startIdx, end) of m.filtered consumes at most budget lines. The walk
+// mirrors renderListAt: when multiGroup is true, prevGroup initializes to -1
+// so the first row at startIdx always charges a group-label line, matching
+// the renderer's "begin a window inside group 1 still emits the label"
+// behavior.
+func fitListRows(m Model, startIdx, budget int, multiGroup bool) int {
+	total := len(m.filtered)
+	if budget <= 0 || startIdx >= total {
+		return startIdx
+	}
+	used := 0
+	prevGroup := -1
+	end := startIdx
+	for i := startIdx; i < total; i++ {
+		cost := 1
+		var g int
+		if multiGroup {
+			g = stateGroup(m.filtered[i], m.lastActivity, m.idleThreshold)
+			if g != prevGroup {
+				cost++
+			}
+		}
+		if used+cost > budget {
+			break
+		}
+		used += cost
+		if multiGroup {
+			prevGroup = g
+		}
+		end = i + 1
+	}
+	return end
 }
 
 // anyRowHasActivePulse reports whether any filtered row carries an active

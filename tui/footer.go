@@ -68,8 +68,13 @@ func renderFooter(m Model) string {
 // listFooterLine2 prefixes the navigation hints with a gloss of the cursor
 // row's state icon (e.g. `⚡ active — j/k: up/down …`). The gloss text picks
 // up the state's accent color so the meaning of the row icon is reinforced;
-// the dash separator and trailing nav stay in the dim footer style.
+// the dash separator and trailing nav stay in the dim footer style. When the
+// filtered list overflows the visible window a `start–end of total` position
+// fragment is prepended so the user sees where the cursor sits.
 func listFooterLine2(m Model, nav string) string {
+	if pos := listPositionFragment(m); pos != "" {
+		nav = pos + "   " + nav
+	}
 	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
 		s := m.filtered[m.cursor]
 		if g := StateGloss(s.State); g != "" {
@@ -79,6 +84,29 @@ func listFooterLine2(m Model, nav string) string {
 		}
 	}
 	return styleFooter.Render("  " + nav)
+}
+
+// listPositionFragment returns a `start–end of total` indicator (mirroring
+// detailFooter) when the filtered list overflows the visible window.
+// Returns "" when everything fits or the model has not yet been resized.
+func listPositionFragment(m Model) string {
+	total := len(m.filtered)
+	if total == 0 || m.height == 0 {
+		return ""
+	}
+	visible := listVisibleHeight(m)
+	if visible >= total {
+		return ""
+	}
+	start := m.listOffset + 1
+	end := m.listOffset + visible
+	if end > total {
+		end = total
+	}
+	if start < 1 {
+		start = 1
+	}
+	return fmt.Sprintf("%d–%d of %d", start, end, total)
 }
 
 // footerEntry describes one slot in the stable footer palette. The palette is

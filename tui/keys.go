@@ -33,6 +33,8 @@ const (
 
 	keyPgUp   = "pgup"   // scroll detail pane up by one page
 	keyPgDown = "pgdown" // scroll detail pane down by one page
+	keyCtrlD  = "ctrl+d" // list: cursor down by half a page
+	keyCtrlU  = "ctrl+u" // list: cursor up by half a page
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
 

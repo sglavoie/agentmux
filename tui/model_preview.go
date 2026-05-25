@@ -71,9 +71,14 @@ func (m Model) render() string {
 func renderSplit(m Model) string {
 	cfg := m.cfg.Defaults.Preview
 	footerLines := previewFooterLines(m)
-	// Vertical space available for the list+preview area (header consumes 1
-	// line, then a blank line separates the content from the footer).
-	paneHeight := m.height - 1 - 1 - footerLines
+	// Vertical space available for the list+preview area: total height minus
+	// all chrome rendered above the list (header + banner + legend + chips +
+	// inline filter), minus the trailing newline render() writes after the
+	// list block, minus the footer. Must stay in lock-step with
+	// listVisibleHeight's preview branch so scrollListToCursor and renderListAt
+	// agree on the budget — otherwise the cursor can land at a row the
+	// renderer emits past the visible terminal area.
+	paneHeight := m.height - chromeAboveListLines(m) - 1 /* trailing newline */ - footerLines
 	if paneHeight < 4 || m.width < 20 {
 		return renderList(m)
 	}
@@ -93,7 +98,7 @@ func renderSplit(m Model) string {
 			previewHeight = paneHeight - 2
 		}
 		listHeight := paneHeight - previewHeight - 1
-		listView := clipHeight(renderListAt(m, m.width), listHeight)
+		listView := renderListAt(m, m.width, listHeight)
 		divider := styleDim.Render(strings.Repeat("─", m.width))
 		previewView := renderPreview(m.width, previewHeight, sess, m.previewText, m.previewError, acctColor)
 		return lipgloss.JoinVertical(lipgloss.Left, listView, divider, previewView) + "\n"
@@ -107,25 +112,11 @@ func renderSplit(m Model) string {
 		previewWidth = m.width - 20
 	}
 	listWidth := m.width - previewWidth - 1
-	listView := clipHeight(renderListAt(m, listWidth), paneHeight)
+	listView := renderListAt(m, listWidth, paneHeight)
 	previewView := renderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
 	divider = strings.TrimRight(divider, "\n")
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
-}
-
-// clipHeight forces s to exactly n visual lines: extra lines are dropped and
-// missing lines are padded with empty strings.
-func clipHeight(s string, n int) string {
-	s = strings.TrimRight(s, "\n")
-	lines := strings.Split(s, "\n")
-	if len(lines) > n {
-		lines = lines[:n]
-	}
-	for len(lines) < n {
-		lines = append(lines, "")
-	}
-	return strings.Join(lines, "\n")
 }
 
 // previewFooterLines returns the number of lines the footer will occupy in
@@ -161,6 +152,7 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 		m.previewText = ""
 		m.previewError = ""
 		m.previewWindowID = 0
+		scrollListToCursor(&m)
 		return m, nil
 	}
 	cfg := m.cfg.Defaults.Preview
@@ -173,6 +165,7 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	m.previewText = ""
 	m.previewError = ""
 	m.previewWindowID = m.currentPreviewWindowID()
+	scrollListToCursor(&m)
 	d := time.Duration(cfg.RefreshMs) * time.Millisecond
 	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
 }
@@ -263,6 +256,7 @@ func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 		m.previewText = ""
 		m.previewError = ""
 		m.previewWindowID = 0
+		scrollPickerToCursor(&m)
 		return m, nil
 	}
 	cfg := m.cfg.Defaults.Preview
@@ -275,6 +269,7 @@ func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 	m.previewText = ""
 	m.previewError = ""
 	m.previewWindowID = m.pickerCurrentWindowID()
+	scrollPickerToCursor(&m)
 	d := time.Duration(cfg.RefreshMs) * time.Millisecond
 	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
 }

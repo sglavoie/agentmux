@@ -21,7 +21,11 @@ const pickerRunningPeekLines = 20
 // terminal is wide enough, it splits horizontally with a config + running-peek
 // pane on the right; otherwise it falls back to a single-pane layout.
 func renderPicker(m Model) string {
-	listText := renderPickerList(m)
+	listHeight := 0
+	if m.height > 0 {
+		listHeight = pickerVisibleHeight(m)
+	}
+	listText := renderPickerList(m, listHeight)
 
 	if !m.pickerPreviewEnabled {
 		return listText
@@ -49,16 +53,18 @@ func renderPicker(m Model) string {
 
 	origIdx := m.pickerFilteredIdx[m.pickerCursor]
 
-	listView := clipHeight(listText, paneHeight)
 	previewView := renderPickerPreview(m, origIdx, previewWidth, paneHeight)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
 	divider = strings.TrimRight(divider, "\n")
 	_ = listWidth // picker rows are short; no per-row truncation needed
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
+	return lipgloss.JoinHorizontal(lipgloss.Top, listText, divider, previewView) + "\n"
 }
 
-// renderPickerList renders the header, sticky filter prompt, and rows.
-func renderPickerList(m Model) string {
+// renderPickerList renders the header, sticky filter prompt, and rows
+// constrained by a row-line budget. A non-positive height means "unbounded":
+// every row in m.pickerFilteredIdx is rendered and the ▲/▼ scroll indicators
+// are suppressed. Mirrors renderListAt's windowing contract.
+func renderPickerList(m Model, height int) string {
 	var sb strings.Builder
 	selectedCount := 0
 	for _, v := range m.pickerSelected {
@@ -91,7 +97,57 @@ func renderPickerList(m Model) string {
 
 	acctColor := buildProfileColorMap(m)
 
-	for cursor, origIdx := range m.pickerFilteredIdx {
+	total := len(m.pickerFilteredIdx)
+	startIdx := 0
+	endIdx := total
+	showTop := false
+	showBottom := false
+
+	if height > 0 {
+		// Defensive clamp for a stale offset (e.g. after a refresh shrank
+		// pickerFilteredIdx). Mirrors renderListAt.
+		offset := m.pickerOffset
+		if offset < 0 {
+			offset = 0
+		}
+		if offset > total {
+			offset = total
+		}
+		startIdx = offset
+
+		budget := height
+		if startIdx > 0 {
+			showTop = true
+			budget--
+		}
+		if budget < 0 {
+			budget = 0
+		}
+		// Two-pass fit: try without bottom indicator, then re-fit with it
+		// reserved if rows still remain past the window.
+		endIdx = startIdx + budget
+		if endIdx > total {
+			endIdx = total
+		}
+		if endIdx < total {
+			showBottom = true
+			if budget > 0 {
+				budget--
+			}
+			endIdx = startIdx + budget
+			if endIdx > total {
+				endIdx = total
+			}
+		}
+	}
+
+	if showTop {
+		sb.WriteString(styleDim.Render("  ▲"))
+		sb.WriteByte('\n')
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		origIdx := m.pickerFilteredIdx[i]
 		sess := m.pickerSessionWithResolvedProfile(origIdx)
 		defaultProfile := m.pickerSessions[origIdx].EffectiveProfile()
 		running := m.pickerRunning[session.SessionKey(sess.EffectiveProfile(), sess.Title)]
@@ -114,13 +170,19 @@ func renderPickerList(m Model) string {
 			line += "  " + styleDim.Render("(running)")
 		}
 
-		if cursor == m.pickerCursor {
+		if i == m.pickerCursor {
 			sb.WriteString(styleSelected.Render(line))
 		} else {
 			sb.WriteString(line)
 		}
 		sb.WriteByte('\n')
 	}
+
+	if showBottom {
+		sb.WriteString(styleDim.Render("  ▼"))
+		sb.WriteByte('\n')
+	}
+
 	return sb.String()
 }
 

@@ -16,6 +16,7 @@ func (m *Model) applyTypeBuffer() {
 	m.sortFiltered()
 	m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
 	m.focusedChipIdx = -1
+	scrollListToCursor(m)
 }
 
 // applyFilterChange swaps in a new active filter, re-applies it to the
@@ -27,6 +28,7 @@ func (m *Model) applyFilterChange(f Filter) {
 	m.sortFiltered()
 	m.cursor = 0
 	m.focusedChipIdx = -1
+	scrollListToCursor(m)
 }
 
 // enterFilter switches into ModeSearch with the given pre-filled buffer and
@@ -42,6 +44,7 @@ func (m *Model) enterFilter(prefill string) {
 	m.focusedChipIdx = -1
 	m.mode = ModeSearch
 	m.recomputeCompletion()
+	scrollListToCursor(m)
 }
 
 // reapplyFilterLive parses filterText and refreshes the list. Used by every
@@ -52,6 +55,7 @@ func (m *Model) reapplyFilterLive() {
 	m.sortFiltered()
 	m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
 	m.focusedChipIdx = -1
+	scrollListToCursor(m)
 }
 
 // restoreCursor picks the cursor row after the session list is rebuilt.

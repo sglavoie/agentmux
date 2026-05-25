@@ -43,9 +43,10 @@ type Model struct {
 	sortMode string
 
 	// session state
-	sessions []session.RunningSession // sorted full list
-	filtered []session.RunningSession // sessions after query+filter applied
-	cursor   int
+	sessions   []session.RunningSession // sorted full list
+	filtered   []session.RunningSession // sessions after query+filter applied
+	cursor     int
+	listOffset int // top row index for the scrollable list view in ModeList
 
 	// mode
 	mode Mode
@@ -77,6 +78,7 @@ type Model struct {
 	pickerRunning        map[string]bool
 	pickerSelected       map[int]bool
 	pickerCursor         int
+	pickerOffset         int // top row index for the scrollable picker view
 	pickerFilter         string // live filter buffer (DSL)
 	pickerFilteredIdx    []int  // indices into pickerSessions for the filtered view
 	pickerSearchMode     bool   // true while / is active and filter input is open
@@ -228,6 +230,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// dead rows before the viewport reacts.
 		clampDetailScroll(&m)
 		clampHelpOffset(&m)
+		clampListOffset(&m)
+		scrollListToCursor(&m)
+		clampPickerOffset(&m)
+		scrollPickerToCursor(&m)
 		return m, nil
 
 	case tickMsg:
@@ -292,6 +298,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 		m.sortFiltered()
 		m.cursor = restoreCursor(m.filtered, priorBase, m.lastActivity, m.idleThreshold)
+		clampListOffset(&m)
+		scrollListToCursor(&m)
 		return m, nil
 
 	case errMsg:

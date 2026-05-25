@@ -28,6 +28,10 @@ var helpSections = []struct {
 	{"Navigate", []string{
 		"  j / ↓     move down",
 		"  k / ↑     move up",
+		"  ctrl+d    half page down",
+		"  ctrl+u    half page up",
+		"  pgdn      page down",
+		"  pgup      page up",
 		"  g         go to top",
 		"  G         go to bottom",
 		"  tab       focus next filter chip",

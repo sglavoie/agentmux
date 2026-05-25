@@ -38,6 +38,7 @@ func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.pickerFilter = string(r[:len(r)-1])
 			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
 			m.pickerCursor = 0
+			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 				return m, cmd
 			}
@@ -48,6 +49,7 @@ func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.pickerFilter += t
 			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
 			m.pickerCursor = 0
+			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 				return m, cmd
 			}
@@ -70,6 +72,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.pickerFilter = ""
 			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
 			m.pickerCursor = 0
+			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 				return m, cmd
 			}
@@ -85,12 +88,58 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case keyJ, keyDown:
 		m.pickerCursor = clamp(m.pickerCursor+1, 0, len(m.pickerFilteredIdx)-1)
+		scrollPickerToCursor(&m)
 		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 			return m, cmd
 		}
 		return m, nil
 	case keyK, keyUp:
 		m.pickerCursor = clamp(m.pickerCursor-1, 0, len(m.pickerFilteredIdx)-1)
+		scrollPickerToCursor(&m)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyCtrlD:
+		step := pickerVisibleHeight(m) / 2
+		if step < 1 {
+			step = 1
+		}
+		m.pickerCursor = clamp(m.pickerCursor+step, 0, len(m.pickerFilteredIdx)-1)
+		scrollPickerToCursor(&m)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyCtrlU:
+		step := pickerVisibleHeight(m) / 2
+		if step < 1 {
+			step = 1
+		}
+		m.pickerCursor = clamp(m.pickerCursor-step, 0, len(m.pickerFilteredIdx)-1)
+		scrollPickerToCursor(&m)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyPgDown:
+		step := pickerVisibleHeight(m) - 1
+		if step < 1 {
+			step = 1
+		}
+		m.pickerCursor = clamp(m.pickerCursor+step, 0, len(m.pickerFilteredIdx)-1)
+		scrollPickerToCursor(&m)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyPgUp:
+		step := pickerVisibleHeight(m) - 1
+		if step < 1 {
+			step = 1
+		}
+		m.pickerCursor = clamp(m.pickerCursor-step, 0, len(m.pickerFilteredIdx)-1)
+		scrollPickerToCursor(&m)
 		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 			return m, cmd
 		}
@@ -142,6 +191,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.pickerFilter = string(r[:len(r)-1])
 			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
 			m.pickerCursor = 0
+			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 				return m, cmd
 			}
