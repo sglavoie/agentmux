@@ -232,8 +232,9 @@ func sessionWithProfile(sess config.Session, profileName string) config.Session 
 	return out
 }
 
-// openDirActionCmd opens a config session's directory in a plain shell tab,
-// returning pickerOpenDoneMsg so the dashboard refreshes afterwards.
+// openDirActionCmd opens a config session's directory in a plain shell tab.
+// Emits pickerOpenDoneMsg so the model can quit on success or surface the
+// error in the dashboard otherwise.
 func openDirActionCmd(m Model, cs config.Session) tea.Cmd {
 	accounts := m.cfg.Accounts
 	client := m.client
@@ -241,7 +242,7 @@ func openDirActionCmd(m Model, cs config.Session) tea.Cmd {
 	return func() tea.Msg {
 		acc, ok := findAccountByName(accounts, cs.EffectiveProfile())
 		if !ok {
-			return pickerOpenDoneMsg{err: nil}
+			return pickerOpenDoneMsg{err: fmt.Errorf("no matching account for profile %q", cs.EffectiveProfile())}
 		}
 		return pickerOpenDoneMsg{err: session.OpenDirectory(client, cs, acc, cfg)}
 	}
@@ -249,7 +250,8 @@ func openDirActionCmd(m Model, cs config.Session) tea.Cmd {
 
 // openInEditorActionCmd opens a config session's directory in a new Kitty tab
 // running the configured editor (defaults.editor → $VISUAL → $EDITOR → vi).
-// Returns pickerOpenDoneMsg so the dashboard refreshes afterwards.
+// Emits pickerOpenDoneMsg so the model can quit on success or surface the
+// error in the dashboard otherwise.
 func openInEditorActionCmd(m Model, cs config.Session) tea.Cmd {
 	accounts := m.cfg.Accounts
 	client := m.client
@@ -257,7 +259,7 @@ func openInEditorActionCmd(m Model, cs config.Session) tea.Cmd {
 	return func() tea.Msg {
 		acc, ok := findAccountByName(accounts, cs.EffectiveProfile())
 		if !ok {
-			return pickerOpenDoneMsg{err: nil}
+			return pickerOpenDoneMsg{err: fmt.Errorf("no matching account for profile %q", cs.EffectiveProfile())}
 		}
 		return pickerOpenDoneMsg{err: session.OpenInEditor(client, cs, acc, cfg)}
 	}

@@ -172,7 +172,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg {
 				acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
 				if !ok {
-					return pickerOpenDoneMsg{err: nil}
+					return pickerOpenDoneMsg{err: fmt.Errorf("no matching account for profile %q", sess.EffectiveProfile())}
 				}
 				return pickerOpenDoneMsg{err: session.OpenInEditor(client, sess, acc, cfg)}
 			}
@@ -351,7 +351,7 @@ func pickerOpenCmd(m Model, sess config.Session) tea.Cmd {
 	return func() tea.Msg {
 		acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
 		if !ok {
-			return pickerOpenDoneMsg{err: nil}
+			return pickerOpenDoneMsg{err: fmt.Errorf("no matching account for profile %q", sess.EffectiveProfile())}
 		}
 		return pickerOpenDoneMsg{err: session.OpenDirectory(client, sess, acc, cfg)}
 	}

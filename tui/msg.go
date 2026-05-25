@@ -30,7 +30,9 @@ type actionDoneMsg struct{ err error }
 // resortDoneMsg is sent when a session.Resort call completes.
 type resortDoneMsg struct{ err error }
 
-// pickerOpenDoneMsg is sent when a picker open-directory action completes.
+// pickerOpenDoneMsg is sent when an open-dir or open-in-editor action
+// completes from any entry point (list, picker, actions overlay). The model
+// quits on success (err == nil) and surfaces err in the header otherwise.
 type pickerOpenDoneMsg struct{ err error }
 
 // focusDoneMsg is sent when a focus-tab action completes.

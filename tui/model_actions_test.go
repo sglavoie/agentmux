@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -80,6 +82,36 @@ func TestPickerOpenEditorKeyEmptyIsNoOp(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Fatal("expected nil cmd after O on empty picker")
+	}
+}
+
+func TestPickerOpenDoneMsgQuitsOnSuccess(t *testing.T) {
+	m := testModel()
+	_, cmd := m.Update(pickerOpenDoneMsg{err: nil})
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd on success")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Fatalf("expected tea.QuitMsg on success, got %T", msg)
+	}
+}
+
+func TestPickerOpenDoneMsgStaysOpenOnError(t *testing.T) {
+	m := testModel()
+	updated, cmd := m.Update(pickerOpenDoneMsg{err: errors.New("kitten exploded")})
+	if updated.(Model).actionErr == nil {
+		t.Fatal("expected actionErr set on error")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd (fetchCmd) on error")
+	}
+	// fetchCmd would emit sessionsMsg or errMsg; it must not be tea.Quit.
+	// Invoking it requires a live Kitty client, so we only assert by type
+	// of cmd indirectly: invoke and confirm we did NOT get a QuitMsg.
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); ok {
+		t.Fatal("expected non-QuitMsg on error, got tea.QuitMsg")
 	}
 }
 

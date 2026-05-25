@@ -336,8 +336,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pickerOpenDoneMsg:
 		if msg.err != nil {
 			m.actionErr = msg.err
+			return m, fetchCmd(m.client, m.cfg, m.sortMode)
 		}
-		return m, fetchCmd(m.client, m.cfg, m.sortMode)
+		return m, tea.Quit
 
 	case focusDoneMsg:
 		if msg.err != nil {
