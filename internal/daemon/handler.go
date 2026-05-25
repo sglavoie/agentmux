@@ -8,12 +8,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// kittyTitleClient is the narrow subset of kitty.KittyClient that the stale
-// sweep needs. Declaring it locally lets tests provide a fake with just two
-// methods instead of all ten on kitty.KittyClient. kitty.SubprocessClient
-// satisfies this interface implicitly.
+// kittyTitleClient is the narrow subset of kitty.KittyClient that the daemon
+// sweeps need. Declaring it locally lets tests provide a focused fake instead
+// of all methods on kitty.KittyClient. kitty.SubprocessClient satisfies this
+// interface implicitly.
 type kittyTitleClient interface {
 	ListWindows() ([]kitty.OSWindow, error)
+	GetText(matchExpr, extent string) (string, error)
 	SetTabTitle(matchExpr, title string) error
 }
 

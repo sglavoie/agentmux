@@ -83,7 +83,7 @@ type EventsExport struct {
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
 // `amx daemon export-events`.
-const EventsExportSchemaVersion = 3
+const EventsExportSchemaVersion = 4
 
 // ExportEventsPayload is the CLI JSON envelope written by
 // `amx daemon export-events`.
@@ -100,7 +100,7 @@ type ExportDaemonMetadata struct {
 	UptimeSeconds int64 `json:"uptime_seconds"`
 }
 
-// ExportWindow is one per-window investigation entry in the schema-v3 payload.
+// ExportWindow is one per-window investigation entry in the schema-v4 payload.
 // Durable fields come from the daemon; Live is joined at export time from
 // Kitty/session lookups on a best-effort basis.
 type ExportWindow struct {
@@ -169,6 +169,7 @@ type SessionEvent struct {
 	Action            string `json:"action"`                       // resolved action (active, stop, …)
 	ToolName          string `json:"tool_name,omitempty"`          // tool name when event carries one
 	Source            string `json:"source,omitempty"`             // raw source payload field
+	PromptKind        string `json:"prompt_kind,omitempty"`        // screen-probe prompt kind for synthetic prompt events
 	Suppressed        bool   `json:"suppressed,omitempty"`         // true when the daemon blocked the transition
 	PreservesIcon     bool   `json:"preserves_icon,omitempty"`     // true when the event preserved the current icon (child-complete signals)
 	ResultIconState   string `json:"result_icon_state"`            // daemon-resolved icon outcome: "", "preserve", or a concrete icon state

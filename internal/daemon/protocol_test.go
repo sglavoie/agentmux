@@ -86,12 +86,12 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 		Events: []SessionEvent{
 			{
 				At:               1700000000,
-				Event:            "PreToolUse",
-				Action:           "active",
-				ToolName:         "Bash",
-				Source:           "new",
-				ResultIconState:  "bolt",
-				CurrentIconState: "key",
+				Event:            "ScreenPromptProbe",
+				Action:           "elicitation",
+				Source:           "codex_screen",
+				PromptKind:       "edit_approval",
+				ResultIconState:  "question",
+				CurrentIconState: "bolt",
 			},
 			{
 				At:                1700000001,
@@ -123,12 +123,12 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 	}
 	if out.Events[0] != (SessionEvent{
 		At:               1700000000,
-		Event:            "PreToolUse",
-		Action:           "active",
-		ToolName:         "Bash",
-		Source:           "new",
-		ResultIconState:  "bolt",
-		CurrentIconState: "key",
+		Event:            "ScreenPromptProbe",
+		Action:           "elicitation",
+		Source:           "codex_screen",
+		PromptKind:       "edit_approval",
+		ResultIconState:  "question",
+		CurrentIconState: "bolt",
 	}) {
 		t.Fatalf("Events[0] = %+v", out.Events[0])
 	}
@@ -174,6 +174,7 @@ func TestSessionEvent_OmitsZeroOptionalFields(t *testing.T) {
 		"stop_reason",
 		"reason",
 		"source",
+		"prompt_kind",
 		"context_limit",
 		"reset_flow",
 	} {
@@ -202,7 +203,7 @@ func TestResponse_RoundtripCarriesEventsByWindow(t *testing.T) {
 		OK: true,
 		EventsByWindow: map[int][]SessionEvent{
 			1: {
-				{At: 1700000000, Event: "PreToolUse", Action: "active", ToolName: "Bash", Source: "clear", ResultIconState: "bolt"},
+				{At: 1700000000, Event: "ScreenPromptProbe", Action: "elicitation", Source: "codex_screen", PromptKind: "request_user_input", ResultIconState: "question"},
 				{At: 1700000001, Event: "agentStop", Action: "active", PreservesIcon: true, ResultIconState: IconStatePreserve},
 			},
 			2: {

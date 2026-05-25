@@ -244,8 +244,8 @@ func resolveDaemonExportWindowID(cmd *cobra.Command) (int, error) {
 
 var daemonExportEventsCmd = &cobra.Command{
 	Use:   "export-events",
-	Short: "Dump schema-v3 hook event history as JSON for investigation",
-	Long: `Export the daemon's schema-v3 investigation snapshot as JSON.
+	Short: "Dump schema-v4 hook event history as JSON for investigation",
+	Long: `Export the daemon's schema-v4 investigation snapshot as JSON.
 
 The payload is organized as a per-window array so each entry carries its own
 event list, durable daemon metadata, and best-effort live Kitty/session

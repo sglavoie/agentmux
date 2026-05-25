@@ -262,6 +262,18 @@ func TestCodexHooksIncludeCompletionSignals(t *testing.T) {
 	}
 }
 
+func TestCodexHooksDoNotInstallUnsupportedPromptHooks(t *testing.T) {
+	hooks := buildCodexHooks(nil, "amx")
+	for _, event := range []string{"Notification", "Elicitation"} {
+		if slices.Contains(codexHookEvents, event) {
+			t.Fatalf("codexHookEvents includes unsupported %q", event)
+		}
+		if _, ok := hooks[event]; ok {
+			t.Fatalf("buildCodexHooks installed unsupported %q hook", event)
+		}
+	}
+}
+
 // TestMergeDataNullJSONNoPanic verifies that MergeData does not panic when the
 // existing hooks file contains a top-level JSON `null`. Unmarshaling `null`
 // into a map sets the map to nil rather than erroring, so the subsequent

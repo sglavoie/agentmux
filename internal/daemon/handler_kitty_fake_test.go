@@ -15,6 +15,8 @@ type fakeKittyClient struct {
 	mu            sync.Mutex
 	windows       []kitty.OSWindow
 	listErr       error
+	getText       map[string]string
+	getTextErr    error
 	setTitleErr   error
 	setTitleCalls []setTitleCall
 }
@@ -35,6 +37,15 @@ func (f *fakeKittyClient) ListWindows() ([]kitty.OSWindow, error) {
 	out := make([]kitty.OSWindow, len(f.windows))
 	copy(out, f.windows)
 	return out, nil
+}
+
+func (f *fakeKittyClient) GetText(matchExpr, _ string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.getTextErr != nil {
+		return "", f.getTextErr
+	}
+	return f.getText[matchExpr], nil
 }
 
 func (f *fakeKittyClient) SetTabTitle(matchExpr, title string) error {

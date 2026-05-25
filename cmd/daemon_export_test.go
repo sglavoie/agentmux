@@ -80,7 +80,7 @@ func findExportWindow(t *testing.T, payload daemon.ExportEventsPayload, id int) 
 	return daemon.ExportWindow{}
 }
 
-func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV3Payload(t *testing.T) {
+func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV4Payload(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	now := time.Unix(1_700_000_100, 0)
@@ -94,6 +94,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV3Payload(t *testing.T) {
 				EventsByWindow: map[int][]daemon.SessionEvent{
 					42: {
 						{At: 1_700_000_000, Event: "PreToolUse", Action: "active", Source: "new", ResultIconState: "bolt"},
+						{At: 1_700_000_001, Event: "ScreenPromptProbe", Action: "elicitation", Source: "codex_screen", PromptKind: "edit_approval", ResultIconState: "question"},
 					},
 					77: {
 						{At: 1_700_000_005, Event: "Stop", Action: "stop", ResultIconState: "stop"},
@@ -101,13 +102,13 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV3Payload(t *testing.T) {
 				},
 				WindowMetadata: map[int]daemon.WindowDebugMetadata{
 					42: {
-						Stats: daemon.WindowDebugStats{EventCount: 1, FirstEventAt: 1_700_000_000, LastEventAt: 1_700_000_000},
+						Stats: daemon.WindowDebugStats{EventCount: 2, FirstEventAt: 1_700_000_000, LastEventAt: 1_700_000_001},
 						Durable: daemon.WindowDebugDurable{
 							SessionTitle:    "W:api",
 							Profile:         "work",
-							Harness:         "claude",
-							ActivityAt:      1_700_000_000,
-							LastAction:      "active",
+							Harness:         "codex",
+							ActivityAt:      1_700_000_001,
+							LastAction:      "elicitation",
 							LastActiveEvent: "PreToolUse",
 						},
 					},
@@ -126,7 +127,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV3Payload(t *testing.T) {
 						Durable: daemon.WindowDebugDurable{
 							SessionTitle: "W:stale",
 							Profile:      "work",
-							Harness:      "claude",
+							Harness:      "codex",
 							ActivityAt:   1_699_999_999,
 							LastAction:   "active",
 						},
@@ -150,7 +151,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV3Payload(t *testing.T) {
 						CWD:   "/work/api",
 						UserVars: kitty.UserVars{
 							Profile:      "work",
-							Harness:      "claude",
+							Harness:      "codex",
 							Project:      "api",
 							AMXDirectory: "/work/api",
 						},
@@ -181,6 +182,9 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV3Payload(t *testing.T) {
 	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
 		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
 	}
+	if payload.SchemaVersion != 4 {
+		t.Fatalf("schema_version = %d; want 4", payload.SchemaVersion)
+	}
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())
 	}
@@ -192,18 +196,22 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV3Payload(t *testing.T) {
 	}
 
 	window42 := findExportWindow(t, payload, 42)
-	if len(window42.Events) != 1 || window42.Events[0].ResultIconState != "bolt" {
-		t.Fatalf("window 42 events = %+v; want one bolt event", window42.Events)
+	if len(window42.Events) != 2 || window42.Events[0].ResultIconState != "bolt" {
+		t.Fatalf("window 42 events = %+v; want bolt event then prompt probe", window42.Events)
 	}
 	if window42.Events[0].Source != "new" {
 		t.Fatalf("window 42 source = %q; want new", window42.Events[0].Source)
+	}
+	if window42.Events[1].Event != "ScreenPromptProbe" || window42.Events[1].Source != "codex_screen" ||
+		window42.Events[1].PromptKind != "edit_approval" || window42.Events[1].ResultIconState != "question" {
+		t.Fatalf("window 42 prompt probe event = %+v; want ScreenPromptProbe/codex_screen/edit_approval/question", window42.Events[1])
 	}
 	if window42.Durable.SessionTitle != "W:api" {
 		t.Fatalf("window 42 durable.session_title = %q; want W:api", window42.Durable.SessionTitle)
 	}
 	if !window42.Live.Found || window42.Live.TabID != 91 || window42.Live.OSWindowID != 900 || window42.Live.TabTitle != "⚡W:api" ||
 		window42.Live.BaseTitle != "W:api" || window42.Live.IconState != "bolt" || window42.Live.WindowTitle != "api window" ||
-		window42.Live.Project != "api" || window42.Live.Profile != "work" || window42.Live.Harness != "claude" ||
+		window42.Live.Project != "api" || window42.Live.Profile != "work" || window42.Live.Harness != "codex" ||
 		window42.Live.Directory != "/work/api" {
 		t.Fatalf("window 42 live = %+v", window42.Live)
 	}

@@ -57,6 +57,13 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	hookSilenceTicker := time.NewTicker(hookSilenceInterval)
 	defer hookSilenceTicker.Stop()
 
+	// Prompt-probe ticker: Codex can show interactive prompts before hooks
+	// report a durable state. Keep this responsive but separate from the
+	// lower-frequency watchdog sweeps.
+	promptProbeInterval := 1500 * time.Millisecond
+	promptProbeTicker := time.NewTicker(promptProbeInterval)
+	defer promptProbeTicker.Stop()
+
 	// activityCh receives a signal on every handled request.
 	activityCh := make(chan struct{}, 1)
 	handler.onActivity = func() {
@@ -106,6 +113,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			// Hook-silence sweep is also internal — same activityCh
 			// discipline as the per-window sweep.
 			handler.SweepHookSilence(time.Now())
+
+		case <-promptProbeTicker.C:
+			// Prompt probing is internal and best-effort. It should not keep
+			// an otherwise idle daemon alive.
+			handler.ProbeCodexScreenPrompts(time.Now())
 
 		case err := <-serveErr:
 			return err

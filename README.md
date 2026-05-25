@@ -279,7 +279,7 @@ It listens on:
 
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema-v3 JSON snapshot for investigation.
+`amx daemon export-events` writes a schema-v4 JSON snapshot for investigation.
 Top-level fields describe the export timestamp and daemon health; `windows` is
 an array of per-window entries, each carrying its own `stats`, `durable`,
 `live`, and `events` fields so a single window can be inspected without paired
@@ -287,7 +287,7 @@ map lookups:
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "daemon": { "pid": 1234, "uptime_seconds": 97 },
   "windows": [
     {
@@ -306,7 +306,17 @@ Durable metadata can outlive the live Kitty join after a tab closes;
 available. Event rows keep the raw `event`/`action` fields plus lifecycle
 context such as `tool_name`, `source`, `result_icon_state`,
 `current_icon_state`, `notification_type`, `stop_reason`, `reason`,
-`reset_flow`, and `suppressed`/`suppression_reason` when present.
+`prompt_kind`, `reset_flow`, and `suppressed`/`suppression_reason` when
+present. Codex screen prompt detection appears as synthetic
+`event: "ScreenPromptProbe"` rows with `source: "codex_screen"` and
+`prompt_kind` values such as `edit_approval`, `request_user_input`,
+`command_approval`, and `permission_grant`.
+
+Codex 0.133.0 exposes edit approvals and `request_user_input` waits through
+TUI/server-request flows rather than normal lifecycle hooks. Agent Mux keeps
+the Codex hook installation to supported command hooks and uses a best-effort
+Kitty screen fallback to classify visible Codex prompts while preserving
+terminal, warning, and error states; the daemon runs that probe every 1.5s.
 
 The primary live-debug workflow is the current tab:
 
