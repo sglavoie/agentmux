@@ -30,6 +30,17 @@ func (m Model) render() string {
 		// Session search owns its full layout (header + chips + query +
 		// results) so the dashboard list is not rendered below.
 		sb.WriteString(renderSessionSearch(m))
+	case ModeSessionView:
+		// Viewer owns its full layout — like ModeSessionSearch, the
+		// dashboard list must not render underneath.
+		sb.WriteString(renderSessionView(m))
+	case ModeDeleteChoice:
+		// Delete-choice is a modal overlay on top of ModeSessionSearch.
+		// Render the search view as context, then the prompt below so
+		// the user can see which row they're acting on.
+		sb.WriteString(renderSessionSearch(m))
+		sb.WriteByte('\n')
+		sb.WriteString(renderDeleteChoice(m))
 	default:
 		// Header area varies by mode; list is always shown below.
 		switch m.mode {

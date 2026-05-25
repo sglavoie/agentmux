@@ -103,6 +103,7 @@ Key flows:
 - `o`: open the selected project's directory in a plain shell tab
 - `p`: toggle the preview pane
 - `d`: show the per-session hook event log (scrollable detail pane)
+- `S`: search past session transcripts across every configured profile
 - `?`: show the full keymap
 
 The dashboard keeps the profile badge and harness metadata separate from the
@@ -129,6 +130,29 @@ its own badge/metadata columns.
 - `o` opens the highlighted project's directory instead of launching it.
 
 Overrides only affect the current launch. They do not rewrite `config.toml`.
+
+### Past sessions
+
+Press `S` from the dashboard to open the past-session search. amx walks each
+profile's transcript directory (Claude `~/.claude/projects`, Copilot
+`~/.copilot/session-state`, Codex `~/.codex/sessions`) and indexes every
+JSONL conversation it finds at `~/.local/share/agent-mux/transcripts.json`.
+
+- `/` enters a free-text query; results stream the matching JSONL on demand
+  and show the per-session match count.
+- `h`, `p`, `r` cycle single-value chip filters for harness, profile, and
+  project.
+- `enter` opens the transcript viewer (role-coded lines, `n`/`N` jumps
+  between matches, `j`/`k` and `g`/`G` for scrolling).
+- `d` opens a three-way delete prompt: `i` hides the row from the index only
+  (file kept on disk; rescans do not resurrect it), `f` also removes the
+  underlying JSONL file (irreversible).
+
+Retention is controlled by `[defaults.session_archive] keep_days` (default
+30). The daemon runs a background prune every six hours that flips entries
+older than `keep_days` to hidden; the on-disk transcript file is left
+intact. Set `keep_days = 0` to use the default; negative values are
+rejected at validation time.
 
 ### Filter DSL
 

@@ -133,6 +133,41 @@ func TestRefresh_AddsNewEntries(t *testing.T) {
 	}
 }
 
+// TestRefresh_ExpandsTildeInHomeDir guards the integration between the
+// config layer (which stores HomeDir verbatim, with a leading "~") and
+// each Reader.Discover (which calls os.ReadDir on the raw value).
+// Without tilde expansion in Refresh the per-harness readers silently
+// return zero entries because "~/.claude" doesn't exist as a literal path.
+func TestRefresh_ExpandsTildeInHomeDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("no home dir available: %v", err)
+	}
+	cfg := &config.Config{
+		Profiles: []config.Account{{
+			Name:    "work",
+			Harness: harness.Claude,
+			HomeDir: "~/transcript-tilde-test-should-not-exist",
+		}},
+	}
+	var got string
+	fr := &fakeReader{
+		harness: harness.Claude,
+		discover: func(homeDir string) ([]SessionMeta, error) {
+			got = homeDir
+			return nil, nil
+		},
+	}
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	want := filepath.Join(home, "transcript-tilde-test-should-not-exist")
+	if got != want {
+		t.Errorf("Discover received homeDir = %q, want %q", got, want)
+	}
+}
+
 func TestRefresh_SkipsUnchangedEntries(t *testing.T) {
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-1.jsonl")

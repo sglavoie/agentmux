@@ -170,7 +170,7 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 				"harness", harnessName, "profile", profile.Name)
 			continue
 		}
-		home := profile.EffectiveHomeDir()
+		home := config.ExpandTilde(profile.EffectiveHomeDir())
 		metas, err := reader.Discover(home)
 		if err != nil {
 			slog.Debug("transcript.index: discover failed",

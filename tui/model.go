@@ -34,6 +34,8 @@ const (
 	ModeDetail            // detail pane: per-session hook event log
 	ModeActions           // per-row actions overlay
 	ModeSessionSearch     // searchable list of past harness transcripts
+	ModeSessionView       // scrollable transcript viewer for a single past session
+	ModeDeleteChoice      // three-way prompt: hide from index, also delete file, cancel
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -186,6 +188,29 @@ type Model struct {
 	filterHarness      []string // chip filter; "" means "no filter"
 	filterProfile      []string
 	filterProject      []string
+
+	// session viewer (ModeSessionView). viewerSession is the metadata of the
+	// transcript currently being read; nil when the viewer is closed.
+	// viewerMessages is the parsed message list; viewerScroll is the top row
+	// index. viewerMatchLines holds the indices into viewerMessages whose
+	// text contains the current sessionQuery (lowercased substring match);
+	// viewerMatchIdx is the cursor into viewerMatchLines for n/N navigation.
+	// viewerLoading covers the async ReadMessages call; viewerLoadSeq is a
+	// monotonic counter separate from sessionSearchSeq so a stale viewer
+	// load arriving after the user moved on is dropped.
+	viewerSession    *transcript.SessionMeta
+	viewerMessages   []transcript.Message
+	viewerScroll     int
+	viewerMatchIdx   int
+	viewerMatchLines []int
+	viewerLoading    bool
+	viewerLoadErr    error
+	viewerLoadSeq    int
+
+	// delete flow (ModeDeleteChoice). deleteTarget holds the entry the user
+	// selected with `d` from ModeSessionSearch; nil when no delete is in
+	// progress. The prompt itself reads from this pointer.
+	deleteTarget *transcript.SessionMeta
 }
 
 // NewModel creates a dashboard model.
@@ -261,6 +286,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		scrollListToCursor(&m)
 		clampPickerOffset(&m)
 		scrollPickerToCursor(&m)
+		clampViewerScroll(&m)
 		return m, nil
 
 	case tickMsg:
@@ -432,6 +458,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		scrollSessionSearchToCursor(&m)
+		return m, nil
+
+	case viewerMessagesLoadedMsg:
+		// Drop stale loads: either the user already left the viewer, or
+		// pressed Enter on a different row before this one finished.
+		if m.mode != ModeSessionView || msg.seq != m.viewerLoadSeq {
+			return m, nil
+		}
+		m.viewerLoading = false
+		m.viewerLoadErr = msg.err
+		m.viewerMessages = msg.messages
+		m.viewerMatchLines = computeViewerMatches(m.viewerMessages, m.sessionQuery)
+		m.viewerMatchIdx = 0
+		m.viewerScroll = 0
+		if len(m.viewerMatchLines) > 0 {
+			m.viewerScroll = m.viewerMatchLines[0]
+			clampViewerScroll(&m)
+		}
 		return m, nil
 
 	case tea.KeyPressMsg:

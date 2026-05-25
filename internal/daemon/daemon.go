@@ -11,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 const idleTimeout = 30 * time.Minute
@@ -67,6 +68,18 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	promptProbeTicker := time.NewTicker(promptProbeInterval)
 	defer promptProbeTicker.Stop()
 
+	// Prune ticker: retention sweep for past-session transcripts. Hides
+	// entries older than cfg.Defaults.SessionArchive.KeepDays from the TUI
+	// search view; transcript files on disk are never touched.
+	pruneInterval := 6 * time.Hour
+	pruneTicker := time.NewTicker(pruneInterval)
+	defer pruneTicker.Stop()
+
+	// Fire one prune sweep up front so a freshly-started daemon does not
+	// have to wait six hours before retention takes effect. Best-effort:
+	// failures are logged but never stop the daemon.
+	runTranscriptPrune(cfg)
+
 	// activityCh receives a signal on every handled request.
 	activityCh := make(chan struct{}, 1)
 	handler.onActivity = func() {
@@ -122,6 +135,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			// an otherwise idle daemon alive.
 			handler.ProbeCodexScreenPrompts(time.Now())
 
+		case <-pruneTicker.C:
+			// Retention sweep is internal — same activityCh discipline as
+			// the other watchdog sweeps.
+			runTranscriptPrune(cfg)
+
 		case err := <-serveErr:
 			return err
 
@@ -171,6 +189,23 @@ func buildStaleThresholds(cfg *config.Config) (map[string]time.Duration, map[str
 		perAccount[strings.ToLower(p.Name)] = inner
 	}
 	return global, perAccount
+}
+
+// runTranscriptPrune loads the transcript index and runs a retention pass.
+// Errors are logged at warn level but never propagated — a broken index or
+// missing file must not bring down the daemon.
+func runTranscriptPrune(cfg *config.Config) {
+	idx, err := transcript.LoadIndex()
+	if err != nil {
+		slog.Warn("transcript.prune: load index failed", "err", err)
+		return
+	}
+	hidden, err := transcript.Prune(idx, cfg, time.Now())
+	if err != nil {
+		slog.Warn("transcript.prune failed", "err", err)
+		return
+	}
+	slog.Debug("transcript.prune", "hidden", hidden)
 }
 
 // buildHookSilenceThresholds projects cfg.Defaults.Watchdog.HookSilence and

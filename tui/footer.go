@@ -34,6 +34,12 @@ func renderFooter(m Model) string {
 	case ModeSessionSearch:
 		line1 = styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back")
 		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
+	case ModeSessionView:
+		line1 = styleFooter.Render("  j/k scroll · g/G top/bot · n/N next match · esc back")
+		line2 = styleFooter.Render("  pgup/pgdn: page")
+	case ModeDeleteChoice:
+		line1 = styleFooter.Render("  [i] index only · ") + styleError.Render("[f] also delete file") + styleFooter.Render(" · [esc] cancel")
+		line2 = ""
 	default: // ModeList
 		if m.previewEnabled {
 			// In preview mode the only binding shown is `p: hide preview`,
@@ -200,6 +206,7 @@ var listFooterPalette = []footerEntry{
 	{"L", "lock", footerSectionRow, hasRow},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
 	{"/", "filter", footerSectionFilter, func(Model) bool { return true }},
+	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
 	{"p", "preview", footerSectionApp, func(Model) bool { return true }},
 	{"R", "resort", footerSectionApp, func(Model) bool { return true }},
 	{"?", "help", footerSectionApp, func(Model) bool { return true }},

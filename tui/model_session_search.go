@@ -182,23 +182,15 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		m.filterProject = cycleChip(m.filterProject, projectTitles(m))
 		return m, m.dispatchSessionSearch()
 	case keyEnter:
-		// Viewer is not implemented yet (Session 8).
-		if c := m.pushToast(Toast{
-			Severity: toastInfo,
-			Text:     "Transcript viewer not implemented yet",
-		}); c != nil {
-			return m, c
+		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
+			return m, nil
 		}
-		return m, nil
-	case "d":
-		// Delete flow is not implemented yet (Session 9).
-		if c := m.pushToast(Toast{
-			Severity: toastInfo,
-			Text:     "Delete flow not implemented yet",
-		}); c != nil {
-			return m, c
+		return m.enterSessionView(m.sessionResults[m.sessionCursor].Meta)
+	case keyD:
+		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
+			return m, nil
 		}
-		return m, nil
+		return m.enterDeleteChoice(m.sessionResults[m.sessionCursor].Meta)
 	}
 	return m, nil
 }
