@@ -64,11 +64,11 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 			notifier := NewNotifier(cfg)
 			var mu sync.Mutex
 			var calls []string
-			notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+			notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 				mu.Lock()
 				calls = append(calls, subtitle)
 				mu.Unlock()
-				return nil
+				return false, nil
 			}
 			h := NewHandler(guard, notifier)
 
@@ -106,11 +106,11 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 			notifier := NewNotifier(cfg)
 			var mu sync.Mutex
 			var calls []string
-			notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+			notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 				mu.Lock()
 				calls = append(calls, subtitle)
 				mu.Unlock()
-				return nil
+				return false, nil
 			}
 			h := NewHandler(guard, notifier)
 

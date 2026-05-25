@@ -13,7 +13,7 @@ func TestNotifier_PermissionDebounceFires(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
 		n, calls := newTestNotifier(cfg)
 
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 		// Should not fire immediately.
 		time.Sleep(10 * time.Millisecond)
 		synctest.Wait()
@@ -34,7 +34,7 @@ func TestNotifier_PermissionDebounceCancelledByActive(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
 		n, calls := newTestNotifier(cfg)
 
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 		time.Sleep(20 * time.Millisecond)
 		n.CancelPending(1) // simulates auto-approval (active transition)
 
@@ -52,7 +52,7 @@ func TestNotifier_PermissionDebounceFiresWhenNoCancel(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 50}
 		n, calls := newTestNotifier(cfg)
 
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 		time.Sleep(time.Second)
 		synctest.Wait()
 		if calls.len() < 1 {
@@ -66,9 +66,9 @@ func TestNotifier_PermissionDebounceRefreshesOnRepeat(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 80}
 		n, calls := newTestNotifier(cfg)
 
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 		time.Sleep(50 * time.Millisecond)
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 
 		time.Sleep(40 * time.Millisecond)
 		synctest.Wait()
@@ -90,10 +90,10 @@ func TestNotifier_CancelPendingAllowsNextPermission(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 200}
 		n, calls := newTestNotifier(cfg)
 
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 		n.CancelPending(1)
 
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 		time.Sleep(time.Second)
 		synctest.Wait()
 		if calls.len() < 1 {
@@ -108,7 +108,7 @@ func TestNotifier_PermissionNoDebounce(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 0}
 		n, calls := newTestNotifier(cfg)
 
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 		synctest.Wait()
 		if calls.len() < 1 {
 			t.Fatal("expected immediate notification when debounce is 0")
@@ -120,7 +120,7 @@ func TestNotifier_ElicitationFiresWhenPermissionEnabled(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true}
 		n, calls := newTestNotifier(cfg)
-		n.MaybeNotify(1, "W:api", "elicitation", false)
+		n.MaybeNotify(1, "W:api", "", "elicitation", false)
 		synctest.Wait()
 		if calls.len() < 1 {
 			t.Fatal("expected notification for elicitation when Permission=true")
@@ -132,7 +132,7 @@ func TestNotifier_ElicitationSilencedWhenPermissionDisabled(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: false}
 		n, calls := newTestNotifier(cfg)
-		n.MaybeNotify(1, "W:api", "elicitation", false)
+		n.MaybeNotify(1, "W:api", "", "elicitation", false)
 		synctest.Wait()
 		if calls.len() > 0 {
 			t.Fatal("elicitation should be suppressed when Permission=false")
@@ -144,7 +144,7 @@ func TestNotifier_ElicitationLabel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true}
 		n, calls := newTestNotifier(cfg)
-		n.MaybeNotify(1, "W:api", "elicitation", false)
+		n.MaybeNotify(1, "W:api", "", "elicitation", false)
 		synctest.Wait()
 		if calls.len() < 1 {
 			t.Fatal("expected notification for elicitation")
@@ -162,13 +162,13 @@ func TestNotifier_StopCooldownDoesNotSuppressPermission(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true, Stop: true, PermissionDebounceMs: 50}
 		n, calls := newTestNotifier(cfg)
 
-		n.MaybeNotify(1, "W:api", "stop", false)
+		n.MaybeNotify(1, "W:api", "", "stop", false)
 		synctest.Wait()
 		if calls.len() < 1 {
 			t.Fatal("expected stop notification to fire")
 		}
 
-		n.MaybeNotify(1, "W:api", "permission", false)
+		n.MaybeNotify(1, "W:api", "", "permission", false)
 		time.Sleep(time.Second)
 		synctest.Wait()
 		if calls.len() < 2 {

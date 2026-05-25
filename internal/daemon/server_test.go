@@ -33,7 +33,7 @@ func captureSlog(t *testing.T) *bytes.Buffer {
 func newTestServer() *Server {
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 	handler := NewHandler(guard, notifier)
 	return &Server{handler: handler}
 }
@@ -206,7 +206,7 @@ func TestServer_CloseWaitsForInflightHandlers(t *testing.T) {
 
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)
@@ -343,7 +343,7 @@ func TestServer_HandshakeDeadlineReleasesIdleConn(t *testing.T) {
 
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)
@@ -414,7 +414,7 @@ func TestServer_ServeDoesNotLeakWatchdogOnCloseWithoutCancel(t *testing.T) {
 
 		guard := NewStateGuard(time.Hour)
 		notifier := NewNotifier(&config.NotificationConfig{})
-		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+		notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 		handler := NewHandler(guard, notifier)
 
 		server, err := NewServer(socketPath, handler)
@@ -465,7 +465,7 @@ func TestNewServer_SocketIsOwnerOnly(t *testing.T) {
 
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)

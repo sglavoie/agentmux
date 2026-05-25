@@ -221,8 +221,12 @@ func TestSweepHookSilence_PerAccountOverride(t *testing.T) {
 		if got := rec.len(); got != 1 {
 			t.Fatalf("dispatches = %d; want 1 (work fires; personal still under global)", got)
 		}
-		if title := rec.snapshot()[0].title; title != "work" {
-			t.Errorf("dispatch title = %q; want work", title)
+		call := rec.snapshot()[0]
+		if call.title != "work" {
+			t.Errorf("dispatch title = %q; want work", call.title)
+		}
+		if call.account != "work" {
+			t.Errorf("dispatch account = %q; want work (Session 2 threads account through MaybeNotify)", call.account)
 		}
 	})
 }

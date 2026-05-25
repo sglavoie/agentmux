@@ -10,8 +10,11 @@ import (
 )
 
 type notifyCall struct {
+	windowID int
+	account  string
 	title    string
 	subtitle string
+	clicked  bool
 }
 
 // callRecorder is a thread-safe collector for dispatcher invocations. The
@@ -20,8 +23,9 @@ type notifyCall struct {
 // it. Both notify_test.go and handler_test.go use this helper to avoid
 // hand-rolling per-test mutex bookkeeping.
 type callRecorder struct {
-	mu    sync.Mutex
-	calls []notifyCall
+	mu          sync.Mutex
+	calls       []notifyCall
+	clickResult bool
 }
 
 func (r *callRecorder) add(c notifyCall) {
@@ -45,12 +49,29 @@ func (r *callRecorder) snapshot() []notifyCall {
 	return out
 }
 
+// setClickResult controls the bool returned by the recorder's dispatch stub
+// so Session 3 tests can simulate the user clicking the notification body.
+func (r *callRecorder) setClickResult(v bool) {
+	r.mu.Lock()
+	r.clickResult = v
+	r.mu.Unlock()
+}
+
 func newTestNotifier(cfg *config.NotificationConfig) (*Notifier, *callRecorder) {
 	n := NewNotifier(cfg)
 	rec := &callRecorder{}
-	n.dispatch = func(_ context.Context, title, subtitle string) error {
-		rec.add(notifyCall{title, subtitle})
-		return nil
+	n.dispatch = func(_ context.Context, windowID int, account, title, subtitle string) (bool, error) {
+		rec.mu.Lock()
+		clicked := rec.clickResult
+		rec.mu.Unlock()
+		rec.add(notifyCall{
+			windowID: windowID,
+			account:  account,
+			title:    title,
+			subtitle: subtitle,
+			clicked:  clicked,
+		})
+		return clicked, nil
 	}
 	return n, rec
 }
@@ -58,7 +79,7 @@ func newTestNotifier(cfg *config.NotificationConfig) (*Notifier, *callRecorder) 
 func newTestHandler() *Handler {
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 	return NewHandler(guard, notifier)
 }
 

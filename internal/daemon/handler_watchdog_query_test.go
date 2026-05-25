@@ -355,7 +355,7 @@ func TestHandler_HookSilenceNotificationDispatches(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{}
 		n, calls := newTestNotifier(cfg)
-		n.MaybeNotify(1, "work", "hook_silence", false)
+		n.MaybeNotify(1, "work", "work", "hook_silence", false)
 		synctest.Wait()
 		if calls.len() < 1 {
 			t.Fatalf("expected hook_silence notification to fire")
@@ -377,7 +377,7 @@ func TestHandler_HookSilenceNotificationSuppressedByConfig(t *testing.T) {
 		disabled := false
 		cfg := &config.NotificationConfig{HookSilence: &disabled}
 		n, calls := newTestNotifier(cfg)
-		n.MaybeNotify(1, "work", "hook_silence", false)
+		n.MaybeNotify(1, "work", "work", "hook_silence", false)
 		synctest.Wait()
 		if calls.len() > 0 {
 			t.Fatalf("hook_silence should be suppressed when HookSilence=&false")

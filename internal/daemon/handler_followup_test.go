@@ -52,11 +52,11 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 		notifier := NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return nil
+			return false, nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -91,9 +91,9 @@ func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 		notifier := NewNotifier(cfg)
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			calls = append(calls, subtitle)
-			return nil
+			return false, nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -120,9 +120,9 @@ func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 		notifier := NewNotifier(cfg)
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			calls = append(calls, subtitle)
-			return nil
+			return false, nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -297,11 +297,11 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 		notifier := NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return nil
+			return false, nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -469,11 +469,11 @@ func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
 		notifier := NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return nil
+			return false, nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -514,11 +514,11 @@ func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
 		notifier := NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _, subtitle string) error {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return nil
+			return false, nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -565,7 +565,7 @@ func TestHandler_ActiveBlockedAfterStopGuardExpiry(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		guard := NewStateGuard(time.Nanosecond) // expires immediately
 		notifier := NewNotifier(&config.NotificationConfig{})
-		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+		notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 		h := NewHandler(guard, notifier)
 
 		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})
@@ -617,7 +617,7 @@ func TestHandler_ActiveBlockedAfterStopFailureGuardExpiry(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		guard := NewStateGuard(time.Nanosecond)
 		notifier := NewNotifier(&config.NotificationConfig{})
-		notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+		notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 		h := NewHandler(guard, notifier)
 
 		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop_failure"})

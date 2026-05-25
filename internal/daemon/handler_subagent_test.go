@@ -175,7 +175,7 @@ func TestHandler_IdleAfterSuppressedActivePreservesStopIcon(t *testing.T) {
 				// arrives shortly after.
 				guard := NewStateGuard(50 * time.Millisecond)
 				notifier := NewNotifier(&config.NotificationConfig{})
-				notifier.dispatch = func(_ context.Context, _, _ string) error { return nil }
+				notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
 				h := NewHandler(guard, notifier)
 
 				h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prevAction})

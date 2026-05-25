@@ -31,7 +31,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	notifier := NewNotifier(&cfg.Defaults.Notifications)
 	handler := NewHandler(guard, notifier)
 	kittyRunner := kitty.NewRealRunner()
-	handler.SetKittyClient(kitty.NewClient(kittyRunner))
+	kittyClient := kitty.NewClient(kittyRunner)
+	handler.SetKittyClient(kittyClient)
+	notifier.SetFocus(kittyClient)
 	global, perAccount := buildStaleThresholds(cfg)
 	handler.SetStaleThresholds(global, perAccount)
 	hsGlobal, hsPerAccount := buildHookSilenceThresholds(cfg)
@@ -39,6 +41,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	notifier.SetParentContext(ctx)
 
 	// Idle timer: shut down after 30 minutes of no requests.
 	idleTimer := time.NewTimer(idleTimeout)

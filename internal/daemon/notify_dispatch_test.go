@@ -37,7 +37,7 @@ func TestNotifier_DispatchHonorsContextTimeout(t *testing.T) {
 		var inflight atomic.Int32
 		var peakInflight atomic.Int32
 		returned := make(chan error, 4)
-		n.dispatch = func(ctx context.Context, _, _ string) error {
+		n.dispatch = func(ctx context.Context, _ int, _, _, _ string) (bool, error) {
 			cur := inflight.Add(1)
 			defer inflight.Add(-1)
 			for {
@@ -48,10 +48,10 @@ func TestNotifier_DispatchHonorsContextTimeout(t *testing.T) {
 			}
 			<-ctx.Done()
 			returned <- ctx.Err()
-			return ctx.Err()
+			return false, ctx.Err()
 		}
 
-		n.MaybeNotify(1, "W:api", "stop", false)
+		n.MaybeNotify(1, "W:api", "", "stop", false)
 		// Advance fake time past the dispatch timeout, then drain spawned goroutines.
 		time.Sleep(time.Second)
 		synctest.Wait()
@@ -69,7 +69,7 @@ func TestNotifier_DispatchHonorsContextTimeout(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			// Reset cooldown so each call schedules its own dispatch.
 			n.ResetCooldown(1)
-			n.MaybeNotify(1, "W:api", "stop", false)
+			n.MaybeNotify(1, "W:api", "", "stop", false)
 		}
 		time.Sleep(time.Second)
 		synctest.Wait()
@@ -89,7 +89,7 @@ func TestNotifier_EmptySessionTitleFallback(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true}
 		n, calls := newTestNotifier(cfg)
-		n.MaybeNotify(1, "", "stop", false)
+		n.MaybeNotify(1, "", "", "stop", false)
 		synctest.Wait()
 		if calls.len() < 1 {
 			t.Fatal("expected notification")
@@ -128,5 +128,118 @@ func TestQuoteAppleScript(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("quoteAppleScript(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestNotifier_RecorderClickKnobFlowsThroughDispatch confirms the
+// setClickResult knob on the recorder propagates into both the dispatcher's
+// return value and the recorded notifyCall. Session 3 uses this knob to
+// assert that focus is invoked on click; locking the wiring here means
+// future regressions surface in this small unit test instead of in the
+// integration coverage.
+func TestNotifier_RecorderClickKnobFlowsThroughDispatch(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{Stop: true}
+		n, calls := newTestNotifier(cfg)
+		calls.setClickResult(true)
+
+		n.MaybeNotify(1, "W:api", "", "stop", false)
+		synctest.Wait()
+
+		snap := calls.snapshot()
+		if len(snap) != 1 {
+			t.Fatalf("got %d calls, want 1", len(snap))
+		}
+		if !snap[0].clicked {
+			t.Errorf("notifyCall.clicked = false, want true after setClickResult(true)")
+		}
+	})
+}
+
+// TestNotifier_ParentContextCancellationStopsDispatch locks in the fix for
+// the latent bug where runDispatch derived its bounded context from
+// context.Background(). Under the 5-minute alerter timeout, that meant
+// `amx daemon stop` could leave an alerter subprocess running for up to five
+// minutes. The dispatch ctx must now be a child of the parent installed via
+// SetParentContext, so cancelling the daemon's ctx propagates immediately.
+func TestNotifier_ParentContextCancellationStopsDispatch(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{Stop: true}
+		n := NewNotifier(cfg)
+		// Generous per-dispatch timeout so this test would hang for the full
+		// timeout if parent-ctx cancellation did not propagate.
+		n.dispatchTimeout = time.Hour
+		parent, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		n.SetParentContext(parent)
+
+		returned := make(chan error, 1)
+		n.dispatch = func(ctx context.Context, _ int, _, _, _ string) (bool, error) {
+			<-ctx.Done()
+			returned <- ctx.Err()
+			return false, ctx.Err()
+		}
+
+		n.MaybeNotify(1, "W:api", "", "stop", false)
+		// Let the dispatch goroutine reach <-ctx.Done().
+		synctest.Wait()
+
+		select {
+		case <-returned:
+			t.Fatal("dispatch returned before parent cancel; the timeout fired instead of cancellation propagating")
+		default:
+		}
+
+		cancel()
+		synctest.Wait()
+
+		select {
+		case err := <-returned:
+			if err == nil {
+				t.Fatal("expected ctx.Err() after parent cancel, got nil")
+			}
+		default:
+			t.Fatal("dispatch did not return after parent ctx cancel — runDispatch is detached from the daemon lifecycle")
+		}
+	})
+}
+
+// TestParseAlerterOutput pins which alerter stdout tokens are interpreted as
+// an explicit click. Only @CONTENTCLICKED and @ACTIONCLICKED indicate the
+// user wants the source window focused; every other outcome (timeout, close,
+// reply, content-close, empty, garbled) must remain false so a passive
+// dismissal cannot yank focus away from whatever the user is currently doing.
+func TestParseAlerterOutput(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"content-clicked", "@CONTENTCLICKED", true},
+		{"action-clicked", "@ACTIONCLICKED", true},
+		{"timeout", "@TIMEOUT", false},
+		{"closed", "@CLOSED", false},
+		{"replied", "@REPLIED", false},
+		{"content-closed", "@CONTENTCLOSED", false},
+		{"empty", "", false},
+		{"whitespace-only", "   \t\n  ", false},
+		{"garbage", "what is this", false},
+		{"trailing-newline", "@CONTENTCLICKED\n", true},
+		{"leading-whitespace", "  @CONTENTCLICKED", true},
+		{"two-lines-keeps-first", "@CONTENTCLICKED\n@REPLIED", true},
+		{"two-lines-non-click-first", "@TIMEOUT\n@CONTENTCLICKED", false},
+		// alerter emits uppercase tokens; case-sensitive matching is
+		// intentional so a future stdout format change does not silently
+		// start treating arbitrary text as a click.
+		{"lowercase-content-clicked", "@contentclicked", false},
+		{"lowercase-action-clicked", "@actionclicked", false},
+		{"mixed-case-content-clicked", "@ContentClicked", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseAlerterOutput([]byte(tc.in)); got != tc.want {
+				t.Errorf("parseAlerterOutput(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }

@@ -243,6 +243,7 @@ func (h *Handler) SweepStale(now time.Time) {
 	}
 	type staleEntry struct {
 		windowID int
+		account  string
 		title    string
 		pipeMode bool
 		notify   bool
@@ -255,7 +256,8 @@ func (h *Handler) SweepStale(now time.Time) {
 		if action != "active" && action != "subagent" && action != "compact" {
 			continue
 		}
-		threshold := h.resolveThreshold(h.lastAccount[windowID], action)
+		account := h.lastAccount[windowID]
+		threshold := h.resolveThreshold(account, action)
 		if threshold <= 0 {
 			continue
 		}
@@ -276,14 +278,20 @@ func (h *Handler) SweepStale(now time.Time) {
 		delete(h.lastActiveEvent, windowID)
 		delete(h.copilotToolPermissionState, windowID)
 		delete(h.subagentCount, windowID)
-		stale = append(stale, staleEntry{windowID, title, pipe, notify})
+		stale = append(stale, staleEntry{
+			windowID: windowID,
+			account:  account,
+			title:    title,
+			pipeMode: pipe,
+			notify:   notify,
+		})
 	}
 	h.stateMu.Unlock()
 
 	for _, s := range stale {
 		h.guard.Clear(s.windowID)
 		if s.notify {
-			h.notifier.MaybeNotify(s.windowID, s.title, "stale", s.pipeMode)
+			h.notifier.MaybeNotify(s.windowID, s.title, s.account, "stale", s.pipeMode)
 		}
 		if h.kittyClient != nil {
 			h.clearStaleTitle(s.windowID, s.title)
@@ -389,6 +397,6 @@ func (h *Handler) SweepHookSilence(now time.Time) {
 	h.stateMu.Unlock()
 
 	for _, s := range silent {
-		h.notifier.MaybeNotify(hookSilenceWindowID(s.account), s.account, "hook_silence", false)
+		h.notifier.MaybeNotify(hookSilenceWindowID(s.account), s.account, s.account, "hook_silence", false)
 	}
 }
