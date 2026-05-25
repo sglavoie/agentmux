@@ -18,6 +18,25 @@ func TestCopyDarwinSmoke(t *testing.T) {
 	if _, err := exec.LookPath("pbpaste"); err != nil {
 		t.Skip("pbpaste not available")
 	}
+
+	// Snapshot the user's clipboard so the test doesn't clobber it.
+	prior, priorErr := exec.Command("pbpaste").Output()
+	if priorErr == nil {
+		t.Cleanup(func() {
+			cmd := exec.Command("pbcopy")
+			stdin, err := cmd.StdinPipe()
+			if err != nil {
+				return
+			}
+			if err := cmd.Start(); err != nil {
+				return
+			}
+			_, _ = stdin.Write(prior)
+			_ = stdin.Close()
+			_ = cmd.Wait()
+		})
+	}
+
 	want := "amx-clipboard-test-token"
 	if err := Copy(want); err != nil {
 		t.Fatalf("Copy: %v", err)
