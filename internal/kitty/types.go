@@ -213,6 +213,7 @@ type UserVars struct {
 	Groups           string `json:"cc_groups"`
 	Mute             string `json:"cc_mute"`
 	CWD              string `json:"cc_cwd"`
+	Locked           bool   `json:"-"`
 }
 
 func (u *UserVars) UnmarshalJSON(data []byte) error {
@@ -230,6 +231,12 @@ func (u *UserVars) UnmarshalJSON(data []byte) error {
 
 	*u = UserVars(decoded)
 	_, u.ExplicitFlagsSet = raw["cc_explicit_flags"]
+	if v, ok := raw["amx_locked"]; ok {
+		var s string
+		if err := json.Unmarshal(v, &s); err == nil {
+			u.Locked = s == "true"
+		}
+	}
 	return nil
 }
 

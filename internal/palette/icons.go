@@ -7,6 +7,7 @@ import (
 
 type rawIcons struct {
 	Star       string            `json:"star"`
+	Lock       string            `json:"lock"`
 	States     map[string]string `json:"states"`
 	StateOrder []string          `json:"state_order"`
 }
@@ -21,6 +22,9 @@ func init() {
 
 // StarIcon returns the star/pin icon character.
 func StarIcon() string { return ico.Star }
+
+// LockIcon returns the lock icon character.
+func LockIcon() string { return ico.Lock }
 
 // StateIcon returns the icon character for a named state ("bolt", "stop", "key",
 // "warning", "error", "subagent", "compact"), or "" if the state name is

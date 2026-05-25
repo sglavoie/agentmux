@@ -8,6 +8,12 @@ func TestStarIcon(t *testing.T) {
 	}
 }
 
+func TestLockIcon(t *testing.T) {
+	if got := LockIcon(); got != "🔒" {
+		t.Errorf("LockIcon() = %q, want %q", got, "🔒")
+	}
+}
+
 func TestStateIconAllStates(t *testing.T) {
 	states := []string{"bolt", "stop", "key", "warning", "error", "subagent", "compact", "question"}
 	for _, s := range states {

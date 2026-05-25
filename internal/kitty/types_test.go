@@ -242,3 +242,29 @@ func TestUserVars_EffectiveProfile(t *testing.T) {
 		})
 	}
 }
+
+func TestUserVars_UnmarshalJSON_Locked(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		want bool
+	}{
+		{"true value", `{"amx_locked":"true"}`, true},
+		{"false value", `{"amx_locked":"false"}`, false},
+		{"empty value", `{"amx_locked":""}`, false},
+		{"key absent", `{}`, false},
+		{"other key only", `{"cc_account":"work"}`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var u UserVars
+			if err := json.Unmarshal([]byte(tt.json), &u); err != nil {
+				t.Fatalf("Unmarshal(%q) error: %v", tt.json, err)
+			}
+			if u.Locked != tt.want {
+				t.Errorf("Locked = %v, want %v (input %q)", u.Locked, tt.want, tt.json)
+			}
+		})
+	}
+}
