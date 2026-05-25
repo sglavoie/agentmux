@@ -105,6 +105,50 @@ func TestActionAvailabilityIdleRow(t *testing.T) {
 	}
 }
 
+// TestActionAvailabilityUnlockedRow verifies that on an unlocked row, the
+// destructive actions (close/restart/override) and the lock action are all
+// available.
+func TestActionAvailabilityUnlockedRow(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), []session.RunningSession{
+		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10, Locked: false},
+	})
+	m = openActionsOverlay(t, m)
+	avail := map[string]bool{}
+	for _, a := range actionsFor(m) {
+		avail[a.keyMatch] = a.available(m)
+	}
+	want := map[string]bool{
+		keyR: true, keyX: true, keyC: true, keyLock: true,
+	}
+	for k, w := range want {
+		if avail[k] != w {
+			t.Errorf("unlocked row: action %q availability got %v, want %v", k, avail[k], w)
+		}
+	}
+}
+
+// TestActionAvailabilityLockedRow verifies that on a locked row, close /
+// restart / override are unavailable while the lock toggle itself stays
+// available so the user can still unlock.
+func TestActionAvailabilityLockedRow(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), []session.RunningSession{
+		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10, Locked: true},
+	})
+	m = openActionsOverlay(t, m)
+	avail := map[string]bool{}
+	for _, a := range actionsFor(m) {
+		avail[a.keyMatch] = a.available(m)
+	}
+	want := map[string]bool{
+		keyR: false, keyX: false, keyC: false, keyLock: true,
+	}
+	for k, w := range want {
+		if avail[k] != w {
+			t.Errorf("locked row: action %q availability got %v, want %v", k, avail[k], w)
+		}
+	}
+}
+
 // TestOpenDirActionUnavailableWithoutConfig verifies the `o` action falls
 // back to unavailable when no config.Session matches the row's project title.
 func TestOpenDirActionUnavailableWithoutConfig(t *testing.T) {

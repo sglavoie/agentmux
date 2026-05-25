@@ -46,6 +46,7 @@ var helpSections = []struct {
 		"  x         close session (confirm)",
 		"  c         override session profile",
 		"  C         clear session icon",
+		"  L         lock / unlock session (blocks r/x/c)",
 	}},
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",

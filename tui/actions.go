@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/clipboard"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -59,7 +60,7 @@ func actionsFor(_ Model) []action {
 			keyMatch:    keyR,
 			label:       "restart",
 			description: "close and relaunch the session",
-			available:   func(Model) bool { return true },
+			available:   func(m Model) bool { return !m.targetSession.Locked },
 			run: func(m Model) (Model, tea.Cmd) {
 				m.actionErr = nil
 				if m.cfg.Defaults.ConfirmDestructive {
@@ -78,7 +79,7 @@ func actionsFor(_ Model) []action {
 			keyMatch:    keyX,
 			label:       "close",
 			description: "exit the Claude process; transcript persists",
-			available:   func(Model) bool { return true },
+			available:   func(m Model) bool { return !m.targetSession.Locked },
 			run: func(m Model) (Model, tea.Cmd) {
 				m.actionErr = nil
 				if m.cfg.Defaults.ConfirmDestructive {
@@ -97,7 +98,7 @@ func actionsFor(_ Model) []action {
 			keyMatch:    keyC,
 			label:       "override profile",
 			description: "restart under a different harness profile",
-			available:   func(Model) bool { return true },
+			available:   func(m Model) bool { return !m.targetSession.Locked },
 			run: func(m Model) (Model, tea.Cmd) {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
@@ -170,6 +171,17 @@ func actionsFor(_ Model) []action {
 				title := runningSessionDisplayTitle(m.targetSession)
 				m.mode = ModeList
 				return m, copyTitleCmd(title)
+			},
+		},
+		{
+			keyDisplay:  "L",
+			keyMatch:    keyLock,
+			label:       "lock/unlock",
+			description: "toggle session lock (prevents close/restart/override)",
+			available:   func(Model) bool { return true },
+			run: func(m Model) (Model, tea.Cmd) {
+				m.mode = ModeList
+				return m, toggleLockCmd(m.client, m.targetSession)
 			},
 		},
 	}
@@ -270,5 +282,19 @@ func openInEditorActionCmd(m Model, cs config.Session) tea.Cmd {
 func copyTitleCmd(title string) tea.Cmd {
 	return func() tea.Msg {
 		return actionDoneMsg{err: clipboard.Copy(title)}
+	}
+}
+
+// toggleLockCmd flips the lock state on the session's anchor window. Locked
+// sessions reject close/restart/override from the dashboard.
+func toggleLockCmd(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		if rs.Locked {
+			err = session.Unlock(client, rs.WindowID)
+		} else {
+			err = session.Lock(client, rs.WindowID)
+		}
+		return actionDoneMsg{err: err}
 	}
 }

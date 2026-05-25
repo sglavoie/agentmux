@@ -30,6 +30,7 @@ const (
 	keyClearStatus = "C" // clears the highlighted session's icon
 	keyOpenEditor  = "O" // opens the project directory in the configured editor
 	keyResort      = "R" // re-sort tabs in Kitty to repair drifted physical order
+	keyLock        = "L" // toggle the session lock (blocks close/restart/override)
 	keyD           = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
 
 	keyPgUp   = "pgup"   // scroll detail pane up by one page

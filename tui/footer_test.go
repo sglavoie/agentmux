@@ -164,7 +164,7 @@ func TestListFooterAvailability(t *testing.T) {
 			want: map[string]bool{
 				"enter": false, "a": false, "e": false, "r": false, "x": false,
 				"c": false, "C": false,
-				"o": false, "O": false, "y": false,
+				"o": false, "O": false, "y": false, "L": false,
 				"l": true, "/": true, "p": true, "R": true, "?": true,
 			},
 		},
@@ -176,7 +176,7 @@ func TestListFooterAvailability(t *testing.T) {
 			want: map[string]bool{
 				"enter": true, "a": true, "e": false, "r": true, "x": true,
 				"c": true, "C": true,
-				"o": false, "O": false, "y": true,
+				"o": false, "O": false, "y": true, "L": true,
 				"l": true, "/": true, "p": true, "R": true, "?": true,
 			},
 		},
@@ -188,7 +188,7 @@ func TestListFooterAvailability(t *testing.T) {
 			want: map[string]bool{
 				"enter": true, "a": true, "e": true, "r": true, "x": true,
 				"c": true, "C": false,
-				"o": false, "O": false, "y": true,
+				"o": false, "O": false, "y": true, "L": true,
 				"l": true, "/": true, "p": true, "R": true, "?": true,
 			},
 		},
@@ -200,7 +200,7 @@ func TestListFooterAvailability(t *testing.T) {
 			want: map[string]bool{
 				"enter": true, "a": true, "e": false, "r": true, "x": true,
 				"c": true, "C": false,
-				"o": false, "O": false, "y": true,
+				"o": false, "O": false, "y": true, "L": true,
 				"l": true, "/": true, "p": true, "R": true, "?": true,
 			},
 		},
@@ -213,7 +213,7 @@ func TestListFooterAvailability(t *testing.T) {
 			want: map[string]bool{
 				"enter": false, "a": false, "e": false, "r": false, "x": false,
 				"c": false, "C": false,
-				"o": false, "O": false, "y": false,
+				"o": false, "O": false, "y": false, "L": false,
 				"l": true, "/": true, "p": true, "R": true, "?": true,
 			},
 		},
