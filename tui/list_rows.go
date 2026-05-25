@@ -30,6 +30,11 @@ func renderList(m Model) string {
 // current view has an active pulse.
 const pulseColumnWidth = 2
 
+// lockColumnWidth is the visual width reserved for the per-row lock indicator
+// (🔒 = 2 cells, or 2 spaces when unlocked) prepended to every row so columns
+// stay aligned regardless of which rows in the view are locked.
+const lockColumnWidth = 2
+
 // ageColumnWidth is the visual width consumed by the per-row age column
 // (5 cells of text + 1 trailing space). Sized to fit a warning cell like
 // "9m ⏳"; only reserved when at least one row carries a sweep-eligible
@@ -141,6 +146,8 @@ func renderListAt(m Model, width, height int) string {
 		switch {
 		case i == m.cursor:
 			styledRow = styleSelected.Render(row)
+		case s.Locked:
+			styledRow = styleDim.Render(row)
 		case g == 0:
 			styledRow = styleAttentionRow.Render(row)
 		default:
@@ -430,6 +437,16 @@ func harnessLabel(h string) string {
 // otherwise it is a pre-rendered fixed-width cell (ageColumnWidth cells,
 // trailing space included) inserted immediately before the directory column.
 func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, width int, ageCell string) string {
+	// Lock indicator column. Always reserved (2 cells) so column alignment is
+	// stable; only filled when the session is locked.
+	lockCol := "  "
+	if s.Locked {
+		lockCol = palette.LockIcon()
+		if w := runewidth.StringWidth(lockCol); w < lockColumnWidth {
+			lockCol += strings.Repeat(" ", lockColumnWidth-w)
+		}
+	}
+
 	// State icon at the start for instant scanning.
 	iconCol := "  "
 	if s.State != "" {
@@ -477,8 +494,8 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		used := 3 + 4 + harnessColWidth + 1 + titleColWidth + 3
-		// icon+space (3) + "[X] " badge (4) + harness (9) + space (1)
+		used := lockColumnWidth + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3
+		// lock (2) + icon+space (3) + "[X] " badge (4) + harness (9) + space (1)
 		//   + title (20) + separators before dir (3)
 		available := width - used
 		if available > 10 {
@@ -494,7 +511,7 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	}
 	dir = styleDim.Render(dir)
 
-	return iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
+	return lockCol + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
 }
 
 // iconDisplayWidth returns the visual cell width of a state icon. We rely
