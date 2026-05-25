@@ -162,6 +162,22 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, pickerOpenCmd(m, m.pickerSessionWithResolvedProfile(origIdx))
 		}
 		return m, nil
+	case keyOpenEditor:
+		if len(m.pickerFilteredIdx) > 0 {
+			origIdx := m.pickerFilteredIdx[m.pickerCursor]
+			sess := m.pickerSessionWithResolvedProfile(origIdx)
+			accounts := m.cfg.Accounts
+			client := m.client
+			cfg := m.cfg
+			return m, func() tea.Msg {
+				acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
+				if !ok {
+					return pickerOpenDoneMsg{err: nil}
+				}
+				return pickerOpenDoneMsg{err: session.OpenInEditor(client, sess, acc, cfg)}
+			}
+		}
+		return m, nil
 	case keyClearStatus:
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]

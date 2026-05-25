@@ -20,7 +20,7 @@ func renderFooter(m Model) string {
 		line1 = styleFooter.Render("  [y]es   [n]o   [esc] cancel")
 		line2 = ""
 	case ModePicker:
-		line1 = styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  p: preview  esc: clear/exit")
+		line1 = styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  O: open in editor  p: preview  esc: clear/exit")
 		line2 = styleFooter.Render("  type to filter (DSL: @profile, word)  j/k: up/down")
 	case ModeConfigPicker:
 		line1 = styleFooter.Render("  enter: select  esc: cancel")
@@ -178,6 +178,14 @@ var listFooterPalette = []footerEntry{
 		return stateGroup(m.filtered[m.cursor], m.lastActivity, m.idleThreshold) == 0
 	}},
 	{"o", "open dir", footerSectionRow, func(m Model) bool {
+		if !hasRow(m) {
+			return false
+		}
+		s := m.filtered[m.cursor]
+		_, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
+		return ok
+	}},
+	{"O", "open in editor", footerSectionRow, func(m Model) bool {
 		if !hasRow(m) {
 			return false
 		}

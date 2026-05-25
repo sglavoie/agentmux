@@ -143,6 +143,24 @@ func actionsFor(_ Model) []action {
 			},
 		},
 		{
+			keyDisplay:  "O",
+			keyMatch:    keyOpenEditor,
+			label:       "open in editor",
+			description: "open the project directory in $VISUAL/$EDITOR (or defaults.editor)",
+			available: func(m Model) bool {
+				_, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
+				return ok
+			},
+			run: func(m Model) (Model, tea.Cmd) {
+				cs, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
+				m.mode = ModeList
+				if !ok {
+					return m, nil
+				}
+				return m, openInEditorActionCmd(m, cs)
+			},
+		},
+		{
 			keyDisplay:  "y",
 			keyMatch:    keyY,
 			label:       "copy title",
@@ -226,6 +244,22 @@ func openDirActionCmd(m Model, cs config.Session) tea.Cmd {
 			return pickerOpenDoneMsg{err: nil}
 		}
 		return pickerOpenDoneMsg{err: session.OpenDirectory(client, cs, acc, cfg)}
+	}
+}
+
+// openInEditorActionCmd opens a config session's directory in a new Kitty tab
+// running the configured editor (defaults.editor → $VISUAL → $EDITOR → vi).
+// Returns pickerOpenDoneMsg so the dashboard refreshes afterwards.
+func openInEditorActionCmd(m Model, cs config.Session) tea.Cmd {
+	accounts := m.cfg.Accounts
+	client := m.client
+	cfg := m.cfg
+	return func() tea.Msg {
+		acc, ok := findAccountByName(accounts, cs.EffectiveProfile())
+		if !ok {
+			return pickerOpenDoneMsg{err: nil}
+		}
+		return pickerOpenDoneMsg{err: session.OpenInEditor(client, cs, acc, cfg)}
 	}
 }
 

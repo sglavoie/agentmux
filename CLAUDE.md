@@ -136,6 +136,7 @@ sort = "alpha"              # "alpha" or "account"
 refresh_interval = 2        # TUI refresh in seconds
 guard_duration = 1          # state-guard window in seconds
 claude_flags = []           # global flags applied to all sessions
+# editor = "nvim"           # overrides $VISUAL/$EDITOR for the `O` keybinding
 
 [defaults.notifications]
 error = false

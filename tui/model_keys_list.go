@@ -351,6 +351,16 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					}
 				}
 				return m, nil
+			case keyOpenEditor:
+				if len(m.filtered) > 0 {
+					s := m.filtered[m.cursor]
+					if cs, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject()); ok {
+						m.targetSession = s
+						m.actionErr = nil
+						return m, openInEditorActionCmd(m, cs)
+					}
+				}
+				return m, nil
 			case keyY:
 				if len(m.filtered) > 0 {
 					title := runningSessionDisplayTitle(m.filtered[m.cursor])

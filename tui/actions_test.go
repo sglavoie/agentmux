@@ -270,6 +270,48 @@ func TestListONoOpWithoutMatchingConfig(t *testing.T) {
 	}
 }
 
+// TestOpenInEditorActionUnavailableWithoutConfig verifies the `O` action
+// falls back to unavailable when no config.Session matches the row's project.
+func TestOpenInEditorActionUnavailableWithoutConfig(t *testing.T) {
+	m := testModel() // no Sessions in cfg
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 1, Base: "nosuch", Account: "work", State: "bolt"},
+	})
+	m = openActionsOverlay(t, m)
+	for _, a := range actionsFor(m) {
+		if a.keyMatch == keyOpenEditor && a.available(m) {
+			t.Errorf("expected open-in-editor unavailable without matching config session")
+		}
+	}
+}
+
+// TestListOpenEditorDirectOpensWhenConfigMatches verifies `O` in ModeList
+// resolves the cursor's config session and dispatches an open-in-editor cmd.
+func TestListOpenEditorDirectOpensWhenConfigMatches(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), []session.RunningSession{
+		{TabID: 1, Base: "api", Account: "work", State: "bolt"},
+	})
+	updated, cmd := m.Update(keyPress("O"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after O, got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Error("expected open-in-editor cmd from list O with matching config session")
+	}
+}
+
+// TestListOpenEditorNoOpWithoutMatchingConfig verifies `O` is silent on a
+// row whose title isn't in the config.
+func TestListOpenEditorNoOpWithoutMatchingConfig(t *testing.T) {
+	m := loadSessions(testModel(), []session.RunningSession{
+		{TabID: 1, Base: "orphan", Account: "work", State: "bolt"},
+	})
+	_, cmd := m.Update(keyPress("O"))
+	if cmd != nil {
+		t.Error("expected no cmd when no config session matches for O")
+	}
+}
+
 // TestFindAccountByNameCaseInsensitive verifies that account lookup folds
 // case when matching a running session's profile user var against the
 // configured profile list. Without this fold, a session launched as

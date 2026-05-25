@@ -48,6 +48,53 @@ func TestPickerOKeyEmptyIsNoOp(t *testing.T) {
 	}
 }
 
+func TestPickerOpenEditorKeyEmitsCmd(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m = pressKey(m, "l")
+	updated, cmd := m.Update(keyPress("O"))
+	if updated.(Model).mode != ModePicker {
+		t.Fatalf("expected ModePicker after O (stays in picker), got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd after O in picker")
+	}
+}
+
+func TestPickerOpenEditorKeyEmptyIsNoOp(t *testing.T) {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts: []config.Account{
+			{Name: "work", Color: "blue"},
+		},
+		Sessions: []config.Session{},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m = loadSessions(m, nil)
+	m = pressKey(m, "l")
+	updated, cmd := m.Update(keyPress("O"))
+	if updated.(Model).mode != ModePicker {
+		t.Fatalf("expected ModePicker after O on empty picker, got %d", updated.(Model).mode)
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd after O on empty picker")
+	}
+}
+
+func TestFooterPickerOpenEditorHint(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.mode = ModePicker
+	footer := renderFooter(m)
+	if !strings.Contains(footer, "O: open in editor") {
+		t.Errorf("picker footer missing open in editor hint, got:\n%s", footer)
+	}
+	if !strings.Contains(footer, "o: open dir") {
+		t.Errorf("picker footer missing open dir hint, got:\n%s", footer)
+	}
+}
+
 // ---- Peek mode tests ----
 
 func TestEKeyReturnsPeekCmd(t *testing.T) {

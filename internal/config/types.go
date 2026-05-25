@@ -49,6 +49,7 @@ type Defaults struct {
 	ConfirmDestructive   bool               `toml:"confirm_destructive"`    // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
 	Notifications        NotificationConfig `toml:"notifications"`
 	Preview              PreviewConfig      `toml:"preview"`
+	Editor               string             `toml:"editor"` // overrides $VISUAL/$EDITOR for the `O` keybinding (Open in editor)
 }
 
 // WatchdogConfig holds per-state stale-detection thresholds, in seconds. A
