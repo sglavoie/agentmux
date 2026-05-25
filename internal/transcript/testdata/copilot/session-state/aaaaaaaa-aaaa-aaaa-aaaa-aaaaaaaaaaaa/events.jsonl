@@ -1,0 +1,13 @@
+{"type":"session.start","data":{"sessionId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","version":1,"producer":"copilot-agent","copilotVersion":"1.0.4","startTime":"2026-05-24T13:00:00.000Z","selectedModel":"gpt-5.3-codex","context":{"cwd":"/Users/dev/projects/foo","gitRoot":"/Users/dev/projects/foo","branch":"main"},"alreadyInUse":false},"id":"evt-1","timestamp":"2026-05-24T13:00:01.000Z","parentId":null}
+{"type":"session.model_change","data":{"selectedModel":"gpt-5.3-codex"},"id":"evt-2","timestamp":"2026-05-24T13:00:01.500Z","parentId":null}
+{"type":"user.message","data":{"source":null,"agentMode":"autopilot","content":"Refactor the auth flow to support magic links.","transformedContent":"<current_datetime>2026-05-24T13:00:02.000Z</current_datetime>\n\nRefactor the auth flow to support magic links."},"id":"evt-3","timestamp":"2026-05-24T13:00:02.000Z","parentId":null}
+{"type":"assistant.turn_start","data":{},"id":"evt-4","timestamp":"2026-05-24T13:00:03.000Z","parentId":null}
+{"type":"assistant.message","data":{"content":"","reasoningText":"**Planning the work**","phase":null,"toolRequests":[{"toolName":"read_file"}]},"id":"evt-5","timestamp":"2026-05-24T13:00:03.500Z","parentId":null}
+{"type":"tool.execution_start","data":{"toolCallId":"call_1","toolName":"read_file","arguments":"{\"path\":\"auth.go\"}"},"id":"evt-6","timestamp":"2026-05-24T13:00:04.000Z","parentId":null}
+{"type":"tool.execution_complete","data":{"toolCallId":"call_1","success":true,"result":"{\"content\":\"package auth\\n\\n// existing code\"}"},"id":"evt-7","timestamp":"2026-05-24T13:00:04.500Z","parentId":null}
+{"type":"assistant.message","data":{"content":"Here is the plan.","reasoningText":"**Summarizing plan**","phase":"commentary","toolRequests":[]},"id":"evt-8","timestamp":"2026-05-24T13:00:05.000Z","parentId":null}
+this line is not valid json and must be skipped
+{"type":"user.message","data":{"source":"user","agentMode":"autopilot","content":"Continue please.","transformedContent":"Continue please."},"id":"evt-9","timestamp":"2026-05-24T13:00:06.000Z","parentId":null}
+{"type":"assistant.message","data":{"content":"Done. See the diff above.","reasoningText":"","phase":"commentary","toolRequests":[]},"id":"evt-10","timestamp":"2026-05-24T13:00:07.000Z","parentId":null}
+{"type":"session.task_complete","data":{"turnId":"t1"},"id":"evt-11","timestamp":"2026-05-24T13:00:08.000Z","parentId":null}
+{"type":"session.shutdown","data":{"reason":"task_complete"

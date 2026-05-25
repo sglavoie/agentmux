@@ -41,6 +41,23 @@ func TestValidate_MissingHomeDirAfterNormalization(t *testing.T) {
 	}
 }
 
+func TestValidate_SessionArchiveNegativeKeepDays(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	cfg.Defaults.SessionArchive.KeepDays = -1
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for negative session_archive.keep_days")
+	}
+	if !strings.Contains(err.Error(), "session_archive.keep_days must be >= 0") {
+		t.Errorf("expected session_archive.keep_days error, got: %v", err)
+	}
+}
+
 // TestValidate_PreviewMinDimensions exercises the boundary cases for the
 // preview.min_cols / preview.min_rows checks. The previous error message
 // claimed "must be > 0" but the predicate only rejected negative values, so

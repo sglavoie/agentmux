@@ -70,6 +70,9 @@ func validateDefaults(d *Defaults) []string {
 	if d.Watchdog.HookSilence < 0 {
 		errs = append(errs, "defaults.watchdog.hook_silence must be >= 0")
 	}
+	if d.SessionArchive.KeepDays < 0 {
+		errs = append(errs, "defaults.session_archive.keep_days must be >= 0")
+	}
 	if d.Preview.Direction != "" && !ValidPreviewDirection(d.Preview.Direction) {
 		errs = append(errs, fmt.Sprintf(
 			"invalid defaults.preview.direction %q: must be one of horizontal, vertical",

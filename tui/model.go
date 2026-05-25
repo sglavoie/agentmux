@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 // Health-pip refresh cadences. Daemon checks are a cheap socket round-trip
@@ -32,6 +33,7 @@ const (
 	ModeHelp              // help overlay
 	ModeDetail            // detail pane: per-session hook event log
 	ModeActions           // per-row actions overlay
+	ModeSessionSearch     // searchable list of past harness transcripts
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -159,6 +161,31 @@ type Model struct {
 	detailScroll   int                   // top row index for the scrollable view
 	detailLoading  bool                  // true while the daemon query is in flight
 	detailErr      error                 // last error from the daemon query
+
+	// transcript index + per-harness readers built once on demand and
+	// reused across every ModeSessionSearch refresh/search. transcriptIndex
+	// is nil until the first entry into ModeSessionSearch.
+	transcriptIndex   *transcript.Index
+	transcriptReaders map[string]transcript.Reader
+
+	// session search view (ModeSessionSearch). sessionResults holds the
+	// most recent transcript.Search output. sessionQuery is the free-text
+	// query typed after `/`. sessionSearchMode is true while the user is
+	// actively editing sessionQuery (mirrors pickerSearchMode). The chip
+	// fields hold the current harness/profile/project filters. sessionLoading
+	// covers both the initial refresh and a pending text search.
+	sessionQuery       string
+	sessionResults     []transcript.Result
+	sessionCursor      int
+	sessionOffset      int
+	sessionSearchMode  bool
+	sessionLoading     bool
+	sessionRefreshErr  error
+	sessionSearchErr   error
+	sessionSearchSeq   int      // bumps on each Search dispatch; stale msgs are dropped
+	filterHarness      []string // chip filter; "" means "no filter"
+	filterProfile      []string
+	filterProject      []string
 }
 
 // NewModel creates a dashboard model.
@@ -370,6 +397,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// would operate on the stale offset and chew through dead rows
 		// before the viewport reacts — mirror the WindowSizeMsg clamp.
 		clampDetailScroll(&m)
+		return m, nil
+
+	case sessionsRefreshDoneMsg:
+		m.sessionRefreshErr = msg.err
+		// Always follow a refresh with a search dispatch — even on error,
+		// because Refresh updates whatever profiles succeeded and the old
+		// index entries are still usable. Reuse the seq the refresh was
+		// dispatched with so a chip change made mid-refresh wins.
+		if msg.seq < m.sessionSearchSeq {
+			// A newer dispatch is already in flight; defer to it.
+			return m, nil
+		}
+		return m, runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
+
+	case sessionSearchDebounceMsg:
+		// Stale debounce ticks (the user kept typing) are silently dropped.
+		if msg.seq != m.sessionSearchSeq {
+			return m, nil
+		}
+		return m, runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
+
+	case sessionSearchDoneMsg:
+		if msg.seq != m.sessionSearchSeq {
+			return m, nil
+		}
+		m.sessionLoading = false
+		m.sessionSearchErr = msg.err
+		m.sessionResults = msg.results
+		if m.sessionCursor >= len(m.sessionResults) {
+			m.sessionCursor = len(m.sessionResults) - 1
+			if m.sessionCursor < 0 {
+				m.sessionCursor = 0
+			}
+		}
+		scrollSessionSearchToCursor(&m)
 		return m, nil
 
 	case tea.KeyPressMsg:

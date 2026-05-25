@@ -57,6 +57,14 @@ compact = 180
 # misconfigured. Defaults to 4 hours (14400 seconds).
 hook_silence = 14400
 
+# Session archive: retention policy for the searchable session-transcript
+# index. The daemon prunes entries older than keep_days from the index;
+# transcript files on disk are left intact. Set keep_days to 0 to use the
+# default. Per-session "also delete the file" deletes are handled
+# interactively from the dashboard, not by this setting.
+# [defaults.session_archive]
+# keep_days = 30
+
 # Flags passed to every harness session, regardless of profile.
 # Use this only for harness-neutral flags (e.g. a wrapper script flag).
 # Put harness-specific flags (e.g. --dangerously-skip-permissions) on the

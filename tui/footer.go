@@ -31,6 +31,9 @@ func renderFooter(m Model) string {
 	case ModeActions:
 		line1 = styleFooter.Render("  <key>: run action  esc/q: back")
 		line2 = ""
+	case ModeSessionSearch:
+		line1 = styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back")
+		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
 	default: // ModeList
 		if m.previewEnabled {
 			// In preview mode the only binding shown is `p: hide preview`,

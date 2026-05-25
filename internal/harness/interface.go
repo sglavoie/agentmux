@@ -31,4 +31,9 @@ type Impl interface {
 	PipeModeTokens() []string
 	// HookContract returns the harness-specific hook installation contract.
 	HookContract() HookContract
+	// TranscriptsDir returns the directory under homeDir where this harness
+	// writes per-session transcript files (typically JSONL). Callers pass the
+	// effective profile home directory; the harness joins the appropriate
+	// subdirectory.
+	TranscriptsDir(homeDir string) string
 }

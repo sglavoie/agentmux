@@ -188,7 +188,8 @@ func (f fakeHarness) Executable() string         { return "fake" }
 func (f fakeHarness) ConfigEnvVar() string       { return "FAKE_DIR" }
 func (f fakeHarness) DefaultHomeDir() string     { return "/fake/home" }
 func (f fakeHarness) PipeModeTokens() []string   { return []string{"--fake"} }
-func (f fakeHarness) HookContract() HookContract { return fakeHookContract{} }
+func (f fakeHarness) HookContract() HookContract                { return fakeHookContract{} }
+func (f fakeHarness) TranscriptsDir(homeDir string) string       { return homeDir + "/transcripts" }
 
 type fakeHookContract struct{}
 

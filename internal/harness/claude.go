@@ -16,3 +16,6 @@ func (claudeHarness) DefaultHomeDir() string {
 }
 func (claudeHarness) PipeModeTokens() []string   { return []string{"-p", "--print"} }
 func (claudeHarness) HookContract() HookContract { return claudeHookContract{} }
+func (claudeHarness) TranscriptsDir(homeDir string) string {
+	return filepath.Join(homeDir, "projects")
+}

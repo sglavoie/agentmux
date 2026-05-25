@@ -16,3 +16,6 @@ func (copilotHarness) DefaultHomeDir() string {
 }
 func (copilotHarness) PipeModeTokens() []string   { return []string{"-p", "--prompt"} }
 func (copilotHarness) HookContract() HookContract { return copilotHookContract{} }
+func (copilotHarness) TranscriptsDir(homeDir string) string {
+	return filepath.Join(homeDir, "session-state")
+}

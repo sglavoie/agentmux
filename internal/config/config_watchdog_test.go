@@ -165,6 +165,45 @@ color = "blue"
 	}
 }
 
+func TestLoad_SessionArchiveDefaultApplied(t *testing.T) {
+	content := `
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	path := writeTempConfig(t, content)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Defaults.SessionArchive.KeepDays; got != 30 {
+		t.Errorf("SessionArchive.KeepDays default: got %d, want 30", got)
+	}
+}
+
+func TestLoad_SessionArchiveUserOverridePreserved(t *testing.T) {
+	content := `
+[defaults.session_archive]
+keep_days = 7
+
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	path := writeTempConfig(t, content)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Defaults.SessionArchive.KeepDays; got != 7 {
+		t.Errorf("SessionArchive.KeepDays: got %d, want 7", got)
+	}
+}
+
 // TestLoad_WatchdogPerProfileOverride pins that per-profile watchdog overrides
 // load onto the matching Account entry in cfg.Profiles. S2 reads these as
 // per-profile overlays on top of cfg.Defaults.Watchdog.

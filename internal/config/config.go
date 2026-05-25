@@ -143,6 +143,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.Watchdog.HookSilence == 0 {
 		cfg.Defaults.Watchdog.HookSilence = 14400
 	}
+	if cfg.Defaults.SessionArchive.KeepDays == 0 {
+		cfg.Defaults.SessionArchive.KeepDays = 30
+	}
 	if cfg.Defaults.Preview.Direction == "" {
 		cfg.Defaults.Preview.Direction = "horizontal"
 	}

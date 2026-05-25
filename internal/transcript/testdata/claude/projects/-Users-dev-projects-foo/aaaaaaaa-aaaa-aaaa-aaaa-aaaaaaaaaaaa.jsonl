@@ -1,0 +1,7 @@
+{"type":"file-history-snapshot","messageId":"x","snapshot":{}}
+{"type":"user","message":{"role":"user","content":"Refactor the auth flow to support magic links."},"uuid":"u1","timestamp":"2026-05-24T17:37:44.531Z","cwd":"/Users/dev/projects/foo","sessionId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"plan steps"},{"type":"text","text":"Sure, here is the plan."},{"type":"tool_use","name":"read_file","input":{}}]},"uuid":"u2","timestamp":"2026-05-24T17:37:48.572Z","cwd":"/Users/dev/projects/foo","sessionId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}
+this line is not valid json and must be skipped
+{"type":"user","isMeta":true,"message":{"role":"user","content":"<system-reminder>"},"uuid":"u3","timestamp":"2026-05-24T17:37:50.000Z","cwd":"/Users/dev/projects/foo"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Continue please."}]},"uuid":"u4","timestamp":"2026-05-24T17:38:00.123Z","cwd":"/Users/dev/projects/foo"}
+{"type":"user","message":{"role":"user","content":"truncated partial line

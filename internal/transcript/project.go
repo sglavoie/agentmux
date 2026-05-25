@@ -1,0 +1,50 @@
+package transcript
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/sglavoie/agentmux/internal/config"
+)
+
+// ResolveProject maps a transcript's recorded working directory to the
+// human-readable project title from the user's config. It expands `~` and
+// makes both sides absolute before comparing so the match works regardless
+// of how the harness recorded the path.
+//
+// When no configured project matches, it falls back to the base name of the
+// directory so the search view always has something to display.
+func ResolveProject(cwd string, projects []config.Session) string {
+	abs := absPath(cwd)
+	for _, p := range projects {
+		if p.Directory == "" {
+			continue
+		}
+		if absPath(p.Directory) == abs {
+			return p.Title
+		}
+	}
+	if abs == "" {
+		return ""
+	}
+	return filepath.Base(abs)
+}
+
+// absPath expands `~` and converts to an absolute, symlink-evaluated path.
+// All steps are best-effort: any failure returns the input cleaned with
+// filepath.Clean so callers always get a comparable string.
+func absPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	if strings.HasPrefix(p, "~") {
+		if home, err := os.UserHomeDir(); err == nil {
+			p = filepath.Join(home, strings.TrimPrefix(p, "~"))
+		}
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	return filepath.Clean(p)
+}

@@ -16,3 +16,6 @@ func (codexHarness) DefaultHomeDir() string {
 }
 func (codexHarness) PipeModeTokens() []string   { return []string{"exec", "e", "review"} }
 func (codexHarness) HookContract() HookContract { return codexHookContract{} }
+func (codexHarness) TranscriptsDir(homeDir string) string {
+	return filepath.Join(homeDir, "sessions")
+}

@@ -38,18 +38,19 @@ type Deprecation struct {
 
 // Defaults holds global default settings.
 type Defaults struct {
-	Sort                 string             `toml:"sort"`
-	RefreshInterval      int                `toml:"refresh_interval"`
-	GuardDuration        int                `toml:"guard_duration"`
-	IdleThreshold        int                `toml:"idle_threshold"`         // seconds before a session is considered idle; 0 → default (300)
-	StaleActiveThreshold int                `toml:"stale_active_threshold"` // deprecated: use [defaults.watchdog].active; mirrored on load
-	Watchdog             WatchdogConfig     `toml:"watchdog"`               // per-state stale-detection thresholds (seconds)
-	Args                 []string           `toml:"args"`                   // preferred shared launch args
-	ClaudeFlags          []string           `toml:"claude_flags"`           // legacy alias for args
-	ConfirmDestructive   bool               `toml:"confirm_destructive"`    // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
-	Notifications        NotificationConfig `toml:"notifications"`
-	Preview              PreviewConfig      `toml:"preview"`
-	Editor               string             `toml:"editor"` // overrides $VISUAL/$EDITOR for the `O` keybinding (Open in editor)
+	Sort                 string               `toml:"sort"`
+	RefreshInterval      int                  `toml:"refresh_interval"`
+	GuardDuration        int                  `toml:"guard_duration"`
+	IdleThreshold        int                  `toml:"idle_threshold"`         // seconds before a session is considered idle; 0 → default (300)
+	StaleActiveThreshold int                  `toml:"stale_active_threshold"` // deprecated: use [defaults.watchdog].active; mirrored on load
+	Watchdog             WatchdogConfig       `toml:"watchdog"`               // per-state stale-detection thresholds (seconds)
+	SessionArchive       SessionArchiveConfig `toml:"session_archive"`        // retention policy for the searchable session-transcript index
+	Args                 []string             `toml:"args"`                   // preferred shared launch args
+	ClaudeFlags          []string             `toml:"claude_flags"`           // legacy alias for args
+	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
+	Notifications        NotificationConfig   `toml:"notifications"`
+	Preview              PreviewConfig        `toml:"preview"`
+	Editor               string               `toml:"editor"` // overrides $VISUAL/$EDITOR for the `O` keybinding (Open in editor)
 }
 
 // WatchdogConfig holds per-state stale-detection thresholds, in seconds. A
@@ -66,6 +67,13 @@ type WatchdogConfig struct {
 	Subagent    int `toml:"subagent"`     // SubagentStart-driven active icon; 0 → default (1800)
 	Compact     int `toml:"compact"`      // PreCompact-driven active icon; 0 → default (180)
 	HookSilence int `toml:"hook_silence"` // account-level hook-silence threshold; 0 → default (14400)
+}
+
+// SessionArchiveConfig controls retention for the searchable session-transcript
+// index. A zero value means "use the default" — applyDefaults populates
+// KeepDays so users can omit the section entirely.
+type SessionArchiveConfig struct {
+	KeepDays int `toml:"keep_days"` // days to retain index entries; 0 → default (30)
 }
 
 // NotificationConfig controls which macOS notifications fire.

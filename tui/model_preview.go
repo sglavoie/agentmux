@@ -26,6 +26,10 @@ func (m Model) render() string {
 	case ModePicker:
 		// Picker replaces both header and list.
 		sb.WriteString(renderPicker(m))
+	case ModeSessionSearch:
+		// Session search owns its full layout (header + chips + query +
+		// results) so the dashboard list is not rendered below.
+		sb.WriteString(renderSessionSearch(m))
 	default:
 		// Header area varies by mode; list is always shown below.
 		switch m.mode {

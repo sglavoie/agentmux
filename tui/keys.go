@@ -32,6 +32,7 @@ const (
 	keyResort      = "R" // re-sort tabs in Kitty to repair drifted physical order
 	keyLock        = "L" // toggle the session lock (blocks close/restart/override)
 	keyD           = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
+	keySessionSearch = "S" // opens ModeSessionSearch (past harness transcripts)
 
 	keyPgUp   = "pgup"   // scroll detail pane up by one page
 	keyPgDown = "pgdown" // scroll detail pane down by one page
