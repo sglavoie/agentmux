@@ -77,6 +77,17 @@ func (m *Model) restartWithToast(rs session.RunningSession) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// lockedDenyToast pushes the standard "session is locked" denial toast and
+// returns the cmd that arms the toast tick. Reused by every direct keypress
+// that would otherwise destroy or override a locked session so the user
+// sees a uniform message regardless of which key was rejected.
+func (m *Model) lockedDenyToast() tea.Cmd {
+	return m.pushToast(Toast{
+		Severity: toastError,
+		Text:     "session is locked — press L to unlock",
+	})
+}
+
 // undoToastText returns the user-facing message for the aggregating undo
 // toast. A single pending entry shows its label; multiple entries collapse
 // into a count with "undo last" so the affordance stays accurate.

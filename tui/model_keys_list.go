@@ -292,7 +292,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case keyR:
 				if len(m.filtered) > 0 {
-					m.targetSession = m.filtered[m.cursor]
+					s := m.filtered[m.cursor]
+					if s.Locked {
+						return m, m.lockedDenyToast()
+					}
+					m.targetSession = s
 					m.actionErr = nil
 					if m.cfg.Defaults.ConfirmDestructive {
 						m.confirmAction = "restart"
@@ -309,7 +313,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if len(m.filtered) > 0 {
-					m.targetSession = m.filtered[m.cursor]
+					s := m.filtered[m.cursor]
+					if s.Locked {
+						return m, m.lockedDenyToast()
+					}
+					m.targetSession = s
 					m.actionErr = nil
 					if m.cfg.Defaults.ConfirmDestructive {
 						m.confirmAction = "close"
@@ -324,7 +332,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, m.undoLastCmd()
 			case keyC:
 				if len(m.filtered) > 0 {
-					m.targetSession = m.filtered[m.cursor]
+					s := m.filtered[m.cursor]
+					if s.Locked {
+						return m, m.lockedDenyToast()
+					}
+					m.targetSession = s
 					m.configPickerAccounts = m.cfg.Accounts
 					m.configPickerCurrent = m.targetSession.EffectiveProfile()
 					m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
@@ -339,6 +351,13 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					s := m.filtered[m.cursor]
 					m.actionErr = nil
 					return m, clearStatusCmd(m.client, s)
+				}
+				return m, nil
+			case keyLock:
+				if len(m.filtered) > 0 {
+					s := m.filtered[m.cursor]
+					m.actionErr = nil
+					return m, toggleLockCmd(m.client, s)
 				}
 				return m, nil
 			case keyO:
