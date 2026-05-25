@@ -28,7 +28,7 @@ func pickerScrollFixtureModel(t *testing.T, rows, height int) Model {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessColors: map[string]string{"claude": "blue"},
-		Accounts:      []config.Account{{Name: "work"}},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      sessions,
 	}
 	runner := kitty.NewMockRunner(nil)
@@ -213,7 +213,7 @@ func TestRenderPickerList_UnboundedRendersAllRows(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessColors: map[string]string{"claude": "blue"},
-		Accounts:      []config.Account{{Name: "work"}},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      sessions,
 	}
 	runner := kitty.NewMockRunner(nil)

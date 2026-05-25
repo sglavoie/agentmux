@@ -1,6 +1,10 @@
 package config
 
-import "github.com/sglavoie/agentmux/internal/harness"
+import (
+	"strings"
+
+	"github.com/sglavoie/agentmux/internal/harness"
+)
 
 // Config is the top-level structure for config.toml.
 type Config struct {
@@ -95,9 +99,11 @@ type Account struct {
 	Harness   string `toml:"harness"`
 	HomeDir   string `toml:"home_dir"`
 	ConfigDir string `toml:"config_dir"`
-	// Deprecated: per-profile tab color was replaced by the top-level
-	// [harness_colors] table. The field is retained only so config Load
-	// can detect the legacy key and emit a migration error via Validate.
+	// Color is the required per-profile palette color used to render the
+	// project title (picker, main list, detail header, preview headers, and
+	// account chips/badges). Distinct from [harness_colors], which colors
+	// harness affordances (the Kitty tab bar and the harness path/cell).
+	// Validation rejects an empty or invalid value.
 	Color    string         `toml:"color"`
 	Args     []string       `toml:"args"`
 	Watchdog WatchdogConfig `toml:"watchdog"` // per-profile override; zero fields fall back to defaults at read time
@@ -175,6 +181,21 @@ func (c *Config) HarnessColor(name string) string {
 		return ""
 	}
 	return c.HarnessColors[harness.Normalize(name)]
+}
+
+// ProfileColor returns the palette color name configured on the matched
+// profile. Returns "" when no profile matches; validation guarantees a
+// non-empty Color for every matched profile.
+func (c *Config) ProfileColor(profileName string) string {
+	if c == nil {
+		return ""
+	}
+	for _, p := range c.Profiles {
+		if strings.EqualFold(p.Name, profileName) {
+			return p.Color
+		}
+	}
+	return ""
 }
 
 // EffectiveHomeDir returns the normalized profile home/config directory.

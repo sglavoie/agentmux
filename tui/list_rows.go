@@ -58,6 +58,7 @@ func renderListAt(m Model, width, height int) string {
 	}
 
 	acctColor := buildProfileColorMap(m)
+	harnessColor := buildHarnessColorByProfileMap(m)
 
 	groupCounts := countGroups(m.filtered, m.lastActivity, m.idleThreshold)
 	multiGroup := groupCounts > 1
@@ -135,7 +136,7 @@ func renderListAt(m Model, width, height int) string {
 		if ageActive {
 			ageCell = renderAgeCell(m.watchdog[s.WindowID], now)
 		}
-		row := formatRow(s, acctColor, rowWidth, ageCell)
+		row := formatRow(s, acctColor, harnessColor, rowWidth, ageCell)
 		var styledRow string
 		switch {
 		case i == m.cursor:
@@ -428,7 +429,7 @@ func harnessLabel(h string) string {
 // ageCell is empty when no row in the current view carries a watchdog entry;
 // otherwise it is a pre-rendered fixed-width cell (ageColumnWidth cells,
 // trailing space included) inserted immediately before the directory column.
-func formatRow(s session.RunningSession, acctColor map[string]string, width int, ageCell string) string {
+func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, width int, ageCell string) string {
 	// State icon at the start for instant scanning.
 	iconCol := "  "
 	if s.State != "" {
@@ -462,14 +463,15 @@ func formatRow(s session.RunningSession, acctColor map[string]string, width int,
 		if pad < 0 {
 			pad = 0
 		}
-		harnessCell = styleDim.Render(text) + strings.Repeat(" ", pad)
+		harnessCell = accountStyle(harnessColor[s.Account]).Render(text) + strings.Repeat(" ", pad)
 	} else {
 		harnessCell = strings.Repeat(" ", harnessColWidth)
 	}
 
 	// Title: use the project title padded to titleColWidth.
 	title := runewidth.Truncate(runningSessionDisplayTitle(s), titleColWidth, "…")
-	title = title + strings.Repeat(" ", titleColWidth-runewidth.StringWidth(title))
+	paddedTitle := title + strings.Repeat(" ", titleColWidth-runewidth.StringWidth(title))
+	title = accountStyle(acctColor[s.Account]).Render(paddedTitle)
 
 	// Directory: truncated.
 	dir := s.Directory
@@ -514,9 +516,23 @@ func padIconCell(icon string) string {
 	return icon + strings.Repeat(" ", 2-w)
 }
 
-// buildProfileColorMap maps profile name → palette color name resolved via
-// the profile's harness.
+// buildProfileColorMap maps profile name → palette color name resolved from
+// the profile's required Color field. Used for elements that should track the
+// profile (project title, [X] account badge, account chips, detail/preview
+// header).
 func buildProfileColorMap(m Model) map[string]string {
+	result := make(map[string]string, len(m.cfg.Accounts))
+	for _, acc := range m.cfg.Accounts {
+		result[acc.Name] = acc.Color
+	}
+	return result
+}
+
+// buildHarnessColorByProfileMap maps profile name → palette color name
+// resolved via the profile's harness. Used to color elements that should
+// track the harness (e.g. the [claude] harness cell and the [profile/harness]
+// picker badge).
+func buildHarnessColorByProfileMap(m Model) map[string]string {
 	result := make(map[string]string, len(m.cfg.Accounts))
 	for _, acc := range m.cfg.Accounts {
 		result[acc.Name] = m.cfg.HarnessColor(acc.EffectiveHarness())

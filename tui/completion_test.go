@@ -71,7 +71,7 @@ func TestTokenAtCaret_AfterTrailingSpace(t *testing.T) {
 
 func TestCandidatesForSigil_Account(t *testing.T) {
 	cfg := &config.Config{
-		Profiles: []config.Account{{Name: "work"}, {Name: "personal"}},
+		Profiles: []config.Account{{Name: "work", Color: "blue"}, {Name: "personal", Color: "yellow"}},
 	}
 	got := candidatesForSigil('@', cfg)
 	want := []string{"work", "personal"}
@@ -82,8 +82,8 @@ func TestCandidatesForSigil_Account(t *testing.T) {
 
 func TestCandidatesForSigil_AccountDedupesLegacyAlias(t *testing.T) {
 	cfg := &config.Config{
-		Profiles: []config.Account{{Name: "work"}},
-		Accounts: []config.Account{{Name: "work"}, {Name: "personal"}},
+		Profiles: []config.Account{{Name: "work", Color: "blue"}},
+		Accounts: []config.Account{{Name: "work", Color: "blue"}, {Name: "personal", Color: "yellow"}},
 	}
 	got := candidatesForSigil('@', cfg)
 	want := []string{"work", "personal"}
@@ -178,8 +178,8 @@ func completionTestModel() Model {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work"},
-			{Name: "personal"},
+			{Name: "work", Color: "blue"},
+			{Name: "personal", Color: "yellow"},
 		},
 	}
 	return Model{cfg: cfg, focusedChipIdx: -1}

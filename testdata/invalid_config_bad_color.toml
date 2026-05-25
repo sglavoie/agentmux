@@ -1,11 +1,15 @@
 [defaults]
 
-[[accounts]]
+[harness_colors]
+claude = "blue"
+
+[[profiles]]
 name = "work"
-config_dir = "~/.config/claude-work"
+harness = "claude"
+home_dir = "~/.config/claude-work"
 color = "magenta"
 
-[[sessions]]
+[[projects]]
 title = "W:api"
 directory = "~/projects/api"
-account = "work"
+profile = "work"

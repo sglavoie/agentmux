@@ -160,8 +160,8 @@ func TestValidate_DuplicateProjectTitleAcrossProfilesAllowed(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/w"},
-			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
+			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p", Color: "blue"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "work"},
@@ -260,7 +260,7 @@ func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "Work"},
@@ -280,7 +280,7 @@ func TestValidate_HookOverrideKeyCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
 		Hooks: config.HooksConfig{
 			Overrides: map[string]config.AccountHookOverride{
@@ -382,7 +382,7 @@ func TestValidate_ZeroWatchdogAccepted(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 0, Subagent: 0, Compact: 0, HookSilence: 0}},
 		HarnessColors: map[string]string{"claude": "blue"},
-		Profiles:      []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h"}},
+		Profiles:      []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"}},
 	}
 	if err := config.Validate(cfg); err != nil {
 		t.Fatalf("zero watchdog values must validate cleanly: %v", err)
@@ -403,7 +403,7 @@ func TestValidate_SubThirtyWatchdogWarns(t *testing.T) {
 		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Watchdog: config.WatchdogConfig{Subagent: 10}},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue", Watchdog: config.WatchdogConfig{Subagent: 10}},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {
@@ -431,7 +431,7 @@ func TestValidate_WatchdogWarningsIdempotent(t *testing.T) {
 		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Watchdog: config.WatchdogConfig{Subagent: 10}},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue", Watchdog: config.WatchdogConfig{Subagent: 10}},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {
@@ -468,7 +468,7 @@ func TestValidate_StripsStaleWatchdogWarningsOnRevalidate(t *testing.T) {
 		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {
@@ -534,7 +534,7 @@ func TestValidate_ProjectProfileAccountMatchingAccepted(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/w"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
 		},
 		Projects: []config.Session{
 			{Title: "api", Directory: "/tmp/a", Profile: "work", Account: "Work"},
@@ -589,34 +589,6 @@ func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "worrk") {
 		t.Errorf("expected error to mention the unknown profile %q, got %q", "worrk", err.Error())
-	}
-}
-
-// TestValidate_LegacyPerProfileColorRejected pins that the deprecated
-// per-profile `color` key is reported as a hard error with a migration hint
-// pointing at [harness_colors]. The old single-color-per-profile model has
-// been replaced by harness-keyed colors; any config still carrying the legacy
-// key must surface a clear migration message rather than silently mirroring
-// the value.
-func TestValidate_LegacyPerProfileColorRejected(t *testing.T) {
-	// This test deliberately exercises the deprecated Account.Color field
-	// to verify Validate rejects it; the staticcheck SA1019 hit is expected.
-	legacy := config.Account{Name: "work", Harness: "claude", HomeDir: "/tmp/h"}
-	legacy.Color = "blue" //nolint:staticcheck // intentional: validator regression for deprecated key
-	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
-		Profiles:      []config.Account{legacy},
-	}
-	err := config.Validate(cfg)
-	if err == nil {
-		t.Fatal("expected validation error for legacy per-profile color, got nil")
-	}
-	msg := err.Error()
-	if !strings.Contains(msg, "'color' has moved to [harness_colors]") {
-		t.Errorf("expected migration message in error, got %q", msg)
-	}
-	if !strings.Contains(msg, "work") {
-		t.Errorf("expected error to name the offending profile %q, got %q", "work", msg)
 	}
 }
 
@@ -698,7 +670,7 @@ func TestValidate_HarnessColorsExtraEntryForUnusedHarnessAllowed(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue", "copilot": "purple"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {
@@ -714,8 +686,8 @@ func TestValidate_HarnessColorsTwoProfilesShareOneEntry(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/w"},
-			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
+			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p", Color: "blue"},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {

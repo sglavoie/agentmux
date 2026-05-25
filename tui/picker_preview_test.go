@@ -122,7 +122,7 @@ func TestPickerPreviewRunningPeek(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
 		HarnessColors: map[string]string{"claude": "blue"},
-		Accounts:      []config.Account{{Name: "work"}},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions: []config.Session{
 			{Title: "api", Directory: "/home/user/api", Account: "work"},
 		},
@@ -151,7 +151,7 @@ func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
 		HarnessColors: map[string]string{"claude": "blue"},
-		Accounts:      []config.Account{{Name: "work"}, {Name: "personal"}},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}, {Name: "personal", Color: "yellow"}},
 		Sessions: []config.Session{
 			{Title: "api", Account: "work"},
 			{Title: "notes", Account: "personal"},

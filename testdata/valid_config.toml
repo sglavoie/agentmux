@@ -14,10 +14,12 @@ claude = "blue"
 [[accounts]]
 name = "work"
 config_dir = "~/.config/claude-work"
+color = "yellow"
 
 [[accounts]]
 name = "personal"
 config_dir = "~/.config/claude"
+color = "cyan"
 
 [[sessions]]
 title = "W:api"

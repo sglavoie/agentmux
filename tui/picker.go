@@ -96,6 +96,7 @@ func renderPickerList(m Model, height int) string {
 	}
 
 	acctColor := buildProfileColorMap(m)
+	harnessColor := buildHarnessColorByProfileMap(m)
 
 	total := len(m.pickerFilteredIdx)
 	startIdx := 0
@@ -161,7 +162,7 @@ func renderPickerList(m Model, height int) string {
 		coloredTitle := accountStyle(acctColor[sess.EffectiveProfile()]).Render(title)
 		line := "  " + prefix + coloredTitle
 		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
-			line += "  " + styleDim.Render("["+acc.Name+"/"+acc.EffectiveHarness()+"]")
+			line += "  " + accountStyle(harnessColor[sess.EffectiveProfile()]).Render("["+acc.Name+"/"+acc.EffectiveHarness()+"]")
 		}
 		if sess.EffectiveProfile() != defaultProfile {
 			line += "  " + styleDim.Render("(override)")

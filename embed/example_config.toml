@@ -108,7 +108,8 @@ codex   = "purple"
 # ── Profiles ──────────────────────────────────────────────────────────────────
 # A profile ties a harness to an isolated home directory.
 # You can define as many profiles as you like and mix harnesses freely.
-# Tab color is now per-harness (see [harness_colors] above), not per-profile.
+# Tab color is per-harness (see [harness_colors] above); the project title
+# color is per-profile (`color`, below).
 #
 # Required fields:
 #   name      Unique identifier used to reference this profile from projects.
@@ -117,6 +118,11 @@ codex   = "purple"
 #             Claude exports CLAUDE_CONFIG_DIR=<home_dir>.
 #             Copilot exports COPILOT_HOME=<home_dir>.
 #             Codex exports CODEX_HOME=<home_dir>.
+#   color     Per-profile palette color used to render the project title in
+#             the dashboard list, picker, detail header, and account chips.
+#             Valid colors: green, blue, red, orange, purple, teal, pink,
+#             yellow, gray, cyan. Distinct from [harness_colors], which
+#             colors the Kitty tab bar and harness path/cell.
 #
 # Optional fields:
 #   args      Flags passed to every session launched under this profile.
@@ -131,6 +137,7 @@ codex   = "purple"
 # name = "claude-work"
 # harness = "claude"
 # home_dir = "~/.config/claude-work"
+# color = "yellow"
 # args = ["--dangerously-skip-permissions"]
 
 # Example Copilot profile:
@@ -138,6 +145,7 @@ codex   = "purple"
 # name = "copilot-work"
 # harness = "copilot"
 # home_dir = "~/.copilot-work"
+# color = "green"
 # args = ["--model", "gpt-5"]
 
 # Example Codex profile:
@@ -145,6 +153,7 @@ codex   = "purple"
 # name = "codex-work"
 # harness = "codex"
 # home_dir = "~/.codex-work"
+# color = "purple"
 # args = ["--dangerously-bypass-hook-trust"]
 
 
@@ -203,5 +212,6 @@ codex   = "purple"
 #   account               → profile    (on projects)
 #   claude_flags          → args
 #   stale_active_threshold → [defaults.watchdog].active
-#   profiles[].color      → [harness_colors] (now per-harness, not per-profile)
-#     NOTE: this is a hard error, not a soft migration — old configs must be updated.
+#   profiles[].color      Now the required per-profile project-title color
+#                         (distinct from [harness_colors], which still exists
+#                         per harness for tab-bar and harness-cell coloring).

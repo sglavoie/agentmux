@@ -84,8 +84,8 @@ func TestConfigPickerEnterProjectIdxOOBSafe(t *testing.T) {
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work"},
-			{Name: "personal"},
+			{Name: "work", Color: "blue"},
+			{Name: "personal", Color: "yellow"},
 		},
 		Sessions: []config.Session{
 			{Title: "api", Directory: "/api", Account: "work"},
@@ -189,7 +189,7 @@ func TestPickerEscClearsThenExits(t *testing.T) {
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work"},
+			{Name: "work", Color: "blue"},
 		},
 		Sessions: []config.Session{
 			{Title: "api", Account: "work"},
@@ -237,7 +237,7 @@ func TestPickerSpaceWithEmptyFilteredIdxIsSafe(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessColors: map[string]string{"claude": "blue"},
-		Accounts:      []config.Account{{Name: "work"}},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      []config.Session{{Title: "api", Account: "work"}},
 	}
 	runner := kitty.NewMockRunner(nil)
@@ -453,7 +453,7 @@ func TestCtrlCQuitsFromPickerSearchMode(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessColors: map[string]string{"claude": "blue"},
-		Accounts:      []config.Account{{Name: "work"}},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      []config.Session{{Title: "api", Account: "work"}},
 	}
 	runner := kitty.NewMockRunner(nil)

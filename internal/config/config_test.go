@@ -3,6 +3,7 @@ package config_test
 import (
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -241,6 +242,24 @@ func TestValidate_BadColor(t *testing.T) {
 	err = config.Validate(cfg)
 	if err == nil {
 		t.Fatal("expected validation error for bad color, got nil")
+	}
+	if !strings.Contains(err.Error(), `invalid color "magenta"`) {
+		t.Errorf("expected error to mention invalid color, got %q", err.Error())
+	}
+}
+
+func TestValidate_MissingProfileColor(t *testing.T) {
+	path := filepath.Join(testdataDir, "invalid_config_missing_profile_color.toml")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	err = config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for missing profile color, got nil")
+	}
+	if !strings.Contains(err.Error(), "'color' is required") {
+		t.Errorf("expected error to mention 'color' is required, got %q", err.Error())
 	}
 }
 

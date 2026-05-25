@@ -253,8 +253,8 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 func TestFormatRowWarningIconAlignment(t *testing.T) {
 	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "api"}
 	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "api"}
-	rowBolt := formatRow(sBolt, nil, 0, "")
-	rowWarn := formatRow(sWarn, nil, 0, "")
+	rowBolt := formatRow(sBolt, nil, nil, 0, "")
+	rowWarn := formatRow(sWarn, nil, nil, 0, "")
 
 	iBoltBadge := idxBadge(rowBolt)
 	iWarnBadge := idxBadge(rowWarn)
@@ -296,10 +296,10 @@ func TestFormatRowHarnessBadge(t *testing.T) {
 	sCopilot := session.RunningSession{Base: "api", Account: "work", Harness: "copilot"}
 	sNone := session.RunningSession{Base: "api", Account: "work", Harness: ""}
 
-	rowClaude := stripAnsi(formatRow(sClaude, nil, 0, ""))
-	rowCodex := stripAnsi(formatRow(sCodex, nil, 0, ""))
-	rowCopilot := stripAnsi(formatRow(sCopilot, nil, 0, ""))
-	rowNone := stripAnsi(formatRow(sNone, nil, 0, ""))
+	rowClaude := stripAnsi(formatRow(sClaude, nil, nil, 0, ""))
+	rowCodex := stripAnsi(formatRow(sCodex, nil, nil, 0, ""))
+	rowCopilot := stripAnsi(formatRow(sCopilot, nil, nil, 0, ""))
+	rowNone := stripAnsi(formatRow(sNone, nil, nil, 0, ""))
 
 	if !strings.Contains(rowClaude, "[claude]") {
 		t.Errorf("expected [claude] badge for claude harness; got %q", rowClaude)
@@ -349,7 +349,7 @@ func TestFormatRowAcctBadgeUnicode(t *testing.T) {
 	}
 	for _, tc := range cases {
 		s := session.RunningSession{Base: "x", Account: tc.account}
-		row := stripAnsi(formatRow(s, nil, 0, ""))
+		row := stripAnsi(formatRow(s, nil, nil, 0, ""))
 		if !strings.Contains(row, tc.want) {
 			t.Errorf("account %q: row %q does not contain expected badge %q", tc.account, row, tc.want)
 		}

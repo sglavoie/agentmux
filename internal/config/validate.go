@@ -113,11 +113,15 @@ func validateAccounts(accounts []Account) []string {
 		if a.HomeDir == "" {
 			errs = append(errs, fmt.Sprintf("profile %q: home_dir is required", a.Name))
 		}
-		if a.Color != "" {
+		if a.Color == "" {
 			errs = append(errs, fmt.Sprintf(
-				"profile %q: 'color' has moved to [harness_colors] "+
-					"(one entry per harness, e.g. claude=\"blue\"); remove this field",
+				"profile %q: 'color' is required (e.g. color=\"yellow\")\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
 				a.Name,
+			))
+		} else if !ValidColor(a.Color) {
+			errs = append(errs, fmt.Sprintf(
+				"profile %q: invalid color %q\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
+				a.Name, a.Color,
 			))
 		}
 		// Only check duplicates for named profiles. Otherwise a config with

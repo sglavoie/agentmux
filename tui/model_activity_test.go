@@ -183,7 +183,7 @@ func TestClearStatusCmdSetsTabTitle(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 300},
 		HarnessColors: map[string]string{"claude": "blue"},
-		Accounts:      []config.Account{{Name: "work"}},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 	}
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")

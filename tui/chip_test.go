@@ -92,8 +92,8 @@ func chipTestModel() Model {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
 		Accounts: []config.Account{
-			{Name: "work"},
-			{Name: "personal"},
+			{Name: "work", Color: "blue"},
+			{Name: "personal", Color: "yellow"},
 		},
 	}
 	m := Model{cfg: cfg, width: 120, focusedChipIdx: -1}
