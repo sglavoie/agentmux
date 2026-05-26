@@ -36,6 +36,18 @@ type Message struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// LookupFunc lets Discover skip a full parse when the index already has a
+// fresh entry for the file. Implementations return the cached SessionMeta
+// and true when the supplied size and mtime match the cached snapshot.
+type LookupFunc func(path string, size int64, mtime time.Time) (SessionMeta, bool)
+
+// DiscoverOptions tunes a single Discover pass without changing the
+// per-harness layout walk.
+type DiscoverOptions struct {
+	Cached  LookupFunc // optional; nil means always parse
+	MinTime time.Time  // zero means no cutoff; files with older mtime are skipped
+}
+
 // Reader is the interface implemented by each harness adapter. Discover
 // walks the harness's transcripts directory under homeDir (typically the
 // path returned by harness.Impl.TranscriptsDir) and returns one SessionMeta
@@ -46,7 +58,7 @@ type Message struct {
 // skipped, partial reads (sessions still being written) tolerated.
 type Reader interface {
 	Harness() string
-	Discover(homeDir string) ([]SessionMeta, error)
+	Discover(homeDir string, opts DiscoverOptions) ([]SessionMeta, error)
 	ReadMessages(path string) ([]Message, error)
 }
 

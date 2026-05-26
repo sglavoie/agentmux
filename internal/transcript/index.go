@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 )
@@ -161,6 +162,37 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
+	// Snapshot the existing entries by Path so each reader's Discover can
+	// short-circuit a parse when the on-disk file is byte-identical to the
+	// cached metadata. Path keying is used (rather than IndexKey) because
+	// the harness id is sometimes only known after parsing the first line
+	// of the file (Codex), so it is unavailable at the discovery-walk stage.
+	byPath := make(map[string]SessionMeta, len(i.entries))
+	for _, meta := range i.entries {
+		if meta.Path == "" {
+			continue
+		}
+		byPath[meta.Path] = meta
+	}
+	lookup := func(path string, size int64, mtime time.Time) (SessionMeta, bool) {
+		meta, ok := byPath[path]
+		if !ok {
+			return SessionMeta{}, false
+		}
+		if meta.FileSize != size || !meta.FileModTime.Equal(mtime) {
+			return SessionMeta{}, false
+		}
+		return meta, true
+	}
+
+	days := cfg.Defaults.SessionArchive.ScanMaxAgeDays
+	var cutoff time.Time
+	if days > 0 {
+		cutoff = time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	}
+	// days <= 0 → unlimited; leave cutoff zero so MinTime.IsZero() is true
+	// in each reader and no file is filtered by age.
+
 	var firstErr error
 	for _, profile := range cfg.Profiles {
 		harnessName := profile.EffectiveHarness()
@@ -171,7 +203,7 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 			continue
 		}
 		home := config.ExpandTilde(profile.EffectiveHomeDir())
-		metas, err := reader.Discover(home)
+		metas, err := reader.Discover(home, DiscoverOptions{Cached: lookup, MinTime: cutoff})
 		if err != nil {
 			slog.Debug("transcript.index: discover failed",
 				"harness", harnessName, "profile", profile.Name, "err", err)

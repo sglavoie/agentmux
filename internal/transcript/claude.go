@@ -54,7 +54,7 @@ type claudeMessage struct {
 // Discover walks <homeDir>/projects and returns one SessionMeta per .jsonl
 // file. Per-directory or per-file errors are logged at debug level and
 // otherwise skipped — a single corrupt session must not hide the rest.
-func (r ClaudeReader) Discover(homeDir string) ([]SessionMeta, error) {
+func (r ClaudeReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMeta, error) {
 	if homeDir == "" {
 		return nil, nil
 	}
@@ -83,7 +83,21 @@ func (r ClaudeReader) Discover(homeDir string) ([]SessionMeta, error) {
 				continue
 			}
 			path := filepath.Join(projDir, f.Name())
-			meta, err := r.parseFile(path, entry.Name())
+			info, err := os.Stat(path)
+			if err != nil {
+				slog.Debug("transcript.claude: skip file", "path", path, "err", err)
+				continue
+			}
+			if !opts.MinTime.IsZero() && info.ModTime().Before(opts.MinTime) {
+				continue
+			}
+			if opts.Cached != nil {
+				if meta, ok := opts.Cached(path, info.Size(), info.ModTime()); ok {
+					out = append(out, meta)
+					continue
+				}
+			}
+			meta, err := r.parseFile(path, info, entry.Name())
 			if err != nil {
 				slog.Debug("transcript.claude: skip file", "path", path, "err", err)
 				continue
@@ -132,11 +146,7 @@ func (r ClaudeReader) ReadMessages(path string) ([]Message, error) {
 // parseFile streams one transcript end to end to produce SessionMeta. The
 // loop tracks first/last timestamp, message count, snippet, and CWD — all
 // using whatever subset of fields each line happens to carry.
-func (r ClaudeReader) parseFile(path, encodedDir string) (SessionMeta, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return SessionMeta{}, err
-	}
+func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string) (SessionMeta, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return SessionMeta{}, err

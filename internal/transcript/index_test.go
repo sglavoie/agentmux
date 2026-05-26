@@ -18,19 +18,19 @@ import (
 // parsers (which have their own dedicated tests).
 type fakeReader struct {
 	harness     string
-	discover    func(homeDir string) ([]SessionMeta, error)
+	discover    func(homeDir string, opts DiscoverOptions) ([]SessionMeta, error)
 	readErr     error
 	readResult  []Message
 	discoverErr error
 }
 
 func (f *fakeReader) Harness() string { return f.harness }
-func (f *fakeReader) Discover(homeDir string) ([]SessionMeta, error) {
+func (f *fakeReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMeta, error) {
 	if f.discoverErr != nil {
 		return nil, f.discoverErr
 	}
 	if f.discover != nil {
-		return f.discover(homeDir)
+		return f.discover(homeDir, opts)
 	}
 	return nil, nil
 }
@@ -94,7 +94,7 @@ func TestRefresh_AddsNewEntries(t *testing.T) {
 
 	fr := &fakeReader{
 		harness: harness.Claude,
-		discover: func(homeDir string) ([]SessionMeta, error) {
+		discover: func(homeDir string, _ DiscoverOptions) ([]SessionMeta, error) {
 			return []SessionMeta{{
 				ID:           "sess-1",
 				Harness:      harness.Claude,
@@ -153,7 +153,7 @@ func TestRefresh_ExpandsTildeInHomeDir(t *testing.T) {
 	var got string
 	fr := &fakeReader{
 		harness: harness.Claude,
-		discover: func(homeDir string) ([]SessionMeta, error) {
+		discover: func(homeDir string, _ DiscoverOptions) ([]SessionMeta, error) {
 			got = homeDir
 			return nil, nil
 		},
@@ -186,7 +186,7 @@ func TestRefresh_SkipsUnchangedEntries(t *testing.T) {
 	calls := 0
 	fr := &fakeReader{
 		harness: harness.Claude,
-		discover: func(string) ([]SessionMeta, error) {
+		discover: func(string, DiscoverOptions) ([]SessionMeta, error) {
 			calls++
 			// On the second call, return identical FileSize/FileModTime
 			// but blank MessageCount/Snippet/StartedAt/LastAt — the
@@ -257,7 +257,7 @@ func TestRefresh_RefreshesChangedEntries(t *testing.T) {
 	calls := 0
 	fr := &fakeReader{
 		harness: harness.Claude,
-		discover: func(string) ([]SessionMeta, error) {
+		discover: func(string, DiscoverOptions) ([]SessionMeta, error) {
 			calls++
 			if calls == 1 {
 				return []SessionMeta{{
@@ -328,7 +328,7 @@ func TestRefresh_PreservesHiddenFromIndex(t *testing.T) {
 
 	fr := &fakeReader{
 		harness: harness.Claude,
-		discover: func(string) ([]SessionMeta, error) {
+		discover: func(string, DiscoverOptions) ([]SessionMeta, error) {
 			return []SessionMeta{{
 				ID:          "sess-h",
 				Harness:     harness.Claude,
@@ -509,7 +509,7 @@ func TestRefresh_NoReaderForHarnessSkipped(t *testing.T) {
 	}
 	claudeFR := &fakeReader{
 		harness: harness.Claude,
-		discover: func(string) ([]SessionMeta, error) {
+		discover: func(string, DiscoverOptions) ([]SessionMeta, error) {
 			return []SessionMeta{{
 				ID: "x", Harness: harness.Claude,
 			}}, nil
@@ -522,6 +522,193 @@ func TestRefresh_NoReaderForHarnessSkipped(t *testing.T) {
 	}
 	if _, ok := idx.Get(IndexKey(harness.Claude, "x")); !ok {
 		t.Errorf("claude entry missing after partial-reader Refresh")
+	}
+}
+
+func TestRefresh_FastPathSkipsUnchangedFiles(t *testing.T) {
+	tmp := t.TempDir()
+	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-1.jsonl")
+	writeTranscript(t, transcriptPath, "{}\n")
+
+	cfg := &config.Config{
+		Profiles: []config.Account{{
+			Name:    "work",
+			Harness: harness.Claude,
+			HomeDir: filepath.Join(tmp, "home"),
+		}},
+	}
+
+	var parsedPaths []string
+	fr := &fakeReader{
+		harness: harness.Claude,
+		discover: func(_ string, opts DiscoverOptions) ([]SessionMeta, error) {
+			stat, err := os.Stat(transcriptPath)
+			if err != nil {
+				return nil, err
+			}
+			if opts.Cached != nil {
+				if meta, ok := opts.Cached(transcriptPath, stat.Size(), stat.ModTime()); ok {
+					return []SessionMeta{meta}, nil
+				}
+			}
+			parsedPaths = append(parsedPaths, transcriptPath)
+			return []SessionMeta{{
+				ID:           "sess-1",
+				Harness:      harness.Claude,
+				CWD:          "/tmp/foo",
+				Path:         transcriptPath,
+				FileSize:     stat.Size(),
+				FileModTime:  stat.ModTime(),
+				MessageCount: 4,
+				Snippet:      "original",
+			}}, nil
+		},
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("first Refresh: %v", err)
+	}
+	if len(parsedPaths) != 1 {
+		t.Fatalf("first Refresh: parsed %d files, want 1", len(parsedPaths))
+	}
+	parsedPaths = nil
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("second Refresh: %v", err)
+	}
+	if len(parsedPaths) != 0 {
+		t.Errorf("second Refresh: parsed %d files, want 0 (cache should short-circuit)", len(parsedPaths))
+	}
+}
+
+func TestRefresh_PreservesEntriesBeyondCutoff(t *testing.T) {
+	tmp := t.TempDir()
+	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-old.jsonl")
+	writeTranscript(t, transcriptPath, "{}\n")
+
+	oldTime := time.Now().Add(-60 * 24 * time.Hour)
+	if err := os.Chtimes(transcriptPath, oldTime, oldTime); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	stat, err := os.Stat(transcriptPath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			SessionArchive: config.SessionArchiveConfig{ScanMaxAgeDays: 30},
+		},
+		Profiles: []config.Account{{
+			Name:    "work",
+			Harness: harness.Claude,
+			HomeDir: filepath.Join(tmp, "home"),
+		}},
+	}
+
+	var sawPaths []string
+	fr := &fakeReader{
+		harness: harness.Claude,
+		discover: func(_ string, opts DiscoverOptions) ([]SessionMeta, error) {
+			if !opts.MinTime.IsZero() && stat.ModTime().Before(opts.MinTime) {
+				return nil, nil
+			}
+			sawPaths = append(sawPaths, transcriptPath)
+			return []SessionMeta{{
+				ID:          "sess-old",
+				Harness:     harness.Claude,
+				Path:        transcriptPath,
+				FileSize:    stat.Size(),
+				FileModTime: stat.ModTime(),
+			}}, nil
+		},
+	}
+
+	idx := newTestIndex(t)
+	key := IndexKey(harness.Claude, "sess-old")
+	primed := SessionMeta{
+		ID:           "sess-old",
+		Harness:      harness.Claude,
+		Path:         transcriptPath,
+		FileSize:     stat.Size(),
+		FileModTime:  stat.ModTime(),
+		MessageCount: 99,
+		Snippet:      "ancient",
+		StartedAt:    oldTime,
+		LastAt:       oldTime,
+	}
+	must(t, idx.SetEntryForTest(key, primed))
+
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if len(sawPaths) != 0 {
+		t.Errorf("reader saw paths beyond cutoff: %v", sawPaths)
+	}
+	got, ok := idx.Get(key)
+	if !ok {
+		t.Fatalf("entry beyond cutoff was dropped by Refresh")
+	}
+	if got.MessageCount != 99 {
+		t.Errorf("MessageCount = %d, want 99 (untouched)", got.MessageCount)
+	}
+	if got.Snippet != "ancient" {
+		t.Errorf("Snippet = %q, want %q (untouched)", got.Snippet, "ancient")
+	}
+}
+
+func TestRefresh_RescansFilesWithinCutoff(t *testing.T) {
+	tmp := t.TempDir()
+	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-recent.jsonl")
+	writeTranscript(t, transcriptPath, "{}\n")
+
+	recentTime := time.Now().Add(-5 * 24 * time.Hour)
+	if err := os.Chtimes(transcriptPath, recentTime, recentTime); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	stat, err := os.Stat(transcriptPath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			SessionArchive: config.SessionArchiveConfig{ScanMaxAgeDays: 30},
+		},
+		Profiles: []config.Account{{
+			Name:    "work",
+			Harness: harness.Claude,
+			HomeDir: filepath.Join(tmp, "home"),
+		}},
+	}
+
+	var sawPaths []string
+	fr := &fakeReader{
+		harness: harness.Claude,
+		discover: func(_ string, opts DiscoverOptions) ([]SessionMeta, error) {
+			if !opts.MinTime.IsZero() && stat.ModTime().Before(opts.MinTime) {
+				return nil, nil
+			}
+			sawPaths = append(sawPaths, transcriptPath)
+			return []SessionMeta{{
+				ID:          "sess-recent",
+				Harness:     harness.Claude,
+				Path:        transcriptPath,
+				FileSize:    stat.Size(),
+				FileModTime: stat.ModTime(),
+			}}, nil
+		},
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if len(sawPaths) != 1 {
+		t.Errorf("reader did not see recent file within cutoff: paths=%v", sawPaths)
+	}
+	if _, ok := idx.Get(IndexKey(harness.Claude, "sess-recent")); !ok {
+		t.Errorf("recent entry not added to index")
 	}
 }
 

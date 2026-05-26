@@ -204,6 +204,77 @@ color = "blue"
 	}
 }
 
+func TestLoad_SessionArchiveScanMaxAgeDays(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    int
+	}{
+		{
+			name: "unset defaults to KeepDays default",
+			content: `
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`,
+			want: 30,
+		},
+		{
+			name: "follows explicit KeepDays when unset",
+			content: `
+[defaults.session_archive]
+keep_days = 30
+
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`,
+			want: 30,
+		},
+		{
+			name: "explicit override preserved",
+			content: `
+[defaults.session_archive]
+keep_days = 30
+scan_max_age_days = 7
+
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`,
+			want: 7,
+		},
+		{
+			name: "negative sentinel preserved",
+			content: `
+[defaults.session_archive]
+scan_max_age_days = -1
+
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`,
+			want: -1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeTempConfig(t, tc.content)
+			cfg, err := config.Load(path)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got := cfg.Defaults.SessionArchive.ScanMaxAgeDays; got != tc.want {
+				t.Errorf("SessionArchive.ScanMaxAgeDays: got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestLoad_WatchdogPerProfileOverride pins that per-profile watchdog overrides
 // load onto the matching Account entry in cfg.Profiles. S2 reads these as
 // per-profile overlays on top of cfg.Defaults.Watchdog.

@@ -97,7 +97,7 @@ type copilotToolComplete struct {
 // Discover walks <homeDir>/session-state/<UUID>/events.jsonl and returns
 // one SessionMeta per transcript. Per-file errors are logged at debug
 // level so a single corrupt session cannot hide the rest.
-func (r CopilotReader) Discover(homeDir string) ([]SessionMeta, error) {
+func (r CopilotReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMeta, error) {
 	if homeDir == "" {
 		return nil, nil
 	}
@@ -116,12 +116,22 @@ func (r CopilotReader) Discover(homeDir string) ([]SessionMeta, error) {
 			continue
 		}
 		path := filepath.Join(root, entry.Name(), "events.jsonl")
-		if _, err := os.Stat(path); err != nil {
+		info, err := os.Stat(path)
+		if err != nil {
 			// Session directory without an events.jsonl — interrupted
 			// before any event was written. Skip silently.
 			continue
 		}
-		meta, err := r.parseFile(path, entry.Name())
+		if !opts.MinTime.IsZero() && info.ModTime().Before(opts.MinTime) {
+			continue
+		}
+		if opts.Cached != nil {
+			if meta, ok := opts.Cached(path, info.Size(), info.ModTime()); ok {
+				out = append(out, meta)
+				continue
+			}
+		}
+		meta, err := r.parseFile(path, info, entry.Name())
 		if err != nil {
 			slog.Debug("transcript.copilot: skip file", "path", path, "err", err)
 			continue
@@ -204,11 +214,7 @@ func (r CopilotReader) ReadMessages(path string) ([]Message, error) {
 // parseFile streams one transcript end to end to produce SessionMeta. The
 // loop tracks first/last timestamp, message count, snippet, cwd, and id —
 // using whichever subset of fields each line happens to carry.
-func (r CopilotReader) parseFile(path, dirName string) (SessionMeta, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return SessionMeta{}, err
-	}
+func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) (SessionMeta, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return SessionMeta{}, err

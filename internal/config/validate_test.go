@@ -58,6 +58,23 @@ func TestValidate_SessionArchiveNegativeKeepDays(t *testing.T) {
 	}
 }
 
+func TestValidate_SessionArchiveNegativeScanMaxAgeDays(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	cfg.Defaults.SessionArchive.ScanMaxAgeDays = -2
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for scan_max_age_days = -2")
+	}
+	if !strings.Contains(err.Error(), "session_archive.scan_max_age_days must be >= -1") {
+		t.Errorf("expected session_archive.scan_max_age_days error, got: %v", err)
+	}
+}
+
 // TestValidate_PreviewMinDimensions exercises the boundary cases for the
 // preview.min_cols / preview.min_rows checks. The previous error message
 // claimed "must be > 0" but the predicate only rejected negative values, so

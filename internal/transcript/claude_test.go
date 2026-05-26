@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,7 +13,7 @@ const claudeFixtureRoot = "testdata/claude"
 
 func TestClaudeReader_Discover(t *testing.T) {
 	r := NewClaudeReader()
-	metas, err := r.Discover(claudeFixtureRoot)
+	metas, err := r.Discover(claudeFixtureRoot, DiscoverOptions{})
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestClaudeReader_Discover(t *testing.T) {
 
 func TestClaudeReader_DiscoverMissingDir(t *testing.T) {
 	r := NewClaudeReader()
-	metas, err := r.Discover(filepath.Join(claudeFixtureRoot, "does-not-exist"))
+	metas, err := r.Discover(filepath.Join(claudeFixtureRoot, "does-not-exist"), DiscoverOptions{})
 	if err != nil {
 		t.Fatalf("Discover missing root: %v", err)
 	}
@@ -86,7 +87,7 @@ func TestClaudeReader_DiscoverMissingDir(t *testing.T) {
 
 func TestClaudeReader_DiscoverEmptyHome(t *testing.T) {
 	r := NewClaudeReader()
-	metas, err := r.Discover("")
+	metas, err := r.Discover("", DiscoverOptions{})
 	if err != nil {
 		t.Fatalf("Discover empty homeDir: %v", err)
 	}
@@ -123,6 +124,135 @@ func TestClaudeReader_ReadMessages(t *testing.T) {
 	}
 	if msgs[2].Role != "user" || msgs[2].Text != "Continue please." {
 		t.Errorf("msg[2] = %+v", msgs[2])
+	}
+}
+
+func TestClaudeDiscover_CacheHitSkipsParse(t *testing.T) {
+	root := t.TempDir()
+	projDir := filepath.Join(root, "projects", "-tmp-cache-hit")
+	path := filepath.Join(projDir, "cccccccc-cccc-cccc-cccc-cccccccccccc.jsonl")
+	info := writeTranscript(t, path, `{"type":"user","timestamp":"2026-05-24T17:37:44.531Z","message":{"role":"user","content":"on-disk body that should not be read"}}`+"\n")
+
+	cachedMeta := SessionMeta{
+		ID:           "cached-id",
+		Harness:      "claude",
+		Path:         path,
+		FileSize:     info.Size(),
+		FileModTime:  info.ModTime(),
+		MessageCount: 7,
+		Snippet:      "cached snippet",
+		CWD:          "/cached/cwd",
+	}
+
+	called := 0
+	r := NewClaudeReader()
+	metas, err := r.Discover(root, DiscoverOptions{
+		Cached: func(p string, size int64, mtime time.Time) (SessionMeta, bool) {
+			called++
+			if p != path {
+				t.Errorf("Cached called with path %q, want %q", p, path)
+			}
+			if size != info.Size() {
+				t.Errorf("Cached called with size %d, want %d", size, info.Size())
+			}
+			if !mtime.Equal(info.ModTime()) {
+				t.Errorf("Cached called with mtime %v, want %v", mtime, info.ModTime())
+			}
+			return cachedMeta, true
+		},
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("Cached called %d times, want 1", called)
+	}
+	if len(metas) != 1 {
+		t.Fatalf("got %d metas, want 1", len(metas))
+	}
+	got := metas[0]
+	if got.ID != cachedMeta.ID {
+		t.Errorf("ID = %q, want %q (cache should not be overwritten)", got.ID, cachedMeta.ID)
+	}
+	if got.Snippet != cachedMeta.Snippet {
+		t.Errorf("Snippet = %q, want %q (cache should not be overwritten)", got.Snippet, cachedMeta.Snippet)
+	}
+	if got.MessageCount != cachedMeta.MessageCount {
+		t.Errorf("MessageCount = %d, want %d (cache should not be overwritten)", got.MessageCount, cachedMeta.MessageCount)
+	}
+	if got.CWD != cachedMeta.CWD {
+		t.Errorf("CWD = %q, want %q (cache should not be overwritten)", got.CWD, cachedMeta.CWD)
+	}
+}
+
+func TestClaudeDiscover_MinTimeSkipsOldFiles(t *testing.T) {
+	root := t.TempDir()
+	newPath := filepath.Join(root, "projects", "-tmp-new", "new.jsonl")
+	oldPath := filepath.Join(root, "projects", "-tmp-old", "old.jsonl")
+	body := `{"type":"user","timestamp":"2026-05-24T17:37:44.531Z","message":{"role":"user","content":"hi"}}` + "\n"
+	writeTranscript(t, newPath, body)
+	writeTranscript(t, oldPath, body)
+
+	stale := time.Now().Add(-30 * 24 * time.Hour)
+	if err := os.Chtimes(oldPath, stale, stale); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	r := NewClaudeReader()
+	metas, err := r.Discover(root, DiscoverOptions{
+		MinTime: time.Now().Add(-7 * 24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(metas) != 1 {
+		t.Fatalf("got %d metas, want 1: %+v", len(metas), metas)
+	}
+	if metas[0].Path != newPath {
+		t.Errorf("returned path = %q, want %q", metas[0].Path, newPath)
+	}
+}
+
+func TestClaudeDiscover_CacheMissReparses(t *testing.T) {
+	root := t.TempDir()
+	projDir := filepath.Join(root, "projects", "-tmp-cache-miss")
+	path := filepath.Join(projDir, "dddddddd-dddd-dddd-dddd-dddddddddddd.jsonl")
+	body := `{"type":"user","timestamp":"2026-05-24T17:37:44.531Z","message":{"role":"user","content":"fresh body"}}` + "\n"
+	info := writeTranscript(t, path, body)
+
+	staleCached := SessionMeta{
+		ID:          "stale-id",
+		Harness:     "claude",
+		Path:        path,
+		FileSize:    info.Size() - 1, // deliberate mismatch
+		FileModTime: info.ModTime(),
+		Snippet:     "stale snippet",
+	}
+
+	r := NewClaudeReader()
+	metas, err := r.Discover(root, DiscoverOptions{
+		Cached: func(p string, size int64, mtime time.Time) (SessionMeta, bool) {
+			if size != staleCached.FileSize {
+				return SessionMeta{}, false
+			}
+			return staleCached, true
+		},
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(metas) != 1 {
+		t.Fatalf("got %d metas, want 1", len(metas))
+	}
+	got := metas[0]
+	if got.Snippet == staleCached.Snippet {
+		t.Errorf("Snippet should be re-parsed, got stale value %q", got.Snippet)
+	}
+	if got.Snippet != "fresh body" {
+		t.Errorf("Snippet = %q, want %q", got.Snippet, "fresh body")
+	}
+	if got.FileSize != info.Size() {
+		t.Errorf("FileSize = %d, want %d (re-parse should reflect live file)", got.FileSize, info.Size())
 	}
 }
 

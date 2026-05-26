@@ -194,7 +194,9 @@ type dispatchReader struct {
 }
 
 func (d *dispatchReader) Harness() string                          { return d.harness }
-func (d *dispatchReader) Discover(string) ([]SessionMeta, error)   { return nil, nil }
+func (d *dispatchReader) Discover(string, DiscoverOptions) ([]SessionMeta, error) {
+	return nil, nil
+}
 func (d *dispatchReader) ReadMessages(path string) ([]Message, error) {
 	return d.byPath[path], nil
 }

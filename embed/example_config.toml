@@ -62,8 +62,13 @@ hook_silence = 14400
 # transcript files on disk are left intact. Set keep_days to 0 to use the
 # default. Per-session "also delete the file" deletes are handled
 # interactively from the dashboard, not by this setting.
+# scan_max_age_days bounds the per-refresh transcript walk: files whose
+# mtime is older than the cutoff are skipped without opening, while
+# existing index entries remain searchable until keep_days retires them.
+# Set to 0 to inherit keep_days, or to -1 for "scan everything".
 # [defaults.session_archive]
 # keep_days = 30
+# scan_max_age_days = 30
 
 # Flags passed to every harness session, regardless of profile.
 # Use this only for harness-neutral flags (e.g. a wrapper script flag).

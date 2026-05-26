@@ -154,6 +154,11 @@ older than `keep_days` to hidden; the on-disk transcript file is left
 intact. Set `keep_days = 0` to use the default; negative values are
 rejected at validation time.
 
+Each refresh of the past-session list only walks files modified within
+`scan_max_age_days` days (default: inherits `keep_days`). Set to `0` to
+inherit `keep_days`, or to `-1` for an unbounded walk; existing index
+entries remain searchable past the cutoff until `keep_days` retires them.
+
 ### Filter DSL
 
 The list and launcher share the same filter DSL:

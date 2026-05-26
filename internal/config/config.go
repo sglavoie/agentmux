@@ -146,6 +146,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.SessionArchive.KeepDays == 0 {
 		cfg.Defaults.SessionArchive.KeepDays = 30
 	}
+	if cfg.Defaults.SessionArchive.ScanMaxAgeDays == 0 {
+		cfg.Defaults.SessionArchive.ScanMaxAgeDays = cfg.Defaults.SessionArchive.KeepDays
+	}
 	if cfg.Defaults.Preview.Direction == "" {
 		cfg.Defaults.Preview.Direction = "horizontal"
 	}

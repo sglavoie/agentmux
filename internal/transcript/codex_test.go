@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ const codexFixtureRoot = "testdata/codex"
 
 func TestCodexReader_Discover(t *testing.T) {
 	r := NewCodexReader()
-	metas, err := r.Discover(codexFixtureRoot)
+	metas, err := r.Discover(codexFixtureRoot, DiscoverOptions{})
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestCodexReader_Discover(t *testing.T) {
 
 func TestCodexReader_DiscoverMissingDir(t *testing.T) {
 	r := NewCodexReader()
-	metas, err := r.Discover(filepath.Join(codexFixtureRoot, "does-not-exist"))
+	metas, err := r.Discover(filepath.Join(codexFixtureRoot, "does-not-exist"), DiscoverOptions{})
 	if err != nil {
 		t.Fatalf("Discover missing root: %v", err)
 	}
@@ -70,7 +71,7 @@ func TestCodexReader_DiscoverMissingDir(t *testing.T) {
 
 func TestCodexReader_DiscoverEmptyHome(t *testing.T) {
 	r := NewCodexReader()
-	metas, err := r.Discover("")
+	metas, err := r.Discover("", DiscoverOptions{})
 	if err != nil {
 		t.Fatalf("Discover empty homeDir: %v", err)
 	}
@@ -108,6 +109,142 @@ func TestCodexReader_ReadMessages(t *testing.T) {
 	}
 	if msgs[5].Role != "assistant" || msgs[5].Text != "Done. See the diff above." {
 		t.Errorf("msg[5] = %+v", msgs[5])
+	}
+}
+
+func TestCodexDiscover_CacheHitSkipsParse(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "2026", "05", "24")
+	path := filepath.Join(dir, "rollout-2026-05-24T09-00-00-cccccccc-cccc-cccc-cccc-cccccccccccc.jsonl")
+	body := `{"timestamp":"2026-05-24T13:00:01.000Z","type":"session_meta","payload":{"id":"on-disk-id","timestamp":"2026-05-24T13:00:00.000Z","cwd":"/on-disk/cwd"}}` + "\n"
+	info := writeTranscript(t, path, body)
+
+	cachedMeta := SessionMeta{
+		ID:           "cached-id",
+		Harness:      "codex",
+		Path:         path,
+		FileSize:     info.Size(),
+		FileModTime:  info.ModTime(),
+		MessageCount: 9,
+		Snippet:      "cached snippet",
+		CWD:          "/cached/cwd",
+	}
+
+	called := 0
+	r := NewCodexReader()
+	metas, err := r.Discover(root, DiscoverOptions{
+		Cached: func(p string, size int64, mtime time.Time) (SessionMeta, bool) {
+			called++
+			if p != path {
+				t.Errorf("Cached called with path %q, want %q", p, path)
+			}
+			if size != info.Size() {
+				t.Errorf("Cached called with size %d, want %d", size, info.Size())
+			}
+			if !mtime.Equal(info.ModTime()) {
+				t.Errorf("Cached called with mtime %v, want %v", mtime, info.ModTime())
+			}
+			return cachedMeta, true
+		},
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("Cached called %d times, want 1", called)
+	}
+	if len(metas) != 1 {
+		t.Fatalf("got %d metas, want 1", len(metas))
+	}
+	got := metas[0]
+	if got.ID != cachedMeta.ID {
+		t.Errorf("ID = %q, want %q (cache should not be overwritten)", got.ID, cachedMeta.ID)
+	}
+	if got.Snippet != cachedMeta.Snippet {
+		t.Errorf("Snippet = %q, want %q (cache should not be overwritten)", got.Snippet, cachedMeta.Snippet)
+	}
+	if got.MessageCount != cachedMeta.MessageCount {
+		t.Errorf("MessageCount = %d, want %d (cache should not be overwritten)", got.MessageCount, cachedMeta.MessageCount)
+	}
+	if got.CWD != cachedMeta.CWD {
+		t.Errorf("CWD = %q, want %q (cache should not be overwritten)", got.CWD, cachedMeta.CWD)
+	}
+}
+
+func TestCodexDiscover_MinTimeSkipsOldFiles(t *testing.T) {
+	root := t.TempDir()
+	body := `{"timestamp":"2026-05-24T13:00:01.000Z","type":"session_meta","payload":{"id":"sess-id","timestamp":"2026-05-24T13:00:00.000Z","cwd":"/cwd"}}` + "\n"
+	newPath := filepath.Join(root, "sessions", "2026", "05", "24",
+		"rollout-2026-05-24T09-00-00-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.jsonl")
+	oldPath := filepath.Join(root, "sessions", "2026", "04", "01",
+		"rollout-2026-04-01T09-00-00-eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee.jsonl")
+	writeTranscript(t, newPath, body)
+	writeTranscript(t, oldPath, body)
+
+	stale := time.Now().Add(-30 * 24 * time.Hour)
+	if err := os.Chtimes(oldPath, stale, stale); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	r := NewCodexReader()
+	metas, err := r.Discover(root, DiscoverOptions{
+		MinTime: time.Now().Add(-7 * 24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(metas) != 1 {
+		t.Fatalf("got %d metas, want 1: %+v", len(metas), metas)
+	}
+	if metas[0].Path != newPath {
+		t.Errorf("returned path = %q, want %q", metas[0].Path, newPath)
+	}
+}
+
+func TestCodexDiscover_CacheMissReparses(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "2026", "05", "24")
+	path := filepath.Join(dir, "rollout-2026-05-24T09-00-00-dddddddd-dddd-dddd-dddd-dddddddddddd.jsonl")
+	body := `{"timestamp":"2026-05-24T13:00:01.000Z","type":"session_meta","payload":{"id":"fresh-id","timestamp":"2026-05-24T13:00:00.000Z","cwd":"/fresh/cwd"}}` + "\n" +
+		`{"timestamp":"2026-05-24T13:00:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"fresh body"}}` + "\n"
+	info := writeTranscript(t, path, body)
+
+	staleCached := SessionMeta{
+		ID:          "stale-id",
+		Harness:     "codex",
+		Path:        path,
+		FileSize:    info.Size() - 1, // deliberate mismatch
+		FileModTime: info.ModTime(),
+		Snippet:     "stale snippet",
+	}
+
+	r := NewCodexReader()
+	metas, err := r.Discover(root, DiscoverOptions{
+		Cached: func(p string, size int64, mtime time.Time) (SessionMeta, bool) {
+			if size != staleCached.FileSize {
+				return SessionMeta{}, false
+			}
+			return staleCached, true
+		},
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(metas) != 1 {
+		t.Fatalf("got %d metas, want 1", len(metas))
+	}
+	got := metas[0]
+	if got.ID == staleCached.ID {
+		t.Errorf("ID should be re-parsed, got stale value %q", got.ID)
+	}
+	if got.ID != "fresh-id" {
+		t.Errorf("ID = %q, want %q", got.ID, "fresh-id")
+	}
+	if got.Snippet != "fresh body" {
+		t.Errorf("Snippet = %q, want %q", got.Snippet, "fresh body")
+	}
+	if got.FileSize != info.Size() {
+		t.Errorf("FileSize = %d, want %d (re-parse should reflect live file)", got.FileSize, info.Size())
 	}
 }
 

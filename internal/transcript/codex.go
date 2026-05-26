@@ -78,7 +78,7 @@ type codexEventMsgPayload struct {
 // Discover walks <homeDir>/sessions/YYYY/MM/DD/ and returns one SessionMeta
 // per rollout-*.jsonl file. Per-file errors are logged at debug level so a
 // single corrupt session cannot hide the rest.
-func (r CodexReader) Discover(homeDir string) ([]SessionMeta, error) {
+func (r CodexReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMeta, error) {
 	if homeDir == "" {
 		return nil, nil
 	}
@@ -103,7 +103,21 @@ func (r CodexReader) Discover(homeDir string) ([]SessionMeta, error) {
 		if !strings.HasPrefix(name, rolloutPrefix) || !strings.HasSuffix(name, ".jsonl") {
 			return nil
 		}
-		meta, err := r.parseFile(path)
+		info, err := os.Stat(path)
+		if err != nil {
+			slog.Debug("transcript.codex: skip file", "path", path, "err", err)
+			return nil
+		}
+		if !opts.MinTime.IsZero() && info.ModTime().Before(opts.MinTime) {
+			return nil
+		}
+		if opts.Cached != nil {
+			if meta, ok := opts.Cached(path, info.Size(), info.ModTime()); ok {
+				out = append(out, meta)
+				return nil
+			}
+		}
+		meta, err := r.parseFile(path, info)
 		if err != nil {
 			slog.Debug("transcript.codex: skip file", "path", path, "err", err)
 			return nil
@@ -192,11 +206,7 @@ func (r CodexReader) ReadMessages(path string) ([]Message, error) {
 // parseFile streams one transcript end to end to produce SessionMeta. The
 // loop tracks first/last timestamp, message count, snippet, cwd, and id —
 // using whichever subset of fields each line happens to carry.
-func (r CodexReader) parseFile(path string) (SessionMeta, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return SessionMeta{}, err
-	}
+func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return SessionMeta{}, err

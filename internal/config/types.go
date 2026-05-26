@@ -73,7 +73,8 @@ type WatchdogConfig struct {
 // index. A zero value means "use the default" — applyDefaults populates
 // KeepDays so users can omit the section entirely.
 type SessionArchiveConfig struct {
-	KeepDays int `toml:"keep_days"` // days to retain index entries; 0 → default (30)
+	KeepDays        int `toml:"keep_days"`          // days to retain index entries; 0 → default (30)
+	ScanMaxAgeDays  int `toml:"scan_max_age_days"`  // 0 → fall back to KeepDays; <0 → unlimited (scan everything)
 }
 
 // NotificationConfig controls which macOS notifications fire.
