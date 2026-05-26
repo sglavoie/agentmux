@@ -31,6 +31,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleMessageDetailKey(msg)
 	case ModeDeleteChoice:
 		return m.handleDeleteChoiceKey(msg)
+	case ModeChipPicker:
+		return m.handleChipPickerKey(msg)
 	default:
 		return m.handleListKey(msg)
 	}

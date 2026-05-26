@@ -173,14 +173,11 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		scrollSessionSearchToCursor(&m)
 		return m, nil
 	case "h":
-		m.filterHarness = cycleChip(m.filterHarness, harness.Names())
-		return m, m.dispatchSessionSearch()
+		return m.enterChipPicker(chipPickerHarness)
 	case "p":
-		m.filterProfile = cycleChip(m.filterProfile, profileNames(m))
-		return m, m.dispatchSessionSearch()
+		return m.enterChipPicker(chipPickerProfile)
 	case "r":
-		m.filterProject = cycleChip(m.filterProject, projectTitles(m))
-		return m, m.dispatchSessionSearch()
+		return m.enterChipPicker(chipPickerProject)
 	case keyEnter:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
@@ -279,32 +276,6 @@ func scrollSessionSearchToCursor(m *Model) {
 	if m.sessionOffset < 0 {
 		m.sessionOffset = 0
 	}
-}
-
-// cycleChip cycles current through (none) → opts[0] → opts[1] → … → (none).
-// current and opts are both []string but for v1 chips hold at most one value
-// (single-select), so cycling a longer slice is not supported.
-func cycleChip(current, opts []string) []string {
-	if len(opts) == 0 {
-		return nil
-	}
-	cur := ""
-	if len(current) > 0 {
-		cur = current[0]
-	}
-	if cur == "" {
-		return []string{opts[0]}
-	}
-	for i, o := range opts {
-		if o == cur {
-			if i+1 >= len(opts) {
-				return nil
-			}
-			return []string{opts[i+1]}
-		}
-	}
-	// Current value not in opts (e.g., profiles changed at runtime) — reset.
-	return []string{opts[0]}
 }
 
 func profileNames(m Model) []string {

@@ -43,6 +43,10 @@ func (m Model) render() string {
 		sb.WriteString(renderSessionSearch(m))
 		sb.WriteByte('\n')
 		sb.WriteString(renderDeleteChoice(m))
+	case ModeChipPicker:
+		sb.WriteString(renderSessionSearch(m))
+		sb.WriteByte('\n')
+		sb.WriteString(renderChipPicker(m))
 	default:
 		// Header area varies by mode; list is always shown below.
 		switch m.mode {

@@ -36,7 +36,18 @@ const (
 	ModeSessionSearch     // searchable list of past harness transcripts
 	ModeSessionView       // scrollable transcript viewer for a single past session
 	ModeDeleteChoice      // three-way prompt: hide from index, also delete file, cancel
+	ModeChipPicker        // overlay listing chip values for ModeSessionSearch
 	ModeMessageDetail     // full-message overlay opened from ModeSessionView
+)
+
+// chipPickerKind identifies which ModeSessionSearch chip filter the picker
+// overlay is editing.
+type chipPickerKind int
+
+const (
+	chipPickerHarness chipPickerKind = iota
+	chipPickerProfile
+	chipPickerProject
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -190,6 +201,17 @@ type Model struct {
 	filterProfile      []string
 	filterProject      []string
 
+	// chip picker overlay (ModeChipPicker) opened from ModeSessionSearch when
+	// the user presses h/p/r to choose harness/profile/project. chipPickerKind
+	// selects which filter is being edited; chipPickerOptions is the option
+	// list captured at open time (the leading empty string represents "(any)");
+	// chipPickerCursor/Offset follow the same window contract as
+	// sessionCursor/sessionOffset.
+	chipPickerKind    chipPickerKind
+	chipPickerOptions []string
+	chipPickerCursor  int
+	chipPickerOffset  int
+
 	// session viewer (ModeSessionView). viewerSession is the metadata of the
 	// transcript currently being read; nil when the viewer is closed.
 	// viewerMessages is the parsed message list. The viewer splits selection
@@ -303,6 +325,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		scrollPickerToCursor(&m)
 		clampViewerScroll(&m)
 		scrollViewerToCursor(&m)
+		scrollChipPickerToCursor(&m)
 		return m, nil
 
 	case tickMsg:

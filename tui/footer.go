@@ -31,6 +31,9 @@ func renderFooter(m Model) string {
 	case ModeActions:
 		line1 = styleFooter.Render("  <key>: run action  esc/q: back")
 		line2 = ""
+	case ModeChipPicker:
+		line1 = styleFooter.Render("  enter: select  esc/q: cancel")
+		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom  pgup/pgdn: page")
 	case ModeSessionSearch:
 		line1 = styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back")
 		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
