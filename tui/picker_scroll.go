@@ -48,8 +48,11 @@ func clampPickerOffset(m *Model) {
 
 // scrollPickerToCursor adjusts m.pickerOffset so the picker cursor sits
 // within the currently visible window. Picker rows have no group labels so
-// each row costs exactly one line; the walk reduces to the same shape as
-// color_picker_app.scrollToCursor.
+// each row costs exactly one line, but renderPickerList still spends one
+// line of the visible budget on each of the ▲ and ▼ indicators when they
+// appear — the row-by-row walk via pickerCursorFitsWindow reserves those
+// lines so the renderer never drops the cursor row. Mirrors
+// scrollListToCursor without the group-label cost.
 func scrollPickerToCursor(m *Model) {
 	if m.height == 0 {
 		return
@@ -68,10 +71,37 @@ func scrollPickerToCursor(m *Model) {
 		m.pickerOffset = m.pickerCursor
 	}
 	visible := pickerVisibleHeight(*m)
-	if m.pickerCursor >= m.pickerOffset+visible {
-		m.pickerOffset = m.pickerCursor - visible + 1
+	for m.pickerOffset < m.pickerCursor {
+		if pickerCursorFitsWindow(m, m.pickerOffset, visible) {
+			break
+		}
+		m.pickerOffset++
 	}
 	if m.pickerOffset < 0 {
 		m.pickerOffset = 0
 	}
+}
+
+// pickerCursorFitsWindow reports whether renderPickerList can emit the
+// cursor row from the given offset inside the visible height. The
+// renderer spends one line on ▲ when offset > 0 and one line on ▼ when
+// rows remain below the cursor; those indicator lines must be reserved
+// during scroll calculations, otherwise the renderer drops the cursor
+// row while making space for the scroll markers. Mirrors
+// listCursorFitsWindow without the group-label cost.
+func pickerCursorFitsWindow(m *Model, offset, height int) bool {
+	if offset < 0 || offset > m.pickerCursor || m.pickerCursor >= len(m.pickerFilteredIdx) {
+		return false
+	}
+	budget := height
+	if offset > 0 {
+		budget--
+	}
+	if m.pickerCursor < len(m.pickerFilteredIdx)-1 {
+		budget--
+	}
+	if budget < 0 {
+		return false
+	}
+	return (m.pickerCursor - offset + 1) <= budget
 }

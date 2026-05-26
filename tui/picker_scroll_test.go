@@ -112,6 +112,22 @@ func TestHandlePickerKey_JAdvancesOffsetPastVisibleWindow(t *testing.T) {
 	}
 }
 
+func TestHandlePickerKey_JReachesLastRow(t *testing.T) {
+	m := pickerScrollFixtureModel(t, 40, 15)
+	total := len(m.pickerFilteredIdx)
+	for i := 0; i < total; i++ {
+		m = pressKey(m, "j")
+	}
+	if m.pickerCursor != total-1 {
+		t.Fatalf("cursor: got %d want %d", m.pickerCursor, total-1)
+	}
+	out := stripAnsi(renderPickerList(m, pickerVisibleHeight(m)))
+	last := indexedRowName(total - 1)
+	if !strings.Contains(out, last) {
+		t.Errorf("last row %q not rendered; got %q", last, out)
+	}
+}
+
 func TestHandlePickerKey_KFollowsCursorBackUp(t *testing.T) {
 	m := pickerScrollFixtureModel(t, 40, 15)
 	visible := pickerVisibleHeight(m)
