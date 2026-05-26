@@ -129,10 +129,7 @@ func renderSessionViewBody(m Model, height int) string {
 	for _, idx := range m.viewerMatchLines {
 		isMatchLine[idx] = true
 	}
-	cursorLine := -1
-	if len(m.viewerMatchLines) > 0 && m.viewerMatchIdx >= 0 && m.viewerMatchIdx < len(m.viewerMatchLines) {
-		cursorLine = m.viewerMatchLines[m.viewerMatchIdx]
-	}
+	cursorLine := m.viewerCursor
 
 	for i := startIdx; i < endIdx; i++ {
 		line := formatViewerLine(m.viewerMessages[i], maxWidth)
@@ -234,6 +231,49 @@ func computeViewerMatches(msgs []transcript.Message, query string) []int {
 		}
 	}
 	return matches
+}
+
+// scrollViewerToCursor advances m.viewerScroll the minimum amount needed to
+// keep m.viewerCursor visible inside the windowed body. Mirrors
+// scrollSessionSearchToCursor: the body reserves one row for ▲ when scroll
+// > 0 and one row for ▼ when more rows remain past the window, so the budget
+// must subtract them too — otherwise the cursor falls off the bottom of the
+// rendered list.
+func scrollViewerToCursor(m *Model) {
+	total := len(m.viewerMessages)
+	height := sessionViewVisibleHeight(*m)
+	if height <= 0 || total == 0 {
+		m.viewerScroll = 0
+		return
+	}
+	if m.viewerCursor < 0 {
+		m.viewerCursor = 0
+	}
+	if m.viewerCursor >= total {
+		m.viewerCursor = total - 1
+	}
+	if m.viewerCursor < m.viewerScroll {
+		m.viewerScroll = m.viewerCursor
+	}
+	for m.viewerScroll < m.viewerCursor {
+		budget := height
+		if m.viewerScroll > 0 {
+			budget--
+		}
+		if m.viewerCursor < total-1 {
+			budget--
+		}
+		if budget < 1 {
+			budget = 1
+		}
+		if m.viewerCursor-m.viewerScroll+1 <= budget {
+			break
+		}
+		m.viewerScroll++
+	}
+	if m.viewerScroll < 0 {
+		m.viewerScroll = 0
+	}
 }
 
 // clampViewerScroll pins m.viewerScroll to [0, max(0, total - visible)] at

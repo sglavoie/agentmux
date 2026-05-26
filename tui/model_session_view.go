@@ -25,6 +25,7 @@ func (m Model) enterSessionView(meta transcript.SessionMeta) (tea.Model, tea.Cmd
 	metaCopy := meta
 	m.viewerSession = &metaCopy
 	m.viewerMessages = nil
+	m.viewerCursor = 0
 	m.viewerScroll = 0
 	m.viewerMatchIdx = 0
 	m.viewerMatchLines = nil
@@ -49,6 +50,7 @@ func (m *Model) exitSessionView() {
 	m.mode = ModeSessionSearch
 	m.viewerSession = nil
 	m.viewerMessages = nil
+	m.viewerCursor = 0
 	m.viewerScroll = 0
 	m.viewerMatchIdx = 0
 	m.viewerMatchLines = nil
@@ -62,9 +64,9 @@ func (m *Model) exitSessionView() {
 func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	total := len(m.viewerMessages)
 	visible := sessionViewVisibleHeight(m)
-	maxOffset := total - visible
-	if maxOffset < 0 {
-		maxOffset = 0
+	lastIdx := total - 1
+	if lastIdx < 0 {
+		lastIdx = 0
 	}
 
 	switch msg.String() {
@@ -74,46 +76,59 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyJ, keyDown:
-		if m.viewerScroll < maxOffset {
-			m.viewerScroll++
+		if m.viewerCursor < lastIdx {
+			m.viewerCursor++
 		}
+		scrollViewerToCursor(&m)
 	case keyK, keyUp:
-		if m.viewerScroll > 0 {
-			m.viewerScroll--
+		if m.viewerCursor > 0 {
+			m.viewerCursor--
 		}
+		scrollViewerToCursor(&m)
 	case keyPgDown:
-		m.viewerScroll += visible
-		if m.viewerScroll > maxOffset {
-			m.viewerScroll = maxOffset
+		m.viewerCursor += visible
+		if m.viewerCursor > lastIdx {
+			m.viewerCursor = lastIdx
 		}
+		scrollViewerToCursor(&m)
 	case keyPgUp:
-		m.viewerScroll -= visible
-		if m.viewerScroll < 0 {
-			m.viewerScroll = 0
+		m.viewerCursor -= visible
+		if m.viewerCursor < 0 {
+			m.viewerCursor = 0
 		}
+		scrollViewerToCursor(&m)
 	case keyG:
-		m.viewerScroll = 0
+		m.viewerCursor = 0
+		scrollViewerToCursor(&m)
 	case keyGG:
-		m.viewerScroll = maxOffset
+		m.viewerCursor = lastIdx
+		scrollViewerToCursor(&m)
 	case keyN:
 		m.jumpToNextMatch(1)
 	case "N":
 		m.jumpToNextMatch(-1)
+	case keyEnter:
+		if len(m.viewerMessages) == 0 ||
+			m.viewerCursor < 0 ||
+			m.viewerCursor >= len(m.viewerMessages) {
+			return m, nil
+		}
+		return m.enterMessageDetail()
 	}
 	return m, nil
 }
 
 // jumpToNextMatch advances viewerMatchIdx by step (+1 for `n`, -1 for `N`)
-// with wrap-around, then snaps viewerScroll to the resulting match line so
-// the match is visible at the top of the viewport.
+// with wrap-around, then moves viewerCursor to the resulting match line and
+// lets scrollViewerToCursor follow.
 func (m *Model) jumpToNextMatch(step int) {
 	n := len(m.viewerMatchLines)
 	if n == 0 {
 		return
 	}
 	m.viewerMatchIdx = (m.viewerMatchIdx + step + n) % n
-	m.viewerScroll = m.viewerMatchLines[m.viewerMatchIdx]
-	clampViewerScroll(m)
+	m.viewerCursor = m.viewerMatchLines[m.viewerMatchIdx]
+	scrollViewerToCursor(m)
 }
 
 // readViewerMessagesCmd wraps reader.ReadMessages in a tea.Cmd so the parse

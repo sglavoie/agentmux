@@ -36,6 +36,7 @@ const (
 	ModeSessionSearch     // searchable list of past harness transcripts
 	ModeSessionView       // scrollable transcript viewer for a single past session
 	ModeDeleteChoice      // three-way prompt: hide from index, also delete file, cancel
+	ModeMessageDetail     // full-message overlay opened from ModeSessionView
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -191,15 +192,21 @@ type Model struct {
 
 	// session viewer (ModeSessionView). viewerSession is the metadata of the
 	// transcript currently being read; nil when the viewer is closed.
-	// viewerMessages is the parsed message list; viewerScroll is the top row
-	// index. viewerMatchLines holds the indices into viewerMessages whose
-	// text contains the current sessionQuery (lowercased substring match);
-	// viewerMatchIdx is the cursor into viewerMatchLines for n/N navigation.
-	// viewerLoading covers the async ReadMessages call; viewerLoadSeq is a
-	// monotonic counter separate from sessionSearchSeq so a stale viewer
-	// load arriving after the user moved on is dropped.
+	// viewerMessages is the parsed message list. The viewer splits selection
+	// from windowing: viewerCursor is the selected message row (always a
+	// valid index into viewerMessages when the viewer is open), and
+	// viewerScroll is the top-of-window index. j/k/g/G/pgup/pgdn move the
+	// cursor; scroll follows via scrollViewerToCursor. viewerMatchLines
+	// holds the indices into viewerMessages whose text contains the current
+	// sessionQuery (lowercased substring match); viewerMatchIdx is the
+	// cursor into viewerMatchLines for n/N navigation (which moves
+	// viewerCursor to the chosen match). viewerLoading covers the async
+	// ReadMessages call; viewerLoadSeq is a monotonic counter separate from
+	// sessionSearchSeq so a stale viewer load arriving after the user moved
+	// on is dropped.
 	viewerSession    *transcript.SessionMeta
 	viewerMessages   []transcript.Message
+	viewerCursor     int
 	viewerScroll     int
 	viewerMatchIdx   int
 	viewerMatchLines []int
@@ -211,6 +218,12 @@ type Model struct {
 	// selected with `d` from ModeSessionSearch; nil when no delete is in
 	// progress. The prompt itself reads from this pointer.
 	deleteTarget *transcript.SessionMeta
+
+	// ModeMessageDetail overlay state. messageDetailIdx is the message
+	// index captured at overlay open time; -1 means closed.
+	// messageDetailScroll is the top wrapped-line index.
+	messageDetailIdx    int
+	messageDetailScroll int
 }
 
 // NewModel creates a dashboard model.
@@ -232,14 +245,15 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 		amxBin = "amx"
 	}
 	return Model{
-		client:         client,
-		cfg:            cfg,
-		interval:       interval,
-		sortMode:       sort,
-		idleThreshold:  idle,
-		focusedChipIdx: -1,
-		amxBin:         amxBin,
-		deprecations:   cfg.Deprecations,
+		client:           client,
+		cfg:              cfg,
+		interval:         interval,
+		sortMode:         sort,
+		idleThreshold:    idle,
+		focusedChipIdx:   -1,
+		amxBin:           amxBin,
+		deprecations:     cfg.Deprecations,
+		messageDetailIdx: -1,
 	}
 }
 
@@ -282,11 +296,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// dead rows before the viewport reacts.
 		clampDetailScroll(&m)
 		clampHelpOffset(&m)
+		clampMessageDetailScroll(&m)
 		clampListOffset(&m)
 		scrollListToCursor(&m)
 		clampPickerOffset(&m)
 		scrollPickerToCursor(&m)
 		clampViewerScroll(&m)
+		scrollViewerToCursor(&m)
 		return m, nil
 
 	case tickMsg:
@@ -472,10 +488,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewerMatchLines = computeViewerMatches(m.viewerMessages, m.sessionQuery)
 		m.viewerMatchIdx = 0
 		m.viewerScroll = 0
+		m.viewerCursor = 0
 		if len(m.viewerMatchLines) > 0 {
-			m.viewerScroll = m.viewerMatchLines[0]
-			clampViewerScroll(&m)
+			m.viewerCursor = m.viewerMatchLines[0]
 		}
+		scrollViewerToCursor(&m)
 		return m, nil
 
 	case tea.KeyPressMsg:

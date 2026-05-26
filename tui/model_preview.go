@@ -34,6 +34,8 @@ func (m Model) render() string {
 		// Viewer owns its full layout — like ModeSessionSearch, the
 		// dashboard list must not render underneath.
 		sb.WriteString(renderSessionView(m))
+	case ModeMessageDetail:
+		sb.WriteString(renderMessageDetail(m))
 	case ModeDeleteChoice:
 		// Delete-choice is a modal overlay on top of ModeSessionSearch.
 		// Render the search view as context, then the prompt below so

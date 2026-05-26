@@ -35,8 +35,11 @@ func renderFooter(m Model) string {
 		line1 = styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back")
 		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
 	case ModeSessionView:
-		line1 = styleFooter.Render("  j/k scroll · g/G top/bot · n/N next match · esc back")
-		line2 = styleFooter.Render("  pgup/pgdn: page")
+		line1 = styleFooter.Render("  j/k move · n/N match · enter view message · esc back")
+		line2 = styleFooter.Render("  g/G top/bot  pgup/pgdn: page")
+	case ModeMessageDetail:
+		line1 = styleFooter.Render("  j/k scroll · g/G top/bottom · esc/q/enter close")
+		line2 = ""
 	case ModeDeleteChoice:
 		line1 = styleFooter.Render("  [i] index only · ") + styleError.Render("[f] also delete file") + styleFooter.Render(" · [esc] cancel")
 		line2 = ""

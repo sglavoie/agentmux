@@ -27,6 +27,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleSessionSearchKey(msg)
 	case ModeSessionView:
 		return m.handleSessionViewKey(msg)
+	case ModeMessageDetail:
+		return m.handleMessageDetailKey(msg)
 	case ModeDeleteChoice:
 		return m.handleDeleteChoiceKey(msg)
 	default:
