@@ -36,17 +36,20 @@ func (m Model) render() string {
 		sb.WriteString(renderSessionView(m))
 	case ModeMessageDetail:
 		sb.WriteString(renderMessageDetail(m))
-	case ModeDeleteChoice:
-		// Delete-choice is a modal overlay on top of ModeSessionSearch.
-		// Render the search view as context, then the prompt below so
-		// the user can see which row they're acting on.
-		sb.WriteString(renderSessionSearch(m))
-		sb.WriteByte('\n')
-		sb.WriteString(renderDeleteChoice(m))
-	case ModeChipPicker:
-		sb.WriteString(renderSessionSearch(m))
-		sb.WriteByte('\n')
-		sb.WriteString(renderChipPicker(m))
+	case ModeDeleteChoice, ModeChipPicker:
+		// Modal overlays on top of ModeSessionSearch. The base view is
+		// rendered then dimmed; the bordered popup is composited via
+		// line-splicing so the underlying list stays visible around it.
+		// See tui/overlay.go for the splicing algorithm.
+		base := renderSessionSearch(m)
+		var popup string
+		if m.mode == ModeChipPicker {
+			popup = renderChipPickerBox(m)
+		} else {
+			popup = renderDeleteChoiceBox(m)
+		}
+		overlayH := m.height - previewFooterLines(m) - 1 // trailing \n appended below
+		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
 	default:
 		// Header area varies by mode; list is always shown below.
 		switch m.mode {

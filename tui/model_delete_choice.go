@@ -152,6 +152,22 @@ func renderDeleteChoice(m Model) string {
 	return sb.String()
 }
 
+// renderDeleteChoiceBox wraps renderDeleteChoice in styleOverlayBox so the
+// prompt can be composited as a centered overlay on top of the session
+// search backdrop. The inner width is capped at 70 columns (enough room for
+// the longest `[f] also delete file …` line) and clamped to m.width-4 on
+// narrow terminals.
+func renderDeleteChoiceBox(m Model) string {
+	innerWidth := 70
+	if avail := m.width - 4; avail < innerWidth {
+		innerWidth = avail
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderDeleteChoice(m), "\n"))
+}
+
 // deleteTargetLabel produces a short, scannable description of the
 // transcript for the header + toast text. Falls back to the path's basename
 // when no project title was resolved.

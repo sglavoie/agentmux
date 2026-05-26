@@ -42,9 +42,10 @@ func TestChipPickerVisibleHeightBudget(t *testing.T) {
 		{1, 1},
 		{5, 1},
 		{6, 1},
-		{10, 5},
-		{16, 11},
-		{17, 12},
+		{10, 4},
+		{16, 10},
+		{17, 11},
+		{18, 12},
 		{100, 12},
 	}
 	for _, tc := range cases {

@@ -145,6 +145,20 @@ func TestEnterChipPickerGhostFilterFallsBackToAny(t *testing.T) {
 	}
 }
 
+// TestRenderChipPickerBox is a smoke test for the bordered wrapper: the
+// rounded top-left glyph appears and the header text survives the wrap.
+func TestRenderChipPickerBox(t *testing.T) {
+	m := chipPickerFixture(chipPickerHarness, []string{"", "claude", "codex"}, 0)
+	raw := renderChipPickerBox(m)
+	if !strings.Contains(raw, "╭") {
+		t.Errorf("expected rounded top-left glyph in box output; got %q", raw)
+	}
+	plain := stripAnsi(raw)
+	if !strings.Contains(plain, "Choose harness") {
+		t.Errorf("expected header in box output; got %q", plain)
+	}
+}
+
 // rowIsStyled reports whether the line containing label in raw also carries
 // the ANSI escape introducer (\x1b[) emitted by styleSelected. The renderer
 // only wraps the cursor row in styleSelected, so this is a precise check.

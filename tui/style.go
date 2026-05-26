@@ -13,6 +13,16 @@ var (
 	styleFooter   = lipgloss.NewStyle().Faint(true)
 	styleHeader   = lipgloss.NewStyle().Bold(true)
 
+	// styleOverlayBox wraps overlay popups (chip picker, delete-choice
+	// prompt) in a rounded border with the de-facto accent teal. Padding
+	// adds a single column of breathing room on each side; combined with
+	// the border, the box adds 2 columns + 2 rows of chrome to inner
+	// content.
+	styleOverlayBox = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#4ec9b0")).
+			Padding(0, 1)
+
 	// styleFooterUnavailable renders palette entries whose action does not
 	// apply to the current cursor row. The dim grey foreground keeps the
 	// key visible (so the palette order stays stable) while signaling that

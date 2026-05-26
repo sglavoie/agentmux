@@ -9,8 +9,11 @@ func chipPickerVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	// separator (1) + header (1) + trailing (1) + footer (2) = 5
-	avail := m.height - 5
+	// Box chrome: top border (1) + bottom border (1) + header (1) + footer
+	// reserve (1) + safety margin (2) = 6. The chip picker now renders as a
+	// centered overlay, so the budget no longer scales with the full
+	// terminal — it just needs to fit inside the styleOverlayBox.
+	avail := m.height - 6
 	if avail < 1 {
 		return 1
 	}
@@ -114,6 +117,21 @@ func renderChipPicker(m Model) string {
 	}
 
 	return sb.String()
+}
+
+// renderChipPickerBox wraps renderChipPicker in styleOverlayBox so the chip
+// picker can be composited as a centered overlay on top of the session
+// search backdrop. The inner width is capped at 50 columns for visual
+// readability on wide terminals and clamped to m.width-4 on narrow ones.
+func renderChipPickerBox(m Model) string {
+	innerWidth := 50
+	if avail := m.width - 4; avail < innerWidth {
+		innerWidth = avail
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderChipPicker(m), "\n"))
 }
 
 // currentChipValue returns the active filter value for the kind currently
