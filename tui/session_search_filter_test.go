@@ -1,0 +1,175 @@
+package tui
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/transcript"
+)
+
+// writeTranscriptIndex serializes a hand-crafted index to disk so a TUI
+// test can load it via transcript.LoadIndexAt without exporting the
+// transcript package's private state. Returns the loaded *Index.
+func writeTranscriptIndex(t *testing.T, entries map[string]transcript.SessionMeta) *transcript.Index {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "transcripts.json")
+	type indexFile struct {
+		Entries map[string]transcript.SessionMeta `json:"entries"`
+	}
+	data, err := json.Marshal(indexFile{Entries: entries})
+	if err != nil {
+		t.Fatalf("marshal index: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	idx, err := transcript.LoadIndexAt(path)
+	if err != nil {
+		t.Fatalf("LoadIndexAt: %v", err)
+	}
+	return idx
+}
+
+// sessionSearchFilterModel returns a Model preloaded with two index entries
+// — one whose SearchText contains "needle", one that does not — and placed
+// directly into ModeSessionSearch with the empty-query result set already
+// populated.
+func sessionSearchFilterModel(t *testing.T) Model {
+	t.Helper()
+	now := time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)
+	hit := transcript.SessionMeta{
+		ID: "hit", Harness: harness.Claude, Profile: "work", Project: "Foo",
+		MessageCount: 2, SearchText: "alpha needle beta",
+		Snippet: "alpha needle beta", LastAt: now,
+	}
+	miss := transcript.SessionMeta{
+		ID: "miss", Harness: harness.Claude, Profile: "work", Project: "Bar",
+		MessageCount: 1, SearchText: "no match here",
+		Snippet: "no match here", LastAt: now.Add(-time.Hour),
+	}
+	idx := writeTranscriptIndex(t, map[string]transcript.SessionMeta{
+		"claude:hit":  hit,
+		"claude:miss": miss,
+	})
+	// Empty readers map is sufficient because both entries carry SearchText
+	// (the fast path skips reader lookups entirely).
+	m := Model{
+		mode:              ModeSessionSearch,
+		width:             100,
+		height:            30,
+		cfg:               &config.Config{},
+		transcriptIndex:   idx,
+		transcriptReaders: map[string]transcript.Reader{},
+		sessionResults: []transcript.Result{
+			{Meta: hit, Preview: hit.Snippet},
+			{Meta: miss, Preview: miss.Snippet},
+		},
+	}
+	return m
+}
+
+// drainCmd executes a tea.Cmd and returns the resulting message. Batched
+// commands are flattened so tests can assert against a single concrete msg.
+func drainCmd(t *testing.T, cmd tea.Cmd) tea.Msg {
+	t.Helper()
+	if cmd == nil {
+		t.Fatal("drainCmd: nil cmd")
+	}
+	return cmd()
+}
+
+// TestSessionSearch_TypingShrinksResultSet drives the dispatch chain end to
+// end: ModeSessionSearch → "/" → "n" → debounce → search → done. After the
+// final sessionSearchDoneMsg the model's sessionResults must contain only
+// the entry whose SearchText matches the typed needle. Guards against
+// future regressions to the seq-dispatch glue between
+// dispatchSessionSearch, sessionSearchDebounceMsg, and sessionSearchDoneMsg.
+func TestSessionSearch_TypingShrinksResultSet(t *testing.T) {
+	m := sessionSearchFilterModel(t)
+	if len(m.sessionResults) != 2 {
+		t.Fatalf("setup: want 2 results, got %d", len(m.sessionResults))
+	}
+
+	// `/` flips into search-text editing mode.
+	m = pressKey(m, "/")
+	if !m.sessionSearchMode {
+		t.Fatalf("after `/`: sessionSearchMode=false, want true")
+	}
+
+	// Type "needle" one character at a time. Each keystroke bumps
+	// sessionSearchSeq; the returned tea.Cmd is a debounce tick we drop
+	// because the user outpaces the debounce window in the live runtime.
+	for _, r := range "needle" {
+		m = pressKey(m, string(r))
+	}
+	if m.sessionQuery != "needle" {
+		t.Fatalf("sessionQuery=%q, want %q", m.sessionQuery, "needle")
+	}
+
+	// The real dispatch path waits 250ms inside tea.Tick before emitting
+	// sessionSearchDebounceMsg. We synthesize the post-tick msg directly
+	// with the live seq so the test does not pay the debounce in wall-clock
+	// time.
+	debounceMsg := sessionSearchDebounceMsg{seq: m.sessionSearchSeq}
+
+	// Feed the debounce msg through Update; that handler returns the
+	// runSessionSearchCmd which actually calls transcript.Search.
+	updated, cmd := m.Update(debounceMsg)
+	m = updated.(Model)
+	doneMsg, ok := drainCmd(t, cmd).(sessionSearchDoneMsg)
+	if !ok {
+		t.Fatalf("debounce dispatch produced %T, want sessionSearchDoneMsg", doneMsg)
+	}
+	if doneMsg.err != nil {
+		t.Fatalf("search returned error: %v", doneMsg.err)
+	}
+
+	// Final state: m.sessionResults should be the filtered set.
+	updated, _ = m.Update(doneMsg)
+	m = updated.(Model)
+	if len(m.sessionResults) != 1 {
+		t.Fatalf("after done: len(sessionResults)=%d, want 1", len(m.sessionResults))
+	}
+	if m.sessionResults[0].Meta.ID != "hit" {
+		t.Errorf("filtered result ID=%q, want hit", m.sessionResults[0].Meta.ID)
+	}
+	if m.sessionLoading {
+		t.Errorf("sessionLoading still true after done msg")
+	}
+}
+
+// TestSessionSearch_StaleRefreshDoesNotOverwriteTypedResults locks in the
+// session-1 root-cause shape. A typed-query result set is in place; then a
+// late sessionsRefreshDoneMsg arrives bearing an older seq. The refresh
+// handler must drop it (msg.seq < m.sessionSearchSeq) instead of
+// dispatching a fresh empty-query search that would overwrite the
+// typed-query results.
+func TestSessionSearch_StaleRefreshDoesNotOverwriteTypedResults(t *testing.T) {
+	m := sessionSearchFilterModel(t)
+
+	// Simulate the post-typing state: query set, seq advanced, results
+	// reflect the filtered set.
+	m.sessionQuery = "needle"
+	m.sessionSearchSeq = 5
+	m.sessionResults = []transcript.Result{
+		{Meta: transcript.SessionMeta{ID: "hit", Harness: harness.Claude}, Matches: 1, Preview: "alpha needle beta"},
+	}
+
+	// A stale refresh from before the user started typing arrives.
+	updated, cmd := m.Update(sessionsRefreshDoneMsg{seq: 1, err: nil})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Errorf("stale refresh produced a follow-up cmd; want nil so the typed query stands")
+	}
+	if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "hit" {
+		t.Errorf("typed-query results were overwritten by stale refresh: %+v", m.sessionResults)
+	}
+}

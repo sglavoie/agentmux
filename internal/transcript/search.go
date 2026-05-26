@@ -60,11 +60,41 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		return results, nil
 	}
 
-	if readers == nil {
-		return nil, errors.New("transcript: Search with text requires readers")
-	}
-
 	for _, m := range metas {
+		// Snippet short-circuit: meta.Snippet is the indexed first-user-message
+		// (≤160 runes). When the needle already appears in that snippet we
+		// emit a result with Matches=1 and the snippet as preview, skipping
+		// the SearchText scan entirely. Trades an exact match count for a
+		// constant-time lookup — the user-visible cost is a (1 match) badge
+		// instead of the true count for sessions whose snippet contains the
+		// needle. Snippets are stored as written (not lowercased) so we
+		// lowercase here for case-insensitive comparison.
+		if m.Snippet != "" && strings.Contains(strings.ToLower(m.Snippet), needle) {
+			results = append(results, Result{Meta: m, Matches: 1, Preview: m.Snippet})
+			continue
+		}
+		// Fast path: SearchText is the lowercased concatenated transcript
+		// body persisted in the index by Refresh. Substring search and
+		// match counting run entirely in memory — no JSONL reopen, no
+		// per-message decoding. The on-disk index for the dev machine
+		// (~4200 sessions) drops a query that took ~47s through ReadMessages
+		// to well under a second once SearchText is populated.
+		if m.SearchText != "" {
+			count, preview := countMatchesInSearchText(m.SearchText, needle)
+			if count == 0 {
+				continue
+			}
+			results = append(results, Result{Meta: m, Matches: count, Preview: preview})
+			continue
+		}
+		// Legacy fallback: entries written by older versions of amx (and
+		// the realdata diagnostic test that loads the on-disk index
+		// directly without a Refresh) have no SearchText. Stream the file
+		// for those — slow but correct, and the next Refresh will
+		// populate SearchText so the slow path stops triggering.
+		if readers == nil {
+			return nil, errors.New("transcript: Search with text requires readers")
+		}
 		reader, ok := readers[m.Harness]
 		if !ok {
 			slog.Debug("transcript.search: no reader for harness",
@@ -86,6 +116,36 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 
 	sortResults(results)
 	return results, nil
+}
+
+// countMatchesInSearchText counts case-insensitive occurrences of needle
+// inside the precomputed (already-lowercased) SearchText. The preview is
+// the single line of text containing the first match — necessarily
+// lowercased, since SearchText itself is the only source available
+// without re-reading the file. needle must already be lower-cased.
+func countMatchesInSearchText(searchText, needle string) (int, string) {
+	if needle == "" {
+		return 0, ""
+	}
+	idx := 0
+	first := -1
+	total := 0
+	for {
+		pos := strings.Index(searchText[idx:], needle)
+		if pos < 0 {
+			break
+		}
+		absolute := idx + pos
+		if first < 0 {
+			first = absolute
+		}
+		total++
+		idx = absolute + len(needle)
+	}
+	if total == 0 {
+		return 0, ""
+	}
+	return total, firstMatchLine(searchText, first)
 }
 
 // countMatches walks msgs in order, counting case-insensitive occurrences

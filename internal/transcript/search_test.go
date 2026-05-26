@@ -2,6 +2,8 @@ package transcript
 
 import (
 	"errors"
+	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +185,207 @@ func TestSearch_ResultsSortedByLastAtThenStartedAt(t *testing.T) {
 func TestSearch_NilIndexReturnsError(t *testing.T) {
 	if _, err := Search(nil, nil, Query{}); err == nil {
 		t.Errorf("expected error for nil index")
+	}
+}
+
+// TestSearch_FastPathUsesSearchText locks in the session-2 performance fix:
+// when SessionMeta.SearchText is populated, Search must filter and count
+// matches against that field instead of calling Reader.ReadMessages. The
+// readers map is intentionally nil — Search with non-empty Text used to
+// reject that combination outright, but the fast path makes readers
+// optional when every survivor carries a non-empty SearchText.
+func TestSearch_FastPathUsesSearchText(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
+		ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
+		MessageCount: 2,
+		SearchText:   "first line\nsearchterm shows up here\nlast\ntalked about searchterm again",
+		LastAt:       time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+	}))
+	must(t, idx.SetEntryForTest("claude:miss", SessionMeta{
+		ID: "miss", Harness: harness.Claude, Path: "/tmp/miss.jsonl",
+		MessageCount: 1,
+		SearchText:   "nothing relevant",
+		LastAt:       time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC),
+	}))
+
+	results, err := Search(idx, nil, Query{Text: "searchterm"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len=%d, want 1", len(results))
+	}
+	r := results[0]
+	if r.Meta.ID != "hit" {
+		t.Errorf("ID=%q, want hit", r.Meta.ID)
+	}
+	if r.Matches != 2 {
+		t.Errorf("Matches=%d, want 2", r.Matches)
+	}
+	if !strings.Contains(r.Preview, "searchterm") {
+		t.Errorf("Preview=%q does not contain match line", r.Preview)
+	}
+	if strings.Contains(r.Preview, "first line") {
+		t.Errorf("Preview leaked the prior line: %q", r.Preview)
+	}
+}
+
+// TestSearch_FastPathSkipsReader proves the fast path never reaches
+// Reader.ReadMessages when SearchText is populated. A reader that errors
+// on every call is supplied; if Search were still routing through the
+// legacy path the result would silently drop to zero.
+func TestSearch_FastPathSkipsReader(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
+		ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
+		MessageCount: 1,
+		SearchText:   "needle in haystack",
+		LastAt:       time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+	}))
+	readers := map[string]Reader{
+		harness.Claude: &fakeReader{
+			harness: harness.Claude,
+			readErr: errors.New("ReadMessages must not be called on the fast path"),
+		},
+	}
+	results, err := Search(idx, readers, Query{Text: "needle"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 || results[0].Meta.ID != "hit" {
+		t.Fatalf("fast path bypassed; results=%+v", results)
+	}
+	if results[0].Matches != 1 {
+		t.Errorf("Matches=%d, want 1", results[0].Matches)
+	}
+}
+
+// TestSearch_SnippetShortCircuits covers the snippet short-circuit added in
+// session 4: when the needle appears in meta.Snippet the result emits
+// Matches=1 with Preview=snippet, bypassing the SearchText scan entirely.
+// The session's body still contains the needle three times — proof of the
+// match-count trade-off the spec accepts in exchange for a constant-time
+// lookup against the 160-rune snippet.
+func TestSearch_SnippetShortCircuits(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
+		ID: "hit", Harness: harness.Claude,
+		MessageCount: 2,
+		Snippet:      "Quick NEEDLE intro from the user",
+		SearchText:   "quick needle intro from the user\nneedle appears again\nand once more needle",
+		LastAt:       time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+	}))
+	results, err := Search(idx, nil, Query{Text: "needle"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len=%d, want 1", len(results))
+	}
+	r := results[0]
+	if r.Matches != 1 {
+		t.Errorf("Matches=%d, want 1 (snippet short-circuit)", r.Matches)
+	}
+	if r.Preview != "Quick NEEDLE intro from the user" {
+		t.Errorf("Preview=%q, want snippet verbatim", r.Preview)
+	}
+}
+
+// TestSearch_SnippetMissFallsThroughToSearchText guards against the
+// short-circuit accidentally short-circuiting too aggressively: when the
+// needle is absent from the snippet the SearchText path must still run and
+// produce the full match count.
+func TestSearch_SnippetMissFallsThroughToSearchText(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
+		ID: "hit", Harness: harness.Claude,
+		MessageCount: 2,
+		Snippet:      "harmless intro line",
+		SearchText:   "harmless intro line\nneedle hidden in body\nneedle again",
+		LastAt:       time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+	}))
+	results, err := Search(idx, nil, Query{Text: "needle"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len=%d, want 1", len(results))
+	}
+	if results[0].Matches != 2 {
+		t.Errorf("Matches=%d, want 2 (SearchText counted both body hits)", results[0].Matches)
+	}
+}
+
+// populateBenchIndex builds an in-memory *Index with n entries without
+// going through SetEntryForTest — that helper writes the whole index to
+// disk after every insert, which is O(N²) and would dominate the
+// benchmark's wall-clock time.
+func populateBenchIndex(b *testing.B, n int, snippet, body string) *Index {
+	b.Helper()
+	idx := &Index{path: filepath.Join(b.TempDir(), "transcripts.json"), entries: make(map[string]SessionMeta, n)}
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("claude:bench-%d", i)
+		idx.entries[key] = SessionMeta{
+			ID:           fmt.Sprintf("bench-%d", i),
+			Harness:      harness.Claude,
+			Profile:      "work",
+			Project:      "Foo",
+			MessageCount: 50,
+			Snippet:      snippet,
+			SearchText:   body,
+			LastAt:       base.Add(time.Duration(i) * time.Minute),
+		}
+	}
+	return idx
+}
+
+// BenchmarkSearch_FastPath establishes a baseline for transcript.Search over
+// a synthetic corpus of N=4500 sessions. Each entry carries a populated
+// SearchText so the benchmark exercises the session-2 fast path while
+// avoiding the snippet short-circuit (no needle in any Snippet). Per-entry
+// body is ~22 KiB so the overall haystack approximates the dev machine's
+// ~36 MiB on-disk index. Run with:
+//
+//	go test ./internal/transcript -run=^$ -bench=BenchmarkSearch_FastPath
+func BenchmarkSearch_FastPath(b *testing.B) {
+	body := strings.Repeat("lorem ipsum dolor sit amet consectetur adipiscing elit\n", 200) +
+		"alpha needle beta\n" +
+		strings.Repeat("ut enim ad minim veniam quis nostrud exercitation\n", 200)
+	idx := populateBenchIndex(b, 4500, "a synthetic transcript with lorem ipsum content", body)
+	q := Query{Text: "needle"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		results, err := Search(idx, nil, q)
+		if err != nil {
+			b.Fatalf("Search: %v", err)
+		}
+		if len(results) != 4500 {
+			b.Fatalf("results=%d, want 4500", len(results))
+		}
+	}
+}
+
+// BenchmarkSearch_SnippetShortCircuit exercises the path where every entry's
+// Snippet already contains the needle. The full SearchText is never touched
+// for any of the 4500 entries, so the Search call collapses to a sequence
+// of cheap strings.Contains calls against 160-rune snippets. Demonstrates
+// the throughput ceiling for the most common interactive case (user types
+// a fragment that already appears in the kick-off prompt).
+func BenchmarkSearch_SnippetShortCircuit(b *testing.B) {
+	body := strings.Repeat("filler text without the needle\n", 400)
+	idx := populateBenchIndex(b, 4500, "user asks about the needle in the kick-off prompt", body)
+	q := Query{Text: "needle"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		results, err := Search(idx, nil, q)
+		if err != nil {
+			b.Fatalf("Search: %v", err)
+		}
+		if len(results) != 4500 {
+			b.Fatalf("results=%d, want 4500", len(results))
+		}
 	}
 }
 

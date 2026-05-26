@@ -163,6 +163,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		FileSize:    info.Size(),
 		FileModTime: info.ModTime(),
 	}
+	var searchBuf strings.Builder
 
 	for scanner.Scan() {
 		var rec claudeRecord
@@ -184,12 +185,16 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		if !rec.IsMeta && (rec.Type == "user" || rec.Type == "assistant") {
 			meta.MessageCount++
 		}
-		if meta.Snippet == "" && rec.Type == "user" && !rec.IsMeta && rec.Message != nil {
+		if !rec.IsMeta && rec.Message != nil && (rec.Type == "user" || rec.Type == "assistant") {
 			if text := flattenClaudeContent(rec.Message.Content); text != "" {
-				meta.Snippet = truncateSnippet(text)
+				if meta.Snippet == "" && rec.Type == "user" {
+					meta.Snippet = truncateSnippet(text)
+				}
+				appendSearchText(&searchBuf, text)
 			}
 		}
 	}
+	meta.SearchText = searchBuf.String()
 
 	// Last-resort CWD: decode the project dir name. Claude encodes the
 	// absolute path by replacing path separators with '-', which is lossy

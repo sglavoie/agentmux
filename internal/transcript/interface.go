@@ -4,7 +4,10 @@
 // implementations expose a uniform view of those files to the rest of amx.
 package transcript
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // SessionMeta describes a single discovered transcript. It is the cacheable
 // per-session metadata used by the index, search, and TUI layers. The
@@ -24,6 +27,13 @@ type SessionMeta struct {
 	FileModTime     time.Time `json:"file_mod_time"`
 	MessageCount    int       `json:"message_count"`
 	Snippet         string    `json:"snippet"`
+	// SearchText is the lowercased concatenation of every message body
+	// in the transcript, joined by '\n', persisted so substring search
+	// can run entirely against the in-memory index without reopening
+	// the underlying JSONL file on every keystroke. Empty for entries
+	// written by older versions of amx; Search falls back to a live
+	// ReadMessages scan in that case.
+	SearchText      string    `json:"search_text,omitempty"`
 	HiddenFromIndex bool      `json:"hidden_from_index,omitempty"`
 }
 
@@ -89,4 +99,19 @@ func truncateSnippet(s string) string {
 		}
 	}
 	return string(out)
+}
+
+// appendSearchText concatenates one message body into the per-session
+// search buffer used by SessionMeta.SearchText. Messages are joined with
+// '\n' so the preview reconstruction in firstMatchLine can still extract
+// a single-line excerpt around the match. Text is lowercased so substring
+// matching in Search avoids per-keystroke ToLower of the haystack.
+func appendSearchText(buf *strings.Builder, text string) {
+	if text == "" {
+		return
+	}
+	if buf.Len() > 0 {
+		buf.WriteByte('\n')
+	}
+	buf.WriteString(strings.ToLower(text))
 }

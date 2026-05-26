@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -231,6 +232,7 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 		FileSize:    info.Size(),
 		FileModTime: info.ModTime(),
 	}
+	var searchBuf strings.Builder
 
 	for scanner.Scan() {
 		var env copilotEnvelope
@@ -272,6 +274,7 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 			if meta.Snippet == "" {
 				meta.Snippet = truncateSnippet(p.Content)
 			}
+			appendSearchText(&searchBuf, p.Content)
 		case "assistant.message":
 			var p copilotAssistantMessage
 			if err := json.Unmarshal(env.Data, &p); err != nil {
@@ -279,9 +282,27 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 			}
 			if p.Content != "" {
 				meta.MessageCount++
+				appendSearchText(&searchBuf, p.Content)
+			}
+		case "tool.execution_start":
+			var p copilotToolStart
+			if err := json.Unmarshal(env.Data, &p); err != nil {
+				continue
+			}
+			if p.ToolName != "" {
+				appendSearchText(&searchBuf, "[tool_use: "+p.ToolName+"]")
+			}
+		case "tool.execution_complete":
+			var p copilotToolComplete
+			if err := json.Unmarshal(env.Data, &p); err != nil {
+				continue
+			}
+			if p.Result != "" {
+				appendSearchText(&searchBuf, p.Result)
 			}
 		}
 	}
+	meta.SearchText = searchBuf.String()
 
 	return meta, nil
 }

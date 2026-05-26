@@ -182,6 +182,15 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 		if meta.FileSize != size || !meta.FileModTime.Equal(mtime) {
 			return SessionMeta{}, false
 		}
+		// Pre-SearchText entries (written by earlier versions of amx) must
+		// be reparsed once so the substring search can run against
+		// in-memory text instead of reopening the JSONL on every keystroke.
+		// Empty MessageCount in the cached entry implies no conversation
+		// records were ever in the file, so SearchText would still be ""
+		// on reparse; that case keeps the cache hit.
+		if meta.SearchText == "" && meta.MessageCount > 0 {
+			return SessionMeta{}, false
+		}
 		return meta, true
 	}
 
@@ -223,10 +232,25 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 					meta.Snippet = existing.Snippet
 					meta.StartedAt = existing.StartedAt
 					meta.LastAt = existing.LastAt
+					// Preserve a previously populated SearchText so the
+					// merge path does not blank it out when a discover
+					// pass produces a meta without one (e.g., the cached
+					// lookup hit and SearchText was already present).
+					if meta.SearchText == "" {
+						meta.SearchText = existing.SearchText
+					}
 				}
 			}
 			i.entries[key] = meta
 		}
+	}
+	// Persist the refreshed index so newly-populated SearchText survives a
+	// process restart. Save failures are logged and swallowed — a broken
+	// disk must not turn a successful in-memory refresh into a Refresh
+	// error, and the caller can still operate against the in-memory copy.
+	if err := i.saveLocked(); err != nil {
+		slog.Debug("transcript.index: save after refresh failed",
+			"path", i.path, "err", err)
 	}
 	return firstErr
 }

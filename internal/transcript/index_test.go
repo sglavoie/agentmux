@@ -561,6 +561,7 @@ func TestRefresh_FastPathSkipsUnchangedFiles(t *testing.T) {
 				FileModTime:  stat.ModTime(),
 				MessageCount: 4,
 				Snippet:      "original",
+				SearchText:   "original",
 			}}, nil
 		},
 	}

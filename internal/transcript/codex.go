@@ -222,6 +222,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 		FileSize:    info.Size(),
 		FileModTime: info.ModTime(),
 	}
+	var searchBuf strings.Builder
 
 	for scanner.Scan() {
 		var env codexEnvelope
@@ -261,17 +262,34 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 				if meta.Snippet == "" && p.Message != "" {
 					meta.Snippet = truncateSnippet(p.Message)
 				}
+				appendSearchText(&searchBuf, p.Message)
 			}
 		case "response_item":
 			var p codexResponseItemPayload
 			if err := json.Unmarshal(env.Payload, &p); err != nil {
 				continue
 			}
-			if p.Type == "message" && p.Role == "assistant" {
+			switch p.Type {
+			case "message":
+				if p.Role != "assistant" {
+					continue
+				}
 				meta.MessageCount++
+				if text := flattenCodexContent(p.Content); text != "" {
+					appendSearchText(&searchBuf, text)
+				}
+			case "function_call":
+				if p.Name != "" {
+					appendSearchText(&searchBuf, "[tool_use: "+p.Name+"]")
+				}
+			case "function_call_output":
+				if p.Output != "" {
+					appendSearchText(&searchBuf, p.Output)
+				}
 			}
 		}
 	}
+	meta.SearchText = searchBuf.String()
 
 	// Fallback id: extract the UUID tail from the filename if no
 	// session_meta record was found (corrupt or pre-session_meta vintage).
