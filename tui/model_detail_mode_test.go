@@ -188,7 +188,7 @@ func TestDetailScrollKeys(t *testing.T) {
 	// Pick a height that produces visible=3 (detailMinVisible) so a 6-event
 	// buffer exposes a maxOffset of 3 — enough to exercise both the up and
 	// down clamps without dipping into terminal-specific arithmetic.
-	m.height = detailChrome + detailMinVisible
+	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = []daemon.SessionEvent{
 		{At: 1, Event: "PreToolUse", Action: "active"},
 		{At: 2, Event: "PostToolUse", Action: "active"},
@@ -198,7 +198,7 @@ func TestDetailScrollKeys(t *testing.T) {
 		{At: 6, Event: "PostToolUse", Action: "active"},
 	}
 	m.detailLoading = false
-	_, visible := detailScrollBounds(m)
+	_, visible := detailScrollBounds(m, detailVisibleHeight(m))
 	maxOffset := len(m.detailEvents) - visible
 
 	m = pressKey(m, "j")
@@ -269,10 +269,10 @@ func TestDetailEventsMsgClampsScrollOnShrink(t *testing.T) {
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
 		m = mm.(Model)
 	}
-	m.height = detailChrome + detailMinVisible // visible == 3
+	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.width = 100
 	m.detailEvents = makeEvents(60)
-	_, visible := detailScrollBounds(m)
+	_, visible := detailScrollBounds(m, detailVisibleHeight(m))
 	m.detailScroll = len(m.detailEvents) - visible // park at bottom
 
 	// Now deliver a tiny event ring — the daemon GC'd most entries.
@@ -280,7 +280,7 @@ func TestDetailEventsMsgClampsScrollOnShrink(t *testing.T) {
 	updated, _ := m.Update(detailEventsMsg{windowID: m.detailWindowID, events: small})
 	got := updated.(Model)
 
-	total, vis := detailScrollBounds(got)
+	total, vis := detailScrollBounds(got, detailVisibleHeight(got))
 	maxOffset := total - vis
 	if maxOffset < 0 {
 		maxOffset = 0

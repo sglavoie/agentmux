@@ -10,7 +10,7 @@ import (
 // messageDetailChrome is the number of vertical lines the message-detail
 // overlay reserves outside the scrollable body window: title (1) + blank
 // after title (1) + ▲ slot (1) + ▼ slot (1) + trailing newline reserved by
-// render() (1) = 5. Mirrors helpChrome.
+// render() (1) = 5.
 const messageDetailChrome = 5
 
 // messageDetailMinVisible is the floor on the visible body window so the

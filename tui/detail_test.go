@@ -140,7 +140,7 @@ func makeEvents(n int) []daemon.SessionEvent {
 
 func TestRenderDetailScrollIndicatorAtTop(t *testing.T) {
 	m := detailModel(t)
-	m.height = detailChrome + detailMinVisible // visible == 3
+	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = makeEvents(60)
 	m.detailScroll = 0
 
@@ -156,9 +156,9 @@ func TestRenderDetailScrollIndicatorAtTop(t *testing.T) {
 
 func TestRenderDetailScrollIndicatorAtBottom(t *testing.T) {
 	m := detailModel(t)
-	m.height = detailChrome + detailMinVisible // visible == 3
+	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = makeEvents(60)
-	total, visible := detailScrollBounds(m)
+	total, visible := detailScrollBounds(m, detailVisibleHeight(m))
 	m.detailScroll = total - visible
 
 	out := stripAnsi(renderDetail(m))
@@ -173,7 +173,7 @@ func TestRenderDetailScrollIndicatorAtBottom(t *testing.T) {
 
 func TestRenderDetailFooterCount(t *testing.T) {
 	m := detailModel(t)
-	m.height = detailChrome + detailMinVisible
+	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = makeEvents(60)
 	m.detailScroll = 0
 
@@ -215,10 +215,10 @@ func TestFormatRelativeAge(t *testing.T) {
 
 func TestDetailPageScrollKeys(t *testing.T) {
 	m := detailModel(t)
-	m.height = detailChrome + detailMinVisible // visible == 3
+	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = makeEvents(20)
 
-	_, visible := detailScrollBounds(m)
+	_, visible := detailScrollBounds(m, detailVisibleHeight(m))
 	maxOffset := len(m.detailEvents) - visible
 	if maxOffset <= visible {
 		t.Fatalf("test pre-condition: expected maxOffset > visible (%d) for meaningful page scroll, got %d", visible, maxOffset)
@@ -346,8 +346,8 @@ func TestDetailScrollClampsOnResize(t *testing.T) {
 	m.detailEvents = makeEvents(20)
 
 	// Small viewport: scroll to bottom (maxOffset is large).
-	m.height = detailChrome + detailMinVisible // visible == detailMinVisible == 3
-	_, visible := detailScrollBounds(m)
+	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
+	_, visible := detailScrollBounds(m, detailVisibleHeight(m))
 	maxOffset := len(m.detailEvents) - visible
 	if maxOffset <= 0 {
 		t.Fatalf("setup: expected non-zero maxOffset at small height, got %d", maxOffset)
@@ -356,10 +356,10 @@ func TestDetailScrollClampsOnResize(t *testing.T) {
 
 	// Grow the viewport — visible expands, maxOffset shrinks. The stale
 	// offset must be clamped to the new maxOffset.
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: detailChrome + 15})
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m2 := updated.(Model)
 
-	_, visible2 := detailScrollBounds(m2)
+	_, visible2 := detailScrollBounds(m2, detailVisibleHeight(m2))
 	maxOffset2 := len(m2.detailEvents) - visible2
 	if maxOffset2 < 0 {
 		maxOffset2 = 0

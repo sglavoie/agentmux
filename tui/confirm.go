@@ -31,13 +31,26 @@ func renderConfirm(m Model) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("  ")
 	sb.WriteString(styleHeader.Render(fmt.Sprintf("%s %q?", verb, runningSessionDisplayTitle(m.targetSession))))
 	sb.WriteByte('\n')
 	if m.confirmConsequence != "" {
-		sb.WriteString("  ")
 		sb.WriteString(styleDim.Render(m.confirmConsequence))
 		sb.WriteByte('\n')
 	}
 	return sb.String()
+}
+
+// renderConfirmBox wraps renderConfirm in styleOverlayBox so the y/n confirm
+// prompt can be composited as a centered modal on top of the dimmed
+// dashboard. The inner width is capped at 70 columns and clamped to
+// m.width-4 on narrow terminals.
+func renderConfirmBox(m Model) string {
+	innerWidth := 70
+	if avail := m.width - 4; avail < innerWidth {
+		innerWidth = avail
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderConfirm(m), "\n"))
 }

@@ -13,18 +13,18 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// detailChrome is the vertical-line budget the detail pane reserves outside
-// the scrollable event body: header line 1 (1) + header line 2 (1) + blank
-// after header (1) + scroll-up indicator slot (1) + scroll-down indicator
-// slot (1) + pane footer (1) + the dashboard's render() trailing newline +
-// footer (1) = 7. The two indicator slots are reserved unconditionally so
-// the layout does not jitter as the user scrolls.
-const detailChrome = 7
-
 // detailMinVisible is the floor on the visible body height. Even on very
 // short terminals we keep at least this many event rows visible so the pane
 // remains useful.
 const detailMinVisible = 3
+
+// detailInnerChrome counts the lines renderDetail reserves inside the
+// overlay box outside the scrollable event body: header line 1 (1) +
+// header line 2 (1) + blank after header (1) + scroll-up indicator slot
+// (1) + scroll-down indicator slot (1) + pane footer (1) = 6. The two
+// indicator slots are reserved unconditionally so the layout does not
+// jitter as the user scrolls.
+const detailInnerChrome = 6
 
 // Detail-row column widths. The Tool column flexes to fill the rest of the
 // terminal width; everything else is fixed so columns line up across rows.
@@ -47,7 +47,7 @@ const detailColumnGap = 1
 // maxOffset — without the clamp the next j/k keypress would have to chew
 // through the dead rows before the visible window reacts.
 func clampDetailScroll(m *Model) {
-	total, visible := detailScrollBounds(*m)
+	total, visible := detailScrollBounds(*m, detailVisibleHeight(*m))
 	maxOffset := total - visible
 	if maxOffset < 0 {
 		maxOffset = 0
@@ -60,22 +60,55 @@ func clampDetailScroll(m *Model) {
 	}
 }
 
+// detailOverlayInnerHeight returns the inner content height of the detail
+// overlay box (everything inside the rounded border). The box uses
+// Padding(0, 1) so vertical padding is zero; the only chrome it owns is
+// the 2 border rows. The remaining 4-row margin keeps the modal floating
+// rather than consuming the full terminal even on short screens. A 30-row
+// cap prevents very tall terminals from rendering an oversized modal.
+func detailOverlayInnerHeight(m Model) int {
+	if m.height <= 0 {
+		return 0
+	}
+	// Inside the box we render the chrome counted by detailInnerChrome
+	// (header 2 + blank + ▲ slot + ▼ slot + footer = 6) on top of at
+	// least detailMinVisible body rows.
+	minInner := detailMinVisible + detailInnerChrome
+	avail := m.height - 6 // border (2) + safety margin (4)
+	if avail < minInner {
+		return minInner
+	}
+	if avail > 30 {
+		avail = 30
+	}
+	return avail
+}
+
+// detailVisibleHeight returns the number of scrollable event rows that fit
+// inside the detail overlay's inner area (innerHeight minus the
+// detailInnerChrome lines reserved by renderDetail).
+func detailVisibleHeight(m Model) int {
+	inner := detailOverlayInnerHeight(m)
+	if inner <= 0 {
+		return 0
+	}
+	v := inner - detailInnerChrome
+	if v < detailMinVisible {
+		return detailMinVisible
+	}
+	return v
+}
+
 // detailScrollBounds returns the total number of events and the visible
-// page size at the model's current height. Pre-WindowSizeMsg the visible
-// page equals the total so scroll keys are no-ops; this mirrors the
-// pre-resize behavior of helpScrollBounds.
-func detailScrollBounds(m Model) (total, visible int) {
+// page size at the supplied content height. When the model has no height
+// yet (pre-WindowSizeMsg) the visible window equals the total so scroll
+// keys become no-ops naturally — mirroring helpScrollBounds.
+func detailScrollBounds(m Model, visibleHeight int) (total, visible int) {
 	total = len(m.detailEvents)
 	if m.height == 0 {
 		return total, total
 	}
-	visible = m.height - detailChrome
-	if visible < detailMinVisible {
-		visible = detailMinVisible
-	}
-	if visible > total {
-		visible = total
-	}
+	visible = max(detailMinVisible, min(total, visibleHeight))
 	return total, visible
 }
 
@@ -297,7 +330,7 @@ func renderDetail(m Model) string {
 		return sb.String()
 	}
 
-	total, visible := detailScrollBounds(m)
+	total, visible := detailScrollBounds(m, detailVisibleHeight(m))
 
 	// Most-recent-first: the daemon serves events oldest-first, so we walk
 	// the slice in reverse for display. detailScroll is then a count of
@@ -320,10 +353,7 @@ func renderDetail(m Model) string {
 	}
 	sb.WriteByte('\n')
 
-	rowWidth := m.width
-	if rowWidth <= 0 {
-		rowWidth = 80
-	}
+	rowWidth := detailRowWidth(m)
 	now := time.Now()
 	end := offset + visible
 	if end > total {
@@ -347,4 +377,38 @@ func renderDetail(m Model) string {
 	sb.WriteByte('\n')
 
 	return sb.String()
+}
+
+// detailBoxInnerWidth returns the styleOverlayBox `.Width(...)` value used
+// for the detail overlay. The cap (100 cols) keeps the modal floating on
+// very wide terminals; the m.width-4 clamp prevents the box from spilling
+// off-screen on narrow ones.
+func detailBoxInnerWidth(m Model) int {
+	innerWidth := 100
+	if avail := m.width - 4; avail < innerWidth {
+		innerWidth = avail
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	return innerWidth
+}
+
+// detailRowWidth returns the cell width an event row should occupy so it
+// fits inside the overlay box's content area without wrapping. The 2-col
+// subtraction matches styleOverlayBox's Padding(0, 1) — the border is
+// already excluded from `.Width(...)` semantics in lipgloss.
+func detailRowWidth(m Model) int {
+	w := detailBoxInnerWidth(m) - 2
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// renderDetailBox wraps renderDetail in styleOverlayBox so the per-session
+// hook event log can be composited as a centered modal on top of the
+// dimmed dashboard.
+func renderDetailBox(m Model) string {
+	return styleOverlayBox.Width(detailBoxInnerWidth(m)).Render(strings.TrimRight(renderDetail(m), "\n"))
 }

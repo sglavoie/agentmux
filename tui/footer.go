@@ -23,13 +23,19 @@ func renderFooter(m Model) string {
 		line1 = styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  O: open in editor  p: preview  esc: clear/exit")
 		line2 = styleFooter.Render("  type to filter (DSL: @profile, word)  j/k: up/down")
 	case ModeConfigPicker:
-		line1 = styleFooter.Render("  enter: select  esc: cancel")
+		line1 = styleFooter.Render("  enter: select  esc/q: cancel")
 		line2 = styleFooter.Render("  j/k: up/down")
 	case ModeHelp:
 		line1 = styleFooter.Render("  j/k: up/down  g/G: top/bottom  esc/?/q: close help")
 		line2 = ""
 	case ModeActions:
 		line1 = styleFooter.Render("  <key>: run action  esc/q: back")
+		line2 = ""
+	case ModeDetail:
+		// Inner box footer already carries the scroll position and detail
+		// keymap; the outer hint area stays blank so the dimmed dashboard
+		// footer doesn't surface irrelevant row-action keys.
+		line1 = ""
 		line2 = ""
 	case ModeChipPicker:
 		line1 = styleFooter.Render("  enter: select  esc/q: cancel")

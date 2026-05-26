@@ -241,7 +241,7 @@ func TestFooterConfigPickerHint(t *testing.T) {
 	if !strings.Contains(footer, "enter: select") {
 		t.Errorf("config picker footer missing select hint, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "esc: cancel") {
+	if !strings.Contains(footer, "esc/q: cancel") {
 		t.Errorf("config picker footer missing cancel hint, got:\n%s", footer)
 	}
 }

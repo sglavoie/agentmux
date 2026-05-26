@@ -51,7 +51,7 @@ func TestRenderHelpIndicatorsAtTopAndBottom(t *testing.T) {
 		t.Errorf("expected no scroll-up indicator at offset=0, got:\n%s", topOut)
 	}
 
-	total, visible := helpScrollBounds(m)
+	total, visible := helpScrollBounds(m, helpVisibleHeight(m))
 	m.helpOffset = total - visible
 	if m.helpOffset < 0 {
 		m.helpOffset = 0
@@ -73,7 +73,7 @@ func TestHelpScrollKeys(t *testing.T) {
 		return m
 	}
 
-	total, visible := helpScrollBounds(base())
+	total, visible := helpScrollBounds(base(), helpVisibleHeight(base()))
 	maxOffset := total - visible
 	if maxOffset < 0 {
 		maxOffset = 0
@@ -133,7 +133,7 @@ func TestHelpOffsetClampsOnResize(t *testing.T) {
 
 	// Small viewport: maxOffset is large; scroll to bottom.
 	m.height = 12
-	total, visible := helpScrollBounds(m)
+	total, visible := helpScrollBounds(m, helpVisibleHeight(m))
 	maxOffset := total - visible
 	if maxOffset <= 0 {
 		t.Skipf("help content too short at height=12 (maxOffset=%d)", maxOffset)
@@ -145,7 +145,7 @@ func TestHelpOffsetClampsOnResize(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 60})
 	m2 := updated.(Model)
 
-	total2, visible2 := helpScrollBounds(m2)
+	total2, visible2 := helpScrollBounds(m2, helpVisibleHeight(m2))
 	maxOffset2 := total2 - visible2
 	if maxOffset2 < 0 {
 		maxOffset2 = 0

@@ -50,21 +50,33 @@ func (m Model) render() string {
 		}
 		overlayH := m.height - previewFooterLines(m) - 1 // trailing \n appended below
 		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
+	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail:
+		var base string
+		if m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker {
+			base = renderPicker(m)
+		} else {
+			base = renderDashboard(m)
+		}
+		var popup string
+		switch m.mode {
+		case ModeActions:
+			popup = renderActionsBox(m)
+		case ModeConfirm:
+			popup = renderConfirmBox(m)
+		case ModeConfigPicker:
+			popup = renderConfigPickerBox(m)
+		case ModeHelp:
+			popup = renderHelpBox(m)
+		case ModeDetail:
+			popup = renderDetailBox(m)
+		}
+		overlayH := m.height - previewFooterLines(m) - 1
+		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
 	default:
 		// Header area varies by mode; list is always shown below.
 		switch m.mode {
 		case ModeSearch:
 			sb.WriteString(renderSearch(m))
-		case ModeConfirm:
-			sb.WriteString(renderConfirm(m))
-		case ModeConfigPicker:
-			sb.WriteString(renderConfigPicker(m))
-		case ModeHelp:
-			sb.WriteString(renderHelp(m))
-		case ModeDetail:
-			sb.WriteString(renderDetail(m))
-		case ModeActions:
-			sb.WriteString(renderActions(m))
 		default:
 			sb.WriteString(renderHeader(m))
 		}
@@ -86,6 +98,24 @@ func (m Model) render() string {
 	sb.WriteString(renderToasts(m))
 	sb.WriteString(renderFooter(m))
 
+	return sb.String()
+}
+
+// renderDashboard emits the canonical ModeList layout — header, deprecation
+// banner, legend, chips, inline filter, then list (or list+preview split).
+// Overlay-modal modes use this as the dimmed base view behind their popup.
+func renderDashboard(m Model) string {
+	var sb strings.Builder
+	sb.WriteString(renderHeader(m))
+	sb.WriteString(renderDeprecationBanner(m))
+	sb.WriteString(renderLegend(m))
+	sb.WriteString(renderChips(m, m.width))
+	sb.WriteString(renderInlineFilter(m))
+	if m.previewEnabled {
+		sb.WriteString(renderSplit(m))
+	} else {
+		sb.WriteString(renderList(m))
+	}
 	return sb.String()
 }
 

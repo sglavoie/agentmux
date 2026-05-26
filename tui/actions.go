@@ -187,25 +187,108 @@ func actionsFor(_ Model) []action {
 	}
 }
 
+// actionDescIndent is the column at which wrapped description text must
+// resume so continuation lines align under the first description column.
+// It matches the 22 visible columns produced by `%-2s  %-18s` for the
+// key+label prefix plus the 2-space separator before the description.
+const actionDescIndent = 24
+
 // renderActions renders the actions overlay for m.targetSession. Available
-// actions render in default text; unavailable ones render dim.
-func renderActions(m Model) string {
+// actions render in default text; unavailable ones render dim. Descriptions
+// are word-wrapped to descWidth so continuation lines indent under the
+// description column instead of dangling at the left edge.
+func renderActions(m Model, descWidth int) string {
+	if descWidth < 1 {
+		descWidth = 1
+	}
+	indent := strings.Repeat(" ", actionDescIndent)
+
 	var sb strings.Builder
 	sb.WriteString(styleHeader.Render("Actions for "+runningSessionDisplayTitle(m.targetSession)) + "\n\n")
 	for _, a := range actionsFor(m) {
 		avail := a.available(m)
-		// Display column: <2-cell key>  <label, padded>
 		keyCol := fmt.Sprintf("%-2s  %-18s", a.keyDisplay, a.label)
-		desc := a.description
-		line := "  " + keyCol + "  " + styleDim.Render(desc)
-		if !avail {
-			line = "  " + styleFooterUnavailable.Render(keyCol) + "  " + styleFooterUnavailable.Render(desc)
+		descLines := wrapText(a.description, descWidth)
+		if len(descLines) == 0 {
+			descLines = []string{""}
 		}
-		sb.WriteString(line + "\n")
+		style := styleDim
+		keyRendered := keyCol
+		if !avail {
+			style = styleFooterUnavailable
+			keyRendered = styleFooterUnavailable.Render(keyCol)
+		}
+		sb.WriteString(keyRendered + "  " + style.Render(descLines[0]) + "\n")
+		for _, cont := range descLines[1:] {
+			sb.WriteString(indent + style.Render(cont) + "\n")
+		}
 	}
 	sb.WriteByte('\n')
-	sb.WriteString(styleDim.Render("  press a key to run · esc to back out") + "\n")
+	sb.WriteString(styleDim.Render("press a key to run · esc/q to back out") + "\n")
 	return sb.String()
+}
+
+// wrapText greedy-wraps s into lines no wider than width. Tokens longer
+// than width are hard-broken so the caller can guarantee every emitted
+// line fits the available column budget.
+func wrapText(s string, width int) []string {
+	if width < 1 {
+		width = 1
+	}
+	if s == "" {
+		return nil
+	}
+	var lines []string
+	var cur strings.Builder
+	flush := func() {
+		if cur.Len() == 0 {
+			return
+		}
+		lines = append(lines, cur.String())
+		cur.Reset()
+	}
+	for _, word := range strings.Fields(s) {
+		for len(word) > width {
+			flush()
+			lines = append(lines, word[:width])
+			word = word[width:]
+		}
+		if cur.Len() == 0 {
+			cur.WriteString(word)
+			continue
+		}
+		if cur.Len()+1+len(word) > width {
+			flush()
+			cur.WriteString(word)
+			continue
+		}
+		cur.WriteByte(' ')
+		cur.WriteString(word)
+	}
+	flush()
+	return lines
+}
+
+// renderActionsBox wraps renderActions in styleOverlayBox so the actions
+// overlay can be composited as a centered modal on top of the dimmed
+// dashboard. styleOverlayBox.Width sets the outer box width (including
+// the 1-col border and 1-col padding on each side), so the usable text
+// column is innerWidth-4 and the description column budget is
+// innerWidth-4-actionDescIndent. The outer width is capped at 70 and
+// clamped to m.width-4 on narrow terminals to leave a 2-col margin.
+func renderActionsBox(m Model) string {
+	innerWidth := 70
+	if avail := m.width - 4; avail < innerWidth {
+		innerWidth = avail
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	descWidth := innerWidth - 4 - actionDescIndent
+	if descWidth < 1 {
+		descWidth = 1
+	}
+	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderActions(m, descWidth), "\n"))
 }
 
 // findConfigSession resolves a running session back to its configured project

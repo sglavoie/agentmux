@@ -2,13 +2,6 @@ package tui
 
 import "strings"
 
-// helpChrome is the number of vertical lines the help overlay reserves
-// outside the scrollable content window: title (1) + blank after title (1)
-// + scroll-up indicator slot (1) + scroll-down indicator slot (1) + footer
-// reserved by render() (1). ModeHelp does not surface toasts, so they do
-// not reserve space.
-const helpChrome = 5
-
 // helpMinVisible is the floor on the visible content window. Even on
 // extremely short terminals we always render at least this many content
 // lines so the overlay stays useful.
@@ -96,7 +89,7 @@ func helpContentLines() []string {
 // WindowSizeMsg handler so a viewport shrink doesn't leave a stale offset
 // the user has to scroll through before help reacts to j/k.
 func clampHelpOffset(m *Model) {
-	total, visible := helpScrollBounds(*m)
+	total, visible := helpScrollBounds(*m, helpVisibleHeight(*m))
 	maxOffset := total - visible
 	if maxOffset < 0 {
 		maxOffset = 0
@@ -109,16 +102,55 @@ func clampHelpOffset(m *Model) {
 	}
 }
 
+// helpOverlayInnerHeight returns the inner content height of the help
+// overlay box (everything inside the rounded border). The box uses
+// Padding(0, 1) so vertical padding is zero; the only chrome it owns is
+// the 2 border rows. The remaining 4-row margin keeps the modal floating
+// rather than consuming the full terminal even on short screens. A 30-row
+// cap prevents very tall terminals from rendering an oversized modal.
+func helpOverlayInnerHeight(m Model) int {
+	if m.height <= 0 {
+		return 0
+	}
+	// Inside the box we render: title (1) + blank (1) + ▲ slot (1) +
+	// content (≥ helpMinVisible) + ▼ slot (1). Ensure the inner height is
+	// large enough to fit that floor even on tiny terminals.
+	minInner := helpMinVisible + 4
+	avail := m.height - 6 // border (2) + safety margin (4)
+	if avail < minInner {
+		return minInner
+	}
+	if avail > 30 {
+		avail = 30
+	}
+	return avail
+}
+
+// helpVisibleHeight returns the number of scrollable content lines that
+// fit inside the help overlay's inner area (innerHeight minus title (1) +
+// blank (1) + ▲ slot (1) + ▼ slot (1) = 4 chrome lines).
+func helpVisibleHeight(m Model) int {
+	inner := helpOverlayInnerHeight(m)
+	if inner <= 0 {
+		return 0
+	}
+	v := inner - 4
+	if v < helpMinVisible {
+		return helpMinVisible
+	}
+	return v
+}
+
 // helpScrollBounds returns the total number of scrollable content lines
-// and the number of those lines visible at the model's current height.
+// and the number of those lines visible at the supplied content height.
 // When the model has no height yet (pre-WindowSizeMsg) the visible window
 // equals the total so scroll keys become no-ops naturally.
-func helpScrollBounds(m Model) (total, visible int) {
+func helpScrollBounds(m Model, visibleHeight int) (total, visible int) {
 	total = len(helpContentLines())
 	if m.height == 0 {
 		return total, total
 	}
-	visible = max(helpMinVisible, min(total, m.height-helpChrome))
+	visible = max(helpMinVisible, min(total, visibleHeight))
 	return total, visible
 }
 
@@ -142,7 +174,7 @@ func renderHelp(m Model) string {
 	}
 
 	n := len(lines)
-	_, visible := helpScrollBounds(m)
+	_, visible := helpScrollBounds(m, helpVisibleHeight(m))
 	offset := m.helpOffset
 	if offset+visible > n {
 		offset = n - visible
@@ -171,4 +203,19 @@ func renderHelp(m Model) string {
 	sb.WriteByte('\n')
 
 	return sb.String()
+}
+
+// renderHelpBox wraps renderHelp in styleOverlayBox so the keyboard-shortcut
+// overlay can be composited as a centered modal on top of the dimmed
+// dashboard. The inner width is capped at 70 columns and clamped to
+// m.width-4 on narrow terminals.
+func renderHelpBox(m Model) string {
+	innerWidth := 70
+	if avail := m.width - 4; avail < innerWidth {
+		innerWidth = avail
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderHelp(m), "\n"))
 }

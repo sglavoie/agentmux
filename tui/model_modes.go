@@ -95,7 +95,7 @@ func (m *Model) exitDetailMode() {
 }
 
 func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	total, visible := detailScrollBounds(m)
+	total, visible := detailScrollBounds(m, detailVisibleHeight(m))
 	maxOffset := total - visible
 	if maxOffset < 0 {
 		maxOffset = 0
@@ -150,7 +150,7 @@ func sessionDetailCmd(windowID int) tea.Cmd {
 }
 
 func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	total, visible := helpScrollBounds(m)
+	total, visible := helpScrollBounds(m, helpVisibleHeight(m))
 	switch msg.String() {
 	case keyEsc, keyQuestion, keyQ:
 		m.mode = ModeList

@@ -29,7 +29,7 @@ func TestRenderActionsOverlayHeader(t *testing.T) {
 		{TabID: 1, Base: "W:api", Account: "work", State: "bolt", WindowID: 10},
 	})
 	m = openActionsOverlay(t, m)
-	out := stripAnsi(renderActions(m))
+	out := stripAnsi(renderActions(m, 46))
 	if !strings.Contains(out, "Actions for ") {
 		t.Errorf("expected header prefix; got %q", out)
 	}
