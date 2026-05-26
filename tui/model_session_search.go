@@ -240,18 +240,41 @@ func (m Model) currentSessionQuery() transcript.Query {
 }
 
 // scrollSessionSearchToCursor keeps the cursor inside the visible window
-// after navigation. Mirrors scrollListToCursor.
+// after navigation. Mirrors scrollListToCursor: renderSessionSearchList
+// reserves one row for ▲ when offset > 0 and one row for ▼ when items
+// remain past the window, so the scroll budget must subtract them too —
+// otherwise the cursor falls off the bottom of the rendered list.
 func scrollSessionSearchToCursor(m *Model) {
+	total := len(m.sessionResults)
 	height := sessionSearchVisibleHeight(*m)
-	if height <= 0 || len(m.sessionResults) == 0 {
+	if height <= 0 || total == 0 {
 		m.sessionOffset = 0
 		return
+	}
+	if m.sessionCursor < 0 {
+		m.sessionCursor = 0
+	}
+	if m.sessionCursor >= total {
+		m.sessionCursor = total - 1
 	}
 	if m.sessionCursor < m.sessionOffset {
 		m.sessionOffset = m.sessionCursor
 	}
-	if m.sessionCursor >= m.sessionOffset+height {
-		m.sessionOffset = m.sessionCursor - height + 1
+	for m.sessionOffset < m.sessionCursor {
+		budget := height
+		if m.sessionOffset > 0 {
+			budget--
+		}
+		if m.sessionCursor < total-1 {
+			budget--
+		}
+		if budget < 1 {
+			budget = 1
+		}
+		if m.sessionCursor-m.sessionOffset+1 <= budget {
+			break
+		}
+		m.sessionOffset++
 	}
 	if m.sessionOffset < 0 {
 		m.sessionOffset = 0
