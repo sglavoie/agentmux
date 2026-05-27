@@ -77,7 +77,7 @@ func LoadIndexAt(path string) (*Index, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec := json.NewDecoder(f)
 	if err := idx.decodeIndexFile(dec); err != nil {

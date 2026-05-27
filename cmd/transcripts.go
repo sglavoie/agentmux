@@ -44,11 +44,11 @@ var transcriptsCompactCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "compacted transcript index\n")
-		fmt.Fprintf(cmd.OutOrStdout(), "legacy_search_text_entries: %d\n", result.LegacyFields)
-		fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_before: %d\n", result.StatusBefore.MetadataSize)
-		fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_after: %d\n", result.StatusAfter.MetadataSize)
-		fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.StatusAfter.SidecarCount)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "compacted transcript index\n")
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "legacy_search_text_entries: %d\n", result.LegacyFields)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_before: %d\n", result.StatusBefore.MetadataSize)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_after: %d\n", result.StatusAfter.MetadataSize)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.StatusAfter.SidecarCount)
 		return nil
 	},
 }
@@ -65,26 +65,26 @@ var transcriptsRebuildCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "rebuilt transcript sidecars\n")
-		fmt.Fprintf(cmd.OutOrStdout(), "metadata_path: %s\n", result.Status.MetadataPath)
-		fmt.Fprintf(cmd.OutOrStdout(), "visible_entries: %d\n", result.Status.VisibleEntries)
-		fmt.Fprintf(cmd.OutOrStdout(), "hidden_entries: %d\n", result.Status.HiddenEntries)
-		fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.Status.SidecarCount)
-		fmt.Fprintf(cmd.OutOrStdout(), "missing_sidecars: %d\n", result.Status.MissingSidecars)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "rebuilt transcript sidecars\n")
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_path: %s\n", result.Status.MetadataPath)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_entries: %d\n", result.Status.VisibleEntries)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_entries: %d\n", result.Status.HiddenEntries)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.Status.SidecarCount)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "missing_sidecars: %d\n", result.Status.MissingSidecars)
 		return nil
 	},
 }
 
 func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "metadata_path: %s\n", status.MetadataPath)
-	fmt.Fprintf(out, "metadata_size: %d\n", status.MetadataSize)
-	fmt.Fprintf(out, "sidecar_dir: %s\n", status.SidecarDir)
-	fmt.Fprintf(out, "sidecar_size: %d\n", status.SidecarSize)
-	fmt.Fprintf(out, "sidecar_count: %d\n", status.SidecarCount)
-	fmt.Fprintf(out, "visible_entries: %d\n", status.VisibleEntries)
-	fmt.Fprintf(out, "hidden_entries: %d\n", status.HiddenEntries)
-	fmt.Fprintf(out, "missing_sidecars: %d\n", status.MissingSidecars)
+	_, _ = fmt.Fprintf(out, "metadata_path: %s\n", status.MetadataPath)
+	_, _ = fmt.Fprintf(out, "metadata_size: %d\n", status.MetadataSize)
+	_, _ = fmt.Fprintf(out, "sidecar_dir: %s\n", status.SidecarDir)
+	_, _ = fmt.Fprintf(out, "sidecar_size: %d\n", status.SidecarSize)
+	_, _ = fmt.Fprintf(out, "sidecar_count: %d\n", status.SidecarCount)
+	_, _ = fmt.Fprintf(out, "visible_entries: %d\n", status.VisibleEntries)
+	_, _ = fmt.Fprintf(out, "hidden_entries: %d\n", status.HiddenEntries)
+	_, _ = fmt.Fprintf(out, "missing_sidecars: %d\n", status.MissingSidecars)
 }
 
 func transcriptReaders() map[string]transcript.Reader {

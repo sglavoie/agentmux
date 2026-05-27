@@ -62,6 +62,13 @@ func (h *Handler) resolveThreshold(account, action string) time.Duration {
 	return h.staleThresholds[action]
 }
 
+// SetClaudeContextLimitProbe toggles the periodic Claude context-limit probe.
+// Mirrors the [defaults.watchdog].claude_context_limit_probe config knob.
+// Safe to call once before the probe ticker fires.
+func (h *Handler) SetClaudeContextLimitProbe(enabled bool) {
+	h.claudeContextLimitProbeEnabled = enabled
+}
+
 // SetHookSilenceThresholds configures the global and per-account hook-silence
 // thresholds consumed by SweepHookSilence. The global value applies whenever a
 // per-account override is missing or zero. A global value of 0 disables the
@@ -165,6 +172,9 @@ func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 	for id := range h.notifiedStale {
 		collect(id)
 	}
+	for id := range h.contextLimitNotified {
+		collect(id)
+	}
 	for id := range h.lastSessionTitle {
 		collect(id)
 	}
@@ -183,6 +193,7 @@ func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 		delete(h.copilotToolPermissionState, id)
 		delete(h.subagentCount, id)
 		delete(h.notifiedStale, id)
+		delete(h.contextLimitNotified, id)
 		delete(h.lastSessionTitle, id)
 		delete(h.lastPipeMode, id)
 		delete(h.pendingReset, id)

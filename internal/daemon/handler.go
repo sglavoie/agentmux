@@ -105,6 +105,17 @@ type Handler struct {
 	// for that window so a future stall produces a fresh notification.
 	notifiedStale map[int]bool
 
+	// contextLimitNotified marks windows already swapped to the error icon by
+	// ProbeClaudeContextLimit during the current stall episode. Cleared in
+	// handler_state_update.go when an "active"-class event re-enters the window
+	// (S3) and in pruneClosedWindows when the window closes (S3).
+	contextLimitNotified map[int]bool
+
+	// claudeContextLimitProbeEnabled gates ProbeClaudeContextLimit. Set from
+	// [defaults.watchdog].claude_context_limit_probe at daemon startup.
+	// Defaults to true; an explicit `false` skips the probe entirely.
+	claudeContextLimitProbeEnabled bool
+
 	// lastSeenEventAt records the most recent event timestamp per account
 	// (any action, any window). The hook-silence sweep compares this against
 	// the configured threshold to detect accounts whose hooks have stopped
@@ -159,26 +170,28 @@ const maxEventsPerWindow = 5000
 // NewHandler creates a Handler with the given guard and notifier.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 	return &Handler{
-		guard:                      guard,
-		notifier:                   notifier,
-		startedAt:                  time.Now(),
-		staleThresholds:            make(map[string]time.Duration),
-		perAccountThresholds:       make(map[string]map[string]time.Duration),
-		perAccountHookSilence:      make(map[string]time.Duration),
-		activity:                   make(map[int]time.Time),
-		lastAction:                 make(map[int]string),
-		lastAccount:                make(map[int]string),
-		lastActiveEvent:            make(map[int]string),
-		copilotToolPermissionState: make(map[int]copilotToolPermissionState),
-		subagentCount:              make(map[int]int),
-		pendingReset:               make(map[int]resetFlowState),
-		notifiedStale:              make(map[int]bool),
-		lastSeenEventAt:            make(map[string]time.Time),
-		notifiedHookSilence:        make(map[string]bool),
-		lastSessionTitle:           make(map[int]string),
-		lastPipeMode:               make(map[int]bool),
-		eventLog:                   make(map[int][]SessionEvent),
-		windowMetadata:             make(map[int]WindowDebugMetadata),
+		guard:                          guard,
+		notifier:                       notifier,
+		startedAt:                      time.Now(),
+		staleThresholds:                make(map[string]time.Duration),
+		perAccountThresholds:           make(map[string]map[string]time.Duration),
+		perAccountHookSilence:          make(map[string]time.Duration),
+		activity:                       make(map[int]time.Time),
+		lastAction:                     make(map[int]string),
+		lastAccount:                    make(map[int]string),
+		lastActiveEvent:                make(map[int]string),
+		copilotToolPermissionState:     make(map[int]copilotToolPermissionState),
+		subagentCount:                  make(map[int]int),
+		pendingReset:                   make(map[int]resetFlowState),
+		notifiedStale:                  make(map[int]bool),
+		contextLimitNotified:           make(map[int]bool),
+		claudeContextLimitProbeEnabled: true,
+		lastSeenEventAt:                make(map[string]time.Time),
+		notifiedHookSilence:            make(map[string]bool),
+		lastSessionTitle:               make(map[int]string),
+		lastPipeMode:                   make(map[int]bool),
+		eventLog:                       make(map[int][]SessionEvent),
+		windowMetadata:                 make(map[int]WindowDebugMetadata),
 	}
 }
 

@@ -288,64 +288,6 @@ func TestIsPromptEvent(t *testing.T) {
 	}
 }
 
-func TestHasContextLimitMarker(t *testing.T) {
-	cases := []struct {
-		name string
-		text string
-		want bool
-	}{
-		{
-			name: "exact message",
-			text: "Context limit reached · /compact or /clear to continue",
-			want: true,
-		},
-		{
-			name: "window full variant",
-			text: "Context window is full\n/compact or /clear to continue",
-			want: true,
-		},
-		{
-			name: "missing recovery hint",
-			text: "Context limit reached",
-			want: false,
-		},
-		{
-			name: "unrelated text",
-			text: "All good here",
-			want: false,
-		},
-	}
-	for _, tc := range cases {
-		if got := hasContextLimitMarker(tc.text); got != tc.want {
-			t.Errorf("%s: hasContextLimitMarker(%q) = %v, want %v", tc.name, tc.text, got, tc.want)
-		}
-	}
-}
-
-func TestScreenShowsContextLimit(t *testing.T) {
-	cases := []struct {
-		name string
-		text string
-		want bool
-	}{
-		{
-			name: "warning at screen tail",
-			text: "earlier line\n\nContext limit reached · /compact or /clear to continue\n\n✻ Cooked for 17m 6s\n",
-			want: true,
-		},
-		{
-			name: "quoted text earlier in scrollback does not trip fallback",
-			text: "Context limit reached · /compact or /clear to continue\nuser was discussing the warning\n\nnormal latest output\nstill running fine\n",
-			want: false,
-		},
-	}
-	for _, tc := range cases {
-		if got := screenShowsContextLimit(tc.text); got != tc.want {
-			t.Errorf("%s: screenShowsContextLimit(%q) = %v, want %v", tc.name, tc.text, got, tc.want)
-		}
-	}
-}
-
 func TestResolveAction_CopilotTurnEndIsStop(t *testing.T) {
 	// Regression: commit 5858318 had reclassified agentStop as a non-terminal
 	// active+preserve-current event. That broke the icon transition because

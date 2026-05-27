@@ -61,6 +61,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	handler.SetStaleThresholds(global, perAccount)
 	hsGlobal, hsPerAccount := buildHookSilenceThresholds(cfg)
 	handler.SetHookSilenceThresholds(hsGlobal, hsPerAccount)
+	if cfg.Defaults.Watchdog.ClaudeContextLimitProbe != nil {
+		handler.SetClaudeContextLimitProbe(*cfg.Defaults.Watchdog.ClaudeContextLimitProbe)
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -136,6 +139,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			// Prompt probing is internal and best-effort. It should not keep
 			// an otherwise idle daemon alive.
 			handler.ProbeCodexScreenPrompts(time.Now())
+			handler.ProbeClaudeContextLimit(time.Now())
 
 		case err := <-serveErr:
 			return err

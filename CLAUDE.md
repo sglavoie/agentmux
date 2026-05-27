@@ -150,6 +150,7 @@ active = 600                 # seconds before a bolt-icon session is flagged sta
 subagent = 1800              # seconds before a robot-icon (subagent) is flagged
 compact = 180                # seconds before a compaction icon is flagged
 hook_silence = 14400         # seconds without any hook event for a profile
+claude_context_limit_probe = true  # detect Claude context-limit stalls; default true
 
 [[accounts]]
 name = "work"
@@ -174,6 +175,8 @@ disabled_events = ["Stop"]  # suppress hook events for this account
 
 **Deprecation**: `stale_active_threshold` is replaced by `[defaults.watchdog].active`. The legacy key still loads and is mirrored into `Watchdog.Active` when the new field is unset; both surface in `amx config show` via `Deprecations`.
 
+**`claude_context_limit_probe`**: when true (default), the daemon periodically scans Claude session screens for the "Context limit reached · /compact or /clear to continue" banner and, on detection, swaps the bolt ⚡ icon to error ❗ and fires a one-shot notification (gated independently by `[defaults.notifications].stop_failure`). Set to `false` to disable the probe entirely.
+
 The config path defaults to `~/.config/cc-manager/config.toml` and can be overridden with `amx_CONFIG` environment variable.
 
 ## Key conventions
@@ -184,6 +187,8 @@ Tab titles use the project title only. The dashboard shows the profile
 separately via its badge (`[W]`, `[P]`, etc.), while state icons (bolt `⚡`,
 stop `⏹`, key `🔑`, error `✗`) and the star marker (`★`) are prepended to the
 base title by `palette.BuildTitle()`.
+
+When a Claude session stalls at the context limit, no hook fires (the assistant turn never completes cleanly), so the bolt ⚡ would otherwise stay stuck. The daemon's periodic Claude screen probe (`internal/daemon/claude_context_limit_probe.go`) detects the recovery banner and swaps the icon to error ❗ via the `stop_failure` action. Opt out with `[defaults.watchdog].claude_context_limit_probe = false`.
 
 The palette and icon set are embedded at compile time in `internal/palette/` via `//go:embed`. To change a color or icon, edit the embedded JSON and rebuild.
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/contextlimit"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -114,7 +115,7 @@ func runWithDeps(
 		text, textErr := client.GetText(kitty.MatchWindowByID(windowID), "screen")
 		if textErr != nil {
 			slog.Debug("indicator: context-limit probe failed", "window_id", windowID, "event", eventOrAction, "err", textErr)
-		} else if screenShowsContextLimit(text) {
+		} else if contextlimit.ScreenShowsMarker(text) {
 			action = "stop_failure"
 			preservesIcon = false
 			contextLimitDetected = true

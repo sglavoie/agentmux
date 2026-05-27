@@ -56,6 +56,12 @@ compact = 180
 # hook events before the watchdog reports the account is likely
 # misconfigured. Defaults to 4 hours (14400 seconds).
 hook_silence = 14400
+# Periodic screen probe that detects Claude context-limit stalls (the
+# "Context limit reached · /compact or /clear to continue" banner). When a
+# stall is detected, the bolt ⚡ icon is swapped to the error ❗ icon and a
+# one-shot notification fires (gated by [defaults.notifications].stop_failure).
+# Set to false to disable the probe entirely. Default: true.
+# claude_context_limit_probe = true
 
 # Session archive: retention policy for the searchable session-transcript
 # index. transcripts.json stores metadata only; searchable text lives in

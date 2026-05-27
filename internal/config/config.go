@@ -143,6 +143,10 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.Watchdog.HookSilence == 0 {
 		cfg.Defaults.Watchdog.HookSilence = 14400
 	}
+	if cfg.Defaults.Watchdog.ClaudeContextLimitProbe == nil {
+		t := true
+		cfg.Defaults.Watchdog.ClaudeContextLimitProbe = &t
+	}
 	if cfg.Defaults.SessionArchive.KeepDays == 0 {
 		cfg.Defaults.SessionArchive.KeepDays = 30
 	}

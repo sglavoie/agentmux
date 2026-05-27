@@ -67,14 +67,22 @@ type WatchdogConfig struct {
 	Subagent    int `toml:"subagent"`     // SubagentStart-driven active icon; 0 → default (1800)
 	Compact     int `toml:"compact"`      // PreCompact-driven active icon; 0 → default (180)
 	HookSilence int `toml:"hook_silence"` // account-level hook-silence threshold; 0 → default (14400)
+
+	// ClaudeContextLimitProbe enables the periodic screen-text probe that
+	// detects Claude context-limit stalls and swaps the bolt ⚡ icon to the
+	// error ❗ icon. *bool so the load path can distinguish "user omitted the
+	// key" (nil → default true) from "user set claude_context_limit_probe =
+	// false" (&false → suppressed). Only consulted from the global
+	// [defaults.watchdog] block — per-profile overrides do not apply.
+	ClaudeContextLimitProbe *bool `toml:"claude_context_limit_probe"`
 }
 
 // SessionArchiveConfig controls retention for the searchable session-transcript
 // index. A zero value means "use the default" — applyDefaults populates
 // KeepDays so users can omit the section entirely.
 type SessionArchiveConfig struct {
-	KeepDays        int `toml:"keep_days"`          // days to retain index entries; 0 → default (30)
-	ScanMaxAgeDays  int `toml:"scan_max_age_days"`  // 0 → fall back to KeepDays; <0 → unlimited (scan everything)
+	KeepDays       int `toml:"keep_days"`         // days to retain index entries; 0 → default (30)
+	ScanMaxAgeDays int `toml:"scan_max_age_days"` // 0 → fall back to KeepDays; <0 → unlimited (scan everything)
 }
 
 // NotificationConfig controls which macOS notifications fire.

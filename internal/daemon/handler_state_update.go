@@ -511,6 +511,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			delete(h.pendingReset, req.WindowID)
 		}
 		delete(h.notifiedStale, req.WindowID)
+		delete(h.contextLimitNotified, req.WindowID)
 		delete(h.lastSessionTitle, req.WindowID)
 		delete(h.lastPipeMode, req.WindowID)
 		delete(h.lastAccount, req.WindowID)
@@ -617,6 +618,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if recordedAction != "" && recordedAction != "idle" && recordedAction != "clear" && recordedAction != "user_clear" && !isAutoApprovedPerm {
 		h.lastAction[req.WindowID] = recordedAction
 		delete(h.notifiedStale, req.WindowID)
+		delete(h.contextLimitNotified, req.WindowID)
 	}
 	meta := h.windowMetadata[req.WindowID]
 	meta.Durable.ActivityAt = now.Unix()
