@@ -119,8 +119,8 @@ func TestFooterListHintNoSessions(t *testing.T) {
 	if !strings.Contains(footer, "l launch") {
 		t.Errorf("expected l launch in no-session footer, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "? help") {
-		t.Errorf("expected ? help in no-session footer, got:\n%s", footer)
+	if !strings.Contains(footer, "R resort") {
+		t.Errorf("expected R resort in no-session footer, got:\n%s", footer)
 	}
 }
 

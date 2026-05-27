@@ -44,16 +44,7 @@ func TestListFooterPaletteOrder(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			out := stripAnsi(listFooterLine1(tc.m))
 			prev := -1
-			rowCount := 0
 			for _, e := range listFooterPalette {
-				if e.section == footerSectionRow {
-					rowCount++
-					if rowCount > listFooterRowCap {
-						// Entry collapsed into the overflow indicator;
-						// not expected to appear verbatim in the line.
-						continue
-					}
-				}
 				frag := e.key + " " + e.label
 				idx := strings.Index(out, frag)
 				if idx < 0 {
@@ -70,8 +61,7 @@ func TestListFooterPaletteOrder(t *testing.T) {
 }
 
 // TestListFooterSections asserts the section separator glyph appears between
-// each rendered section group, and that the row-section overflow indicator
-// appears whenever the row palette exceeds the visible cap.
+// each rendered section group.
 func TestListFooterSections(t *testing.T) {
 	out := stripAnsi(listFooterLine1(Model{
 		filtered: []session.RunningSession{{State: "bolt"}},
@@ -84,13 +74,10 @@ func TestListFooterSections(t *testing.T) {
 	}
 
 	rowEntries := footerEntriesForSection(footerSectionRow)
-	if len(rowEntries) > listFooterRowCap && !strings.Contains(out, "…") {
-		t.Errorf("expected overflow indicator '…' in %q", out)
-	}
 
 	// Section breaks must come after the row section's last visible entry
 	// and before the launch entry.
-	rowLast := rowEntries[listFooterRowCap-1]
+	rowLast := rowEntries[len(rowEntries)-1]
 	rowLastIdx := strings.Index(out, rowLast.key+" "+rowLast.label)
 	launchIdx := strings.Index(out, "l launch")
 	sepIdx := strings.Index(out, strings.TrimSpace(listFooterSectionSeparator))
@@ -162,10 +149,10 @@ func TestListFooterAvailability(t *testing.T) {
 			name: "empty list — only global actions available",
 			m:    Model{},
 			want: map[string]bool{
-				"enter": false, "a": false, "e": false, "r": false, "x": false,
+				"e": false, "r": false, "x": false,
 				"c": false, "C": false,
-				"o": false, "O": false, "y": false, "L": false, "m": false,
-				"l": true, "/": true, "S": true, "P": true, "p": true, "R": true, "?": true,
+				"o": false, "O": false,
+				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -174,10 +161,10 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: "key"}},
 			},
 			want: map[string]bool{
-				"enter": true, "a": true, "e": false, "r": true, "x": true,
+				"e": false, "r": true, "x": true,
 				"c": true, "C": true,
-				"o": false, "O": false, "y": true, "L": true, "m": true,
-				"l": true, "/": true, "S": true, "P": true, "p": true, "R": true, "?": true,
+				"o": false, "O": false,
+				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -186,10 +173,10 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: "bolt"}},
 			},
 			want: map[string]bool{
-				"enter": true, "a": true, "e": true, "r": true, "x": true,
+				"e": true, "r": true, "x": true,
 				"c": true, "C": false,
-				"o": false, "O": false, "y": true, "L": true, "m": true,
-				"l": true, "/": true, "S": true, "P": true, "p": true, "R": true, "?": true,
+				"o": false, "O": false,
+				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -198,10 +185,10 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: ""}},
 			},
 			want: map[string]bool{
-				"enter": true, "a": true, "e": false, "r": true, "x": true,
+				"e": false, "r": true, "x": true,
 				"c": true, "C": false,
-				"o": false, "O": false, "y": true, "L": true, "m": true,
-				"l": true, "/": true, "S": true, "P": true, "p": true, "R": true, "?": true,
+				"o": false, "O": false,
+				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -211,10 +198,10 @@ func TestListFooterAvailability(t *testing.T) {
 				typeBuffer: "ap",
 			},
 			want: map[string]bool{
-				"enter": false, "a": false, "e": false, "r": false, "x": false,
+				"e": false, "r": false, "x": false,
 				"c": false, "C": false,
-				"o": false, "O": false, "y": false, "L": false, "m": false,
-				"l": true, "/": true, "S": true, "P": true, "p": true, "R": true, "?": true,
+				"o": false, "O": false,
+				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
 	}

@@ -153,20 +153,13 @@ type footerEntry struct {
 const (
 	footerSectionRow    = "row"
 	footerSectionLaunch = "launch"
-	footerSectionFilter = "filter"
 	footerSectionApp    = "app"
 )
-
-// listFooterRowCap caps the number of row-section entries rendered on footer
-// line 1. Anything beyond is collapsed into a single overflow indicator so the
-// palette stays scannable; entries are still listed in the help overlay.
-const listFooterRowCap = 7
 
 // listFooterSectionOrder is the left-to-right ordering of sections on line 1.
 var listFooterSectionOrder = []string{
 	footerSectionRow,
 	footerSectionLaunch,
-	footerSectionFilter,
 	footerSectionApp,
 }
 
@@ -190,8 +183,6 @@ func hasRow(m Model) bool {
 // entry's availability function decides whether to render with the available
 // or unavailable style.
 var listFooterPalette = []footerEntry{
-	{"enter", "focus", footerSectionRow, hasRow},
-	{"a", "actions", footerSectionRow, hasRow},
 	{"e", "peek", footerSectionRow, func(m Model) bool {
 		return hasRow(m) && m.filtered[m.cursor].State == "bolt"
 	}},
@@ -220,16 +211,10 @@ var listFooterPalette = []footerEntry{
 		_, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
 		return ok
 	}},
-	{"y", "copy title", footerSectionRow, hasRow},
-	{"L", "lock", footerSectionRow, hasRow},
-	{"m", "mute", footerSectionRow, hasRow},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
-	{"/", "filter", footerSectionFilter, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
 	{"P", "plans", footerSectionApp, func(Model) bool { return true }},
-	{"p", "preview", footerSectionApp, func(Model) bool { return true }},
 	{"R", "resort", footerSectionApp, func(Model) bool { return true }},
-	{"?", "help", footerSectionApp, func(Model) bool { return true }},
 }
 
 func listFooterLine1(m Model) string {
@@ -247,14 +232,7 @@ func listFooterLine1(m Model) string {
 		}
 		first = false
 
-		visible := entries
-		overflow := false
-		if sec == footerSectionRow && len(entries) > listFooterRowCap {
-			visible = entries[:listFooterRowCap]
-			overflow = true
-		}
-
-		for i, e := range visible {
+		for i, e := range entries {
 			if i > 0 {
 				sb.WriteString(styleFooter.Render(" · "))
 			}
@@ -264,9 +242,6 @@ func listFooterLine1(m Model) string {
 			} else {
 				sb.WriteString(styleFooterUnavailable.Render(text))
 			}
-		}
-		if overflow {
-			sb.WriteString(styleFooter.Render(" · …"))
 		}
 	}
 	return sb.String()

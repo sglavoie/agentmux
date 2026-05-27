@@ -128,7 +128,7 @@ func TestEmptyListFooterRendersWithoutPanic(t *testing.T) {
 	// At least one app-section key must still render — the palette is
 	// fixed-order and reserves space for the row keys in their unavailable
 	// style regardless of selection.
-	if !strings.Contains(out, "? help") {
-		t.Errorf("expected ? help in empty-list footer, got:\n%s", out)
+	if !strings.Contains(out, "R resort") {
+		t.Errorf("expected R resort in empty-list footer, got:\n%s", out)
 	}
 }
