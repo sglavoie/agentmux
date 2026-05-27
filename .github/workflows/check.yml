@@ -11,60 +11,38 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq shellcheck
-
-      - name: Install system dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: brew install jq shellcheck
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Install just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - name: Build
+        run: just build
 
-      - name: Install Python dev dependencies
-        run: uv sync
+      - name: Test
+        run: just test
 
-      - name: Run tests
+      - name: Vet
+        run: just vet
+
+      - name: Check formatting
         run: |
-          python3 tests/test_toml_roundtrip.py
-          python3 tests/test_toml_writer.py
-          python3 tests/test_config_validator.py
-          python3 tests/test_hooks_validator.py
-          python3 tests/test_hooks_install.py
-          python3 tests/test_data_files.py
-          python3 tests/test_smoke.py
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
 
-      - name: Lint (Python + shell)
-        run: just lint
-
-      - name: Check Python formatting
-        run: uv run ruff format --check kittens/
-
-      - name: Typecheck
-        run: uv run mypy kittens/
-
-      - name: Audit keybindings
-        run: python3 scripts/check_keybindings.py
-
-      - name: Validate Bash completion syntax
-        run: bash -n completions/_amx.bash
-
-      - name: Check version consistency
-        run: |
-          python3 -c "
-          import tomllib
-          v = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
-          f = open('VERSION').read().strip()
-          assert v == f, f'Version mismatch: pyproject.toml={v} VERSION={f}'
-          print(f'Version {v} OK')
-          "
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
