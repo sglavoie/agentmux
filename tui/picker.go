@@ -98,6 +98,25 @@ func renderPickerList(m Model, height int) string {
 	acctColor := buildProfileColorMap(m)
 	harnessColor := buildHarnessColorByProfileMap(m)
 
+	// Pre-pass: compute column widths over the filtered set so the harness
+	// badge and state-flag columns line up vertically. The checkbox prefix
+	// ("[ ] " / "[*] ") is always 4 cells wide regardless of selection.
+	titleColW := 0
+	harnessColW := 0
+	for _, origIdx := range m.pickerFilteredIdx {
+		sess := m.pickerSessionWithResolvedProfile(origIdx)
+		w := 4 + runewidth.StringWidth(configSessionDisplayTitle(sess))
+		if w > titleColW {
+			titleColW = w
+		}
+		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
+			hw := runewidth.StringWidth("[" + acc.Name + "/" + acc.EffectiveHarness() + "]")
+			if hw > harnessColW {
+				harnessColW = hw
+			}
+		}
+	}
+
 	total := len(m.pickerFilteredIdx)
 	startIdx := 0
 	endIdx := total
@@ -160,10 +179,24 @@ func renderPickerList(m Model, height int) string {
 
 		title := configSessionDisplayTitle(sess)
 		coloredTitle := accountStyle(acctColor[sess.EffectiveProfile()]).Render(title)
-		line := "  " + prefix + coloredTitle
-		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
-			line += "  " + accountStyle(harnessColor[sess.EffectiveProfile()]).Render("["+acc.Name+"/"+acc.EffectiveHarness()+"]")
+		titlePad := titleColW - (4 + runewidth.StringWidth(title))
+		if titlePad < 0 {
+			titlePad = 0
 		}
+
+		var harnessCell string
+		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
+			text := "[" + acc.Name + "/" + acc.EffectiveHarness() + "]"
+			pad := harnessColW - runewidth.StringWidth(text)
+			if pad < 0 {
+				pad = 0
+			}
+			harnessCell = accountStyle(harnessColor[sess.EffectiveProfile()]).Render(text) + strings.Repeat(" ", pad)
+		} else {
+			harnessCell = strings.Repeat(" ", harnessColW)
+		}
+
+		line := "  " + prefix + coloredTitle + strings.Repeat(" ", titlePad) + "  " + harnessCell
 		if sess.EffectiveProfile() != defaultProfile {
 			line += "  " + styleDim.Render("(override)")
 		}
