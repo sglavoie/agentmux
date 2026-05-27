@@ -35,6 +35,14 @@ func pressKey(m Model, key string) Model {
 	return updated.(Model)
 }
 
+// typeString types each character of s into the model in sequence.
+func typeString(m Model, s string) Model {
+	for _, ch := range s {
+		m = pressKey(m, string(ch))
+	}
+	return m
+}
+
 // keyPress creates a KeyPressMsg whose String() returns the given key string.
 func keyPress(key string) tea.KeyPressMsg {
 	switch key {
