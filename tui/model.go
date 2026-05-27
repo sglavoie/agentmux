@@ -371,94 +371,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		m.sweepRecentTransitions()
-		cmds := []tea.Cmd{fetchCmd(m.client, m.cfg, m.sortMode), tickCmd(m.interval)}
-		now := time.Now()
-		checkDaemon := now.Sub(m.daemonHealthCheckedAt) >= daemonHealthInterval
-		checkHooks := now.Sub(m.hookHealthCheckedAt) >= hookHealthInterval
-		if checkDaemon || checkHooks {
-			cmds = append(cmds, healthCmd(m.cfg, m.amxBin, checkDaemon, checkHooks))
-		}
-		if m.mode == ModeDetail && m.detailWindowID != 0 {
-			cmds = append(cmds, sessionDetailCmd(m.detailWindowID))
-		}
-		return m, tea.Batch(cmds...)
+		return m.handleTick(msg)
 
 	case healthMsg:
-		now := time.Now()
-		if msg.daemonChecked {
-			m.daemonAlive = msg.daemonAlive
-			m.daemonHealthCheckedAt = now
-		}
-		if msg.hookChecked {
-			m.hookHealth = msg.hookSummary
-			m.hookHealthErr = msg.hookErr
-			m.hookHealthCheckedAt = now
-		}
-		return m, nil
+		return m.handleHealth(msg)
 
 	case previewTickMsg:
-		if !m.activePreviewEnabled() {
-			return m, nil
-		}
-		d := time.Duration(m.cfg.Defaults.Preview.RefreshMs) * time.Millisecond
-		return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
+		return m.handlePreviewTick(msg)
 
 	case previewContentMsg:
-		if !m.activePreviewEnabled() || msg.windowID != m.previewWindowID {
-			return m, nil
-		}
-		if msg.err != nil {
-			m.previewError = msg.err.Error()
-		} else {
-			m.previewError = ""
-			m.previewText = msg.text
-		}
-		return m, nil
+		return m.handlePreviewContent(msg)
 
 	case sessionsMsg:
-		m.err = nil
-		// Capture the prior cursor's row identity before the list is
-		// rebuilt so we can restore it post-refresh. Empty list → no
-		// prior selection to preserve.
-		var priorBase string
-		if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
-			priorBase = m.filtered[m.cursor].Base
-		}
-		m.lastActivity = msg.activity
-		m.watchdog = msg.watchdog
-		m.sessions = msg.sessions
-		m.recordTransitions()
-		m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
-		m.sortFiltered()
-		m.cursor = restoreCursor(m.filtered, priorBase, m.lastActivity, m.idleThreshold)
-		clampListOffset(&m)
-		scrollListToCursor(&m)
-		return m, nil
+		return m.handleSessionsMsg(msg)
 
 	case errMsg:
 		m.err = msg.err
 		return m, nil
 
 	case actionDoneMsg:
-		m.actionErr = msg.err
-		// Trigger a refresh so the list reflects the new state.
-		return m, fetchCmd(m.client, m.cfg, m.sortMode)
+		return m.handleActionDone(msg)
 
 	case resortDoneMsg:
-		m.actionErr = msg.err
-		var cmds []tea.Cmd
-		var t Toast
-		if msg.err != nil {
-			t = Toast{Severity: toastError, Text: "Resort failed: " + msg.err.Error()}
-		} else {
-			t = Toast{Severity: toastSuccess, Text: "Tabs resorted"}
-		}
-		if c := m.pushToast(t); c != nil {
-			cmds = append(cmds, c)
-		}
-		cmds = append(cmds, fetchCmd(m.client, m.cfg, m.sortMode))
-		return m, tea.Batch(cmds...)
+		return m.handleResortDone(msg)
 
 	case launchProgressMsg:
 		return m.handleLaunchProgress(msg)
@@ -468,151 +403,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.sweepToasts()
 
 	case pickerOpenDoneMsg:
-		if msg.err != nil {
-			m.actionErr = msg.err
-			return m, fetchCmd(m.client, m.cfg, m.sortMode)
-		}
-		return m, tea.Quit
+		return m.handlePickerOpenDone(msg)
 
 	case focusDoneMsg:
-		if msg.err != nil {
-			m.actionErr = msg.err
-			return m, nil
-		}
-		return m, tea.Quit
+		return m.handleFocusDone(msg)
 
 	case peekDoneMsg:
-		if msg.err != nil {
-			m.actionErr = msg.err
-		}
-		return m, nil
+		return m.handlePeekDone(msg)
 
 	case detailEventsMsg:
-		// Stale responses (mode changed or different window than the one
-		// currently shown in the pane) are dropped silently so a slow
-		// daemon roundtrip cannot overwrite a fresh request's loading
-		// state or repopulate the pane after the user closed it.
-		if m.mode != ModeDetail || msg.windowID != m.detailWindowID {
-			return m, nil
-		}
-		m.detailEvents = msg.events
-		m.detailErr = msg.err
-		m.detailLoading = false
-		// A refresh that shrinks the event ring (daemon GC, or an empty
-		// reply) can leave detailScroll above the new maxOffset. The
-		// renderer clamps for display, but the next j/k/pgup/pgdn press
-		// would operate on the stale offset and chew through dead rows
-		// before the viewport reacts — mirror the WindowSizeMsg clamp.
-		clampDetailScroll(&m)
-		return m, nil
+		return m.handleDetailEvents(msg)
 
 	case sessionsRefreshDoneMsg:
-		m.sessionRefreshErr = msg.err
-		// Always follow a refresh with a search dispatch — even on error,
-		// because Refresh updates whatever profiles succeeded and the old
-		// index entries are still usable. Reuse the seq the refresh was
-		// dispatched with so a chip change made mid-refresh wins.
-		if msg.seq < m.sessionSearchSeq {
-			// A newer dispatch is already in flight; defer to it.
-			return m, nil
-		}
-		return m, runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
+		return m.handleSessionsRefreshDone(msg)
 
 	case sessionSearchDebounceMsg:
-		// Stale debounce ticks (the user kept typing) are silently dropped.
-		if msg.seq != m.sessionSearchSeq {
-			return m, nil
-		}
-		return m, runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
+		return m.handleSessionSearchDebounce(msg)
 
 	case sessionSearchDoneMsg:
-		if msg.seq != m.sessionSearchSeq {
-			return m, nil
-		}
-		m.sessionLoading = false
-		m.sessionSearchErr = msg.err
-		m.sessionResults = msg.results
-		if m.sessionCursor >= len(m.sessionResults) {
-			m.sessionCursor = len(m.sessionResults) - 1
-			if m.sessionCursor < 0 {
-				m.sessionCursor = 0
-			}
-		}
-		scrollSessionSearchToCursor(&m)
-		return m, nil
+		return m.handleSessionSearchDone(msg)
 
 	case plansRefreshDoneMsg:
-		m.planRefreshErr = msg.err
-		if msg.seq < m.planSearchSeq {
-			return m, nil
-		}
-		return m, runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
+		return m.handlePlansRefreshDone(msg)
 
 	case planSearchDebounceMsg:
-		if msg.seq != m.planSearchSeq {
-			return m, nil
-		}
-		return m, runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
+		return m.handlePlanSearchDebounce(msg)
 
 	case planSearchDoneMsg:
-		if msg.seq != m.planSearchSeq {
-			return m, nil
-		}
-		m.planLoading = false
-		m.planSearchErr = msg.err
-		m.planResults = msg.results
-		if m.planCursor >= len(m.planResults) {
-			m.planCursor = len(m.planResults) - 1
-			if m.planCursor < 0 {
-				m.planCursor = 0
-			}
-		}
-		scrollPlanSearchToCursor(&m)
-		return m, nil
+		return m.handlePlanSearchDone(msg)
 
 	case planEditorErrMsg:
-		if c := m.pushToast(Toast{Severity: toastError, Text: "open editor: " + msg.err.Error()}); c != nil {
-			return m, c
-		}
-		return m, nil
+		return m.handlePlanEditorErr(msg)
 
 	case planFilesLoadedMsg:
-		// Drop stale loads: either the user already left the viewer, or
-		// pressed Enter on a different plan before this one finished.
-		if m.mode != ModePlanView || msg.seq != m.planViewerLoadSeq {
-			return m, nil
-		}
-		m.planViewerLoading = false
-		m.planViewerLoadErr = msg.err
-		m.planViewerLines = msg.lines
-		m.planViewerMatchLines = computePlanViewerMatches(m.planViewerLines, m.planQuery)
-		m.planViewerMatchIdx = 0
-		m.planViewerScroll = 0
-		m.planViewerCursor = 0
-		if len(m.planViewerMatchLines) > 0 {
-			m.planViewerCursor = m.planViewerMatchLines[0]
-		}
-		scrollPlanViewerToCursor(&m)
-		return m, nil
+		return m.handlePlanFilesLoaded(msg)
 
 	case viewerMessagesLoadedMsg:
-		// Drop stale loads: either the user already left the viewer, or
-		// pressed Enter on a different row before this one finished.
-		if m.mode != ModeSessionView || msg.seq != m.viewerLoadSeq {
-			return m, nil
-		}
-		m.viewerLoading = false
-		m.viewerLoadErr = msg.err
-		m.viewerMessages = msg.messages
-		m.viewerMatchLines = computeViewerMatches(m.viewerMessages, m.sessionQuery)
-		m.viewerMatchIdx = 0
-		m.viewerScroll = 0
-		m.viewerCursor = 0
-		if len(m.viewerMatchLines) > 0 {
-			m.viewerCursor = m.viewerMatchLines[0]
-		}
-		scrollViewerToCursor(&m)
-		return m, nil
+		return m.handleViewerMessagesLoaded(msg)
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
