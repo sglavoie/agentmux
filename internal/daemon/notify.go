@@ -115,10 +115,11 @@ type Notifier struct {
 	debounce        time.Duration
 	dispatchTimeout time.Duration
 	cfg             *config.NotificationConfig
-	now             func() time.Time // injectable for tests
-	dispatch        dispatchFn       // injectable for tests
-	focus           focusClient      // optional; nil when the daemon has no Kitty client wired
-	ctx             context.Context  // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
+	now             func() time.Time   // injectable for tests
+	dispatch        dispatchFn         // injectable for tests
+	focus           focusClient        // optional; nil when the daemon has no Kitty client wired
+	isMuted         func(int) bool     // optional; nil treats every window as unmuted (tests + pre-wire)
+	ctx             context.Context    // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
 }
 
 // NewNotifier creates a Notifier with the given notification config.
@@ -143,6 +144,29 @@ func (n *Notifier) SetFocus(f focusClient) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.focus = f
+}
+
+// SetIsMuted installs the closure MaybeNotify consults to suppress
+// notifications for muted windows. The closure is typically Handler.IsMuted,
+// which reads the daemon's mutedWindows cache populated from Request.Muted.
+// A nil closure (or one that returns false) leaves the gate open.
+func (n *Notifier) SetIsMuted(fn func(int) bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.isMuted = fn
+}
+
+// IsMuted reports whether the configured isMuted closure marks windowID as
+// muted. Returns false when no closure is installed so tests and unwired
+// pre-Run code paths behave identically to "not muted".
+func (n *Notifier) IsMuted(windowID int) bool {
+	n.mu.Lock()
+	fn := n.isMuted
+	n.mu.Unlock()
+	if fn == nil {
+		return false
+	}
+	return fn(windowID)
 }
 
 // SetParentContext installs the daemon's lifecycle context as the parent of
@@ -188,6 +212,9 @@ func selectDispatcher() dispatcher {
 // silently no-ops in that case.
 func (n *Notifier) MaybeNotify(windowID int, sessionTitle, account, action string, pipeMode bool) {
 	if pipeMode {
+		return
+	}
+	if n.IsMuted(windowID) {
 		return
 	}
 	if !notifyableActions[action] {

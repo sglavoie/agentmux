@@ -36,6 +36,7 @@ type Request struct {
 	Reason           string      `json:"reason,omitempty"`             // normalized reason payload field
 	ContextLimit     bool        `json:"context_limit,omitempty"`      // true when indicator detected a context-limit stop/failure
 	ResetFlow        bool        `json:"reset_flow,omitempty"`         // true when the event belongs to a user-initiated session reset flow
+	Muted            bool        `json:"muted,omitempty"`              // true when the originating window is muted (cc_mute set); daemon caches and gates notifications
 }
 
 // Response is a JSON message sent by the daemon back to the client.

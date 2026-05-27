@@ -123,3 +123,47 @@ func TestDirectLockKeyNoOpWhenListEmpty(t *testing.T) {
 		t.Errorf("L on empty list: expected ModeList, got %d", m2.mode)
 	}
 }
+
+// TestDirectMuteKeyTogglesFromList verifies pressing m from ModeList
+// dispatches a toggle command without opening the actions overlay. The cmd
+// itself is opaque (it bridges to session.Mute/Unmute via the kitty client),
+// so we only assert it was returned and the model stayed put. Mirrors the
+// lock-key direct-press contract above.
+func TestDirectMuteKeyTogglesFromList(t *testing.T) {
+	m := testModelWithSessions()
+	rs := session.RunningSession{
+		TabID:     1,
+		WindowID:  10,
+		Base:      "api",
+		Account:   "work",
+		Profile:   "work",
+		Directory: "/home/user/api",
+	}
+	m = loadSessions(m, []session.RunningSession{rs})
+
+	updated, cmd := m.Update(keyPress("m"))
+	m2 := updated.(Model)
+	if cmd == nil {
+		t.Fatal("m on list mode: expected toggle cmd, got nil")
+	}
+	if m2.mode != ModeList {
+		t.Errorf("m on list mode: expected ModeList preserved, got %d", m2.mode)
+	}
+	if m2.actionErr != nil {
+		t.Errorf("m on list mode: expected actionErr cleared, got %v", m2.actionErr)
+	}
+}
+
+// TestDirectMuteKeyNoOpWhenListEmpty guards against panics when m fires on
+// an empty list — the early-return branch must not dereference the cursor.
+func TestDirectMuteKeyNoOpWhenListEmpty(t *testing.T) {
+	m := testModelWithSessions()
+	updated, cmd := m.Update(keyPress("m"))
+	m2 := updated.(Model)
+	if cmd != nil {
+		t.Errorf("m on empty list: expected nil cmd, got %v", cmd)
+	}
+	if m2.mode != ModeList {
+		t.Errorf("m on empty list: expected ModeList, got %d", m2.mode)
+	}
+}

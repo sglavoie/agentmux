@@ -374,6 +374,13 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					return m, toggleLockCmd(m.client, s)
 				}
 				return m, nil
+			case keyM:
+				if len(m.filtered) > 0 {
+					s := m.filtered[m.cursor]
+					m.actionErr = nil
+					return m, toggleMuteCmd(m.client, s)
+				}
+				return m, nil
 			case keyO:
 				if len(m.filtered) > 0 {
 					s := m.filtered[m.cursor]

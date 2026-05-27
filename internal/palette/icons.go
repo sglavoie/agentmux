@@ -8,6 +8,7 @@ import (
 type rawIcons struct {
 	Star       string            `json:"star"`
 	Lock       string            `json:"lock"`
+	Mute       string            `json:"mute"`
 	States     map[string]string `json:"states"`
 	StateOrder []string          `json:"state_order"`
 }
@@ -26,6 +27,9 @@ func StarIcon() string { return ico.Star }
 // LockIcon returns the lock icon character.
 func LockIcon() string { return ico.Lock }
 
+// MuteIcon returns the mute icon character.
+func MuteIcon() string { return ico.Mute }
+
 // StateIcon returns the icon character for a named state ("bolt", "stop", "key",
 // "warning", "error", "subagent", "compact"), or "" if the state name is
 // unknown.
@@ -39,14 +43,26 @@ func StateOrder() []string {
 }
 
 // ParseTitle parses a tab title into its components.
-// Tab title format: [★][<state-icon>]<base>
+// Tab title format: [★][🔇][<state-icon>]<base>
 // Returns base title, state name
 // ("bolt"/"stop"/"key"/"warning"/"error"/"subagent"/"compact"/"question"/""),
-// and starred flag.
+// and starred flag. Use ParseTitleFull to also recover the muted flag.
 func ParseTitle(title string) (base, state string, starred bool) {
+	base, state, starred, _ = ParseTitleFull(title)
+	return
+}
+
+// ParseTitleFull parses a tab title into its components, including the muted
+// flag carried by an optional 🔇 prefix.
+// Tab title format: [★][🔇][<state-icon>]<base>
+func ParseTitleFull(title string) (base, state string, starred, muted bool) {
 	if ico.Star != "" && strings.HasPrefix(title, ico.Star) {
 		starred = true
 		title = title[len(ico.Star):]
+	}
+	if ico.Mute != "" && strings.HasPrefix(title, ico.Mute) {
+		muted = true
+		title = title[len(ico.Mute):]
 	}
 	for _, name := range ico.StateOrder {
 		icon := ico.States[name]
@@ -66,11 +82,21 @@ func ParseTitle(title string) (base, state string, starred bool) {
 }
 
 // BuildTitle constructs a tab title from its components.
-// Output format: [★][<state-icon>]<base>
+// Output format: [★][<state-icon>]<base>. Use BuildTitleFull to include the
+// 🔇 mute prefix.
 func BuildTitle(base, state string, starred bool) string {
+	return BuildTitleFull(base, state, starred, false)
+}
+
+// BuildTitleFull constructs a tab title from its components, including an
+// optional 🔇 mute prefix. Output format: [★][🔇][<state-icon>]<base>.
+func BuildTitleFull(base, state string, starred, muted bool) string {
 	var sb strings.Builder
 	if starred {
 		sb.WriteString(ico.Star)
+	}
+	if muted && ico.Mute != "" {
+		sb.WriteString(ico.Mute)
 	}
 	if icon, ok := ico.States[state]; ok && state != "" {
 		sb.WriteString(icon)
@@ -79,11 +105,14 @@ func BuildTitle(base, state string, starred bool) string {
 	return sb.String()
 }
 
-// StripIcons removes the star prefix and any state icon from a title,
-// returning the plain base title.
+// StripIcons removes the star prefix, optional mute prefix, and any state
+// icon from a title, returning the plain base title.
 func StripIcons(title string) string {
 	if ico.Star != "" {
 		title = strings.TrimPrefix(title, ico.Star)
+	}
+	if ico.Mute != "" {
+		title = strings.TrimPrefix(title, ico.Mute)
 	}
 	for _, name := range ico.StateOrder {
 		icon := ico.States[name]
@@ -101,6 +130,9 @@ func StripIcons(title string) string {
 func DetectState(title string) string {
 	if ico.Star != "" {
 		title = strings.TrimPrefix(title, ico.Star)
+	}
+	if ico.Mute != "" {
+		title = strings.TrimPrefix(title, ico.Mute)
 	}
 	for _, name := range ico.StateOrder {
 		icon := ico.States[name]

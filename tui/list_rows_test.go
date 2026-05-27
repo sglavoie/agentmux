@@ -35,6 +35,32 @@ func TestFormatRowLockIconPresentWhenLocked(t *testing.T) {
 	}
 }
 
+// TestFormatRowMuteIconPresentWhenMuted verifies that a muted session renders
+// the 🔇 glyph in the mute column and an unmuted session does not.
+func TestFormatRowMuteIconPresentWhenMuted(t *testing.T) {
+	s := session.RunningSession{
+		WindowID:  1,
+		Account:   "work",
+		Project:   "api",
+		Title:     "api",
+		Base:      "api",
+		Directory: "/tmp",
+	}
+	acctColor := map[string]string{"work": "blue"}
+	harnessColor := map[string]string{}
+
+	unmuted := stripAnsi(formatRow(s, acctColor, harnessColor, 120, ""))
+	if strings.Contains(unmuted, palette.MuteIcon()) {
+		t.Fatalf("unmuted row should not contain %q; got %q", palette.MuteIcon(), unmuted)
+	}
+
+	s.Muted = true
+	muted := stripAnsi(formatRow(s, acctColor, harnessColor, 120, ""))
+	if !strings.Contains(muted, palette.MuteIcon()) {
+		t.Fatalf("muted row should contain %q; got %q", palette.MuteIcon(), muted)
+	}
+}
+
 // TestRenderListLockedRowIsDimmed verifies that the per-row styling switch
 // in renderListAt wraps a locked row in styleDim. Because styleDim emits the
 // Faint (\x1b[2m) ANSI escape and the locked-row case sits above the

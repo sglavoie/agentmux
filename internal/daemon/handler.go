@@ -138,6 +138,13 @@ type Handler struct {
 	// so stale notifications honor the same silence rule.
 	lastPipeMode map[int]bool
 
+	// mutedWindows caches the most recent Request.Muted value per window so
+	// MaybeNotify (and sweep paths that lack a Request) can gate notifications
+	// without consulting Kitty. The kitty user var cc_mute remains the durable
+	// source of truth — the cache repopulates from the next inbound request
+	// after a daemon restart. Protected by stateMu.
+	mutedWindows map[int]bool
+
 	// eventLog stores a per-window ring buffer of recent state events. Bounded
 	// by maxEventsPerWindow; older entries are dropped from the front. Preserved
 	// across terminal transitions so export-events can inspect ended sessions;
@@ -190,6 +197,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		notifiedHookSilence:            make(map[string]bool),
 		lastSessionTitle:               make(map[int]string),
 		lastPipeMode:                   make(map[int]bool),
+		mutedWindows:                   make(map[int]bool),
 		eventLog:                       make(map[int][]SessionEvent),
 		windowMetadata:                 make(map[int]WindowDebugMetadata),
 	}
@@ -295,6 +303,17 @@ func (h *Handler) handleEventsExport(req Request) Response {
 	}
 	h.stateMu.Unlock()
 	return Response{OK: true, EventsByWindow: out, WindowMetadata: meta}
+}
+
+// IsMuted reports whether the given window is currently marked as muted. The
+// daemon populates this cache from Request.Muted on every state update; sweep
+// paths that lack a Request consult it via the Notifier closure installed in
+// daemon.Run.
+func (h *Handler) IsMuted(windowID int) bool {
+	h.stateMu.Lock()
+	muted := h.mutedWindows[windowID]
+	h.stateMu.Unlock()
+	return muted
 }
 
 func (h *Handler) handleShutdown() Response {

@@ -307,6 +307,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	h.stateMu.Lock()
 	req = h.applyResetFlowLocked(req)
 	h.touchWindowMetadataLocked(req)
+	if req.Muted {
+		h.mutedWindows[req.WindowID] = true
+	} else {
+		delete(h.mutedWindows, req.WindowID)
+	}
 	h.stateMu.Unlock()
 
 	slog.Debug("hook event received",

@@ -31,7 +31,7 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 
 	for _, ow := range windows {
 		for _, tab := range ow.Tabs {
-			baseTitle, iconState, starred := palette.ParseTitle(tab.Title)
+			baseTitle, iconState, starred, muted := palette.ParseTitleFull(tab.Title)
 			if !codexPromptProbeCanOverwrite(iconState) {
 				continue
 			}
@@ -39,7 +39,7 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 				if win.UserVars.EffectiveHarness() != harness.Codex {
 					continue
 				}
-				h.probeCodexWindow(now, win.ID, tab.Title, baseTitle, iconState, starred, win.UserVars)
+				h.probeCodexWindow(now, win.ID, tab.Title, baseTitle, iconState, starred, muted, win.UserVars)
 			}
 		}
 	}
@@ -61,6 +61,7 @@ func (h *Handler) probeCodexWindow(
 	baseTitle string,
 	currentIconState string,
 	starred bool,
+	muted bool,
 	userVars kitty.UserVars,
 ) {
 	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(windowID), "screen")
@@ -88,7 +89,7 @@ func (h *Handler) probeCodexWindow(
 	}
 	h.recordCodexPromptProbeState(now, windowID, baseTitle, currentIconState, userVars, classification, iconState)
 	if iconState != currentIconState {
-		newTitle := palette.BuildTitle(baseTitle, iconState, starred)
+		newTitle := palette.BuildTitleFull(baseTitle, iconState, starred, muted)
 		if newTitle != tabTitle {
 			if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
 				slog.Debug("codex prompt probe: set tab title failed", "window_id", windowID, "err", err)

@@ -43,6 +43,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	guard := NewStateGuard(guardDur)
 	notifier := NewNotifier(&cfg.Defaults.Notifications)
 	handler := NewHandler(guard, notifier)
+	notifier.SetIsMuted(handler.IsMuted)
 
 	server, err := NewServer(socketPath, handler)
 	if err != nil {

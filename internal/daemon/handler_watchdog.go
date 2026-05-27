@@ -184,6 +184,9 @@ func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 	for id := range h.pendingReset {
 		collect(id)
 	}
+	for id := range h.mutedWindows {
+		collect(id)
+	}
 	for id := range closed {
 		delete(h.eventLog, id)
 		delete(h.activity, id)
@@ -197,6 +200,7 @@ func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 		delete(h.lastSessionTitle, id)
 		delete(h.lastPipeMode, id)
 		delete(h.pendingReset, id)
+		delete(h.mutedWindows, id)
 	}
 	h.stateMu.Unlock()
 	// Notifier cooldown/pending entries are keyed by window ID too. Without
@@ -324,8 +328,8 @@ func (h *Handler) clearStaleTitle(windowID int, fallbackTitle string) {
 	if !ok {
 		return
 	}
-	base, _, starred := palette.ParseTitle(tab.Title)
-	newTitle := palette.BuildTitle(base, "", starred)
+	base, _, starred, muted := palette.ParseTitleFull(tab.Title)
+	newTitle := palette.BuildTitleFull(base, "", starred, muted)
 	if newTitle == tab.Title {
 		return
 	}

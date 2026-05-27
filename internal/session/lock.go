@@ -14,3 +14,16 @@ func Lock(client kitty.KittyClient, windowID int) error {
 func Unlock(client kitty.KittyClient, windowID int) error {
 	return client.SetUserVars(kitty.MatchWindowByID(windowID), map[string]string{"amx_locked": ""})
 }
+
+// Mute marks the session anchored at windowID as muted. Muted sessions render
+// a 🔇 glyph on the tab title and suppress all macOS notifications originating
+// from that window.
+func Mute(client kitty.KittyClient, windowID int) error {
+	return client.SetUserVars(kitty.MatchWindowByID(windowID), map[string]string{"cc_mute": "1"})
+}
+
+// Unmute clears the mute state on the session anchored at windowID. As with
+// Unlock, the user var is set to empty rather than deleted.
+func Unmute(client kitty.KittyClient, windowID int) error {
+	return client.SetUserVars(kitty.MatchWindowByID(windowID), map[string]string{"cc_mute": ""})
+}

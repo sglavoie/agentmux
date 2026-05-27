@@ -31,6 +31,7 @@ const (
 	keyOpenEditor  = "O" // opens the project directory in the configured editor
 	keyResort      = "R" // re-sort tabs in Kitty to repair drifted physical order
 	keyLock        = "L" // toggle the session lock (blocks close/restart/override)
+	keyM           = "m" // toggle session mute (suppresses notifications)
 	keyD           = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
 	keySessionSearch = "S" // opens ModeSessionSearch (past harness transcripts)
 	keyPlanSearch    = "P" // opens ModePlanSearch (past agent plans)

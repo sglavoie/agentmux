@@ -202,6 +202,7 @@ func TestBuildStateUpdateRequest_CarriesNormalizedDebugContext(t *testing.T) {
 		false,
 		true,
 		false,
+		false,
 	)
 
 	want := daemon.Request{
@@ -481,6 +482,7 @@ func TestBuildStateUpdateRequest_CarriesResetFlow(t *testing.T) {
 		false,
 		false,
 		true,
+		false,
 	)
 
 	if !req.ResetFlow {

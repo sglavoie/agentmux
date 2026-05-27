@@ -92,7 +92,7 @@ func fetchDaemonState() (map[int]time.Time, map[int]daemon.WatchdogState) {
 // dashboard already updated the title directly.
 func clearStatusCmd(client kitty.KittyClient, s session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		newTitle := palette.BuildTitle(s.Base, "", s.Starred)
+		newTitle := palette.BuildTitleFull(s.Base, "", s.Starred, s.Muted)
 		err := client.SetTabTitle(kitty.MatchTabByWindowID(s.WindowID), newTitle)
 		_, _ = daemon.NewClient().Send(daemon.Request{
 			Type:         daemon.TypeStateUpdate,

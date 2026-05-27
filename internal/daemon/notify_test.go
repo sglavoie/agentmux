@@ -294,6 +294,69 @@ func TestNotifier_CooldownPerWindow(t *testing.T) {
 	})
 }
 
+// TestMaybeNotify_SuppressedWhenMuted asserts that every notifyable action
+// becomes a no-op when the IsMuted closure reports the window as muted.
+// The mute gate sits between the pipeMode early-out and the notifyable-action
+// check, so it must cover stop / permission / failure / stop_failure /
+// elicitation / stale / hook_silence in one pass.
+func TestMaybeNotify_SuppressedWhenMuted(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		enabled := true
+		cfg := &config.NotificationConfig{
+			Stop:        true,
+			Permission:  true,
+			Error:       true,
+			StopFailure: &enabled,
+		}
+		n, calls := newTestNotifier(cfg)
+		n.SetIsMuted(func(id int) bool { return id == 1 })
+
+		for _, action := range []string{
+			"stop", "permission", "failure", "stop_failure",
+			"elicitation", "stale", "hook_silence",
+		} {
+			n.MaybeNotify(1, "W:api", "work", action, false)
+		}
+		synctest.Wait()
+		if calls.len() != 0 {
+			t.Fatalf("muted window should suppress every notifyable action, got %d calls: %+v",
+				calls.len(), calls.snapshot())
+		}
+
+		// Unmuted window with the same dispatcher still fires.
+		n.MaybeNotify(2, "P:dotfiles", "work", "stop", false)
+		synctest.Wait()
+		if calls.len() != 1 {
+			t.Fatalf("unmuted window should still notify, got %d calls", calls.len())
+		}
+	})
+}
+
+// TestMaybeNotify_MuteRespectedAfterUnmute confirms the gate is dynamic:
+// flipping IsMuted from true to false re-opens the notification path without
+// requiring any other state change.
+func TestMaybeNotify_MuteRespectedAfterUnmute(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := &config.NotificationConfig{Stop: true}
+		n, calls := newTestNotifier(cfg)
+		muted := true
+		n.SetIsMuted(func(int) bool { return muted })
+
+		n.MaybeNotify(1, "W:api", "", "stop", false)
+		synctest.Wait()
+		if calls.len() != 0 {
+			t.Fatalf("muted stop should be suppressed, got %d calls", calls.len())
+		}
+
+		muted = false
+		n.MaybeNotify(1, "W:api", "", "stop", false)
+		synctest.Wait()
+		if calls.len() != 1 {
+			t.Fatalf("unmuted stop should fire once, got %d calls", calls.len())
+		}
+	})
+}
+
 func TestNotifier_SessionTitleInNotification(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true}

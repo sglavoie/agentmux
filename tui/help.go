@@ -40,6 +40,7 @@ var helpSections = []struct {
 		"  c         override session profile",
 		"  C         clear session icon",
 		"  L         lock / unlock session (blocks r/x/c)",
+		"  m         mute / unmute session (suppresses notifications)",
 	}},
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",

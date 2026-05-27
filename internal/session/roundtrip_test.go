@@ -59,6 +59,50 @@ func TestTitleRoundTrip_FormatPalettePalette(t *testing.T) {
 	}
 }
 
+// TestTitleRoundTrip_FormatPaletteFull verifies that wrapping FormatTitle
+// output with BuildTitleFull/ParseTitleFull preserves the muted flag through
+// the full round-trip, complementing the BuildTitle/ParseTitle wrapper cases.
+func TestTitleRoundTrip_FormatPaletteFull(t *testing.T) {
+	cases := []struct {
+		name    string
+		sess    config.Session
+		state   string
+		starred bool
+		muted   bool
+	}{
+		{"muted plain", config.Session{Title: "api", Account: "work"}, "", false, true},
+		{"muted bolt", config.Session{Title: "api", Account: "work"}, "bolt", false, true},
+		{"muted starred", config.Session{Title: "api", Account: "work"}, "", true, true},
+		{"muted starred bolt", config.Session{Title: "api", Account: "work"}, "bolt", true, true},
+		{"muted unicode profile", config.Session{Title: "scriba", Profile: "éscriba"}, "key", true, true},
+		{"muted colon title", config.Session{Title: "a:b:c", Account: "work"}, "error", true, true},
+		{"unmuted via Full", config.Session{Title: "api", Account: "work"}, "warning", true, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			formatted := session.FormatTitle(tc.sess)
+			withIcons := palette.BuildTitleFull(formatted, tc.state, tc.starred, tc.muted)
+
+			base, state, starred, muted := palette.ParseTitleFull(withIcons)
+			if base != formatted {
+				t.Errorf("ParseTitleFull.base = %q, want %q (built %q)", base, formatted, withIcons)
+			}
+			if state != tc.state {
+				t.Errorf("ParseTitleFull.state = %q, want %q", state, tc.state)
+			}
+			if starred != tc.starred {
+				t.Errorf("ParseTitleFull.starred = %v, want %v", starred, tc.starred)
+			}
+			if muted != tc.muted {
+				t.Errorf("ParseTitleFull.muted = %v, want %v", muted, tc.muted)
+			}
+			if got := palette.StripIcons(withIcons); got != formatted {
+				t.Errorf("StripIcons = %q, want %q", got, formatted)
+			}
+		})
+	}
+}
+
 // TestFormatTitle_IgnoresProfileAndAccount verifies that managed Kitty tab
 // base titles come entirely from the project title.
 func TestFormatTitle_IgnoresProfileAndAccount(t *testing.T) {

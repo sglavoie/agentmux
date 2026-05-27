@@ -35,6 +35,11 @@ const pulseColumnWidth = 2
 // stay aligned regardless of which rows in the view are locked.
 const lockColumnWidth = 2
 
+// muteColumnWidth is the visual width reserved for the per-row mute indicator
+// (🔇 = 2 cells, or 2 spaces when unmuted) rendered alongside the lock column so
+// rows stay aligned regardless of which sessions in the view are muted.
+const muteColumnWidth = 2
+
 // ageColumnWidth is the visual width consumed by the per-row age column
 // (5 cells of text + 1 trailing space). Sized to fit a warning cell like
 // "9m ⏳"; only reserved when at least one row carries a sweep-eligible
@@ -447,6 +452,16 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 		}
 	}
 
+	// Mute indicator column. Always reserved (2 cells) so column alignment is
+	// stable; only filled when the session is muted.
+	muteCol := "  "
+	if s.Muted {
+		muteCol = palette.MuteIcon()
+		if w := runewidth.StringWidth(muteCol); w < muteColumnWidth {
+			muteCol += strings.Repeat(" ", muteColumnWidth-w)
+		}
+	}
+
 	// State icon at the start for instant scanning.
 	iconCol := "  "
 	if s.State != "" {
@@ -494,9 +509,9 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		used := lockColumnWidth + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3
-		// lock (2) + icon+space (3) + "[X] " badge (4) + harness (9) + space (1)
-		//   + title (20) + separators before dir (3)
+		used := lockColumnWidth + muteColumnWidth + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3
+		// lock (2) + mute (2) + icon+space (3) + "[X] " badge (4) + harness (9)
+		//   + space (1) + title (20) + separators before dir (3)
 		available := width - used
 		if available > 10 {
 			maxDir = available
@@ -511,7 +526,7 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	}
 	dir = styleDim.Render(dir)
 
-	return lockCol + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
+	return lockCol + muteCol + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
 }
 
 // iconDisplayWidth returns the visual cell width of a state icon. We rely

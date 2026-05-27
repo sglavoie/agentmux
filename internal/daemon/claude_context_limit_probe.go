@@ -40,7 +40,7 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 
 	for _, ow := range windows {
 		for _, tab := range ow.Tabs {
-			baseTitle, iconState, starred := palette.ParseTitle(tab.Title)
+			baseTitle, iconState, starred, muted := palette.ParseTitleFull(tab.Title)
 			if !claudeContextLimitProbeCanOverwrite(iconState) {
 				continue
 			}
@@ -48,7 +48,7 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 				if win.UserVars.EffectiveHarness() != harness.Claude {
 					continue
 				}
-				h.probeClaudeContextLimitWindow(now, win.ID, tab.Title, baseTitle, iconState, starred, win.UserVars)
+				h.probeClaudeContextLimitWindow(now, win.ID, tab.Title, baseTitle, iconState, starred, muted, win.UserVars)
 			}
 		}
 	}
@@ -70,6 +70,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	baseTitle string,
 	currentIconState string,
 	starred bool,
+	muted bool,
 	userVars kitty.UserVars,
 ) {
 	h.stateMu.Lock()
@@ -98,7 +99,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	h.recordClaudeContextLimitProbeState(now, windowID, baseTitle, currentIconState, userVars, resultIconState)
 
 	if resultIconState != currentIconState {
-		newTitle := palette.BuildTitle(baseTitle, resultIconState, starred)
+		newTitle := palette.BuildTitleFull(baseTitle, resultIconState, starred, muted)
 		if newTitle != tabTitle {
 			if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
 				slog.Debug("claude context-limit probe: set tab title failed", "window_id", windowID, "err", err)

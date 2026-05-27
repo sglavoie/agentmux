@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/clipboard"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -182,6 +183,17 @@ func actionsFor(_ Model) []action {
 			run: func(m Model) (Model, tea.Cmd) {
 				m.mode = ModeList
 				return m, toggleLockCmd(m.client, m.targetSession)
+			},
+		},
+		{
+			keyDisplay:  "m",
+			keyMatch:    keyM,
+			label:       "mute/unmute",
+			description: "toggle session mute (suppresses macOS notifications)",
+			available:   func(Model) bool { return true },
+			run: func(m Model) (Model, tea.Cmd) {
+				m.mode = ModeList
+				return m, toggleMuteCmd(m.client, m.targetSession)
 			},
 		},
 	}
@@ -377,6 +389,29 @@ func toggleLockCmd(client kitty.KittyClient, rs session.RunningSession) tea.Cmd 
 			err = session.Unlock(client, rs.WindowID)
 		} else {
 			err = session.Lock(client, rs.WindowID)
+		}
+		return actionDoneMsg{err: err}
+	}
+}
+
+// toggleMuteCmd flips the mute state on the session's anchor window. Muted
+// sessions suppress macOS notifications across every notify path in the daemon.
+// After flipping the user var, the tab title is rebuilt with the new muted flag
+// so the 🔇 glyph appears immediately on the Kitty tab — without this push every
+// downstream title-rewrite path only preserves a 🔇 already present and never
+// seeds it.
+func toggleMuteCmd(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		if rs.Muted {
+			err = session.Unmute(client, rs.WindowID)
+		} else {
+			err = session.Mute(client, rs.WindowID)
+		}
+		if err == nil {
+			newMuted := !rs.Muted
+			newTitle := palette.BuildTitleFull(rs.Base, rs.State, rs.Starred, newMuted)
+			err = client.SetTabTitle(kitty.MatchTabByWindowID(rs.WindowID), newTitle)
 		}
 		return actionDoneMsg{err: err}
 	}

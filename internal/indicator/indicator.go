@@ -123,9 +123,11 @@ func runWithDeps(
 	}
 
 	var profile, harnessName string
+	var muted bool
 	if win != nil {
 		profile = win.UserVars.EffectiveProfile()
 		harnessName = win.UserVars.EffectiveHarness()
+		muted = win.UserVars.Mute != ""
 	}
 	resetFlowDetected := payloadHasResetFlow(harnessName, eventOrAction, payload)
 	toolName := payload.EffectiveToolName()
@@ -162,6 +164,7 @@ func runWithDeps(
 		preservesIcon,
 		contextLimitDetected,
 		resetFlowDetected,
+		muted,
 	), amxBin)
 	if err != nil {
 		log.Debug("indicator: daemon unavailable, updating title without guard", "err", err)
@@ -202,6 +205,7 @@ func buildStateUpdateRequest(
 	preservesIcon bool,
 	contextLimitDetected bool,
 	resetFlowDetected bool,
+	muted bool,
 ) daemon.Request {
 	return daemon.Request{
 		Type:             daemon.TypeStateUpdate,
@@ -222,6 +226,7 @@ func buildStateUpdateRequest(
 		Reason:           payload.Reason,
 		ContextLimit:     contextLimitDetected,
 		ResetFlow:        resetFlowDetected,
+		Muted:            muted,
 	}
 }
 
@@ -294,8 +299,8 @@ func daemonDownIconState(action, currentIconState string, preservesIcon bool, ha
 }
 
 func updateTitle(windowID int, iconState string, client kittyTitleSetter, tab *kitty.Tab) error {
-	base, _, starred := palette.ParseTitle(tab.Title)
-	newTitle := palette.BuildTitle(base, iconState, starred)
+	base, _, starred, muted := palette.ParseTitleFull(tab.Title)
+	newTitle := palette.BuildTitleFull(base, iconState, starred, muted)
 
 	if newTitle == tab.Title {
 		return nil

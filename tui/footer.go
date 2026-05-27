@@ -222,6 +222,7 @@ var listFooterPalette = []footerEntry{
 	}},
 	{"y", "copy title", footerSectionRow, hasRow},
 	{"L", "lock", footerSectionRow, hasRow},
+	{"m", "mute", footerSectionRow, hasRow},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
 	{"/", "filter", footerSectionFilter, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},

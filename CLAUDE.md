@@ -185,8 +185,8 @@ Account detection reads the `cc_account` Kitty user var set at launch time (`--v
 
 Tab titles use the project title only. The dashboard shows the profile
 separately via its badge (`[W]`, `[P]`, etc.), while state icons (bolt `⚡`,
-stop `⏹`, key `🔑`, error `✗`) and the star marker (`★`) are prepended to the
-base title by `palette.BuildTitle()`.
+stop `⏹`, key `🔑`, error `✗`), the star marker (`★`), and the mute marker
+(`🔇`) are prepended to the base title by `palette.BuildTitleFull()`.
 
 When a Claude session stalls at the context limit, no hook fires (the assistant turn never completes cleanly), so the bolt ⚡ would otherwise stay stuck. The daemon's periodic Claude screen probe (`internal/daemon/claude_context_limit_probe.go`) detects the recovery banner and swaps the icon to error ❗ via the `stop_failure` action. Opt out with `[defaults.watchdog].claude_context_limit_probe = false`.
 

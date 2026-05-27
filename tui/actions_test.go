@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -124,6 +126,38 @@ func TestActionAvailabilityUnlockedRow(t *testing.T) {
 		if avail[k] != w {
 			t.Errorf("unlocked row: action %q availability got %v, want %v", k, avail[k], w)
 		}
+	}
+}
+
+// TestActionAvailabilityMuteAlwaysOn verifies the mute/unmute entry is
+// always available — it must work on muted *and* locked rows so the user
+// can quiet a runaway tab without first unlocking it.
+func TestActionAvailabilityMuteAlwaysOn(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		rs   session.RunningSession
+	}{
+		{"unmuted-unlocked", session.RunningSession{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10}},
+		{"muted-unlocked", session.RunningSession{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10, Muted: true}},
+		{"unmuted-locked", session.RunningSession{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10, Locked: true}},
+		{"muted-locked", session.RunningSession{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10, Locked: true, Muted: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := loadSessions(testModelWithSessions(), []session.RunningSession{tc.rs})
+			m = openActionsOverlay(t, m)
+			found := false
+			for _, a := range actionsFor(m) {
+				if a.keyMatch == keyM {
+					found = true
+					if !a.available(m) {
+						t.Errorf("mute action: expected available on %s row, got false", tc.name)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("mute action: not present in actionsFor for %s row", tc.name)
+			}
+		})
 	}
 }
 
@@ -353,6 +387,107 @@ func TestListOpenEditorNoOpWithoutMatchingConfig(t *testing.T) {
 	_, cmd := m.Update(keyPress("O"))
 	if cmd != nil {
 		t.Error("expected no cmd when no config session matches for O")
+	}
+}
+
+// TestToggleMuteCmdSetsUserVarAndPushesTitle verifies that toggleMuteCmd both
+// flips the cc_mute user var on the anchor window and pushes a refreshed tab
+// title that contains the 🔇 glyph. Without the title push, downstream
+// rewrite paths only preserve a 🔇 that is already present, so the glyph
+// never appears on the tab.
+func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+	rs := session.RunningSession{
+		WindowID: 7,
+		Base:     "api",
+		State:    "bolt",
+	}
+
+	cmd := toggleMuteCmd(client, rs)
+	msg := cmd()
+
+	done, ok := msg.(actionDoneMsg)
+	if !ok {
+		t.Fatalf("expected actionDoneMsg, got %T", msg)
+	}
+	if done.err != nil {
+		t.Fatalf("toggleMuteCmd returned error: %v", done.err)
+	}
+	if len(runner.Calls) != 2 {
+		t.Fatalf("expected 2 kitten calls (set-user-vars, set-tab-title), got %d: %+v", len(runner.Calls), runner.Calls)
+	}
+
+	wantMute := []string{"@", "set-user-vars", "--match=id:7", "cc_mute=1"}
+	gotMute := runner.Calls[0].Args
+	if len(gotMute) != len(wantMute) {
+		t.Fatalf("mute argv length: got %v, want %v", gotMute, wantMute)
+	}
+	for i := range wantMute {
+		if gotMute[i] != wantMute[i] {
+			t.Errorf("mute argv[%d]: got %q, want %q (full: %v)", i, gotMute[i], wantMute[i], gotMute)
+		}
+	}
+
+	gotTitle := runner.Calls[1].Args
+	wantTitlePrefix := []string{"@", "set-tab-title", "--match=window_id:7", "--"}
+	if len(gotTitle) != len(wantTitlePrefix)+1 {
+		t.Fatalf("set-tab-title argv: got %v, want prefix %v + title", gotTitle, wantTitlePrefix)
+	}
+	for i := range wantTitlePrefix {
+		if gotTitle[i] != wantTitlePrefix[i] {
+			t.Errorf("set-tab-title argv[%d]: got %q, want %q (full: %v)", i, gotTitle[i], wantTitlePrefix[i], gotTitle)
+		}
+	}
+	gotTitleValue := gotTitle[len(wantTitlePrefix)]
+	wantTitleValue := palette.BuildTitleFull("api", "bolt", false, true)
+	if gotTitleValue != wantTitleValue {
+		t.Errorf("set-tab-title value: got %q, want %q", gotTitleValue, wantTitleValue)
+	}
+	if !strings.Contains(gotTitleValue, palette.MuteIcon()) {
+		t.Errorf("set-tab-title value %q should contain mute icon %q", gotTitleValue, palette.MuteIcon())
+	}
+}
+
+// TestToggleMuteCmdUnmuteStripsGlyph verifies that toggling a currently-muted
+// session writes an empty cc_mute and rebuilds the title without the 🔇 glyph,
+// so the tab returns to its un-muted appearance immediately.
+func TestToggleMuteCmdUnmuteStripsGlyph(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+	rs := session.RunningSession{
+		WindowID: 9,
+		Base:     "api",
+		State:    "bolt",
+		Muted:    true,
+	}
+
+	cmd := toggleMuteCmd(client, rs)
+	msg := cmd()
+
+	done, ok := msg.(actionDoneMsg)
+	if !ok {
+		t.Fatalf("expected actionDoneMsg, got %T", msg)
+	}
+	if done.err != nil {
+		t.Fatalf("toggleMuteCmd returned error: %v", done.err)
+	}
+	if len(runner.Calls) != 2 {
+		t.Fatalf("expected 2 kitten calls, got %d: %+v", len(runner.Calls), runner.Calls)
+	}
+
+	gotMute := runner.Calls[0].Args
+	wantMute := []string{"@", "set-user-vars", "--match=id:9", "cc_mute="}
+	for i := range wantMute {
+		if i >= len(gotMute) || gotMute[i] != wantMute[i] {
+			t.Errorf("unmute argv[%d]: got %v, want %v", i, gotMute, wantMute)
+			break
+		}
+	}
+
+	gotTitleValue := runner.Calls[1].Args[len(runner.Calls[1].Args)-1]
+	if strings.Contains(gotTitleValue, palette.MuteIcon()) {
+		t.Errorf("unmuted tab title %q must not contain mute icon %q", gotTitleValue, palette.MuteIcon())
 	}
 }
 

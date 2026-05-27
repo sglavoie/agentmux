@@ -743,6 +743,40 @@ func TestHandler_StateQueryReturnsActivity(t *testing.T) {
 	}
 }
 
+// TestHandler_StateUpdateRefreshesMutedWindowsCache verifies that an inbound
+// Request with Muted=true populates the per-window cache that Notifier.IsMuted
+// consults, and that a subsequent request with Muted=false clears the entry.
+// This is the daemon-side half of session 3's gating contract: the title
+// remains the durable source of truth (via cc_mute on the kitty window), but
+// MaybeNotify and the sweep paths need an in-memory cache to consult.
+func TestHandler_StateUpdateRefreshesMutedWindowsCache(t *testing.T) {
+	h := newTestHandler()
+
+	if h.IsMuted(42) {
+		t.Fatal("window should default to unmuted")
+	}
+
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Muted: true})
+	if !resp.OK || !resp.Allowed {
+		t.Fatalf("muted state update should still be allowed, got %+v", resp)
+	}
+	if !h.IsMuted(42) {
+		t.Fatal("mutedWindows cache should reflect Muted=true after handleStateUpdate")
+	}
+
+	// A separate window with Muted=false must not be polluted by the muted entry.
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 43, Action: "active"})
+	if h.IsMuted(43) {
+		t.Fatal("unmuted sibling window should not be marked muted")
+	}
+
+	// Toggling Muted back to false on the same window clears the cache.
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Muted: false})
+	if h.IsMuted(42) {
+		t.Fatal("mutedWindows cache should be cleared after Muted=false update")
+	}
+}
+
 func TestHandler_Shutdown(t *testing.T) {
 	h := newTestHandler()
 	called := make(chan struct{}, 1)

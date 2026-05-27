@@ -19,6 +19,7 @@ type RunningSession struct {
 	State            string // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
 	Starred          bool
 	Locked           bool
+	Muted            bool
 	Project          string   // configured project title
 	Profile          string   // from amx_profile / legacy cc_account user vars
 	Account          string   // compatibility alias for Profile
@@ -254,6 +255,7 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 		State:            state,
 		Starred:          starred,
 		Locked:           win.UserVars.Locked,
+		Muted:            win.UserVars.Mute != "",
 		Project:          project,
 		Profile:          profile,
 		Account:          profile,
