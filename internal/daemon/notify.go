@@ -13,10 +13,7 @@ package daemon
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
@@ -25,23 +22,6 @@ import (
 )
 
 const cooldownDuration = 10 * time.Second
-
-// notifyDispatchTimeout caps how long a single osascript dispatch can run.
-// macOS notification backends can block under user-mode pressure (e.g.
-// Notification Center unresponsive, UI server restart), so the goroutine
-// wrapping every dispatch must enforce its own deadline rather than trusting
-// the external process to return promptly. osascript returns as soon as the
-// notification is posted; alerter blocks waiting for user interaction and uses
-// the longer alerterDispatchTimeout instead.
-const notifyDispatchTimeout = 5 * time.Second
-
-// alerterDispatchTimeout bounds how long a single alerter invocation may
-// wait for user interaction. alerter exits when the user clicks, dismisses,
-// or times out; this cap is an upper bound for the worst case where the user
-// never interacts and Notification Center swallows the alert. The
-// exec.CommandContext underlying runAlerter still terminates the subprocess
-// promptly on daemon shutdown via context cancellation.
-const alerterDispatchTimeout = 5 * time.Minute
 
 // notifyableActions lists the actions that may produce macOS notifications.
 var notifyableActions = map[string]bool{
@@ -65,34 +45,12 @@ var notificationLabels = map[string]string{
 	"hook_silence": "Hook silence detected",
 }
 
-type pendingNotification struct {
-	timer *time.Timer
-	seq   uint64
-}
-
 // notifyKey scopes the cooldown to a single (window, action) pair so a
 // recent stop/failure notification cannot silently suppress a subsequent
 // permission notification (and vice versa).
 type notifyKey struct {
 	windowID int
 	action   string
-}
-
-// dispatchFn is the signature each backend implements. The bool reports
-// whether the user clicked the notification body (alerter only); osascript
-// always returns false because its notifications cannot relay interaction.
-// windowID and account identify the focus target for click handling: a
-// positive windowID maps to a real Kitty window; a non-empty account is
-// used when windowID is synthetic (e.g. hook-silence sweeps). Backends
-// today ignore both — Session 3 wires them to a focus closure.
-type dispatchFn func(ctx context.Context, windowID int, account, title, subtitle string) (bool, error)
-
-// dispatcher bundles a backend's dispatch function with the timeout the
-// runDispatch goroutine should use. Bundling avoids a mismatch where the
-// alerter backend is selected but runs under the short osascript timeout.
-type dispatcher struct {
-	fn      dispatchFn
-	timeout time.Duration
 }
 
 // focusClient is the narrow subset of the Kitty client that the Notifier
@@ -179,17 +137,6 @@ func (n *Notifier) SetParentContext(ctx context.Context) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.ctx = ctx
-}
-
-// selectDispatcher picks the macOS notification backend once at construction.
-// alerter is preferred when available; otherwise osascript is used.
-func selectDispatcher() dispatcher {
-	if _, err := exec.LookPath("alerter"); err == nil {
-		slog.Info("notifier: using alerter backend")
-		return dispatcher{fn: runAlerter, timeout: alerterDispatchTimeout}
-	}
-	slog.Info("notifier: using osascript backend (alerter not found in PATH)")
-	return dispatcher{fn: runOsascript, timeout: notifyDispatchTimeout}
 }
 
 // MaybeNotify fires a notification for the given window if:
@@ -306,48 +253,6 @@ func (n *Notifier) focusForClick(focus focusClient, windowID int, account string
 	}
 }
 
-func (n *Notifier) schedulePermissionLocked(windowID int, account, title, subtitle string) {
-	n.cancelPendingLocked(windowID)
-	n.nextPendingSeq++
-	seq := n.nextPendingSeq
-	entry := pendingNotification{seq: seq}
-	entry.timer = time.AfterFunc(n.debounce, func() {
-		n.mu.Lock()
-		pending, ok := n.pending[windowID]
-		if !ok || pending.seq != seq {
-			n.mu.Unlock()
-			return
-		}
-		delete(n.pending, windowID)
-
-		key := notifyKey{windowID: windowID, action: "permission"}
-		now := n.now()
-		if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
-			n.mu.Unlock()
-			return
-		}
-		n.last[key] = now
-		n.mu.Unlock()
-
-		n.runDispatch(windowID, account, title, subtitle)
-	})
-	n.pending[windowID] = entry
-}
-
-func (n *Notifier) cancelPendingLocked(windowID int) {
-	if pending, ok := n.pending[windowID]; ok {
-		pending.timer.Stop()
-		delete(n.pending, windowID)
-	}
-}
-
-// CancelPending cancels any pending permission notification for windowID.
-func (n *Notifier) CancelPending(windowID int) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.cancelPendingLocked(windowID)
-}
-
 func (n *Notifier) actionEnabled(action string) bool {
 	switch action {
 	case "stop":
@@ -366,76 +271,6 @@ func (n *Notifier) actionEnabled(action string) bool {
 		return n.cfg.HookSilence == nil || *n.cfg.HookSilence
 	}
 	return false
-}
-
-func runOsascript(ctx context.Context, _ int, _ string, title, subtitle string) (bool, error) {
-	script := fmt.Sprintf(
-		`display notification "" with title %s subtitle %s`,
-		quoteAppleScript(title), quoteAppleScript(subtitle),
-	)
-	return false, exec.CommandContext(ctx, "osascript", "-e", script).Run()
-}
-
-// quoteAppleScript wraps s in a double-quoted AppleScript string literal.
-// AppleScript only recognizes \", \\, \n, \r, and \t as string escapes; Go's
-// %q can emit \uXXXX / \xNN forms (e.g. for U+2028) that AppleScript treats
-// as a syntax error, dropping the notification silently. This routine
-// escapes only the characters AppleScript understands and passes every other
-// rune through verbatim — including any non-ASCII printable characters
-// commonly found in session titles.
-func quoteAppleScript(s string) string {
-	var b strings.Builder
-	b.Grow(len(s) + 2)
-	b.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '\\':
-			b.WriteString(`\\`)
-		case '"':
-			b.WriteString(`\"`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	b.WriteByte('"')
-	return b.String()
-}
-
-func alerterArgs(title, subtitle string) []string {
-	return []string{"--title", title, "--subtitle", subtitle, "--message", ""}
-}
-
-func runAlerter(ctx context.Context, _ int, _ string, title, subtitle string) (bool, error) {
-	out, err := exec.CommandContext(ctx, "alerter", alerterArgs(title, subtitle)...).Output()
-	if err != nil {
-		return false, err
-	}
-	return parseAlerterOutput(out), nil
-}
-
-// parseAlerterOutput reports whether the user clicked the notification body.
-// alerter prints exactly one of @CONTENTCLICKED, @ACTIONCLICKED, @CLOSED,
-// @TIMEOUT, @REPLIED, or @CONTENTCLOSED on stdout when it exits. Only the
-// two "click" outcomes count as an explicit request to focus; everything
-// else (dismissal, timeout, reply, empty/garbled output) is treated as no
-// click so the caller does not steal focus on a passive dismissal.
-func parseAlerterOutput(stdout []byte) bool {
-	line := strings.TrimSpace(string(stdout))
-	if i := strings.IndexAny(line, "\r\n"); i >= 0 {
-		line = line[:i]
-	}
-	switch line {
-	case "@CONTENTCLICKED", "@ACTIONCLICKED":
-		return true
-	default:
-		return false
-	}
 }
 
 // ResetCooldown clears all per-action cooldowns for windowID (for testing).
