@@ -14,45 +14,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
-// Health-pip refresh cadences. Daemon checks are a cheap socket round-trip
-// (5s), hook checks read each profile's settings.json so they run on a
-// longer interval (15s).
-const (
-	daemonHealthInterval = 5 * time.Second
-	hookHealthInterval   = 15 * time.Second
-)
-
-// Mode represents the current UI mode.
-type Mode int
-
-const (
-	ModeList          Mode = iota
-	ModeSearch             // typing a filter expression (DSL)
-	ModeConfirm            // y/n confirmation for a destructive action
-	ModePicker             // multi-select session launcher
-	ModeConfigPicker       // account picker for config override
-	ModeHelp               // help overlay
-	ModeDetail             // detail pane: per-session hook event log
-	ModeActions            // per-row actions overlay
-	ModeSessionSearch      // searchable list of past harness transcripts
-	ModeSessionView        // scrollable transcript viewer for a single past session
-	ModeDeleteChoice       // three-way prompt: hide from index, also delete file, cancel
-	ModeChipPicker         // overlay listing chip values for ModeSessionSearch
-	ModeMessageDetail      // full-message overlay opened from ModeSessionView
-	ModePlanSearch         // searchable list of past agent-plan directories
-	ModePlanView           // inline pager for a single plan directory
-)
-
-// chipPickerKind identifies which ModeSessionSearch chip filter the picker
-// overlay is editing.
-type chipPickerKind int
-
-const (
-	chipPickerHarness chipPickerKind = iota
-	chipPickerProfile
-	chipPickerProject
-)
-
 // Model is the root Bubble Tea model for the dashboard.
 type Model struct {
 	// deps
@@ -333,42 +294,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		cfg := m.cfg.Defaults.Preview
-		if m.previewEnabled {
-			if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-				m.disablePreviewWithNotice("preview disabled: terminal too small")
-			}
-		}
-		if m.pickerPreviewEnabled {
-			if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-				m.pickerPreviewEnabled = false
-				m.previewText = ""
-				m.previewError = ""
-				m.previewWindowID = 0
-				m.previewNotice = "preview disabled: terminal too small"
-				m.previewNoticeExpires = time.Now().Add(2 * time.Second)
-			}
-		}
-		// Clamp scroll offsets to the new viewport. Without this, a resize
-		// that shrinks the visible window leaves the persisted offset above
-		// maxOffset; the renderer clamps for display but the next j/k press
-		// operates on the stale value, so the user has to scroll through
-		// dead rows before the viewport reacts.
-		clampDetailScroll(&m)
-		clampHelpOffset(&m)
-		clampMessageDetailScroll(&m)
-		clampListOffset(&m)
-		scrollListToCursor(&m)
-		clampPickerOffset(&m)
-		scrollPickerToCursor(&m)
-		clampViewerScroll(&m)
-		scrollViewerToCursor(&m)
-		clampPlanViewerScroll(&m)
-		scrollPlanViewerToCursor(&m)
-		scrollChipPickerToCursor(&m)
-		return m, nil
+		return m.handleWindowSize(msg)
 
 	case tickMsg:
 		return m.handleTick(msg)
