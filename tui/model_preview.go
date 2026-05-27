@@ -30,6 +30,14 @@ func (m Model) render() string {
 		// Session search owns its full layout (header + chips + query +
 		// results) so the dashboard list is not rendered below.
 		sb.WriteString(renderSessionSearch(m))
+	case ModePlanSearch:
+		// Plan search owns its full layout — like ModeSessionSearch, the
+		// dashboard list must not render underneath.
+		sb.WriteString(renderPlanSearch(m))
+	case ModePlanView:
+		// Plan viewer owns its full layout — like ModeSessionView, the
+		// dashboard list must not render underneath.
+		sb.WriteString(renderPlanView(m))
 	case ModeSessionView:
 		// Viewer owns its full layout — like ModeSessionSearch, the
 		// dashboard list must not render underneath.

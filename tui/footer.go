@@ -46,6 +46,12 @@ func renderFooter(m Model) string {
 	case ModeSessionView:
 		line1 = styleFooter.Render("  j/k move · n/N match · enter view message · esc back")
 		line2 = styleFooter.Render("  g/G top/bot  pgup/pgdn: page")
+	case ModePlanSearch:
+		line1 = styleFooter.Render("  / filter · enter view · o open in editor · esc back")
+		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
+	case ModePlanView:
+		line1 = styleFooter.Render("  j/k scroll · n/N match · o editor · / search · esc back")
+		line2 = styleFooter.Render("  g/G top/bot  pgup/pgdn: page")
 	case ModeMessageDetail:
 		line1 = styleFooter.Render("  j/k scroll · g/G top/bottom · esc/q/enter close")
 		line2 = ""
@@ -219,6 +225,7 @@ var listFooterPalette = []footerEntry{
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
 	{"/", "filter", footerSectionFilter, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
+	{"P", "plans", footerSectionApp, func(Model) bool { return true }},
 	{"p", "preview", footerSectionApp, func(Model) bool { return true }},
 	{"R", "resort", footerSectionApp, func(Model) bool { return true }},
 	{"?", "help", footerSectionApp, func(Model) bool { return true }},

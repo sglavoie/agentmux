@@ -74,6 +74,94 @@ func TestOpenDirectory_LaunchesWithCorrectArgs(t *testing.T) {
 	}
 }
 
+// TestOpenPathInEditor_LaunchesWithCorrectArgs verifies that OpenPathInEditor
+// calls kitten @ launch with the expected title, cwd, and editor cmdline, and
+// does not apply any account-derived color.
+func TestOpenPathInEditor_LaunchesWithCorrectArgs(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+	cfg.Defaults.Editor = "myeditor --wait"
+
+	err := session.OpenPathInEditor(client, "/tmp/plans/myplan", "myplan", cfg)
+	if err != nil {
+		t.Fatalf("OpenPathInEditor: %v", err)
+	}
+
+	launchCalled := false
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		hasLaunch := false
+		for _, a := range c.Args {
+			if a == "launch" {
+				hasLaunch = true
+			}
+		}
+		if !hasLaunch {
+			continue
+		}
+		launchCalled = true
+
+		argMap := make(map[string]bool)
+		for _, a := range c.Args {
+			argMap[a] = true
+		}
+		if !argMap["--tab-title=myplan"] {
+			t.Errorf("expected --tab-title=myplan in args: %v", c.Args)
+		}
+		if !argMap["--cwd=/tmp/plans/myplan"] {
+			t.Errorf("expected --cwd=/tmp/plans/myplan in args: %v", c.Args)
+		}
+
+		// Verify the trailing cmdline contains: myeditor --wait /tmp/plans/myplan
+		// (split on whitespace per resolveEditor's handling).
+		wantTrailing := []string{"myeditor", "--wait", "/tmp/plans/myplan"}
+		if !containsInOrder(c.Args, wantTrailing) {
+			t.Errorf("expected cmdline tail %v to appear in order in args: %v", wantTrailing, c.Args)
+		}
+	}
+	if !launchCalled {
+		t.Error("expected kitten @ launch to be called")
+	}
+
+	// No set-tab-color call: OpenPathInEditor has no account context.
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		for _, a := range c.Args {
+			if a == "set-tab-color" {
+				t.Errorf("did not expect set-tab-color for OpenPathInEditor: %v", c.Args)
+			}
+		}
+	}
+}
+
+// containsInOrder reports whether sub appears as a contiguous slice in s.
+func containsInOrder(s, sub []string) bool {
+	if len(sub) == 0 {
+		return true
+	}
+	for i := 0; i+len(sub) <= len(s); i++ {
+		match := true
+		for j := range sub {
+			if s[i+j] != sub[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
 // TestOpenDirectory_ColorApplied verifies that set-tab-color is called
 // when the new tab appears in a post-launch ls response.
 func TestOpenDirectory_ColorApplied(t *testing.T) {

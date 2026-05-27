@@ -61,6 +61,22 @@ func TestLoad_AppliesDefaults(t *testing.T) {
 	if cfg.Defaults.Notifications.PermissionDebounceMs != 500 {
 		t.Errorf("default permission_debounce_ms: got %d, want 500", cfg.Defaults.Notifications.PermissionDebounceMs)
 	}
+	if cfg.Defaults.PlansDirectory != "~/.local/share/agent-plans" {
+		t.Errorf("default plans_directory: got %q, want %q", cfg.Defaults.PlansDirectory, "~/.local/share/agent-plans")
+	}
+}
+
+func TestLoad_PreservesExplicitPlansDirectory(t *testing.T) {
+	path := writeTempConfig(t, `[defaults]
+plans_directory = "/elsewhere"
+`)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Defaults.PlansDirectory != "/elsewhere" {
+		t.Errorf("explicit plans_directory: got %q, want %q", cfg.Defaults.PlansDirectory, "/elsewhere")
+	}
 }
 
 func TestLoad_NormalizesProfileArgsAndClonesAliases(t *testing.T) {

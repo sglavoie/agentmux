@@ -96,6 +96,10 @@ confirm_destructive = false
 # "code --wait" are split on whitespace.
 # editor = "nvim"
 
+# Filesystem root scanned by the `P` keybinding to list past plans.
+# Each top-level directory under this root is treated as one plan.
+# plans_directory = "~/.local/share/agent-plans"
+
 [defaults.notifications]
 
 # Notify when a session is waiting for your permission to use a tool.

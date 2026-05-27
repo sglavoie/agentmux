@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -38,6 +39,8 @@ const (
 	ModeDeleteChoice      // three-way prompt: hide from index, also delete file, cancel
 	ModeChipPicker        // overlay listing chip values for ModeSessionSearch
 	ModeMessageDetail     // full-message overlay opened from ModeSessionView
+	ModePlanSearch        // searchable list of past agent-plan directories
+	ModePlanView          // inline pager for a single plan directory
 )
 
 // chipPickerKind identifies which ModeSessionSearch chip filter the picker
@@ -246,6 +249,43 @@ type Model struct {
 	// messageDetailScroll is the top wrapped-line index.
 	messageDetailIdx    int
 	messageDetailScroll int
+
+	// plan search view (ModePlanSearch). plansIndex is lazy-constructed on
+	// first entry and reused across refreshes. planResults holds the most
+	// recent plans.Search output; planQuery is the text typed after `/`.
+	// planSearchMode is true while editing planQuery. planSearchSeq dedupes
+	// in-flight refresh/search dispatches the same way sessionSearchSeq does.
+	plansIndex     *plans.Index
+	planQuery      string
+	planResults    []plans.Result
+	planCursor     int
+	planOffset     int
+	planSearchMode bool
+	planLoading    bool
+	planRefreshErr error
+	planSearchErr  error
+	planSearchSeq  int
+
+	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
+	// user opened with Enter; nil when the viewer is closed. planViewerLines
+	// is the flattened concatenation of every file in viewerPlan.Files with
+	// "--- <rel> ---" separator rows between them. The viewer splits
+	// selection from windowing the same way the session viewer does:
+	// planViewerCursor is the focused line; planViewerScroll is the
+	// top-of-window index. planViewerMatchLines holds the line indices
+	// containing planQuery (case-insensitive substring); planViewerMatchIdx
+	// is the cursor into that list for n/N navigation. planViewerLoadSeq is
+	// monotonic so a stale async load (user already left the viewer or
+	// opened a different plan) is dropped in Update.
+	viewerPlan           *plans.PlanMeta
+	planViewerLines      []string
+	planViewerCursor     int
+	planViewerScroll     int
+	planViewerMatchIdx   int
+	planViewerMatchLines []int
+	planViewerLoading    bool
+	planViewerLoadErr    error
+	planViewerLoadSeq    int
 }
 
 // NewModel creates a dashboard model.
@@ -325,6 +365,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		scrollPickerToCursor(&m)
 		clampViewerScroll(&m)
 		scrollViewerToCursor(&m)
+		clampPlanViewerScroll(&m)
+		scrollPlanViewerToCursor(&m)
 		scrollChipPickerToCursor(&m)
 		return m, nil
 
@@ -497,6 +539,60 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		scrollSessionSearchToCursor(&m)
+		return m, nil
+
+	case plansRefreshDoneMsg:
+		m.planRefreshErr = msg.err
+		if msg.seq < m.planSearchSeq {
+			return m, nil
+		}
+		return m, runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
+
+	case planSearchDebounceMsg:
+		if msg.seq != m.planSearchSeq {
+			return m, nil
+		}
+		return m, runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
+
+	case planSearchDoneMsg:
+		if msg.seq != m.planSearchSeq {
+			return m, nil
+		}
+		m.planLoading = false
+		m.planSearchErr = msg.err
+		m.planResults = msg.results
+		if m.planCursor >= len(m.planResults) {
+			m.planCursor = len(m.planResults) - 1
+			if m.planCursor < 0 {
+				m.planCursor = 0
+			}
+		}
+		scrollPlanSearchToCursor(&m)
+		return m, nil
+
+	case planEditorErrMsg:
+		if c := m.pushToast(Toast{Severity: toastError, Text: "open editor: " + msg.err.Error()}); c != nil {
+			return m, c
+		}
+		return m, nil
+
+	case planFilesLoadedMsg:
+		// Drop stale loads: either the user already left the viewer, or
+		// pressed Enter on a different plan before this one finished.
+		if m.mode != ModePlanView || msg.seq != m.planViewerLoadSeq {
+			return m, nil
+		}
+		m.planViewerLoading = false
+		m.planViewerLoadErr = msg.err
+		m.planViewerLines = msg.lines
+		m.planViewerMatchLines = computePlanViewerMatches(m.planViewerLines, m.planQuery)
+		m.planViewerMatchIdx = 0
+		m.planViewerScroll = 0
+		m.planViewerCursor = 0
+		if len(m.planViewerMatchLines) > 0 {
+			m.planViewerCursor = m.planViewerMatchLines[0]
+		}
+		scrollPlanViewerToCursor(&m)
 		return m, nil
 
 	case viewerMessagesLoadedMsg:

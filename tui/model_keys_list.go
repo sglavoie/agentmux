@@ -25,6 +25,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleActionsKey(msg)
 	case ModeSessionSearch:
 		return m.handleSessionSearchKey(msg)
+	case ModePlanSearch:
+		return m.handlePlanSearchKey(msg)
+	case ModePlanView:
+		return m.handlePlanViewKey(msg)
 	case ModeSessionView:
 		return m.handleSessionViewKey(msg)
 	case ModeMessageDetail:
@@ -399,6 +403,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case keySessionSearch:
 				return m.enterSessionSearch()
+			case keyPlanSearch:
+				return m.enterPlanSearch()
 			case keyD:
 				if !m.deprecationDismissed && len(m.deprecations) > 0 {
 					// Banner dismissal first when one is visible; the detail

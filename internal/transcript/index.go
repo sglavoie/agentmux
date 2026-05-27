@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/searchstore"
 )
 
 // IndexPath returns the on-disk JSON path for the searchable session
@@ -45,6 +46,7 @@ func IndexKey(harness, id string) string {
 type Index struct {
 	mu      sync.Mutex
 	path    string
+	store   *searchstore.Store
 	entries map[string]SessionMeta
 }
 
@@ -70,6 +72,7 @@ func LoadIndex() (*Index, error) {
 // caller that needs to point at a non-default location.
 func LoadIndexAt(path string) (*Index, error) {
 	idx := &Index{path: path, entries: make(map[string]SessionMeta)}
+	idx.store = searchstore.New(idx.path)
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {

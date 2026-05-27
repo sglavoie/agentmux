@@ -33,6 +33,7 @@ const (
 	keyLock        = "L" // toggle the session lock (blocks close/restart/override)
 	keyD           = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
 	keySessionSearch = "S" // opens ModeSessionSearch (past harness transcripts)
+	keyPlanSearch    = "P" // opens ModePlanSearch (past agent plans)
 
 	keyPgUp   = "pgup"   // scroll detail pane up by one page
 	keyPgDown = "pgdown" // scroll detail pane down by one page

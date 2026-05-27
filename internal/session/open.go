@@ -145,3 +145,26 @@ func OpenInEditor(client kitty.KittyClient, sess config.Session, acc config.Acco
 
 	return nil
 }
+
+// OpenPathInEditor launches a Kitty tab running the user's editor against an
+// arbitrary directory. Unlike OpenInEditor it has no profile/harness context,
+// so it skips color application and account-derived tab styling. title becomes
+// the new tab's title.
+func OpenPathInEditor(client kitty.KittyClient, path, title string, cfg *config.Config) error {
+	name, editorArgs, err := resolveEditor(cfg.Defaults.Editor)
+	if err != nil {
+		return fmt.Errorf("resolving editor for %q: %w", title, err)
+	}
+
+	expandedPath := config.ExpandTilde(path)
+	launchOpts := kitty.LaunchOpts{
+		Title:     title,
+		Directory: expandedPath,
+		Cmdline:   append([]string{name}, append(editorArgs, expandedPath)...),
+	}
+
+	if err := client.LaunchTab(launchOpts); err != nil {
+		return fmt.Errorf("opening editor for %q: %w", title, err)
+	}
+	return nil
+}
