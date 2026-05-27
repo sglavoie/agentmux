@@ -6,6 +6,16 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
+// chipPickerKind identifies which ModeSessionSearch chip filter the picker
+// overlay is editing.
+type chipPickerKind int
+
+const (
+	chipPickerHarness chipPickerKind = iota
+	chipPickerProfile
+	chipPickerProject
+)
+
 // enterChipPicker opens the chip picker overlay for the given kind. The
 // option list is captured at open time (prepended with "" for the "(any)"
 // row) so a runtime config change can't shift the cursor under the user.
