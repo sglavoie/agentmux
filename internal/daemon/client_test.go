@@ -3,6 +3,7 @@ package daemon
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -386,6 +387,85 @@ func TestClient_SendWithAutoStart_NoDoubleSpawnAfterRestart(t *testing.T) {
 	spawnMu.Unlock()
 	if got != 1 {
 		t.Fatalf("spawn calls = %d, want 1 (restart-then-spawn-again would double-up daemons)", got)
+	}
+}
+
+func TestClient_SendWithAutoStart_BurstSpawnsOnce(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-client-burst-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	socketPath := filepath.Join(dir, "daemon.sock")
+	amxBin := filepath.Join(dir, "amx")
+	if err := os.WriteFile(amxBin, []byte("binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile(binary): %v", err)
+	}
+
+	prevRetryDelay := autoStartRetryDelay
+	autoStartRetryDelay = 20 * time.Millisecond
+	t.Cleanup(func() { autoStartRetryDelay = prevRetryDelay })
+
+	var spawnMu sync.Mutex
+	spawnCalls := 0
+	var stop func()
+	prevSpawn := spawnDetached
+	spawnDetached = func(path string) error {
+		spawnMu.Lock()
+		spawnCalls++
+		spawnMu.Unlock()
+		if path != amxBin {
+			t.Errorf("spawn path = %q, want %q", path, amxBin)
+		}
+		time.Sleep(30 * time.Millisecond)
+		stop = startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
+			return Response{OK: true, Allowed: true, IconState: "bolt"}, true
+		})
+		return nil
+	}
+	t.Cleanup(func() {
+		spawnDetached = prevSpawn
+		if stop != nil {
+			stop()
+		}
+	})
+
+	const callers = 8
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func(windowID int) {
+			defer wg.Done()
+			c := NewClientWithSocket(socketPath)
+			resp, err := c.SendWithAutoStart(Request{
+				Type:     TypeStateUpdate,
+				WindowID: windowID,
+				Action:   "active",
+			}, amxBin)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if !resp.OK || resp.IconState != "bolt" {
+				errs <- fmt.Errorf("response = %+v, want OK/bolt", resp)
+			}
+		}(i + 1)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	spawnMu.Lock()
+	got := spawnCalls
+	spawnMu.Unlock()
+	if got != 1 {
+		t.Fatalf("spawn calls = %d, want 1 for burst auto-start", got)
 	}
 }
 

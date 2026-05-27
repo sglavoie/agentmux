@@ -140,10 +140,13 @@ func daemonSocketOlderThanBinary(socketPath, amxBin string) bool {
 func waitForSocketRemoval(socketPath string) {
 	for i := 0; i < restartSocketPollCount; i++ {
 		if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+			slog.Debug("daemon client: restart socket removed", "socket_path", socketPath, "attempt", i+1)
 			return
 		}
+		slog.Debug("daemon client: waiting for old socket removal", "socket_path", socketPath, "attempt", i+1)
 		time.Sleep(restartSocketPollDelay)
 	}
+	slog.Debug("daemon client: old socket still present after restart wait", "socket_path", socketPath, "attempts", restartSocketPollCount)
 }
 
 // RestartDetached stops the current daemon if it is running, then starts a new
@@ -155,6 +158,7 @@ func (c *Client) RestartDetached(amxBin string) error {
 
 func (c *Client) restartDetached(amxBin string, daemonAlive bool) error {
 	if daemonAlive {
+		slog.Debug("daemon client: requesting daemon shutdown before restart", "socket_path", c.socketPath)
 		resp, err := c.Send(Request{Type: TypeShutdown})
 		if err != nil {
 			return fmt.Errorf("shutting down daemon: %w", err)
@@ -164,17 +168,55 @@ func (c *Client) restartDetached(amxBin string, daemonAlive bool) error {
 		}
 		waitForSocketRemoval(c.socketPath)
 	}
+	slog.Debug("daemon client: spawning detached daemon", "socket_path", c.socketPath, "amx_bin", amxBin)
 	if err := spawnDetached(amxBin); err != nil {
 		return fmt.Errorf("spawn daemon: %w", err)
 	}
 	return nil
 }
 
+func (c *Client) sendWithRetries(req Request, attempts int) (Response, error) {
+	var resp Response
+	var err error
+	for i := 0; i < attempts; i++ {
+		time.Sleep(autoStartRetryDelay)
+		resp, err = c.Send(req)
+		if err == nil {
+			return resp, nil
+		}
+	}
+	return Response{}, err
+}
+
 // SendWithAutoStart sends req to the daemon, auto-starting it if not running.
 // amxBin is the path to the amx binary used for auto-start.
 func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error) {
 	restarted := false
+	var autoStartLock *os.File
+	defer func() {
+		if autoStartLock != nil {
+			releaseAutoStartLock(autoStartLock)
+		}
+	}()
+
 	if daemonSocketOlderThanBinary(c.socketPath, amxBin) {
+		lock, lockErr := acquireAutoStartLock(c.socketPath)
+		if lockErr != nil {
+			if !errors.Is(lockErr, errAutoStartInProgress) {
+				return Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
+			}
+			resp, err := c.Send(req)
+			if err == nil {
+				return resp, nil
+			}
+			resp, retryErr := c.sendWithRetries(req, autoStartRetryCount)
+			if retryErr == nil {
+				return resp, nil
+			}
+			return Response{}, fmt.Errorf("daemon did not start in time: %w", retryErr)
+		}
+		autoStartLock = lock
+
 		if health := c.Health(); health.Alive {
 			slog.Debug("daemon client: restarting stale daemon for newer amx binary",
 				"socket_path", c.socketPath,
@@ -200,18 +242,33 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 	// behind a ghost daemon listening on no filesystem entry. Skip the
 	// spawnDetached and fall straight into the retry loop instead.
 	if !restarted {
-		if startErr := spawnDetached(amxBin); startErr != nil {
-			return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
+		if autoStartLock == nil {
+			lock, lockErr := acquireAutoStartLock(c.socketPath)
+			if lockErr != nil {
+				if !errors.Is(lockErr, errAutoStartInProgress) {
+					return Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
+				}
+			} else {
+				autoStartLock = lock
+			}
+		}
+		if autoStartLock != nil {
+			// Another process may have completed startup between our failed Send
+			// and acquiring the lock. Recheck before spawning.
+			resp, err = c.Send(req)
+			if err == nil {
+				return resp, nil
+			}
+			if startErr := spawnDetached(amxBin); startErr != nil {
+				return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
+			}
 		}
 	}
 
 	// Retry for up to 1s.
-	for i := 0; i < autoStartRetryCount; i++ {
-		time.Sleep(autoStartRetryDelay)
-		resp, err = c.Send(req)
-		if err == nil {
-			return resp, nil
-		}
+	resp, err = c.sendWithRetries(req, autoStartRetryCount)
+	if err == nil {
+		return resp, nil
 	}
 	return Response{}, fmt.Errorf("daemon did not start in time: %w", err)
 }

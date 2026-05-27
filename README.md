@@ -136,7 +136,10 @@ Overrides only affect the current launch. They do not rewrite `config.toml`.
 Press `S` from the dashboard to open the past-session search. amx walks each
 profile's transcript directory (Claude `~/.claude/projects`, Copilot
 `~/.copilot/session-state`, Codex `~/.codex/sessions`) and indexes every
-JSONL conversation it finds at `~/.local/share/agent-mux/transcripts.json`.
+JSONL conversation it finds. Session metadata is stored at
+`~/.local/share/agent-mux/transcripts.json`; searchable transcript text is
+stored in per-session sidecars under `~/.local/share/agent-mux/transcripts.search/`.
+The daemon never loads the transcript index or search sidecars.
 
 - `/` enters a free-text query; results stream the matching JSONL on demand
   and show the per-session match count.
@@ -148,11 +151,24 @@ JSONL conversation it finds at `~/.local/share/agent-mux/transcripts.json`.
   (file kept on disk; rescans do not resurrect it), `f` also removes the
   underlying JSONL file (irreversible).
 
+Maintenance commands:
+
+```bash
+amx transcripts status
+amx transcripts compact
+amx transcripts rebuild --all
+```
+
+`status` reports metadata and sidecar sizes, visible/hidden entry counts, and
+missing sidecars. `compact` migrates legacy inline `search_text` fields into
+sidecars and rewrites `transcripts.json` as metadata-only JSON. `rebuild --all`
+deletes and rebuilds the sidecar store from configured transcript directories,
+temporarily disabling the scan-age cutoff for that pass.
+
 Retention is controlled by `[defaults.session_archive] keep_days` (default
-30). The daemon runs a background prune every six hours that flips entries
-older than `keep_days` to hidden; the on-disk transcript file is left
-intact. Set `keep_days = 0` to use the default; negative values are
-rejected at validation time.
+30). Refresh and prune operations hide index entries older than `keep_days`;
+the on-disk transcript files are left intact. Set `keep_days = 0` to use the
+default; negative values are rejected at validation time.
 
 Each refresh of the past-session list only walks files modified within
 `scan_max_age_days` days (default: inherits `keep_days`). Set to `0` to
@@ -305,6 +321,14 @@ It listens on:
 ```text
 ~/.local/share/agent-mux/daemon.sock
 ```
+
+Startup is guarded by a single-instance lock next to the socket. Concurrent
+hook bursts and duplicate `amx daemon start` calls reuse the serving daemon
+instead of creating process storms. `amx daemon restart` asks the current
+daemon to shut down, waits briefly for socket removal, then starts one detached
+replacement. Daemon startup intentionally avoids transcript maintenance; use
+the `amx transcripts ...` commands or the dashboard search path for transcript
+storage work.
 
 ### Investigating hook event flow
 

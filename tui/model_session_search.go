@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+	"log/slog"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -215,13 +217,25 @@ func runSessionSearchCmd(seq int, idx *transcript.Index, readers map[string]tran
 	}
 }
 
-// sessionsRefreshCmd runs Index.Refresh off-thread and emits a
-// sessionsRefreshDoneMsg on completion. The seq is forwarded to the
+// sessionsRefreshCmd runs Index.Refresh and retention pruning off-thread, then
+// emits a sessionsRefreshDoneMsg on completion. The seq is forwarded to the
 // follow-up search dispatch so the result chain stays cancellable.
 func sessionsRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader, seq int) tea.Cmd {
 	return func() tea.Msg {
-		err := idx.Refresh(cfg, readers)
-		return sessionsRefreshDoneMsg{err: err, seq: seq}
+		refreshErr := idx.Refresh(cfg, readers)
+		hidden, pruneErr := transcript.Prune(idx, cfg, time.Now())
+		if pruneErr != nil {
+			slog.Warn("transcript.prune failed", "err", pruneErr)
+		} else if hidden > 0 {
+			slog.Debug("transcript.prune", "hidden", hidden)
+		}
+		if refreshErr != nil && pruneErr != nil {
+			return sessionsRefreshDoneMsg{err: fmt.Errorf("refresh failed: %v; prune failed: %w", refreshErr, pruneErr), seq: seq}
+		}
+		if refreshErr != nil {
+			return sessionsRefreshDoneMsg{err: refreshErr, seq: seq}
+		}
+		return sessionsRefreshDoneMsg{err: pruneErr, seq: seq}
 	}
 }
 

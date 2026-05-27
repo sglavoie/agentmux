@@ -29,20 +29,28 @@ func Prune(idx *Index, cfg *config.Config, now time.Time) (int, error) {
 	}
 	cutoff := now.Add(-time.Duration(keepDays) * 24 * time.Hour)
 
-	entries := idx.List(ListFilter{IncludeHidden: true})
 	hidden := 0
-	for _, meta := range entries {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	for key, meta := range idx.entries {
 		if meta.HiddenFromIndex {
 			continue
 		}
 		if meta.LastAt.IsZero() || !meta.LastAt.Before(cutoff) {
 			continue
 		}
-		key := IndexKey(meta.Harness, meta.ID)
-		if err := idx.SetHidden(key, true); err != nil {
+		meta.HiddenFromIndex = true
+		idx.entries[key] = meta
+		if err := idx.DeleteSearchText(key); err != nil {
 			return hidden, err
 		}
 		hidden++
+	}
+	if hidden == 0 {
+		return 0, nil
+	}
+	if err := idx.saveLocked(); err != nil {
+		return hidden, err
 	}
 	return hidden, nil
 }

@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"errors"
+	"io/fs"
 	"log/slog"
 	"sort"
 	"strings"
@@ -64,7 +65,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		// Snippet short-circuit: meta.Snippet is the indexed first-user-message
 		// (≤160 runes). When the needle already appears in that snippet we
 		// emit a result with Matches=1 and the snippet as preview, skipping
-		// the SearchText scan entirely. Trades an exact match count for a
+		// the sidecar scan entirely. Trades an exact match count for a
 		// constant-time lookup — the user-visible cost is a (1 match) badge
 		// instead of the true count for sessions whose snippet contains the
 		// needle. Snippets are stored as written (not lowercased) so we
@@ -73,25 +74,26 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 			results = append(results, Result{Meta: m, Matches: 1, Preview: m.Snippet})
 			continue
 		}
-		// Fast path: SearchText is the lowercased concatenated transcript
-		// body persisted in the index by Refresh. Substring search and
-		// match counting run entirely in memory — no JSONL reopen, no
-		// per-message decoding. The on-disk index for the dev machine
-		// (~4200 sessions) drops a query that took ~47s through ReadMessages
-		// to well under a second once SearchText is populated.
-		if m.SearchText != "" {
-			count, preview := countMatchesInSearchText(m.SearchText, needle)
+		// Fast path: per-session sidecars hold the lowercased concatenated
+		// transcript body. Substring search and match counting avoid JSONL
+		// reopen/decoding while keeping the in-memory index metadata-only.
+		key := IndexKey(m.Harness, m.ID)
+		searchText, err := idx.ReadSearchText(key)
+		if err == nil {
+			count, preview := countMatchesInSearchText(searchText, needle)
 			if count == 0 {
 				continue
 			}
 			results = append(results, Result{Meta: m, Matches: count, Preview: preview})
 			continue
 		}
-		// Legacy fallback: entries written by older versions of amx (and
-		// the realdata diagnostic test that loads the on-disk index
-		// directly without a Refresh) have no SearchText. Stream the file
-		// for those — slow but correct, and the next Refresh will
-		// populate SearchText so the slow path stops triggering.
+		if !errors.Is(err, fs.ErrNotExist) {
+			slog.Debug("transcript.search: sidecar read failed",
+				"path", idx.SearchTextPath(key), "err", err)
+		}
+		// Fallback: older/corrupt indexes may lack sidecars. Stream the
+		// file for those — slow but correct — and repair the sidecar after
+		// a successful read so subsequent searches use the fast path.
 		if readers == nil {
 			return nil, errors.New("transcript: Search with text requires readers")
 		}
@@ -107,6 +109,10 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 				"path", m.Path, "err", err)
 			continue
 		}
+		if err := idx.WriteSearchText(key, messagesSearchText(msgs)); err != nil {
+			slog.Debug("transcript.search: sidecar repair failed",
+				"path", idx.SearchTextPath(key), "err", err)
+		}
 		count, preview := countMatches(msgs, needle)
 		if count == 0 {
 			continue
@@ -118,10 +124,18 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 	return results, nil
 }
 
+func messagesSearchText(msgs []Message) string {
+	var buf strings.Builder
+	for _, msg := range msgs {
+		appendSearchText(&buf, msg.Text)
+	}
+	return buf.String()
+}
+
 // countMatchesInSearchText counts case-insensitive occurrences of needle
-// inside the precomputed (already-lowercased) SearchText. The preview is
+// inside the precomputed (already-lowercased) search text. The preview is
 // the single line of text containing the first match — necessarily
-// lowercased, since SearchText itself is the only source available
+// lowercased, since the sidecar is the only source available
 // without re-reading the file. needle must already be lower-cased.
 func countMatchesInSearchText(searchText, needle string) (int, string) {
 	if needle == "" {

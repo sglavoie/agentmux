@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -47,6 +48,10 @@ type Index struct {
 	entries map[string]SessionMeta
 }
 
+// saveLockedHookForTest lets same-package tests count successful persistence
+// operations without changing the production save path.
+var saveLockedHookForTest func()
+
 // indexFile is the on-disk wrapper used for JSON serialization. A struct
 // with a single field is used (instead of marshalling the bare map) so
 // the file can grow a version or auxiliary fields without breaking
@@ -65,24 +70,138 @@ func LoadIndex() (*Index, error) {
 // caller that needs to point at a non-default location.
 func LoadIndexAt(path string) (*Index, error) {
 	idx := &Index{path: path, entries: make(map[string]SessionMeta)}
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return idx, nil
 		}
 		return nil, err
 	}
-	if len(data) == 0 {
-		return idx, nil
-	}
-	var stored indexFile
-	if err := json.Unmarshal(data, &stored); err != nil {
+	defer f.Close()
+
+	dec := json.NewDecoder(f)
+	if err := idx.decodeIndexFile(dec); err != nil {
+		if errors.Is(err, io.EOF) {
+			return idx, nil
+		}
 		return nil, fmt.Errorf("decoding transcript index %s: %w", path, err)
 	}
-	if stored.Entries != nil {
-		idx.entries = stored.Entries
-	}
 	return idx, nil
+}
+
+func (i *Index) decodeIndexFile(dec *json.Decoder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok || delim != '{' {
+		return fmt.Errorf("expected object start, got %v", tok)
+	}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		field, ok := tok.(string)
+		if !ok {
+			return fmt.Errorf("expected object field name, got %v", tok)
+		}
+		if field != "entries" {
+			if err := skipJSONValue(dec); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := i.decodeEntries(dec); err != nil {
+			return err
+		}
+	}
+	tok, err = dec.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok = tok.(json.Delim)
+	if !ok || delim != '}' {
+		return fmt.Errorf("expected object end, got %v", tok)
+	}
+	return nil
+}
+
+func (i *Index) decodeEntries(dec *json.Decoder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if tok == nil {
+		return nil
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok || delim != '{' {
+		return fmt.Errorf("expected entries object start, got %v", tok)
+	}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		key, ok := tok.(string)
+		if !ok {
+			return fmt.Errorf("expected entry key, got %v", tok)
+		}
+		var meta SessionMeta
+		if err := dec.Decode(&meta); err != nil {
+			return err
+		}
+		if meta.SearchText != "" {
+			if err := i.WriteSearchText(key, meta.SearchText); err != nil {
+				return err
+			}
+			meta.SearchText = ""
+		}
+		i.entries[key] = meta
+	}
+	tok, err = dec.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok = tok.(json.Delim)
+	if !ok || delim != '}' {
+		return fmt.Errorf("expected entries object end, got %v", tok)
+	}
+	return nil
+}
+
+func skipJSONValue(dec *json.Decoder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delim {
+	case '{':
+		for dec.More() {
+			if _, err := dec.Token(); err != nil {
+				return err
+			}
+			if err := skipJSONValue(dec); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for dec.More() {
+			if err := skipJSONValue(dec); err != nil {
+				return err
+			}
+		}
+	default:
+		return nil
+	}
+	_, err = dec.Token()
+	return err
 }
 
 // Path returns the absolute on-disk path backing this index.
@@ -107,7 +226,15 @@ func (i *Index) saveLocked() (retErr error) {
 	if err := os.MkdirAll(filepath.Dir(i.path), 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(indexFile{Entries: i.entries}, "", "  ")
+	for key, meta := range i.entries {
+		if meta.SearchText == "" {
+			continue
+		}
+		if err := i.WriteSearchText(key, meta.SearchText); err != nil {
+			return err
+		}
+	}
+	data, err := json.MarshalIndent(indexFile{Entries: metadataOnlyEntries(i.entries)}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -132,7 +259,22 @@ func (i *Index) saveLocked() (retErr error) {
 	if err := tf.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, i.path)
+	if err := os.Rename(tmp, i.path); err != nil {
+		return err
+	}
+	if saveLockedHookForTest != nil {
+		saveLockedHookForTest()
+	}
+	return nil
+}
+
+func metadataOnlyEntries(entries map[string]SessionMeta) map[string]SessionMeta {
+	out := make(map[string]SessionMeta, len(entries))
+	for key, meta := range entries {
+		meta.SearchText = ""
+		out[key] = meta
+	}
+	return out
 }
 
 // Refresh re-walks every configured profile's transcripts directory via
@@ -182,13 +324,20 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 		if meta.FileSize != size || !meta.FileModTime.Equal(mtime) {
 			return SessionMeta{}, false
 		}
-		// Pre-SearchText entries (written by earlier versions of amx) must
-		// be reparsed once so the substring search can run against
-		// in-memory text instead of reopening the JSONL on every keystroke.
-		// Empty MessageCount in the cached entry implies no conversation
-		// records were ever in the file, so SearchText would still be ""
-		// on reparse; that case keeps the cache hit.
-		if meta.SearchText == "" && meta.MessageCount > 0 {
+		if meta.SearchText != "" {
+			return meta, true
+		}
+		if meta.HiddenFromIndex || meta.MessageCount == 0 {
+			return meta, true
+		}
+		key := IndexKey(meta.Harness, meta.ID)
+		exists, err := i.SearchTextExists(key)
+		if err != nil {
+			slog.Debug("transcript.index: search sidecar stat failed",
+				"key", key, "err", err)
+			return SessionMeta{}, false
+		}
+		if !exists {
 			return SessionMeta{}, false
 		}
 		return meta, true
@@ -227,19 +376,30 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 			key := IndexKey(meta.Harness, meta.ID)
 			if existing, ok := i.entries[key]; ok {
 				meta.HiddenFromIndex = existing.HiddenFromIndex
-				if existing.FileSize == meta.FileSize && existing.FileModTime.Equal(meta.FileModTime) {
+				if meta.SearchText == "" && existing.FileSize == meta.FileSize && existing.FileModTime.Equal(meta.FileModTime) {
 					meta.MessageCount = existing.MessageCount
 					meta.Snippet = existing.Snippet
 					meta.StartedAt = existing.StartedAt
 					meta.LastAt = existing.LastAt
-					// Preserve a previously populated SearchText so the
-					// merge path does not blank it out when a discover
-					// pass produces a meta without one (e.g., the cached
-					// lookup hit and SearchText was already present).
-					if meta.SearchText == "" {
-						meta.SearchText = existing.SearchText
+				}
+			}
+			if meta.SearchText != "" {
+				if meta.HiddenFromIndex {
+					if err := i.DeleteSearchText(key); err != nil {
+						slog.Debug("transcript.index: hidden search sidecar cleanup failed",
+							"key", key, "err", err)
+						if firstErr == nil {
+							firstErr = err
+						}
+					}
+				} else if err := i.WriteSearchText(key, meta.SearchText); err != nil {
+					slog.Debug("transcript.index: search sidecar write failed",
+						"key", key, "err", err)
+					if firstErr == nil {
+						firstErr = err
 					}
 				}
+				meta.SearchText = ""
 			}
 			i.entries[key] = meta
 		}
@@ -276,6 +436,10 @@ func (i *Index) Delete(key string, alsoFile bool) error {
 			i.entries[key] = entry
 			return fmt.Errorf("removing transcript file %s: %w", entry.Path, err)
 		}
+	}
+	if err := i.DeleteSearchText(key); err != nil {
+		i.entries[key] = entry
+		return fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err)
 	}
 	return i.saveLocked()
 }

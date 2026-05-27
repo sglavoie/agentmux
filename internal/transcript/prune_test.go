@@ -77,6 +77,112 @@ func TestPrune_DoesNotTouchFiles(t *testing.T) {
 	}
 }
 
+func TestPrune_RemovesSidecarsForNewlyHiddenEntries(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "transcript.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	idx := newTestIndex(t)
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	key := "claude:old"
+	must(t, idx.SetEntryForTest(key, SessionMeta{
+		ID: "old", Harness: harness.Claude, Path: path,
+		LastAt:       now.Add(-365 * 24 * time.Hour),
+		MessageCount: 1,
+	}))
+	if err := idx.WriteSearchText(key, "old needle"); err != nil {
+		t.Fatalf("WriteSearchText: %v", err)
+	}
+
+	cfg := &config.Config{}
+	cfg.Defaults.SessionArchive.KeepDays = 30
+	hidden, err := Prune(idx, cfg, now)
+	if err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if hidden != 1 {
+		t.Fatalf("hidden=%d, want 1", hidden)
+	}
+	exists, err := idx.SearchTextExists(key)
+	if err != nil {
+		t.Fatalf("SearchTextExists: %v", err)
+	}
+	if exists {
+		t.Fatalf("sidecar still exists after Prune")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("transcript file removed by Prune: %v", err)
+	}
+}
+
+func TestPrune_BatchesIndexSave(t *testing.T) {
+	idx := newTestIndex(t)
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	for _, id := range []string{"old-1", "old-2", "old-3"} {
+		must(t, idx.SetEntryForTest("claude:"+id, SessionMeta{
+			ID: id, Harness: harness.Claude,
+			LastAt: now.Add(-60 * 24 * time.Hour),
+		}))
+	}
+
+	saves := 0
+	saveLockedHookForTest = func() { saves++ }
+	t.Cleanup(func() { saveLockedHookForTest = nil })
+
+	cfg := &config.Config{}
+	cfg.Defaults.SessionArchive.KeepDays = 30
+	hidden, err := Prune(idx, cfg, now)
+	if err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if hidden != 3 {
+		t.Fatalf("hidden=%d, want 3", hidden)
+	}
+	if saves != 1 {
+		t.Fatalf("saves=%d, want 1 batched save", saves)
+	}
+}
+
+func TestPrune_PreservesHiddenEntriesAndSearchExcludesThem(t *testing.T) {
+	idx := newTestIndex(t)
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	must(t, idx.SetEntryForTest("claude:hidden", SessionMeta{
+		ID: "hidden", Harness: harness.Claude,
+		LastAt:          now.Add(-90 * 24 * time.Hour),
+		SearchText:      "needle",
+		HiddenFromIndex: true,
+	}))
+	must(t, idx.SetEntryForTest("claude:old", SessionMeta{
+		ID: "old", Harness: harness.Claude,
+		LastAt:     now.Add(-90 * 24 * time.Hour),
+		SearchText: "needle",
+	}))
+
+	cfg := &config.Config{}
+	cfg.Defaults.SessionArchive.KeepDays = 30
+	hidden, err := Prune(idx, cfg, now)
+	if err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if hidden != 1 {
+		t.Fatalf("hidden=%d, want 1 newly hidden entry", hidden)
+	}
+
+	all := idx.List(ListFilter{IncludeHidden: true})
+	if len(all) != 2 {
+		t.Fatalf("hidden entries were dropped from index: len=%d, want 2", len(all))
+	}
+	results, err := Search(idx, nil, Query{Text: "needle"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("Search returned hidden entries: %+v", results)
+	}
+}
+
 func TestPrune_ZeroKeepDaysIsNoOp(t *testing.T) {
 	idx := newTestIndex(t)
 	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)

@@ -58,9 +58,11 @@ compact = 180
 hook_silence = 14400
 
 # Session archive: retention policy for the searchable session-transcript
-# index. The daemon prunes entries older than keep_days from the index;
-# transcript files on disk are left intact. Set keep_days to 0 to use the
-# default. Per-session "also delete the file" deletes are handled
+# index. transcripts.json stores metadata only; searchable text lives in
+# per-session sidecars under transcripts.search. The daemon does not load
+# either store on startup. Refresh/prune operations hide entries older than
+# keep_days; transcript files on disk are left intact. Set keep_days to 0 to
+# use the default. Per-session "also delete the file" deletes are handled
 # interactively from the dashboard, not by this setting.
 # scan_max_age_days bounds the per-refresh transcript walk: files whose
 # mtime is older than the cutoff are skipped without opening, while

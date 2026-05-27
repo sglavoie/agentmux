@@ -38,29 +38,51 @@ func writeTranscriptIndex(t *testing.T, entries map[string]transcript.SessionMet
 	return idx
 }
 
+type sessionSearchTestReader struct {
+	harness  string
+	discover func(homeDir string, opts transcript.DiscoverOptions) ([]transcript.SessionMeta, error)
+}
+
+func (r sessionSearchTestReader) Harness() string { return r.harness }
+func (r sessionSearchTestReader) Discover(homeDir string, opts transcript.DiscoverOptions) ([]transcript.SessionMeta, error) {
+	if r.discover != nil {
+		return r.discover(homeDir, opts)
+	}
+	return nil, nil
+}
+func (r sessionSearchTestReader) ReadMessages(string) ([]transcript.Message, error) {
+	return nil, nil
+}
+
 // sessionSearchFilterModel returns a Model preloaded with two index entries
-// — one whose SearchText contains "needle", one that does not — and placed
-// directly into ModeSessionSearch with the empty-query result set already
-// populated.
+// — one whose search sidecar contains "needle", one that does not — and
+// placed directly into ModeSessionSearch with the empty-query result set
+// already populated.
 func sessionSearchFilterModel(t *testing.T) Model {
 	t.Helper()
 	now := time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)
 	hit := transcript.SessionMeta{
 		ID: "hit", Harness: harness.Claude, Profile: "work", Project: "Foo",
-		MessageCount: 2, SearchText: "alpha needle beta",
-		Snippet: "alpha needle beta", LastAt: now,
+		MessageCount: 2,
+		Snippet:      "alpha needle beta", LastAt: now,
 	}
 	miss := transcript.SessionMeta{
 		ID: "miss", Harness: harness.Claude, Profile: "work", Project: "Bar",
-		MessageCount: 1, SearchText: "no match here",
-		Snippet: "no match here", LastAt: now.Add(-time.Hour),
+		MessageCount: 1,
+		Snippet:      "no match here", LastAt: now.Add(-time.Hour),
 	}
 	idx := writeTranscriptIndex(t, map[string]transcript.SessionMeta{
 		"claude:hit":  hit,
 		"claude:miss": miss,
 	})
-	// Empty readers map is sufficient because both entries carry SearchText
-	// (the fast path skips reader lookups entirely).
+	if err := idx.WriteSearchText("claude:hit", "alpha needle beta"); err != nil {
+		t.Fatalf("WriteSearchText hit: %v", err)
+	}
+	if err := idx.WriteSearchText("claude:miss", "no match here"); err != nil {
+		t.Fatalf("WriteSearchText miss: %v", err)
+	}
+	// Empty readers map is sufficient because both entries have search
+	// sidecars (the fast path skips reader lookups entirely).
 	m := Model{
 		mode:              ModeSessionSearch,
 		width:             100,
@@ -89,7 +111,7 @@ func drainCmd(t *testing.T, cmd tea.Cmd) tea.Msg {
 // TestSessionSearch_TypingShrinksResultSet drives the dispatch chain end to
 // end: ModeSessionSearch → "/" → "n" → debounce → search → done. After the
 // final sessionSearchDoneMsg the model's sessionResults must contain only
-// the entry whose SearchText matches the typed needle. Guards against
+// the entry whose search sidecar matches the typed needle. Guards against
 // future regressions to the seq-dispatch glue between
 // dispatchSessionSearch, sessionSearchDebounceMsg, and sessionSearchDoneMsg.
 func TestSessionSearch_TypingShrinksResultSet(t *testing.T) {
@@ -171,5 +193,47 @@ func TestSessionSearch_StaleRefreshDoesNotOverwriteTypedResults(t *testing.T) {
 	}
 	if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "hit" {
 		t.Errorf("typed-query results were overwritten by stale refresh: %+v", m.sessionResults)
+	}
+}
+
+func TestSessionsRefreshCmdPrunesOldEntries(t *testing.T) {
+	old := transcript.SessionMeta{
+		ID:      "old",
+		Harness: harness.Claude,
+		LastAt:  time.Now().Add(-45 * 24 * time.Hour),
+	}
+	idx := writeTranscriptIndex(t, map[string]transcript.SessionMeta{})
+	cfg := &config.Config{}
+	cfg.Defaults.SessionArchive.KeepDays = 30
+	cfg.Profiles = []config.Account{{
+		Name:    "work",
+		Harness: harness.Claude,
+		HomeDir: t.TempDir(),
+	}}
+	readers := map[string]transcript.Reader{
+		harness.Claude: sessionSearchTestReader{
+			harness: harness.Claude,
+			discover: func(string, transcript.DiscoverOptions) ([]transcript.SessionMeta, error) {
+				return []transcript.SessionMeta{old}, nil
+			},
+		},
+	}
+
+	msg, ok := drainCmd(t, sessionsRefreshCmd(idx, cfg, readers, 7)).(sessionsRefreshDoneMsg)
+	if !ok {
+		t.Fatalf("refresh cmd produced %T, want sessionsRefreshDoneMsg", msg)
+	}
+	if msg.err != nil {
+		t.Fatalf("refresh/prune returned error: %v", msg.err)
+	}
+	if msg.seq != 7 {
+		t.Fatalf("seq = %d, want 7", msg.seq)
+	}
+	meta, ok := idx.Get("claude:old")
+	if !ok {
+		t.Fatal("old entry missing after refresh/prune")
+	}
+	if !meta.HiddenFromIndex {
+		t.Fatal("old entry was not hidden by refresh-time prune")
 	}
 }
