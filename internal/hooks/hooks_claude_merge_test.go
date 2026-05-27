@@ -229,4 +229,3 @@ func TestMergeUpdatesStaleHooks(t *testing.T) {
 		t.Errorf("expected in_sync after update, got %q", statuses[0].Status)
 	}
 }
-

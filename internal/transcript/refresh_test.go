@@ -373,4 +373,3 @@ func TestRefresh_FastPathSkipsUnchangedFiles(t *testing.T) {
 		t.Errorf("second Refresh: parsed %d files, want 0 (cache should short-circuit)", len(parsedPaths))
 	}
 }
-

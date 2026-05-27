@@ -171,4 +171,3 @@ func TestDaemonSocketOlderThanBinary(t *testing.T) {
 		t.Fatal("expected older binary to skip daemon restart check")
 	}
 }
-

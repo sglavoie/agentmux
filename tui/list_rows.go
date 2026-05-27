@@ -358,4 +358,3 @@ func countInGroup(sessions []session.RunningSession, group int, lastActivity map
 }
 
 var groupLabels = [3]string{"Needs Attention", "Active", "Idle"}
-
