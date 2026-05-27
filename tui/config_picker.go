@@ -14,14 +14,6 @@ func renderConfigPicker(m Model) string {
 	}
 	sb.WriteString(styleHeader.Render(header+": "+runningSessionDisplayTitle(m.targetSession)) + "\n\n")
 
-	if m.configPickerCursor >= 0 && m.configPickerCursor < len(m.configPickerAccounts) {
-		selectedHarness := m.configPickerAccounts[m.configPickerCursor].EffectiveHarness()
-		currentHarness := m.targetSession.Harness
-		if currentHarness != "" && selectedHarness != "" && !strings.EqualFold(currentHarness, selectedHarness) {
-			warning := "⚠  Switching harness: " + currentHarness + " → " + selectedHarness + ". Session will restart."
-			sb.WriteString(styleAttentionRow.Render(warning) + "\n\n")
-		}
-	}
 	maxName, maxHarness := 0, 0
 	for _, acc := range m.configPickerAccounts {
 		if n := len(acc.Name); n > maxName {
@@ -47,6 +39,15 @@ func renderConfigPicker(m Model) string {
 			sb.WriteString(line)
 		}
 		sb.WriteByte('\n')
+	}
+
+	if m.configPickerCursor >= 0 && m.configPickerCursor < len(m.configPickerAccounts) {
+		selectedHarness := m.configPickerAccounts[m.configPickerCursor].EffectiveHarness()
+		currentHarness := m.targetSession.Harness
+		if currentHarness != "" && selectedHarness != "" && !strings.EqualFold(currentHarness, selectedHarness) {
+			warning := "⚠  Switching harness: " + currentHarness + " → " + selectedHarness + ". Session will restart."
+			sb.WriteString("\n" + styleAttentionRow.Render(warning) + "\n")
+		}
 	}
 	return sb.String()
 }

@@ -66,6 +66,20 @@ func centerOverlay(base, popup string, baseWidth, baseHeight int, dim bool) stri
 	return composeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)
 }
 
+// topCenterOverlay horizontally centers the popup but anchors it near the top
+// of the base area (one row from the top edge). Use this when the popup's
+// height can change at runtime and the user shouldn't see the modal jump
+// vertically as content is added or removed.
+func topCenterOverlay(base, popup string, baseWidth, baseHeight int, dim bool) string {
+	popupW := popupWidth(popup)
+	startCol := max((baseWidth-popupW)/2, 0)
+	startRow := 1
+	if baseHeight <= 1 {
+		startRow = 0
+	}
+	return composeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)
+}
+
 // popupWidth returns the widest rendered line in popup, accounting for ANSI
 // escape sequences via lipgloss.Width.
 func popupWidth(popup string) int {

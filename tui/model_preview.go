@@ -79,7 +79,13 @@ func (m Model) render() string {
 			popup = renderDetailBox(m)
 		}
 		overlayH := m.height - previewFooterLines(m) - 1
-		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
+		if m.mode == ModeConfigPicker {
+			// Top-anchored so the modal doesn't jump when the harness-switch
+			// warning is appended/removed.
+			sb.WriteString(topCenterOverlay(base, popup, m.width, overlayH, true))
+		} else {
+			sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
+		}
 	default:
 		// Header area varies by mode; list is always shown below.
 		switch m.mode {
