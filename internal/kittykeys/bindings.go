@@ -17,6 +17,7 @@ var Actions = []Action{
 	// Session management
 	{Key: "f6", Section: "Sessions", Description: "set tab color (overlay picker)", AmxCommand: "color-picker", LaunchType: "overlay"},
 	{Key: "f8", Section: "Sessions", Description: "clear markers and state icons from tab", AmxCommand: "hook-indicator user_clear", LaunchType: "background"},
+	{Key: "f10", Section: "Sessions", Description: "toggle mute on the focused tab (suppresses notifications)", AmxCommand: "mute-toggle", LaunchType: "background"},
 	{Key: "f4", Section: "Sessions", Description: "focus next tab needing attention", AmxCommand: "focus-next", LaunchType: "background"},
 	// Scrollback / terminal
 	{Key: "f3", Section: "Scrollback", Description: "toggle error/warning markers"},
