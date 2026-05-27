@@ -4,9 +4,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/spf13/cobra"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/spf13/cobra"
 )
 
 var focusNextWindowID int

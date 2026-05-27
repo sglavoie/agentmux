@@ -48,7 +48,7 @@ func TestDisplayName(t *testing.T) {
 		{"plan", "plan"},
 		{"", ""},
 		{"plan-not12hex-aabbccddeeff", "plan-not12hex"},
-		{"plan-zzzzzzzzzzzz", "plan-zzzzzzzzzzzz"}, // non-hex chars: not stripped
+		{"plan-zzzzzzzzzzzz", "plan-zzzzzzzzzzzz"},       // non-hex chars: not stripped
 		{"plan-aabb1122ccdd-ee", "plan-aabb1122ccdd-ee"}, // trailing isn't 12 hex
 	}
 	for _, tc := range cases {

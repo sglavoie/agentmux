@@ -15,26 +15,26 @@ import (
 // from the TUI) and is preserved across rescans so old sessions do not
 // resurrect when the underlying file is still present.
 type SessionMeta struct {
-	ID              string    `json:"id"`
-	Harness         string    `json:"harness"`
-	Profile         string    `json:"profile"`
-	Project         string    `json:"project"`
-	CWD             string    `json:"cwd"`
-	StartedAt       time.Time `json:"started_at"`
-	LastAt          time.Time `json:"last_at"`
-	Path            string    `json:"path"`
-	FileSize        int64     `json:"file_size"`
-	FileModTime     time.Time `json:"file_mod_time"`
-	MessageCount    int       `json:"message_count"`
-	Snippet         string    `json:"snippet"`
+	ID           string    `json:"id"`
+	Harness      string    `json:"harness"`
+	Profile      string    `json:"profile"`
+	Project      string    `json:"project"`
+	CWD          string    `json:"cwd"`
+	StartedAt    time.Time `json:"started_at"`
+	LastAt       time.Time `json:"last_at"`
+	Path         string    `json:"path"`
+	FileSize     int64     `json:"file_size"`
+	FileModTime  time.Time `json:"file_mod_time"`
+	MessageCount int       `json:"message_count"`
+	Snippet      string    `json:"snippet"`
 	// SearchText is the lowercased concatenation of every message body
 	// in the transcript, joined by '\n', persisted so substring search
 	// can run entirely against the in-memory index without reopening
 	// the underlying JSONL file on every keystroke. Empty for entries
 	// written by older versions of amx; Search falls back to a live
 	// ReadMessages scan in that case.
-	SearchText      string    `json:"search_text,omitempty"`
-	HiddenFromIndex bool      `json:"hidden_from_index,omitempty"`
+	SearchText      string `json:"search_text,omitempty"`
+	HiddenFromIndex bool   `json:"hidden_from_index,omitempty"`
 }
 
 // Message is one parsed conversation turn, flattened for display and

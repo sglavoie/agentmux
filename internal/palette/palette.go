@@ -19,9 +19,9 @@ func (c Color) ForegroundHex() string {
 }
 
 type rawPalette struct {
-	ActiveFg   string            `json:"active_fg"`
-	InactiveFg string            `json:"inactive_fg"`
-	Colors     map[string]Color  `json:"colors"`
+	ActiveFg   string           `json:"active_fg"`
+	InactiveFg string           `json:"inactive_fg"`
+	Colors     map[string]Color `json:"colors"`
 }
 
 var (

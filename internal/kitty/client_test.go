@@ -280,8 +280,8 @@ func TestLaunchOverlayPager_Args(t *testing.T) {
 	}
 	args := runner.Calls[0].Args
 	wantArgs := map[string]bool{
-		"--type=overlay":                  false,
-		"--source-window=id:7":            false,
+		"--type=overlay":                    false,
+		"--source-window=id:7":              false,
 		"--stdin-source=@screen_scrollback": false,
 	}
 	for _, a := range args {
@@ -301,7 +301,7 @@ func TestSetUserVars_Argv(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 
 	err := client.SetUserVars("id:7", map[string]string{
-		"cc_account": "work",
+		"cc_account":  "work",
 		"amx_profile": "work",
 	})
 	if err != nil {

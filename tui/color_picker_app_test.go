@@ -23,15 +23,15 @@ type setUserVarsCall struct {
 	vars      map[string]string
 }
 
-func (f *fakeColorPickerClient) ListWindows() ([]kitty.OSWindow, error)          { return nil, nil }
-func (f *fakeColorPickerClient) LaunchTab(kitty.LaunchOpts) error                { return nil }
-func (f *fakeColorPickerClient) CloseTab(string) error                           { return nil }
-func (f *fakeColorPickerClient) MoveTab(string, int) error                       { return nil }
-func (f *fakeColorPickerClient) SetTabTitle(string, string) error                { return nil }
-func (f *fakeColorPickerClient) FocusTab(string) error                           { return nil }
-func (f *fakeColorPickerClient) FocusWindow(string) error                        { return nil }
-func (f *fakeColorPickerClient) GetText(string, string) (string, error)          { return "", nil }
-func (f *fakeColorPickerClient) LaunchOverlayPager(string) error                 { return nil }
+func (f *fakeColorPickerClient) ListWindows() ([]kitty.OSWindow, error) { return nil, nil }
+func (f *fakeColorPickerClient) LaunchTab(kitty.LaunchOpts) error       { return nil }
+func (f *fakeColorPickerClient) CloseTab(string) error                  { return nil }
+func (f *fakeColorPickerClient) MoveTab(string, int) error              { return nil }
+func (f *fakeColorPickerClient) SetTabTitle(string, string) error       { return nil }
+func (f *fakeColorPickerClient) FocusTab(string) error                  { return nil }
+func (f *fakeColorPickerClient) FocusWindow(string) error               { return nil }
+func (f *fakeColorPickerClient) GetText(string, string) (string, error) { return "", nil }
+func (f *fakeColorPickerClient) LaunchOverlayPager(string) error        { return nil }
 
 func (f *fakeColorPickerClient) SetTabColor(matchExpr, activeBg, inactiveBg, activeFg, inactiveFg string) error {
 	f.tabColorCalls = append(f.tabColorCalls, setTabColorCall{matchExpr, activeBg, inactiveBg, activeFg, inactiveFg})

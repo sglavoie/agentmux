@@ -43,7 +43,7 @@ type KittyClient interface {
 type LaunchOpts struct {
 	Title     string
 	Directory string
-	Location  string            // "first", "after", or "" for default
+	Location  string // "first", "after", or "" for default
 	Env       map[string]string
 	UserVars  map[string]string
 	Cmdline   []string

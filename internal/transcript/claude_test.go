@@ -275,4 +275,3 @@ func TestTruncateSnippet(t *testing.T) {
 		t.Errorf("long truncation missing ellipsis: %q", got)
 	}
 }
-

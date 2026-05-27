@@ -115,11 +115,11 @@ type Notifier struct {
 	debounce        time.Duration
 	dispatchTimeout time.Duration
 	cfg             *config.NotificationConfig
-	now             func() time.Time   // injectable for tests
-	dispatch        dispatchFn         // injectable for tests
-	focus           focusClient        // optional; nil when the daemon has no Kitty client wired
-	isMuted         func(int) bool     // optional; nil treats every window as unmuted (tests + pre-wire)
-	ctx             context.Context    // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
+	now             func() time.Time // injectable for tests
+	dispatch        dispatchFn       // injectable for tests
+	focus           focusClient      // optional; nil when the daemon has no Kitty client wired
+	isMuted         func(int) bool   // optional; nil treats every window as unmuted (tests + pre-wire)
+	ctx             context.Context  // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
 }
 
 // NewNotifier creates a Notifier with the given notification config.

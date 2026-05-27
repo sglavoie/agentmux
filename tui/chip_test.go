@@ -264,7 +264,7 @@ func TestRenderFocusedChipShowsBracketedRemove(t *testing.T) {
 func TestEnterOnFocusedChipRemoves(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = Parse("api @work")
-	m = pressKey(m, "tab")               // focus first chip (/api)
+	m = pressKey(m, "tab") // focus first chip (/api)
 	updated, cmd := m.Update(keyPress("enter"))
 	if cmd != nil {
 		t.Errorf("expected no focusCmd when removing chip, got non-nil cmd")

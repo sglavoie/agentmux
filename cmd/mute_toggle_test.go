@@ -158,8 +158,8 @@ func (f *fakeMuteClient) SetUserVars(matchExpr string, vars map[string]string) e
 	return nil
 }
 
-func (f *fakeMuteClient) FocusTab(string) error               { return nil }
-func (f *fakeMuteClient) FocusWindow(string) error            { return nil }
+func (f *fakeMuteClient) FocusTab(string) error    { return nil }
+func (f *fakeMuteClient) FocusWindow(string) error { return nil }
 func (f *fakeMuteClient) GetText(string, string) (string, error) {
 	return "", nil
 }

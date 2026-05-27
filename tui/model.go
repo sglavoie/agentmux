@@ -26,21 +26,21 @@ const (
 type Mode int
 
 const (
-	ModeList         Mode = iota
-	ModeSearch            // typing a filter expression (DSL)
-	ModeConfirm           // y/n confirmation for a destructive action
-	ModePicker            // multi-select session launcher
-	ModeConfigPicker      // account picker for config override
-	ModeHelp              // help overlay
-	ModeDetail            // detail pane: per-session hook event log
-	ModeActions           // per-row actions overlay
-	ModeSessionSearch     // searchable list of past harness transcripts
-	ModeSessionView       // scrollable transcript viewer for a single past session
-	ModeDeleteChoice      // three-way prompt: hide from index, also delete file, cancel
-	ModeChipPicker        // overlay listing chip values for ModeSessionSearch
-	ModeMessageDetail     // full-message overlay opened from ModeSessionView
-	ModePlanSearch        // searchable list of past agent-plan directories
-	ModePlanView          // inline pager for a single plan directory
+	ModeList          Mode = iota
+	ModeSearch             // typing a filter expression (DSL)
+	ModeConfirm            // y/n confirmation for a destructive action
+	ModePicker             // multi-select session launcher
+	ModeConfigPicker       // account picker for config override
+	ModeHelp               // help overlay
+	ModeDetail             // detail pane: per-session hook event log
+	ModeActions            // per-row actions overlay
+	ModeSessionSearch      // searchable list of past harness transcripts
+	ModeSessionView        // scrollable transcript viewer for a single past session
+	ModeDeleteChoice       // three-way prompt: hide from index, also delete file, cancel
+	ModeChipPicker         // overlay listing chip values for ModeSessionSearch
+	ModeMessageDetail      // full-message overlay opened from ModeSessionView
+	ModePlanSearch         // searchable list of past agent-plan directories
+	ModePlanView           // inline pager for a single plan directory
 )
 
 // chipPickerKind identifies which ModeSessionSearch chip filter the picker
@@ -97,7 +97,7 @@ type Model struct {
 	pickerRunning        map[string]bool
 	pickerSelected       map[int]bool
 	pickerCursor         int
-	pickerOffset         int // top row index for the scrollable picker view
+	pickerOffset         int    // top row index for the scrollable picker view
 	pickerFilter         string // live filter buffer (DSL)
 	pickerFilteredIdx    []int  // indices into pickerSessions for the filtered view
 	pickerSearchMode     bool   // true while / is active and filter input is open
@@ -191,18 +191,18 @@ type Model struct {
 	// actively editing sessionQuery (mirrors pickerSearchMode). The chip
 	// fields hold the current harness/profile/project filters. sessionLoading
 	// covers both the initial refresh and a pending text search.
-	sessionQuery       string
-	sessionResults     []transcript.Result
-	sessionCursor      int
-	sessionOffset      int
-	sessionSearchMode  bool
-	sessionLoading     bool
-	sessionRefreshErr  error
-	sessionSearchErr   error
-	sessionSearchSeq   int      // bumps on each Search dispatch; stale msgs are dropped
-	filterHarness      []string // chip filter; "" means "no filter"
-	filterProfile      []string
-	filterProject      []string
+	sessionQuery      string
+	sessionResults    []transcript.Result
+	sessionCursor     int
+	sessionOffset     int
+	sessionSearchMode bool
+	sessionLoading    bool
+	sessionRefreshErr error
+	sessionSearchErr  error
+	sessionSearchSeq  int      // bumps on each Search dispatch; stale msgs are dropped
+	filterHarness     []string // chip filter; "" means "no filter"
+	filterProfile     []string
+	filterProject     []string
 
 	// chip picker overlay (ModeChipPicker) opened from ModeSessionSearch when
 	// the user presses h/p/r to choose harness/profile/project. chipPickerKind

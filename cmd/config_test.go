@@ -17,12 +17,12 @@ import (
 // of the binary name.
 func TestResolveEditorCommand_SplitsEditorArguments(t *testing.T) {
 	cases := []struct {
-		name       string
-		editor     string
-		path       string
-		wantName   string
-		wantArgs   []string
-		wantErr    bool
+		name     string
+		editor   string
+		path     string
+		wantName string
+		wantArgs []string
+		wantErr  bool
 	}{
 		{
 			name:     "single binary uses it directly",
