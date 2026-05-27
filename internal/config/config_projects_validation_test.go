@@ -1,0 +1,120 @@
+package config_test
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/sglavoie/agentmux/internal/config"
+)
+
+func TestValidate_DuplicateProjectTitlePerProfile(t *testing.T) {
+	// Two projects with the same (profile, title) pair are ambiguous: launch dedup
+	// keys on this pair, so duplicates would mask one of them and silently confuse
+	// the user. Validation must surface this rather than wait for runtime confusion.
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Directory: "/tmp/a", Profile: "work"},
+			{Title: "api", Directory: "/tmp/b", Profile: "work"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for duplicate project title under same profile, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate") || !strings.Contains(err.Error(), "api") {
+		t.Errorf("expected duplicate/api in error, got %q", err.Error())
+	}
+}
+
+// TestValidate_DuplicateProjectTitleCaseInsensitive pins the dedup contract:
+// launch-time SessionKey lowercases both the profile name and project title
+// before deduping, so validation must use the same case-folding. Two projects
+// "api" and "API" under profile "work" would silently collide at runtime if
+// validation only checked exact-case equality.
+func TestValidate_DuplicateProjectTitleCaseInsensitive(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Directory: "/tmp/a", Profile: "work"},
+			{Title: "API", Directory: "/tmp/b", Profile: "work"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for case-insensitive duplicate title under same profile, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Errorf("expected duplicate in error, got %q", err.Error())
+	}
+}
+
+// TestValidate_DuplicateProjectTitleProfileCaseInsensitive pins the same dedup
+// contract on the profile side: "Work" and "work" lowercase to the same key
+// in SessionKey, so they share a runtime dedup namespace and validation must
+// surface the collision rather than wait for confusing launch behavior.
+func TestValidate_DuplicateProjectTitleProfileCaseInsensitive(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+			{Name: "Work", Harness: "claude", HomeDir: "/tmp/h2"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Directory: "/tmp/a", Profile: "work"},
+			{Title: "api", Directory: "/tmp/b", Profile: "Work"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for case-insensitive profile collision, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Errorf("expected duplicate in error, got %q", err.Error())
+	}
+}
+
+func TestValidate_DuplicateProjectTitleAcrossProfilesAllowed(t *testing.T) {
+	// Same title under different profiles is allowed: launch dedup keys on
+	// (account, title), so they are distinct sessions.
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
+			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p", Color: "blue"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Directory: "/tmp/a", Profile: "work"},
+			{Title: "api", Directory: "/tmp/b", Profile: "personal"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("unexpected error for same-title-across-profiles: %v", err)
+	}
+}
+
+// TestValidate_ProjectProfileReferenceCaseInsensitive pins the contract that
+// project.profile references resolve case-insensitively: runtime findAccount
+// uses strings.EqualFold, so a project listing profile = "Work" against a
+// configured profile name "work" works at launch time and validation must not
+// reject it as unknown.
+func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Directory: "/tmp/a", Profile: "Work"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("unexpected error for case-insensitive profile reference: %v", err)
+	}
+}
