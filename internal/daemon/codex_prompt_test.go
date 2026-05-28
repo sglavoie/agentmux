@@ -64,6 +64,41 @@ enter to submit answer
 			wantOK:     true,
 		},
 		{
+			name: "request user input current pane options",
+			screen: `
+Pick the deployment target.
+
+› Staging (Recommended)
+  Production
+  None of the above
+
+↑/↓ to navigate questions
+ctrl + p / ctrl + n change question
+Type your answer (optional)
+Add notes
+Proceed
+`,
+			wantKind:   CodexPromptRequestUserInput,
+			wantAction: "elicitation",
+			wantIcon:   "question",
+			wantOK:     true,
+		},
+		{
+			name: "request user input current pane freeform",
+			screen: `
+What should Codex optimize for?
+
+Type your answer (optional)
+Add notes
+
+⏎ to submit answer
+`,
+			wantKind:   CodexPromptRequestUserInput,
+			wantAction: "elicitation",
+			wantIcon:   "question",
+			wantOK:     true,
+		},
+		{
 			name: "unanswered confirmation",
 			screen: `
 Unanswered confirmation
@@ -112,6 +147,16 @@ Current status: working
 Build complete.
 
 Press enter to confirm
+`,
+			wantOK: false,
+		},
+		{
+			name: "transcript mentioning request pane labels",
+			screen: `
+Implementation notes:
+Proceed only after all questions are answered.
+Add notes to document the decision.
+Type your answer in the issue template.
 `,
 			wantOK: false,
 		},

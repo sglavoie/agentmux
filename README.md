@@ -365,11 +365,12 @@ present. Codex screen prompt detection appears as synthetic
 `prompt_kind` values such as `edit_approval`, `request_user_input`,
 `command_approval`, and `permission_grant`.
 
-Codex 0.133.0 exposes edit approvals and `request_user_input` waits through
-TUI/server-request flows rather than normal lifecycle hooks. Agent Mux keeps
-the Codex hook installation to supported command hooks and uses a best-effort
-Kitty screen fallback to classify visible Codex prompts while preserving
-terminal, warning, and error states; the daemon runs that probe every 1.5s.
+Codex 0.133.0 and 0.134.0 expose edit approvals and `request_user_input` waits
+through TUI/server-request flows rather than normal lifecycle hooks. Agent Mux
+keeps the Codex hook installation to supported command hooks and uses a
+best-effort Kitty screen fallback to classify visible Codex prompts, including
+the 0.134.0 bottom-pane question UI, while preserving terminal, warning, and
+error states; the daemon runs that probe every 1.5s.
 
 The primary live-debug workflow is the current tab:
 

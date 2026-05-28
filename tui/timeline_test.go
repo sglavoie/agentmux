@@ -470,7 +470,7 @@ func TestPhaseHeaderLinePositionsFoldEffect(t *testing.T) {
 		t.Fatalf("expected ≥2 phases, got %d", len(phases))
 	}
 
-	posCollapsed := phaseHeaderLinePositions(phases, nil, false)         // first phase >5 events → collapsed by default
+	posCollapsed := phaseHeaderLinePositions(phases, nil, false)                  // first phase >5 events → collapsed by default
 	posExpanded := phaseHeaderLinePositions(phases, map[int]bool{0: true}, false) // force-expand
 
 	// The second-phase (or gap) header should shift down when first phase is expanded.

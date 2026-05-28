@@ -94,6 +94,45 @@ func TestProbeCodexScreenPrompts_CommandPromptStaysKey(t *testing.T) {
 	}
 }
 
+func TestProbeCodexScreenPrompts_RequestUserInputReplacesBoltWithQuestion(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+			Profile: "work",
+			Harness: "codex",
+		}),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): codexRequestUserInputScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	calls := fake.titleCalls()
+	if len(calls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(calls))
+	}
+	if want := palette.BuildTitle("W:api", "question", false); calls[0].title != want {
+		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
+	}
+	if got := h.guard.Current(42); got != "elicitation" {
+		t.Fatalf("guard.Current = %q, want elicitation", got)
+	}
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(resp.Events) != 1 {
+		t.Fatalf("events = %d, want 1", len(resp.Events))
+	}
+	ev := resp.Events[0]
+	if ev.PromptKind != string(CodexPromptRequestUserInput) || ev.Action != "elicitation" {
+		t.Fatalf("event prompt/action = (%q, %q), want (%q, elicitation)", ev.PromptKind, ev.Action, CodexPromptRequestUserInput)
+	}
+	if ev.ResultIconState != "question" || ev.CurrentIconState != "bolt" {
+		t.Fatalf("event icons = current %q result %q, want bolt -> question", ev.CurrentIconState, ev.ResultIconState)
+	}
+}
+
 func TestProbeCodexScreenPrompts_DoesNotOverwriteProtectedIcons(t *testing.T) {
 	protected := []string{"stop", "warning", "error", "subagent", "compact"}
 	for _, state := range protected {
@@ -199,6 +238,20 @@ const codexEditApprovalScreen = `
   2. No, keep editing
 
 Press enter to confirm
+`
+
+const codexRequestUserInputScreen = `
+Pick the deployment target.
+
+› Staging (Recommended)
+  Production
+  None of the above
+
+↑/↓ to navigate questions
+ctrl + p / ctrl + n change question
+Type your answer (optional)
+Add notes
+Proceed
 `
 
 const codexCommandApprovalScreen = `

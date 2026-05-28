@@ -12,12 +12,12 @@ import (
 )
 
 type timelinePhase struct {
-	kind         string               // "preamble" | "active" | "subagent" | "compact" | "gap" | "separator"
+	kind         string // "preamble" | "active" | "subagent" | "compact" | "gap" | "separator"
 	startAt      time.Time
-	endAt        time.Time            // zero = ongoing
+	endAt        time.Time // zero = ongoing
 	events       []daemon.SessionEvent
 	termEvent    *daemon.SessionEvent // event that closed this phase (nil = ongoing)
-	contextLimit bool // phase terminated by context-limit probe
+	contextLimit bool                 // phase terminated by context-limit probe
 }
 
 // phaseDuration returns a human-readable duration string, or "ongoing" if endAt is zero.
