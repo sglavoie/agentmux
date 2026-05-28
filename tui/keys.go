@@ -36,6 +36,14 @@ const (
 	keySessionSearch = "S" // opens ModeSessionSearch (past harness transcripts)
 	keyPlanSearch    = "P" // opens ModePlanSearch (past agent plans)
 
+	keyToggleTimeline   = "t"  // toggle flat list ↔ timeline in ModeDetail
+	keyToggleTimestamps = "T"  // toggle timestamp column in timeline (ModeDetail)
+	keyPhasePrev        = "["  // jump to previous phase header in timeline
+	keyPhaseNext        = "]"  // jump to next phase header in timeline
+	// keyOpenTimeline is the same key string as keyToggleTimestamps; disambiguation is by mode.
+	// In ModeList: open detail pane directly in timeline mode.
+	keyOpenTimeline = "T"
+
 	keyPgUp   = "pgup"   // scroll detail pane up by one page
 	keyPgDown = "pgdown" // scroll detail pane down by one page
 	keyCtrlD  = "ctrl+d" // list: cursor down by half a page

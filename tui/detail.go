@@ -288,7 +288,7 @@ func detailFooter(m Model, total, visible int) string {
 		}
 		pos = fmt.Sprintf("%d–%d of %d", start, end, total)
 	}
-	hints := "↑/↓ scroll · pgup/pgdn page · g/G top/bottom · d/esc close"
+	hints := "t: timeline · ↑/↓ scroll · pgup/pgdn page · g/G top/bottom · d/esc close"
 	return styleDim.Render(pos + "   " + hints)
 }
 
@@ -408,7 +408,11 @@ func detailRowWidth(m Model) int {
 
 // renderDetailBox wraps renderDetail in styleOverlayBox so the per-session
 // hook event log can be composited as a centered modal on top of the
-// dimmed dashboard.
+// dimmed dashboard. When detailViewTimeline is set, renderTimeline is used
+// instead (it returns a fully self-contained styled box).
 func renderDetailBox(m Model) string {
+	if m.detailViewTimeline {
+		return renderTimeline(m)
+	}
 	return styleOverlayBox.Width(detailBoxInnerWidth(m)).Render(strings.TrimRight(renderDetail(m), "\n"))
 }

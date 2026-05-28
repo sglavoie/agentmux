@@ -17,7 +17,7 @@ import (
 func detailModel(t *testing.T) Model {
 	t.Helper()
 	m := loadSessions(testModel(), detailSessions())
-	mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+	mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 	m = mm.(Model)
 	m.height = 30 // generous default; specific tests override
 	m.width = 100

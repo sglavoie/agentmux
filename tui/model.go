@@ -140,6 +140,13 @@ type Model struct {
 	detailLoading  bool                  // true while the daemon query is in flight
 	detailErr      error                 // last error from the daemon query
 
+	// timeline sub-view controls (within ModeDetail). All five are zeroed by exitDetailMode.
+	detailViewTimeline   bool
+	detailTimelineScroll int
+	detailTimelineFold   map[int]bool
+	detailShowSuppressed bool
+	detailShowTimestamps bool
+
 	// transcript index + per-harness readers built once on demand and
 	// reused across every ModeSessionSearch refresh/search. transcriptIndex
 	// is nil until the first entry into ModeSessionSearch.

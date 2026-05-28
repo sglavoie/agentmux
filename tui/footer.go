@@ -186,6 +186,7 @@ var listFooterPalette = []footerEntry{
 	{"e", "peek", footerSectionRow, func(m Model) bool {
 		return hasRow(m) && m.filtered[m.cursor].State == "bolt"
 	}},
+	{"T", "timeline", footerSectionRow, hasRow},
 	{"r", "restart", footerSectionRow, hasRow},
 	{"x", "close", footerSectionRow, hasRow},
 	{"c", "profile", footerSectionRow, hasRow},

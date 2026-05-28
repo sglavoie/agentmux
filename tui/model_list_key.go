@@ -387,7 +387,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				if len(m.filtered) == 0 {
 					return m, nil
 				}
-				return m.enterDetailMode(m.filtered[m.cursor].WindowID)
+				return m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
+			case keyOpenTimeline:
+				if m.cursor < len(m.filtered) {
+					return m.enterDetailMode(m.filtered[m.cursor].WindowID, true)
+				}
 			}
 		}
 		// Fall through: anything else printable goes into the type buffer.

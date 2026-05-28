@@ -149,7 +149,7 @@ func TestListFooterAvailability(t *testing.T) {
 			name: "empty list — only global actions available",
 			m:    Model{},
 			want: map[string]bool{
-				"e": false, "r": false, "x": false,
+				"e": false, "T": false, "r": false, "x": false,
 				"c": false, "C": false,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
@@ -161,7 +161,7 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: "key"}},
 			},
 			want: map[string]bool{
-				"e": false, "r": true, "x": true,
+				"e": false, "T": true, "r": true, "x": true,
 				"c": true, "C": true,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
@@ -173,7 +173,7 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: "bolt"}},
 			},
 			want: map[string]bool{
-				"e": true, "r": true, "x": true,
+				"e": true, "T": true, "r": true, "x": true,
 				"c": true, "C": false,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
@@ -185,7 +185,7 @@ func TestListFooterAvailability(t *testing.T) {
 				filtered: []session.RunningSession{{State: ""}},
 			},
 			want: map[string]bool{
-				"e": false, "r": true, "x": true,
+				"e": false, "T": true, "r": true, "x": true,
 				"c": true, "C": false,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
@@ -198,7 +198,7 @@ func TestListFooterAvailability(t *testing.T) {
 				typeBuffer: "ap",
 			},
 			want: map[string]bool{
-				"e": false, "r": false, "x": false,
+				"e": false, "T": false, "r": false, "x": false,
 				"c": false, "C": false,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,

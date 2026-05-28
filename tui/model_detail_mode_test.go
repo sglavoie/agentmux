@@ -77,7 +77,7 @@ func TestDKeyDismissesDeprecationBeforeEnteringDetail(t *testing.T) {
 func TestDetailEventsMsgPopulatesEvents(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	{
-		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 		m = mm.(Model)
 	}
 
@@ -101,7 +101,7 @@ func TestDetailEventsMsgPopulatesEvents(t *testing.T) {
 func TestDetailEventsMsgStaleIsIgnored(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	{
-		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 		m = mm.(Model)
 	}
 
@@ -122,7 +122,7 @@ func TestDetailEventsMsgStaleIsIgnored(t *testing.T) {
 func TestDetailEventsMsgErrorPropagates(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	{
-		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 		m = mm.(Model)
 	}
 
@@ -142,7 +142,7 @@ func TestDetailEventsMsgErrorPropagates(t *testing.T) {
 func TestDetailEscReturnsToListAndZerosFields(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	{
-		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 		m = mm.(Model)
 	}
 	m.detailEvents = []daemon.SessionEvent{{At: 1, Event: "PreToolUse", Action: "active"}}
@@ -182,7 +182,7 @@ func TestDetailDKeyToggles(t *testing.T) {
 func TestDetailScrollKeys(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	{
-		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 		m = mm.(Model)
 	}
 	// Pick a height that produces visible=3 (detailMinVisible) so a 6-event
@@ -240,7 +240,7 @@ func TestHelpListsDetailKey(t *testing.T) {
 func TestTickInDetailModePreservesPaneState(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	{
-		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 		m = mm.(Model)
 	}
 	targetID := m.detailWindowID
@@ -266,7 +266,7 @@ func TestTickInDetailModePreservesPaneState(t *testing.T) {
 func TestDetailEventsMsgClampsScrollOnShrink(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	{
-		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID)
+		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 		m = mm.(Model)
 	}
 	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3

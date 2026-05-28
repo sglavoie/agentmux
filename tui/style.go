@@ -94,6 +94,19 @@ var (
 	detailToolStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
 )
 
+// Timeline phase header and annotation styles (ModeDetail timeline sub-view).
+var (
+	styleTimelineActive = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#4ec9b0"))
+	styleTimelineCompact  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ffaa00"))
+	styleTimelineStop     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
+	styleTimelineError    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff5555"))
+	styleTimelineGap      = lipgloss.NewStyle().Faint(true)
+	styleTimelineSep      = lipgloss.NewStyle().Faint(true)
+	styleTimelineTree     = lipgloss.NewStyle().Faint(true)
+	styleTimelineTool     = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
+	styleTimelineExpanded = lipgloss.NewStyle().Faint(true).Italic(true)
+)
+
 // chipStyle returns the rendering style for a chip, layering the focus
 // underline on top of the kind-specific base color when applicable.
 func chipStyle(c chipComponent, acctColor map[string]string, focused bool) lipgloss.Style {
