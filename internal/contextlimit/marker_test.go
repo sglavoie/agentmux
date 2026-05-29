@@ -63,6 +63,16 @@ func TestScreenShowsMarker(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "warning wrapped across extremely narrow screen bottom",
+			text: "earlier line\n\nContext\nlimit\nreached\n/compact or /clear\nto continue\n",
+			want: true,
+		},
+		{
+			name: "warning wrapped across extremely narrow screen tail",
+			text: "earlier line\n\nContext\nlimit\nreached\n/compact or /clear\nto continue\n\n✻ Cooked for 17m 6s\n",
+			want: true,
+		},
+		{
 			name: "quoted text earlier in scrollback does not trip fallback",
 			text: "Context limit reached · /compact or /clear to continue\nuser was discussing the warning\n\nnormal latest output\nstill running fine\n",
 			want: false,

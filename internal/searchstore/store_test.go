@@ -151,6 +151,20 @@ func TestExists_AfterWrite(t *testing.T) {
 	}
 }
 
+func TestExists_DirectoryAtSidecarPathReturnsFalse(t *testing.T) {
+	s := newTestStore(t)
+	if err := os.MkdirAll(s.Path("k"), 0o755); err != nil {
+		t.Fatalf("MkdirAll sidecar path: %v", err)
+	}
+	ok, err := s.Exists("k")
+	if err != nil {
+		t.Fatalf("Exists: %v", err)
+	}
+	if ok {
+		t.Errorf("Exists = true for directory, want false")
+	}
+}
+
 func TestDelete_IdempotentOnMissing(t *testing.T) {
 	s := newTestStore(t)
 	if err := s.Delete("never-written"); err != nil {

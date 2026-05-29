@@ -48,6 +48,17 @@ func TestKittyError_NoOutputNoErr(t *testing.T) {
 	}
 }
 
+func TestKittyError_EmptyCommandUsesPlaceholder(t *testing.T) {
+	e := &KittyError{Err: errors.New("boom")}
+	msg := e.Error()
+	if !strings.Contains(msg, "kitty command failed: <unknown command>") {
+		t.Fatalf("expected unknown-command placeholder, got %q", msg)
+	}
+	if !strings.Contains(msg, "error: boom") {
+		t.Fatalf("expected underlying error, got %q", msg)
+	}
+}
+
 func TestKittyError_Unwrap(t *testing.T) {
 	underlying := errors.New("boom")
 	e := &KittyError{Err: underlying}

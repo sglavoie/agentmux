@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,6 +57,19 @@ func TestDisplayName(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("DisplayName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestTruncateSnippetBoundary(t *testing.T) {
+	exact := strings.Repeat("a", snippetMaxLen)
+	if got := truncateSnippet(exact); got != exact {
+		t.Errorf("truncateSnippet(exact length) = %q, want %q", got, exact)
+	}
+
+	over := exact + "b"
+	want := exact + "…"
+	if got := truncateSnippet(over); got != want {
+		t.Errorf("truncateSnippet(over length) = %q, want %q", got, want)
 	}
 }
 

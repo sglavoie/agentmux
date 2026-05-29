@@ -127,7 +127,7 @@ func IsIgnoredEvent(input string, payload HookPayload) bool {
 	if !isNotificationEvent(input) {
 		return false
 	}
-	switch payload.EffectiveNotificationType() {
+	switch normalizedNotificationType(payload) {
 	case "shell_completed", "shell_detached_completed", "agent_completed":
 		return true
 	default:
@@ -184,7 +184,7 @@ func resolveNotificationAction(input string, payload HookPayload) (string, bool)
 	if !isNotificationEvent(input) {
 		return "", false
 	}
-	switch payload.EffectiveNotificationType() {
+	switch normalizedNotificationType(payload) {
 	case "permission_prompt":
 		return "permission", true
 	case "elicitation_dialog":
@@ -201,6 +201,10 @@ func resolveNotificationAction(input string, payload HookPayload) (string, bool)
 
 func isNotificationEvent(input string) bool {
 	return input == "notification" || input == "Notification"
+}
+
+func normalizedNotificationType(payload HookPayload) string {
+	return normalizeLifecycleValue(payload.EffectiveNotificationType())
 }
 
 // PreservesCurrent reports whether event represents a child completing while

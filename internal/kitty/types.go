@@ -105,6 +105,9 @@ func isDashboardCmdline(cmdline []string) bool {
 		return false
 	}
 	for _, arg := range cmdline[1:] {
+		if arg == "--" {
+			return true
+		}
 		if isInfoOnlyRootFlag(arg) {
 			return false
 		}
@@ -158,6 +161,9 @@ func isKeybindingsCmdline(cmdline []string) bool {
 	// `amx --debug keybindings` would be missed by the dedup detector and a
 	// second overlay window would be opened.
 	for _, arg := range cmdline[1:] {
+		if arg == "--" {
+			return false
+		}
 		if strings.HasPrefix(arg, "-") {
 			continue
 		}
@@ -197,6 +203,9 @@ func isColorPickerCmdline(cmdline []string) bool {
 		return false
 	}
 	for _, arg := range cmdline[1:] {
+		if arg == "--" {
+			return false
+		}
 		if strings.HasPrefix(arg, "-") {
 			continue
 		}

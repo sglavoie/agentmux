@@ -237,3 +237,10 @@ func TestSessionsRefreshCmdPrunesOldEntries(t *testing.T) {
 		t.Fatal("old entry was not hidden by refresh-time prune")
 	}
 }
+
+func TestFormatSessionWhenFutureClampsToZero(t *testing.T) {
+	future := time.Now().Add(5 * time.Second)
+	if got := formatSessionWhen(future); got != " 0m   ago" {
+		t.Fatalf("formatSessionWhen(future) = %q, want %q", got, " 0m   ago")
+	}
+}

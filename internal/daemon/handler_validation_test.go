@@ -18,6 +18,8 @@ func TestHandler_InvalidRequestDoesNotSignalActivity(t *testing.T) {
 		req  Request
 	}{
 		{name: "unknown type", req: Request{Type: "bogus"}},
+		{name: "missing window ID", req: Request{Type: TypeStateUpdate, Action: "active"}},
+		{name: "negative window ID", req: Request{Type: TypeStateUpdate, WindowID: -1, Action: "active"}},
 		{name: "missing action", req: Request{Type: TypeStateUpdate}},
 		{name: "unknown action", req: Request{Type: TypeStateUpdate, WindowID: 1, Action: "nope"}},
 	}
@@ -55,9 +57,29 @@ func TestHandler_ValidRequestSignalsActivity(t *testing.T) {
 
 func TestHandler_MissingAction(t *testing.T) {
 	h := newTestHandler()
-	resp := h.Handle(Request{Type: TypeStateUpdate})
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1})
 	if resp.OK {
 		t.Fatal("expected ok=false when action is missing")
+	}
+}
+
+func TestHandler_InvalidWindowID(t *testing.T) {
+	tests := []struct {
+		name     string
+		windowID int
+	}{
+		{name: "zero", windowID: 0},
+		{name: "negative", windowID: -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHandler()
+			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: tt.windowID, Action: "active"})
+			if resp.OK {
+				t.Fatalf("expected ok=false for window_id %d", tt.windowID)
+			}
+		})
 	}
 }
 

@@ -47,6 +47,16 @@ func TestIsAmxHookEntryChecksCommandWindows(t *testing.T) {
 	}
 }
 
+func TestIsAmxHookEntryRequiresCommandType(t *testing.T) {
+	got := isAmxHookEntry(hookEntry{
+		Type:    "prompt",
+		Command: "amx hook-indicator Stop",
+	})
+	if got {
+		t.Fatalf("isAmxHookEntry() recognized non-command hook as Agent Mux-owned")
+	}
+}
+
 func TestStripAmxGroupsRemovesPathWithSpaces(t *testing.T) {
 	in := map[string][]hookGroup{
 		"Stop": {{Hooks: []hookEntry{{

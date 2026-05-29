@@ -156,6 +156,7 @@ func TestShouldDelayResetSensitiveStop(t *testing.T) {
 		{name: "copilot agent stop waits", event: "agentStop", action: "stop", want: true},
 		{name: "session end waits", event: "sessionEnd", action: "stop", want: true},
 		{name: "agent idle notification waits", event: "notification", action: "stop", payload: HookPayload{NotificationType: "agent_idle"}, want: true},
+		{name: "agent idle notification type is normalized", event: "notification", action: "stop", payload: HookPayload{NotificationTypeCamel: " Agent_Idle "}, want: true},
 		{name: "post compact does not wait", event: "PostCompact", action: "stop", want: false},
 		{name: "failure stop does not wait", event: "Stop", action: "stop", contextStop: true, want: false},
 		{name: "known reset stop does not wait", event: "Stop", action: "stop", resetFlow: true, want: false},

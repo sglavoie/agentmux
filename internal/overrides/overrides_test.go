@@ -18,6 +18,28 @@ func TestLoadMissing(t *testing.T) {
 	if len(f.Entries) != 0 {
 		t.Fatalf("expected empty entries for missing file, got %v", f.Entries)
 	}
+	if f.Entries == nil {
+		t.Fatal("expected entries to be a non-nil empty slice for missing file")
+	}
+}
+
+func TestLoadNullEntriesNormalizesToEmptySlice(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "overrides.json")
+	t.Setenv(overrides.PathEnvVar, path)
+	if err := os.WriteFile(path, []byte(`{"version":1,"entries":null}`), 0o644); err != nil {
+		t.Fatalf("seed overrides file: %v", err)
+	}
+
+	f, err := overrides.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(f.Entries) != 0 {
+		t.Fatalf("expected empty entries, got %v", f.Entries)
+	}
+	if f.Entries == nil {
+		t.Fatal("expected entries to be a non-nil empty slice")
+	}
 }
 
 func TestRoundTrip(t *testing.T) {

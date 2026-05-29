@@ -52,10 +52,11 @@ func TestCopyDarwinSmoke(t *testing.T) {
 }
 
 func TestCopyUnsupportedPlatform(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("darwin has a supported backend")
-	}
-	if err := Copy("ignored"); !errors.Is(err, ErrUnsupported) {
+	err := copy("ignored", "linux", func(string) (string, error) {
+		t.Fatal("lookPath should not be called on unsupported platforms")
+		return "", nil
+	})
+	if !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("expected ErrUnsupported, got %v", err)
 	}
 }

@@ -166,3 +166,28 @@ claude_flags = ["--ignored-project"]
 		}
 	}
 }
+
+func TestLoad_ReportsNegativeLegacyStaleActiveThreshold(t *testing.T) {
+	content := `
+[defaults]
+stale_active_threshold = -1
+
+[[profiles]]
+name = "work"
+home_dir = "~/.config/claude-work"
+color = "blue"
+`
+	path := writeTempConfig(t, content)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	for _, d := range cfg.Deprecations {
+		if d.Key == "defaults.stale_active_threshold" {
+			return
+		}
+	}
+	t.Fatalf("Deprecations missing defaults.stale_active_threshold (got %+v)", cfg.Deprecations)
+}

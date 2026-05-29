@@ -26,8 +26,8 @@ func HasMarker(text string) bool {
 
 func ScreenShowsMarker(text string) bool {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	tail := make([]string, 0, 5)
-	for i := len(lines) - 1; i >= 0 && len(tail) < 5; i-- {
+	tail := make([]string, 0, 6)
+	for i := len(lines) - 1; i >= 0 && len(tail) < 6; i-- {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
@@ -47,6 +47,14 @@ func ScreenShowsMarker(text string) bool {
 	}
 	if len(tail) >= 5 &&
 		hasWrappedMarkerWindow(tail[len(tail)-5:len(tail)-1]) {
+		return true
+	}
+	if len(tail) >= 5 &&
+		hasWrappedMarkerWindow(tail[len(tail)-5:]) {
+		return true
+	}
+	if len(tail) >= 6 &&
+		hasWrappedMarkerWindow(tail[len(tail)-6:len(tail)-1]) {
 		return true
 	}
 	return false

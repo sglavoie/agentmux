@@ -300,14 +300,14 @@ func runningSessionsFromTabs(tabs []kitty.Tab, cfg *config.Config) ([]RunningSes
 
 func titleFallbackMatches(cfg *config.Config, base string) ([]titleFallbackMatch, string) {
 	exact := configuredTitleMatches(cfg, func(acc config.Account, sess config.Session) bool {
-		return sess.EffectiveProfile() == acc.Name && sess.Title == base
+		return strings.EqualFold(sess.EffectiveProfile(), acc.Name) && sess.Title == base
 	})
 	if len(exact) > 0 {
 		return exact, "exact-title"
 	}
 	legacy := configuredTitleMatches(cfg, func(acc config.Account, sess config.Session) bool {
 		project, ok := legacyProjectName(base, acc.Name)
-		return ok && sess.EffectiveProfile() == acc.Name && sess.Title == project
+		return ok && strings.EqualFold(sess.EffectiveProfile(), acc.Name) && sess.Title == project
 	})
 	return legacy, "legacy-prefix"
 }

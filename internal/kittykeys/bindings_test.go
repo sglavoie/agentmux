@@ -48,3 +48,20 @@ func TestBackgroundBindingsPassActiveWindowID(t *testing.T) {
 		}
 	}
 }
+
+func TestScrollbackMarkerBindingDescribesFailureMarkers(t *testing.T) {
+	markers := findAction(t, "f3")
+
+	if markers.Section != "Scrollback" {
+		t.Fatalf("f3 Section = %q, want Scrollback", markers.Section)
+	}
+	if markers.Description != "toggle error/failure/warning markers" {
+		t.Fatalf("f3 Description = %q", markers.Description)
+	}
+	if markers.AmxCommand != "" {
+		t.Fatalf("f3 AmxCommand = %q, want native Kitty action", markers.AmxCommand)
+	}
+	if markers.LaunchType != "" {
+		t.Fatalf("f3 LaunchType = %q, want native Kitty action", markers.LaunchType)
+	}
+}

@@ -42,7 +42,7 @@ func Load() (File, error) {
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return File{Version: 1}, nil
+		return File{Version: 1, Entries: []Entry{}}, nil
 	}
 	if err != nil {
 		return File{}, err
@@ -50,6 +50,9 @@ func Load() (File, error) {
 	var f File
 	if err := json.Unmarshal(data, &f); err != nil {
 		return File{}, err
+	}
+	if f.Entries == nil {
+		f.Entries = []Entry{}
 	}
 	return f, nil
 }

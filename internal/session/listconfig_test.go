@@ -74,6 +74,47 @@ func TestListWithConfig_TitleFallback_HappyPath(t *testing.T) {
 	}
 }
 
+func TestListWithConfig_TitleFallback_ProfileMatchCaseInsensitive(t *testing.T) {
+	fixture := []byte(`[
+  {
+    "id": 1,
+    "is_active": true,
+    "tabs": [
+      {
+        "id": 22,
+        "is_active": true,
+        "title": "api",
+        "windows": [
+          {
+            "id": 23,
+            "is_active": true,
+            "cwd": "/tmp",
+            "user_vars": {}
+          }
+        ]
+      }
+    ]
+  }
+]`)
+	client := newClientFromBytes(t, fixture)
+
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "work", Harness: "claude"}},
+		Sessions: []config.Session{{Title: "api", Profile: "Work", Directory: "/projects/api"}},
+	}
+
+	sessions, ghosts, err := session.ListWithConfig(client, cfg)
+	if err != nil {
+		t.Fatalf("ListWithConfig: %v", err)
+	}
+	if len(sessions) != 1 || len(ghosts) != 1 {
+		t.Fatalf("expected 1 session + 1 ghost, got %d/%d", len(sessions), len(ghosts))
+	}
+	if sessions[0].Profile != "Work" || ghosts[0].Profile != "Work" {
+		t.Fatalf("profile case was not preserved in fallback: session=%q ghost=%q", sessions[0].Profile, ghosts[0].Profile)
+	}
+}
+
 func TestListWithConfig_TitleFallback_StripsStateIcon(t *testing.T) {
 	fixture := []byte(`[
   {

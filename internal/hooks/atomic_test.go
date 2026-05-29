@@ -20,8 +20,19 @@ func readFileOrFatal(t *testing.T, path string) []byte {
 	return b
 }
 
+func assertNoAtomicTemp(t *testing.T, path string) {
+	t.Helper()
+	matches, err := filepath.Glob(path + ".tmp-*")
+	if err != nil {
+		t.Fatalf("glob atomic temps: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("expected no leftover atomic temp files, got %v", matches)
+	}
+}
+
 // TestAtomicWriteFile_NoTempLeftOnSuccess verifies that after a successful
-// atomicWriteFile call, no "<name>.tmp" sibling remains in the directory.
+// atomicWriteFile call, no generated temp sibling remains in the directory.
 func TestAtomicWriteFile_NoTempLeftOnSuccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")
@@ -30,12 +41,29 @@ func TestAtomicWriteFile_NoTempLeftOnSuccess(t *testing.T) {
 		t.Fatalf("atomicWriteFile: %v", err)
 	}
 
-	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
-		t.Fatalf("expected temp file gone, stat err=%v", err)
-	}
+	assertNoAtomicTemp(t, path)
 	if got := string(readFileOrFatal(t, path)); got != `{"hooks":{}}` {
 		t.Fatalf("unexpected content: %q", got)
 	}
+}
+
+func TestAtomicWriteFile_DoesNotClobberExistingTmpSibling(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	tmpPath := path + ".tmp"
+	tmpData := []byte("unrelated temp content")
+	if err := os.WriteFile(tmpPath, tmpData, 0o600); err != nil {
+		t.Fatalf("seed tmp sibling: %v", err)
+	}
+
+	if err := atomicWriteFile(path, []byte(`{"hooks":{}}`), 0o644); err != nil {
+		t.Fatalf("atomicWriteFile: %v", err)
+	}
+
+	if got := readFileOrFatal(t, tmpPath); string(got) != string(tmpData) {
+		t.Fatalf("existing tmp sibling was clobbered: got %q want %q", got, tmpData)
+	}
+	assertNoAtomicTemp(t, path)
 }
 
 // TestAtomicWriteFile_FaultDoesNotCorruptOriginal verifies that if the write
@@ -74,9 +102,7 @@ func TestAtomicWriteFile_FaultDoesNotCorruptOriginal(t *testing.T) {
 		t.Fatalf("original corrupted: got %q want %q", got, original)
 	}
 	// Temp file must be cleaned up.
-	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
-		t.Fatalf("expected temp file removed after fault, stat err=%v", err)
-	}
+	assertNoAtomicTemp(t, path)
 }
 
 func TestAtomicWriteFile_ChmodFaultRemovesTemp(t *testing.T) {
@@ -98,9 +124,7 @@ func TestAtomicWriteFile_ChmodFaultRemovesTemp(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("expected destination not to be created, stat err=%v", err)
 	}
-	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
-		t.Fatalf("expected temp file removed after chmod fault, stat err=%v", err)
-	}
+	assertNoAtomicTemp(t, path)
 }
 
 // TestMergeViaContract_PreservesBackup is a regression guard: the .bak file
@@ -137,10 +161,8 @@ func TestMergeViaContract_PreservesBackup(t *testing.T) {
 		t.Fatalf(".bak content mismatch: got %q want %q", bak, original)
 	}
 
-	// And the .tmp must not be left behind.
-	if _, err := os.Stat(settingsPath + ".tmp"); !os.IsNotExist(err) {
-		t.Fatalf("expected no leftover .tmp, stat err=%v", err)
-	}
+	// And the generated temp must not be left behind.
+	assertNoAtomicTemp(t, settingsPath)
 }
 
 // TestMergeViaContract_FaultLeavesOriginalAndBackupIntact end-to-end check:
@@ -197,8 +219,6 @@ func TestMergeViaContract_FaultLeavesOriginalAndBackupIntact(t *testing.T) {
 	if string(bak) != string(original) {
 		t.Fatalf(".bak content mismatch: got %q want %q", bak, original)
 	}
-	// No leftover .tmp.
-	if _, err := os.Stat(settingsPath + ".tmp"); !os.IsNotExist(err) {
-		t.Fatalf("expected no leftover .tmp after fault, stat err=%v", err)
-	}
+	// No leftover generated temp.
+	assertNoAtomicTemp(t, settingsPath)
 }

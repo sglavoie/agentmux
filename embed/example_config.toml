@@ -108,6 +108,9 @@ permission = true
 # Notify when a session stops or exits.
 stop = true
 
+# Notify when a session stops because of a failure.
+stop_failure = true
+
 # Notify (one-shot) when a session is detected as stale-active and its icon is
 # auto-cleared. See defaults.watchdog.active for the trigger.
 stale_active = true

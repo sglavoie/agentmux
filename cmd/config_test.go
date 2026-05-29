@@ -101,6 +101,26 @@ func TestResolveEditorCommand_SplitsEditorArguments(t *testing.T) {
 	}
 }
 
+func TestConfigPathCommandWritesToCommandOutput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv("amx_CONFIG", path)
+
+	oldOut := configPathCmd.OutOrStdout()
+	t.Cleanup(func() {
+		configPathCmd.SetOut(oldOut)
+	})
+
+	var out bytes.Buffer
+	configPathCmd.SetOut(&out)
+
+	if err := configPathCmd.RunE(configPathCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if got, want := out.String(), path+"\n"; got != want {
+		t.Fatalf("output = %q; want %q", got, want)
+	}
+}
+
 // TestConfigHooksSync_ReturnsErrorOnPartialFailure pins the contract that the
 // hooks-sync command exits non-zero when any per-profile merge fails. Earlier
 // behavior printed per-account errors to stderr but returned nil, so a CI run

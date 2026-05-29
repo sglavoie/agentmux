@@ -158,8 +158,9 @@ var configShowCmd = &cobra.Command{
 var configPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Print the config.toml path",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(config.DefaultConfigPath())
+	RunE: func(cmd *cobra.Command, args []string) error {
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), config.DefaultConfigPath())
+		return err
 	},
 }
 

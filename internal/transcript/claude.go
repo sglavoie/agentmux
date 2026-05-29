@@ -269,15 +269,46 @@ func flattenClaudeContent(raw json.RawMessage) string {
 				sb.WriteByte(']')
 			}
 		case "tool_result":
-			if content, ok := b["content"].(string); ok {
-				if sb.Len() > 0 {
-					sb.WriteByte('\n')
-				}
-				sb.WriteString(content)
+			for _, content := range flattenClaudeToolResultContent(b["content"]) {
+				appendClaudeContentLine(&sb, content)
 			}
 		}
 	}
 	return sb.String()
+}
+
+func appendClaudeContentLine(sb *strings.Builder, text string) {
+	if text == "" {
+		return
+	}
+	if sb.Len() > 0 {
+		sb.WriteByte('\n')
+	}
+	sb.WriteString(text)
+}
+
+func flattenClaudeToolResultContent(raw any) []string {
+	switch content := raw.(type) {
+	case string:
+		return []string{content}
+	case []any:
+		out := make([]string, 0, len(content))
+		for _, item := range content {
+			switch v := item.(type) {
+			case string:
+				if v != "" {
+					out = append(out, v)
+				}
+			case map[string]any:
+				if text, ok := v["text"].(string); ok && text != "" {
+					out = append(out, text)
+				}
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func parseClaudeTimestamp(s string) (time.Time, bool) {

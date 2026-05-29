@@ -7,6 +7,9 @@ import (
 )
 
 func (h *Handler) handleStateUpdate(req Request) Response {
+	if req.WindowID <= 0 {
+		return Response{OK: false, Error: "window_id is required for state_update"}
+	}
 	if req.Action == "" {
 		return Response{OK: false, Error: "action is required for state_update"}
 	}

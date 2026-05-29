@@ -94,6 +94,7 @@ func (copilotHookContract) ParseInstalledEvents(path string) ([]string, error) {
 
 func isAmxCopilotHookDef(def copilotHookDef) bool {
 	return isAmxHookEntry(hookEntry{
+		Type:           def.Type,
 		Command:        def.Bash,
 		CommandWindows: def.Powershell,
 	})

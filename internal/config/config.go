@@ -73,7 +73,7 @@ func collectDeprecations(cfg *Config) []Deprecation {
 	// user also wrote [defaults.watchdog]: when both are present the new
 	// block wins (per applyDefaults), and the user should still be told the
 	// legacy key has moved so they can drop it on their next edit.
-	if cfg.Defaults.StaleActiveThreshold > 0 {
+	if cfg.Defaults.StaleActiveThreshold != 0 {
 		deps = append(deps, Deprecation{
 			Key:         "defaults.stale_active_threshold",
 			Replacement: "defaults.watchdog.active",

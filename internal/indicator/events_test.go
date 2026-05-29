@@ -82,6 +82,12 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 			payload: HookPayload{NotificationType: "shell_completed"},
 			ok:      false,
 		},
+		{
+			name:    "notification type is normalized before resolving",
+			payload: HookPayload{NotificationTypeCamel: " Permission_Prompt "},
+			want:    "permission",
+			ok:      true,
+		},
 	}
 	for _, tc := range cases {
 		got, ok := ResolveAction("notification", tc.payload)
@@ -231,6 +237,7 @@ func TestIsIgnoredEvent(t *testing.T) {
 		{"CwdChanged", HookPayload{}, true},
 		{"FileChanged", HookPayload{}, true},
 		{"Notification", HookPayload{NotificationType: "shell_completed"}, true},
+		{"Notification", HookPayload{NotificationTypeCamel: " Shell_Completed "}, true},
 		{"Notification", HookPayload{NotificationType: "agent_idle"}, false},
 		{"Notification", HookPayload{}, false},
 	}

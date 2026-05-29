@@ -245,7 +245,7 @@ func shouldDelayResetSensitiveStop(eventOrAction, action string, payload HookPay
 	case "Stop", "SessionEnd", "agentStop", "sessionEnd":
 		return true
 	case "Notification", "notification":
-		return payload.EffectiveNotificationType() == "agent_idle"
+		return normalizedNotificationType(payload) == "agent_idle"
 	default:
 		return false
 	}

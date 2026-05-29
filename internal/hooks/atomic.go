@@ -22,8 +22,8 @@ var atomicChmodFn = func(f *os.File, perm os.FileMode) error {
 	return f.Chmod(perm)
 }
 
-// atomicWriteFile writes data to path atomically: it creates a sibling
-// "<name>.tmp" file in the same directory, fsyncs and closes it, then
+// atomicWriteFile writes data to path atomically: it creates a unique sibling
+// temp file in the same directory, fsyncs and closes it, then
 // renames it over path. On any failure the temp file is removed so a partial
 // write never replaces the original. The rename is constrained to the same
 // directory so it stays on a single filesystem, where POSIX guarantees
@@ -31,12 +31,12 @@ var atomicChmodFn = func(f *os.File, perm os.FileMode) error {
 func atomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) {
 	dir := filepath.Dir(path)
 	base := filepath.Base(path)
-	tmpPath := filepath.Join(dir, base+".tmp")
 
-	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	f, err := os.CreateTemp(dir, base+".tmp-*")
 	if err != nil {
-		return fmt.Errorf("creating temp file %s: %w", tmpPath, err)
+		return fmt.Errorf("creating temp file for %s: %w", path, err)
 	}
+	tmpPath := f.Name()
 
 	// Ensure the temp file is removed on any failure path. On the happy path
 	// the rename consumes it, so Remove will be a no-op error we ignore.

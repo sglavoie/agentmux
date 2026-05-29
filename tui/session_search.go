@@ -233,10 +233,13 @@ func formatSessionWhen(t time.Time) string {
 		return "          "
 	}
 	delta := time.Since(t)
+	if delta < 0 {
+		delta = 0
+	}
 	switch {
 	case delta < time.Hour:
 		mins := int(delta.Minutes())
-		if mins < 1 {
+		if mins < 1 && delta > 0 {
 			mins = 1
 		}
 		return fmt.Sprintf("%2dm   ago", mins)

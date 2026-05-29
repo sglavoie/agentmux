@@ -127,6 +127,28 @@ func TestClaudeReader_ReadMessages(t *testing.T) {
 	}
 }
 
+func TestFlattenClaudeContent_ToolResultArray(t *testing.T) {
+	raw := []byte(`[
+		{"type":"text","text":"before tool"},
+		{"type":"tool_result","content":[
+			{"type":"text","text":"array result line one"},
+			{"type":"text","text":"array result line two"}
+		]},
+		{"type":"tool_result","content":"string result"}
+	]`)
+
+	got := flattenClaudeContent(raw)
+	want := strings.Join([]string{
+		"before tool",
+		"array result line one",
+		"array result line two",
+		"string result",
+	}, "\n")
+	if got != want {
+		t.Fatalf("flattenClaudeContent() = %q, want %q", got, want)
+	}
+}
+
 func TestClaudeDiscover_CacheHitSkipsParse(t *testing.T) {
 	root := t.TempDir()
 	projDir := filepath.Join(root, "projects", "-tmp-cache-hit")

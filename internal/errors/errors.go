@@ -39,6 +39,9 @@ func (e *KittyError) Error() string {
 		return "kitty command failed: <nil>"
 	}
 	cmd := strings.Join(e.Command, " ")
+	if cmd == "" {
+		cmd = "<unknown command>"
+	}
 	trimmed := strings.TrimSpace(e.Output)
 	if trimmed != "" {
 		return fmt.Sprintf("kitty command failed: %s\n  output: %s", cmd, trimmed)
