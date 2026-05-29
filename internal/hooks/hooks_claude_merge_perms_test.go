@@ -3,6 +3,7 @@ package hooks
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -148,5 +149,29 @@ func TestMergeFreshWriteUsesDefaultPerm(t *testing.T) {
 	want := os.FileMode(0o644) &^ currentUmask()
 	if got := info.Mode().Perm(); got != want {
 		t.Errorf("fresh-write perms: got %o, want %o", got, want)
+	}
+}
+
+func TestMergeFreshWriteHonorsRestrictiveUmask(t *testing.T) {
+	oldUmask := syscall.Umask(0o077)
+	t.Cleanup(func() { syscall.Umask(oldUmask) })
+
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir},
+	}, nil)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(accountDir, "settings.json"))
+	if err != nil {
+		t.Fatalf("stat settings: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("fresh-write perms ignored restrictive umask: got %o, want 0600", got)
 	}
 }

@@ -75,6 +75,35 @@ func TestSaveAtomic(t *testing.T) {
 	}
 }
 
+func TestSaveIgnoresBlockedLegacyTempPath(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "overrides.json")
+	t.Setenv(overrides.PathEnvVar, path)
+
+	legacyTmp := path + ".tmp"
+	if err := os.Mkdir(legacyTmp, 0o755); err != nil {
+		t.Fatalf("seed blocked legacy temp path: %v", err)
+	}
+
+	f := overrides.File{
+		Version: 1,
+		Entries: []overrides.Entry{{ProjectTitle: "api", ProfileName: "work"}},
+	}
+	if err := overrides.Save(f); err != nil {
+		t.Fatalf("Save with blocked legacy temp path: %v", err)
+	}
+	if info, err := os.Stat(legacyTmp); err != nil || !info.IsDir() {
+		t.Fatalf("legacy temp path should be left untouched as a directory, info=%v err=%v", info, err)
+	}
+	got, err := overrides.Load()
+	if err != nil {
+		t.Fatalf("Load after Save: %v", err)
+	}
+	if len(got.Entries) != 1 || got.Entries[0] != f.Entries[0] {
+		t.Errorf("unexpected entries after Save: %v", got.Entries)
+	}
+}
+
 // TestSaveCleansUpTempOnRenameFailure pins the post-failure invariant: when
 // the final rename cannot complete (here because the destination path is
 // already occupied by a directory), the Save call must report the error and

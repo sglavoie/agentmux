@@ -30,6 +30,11 @@ func TestNew_DirDerivation(t *testing.T) {
 			indexPath: "/tmp/foo/transcripts",
 			wantDir:   "/tmp/foo/transcripts.search",
 		},
+		{
+			name:      "hidden file with no extension",
+			indexPath: "/tmp/foo/.transcripts",
+			wantDir:   "/tmp/foo/.transcripts.search",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -54,5 +54,8 @@ func Fatal(format string, args ...any) {
 
 // Print prints an error to stderr without exiting.
 func Print(err error) {
+	if err == nil {
+		return
+	}
 	fmt.Fprintf(os.Stderr, "%serror:%s %s\n", colorRed, colorReset, err)
 }

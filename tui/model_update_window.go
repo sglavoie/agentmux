@@ -45,6 +45,8 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	scrollListToCursor(&m)
 	clampPickerOffset(&m)
 	scrollPickerToCursor(&m)
+	scrollSessionSearchToCursor(&m)
+	scrollPlanSearchToCursor(&m)
 	clampViewerScroll(&m)
 	scrollViewerToCursor(&m)
 	clampPlanViewerScroll(&m)

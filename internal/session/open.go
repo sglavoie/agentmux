@@ -67,9 +67,9 @@ func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Acc
 //
 //	cfgEditor → $VISUAL → $EDITOR → "vi"
 //
-// Splits the chosen value on whitespace so "code --wait" and similar work
-// (matches cmd/config.go:resolveEditorCommand). Returns (name, args, nil) on
-// success or ("", nil, error) if every source is empty.
+// Splits the chosen value as shell arguments so "code --wait" and quoted
+// editor paths both work. Returns (name, args, nil) on success or ("", nil,
+// error) if every source is empty or the selected command cannot be parsed.
 func resolveEditor(cfgEditor string) (string, []string, error) {
 	candidates := []string{
 		cfgEditor,
@@ -81,7 +81,10 @@ func resolveEditor(cfgEditor string) (string, []string, error) {
 		if strings.TrimSpace(c) == "" {
 			continue
 		}
-		parts := strings.Fields(c)
+		parts, err := splitShellArgs(c)
+		if err != nil {
+			return "", nil, fmt.Errorf("parsing editor command %q: %w", c, err)
+		}
 		if len(parts) == 0 {
 			continue
 		}

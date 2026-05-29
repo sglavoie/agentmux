@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -101,6 +102,8 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 		if info, statErr := os.Stat(path); statErr == nil {
 			perm = info.Mode().Perm()
 		}
+	} else {
+		perm &^= processUmask()
 	}
 
 	newData, err := contract.MergeData(existingData, override.DisabledEvents, amxBin)
@@ -129,4 +132,10 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 		status = MergeCreated
 	}
 	return MergeResult{Account: account.Name, Path: path, Status: status}, nil
+}
+
+func processUmask() os.FileMode {
+	u := syscall.Umask(0)
+	syscall.Umask(u)
+	return os.FileMode(u)
 }

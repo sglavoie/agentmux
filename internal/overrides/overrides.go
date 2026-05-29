@@ -54,8 +54,8 @@ func Load() (File, error) {
 	return f, nil
 }
 
-// Save writes the overrides file atomically: it serializes f to a sibling
-// "<name>.tmp" file in the same directory, fsyncs and closes it, then renames
+// Save writes the overrides file atomically: it serializes f to a unique
+// sibling temp file in the same directory, fsyncs and closes it, then renames
 // it over the destination. On any failure the temp file is removed so a
 // partial write never lingers as garbage on disk.
 func Save(f File) (retErr error) {
@@ -63,18 +63,19 @@ func Save(f File) (retErr error) {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	data, err := json.Marshal(f)
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	tf, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	tf, err := os.CreateTemp(dir, filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
 	}
+	tmp := tf.Name()
 	// On any failure path remove the temp file; the rename consumes it on
 	// success so the Remove becomes a no-op error we ignore.
 	defer func() {
@@ -82,6 +83,10 @@ func Save(f File) (retErr error) {
 			_ = os.Remove(tmp)
 		}
 	}()
+	if err := tf.Chmod(0o644); err != nil {
+		_ = tf.Close()
+		return err
+	}
 	if _, err := tf.Write(data); err != nil {
 		_ = tf.Close()
 		return err

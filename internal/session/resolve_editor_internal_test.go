@@ -78,6 +78,22 @@ func TestResolveEditor(t *testing.T) {
 			wantName:  "emacs",
 			wantArgs:  []string{"-nw"},
 		},
+		{
+			name:      "quoted editor path stays intact",
+			cfg:       `"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --wait`,
+			visualEnv: "",
+			editorEnv: "",
+			wantName:  "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+			wantArgs:  []string{"--wait"},
+		},
+		{
+			name:      "quoted editor arg stays intact",
+			cfg:       `code --goto "main.go:12:4"`,
+			visualEnv: "",
+			editorEnv: "",
+			wantName:  "code",
+			wantArgs:  []string{"--goto", "main.go:12:4"},
+		},
 	}
 
 	for _, tc := range tests {

@@ -81,10 +81,22 @@ func (copilotHookContract) ParseInstalledEvents(path string) ([]string, error) {
 	}
 
 	var events []string
-	for event := range f.Hooks {
-		events = append(events, event)
+	for event, defs := range f.Hooks {
+		for _, def := range defs {
+			if isAmxCopilotHookDef(def) {
+				events = append(events, event)
+				break
+			}
+		}
 	}
 	return events, nil
+}
+
+func isAmxCopilotHookDef(def copilotHookDef) bool {
+	return isAmxHookEntry(hookEntry{
+		Command:        def.Bash,
+		CommandWindows: def.Powershell,
+	})
 }
 
 func buildCopilotHooks(disabledEvents []string, amxBin string) copilotHooksFile {

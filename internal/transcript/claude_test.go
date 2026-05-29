@@ -265,6 +265,10 @@ func TestTruncateSnippet(t *testing.T) {
 	if multi != "line1 line2 line3" {
 		t.Errorf("whitespace collapse = %q", multi)
 	}
+	exact := strings.Repeat("a", snippetMaxLen)
+	if got := truncateSnippet(exact); got != exact {
+		t.Errorf("exact length snippet = %q, want no ellipsis", got)
+	}
 	long := make([]byte, 0, snippetMaxLen+50)
 	for i := 0; i < snippetMaxLen+50; i++ {
 		long = append(long, 'a')

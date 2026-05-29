@@ -26,13 +26,28 @@ func HasMarker(text string) bool {
 
 func ScreenShowsMarker(text string) bool {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	tail := make([]string, 0, 3)
-	for i := len(lines) - 1; i >= 0 && len(tail) < 3; i-- {
+	tail := make([]string, 0, 4)
+	for i := len(lines) - 1; i >= 0 && len(tail) < 4; i-- {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
 		}
 		tail = append([]string{line}, tail...)
 	}
-	return HasMarker(strings.Join(tail, "\n"))
+	if HasMarker(strings.Join(lastLines(tail, 3), "\n")) {
+		return true
+	}
+	if len(tail) >= 4 &&
+		HasMarker(strings.Join(tail[:3], "\n")) &&
+		!HasMarker(tail[0]) {
+		return true
+	}
+	return false
+}
+
+func lastLines(lines []string, n int) []string {
+	if len(lines) <= n {
+		return lines
+	}
+	return lines[len(lines)-n:]
 }

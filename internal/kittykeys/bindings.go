@@ -5,7 +5,7 @@ type Action struct {
 	Key         string // Kitty key expression, e.g. "f8", "ctrl+shift+d"
 	Description string // One-line human-readable description
 	Section     string // Grouping header for display
-	AmxCommand  string // e.g. "focus-next" — empty for native Kitty actions
+	AmxCommand  string // e.g. "focus-next"; empty for native Kitty actions or the amx root dashboard
 	LaunchType  string // "overlay" | "background" | "" (native Kitty action)
 }
 
@@ -13,7 +13,7 @@ type Action struct {
 var Actions = []Action{
 	// Overlays
 	{Key: "f1", Section: "Overlays", Description: "show this keybinding reference", AmxCommand: "keybindings", LaunchType: "overlay"},
-	{Key: "ctrl+shift+d", Section: "Overlays", Description: "open Agent Mux dashboard", LaunchType: "overlay"},
+	{Key: "ctrl+shift+d", Section: "Overlays", Description: "open or focus Agent Mux dashboard", LaunchType: "overlay"},
 	// Session management
 	{Key: "f6", Section: "Sessions", Description: "set tab color (overlay picker)", AmxCommand: "color-picker", LaunchType: "overlay"},
 	{Key: "f8", Section: "Sessions", Description: "clear markers and state icons from tab", AmxCommand: "hook-indicator user_clear", LaunchType: "background"},

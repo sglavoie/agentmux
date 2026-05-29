@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
@@ -57,22 +58,88 @@ var configEditCmd = &cobra.Command{
 // resolveEditorCommand turns the user's $EDITOR value into a program name and
 // argument list suitable for exec.Command, with the target file path appended.
 //
-// $EDITOR commonly includes flags (e.g. "code --wait", "emacs -nw"). The
-// previous implementation passed the whole string as the program name to
-// exec.Command, which caused exec to look up a binary literally named
-// "code --wait" and fail. Splitting on whitespace is the same behavior most
-// shells and other CLI tools apply for $EDITOR.
+// $EDITOR commonly includes flags (e.g. "code --wait", "emacs -nw"). It can
+// also include quoted arguments (e.g. `vim -c "set ft=toml"`), so use a small
+// shell-style field splitter instead of strings.Fields.
 func resolveEditorCommand(editor, path string) (string, []string, error) {
 	if strings.TrimSpace(editor) == "" {
 		editor = "vi"
 	}
-	parts := strings.Fields(editor)
+	parts, err := splitEditorFields(editor)
+	if err != nil {
+		return "", nil, err
+	}
 	if len(parts) == 0 {
 		return "", nil, fmt.Errorf("invalid EDITOR value: %q", editor)
 	}
 	editorArgs := append([]string{}, parts[1:]...)
 	editorArgs = append(editorArgs, path)
 	return parts[0], editorArgs, nil
+}
+
+func splitEditorFields(s string) ([]string, error) {
+	var (
+		fields       []string
+		b            strings.Builder
+		quote        rune
+		escaping     bool
+		fieldStarted bool
+	)
+
+	flush := func() {
+		if !fieldStarted {
+			return
+		}
+		fields = append(fields, b.String())
+		b.Reset()
+		fieldStarted = false
+	}
+
+	for _, r := range s {
+		if escaping {
+			b.WriteRune(r)
+			escaping = false
+			fieldStarted = true
+			continue
+		}
+		if quote != 0 {
+			switch r {
+			case '\\':
+				if quote == '"' {
+					escaping = true
+				} else {
+					b.WriteRune(r)
+				}
+			case quote:
+				quote = 0
+			default:
+				b.WriteRune(r)
+			}
+			fieldStarted = true
+			continue
+		}
+		switch {
+		case r == '\\':
+			escaping = true
+			fieldStarted = true
+		case r == '\'' || r == '"':
+			quote = r
+			fieldStarted = true
+		case unicode.IsSpace(r):
+			flush()
+		default:
+			b.WriteRune(r)
+			fieldStarted = true
+		}
+	}
+	if escaping {
+		b.WriteRune('\\')
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("invalid EDITOR value %q: unterminated quote", s)
+	}
+	flush()
+	return fields, nil
 }
 
 var configShowCmd = &cobra.Command{

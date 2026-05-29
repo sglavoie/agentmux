@@ -54,6 +54,37 @@ func TestValidate_HarnessColorsUnknownHarnessRejected(t *testing.T) {
 	}
 }
 
+// TestLoad_NormalizesHarnessColorKeys pins that [harness_colors] keys follow
+// the same case-insensitive normalization as profile harness names and
+// Config.HarnessColor lookups. Without this, a key like "Claude" validates as
+// a known harness but is still missed by the later normalized lookup for
+// "claude".
+func TestLoad_NormalizesHarnessColorKeys(t *testing.T) {
+	path := writeTempConfig(t, `
+[harness_colors]
+Claude = "blue"
+
+[[profiles]]
+name = "work"
+harness = "claude"
+home_dir = "/tmp/h"
+color = "blue"
+`)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if got := cfg.HarnessColor("claude"); got != "blue" {
+		t.Errorf("HarnessColor(%q): got %q, want %q", "claude", got, "blue")
+	}
+	if _, ok := cfg.HarnessColors["Claude"]; ok {
+		t.Errorf("HarnessColors retained unnormalized key %q: %#v", "Claude", cfg.HarnessColors)
+	}
+}
+
 // TestValidate_HarnessColorsInvalidColorRejected pins that a [harness_colors]
 // value that is not in the palette is rejected with a per-harness location and
 // the palette list appended.

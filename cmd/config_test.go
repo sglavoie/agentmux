@@ -46,6 +46,20 @@ func TestResolveEditorCommand_SplitsEditorArguments(t *testing.T) {
 			wantArgs: []string{"-nw", "--no-splash", "/tmp/config.toml"},
 		},
 		{
+			name:     "quoted editor argument stays intact",
+			editor:   `vim -c "set ft=toml"`,
+			path:     "/tmp/config.toml",
+			wantName: "vim",
+			wantArgs: []string{"-c", "set ft=toml", "/tmp/config.toml"},
+		},
+		{
+			name:     "quoted binary flag value stays intact",
+			editor:   `open -a "Visual Studio Code" --args --wait`,
+			path:     "/tmp/config.toml",
+			wantName: "open",
+			wantArgs: []string{"-a", "Visual Studio Code", "--args", "--wait", "/tmp/config.toml"},
+		},
+		{
 			name:     "empty EDITOR falls back to vi",
 			editor:   "",
 			path:     "/tmp/config.toml",
@@ -58,6 +72,12 @@ func TestResolveEditorCommand_SplitsEditorArguments(t *testing.T) {
 			path:     "/tmp/config.toml",
 			wantName: "vi",
 			wantArgs: []string{"/tmp/config.toml"},
+		},
+		{
+			name:    "unterminated quote returns an error",
+			editor:  `vim -c "set ft=toml`,
+			path:    "/tmp/config.toml",
+			wantErr: true,
 		},
 	}
 	for _, tc := range cases {

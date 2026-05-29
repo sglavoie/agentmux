@@ -24,9 +24,9 @@ type Store struct {
 // the path is used verbatim as the base — preserved for parity with
 // callers that pass an extension-less path.
 func New(indexPath string) *Store {
-	base := indexPath[:len(indexPath)-len(filepath.Ext(indexPath))]
-	if base == "" {
-		base = indexPath
+	base := indexPath
+	if ext := filepath.Ext(indexPath); ext != "" && len(filepath.Base(indexPath)) > len(ext) {
+		base = indexPath[:len(indexPath)-len(ext)]
 	}
 	return &Store{dir: base + ".search"}
 }

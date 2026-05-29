@@ -3,6 +3,7 @@ package palette
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 )
 
 // Color holds the display values for a single named color.
@@ -49,11 +50,12 @@ func Lookup(name string) (Color, error) {
 	return c, nil
 }
 
-// Names returns all color names in undefined order.
+// Names returns all color names in sorted order.
 func Names() []string {
 	names := make([]string, 0, len(pal.Colors))
 	for k := range pal.Colors {
 		names = append(names, k)
 	}
+	sort.Strings(names)
 	return names
 }

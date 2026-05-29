@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"sort"
 
 	"github.com/BurntSushi/toml"
 	ccembed "github.com/sglavoie/agentmux/embed"
@@ -201,6 +202,8 @@ func normalizeAliases(cfg *Config) {
 		cfg.Defaults.ClaudeFlags = cloneStrings(cfg.Defaults.Args)
 	}
 
+	cfg.HarnessColors = normalizeHarnessColors(cfg.HarnessColors)
+
 	profiles := cfg.Profiles
 	if len(profiles) == 0 {
 		profiles = cfg.Accounts
@@ -263,6 +266,23 @@ func cloneAccounts(in []Account) []Account {
 	copy(out, in)
 	for i := range out {
 		out[i].Args = cloneStrings(out[i].Args)
+	}
+	return out
+}
+
+func normalizeHarnessColors(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(in))
+	for k := range in {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	out := make(map[string]string, len(in))
+	for _, k := range keys {
+		out[harness.Normalize(k)] = in[k]
 	}
 	return out
 }

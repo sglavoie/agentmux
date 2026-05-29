@@ -1,6 +1,7 @@
 package clipboard
 
 import (
+	"errors"
 	"os/exec"
 	"runtime"
 	"testing"
@@ -54,7 +55,16 @@ func TestCopyUnsupportedPlatform(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip("darwin has a supported backend")
 	}
-	if err := Copy("ignored"); err == nil {
-		t.Fatal("expected ErrUnsupported, got nil")
+	if err := Copy("ignored"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCopyDarwinMissingBackend(t *testing.T) {
+	err := copy("ignored", "darwin", func(string) (string, error) {
+		return "", exec.ErrNotFound
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
 	}
 }

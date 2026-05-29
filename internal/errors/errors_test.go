@@ -2,6 +2,8 @@ package errors
 
 import (
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -52,4 +54,53 @@ func TestKittyError_Unwrap(t *testing.T) {
 	if !errors.Is(e, underlying) {
 		t.Error("errors.Is should match underlying")
 	}
+}
+
+func TestPrint_NilErrorDoesNotPrintMalformedMessage(t *testing.T) {
+	output := captureStderr(t, func() {
+		Print(nil)
+	})
+	if output != "" {
+		t.Fatalf("Print(nil) wrote %q, want no output", output)
+	}
+}
+
+func TestPrint_ErrorWritesMessage(t *testing.T) {
+	output := captureStderr(t, func() {
+		Print(errors.New("boom"))
+	})
+	if !strings.Contains(output, "error:") {
+		t.Fatalf("Print(error) output = %q, want error prefix", output)
+	}
+	if !strings.Contains(output, "boom") {
+		t.Fatalf("Print(error) output = %q, want error message", output)
+	}
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	original := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	t.Cleanup(func() {
+		os.Stderr = original
+	})
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

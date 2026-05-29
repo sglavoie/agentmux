@@ -105,11 +105,23 @@ func isDashboardCmdline(cmdline []string) bool {
 		return false
 	}
 	for _, arg := range cmdline[1:] {
+		if isInfoOnlyRootFlag(arg) {
+			return false
+		}
 		if !strings.HasPrefix(arg, "-") {
 			return false
 		}
 	}
 	return true
+}
+
+func isInfoOnlyRootFlag(arg string) bool {
+	switch arg {
+	case "-h", "--help", "--help=true", "--version", "--version=true":
+		return true
+	default:
+		return false
+	}
 }
 
 // FindKeybindingsWindow scans all OS windows for a window whose foreground

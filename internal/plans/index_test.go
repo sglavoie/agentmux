@@ -162,6 +162,42 @@ func TestRefresh_IdempotentNoSidecarRewrite(t *testing.T) {
 	}
 }
 
+func TestRefresh_RebuildsMissingSidecarOnCacheHit(t *testing.T) {
+	root := t.TempDir()
+	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
+		"manifest.md":  "# title",
+		"session-1.md": "body-only-needle",
+	})
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh 1: %v", err)
+	}
+
+	sidecar := idx.store.Path(PlanKey(planDir))
+	if err := os.Remove(sidecar); err != nil {
+		t.Fatalf("remove sidecar: %v", err)
+	}
+
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh 2: %v", err)
+	}
+	if _, err := os.Stat(sidecar); err != nil {
+		t.Fatalf("sidecar was not rebuilt: %v", err)
+	}
+
+	results, err := Search(idx, Query{Text: "body-only-needle"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if results[0].Meta.DirPath != planDir {
+		t.Errorf("Meta.DirPath = %q, want %q", results[0].Meta.DirPath, planDir)
+	}
+}
+
 func TestRefresh_DropsVanishedPlans(t *testing.T) {
 	root := t.TempDir()
 	planA := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{

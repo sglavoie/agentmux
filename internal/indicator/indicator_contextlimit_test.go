@@ -108,3 +108,46 @@ func TestRunWithDeps_DaemonDownFallbackStillShowsContextLimitError(t *testing.T)
 		t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], wantTitle)
 	}
 }
+
+func TestRunWithDeps_SubagentStopScreenContextLimitPromotesStopFailure(t *testing.T) {
+	tabTitle := palette.BuildTitle("api", "subagent", false)
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, tabTitle, "work", "claude"),
+		screenText: "working\n\n" +
+			"Context limit reached · /compact or /clear to continue\n\n" +
+			"✻ Cooked for 3m 12s\n",
+	}
+	daemonClient := &fakeIndicatorDaemonClient{
+		resp: daemon.Response{OK: true, Allowed: true, IconState: "error"},
+	}
+
+	err := runWithDeps(
+		"SubagentStop",
+		42,
+		"/tmp/amx",
+		HookPayload{},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(daemonClient.reqs) != 1 {
+		t.Fatalf("daemon requests = %d, want 1", len(daemonClient.reqs))
+	}
+	req := daemonClient.reqs[0]
+	if req.Action != "stop_failure" || !req.ContextLimit {
+		t.Fatalf("daemon request = %+v, want stop_failure with context_limit", req)
+	}
+	if len(kittyClient.getTextCalls) != 1 {
+		t.Fatalf("GetText calls = %d, want 1", len(kittyClient.getTextCalls))
+	}
+	if len(kittyClient.setTitleCalls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(kittyClient.setTitleCalls))
+	}
+	wantTitle := palette.BuildTitle("api", "error", false)
+	if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:42", title: wantTitle}) {
+		t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], wantTitle)
+	}
+}

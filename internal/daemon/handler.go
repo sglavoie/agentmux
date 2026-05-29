@@ -205,26 +205,27 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 
 // Handle processes a Request and returns a Response.
 func (h *Handler) Handle(req Request) Response {
-	if h.onActivity != nil {
-		h.onActivity()
-	}
-
+	var resp Response
 	switch req.Type {
 	case TypeStateUpdate:
-		return h.handleStateUpdate(req)
+		resp = h.handleStateUpdate(req)
 	case TypeStateQuery:
-		return h.handleStateQuery()
+		resp = h.handleStateQuery()
 	case TypeSessionDetail:
-		return h.handleSessionDetail(req)
+		resp = h.handleSessionDetail(req)
 	case TypeEventsExport:
-		return h.handleEventsExport(req)
+		resp = h.handleEventsExport(req)
 	case TypeHealth:
-		return h.handleHealth()
+		resp = h.handleHealth()
 	case TypeShutdown:
-		return h.handleShutdown()
+		resp = h.handleShutdown()
 	default:
-		return Response{OK: false, Error: "unknown request type: " + string(req.Type)}
+		resp = Response{OK: false, Error: "unknown request type: " + string(req.Type)}
 	}
+	if resp.OK && h.onActivity != nil {
+		h.onActivity()
+	}
+	return resp
 }
 
 func (h *Handler) handleHealth() Response {

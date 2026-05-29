@@ -15,10 +15,18 @@ var ErrUnsupported = errors.New("clipboard: unsupported platform")
 // Copy writes text to the system clipboard. Returns ErrUnsupported on non-darwin
 // platforms or when no backend is available.
 func Copy(text string) error {
-	if runtime.GOOS != "darwin" {
+	return copy(text, runtime.GOOS, exec.LookPath)
+}
+
+func copy(text, goos string, lookPath func(string) (string, error)) error {
+	if goos != "darwin" {
 		return ErrUnsupported
 	}
-	cmd := exec.Command("pbcopy")
+	pbcopy, err := lookPath("pbcopy")
+	if err != nil {
+		return ErrUnsupported
+	}
+	cmd := exec.Command(pbcopy)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("clipboard: stdin pipe: %w", err)

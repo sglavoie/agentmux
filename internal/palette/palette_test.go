@@ -1,6 +1,7 @@
 package palette
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -63,6 +64,13 @@ func TestActiveFgInactiveFg(t *testing.T) {
 func TestNamesCount(t *testing.T) {
 	if got := len(Names()); got != 10 {
 		t.Errorf("Names() returned %d colors, want 10", got)
+	}
+}
+
+func TestNamesSorted(t *testing.T) {
+	names := Names()
+	if !slices.IsSorted(names) {
+		t.Fatalf("Names() = %v, want sorted order", names)
 	}
 }
 

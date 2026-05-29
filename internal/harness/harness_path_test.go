@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"os"
 	"testing"
 )
 
@@ -47,5 +48,60 @@ func TestStripAmxGroupsRemovesPathWithSpaces(t *testing.T) {
 	}
 	if _, ok := out["PreToolUse"]; !ok {
 		t.Errorf("user-managed PreToolUse should have survived; got %+v", out)
+	}
+}
+
+func TestCopilotParseInstalledEventsOnlyReportsAmxHooks(t *testing.T) {
+	path := t.TempDir() + "/agent-mux.json"
+	data := []byte(`{
+  "version": 1,
+  "hooks": {
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "/usr/local/bin/amx hook-indicator sessionEnd"
+      }
+    ],
+    "notification": [
+      {
+        "type": "command",
+        "bash": "/opt/notamx hook-indicator notification"
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "powershell": "amx hook-indicator preToolUse"
+      }
+    ]
+  }
+}`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write hooks file: %v", err)
+	}
+
+	got, err := (copilotHookContract{}).ParseInstalledEvents(path)
+	if err != nil {
+		t.Fatalf("ParseInstalledEvents() err: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ParseInstalledEvents() = %v, want exactly sessionEnd and preToolUse", got)
+	}
+	for _, want := range []string{"sessionEnd", "preToolUse"} {
+		found := false
+		for _, event := range got {
+			if event == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ParseInstalledEvents() missing %q: %v", want, got)
+		}
+	}
+	for _, event := range got {
+		if event == "notification" {
+			t.Fatalf("ParseInstalledEvents() reported third-party hook: %v", got)
+		}
 	}
 }

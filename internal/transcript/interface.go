@@ -93,10 +93,10 @@ func truncateSnippet(s string) string {
 		} else {
 			prevSpace = false
 		}
-		out = append(out, r)
 		if len(out) >= snippetMaxLen {
 			return string(out) + "…"
 		}
+		out = append(out, r)
 	}
 	return string(out)
 }

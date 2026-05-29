@@ -289,8 +289,9 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, error) {
 
 	// Cache hit: identical aggregate size and mtime means the corpus
 	// is byte-identical to the cached snapshot. Reuse the cached
-	// snippet and skip the per-file read + sidecar rewrite.
-	if cached, ok := i.entries[PlanKey(planDir)]; ok && cached.Size == size && cached.ModTime.Equal(modTime) {
+	// snippet and skip the per-file read + sidecar rewrite when the
+	// search sidecar still exists; otherwise fall through to rebuild it.
+	if cached, ok := i.entries[PlanKey(planDir)]; ok && cached.Size == size && cached.ModTime.Equal(modTime) && i.sidecarExists(PlanKey(planDir)) {
 		cached.Files = rels
 		cached.Name = displayName
 		cached.DirPath = planDir
@@ -333,6 +334,11 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, error) {
 		ModTime: modTime,
 		Snippet: snippet,
 	}, nil
+}
+
+func (i *Index) sidecarExists(key string) bool {
+	_, err := os.Stat(i.store.Path(key))
+	return err == nil
 }
 
 // extractSnippet returns the first non-empty trimmed line of the given

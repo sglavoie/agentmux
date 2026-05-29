@@ -14,6 +14,7 @@ func shouldProbeWindowForContextLimit(eventOrAction, action string) bool {
 	switch eventOrAction {
 	case "TaskCompleted",
 		"Stop", "agentStop",
+		"SubagentStop", "subagentStop",
 		"SessionEnd", "sessionEnd",
 		"Notification", "notification":
 		return true
