@@ -57,3 +57,20 @@ func TestGuard_StopFailureTerminal_NotClearedByActive(t *testing.T) {
 		}
 	}
 }
+
+func TestGuard_StopFailureNotDowngradedByFailure(t *testing.T) {
+	// stop_failure and failure share priority 4, but stop_failure is terminal.
+	// A later recoverable tool failure must not replace the sticky error state
+	// with a transient warning before explicit user acknowledgement.
+	g := NewStateGuard(time.Hour)
+	if ok, eff := g.TryUpdate(1, "stop_failure", false); !ok || eff != "stop_failure" {
+		t.Fatalf("want initial (true, stop_failure), got (%v, %q)", ok, eff)
+	}
+
+	if ok, eff := g.TryUpdate(1, "failure", false); ok || eff != "" {
+		t.Fatalf("want failure to be blocked by stop_failure, got (%v, %q)", ok, eff)
+	}
+	if cur := g.Current(1); cur != "stop_failure" {
+		t.Fatalf("want guard=stop_failure, got %q", cur)
+	}
+}

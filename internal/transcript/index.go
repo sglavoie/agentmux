@@ -296,7 +296,14 @@ func (i *Index) SetHidden(key string, hidden bool) error {
 	if !ok {
 		return fmt.Errorf("transcript: no index entry for %q", key)
 	}
+	if hidden {
+		if err := i.DeleteSearchText(key); err != nil {
+			return fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err)
+		}
+		entry.SearchText = ""
+	}
 	if entry.HiddenFromIndex == hidden {
+		i.entries[key] = entry
 		return nil
 	}
 	entry.HiddenFromIndex = hidden

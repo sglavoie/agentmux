@@ -51,6 +51,9 @@ func Load() (File, error) {
 	if err := json.Unmarshal(data, &f); err != nil {
 		return File{}, err
 	}
+	if f.Version == 0 {
+		f.Version = 1
+	}
 	if f.Entries == nil {
 		f.Entries = []Entry{}
 	}

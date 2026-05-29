@@ -68,8 +68,18 @@ func TestScreenShowsMarker(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "warning wrapped with command hint split across screen bottom",
+			text: "earlier line\n\nContext\nlimit\nreached\n/compact\nor /clear\nto continue\n",
+			want: true,
+		},
+		{
 			name: "warning wrapped across extremely narrow screen tail",
 			text: "earlier line\n\nContext\nlimit\nreached\n/compact or /clear\nto continue\n\n✻ Cooked for 17m 6s\n",
+			want: true,
+		},
+		{
+			name: "warning wrapped with command hint split across screen tail",
+			text: "earlier line\n\nContext\nlimit\nreached\n/compact\nor /clear\nto continue\n\n✻ Cooked for 17m 6s\n",
 			want: true,
 		},
 		{

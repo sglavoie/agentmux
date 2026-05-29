@@ -150,8 +150,8 @@ var configShowCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("reading config: %w", err)
 		}
-		fmt.Print(string(data))
-		return nil
+		_, err = fmt.Fprint(cmd.OutOrStdout(), string(data))
+		return err
 	},
 }
 

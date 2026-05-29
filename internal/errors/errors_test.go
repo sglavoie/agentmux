@@ -40,6 +40,21 @@ func TestKittyError_RealOutputTrimmed(t *testing.T) {
 	}
 }
 
+func TestKittyError_OutputAndErrIncludesBoth(t *testing.T) {
+	e := &KittyError{
+		Command: []string{"kitten", "@", "ls"},
+		Output:  "boom: not connected\n",
+		Err:     errors.New("exit status 1"),
+	}
+	msg := e.Error()
+	if !strings.Contains(msg, "output: boom: not connected") {
+		t.Errorf("expected command output, got %q", msg)
+	}
+	if !strings.Contains(msg, "error: exit status 1") {
+		t.Errorf("expected underlying error, got %q", msg)
+	}
+}
+
 func TestKittyError_NoOutputNoErr(t *testing.T) {
 	e := &KittyError{Command: []string{"kitten", "@", "ls"}}
 	msg := e.Error()

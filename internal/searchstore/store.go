@@ -105,7 +105,7 @@ func (s *Store) Delete(key string) error {
 	return err
 }
 
-// Stats returns the number and total byte size of regular .txt sidecar
+// Stats returns the number and total byte size of regular hashed .txt sidecar
 // files in the store's directory. A missing directory is treated as empty
 // (returns 0, 0, nil) rather than an error so a freshly constructed Store
 // whose directory has not been created yet is reported as empty.
@@ -121,7 +121,7 @@ func (s *Store) Stats() (count int, size int64, err error) {
 		if entry.IsDir() {
 			continue
 		}
-		if filepath.Ext(entry.Name()) != ".txt" {
+		if !isSidecarName(entry.Name()) {
 			continue
 		}
 		info, err := entry.Info()
@@ -135,4 +135,16 @@ func (s *Store) Stats() (count int, size int64, err error) {
 		size += info.Size()
 	}
 	return count, size, nil
+}
+
+func isSidecarName(name string) bool {
+	if len(name) != sha256.Size*2+len(".txt") || filepath.Ext(name) != ".txt" {
+		return false
+	}
+	for _, r := range name[:sha256.Size*2] {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }

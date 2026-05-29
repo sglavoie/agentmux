@@ -167,7 +167,7 @@ func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab
 	if len(tab.Windows) == 0 {
 		return RunningSession{}, nil, false
 	}
-	base, state, starred := palette.ParseTitle(tab.Title)
+	base, state, starred, muted := palette.ParseTitleFull(tab.Title)
 
 	matches, strategy := titleFallbackMatches(cfg, base)
 	if len(matches) != 1 {
@@ -209,6 +209,7 @@ func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab
 		Base:             base,
 		State:            state,
 		Starred:          starred,
+		Muted:            muted,
 		Project:          m.sess.Title,
 		Profile:          profile,
 		Account:          profile,
@@ -235,7 +236,7 @@ func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab
 
 func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 	profile := win.UserVars.EffectiveProfile()
-	base, state, starred := palette.ParseTitle(tab.Title)
+	base, state, starred, muted := palette.ParseTitleFull(tab.Title)
 	dir := win.UserVars.EffectiveDirectory()
 	if dir == "" {
 		dir = win.CWD
@@ -255,7 +256,7 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 		State:            state,
 		Starred:          starred,
 		Locked:           win.UserVars.Locked,
-		Muted:            win.UserVars.Mute != "",
+		Muted:            muted || win.UserVars.Mute != "",
 		Project:          project,
 		Profile:          profile,
 		Account:          profile,

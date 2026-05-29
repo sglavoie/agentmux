@@ -163,6 +163,54 @@ func TestListWithConfig_TitleFallback_StripsStateIcon(t *testing.T) {
 	}
 }
 
+func TestListWithConfig_TitleFallback_PreservesMuteIcon(t *testing.T) {
+	fixture := []byte(`[
+  {
+    "id": 1,
+    "is_active": true,
+    "tabs": [
+      {
+        "id": 32,
+        "is_active": true,
+        "title": "🔇⚡api",
+        "windows": [
+          {
+            "id": 33,
+            "is_active": true,
+            "cwd": "/tmp",
+            "user_vars": {}
+          }
+        ]
+      }
+    ]
+  }
+]`)
+	client := newClientFromBytes(t, fixture)
+
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "work", Harness: "claude"}},
+		Sessions: []config.Session{{Title: "api", Account: "work", Directory: "/projects/api"}},
+	}
+
+	sessions, ghosts, err := session.ListWithConfig(client, cfg)
+	if err != nil {
+		t.Fatalf("ListWithConfig: %v", err)
+	}
+	if len(sessions) != 1 || len(ghosts) != 1 {
+		t.Fatalf("expected 1 session + 1 ghost, got %d/%d", len(sessions), len(ghosts))
+	}
+	rs := sessions[0]
+	if !rs.Muted {
+		t.Errorf("Muted: got false, want true")
+	}
+	if rs.State != "bolt" {
+		t.Errorf("State: got %q, want %q", rs.State, "bolt")
+	}
+	if rs.Base != "api" {
+		t.Errorf("Base: got %q, want %q", rs.Base, "api")
+	}
+}
+
 func TestListWithConfig_TitleFallback_AmbiguousMatchSkipped(t *testing.T) {
 	fixture := []byte(`[
   {

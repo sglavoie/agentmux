@@ -44,6 +44,9 @@ func (e *KittyError) Error() string {
 	}
 	trimmed := strings.TrimSpace(e.Output)
 	if trimmed != "" {
+		if e.Err != nil {
+			return fmt.Sprintf("kitty command failed: %s\n  output: %s\n  error: %s", cmd, trimmed, e.Err)
+		}
 		return fmt.Sprintf("kitty command failed: %s\n  output: %s", cmd, trimmed)
 	}
 	if e.Err != nil {

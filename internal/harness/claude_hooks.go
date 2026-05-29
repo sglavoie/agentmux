@@ -124,13 +124,13 @@ func (claudeHookContract) ParseInstalledEvents(path string) ([]string, error) {
 
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("parsing settings.json: %w", err)
 	}
 
 	var hooks map[string][]hookGroup
 	if hooksRaw, ok := raw["hooks"]; ok {
 		if err := json.Unmarshal(hooksRaw, &hooks); err != nil {
-			return nil, nil
+			return nil, fmt.Errorf("parsing settings.json hooks section: %w", err)
 		}
 	}
 

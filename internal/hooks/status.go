@@ -92,11 +92,13 @@ func StatusAll(cfg *config.Config, amxBin string) ([]AccountStatus, error) {
 			if harnessName == "" {
 				harnessName = "claude"
 			}
-			status = AccountStatus{
-				Account: account.Name,
-				Harness: harnessName,
-				Err:     err,
+			if status.Account == "" {
+				status.Account = account.Name
 			}
+			if status.Harness == "" {
+				status.Harness = harnessName
+			}
+			status.Err = err
 			errs = append(errs, fmt.Errorf("%s: %w", account.Name, err))
 		}
 		results = append(results, status)
@@ -120,12 +122,12 @@ func checkStatus(account config.Account, override config.AccountHookOverride, am
 		if os.IsNotExist(err) {
 			return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncMissing}, nil
 		}
-		return AccountStatus{}, err
+		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path}, err
 	}
 
 	installed, err := contract.ParseInstalledEvents(path)
 	if err != nil {
-		return AccountStatus{}, err
+		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path}, err
 	}
 	if len(installed) == 0 {
 		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncMissing}, nil
@@ -133,7 +135,7 @@ func checkStatus(account config.Account, override config.AccountHookOverride, am
 
 	newData, err := contract.MergeData(existingData, override.DisabledEvents, amxBin)
 	if err != nil {
-		return AccountStatus{}, err
+		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path}, err
 	}
 	if bytes.Equal(existingData, newData) {
 		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncInSync}, nil

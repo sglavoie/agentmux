@@ -116,6 +116,11 @@ func (g *StateGuard) TryUpdate(windowID int, action string, isPrompt bool) (allo
 		case entry.action == "stop" && isPrompt:
 			// Prompt bypasses stop guard — fall through to set new guard.
 			delete(g.entries, windowID)
+		case entry.action == "stop_failure" && action == "failure":
+			// stop_failure is terminal. A later recoverable tool failure has the
+			// same numeric priority, but must not downgrade the sticky error icon
+			// to a transient warning before the user explicitly clears it.
+			return false, ""
 		case Priority(action) < entry.priority:
 			return false, ""
 		}

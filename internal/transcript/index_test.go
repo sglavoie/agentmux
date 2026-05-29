@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // fakeReader implements Reader without parsing any files on disk. It is
@@ -66,6 +68,46 @@ func TestLoadIndex_MissingFileReturnsEmpty(t *testing.T) {
 	}
 	if idx.Len() != 0 {
 		t.Errorf("expected empty index, got %d entries", idx.Len())
+	}
+}
+
+func TestSetHiddenRemovesSearchSidecar(t *testing.T) {
+	idx := newTestIndex(t)
+	key := IndexKey(harness.Claude, "sess-1")
+	must(t, idx.SetEntryForTest(key, SessionMeta{
+		ID:           "sess-1",
+		Harness:      harness.Claude,
+		MessageCount: 1,
+		SearchText:   "needle body",
+	}))
+	exists, err := idx.SearchTextExists(key)
+	if err != nil {
+		t.Fatalf("SearchTextExists before SetHidden: %v", err)
+	}
+	if !exists {
+		t.Fatalf("sidecar missing before SetHidden")
+	}
+
+	if err := idx.SetHidden(key, true); err != nil {
+		t.Fatalf("SetHidden: %v", err)
+	}
+
+	got, ok := idx.Get(key)
+	if !ok {
+		t.Fatalf("entry missing after SetHidden")
+	}
+	if !got.HiddenFromIndex {
+		t.Fatalf("HiddenFromIndex = false, want true")
+	}
+	if got.SearchText != "" {
+		t.Fatalf("SearchText retained after SetHidden: %q", got.SearchText)
+	}
+	exists, err = idx.SearchTextExists(key)
+	if err != nil {
+		t.Fatalf("SearchTextExists after SetHidden: %v", err)
+	}
+	if exists {
+		t.Fatalf("sidecar still exists after SetHidden")
 	}
 }
 

@@ -236,6 +236,9 @@ func TestStatusAll_ContinuesPastPerAccountError(t *testing.T) {
 	if byName["broken"].Err == nil {
 		t.Errorf("expected per-account Err on the failing account, got nil")
 	}
+	if want := filepath.Join(brokenDir, "settings.json"); byName["broken"].Path != want {
+		t.Errorf("expected failing account path=%q, got %q", want, byName["broken"].Path)
+	}
 	if byName["in"].Err != nil {
 		t.Errorf("expected nil Err for in-sync account, got %v", byName["in"].Err)
 	}

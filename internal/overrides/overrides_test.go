@@ -42,6 +42,22 @@ func TestLoadNullEntriesNormalizesToEmptySlice(t *testing.T) {
 	}
 }
 
+func TestLoadMissingVersionDefaultsToCurrentVersion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "overrides.json")
+	t.Setenv(overrides.PathEnvVar, path)
+	if err := os.WriteFile(path, []byte(`{"entries":[]}`), 0o644); err != nil {
+		t.Fatalf("seed overrides file: %v", err)
+	}
+
+	f, err := overrides.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if f.Version != 1 {
+		t.Fatalf("Version: got %d, want 1", f.Version)
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "overrides.json"))
 

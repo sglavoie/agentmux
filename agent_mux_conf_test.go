@@ -33,7 +33,7 @@ func TestReadmeDocumentsFocusNextBinding(t *testing.T) {
 		t.Fatalf("ReadFile(README.md): %v", err)
 	}
 
-	const binding = "map f4 launch --type=background --allow-remote-control amx focus-next"
+	const binding = "map f4 launch --type=background --allow-remote-control amx focus-next --window-id @active-kitty-window-id"
 	if !strings.Contains(string(conf), binding) {
 		t.Fatalf("agent-mux.conf missing focus-next binding %q", binding)
 	}

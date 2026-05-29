@@ -131,7 +131,9 @@ func TestHookPayload_EffectivePrompt(t *testing.T) {
 		want    string
 	}{
 		{name: "prompt wins", payload: HookPayload{Prompt: "/clear"}, want: "/clear"},
+		{name: "blank prompt falls back", payload: HookPayload{Prompt: " \t", InitialPrompt: "/reset"}, want: "/reset"},
 		{name: "snake initial prompt fallback", payload: HookPayload{InitialPrompt: "/reset"}, want: "/reset"},
+		{name: "blank snake initial prompt falls back", payload: HookPayload{InitialPrompt: " \n", InitialPromptCamel: "/new"}, want: "/new"},
 		{name: "camel initial prompt fallback", payload: HookPayload{InitialPromptCamel: "/new"}, want: "/new"},
 		{name: "empty prompt", payload: HookPayload{}, want: ""},
 	}
@@ -149,6 +151,7 @@ func TestHookPayload_EffectiveToolName(t *testing.T) {
 		want    string
 	}{
 		{name: "snake case tool name", payload: HookPayload{ToolName: "Bash"}, want: "Bash"},
+		{name: "blank snake case tool name falls back", payload: HookPayload{ToolName: " ", ToolNameCamel: "bash"}, want: "bash"},
 		{name: "camel case tool name", payload: HookPayload{ToolNameCamel: "bash"}, want: "bash"},
 		{name: "empty tool name", payload: HookPayload{}, want: ""},
 	}
@@ -156,6 +159,21 @@ func TestHookPayload_EffectiveToolName(t *testing.T) {
 		if got := tc.payload.EffectiveToolName(); got != tc.want {
 			t.Errorf("%s: EffectiveToolName() = %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestHookPayload_EffectiveLifecycleFieldsSkipBlankPreferredValue(t *testing.T) {
+	payload := HookPayload{
+		NotificationType:      " ",
+		NotificationTypeCamel: "permission_prompt",
+		StopReason:            "\t",
+		StopReasonCamel:       "context_limit_reached",
+	}
+	if got := payload.EffectiveNotificationType(); got != "permission_prompt" {
+		t.Fatalf("EffectiveNotificationType() = %q, want permission_prompt", got)
+	}
+	if got := payload.EffectiveStopReason(); got != "context_limit_reached" {
+		t.Fatalf("EffectiveStopReason() = %q, want context_limit_reached", got)
 	}
 }
 

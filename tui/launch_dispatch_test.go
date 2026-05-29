@@ -182,6 +182,35 @@ func TestDispatchPickerLaunch_OnlyNonRunningIsQueued(t *testing.T) {
 	}
 }
 
+// TestDispatchPickerLaunch_MissingAccountReportsError verifies that a stale
+// or invalid profile reference does not look like a successful launch. The
+// progress handler only quits when every launchProgressMsg has nil err, so
+// this branch must surface a real error.
+func TestDispatchPickerLaunch_MissingAccountReportsError(t *testing.T) {
+	m := launchDispatchModel(t, nil)
+	m.cfg.Sessions[0].Account = "missing"
+	m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
+	m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
+	m.pickerSelected = make(map[int]bool)
+	selectByTitle(&m, "api")
+
+	cmd := m.dispatchPickerLaunch()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for selected session with missing account")
+	}
+
+	got := countLaunchProgress(collectLeafMsgs(t, cmd))
+	if len(got) != 1 {
+		t.Fatalf("expected 1 launchProgressMsg, got %d (%+v)", len(got), got)
+	}
+	if got[0].err == nil {
+		t.Fatal("expected missing account to be reported as launch error")
+	}
+	if got[0].title != "api" {
+		t.Errorf("expected queued title api, got %q", got[0].title)
+	}
+}
+
 // TestDispatchPickerLaunch_RunningSnapshotIsStable verifies that the dedup
 // decision is finalized synchronously at dispatch time. Mutating
 // m.pickerRunning after dispatch does NOT affect which sessions launch —

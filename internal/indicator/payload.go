@@ -85,34 +85,28 @@ func DecodeHookPayload(r io.Reader) (HookPayload, error) {
 }
 
 func (p HookPayload) EffectiveNotificationType() string {
-	if p.NotificationType != "" {
-		return p.NotificationType
-	}
-	return p.NotificationTypeCamel
+	return firstNonBlank(p.NotificationType, p.NotificationTypeCamel)
 }
 
 func (p HookPayload) EffectiveStopReason() string {
-	if p.StopReason != "" {
-		return p.StopReason
-	}
-	return p.StopReasonCamel
+	return firstNonBlank(p.StopReason, p.StopReasonCamel)
 }
 
 func (p HookPayload) EffectivePrompt() string {
-	if p.Prompt != "" {
-		return p.Prompt
-	}
-	if p.InitialPrompt != "" {
-		return p.InitialPrompt
-	}
-	return p.InitialPromptCamel
+	return firstNonBlank(p.Prompt, p.InitialPrompt, p.InitialPromptCamel)
 }
 
 func (p HookPayload) EffectiveToolName() string {
-	if p.ToolName != "" {
-		return p.ToolName
+	return firstNonBlank(p.ToolName, p.ToolNameCamel)
+}
+
+func firstNonBlank(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
 	}
-	return p.ToolNameCamel
+	return ""
 }
 
 // payloadHasResetFlow classifies user-initiated reset flows from the harness

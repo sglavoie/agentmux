@@ -1,6 +1,9 @@
 package kittykeys
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func findAction(t *testing.T, key string) Action {
 	t.Helper()
@@ -63,5 +66,25 @@ func TestScrollbackMarkerBindingDescribesFailureMarkers(t *testing.T) {
 	}
 	if markers.LaunchType != "" {
 		t.Fatalf("f3 LaunchType = %q, want native Kitty action", markers.LaunchType)
+	}
+}
+
+func TestActionsUseConcreteKittyKeyExpressions(t *testing.T) {
+	seen := make(map[string]bool)
+
+	for _, action := range Actions {
+		if action.Key == "" {
+			t.Fatal("action has empty Key")
+		}
+		if strings.ContainsAny(action.Key, " \t\n\r") {
+			t.Fatalf("%q is not a concrete Kitty key expression", action.Key)
+		}
+		if strings.Contains(action.Key, "–") {
+			t.Fatalf("%q is a display range, want concrete Kitty key expression", action.Key)
+		}
+		if seen[action.Key] {
+			t.Fatalf("duplicate binding for %q", action.Key)
+		}
+		seen[action.Key] = true
 	}
 }

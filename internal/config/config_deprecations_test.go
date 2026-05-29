@@ -191,3 +191,74 @@ color = "blue"
 	}
 	t.Fatalf("Deprecations missing defaults.stale_active_threshold (got %+v)", cfg.Deprecations)
 }
+
+// TestLoad_ReportsZeroLegacyStaleActiveThreshold pins that deprecation
+// detection is based on TOML key presence, not the decoded int value. A user
+// who explicitly writes the old key with 0 still needs the migration banner;
+// value-based detection used to miss it because 0 is also the Go zero value.
+func TestLoad_ReportsZeroLegacyStaleActiveThreshold(t *testing.T) {
+	content := `
+[defaults]
+stale_active_threshold = 0
+
+[[profiles]]
+name = "work"
+home_dir = "~/.config/claude-work"
+color = "blue"
+`
+	path := writeTempConfig(t, content)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	for _, d := range cfg.Deprecations {
+		if d.Key == "defaults.stale_active_threshold" {
+			return
+		}
+	}
+	t.Fatalf("Deprecations missing defaults.stale_active_threshold (got %+v)", cfg.Deprecations)
+}
+
+// TestLoad_ReportsEmptyLegacyAliases pins the same presence-based contract for
+// empty list/string aliases. Empty legacy keys are still legacy keys and should
+// be surfaced before normalizeAliases erases the distinction.
+func TestLoad_ReportsEmptyLegacyAliases(t *testing.T) {
+	content := `
+[defaults]
+claude_flags = []
+
+[[profiles]]
+name = "work"
+home_dir = "~/.config/claude-work"
+color = "blue"
+
+[[projects]]
+title = "api"
+directory = "~/projects/api"
+profile = "work"
+account = ""
+claude_flags = []
+`
+	path := writeTempConfig(t, content)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	keys := make(map[string]bool, len(cfg.Deprecations))
+	for _, d := range cfg.Deprecations {
+		keys[d.Key] = true
+	}
+	for _, want := range []string{
+		"defaults.claude_flags",
+		"[[projects]].claude_flags",
+		"[[projects]].account",
+	} {
+		if !keys[want] {
+			t.Errorf("Deprecations missing key %q (got %+v)", want, cfg.Deprecations)
+		}
+	}
+}

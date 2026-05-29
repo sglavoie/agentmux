@@ -26,8 +26,8 @@ func HasMarker(text string) bool {
 
 func ScreenShowsMarker(text string) bool {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	tail := make([]string, 0, 6)
-	for i := len(lines) - 1; i >= 0 && len(tail) < 6; i-- {
+	tail := make([]string, 0, 7)
+	for i := len(lines) - 1; i >= 0 && len(tail) < 7; i-- {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
@@ -37,26 +37,19 @@ func ScreenShowsMarker(text string) bool {
 	if HasMarker(strings.Join(lastLines(tail, 3), "\n")) {
 		return true
 	}
-	if len(tail) >= 4 &&
-		hasWrappedMarkerWindow(tail[len(tail)-4:len(tail)-1]) {
-		return true
+
+	for markerLines := 4; markerLines <= 6; markerLines++ {
+		for trailingLines := 1; trailingLines >= 0; trailingLines-- {
+			if len(tail) < markerLines+trailingLines {
+				continue
+			}
+			end := len(tail) - trailingLines
+			if hasWrappedMarkerWindow(tail[end-markerLines : end]) {
+				return true
+			}
+		}
 	}
-	if len(tail) >= 4 &&
-		hasWrappedMarkerWindow(tail[len(tail)-4:]) {
-		return true
-	}
-	if len(tail) >= 5 &&
-		hasWrappedMarkerWindow(tail[len(tail)-5:len(tail)-1]) {
-		return true
-	}
-	if len(tail) >= 5 &&
-		hasWrappedMarkerWindow(tail[len(tail)-5:]) {
-		return true
-	}
-	if len(tail) >= 6 &&
-		hasWrappedMarkerWindow(tail[len(tail)-6:len(tail)-1]) {
-		return true
-	}
+
 	return false
 }
 

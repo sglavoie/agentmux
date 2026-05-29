@@ -218,7 +218,12 @@ func (c *SubprocessClient) FocusWindow(matchExpr string) error {
 }
 
 func (c *SubprocessClient) GetText(matchExpr, extent string) (string, error) {
-	data, err := c.kitten("get-text", "--extent="+extent, "--match="+matchExpr)
+	args := []string{"get-text"}
+	if extent != "" {
+		args = append(args, "--extent="+extent)
+	}
+	args = append(args, "--match="+matchExpr)
+	data, err := c.kitten(args...)
 	if err != nil {
 		return "", err
 	}

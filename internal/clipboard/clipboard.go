@@ -24,6 +24,9 @@ func copy(text, goos string, lookPath func(string) (string, error)) error {
 	}
 	pbcopy, err := lookPath("pbcopy")
 	if err != nil {
+		if !errors.Is(err, exec.ErrNotFound) && !errors.Is(err, exec.ErrDot) {
+			return fmt.Errorf("clipboard: find pbcopy: %w", err)
+		}
 		return ErrUnsupported
 	}
 	cmd := exec.Command(pbcopy)

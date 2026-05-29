@@ -121,6 +121,55 @@ func TestConfigPathCommandWritesToCommandOutput(t *testing.T) {
 	}
 }
 
+func TestConfigShowCommandWritesToCommandOutput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	body := "example = true\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+
+	oldOut := configShowCmd.OutOrStdout()
+	t.Cleanup(func() {
+		configShowCmd.SetOut(oldOut)
+	})
+
+	var out bytes.Buffer
+	configShowCmd.SetOut(&out)
+
+	if err := configShowCmd.RunE(configShowCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if got := out.String(); got != body {
+		t.Fatalf("output = %q; want %q", got, body)
+	}
+}
+
+func TestConfigShowCommandReturnsWriteError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("example = true\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+
+	oldOut := configShowCmd.OutOrStdout()
+	t.Cleanup(func() {
+		configShowCmd.SetOut(oldOut)
+	})
+
+	configShowCmd.SetOut(failingWriter{})
+
+	if err := configShowCmd.RunE(configShowCmd, nil); err == nil {
+		t.Fatal("RunE error = nil; want write error")
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, os.ErrPermission
+}
+
 // TestConfigHooksSync_ReturnsErrorOnPartialFailure pins the contract that the
 // hooks-sync command exits non-zero when any per-profile merge fails. Earlier
 // behavior printed per-account errors to stderr but returned nil, so a CI run

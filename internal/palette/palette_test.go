@@ -46,6 +46,13 @@ func TestForegroundHex(t *testing.T) {
 	}
 }
 
+func TestForegroundHexClampsOutOfRangeChannels(t *testing.T) {
+	c := Color{TextFg: [3]int{-1, 300, 127}}
+	if got := c.ForegroundHex(); got != "#00ff7f" {
+		t.Errorf("ForegroundHex() = %q, want %q", got, "#00ff7f")
+	}
+}
+
 func TestActiveFgInactiveFg(t *testing.T) {
 	if ActiveFg == "" {
 		t.Error("ActiveFg is empty")

@@ -25,6 +25,15 @@ var Actions = []Action{
 	// Tab navigation
 	{Key: "f7", Section: "Navigation", Description: "focus previous managed tab", AmxCommand: "focus-prev-managed --window-id @active-kitty-window-id", LaunchType: "background"},
 	{Key: "f9", Section: "Navigation", Description: "focus next managed tab", AmxCommand: "focus-next-managed --window-id @active-kitty-window-id", LaunchType: "background"},
-	{Key: "cmd+1 – cmd+0", Section: "Navigation", Description: "switch to tab 1–10"},
+	{Key: "cmd+1", Section: "Navigation", Description: "switch to tab 1"},
+	{Key: "cmd+2", Section: "Navigation", Description: "switch to tab 2"},
+	{Key: "cmd+3", Section: "Navigation", Description: "switch to tab 3"},
+	{Key: "cmd+4", Section: "Navigation", Description: "switch to tab 4"},
+	{Key: "cmd+5", Section: "Navigation", Description: "switch to tab 5"},
+	{Key: "cmd+6", Section: "Navigation", Description: "switch to tab 6"},
+	{Key: "cmd+7", Section: "Navigation", Description: "switch to tab 7"},
+	{Key: "cmd+8", Section: "Navigation", Description: "switch to tab 8"},
+	{Key: "cmd+9", Section: "Navigation", Description: "switch to tab 9"},
+	{Key: "cmd+0", Section: "Navigation", Description: "switch to tab 10"},
 	{Key: "cmd+l", Section: "Navigation", Description: "toggle between two most recently used tabs"},
 }

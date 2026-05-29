@@ -32,6 +32,28 @@ guard_duration = 1
 # Seconds of inactivity after which a session is considered idle.
 idle_threshold = 300
 
+# Flags passed to every harness session, regardless of profile.
+# Use this only for harness-neutral flags (e.g. a wrapper script flag).
+# Put harness-specific flags (e.g. --dangerously-skip-permissions) on the
+# relevant profile instead, so they do not bleed into other harnesses.
+# Args resolve with this precedence (highest first):
+#   project args → profile args → defaults.args
+args = []
+
+# When true, close (x) and restart (r) prompt for confirmation with a modal
+# y/n overlay. When false (default), the action runs immediately and a toast
+# offers `u` to undo within a few seconds.
+confirm_destructive = false
+
+# Editor command used by the `O` keybinding (Open in editor). When unset,
+# falls back to $VISUAL, then $EDITOR, then "vi". Multi-token values like
+# "code --wait" are split on whitespace.
+# editor = "nvim"
+
+# Filesystem root scanned by the `P` keybinding to list past plans.
+# Each top-level directory under this root is treated as one plan.
+# plans_directory = "~/.local/share/agent-plans"
+
 # Watchdog: per-state thresholds (in seconds) after which a session showing
 # the corresponding active icon but receiving no new events is flagged as
 # stale. The daemon clears the icon and (optionally) fires a one-shot
@@ -77,28 +99,6 @@ hook_silence = 14400
 # [defaults.session_archive]
 # keep_days = 30
 # scan_max_age_days = 30
-
-# Flags passed to every harness session, regardless of profile.
-# Use this only for harness-neutral flags (e.g. a wrapper script flag).
-# Put harness-specific flags (e.g. --dangerously-skip-permissions) on the
-# relevant profile instead, so they do not bleed into other harnesses.
-# Args resolve with this precedence (highest first):
-#   project args → profile args → defaults.args
-args = []
-
-# When true, close (x) and restart (r) prompt for confirmation with a modal
-# y/n overlay. When false (default), the action runs immediately and a toast
-# offers `u` to undo within a few seconds.
-confirm_destructive = false
-
-# Editor command used by the `O` keybinding (Open in editor). When unset,
-# falls back to $VISUAL, then $EDITOR, then "vi". Multi-token values like
-# "code --wait" are split on whitespace.
-# editor = "nvim"
-
-# Filesystem root scanned by the `P` keybinding to list past plans.
-# Each top-level directory under this root is treated as one plan.
-# plans_directory = "~/.local/share/agent-plans"
 
 [defaults.notifications]
 

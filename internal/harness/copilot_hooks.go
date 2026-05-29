@@ -77,7 +77,7 @@ func (copilotHookContract) ParseInstalledEvents(path string) ([]string, error) {
 
 	var f copilotHooksFile
 	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("parsing agent-mux.json: %w", err)
 	}
 
 	var events []string

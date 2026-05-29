@@ -213,9 +213,12 @@ func TestStats_CountsRegularTxtFilesOnly(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(s.Dir(), "subdir"), 0o755); err != nil {
 		t.Fatalf("MkdirAll subdir: %v", err)
 	}
-	// A non-.txt file
+	// Files that are not hash-named sidecars
 	if err := os.WriteFile(filepath.Join(s.Dir(), "notes.md"), []byte("ignored"), 0o644); err != nil {
 		t.Fatalf("write notes.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir(), "notes.txt"), []byte("ignored"), 0o644); err != nil {
+		t.Fatalf("write notes.txt: %v", err)
 	}
 
 	count, size, err := s.Stats()

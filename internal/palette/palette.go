@@ -16,7 +16,20 @@ type Color struct {
 
 // ForegroundHex returns the text foreground as a hex color string (#rrggbb).
 func (c Color) ForegroundHex() string {
-	return fmt.Sprintf("#%02x%02x%02x", c.TextFg[0], c.TextFg[1], c.TextFg[2])
+	r := clampRGB(c.TextFg[0])
+	g := clampRGB(c.TextFg[1])
+	b := clampRGB(c.TextFg[2])
+	return fmt.Sprintf("#%02x%02x%02x", r, g, b)
+}
+
+func clampRGB(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return v
 }
 
 type rawPalette struct {

@@ -69,3 +69,16 @@ func TestCopyDarwinMissingBackend(t *testing.T) {
 		t.Fatalf("expected ErrUnsupported, got %v", err)
 	}
 }
+
+func TestCopyDarwinUnexpectedLookupError(t *testing.T) {
+	lookupErr := errors.New("lookup failed")
+	err := copy("ignored", "darwin", func(string) (string, error) {
+		return "", lookupErr
+	})
+	if errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected non-unsupported lookup error, got %v", err)
+	}
+	if !errors.Is(err, lookupErr) {
+		t.Fatalf("expected wrapped lookup error, got %v", err)
+	}
+}

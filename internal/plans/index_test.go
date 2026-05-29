@@ -212,6 +212,57 @@ func TestRefresh_RebuildsMissingSidecarOnCacheHit(t *testing.T) {
 	}
 }
 
+func TestRefresh_RebuildsWhenMarkdownFileListChanges(t *testing.T) {
+	root := t.TempDir()
+	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
+		"manifest.md": "# title",
+		"old.md":      "old-needle",
+	})
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh 1: %v", err)
+	}
+	original, ok := idx.Get(PlanKey(planDir))
+	if !ok {
+		t.Fatalf("entry missing after first refresh")
+	}
+
+	if err := os.Remove(filepath.Join(planDir, "old.md")); err != nil {
+		t.Fatalf("remove old markdown: %v", err)
+	}
+	newPath := filepath.Join(planDir, "new.md")
+	if err := os.WriteFile(newPath, []byte("new-needle"), 0o644); err != nil {
+		t.Fatalf("write new markdown: %v", err)
+	}
+	if err := os.Chtimes(newPath, original.ModTime, original.ModTime); err != nil {
+		t.Fatalf("set new markdown time: %v", err)
+	}
+
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh 2: %v", err)
+	}
+
+	oldResults, err := Search(idx, Query{Text: "old-needle"})
+	if err != nil {
+		t.Fatalf("Search old needle: %v", err)
+	}
+	if len(oldResults) != 0 {
+		t.Fatalf("len(oldResults) = %d, want 0 after old markdown was removed", len(oldResults))
+	}
+
+	newResults, err := Search(idx, Query{Text: "new-needle"})
+	if err != nil {
+		t.Fatalf("Search new needle: %v", err)
+	}
+	if len(newResults) != 1 {
+		t.Fatalf("len(newResults) = %d, want 1 after sidecar rebuild", len(newResults))
+	}
+	if newResults[0].Meta.DirPath != planDir {
+		t.Errorf("Meta.DirPath = %q, want %q", newResults[0].Meta.DirPath, planDir)
+	}
+}
+
 func TestRefresh_DropsVanishedPlans(t *testing.T) {
 	root := t.TempDir()
 	planA := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{

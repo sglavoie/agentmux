@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -120,5 +121,48 @@ func TestList_PrefersActiveManagedWindowMetadata(t *testing.T) {
 	}
 	if len(got.Groups) != 1 || got.Groups[0] != "live" {
 		t.Errorf("Groups: got %v, want [live]", got.Groups)
+	}
+}
+
+func TestList_PreservesMuteIconWithoutMuteUserVar(t *testing.T) {
+	title := palette.BuildTitleFull("api", "", false, true)
+	fixture := []byte(`[
+  {
+    "id": 1,
+    "is_active": true,
+    "tabs": [
+      {
+        "id": 70,
+        "is_active": true,
+        "title": "` + title + `",
+        "windows": [
+          {
+            "id": 71,
+            "is_active": true,
+            "cwd": "/projects/api",
+            "user_vars": {
+              "cc_account": "work",
+              "cc_cwd": "/projects/api"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]`)
+	client := newClientFromBytes(t, fixture)
+
+	sessions, err := session.List(client)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if !sessions[0].Muted {
+		t.Errorf("Muted: got false, want true")
+	}
+	if sessions[0].Base != "api" {
+		t.Errorf("Base: got %q, want %q", sessions[0].Base, "api")
 	}
 }

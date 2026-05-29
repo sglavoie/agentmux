@@ -295,11 +295,11 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, error) {
 
 	displayName := DisplayName(filepath.Base(planDir))
 
-	// Cache hit: identical aggregate size and mtime means the corpus
-	// is byte-identical to the cached snapshot. Reuse the cached
-	// snippet and skip the per-file read + sidecar rewrite when the
-	// search sidecar still exists; otherwise fall through to rebuild it.
-	if cached, ok := i.entries[PlanKey(planDir)]; ok && cached.Size == size && cached.ModTime.Equal(modTime) && i.sidecarExists(PlanKey(planDir)) {
+	// Cache hit: identical file list, aggregate size, and mtime means
+	// the corpus matches the cached snapshot. Reuse the cached snippet
+	// and skip the per-file read + sidecar rewrite when the search
+	// sidecar still exists; otherwise fall through to rebuild it.
+	if cached, ok := i.entries[PlanKey(planDir)]; ok && equalStrings(cached.Files, rels) && cached.Size == size && cached.ModTime.Equal(modTime) && i.sidecarExists(PlanKey(planDir)) {
 		cached.Files = rels
 		cached.Name = displayName
 		cached.DirPath = planDir
@@ -347,6 +347,18 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, error) {
 func (i *Index) sidecarExists(key string) bool {
 	_, err := os.Stat(i.store.Path(key))
 	return err == nil
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for idx := range a {
+		if a[idx] != b[idx] {
+			return false
+		}
+	}
+	return true
 }
 
 // extractSnippet returns the first non-empty trimmed line of the given

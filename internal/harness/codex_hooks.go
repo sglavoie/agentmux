@@ -101,22 +101,23 @@ func (codexHookContract) ParseInstalledEvents(path string) ([]string, error) {
 
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("parsing hooks.json: %w", err)
 	}
 
 	var hooksRaw map[string]json.RawMessage
 	if rawHooks, ok := raw["hooks"]; ok {
 		if err := json.Unmarshal(rawHooks, &hooksRaw); err != nil {
-			return nil, nil
+			return nil, fmt.Errorf("parsing hooks.json hooks section: %w", err)
 		}
 	}
 
+	hooks, _, err := parseCodexHooksSection(hooksRaw)
+	if err != nil {
+		return nil, err
+	}
+
 	var events []string
-	for event, value := range hooksRaw {
-		var groups []hookGroup
-		if err := json.Unmarshal(value, &groups); err != nil {
-			continue
-		}
+	for event, groups := range hooks {
 		for _, g := range groups {
 			if isAmxGroup(g) {
 				events = append(events, event)

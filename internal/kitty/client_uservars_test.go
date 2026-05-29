@@ -64,6 +64,30 @@ func TestGetText_ReturnsText(t *testing.T) {
 	}
 }
 
+func TestGetText_EmptyExtentUsesKittyDefault(t *testing.T) {
+	want := "default screen text\n"
+	runner := kitty.NewMockRunner(map[string][]byte{
+		"kitten @ get-text --match=id:7": []byte(want),
+	})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	got, err := client.GetText("id:7", "")
+	if err != nil {
+		t.Fatalf("GetText: %v", err)
+	}
+	if got != want {
+		t.Errorf("GetText: got %q, want %q", got, want)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+	for _, arg := range runner.Calls[0].Args {
+		if arg == "--extent=" {
+			t.Fatalf("empty extent should not be passed to kitten, args=%v", runner.Calls[0].Args)
+		}
+	}
+}
+
 func TestUserVarsUnmarshal(t *testing.T) {
 	raw := `{"cc_account":"work","cc_config_dir":"~/.config/claude-work","cc_flags":"--dangerously-skip-permissions","cc_pw":"","cc_env":"","cc_groups":"backend","cc_mute":"","cc_cwd":"/home/user/api"}`
 	var uv kitty.UserVars

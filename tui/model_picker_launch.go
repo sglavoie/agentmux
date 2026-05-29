@@ -80,7 +80,8 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 		launchCmds = append(launchCmds, func() tea.Msg {
 			acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
 			if !ok {
-				return launchProgressMsg{batchID: batchID, total: total, title: title, err: nil}
+				err := fmt.Errorf("no matching account for profile %q", sess.EffectiveProfile())
+				return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 			}
 			err := session.Launch(client, sess, acc, cfg)
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}

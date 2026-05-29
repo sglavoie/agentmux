@@ -30,10 +30,11 @@ func LoadDefault() (*Config, error) {
 
 func parseConfig(data []byte) (*Config, error) {
 	var cfg Config
-	if _, err := toml.Decode(string(data), &cfg); err != nil {
+	md, err := toml.Decode(string(data), &cfg)
+	if err != nil {
 		return nil, err
 	}
-	cfg.Deprecations = collectDeprecations(&cfg)
+	cfg.Deprecations = collectDeprecations(&cfg, md)
 	applyDefaults(&cfg)
 	return &cfg, nil
 }
@@ -41,28 +42,28 @@ func parseConfig(data []byte) (*Config, error) {
 // collectDeprecations inspects the raw decoded config and records any
 // legacy TOML keys present. Must be called before normalizeAliases, which
 // mirrors deprecated/canonical fields and erases the distinction.
-func collectDeprecations(cfg *Config) []Deprecation {
+func collectDeprecations(cfg *Config, md toml.MetaData) []Deprecation {
 	var deps []Deprecation
 	// Report the deprecated key whenever it is populated. When the canonical
 	// form is *also* populated, normalizeAliases silently discards the
 	// deprecated entries (canonical wins), so users need to know their
 	// [[accounts]] / [[sessions]] data is being ignored — not only when they
 	// use the legacy form exclusively.
-	if len(cfg.Accounts) > 0 {
+	if tomlKeyDefined(md, "accounts") {
 		deps = append(deps, Deprecation{
 			Key:         "accounts",
 			Replacement: "profiles",
 			Location:    "[[accounts]]",
 		})
 	}
-	if len(cfg.Sessions) > 0 {
+	if tomlKeyDefined(md, "sessions") {
 		deps = append(deps, Deprecation{
 			Key:         "sessions",
 			Replacement: "projects",
 			Location:    "[[sessions]]",
 		})
 	}
-	if len(cfg.Defaults.ClaudeFlags) > 0 {
+	if tomlKeyDefined(md, "defaults", "claude_flags") {
 		deps = append(deps, Deprecation{
 			Key:         "defaults.claude_flags",
 			Replacement: "defaults.args",
@@ -73,7 +74,7 @@ func collectDeprecations(cfg *Config) []Deprecation {
 	// user also wrote [defaults.watchdog]: when both are present the new
 	// block wins (per applyDefaults), and the user should still be told the
 	// legacy key has moved so they can drop it on their next edit.
-	if cfg.Defaults.StaleActiveThreshold != 0 {
+	if tomlKeyDefined(md, "defaults", "stale_active_threshold") {
 		deps = append(deps, Deprecation{
 			Key:         "defaults.stale_active_threshold",
 			Replacement: "defaults.watchdog.active",
@@ -86,29 +87,58 @@ func collectDeprecations(cfg *Config) []Deprecation {
 	// value can otherwise look like it is still doing something.
 	projectSeen := false
 	accountSeen := false
-	scan := func(items []Session, table string) {
-		for _, p := range items {
-			if !projectSeen && len(p.ClaudeFlags) > 0 {
-				deps = append(deps, Deprecation{
-					Key:         table + ".claude_flags",
-					Replacement: table + ".args",
-					Location:    table + " " + p.Title,
-				})
-				projectSeen = true
-			}
-			if !accountSeen && p.Account != "" {
-				deps = append(deps, Deprecation{
-					Key:         table + ".account",
-					Replacement: table + ".profile",
-					Location:    table + " " + p.Title,
-				})
-				accountSeen = true
-			}
+	scan := func(items []Session, table, tableKey string) {
+		if !projectSeen && tomlKeyDefined(md, tableKey, "claude_flags") {
+			deps = append(deps, Deprecation{
+				Key:         table + ".claude_flags",
+				Replacement: table + ".args",
+				Location:    legacyProjectLocation(items, table, func(p Session) bool { return len(p.ClaudeFlags) > 0 }),
+			})
+			projectSeen = true
+		}
+		if !accountSeen && tomlKeyDefined(md, tableKey, "account") {
+			deps = append(deps, Deprecation{
+				Key:         table + ".account",
+				Replacement: table + ".profile",
+				Location:    legacyProjectLocation(items, table, func(p Session) bool { return p.Account != "" }),
+			})
+			accountSeen = true
 		}
 	}
-	scan(cfg.Projects, "[[projects]]")
-	scan(cfg.Sessions, "[[sessions]]")
+	scan(cfg.Projects, "[[projects]]", "projects")
+	scan(cfg.Sessions, "[[sessions]]", "sessions")
 	return deps
+}
+
+func legacyProjectLocation(items []Session, table string, hasValue func(Session) bool) string {
+	for _, p := range items {
+		if hasValue(p) {
+			if p.Title == "" {
+				return table
+			}
+			return table + " " + p.Title
+		}
+	}
+	return table
+}
+
+func tomlKeyDefined(md toml.MetaData, key ...string) bool {
+	for _, k := range md.Keys() {
+		if len(k) != len(key) {
+			continue
+		}
+		match := true
+		for i := range key {
+			if k[i] != key[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 func applyDefaults(cfg *Config) {
