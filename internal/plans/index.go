@@ -337,7 +337,11 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, error) {
 		snippet = firstSnippet
 	}
 
-	if err := i.store.Write(PlanKey(planDir), searchBuilder.String()); err != nil {
+	key := PlanKey(planDir)
+	if err := i.removeNonRegularSidecar(key); err != nil {
+		return nil, err
+	}
+	if err := i.store.Write(key, searchBuilder.String()); err != nil {
 		return nil, fmt.Errorf("writing plan search sidecar: %w", err)
 	}
 	return &PlanMeta{
@@ -351,8 +355,26 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, error) {
 }
 
 func (i *Index) sidecarExists(key string) bool {
-	_, err := os.Stat(i.store.Path(key))
-	return err == nil
+	ok, err := i.store.Exists(key)
+	return err == nil && ok
+}
+
+func (i *Index) removeNonRegularSidecar(key string) error {
+	path := i.store.Path(key)
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("checking plan search sidecar: %w", err)
+	}
+	if info.Mode().IsRegular() {
+		return nil
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("removing non-regular plan search sidecar: %w", err)
+	}
+	return nil
 }
 
 func equalStrings(a, b []string) bool {

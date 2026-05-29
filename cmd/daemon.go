@@ -64,12 +64,12 @@ var daemonStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show daemon status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := daemon.Ping(); err != nil {
-			fmt.Printf("daemon: not running (%s)\n", daemon.SocketPath())
-			return nil
+		if err := daemonPing(); err != nil {
+			_, err := fmt.Fprintf(cmd.OutOrStdout(), "daemon: not running (%s)\n", daemonSocketPath())
+			return err
 		}
-		fmt.Printf("daemon: running (%s)\n", daemon.SocketPath())
-		return nil
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "daemon: running (%s)\n", daemonSocketPath())
+		return err
 	},
 }
 
@@ -96,6 +96,8 @@ var (
 	daemonExportEventsLast          int
 	daemonExportEventsOutput        string
 	daemonExportEventsPretty        bool
+	daemonPing                      = daemon.Ping
+	daemonSocketPath                = daemon.SocketPath
 	newDaemonExportClient           = func() daemonExportClient { return daemon.NewClient() }
 	newDaemonExportKitty            = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
 	daemonExportNow                 = time.Now

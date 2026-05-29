@@ -119,3 +119,33 @@ func TestConfigPickerEnterProjectIdxOOBSafe(t *testing.T) {
 		t.Error("OOB projectIdx must not be written into pickerProfileOverride")
 	}
 }
+
+func TestConfigPickerEnterNegativeCursorSafe(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Accounts: []config.Account{
+			{Name: "work", Color: "blue"},
+		},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m.configPickerAccounts = cfg.Accounts
+	m.configPickerCursor = -1
+	m.configPickerReturnMode = ModeList
+	m.mode = ModeConfigPicker
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("handleConfigPickerKey panicked on negative cursor: %v", r)
+		}
+	}()
+	updated, cmd := m.Update(keyPress("enter"))
+	got := updated.(Model)
+	if got.mode != ModeConfigPicker {
+		t.Fatalf("mode = %d, want ModeConfigPicker for invalid cursor", got.mode)
+	}
+	if cmd != nil {
+		t.Fatal("invalid cursor enter returned non-nil cmd")
+	}
+}

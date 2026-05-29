@@ -56,10 +56,11 @@ func (copilotHookContract) MergeData(existingData []byte, disabledEvents []strin
 	// so the caller's byte comparison detects "no change".
 	if len(existingData) > 0 {
 		var existing copilotHooksFile
-		if err := json.Unmarshal(existingData, &existing); err == nil {
-			if copilotHooksEqual(existing, expected) {
-				return existingData, nil
-			}
+		if err := json.Unmarshal(existingData, &existing); err != nil {
+			return nil, fmt.Errorf("parsing agent-mux.json: %w", err)
+		}
+		if copilotHooksEqual(existing, expected) {
+			return existingData, nil
 		}
 	}
 

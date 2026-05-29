@@ -296,6 +296,7 @@ func cloneAccounts(in []Account) []Account {
 	copy(out, in)
 	for i := range out {
 		out[i].Args = cloneStrings(out[i].Args)
+		out[i].Watchdog.ClaudeContextLimitProbe = cloneBoolPtr(out[i].Watchdog.ClaudeContextLimitProbe)
 	}
 	return out
 }
@@ -350,4 +351,12 @@ func cloneStringMap(in map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+func cloneBoolPtr(in *bool) *bool {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }

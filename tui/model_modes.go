@@ -17,7 +17,7 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyK, keyUp:
 		m.configPickerCursor = clamp(m.configPickerCursor-1, 0, len(m.configPickerAccounts)-1)
 	case keyEnter:
-		if m.configPickerCursor < len(m.configPickerAccounts) {
+		if m.configPickerCursor >= 0 && m.configPickerCursor < len(m.configPickerAccounts) {
 			acc := m.configPickerAccounts[m.configPickerCursor]
 			m.mode = m.configPickerReturnMode
 			if m.configPickerReturnMode == ModePicker && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {

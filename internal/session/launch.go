@@ -45,23 +45,26 @@ func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defa
 	projectDir := config.ExpandTilde(sess.Directory)
 	harnessName := acc.EffectiveHarness()
 
-	return map[string]string{
-		"amx_profile":       profileName,
-		"amx_harness":       harnessName,
-		"amx_home_dir":      homeDir,
-		"amx_project":       sess.Title,
-		"amx_directory":     projectDir,
-		"amx_args":          args,
-		"amx_env":           ccEnv,
-		"amx_groups":        groups,
-		"cc_account":        profileName,
-		"cc_config_dir":     homeDir,
-		"cc_cwd":            projectDir,
-		"cc_flags":          args,
-		"cc_explicit_flags": explicitArgs,
-		"cc_env":            ccEnv,
-		"cc_groups":         groups,
+	userVars := map[string]string{
+		"amx_profile":   profileName,
+		"amx_harness":   harnessName,
+		"amx_home_dir":  homeDir,
+		"amx_project":   sess.Title,
+		"amx_directory": projectDir,
+		"amx_args":      args,
+		"amx_env":       ccEnv,
+		"amx_groups":    groups,
+		"cc_account":    profileName,
+		"cc_config_dir": homeDir,
+		"cc_cwd":        projectDir,
+		"cc_flags":      args,
+		"cc_env":        ccEnv,
+		"cc_groups":     groups,
 	}
+	if explicitArgs != "" {
+		userVars["cc_explicit_flags"] = explicitArgs
+	}
+	return userVars
 }
 
 // Launch launches a single session from config.

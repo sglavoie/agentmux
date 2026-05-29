@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -26,6 +27,17 @@ func TestMergeDataNullJSONNoPanic(t *testing.T) {
 				t.Fatalf("MergeData(%q, null) returned empty output", name)
 			}
 		})
+	}
+}
+
+func TestCopilotMergeDataMalformedJSONReturnsError(t *testing.T) {
+	contract := Lookup(Copilot).HookContract()
+	_, err := contract.MergeData([]byte(`{"hooks":`), nil, "/usr/bin/amx")
+	if err == nil {
+		t.Fatalf("MergeData(%q) returned nil error for malformed JSON", Copilot)
+	}
+	if !strings.Contains(err.Error(), "parsing agent-mux.json") {
+		t.Fatalf("MergeData(%q) error = %v, want parsing agent-mux.json error", Copilot, err)
 	}
 }
 

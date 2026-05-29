@@ -77,6 +77,53 @@ func findExportWindow(t *testing.T, payload daemon.ExportEventsPayload, id int) 
 	return daemon.ExportWindow{}
 }
 
+func resetDaemonStatusTestState(t *testing.T) {
+	t.Helper()
+	oldPing := daemonPing
+	oldSocketPath := daemonSocketPath
+	oldOut := daemonStatusCmd.OutOrStdout()
+	t.Cleanup(func() {
+		daemonPing = oldPing
+		daemonSocketPath = oldSocketPath
+		daemonStatusCmd.SetOut(oldOut)
+	})
+}
+
+func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
+	cases := []struct {
+		name    string
+		pingErr error
+		want    string
+	}{
+		{
+			name: "running",
+			want: "daemon: running (/tmp/amx.sock)\n",
+		},
+		{
+			name:    "not running",
+			pingErr: fmt.Errorf("connect: no such file"),
+			want:    "daemon: not running (/tmp/amx.sock)\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDaemonStatusTestState(t)
+			daemonPing = func() error { return tc.pingErr }
+			daemonSocketPath = func() string { return "/tmp/amx.sock" }
+
+			var out bytes.Buffer
+			daemonStatusCmd.SetOut(&out)
+
+			if err := daemonStatusCmd.RunE(daemonStatusCmd, nil); err != nil {
+				t.Fatalf("RunE: %v", err)
+			}
+			if got := out.String(); got != tc.want {
+				t.Fatalf("output = %q; want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestDaemonExportEventsCommand_CurrentWindowRejectsExplicitWindow(t *testing.T) {
 	resetDaemonExportTestState(t)
 	t.Setenv("KITTY_WINDOW_ID", "77")

@@ -107,3 +107,25 @@ func TestBuildUserVars_ProfileFallsBackToAccount(t *testing.T) {
 		t.Errorf("cc_account: got %q, want %q", got["cc_account"], "personal")
 	}
 }
+
+func TestBuildUserVars_InheritedArgsDoNotSetExplicitFlags(t *testing.T) {
+	defaults := config.Defaults{}
+	acc := config.Account{
+		Name:    "work",
+		Harness: "claude",
+		Args:    []string{"--account-flag"},
+	}
+	sess := config.Session{
+		Title:     "api",
+		Directory: "/tmp/api",
+		Account:   "work",
+	}
+
+	got := session.BuildUserVars(sess, acc, defaults)
+	if got["cc_flags"] != "--account-flag" {
+		t.Fatalf("cc_flags: got %q, want %q", got["cc_flags"], "--account-flag")
+	}
+	if _, ok := got["cc_explicit_flags"]; ok {
+		t.Fatalf("cc_explicit_flags should be omitted for inherited args, got %q", got["cc_explicit_flags"])
+	}
+}

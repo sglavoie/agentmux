@@ -127,6 +127,34 @@ func TestLoad_NormalizesProfileArgsAndClonesAliases(t *testing.T) {
 	}
 }
 
+func TestLoad_ClonesProfileWatchdogProbeAlias(t *testing.T) {
+	path := writeTempConfig(t, `
+[[profiles]]
+name = "work"
+home_dir = "~/.config/claude-work"
+color = "blue"
+watchdog = { claude_context_limit_probe = false }
+`)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Profiles) != 1 || len(cfg.Accounts) != 1 {
+		t.Fatalf("profiles/accounts: got %d/%d, want 1/1", len(cfg.Profiles), len(cfg.Accounts))
+	}
+	if cfg.Profiles[0].Watchdog.ClaudeContextLimitProbe == nil {
+		t.Fatal("Profiles[0].Watchdog.ClaudeContextLimitProbe: got nil, want explicit false")
+	}
+	if cfg.Accounts[0].Watchdog.ClaudeContextLimitProbe == nil {
+		t.Fatal("Accounts[0].Watchdog.ClaudeContextLimitProbe: got nil, want explicit false")
+	}
+
+	*cfg.Accounts[0].Watchdog.ClaudeContextLimitProbe = true
+	if got := *cfg.Profiles[0].Watchdog.ClaudeContextLimitProbe; got {
+		t.Errorf("Profiles[0].Watchdog.ClaudeContextLimitProbe shared pointer with Accounts alias: got %v, want false", got)
+	}
+}
+
 func TestLoad_NormalizesLegacyClaudeFlags(t *testing.T) {
 	path := filepath.Join(testdataDir, "legacy_flags_config.toml")
 	cfg, err := config.Load(path)
