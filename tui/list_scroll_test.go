@@ -46,6 +46,30 @@ func TestListChromeLines_DeprecationBannerAddsTwoLines(t *testing.T) {
 	}
 }
 
+func TestListChromeLines_HealthHintsAddHeaderLines(t *testing.T) {
+	m := scrollModel()
+	base := listChromeLines(m)
+	now := time.Now()
+	m.daemonAlive = false
+	m.daemonHealthCheckedAt = now
+	m.hookHealth = HookHealth{Drifted: []string{"work"}}
+	m.hookHealthCheckedAt = now
+
+	got := listChromeLines(m)
+	if got != base+2 {
+		t.Errorf("with daemon and hook health hints: got %d want %d", got, base+2)
+	}
+	if hints := healthHintLines(m); hints != 2 {
+		t.Errorf("health hint count: got %d want 2", hints)
+	}
+
+	m.daemonAlive = true
+	m.hookHealth = HookHealth{InSync: []string{"work"}}
+	if got := listChromeLines(m); got != base {
+		t.Errorf("healthy pips should not reserve hint lines: got %d want %d", got, base)
+	}
+}
+
 func TestListChromeLines_LegendDroppedBelowLegendMinHeight(t *testing.T) {
 	m := scrollModel()
 	base := listChromeLines(m)

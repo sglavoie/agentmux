@@ -79,13 +79,11 @@ func TestSearch_FastPathSkipsReader(t *testing.T) {
 	}
 }
 
-// TestSearch_SnippetShortCircuits covers the snippet short-circuit added in
-// session 4: when the needle appears in meta.Snippet the result emits
-// Matches=1 with Preview=snippet, bypassing the sidecar scan entirely.
-// The session's body still contains the needle three times — proof of the
-// match-count trade-off the spec accepts in exchange for a constant-time
-// lookup against the 160-rune snippet.
-func TestSearch_SnippetShortCircuits(t *testing.T) {
+// TestSearch_SnippetHitStillCountsSidecar covers the preview optimization:
+// when the needle appears in meta.Snippet the result can use that original-
+// case snippet as Preview, but it must still scan the sidecar so Matches
+// reports the full session count.
+func TestSearch_SnippetHitStillCountsSidecar(t *testing.T) {
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
 		ID: "hit", Harness: harness.Claude,
@@ -102,8 +100,8 @@ func TestSearch_SnippetShortCircuits(t *testing.T) {
 		t.Fatalf("len=%d, want 1", len(results))
 	}
 	r := results[0]
-	if r.Matches != 1 {
-		t.Errorf("Matches=%d, want 1 (snippet short-circuit)", r.Matches)
+	if r.Matches != 3 {
+		t.Errorf("Matches=%d, want 3 (sidecar counted all hits)", r.Matches)
 	}
 	if r.Preview != "Quick NEEDLE intro from the user" {
 		t.Errorf("Preview=%q, want snippet verbatim", r.Preview)

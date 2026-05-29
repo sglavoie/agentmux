@@ -138,13 +138,16 @@ func (c *SubprocessClient) MoveTab(matchExpr string, delta int) error {
 	if err := c.FocusTab(matchExpr); err != nil {
 		return err
 	}
-	action := "move_tab_forward"
-	if delta < 0 {
-		action = "move_tab_backward"
-		delta = -delta
+	if delta > 0 {
+		for i := 0; i < delta; i++ {
+			if _, err := c.kitten("action", "move_tab_forward"); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	for i := 0; i < delta; i++ {
-		if _, err := c.kitten("action", action); err != nil {
+	for i := 0; i > delta; i-- {
+		if _, err := c.kitten("action", "move_tab_backward"); err != nil {
 			return err
 		}
 	}

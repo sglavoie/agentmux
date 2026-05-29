@@ -3,6 +3,9 @@ package indicator
 import "github.com/sglavoie/agentmux/internal/contextlimit"
 
 func payloadHasContextLimit(payload HookPayload) bool {
+	if normalizeLifecycleValue(payload.EffectiveStopReason()) == "context_limit_reached" {
+		return true
+	}
 	return contextlimit.HasMarker(payload.Title + "\n" + payload.Message)
 }
 

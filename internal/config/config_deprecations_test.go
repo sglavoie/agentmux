@@ -120,3 +120,49 @@ args = ["--project"]
 		t.Errorf("Deprecations: got %+v, want empty", cfg.Deprecations)
 	}
 }
+
+// TestLoad_ReportsLegacyAliasesEvenWhenCanonicalFieldAlsoSet pins the
+// deprecation collector's "key encountered" contract for per-field aliases.
+// args/profile win over claude_flags/account at read time, so a config that
+// keeps both should still surface the deprecated key instead of making the
+// ignored legacy value look active.
+func TestLoad_ReportsLegacyAliasesEvenWhenCanonicalFieldAlsoSet(t *testing.T) {
+	content := `
+[defaults]
+args = ["--shared"]
+claude_flags = ["--ignored-shared"]
+
+[[profiles]]
+name = "work"
+home_dir = "~/.config/claude-work"
+color = "blue"
+
+[[projects]]
+title = "api"
+directory = "~/projects/api"
+profile = "work"
+account = "work"
+args = ["--project"]
+claude_flags = ["--ignored-project"]
+`
+	path := writeTempConfig(t, content)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	keys := make(map[string]bool, len(cfg.Deprecations))
+	for _, d := range cfg.Deprecations {
+		keys[d.Key] = true
+	}
+	for _, want := range []string{
+		"defaults.claude_flags",
+		"[[projects]].claude_flags",
+		"[[projects]].account",
+	} {
+		if !keys[want] {
+			t.Errorf("Deprecations missing key %q (got %+v)", want, cfg.Deprecations)
+		}
+	}
+}

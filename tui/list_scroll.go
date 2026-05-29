@@ -13,7 +13,7 @@ const listMinVisible = 3
 // place as the preview's own height allocation.
 //
 // Elements (each contributes its row count when visible):
-//   - header                                                              (1)
+//   - header + health hints                                             (1..3)
 //   - deprecation banner (when undismissed and at least one entry)        (2)
 //   - legend (omitted when m.height > 0 && m.height < legendMinHeight)    (1)
 //   - chips (when activeFilter has at least one component)                (1)
@@ -24,6 +24,7 @@ const listMinVisible = 3
 // absorbs that drift on short terminals.
 func chromeAboveListLines(m Model) int {
 	n := 1 // header
+	n += healthHintLines(m)
 	if !m.deprecationDismissed && len(m.deprecations) > 0 {
 		n += 2
 	}
@@ -35,6 +36,25 @@ func chromeAboveListLines(m Model) int {
 	}
 	if m.mode == ModeList {
 		n++ // inline filter is always one line in ModeList
+	}
+	return n
+}
+
+// healthHintLines mirrors renderHealthHints' line count without rendering
+// styled text. renderHeader appends one line per degraded health signal below
+// the title row, so list/preview height math must reserve those rows.
+func healthHintLines(m Model) int {
+	if m.daemonHealthCheckedAt.IsZero() && m.hookHealthCheckedAt.IsZero() {
+		return 0
+	}
+	n := 0
+	if !m.daemonHealthCheckedAt.IsZero() && !m.daemonAlive {
+		n++
+	}
+	if m.hookHealthErr != nil {
+		n++
+	} else if !m.hookHealthCheckedAt.IsZero() && !m.hookHealth.Healthy() {
+		n++
 	}
 	return n
 }

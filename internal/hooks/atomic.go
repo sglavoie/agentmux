@@ -16,6 +16,12 @@ var atomicWriteFn = func(f *os.File, data []byte) (int, error) {
 	return f.Write(data)
 }
 
+// atomicChmodFn mirrors atomicWriteFn for the permission step, giving tests a
+// way to exercise cleanup paths that are otherwise hard to trigger reliably.
+var atomicChmodFn = func(f *os.File, perm os.FileMode) error {
+	return f.Chmod(perm)
+}
+
 // atomicWriteFile writes data to path atomically: it creates a sibling
 // "<name>.tmp" file in the same directory, fsyncs and closes it, then
 // renames it over path. On any failure the temp file is removed so a partial
@@ -31,14 +37,6 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) 
 	if err != nil {
 		return fmt.Errorf("creating temp file %s: %w", tmpPath, err)
 	}
-	// Force the requested mode explicitly: O_CREATE only applies perm when
-	// the file is newly created, so a leftover .tmp from a prior crashed
-	// write could otherwise retain stale (and possibly broader) permissions
-	// before being renamed over the destination.
-	if err := f.Chmod(perm); err != nil {
-		_ = f.Close()
-		return fmt.Errorf("chmod temp file %s: %w", tmpPath, err)
-	}
 
 	// Ensure the temp file is removed on any failure path. On the happy path
 	// the rename consumes it, so Remove will be a no-op error we ignore.
@@ -47,6 +45,15 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) 
 			_ = os.Remove(tmpPath)
 		}
 	}()
+
+	// Force the requested mode explicitly: O_CREATE only applies perm when
+	// the file is newly created, so a leftover .tmp from a prior crashed
+	// write could otherwise retain stale (and possibly broader) permissions
+	// before being renamed over the destination.
+	if err := atomicChmodFn(f, perm); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("chmod temp file %s: %w", tmpPath, err)
+	}
 
 	if n, werr := atomicWriteFn(f, data); werr != nil {
 		_ = f.Close()

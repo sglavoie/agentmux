@@ -14,6 +14,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
 	}
 
+	receivedAt := time.Now()
 	h.stateMu.Lock()
 	req = h.applyResetFlowLocked(req)
 	h.touchWindowMetadataLocked(req)
@@ -21,6 +22,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.mutedWindows[req.WindowID] = true
 	} else {
 		delete(h.mutedWindows, req.WindowID)
+	}
+	if req.Account != "" {
+		accountKey := strings.ToLower(req.Account)
+		h.lastSeenEventAt[accountKey] = receivedAt
+		delete(h.notifiedHookSilence, accountKey)
 	}
 	h.stateMu.Unlock()
 
@@ -191,9 +197,6 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		delete(h.notifiedStale, req.WindowID)
 		if req.Account != "" {
 			h.lastAccount[req.WindowID] = req.Account
-			accountKey := strings.ToLower(req.Account)
-			h.lastSeenEventAt[accountKey] = now
-			delete(h.notifiedHookSilence, accountKey)
 		}
 		meta := h.windowMetadata[req.WindowID]
 		meta.Durable.ActivityAt = now.Unix()
@@ -306,11 +309,6 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	h.lastPipeMode[req.WindowID] = req.PipeMode
 	if req.Account != "" {
 		h.lastAccount[req.WindowID] = req.Account
-		// Per-account event tracking for the hook-silence watchdog. Re-arms
-		// the one-shot latch so a future silence stretch can notify again.
-		accountKey := strings.ToLower(req.Account)
-		h.lastSeenEventAt[accountKey] = now
-		delete(h.notifiedHookSilence, accountKey)
 	}
 	if effective == "active" {
 		h.lastActiveEvent[req.WindowID] = req.Event

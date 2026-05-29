@@ -62,7 +62,7 @@ func collectDeprecations(cfg *Config) []Deprecation {
 			Location:    "[[sessions]]",
 		})
 	}
-	if len(cfg.Defaults.ClaudeFlags) > 0 && len(cfg.Defaults.Args) == 0 {
+	if len(cfg.Defaults.ClaudeFlags) > 0 {
 		deps = append(deps, Deprecation{
 			Key:         "defaults.claude_flags",
 			Replacement: "defaults.args",
@@ -81,12 +81,14 @@ func collectDeprecations(cfg *Config) []Deprecation {
 		})
 	}
 	// Per-project: scan both Projects and Sessions for legacy claude_flags
-	// and account keys. Only report when the canonical field is unset.
+	// and account keys. Report the deprecated key whenever it is populated;
+	// when canonical fields are also populated, canonical wins and the legacy
+	// value can otherwise look like it is still doing something.
 	projectSeen := false
 	accountSeen := false
 	scan := func(items []Session, table string) {
 		for _, p := range items {
-			if !projectSeen && len(p.ClaudeFlags) > 0 && len(p.Args) == 0 {
+			if !projectSeen && len(p.ClaudeFlags) > 0 {
 				deps = append(deps, Deprecation{
 					Key:         table + ".claude_flags",
 					Replacement: table + ".args",
@@ -94,7 +96,7 @@ func collectDeprecations(cfg *Config) []Deprecation {
 				})
 				projectSeen = true
 			}
-			if !accountSeen && p.Account != "" && p.Profile == "" {
+			if !accountSeen && p.Account != "" {
 				deps = append(deps, Deprecation{
 					Key:         table + ".account",
 					Replacement: table + ".profile",

@@ -198,10 +198,10 @@ func stripAmxGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
 
 // isAmxGroup reports whether g was installed by Agent Mux. The check inspects
 // the command's first token (the executable) and requires its basename to be
-// "amx" with a "hook-indicator" subcommand argument. Substring matching on
-// "hook-indicator" alone would misclassify unrelated user tools that happen to
-// share that token (e.g. a path like /opt/hook-indicator-helper/run) and
-// silently wipe them on every sync.
+// "amx" or "amx.exe" with a "hook-indicator" subcommand argument. Substring
+// matching on "hook-indicator" alone would misclassify unrelated user tools
+// that happen to share that token (e.g. a path like
+// /opt/hook-indicator-helper/run) and silently wipe them on every sync.
 func isAmxGroup(g hookGroup) bool {
 	for _, e := range g.Hooks {
 		if isAmxHookEntry(e) {
@@ -219,13 +219,29 @@ func isAmxHookEntry(e hookEntry) bool {
 		if idx <= 0 {
 			continue
 		}
-		prefix := strings.TrimRight(candidate[:idx], " \t")
-		if prefix == "" {
-			continue
-		}
-		if filepath.Base(prefix) == amxHookCommandIdentifier {
+		if isAmxExecutable(commandExecutableBase(candidate[:idx])) {
 			return true
 		}
 	}
 	return false
+}
+
+func commandExecutableBase(prefix string) string {
+	prefix = strings.TrimSpace(prefix)
+	if strings.HasPrefix(prefix, "&") {
+		prefix = strings.TrimSpace(strings.TrimPrefix(prefix, "&"))
+	}
+	prefix = strings.Trim(prefix, `"'`)
+	prefix = strings.TrimRight(prefix, `/\`)
+
+	i := strings.LastIndexAny(prefix, `/\`)
+	if i >= 0 {
+		return prefix[i+1:]
+	}
+	return filepath.Base(prefix)
+}
+
+func isAmxExecutable(base string) bool {
+	base = strings.ToLower(base)
+	return base == amxHookCommandIdentifier || base == amxHookCommandIdentifier+".exe"
 }

@@ -62,17 +62,13 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 	}
 
 	for _, m := range metas {
-		// Snippet short-circuit: meta.Snippet is the indexed first-user-message
-		// (≤160 runes). When the needle already appears in that snippet we
-		// emit a result with Matches=1 and the snippet as preview, skipping
-		// the sidecar scan entirely. Trades an exact match count for a
-		// constant-time lookup — the user-visible cost is a (1 match) badge
-		// instead of the true count for sessions whose snippet contains the
-		// needle. Snippets are stored as written (not lowercased) so we
-		// lowercase here for case-insensitive comparison.
+		// Snippets are stored as written (not lowercased), so lowercase here
+		// for case-insensitive comparison. A matching snippet is only a preview
+		// preference; the result still needs the sidecar or reader scan below so
+		// Matches stays exact.
+		snippetPreview := ""
 		if m.Snippet != "" && strings.Contains(strings.ToLower(m.Snippet), needle) {
-			results = append(results, Result{Meta: m, Matches: 1, Preview: m.Snippet})
-			continue
+			snippetPreview = m.Snippet
 		}
 		// Fast path: per-session sidecars hold the lowercased concatenated
 		// transcript body. Substring search and match counting avoid JSONL
@@ -83,6 +79,9 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 			count, preview := countMatchesInSearchText(searchText, needle)
 			if count == 0 {
 				continue
+			}
+			if snippetPreview != "" {
+				preview = snippetPreview
 			}
 			results = append(results, Result{Meta: m, Matches: count, Preview: preview})
 			continue
@@ -116,6 +115,9 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		count, preview := countMatches(msgs, needle)
 		if count == 0 {
 			continue
+		}
+		if snippetPreview != "" {
+			preview = snippetPreview
 		}
 		results = append(results, Result{Meta: m, Matches: count, Preview: preview})
 	}

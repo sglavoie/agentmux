@@ -64,18 +64,9 @@ func ParseTitleFull(title string) (base, state string, starred, muted bool) {
 		muted = true
 		title = title[len(ico.Mute):]
 	}
-	for _, name := range ico.StateOrder {
-		icon := ico.States[name]
-		// Skip empty icons so a stale entry in state_order without a matching
-		// glyph cannot prefix-match every title and report a phantom state.
-		if icon == "" {
-			continue
-		}
-		if strings.HasPrefix(title, icon) {
-			state = name
-			title = title[len(icon):]
-			break
-		}
+	if name, rest, ok := consumeStateIcon(title); ok {
+		state = name
+		title = rest
 	}
 	base = title
 	return
@@ -114,14 +105,8 @@ func StripIcons(title string) string {
 	if ico.Mute != "" {
 		title = strings.TrimPrefix(title, ico.Mute)
 	}
-	for _, name := range ico.StateOrder {
-		icon := ico.States[name]
-		if icon == "" {
-			continue
-		}
-		if strings.HasPrefix(title, icon) {
-			return title[len(icon):]
-		}
+	if _, rest, ok := consumeStateIcon(title); ok {
+		return rest
 	}
 	return title
 }
@@ -134,14 +119,28 @@ func DetectState(title string) string {
 	if ico.Mute != "" {
 		title = strings.TrimPrefix(title, ico.Mute)
 	}
+	name, _, ok := consumeStateIcon(title)
+	if ok {
+		return name
+	}
+	return ""
+}
+
+func consumeStateIcon(title string) (state, rest string, ok bool) {
 	for _, name := range ico.StateOrder {
 		icon := ico.States[name]
+		// Skip empty icons so a stale entry in state_order without a matching
+		// glyph cannot prefix-match every title and report a phantom state.
 		if icon == "" {
 			continue
 		}
 		if strings.HasPrefix(title, icon) {
-			return name
+			return name, title[len(icon):], true
+		}
+		fallback := strings.ReplaceAll(icon, "\ufe0f", "")
+		if fallback != icon && fallback != "" && strings.HasPrefix(title, fallback) {
+			return name, title[len(fallback):], true
 		}
 	}
-	return ""
+	return "", title, false
 }

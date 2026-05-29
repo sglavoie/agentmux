@@ -151,3 +151,42 @@ func TestRunWithDeps_SubagentStopScreenContextLimitPromotesStopFailure(t *testin
 		t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], wantTitle)
 	}
 }
+
+func TestRunWithDeps_StopReasonContextLimitMarksRequest(t *testing.T) {
+	tabTitle := palette.BuildTitle("api", "bolt", false)
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, tabTitle, "work", "copilot"),
+	}
+	daemonClient := &fakeIndicatorDaemonClient{
+		resp: daemon.Response{OK: true, Allowed: true, IconState: "error"},
+	}
+
+	err := runWithDeps(
+		"agentStop",
+		42,
+		"/tmp/amx",
+		HookPayload{StopReasonCamel: " context_limit_reached "},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(daemonClient.reqs) != 1 {
+		t.Fatalf("daemon requests = %d, want 1", len(daemonClient.reqs))
+	}
+	req := daemonClient.reqs[0]
+	if req.Action != "stop_failure" {
+		t.Fatalf("request action = %q, want stop_failure", req.Action)
+	}
+	if !req.ContextLimit {
+		t.Fatal("request context_limit = false, want true")
+	}
+	if req.StopReason != " context_limit_reached " {
+		t.Fatalf("request stop_reason = %q, want original payload value", req.StopReason)
+	}
+	if len(kittyClient.getTextCalls) != 0 {
+		t.Fatalf("GetText calls = %d, want 0", len(kittyClient.getTextCalls))
+	}
+}

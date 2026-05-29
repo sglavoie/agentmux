@@ -60,6 +60,7 @@ func splitShellArgs(raw string) ([]string, error) {
 		inSingle     bool
 		inDouble     bool
 		escaping     bool
+		escapeDouble bool
 		tokenStarted bool
 	)
 
@@ -73,8 +74,12 @@ func splitShellArgs(raw string) ([]string, error) {
 	for _, r := range raw {
 		switch {
 		case escaping:
+			if escapeDouble && !isDoubleQuoteEscapedRune(r) {
+				current.WriteRune('\\')
+			}
 			current.WriteRune(r)
 			escaping = false
+			escapeDouble = false
 			tokenStarted = true
 		case inSingle:
 			if r == '\'' {
@@ -91,6 +96,7 @@ func splitShellArgs(raw string) ([]string, error) {
 				quoted = true
 			case '\\':
 				escaping = true
+				escapeDouble = true
 				tokenStarted = true
 			default:
 				current.WriteRune(r)
@@ -130,4 +136,8 @@ func splitShellArgs(raw string) ([]string, error) {
 	}
 
 	return args, nil
+}
+
+func isDoubleQuoteEscapedRune(r rune) bool {
+	return r == '$' || r == '`' || r == '"' || r == '\\' || r == '\n'
 }

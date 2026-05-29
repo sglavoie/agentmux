@@ -102,6 +102,30 @@ func TestWrite_OverwritesAtomically(t *testing.T) {
 	}
 }
 
+func TestWrite_StaleFixedTempPathDoesNotBlockWrite(t *testing.T) {
+	s := newTestStore(t)
+	const key = "k"
+	const text = "fresh search text"
+
+	if err := os.MkdirAll(s.Dir(), 0o755); err != nil {
+		t.Fatalf("MkdirAll store dir: %v", err)
+	}
+	if err := os.Mkdir(s.Path(key)+".tmp", 0o755); err != nil {
+		t.Fatalf("create stale tmp dir: %v", err)
+	}
+
+	if err := s.Write(key, text); err != nil {
+		t.Fatalf("Write with stale tmp path present: %v", err)
+	}
+	got, err := s.Read(key)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got != text {
+		t.Errorf("Read = %q, want %q", got, text)
+	}
+}
+
 func TestExists_MissingReturnsFalseNil(t *testing.T) {
 	s := newTestStore(t)
 	ok, err := s.Exists("never-written")

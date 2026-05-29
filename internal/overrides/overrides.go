@@ -67,6 +67,9 @@ func Save(f File) (retErr error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	if f.Entries == nil {
+		f.Entries = []Entry{}
+	}
 	data, err := json.Marshal(f)
 	if err != nil {
 		return err

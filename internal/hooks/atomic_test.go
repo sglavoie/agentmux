@@ -79,6 +79,30 @@ func TestAtomicWriteFile_FaultDoesNotCorruptOriginal(t *testing.T) {
 	}
 }
 
+func TestAtomicWriteFile_ChmodFaultRemovesTemp(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+
+	chmodErr := errors.New("chmod fault")
+	prev := atomicChmodFn
+	t.Cleanup(func() { atomicChmodFn = prev })
+	atomicChmodFn = func(_ *os.File, _ os.FileMode) error {
+		return chmodErr
+	}
+
+	err := atomicWriteFile(path, []byte(`{"hooks":{}}`), 0o644)
+	if !errors.Is(err, chmodErr) {
+		t.Fatalf("expected chmod fault, got: %v", err)
+	}
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected destination not to be created, stat err=%v", err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("expected temp file removed after chmod fault, stat err=%v", err)
+	}
+}
+
 // TestMergeViaContract_PreservesBackup is a regression guard: the .bak file
 // must continue to be written before the new settings.json replaces the
 // original, even after the atomic-write refactor.

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -160,35 +159,17 @@ home_dir = "` + badHome + `"
 		rootCmd.SetErr(nil)
 	})
 
-	// The hooks-sync RunE writes per-account errors directly to os.Stderr
-	// (not the cobra command's stderr), so we intercept the real os.Stderr
-	// to capture them.
-	origStderr := os.Stderr
-	r, w, pipeErr := os.Pipe()
-	if pipeErr != nil {
-		t.Fatalf("pipe: %v", pipeErr)
-	}
-	os.Stderr = w
-	done := make(chan string, 1)
-	go func() {
-		data, _ := io.ReadAll(r)
-		done <- string(data)
-	}()
-
 	err := rootCmd.Execute()
 
-	_ = w.Close()
-	os.Stderr = origStderr
-	capturedStderr := <-done
-
 	if err == nil {
-		t.Fatalf("expected non-nil error from hooks-sync with one failing profile, got nil (stdout=%q stderr=%q)", stdoutBuf.String(), capturedStderr)
+		t.Fatalf("expected non-nil error from hooks-sync with one failing profile, got nil (stdout=%q stderr=%q)", stdoutBuf.String(), stderrBuf.String())
 	}
 	if !strings.Contains(err.Error(), "bad") {
 		t.Errorf("expected error to name the failing profile %q, got %q", "bad", err.Error())
 	}
-	// stderr must still carry the per-account error detail.
-	if !strings.Contains(capturedStderr, "error (bad)") {
-		t.Errorf("expected stderr to contain per-account error line, got %q", capturedStderr)
+	// stderr must carry the per-account error detail through Cobra's configured
+	// stream, not directly through process-global os.Stderr.
+	if !strings.Contains(stderrBuf.String(), "error (bad)") {
+		t.Errorf("expected stderr to contain per-account error line, got %q", stderrBuf.String())
 	}
 }

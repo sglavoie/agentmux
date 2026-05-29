@@ -207,17 +207,17 @@ var configHooksSyncCmd = &cobra.Command{
 		var failed []string
 		for _, r := range results {
 			if r.Err != nil {
-				fmt.Fprintf(os.Stderr, "  error (%s): %v\n", r.Account, r.Err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "  error (%s): %v\n", r.Account, r.Err)
 				failed = append(failed, r.Account)
 				continue
 			}
 			switch r.Status {
 			case hooks.MergeCreated:
-				fmt.Printf("  created  %s\n", r.Path)
+				fmt.Fprintf(cmd.OutOrStdout(), "  created  %s\n", r.Path)
 			case hooks.MergeUpdated:
-				fmt.Printf("  updated  %s\n", r.Path)
+				fmt.Fprintf(cmd.OutOrStdout(), "  updated  %s\n", r.Path)
 			case hooks.MergeSkipped:
-				fmt.Printf("  skipped  %s (already up to date)\n", r.Path)
+				fmt.Fprintf(cmd.OutOrStdout(), "  skipped  %s (already up to date)\n", r.Path)
 			}
 		}
 		// Surface partial-failure scenarios with a non-zero exit code so callers

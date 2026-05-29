@@ -41,9 +41,9 @@ func populateBenchIndex(b *testing.B, n int, snippet, body string) *Index {
 // BenchmarkSearch_FastPath establishes a baseline for transcript.Search over
 // a synthetic corpus of N=4500 sessions. Each entry carries a populated
 // search-text sidecar so the benchmark exercises the fast path while
-// avoiding the snippet short-circuit (no needle in any Snippet). Per-entry
-// body is ~22 KiB so the overall haystack approximates the dev machine's
-// ~36 MiB on-disk index. Run with:
+// avoiding snippet-preview hits (no needle in any Snippet). Per-entry body
+// is ~22 KiB so the overall haystack approximates the dev machine's ~36 MiB
+// on-disk index. Run with:
 //
 //	go test ./internal/transcript -run=^$ -bench=BenchmarkSearch_FastPath
 func BenchmarkSearch_FastPath(b *testing.B) {
@@ -85,13 +85,10 @@ func BenchmarkSearch_Sidecar(b *testing.B) {
 	}
 }
 
-// BenchmarkSearch_SnippetShortCircuit exercises the path where every entry's
-// Snippet already contains the needle. The full sidecar is never touched
-// for any of the 4500 entries, so the Search call collapses to a sequence
-// of cheap strings.Contains calls against 160-rune snippets. Demonstrates
-// the throughput ceiling for the most common interactive case (user types
-// a fragment that already appears in the kick-off prompt).
-func BenchmarkSearch_SnippetShortCircuit(b *testing.B) {
+// BenchmarkSearch_SnippetPreviewWithSidecar exercises the path where every
+// entry's Snippet already contains the needle. Search still reads sidecars
+// so match counts stay exact, but the preview uses the original-case snippet.
+func BenchmarkSearch_SnippetPreviewWithSidecar(b *testing.B) {
 	body := strings.Repeat("filler text without the needle\n", 400)
 	idx := populateBenchIndex(b, 4500, "user asks about the needle in the kick-off prompt", body)
 	q := Query{Text: "needle"}

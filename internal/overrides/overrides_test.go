@@ -1,6 +1,7 @@
 package overrides_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,6 +47,30 @@ func TestRoundTrip(t *testing.T) {
 		if got.Entries[i] != e {
 			t.Errorf("Entries[%d]: got %+v, want %+v", i, got.Entries[i], e)
 		}
+	}
+}
+
+func TestSaveEmptyEntriesWritesArray(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "overrides.json")
+	t.Setenv(overrides.PathEnvVar, path)
+
+	if err := overrides.Save(overrides.File{Version: 1}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("Unmarshal saved file: %v", err)
+	}
+	entries, ok := decoded["entries"].([]any)
+	if !ok {
+		t.Fatalf("entries encoded as %T, want JSON array; raw=%s", decoded["entries"], raw)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("entries length: got %d, want 0", len(entries))
 	}
 }
 

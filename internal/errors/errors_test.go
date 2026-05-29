@@ -56,6 +56,23 @@ func TestKittyError_Unwrap(t *testing.T) {
 	}
 }
 
+func TestKittyError_NilReceiverIsSafe(t *testing.T) {
+	var e *KittyError
+	if got := e.Error(); got != "kitty command failed: <nil>" {
+		t.Fatalf("nil KittyError Error() = %q", got)
+	}
+	if got := e.Unwrap(); got != nil {
+		t.Fatalf("nil KittyError Unwrap() = %v, want nil", got)
+	}
+}
+
+func TestConfigError_NilReceiverIsSafe(t *testing.T) {
+	var e *ConfigError
+	if got := e.Error(); got != "config error: <nil>" {
+		t.Fatalf("nil ConfigError Error() = %q", got)
+	}
+}
+
 func TestPrint_NilErrorDoesNotPrintMalformedMessage(t *testing.T) {
 	output := captureStderr(t, func() {
 		Print(nil)

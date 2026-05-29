@@ -44,14 +44,15 @@ func (s *Store) Path(key string) string {
 // rename so a crash mid-write never leaves a half-written sidecar in place).
 func (s *Store) Write(key, text string) (retErr error) {
 	path := s.Path(key)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	tf, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	tf, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
 	}
+	tmp := tf.Name()
 	defer func() {
 		if retErr != nil {
 			_ = os.Remove(tmp)

@@ -26,8 +26,8 @@ func HasMarker(text string) bool {
 
 func ScreenShowsMarker(text string) bool {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	tail := make([]string, 0, 4)
-	for i := len(lines) - 1; i >= 0 && len(tail) < 4; i-- {
+	tail := make([]string, 0, 5)
+	for i := len(lines) - 1; i >= 0 && len(tail) < 5; i-- {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
@@ -38,11 +38,22 @@ func ScreenShowsMarker(text string) bool {
 		return true
 	}
 	if len(tail) >= 4 &&
-		HasMarker(strings.Join(tail[:3], "\n")) &&
-		!HasMarker(tail[0]) {
+		hasWrappedMarkerWindow(tail[len(tail)-4:len(tail)-1]) {
+		return true
+	}
+	if len(tail) >= 4 &&
+		hasWrappedMarkerWindow(tail[len(tail)-4:]) {
+		return true
+	}
+	if len(tail) >= 5 &&
+		hasWrappedMarkerWindow(tail[len(tail)-5:len(tail)-1]) {
 		return true
 	}
 	return false
+}
+
+func hasWrappedMarkerWindow(lines []string) bool {
+	return HasMarker(strings.Join(lines, "\n")) && !HasMarker(lines[0])
 }
 
 func lastLines(lines []string, n int) []string {

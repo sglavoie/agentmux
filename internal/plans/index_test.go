@@ -241,6 +241,40 @@ func TestRefresh_DropsVanishedPlans(t *testing.T) {
 	}
 }
 
+func TestRefresh_DropsPlanWhenMarkdownRemoved(t *testing.T) {
+	root := t.TempDir()
+	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
+		"manifest.md": "# alpha",
+		"notes.txt":   "not indexed",
+	})
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh 1: %v", err)
+	}
+	key := PlanKey(planDir)
+	sidecar := idx.store.Path(key)
+	if _, ok := idx.Get(key); !ok {
+		t.Fatalf("entry missing after first refresh")
+	}
+	if _, err := os.Stat(sidecar); err != nil {
+		t.Fatalf("sidecar missing after first refresh: %v", err)
+	}
+
+	if err := os.Remove(filepath.Join(planDir, "manifest.md")); err != nil {
+		t.Fatalf("removing manifest: %v", err)
+	}
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh 2: %v", err)
+	}
+	if _, ok := idx.Get(key); ok {
+		t.Errorf("entry should be dropped after plan has no markdown files")
+	}
+	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
+		t.Errorf("sidecar should be deleted after markdown removal; stat err = %v", err)
+	}
+}
+
 func TestSaveLoadRoundtrip(t *testing.T) {
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{

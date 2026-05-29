@@ -1,10 +1,24 @@
 package kitty_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
+
+type failOnActionRunner struct {
+	calls []kitty.MockCall
+	err   error
+}
+
+func (r *failOnActionRunner) Run(name string, args ...string) ([]byte, []byte, error) {
+	r.calls = append(r.calls, kitty.MockCall{Name: name, Args: append([]string(nil), args...)})
+	if containsArg(args, "action") {
+		return nil, []byte("action failed"), r.err
+	}
+	return nil, nil, nil
+}
 
 func TestCloseTab_MatchExpr(t *testing.T) {
 	runner := kitty.NewMockRunner(map[string][]byte{})
@@ -83,5 +97,23 @@ func TestMoveTab_PositiveDelta_ForwardAction(t *testing.T) {
 		if !containsArg(runner.Calls[i].Args, "move_tab_forward") {
 			t.Errorf("call %d: expected move_tab_forward, got %v", i, runner.Calls[i].Args)
 		}
+	}
+}
+
+func TestMoveTab_MinIntDeltaAttemptsBackwardAction(t *testing.T) {
+	actionErr := errors.New("stop after first action")
+	runner := &failOnActionRunner{err: actionErr}
+	client := kitty.NewClientWithSocket(runner, "")
+	minInt := -int(^uint(0)>>1) - 1
+
+	err := client.MoveTab("id:7", minInt)
+	if !errors.Is(err, actionErr) {
+		t.Fatalf("MoveTab error = %v, want %v", err, actionErr)
+	}
+	if len(runner.calls) != 2 {
+		t.Fatalf("expected focus plus one action call, got %d: %v", len(runner.calls), runner.calls)
+	}
+	if !containsArg(runner.calls[1].Args, "move_tab_backward") {
+		t.Fatalf("expected first action to move backward, got %v", runner.calls[1].Args)
 	}
 }

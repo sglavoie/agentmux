@@ -18,6 +18,9 @@ type ConfigError struct {
 }
 
 func (e *ConfigError) Error() string {
+	if e == nil {
+		return "config error: <nil>"
+	}
 	if e.Hint != "" {
 		return fmt.Sprintf("%s\n  → %s", e.Message, e.Hint)
 	}
@@ -32,6 +35,9 @@ type KittyError struct {
 }
 
 func (e *KittyError) Error() string {
+	if e == nil {
+		return "kitty command failed: <nil>"
+	}
 	cmd := strings.Join(e.Command, " ")
 	trimmed := strings.TrimSpace(e.Output)
 	if trimmed != "" {
@@ -43,7 +49,12 @@ func (e *KittyError) Error() string {
 	return fmt.Sprintf("kitty command failed: %s", cmd)
 }
 
-func (e *KittyError) Unwrap() error { return e.Err }
+func (e *KittyError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 // Fatal prints a red "error: " prefixed message to stderr and exits 1.
 func Fatal(format string, args ...any) {

@@ -168,9 +168,9 @@ func (i *Index) Delete(key string) error {
 
 // Refresh walks the configured plans root, indexes every top-level plan
 // directory containing at least one .md file (depth <= 2), and prunes
-// entries whose backing directory has disappeared from disk. Per-plan
-// failures are logged and skipped — a single unreadable plan must not
-// hide the rest.
+// entries whose backing directory has disappeared from disk or no longer
+// contains eligible markdown. Per-plan failures are logged and skipped —
+// a single unreadable plan must not hide the rest.
 func (i *Index) Refresh(root string) error {
 	if root == "" {
 		return errors.New("plans: Refresh requires a non-empty root path")
@@ -198,7 +198,15 @@ func (i *Index) Refresh(root string) error {
 				"dir", planDir, "err", err)
 			continue
 		}
+		key := PlanKey(planDir)
 		if meta == nil {
+			if _, ok := i.entries[key]; ok {
+				delete(i.entries, key)
+				if err := i.store.Delete(key); err != nil {
+					slog.Debug("plans.index: empty-plan sidecar delete failed",
+						"key", key, "err", err)
+				}
+			}
 			continue
 		}
 		i.entries[PlanKey(meta.DirPath)] = *meta

@@ -106,6 +106,41 @@ func TestSweepHookSilence_LatchClearsOnFreshEventThenReFires(t *testing.T) {
 	})
 }
 
+func TestSweepHookSilence_SuppressedEventCountsAsFresh(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newHookSilenceTestHandler(1*time.Hour, nil)
+		fake.windows = fakeWindowsForAccount("work")
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Account: "work"})
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.lastSeenEventAt["work"] = now.Add(-2 * time.Hour)
+		delete(h.notifiedHookSilence, "work")
+		h.stateMu.Unlock()
+
+		resp := h.Handle(Request{
+			Type:             TypeStateUpdate,
+			WindowID:         42,
+			Action:           "active",
+			Event:            "PostToolUse",
+			Account:          "work",
+			CurrentIconState: "stop",
+		})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("active after terminal should be suppressed, got %+v", resp)
+		}
+
+		h.SweepHookSilence(time.Now())
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 (suppressed event should refresh hook-silence baseline)", got)
+		}
+	})
+}
+
 // TestSweepHookSilence_ZeroThresholdSkipped verifies that a stale account is
 // skipped when neither the global nor a per-account override supplies a
 // positive threshold — even though "work" is running and its lastSeenEventAt

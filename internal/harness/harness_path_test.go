@@ -14,11 +14,18 @@ func TestIsAmxHookEntryHandlesPathWithSpaces(t *testing.T) {
 		{"simple basename", "amx hook-indicator Stop", true},
 		{"absolute path", "/usr/local/bin/amx hook-indicator Stop", true},
 		{"path with spaces", "/Users/foo bar/bin/amx hook-indicator Stop", true},
+		{"windows exe path", `C:\Users\foo\bin\amx.exe hook-indicator Stop`, true},
+		{"windows exe path with spaces", `C:\Program Files\Agent Mux\amx.exe hook-indicator Stop`, true},
+		{"quoted windows exe path", `"C:\Program Files\Agent Mux\amx.exe" hook-indicator Stop`, true},
+		{"powershell call operator", `& 'C:\Program Files\Agent Mux\amx.exe' hook-indicator Stop`, true},
+		{"windows exe uppercase", `C:\Users\foo\bin\AMX.EXE hook-indicator Stop`, true},
 		{"different binary", "/usr/local/bin/notamx hook-indicator Stop", false},
+		{"different windows binary", `C:\Users\foo\bin\notamx.exe hook-indicator Stop`, false},
 		{"unrelated path", "/opt/hook-indicator-helper/run --start", false},
 		{"missing subcommand", "amx", false},
 		{"empty", "", false},
 		{"sibling name", "/usr/bin/amxhelper hook-indicator Stop", false},
+		{"windows sibling name", `C:\Users\foo\bin\amxhelper.exe hook-indicator Stop`, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -27,6 +34,16 @@ func TestIsAmxHookEntryHandlesPathWithSpaces(t *testing.T) {
 				t.Errorf("isAmxHookEntry(%q) = %v, want %v", tc.command, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestIsAmxHookEntryChecksCommandWindows(t *testing.T) {
+	got := isAmxHookEntry(hookEntry{
+		Type:           "command",
+		CommandWindows: `C:\Program Files\Agent Mux\amx.exe hook-indicator Stop`,
+	})
+	if !got {
+		t.Fatalf("isAmxHookEntry() did not recognize CommandWindows amx.exe hook")
 	}
 }
 
