@@ -54,6 +54,30 @@ func TestValidate_HarnessColorsUnknownHarnessRejected(t *testing.T) {
 	}
 }
 
+// TestValidate_InvalidProfileHarnessDoesNotRequestHarnessColor pins that an
+// invalid profile harness is reported as the profile error it is. Asking the
+// user to add a [harness_colors] entry for an unknown harness is misleading,
+// and that entry would be rejected separately anyway.
+func TestValidate_InvalidProfileHarnessDoesNotRequestHarnessColor(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "bogus", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for invalid profile harness, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, `profile "work": invalid harness "bogus"`) {
+		t.Errorf("expected invalid profile harness error, got %q", msg)
+	}
+	if strings.Contains(msg, `[harness_colors] is missing color for harness "bogus"`) {
+		t.Errorf("unexpected missing harness color error for invalid harness: %q", msg)
+	}
+}
+
 // TestLoad_NormalizesHarnessColorKeys pins that [harness_colors] keys follow
 // the same case-insensitive normalization as profile harness names and
 // Config.HarnessColor lookups. Without this, a key like "Claude" validates as

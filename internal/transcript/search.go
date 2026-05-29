@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Query describes a search request against the transcript index. Empty
@@ -181,12 +182,39 @@ func countMatches(msgs []Message, needle string) (int, string) {
 			}
 			total++
 			if preview == "" {
-				preview = firstMatchLine(msg.Text, idx+pos)
+				preview = firstMatchLine(msg.Text, originalOffsetForFoldedByte(msg.Text, idx+pos))
 			}
 			idx += pos + len(needle)
 		}
 	}
 	return total, preview
+}
+
+// originalOffsetForFoldedByte maps a byte offset in strings.ToLower(text)
+// back to the corresponding byte offset in text. Some Unicode case mappings
+// change UTF-8 byte length, so offsets from the folded haystack cannot be
+// used directly to slice the original text for previews.
+func originalOffsetForFoldedByte(text string, foldedPos int) int {
+	if foldedPos <= 0 {
+		return 0
+	}
+	foldedOffset := 0
+	for originalOffset, r := range text {
+		lower := strings.ToLower(string(r))
+		nextFolded := foldedOffset + len(lower)
+		size := utf8.RuneLen(r)
+		if size < 0 {
+			size = 1
+		}
+		if foldedPos < nextFolded {
+			return originalOffset
+		}
+		if foldedPos == nextFolded {
+			return originalOffset + size
+		}
+		foldedOffset = nextFolded
+	}
+	return len(text)
 }
 
 // firstMatchLine returns the single line of text containing the byte

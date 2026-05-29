@@ -62,7 +62,7 @@ func looksLikePipeMode(cmdline string) bool {
 	// terminator so `claude -- -p` (where `-p` is a positional argument) and
 	// `codex -- review` do not falsely trigger pipe mode.
 	for i, field := range fields {
-		base := filepath.Base(field)
+		base := commandBase(field)
 		if !harness.Valid(base) {
 			continue
 		}
@@ -84,6 +84,15 @@ func looksLikePipeMode(cmdline string) bool {
 		}
 	}
 	return false
+}
+
+func commandBase(field string) string {
+	field = strings.Trim(strings.TrimSpace(field), `"'`)
+	base := filepath.Base(field)
+	if i := strings.LastIndex(base, `\`); i >= 0 {
+		base = base[i+1:]
+	}
+	return strings.TrimSuffix(base, ".exe")
 }
 
 // looksLikeClaudePipe is kept as a compatibility alias for older tests while

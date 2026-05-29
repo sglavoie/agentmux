@@ -11,9 +11,9 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	// Capture the prior cursor's row identity before the list is
 	// rebuilt so we can restore it post-refresh. Empty list → no
 	// prior selection to preserve.
-	var priorBase string
+	var prior cursorIdentity
 	if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
-		priorBase = m.filtered[m.cursor].Base
+		prior = captureCursorIdentity(m.filtered[m.cursor])
 	}
 	m.lastActivity = msg.activity
 	m.watchdog = msg.watchdog
@@ -21,7 +21,7 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	m.recordTransitions()
 	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	m.sortFiltered()
-	m.cursor = restoreCursor(m.filtered, priorBase, m.lastActivity, m.idleThreshold)
+	m.cursor = restoreCursorByIdentity(m.filtered, prior, m.lastActivity, m.idleThreshold)
 	clampListOffset(&m)
 	scrollListToCursor(&m)
 	return m, nil

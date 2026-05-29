@@ -7,6 +7,17 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
+type cursorIdentity struct {
+	tabID     int
+	windowID  int
+	key       string
+	base      string
+	profile   string
+	project   string
+	harness   string
+	directory string
+}
+
 // applyFilterChange swaps in a new active filter, re-applies it to the
 // session list, and resets cursor + chip focus. Used by chip removal and
 // the Esc "clear all" path so they share the bookkeeping.
@@ -51,12 +62,60 @@ func (m *Model) reapplyFilterLive() {
 // first attention-state row (orange band), (3) row 0. Returns 0 for an
 // empty list so callers can use the result directly without clamping.
 func restoreCursor(filtered []session.RunningSession, priorBase string, lastActivity map[int]time.Time, idle time.Duration) int {
+	prior := cursorIdentity{base: priorBase}
+	return restoreCursorByIdentity(filtered, prior, lastActivity, idle)
+}
+
+func captureCursorIdentity(s session.RunningSession) cursorIdentity {
+	return cursorIdentity{
+		tabID:     s.TabID,
+		windowID:  s.WindowID,
+		key:       s.Key,
+		base:      s.Base,
+		profile:   s.EffectiveProfile(),
+		project:   s.EffectiveProject(),
+		harness:   s.Harness,
+		directory: s.Directory,
+	}
+}
+
+func restoreCursorByIdentity(filtered []session.RunningSession, prior cursorIdentity, lastActivity map[int]time.Time, idle time.Duration) int {
 	if len(filtered) == 0 {
 		return 0
 	}
-	if priorBase != "" {
+	if prior.tabID != 0 {
 		for i, s := range filtered {
-			if s.Base == priorBase {
+			if s.TabID == prior.tabID {
+				return i
+			}
+		}
+	}
+	if prior.windowID != 0 {
+		for i, s := range filtered {
+			if s.WindowID == prior.windowID {
+				return i
+			}
+		}
+	}
+	if prior.key != "" {
+		for i, s := range filtered {
+			if s.Key == prior.key {
+				return i
+			}
+		}
+	}
+	if prior.base != "" {
+		for i, s := range filtered {
+			if s.Base == prior.base &&
+				s.EffectiveProfile() == prior.profile &&
+				s.EffectiveProject() == prior.project &&
+				s.Harness == prior.harness &&
+				s.Directory == prior.directory {
+				return i
+			}
+		}
+		for i, s := range filtered {
+			if s.Base == prior.base {
 				return i
 			}
 		}

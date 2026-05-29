@@ -112,6 +112,72 @@ func TestLaunch_DedupUsesEffectiveProfile(t *testing.T) {
 	}
 }
 
+// TestLaunch_InsertLocationUsesEffectiveProfile verifies account-mode sorted
+// insertion uses the same effective profile as dedup and user vars. When a
+// caller passes an account record whose Name differs from Session.Profile, the
+// new tab must be placed in the Session.Profile group, not the account-name
+// group.
+func TestLaunch_InsertLocationUsesEffectiveProfile(t *testing.T) {
+	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
+		`{"id":10,"is_active":true,"title":"apple","windows":[` +
+		`{"id":11,"is_active":true,"title":"apple","cwd":"/tmp/apple","user_vars":{` +
+		`"amx_profile":"beta","amx_project":"apple","amx_directory":"/tmp/apple"` +
+		`}}]},` +
+		`{"id":20,"is_active":false,"title":"carrot","windows":[` +
+		`{"id":21,"is_active":true,"title":"carrot","cwd":"/tmp/carrot","user_vars":{` +
+		`"amx_profile":"gamma","amx_project":"carrot","amx_directory":"/tmp/carrot"` +
+		`}}]}` +
+		`]}]`)
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{fixture, fixture},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "account"},
+		Accounts: []config.Account{
+			{Name: "alpha", ConfigDir: "~/.config/alpha"},
+		},
+	}
+
+	sess := config.Session{Title: "banana", Profile: "beta", Directory: "/tmp/banana"}
+	acc := cfg.Accounts[0]
+
+	if err := session.Launch(client, sess, acc, cfg); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	var launchArgs []string
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		argSet := make(map[string]bool)
+		for _, a := range c.Args {
+			argSet[a] = true
+		}
+		if argSet["launch"] {
+			launchArgs = c.Args
+			break
+		}
+	}
+	if launchArgs == nil {
+		t.Fatal("expected kitten @ launch to be called")
+	}
+	argSet := make(map[string]bool)
+	for _, a := range launchArgs {
+		argSet[a] = true
+	}
+	if !argSet["--location=after"] {
+		t.Fatalf("expected launch after the beta/apple tab, got args: %v", launchArgs)
+	}
+	if !argSet["--var=amx_profile=beta"] {
+		t.Errorf("expected amx_profile=beta in launch args: %v", launchArgs)
+	}
+	if !argSet["--var=cc_account=beta"] {
+		t.Errorf("expected cc_account=beta in launch args: %v", launchArgs)
+	}
+}
+
 // TestLaunch_DedupSeesConfigMatchedGhostTabs verifies that Launch does not
 // duplicate a configured project whose anchor window lost its user vars. The
 // config-backed title fallback already treats that tab as running for

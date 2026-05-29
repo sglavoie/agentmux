@@ -309,6 +309,42 @@ func TestCodexStatusInSync(t *testing.T) {
 	}
 }
 
+func TestCodexStatusAllEventsDisabledInSync(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "codex")
+	allCodexEvents := []string{
+		"SessionStart",
+		"UserPromptSubmit",
+		"PreToolUse",
+		"PermissionRequest",
+		"PostToolUse",
+		"PreCompact",
+		"PostCompact",
+		"SubagentStart",
+		"SubagentStop",
+		"Stop",
+	}
+
+	cfg := makeCodexConfig(
+		[]config.Account{makeCodexAccount("work", accountDir)},
+		map[string]config.AccountHookOverride{
+			"work": {DisabledEvents: allCodexEvents},
+		},
+	)
+
+	if _, err := MergeAll(cfg, "", testBin); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+
+	results, err := StatusAll(cfg, testBin)
+	if err != nil {
+		t.Fatalf("StatusAll: %v", err)
+	}
+	if results[0].Status != SyncInSync {
+		t.Errorf("expected in_sync when every managed event is intentionally disabled, got %q", results[0].Status)
+	}
+}
+
 func TestCodexStatusDrifted(t *testing.T) {
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "codex")

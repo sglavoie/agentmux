@@ -304,8 +304,10 @@ func (h *Handler) SweepStale(now time.Time) {
 	h.stateMu.Unlock()
 
 	for _, s := range stale {
-		h.guard.Clear(s.windowID)
-		if s.notify {
+		if h.guard != nil {
+			h.guard.Clear(s.windowID)
+		}
+		if s.notify && h.notifier != nil {
 			h.notifier.MaybeNotify(s.windowID, s.title, s.account, "stale", s.pipeMode)
 		}
 		if h.kittyClient != nil {
@@ -412,6 +414,8 @@ func (h *Handler) SweepHookSilence(now time.Time) {
 	h.stateMu.Unlock()
 
 	for _, s := range silent {
-		h.notifier.MaybeNotify(hookSilenceWindowID(s.account), s.account, s.account, "hook_silence", false)
+		if h.notifier != nil {
+			h.notifier.MaybeNotify(hookSilenceWindowID(s.account), s.account, s.account, "hook_silence", false)
+		}
 	}
 }

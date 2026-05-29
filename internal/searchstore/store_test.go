@@ -165,6 +165,28 @@ func TestExists_DirectoryAtSidecarPathReturnsFalse(t *testing.T) {
 	}
 }
 
+func TestExists_SymlinkAtSidecarPathReturnsFalse(t *testing.T) {
+	s := newTestStore(t)
+	if err := os.MkdirAll(s.Dir(), 0o755); err != nil {
+		t.Fatalf("MkdirAll store dir: %v", err)
+	}
+	target := filepath.Join(t.TempDir(), "target.txt")
+	if err := os.WriteFile(target, []byte("outside sidecar"), 0o644); err != nil {
+		t.Fatalf("write symlink target: %v", err)
+	}
+	if err := os.Symlink(target, s.Path("k")); err != nil {
+		t.Skipf("creating symlink: %v", err)
+	}
+
+	ok, err := s.Exists("k")
+	if err != nil {
+		t.Fatalf("Exists: %v", err)
+	}
+	if ok {
+		t.Errorf("Exists = true for symlink to regular file, want false")
+	}
+}
+
 func TestDelete_IdempotentOnMissing(t *testing.T) {
 	s := newTestStore(t)
 	if err := s.Delete("never-written"); err != nil {

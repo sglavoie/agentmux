@@ -177,6 +177,9 @@ func TestLooksLikeClaudePipe(t *testing.T) {
 		{"codex review", true},
 		{"codex run", false},
 		{"codex-exec", false},
+		{`"/usr/local/bin/claude" -p`, true},
+		{`'/usr/local/bin/copilot' --prompt`, true},
+		{`"C:\Program Files\Codex\codex.exe" exec`, true},
 		// Flag must follow the command in the same cmdline.
 		{"-p claude", false}, // -p before claude
 		{"some-tool -p claude", false},

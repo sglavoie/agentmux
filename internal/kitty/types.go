@@ -164,6 +164,9 @@ func isKeybindingsCmdline(cmdline []string) bool {
 		if arg == "--" {
 			return false
 		}
+		if isInfoOnlyRootFlag(arg) {
+			return false
+		}
 		if strings.HasPrefix(arg, "-") {
 			continue
 		}
@@ -204,6 +207,9 @@ func isColorPickerCmdline(cmdline []string) bool {
 	}
 	for _, arg := range cmdline[1:] {
 		if arg == "--" {
+			return false
+		}
+		if isInfoOnlyRootFlag(arg) {
 			return false
 		}
 		if strings.HasPrefix(arg, "-") {

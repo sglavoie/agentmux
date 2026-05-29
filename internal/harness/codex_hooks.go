@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // codexHookEvents lists the Codex hook events Agent Mux installs.
@@ -125,6 +126,7 @@ func (codexHookContract) ParseInstalledEvents(path string) ([]string, error) {
 			}
 		}
 	}
+	sort.Strings(events)
 	return events, nil
 }
 

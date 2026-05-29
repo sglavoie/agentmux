@@ -37,10 +37,7 @@ func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defa
 	explicitArgs := shellQuoteArgs(sess.EffectiveArgs())
 	groups := strings.Join(sess.Groups, "\x1f")
 	ccEnv := SerializeSessionEnv(sess.Env)
-	profileName := sess.EffectiveProfile()
-	if profileName == "" {
-		profileName = acc.Name
-	}
+	profileName := effectiveSessionProfile(sess, acc)
 	homeDir := config.ExpandTilde(acc.EffectiveHomeDir())
 	projectDir := config.ExpandTilde(sess.Directory)
 	harnessName := acc.EffectiveHarness()
@@ -85,10 +82,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 
 	skipDedup := len(opts) > 0 && opts[0].SkipDedup
 	if !skipDedup {
-		profileName := sess.EffectiveProfile()
-		if profileName == "" {
-			profileName = acc.Name
-		}
+		profileName := effectiveSessionProfile(sess, acc)
 		if _, exists := FindByKey(running, SessionKey(profileName, sess.Title)); exists {
 			launchDebug.Printf("Launch: dedup hit, returning nil")
 			return nil
@@ -104,7 +98,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	beforeIDs := allTabIDs(osWindows)
 
 	// Compute insert location for sorted insertion.
-	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, acc.Name, formattedTitle)
+	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
 	if err != nil {
 		// Non-fatal: fall back to default insertion.
 		loc = ""
@@ -167,6 +161,13 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	}
 
 	return nil
+}
+
+func effectiveSessionProfile(sess config.Session, acc config.Account) string {
+	if profileName := sess.EffectiveProfile(); profileName != "" {
+		return profileName
+	}
+	return acc.Name
 }
 
 // locationArg converts a logical location to the kitten @ launch --location

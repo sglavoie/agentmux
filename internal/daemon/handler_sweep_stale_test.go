@@ -99,6 +99,49 @@ func TestSweepStale_ClearsActiveSessionAndNotifies(t *testing.T) {
 	})
 }
 
+func TestSweepStale_WithoutNotifierStillClearsStateAndTitle(t *testing.T) {
+	guard := NewStateGuard(time.Hour)
+	h := NewHandler(guard, nil)
+	fake := &fakeKittyClient{}
+	h.SetKittyClient(fake)
+	h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Minute}, nil)
+
+	boltTitle := palette.BuildTitle("W:api", "bolt", false)
+	clearedTitle := palette.BuildTitle("W:api", "", false)
+	fake.windows = fakeOSWindowsWithTab(42, boltTitle)
+
+	now := time.Now()
+	h.stateMu.Lock()
+	h.activity[42] = now.Add(-15 * time.Minute)
+	h.lastAction[42] = "active"
+	h.lastSessionTitle[42] = "W:api"
+	h.stateMu.Unlock()
+
+	h.SweepStale(now)
+
+	h.stateMu.Lock()
+	_, hasAction := h.lastAction[42]
+	notified := h.notifiedStale[42]
+	h.stateMu.Unlock()
+	if hasAction {
+		t.Fatalf("lastAction[42] still present after sweep")
+	}
+	if !notified {
+		t.Fatalf("notifiedStale[42] = false; want true")
+	}
+	if cur := guard.Current(42); cur != "" {
+		t.Fatalf("guard.Current(42) = %q; want cleared", cur)
+	}
+
+	titles := fake.titleCalls()
+	if len(titles) != 1 {
+		t.Fatalf("SetTabTitle calls = %d; want 1", len(titles))
+	}
+	if titles[0].title != clearedTitle {
+		t.Fatalf("SetTabTitle title = %q; want %q", titles[0].title, clearedTitle)
+	}
+}
+
 // TestSweepStale_FreshActiveLeftAlone verifies that a recent active session
 // is not touched by the sweep.
 func TestSweepStale_FreshActiveLeftAlone(t *testing.T) {

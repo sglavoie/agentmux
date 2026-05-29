@@ -27,7 +27,7 @@ func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Acc
 	// formattedTitle.
 	beforeIDs := allTabIDs(osWindows)
 
-	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, acc.Name, formattedTitle)
+	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
 	if err != nil {
 		loc = ""
 		prevTabID = 0
@@ -106,7 +106,7 @@ func OpenInEditor(client kitty.KittyClient, sess config.Session, acc config.Acco
 	}
 	beforeIDs := allTabIDs(osWindows)
 
-	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, acc.Name, formattedTitle)
+	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
 	if err != nil {
 		loc = ""
 		prevTabID = 0

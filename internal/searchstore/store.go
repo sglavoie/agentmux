@@ -85,7 +85,7 @@ func (s *Store) Read(key string) (string, error) {
 // Exists reports whether the regular sidecar file for key exists. A missing
 // file is not an error — it returns (false, nil).
 func (s *Store) Exists(key string) (bool, error) {
-	info, err := os.Stat(s.Path(key))
+	info, err := os.Lstat(s.Path(key))
 	if err == nil {
 		return info.Mode().IsRegular(), nil
 	}

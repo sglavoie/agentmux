@@ -194,6 +194,16 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 	}
 }
 
+func TestDaemonExportEventsCommandRejectsPositionalArgs(t *testing.T) {
+	err := daemonExportEventsCmd.Args(daemonExportEventsCmd, []string{"events.json"})
+	if err == nil {
+		t.Fatal("Args error = nil; want positional argument error")
+	}
+	if got := err.Error(); !strings.Contains(got, `unknown command "events.json" for "amx daemon export-events"`) {
+		t.Fatalf("Args error = %q; want unknown positional argument error", got)
+	}
+}
+
 func TestDaemonExportEventsCommand_CurrentWindowRejectsExplicitWindow(t *testing.T) {
 	resetDaemonExportTestState(t)
 	t.Setenv("KITTY_WINDOW_ID", "77")

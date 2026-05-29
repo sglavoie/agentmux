@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 type copilotHooksFile struct {
@@ -90,6 +91,7 @@ func (copilotHookContract) ParseInstalledEvents(path string) ([]string, error) {
 			}
 		}
 	}
+	sort.Strings(events)
 	return events, nil
 }
 

@@ -116,6 +116,36 @@ func TestSearch_TextFiltersAndCountsMatches(t *testing.T) {
 	}
 }
 
+func TestSearch_TextPreviewMapsFoldedUnicodeOffset(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
+		ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
+		LastAt: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+	}))
+
+	readers := map[string]Reader{
+		harness.Claude: &dispatchReader{
+			harness: harness.Claude,
+			byPath: map[string][]Message{
+				"/tmp/hit.jsonl": {
+					{Role: "user", Text: "ẞ\nNeedle is on the second line"},
+				},
+			},
+		},
+	}
+
+	results, err := Search(idx, readers, Query{Text: "needle"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len=%d, want 1", len(results))
+	}
+	if results[0].Preview != "Needle is on the second line" {
+		t.Fatalf("Preview=%q, want second line", results[0].Preview)
+	}
+}
+
 func TestSearch_NoReaderMeansSessionDropped(t *testing.T) {
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:a", SessionMeta{

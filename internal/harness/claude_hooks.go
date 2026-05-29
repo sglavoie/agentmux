@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -143,6 +144,7 @@ func (claudeHookContract) ParseInstalledEvents(path string) ([]string, error) {
 			}
 		}
 	}
+	sort.Strings(events)
 	return events, nil
 }
 

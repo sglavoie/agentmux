@@ -263,6 +263,7 @@ metadata without paired map lookups.`,
   amx daemon export-events --current-window --last 25
   amx daemon export-events --window 42
   amx daemon export-events --pretty=false --output events.json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if daemonExportEventsLast < 0 {
 			return fmt.Errorf("--last must be >= 0")

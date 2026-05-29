@@ -192,6 +192,9 @@ func validateHarnessColors(cfg *Config) []string {
 	used := map[string][]string{}
 	for _, p := range cfg.Profiles {
 		h := p.EffectiveHarness()
+		if !harness.Valid(h) {
+			continue
+		}
 		used[h] = append(used[h], p.Name)
 	}
 	harnessKeys := make([]string, 0, len(used))

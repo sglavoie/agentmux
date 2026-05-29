@@ -129,9 +129,6 @@ func checkStatus(account config.Account, override config.AccountHookOverride, am
 	if err != nil {
 		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path}, err
 	}
-	if len(installed) == 0 {
-		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncMissing}, nil
-	}
 
 	newData, err := contract.MergeData(existingData, override.DisabledEvents, amxBin)
 	if err != nil {
@@ -139,6 +136,9 @@ func checkStatus(account config.Account, override config.AccountHookOverride, am
 	}
 	if bytes.Equal(existingData, newData) {
 		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncInSync}, nil
+	}
+	if len(installed) == 0 {
+		return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncMissing}, nil
 	}
 	return AccountStatus{Account: account.Name, Harness: harnessName, Path: path, Status: SyncDrifted}, nil
 }
