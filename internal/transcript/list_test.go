@@ -47,3 +47,36 @@ func TestList_FiltersAndSort(t *testing.T) {
 		t.Errorf("Profile filter returned %+v", byProfile)
 	}
 }
+
+func TestList_SortTieBreakersAreDeterministic(t *testing.T) {
+	idx := newTestIndex(t)
+	lastAt := time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)
+
+	must(t, idx.SetEntryForTest("codex:b", SessionMeta{
+		ID: "b", Harness: harness.Codex,
+		StartedAt: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+		LastAt:    lastAt,
+	}))
+	must(t, idx.SetEntryForTest("claude:c", SessionMeta{
+		ID: "c", Harness: harness.Claude,
+		StartedAt: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+		LastAt:    lastAt,
+	}))
+	must(t, idx.SetEntryForTest("claude:a", SessionMeta{
+		ID: "a", Harness: harness.Claude,
+		StartedAt: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+		LastAt:    lastAt,
+	}))
+
+	got := idx.List(ListFilter{})
+	want := []string{"claude:c", "claude:a", "codex:b"}
+	if len(got) != len(want) {
+		t.Fatalf("List len = %d, want %d: %+v", len(got), len(want), got)
+	}
+	for n, meta := range got {
+		key := IndexKey(meta.Harness, meta.ID)
+		if key != want[n] {
+			t.Fatalf("List[%d] = %q, want %q; full list=%+v", n, key, want[n], got)
+		}
+	}
+}

@@ -97,3 +97,9 @@ func TestExampleConfigIncludesStopFailureNotificationToggle(t *testing.T) {
 		t.Fatal("defaults.notifications.stop_failure = false, want true")
 	}
 }
+
+func TestExampleConfigDoesNotAdvertiseEmptyProjectArgsAsOverride(t *testing.T) {
+	if strings.Contains(ExampleConfig, "set to [] to pass none") {
+		t.Fatal("ExampleConfig claims project args = [] disables inherited args, but empty args inherit")
+	}
+}

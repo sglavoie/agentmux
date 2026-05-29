@@ -48,6 +48,44 @@ func TestIsAmxHookEntryChecksCommandWindows(t *testing.T) {
 	}
 }
 
+func TestBuildHooksQuoteAmxBinWithSpaces(t *testing.T) {
+	amxBin := "/Users/foo bar/bin/amx"
+
+	claudeCommand := buildClaudeHooks(nil, amxBin)["Stop"][0].Hooks[0].Command
+	if want := "'/Users/foo bar/bin/amx' hook-indicator Stop"; claudeCommand != want {
+		t.Fatalf("buildClaudeHooks command = %q, want %q", claudeCommand, want)
+	}
+	if !isAmxHookEntry(hookEntry{Type: "command", Command: claudeCommand}) {
+		t.Fatalf("generated quoted Claude command was not recognized as Agent Mux-owned: %q", claudeCommand)
+	}
+
+	codexCommand := buildCodexHooks(nil, amxBin)["Stop"][0].Hooks[0].Command
+	if want := "'/Users/foo bar/bin/amx' hook-indicator Stop"; codexCommand != want {
+		t.Fatalf("buildCodexHooks command = %q, want %q", codexCommand, want)
+	}
+	if !isAmxHookEntry(hookEntry{Type: "command", Command: codexCommand}) {
+		t.Fatalf("generated quoted Codex command was not recognized as Agent Mux-owned: %q", codexCommand)
+	}
+
+	copilotDef := buildCopilotHooks(nil, amxBin).Hooks["agentStop"][0]
+	if want := "'/Users/foo bar/bin/amx' hook-indicator agentStop"; copilotDef.Bash != want {
+		t.Fatalf("buildCopilotHooks bash command = %q, want %q", copilotDef.Bash, want)
+	}
+	if want := "'/Users/foo bar/bin/amx' hook-indicator agentStop"; copilotDef.Powershell != want {
+		t.Fatalf("buildCopilotHooks powershell command = %q, want %q", copilotDef.Powershell, want)
+	}
+	if !isAmxCopilotHookDef(copilotDef) {
+		t.Fatalf("generated quoted Copilot command was not recognized as Agent Mux-owned: %+v", copilotDef)
+	}
+}
+
+func TestBuildCopilotHooksEscapesPowershellSingleQuote(t *testing.T) {
+	def := buildCopilotHooks(nil, `C:\Users\O'Brien\bin\amx.exe`).Hooks["agentStop"][0]
+	if want := `'C:\Users\O''Brien\bin\amx.exe' hook-indicator agentStop`; def.Powershell != want {
+		t.Fatalf("buildCopilotHooks powershell command = %q, want %q", def.Powershell, want)
+	}
+}
+
 func TestIsAmxHookEntryRequiresCommandType(t *testing.T) {
 	got := isAmxHookEntry(hookEntry{
 		Type:    "prompt",

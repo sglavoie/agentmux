@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -58,10 +59,18 @@ type Server struct {
 }
 
 // NewServer creates a Server bound to socketPath.
-// The socket file is removed if it already exists (stale socket from a prior crash).
+// A pre-existing stale socket file is removed, but non-socket files are left intact.
 func NewServer(socketPath string, handler *Handler) (*Server, error) {
-	// Remove stale socket.
-	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+	// Remove stale sockets, but do not unlink arbitrary files if the configured
+	// path is wrong.
+	if info, err := os.Lstat(socketPath); err == nil {
+		if info.Mode()&os.ModeSocket == 0 {
+			return nil, fmt.Errorf("socket path exists and is not a socket: %s", socketPath)
+		}
+		if err := os.Remove(socketPath); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 	ln, err := net.Listen("unix", socketPath)

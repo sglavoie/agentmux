@@ -47,7 +47,7 @@ var daemonStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the running daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c := daemon.NewClient()
+		c := newDaemonLifecycleClient()
 		resp, err := c.Send(daemon.Request{Type: daemon.TypeShutdown})
 		if err != nil {
 			return fmt.Errorf("daemon not running: %w", err)
@@ -55,8 +55,8 @@ var daemonStopCmd = &cobra.Command{
 		if !resp.OK {
 			return fmt.Errorf("daemon error: %s", resp.Error)
 		}
-		fmt.Println("daemon stopped")
-		return nil
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), "daemon stopped")
+		return err
 	},
 }
 
@@ -77,7 +77,7 @@ var daemonRestartCmd = &cobra.Command{
 	Use:   "restart",
 	Short: "Restart the daemon detached in the background",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c := daemon.NewClient()
+		c := newDaemonLifecycleClient()
 		amxBin, err := os.Executable()
 		if err != nil {
 			amxBin = "amx"
@@ -85,8 +85,8 @@ var daemonRestartCmd = &cobra.Command{
 		if err := c.RestartDetached(amxBin); err != nil {
 			return err
 		}
-		fmt.Println("daemon restarted")
-		return nil
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), "daemon restarted")
+		return err
 	},
 }
 
@@ -98,10 +98,16 @@ var (
 	daemonExportEventsPretty        bool
 	daemonPing                      = daemon.Ping
 	daemonSocketPath                = daemon.SocketPath
+	newDaemonLifecycleClient        = func() daemonLifecycleClient { return daemon.NewClient() }
 	newDaemonExportClient           = func() daemonExportClient { return daemon.NewClient() }
 	newDaemonExportKitty            = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
 	daemonExportNow                 = time.Now
 )
+
+type daemonLifecycleClient interface {
+	Send(daemon.Request) (daemon.Response, error)
+	RestartDetached(amxBin string) error
+}
 
 type daemonExportClient interface {
 	ExportEvents(windowID int) (daemon.EventsExport, error)

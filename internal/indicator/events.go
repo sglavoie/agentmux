@@ -100,14 +100,14 @@ var validActions = map[string]bool{
 // when needed (e.g. typed Notification hooks).
 // Unknown inputs return ("", false).
 func ResolveAction(input string, payload HookPayload) (action string, ok bool) {
-	if validActions[input] {
-		return input, true
-	}
 	if IsIgnoredEvent(input, payload) {
 		return "", false
 	}
 	if action, ok := resolveFailureAction(input, payload); ok {
 		return action, true
+	}
+	if validActions[input] {
+		return input, true
 	}
 	if action, ok := resolveNotificationAction(input, payload); ok {
 		return action, true
@@ -146,7 +146,7 @@ func resolveFailureAction(input string, payload HookPayload) (string, bool) {
 		if reason == "error" || reason == "timeout" {
 			return "stop_failure", true
 		}
-	case "Stop", "agentStop", "SubagentStop", "subagentStop":
+	case "Stop", "agentStop", "SubagentStop", "subagentStop", "stop":
 		// Normalize the harness-reported stop reason: trailing whitespace
 		// or unusual casing on a benign "end_turn" must not be promoted to
 		// stop_failure (which would surface the error icon on every clean
@@ -171,6 +171,7 @@ func isContextLimitCarrier(input string) bool {
 		"Stop", "agentStop",
 		"SubagentStop", "subagentStop",
 		"SessionEnd", "sessionEnd",
+		"stop",
 		"StopFailure",
 		"PostToolUseFailure", "postToolUseFailure",
 		"ErrorOccurred", "errorOccurred":

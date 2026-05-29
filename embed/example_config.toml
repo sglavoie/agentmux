@@ -203,7 +203,7 @@ codex   = "purple"
 #
 # Optional fields:
 #   args       Flags passed to this session only. Override profile args.
-#              Omit to inherit the profile's args; set to [] to pass none.
+#              Omit or leave empty to inherit the profile's args.
 #   env        Key/value pairs injected into the session's environment.
 #   groups     Arbitrary labels for filtering in the dashboard and launcher.
 

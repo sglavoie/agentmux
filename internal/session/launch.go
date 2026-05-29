@@ -77,7 +77,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	if err != nil {
 		return fmt.Errorf("listing running sessions: %w", err)
 	}
-	running, _ := runningSessionsFromOSWindows(osWindows, nil)
+	running, _ := runningSessionsFromOSWindows(osWindows, cfg)
 	launchDebug.Printf("Launch: %d running sessions", len(running))
 	for _, r := range running {
 		launchDebug.Printf("  running: base=%q account=%q tabID=%d", r.Base, r.Account, r.TabID)

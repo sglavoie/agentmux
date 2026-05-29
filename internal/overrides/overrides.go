@@ -2,6 +2,7 @@ package overrides
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 )
@@ -47,10 +48,14 @@ func Load() (File, error) {
 	if err != nil {
 		return File{}, err
 	}
-	var f File
-	if err := json.Unmarshal(data, &f); err != nil {
+	var fp *File
+	if err := json.Unmarshal(data, &fp); err != nil {
 		return File{}, err
 	}
+	if fp == nil {
+		return File{}, errors.New("overrides file must contain a JSON object")
+	}
+	f := *fp
 	if f.Version == 0 {
 		f.Version = 1
 	}

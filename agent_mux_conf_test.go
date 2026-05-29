@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"os"
 	"strings"
 	"testing"
@@ -17,8 +18,8 @@ func TestAgentMuxConf_DisablesBellMarkersAndAudioBell(t *testing.T) {
 		"enable_tab_bar_bell_markers no",
 		"enable_audio_bell no",
 	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("agent-mux.conf missing %q", want)
+		if !hasActiveConfigLine(text, want) {
+			t.Fatalf("agent-mux.conf missing active line %q", want)
 		}
 	}
 }
@@ -34,12 +35,26 @@ func TestReadmeDocumentsFocusNextBinding(t *testing.T) {
 	}
 
 	const binding = "map f4 launch --type=background --allow-remote-control amx focus-next --window-id @active-kitty-window-id"
-	if !strings.Contains(string(conf), binding) {
-		t.Fatalf("agent-mux.conf missing focus-next binding %q", binding)
+	if !hasActiveConfigLine(string(conf), binding) {
+		t.Fatalf("agent-mux.conf missing active focus-next binding %q", binding)
 	}
 
 	const documented = "`F4` for the next attention tab"
 	if !strings.Contains(string(readme), documented) {
 		t.Fatalf("README.md missing documented focus-next binding %q", documented)
 	}
+}
+
+func hasActiveConfigLine(text, want string) bool {
+	scanner := bufio.NewScanner(strings.NewReader(text))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if line == want {
+			return true
+		}
+	}
+	return false
 }

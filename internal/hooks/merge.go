@@ -139,25 +139,29 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 }
 
 func resolveHookWritePath(path string) (string, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return path, nil
+	current := path
+	for range 255 {
+		info, err := os.Lstat(current)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return current, nil
+			}
+			return "", fmt.Errorf("checking %s: %w", current, err)
 		}
-		return "", fmt.Errorf("checking %s: %w", path, err)
-	}
-	if info.Mode()&os.ModeSymlink == 0 {
-		return path, nil
-	}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return current, nil
+		}
 
-	target, err := os.Readlink(path)
-	if err != nil {
-		return "", fmt.Errorf("reading symlink %s: %w", path, err)
+		target, err := os.Readlink(current)
+		if err != nil {
+			return "", fmt.Errorf("reading symlink %s: %w", current, err)
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(current), target)
+		}
+		current = filepath.Clean(target)
 	}
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(path), target)
-	}
-	return filepath.Clean(target), nil
+	return "", fmt.Errorf("resolving symlink chain for %s: too many links", path)
 }
 
 func processUmask() os.FileMode {

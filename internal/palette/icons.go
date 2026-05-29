@@ -139,7 +139,10 @@ func consumeStateIcon(title string) (state, rest string, ok bool) {
 		}
 		fallback := strings.ReplaceAll(icon, "\ufe0f", "")
 		if fallback != icon && fallback != "" && strings.HasPrefix(title, fallback) {
-			return name, title[len(fallback):], true
+			rest := title[len(fallback):]
+			rest = strings.TrimPrefix(rest, "\ufe0f")
+			rest = strings.TrimPrefix(rest, "\ufe0e")
+			return name, rest, true
 		}
 	}
 	return "", title, false

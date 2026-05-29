@@ -112,6 +112,45 @@ func TestLaunch_DedupUsesEffectiveProfile(t *testing.T) {
 	}
 }
 
+// TestLaunch_DedupSeesConfigMatchedGhostTabs verifies that Launch does not
+// duplicate a configured project whose anchor window lost its user vars. The
+// config-backed title fallback already treats that tab as running for
+// ListWithConfig/ReanchorAll; launch dedup must use the same view.
+func TestLaunch_DedupSeesConfigMatchedGhostTabs(t *testing.T) {
+	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
+		`{"id":10,"is_active":true,"title":"api","windows":[` +
+		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{}}` +
+		`]}]}]`)
+	runner := kitty.NewMockRunner(map[string][]byte{
+		"kitten @ ls": fixture,
+	})
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Account: "work", Directory: "/tmp/api"},
+		},
+	}
+
+	sess := config.Session{Title: "api", Account: "work", Directory: "/tmp/api"}
+	acc := cfg.Accounts[0]
+
+	if err := session.Launch(client, sess, acc, cfg); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	for _, c := range runner.Calls {
+		for _, a := range c.Args {
+			if a == "launch" {
+				t.Errorf("expected ghost-tab dedup hit; got kitten @ launch call: %v", c.Args)
+			}
+		}
+	}
+}
+
 // TestLaunch_ColorRetryApplied verifies that SetTabColor is called when the
 // new tab appears in a post-launch ls response.
 func TestLaunch_ColorRetryApplied(t *testing.T) {

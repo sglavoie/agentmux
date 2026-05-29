@@ -345,7 +345,16 @@ func (i *Index) List(filter ListFilter) []SessionMeta {
 		out = append(out, meta)
 	}
 	sort.Slice(out, func(a, b int) bool {
-		return out[a].LastAt.After(out[b].LastAt)
+		if !out[a].LastAt.Equal(out[b].LastAt) {
+			return out[a].LastAt.After(out[b].LastAt)
+		}
+		if !out[a].StartedAt.Equal(out[b].StartedAt) {
+			return out[a].StartedAt.After(out[b].StartedAt)
+		}
+		if out[a].Harness != out[b].Harness {
+			return out[a].Harness < out[b].Harness
+		}
+		return out[a].ID < out[b].ID
 	})
 	return out
 }

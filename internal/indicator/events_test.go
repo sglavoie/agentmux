@@ -122,6 +122,33 @@ func TestResolveAction_AgentStopNonEndTurnShowsStopFailure(t *testing.T) {
 	}
 }
 
+func TestResolveAction_DirectStopContextLimitShowsStopFailure(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload HookPayload
+	}{
+		{
+			name:    "stop reason marker",
+			payload: HookPayload{StopReason: " context_limit_reached "},
+		},
+		{
+			name: "payload text marker",
+			payload: HookPayload{
+				Title:   "Context limit reached",
+				Message: "/compact or /clear to continue",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveAction("stop", tc.payload)
+			if !ok || got != "stop_failure" {
+				t.Fatalf("ResolveAction(stop, %+v) = (%q, %v), want (stop_failure, true)", tc.payload, got, ok)
+			}
+		})
+	}
+}
+
 // TestResolveAction_NormalizesStopReasonAndReason locks in the contract that
 // the failure-promotion checks tolerate the casing and whitespace harnesses
 // occasionally include in JSON lifecycle fields. Without normalization, a
@@ -184,6 +211,7 @@ func TestResolveAction_ContextLimitOnlyPromotesForFailureCarriers(t *testing.T) 
 		{name: "notification still promotes", event: "notification", wantOK: true, wantValue: "stop_failure"},
 		{name: "Stop still promotes", event: "Stop", wantOK: true, wantValue: "stop_failure"},
 		{name: "SessionEnd still promotes", event: "SessionEnd", wantOK: true, wantValue: "stop_failure"},
+		{name: "direct stop still promotes", event: "stop", wantOK: true, wantValue: "stop_failure"},
 		{name: "Setup keeps active", event: "Setup", wantOK: true, wantValue: "active"},
 		{name: "PreToolUse keeps active", event: "PreToolUse", wantOK: true, wantValue: "active"},
 		{name: "ConfigChange keeps clear", event: "ConfigChange", wantOK: true, wantValue: "clear"},
@@ -205,6 +233,7 @@ func TestIsContextLimitCarrier(t *testing.T) {
 		"Stop", "agentStop",
 		"SubagentStop", "subagentStop",
 		"SessionEnd", "sessionEnd",
+		"stop",
 		"StopFailure",
 		"PostToolUseFailure", "postToolUseFailure",
 		"ErrorOccurred", "errorOccurred",

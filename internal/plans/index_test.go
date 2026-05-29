@@ -143,6 +143,38 @@ func TestRefresh_PopulatesEntriesAndSkipsSources(t *testing.T) {
 	}
 }
 
+func TestRefresh_DropsPreviouslyIndexedSkippedDirectories(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"sources", ".hidden"} {
+		planDir := seedPlanDir(t, root, name, map[string]string{
+			"manifest.md": "# should not remain indexed",
+		})
+		key := PlanKey(planDir)
+
+		idx := newTestIndex(t)
+		idx.entries[key] = PlanMeta{
+			Name:    name,
+			DirPath: planDir,
+			Files:   []string{"manifest.md"},
+			Snippet: "# should not remain indexed",
+		}
+		if err := idx.store.Write(key, "should not remain indexed"); err != nil {
+			t.Fatalf("seed sidecar for %s: %v", name, err)
+		}
+		sidecar := idx.store.Path(key)
+
+		if err := idx.Refresh(root); err != nil {
+			t.Fatalf("Refresh with %s: %v", name, err)
+		}
+		if _, ok := idx.Get(key); ok {
+			t.Errorf("%s entry should be dropped", name)
+		}
+		if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
+			t.Errorf("%s sidecar should be deleted; stat err = %v", name, err)
+		}
+	}
+}
+
 func TestRefresh_RelativeRootStoresAbsolutePaths(t *testing.T) {
 	base := t.TempDir()
 	rootName := "plans-root"

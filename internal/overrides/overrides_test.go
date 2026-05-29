@@ -42,6 +42,18 @@ func TestLoadNullEntriesNormalizesToEmptySlice(t *testing.T) {
 	}
 }
 
+func TestLoadTopLevelNullReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "overrides.json")
+	t.Setenv(overrides.PathEnvVar, path)
+	if err := os.WriteFile(path, []byte(`null`), 0o644); err != nil {
+		t.Fatalf("seed overrides file: %v", err)
+	}
+
+	if _, err := overrides.Load(); err == nil {
+		t.Fatal("expected error for top-level null overrides file")
+	}
+}
+
 func TestLoadMissingVersionDefaultsToCurrentVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "overrides.json")
 	t.Setenv(overrides.PathEnvVar, path)

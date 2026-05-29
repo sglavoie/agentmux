@@ -41,6 +41,36 @@ func (f fakeKittyWindowLister) ListWindows() ([]kitty.OSWindow, error) {
 	return f.windows, nil
 }
 
+type fakeDaemonLifecycleClient struct {
+	sendResp     daemon.Response
+	sendErr      error
+	sendCalls    []daemon.Request
+	restartErr   error
+	restartCalls []string
+}
+
+func (f *fakeDaemonLifecycleClient) Send(req daemon.Request) (daemon.Response, error) {
+	f.sendCalls = append(f.sendCalls, req)
+	return f.sendResp, f.sendErr
+}
+
+func (f *fakeDaemonLifecycleClient) RestartDetached(amxBin string) error {
+	f.restartCalls = append(f.restartCalls, amxBin)
+	return f.restartErr
+}
+
+func resetDaemonLifecycleTestState(t *testing.T) {
+	t.Helper()
+	oldClient := newDaemonLifecycleClient
+	oldStopOut := daemonStopCmd.OutOrStdout()
+	oldRestartOut := daemonRestartCmd.OutOrStdout()
+	t.Cleanup(func() {
+		newDaemonLifecycleClient = oldClient
+		daemonStopCmd.SetOut(oldStopOut)
+		daemonRestartCmd.SetOut(oldRestartOut)
+	})
+}
+
 func resetDaemonExportTestState(t *testing.T) {
 	t.Helper()
 	oldClient := newDaemonExportClient
@@ -64,6 +94,46 @@ func resetDaemonExportTestState(t *testing.T) {
 		daemonExportEventsPretty = oldPretty
 		daemonExportEventsCmd.SetOut(oldOut)
 	})
+}
+
+func TestDaemonStopCommandWritesToCommandOutput(t *testing.T) {
+	resetDaemonLifecycleTestState(t)
+	client := &fakeDaemonLifecycleClient{
+		sendResp: daemon.Response{OK: true},
+	}
+	newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
+
+	var out bytes.Buffer
+	daemonStopCmd.SetOut(&out)
+
+	if err := daemonStopCmd.RunE(daemonStopCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if got, want := out.String(), "daemon stopped\n"; got != want {
+		t.Fatalf("output = %q; want %q", got, want)
+	}
+	if len(client.sendCalls) != 1 || client.sendCalls[0].Type != daemon.TypeShutdown {
+		t.Fatalf("Send calls = %+v; want one shutdown request", client.sendCalls)
+	}
+}
+
+func TestDaemonRestartCommandWritesToCommandOutput(t *testing.T) {
+	resetDaemonLifecycleTestState(t)
+	client := &fakeDaemonLifecycleClient{}
+	newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
+
+	var out bytes.Buffer
+	daemonRestartCmd.SetOut(&out)
+
+	if err := daemonRestartCmd.RunE(daemonRestartCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if got, want := out.String(), "daemon restarted\n"; got != want {
+		t.Fatalf("output = %q; want %q", got, want)
+	}
+	if len(client.restartCalls) != 1 || client.restartCalls[0] == "" {
+		t.Fatalf("RestartDetached calls = %+v; want one non-empty binary path", client.restartCalls)
+	}
 }
 
 func findExportWindow(t *testing.T, payload daemon.ExportEventsPayload, id int) daemon.ExportWindow {

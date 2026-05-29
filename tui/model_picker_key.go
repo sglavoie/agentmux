@@ -75,10 +75,14 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.mode = ModeList
 		m.pickerProfileOverride = nil
+		var cmds []tea.Cmd
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
-			return m, cmd
+			cmds = append(cmds, cmd)
 		}
-		return m, nil
+		if cmd := m.resumeListPreviewTickCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
 	case keyCtrlC, keyQ:
 		return m, tea.Quit
 	case keyJ, keyDown:
@@ -197,7 +201,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModeList
 		m.pickerSelected = nil
 		m.pickerProfileOverride = nil
-		return m, cmd
+		return m, tea.Batch(cmd, m.resumeListPreviewTickCmd())
 	case keyBackspace:
 		if r := []rune(m.pickerFilter); len(r) > 0 {
 			m.pickerFilter = string(r[:len(r)-1])

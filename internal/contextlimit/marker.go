@@ -6,7 +6,7 @@ package contextlimit
 import "strings"
 
 func HasMarker(text string) bool {
-	normalized := strings.ToLower(strings.Join(strings.Fields(text), " "))
+	normalized := strings.ToLower(strings.Join(strings.Fields(stripTerminalEscapes(text)), " "))
 	if normalized == "" {
 		return false
 	}
@@ -62,4 +62,48 @@ func lastLines(lines []string, n int) []string {
 		return lines
 	}
 	return lines[len(lines)-n:]
+}
+
+func stripTerminalEscapes(text string) string {
+	var b strings.Builder
+	b.Grow(len(text))
+
+	for i := 0; i < len(text); i++ {
+		if text[i] != 0x1b {
+			b.WriteByte(text[i])
+			continue
+		}
+		i++
+		if i >= len(text) {
+			break
+		}
+
+		switch text[i] {
+		case '[':
+			for i+1 < len(text) {
+				i++
+				if text[i] >= 0x40 && text[i] <= 0x7e {
+					break
+				}
+			}
+		case ']':
+			for i+1 < len(text) {
+				i++
+				if text[i] == 0x07 {
+					break
+				}
+				if text[i] == 0x1b && i+1 < len(text) && text[i+1] == '\\' {
+					i++
+					break
+				}
+			}
+		default:
+			if text[i] >= 0x40 && text[i] <= 0x5f {
+				continue
+			}
+			b.WriteByte(text[i])
+		}
+	}
+
+	return b.String()
 }

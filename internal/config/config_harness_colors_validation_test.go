@@ -85,6 +85,37 @@ color = "blue"
 	}
 }
 
+// TestValidate_HarnessColorsDuplicateNormalizedKeysRejected pins that two
+// spellings of the same harness key do not collapse silently during load.
+func TestValidate_HarnessColorsDuplicateNormalizedKeysRejected(t *testing.T) {
+	path := writeTempConfig(t, `
+[harness_colors]
+Claude = "blue"
+claude = "red"
+
+[[profiles]]
+name = "work"
+harness = "claude"
+home_dir = "/tmp/h"
+color = "blue"
+`)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	err = config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for duplicate normalized harness color keys, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "duplicate keys normalize to the same harness") {
+		t.Errorf("expected duplicate-key error, got %q", msg)
+	}
+	if !strings.Contains(msg, "Claude") || !strings.Contains(msg, "claude") {
+		t.Errorf("expected error to include both raw keys, got %q", msg)
+	}
+}
+
 // TestValidate_HarnessColorsInvalidColorRejected pins that a [harness_colors]
 // value that is not in the palette is rejected with a per-harness location and
 // the palette list appended.

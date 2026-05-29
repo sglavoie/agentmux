@@ -151,6 +151,7 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 	for _, e := range disabledEvents {
 		disabled[e] = true
 	}
+	amxCommand := shellQuoteArg(amxBin)
 	hooks := make(map[string][]hookGroup)
 	for _, event := range claudeHookEvents {
 		if disabled[event] {
@@ -159,7 +160,7 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 		hooks[event] = []hookGroup{
 			{Hooks: []hookEntry{{
 				Type:    "command",
-				Command: amxBin + " hook-indicator " + event,
+				Command: amxCommand + " hook-indicator " + event,
 				Async:   boolPtr(true),
 			}}},
 		}
@@ -168,6 +169,26 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 }
 
 func boolPtr(v bool) *bool { return &v }
+
+func shellQuoteArg(arg string) string {
+	if arg == "" {
+		return "''"
+	}
+	if !strings.ContainsAny(arg, " \t\n'\"\\$`!#&;()<>|*?[]{}") {
+		return arg
+	}
+	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+}
+
+func powershellQuoteArg(arg string) string {
+	if arg == "" {
+		return "''"
+	}
+	if !strings.ContainsAny(arg, " \t\n'\"`$&;()<>|*?[]{}") {
+		return arg
+	}
+	return "'" + strings.ReplaceAll(arg, "'", "''") + "'"
+}
 
 func stripAmxGroups(hooks map[string][]hookGroup) map[string][]hookGroup {
 	out := make(map[string][]hookGroup, len(hooks))

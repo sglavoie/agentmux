@@ -25,6 +25,8 @@ type Config struct {
 	// the distinction between deprecated and canonical fields. Surfaced by
 	// the TUI as a one-line banner pointing the user at the migration.
 	Deprecations []Deprecation `toml:"-"`
+
+	harnessColorKeyConflicts []string
 }
 
 // Deprecation captures a single legacy TOML key that the user's config

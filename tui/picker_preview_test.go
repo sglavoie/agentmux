@@ -184,3 +184,41 @@ func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 		t.Error("expected non-nil fetch cmd after picker cursor moved to a different window")
 	}
 }
+
+func TestPickerExitRestartsListPreviewTicker(t *testing.T) {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
+		Sessions: []config.Session{
+			{Title: "api", Account: "work"},
+		},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 1, WindowID: 11, Base: "api", Account: "work"},
+	})
+	m.width, m.height = 120, 40
+	m.previewEnabled = true
+	m.previewWindowID = 11
+	m.mode = ModePicker
+	m.pickerPreviewEnabled = false
+	m.pickerFilteredIdx = []int{0}
+
+	updated, deadTick := m.Update(previewTickMsg{})
+	m = updated.(Model)
+	if deadTick != nil {
+		t.Fatal("setup expected picker without picker preview to consume the list preview tick")
+	}
+
+	updated, cmd := m.Update(keyPress("esc"))
+	m = updated.(Model)
+	if m.mode != ModeList {
+		t.Fatalf("expected esc to return to ModeList, got %d", m.mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected exiting picker to reschedule the list preview ticker")
+	}
+}

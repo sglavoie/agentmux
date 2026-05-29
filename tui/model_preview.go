@@ -316,6 +316,14 @@ func (m *Model) refreshPreviewForCursor() tea.Cmd {
 	return fetchPreviewCmd(m.client, winID)
 }
 
+func (m Model) resumeListPreviewTickCmd() tea.Cmd {
+	if !m.previewEnabled {
+		return nil
+	}
+	d := time.Duration(m.cfg.Defaults.Preview.RefreshMs) * time.Millisecond
+	return previewTickCmd(d)
+}
+
 // togglePickerPreview flips the picker's own preview pane on/off, independent
 // of m.previewEnabled (the list's preview flag).
 func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {

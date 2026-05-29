@@ -82,6 +82,19 @@ func TestParseWarningGlyphWithoutVariationSelector(t *testing.T) {
 	}
 }
 
+func TestParseWarningGlyphWithTextVariationSelector(t *testing.T) {
+	base, state, starred := ParseTitle("⚠︎base")
+	if base != "base" || state != "warning" || starred {
+		t.Errorf("ParseTitle(⚠︎base) = (%q, %q, %v), want (base, warning, false)", base, state, starred)
+	}
+	if got := StripIcons("⚠︎base"); got != "base" {
+		t.Errorf("StripIcons(⚠︎base) = %q, want base", got)
+	}
+	if got := DetectState("⚠︎base"); got != "warning" {
+		t.Errorf("DetectState(⚠︎base) = %q, want warning", got)
+	}
+}
+
 func TestParseTitleErrorGlyph(t *testing.T) {
 	// Regression: terminal failures keep the ❗ error glyph after warning was
 	// split back out into its own ⚠️ state.

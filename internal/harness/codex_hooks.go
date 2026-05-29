@@ -134,6 +134,7 @@ func buildCodexHooks(disabledEvents []string, amxBin string) map[string][]hookGr
 		disabled[e] = true
 	}
 
+	amxCommand := shellQuoteArg(amxBin)
 	hooks := make(map[string][]hookGroup)
 	for _, event := range codexHookEvents {
 		if disabled[event] {
@@ -142,7 +143,7 @@ func buildCodexHooks(disabledEvents []string, amxBin string) map[string][]hookGr
 		hooks[event] = []hookGroup{
 			{Hooks: []hookEntry{{
 				Type:    "command",
-				Command: amxBin + " hook-indicator " + event,
+				Command: amxCommand + " hook-indicator " + event,
 				Timeout: 5,
 			}}},
 		}

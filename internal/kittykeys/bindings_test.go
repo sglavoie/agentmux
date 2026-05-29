@@ -52,13 +52,13 @@ func TestBackgroundBindingsPassActiveWindowID(t *testing.T) {
 	}
 }
 
-func TestScrollbackMarkerBindingDescribesFailureMarkers(t *testing.T) {
+func TestScrollbackMarkerBindingDescribesConfiguredMarkers(t *testing.T) {
 	markers := findAction(t, "f3")
 
 	if markers.Section != "Scrollback" {
 		t.Fatalf("f3 Section = %q, want Scrollback", markers.Section)
 	}
-	if markers.Description != "toggle error/failure/warning markers" {
+	if markers.Description != "toggle error/failure/warning/deprecated markers" {
 		t.Fatalf("f3 Description = %q", markers.Description)
 	}
 	if markers.AmxCommand != "" {

@@ -20,7 +20,7 @@ var Actions = []Action{
 	{Key: "f10", Section: "Sessions", Description: "toggle mute on the focused tab (suppresses notifications)", AmxCommand: "mute-toggle --window-id @active-kitty-window-id", LaunchType: "background"},
 	{Key: "f4", Section: "Sessions", Description: "focus next tab needing attention", AmxCommand: "focus-next --window-id @active-kitty-window-id", LaunchType: "background"},
 	// Scrollback / terminal
-	{Key: "f3", Section: "Scrollback", Description: "toggle error/failure/warning markers"},
+	{Key: "f3", Section: "Scrollback", Description: "toggle error/failure/warning/deprecated markers"},
 	{Key: "f12", Section: "Scrollback", Description: "broadcast input to all windows in tab"},
 	// Tab navigation
 	{Key: "f7", Section: "Navigation", Description: "focus previous managed tab", AmxCommand: "focus-prev-managed --window-id @active-kitty-window-id", LaunchType: "background"},

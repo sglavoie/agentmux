@@ -19,6 +19,16 @@ func TestHasMarker(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "ansi-styled message",
+			text: "\x1b[31mContext limit reached\x1b[0m · \x1b[1m/compact or /clear\x1b[0m to continue",
+			want: true,
+		},
+		{
+			name: "osc-wrapped command hint",
+			text: "Context limit reached · \x1b]8;;https://example.invalid\x1b\\/compact or /clear\x1b]8;;\x1b\\ to continue",
+			want: true,
+		},
+		{
 			name: "missing recovery hint",
 			text: "Context limit reached",
 			want: false,
@@ -50,6 +60,11 @@ func TestScreenShowsMarker(t *testing.T) {
 		{
 			name: "warning wrapped across narrow screen tail",
 			text: "earlier line\n\nContext limit reached\n/compact or /clear\nto continue\n\n✻ Cooked for 17m 6s\n",
+			want: true,
+		},
+		{
+			name: "warning wrapped with ansi styling",
+			text: "earlier line\n\n\x1b[31mContext limit reached\x1b[0m\n\x1b[1m/compact or /clear\x1b[0m\nto continue\n\n✻ Cooked for 17m 6s\n",
 			want: true,
 		},
 		{

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	ccembed "github.com/sglavoie/agentmux/embed"
@@ -35,6 +36,7 @@ func parseConfig(data []byte) (*Config, error) {
 		return nil, err
 	}
 	cfg.Deprecations = collectDeprecations(&cfg, md)
+	cfg.harnessColorKeyConflicts = detectHarnessColorKeyConflicts(cfg.HarnessColors)
 	applyDefaults(&cfg)
 	return &cfg, nil
 }
@@ -233,6 +235,9 @@ func normalizeAliases(cfg *Config) {
 		cfg.Defaults.Args = cloneStrings(cfg.Defaults.ClaudeFlags)
 	}
 
+	if len(cfg.harnessColorKeyConflicts) == 0 {
+		cfg.harnessColorKeyConflicts = detectHarnessColorKeyConflicts(cfg.HarnessColors)
+	}
 	cfg.HarnessColors = normalizeHarnessColors(cfg.HarnessColors)
 
 	profiles := cfg.Profiles
@@ -316,6 +321,33 @@ func normalizeHarnessColors(in map[string]string) map[string]string {
 		out[harness.Normalize(k)] = in[k]
 	}
 	return out
+}
+
+func detectHarnessColorKeyConflicts(in map[string]string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	byNormalized := make(map[string][]string, len(in))
+	for k := range in {
+		normalized := harness.Normalize(k)
+		byNormalized[normalized] = append(byNormalized[normalized], k)
+	}
+	normalizedKeys := make([]string, 0, len(byNormalized))
+	for k := range byNormalized {
+		normalizedKeys = append(normalizedKeys, k)
+	}
+	sort.Strings(normalizedKeys)
+
+	var conflicts []string
+	for _, normalized := range normalizedKeys {
+		rawKeys := byNormalized[normalized]
+		if len(rawKeys) < 2 {
+			continue
+		}
+		sort.Strings(rawKeys)
+		conflicts = append(conflicts, normalized+": "+strings.Join(rawKeys, ", "))
+	}
+	return conflicts
 }
 
 func cloneSessions(in []Session) []Session {

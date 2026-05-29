@@ -184,6 +184,34 @@ func TestServer_CloseDoesNotUnlinkSocketPath(t *testing.T) {
 	}
 }
 
+func TestNewServer_DoesNotRemoveNonSocketPath(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-srv-nonsocket-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "d.sock")
+
+	const contents = "do not unlink me"
+	if err := os.WriteFile(socketPath, []byte(contents), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	server, err := NewServer(socketPath, newTestHandler())
+	if err == nil {
+		server.Close()
+		t.Fatal("NewServer succeeded for a regular file at the socket path")
+	}
+
+	got, readErr := os.ReadFile(socketPath)
+	if readErr != nil {
+		t.Fatalf("ReadFile: %v", readErr)
+	}
+	if string(got) != contents {
+		t.Fatalf("socket path contents = %q; want %q", got, contents)
+	}
+}
+
 // TestServer_ServeDoesNotLeakWatchdogOnCloseWithoutCancel verifies that the
 // listener-closer goroutine started inside Serve exits when Serve returns,
 // even if the caller shuts the server down via Close without ever cancelling

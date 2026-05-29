@@ -162,6 +162,12 @@ func validateAccounts(accounts []Account) []string {
 
 func validateHarnessColors(cfg *Config) []string {
 	var errs []string
+	for _, conflict := range cfg.harnessColorKeyConflicts {
+		errs = append(errs, fmt.Sprintf(
+			"[harness_colors] duplicate keys normalize to the same harness (%s)\n  → keep only one spelling for each harness",
+			conflict,
+		))
+	}
 	keys := make([]string, 0, len(cfg.HarnessColors))
 	for k := range cfg.HarnessColors {
 		keys = append(keys, k)

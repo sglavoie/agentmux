@@ -107,15 +107,16 @@ func buildCopilotHooks(disabledEvents []string, amxBin string) copilotHooksFile 
 		disabled[e] = true
 	}
 	hooks := make(map[string][]copilotHookDef)
+	bashCommand := shellQuoteArg(amxBin)
+	powershellCommand := powershellQuoteArg(amxBin)
 	for _, event := range copilotHookEvents {
 		if disabled[event] {
 			continue
 		}
-		cmd := amxBin + " hook-indicator " + event
 		hooks[event] = []copilotHookDef{{
 			Type:       "command",
-			Bash:       cmd,
-			Powershell: cmd,
+			Bash:       bashCommand + " hook-indicator " + event,
+			Powershell: powershellCommand + " hook-indicator " + event,
 			TimeoutSec: 5,
 		}}
 	}

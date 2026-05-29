@@ -195,6 +195,15 @@ func (i *Index) Refresh(root string) error {
 		}
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") || name == "sources" {
+			planDir := filepath.Join(root, name)
+			key := PlanKey(planDir)
+			if _, ok := i.entries[key]; ok {
+				delete(i.entries, key)
+				if err := i.store.Delete(key); err != nil {
+					slog.Debug("plans.index: skipped-plan sidecar delete failed",
+						"key", key, "err", err)
+				}
+			}
 			continue
 		}
 		planDir := filepath.Join(root, name)
