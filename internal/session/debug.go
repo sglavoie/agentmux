@@ -33,5 +33,9 @@ func newFileLogger(path, prefix string) *log.Logger {
 	if err != nil {
 		return log.New(io.Discard, prefix, 0)
 	}
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		return log.New(io.Discard, prefix, 0)
+	}
 	return log.New(f, prefix, log.LstdFlags)
 }

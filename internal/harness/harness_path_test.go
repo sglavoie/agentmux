@@ -14,6 +14,7 @@ func TestIsAmxHookEntryHandlesPathWithSpaces(t *testing.T) {
 		{"simple basename", "amx hook-indicator Stop", true},
 		{"absolute path", "/usr/local/bin/amx hook-indicator Stop", true},
 		{"path with spaces", "/Users/foo bar/bin/amx hook-indicator Stop", true},
+		{"path containing marker text", "/tmp/agent mux hook-indicator test/bin/amx hook-indicator Stop", true},
 		{"windows exe path", `C:\Users\foo\bin\amx.exe hook-indicator Stop`, true},
 		{"windows exe path with spaces", `C:\Program Files\Agent Mux\amx.exe hook-indicator Stop`, true},
 		{"quoted windows exe path", `"C:\Program Files\Agent Mux\amx.exe" hook-indicator Stop`, true},

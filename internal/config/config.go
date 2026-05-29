@@ -227,11 +227,10 @@ func applyDefaults(cfg *Config) {
 var ExampleConfig = string(ccembed.ExampleConfig)
 
 func normalizeAliases(cfg *Config) {
-	if len(cfg.Defaults.Args) == 0 && len(cfg.Defaults.ClaudeFlags) > 0 {
-		cfg.Defaults.Args = cloneStrings(cfg.Defaults.ClaudeFlags)
-	}
-	if len(cfg.Defaults.ClaudeFlags) == 0 && len(cfg.Defaults.Args) > 0 {
+	if len(cfg.Defaults.Args) > 0 {
 		cfg.Defaults.ClaudeFlags = cloneStrings(cfg.Defaults.Args)
+	} else if len(cfg.Defaults.ClaudeFlags) > 0 {
+		cfg.Defaults.Args = cloneStrings(cfg.Defaults.ClaudeFlags)
 	}
 
 	cfg.HarnessColors = normalizeHarnessColors(cfg.HarnessColors)
@@ -280,11 +279,10 @@ func normalizeProjects(in []Session) []Session {
 		if out[i].Account == "" {
 			out[i].Account = out[i].Profile
 		}
-		if len(out[i].Args) == 0 && len(out[i].ClaudeFlags) > 0 {
-			out[i].Args = cloneStrings(out[i].ClaudeFlags)
-		}
-		if len(out[i].ClaudeFlags) == 0 && len(out[i].Args) > 0 {
+		if len(out[i].Args) > 0 {
 			out[i].ClaudeFlags = cloneStrings(out[i].Args)
+		} else if len(out[i].ClaudeFlags) > 0 {
+			out[i].Args = cloneStrings(out[i].ClaudeFlags)
 		}
 	}
 	return out

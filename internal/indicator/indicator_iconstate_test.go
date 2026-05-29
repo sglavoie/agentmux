@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // TestIndicator_ReturnsNilWhenTabMissingButDaemonSucceeded locks in the
@@ -139,6 +140,30 @@ func TestBuildStateUpdateRequest_CarriesResetFlow(t *testing.T) {
 
 	if !req.ResetFlow {
 		t.Fatalf("buildStateUpdateRequest() reset_flow = false, want true: %+v", req)
+	}
+}
+
+func TestRunWithDeps_TitleMuteIconMarksRequestMuted(t *testing.T) {
+	tabTitle := palette.BuildTitleFull("api", "bolt", false, true)
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: fakeIndicatorWindows(42, tabTitle, "work", "claude"),
+	}
+	daemonClient := &fakeIndicatorDaemonClient{
+		resp: daemon.Response{OK: true, Allowed: true, IconState: daemon.IconStatePreserve},
+	}
+
+	if err := runWithDeps("PreToolUse", 42, "/tmp/amx", HookPayload{}, false, kittyClient, daemonClient); err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(daemonClient.reqs) != 1 {
+		t.Fatalf("daemon requests = %d, want 1", len(daemonClient.reqs))
+	}
+	req := daemonClient.reqs[0]
+	if !req.Muted {
+		t.Fatalf("request muted = false, want true for title %q", tabTitle)
+	}
+	if req.SessionTitle != "api" || req.CurrentIconState != "bolt" {
+		t.Fatalf("request title state = (%q, %q), want (api, bolt)", req.SessionTitle, req.CurrentIconState)
 	}
 }
 

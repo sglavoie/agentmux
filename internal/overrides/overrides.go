@@ -73,6 +73,9 @@ func Save(f File) (retErr error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	if f.Version == 0 {
+		f.Version = 1
+	}
 	if f.Entries == nil {
 		f.Entries = []Entry{}
 	}

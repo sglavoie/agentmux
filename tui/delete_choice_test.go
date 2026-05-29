@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -33,5 +35,17 @@ func TestRenderDeleteChoiceBox(t *testing.T) {
 	}
 	if !strings.Contains(plain, "[f] also delete file") {
 		t.Errorf("expected destructive option text in box output; got %q", plain)
+	}
+}
+
+func TestDeleteChoiceQQuits(t *testing.T) {
+	m := Model{mode: ModeDeleteChoice}
+
+	_, cmd := m.Update(keyPress("q"))
+	if cmd == nil {
+		t.Fatal("q in delete choice returned nil cmd; want tea.Quit")
+	}
+	if msg := cmd(); msg != (tea.QuitMsg{}) {
+		t.Fatalf("q in delete choice produced %T; want tea.QuitMsg", msg)
 	}
 }

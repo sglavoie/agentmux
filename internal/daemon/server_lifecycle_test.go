@@ -164,6 +164,26 @@ func TestServer_HandshakeDeadlineReleasesIdleConn(t *testing.T) {
 	}
 }
 
+func TestServer_CloseDoesNotUnlinkSocketPath(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-srv-unlink-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "d.sock")
+
+	server, err := NewServer(socketPath, newTestHandler())
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	server.Close()
+
+	if _, err := os.Stat(socketPath); err != nil {
+		t.Fatalf("socket path should survive Server.Close for explicit owner removal; stat err = %v", err)
+	}
+}
+
 // TestServer_ServeDoesNotLeakWatchdogOnCloseWithoutCancel verifies that the
 // listener-closer goroutine started inside Serve exits when Serve returns,
 // even if the caller shuts the server down via Close without ever cancelling

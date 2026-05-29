@@ -68,6 +68,7 @@ func NewServer(socketPath string, handler *Handler) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	disableListenerAutoUnlink(ln)
 	// net.Listen applies umask to the socket file (typically yielding 0755),
 	// which lets any local user connect and inject state updates for arbitrary
 	// Kitty windows. Restrict to owner-only so only the daemon's user can talk
@@ -78,6 +79,17 @@ func NewServer(socketPath string, handler *Handler) (*Server, error) {
 		return nil, err
 	}
 	return &Server{handler: handler, ln: ln}, nil
+}
+
+func disableListenerAutoUnlink(ln net.Listener) {
+	if unixLn, ok := ln.(*net.UnixListener); ok {
+		// Run removes the socket path explicitly after Server.Close drains
+		// handlers. Leaving Go's implicit unlink enabled opens a restart race:
+		// the old listener Close can make waitForSocketRemoval return, then the
+		// old process's later explicit os.Remove can unlink the replacement
+		// daemon's freshly bound socket.
+		unixLn.SetUnlinkOnClose(false)
+	}
 }
 
 // Serve accepts connections until ctx is cancelled or the listener is closed.

@@ -1,9 +1,7 @@
 package transcript
 
 import (
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
 )
@@ -38,13 +36,12 @@ func absPath(p string) string {
 	if p == "" {
 		return ""
 	}
-	if strings.HasPrefix(p, "~") {
-		if home, err := os.UserHomeDir(); err == nil {
-			p = filepath.Join(home, strings.TrimPrefix(p, "~"))
-		}
-	}
+	p = config.ExpandTilde(p)
 	if abs, err := filepath.Abs(p); err == nil {
 		p = abs
+	}
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		p = real
 	}
 	return filepath.Clean(p)
 }

@@ -80,8 +80,12 @@ func mergeAccount(account config.Account, override config.AccountHookOverride, a
 
 func mergeViaContract(contract harness.HookContract, homeDir string, account config.Account, override config.AccountHookOverride, amxBin string) (MergeResult, error) {
 	path := contract.InstallPath(homeDir)
+	writePath, err := resolveHookWritePath(path)
+	if err != nil {
+		return MergeResult{}, err
+	}
 
-	existingData, err := os.ReadFile(path)
+	existingData, err := os.ReadFile(writePath)
 	fileExisted := true
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -99,7 +103,7 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 	// and let the umask narrow it.
 	perm := os.FileMode(0o644)
 	if fileExisted {
-		if info, statErr := os.Stat(path); statErr == nil {
+		if info, statErr := os.Stat(writePath); statErr == nil {
 			perm = info.Mode().Perm()
 		}
 	} else {
@@ -116,14 +120,14 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 	}
 
 	if fileExisted {
-		if err := writeBackup(path+".bak", existingData, perm); err != nil {
-			return MergeResult{}, fmt.Errorf("creating backup %s.bak: %w", path, err)
+		if err := writeBackup(writePath+".bak", existingData, perm); err != nil {
+			return MergeResult{}, fmt.Errorf("creating backup %s.bak: %w", writePath, err)
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return MergeResult{}, fmt.Errorf("creating directory %s: %w", filepath.Dir(path), err)
+	if err := os.MkdirAll(filepath.Dir(writePath), 0o755); err != nil {
+		return MergeResult{}, fmt.Errorf("creating directory %s: %w", filepath.Dir(writePath), err)
 	}
-	if err := atomicWriteFile(path, newData, perm); err != nil {
+	if err := atomicWriteFile(writePath, newData, perm); err != nil {
 		return MergeResult{}, fmt.Errorf("writing %s: %w", path, err)
 	}
 
@@ -132,6 +136,28 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 		status = MergeCreated
 	}
 	return MergeResult{Account: account.Name, Path: path, Status: status}, nil
+}
+
+func resolveHookWritePath(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return path, nil
+		}
+		return "", fmt.Errorf("checking %s: %w", path, err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return path, nil
+	}
+
+	target, err := os.Readlink(path)
+	if err != nil {
+		return "", fmt.Errorf("reading symlink %s: %w", path, err)
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(path), target)
+	}
+	return filepath.Clean(target), nil
 }
 
 func processUmask() os.FileMode {

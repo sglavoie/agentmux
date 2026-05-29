@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -28,11 +29,40 @@ func TestResolveProject(t *testing.T) {
 	}
 }
 
+func TestResolveProjectMatchesSymlinkEquivalentPaths(t *testing.T) {
+	root := t.TempDir()
+	realDir := filepath.Join(root, "real")
+	if err := os.Mkdir(realDir, 0o755); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	linkDir := filepath.Join(root, "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	projects := []config.Session{{Title: "API", Directory: linkDir}}
+	if got := ResolveProject(realDir, projects); got != "API" {
+		t.Errorf("symlink-equivalent match = %q, want API", got)
+	}
+}
+
 func TestAbsPathExpandsTilde(t *testing.T) {
 	// Just verify the call does not panic and produces a sensible path —
 	// the exact value depends on the test environment's $HOME.
 	got := absPath("~/transcript-test")
 	if got == "" || got[0] != filepath.Separator {
 		t.Errorf("expected absolute path from ~, got %q", got)
+	}
+}
+
+func TestAbsPathDoesNotExpandNamedTilde(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	input := "~definitely-not-current-user-agentmux/transcript-test"
+	want := filepath.Clean(filepath.Join(cwd, input))
+	if got := absPath(input); got != want {
+		t.Errorf("named tilde path = %q, want %q", got, want)
 	}
 }

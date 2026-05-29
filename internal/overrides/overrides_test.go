@@ -112,6 +112,26 @@ func TestSaveEmptyEntriesWritesArray(t *testing.T) {
 	}
 }
 
+func TestSaveMissingVersionDefaultsToCurrentVersion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "overrides.json")
+	t.Setenv(overrides.PathEnvVar, path)
+
+	if err := overrides.Save(overrides.File{}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var decoded overrides.File
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("Unmarshal saved file: %v", err)
+	}
+	if decoded.Version != 1 {
+		t.Fatalf("Version: got %d, want 1; raw=%s", decoded.Version, raw)
+	}
+}
+
 func TestSaveAtomic(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "overrides.json")

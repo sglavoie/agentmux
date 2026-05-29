@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -164,6 +165,22 @@ claude_flags = ["--ignored-project"]
 		if !keys[want] {
 			t.Errorf("Deprecations missing key %q (got %+v)", want, cfg.Deprecations)
 		}
+	}
+
+	wantDefaults := []string{"--shared"}
+	if !reflect.DeepEqual(cfg.Defaults.Args, wantDefaults) {
+		t.Errorf("Defaults.Args: got %v, want %v", cfg.Defaults.Args, wantDefaults)
+	}
+	if !reflect.DeepEqual(cfg.Defaults.ClaudeFlags, wantDefaults) {
+		t.Errorf("Defaults.ClaudeFlags: got %v, want canonical mirror %v", cfg.Defaults.ClaudeFlags, wantDefaults)
+	}
+
+	wantProject := []string{"--project"}
+	if !reflect.DeepEqual(cfg.Projects[0].Args, wantProject) {
+		t.Errorf("Projects[0].Args: got %v, want %v", cfg.Projects[0].Args, wantProject)
+	}
+	if !reflect.DeepEqual(cfg.Projects[0].ClaudeFlags, wantProject) {
+		t.Errorf("Projects[0].ClaudeFlags: got %v, want canonical mirror %v", cfg.Projects[0].ClaudeFlags, wantProject)
 	}
 }
 

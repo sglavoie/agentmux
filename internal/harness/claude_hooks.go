@@ -219,7 +219,7 @@ func isAmxHookEntry(e hookEntry) bool {
 
 	const marker = " hook-indicator "
 	for _, candidate := range []string{e.Command, e.CommandWindows} {
-		idx := strings.Index(candidate, marker)
+		idx := strings.LastIndex(candidate, marker)
 		if idx <= 0 {
 			continue
 		}

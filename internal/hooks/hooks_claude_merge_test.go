@@ -229,3 +229,71 @@ func TestMergeUpdatesStaleHooks(t *testing.T) {
 		t.Errorf("expected in_sync after update, got %q", statuses[0].Status)
 	}
 }
+
+func TestMergePreservesSettingsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	targetDir := filepath.Join(dir, "managed")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	targetPath := filepath.Join(targetDir, "settings.json")
+	linkPath := filepath.Join(accountDir, "settings.json")
+	original := []byte(`{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"/old/amx hook-indicator UserPromptSubmit","async":true}]}]}}`)
+	if err := os.WriteFile(targetPath, original, 0o644); err != nil {
+		t.Fatalf("seed target: %v", err)
+	}
+	relTarget, err := filepath.Rel(accountDir, targetPath)
+	if err != nil {
+		t.Fatalf("relative symlink target: %v", err)
+	}
+	if err := os.Symlink(relTarget, linkPath); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir},
+	}, nil)
+
+	results, err := MergeAll(cfg, "", testBin)
+	if err != nil {
+		t.Fatalf("MergeAll error: %v", err)
+	}
+	if results[0].Status != MergeUpdated {
+		t.Fatalf("expected updated, got %q", results[0].Status)
+	}
+	if results[0].Path != linkPath {
+		t.Fatalf("result path = %q, want install path %q", results[0].Path, linkPath)
+	}
+
+	info, err := os.Lstat(linkPath)
+	if err != nil {
+		t.Fatalf("lstat link: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings symlink was replaced with mode %v", info.Mode())
+	}
+
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	var s map[string]any
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("json.Unmarshal target: %v", err)
+	}
+	hooks := s["hooks"].(map[string]any)
+	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit")
+
+	bak, err := os.ReadFile(targetPath + ".bak")
+	if err != nil {
+		t.Fatalf("expected target .bak file, got: %v", err)
+	}
+	if string(bak) != string(original) {
+		t.Fatalf(".bak content mismatch: got %q want %q", bak, original)
+	}
+}

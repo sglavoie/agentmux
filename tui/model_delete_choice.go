@@ -34,6 +34,8 @@ func (m Model) handleDeleteChoiceKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyCtrlC:
 		return m, tea.Quit
+	case keyQ:
+		return m, tea.Quit
 	case keyEsc:
 		m.exitDeleteChoice()
 		return m, nil

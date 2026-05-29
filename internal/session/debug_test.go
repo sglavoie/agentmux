@@ -56,6 +56,34 @@ func TestNewFileLogger_EnabledWritesWithOwnerOnlyPerms(t *testing.T) {
 	}
 }
 
+// TestNewFileLogger_EnabledTightensExistingPerms verifies that reopening an
+// existing debug log also clamps permissions. os.OpenFile's mode only applies
+// when creating the file, so without an explicit chmod a log left behind by an
+// older build could stay group/world-readable.
+func TestNewFileLogger_EnabledTightensExistingPerms(t *testing.T) {
+	t.Setenv("amx_DEBUG", "1")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "amx-debug.log")
+	if err := os.WriteFile(path, []byte("old\n"), 0o644); err != nil {
+		t.Fatalf("seed debug log: %v", err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatalf("chmod seed debug log: %v", err)
+	}
+
+	logger := newFileLogger(path, "[test] ")
+	logger.Printf("new entry")
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+	if mode := info.Mode().Perm(); mode&0o077 != 0 {
+		t.Fatalf("debug log mode = %v, want owner-only after reopening existing file", mode)
+	}
+}
+
 // TestDebugEnabled_AcceptedTruthyValues guards the truthy-value lexicon so a
 // downstream refactor cannot silently shrink it.
 func TestDebugEnabled_AcceptedTruthyValues(t *testing.T) {

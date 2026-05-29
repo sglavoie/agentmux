@@ -33,8 +33,8 @@ var configInitCmd = &cobra.Command{
 		if err := os.WriteFile(path, []byte(config.ExampleConfig), 0o644); err != nil {
 			return fmt.Errorf("writing config: %w", err)
 		}
-		fmt.Printf("created %s\n", path)
-		return nil
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "created %s\n", path)
+		return err
 	},
 }
 
@@ -177,8 +177,8 @@ var configValidateCmd = &cobra.Command{
 			ccerrors.Print(err)
 			return err
 		}
-		fmt.Println("config is valid")
-		return nil
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), "config is valid")
+		return err
 	},
 }
 
@@ -246,26 +246,42 @@ var configHooksStatusCmd = &cobra.Command{
 			return fmt.Errorf("resolving amx binary: %w", err)
 		}
 		statuses, statusErr := hooks.StatusAll(cfg, bin)
-		fmt.Printf("%-20s %-10s %-10s %s\n", "ACCOUNT", "HARNESS", "STATUS", "PATH")
+		out := cmd.OutOrStdout()
+		errOut := cmd.ErrOrStderr()
+		if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %s\n", "ACCOUNT", "HARNESS", "STATUS", "PATH"); err != nil {
+			return err
+		}
 		needsResync := false
 		for _, s := range statuses {
 			if s.Err != nil {
-				fmt.Printf("%-20s %-10s %-10s %s\n", s.Account, s.Harness, "error", s.Err.Error())
+				if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %s\n", s.Account, s.Harness, "error", s.Err.Error()); err != nil {
+					return err
+				}
 				needsResync = true
 				continue
 			}
-			fmt.Printf("%-20s %-10s %-10s %s\n", s.Account, s.Harness, s.Status, s.Path)
+			if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %s\n", s.Account, s.Harness, s.Status, s.Path); err != nil {
+				return err
+			}
 			if s.Status != hooks.SyncInSync {
 				needsResync = true
 			}
 		}
 		if statusErr != nil {
-			fmt.Fprintln(os.Stderr)
-			ccerrors.Print(statusErr)
+			if _, err := fmt.Fprintln(errOut); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(errOut, "error: %s\n", statusErr); err != nil {
+				return err
+			}
 		}
 		if needsResync {
-			fmt.Println()
-			fmt.Println("hint: drifted or missing hooks can strand tab icons; run `amx config hooks-sync` to restore terminal hooks like Stop/SessionEnd/agentStop and child-complete hooks like TeammateIdle.")
+			if _, err := fmt.Fprintln(out); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintln(out, "hint: drifted or missing hooks can strand tab icons; run `amx config hooks-sync` to restore terminal hooks like Stop/SessionEnd/agentStop and child-complete hooks like TeammateIdle."); err != nil {
+				return err
+			}
 		}
 		if statusErr != nil {
 			return statusErr

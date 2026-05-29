@@ -97,14 +97,16 @@ func runWithDeps(
 	var win *kitty.Window
 	var sessionTitle string
 	var currentIconState string
+	var titleMuted bool
 	if err == nil {
 		t, w, found := kitty.FindTabByWindowID(windows, windowID)
 		if found {
 			tab = t
 			win = w
-			base, state, _ := palette.ParseTitle(tab.Title)
+			base, state, _, muted := palette.ParseTitleFull(tab.Title)
 			sessionTitle = base
 			currentIconState = state
+			titleMuted = muted
 		}
 	} else {
 		slog.Debug("indicator: kitty lookup failed", "err", err)
@@ -127,7 +129,7 @@ func runWithDeps(
 	if win != nil {
 		profile = win.UserVars.EffectiveProfile()
 		harnessName = win.UserVars.EffectiveHarness()
-		muted = win.UserVars.Mute != ""
+		muted = titleMuted || win.UserVars.Mute != ""
 	}
 	resetFlowDetected := payloadHasResetFlow(harnessName, eventOrAction, payload)
 	toolName := payload.EffectiveToolName()

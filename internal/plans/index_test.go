@@ -143,6 +143,52 @@ func TestRefresh_PopulatesEntriesAndSkipsSources(t *testing.T) {
 	}
 }
 
+func TestRefresh_RelativeRootStoresAbsolutePaths(t *testing.T) {
+	base := t.TempDir()
+	rootName := "plans-root"
+	planName := "alpha-aabb112233cc"
+	absRoot := filepath.Join(base, rootName)
+	planDir := seedPlanDir(t, absRoot, planName, map[string]string{
+		"manifest.md": "# alpha",
+	})
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(cwd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+	if err := os.Chdir(base); err != nil {
+		t.Fatalf("Chdir: %v", err)
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(rootName); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	wantDir, err := filepath.Abs(filepath.Join(rootName, planName))
+	if err != nil {
+		t.Fatalf("Abs: %v", err)
+	}
+	got, ok := idx.Get(PlanKey(wantDir))
+	if !ok {
+		t.Fatalf("entry missing under absolute key %q; seed path was %q", wantDir, planDir)
+	}
+	if got.DirPath != wantDir {
+		t.Errorf("DirPath = %q, want absolute path %q", got.DirPath, wantDir)
+	}
+	if !filepath.IsAbs(got.DirPath) {
+		t.Errorf("DirPath = %q, want absolute path", got.DirPath)
+	}
+	if _, ok := idx.Get(PlanKey(filepath.Join(rootName, planName))); ok {
+		t.Errorf("entry unexpectedly indexed under relative key")
+	}
+}
+
 func TestRefresh_IdempotentNoSidecarRewrite(t *testing.T) {
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{

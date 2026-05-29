@@ -175,6 +175,12 @@ func (i *Index) Refresh(root string) error {
 	if root == "" {
 		return errors.New("plans: Refresh requires a non-empty root path")
 	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("resolving plans root %s: %w", root, err)
+	}
+	root = absRoot
+
 	dirEntries, err := os.ReadDir(root)
 	if err != nil {
 		return fmt.Errorf("reading plans root %s: %w", root, err)

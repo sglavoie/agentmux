@@ -314,6 +314,7 @@ func startTestDaemonServer(t *testing.T, socketPath string, handler func(Request
 	if err != nil {
 		t.Fatalf("Listen(%s): %v", socketPath, err)
 	}
+	disableListenerAutoUnlink(ln)
 
 	var once sync.Once
 	stop := func() {
