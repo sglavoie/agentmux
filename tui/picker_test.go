@@ -271,8 +271,8 @@ func TestPickerFooterShowsFilterHint(t *testing.T) {
 	m := pickerModel(t)
 	m.width, m.height = 120, 40
 	footer := renderFooter(m)
-	if !strings.Contains(footer, "type to filter") {
-		t.Errorf("expected picker footer to advertise live filter, got:\n%s", footer)
+	if !strings.Contains(footer, "press / to filter") {
+		t.Errorf("expected picker footer to advertise explicit filter entry, got:\n%s", footer)
 	}
 	if !strings.Contains(footer, "esc: clear/exit") {
 		t.Errorf("expected picker footer to advertise esc behavior, got:\n%s", footer)

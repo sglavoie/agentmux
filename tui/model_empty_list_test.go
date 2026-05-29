@@ -64,15 +64,16 @@ func TestEmptyListRowActionKeysAreNoOp(t *testing.T) {
 	}
 }
 
-// TestEmptyFilteredListAfterTypeBufferIsSafe drives the empty-list path via
-// the type-to-filter buffer (rather than nil sessions) — exercises the
-// codepath where m.sessions is non-empty but m.filtered collapses to zero.
-func TestEmptyFilteredListAfterTypeBufferIsSafe(t *testing.T) {
+// TestEmptyFilteredListAfterExplicitSearchIsSafe drives the empty-list path via
+// an explicit / search rather than nil sessions. This exercises the codepath
+// where m.sessions is non-empty but m.filtered collapses to zero.
+func TestEmptyFilteredListAfterExplicitSearchIsSafe(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Type a buffer that matches nothing.
+	m = pressKey(m, "/")
 	m = pressKey(m, "z")
 	m = pressKey(m, "z")
 	m = pressKey(m, "z")
+	m = pressKey(m, "enter")
 	if len(m.filtered) != 0 {
 		t.Fatalf("setup: expected zero matches for 'zzz', got %d", len(m.filtered))
 	}
@@ -90,20 +91,19 @@ func TestEmptyFilteredListAfterTypeBufferIsSafe(t *testing.T) {
 	}
 }
 
-// TestEmptyListEscClearsTypeBufferAndRestoresList verifies the recovery
-// path: after a type-buffer narrows the list to empty, Esc clears both
-// the buffer and the filter so the full session list is visible again.
-func TestEmptyListEscClearsTypeBufferAndRestoresList(t *testing.T) {
+// TestEmptyListEscClearsFilterAndRestoresList verifies the recovery path:
+// after explicit search narrows the list to empty, Esc clears the filter so
+// the full session list is visible again.
+func TestEmptyListEscClearsFilterAndRestoresList(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "/")
 	m = pressKey(m, "z")
 	m = pressKey(m, "z")
+	m = pressKey(m, "enter")
 	if len(m.filtered) != 0 {
 		t.Fatalf("setup: expected zero matches, got %d", len(m.filtered))
 	}
 	m = pressKey(m, "esc")
-	if m.typeBuffer != "" {
-		t.Errorf("expected typeBuffer cleared after esc, got %q", m.typeBuffer)
-	}
 	if !m.activeFilter.IsEmpty() {
 		t.Errorf("expected filter cleared after esc, got %+v", m.activeFilter)
 	}

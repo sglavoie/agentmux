@@ -39,13 +39,12 @@ func TestModeRoundTripBackToList(t *testing.T) {
 	cases := []struct {
 		name    string
 		openKey string
-		// extraEsc covers modes where opening pre-fills a token (e.g. "f"
-		// seeds "@" and immediately opens the completion popup), so the
-		// first esc closes the popup and the second exits the mode.
+		// extraEsc covers modes where opening immediately shows an overlay
+		// inside the mode, so the first esc closes the overlay and the
+		// second exits the mode.
 		extraEsc bool
 	}{
 		{"search via /", "/", false},
-		{"search via f", "f", true},
 		{"help via ?", "?", false},
 		{"actions via a", "a", false},
 		{"config-picker via c", "c", false},
@@ -164,8 +163,8 @@ func TestPickerSpaceWithEmptyFilteredIdxIsSafe(t *testing.T) {
 // tab fails to wrap or jumps past Components()-1.
 func TestHandleListKeyTabCyclesChips(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Apply a filter with three components directly — typing spaces through
-	// the synthetic key helper has separate coverage in TestTypeBufferSpaceAppends.
+	// Apply a filter with three components directly so the chip focus path is
+	// independent of search input details.
 	m.activeFilter = Parse("api @work !bolt")
 	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	if got := len(m.activeFilter.Components()); got != 3 {
@@ -279,42 +278,13 @@ func TestHandleKeyDispatchByMode(t *testing.T) {
 	}
 }
 
-// TestTypeBufferSpaceAppends pins that pressing space while the
-// type-to-filter buffer is non-empty appends the space to the buffer
-// (advancing to the next DSL token) rather than focusing the cursor's
-// tab. Regression guard for the case where typing "foo bar" inline
-// silently lost the separator and the second word never registered.
-func TestTypeBufferSpaceAppends(t *testing.T) {
+// TestSpaceInListFocuses verifies the bare space shortcut remains a row action
+// now that dashboard filtering only starts after /.
+func TestSpaceInListFocuses(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	// Type a letter so the buffer is non-empty.
-	m = pressKey(m, "i")
-	if m.typeBuffer == "" {
-		t.Skip("type-buffer wasn't entered; preceding key intercepts swallow the seed letter")
-	}
-	before := m.typeBuffer
-	// Press space — must append, not focus.
-	updated, cmd := m.Update(keyPress(" "))
-	got := updated.(Model)
-	if cmd != nil {
-		t.Errorf("expected nil cmd from space-in-buffer, got %T (focusCmd would be non-nil)", cmd)
-	}
-	if got.typeBuffer != before+" " {
-		t.Errorf("expected typeBuffer=%q, got %q", before+" ", got.typeBuffer)
-	}
-}
-
-// TestTypeBufferSpaceWithEmptyBufferStillFocuses verifies the original
-// behavior is preserved when the type-buffer is empty: space focuses the
-// cursor's tab. Regression guard against the space-in-buffer fix
-// accidentally diverting the bare space shortcut too.
-func TestTypeBufferSpaceWithEmptyBufferStillFocuses(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	if m.typeBuffer != "" {
-		t.Fatalf("expected empty typeBuffer at start, got %q", m.typeBuffer)
-	}
 	_, cmd := m.Update(keyPress(" "))
 	if cmd == nil {
-		t.Fatal("space on a non-empty list with empty buffer must return focusCmd")
+		t.Fatal("space on a non-empty list must return focusCmd")
 	}
 }
 

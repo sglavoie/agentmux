@@ -123,7 +123,7 @@ and lets you multi-select launches.
 Launcher rows likewise show the project title only; profile information stays in
 its own badge/metadata columns.
 
-- type to filter live,
+- press `/` to filter live,
 - `space` toggles selection,
 - `enter` launches the selected projects,
 - `C` chooses a **one-time profile override** for the highlighted project,

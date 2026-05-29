@@ -7,18 +7,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// applyTypeBuffer parses the current type-to-filter buffer and re-applies the
-// resulting Filter to the session list. Mirrors reapplyFilterLive for the
-// ModeList code path.
-func (m *Model) applyTypeBuffer() {
-	m.activeFilter = Parse(m.typeBuffer)
-	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
-	m.sortFiltered()
-	m.cursor = clamp(m.cursor, 0, len(m.filtered)-1)
-	m.focusedChipIdx = -1
-	scrollListToCursor(m)
-}
-
 // applyFilterChange swaps in a new active filter, re-applies it to the
 // session list, and resets cursor + chip focus. Used by chip removal and
 // the Esc "clear all" path so they share the bookkeeping.

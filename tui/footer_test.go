@@ -191,19 +191,6 @@ func TestListFooterAvailability(t *testing.T) {
 				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
-		{
-			name: "type-to-filter active — row actions dimmed",
-			m: Model{
-				filtered:   []session.RunningSession{{State: "bolt"}},
-				typeBuffer: "ap",
-			},
-			want: map[string]bool{
-				"e": false, "T": false, "r": false, "x": false,
-				"c": false, "C": false,
-				"o": false, "O": false,
-				"l": true, "S": true, "P": true, "R": true,
-			},
-		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

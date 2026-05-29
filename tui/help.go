@@ -49,10 +49,8 @@ var helpSections = []struct {
 		"  p         toggle preview pane (also active in launcher)",
 	}},
 	{"Filter", []string{
-		"  any key   type-to-filter (live narrowing without /)",
 		"  /         filter (DSL: @profile, !state, word)",
-		"  f         filter pre-filled with @ (profile)",
-		"  esc       clear type-buffer / clear filter chips",
+		"  esc       clear filter chips",
 		"  1 – 9     remove filter chip at that position",
 	}},
 	{"App", []string{

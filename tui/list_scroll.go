@@ -17,8 +17,7 @@ const listMinVisible = 3
 //   - deprecation banner (when undismissed and at least one entry)        (2)
 //   - legend (omitted when m.height > 0 && m.height < legendMinHeight)    (1)
 //   - chips (when activeFilter has at least one component)                (1)
-//   - inline filter (unconditionally 1 in ModeList; the placeholder still
-//     consumes a line when the type buffer is empty)                      (1)
+//   - inline filter hint (unconditionally 1 in ModeList)                 (1)
 //
 // The renderHeader hint and chip-wrap-to-two-lines edge cases can drift the
 // real chrome by one line; the listMinVisible floor in listVisibleHeight

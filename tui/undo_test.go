@@ -253,20 +253,17 @@ func TestActionsOverlayCloseFiresToast(t *testing.T) {
 	}
 }
 
-// TestUKeyDivertsIntoTypeBuffer guards the type-to-filter precedence: when
-// the user is mid-filter, `u` must extend the buffer rather than firing
-// undo. This mirrors the row-action-divert behavior set up in session 5.
-func TestUKeyDivertsIntoTypeBuffer(t *testing.T) {
+// TestUKeyRunsUndoFromListMode verifies `u` remains a row-level shortcut now
+// that dashboard filtering only starts after /.
+func TestUKeyRunsUndoFromListMode(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	m.typeBuffer = "ap"
-	// Seed a pending undo so we can confirm it survives.
 	m.pendingUndo = []undoEntry{{label: "phantom", deadline: time.Now().Add(undoWindow)}}
-	updated, _ := m.Update(keyPress("u"))
+	updated, cmd := m.Update(keyPress("u"))
 	m2 := updated.(Model)
-	if m2.typeBuffer != "apu" {
-		t.Errorf("expected u to extend buffer to %q, got %q", "apu", m2.typeBuffer)
+	if cmd == nil {
+		t.Fatal("expected u to dispatch undo cmd")
 	}
-	if len(m2.pendingUndo) != 1 {
-		t.Errorf("expected pending undo preserved while typing, got %d", len(m2.pendingUndo))
+	if len(m2.pendingUndo) != 0 {
+		t.Errorf("expected pending undo consumed, got %d", len(m2.pendingUndo))
 	}
 }

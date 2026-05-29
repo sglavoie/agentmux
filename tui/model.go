@@ -33,11 +33,10 @@ type Model struct {
 
 	// filter (unified search + account + state DSL)
 	filterText     string          // live input while in ModeSearch
-	typeBuffer     string          // live input from ModeList's type-to-filter dispatch
 	activeFilter   Filter          // committed filter applied to filtered
 	savedFilter    Filter          // snapshot taken on enter; restored on Esc
 	focusedChipIdx int             // -1 when no chip focused; otherwise index into Components()
-	completion     completionState // sigil-aware popup state for ModeSearch / type-to-filter
+	completion     completionState // sigil-aware popup state for ModeSearch
 
 	// terminal dimensions
 	width  int

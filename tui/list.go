@@ -163,31 +163,17 @@ func renderDeprecationBanner(m Model) string {
 	return styleBanner.Render(headline) + "\n" + styleFooter.Render(hint) + "\n"
 }
 
-// inlineFilterPlaceholder is the greyed copy shown above the list when the
-// ModeList type-to-filter buffer is empty. It nudges users toward both the
-// implicit (type) and explicit (/) entry points without consuming a key.
-const inlineFilterPlaceholder = "type to filter (or / for explicit)"
+// inlineFilterPlaceholder is the greyed copy shown above the list. Filtering is
+// explicit-only from the dashboard: press / to open the search input.
+const inlineFilterPlaceholder = "/ to filter"
 
-// renderInlineFilter draws the persistent type-to-filter input above the
-// list. Buffer empty → greyed placeholder; buffer non-empty → caret-suffixed
-// search-styled string. When the completion popup is visible it stacks
-// directly beneath. Returns "" outside ModeList so the line collapses
-// cleanly in other modes.
+// renderInlineFilter draws the persistent filter hint above the list. Returns
+// "" outside ModeList so the line collapses cleanly in other modes.
 func renderInlineFilter(m Model) string {
 	if m.mode != ModeList {
 		return ""
 	}
-	var head string
-	if m.typeBuffer == "" {
-		head = styleDim.Render("  " + inlineFilterPlaceholder)
-	} else {
-		head = "  " + styleSearch.Render("/") + m.typeBuffer + "█"
-	}
-	out := head + "\n"
-	if popup := renderCompletion(m); popup != "" {
-		out += popup
-	}
-	return out
+	return styleDim.Render("  "+inlineFilterPlaceholder) + "\n"
 }
 
 // renderChips renders the filter chip row(s) for the current activeFilter,

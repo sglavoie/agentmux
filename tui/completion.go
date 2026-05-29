@@ -82,9 +82,8 @@ func (m *Model) recomputeCompletion() {
 	m.recomputeCompletionFor(m.filterText)
 }
 
-// recomputeCompletionFor is the buffer-agnostic core used by both the
-// ModeSearch input (m.filterText) and the ModeList type-to-filter input
-// (m.typeBuffer).
+// recomputeCompletionFor is the buffer-agnostic core used by the ModeSearch
+// input.
 func (m *Model) recomputeCompletionFor(text string) {
 	sigil, prefix, from, to := TokenAtCaret(text, len(text))
 	if sigil == 0 {
@@ -128,8 +127,7 @@ func (m *Model) insertCompletion() {
 	m.insertCompletionInto(&m.filterText)
 }
 
-// insertCompletionInto is the buffer-agnostic core; ModeList type-to-filter
-// passes &m.typeBuffer instead of &m.filterText.
+// insertCompletionInto is the buffer-agnostic core used by insertCompletion.
 func (m *Model) insertCompletionInto(buf *string) {
 	if !m.completion.Visible || len(m.completion.Candidates) == 0 {
 		return

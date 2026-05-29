@@ -21,7 +21,7 @@ func renderFooter(m Model) string {
 		line2 = ""
 	case ModePicker:
 		line1 = styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  O: open in editor  p: preview  esc: clear/exit")
-		line2 = styleFooter.Render("  type to filter (DSL: @profile, word)  j/k: up/down")
+		line2 = styleFooter.Render("  press / to filter (DSL: @profile, word)  j/k: up/down")
 	case ModeConfigPicker:
 		line1 = styleFooter.Render("  enter: select  esc/q: cancel")
 		line2 = styleFooter.Render("  j/k: up/down")
@@ -66,10 +66,8 @@ func renderFooter(m Model) string {
 			line2 = ""
 		} else {
 			line1 = listFooterLine1(m)
-			nav := "j/k: up/down  enter: focus  a: actions  /, f: filter  ?: help  q: quit  p: preview"
-			if m.typeBuffer != "" {
-				nav = "j/k: up/down  enter: apply  esc: clear  type more to narrow"
-			} else if !m.activeFilter.IsEmpty() {
+			nav := "j/k: up/down  enter: focus  a: actions  /: filter  ?: help  q: quit  p: preview"
+			if !m.activeFilter.IsEmpty() {
 				nav += "  esc: clear filters"
 				if n := len(m.activeFilter.Components()); n > 0 {
 					nav += fmt.Sprintf("  1-%d: remove chip  tab: focus next", n)
@@ -167,14 +165,9 @@ var listFooterSectionOrder = []string{
 // line 1. Wider than the within-section " · " so the eye can chunk groups.
 const listFooterSectionSeparator = " ▏ "
 
-// hasRow reports whether a row is selected (any row-targeted action requires
-// a cursor sitting on a session). Row actions are also marked unavailable
-// while the type-to-filter buffer is non-empty: their keys divert into the
-// buffer until the user presses esc or enter.
+// hasRow reports whether a row is selected; any row-targeted action requires a
+// cursor sitting on a session.
 func hasRow(m Model) bool {
-	if m.typeBuffer != "" {
-		return false
-	}
 	return len(m.filtered) > 0 && m.cursor < len(m.filtered)
 }
 

@@ -58,14 +58,17 @@ func TestModeSearchLiveAppliesEachKeystroke(t *testing.T) {
 	}
 }
 
-func TestFKeyEntersFilterWithAccountPrefill(t *testing.T) {
+func TestFKeyDoesNotEnterFilter(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "f")
-	if m.mode != ModeSearch {
-		t.Fatalf("expected ModeSearch (unified filter) after f, got %d", m.mode)
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after f, got %d", m.mode)
 	}
-	if m.filterText != "@" {
-		t.Fatalf("expected filterText=@, got %q", m.filterText)
+	if m.filterText != "" {
+		t.Fatalf("expected empty filterText after f, got %q", m.filterText)
+	}
+	if !m.activeFilter.IsEmpty() {
+		t.Fatalf("expected f not to apply a filter, got %+v", m.activeFilter)
 	}
 }
 
@@ -89,9 +92,10 @@ func TestFilterEscRestoresSavedFilter(t *testing.T) {
 	}
 }
 
-func TestFKeyTypingNarrowsByAccount(t *testing.T) {
+func TestSlashTypingNarrowsByAccount(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	m = pressKey(m, "f") // filterText="@"
+	m = pressKey(m, "/")
+	m = pressKey(m, "@")
 	m = pressKey(m, "w")
 	m = pressKey(m, "o")
 	m = pressKey(m, "r")
@@ -246,7 +250,7 @@ func TestFooterChangesWithMode(t *testing.T) {
 	m.width, m.height = 120, 40
 
 	listFooter := renderFooter(m)
-	if !strings.Contains(listFooter, "/, f: filter") {
+	if !strings.Contains(listFooter, "/: filter") {
 		t.Errorf("list footer missing unified filter hint, got:\n%s", listFooter)
 	}
 
