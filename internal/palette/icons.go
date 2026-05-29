@@ -127,6 +127,7 @@ func DetectState(title string) string {
 }
 
 func consumeStateIcon(title string) (state, rest string, ok bool) {
+	bestLen := -1
 	for _, name := range ico.StateOrder {
 		icon := ico.States[name]
 		// Skip empty icons so a stale entry in state_order without a matching
@@ -135,15 +136,30 @@ func consumeStateIcon(title string) (state, rest string, ok bool) {
 			continue
 		}
 		if strings.HasPrefix(title, icon) {
-			return name, title[len(icon):], true
+			if len(icon) > bestLen {
+				state = name
+				rest = title[len(icon):]
+				ok = true
+				bestLen = len(icon)
+			}
+			continue
 		}
 		fallback := strings.ReplaceAll(icon, "\ufe0f", "")
 		if fallback != icon && fallback != "" && strings.HasPrefix(title, fallback) {
-			rest := title[len(fallback):]
-			rest = strings.TrimPrefix(rest, "\ufe0f")
-			rest = strings.TrimPrefix(rest, "\ufe0e")
-			return name, rest, true
+			candidateRest := title[len(fallback):]
+			candidateRest = strings.TrimPrefix(candidateRest, "\ufe0f")
+			candidateRest = strings.TrimPrefix(candidateRest, "\ufe0e")
+			matchedLen := len(title) - len(candidateRest)
+			if matchedLen > bestLen {
+				state = name
+				rest = candidateRest
+				ok = true
+				bestLen = matchedLen
+			}
 		}
+	}
+	if ok {
+		return state, rest, true
 	}
 	return "", title, false
 }

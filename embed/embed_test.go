@@ -36,6 +36,13 @@ type exampleConfig struct {
 			HookSilence          *bool `toml:"hook_silence"`
 			PermissionDebounceMs int   `toml:"permission_debounce_ms"`
 		}
+		Preview struct {
+			Direction string
+			Ratio     float64
+			RefreshMs int `toml:"refresh_ms"`
+			MinCols   int `toml:"min_cols"`
+			MinRows   int `toml:"min_rows"`
+		}
 	}
 	HarnessColors map[string]string `toml:"harness_colors"`
 }
@@ -95,6 +102,38 @@ func TestExampleConfigIncludesStopFailureNotificationToggle(t *testing.T) {
 	}
 	if !*decoded.Defaults.Notifications.StopFailure {
 		t.Fatal("defaults.notifications.stop_failure = false, want true")
+	}
+}
+
+func TestExampleConfigIncludesPreviewDefaults(t *testing.T) {
+	var decoded struct {
+		Defaults struct {
+			Preview struct {
+				Direction string
+				Ratio     float64
+				RefreshMs int `toml:"refresh_ms"`
+				MinCols   int `toml:"min_cols"`
+				MinRows   int `toml:"min_rows"`
+			}
+		}
+	}
+	if _, err := toml.Decode(ExampleConfig, &decoded); err != nil {
+		t.Fatalf("ExampleConfig is not valid TOML: %v", err)
+	}
+	if decoded.Defaults.Preview.Direction != "horizontal" {
+		t.Fatalf("defaults.preview.direction = %q, want horizontal", decoded.Defaults.Preview.Direction)
+	}
+	if decoded.Defaults.Preview.Ratio != 0.5 {
+		t.Fatalf("defaults.preview.ratio = %v, want 0.5", decoded.Defaults.Preview.Ratio)
+	}
+	if decoded.Defaults.Preview.RefreshMs != 500 {
+		t.Fatalf("defaults.preview.refresh_ms = %d, want 500", decoded.Defaults.Preview.RefreshMs)
+	}
+	if decoded.Defaults.Preview.MinCols != 100 {
+		t.Fatalf("defaults.preview.min_cols = %d, want 100", decoded.Defaults.Preview.MinCols)
+	}
+	if decoded.Defaults.Preview.MinRows != 30 {
+		t.Fatalf("defaults.preview.min_rows = %d, want 30", decoded.Defaults.Preview.MinRows)
 	}
 }
 

@@ -157,8 +157,10 @@ func TestLooksLikeClaudePipe(t *testing.T) {
 		{"", false},
 		{"claude", false},
 		{"claude -p", true},
+		{"claude -p=short", true},
 		{"claude --print", true},
 		{"claude --print-output", false}, // --print-output is not --print
+		{"claude --print-output=true", false},
 		// Exact-command match: basename must equal "claude" or "copilot".
 		{"claude-lint", false},
 		{"claude-lint -p", false},        // basename is claude-lint, not claude
@@ -169,10 +171,13 @@ func TestLooksLikeClaudePipe(t *testing.T) {
 		{"/usr/local/bin/codex review", true},     // path-prefixed codex is fine
 		{"copilot", false},
 		{"copilot -p", true},
+		{"copilot -p=short", true},
 		{"copilot --prompt", true},
+		{"copilot --prompt=short", true},
 		{"copilot --print", false}, // --print is claude-only; copilot uses --prompt
 		{"codex", false},
 		{"codex exec", true},
+		{"codex exec=1", false},
 		{"codex e", true},
 		{"codex review", true},
 		{"codex run", false},

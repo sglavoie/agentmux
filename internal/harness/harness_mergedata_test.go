@@ -1,6 +1,8 @@
 package harness
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -61,5 +63,30 @@ func TestMergeDataHooksNullNoPanic(t *testing.T) {
 				t.Fatalf("MergeData(%q, hooks:null) returned empty output", name)
 			}
 		})
+	}
+}
+
+func TestCodexMergeDataPreservesUnknownNullHookValue(t *testing.T) {
+	contract := Lookup(Codex).HookContract()
+	out, err := contract.MergeData([]byte(`{"hooks":{"FutureEvent":null}}`), nil, "/usr/bin/amx")
+	if err != nil {
+		t.Fatalf("MergeData(%q) err: %v", Codex, err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatalf("unmarshal merged hooks.json: %v", err)
+	}
+	var hooks map[string]json.RawMessage
+	if err := json.Unmarshal(raw["hooks"], &hooks); err != nil {
+		t.Fatalf("unmarshal merged hooks section: %v", err)
+	}
+
+	got, ok := hooks["FutureEvent"]
+	if !ok {
+		t.Fatalf("MergeData(%q) dropped unknown null hook key; hooks keys: %v", Codex, hooks)
+	}
+	if !bytes.Equal(bytes.TrimSpace(got), []byte("null")) {
+		t.Fatalf("MergeData(%q) FutureEvent = %s, want null", Codex, got)
 	}
 }

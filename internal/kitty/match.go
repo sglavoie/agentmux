@@ -22,12 +22,13 @@ func MatchTabByTitle(title string) string {
 
 // MatchWindowByVar returns a match expression selecting windows with a specific user var value.
 //
-// Kitty interprets the value portion of `var:NAME=VALUE` as a Python regex
-// applied unanchored. Callers passing literal account/profile names expect
-// exact equality, so the value is escaped and anchored with `^...$` to
-// prevent prefix bleed (e.g. account "work" inadvertently matching "workshop").
+// Kitty interprets both NAME and VALUE in `var:NAME=VALUE` as Python regexes
+// applied unanchored. Callers passing literal variable/account/profile names
+// expect exact equality, so both sides are escaped and anchored to prevent
+// bleed (e.g. account "work" matching "workshop", or variable "cc_account"
+// matching "old_cc_account").
 func MatchWindowByVar(varName, value string) string {
-	return fmt.Sprintf("var:%s=^%s$", varName, regexp.QuoteMeta(value))
+	return fmt.Sprintf("var:^%s$=^%s$", regexp.QuoteMeta(varName), regexp.QuoteMeta(value))
 }
 
 // MatchAccountWindows returns a match expression for all windows belonging to an account.

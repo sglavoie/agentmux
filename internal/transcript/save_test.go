@@ -261,3 +261,18 @@ func TestLoadIndex_MigratesLegacySearchTextToSidecars(t *testing.T) {
 		t.Fatalf("rewritten index still contains legacy search_text")
 	}
 }
+
+func TestLoadIndex_RejectsTrailingJSONValue(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	if err := os.WriteFile(path, []byte(`{"entries":{}}{"entries":{}}`), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+
+	_, err := LoadIndexAt(path)
+	if err == nil {
+		t.Fatalf("LoadIndexAt accepted trailing JSON value")
+	}
+	if !strings.Contains(err.Error(), "trailing data") {
+		t.Fatalf("LoadIndexAt error = %v, want trailing data error", err)
+	}
+}

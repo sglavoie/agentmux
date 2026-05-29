@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"testing"
+	"time"
 )
 
 func TestHandler_UnknownType(t *testing.T) {
@@ -52,6 +53,20 @@ func TestHandler_ValidRequestSignalsActivity(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("onActivity calls = %d; want 1", calls)
+	}
+}
+
+func TestHandler_StateUpdateWithoutNotifier(t *testing.T) {
+	h := NewHandler(NewStateGuard(time.Hour), nil)
+
+	resp := h.Handle(Request{
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "stop",
+		Event:    "Stop",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+		t.Fatalf("state_update without notifier = %+v; want ok allowed stop icon", resp)
 	}
 }
 

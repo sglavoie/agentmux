@@ -30,7 +30,7 @@ func renderConfigPicker(m Model) string {
 		if home := acc.EffectiveHomeDir(); home != "" {
 			line += "  " + styleDim.Render(home)
 		}
-		if acc.Name == m.configPickerCurrent {
+		if strings.EqualFold(acc.Name, m.configPickerCurrent) {
 			line += styleDim.Render(" (current)")
 		}
 		if i == m.configPickerCursor {

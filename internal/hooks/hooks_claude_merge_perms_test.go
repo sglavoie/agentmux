@@ -124,6 +124,65 @@ func TestMergePreservesRestrictiveFilePermsAfterTightening(t *testing.T) {
 	}
 }
 
+func TestMergeOverwritesReadOnlyBackup(t *testing.T) {
+	dir := t.TempDir()
+	accountDir := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(accountDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(accountDir, "settings.json")
+
+	dirty := []byte(`{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"/old/amx hook-indicator UserPromptSubmit","async":true}]}]}}`)
+	if err := os.WriteFile(settingsPath, dirty, 0o400); err != nil {
+		t.Fatalf("seed read-only settings: %v", err)
+	}
+	if err := os.Chmod(settingsPath, 0o400); err != nil {
+		t.Fatalf("chmod read-only settings: %v", err)
+	}
+
+	staleBackup := settingsPath + ".bak"
+	if err := os.WriteFile(staleBackup, []byte(`{"stale":true}`), 0o400); err != nil {
+		t.Fatalf("seed read-only .bak: %v", err)
+	}
+	if err := os.Chmod(staleBackup, 0o400); err != nil {
+		t.Fatalf("chmod read-only .bak: %v", err)
+	}
+
+	cfg := makeConfig([]config.Account{
+		{Name: "personal", ConfigDir: accountDir},
+	}, nil)
+
+	results, err := MergeAll(cfg, "", testBin)
+	if err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+	if results[0].Status != MergeUpdated {
+		t.Fatalf("expected updated, got %q", results[0].Status)
+	}
+
+	bak, err := os.ReadFile(staleBackup)
+	if err != nil {
+		t.Fatalf("read .bak: %v", err)
+	}
+	if string(bak) != string(dirty) {
+		t.Fatalf(".bak content mismatch: got %q want %q", bak, dirty)
+	}
+	bakInfo, err := os.Stat(staleBackup)
+	if err != nil {
+		t.Fatalf("stat .bak: %v", err)
+	}
+	if got := bakInfo.Mode().Perm(); got != 0o400 {
+		t.Errorf(".bak mode changed: got %o, want 0400", got)
+	}
+	settingsInfo, err := os.Stat(settingsPath)
+	if err != nil {
+		t.Fatalf("stat settings: %v", err)
+	}
+	if got := settingsInfo.Mode().Perm(); got != 0o400 {
+		t.Errorf("settings mode changed: got %o, want 0400", got)
+	}
+}
+
 // TestMergeFreshWriteUsesDefaultPerm pins the fallback contract: when no
 // existing settings.json is on disk, the merge writes the new file with
 // the conventional 0o644 default (subject to the process umask). This

@@ -75,7 +75,15 @@ func (s *Store) Write(key, text string) (retErr error) {
 // Read returns the sidecar contents for key. A missing sidecar surfaces
 // the underlying os.ErrNotExist so callers can branch on it via errors.Is.
 func (s *Store) Read(key string) (string, error) {
-	data, err := os.ReadFile(s.Path(key))
+	path := s.Path(key)
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", &os.PathError{Op: "read", Path: path, Err: fs.ErrInvalid}
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}

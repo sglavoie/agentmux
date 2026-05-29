@@ -54,6 +54,18 @@ confirm_destructive = false
 # Each top-level directory under this root is treated as one plan.
 # plans_directory = "~/.local/share/agent-plans"
 
+# Preview pane shown by the `p` keybinding. Direction chooses a side-by-side
+# split ("horizontal") or stacked split ("vertical"). Ratio is the fraction of
+# the terminal given to the preview. Refresh is in milliseconds while the
+# preview is open. The min_* values disable preview automatically on terminals
+# too small to keep both panes usable.
+[defaults.preview]
+direction = "horizontal"
+ratio = 0.5
+refresh_ms = 500
+min_cols = 100
+min_rows = 30
+
 # Watchdog: per-state thresholds (in seconds) after which a session showing
 # the corresponding active icon but receiving no new events is flagged as
 # stale. The daemon clears the icon and (optionally) fires a one-shot

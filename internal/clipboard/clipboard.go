@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 // ErrUnsupported is returned by Copy on platforms without a supported backend.
@@ -30,23 +31,8 @@ func copy(text, goos string, lookPath func(string) (string, error)) error {
 		return ErrUnsupported
 	}
 	cmd := exec.Command(pbcopy)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("clipboard: stdin pipe: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("clipboard: start pbcopy: %w", err)
-	}
-	if _, err := stdin.Write([]byte(text)); err != nil {
-		_ = stdin.Close()
-		_ = cmd.Wait()
-		return fmt.Errorf("clipboard: write: %w", err)
-	}
-	if err := stdin.Close(); err != nil {
-		_ = cmd.Wait()
-		return fmt.Errorf("clipboard: close stdin: %w", err)
-	}
-	if err := cmd.Wait(); err != nil {
+	cmd.Stdin = strings.NewReader(text)
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("clipboard: pbcopy: %w", err)
 	}
 	return nil

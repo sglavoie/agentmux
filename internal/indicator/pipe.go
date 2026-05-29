@@ -78,10 +78,21 @@ func looksLikePipeMode(cmdline string) bool {
 			if after == "--" {
 				break
 			}
-			if tokenSet[after] {
+			if matchesPipeModeToken(after, tokenSet) {
 				return true
 			}
 		}
+	}
+	return false
+}
+
+func matchesPipeModeToken(arg string, tokenSet map[string]bool) bool {
+	if tokenSet[arg] {
+		return true
+	}
+	name, _, hasValue := strings.Cut(arg, "=")
+	if hasValue && strings.HasPrefix(name, "-") && tokenSet[name] {
+		return true
 	}
 	return false
 }

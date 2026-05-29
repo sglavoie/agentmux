@@ -108,6 +108,11 @@ func TestScreenShowsMarker(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "window full variant wrapped one word per line at screen tail",
+			text: "earlier line\n\nContext\nwindow\nis\nfull\n/compact\nor\n/clear\nto\ncontinue\n\n✻ Cooked for 17m 6s\n",
+			want: true,
+		},
+		{
 			name: "quoted text earlier in scrollback does not trip fallback",
 			text: "Context limit reached · /compact or /clear to continue\nuser was discussing the warning\n\nnormal latest output\nstill running fine\n",
 			want: false,

@@ -52,6 +52,40 @@ func TestParseTitleIgnoresEmptyStateIcon(t *testing.T) {
 	}
 }
 
+// TestParseTitlePrefersLongestStateIcon ensures overlapping configured glyphs
+// do not break the BuildTitle/ParseTitle round-trip. state_order still wins
+// ties, but a shorter glyph must not steal a title built with a longer glyph.
+func TestParseTitlePrefersLongestStateIcon(t *testing.T) {
+	prevOrder := ico.StateOrder
+	prevStates := ico.States
+	t.Cleanup(func() {
+		ico.StateOrder = prevOrder
+		ico.States = prevStates
+	})
+
+	ico.StateOrder = []string{"short", "long"}
+	ico.States = map[string]string{
+		"short": "!",
+		"long":  "!!",
+	}
+
+	title := BuildTitle("base", "long", false)
+	if title != "!!base" {
+		t.Fatalf("BuildTitle(long) = %q, want !!base", title)
+	}
+
+	base, state, starred := ParseTitle(title)
+	if base != "base" || state != "long" || starred {
+		t.Fatalf("ParseTitle(%q) = (%q, %q, %v), want (base, long, false)", title, base, state, starred)
+	}
+	if got := StripIcons(title); got != "base" {
+		t.Fatalf("StripIcons(%q) = %q, want base", title, got)
+	}
+	if got := DetectState(title); got != "long" {
+		t.Fatalf("DetectState(%q) = %q, want long", title, got)
+	}
+}
+
 // TestParseTitleIgnoresEmptyStar guards against an empty star glyph causing
 // every title to be reported as starred — strings.HasPrefix(s, "") is true, so
 // the naive prefix check would otherwise set starred unconditionally.

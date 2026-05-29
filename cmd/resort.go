@@ -10,20 +10,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	resortLoadConfig = config.LoadDefault
+	resortNewClient  = func() kitty.KittyClient { return kitty.NewClient(kitty.NewRealRunner()) }
+	resortSessions   = session.Resort
+)
+
 var resortCmd = &cobra.Command{
 	Use:   "resort",
 	Short: "Reorder Kitty tabs to match the configured sort.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.LoadDefault()
+		cfg, err := resortLoadConfig()
 		if err != nil {
 			ccerrors.Print(err)
 			return fmt.Errorf("loading config: %w", err)
 		}
-		client := kitty.NewClient(kitty.NewRealRunner())
-		if err := session.Resort(client, cfg.Defaults.Sort); err != nil {
+		client := resortNewClient()
+		if err := resortSessions(client, cfg.Defaults.Sort); err != nil {
 			return fmt.Errorf("resort: %w", err)
 		}
-		fmt.Println("tabs resorted")
-		return nil
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), "tabs resorted")
+		return err
 	},
 }

@@ -287,6 +287,23 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 		if s.Directory == "" {
 			errs = append(errs, fmt.Sprintf("project %q: directory is required", s.Title))
 		}
+		envKeys := make([]string, 0, len(s.Env))
+		for k := range s.Env {
+			envKeys = append(envKeys, k)
+		}
+		sort.Strings(envKeys)
+		for _, k := range envKeys {
+			if k == "" {
+				errs = append(errs, fmt.Sprintf("project %q: env key is required", s.Title))
+				continue
+			}
+			if strings.Contains(k, "=") {
+				errs = append(errs, fmt.Sprintf(
+					"project %q: env key %q must not contain \"=\"",
+					s.Title, k,
+				))
+			}
+		}
 		// normalizeProjects mirrors profile↔account when one is empty, but
 		// silently keeps both when the user wrote two different values. That
 		// would route launch (Account) and dashboard (Profile via

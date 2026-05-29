@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -218,6 +220,45 @@ func TestConfigPickerSameAccountNoOp(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Fatal("expected nil cmd when selecting same account (no-op)")
+	}
+}
+
+func TestConfigPickerCurrentProfileCaseInsensitive(t *testing.T) {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessColors: map[string]string{"claude": "blue"},
+		Accounts: []config.Account{
+			{Name: "personal", Color: "yellow"},
+			{Name: "work", Color: "blue"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "/home/user/api", Account: "work"},
+		},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 1, WindowID: 10, Base: "api", Profile: "Work", Account: "Work"},
+	})
+
+	m = pressKey(m, "c")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after c, got %d", m.mode)
+	}
+	if m.configPickerCursor != 1 {
+		t.Fatalf("expected cursor on work profile despite case mismatch, got %d", m.configPickerCursor)
+	}
+	if out := stripAnsi(renderConfigPicker(m)); !strings.Contains(out, "work") || !strings.Contains(out, "(current)") {
+		t.Fatalf("expected work row to be marked current despite case mismatch, got:\n%s", out)
+	}
+
+	updated, cmd := m.Update(keyPress("enter"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after selecting same profile, got %d", updated.(Model).mode)
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd when selected profile only differs by case")
 	}
 }
 

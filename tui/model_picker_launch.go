@@ -185,7 +185,7 @@ func applyPickerFilter(sessions []config.Session, query string) []int {
 // pickerAccountIndex returns the index of the named account in the slice, or 0 if not found.
 func pickerAccountIndex(accounts []config.Account, name string) int {
 	for i, a := range accounts {
-		if a.Name == name {
+		if strings.EqualFold(a.Name, name) {
 			return i
 		}
 	}

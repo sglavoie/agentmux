@@ -317,6 +317,20 @@ func (h *Handler) IsMuted(windowID int) bool {
 	return muted
 }
 
+func (h *Handler) cancelPendingNotification(windowID int) {
+	if h.notifier == nil {
+		return
+	}
+	h.notifier.CancelPending(windowID)
+}
+
+func (h *Handler) maybeNotify(windowID int, sessionTitle, account, action string, pipeMode bool) {
+	if h.notifier == nil {
+		return
+	}
+	h.notifier.MaybeNotify(windowID, sessionTitle, account, action, pipeMode)
+}
+
 func (h *Handler) handleShutdown() Response {
 	if h.onShutdown != nil {
 		h.shutdownOnce.Do(func() { go h.onShutdown() })

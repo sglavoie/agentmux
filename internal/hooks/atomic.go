@@ -88,7 +88,17 @@ var errInjectedFault = errors.New("hooks: injected write fault")
 // to 0o600. We chmod after the write so the backup mode always tracks the
 // caller-provided perm.
 func writeBackup(path string, data []byte, perm os.FileMode) error {
-	if err := os.WriteFile(path, data, perm); err != nil {
+	writePerm := perm | 0o200
+	if info, err := os.Stat(path); err == nil {
+		if info.Mode().IsRegular() && info.Mode().Perm()&0o200 == 0 {
+			if err := os.Chmod(path, info.Mode().Perm()|0o200); err != nil {
+				return err
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.WriteFile(path, data, writePerm); err != nil {
 		return err
 	}
 	return os.Chmod(path, perm)

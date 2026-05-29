@@ -75,13 +75,13 @@ func TestSearch_EmptyQueryReturnsAllByModTimeDesc(t *testing.T) {
 	}
 }
 
-func TestSearch_SnippetShortCircuitNoSidecarDependency(t *testing.T) {
+func TestSearch_SnippetMatchSurvivesMissingSidecar(t *testing.T) {
 	idx, planA, _ := seedTwoPlans(t)
 
 	// "Alpha" is in planA's snippet (manifest.md first line) but not
-	// in planB's. Verify the short-circuit by deleting planA's
-	// sidecar before searching — the snippet match must still
-	// succeed without it.
+	// in planB's. Deleting planA's sidecar means Search cannot count
+	// the corpus exactly, but the snippet match should still surface
+	// the plan.
 	key := PlanKey(planA)
 	if err := os.Remove(idx.store.Path(key)); err != nil {
 		t.Fatalf("removing planA sidecar: %v", err)
@@ -99,10 +99,41 @@ func TestSearch_SnippetShortCircuitNoSidecarDependency(t *testing.T) {
 		t.Errorf("Meta.DirPath = %q, want %q", got.Meta.DirPath, planA)
 	}
 	if got.Matches != 1 {
-		t.Errorf("Matches = %d, want 1 (snippet short-circuit emits 1)", got.Matches)
+		t.Errorf("Matches = %d, want 1 (missing sidecar falls back to snippet match)", got.Matches)
 	}
 	if got.Preview != got.Meta.Snippet {
 		t.Errorf("Preview = %q, want Meta.Snippet %q", got.Preview, got.Meta.Snippet)
+	}
+}
+
+func TestSearch_SnippetHitStillCountsSidecar(t *testing.T) {
+	root := t.TempDir()
+	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
+		"manifest.md":  "# Alpha overview",
+		"session-1.md": "alpha detail alpha tail",
+	})
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	results, err := Search(idx, Query{Text: "alpha"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	got := results[0]
+	if got.Meta.DirPath != planDir {
+		t.Errorf("Meta.DirPath = %q, want %q", got.Meta.DirPath, planDir)
+	}
+	if got.Matches != 3 {
+		t.Errorf("Matches = %d, want 3 (sidecar should count snippet and body hits)", got.Matches)
+	}
+	if got.Preview != "# Alpha overview" {
+		t.Errorf("Preview = %q, want original-case snippet", got.Preview)
 	}
 }
 

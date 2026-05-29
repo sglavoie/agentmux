@@ -3,6 +3,8 @@ package searchstore
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,6 +125,28 @@ func TestWrite_StaleFixedTempPathDoesNotBlockWrite(t *testing.T) {
 	}
 	if got != text {
 		t.Errorf("Read = %q, want %q", got, text)
+	}
+}
+
+func TestRead_SymlinkAtSidecarPathReturnsInvalid(t *testing.T) {
+	s := newTestStore(t)
+	if err := os.MkdirAll(s.Dir(), 0o755); err != nil {
+		t.Fatalf("MkdirAll store dir: %v", err)
+	}
+	target := filepath.Join(t.TempDir(), "target.txt")
+	if err := os.WriteFile(target, []byte("outside sidecar"), 0o644); err != nil {
+		t.Fatalf("write symlink target: %v", err)
+	}
+	if err := os.Symlink(target, s.Path("k")); err != nil {
+		t.Skipf("creating symlink: %v", err)
+	}
+
+	got, err := s.Read("k")
+	if !errors.Is(err, fs.ErrInvalid) {
+		t.Fatalf("Read error = %v, want fs.ErrInvalid", err)
+	}
+	if got != "" {
+		t.Errorf("Read = %q, want empty string", got)
 	}
 }
 

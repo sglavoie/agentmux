@@ -118,3 +118,43 @@ func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
 		t.Fatalf("unexpected error for case-insensitive profile reference: %v", err)
 	}
 }
+
+// TestValidate_ProjectEnvKeysRejectUnserializableNames pins that project env
+// keys must be representable as KEY=VALUE pairs. Empty keys and keys
+// containing "=" cannot round-trip through the session env user-var format,
+// so validation should catch them before launch/restart loses or corrupts the
+// entry.
+func TestValidate_ProjectEnvKeysRejectUnserializableNames(t *testing.T) {
+	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+		Projects: []config.Session{
+			{
+				Title:     "api",
+				Directory: "/tmp/a",
+				Profile:   "work",
+				Env: map[string]string{
+					"":        "missing",
+					"BAD=KEY": "value",
+					"DEBUG":   "a=b",
+				},
+			},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for unserializable env keys, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "env key is required") {
+		t.Errorf("expected missing env key error, got %q", msg)
+	}
+	if !strings.Contains(msg, `env key "BAD=KEY" must not contain "="`) {
+		t.Errorf("expected '=' env key error, got %q", msg)
+	}
+	if strings.Contains(msg, "DEBUG") {
+		t.Errorf("valid env value containing '=' should not be rejected, got %q", msg)
+	}
+}

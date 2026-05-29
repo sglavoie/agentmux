@@ -3,12 +3,15 @@ package overrides
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 )
 
 // PathEnvVar is the environment variable that overrides the default file path (for testing).
 const PathEnvVar = "AMX_OVERRIDES_PATH"
+
+const currentVersion = 1
 
 // Entry records a pinned profile override for a project.
 type Entry struct {
@@ -43,7 +46,7 @@ func Load() (File, error) {
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return File{Version: 1, Entries: []Entry{}}, nil
+		return File{Version: currentVersion, Entries: []Entry{}}, nil
 	}
 	if err != nil {
 		return File{}, err
@@ -57,7 +60,10 @@ func Load() (File, error) {
 	}
 	f := *fp
 	if f.Version == 0 {
-		f.Version = 1
+		f.Version = currentVersion
+	}
+	if err := validateVersion(f.Version); err != nil {
+		return File{}, err
 	}
 	if f.Entries == nil {
 		f.Entries = []Entry{}
@@ -79,7 +85,10 @@ func Save(f File) (retErr error) {
 		return err
 	}
 	if f.Version == 0 {
-		f.Version = 1
+		f.Version = currentVersion
+	}
+	if err := validateVersion(f.Version); err != nil {
+		return err
 	}
 	if f.Entries == nil {
 		f.Entries = []Entry{}
@@ -116,4 +125,14 @@ func Save(f File) (retErr error) {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+func validateVersion(version int) error {
+	if version < 1 {
+		return fmt.Errorf("overrides file version must be at least 1, got %d", version)
+	}
+	if version > currentVersion {
+		return fmt.Errorf("unsupported overrides file version %d; current version is %d", version, currentVersion)
+	}
+	return nil
 }

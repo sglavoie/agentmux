@@ -67,6 +67,46 @@ func TestScrollbackMarkerBindingDescribesConfiguredMarkers(t *testing.T) {
 	if markers.LaunchType != "" {
 		t.Fatalf("f3 LaunchType = %q, want native Kitty action", markers.LaunchType)
 	}
+	if markers.KittyCommand == "" {
+		t.Fatal("f3 KittyCommand is empty, want native Kitty command")
+	}
+}
+
+func TestConfigLineGeneratesAMXRootDashboardLaunch(t *testing.T) {
+	dashboard := findAction(t, "ctrl+shift+d")
+
+	want := "map ctrl+shift+d launch --type=overlay --allow-remote-control amx"
+	if got := dashboard.ConfigLine(); got != want {
+		t.Fatalf("dashboard ConfigLine() = %q, want %q", got, want)
+	}
+}
+
+func TestConfigLineGeneratesNativeKittyCommands(t *testing.T) {
+	tests := map[string]string{
+		"f3":    `map f3 toggle_marker iregex 1 \\bError\\b 2 \\bFailed\\b 3 \\bWarning\\b 3 \\bDEPRECATED\\b`,
+		"f12":   "map f12 launch --allow-remote-control kitty +kitten broadcast",
+		"cmd+0": "map cmd+0 goto_tab 10",
+		"cmd+l": "map cmd+l goto_tab -1",
+	}
+
+	for key, want := range tests {
+		action := findAction(t, key)
+		if got := action.ConfigLine(); got != want {
+			t.Fatalf("%s ConfigLine() = %q, want %q", key, got, want)
+		}
+	}
+}
+
+func TestActionsGenerateConcreteConfigLines(t *testing.T) {
+	for _, action := range Actions {
+		line := action.ConfigLine()
+		if line == "" {
+			t.Fatalf("%s ConfigLine() is empty", action.Key)
+		}
+		if !strings.HasPrefix(line, "map "+action.Key+" ") {
+			t.Fatalf("%s ConfigLine() = %q, want map prefix", action.Key, line)
+		}
+	}
 }
 
 func TestActionsUseConcreteKittyKeyExpressions(t *testing.T) {

@@ -16,11 +16,11 @@ type Query struct {
 }
 
 // Result is one matching plan. Matches is the case-insensitive substring
-// count across the plan's search corpus (snippet short-circuits to 1).
-// Preview is the source line containing the first match — for snippet
-// short-circuits that's the snippet itself; for sidecar matches it's a
-// lowercased line (the sidecar is stored lowercased and is the only
-// source available without re-reading every .md file).
+// count across the plan's search corpus. Preview is the source line
+// containing the first match — when the cached snippet matches it is
+// preferred as the preview; otherwise sidecar matches use a lowercased
+// line (the sidecar is stored lowercased and is the only source available
+// without re-reading every .md file).
 type Result struct {
 	Meta    PlanMeta
 	Matches int
@@ -52,14 +52,13 @@ func Search(idx *Index, q Query) ([]Result, error) {
 	}
 
 	for _, m := range metas {
-		// Snippet short-circuit: when the needle already appears in the
-		// cached snippet we emit a result with Matches=1 and the snippet
-		// as preview, skipping the sidecar read entirely. Trades exact
-		// match count for a constant-time lookup. Snippets are stored
-		// as written (not lowercased) so lowercase for compare.
+		// Snippets are stored as written (not lowercased), so lowercase
+		// here for case-insensitive comparison. A matching snippet is a
+		// preview preference; when the sidecar exists, it still supplies
+		// the exact match count for ranking.
+		snippetPreview := ""
 		if m.Snippet != "" && strings.Contains(strings.ToLower(m.Snippet), needle) {
-			results = append(results, Result{Meta: m, Matches: 1, Preview: m.Snippet})
-			continue
+			snippetPreview = m.Snippet
 		}
 		key := PlanKey(m.DirPath)
 		searchText, err := idx.store.Read(key)
@@ -71,11 +70,17 @@ func Search(idx *Index, q Query) ([]Result, error) {
 			// Missing sidecar: skip the entry. Rebuilding sidecars is
 			// the index's job (Refresh); doing it here would risk
 			// repeated rebuilds on every keystroke.
+			if snippetPreview != "" {
+				results = append(results, Result{Meta: m, Matches: 1, Preview: snippetPreview})
+			}
 			continue
 		}
 		count, preview := countMatchesInSearchText(searchText, needle)
 		if count == 0 {
 			continue
+		}
+		if snippetPreview != "" {
+			preview = snippetPreview
 		}
 		results = append(results, Result{Meta: m, Matches: count, Preview: preview})
 	}

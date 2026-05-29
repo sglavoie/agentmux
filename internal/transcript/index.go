@@ -89,7 +89,14 @@ func LoadIndexAt(path string) (*Index, error) {
 		}
 		return nil, fmt.Errorf("decoding transcript index %s: %w", path, err)
 	}
-	return idx, nil
+	if tok, err := dec.Token(); err != nil {
+		if errors.Is(err, io.EOF) {
+			return idx, nil
+		}
+		return nil, fmt.Errorf("decoding transcript index %s: %w", path, err)
+	} else {
+		return nil, fmt.Errorf("decoding transcript index %s: trailing data after top-level object: %v", path, tok)
+	}
 }
 
 // Path returns the absolute on-disk path backing this index.

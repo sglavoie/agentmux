@@ -85,7 +85,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// cancelPendingLocked supersedes the pending entry (see notify.go MaybeNotify).
 	switch req.Action {
 	case "idle", "clear", "user_clear", "stop", "stop_failure":
-		h.notifier.CancelPending(req.WindowID)
+		h.cancelPendingNotification(req.WindowID)
 	}
 
 	// SubagentStart: increment reference count so the robot icon persists
@@ -169,7 +169,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			// Refresh the subagent guard so it does not expire while agents run.
 			h.guard.TryUpdate(req.WindowID, "subagent", false)
 			if req.Event == "permissionRequest" {
-				h.notifier.CancelPending(req.WindowID)
+				h.cancelPendingNotification(req.WindowID)
 			}
 			slog.Debug("copilot mid-subagent suppression",
 				"window_id", req.WindowID,
@@ -190,7 +190,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// progress (auto-approved) or a later explicit prompt notification
 	// (permission_prompt or elicitation_dialog).
 	if isCopilotPermissionRequest(req) {
-		h.notifier.CancelPending(req.WindowID)
+		h.cancelPendingNotification(req.WindowID)
 		h.stateMu.Lock()
 		now := time.Now()
 		h.copilotToolPermissionState[req.WindowID] = copilotToolPermissionPending
@@ -248,7 +248,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// "active" and ask the indicator to clear the persisting stop icon.
 	if req.Action == "active" && !req.IsPrompt {
 		if prevAction == "stop" || prevAction == "stop_failure" {
-			h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Account, req.Action, req.PipeMode)
+			h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, req.Action, req.PipeMode)
 			h.stateMu.Lock()
 			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonActiveAfterTerminal))
 			h.stateMu.Unlock()
@@ -280,7 +280,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		// still warrant a notification (permission/stop/failure/elicitation).
 		// Pass req.Action — the notifier filters by its own per-action config and
 		// cooldown, so this cannot double-fire with the success path below.
-		h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Account, req.Action, req.PipeMode)
+		h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, req.Action, req.PipeMode)
 		h.stateMu.Lock()
 		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked))
 		h.stateMu.Unlock()
@@ -403,9 +403,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.stateMu.Unlock()
 	}
 	if isCopilotAutoApprovedPerm {
-		h.notifier.CancelPending(req.WindowID)
+		h.cancelPendingNotification(req.WindowID)
 	} else {
-		h.notifier.MaybeNotify(req.WindowID, req.SessionTitle, req.Account, effective, req.PipeMode)
+		h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, effective, req.PipeMode)
 	}
 
 	h.stateMu.Lock()

@@ -70,6 +70,18 @@ func TestLoadMissingVersionDefaultsToCurrentVersion(t *testing.T) {
 	}
 }
 
+func TestLoadFutureVersionReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "overrides.json")
+	t.Setenv(overrides.PathEnvVar, path)
+	if err := os.WriteFile(path, []byte(`{"version":2,"entries":[]}`), 0o644); err != nil {
+		t.Fatalf("seed overrides file: %v", err)
+	}
+
+	if _, err := overrides.Load(); err == nil {
+		t.Fatal("expected error for unsupported future version")
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "overrides.json"))
 
@@ -141,6 +153,19 @@ func TestSaveMissingVersionDefaultsToCurrentVersion(t *testing.T) {
 	}
 	if decoded.Version != 1 {
 		t.Fatalf("Version: got %d, want 1; raw=%s", decoded.Version, raw)
+	}
+}
+
+func TestSaveFutureVersionReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "overrides.json")
+	t.Setenv(overrides.PathEnvVar, path)
+
+	err := overrides.Save(overrides.File{Version: 2})
+	if err == nil {
+		t.Fatal("expected error for unsupported future version")
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no file written for unsupported version, stat err=%v", statErr)
 	}
 }
 

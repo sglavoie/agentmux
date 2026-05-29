@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
@@ -22,7 +24,7 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.mode = m.configPickerReturnMode
 			if m.configPickerReturnMode == ModePicker && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
 				defaultProfile := m.pickerSessions[m.configPickerProjectIdx].EffectiveProfile()
-				if acc.Name == defaultProfile {
+				if strings.EqualFold(acc.Name, defaultProfile) {
 					delete(m.pickerProfileOverride, m.configPickerProjectIdx)
 				} else {
 					if m.pickerProfileOverride == nil {
@@ -36,7 +38,7 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			if acc.Name == m.configPickerCurrent {
+			if strings.EqualFold(acc.Name, m.configPickerCurrent) {
 				return m, nil
 			}
 			return m, m.restartWithAccountCmd(acc)

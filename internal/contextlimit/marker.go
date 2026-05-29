@@ -5,6 +5,11 @@ package contextlimit
 
 import "strings"
 
+const (
+	maxScreenMarkerLines   = 9
+	maxTrailingStatusLines = 1
+)
+
 func HasMarker(text string) bool {
 	normalized := strings.ToLower(strings.Join(strings.Fields(stripTerminalEscapes(text)), " "))
 	if normalized == "" {
@@ -26,8 +31,8 @@ func HasMarker(text string) bool {
 
 func ScreenShowsMarker(text string) bool {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	tail := make([]string, 0, 8)
-	for i := len(lines) - 1; i >= 0 && len(tail) < 8; i-- {
+	tail := make([]string, 0, maxScreenMarkerLines+maxTrailingStatusLines)
+	for i := len(lines) - 1; i >= 0 && len(tail) < maxScreenMarkerLines+maxTrailingStatusLines; i-- {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
@@ -38,8 +43,8 @@ func ScreenShowsMarker(text string) bool {
 		return true
 	}
 
-	for markerLines := 4; markerLines <= 7; markerLines++ {
-		for trailingLines := 1; trailingLines >= 0; trailingLines-- {
+	for markerLines := 4; markerLines <= maxScreenMarkerLines; markerLines++ {
+		for trailingLines := maxTrailingStatusLines; trailingLines >= 0; trailingLines-- {
 			if len(tail) < markerLines+trailingLines {
 				continue
 			}

@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -162,6 +163,11 @@ func parseCodexHooksSection(raw map[string]json.RawMessage) (map[string][]hookGr
 	}
 
 	for key, value := range raw {
+		if !managed[key] && isJSONNull(value) {
+			passthrough[key] = value
+			continue
+		}
+
 		var groups []hookGroup
 		if err := json.Unmarshal(value, &groups); err != nil {
 			if managed[key] {
@@ -174,4 +180,8 @@ func parseCodexHooksSection(raw map[string]json.RawMessage) (map[string][]hookGr
 	}
 
 	return hookGroups, passthrough, nil
+}
+
+func isJSONNull(raw json.RawMessage) bool {
+	return bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
 }

@@ -52,3 +52,16 @@ func TestSplitShellArgs_DoubleQuotedBackslashes(t *testing.T) {
 		})
 	}
 }
+
+func TestSplitShellArgs_BackslashNewlineContinuesLine(t *testing.T) {
+	raw := "cmd foo\\\nbar \"a\\\nb\" \\\n next"
+	want := []string{"cmd", "foobar", "ab", "next"}
+
+	got, err := splitShellArgs(raw)
+	if err != nil {
+		t.Fatalf("splitShellArgs(%q): %v", raw, err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("splitShellArgs(%q) = %#v, want %#v", raw, got, want)
+	}
+}

@@ -74,6 +74,11 @@ func splitShellArgs(raw string) ([]string, error) {
 	for _, r := range raw {
 		switch {
 		case escaping:
+			if r == '\n' {
+				escaping = false
+				escapeDouble = false
+				continue
+			}
 			if escapeDouble && !isDoubleQuoteEscapedRune(r) {
 				current.WriteRune('\\')
 			}
@@ -116,7 +121,6 @@ func splitShellArgs(raw string) ([]string, error) {
 				tokenStarted = true
 			case r == '\\':
 				escaping = true
-				tokenStarted = true
 			default:
 				current.WriteRune(r)
 				tokenStarted = true
