@@ -8,12 +8,12 @@ import "strings"
 const helpMinVisible = 3
 
 // helpSections is the static list of sections rendered in the keyboard
-// shortcut overlay. Sections are ordered by frequency-of-use (Pareto),
-// and each section caps at ≤7 entries so the user can chunk the list
-// without scanning it linearly. Keys that overload across modes (e.g.
-// `tab`/`esc`) are listed under the section where they're most often
-// reached for; the footer/actions overlay disclose mode-specific meanings
-// inline.
+// shortcut overlay. Sections are ordered by frequency-of-use (Pareto);
+// the overlay is scrollable (see ▲/▼ indicators) so taller sections are
+// acceptable when grouping is more useful than capping length. Keys that
+// overload across modes (e.g. `tab`/`esc`) are listed under the section
+// where they're most often reached for; the footer/actions overlay
+// disclose mode-specific meanings inline.
 var helpSections = []struct {
 	name  string
 	lines []string
@@ -27,8 +27,23 @@ var helpSections = []struct {
 		"  pgup      page up",
 		"  g         go to top",
 		"  G         go to bottom",
+		"  }         next attention session + focus tab",
+		"  {         previous attention session + focus tab",
 		"  tab       focus next filter chip",
 		"  esc       clear filter / back out of overlay",
+	}},
+	{"Bracket jump", []string{
+		"  ]]        next attention session",
+		"  [[        previous attention session",
+		"  ]p / [p   next/prev permission request",
+		"  ]e / [e   next/prev failure (error or warning)",
+		"  ]a / [a   next/prev active session",
+		"  ]q / [q   next/prev awaiting-response (question)",
+		"  ]s / [s   next/prev stopped session",
+		"  ]c / [c   next/prev compacting session",
+		"  ]b / [b   next/prev subagent session",
+		"  esc       cancel pending chord",
+		"  (attention set configurable via [defaults.jump])",
 	}},
 	{"Act on row", []string{
 		"  enter     focus the session's tab",

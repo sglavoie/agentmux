@@ -45,6 +45,7 @@ type sessionSearchDoneMsg struct {
 // cached index (no re-refresh per keypress — the dev machine takes ~10s to
 // rescan ~1700 sessions, per S5 notes).
 func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
+	m.clearJumpChord()
 	m.mode = ModeSessionSearch
 	m.sessionCursor = 0
 	m.sessionOffset = 0

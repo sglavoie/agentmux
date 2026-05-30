@@ -112,6 +112,16 @@ hook_silence = 14400
 # keep_days = 30
 # scan_max_age_days = 30
 
+# Bracket-key navigation: the set of session states that ]/[ (cursor jump)
+# and }/{ (cursor jump + Kitty tab focus) treat as "attention". Defaults to
+# the four states below — add "stop" to also land on cleanly stopped
+# sessions, or other names from
+# {bolt, stop, key, warning, error, subagent, compact, question}.
+# An omitted section or an empty list both fall back to the default set;
+# unknown state names fail config validation.
+# [defaults.jump]
+# attention_states = ["key", "error", "warning", "question"]
+
 [defaults.notifications]
 
 # Notify when a session is waiting for your permission to use a tool.

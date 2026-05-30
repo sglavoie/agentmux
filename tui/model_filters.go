@@ -34,6 +34,7 @@ func (m *Model) applyFilterChange(f Filter) {
 // snapshots the current filter so Esc can restore it. The pre-fill is parsed
 // and live-applied immediately so the list reflects the buffer on entry.
 func (m *Model) enterFilter(prefill string) {
+	m.clearJumpChord()
 	m.savedFilter = m.activeFilter
 	m.filterText = prefill
 	m.activeFilter = Parse(prefill)

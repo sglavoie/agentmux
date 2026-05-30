@@ -10,6 +10,31 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.snapshotSeenStates()
 	key := msg.String()
 
+	// Chord intercept. When ]/[ has set pendingJumpDir, the very next key is
+	// the chord follow-up — including q, which would otherwise quit, and
+	// single letters like p/e/a/c that map to existing list actions. The
+	// bracket keys themselves bypass the intercept so their cases can handle
+	// the double-tap (]] / [[) attention jump.
+	if m.pendingJumpDir != 0 && key != keyJumpAttentionPrev && key != keyJumpAttentionNext {
+		dir := m.pendingJumpDir
+		m.pendingJumpDir = 0
+		if key == keyEsc {
+			return m, nil
+		}
+		if matcher := chordStateMatcher(key); matcher != nil {
+			if next := findNextMatching(m.filtered, m.cursor, dir, matcher); next >= 0 {
+				m.cursor = next
+				scrollListToCursor(&m)
+				if cmd := m.refreshPreviewForCursor(); cmd != nil {
+					return m, cmd
+				}
+			}
+			return m, nil
+		}
+		// Unknown chord key: chord is canceled (pendingJumpDir already
+		// reset); fall through so the keypress hits its normal handler.
+	}
+
 	switch key {
 	case keyCtrlC, keyQ:
 		return m, tea.Quit
@@ -27,6 +52,70 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
+
+	case keyJumpAttentionNext:
+		if m.pendingJumpDir == +1 {
+			// Double-tap ]]: perform the attention-set jump.
+			m.pendingJumpDir = 0
+			attn := isAttentionStateFor(m.attentionStates)
+			if next := findNextMatching(m.filtered, m.cursor, +1, attn); next >= 0 {
+				m.cursor = next
+				scrollListToCursor(&m)
+				if cmd := m.refreshPreviewForCursor(); cmd != nil {
+					return m, cmd
+				}
+			}
+			return m, nil
+		}
+		// Single-tap ]: arm the chord.
+		m.pendingJumpDir = +1
+		return m, nil
+
+	case keyJumpAttentionPrev:
+		if m.pendingJumpDir == -1 {
+			// Double-tap [[: perform the attention-set jump backward.
+			m.pendingJumpDir = 0
+			attn := isAttentionStateFor(m.attentionStates)
+			if prev := findNextMatching(m.filtered, m.cursor, -1, attn); prev >= 0 {
+				m.cursor = prev
+				scrollListToCursor(&m)
+				if cmd := m.refreshPreviewForCursor(); cmd != nil {
+					return m, cmd
+				}
+			}
+			return m, nil
+		}
+		// Single-tap [: arm the chord.
+		m.pendingJumpDir = -1
+		return m, nil
+
+	case keyJumpAttentionNextFocus:
+		attn := isAttentionStateFor(m.attentionStates)
+		if next := findNextMatching(m.filtered, m.cursor, +1, attn); next >= 0 {
+			m.cursor = next
+			scrollListToCursor(&m)
+			s := m.filtered[m.cursor]
+			cmds := []tea.Cmd{focusCmd(m.client, s.TabID)}
+			if cmd := m.refreshPreviewForCursor(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return m, tea.Batch(cmds...)
+		}
+		return m, nil
+
+	case keyJumpAttentionPrevFocus:
+		attn := isAttentionStateFor(m.attentionStates)
+		if prev := findNextMatching(m.filtered, m.cursor, -1, attn); prev >= 0 {
+			m.cursor = prev
+			scrollListToCursor(&m)
+			s := m.filtered[m.cursor]
+			cmds := []tea.Cmd{focusCmd(m.client, s.TabID)}
+			if cmd := m.refreshPreviewForCursor(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return m, tea.Batch(cmds...)
+		}
+		return m, nil
 
 	case keyG:
 		m.cursor = 0

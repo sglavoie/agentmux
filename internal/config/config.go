@@ -182,6 +182,9 @@ func applyDefaults(cfg *Config) {
 		t := true
 		cfg.Defaults.Watchdog.ClaudeContextLimitProbe = &t
 	}
+	if len(cfg.Defaults.Jump.AttentionStates) == 0 {
+		cfg.Defaults.Jump.AttentionStates = []string{"key", "error", "warning", "question"}
+	}
 	if cfg.Defaults.SessionArchive.KeepDays == 0 {
 		cfg.Defaults.SessionArchive.KeepDays = 30
 	}

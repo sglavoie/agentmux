@@ -17,16 +17,23 @@ import (
 // Model is the root Bubble Tea model for the dashboard.
 type Model struct {
 	// deps
-	client   kitty.KittyClient
-	cfg      *config.Config
-	interval time.Duration
-	sortMode string
+	client          kitty.KittyClient
+	cfg             *config.Config
+	interval        time.Duration
+	sortMode        string
+	attentionStates map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
 
 	// session state
 	sessions   []session.RunningSession // sorted full list
 	filtered   []session.RunningSession // sessions after query+filter applied
 	cursor     int
 	listOffset int // top row index for the scrollable list view in ModeList
+
+	// pendingJumpDir holds the direction of a pending bracket-key chord:
+	// 0 = no chord pending, +1 = ] pressed, -1 = [ pressed. Cleared on
+	// chord completion, on Esc, on any unknown follow-up key, and on
+	// transitions out of ModeList via clearJumpChord().
+	pendingJumpDir int
 
 	// mode
 	mode Mode
@@ -273,11 +280,16 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 	if err != nil {
 		amxBin = "amx"
 	}
+	attn := make(map[string]bool, len(cfg.Defaults.Jump.AttentionStates))
+	for _, s := range cfg.Defaults.Jump.AttentionStates {
+		attn[s] = true
+	}
 	return Model{
 		client:           client,
 		cfg:              cfg,
 		interval:         interval,
 		sortMode:         sort,
+		attentionStates:  attn,
 		idleThreshold:    idle,
 		focusedChipIdx:   -1,
 		amxBin:           amxBin,

@@ -40,6 +40,17 @@ const (
 	keyToggleTimestamps = "T" // toggle timestamp column in timeline (ModeDetail)
 	keyPhasePrev        = "[" // jump to previous phase header in timeline
 	keyPhaseNext        = "]" // jump to next phase header in timeline
+	// keyJumpAttentionPrev/Next: in ModeList, jumps the cursor to the
+	// previous/next session whose state is in the attention set. Shares the
+	// same string values as keyPhasePrev/keyPhaseNext above; disambiguation
+	// is by mode, exactly like keyOpenTimeline below.
+	keyJumpAttentionPrev = "["
+	keyJumpAttentionNext = "]"
+	// keyJumpAttentionPrevFocus/NextFocus: jump cursor like
+	// keyJumpAttentionPrev/Next, then focus the Kitty tab. Useful for
+	// "address the next attention item" in one keystroke.
+	keyJumpAttentionPrevFocus = "{"
+	keyJumpAttentionNextFocus = "}"
 	// keyOpenTimeline is the same key string as keyToggleTimestamps; disambiguation is by mode.
 	// In ModeList: open detail pane directly in timeline mode.
 	keyOpenTimeline = "T"

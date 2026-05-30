@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // Validate performs cross-section validation on a loaded Config.
@@ -20,6 +21,7 @@ func Validate(cfg *Config) error {
 	normalizeAliases(cfg)
 
 	errs = append(errs, validateDefaults(&cfg.Defaults)...)
+	errs = append(errs, validateJump(&cfg.Defaults.Jump)...)
 	errs = append(errs, validateHarnessColors(cfg)...)
 	errs = append(errs, validateAccounts(cfg.Profiles)...)
 	errs = append(errs, validateSessions(cfg.Projects, cfg.Profiles)...)
@@ -99,6 +101,32 @@ func validateDefaults(d *Defaults) []string {
 	}
 	if d.Notifications.PermissionDebounceMs < 0 {
 		errs = append(errs, "defaults.notifications.permission_debounce_ms must be >= 0")
+	}
+	return errs
+}
+
+func validateJump(j *JumpConfig) []string {
+	if len(j.AttentionStates) == 0 {
+		return nil
+	}
+	known := palette.StateOrder()
+	knownSet := make(map[string]bool, len(known))
+	for _, s := range known {
+		knownSet[s] = true
+	}
+	sortedKnown := make([]string, len(known))
+	copy(sortedKnown, known)
+	sort.Strings(sortedKnown)
+	validList := strings.Join(sortedKnown, ", ")
+
+	var errs []string
+	for _, s := range j.AttentionStates {
+		if !knownSet[s] {
+			errs = append(errs, fmt.Sprintf(
+				"defaults.jump.attention_states: unknown state %q\n  → valid states: %s",
+				s, validList,
+			))
+		}
 	}
 	return errs
 }

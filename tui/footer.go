@@ -59,14 +59,24 @@ func renderFooter(m Model) string {
 		line1 = styleFooter.Render("  [i] index only · ") + styleError.Render("[f] also delete file") + styleFooter.Render(" · [esc] cancel")
 		line2 = ""
 	default: // ModeList
-		if m.previewEnabled {
+		switch {
+		case m.pendingJumpDir != 0:
+			// Bracket chord pending: show the chord vocabulary instead of
+			// the usual nav row so the user can complete or cancel.
+			arrow := "next"
+			if m.pendingJumpDir == -1 {
+				arrow = "prev"
+			}
+			line1 = listFooterLine1(m)
+			line2 = styleFooter.Render(fmt.Sprintf("  jump %s: p)perm  e)fail  a)active  q)question  s)stop  c)compact  b)sub  ]]/[[)attention  (esc cancels)", arrow))
+		case m.previewEnabled:
 			// In preview mode the only binding shown is `p: hide preview`,
 			// which is rendered right-aligned in the title row.
 			line1 = ""
 			line2 = ""
-		} else {
+		default:
 			line1 = listFooterLine1(m)
-			nav := "j/k: up/down  enter: focus  a: actions  /: filter  ?: help  q: quit  p: preview"
+			nav := "j/k: up/down  ]/[: jump-chord  }/{: nav+focus  enter: focus  a: actions  /: filter  ?: help  q: quit  p: preview"
 			if !m.activeFilter.IsEmpty() {
 				nav += "  esc: clear filters"
 				if n := len(m.activeFilter.Components()); n > 0 {

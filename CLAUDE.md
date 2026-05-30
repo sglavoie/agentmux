@@ -152,6 +152,9 @@ compact = 180                # seconds before a compaction icon is flagged
 hook_silence = 14400         # seconds without any hook event for a profile
 claude_context_limit_probe = true  # detect Claude context-limit stalls; default true
 
+[defaults.jump]              # bracket-key (]/[ and }/{) attention-state navigation
+attention_states = ["key", "error", "warning", "question"]  # default; unknown names fail validation
+
 [[accounts]]
 name = "work"
 config_dir = "~/.config/claude-work"
@@ -176,6 +179,10 @@ disabled_events = ["Stop"]  # suppress hook events for this account
 **Deprecation**: `stale_active_threshold` is replaced by `[defaults.watchdog].active`. The legacy key still loads and is mirrored into `Watchdog.Active` when the new field is unset; both surface in `amx config show` via `Deprecations`.
 
 **`claude_context_limit_probe`**: when true (default), the daemon periodically scans Claude session screens for the "Context limit reached · /compact or /clear to continue" banner and, on detection, swaps the bolt ⚡ icon to error ❗ and fires a one-shot notification (gated independently by `[defaults.notifications].stop_failure`). Set to `false` to disable the probe entirely.
+
+**`[defaults.jump].attention_states`**: bracket-key navigation in the TUI list. `]]`/`[[` (double-tap) jump the cursor to the next/previous session whose state is in this set; `}`/`{` do the same plus focus the Kitty tab in one keystroke. Defaults to `["key", "error", "warning", "question"]`. Valid state names come from `palette.StateOrder()`: `bolt`, `stop`, `key`, `warning`, `error`, `subagent`, `compact`, `question`. Omitting the section or setting an empty list both fall back to the default; an unknown name fails validation.
+
+**Bracket chord keys**: a single `]` (or `[`) in the TUI list arms a chord; the next keystroke selects a specific state to jump to (independent of `attention_states`). The vocabulary is fixed: `p` → permission (`key`), `e` → failure (`error` or `warning`), `a` → active (`bolt`), `q` → question, `s` → stopped, `c` → compacting, `b` → subagent. Double-tap `]]`/`[[` performs the configurable attention-set jump. `esc` (or any unknown key) cancels the pending chord.
 
 The config path defaults to `~/.config/cc-manager/config.toml` and can be overridden with `amx_CONFIG` environment variable.
 

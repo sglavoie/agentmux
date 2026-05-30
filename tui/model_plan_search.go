@@ -41,6 +41,7 @@ type planSearchDoneMsg struct {
 // enterPlanSearch swaps to ModePlanSearch, lazily builds the index, and
 // dispatches an async refresh. Subsequent entries reuse the cached index.
 func (m Model) enterPlanSearch() (tea.Model, tea.Cmd) {
+	m.clearJumpChord()
 	m.mode = ModePlanSearch
 	m.planCursor = 0
 	m.planOffset = 0

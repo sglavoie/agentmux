@@ -52,8 +52,18 @@ type Defaults struct {
 	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
 	Notifications        NotificationConfig   `toml:"notifications"`
 	Preview              PreviewConfig        `toml:"preview"`
+	Jump                 JumpConfig           `toml:"jump"`            // bracket-key (]/[ and }/{) attention-state navigation
 	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the `O` keybinding (Open in editor)
 	PlansDirectory       string               `toml:"plans_directory"` // root for the `P` keybinding's plans index; defaults to ~/.local/share/agent-plans
+}
+
+// JumpConfig controls which session states the TUI bracket-key navigation
+// (]/[ and }/{) treats as "attention". When AttentionStates is empty,
+// applyDefaults fills it with the canonical set
+// ["key", "error", "warning", "question"]. Validation rejects unknown state
+// names (anything outside palette.StateOrder()).
+type JumpConfig struct {
+	AttentionStates []string `toml:"attention_states"`
 }
 
 // WatchdogConfig holds per-state stale-detection thresholds, in seconds. A
