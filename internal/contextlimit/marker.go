@@ -16,10 +16,13 @@ func HasMarker(text string) bool {
 		return false
 	}
 
-	hasLimitMessage := strings.Contains(normalized, "context limit reached") ||
-		strings.Contains(normalized, "context window is full") ||
+	if strings.Contains(normalized, "context limit reached") {
+		return strings.Contains(normalized, "/compact")
+	}
+
+	hasWindowFullMessage := strings.Contains(normalized, "context window is full") ||
 		strings.Contains(normalized, "context window full")
-	if !hasLimitMessage {
+	if !hasWindowFullMessage {
 		return false
 	}
 

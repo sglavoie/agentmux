@@ -14,6 +14,11 @@ func TestHasMarker(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "context limit compact hint",
+			text: "Context limit reached. Run /compact to continue.",
+			want: true,
+		},
+		{
 			name: "window full variant",
 			text: "Context window is full\n/compact or /clear to continue",
 			want: true,
@@ -31,6 +36,11 @@ func TestHasMarker(t *testing.T) {
 		{
 			name: "missing recovery hint",
 			text: "Context limit reached",
+			want: false,
+		},
+		{
+			name: "compact hint without context limit",
+			text: "Run /compact when you want to summarize the conversation.",
 			want: false,
 		},
 		{
@@ -60,6 +70,11 @@ func TestScreenShowsMarker(t *testing.T) {
 		{
 			name: "warning wrapped across narrow screen tail",
 			text: "earlier line\n\nContext limit reached\n/compact or /clear\nto continue\n\n✻ Cooked for 17m 6s\n",
+			want: true,
+		},
+		{
+			name: "warning wrapped with compact-only hint at screen tail",
+			text: "earlier line\n\nContext\nlimit\nreached\n/compact\n\n✻ Cooked for 17m 6s\n",
 			want: true,
 		},
 		{
