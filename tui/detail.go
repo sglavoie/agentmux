@@ -205,7 +205,7 @@ func detailHeader(m Model) string {
 	if r, sz := utf8.DecodeRuneInString(s.Account); sz > 0 && r != utf8.RuneError {
 		acctBadge = strings.ToUpper(string(r))
 	}
-	colorName := buildProfileColorMap(m)[s.Account]
+	colorName := projectIdentityColor(s, buildProfileColorMap(m), m.cfg)
 	badge := accountStyle(colorName).Render("[" + acctBadge + "]")
 
 	icon := ""

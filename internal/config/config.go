@@ -36,6 +36,7 @@ func parseConfig(data []byte) (*Config, error) {
 		return nil, err
 	}
 	cfg.Deprecations = collectDeprecations(&cfg, md)
+	cfg.harnessEmojiKeyConflicts = detectHarnessEmojiKeyConflicts(cfg.HarnessEmojis)
 	cfg.harnessColorKeyConflicts = detectHarnessColorKeyConflicts(cfg.HarnessColors)
 	applyDefaults(&cfg)
 	return &cfg, nil
@@ -238,6 +239,10 @@ func normalizeAliases(cfg *Config) {
 		cfg.Defaults.Args = cloneStrings(cfg.Defaults.ClaudeFlags)
 	}
 
+	if len(cfg.harnessEmojiKeyConflicts) == 0 {
+		cfg.harnessEmojiKeyConflicts = detectHarnessEmojiKeyConflicts(cfg.HarnessEmojis)
+	}
+	cfg.HarnessEmojis = normalizeHarnessEmojis(cfg.HarnessEmojis)
 	if len(cfg.harnessColorKeyConflicts) == 0 {
 		cfg.harnessColorKeyConflicts = detectHarnessColorKeyConflicts(cfg.HarnessColors)
 	}
@@ -309,7 +314,15 @@ func cloneAccounts(in []Account) []Account {
 	return out
 }
 
+func normalizeHarnessEmojis(in map[string]string) map[string]string {
+	return normalizeHarnessMap(in)
+}
+
 func normalizeHarnessColors(in map[string]string) map[string]string {
+	return normalizeHarnessMap(in)
+}
+
+func normalizeHarnessMap(in map[string]string) map[string]string {
 	if len(in) == 0 {
 		return nil
 	}
@@ -326,7 +339,15 @@ func normalizeHarnessColors(in map[string]string) map[string]string {
 	return out
 }
 
+func detectHarnessEmojiKeyConflicts(in map[string]string) []string {
+	return detectHarnessKeyConflicts(in)
+}
+
 func detectHarnessColorKeyConflicts(in map[string]string) []string {
+	return detectHarnessKeyConflicts(in)
+}
+
+func detectHarnessKeyConflicts(in map[string]string) []string {
 	if len(in) == 0 {
 		return nil
 	}

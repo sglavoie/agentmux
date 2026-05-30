@@ -29,7 +29,9 @@ func AccountPrefix(accountName string) string {
 }
 
 // FormatTitle returns the managed Kitty tab base title for a session.
-// Palette icons and the star marker are layered on top of this base title.
-func FormatTitle(sess config.Session) string {
-	return sess.Title
+// The harness emoji (when configured via [harness_emojis]) is prepended as the
+// last prefix, immediately before the project name. Palette icons and the
+// star/mute markers are layered on top of this base title.
+func FormatTitle(sess config.Session, acc config.Account, cfg *config.Config) string {
+	return cfg.HarnessEmoji(acc.EffectiveHarness()) + sess.Title
 }

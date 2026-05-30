@@ -15,9 +15,13 @@ type Config struct {
 	Sessions []Session   `toml:"sessions"` // deprecated alias; mirrored from Projects on load
 	Hooks    HooksConfig `toml:"hooks"`
 
+	// HarnessEmojis maps a harness name (normalized) to a single emoji
+	// glyph used as the harness badge in the Kitty tab title. Looked up
+	// by Config.HarnessEmoji.
+	HarnessEmojis map[string]string `toml:"harness_emojis"`
+
 	// HarnessColors maps a harness name (normalized) to a palette color
-	// name. Looked up by Config.HarnessColor. Replaces the per-profile
-	// Account.Color field, which is being phased out.
+	// name. Used for harness-name cells in the dashboard and launch picker.
 	HarnessColors map[string]string `toml:"harness_colors"`
 
 	// Deprecations records any legacy TOML keys encountered during Load.
@@ -26,6 +30,7 @@ type Config struct {
 	// the TUI as a one-line banner pointing the user at the migration.
 	Deprecations []Deprecation `toml:"-"`
 
+	harnessEmojiKeyConflicts []string
 	harnessColorKeyConflicts []string
 }
 
@@ -131,10 +136,10 @@ type Account struct {
 	HomeDir   string `toml:"home_dir"`
 	ConfigDir string `toml:"config_dir"`
 	// Color is the required per-profile palette color used to render the
-	// project title (picker, main list, detail header, preview headers, and
-	// account chips/badges). Distinct from [harness_colors], which colors
-	// harness affordances (the Kitty tab bar and the harness path/cell).
-	// Validation rejects an empty or invalid value.
+	// project title (picker, main list, detail header, preview headers,
+	// and account chips/badges) and the Kitty tab-bar accent for every
+	// session launched under this profile. Validation rejects an empty or
+	// invalid value.
 	Color    string         `toml:"color"`
 	Args     []string       `toml:"args"`
 	Watchdog WatchdogConfig `toml:"watchdog"` // per-profile override; zero fields fall back to defaults at read time
@@ -204,9 +209,19 @@ func (a Account) EffectiveHarness() string {
 	return harness.Normalize(a.Harness)
 }
 
-// HarnessColor returns the configured tab color for the named harness,
-// or "" if none is set. Normalizes the harness name so callers can pass
-// raw or effective harness names interchangeably.
+// HarnessEmoji returns the configured tab-title emoji badge for the named
+// harness, or "" if none is set. Normalizes the harness name so callers
+// can pass raw or effective harness names interchangeably.
+func (c *Config) HarnessEmoji(name string) string {
+	if c == nil {
+		return ""
+	}
+	return c.HarnessEmojis[harness.Normalize(name)]
+}
+
+// HarnessColor returns the configured UI color for the named harness, or ""
+// if none is set. Normalizes the harness name so callers can pass raw or
+// effective harness names interchangeably.
 func (c *Config) HarnessColor(name string) string {
 	if c == nil {
 		return ""
@@ -224,6 +239,24 @@ func (c *Config) ProfileColor(profileName string) string {
 	for _, p := range c.Profiles {
 		if strings.EqualFold(p.Name, profileName) {
 			return p.Color
+		}
+	}
+	return ""
+}
+
+// DefaultProfileFor returns the configured default profile name for the
+// project whose title matches projectTitle, or "" if none matches.
+// Override-aware callers use this to look up the project's identity color
+// after the in-memory session has been rewritten by sessionWithProfile.
+// Matches case-sensitively because project titles are user-authored and used
+// as the dedup key elsewhere.
+func (c *Config) DefaultProfileFor(projectTitle string) string {
+	if c == nil || projectTitle == "" {
+		return ""
+	}
+	for _, p := range c.Projects {
+		if p.Title == projectTitle {
+			return p.EffectiveProfile()
 		}
 	}
 	return ""

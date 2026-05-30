@@ -25,7 +25,7 @@ func TestValidate_NegativeWatchdogThresholds(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.Config{
-				HarnessColors: map[string]string{"claude": "blue"},
+				HarnessEmojis: map[string]string{"claude": "🦊"},
 				Profiles:      []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h"}},
 			}
 			tc.mut(&cfg.Defaults)
@@ -46,7 +46,7 @@ func TestValidate_NegativeWatchdogThresholds(t *testing.T) {
 // error so the user can locate it.
 func TestValidate_PerProfileNegativeWatchdog(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Watchdog: config.WatchdogConfig{Active: -5}},
 		},
@@ -67,7 +67,7 @@ func TestValidate_PerProfileNegativeWatchdog(t *testing.T) {
 func TestValidate_ZeroWatchdogAccepted(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 0, Subagent: 0, Compact: 0, HookSilence: 0}},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles:      []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"}},
 	}
 	if err := config.Validate(cfg); err != nil {
@@ -87,7 +87,7 @@ func TestValidate_ZeroWatchdogAccepted(t *testing.T) {
 func TestValidate_SubThirtyWatchdogWarns(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue", Watchdog: config.WatchdogConfig{Subagent: 10}},
 		},
@@ -115,7 +115,7 @@ func TestValidate_SubThirtyWatchdogWarns(t *testing.T) {
 func TestValidate_WatchdogWarningsIdempotent(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue", Watchdog: config.WatchdogConfig{Subagent: 10}},
 		},
@@ -152,7 +152,7 @@ func TestValidate_WatchdogWarningsIdempotent(t *testing.T) {
 func TestValidate_StripsStaleWatchdogWarningsOnRevalidate(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Watchdog: config.WatchdogConfig{Active: 5}},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -23,6 +24,7 @@ func Validate(cfg *Config) error {
 	errs = append(errs, validateDefaults(&cfg.Defaults)...)
 	errs = append(errs, validateJump(&cfg.Defaults.Jump)...)
 	errs = append(errs, validateHarnessColors(cfg)...)
+	errs = append(errs, validateHarnessEmojis(cfg)...)
 	errs = append(errs, validateAccounts(cfg.Profiles)...)
 	errs = append(errs, validateSessions(cfg.Projects, cfg.Profiles)...)
 	errs = append(errs, validateHookOverrides(cfg.Hooks, cfg.Profiles)...)
@@ -188,6 +190,76 @@ func validateAccounts(accounts []Account) []string {
 	return errs
 }
 
+// validateHarnessEmojis checks the [harness_emojis] table: every used
+// harness must have an entry, values must be a single emoji glyph that
+// does not collide with the palette state icons, and case-conflict
+// duplicates are rejected.
+func validateHarnessEmojis(cfg *Config) []string {
+	var errs []string
+	for _, conflict := range cfg.harnessEmojiKeyConflicts {
+		errs = append(errs, fmt.Sprintf(
+			"[harness_emojis] duplicate keys normalize to the same harness (%s)\n  → keep only one spelling for each harness",
+			conflict,
+		))
+	}
+	stateIcons := paletteStateIconSet()
+	keys := make([]string, 0, len(cfg.HarnessEmojis))
+	for k := range cfg.HarnessEmojis {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := cfg.HarnessEmojis[k]
+		if !harness.Valid(k) {
+			errs = append(errs, fmt.Sprintf(
+				"[harness_emojis] unknown harness %q\n  → valid harnesses: %s",
+				k, strings.Join(harness.Names(), ", "),
+			))
+			continue
+		}
+		if !validHarnessEmojiValue(v) {
+			errs = append(errs, fmt.Sprintf(
+				"[harness_emojis].%s: invalid emoji %q\n  → value must be a single emoji glyph (display width 1 or 2)",
+				k, v,
+			))
+			continue
+		}
+		if state, ok := stateIcons[v]; ok {
+			errs = append(errs, fmt.Sprintf(
+				"[harness_emojis].%s: %q collides with the %q state icon — tab titles parse the first emoji as state\n  → pick a glyph not in {%s}",
+				k, v, state, stateIconList(stateIcons),
+			))
+		}
+	}
+	used := map[string][]string{}
+	for _, p := range cfg.Profiles {
+		h := p.EffectiveHarness()
+		if !harness.Valid(h) {
+			continue
+		}
+		used[h] = append(used[h], p.Name)
+	}
+	harnessKeys := make([]string, 0, len(used))
+	for h := range used {
+		harnessKeys = append(harnessKeys, h)
+	}
+	sort.Strings(harnessKeys)
+	for _, h := range harnessKeys {
+		if _, ok := cfg.HarnessEmojis[h]; ok {
+			continue
+		}
+		sort.Strings(used[h])
+		errs = append(errs, fmt.Sprintf(
+			"[harness_emojis] is missing an entry for harness %q (used by profile(s): %s)",
+			h, strings.Join(used[h], ", "),
+		))
+	}
+	return errs
+}
+
+// validateHarnessColors checks the optional [harness_colors] table. When the
+// table is present, every harness referenced by a profile must have a color so
+// the dashboard and picker do not mix styled and unstyled harness cells.
 func validateHarnessColors(cfg *Config) []string {
 	var errs []string
 	for _, conflict := range cfg.harnessColorKeyConflicts {
@@ -210,13 +282,17 @@ func validateHarnessColors(cfg *Config) []string {
 			))
 			continue
 		}
-		if v == "" || !ValidColor(v) {
+		if !ValidColor(v) {
 			errs = append(errs, fmt.Sprintf(
 				"[harness_colors].%s: invalid color %q\n  → valid colors: green, blue, red, orange, purple, teal, pink, yellow, gray, cyan",
 				k, v,
 			))
 		}
 	}
+	if len(cfg.HarnessColors) == 0 {
+		return errs
+	}
+
 	used := map[string][]string{}
 	for _, p := range cfg.Profiles {
 		h := p.EffectiveHarness()
@@ -241,6 +317,56 @@ func validateHarnessColors(cfg *Config) []string {
 		))
 	}
 	return errs
+}
+
+// paletteStateIconSet returns a map from state-icon glyph to the state
+// name it represents, used to reject harness emojis that would collide
+// with the title parser's state-icon prefix.
+func paletteStateIconSet() map[string]string {
+	out := map[string]string{}
+	for _, name := range palette.StateOrder() {
+		icon := palette.StateIcon(name)
+		if icon == "" {
+			continue
+		}
+		out[icon] = name
+	}
+	return out
+}
+
+// stateIconList renders the state-icon glyphs from set in a deterministic
+// order (matching palette.StateOrder so the error message stays stable).
+func stateIconList(set map[string]string) string {
+	names := palette.StateOrder()
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		icon := palette.StateIcon(name)
+		if icon == "" {
+			continue
+		}
+		if _, ok := set[icon]; ok {
+			parts = append(parts, icon)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// validHarnessEmojiValue reports whether v looks like a single emoji
+// glyph suitable for the tab-title harness badge. The check is approximate
+// (no full grapheme clustering): the display width must be 1 or 2, and the
+// value must contain a non-ASCII rune so that text like "ab" — which has
+// width 2 from two width-1 ASCII chars — is rejected.
+func validHarnessEmojiValue(v string) bool {
+	w := runewidth.StringWidth(v)
+	if w < 1 || w > 2 {
+		return false
+	}
+	for _, r := range v {
+		if r > 127 {
+			return true
+		}
+	}
+	return false
 }
 
 // watchdogWarningReplacement is the marker placed on advisory entries

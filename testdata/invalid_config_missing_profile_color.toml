@@ -1,7 +1,7 @@
 [defaults]
 
-[harness_colors]
-claude = "blue"
+[harness_emojis]
+claude = "🦊"
 
 [[profiles]]
 name = "work"

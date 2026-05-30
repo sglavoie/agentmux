@@ -12,12 +12,11 @@ import (
 
 func TestFormatRowIconFirst(t *testing.T) {
 	acctColor := map[string]string{"work": "blue"}
-	harnessColor := map[string]string{"work": "blue"}
 	s := session.RunningSession{
 		TabID: 1, Base: "api", Account: "work",
 		Directory: "/home/user/api", State: "bolt",
 	}
-	row := formatRow(s, acctColor, harnessColor, 120, "")
+	row := formatRow(s, acctColor, nil, nil, 120, "")
 	// The bolt icon (⚡) should appear before the badge [W].
 	boltIdx := strings.Index(row, "⚡")
 	badgeIdx := strings.Index(row, "[W]")
@@ -101,12 +100,11 @@ func TestSingleGroupNoDivider(t *testing.T) {
 
 func TestFormatRowNoStateIcon(t *testing.T) {
 	acctColor := map[string]string{"work": "blue"}
-	harnessColor := map[string]string{"work": "blue"}
 	s := session.RunningSession{
 		TabID: 1, Base: "api", Account: "work",
 		Directory: "/home/user/api", State: "",
 	}
-	row := formatRow(s, acctColor, harnessColor, 120, "")
+	row := formatRow(s, acctColor, nil, nil, 120, "")
 	// No state icon, but row should start with 2-space placeholder then space then badge.
 	if !strings.HasPrefix(row, "   ") {
 		t.Errorf("expected row to start with placeholder spaces, got: %q", row)

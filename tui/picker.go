@@ -17,6 +17,22 @@ import (
 // "── running ──" divider in the picker preview pane.
 const pickerRunningPeekLines = 20
 
+// pickerHarnessCellText renders the picker's harness cell text for a single
+// account: "<emoji> <profile>/<harness>", or just "<profile>/<harness>" when
+// no emoji is configured for the harness, so unconfigured users do not see a
+// stray leading space.
+func pickerHarnessCellText(cfg *config.Config, acc config.Account) string {
+	label := acc.Name + "/" + acc.EffectiveHarness()
+	emoji := ""
+	if cfg != nil {
+		emoji = cfg.HarnessEmoji(acc.EffectiveHarness())
+	}
+	if emoji == "" {
+		return label
+	}
+	return emoji + " " + label
+}
+
 // renderPicker renders the session picker. When preview is enabled and the
 // terminal is wide enough, it splits horizontally with a config + running-peek
 // pane on the right; otherwise it falls back to a single-pane layout.
@@ -96,10 +112,10 @@ func renderPickerList(m Model, height int) string {
 	}
 
 	acctColor := buildProfileColorMap(m)
-	harnessColor := buildHarnessColorByProfileMap(m)
+	harnessColor := buildHarnessColorMap(m)
 
 	// Pre-pass: compute column widths over the filtered set so the harness
-	// badge and state-flag columns line up vertically. The checkbox prefix
+	// cell and state-flag columns line up vertically. The checkbox prefix
 	// ("[ ] " / "[*] ") is always 4 cells wide regardless of selection.
 	titleColW := 0
 	harnessColW := 0
@@ -110,7 +126,7 @@ func renderPickerList(m Model, height int) string {
 			titleColW = w
 		}
 		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
-			hw := runewidth.StringWidth("[" + acc.Name + "/" + acc.EffectiveHarness() + "]")
+			hw := runewidth.StringWidth(pickerHarnessCellText(m.cfg, acc))
 			if hw > harnessColW {
 				harnessColW = hw
 			}
@@ -178,7 +194,7 @@ func renderPickerList(m Model, height int) string {
 		}
 
 		title := configSessionDisplayTitle(sess)
-		coloredTitle := accountStyle(acctColor[sess.EffectiveProfile()]).Render(title)
+		coloredTitle := accountStyle(acctColor[defaultProfile]).Render(title)
 		titlePad := titleColW - (4 + runewidth.StringWidth(title))
 		if titlePad < 0 {
 			titlePad = 0
@@ -186,12 +202,12 @@ func renderPickerList(m Model, height int) string {
 
 		var harnessCell string
 		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
-			text := "[" + acc.Name + "/" + acc.EffectiveHarness() + "]"
+			text := pickerHarnessCellText(m.cfg, acc)
 			pad := harnessColW - runewidth.StringWidth(text)
 			if pad < 0 {
 				pad = 0
 			}
-			harnessCell = accountStyle(harnessColor[sess.EffectiveProfile()]).Render(text) + strings.Repeat(" ", pad)
+			harnessCell = accountStyle(harnessColor[acc.EffectiveHarness()]).Render(text) + strings.Repeat(" ", pad)
 		} else {
 			harnessCell = strings.Repeat(" ", harnessColW)
 		}
@@ -232,7 +248,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 	acctColor := buildProfileColorMap(m)
 
 	lines := make([]string, 0, height)
-	header := accountStyle(acctColor[sess.EffectiveProfile()]).Render(
+	header := accountStyle(acctColor[defaultProfile]).Render(
 		runewidth.Truncate(configSessionDisplayTitle(sess), width, "…"),
 	)
 	lines = append(lines, header)

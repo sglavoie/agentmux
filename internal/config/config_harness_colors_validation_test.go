@@ -7,15 +7,25 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 )
 
-// TestValidate_MissingHarnessColorListsReferringProfiles pins that the
-// validator reports a missing [harness_colors] entry for any harness used by
-// at least one profile, and the message names every profile referencing the
-// harness in sorted order so the user can locate them.
+func TestValidate_HarnessColorsOptionalWhenAbsent(t *testing.T) {
+	cfg := &config.Config{
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("missing [harness_colors] table should be accepted: %v", err)
+	}
+}
+
 func TestValidate_MissingHarnessColorListsReferringProfiles(t *testing.T) {
 	cfg := &config.Config{
+		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊", "copilot": "🚁"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/w"},
-			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p"},
+			{Name: "work", Harness: "copilot", HomeDir: "/tmp/w", Color: "blue"},
+			{Name: "personal", Harness: "copilot", HomeDir: "/tmp/p", Color: "yellow"},
 		},
 	}
 	err := config.Validate(cfg)
@@ -23,7 +33,7 @@ func TestValidate_MissingHarnessColorListsReferringProfiles(t *testing.T) {
 		t.Fatal("expected validation error for missing harness color, got nil")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "[harness_colors] is missing color for harness \"claude\"") {
+	if !strings.Contains(msg, `[harness_colors] is missing color for harness "copilot"`) {
 		t.Errorf("expected missing-harness error, got %q", msg)
 	}
 	if !strings.Contains(msg, "personal, work") {
@@ -31,14 +41,12 @@ func TestValidate_MissingHarnessColorListsReferringProfiles(t *testing.T) {
 	}
 }
 
-// TestValidate_HarnessColorsUnknownHarnessRejected pins that an entry in
-// [harness_colors] keyed by an unknown harness name is reported with the set
-// of valid harnesses appended for guidance.
 func TestValidate_HarnessColorsUnknownHarnessRejected(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue", "bogus": "red"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
 	}
 	err := config.Validate(cfg)
@@ -46,7 +54,7 @@ func TestValidate_HarnessColorsUnknownHarnessRejected(t *testing.T) {
 		t.Fatal("expected validation error for unknown harness key, got nil")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "[harness_colors] unknown harness \"bogus\"") {
+	if !strings.Contains(msg, `[harness_colors] unknown harness "bogus"`) {
 		t.Errorf("expected unknown-harness error, got %q", msg)
 	}
 	if !strings.Contains(msg, "valid harnesses:") {
@@ -54,13 +62,10 @@ func TestValidate_HarnessColorsUnknownHarnessRejected(t *testing.T) {
 	}
 }
 
-// TestValidate_InvalidProfileHarnessDoesNotRequestHarnessColor pins that an
-// invalid profile harness is reported as the profile error it is. Asking the
-// user to add a [harness_colors] entry for an unknown harness is misleading,
-// and that entry would be rejected separately anyway.
 func TestValidate_InvalidProfileHarnessDoesNotRequestHarnessColor(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "bogus", HomeDir: "/tmp/h", Color: "blue"},
 		},
@@ -78,15 +83,13 @@ func TestValidate_InvalidProfileHarnessDoesNotRequestHarnessColor(t *testing.T) 
 	}
 }
 
-// TestLoad_NormalizesHarnessColorKeys pins that [harness_colors] keys follow
-// the same case-insensitive normalization as profile harness names and
-// Config.HarnessColor lookups. Without this, a key like "Claude" validates as
-// a known harness but is still missed by the later normalized lookup for
-// "claude".
 func TestLoad_NormalizesHarnessColorKeys(t *testing.T) {
 	path := writeTempConfig(t, `
 [harness_colors]
 Claude = "blue"
+
+[harness_emojis]
+claude = "🦊"
 
 [[profiles]]
 name = "work"
@@ -109,13 +112,14 @@ color = "blue"
 	}
 }
 
-// TestValidate_HarnessColorsDuplicateNormalizedKeysRejected pins that two
-// spellings of the same harness key do not collapse silently during load.
 func TestValidate_HarnessColorsDuplicateNormalizedKeysRejected(t *testing.T) {
 	path := writeTempConfig(t, `
 [harness_colors]
 Claude = "blue"
 claude = "red"
+
+[harness_emojis]
+claude = "🦊"
 
 [[profiles]]
 name = "work"
@@ -132,7 +136,7 @@ color = "blue"
 		t.Fatal("expected validation error for duplicate normalized harness color keys, got nil")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "duplicate keys normalize to the same harness") {
+	if !strings.Contains(msg, "[harness_colors] duplicate keys normalize to the same harness") {
 		t.Errorf("expected duplicate-key error, got %q", msg)
 	}
 	if !strings.Contains(msg, "Claude") || !strings.Contains(msg, "claude") {
@@ -140,14 +144,12 @@ color = "blue"
 	}
 }
 
-// TestValidate_HarnessColorsInvalidColorRejected pins that a [harness_colors]
-// value that is not in the palette is rejected with a per-harness location and
-// the palette list appended.
 func TestValidate_HarnessColorsInvalidColorRejected(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "magenta"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
-			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
 	}
 	err := config.Validate(cfg)
@@ -163,13 +165,10 @@ func TestValidate_HarnessColorsInvalidColorRejected(t *testing.T) {
 	}
 }
 
-// TestValidate_HarnessColorsExtraEntryForUnusedHarnessAllowed pins that
-// supplying a [harness_colors] entry for a harness no profile references is
-// allowed — the user may be staging a future profile, and the entry is inert
-// until referenced.
 func TestValidate_HarnessColorsExtraEntryForUnusedHarnessAllowed(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue", "copilot": "purple"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
@@ -179,16 +178,13 @@ func TestValidate_HarnessColorsExtraEntryForUnusedHarnessAllowed(t *testing.T) {
 	}
 }
 
-// TestValidate_HarnessColorsTwoProfilesShareOneEntry pins that two profiles
-// backed by the same harness require only one [harness_colors] entry — the
-// whole point of the migration is that color is keyed by harness, not by
-// profile.
 func TestValidate_HarnessColorsTwoProfilesShareOneEntry(t *testing.T) {
 	cfg := &config.Config{
 		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
-			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p", Color: "blue"},
+			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p", Color: "yellow"},
 		},
 	}
 	if err := config.Validate(cfg); err != nil {

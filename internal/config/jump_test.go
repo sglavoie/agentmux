@@ -66,7 +66,7 @@ attention_states = ["stop", "key"]
 // reading the source.
 func TestValidate_JumpUnknownState(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
@@ -93,7 +93,7 @@ func TestValidate_JumpUnknownState(t *testing.T) {
 // addition to palette must either expand the test or break it loudly.
 func TestValidate_JumpKnownStatesAccepted(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},

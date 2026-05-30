@@ -292,8 +292,8 @@ func TestConfigHooksStatusCommandWritesErrorsToCommandErrorOutput(t *testing.T) 
 
 func validConfigBody(homeDir string) string {
 	return `
-[harness_colors]
-claude = "blue"
+[harness_emojis]
+claude = "🦊"
 
 [[profiles]]
 name = "work"
@@ -329,8 +329,8 @@ func TestConfigHooksSync_ReturnsErrorOnPartialFailure(t *testing.T) {
 [defaults]
 sort = "alpha"
 
-[harness_colors]
-claude = "blue"
+[harness_emojis]
+claude = "🦊"
 
 [[profiles]]
 name = "good"

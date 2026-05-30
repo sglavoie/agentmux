@@ -15,7 +15,7 @@ import (
 func jumpFocusModel(rows []session.RunningSession, cursor int) (Model, *kitty.MockRunner) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 	}
 	runner := kitty.NewMockRunner(nil)

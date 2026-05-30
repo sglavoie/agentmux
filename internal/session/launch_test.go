@@ -1,10 +1,12 @@
 package session_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -35,10 +37,10 @@ func (r *sequentialLSRunner) Run(name string, args ...string) ([]byte, []byte, e
 func buildTestConfig() *config.Config {
 	return &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work"},
-			{Name: "personal", ConfigDir: "~/.config/claude"},
+			{Name: "work", Color: "blue", ConfigDir: "~/.config/claude-work"},
+			{Name: "personal", Color: "yellow", ConfigDir: "~/.config/claude"},
 		},
 		Sessions: []config.Session{},
 	}
@@ -90,7 +92,7 @@ func TestLaunch_DedupUsesEffectiveProfile(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "claude", ConfigDir: "~/.config/claude"},
 		},
@@ -193,7 +195,7 @@ func TestLaunch_DedupSeesConfigMatchedGhostTabs(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", ConfigDir: "~/.config/claude-work"},
 		},
@@ -224,8 +226,8 @@ func TestLaunch_ColorRetryApplied(t *testing.T) {
 
 	// Post-launch fixture: newproject tab with ID 100 (not in pre-launch IDs).
 	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
-		`{"id":100,"is_active":true,"title":"newproject","windows":[` +
-		`{"id":101,"is_active":true,"title":"newproject","cwd":"/tmp/newproject","cmdline":["claude"],` +
+		`{"id":100,"is_active":true,"title":"🦊newproject","windows":[` +
+		`{"id":101,"is_active":true,"title":"🦊newproject","cwd":"/tmp/newproject","cmdline":["claude"],` +
 		`"user_vars":{"cc_account":"work","cc_config_dir":"","cc_flags":"","cc_pw":"","cc_env":"","cc_groups":"","cc_mute":"","cc_cwd":"/tmp/newproject"}}` +
 		`]}]}]`)
 
@@ -262,6 +264,87 @@ func TestLaunch_ColorRetryApplied(t *testing.T) {
 	}
 	if !colorCalled {
 		t.Error("expected kitten @ set-tab-color to be called after color retry found new tab")
+	}
+}
+
+// TestLaunch_ColorTracksProjectDefaultProfile verifies that when a session is
+// launched under an *override* profile, the Kitty tab-bar accent applied via
+// kitten @ set-tab-color uses the project's *configured* default profile color
+// — preserving the project's visual identity — rather than the override
+// profile's color.
+func TestLaunch_ColorTracksProjectDefaultProfile(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+
+	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
+		`{"id":100,"is_active":true,"title":"🦊api","windows":[` +
+		`{"id":101,"is_active":true,"title":"🦊api","cwd":"/tmp/api","cmdline":["claude"],` +
+		`"user_vars":{"cc_account":"work","cc_config_dir":"","cc_flags":"","cc_pw":"","cc_env":"","cc_groups":"","cc_mute":"","cc_cwd":"/tmp/api"}}` +
+		`]}]}]`)
+
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, postLaunch, postLaunch, postLaunch},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		Accounts: []config.Account{
+			{Name: "work", Color: "blue", ConfigDir: "~/.config/claude-work"},
+			{Name: "personal", Color: "yellow", ConfigDir: "~/.config/claude"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Account: "personal", Directory: "/tmp/api"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Account: "personal", Directory: "/tmp/api"},
+		},
+	}
+
+	// Launch under the *override* profile (work/blue). The project's configured
+	// default is personal/yellow, so set-tab-color must apply yellow rather than
+	// blue.
+	sess := config.Session{Title: "api", Account: "work", Profile: "work", Directory: "/tmp/api"}
+	overrideAcc := cfg.Accounts[0] // work
+	defaultAcc := cfg.Accounts[1]  // personal
+
+	if err := session.Launch(client, sess, overrideAcc, cfg); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	yellow, err := palette.Lookup(defaultAcc.Color)
+	if err != nil {
+		t.Fatalf("palette.Lookup(%q): %v", defaultAcc.Color, err)
+	}
+	blue, err := palette.Lookup(overrideAcc.Color)
+	if err != nil {
+		t.Fatalf("palette.Lookup(%q): %v", overrideAcc.Color, err)
+	}
+
+	var setTabColorArgs []string
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		argSet := make(map[string]bool)
+		for _, a := range c.Args {
+			argSet[a] = true
+		}
+		if argSet["set-tab-color"] {
+			setTabColorArgs = c.Args
+			break
+		}
+	}
+	if setTabColorArgs == nil {
+		t.Fatal("expected kitten @ set-tab-color to be called")
+	}
+
+	joined := strings.Join(setTabColorArgs, " ")
+	if !strings.Contains(joined, "active_bg="+yellow.ActiveBg) {
+		t.Errorf("expected set-tab-color to carry the project default (yellow) active_bg=%q; args: %v", yellow.ActiveBg, setTabColorArgs)
+	}
+	if strings.Contains(joined, "active_bg="+blue.ActiveBg) {
+		t.Errorf("expected set-tab-color NOT to use the override (blue) active_bg=%q; args: %v", blue.ActiveBg, setTabColorArgs)
 	}
 }
 

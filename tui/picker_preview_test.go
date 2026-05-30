@@ -121,7 +121,7 @@ func TestPickerPreviewRenderAutoDisableNarrow(t *testing.T) {
 func TestPickerPreviewRunningPeek(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions: []config.Session{
 			{Title: "api", Directory: "/home/user/api", Account: "work"},
@@ -150,7 +150,7 @@ func TestPickerPreviewRunningPeek(t *testing.T) {
 func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}, {Name: "personal", Color: "yellow"}},
 		Sessions: []config.Session{
 			{Title: "api", Account: "work"},
@@ -188,7 +188,7 @@ func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 func TestPickerExitRestartsListPreviewTicker(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions: []config.Session{
 			{Title: "api", Account: "work"},

@@ -226,7 +226,7 @@ func TestConfigPickerSameAccountNoOp(t *testing.T) {
 func TestConfigPickerCurrentProfileCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "personal", Color: "yellow"},
 			{Name: "work", Color: "blue"},

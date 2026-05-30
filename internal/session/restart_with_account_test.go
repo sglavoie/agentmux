@@ -61,8 +61,8 @@ func TestRestartWithAccount_SwitchesAccount(t *testing.T) {
 	for _, a := range launchArgs {
 		argSet[a] = true
 	}
-	if !argSet["--tab-title=api"] {
-		t.Errorf("expected --tab-title=api in launch args: %v", launchArgs)
+	if !argSet["--tab-title=🦊api"] {
+		t.Errorf("expected --tab-title=🦊api in launch args: %v", launchArgs)
 	}
 	if !argSet["--var=cc_account=personal"] {
 		t.Errorf("expected --var=cc_account=personal in launch args: %v", launchArgs)
@@ -80,7 +80,7 @@ func TestRestartWithAccount_NewSessionPicksUpTargetAccountArgs(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--work-flag"}},
 			{Name: "personal", ConfigDir: "~/.config/claude", Args: []string{"--personal-flag"}},
@@ -222,7 +222,7 @@ func TestRestartWithAccount_LegacySessionPreservesEffectiveArgs(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--work-flag"}},
 			{Name: "personal", ConfigDir: "~/.config/claude-personal", Args: []string{"--personal-flag"}},

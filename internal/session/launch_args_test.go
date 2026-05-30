@@ -56,8 +56,8 @@ func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
 		for _, a := range c.Args {
 			argMap[a] = true
 		}
-		if !argMap["--tab-title=newproject"] {
-			t.Errorf("expected --tab-title=newproject in args: %v", c.Args)
+		if !argMap["--tab-title=🦊newproject"] {
+			t.Errorf("expected --tab-title=🦊newproject in args: %v", c.Args)
 		}
 		if !argMap["--var=cc_account=work"] {
 			t.Errorf("expected --var=cc_account=work in args: %v", c.Args)
@@ -87,7 +87,7 @@ func TestLaunch_StoresExplicitFlags(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--account-flag"}},
 		},

@@ -73,7 +73,7 @@ func TestModeRoundTripBackToList(t *testing.T) {
 func TestPickerEscClearsThenExits(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", Color: "blue"},
 		},
@@ -122,7 +122,7 @@ func TestPickerEscClearsThenExits(t *testing.T) {
 func TestPickerSpaceWithEmptyFilteredIdxIsSafe(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      []config.Session{{Title: "api", Account: "work"}},
 	}
@@ -309,7 +309,7 @@ func TestCtrlCQuitsFromSearchMode(t *testing.T) {
 func TestCtrlCQuitsFromPickerSearchMode(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      []config.Session{{Title: "api", Account: "work"}},
 	}

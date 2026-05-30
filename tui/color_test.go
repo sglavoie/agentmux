@@ -10,15 +10,14 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// TestPickerRowColorSplit verifies that the picker row renders the project
-// title in the profile color while the [profile/harness] badge takes the
-// harness color. This is the visible contract of the per-profile color
-// feature: the title tracks the profile, the harness affordance tracks the
-// harness.
-func TestPickerRowColorSplit(t *testing.T) {
+// TestPickerRowHarnessColor verifies that the picker row renders the project
+// title in the profile color while the "<emoji> <profile>/<harness>" cell uses
+// the configured harness color.
+func TestPickerRowProfileColor(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		HarnessColors: map[string]string{"claude": "purple"},
 		Accounts: []config.Account{
 			{Name: "work", Color: "yellow"},
 		},
@@ -42,30 +41,227 @@ func TestPickerRowColorSplit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("palette.Lookup(yellow): %v", err)
 	}
-	blue, err := palette.Lookup("blue")
+	purple, err := palette.Lookup("purple")
 	if err != nil {
-		t.Fatalf("palette.Lookup(blue): %v", err)
+		t.Fatalf("palette.Lookup(purple): %v", err)
 	}
 	yellowHex := yellow.ForegroundHex()
-	blueHex := blue.ForegroundHex()
+	purpleHex := purple.ForegroundHex()
 
 	out := renderPickerList(m, 0)
 
-	titleIdx := indexColoredSegment(out, yellowHex, "api")
-	if titleIdx < 0 {
+	if indexColoredSegment(out, yellowHex, "api") < 0 {
 		t.Errorf("expected title 'api' to be wrapped in yellow (%s); rendered:\n%s", yellowHex, out)
 	}
-	badgeIdx := indexColoredSegment(out, blueHex, "[work/claude]")
-	if badgeIdx < 0 {
-		t.Errorf("expected [work/claude] badge to be wrapped in blue (%s); rendered:\n%s", blueHex, out)
+	if indexColoredSegment(out, purpleHex, "🦊 work/claude") < 0 {
+		t.Errorf("expected '🦊 work/claude' cell to be wrapped in harness purple (%s); rendered:\n%s", purpleHex, out)
 	}
 }
 
-// TestFormatRowColorSplit verifies the main list row applies the profile
-// color to the title cell and the harness color to the [claude] cell.
-func TestFormatRowColorSplit(t *testing.T) {
+// TestPickerRowOverrideSplitsColor verifies that when a picker row's profile is
+// overridden, the project title keeps the *default* profile's color while the
+// harness cell uses the configured harness color rather than either profile's
+// color.
+func TestPickerRowOverrideSplitsColor(t *testing.T) {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		HarnessColors: map[string]string{"claude": "purple"},
+		Accounts: []config.Account{
+			{Name: "work", Color: "blue", Harness: "claude"},
+			{Name: "personal", Color: "yellow", Harness: "claude"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "/home/user/api", Account: "personal"},
+		},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m = loadSessions(m, nil)
+	m = pressKey(m, "l")
+	m.width, m.height = 120, 40
+	// Override the only project's profile from "personal" → "work".
+	if m.pickerProfileOverride == nil {
+		m.pickerProfileOverride = map[int]string{}
+	}
+	m.pickerProfileOverride[0] = "work"
+	// Move cursor off the row so styleSelected does not mask inner styles.
+	m.pickerCursor = -1
+
+	yellow, err := palette.Lookup("yellow")
+	if err != nil {
+		t.Fatalf("palette.Lookup(yellow): %v", err)
+	}
+	purple, err := palette.Lookup("purple")
+	if err != nil {
+		t.Fatalf("palette.Lookup(purple): %v", err)
+	}
+	yellowHex := yellow.ForegroundHex()
+	purpleHex := purple.ForegroundHex()
+
+	out := renderPickerList(m, 0)
+
+	if indexColoredSegment(out, yellowHex, "api") < 0 {
+		t.Errorf("expected title 'api' to keep the project default profile color (%s, yellow); rendered:\n%s", yellowHex, out)
+	}
+	if indexColoredSegment(out, purpleHex, "🦊 work/claude") < 0 {
+		t.Errorf("expected harness cell to use harness purple (%s); rendered:\n%s", purpleHex, out)
+	}
+}
+
+// TestPickerPreviewOverrideHeaderColor verifies the picker preview header tracks
+// the project's *default* profile color even when an override is active.
+func TestPickerPreviewOverrideHeaderColor(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			Sort:            "alpha",
+			RefreshInterval: 2,
+			Preview:         pickerPreviewCfg(),
+		},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		Accounts: []config.Account{
+			{Name: "work", Color: "blue", Harness: "claude"},
+			{Name: "personal", Color: "yellow", Harness: "claude"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "/home/user/api", Account: "personal"},
+		},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m = loadSessions(m, nil)
+	m = pressKey(m, "l")
+	m.width, m.height = 120, 40
+	if m.pickerProfileOverride == nil {
+		m.pickerProfileOverride = map[int]string{}
+	}
+	m.pickerProfileOverride[0] = "work"
+	m.pickerPreviewEnabled = true
+
+	yellow, err := palette.Lookup("yellow")
+	if err != nil {
+		t.Fatalf("palette.Lookup(yellow): %v", err)
+	}
+	yellowHex := yellow.ForegroundHex()
+
+	out := renderPickerPreview(m, 0, 40, 10)
+	if indexColoredSegment(out, yellowHex, "api") < 0 {
+		t.Errorf("expected preview header to keep the project default color (%s, yellow); rendered:\n%s", yellowHex, out)
+	}
+}
+
+// TestFormatRowOverrideSplitsColor verifies the main list row keeps the title
+// and account badge on the project's *configured default* profile color while
+// the harness-name cell uses the configured harness color.
+func TestFormatRowOverrideSplitsColor(t *testing.T) {
+	cfg := &config.Config{
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		Projects: []config.Session{
+			{Title: "api", Account: "personal"},
+		},
+	}
+	acctColor := map[string]string{"work": "blue", "personal": "yellow"}
+	s := session.RunningSession{
+		TabID:     1,
+		WindowID:  42,
+		Account:   "work", // running profile (override)
+		Project:   "api",  // configured default → personal
+		Harness:   "claude",
+		Directory: "/home/user/api",
+		State:     "bolt",
+	}
+
+	yellow, err := palette.Lookup("yellow")
+	if err != nil {
+		t.Fatalf("palette.Lookup(yellow): %v", err)
+	}
+	purple, err := palette.Lookup("purple")
+	if err != nil {
+		t.Fatalf("palette.Lookup(purple): %v", err)
+	}
+	yellowHex := yellow.ForegroundHex()
+	purpleHex := purple.ForegroundHex()
+
+	row := formatRow(s, acctColor, map[string]string{"claude": "purple"}, cfg, 120, "")
+
+	if indexColoredSegment(row, yellowHex, "api") < 0 {
+		t.Errorf("expected title 'api' to render in the project default profile color (%s, yellow); row:\n%q", yellowHex, row)
+	}
+	if indexColoredSegment(row, yellowHex, "[W]") < 0 {
+		t.Errorf("expected account badge to render in the project default profile color (%s, yellow); row:\n%q", yellowHex, row)
+	}
+	if indexColoredSegment(row, purpleHex, "🦊 claude") < 0 {
+		t.Errorf("expected harness cell to render in harness purple (%s); row:\n%q", purpleHex, row)
+	}
+}
+
+func TestRenderPreviewOverrideHeaderColor(t *testing.T) {
+	cfg := &config.Config{
+		Projects: []config.Session{
+			{Title: "api", Profile: "personal"},
+		},
+	}
+	acctColor := map[string]string{"work": "blue", "personal": "yellow"}
+	s := session.RunningSession{
+		WindowID:  42,
+		Account:   "work",
+		Profile:   "work",
+		Project:   "api",
+		Base:      "api",
+		Directory: "/home/user/api",
+	}
+
+	yellow, err := palette.Lookup("yellow")
+	if err != nil {
+		t.Fatalf("palette.Lookup(yellow): %v", err)
+	}
+	yellowHex := yellow.ForegroundHex()
+
+	out := renderPreview(80, 4, s, "", "", acctColor, cfg)
+	if indexColoredSegment(out, yellowHex, "api") < 0 {
+		t.Errorf("expected preview header to keep the project default color (%s, yellow); rendered:\n%s", yellowHex, out)
+	}
+}
+
+func TestDetailHeaderOverrideBadgeColor(t *testing.T) {
+	cfg := &config.Config{
+		Accounts: []config.Account{
+			{Name: "work", Color: "blue"},
+			{Name: "personal", Color: "yellow"},
+		},
+		Projects: []config.Session{
+			{Title: "api", Profile: "personal"},
+		},
+	}
+	m := Model{
+		cfg:            cfg,
+		detailWindowID: 42,
+		sessions: []session.RunningSession{
+			{WindowID: 42, Account: "work", Profile: "work", Project: "api", Base: "api"},
+		},
+	}
+
+	yellow, err := palette.Lookup("yellow")
+	if err != nil {
+		t.Fatalf("palette.Lookup(yellow): %v", err)
+	}
+	yellowHex := yellow.ForegroundHex()
+
+	out := detailHeader(m)
+	if indexColoredSegment(out, yellowHex, "[W]") < 0 {
+		t.Errorf("expected detail badge to keep the project default color (%s, yellow); rendered:\n%s", yellowHex, out)
+	}
+}
+
+// TestFormatRowProfileColor verifies the main list row applies the profile
+// color to the title and the harness color to the "<emoji> <label>" cell.
+func TestFormatRowProfileColor(t *testing.T) {
+	cfg := &config.Config{
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+	}
 	acctColor := map[string]string{"work": "yellow"}
-	harnessColor := map[string]string{"work": "blue"}
 	s := session.RunningSession{
 		TabID: 1, Base: "api", Account: "work",
 		Harness: "claude", Directory: "/home/user/api", State: "bolt",
@@ -82,13 +278,13 @@ func TestFormatRowColorSplit(t *testing.T) {
 	yellowHex := yellow.ForegroundHex()
 	blueHex := blue.ForegroundHex()
 
-	row := formatRow(s, acctColor, harnessColor, 120, "")
+	row := formatRow(s, acctColor, map[string]string{"claude": "blue"}, cfg, 120, "")
 
 	if indexColoredSegment(row, yellowHex, "api") < 0 {
 		t.Errorf("expected title 'api' wrapped in yellow (%s); row:\n%q", yellowHex, row)
 	}
-	if indexColoredSegment(row, blueHex, "[claude]") < 0 {
-		t.Errorf("expected [claude] cell wrapped in blue (%s); row:\n%q", blueHex, row)
+	if indexColoredSegment(row, blueHex, "🦊 claude") < 0 {
+		t.Errorf("expected '🦊 claude' cell wrapped in harness blue (%s); row:\n%q", blueHex, row)
 	}
 }
 

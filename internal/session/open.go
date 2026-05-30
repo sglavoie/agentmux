@@ -16,7 +16,7 @@ import (
 // shell (no Claude Code). The tab gets the correct title and account color
 // but no user vars, so it won't appear in the dashboard's session list.
 func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config) error {
-	formattedTitle := FormatTitle(sess)
+	formattedTitle := FormatTitle(sess, acc, cfg)
 
 	osWindows, err := client.ListWindows()
 	if err != nil {
@@ -48,13 +48,14 @@ func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Acc
 		return fmt.Errorf("opening directory for %q: %w", formattedTitle, err)
 	}
 
-	colorName := cfg.HarnessColor(acc.EffectiveHarness())
+	colorName := acc.Color
 	if color, err := palette.Lookup(colorName); err == nil {
 		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
 			slog.Warn("applying tab color after open",
 				"title", formattedTitle,
 				"account", acc.Name,
 				"harness", acc.EffectiveHarness(),
+				"profile_color", acc.Color,
 				"error", colorErr,
 			)
 		}
@@ -98,7 +99,7 @@ func resolveEditor(cfgEditor string) (string, []string, error) {
 // but no user vars, so it won't appear in the dashboard's session list
 // (same contract as OpenDirectory).
 func OpenInEditor(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config) error {
-	formattedTitle := FormatTitle(sess)
+	formattedTitle := FormatTitle(sess, acc, cfg)
 
 	osWindows, err := client.ListWindows()
 	if err != nil {
@@ -134,13 +135,14 @@ func OpenInEditor(client kitty.KittyClient, sess config.Session, acc config.Acco
 		return fmt.Errorf("opening editor for %q: %w", formattedTitle, err)
 	}
 
-	colorName := cfg.HarnessColor(acc.EffectiveHarness())
+	colorName := acc.Color
 	if color, err := palette.Lookup(colorName); err == nil {
 		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
 			slog.Warn("applying tab color after open-in-editor",
 				"title", formattedTitle,
 				"account", acc.Name,
 				"harness", acc.EffectiveHarness(),
+				"profile_color", acc.Color,
 				"error", colorErr,
 			)
 		}

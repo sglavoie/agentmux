@@ -90,7 +90,7 @@ func TestSerializeFilterEscapesLeadingMarkers(t *testing.T) {
 
 func chipTestModel() Model {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", Color: "blue"},
 			{Name: "personal", Color: "yellow"},

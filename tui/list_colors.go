@@ -3,6 +3,7 @@ package tui
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -18,16 +19,25 @@ func buildProfileColorMap(m Model) map[string]string {
 	return result
 }
 
-// buildHarnessColorByProfileMap maps profile name → palette color name
-// resolved via the profile's harness. Used to color elements that should
-// track the harness (e.g. the [claude] harness cell and the [profile/harness]
-// picker badge).
-func buildHarnessColorByProfileMap(m Model) map[string]string {
-	result := make(map[string]string, len(m.cfg.Accounts))
-	for _, acc := range m.cfg.Accounts {
-		result[acc.Name] = m.cfg.HarnessColor(acc.EffectiveHarness())
+func buildHarnessColorMap(m Model) map[string]string {
+	result := make(map[string]string, len(m.cfg.HarnessColors))
+	for name, color := range m.cfg.HarnessColors {
+		result[name] = color
 	}
 	return result
+}
+
+func projectIdentityColor(s session.RunningSession, acctColor map[string]string, cfg *config.Config) string {
+	colorName := acctColor[s.EffectiveProfile()]
+	if cfg == nil {
+		return colorName
+	}
+	if def := cfg.DefaultProfileFor(s.Project); def != "" {
+		if c := acctColor[def]; c != "" {
+			return c
+		}
+	}
+	return colorName
 }
 
 // stateGroup classifies a session into one of three buckets:

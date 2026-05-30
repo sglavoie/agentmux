@@ -49,10 +49,12 @@ const ageColumnWidth = 6
 // "approaching stale" without competing with the row's icon column.
 const ageWarningGlyph = "⏳"
 
-// harnessColWidth is the visual width of the harness badge text
-// ("[copilot]" = 9 cells). The column is always reserved so rows stay
-// aligned regardless of which harness (or none) a session uses.
-const harnessColWidth = 9
+// harnessColWidth is the visual width reserved for the harness cell. Sized
+// to fit the widest possible text — a 2-cell emoji + a 1-cell space + a
+// 7-cell label (`copilot`) — so rows stay aligned regardless of which
+// harness (or none) a session uses and regardless of the configured emoji's
+// cell width.
+const harnessColWidth = 10
 
 // renderListAt renders the session list with explicit width and height
 // budgets. The width budget controls per-row column truncation; the height
@@ -66,7 +68,7 @@ func renderListAt(m Model, width, height int) string {
 	}
 
 	acctColor := buildProfileColorMap(m)
-	harnessColor := buildHarnessColorByProfileMap(m)
+	harnessColor := buildHarnessColorMap(m)
 
 	groupCounts := countGroups(m.filtered, m.lastActivity, m.idleThreshold)
 	multiGroup := groupCounts > 1
@@ -144,7 +146,7 @@ func renderListAt(m Model, width, height int) string {
 		if ageActive {
 			ageCell = renderAgeCell(m.watchdog[s.WindowID], now)
 		}
-		row := formatRow(s, acctColor, harnessColor, rowWidth, ageCell)
+		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, ageCell)
 		var styledRow string
 		switch {
 		case i == m.cursor:

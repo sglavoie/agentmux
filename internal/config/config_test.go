@@ -226,7 +226,7 @@ func TestDefaultsEffectiveArgs_PrefersArgsOverClaudeFlags(t *testing.T) {
 func TestValidate_NegativeIdleThreshold(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{IdleThreshold: -1},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work"}},
 	}
 	err := config.Validate(cfg)
@@ -238,7 +238,7 @@ func TestValidate_NegativeIdleThreshold(t *testing.T) {
 func TestValidate_NegativeStaleActiveThreshold(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{StaleActiveThreshold: -1},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work"}},
 	}
 	err := config.Validate(cfg)
@@ -309,7 +309,7 @@ func TestValidate_MissingProfileColor(t *testing.T) {
 
 func TestValidate_MissingTitle(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work"}},
 		Sessions:      []config.Session{{Title: "", Directory: "~/projects", Account: "work"}},
 	}
@@ -321,7 +321,7 @@ func TestValidate_MissingTitle(t *testing.T) {
 
 func TestValidate_DuplicateAccountName(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", ConfigDir: "~/.config/claude-work"},
 			{Name: "work", ConfigDir: "~/.config/claude-work2"},
@@ -336,7 +336,7 @@ func TestValidate_DuplicateAccountName(t *testing.T) {
 func TestValidate_InvalidSort(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "random"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", ConfigDir: "~/.config/claude-work"}},
 	}
 	err := config.Validate(cfg)

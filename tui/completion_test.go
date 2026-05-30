@@ -176,7 +176,7 @@ func TestFilterCandidates_EmptyPrefixReturnsAll(t *testing.T) {
 
 func completionTestModel() Model {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Color: "blue"},
 			{Name: "personal", Color: "yellow"},

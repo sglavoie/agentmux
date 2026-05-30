@@ -12,7 +12,7 @@ func TestValidate_DuplicateProjectTitlePerProfile(t *testing.T) {
 	// keys on this pair, so duplicates would mask one of them and silently confuse
 	// the user. Validation must surface this rather than wait for runtime confusion.
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
@@ -37,7 +37,7 @@ func TestValidate_DuplicateProjectTitlePerProfile(t *testing.T) {
 // validation only checked exact-case equality.
 func TestValidate_DuplicateProjectTitleCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
@@ -61,7 +61,7 @@ func TestValidate_DuplicateProjectTitleCaseInsensitive(t *testing.T) {
 // surface the collision rather than wait for confusing launch behavior.
 func TestValidate_DuplicateProjectTitleProfileCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 			{Name: "Work", Harness: "claude", HomeDir: "/tmp/h2"},
@@ -84,7 +84,7 @@ func TestValidate_DuplicateProjectTitleAcrossProfilesAllowed(t *testing.T) {
 	// Same title under different profiles is allowed: launch dedup keys on
 	// (account, title), so they are distinct sessions.
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
 			{Name: "personal", Harness: "claude", HomeDir: "/tmp/p", Color: "blue"},
@@ -106,7 +106,7 @@ func TestValidate_DuplicateProjectTitleAcrossProfilesAllowed(t *testing.T) {
 // reject it as unknown.
 func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
@@ -126,7 +126,7 @@ func TestValidate_ProjectProfileReferenceCaseInsensitive(t *testing.T) {
 // entry.
 func TestValidate_ProjectEnvKeysRejectUnserializableNames(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},

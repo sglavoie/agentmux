@@ -73,7 +73,7 @@ func resolveColorPickerContext(client kitty.KittyClient, tab *kitty.Tab, overlay
 			}
 			for _, a := range cfg.Accounts {
 				if strings.EqualFold(a.Name, w.UserVars.EffectiveProfile()) {
-					ctx.DefaultColor = cfg.HarnessColor(a.EffectiveHarness())
+					ctx.DefaultColor = a.Color
 					break
 				}
 			}

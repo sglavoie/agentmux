@@ -446,9 +446,11 @@ watchdog = { active = 300, subagent = 2400, hook_silence = 0 }
 ```
 
 `color` is required on every profile and sets the project-title color in
-the dashboard, picker, detail header, and account chips. The Kitty
-tab-bar accent is per-harness and lives in `[harness_colors]` (see the
-starter `config.toml`).
+the dashboard, picker, detail header, and account chips, as well as the
+Kitty tab-bar accent on every session launched under that profile. Harness
+identity uses `[harness_emojis]` for the tab-title prefix and
+`[harness_colors]` for harness-name cells in the dashboard and launch picker
+(see the starter `config.toml`).
 
 `hook_silence = 0` on a per-profile override disables the silence sweep
 for that profile only.

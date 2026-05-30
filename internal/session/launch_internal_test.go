@@ -142,8 +142,8 @@ func TestLaunch_LogsWarnWhenColorRetryFails(t *testing.T) {
 
 	emptyLS := []byte(`[]`)
 	postLaunch := []byte(`[{"id":1,"is_active":true,"tabs":[` +
-		`{"id":100,"is_active":true,"title":"newproject","windows":[` +
-		`{"id":101,"is_active":true,"title":"newproject"}` +
+		`{"id":100,"is_active":true,"title":"🦊newproject","windows":[` +
+		`{"id":101,"is_active":true,"title":"🦊newproject"}` +
 		`]}]}]`)
 	runner := &sequentialColorFailRunner{
 		// ls calls: dedup-check, compute-insert, then color-retry attempts.
@@ -158,9 +158,9 @@ func TestLaunch_LogsWarnWhenColorRetryFails(t *testing.T) {
 
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
-			{Name: "work", ConfigDir: "~/.config/claude-work"},
+			{Name: "work", Color: "blue", ConfigDir: "~/.config/claude-work"},
 		},
 	}
 	sess := config.Session{Title: "newproject", Account: "work", Directory: "/tmp/newproject"}

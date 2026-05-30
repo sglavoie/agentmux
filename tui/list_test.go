@@ -253,8 +253,8 @@ func TestRenderListSingleGroupNoBorder(t *testing.T) {
 func TestFormatRowWarningIconAlignment(t *testing.T) {
 	sBolt := session.RunningSession{State: "bolt", Account: "p", Base: "api"}
 	sWarn := session.RunningSession{State: "warning", Account: "p", Base: "api"}
-	rowBolt := formatRow(sBolt, nil, nil, 0, "")
-	rowWarn := formatRow(sWarn, nil, nil, 0, "")
+	rowBolt := formatRow(sBolt, nil, nil, nil, 0, "")
+	rowWarn := formatRow(sWarn, nil, nil, nil, 0, "")
 
 	iBoltBadge := idxBadge(rowBolt)
 	iWarnBadge := idxBadge(rowWarn)
@@ -286,41 +286,48 @@ func idxTitle(row, title string) int {
 	return terminalWidth(plain[:i])
 }
 
-// TestFormatRowHarnessBadge asserts that [claude], [codex], and [copilot]
-// appear for their respective harnesses, that empty-harness rows show no
-// harness brackets, and that the title column lands at the same visual
-// offset across all four cases (always-reserved harness column).
+// TestFormatRowHarnessBadge asserts that "<emoji> <label>" appears for each
+// known harness, that empty-harness rows show no label at all, and that the
+// title column lands at the same visual offset across all four cases
+// (always-reserved harness column).
 func TestFormatRowHarnessBadge(t *testing.T) {
+	cfg := &config.Config{
+		HarnessEmojis: map[string]string{
+			"claude":  "🐱",
+			"codex":   "🦊",
+			"copilot": "🐙",
+		},
+	}
 	sClaude := session.RunningSession{Base: "api", Account: "work", Harness: "claude"}
 	sCodex := session.RunningSession{Base: "api", Account: "work", Harness: "codex"}
 	sCopilot := session.RunningSession{Base: "api", Account: "work", Harness: "copilot"}
 	sNone := session.RunningSession{Base: "api", Account: "work", Harness: ""}
 
-	rowClaude := stripAnsi(formatRow(sClaude, nil, nil, 0, ""))
-	rowCodex := stripAnsi(formatRow(sCodex, nil, nil, 0, ""))
-	rowCopilot := stripAnsi(formatRow(sCopilot, nil, nil, 0, ""))
-	rowNone := stripAnsi(formatRow(sNone, nil, nil, 0, ""))
+	rowClaude := stripAnsi(formatRow(sClaude, nil, nil, cfg, 0, ""))
+	rowCodex := stripAnsi(formatRow(sCodex, nil, nil, cfg, 0, ""))
+	rowCopilot := stripAnsi(formatRow(sCopilot, nil, nil, cfg, 0, ""))
+	rowNone := stripAnsi(formatRow(sNone, nil, nil, cfg, 0, ""))
 
-	if !strings.Contains(rowClaude, "[claude]") {
-		t.Errorf("expected [claude] badge for claude harness; got %q", rowClaude)
+	if !strings.Contains(rowClaude, "🐱 claude") {
+		t.Errorf("expected '🤖 claude' cell for claude harness; got %q", rowClaude)
 	}
-	if strings.Contains(rowClaude, "[codex]") || strings.Contains(rowClaude, "[copilot]") {
-		t.Errorf("unexpected non-claude badge in claude row; got %q", rowClaude)
+	if strings.Contains(rowClaude, "codex") || strings.Contains(rowClaude, "copilot") {
+		t.Errorf("unexpected non-claude label in claude row; got %q", rowClaude)
 	}
-	if !strings.Contains(rowCodex, "[codex]") {
-		t.Errorf("expected [codex] badge for codex harness; got %q", rowCodex)
+	if !strings.Contains(rowCodex, "🦊 codex") {
+		t.Errorf("expected '🦊 codex' cell for codex harness; got %q", rowCodex)
 	}
-	if strings.Contains(rowCodex, "[claude]") || strings.Contains(rowCodex, "[copilot]") {
-		t.Errorf("unexpected non-codex badge in codex row; got %q", rowCodex)
+	if strings.Contains(rowCodex, "claude") || strings.Contains(rowCodex, "copilot") {
+		t.Errorf("unexpected non-codex label in codex row; got %q", rowCodex)
 	}
-	if !strings.Contains(rowCopilot, "[copilot]") {
-		t.Errorf("expected [copilot] badge for copilot harness; got %q", rowCopilot)
+	if !strings.Contains(rowCopilot, "🐙 copilot") {
+		t.Errorf("expected '🐙 copilot' cell for copilot harness; got %q", rowCopilot)
 	}
-	if strings.Contains(rowCopilot, "[claude]") || strings.Contains(rowCopilot, "[codex]") {
-		t.Errorf("unexpected non-copilot badge in copilot row; got %q", rowCopilot)
+	if strings.Contains(rowCopilot, "claude") || strings.Contains(rowCopilot, "codex") {
+		t.Errorf("unexpected non-copilot label in copilot row; got %q", rowCopilot)
 	}
-	if strings.Contains(rowNone, "[claude]") || strings.Contains(rowNone, "[codex]") || strings.Contains(rowNone, "[copilot]") {
-		t.Errorf("expected no harness badge for empty harness; got %q", rowNone)
+	if strings.Contains(rowNone, "claude") || strings.Contains(rowNone, "codex") || strings.Contains(rowNone, "copilot") {
+		t.Errorf("expected no harness label for empty harness; got %q", rowNone)
 	}
 
 	iClaude := idxTitle(rowClaude, "api")
@@ -349,7 +356,7 @@ func TestFormatRowAcctBadgeUnicode(t *testing.T) {
 	}
 	for _, tc := range cases {
 		s := session.RunningSession{Base: "x", Account: tc.account}
-		row := stripAnsi(formatRow(s, nil, nil, 0, ""))
+		row := stripAnsi(formatRow(s, nil, nil, nil, 0, ""))
 		if !strings.Contains(row, tc.want) {
 			t.Errorf("account %q: row %q does not contain expected badge %q", tc.account, row, tc.want)
 		}

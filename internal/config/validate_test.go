@@ -28,7 +28,7 @@ func TestValidate_MissingHomeDirAfterNormalization(t *testing.T) {
 	// so a profile with no home_dir or config_dir specified does not fail validation
 	// for home_dir. This test documents that invariant.
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "belt", Harness: "claude"},
 		},
@@ -43,7 +43,7 @@ func TestValidate_MissingHomeDirAfterNormalization(t *testing.T) {
 
 func TestValidate_SessionArchiveNegativeKeepDays(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
@@ -60,7 +60,7 @@ func TestValidate_SessionArchiveNegativeKeepDays(t *testing.T) {
 
 func TestValidate_SessionArchiveNegativeScanMaxAgeDays(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
@@ -83,7 +83,7 @@ func TestValidate_SessionArchiveNegativeScanMaxAgeDays(t *testing.T) {
 // bound that actually matches the predicate.
 func TestValidate_PreviewMinDimensions(t *testing.T) {
 	zero := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
@@ -95,7 +95,7 @@ func TestValidate_PreviewMinDimensions(t *testing.T) {
 	}
 
 	neg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
@@ -124,7 +124,7 @@ func TestValidate_PreviewMinDimensions(t *testing.T) {
 // profiles. The user must collapse them to one value or use only profile.
 func TestValidate_ProjectProfileAccountConflict(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "X", Harness: "claude", HomeDir: "/tmp/x"},
 			{Name: "Y", Harness: "claude", HomeDir: "/tmp/y"},
@@ -152,7 +152,7 @@ func TestValidate_ProjectProfileAccountConflict(t *testing.T) {
 // configs were written with both keys set to the same value.
 func TestValidate_ProjectProfileAccountMatchingAccepted(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/w", Color: "blue"},
 		},
@@ -175,7 +175,7 @@ func TestValidate_NegativePermissionDebounce(t *testing.T) {
 		Defaults: config.Defaults{
 			Notifications: config.NotificationConfig{PermissionDebounceMs: -1},
 		},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},

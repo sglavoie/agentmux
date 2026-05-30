@@ -1,0 +1,15 @@
+[defaults]
+
+[harness_emojis]
+claude = "ab"
+
+[[profiles]]
+name = "work"
+harness = "claude"
+home_dir = "~/.config/claude-work"
+color = "blue"
+
+[[projects]]
+title = "W:api"
+directory = "~/projects/api"
+profile = "work"

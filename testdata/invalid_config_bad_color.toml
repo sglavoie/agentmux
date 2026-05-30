@@ -1,8 +1,5 @@
 [defaults]
 
-[harness_colors]
-claude = "blue"
-
 [[profiles]]
 name = "work"
 harness = "claude"

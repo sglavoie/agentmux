@@ -21,15 +21,14 @@ func TestFormatRowLockIconPresentWhenLocked(t *testing.T) {
 		Directory: "/tmp",
 	}
 	acctColor := map[string]string{"work": "blue"}
-	harnessColor := map[string]string{}
 
-	unlocked := stripAnsi(formatRow(s, acctColor, harnessColor, 120, ""))
+	unlocked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, ""))
 	if strings.Contains(unlocked, palette.LockIcon()) {
 		t.Fatalf("unlocked row should not contain %q; got %q", palette.LockIcon(), unlocked)
 	}
 
 	s.Locked = true
-	locked := stripAnsi(formatRow(s, acctColor, harnessColor, 120, ""))
+	locked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, ""))
 	if !strings.Contains(locked, palette.LockIcon()) {
 		t.Fatalf("locked row should contain %q; got %q", palette.LockIcon(), locked)
 	}
@@ -47,15 +46,14 @@ func TestFormatRowMuteIconPresentWhenMuted(t *testing.T) {
 		Directory: "/tmp",
 	}
 	acctColor := map[string]string{"work": "blue"}
-	harnessColor := map[string]string{}
 
-	unmuted := stripAnsi(formatRow(s, acctColor, harnessColor, 120, ""))
+	unmuted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, ""))
 	if strings.Contains(unmuted, palette.MuteIcon()) {
 		t.Fatalf("unmuted row should not contain %q; got %q", palette.MuteIcon(), unmuted)
 	}
 
 	s.Muted = true
-	muted := stripAnsi(formatRow(s, acctColor, harnessColor, 120, ""))
+	muted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, ""))
 	if !strings.Contains(muted, palette.MuteIcon()) {
 		t.Fatalf("muted row should contain %q; got %q", palette.MuteIcon(), muted)
 	}

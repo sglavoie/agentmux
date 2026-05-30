@@ -64,8 +64,8 @@ func TestRestart_ClosesAndRelaunches(t *testing.T) {
 	for _, a := range launchArgs {
 		argSet[a] = true
 	}
-	if !argSet["--tab-title=api"] {
-		t.Errorf("expected --tab-title=api in launch args: %v", launchArgs)
+	if !argSet["--tab-title=🦊api"] {
+		t.Errorf("expected --tab-title=🦊api in launch args: %v", launchArgs)
 	}
 	if !argSet["--var=cc_account=work"] {
 		t.Errorf("expected --var=cc_account=work in launch args: %v", launchArgs)
@@ -150,7 +150,7 @@ func TestRestart_NewSessionUsesAccountArgs(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", ConfigDir: "~/.config/claude-work", Args: []string{"--account-flag"}},
 		},
@@ -272,7 +272,7 @@ func TestRestart_OverrideResolution(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", ConfigDir: "~/.config/claude-work"},
 		},

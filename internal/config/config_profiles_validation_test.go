@@ -13,7 +13,7 @@ func TestValidate_UnknownHookDisabledEvent(t *testing.T) {
 	// disabled and the user wonders why their hook still fires. Validation must
 	// catch this and report the typo with a hint to the valid set.
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
@@ -43,7 +43,7 @@ func TestValidate_UnknownHookDisabledEvent(t *testing.T) {
 // profiles) instead of a phantom duplicate report.
 func TestValidate_EmptyNamesNotReportedAsDuplicate(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Harness: "claude", HomeDir: "/tmp/a"},
 			{Harness: "claude", HomeDir: "/tmp/b"},
@@ -70,7 +70,7 @@ func TestValidate_EmptyNamesNotReportedAsDuplicate(t *testing.T) {
 // collision directly.
 func TestValidate_DuplicateProfileNameCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/a"},
 			{Name: "Work", Harness: "claude", HomeDir: "/tmp/b"},
@@ -92,7 +92,7 @@ func TestValidate_DuplicateProfileNameCaseInsensitive(t *testing.T) {
 // even though the override would be applied correctly at merge time.
 func TestValidate_HookOverrideKeyCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
 		},
@@ -115,7 +115,7 @@ func TestValidate_HookOverrideKeyCaseInsensitive(t *testing.T) {
 // the other on a per-run basis. Surface it instead.
 func TestValidate_DuplicateHookOverrideKeyCaseInsensitive(t *testing.T) {
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},
@@ -139,7 +139,7 @@ func TestValidate_UnknownHookOverrideAccount(t *testing.T) {
 	// An override keyed by a profile that doesn't exist is dead weight; the user
 	// renamed the profile or made a typo. Surface it.
 	cfg := &config.Config{
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", HomeDir: "/tmp/h"},
 		},

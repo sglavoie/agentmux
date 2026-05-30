@@ -190,10 +190,14 @@ The config path defaults to `~/.config/cc-manager/config.toml` and can be overri
 
 Account detection reads the `cc_account` Kitty user var set at launch time (`--var cc_account=NAME`). This is the only method — no fallback to process cmdlines in the Go implementation.
 
-Tab titles use the project title only. The dashboard shows the profile
-separately via its badge (`[W]`, `[P]`, etc.), while state icons (bolt `⚡`,
-stop `⏹`, key `🔑`, error `✗`), the star marker (`★`), and the mute marker
-(`🔇`) are prepended to the base title by `palette.BuildTitleFull()`.
+Tab titles carry the project title prefixed by the harness emoji from
+`[harness_emojis]` (last prefix, immediately before the project name).
+The dashboard shows the profile separately via its badge (`[W]`, `[P]`,
+etc.), and colors harness-name cells from `[harness_colors]`. State icons
+(bolt `⚡`, stop `⏹`, key `🔑`, error `✗`), the star marker (`★`), and the
+mute marker (`🔇`) are layered on top of the base title by
+`palette.BuildTitleFull()`. The Kitty tab-bar accent color comes from each
+profile's `color`, not from the harness.
 
 When a Claude session stalls at the context limit, no hook fires (the assistant turn never completes cleanly), so the bolt ⚡ would otherwise stay stuck. The daemon's periodic Claude screen probe (`internal/daemon/claude_context_limit_probe.go`) detects the recovery banner and swaps the icon to error ❗ via the `stop_failure` action. Opt out with `[defaults.watchdog].claude_context_limit_probe = false`.
 

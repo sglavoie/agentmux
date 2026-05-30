@@ -44,6 +44,7 @@ type exampleConfig struct {
 			MinRows   int `toml:"min_rows"`
 		}
 	}
+	HarnessEmojis map[string]string `toml:"harness_emojis"`
 	HarnessColors map[string]string `toml:"harness_colors"`
 }
 
@@ -80,6 +81,9 @@ func TestExampleConfigActiveKeysMatchConfigShape(t *testing.T) {
 	}
 	if decoded.Defaults.Args == nil {
 		t.Fatal("defaults.args was not decoded; it may be scoped under a nested table")
+	}
+	if _, ok := decoded.HarnessEmojis["claude"]; !ok {
+		t.Fatal("harness_emojis.claude was not decoded")
 	}
 	if _, ok := decoded.HarnessColors["claude"]; !ok {
 		t.Fatal("harness_colors.claude was not decoded")

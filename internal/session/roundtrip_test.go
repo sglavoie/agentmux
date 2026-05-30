@@ -37,9 +37,11 @@ func TestTitleRoundTrip_FormatPalettePalette(t *testing.T) {
 		{"title contains colon", config.Session{Title: "a:b:c", Account: "work"}, "", false},
 		{"title contains spaces", config.Session{Title: "with spaces", Account: "work"}, "", false},
 	}
+	acc := config.Account{Name: "work", Color: "blue"}
+	cfg := &config.Config{}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			formatted := session.FormatTitle(tc.sess)
+			formatted := session.FormatTitle(tc.sess, acc, cfg)
 			withIcons := palette.BuildTitle(formatted, tc.state, tc.starred)
 
 			base, state, starred := palette.ParseTitle(withIcons)
@@ -78,9 +80,11 @@ func TestTitleRoundTrip_FormatPaletteFull(t *testing.T) {
 		{"muted colon title", config.Session{Title: "a:b:c", Account: "work"}, "error", true, true},
 		{"unmuted via Full", config.Session{Title: "api", Account: "work"}, "warning", true, false},
 	}
+	acc := config.Account{Name: "work", Color: "blue"}
+	cfg := &config.Config{}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			formatted := session.FormatTitle(tc.sess)
+			formatted := session.FormatTitle(tc.sess, acc, cfg)
 			withIcons := palette.BuildTitleFull(formatted, tc.state, tc.starred, tc.muted)
 
 			base, state, starred, muted := palette.ParseTitleFull(withIcons)
@@ -103,11 +107,60 @@ func TestTitleRoundTrip_FormatPaletteFull(t *testing.T) {
 	}
 }
 
+// TestTitleRoundTrip_WithHarnessEmoji verifies that when [harness_emojis] is
+// configured, the emoji rides inside the parsed base title — i.e. it is
+// preserved as part of `base` through BuildTitleFull → ParseTitleFull rather
+// than being mistaken for an icon prefix. Uses a fox emoji (🦊) that is not
+// in the palette state-icon set, so the parser cannot confuse it for a state.
+func TestTitleRoundTrip_WithHarnessEmoji(t *testing.T) {
+	cases := []struct {
+		name    string
+		acc     config.Account
+		sess    config.Session
+		state   string
+		starred bool
+		muted   bool
+	}{
+		{"emoji plain", config.Account{Name: "work", Color: "blue", Harness: "claude"}, config.Session{Title: "api"}, "", false, false},
+		{"emoji bolt", config.Account{Name: "work", Color: "blue", Harness: "claude"}, config.Session{Title: "api"}, "bolt", false, false},
+		{"emoji starred muted", config.Account{Name: "work", Color: "blue", Harness: "claude"}, config.Session{Title: "api"}, "key", true, true},
+	}
+	cfg := &config.Config{HarnessEmojis: map[string]string{"claude": "🦊"}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			formatted := session.FormatTitle(tc.sess, tc.acc, cfg)
+			if formatted != "🦊api" {
+				t.Fatalf("FormatTitle pre-condition: got %q, want %q", formatted, "🦊api")
+			}
+			withIcons := palette.BuildTitleFull(formatted, tc.state, tc.starred, tc.muted)
+			base, state, starred, muted := palette.ParseTitleFull(withIcons)
+			if base != formatted {
+				t.Errorf("ParseTitleFull.base = %q, want %q (built %q)", base, formatted, withIcons)
+			}
+			if state != tc.state {
+				t.Errorf("ParseTitleFull.state = %q, want %q", state, tc.state)
+			}
+			if starred != tc.starred {
+				t.Errorf("ParseTitleFull.starred = %v, want %v", starred, tc.starred)
+			}
+			if muted != tc.muted {
+				t.Errorf("ParseTitleFull.muted = %v, want %v", muted, tc.muted)
+			}
+			if got := palette.StripIcons(withIcons); got != formatted {
+				t.Errorf("StripIcons = %q, want %q", got, formatted)
+			}
+		})
+	}
+}
+
 // TestFormatTitle_IgnoresProfileAndAccount verifies that managed Kitty tab
-// base titles come entirely from the project title.
+// base titles come entirely from the project title (when no harness emoji
+// is configured).
 func TestFormatTitle_IgnoresProfileAndAccount(t *testing.T) {
 	sess := config.Session{Title: "api", Profile: "alpha", Account: "beta"}
-	if got := session.FormatTitle(sess); got != "api" {
+	acc := config.Account{Name: "work", Color: "blue"}
+	cfg := &config.Config{}
+	if got := session.FormatTitle(sess, acc, cfg); got != "api" {
 		t.Errorf("FormatTitle(Profile=alpha, Account=beta) = %q, want %q", got, "api")
 	}
 }

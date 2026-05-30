@@ -54,7 +54,7 @@ func launchDispatchModel(t *testing.T, running []session.RunningSession) Model {
 	t.Helper()
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		HarnessColors: map[string]string{"claude": "blue"},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", Color: "blue"},
 			{Name: "personal", Color: "yellow"},

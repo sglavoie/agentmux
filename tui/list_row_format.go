@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -26,11 +27,16 @@ func harnessLabel(h string) string {
 }
 
 // formatRow formats a single session row.
-// Format: state_icon | account_prefix | [harness] | title | [age] | directory
+// Format: state_icon | account_prefix | <emoji> harness | title | [age] | directory
 // ageCell is empty when no row in the current view carries a watchdog entry;
 // otherwise it is a pre-rendered fixed-width cell (ageColumnWidth cells,
 // trailing space included) inserted immediately before the directory column.
-func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, width int, ageCell string) string {
+// cfg supplies the [harness_emojis] lookup so the harness cell can render as
+// "<emoji> <label>". harnessColor supplies the optional [harness_colors]
+// foreground for that cell. When the configured emoji is empty, the cell
+// collapses to just "<label>" so unconfigured users don't see a stray leading
+// space.
+func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, ageCell string) string {
 	// Lock indicator column. Always reserved (2 cells) so column alignment is
 	// stable; only filled when the session is locked.
 	lockCol := "  "
@@ -70,21 +76,34 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 		acctBadge = strings.ToUpper(string(r))
 	}
 
-	colorName := acctColor[s.Account]
-	style := accountStyle(colorName)
+	// Project-identity color tracks the project's configured default profile so
+	// override-launched rows keep the project's visual identity on the title and
+	// badge. The badge letter and harness label still reflect the running
+	// profile/harness. Falls back to the running account color when the project
+	// is not configured (orphan tab).
+	identityColor := projectIdentityColor(s, acctColor, cfg)
+	style := accountStyle(identityColor)
 
 	badge := style.Render("[" + acctBadge + "]")
 
-	// Harness badge column, always reserved so rows stay aligned regardless
-	// of which harness (or none) the session uses.
+	// Harness cell, always reserved so rows stay aligned regardless of which
+	// harness (or none) the session uses. Its color is keyed by harness, not by
+	// profile, so the column is stable across profile overrides.
 	var harnessCell string
 	if label := harnessLabel(s.Harness); label != "" {
-		text := "[" + label + "]"
+		emoji := ""
+		if cfg != nil {
+			emoji = cfg.HarnessEmoji(s.Harness)
+		}
+		text := label
+		if emoji != "" {
+			text = emoji + " " + label
+		}
 		pad := harnessColWidth - runewidth.StringWidth(text)
 		if pad < 0 {
 			pad = 0
 		}
-		harnessCell = accountStyle(harnessColor[s.Account]).Render(text) + strings.Repeat(" ", pad)
+		harnessCell = accountStyle(harnessColor[strings.ToLower(s.Harness)]).Render(text) + strings.Repeat(" ", pad)
 	} else {
 		harnessCell = strings.Repeat(" ", harnessColWidth)
 	}
@@ -92,14 +111,14 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	// Title: use the project title padded to titleColWidth.
 	title := runewidth.Truncate(runningSessionDisplayTitle(s), titleColWidth, "…")
 	paddedTitle := title + strings.Repeat(" ", titleColWidth-runewidth.StringWidth(title))
-	title = accountStyle(acctColor[s.Account]).Render(paddedTitle)
+	title = accountStyle(identityColor).Render(paddedTitle)
 
 	// Directory: truncated.
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
 		used := lockColumnWidth + muteColumnWidth + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3
-		// lock (2) + mute (2) + icon+space (3) + "[X] " badge (4) + harness (9)
+		// lock (2) + mute (2) + icon+space (3) + "[X] " badge (4) + harness (10)
 		//   + space (1) + title (20) + separators before dir (3)
 		available := width - used
 		if available > 10 {

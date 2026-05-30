@@ -67,7 +67,7 @@ func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defa
 // Launch launches a single session from config.
 // Returns nil silently if the session is already running (dedup).
 func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, opts ...LaunchOpt) error {
-	formattedTitle := FormatTitle(sess)
+	formattedTitle := FormatTitle(sess, acc, cfg)
 	launchDebug.Printf("Launch: title=%q acc=%q dir=%q opts=%+v", formattedTitle, acc.Name, sess.Directory, opts)
 
 	osWindows, err := client.ListWindows()
@@ -143,9 +143,20 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	}
 	launchDebug.Printf("Launch: LaunchTab succeeded")
 
-	// Apply tab color with exponential backoff retry.
-	// Kitty may not register the new tab immediately for color changes.
-	colorName := cfg.HarnessColor(acc.EffectiveHarness())
+	// Apply tab color with exponential backoff retry. The accent tracks the
+	// project's *configured* default profile so an override-launched tab keeps
+	// the project's visual identity. Falls back to the running profile's color
+	// when the project is not configured (orphan / no-cfg paths).
+	colorName := acc.Color
+	projectDefaultColor := ""
+	if cfg != nil {
+		if def := cfg.DefaultProfileFor(sess.Title); def != "" {
+			if defAcc, ok := findAccount(cfg, def); ok && defAcc.Color != "" {
+				colorName = defAcc.Color
+				projectDefaultColor = defAcc.Color
+			}
+		}
+	}
 	if color, err := palette.Lookup(colorName); err == nil {
 		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
 			// Tab color is cosmetic — degrade to a Warn-level log so the
@@ -155,6 +166,8 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 				"title", formattedTitle,
 				"account", acc.Name,
 				"harness", acc.EffectiveHarness(),
+				"profile_color", acc.Color,
+				"project_default_color", projectDefaultColor,
 				"error", colorErr,
 			)
 		}

@@ -168,7 +168,7 @@ func renderSplit(m Model) string {
 		listHeight := paneHeight - previewHeight - 1
 		listView := renderListAt(m, m.width, listHeight)
 		divider := styleDim.Render(strings.Repeat("─", m.width))
-		previewView := renderPreview(m.width, previewHeight, sess, m.previewText, m.previewError, acctColor)
+		previewView := renderPreview(m.width, previewHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
 		return lipgloss.JoinVertical(lipgloss.Left, listView, divider, previewView) + "\n"
 	}
 
@@ -181,7 +181,7 @@ func renderSplit(m Model) string {
 	}
 	listWidth := m.width - previewWidth - 1
 	listView := renderListAt(m, listWidth, paneHeight)
-	previewView := renderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor)
+	previewView := renderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
 	divider = strings.TrimRight(divider, "\n")
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"

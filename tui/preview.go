@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	runewidth "github.com/mattn/go-runewidth"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -44,12 +45,12 @@ func fetchPreviewCmd(client kitty.KittyClient, windowID int) tea.Cmd {
 // renderPreview formats the preview pane for the given width/height. The
 // final return is exactly height lines tall (no trailing newline). When the
 // session is not running (WindowID == 0) it renders a placeholder.
-func renderPreview(width, height int, sess session.RunningSession, text, errText string, acctColor map[string]string) string {
+func renderPreview(width, height int, sess session.RunningSession, text, errText string, acctColor map[string]string, cfg *config.Config) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	// One-line header with account-colored title.
-	colorName := acctColor[sess.Account]
+	// One-line header with project-identity-colored title.
+	colorName := projectIdentityColor(sess, acctColor, cfg)
 	header := accountStyle(colorName).Render(
 		runewidth.Truncate(runningSessionDisplayTitle(sess), width, "…"),
 	)
