@@ -318,19 +318,20 @@ func pickerScrollbackTail(text, errText string, height, width int) []string {
 	return out
 }
 
-// sortPickerSessions returns a sorted copy: by account name, then by title.
+// sortPickerSessions returns a sorted copy: by profile, then by normalized
+// project title (emoji/punctuation prefix stripped, case-insensitive).
 func sortPickerSessions(sessions []config.Session) []config.Session {
 	sorted := slices.Clone(sessions)
 	slices.SortStableFunc(sorted, func(a, b config.Session) int {
 		if c := strings.Compare(
-			strings.ToLower(a.EffectiveProfile()),
-			strings.ToLower(b.EffectiveProfile()),
+			session.ProjectSortKey(a.EffectiveProfile()),
+			session.ProjectSortKey(b.EffectiveProfile()),
 		); c != 0 {
 			return c
 		}
 		return strings.Compare(
-			strings.ToLower(a.Title),
-			strings.ToLower(b.Title),
+			session.ProjectSortKey(a.Title),
+			session.ProjectSortKey(b.Title),
 		)
 	})
 	return sorted

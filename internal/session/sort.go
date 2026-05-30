@@ -22,7 +22,7 @@ func SortKey(account, baseTitle string, starred bool, mode string) string {
 		pin = "0"
 	}
 	proj := projectNameForProfile(baseTitle, account)
-	projKey := projectSortKey(proj)
+	projKey := ProjectSortKey(proj)
 	accountKey := strings.ToLower(account)
 	projectKey := strings.ToLower(proj)
 	switch mode {
@@ -126,12 +126,12 @@ func projectNameForProfile(base, profile string) string {
 	return projectName(base)
 }
 
-// projectSortKey returns the lowercased project name with leading
+// ProjectSortKey returns the lowercased project name with leading
 // non-letter, non-digit runes (emoji, punctuation, symbols, combining
 // marks) stripped. Intra-word characters are preserved. When stripping
 // would leave an empty string, the full lowercased input is returned
 // so a title made entirely of symbols still has a stable key.
-func projectSortKey(project string) string {
+func ProjectSortKey(project string) string {
 	i := 0
 	for i < len(project) {
 		r, size := utf8.DecodeRuneInString(project[i:])

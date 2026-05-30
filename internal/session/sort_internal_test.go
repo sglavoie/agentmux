@@ -74,8 +74,8 @@ func TestProjectSortKey(t *testing.T) {
 		{"🐱📝amx", "amx"},
 	}
 	for _, tc := range cases {
-		if got := projectSortKey(tc.project); got != tc.want {
-			t.Errorf("projectSortKey(%q) = %q, want %q", tc.project, got, tc.want)
+		if got := ProjectSortKey(tc.project); got != tc.want {
+			t.Errorf("ProjectSortKey(%q) = %q, want %q", tc.project, got, tc.want)
 		}
 	}
 }
