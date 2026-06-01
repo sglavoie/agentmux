@@ -174,8 +174,37 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		return m.enterPlanView(m.planResults[m.planCursor].Meta)
+	case keySortPlan:
+		m.planSortMode = nextPlanSortMode(m.planSortMode)
+		var anchor string
+		if m.planCursor >= 0 && m.planCursor < len(m.planResults) {
+			anchor = m.planResults[m.planCursor].Meta.DirPath
+		}
+		plans.SortResults(m.planResults, m.planSortMode)
+		m.planCursor = 0
+		if anchor != "" {
+			for i := range m.planResults {
+				if m.planResults[i].Meta.DirPath == anchor {
+					m.planCursor = i
+					break
+				}
+			}
+		}
+		scrollPlanSearchToCursor(&m)
+		return m, nil
 	}
 	return m, nil
+}
+
+// nextPlanSortMode advances mode through the cycle:
+// SortByMatches → SortByModTime → SortByMatches.
+func nextPlanSortMode(mode plans.SortMode) plans.SortMode {
+	switch mode {
+	case plans.SortByMatches:
+		return plans.SortByModTime
+	default:
+		return plans.SortByMatches
+	}
 }
 
 // dispatchPlanSearch returns a tea.Cmd that fires after the debounce
@@ -222,7 +251,7 @@ func openPlanInEditorCmd(client kitty.KittyClient, meta plans.PlanMeta, cfg *con
 
 // currentPlanQuery snapshots the text query into a plans.Query value.
 func (m Model) currentPlanQuery() plans.Query {
-	return plans.Query{Text: m.planQuery}
+	return plans.Query{Text: m.planQuery, Sort: m.planSortMode}
 }
 
 // scrollPlanSearchToCursor keeps the cursor inside the visible window after

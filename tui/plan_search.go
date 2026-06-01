@@ -24,6 +24,19 @@ func planSearchVisibleHeight(m Model) int {
 	return avail
 }
 
+// planSortLabel returns the short label rendered in the Plans header to
+// signal which ordering is active. Kept distinct from the SortMode
+// constants so the on-screen labels can evolve without touching the
+// internal type.
+func planSortLabel(mode plans.SortMode) string {
+	switch mode {
+	case plans.SortByModTime:
+		return "recent"
+	default:
+		return "matches"
+	}
+}
+
 // renderPlanSearch renders the entire ModePlanSearch view: header, query
 // bar, and the results list. Mirrors renderSessionSearch without the chip
 // bar (plans have no categorical filters).
@@ -35,7 +48,8 @@ func renderPlanSearch(m Model) string {
 	if m.planLoading {
 		header += "  " + styleDim.Render("(scanning…)")
 	} else {
-		header += fmt.Sprintf("  [%d result%s]", count, plural(count))
+		header += "  " + styleDim.Render(fmt.Sprintf("[%d result%s · sort: %s]",
+			count, plural(count), planSortLabel(m.planSortMode)))
 	}
 	sb.WriteString(styleHeader.Render(header))
 	sb.WriteByte('\n')

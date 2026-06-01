@@ -299,6 +299,89 @@ func TestSearch_SortMatchesDescThenModTimeDesc(t *testing.T) {
 	}
 }
 
+func TestSortResults_ByMatches(t *testing.T) {
+	older := time.Now().Add(-1 * time.Hour)
+	newer := time.Now()
+	rs := []Result{
+		{Meta: PlanMeta{DirPath: "low-newer", ModTime: newer}, Matches: 1},
+		{Meta: PlanMeta{DirPath: "high-older", ModTime: older}, Matches: 5},
+		{Meta: PlanMeta{DirPath: "low-older", ModTime: older}, Matches: 1},
+	}
+	SortResults(rs, SortByMatches)
+	got := []string{rs[0].Meta.DirPath, rs[1].Meta.DirPath, rs[2].Meta.DirPath}
+	want := []string{"high-older", "low-newer", "low-older"}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("SortByMatches order[%d] = %q, want %q (full order %v)",
+				i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestSortResults_ByModTime(t *testing.T) {
+	older := time.Now().Add(-1 * time.Hour)
+	newer := time.Now()
+	rs := []Result{
+		{Meta: PlanMeta{DirPath: "low-newer", ModTime: newer}, Matches: 1},
+		{Meta: PlanMeta{DirPath: "high-older", ModTime: older}, Matches: 5},
+		{Meta: PlanMeta{DirPath: "high-newer", ModTime: newer}, Matches: 5},
+	}
+	SortResults(rs, SortByModTime)
+	got := []string{rs[0].Meta.DirPath, rs[1].Meta.DirPath, rs[2].Meta.DirPath}
+	want := []string{"high-newer", "low-newer", "high-older"}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("SortByModTime order[%d] = %q, want %q (full order %v)",
+				i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestSearch_QuerySortByModTime(t *testing.T) {
+	root := t.TempDir()
+	// planA: many matches, older mtime — would win under SortByMatches.
+	planA := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
+		"manifest.md":  "# Plan A",
+		"session-1.md": "alpha alpha alpha extra text",
+	})
+	// planB: one match, newest mtime — must win under SortByModTime.
+	planB := seedPlanDir(t, root, "beta-ccdd44556677", map[string]string{
+		"manifest.md":  "# Plan B",
+		"session-1.md": "single alpha mention",
+	})
+
+	older := time.Now().Add(-1 * time.Hour)
+	newer := time.Now()
+	for _, f := range []string{"manifest.md", "session-1.md"} {
+		if err := os.Chtimes(planA+"/"+f, older, older); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(planB+"/"+f, newer, newer); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	results, err := Search(idx, Query{Text: "alpha", Sort: SortByModTime})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("len(results) = %d, want 2", len(results))
+	}
+	if results[0].Meta.DirPath != planB {
+		t.Errorf("results[0] = %q, want planB %q (newer mtime should win regardless of match count)",
+			results[0].Meta.DirPath, planB)
+	}
+	if results[1].Meta.DirPath != planA {
+		t.Errorf("results[1] = %q, want planA %q", results[1].Meta.DirPath, planA)
+	}
+}
+
 func TestSearch_NilIndexReturnsError(t *testing.T) {
 	if _, err := Search(nil, Query{Text: "anything"}); err == nil {
 		t.Errorf("Search(nil, ...) returned nil error; expected non-nil")

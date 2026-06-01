@@ -239,6 +239,7 @@ type Model struct {
 	planRefreshErr error
 	planSearchErr  error
 	planSearchSeq  int
+	planSortMode   plans.SortMode // cycled with `s`; zero value = SortByMatches
 
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
 	// user opened with Enter; nil when the viewer is closed. planViewerLines

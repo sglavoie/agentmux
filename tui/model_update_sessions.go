@@ -2,6 +2,8 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/sglavoie/agentmux/internal/plans"
 )
 
 // handleSessionsMsg processes a sessionsMsg: rebuilds the session list,
@@ -176,6 +178,10 @@ func (m Model) handlePlanSearchDone(msg planSearchDoneMsg) (tea.Model, tea.Cmd) 
 	m.planLoading = false
 	m.planSearchErr = msg.err
 	m.planResults = msg.results
+	// Belt-and-suspenders: the in-search sort already honours
+	// Query.Sort, but the cycle keystroke path mutates m.planSortMode
+	// without re-issuing a search, so re-sort here on every receive.
+	plans.SortResults(m.planResults, m.planSortMode)
 	if m.planCursor >= len(m.planResults) {
 		m.planCursor = len(m.planResults) - 1
 		if m.planCursor < 0 {

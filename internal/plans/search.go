@@ -8,11 +8,23 @@ import (
 	"strings"
 )
 
+// SortMode selects the ordering applied to search results. Zero value is
+// SortByMatches so callers that never set Query.Sort keep today's behaviour.
+type SortMode int
+
+const (
+	// SortByMatches orders by Matches DESC, tie-broken by ModTime DESC.
+	SortByMatches SortMode = iota
+	// SortByModTime orders by ModTime DESC, tie-broken by Matches DESC.
+	SortByModTime
+)
+
 // Query describes a plan-search request. An empty Text returns every
 // indexed plan with Matches=0 and Preview falling back to the cached
 // snippet, sorted by ModTime descending.
 type Query struct {
 	Text string
+	Sort SortMode
 }
 
 // Result is one matching plan. Matches is the case-insensitive substring
@@ -45,9 +57,9 @@ func Search(idx *Index, q Query) ([]Result, error) {
 			results = append(results, Result{Meta: m, Preview: m.Snippet})
 		}
 		// metas already arrives sorted by ModTime desc from idx.List();
-		// sortResults preserves that order (Matches is zero for every
+		// SortResults preserves that order (Matches is zero for every
 		// result, so the tie-break falls through to ModTime).
-		sortResults(results)
+		SortResults(results, q.Sort)
 		return results, nil
 	}
 
@@ -85,7 +97,7 @@ func Search(idx *Index, q Query) ([]Result, error) {
 		results = append(results, Result{Meta: m, Matches: count, Preview: preview})
 	}
 
-	sortResults(results)
+	SortResults(results, q.Sort)
 	return results, nil
 }
 
@@ -140,13 +152,23 @@ func firstMatchLine(text string, pos int) string {
 	return truncateSnippet(text[start:end])
 }
 
-// sortResults orders results by Matches desc, breaking ties with
-// ModTime desc so output is deterministic for tests and the TUI list.
-func sortResults(rs []Result) {
-	sort.SliceStable(rs, func(a, b int) bool {
-		if rs[a].Matches != rs[b].Matches {
+// SortResults orders rs in place according to mode. Output is stable so
+// tests and the TUI list see deterministic ordering on every call.
+func SortResults(rs []Result, mode SortMode) {
+	switch mode {
+	case SortByModTime:
+		sort.SliceStable(rs, func(a, b int) bool {
+			if !rs[a].Meta.ModTime.Equal(rs[b].Meta.ModTime) {
+				return rs[a].Meta.ModTime.After(rs[b].Meta.ModTime)
+			}
 			return rs[a].Matches > rs[b].Matches
-		}
-		return rs[a].Meta.ModTime.After(rs[b].Meta.ModTime)
-	})
+		})
+	default:
+		sort.SliceStable(rs, func(a, b int) bool {
+			if rs[a].Matches != rs[b].Matches {
+				return rs[a].Matches > rs[b].Matches
+			}
+			return rs[a].Meta.ModTime.After(rs[b].Meta.ModTime)
+		})
+	}
 }
