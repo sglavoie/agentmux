@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -132,6 +134,76 @@ func TestListFooterEAndCAlwaysPresent(t *testing.T) {
 				t.Errorf("expected `C clear` in footer; got %q", out)
 			}
 		})
+	}
+}
+
+// TestListFooterLine1WrapsNarrow asserts that line 1 emits at least one
+// newline and every line fits within the configured terminal width when the
+// width is too narrow for the full palette.
+func TestListFooterLine1WrapsNarrow(t *testing.T) {
+	const width = 60
+	m := Model{width: width}
+	out := listFooterLine1(m)
+	if strings.Count(out, "\n") < 1 {
+		t.Fatalf("expected line1 to wrap at width %d, got single line:\n%s", width, out)
+	}
+	for i, line := range strings.Split(out, "\n") {
+		if w := lipgloss.Width(line); w > width {
+			t.Errorf("line %d width %d exceeds max %d: %q", i, w, width, line)
+		}
+	}
+}
+
+// TestListFooterLine1NoWrapWide asserts no wrapping happens when the width
+// comfortably exceeds the rendered palette.
+func TestListFooterLine1NoWrapWide(t *testing.T) {
+	m := Model{width: 200}
+	out := listFooterLine1(m)
+	if strings.Contains(out, "\n") {
+		t.Errorf("expected line1 to fit on one line at width 200, got:\n%s", out)
+	}
+}
+
+// TestListFooterLine1ZeroWidth asserts that a zero-width model (before the
+// first WindowSizeMsg) emits a single unwrapped line — preserving the
+// pre-wrap fallback behavior.
+func TestListFooterLine1ZeroWidth(t *testing.T) {
+	m := Model{}
+	out := listFooterLine1(m)
+	if strings.Contains(out, "\n") {
+		t.Errorf("expected single line at zero width, got:\n%s", out)
+	}
+}
+
+// TestListFooterLine2WrapsNarrow asserts that line 2 wraps when the nav
+// fragments overflow the configured width.
+func TestListFooterLine2WrapsNarrow(t *testing.T) {
+	const width = 40
+	m := Model{width: width}
+	nav := []string{
+		"j/k: up/down", "]/[: jump-chord", "}/{: nav+focus",
+		"enter: focus", "a: actions", "/: filter",
+		"?: help", "q: quit", "p: preview",
+	}
+	out := listFooterLine2(m, nav)
+	if strings.Count(out, "\n") < 1 {
+		t.Fatalf("expected line2 to wrap at width %d, got single line:\n%s", width, out)
+	}
+	for i, line := range strings.Split(out, "\n") {
+		if w := lipgloss.Width(line); w > width {
+			t.Errorf("line %d width %d exceeds max %d: %q", i, w, width, line)
+		}
+	}
+}
+
+// TestListFooterLine2ZeroWidth asserts that a zero-width model emits a single
+// unwrapped line for line 2.
+func TestListFooterLine2ZeroWidth(t *testing.T) {
+	m := Model{}
+	nav := []string{"j/k: up/down", "enter: focus", "q: quit"}
+	out := listFooterLine2(m, nav)
+	if strings.Contains(out, "\n") {
+		t.Errorf("expected single line at zero width, got:\n%s", out)
 	}
 }
 

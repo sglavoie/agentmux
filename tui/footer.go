@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -76,14 +78,27 @@ func renderFooter(m Model) string {
 			line2 = ""
 		default:
 			line1 = listFooterLine1(m)
-			nav := "j/k: up/down  ]/[: jump-chord  }/{: nav+focus  enter: focus  a: actions  /: filter  ?: help  q: quit  p: preview"
+			navTokens := []string{
+				"j/k: up/down",
+				"]/[: jump-chord",
+				"}/{: nav+focus",
+				"enter: focus",
+				"a: actions",
+				"/: filter",
+				"?: help",
+				"q: quit",
+				"p: preview",
+			}
 			if !m.activeFilter.IsEmpty() {
-				nav += "  esc: clear filters"
+				navTokens = append(navTokens, "esc: clear filters")
 				if n := len(m.activeFilter.Components()); n > 0 {
-					nav += fmt.Sprintf("  1-%d: remove chip  tab: focus next", n)
+					navTokens = append(navTokens,
+						fmt.Sprintf("1-%d: remove chip", n),
+						"tab: focus next",
+					)
 				}
 			}
-			line2 = listFooterLine2(m, nav)
+			line2 = listFooterLine2(m, navTokens)
 		}
 	}
 
@@ -106,19 +121,77 @@ func renderFooter(m Model) string {
 // the dash separator and trailing nav stay in the dim footer style. When the
 // filtered list overflows the visible window a `start–end of total` position
 // fragment is prepended so the user sees where the cursor sits.
-func listFooterLine2(m Model, nav string) string {
+//
+// navFragments is the ordered list of navigation hints to render; each
+// fragment is joined with the standard double-space separator and wrapped to
+// fit m.width.
+func listFooterLine2(m Model, navFragments []string) string {
+	sep := styleFooter.Render("  ")
+	sepW := lipgloss.Width(sep)
+
+	frags := navFragments
 	if pos := listPositionFragment(m); pos != "" {
-		nav = pos + "   " + nav
+		// The position fragment sits before the nav hints with a wider
+		// three-space gap so the eye chunks it as a separate group.
+		gap := styleFooter.Render("   ")
+		gapW := lipgloss.Width(gap)
+		tokens := make([]footerToken, 0, len(frags)+1)
+		posRendered := styleFooter.Render(pos)
+		tokens = append(tokens, footerToken{
+			rendered: posRendered,
+			width:    lipgloss.Width(posRendered),
+			sep:      gap,
+			sepWidth: gapW,
+		})
+		for i, f := range frags {
+			rendered := styleFooter.Render(f)
+			tok := footerToken{
+				rendered: rendered,
+				width:    lipgloss.Width(rendered),
+			}
+			if i < len(frags)-1 {
+				tok.sep = sep
+				tok.sepWidth = sepW
+			}
+			tokens = append(tokens, tok)
+		}
+		firstLead, contIndent := listFooterLine2Leads(m)
+		return wrapFooterLine(firstLead, contIndent, tokens, m.width)
 	}
+
+	tokens := make([]footerToken, 0, len(frags))
+	for i, f := range frags {
+		rendered := styleFooter.Render(f)
+		tok := footerToken{
+			rendered: rendered,
+			width:    lipgloss.Width(rendered),
+		}
+		if i < len(frags)-1 {
+			tok.sep = sep
+			tok.sepWidth = sepW
+		}
+		tokens = append(tokens, tok)
+	}
+	firstLead, contIndent := listFooterLine2Leads(m)
+	return wrapFooterLine(firstLead, contIndent, tokens, m.width)
+}
+
+// listFooterLine2Leads returns the rendered prefix for the first line and the
+// indent used on continuation lines. When the cursor row has a state gloss
+// the first line carries the accent-colored "⚡ active —" lead; continuation
+// lines fall back to the plain two-space indent so the gloss does not repeat.
+func listFooterLine2Leads(m Model) (string, string) {
+	indent := "  "
 	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
 		s := m.filtered[m.cursor]
 		if g := StateGloss(s.State); g != "" {
 			icon := palette.StateIcon(s.State)
 			glossText := padIconCell(icon) + " " + g
-			return "  " + stateAccentStyle(s.State).Render(glossText) + styleFooter.Render(" — "+nav)
+			lead := indent + stateAccentStyle(s.State).Render(glossText) + styleFooter.Render(" — ")
+			return lead, indent
 		}
 	}
-	return styleFooter.Render("  " + nav)
+	return indent, indent
 }
 
 // listPositionFragment returns a `start–end of total` indicator (mirroring
@@ -222,33 +295,123 @@ var listFooterPalette = []footerEntry{
 }
 
 func listFooterLine1(m Model) string {
-	var sb strings.Builder
-	sb.WriteString("  ")
+	const indent = "  "
+	innerSep := styleFooter.Render(" · ")
+	innerSepW := lipgloss.Width(innerSep)
+	sectionSep := styleFooter.Render(listFooterSectionSeparator)
+	sectionSepW := lipgloss.Width(sectionSep)
 
-	first := true
-	for _, sec := range listFooterSectionOrder {
+	var tokens []footerToken
+	for sIdx, sec := range listFooterSectionOrder {
 		entries := footerEntriesForSection(sec)
 		if len(entries) == 0 {
 			continue
 		}
-		if !first {
-			sb.WriteString(styleFooter.Render(listFooterSectionSeparator))
-		}
-		first = false
-
 		for i, e := range entries {
-			if i > 0 {
-				sb.WriteString(styleFooter.Render(" · "))
-			}
 			text := e.key + " " + e.label
+			var rendered string
 			if e.availFn(m) {
-				sb.WriteString(styleFooter.Render(text))
+				rendered = styleFooter.Render(text)
 			} else {
-				sb.WriteString(styleFooterUnavailable.Render(text))
+				rendered = styleFooterUnavailable.Render(text)
 			}
+			tok := footerToken{
+				rendered: rendered,
+				width:    lipgloss.Width(rendered),
+			}
+			// Decide separator that follows this token within the current
+			// section. The last entry of a section either gets the wider
+			// section separator (if more sections follow) or no separator
+			// at all.
+			if i < len(entries)-1 {
+				tok.sep = innerSep
+				tok.sepWidth = innerSepW
+			} else if sIdx < len(listFooterSectionOrder)-1 {
+				// Find whether any subsequent section has entries.
+				for j := sIdx + 1; j < len(listFooterSectionOrder); j++ {
+					if len(footerEntriesForSection(listFooterSectionOrder[j])) > 0 {
+						tok.sep = sectionSep
+						tok.sepWidth = sectionSepW
+						break
+					}
+				}
+			}
+			tokens = append(tokens, tok)
 		}
 	}
-	return sb.String()
+	return wrapFooterLine(indent, indent, tokens, m.width)
+}
+
+// footerToken pairs a styled rendered string with its visible width and an
+// optional separator that follows it within a section. Pre-measuring with
+// lipgloss.Width lets us account for ANSI styling correctly.
+type footerToken struct {
+	rendered string
+	width    int
+	sep      string
+	sepWidth int
+}
+
+// wrapFooterLine renders tokens onto one or more lines, breaking when the
+// next token's render width would exceed maxWidth. firstLineLead is the lead
+// rendered before the first token of the first line; continuationIndent is
+// the left margin applied to every subsequent line. The trailing separator
+// of the last token on each line is dropped so wrap points stay clean.
+//
+// When maxWidth <= 0 (uninitialized width before the first WindowSizeMsg),
+// the helper emits a single unwrapped line — matching pre-wrap behavior.
+// A token whose width alone exceeds maxWidth is still placed on its own
+// line; we never split mid-token, mirroring renderChips.
+func wrapFooterLine(firstLineLead, continuationIndent string, tokens []footerToken, maxWidth int) string {
+	if len(tokens) == 0 {
+		return firstLineLead
+	}
+	if maxWidth <= 0 {
+		var sb strings.Builder
+		sb.WriteString(firstLineLead)
+		for i, t := range tokens {
+			sb.WriteString(t.rendered)
+			if i < len(tokens)-1 {
+				sb.WriteString(t.sep)
+			}
+		}
+		return sb.String()
+	}
+
+	leadW := lipgloss.Width(firstLineLead)
+	contW := lipgloss.Width(continuationIndent)
+
+	var out strings.Builder
+	out.WriteString(firstLineLead)
+
+	lineW := leadW
+	lineHasToken := false
+	pendingSep := ""
+	pendingSepW := 0
+	for _, t := range tokens {
+		// Cost to extend the current line with this token: the prior
+		// token's separator (if any) plus the token itself.
+		cost := t.width
+		if lineHasToken {
+			cost += pendingSepW
+		}
+		if lineHasToken && lineW+cost > maxWidth {
+			out.WriteString("\n")
+			out.WriteString(continuationIndent)
+			lineW = contW
+			lineHasToken = false
+			cost = t.width
+		}
+		if lineHasToken {
+			out.WriteString(pendingSep)
+		}
+		out.WriteString(t.rendered)
+		lineW += cost
+		lineHasToken = true
+		pendingSep = t.sep
+		pendingSepW = t.sepWidth
+	}
+	return out.String()
 }
 
 // footerEntriesForSection returns the palette entries whose section matches
