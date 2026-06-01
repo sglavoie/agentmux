@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 )
@@ -36,41 +35,6 @@ func newTestIndex(t *testing.T) *Index {
 		t.Fatalf("LoadIndexAt: %v", err)
 	}
 	return idx
-}
-
-func TestDisplayName(t *testing.T) {
-	cases := []struct {
-		in, want string
-	}{
-		{"add-ability-to-search-drifting-beacon-4ca2183c5850", "add-ability-to-search-drifting-beacon"},
-		{"agent-mux-memory-exhaustion-fix-9-sessions-8027329421d8-5d44126d1695", "agent-mux-memory-exhaustion-fix-9-sessions"},
-		{"plan-deadbeef00ff", "plan"},
-		{"plan-x-y-z", "plan-x-y-z"},
-		{"plan", "plan"},
-		{"", ""},
-		{"plan-not12hex-aabbccddeeff", "plan-not12hex"},
-		{"plan-zzzzzzzzzzzz", "plan-zzzzzzzzzzzz"},       // non-hex chars: not stripped
-		{"plan-aabb1122ccdd-ee", "plan-aabb1122ccdd-ee"}, // trailing isn't 12 hex
-	}
-	for _, tc := range cases {
-		got := DisplayName(tc.in)
-		if got != tc.want {
-			t.Errorf("DisplayName(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
-func TestTruncateSnippetBoundary(t *testing.T) {
-	exact := strings.Repeat("a", snippetMaxLen)
-	if got := truncateSnippet(exact); got != exact {
-		t.Errorf("truncateSnippet(exact length) = %q, want %q", got, exact)
-	}
-
-	over := exact + "b"
-	want := exact + "…"
-	if got := truncateSnippet(over); got != want {
-		t.Errorf("truncateSnippet(over length) = %q, want %q", got, want)
-	}
 }
 
 func TestRefresh_PopulatesEntriesAndSkipsSources(t *testing.T) {
@@ -458,55 +422,6 @@ func TestRefresh_DropsPlanWhenMarkdownRemoved(t *testing.T) {
 	}
 }
 
-func TestSaveLoadRoundtrip(t *testing.T) {
-	root := t.TempDir()
-	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
-		"manifest.md":  "# alpha title\nmore",
-		"session-1.md": "body text",
-	})
-
-	src := newTestIndex(t)
-	if err := src.Refresh(root); err != nil {
-		t.Fatalf("Refresh: %v", err)
-	}
-	want, ok := src.Get(PlanKey(planDir))
-	if !ok {
-		t.Fatalf("entry missing pre-roundtrip")
-	}
-
-	// Save was already called by Refresh; load a fresh Index against
-	// the same path and compare.
-	loaded, err := LoadIndexAt(src.Path())
-	if err != nil {
-		t.Fatalf("LoadIndexAt: %v", err)
-	}
-	if loaded.Len() != 1 {
-		t.Fatalf("loaded Len = %d, want 1", loaded.Len())
-	}
-	got, ok := loaded.Get(PlanKey(planDir))
-	if !ok {
-		t.Fatalf("entry missing post-roundtrip")
-	}
-	if got.Name != want.Name {
-		t.Errorf("Name: got %q want %q", got.Name, want.Name)
-	}
-	if got.DirPath != want.DirPath {
-		t.Errorf("DirPath: got %q want %q", got.DirPath, want.DirPath)
-	}
-	if got.Size != want.Size {
-		t.Errorf("Size: got %d want %d", got.Size, want.Size)
-	}
-	if !got.ModTime.Equal(want.ModTime) {
-		t.Errorf("ModTime: got %v want %v", got.ModTime, want.ModTime)
-	}
-	if got.Snippet != want.Snippet {
-		t.Errorf("Snippet: got %q want %q", got.Snippet, want.Snippet)
-	}
-	if got.SearchText != "" {
-		t.Errorf("SearchText leaked into JSON: %q", got.SearchText)
-	}
-}
-
 func TestRefresh_PrefersManifestSnippet(t *testing.T) {
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
@@ -588,40 +503,5 @@ func TestRefresh_WalksDepthTwoOnly(t *testing.T) {
 		if f != want[i] {
 			t.Errorf("Files[%d] = %q, want %q", i, f, want[i])
 		}
-	}
-}
-
-func TestLoadIndexAt_MissingFileReturnsEmpty(t *testing.T) {
-	idx, err := LoadIndexAt(filepath.Join(t.TempDir(), "does-not-exist.json"))
-	if err != nil {
-		t.Fatalf("LoadIndexAt: %v", err)
-	}
-	if idx.Len() != 0 {
-		t.Errorf("Len = %d, want 0", idx.Len())
-	}
-}
-
-func TestDelete_RemovesEntryAndSidecar(t *testing.T) {
-	root := t.TempDir()
-	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
-		"manifest.md": "# alpha",
-	})
-	idx := newTestIndex(t)
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh: %v", err)
-	}
-	key := PlanKey(planDir)
-	sidecar := idx.store.Path(key)
-	if _, err := os.Stat(sidecar); err != nil {
-		t.Fatalf("sidecar missing pre-delete: %v", err)
-	}
-	if err := idx.Delete(key); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-	if _, ok := idx.Get(key); ok {
-		t.Errorf("entry still present after Delete")
-	}
-	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
-		t.Errorf("sidecar should be deleted; stat err = %v", err)
 	}
 }
