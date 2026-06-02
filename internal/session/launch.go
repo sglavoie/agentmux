@@ -23,9 +23,29 @@ var (
 	colorBackoffMul   = 1.5
 )
 
-// LaunchOpt controls optional Launch behavior.
-type LaunchOpt struct {
-	SkipDedup bool // skip duplicate-session check (used by restart)
+// LaunchPolicy controls whether Launch should honor the duplicate-session
+// guard or deliberately create another tab for the same session key.
+type LaunchPolicy int
+
+const (
+	// LaunchPolicyDedupExisting is the default idempotent behavior: if the
+	// same profile/project key is already running, Launch returns without
+	// creating another tab.
+	LaunchPolicyDedupExisting LaunchPolicy = iota
+	// LaunchPolicyAlwaysNewInstance bypasses the duplicate-session guard and
+	// always asks Kitty to create a new tab.
+	LaunchPolicyAlwaysNewInstance
+)
+
+func (p LaunchPolicy) String() string {
+	switch p {
+	case LaunchPolicyDedupExisting:
+		return "dedup-existing"
+	case LaunchPolicyAlwaysNewInstance:
+		return "always-new-instance"
+	default:
+		return "unknown"
+	}
 }
 
 // BuildUserVars constructs the user-var map written onto a launched (or
@@ -64,11 +84,16 @@ func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defa
 	return userVars
 }
 
-// Launch launches a single session from config.
-// Returns nil silently if the session is already running (dedup).
-func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, opts ...LaunchOpt) error {
+// Launch launches a single session from config. The default policy is
+// LaunchPolicyDedupExisting, which returns nil silently if the session is
+// already running.
+func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, policies ...LaunchPolicy) error {
 	formattedTitle := FormatTitle(sess, acc, cfg)
-	launchDebug.Printf("Launch: title=%q acc=%q dir=%q opts=%+v", formattedTitle, acc.Name, sess.Directory, opts)
+	policy := LaunchPolicyDedupExisting
+	if len(policies) > 0 {
+		policy = policies[0]
+	}
+	launchDebug.Printf("Launch: title=%q acc=%q dir=%q policy=%s", formattedTitle, acc.Name, sess.Directory, policy)
 
 	osWindows, err := client.ListWindows()
 	if err != nil {
@@ -80,8 +105,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 		launchDebug.Printf("  running: base=%q account=%q tabID=%d", r.Base, r.Account, r.TabID)
 	}
 
-	skipDedup := len(opts) > 0 && opts[0].SkipDedup
-	if !skipDedup {
+	if policy != LaunchPolicyAlwaysNewInstance {
 		profileName := effectiveSessionProfile(sess, acc)
 		if _, exists := FindByKey(running, SessionKey(profileName, sess.Title)); exists {
 			launchDebug.Printf("Launch: dedup hit, returning nil")

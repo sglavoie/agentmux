@@ -24,7 +24,7 @@ func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Confi
 
 	sess := SessionFromRunning(running)
 
-	if err := Launch(client, sess, acc, cfg, LaunchOpt{SkipDedup: true}); err != nil {
+	if err := Launch(client, sess, acc, cfg, LaunchPolicyAlwaysNewInstance); err != nil {
 		return err
 	}
 
@@ -57,7 +57,7 @@ func RestartWithAccount(client kitty.KittyClient, running RunningSession, target
 	sess.Account = targetAcc.Name
 	debugLog.Printf("RestartWithAccount: session=%+v", sess)
 
-	launchErr := Launch(client, sess, targetAcc, cfg, LaunchOpt{SkipDedup: true})
+	launchErr := Launch(client, sess, targetAcc, cfg, LaunchPolicyAlwaysNewInstance)
 	debugLog.Printf("RestartWithAccount: Launch err=%v", launchErr)
 	if launchErr != nil {
 		return launchErr

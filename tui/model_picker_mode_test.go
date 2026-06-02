@@ -47,9 +47,8 @@ func TestPickerSpaceTogglesSelection(t *testing.T) {
 }
 
 func TestPickerEnterEmitsLaunchCmd(t *testing.T) {
-	// No running sessions so every config row is a launch candidate. With
-	// the new per-launch progress flow, dedup of already-running rows
-	// would return nil — this test asserts the launch path itself.
+	// No running sessions so this asserts the plain picker launch path without
+	// also exercising duplicate-instance behavior.
 	m := loadSessions(testModelWithSessions(), nil)
 	m = pressKey(m, "l")
 	m = pressKey(m, " ") // select first session
@@ -69,26 +68,28 @@ func TestPickerRunningStatus(t *testing.T) {
 	// All 3 config sessions match the running sessions.
 	for _, sess := range m.cfg.Sessions {
 		key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
-		if !m.pickerRunning[key] {
-			t.Errorf("expected %q to be marked as running in picker", key)
+		if m.pickerRunning[key] != 1 {
+			t.Errorf("expected %q to have running count 1 in picker, got %d", key, m.pickerRunning[key])
 		}
 	}
 }
 
 func TestBuildPickerRunning(t *testing.T) {
-	running := makeSessions()
+	running := append(makeSessions(), session.RunningSession{
+		TabID: 4, Base: "api", Account: "work", Directory: "/home/user/api",
+	})
 	got := buildPickerRunning(running)
-	if !got[session.SessionKey("work", "api")] {
-		t.Error("expected work/api in running set")
+	if got[session.SessionKey("work", "api")] != 2 {
+		t.Errorf("expected work/api running count 2, got %d", got[session.SessionKey("work", "api")])
 	}
-	if !got[session.SessionKey("work", "backend")] {
-		t.Error("expected work/backend in running set")
+	if got[session.SessionKey("work", "backend")] != 1 {
+		t.Errorf("expected work/backend running count 1, got %d", got[session.SessionKey("work", "backend")])
 	}
-	if !got[session.SessionKey("personal", "dotfiles")] {
-		t.Error("expected personal/dotfiles in running set")
+	if got[session.SessionKey("personal", "dotfiles")] != 1 {
+		t.Errorf("expected personal/dotfiles running count 1, got %d", got[session.SessionKey("personal", "dotfiles")])
 	}
-	if got[session.SessionKey("work", "other")] {
-		t.Error("expected work/other NOT in running set")
+	if got[session.SessionKey("work", "other")] != 0 {
+		t.Errorf("expected work/other running count 0, got %d", got[session.SessionKey("work", "other")])
 	}
 }
 

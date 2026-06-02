@@ -263,7 +263,9 @@ func (m Model) currentPreviewWindowID() int {
 }
 
 // pickerCurrentWindowID returns the WindowID of the running session matching
-// the picker's highlighted config row, or 0 when nothing matches.
+// the picker's highlighted config row, or 0 when nothing matches. When multiple
+// instances share a key, use the last match in the current session ordering,
+// which tracks the newest same-key tab after sorted insertion.
 func (m Model) pickerCurrentWindowID() int {
 	if len(m.pickerFilteredIdx) == 0 || m.pickerCursor >= len(m.pickerFilteredIdx) {
 		return 0
@@ -271,12 +273,13 @@ func (m Model) pickerCurrentWindowID() int {
 	origIdx := m.pickerFilteredIdx[m.pickerCursor]
 	sess := m.pickerSessionWithResolvedProfile(origIdx)
 	key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
+	winID := 0
 	for _, rs := range m.sessions {
 		if runningSessionKey(rs) == key {
-			return rs.WindowID
+			winID = rs.WindowID
 		}
 	}
-	return 0
+	return winID
 }
 
 // refreshPreviewForPickerCursor returns an immediate fetch cmd when the

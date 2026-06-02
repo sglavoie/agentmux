@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/sglavoie/agentmux/internal/config"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -11,7 +10,7 @@ import (
 )
 
 var (
-	resortLoadConfig = config.LoadDefault
+	resortLoadConfig = loadRunnableConfig
 	resortNewClient  = func() kitty.KittyClient { return kitty.NewClient(kitty.NewRealRunner()) }
 	resortSessions   = session.Resort
 )
@@ -23,7 +22,7 @@ var resortCmd = &cobra.Command{
 		cfg, err := resortLoadConfig()
 		if err != nil {
 			ccerrors.Print(err)
-			return fmt.Errorf("loading config: %w", err)
+			return err
 		}
 		client := resortNewClient()
 		if err := resortSessions(client, cfg.Defaults.Sort); err != nil {

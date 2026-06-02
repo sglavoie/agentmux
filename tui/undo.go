@@ -162,7 +162,7 @@ func (m *Model) undoLastCmd() tea.Cmd {
 	cfg := m.cfg
 	client := m.client
 	launch := func() tea.Msg {
-		err := session.Launch(client, sess, acc, cfg, session.LaunchOpt{SkipDedup: true})
+		err := session.Launch(client, sess, acc, cfg, session.LaunchPolicyAlwaysNewInstance)
 		return actionDoneMsg{err: err}
 	}
 

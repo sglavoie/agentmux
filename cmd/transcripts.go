@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/spf13/cobra"
@@ -13,9 +12,7 @@ var (
 	transcriptsRebuildAll bool
 
 	transcriptsIndexPath  = transcript.IndexPath
-	transcriptsLoadConfig = func() (*config.Config, error) {
-		return config.LoadDefault()
-	}
+	transcriptsLoadConfig = loadRunnableConfig
 )
 
 var transcriptsCmd = &cobra.Command{

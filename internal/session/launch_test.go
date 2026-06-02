@@ -46,8 +46,17 @@ func buildTestConfig() *config.Config {
 	}
 }
 
+func hasArg(args []string, want string) bool {
+	for _, arg := range args {
+		if arg == want {
+			return true
+		}
+	}
+	return false
+}
+
 // TestLaunch_DedupSkipsExisting verifies that launching an already-running
-// session does not call kitten @ launch.
+// session with the default policy does not call kitten @ launch.
 func TestLaunch_DedupSkipsExisting(t *testing.T) {
 	existing := loadFixture(t, "kitty_ls.json") // has P:dotfiles and W:api
 	runner := kitty.NewMockRunner(map[string][]byte{
@@ -70,6 +79,40 @@ func TestLaunch_DedupSkipsExisting(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestLaunch_AlwaysNewInstancePolicyBypassesDedup(t *testing.T) {
+	existing := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
+		`{"id":10,"is_active":true,"title":"api","windows":[` +
+		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{` +
+		`"amx_profile":"work","amx_project":"api","amx_directory":"/tmp/api",` +
+		`"cc_account":"work","cc_cwd":"/tmp/api"` +
+		`}}]}]}]`)
+	runner := kitty.NewMockRunner(map[string][]byte{
+		"kitten @ ls": existing,
+	})
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work"},
+		},
+	}
+
+	sess := config.Session{Title: "api", Account: "work", Directory: "/tmp/api"}
+	acc := cfg.Accounts[0]
+
+	err := session.Launch(client, sess, acc, cfg, session.LaunchPolicyAlwaysNewInstance)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	for _, c := range runner.Calls {
+		if c.Name == "kitten" && hasArg(c.Args, "launch") {
+			return
+		}
+	}
+	t.Fatal("expected explicit always-new-instance policy to call kitten @ launch despite existing same-key session")
 }
 
 // TestLaunch_DedupUsesEffectiveProfile verifies that Launch dedups against the
@@ -264,6 +307,52 @@ func TestLaunch_ColorRetryApplied(t *testing.T) {
 	}
 	if !colorCalled {
 		t.Error("expected kitten @ set-tab-color to be called after color retry found new tab")
+	}
+}
+
+func TestLaunch_ColorRetryUsesTabIDWithDuplicateTitles(t *testing.T) {
+	preLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
+		`{"id":42,"is_active":true,"title":"🦊api","windows":[` +
+		`{"id":43,"is_active":true,"title":"🦊api","cwd":"/tmp/api","cmdline":["zsh"],"user_vars":{}}` +
+		`]}]}]`)
+	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
+		`{"id":42,"is_active":true,"title":"🦊api","windows":[` +
+		`{"id":43,"is_active":true,"title":"🦊api","cwd":"/tmp/api","cmdline":["zsh"],"user_vars":{}}` +
+		`]},` +
+		`{"id":100,"is_active":false,"title":"🦊api","windows":[` +
+		`{"id":101,"is_active":true,"title":"🦊api","cwd":"/tmp/api","cmdline":["claude"],"user_vars":{` +
+		`"amx_profile":"work","amx_project":"api","amx_directory":"/tmp/api"` +
+		`}}]}` +
+		`]}]`)
+
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{preLaunch, preLaunch, postLaunch},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+
+	sess := config.Session{Title: "api", Account: "work", Directory: "/tmp/api"}
+	acc := cfg.Accounts[0]
+
+	if err := session.Launch(client, sess, acc, cfg); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	var setTabColorArgs []string
+	for _, c := range runner.Calls {
+		if c.Name == "kitten" && hasArg(c.Args, "set-tab-color") {
+			setTabColorArgs = c.Args
+			break
+		}
+	}
+	if setTabColorArgs == nil {
+		t.Fatal("expected kitten @ set-tab-color to be called")
+	}
+	if !hasArg(setTabColorArgs, "--match=id:100") {
+		t.Fatalf("expected color retry to target the newly launched duplicate-title tab by ID 100, got args: %v", setTabColorArgs)
+	}
+	if hasArg(setTabColorArgs, "--match=id:42") {
+		t.Fatalf("color retry targeted the pre-existing duplicate-title tab: %v", setTabColorArgs)
 	}
 }
 

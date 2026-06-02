@@ -174,8 +174,11 @@ codex   = "purple"
 
 
 # ── Profiles ──────────────────────────────────────────────────────────────────
-# A profile ties a harness to an isolated home directory.
+# A profile name is a unique launch identity. It ties a harness to an isolated
+# home directory and is the value projects and one-time overrides reference.
 # You can define as many profiles as you like and mix harnesses freely.
+# If the same account or project family spans harnesses, give each variant a
+# distinct name, for example "vta" and "vta-codex".
 # Tab bar color comes from each profile's `color` (below). The harness
 # shows as a one-character emoji prefix in the Kitty tab title, and harness
 # labels use [harness_colors] above.

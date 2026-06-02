@@ -168,12 +168,8 @@ var configValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate config.toml",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.LoadDefault()
+		_, err := loadRunnableConfig()
 		if err != nil {
-			ccerrors.Print(err)
-			return fmt.Errorf("loading config: %w", err)
-		}
-		if err := config.Validate(cfg); err != nil {
 			ccerrors.Print(err)
 			return err
 		}
@@ -187,10 +183,10 @@ var configHooksSyncCmd = &cobra.Command{
 	Short: "Sync Agent Mux hooks for configured harness profiles",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.LoadDefault()
+		cfg, err := loadRunnableConfig()
 		if err != nil {
 			ccerrors.Print(err)
-			return fmt.Errorf("loading config: %w", err)
+			return err
 		}
 		bin, err := os.Executable()
 		if err != nil {
@@ -236,10 +232,10 @@ var configHooksStatusCmd = &cobra.Command{
 	Use:   "hooks-status",
 	Short: "Show hooks sync status per profile",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.LoadDefault()
+		cfg, err := loadRunnableConfig()
 		if err != nil {
 			ccerrors.Print(err)
-			return fmt.Errorf("loading config: %w", err)
+			return err
 		}
 		bin, err := os.Executable()
 		if err != nil {

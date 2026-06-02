@@ -44,7 +44,10 @@ func validateAccounts(accounts []Account) []string {
 		if a.Name != "" {
 			key := strings.ToLower(a.Name)
 			if seen[key] {
-				errs = append(errs, fmt.Sprintf("duplicate profile name %q", a.Name))
+				errs = append(errs, fmt.Sprintf(
+					"duplicate profile name %q\n  → profile.name is the unique launch ID; use distinct IDs per harness, e.g. \"vta-claude\" and \"vta-codex\"",
+					a.Name,
+				))
 			}
 			seen[key] = true
 		}

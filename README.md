@@ -59,6 +59,12 @@ attention signal.
 
 ## Harness profiles
 
+A profile name is a unique launch identity, not a display label. Each project
+stores the profile it should launch by default, and one-time launcher overrides
+target another profile by this same `name`. If you use the same account or
+project family across harnesses, give each harness variant its own ID, such as
+`vta` for Claude and `vta-codex` for Codex.
+
 ### Claude Code
 
 Claude profiles launch `claude` and export `CLAUDE_CONFIG_DIR=<home_dir>`.
@@ -129,7 +135,14 @@ its own badge/metadata columns.
 - `C` chooses a **one-time profile override** for the highlighted project,
 - `o` opens the highlighted project's directory instead of launching it.
 
-Overrides only affect the current launch. They do not rewrite `config.toml`.
+Overrides are useful for cross-harness launches. For example, a project such as
+`sis` can keep `profile = "vta"` as its Claude default while `C` launches that
+same project under a Codex profile such as `vta-codex`.
+
+Overrides only affect launcher behavior. They do not rewrite `config.toml`, and
+pressing `enter` in the launcher is an explicit request for new tab(s): if the
+selected project/profile is already running, Agent Mux opens another instance
+instead of skipping or focusing the existing tab.
 
 ### Past sessions
 

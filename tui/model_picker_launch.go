@@ -27,8 +27,9 @@ func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
 
 // dispatchPickerLaunch starts a multi-session launch and returns a batch of
 // per-session commands. Each command emits a launchProgressMsg the model
-// uses to drive the progress toast (1/N, 2/N, …). Returns nil when no
-// non-running session is selected so the caller doesn't dispatch a dud cmd.
+// uses to drive the progress toast (1/N, 2/N, …). Returns nil when no session
+// is selected so the caller doesn't dispatch a dud cmd. Running picker rows
+// are explicit requests for another same-key tab.
 func (m *Model) dispatchPickerLaunch() tea.Cmd {
 	type queued struct {
 		sess  config.Session
@@ -40,10 +41,6 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 			continue
 		}
 		sess = m.pickerSessionWithResolvedProfile(i)
-		key := session.SessionKey(sess.EffectiveProfile(), sess.Title)
-		if m.pickerRunning[key] {
-			continue // dedup: skip already-running sessions
-		}
 		todo = append(todo, queued{sess: sess, title: configSessionDisplayTitle(sess)})
 	}
 	if len(todo) == 0 {
@@ -83,7 +80,7 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 				err := fmt.Errorf("no matching account for profile %q", sess.EffectiveProfile())
 				return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 			}
-			err := session.Launch(client, sess, acc, cfg)
+			err := session.Launch(client, sess, acc, cfg, session.LaunchPolicyAlwaysNewInstance)
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 		})
 	}

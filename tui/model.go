@@ -61,7 +61,7 @@ type Model struct {
 
 	// picker mode
 	pickerSessions       []config.Session
-	pickerRunning        map[string]bool
+	pickerRunning        map[string]int
 	pickerSelected       map[int]bool
 	pickerCursor         int
 	pickerOffset         int    // top row index for the scrollable picker view

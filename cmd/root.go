@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui"
 	"github.com/spf13/cobra"
@@ -25,7 +24,7 @@ var rootCmd = &cobra.Command{
 		configureLogging(debugEnabled())
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.LoadDefault()
+		cfg, err := loadRunnableConfig()
 		if err != nil {
 			return err
 		}

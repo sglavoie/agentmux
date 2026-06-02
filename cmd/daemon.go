@@ -29,10 +29,10 @@ var daemonStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the daemon (blocks until shutdown)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.LoadDefault()
+		cfg, err := loadRunnableConfig()
 		if err != nil {
 			ccerrors.Print(err)
-			return fmt.Errorf("loading config: %w", err)
+			return err
 		}
 
 		ctx, cancel := signal.NotifyContext(context.Background(),

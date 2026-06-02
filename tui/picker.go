@@ -186,7 +186,7 @@ func renderPickerList(m Model, height int) string {
 		origIdx := m.pickerFilteredIdx[i]
 		sess := m.pickerSessionWithResolvedProfile(origIdx)
 		defaultProfile := m.pickerSessions[origIdx].EffectiveProfile()
-		running := m.pickerRunning[session.SessionKey(sess.EffectiveProfile(), sess.Title)]
+		runningCount := m.pickerRunning[session.SessionKey(sess.EffectiveProfile(), sess.Title)]
 
 		prefix := "[ ] "
 		if m.pickerSelected[origIdx] {
@@ -216,8 +216,10 @@ func renderPickerList(m Model, height int) string {
 		if sess.EffectiveProfile() != defaultProfile {
 			line += "  " + styleDim.Render("(override)")
 		}
-		if running {
+		if runningCount == 1 {
 			line += "  " + styleDim.Render("(running)")
+		} else if runningCount > 1 {
+			line += "  " + styleDim.Render(fmt.Sprintf("(%d running)", runningCount))
 		}
 
 		if i == m.pickerCursor {
@@ -290,7 +292,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 		addField("groups", strings.Join(sess.Groups, ", "))
 	}
 
-	if m.pickerRunning[session.SessionKey(sess.EffectiveProfile(), sess.Title)] {
+	if m.pickerRunning[session.SessionKey(sess.EffectiveProfile(), sess.Title)] > 0 {
 		lines = append(lines, styleDim.Render("── running ──"))
 		remaining := height - len(lines)
 		if remaining > pickerRunningPeekLines {
@@ -353,11 +355,11 @@ func sortPickerSessions(sessions []config.Session) []config.Session {
 	return sorted
 }
 
-// buildPickerRunning returns a set of logical session keys for all currently running sessions.
-func buildPickerRunning(sessions []session.RunningSession) map[string]bool {
-	m := make(map[string]bool, len(sessions))
+// buildPickerRunning returns logical session keys and their current instance counts.
+func buildPickerRunning(sessions []session.RunningSession) map[string]int {
+	m := make(map[string]int, len(sessions))
 	for _, s := range sessions {
-		m[runningSessionKey(s)] = true
+		m[runningSessionKey(s)]++
 	}
 	return m
 }

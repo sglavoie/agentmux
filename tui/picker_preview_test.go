@@ -147,6 +147,38 @@ func TestPickerPreviewRunningPeek(t *testing.T) {
 	}
 }
 
+func TestPickerPreviewUsesNewestDuplicateInSessionOrder(t *testing.T) {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "/home/user/api", Account: "work"},
+		},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 1, WindowID: 11, Base: "api", Account: "work"},
+		{TabID: 2, WindowID: 33, Base: "api", Account: "work"},
+	})
+	m = pressKey(m, "l")
+
+	if got := m.pickerRunning[session.SessionKey("work", "api")]; got != 2 {
+		t.Fatalf("expected picker running count 2, got %d", got)
+	}
+	if got := m.pickerCurrentWindowID(); got != 33 {
+		t.Fatalf("expected picker preview to choose newest duplicate window 33, got %d", got)
+	}
+
+	m.width, m.height = 120, 40
+	out := stripAnsi(renderPicker(m))
+	if !strings.Contains(out, "(2 running)") {
+		t.Errorf("expected picker row to show duplicate running count, got:\n%s", out)
+	}
+}
+
 func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},

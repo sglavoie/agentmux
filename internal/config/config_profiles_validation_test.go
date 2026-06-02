@@ -83,6 +83,11 @@ func TestValidate_DuplicateProfileNameCaseInsensitive(t *testing.T) {
 	if !strings.Contains(err.Error(), "duplicate profile name") {
 		t.Errorf("expected 'duplicate profile name' in error, got %q", err.Error())
 	}
+	for _, want := range []string{"unique launch ID", "vta-claude", "vta-codex"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected duplicate profile hint to include %q, got %q", want, err.Error())
+		}
+	}
 }
 
 // TestValidate_HookOverrideKeyCaseInsensitive pins the contract that

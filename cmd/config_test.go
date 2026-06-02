@@ -168,6 +168,34 @@ func TestConfigShowCommandWritesToCommandOutput(t *testing.T) {
 	}
 }
 
+func TestConfigShowCommandAllowsInvalidProfilesForRecovery(t *testing.T) {
+	tempHome := t.TempDir()
+	path := filepath.Join(tempHome, "config.toml")
+	body := duplicateProfileConfigBody(
+		filepath.Join(tempHome, "claude"),
+		filepath.Join(tempHome, "codex"),
+	)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+
+	oldOut := configShowCmd.OutOrStdout()
+	t.Cleanup(func() {
+		configShowCmd.SetOut(oldOut)
+	})
+
+	var out bytes.Buffer
+	configShowCmd.SetOut(&out)
+
+	if err := configShowCmd.RunE(configShowCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if got := out.String(); got != body {
+		t.Fatalf("output = %q; want %q", got, body)
+	}
+}
+
 func TestConfigShowCommandReturnsWriteError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(path, []byte("example = true\n"), 0o644); err != nil {
@@ -213,6 +241,29 @@ func TestConfigValidateCommandWritesToCommandOutput(t *testing.T) {
 	}
 	if got, want := out.String(), "config is valid\n"; got != want {
 		t.Fatalf("output = %q; want %q", got, want)
+	}
+}
+
+func TestLoadRunnableConfigRejectsDuplicateProfiles(t *testing.T) {
+	tempHome := t.TempDir()
+	path := filepath.Join(tempHome, "config.toml")
+	if err := os.WriteFile(path, []byte(duplicateProfileConfigBody(
+		filepath.Join(tempHome, "claude"),
+		filepath.Join(tempHome, "codex"),
+	)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+
+	_, err := loadRunnableConfig()
+	if err == nil {
+		t.Fatal("loadRunnableConfig error = nil; want duplicate profile validation error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"duplicate profile name", "unique launch ID", "vta-claude", "vta-codex"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("loadRunnableConfig error missing %q:\n%s", want, msg)
+		}
 	}
 }
 
@@ -336,11 +387,13 @@ claude = "🦊"
 name = "good"
 harness = "claude"
 home_dir = "` + goodHome + `"
+color = "blue"
 
 [[profiles]]
 name = "bad"
 harness = "claude"
 home_dir = "` + badHome + `"
+color = "red"
 `
 	if err := os.WriteFile(cfgPath, []byte(cfgBody), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -374,4 +427,24 @@ home_dir = "` + badHome + `"
 	if !strings.Contains(stderrBuf.String(), "error (bad)") {
 		t.Errorf("expected stderr to contain per-account error line, got %q", stderrBuf.String())
 	}
+}
+
+func duplicateProfileConfigBody(claudeHome, codexHome string) string {
+	return `
+[harness_emojis]
+claude = "🦊"
+codex = "🤖"
+
+[[profiles]]
+name = "vta"
+harness = "claude"
+home_dir = "` + claudeHome + `"
+color = "blue"
+
+[[profiles]]
+name = "vta"
+harness = "codex"
+home_dir = "` + codexHome + `"
+color = "green"
+`
 }

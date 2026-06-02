@@ -1,14 +1,38 @@
 package tui
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
 )
+
+type fakeLaunchDispatchClient struct {
+	windows  []kitty.OSWindow
+	launched []kitty.LaunchOpts
+}
+
+func (f *fakeLaunchDispatchClient) ListWindows() ([]kitty.OSWindow, error) { return f.windows, nil }
+func (f *fakeLaunchDispatchClient) LaunchTab(opts kitty.LaunchOpts) error {
+	f.launched = append(f.launched, opts)
+	return nil
+}
+func (f *fakeLaunchDispatchClient) CloseTab(string) error     { return nil }
+func (f *fakeLaunchDispatchClient) MoveTab(string, int) error { return nil }
+func (f *fakeLaunchDispatchClient) SetTabColor(string, string, string, string, string) error {
+	return nil
+}
+func (f *fakeLaunchDispatchClient) SetTabTitle(string, string) error            { return nil }
+func (f *fakeLaunchDispatchClient) SetUserVars(string, map[string]string) error { return nil }
+func (f *fakeLaunchDispatchClient) FocusTab(string) error                       { return nil }
+func (f *fakeLaunchDispatchClient) FocusWindow(string) error                    { return nil }
+func (f *fakeLaunchDispatchClient) GetText(string, string) (string, error)      { return "", nil }
+func (f *fakeLaunchDispatchClient) LaunchOverlayPager(string) error             { return nil }
 
 // collectLeafMsgs invokes cmd and recursively expands any tea.Sequence /
 // tea.Batch slice results into the leaf tea.Msg values they produce. Used
@@ -92,9 +116,20 @@ func selectByTitle(m *Model, titles ...string) {
 	}
 }
 
+func selectByTitleAndProfile(m *Model, title, profile string) {
+	if m.pickerSelected == nil {
+		m.pickerSelected = make(map[int]bool)
+	}
+	for i, s := range m.pickerSessions {
+		if s.Title == title && s.EffectiveProfile() == profile {
+			m.pickerSelected[i] = true
+		}
+	}
+}
+
 // TestDispatchPickerLaunch_BothQueuedWhenNoneRunning verifies that selecting
 // two sessions and dispatching while neither is in pickerRunning queues both
-// for launch. Regression guard for the dedup snapshot semantics.
+// for launch.
 func TestDispatchPickerLaunch_BothQueuedWhenNoneRunning(t *testing.T) {
 	m := launchDispatchModel(t, nil)
 	selectByTitle(&m, "api", "backend")
@@ -129,11 +164,9 @@ func TestDispatchPickerLaunch_BothQueuedWhenNoneRunning(t *testing.T) {
 	}
 }
 
-// TestDispatchPickerLaunch_AllDedupedReturnsNil verifies that when every
-// selected session is already in pickerRunning, dispatch returns nil and
-// does not bump launchBatchID. Regression guard against accidentally
-// emitting an empty progress toast.
-func TestDispatchPickerLaunch_AllDedupedReturnsNil(t *testing.T) {
+// TestDispatchPickerLaunch_RunningRowsStillQueued verifies that running rows
+// stay launchable from the picker.
+func TestDispatchPickerLaunch_RunningRowsStillQueued(t *testing.T) {
 	running := []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work"},
 		{TabID: 2, Base: "backend", Account: "work"},
@@ -143,18 +176,22 @@ func TestDispatchPickerLaunch_AllDedupedReturnsNil(t *testing.T) {
 
 	beforeID := m.launchBatchID
 	cmd := m.dispatchPickerLaunch()
-	if cmd != nil {
-		t.Fatal("expected nil cmd when every selected session is already running")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd when every selected session is already running")
 	}
-	if m.launchBatchID != beforeID {
-		t.Fatalf("expected launchBatchID unchanged, got %d → %d", beforeID, m.launchBatchID)
+	if m.launchBatchID != beforeID+1 {
+		t.Fatalf("expected launchBatchID to increment by 1, got %d → %d", beforeID, m.launchBatchID)
+	}
+
+	got := countLaunchProgress(collectLeafMsgs(t, cmd))
+	if len(got) != 2 {
+		t.Fatalf("expected 2 launchProgressMsg, got %d (%+v)", len(got), got)
 	}
 }
 
-// TestDispatchPickerLaunch_OnlyNonRunningIsQueued verifies the mixed case:
-// one of two selected sessions is in pickerRunning, so only the other is
-// queued. Regression guard for the dedup branch in dispatchPickerLaunch.
-func TestDispatchPickerLaunch_OnlyNonRunningIsQueued(t *testing.T) {
+// TestDispatchPickerLaunch_RunningAndStoppedRowsQueued verifies the mixed case:
+// running and non-running rows are both launch requests.
+func TestDispatchPickerLaunch_RunningAndStoppedRowsQueued(t *testing.T) {
 	running := []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work"},
 	}
@@ -164,21 +201,236 @@ func TestDispatchPickerLaunch_OnlyNonRunningIsQueued(t *testing.T) {
 	beforeID := m.launchBatchID
 	cmd := m.dispatchPickerLaunch()
 	if cmd == nil {
-		t.Fatal("expected non-nil cmd: backend should launch even though api is deduped")
+		t.Fatal("expected non-nil cmd")
 	}
 	if m.launchBatchID != beforeID+1 {
 		t.Fatalf("expected launchBatchID to increment by 1, got %d → %d", beforeID, m.launchBatchID)
 	}
 
 	got := countLaunchProgress(collectLeafMsgs(t, cmd))
+	if len(got) != 2 {
+		t.Fatalf("expected 2 launchProgressMsg, got %d (%+v)", len(got), got)
+	}
+	titles := map[string]bool{}
+	for _, lp := range got {
+		titles[lp.title] = true
+	}
+	if !titles["api"] || !titles["backend"] {
+		t.Errorf("expected api and backend titles, got %v", titles)
+	}
+	for _, lp := range got {
+		if lp.total != 2 {
+			t.Errorf("expected total=2 in launchProgressMsg, got %d", lp.total)
+		}
+	}
+}
+
+func TestDispatchPickerLaunch_RunningRowBypassesLaunchDedup(t *testing.T) {
+	client := &fakeLaunchDispatchClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:       10,
+				Title:    "api",
+				Windows:  []kitty.Window{{ID: 11, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Project: "api"}}},
+				IsActive: true,
+			}},
+		}},
+	}
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Accounts: []config.Account{
+			{Name: "work"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "/home/user/api", Account: "work"},
+		},
+	}
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 10, WindowID: 11, Base: "api", Account: "work", Profile: "work", Project: "api", Key: session.SessionKey("work", "api")},
+	})
+	m = pressKey(m, "l")
+	selectByTitle(&m, "api")
+
+	cmd := m.dispatchPickerLaunch()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for selected running row")
+	}
+	got := countLaunchProgress(collectLeafMsgs(t, cmd))
 	if len(got) != 1 {
-		t.Fatalf("expected 1 launchProgressMsg (backend only), got %d (%+v)", len(got), got)
+		t.Fatalf("expected 1 launchProgressMsg, got %d (%+v)", len(got), got)
 	}
-	if got[0].title != "backend" {
-		t.Errorf("expected queued title backend, got %q", got[0].title)
+	if len(client.launched) != 1 {
+		t.Fatalf("expected LaunchTab to be called once for running row, got %d", len(client.launched))
 	}
-	if got[0].total != 1 {
-		t.Errorf("expected total=1 in launchProgressMsg, got %d", got[0].total)
+}
+
+func TestDispatchPickerLaunch_SameProjectDifferentProfileLaunches(t *testing.T) {
+	client := &fakeLaunchDispatchClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:       10,
+				Title:    "sis",
+				Windows:  []kitty.Window{{ID: 11, IsActive: true, CWD: "/home/user/sis", UserVars: kitty.UserVars{Profile: "vta", Harness: "claude", Project: "sis", AMXDirectory: "/home/user/sis"}}},
+				IsActive: true,
+			}},
+		}},
+	}
+	projects := []config.Session{
+		{Title: "sis", Directory: "/home/user/sis", Profile: "vta"},
+		{Title: "sis", Directory: "/home/user/sis", Profile: "vta-codex"},
+	}
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Accounts: []config.Account{
+			{Name: "vta", Harness: "claude", Color: "blue"},
+			{Name: "vta-codex", Harness: "codex", Color: "green"},
+		},
+		Projects: projects,
+		Sessions: projects,
+	}
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 10, WindowID: 11, Base: "sis", Profile: "vta", Account: "vta", Harness: "claude", Project: "sis", Directory: "/home/user/sis", Key: session.SessionKey("vta", "sis")},
+	})
+	m = pressKey(m, "l")
+	selectByTitleAndProfile(&m, "sis", "vta-codex")
+
+	cmd := m.dispatchPickerLaunch()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for selected vta-codex row while vta row is running")
+	}
+	got := countLaunchProgress(collectLeafMsgs(t, cmd))
+	if len(got) != 1 {
+		t.Fatalf("expected 1 launchProgressMsg, got %d (%+v)", len(got), got)
+	}
+	if got[0].err != nil {
+		t.Fatalf("expected launch to succeed, got %v", got[0].err)
+	}
+	if len(client.launched) != 1 {
+		t.Fatalf("expected LaunchTab to be called once for vta-codex/sis, got %d", len(client.launched))
+	}
+	if got := client.launched[0].UserVars["amx_profile"]; got != "vta-codex" {
+		t.Errorf("expected amx_profile=vta-codex, got %q", got)
+	}
+	if got := client.launched[0].UserVars["amx_harness"]; got != "codex" {
+		t.Errorf("expected amx_harness=codex, got %q", got)
+	}
+	if got := client.launched[0].UserVars["amx_project"]; got != "sis" {
+		t.Errorf("expected amx_project=sis, got %q", got)
+	}
+}
+
+func TestDispatchPickerLaunch_SisOverrideCreatesNewCodexInstances(t *testing.T) {
+	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "overrides.json"))
+
+	client := &fakeLaunchDispatchClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:       10,
+				Title:    "sis",
+				Windows:  []kitty.Window{{ID: 11, IsActive: true, CWD: "/home/user/sis", UserVars: kitty.UserVars{Profile: "vta", Harness: "claude", Project: "sis", AMXDirectory: "/home/user/sis"}}},
+				IsActive: true,
+			}},
+		}},
+	}
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Accounts: []config.Account{
+			{Name: "vta", Harness: "claude"},
+			{Name: "vta-codex", Harness: "codex"},
+		},
+		Sessions: []config.Session{
+			{Title: "sis", Directory: "/home/user/sis", Profile: "vta"},
+		},
+	}
+	cfg.Projects = cfg.Sessions
+
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 10, WindowID: 11, Base: "sis", Profile: "vta", Account: "vta", Harness: "claude", Project: "sis", Directory: "/home/user/sis", Key: session.SessionKey("vta", "sis")},
+	})
+	m = pressKey(m, "l")
+	if got := m.pickerRunning[session.SessionKey("vta", "sis")]; got != 1 {
+		t.Fatalf("expected picker to show one running Claude sis, got %d", got)
+	}
+
+	m = pressKey(m, "C")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
+	}
+	m = pressKey(m, "j")
+	m = pressKey(m, "enter")
+	if got := m.pickerEffectiveProfile(0); got != "vta-codex" {
+		t.Fatalf("expected picker override profile vta-codex, got %q", got)
+	}
+
+	selectByTitle(&m, "sis")
+	first := m.dispatchPickerLaunch()
+	if first == nil {
+		t.Fatal("expected non-nil first launch cmd")
+	}
+	gotFirst := countLaunchProgress(collectLeafMsgs(t, first))
+	if len(gotFirst) != 1 || gotFirst[0].err != nil {
+		t.Fatalf("expected first vta-codex launch to succeed, got %+v", gotFirst)
+	}
+	if len(client.launched) != 1 {
+		t.Fatalf("expected one launched tab after first dispatch, got %d", len(client.launched))
+	}
+	if got := client.launched[0].UserVars["amx_profile"]; got != "vta-codex" {
+		t.Fatalf("expected first launch amx_profile=vta-codex, got %q", got)
+	}
+	if got := client.launched[0].UserVars["amx_harness"]; got != "codex" {
+		t.Fatalf("expected first launch amx_harness=codex, got %q", got)
+	}
+
+	client.windows = []kitty.OSWindow{{
+		ID: 1,
+		Tabs: []kitty.Tab{
+			{
+				ID:       10,
+				Title:    "sis",
+				Windows:  []kitty.Window{{ID: 11, IsActive: true, CWD: "/home/user/sis", UserVars: kitty.UserVars{Profile: "vta", Harness: "claude", Project: "sis", AMXDirectory: "/home/user/sis"}}},
+				IsActive: true,
+			},
+			{
+				ID:       20,
+				Title:    "sis",
+				Windows:  []kitty.Window{{ID: 21, IsActive: true, CWD: "/home/user/sis", UserVars: kitty.UserVars{Profile: "vta-codex", Harness: "codex", Project: "sis", AMXDirectory: "/home/user/sis"}}},
+				IsActive: true,
+			},
+		},
+	}}
+	m = NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 10, WindowID: 11, Base: "sis", Profile: "vta", Account: "vta", Harness: "claude", Project: "sis", Directory: "/home/user/sis", Key: session.SessionKey("vta", "sis")},
+		{TabID: 20, WindowID: 21, Base: "sis", Profile: "vta-codex", Account: "vta-codex", Harness: "codex", Project: "sis", Directory: "/home/user/sis", Key: session.SessionKey("vta-codex", "sis")},
+	})
+	m = pressKey(m, "l")
+	if got := m.pickerEffectiveProfile(0); got != "vta-codex" {
+		t.Fatalf("expected persisted picker override vta-codex, got %q", got)
+	}
+	if got := m.pickerRunning[session.SessionKey("vta-codex", "sis")]; got != 1 {
+		t.Fatalf("expected picker to show one running Codex sis before second launch, got %d", got)
+	}
+
+	selectByTitle(&m, "sis")
+	second := m.dispatchPickerLaunch()
+	if second == nil {
+		t.Fatal("expected non-nil second launch cmd")
+	}
+	gotSecond := countLaunchProgress(collectLeafMsgs(t, second))
+	if len(gotSecond) != 1 || gotSecond[0].err != nil {
+		t.Fatalf("expected second vta-codex launch to succeed, got %+v", gotSecond)
+	}
+	if len(client.launched) != 2 {
+		t.Fatalf("expected second explicit picker launch to create another tab, got %d launches", len(client.launched))
+	}
+	if got := client.launched[1].UserVars["amx_profile"]; got != "vta-codex" {
+		t.Fatalf("expected second launch amx_profile=vta-codex, got %q", got)
 	}
 }
 
@@ -211,13 +463,10 @@ func TestDispatchPickerLaunch_MissingAccountReportsError(t *testing.T) {
 	}
 }
 
-// TestDispatchPickerLaunch_RunningSnapshotIsStable verifies that the dedup
-// decision is finalized synchronously at dispatch time. Mutating
-// m.pickerRunning after dispatch does NOT affect which sessions launch —
-// the closures don't re-poll the snapshot. This pins the "no race" claim
-// from session 5: A's tab appearing in m.sessions before B's closure runs
-// can never cause B to be skipped, because dispatch doesn't consult
-// m.sessions or re-check m.pickerRunning inside the per-launch closures.
+// TestDispatchPickerLaunch_RunningSnapshotIsStable verifies that selected
+// sessions are finalized synchronously at dispatch time. Mutating
+// m.pickerRunning after dispatch does NOT affect which sessions launch because
+// the closures don't re-poll the snapshot.
 func TestDispatchPickerLaunch_RunningSnapshotIsStable(t *testing.T) {
 	m := launchDispatchModel(t, nil)
 	selectByTitle(&m, "api", "backend")
@@ -229,11 +478,10 @@ func TestDispatchPickerLaunch_RunningSnapshotIsStable(t *testing.T) {
 
 	// Simulate the "race" scenario described in the original session plan:
 	// A's tab appears in m.sessions (and therefore in any rebuilt
-	// pickerRunning snapshot) before B's closure fires. Mutate both maps
-	// to seed both sessions as "running" and verify the already-dispatched
-	// closures still emit both launchProgressMsg values.
-	m.pickerRunning[session.SessionKey("work", "api")] = true
-	m.pickerRunning[session.SessionKey("work", "backend")] = true
+	// pickerRunning snapshot) before B's closure fires. Mutate both maps and
+	// verify the already-dispatched closures still emit both progress values.
+	m.pickerRunning[session.SessionKey("work", "api")] = 1
+	m.pickerRunning[session.SessionKey("work", "backend")] = 1
 	m.sessions = append(m.sessions, session.RunningSession{
 		TabID: 99, Base: "api", Account: "work",
 	})
