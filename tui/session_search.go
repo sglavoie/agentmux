@@ -33,10 +33,18 @@ func renderSessionSearch(m Model) string {
 
 	header := "Past Sessions"
 	count := len(m.sessionResults)
-	if m.sessionLoading {
-		header += "  " + styleDim.Render("(scanning…)")
-	} else {
+	if count > 0 || !m.sessionLoading {
 		header += fmt.Sprintf("  [%d result%s]", count, plural(count))
+	}
+	var states []string
+	if label := sessionLoadingLabel(m); label != "" {
+		states = append(states, label)
+	}
+	if m.sessionRefreshInFlight {
+		states = append(states, "scanning transcripts…")
+	}
+	if len(states) > 0 {
+		header += "  " + styleDim.Render("("+strings.Join(states, ", ")+")")
 	}
 	sb.WriteString(styleHeader.Render(header))
 	sb.WriteByte('\n')
@@ -56,7 +64,7 @@ func renderSessionSearch(m Model) string {
 	sb.WriteByte('\n')
 
 	if err := m.sessionRefreshErr; err != nil {
-		sb.WriteString(styleError.Render("refresh error: "+err.Error()) + "\n")
+		sb.WriteString(styleError.Render(sessionRefreshErrorLabel(m)+": "+err.Error()) + "\n")
 	}
 	if err := m.sessionSearchErr; err != nil {
 		sb.WriteString(styleError.Render("search error: "+err.Error()) + "\n")
@@ -105,8 +113,10 @@ func renderSessionSearchList(m Model, height int) string {
 
 	total := len(m.sessionResults)
 	if total == 0 {
-		if m.sessionLoading {
-			sb.WriteString(styleDim.Render("  (loading…)"))
+		if label := sessionLoadingLabel(m); label != "" {
+			sb.WriteString(styleDim.Render("  (" + label + ")"))
+		} else if m.sessionRefreshInFlight {
+			sb.WriteString(styleDim.Render("  (scanning transcripts…)"))
 		} else {
 			sb.WriteString(styleDim.Render("  (no sessions match)"))
 		}
@@ -182,6 +192,23 @@ func renderSessionSearchList(m Model, height int) string {
 	}
 
 	return sb.String()
+}
+
+func sessionLoadingLabel(m Model) string {
+	if !m.sessionLoading {
+		return ""
+	}
+	if m.sessionCacheLoadInFlight || m.transcriptIndex == nil {
+		return "loading cache…"
+	}
+	return "searching…"
+}
+
+func sessionRefreshErrorLabel(m Model) string {
+	if m.transcriptIndex == nil {
+		return "cache load error"
+	}
+	return "refresh error"
 }
 
 // formatSessionRow returns a single-line summary of one search result.

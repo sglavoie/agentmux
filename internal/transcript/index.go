@@ -141,21 +141,22 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 		return errors.New("transcript: Refresh requires at least one reader")
 	}
 
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
 	// Snapshot the existing entries by Path so each reader's Discover can
 	// short-circuit a parse when the on-disk file is byte-identical to the
 	// cached metadata. Path keying is used (rather than IndexKey) because
 	// the harness id is sometimes only known after parsing the first line
 	// of the file (Codex), so it is unavailable at the discovery-walk stage.
+	i.mu.Lock()
+	snapshot := make(map[string]SessionMeta, len(i.entries))
 	byPath := make(map[string]SessionMeta, len(i.entries))
-	for _, meta := range i.entries {
-		if meta.Path == "" {
-			continue
+	for key, meta := range i.entries {
+		snapshot[key] = meta
+		if meta.Path != "" {
+			byPath[meta.Path] = meta
 		}
-		byPath[meta.Path] = meta
 	}
+	i.mu.Unlock()
+
 	lookup := func(path string, size int64, mtime time.Time) (SessionMeta, bool) {
 		meta, ok := byPath[path]
 		if !ok {
@@ -192,6 +193,7 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 	// in each reader and no file is filtered by age.
 
 	var firstErr error
+	var discovered []SessionMeta
 	for _, profile := range cfg.Profiles {
 		harnessName := profile.EffectiveHarness()
 		reader, ok := readers[harnessName]
@@ -213,36 +215,49 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 		for _, meta := range metas {
 			meta.Profile = profile.Name
 			meta.Project = ResolveProject(meta.CWD, cfg.Projects)
-			key := IndexKey(meta.Harness, meta.ID)
-			if existing, ok := i.entries[key]; ok {
-				meta.HiddenFromIndex = existing.HiddenFromIndex
-				if meta.SearchText == "" && existing.FileSize == meta.FileSize && existing.FileModTime.Equal(meta.FileModTime) {
-					meta.MessageCount = existing.MessageCount
-					meta.Snippet = existing.Snippet
-					meta.StartedAt = existing.StartedAt
-					meta.LastAt = existing.LastAt
-				}
+			discovered = append(discovered, meta)
+		}
+	}
+
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	for _, meta := range discovered {
+		key := IndexKey(meta.Harness, meta.ID)
+		existing, exists := i.entries[key]
+		if _, existedAtSnapshot := snapshot[key]; existedAtSnapshot && !exists {
+			continue
+		}
+		if !discoveredMetaStillFresh(meta) {
+			continue
+		}
+		if exists {
+			meta.HiddenFromIndex = existing.HiddenFromIndex
+			if meta.SearchText == "" && existing.FileSize == meta.FileSize && existing.FileModTime.Equal(meta.FileModTime) {
+				meta.MessageCount = existing.MessageCount
+				meta.Snippet = existing.Snippet
+				meta.StartedAt = existing.StartedAt
+				meta.LastAt = existing.LastAt
 			}
-			if meta.SearchText != "" {
-				if meta.HiddenFromIndex {
-					if err := i.DeleteSearchText(key); err != nil {
-						slog.Debug("transcript.index: hidden search sidecar cleanup failed",
-							"key", key, "err", err)
-						if firstErr == nil {
-							firstErr = err
-						}
-					}
-				} else if err := i.WriteSearchText(key, meta.SearchText); err != nil {
-					slog.Debug("transcript.index: search sidecar write failed",
+		}
+		if meta.SearchText != "" {
+			if meta.HiddenFromIndex {
+				if err := i.DeleteSearchText(key); err != nil {
+					slog.Debug("transcript.index: hidden search sidecar cleanup failed",
 						"key", key, "err", err)
 					if firstErr == nil {
 						firstErr = err
 					}
 				}
-				meta.SearchText = ""
+			} else if err := i.WriteSearchText(key, meta.SearchText); err != nil {
+				slog.Debug("transcript.index: search sidecar write failed",
+					"key", key, "err", err)
+				if firstErr == nil {
+					firstErr = err
+				}
 			}
-			i.entries[key] = meta
+			meta.SearchText = ""
 		}
+		i.entries[key] = meta
 	}
 	// Persist the refreshed index so newly-populated SearchText survives a
 	// process restart. Save failures are logged and swallowed — a broken
@@ -253,6 +268,17 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 			"path", i.path, "err", err)
 	}
 	return firstErr
+}
+
+func discoveredMetaStillFresh(meta SessionMeta) bool {
+	if meta.Path == "" {
+		return true
+	}
+	info, err := os.Stat(meta.Path)
+	if err != nil {
+		return false
+	}
+	return info.Size() == meta.FileSize && info.ModTime().Equal(meta.FileModTime)
 }
 
 // Delete removes the entry with the given key. When alsoFile is true,

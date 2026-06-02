@@ -146,13 +146,17 @@ instead of skipping or focusing the existing tab.
 
 ### Past sessions
 
-Press `S` from the dashboard to open the past-session search. amx walks each
-profile's transcript directory (Claude `~/.claude/projects`, Copilot
-`~/.copilot/session-state`, Codex `~/.codex/sessions`) and indexes every
-JSONL conversation it finds. Session metadata is stored at
+Press `S` from the dashboard to open the past-session search. During dashboard
+startup, amx loads the cached transcript index in the background and then
+starts a slower scan of each profile's transcript directory (Claude
+`~/.claude/projects`, Copilot `~/.copilot/session-state`, Codex
+`~/.codex/sessions`). Opening `S` usually shows the warmed cache immediately;
+while a scan is still running, existing rows stay visible and the header shows
+the scan status. Session metadata is stored at
 `~/.local/share/agent-mux/transcripts.json`; searchable transcript text is
-stored in per-session sidecars under `~/.local/share/agent-mux/transcripts.search/`.
-The daemon never loads the transcript index or search sidecars.
+stored in per-session sidecars under
+`~/.local/share/agent-mux/transcripts.search/`. The daemon still never loads
+the transcript index or search sidecars.
 
 - `/` enters a free-text query; results stream the matching JSONL on demand
   and show the per-session match count.

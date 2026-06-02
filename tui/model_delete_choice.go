@@ -120,6 +120,7 @@ func (m Model) applyDeleteChoice(alsoFile bool) (tea.Model, tea.Cmd) {
 	// invalidated by their stale-drop guards.
 	m.sessionSearchSeq++
 	m.sessionLoading = true
+	m.sessionSearchErr = nil
 	cmds = append(cmds, runSessionSearchCmd(m.sessionSearchSeq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery()))
 	return m, tea.Batch(cmds...)
 }

@@ -106,9 +106,83 @@ func (m Model) handleDetailEvents(msg detailEventsMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleSessionCacheLoadStarted(sessionCacheLoadStartedMsg) (tea.Model, tea.Cmd) {
+	m.sessionCacheLoadInFlight = true
+	m.sessionRefreshErr = nil
+	return m, nil
+}
+
+// handleSessionCacheLoadDone stores the startup-loaded index/readers and, if
+// no newer user search has been dispatched, publishes the cached empty-query
+// results before starting a background refresh/prune.
+func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Model, tea.Cmd) {
+	m.sessionCacheLoadInFlight = false
+	if msg.loadErr != nil {
+		m.sessionRefreshErr = msg.loadErr
+		m.sessionSearchErr = nil
+		m.sessionLoading = false
+		return m, nil
+	}
+	m.transcriptIndex = msg.idx
+	m.transcriptReaders = msg.readers
+	m.sessionRefreshErr = nil
+
+	var cmds []tea.Cmd
+	publishCachedResults := msg.seq == m.sessionSearchSeq && sessionQueryIsEmpty(m.currentSessionQuery())
+	if publishCachedResults {
+		m.sessionSearchErr = msg.searchErr
+		m.sessionResults = msg.results
+		m.sessionLoading = false
+		if m.sessionCursor >= len(m.sessionResults) {
+			m.sessionCursor = len(m.sessionResults) - 1
+			if m.sessionCursor < 0 {
+				m.sessionCursor = 0
+			}
+		}
+		scrollSessionSearchToCursor(&m)
+	} else if m.mode == ModeSessionSearch {
+		m.sessionLoading = true
+		cmds = append(cmds, runSessionSearchCmd(m.sessionSearchSeq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery()))
+	} else {
+		m.sessionLoading = false
+	}
+
+	if !m.sessionRefreshInFlight {
+		m.sessionRefreshInFlight = true
+		warmSeq := msg.seq
+		if !publishCachedResults {
+			warmSeq = -1
+		}
+		cmds = append(cmds, sessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, warmSeq))
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// handleSessionWarmRefreshDone publishes the background refresh result if no
+// newer user search has superseded the startup empty-query search.
+func (m Model) handleSessionWarmRefreshDone(msg sessionWarmRefreshDoneMsg) (tea.Model, tea.Cmd) {
+	m.sessionRefreshInFlight = false
+	m.sessionRefreshErr = msg.refreshErr
+	if msg.seq != m.sessionSearchSeq {
+		return m, nil
+	}
+	m.sessionSearchErr = msg.searchErr
+	m.sessionResults = msg.results
+	m.sessionLoading = false
+	if m.sessionCursor >= len(m.sessionResults) {
+		m.sessionCursor = len(m.sessionResults) - 1
+		if m.sessionCursor < 0 {
+			m.sessionCursor = 0
+		}
+	}
+	scrollSessionSearchToCursor(&m)
+	return m, nil
+}
+
 // handleSessionsRefreshDone processes a sessionsRefreshDoneMsg: records any
 // refresh error and follows up with a search dispatch.
 func (m Model) handleSessionsRefreshDone(msg sessionsRefreshDoneMsg) (tea.Model, tea.Cmd) {
+	m.sessionRefreshInFlight = false
 	m.sessionRefreshErr = msg.err
 	// Always follow a refresh with a search dispatch — even on error,
 	// because Refresh updates whatever profiles succeeded and the old
@@ -127,6 +201,16 @@ func (m Model) handleSessionSearchDebounce(msg sessionSearchDebounceMsg) (tea.Mo
 	// Stale debounce ticks (the user kept typing) are silently dropped.
 	if msg.seq != m.sessionSearchSeq {
 		return m, nil
+	}
+	if m.transcriptIndex == nil {
+		if m.sessionCacheLoadInFlight {
+			return m, nil
+		}
+		m.sessionCacheLoadInFlight = true
+		return m, startupSessionWarmupCmd(m.sessionSearchSeq)
+	}
+	if m.transcriptReaders == nil {
+		m.transcriptReaders = buildTranscriptReaders()
 	}
 	return m, runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
 }

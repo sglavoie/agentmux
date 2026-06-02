@@ -25,6 +25,33 @@ type sessionsRefreshDoneMsg struct {
 	seq int // sessionSearchSeq snapshot at dispatch time
 }
 
+// sessionCacheLoadStartedMsg marks the startup cache read as in-flight. It is
+// emitted before the load command so users entering Past Sessions during
+// startup see a loading state instead of doing a duplicate synchronous load.
+type sessionCacheLoadStartedMsg struct{}
+
+// sessionCacheLoadDoneMsg carries the startup transcripts.json load and its
+// immediate empty-query search result. seq is the sessionSearchSeq snapshot
+// from Init; if the user has already typed a newer query, the loaded index is
+// retained but the empty-query results are not allowed to overwrite it.
+type sessionCacheLoadDoneMsg struct {
+	seq       int
+	idx       *transcript.Index
+	readers   map[string]transcript.Reader
+	results   []transcript.Result
+	loadErr   error
+	searchErr error
+}
+
+// sessionWarmRefreshDoneMsg carries the background refresh/prune result that
+// follows startup cache loading, plus a fresh empty-query result set.
+type sessionWarmRefreshDoneMsg struct {
+	seq        int
+	results    []transcript.Result
+	refreshErr error
+	searchErr  error
+}
+
 // sessionSearchDebounceMsg fires after sessionSearchDebounce. The handler
 // dispatches the actual search iff this message's seq still matches the
 // current sessionSearchSeq — otherwise the user kept typing and a fresher
@@ -40,10 +67,10 @@ type sessionSearchDoneMsg struct {
 	err     error
 }
 
-// enterSessionSearch swaps to ModeSessionSearch, lazily builds the index +
-// readers, and dispatches an async refresh. Subsequent entries reuse the
-// cached index (no re-refresh per keypress — the dev machine takes ~10s to
-// rescan ~1700 sessions, per S5 notes).
+// enterSessionSearch swaps to ModeSessionSearch and reuses any warmed
+// sessionResults immediately. If startup cache loading has not produced an
+// index yet, entry starts or joins that cache-load path instead of kicking a
+// duplicate filesystem refresh.
 func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
 	m.clearJumpChord()
 	m.mode = ModeSessionSearch
@@ -53,36 +80,30 @@ func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
 	m.sessionRefreshErr = nil
 	m.sessionSearchErr = nil
 
-	if m.transcriptIndex == nil {
-		idx, err := transcript.LoadIndex()
-		if err != nil {
-			m.sessionRefreshErr = err
-			m.sessionLoading = false
-			return m, nil
-		}
-		m.transcriptIndex = idx
-	}
-	if m.transcriptReaders == nil {
-		m.transcriptReaders = map[string]transcript.Reader{
-			harness.Claude:  transcript.NewClaudeReader(),
-			harness.Copilot: transcript.NewCopilotReader(),
-			harness.Codex:   transcript.NewCodexReader(),
-		}
+	if m.transcriptIndex != nil && m.transcriptReaders == nil {
+		m.transcriptReaders = buildTranscriptReaders()
 	}
 
-	m.sessionLoading = true
-	m.sessionSearchSeq++
-	seq := m.sessionSearchSeq
-	var cmds []tea.Cmd
-	cmds = append(cmds, sessionsRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, seq))
-	if c := m.pushToast(Toast{
-		Severity: toastInfo,
-		Text:     "Scanning transcripts…",
-		Expires:  time.Now().Add(progressToastTTL),
-	}); c != nil {
-		cmds = append(cmds, c)
+	if m.transcriptIndex == nil {
+		m.sessionLoading = len(m.sessionResults) == 0
+		if m.sessionCacheLoadInFlight {
+			return m, nil
+		}
+		m.sessionCacheLoadInFlight = true
+		return m, startupSessionWarmupCmd(m.sessionSearchSeq)
 	}
-	return m, tea.Batch(cmds...)
+
+	if m.sessionCacheLoadInFlight {
+		m.sessionLoading = len(m.sessionResults) == 0
+		return m, nil
+	}
+	if m.sessionRefreshInFlight {
+		m.sessionLoading = false
+		return m, nil
+	}
+
+	m.sessionLoading = false
+	return m, nil
 }
 
 // exitSessionSearch returns to ModeList and clears transient input state
@@ -203,9 +224,68 @@ func (m *Model) dispatchSessionSearch() tea.Cmd {
 	m.sessionSearchSeq++
 	seq := m.sessionSearchSeq
 	m.sessionLoading = true
+	m.sessionSearchErr = nil
 	return tea.Tick(sessionSearchDebounce, func(time.Time) tea.Msg {
 		return sessionSearchDebounceMsg{seq: seq}
 	})
+}
+
+func startupSessionWarmupCmd(seq int) tea.Cmd {
+	return tea.Sequence(
+		func() tea.Msg { return sessionCacheLoadStartedMsg{} },
+		sessionCacheLoadCmd(seq),
+	)
+}
+
+func sessionCacheLoadCmd(seq int) tea.Cmd {
+	return func() tea.Msg {
+		idx, readers, err := loadTranscriptCache()
+		if err != nil {
+			return sessionCacheLoadDoneMsg{seq: seq, loadErr: err}
+		}
+		results, searchErr := transcript.Search(idx, readers, transcript.Query{})
+		return sessionCacheLoadDoneMsg{
+			seq:       seq,
+			idx:       idx,
+			readers:   readers,
+			results:   results,
+			searchErr: searchErr,
+		}
+	}
+}
+
+func loadTranscriptCache() (*transcript.Index, map[string]transcript.Reader, error) {
+	idx, err := transcript.LoadIndex()
+	if err != nil {
+		return nil, nil, err
+	}
+	return idx, buildTranscriptReaders(), nil
+}
+
+func (m *Model) ensureTranscriptCache() error {
+	if m.transcriptIndex == nil {
+		idx, err := transcript.LoadIndex()
+		if err != nil {
+			return err
+		}
+		m.transcriptIndex = idx
+	}
+	if m.transcriptReaders == nil {
+		m.transcriptReaders = buildTranscriptReaders()
+	}
+	return nil
+}
+
+func sessionQueryIsEmpty(q transcript.Query) bool {
+	return q.Text == "" && len(q.Harness) == 0 && len(q.Profile) == 0 && len(q.Project) == 0
+}
+
+func buildTranscriptReaders() map[string]transcript.Reader {
+	return map[string]transcript.Reader{
+		harness.Claude:  transcript.NewClaudeReader(),
+		harness.Copilot: transcript.NewCopilotReader(),
+		harness.Codex:   transcript.NewCodexReader(),
+	}
 }
 
 // runSessionSearchCmd kicks off a transcript.Search dispatch without
@@ -223,21 +303,38 @@ func runSessionSearchCmd(seq int, idx *transcript.Index, readers map[string]tran
 // follow-up search dispatch so the result chain stays cancellable.
 func sessionsRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader, seq int) tea.Cmd {
 	return func() tea.Msg {
-		refreshErr := idx.Refresh(cfg, readers)
-		hidden, pruneErr := transcript.Prune(idx, cfg, time.Now())
-		if pruneErr != nil {
-			slog.Warn("transcript.prune failed", "err", pruneErr)
-		} else if hidden > 0 {
-			slog.Debug("transcript.prune", "hidden", hidden)
-		}
-		if refreshErr != nil && pruneErr != nil {
-			return sessionsRefreshDoneMsg{err: fmt.Errorf("refresh failed: %v; prune failed: %w", refreshErr, pruneErr), seq: seq}
-		}
-		if refreshErr != nil {
-			return sessionsRefreshDoneMsg{err: refreshErr, seq: seq}
-		}
-		return sessionsRefreshDoneMsg{err: pruneErr, seq: seq}
+		return sessionsRefreshDoneMsg{err: refreshAndPruneSessions(idx, cfg, readers), seq: seq}
 	}
+}
+
+func sessionWarmRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader, seq int) tea.Cmd {
+	return func() tea.Msg {
+		refreshErr := refreshAndPruneSessions(idx, cfg, readers)
+		results, searchErr := transcript.Search(idx, readers, transcript.Query{})
+		return sessionWarmRefreshDoneMsg{
+			seq:        seq,
+			results:    results,
+			refreshErr: refreshErr,
+			searchErr:  searchErr,
+		}
+	}
+}
+
+func refreshAndPruneSessions(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader) error {
+	refreshErr := idx.Refresh(cfg, readers)
+	hidden, pruneErr := transcript.Prune(idx, cfg, time.Now())
+	if pruneErr != nil {
+		slog.Warn("transcript.prune failed", "err", pruneErr)
+	} else if hidden > 0 {
+		slog.Debug("transcript.prune", "hidden", hidden)
+	}
+	if refreshErr != nil && pruneErr != nil {
+		return fmt.Errorf("refresh failed: %v; prune failed: %w", refreshErr, pruneErr)
+	}
+	if refreshErr != nil {
+		return refreshErr
+	}
+	return pruneErr
 }
 
 // currentSessionQuery snapshots the chip filters + text query into a

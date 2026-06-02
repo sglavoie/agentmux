@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -18,7 +19,11 @@ import (
 // benchmark's wall-clock time.
 func populateBenchIndex(b *testing.B, n int, snippet, body string) *Index {
 	b.Helper()
-	idx := &Index{path: filepath.Join(b.TempDir(), "transcripts.json"), entries: make(map[string]SessionMeta, n)}
+	idx, err := LoadIndexAt(filepath.Join(b.TempDir(), "transcripts.json"))
+	if err != nil {
+		b.Fatalf("LoadIndexAt: %v", err)
+	}
+	idx.entries = make(map[string]SessionMeta, n)
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < n; i++ {
 		key := fmt.Sprintf("claude:bench-%d", i)
@@ -36,6 +41,88 @@ func populateBenchIndex(b *testing.B, n int, snippet, body string) *Index {
 		}
 	}
 	return idx
+}
+
+func BenchmarkRefresh_UnchangedFilesFastPath(b *testing.B) {
+	dir := b.TempDir()
+	idx, err := LoadIndexAt(filepath.Join(dir, "transcripts.json"))
+	if err != nil {
+		b.Fatalf("LoadIndexAt: %v", err)
+	}
+
+	const n = 4500
+	idx.entries = make(map[string]SessionMeta, n)
+	metas := make([]SessionMeta, 0, n)
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < n; i++ {
+		path := filepath.Join(dir, "home", "projects", "-tmp-bench", fmt.Sprintf("sess-%d.jsonl", i))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			b.Fatalf("MkdirAll: %v", err)
+		}
+		if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
+			b.Fatalf("WriteFile: %v", err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			b.Fatalf("Stat: %v", err)
+		}
+		meta := SessionMeta{
+			ID:           fmt.Sprintf("bench-%d", i),
+			Harness:      harness.Claude,
+			Profile:      "work",
+			Project:      "Bench",
+			CWD:          "/tmp/bench",
+			Path:         path,
+			FileSize:     info.Size(),
+			FileModTime:  info.ModTime(),
+			MessageCount: 2,
+			Snippet:      "cached bench transcript",
+			StartedAt:    base.Add(time.Duration(i) * time.Minute),
+			LastAt:       base.Add(time.Duration(i) * time.Minute),
+		}
+		key := IndexKey(meta.Harness, meta.ID)
+		idx.entries[key] = meta
+		metas = append(metas, meta)
+		if err := idx.WriteSearchText(key, "cached bench transcript body"); err != nil {
+			b.Fatalf("WriteSearchText: %v", err)
+		}
+	}
+
+	cfg := &config.Config{
+		Profiles: []config.Account{{
+			Name:    "work",
+			Harness: harness.Claude,
+			HomeDir: filepath.Join(dir, "home"),
+		}},
+	}
+	reader := &fakeReader{
+		harness: harness.Claude,
+		discover: func(_ string, opts DiscoverOptions) ([]SessionMeta, error) {
+			out := make([]SessionMeta, 0, len(metas))
+			for _, meta := range metas {
+				if opts.Cached != nil {
+					if cached, ok := opts.Cached(meta.Path, meta.FileSize, meta.FileModTime); ok {
+						out = append(out, cached)
+						continue
+					}
+				}
+				fresh := meta
+				fresh.SearchText = "fresh bench transcript body"
+				out = append(out, fresh)
+			}
+			return out, nil
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: reader}); err != nil {
+			b.Fatalf("Refresh: %v", err)
+		}
+		if idx.Len() != n {
+			b.Fatalf("Len=%d, want %d", idx.Len(), n)
+		}
+	}
 }
 
 // BenchmarkSearch_FastPath establishes a baseline for transcript.Search over

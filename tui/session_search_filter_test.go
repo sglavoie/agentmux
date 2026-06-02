@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,6 +194,89 @@ func TestSessionSearch_StaleRefreshDoesNotOverwriteTypedResults(t *testing.T) {
 	}
 	if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "hit" {
 		t.Errorf("typed-query results were overwritten by stale refresh: %+v", m.sessionResults)
+	}
+}
+
+func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		key        string
+		wantEntry  bool
+		wantHidden bool
+		wantToast  string
+	}{
+		{
+			name:       "hide from index",
+			key:        "i",
+			wantEntry:  true,
+			wantHidden: true,
+			wantToast:  "Hid",
+		},
+		{
+			name:      "delete entry",
+			key:       "f",
+			wantEntry: false,
+			wantToast: "Deleted",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := sessionSearchFilterModel(t)
+			target := m.sessionResults[0].Meta
+			staleSeq := m.sessionSearchSeq
+			m.sessionRefreshInFlight = true
+			m.mode = ModeDeleteChoice
+			m.deleteTarget = &target
+
+			updated, _ := m.Update(keyPress(tc.key))
+			m = updated.(Model)
+			if m.mode != ModeSessionSearch {
+				t.Fatalf("mode = %v, want ModeSessionSearch", m.mode)
+			}
+			if !m.sessionLoading {
+				t.Fatal("delete choice did not mark the follow-up search as loading")
+			}
+			if m.sessionSearchSeq <= staleSeq {
+				t.Fatalf("sessionSearchSeq = %d, want > stale seq %d", m.sessionSearchSeq, staleSeq)
+			}
+			if len(m.toasts) == 0 || !strings.Contains(m.toasts[0].Text, tc.wantToast) {
+				t.Fatalf("toast = %+v, want text containing %q", m.toasts, tc.wantToast)
+			}
+
+			key := transcript.IndexKey(target.Harness, target.ID)
+			gotMeta, exists := m.transcriptIndex.Get(key)
+			if exists != tc.wantEntry {
+				t.Fatalf("entry exists = %v, want %v", exists, tc.wantEntry)
+			}
+			if exists && gotMeta.HiddenFromIndex != tc.wantHidden {
+				t.Fatalf("HiddenFromIndex = %v, want %v", gotMeta.HiddenFromIndex, tc.wantHidden)
+			}
+
+			results, err := transcript.Search(m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
+			if err != nil {
+				t.Fatalf("follow-up search: %v", err)
+			}
+			updated, _ = m.Update(sessionSearchDoneMsg{
+				seq:     m.sessionSearchSeq,
+				results: results,
+				err:     nil,
+			})
+			m = updated.(Model)
+			if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "miss" {
+				t.Fatalf("follow-up search did not remove target: %+v", m.sessionResults)
+			}
+
+			updated, cmd := m.Update(sessionWarmRefreshDoneMsg{
+				seq:     staleSeq,
+				results: []transcript.Result{{Meta: target, Preview: "stale warm refresh row"}},
+			})
+			m = updated.(Model)
+			if cmd != nil {
+				t.Fatalf("stale warm refresh returned cmd %T; want nil", cmd)
+			}
+			if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "miss" {
+				t.Fatalf("late warm refresh resurrected deleted target: %+v", m.sessionResults)
+			}
+		})
 	}
 }
 

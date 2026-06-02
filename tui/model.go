@@ -159,12 +159,19 @@ type Model struct {
 	transcriptIndex   *transcript.Index
 	transcriptReaders map[string]transcript.Reader
 
+	// background warm-up state for ModeSessionSearch. The startup cache load
+	// reads transcripts.json and populates sessionResults; the warm refresh
+	// then updates the same index without blocking the dashboard.
+	sessionCacheLoadInFlight bool
+	sessionRefreshInFlight   bool
+
 	// session search view (ModeSessionSearch). sessionResults holds the
 	// most recent transcript.Search output. sessionQuery is the free-text
 	// query typed after `/`. sessionSearchMode is true while the user is
 	// actively editing sessionQuery (mirrors pickerSearchMode). The chip
 	// fields hold the current harness/profile/project filters. sessionLoading
-	// covers both the initial refresh and a pending text search.
+	// covers cache/query result loading; sessionRefreshInFlight tracks the
+	// slower background scan so warmed rows can remain visible while it runs.
 	sessionQuery      string
 	sessionResults    []transcript.Result
 	sessionCursor     int
@@ -305,6 +312,7 @@ func (m Model) Init() tea.Cmd {
 		fetchCmd(m.client, m.cfg, m.sortMode),
 		tickCmd(m.interval),
 		healthCmd(m.cfg, m.amxBin, true, true),
+		startupSessionWarmupCmd(m.sessionSearchSeq),
 	)
 }
 
@@ -358,6 +366,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case detailEventsMsg:
 		return m.handleDetailEvents(msg)
+
+	case sessionCacheLoadStartedMsg:
+		return m.handleSessionCacheLoadStarted(msg)
+
+	case sessionCacheLoadDoneMsg:
+		return m.handleSessionCacheLoadDone(msg)
+
+	case sessionWarmRefreshDoneMsg:
+		return m.handleSessionWarmRefreshDone(msg)
 
 	case sessionsRefreshDoneMsg:
 		return m.handleSessionsRefreshDone(msg)
