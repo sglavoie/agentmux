@@ -110,6 +110,79 @@ func TestPickerRowOverrideSplitsColor(t *testing.T) {
 	}
 }
 
+// TestConfigPickerHarnessEmojiAndColor verifies that the launch-profile
+// overlay uses the same harness emoji/color cues as the main launch picker.
+func TestConfigPickerHarnessEmojiAndColor(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{
+			"claude":  "🦊",
+			"codex":   "📟",
+			"copilot": "🚁",
+		},
+		HarnessColors: map[string]string{
+			"claude":  "blue",
+			"codex":   "purple",
+			"copilot": "green",
+		},
+		Accounts: []config.Account{
+			{Name: "personal-codex", Color: "purple", Harness: "codex", HomeDir: "~/.codex"},
+			{Name: "personal", Color: "yellow", Harness: "claude", HomeDir: "~/.claude"},
+			{Name: "copilot", Color: "green", Harness: "copilot", HomeDir: "~/.copilot"},
+		},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m.mode = ModeConfigPicker
+	m.targetSession = session.RunningSession{Base: "dotfiles", Project: "dotfiles", Harness: "claude"}
+	m.configPickerAccounts = cfg.Accounts
+	m.configPickerCurrent = "personal"
+	m.configPickerCursor = -1
+	m.configPickerReturnMode = ModePicker
+
+	out := renderConfigPicker(m)
+	plain := stripAnsi(out)
+	if !strings.Contains(plain, "Launch profile: dotfiles") {
+		t.Errorf("expected Launch profile header, got:\n%s", plain)
+	}
+	for _, segment := range []string{"📟 codex", "🦊 claude", "🚁 copilot"} {
+		if !strings.Contains(plain, segment) {
+			t.Errorf("expected harness segment %q in config picker, got:\n%s", segment, plain)
+		}
+	}
+
+	expectedColors := map[string]string{
+		"📟 codex":   "purple",
+		"🦊 claude":  "blue",
+		"🚁 copilot": "green",
+	}
+	for segment, colorName := range expectedColors {
+		color, err := palette.Lookup(colorName)
+		if err != nil {
+			t.Fatalf("palette.Lookup(%s): %v", colorName, err)
+		}
+		if indexColoredSegment(out, color.ForegroundHex(), segment) < 0 {
+			t.Errorf("expected %q to be wrapped in harness color %s; rendered:\n%s", segment, color.ForegroundHex(), out)
+		}
+	}
+
+	expectedProfileColors := map[string]string{
+		"personal-codex": "purple",
+		"personal":       "yellow",
+		"copilot":        "green",
+	}
+	for profile, colorName := range expectedProfileColors {
+		color, err := palette.Lookup(colorName)
+		if err != nil {
+			t.Fatalf("palette.Lookup(%s): %v", colorName, err)
+		}
+		if indexColoredSegment(out, color.ForegroundHex(), profile) < 0 {
+			t.Errorf("expected profile %q to be wrapped in profile color %s; rendered:\n%s", profile, color.ForegroundHex(), out)
+		}
+	}
+}
+
 // TestPickerPreviewOverrideHeaderColor verifies the picker preview header tracks
 // the project's *default* profile color even when an override is active.
 func TestPickerPreviewOverrideHeaderColor(t *testing.T) {

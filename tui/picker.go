@@ -33,6 +33,19 @@ func pickerHarnessCellText(cfg *config.Config, acc config.Account) string {
 	return emoji + " " + label
 }
 
+// harnessDisplayText renders a harness name with its configured emoji prefix,
+// falling back to the bare harness name when no emoji is configured.
+func harnessDisplayText(cfg *config.Config, harness string) string {
+	emoji := ""
+	if cfg != nil {
+		emoji = cfg.HarnessEmoji(harness)
+	}
+	if emoji == "" {
+		return harness
+	}
+	return emoji + " " + harness
+}
+
 // renderPicker renders the session picker. When preview is enabled and the
 // terminal is wide enough, it splits horizontally with a config + running-peek
 // pane on the right; otherwise it falls back to a single-pane layout.

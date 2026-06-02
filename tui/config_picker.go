@@ -1,8 +1,9 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
+
+	runewidth "github.com/mattn/go-runewidth"
 )
 
 // renderConfigPicker renders the profile picker overlay for restart/launch overrides.
@@ -16,17 +17,27 @@ func renderConfigPicker(m Model) string {
 
 	maxName, maxHarness := 0, 0
 	for _, acc := range m.configPickerAccounts {
-		if n := len(acc.Name); n > maxName {
+		if n := runewidth.StringWidth(acc.Name); n > maxName {
 			maxName = n
 		}
-		if h := len(acc.EffectiveHarness()); h > maxHarness {
+		if h := runewidth.StringWidth(harnessDisplayText(m.cfg, acc.EffectiveHarness())); h > maxHarness {
 			maxHarness = h
 		}
 	}
+	harnessColor := buildHarnessColorMap(m)
 	for i, acc := range m.configPickerAccounts {
-		name := fmt.Sprintf("%-*s", maxName, acc.Name)
-		harness := fmt.Sprintf("%-*s", maxHarness, acc.EffectiveHarness())
-		line := name + "  " + styleDim.Render(harness)
+		namePad := maxName - runewidth.StringWidth(acc.Name)
+		if namePad < 0 {
+			namePad = 0
+		}
+		name := accountStyle(acc.Color).Render(acc.Name) + strings.Repeat(" ", namePad)
+		harnessText := harnessDisplayText(m.cfg, acc.EffectiveHarness())
+		pad := maxHarness - runewidth.StringWidth(harnessText)
+		if pad < 0 {
+			pad = 0
+		}
+		harness := accountStyle(harnessColor[acc.EffectiveHarness()]).Render(harnessText) + strings.Repeat(" ", pad)
+		line := name + "  " + harness
 		if home := acc.EffectiveHomeDir(); home != "" {
 			line += "  " + styleDim.Render(home)
 		}
