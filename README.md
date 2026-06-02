@@ -110,6 +110,8 @@ Key flows:
 - `p`: toggle the preview pane
 - `d`: show the per-session hook event log (scrollable detail pane)
 - `S`: search past session transcripts across every configured profile
+- `P`: search saved agent plans; in the plan viewer, `y` copies the selected
+  raw line
 - `?`: show the full keymap
 
 The dashboard keeps the profile badge and harness metadata separate from the
@@ -163,7 +165,8 @@ the transcript index or search sidecars.
 - `h`, `p`, `r` cycle single-value chip filters for harness, profile, and
   project.
 - `enter` opens the transcript viewer (role-coded lines, `n`/`N` jumps
-  between matches, `j`/`k` and `g`/`G` for scrolling).
+  between matches, `j`/`k` and `g`/`G` for scrolling, `y` copies the selected
+  message text).
 - `d` opens a three-way delete prompt: `i` hides the row from the index only
   (file kept on disk; rescans do not resurrect it), `f` also removes the
   underlying JSONL file (irreversible).

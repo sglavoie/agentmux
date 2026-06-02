@@ -60,7 +60,7 @@ var helpSections = []struct {
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
 		"  o         open session directory in a plain shell tab",
-		"  y         copy session title to clipboard",
+		"  y         copy session title; in transcript/plan viewers, copy selection",
 		"  p         toggle preview pane (also active in launcher)",
 	}},
 	{"Filter", []string{

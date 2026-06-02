@@ -345,6 +345,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionDoneMsg:
 		return m.handleActionDone(msg)
 
+	case copyDoneMsg:
+		return m.handleCopyDone(msg)
+
 	case resortDoneMsg:
 		return m.handleResortDone(msg)
 

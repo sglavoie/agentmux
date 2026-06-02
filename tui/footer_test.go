@@ -137,6 +137,25 @@ func TestListFooterEAndCAlwaysPresent(t *testing.T) {
 	}
 }
 
+func TestViewerFootersAdvertiseCopy(t *testing.T) {
+	cases := []struct {
+		name string
+		mode Mode
+	}{
+		{name: "session viewer", mode: ModeSessionView},
+		{name: "plan viewer", mode: ModePlanView},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := stripAnsi(renderFooter(Model{mode: tc.mode}))
+			if !strings.Contains(out, "y copy") {
+				t.Fatalf("footer = %q, want y copy hint", out)
+			}
+		})
+	}
+}
+
 // TestListFooterLine1WrapsNarrow asserts that line 1 emits at least one
 // newline and every line fits within the configured terminal width when the
 // width is too narrow for the full palette.

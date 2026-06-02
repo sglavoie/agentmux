@@ -46,13 +46,13 @@ func renderFooter(m Model) string {
 		line1 = styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back")
 		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
 	case ModeSessionView:
-		line1 = styleFooter.Render("  j/k move · n/N match · enter view message · esc back")
+		line1 = styleFooter.Render("  j/k move · n/N match · y copy · enter view message · esc back")
 		line2 = styleFooter.Render("  g/G top/bot  pgup/pgdn: page")
 	case ModePlanSearch:
 		line1 = styleFooter.Render("  / filter · s sort · enter view · o open in editor · esc back")
 		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
 	case ModePlanView:
-		line1 = styleFooter.Render("  j/k scroll · n/N match · o editor · / search · esc back")
+		line1 = styleFooter.Render("  j/k scroll · n/N match · y copy · o editor · / search · esc back")
 		line2 = styleFooter.Render("  g/G top/bot  pgup/pgdn: page")
 	case ModeMessageDetail:
 		line1 = styleFooter.Render("  j/k scroll · g/G top/bottom · esc/q/enter close")

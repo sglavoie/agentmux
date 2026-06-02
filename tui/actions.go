@@ -13,6 +13,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
+var copyToClipboard = clipboard.Copy
+
 // action describes one entry in the per-row actions overlay. keyDisplay is
 // what the user sees in the overlay (e.g. "⏎"); keyMatch is the literal
 // msg.String() value the handler compares against (e.g. "enter").
@@ -376,7 +378,15 @@ func openInEditorActionCmd(m Model, cs config.Session) tea.Cmd {
 // reported via actionDoneMsg so the dashboard surfaces them in the header.
 func copyTitleCmd(title string) tea.Cmd {
 	return func() tea.Msg {
-		return actionDoneMsg{err: clipboard.Copy(title)}
+		return actionDoneMsg{err: copyToClipboard(title)}
+	}
+}
+
+// copyTextCmd writes arbitrary text to the system clipboard. It reports via
+// copyDoneMsg so full-layout viewers do not trigger a live-session refresh.
+func copyTextCmd(text string) tea.Cmd {
+	return func() tea.Msg {
+		return copyDoneMsg{err: copyToClipboard(text)}
 	}
 }
 

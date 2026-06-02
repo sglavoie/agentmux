@@ -27,6 +27,9 @@ func (e errMsg) Error() string { return e.err.Error() }
 // actionDoneMsg is sent when a close or restart action completes.
 type actionDoneMsg struct{ err error }
 
+// copyDoneMsg is sent when a viewer copy action completes.
+type copyDoneMsg struct{ err error }
+
 // resortDoneMsg is sent when a session.Resort call completes.
 type resortDoneMsg struct{ err error }
 

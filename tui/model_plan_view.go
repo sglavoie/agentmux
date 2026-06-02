@@ -115,6 +115,13 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModePlanSearch
 		m.planSearchMode = true
 		return m, nil
+	case keyY:
+		if len(m.planViewerLines) == 0 ||
+			m.planViewerCursor < 0 ||
+			m.planViewerCursor >= len(m.planViewerLines) {
+			return m, nil
+		}
+		return m, copyTextCmd(m.planViewerLines[m.planViewerCursor])
 	case keyO:
 		if m.viewerPlan == nil {
 			return m, nil

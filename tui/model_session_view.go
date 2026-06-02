@@ -107,6 +107,13 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.jumpToNextMatch(1)
 	case "N":
 		m.jumpToNextMatch(-1)
+	case keyY:
+		if len(m.viewerMessages) == 0 ||
+			m.viewerCursor < 0 ||
+			m.viewerCursor >= len(m.viewerMessages) {
+			return m, nil
+		}
+		return m, copyTextCmd(m.viewerMessages[m.viewerCursor].Text)
 	case keyEnter:
 		if len(m.viewerMessages) == 0 ||
 			m.viewerCursor < 0 ||

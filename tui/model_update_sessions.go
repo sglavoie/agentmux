@@ -37,6 +37,19 @@ func (m Model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
 	return m, fetchCmd(m.client, m.cfg, m.sortMode)
 }
 
+// handleCopyDone processes a copyDoneMsg without refreshing live sessions.
+// Copy errors are rendered as toasts so they remain visible inside full
+// transcript and plan viewer layouts.
+func (m Model) handleCopyDone(msg copyDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.err == nil {
+		return m, nil
+	}
+	if c := m.pushToast(Toast{Severity: toastError, Text: "copy: " + msg.err.Error()}); c != nil {
+		return m, c
+	}
+	return m, nil
+}
+
 // handleResortDone processes a resortDoneMsg: records any error, pushes a
 // success or failure toast, and triggers a session refresh.
 func (m Model) handleResortDone(msg resortDoneMsg) (tea.Model, tea.Cmd) {
