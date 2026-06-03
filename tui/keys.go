@@ -2,41 +2,41 @@ package tui
 
 // Key string constants used in KeyPressMsg switch cases.
 const (
-	keyUp            = "up"
-	keyDown          = "down"
-	keyJ             = "j"
-	keyK             = "k"
-	keyG             = "g"
-	keyGG            = "G"
-	keySlash         = "/"
-	keyF             = "f"
-	keyA             = "a"
-	keyO             = "o"
-	keyL             = "l"
-	keyY             = "y"
-	keyN             = "n"
-	keySpace         = "space"
-	keyEnter         = "enter"
-	keyEsc           = "esc"
-	keyQ             = "q"
-	keyCtrlC         = "ctrl+c"
-	keyE             = "e"
-	keyClose         = "X" // closes the highlighted session
-	keyR             = "r"
-	keyU             = "u" // undo the most recent destructive action
-	keyBackspace     = "backspace"
-	keyQuestion      = "?" // opens ModeHelp overlay
-	keyC             = "c" // opens ModeConfigPicker for profile override
+	keyUp              = "up"
+	keyDown            = "down"
+	keyJ               = "j"
+	keyK               = "k"
+	keyG               = "g"
+	keyGG              = "G"
+	keySlash           = "/"
+	keyF               = "f"
+	keyA               = "a"
+	keyO               = "o"
+	keyL               = "l"
+	keyY               = "y"
+	keyN               = "n"
+	keySpace           = "space"
+	keyEnter           = "enter"
+	keyEsc             = "esc"
+	keyQ               = "q"
+	keyCtrlC           = "ctrl+c"
+	keyE               = "e"
+	keyClose           = "X" // closes the highlighted session
+	keyR               = "r"
+	keyU               = "u" // undo the most recent destructive action
+	keyBackspace       = "backspace"
+	keyQuestion        = "?" // opens ModeHelp overlay
+	keyC               = "c" // opens ModeConfigPicker for profile override
 	keyDashboardLaunch = "C" // opens ModeConfigPicker for dashboard launch
-	keyClearStatus   = "x" // clears the highlighted session's icon
-	keyOpenEditor    = "O" // opens the project directory in the configured editor
-	keyResort        = "R" // re-sort tabs in Kitty to repair drifted physical order
-	keyLock          = "L" // toggle the session lock (blocks close/restart/override)
-	keyM             = "m" // toggle session mute (suppresses notifications)
-	keyD             = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
-	keySessionSearch = "S" // opens ModeSessionSearch (past harness transcripts)
-	keyPlanSearch    = "P" // opens ModePlanSearch (past agent plans)
-	keySortPlan      = "s" // cycles the ModePlanSearch result-sort mode
+	keyClearStatus     = "x" // clears the highlighted session's icon
+	keyOpenEditor      = "O" // opens the project directory in the configured editor
+	keyResort          = "R" // re-sort tabs in Kitty to repair drifted physical order
+	keyLock            = "L" // toggle the session lock (blocks close/restart/override)
+	keyM               = "m" // toggle session mute (suppresses notifications)
+	keyD               = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
+	keySessionSearch   = "S" // opens ModeSessionSearch (past harness transcripts)
+	keyPlanSearch      = "P" // opens ModePlanSearch (past agent plans)
+	keySortPlan        = "s" // cycles the ModePlanSearch result-sort mode
 
 	keyToggleTimeline   = "t" // toggle flat list ↔ timeline in ModeDetail
 	keyToggleTimestamps = "T" // toggle timestamp column in timeline (ModeDetail)
@@ -57,10 +57,12 @@ const (
 	// In ModeList: open detail pane directly in timeline mode.
 	keyOpenTimeline = "T"
 
-	keyPgUp   = "pgup"   // scroll detail pane up by one page
-	keyPgDown = "pgdown" // scroll detail pane down by one page
-	keyCtrlD  = "ctrl+d" // list: cursor down by half a page
-	keyCtrlU  = "ctrl+u" // list: cursor up by half a page
+	keyPgUp   = "pgup"   // move up by one page in scrollable views
+	keyPgDown = "pgdown" // move down by one page in scrollable views
+	keyCtrlD  = "ctrl+d" // move down by half a page in scrollable views
+	keyCtrlU  = "ctrl+u" // move up by half a page in scrollable views
+	keyCtrlF  = "ctrl+f" // move down by one page in scrollable views
+	keyCtrlB  = "ctrl+b" // move up by one page in scrollable views
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
 

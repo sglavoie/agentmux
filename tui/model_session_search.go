@@ -180,19 +180,23 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		}
 		scrollSessionSearchToCursor(&m)
 		return m, nil
-	case keyPgDown:
-		step := sessionSearchVisibleHeight(m) - 1
-		if step < 1 {
-			step = 1
-		}
+	case keyCtrlD:
+		step := halfPageStep(sessionSearchVisibleHeight(m))
 		m.sessionCursor = clamp(m.sessionCursor+step, 0, len(m.sessionResults)-1)
 		scrollSessionSearchToCursor(&m)
 		return m, nil
-	case keyPgUp:
-		step := sessionSearchVisibleHeight(m) - 1
-		if step < 1 {
-			step = 1
-		}
+	case keyCtrlU:
+		step := halfPageStep(sessionSearchVisibleHeight(m))
+		m.sessionCursor = clamp(m.sessionCursor-step, 0, len(m.sessionResults)-1)
+		scrollSessionSearchToCursor(&m)
+		return m, nil
+	case keyPgDown, keyCtrlF:
+		step := fullPageStep(sessionSearchVisibleHeight(m))
+		m.sessionCursor = clamp(m.sessionCursor+step, 0, len(m.sessionResults)-1)
+		scrollSessionSearchToCursor(&m)
+		return m, nil
+	case keyPgUp, keyCtrlB:
+		step := fullPageStep(sessionSearchVisibleHeight(m))
 		m.sessionCursor = clamp(m.sessionCursor-step, 0, len(m.sessionResults)-1)
 		scrollSessionSearchToCursor(&m)
 		return m, nil

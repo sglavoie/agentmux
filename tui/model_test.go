@@ -96,6 +96,14 @@ func keyPress(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyPgUp})
 	case "pgdown":
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyPgDown})
+	case "ctrl+d":
+		return tea.KeyPressMsg(tea.Key{Code: 'd', Mod: tea.ModCtrl})
+	case "ctrl+u":
+		return tea.KeyPressMsg(tea.Key{Code: 'u', Mod: tea.ModCtrl})
+	case "ctrl+f":
+		return tea.KeyPressMsg(tea.Key{Code: 'f', Mod: tea.ModCtrl})
+	case "ctrl+b":
+		return tea.KeyPressMsg(tea.Key{Code: 'b', Mod: tea.ModCtrl})
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		return tea.KeyPressMsg(tea.Key{Code: rune(key[0]), Text: key})
 	default:

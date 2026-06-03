@@ -48,16 +48,16 @@ func renderFooter(m Model) string {
 		}
 	case ModeSessionSearch:
 		line1 = styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back")
-		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
+		line2 = styleFooter.Render("  j/k: up/down  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bottom")
 	case ModeSessionView:
 		line1 = styleFooter.Render("  j/k move · n/N match · y copy · enter view message · esc back")
-		line2 = styleFooter.Render("  g/G top/bot  pgup/pgdn: page")
+		line2 = styleFooter.Render("  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bot")
 	case ModePlanSearch:
-		line1 = styleFooter.Render("  / filter · s sort · enter view · o open in editor · esc back")
-		line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom")
+		line1 = styleFooter.Render("  / filter · enter view · o editor · s sort · esc back")
+		line2 = styleFooter.Render("  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page")
 	case ModePlanView:
-		line1 = styleFooter.Render("  j/k scroll · n/N match · y copy · o editor · / search · esc back")
-		line2 = styleFooter.Render("  g/G top/bot  pgup/pgdn: page")
+		line1 = styleFooter.Render("  / search · n/N match · y copy · o editor · esc back")
+		line2 = styleFooter.Render("  j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page")
 	case ModeMessageDetail:
 		line1 = styleFooter.Render("  j/k scroll · g/G top/bottom · esc/q/enter close")
 		line2 = ""

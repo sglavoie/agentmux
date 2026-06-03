@@ -148,19 +148,23 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 		scrollPlanSearchToCursor(&m)
 		return m, nil
-	case keyPgDown:
-		step := planSearchVisibleHeight(m) - 1
-		if step < 1 {
-			step = 1
-		}
+	case keyCtrlD:
+		step := halfPageStep(planSearchVisibleHeight(m))
 		m.planCursor = clamp(m.planCursor+step, 0, len(m.planResults)-1)
 		scrollPlanSearchToCursor(&m)
 		return m, nil
-	case keyPgUp:
-		step := planSearchVisibleHeight(m) - 1
-		if step < 1 {
-			step = 1
-		}
+	case keyCtrlU:
+		step := halfPageStep(planSearchVisibleHeight(m))
+		m.planCursor = clamp(m.planCursor-step, 0, len(m.planResults)-1)
+		scrollPlanSearchToCursor(&m)
+		return m, nil
+	case keyPgDown, keyCtrlF:
+		step := fullPageStep(planSearchVisibleHeight(m))
+		m.planCursor = clamp(m.planCursor+step, 0, len(m.planResults)-1)
+		scrollPlanSearchToCursor(&m)
+		return m, nil
+	case keyPgUp, keyCtrlB:
+		step := fullPageStep(planSearchVisibleHeight(m))
 		m.planCursor = clamp(m.planCursor-step, 0, len(m.planResults)-1)
 		scrollPlanSearchToCursor(&m)
 		return m, nil

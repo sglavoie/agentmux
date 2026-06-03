@@ -87,9 +87,13 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.planViewerCursor--
 		}
 		scrollPlanViewerToCursor(&m)
-	case keyPgDown:
+	case keyCtrlD:
+		halfPagePlanViewerRows(&m, visible, 1)
+	case keyCtrlU:
+		halfPagePlanViewerRows(&m, visible, -1)
+	case keyPgDown, keyCtrlF:
 		pagePlanViewerRows(&m, visible, 1)
-	case keyPgUp:
+	case keyPgUp, keyCtrlB:
 		pagePlanViewerRows(&m, visible, -1)
 	case keyG:
 		m.planViewerCursor = 0
@@ -140,6 +144,14 @@ func (m *Model) jumpToNextPlanMatch(step int) {
 // pagePlanViewerRows shifts the window by visual wrapped rows, then syncs the
 // logical cursor to the source line at the new top row.
 func pagePlanViewerRows(m *Model, visible, direction int) {
+	movePlanViewerRows(m, visible, direction, false)
+}
+
+func halfPagePlanViewerRows(m *Model, visible, direction int) {
+	movePlanViewerRows(m, visible, direction, true)
+}
+
+func movePlanViewerRows(m *Model, visible, direction int, half bool) {
 	rows := planViewerRows(*m)
 	total := len(rows)
 	if visible <= 0 || total == 0 {
@@ -149,6 +161,9 @@ func pagePlanViewerRows(m *Model, visible, direction int) {
 	}
 	clampPlanViewerScroll(m)
 	step := planViewerPageStep(total, m.planViewerScroll, visible)
+	if half {
+		step = halfPageStep(step)
+	}
 	m.planViewerScroll += direction * step
 	clampPlanViewerScroll(m)
 	if m.planViewerScroll < 0 || m.planViewerScroll >= total {

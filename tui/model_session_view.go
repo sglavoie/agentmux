@@ -85,13 +85,27 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.viewerCursor--
 		}
 		scrollViewerToCursor(&m)
-	case keyPgDown:
+	case keyCtrlD:
+		step := halfPageStep(visible)
+		m.viewerCursor += step
+		if m.viewerCursor > lastIdx {
+			m.viewerCursor = lastIdx
+		}
+		scrollViewerToCursor(&m)
+	case keyCtrlU:
+		step := halfPageStep(visible)
+		m.viewerCursor -= step
+		if m.viewerCursor < 0 {
+			m.viewerCursor = 0
+		}
+		scrollViewerToCursor(&m)
+	case keyPgDown, keyCtrlF:
 		m.viewerCursor += visible
 		if m.viewerCursor > lastIdx {
 			m.viewerCursor = lastIdx
 		}
 		scrollViewerToCursor(&m)
-	case keyPgUp:
+	case keyPgUp, keyCtrlB:
 		m.viewerCursor -= visible
 		if m.viewerCursor < 0 {
 			m.viewerCursor = 0

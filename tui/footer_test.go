@@ -158,6 +158,39 @@ func TestViewerFootersAdvertiseCopy(t *testing.T) {
 	}
 }
 
+func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
+	planSearch := Model{
+		mode:   ModePlanSearch,
+		width:  100,
+		height: 20,
+	}
+	planView := Model{
+		mode:             ModePlanView,
+		width:            100,
+		height:           20,
+		planViewerLines:  []string{"first", "second"},
+		planViewerCursor: 0,
+	}
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{name: "plan search", m: planSearch},
+		{name: "plan viewer", m: planView},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := stripAnsi(tc.m.render())
+			for _, want := range []string{"ctrl+d/u half", "ctrl+f/b page"} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("rendered plan view missing %q:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
 // TestListFooterLine1WrapsNarrow asserts that line 1 emits at least one
 // newline and every line fits within the configured terminal width when the
 // width is too narrow for the full palette.

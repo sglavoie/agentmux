@@ -23,6 +23,8 @@ var helpSections = []struct {
 		"  k / ↑     move up",
 		"  ctrl+d    half page down",
 		"  ctrl+u    half page up",
+		"  ctrl+f    page down",
+		"  ctrl+b    page up",
 		"  pgdn      page down",
 		"  pgup      page up",
 		"  g         go to top",
