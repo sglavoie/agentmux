@@ -54,10 +54,9 @@ func renderPicker(m Model) string {
 	if m.height > 0 {
 		listHeight = pickerVisibleHeight(m)
 	}
-	listText := renderPickerList(m, listHeight)
 
 	if !m.pickerPreviewEnabled {
-		return listText
+		return renderPickerList(m, listHeight)
 	}
 
 	cfg := m.cfg.Defaults.Preview
@@ -65,10 +64,10 @@ func renderPicker(m Model) string {
 	// so the available content height is height - 3.
 	paneHeight := m.height - 3
 	if paneHeight < 4 || m.width < cfg.MinCols {
-		return listText
+		return renderPickerList(m, listHeight)
 	}
 	if len(m.pickerFilteredIdx) == 0 {
-		return listText
+		return renderPickerList(m, listHeight)
 	}
 
 	previewWidth := int(float64(m.width) * cfg.Ratio)
@@ -82,10 +81,12 @@ func renderPicker(m Model) string {
 
 	origIdx := m.pickerFilteredIdx[m.pickerCursor]
 
+	listModel := m
+	listModel.width = listWidth
+	listText := renderPickerList(listModel, listHeight)
 	previewView := renderPickerPreview(m, origIdx, previewWidth, paneHeight)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)
 	divider = strings.TrimRight(divider, "\n")
-	_ = listWidth // picker rows are short; no per-row truncation needed
 	return lipgloss.JoinHorizontal(lipgloss.Top, listText, divider, previewView) + "\n"
 }
 
@@ -105,14 +106,14 @@ func renderPickerList(m Model, height int) string {
 	if selectedCount > 0 {
 		header += fmt.Sprintf("  [%d selected]", selectedCount)
 	}
-	sb.WriteString(styleHeader.Render(header) + "\n")
+	sb.WriteString(renderPickerHeader(m, header))
 	switch {
 	case m.pickerSearchMode:
 		sb.WriteString(styleSearch.Render("/") + m.pickerFilter + "█" + "\n\n")
 	case m.pickerFilter != "":
 		sb.WriteString(styleSearch.Render("/") + m.pickerFilter + "\n\n")
 	default:
-		sb.WriteString(styleDim.Render("press / to filter") + "\n\n")
+		sb.WriteByte('\n')
 	}
 
 	if len(m.pickerSessions) == 0 {
@@ -249,6 +250,22 @@ func renderPickerList(m Model, height int) string {
 	}
 
 	return sb.String()
+}
+
+func renderPickerHeader(m Model, header string) string {
+	left := styleHeader.Render(header)
+	right := ""
+	if !m.pickerSearchMode && m.pickerFilter == "" {
+		right = styleDim.Render("press / to filter")
+	}
+	if right == "" || m.width <= 0 {
+		return left + "\n"
+	}
+	pad := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	if pad < 1 {
+		return left + "\n"
+	}
+	return left + strings.Repeat(" ", pad) + right + "\n"
 }
 
 // renderPickerPreview renders the right-hand pane for the picker: a labeled

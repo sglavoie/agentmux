@@ -209,14 +209,19 @@ func TestPickerDSLAccountFilter(t *testing.T) {
 
 func TestPickerStickyInputRendered(t *testing.T) {
 	m := pickerModel(t)
+	m.width = 80
 
-	// Initial state: nav mode, empty filter → hint text, no cursor.
+	// Initial state: nav mode, empty filter → header hint, no cursor.
 	out := stripAnsi(renderPicker(m))
 	if strings.Contains(out, "/█") {
 		t.Errorf("expected no cursor block in initial render (not yet in search mode), got:\n%s", out)
 	}
-	if !strings.Contains(out, "press / to filter") {
-		t.Errorf("expected hint 'press / to filter' in initial render, got:\n%s", out)
+	firstLine := strings.Split(out, "\n")[0]
+	if !strings.HasSuffix(firstLine, "press / to filter") {
+		t.Errorf("expected header hint 'press / to filter' in initial render, got header=%q\n%s", firstLine, out)
+	}
+	if len(firstLine) != m.width {
+		t.Errorf("expected header hint to be right-aligned to width %d, got width %d header=%q", m.width, len(firstLine), firstLine)
 	}
 
 	// After pressing `/`: search mode active → prompt with cursor.
@@ -267,12 +272,18 @@ func TestPickerNavModeIgnoresPrintableChars(t *testing.T) {
 	}
 }
 
-func TestPickerFooterShowsFilterHint(t *testing.T) {
+func TestPickerFooterShowsFilterControls(t *testing.T) {
 	m := pickerModel(t)
 	m.width, m.height = 120, 40
-	footer := renderFooter(m)
-	if !strings.Contains(footer, "press / to filter") {
-		t.Errorf("expected picker footer to advertise explicit filter entry, got:\n%s", footer)
+	footer := stripAnsi(renderFooter(m))
+	if strings.Contains(footer, "press / to filter") {
+		t.Errorf("picker footer should not duplicate the header filter hint, got:\n%s", footer)
+	}
+	if strings.Contains(footer, "/: filter") {
+		t.Errorf("picker footer should not duplicate the header filter key, got:\n%s", footer)
+	}
+	if !strings.Contains(footer, "DSL: @profile, word") {
+		t.Errorf("expected picker footer to retain DSL hint, got:\n%s", footer)
 	}
 	if !strings.Contains(footer, "esc: clear/exit") {
 		t.Errorf("expected picker footer to advertise esc behavior, got:\n%s", footer)

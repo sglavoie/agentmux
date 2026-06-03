@@ -23,7 +23,7 @@ func renderFooter(m Model) string {
 	case ModePicker:
 		lines = nonEmptyFooterLines(
 			styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  O: open in editor  p: preview  esc: clear/exit"),
-			styleFooter.Render("  press / to filter (DSL: @profile, word)  j/k: up/down"),
+			styleFooter.Render("  DSL: @profile, word  j/k: up/down"),
 		)
 	case ModeConfigPicker:
 		lines = nonEmptyFooterLines(

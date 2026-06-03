@@ -1,16 +1,22 @@
 package tui
 
-// pickerInternalChrome is the number of vertical lines the picker emits
-// before the first row inside renderPickerList: header (1) + the sticky
-// filter / "press / to filter" prompt followed by a blank line (2) = 3.
-const pickerInternalChrome = 3
-
 // pickerOuterChrome is the number of vertical lines outside the picker
 // block in ModePicker: the trailing newline written by render() (1) plus
 // previewFooterLines for ModePicker which is fixed at 2 = 3. Preview state
 // does not affect this — the picker pane (with or without right-side
 // preview) always occupies m.height - pickerOuterChrome lines.
 const pickerOuterChrome = 3
+
+// pickerInternalChrome is the number of vertical lines the picker emits
+// before the first row inside renderPickerList. In the empty-filter nav state
+// the filter hint lives in the header, so the chrome is header + blank spacer.
+// Once search input is visible, the prompt gets its own line before that blank.
+func pickerInternalChrome(m Model) int {
+	if m.pickerSearchMode || m.pickerFilter != "" {
+		return 3
+	}
+	return 2
+}
 
 // pickerVisibleHeight returns the row-line budget for the scrollable picker
 // list at the model's current dimensions. The result is floored at
@@ -22,7 +28,7 @@ func pickerVisibleHeight(m Model) int {
 	if m.height == 0 {
 		return len(m.pickerFilteredIdx)
 	}
-	h := m.height - pickerOuterChrome - pickerInternalChrome
+	h := m.height - pickerOuterChrome - pickerInternalChrome(m)
 	if h < listMinVisible {
 		h = listMinVisible
 	}
