@@ -110,8 +110,8 @@ Key flows:
 - `p`: toggle the preview pane
 - `d`: show the per-session hook event log (scrollable detail pane)
 - `S`: search past session transcripts across every configured profile
-- `P`: search saved agent plans; in the plan viewer, `y` copies the selected
-  raw line
+- `P`: search saved agent plans; the plan viewer wraps long lines, and `y`
+  copies the selected raw line
 - `?`: show the full keymap
 
 The dashboard keeps the profile badge and harness metadata separate from the

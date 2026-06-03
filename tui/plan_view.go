@@ -3,12 +3,10 @@ package tui
 import (
 	"fmt"
 	"strings"
-
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 // renderPlanView renders the full ModePlanView layout: a one-line header
-// summarising the plan and a scrollable list of file content lines below.
+// summarising the plan and a scrollable list of wrapped visual rows below.
 func renderPlanView(m Model) string {
 	var sb strings.Builder
 
@@ -40,13 +38,15 @@ func renderPlanView(m Model) string {
 	return sb.String()
 }
 
-// renderPlanViewBody renders the windowed line list. Mirrors
-// renderSessionViewBody's windowing contract: at most height rows, with
-// ▲ when offset > 0 and ▼ when more rows remain past the window.
+// renderPlanViewBody renders wrapped visual rows derived from the logical
+// source lines in planViewerLines. Mirrors renderSessionViewBody's windowing
+// contract: at most height rows, with ▲ when offset > 0 and ▼ when more rows
+// remain past the window.
 func renderPlanViewBody(m Model, height int) string {
 	var sb strings.Builder
 
-	total := len(m.planViewerLines)
+	rows := planViewerRows(m)
+	total := len(rows)
 	if total == 0 {
 		if m.planViewerLoading {
 			sb.WriteString(styleDim.Render("  (loading…)"))
@@ -57,71 +57,24 @@ func renderPlanViewBody(m Model, height int) string {
 		return sb.String()
 	}
 
-	startIdx := 0
-	endIdx := total
-	showTop := false
-	showBottom := false
+	window := planViewerRowWindowFor(total, m.planViewerScroll, height)
 
-	if height > 0 {
-		offset := m.planViewerScroll
-		if offset < 0 {
-			offset = 0
-		}
-		if offset > total {
-			offset = total
-		}
-		startIdx = offset
-
-		budget := height
-		if startIdx > 0 {
-			showTop = true
-			budget--
-		}
-		if budget < 0 {
-			budget = 0
-		}
-		endIdx = startIdx + budget
-		if endIdx > total {
-			endIdx = total
-		}
-		if endIdx < total {
-			showBottom = true
-			if budget > 0 {
-				budget--
-			}
-			endIdx = startIdx + budget
-			if endIdx > total {
-				endIdx = total
-			}
-		}
-	}
-
-	if showTop {
+	if window.showTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
 
-	maxWidth := m.width
-	if maxWidth <= 0 {
-		maxWidth = 120
-	}
-
-	isMatchLine := make(map[int]bool, len(m.planViewerMatchLines))
-	for _, idx := range m.planViewerMatchLines {
-		isMatchLine[idx] = true
-	}
 	cursorLine := m.planViewerCursor
 
-	for i := startIdx; i < endIdx; i++ {
-		raw := m.planViewerLines[i]
-		isSeparator := strings.HasPrefix(raw, "--- ") && strings.HasSuffix(raw, " ---")
-		line := runewidth.Truncate(raw, maxRunes(maxWidth), "…")
+	for i := window.start; i < window.end; i++ {
+		row := rows[i]
+		line := row.text
 		switch {
-		case i == cursorLine:
+		case row.sourceLine == cursorLine:
 			sb.WriteString(styleSelected.Render(line))
-		case isMatchLine[i]:
+		case row.isMatch(m.planViewerMatchLines):
 			sb.WriteString(styleSearch.Render(line))
-		case isSeparator:
+		case row.isSeparator(m.planViewerLines):
 			sb.WriteString(styleDim.Render(line))
 		default:
 			sb.WriteString(line)
@@ -129,7 +82,7 @@ func renderPlanViewBody(m Model, height int) string {
 		sb.WriteByte('\n')
 	}
 
-	if showBottom {
+	if window.showBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}

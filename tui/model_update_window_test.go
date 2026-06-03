@@ -72,3 +72,31 @@ func TestWindowSizeMsg_ResizeKeepsPlanSearchCursorVisible(t *testing.T) {
 			cursorLine, m.planCursor, m.planOffset, out)
 	}
 }
+
+func TestWindowSizeMsg_ResizeClampsPlanViewerVisualScroll(t *testing.T) {
+	m := Model{
+		mode:   ModePlanView,
+		width:  8,
+		height: 8,
+		cfg:    &config.Config{},
+		planViewerLines: []string{
+			"abcdefghijklmnopqrstuvwx",
+			"cursor line",
+		},
+		planViewerCursor: 1,
+		planViewerScroll: 99,
+	}
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
+	m = updated.(Model)
+
+	maxScroll := planViewerMaxScrollOffset(len(planViewerRows(m)), planViewerVisibleHeight(m))
+	if m.planViewerScroll > maxScroll {
+		t.Fatalf("plan viewer scroll = %d, want <= wrapped-row max %d", m.planViewerScroll, maxScroll)
+	}
+	out := stripAnsi(renderPlanViewBody(m, planViewerVisibleHeight(m)))
+	if !strings.Contains(out, "cursor line") {
+		t.Fatalf("plan viewer cursor row not rendered after resize (cursor=%d scroll=%d)\n%s",
+			m.planViewerCursor, m.planViewerScroll, out)
+	}
+}

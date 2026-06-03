@@ -54,10 +54,11 @@ func (m *Model) exitPlanView() {
 	m.planViewerLoadErr = nil
 }
 
-// handlePlanViewKey processes keys while ModePlanView is active. Mirrors
-// handleSessionViewKey's j/k/g/G/pgup/pgdn/esc/q/n/N and adds `o` (open
-// the plan dir in $EDITOR) and `/` (re-enter ModePlanSearch keeping the
-// current query).
+// handlePlanViewKey processes keys while ModePlanView is active. j/k/g/G
+// and n/N move between logical source lines, pgup/pgdn page through visual
+// wrapped rows, and `y` copies the selected raw source line. Also supports
+// `o` (open the plan dir in $EDITOR) and `/` (re-enter ModePlanSearch
+// keeping the current query).
 func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	total := len(m.planViewerLines)
 	visible := planViewerVisibleHeight(m)
@@ -87,17 +88,9 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		scrollPlanViewerToCursor(&m)
 	case keyPgDown:
-		m.planViewerCursor += visible
-		if m.planViewerCursor > lastIdx {
-			m.planViewerCursor = lastIdx
-		}
-		scrollPlanViewerToCursor(&m)
+		pagePlanViewerRows(&m, visible, 1)
 	case keyPgUp:
-		m.planViewerCursor -= visible
-		if m.planViewerCursor < 0 {
-			m.planViewerCursor = 0
-		}
-		scrollPlanViewerToCursor(&m)
+		pagePlanViewerRows(&m, visible, -1)
 	case keyG:
 		m.planViewerCursor = 0
 		scrollPlanViewerToCursor(&m)
@@ -133,7 +126,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // jumpToNextPlanMatch advances planViewerMatchIdx by step (+1 for `n`,
 // -1 for `N`) with wrap-around, then moves planViewerCursor to the
-// resulting match line. Mirrors jumpToNextMatch.
+// resulting logical source line. Mirrors jumpToNextMatch.
 func (m *Model) jumpToNextPlanMatch(step int) {
 	n := len(m.planViewerMatchLines)
 	if n == 0 {
@@ -142,6 +135,29 @@ func (m *Model) jumpToNextPlanMatch(step int) {
 	m.planViewerMatchIdx = (m.planViewerMatchIdx + step + n) % n
 	m.planViewerCursor = m.planViewerMatchLines[m.planViewerMatchIdx]
 	scrollPlanViewerToCursor(m)
+}
+
+// pagePlanViewerRows shifts the window by visual wrapped rows, then syncs the
+// logical cursor to the source line at the new top row.
+func pagePlanViewerRows(m *Model, visible, direction int) {
+	rows := planViewerRows(*m)
+	total := len(rows)
+	if visible <= 0 || total == 0 {
+		m.planViewerScroll = 0
+		m.planViewerCursor = 0
+		return
+	}
+	clampPlanViewerScroll(m)
+	step := planViewerPageStep(total, m.planViewerScroll, visible)
+	m.planViewerScroll += direction * step
+	clampPlanViewerScroll(m)
+	if m.planViewerScroll < 0 || m.planViewerScroll >= total {
+		return
+	}
+	sourceLine := rows[m.planViewerScroll].sourceLine
+	if sourceLine >= 0 && sourceLine < len(m.planViewerLines) {
+		m.planViewerCursor = sourceLine
+	}
 }
 
 // readPlanFilesCmd reads every file in meta.Files (relative paths under
@@ -201,58 +217,61 @@ func planViewerVisibleHeight(m Model) int {
 	return avail
 }
 
-// scrollPlanViewerToCursor advances m.planViewerScroll the minimum
-// amount needed to keep m.planViewerCursor visible inside the windowed
-// body. Mirrors scrollViewerToCursor: the body reserves one row for ▲
-// when scroll > 0 and one row for ▼ when more rows remain past the
-// window, so the budget must subtract them too.
+// scrollPlanViewerToCursor advances m.planViewerScroll, a visual wrapped-row
+// offset, the minimum amount needed to keep m.planViewerCursor, a logical
+// source-line index, visible inside the windowed body. Mirrors
+// scrollViewerToCursor: the body reserves one row for ▲ when scroll > 0 and
+// one row for ▼ when more rows remain past the window, so the budget must
+// subtract them too.
 func scrollPlanViewerToCursor(m *Model) {
-	total := len(m.planViewerLines)
+	totalLines := len(m.planViewerLines)
+	rows := planViewerRows(*m)
+	totalRows := len(rows)
 	height := planViewerVisibleHeight(*m)
-	if height <= 0 || total == 0 {
+	if height <= 0 || totalLines == 0 || totalRows == 0 {
 		m.planViewerScroll = 0
+		m.planViewerCursor = 0
 		return
 	}
 	if m.planViewerCursor < 0 {
 		m.planViewerCursor = 0
 	}
-	if m.planViewerCursor >= total {
-		m.planViewerCursor = total - 1
+	if m.planViewerCursor >= totalLines {
+		m.planViewerCursor = totalLines - 1
 	}
-	if m.planViewerCursor < m.planViewerScroll {
-		m.planViewerScroll = m.planViewerCursor
+	cursorRow := planViewerFirstRowForLine(rows, m.planViewerCursor)
+	if cursorRow < 0 {
+		cursorRow = 0
 	}
-	for m.planViewerScroll < m.planViewerCursor {
+	if cursorRow < m.planViewerScroll {
+		m.planViewerScroll = cursorRow
+	}
+	for m.planViewerScroll < cursorRow {
 		budget := height
 		if m.planViewerScroll > 0 {
 			budget--
 		}
-		if m.planViewerCursor < total-1 {
+		if cursorRow < totalRows-1 {
 			budget--
 		}
 		if budget < 1 {
 			budget = 1
 		}
-		if m.planViewerCursor-m.planViewerScroll+1 <= budget {
+		if cursorRow-m.planViewerScroll+1 <= budget {
 			break
 		}
 		m.planViewerScroll++
 	}
-	if m.planViewerScroll < 0 {
-		m.planViewerScroll = 0
-	}
+	clampPlanViewerScroll(m)
 }
 
-// clampPlanViewerScroll pins m.planViewerScroll to [0, max(0, total -
-// visible)] at the model's current dimensions. Protects against a stale
-// offset surviving a resize that shrinks the viewport.
+// clampPlanViewerScroll pins m.planViewerScroll to a valid wrapped-row
+// offset at the model's current dimensions. Protects against a stale offset
+// surviving a resize that changes the wrapped row count.
 func clampPlanViewerScroll(m *Model) {
-	total := len(m.planViewerLines)
+	total := len(planViewerRows(*m))
 	visible := planViewerVisibleHeight(*m)
-	maxOffset := total - visible
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
+	maxOffset := planViewerMaxScrollOffset(total, visible)
 	if m.planViewerScroll > maxOffset {
 		m.planViewerScroll = maxOffset
 	}

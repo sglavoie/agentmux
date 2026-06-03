@@ -251,14 +251,16 @@ type Model struct {
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
 	// user opened with Enter; nil when the viewer is closed. planViewerLines
 	// is the flattened concatenation of every file in viewerPlan.Files with
-	// "--- <rel> ---" separator rows between them. The viewer splits
-	// selection from windowing the same way the session viewer does:
-	// planViewerCursor is the focused line; planViewerScroll is the
-	// top-of-window index. planViewerMatchLines holds the line indices
-	// containing planQuery (case-insensitive substring); planViewerMatchIdx
-	// is the cursor into that list for n/N navigation. planViewerLoadSeq is
-	// monotonic so a stale async load (user already left the viewer or
-	// opened a different plan) is dropped in Update.
+	// "--- <rel> ---" separator rows between them. planViewerCursor is a
+	// logical source-line index into planViewerLines; planViewerScroll is a
+	// visual wrapped-row offset derived from those logical lines. The viewer
+	// keeps selection on source lines so actions like `y` copy the raw line,
+	// while windowing and page keys operate on wrapped terminal rows.
+	// planViewerMatchLines holds the logical line indices containing planQuery
+	// (case-insensitive substring); planViewerMatchIdx is the cursor into that
+	// list for n/N navigation. planViewerLoadSeq is monotonic so a stale async
+	// load (user already left the viewer or opened a different plan) is
+	// dropped in Update.
 	viewerPlan           *plans.PlanMeta
 	planViewerLines      []string
 	planViewerCursor     int
