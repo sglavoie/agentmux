@@ -42,15 +42,14 @@ func TestRenderChipPickerHeaderByKind(t *testing.T) {
 	}
 }
 
-func TestRenderChipPickerProjectHeaderShowsFilterHint(t *testing.T) {
+func TestRenderChipPickerHeaderShowsFilterHint(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		kind chipPickerKind
-		want bool
 	}{
-		{name: "harness", kind: chipPickerHarness, want: false},
-		{name: "profile", kind: chipPickerProfile, want: false},
-		{name: "project", kind: chipPickerProject, want: true},
+		{name: "harness", kind: chipPickerHarness},
+		{name: "profile", kind: chipPickerProfile},
+		{name: "project", kind: chipPickerProject},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := chipPickerFixture(tc.kind, []string{""}, 0)
@@ -60,8 +59,8 @@ func TestRenderChipPickerProjectHeaderShowsFilterHint(t *testing.T) {
 				t.Fatalf("expected header line, got empty output")
 			}
 			got := strings.Contains(lines[0], "/ to filter")
-			if got != tc.want {
-				t.Fatalf("header filter hint present=%v, want %v; header=%q", got, tc.want, lines[0])
+			if !got {
+				t.Fatalf("header filter hint missing; header=%q", lines[0])
 			}
 		})
 	}

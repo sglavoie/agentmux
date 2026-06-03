@@ -41,11 +41,7 @@ func renderFooter(m Model) string {
 		line2 = ""
 	case ModeChipPicker:
 		line1 = styleFooter.Render("  enter: select  esc/q: cancel")
-		if m.chipPickerKind == chipPickerProject {
-			line2 = styleFooter.Render("  /: search  j/k: up/down  g/G: top/bottom  pgup/pgdn: page")
-		} else {
-			line2 = styleFooter.Render("  j/k: up/down  g/G: top/bottom  pgup/pgdn: page")
-		}
+		line2 = styleFooter.Render("  /: search  j/k: up/down  g/G: top/bottom  pgup/pgdn: page")
 	case ModeSessionSearch:
 		line1 = styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back")
 		line2 = styleFooter.Render("  j/k: up/down  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bottom")

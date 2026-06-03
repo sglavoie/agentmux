@@ -27,8 +27,8 @@ const (
 func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
 	m.mode = ModeChipPicker
 	m.chipPickerKind = kind
-	m.chipPickerProjectQuery = ""
-	m.chipPickerProjectSearchMode = false
+	m.chipPickerQuery = ""
+	m.chipPickerSearchMode = false
 
 	var opts []string
 	var current string
@@ -47,7 +47,7 @@ func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
 	options = append(options, "")
 	options = append(options, opts...)
 	m.chipPickerAllOptions = options
-	m.chipPickerOptions = filterProjectChipPickerOptions(m.chipPickerAllOptions, m.chipPickerProjectQuery)
+	m.chipPickerOptions = filterChipPickerOptions(m.chipPickerAllOptions, m.chipPickerQuery)
 
 	cursor := 0
 	if current != "" {
@@ -68,29 +68,29 @@ func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
 // without changing the filter; enter commits the highlighted row and
 // dispatches a re-search. Navigation mirrors the other overlays.
 func (m Model) handleChipPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.chipPickerKind == chipPickerProject && m.chipPickerProjectSearchMode {
-		return m.handleProjectChipPickerSearchKey(msg)
+	if m.chipPickerSearchMode {
+		return m.handleChipPickerSearchKey(msg)
 	}
 	return m.handleChipPickerNavKey(msg)
 }
 
-func (m Model) handleProjectChipPickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleChipPickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyEsc, keyEnter:
-		m.chipPickerProjectSearchMode = false
+		m.chipPickerSearchMode = false
 		return m, nil
 	case keyBackspace:
-		if r := []rune(m.chipPickerProjectQuery); len(r) > 0 {
-			m.chipPickerProjectQuery = string(r[:len(r)-1])
-			applyProjectChipPickerQuery(&m)
+		if r := []rune(m.chipPickerQuery); len(r) > 0 {
+			m.chipPickerQuery = string(r[:len(r)-1])
+			applyChipPickerQuery(&m)
 		}
 		return m, nil
 	default:
 		if t := msg.Key().Text; t != "" {
-			m.chipPickerProjectQuery += t
-			applyProjectChipPickerQuery(&m)
+			m.chipPickerQuery += t
+			applyChipPickerQuery(&m)
 		}
 		return m, nil
 	}
@@ -101,9 +101,7 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	case keyCtrlC:
 		return m, tea.Quit
 	case keySlash:
-		if m.chipPickerKind == chipPickerProject {
-			m.chipPickerProjectSearchMode = true
-		}
+		m.chipPickerSearchMode = true
 		return m, nil
 	case keyEsc, keyQ:
 		m.mode = ModeSessionSearch
@@ -144,7 +142,7 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		scrollChipPickerToCursor(&m)
 		return m, nil
 	case keyEnter:
-		if m.chipPickerKind == chipPickerProject && len(m.chipPickerOptions) == 0 {
+		if len(m.chipPickerOptions) == 0 {
 			return m, nil
 		}
 		if m.chipPickerCursor < 0 || m.chipPickerCursor >= len(m.chipPickerOptions) {
@@ -170,14 +168,14 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	return m, nil
 }
 
-func applyProjectChipPickerQuery(m *Model) {
-	m.chipPickerOptions = filterProjectChipPickerOptions(m.chipPickerAllOptions, m.chipPickerProjectQuery)
+func applyChipPickerQuery(m *Model) {
+	m.chipPickerOptions = filterChipPickerOptions(m.chipPickerAllOptions, m.chipPickerQuery)
 	m.chipPickerCursor = 0
 	m.chipPickerOffset = 0
 	scrollChipPickerToCursor(m)
 }
 
-func filterProjectChipPickerOptions(options []string, query string) []string {
+func filterChipPickerOptions(options []string, query string) []string {
 	if query == "" {
 		return append([]string(nil), options...)
 	}

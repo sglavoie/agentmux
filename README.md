@@ -167,8 +167,8 @@ the transcript index or search sidecars.
 
 - `/` enters a free-text query; results stream the matching JSONL on demand
   and show the per-session match count.
-- `h`, `p`, `r` cycle single-value chip filters for harness, profile, and
-  project.
+- `h`, `p`, `r` open single-value chip pickers for harness, profile, and
+  project; press `/` inside a chip picker to filter its options.
 - `enter` opens the transcript viewer (role-coded lines, `n`/`N` jumps
   between matches, `j`/`k`, `g`/`G`, and `Ctrl+d/u/f/b` for scrolling, `y`
   copies the selected message text).

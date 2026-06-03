@@ -10,10 +10,10 @@ func chipPickerVisibleHeight(m Model) int {
 		return 0
 	}
 	// Box chrome: top border (1) + bottom border (1) + header (1) + footer
-	// reserve (1) + safety margin (2) = 6. The project picker also spends
-	// one row on the transient search prompt once search has started.
+	// reserve (1) + safety margin (2) = 6. A picker also spends one row on
+	// the transient search prompt once search has started.
 	chrome := 6
-	if chipPickerProjectSearchVisible(m) {
+	if chipPickerSearchVisible(m) {
 		chrome++
 	}
 	avail := m.height - chrome
@@ -40,20 +40,18 @@ func renderChipPicker(m Model) string {
 		header = "Choose project"
 	}
 	sb.WriteString(styleHeader.Render(header))
-	if m.chipPickerKind == chipPickerProject {
-		sb.WriteString(styleDim.Render("  / to filter"))
-	}
+	sb.WriteString(styleDim.Render("  / to filter"))
 	sb.WriteByte('\n')
 
-	if chipPickerProjectSearchVisible(m) {
-		sb.WriteString(renderChipPickerProjectSearch(m))
+	if chipPickerSearchVisible(m) {
+		sb.WriteString(renderChipPickerSearch(m))
 		sb.WriteByte('\n')
 	}
 
 	total := len(m.chipPickerOptions)
 	if total == 0 {
-		if chipPickerProjectSearchVisible(m) {
-			sb.WriteString(styleDim.Render("  (no projects match)"))
+		if chipPickerSearchVisible(m) {
+			sb.WriteString(styleDim.Render("  (no " + chipPickerPluralLabel(m.chipPickerKind) + " match)"))
 		} else {
 			sb.WriteString(styleDim.Render("  (no options)"))
 		}
@@ -134,17 +132,28 @@ func renderChipPicker(m Model) string {
 	return sb.String()
 }
 
-func chipPickerProjectSearchVisible(m Model) bool {
-	return m.chipPickerKind == chipPickerProject &&
-		(m.chipPickerProjectSearchMode || m.chipPickerProjectQuery != "")
+func chipPickerSearchVisible(m Model) bool {
+	return m.chipPickerSearchMode || m.chipPickerQuery != ""
 }
 
-func renderChipPickerProjectSearch(m Model) string {
-	line := styleSearch.Render("/") + m.chipPickerProjectQuery
-	if m.chipPickerProjectSearchMode {
+func renderChipPickerSearch(m Model) string {
+	line := styleSearch.Render("/") + m.chipPickerQuery
+	if m.chipPickerSearchMode {
 		line += "█"
 	}
 	return line
+}
+
+func chipPickerPluralLabel(kind chipPickerKind) string {
+	switch kind {
+	case chipPickerHarness:
+		return "harnesses"
+	case chipPickerProfile:
+		return "profiles"
+	case chipPickerProject:
+		return "projects"
+	}
+	return "options"
 }
 
 // renderChipPickerBox wraps renderChipPicker in styleOverlayBox so the chip

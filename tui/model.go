@@ -194,13 +194,13 @@ type Model struct {
 	// the cursor, renderer, and selection (the leading empty string represents
 	// "(any)" when visible). chipPickerCursor/Offset follow the same window
 	// contract as sessionCursor/sessionOffset.
-	chipPickerKind              chipPickerKind
-	chipPickerAllOptions        []string
-	chipPickerOptions           []string
-	chipPickerCursor            int
-	chipPickerOffset            int
-	chipPickerProjectQuery      string
-	chipPickerProjectSearchMode bool
+	chipPickerKind       chipPickerKind
+	chipPickerAllOptions []string
+	chipPickerOptions    []string
+	chipPickerCursor     int
+	chipPickerOffset     int
+	chipPickerQuery      string
+	chipPickerSearchMode bool
 
 	// session viewer (ModeSessionView). viewerSession is the metadata of the
 	// transcript currently being read; nil when the viewer is closed.
