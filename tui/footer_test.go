@@ -12,7 +12,7 @@ import (
 // TestListFooterPaletteOrder asserts that the palette is rendered in its
 // declaration order regardless of the cursor row's state. The test
 // reconstructs the expected fragment positions and verifies each entry's
-// `key label` substring appears in order on the stripped line.
+// `key label` substring appears in order across the stripped command rows.
 func TestListFooterPaletteOrder(t *testing.T) {
 	cases := []struct {
 		name string
@@ -44,7 +44,7 @@ func TestListFooterPaletteOrder(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := stripAnsi(listFooterLine1(tc.m))
+			out := listFooterCommandBlock(tc.m)
 			prev := -1
 			for _, e := range listFooterPalette {
 				frag := e.key + " " + e.label
@@ -62,35 +62,39 @@ func TestListFooterPaletteOrder(t *testing.T) {
 	}
 }
 
-// TestListFooterSections asserts the section separator glyph appears between
-// each rendered section group.
-func TestListFooterSections(t *testing.T) {
-	out := stripAnsi(listFooterLine1(Model{
+// TestListFooterCommandRowsSplit asserts row-targeted commands and global app
+// commands render on separate rows and no longer mix middle-dot separators with
+// the former section bar.
+func TestListFooterCommandRowsSplit(t *testing.T) {
+	out := listFooterCommandBlock(Model{
 		filtered: []session.RunningSession{{State: "bolt"}},
-	}))
+	})
 
-	sepCount := strings.Count(out, strings.TrimSpace(listFooterSectionSeparator))
-	wantSeps := len(listFooterSectionOrder) - 1
-	if sepCount != wantSeps {
-		t.Errorf("expected %d section separators, got %d in %q", wantSeps, sepCount, out)
+	if strings.Contains(out, "▏") {
+		t.Errorf("footer should not render section bars; got %q", out)
 	}
 
-	rowEntries := footerEntriesForSection(footerSectionRow)
+	lines := strings.Split(out, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected two command rows, got %d in %q", len(lines), out)
+	}
+	for _, frag := range []string{"e peek", "O open in editor"} {
+		if !strings.Contains(lines[0], frag) {
+			t.Errorf("expected row command %q on line 1; got %q", frag, lines[0])
+		}
+	}
+	if strings.Contains(lines[0], "l launch") {
+		t.Errorf("global launch command should move off line 1; got %q", lines[0])
+	}
+	for _, frag := range []string{"l launch", "S sessions", "P plans", "R resort"} {
+		if !strings.Contains(lines[1], frag) {
+			t.Errorf("expected global command %q on line 2; got %q", frag, lines[1])
+		}
+	}
+}
 
-	// Section breaks must come after the row section's last visible entry
-	// and before the launch entry.
-	rowLast := rowEntries[len(rowEntries)-1]
-	rowLastIdx := strings.Index(out, rowLast.key+" "+rowLast.label)
-	launchIdx := strings.Index(out, "l launch")
-	sepIdx := strings.Index(out, strings.TrimSpace(listFooterSectionSeparator))
-	if rowLastIdx < 0 || launchIdx < 0 || sepIdx < 0 {
-		t.Fatalf("missing landmark fragments in %q (rowLast=%d, launch=%d, sep=%d)",
-			out, rowLastIdx, launchIdx, sepIdx)
-	}
-	if rowLastIdx >= sepIdx || sepIdx >= launchIdx {
-		t.Errorf("section separator out of place between row and launch: rowLast=%d sep=%d launch=%d in %q",
-			rowLastIdx, sepIdx, launchIdx, out)
-	}
+func listFooterCommandBlock(m Model) string {
+	return stripAnsi(strings.Join([]string{listFooterLine1(m), listFooterGlobalLine(m)}, "\n"))
 }
 
 // TestListFooterKeyHintsAlwaysPresent locks in the discoverability

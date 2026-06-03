@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // ---- Completion popup from explicit dashboard search ----
@@ -41,13 +42,38 @@ func TestCompletionEnterInsertsFromExplicitSearch(t *testing.T) {
 	}
 }
 
-// ---- Inline filter rendering ----
+// ---- Dashboard filter hint rendering ----
 
-func TestRenderInlineFilterPlaceholder(t *testing.T) {
+func TestRenderHeaderShowsFilterHintBeforeHealthPips(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.width = 100
+	m.daemonAlive = true
+	m.daemonHealthCheckedAt = time.Now()
+	m.hookHealth = HookHealth{InSync: []string{"work"}}
+	m.hookHealthCheckedAt = time.Now()
+
+	firstLine := strings.Split(stripAnsi(renderHeader(m)), "\n")[0]
+	filterIdx := strings.Index(firstLine, inlineFilterPlaceholder)
+	daemonIdx := strings.Index(firstLine, "daemon")
+	if filterIdx < 0 {
+		t.Fatalf("header filter hint missing; header=%q", firstLine)
+	}
+	if daemonIdx < 0 {
+		t.Fatalf("daemon pip missing; header=%q", firstLine)
+	}
+	if filterIdx > daemonIdx {
+		t.Errorf("filter hint should render before daemon/hooks pips; header=%q", firstLine)
+	}
+}
+
+func TestRenderInlineFilterSpacer(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	out := stripAnsi(renderInlineFilter(m))
-	if !strings.Contains(out, inlineFilterPlaceholder) {
-		t.Errorf("expected placeholder in inline filter, got %q", out)
+	if out != "\n" {
+		t.Errorf("expected one blank spacer line, got %q", out)
+	}
+	if strings.Contains(out, inlineFilterPlaceholder) {
+		t.Errorf("inline spacer should not repeat dashboard filter hint, got %q", out)
 	}
 	if strings.Contains(out, "type to filter") {
 		t.Errorf("dashboard hint should not advertise implicit typing, got %q", out)
@@ -59,7 +85,7 @@ func TestRenderInlineFilterSuppressedOutsideModeList(t *testing.T) {
 	m.mode = ModeSearch
 	out := renderInlineFilter(m)
 	if out != "" {
-		t.Errorf("expected inline filter empty outside ModeList, got %q", out)
+		t.Errorf("expected spacer empty outside ModeList, got %q", out)
 	}
 }
 

@@ -128,6 +128,9 @@ func renderListAt(m Model, width, height int) string {
 		s := m.filtered[i]
 		g := stateGroup(s, m.lastActivity, m.idleThreshold)
 		if multiGroup && g != prevGroup {
+			if prevGroup != -1 {
+				sb.WriteByte('\n')
+			}
 			sb.WriteString(renderGroupLabel(g, countInGroup(m.filtered, g, m.lastActivity, m.idleThreshold)))
 			sb.WriteByte('\n')
 			prevGroup = g
@@ -181,7 +184,8 @@ func renderListAt(m Model, width, height int) string {
 // mirrors renderListAt: when multiGroup is true, prevGroup initializes to -1
 // so the first row at startIdx always charges a group-label line, matching
 // the renderer's "begin a window inside group 1 still emits the label"
-// behavior.
+// behavior. Subsequent visible group transitions also charge one blank
+// separator line before the next group label.
 func fitListRows(m Model, startIdx, budget int, multiGroup bool) int {
 	total := len(m.filtered)
 	if budget <= 0 || startIdx >= total {
@@ -197,6 +201,9 @@ func fitListRows(m Model, startIdx, budget int, multiGroup bool) int {
 			g = stateGroup(m.filtered[i], m.lastActivity, m.idleThreshold)
 			if g != prevGroup {
 				cost++
+				if prevGroup != -1 {
+					cost++
+				}
 			}
 		}
 		if used+cost > budget {

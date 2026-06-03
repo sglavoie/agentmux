@@ -70,7 +70,7 @@ func TestRenderListGroupDividers(t *testing.T) {
 	// no-record bucket.
 	m.idleThreshold = time.Second
 	m.lastActivity = map[int]time.Time{13: time.Now().Add(-time.Hour)}
-	output := renderList(m)
+	output := stripAnsi(renderList(m))
 	if !strings.Contains(output, "Needs Attention (1)") {
 		t.Errorf("expected attention divider, got:\n%s", output)
 	}
@@ -80,6 +80,25 @@ func TestRenderListGroupDividers(t *testing.T) {
 	if !strings.Contains(output, "Idle (1)") {
 		t.Errorf("expected idle divider, got:\n%s", output)
 	}
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+	for _, label := range []string{"Active (1)", "Idle (1)"} {
+		idx := indexLineContaining(lines, label)
+		if idx < 1 {
+			t.Fatalf("expected %q after a separator line; lines=%q", label, lines)
+		}
+		if lines[idx-1] != "" {
+			t.Errorf("expected blank separator before %q, got previous line %q", label, lines[idx-1])
+		}
+	}
+}
+
+func indexLineContaining(lines []string, needle string) int {
+	for i, line := range lines {
+		if strings.Contains(line, needle) {
+			return i
+		}
+	}
+	return -1
 }
 
 func TestSingleGroupNoDivider(t *testing.T) {

@@ -40,9 +40,9 @@ func StateGloss(state string) string {
 }
 
 // renderHeader renders the dashboard title line. Active filters are surfaced
-// as chips below the header via renderChips, so this line only carries the
-// title plus any error indicators (kitty / action), the preview hint, and
-// the right-aligned daemon/hooks health pips.
+// as chips below the header via renderChips, so this line carries the title
+// plus any error indicators (kitty / action), the filter hint, the preview
+// hint, and the right-aligned daemon/hooks health pips.
 func renderHeader(m Model) string {
 	title := styleHeader.Render("Agent Mux")
 	info := ""
@@ -54,18 +54,18 @@ func renderHeader(m Model) string {
 	}
 	left := title + styleDim.Render(info)
 
-	var right string
+	var rightParts []string
+	if m.mode == ModeList {
+		rightParts = append(rightParts, styleDim.Render(inlineFilterPlaceholder))
+	}
 	if m.previewEnabled {
-		right = styleFooter.Render("p: hide preview  ")
+		rightParts = append(rightParts, styleFooter.Render("p: hide preview"))
 	}
 	pips := renderHealthPips(m)
 	if pips != "" {
-		if right != "" {
-			right = pips + "  " + right
-		} else {
-			right = pips
-		}
+		rightParts = append(rightParts, pips)
 	}
+	right := strings.Join(rightParts, styleFooter.Render("   "))
 
 	if right != "" && m.width > 0 {
 		pad := m.width - lipgloss.Width(left) - lipgloss.Width(right)
@@ -163,17 +163,19 @@ func renderDeprecationBanner(m Model) string {
 	return styleBanner.Render(headline) + "\n" + styleFooter.Render(hint) + "\n"
 }
 
-// inlineFilterPlaceholder is the greyed copy shown above the list. Filtering is
-// explicit-only from the dashboard: press / to open the search input.
+// inlineFilterPlaceholder is the greyed copy shown in the dashboard title row.
+// Filtering is explicit-only from the dashboard: press / to open the search
+// input.
 const inlineFilterPlaceholder = "/ to filter"
 
-// renderInlineFilter draws the persistent filter hint above the list. Returns
-// "" outside ModeList so the line collapses cleanly in other modes.
+// renderInlineFilter keeps a spacer line above the list where the persistent
+// filter hint used to render. Returns "" outside ModeList so the line
+// collapses cleanly in other modes.
 func renderInlineFilter(m Model) string {
 	if m.mode != ModeList {
 		return ""
 	}
-	return styleDim.Render("  "+inlineFilterPlaceholder) + "\n"
+	return "\n"
 }
 
 // renderChips renders the filter chip row(s) for the current activeFilter,

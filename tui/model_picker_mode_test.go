@@ -136,16 +136,24 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 		}
 	}
 	lines := strings.Split(footer, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("expected 2-line footer, got %d lines", len(lines))
+	if len(lines) != 4 {
+		t.Fatalf("expected 4-line footer, got %d lines", len(lines))
 	}
 	for _, frag := range []string{"C launch", "x clear", "X close"} {
 		if !strings.Contains(lines[0], frag) {
 			t.Errorf("expected %q on footer line 1", frag)
 		}
 	}
-	if !strings.Contains(lines[1], "j/k: up/down") {
-		t.Error("expected navigation on line 2")
+	for _, frag := range []string{"l launch", "S sessions", "P plans", "R resort"} {
+		if !strings.Contains(lines[1], frag) {
+			t.Errorf("expected %q on footer line 2", frag)
+		}
+	}
+	if lines[2] != "" {
+		t.Errorf("expected blank separator line before selected-row hints, got %q", lines[2])
+	}
+	if !strings.Contains(lines[3], "j/k: up/down") {
+		t.Error("expected navigation on line 4")
 	}
 	if strings.Contains(footer, "a: more actions") {
 		t.Error("actions menu hint should not appear in footer")

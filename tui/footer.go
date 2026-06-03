@@ -11,55 +11,63 @@ import (
 )
 
 func renderFooter(m Model) string {
-	var sb strings.Builder
-
-	var line1, line2 string
+	var lines []string
 	switch m.mode {
 	case ModeSearch:
-		line1 = styleFooter.Render("  filter: @profile · !state · word · \\@/\\! literal")
-		line2 = styleFooter.Render("  enter: apply  esc: cancel")
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  filter: @profile · !state · word · \\@/\\! literal"),
+			styleFooter.Render("  enter: apply  esc: cancel"),
+		)
 	case ModeConfirm:
-		line1 = styleFooter.Render("  [y]es   [n]o   [esc] cancel")
-		line2 = ""
+		lines = nonEmptyFooterLines(styleFooter.Render("  [y]es   [n]o   [esc] cancel"))
 	case ModePicker:
-		line1 = styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  O: open in editor  p: preview  esc: clear/exit")
-		line2 = styleFooter.Render("  press / to filter (DSL: @profile, word)  j/k: up/down")
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  O: open in editor  p: preview  esc: clear/exit"),
+			styleFooter.Render("  press / to filter (DSL: @profile, word)  j/k: up/down"),
+		)
 	case ModeConfigPicker:
-		line1 = styleFooter.Render("  enter: select  esc/q: cancel")
-		line2 = styleFooter.Render("  j/k: up/down")
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  enter: select  esc/q: cancel"),
+			styleFooter.Render("  j/k: up/down"),
+		)
 	case ModeHelp:
-		line1 = styleFooter.Render("  j/k: up/down  g/G: top/bottom  esc/?/q: close help")
-		line2 = ""
+		lines = nonEmptyFooterLines(styleFooter.Render("  j/k: up/down  g/G: top/bottom  esc/?/q: close help"))
 	case ModeActions:
-		line1 = styleFooter.Render("  <key>: run action  esc/q: back")
-		line2 = ""
+		lines = nonEmptyFooterLines(styleFooter.Render("  <key>: run action  esc/q: back"))
 	case ModeDetail:
 		// Inner box footer already carries the scroll position and detail
 		// keymap; the outer hint area stays blank so the dimmed dashboard
 		// footer doesn't surface irrelevant row-action keys.
-		line1 = ""
-		line2 = ""
+		lines = nil
 	case ModeChipPicker:
-		line1 = styleFooter.Render("  enter: select  esc/q: cancel")
-		line2 = styleFooter.Render("  /: search  j/k: up/down  g/G: top/bottom  pgup/pgdn: page")
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  enter: select  esc/q: cancel"),
+			styleFooter.Render("  /: search  j/k: up/down  g/G: top/bottom  pgup/pgdn: page"),
+		)
 	case ModeSessionSearch:
-		line1 = styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back")
-		line2 = styleFooter.Render("  j/k: up/down  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bottom")
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back"),
+			styleFooter.Render("  j/k: up/down  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bottom"),
+		)
 	case ModeSessionView:
-		line1 = styleFooter.Render("  j/k move · n/N match · y copy · enter view message · esc back")
-		line2 = styleFooter.Render("  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bot")
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  j/k move · n/N match · y copy · enter view message · esc back"),
+			styleFooter.Render("  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bot"),
+		)
 	case ModePlanSearch:
-		line1 = styleFooter.Render("  / filter · enter view · o editor · s sort · esc back")
-		line2 = styleFooter.Render("  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page")
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  / filter · enter view · o editor · s sort · esc back"),
+			styleFooter.Render("  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page"),
+		)
 	case ModePlanView:
-		line1 = styleFooter.Render("  / search · n/N match · y copy · o editor · esc back")
-		line2 = styleFooter.Render("  j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page")
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  / search · n/N match · y copy · o editor · esc back"),
+			styleFooter.Render("  j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page"),
+		)
 	case ModeMessageDetail:
-		line1 = styleFooter.Render("  j/k scroll · g/G top/bottom · esc/q/enter close")
-		line2 = ""
+		lines = nonEmptyFooterLines(styleFooter.Render("  j/k scroll · g/G top/bottom · esc/q/enter close"))
 	case ModeDeleteChoice:
-		line1 = styleFooter.Render("  [i] index only · ") + styleError.Render("[f] also delete file") + styleFooter.Render(" · [esc] cancel")
-		line2 = ""
+		lines = nonEmptyFooterLines(styleFooter.Render("  [i] index only · ") + styleError.Render("[f] also delete file") + styleFooter.Render(" · [esc] cancel"))
 	default: // ModeList
 		switch {
 		case m.pendingJumpDir != 0:
@@ -69,15 +77,12 @@ func renderFooter(m Model) string {
 			if m.pendingJumpDir == -1 {
 				arrow = "prev"
 			}
-			line1 = listFooterLine1(m)
-			line2 = styleFooter.Render(fmt.Sprintf("  jump %s: p)perm  e)fail  a)active  q)question  s)stop  c)compact  b)sub  ]]/[[)attention  (esc cancels)", arrow))
+			lines = listFooterLines(m, styleFooter.Render(fmt.Sprintf("  jump %s: p)perm  e)fail  a)active  q)question  s)stop  c)compact  b)sub  ]]/[[)attention  (esc cancels)", arrow)))
 		case m.previewEnabled:
 			// In preview mode the only binding shown is `p: hide preview`,
 			// which is rendered right-aligned in the title row.
-			line1 = ""
-			line2 = ""
+			lines = nil
 		default:
-			line1 = listFooterLine1(m)
 			navTokens := []string{
 				"j/k: up/down",
 				"]/[: jump-chord",
@@ -98,21 +103,43 @@ func renderFooter(m Model) string {
 					)
 				}
 			}
-			line2 = listFooterLine2(m, navTokens)
+			lines = listFooterLines(m, listFooterLine2(m, navTokens))
 		}
 	}
 
-	sb.WriteString(line1)
-	if line2 != "" {
-		sb.WriteString("\n")
-		sb.WriteString(line2)
+	var sb strings.Builder
+	if len(lines) > 0 {
+		sb.WriteString(strings.Join(lines, "\n"))
 	}
 	if m.mode == ModeList && m.previewNotice != "" &&
 		(m.previewNoticeExpires.IsZero() || time.Now().Before(m.previewNoticeExpires)) {
-		sb.WriteString("\n")
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
 		sb.WriteString(styleError.Render("  " + m.previewNotice))
 	}
 	return sb.String()
+}
+
+func nonEmptyFooterLines(lines ...string) []string {
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+func listFooterLines(m Model, selectedLine string) []string {
+	lines := []string{
+		listFooterLine1(m),
+		listFooterGlobalLine(m),
+	}
+	if selectedLine != "" {
+		lines = append(lines, "", selectedLine)
+	}
+	return lines
 }
 
 // listFooterLine2 prefixes the navigation hints with a gloss of the cursor
@@ -220,9 +247,9 @@ func listPositionFragment(m Model) string {
 // footerEntry describes one slot in the stable footer palette. The palette is
 // rendered in declaration order regardless of the cursor row's state; only the
 // styling of each entry changes (available vs unavailable) so users always see
-// every action at the same on-screen position. `section` groups entries on
-// footer line 1 so users can map shortcuts to their semantic bucket (row
-// actions, launching, filtering, app-wide commands).
+// every action at the same on-screen position. `section` groups entries onto
+// command rows so users can map shortcuts to their semantic bucket (row
+// actions, launching, app-wide commands).
 type footerEntry struct {
 	key     string
 	label   string
@@ -230,23 +257,12 @@ type footerEntry struct {
 	availFn func(Model) bool
 }
 
-// Section identifiers for footer line 1.
+// Section identifiers for footer command rows.
 const (
 	footerSectionRow    = "row"
 	footerSectionLaunch = "launch"
 	footerSectionApp    = "app"
 )
-
-// listFooterSectionOrder is the left-to-right ordering of sections on line 1.
-var listFooterSectionOrder = []string{
-	footerSectionRow,
-	footerSectionLaunch,
-	footerSectionApp,
-}
-
-// listFooterSectionSeparator is the glyph drawn between sections on footer
-// line 1. Wider than the within-section " · " so the eye can chunk groups.
-const listFooterSectionSeparator = " ▏ "
 
 // hasRow reports whether a row is selected; any row-targeted action requires a
 // cursor sitting on a session.
@@ -254,8 +270,8 @@ func hasRow(m Model) bool {
 	return len(m.filtered) > 0 && m.cursor < len(m.filtered)
 }
 
-// listFooterPalette is the fixed-order set of keys shown on footer line 1 in
-// ModeList. Order is invariant — entries never move between states. Each
+// listFooterPalette is the fixed-order set of keys shown in the ModeList footer
+// command rows. Order is invariant — entries never move between states. Each
 // entry's availability function decides whether to render with the available
 // or unavailable style.
 var listFooterPalette = []footerEntry{
@@ -296,14 +312,20 @@ var listFooterPalette = []footerEntry{
 }
 
 func listFooterLine1(m Model) string {
+	return listFooterSectionsLine(m, []string{footerSectionRow})
+}
+
+func listFooterGlobalLine(m Model) string {
+	return listFooterSectionsLine(m, []string{footerSectionLaunch, footerSectionApp})
+}
+
+func listFooterSectionsLine(m Model, sections []string) string {
 	const indent = "  "
 	innerSep := styleFooter.Render(" · ")
 	innerSepW := lipgloss.Width(innerSep)
-	sectionSep := styleFooter.Render(listFooterSectionSeparator)
-	sectionSepW := lipgloss.Width(sectionSep)
 
 	var tokens []footerToken
-	for sIdx, sec := range listFooterSectionOrder {
+	for _, sec := range sections {
 		entries := footerEntriesForSection(sec)
 		if len(entries) == 0 {
 			continue
@@ -320,27 +342,30 @@ func listFooterLine1(m Model) string {
 				rendered: rendered,
 				width:    lipgloss.Width(rendered),
 			}
-			// Decide separator that follows this token within the current
-			// section. The last entry of a section either gets the wider
-			// section separator (if more sections follow) or no separator
-			// at all.
-			if i < len(entries)-1 {
+			if i < len(entries)-1 || hasLaterEntries(sections, sec) {
 				tok.sep = innerSep
 				tok.sepWidth = innerSepW
-			} else if sIdx < len(listFooterSectionOrder)-1 {
-				// Find whether any subsequent section has entries.
-				for j := sIdx + 1; j < len(listFooterSectionOrder); j++ {
-					if len(footerEntriesForSection(listFooterSectionOrder[j])) > 0 {
-						tok.sep = sectionSep
-						tok.sepWidth = sectionSepW
-						break
-					}
-				}
 			}
 			tokens = append(tokens, tok)
 		}
 	}
 	return wrapFooterLine(indent, indent, tokens, m.width)
+}
+
+func hasLaterEntries(sections []string, current string) bool {
+	foundCurrent := false
+	for _, sec := range sections {
+		if !foundCurrent {
+			if sec == current {
+				foundCurrent = true
+			}
+			continue
+		}
+		if len(footerEntriesForSection(sec)) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // footerToken pairs a styled rendered string with its visible width and an

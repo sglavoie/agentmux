@@ -17,7 +17,7 @@ const listMinVisible = 3
 //   - deprecation banner (when undismissed and at least one entry)        (2)
 //   - legend (omitted when m.height > 0 && m.height < legendMinHeight)    (1)
 //   - chips (when activeFilter has at least one component)                (1)
-//   - inline filter hint (unconditionally 1 in ModeList)                 (1)
+//   - spacer where the inline filter hint used to sit in ModeList          (1)
 //
 // The renderHeader hint and chip-wrap-to-two-lines edge cases can drift the
 // real chrome by one line; the listMinVisible floor in listVisibleHeight
@@ -35,7 +35,7 @@ func chromeAboveListLines(m Model) int {
 		n++
 	}
 	if m.mode == ModeList {
-		n++ // inline filter is always one line in ModeList
+		n++ // spacer is always one line in ModeList
 	}
 	return n
 }
@@ -126,8 +126,9 @@ func clampListOffset(m *Model) {
 
 // scrollListToCursor adjusts m.listOffset so the cursor sits within the
 // currently visible window. Mirrors color_picker_app.scrollToCursor but
-// accounts for the group-label lines emitted by renderListAt when multiGroup
-// is true: a row that starts a new group costs one extra line for its label.
+// accounts for the group chrome emitted by renderListAt when multiGroup is
+// true: a row that starts a visible group costs one extra line for its label,
+// plus a blank separator when a prior group is already visible.
 //
 // The renderer initializes prevGroup to -1, so the first row at the window
 // origin always emits a group label when multiGroup is true. The cost walk
@@ -200,9 +201,10 @@ func listCursorFitsWindow(m *Model, offset, height int, multiGroup bool) bool {
 // listLineCost returns the number of rendered lines from offset through
 // cursor inclusive, matching the renderListAt walk. When multiGroup is true a
 // group-label line precedes the first row and every subsequent row whose
-// group differs from the previous one. The walk initializes prevGroup to -1
-// to match renderListAt, so the row at offset always emits a label when
-// multiGroup is true.
+// group differs from the previous one; subsequent visible group labels also
+// get a blank separator line. The walk initializes prevGroup to -1 to match
+// renderListAt, so the row at offset always emits a label when multiGroup is
+// true.
 func listLineCost(m *Model, offset, cursor int, multiGroup bool) int {
 	if offset > cursor || offset < 0 || cursor >= len(m.filtered) {
 		return 0
@@ -213,6 +215,9 @@ func listLineCost(m *Model, offset, cursor int, multiGroup bool) int {
 		if multiGroup {
 			g := stateGroup(m.filtered[i], m.lastActivity, m.idleThreshold)
 			if g != prevGroup {
+				if prevGroup != -1 {
+					cost++ // blank separator before a subsequent group
+				}
 				cost++ // group label
 				prevGroup = g
 			}

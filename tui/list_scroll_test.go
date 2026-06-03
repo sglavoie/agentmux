@@ -22,10 +22,10 @@ func scrollModel() Model {
 
 func TestListChromeLines_BaselineModeList(t *testing.T) {
 	m := scrollModel()
-	// Baseline: header(1) + legend(1) + inline filter(1) + trailing nl(1)
-	// + previewFooterLines (preview off, no notice → 2) = 6.
+	// Baseline: header(1) + legend(1) + spacer(1) + trailing nl(1)
+	// + previewFooterLines (preview off, no notice → 4) = 8.
 	got := listChromeLines(m)
-	want := 1 + 1 + 1 + 1 + 2
+	want := 1 + 1 + 1 + 1 + 4
 	if got != want {
 		t.Errorf("baseline chrome: got %d want %d", got, want)
 	}
@@ -90,18 +90,17 @@ func TestListChromeLines_ChipsAddOneLine(t *testing.T) {
 	}
 }
 
-func TestListChromeLines_InlineFilterDropsOutsideModeList(t *testing.T) {
+func TestListChromeLines_SpacerDropsOutsideModeList(t *testing.T) {
 	m := scrollModel()
 	base := listChromeLines(m)
-	// Outside ModeList the inline filter line is not emitted; the footer
+	// Outside ModeList the spacer line is not emitted; the footer
 	// also flips back to its default but for this test we only assert the
-	// inline-filter delta by holding everything else constant. Switching to
-	// a mode whose footer is still the default-2 lines preserves the
-	// invariant.
+	// spacer delta by holding everything else constant.
 	m.mode = ModeHelp
 	got := listChromeLines(m)
-	if got != base-1 {
-		t.Errorf("inline filter outside ModeList: got %d want %d", got, base-1)
+	want := base - 1 - 2 // spacer removed; footer drops from 4 lines to 2.
+	if got != want {
+		t.Errorf("spacer outside ModeList: got %d want %d", got, want)
 	}
 }
 
@@ -246,8 +245,9 @@ func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
 	m := scrollModel()
 	// Two groups: group 0 (state="stop", needs attention) then group 1
 	// (state="bolt", active). With multiGroup=true the renderer emits a
-	// label before the first row of each group, so a slice that contains
-	// both groups costs (rows + 2) lines while a slice from a single group
+	// label before the first row of each group and a blank separator before
+	// subsequent visible groups, so a slice that contains both groups costs
+	// (rows + labels + separators) lines while a slice from a single group
 	// costs (rows + 1) lines.
 	m.filtered = []session.RunningSession{
 		{WindowID: 1, Base: "a1", Account: "work", State: "stop"},
@@ -269,9 +269,9 @@ func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
 		t.Errorf("single-row, single-group cost: got %d want 2", got)
 	}
 
-	// Slice [0..2] spans groups 0 and 1: rows=3, labels=2 → cost=5.
-	if got := listLineCost(&m, 0, 2, true); got != 5 {
-		t.Errorf("two-group slice cost: got %d want 5", got)
+	// Slice [0..2] spans groups 0 and 1: rows=3, labels=2, separators=1 → cost=6.
+	if got := listLineCost(&m, 0, 2, true); got != 6 {
+		t.Errorf("two-group slice cost: got %d want 6", got)
 	}
 
 	// Slice [2..4] stays within group 1: rows=3, labels=1 → cost=4.
@@ -302,7 +302,7 @@ func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
 // screenshot scenario reported against commit 1802fa2: preview pane on,
 // multi-group filtered list, cursor on a row past the visible window. Before
 // the fix, listVisibleHeight (and renderSplit) over-counted the available
-// height by the size of the chrome above the list (legend + inline filter +
+// height by the size of the chrome above the list (legend + spacer +
 // banner + chips), so scrollListToCursor thought the cursor fit when in
 // practice the terminal clipped it. This test fails on the buggy
 // `m.height - 1 - 1 - footerLines` formula and passes after the chrome is
@@ -362,7 +362,7 @@ func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
 
 func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) {
 	m := scrollModel()
-	m.height = 13 // short-terminal chrome leaves an 8-line list pane
+	m.height = 15 // short-terminal chrome leaves an 8-line list pane
 	m.filtered = makeRowsForScroll(20)
 	m.cursor = 10
 	m.listOffset = 0

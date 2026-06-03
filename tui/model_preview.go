@@ -116,7 +116,7 @@ func (m Model) render() string {
 }
 
 // renderDashboard emits the canonical ModeList layout — header, deprecation
-// banner, legend, chips, inline filter, then list (or list+preview split).
+// banner, legend, chips, spacer, then list (or list+preview split).
 // Overlay-modal modes use this as the dimmed base view behind their popup.
 func renderDashboard(m Model) string {
 	var sb strings.Builder
@@ -141,7 +141,7 @@ func renderSplit(m Model) string {
 	footerLines := previewFooterLines(m)
 	// Vertical space available for the list+preview area: total height minus
 	// all chrome rendered above the list (header + banner + legend + chips +
-	// inline filter), minus the trailing newline render() writes after the
+	// spacer), minus the trailing newline render() writes after the
 	// list block, minus the footer. Must stay in lock-step with
 	// listVisibleHeight's preview branch so scrollListToCursor and renderListAt
 	// agree on the budget — otherwise the cursor can land at a row the
@@ -187,8 +187,9 @@ func renderSplit(m Model) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
 }
 
-// previewFooterLines returns the number of lines the footer will occupy in
-// the current mode (used for layout math and resize fits-check).
+// previewFooterLines returns the baseline number of lines the footer will
+// occupy in the current mode (used for layout math and resize fits-check).
+// Narrow-terminal wrapping can add continuation rows, as it did before.
 func previewFooterLines(m Model) int {
 	if m.mode == ModePicker {
 		// Picker footer is always two lines regardless of preview state.
@@ -207,9 +208,9 @@ func previewFooterLines(m Model) int {
 		return 0
 	}
 	if noticeActive {
-		return 3
+		return 5
 	}
-	return 2
+	return 4
 }
 
 // togglePreview flips the preview pane on/off. Returns the model and any cmd
