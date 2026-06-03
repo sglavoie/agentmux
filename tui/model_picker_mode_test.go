@@ -130,7 +130,7 @@ func TestFooterListHintNoSessions(t *testing.T) {
 func TestFooterIncludesDirectKeys(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	footer := stripAnsi(renderFooter(m))
-	for _, frag := range []string{"x close", "r restart"} {
+	for _, frag := range []string{"r restart", "C launch", "x clear", "X close"} {
 		if !strings.Contains(footer, frag) {
 			t.Errorf("list footer missing direct key %q, got:\n%s", frag, footer)
 		}
@@ -139,14 +139,21 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("expected 2-line footer, got %d lines", len(lines))
 	}
-	if !strings.Contains(lines[0], "x close") {
-		t.Error("expected actions on line 1")
+	for _, frag := range []string{"C launch", "x clear", "X close"} {
+		if !strings.Contains(lines[0], frag) {
+			t.Errorf("expected %q on footer line 1", frag)
+		}
 	}
 	if !strings.Contains(lines[1], "j/k: up/down") {
 		t.Error("expected navigation on line 2")
 	}
 	if strings.Contains(footer, "a: more actions") {
 		t.Error("actions menu hint should not appear in footer")
+	}
+	for _, stale := range []string{"x close", "C clear"} {
+		if strings.Contains(footer, stale) {
+			t.Errorf("footer should not contain stale hint %q, got:\n%s", stale, footer)
+		}
 	}
 }
 
@@ -172,6 +179,9 @@ func TestCKeyOpensConfigPicker(t *testing.T) {
 	m = pressKey(m, "c")
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after c, got %d", m.mode)
+	}
+	if m.configPickerPurpose != ConfigPickerRestartProfile {
+		t.Fatalf("expected restart-profile purpose after c, got %d", m.configPickerPurpose)
 	}
 	if len(m.configPickerAccounts) != 2 {
 		t.Fatalf("expected 2 accounts in picker, got %d", len(m.configPickerAccounts))
@@ -212,6 +222,9 @@ func TestConfigPickerSameAccountNoOp(t *testing.T) {
 	m = pressKey(m, "c") // → ModeConfigPicker
 	// After state-group sort cursor=0 is backend (bolt), account="work".
 	// configPickerCurrent should be "work", cursor at index 0 (work).
+	if m.configPickerPurpose != ConfigPickerRestartProfile {
+		t.Fatalf("expected restart-profile purpose after c, got %d", m.configPickerPurpose)
+	}
 	if m.configPickerCurrent != "work" {
 		t.Fatalf("expected configPickerCurrent=work, got %q", m.configPickerCurrent)
 	}

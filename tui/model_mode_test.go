@@ -268,7 +268,7 @@ func TestFooterChangesWithMode(t *testing.T) {
 
 func TestConfirmNReturnsToList(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	m = pressKey(m, "x") // → ModeConfirm (close)
+	m = pressKey(m, "X") // → ModeConfirm (close)
 	m = pressKey(m, "n") // cancel
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after n in confirm, got %d", m.mode)
@@ -277,7 +277,7 @@ func TestConfirmNReturnsToList(t *testing.T) {
 
 func TestConfirmEscReturnsToList(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	m = pressKey(m, "x") // → ModeConfirm
+	m = pressKey(m, "X") // → ModeConfirm
 	m = pressKey(m, "esc")
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after esc in confirm, got %d", m.mode)
@@ -286,7 +286,7 @@ func TestConfirmEscReturnsToList(t *testing.T) {
 
 func TestConfirmYEmitsCloseCmd(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	m = pressKey(m, "x") // → ModeConfirm (close)
+	m = pressKey(m, "X") // → ModeConfirm (close)
 	updated, cmd := m.Update(keyPress("y"))
 	if updated.(Model).mode != ModeList {
 		t.Fatalf("expected ModeList after y, got %d", updated.(Model).mode)

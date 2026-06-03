@@ -11,9 +11,9 @@ import (
 
 func TestXKeyDirectClose(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	m = pressKey(m, "x")
+	m = pressKey(m, "X")
 	if m.mode != ModeConfirm {
-		t.Fatalf("expected ModeConfirm after x, got %d", m.mode)
+		t.Fatalf("expected ModeConfirm after X, got %d", m.mode)
 	}
 	if m.confirmAction != "close" {
 		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
@@ -44,9 +44,9 @@ func TestRKeyDirectRestart(t *testing.T) {
 func TestDirectKeyEmptyListNoOp(t *testing.T) {
 	m := loadSessions(testModel(), nil)
 
-	mx := pressKey(m, "x")
+	mx := pressKey(m, "X")
 	if mx.mode != ModeList {
-		t.Fatalf("expected ModeList after x on empty list, got %d", mx.mode)
+		t.Fatalf("expected ModeList after X on empty list, got %d", mx.mode)
 	}
 
 	mr := pressKey(m, "r")
@@ -146,8 +146,11 @@ func TestFooterListContextAwareAttention(t *testing.T) {
 	if !strings.Contains(footer, "c profile") {
 		t.Errorf("attention footer missing c profile, got:\n%s", footer)
 	}
-	if !strings.Contains(footer, "C clear") {
-		t.Errorf("attention footer missing C clear, got:\n%s", footer)
+	if !strings.Contains(footer, "C launch") {
+		t.Errorf("attention footer missing C launch, got:\n%s", footer)
+	}
+	if !strings.Contains(footer, "x clear") {
+		t.Errorf("attention footer missing x clear, got:\n%s", footer)
 	}
 }
 

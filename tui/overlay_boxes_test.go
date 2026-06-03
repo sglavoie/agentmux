@@ -76,6 +76,7 @@ func TestRenderConfigPickerBox(t *testing.T) {
 	m.configPickerAccounts = m.cfg.Accounts
 	m.configPickerCurrent = "work"
 	m.configPickerCursor = 0
+	m.configPickerPurpose = ConfigPickerRestartProfile
 	m.configPickerReturnMode = ModeList
 	m.mode = ModeConfigPicker
 	m.width, m.height = 100, 40
@@ -85,8 +86,8 @@ func TestRenderConfigPickerBox(t *testing.T) {
 		t.Errorf("expected rounded top-left glyph in box output; got %q", raw)
 	}
 	plain := stripAnsi(raw)
-	if !strings.Contains(plain, "Choose profile") {
-		t.Errorf("expected 'Choose profile' header in box output; got %q", plain)
+	if !strings.Contains(plain, "Restart with profile") {
+		t.Errorf("expected 'Restart with profile' header in box output; got %q", plain)
 	}
 }
 
@@ -94,6 +95,7 @@ func TestRenderConfigPickerBoxLaunchHeader(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	m.configPickerAccounts = m.cfg.Accounts
+	m.configPickerPurpose = ConfigPickerLauncherOverride
 	m.configPickerReturnMode = ModePicker
 	m.mode = ModeConfigPicker
 	m.width, m.height = 100, 40
@@ -101,6 +103,21 @@ func TestRenderConfigPickerBoxLaunchHeader(t *testing.T) {
 	plain := stripAnsi(renderConfigPickerBox(m))
 	if !strings.Contains(plain, "Launch profile") {
 		t.Errorf("expected 'Launch profile' header when returning to ModePicker; got %q", plain)
+	}
+}
+
+func TestRenderConfigPickerBoxDashboardLaunchHeader(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
+	m.configPickerAccounts = m.cfg.Accounts
+	m.configPickerPurpose = ConfigPickerDashboardLaunch
+	m.configPickerReturnMode = ModeList
+	m.mode = ModeConfigPicker
+	m.width, m.height = 100, 40
+
+	plain := stripAnsi(renderConfigPickerBox(m))
+	if !strings.Contains(plain, "Launch new session with profile") {
+		t.Errorf("expected dashboard launch header, got %q", plain)
 	}
 }
 

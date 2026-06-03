@@ -167,21 +167,10 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	}
 	launchDebug.Printf("Launch: LaunchTab succeeded")
 
-	// Apply tab color with exponential backoff retry. The accent tracks the
-	// project's *configured* default profile so an override-launched tab keeps
-	// the project's visual identity. Falls back to the running profile's color
-	// when the project is not configured (orphan / no-cfg paths).
-	colorName := acc.Color
-	projectDefaultColor := ""
-	if cfg != nil {
-		if def := cfg.DefaultProfileFor(sess.Title); def != "" {
-			if defAcc, ok := findAccount(cfg, def); ok && defAcc.Color != "" {
-				colorName = defAcc.Color
-				projectDefaultColor = defAcc.Color
-			}
-		}
-	}
-	if color, err := palette.Lookup(colorName); err == nil {
+	// Apply tab color with exponential backoff retry. The Kitty tab accent
+	// tracks the launch profile's configured color, matching the README
+	// contract and the open/open-in-editor helpers.
+	if color, err := palette.Lookup(acc.Color); err == nil {
 		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
 			// Tab color is cosmetic — degrade to a Warn-level log so the
 			// failure is visible in `amx daemon start --debug` output
@@ -191,7 +180,6 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 				"account", acc.Name,
 				"harness", acc.EffectiveHarness(),
 				"profile_color", acc.Color,
-				"project_default_color", projectDefaultColor,
 				"error", colorErr,
 			)
 		}

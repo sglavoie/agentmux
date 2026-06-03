@@ -105,16 +105,16 @@ func TestNewModelHonorsConfiguredIdleThreshold(t *testing.T) {
 	}
 }
 
-// ---- C key (clear status) tests ----
+// ---- C key (dashboard launch) tests ----
 
-func TestCapitalCKeyReturnsClearCmd(t *testing.T) {
+func TestCapitalCKeyOpensDashboardLaunchPicker(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
-	updated, cmd := m.Update(keyPress("C"))
-	if updated.(Model).mode != ModeList {
-		t.Fatalf("expected ModeList to remain after C, got %d", updated.(Model).mode)
+	m = pressKey(m, "C")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
 	}
-	if cmd == nil {
-		t.Fatal("expected non-nil cmd from C key with sessions present")
+	if m.configPickerPurpose != ConfigPickerDashboardLaunch {
+		t.Fatalf("expected dashboard-launch purpose after C, got %d", m.configPickerPurpose)
 	}
 }
 
@@ -129,16 +129,14 @@ func TestCapitalCKeyEmptyListIsNoOp(t *testing.T) {
 	}
 }
 
-func TestCapitalCDoesNotEnterConfigPicker(t *testing.T) {
-	// Confirm the case-sensitive split: uppercase C must not be aliased to
-	// lowercase c (which opens the config picker).
+func TestCapitalCUsesDashboardLaunchPurpose(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "C")
-	if m.mode == ModeConfigPicker {
-		t.Fatal("uppercase C should not open ModeConfigPicker")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
 	}
-	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after C, got %d", m.mode)
+	if m.configPickerPurpose == ConfigPickerRestartProfile {
+		t.Fatal("uppercase C should not reuse restart-profile purpose")
 	}
 }
 

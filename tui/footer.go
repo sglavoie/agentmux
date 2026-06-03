@@ -264,14 +264,15 @@ var listFooterPalette = []footerEntry{
 	}},
 	{"T", "timeline", footerSectionRow, hasRow},
 	{"r", "restart", footerSectionRow, hasRow},
-	{"x", "close", footerSectionRow, hasRow},
 	{"c", "profile", footerSectionRow, hasRow},
-	{"C", "clear", footerSectionRow, func(m Model) bool {
+	{"C", "launch", footerSectionRow, hasRow},
+	{"x", "clear", footerSectionRow, func(m Model) bool {
 		if !hasRow(m) {
 			return false
 		}
 		return stateGroup(m.filtered[m.cursor], m.lastActivity, m.idleThreshold) == 0
 	}},
+	{"X", "close", footerSectionRow, hasRow},
 	{"o", "open dir", footerSectionRow, func(m Model) bool {
 		if !hasRow(m) {
 			return false

@@ -78,8 +78,59 @@ func actionsFor(_ Model) []action {
 			},
 		},
 		{
+			keyDisplay:  "c",
+			keyMatch:    keyC,
+			label:       "override profile",
+			description: "restart under a different harness profile",
+			available:   func(m Model) bool { return !m.targetSession.Locked },
+			run: func(m Model) (Model, tea.Cmd) {
+				m.configPickerAccounts = m.cfg.Accounts
+				m.configPickerCurrent = m.targetSession.EffectiveProfile()
+				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
+				m.configPickerPurpose = ConfigPickerRestartProfile
+				m.configPickerReturnMode = ModeList
+				m.configPickerProjectIdx = -1
+				m.actionErr = nil
+				m.mode = ModeConfigPicker
+				return m, nil
+			},
+		},
+		{
+			keyDisplay:  "C",
+			keyMatch:    keyDashboardLaunch,
+			label:       "launch new",
+			description: "pick a profile and launch another session from this row",
+			available:   func(Model) bool { return true },
+			run: func(m Model) (Model, tea.Cmd) {
+				m.configPickerAccounts = m.cfg.Accounts
+				m.configPickerCurrent = m.targetSession.EffectiveProfile()
+				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
+				m.configPickerPurpose = ConfigPickerDashboardLaunch
+				m.configPickerReturnMode = ModeList
+				m.configPickerProjectIdx = -1
+				m.actionErr = nil
+				m.mode = ModeConfigPicker
+				return m, nil
+			},
+		},
+		{
 			keyDisplay:  "x",
-			keyMatch:    keyX,
+			keyMatch:    keyClearStatus,
+			label:       "clear icon",
+			description: "drop the attention/key/stop badge on the tab title",
+			available: func(m Model) bool {
+				return stateGroup(m.targetSession, m.lastActivity, m.idleThreshold) == 0
+			},
+			run: func(m Model) (Model, tea.Cmd) {
+				cmd := clearStatusCmd(m.client, m.targetSession)
+				m.actionErr = nil
+				m.mode = ModeList
+				return m, cmd
+			},
+		},
+		{
+			keyDisplay:  "X",
+			keyMatch:    keyClose,
 			label:       "close",
 			description: "exit the Claude process; transcript persists",
 			available:   func(m Model) bool { return !m.targetSession.Locked },
@@ -93,38 +144,6 @@ func actionsFor(_ Model) []action {
 				}
 				m.mode = ModeList
 				cmd := m.closeWithToast(m.targetSession)
-				return m, cmd
-			},
-		},
-		{
-			keyDisplay:  "c",
-			keyMatch:    keyC,
-			label:       "override profile",
-			description: "restart under a different harness profile",
-			available:   func(m Model) bool { return !m.targetSession.Locked },
-			run: func(m Model) (Model, tea.Cmd) {
-				m.configPickerAccounts = m.cfg.Accounts
-				m.configPickerCurrent = m.targetSession.EffectiveProfile()
-				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
-				m.configPickerReturnMode = ModeList
-				m.configPickerProjectIdx = -1
-				m.actionErr = nil
-				m.mode = ModeConfigPicker
-				return m, nil
-			},
-		},
-		{
-			keyDisplay:  "C",
-			keyMatch:    keyClearStatus,
-			label:       "clear icon",
-			description: "drop the attention/key/stop badge on the tab title",
-			available: func(m Model) bool {
-				return stateGroup(m.targetSession, m.lastActivity, m.idleThreshold) == 0
-			},
-			run: func(m Model) (Model, tea.Cmd) {
-				cmd := clearStatusCmd(m.client, m.targetSession)
-				m.actionErr = nil
-				m.mode = ModeList
 				return m, cmd
 			},
 		},

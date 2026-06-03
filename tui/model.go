@@ -77,6 +77,7 @@ type Model struct {
 	configPickerAccounts   []config.Account
 	configPickerCursor     int
 	configPickerCurrent    string
+	configPickerPurpose    ConfigPickerPurpose
 	configPickerReturnMode Mode
 	configPickerProjectIdx int
 
@@ -124,10 +125,11 @@ type Model struct {
 	previewNoticeExpires time.Time
 
 	// toast strip + launch-progress bookkeeping
-	toasts            []Toast
-	launchBatchID     int
-	launchBatchDone   int
-	launchBatchErrors int
+	toasts                   []Toast
+	launchBatchID            int
+	launchBatchDone          int
+	launchBatchErrors        int
+	launchBatchQuitOnSuccess bool
 
 	// pendingUndo stacks the most recent destructive actions eligible for
 	// `u`-driven undo. Entries expire at their deadline; sweepUndo trims

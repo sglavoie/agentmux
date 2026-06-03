@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -152,6 +153,7 @@ func TestLaunchProgressErrorPushesErrorToast(t *testing.T) {
 func TestLaunchProgressFinalIsSuccess(t *testing.T) {
 	m := testModel()
 	m.launchBatchID = 7
+	m.launchBatchQuitOnSuccess = true
 	// First of two.
 	updated, _ := m.Update(launchProgressMsg{batchID: 7, total: 2, title: "api"})
 	m = updated.(Model)
@@ -166,6 +168,21 @@ func TestLaunchProgressFinalIsSuccess(t *testing.T) {
 	}
 	if !strings.Contains(m.toasts[0].Text, "2/2") {
 		t.Errorf("expected '2/2' in final progress, got %q", m.toasts[0].Text)
+	}
+}
+
+func TestLaunchProgressFinalDashboardLaunchStaysInTUI(t *testing.T) {
+	m := testModel()
+	m.launchBatchID = 8
+	m.launchBatchQuitOnSuccess = false
+	_, cmd := m.Update(launchProgressMsg{batchID: 8, total: 1, title: "api"})
+	if cmd == nil {
+		t.Fatal("expected follow-up cmd on final dashboard launch progress")
+	}
+	for _, msg := range collectLeafMsgs(t, cmd) {
+		if _, ok := msg.(tea.QuitMsg); ok {
+			t.Fatal("dashboard launch progress should refresh, not quit")
+		}
 	}
 }
 

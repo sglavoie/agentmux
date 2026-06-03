@@ -6,19 +6,46 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// TestActionsOverlayDispatchClose verifies that pressing `x` from the
+// TestActionsOverlayDispatchClose verifies that pressing `X` from the
 // overlay under the legacy confirm flow flips to ModeConfirm. The default
 // toast/undo path is covered by undo_test.go.
 func TestActionsOverlayDispatchClose(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.cfg.Defaults.ConfirmDestructive = true
 	m = openActionsOverlay(t, m)
-	m = pressKey(m, "x")
+	m = pressKey(m, "X")
 	if m.mode != ModeConfirm {
-		t.Fatalf("expected ModeConfirm after x, got %d", m.mode)
+		t.Fatalf("expected ModeConfirm after X, got %d", m.mode)
 	}
 	if m.confirmAction != "close" {
 		t.Fatalf("expected confirmAction=close, got %q", m.confirmAction)
+	}
+}
+
+func TestActionsOverlayDispatchClearStatus(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), []session.RunningSession{
+		{TabID: 1, Base: "api", Account: "work", State: "key", WindowID: 42},
+	})
+	m = openActionsOverlay(t, m)
+	updated, cmd := m.Update(keyPress("x"))
+	m2 := updated.(Model)
+	if m2.mode != ModeList {
+		t.Fatalf("expected ModeList after x, got %d", m2.mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected clear-status cmd from overlay x")
+	}
+}
+
+func TestActionsOverlayDispatchDashboardLaunch(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m = openActionsOverlay(t, m)
+	m = pressKey(m, "C")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after overlay C, got %d", m.mode)
+	}
+	if m.configPickerPurpose != ConfigPickerDashboardLaunch {
+		t.Fatalf("expected dashboard-launch purpose after overlay C, got %d", m.configPickerPurpose)
 	}
 }
 
@@ -44,6 +71,9 @@ func TestActionsOverlayDispatchConfigPicker(t *testing.T) {
 	m = pressKey(m, "c")
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after c, got %d", m.mode)
+	}
+	if m.configPickerPurpose != ConfigPickerRestartProfile {
+		t.Fatalf("expected restart-profile purpose after overlay c, got %d", m.configPickerPurpose)
 	}
 }
 

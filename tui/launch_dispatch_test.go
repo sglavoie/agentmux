@@ -362,6 +362,9 @@ func TestDispatchPickerLaunch_SisOverrideCreatesNewCodexInstances(t *testing.T) 
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("expected ModeConfigPicker after C, got %d", m.mode)
 	}
+	if m.configPickerPurpose != ConfigPickerLauncherOverride {
+		t.Fatalf("expected launcher-override purpose after C, got %d", m.configPickerPurpose)
+	}
 	m = pressKey(m, "j")
 	m = pressKey(m, "enter")
 	if got := m.pickerEffectiveProfile(0); got != "vta-codex" {
@@ -431,6 +434,154 @@ func TestDispatchPickerLaunch_SisOverrideCreatesNewCodexInstances(t *testing.T) 
 	}
 	if got := client.launched[1].UserVars["amx_profile"]; got != "vta-codex" {
 		t.Fatalf("expected second launch amx_profile=vta-codex, got %q", got)
+	}
+}
+
+func TestDashboardLaunch_SameProfileSelectionStillLaunches(t *testing.T) {
+	client := &fakeLaunchDispatchClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:       10,
+				Title:    "api",
+				Windows:  []kitty.Window{{ID: 11, IsActive: true, CWD: "/home/user/api", UserVars: kitty.UserVars{Profile: "work", Harness: "claude", Project: "api", AMXDirectory: "/home/user/api"}}},
+				IsActive: true,
+			}},
+		}},
+	}
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", Color: "blue"},
+			{Name: "personal", Harness: "codex", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "/home/user/api", Profile: "work"},
+		},
+	}
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 10, WindowID: 11, Base: "api", Profile: "work", Account: "work", Harness: "claude", Project: "api", Directory: "/home/user/api", Key: session.SessionKey("work", "api")},
+	})
+
+	m = pressKey(m, "C")
+	if m.mode != ModeConfigPicker {
+		t.Fatalf("expected ModeConfigPicker after dashboard C, got %d", m.mode)
+	}
+	updated, cmd := m.Update(keyPress("enter"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after confirming dashboard launch, got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for same-profile dashboard launch")
+	}
+
+	got := countLaunchProgress(collectLeafMsgs(t, cmd))
+	if len(got) != 1 {
+		t.Fatalf("expected 1 launchProgressMsg, got %d (%+v)", len(got), got)
+	}
+	if got[0].err != nil {
+		t.Fatalf("expected same-profile dashboard launch to succeed, got %v", got[0].err)
+	}
+	if len(client.launched) != 1 {
+		t.Fatalf("expected one launched tab, got %d", len(client.launched))
+	}
+	if got := client.launched[0].UserVars["amx_profile"]; got != "work" {
+		t.Fatalf("expected amx_profile=work, got %q", got)
+	}
+}
+
+func TestDashboardLaunch_AlternateProfileSelectionLaunchesWithSelectedVars(t *testing.T) {
+	client := &fakeLaunchDispatchClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:       10,
+				Title:    "api",
+				Windows:  []kitty.Window{{ID: 11, IsActive: true, CWD: "/home/user/api", UserVars: kitty.UserVars{Profile: "work", Harness: "claude", Project: "api", AMXDirectory: "/home/user/api"}}},
+				IsActive: true,
+			}},
+		}},
+	}
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", Color: "blue"},
+			{Name: "personal", Harness: "codex", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "/home/user/api", Profile: "work"},
+		},
+	}
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 10, WindowID: 11, Base: "api", Profile: "work", Account: "work", Harness: "claude", Project: "api", Directory: "/home/user/api", Key: session.SessionKey("work", "api")},
+	})
+
+	m = pressKey(m, "C")
+	m = pressKey(m, "j")
+	_, cmd := m.Update(keyPress("enter"))
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for alternate-profile dashboard launch")
+	}
+
+	got := countLaunchProgress(collectLeafMsgs(t, cmd))
+	if len(got) != 1 || got[0].err != nil {
+		t.Fatalf("expected alternate-profile dashboard launch to succeed, got %+v", got)
+	}
+	if len(client.launched) != 1 {
+		t.Fatalf("expected one launched tab, got %d", len(client.launched))
+	}
+	if got := client.launched[0].UserVars["amx_profile"]; got != "personal" {
+		t.Fatalf("expected amx_profile=personal, got %q", got)
+	}
+	if got := client.launched[0].UserVars["amx_harness"]; got != "codex" {
+		t.Fatalf("expected amx_harness=codex, got %q", got)
+	}
+}
+
+func TestDashboardLaunch_OrphanRowUsesSessionFromRunningTemplate(t *testing.T) {
+	client := &fakeLaunchDispatchClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:       10,
+				Title:    "orphan",
+				Windows:  []kitty.Window{{ID: 11, IsActive: true, CWD: "/home/user/orphan", UserVars: kitty.UserVars{Profile: "work", Harness: "claude", Project: "orphan", AMXDirectory: "/home/user/orphan"}}},
+				IsActive: true,
+			}},
+		}},
+	}
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", Color: "blue"},
+			{Name: "personal", Harness: "codex", Color: "green"},
+		},
+	}
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 10, WindowID: 11, Base: "orphan", Profile: "work", Account: "work", Harness: "claude", Project: "orphan", Directory: "/home/user/orphan", Key: session.SessionKey("work", "orphan"), Args: "--danger", Env: "FOO=bar"},
+	})
+
+	m = pressKey(m, "C")
+	_, cmd := m.Update(keyPress("enter"))
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for orphan-row dashboard launch")
+	}
+
+	got := countLaunchProgress(collectLeafMsgs(t, cmd))
+	if len(got) != 1 || got[0].err != nil {
+		t.Fatalf("expected orphan-row dashboard launch to succeed, got %+v", got)
+	}
+	if len(client.launched) != 1 {
+		t.Fatalf("expected one launched tab, got %d", len(client.launched))
+	}
+	if got := client.launched[0].UserVars["amx_project"]; got != "orphan" {
+		t.Fatalf("expected amx_project=orphan, got %q", got)
+	}
+	if got := client.launched[0].Directory; got != "/home/user/orphan" {
+		t.Fatalf("expected directory /home/user/orphan, got %q", got)
 	}
 }
 

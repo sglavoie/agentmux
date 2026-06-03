@@ -285,11 +285,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, m.restartWithToast(m.targetSession)
 			}
 			return m, nil
-		case keyX:
-			if m.focusedChipIdx >= 0 {
-				m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))
-				return m, nil
-			}
+		case keyClose:
 			if len(m.filtered) > 0 {
 				s := m.filtered[m.cursor]
 				if s.Locked {
@@ -318,6 +314,20 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.configPickerAccounts = m.cfg.Accounts
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
+				m.configPickerPurpose = ConfigPickerRestartProfile
+				m.configPickerReturnMode = ModeList
+				m.configPickerProjectIdx = -1
+				m.actionErr = nil
+				m.mode = ModeConfigPicker
+			}
+			return m, nil
+		case keyDashboardLaunch:
+			if len(m.filtered) > 0 {
+				m.targetSession = m.filtered[m.cursor]
+				m.configPickerAccounts = m.cfg.Accounts
+				m.configPickerCurrent = m.targetSession.EffectiveProfile()
+				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
+				m.configPickerPurpose = ConfigPickerDashboardLaunch
 				m.configPickerReturnMode = ModeList
 				m.configPickerProjectIdx = -1
 				m.actionErr = nil
@@ -326,9 +336,12 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keyClearStatus:
 			if len(m.filtered) > 0 {
-				s := m.filtered[m.cursor]
+				m.targetSession = m.filtered[m.cursor]
+				if stateGroup(m.targetSession, m.lastActivity, m.idleThreshold) != 0 {
+					return m, nil
+				}
 				m.actionErr = nil
-				return m, clearStatusCmd(m.client, s)
+				return m, clearStatusCmd(m.client, m.targetSession)
 			}
 			return m, nil
 		case keyLock:

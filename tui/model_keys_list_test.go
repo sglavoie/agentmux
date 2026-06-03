@@ -26,7 +26,7 @@ func lockedTestModel() Model {
 
 // assertLockedDenial verifies that pressing key on a locked row leaves the
 // model in ModeList, surfaces a denial toast, and does not dispatch a
-// destructive command. Shared across the r/x/c cases below so each test
+// destructive command. Shared across the r/X/c cases below so each test
 // captures the same set of guarantees.
 func assertLockedDenial(t *testing.T, key string) {
 	t.Helper()
@@ -56,11 +56,11 @@ func TestRestartDeniedOnLockedRow(t *testing.T) {
 	assertLockedDenial(t, "r")
 }
 
-// TestCloseDeniedOnLockedRow verifies a direct x press on a locked row
+// TestCloseDeniedOnLockedRow verifies a direct X press on a locked row
 // short-circuits before the close cmd or undo snapshot is created. Also
-// guards against the chip-remove branch swallowing the lock check.
+// guards against key-remap regressions bypassing the lock check.
 func TestCloseDeniedOnLockedRow(t *testing.T) {
-	assertLockedDenial(t, "x")
+	assertLockedDenial(t, "X")
 }
 
 // TestOverrideProfileDeniedOnLockedRow verifies a direct c press on a
@@ -77,6 +77,52 @@ func TestOverrideProfileDeniedOnLockedRow(t *testing.T) {
 	}
 	if !strings.Contains(m2.toasts[0].Text, "locked") {
 		t.Errorf("c on locked row: expected toast mentioning lock, got %q", m2.toasts[0].Text)
+	}
+}
+
+func TestDashboardLaunchAllowedOnLockedRow(t *testing.T) {
+	m := lockedTestModel()
+	updated, _ := m.Update(keyPress("C"))
+	m2 := updated.(Model)
+	if m2.mode != ModeConfigPicker {
+		t.Fatalf("C on locked row: expected ModeConfigPicker, got %d", m2.mode)
+	}
+	if m2.configPickerPurpose != ConfigPickerDashboardLaunch {
+		t.Fatalf("C on locked row: expected dashboard-launch purpose, got %d", m2.configPickerPurpose)
+	}
+	if len(m2.toasts) != 0 {
+		t.Fatalf("C on locked row: expected no denial toast, got %+v", m2.toasts)
+	}
+}
+
+func TestClearStatusAllowedOnLockedAttentionRow(t *testing.T) {
+	m := lockedTestModel()
+	m.filtered[0].State = "key"
+	updated, cmd := m.Update(keyPress("x"))
+	m2 := updated.(Model)
+	if m2.mode != ModeList {
+		t.Fatalf("x on locked row: expected ModeList, got %d", m2.mode)
+	}
+	if cmd == nil {
+		t.Fatal("x on locked row: expected clear-status cmd")
+	}
+	if len(m2.toasts) != 0 {
+		t.Fatalf("x on locked row: expected no denial toast, got %+v", m2.toasts)
+	}
+}
+
+func TestClearStatusNoOpOnNonAttentionRow(t *testing.T) {
+	m := lockedTestModel()
+	updated, cmd := m.Update(keyPress("x"))
+	m2 := updated.(Model)
+	if m2.mode != ModeList {
+		t.Fatalf("x on non-attention row: expected ModeList, got %d", m2.mode)
+	}
+	if cmd != nil {
+		t.Fatal("x on non-attention row: expected no clear-status cmd")
+	}
+	if len(m2.toasts) != 0 {
+		t.Fatalf("x on non-attention row: expected no toast, got %+v", m2.toasts)
 	}
 }
 

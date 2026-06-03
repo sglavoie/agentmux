@@ -21,13 +21,14 @@ const (
 	keyQ             = "q"
 	keyCtrlC         = "ctrl+c"
 	keyE             = "e"
-	keyX             = "x"
+	keyClose         = "X" // closes the highlighted session
 	keyR             = "r"
 	keyU             = "u" // undo the most recent destructive action
 	keyBackspace     = "backspace"
 	keyQuestion      = "?" // opens ModeHelp overlay
 	keyC             = "c" // opens ModeConfigPicker for profile override
-	keyClearStatus   = "C" // clears the highlighted session's icon
+	keyDashboardLaunch = "C" // opens ModeConfigPicker for dashboard launch
+	keyClearStatus   = "x" // clears the highlighted session's icon
 	keyOpenEditor    = "O" // opens the project directory in the configured editor
 	keyResort        = "R" // re-sort tabs in Kitty to repair drifted physical order
 	keyLock          = "L" // toggle the session lock (blocks close/restart/override)

@@ -205,22 +205,27 @@ func TestTabNoFiltersNoOp(t *testing.T) {
 	}
 }
 
-func TestXRemovesFocusedChip(t *testing.T) {
+func TestXWithFocusedChipPreservesFilterAndClearsStatus(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
+	m.filtered[0].State = "key"
 	m.activeFilter = Parse("api @work")
 	m = pressKey(m, "tab") // focus /api
 	if m.focusedChipIdx != 0 {
 		t.Fatalf("setup: expected focus=0, got %d", m.focusedChipIdx)
 	}
-	m = pressKey(m, "x")
-	if len(m.activeFilter.Substrings) != 0 {
-		t.Errorf("expected substring removed, got %v", m.activeFilter.Substrings)
+	updated, cmd := m.Update(keyPress("x"))
+	m2 := updated.(Model)
+	if len(m2.activeFilter.Substrings) != 1 {
+		t.Errorf("expected substring preserved, got %v", m2.activeFilter.Substrings)
 	}
-	if m.activeFilter.Account != "work" {
-		t.Errorf("expected account preserved, got %q", m.activeFilter.Account)
+	if m2.activeFilter.Account != "work" {
+		t.Errorf("expected account preserved, got %q", m2.activeFilter.Account)
 	}
-	if m.mode == ModeConfirm {
-		t.Errorf("expected x to remove chip, not open close-confirm overlay")
+	if cmd == nil {
+		t.Fatal("expected x to dispatch clear-status cmd")
+	}
+	if m2.mode == ModeConfirm {
+		t.Errorf("expected x to clear status, not open close-confirm overlay")
 	}
 }
 
@@ -234,17 +239,17 @@ func TestBackspaceRemovesFocusedChip(t *testing.T) {
 	}
 }
 
-func TestXWithoutFocusedChipOpensConfirm(t *testing.T) {
-	// Postel: x retains its existing close-session behavior when no chip is focused.
+func TestUppercaseXWithoutFocusedChipOpensConfirm(t *testing.T) {
+	// Uppercase X remains the direct close-session shortcut when no chip is focused.
 	// Tested under the legacy confirm flow so the assertion checks ModeConfirm;
 	// the toast/undo default is exercised in undo_test.go.
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m.activeFilter = Parse("api")
 	// No tab pressed → focusedChipIdx remains -1.
-	updated, _ := m.Update(keyPress("x"))
+	updated, _ := m.Update(keyPress("X"))
 	m2 := updated.(Model)
 	if m2.mode != ModeConfirm {
-		t.Errorf("expected x to open close-confirm, got mode=%d", m2.mode)
+		t.Errorf("expected X to open close-confirm, got mode=%d", m2.mode)
 	}
 }
 

@@ -9,10 +9,8 @@ import (
 // renderConfigPicker renders the profile picker overlay for restart/launch overrides.
 func renderConfigPicker(m Model) string {
 	var sb strings.Builder
-	header := "Choose profile"
-	if m.configPickerReturnMode == ModePicker {
-		header = "Launch profile"
-	}
+	purpose := m.activeConfigPickerPurpose()
+	header := purpose.header()
 	sb.WriteString(styleHeader.Render(header+": "+runningSessionDisplayTitle(m.targetSession)) + "\n\n")
 
 	maxName, maxHarness := 0, 0
@@ -56,7 +54,7 @@ func renderConfigPicker(m Model) string {
 		selectedHarness := m.configPickerAccounts[m.configPickerCursor].EffectiveHarness()
 		currentHarness := m.targetSession.Harness
 		if currentHarness != "" && selectedHarness != "" && !strings.EqualFold(currentHarness, selectedHarness) {
-			warning := "⚠  Switching harness: " + currentHarness + " → " + selectedHarness + ". Session will restart."
+			warning := "⚠  " + purpose.harnessWarning(currentHarness, selectedHarness)
 			sb.WriteString("\n" + styleAttentionRow.Render(warning) + "\n")
 		}
 	}

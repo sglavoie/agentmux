@@ -35,15 +35,15 @@ func TestSessionFromRunningSnapshotMatchesRunning(t *testing.T) {
 	}
 }
 
-// TestXCloseDispatchesToastByDefault verifies that pressing x in ModeList
+// TestXCloseDispatchesToastByDefault verifies that pressing X in ModeList
 // with the default config (confirm_destructive=false) skips ModeConfirm,
 // records an undoable snapshot, and pushes the aggregating undo toast.
 func TestXCloseDispatchesToastByDefault(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	updated, cmd := m.Update(keyPress("x"))
+	updated, cmd := m.Update(keyPress("X"))
 	m2 := updated.(Model)
 	if m2.mode != ModeList {
-		t.Fatalf("expected ModeList after x, got %d", m2.mode)
+		t.Fatalf("expected ModeList after X, got %d", m2.mode)
 	}
 	if cmd == nil {
 		t.Fatal("expected a close+toast cmd, got nil")
@@ -52,7 +52,7 @@ func TestXCloseDispatchesToastByDefault(t *testing.T) {
 		t.Fatalf("expected 1 pending undo entry, got %d", len(m2.pendingUndo))
 	}
 	if len(m2.toasts) != 1 {
-		t.Fatalf("expected 1 toast after x, got %d", len(m2.toasts))
+		t.Fatalf("expected 1 toast after X, got %d", len(m2.toasts))
 	}
 	if !strings.Contains(m2.toasts[0].Text, "u to undo") {
 		t.Errorf("expected toast to advertise undo, got %q", m2.toasts[0].Text)
@@ -63,11 +63,11 @@ func TestXCloseDispatchesToastByDefault(t *testing.T) {
 }
 
 // TestXCloseUsesModalWhenConfirmDestructive verifies opt-out: with
-// confirm_destructive=true, x reverts to the existing ModeConfirm flow and
+// confirm_destructive=true, X reverts to the existing ModeConfirm flow and
 // records no undo state.
 func TestXCloseUsesModalWhenConfirmDestructive(t *testing.T) {
 	m := loadSessions(modalConfirmModel(), makeSessions())
-	updated, _ := m.Update(keyPress("x"))
+	updated, _ := m.Update(keyPress("X"))
 	m2 := updated.(Model)
 	if m2.mode != ModeConfirm {
 		t.Fatalf("expected ModeConfirm under opt-out, got %d", m2.mode)
@@ -83,7 +83,7 @@ func TestXCloseUsesModalWhenConfirmDestructive(t *testing.T) {
 func TestMultipleClosesAggregateToSingleToast(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	for range 3 {
-		updated, _ := m.Update(keyPress("x"))
+		updated, _ := m.Update(keyPress("X"))
 		m = updated.(Model)
 		// Each press selects the new top-of-list session; the snapshots are
 		// distinct, but the toast collapses into a single slot.
@@ -116,7 +116,7 @@ func TestMultipleClosesAggregateToSingleToast(t *testing.T) {
 // remaining undo count stays accurate.
 func TestUndoLastConsumesNewestEntry(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
-	updated, _ := m.Update(keyPress("x"))
+	updated, _ := m.Update(keyPress("X"))
 	m = updated.(Model)
 	first := m.pendingUndo[0].label
 
@@ -195,7 +195,7 @@ func TestTransientCloseSkipsUndo(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 99, Base: "orphan", Account: "unknown", Profile: "unknown"},
 	})
-	updated, cmd := m.Update(keyPress("x"))
+	updated, cmd := m.Update(keyPress("X"))
 	m2 := updated.(Model)
 	if cmd == nil {
 		t.Fatal("expected close cmd even for transient session")
@@ -236,17 +236,17 @@ func TestRestartDispatchesToastByDefault(t *testing.T) {
 }
 
 // TestActionsOverlayCloseFiresToast verifies the same close-toast path
-// dispatches when the user reaches `x` via the actions overlay (a → x).
+// dispatches when the user reaches `X` via the actions overlay (a → X).
 func TestActionsOverlayCloseFiresToast(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = openActionsOverlay(t, m)
-	updated, cmd := m.Update(keyPress("x"))
+	updated, cmd := m.Update(keyPress("X"))
 	m2 := updated.(Model)
 	if m2.mode != ModeList {
-		t.Fatalf("expected ModeList after x from overlay, got %d", m2.mode)
+		t.Fatalf("expected ModeList after X from overlay, got %d", m2.mode)
 	}
 	if cmd == nil {
-		t.Fatal("expected close+toast cmd from overlay x")
+		t.Fatal("expected close+toast cmd from overlay X")
 	}
 	if len(m2.pendingUndo) != 1 {
 		t.Fatalf("expected 1 pending undo, got %d", len(m2.pendingUndo))

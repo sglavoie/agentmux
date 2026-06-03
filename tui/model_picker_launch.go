@@ -25,24 +25,12 @@ func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
 	}
 }
 
-// dispatchPickerLaunch starts a multi-session launch and returns a batch of
-// per-session commands. Each command emits a launchProgressMsg the model
-// uses to drive the progress toast (1/N, 2/N, …). Returns nil when no session
-// is selected so the caller doesn't dispatch a dud cmd. Running picker rows
-// are explicit requests for another same-key tab.
-func (m *Model) dispatchPickerLaunch() tea.Cmd {
-	type queued struct {
-		sess  config.Session
-		title string
-	}
-	var todo []queued
-	for i, sess := range m.pickerSessions {
-		if !m.pickerSelected[i] {
-			continue
-		}
-		sess = m.pickerSessionWithResolvedProfile(i)
-		todo = append(todo, queued{sess: sess, title: configSessionDisplayTitle(sess)})
-	}
+type queuedLaunch struct {
+	sess  config.Session
+	title string
+}
+
+func (m *Model) launchBatchCmd(todo []queuedLaunch, quitOnSuccess bool) tea.Cmd {
 	if len(todo) == 0 {
 		return nil
 	}
@@ -52,6 +40,7 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 	total := len(todo)
 	m.launchBatchDone = 0
 	m.launchBatchErrors = 0
+	m.launchBatchQuitOnSuccess = quitOnSuccess
 
 	// The toast-tick cmd (returned by replaceToastByID when the toast strip
 	// was empty) is a tea.Tick that blocks for toastTickInterval before it
@@ -91,6 +80,32 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 	return seq
 }
 
+func (m *Model) dashboardLaunchWithAccountCmd(acc config.Account) tea.Cmd {
+	sess := session.SessionFromRunning(m.targetSession)
+	sess = sessionWithProfile(sess, acc.Name)
+	return m.launchBatchCmd([]queuedLaunch{{
+		sess:  sess,
+		title: configSessionDisplayTitle(sess),
+	}}, false)
+}
+
+// dispatchPickerLaunch starts a multi-session launch and returns a batch of
+// per-session commands. Each command emits a launchProgressMsg the model
+// uses to drive the progress toast (1/N, 2/N, …). Returns nil when no session
+// is selected so the caller doesn't dispatch a dud cmd. Running picker rows
+// are explicit requests for another same-key tab.
+func (m *Model) dispatchPickerLaunch() tea.Cmd {
+	var todo []queuedLaunch
+	for i, sess := range m.pickerSessions {
+		if !m.pickerSelected[i] {
+			continue
+		}
+		sess = m.pickerSessionWithResolvedProfile(i)
+		todo = append(todo, queuedLaunch{sess: sess, title: configSessionDisplayTitle(sess)})
+	}
+	return m.launchBatchCmd(todo, true)
+}
+
 // handleLaunchProgress updates the progress toast for a finished
 // per-session launch and triggers a session list refresh so the newly
 // running session appears.
@@ -128,7 +143,7 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	}); c != nil {
 		cmds = append(cmds, c)
 	}
-	if batchDone && m.launchBatchErrors == 0 {
+	if batchDone && m.launchBatchErrors == 0 && m.launchBatchQuitOnSuccess {
 		cmds = append(cmds, tea.Quit)
 	} else {
 		cmds = append(cmds, fetchCmd(m.client, m.cfg, m.sortMode))

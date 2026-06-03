@@ -24,6 +24,30 @@ func TestRenderHelpNoHeightShowsAll(t *testing.T) {
 	}
 }
 
+func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.mode = ModeHelp
+	out := stripAnsi(renderHelp(m))
+
+	for _, frag := range []string{
+		"x         clear session icon",
+		"X         close session (confirm)",
+		"C         launch new session with profile selection",
+	} {
+		if !strings.Contains(out, frag) {
+			t.Errorf("expected help output to contain %q, got:\n%s", frag, out)
+		}
+	}
+	for _, stale := range []string{
+		"x         close session (confirm)",
+		"C         clear session icon",
+	} {
+		if strings.Contains(out, stale) {
+			t.Errorf("expected stale help hint %q to be absent, got:\n%s", stale, out)
+		}
+	}
+}
+
 func TestRenderHelpClipsToVisible(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp

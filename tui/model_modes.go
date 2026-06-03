@@ -21,8 +21,9 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyEnter:
 		if m.configPickerCursor >= 0 && m.configPickerCursor < len(m.configPickerAccounts) {
 			acc := m.configPickerAccounts[m.configPickerCursor]
+			purpose := m.activeConfigPickerPurpose()
 			m.mode = m.configPickerReturnMode
-			if m.configPickerReturnMode == ModePicker && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
+			if purpose == ConfigPickerLauncherOverride && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
 				defaultProfile := m.pickerSessions[m.configPickerProjectIdx].EffectiveProfile()
 				if strings.EqualFold(acc.Name, defaultProfile) {
 					delete(m.pickerProfileOverride, m.configPickerProjectIdx)
@@ -38,8 +39,11 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			if strings.EqualFold(acc.Name, m.configPickerCurrent) {
+			if purpose == ConfigPickerRestartProfile && strings.EqualFold(acc.Name, m.configPickerCurrent) {
 				return m, nil
+			}
+			if purpose == ConfigPickerDashboardLaunch {
+				return m, m.dashboardLaunchWithAccountCmd(acc)
 			}
 			return m, m.restartWithAccountCmd(acc)
 		}

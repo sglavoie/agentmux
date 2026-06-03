@@ -177,7 +177,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case keyClearStatus:
+	case keyDashboardLaunch:
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]
 			sess := m.pickerSessionWithResolvedProfile(origIdx)
@@ -191,6 +191,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.configPickerAccounts = m.cfg.Accounts
 			m.configPickerCurrent = profile
 			m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, profile)
+			m.configPickerPurpose = ConfigPickerLauncherOverride
 			m.configPickerReturnMode = ModePicker
 			m.configPickerProjectIdx = origIdx
 			m.mode = ModeConfigPicker

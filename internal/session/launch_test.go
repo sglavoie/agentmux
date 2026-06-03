@@ -356,12 +356,10 @@ func TestLaunch_ColorRetryUsesTabIDWithDuplicateTitles(t *testing.T) {
 	}
 }
 
-// TestLaunch_ColorTracksProjectDefaultProfile verifies that when a session is
-// launched under an *override* profile, the Kitty tab-bar accent applied via
-// kitten @ set-tab-color uses the project's *configured* default profile color
-// — preserving the project's visual identity — rather than the override
-// profile's color.
-func TestLaunch_ColorTracksProjectDefaultProfile(t *testing.T) {
+// TestLaunch_ColorTracksLaunchProfile verifies that when a session is
+// launched under an override profile, the Kitty tab-bar accent follows the
+// chosen launch profile rather than the project's default profile.
+func TestLaunch_ColorTracksLaunchProfile(t *testing.T) {
 	empty := loadFixture(t, "kitty_ls_empty.json")
 
 	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
@@ -390,9 +388,9 @@ func TestLaunch_ColorTracksProjectDefaultProfile(t *testing.T) {
 		},
 	}
 
-	// Launch under the *override* profile (work/blue). The project's configured
-	// default is personal/yellow, so set-tab-color must apply yellow rather than
-	// blue.
+	// Launch under the override profile (work/blue). Even though the project's
+	// configured default is personal/yellow, the new tab should use the launch
+	// profile's blue accent.
 	sess := config.Session{Title: "api", Account: "work", Profile: "work", Directory: "/tmp/api"}
 	overrideAcc := cfg.Accounts[0] // work
 	defaultAcc := cfg.Accounts[1]  // personal
@@ -429,11 +427,11 @@ func TestLaunch_ColorTracksProjectDefaultProfile(t *testing.T) {
 	}
 
 	joined := strings.Join(setTabColorArgs, " ")
-	if !strings.Contains(joined, "active_bg="+yellow.ActiveBg) {
-		t.Errorf("expected set-tab-color to carry the project default (yellow) active_bg=%q; args: %v", yellow.ActiveBg, setTabColorArgs)
+	if !strings.Contains(joined, "active_bg="+blue.ActiveBg) {
+		t.Errorf("expected set-tab-color to use the launch profile (blue) active_bg=%q; args: %v", blue.ActiveBg, setTabColorArgs)
 	}
-	if strings.Contains(joined, "active_bg="+blue.ActiveBg) {
-		t.Errorf("expected set-tab-color NOT to use the override (blue) active_bg=%q; args: %v", blue.ActiveBg, setTabColorArgs)
+	if strings.Contains(joined, "active_bg="+yellow.ActiveBg) {
+		t.Errorf("expected set-tab-color NOT to use the project default (yellow) active_bg=%q; args: %v", yellow.ActiveBg, setTabColorArgs)
 	}
 }
 

@@ -93,10 +93,10 @@ func TestListFooterSections(t *testing.T) {
 	}
 }
 
-// TestListFooterEAndCAlwaysPresent locks in the discoverability requirement
-// from the brief: `e` (peek) and `C` (clear) must appear in the footer in
-// every state group, even when dimmed.
-func TestListFooterEAndCAlwaysPresent(t *testing.T) {
+// TestListFooterKeyHintsAlwaysPresent locks in the discoverability
+// requirement from the brief: `e` (peek), `C` (launch), `x` (clear), and
+// `X` (close) must appear in the footer in every state group, even when dimmed.
+func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 	cases := []struct {
 		name string
 		m    Model
@@ -130,8 +130,10 @@ func TestListFooterEAndCAlwaysPresent(t *testing.T) {
 			if !strings.Contains(out, "e peek") {
 				t.Errorf("expected `e peek` in footer; got %q", out)
 			}
-			if !strings.Contains(out, "C clear") {
-				t.Errorf("expected `C clear` in footer; got %q", out)
+			for _, frag := range []string{"C launch", "x clear", "X close"} {
+				if !strings.Contains(out, frag) {
+					t.Errorf("expected %q in footer; got %q", frag, out)
+				}
 			}
 		})
 	}
@@ -227,7 +229,7 @@ func TestListFooterLine2ZeroWidth(t *testing.T) {
 }
 
 // TestListFooterAvailability verifies the per-entry availability rules: rows
-// in the attention group activate `C`; bolt rows activate `e`; empty lists
+// in the attention group activate `x`; bolt rows activate `e`; empty lists
 // keep every row-targeted entry unavailable.
 func TestListFooterAvailability(t *testing.T) {
 	cases := []struct {
@@ -240,44 +242,44 @@ func TestListFooterAvailability(t *testing.T) {
 			name: "empty list — only global actions available",
 			m:    Model{},
 			want: map[string]bool{
-				"e": false, "T": false, "r": false, "x": false,
-				"c": false, "C": false,
+				"e": false, "T": false, "r": false, "c": false,
+				"C": false, "x": false, "X": false,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
-			name: "attention row — C active, e unavailable",
+			name: "attention row — x active, e unavailable",
 			m: Model{
 				filtered: []session.RunningSession{{State: "key"}},
 			},
 			want: map[string]bool{
-				"e": false, "T": true, "r": true, "x": true,
-				"c": true, "C": true,
+				"e": false, "T": true, "r": true, "c": true,
+				"C": true, "x": true, "X": true,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
-			name: "active row — e active, C unavailable",
+			name: "active row — e active, x unavailable",
 			m: Model{
 				filtered: []session.RunningSession{{State: "bolt"}},
 			},
 			want: map[string]bool{
-				"e": true, "T": true, "r": true, "x": true,
-				"c": true, "C": false,
+				"e": true, "T": true, "r": true, "c": true,
+				"C": true, "x": false, "X": true,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
-			name: "idle row — neither e nor C available",
+			name: "idle row — neither e nor x available",
 			m: Model{
 				filtered: []session.RunningSession{{State: ""}},
 			},
 			want: map[string]bool{
-				"e": false, "T": true, "r": true, "x": true,
-				"c": true, "C": false,
+				"e": false, "T": true, "r": true, "c": true,
+				"C": true, "x": false, "X": true,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
 			},

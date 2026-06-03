@@ -106,6 +106,9 @@ Key flows:
 
 - `l`: open the launcher
 - `c`: restart the selected running session under another profile
+- `C`: launch a new session from the selected row, with profile selection first
+- `x`: clear the selected session's status icon
+- `X`: close the selected running session
 - `o`: open the selected project's directory in a plain shell tab
 - `p`: toggle the preview pane
 - `d`: show the per-session hook event log (scrollable detail pane)
@@ -141,10 +144,12 @@ Overrides are useful for cross-harness launches. For example, a project such as
 `sis` can keep `profile = "vta"` as its Claude default while `C` launches that
 same project under a Codex profile such as `vta-codex`.
 
-Overrides only affect launcher behavior. They do not rewrite `config.toml`, and
-pressing `enter` in the launcher is an explicit request for new tab(s): if the
-selected project/profile is already running, Agent Mux opens another instance
-instead of skipping or focusing the existing tab.
+Overrides only affect launcher behavior. They do not rewrite `config.toml`.
+Dashboard `C` uses the same profile picker, but launches from the highlighted
+running row instead of from the launcher list. Pressing `enter` in the launcher
+is an explicit request for new tab(s): if the selected project/profile is
+already running, Agent Mux opens another instance instead of skipping or
+focusing the existing tab.
 
 ### Past sessions
 

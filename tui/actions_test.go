@@ -53,8 +53,9 @@ func TestActionAvailabilityActiveRow(t *testing.T) {
 		avail[a.keyMatch] = a.available(m)
 	}
 	want := map[string]bool{
-		"enter": true, "e": true, "r": true, "x": true,
-		"c": true, "C": false, "o": true, "y": true,
+		keyEnter: true, keyE: true, keyR: true, keyC: true,
+		keyDashboardLaunch: true, keyClearStatus: false, keyClose: true,
+		keyO: true, keyY: true,
 	}
 	for k, w := range want {
 		if avail[k] != w {
@@ -74,10 +75,13 @@ func TestActionAvailabilityAttentionRow(t *testing.T) {
 	for _, a := range actionsFor(m) {
 		avail[a.keyMatch] = a.available(m)
 	}
-	if avail["e"] != false {
+	if avail[keyE] != false {
 		t.Errorf("attention row: peek should be unavailable")
 	}
-	if avail["C"] != true {
+	if avail[keyDashboardLaunch] != true {
+		t.Errorf("attention row: launch should be available")
+	}
+	if avail[keyClearStatus] != true {
 		t.Errorf("attention row: clear should be available")
 	}
 }
@@ -96,10 +100,13 @@ func TestActionAvailabilityIdleRow(t *testing.T) {
 	for _, a := range actionsFor(m) {
 		avail[a.keyMatch] = a.available(m)
 	}
-	if avail["e"] != false {
+	if avail[keyE] != false {
 		t.Errorf("idle row: peek should be unavailable")
 	}
-	if avail["C"] != false {
+	if avail[keyDashboardLaunch] != true {
+		t.Errorf("idle row: launch should be available")
+	}
+	if avail[keyClearStatus] != false {
 		t.Errorf("idle row: clear should be unavailable")
 	}
 }
@@ -117,7 +124,7 @@ func TestActionAvailabilityUnlockedRow(t *testing.T) {
 		avail[a.keyMatch] = a.available(m)
 	}
 	want := map[string]bool{
-		keyR: true, keyX: true, keyC: true, keyLock: true,
+		keyR: true, keyClose: true, keyC: true, keyDashboardLaunch: true, keyLock: true,
 	}
 	for k, w := range want {
 		if avail[k] != w {
@@ -171,12 +178,37 @@ func TestActionAvailabilityLockedRow(t *testing.T) {
 		avail[a.keyMatch] = a.available(m)
 	}
 	want := map[string]bool{
-		keyR: false, keyX: false, keyC: false, keyLock: true,
+		keyR: false, keyClose: false, keyC: false, keyDashboardLaunch: true, keyLock: true,
 	}
 	for k, w := range want {
 		if avail[k] != w {
 			t.Errorf("locked row: action %q availability got %v, want %v", k, avail[k], w)
 		}
+	}
+}
+
+func TestActionsOverlayReflectsDashboardRemap(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), []session.RunningSession{
+		{TabID: 1, Base: "api", Account: "work", State: "key", WindowID: 10},
+	})
+	m = openActionsOverlay(t, m)
+	out := stripAnsi(renderActions(m, 80))
+
+	for _, frag := range []string{"C   launch new", "x   clear icon", "X   close"} {
+		if !strings.Contains(out, frag) {
+			t.Errorf("expected actions overlay to contain %q, got:\n%s", frag, out)
+		}
+	}
+	for _, stale := range []string{"x   close", "C   clear"} {
+		if strings.Contains(out, stale) {
+			t.Errorf("expected stale actions hint %q to be absent, got:\n%s", stale, out)
+		}
+	}
+	if strings.Index(out, "C   launch new") > strings.Index(out, "x   clear icon") {
+		t.Errorf("expected dashboard launch to appear before clear icon, got:\n%s", out)
+	}
+	if strings.Index(out, "x   clear icon") > strings.Index(out, "X   close") {
+		t.Errorf("expected clear icon to appear before close, got:\n%s", out)
 	}
 }
 

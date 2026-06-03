@@ -139,6 +139,7 @@ func TestConfigPickerHarnessEmojiAndColor(t *testing.T) {
 	m.configPickerAccounts = cfg.Accounts
 	m.configPickerCurrent = "personal"
 	m.configPickerCursor = -1
+	m.configPickerPurpose = ConfigPickerLauncherOverride
 	m.configPickerReturnMode = ModePicker
 
 	out := renderConfigPicker(m)
