@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -25,6 +27,8 @@ const (
 func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
 	m.mode = ModeChipPicker
 	m.chipPickerKind = kind
+	m.chipPickerProjectQuery = ""
+	m.chipPickerProjectSearchMode = false
 
 	var opts []string
 	var current string
@@ -42,11 +46,12 @@ func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
 	options := make([]string, 0, len(opts)+1)
 	options = append(options, "")
 	options = append(options, opts...)
-	m.chipPickerOptions = options
+	m.chipPickerAllOptions = options
+	m.chipPickerOptions = filterProjectChipPickerOptions(m.chipPickerAllOptions, m.chipPickerProjectQuery)
 
 	cursor := 0
 	if current != "" {
-		for i, o := range options {
+		for i, o := range m.chipPickerOptions {
 			if o == current {
 				cursor = i
 				break
@@ -63,9 +68,43 @@ func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
 // without changing the filter; enter commits the highlighted row and
 // dispatches a re-search. Navigation mirrors the other overlays.
 func (m Model) handleChipPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.chipPickerKind == chipPickerProject && m.chipPickerProjectSearchMode {
+		return m.handleProjectChipPickerSearchKey(msg)
+	}
+	return m.handleChipPickerNavKey(msg)
+}
+
+func (m Model) handleProjectChipPickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyCtrlC:
 		return m, tea.Quit
+	case keyEsc, keyEnter:
+		m.chipPickerProjectSearchMode = false
+		return m, nil
+	case keyBackspace:
+		if r := []rune(m.chipPickerProjectQuery); len(r) > 0 {
+			m.chipPickerProjectQuery = string(r[:len(r)-1])
+			applyProjectChipPickerQuery(&m)
+		}
+		return m, nil
+	default:
+		if t := msg.Key().Text; t != "" {
+			m.chipPickerProjectQuery += t
+			applyProjectChipPickerQuery(&m)
+		}
+		return m, nil
+	}
+}
+
+func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case keyCtrlC:
+		return m, tea.Quit
+	case keySlash:
+		if m.chipPickerKind == chipPickerProject {
+			m.chipPickerProjectSearchMode = true
+		}
+		return m, nil
 	case keyEsc, keyQ:
 		m.mode = ModeSessionSearch
 		return m, nil
@@ -105,6 +144,9 @@ func (m Model) handleChipPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		scrollChipPickerToCursor(&m)
 		return m, nil
 	case keyEnter:
+		if m.chipPickerKind == chipPickerProject && len(m.chipPickerOptions) == 0 {
+			return m, nil
+		}
 		if m.chipPickerCursor < 0 || m.chipPickerCursor >= len(m.chipPickerOptions) {
 			m.mode = ModeSessionSearch
 			return m, nil
@@ -126,6 +168,30 @@ func (m Model) handleChipPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.dispatchSessionSearch()
 	}
 	return m, nil
+}
+
+func applyProjectChipPickerQuery(m *Model) {
+	m.chipPickerOptions = filterProjectChipPickerOptions(m.chipPickerAllOptions, m.chipPickerProjectQuery)
+	m.chipPickerCursor = 0
+	m.chipPickerOffset = 0
+	scrollChipPickerToCursor(m)
+}
+
+func filterProjectChipPickerOptions(options []string, query string) []string {
+	if query == "" {
+		return append([]string(nil), options...)
+	}
+	q := strings.ToLower(query)
+	filtered := make([]string, 0, len(options))
+	for _, opt := range options {
+		if opt == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(opt), q) {
+			filtered = append(filtered, opt)
+		}
+	}
+	return filtered
 }
 
 // scrollChipPickerToCursor keeps the cursor inside the visible window after

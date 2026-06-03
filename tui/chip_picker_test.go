@@ -42,6 +42,31 @@ func TestRenderChipPickerHeaderByKind(t *testing.T) {
 	}
 }
 
+func TestRenderChipPickerProjectHeaderShowsFilterHint(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind chipPickerKind
+		want bool
+	}{
+		{name: "harness", kind: chipPickerHarness, want: false},
+		{name: "profile", kind: chipPickerProfile, want: false},
+		{name: "project", kind: chipPickerProject, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := chipPickerFixture(tc.kind, []string{""}, 0)
+			out := stripAnsi(renderChipPicker(m))
+			lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+			if len(lines) == 0 {
+				t.Fatalf("expected header line, got empty output")
+			}
+			got := strings.Contains(lines[0], "/ to filter")
+			if got != tc.want {
+				t.Fatalf("header filter hint present=%v, want %v; header=%q", got, tc.want, lines[0])
+			}
+		})
+	}
+}
+
 // TestRenderChipPickerAnyFirstWhenNoFilter verifies the "(any)" row sits at
 // the top of the list and carries the cursor highlight when no filter is set.
 func TestRenderChipPickerAnyFirstWhenNoFilter(t *testing.T) {

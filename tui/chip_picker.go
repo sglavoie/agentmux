@@ -10,10 +10,13 @@ func chipPickerVisibleHeight(m Model) int {
 		return 0
 	}
 	// Box chrome: top border (1) + bottom border (1) + header (1) + footer
-	// reserve (1) + safety margin (2) = 6. The chip picker now renders as a
-	// centered overlay, so the budget no longer scales with the full
-	// terminal — it just needs to fit inside the styleOverlayBox.
-	avail := m.height - 6
+	// reserve (1) + safety margin (2) = 6. The project picker also spends
+	// one row on the transient search prompt once search has started.
+	chrome := 6
+	if chipPickerProjectSearchVisible(m) {
+		chrome++
+	}
+	avail := m.height - chrome
 	if avail < 1 {
 		return 1
 	}
@@ -37,11 +40,23 @@ func renderChipPicker(m Model) string {
 		header = "Choose project"
 	}
 	sb.WriteString(styleHeader.Render(header))
+	if m.chipPickerKind == chipPickerProject {
+		sb.WriteString(styleDim.Render("  / to filter"))
+	}
 	sb.WriteByte('\n')
+
+	if chipPickerProjectSearchVisible(m) {
+		sb.WriteString(renderChipPickerProjectSearch(m))
+		sb.WriteByte('\n')
+	}
 
 	total := len(m.chipPickerOptions)
 	if total == 0 {
-		sb.WriteString(styleDim.Render("  (no options)"))
+		if chipPickerProjectSearchVisible(m) {
+			sb.WriteString(styleDim.Render("  (no projects match)"))
+		} else {
+			sb.WriteString(styleDim.Render("  (no options)"))
+		}
 		sb.WriteByte('\n')
 		return sb.String()
 	}
@@ -117,6 +132,19 @@ func renderChipPicker(m Model) string {
 	}
 
 	return sb.String()
+}
+
+func chipPickerProjectSearchVisible(m Model) bool {
+	return m.chipPickerKind == chipPickerProject &&
+		(m.chipPickerProjectSearchMode || m.chipPickerProjectQuery != "")
+}
+
+func renderChipPickerProjectSearch(m Model) string {
+	line := styleSearch.Render("/") + m.chipPickerProjectQuery
+	if m.chipPickerProjectSearchMode {
+		line += "█"
+	}
+	return line
 }
 
 // renderChipPickerBox wraps renderChipPicker in styleOverlayBox so the chip

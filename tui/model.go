@@ -189,14 +189,18 @@ type Model struct {
 
 	// chip picker overlay (ModeChipPicker) opened from ModeSessionSearch when
 	// the user presses h/p/r to choose harness/profile/project. chipPickerKind
-	// selects which filter is being edited; chipPickerOptions is the option
-	// list captured at open time (the leading empty string represents "(any)");
-	// chipPickerCursor/Offset follow the same window contract as
-	// sessionCursor/sessionOffset.
-	chipPickerKind    chipPickerKind
-	chipPickerOptions []string
-	chipPickerCursor  int
-	chipPickerOffset  int
+	// selects which filter is being edited. chipPickerAllOptions is the full
+	// list captured at open time; chipPickerOptions is the visible list used by
+	// the cursor, renderer, and selection (the leading empty string represents
+	// "(any)" when visible). chipPickerCursor/Offset follow the same window
+	// contract as sessionCursor/sessionOffset.
+	chipPickerKind              chipPickerKind
+	chipPickerAllOptions        []string
+	chipPickerOptions           []string
+	chipPickerCursor            int
+	chipPickerOffset            int
+	chipPickerProjectQuery      string
+	chipPickerProjectSearchMode bool
 
 	// session viewer (ModeSessionView). viewerSession is the metadata of the
 	// transcript currently being read; nil when the viewer is closed.
