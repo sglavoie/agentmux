@@ -213,6 +213,18 @@ func previewFooterLines(m Model) int {
 	return 4
 }
 
+// dashboardPreviewEnableFooterLines returns the footer budget used to decide
+// whether enabling ModeList preview will fit. A successful enable suppresses
+// the regular dashboard footer and clears stale preview notices, so the
+// preview-off footer must not make the initial fit check stricter than the
+// enabled layout.
+func dashboardPreviewEnableFooterLines(m Model) int {
+	if m.mode != ModeList {
+		return previewFooterLines(m)
+	}
+	return 0
+}
+
 // togglePreview flips the preview pane on/off. Returns the model and any cmd
 // (immediate fetch + ticker) to dispatch on enable.
 func (m Model) togglePreview() (tea.Model, tea.Cmd) {
@@ -225,7 +237,7 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	cfg := m.cfg.Defaults.Preview
-	if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+	if !previewFits(m.width, m.height, dashboardPreviewEnableFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
 		m.previewNotice = "preview unavailable: terminal too small"
 		m.previewNoticeExpires = time.Now().Add(2 * time.Second)
 		return m, nil
@@ -234,6 +246,8 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	m.previewText = ""
 	m.previewError = ""
 	m.previewWindowID = m.currentPreviewWindowID()
+	m.previewNotice = ""
+	m.previewNoticeExpires = time.Time{}
 	scrollListToCursor(&m)
 	d := time.Duration(cfg.RefreshMs) * time.Millisecond
 	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
