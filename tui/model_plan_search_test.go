@@ -166,6 +166,42 @@ func TestPlanSearch_TypingShrinksResultSet(t *testing.T) {
 	}
 }
 
+// TestPlanSearchLowercaseSRemainsSortKey pins the mode-scoped key contract:
+// lowercase s sorts plan-search results and must not enter project-scoped
+// Past Sessions from this mode.
+func TestPlanSearchLowercaseSRemainsSortKey(t *testing.T) {
+	m, _ := planSearchTestModel(t)
+	m.planSortMode = plans.SortByMatches
+
+	updated, cmd := m.Update(keyPress("s"))
+	got := updated.(Model)
+
+	if cmd != nil {
+		t.Fatalf("plan search s returned cmd %T, want nil", cmd)
+	}
+	if got.mode != ModePlanSearch {
+		t.Fatalf("mode = %v, want ModePlanSearch", got.mode)
+	}
+	if got.planSortMode != plans.SortByModTime {
+		t.Fatalf("planSortMode = %v, want SortByModTime", got.planSortMode)
+	}
+	if singleChipValue(got.filterProject) != "" {
+		t.Fatalf("filterProject = %#v, want unchanged empty project chip", got.filterProject)
+	}
+
+	updated, cmd = got.Update(keyPress("s"))
+	got = updated.(Model)
+	if cmd != nil {
+		t.Fatalf("second plan search s returned cmd %T, want nil", cmd)
+	}
+	if got.mode != ModePlanSearch {
+		t.Fatalf("second mode = %v, want ModePlanSearch", got.mode)
+	}
+	if got.planSortMode != plans.SortByMatches {
+		t.Fatalf("second planSortMode = %v, want SortByMatches", got.planSortMode)
+	}
+}
+
 // TestPlanSearch_OpenInEditorInvokesLaunch verifies pressing `o` on a row
 // dispatches a tea.Cmd that drives kitten @ launch with the plan's directory.
 func TestPlanSearch_OpenInEditorInvokesLaunch(t *testing.T) {

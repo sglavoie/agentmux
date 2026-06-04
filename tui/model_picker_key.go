@@ -155,6 +155,15 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		origIdx := m.pickerFilteredIdx[m.pickerCursor]
 		m.pickerSelected[origIdx] = !m.pickerSelected[origIdx]
 		return m, nil
+	case keyProjectSessionSearch:
+		if len(m.pickerFilteredIdx) == 0 || m.pickerCursor < 0 || m.pickerCursor >= len(m.pickerFilteredIdx) {
+			return m, nil
+		}
+		origIdx := m.pickerFilteredIdx[m.pickerCursor]
+		if origIdx < 0 || origIdx >= len(m.pickerSessions) {
+			return m, nil
+		}
+		return m.enterSessionSearchForProject(m.pickerSessions[origIdx].Title)
 	case keyO:
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]

@@ -107,6 +107,7 @@ Key flows:
 - `l`: open the launcher
 - `c`: restart the selected running session under another profile
 - `C`: launch a new session from the selected row, with profile selection first
+- `s`: search past session transcripts for the selected project
 - `x`: clear the selected session's status icon
 - `X`: close the selected running session
 - `o`: open the selected project's directory in a plain shell tab
@@ -137,6 +138,7 @@ its own badge/metadata columns.
 - press `/` to filter live,
 - `space` toggles selection,
 - `enter` launches the selected projects,
+- `s` searches past session transcripts for the highlighted project,
 - `C` chooses a **one-time profile override** for the highlighted project,
 - `o` opens the highlighted project's directory instead of launching it.
 
@@ -153,13 +155,15 @@ focusing the existing tab.
 
 ### Past sessions
 
-Press `S` from the dashboard to open the past-session search. During dashboard
+Press `S` from the dashboard to open the past-session search across every
+configured profile and project. Press `s` from the dashboard or launcher to
+open the same search filtered to the highlighted project. During dashboard
 startup, amx loads the cached transcript index in the background and then
 starts a slower scan of each profile's transcript directory (Claude
 `~/.claude/projects`, Copilot `~/.copilot/session-state`, Codex
-`~/.codex/sessions`). Opening `S` usually shows the warmed cache immediately;
-while a scan is still running, existing rows stay visible and the header shows
-the scan status. Session metadata is stored at
+`~/.codex/sessions`). Opening past-session search usually shows the warmed
+cache immediately; while a scan is still running, existing rows stay visible
+and the header shows the scan status. Session metadata is stored at
 `~/.local/share/agent-mux/transcripts.json`; searchable transcript text is
 stored in per-session sidecars under
 `~/.local/share/agent-mux/transcripts.search/`. The daemon still never loads

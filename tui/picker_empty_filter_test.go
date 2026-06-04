@@ -41,7 +41,7 @@ func TestPickerEmptyFilterNavigationIsSafe(t *testing.T) {
 	if m.mode != ModePicker {
 		t.Fatalf("setup: expected ModePicker after esc from search, got %d", m.mode)
 	}
-	for _, k := range []string{"j", "k", " ", "o", "C"} {
+	for _, k := range []string{"j", "k", " ", "s", "o", "C"} {
 		m = pressKeyPickerSafe(t, m, k)
 		if m.mode != ModePicker {
 			t.Errorf("expected to stay in ModePicker after %q with empty filter, got mode=%d", k, m.mode)

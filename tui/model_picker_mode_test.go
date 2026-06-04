@@ -114,6 +114,9 @@ func TestFooterPickerHint(t *testing.T) {
 	if !strings.Contains(footer, "space: toggle") {
 		t.Errorf("picker footer missing space hint, got:\n%s", footer)
 	}
+	if !strings.Contains(footer, "s: sessions") {
+		t.Errorf("picker footer missing project sessions hint, got:\n%s", footer)
+	}
 }
 
 func TestFooterListHintNoSessions(t *testing.T) {
@@ -139,7 +142,7 @@ func TestFooterIncludesDirectKeys(t *testing.T) {
 	if len(lines) != 4 {
 		t.Fatalf("expected 4-line footer, got %d lines", len(lines))
 	}
-	for _, frag := range []string{"C launch", "x clear", "X close"} {
+	for _, frag := range []string{"C launch", "s project sessions", "x clear", "X close"} {
 		if !strings.Contains(lines[0], frag) {
 			t.Errorf("expected %q on footer line 1", frag)
 		}

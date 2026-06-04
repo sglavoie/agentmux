@@ -387,6 +387,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keySessionSearch:
 			return m.enterSessionSearch()
+		case keyProjectSessionSearch:
+			if len(m.filtered) == 0 || m.cursor < 0 || m.cursor >= len(m.filtered) {
+				return m, nil
+			}
+			return m.enterSessionSearchForProject(m.filtered[m.cursor].EffectiveProject())
 		case keyPlanSearch:
 			return m.enterPlanSearch()
 		case keyD:

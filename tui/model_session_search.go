@@ -106,6 +106,30 @@ func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// enterSessionSearchForProject resets Past Sessions to a single project chip
+// and uses the normal entry/cache path before dispatching a filtered search
+// when the transcript cache is already available.
+func (m Model) enterSessionSearchForProject(project string) (tea.Model, tea.Cmd) {
+	if project == "" {
+		return m, nil
+	}
+	m.sessionQuery = ""
+	m.filterHarness = nil
+	m.filterProfile = nil
+	m.filterProject = []string{project}
+
+	updated, cmd := m.enterSessionSearch()
+	m = updated.(Model)
+	if m.transcriptIndex == nil || m.sessionCacheLoadInFlight {
+		return m, cmd
+	}
+	searchCmd := m.dispatchSessionSearch()
+	if cmd == nil {
+		return m, searchCmd
+	}
+	return m, tea.Batch(cmd, searchCmd)
+}
+
 // exitSessionSearch returns to ModeList and clears transient input state
 // (the query and chip filters are preserved so re-entry feels stateful).
 func (m *Model) exitSessionSearch() {

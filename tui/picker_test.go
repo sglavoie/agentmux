@@ -193,6 +193,98 @@ func TestPickerEnterLaunchesWhileFiltered(t *testing.T) {
 	}
 }
 
+func TestPickerProjectSessionSearchUsesFilteredRowTitle(t *testing.T) {
+	m := sessionSearchFilterModel(t)
+	m.mode = ModePicker
+	m.cfg.Sessions = []config.Session{
+		{Title: "Foo", Directory: "/home/user/foo", Account: "work"},
+		{Title: "Bar", Directory: "/home/user/bar", Account: "work"},
+	}
+	m.pickerSessions = m.cfg.Sessions
+	m.pickerFilter = "Bar"
+	m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+	m.pickerCursor = 0
+	seq := m.sessionSearchSeq
+
+	updated, cmd := m.Update(keyPress("s"))
+	got := updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("picker project session search returned nil cmd; want debounced search")
+	}
+	if got.mode != ModeSessionSearch {
+		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+	}
+	if got.sessionSearchSeq != seq+1 {
+		t.Fatalf("sessionSearchSeq = %d, want %d", got.sessionSearchSeq, seq+1)
+	}
+	if singleChipValue(got.filterProject) != "Bar" {
+		t.Fatalf("filterProject = %#v, want Bar", got.filterProject)
+	}
+	if out := stripAnsi(renderSessionSearch(got)); !strings.Contains(out, "project: Bar") {
+		t.Fatalf("project chip was not visible after picker project search entry:\n%s", out)
+	}
+
+	updated, searchCmd := got.Update(sessionSearchDebounceMsg{seq: got.sessionSearchSeq})
+	got = updated.(Model)
+	doneMsg, ok := drainCmd(t, searchCmd).(sessionSearchDoneMsg)
+	if !ok {
+		t.Fatalf("project debounce produced %T, want sessionSearchDoneMsg", doneMsg)
+	}
+	if doneMsg.err != nil {
+		t.Fatalf("project-filtered search returned error: %v", doneMsg.err)
+	}
+	updated, _ = got.Update(doneMsg)
+	got = updated.(Model)
+	if len(got.sessionResults) != 1 || got.sessionResults[0].Meta.Project != "Bar" {
+		t.Fatalf("project-filtered results = %+v, want only Bar", got.sessionResults)
+	}
+}
+
+func TestPickerProjectSessionSearchSIsTextInSearchMode(t *testing.T) {
+	m := pickerModel(t)
+	m = pressKey(m, "/")
+
+	updated, cmd := m.Update(keyPress("s"))
+	got := updated.(Model)
+
+	if cmd != nil {
+		t.Fatalf("typing s in picker search mode returned cmd %T, want nil", cmd)
+	}
+	if got.mode != ModePicker {
+		t.Fatalf("mode = %v, want ModePicker", got.mode)
+	}
+	if !got.pickerSearchMode {
+		t.Fatal("pickerSearchMode=false after typing s")
+	}
+	if got.pickerFilter != "s" {
+		t.Fatalf("pickerFilter = %q, want s", got.pickerFilter)
+	}
+}
+
+func TestPickerProjectSessionSearchEmptyFilterIsNoOp(t *testing.T) {
+	m := pickerModel(t)
+	m = pressKey(m, "/")
+	m = typeString(m, "zzzz")
+	m = pressKey(m, "esc")
+	if len(m.pickerFilteredIdx) != 0 {
+		t.Fatalf("setup: expected 0 matches, got %d", len(m.pickerFilteredIdx))
+	}
+
+	updated, cmd := m.Update(keyPress("s"))
+	got := updated.(Model)
+
+	if cmd != nil {
+		t.Fatalf("project session search on empty picker returned cmd %T, want nil", cmd)
+	}
+	if got.mode != ModePicker {
+		t.Fatalf("mode = %v, want ModePicker", got.mode)
+	}
+	if got.pickerFilter != "zzzz" {
+		t.Fatalf("pickerFilter = %q, want unchanged zzzz", got.pickerFilter)
+	}
+}
+
 func TestPickerDSLAccountFilter(t *testing.T) {
 	// Drive the DSL filter via applyPickerFilter directly to verify the underlying
 	// semantics — the live-typing path (in search mode) is covered by TestPickerTypingNarrowsLive.

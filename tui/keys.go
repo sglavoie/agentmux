@@ -80,3 +80,5 @@ const (
 	key8 = "8"
 	key9 = "9"
 )
+
+const keyProjectSessionSearch = "s" // opens ModeSessionSearch filtered to the selected project

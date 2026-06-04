@@ -22,7 +22,7 @@ func renderFooter(m Model) string {
 		lines = nonEmptyFooterLines(styleFooter.Render("  [y]es   [n]o   [esc] cancel"))
 	case ModePicker:
 		lines = nonEmptyFooterLines(
-			styleFooter.Render("  space: toggle  enter: launch  C: profile  o: open dir  O: open in editor  p: preview  esc: clear/exit"),
+			styleFooter.Render("  space: toggle  enter: launch  s: sessions  C: profile  o: open dir  O: open in editor  p: preview  esc: clear/exit"),
 			styleFooter.Render("  DSL: @profile, word  j/k: up/down"),
 		)
 	case ModeConfigPicker:
@@ -282,6 +282,7 @@ var listFooterPalette = []footerEntry{
 	{"r", "restart", footerSectionRow, hasRow},
 	{"c", "profile", footerSectionRow, hasRow},
 	{"C", "launch", footerSectionRow, hasRow},
+	{"s", "project sessions", footerSectionRow, hasRow},
 	{"x", "clear", footerSectionRow, func(m Model) bool {
 		if !hasRow(m) {
 			return false

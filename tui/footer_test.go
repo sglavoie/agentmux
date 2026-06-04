@@ -78,7 +78,7 @@ func TestListFooterCommandRowsSplit(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("expected two command rows, got %d in %q", len(lines), out)
 	}
-	for _, frag := range []string{"e peek", "O open in editor"} {
+	for _, frag := range []string{"e peek", "s project sessions", "O open in editor"} {
 		if !strings.Contains(lines[0], frag) {
 			t.Errorf("expected row command %q on line 1; got %q", frag, lines[0])
 		}
@@ -280,7 +280,7 @@ func TestListFooterAvailability(t *testing.T) {
 			m:    Model{},
 			want: map[string]bool{
 				"e": false, "T": false, "r": false, "c": false,
-				"C": false, "x": false, "X": false,
+				"C": false, "s": false, "x": false, "X": false,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
 			},
@@ -292,7 +292,7 @@ func TestListFooterAvailability(t *testing.T) {
 			},
 			want: map[string]bool{
 				"e": false, "T": true, "r": true, "c": true,
-				"C": true, "x": true, "X": true,
+				"C": true, "s": true, "x": true, "X": true,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
 			},
@@ -304,7 +304,7 @@ func TestListFooterAvailability(t *testing.T) {
 			},
 			want: map[string]bool{
 				"e": true, "T": true, "r": true, "c": true,
-				"C": true, "x": false, "X": true,
+				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
 			},
@@ -316,7 +316,7 @@ func TestListFooterAvailability(t *testing.T) {
 			},
 			want: map[string]bool{
 				"e": false, "T": true, "r": true, "c": true,
-				"C": true, "x": false, "X": true,
+				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
 				"l": true, "S": true, "P": true, "R": true,
 			},
