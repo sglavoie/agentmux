@@ -211,27 +211,29 @@ func TestTransientCloseSkipsUndo(t *testing.T) {
 	}
 }
 
-// TestRestartDispatchesToastByDefault verifies r runs restart immediately
-// and pushes a confirmation toast (no undo entry — restart is two-step
-// internally and undo would be ambiguous).
-func TestRestartDispatchesToastByDefault(t *testing.T) {
+// TestRestartDirectKeyConfirmsByDefault verifies the one-key dashboard r path
+// always enters the modal confirmation flow before dispatching a restart.
+func TestRestartDirectKeyConfirmsByDefault(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	updated, cmd := m.Update(keyPress("r"))
 	m2 := updated.(Model)
-	if m2.mode != ModeList {
-		t.Fatalf("expected ModeList after r, got %d", m2.mode)
+	if m2.mode != ModeConfirm {
+		t.Fatalf("expected ModeConfirm after r, got %d", m2.mode)
 	}
-	if cmd == nil {
-		t.Fatal("expected restart cmd, got nil")
+	if cmd != nil {
+		t.Fatal("expected no immediate restart cmd before confirmation")
+	}
+	if m2.confirmAction != "restart" {
+		t.Fatalf("expected confirmAction=restart, got %q", m2.confirmAction)
+	}
+	if m2.confirmConsequence != restartConsequence {
+		t.Fatalf("expected restart consequence, got %q", m2.confirmConsequence)
 	}
 	if len(m2.pendingUndo) != 0 {
 		t.Errorf("expected no pendingUndo from restart, got %d", len(m2.pendingUndo))
 	}
-	if len(m2.toasts) != 1 {
-		t.Fatalf("expected 1 restart toast, got %d", len(m2.toasts))
-	}
-	if !strings.Contains(m2.toasts[0].Text, "restarted") {
-		t.Errorf("expected restart toast text, got %q", m2.toasts[0].Text)
+	if len(m2.toasts) != 0 {
+		t.Fatalf("expected no restart toast before confirmation, got %d", len(m2.toasts))
 	}
 }
 
@@ -250,6 +252,30 @@ func TestActionsOverlayCloseFiresToast(t *testing.T) {
 	}
 	if len(m2.pendingUndo) != 1 {
 		t.Fatalf("expected 1 pending undo, got %d", len(m2.pendingUndo))
+	}
+}
+
+// TestActionsOverlayRestartStillFiresToastByDefault verifies the scoped
+// direct-r guard does not change the existing a -> r overlay behavior.
+func TestActionsOverlayRestartStillFiresToastByDefault(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m = openActionsOverlay(t, m)
+	updated, cmd := m.Update(keyPress("r"))
+	m2 := updated.(Model)
+	if m2.mode != ModeList {
+		t.Fatalf("expected ModeList after overlay r, got %d", m2.mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected restart cmd from overlay r")
+	}
+	if len(m2.pendingUndo) != 0 {
+		t.Errorf("expected no pendingUndo from restart, got %d", len(m2.pendingUndo))
+	}
+	if len(m2.toasts) != 1 {
+		t.Fatalf("expected 1 restart toast, got %d", len(m2.toasts))
+	}
+	if !strings.Contains(m2.toasts[0].Text, "restarted") {
+		t.Errorf("expected restart toast text, got %q", m2.toasts[0].Text)
 	}
 }
 

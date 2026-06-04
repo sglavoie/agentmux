@@ -297,7 +297,7 @@ func TestConfirmYEmitsCloseCmd(t *testing.T) {
 }
 
 func TestConfirmYEmitsRestartCmd(t *testing.T) {
-	m := loadSessions(modalConfirmModel(), makeSessions())
+	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "r") // → ModeConfirm (restart)
 	updated, cmd := m.Update(keyPress("y"))
 	if updated.(Model).mode != ModeList {

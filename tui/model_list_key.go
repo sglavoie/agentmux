@@ -284,13 +284,10 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				m.targetSession = s
 				m.actionErr = nil
-				if m.cfg.Defaults.ConfirmDestructive {
-					m.confirmAction = "restart"
-					m.confirmConsequence = restartConsequence
-					m.mode = ModeConfirm
-					return m, nil
-				}
-				return m, m.restartWithToast(m.targetSession)
+				m.confirmAction = "restart"
+				m.confirmConsequence = restartConsequence
+				m.mode = ModeConfirm
+				return m, nil
 			}
 			return m, nil
 		case keyClose:

@@ -106,6 +106,7 @@ Key flows:
 
 - `l`: open the launcher
 - `t`: tail an active `agent-session-loop` run in the dashboard terminal
+- `r`: restart the selected running session, after confirmation
 - `c`: restart the selected running session under another profile
 - `C`: launch a new session from the selected row, with profile selection first
 - `s`: search past session transcripts for the selected project

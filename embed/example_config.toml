@@ -40,9 +40,10 @@ idle_threshold = 300
 #   project args → profile args → defaults.args
 args = []
 
-# When true, close (x) and restart (r) prompt for confirmation with a modal
-# y/n overlay. When false (default), the action runs immediately and a toast
-# offers `u` to undo within a few seconds.
+# Direct dashboard restart (`r`) always prompts for confirmation. When true,
+# close (`X`) and actions-overlay restart (`a` then `r`) also prompt with a
+# modal y/n overlay. When false (default), those paths run immediately and use
+# toasts where available.
 confirm_destructive = false
 
 # Editor command used by the `O` keybinding (Open in editor). When unset,

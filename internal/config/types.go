@@ -54,7 +54,7 @@ type Defaults struct {
 	SessionArchive       SessionArchiveConfig `toml:"session_archive"`        // retention policy for the searchable session-transcript index
 	Args                 []string             `toml:"args"`                   // preferred shared launch args
 	ClaudeFlags          []string             `toml:"claude_flags"`           // legacy alias for args
-	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // when true, fall back to the modal y/n confirm for close/restart instead of toast+undo
+	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // direct dashboard r always confirms; when true, close/actions-overlay restart use modal confirm instead of toast paths
 	Notifications        NotificationConfig   `toml:"notifications"`
 	Preview              PreviewConfig        `toml:"preview"`
 	Jump                 JumpConfig           `toml:"jump"`            // bracket-key (]/[ and }/{) attention-state navigation
