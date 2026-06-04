@@ -68,7 +68,7 @@ func (m Model) handleLoopTailPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		candidate := m.loopTailCandidates[m.loopTailCursor]
 		m.closeLoopTailPicker()
 		m.actionErr = nil
-		return m, loopTailLaunchCmd(m.client, candidate)
+		return m, loopTailLaunchCmd(candidate)
 	}
 	return m, nil
 }

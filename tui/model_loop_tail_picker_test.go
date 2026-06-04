@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -210,8 +211,10 @@ func TestLoopTailPickerCancelPreservesDashboardState(t *testing.T) {
 }
 
 func TestLoopTailPickerEnterLaunchesSelectedCandidate(t *testing.T) {
-	client := &fakeLoopTailClient{}
 	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
+	client := &fakeLoopTailKittyClient{}
 	candidates := []agentloop.Candidate{
 		loopTailPickerCandidate("/plans/api", "/work/api", 111),
 		loopTailPickerCandidate("/plans/backend", "/work/backend", 222),
@@ -239,11 +242,14 @@ func TestLoopTailPickerEnterLaunchesSelectedCandidate(t *testing.T) {
 	if done.err != nil {
 		t.Fatalf("launch err = %v, want nil", done.err)
 	}
-	if len(client.overlays) != 1 {
-		t.Fatalf("overlay calls = %d, want 1", len(client.overlays))
+	if len(execCalls) != 1 {
+		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
-	if got := client.overlays[0].Cmdline[2]; got != "/plans/backend" {
+	if got := execCalls[0].Args[2]; got != "/plans/backend" {
 		t.Fatalf("launched plan = %q, want /plans/backend", got)
+	}
+	if len(client.overlays) != 0 {
+		t.Fatalf("kitty overlay calls = %d, want 0", len(client.overlays))
 	}
 }
 

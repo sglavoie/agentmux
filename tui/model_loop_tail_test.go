@@ -9,31 +9,36 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-type fakeLoopTailClient struct {
-	overlays   []kitty.LaunchOpts
-	overlayErr error
+type fakeLoopTailKittyClient struct {
+	overlays []kitty.LaunchOpts
 }
 
-func (f *fakeLoopTailClient) ListWindows() ([]kitty.OSWindow, error) { return nil, nil }
-func (f *fakeLoopTailClient) LaunchTab(kitty.LaunchOpts) error       { return nil }
-func (f *fakeLoopTailClient) LaunchOverlay(opts kitty.LaunchOpts) error {
+func (f *fakeLoopTailKittyClient) ListWindows() ([]kitty.OSWindow, error) { return nil, nil }
+func (f *fakeLoopTailKittyClient) LaunchTab(kitty.LaunchOpts) error       { return nil }
+func (f *fakeLoopTailKittyClient) LaunchOverlay(opts kitty.LaunchOpts) error {
 	f.overlays = append(f.overlays, opts)
-	return f.overlayErr
+	return nil
 }
-func (f *fakeLoopTailClient) CloseTab(string) error                                    { return nil }
-func (f *fakeLoopTailClient) MoveTab(string, int) error                                { return nil }
-func (f *fakeLoopTailClient) SetTabColor(string, string, string, string, string) error { return nil }
-func (f *fakeLoopTailClient) SetTabTitle(string, string) error                         { return nil }
-func (f *fakeLoopTailClient) SetUserVars(string, map[string]string) error              { return nil }
-func (f *fakeLoopTailClient) FocusTab(string) error                                    { return nil }
-func (f *fakeLoopTailClient) FocusWindow(string) error                                 { return nil }
-func (f *fakeLoopTailClient) GetText(string, string) (string, error)                   { return "", nil }
-func (f *fakeLoopTailClient) LaunchOverlayPager(string) error                          { return nil }
+func (f *fakeLoopTailKittyClient) CloseTab(string) error { return nil }
+func (f *fakeLoopTailKittyClient) MoveTab(string, int) error {
+	return nil
+}
+func (f *fakeLoopTailKittyClient) SetTabColor(string, string, string, string, string) error {
+	return nil
+}
+func (f *fakeLoopTailKittyClient) SetTabTitle(string, string) error            { return nil }
+func (f *fakeLoopTailKittyClient) SetUserVars(string, map[string]string) error { return nil }
+func (f *fakeLoopTailKittyClient) FocusTab(string) error                       { return nil }
+func (f *fakeLoopTailKittyClient) FocusWindow(string) error                    { return nil }
+func (f *fakeLoopTailKittyClient) GetText(string, string) (string, error)      { return "", nil }
+func (f *fakeLoopTailKittyClient) LaunchOverlayPager(string) error             { return nil }
 
 func stubLoopTailDiscover(t *testing.T, candidates []agentloop.Candidate, err error) {
 	t.Helper()
@@ -65,6 +70,21 @@ func stubLoopTailFallbackPaths(t *testing.T, paths ...string) {
 	t.Cleanup(func() { loopTailFallbackPaths = old })
 }
 
+func stubLoopTailExecProcess(t *testing.T, runErr error, calls *[]*exec.Cmd) {
+	t.Helper()
+	old := loopTailExecProcess
+	loopTailExecProcess = func(cmd *exec.Cmd, fn tea.ExecCallback) tea.Cmd {
+		*calls = append(*calls, cmd)
+		return func() tea.Msg {
+			if fn == nil {
+				return nil
+			}
+			return fn(runErr)
+		}
+	}
+	t.Cleanup(func() { loopTailExecProcess = old })
+}
+
 func pathListIndex(pathValue, want string) int {
 	for i, entry := range filepath.SplitList(pathValue) {
 		if entry == want {
@@ -82,6 +102,16 @@ func pathListCount(pathValue, want string) int {
 		}
 	}
 	return count
+}
+
+func envValue(environ []string, key string) (string, bool) {
+	prefix := key + "="
+	for _, entry := range environ {
+		if strings.HasPrefix(entry, prefix) {
+			return strings.TrimPrefix(entry, prefix), true
+		}
+	}
+	return "", false
 }
 
 func runLoopTailSelection(t *testing.T, m Model) loopTailSelectionMsg {
@@ -136,10 +166,12 @@ func TestModeListTKeyDispatchesLoopTailSelection(t *testing.T) {
 }
 
 func TestModeListTKeyLaunchesUniqueMatchThroughFullUpdatePath(t *testing.T) {
-	client := &fakeLoopTailClient{}
 	candidate := agentloop.Candidate{PlanDir: "/plans/api", CWD: "/work/api"}
 	stubLoopTailDiscover(t, []agentloop.Candidate{candidate}, nil)
 	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
+	client := &fakeLoopTailKittyClient{}
 
 	m := loadSessions(testModel(), []session.RunningSession{{Directory: candidate.CWD}})
 	m.client = client
@@ -162,7 +194,7 @@ func TestModeListTKeyLaunchesUniqueMatchThroughFullUpdatePath(t *testing.T) {
 		t.Fatalf("actionErr after launch selection = %v, want nil", got.actionErr)
 	}
 	if cmd == nil {
-		t.Fatal("launch selection returned nil cmd; expected overlay launch")
+		t.Fatal("launch selection returned nil cmd; expected exec command")
 	}
 
 	done, ok := cmd().(loopTailDoneMsg)
@@ -172,23 +204,31 @@ func TestModeListTKeyLaunchesUniqueMatchThroughFullUpdatePath(t *testing.T) {
 	if done.err != nil {
 		t.Fatalf("launch err = %v, want nil", done.err)
 	}
-	if len(client.overlays) != 1 {
-		t.Fatalf("overlay calls = %d, want 1", len(client.overlays))
+	if len(execCalls) != 1 {
+		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
 	wantCmdline := []string{"/bin/agent-session-loop", "tail", candidate.PlanDir}
-	if !reflect.DeepEqual(client.overlays[0].Cmdline, wantCmdline) {
-		t.Fatalf("overlay Cmdline = %#v, want %#v", client.overlays[0].Cmdline, wantCmdline)
+	if !reflect.DeepEqual(execCalls[0].Args, wantCmdline) {
+		t.Fatalf("exec Args = %#v, want %#v", execCalls[0].Args, wantCmdline)
+	}
+	if execCalls[0].Dir != candidate.CWD {
+		t.Fatalf("exec Dir = %q, want cwd %q", execCalls[0].Dir, candidate.CWD)
+	}
+	if len(client.overlays) != 0 {
+		t.Fatalf("kitty overlay calls = %d, want 0", len(client.overlays))
 	}
 }
 
 func TestModeListTKeyPickerLaunchesSelectedCandidateThroughFullUpdatePath(t *testing.T) {
-	client := &fakeLoopTailClient{}
 	candidates := []agentloop.Candidate{
 		{PlanDir: "/plans/backend-a", CWD: "/work/backend"},
 		{PlanDir: "/plans/backend-b", CWD: "/work/backend"},
 	}
 	stubLoopTailDiscover(t, candidates, nil)
 	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
+	client := &fakeLoopTailKittyClient{}
 
 	m := loadSessions(testModel(), []session.RunningSession{{Directory: "/work/backend"}})
 	m.client = client
@@ -229,7 +269,7 @@ func TestModeListTKeyPickerLaunchesSelectedCandidateThroughFullUpdatePath(t *tes
 		t.Fatalf("picker candidates after launch = %#v, want empty", got.loopTailCandidates)
 	}
 	if cmd == nil {
-		t.Fatal("picker enter returned nil cmd; expected overlay launch")
+		t.Fatal("picker enter returned nil cmd; expected exec command")
 	}
 
 	done, ok := cmd().(loopTailDoneMsg)
@@ -239,12 +279,15 @@ func TestModeListTKeyPickerLaunchesSelectedCandidateThroughFullUpdatePath(t *tes
 	if done.err != nil {
 		t.Fatalf("launch err = %v, want nil", done.err)
 	}
-	if len(client.overlays) != 1 {
-		t.Fatalf("overlay calls = %d, want 1", len(client.overlays))
+	if len(execCalls) != 1 {
+		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
 	wantCmdline := []string{"/bin/agent-session-loop", "tail", "/plans/backend-b"}
-	if !reflect.DeepEqual(client.overlays[0].Cmdline, wantCmdline) {
-		t.Fatalf("overlay Cmdline = %#v, want %#v", client.overlays[0].Cmdline, wantCmdline)
+	if !reflect.DeepEqual(execCalls[0].Args, wantCmdline) {
+		t.Fatalf("exec Args = %#v, want %#v", execCalls[0].Args, wantCmdline)
+	}
+	if len(client.overlays) != 0 {
+		t.Fatalf("kitty overlay calls = %d, want 0", len(client.overlays))
 	}
 }
 
@@ -299,12 +342,12 @@ func TestModeListTKeyEmptyListNoActiveLoopSetsNonFatalError(t *testing.T) {
 }
 
 func TestModeListTKeySelectedProjectWithoutActiveLoopSetsNonFatalError(t *testing.T) {
-	client := &fakeLoopTailClient{}
 	candidate := agentloop.Candidate{PlanDir: "/plans/other", CWD: "/work/other"}
 	stubLoopTailDiscover(t, []agentloop.Candidate{candidate}, nil)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
 
 	m := loadSessions(testModel(), []session.RunningSession{{Directory: "/work/amx"}})
-	m.client = client
 
 	updated, cmd := m.Update(keyPress("t"))
 	if cmd == nil {
@@ -323,8 +366,8 @@ func TestModeListTKeySelectedProjectWithoutActiveLoopSetsNonFatalError(t *testin
 	if !errors.Is(got.actionErr, errNoActiveLoop) {
 		t.Fatalf("actionErr = %v, want %v", got.actionErr, errNoActiveLoop)
 	}
-	if len(client.overlays) != 0 {
-		t.Fatalf("overlay calls = %d, want 0", len(client.overlays))
+	if len(execCalls) != 0 {
+		t.Fatalf("exec calls = %d, want 0", len(execCalls))
 	}
 }
 
@@ -462,9 +505,11 @@ func TestHandleLoopTailSelectionNoneSetsNonFatalError(t *testing.T) {
 	}
 }
 
-func TestHandleLoopTailSelectionLaunchesOverlayWithDirectArgv(t *testing.T) {
-	client := &fakeLoopTailClient{}
+func TestHandleLoopTailSelectionBuildsExecCommandWithDirectArgv(t *testing.T) {
+	t.Setenv("AGENTMUX_LOOP_TAIL_KEEP", "1")
 	stubLoopTailLookPath(t, "/usr/local/bin/agent-session-loop", nil)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
 
 	planDir := "/plans/api"
 	candidate := agentloop.Candidate{
@@ -472,7 +517,6 @@ func TestHandleLoopTailSelectionLaunchesOverlayWithDirectArgv(t *testing.T) {
 		CWD:     "/work/api",
 	}
 	m := testModel()
-	m.client = client
 
 	updated, cmd := m.Update(loopTailSelectionMsg{
 		selection: agentloop.Selection{
@@ -493,27 +537,27 @@ func TestHandleLoopTailSelectionLaunchesOverlayWithDirectArgv(t *testing.T) {
 	if done.err != nil {
 		t.Fatalf("launch err = %v, want nil", done.err)
 	}
-	if len(client.overlays) != 1 {
-		t.Fatalf("overlay calls = %d, want 1", len(client.overlays))
+	if len(execCalls) != 1 {
+		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
 
-	got := client.overlays[0]
+	got := execCalls[0]
 	wantCmdline := []string{"/usr/local/bin/agent-session-loop", "tail", planDir}
-	if !reflect.DeepEqual(got.Cmdline, wantCmdline) {
-		t.Fatalf("Cmdline = %#v, want %#v", got.Cmdline, wantCmdline)
+	if !reflect.DeepEqual(got.Args, wantCmdline) {
+		t.Fatalf("Args = %#v, want %#v", got.Args, wantCmdline)
 	}
-	if got.Directory != candidate.CWD {
-		t.Fatalf("Directory = %q, want cwd %q", got.Directory, candidate.CWD)
+	if got.Dir != candidate.CWD {
+		t.Fatalf("Dir = %q, want cwd %q", got.Dir, candidate.CWD)
 	}
-	if !got.Hold {
-		t.Fatal("expected Hold=true")
+	if len(got.Env) == 0 {
+		t.Fatal("expected exec env")
 	}
-	if got.Title != "tail: api" {
-		t.Fatalf("Title = %q, want tail: api", got.Title)
+	if env, ok := envValue(got.Env, "AGENTMUX_LOOP_TAIL_KEEP"); !ok || env != "1" {
+		t.Fatalf("exec env should preserve current environment, got %#v", got.Env)
 	}
 }
 
-func TestLoopTailOverlayPathPrependsEnvPythonDirs(t *testing.T) {
+func TestLoopTailExecPathPrependsEnvPythonDirs(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatalf("user home dir: %v", err)
@@ -521,7 +565,7 @@ func TestLoopTailOverlayPathPrependsEnvPythonDirs(t *testing.T) {
 	localBin := filepath.Join(home, ".local", "bin")
 	currentPath := strings.Join([]string{"/usr/bin", "/bin", "/opt/homebrew/bin"}, string(os.PathListSeparator))
 
-	got := loopTailOverlayPath(filepath.Join(localBin, agentSessionLoopBinary), currentPath)
+	got := loopTailExecPath(filepath.Join(localBin, agentSessionLoopBinary), currentPath)
 	if idx := pathListIndex(got, localBin); idx != 0 {
 		t.Fatalf("local bin index = %d, want 0 in PATH %q", idx, got)
 	}
@@ -534,32 +578,34 @@ func TestLoopTailOverlayPathPrependsEnvPythonDirs(t *testing.T) {
 		t.Fatalf("/opt/homebrew/bin count = %d, want 1 in PATH %q", count, got)
 	}
 
-	opts := loopTailOverlayOpts(filepath.Join(localBin, agentSessionLoopBinary), agentloop.Candidate{PlanDir: "/plans/api"})
-	if opts.Env["PATH"] == "" {
-		t.Fatal("overlay opts should set PATH for env-based shebangs")
+	env := loopTailExecEnv(filepath.Join(localBin, agentSessionLoopBinary), []string{"FOO=bar"})
+	if pathListIndex(strings.TrimPrefix(env[len(env)-1], "PATH="), localBin) != 0 {
+		t.Fatalf("exec env should prepend local bin PATH, got %#v", env)
 	}
 }
 
-func TestLoopTailLaunchFallsBackToPlanDirForOverlayCWD(t *testing.T) {
-	client := &fakeLoopTailClient{}
+func TestLoopTailLaunchFallsBackToPlanDirForExecCWD(t *testing.T) {
 	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
 
 	candidate := agentloop.Candidate{PlanDir: "/plans/no-cwd"}
-	done := loopTailLaunchCmd(client, candidate)().(loopTailDoneMsg)
+	done := loopTailLaunchCmd(candidate)().(loopTailDoneMsg)
 	if done.err != nil {
 		t.Fatalf("launch err = %v, want nil", done.err)
 	}
-	if len(client.overlays) != 1 {
-		t.Fatalf("overlay calls = %d, want 1", len(client.overlays))
+	if len(execCalls) != 1 {
+		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
-	if client.overlays[0].Directory != candidate.PlanDir {
-		t.Fatalf("Directory = %q, want plan dir %q", client.overlays[0].Directory, candidate.PlanDir)
+	if execCalls[0].Dir != candidate.PlanDir {
+		t.Fatalf("Dir = %q, want plan dir %q", execCalls[0].Dir, candidate.PlanDir)
 	}
 }
 
 func TestLoopTailLaunchUsesFallbackBinaryWhenPathMisses(t *testing.T) {
-	client := &fakeLoopTailClient{}
 	stubLoopTailLookPath(t, "", exec.ErrNotFound)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
 
 	fallback := filepath.Join(t.TempDir(), agentSessionLoopBinary)
 	if err := os.WriteFile(fallback, []byte("#!/bin/sh\n"), 0o755); err != nil {
@@ -568,36 +614,54 @@ func TestLoopTailLaunchUsesFallbackBinaryWhenPathMisses(t *testing.T) {
 	stubLoopTailFallbackPaths(t, fallback)
 
 	candidate := agentloop.Candidate{PlanDir: "/plans/api", CWD: "/work/api"}
-	done := loopTailLaunchCmd(client, candidate)().(loopTailDoneMsg)
+	done := loopTailLaunchCmd(candidate)().(loopTailDoneMsg)
 	if done.err != nil {
 		t.Fatalf("launch err = %v, want nil", done.err)
 	}
-	if len(client.overlays) != 1 {
-		t.Fatalf("overlay calls = %d, want 1", len(client.overlays))
+	if len(execCalls) != 1 {
+		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
 	wantCmdline := []string{fallback, "tail", candidate.PlanDir}
-	if !reflect.DeepEqual(client.overlays[0].Cmdline, wantCmdline) {
-		t.Fatalf("overlay Cmdline = %#v, want %#v", client.overlays[0].Cmdline, wantCmdline)
+	if !reflect.DeepEqual(execCalls[0].Args, wantCmdline) {
+		t.Fatalf("exec Args = %#v, want %#v", execCalls[0].Args, wantCmdline)
 	}
 }
 
-func TestLoopTailLaunchMissingBinaryDoesNotCallKitty(t *testing.T) {
-	client := &fakeLoopTailClient{}
+func TestLoopTailLaunchMissingBinaryDoesNotExec(t *testing.T) {
 	stubLoopTailLookPath(t, "", exec.ErrNotFound)
 	stubLoopTailFallbackPaths(t, filepath.Join(t.TempDir(), agentSessionLoopBinary))
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
 
-	done := loopTailLaunchCmd(client, agentloop.Candidate{PlanDir: "/plans/api"})().(loopTailDoneMsg)
+	done := loopTailLaunchCmd(agentloop.Candidate{PlanDir: "/plans/api"})().(loopTailDoneMsg)
 	if !errors.Is(done.err, exec.ErrNotFound) {
 		t.Fatalf("launch err = %v, want exec.ErrNotFound", done.err)
 	}
-	if len(client.overlays) != 0 {
-		t.Fatalf("overlay calls = %d, want 0", len(client.overlays))
+	if len(execCalls) != 0 {
+		t.Fatalf("exec calls = %d, want 0", len(execCalls))
 	}
 }
 
-func TestLoopTailLaunchNonExecutableFallbackDoesNotCallKitty(t *testing.T) {
-	client := &fakeLoopTailClient{}
+func TestLoopTailLaunchMissingPlanDirDoesNotExec(t *testing.T) {
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
+
+	done := loopTailLaunchCmd(agentloop.Candidate{CWD: "/work/api"})().(loopTailDoneMsg)
+	if done.err == nil {
+		t.Fatal("launch err = nil, want missing plan directory error")
+	}
+	if !strings.Contains(done.err.Error(), "missing plan directory") {
+		t.Fatalf("launch err = %q, want missing plan directory context", done.err)
+	}
+	if len(execCalls) != 0 {
+		t.Fatalf("exec calls = %d, want 0", len(execCalls))
+	}
+}
+
+func TestLoopTailLaunchNonExecutableFallbackDoesNotExec(t *testing.T) {
 	stubLoopTailLookPath(t, "", exec.ErrNotFound)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, nil, &execCalls)
 
 	fallback := filepath.Join(t.TempDir(), agentSessionLoopBinary)
 	if err := os.WriteFile(fallback, []byte("#!/bin/sh\n"), 0o644); err != nil {
@@ -605,22 +669,58 @@ func TestLoopTailLaunchNonExecutableFallbackDoesNotCallKitty(t *testing.T) {
 	}
 	stubLoopTailFallbackPaths(t, fallback)
 
-	done := loopTailLaunchCmd(client, agentloop.Candidate{PlanDir: "/plans/api"})().(loopTailDoneMsg)
+	done := loopTailLaunchCmd(agentloop.Candidate{PlanDir: "/plans/api"})().(loopTailDoneMsg)
 	if !errors.Is(done.err, exec.ErrNotFound) {
 		t.Fatalf("launch err = %v, want exec.ErrNotFound", done.err)
 	}
 	if !strings.Contains(done.err.Error(), "fallback locations") {
 		t.Fatalf("launch err = %q, want fallback locations context", done.err)
 	}
-	if len(client.overlays) != 0 {
-		t.Fatalf("overlay calls = %d, want 0", len(client.overlays))
+	if len(execCalls) != 0 {
+		t.Fatalf("exec calls = %d, want 0", len(execCalls))
 	}
 }
 
-func TestLoopTailDoneMsgSetsActionErr(t *testing.T) {
-	launchErr := errors.New("kitty launch failed")
-	updated, _ := testModel().Update(loopTailDoneMsg{err: launchErr})
-	if !errors.Is(updated.(Model).actionErr, launchErr) {
-		t.Fatalf("actionErr = %v, want %v", updated.(Model).actionErr, launchErr)
+func TestLoopTailExecErrorResumesDashboardWithActionErr(t *testing.T) {
+	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
+	tailErr := errors.New("signal: interrupt")
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, tailErr, &execCalls)
+
+	updated, cmd := testModel().Update(loopTailSelectionMsg{
+		selection: agentloop.Selection{
+			Kind: agentloop.SelectionLaunch,
+			Candidates: []agentloop.Candidate{{
+				PlanDir: "/plans/api",
+				CWD:     "/work/api",
+			}},
+		},
+	})
+	got := updated.(Model)
+	if got.mode != ModeList {
+		t.Fatalf("mode before tail exits = %v, want ModeList", got.mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected launch command")
+	}
+
+	done, ok := cmd().(loopTailDoneMsg)
+	if !ok {
+		t.Fatalf("launch cmd returned %T, want loopTailDoneMsg", done)
+	}
+	if !errors.Is(done.err, tailErr) {
+		t.Fatalf("tail err = %v, want %v", done.err, tailErr)
+	}
+
+	updated, cmd = got.Update(done)
+	got = updated.(Model)
+	if cmd != nil {
+		t.Fatalf("tail completion returned cmd %v, want nil", cmd)
+	}
+	if got.mode != ModeList {
+		t.Fatalf("mode after tail exits = %v, want ModeList", got.mode)
+	}
+	if !errors.Is(got.actionErr, tailErr) {
+		t.Fatalf("actionErr = %v, want %v", got.actionErr, tailErr)
 	}
 }

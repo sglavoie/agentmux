@@ -105,7 +105,7 @@ already running.
 Key flows:
 
 - `l`: open the launcher
-- `t`: tail an active `agent-session-loop` run in a Kitty overlay
+- `t`: tail an active `agent-session-loop` run in the dashboard terminal
 - `c`: restart the selected running session under another profile
 - `C`: launch a new session from the selected row, with profile selection first
 - `s`: search past session transcripts for the selected project

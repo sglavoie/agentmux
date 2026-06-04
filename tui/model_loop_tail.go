@@ -11,13 +11,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 const agentSessionLoopBinary = "agent-session-loop"
 
 var (
 	loopTailDiscover      = agentloop.Discover
+	loopTailExecProcess   = tea.ExecProcess
 	loopTailLookPath      = exec.LookPath
 	loopTailFallbackPaths = defaultLoopTailFallbackPaths
 	loopTailStat          = os.Stat
@@ -82,7 +82,7 @@ func (m Model) handleLoopTailSelection(msg loopTailSelectionMsg) (tea.Model, tea
 		m.loopTailCursor = 0
 		m.loopTailOffset = 0
 		m.actionErr = nil
-		return m, loopTailLaunchCmd(m.client, candidate)
+		return m, loopTailLaunchCmd(candidate)
 	case agentloop.SelectionPicker:
 		m.loopTailCandidates = append([]agentloop.Candidate(nil), msg.selection.Candidates...)
 		m.loopTailCursor = 0
@@ -101,26 +101,38 @@ func (m Model) handleLoopTailSelection(msg loopTailSelectionMsg) (tea.Model, tea
 	}
 }
 
-// loopTailLaunchCmd launches the existing Python tail command for a selected
-// active run. It resolves the executable at launch time so PATH changes are
-// honored between dashboard startup and user action.
-func loopTailLaunchCmd(client kitty.KittyClient, candidate agentloop.Candidate) tea.Cmd {
-	return func() tea.Msg {
-		return loopTailDoneMsg{err: launchLoopTail(client, candidate)}
+// loopTailLaunchCmd runs the existing Python tail command for a selected
+// active run in the dashboard terminal. It resolves the executable when the
+// user launches the tail so PATH changes are honored between dashboard startup
+// and user action. While tea.ExecProcess owns the terminal, Ctrl+C is handled
+// by the child tail process; when the child exits, the dashboard resumes via
+// loopTailDoneMsg.
+func loopTailLaunchCmd(candidate agentloop.Candidate) tea.Cmd {
+	cmd, err := loopTailExecCmd(candidate)
+	if err != nil {
+		return func() tea.Msg {
+			return loopTailDoneMsg{err: err}
+		}
 	}
+	return loopTailExecProcess(cmd, func(err error) tea.Msg {
+		return loopTailDoneMsg{err: err}
+	})
 }
 
-func launchLoopTail(client kitty.KittyClient, candidate agentloop.Candidate) error {
+func loopTailExecCmd(candidate agentloop.Candidate) (*exec.Cmd, error) {
 	if candidate.PlanDir == "" {
-		return errors.New("agent-session-loop candidate missing plan directory")
+		return nil, errors.New("agent-session-loop candidate missing plan directory")
 	}
 
 	binary, err := resolveLoopTailBinary()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return client.LaunchOverlay(loopTailOverlayOpts(binary, candidate))
+	cmd := exec.Command(binary, "tail", candidate.PlanDir)
+	cmd.Dir = candidate.OverlayCWD()
+	cmd.Env = loopTailExecEnv(binary, os.Environ())
+	return cmd, nil
 }
 
 func resolveLoopTailBinary() (string, error) {
@@ -171,27 +183,26 @@ func isExecutableFile(path string) bool {
 	return info.Mode()&0o111 != 0
 }
 
-func loopTailOverlayOpts(binary string, candidate agentloop.Candidate) kitty.LaunchOpts {
-	title := "agent-session-loop tail"
-	if base := filepath.Base(candidate.PlanDir); base != "." && base != string(filepath.Separator) {
-		title = "tail: " + base
+func loopTailExecEnv(binary string, environ []string) []string {
+	pathSet := false
+	out := make([]string, 0, len(environ)+1)
+	for _, entry := range environ {
+		if strings.HasPrefix(entry, "PATH=") {
+			if !pathSet {
+				out = append(out, "PATH="+loopTailExecPath(binary, strings.TrimPrefix(entry, "PATH=")))
+				pathSet = true
+			}
+			continue
+		}
+		out = append(out, entry)
 	}
-	return kitty.LaunchOpts{
-		Title:     title,
-		Directory: candidate.OverlayCWD(),
-		Hold:      true,
-		Env:       loopTailOverlayEnv(binary),
-		Cmdline:   []string{binary, "tail", candidate.PlanDir},
+	if !pathSet {
+		out = append(out, "PATH="+loopTailExecPath(binary, ""))
 	}
+	return out
 }
 
-func loopTailOverlayEnv(binary string) map[string]string {
-	return map[string]string{
-		"PATH": loopTailOverlayPath(binary, os.Getenv("PATH")),
-	}
-}
-
-func loopTailOverlayPath(binary, currentPath string) string {
+func loopTailExecPath(binary, currentPath string) string {
 	dirs := make([]string, 0, 8)
 	if binaryDir := filepath.Dir(binary); binaryDir != "." && binaryDir != string(filepath.Separator) {
 		dirs = append(dirs, binaryDir)
