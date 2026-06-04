@@ -138,8 +138,11 @@ func (f *fakeMuteClient) ListWindows() ([]kitty.OSWindow, error) {
 }
 
 func (f *fakeMuteClient) LaunchTab(kitty.LaunchOpts) error { return nil }
-func (f *fakeMuteClient) CloseTab(string) error            { return nil }
-func (f *fakeMuteClient) MoveTab(string, int) error        { return nil }
+func (f *fakeMuteClient) LaunchOverlay(kitty.LaunchOpts) error {
+	return nil
+}
+func (f *fakeMuteClient) CloseTab(string) error     { return nil }
+func (f *fakeMuteClient) MoveTab(string, int) error { return nil }
 func (f *fakeMuteClient) SetTabColor(string, string, string, string, string) error {
 	return nil
 }

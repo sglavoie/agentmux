@@ -45,6 +45,18 @@ func TestReadmeDocumentsFocusNextBinding(t *testing.T) {
 	}
 }
 
+func TestReadmeDocumentsDashboardTailBinding(t *testing.T) {
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatalf("ReadFile(README.md): %v", err)
+	}
+
+	const documented = "`t`: tail an active `agent-session-loop` run"
+	if !strings.Contains(string(readme), documented) {
+		t.Fatalf("README.md missing documented dashboard tail binding %q", documented)
+	}
+}
+
 func hasActiveConfigLine(text, want string) bool {
 	scanner := bufio.NewScanner(strings.NewReader(text))
 	for scanner.Scan() {

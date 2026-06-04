@@ -58,7 +58,7 @@ func (m Model) render() string {
 		}
 		overlayH := m.height - previewFooterLines(m) - 1 // trailing \n appended below
 		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
-	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail:
+	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeLoopTailPicker:
 		var base string
 		if m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker {
 			base = renderPicker(m)
@@ -77,6 +77,8 @@ func (m Model) render() string {
 			popup = renderHelpBox(m)
 		case ModeDetail:
 			popup = renderDetailBox(m)
+		case ModeLoopTailPicker:
+			popup = renderLoopTailPickerBox(m)
 		}
 		overlayH := m.height - previewFooterLines(m) - 1
 		if m.mode == ModeConfigPicker {

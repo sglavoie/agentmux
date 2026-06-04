@@ -25,6 +25,7 @@ type setUserVarsCall struct {
 
 func (f *fakeColorPickerClient) ListWindows() ([]kitty.OSWindow, error) { return nil, nil }
 func (f *fakeColorPickerClient) LaunchTab(kitty.LaunchOpts) error       { return nil }
+func (f *fakeColorPickerClient) LaunchOverlay(kitty.LaunchOpts) error   { return nil }
 func (f *fakeColorPickerClient) CloseTab(string) error                  { return nil }
 func (f *fakeColorPickerClient) MoveTab(string, int) error              { return nil }
 func (f *fakeColorPickerClient) SetTabTitle(string, string) error       { return nil }

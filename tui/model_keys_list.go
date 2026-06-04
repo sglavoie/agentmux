@@ -35,6 +35,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleDeleteChoiceKey(msg)
 	case ModeChipPicker:
 		return m.handleChipPickerKey(msg)
+	case ModeLoopTailPicker:
+		return m.handleLoopTailPickerKey(msg)
 	default:
 		return m.handleListKey(msg)
 	}

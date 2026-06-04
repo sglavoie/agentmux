@@ -183,6 +183,34 @@ func TestChordUnknownKeyCancels(t *testing.T) {
 	}
 }
 
+// TestChordTailKeyCancelsWithoutLaunching verifies `]t` only cancels the
+// pending jump chord. The `t` key is a ModeList action, but not a chord
+// follow-up, so it must not dispatch loop-tail discovery from chord state.
+func TestChordTailKeyCancelsWithoutLaunching(t *testing.T) {
+	rows := []session.RunningSession{
+		{TabID: 100, Base: "idle", State: ""},
+		{TabID: 101, Base: "needs-key", State: "key"},
+	}
+	m := chordModel(rows, 0)
+
+	updated, _ := m.Update(keyPress("]"))
+	updated, cmd := updated.(Model).Update(keyPress("t"))
+	m2 := updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("expected no loop-tail command from ]t")
+	}
+	if m2.pendingJumpDir != 0 {
+		t.Errorf("pendingJumpDir = %d, want 0 (canceled)", m2.pendingJumpDir)
+	}
+	if m2.mode != ModeList {
+		t.Errorf("mode = %v, want ModeList", m2.mode)
+	}
+	if m2.cursor != 0 {
+		t.Errorf("cursor = %d, want 0 (no movement on tail chord)", m2.cursor)
+	}
+}
+
 // TestChordEscCancels verifies that pressing Esc while a chord is pending
 // silently cancels it without side effects.
 func TestChordEscCancels(t *testing.T) {

@@ -90,6 +90,7 @@ func (f *fakeKittyClient) FocusTab(matchExpr string) error {
 }
 
 func (f *fakeKittyClient) LaunchTab(kitty.LaunchOpts) error                         { return nil }
+func (f *fakeKittyClient) LaunchOverlay(kitty.LaunchOpts) error                     { return nil }
 func (f *fakeKittyClient) CloseTab(string) error                                    { return nil }
 func (f *fakeKittyClient) SetTabColor(string, string, string, string, string) error { return nil }
 func (f *fakeKittyClient) SetTabTitle(string, string) error                         { return nil }

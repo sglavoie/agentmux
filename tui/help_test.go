@@ -33,6 +33,7 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		"x         clear session icon",
 		"X         close session (confirm)",
 		"C         launch new session with profile selection",
+		"t         tail active agent-session-loop run",
 	} {
 		if !strings.Contains(out, frag) {
 			t.Errorf("expected help output to contain %q, got:\n%s", frag, out)

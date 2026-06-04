@@ -52,5 +52,6 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	clampPlanViewerScroll(&m)
 	scrollPlanViewerToCursor(&m)
 	scrollChipPickerToCursor(&m)
+	scrollLoopTailPickerToCursor(&m)
 	return m, nil
 }

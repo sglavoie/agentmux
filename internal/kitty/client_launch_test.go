@@ -1,6 +1,7 @@
 package kitty_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -157,6 +158,73 @@ func TestLaunchTab_DeterministicArgvOrder(t *testing.T) {
 	for i := range wantVars {
 		if varArgs[i] != wantVars[i] {
 			t.Errorf("var arg %d: got %q, want %q", i, varArgs[i], wantVars[i])
+		}
+	}
+}
+
+func TestLaunchOverlay_ArgvContract(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	err := client.LaunchOverlay(kitty.LaunchOpts{
+		Title:     "loop tail",
+		Directory: "/tmp/work",
+		Hold:      true,
+		Env: map[string]string{
+			"ZED":   "z",
+			"ALPHA": "a",
+		},
+		UserVars: map[string]string{
+			"run":     "42",
+			"account": "work",
+		},
+		Cmdline: []string{"--dash-command", "tail", "/tmp/plan"},
+	})
+	if err != nil {
+		t.Fatalf("LaunchOverlay: %v", err)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+
+	want := []string{
+		"@",
+		"launch",
+		"--type=overlay",
+		"--no-response",
+		"--hold",
+		"--title=loop tail",
+		"--cwd=/tmp/work",
+		"--env=ALPHA=a",
+		"--env=ZED=z",
+		"--var=account=work",
+		"--var=run=42",
+		"--",
+		"--dash-command",
+		"tail",
+		"/tmp/plan",
+	}
+	if !reflect.DeepEqual(runner.Calls[0].Args, want) {
+		t.Fatalf("LaunchOverlay args:\n got %v\nwant %v", runner.Calls[0].Args, want)
+	}
+}
+
+func TestLaunchOverlay_NoCmdlineSkipsSeparatorAndHold(t *testing.T) {
+	runner := kitty.NewMockRunner(map[string][]byte{})
+	client := kitty.NewClientWithSocket(runner, "")
+
+	if err := client.LaunchOverlay(kitty.LaunchOpts{Title: "loop tail"}); err != nil {
+		t.Fatalf("LaunchOverlay: %v", err)
+	}
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 kitten call, got %d", len(runner.Calls))
+	}
+	for _, a := range runner.Calls[0].Args {
+		if a == "--" {
+			t.Errorf("did not expect a trailing `--` when Cmdline is empty, args=%v", runner.Calls[0].Args)
+		}
+		if a == "--hold" {
+			t.Errorf("did not expect `--hold` unless Hold is true, args=%v", runner.Calls[0].Args)
 		}
 	}
 }

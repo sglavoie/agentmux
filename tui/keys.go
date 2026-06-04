@@ -38,6 +38,7 @@ const (
 	keyPlanSearch      = "P" // opens ModePlanSearch (past agent plans)
 	keySortPlan        = "s" // cycles the ModePlanSearch result-sort mode
 
+	keyLoopTail         = "t" // tail an active agent-session-loop run in ModeList
 	keyToggleTimeline   = "t" // toggle flat list ↔ timeline in ModeDetail
 	keyToggleTimestamps = "T" // toggle timestamp column in timeline (ModeDetail)
 	keyPhasePrev        = "[" // jump to previous phase header in timeline

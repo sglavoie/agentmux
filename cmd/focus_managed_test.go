@@ -63,6 +63,10 @@ func (f *fakeFocusManagedClient) LaunchTab(kitty.LaunchOpts) error {
 	return nil
 }
 
+func (f *fakeFocusManagedClient) LaunchOverlay(kitty.LaunchOpts) error {
+	return nil
+}
+
 func (f *fakeFocusManagedClient) CloseTab(string) error {
 	return nil
 }

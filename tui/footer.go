@@ -44,6 +44,11 @@ func renderFooter(m Model) string {
 			styleFooter.Render("  enter: select  esc/q: cancel"),
 			styleFooter.Render("  /: search  j/k: up/down  g/G: top/bottom  pgup/pgdn: page"),
 		)
+	case ModeLoopTailPicker:
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  enter: tail  esc/q: cancel"),
+			styleFooter.Render("  j/k: up/down  g/G: top/bottom  pgup/pgdn: page"),
+		)
 	case ModeSessionSearch:
 		lines = nonEmptyFooterLines(
 			styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back"),
@@ -307,6 +312,7 @@ var listFooterPalette = []footerEntry{
 		return ok
 	}},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
+	{"t", "tail", footerSectionLaunch, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
 	{"P", "plans", footerSectionApp, func(Model) bool { return true }},
 	{"R", "resort", footerSectionApp, func(Model) bool { return true }},

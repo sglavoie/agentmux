@@ -179,6 +179,40 @@ func TestDetailDKeyToggles(t *testing.T) {
 	}
 }
 
+func TestDetailTKeyTogglesTimeline(t *testing.T) {
+	m := loadSessions(testModel(), detailSessions())
+	updated, cmd := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected detail query command when entering detail mode")
+	}
+	if m.detailViewTimeline {
+		t.Fatal("setup: expected detailViewTimeline=false")
+	}
+
+	updated, cmd = m.Update(keyPress("t"))
+	m = updated.(Model)
+	if cmd != nil {
+		t.Fatal("expected nil cmd when toggling detail timeline")
+	}
+	if m.mode != ModeDetail {
+		t.Fatalf("mode = %v, want ModeDetail", m.mode)
+	}
+	if !m.detailViewTimeline {
+		t.Fatal("expected t to enable detail timeline")
+	}
+
+	m.detailTimelineScroll = 4
+	updated, _ = m.Update(keyPress("t"))
+	m = updated.(Model)
+	if m.detailViewTimeline {
+		t.Fatal("expected second t to disable detail timeline")
+	}
+	if m.detailTimelineScroll != 0 {
+		t.Fatalf("detailTimelineScroll = %d, want 0", m.detailTimelineScroll)
+	}
+}
+
 func TestDetailScrollKeys(t *testing.T) {
 	m := loadSessions(testModel(), detailSessions())
 	{

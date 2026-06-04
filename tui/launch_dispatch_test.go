@@ -22,8 +22,9 @@ func (f *fakeLaunchDispatchClient) LaunchTab(opts kitty.LaunchOpts) error {
 	f.launched = append(f.launched, opts)
 	return nil
 }
-func (f *fakeLaunchDispatchClient) CloseTab(string) error     { return nil }
-func (f *fakeLaunchDispatchClient) MoveTab(string, int) error { return nil }
+func (f *fakeLaunchDispatchClient) LaunchOverlay(kitty.LaunchOpts) error { return nil }
+func (f *fakeLaunchDispatchClient) CloseTab(string) error                { return nil }
+func (f *fakeLaunchDispatchClient) MoveTab(string, int) error            { return nil }
 func (f *fakeLaunchDispatchClient) SetTabColor(string, string, string, string, string) error {
 	return nil
 }

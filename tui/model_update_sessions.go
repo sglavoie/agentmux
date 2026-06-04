@@ -97,6 +97,13 @@ func (m Model) handlePeekDone(msg peekDoneMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleLoopTailDone records non-fatal loop-tail launch errors in the same
+// header slot as other dashboard row actions.
+func (m Model) handleLoopTailDone(msg loopTailDoneMsg) (tea.Model, tea.Cmd) {
+	m.actionErr = msg.err
+	return m, nil
+}
+
 // handleDetailEvents processes a detailEventsMsg: updates the detail pane
 // event list, dropping stale responses from a previous mode or window.
 func (m Model) handleDetailEvents(msg detailEventsMsg) (tea.Model, tea.Cmd) {

@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -69,6 +70,12 @@ type Model struct {
 	pickerFilteredIdx    []int  // indices into pickerSessions for the filtered view
 	pickerSearchMode     bool   // true while / is active and filter input is open
 	pickerPreviewEnabled bool   // picker-local preview toggle, independent of ModeList
+
+	// loop-tail picker placeholder. Session 3 populates these candidates when
+	// discovery finds multiple active loops; Session 4 owns the modal UI.
+	loopTailCandidates []agentloop.Candidate
+	loopTailCursor     int
+	loopTailOffset     int
 
 	// last error from a close/restart action
 	actionErr error
@@ -374,6 +381,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case peekDoneMsg:
 		return m.handlePeekDone(msg)
+
+	case loopTailSelectionMsg:
+		return m.handleLoopTailSelection(msg)
+
+	case loopTailDoneMsg:
+		return m.handleLoopTailDone(msg)
 
 	case detailEventsMsg:
 		return m.handleDetailEvents(msg)

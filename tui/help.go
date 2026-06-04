@@ -61,6 +61,7 @@ var helpSections = []struct {
 	}},
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
+		"  t         tail active agent-session-loop run",
 		"  C         launch new session with profile selection",
 		"  o         open session directory in a plain shell tab",
 		"  y         copy session title; in transcript/plan viewers, copy selection",

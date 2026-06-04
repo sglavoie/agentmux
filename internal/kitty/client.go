@@ -15,6 +15,8 @@ type KittyClient interface {
 	ListWindows() ([]OSWindow, error)
 	// LaunchTab creates a new tab with the given options.
 	LaunchTab(opts LaunchOpts) error
+	// LaunchOverlay opens a Kitty overlay running the given command argv.
+	LaunchOverlay(opts LaunchOpts) error
 	// CloseTab closes the tab matched by matchExpr.
 	CloseTab(matchExpr string) error
 	// MoveTab focuses the tab matched by matchExpr and slides it |delta|
@@ -44,6 +46,7 @@ type LaunchOpts struct {
 	Title     string
 	Directory string
 	Location  string // "first", "after", or "" for default
+	Hold      bool
 	Env       map[string]string
 	UserVars  map[string]string
 	Cmdline   []string
@@ -118,6 +121,33 @@ func (c *SubprocessClient) LaunchTab(opts LaunchOpts) error {
 	// Use a `--` separator so that a Cmdline whose first token begins with a
 	// dash (e.g. an opaque shell wrapper passed in by callers) cannot be
 	// misinterpreted by kitten as a flag belonging to `kitten @ launch`.
+	if len(opts.Cmdline) > 0 {
+		args = append(args, "--")
+		args = append(args, opts.Cmdline...)
+	}
+	_, err := c.kitten(args...)
+	return err
+}
+
+func (c *SubprocessClient) LaunchOverlay(opts LaunchOpts) error {
+	args := []string{"launch", "--type=overlay", "--no-response"}
+	if opts.Hold {
+		args = append(args, "--hold")
+	}
+	if opts.Title != "" {
+		args = append(args, "--title="+opts.Title)
+	}
+	if opts.Directory != "" {
+		args = append(args, "--cwd="+opts.Directory)
+	}
+	for _, k := range sortedKeys(opts.Env) {
+		args = append(args, "--env="+k+"="+opts.Env[k])
+	}
+	for _, k := range sortedKeys(opts.UserVars) {
+		args = append(args, "--var="+k+"="+opts.UserVars[k])
+	}
+	// Use a `--` separator so command tokens that begin with a dash are
+	// passed to the launched program rather than parsed as Kitty flags.
 	if len(opts.Cmdline) > 0 {
 		args = append(args, "--")
 		args = append(args, opts.Cmdline...)
