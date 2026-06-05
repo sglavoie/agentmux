@@ -21,18 +21,24 @@ import (
 //
 // The popup is right-clipped at baseWidth when its width plus startCol would
 // exceed the base area. Rows beyond baseHeight are dropped. An empty popup
-// returns the (possibly dimmed) base unchanged.
+// returns the normalized, possibly dimmed base.
 func composeOverlay(base, popup string, baseWidth, baseHeight, startCol, startRow int, dim bool) string {
 	if dim {
 		base = dimContent(base)
 	}
-	if popup == "" {
-		return base
-	}
 
-	baseLines := strings.Split(base, "\n")
+	baseLines := rootSectionLines(base)
+	if baseHeight < 0 {
+		baseHeight = 0
+	}
+	if len(baseLines) > baseHeight {
+		baseLines = baseLines[:baseHeight]
+	}
 	for len(baseLines) < baseHeight {
 		baseLines = append(baseLines, "")
+	}
+	if popup == "" {
+		return strings.Join(baseLines, "\n")
 	}
 
 	popupLines := strings.Split(popup, "\n")

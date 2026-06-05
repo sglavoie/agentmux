@@ -290,20 +290,6 @@ func loadTranscriptCache() (*transcript.Index, map[string]transcript.Reader, err
 	return idx, buildTranscriptReaders(), nil
 }
 
-func (m *Model) ensureTranscriptCache() error {
-	if m.transcriptIndex == nil {
-		idx, err := transcript.LoadIndex()
-		if err != nil {
-			return err
-		}
-		m.transcriptIndex = idx
-	}
-	if m.transcriptReaders == nil {
-		m.transcriptReaders = buildTranscriptReaders()
-	}
-	return nil
-}
-
 func sessionQueryIsEmpty(q transcript.Query) bool {
 	return q.Text == "" && len(q.Harness) == 0 && len(q.Profile) == 0 && len(q.Project) == 0
 }

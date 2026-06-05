@@ -42,14 +42,15 @@ func TestChipPickerVisibleHeightBudget(t *testing.T) {
 		{1, 1},
 		{5, 1},
 		{6, 1},
-		{10, 4},
-		{16, 10},
-		{17, 11},
-		{18, 12},
+		{10, 2},
+		{16, 8},
+		{17, 9},
+		{18, 10},
+		{20, 12},
 		{100, 12},
 	}
 	for _, tc := range cases {
-		m := Model{height: tc.height}
+		m := Model{mode: ModeChipPicker, height: tc.height}
 		if got := chipPickerVisibleHeight(m); got != tc.want {
 			t.Errorf("height=%d: chipPickerVisibleHeight=%d, want %d", tc.height, got, tc.want)
 		}

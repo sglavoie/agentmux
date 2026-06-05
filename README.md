@@ -123,6 +123,10 @@ Key flows:
 The dashboard keeps the profile badge and harness metadata separate from the
 title column, so visible titles are just the project name.
 
+A sticky status row occupies the final terminal line for health, active mode
+summaries, and transient action messages; keybinding hints stay immediately
+above it.
+
 The detail pane's event history persists through terminal hooks (`Stop`,
 `SessionEnd`, etc.) and through the watchdog's stale sweep, so you can still
 review what a session did after its icon clears. History is held in memory per

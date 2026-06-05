@@ -94,21 +94,26 @@ func TestReplaceToastByIDUpdatesInPlace(t *testing.T) {
 	}
 }
 
-func TestRenderToastsEmpty(t *testing.T) {
+func TestReplaceToastByIDMovesUpdatedToastToTop(t *testing.T) {
 	m := testModel()
-	if got := renderToasts(m); got != "" {
-		t.Errorf("expected empty render with no toasts, got %q", got)
+	m.replaceToastByID(42, Toast{Severity: toastInfo, Text: "first"})
+	m.pushToast(Toast{Severity: toastError, Text: "newer unrelated"})
+	m.replaceToastByID(42, Toast{Severity: toastSuccess, Text: "updated"})
+
+	if len(m.toasts) != 2 {
+		t.Fatalf("expected 2 toasts, got %d", len(m.toasts))
 	}
+	if m.toasts[0].id != 42 || m.toasts[0].Text != "updated" {
+		t.Fatalf("expected replaced toast to move to top, got %+v", m.toasts)
+	}
+	assertStatusBarContains(t, m, "updated")
 }
 
-func TestRenderToastsIncludesText(t *testing.T) {
+func TestToastStatusBarIncludesLatestText(t *testing.T) {
 	m := testModel()
 	m.width = 80
 	m.pushToast(Toast{Severity: toastSuccess, Text: "Launched 1/3 · api"})
-	out := renderToasts(m)
-	if !strings.Contains(stripAnsi(out), "Launched 1/3 · api") {
-		t.Errorf("expected toast text in render, got %q", out)
-	}
+	assertStatusBarContains(t, m, "Launched 1/3 · api")
 }
 
 func TestLaunchProgressIncrementsCounter(t *testing.T) {
@@ -125,6 +130,7 @@ func TestLaunchProgressIncrementsCounter(t *testing.T) {
 	if !strings.Contains(m.toasts[0].Text, "1/3") {
 		t.Errorf("expected progress text '1/3', got %q", m.toasts[0].Text)
 	}
+	assertStatusBarContains(t, m, "1/3")
 }
 
 func TestLaunchProgressErrorPushesErrorToast(t *testing.T) {
@@ -148,6 +154,7 @@ func TestLaunchProgressErrorPushesErrorToast(t *testing.T) {
 	if !hasError {
 		t.Errorf("expected an error toast carrying the failure reason, got %+v", m.toasts)
 	}
+	assertStatusBarContains(t, m, "1/2")
 }
 
 func TestLaunchProgressFinalIsSuccess(t *testing.T) {
@@ -169,6 +176,27 @@ func TestLaunchProgressFinalIsSuccess(t *testing.T) {
 	if !strings.Contains(m.toasts[0].Text, "2/2") {
 		t.Errorf("expected '2/2' in final progress, got %q", m.toasts[0].Text)
 	}
+	assertStatusBarContains(t, m, "2/2")
+}
+
+func TestResortDoneUsesStatusBarToast(t *testing.T) {
+	m := testModel()
+	updated, cmd := m.Update(resortDoneMsg{})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected resort completion to return refresh/tick command")
+	}
+	assertStatusBarContains(t, m, "Tabs resorted")
+}
+
+func TestCopyDoneErrorUsesStatusBarToast(t *testing.T) {
+	m := testModel()
+	updated, cmd := m.Update(copyDoneMsg{err: errors.New("clipboard unavailable")})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected copy error to arm toast tick")
+	}
+	assertStatusBarContains(t, m, "copy: clipboard unavailable")
 }
 
 func TestLaunchProgressFinalDashboardLaunchStaysInTUI(t *testing.T) {

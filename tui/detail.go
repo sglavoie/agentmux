@@ -74,7 +74,7 @@ func detailOverlayInnerHeight(m Model) int {
 	// (header 2 + blank + ▲ slot + ▼ slot + footer = 6) on top of at
 	// least detailMinVisible body rows.
 	minInner := detailMinVisible + detailInnerChrome
-	avail := m.height - 6 // border (2) + safety margin (4)
+	avail := rootBodyHeight(m) - 6 // border (2) + safety margin (4)
 	if avail < minInner {
 		return minInner
 	}

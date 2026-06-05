@@ -5,6 +5,8 @@ package tui
 // pane remains useful. Mirrors detailMinVisible.
 const listMinVisible = 3
 
+const statusBarLines = 1
+
 // chromeAboveListLines returns the number of vertical lines render() writes
 // between the very top of the screen and the start of the list block in
 // ModeList. This is the "header + everything between header and list" budget;
@@ -61,12 +63,12 @@ func healthHintLines(m Model) int {
 
 // listChromeLines returns the total number of vertical lines the dashboard
 // chrome occupies around the session list in ModeList, mirroring the
-// composition in render(). Sum of chromeAboveListLines (above) + trailing
-// newline written by render() after the list block + previewFooterLines.
+// composition in render(). Sum of chromeAboveListLines (above) + the padding
+// row between body and footer + footerBudgetLines + the sticky status bar.
 // Used by listVisibleHeight to derive the row budget when the preview pane
 // is off.
 func listChromeLines(m Model) int {
-	return chromeAboveListLines(m) + 1 /* trailing newline */ + previewFooterLines(m)
+	return chromeAboveListLines(m) + 1 /* padding row */ + footerBudgetLines(m) + statusBarLines
 }
 
 // listVisibleHeight returns the row-line budget for the scrollable session
@@ -82,8 +84,8 @@ func listVisibleHeight(m Model) int {
 	var h int
 	if m.previewEnabled && m.cfg != nil {
 		cfg := m.cfg.Defaults.Preview
-		footerLines := previewFooterLines(m)
-		paneHeight := m.height - chromeAboveListLines(m) - 1 /* trailing newline */ - footerLines
+		footerLines := footerBudgetLines(m)
+		paneHeight := m.height - chromeAboveListLines(m) - 1 /* padding row */ - footerLines - statusBarLines
 		if cfg.Direction == "vertical" {
 			previewHeight := int(float64(paneHeight) * cfg.Ratio)
 			if previewHeight < 3 {

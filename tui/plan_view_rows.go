@@ -66,7 +66,6 @@ func planViewerRowWindowFor(total, offset, height int) planViewerRowWindow {
 	if height <= 0 {
 		return window
 	}
-
 	if offset < 0 {
 		offset = 0
 	}
@@ -74,6 +73,14 @@ func planViewerRowWindowFor(total, offset, height int) planViewerRowWindow {
 		offset = total
 	}
 	window.start = offset
+
+	if height == 1 {
+		window.end = window.start + 1
+		if window.end > total {
+			window.end = total
+		}
+		return window
+	}
 
 	budget := height
 	if window.start > 0 {
@@ -89,8 +96,10 @@ func planViewerRowWindowFor(total, offset, height int) planViewerRowWindow {
 	}
 	if window.end < total {
 		window.showBottom = true
-		if budget > 0 {
+		if budget > 1 {
 			budget--
+		} else {
+			window.showBottom = false
 		}
 		window.end = window.start + budget
 		if window.end > total {

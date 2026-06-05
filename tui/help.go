@@ -134,7 +134,7 @@ func helpOverlayInnerHeight(m Model) int {
 	// content (≥ helpMinVisible) + ▼ slot (1). Ensure the inner height is
 	// large enough to fit that floor even on tiny terminals.
 	minInner := helpMinVisible + 4
-	avail := m.height - 6 // border (2) + safety margin (4)
+	avail := rootBodyHeight(m) - 6 // border (2) + safety margin (4)
 	if avail < minInner {
 		return minInner
 	}

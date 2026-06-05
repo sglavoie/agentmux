@@ -74,6 +74,32 @@ func TestPickerPreviewRenderShowsConfigBlock(t *testing.T) {
 	}
 }
 
+func TestPickerPreviewRootKeepsFooterAboveStatusBar(t *testing.T) {
+	m := pickerModel(t)
+	m.width, m.height = 100, 14
+	m.cfg.Defaults.Preview = pickerPreviewCfg()
+	m.pickerPreviewEnabled = true
+
+	out := stripAnsi(m.render())
+	lines := strings.Split(out, "\n")
+	if len(lines) != m.height {
+		t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
+	}
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if !strings.Contains(last, "Launch Sessions") {
+		t.Fatalf("final row = %q, want picker status", last)
+	}
+	footer := strings.Join(lines[len(lines)-3:len(lines)-1], "\n")
+	for _, want := range []string{"space: toggle", "DSL:"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("picker footer above status missing %q:\n%s", want, footer)
+		}
+	}
+	if !strings.Contains(out, "dir:") {
+		t.Fatalf("expected picker preview pane to remain visible:\n%s", out)
+	}
+}
+
 func TestPickerProfileOverrideUpdatesLaunchProfile(t *testing.T) {
 	m := pickerModel(t)
 	m = pressKey(m, "C")

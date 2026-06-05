@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -115,13 +114,6 @@ func renderFooter(m Model) string {
 	var sb strings.Builder
 	if len(lines) > 0 {
 		sb.WriteString(strings.Join(lines, "\n"))
-	}
-	if m.mode == ModeList && m.previewNotice != "" &&
-		(m.previewNoticeExpires.IsZero() || time.Now().Before(m.previewNoticeExpires)) {
-		if sb.Len() > 0 {
-			sb.WriteString("\n")
-		}
-		sb.WriteString(styleError.Render("  " + m.previewNotice))
 	}
 	return sb.String()
 }

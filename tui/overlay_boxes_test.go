@@ -148,3 +148,85 @@ func TestRenderHelpBoxNarrowClamps(t *testing.T) {
 		}
 	}
 }
+
+func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
+	actions := loadSessions(testModelWithSessions(), makeSessions())
+	actions = pressKey(actions, "a")
+
+	confirm := loadSessions(modalConfirmModel(), makeSessions())
+	confirm.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
+	confirm.confirmAction = "close"
+	confirm.confirmConsequence = closeConsequence
+	confirm.mode = ModeConfirm
+
+	configPicker := loadSessions(testModelWithSessions(), makeSessions())
+	configPicker.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
+	configPicker.configPickerAccounts = configPicker.cfg.Accounts
+	configPicker.configPickerCurrent = "work"
+	configPicker.configPickerPurpose = ConfigPickerRestartProfile
+	configPicker.configPickerReturnMode = ModeList
+	configPicker.mode = ModeConfigPicker
+
+	help := loadSessions(testModel(), makeSessions())
+	help.mode = ModeHelp
+
+	detail := loadSessions(testModel(), []session.RunningSession{
+		{TabID: 1, WindowID: 42, Base: "api", Account: "work"},
+	})
+	detail.detailWindowID = 42
+	detail.mode = ModeDetail
+
+	loopTail := loadSessions(testModelWithSessions(), makeSessions())
+	loopTail.mode = ModeLoopTailPicker
+	loopTail.loopTailCandidates = append(loopTail.loopTailCandidates, loopTailPickerCandidate("/plans/api", "/work/api", 1234))
+
+	cases := []struct {
+		name   string
+		m      Model
+		popup  string
+		status string
+	}{
+		{name: "actions", m: actions, popup: "Actions for", status: "Session actions"},
+		{name: "confirm", m: confirm, popup: "Close", status: "Confirm close"},
+		{name: "config picker", m: configPicker, popup: "Restart with profile", status: "Choose profile"},
+		{name: "help", m: help, popup: "Keyboard Shortcuts", status: "Help"},
+		{name: "detail", m: detail, popup: "api", status: "Session details: window 42"},
+		{name: "loop tail", m: loopTail, popup: "Choose loop to tail", status: "Loop tail: 1 candidate"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := tc.m
+			m.width = 90
+			m.height = 12
+			out := stripAnsi(m.render())
+			lines := strings.Split(out, "\n")
+			if len(lines) != m.height {
+				t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
+			}
+			if !strings.Contains(out, tc.popup) {
+				t.Fatalf("expected popup marker %q in overlay output:\n%s", tc.popup, out)
+			}
+			last := strings.TrimSpace(lines[len(lines)-1])
+			if !strings.Contains(last, tc.status) {
+				t.Fatalf("final row = %q, want status %q", last, tc.status)
+			}
+		})
+	}
+}
+
+func TestDashboardOverlayTinyTerminalDoesNotOverflowStatusBar(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m = pressKey(m, "a")
+	m.width = 50
+	m.height = 3
+
+	out := stripAnsi(m.render())
+	lines := strings.Split(out, "\n")
+	if len(lines) != m.height {
+		t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
+	}
+	if last := strings.TrimSpace(lines[len(lines)-1]); !strings.Contains(last, "Session actions") {
+		t.Fatalf("final row = %q, want actions status", last)
+	}
+}

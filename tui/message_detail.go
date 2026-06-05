@@ -8,10 +8,9 @@ import (
 )
 
 // messageDetailChrome is the number of vertical lines the message-detail
-// overlay reserves outside the scrollable body window: title (1) + blank
-// after title (1) + ▲ slot (1) + ▼ slot (1) + trailing newline reserved by
-// render() (1) = 5.
-const messageDetailChrome = 5
+// overlay reserves inside the root body but outside the scrollable body
+// window: title (1) + blank after title (1) + ▲ slot (1) + ▼ slot (1) = 4.
+const messageDetailChrome = 4
 
 // messageDetailMinVisible is the floor on the visible body window so the
 // overlay stays usable on short terminals. Mirrors helpMinVisible.
@@ -57,7 +56,7 @@ func messageDetailScrollBounds(m Model) (total, visible int) {
 	if m.height == 0 {
 		return total, total
 	}
-	visible = max(messageDetailMinVisible, min(total, m.height-messageDetailChrome))
+	visible = max(messageDetailMinVisible, min(total, rootBodyHeight(m)-messageDetailChrome))
 	return total, visible
 }
 

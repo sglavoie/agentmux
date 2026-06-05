@@ -10,7 +10,7 @@ import (
 )
 
 // scrollModel returns a baseline Model parked in ModeList with a generous
-// height so the legend renders and previewFooterLines reports the non-preview
+// height so the legend renders and footerBudgetLines reports the non-preview
 // default. Tests override individual fields to flip a single chrome element
 // or shrink the viewport.
 func scrollModel() Model {
@@ -22,10 +22,10 @@ func scrollModel() Model {
 
 func TestListChromeLines_BaselineModeList(t *testing.T) {
 	m := scrollModel()
-	// Baseline: header(1) + legend(1) + spacer(1) + trailing nl(1)
-	// + previewFooterLines (preview off, no notice → 4) = 8.
+	// Baseline: header(1) + legend(1) + spacer(1) + padding row(1)
+	// + footerBudgetLines (preview off -> 4) + status bar(1) = 9.
 	got := listChromeLines(m)
-	want := 1 + 1 + 1 + 1 + 4
+	want := 1 + 1 + 1 + 1 + 4 + statusBarLines
 	if got != want {
 		t.Errorf("baseline chrome: got %d want %d", got, want)
 	}
@@ -118,8 +118,8 @@ func TestListVisibleHeight_PreviewVerticalMatchesRenderSplit(t *testing.T) {
 	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "vertical", Ratio: 0.5}
 	m.previewEnabled = true
 
-	footerLines := previewFooterLines(m)
-	paneHeight := m.height - chromeAboveListLines(m) - 1 - footerLines
+	footerLines := footerBudgetLines(m)
+	paneHeight := m.height - chromeAboveListLines(m) - 1 - footerLines - statusBarLines
 	previewHeight := int(float64(paneHeight) * 0.5)
 	if previewHeight < 3 {
 		previewHeight = 3
@@ -139,8 +139,8 @@ func TestListVisibleHeight_PreviewHorizontalReturnsPaneHeight(t *testing.T) {
 	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "horizontal", Ratio: 0.5}
 	m.previewEnabled = true
 
-	footerLines := previewFooterLines(m)
-	want := m.height - chromeAboveListLines(m) - 1 - footerLines
+	footerLines := footerBudgetLines(m)
+	want := m.height - chromeAboveListLines(m) - 1 - footerLines - statusBarLines
 
 	if got := listVisibleHeight(m); got != want {
 		t.Errorf("preview horizontal: got %d want %d", got, want)
@@ -362,14 +362,14 @@ func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
 
 func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) {
 	m := scrollModel()
-	m.height = 15 // short-terminal chrome leaves an 8-line list pane
+	m.height = 15 // short-terminal chrome leaves a 7-line list pane
 	m.filtered = makeRowsForScroll(20)
 	m.cursor = 10
 	m.listOffset = 0
 
 	visible := listVisibleHeight(m)
-	if visible != 8 {
-		t.Fatalf("test fixture expected visible=8, got %d", visible)
+	if visible != 7 {
+		t.Fatalf("test fixture expected visible=7, got %d", visible)
 	}
 
 	scrollListToCursor(&m)

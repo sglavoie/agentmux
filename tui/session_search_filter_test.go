@@ -241,6 +241,7 @@ func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
 			if len(m.toasts) == 0 || !strings.Contains(m.toasts[0].Text, tc.wantToast) {
 				t.Fatalf("toast = %+v, want text containing %q", m.toasts, tc.wantToast)
 			}
+			assertStatusBarContains(t, m, tc.wantToast)
 
 			key := transcript.IndexKey(target.Harness, target.ID)
 			gotMeta, exists := m.transcriptIndex.Get(key)

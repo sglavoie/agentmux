@@ -42,10 +42,10 @@ func (m *Model) launchBatchCmd(todo []queuedLaunch, quitOnSuccess bool) tea.Cmd 
 	m.launchBatchErrors = 0
 	m.launchBatchQuitOnSuccess = quitOnSuccess
 
-	// The toast-tick cmd (returned by replaceToastByID when the toast strip
-	// was empty) is a tea.Tick that blocks for toastTickInterval before it
-	// emits. Keeping it OUTSIDE tea.Sequence below is critical: inside the
-	// sequence it would gate the first launch on the tick's 250ms timer.
+	// The toast-tick cmd (returned by replaceToastByID when the transient
+	// status list was empty) is a tea.Tick that blocks for toastTickInterval
+	// before it emits. Keeping it OUTSIDE tea.Sequence below is critical:
+	// inside the sequence it would gate the first launch on the tick's 250ms timer.
 	var toastCmd tea.Cmd
 	startText := fmt.Sprintf("Launching %d session(s)…", total)
 	if c := m.replaceToastByID(batchID, Toast{
@@ -96,11 +96,11 @@ func (m *Model) dashboardLaunchWithAccountCmd(acc config.Account) tea.Cmd {
 // are explicit requests for another same-key tab.
 func (m *Model) dispatchPickerLaunch() tea.Cmd {
 	var todo []queuedLaunch
-	for i, sess := range m.pickerSessions {
+	for i := range m.pickerSessions {
 		if !m.pickerSelected[i] {
 			continue
 		}
-		sess = m.pickerSessionWithResolvedProfile(i)
+		sess := m.pickerSessionWithResolvedProfile(i)
 		todo = append(todo, queuedLaunch{sess: sess, title: configSessionDisplayTitle(sess)})
 	}
 	return m.launchBatchCmd(todo, true)

@@ -57,6 +57,7 @@ func TestXCloseDispatchesToastByDefault(t *testing.T) {
 	if !strings.Contains(m2.toasts[0].Text, "u to undo") {
 		t.Errorf("expected toast to advertise undo, got %q", m2.toasts[0].Text)
 	}
+	assertStatusBarContains(t, m2, "u to undo")
 	if m2.toasts[0].id != undoCloseToastID {
 		t.Errorf("expected toast id=%d, got %d", undoCloseToastID, m2.toasts[0].id)
 	}
@@ -137,6 +138,7 @@ func TestUndoLastConsumesNewestEntry(t *testing.T) {
 	if !strings.Contains(aggText, "restored "+first) {
 		t.Errorf("expected restored toast for %q, got %q", first, aggText)
 	}
+	assertStatusBarContains(t, m, "restored "+first)
 }
 
 // TestUndoLastWithoutEntriesIsNoOp verifies u with nothing to undo returns

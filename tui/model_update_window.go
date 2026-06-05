@@ -18,19 +18,19 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width = msg.Width
 	m.height = msg.Height
 	cfg := m.cfg.Defaults.Preview
+	var cmds []tea.Cmd
 	if m.previewEnabled {
-		if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-			m.disablePreviewWithNotice("preview disabled: terminal too small")
+		if !previewFits(m.width, m.height, footerBudgetLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+			if c := m.disablePreviewWithNotice("preview disabled: terminal too small"); c != nil {
+				cmds = append(cmds, c)
+			}
 		}
 	}
 	if m.pickerPreviewEnabled {
-		if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-			m.pickerPreviewEnabled = false
-			m.previewText = ""
-			m.previewError = ""
-			m.previewWindowID = 0
-			m.previewNotice = "preview disabled: terminal too small"
-			m.previewNoticeExpires = time.Now().Add(2 * time.Second)
+		if !previewFits(m.width, m.height, footerBudgetLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+			if c := m.disablePickerPreviewWithNotice("preview disabled: terminal too small"); c != nil {
+				cmds = append(cmds, c)
+			}
 		}
 	}
 	// Clamp scroll offsets to the new viewport. Without this, a resize
@@ -53,5 +53,8 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	scrollPlanViewerToCursor(&m)
 	scrollChipPickerToCursor(&m)
 	scrollLoopTailPickerToCursor(&m)
+	if len(cmds) > 0 {
+		return m, tea.Batch(cmds...)
+	}
 	return m, nil
 }

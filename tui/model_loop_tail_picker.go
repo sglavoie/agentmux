@@ -84,7 +84,7 @@ func loopTailPickerVisibleHeight(m Model) int {
 	if m.height == 0 {
 		return len(m.loopTailCandidates)
 	}
-	h := m.height - 8
+	h := rootBodyHeight(m) - 5 // box border (2) + header (1) + safety margin (2)
 	if h < 1 {
 		return 1
 	}

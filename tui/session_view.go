@@ -10,17 +10,25 @@ import (
 )
 
 // sessionViewVisibleHeight returns the number of viewer rows that fit in the
-// current viewport. The viewer's chrome is leaner than the search view:
-// header (1) + blank (1) + trailing newline (1) + two-line footer (2) = 5.
+// root body area. composeRootView owns the footer and sticky status row, so
+// this budget subtracts only the viewer header/blank chrome and any inline
+// read-error row.
 func sessionViewVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	avail := m.height - 5
+	avail := rootBodyHeight(m) - 2 - sessionViewErrorLines(m)
 	if avail < 1 {
 		return 1
 	}
 	return avail
+}
+
+func sessionViewErrorLines(m Model) int {
+	if m.viewerLoadErr != nil {
+		return 1
+	}
+	return 0
 }
 
 // renderSessionView renders the full ModeSessionView layout: a one-line
@@ -76,46 +84,9 @@ func renderSessionViewBody(m Model, height int) string {
 		return sb.String()
 	}
 
-	startIdx := 0
-	endIdx := total
-	showTop := false
-	showBottom := false
+	window := flatListWindowFor(total, m.viewerScroll, height)
 
-	if height > 0 {
-		offset := m.viewerScroll
-		if offset < 0 {
-			offset = 0
-		}
-		if offset > total {
-			offset = total
-		}
-		startIdx = offset
-
-		budget := height
-		if startIdx > 0 {
-			showTop = true
-			budget--
-		}
-		if budget < 0 {
-			budget = 0
-		}
-		endIdx = startIdx + budget
-		if endIdx > total {
-			endIdx = total
-		}
-		if endIdx < total {
-			showBottom = true
-			if budget > 0 {
-				budget--
-			}
-			endIdx = startIdx + budget
-			if endIdx > total {
-				endIdx = total
-			}
-		}
-	}
-
-	if showTop {
+	if window.showTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
@@ -131,7 +102,7 @@ func renderSessionViewBody(m Model, height int) string {
 	}
 	cursorLine := m.viewerCursor
 
-	for i := startIdx; i < endIdx; i++ {
+	for i := window.start; i < window.end; i++ {
 		line := formatViewerLine(m.viewerMessages[i], maxWidth)
 		switch {
 		case i == cursorLine:
@@ -144,7 +115,7 @@ func renderSessionViewBody(m Model, height int) string {
 		sb.WriteByte('\n')
 	}
 
-	if showBottom {
+	if window.showBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}

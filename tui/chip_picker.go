@@ -9,14 +9,15 @@ func chipPickerVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	// Box chrome: top border (1) + bottom border (1) + header (1) + footer
-	// reserve (1) + safety margin (2) = 6. A picker also spends one row on
-	// the transient search prompt once search has started.
-	chrome := 6
+	// Box chrome: top border (1) + bottom border (1) + header (1) + safety
+	// margin (2) = 5. A picker also spends one row on the transient search
+	// prompt once search has started. The outer footer/status rows are
+	// already excluded by rootBodyHeight.
+	chrome := 5
 	if chipPickerSearchVisible(m) {
 		chrome++
 	}
-	avail := m.height - chrome
+	avail := rootBodyHeight(m) - chrome
 	if avail < 1 {
 		return 1
 	}
@@ -62,51 +63,14 @@ func renderChipPicker(m Model) string {
 	current := currentChipValue(m)
 	height := chipPickerVisibleHeight(m)
 
-	startIdx := 0
-	endIdx := total
-	showTop := false
-	showBottom := false
+	window := flatListWindowFor(total, m.chipPickerOffset, height)
 
-	if height > 0 {
-		offset := m.chipPickerOffset
-		if offset < 0 {
-			offset = 0
-		}
-		if offset > total {
-			offset = total
-		}
-		startIdx = offset
-
-		budget := height
-		if startIdx > 0 {
-			showTop = true
-			budget--
-		}
-		if budget < 0 {
-			budget = 0
-		}
-		endIdx = startIdx + budget
-		if endIdx > total {
-			endIdx = total
-		}
-		if endIdx < total {
-			showBottom = true
-			if budget > 0 {
-				budget--
-			}
-			endIdx = startIdx + budget
-			if endIdx > total {
-				endIdx = total
-			}
-		}
-	}
-
-	if showTop {
+	if window.showTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
 
-	for i := startIdx; i < endIdx; i++ {
+	for i := window.start; i < window.end; i++ {
 		opt := m.chipPickerOptions[i]
 		label := opt
 		if opt == "" {
@@ -124,7 +88,7 @@ func renderChipPicker(m Model) string {
 		sb.WriteByte('\n')
 	}
 
-	if showBottom {
+	if window.showBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}

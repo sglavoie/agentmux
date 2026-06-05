@@ -11,18 +11,30 @@ import (
 )
 
 // sessionSearchVisibleHeight returns the number of result rows that fit in
-// the current viewport. Mirrors pickerVisibleHeight: total height minus the
-// header + filter bar + query bar + a trailing newline + the two-line footer.
+// the root body area. composeRootView owns the footer and sticky status row,
+// so this budget subtracts only the lines renderSessionSearch writes above
+// the scrollable results plus any inline error rows.
 func sessionSearchVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	// header (1) + chip bar (1) + query bar (1) + blank (1) + trailing (1) + footer (2) = 7
-	avail := m.height - 7
+	// header (1) + chip bar (1) + query bar (1) + blank (1) = 4
+	avail := rootBodyHeight(m) - 4 - sessionSearchErrorLines(m)
 	if avail < 1 {
 		return 1
 	}
 	return avail
+}
+
+func sessionSearchErrorLines(m Model) int {
+	n := 0
+	if m.sessionRefreshErr != nil {
+		n++
+	}
+	if m.sessionSearchErr != nil {
+		n++
+	}
+	return n
 }
 
 // renderSessionSearch renders the entire ModeSessionSearch view: header,
@@ -124,46 +136,9 @@ func renderSessionSearchList(m Model, height int) string {
 		return sb.String()
 	}
 
-	startIdx := 0
-	endIdx := total
-	showTop := false
-	showBottom := false
+	window := flatListWindowFor(total, m.sessionOffset, height)
 
-	if height > 0 {
-		offset := m.sessionOffset
-		if offset < 0 {
-			offset = 0
-		}
-		if offset > total {
-			offset = total
-		}
-		startIdx = offset
-
-		budget := height
-		if startIdx > 0 {
-			showTop = true
-			budget--
-		}
-		if budget < 0 {
-			budget = 0
-		}
-		endIdx = startIdx + budget
-		if endIdx > total {
-			endIdx = total
-		}
-		if endIdx < total {
-			showBottom = true
-			if budget > 0 {
-				budget--
-			}
-			endIdx = startIdx + budget
-			if endIdx > total {
-				endIdx = total
-			}
-		}
-	}
-
-	if showTop {
+	if window.showTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
@@ -175,7 +150,7 @@ func renderSessionSearchList(m Model, height int) string {
 
 	acctColor := buildProfileColorMap(m)
 
-	for i := startIdx; i < endIdx; i++ {
+	for i := window.start; i < window.end; i++ {
 		res := m.sessionResults[i]
 		line := formatSessionRow(res, acctColor, maxWidth)
 		if i == m.sessionCursor {
@@ -186,12 +161,72 @@ func renderSessionSearchList(m Model, height int) string {
 		sb.WriteByte('\n')
 	}
 
-	if showBottom {
+	if window.showBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}
 
 	return sb.String()
+}
+
+type flatListWindow struct {
+	start      int
+	end        int
+	showTop    bool
+	showBottom bool
+}
+
+func flatListWindowFor(total, offset, height int) flatListWindow {
+	window := flatListWindow{start: 0, end: total}
+	if total <= 0 {
+		window.end = 0
+		return window
+	}
+	if height <= 0 {
+		return window
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > total {
+		offset = total
+	}
+	window.start = offset
+
+	if height == 1 {
+		window.end = window.start + 1
+		if window.end > total {
+			window.end = total
+		}
+		return window
+	}
+
+	budget := height
+	if window.start > 0 {
+		window.showTop = true
+		budget--
+	}
+	if budget < 0 {
+		budget = 0
+	}
+	window.end = window.start + budget
+	if window.end > total {
+		window.end = total
+	}
+	if window.end < total {
+		window.showBottom = true
+		if budget > 1 {
+			budget--
+		} else {
+			window.showBottom = false
+		}
+		window.end = window.start + budget
+		if window.end > total {
+			window.end = total
+		}
+	}
+	return window
 }
 
 func sessionLoadingLabel(m Model) string {

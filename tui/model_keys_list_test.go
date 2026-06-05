@@ -45,6 +45,7 @@ func assertLockedDenial(t *testing.T, key string) {
 	if !strings.Contains(m2.toasts[0].Text, "locked") {
 		t.Errorf("%s on locked row: expected toast mentioning lock, got %q", key, m2.toasts[0].Text)
 	}
+	assertStatusBarContains(t, m2, "locked")
 	if len(m2.pendingUndo) != 0 {
 		t.Errorf("%s on locked row: expected no pendingUndo, got %d", key, len(m2.pendingUndo))
 	}
@@ -78,6 +79,7 @@ func TestOverrideProfileDeniedOnLockedRow(t *testing.T) {
 	if !strings.Contains(m2.toasts[0].Text, "locked") {
 		t.Errorf("c on locked row: expected toast mentioning lock, got %q", m2.toasts[0].Text)
 	}
+	assertStatusBarContains(t, m2, "locked")
 }
 
 func TestDashboardLaunchAllowedOnLockedRow(t *testing.T) {

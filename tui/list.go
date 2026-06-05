@@ -40,19 +40,12 @@ func StateGloss(state string) string {
 }
 
 // renderHeader renders the dashboard title line. Active filters are surfaced
-// as chips below the header via renderChips, so this line carries the title
-// plus any error indicators (kitty / action), the filter hint, the preview
-// hint, and the right-aligned daemon/hooks health pips.
+// as chips below the header via renderChips, so this line carries the title,
+// the filter hint, the preview hint, and the right-aligned daemon/hooks
+// health pips. Error details are surfaced through the sticky status bar.
 func renderHeader(m Model) string {
 	title := styleHeader.Render("Agent Mux")
-	info := ""
-	if m.err != nil {
-		info += "  " + styleError.Render("kitty: "+m.err.Error())
-	}
-	if m.actionErr != nil {
-		info += "  " + styleError.Render("action: "+m.actionErr.Error())
-	}
-	left := title + styleDim.Render(info)
+	left := title
 
 	var rightParts []string
 	if m.mode == ModeList {

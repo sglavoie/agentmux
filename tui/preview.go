@@ -91,11 +91,12 @@ func previewBody(width, height int, sess session.RunningSession, text, errText s
 }
 
 // previewFits reports whether the current terminal dimensions allow the
-// configured preview direction. footerLines is reserved at the bottom.
+// configured preview direction. footerLines plus the sticky status row are
+// reserved at the bottom.
 func previewFits(width, height, footerLines, minCols, minRows int, direction string) bool {
 	switch direction {
 	case "vertical":
-		return height-footerLines >= minRows
+		return height-footerLines-statusBarLines >= minRows
 	default:
 		return width >= minCols
 	}

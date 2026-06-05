@@ -3,8 +3,10 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/lipgloss/v2"
+	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -196,6 +198,75 @@ func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRootRenderPinsStatusBarToFinalRow(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.width = 140
+	m.height = 20
+
+	out := stripAnsi(m.render())
+	lines := strings.Split(out, "\n")
+	if len(lines) != m.height {
+		t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
+	}
+
+	last := lines[len(lines)-1]
+	if got := runewidth.StringWidth(last); got != m.width {
+		t.Fatalf("status row width = %d, want %d; row %q", got, m.width, last)
+	}
+	if !strings.Contains(strings.TrimSpace(last), "Sessions: 3 running") {
+		t.Fatalf("final row = %q, want list status", last)
+	}
+
+	footerLine := lines[len(lines)-2]
+	for _, want := range []string{"j/k: up/down", "q: quit", "p: preview"} {
+		if !strings.Contains(footerLine, want) {
+			t.Fatalf("footer line above status missing %q: %q", want, footerLine)
+		}
+	}
+}
+
+func TestRootRenderUsesStatusBarForToasts(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.width = 80
+	m.height = 20
+	m.toasts = []Toast{
+		{Severity: toastSuccess, Text: "launch finished", Expires: time.Now().Add(time.Minute)},
+		{Severity: toastInfo, Text: "older toast", Expires: time.Now().Add(time.Minute)},
+	}
+
+	lines := strings.Split(stripAnsi(m.render()), "\n")
+	if last := strings.TrimSpace(lines[len(lines)-1]); !strings.Contains(last, "launch finished") {
+		t.Fatalf("final row = %q, want latest toast status", last)
+	}
+	bodyAndFooter := strings.Join(lines[:len(lines)-1], "\n")
+	if strings.Contains(bodyAndFooter, "older toast") {
+		t.Fatalf("older toast rendered outside status bar:\n%s", bodyAndFooter)
+	}
+}
+
+func TestRootRenderListPreviewSuppressesFooterButKeepsStatusBar(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.width = 140
+	m.height = 20
+	m.previewEnabled = true
+
+	out := stripAnsi(m.render())
+	lines := strings.Split(out, "\n")
+	if len(lines) != m.height {
+		t.Fatalf("rendered line count = %d, want terminal height %d:\n%s", len(lines), m.height, out)
+	}
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if !strings.Contains(last, "Sessions: 3 running") {
+		t.Fatalf("final row = %q, want list status", last)
+	}
+	if strings.Contains(out, "q: quit") || strings.Contains(out, "j/k: up/down") {
+		t.Fatalf("normal footer hints should be suppressed while preview is on:\n%s", out)
+	}
+	if !strings.Contains(out, "p: hide preview") {
+		t.Fatalf("preview header hint should remain visible:\n%s", out)
 	}
 }
 

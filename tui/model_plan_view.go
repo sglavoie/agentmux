@@ -218,18 +218,25 @@ func computePlanViewerMatches(lines []string, query string) []int {
 	return matches
 }
 
-// planViewerVisibleHeight returns the number of body rows that fit in
-// the current viewport. The viewer's chrome matches the session viewer:
-// header (1) + blank (1) + trailing newline (1) + two-line footer (2) = 5.
+// planViewerVisibleHeight returns the number of body rows that fit in the
+// root body area. The viewer's chrome matches the session viewer: header (1)
+// + blank (1), plus any inline read-error row.
 func planViewerVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	avail := m.height - 5
+	avail := rootBodyHeight(m) - 2 - planViewerErrorLines(m)
 	if avail < 1 {
 		return 1
 	}
 	return avail
+}
+
+func planViewerErrorLines(m Model) int {
+	if m.planViewerLoadErr != nil {
+		return 1
+	}
+	return 0
 }
 
 // scrollPlanViewerToCursor advances m.planViewerScroll, a visual wrapped-row

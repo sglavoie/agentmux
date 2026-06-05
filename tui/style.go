@@ -62,12 +62,23 @@ var (
 	// an underline regardless of the base color.
 	styleChip = lipgloss.NewStyle()
 
-	// Toast severity styles. Info is neutral foreground (no styling so it
-	// reads as a status line); success picks up the palette's green, error
-	// reuses the inline error red.
-	styleToastInfo    = lipgloss.NewStyle()
-	styleToastSuccess = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ec9b0"))
-	styleToastError   = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
+	// Status bar styles own the fixed bottom row. Each style sets a
+	// background so the padded row reads as a full-width mode/status strip.
+	styleStatusIdle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d4d4d4")).
+			Background(lipgloss.Color("#1f2933"))
+	styleStatusInfo = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d8f3ff")).
+			Background(lipgloss.Color("#12313b"))
+	styleStatusSuccess = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#d8ffe8")).
+				Background(lipgloss.Color("#123927"))
+	styleStatusWarning = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#fff1b8")).
+				Background(lipgloss.Color("#3a2d05"))
+	styleStatusError = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#ffe1e1")).
+				Background(lipgloss.Color("#3a1515"))
 
 	// Health pip and deprecation banner styles. OK reuses the active-teal
 	// from styleStateBolt, Warn reuses the attention amber, and Err reuses

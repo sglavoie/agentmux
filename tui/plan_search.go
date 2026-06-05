@@ -10,18 +10,29 @@ import (
 )
 
 // planSearchVisibleHeight returns the number of result rows that fit in the
-// current viewport. Plans has no chip bar, so the chrome is one row lighter
-// than session-search: header (1) + query bar (1) + blank (1) + trailing (1)
-// + footer (2) = 6.
+// root body area. Plans has no chip bar, so the chrome is one row lighter
+// than session search: header (1) + query bar (1) + blank (1), plus any
+// inline error rows.
 func planSearchVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	avail := m.height - 6
+	avail := rootBodyHeight(m) - 3 - planSearchErrorLines(m)
 	if avail < 1 {
 		return 1
 	}
 	return avail
+}
+
+func planSearchErrorLines(m Model) int {
+	n := 0
+	if m.planRefreshErr != nil {
+		n++
+	}
+	if m.planSearchErr != nil {
+		n++
+	}
+	return n
 }
 
 // planSortLabel returns the short label rendered in the Plans header to
@@ -94,46 +105,9 @@ func renderPlanSearchList(m Model, height int) string {
 		return sb.String()
 	}
 
-	startIdx := 0
-	endIdx := total
-	showTop := false
-	showBottom := false
+	window := flatListWindowFor(total, m.planOffset, height)
 
-	if height > 0 {
-		offset := m.planOffset
-		if offset < 0 {
-			offset = 0
-		}
-		if offset > total {
-			offset = total
-		}
-		startIdx = offset
-
-		budget := height
-		if startIdx > 0 {
-			showTop = true
-			budget--
-		}
-		if budget < 0 {
-			budget = 0
-		}
-		endIdx = startIdx + budget
-		if endIdx > total {
-			endIdx = total
-		}
-		if endIdx < total {
-			showBottom = true
-			if budget > 0 {
-				budget--
-			}
-			endIdx = startIdx + budget
-			if endIdx > total {
-				endIdx = total
-			}
-		}
-	}
-
-	if showTop {
+	if window.showTop {
 		sb.WriteString(styleDim.Render("  ▲"))
 		sb.WriteByte('\n')
 	}
@@ -143,7 +117,7 @@ func renderPlanSearchList(m Model, height int) string {
 		maxWidth = 120
 	}
 
-	for i := startIdx; i < endIdx; i++ {
+	for i := window.start; i < window.end; i++ {
 		res := m.planResults[i]
 		line := formatPlanRow(res, maxWidth)
 		if i == m.planCursor {
@@ -154,7 +128,7 @@ func renderPlanSearchList(m Model, height int) string {
 		sb.WriteByte('\n')
 	}
 
-	if showBottom {
+	if window.showBottom {
 		sb.WriteString(styleDim.Render("  ▼"))
 		sb.WriteByte('\n')
 	}

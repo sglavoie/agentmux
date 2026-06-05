@@ -124,14 +124,12 @@ type Model struct {
 	deprecationDismissed  bool
 
 	// preview pane
-	previewEnabled       bool
-	previewWindowID      int
-	previewText          string
-	previewError         string
-	previewNotice        string
-	previewNoticeExpires time.Time
+	previewEnabled  bool
+	previewWindowID int
+	previewText     string
+	previewError    string
 
-	// toast strip + launch-progress bookkeeping
+	// transient status messages + launch-progress bookkeeping
 	toasts                   []Toast
 	launchBatchID            int
 	launchBatchDone          int

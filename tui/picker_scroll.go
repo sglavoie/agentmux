@@ -1,11 +1,23 @@
 package tui
 
-// pickerOuterChrome is the number of vertical lines outside the picker
-// block in ModePicker: the trailing newline written by render() (1) plus
-// previewFooterLines for ModePicker which is fixed at 2 = 3. Preview state
-// does not affect this — the picker pane (with or without right-side
-// preview) always occupies m.height - pickerOuterChrome lines.
-const pickerOuterChrome = 3
+const pickerFooterLines = 2
+
+// pickerOuterChrome is the number of vertical lines outside the picker body:
+// the fixed two-line ModePicker footer plus the sticky one-line status bar.
+// Preview state does not affect this — the picker pane (with or without the
+// right-side preview) always occupies m.height - pickerOuterChrome lines.
+const pickerOuterChrome = pickerFooterLines + statusBarLines
+
+func pickerPaneHeight(m Model) int {
+	if m.height <= 0 {
+		return 0
+	}
+	h := m.height - pickerOuterChrome
+	if h < 0 {
+		return 0
+	}
+	return h
+}
 
 // pickerInternalChrome is the number of vertical lines the picker emits
 // before the first row inside renderPickerList. In the empty-filter nav state
@@ -28,7 +40,7 @@ func pickerVisibleHeight(m Model) int {
 	if m.height == 0 {
 		return len(m.pickerFilteredIdx)
 	}
-	h := m.height - pickerOuterChrome - pickerInternalChrome(m)
+	h := pickerPaneHeight(m) - pickerInternalChrome(m)
 	if h < listMinVisible {
 		h = listMinVisible
 	}

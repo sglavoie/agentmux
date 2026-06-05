@@ -56,7 +56,7 @@ func (m Model) render() string {
 		} else {
 			popup = renderDeleteChoiceBox(m)
 		}
-		overlayH := m.height - previewFooterLines(m) - 1 // trailing \n appended below
+		overlayH := rootBodyHeight(m)
 		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
 	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeLoopTailPicker:
 		var base string
@@ -80,7 +80,7 @@ func (m Model) render() string {
 		case ModeLoopTailPicker:
 			popup = renderLoopTailPickerBox(m)
 		}
-		overlayH := m.height - previewFooterLines(m) - 1
+		overlayH := rootBodyHeight(m)
 		if m.mode == ModeConfigPicker {
 			// Top-anchored so the modal doesn't jump when the harness-switch
 			// warning is appended/removed.
@@ -109,12 +109,65 @@ func (m Model) render() string {
 		}
 	}
 
-	sb.WriteByte('\n')
+	return composeRootView(sb.String(), m)
+}
 
-	sb.WriteString(renderToasts(m))
-	sb.WriteString(renderFooter(m))
+func composeRootView(body string, m Model) string {
+	bodyLines := rootSectionLines(body)
+	footerLines := rootFooterLines(m)
+	status := renderStatusBar(m)
 
-	return sb.String()
+	paddingLines := 1
+	if m.height > 0 {
+		footerBudget := m.height - statusBarLines
+		if footerBudget < 0 {
+			footerBudget = 0
+		}
+		if len(footerLines) > footerBudget {
+			footerLines = footerLines[len(footerLines)-footerBudget:]
+		}
+
+		bodyBudget := m.height - len(footerLines) - statusBarLines
+		if bodyBudget < 0 {
+			bodyBudget = 0
+		}
+		if len(bodyLines) > bodyBudget {
+			bodyLines = bodyLines[:bodyBudget]
+		}
+		paddingLines = bodyBudget - len(bodyLines)
+	}
+
+	lines := make([]string, 0, len(bodyLines)+paddingLines+len(footerLines)+statusBarLines)
+	lines = append(lines, bodyLines...)
+	for i := 0; i < paddingLines; i++ {
+		lines = append(lines, "")
+	}
+	lines = append(lines, footerLines...)
+	lines = append(lines, status)
+	return strings.Join(lines, "\n")
+}
+
+func rootBodyHeight(m Model) int {
+	if m.height <= 0 {
+		return 0
+	}
+	h := m.height - len(rootFooterLines(m)) - statusBarLines
+	if h < 0 {
+		return 0
+	}
+	return h
+}
+
+func rootFooterLines(m Model) []string {
+	return rootSectionLines(renderFooter(m))
+}
+
+func rootSectionLines(section string) []string {
+	section = strings.TrimRight(section, "\n")
+	if section == "" {
+		return nil
+	}
+	return strings.Split(section, "\n")
 }
 
 // renderDashboard emits the canonical ModeList layout — header, deprecation
@@ -140,15 +193,15 @@ func renderDashboard(m Model) string {
 // dimensions or selection make the preview unusable.
 func renderSplit(m Model) string {
 	cfg := m.cfg.Defaults.Preview
-	footerLines := previewFooterLines(m)
+	footerLines := footerBudgetLines(m)
 	// Vertical space available for the list+preview area: total height minus
 	// all chrome rendered above the list (header + banner + legend + chips +
-	// spacer), minus the trailing newline render() writes after the
-	// list block, minus the footer. Must stay in lock-step with
+	// spacer), minus the padding row between body and footer, minus the footer,
+	// minus the sticky status bar. Must stay in lock-step with
 	// listVisibleHeight's preview branch so scrollListToCursor and renderListAt
 	// agree on the budget — otherwise the cursor can land at a row the
 	// renderer emits past the visible terminal area.
-	paneHeight := m.height - chromeAboveListLines(m) - 1 /* trailing newline */ - footerLines
+	paneHeight := m.height - chromeAboveListLines(m) - 1 /* padding row */ - footerLines - statusBarLines
 	if paneHeight < 4 || m.width < 20 {
 		return renderList(m)
 	}
@@ -189,42 +242,50 @@ func renderSplit(m Model) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
 }
 
-// previewFooterLines returns the baseline number of lines the footer will
-// occupy in the current mode (used for layout math and resize fits-check).
-// Narrow-terminal wrapping can add continuation rows, as it did before.
-func previewFooterLines(m Model) int {
+// footerBudgetLines returns the baseline number of footer rows reserved by
+// layout math and preview resize checks. The sticky status row is accounted
+// for separately by callers.
+func footerBudgetLines(m Model) int {
 	if m.mode == ModePicker {
 		// Picker footer is always two lines regardless of preview state.
-		return 2
+		return pickerFooterLines
 	}
 	if m.mode != ModeList {
 		return 2
 	}
-	noticeActive := m.previewNotice != "" &&
-		(m.previewNoticeExpires.IsZero() || time.Now().Before(m.previewNoticeExpires))
 	if m.previewEnabled {
-		// Footer keybindings are suppressed; only the notice (if any) takes a line.
-		if noticeActive {
-			return 1
-		}
+		// Footer keybindings are suppressed while preview owns the split pane.
 		return 0
-	}
-	if noticeActive {
-		return 5
 	}
 	return 4
 }
 
 // dashboardPreviewEnableFooterLines returns the footer budget used to decide
 // whether enabling ModeList preview will fit. A successful enable suppresses
-// the regular dashboard footer and clears stale preview notices, so the
-// preview-off footer must not make the initial fit check stricter than the
-// enabled layout.
+// the regular dashboard footer, so the preview-off footer must not make the
+// initial fit check stricter than the enabled layout.
 func dashboardPreviewEnableFooterLines(m Model) int {
 	if m.mode != ModeList {
-		return previewFooterLines(m)
+		return footerBudgetLines(m)
 	}
 	return 0
+}
+
+const (
+	previewNoticeToastID = -2
+	previewNoticeTTL     = 2 * time.Second
+)
+
+func (m *Model) pushPreviewNotice(text string) tea.Cmd {
+	return m.replaceToastByID(previewNoticeToastID, Toast{
+		Severity: toastError,
+		Text:     text,
+		Expires:  time.Now().Add(previewNoticeTTL),
+	})
+}
+
+func (m *Model) clearPreviewNotice() {
+	m.clearToastByID(previewNoticeToastID)
 }
 
 // togglePreview flips the preview pane on/off. Returns the model and any cmd
@@ -240,16 +301,13 @@ func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	}
 	cfg := m.cfg.Defaults.Preview
 	if !previewFits(m.width, m.height, dashboardPreviewEnableFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-		m.previewNotice = "preview unavailable: terminal too small"
-		m.previewNoticeExpires = time.Now().Add(2 * time.Second)
-		return m, nil
+		return m, m.pushPreviewNotice("preview unavailable: terminal too small")
 	}
 	m.previewEnabled = true
 	m.previewText = ""
 	m.previewError = ""
 	m.previewWindowID = m.currentPreviewWindowID()
-	m.previewNotice = ""
-	m.previewNoticeExpires = time.Time{}
+	m.clearPreviewNotice()
 	scrollListToCursor(&m)
 	d := time.Duration(cfg.RefreshMs) * time.Millisecond
 	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
@@ -356,27 +414,33 @@ func (m Model) togglePickerPreview() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	cfg := m.cfg.Defaults.Preview
-	if !previewFits(m.width, m.height, previewFooterLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
-		m.previewNotice = "preview unavailable: terminal too small"
-		m.previewNoticeExpires = time.Now().Add(2 * time.Second)
-		return m, nil
+	if !previewFits(m.width, m.height, footerBudgetLines(m), cfg.MinCols, cfg.MinRows, cfg.Direction) {
+		return m, m.pushPreviewNotice("preview unavailable: terminal too small")
 	}
 	m.pickerPreviewEnabled = true
 	m.previewText = ""
 	m.previewError = ""
 	m.previewWindowID = m.pickerCurrentWindowID()
+	m.clearPreviewNotice()
 	scrollPickerToCursor(&m)
 	d := time.Duration(cfg.RefreshMs) * time.Millisecond
 	return m, tea.Batch(fetchPreviewCmd(m.client, m.previewWindowID), previewTickCmd(d))
 }
 
-// disablePreviewWithNotice turns the preview off and shows a transient footer
-// notice. Used both by the resize guard and any other auto-disable path.
-func (m *Model) disablePreviewWithNotice(msg string) {
+// disablePreviewWithNotice turns the dashboard preview off and shows a
+// transient status-bar notice. Used by the resize guard.
+func (m *Model) disablePreviewWithNotice(msg string) tea.Cmd {
 	m.previewEnabled = false
 	m.previewText = ""
 	m.previewError = ""
 	m.previewWindowID = 0
-	m.previewNotice = msg
-	m.previewNoticeExpires = time.Now().Add(2 * time.Second)
+	return m.pushPreviewNotice(msg)
+}
+
+func (m *Model) disablePickerPreviewWithNotice(msg string) tea.Cmd {
+	m.pickerPreviewEnabled = false
+	m.previewText = ""
+	m.previewError = ""
+	m.previewWindowID = 0
+	return m.pushPreviewNotice(msg)
 }

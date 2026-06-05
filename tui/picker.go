@@ -60,9 +60,7 @@ func renderPicker(m Model) string {
 	}
 
 	cfg := m.cfg.Defaults.Preview
-	// Picker render is followed by "\n" + a 2-line footer in render(),
-	// so the available content height is height - 3.
-	paneHeight := m.height - 3
+	paneHeight := pickerPaneHeight(m)
 	if paneHeight < 4 || m.width < cfg.MinCols {
 		return renderPickerList(m, listHeight)
 	}

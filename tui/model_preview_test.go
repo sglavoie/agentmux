@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestTogglePreviewVerticalUsesEnabledFooterBudget(t *testing.T) {
 	updated, cmd := m.Update(keyPress("p"))
 	got := updated.(Model)
 	if !got.previewEnabled {
-		t.Fatalf("expected preview to enable at 141x33 with min_rows=30; notice=%q", got.previewNotice)
+		t.Fatalf("expected preview to enable at 141x33 with min_rows=30; toasts=%+v", got.toasts)
 	}
 	if cmd == nil {
 		t.Fatal("expected preview enable to return fetch/tick command")
@@ -44,11 +45,18 @@ func TestTogglePreviewVerticalRejectsGenuinelyShortTerminal(t *testing.T) {
 	if got.previewEnabled {
 		t.Fatal("expected preview to stay disabled below min_rows")
 	}
-	if got.previewNotice != "preview unavailable: terminal too small" {
-		t.Fatalf("preview notice = %q, want terminal-too-small notice", got.previewNotice)
+	if len(got.toasts) != 1 || got.toasts[0].id != previewNoticeToastID {
+		t.Fatalf("expected one addressable preview notice toast, got %+v", got.toasts)
 	}
-	if cmd != nil {
-		t.Fatal("expected no command when preview is rejected")
+	if got.toasts[0].Text != "preview unavailable: terminal too small" {
+		t.Fatalf("preview notice toast = %q, want terminal-too-small notice", got.toasts[0].Text)
+	}
+	if cmd == nil {
+		t.Fatal("expected preview rejection to arm toast tick")
+	}
+	assertStatusBarContains(t, got, "preview unavailable: terminal too small")
+	if strings.Contains(stripAnsi(renderFooter(got)), "preview unavailable") {
+		t.Fatal("preview notice should render through the status bar, not the footer")
 	}
 }
 
@@ -57,16 +65,21 @@ func TestTogglePreviewClearsStalePreviewNoticeOnSuccess(t *testing.T) {
 	m.width = 141
 	m.height = 33
 	m.cfg.Defaults.Preview = dashboardPreviewCfg()
-	m.previewNotice = "preview unavailable: terminal too small"
-	m.previewNoticeExpires = time.Now().Add(time.Second)
+	m.toasts = []Toast{{
+		Severity: toastError,
+		Text:     "preview unavailable: terminal too small",
+		Expires:  time.Now().Add(time.Second),
+		id:       previewNoticeToastID,
+	}}
 
 	updated, _ := m.Update(keyPress("p"))
 	got := updated.(Model)
 	if !got.previewEnabled {
-		t.Fatalf("expected stale notice not to block preview enable; notice=%q", got.previewNotice)
+		t.Fatalf("expected stale notice not to block preview enable; toasts=%+v", got.toasts)
 	}
-	if !got.previewNoticeExpires.IsZero() || got.previewNotice != "" {
-		t.Fatalf("expected stale notice to clear on successful enable, got notice=%q expires=%v",
-			got.previewNotice, got.previewNoticeExpires)
+	for _, toast := range got.toasts {
+		if toast.id == previewNoticeToastID {
+			t.Fatalf("expected stale preview notice toast to clear on successful enable, got %+v", got.toasts)
+		}
 	}
 }

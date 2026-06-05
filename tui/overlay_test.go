@@ -41,6 +41,20 @@ func TestComposeOverlaySingleCellMiddle(t *testing.T) {
 	}
 }
 
+func TestComposeOverlayClampsBaseHeight(t *testing.T) {
+	base := makeBase(5, 5)
+	got := composeOverlay(base, "", 5, 3, 0, 0, false)
+	lines := strings.Split(got, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected base to clamp to 3 lines; got %d (%q)", len(lines), got)
+	}
+	for i, want := range []string{"abcde", "fghij", "klmno"} {
+		if lines[i] != want {
+			t.Errorf("row %d: expected %q; got %q", i, want, lines[i])
+		}
+	}
+}
+
 func TestComposeOverlayMultiLinePreservesAnsiOutsideRegion(t *testing.T) {
 	styled := styleSelected.Render("hello")
 	base := styled + "\n" + styled + "\n" + styled

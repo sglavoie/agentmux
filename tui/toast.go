@@ -1,11 +1,9 @@
 package tui
 
 import (
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 // toastSeverity classifies a toast for styling and ordering.
@@ -17,9 +15,9 @@ const (
 	toastError
 )
 
-// maxToasts caps the number of toasts shown at once. Older toasts are
-// dropped when a push would exceed this — newest-on-top means the user
-// always sees the most recent action.
+// maxToasts caps the number of transient status messages retained. Older
+// toasts are dropped when a push would exceed this — newest-on-top means the
+// sticky status bar always sees the most recent active action first.
 const maxToasts = 3
 
 // defaultToastTTL is the lifetime of a transient toast. Progress toasts
@@ -35,7 +33,7 @@ const progressToastTTL = 10 * time.Second
 // the runloop too often, fine enough that visible expiry is snappy.
 const toastTickInterval = 250 * time.Millisecond
 
-// Toast is a transient status message shown above the footer.
+// Toast is a transient message shown through the sticky status bar.
 type Toast struct {
 	Severity toastSeverity
 	Text     string
@@ -90,10 +88,10 @@ func (m *Model) pushToast(t Toast) tea.Cmd {
 
 // replaceToastByID replaces (or pushes) a toast carrying the given id.
 // Used for progress toasts so successive "Launched 1/N · …" updates
-// occupy the same slot rather than stacking. id == 0 means "not addressable"
-// so the toast is appended as a fresh transient entry instead of merging
-// with whatever happens to sit in the slot — a stray zero would otherwise
-// clobber a recent unrelated info toast (whose id field defaults to 0).
+// share one logical channel rather than stacking. Replacements move to the
+// top so the sticky status bar treats the update as the latest transient.
+// id == 0 means "not addressable" so the toast is appended as a fresh
+// transient entry instead of merging with whatever happens to sit in the slot.
 func (m *Model) replaceToastByID(id int, t Toast) tea.Cmd {
 	if t.Expires.IsZero() {
 		t.Expires = time.Now().Add(defaultToastTTL)
@@ -102,12 +100,30 @@ func (m *Model) replaceToastByID(id int, t Toast) tea.Cmd {
 	if id != 0 {
 		for i := range m.toasts {
 			if m.toasts[i].id == id {
-				m.toasts[i] = t
+				if i == 0 {
+					m.toasts[0] = t
+					return nil
+				}
+				copy(m.toasts[1:i+1], m.toasts[0:i])
+				m.toasts[0] = t
 				return nil
 			}
 		}
 	}
 	return m.pushToast(t)
+}
+
+func (m *Model) clearToastByID(id int) {
+	if id == 0 || len(m.toasts) == 0 {
+		return
+	}
+	kept := m.toasts[:0]
+	for _, t := range m.toasts {
+		if t.id != id {
+			kept = append(kept, t)
+		}
+	}
+	m.toasts = kept
 }
 
 // sweepToasts drops every toast whose TTL has elapsed. Returns a cmd
@@ -126,29 +142,4 @@ func (m *Model) sweepToasts() tea.Cmd {
 		return nil
 	}
 	return toastTickCmd()
-}
-
-// renderToasts renders the toast strip (one line per toast, newest on
-// top). Returns "" when no toasts are alive so the footer layout collapses.
-func renderToasts(m Model) string {
-	if len(m.toasts) == 0 {
-		return ""
-	}
-	var sb strings.Builder
-	for _, t := range m.toasts {
-		text := "  " + t.Text
-		if m.width > 0 {
-			text = runewidth.Truncate(text, m.width, "…")
-		}
-		switch t.Severity {
-		case toastSuccess:
-			sb.WriteString(styleToastSuccess.Render(text))
-		case toastError:
-			sb.WriteString(styleToastError.Render(text))
-		default:
-			sb.WriteString(styleToastInfo.Render(text))
-		}
-		sb.WriteByte('\n')
-	}
-	return sb.String()
 }
