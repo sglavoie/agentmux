@@ -42,6 +42,15 @@ func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Confi
 // match the target profile. If the target profile is already the current one,
 // it is a no-op. Launch precedes Close for the same reason as Restart.
 func RestartWithAccount(client kitty.KittyClient, running RunningSession, targetAcc config.Account, cfg *config.Config) error {
+	return RestartWithAccountTemplate(client, running, SessionFromRunning(running), targetAcc, cfg)
+}
+
+// RestartWithAccountTemplate relaunches a running session using an explicit
+// launch template, then closes the original tab. Callers that can resolve the
+// configured project template should pass it here so switching harnesses
+// recomputes target-profile args/env instead of inheriting source-harness
+// resolved values from the running tab.
+func RestartWithAccountTemplate(client kitty.KittyClient, running RunningSession, template config.Session, targetAcc config.Account, cfg *config.Config) error {
 	debugLog.Printf("RestartWithAccount: running=%+v targetAcc=%+v", running, targetAcc)
 	// Case-insensitive compare: profile names get lowercased in SessionKey and
 	// duplicates differing only in case are rejected by config validation, so a
@@ -52,7 +61,7 @@ func RestartWithAccount(client kitty.KittyClient, running RunningSession, target
 		return nil
 	}
 
-	sess := SessionFromRunning(running)
+	sess := template
 	sess.Profile = targetAcc.Name
 	sess.Account = targetAcc.Name
 	debugLog.Printf("RestartWithAccount: session=%+v", sess)

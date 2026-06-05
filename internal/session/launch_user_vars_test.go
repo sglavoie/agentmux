@@ -108,7 +108,7 @@ func TestBuildUserVars_ProfileFallsBackToAccount(t *testing.T) {
 	}
 }
 
-func TestBuildUserVars_InheritedArgsDoNotSetExplicitFlags(t *testing.T) {
+func TestBuildUserVars_InheritedArgsSetEmptyExplicitFlagsMarker(t *testing.T) {
 	defaults := config.Defaults{}
 	acc := config.Account{
 		Name:    "work",
@@ -125,7 +125,7 @@ func TestBuildUserVars_InheritedArgsDoNotSetExplicitFlags(t *testing.T) {
 	if got["cc_flags"] != "--account-flag" {
 		t.Fatalf("cc_flags: got %q, want %q", got["cc_flags"], "--account-flag")
 	}
-	if _, ok := got["cc_explicit_flags"]; ok {
-		t.Fatalf("cc_explicit_flags should be omitted for inherited args, got %q", got["cc_explicit_flags"])
+	if v, ok := got["cc_explicit_flags"]; !ok || v != "" {
+		t.Fatalf("cc_explicit_flags should be present and empty for inherited args, got %q present=%v", v, ok)
 	}
 }

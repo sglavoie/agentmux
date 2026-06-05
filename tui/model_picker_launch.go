@@ -15,13 +15,14 @@ import (
 
 // restartWithAccountCmd closes and relaunches a session under a different account.
 func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
+	sess := dashboardSessionTemplate(m.cfg, m.targetSession)
 	return func() (msg tea.Msg) {
 		defer func() {
 			if r := recover(); r != nil {
 				msg = actionDoneMsg{err: fmt.Errorf("panic in restartWithAccount: %v", r)}
 			}
 		}()
-		return actionDoneMsg{err: session.RestartWithAccount(m.client, m.targetSession, acc, m.cfg)}
+		return actionDoneMsg{err: session.RestartWithAccountTemplate(m.client, m.targetSession, sess, acc, m.cfg)}
 	}
 }
 
@@ -81,7 +82,7 @@ func (m *Model) launchBatchCmd(todo []queuedLaunch, quitOnSuccess bool) tea.Cmd 
 }
 
 func (m *Model) dashboardLaunchWithAccountCmd(acc config.Account) tea.Cmd {
-	sess := session.SessionFromRunning(m.targetSession)
+	sess := dashboardSessionTemplate(m.cfg, m.targetSession)
 	sess = sessionWithProfile(sess, acc.Name)
 	return m.launchBatchCmd([]queuedLaunch{{
 		sess:  sess,

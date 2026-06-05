@@ -3,6 +3,8 @@ package tui
 import (
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -15,6 +17,7 @@ import (
 type fakeLaunchDispatchClient struct {
 	windows  []kitty.OSWindow
 	launched []kitty.LaunchOpts
+	closed   []string
 }
 
 func (f *fakeLaunchDispatchClient) ListWindows() ([]kitty.OSWindow, error) { return f.windows, nil }
@@ -23,8 +26,22 @@ func (f *fakeLaunchDispatchClient) LaunchTab(opts kitty.LaunchOpts) error {
 	return nil
 }
 func (f *fakeLaunchDispatchClient) LaunchOverlay(kitty.LaunchOpts) error { return nil }
-func (f *fakeLaunchDispatchClient) CloseTab(string) error                { return nil }
-func (f *fakeLaunchDispatchClient) MoveTab(string, int) error            { return nil }
+func (f *fakeLaunchDispatchClient) CloseTab(match string) error {
+	f.closed = append(f.closed, match)
+	if idText, ok := strings.CutPrefix(match, "id:"); ok {
+		for wi := range f.windows {
+			tabs := f.windows[wi].Tabs
+			for ti := range tabs {
+				if idText == strconv.Itoa(tabs[ti].ID) {
+					f.windows[wi].Tabs = append(tabs[:ti], tabs[ti+1:]...)
+					return nil
+				}
+			}
+		}
+	}
+	return nil
+}
+func (f *fakeLaunchDispatchClient) MoveTab(string, int) error { return nil }
 func (f *fakeLaunchDispatchClient) SetTabColor(string, string, string, string, string) error {
 	return nil
 }
@@ -538,6 +555,165 @@ func TestDashboardLaunch_AlternateProfileSelectionLaunchesWithSelectedVars(t *te
 	}
 	if got := client.launched[0].UserVars["amx_harness"]; got != "codex" {
 		t.Fatalf("expected amx_harness=codex, got %q", got)
+	}
+}
+
+func TestDashboardLaunch_CrossHarnessUsesConfiguredProjectTemplate(t *testing.T) {
+	client := &fakeLaunchDispatchClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:    10,
+				Title: "docs",
+				Windows: []kitty.Window{{
+					ID:       11,
+					IsActive: true,
+					CWD:      "/home/user/docs",
+					UserVars: kitty.UserVars{
+						Profile:      "claude-work",
+						Harness:      "claude",
+						Project:      "docs",
+						AMXDirectory: "/home/user/docs",
+						Args:         "--dangerously-skip-permissions",
+					},
+				}},
+				IsActive: true,
+			}},
+		}},
+	}
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", Args: []string{"--shared-default"}},
+		Accounts: []config.Account{
+			{Name: "claude-work", Harness: "claude", Args: []string{"--dangerously-skip-permissions"}},
+			{Name: "codex-work", Harness: "codex", Args: []string{"--model", "gpt-5"}},
+		},
+		Sessions: []config.Session{
+			{Title: "docs", Directory: "/home/user/docs", Profile: "claude-work"},
+		},
+	}
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{
+			TabID: 10, WindowID: 11, Base: "docs", Profile: "claude-work",
+			Account: "claude-work", Harness: "claude", Project: "docs",
+			Directory: "/home/user/docs", Args: "--dangerously-skip-permissions",
+			Key: session.SessionKey("claude-work", "docs"),
+		},
+	})
+
+	m = pressKey(m, "C")
+	m = pressKey(m, "j")
+	_, cmd := m.Update(keyPress("enter"))
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for cross-harness dashboard launch")
+	}
+	got := countLaunchProgress(collectLeafMsgs(t, cmd))
+	if len(got) != 1 || got[0].err != nil {
+		t.Fatalf("expected cross-harness dashboard launch to succeed, got %+v", got)
+	}
+	if len(client.closed) != 0 {
+		t.Fatalf("dashboard C must not close the source tab, closed=%v", client.closed)
+	}
+	if len(client.launched) != 1 {
+		t.Fatalf("expected one launched tab, got %d", len(client.launched))
+	}
+	opts := client.launched[0]
+	if got := opts.UserVars["amx_profile"]; got != "codex-work" {
+		t.Fatalf("expected amx_profile=codex-work, got %q", got)
+	}
+	if got := opts.UserVars["amx_harness"]; got != "codex" {
+		t.Fatalf("expected amx_harness=codex, got %q", got)
+	}
+	if got := opts.UserVars["cc_flags"]; got != "--model gpt-5" {
+		t.Fatalf("expected target profile args, got cc_flags=%q", got)
+	}
+	if got := opts.UserVars["cc_explicit_flags"]; got != "" {
+		t.Fatalf("expected empty explicit-flags marker for inherited args, got %q", got)
+	}
+	cmdline := strings.Join(opts.Cmdline, "\x00")
+	if !strings.Contains(cmdline, "exec codex --model gpt-5") {
+		t.Fatalf("expected Codex command with target args, got %v", opts.Cmdline)
+	}
+	if strings.Contains(cmdline, "--dangerously-skip-permissions") || strings.Contains(cmdline, "--shared-default") {
+		t.Fatalf("dashboard launch leaked source/default args into target harness: %v", opts.Cmdline)
+	}
+}
+
+func TestDashboardRestartProfile_CrossHarnessUsesConfiguredProjectTemplate(t *testing.T) {
+	client := &fakeLaunchDispatchClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:    10,
+				Title: "docs",
+				Windows: []kitty.Window{{
+					ID:       11,
+					IsActive: true,
+					CWD:      "/home/user/docs",
+					UserVars: kitty.UserVars{
+						Profile:      "claude-work",
+						Harness:      "claude",
+						Project:      "docs",
+						AMXDirectory: "/home/user/docs",
+						Args:         "--dangerously-skip-permissions",
+					},
+				}},
+				IsActive: true,
+			}},
+		}},
+	}
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", Args: []string{"--shared-default"}},
+		Accounts: []config.Account{
+			{Name: "claude-work", Harness: "claude", Args: []string{"--dangerously-skip-permissions"}},
+			{Name: "codex-work", Harness: "codex", Args: []string{"--model", "gpt-5"}},
+		},
+		Sessions: []config.Session{
+			{Title: "docs", Directory: "/home/user/docs", Profile: "claude-work"},
+		},
+	}
+	m := NewModel(cfg, client)
+	m = loadSessions(m, []session.RunningSession{
+		{
+			TabID: 10, WindowID: 11, Base: "docs", Profile: "claude-work",
+			Account: "claude-work", Harness: "claude", Project: "docs",
+			Directory: "/home/user/docs", Args: "--dangerously-skip-permissions",
+			Key: session.SessionKey("claude-work", "docs"),
+		},
+	})
+
+	m = pressKey(m, "c")
+	m = pressKey(m, "j")
+	updated, cmd := m.Update(keyPress("enter"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("expected ModeList after restart profile selection, got %d", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for cross-harness restart")
+	}
+	msg := cmd()
+	if done, ok := msg.(actionDoneMsg); !ok || done.err != nil {
+		t.Fatalf("expected successful actionDoneMsg, got %#v", msg)
+	}
+	if len(client.closed) != 1 {
+		t.Fatalf("dashboard c should close exactly the source tab, closed=%v", client.closed)
+	}
+	if len(client.launched) != 1 {
+		t.Fatalf("expected one launched tab, got %d", len(client.launched))
+	}
+	opts := client.launched[0]
+	if got := opts.UserVars["amx_profile"]; got != "codex-work" {
+		t.Fatalf("expected amx_profile=codex-work, got %q", got)
+	}
+	if got := opts.UserVars["cc_flags"]; got != "--model gpt-5" {
+		t.Fatalf("expected target profile args, got cc_flags=%q", got)
+	}
+	cmdline := strings.Join(opts.Cmdline, "\x00")
+	if !strings.Contains(cmdline, "exec codex --model gpt-5") {
+		t.Fatalf("expected Codex command with target args, got %v", opts.Cmdline)
+	}
+	if strings.Contains(cmdline, "--dangerously-skip-permissions") || strings.Contains(cmdline, "--shared-default") {
+		t.Fatalf("restart leaked source/default args into target harness: %v", opts.Cmdline)
 	}
 }
 

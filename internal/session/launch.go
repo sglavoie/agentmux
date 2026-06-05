@@ -75,11 +75,12 @@ func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defa
 		"cc_config_dir": homeDir,
 		"cc_cwd":        projectDir,
 		"cc_flags":      args,
-		"cc_env":        ccEnv,
-		"cc_groups":     groups,
-	}
-	if explicitArgs != "" {
-		userVars["cc_explicit_flags"] = explicitArgs
+		// Presence matters: an empty value means this modern tab had no
+		// project-explicit args, so restart/profile-switch paths may recompute
+		// profile/default args instead of pinning inherited ones.
+		"cc_explicit_flags": explicitArgs,
+		"cc_env":            ccEnv,
+		"cc_groups":         groups,
 	}
 	return userVars
 }

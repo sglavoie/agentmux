@@ -332,11 +332,55 @@ func findConfigSession(cfg *config.Config, profileName, projectTitle string) (co
 		return config.Session{}, false
 	}
 	for _, cs := range cfg.Sessions {
-		if cs.Title == projectTitle && cs.EffectiveProfile() == profileName {
+		if cs.Title == projectTitle && strings.EqualFold(cs.EffectiveProfile(), profileName) {
 			return cs, true
 		}
 	}
 	return config.Session{}, false
+}
+
+func findConfigSessionForRunning(cfg *config.Config, rs session.RunningSession) (config.Session, bool) {
+	if cfg == nil {
+		return config.Session{}, false
+	}
+	projectTitle := rs.EffectiveProject()
+	if cs, ok := findConfigSession(cfg, rs.EffectiveProfile(), projectTitle); ok {
+		return cs, true
+	}
+
+	var titleMatches []config.Session
+	for _, cs := range cfg.Sessions {
+		if cs.Title == projectTitle {
+			titleMatches = append(titleMatches, cs)
+		}
+	}
+	if len(titleMatches) == 0 {
+		return config.Session{}, false
+	}
+
+	runningDir := config.ExpandTilde(rs.Directory)
+	if runningDir != "" {
+		var dirMatches []config.Session
+		for _, cs := range titleMatches {
+			if config.ExpandTilde(cs.Directory) == runningDir {
+				dirMatches = append(dirMatches, cs)
+			}
+		}
+		if len(dirMatches) == 1 {
+			return dirMatches[0], true
+		}
+	}
+	if len(titleMatches) == 1 {
+		return titleMatches[0], true
+	}
+	return config.Session{}, false
+}
+
+func dashboardSessionTemplate(cfg *config.Config, rs session.RunningSession) config.Session {
+	if cs, ok := findConfigSessionForRunning(cfg, rs); ok {
+		return cs
+	}
+	return session.SessionFromRunning(rs)
 }
 
 func findAccountByName(accounts []config.Account, name string) (config.Account, bool) {
