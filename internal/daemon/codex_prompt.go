@@ -26,6 +26,9 @@ type CodexPromptClassification struct {
 }
 
 var codexChoiceLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*\d+\.`)
+var codexComposerLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*(?:Use /skills to list available skills)?\s*$`)
+var codexContextZeroLineRE = regexp.MustCompile(`(?i)\bcontext\b.*(?:^|[^0-9])0\s*%`)
+var codexLabeledTranscriptLineRE = regexp.MustCompile(`(?i)^\s*(?:user|codex|assistant|system)\s*:`)
 
 // ClassifyCodexPromptScreen classifies a visible Codex prompt from screen text.
 //
@@ -95,4 +98,117 @@ func codexPromptLooksLikeRequestUserInput(lower string) bool {
 		strings.Contains(lower, "proceed")
 
 	return (hasQuestionNavigation || hasAnswerSubmission) && hasRequestPaneAction
+}
+
+// ClassifyCodexClearScreen reports whether Kitty text extents look like Codex's
+// idle UI immediately after `/clear`.
+//
+// False negatives are acceptable here: this probe only exists because Codex
+// does not emit an immediate hook for an idle `/clear`. The classifier requires
+// both a cleared-looking current screen and a transcript-free scrollback extent
+// so a stopped session transcript cannot clear its own stop icon by mentioning
+// `/clear` or showing a stale composer prompt.
+func ClassifyCodexClearScreen(screen, allText string) bool {
+	if !codexScreenLooksCleared(screen) {
+		return false
+	}
+	return codexScrollbackLooksCleared(allText)
+}
+
+func codexScreenLooksCleared(screen string) bool {
+	if !codexComposerLineRE.MatchString(screen) {
+		return false
+	}
+	if !codexTextHasContextZero(screen) {
+		return false
+	}
+	if _, ok := ClassifyCodexPromptScreen(screen); ok {
+		return false
+	}
+	return !codexTextHasTranscriptMarkers(screen)
+}
+
+func codexScrollbackLooksCleared(allText string) bool {
+	if strings.TrimSpace(allText) == "" {
+		return false
+	}
+	if _, ok := ClassifyCodexPromptScreen(allText); ok {
+		return false
+	}
+
+	hasComposer := false
+	hasContextZero := false
+	for _, line := range strings.Split(allText, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if codexComposerLineRE.MatchString(line) {
+			hasComposer = true
+			continue
+		}
+		if codexLineLooksTranscriptMarker(line) {
+			return false
+		}
+		if codexContextZeroLineRE.MatchString(line) {
+			hasContextZero = true
+		}
+	}
+	return hasComposer && hasContextZero
+}
+
+func codexTextHasContextZero(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		if codexContextZeroLineRE.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func codexTextHasTranscriptMarkers(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		if codexLineLooksTranscriptMarker(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func codexLineLooksTranscriptMarker(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	lower := strings.ToLower(trimmed)
+	switch {
+	case trimmed == "":
+		return false
+	case codexComposerLineRE.MatchString(line):
+		return false
+	case codexLineLooksChrome(trimmed):
+		return false
+	case strings.HasPrefix(trimmed, "\u203a") || strings.HasPrefix(trimmed, ">"):
+		return true
+	case strings.HasPrefix(trimmed, "\u2022") || strings.HasPrefix(trimmed, "\u25e6"):
+		return true
+	case strings.HasPrefix(trimmed, "\u258c"):
+		return true
+	case strings.HasPrefix(trimmed, "\u2514") || strings.HasPrefix(trimmed, "\u251c"):
+		return true
+	case strings.HasPrefix(trimmed, "\u2502"):
+		return true
+	case codexLabeledTranscriptLineRE.MatchString(trimmed):
+		return true
+	case strings.HasPrefix(lower, "ran ") || strings.HasPrefix(lower, "explored"):
+		return true
+	default:
+		return false
+	}
+}
+
+func codexLineLooksChrome(trimmed string) bool {
+	if strings.Trim(trimmed, "\u2500") == "" {
+		return true
+	}
+	if strings.Trim(trimmed, "\u2500\u2502\u256d\u256e\u2570\u256f") == "" {
+		return true
+	}
+	return strings.HasPrefix(trimmed, "\u2502") && strings.HasSuffix(trimmed, "\u2502")
 }

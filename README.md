@@ -398,14 +398,18 @@ context such as `tool_name`, `source`, `result_icon_state`,
 present. Codex screen prompt detection appears as synthetic
 `event: "ScreenPromptProbe"` rows with `source: "codex_screen"` and
 `prompt_kind` values such as `edit_approval`, `request_user_input`,
-`command_approval`, and `permission_grant`.
+`command_approval`, and `permission_grant`. Codex idle `/clear` recovery can
+appear as `event: "ScreenClearProbe"` with `action: "user_clear"`,
+`source: "codex_screen"`, and `reset_flow: true`.
 
 Codex 0.133.0 and 0.134.0 expose edit approvals and `request_user_input` waits
 through TUI/server-request flows rather than normal lifecycle hooks. Agent Mux
 keeps the Codex hook installation to supported command hooks and uses a
 best-effort Kitty screen fallback to classify visible Codex prompts, including
 the 0.134.0 bottom-pane question UI, while preserving terminal, warning, and
-error states; the daemon runs that probe every 1.5s.
+error states. A separate conservative stop-only fallback recognizes Codex's
+cleared idle UI after `/clear` when full Kitty scrollback no longer contains a
+transcript. The daemon runs these probes every 1.5s.
 
 The primary live-debug workflow is the current tab:
 
@@ -544,9 +548,10 @@ just test
   event. For Copilot, also upgrade to version `1.0.45` or newer, because
   older releases had `agentStop` hook issues.
 - **`/clear` still shows a stop icon or stop notification**: inspect
-  `amx daemon export-events --window <id>` and confirm the reset sequence is
-  arriving with the documented hook payloads for your harness before tuning
-  reset-flow timing.
+  `amx daemon export-events --window <id>`. Claude/Copilot should show the
+  documented hook reset payloads; Codex may show `ScreenClearProbe` when idle
+  `/clear` happens without an immediate hook. If neither appears, confirm the
+  tab is managed by Agent Mux and Kitty `get-text` remote control works.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

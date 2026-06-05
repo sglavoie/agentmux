@@ -11,6 +11,7 @@ import (
 
 const (
 	screenPromptProbeEvent  = "ScreenPromptProbe"
+	screenClearProbeEvent   = "ScreenClearProbe"
 	screenPromptProbeSource = "codex_screen"
 )
 
@@ -18,7 +19,9 @@ const (
 // prompt found on the current screen. The screen is authoritative for Codex:
 // edit/request_user_input prompts can replace existing bolt/key guards with the
 // lower-priority elicitation state, while terminal and special-purpose icons are
-// never overwritten.
+// never overwritten. A stopped Codex tab gets one extra conservative check for
+// the cleared idle UI because Codex does not emit an immediate hook for idle
+// `/clear`.
 func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 	if h.kittyClient == nil {
 		return
@@ -32,11 +35,15 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 	for _, ow := range windows {
 		for _, tab := range ow.Tabs {
 			baseTitle, iconState, starred, muted := palette.ParseTitleFull(tab.Title)
-			if !codexPromptProbeCanOverwrite(iconState) {
-				continue
-			}
 			for _, win := range tab.Windows {
 				if win.UserVars.EffectiveHarness() != harness.Codex {
+					continue
+				}
+				if iconState == "stop" {
+					h.probeCodexClearWindow(now, win.ID, tab.Title, baseTitle, iconState, starred, muted, win.UserVars)
+					continue
+				}
+				if !codexPromptProbeCanOverwrite(iconState) {
 					continue
 				}
 				h.probeCodexWindow(now, win.ID, tab.Title, baseTitle, iconState, starred, muted, win.UserVars)
@@ -95,6 +102,64 @@ func (h *Handler) probeCodexWindow(
 				slog.Debug("codex prompt probe: set tab title failed", "window_id", windowID, "err", err)
 			}
 		}
+	}
+}
+
+func (h *Handler) probeCodexClearWindow(
+	_ time.Time,
+	windowID int,
+	tabTitle string,
+	baseTitle string,
+	currentIconState string,
+	starred bool,
+	muted bool,
+	userVars kitty.UserVars,
+) {
+	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(windowID), "screen")
+	if err != nil {
+		slog.Debug("codex clear probe: get screen failed", "window_id", windowID, "err", err)
+		return
+	}
+	if !codexScreenLooksCleared(screen) {
+		return
+	}
+
+	allText, err := h.kittyClient.GetText(kitty.MatchWindowByID(windowID), "all")
+	if err != nil {
+		slog.Debug("codex clear probe: get full text failed", "window_id", windowID, "err", err)
+		return
+	}
+	if !ClassifyCodexClearScreen(screen, allText) {
+		return
+	}
+
+	resp := h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         windowID,
+		Action:           "user_clear",
+		Event:            screenClearProbeEvent,
+		Source:           screenPromptProbeSource,
+		Account:          userVars.EffectiveProfile(),
+		Harness:          harness.Codex,
+		SessionTitle:     baseTitle,
+		CurrentIconState: currentIconState,
+		ResetFlow:        true,
+		Muted:            muted || userVars.Mute != "",
+	})
+	if !resp.OK {
+		slog.Debug("codex clear probe: state update failed", "window_id", windowID, "err", resp.Error)
+		return
+	}
+	if !resp.Allowed || resp.IconState == IconStatePreserve {
+		return
+	}
+
+	newTitle := palette.BuildTitleFull(baseTitle, resp.IconState, starred, muted)
+	if newTitle == tabTitle {
+		return
+	}
+	if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
+		slog.Debug("codex clear probe: set tab title failed", "window_id", windowID, "err", err)
 	}
 }
 

@@ -188,3 +188,141 @@ func TestClassifyCodexPromptScreen_RequiresFooterOrChoiceEvidence(t *testing.T) 
 		t.Fatalf("ClassifyCodexPromptScreen() = (%+v, true), want no classification", got)
 	}
 }
+
+func TestClassifyCodexClearScreen(t *testing.T) {
+	cases := []struct {
+		name   string
+		screen string
+		all    string
+		want   bool
+	}{
+		{
+			name:   "reported cleared startup UI",
+			screen: codexReportedClearedScreen,
+			all:    codexReportedClearedScreen,
+			want:   true,
+		},
+		{
+			name:   "cleared startup UI with generic summary wording",
+			screen: codexClearedScreen,
+			all:    codexClearedScreen,
+			want:   true,
+		},
+		{
+			name:   "cleared composer without startup box",
+			screen: codexClearedComposerOnlyScreen,
+			all:    codexClearedComposerOnlyScreen,
+			want:   true,
+		},
+		{
+			name:   "visible prompt is not a clear screen",
+			screen: codexEditApprovalScreen,
+			all:    codexEditApprovalScreen,
+			want:   false,
+		},
+		{
+			name:   "nonzero context is not a clear screen",
+			screen: codexNonzeroContextScreen,
+			all:    codexNonzeroContextScreen,
+			want:   false,
+		},
+		{
+			name:   "transcript in scrollback blocks clear",
+			screen: codexClearedScreen,
+			all:    codexClearedScreenWithTranscript,
+			want:   false,
+		},
+		{
+			name:   "prompt marker in transcript blocks clear",
+			screen: codexClearedComposerOnlyScreen,
+			all:    "› Earlier output: type /clear when done\n\n" + codexClearedComposerOnlyScreen,
+			want:   false,
+		},
+		{
+			name:   "assistant marker in transcript blocks clear",
+			screen: codexClearedComposerOnlyScreen,
+			all:    "• I will inspect the hook flow.\n\n" + codexClearedComposerOnlyScreen,
+			want:   false,
+		},
+		{
+			name:   "tool tree marker in transcript blocks clear",
+			screen: codexClearedComposerOnlyScreen,
+			all:    "└ Read codex_prompt.go\n\n" + codexClearedComposerOnlyScreen,
+			want:   false,
+		},
+		{
+			name:   "labeled transcript blocks clear",
+			screen: codexClearedComposerOnlyScreen,
+			all:    "User: investigate /clear\nCodex: checking\n\n" + codexClearedComposerOnlyScreen,
+			want:   false,
+		},
+		{
+			name:   "empty scrollback does not clear",
+			screen: codexClearedComposerOnlyScreen,
+			all:    "\n\n",
+			want:   false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClassifyCodexClearScreen(tc.screen, tc.all); got != tc.want {
+				t.Fatalf("ClassifyCodexClearScreen() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+const codexReportedClearedScreen = `
+╭─────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.137.0)                      │
+│                                                 │
+│ model:       gpt-5.5 xhigh   /model to change   │
+│ directory:   ~/1_dev_projects/sglavoie_agentmux │
+│ permissions: YOLO mode                          │
+╰─────────────────────────────────────────────────╯
+
+  Tip: New Use /fast to enable our fastest inference with increased plan usage.
+
+Token usage: total=880,434 input=839,452 (+ 5,946,496 cached) output=40,982 (reasoning 21,671)
+To continue this session, run codex resume 019e9855-77d8-7803-9a5a-fb2663a5940d
+
+ 
+› Use /skills to list available skills
+ 
+  gpt-5.5 xhigh · ~/1_dev_projects/sglavoie_agentmux · Context 0% used
+`
+
+const codexClearedScreen = `
+╭────────────────────────────────────────────╮
+│ >_ OpenAI Codex                            │
+│ model: gpt-5-codex                         │
+│ directory: /repo                           │
+│ permissions: on-request                    │
+╰────────────────────────────────────────────╯
+
+Session summary is available with codex resume.
+Token accounting changed wording in this build.
+
+› Use /skills to list available skills
+
+context 0% · gpt-5-codex · default · Plan mode
+`
+
+const codexClearedComposerOnlyScreen = `
+› Use /skills to list available skills
+
+context 0% · gpt-5-codex · default · Plan mode
+`
+
+const codexNonzeroContextScreen = `
+› Use /skills to list available skills
+
+context 12% · gpt-5-codex · default · Plan mode
+`
+
+const codexClearedScreenWithTranscript = `
+User: investigate why /clear leaves the stop icon.
+Codex: I will inspect the hook flow.
+
+` + codexClearedScreen

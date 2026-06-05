@@ -133,6 +133,88 @@ func TestProbeCodexScreenPrompts_RequestUserInputReplacesBoltWithQuestion(t *tes
 	}
 }
 
+func TestProbeCodexScreenPrompts_ClearScreenClearsStoppedCodexTab(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "stop", false), kitty.UserVars{
+			Profile: "work",
+			Harness: "codex",
+		}),
+		getTextByExtent: map[getTextKey]string{
+			{match: kitty.MatchWindowByID(42), extent: "screen"}: codexReportedClearedScreen,
+			{match: kitty.MatchWindowByID(42), extent: "all"}:    codexReportedClearedScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	h.guard.TryUpdate(42, "stop", false)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	calls := fake.titleCalls()
+	if len(calls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(calls))
+	}
+	if calls[0].match != kitty.MatchTabByWindowID(42) {
+		t.Fatalf("SetTabTitle match = %q, want %q", calls[0].match, kitty.MatchTabByWindowID(42))
+	}
+	if want := palette.BuildTitle("W:api", "", false); calls[0].title != want {
+		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
+	}
+	if got := h.guard.Current(42); got != "" {
+		t.Fatalf("guard.Current = %q, want empty after user_clear", got)
+	}
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(resp.Events) != 1 {
+		t.Fatalf("events = %d, want 1", len(resp.Events))
+	}
+	ev := resp.Events[0]
+	if ev.Event != screenClearProbeEvent || ev.Source != screenPromptProbeSource {
+		t.Fatalf("event identity = (%q, %q), want (%q, %q)", ev.Event, ev.Source, screenClearProbeEvent, screenPromptProbeSource)
+	}
+	if ev.Action != "user_clear" || !ev.ResetFlow {
+		t.Fatalf("event action/reset_flow = (%q, %v), want (user_clear, true)", ev.Action, ev.ResetFlow)
+	}
+	if ev.ResultIconState != "" || ev.CurrentIconState != "stop" {
+		t.Fatalf("event icons = current %q result %q, want stop -> empty", ev.CurrentIconState, ev.ResultIconState)
+	}
+
+	h.stateMu.Lock()
+	meta := h.windowMetadata[42]
+	h.stateMu.Unlock()
+	if meta.Durable.Harness != "codex" || meta.Durable.Profile != "work" || meta.Durable.SessionTitle != "W:api" {
+		t.Fatalf("durable metadata = %+v, want codex/work/W:api", meta.Durable)
+	}
+}
+
+func TestProbeCodexScreenPrompts_ClearScreenKeepsStopWithTranscriptScrollback(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "stop", false), kitty.UserVars{
+			Harness: "codex",
+		}),
+		getTextByExtent: map[getTextKey]string{
+			{match: kitty.MatchWindowByID(42), extent: "screen"}: codexClearedScreen,
+			{match: kitty.MatchWindowByID(42), extent: "all"}:    codexClearedScreenWithTranscript,
+		},
+	}
+	h.SetKittyClient(fake)
+	h.guard.TryUpdate(42, "stop", false)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("SetTabTitle calls = %d, want 0", got)
+	}
+	if got := h.guard.Current(42); got != "stop" {
+		t.Fatalf("guard.Current = %q, want stop", got)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(resp.Events) != 0 {
+		t.Fatalf("events = %d, want 0", len(resp.Events))
+	}
+}
+
 func TestProbeCodexScreenPrompts_DoesNotOverwriteProtectedIcons(t *testing.T) {
 	protected := []string{"stop", "warning", "error", "subagent", "compact"}
 	for _, state := range protected {

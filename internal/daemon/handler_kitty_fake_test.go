@@ -12,18 +12,24 @@ import (
 // while the sweep runs (even though the current sweep is synchronous, the
 // notifier dispatch under synctest is not).
 type fakeKittyClient struct {
-	mu            sync.Mutex
-	windows       []kitty.OSWindow
-	listErr       error
-	getText       map[string]string
-	getTextErr    error
-	setTitleErr   error
-	setTitleCalls []setTitleCall
+	mu              sync.Mutex
+	windows         []kitty.OSWindow
+	listErr         error
+	getText         map[string]string
+	getTextByExtent map[getTextKey]string
+	getTextErr      error
+	setTitleErr     error
+	setTitleCalls   []setTitleCall
 }
 
 type setTitleCall struct {
 	match string
 	title string
+}
+
+type getTextKey struct {
+	match  string
+	extent string
 }
 
 func (f *fakeKittyClient) ListWindows() ([]kitty.OSWindow, error) {
@@ -39,11 +45,16 @@ func (f *fakeKittyClient) ListWindows() ([]kitty.OSWindow, error) {
 	return out, nil
 }
 
-func (f *fakeKittyClient) GetText(matchExpr, _ string) (string, error) {
+func (f *fakeKittyClient) GetText(matchExpr, extent string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.getTextErr != nil {
 		return "", f.getTextErr
+	}
+	if f.getTextByExtent != nil {
+		if text, ok := f.getTextByExtent[getTextKey{match: matchExpr, extent: extent}]; ok {
+			return text, nil
+		}
 	}
 	return f.getText[matchExpr], nil
 }
