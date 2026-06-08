@@ -178,7 +178,7 @@ disabled_events = ["Stop"]  # suppress hook events for this account
 
 **Deprecation**: `stale_active_threshold` is replaced by `[defaults.watchdog].active`. The legacy key still loads and is mirrored into `Watchdog.Active` when the new field is unset; both surface in `amx config show` via `Deprecations`.
 
-**`claude_context_limit_probe`**: when true (default), the daemon periodically scans Claude session screens for the "Context limit reached · /compact or /clear to continue" banner and, on detection, swaps the bolt ⚡ icon to error ❗ and fires a one-shot notification (gated independently by `[defaults.notifications].stop_failure`). Set to `false` to disable the probe entirely.
+**`claude_context_limit_probe`**: when true (default), the daemon periodically scans Claude session screens for the "Context limit reached · /compact or /clear to continue" banner and, on detection, swaps the icon to error ❗ and fires a one-shot notification (gated independently by `[defaults.notifications].stop_failure`). The probe acts on windows currently showing bolt ⚡, subagent 🤖, or no state icon, so a stalled session still gets ❗ even if an upstream hook event cleared the bolt to empty. Set to `false` to disable the probe entirely.
 
 **`[defaults.jump].attention_states`**: bracket-key navigation in the TUI list. `]]`/`[[` (double-tap) jump the cursor to the next/previous session whose state is in this set; `}`/`{` do the same plus focus the Kitty tab in one keystroke. Defaults to `["key", "error", "warning", "question"]`. Valid state names come from `palette.StateOrder()`: `bolt`, `stop`, `key`, `warning`, `error`, `subagent`, `compact`, `question`. Omitting the section or setting an empty list both fall back to the default; an unknown name fails validation.
 
@@ -199,7 +199,7 @@ mute marker (`🔇`) are layered on top of the base title by
 `palette.BuildTitleFull()`. The Kitty tab-bar accent color comes from each
 profile's `color`, not from the harness.
 
-When a Claude session stalls at the context limit, no hook fires (the assistant turn never completes cleanly), so the bolt ⚡ would otherwise stay stuck. The daemon's periodic Claude screen probe (`internal/daemon/claude_context_limit_probe.go`) detects the recovery banner and swaps the icon to error ❗ via the `stop_failure` action. Opt out with `[defaults.watchdog].claude_context_limit_probe = false`.
+When a Claude session stalls at the context limit, the assistant turn never completes cleanly. Sometimes no hook fires at all (the bolt ⚡ stays stuck), and sometimes an upstream event resolves to `idle`/`clear` and wipes the bolt to empty before any state can land. The daemon's periodic Claude screen probe (`internal/daemon/claude_context_limit_probe.go`) covers both cases: it scans bolt, subagent, and empty-state Claude windows for the recovery banner and swaps the icon to error ❗ via the `stop_failure` action. Opt out with `[defaults.watchdog].claude_context_limit_probe = false`.
 
 The palette and icon set are embedded at compile time in `internal/palette/` via `//go:embed`. To change a color or icon, edit the embedded JSON and rebuild.
 

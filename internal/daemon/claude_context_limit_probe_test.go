@@ -86,6 +86,50 @@ func TestProbeClaudeContextLimit_BoltSwapsToError(t *testing.T) {
 	}
 }
 
+func TestProbeClaudeContextLimit_EmptyStateSwapsToError(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeWindows(42, palette.BuildTitle("api", "", false), kitty.UserVars{
+			Profile: "work",
+			Harness: "claude",
+		}),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): claudeContextLimitScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	now := time.Unix(1_700_000_000, 0)
+	h.ProbeClaudeContextLimit(now)
+
+	calls := fake.titleCalls()
+	if len(calls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(calls))
+	}
+	if want := palette.BuildTitle("api", "error", false); calls[0].title != want {
+		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
+	}
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(resp.Events) != 1 {
+		t.Fatalf("events = %d, want 1", len(resp.Events))
+	}
+	ev := resp.Events[0]
+	if ev.Action != "stop_failure" || ev.ResultIconState != "error" || ev.CurrentIconState != "" {
+		t.Fatalf("event = %+v, want stop_failure (empty)->error", ev)
+	}
+	if !ev.ContextLimit {
+		t.Fatalf("event.ContextLimit = false, want true")
+	}
+
+	h.stateMu.Lock()
+	notified := h.contextLimitNotified[42]
+	h.stateMu.Unlock()
+	if !notified {
+		t.Fatalf("contextLimitNotified[42] = false, want true")
+	}
+}
+
 func TestProbeClaudeContextLimit_SubagentSwapsToError(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{

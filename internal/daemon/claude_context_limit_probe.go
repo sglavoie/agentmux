@@ -16,11 +16,17 @@ const (
 	claudeContextLimitProbeAction = "stop_failure"
 )
 
-// ProbeClaudeContextLimit scans managed Claude windows currently showing an
-// active-class icon (bolt or subagent) for the "Context limit reached"
-// recovery banner. When found, the window's icon is swapped to the error
-// state via the stop_failure action so the user has a visual signal that
-// the session is stuck and needs /compact or /clear.
+// ProbeClaudeContextLimit scans managed Claude windows whose current icon is
+// either active-class (bolt, subagent) or empty for the "Context limit
+// reached" recovery banner. When found, the window's icon is swapped to the
+// error state via the stop_failure action so the user has a visual signal
+// that the session is stuck and needs /compact or /clear.
+//
+// Empty state is included because some upstream Claude hook events resolve
+// to "idle" or "clear" and wipe the bolt to empty before the probe ticks;
+// without covering empty, a stalled session would show no emoji at all.
+// Banner detection itself (contextlimit.ScreenShowsMarker) remains the real
+// gate, so the broader filter cannot trigger false positives.
 //
 // The icon swap is deduped per stall episode by contextLimitNotified so we
 // don't churn the tab title on every 1.5 s tick. The flag is cleared by an
@@ -56,7 +62,7 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 
 func claudeContextLimitProbeCanOverwrite(iconState string) bool {
 	switch iconState {
-	case "bolt", "subagent":
+	case "", "bolt", "subagent":
 		return true
 	default:
 		return false

@@ -36,7 +36,7 @@ func TestProbeClaudeContextLimit_IgnoresNonClaudeHarnesses(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_IgnoresProtectedIcons(t *testing.T) {
-	protected := []string{"", "stop", "warning", "error", "key", "question", "compact"}
+	protected := []string{"stop", "warning", "error", "key", "question", "compact"}
 	for _, state := range protected {
 		t.Run("state="+state, func(t *testing.T) {
 			h := newTestHandler()
