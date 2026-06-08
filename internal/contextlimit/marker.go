@@ -40,6 +40,9 @@ func ScreenShowsMarker(text string) bool {
 		if line == "" {
 			continue
 		}
+		if isUIChromeLine(line) {
+			continue
+		}
 		tail = append([]string{line}, tail...)
 	}
 	if HasMarker(strings.Join(lastLines(tail, 3), "\n")) {
@@ -70,6 +73,75 @@ func lastLines(lines []string, n int) []string {
 		return lines
 	}
 	return lines[len(lines)-n:]
+}
+
+// isUIChromeLine reports whether a single screen line looks like Claude's
+// input-box / status / hint chrome rather than conversation content. The
+// helper is intentionally conservative: the cost of a false positive
+// (stripping a real chat line) is worse than the cost of a false negative
+// (a chrome line we fail to recognise).
+//
+// Recognised shapes (both the legacy box-drawing UI and the current
+// `─` rule + `❯` prompt + `(shift+tab to cycle)` hint):
+//
+//   - The trimmed line is composed of at least 80% box-drawing runes
+//     (`─ │ ═ ║ ┌ ┐ └ ┘ ╭ ╮ ╰ ╯ ┃ ━`), counted against non-whitespace
+//     runes only.
+//   - The first non-whitespace rune is one of `│`, `╭`, `╰`, or `❯`
+//     (input-box edges or the current prompt indicator).
+//   - The line contains `(shift+tab to cycle)` (current Claude mode hint).
+//   - The line starts with `?` and contains `for shortcuts` (legacy
+//     Claude footer hint).
+//   - The line contains `model:` (legacy footer; conservative
+//     belt-and-braces match).
+func isUIChromeLine(line string) bool {
+	trimmed := strings.TrimSpace(stripTerminalEscapes(line))
+	if trimmed == "" {
+		return false
+	}
+
+	first := firstRune(trimmed)
+	switch first {
+	case '│', '╭', '╰', '❯':
+		return true
+	}
+
+	if strings.Contains(trimmed, "(shift+tab to cycle)") {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "?") && strings.Contains(trimmed, "for shortcuts") {
+		return true
+	}
+	if strings.Contains(trimmed, "model:") {
+		return true
+	}
+
+	var total, boxes int
+	for _, r := range trimmed {
+		if r == ' ' || r == '\t' {
+			continue
+		}
+		total++
+		if isBoxDrawingRune(r) {
+			boxes++
+		}
+	}
+	return total > 0 && boxes*5 >= total*4
+}
+
+func firstRune(s string) rune {
+	for _, r := range s {
+		return r
+	}
+	return 0
+}
+
+func isBoxDrawingRune(r rune) bool {
+	switch r {
+	case '─', '│', '═', '║', '┌', '┐', '└', '┘', '╭', '╮', '╰', '╯', '┃', '━':
+		return true
+	}
+	return false
 }
 
 func stripTerminalEscapes(text string) string {
