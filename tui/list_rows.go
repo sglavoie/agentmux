@@ -38,6 +38,11 @@ const lockColumnWidth = 2
 // rows stay aligned regardless of which sessions in the view are muted.
 const muteColumnWidth = 2
 
+// activeLoopColumnWidth is the visual width reserved for the active
+// agent-session-loop indicator (🔁 = 2 cells + 1 trailing space). It is only
+// reserved when at least one rendered row has a matching active loop.
+const activeLoopColumnWidth = 3
+
 // ageColumnWidth is the visual width consumed by the per-row age column
 // (5 cells of text + 1 trailing space). Sized to fit a warning cell like
 // "9m ⏳"; only reserved when at least one row carries a sweep-eligible
@@ -116,6 +121,7 @@ func renderListAt(m Model, width, height int) string {
 			endIdx = fitListRows(m, startIdx, budget, multiGroup)
 		}
 	}
+	activeLoopActive := anyVisibleRowHasActiveLoop(m, startIdx, endIdx)
 
 	var sb strings.Builder
 	if showTop {
@@ -142,14 +148,15 @@ func renderListAt(m Model, width, height int) string {
 		if pulseActive && rowWidth > 0 {
 			rowWidth -= pulseColumnWidth
 		}
-		if ageActive && rowWidth > 0 {
-			rowWidth -= ageColumnWidth
-		}
 		var ageCell string
 		if ageActive {
 			ageCell = renderAgeCell(m.watchdog[s.WindowID], now)
 		}
-		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, ageCell)
+		var activeLoopCell string
+		if activeLoopActive {
+			activeLoopCell = renderActiveLoopCell(len(m.activeLoopsForDirectory(s.Directory)) > 0)
+		}
+		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, activeLoopCell, ageCell)
 		var styledRow string
 		switch {
 		case i == m.cursor:
@@ -228,6 +235,39 @@ func anyRowHasActivePulse(m Model) bool {
 		}
 	}
 	return false
+}
+
+// anyVisibleRowHasActiveLoop reports whether any row in the rendered window
+// has at least one active agent-session-loop run whose cwd matches the row's
+// directory. The column is reserved for the current window only, so off-screen
+// active loops do not steal horizontal space.
+func anyVisibleRowHasActiveLoop(m Model, startIdx, endIdx int) bool {
+	if len(m.activeLoopCandidates) == 0 {
+		return false
+	}
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	if endIdx > len(m.filtered) {
+		endIdx = len(m.filtered)
+	}
+	for i := startIdx; i < endIdx; i++ {
+		if len(m.activeLoopsForDirectory(m.filtered[i].Directory)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func renderActiveLoopCell(active bool) string {
+	if !active {
+		return strings.Repeat(" ", activeLoopColumnWidth)
+	}
+	cell := "🔁"
+	if pad := activeLoopColumnWidth - runewidth.StringWidth(cell); pad > 0 {
+		cell += strings.Repeat(" ", pad)
+	}
+	return cell
 }
 
 // anyRowHasAge reports whether any filtered row carries a sweep-eligible

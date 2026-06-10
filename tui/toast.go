@@ -12,6 +12,7 @@ type toastSeverity int
 const (
 	toastInfo toastSeverity = iota
 	toastSuccess
+	toastWarning
 	toastError
 )
 

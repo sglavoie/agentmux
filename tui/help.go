@@ -61,6 +61,7 @@ var helpSections = []struct {
 	}},
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
+		"  F         run an agent-session-loop plan (enter run, v view, p path)",
 		"  t         tail active agent-session-loop run",
 		"  C         launch new session with profile selection",
 		"  o         open session directory in a plain shell tab",

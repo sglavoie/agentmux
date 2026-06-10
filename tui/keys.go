@@ -12,6 +12,7 @@ const (
 	keyF               = "f"
 	keyA               = "a"
 	keyO               = "o"
+	keyV               = "v"
 	keyL               = "l"
 	keyY               = "y"
 	keyN               = "n"
@@ -37,6 +38,7 @@ const (
 	keySessionSearch   = "S" // opens ModeSessionSearch (past harness transcripts)
 	keyPlanSearch      = "P" // opens ModePlanSearch (past agent plans)
 	keySortPlan        = "s" // cycles the ModePlanSearch result-sort mode
+	keyLoopRun         = "F" // starts agent-session-loop plan launch for the highlighted project
 
 	keyLoopTail         = "t" // tail an active agent-session-loop run in ModeList
 	keyToggleTimeline   = "t" // toggle flat list ↔ timeline in ModeDetail

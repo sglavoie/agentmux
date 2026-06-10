@@ -88,7 +88,7 @@ func TestListFooterCommandRowsSplit(t *testing.T) {
 	if strings.Contains(lines[0], "l launch") {
 		t.Errorf("global launch command should move off line 1; got %q", lines[0])
 	}
-	for _, frag := range []string{"l launch", "t tail", "S sessions", "P plans", "R resort"} {
+	for _, frag := range []string{"l launch", "F run plan", "t tail", "S sessions", "P plans", "R resort"} {
 		if !strings.Contains(lines[1], frag) {
 			t.Errorf("expected global command %q on line 2; got %q", frag, lines[1])
 		}
@@ -145,6 +145,9 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 			if !strings.Contains(globalOut, "t tail") {
 				t.Errorf("expected `t tail` in footer; got %q", globalOut)
 			}
+			if !strings.Contains(globalOut, "F run plan") {
+				t.Errorf("expected `F run plan` in footer; got %q", globalOut)
+			}
 		})
 	}
 }
@@ -174,6 +177,11 @@ func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
 		width:  100,
 		height: 20,
 	}
+	loopRunPlanSearch := Model{
+		mode:   ModeLoopRunPlanSearch,
+		width:  100,
+		height: 20,
+	}
 	planView := Model{
 		mode:             ModePlanView,
 		width:            100,
@@ -186,6 +194,7 @@ func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
 		m    Model
 	}{
 		{name: "plan search", m: planSearch},
+		{name: "loop run plan search", m: loopRunPlanSearch},
 		{name: "plan viewer", m: planView},
 	}
 
@@ -198,6 +207,24 @@ func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestLoopRunPlanSearchFooterAdvertisesLaunchKeys(t *testing.T) {
+	out := stripAnsi(renderFooter(Model{mode: ModeLoopRunPlanSearch, width: 100}))
+	for _, want := range []string{"enter run", "v view", "p path", "o editor", "esc/q back"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("launch plan footer missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestLoopRunPlanPathFooterAdvertisesInputKeys(t *testing.T) {
+	out := stripAnsi(renderFooter(Model{mode: ModeLoopRunPlanPath, width: 100}))
+	for _, want := range []string{"enter: run", "esc: cancel", "type/paste path", "backspace: edit"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("launch path footer missing %q:\n%s", want, out)
+		}
 	}
 }
 
@@ -357,7 +384,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"e": false, "T": false, "r": false, "c": false,
 				"C": false, "s": false, "x": false, "X": false,
 				"o": false, "O": false,
-				"l": true, "t": true, "S": true, "P": true, "R": true,
+				"l": true, "F": false, "t": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -369,7 +396,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"e": false, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": true, "X": true,
 				"o": false, "O": false,
-				"l": true, "t": true, "S": true, "P": true, "R": true,
+				"l": true, "F": true, "t": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -381,7 +408,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"e": true, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
-				"l": true, "t": true, "S": true, "P": true, "R": true,
+				"l": true, "F": true, "t": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -393,7 +420,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"e": false, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
-				"l": true, "t": true, "S": true, "P": true, "R": true,
+				"l": true, "F": true, "t": true, "S": true, "P": true, "R": true,
 			},
 		},
 	}

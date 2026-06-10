@@ -7,11 +7,16 @@ import (
 )
 
 // handleTick processes a tickMsg: sweeps stale transition pulses, schedules
-// the next session fetch and tick, and conditionally fires a health check.
+// the next session/active-loop fetches and tick, and conditionally fires a health check.
 func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 	_ = msg
 	m.sweepRecentTransitions()
-	cmds := []tea.Cmd{fetchCmd(m.client, m.cfg, m.sortMode), tickCmd(m.interval)}
+	m.activeLoopRefreshSeq++
+	cmds := []tea.Cmd{
+		fetchCmd(m.client, m.cfg, m.sortMode),
+		activeLoopRefreshCmd(m.activeLoopRefreshSeq),
+		tickCmd(m.interval),
+	}
 	now := time.Now()
 	checkDaemon := now.Sub(m.daemonHealthCheckedAt) >= daemonHealthInterval
 	checkHooks := now.Sub(m.hookHealthCheckedAt) >= hookHealthInterval

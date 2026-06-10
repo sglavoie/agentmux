@@ -190,8 +190,8 @@ func TestInitSessionWarmupLoadsCacheAndProducesResults(t *testing.T) {
 	if !ok {
 		t.Fatalf("Init produced %T, want tea.BatchMsg", initMsg)
 	}
-	if len(batch) != 4 {
-		t.Fatalf("Init batch length = %d, want 4 startup commands", len(batch))
+	if len(batch) != 5 {
+		t.Fatalf("Init batch length = %d, want 5 startup commands", len(batch))
 	}
 
 	msgs := flattenMsg(t, batch[len(batch)-1]())

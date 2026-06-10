@@ -27,7 +27,9 @@ func harnessLabel(h string) string {
 }
 
 // formatRow formats a single session row.
-// Format: state_icon | account_prefix | <emoji> harness | title | [age] | directory
+// Format: [loop] | state_icon | account_prefix | <emoji> harness | title | [age] | directory
+// activeLoopCell is empty when the loop column is not reserved; otherwise it is
+// a fixed-width cell containing either 🔁 or spaces.
 // ageCell is empty when no row in the current view carries a watchdog entry;
 // otherwise it is a pre-rendered fixed-width cell (ageColumnWidth cells,
 // trailing space included) inserted immediately before the directory column.
@@ -36,7 +38,7 @@ func harnessLabel(h string) string {
 // foreground for that cell. When the configured emoji is empty, the cell
 // collapses to just "<label>" so unconfigured users don't see a stray leading
 // space.
-func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, ageCell string) string {
+func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, activeLoopCell, ageCell string) string {
 	// Lock indicator column. Always reserved (2 cells) so column alignment is
 	// stable; only filled when the session is locked.
 	lockCol := "  "
@@ -117,24 +119,37 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		used := lockColumnWidth + muteColumnWidth + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3
-		// lock (2) + mute (2) + icon+space (3) + "[X] " badge (4) + harness (10)
-		//   + space (1) + title (20) + separators before dir (3)
+		used := lockColumnWidth + muteColumnWidth + runewidth.StringWidth(activeLoopCell) + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3 + runewidth.StringWidth(ageCell)
+		// lock (2) + mute (2) + optional loop + icon+space (3) + "[X] " badge (4)
+		//   + harness (10) + space (1) + title (20) + separators before dir (3)
+		//   + optional age cell.
 		available := width - used
-		if available > 10 {
-			maxDir = available
+		if available < 0 {
+			available = 0
 		}
+		maxDir = available
 	}
-	if runewidth.StringWidth(dir) > maxDir {
-		runes := []rune(dir)
-		for runewidth.StringWidth(string(runes))+1 > maxDir {
-			runes = runes[1:]
-		}
-		dir = "…" + string(runes)
-	}
+	dir = truncateDirLeft(dir, maxDir)
 	dir = styleDim.Render(dir)
 
-	return lockCol + muteCol + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
+	return lockCol + muteCol + activeLoopCell + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
+}
+
+func truncateDirLeft(dir string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if runewidth.StringWidth(dir) <= maxWidth {
+		return dir
+	}
+	if maxWidth == 1 {
+		return "…"
+	}
+	runes := []rune(dir)
+	for len(runes) > 0 && runewidth.StringWidth(string(runes))+1 > maxWidth {
+		runes = runes[1:]
+	}
+	return "…" + string(runes)
 }
 
 // iconDisplayWidth returns the visual cell width of a state icon. We rely

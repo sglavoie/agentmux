@@ -24,7 +24,12 @@ type planFilesLoadedMsg struct {
 // the async file-read. A value copy of the meta is held so the viewer is
 // not invalidated if the underlying index entry is mutated mid-read.
 func (m Model) enterPlanView(meta plans.PlanMeta) (tea.Model, tea.Cmd) {
+	returnMode := m.mode
+	if returnMode != ModePlanSearch && returnMode != ModeLoopRunPlanSearch {
+		returnMode = ModePlanSearch
+	}
 	m.mode = ModePlanView
+	m.planViewReturnMode = returnMode
 	metaCopy := meta
 	m.viewerPlan = &metaCopy
 	m.planViewerLines = nil
@@ -39,11 +44,16 @@ func (m Model) enterPlanView(meta plans.PlanMeta) (tea.Model, tea.Cmd) {
 	return m, readPlanFilesCmd(seq, metaCopy)
 }
 
-// exitPlanView returns to ModePlanSearch and zeros every viewer-local
-// field. The picker state (query, results, cursor) is preserved so the
-// user lands back on the same row they entered from.
+// exitPlanView returns to the plan picker mode that opened it and zeros every
+// viewer-local field. The picker state (query, results, cursor) is preserved
+// so the user lands back on the same row they entered from.
 func (m *Model) exitPlanView() {
-	m.mode = ModePlanSearch
+	returnMode := m.planViewReturnMode
+	if returnMode != ModePlanSearch && returnMode != ModeLoopRunPlanSearch {
+		returnMode = ModePlanSearch
+	}
+	m.mode = returnMode
+	m.planViewReturnMode = 0
 	m.viewerPlan = nil
 	m.planViewerLines = nil
 	m.planViewerCursor = 0
@@ -57,8 +67,8 @@ func (m *Model) exitPlanView() {
 // handlePlanViewKey processes keys while ModePlanView is active. j/k/g/G
 // and n/N move between logical source lines, pgup/pgdn page through visual
 // wrapped rows, and `y` copies the selected raw source line. Also supports
-// `o` (open the plan dir in $EDITOR) and `/` (re-enter ModePlanSearch
-// keeping the current query).
+// `o` (open the plan dir in $EDITOR) and `/` (re-enter the originating plan
+// picker with the current query).
 func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	total := len(m.planViewerLines)
 	visible := planViewerVisibleHeight(m)
@@ -73,7 +83,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case keyQ:
 		m.exitPlanView()
-		m.mode = ModeList
+		m.exitPlanSearch()
 		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
@@ -109,7 +119,11 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Return to the picker with the editable text query active so the
 		// user can refine the query without re-traversing the navigation
 		// stack.
-		m.mode = ModePlanSearch
+		returnMode := m.planViewReturnMode
+		if returnMode != ModePlanSearch && returnMode != ModeLoopRunPlanSearch {
+			returnMode = ModePlanSearch
+		}
+		m.mode = returnMode
 		m.planSearchMode = true
 		return m, nil
 	case keyY:

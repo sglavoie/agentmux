@@ -3,6 +3,7 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/plans"
 )
 
@@ -26,6 +27,21 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	m.cursor = restoreCursorByIdentity(m.filtered, prior, m.lastActivity, m.idleThreshold)
 	clampListOffset(&m)
 	scrollListToCursor(&m)
+	return m, nil
+}
+
+// handleActiveLoopsMsg stores the latest active-loop discovery result. Older
+// in-flight refreshes are ignored so a slow discovery cannot restore stale
+// candidates after a newer refresh has already completed.
+func (m Model) handleActiveLoopsMsg(msg activeLoopsMsg) (tea.Model, tea.Cmd) {
+	if msg.seq != m.activeLoopRefreshSeq {
+		return m, nil
+	}
+	m.activeLoopRefreshErr = msg.err
+	if msg.err != nil {
+		return m, nil
+	}
+	m.activeLoopCandidates = append([]agentloop.Candidate(nil), msg.candidates...)
 	return m, nil
 }
 

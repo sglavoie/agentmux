@@ -40,6 +40,13 @@ func TestFullScreenModesReserveStickyStatusBar(t *testing.T) {
 			absentBody: indexedRowName(4),
 		},
 		{
+			name:       "loop run plan search",
+			m:          fullScreenLoopRunPlanSearchModel(30, 11),
+			status:     "Run Plan: 30 results",
+			footer:     "enter run",
+			absentBody: indexedRowName(4),
+		},
+		{
 			name:       "plan viewer",
 			m:          fullScreenPlanViewModel(30, 10),
 			status:     "Plan: api-plan",
@@ -98,6 +105,16 @@ func TestFullScreenModeErrorsMirrorToStatusBar(t *testing.T) {
 			name: "plan search",
 			m:    Model{mode: ModePlanSearch, width: 80, planRefreshErr: errors.New("scan failed")},
 			want: "Refresh error: scan failed",
+		},
+		{
+			name: "loop run plan search",
+			m:    Model{mode: ModeLoopRunPlanSearch, width: 80, planRefreshErr: errors.New("scan failed")},
+			want: "Refresh error: scan failed",
+		},
+		{
+			name: "loop run plan path",
+			m:    Model{mode: ModeLoopRunPlanPath, width: 80, loopRunPlanPathErr: errors.New("missing plan")},
+			want: "Path error: missing plan",
 		},
 		{
 			name: "plan viewer",
@@ -226,6 +243,13 @@ func fullScreenPlanSearchModel(total, height int) Model {
 		cfg:         &config.Config{},
 		planResults: results,
 	}
+}
+
+func fullScreenLoopRunPlanSearchModel(total, height int) Model {
+	m := fullScreenPlanSearchModel(total, height)
+	m.mode = ModeLoopRunPlanSearch
+	m.loopRunProjectTitle = "api"
+	return m
 }
 
 func fullScreenPlanViewModel(total, height int) Model {

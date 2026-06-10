@@ -3,6 +3,7 @@ package tui
 import (
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -17,6 +18,13 @@ type sessionsMsg struct {
 	sessions []session.RunningSession
 	activity map[int]time.Time
 	watchdog map[int]daemon.WatchdogState
+}
+
+// activeLoopsMsg carries the latest active agent-session-loop discovery result.
+type activeLoopsMsg struct {
+	seq        int
+	candidates []agentloop.Candidate
+	err        error
 }
 
 // errMsg carries an error from a Kitty query.

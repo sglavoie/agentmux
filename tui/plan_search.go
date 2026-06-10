@@ -48,13 +48,13 @@ func planSortLabel(mode plans.SortMode) string {
 	}
 }
 
-// renderPlanSearch renders the entire ModePlanSearch view: header, query
-// bar, and the results list. Mirrors renderSessionSearch without the chip
-// bar (plans have no categorical filters).
+// renderPlanSearch renders both plan picker views: header, query bar, and the
+// results list. Mirrors renderSessionSearch without the chip bar (plans have
+// no categorical filters).
 func renderPlanSearch(m Model) string {
 	var sb strings.Builder
 
-	header := "Plans"
+	header := planSearchHeader(m)
 	count := len(m.planResults)
 	if m.planLoading {
 		header += "  " + styleDim.Render("(scanning…)")
@@ -86,6 +86,16 @@ func renderPlanSearch(m Model) string {
 	height := planSearchVisibleHeight(m)
 	sb.WriteString(renderPlanSearchList(m, height))
 	return sb.String()
+}
+
+func planSearchHeader(m Model) string {
+	if m.mode != ModeLoopRunPlanSearch {
+		return "Plans"
+	}
+	if m.loopRunProjectTitle != "" {
+		return "Run Plan: " + m.loopRunProjectTitle
+	}
+	return "Run Plan"
 }
 
 // renderPlanSearchList renders the scrollable results list. height is the

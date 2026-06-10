@@ -399,6 +399,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.enterSessionSearchForProject(m.filtered[m.cursor].EffectiveProject())
 		case keyPlanSearch:
 			return m.enterPlanSearch()
+		case keyLoopRun:
+			return m.enterLoopRunPlanSearch()
 		case keyD:
 			if !m.deprecationDismissed && len(m.deprecations) > 0 {
 				// Banner dismissal first when one is visible; the detail

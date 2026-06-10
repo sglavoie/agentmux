@@ -32,6 +32,16 @@ type loopTailSelectionMsg struct {
 
 type loopTailDoneMsg struct{ err error }
 
+func activeLoopRefreshCmd(seq int) tea.Cmd {
+	return func() tea.Msg {
+		candidates, err := loopTailDiscover(agentloop.DiscoverOptions{})
+		if err != nil {
+			return activeLoopsMsg{seq: seq, err: err}
+		}
+		return activeLoopsMsg{seq: seq, candidates: candidates}
+	}
+}
+
 // selectedLoopTailDirectory returns the highlighted dashboard row directory,
 // or an empty string when the list is empty or the cursor is invalid.
 func (m Model) selectedLoopTailDirectory() string {
@@ -39,6 +49,18 @@ func (m Model) selectedLoopTailDirectory() string {
 		return ""
 	}
 	return m.filtered[m.cursor].Directory
+}
+
+func (m Model) activeLoopsForDirectory(directory string) []agentloop.Candidate {
+	matches, err := agentloop.MatchingCWD(m.activeLoopCandidates, directory)
+	if err != nil {
+		return nil
+	}
+	return matches
+}
+
+func (m Model) activeLoopsForSelectedRow() []agentloop.Candidate {
+	return m.activeLoopsForDirectory(m.selectedLoopTailDirectory())
 }
 
 // loopTailSelectionCmd discovers active loop runs and applies the dashboard

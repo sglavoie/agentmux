@@ -23,8 +23,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleActionsKey(msg)
 	case ModeSessionSearch:
 		return m.handleSessionSearchKey(msg)
-	case ModePlanSearch:
+	case ModePlanSearch, ModeLoopRunPlanSearch:
 		return m.handlePlanSearchKey(msg)
+	case ModeLoopRunPlanPath:
+		return m.handleLoopRunPlanPathKey(msg)
 	case ModePlanView:
 		return m.handlePlanViewKey(msg)
 	case ModeSessionView:

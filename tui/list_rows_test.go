@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -22,13 +23,13 @@ func TestFormatRowLockIconPresentWhenLocked(t *testing.T) {
 	}
 	acctColor := map[string]string{"work": "blue"}
 
-	unlocked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, ""))
+	unlocked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", ""))
 	if strings.Contains(unlocked, palette.LockIcon()) {
 		t.Fatalf("unlocked row should not contain %q; got %q", palette.LockIcon(), unlocked)
 	}
 
 	s.Locked = true
-	locked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, ""))
+	locked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", ""))
 	if !strings.Contains(locked, palette.LockIcon()) {
 		t.Fatalf("locked row should contain %q; got %q", palette.LockIcon(), locked)
 	}
@@ -47,13 +48,13 @@ func TestFormatRowMuteIconPresentWhenMuted(t *testing.T) {
 	}
 	acctColor := map[string]string{"work": "blue"}
 
-	unmuted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, ""))
+	unmuted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", ""))
 	if strings.Contains(unmuted, palette.MuteIcon()) {
 		t.Fatalf("unmuted row should not contain %q; got %q", palette.MuteIcon(), unmuted)
 	}
 
 	s.Muted = true
-	muted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, ""))
+	muted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", ""))
 	if !strings.Contains(muted, palette.MuteIcon()) {
 		t.Fatalf("muted row should contain %q; got %q", palette.MuteIcon(), muted)
 	}
@@ -98,5 +99,76 @@ func TestRenderListLockedRowIsDimmed(t *testing.T) {
 	// styleDim renders as \x1b[2m...\x1b[0m. The locked row must contain it.
 	if !strings.Contains(locked, "\x1b[2m") {
 		t.Fatalf("locked row should carry the dim ANSI escape; got %q", locked)
+	}
+}
+
+func TestRenderListActiveLoopColumnAlignsRows(t *testing.T) {
+	m := testModel()
+	m.width = 120
+	m = loadSessions(m, []session.RunningSession{
+		{WindowID: 1, Account: "work", Base: "frontend", Directory: "/work/frontend"},
+		{WindowID: 2, Account: "work", Base: "backend", Directory: "/work/backend"},
+	})
+	m.activeLoopCandidates = []agentloop.Candidate{{PlanDir: "/plans/backend", CWD: "/work/backend"}}
+
+	out := stripAnsi(renderListAt(m, m.width, 0))
+	if count := strings.Count(out, "🔁"); count != 1 {
+		t.Fatalf("active loop indicator count = %d, want 1 in:\n%s", count, out)
+	}
+
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("rendered lines = %d, want 2:\n%s", len(lines), out)
+	}
+	frontTitle := idxTitle(lines[0], "frontend")
+	backTitle := idxTitle(lines[1], "backend")
+	if frontTitle < 0 || backTitle < 0 {
+		t.Fatalf("title offsets not found: frontend=%d backend=%d lines=%q", frontTitle, backTitle, lines)
+	}
+	if frontTitle != backTitle {
+		t.Fatalf("title columns differ with active-loop column: frontend=%d backend=%d lines=%q", frontTitle, backTitle, lines)
+	}
+}
+
+func TestRenderListOmitsActiveLoopColumnWhenNoVisibleRowMatches(t *testing.T) {
+	m := testModel()
+	m.width = 120
+	m = loadSessions(m, []session.RunningSession{
+		{WindowID: 1, Account: "work", Base: "visible", Directory: "/work/visible"},
+		{WindowID: 2, Account: "work", Base: "middle", Directory: "/work/middle"},
+		{WindowID: 3, Account: "work", Base: "hidden", Directory: "/work/hidden"},
+	})
+	m.activeLoopCandidates = []agentloop.Candidate{{PlanDir: "/plans/hidden", CWD: "/work/hidden"}}
+	m.height = 12
+	m.listOffset = 0
+
+	out := stripAnsi(renderListAt(m, m.width, 2))
+	if strings.Contains(out, "🔁") {
+		t.Fatalf("active loop indicator should be omitted when only off-window rows match:\n%s", out)
+	}
+	if !strings.Contains(out, "visible") {
+		t.Fatalf("test fixture should render the visible row:\n%s", out)
+	}
+}
+
+func TestRenderListActiveLoopColumnFitsNarrowWidth(t *testing.T) {
+	const width = 56
+	m := testModel()
+	m.width = width
+	m = loadSessions(m, []session.RunningSession{
+		{
+			WindowID:  1,
+			Account:   "work",
+			Base:      "frontend-service",
+			Directory: "/a/very/long/project/path/that/must/truncate/frontend",
+		},
+	})
+	m.activeLoopCandidates = []agentloop.Candidate{{PlanDir: "/plans/frontend", CWD: "/a/very/long/project/path/that/must/truncate/frontend"}}
+
+	out := renderListAt(m, width, 0)
+	for i, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if got := terminalWidth(stripAnsi(line)); got > width {
+			t.Fatalf("line %d width = %d, want <= %d: %q", i, got, width, stripAnsi(line))
+		}
 	}
 }

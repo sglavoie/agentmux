@@ -33,6 +33,7 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		"x         clear session icon",
 		"X         close session (confirm)",
 		"C         launch new session with profile selection",
+		"F         run an agent-session-loop plan (enter run, v view, p path)",
 		"t         tail active agent-session-loop run",
 	} {
 		if !strings.Contains(out, frag) {

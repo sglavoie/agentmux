@@ -5,9 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // seedPlanDir writes a plan directory under root with the given files
@@ -234,5 +236,179 @@ func TestPlanSearch_OpenInEditorInvokesLaunch(t *testing.T) {
 	}
 	if !launchCalled {
 		t.Error("expected kitten @ launch call after `o` keypress")
+	}
+}
+
+func TestLoopRunKeyEntersLaunchPlanSearchWithProjectPrefill(t *testing.T) {
+	root := t.TempDir()
+	seedPlanDir(t, root, "api-aabb112233cc", map[string]string{
+		"manifest.md":  "# api plan\n\napi rollout",
+		"context.md":   "context",
+		"session-1.md": "session",
+	})
+	idx, err := plans.LoadIndexAt(filepath.Join(t.TempDir(), "plans.json"))
+	if err != nil {
+		t.Fatalf("LoadIndexAt: %v", err)
+	}
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	projectDir := t.TempDir()
+	m := testModel()
+	m.cfg.Defaults.PlansDirectory = root
+	m.plansIndex = idx
+	m = loadSessions(m, []session.RunningSession{{
+		TabID:     1,
+		Base:      "api",
+		Project:   "api",
+		Directory: projectDir,
+	}})
+
+	updated, cmd := m.Update(keyPress("F"))
+	got := updated.(Model)
+	if got.mode != ModeLoopRunPlanSearch {
+		t.Fatalf("mode = %v, want ModeLoopRunPlanSearch", got.mode)
+	}
+	if got.planQuery != "api" {
+		t.Fatalf("planQuery = %q, want project prefill %q", got.planQuery, "api")
+	}
+	if got.loopRunProjectDir != projectDir {
+		t.Fatalf("loopRunProjectDir = %q, want %q", got.loopRunProjectDir, projectDir)
+	}
+	if got.loopRunProjectTitle != "api" {
+		t.Fatalf("loopRunProjectTitle = %q, want api", got.loopRunProjectTitle)
+	}
+	if cmd == nil {
+		t.Fatal("F launch picker entry returned nil cmd; want refresh dispatch")
+	}
+}
+
+func TestPlanSearchEnterRemainsViewAction(t *testing.T) {
+	m, _ := planSearchTestModel(t)
+
+	updated, cmd := m.Update(keyPress("enter"))
+	got := updated.(Model)
+	if got.mode != ModePlanView {
+		t.Fatalf("mode = %v, want ModePlanView", got.mode)
+	}
+	if got.viewerPlan == nil {
+		t.Fatal("viewerPlan is nil after normal plan search enter")
+	}
+	if cmd == nil {
+		t.Fatal("normal plan search enter returned nil cmd; want plan file load")
+	}
+}
+
+func TestLoopRunPlanSearchEnterBuildsLaunchRequest(t *testing.T) {
+	projectDir := t.TempDir()
+	planDir := seedPlanDir(t, t.TempDir(), "api-aabb112233cc", map[string]string{
+		"manifest.md":  "# api plan",
+		"context.md":   "context",
+		"session-1.md": "session",
+	})
+	m := testModel()
+	m.mode = ModeLoopRunPlanSearch
+	m.loopRunProjectDir = projectDir
+	m.planResults = []plans.Result{{
+		Meta: plans.PlanMeta{
+			Name:    "api",
+			DirPath: planDir,
+			Files:   []string{"manifest.md", "context.md", "session-1.md"},
+		},
+	}}
+
+	updated, cmd := m.Update(keyPress("enter"))
+	got := updated.(Model)
+	if got.mode != ModeLoopRunPlanSearch {
+		t.Fatalf("mode after launch request = %v, want ModeLoopRunPlanSearch", got.mode)
+	}
+	if cmd == nil {
+		t.Fatal("launch-mode enter returned nil cmd; want launch request command")
+	}
+	msg, ok := cmd().(loopRunPlanLaunchMsg)
+	if !ok {
+		t.Fatalf("launch request command produced %T, want loopRunPlanLaunchMsg", msg)
+	}
+	if msg.Err != nil {
+		t.Fatalf("launch request validation failed: %v", msg.Err)
+	}
+	wantProject, err := agentloop.CanonicalizePath(projectDir)
+	if err != nil {
+		t.Fatalf("canonical project: %v", err)
+	}
+	wantPlan, err := agentloop.CanonicalizePath(planDir)
+	if err != nil {
+		t.Fatalf("canonical plan: %v", err)
+	}
+	if msg.Request.ProjectDir != wantProject {
+		t.Fatalf("ProjectDir = %q, want %q", msg.Request.ProjectDir, wantProject)
+	}
+	if msg.Request.PlanDir != wantPlan {
+		t.Fatalf("PlanDir = %q, want %q", msg.Request.PlanDir, wantPlan)
+	}
+	if msg.Plan.DirPath != wantPlan {
+		t.Fatalf("Plan.DirPath = %q, want %q", msg.Plan.DirPath, wantPlan)
+	}
+}
+
+func TestLoopRunPlanSearchVOpensViewerAndReturnsToLaunchPicker(t *testing.T) {
+	planDir := seedPlanDir(t, t.TempDir(), "api-aabb112233cc", map[string]string{
+		"manifest.md": "# api plan",
+	})
+	m := testModel()
+	m.mode = ModeLoopRunPlanSearch
+	m.loopRunProjectDir = t.TempDir()
+	m.loopRunProjectTitle = "api"
+	m.planResults = []plans.Result{{
+		Meta: plans.PlanMeta{
+			Name:    "api",
+			DirPath: planDir,
+			Files:   []string{"manifest.md"},
+		},
+	}}
+
+	updated, cmd := m.Update(keyPress("v"))
+	got := updated.(Model)
+	if got.mode != ModePlanView {
+		t.Fatalf("mode after v = %v, want ModePlanView", got.mode)
+	}
+	if got.planViewReturnMode != ModeLoopRunPlanSearch {
+		t.Fatalf("planViewReturnMode = %v, want ModeLoopRunPlanSearch", got.planViewReturnMode)
+	}
+	if cmd == nil {
+		t.Fatal("v returned nil cmd; want plan file load")
+	}
+
+	updated, _ = got.Update(keyPress("esc"))
+	got = updated.(Model)
+	if got.mode != ModeLoopRunPlanSearch {
+		t.Fatalf("mode after viewer esc = %v, want ModeLoopRunPlanSearch", got.mode)
+	}
+	if got.loopRunProjectTitle != "api" {
+		t.Fatalf("loopRunProjectTitle after viewer esc = %q, want api", got.loopRunProjectTitle)
+	}
+}
+
+func TestLoopRunPlanSearchEscReturnsDashboard(t *testing.T) {
+	m := testModel()
+	m.mode = ModeLoopRunPlanSearch
+	m.planQuery = "api"
+	m.loopRunProjectDir = t.TempDir()
+	m.loopRunProjectTitle = "api"
+
+	updated, cmd := m.Update(keyPress("esc"))
+	got := updated.(Model)
+	if cmd != nil {
+		t.Fatalf("launch picker esc returned cmd %T, want nil", cmd)
+	}
+	if got.mode != ModeList {
+		t.Fatalf("mode after esc = %v, want ModeList", got.mode)
+	}
+	if got.planQuery != "" {
+		t.Fatalf("planQuery after launch exit = %q, want cleared", got.planQuery)
+	}
+	if got.loopRunProjectDir != "" || got.loopRunProjectTitle != "" {
+		t.Fatalf("launch context after esc = (%q, %q), want cleared", got.loopRunProjectDir, got.loopRunProjectTitle)
 	}
 }

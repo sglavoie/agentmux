@@ -63,6 +63,16 @@ func renderFooter(m Model) string {
 			styleFooter.Render("  / filter · enter view · o editor · s sort · esc back"),
 			styleFooter.Render("  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page"),
 		)
+	case ModeLoopRunPlanSearch:
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  / filter · enter run · v view · p path · o editor · s sort · esc/q back"),
+			styleFooter.Render("  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page"),
+		)
+	case ModeLoopRunPlanPath:
+		lines = nonEmptyFooterLines(
+			styleFooter.Render("  enter: run  esc: cancel"),
+			styleFooter.Render("  type/paste path  backspace: edit"),
+		)
 	case ModePlanView:
 		lines = nonEmptyFooterLines(
 			styleFooter.Render("  / search · n/N match · y copy · o editor · esc back"),
@@ -304,6 +314,7 @@ var listFooterPalette = []footerEntry{
 		return ok
 	}},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
+	{"F", "run plan", footerSectionLaunch, hasRow},
 	{"t", "tail", footerSectionLaunch, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
 	{"P", "plans", footerSectionApp, func(Model) bool { return true }},

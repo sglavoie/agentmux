@@ -106,6 +106,8 @@ Key flows:
 
 - `l`: open the launcher
 - `t`: tail an active `agent-session-loop` run in the dashboard terminal
+- `F`: run a saved agent plan for the selected project with
+  `agent-session-loop run --cwd . <plan-dir> --unsafe-bypass`
 - `r`: restart the selected running session, after confirmation
 - `c`: restart the selected running session under another profile
 - `C`: launch a new session from the selected row, with profile selection first
@@ -119,6 +121,20 @@ Key flows:
 - `P`: search saved agent plans; the plan viewer wraps long lines, supports
   less-style `Ctrl+d/u/f/b` paging, and `y` copies the selected raw line
 - `?`: show the full keymap
+
+Rows marked with `🔁` have at least one active `agent-session-loop` run whose
+cwd matches the project row. Press `t` to follow an active loop; `t` stays the
+only follow/tail action.
+
+Press `F` on a project row to open the plan-run picker. In that picker,
+`enter` runs the highlighted plan, `v` views it first, `p` lets you paste or
+type a plan directory, `/` filters, and `esc`/`q` returns to the dashboard.
+Agent Mux launches the loop as a detached process and captures stdout, stderr,
+and launch metadata under the AMX launch log directory
+(`~/.local/state/agent-mux/agent-session-loop-launches` by default). The
+success toast includes the child pid and log path. If the exact same cwd and
+plan directory is already active, Agent Mux leaves the existing loop alone,
+shows a warning, refreshes active-loop state, and tells you to press `t`.
 
 The dashboard keeps the profile badge and harness metadata separate from the
 title column, so visible titles are just the project name.
