@@ -681,9 +681,52 @@ func TestLoopTailLaunchNonExecutableFallbackDoesNotExec(t *testing.T) {
 	}
 }
 
+func TestLoopTailInterruptResumesDashboardWithoutActionErr(t *testing.T) {
+	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
+	var execCalls []*exec.Cmd
+	stubLoopTailExecProcess(t, errors.New("signal: interrupt"), &execCalls)
+
+	updated, cmd := testModel().Update(loopTailSelectionMsg{
+		selection: agentloop.Selection{
+			Kind: agentloop.SelectionLaunch,
+			Candidates: []agentloop.Candidate{{
+				PlanDir: "/plans/api",
+				CWD:     "/work/api",
+			}},
+		},
+	})
+	got := updated.(Model)
+	if got.mode != ModeList {
+		t.Fatalf("mode before tail exits = %v, want ModeList", got.mode)
+	}
+	if cmd == nil {
+		t.Fatal("expected launch command")
+	}
+
+	done, ok := cmd().(loopTailDoneMsg)
+	if !ok {
+		t.Fatalf("launch cmd returned %T, want loopTailDoneMsg", done)
+	}
+	if done.err != nil {
+		t.Fatalf("tail interrupt err = %v, want nil", done.err)
+	}
+
+	updated, cmd = got.Update(done)
+	got = updated.(Model)
+	if cmd != nil {
+		t.Fatalf("tail completion returned cmd %v, want nil", cmd)
+	}
+	if got.mode != ModeList {
+		t.Fatalf("mode after tail exits = %v, want ModeList", got.mode)
+	}
+	if got.actionErr != nil {
+		t.Fatalf("actionErr = %v, want nil for tail interrupt", got.actionErr)
+	}
+}
+
 func TestLoopTailExecErrorResumesDashboardWithActionErr(t *testing.T) {
 	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
-	tailErr := errors.New("signal: interrupt")
+	tailErr := errors.New("tail failed")
 	var execCalls []*exec.Cmd
 	stubLoopTailExecProcess(t, tailErr, &execCalls)
 

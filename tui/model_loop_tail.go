@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -137,8 +138,33 @@ func loopTailLaunchCmd(candidate agentloop.Candidate) tea.Cmd {
 		}
 	}
 	return loopTailExecProcess(cmd, func(err error) tea.Msg {
-		return loopTailDoneMsg{err: err}
+		return loopTailDoneMsg{err: normalizeLoopTailDoneErr(err)}
 	})
+}
+
+func normalizeLoopTailDoneErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if isLoopTailInterrupt(err) {
+		return nil
+	}
+	return err
+}
+
+func isLoopTailInterrupt(err error) bool {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			if status.Signaled() && status.Signal() == syscall.SIGINT {
+				return true
+			}
+			if status.Exited() && status.ExitStatus() == 130 {
+				return true
+			}
+		}
+	}
+	return strings.TrimSpace(strings.ToLower(err.Error())) == "signal: interrupt"
 }
 
 func loopTailExecCmd(candidate agentloop.Candidate) (*exec.Cmd, error) {
