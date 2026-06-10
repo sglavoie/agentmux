@@ -53,6 +53,22 @@ func (m Model) handleLoopRunPlanPathKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 	}
 }
 
+func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
+	if m.mode != ModeLoopRunPlanPath {
+		return m, nil
+	}
+	return m.handleLoopRunPlanPathPaste(msg.String())
+}
+
+func (m Model) handleLoopRunPlanPathPaste(text string) (tea.Model, tea.Cmd) {
+	if text == "" {
+		return m, nil
+	}
+	m.loopRunPlanPath += text
+	m.loopRunPlanPathErr = nil
+	return m, nil
+}
+
 func (m Model) submitLoopRunPlanPath() (tea.Model, tea.Cmd) {
 	cleaned := cleanLoopRunPlanPath(m.loopRunPlanPath)
 	m.loopRunPlanPath = cleaned

@@ -39,9 +39,8 @@ type planSearchDoneMsg struct {
 	err     error
 }
 
-// loopRunPlanLaunchMsg is the handoff point from the launch-oriented picker to
-// the later detached-launch integration. Session 7 wires this message to
-// agentloop.StartRun; for now the picker only emits validated requests.
+// loopRunPlanLaunchMsg carries a validated launch request from the plan picker
+// or typed path flow to the detached agent-session-loop starter.
 type loopRunPlanLaunchMsg struct {
 	Request agentloop.RunRequest
 	Plan    plans.PlanMeta

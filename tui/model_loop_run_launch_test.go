@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -48,6 +49,7 @@ func TestLoopRunPlanLaunchStartsDetachedRunAndRefreshesActiveLoops(t *testing.T)
 			LogPaths:   agentloop.LaunchLogPaths{Dir: filepath.Join(t.TempDir(), "logs")},
 		}, nil
 	})
+	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
 	stubLoopTailDiscover(t, []agentloop.Candidate{refreshed}, nil)
 
 	m := testModel()
@@ -72,8 +74,11 @@ func TestLoopRunPlanLaunchStartsDetachedRunAndRefreshesActiveLoops(t *testing.T)
 	if gotReq.ProjectDir != projectDir || gotReq.PlanDir != planDir {
 		t.Fatalf("start request paths = %q/%q, want %q/%q", gotReq.ProjectDir, gotReq.PlanDir, projectDir, planDir)
 	}
-	if gotReq.Binary != agentSessionLoopBinary {
-		t.Fatalf("start request binary = %q, want %q", gotReq.Binary, agentSessionLoopBinary)
+	if gotReq.Binary != "/bin/agent-session-loop" {
+		t.Fatalf("start request binary = %q, want resolved binary", gotReq.Binary)
+	}
+	if path, ok := envValue(gotReq.Env, "PATH"); !ok || pathListIndex(path, "/bin") != 0 {
+		t.Fatalf("start request env PATH = %q, want resolved binary dir first", path)
 	}
 	if !reflect.DeepEqual(gotReq.ActiveRuns, []agentloop.Candidate{existing}) {
 		t.Fatalf("start request active runs = %#v, want existing candidate", gotReq.ActiveRuns)
@@ -105,6 +110,56 @@ func TestLoopRunPlanLaunchStartsDetachedRunAndRefreshesActiveLoops(t *testing.T)
 	}
 	if msg.seq != got.activeLoopRefreshSeq {
 		t.Fatalf("active refresh seq = %d, want %d", msg.seq, got.activeLoopRefreshSeq)
+	}
+}
+
+func TestLoopRunPlanLaunchUsesFallbackBinaryAndExecEnv(t *testing.T) {
+	t.Setenv("AGENTMUX_LOOP_RUN_KEEP", "1")
+	projectDir := t.TempDir()
+	planDir := seedLoopRunPathPlan(t, t.TempDir(), "api-aabb112233cc")
+	fallback := filepath.Join(t.TempDir(), agentSessionLoopBinary)
+	if err := os.WriteFile(fallback, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write fallback binary: %v", err)
+	}
+
+	stubLoopTailLookPath(t, "", exec.ErrNotFound)
+	stubLoopTailFallbackPaths(t, fallback)
+	var gotReq agentloop.StartRunRequest
+	stubLoopRunStart(t, func(req agentloop.StartRunRequest) (agentloop.RunLaunchResult, error) {
+		gotReq = req
+		return agentloop.RunLaunchResult{
+			PID:        4242,
+			ProjectDir: req.ProjectDir,
+			PlanDir:    req.PlanDir,
+			LogPaths:   agentloop.LaunchLogPaths{Dir: filepath.Join(t.TempDir(), "logs")},
+		}, nil
+	})
+
+	m := testModel()
+	m.mode = ModeLoopRunPlanSearch
+	_, cmd := m.Update(loopRunLaunchMsg(projectDir, planDir))
+	if cmd == nil {
+		t.Fatal("launch request returned nil cmd")
+	}
+	done, ok := cmd().(loopRunStartDoneMsg)
+	if !ok {
+		t.Fatalf("start cmd returned %T, want loopRunStartDoneMsg", done)
+	}
+	if done.Err != nil {
+		t.Fatalf("start cmd err = %v, want nil", done.Err)
+	}
+	if gotReq.Binary != fallback {
+		t.Fatalf("start request binary = %q, want fallback %q", gotReq.Binary, fallback)
+	}
+	path, ok := envValue(gotReq.Env, "PATH")
+	if !ok {
+		t.Fatalf("start request env missing PATH: %#v", gotReq.Env)
+	}
+	if idx := pathListIndex(path, filepath.Dir(fallback)); idx != 0 {
+		t.Fatalf("fallback binary dir index = %d, want 0 in PATH %q", idx, path)
+	}
+	if env, ok := envValue(gotReq.Env, "AGENTMUX_LOOP_RUN_KEEP"); !ok || env != "1" {
+		t.Fatalf("start request env should preserve current environment, got %#v", gotReq.Env)
 	}
 }
 
@@ -183,6 +238,7 @@ func TestLoopRunPlanLaunchStartErrorStaysInLaunchMode(t *testing.T) {
 	projectDir := t.TempDir()
 	planDir := seedLoopRunPathPlan(t, t.TempDir(), "api-aabb112233cc")
 	startErr := errors.New("spawn failed")
+	stubLoopTailLookPath(t, "/bin/agent-session-loop", nil)
 	stubLoopRunStart(t, func(agentloop.StartRunRequest) (agentloop.RunLaunchResult, error) {
 		return agentloop.RunLaunchResult{}, startErr
 	})
@@ -214,6 +270,61 @@ func TestLoopRunPlanLaunchStartErrorStaysInLaunchMode(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("error toast should arm toast tick")
+	}
+}
+
+func TestLoopRunPlanLaunchMetadataWarningExitsAndRefreshes(t *testing.T) {
+	projectDir := t.TempDir()
+	planDir := seedLoopRunPathPlan(t, t.TempDir(), "api-aabb112233cc")
+	result := agentloop.RunLaunchResult{
+		PID:        4242,
+		ProjectDir: projectDir,
+		PlanDir:    planDir,
+		LogPaths:   agentloop.LaunchLogPaths{Dir: filepath.Join(t.TempDir(), "logs")},
+	}
+	metadataErr := &agentloop.LaunchMetadataError{
+		Result: result,
+		Err:    errors.New("metadata denied"),
+	}
+	stubLoopTailDiscover(t, []agentloop.Candidate{{CWD: projectDir, PlanDir: planDir, PID: 4242}}, nil)
+
+	m := testModel()
+	m.mode = ModeLoopRunPlanPath
+	m.loopRunProjectDir = projectDir
+	m.loopRunProjectTitle = "api"
+	m.toasts = []Toast{{Severity: toastInfo, Text: "existing"}}
+
+	updated, cmd := m.Update(loopRunStartDoneMsg{
+		Request: agentloop.RunRequest{ProjectDir: projectDir, PlanDir: planDir},
+		Plan:    plans.PlanMeta{Name: "api rollout", DirPath: planDir},
+		Result:  result,
+		Err:     metadataErr,
+	})
+	got := updated.(Model)
+	if got.mode != ModeList {
+		t.Fatalf("mode after metadata warning = %v, want ModeList", got.mode)
+	}
+	if got.actionErr != nil {
+		t.Fatalf("actionErr = %v, want nil for metadata warning", got.actionErr)
+	}
+	if len(got.toasts) == 0 || got.toasts[0].Severity != toastWarning {
+		t.Fatalf("metadata warning toast missing: %+v", got.toasts)
+	}
+	if text := got.toasts[0].Text; !strings.Contains(text, "pid 4242") ||
+		!strings.Contains(text, "logs:") ||
+		!strings.Contains(text, "metadata warning") ||
+		!strings.Contains(text, "metadata denied") {
+		t.Fatalf("metadata warning toast = %q, want pid, logs, and metadata error", text)
+	}
+	if cmd == nil {
+		t.Fatal("metadata warning handler returned nil cmd; want active-loop refresh")
+	}
+	msg, ok := cmd().(activeLoopsMsg)
+	if !ok {
+		t.Fatalf("metadata warning follow-up cmd returned %T, want activeLoopsMsg", msg)
+	}
+	if msg.seq != got.activeLoopRefreshSeq {
+		t.Fatalf("active refresh seq = %d, want %d", msg.seq, got.activeLoopRefreshSeq)
 	}
 }
 

@@ -448,6 +448,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case loopRunStartDoneMsg:
 		return m.handleLoopRunStartDone(msg)
 
+	case tea.PasteMsg:
+		return m.handlePaste(msg)
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}

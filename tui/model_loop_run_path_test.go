@@ -174,15 +174,43 @@ func TestLoopRunPlanPathAcceptsPastedTextWithSpaces(t *testing.T) {
 	root := t.TempDir()
 	planDir := seedLoopRunPathPlan(t, root, "plan with spaces")
 	m := loopRunPathTestModel(projectDir)
+	m.loopRunPlanPathErr = errors.New("old path error")
 
-	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Text: `"` + planDir + `"`}))
+	updated, cmd := m.Update(tea.PasteMsg{Content: `"` + planDir + `"`})
 	m = updated.(Model)
+	if cmd != nil {
+		t.Fatalf("paste returned cmd %T, want nil", cmd)
+	}
+	if m.loopRunPlanPath != `"`+planDir+`"` {
+		t.Fatalf("loopRunPlanPath = %q, want pasted content", m.loopRunPlanPath)
+	}
+	if m.loopRunPlanPathErr != nil {
+		t.Fatalf("loopRunPlanPathErr = %v, want nil after paste", m.loopRunPlanPathErr)
+	}
 
 	msg := submitLoopRunPathForMsg(t, m)
 	if msg.Err != nil {
 		t.Fatalf("launch request validation failed: %v", msg.Err)
 	}
 	assertLoopRunPathRequest(t, msg, projectDir, planDir)
+}
+
+func TestPasteIgnoredOutsideLoopRunPlanPath(t *testing.T) {
+	m := testModel()
+	m.mode = ModePlanSearch
+	m.planQuery = "before"
+
+	updated, cmd := m.Update(tea.PasteMsg{Content: "after"})
+	got := updated.(Model)
+	if cmd != nil {
+		t.Fatalf("paste outside path returned cmd %T, want nil", cmd)
+	}
+	if got.planQuery != "before" {
+		t.Fatalf("planQuery = %q, want unchanged", got.planQuery)
+	}
+	if got.loopRunPlanPath != "" {
+		t.Fatalf("loopRunPlanPath = %q, want unchanged", got.loopRunPlanPath)
+	}
 }
 
 func seedLoopRunPathPlan(t *testing.T, root, name string) string {

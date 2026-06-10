@@ -45,14 +45,25 @@ func (m Model) handleLoopRunPlanLaunchValidationError(msg loopRunPlanLaunchMsg) 
 
 func loopRunStartCmd(req agentloop.RunRequest, plan plans.PlanMeta, activeRuns []agentloop.Candidate) tea.Cmd {
 	active := append([]agentloop.Candidate(nil), activeRuns...)
-	if strings.TrimSpace(req.Binary) == "" {
-		req.Binary = agentSessionLoopBinary
-	}
 	return func() tea.Msg {
+		binary := strings.TrimSpace(req.Binary)
+		if binary == "" || binary == agentSessionLoopBinary {
+			resolved, err := resolveAgentSessionLoopBinary()
+			if err != nil {
+				return loopRunStartDoneMsg{
+					Request: req,
+					Plan:    plan,
+					Err:     err,
+				}
+			}
+			binary = resolved
+		}
+		req.Binary = binary
 		result, err := loopRunStart(agentloop.StartRunRequest{
 			ProjectDir: req.ProjectDir,
 			PlanDir:    req.PlanDir,
 			Binary:     req.Binary,
+			Env:        agentSessionLoopExecEnv(req.Binary),
 			ActiveRuns: active,
 		})
 		return loopRunStartDoneMsg{
@@ -101,6 +112,24 @@ func (m Model) handleLoopRunStartError(msg loopRunStartDoneMsg) (tea.Model, tea.
 		return m, tea.Batch(cmds...)
 	}
 
+	var metadataErr *agentloop.LaunchMetadataError
+	if errors.As(msg.Err, &metadataErr) {
+		if metadataErr.Result.PID > 0 {
+			msg.Result = metadataErr.Result
+		}
+		m.exitLoopRunLaunchFlow()
+		m.actionErr = nil
+		var cmds []tea.Cmd
+		if c := m.pushToast(Toast{
+			Severity: toastWarning,
+			Text:     loopRunStartedWithWarningToastText(msg),
+		}); c != nil {
+			cmds = append(cmds, c)
+		}
+		cmds = append(cmds, m.nextActiveLoopRefreshCmd())
+		return m, tea.Batch(cmds...)
+	}
+
 	m.actionErr = msg.Err
 	if c := m.pushToast(Toast{
 		Severity: toastError,
@@ -139,6 +168,10 @@ func loopRunStartedToastText(msg loopRunStartDoneMsg) string {
 
 func loopRunDuplicateToastText(msg loopRunStartDoneMsg) string {
 	return fmt.Sprintf("Loop already running: %s - press t to follow", loopRunPlanTitle(msg))
+}
+
+func loopRunStartedWithWarningToastText(msg loopRunStartDoneMsg) string {
+	return loopRunStartedToastText(msg) + " metadata warning: " + msg.Err.Error()
 }
 
 func loopRunFailedToastText(msg loopRunStartDoneMsg) string {

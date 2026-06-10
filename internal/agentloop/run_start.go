@@ -25,6 +25,7 @@ type StartRunRequest struct {
 	ProjectDir string
 	PlanDir    string
 	Binary     string
+	Env        []string
 	LogRoot    string
 
 	ActiveRuns []Candidate
@@ -55,6 +56,22 @@ type runLaunchMetadataLogs struct {
 	Stdout   string `json:"stdout"`
 	Stderr   string `json:"stderr"`
 	Metadata string `json:"metadata"`
+}
+
+// LaunchMetadataError reports a post-start metadata write failure. The child
+// process has already been launched, so callers should treat this as a warning
+// and use Result for pid/log details.
+type LaunchMetadataError struct {
+	Result RunLaunchResult
+	Err    error
+}
+
+func (e *LaunchMetadataError) Error() string {
+	return fmt.Sprintf("agentloop: launch metadata failed after starting pid %d: %v", e.Result.PID, e.Err)
+}
+
+func (e *LaunchMetadataError) Unwrap() error {
+	return e.Err
 }
 
 // StartRun validates the selected project and plan, rejects an exact duplicate
@@ -106,6 +123,9 @@ func StartRun(req StartRunRequest) (RunLaunchResult, error) {
 	cmd.Dir = spec.ProjectDir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	if len(req.Env) > 0 {
+		cmd.Env = append([]string(nil), req.Env...)
+	}
 	cmd.SysProcAttr = runLaunchSysProcAttr()
 
 	pid, err := runLaunchStartProcess(cmd)
@@ -125,7 +145,7 @@ func StartRun(req StartRunRequest) (RunLaunchResult, error) {
 		LogPaths:   paths,
 	}
 	if err := writeRunLaunchMetadata(paths.Metadata, result); err != nil {
-		return result, err
+		return result, &LaunchMetadataError{Result: result, Err: err}
 	}
 	return result, nil
 }

@@ -146,18 +146,18 @@ func loopTailExecCmd(candidate agentloop.Candidate) (*exec.Cmd, error) {
 		return nil, errors.New("agent-session-loop candidate missing plan directory")
 	}
 
-	binary, err := resolveLoopTailBinary()
+	binary, err := resolveAgentSessionLoopBinary()
 	if err != nil {
 		return nil, err
 	}
 
 	cmd := exec.Command(binary, "tail", candidate.PlanDir)
 	cmd.Dir = candidate.OverlayCWD()
-	cmd.Env = loopTailExecEnv(binary, os.Environ())
+	cmd.Env = agentSessionLoopExecEnv(binary)
 	return cmd, nil
 }
 
-func resolveLoopTailBinary() (string, error) {
+func resolveAgentSessionLoopBinary() (string, error) {
 	binary, err := loopTailLookPath(agentSessionLoopBinary)
 	if err == nil {
 		if abs, absErr := filepath.Abs(binary); absErr == nil {
@@ -203,6 +203,10 @@ func isExecutableFile(path string) bool {
 		return false
 	}
 	return info.Mode()&0o111 != 0
+}
+
+func agentSessionLoopExecEnv(binary string) []string {
+	return loopTailExecEnv(binary, os.Environ())
 }
 
 func loopTailExecEnv(binary string, environ []string) []string {
