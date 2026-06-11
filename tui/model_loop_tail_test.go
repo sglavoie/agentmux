@@ -207,7 +207,7 @@ func TestModeListTKeyLaunchesUniqueMatchThroughFullUpdatePath(t *testing.T) {
 	if len(execCalls) != 1 {
 		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
-	wantCmdline := []string{"/bin/agent-session-loop", "tail", candidate.PlanDir}
+	wantCmdline := []string{"/bin/agent-session-loop", "tail", "--interactive", candidate.PlanDir}
 	if !reflect.DeepEqual(execCalls[0].Args, wantCmdline) {
 		t.Fatalf("exec Args = %#v, want %#v", execCalls[0].Args, wantCmdline)
 	}
@@ -282,7 +282,7 @@ func TestModeListTKeyPickerLaunchesSelectedCandidateThroughFullUpdatePath(t *tes
 	if len(execCalls) != 1 {
 		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
-	wantCmdline := []string{"/bin/agent-session-loop", "tail", "/plans/backend-b"}
+	wantCmdline := []string{"/bin/agent-session-loop", "tail", "--interactive", "/plans/backend-b"}
 	if !reflect.DeepEqual(execCalls[0].Args, wantCmdline) {
 		t.Fatalf("exec Args = %#v, want %#v", execCalls[0].Args, wantCmdline)
 	}
@@ -542,7 +542,7 @@ func TestHandleLoopTailSelectionBuildsExecCommandWithDirectArgv(t *testing.T) {
 	}
 
 	got := execCalls[0]
-	wantCmdline := []string{"/usr/local/bin/agent-session-loop", "tail", planDir}
+	wantCmdline := []string{"/usr/local/bin/agent-session-loop", "tail", "--interactive", planDir}
 	if !reflect.DeepEqual(got.Args, wantCmdline) {
 		t.Fatalf("Args = %#v, want %#v", got.Args, wantCmdline)
 	}
@@ -621,7 +621,7 @@ func TestLoopTailLaunchUsesFallbackBinaryWhenPathMisses(t *testing.T) {
 	if len(execCalls) != 1 {
 		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
-	wantCmdline := []string{fallback, "tail", candidate.PlanDir}
+	wantCmdline := []string{fallback, "tail", "--interactive", candidate.PlanDir}
 	if !reflect.DeepEqual(execCalls[0].Args, wantCmdline) {
 		t.Fatalf("exec Args = %#v, want %#v", execCalls[0].Args, wantCmdline)
 	}

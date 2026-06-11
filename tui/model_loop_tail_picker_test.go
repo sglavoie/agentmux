@@ -245,8 +245,9 @@ func TestLoopTailPickerEnterLaunchesSelectedCandidate(t *testing.T) {
 	if len(execCalls) != 1 {
 		t.Fatalf("exec calls = %d, want 1", len(execCalls))
 	}
-	if got := execCalls[0].Args[2]; got != "/plans/backend" {
-		t.Fatalf("launched plan = %q, want /plans/backend", got)
+	wantArgs := []string{"/bin/agent-session-loop", "tail", "--interactive", "/plans/backend"}
+	if !reflect.DeepEqual(execCalls[0].Args, wantArgs) {
+		t.Fatalf("exec Args = %#v, want %#v", execCalls[0].Args, wantArgs)
 	}
 	if len(client.overlays) != 0 {
 		t.Fatalf("kitty overlay calls = %d, want 0", len(client.overlays))

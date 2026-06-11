@@ -228,7 +228,7 @@ func TestLoopRunPlanLaunchDuplicateWarnsAndKeepsFollowAvailable(t *testing.T) {
 	if len(execCalls) != 1 {
 		t.Fatalf("tail exec calls = %d, want 1", len(execCalls))
 	}
-	wantArgs := []string{"/bin/agent-session-loop", "tail", planDir}
+	wantArgs := []string{"/bin/agent-session-loop", "tail", "--interactive", planDir}
 	if !reflect.DeepEqual(execCalls[0].Args, wantArgs) {
 		t.Fatalf("tail Args = %#v, want %#v", execCalls[0].Args, wantArgs)
 	}

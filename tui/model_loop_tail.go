@@ -177,7 +177,7 @@ func loopTailExecCmd(candidate agentloop.Candidate) (*exec.Cmd, error) {
 		return nil, err
 	}
 
-	cmd := exec.Command(binary, "tail", candidate.PlanDir)
+	cmd := exec.Command(binary, "tail", "--interactive", candidate.PlanDir)
 	cmd.Dir = candidate.OverlayCWD()
 	cmd.Env = agentSessionLoopExecEnv(binary)
 	return cmd, nil

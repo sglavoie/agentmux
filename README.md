@@ -106,6 +106,7 @@ Key flows:
 
 - `l`: open the launcher
 - `t`: tail an active `agent-session-loop` run in the dashboard terminal
+  (`q` quits the tail view; `a` toggles current-session/all-session output)
 - `F`: run a saved agent plan for the selected project with
   `agent-session-loop run --cwd . <plan-dir> --unsafe-bypass`
 - `r`: restart the selected running session, after confirmation
@@ -123,8 +124,11 @@ Key flows:
 - `?`: show the full keymap
 
 Rows marked with `🔁` have at least one active `agent-session-loop` run whose
-cwd matches the project row. Press `t` to follow an active loop; `t` stays the
-only follow/tail action.
+cwd matches the project row. Press `t` to follow an active loop in the pinned
+tail view; `q` returns to Agent Mux and `a` toggles current-session vs
+all-session output. Direct `agent-session-loop tail` remains plain text by
+default; Agent Mux launches `t` with `--interactive`. `t` stays the only
+follow/tail action.
 
 Press `F` on a project row to open the plan-run picker. In that picker,
 `enter` runs the highlighted plan, `v` views it first, `p` lets you paste or
