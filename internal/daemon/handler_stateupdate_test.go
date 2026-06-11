@@ -74,6 +74,8 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 			{"stop", IconStatePreserve, "idle after stop preserves stop icon"},
 			{"permission", IconStatePreserve, "idle after permission preserves key icon"},
 			{"failure", IconStatePreserve, "idle after failure preserves warning icon"},
+			{"stop_failure", IconStatePreserve, "idle after stop failure preserves error icon"},
+			{"elicitation", IconStatePreserve, "idle after elicitation preserves question icon"},
 		}
 		// Test with a long guard (prevGuard still set when idle arrives).
 		for _, tc := range cases {
@@ -101,6 +103,40 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestHandler_LoopFinishedClearsActiveClassOnly(t *testing.T) {
+	cases := []struct {
+		prev     string
+		wantIcon string
+	}{
+		{prev: "active", wantIcon: ""},
+		{prev: "subagent", wantIcon: ""},
+		{prev: "compact", wantIcon: ""},
+		{prev: "stop", wantIcon: IconStatePreserve},
+		{prev: "permission", wantIcon: IconStatePreserve},
+		{prev: "failure", wantIcon: IconStatePreserve},
+		{prev: "stop_failure", wantIcon: IconStatePreserve},
+		{prev: "elicitation", wantIcon: IconStatePreserve},
+	}
+	for _, tc := range cases {
+		t.Run(tc.prev, func(t *testing.T) {
+			h := newTestHandler()
+			h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prev})
+
+			resp := h.Handle(Request{
+				Type:     TypeStateUpdate,
+				WindowID: 1,
+				Action:   "idle",
+				Event:    "AgentSessionLoopFinished",
+				Source:   "agent_session_loop",
+				Reason:   "run_finished",
+			})
+			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
+				t.Fatalf("AgentSessionLoopFinished after %q: want icon_state=%q, got %+v", tc.prev, tc.wantIcon, resp)
+			}
+		})
+	}
 }
 
 func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {

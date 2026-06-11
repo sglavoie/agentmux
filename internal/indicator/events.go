@@ -11,6 +11,8 @@ var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.
 	"sessionStart": "idle",
 	"SessionStart": "idle",
+	// Internal Agent Mux signal from agent_session_loop when a loop run finishes.
+	"AgentSessionLoopFinished": "idle",
 
 	// Active: the harness is processing.
 	"Setup":               "active",

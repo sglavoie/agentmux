@@ -122,7 +122,9 @@ Key flows:
 Rows marked with `🔁` have at least one active `agent-session-loop` run whose
 cwd matches the project row. Agent Mux also mirrors `🔁` into matching Kitty
 project tab titles while loops are active, preserving existing state, star, and
-mute icons; the marker is removed when discovery no longer reports the loop.
+mute icons. Finished runs stop counting as active when loop discovery sees
+`run_finished_at` in `state.json`, and the `AgentSessionLoopFinished` hook
+clears active-class icons while reconciling the tab-title `🔁` marker.
 Run and tail loops outside the dashboard with `agent-session-loop` directly.
 
 The dashboard keeps the profile badge and harness metadata separate from the
@@ -557,6 +559,11 @@ just test
   documented hook reset payloads; Codex may show `ScreenClearProbe` when idle
   `/clear` happens without an immediate hook. If neither appears, confirm the
   tab is managed by Agent Mux and Kitty `get-text` remote control works.
+- **The loop marker stays after a run is finished**: inspect
+  `amx daemon export-events --current-window --last 50` for
+  `AgentSessionLoopFinished`, then inspect the loop `state.json` for
+  `run_finished_at`. If the marker remains, confirm no other active loop state
+  still has the same `cwd`.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

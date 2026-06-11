@@ -1,9 +1,11 @@
 package indicator
 
 import (
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -218,6 +220,105 @@ func TestRunWithDeps_CopilotUserExitSessionEndClearsImmediately(t *testing.T) {
 	}
 }
 
+func TestRunWithDeps_AgentSessionLoopFinishedReconcilesLoopMarker(t *testing.T) {
+	dir := t.TempDir()
+	otherDir := t.TempDir()
+	discoverErr := errors.New("discover failed")
+	boltLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "api",
+		State:   "bolt",
+		Looping: true,
+	})
+	keyLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "api",
+		State:   "key",
+		Looping: true,
+	})
+	loopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "api",
+		Looping: true,
+	})
+	keyTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:  "api",
+		State: "key",
+	})
+
+	cases := []struct {
+		name        string
+		title       string
+		directory   string
+		candidates  []agentloop.Candidate
+		discoverErr error
+		wantTitle   string
+	}{
+		{
+			name:      "clears active state and loop marker when no loop remains",
+			title:     boltLoopTitle,
+			directory: dir,
+			wantTitle: "api",
+		},
+		{
+			name:       "clears active state and keeps loop marker when another loop remains",
+			title:      boltLoopTitle,
+			directory:  dir,
+			candidates: []agentloop.Candidate{{CWD: dir}, {CWD: otherDir}},
+			wantTitle:  loopTitle,
+		},
+		{
+			name:      "preserves sticky key state while clearing loop marker",
+			title:     keyLoopTitle,
+			directory: dir,
+			wantTitle: keyTitle,
+		},
+		{
+			name:        "preserves loop marker on discovery error",
+			title:       boltLoopTitle,
+			directory:   dir,
+			discoverErr: discoverErr,
+			wantTitle:   loopTitle,
+		},
+		{
+			name:      "preserves loop marker when directory is missing",
+			title:     boltLoopTitle,
+			wantTitle: loopTitle,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubIndicatorLoopDiscover(t, tc.candidates, tc.discoverErr)
+
+			handler := daemon.NewHandler(
+				daemon.NewStateGuard(time.Hour),
+				daemon.NewNotifier(&config.NotificationConfig{}),
+			)
+			daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+			kittyClient := &fakeIndicatorKittyClient{
+				windows: fakeIndicatorWindowsWithDirectory(42, tc.title, "work", "claude", tc.directory),
+			}
+
+			err := runWithDeps(
+				"AgentSessionLoopFinished",
+				42,
+				"/tmp/amx",
+				HookPayload{Source: "agent_session_loop", Reason: "run_finished"},
+				false,
+				kittyClient,
+				daemonClient,
+			)
+			if err != nil {
+				t.Fatalf("runWithDeps() error = %v", err)
+			}
+			if len(kittyClient.setTitleCalls) != 1 {
+				t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+			}
+			if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:42", title: tc.wantTitle}) {
+				t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], tc.wantTitle)
+			}
+		})
+	}
+}
+
 func TestRunWithDeps_NonKittyHookIsSilentNoOp(t *testing.T) {
 	t.Setenv("KITTY_LISTEN_ON", "")
 	t.Setenv("KITTY_WINDOW_ID", "")
@@ -249,6 +350,19 @@ func TestRunWithDeps_NonKittyHookIsSilentNoOp(t *testing.T) {
 	if len(daemonClient.reqs) != 0 {
 		t.Fatalf("daemon requests = %d, want 0", len(daemonClient.reqs))
 	}
+}
+
+func stubIndicatorLoopDiscover(t *testing.T, candidates []agentloop.Candidate, err error) {
+	t.Helper()
+	old := indicatorLoopDiscover
+	indicatorLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
+		out := make([]agentloop.Candidate, len(candidates))
+		copy(out, candidates)
+		return out, err
+	}
+	t.Cleanup(func() {
+		indicatorLoopDiscover = old
+	})
 }
 
 func TestRunWithDeps_MissingWindowIDInsideKittyErrors(t *testing.T) {

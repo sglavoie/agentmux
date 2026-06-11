@@ -230,6 +230,45 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 	}
 }
 
+func TestHandler_EventLog_LoopFinishedCarriesSourceAndReason(t *testing.T) {
+	h := newTestHandler()
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
+	h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "idle",
+		Event:            "AgentSessionLoopFinished",
+		Source:           "agent_session_loop",
+		Reason:           "run_finished",
+		CurrentIconState: "bolt",
+	})
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	if !resp.OK {
+		t.Fatalf("session detail: want OK=true, got %+v", resp)
+	}
+	if len(resp.Events) != 2 {
+		t.Fatalf("events = %d; want 2 (%+v)", len(resp.Events), resp.Events)
+	}
+	ev := resp.Events[1]
+	if ev.Event != "AgentSessionLoopFinished" || ev.Action != "idle" {
+		t.Fatalf("finish event identity = (%q, %q); want (AgentSessionLoopFinished, idle)", ev.Event, ev.Action)
+	}
+	if ev.Source != "agent_session_loop" {
+		t.Fatalf("source = %q; want agent_session_loop", ev.Source)
+	}
+	if ev.Reason != "run_finished" {
+		t.Fatalf("reason = %q; want run_finished", ev.Reason)
+	}
+	if ev.ResultIconState != "" {
+		t.Fatalf("result_icon_state = %q; want empty icon", ev.ResultIconState)
+	}
+	if ev.CurrentIconState != "bolt" {
+		t.Fatalf("current_icon_state = %q; want bolt", ev.CurrentIconState)
+	}
+}
+
 func TestHandler_EventLog_RewrittenResetStopCarriesResetFlow(t *testing.T) {
 	h := newTestHandler()
 

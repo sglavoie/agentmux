@@ -89,6 +89,10 @@ func (f *handlerBackedIndicatorDaemonClient) snapshot() []daemon.Request {
 }
 
 func fakeIndicatorWindows(windowID int, tabTitle, profile, harnessName string) []kitty.OSWindow {
+	return fakeIndicatorWindowsWithDirectory(windowID, tabTitle, profile, harnessName, "")
+}
+
+func fakeIndicatorWindowsWithDirectory(windowID int, tabTitle, profile, harnessName, directory string) []kitty.OSWindow {
 	return []kitty.OSWindow{
 		{
 			ID: 1,
@@ -100,8 +104,9 @@ func fakeIndicatorWindows(windowID int, tabTitle, profile, harnessName string) [
 						{
 							ID: windowID,
 							UserVars: kitty.UserVars{
-								Profile: profile,
-								Harness: harnessName,
+								Profile:      profile,
+								Harness:      harnessName,
+								AMXDirectory: directory,
 							},
 						},
 					},

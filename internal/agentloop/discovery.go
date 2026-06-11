@@ -153,6 +153,16 @@ func MatchingCWD(candidates []Candidate, selectedDir string) ([]Candidate, error
 	return matches, nil
 }
 
+// HasMatchingCWD reports whether any candidate's cwd matches selectedDir after
+// canonicalization.
+func HasMatchingCWD(candidates []Candidate, selectedDir string) (bool, error) {
+	matches, err := MatchingCWD(candidates, selectedDir)
+	if err != nil {
+		return false, err
+	}
+	return len(matches) > 0, nil
+}
+
 // CanonicalizePath mirrors agent-session-loop's realpath(abs(expanduser(path)))
 // behavior without requiring the path to exist.
 func CanonicalizePath(path string) (string, error) {
@@ -181,11 +191,12 @@ func IsPIDRunning(pid int) bool {
 }
 
 type stateFile struct {
-	RunID        string      `json:"run_id"`
-	PlanDir      string      `json:"plan_dir"`
-	CWD          string      `json:"cwd"`
-	RunStartedAt string      `json:"run_started_at"`
-	ActiveTurn   *activeTurn `json:"active_turn"`
+	RunID         string          `json:"run_id"`
+	PlanDir       string          `json:"plan_dir"`
+	CWD           string          `json:"cwd"`
+	RunStartedAt  string          `json:"run_started_at"`
+	RunFinishedAt json.RawMessage `json:"run_finished_at"`
+	ActiveTurn    *activeTurn     `json:"active_turn"`
 }
 
 type activeTurn struct {
@@ -209,6 +220,9 @@ func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
 
 	state, ok := readState(filepath.Join(stateDir, stateFileName))
 	if !ok {
+		return Candidate{}, false
+	}
+	if hasRunFinishedAt(state.RunFinishedAt) {
 		return Candidate{}, false
 	}
 	if state.PlanDir != "" {
@@ -246,6 +260,18 @@ func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
 		ActiveSession:    activeSession,
 		ActiveTurn:       activeTurnIndex,
 	}, true
+}
+
+func hasRunFinishedAt(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return false
+	}
+	return strings.TrimSpace(value) != ""
 }
 
 type lockInfo struct {

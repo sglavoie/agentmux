@@ -9,12 +9,14 @@ import (
 )
 
 type loopSeed struct {
-	PID           int
-	CWD           string
-	RunID         string
-	RunStartedAt  string
-	LockCreatedAt string
-	ActiveTurn    *activeTurn
+	PID              int
+	CWD              string
+	RunID            string
+	RunStartedAt     string
+	RunFinishedAt    any
+	HasRunFinishedAt bool
+	LockCreatedAt    string
+	ActiveTurn       *activeTurn
 }
 
 func TestDiscoverIncludesActiveLock(t *testing.T) {
@@ -96,6 +98,116 @@ func TestDiscoverExcludesStalePID(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("len(candidates) = %d, want 0", len(got))
+	}
+}
+
+func TestDiscoverExcludesFinishedRunWithLivePID(t *testing.T) {
+	root := t.TempDir()
+	seedLoop(t, root, filepath.Join(t.TempDir(), "plan"), loopSeed{
+		PID:              123,
+		CWD:              filepath.Join(t.TempDir(), "project"),
+		RunStartedAt:     "2026-06-04T13:05:00+00:00",
+		RunFinishedAt:    "2026-06-04T13:15:00+00:00",
+		HasRunFinishedAt: true,
+		LockCreatedAt:    "2026-06-04T13:00:00+00:00",
+	})
+
+	got, err := Discover(DiscoverOptions{
+		StateRoot: root,
+		PIDRunning: func(pid int) bool {
+			return pid == 123
+		},
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len(candidates) = %d, want 0", len(got))
+	}
+}
+
+func TestDiscoverIncludesUnfinishedRunForSameCWD(t *testing.T) {
+	root := t.TempDir()
+	base := t.TempDir()
+	cwd := filepath.Join(base, "project")
+	finishedPlan := filepath.Join(base, "finished-plan")
+	activePlan := filepath.Join(base, "active-plan")
+
+	seedLoop(t, root, finishedPlan, loopSeed{
+		PID:              123,
+		CWD:              cwd,
+		RunStartedAt:     "2026-06-04T13:05:00+00:00",
+		RunFinishedAt:    "2026-06-04T13:15:00+00:00",
+		HasRunFinishedAt: true,
+		LockCreatedAt:    "2026-06-04T13:00:00+00:00",
+	})
+	seedLoop(t, root, activePlan, loopSeed{
+		PID:           456,
+		CWD:           cwd,
+		RunStartedAt:  "2026-06-04T13:10:00+00:00",
+		LockCreatedAt: "2026-06-04T13:00:00+00:00",
+	})
+
+	got, err := Discover(DiscoverOptions{
+		StateRoot: root,
+		PIDRunning: func(pid int) bool {
+			return pid == 123 || pid == 456
+		},
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(candidates) = %d, want 1", len(got))
+	}
+	if got[0].PlanDir != canonical(t, activePlan) {
+		t.Errorf("PlanDir = %q, want active plan %q", got[0].PlanDir, canonical(t, activePlan))
+	}
+	if got[0].CWD != canonical(t, cwd) {
+		t.Errorf("CWD = %q, want %q", got[0].CWD, canonical(t, cwd))
+	}
+}
+
+func TestDiscoverRunFinishedAtBackwardCompatibleValues(t *testing.T) {
+	cases := []struct {
+		name             string
+		hasRunFinishedAt bool
+		runFinishedAt    any
+	}{
+		{name: "missing"},
+		{name: "null", hasRunFinishedAt: true, runFinishedAt: nil},
+		{name: "empty", hasRunFinishedAt: true, runFinishedAt: ""},
+		{name: "whitespace", hasRunFinishedAt: true, runFinishedAt: " \t\n"},
+		{name: "malformed-type", hasRunFinishedAt: true, runFinishedAt: map[string]any{"bad": true}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			planDir := filepath.Join(t.TempDir(), "plan")
+			seedLoop(t, root, planDir, loopSeed{
+				PID:              123,
+				CWD:              filepath.Join(t.TempDir(), "project"),
+				RunStartedAt:     "2026-06-04T13:05:00+00:00",
+				RunFinishedAt:    tc.runFinishedAt,
+				HasRunFinishedAt: tc.hasRunFinishedAt,
+				LockCreatedAt:    "2026-06-04T13:00:00+00:00",
+			})
+
+			got, err := Discover(DiscoverOptions{
+				StateRoot:  root,
+				PIDRunning: func(int) bool { return true },
+			})
+			if err != nil {
+				t.Fatalf("Discover: %v", err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("len(candidates) = %d, want 1", len(got))
+			}
+			if got[0].PlanDir != canonical(t, planDir) {
+				t.Errorf("PlanDir = %q, want %q", got[0].PlanDir, canonical(t, planDir))
+			}
+		})
 	}
 }
 
@@ -231,6 +343,21 @@ func TestMatchingCWDMatchesCanonicalCWD(t *testing.T) {
 	if matches[0].PlanDir != match.PlanDir {
 		t.Errorf("matched PlanDir = %q, want %q", matches[0].PlanDir, match.PlanDir)
 	}
+
+	hasMatch, err := HasMatchingCWD([]Candidate{match, other}, linkDir)
+	if err != nil {
+		t.Fatalf("HasMatchingCWD: %v", err)
+	}
+	if !hasMatch {
+		t.Fatal("HasMatchingCWD = false, want true")
+	}
+	hasMatch, err = HasMatchingCWD([]Candidate{match}, filepath.Join(base, "unmatched"))
+	if err != nil {
+		t.Fatalf("HasMatchingCWD unmatched: %v", err)
+	}
+	if hasMatch {
+		t.Fatal("HasMatchingCWD unmatched = true, want false")
+	}
 }
 
 func TestSortCandidatesNewestFirstWithTieBreaks(t *testing.T) {
@@ -292,6 +419,9 @@ func seedLoop(t *testing.T, stateRoot, planDir string, seed loopSeed) string {
 			"session":    seed.ActiveTurn.Session,
 			"turn_index": seed.ActiveTurn.TurnIndex,
 		}
+	}
+	if seed.HasRunFinishedAt {
+		state["run_finished_at"] = seed.RunFinishedAt
 	}
 	writeJSON(t, filepath.Join(stateDir, stateFileName), state)
 	return stateDir

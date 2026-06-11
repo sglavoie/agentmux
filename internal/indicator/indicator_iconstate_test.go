@@ -17,7 +17,7 @@ import (
 // could be treated as deny. The title update is purely cosmetic at that point
 // and is safe to skip.
 func TestIndicator_ReturnsNilWhenTabMissingButDaemonSucceeded(t *testing.T) {
-	if err := finalizeTitleUpdate(nil, 42, "bolt", nil); err != nil {
+	if err := finalizeTitleUpdate(nil, nil, 42, "bolt", "PreToolUse", nil); err != nil {
 		t.Errorf("expected nil error when tab is missing, got %v", err)
 	}
 }

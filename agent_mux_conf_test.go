@@ -53,6 +53,8 @@ func TestReadmeDocumentsPassiveLoopMarkers(t *testing.T) {
 
 	for _, documented := range []string{
 		"Rows marked with `🔁` have at least one active `agent-session-loop` run",
+		"`run_finished_at` in `state.json`",
+		"`AgentSessionLoopFinished` hook",
 		"Run and tail loops outside the dashboard with `agent-session-loop` directly.",
 	} {
 		if !strings.Contains(string(readme), documented) {

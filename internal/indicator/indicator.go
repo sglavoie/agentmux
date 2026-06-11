@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/contextlimit"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -21,6 +22,8 @@ import (
 // notification.
 // Exposed as a var so tests can shrink it.
 var resetFlowStopDelay = 500 * time.Millisecond
+
+var indicatorLoopDiscover = agentloop.Discover
 
 type indicatorKittyClient interface {
 	ListWindows() ([]kitty.OSWindow, error)
@@ -177,7 +180,7 @@ func runWithDeps(
 		if skip {
 			return nil
 		}
-		return updateTitle(windowID, nextIcon, client, tab)
+		return finalizeTitleUpdate(tab, win, windowID, nextIcon, eventOrAction, client)
 	}
 	if !resp.OK {
 		return fmt.Errorf("indicator: daemon error: %s", resp.Error)
@@ -188,10 +191,13 @@ func runWithDeps(
 	}
 	if resp.IconState == daemon.IconStatePreserve {
 		log.Debug("indicator: preserve current icon")
-		return nil
+		if eventOrAction != "AgentSessionLoopFinished" {
+			return nil
+		}
+		return finalizeTitleUpdate(tab, win, windowID, currentIconState, eventOrAction, client)
 	}
 
-	return finalizeTitleUpdate(tab, windowID, resp.IconState, client)
+	return finalizeTitleUpdate(tab, win, windowID, resp.IconState, eventOrAction, client)
 }
 
 func buildStateUpdateRequest(
@@ -253,19 +259,42 @@ func shouldDelayResetSensitiveStop(eventOrAction, action string, payload HookPay
 	}
 }
 
-// finalizeTitleUpdate applies the daemon-resolved icon state to the Kitty tab,
-// or no-ops if the tab is no longer present. The daemon has already recorded
-// the event and resolved any guard transition by the time this runs, so a
-// missing tab is not an error — returning one previously caused Copilot CLI to
-// log every such call as `Hook execution failed: HookExitCodeError` even when
-// the event was captured correctly (and, on permissionRequest hooks, could be
-// treated as a deny).
-func finalizeTitleUpdate(tab *kitty.Tab, windowID int, iconState string, client kittyTitleSetter) error {
+// finalizeTitleUpdate applies the resolved icon state to the Kitty tab, or
+// no-ops if the tab is no longer present. After a successful daemon response,
+// the daemon has already recorded the event and resolved any guard transition by
+// the time this runs, so a missing tab is not an error — returning one
+// previously caused Copilot CLI to log every such call as
+// `Hook execution failed: HookExitCodeError` even when the event was captured
+// correctly (and, on permissionRequest hooks, could be treated as a deny).
+func finalizeTitleUpdate(tab *kitty.Tab, win *kitty.Window, windowID int, iconState string, eventOrAction string, client kittyTitleSetter) error {
 	if tab == nil {
 		slog.Debug("indicator: tab not found after daemon update; skipping title update", "window_id", windowID)
 		return nil
 	}
-	return updateTitle(windowID, iconState, client, tab)
+
+	return updateTitleWithLoopMarker(windowID, iconState, client, tab, loopMarkerForFinishedRun(eventOrAction, win))
+}
+
+func loopMarkerForFinishedRun(eventOrAction string, win *kitty.Window) *bool {
+	if eventOrAction != "AgentSessionLoopFinished" || win == nil {
+		return nil
+	}
+	directory := win.UserVars.EffectiveDirectory()
+	if strings.TrimSpace(directory) == "" {
+		slog.Debug("indicator: preserving loop marker after loop finish; window directory missing")
+		return nil
+	}
+	candidates, err := indicatorLoopDiscover(agentloop.DiscoverOptions{})
+	if err != nil {
+		slog.Debug("indicator: preserving loop marker after loop finish; discovery failed", "err", err)
+		return nil
+	}
+	looping, err := agentloop.HasMatchingCWD(candidates, directory)
+	if err != nil {
+		slog.Debug("indicator: preserving loop marker after loop finish; directory match failed", "directory", directory, "err", err)
+		return nil
+	}
+	return &looping
 }
 
 // daemonDownIconState mirrors the daemon's preserve-current and idle/clear
@@ -301,8 +330,15 @@ func daemonDownIconState(action, currentIconState string, preservesIcon bool, ha
 }
 
 func updateTitle(windowID int, iconState string, client kittyTitleSetter, tab *kitty.Tab) error {
+	return updateTitleWithLoopMarker(windowID, iconState, client, tab, nil)
+}
+
+func updateTitleWithLoopMarker(windowID int, iconState string, client kittyTitleSetter, tab *kitty.Tab, loopMarker *bool) error {
 	parts := palette.ParseTitleParts(tab.Title)
 	parts.State = iconState
+	if loopMarker != nil {
+		parts.Looping = *loopMarker
+	}
 	newTitle := palette.BuildTitleParts(parts)
 
 	if newTitle == tab.Title {
