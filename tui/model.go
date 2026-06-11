@@ -71,14 +71,8 @@ type Model struct {
 	pickerSearchMode     bool   // true while / is active and filter input is open
 	pickerPreviewEnabled bool   // picker-local preview toggle, independent of ModeList
 
-	// loop-tail picker placeholder. Session 3 populates these candidates when
-	// discovery finds multiple active loops; Session 4 owns the modal UI.
-	loopTailCandidates []agentloop.Candidate
-	loopTailCursor     int
-	loopTailOffset     int
-
 	// active agent-session-loop runs shown by dashboard rows. This is refreshed
-	// in the background and remains separate from the on-demand tail picker.
+	// in the background for passive dashboard and Kitty title markers.
 	activeLoopCandidates   []agentloop.Candidate
 	activeLoopRefreshErr   error
 	activeLoopRefreshSeq   int
@@ -249,29 +243,23 @@ type Model struct {
 	messageDetailIdx    int
 	messageDetailScroll int
 
-	// plan search views (ModePlanSearch, ModeLoopRunPlanSearch, and
-	// ModeLoopRunPlanPath). plansIndex is lazy-constructed on first entry and
-	// reused across refreshes. planResults holds the most recent plans.Search
-	// output; planQuery is the text typed after `/`. planSearchMode is true
-	// while editing planQuery. planSearchSeq dedupes in-flight refresh/search
-	// dispatches the same way sessionSearchSeq does. loopRunProject* is
-	// populated only in launch mode.
-	plansIndex          *plans.Index
-	planQuery           string
-	planResults         []plans.Result
-	planCursor          int
-	planOffset          int
-	planSearchMode      bool
-	planLoading         bool
-	planRefreshErr      error
-	planSearchErr       error
-	planSearchSeq       int
-	planSortMode        plans.SortMode // cycled with `s`; zero value = SortByMatches
-	loopRunProjectDir   string
-	loopRunProjectTitle string
-	loopRunPlanPath     string
-	loopRunPlanPathErr  error
-	planViewReturnMode  Mode
+	// plan search view (ModePlanSearch). plansIndex is lazy-constructed on first
+	// entry and reused across refreshes. planResults holds the most recent
+	// plans.Search output; planQuery is the text typed after `/`. planSearchMode
+	// is true while editing planQuery. planSearchSeq dedupes in-flight
+	// refresh/search dispatches the same way sessionSearchSeq does.
+	plansIndex         *plans.Index
+	planQuery          string
+	planResults        []plans.Result
+	planCursor         int
+	planOffset         int
+	planSearchMode     bool
+	planLoading        bool
+	planRefreshErr     error
+	planSearchErr      error
+	planSearchSeq      int
+	planSortMode       plans.SortMode // cycled with `s`; zero value = SortByMatches
+	planViewReturnMode Mode
 
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
 	// user opened with Enter; nil when the viewer is closed. planViewerLines
@@ -401,12 +389,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case peekDoneMsg:
 		return m.handlePeekDone(msg)
 
-	case loopTailSelectionMsg:
-		return m.handleLoopTailSelection(msg)
-
-	case loopTailDoneMsg:
-		return m.handleLoopTailDone(msg)
-
 	case detailEventsMsg:
 		return m.handleDetailEvents(msg)
 
@@ -445,15 +427,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case viewerMessagesLoadedMsg:
 		return m.handleViewerMessagesLoaded(msg)
-
-	case loopRunPlanLaunchMsg:
-		return m.handleLoopRunPlanLaunchMsg(msg)
-
-	case loopRunStartDoneMsg:
-		return m.handleLoopRunStartDone(msg)
-
-	case tea.PasteMsg:
-		return m.handlePaste(msg)
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)

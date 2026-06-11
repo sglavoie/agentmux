@@ -30,12 +30,10 @@ func (m Model) render() string {
 		// Session search owns its full layout (header + chips + query +
 		// results) so the dashboard list is not rendered below.
 		sb.WriteString(renderSessionSearch(m))
-	case ModePlanSearch, ModeLoopRunPlanSearch:
+	case ModePlanSearch:
 		// Plan search owns its full layout — like ModeSessionSearch, the
 		// dashboard list must not render underneath.
 		sb.WriteString(renderPlanSearch(m))
-	case ModeLoopRunPlanPath:
-		sb.WriteString(renderLoopRunPlanPath(m))
 	case ModePlanView:
 		// Plan viewer owns its full layout — like ModeSessionView, the
 		// dashboard list must not render underneath.
@@ -60,7 +58,7 @@ func (m Model) render() string {
 		}
 		overlayH := rootBodyHeight(m)
 		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
-	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeLoopTailPicker:
+	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail:
 		var base string
 		if m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker {
 			base = renderPicker(m)
@@ -79,8 +77,6 @@ func (m Model) render() string {
 			popup = renderHelpBox(m)
 		case ModeDetail:
 			popup = renderDetailBox(m)
-		case ModeLoopTailPicker:
-			popup = renderLoopTailPickerBox(m)
 		}
 		overlayH := rootBodyHeight(m)
 		if m.mode == ModeConfigPicker {

@@ -7,7 +7,6 @@ import (
 
 	runewidth "github.com/mattn/go-runewidth"
 
-	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -128,11 +127,7 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 			want: "Message detail: 2/2",
 		},
 		{name: "plan search", m: Model{mode: ModePlanSearch, width: 80, planResults: []plans.Result{{}, {}}}, want: "Plans: 2 results"},
-		{name: "loop run plan search", m: Model{mode: ModeLoopRunPlanSearch, width: 80, planResults: []plans.Result{{}, {}}}, want: "Run Plan: 2 results"},
-		{name: "loop run plan path", m: Model{mode: ModeLoopRunPlanPath, width: 80}, want: "Run Plan Path"},
-		{name: "loop run plan path typed", m: Model{mode: ModeLoopRunPlanPath, width: 80, loopRunPlanPath: "/tmp/plan"}, want: "Run Plan Path: /tmp/plan"},
 		{name: "plan view", m: Model{mode: ModePlanView, width: 80, viewerPlan: &plans.PlanMeta{Name: "plan-a"}}, want: "Plan: plan-a"},
-		{name: "loop tail picker", m: Model{mode: ModeLoopTailPicker, width: 80, loopTailCandidates: []agentloop.Candidate{{}, {}}}, want: "Loop tail: 2 candidates"},
 	}
 
 	for _, tc := range cases {

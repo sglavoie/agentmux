@@ -2,9 +2,11 @@ package session
 
 import (
 	"log/slog"
+	"path/filepath"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -82,9 +84,9 @@ func (rs RunningSession) TitleParts() palette.TitleParts {
 }
 
 // GhostTab is a managed tab whose anchor window (the one bearing amx user vars)
-// no longer exists, but whose tab title still matches a unique configured
-// project. Callers can use the WindowID to re-stamp user vars onto the
-// surviving window and restore normal detection.
+// no longer exists, but whose tab still matches a unique configured project by
+// title or working directory. Callers can use the WindowID to re-stamp user
+// vars onto the surviving window and restore normal detection.
 type GhostTab struct {
 	TabID    int
 	WindowID int
@@ -115,10 +117,11 @@ func ListFromOSWindows(osWindows []kitty.OSWindow) []RunningSession {
 }
 
 // ListWithConfig returns running sessions plus any "ghost" tabs whose anchor
-// window is gone but whose tab title resolves unambiguously to a configured
-// project title. Legacy "<initial>:<project>" ghost titles are still supported
-// as a fallback when no exact project-title match exists. When cfg is nil, no
-// fallback occurs and ghosts is always empty — behavior is identical to List.
+// window is gone but whose tab resolves unambiguously to a configured project.
+// Title matching is tried first, including legacy "<initial>:<project>"
+// titles. If that fails, the active window's CWD can recover a tab whose title
+// no longer identifies the project. When cfg is nil, no fallback occurs and
+// ghosts is always empty — behavior is identical to List.
 func ListWithConfig(client kitty.KittyClient, cfg *config.Config) (sessions []RunningSession, ghosts []GhostTab, err error) {
 	osWindows, err := client.ListWindows()
 	if err != nil {
@@ -166,6 +169,11 @@ func tabToRunningSession(tab kitty.Tab, cfg *config.Config) (rs RunningSession, 
 			continue
 		}
 		if win.IsActive {
+			if cfg != nil {
+				if rs, ghost, ok := managedWindowOverride(tab, *win, cfg); ok {
+					return rs, ghost, true
+				}
+			}
 			return runningSessionFromWindow(tab, *win), nil, true
 		}
 		if fallback == nil {
@@ -173,10 +181,18 @@ func tabToRunningSession(tab kitty.Tab, cfg *config.Config) (rs RunningSession, 
 		}
 	}
 	if fallback != nil {
+		if cfg != nil {
+			if rs, ghost, ok := managedWindowOverride(tab, *fallback, cfg); ok {
+				return rs, ghost, true
+			}
+		}
 		return runningSessionFromWindow(tab, *fallback), nil, true
 	}
 	if cfg != nil {
 		if rs, ghost, ok := titleFallback(tab, cfg); ok {
+			return rs, ghost, true
+		}
+		if rs, ghost, ok := cwdFallback(tab, cfg); ok {
 			return rs, ghost, true
 		}
 	}
@@ -195,7 +211,7 @@ func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab
 	}
 	base, state, starred, muted := palette.ParseTitleFull(tab.Title)
 
-	matches, strategy := titleFallbackMatches(cfg, base)
+	matches, strategy, matchBase := titleFallbackMatches(cfg, base)
 	if len(matches) != 1 {
 		slog.Debug("title fallback skipped",
 			"tab_id", tab.ID,
@@ -216,6 +232,125 @@ func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab
 		}
 	}
 
+	return fallbackSessionFromMatch(tab, winID, m, matchBase, state, starred, muted, cfg)
+}
+
+// managedWindowOverride repairs a window that still has amx user vars, but
+// where those vars no longer describe the live harness session in that window.
+// This happens when a user reuses a Kitty window for a new Codex/Claude session:
+// Kitty can keep the old user vars and even an old window CWD, while the
+// foreground harness process has moved to the new project.
+func managedWindowOverride(tab kitty.Tab, win kitty.Window, cfg *config.Config) (RunningSession, *GhostTab, bool) {
+	cwd := windowHarnessCWD(win)
+	if cwd != "" {
+		matches := cwdFallbackMatches(cfg, cwd)
+		if len(matches) != 1 {
+			return RunningSession{}, nil, false
+		}
+		match := matches[0]
+		if windowMatchesConfigSession(win, match) {
+			return RunningSession{}, nil, false
+		}
+
+		_, state, starred, muted := palette.ParseTitleFull(tab.Title)
+		return fallbackSessionFromMatch(tab, win.ID, match, match.sess.Title, state, starred, muted, cfg)
+	}
+
+	if match, base, state, starred, muted, ok := matchTabTitleFallback(tab, cfg); ok {
+		if !windowMatchesConfigSession(win, match) {
+			return fallbackSessionFromMatch(tab, win.ID, match, base, state, starred, muted, cfg)
+		}
+	}
+	return RunningSession{}, nil, false
+}
+
+func matchTabTitleFallback(tab kitty.Tab, cfg *config.Config) (titleFallbackMatch, string, string, bool, bool, bool) {
+	base, state, starred, muted := palette.ParseTitleFull(tab.Title)
+	matches, _, matchBase := titleFallbackMatches(cfg, base)
+	if len(matches) != 1 {
+		return titleFallbackMatch{}, "", "", false, false, false
+	}
+	return matches[0], matchBase, state, starred, muted, true
+}
+
+// cwdFallback recognizes a tab by the working directory of its active window
+// when no window carries amx user vars and the title no longer identifies the
+// configured project. The CWD must resolve to exactly one configured project.
+func cwdFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab, bool) {
+	if len(tab.Windows) == 0 {
+		return RunningSession{}, nil, false
+	}
+
+	for _, win := range fallbackWindowsByPriority(tab) {
+		cwd := windowFallbackCWD(win)
+		if strings.TrimSpace(cwd) == "" {
+			continue
+		}
+		matches := cwdFallbackMatches(cfg, cwd)
+		if len(matches) != 1 {
+			slog.Debug("cwd fallback skipped",
+				"tab_id", tab.ID,
+				"window_id", win.ID,
+				"title", tab.Title,
+				"cwd", cwd,
+				"matches", len(matches),
+			)
+			if len(matches) > 1 {
+				return RunningSession{}, nil, false
+			}
+			continue
+		}
+
+		_, state, starred, muted := palette.ParseTitleFull(tab.Title)
+		m := matches[0]
+		return fallbackSessionFromMatch(tab, win.ID, m, m.sess.Title, state, starred, muted, cfg)
+	}
+
+	return RunningSession{}, nil, false
+}
+
+func fallbackWindowsByPriority(tab kitty.Tab) []kitty.Window {
+	windows := make([]kitty.Window, 0, len(tab.Windows))
+	seen := make(map[int]bool, len(tab.Windows))
+	appendMatching := func(matchFn func(kitty.Window) bool) {
+		for _, win := range tab.Windows {
+			if seen[win.ID] || !matchFn(win) {
+				continue
+			}
+			windows = append(windows, win)
+			seen[win.ID] = true
+		}
+	}
+	appendMatching(func(win kitty.Window) bool { return win.IsActive && windowHarnessCWD(win) != "" })
+	appendMatching(func(win kitty.Window) bool { return windowHarnessCWD(win) != "" })
+	appendMatching(func(win kitty.Window) bool { return win.IsActive })
+	appendMatching(func(kitty.Window) bool { return true })
+	return windows
+}
+
+func windowMatchesConfigSession(win kitty.Window, m titleFallbackMatch) bool {
+	profile := m.sess.EffectiveProfile()
+	if profile == "" {
+		profile = m.acc.Name
+	}
+	if current := win.UserVars.EffectiveProfile(); current != "" && !strings.EqualFold(current, profile) {
+		return false
+	}
+	if win.UserVars.Project != "" && win.UserVars.Project != m.sess.Title {
+		return false
+	}
+	if dir := win.UserVars.EffectiveDirectory(); dir != "" {
+		expected := config.ExpandTilde(m.sess.Directory)
+		currentDir, okCurrent := canonicalFallbackDir(dir)
+		expectedDir, okExpected := canonicalFallbackDir(expected)
+		if okCurrent && okExpected && currentDir != expectedDir {
+			return false
+		}
+	}
+	return true
+}
+
+func fallbackSessionFromMatch(tab kitty.Tab, winID int, m titleFallbackMatch, base, state string, starred, muted bool, cfg *config.Config) (RunningSession, *GhostTab, bool) {
 	profile := m.sess.EffectiveProfile()
 	if profile == "" {
 		profile = m.acc.Name
@@ -265,7 +400,7 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 	base, state, starred, muted := palette.ParseTitleFull(tab.Title)
 	dir := win.UserVars.EffectiveDirectory()
 	if dir == "" {
-		dir = win.CWD
+		dir = windowFallbackCWD(win)
 	}
 	project := win.UserVars.EffectiveProject(base)
 	if win.UserVars.Project == "" {
@@ -325,21 +460,116 @@ func runningSessionsFromTabs(tabs []kitty.Tab, cfg *config.Config) ([]RunningSes
 	return sessions, ghosts
 }
 
-func titleFallbackMatches(cfg *config.Config, base string) ([]titleFallbackMatch, string) {
-	exact := configuredTitleMatches(cfg, func(acc config.Account, sess config.Session) bool {
-		return strings.EqualFold(sess.EffectiveProfile(), acc.Name) && sess.Title == base
-	})
-	if len(exact) > 0 {
-		return exact, "exact-title"
+func titleFallbackMatches(cfg *config.Config, base string) ([]titleFallbackMatch, string, string) {
+	bases := titleFallbackBases(cfg, base)
+	for _, candidate := range bases {
+		exact := configuredSessionMatches(cfg, func(acc config.Account, sess config.Session) bool {
+			return strings.EqualFold(sess.EffectiveProfile(), acc.Name) && sess.Title == candidate
+		})
+		if len(exact) > 0 {
+			return exact, "exact-title", candidate
+		}
 	}
-	legacy := configuredTitleMatches(cfg, func(acc config.Account, sess config.Session) bool {
-		project, ok := legacyProjectName(base, acc.Name)
-		return ok && strings.EqualFold(sess.EffectiveProfile(), acc.Name) && sess.Title == project
-	})
-	return legacy, "legacy-prefix"
+	for _, candidate := range bases {
+		legacy := configuredSessionMatches(cfg, func(acc config.Account, sess config.Session) bool {
+			project, ok := legacyProjectName(candidate, acc.Name)
+			return ok && strings.EqualFold(sess.EffectiveProfile(), acc.Name) && sess.Title == project
+		})
+		if len(legacy) > 0 {
+			return legacy, "legacy-prefix", candidate
+		}
+	}
+	return nil, "legacy-prefix", base
 }
 
-func configuredTitleMatches(cfg *config.Config, matchFn func(config.Account, config.Session) bool) []titleFallbackMatch {
+func titleFallbackBases(cfg *config.Config, base string) []string {
+	bases := []string{base}
+	seen := map[string]bool{base: true}
+	if cfg == nil {
+		return bases
+	}
+	for _, emoji := range cfg.HarnessEmojis {
+		if emoji == "" || !strings.HasPrefix(base, emoji) {
+			continue
+		}
+		trimmed := strings.TrimPrefix(base, emoji)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		bases = append(bases, trimmed)
+		seen[trimmed] = true
+	}
+	return bases
+}
+
+func cwdFallbackMatches(cfg *config.Config, cwd string) []titleFallbackMatch {
+	target, ok := canonicalFallbackDir(cwd)
+	if !ok {
+		return nil
+	}
+	return configuredSessionMatches(cfg, func(acc config.Account, sess config.Session) bool {
+		if !strings.EqualFold(sess.EffectiveProfile(), acc.Name) {
+			return false
+		}
+		dir, ok := canonicalFallbackDir(sess.Directory)
+		return ok && dir == target
+	})
+}
+
+func canonicalFallbackDir(path string) (string, bool) {
+	path = strings.TrimSpace(config.ExpandTilde(path))
+	if path == "" {
+		return "", false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return filepath.Clean(path), true
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = real
+	}
+	return filepath.Clean(abs), true
+}
+
+func windowFallbackCWD(win kitty.Window) string {
+	if cwd := windowHarnessCWD(win); cwd != "" {
+		return cwd
+	}
+	for _, fp := range win.ForegroundProcesses {
+		if cwd := strings.TrimSpace(fp.CWD); cwd != "" {
+			return cwd
+		}
+	}
+	return win.CWD
+}
+
+func windowHarnessCWD(win kitty.Window) string {
+	for _, fp := range win.ForegroundProcesses {
+		if !cmdlineContainsHarness(fp.Cmdline) {
+			continue
+		}
+		if cwd := strings.TrimSpace(fp.CWD); cwd != "" {
+			return cwd
+		}
+	}
+	return ""
+}
+
+func cmdlineContainsHarness(cmdline []string) bool {
+	for _, arg := range cmdline {
+		base := strings.TrimSpace(filepath.Base(strings.Trim(arg, `"'`)))
+		base = strings.TrimSuffix(base, ".exe")
+		if base == "" {
+			continue
+		}
+		if harness.Valid(base) {
+			return true
+		}
+	}
+	return false
+}
+
+func configuredSessionMatches(cfg *config.Config, matchFn func(config.Account, config.Session) bool) []titleFallbackMatch {
 	var matches []titleFallbackMatch
 	for _, acc := range cfg.Accounts {
 		for _, sess := range cfg.Sessions {

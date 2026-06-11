@@ -48,9 +48,9 @@ func planSortLabel(mode plans.SortMode) string {
 	}
 }
 
-// renderPlanSearch renders both plan picker views: header, query bar, and the
-// results list. Mirrors renderSessionSearch without the chip bar (plans have
-// no categorical filters).
+// renderPlanSearch renders the plan browser: header, query bar, and the
+// results list. Mirrors renderSessionSearch without the chip bar because plans
+// have no categorical filters.
 func renderPlanSearch(m Model) string {
 	var sb strings.Builder
 
@@ -89,13 +89,7 @@ func renderPlanSearch(m Model) string {
 }
 
 func planSearchHeader(m Model) string {
-	if m.mode != ModeLoopRunPlanSearch {
-		return "Plans"
-	}
-	if m.loopRunProjectTitle != "" {
-		return "Run Plan: " + m.loopRunProjectTitle
-	}
-	return "Run Plan"
+	return "Plans"
 }
 
 // renderPlanSearchList renders the scrollable results list. height is the

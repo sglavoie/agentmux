@@ -33,8 +33,6 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		"x         clear session icon",
 		"X         close session (confirm)",
 		"C         launch new session with profile selection",
-		"F         run an agent-session-loop plan (enter run, v view, p path)",
-		"t         tail active agent-session-loop run (q quit, a all/current)",
 	} {
 		if !strings.Contains(out, frag) {
 			t.Errorf("expected help output to contain %q, got:\n%s", frag, out)
@@ -43,6 +41,8 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 	for _, stale := range []string{
 		"x         close session (confirm)",
 		"C         clear session icon",
+		"F         run an agent-session-loop plan",
+		"t         tail active agent-session-loop run",
 	} {
 		if strings.Contains(out, stale) {
 			t.Errorf("expected stale help hint %q to be absent, got:\n%s", stale, out)

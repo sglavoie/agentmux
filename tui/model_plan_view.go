@@ -25,7 +25,7 @@ type planFilesLoadedMsg struct {
 // not invalidated if the underlying index entry is mutated mid-read.
 func (m Model) enterPlanView(meta plans.PlanMeta) (tea.Model, tea.Cmd) {
 	returnMode := m.mode
-	if returnMode != ModePlanSearch && returnMode != ModeLoopRunPlanSearch {
+	if returnMode != ModePlanSearch {
 		returnMode = ModePlanSearch
 	}
 	m.mode = ModePlanView
@@ -49,7 +49,7 @@ func (m Model) enterPlanView(meta plans.PlanMeta) (tea.Model, tea.Cmd) {
 // so the user lands back on the same row they entered from.
 func (m *Model) exitPlanView() {
 	returnMode := m.planViewReturnMode
-	if returnMode != ModePlanSearch && returnMode != ModeLoopRunPlanSearch {
+	if returnMode != ModePlanSearch {
 		returnMode = ModePlanSearch
 	}
 	m.mode = returnMode
@@ -120,7 +120,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// user can refine the query without re-traversing the navigation
 		// stack.
 		returnMode := m.planViewReturnMode
-		if returnMode != ModePlanSearch && returnMode != ModeLoopRunPlanSearch {
+		if returnMode != ModePlanSearch {
 			returnMode = ModePlanSearch
 		}
 		m.mode = returnMode

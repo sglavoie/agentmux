@@ -50,40 +50,6 @@ type Candidate struct {
 	ActiveTurn    int
 }
 
-// OverlayCWD returns the best working directory for launching commands tied to
-// this loop. The loop state cwd wins when present; the plan directory is the
-// fallback used by the tail command flow.
-func (c Candidate) OverlayCWD() string {
-	if c.CWD != "" {
-		return c.CWD
-	}
-	return c.PlanDir
-}
-
-// SelectionKind describes the caller action after applying loop selection.
-type SelectionKind int
-
-const (
-	SelectionNone SelectionKind = iota
-	SelectionLaunch
-	SelectionPicker
-)
-
-// Selection is the result of applying dashboard tail selection rules.
-type Selection struct {
-	Kind       SelectionKind
-	Candidates []Candidate
-}
-
-// LaunchCandidate returns the single selected candidate when Kind is
-// SelectionLaunch.
-func (s Selection) LaunchCandidate() (Candidate, bool) {
-	if s.Kind != SelectionLaunch || len(s.Candidates) != 1 {
-		return Candidate{}, false
-	}
-	return s.Candidates[0], true
-}
-
 // DefaultStateRoot mirrors agent-session-loop's operational state location.
 func DefaultStateRoot() string {
 	var base string
@@ -185,33 +151,6 @@ func MatchingCWD(candidates []Candidate, selectedDir string) ([]Candidate, error
 		}
 	}
 	return matches, nil
-}
-
-// SelectForDirectory applies the dashboard tail selection rule.
-func SelectForDirectory(candidates []Candidate, selectedDir string) (Selection, error) {
-	if len(candidates) == 0 {
-		return Selection{Kind: SelectionNone}, nil
-	}
-
-	if selectedDir != "" {
-		matches, err := MatchingCWD(candidates, selectedDir)
-		if err != nil {
-			return Selection{}, err
-		}
-		switch len(matches) {
-		case 0:
-			return Selection{Kind: SelectionNone}, nil
-		case 1:
-			return Selection{Kind: SelectionLaunch, Candidates: matches}, nil
-		default:
-			return Selection{Kind: SelectionPicker, Candidates: matches}, nil
-		}
-	}
-
-	if len(candidates) == 1 {
-		return Selection{Kind: SelectionLaunch, Candidates: candidates}, nil
-	}
-	return Selection{Kind: SelectionPicker, Candidates: candidates}, nil
 }
 
 // CanonicalizePath mirrors agent-session-loop's realpath(abs(expanduser(path)))

@@ -101,16 +101,12 @@ func modeErrorStatus(m Model) (statusMessage, bool) {
 		if m.viewerLoadErr != nil {
 			return statusMessage{Text: "Read error: " + m.viewerLoadErr.Error(), Severity: statusError}, true
 		}
-	case ModePlanSearch, ModeLoopRunPlanSearch:
+	case ModePlanSearch:
 		if m.planSearchErr != nil {
 			return statusMessage{Text: "Search error: " + m.planSearchErr.Error(), Severity: statusError}, true
 		}
 		if m.planRefreshErr != nil {
 			return statusMessage{Text: "Refresh error: " + m.planRefreshErr.Error(), Severity: statusError}, true
-		}
-	case ModeLoopRunPlanPath:
-		if m.loopRunPlanPathErr != nil {
-			return statusMessage{Text: "Path error: " + m.loopRunPlanPathErr.Error(), Severity: statusError}, true
 		}
 	case ModePlanView:
 		if m.planViewerLoadErr != nil {
@@ -189,22 +185,8 @@ func fallbackStatusText(m Model) string {
 		}
 		n := len(m.planResults)
 		return fmt.Sprintf("Plans: %d result%s", n, plural(n))
-	case ModeLoopRunPlanSearch:
-		if m.planLoading {
-			return "Run Plan: loading"
-		}
-		n := len(m.planResults)
-		return fmt.Sprintf("Run Plan: %d result%s", n, plural(n))
-	case ModeLoopRunPlanPath:
-		if strings.TrimSpace(m.loopRunPlanPath) != "" {
-			return "Run Plan Path: " + strings.TrimSpace(m.loopRunPlanPath)
-		}
-		return "Run Plan Path"
 	case ModePlanView:
 		return planViewStatusText(m)
-	case ModeLoopTailPicker:
-		n := len(m.loopTailCandidates)
-		return fmt.Sprintf("Loop tail: %d candidate%s", n, plural(n))
 	default:
 		return listStatusText(m)
 	}

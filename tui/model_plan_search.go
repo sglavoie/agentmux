@@ -5,7 +5,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
@@ -39,39 +38,11 @@ type planSearchDoneMsg struct {
 	err     error
 }
 
-// loopRunPlanLaunchMsg carries a validated launch request from the plan picker
-// or typed path flow to the detached agent-session-loop starter.
-type loopRunPlanLaunchMsg struct {
-	Request agentloop.RunRequest
-	Plan    plans.PlanMeta
-	Err     error
-}
-
 // enterPlanSearch swaps to ModePlanSearch, lazily builds the index, and
 // dispatches an async refresh. Subsequent entries reuse the cached index.
 func (m Model) enterPlanSearch() (tea.Model, tea.Cmd) {
-	m.loopRunProjectDir = ""
-	m.loopRunProjectTitle = ""
-	return m.enterPlanSearchMode(ModePlanSearch)
-}
-
-// enterLoopRunPlanSearch opens the plan picker as a launch flow for the
-// highlighted dashboard project. The query is prefilled from the project title
-// so likely matching plans are shown first while `/` still edits normally.
-func (m Model) enterLoopRunPlanSearch() (tea.Model, tea.Cmd) {
-	if len(m.filtered) == 0 || m.cursor < 0 || m.cursor >= len(m.filtered) {
-		return m, nil
-	}
-	selected := m.filtered[m.cursor]
-	m.loopRunProjectDir = selected.Directory
-	m.loopRunProjectTitle = selected.EffectiveProject()
-	m.planQuery = m.loopRunProjectTitle
-	return m.enterPlanSearchMode(ModeLoopRunPlanSearch)
-}
-
-func (m Model) enterPlanSearchMode(mode Mode) (tea.Model, tea.Cmd) {
 	m.clearJumpChord()
-	m.mode = mode
+	m.mode = ModePlanSearch
 	m.planCursor = 0
 	m.planOffset = 0
 	m.planSearchMode = false
@@ -103,17 +74,10 @@ func (m Model) enterPlanSearchMode(mode Mode) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// exitPlanSearch returns to ModeList and clears transient input state. Normal
-// plan-search query text is preserved so re-entry feels stateful; launch-mode
-// prefill is transient and cleared on exit.
+// exitPlanSearch returns to ModeList and clears transient input state.
 func (m *Model) exitPlanSearch() {
-	if m.mode == ModeLoopRunPlanSearch {
-		m.planQuery = ""
-	}
 	m.mode = ModeList
 	m.planSearchMode = false
-	m.loopRunProjectDir = ""
-	m.loopRunProjectTitle = ""
 }
 
 // handlePlanSearchKey dispatches by sub-mode: free-text input after `/`
@@ -152,10 +116,6 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyQ, keyEsc:
-		if m.mode == ModeLoopRunPlanSearch {
-			m.exitPlanSearch()
-			return m, nil
-		}
 		// Two-stage esc: first clears the text query, then exits the mode.
 		// Mirrors session-search behaviour so a stray esc never surprises
 		// the user with an unintended mode switch.
@@ -212,25 +172,11 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		return m, openPlanInEditorCmd(m.client, m.planResults[m.planCursor].Meta, m.cfg)
-	case keyV:
-		if m.mode != ModeLoopRunPlanSearch {
-			return m, nil
-		}
-		if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
-			return m, nil
-		}
-		return m.enterPlanView(m.planResults[m.planCursor].Meta)
 	case keyTogglePreview:
-		if m.mode != ModeLoopRunPlanSearch {
-			return m, nil
-		}
-		return m.enterLoopRunPlanPath()
+		return m, nil
 	case keyEnter:
 		if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
 			return m, nil
-		}
-		if m.mode == ModeLoopRunPlanSearch {
-			return m, m.loopRunSelectedPlanLaunchCmd()
 		}
 		return m.enterPlanView(m.planResults[m.planCursor].Meta)
 	case keySortPlan:
@@ -311,39 +257,6 @@ func openPlanInEditorCmd(client kitty.KittyClient, meta plans.PlanMeta, cfg *con
 // currentPlanQuery snapshots the text query into a plans.Query value.
 func (m Model) currentPlanQuery() plans.Query {
 	return plans.Query{Text: m.planQuery, Sort: m.planSortMode}
-}
-
-func (m Model) loopRunSelectedPlanLaunchCmd() tea.Cmd {
-	if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
-		return nil
-	}
-	meta := m.planResults[m.planCursor].Meta
-	return loopRunPlanLaunchRequestCmd(m.loopRunProjectDir, meta.DirPath, meta)
-}
-
-func loopRunPlanLaunchRequestCmd(projectDir, planDir string, meta plans.PlanMeta) tea.Cmd {
-	return func() tea.Msg {
-		return validateLoopRunPlanLaunchRequest(projectDir, planDir, meta)
-	}
-}
-
-func validateLoopRunPlanLaunchRequest(projectDir, planDir string, meta plans.PlanMeta) loopRunPlanLaunchMsg {
-	canonicalProject, err := agentloop.ResolveProjectCWD(projectDir)
-	if err != nil {
-		return loopRunPlanLaunchMsg{Plan: meta, Err: err}
-	}
-	canonicalPlan, err := agentloop.ValidatePlanDir(planDir)
-	if err != nil {
-		return loopRunPlanLaunchMsg{Plan: meta, Err: err}
-	}
-	meta.DirPath = canonicalPlan
-	return loopRunPlanLaunchMsg{
-		Request: agentloop.RunRequest{
-			ProjectDir: canonicalProject,
-			PlanDir:    canonicalPlan,
-		},
-		Plan: meta,
-	}
 }
 
 // scrollPlanSearchToCursor keeps the cursor inside the visible window after

@@ -46,9 +46,9 @@ func healthCmd(cfg *config.Config, amxBin string, checkDaemon, checkHooks bool) 
 // the activity map is nil and stateGroup treats every session as Active.
 //
 // Any "ghost" tabs surfaced by ListWithConfig (managed tabs whose anchor
-// window vanished but whose title still resolves uniquely in cfg) are
+// window vanished but whose title or CWD still resolves uniquely in cfg) are
 // re-stamped with their user vars in the same tick. A failed re-stamp is
-// silently retried on the next tick because the title fallback re-detects
+// silently retried on the next tick because fallback detection re-detects
 // the same tab.
 func fetchCmd(client kitty.KittyClient, cfg *config.Config, sortMode string) tea.Cmd {
 	return func() tea.Msg {

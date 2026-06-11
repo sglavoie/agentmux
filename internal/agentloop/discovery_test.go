@@ -56,9 +56,6 @@ func TestDiscoverIncludesActiveLock(t *testing.T) {
 	if candidate.CWD != canonical(t, cwd) {
 		t.Errorf("CWD = %q, want %q", candidate.CWD, canonical(t, cwd))
 	}
-	if candidate.OverlayCWD() != canonical(t, cwd) {
-		t.Errorf("OverlayCWD = %q, want cwd %q", candidate.OverlayCWD(), canonical(t, cwd))
-	}
 	if candidate.PID != 123 {
 		t.Errorf("PID = %d, want 123", candidate.PID)
 	}
@@ -193,9 +190,6 @@ func TestDiscoverAllowsMissingCWDAndActiveTurn(t *testing.T) {
 	if got[0].CWD != "" {
 		t.Errorf("CWD = %q, want empty", got[0].CWD)
 	}
-	if got[0].OverlayCWD() != canonical(t, planDir) {
-		t.Errorf("OverlayCWD = %q, want plan dir %q", got[0].OverlayCWD(), canonical(t, planDir))
-	}
 	if got[0].ActiveSession != 0 || got[0].ActiveTurn != 0 {
 		t.Errorf("active turn = session %d turn %d, want absent zeros",
 			got[0].ActiveSession, got[0].ActiveTurn)
@@ -214,7 +208,7 @@ func TestDiscoverMissingRootReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestSelectForDirectoryMatchesCanonicalCWD(t *testing.T) {
+func TestMatchingCWDMatchesCanonicalCWD(t *testing.T) {
 	base := t.TempDir()
 	realDir := filepath.Join(base, "real")
 	if err := os.MkdirAll(realDir, 0o755); err != nil {
@@ -227,72 +221,15 @@ func TestSelectForDirectoryMatchesCanonicalCWD(t *testing.T) {
 
 	match := Candidate{PlanDir: "/plans/match", CWD: canonical(t, realDir)}
 	other := Candidate{PlanDir: "/plans/other", CWD: canonical(t, filepath.Join(base, "other"))}
-	selection, err := SelectForDirectory([]Candidate{match, other}, linkDir)
+	matches, err := MatchingCWD([]Candidate{match, other}, linkDir)
 	if err != nil {
-		t.Fatalf("SelectForDirectory: %v", err)
+		t.Fatalf("MatchingCWD: %v", err)
 	}
-	if selection.Kind != SelectionLaunch {
-		t.Fatalf("Kind = %v, want SelectionLaunch", selection.Kind)
+	if len(matches) != 1 {
+		t.Fatalf("len(matches) = %d, want 1", len(matches))
 	}
-	candidate, ok := selection.LaunchCandidate()
-	if !ok {
-		t.Fatalf("LaunchCandidate returned false")
-	}
-	if candidate.PlanDir != match.PlanDir {
-		t.Errorf("selected PlanDir = %q, want %q", candidate.PlanDir, match.PlanDir)
-	}
-}
-
-func TestSelectForDirectoryAppliesSelectedDirectoryRules(t *testing.T) {
-	a := Candidate{PlanDir: "/plans/a", CWD: "/work/a"}
-	b := Candidate{PlanDir: "/plans/b", CWD: "/work/b"}
-	c := Candidate{PlanDir: "/plans/c", CWD: "/work/b"}
-
-	none, err := SelectForDirectory(nil, "/work/a")
-	if err != nil {
-		t.Fatalf("SelectForDirectory none: %v", err)
-	}
-	if none.Kind != SelectionNone {
-		t.Errorf("empty Kind = %v, want SelectionNone", none.Kind)
-	}
-
-	noMatch, err := SelectForDirectory([]Candidate{a, b}, "/no/match")
-	if err != nil {
-		t.Fatalf("SelectForDirectory no match: %v", err)
-	}
-	if noMatch.Kind != SelectionNone || len(noMatch.Candidates) != 0 {
-		t.Errorf("no-match selection = kind %v len %d, want none len 0",
-			noMatch.Kind, len(noMatch.Candidates))
-	}
-
-	singleGlobal, err := SelectForDirectory([]Candidate{a}, "")
-	if err != nil {
-		t.Fatalf("SelectForDirectory single global: %v", err)
-	}
-	if singleGlobal.Kind != SelectionLaunch || len(singleGlobal.Candidates) != 1 {
-		t.Errorf("single global selection = kind %v len %d, want launch len 1",
-			singleGlobal.Kind, len(singleGlobal.Candidates))
-	}
-
-	multiGlobal, err := SelectForDirectory([]Candidate{a, b}, "")
-	if err != nil {
-		t.Fatalf("SelectForDirectory multi global: %v", err)
-	}
-	if multiGlobal.Kind != SelectionPicker || len(multiGlobal.Candidates) != 2 {
-		t.Errorf("multi global selection = kind %v len %d, want picker len 2",
-			multiGlobal.Kind, len(multiGlobal.Candidates))
-	}
-
-	multiMatch, err := SelectForDirectory([]Candidate{a, b, c}, "/work/b")
-	if err != nil {
-		t.Fatalf("SelectForDirectory multi match: %v", err)
-	}
-	if multiMatch.Kind != SelectionPicker || len(multiMatch.Candidates) != 2 {
-		t.Fatalf("multi match selection = kind %v len %d, want picker len 2",
-			multiMatch.Kind, len(multiMatch.Candidates))
-	}
-	if multiMatch.Candidates[0].PlanDir != b.PlanDir || multiMatch.Candidates[1].PlanDir != c.PlanDir {
-		t.Errorf("multi match candidates = %#v, want b then c", multiMatch.Candidates)
+	if matches[0].PlanDir != match.PlanDir {
+		t.Errorf("matched PlanDir = %q, want %q", matches[0].PlanDir, match.PlanDir)
 	}
 }
 

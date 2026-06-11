@@ -45,15 +45,19 @@ func TestReadmeDocumentsFocusNextBinding(t *testing.T) {
 	}
 }
 
-func TestReadmeDocumentsDashboardTailBinding(t *testing.T) {
+func TestReadmeDocumentsPassiveLoopMarkers(t *testing.T) {
 	readme, err := os.ReadFile("README.md")
 	if err != nil {
 		t.Fatalf("ReadFile(README.md): %v", err)
 	}
 
-	const documented = "`t`: tail an active `agent-session-loop` run"
-	if !strings.Contains(string(readme), documented) {
-		t.Fatalf("README.md missing documented dashboard tail binding %q", documented)
+	for _, documented := range []string{
+		"Rows marked with `🔁` have at least one active `agent-session-loop` run",
+		"Run and tail loops outside the dashboard with `agent-session-loop` directly.",
+	} {
+		if !strings.Contains(string(readme), documented) {
+			t.Fatalf("README.md missing documented passive loop marker text %q", documented)
+		}
 	}
 }
 

@@ -31,11 +31,6 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if key == keyLoopTail {
-			// `t` is a list action, not a bracket-jump follow-up. With a
-			// pending chord it only cancels the chord so ]t/[t cannot launch.
-			return m, nil
-		}
 		// Unknown chord key: chord is canceled (pendingJumpDir already
 		// reset); fall through so the keypress hits its normal handler.
 	}
@@ -260,9 +255,6 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		switch key {
 		case keyTogglePreview:
 			return m.togglePreview()
-		case keyLoopTail:
-			m.actionErr = nil
-			return m, m.loopTailSelectionCmd()
 		case keyA:
 			if len(m.filtered) > 0 {
 				m.targetSession = m.filtered[m.cursor]
@@ -399,8 +391,6 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.enterSessionSearchForProject(m.filtered[m.cursor].EffectiveProject())
 		case keyPlanSearch:
 			return m.enterPlanSearch()
-		case keyLoopRun:
-			return m.enterLoopRunPlanSearch()
 		case keyD:
 			if !m.deprecationDismissed && len(m.deprecations) > 0 {
 				// Banner dismissal first when one is visible; the detail

@@ -51,6 +51,15 @@ func (f *fakeActiveLoopTitleSyncClient) FocusWindow(string) error               
 func (f *fakeActiveLoopTitleSyncClient) GetText(string, string) (string, error)      { return "", nil }
 func (f *fakeActiveLoopTitleSyncClient) LaunchOverlayPager(string) error             { return nil }
 
+func stubActiveLoopDiscover(t *testing.T, candidates []agentloop.Candidate, err error) {
+	t.Helper()
+	old := activeLoopDiscover
+	activeLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
+		return candidates, err
+	}
+	t.Cleanup(func() { activeLoopDiscover = old })
+}
+
 func topLevelBatchCmds(t *testing.T, cmd tea.Cmd) []tea.Cmd {
 	t.Helper()
 	if cmd == nil {
@@ -74,7 +83,7 @@ func topLevelBatchCmds(t *testing.T, cmd tea.Cmd) []tea.Cmd {
 
 func TestInitSchedulesActiveLoopRefresh(t *testing.T) {
 	candidate := agentloop.Candidate{PlanDir: "/plans/api", CWD: "/work/api"}
-	stubLoopTailDiscover(t, []agentloop.Candidate{candidate}, nil)
+	stubActiveLoopDiscover(t, []agentloop.Candidate{candidate}, nil)
 
 	m := testModel()
 	cmds := topLevelBatchCmds(t, m.Init())
@@ -98,7 +107,7 @@ func TestInitSchedulesActiveLoopRefresh(t *testing.T) {
 
 func TestTickRefreshesActiveLoops(t *testing.T) {
 	candidate := agentloop.Candidate{PlanDir: "/plans/backend", CWD: "/work/backend"}
-	stubLoopTailDiscover(t, []agentloop.Candidate{candidate}, nil)
+	stubActiveLoopDiscover(t, []agentloop.Candidate{candidate}, nil)
 
 	m := testModel()
 	m.activeLoopRefreshSeq = 7
@@ -176,7 +185,7 @@ func TestActiveLoopsForSelectedRowMatchesCanonicalCWD(t *testing.T) {
 	m := loadSessions(testModel(), []session.RunningSession{{Directory: linkDir}})
 	m.activeLoopCandidates = []agentloop.Candidate{other, match}
 
-	got := m.activeLoopsForSelectedRow()
+	got := m.activeLoopsForDirectory(linkDir)
 	if !reflect.DeepEqual(got, []agentloop.Candidate{match}) {
 		t.Fatalf("selected-row active loops = %#v, want match", got)
 	}

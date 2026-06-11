@@ -18,8 +18,8 @@ func ReanchorTab(client kitty.KittyClient, ghost GhostTab, defaults config.Defau
 
 // ReanchorAll attempts to re-stamp every ghost in the slice. Per-ghost
 // failures are logged at debug and otherwise ignored: a failed re-stamp is
-// self-healing on the next tick because the title fallback re-detects the
-// same tab.
+// self-healing on the next tick because fallback detection re-detects the same
+// tab.
 func ReanchorAll(client kitty.KittyClient, ghosts []GhostTab, defaults config.Defaults) {
 	for _, g := range ghosts {
 		if err := ReanchorTab(client, g, defaults); err != nil {

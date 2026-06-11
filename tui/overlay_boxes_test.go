@@ -176,10 +176,6 @@ func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 	detail.detailWindowID = 42
 	detail.mode = ModeDetail
 
-	loopTail := loadSessions(testModelWithSessions(), makeSessions())
-	loopTail.mode = ModeLoopTailPicker
-	loopTail.loopTailCandidates = append(loopTail.loopTailCandidates, loopTailPickerCandidate("/plans/api", "/work/api", 1234))
-
 	cases := []struct {
 		name   string
 		m      Model
@@ -191,7 +187,6 @@ func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 		{name: "config picker", m: configPicker, popup: "Restart with profile", status: "Choose profile"},
 		{name: "help", m: help, popup: "Keyboard Shortcuts", status: "Help"},
 		{name: "detail", m: detail, popup: "api", status: "Session details: window 42"},
-		{name: "loop tail", m: loopTail, popup: "Choose loop to tail", status: "Loop tail: 1 candidate"},
 	}
 
 	for _, tc := range cases {
