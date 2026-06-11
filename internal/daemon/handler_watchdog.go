@@ -330,8 +330,9 @@ func (h *Handler) clearStaleTitle(windowID int, fallbackTitle string) {
 	if !ok {
 		return
 	}
-	base, _, starred, muted := palette.ParseTitleFull(tab.Title)
-	newTitle := palette.BuildTitleFull(base, "", starred, muted)
+	parts := palette.ParseTitleParts(tab.Title)
+	parts.State = ""
+	newTitle := palette.BuildTitleParts(parts)
 	if newTitle == tab.Title {
 		return
 	}

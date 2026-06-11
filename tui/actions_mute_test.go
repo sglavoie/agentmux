@@ -20,8 +20,15 @@ func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
 	client := kitty.NewClientWithSocket(runner, "")
 	rs := session.RunningSession{
 		WindowID: 7,
-		Base:     "api",
-		State:    "bolt",
+		Title: palette.BuildTitleParts(palette.TitleParts{
+			Base:    "🦊api",
+			State:   "bolt",
+			Starred: true,
+			Looping: true,
+		}),
+		Base:    "🦊api",
+		State:   "bolt",
+		Starred: true,
 	}
 
 	cmd := toggleMuteCmd(client, rs)
@@ -60,7 +67,13 @@ func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
 		}
 	}
 	gotTitleValue := gotTitle[len(wantTitlePrefix)]
-	wantTitleValue := palette.BuildTitleFull("api", "bolt", false, true)
+	wantTitleValue := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		State:   "bolt",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
 	if gotTitleValue != wantTitleValue {
 		t.Errorf("set-tab-title value: got %q, want %q", gotTitleValue, wantTitleValue)
 	}

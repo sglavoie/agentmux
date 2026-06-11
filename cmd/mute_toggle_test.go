@@ -46,11 +46,18 @@ func TestMuteToggle_UnmutedToMuted(t *testing.T) {
 }
 
 func TestMuteToggle_MutedToUnmuted(t *testing.T) {
+	tabTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		State:   "bolt",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
 	client := &fakeMuteClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
 			Tabs: []kitty.Tab{
-				testMutedManagedTab(10, 101, palette.BuildTitleFull("api", "", false, true)),
+				testMutedManagedTab(10, 101, tabTitle),
 			},
 		}},
 	}
@@ -70,8 +77,18 @@ func TestMuteToggle_MutedToUnmuted(t *testing.T) {
 	if len(client.setTabTitleCalls) != 1 {
 		t.Fatalf("set-tab-title calls: got %d, want 1", len(client.setTabTitleCalls))
 	}
-	if strings.Contains(client.setTabTitleCalls[0].title, palette.MuteIcon()) {
-		t.Errorf("set-tab-title %q should not contain mute icon", client.setTabTitleCalls[0].title)
+	wantTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		State:   "bolt",
+		Starred: true,
+		Looping: true,
+	})
+	gotTitle := client.setTabTitleCalls[0].title
+	if gotTitle != wantTitle {
+		t.Errorf("set-tab-title title: got %q, want %q", gotTitle, wantTitle)
+	}
+	if strings.Contains(gotTitle, palette.MuteIcon()) {
+		t.Errorf("set-tab-title %q should not contain mute icon", gotTitle)
 	}
 }
 

@@ -76,6 +76,9 @@ func fallbackStatusMessage(m Model) statusMessage {
 	if msg, ok := modeErrorStatus(m); ok {
 		return msg
 	}
+	if m.activeLoopTitleSyncErr != nil {
+		return statusMessage{Text: "Loop title sync: " + m.activeLoopTitleSyncErr.Error(), Severity: statusWarning}
+	}
 	if daemonHealthDegraded(m) || hookHealthDegraded(m) {
 		return statusMessage{Text: "Health degraded", Severity: statusWarning}
 	}

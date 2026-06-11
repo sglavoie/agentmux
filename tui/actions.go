@@ -483,7 +483,9 @@ func toggleMuteCmd(client kitty.KittyClient, rs session.RunningSession) tea.Cmd 
 		}
 		if err == nil {
 			newMuted := !rs.Muted
-			newTitle := palette.BuildTitleFull(rs.Base, rs.State, rs.Starred, newMuted)
+			parts := rs.TitleParts()
+			parts.Muted = newMuted
+			newTitle := palette.BuildTitleParts(parts)
 			err = client.SetTabTitle(kitty.MatchTabByWindowID(rs.WindowID), newTitle)
 		}
 		return actionDoneMsg{err: err}

@@ -103,10 +103,10 @@ func runWithDeps(
 		if found {
 			tab = t
 			win = w
-			base, state, _, muted := palette.ParseTitleFull(tab.Title)
-			sessionTitle = base
-			currentIconState = state
-			titleMuted = muted
+			parts := palette.ParseTitleParts(tab.Title)
+			sessionTitle = parts.Base
+			currentIconState = parts.State
+			titleMuted = parts.Muted
 		}
 	} else {
 		slog.Debug("indicator: kitty lookup failed", "err", err)
@@ -301,8 +301,9 @@ func daemonDownIconState(action, currentIconState string, preservesIcon bool, ha
 }
 
 func updateTitle(windowID int, iconState string, client kittyTitleSetter, tab *kitty.Tab) error {
-	base, _, starred, muted := palette.ParseTitleFull(tab.Title)
-	newTitle := palette.BuildTitleFull(base, iconState, starred, muted)
+	parts := palette.ParseTitleParts(tab.Title)
+	parts.State = iconState
+	newTitle := palette.BuildTitleParts(parts)
 
 	if newTitle == tab.Title {
 		return nil

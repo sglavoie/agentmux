@@ -55,6 +55,32 @@ func (rs RunningSession) EffectiveArgs() string {
 	return rs.Flags
 }
 
+// TitleParts returns the title components for rebuilds that need to preserve
+// markers not stored as first-class RunningSession fields yet.
+func (rs RunningSession) TitleParts() palette.TitleParts {
+	parts := palette.TitleParts{
+		Base:    rs.Base,
+		State:   rs.State,
+		Starred: rs.Starred,
+		Muted:   rs.Muted,
+	}
+	if rs.Title == "" {
+		return parts
+	}
+
+	parsed := palette.ParseTitleParts(rs.Title)
+	if parts.Base == "" {
+		parts.Base = parsed.Base
+	}
+	if parts.State == "" {
+		parts.State = parsed.State
+	}
+	parts.Starred = parts.Starred || parsed.Starred
+	parts.Muted = parts.Muted || parsed.Muted
+	parts.Looping = parsed.Looping
+	return parts
+}
+
 // GhostTab is a managed tab whose anchor window (the one bearing amx user vars)
 // no longer exists, but whose tab title still matches a unique configured
 // project. Callers can use the WindowID to re-stamp user vars onto the

@@ -9,11 +9,20 @@ type rawIcons struct {
 	Star       string            `json:"star"`
 	Lock       string            `json:"lock"`
 	Mute       string            `json:"mute"`
+	Loop       string            `json:"loop"`
 	States     map[string]string `json:"states"`
 	StateOrder []string          `json:"state_order"`
 }
 
 var ico rawIcons
+
+type TitleParts struct {
+	Base    string
+	State   string
+	Starred bool
+	Muted   bool
+	Looping bool
+}
 
 func init() {
 	if err := json.Unmarshal(iconsJSON, &ico); err != nil {
@@ -29,6 +38,9 @@ func LockIcon() string { return ico.Lock }
 
 // MuteIcon returns the mute icon character.
 func MuteIcon() string { return ico.Mute }
+
+// LoopIcon returns the active loop marker character.
+func LoopIcon() string { return ico.Loop }
 
 // StateIcon returns the icon character for a named state ("bolt", "stop", "key",
 // "warning", "error", "subagent", "compact"), or "" if the state name is
@@ -52,24 +64,48 @@ func ParseTitle(title string) (base, state string, starred bool) {
 	return
 }
 
+// ParseTitleParts parses a tab title into its complete icon/title components.
+// Leading icon markers are accepted in canonical order and in legacy orders;
+// each marker kind is consumed at most once.
+func ParseTitleParts(title string) TitleParts {
+	parts := TitleParts{Base: title}
+	for {
+		switch {
+		case !parts.Starred && ico.Star != "" && strings.HasPrefix(title, ico.Star):
+			parts.Starred = true
+			title = title[len(ico.Star):]
+		case !parts.Muted && ico.Mute != "" && strings.HasPrefix(title, ico.Mute):
+			parts.Muted = true
+			title = title[len(ico.Mute):]
+		case parts.State == "":
+			if state, rest, ok := consumeStateIcon(title); ok {
+				parts.State = state
+				title = rest
+				continue
+			}
+			if !parts.Looping && ico.Loop != "" && strings.HasPrefix(title, ico.Loop) {
+				parts.Looping = true
+				title = title[len(ico.Loop):]
+				continue
+			}
+			parts.Base = title
+			return parts
+		case !parts.Looping && ico.Loop != "" && strings.HasPrefix(title, ico.Loop):
+			parts.Looping = true
+			title = title[len(ico.Loop):]
+		default:
+			parts.Base = title
+			return parts
+		}
+	}
+}
+
 // ParseTitleFull parses a tab title into its components, including the muted
 // flag carried by an optional 🔇 prefix.
-// Tab title format: [★][🔇][<state-icon>]<base>
+// Tab title format: [★][🔇][<state-icon>][🔁]<base>
 func ParseTitleFull(title string) (base, state string, starred, muted bool) {
-	if ico.Star != "" && strings.HasPrefix(title, ico.Star) {
-		starred = true
-		title = title[len(ico.Star):]
-	}
-	if ico.Mute != "" && strings.HasPrefix(title, ico.Mute) {
-		muted = true
-		title = title[len(ico.Mute):]
-	}
-	if name, rest, ok := consumeStateIcon(title); ok {
-		state = name
-		title = rest
-	}
-	base = title
-	return
+	parts := ParseTitleParts(title)
+	return parts.Base, parts.State, parts.Starred, parts.Muted
 }
 
 // BuildTitle constructs a tab title from its components.
@@ -79,51 +115,46 @@ func BuildTitle(base, state string, starred bool) string {
 	return BuildTitleFull(base, state, starred, false)
 }
 
-// BuildTitleFull constructs a tab title from its components, including an
-// optional 🔇 mute prefix. Output format: [★][🔇][<state-icon>]<base>.
-func BuildTitleFull(base, state string, starred, muted bool) string {
+// BuildTitleParts constructs a tab title from its complete components.
+// Output format: [★][🔇][<state-icon>][🔁]<base>.
+func BuildTitleParts(parts TitleParts) string {
 	var sb strings.Builder
-	if starred {
+	if parts.Starred && ico.Star != "" {
 		sb.WriteString(ico.Star)
 	}
-	if muted && ico.Mute != "" {
+	if parts.Muted && ico.Mute != "" {
 		sb.WriteString(ico.Mute)
 	}
-	if icon, ok := ico.States[state]; ok && state != "" {
+	if icon, ok := ico.States[parts.State]; ok && parts.State != "" {
 		sb.WriteString(icon)
 	}
-	sb.WriteString(base)
+	if parts.Looping && ico.Loop != "" {
+		sb.WriteString(ico.Loop)
+	}
+	sb.WriteString(parts.Base)
 	return sb.String()
 }
 
-// StripIcons removes the star prefix, optional mute prefix, and any state
-// icon from a title, returning the plain base title.
+// BuildTitleFull constructs a tab title from its components, including an
+// optional 🔇 mute prefix. Output format: [★][🔇][<state-icon>]<base>.
+func BuildTitleFull(base, state string, starred, muted bool) string {
+	return BuildTitleParts(TitleParts{
+		Base:    base,
+		State:   state,
+		Starred: starred,
+		Muted:   muted,
+	})
+}
+
+// StripIcons removes leading palette icons from a title, returning the plain
+// base title.
 func StripIcons(title string) string {
-	if ico.Star != "" {
-		title = strings.TrimPrefix(title, ico.Star)
-	}
-	if ico.Mute != "" {
-		title = strings.TrimPrefix(title, ico.Mute)
-	}
-	if _, rest, ok := consumeStateIcon(title); ok {
-		return rest
-	}
-	return title
+	return ParseTitleParts(title).Base
 }
 
 // DetectState returns the state name present in a title, or "" if none.
 func DetectState(title string) string {
-	if ico.Star != "" {
-		title = strings.TrimPrefix(title, ico.Star)
-	}
-	if ico.Mute != "" {
-		title = strings.TrimPrefix(title, ico.Mute)
-	}
-	name, _, ok := consumeStateIcon(title)
-	if ok {
-		return name
-	}
-	return ""
+	return ParseTitleParts(title).State
 }
 
 func consumeStateIcon(title string) (state, rest string, ok bool) {

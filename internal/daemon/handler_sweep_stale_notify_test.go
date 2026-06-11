@@ -201,6 +201,44 @@ func TestSweepStale_PreservesStarGlyph(t *testing.T) {
 	})
 }
 
+func TestSweepStale_PreservesLoopMarkerAndHarnessEmoji(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, _ := newSweepTestHandler(10 * time.Minute)
+		activeTitle := palette.BuildTitleParts(palette.TitleParts{
+			Base:    "🦊api",
+			State:   "bolt",
+			Starred: true,
+			Muted:   true,
+			Looping: true,
+		})
+		clearedTitle := palette.BuildTitleParts(palette.TitleParts{
+			Base:    "🦊api",
+			Starred: true,
+			Muted:   true,
+			Looping: true,
+		})
+		fake.windows = fakeOSWindowsWithTab(42, activeTitle)
+
+		now := time.Now()
+		h.stateMu.Lock()
+		h.activity[42] = now.Add(-15 * time.Minute)
+		h.lastAction[42] = "active"
+		h.lastSessionTitle[42] = "🦊api"
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		titles := fake.titleCalls()
+		if len(titles) != 1 {
+			t.Fatalf("SetTabTitle calls = %d; want 1", len(titles))
+		}
+		if titles[0].title != clearedTitle {
+			t.Fatalf("SetTabTitle title = %q; want %q", titles[0].title, clearedTitle)
+		}
+	})
+}
+
 // TestSweepStale_ListWindowsErrorIsTolerated verifies that a ListWindows
 // failure does not panic and does not block the sweep's other steps: the
 // notification still fires and state is still cleared. The next sweep can

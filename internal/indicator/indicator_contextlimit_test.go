@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -149,6 +150,36 @@ func TestRunWithDeps_SubagentStopScreenContextLimitPromotesStopFailure(t *testin
 	wantTitle := palette.BuildTitle("api", "error", false)
 	if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:42", title: wantTitle}) {
 		t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], wantTitle)
+	}
+}
+
+func TestUpdateTitlePreservesLoopMarkerAndHarnessEmoji(t *testing.T) {
+	tabTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		State:   "bolt",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
+	client := &fakeIndicatorKittyClient{}
+	tab := &kitty.Tab{Title: tabTitle}
+
+	if err := updateTitle(42, "error", client, tab); err != nil {
+		t.Fatalf("updateTitle() error = %v", err)
+	}
+
+	wantTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		State:   "error",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
+	if len(client.setTitleCalls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(client.setTitleCalls))
+	}
+	if client.setTitleCalls[0] != (setTitleCall{match: "window_id:42", title: wantTitle}) {
+		t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", client.setTitleCalls[0], wantTitle)
 	}
 }
 

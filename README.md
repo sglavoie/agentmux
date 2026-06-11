@@ -126,9 +126,11 @@ Key flows:
 Rows marked with `🔁` have at least one active `agent-session-loop` run whose
 cwd matches the project row. Press `t` to follow an active loop in the pinned
 tail view; `q` returns to Agent Mux and `a` toggles current-session vs
-all-session output. Direct `agent-session-loop tail` remains plain text by
-default; Agent Mux launches `t` with `--interactive`. `t` stays the only
-follow/tail action.
+all-session output. Agent Mux also mirrors `🔁` into matching Kitty project tab
+titles while loops are active, preserving existing state, star, and mute icons;
+the marker is removed when discovery no longer reports the loop. Direct
+`agent-session-loop tail` remains plain text by default; Agent Mux launches `t`
+with `--interactive`. `t` stays the only follow/tail action.
 
 Press `F` on a project row to open the plan-run picker. In that picker,
 `enter` runs the highlighted plan, `v` views it first, `p` lets you paste or

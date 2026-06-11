@@ -46,15 +46,15 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 
 	for _, ow := range windows {
 		for _, tab := range ow.Tabs {
-			baseTitle, iconState, starred, muted := palette.ParseTitleFull(tab.Title)
-			if !claudeContextLimitProbeCanOverwrite(iconState) {
+			parts := palette.ParseTitleParts(tab.Title)
+			if !claudeContextLimitProbeCanOverwrite(parts.State) {
 				continue
 			}
 			for _, win := range tab.Windows {
 				if win.UserVars.EffectiveHarness() != harness.Claude {
 					continue
 				}
-				h.probeClaudeContextLimitWindow(now, win.ID, tab.Title, baseTitle, iconState, starred, muted, win.UserVars)
+				h.probeClaudeContextLimitWindow(now, win.ID, tab.Title, parts, win.UserVars)
 			}
 		}
 	}
@@ -73,10 +73,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	now time.Time,
 	windowID int,
 	tabTitle string,
-	baseTitle string,
-	currentIconState string,
-	starred bool,
-	muted bool,
+	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) {
 	h.stateMu.Lock()
@@ -102,10 +99,12 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	}
 
 	resultIconState := IconState(claudeContextLimitProbeAction)
-	h.recordClaudeContextLimitProbeState(now, windowID, baseTitle, currentIconState, userVars, resultIconState)
+	h.recordClaudeContextLimitProbeState(now, windowID, titleParts.Base, titleParts.State, userVars, resultIconState)
 
-	if resultIconState != currentIconState {
-		newTitle := palette.BuildTitleFull(baseTitle, resultIconState, starred, muted)
+	if resultIconState != titleParts.State {
+		newParts := titleParts
+		newParts.State = resultIconState
+		newTitle := palette.BuildTitleParts(newParts)
 		if newTitle != tabTitle {
 			if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
 				slog.Debug("claude context-limit probe: set tab title failed", "window_id", windowID, "err", err)
@@ -122,7 +121,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 		pipeMode := h.lastPipeMode[windowID]
 		account := h.lastAccount[windowID]
 		h.stateMu.Unlock()
-		h.notifier.MaybeNotify(windowID, baseTitle, account, claudeContextLimitProbeAction, pipeMode)
+		h.notifier.MaybeNotify(windowID, titleParts.Base, account, claudeContextLimitProbeAction, pipeMode)
 	}
 }
 

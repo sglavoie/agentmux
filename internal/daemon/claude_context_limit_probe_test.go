@@ -167,6 +167,44 @@ func TestProbeClaudeContextLimit_SubagentSwapsToError(t *testing.T) {
 	}
 }
 
+func TestProbeClaudeContextLimit_PreservesLoopMarkerAndHarnessEmoji(t *testing.T) {
+	h := newTestHandler()
+	tabTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		State:   "bolt",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
+	fake := &fakeKittyClient{
+		windows: codexProbeWindows(42, tabTitle, kitty.UserVars{
+			Profile: "work",
+			Harness: "claude",
+		}),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): claudeContextLimitScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	h.ProbeClaudeContextLimit(time.Unix(1_700_000_000, 0))
+
+	calls := fake.titleCalls()
+	if len(calls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(calls))
+	}
+	want := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		State:   "error",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
+	if calls[0].title != want {
+		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
+	}
+}
+
 func TestProbeClaudeContextLimit_DedupesWithinEpisode(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{

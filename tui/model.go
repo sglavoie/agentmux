@@ -79,9 +79,10 @@ type Model struct {
 
 	// active agent-session-loop runs shown by dashboard rows. This is refreshed
 	// in the background and remains separate from the on-demand tail picker.
-	activeLoopCandidates []agentloop.Candidate
-	activeLoopRefreshErr error
-	activeLoopRefreshSeq int
+	activeLoopCandidates   []agentloop.Candidate
+	activeLoopRefreshErr   error
+	activeLoopRefreshSeq   int
+	activeLoopTitleSyncErr error
 
 	// last error from a close/restart action
 	actionErr error
@@ -367,6 +368,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case activeLoopsMsg:
 		return m.handleActiveLoopsMsg(msg)
+
+	case activeLoopTitleSyncMsg:
+		return m.handleActiveLoopTitleSyncMsg(msg)
 
 	case errMsg:
 		m.err = msg.err

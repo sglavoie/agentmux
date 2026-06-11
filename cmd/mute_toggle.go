@@ -65,6 +65,8 @@ func muteToggle(client kitty.KittyClient, windowID int) error {
 	if err != nil {
 		return err
 	}
-	newTitle := palette.BuildTitleFull(rs.Base, rs.State, rs.Starred, !rs.Muted)
+	parts := rs.TitleParts()
+	parts.Muted = !rs.Muted
+	newTitle := palette.BuildTitleParts(parts)
 	return client.SetTabTitle(kitty.MatchTabByWindowID(rs.WindowID), newTitle)
 }

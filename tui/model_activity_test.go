@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -185,9 +186,16 @@ func TestClearStatusCmdSetsTabTitle(t *testing.T) {
 	}
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
+	title := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		State:   "bolt",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
 
 	target := session.RunningSession{
-		TabID: 7, WindowID: 99, Base: "api", Account: "work", Starred: false,
+		TabID: 7, WindowID: 99, Title: title, Base: "🦊api", State: "bolt", Account: "work", Starred: true, Muted: true,
 	}
 	msg := clearStatusCmd(client, target)()
 	done, ok := msg.(actionDoneMsg)
@@ -199,6 +207,7 @@ func TestClearStatusCmdSetsTabTitle(t *testing.T) {
 	}
 	// Confirm the mock saw a kitten set-tab-title call scoped to the window.
 	found := false
+	var gotTitle string
 	for _, c := range runner.Calls {
 		if c.Name != "kitten" {
 			continue
@@ -214,11 +223,21 @@ func TestClearStatusCmdSetsTabTitle(t *testing.T) {
 		}
 		if hasCmd && hasMatch {
 			found = true
+			gotTitle = c.Args[len(c.Args)-1]
 			break
 		}
 	}
 	if !found {
 		t.Errorf("expected kitten set-tab-title call with --match=window_id:99, got calls: %v", runner.Calls)
+	}
+	wantTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "🦊api",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
+	if gotTitle != wantTitle {
+		t.Errorf("set-tab-title value: got %q, want %q", gotTitle, wantTitle)
 	}
 	_ = cfg // cfg is built to mirror real model construction; only the runner is asserted
 }
