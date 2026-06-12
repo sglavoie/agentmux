@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -124,6 +125,150 @@ func TestSessionViewerYNoOpForEmptyOrInvalidSelection(t *testing.T) {
 	}
 }
 
+func TestSessionSearchCopyPathCopiesSelectedTranscriptPath(t *testing.T) {
+	m := Model{
+		mode: ModeSessionSearch,
+		sessionResults: []transcript.Result{
+			{Meta: transcript.SessionMeta{Path: "/tmp/first.jsonl"}},
+			{Meta: transcript.SessionMeta{Path: "/tmp/selected.jsonl"}},
+		},
+		sessionCursor: 1,
+		width:         80,
+		height:        20,
+	}
+
+	updated, cmd := m.Update(keyPress("Y"))
+	got := updated.(Model)
+	if got.mode != ModeSessionSearch {
+		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+	}
+	if copied := runViewerCopyCmd(t, cmd); copied != "/tmp/selected.jsonl" {
+		t.Fatalf("copied = %q, want selected transcript path", copied)
+	}
+}
+
+func TestSessionSearchCopyPathNoOpForEmptyOrInvalidSelection(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{
+			name: "empty results",
+			m:    Model{mode: ModeSessionSearch},
+		},
+		{
+			name: "cursor below zero",
+			m: Model{
+				mode:           ModeSessionSearch,
+				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
+				sessionCursor:  -1,
+			},
+		},
+		{
+			name: "cursor past end",
+			m: Model{
+				mode:           ModeSessionSearch,
+				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
+				sessionCursor:  1,
+			},
+		},
+		{
+			name: "empty path",
+			m: Model{
+				mode:           ModeSessionSearch,
+				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: ""}}},
+				sessionCursor:  0,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated, cmd := tc.m.Update(keyPress("Y"))
+			got := updated.(Model)
+			if got.mode != ModeSessionSearch {
+				t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+			}
+			if cmd != nil {
+				t.Fatalf("cmd = %T, want nil", cmd)
+			}
+		})
+	}
+}
+
+func TestSessionSearchCopyPathIgnoredDuringTextEntry(t *testing.T) {
+	m := Model{
+		mode:              ModeSessionSearch,
+		sessionSearchMode: true,
+		sessionQuery:      "path:",
+		sessionResults: []transcript.Result{
+			{Meta: transcript.SessionMeta{Path: "/tmp/selected.jsonl"}},
+		},
+		sessionCursor: 0,
+		width:         80,
+		height:        20,
+	}
+
+	updated, cmd := m.Update(keyPress("Y"))
+	got := updated.(Model)
+	if got.sessionQuery != "path:Y" {
+		t.Fatalf("sessionQuery = %q, want typed uppercase Y appended", got.sessionQuery)
+	}
+	if cmd == nil {
+		t.Fatal("cmd = nil, want search dispatch command")
+	}
+}
+
+func TestSessionViewerCopyPathCopiesTranscriptPath(t *testing.T) {
+	m := Model{
+		mode:          ModeSessionView,
+		viewerSession: &transcript.SessionMeta{Path: "/tmp/current.jsonl"},
+		width:         80,
+		height:        20,
+	}
+
+	updated, cmd := m.Update(keyPress("Y"))
+	got := updated.(Model)
+	if got.mode != ModeSessionView {
+		t.Fatalf("mode = %v, want ModeSessionView", got.mode)
+	}
+	if copied := runViewerCopyCmd(t, cmd); copied != "/tmp/current.jsonl" {
+		t.Fatalf("copied = %q, want current transcript path", copied)
+	}
+}
+
+func TestSessionViewerCopyPathNoOpForNilOrEmptyPath(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{
+			name: "nil session",
+			m:    Model{mode: ModeSessionView},
+		},
+		{
+			name: "empty path",
+			m: Model{
+				mode:          ModeSessionView,
+				viewerSession: &transcript.SessionMeta{},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated, cmd := tc.m.Update(keyPress("Y"))
+			got := updated.(Model)
+			if got.mode != ModeSessionView {
+				t.Fatalf("mode = %v, want ModeSessionView", got.mode)
+			}
+			if cmd != nil {
+				t.Fatalf("cmd = %T, want nil", cmd)
+			}
+		})
+	}
+}
+
 func TestPlanViewerYCopiesSelectedLine(t *testing.T) {
 	m := Model{
 		mode:             ModePlanView,
@@ -193,6 +338,150 @@ func TestPlanViewerYNoOpForEmptyOrInvalidSelection(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			updated, cmd := tc.m.Update(keyPress("y"))
+			got := updated.(Model)
+			if got.mode != ModePlanView {
+				t.Fatalf("mode = %v, want ModePlanView", got.mode)
+			}
+			if cmd != nil {
+				t.Fatalf("cmd = %T, want nil", cmd)
+			}
+		})
+	}
+}
+
+func TestPlanSearchCopyPathCopiesSelectedPlanPath(t *testing.T) {
+	m := Model{
+		mode: ModePlanSearch,
+		planResults: []plans.Result{
+			{Meta: plans.PlanMeta{DirPath: "/tmp/first-plan"}},
+			{Meta: plans.PlanMeta{DirPath: "/tmp/selected-plan"}},
+		},
+		planCursor: 1,
+		width:      80,
+		height:     20,
+	}
+
+	updated, cmd := m.Update(keyPress("Y"))
+	got := updated.(Model)
+	if got.mode != ModePlanSearch {
+		t.Fatalf("mode = %v, want ModePlanSearch", got.mode)
+	}
+	if copied := runViewerCopyCmd(t, cmd); copied != "/tmp/selected-plan" {
+		t.Fatalf("copied = %q, want selected plan path", copied)
+	}
+}
+
+func TestPlanSearchCopyPathNoOpForEmptyOrInvalidSelection(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{
+			name: "empty results",
+			m:    Model{mode: ModePlanSearch},
+		},
+		{
+			name: "cursor below zero",
+			m: Model{
+				mode:        ModePlanSearch,
+				planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: "/tmp/present-plan"}}},
+				planCursor:  -1,
+			},
+		},
+		{
+			name: "cursor past end",
+			m: Model{
+				mode:        ModePlanSearch,
+				planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: "/tmp/present-plan"}}},
+				planCursor:  1,
+			},
+		},
+		{
+			name: "empty path",
+			m: Model{
+				mode:        ModePlanSearch,
+				planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: ""}}},
+				planCursor:  0,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated, cmd := tc.m.Update(keyPress("Y"))
+			got := updated.(Model)
+			if got.mode != ModePlanSearch {
+				t.Fatalf("mode = %v, want ModePlanSearch", got.mode)
+			}
+			if cmd != nil {
+				t.Fatalf("cmd = %T, want nil", cmd)
+			}
+		})
+	}
+}
+
+func TestPlanSearchCopyPathIgnoredDuringTextEntry(t *testing.T) {
+	m := Model{
+		mode:           ModePlanSearch,
+		planSearchMode: true,
+		planQuery:      "path:",
+		planResults: []plans.Result{
+			{Meta: plans.PlanMeta{DirPath: "/tmp/selected-plan"}},
+		},
+		planCursor: 0,
+		width:      80,
+		height:     20,
+	}
+
+	updated, cmd := m.Update(keyPress("Y"))
+	got := updated.(Model)
+	if got.planQuery != "path:Y" {
+		t.Fatalf("planQuery = %q, want typed uppercase Y appended", got.planQuery)
+	}
+	if cmd == nil {
+		t.Fatal("cmd = nil, want search dispatch command")
+	}
+}
+
+func TestPlanViewerCopyPathCopiesPlanPath(t *testing.T) {
+	m := Model{
+		mode:       ModePlanView,
+		viewerPlan: &plans.PlanMeta{DirPath: "/tmp/current-plan"},
+		width:      80,
+		height:     20,
+	}
+
+	updated, cmd := m.Update(keyPress("Y"))
+	got := updated.(Model)
+	if got.mode != ModePlanView {
+		t.Fatalf("mode = %v, want ModePlanView", got.mode)
+	}
+	if copied := runViewerCopyCmd(t, cmd); copied != "/tmp/current-plan" {
+		t.Fatalf("copied = %q, want current plan path", copied)
+	}
+}
+
+func TestPlanViewerCopyPathNoOpForNilOrEmptyPath(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{
+			name: "nil plan",
+			m:    Model{mode: ModePlanView},
+		},
+		{
+			name: "empty path",
+			m: Model{
+				mode:       ModePlanView,
+				viewerPlan: &plans.PlanMeta{},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated, cmd := tc.m.Update(keyPress("Y"))
 			got := updated.(Model)
 			if got.mode != ModePlanView {
 				t.Fatalf("mode = %v, want ModePlanView", got.mode)

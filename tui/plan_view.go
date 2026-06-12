@@ -27,6 +27,10 @@ func renderPlanView(m Model) string {
 	}
 	sb.WriteString(styleHeader.Render(header))
 	sb.WriteByte('\n')
+	if row := renderPathRow("plan path", currentPlanViewPath(m), m.width); row != "" {
+		sb.WriteString(row)
+		sb.WriteByte('\n')
+	}
 	sb.WriteByte('\n')
 
 	if err := m.planViewerLoadErr; err != nil {

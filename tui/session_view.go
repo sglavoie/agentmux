@@ -11,13 +11,13 @@ import (
 
 // sessionViewVisibleHeight returns the number of viewer rows that fit in the
 // root body area. composeRootView owns the footer and sticky status row, so
-// this budget subtracts only the viewer header/blank chrome and any inline
-// read-error row.
+// this budget subtracts only the viewer header/path/blank chrome and any
+// inline read-error row.
 func sessionViewVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	avail := rootBodyHeight(m) - 2 - sessionViewErrorLines(m)
+	avail := rootBodyHeight(m) - 2 - pathRowLines(currentSessionViewPath(m)) - sessionViewErrorLines(m)
 	if avail < 1 {
 		return 1
 	}
@@ -56,6 +56,10 @@ func renderSessionView(m Model) string {
 	}
 	sb.WriteString(styleHeader.Render(header))
 	sb.WriteByte('\n')
+	if row := renderPathRow("session path", currentSessionViewPath(m), m.width); row != "" {
+		sb.WriteString(row)
+		sb.WriteByte('\n')
+	}
 	sb.WriteByte('\n')
 
 	if err := m.viewerLoadErr; err != nil {

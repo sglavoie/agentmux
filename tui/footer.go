@@ -45,22 +45,22 @@ func renderFooter(m Model) string {
 		)
 	case ModeSessionSearch:
 		lines = nonEmptyFooterLines(
-			styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · esc back"),
+			styleFooter.Render("  / filter · h/p/r chips · enter view · d delete · Y path · esc back"),
 			styleFooter.Render("  j/k: up/down  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bottom"),
 		)
 	case ModeSessionView:
 		lines = nonEmptyFooterLines(
-			styleFooter.Render("  j/k move · n/N match · y copy · enter view message · esc back"),
+			styleFooter.Render("  j/k move · n/N match · y copy · Y path · enter view message · esc back"),
 			styleFooter.Render("  ctrl+d/u: half  ctrl+f/b: page  g/G: top/bot"),
 		)
 	case ModePlanSearch:
 		lines = nonEmptyFooterLines(
-			styleFooter.Render("  / filter · enter view · o editor · s sort · esc back"),
+			styleFooter.Render("  / filter · enter view · o editor · s sort · Y path · esc back"),
 			styleFooter.Render("  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page"),
 		)
 	case ModePlanView:
 		lines = nonEmptyFooterLines(
-			styleFooter.Render("  / search · n/N match · y copy · o editor · esc back"),
+			styleFooter.Render("  / search · n/N match · y copy · Y path · o editor · esc back"),
 			styleFooter.Render("  j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page"),
 		)
 	case ModeMessageDetail:

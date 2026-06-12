@@ -147,6 +147,12 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 		scrollPlanSearchToCursor(&m)
 		return m, nil
+	case keyCopyPath:
+		path := selectedPlanSearchPath(m)
+		if path == "" {
+			return m, nil
+		}
+		return m, copyTextCmd(path)
 	case keyCtrlD:
 		step := halfPageStep(planSearchVisibleHeight(m))
 		m.planCursor = clamp(m.planCursor+step, 0, len(m.planResults)-1)

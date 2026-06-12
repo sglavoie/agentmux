@@ -115,6 +115,12 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.jumpToNextPlanMatch(1)
 	case "N":
 		m.jumpToNextPlanMatch(-1)
+	case keyCopyPath:
+		path := currentPlanViewPath(m)
+		if path == "" {
+			return m, nil
+		}
+		return m, copyTextCmd(path)
 	case keySlash:
 		// Return to the picker with the editable text query active so the
 		// user can refine the query without re-traversing the navigation
@@ -234,12 +240,12 @@ func computePlanViewerMatches(lines []string, query string) []int {
 
 // planViewerVisibleHeight returns the number of body rows that fit in the
 // root body area. The viewer's chrome matches the session viewer: header (1)
-// + blank (1), plus any inline read-error row.
+// + blank (1), plus the plan path when available and any inline read-error row.
 func planViewerVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	avail := rootBodyHeight(m) - 2 - planViewerErrorLines(m)
+	avail := rootBodyHeight(m) - 2 - pathRowLines(currentPlanViewPath(m)) - planViewerErrorLines(m)
 	if avail < 1 {
 		return 1
 	}

@@ -33,6 +33,7 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		"x         clear session icon",
 		"X         close session (confirm)",
 		"C         launch new session with profile selection",
+		"Y         copy current transcript/plan path in search/view modes",
 	} {
 		if !strings.Contains(out, frag) {
 			t.Errorf("expected help output to contain %q, got:\n%s", frag, out)

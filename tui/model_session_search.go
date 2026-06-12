@@ -204,6 +204,12 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		}
 		scrollSessionSearchToCursor(&m)
 		return m, nil
+	case keyCopyPath:
+		path := selectedSessionSearchPath(m)
+		if path == "" {
+			return m, nil
+		}
+		return m, copyTextCmd(path)
 	case keyCtrlD:
 		step := halfPageStep(sessionSearchVisibleHeight(m))
 		m.sessionCursor = clamp(m.sessionCursor+step, 0, len(m.sessionResults)-1)

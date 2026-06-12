@@ -158,18 +158,23 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 
 func TestViewerFootersAdvertiseCopy(t *testing.T) {
 	cases := []struct {
-		name string
-		mode Mode
+		name  string
+		mode  Mode
+		wants []string
 	}{
-		{name: "session viewer", mode: ModeSessionView},
-		{name: "plan viewer", mode: ModePlanView},
+		{name: "session search", mode: ModeSessionSearch, wants: []string{"Y path"}},
+		{name: "session viewer", mode: ModeSessionView, wants: []string{"y copy", "Y path"}},
+		{name: "plan search", mode: ModePlanSearch, wants: []string{"Y path"}},
+		{name: "plan viewer", mode: ModePlanView, wants: []string{"y copy", "Y path"}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			out := stripAnsi(renderFooter(Model{mode: tc.mode}))
-			if !strings.Contains(out, "y copy") {
-				t.Fatalf("footer = %q, want y copy hint", out)
+			for _, want := range tc.wants {
+				if !strings.Contains(out, want) {
+					t.Fatalf("footer = %q, want %q hint", out, want)
+				}
 			}
 		})
 	}

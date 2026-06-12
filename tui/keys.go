@@ -14,6 +14,7 @@ const (
 	keyO                = "o"
 	keyL                = "l"
 	keyY                = "y"
+	keyCopyPath         = "Y"
 	keyN                = "n"
 	keySpace            = "space"
 	keyEnter            = "enter"

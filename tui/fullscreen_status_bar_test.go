@@ -23,28 +23,28 @@ func TestFullScreenModesReserveStickyStatusBar(t *testing.T) {
 			m:          fullScreenSessionSearchModel(30, 12),
 			status:     "Past Sessions: 30 results",
 			footer:     "g/G: top/bottom",
-			absentBody: indexedRowName(4),
+			absentBody: indexedRowName(3),
 		},
 		{
 			name:       "session viewer",
 			m:          fullScreenSessionViewModel(30, 10),
 			status:     "Transcript: api - 30 messages",
 			footer:     "g/G: top/bot",
-			absentBody: indexedRowName(4),
+			absentBody: indexedRowName(3),
 		},
 		{
 			name:       "plan search",
 			m:          fullScreenPlanSearchModel(30, 11),
 			status:     "Plans: 30 results",
 			footer:     "ctrl+f/b page",
-			absentBody: indexedRowName(4),
+			absentBody: indexedRowName(3),
 		},
 		{
 			name:       "plan viewer",
 			m:          fullScreenPlanViewModel(30, 10),
 			status:     "Plan: api-plan",
 			footer:     "ctrl+f/b page",
-			absentBody: indexedRowName(4),
+			absentBody: indexedRowName(3),
 		},
 	}
 
@@ -187,6 +187,7 @@ func fullScreenSessionSearchModel(total, height int) Model {
 			Meta: transcript.SessionMeta{
 				ID:      indexedRowName(i),
 				Project: indexedRowName(i),
+				Path:    "/tmp/session-" + indexedRowName(i) + ".jsonl",
 			},
 		}
 	}
@@ -209,7 +210,7 @@ func fullScreenSessionViewModel(total, height int) Model {
 		width:          100,
 		height:         height,
 		cfg:            &config.Config{},
-		viewerSession:  &transcript.SessionMeta{Project: "api"},
+		viewerSession:  &transcript.SessionMeta{Project: "api", Path: "/tmp/api-session.jsonl"},
 		viewerMessages: messages,
 	}
 }
@@ -217,7 +218,7 @@ func fullScreenSessionViewModel(total, height int) Model {
 func fullScreenPlanSearchModel(total, height int) Model {
 	results := make([]plans.Result, total)
 	for i := range results {
-		results[i] = plans.Result{Meta: plans.PlanMeta{Name: indexedRowName(i)}}
+		results[i] = plans.Result{Meta: plans.PlanMeta{Name: indexedRowName(i), DirPath: "/tmp/plan-" + indexedRowName(i)}}
 	}
 	return Model{
 		mode:        ModePlanSearch,
@@ -238,7 +239,7 @@ func fullScreenPlanViewModel(total, height int) Model {
 		width:            100,
 		height:           height,
 		cfg:              &config.Config{},
-		viewerPlan:       &plans.PlanMeta{Name: "api-plan"},
+		viewerPlan:       &plans.PlanMeta{Name: "api-plan", DirPath: "/tmp/api-plan"},
 		planViewerLines:  lines,
 		planViewerCursor: 0,
 	}

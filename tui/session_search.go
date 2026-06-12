@@ -18,8 +18,9 @@ func sessionSearchVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	// header (1) + chip bar (1) + query bar (1) + blank (1) = 4
-	avail := rootBodyHeight(m) - 4 - sessionSearchErrorLines(m)
+	// header (1) + chip bar (1) + query bar (1) + blank (1), plus the
+	// selected transcript path when available.
+	avail := rootBodyHeight(m) - 4 - pathRowLines(selectedSessionSearchPath(m)) - sessionSearchErrorLines(m)
 	if avail < 1 {
 		return 1
 	}
@@ -73,6 +74,11 @@ func renderSessionSearch(m Model) string {
 		sb.WriteString(styleDim.Render("press / to search transcript content"))
 	}
 	sb.WriteByte('\n')
+
+	if row := renderPathRow("session path", selectedSessionSearchPath(m), m.width); row != "" {
+		sb.WriteString(row)
+		sb.WriteByte('\n')
+	}
 	sb.WriteByte('\n')
 
 	if err := m.sessionRefreshErr; err != nil {

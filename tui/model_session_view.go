@@ -121,6 +121,12 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.jumpToNextMatch(1)
 	case "N":
 		m.jumpToNextMatch(-1)
+	case keyCopyPath:
+		path := currentSessionViewPath(m)
+		if path == "" {
+			return m, nil
+		}
+		return m, copyTextCmd(path)
 	case keyY:
 		if len(m.viewerMessages) == 0 ||
 			m.viewerCursor < 0 ||

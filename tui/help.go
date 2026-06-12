@@ -64,6 +64,7 @@ var helpSections = []struct {
 		"  C         launch new session with profile selection",
 		"  o         open session directory in a plain shell tab",
 		"  y         copy session title; in transcript/plan viewers, copy selection",
+		"  Y         copy current transcript/plan path in search/view modes",
 		"  p         toggle preview pane (also active in launcher)",
 	}},
 	{"Filter", []string{

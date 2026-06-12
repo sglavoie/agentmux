@@ -12,12 +12,12 @@ import (
 // planSearchVisibleHeight returns the number of result rows that fit in the
 // root body area. Plans has no chip bar, so the chrome is one row lighter
 // than session search: header (1) + query bar (1) + blank (1), plus any
-// inline error rows.
+// selected plan path row and inline error rows.
 func planSearchVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	avail := rootBodyHeight(m) - 3 - planSearchErrorLines(m)
+	avail := rootBodyHeight(m) - 3 - pathRowLines(selectedPlanSearchPath(m)) - planSearchErrorLines(m)
 	if avail < 1 {
 		return 1
 	}
@@ -74,6 +74,10 @@ func renderPlanSearch(m Model) string {
 		sb.WriteString(styleDim.Render("press / to search plan content"))
 	}
 	sb.WriteByte('\n')
+	if row := renderPathRow("plan path", selectedPlanSearchPath(m), m.width); row != "" {
+		sb.WriteString(row)
+		sb.WriteByte('\n')
+	}
 	sb.WriteByte('\n')
 
 	if err := m.planRefreshErr; err != nil {
