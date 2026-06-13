@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -302,6 +303,97 @@ func TestRunWithDeps_AgentSessionLoopFinishedReconcilesLoopMarker(t *testing.T) 
 				42,
 				"/tmp/amx",
 				HookPayload{Source: "agent_session_loop", Reason: "run_finished"},
+				false,
+				kittyClient,
+				daemonClient,
+			)
+			if err != nil {
+				t.Fatalf("runWithDeps() error = %v", err)
+			}
+			if len(kittyClient.setTitleCalls) != 1 {
+				t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+			}
+			if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:42", title: tc.wantTitle}) {
+				t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], tc.wantTitle)
+			}
+		})
+	}
+}
+
+func TestRunWithDeps_AgentSessionLoopFinishedUsesPayloadCWDForSplitTab(t *testing.T) {
+	dir := t.TempDir()
+	otherDir := t.TempDir()
+	boltLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "api",
+		State:   "bolt",
+		Looping: true,
+	})
+	loopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "api",
+		Looping: true,
+	})
+
+	cases := []struct {
+		name       string
+		payloadCWD string
+		candidates []agentloop.Candidate
+		wantTitle  string
+	}{
+		{
+			name:       "clears loop marker from loop pane without user vars",
+			payloadCWD: dir,
+			wantTitle:  "api",
+		},
+		{
+			name:       "keeps loop marker when another active loop remains",
+			payloadCWD: dir,
+			candidates: []agentloop.Candidate{{CWD: dir}},
+			wantTitle:  loopTitle,
+		},
+		{
+			name:       "preserves loop marker when payload cwd belongs elsewhere",
+			payloadCWD: otherDir,
+			wantTitle:  loopTitle,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stubIndicatorLoopDiscover(t, tc.candidates, nil)
+			handler := daemon.NewHandler(
+				daemon.NewStateGuard(time.Hour),
+				daemon.NewNotifier(&config.NotificationConfig{}),
+			)
+			daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+			kittyClient := &fakeIndicatorKittyClient{
+				windows: []kitty.OSWindow{{
+					ID: 1,
+					Tabs: []kitty.Tab{{
+						ID:    100,
+						Title: boltLoopTitle,
+						Windows: []kitty.Window{
+							{
+								ID: 41,
+								UserVars: kitty.UserVars{
+									Profile:      "work",
+									Harness:      "claude",
+									AMXDirectory: dir,
+								},
+							},
+							{
+								ID:       42,
+								IsActive: true,
+							},
+						},
+					}},
+				}},
+			}
+
+			err := runWithDeps(
+				"AgentSessionLoopFinished",
+				42,
+				"/tmp/amx",
+				HookPayload{Source: "agent_session_loop", Reason: "run_finished", CWD: tc.payloadCWD},
 				false,
 				kittyClient,
 				daemonClient,

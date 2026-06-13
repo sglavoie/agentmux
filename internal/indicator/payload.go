@@ -30,6 +30,10 @@ type HookPayload struct {
 	StopReasonCamel       string `json:"stopReason"`
 	Reason                string `json:"reason"`
 	Source                string `json:"source"`
+	CWD                   string `json:"cwd"`
+	PlanDir               string `json:"plan_dir"`
+	RunID                 string `json:"run_id"`
+	RunFinishedAt         string `json:"run_finished_at"`
 	Prompt                string `json:"prompt"`
 	InitialPrompt         string `json:"initial_prompt"`
 	InitialPromptCamel    string `json:"initialPrompt"`

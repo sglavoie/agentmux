@@ -180,7 +180,7 @@ func runWithDeps(
 		if skip {
 			return nil
 		}
-		return finalizeTitleUpdate(tab, win, windowID, nextIcon, eventOrAction, client)
+		return finalizeTitleUpdate(tab, win, windowID, nextIcon, eventOrAction, payload, client)
 	}
 	if !resp.OK {
 		return fmt.Errorf("indicator: daemon error: %s", resp.Error)
@@ -194,10 +194,10 @@ func runWithDeps(
 		if eventOrAction != "AgentSessionLoopFinished" {
 			return nil
 		}
-		return finalizeTitleUpdate(tab, win, windowID, currentIconState, eventOrAction, client)
+		return finalizeTitleUpdate(tab, win, windowID, currentIconState, eventOrAction, payload, client)
 	}
 
-	return finalizeTitleUpdate(tab, win, windowID, resp.IconState, eventOrAction, client)
+	return finalizeTitleUpdate(tab, win, windowID, resp.IconState, eventOrAction, payload, client)
 }
 
 func buildStateUpdateRequest(
@@ -266,20 +266,34 @@ func shouldDelayResetSensitiveStop(eventOrAction, action string, payload HookPay
 // previously caused Copilot CLI to log every such call as
 // `Hook execution failed: HookExitCodeError` even when the event was captured
 // correctly (and, on permissionRequest hooks, could be treated as a deny).
-func finalizeTitleUpdate(tab *kitty.Tab, win *kitty.Window, windowID int, iconState string, eventOrAction string, client kittyTitleSetter) error {
+func finalizeTitleUpdate(tab *kitty.Tab, win *kitty.Window, windowID int, iconState string, eventOrAction string, payload HookPayload, client kittyTitleSetter) error {
 	if tab == nil {
 		slog.Debug("indicator: tab not found after daemon update; skipping title update", "window_id", windowID)
 		return nil
 	}
 
-	return updateTitleWithLoopMarker(windowID, iconState, client, tab, loopMarkerForFinishedRun(eventOrAction, win))
+	return updateTitleWithLoopMarker(windowID, iconState, client, tab, loopMarkerForFinishedRun(eventOrAction, tab, win, payload))
 }
 
-func loopMarkerForFinishedRun(eventOrAction string, win *kitty.Window) *bool {
-	if eventOrAction != "AgentSessionLoopFinished" || win == nil {
+func loopMarkerForFinishedRun(eventOrAction string, tab *kitty.Tab, win *kitty.Window, payload HookPayload) *bool {
+	if eventOrAction != "AgentSessionLoopFinished" || tab == nil {
 		return nil
 	}
-	directory := win.UserVars.EffectiveDirectory()
+	directory := strings.TrimSpace(payload.CWD)
+	if directory != "" {
+		match, known, err := payloadCWDMatchesKnownTabDirectory(directory, tab)
+		if err != nil {
+			slog.Debug("indicator: preserving loop marker after loop finish; payload directory match failed", "cwd", directory, "err", err)
+			return nil
+		}
+		if known && !match {
+			slog.Debug("indicator: preserving loop marker after loop finish; payload cwd differs from tab directory", "cwd", directory)
+			return nil
+		}
+	}
+	if directory == "" {
+		directory = finishedLoopFallbackDirectory(tab, win)
+	}
 	if strings.TrimSpace(directory) == "" {
 		slog.Debug("indicator: preserving loop marker after loop finish; window directory missing")
 		return nil
@@ -295,6 +309,95 @@ func loopMarkerForFinishedRun(eventOrAction string, win *kitty.Window) *bool {
 		return nil
 	}
 	return &looping
+}
+
+func payloadCWDMatchesKnownTabDirectory(cwd string, tab *kitty.Tab) (match bool, known bool, err error) {
+	for i := range tab.Windows {
+		directory := strings.TrimSpace(tab.Windows[i].UserVars.EffectiveDirectory())
+		if directory == "" {
+			continue
+		}
+		known = true
+		same, cmpErr := sameCanonicalDirectory(cwd, directory)
+		if cmpErr != nil {
+			return false, true, cmpErr
+		}
+		if same {
+			return true, true, nil
+		}
+	}
+	return false, known, nil
+}
+
+func sameCanonicalDirectory(a, b string) (bool, error) {
+	canonicalA, err := agentloop.CanonicalizePath(a)
+	if err != nil {
+		return false, err
+	}
+	canonicalB, err := agentloop.CanonicalizePath(b)
+	if err != nil {
+		return false, err
+	}
+	return canonicalA == canonicalB, nil
+}
+
+func finishedLoopFallbackDirectory(tab *kitty.Tab, win *kitty.Window) string {
+	if win != nil {
+		if directory := windowDirectoryHint(*win); directory != "" {
+			return directory
+		}
+	}
+	if tab == nil {
+		return ""
+	}
+	hookWindowID := 0
+	if win != nil {
+		hookWindowID = win.ID
+	}
+	for i := range tab.Windows {
+		if tab.Windows[i].ID == hookWindowID {
+			continue
+		}
+		if directory := strings.TrimSpace(tab.Windows[i].UserVars.EffectiveDirectory()); directory != "" {
+			return directory
+		}
+	}
+	for i := range tab.Windows {
+		if tab.Windows[i].ID == hookWindowID {
+			continue
+		}
+		if directory := firstForegroundCWD(tab.Windows[i]); directory != "" {
+			return directory
+		}
+	}
+	for i := range tab.Windows {
+		if tab.Windows[i].ID == hookWindowID {
+			continue
+		}
+		if directory := strings.TrimSpace(tab.Windows[i].CWD); directory != "" {
+			return directory
+		}
+	}
+	return ""
+}
+
+func windowDirectoryHint(win kitty.Window) string {
+	if directory := strings.TrimSpace(win.UserVars.EffectiveDirectory()); directory != "" {
+		return directory
+	}
+	if directory := firstForegroundCWD(win); directory != "" {
+		return directory
+	}
+	return strings.TrimSpace(win.CWD)
+}
+
+func firstForegroundCWD(win kitty.Window) string {
+	for _, proc := range win.ForegroundProcesses {
+		if cwd := strings.TrimSpace(proc.CWD); cwd != "" {
+			return cwd
+		}
+	}
+	return ""
 }
 
 // daemonDownIconState mirrors the daemon's preserve-current and idle/clear
