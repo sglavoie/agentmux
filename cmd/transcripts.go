@@ -13,6 +13,7 @@ var (
 
 	transcriptsIndexPath  = transcript.IndexPath
 	transcriptsLoadConfig = loadRunnableConfig
+	transcriptsReaders    = transcriptReaders
 )
 
 var transcriptsCmd = &cobra.Command{
@@ -58,7 +59,7 @@ var transcriptsRebuildCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		result, err := transcript.Rebuild(transcriptsIndexPath(), cfg, transcriptReaders(), transcriptsRebuildAll)
+		result, err := transcript.Rebuild(transcriptsIndexPath(), cfg, transcriptsReaders(), transcriptsRebuildAll)
 		if err != nil {
 			return err
 		}
@@ -66,6 +67,9 @@ var transcriptsRebuildCmd = &cobra.Command{
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_path: %s\n", result.Status.MetadataPath)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_entries: %d\n", result.Status.VisibleEntries)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_entries: %d\n", result.Status.HiddenEntries)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_profile_memberships: %d\n", result.Status.VisibleProfileMemberships)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_profile_memberships: %d\n", result.Status.HiddenProfileMemberships)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "shared_profile_entries: %d\n", result.Status.SharedProfileEntries)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.Status.SidecarCount)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "missing_sidecars: %d\n", result.Status.MissingSidecars)
 		return nil
@@ -81,6 +85,9 @@ func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 	_, _ = fmt.Fprintf(out, "sidecar_count: %d\n", status.SidecarCount)
 	_, _ = fmt.Fprintf(out, "visible_entries: %d\n", status.VisibleEntries)
 	_, _ = fmt.Fprintf(out, "hidden_entries: %d\n", status.HiddenEntries)
+	_, _ = fmt.Fprintf(out, "visible_profile_memberships: %d\n", status.VisibleProfileMemberships)
+	_, _ = fmt.Fprintf(out, "hidden_profile_memberships: %d\n", status.HiddenProfileMemberships)
+	_, _ = fmt.Fprintf(out, "shared_profile_entries: %d\n", status.SharedProfileEntries)
 	_, _ = fmt.Fprintf(out, "missing_sidecars: %d\n", status.MissingSidecars)
 }
 

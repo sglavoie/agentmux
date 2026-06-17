@@ -43,11 +43,7 @@ func renderSessionView(m Model) string {
 		if project == "" {
 			project = "(unknown)"
 		}
-		tag := m.viewerSession.Profile + "/" + m.viewerSession.Harness
-		if m.viewerSession.Profile == "" {
-			tag = m.viewerSession.Harness
-		}
-		header = fmt.Sprintf("Transcript: %s  [%s]", project, tag)
+		header = fmt.Sprintf("Transcript: %s  %s", project, sessionProfileTag(*m.viewerSession))
 	}
 	if m.viewerLoading {
 		header += "  " + styleDim.Render("(loading…)")

@@ -52,6 +52,36 @@ func TestSearch_EmptyTextReturnsFilteredMetadata(t *testing.T) {
 	}
 }
 
+func TestSearch_ProfileFilterMatchesProfilesMembership(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:shared", SessionMeta{
+		ID:       "shared",
+		Harness:  harness.Claude,
+		Profile:  "work",
+		Profiles: []string{"work", "personal"},
+		Snippet:  "shared home",
+		LastAt:   time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC),
+	}))
+	must(t, idx.SetEntryForTest("claude:solo", SessionMeta{
+		ID:      "solo",
+		Harness: harness.Claude,
+		Profile: "work",
+		Snippet: "work only",
+		LastAt:  time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+	}))
+
+	results, err := Search(idx, nil, Query{Profile: []string{"personal"}})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 || results[0].Meta.ID != "shared" {
+		t.Fatalf("profile membership search returned %+v, want shared", results)
+	}
+	if results[0].Preview != "shared home" {
+		t.Fatalf("Preview = %q, want snippet fallback", results[0].Preview)
+	}
+}
+
 func TestSearch_TextFiltersAndCountsMatches(t *testing.T) {
 	idx := newTestIndex(t)
 	hitKey := "claude:hit"

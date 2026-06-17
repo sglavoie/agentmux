@@ -13,15 +13,18 @@ import (
 // StoreStatus summarizes the on-disk transcript metadata file and search
 // sidecar store without exposing per-session search text to daemon callers.
 type StoreStatus struct {
-	MetadataPath       string
-	MetadataSize       int64
-	SidecarDir         string
-	SidecarCount       int
-	SidecarSize        int64
-	VisibleEntries     int
-	HiddenEntries      int
-	MissingSidecars    int
-	MissingSidecarKeys []string
+	MetadataPath              string
+	MetadataSize              int64
+	SidecarDir                string
+	SidecarCount              int
+	SidecarSize               int64
+	VisibleEntries            int
+	HiddenEntries             int
+	VisibleProfileMemberships int
+	HiddenProfileMemberships  int
+	SharedProfileEntries      int
+	MissingSidecars           int
+	MissingSidecarKeys        []string
 }
 
 // Status returns filesystem and entry counts for a transcript index.
@@ -48,11 +51,17 @@ func Status(path string) (StoreStatus, error) {
 
 	for _, meta := range idx.List(ListFilter{IncludeHidden: true}) {
 		key := IndexKey(meta.Harness, meta.ID)
+		profileMemberships := len(meta.ProfileNames())
 		if meta.HiddenFromIndex {
 			status.HiddenEntries++
+			status.HiddenProfileMemberships += profileMemberships
 			continue
 		}
 		status.VisibleEntries++
+		status.VisibleProfileMemberships += profileMemberships
+		if profileMemberships > 1 {
+			status.SharedProfileEntries++
+		}
 		if meta.MessageCount == 0 {
 			continue
 		}

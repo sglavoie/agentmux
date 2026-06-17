@@ -1,9 +1,12 @@
 package transcript
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -45,6 +48,93 @@ func TestList_FiltersAndSort(t *testing.T) {
 	byProfile := idx.List(ListFilter{Profile: []string{"home"}, IncludeHidden: true})
 	if len(byProfile) != 1 || byProfile[0].ID != "c" {
 		t.Errorf("Profile filter returned %+v", byProfile)
+	}
+}
+
+func TestList_ProfileFilterMatchesAllCandidateProfiles(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "transcripts.json")
+	data := []byte(`{
+		"entries": {
+			"claude:shared": {
+				"id": "shared",
+				"harness": "claude",
+				"profile": "work",
+				"profiles": ["work", "personal"],
+				"project": "Foo",
+				"snippet": "shared home session"
+			}
+		}
+	}`)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		t.Fatalf("LoadIndexAt: %v", err)
+	}
+
+	for _, profile := range []string{"work", "personal"} {
+		got := idx.List(ListFilter{Profile: []string{profile}})
+		if len(got) != 1 || got[0].ID != "shared" {
+			t.Fatalf("Profile filter %q returned %+v, want shared session", profile, got)
+		}
+	}
+}
+
+func TestSessionMeta_ProfileMembershipHelpers(t *testing.T) {
+	meta := SessionMeta{
+		Profile:  "work",
+		Profiles: []string{"work", "personal", "work", ""},
+	}
+	if got := meta.DisplayProfile(); got != "work" {
+		t.Fatalf("DisplayProfile = %q, want work", got)
+	}
+	gotProfiles := meta.ProfileNames()
+	wantProfiles := []string{"work", "personal"}
+	if len(gotProfiles) != len(wantProfiles) {
+		t.Fatalf("ProfileNames len = %d, want %d: %#v", len(gotProfiles), len(wantProfiles), gotProfiles)
+	}
+	for i := range wantProfiles {
+		if gotProfiles[i] != wantProfiles[i] {
+			t.Fatalf("ProfileNames[%d] = %q, want %q; full=%#v", i, gotProfiles[i], wantProfiles[i], gotProfiles)
+		}
+	}
+	if !meta.MatchesAnyProfile([]string{"personal"}) {
+		t.Fatalf("MatchesAnyProfile did not match Profiles membership")
+	}
+	if meta.MatchesAnyProfile([]string{"ghost"}) {
+		t.Fatalf("MatchesAnyProfile matched unrelated profile")
+	}
+
+	legacy := SessionMeta{Profile: "legacy"}
+	if !legacy.MatchesAnyProfile([]string{"legacy"}) {
+		t.Fatalf("legacy profile fallback did not match Profile")
+	}
+	if got := (SessionMeta{Profiles: []string{"fallback"}}).DisplayProfile(); got != "fallback" {
+		t.Fatalf("DisplayProfile without Profile = %q, want fallback", got)
+	}
+}
+
+func TestDisplayProfileForGroupPrefersProjectDefaultWithinGroup(t *testing.T) {
+	cfg := &config.Config{
+		Projects: []config.Session{{
+			Title:   "Foo",
+			Profile: "personal",
+		}},
+	}
+
+	if got := displayProfileForGroup(cfg, "Foo", "", []string{"work", "personal"}); got != "personal" {
+		t.Fatalf("displayProfileForGroup project default = %q, want personal", got)
+	}
+	if got := displayProfileForGroup(cfg, "Foo", "", []string{"work"}); got != "work" {
+		t.Fatalf("displayProfileForGroup outside group = %q, want work", got)
+	}
+	if got := displayProfileForGroup(cfg, "Other", "", []string{"work", "personal"}); got != "work" {
+		t.Fatalf("displayProfileForGroup no project default = %q, want work", got)
+	}
+	if got := displayProfileForGroup(cfg, "Foo", "work", []string{"work", "personal"}); got != "work" {
+		t.Fatalf("displayProfileForGroup matched profile = %q, want work", got)
 	}
 }
 

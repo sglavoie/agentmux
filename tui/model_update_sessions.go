@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 // handleSessionsMsg processes a sessionsMsg: rebuilds the session list,
@@ -187,10 +188,16 @@ func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Mode
 	if !m.sessionRefreshInFlight {
 		m.sessionRefreshInFlight = true
 		warmSeq := msg.seq
+		warmQuery := transcript.Query{}
 		if !publishCachedResults {
-			warmSeq = -1
+			if m.mode == ModeSessionSearch {
+				warmSeq = m.sessionSearchSeq
+				warmQuery = m.currentSessionQuery()
+			} else {
+				warmSeq = -1
+			}
 		}
-		cmds = append(cmds, sessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, warmSeq))
+		cmds = append(cmds, sessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, warmSeq, warmQuery))
 	}
 	return m, tea.Batch(cmds...)
 }

@@ -15,13 +15,13 @@ import (
 func TestStatusReportsCountsAndMissingSidecars(t *testing.T) {
 	idx := newTestIndex(t)
 	idx.entries[IndexKey(harness.Claude, "visible-ok")] = SessionMeta{
-		ID: "visible-ok", Harness: harness.Claude, MessageCount: 1,
+		ID: "visible-ok", Harness: harness.Claude, Profile: "work", Profiles: []string{"work", "personal"}, MessageCount: 1,
 	}
 	idx.entries[IndexKey(harness.Codex, "visible-missing")] = SessionMeta{
-		ID: "visible-missing", Harness: harness.Codex, MessageCount: 2,
+		ID: "visible-missing", Harness: harness.Codex, Profile: "legacy", MessageCount: 2,
 	}
 	idx.entries[IndexKey(harness.Copilot, "hidden")] = SessionMeta{
-		ID: "hidden", Harness: harness.Copilot, MessageCount: 3, HiddenFromIndex: true,
+		ID: "hidden", Harness: harness.Copilot, Profile: "hidden", MessageCount: 3, HiddenFromIndex: true,
 	}
 	if err := idx.WriteSearchText(IndexKey(harness.Claude, "visible-ok"), "body"); err != nil {
 		t.Fatalf("WriteSearchText: %v", err)
@@ -36,6 +36,10 @@ func TestStatusReportsCountsAndMissingSidecars(t *testing.T) {
 	}
 	if status.VisibleEntries != 2 || status.HiddenEntries != 1 {
 		t.Fatalf("entry counts = visible %d hidden %d, want 2/1", status.VisibleEntries, status.HiddenEntries)
+	}
+	if status.VisibleProfileMemberships != 3 || status.HiddenProfileMemberships != 1 || status.SharedProfileEntries != 1 {
+		t.Fatalf("profile counts = visible memberships %d hidden memberships %d shared entries %d, want 3/1/1",
+			status.VisibleProfileMemberships, status.HiddenProfileMemberships, status.SharedProfileEntries)
 	}
 	if status.SidecarCount != 1 || status.SidecarSize != int64(len("body")) {
 		t.Fatalf("sidecar stats = count %d size %d, want 1/%d", status.SidecarCount, status.SidecarSize, len("body"))

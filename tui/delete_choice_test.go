@@ -38,6 +38,21 @@ func TestRenderDeleteChoiceBox(t *testing.T) {
 	}
 }
 
+func TestRenderDeleteChoiceCompactsSharedHomeProfiles(t *testing.T) {
+	target := transcript.SessionMeta{
+		ID:       "abc123",
+		Harness:  "claude",
+		Profile:  "work",
+		Profiles: []string{"work", "personal", "ops"},
+		Project:  "demo",
+		Path:     "/tmp/demo.jsonl",
+	}
+	out := stripAnsi(renderDeleteChoice(Model{deleteTarget: &target}))
+	if !strings.Contains(out, "claude · work+2 · /tmp/demo.jsonl") {
+		t.Fatalf("delete prompt did not render compact shared-home profile label:\n%s", out)
+	}
+}
+
 func TestDeleteChoiceQQuits(t *testing.T) {
 	m := Model{mode: ModeDeleteChoice}
 

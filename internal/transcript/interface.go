@@ -18,6 +18,7 @@ type SessionMeta struct {
 	ID           string    `json:"id"`
 	Harness      string    `json:"harness"`
 	Profile      string    `json:"profile"`
+	Profiles     []string  `json:"profiles,omitempty"`
 	Project      string    `json:"project"`
 	CWD          string    `json:"cwd"`
 	StartedAt    time.Time `json:"started_at"`
@@ -35,6 +36,68 @@ type SessionMeta struct {
 	// ReadMessages scan in that case.
 	SearchText      string `json:"search_text,omitempty"`
 	HiddenFromIndex bool   `json:"hidden_from_index,omitempty"`
+}
+
+// DisplayProfile returns the stable profile label to show for a session.
+// Older indexes only have Profile; newer shared-home entries also carry
+// Profiles for filter membership.
+func (m SessionMeta) DisplayProfile() string {
+	if m.Profile != "" {
+		return m.Profile
+	}
+	for _, profile := range m.Profiles {
+		if profile != "" {
+			return profile
+		}
+	}
+	return ""
+}
+
+// ProfileNames returns the filter-membership profiles for a session.
+// New metadata uses Profiles; legacy metadata falls back to Profile.
+func (m SessionMeta) ProfileNames() []string {
+	if profiles := cleanProfileNames(m.Profiles); len(profiles) > 0 {
+		return profiles
+	}
+	if m.Profile == "" {
+		return nil
+	}
+	return []string{m.Profile}
+}
+
+// MatchesAnyProfile reports whether this session belongs to any requested
+// profile. An empty requested set means no profile filter.
+func (m SessionMeta) MatchesAnyProfile(profiles []string) bool {
+	if len(profiles) == 0 {
+		return true
+	}
+	for _, profile := range m.ProfileNames() {
+		for _, requested := range profiles {
+			if profile == requested {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func cleanProfileNames(profiles []string) []string {
+	if len(profiles) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(profiles))
+	seen := make(map[string]struct{}, len(profiles))
+	for _, profile := range profiles {
+		if profile == "" {
+			continue
+		}
+		if _, ok := seen[profile]; ok {
+			continue
+		}
+		seen[profile] = struct{}{}
+		out = append(out, profile)
+	}
+	return out
 }
 
 // Message is one parsed conversation turn, flattened for display and

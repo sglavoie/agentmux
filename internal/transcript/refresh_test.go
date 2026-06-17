@@ -3,6 +3,7 @@ package transcript
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -65,6 +66,179 @@ func TestRefresh_AddsNewEntries(t *testing.T) {
 	}
 	if got.Snippet != "hello" {
 		t.Errorf("Snippet = %q, want %q", got.Snippet, "hello")
+	}
+}
+
+func TestRefresh_SharedHomeProfilesKeepStableDisplayAndFilterMembership(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "codex-home")
+	transcriptPath := filepath.Join(home, "projects", "-tmp-foo", "sess-shared.jsonl")
+	info := writeTranscript(t, transcriptPath, "{}\n")
+
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: harness.Codex, HomeDir: home},
+			{Name: "personal", Harness: harness.Codex, HomeDir: home},
+		},
+		Projects: []config.Session{{
+			Title:     "Foo",
+			Directory: "/tmp/foo",
+			Profile:   "work",
+		}},
+	}
+
+	discoverCalls := 0
+	fr := &fakeReader{
+		harness: harness.Codex,
+		discover: func(homeDir string, _ DiscoverOptions) ([]SessionMeta, error) {
+			discoverCalls++
+			if homeDir != home {
+				t.Errorf("Discover homeDir = %q, want %q", homeDir, home)
+			}
+			return []SessionMeta{{
+				ID:           "sess-shared",
+				Harness:      harness.Codex,
+				CWD:          "/tmp/foo",
+				StartedAt:    time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC),
+				LastAt:       time.Date(2026, 5, 1, 12, 5, 0, 0, time.UTC),
+				Path:         transcriptPath,
+				FileSize:     info.Size(),
+				FileModTime:  info.ModTime(),
+				MessageCount: 4,
+				Snippet:      "shared",
+			}}, nil
+		},
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Codex: fr}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	got, ok := idx.Get(IndexKey(harness.Codex, "sess-shared"))
+	if !ok {
+		t.Fatalf("entry missing after Refresh")
+	}
+	if got.Profile != "work" {
+		t.Errorf("Profile = %q, want stable display profile %q", got.Profile, "work")
+	}
+	if !slices.Equal(got.Profiles, []string{"work", "personal"}) {
+		t.Errorf("Profiles = %v, want [work personal]", got.Profiles)
+	}
+	for _, profile := range []string{"work", "personal"} {
+		matches := idx.List(ListFilter{Profile: []string{profile}})
+		if len(matches) != 1 || matches[0].ID != "sess-shared" {
+			t.Errorf("Profile filter %q returned %+v, want shared session", profile, matches)
+		}
+	}
+	if discoverCalls != 1 {
+		t.Errorf("Discover called %d times for one physical transcript home, want 1", discoverCalls)
+	}
+}
+
+func TestRefresh_DuplicateProjectTitleUsesMatchedDirectoryProfile(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude-home")
+	transcriptPath := filepath.Join(home, "projects", "-tmp-personal-app", "sess-personal.jsonl")
+	info := writeTranscript(t, transcriptPath, "{}\n")
+
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: harness.Claude, HomeDir: home},
+			{Name: "personal", Harness: harness.Claude, HomeDir: home},
+		},
+		Projects: []config.Session{
+			{Title: "App", Directory: "/tmp/work-app", Profile: "work"},
+			{Title: "App", Directory: "/tmp/personal-app", Profile: "personal"},
+		},
+	}
+	fr := &fakeReader{
+		harness: harness.Claude,
+		discover: func(homeDir string, _ DiscoverOptions) ([]SessionMeta, error) {
+			if homeDir != home {
+				t.Errorf("Discover homeDir = %q, want %q", homeDir, home)
+			}
+			return []SessionMeta{{
+				ID:           "sess-personal",
+				Harness:      harness.Claude,
+				CWD:          "/tmp/personal-app",
+				StartedAt:    time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC),
+				LastAt:       time.Date(2026, 5, 1, 12, 5, 0, 0, time.UTC),
+				Path:         transcriptPath,
+				FileSize:     info.Size(),
+				FileModTime:  info.ModTime(),
+				MessageCount: 4,
+				Snippet:      "duplicate title",
+			}}, nil
+		},
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	got, ok := idx.Get(IndexKey(harness.Claude, "sess-personal"))
+	if !ok {
+		t.Fatalf("entry missing after Refresh")
+	}
+	if got.Project != "App" {
+		t.Fatalf("Project = %q, want App", got.Project)
+	}
+	if got.Profile != "personal" {
+		t.Fatalf("Profile = %q, want cwd-matched profile personal", got.Profile)
+	}
+	if !slices.Equal(got.Profiles, []string{"work", "personal"}) {
+		t.Fatalf("Profiles = %v, want [work personal]", got.Profiles)
+	}
+}
+
+func TestRefresh_CodexSharedHomeRealDataStyleSessionVisible(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "codex-home")
+	const sessionID = "019ed5d2-642f-7ae0-85e0-9eaf5905b272"
+	transcriptPath := filepath.Join(home, "sessions", "2026", "06", "17",
+		"rollout-2026-06-17T09-30-00-"+sessionID+".jsonl")
+	writeTranscript(t, transcriptPath,
+		`{"timestamp":"2026-06-17T13:30:01.000Z","type":"session_meta","payload":{"id":"`+sessionID+`","timestamp":"2026-06-17T13:30:00.000Z","cwd":"/tmp/log-scanner"}}`+"\n"+
+			`{"timestamp":"2026-06-17T13:30:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"Find missing scanner logs."}}`+"\n"+
+			`{"timestamp":"2026-06-17T13:30:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Found the copied fixture session."}]}}`+"\n")
+
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: harness.Codex, HomeDir: home},
+			{Name: "personal", Harness: harness.Codex, HomeDir: home},
+		},
+		Projects: []config.Session{{
+			Title:     "LogScanner",
+			Directory: "/tmp/log-scanner",
+			Profile:   "personal",
+		}},
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Codex: NewCodexReader()}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	got, ok := idx.Get(IndexKey(harness.Codex, sessionID))
+	if !ok {
+		t.Fatalf("real-data-style Codex session %q missing after Refresh", IndexKey(harness.Codex, sessionID))
+	}
+	if got.Project != "LogScanner" {
+		t.Fatalf("Project = %q, want LogScanner", got.Project)
+	}
+	if got.Profile != "personal" {
+		t.Fatalf("Profile = %q, want project default personal", got.Profile)
+	}
+	if !slices.Equal(got.Profiles, []string{"work", "personal"}) {
+		t.Fatalf("Profiles = %v, want [work personal]", got.Profiles)
+	}
+	for _, profile := range []string{"work", "personal"} {
+		matches := idx.List(ListFilter{Profile: []string{profile}})
+		if len(matches) != 1 || matches[0].ID != sessionID {
+			t.Fatalf("Profile filter %q returned %+v, want copied Codex fixture", profile, matches)
+		}
 	}
 }
 

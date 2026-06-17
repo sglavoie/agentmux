@@ -194,27 +194,27 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 
 	var firstErr error
 	var discovered []SessionMeta
-	for _, profile := range cfg.Profiles {
-		harnessName := profile.EffectiveHarness()
-		reader, ok := readers[harnessName]
+	for _, group := range transcriptHomeGroups(cfg) {
+		reader, ok := readers[group.harnessName]
 		if !ok {
 			slog.Debug("transcript.index: no reader for harness",
-				"harness", harnessName, "profile", profile.Name)
+				"harness", group.harnessName, "profiles", group.profiles)
 			continue
 		}
-		home := config.ExpandTilde(profile.EffectiveHomeDir())
-		metas, err := reader.Discover(home, DiscoverOptions{Cached: lookup, MinTime: cutoff})
+		metas, err := reader.Discover(group.home, DiscoverOptions{Cached: lookup, MinTime: cutoff})
 		if err != nil {
 			slog.Debug("transcript.index: discover failed",
-				"harness", harnessName, "profile", profile.Name, "err", err)
+				"harness", group.harnessName, "home", group.home, "profiles", group.profiles, "err", err)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 		for _, meta := range metas {
-			meta.Profile = profile.Name
-			meta.Project = ResolveProject(meta.CWD, cfg.Projects)
+			project := matchProject(meta.CWD, cfg.Projects)
+			meta.Project = project.title
+			meta.Profiles = append([]string(nil), group.profiles...)
+			meta.Profile = displayProfileForGroup(cfg, meta.Project, project.profile, group.profiles)
 			discovered = append(discovered, meta)
 		}
 	}
@@ -369,7 +369,7 @@ func (i *Index) List(filter ListFilter) []SessionMeta {
 		if !matchAny(meta.Harness, filter.Harness) {
 			continue
 		}
-		if !matchAny(meta.Profile, filter.Profile) {
+		if !meta.MatchesAnyProfile(filter.Profile) {
 			continue
 		}
 		if !matchAny(meta.Project, filter.Project) {
@@ -404,4 +404,63 @@ func matchAny(value string, set []string) bool {
 		}
 	}
 	return false
+}
+
+type transcriptHomeGroup struct {
+	harnessName string
+	home        string
+	profiles    []string
+}
+
+type transcriptHomeGroupKey struct {
+	harnessName string
+	home        string
+}
+
+func transcriptHomeGroups(cfg *config.Config) []transcriptHomeGroup {
+	if cfg == nil {
+		return nil
+	}
+	groups := make([]transcriptHomeGroup, 0, len(cfg.Profiles))
+	groupByKey := make(map[transcriptHomeGroupKey]int, len(cfg.Profiles))
+	for _, profile := range cfg.Profiles {
+		harnessName := profile.EffectiveHarness()
+		home := config.ExpandTilde(profile.EffectiveHomeDir())
+		key := transcriptHomeGroupKey{harnessName: harnessName, home: home}
+		if idx, ok := groupByKey[key]; ok {
+			groups[idx].profiles = append(groups[idx].profiles, profile.Name)
+			continue
+		}
+		groupByKey[key] = len(groups)
+		groups = append(groups, transcriptHomeGroup{
+			harnessName: harnessName,
+			home:        home,
+			profiles:    []string{profile.Name},
+		})
+	}
+	for idx := range groups {
+		groups[idx].profiles = cleanProfileNames(groups[idx].profiles)
+	}
+	return groups
+}
+
+func displayProfileForGroup(cfg *config.Config, projectTitle, matchedProfile string, profiles []string) string {
+	profiles = cleanProfileNames(profiles)
+	if len(profiles) == 0 {
+		return ""
+	}
+	for _, profile := range profiles {
+		if profile == matchedProfile {
+			return profile
+		}
+	}
+	if cfg != nil {
+		defaultProfile := cfg.DefaultProfileFor(projectTitle)
+		for _, profile := range profiles {
+			if profile == defaultProfile {
+				return profile
+			}
+		}
+	}
+	return profiles[0]
 }

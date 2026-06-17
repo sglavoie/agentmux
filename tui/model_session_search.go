@@ -44,7 +44,8 @@ type sessionCacheLoadDoneMsg struct {
 }
 
 // sessionWarmRefreshDoneMsg carries the background refresh/prune result that
-// follows startup cache loading, plus a fresh empty-query result set.
+// follows startup cache loading, plus a fresh result set for the query that was
+// active when the refresh started.
 type sessionWarmRefreshDoneMsg struct {
 	seq        int
 	results    []transcript.Result
@@ -103,7 +104,8 @@ func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
 	}
 
 	m.sessionLoading = false
-	return m, nil
+	m.sessionRefreshInFlight = true
+	return m, sessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, m.sessionSearchSeq, m.currentSessionQuery())
 }
 
 // enterSessionSearchForProject resets Past Sessions to a single project chip
@@ -127,7 +129,8 @@ func (m Model) enterSessionSearchForProject(project string) (tea.Model, tea.Cmd)
 	if cmd == nil {
 		return m, searchCmd
 	}
-	return m, tea.Batch(cmd, searchCmd)
+	refreshCmd := sessionsRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, m.sessionSearchSeq)
+	return m, tea.Batch(searchCmd, refreshCmd)
 }
 
 // exitSessionSearch returns to ModeList and clears transient input state
@@ -327,10 +330,10 @@ func sessionsRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[s
 	}
 }
 
-func sessionWarmRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader, seq int) tea.Cmd {
+func sessionWarmRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader, seq int, q transcript.Query) tea.Cmd {
 	return func() tea.Msg {
 		refreshErr := refreshAndPruneSessions(idx, cfg, readers)
-		results, searchErr := transcript.Search(idx, readers, transcript.Query{})
+		results, searchErr := transcript.Search(idx, readers, q)
 		return sessionWarmRefreshDoneMsg{
 			seq:        seq,
 			results:    results,

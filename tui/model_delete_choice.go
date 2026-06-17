@@ -140,7 +140,7 @@ func renderDeleteChoice(m Model) string {
 	sb.WriteString(styleHeader.Render(fmt.Sprintf("Delete %s?", deleteTargetLabel(*t))))
 	sb.WriteByte('\n')
 	sb.WriteString("  ")
-	sb.WriteString(styleDim.Render(fmt.Sprintf("%s · %s · %s", t.Harness, t.Profile, t.Path)))
+	sb.WriteString(styleDim.Render(deleteTargetDetail(*t)))
 	sb.WriteByte('\n')
 	sb.WriteByte('\n')
 	sb.WriteString("  ")
@@ -180,4 +180,18 @@ func deleteTargetLabel(t transcript.SessionMeta) string {
 		proj = t.ID
 	}
 	return fmt.Sprintf("%q", proj)
+}
+
+func deleteTargetDetail(t transcript.SessionMeta) string {
+	parts := make([]string, 0, 3)
+	if t.Harness != "" {
+		parts = append(parts, t.Harness)
+	}
+	if profile := sessionProfileLabel(t); profile != "" {
+		parts = append(parts, profile)
+	}
+	if t.Path != "" {
+		parts = append(parts, t.Path)
+	}
+	return strings.Join(parts, " · ")
 }

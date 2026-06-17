@@ -184,6 +184,12 @@ stored in per-session sidecars under
 `~/.local/share/agent-mux/transcripts.search/`. The daemon still never loads
 the transcript index or search sidecars.
 
+When multiple configured profiles point at the same harness transcript home,
+amx scans that home once and stores one metadata row per physical transcript.
+Those rows keep a stable display profile but are searchable under every
+candidate profile because older transcript files do not reliably encode the
+exact launch profile.
+
 - `/` enters a free-text query; results stream the matching JSONL on demand
   and show the per-session match count.
 - `h`, `p`, `r` open single-value chip pickers for harness, profile, and
@@ -205,11 +211,12 @@ amx transcripts compact
 amx transcripts rebuild --all
 ```
 
-`status` reports metadata and sidecar sizes, visible/hidden entry counts, and
-missing sidecars. `compact` migrates legacy inline `search_text` fields into
-sidecars and rewrites `transcripts.json` as metadata-only JSON. `rebuild --all`
-deletes and rebuilds the sidecar store from configured transcript directories,
-temporarily disabling the scan-age cutoff for that pass.
+`status` reports metadata and sidecar sizes, visible/hidden entry counts,
+profile membership counts, shared-profile entry counts, and missing sidecars.
+`compact` migrates legacy inline `search_text` fields into sidecars and rewrites
+`transcripts.json` as metadata-only JSON. `rebuild --all` deletes and rebuilds
+the sidecar store from configured transcript directories, temporarily disabling
+the scan-age cutoff for that pass.
 
 Retention is controlled by `[defaults.session_archive] keep_days` (default
 30). Refresh and prune operations hide index entries older than `keep_days`;

@@ -4,10 +4,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 func chipPickerSearchModel(t *testing.T) Model {
@@ -248,8 +251,8 @@ func TestChipPickerSecondEnterSelectsAndDispatchesSearch(t *testing.T) {
 						t.Fatalf("selected harness search returned harness %q, want %q", res.Meta.Harness, tc.wantSelected)
 					}
 				case chipPickerProfile:
-					if res.Meta.Profile != tc.wantSelected {
-						t.Fatalf("selected profile search returned profile %q, want %q", res.Meta.Profile, tc.wantSelected)
+					if !res.Meta.MatchesAnyProfile([]string{tc.wantSelected}) {
+						t.Fatalf("selected profile search returned profiles %#v, want membership in %q", res.Meta.ProfileNames(), tc.wantSelected)
 					}
 				case chipPickerProject:
 					if res.Meta.Project != tc.wantSelected {
@@ -258,6 +261,70 @@ func TestChipPickerSecondEnterSelectsAndDispatchesSearch(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestChipPickerProfileSelectionMatchesSharedHomeMembership(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	shared := transcript.SessionMeta{
+		ID:       "shared",
+		Harness:  harness.Claude,
+		Profile:  "work",
+		Profiles: []string{"work", "personal"},
+		Project:  "Foo",
+		LastAt:   now,
+		Snippet:  "shared home transcript",
+	}
+	workOnly := transcript.SessionMeta{
+		ID:      "work-only",
+		Harness: harness.Claude,
+		Profile: "work",
+		Project: "Bar",
+		LastAt:  now.Add(-time.Hour),
+		Snippet: "work only transcript",
+	}
+	m := chipPickerSearchModel(t)
+	m.transcriptIndex = writeTranscriptIndex(t, map[string]transcript.SessionMeta{
+		"claude:shared":    shared,
+		"claude:work-only": workOnly,
+	})
+	m.transcriptReaders = map[string]transcript.Reader{}
+	m.sessionResults = []transcript.Result{
+		{Meta: shared, Preview: shared.Snippet},
+		{Meta: workOnly, Preview: workOnly.Snippet},
+	}
+
+	m = enterChipPickerForTest(t, m, "p", chipPickerProfile)
+	m = pressKey(m, "/")
+	m = typeString(m, "per")
+	m = pressKey(m, "enter")
+
+	updated, cmd := m.Update(keyPress("enter"))
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("selecting personal profile returned nil cmd, want debounced session search")
+	}
+	if !slices.Equal(m.filterProfile, []string{"personal"}) {
+		t.Fatalf("filterProfile = %#v, want [personal]", m.filterProfile)
+	}
+
+	updated, searchCmd := m.Update(sessionSearchDebounceMsg{seq: m.sessionSearchSeq})
+	m = updated.(Model)
+	doneMsg, ok := drainCmd(t, searchCmd).(sessionSearchDoneMsg)
+	if !ok {
+		t.Fatalf("profile selection debounce produced %T, want sessionSearchDoneMsg", doneMsg)
+	}
+	if doneMsg.err != nil {
+		t.Fatalf("profile-filtered search returned error: %v", doneMsg.err)
+	}
+	updated, _ = m.Update(doneMsg)
+	m = updated.(Model)
+	if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "shared" {
+		t.Fatalf("personal profile filter results = %+v, want only shared-home transcript", m.sessionResults)
+	}
+	out := stripAnsi(renderSessionSearch(m))
+	if !strings.Contains(out, "[work+1/claude]") {
+		t.Fatalf("shared-home result did not render compact profile label:\n%s", out)
 	}
 }
 

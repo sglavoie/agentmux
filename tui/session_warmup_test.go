@@ -265,6 +265,130 @@ func TestSessionCacheLoadDonePopulatesResultsAndStartsWarmRefresh(t *testing.T) 
 	}
 }
 
+func TestSessionCacheLoadDoneActiveQueryWarmRefreshUsesCurrentQuery(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude-home")
+	hitPath := filepath.Join(home, "projects", "-tmp-foo", "sess-new-hit.jsonl")
+	missPath := filepath.Join(home, "projects", "-tmp-foo", "sess-new-miss.jsonl")
+	for _, path := range []string{hitPath, missPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir transcript dir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
+			t.Fatalf("write transcript %s: %v", path, err)
+		}
+	}
+	hitInfo, err := os.Stat(hitPath)
+	if err != nil {
+		t.Fatalf("stat hit transcript: %v", err)
+	}
+	missInfo, err := os.Stat(missPath)
+	if err != nil {
+		t.Fatalf("stat miss transcript: %v", err)
+	}
+
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	cachedHit := transcript.SessionMeta{
+		ID: "cached-hit", Harness: harness.Claude, Profile: "work", Project: "Foo",
+		LastAt: now.Add(-time.Hour), Snippet: "cached needle row",
+	}
+	cachedMiss := transcript.SessionMeta{
+		ID: "cached-miss", Harness: harness.Claude, Profile: "work", Project: "Foo",
+		LastAt: now.Add(-2 * time.Hour), Snippet: "cached unrelated row",
+	}
+	idx := writeTranscriptIndex(t, map[string]transcript.SessionMeta{
+		"claude:cached-hit":  cachedHit,
+		"claude:cached-miss": cachedMiss,
+	})
+	if err := idx.WriteSearchText("claude:cached-hit", "cached needle row"); err != nil {
+		t.Fatalf("WriteSearchText cached hit: %v", err)
+	}
+	if err := idx.WriteSearchText("claude:cached-miss", "cached unrelated row"); err != nil {
+		t.Fatalf("WriteSearchText cached miss: %v", err)
+	}
+
+	readers := map[string]transcript.Reader{
+		harness.Claude: sessionSearchTestReader{
+			harness: harness.Claude,
+			discover: func(homeDir string, _ transcript.DiscoverOptions) ([]transcript.SessionMeta, error) {
+				if homeDir != home {
+					t.Errorf("Discover homeDir = %q, want %q", homeDir, home)
+				}
+				return []transcript.SessionMeta{
+					{
+						ID: "new-hit", Harness: harness.Claude, CWD: "/tmp/foo",
+						StartedAt: now, LastAt: now,
+						Path: hitPath, FileSize: hitInfo.Size(), FileModTime: hitInfo.ModTime(),
+						Snippet: "fresh needle row", SearchText: "fresh needle row",
+					},
+					{
+						ID: "new-miss", Harness: harness.Claude, CWD: "/tmp/foo",
+						StartedAt: now.Add(-time.Minute), LastAt: now.Add(-time.Minute),
+						Path: missPath, FileSize: missInfo.Size(), FileModTime: missInfo.ModTime(),
+						Snippet: "fresh unrelated row", SearchText: "fresh unrelated row",
+					},
+				}, nil
+			},
+		},
+	}
+	m := Model{
+		mode:                     ModeSessionSearch,
+		cfg:                      &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}},
+		sessionCacheLoadInFlight: true,
+		sessionLoading:           true,
+		sessionSearchSeq:         11,
+		sessionQuery:             "needle",
+	}
+
+	updated, cmd := m.Update(sessionCacheLoadDoneMsg{
+		seq:     0,
+		idx:     idx,
+		readers: readers,
+		results: []transcript.Result{{Meta: cachedHit}},
+	})
+	got := updated.(Model)
+	if cmd == nil {
+		t.Fatal("active query cache load did not return search + warm refresh batch")
+	}
+	top := cmd()
+	batch, ok := top.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("cache load command produced %T, want tea.BatchMsg", top)
+	}
+	if len(batch) != 2 {
+		t.Fatalf("cache load batch length = %d, want search + warm refresh", len(batch))
+	}
+
+	warmMsg, ok := batch[1]().(sessionWarmRefreshDoneMsg)
+	if !ok {
+		t.Fatalf("warm refresh command produced %T, want sessionWarmRefreshDoneMsg", warmMsg)
+	}
+	if warmMsg.seq != 11 {
+		t.Fatalf("warm refresh seq = %d, want current query seq 11", warmMsg.seq)
+	}
+	if warmMsg.refreshErr != nil {
+		t.Fatalf("warm refresh error: %v", warmMsg.refreshErr)
+	}
+	if warmMsg.searchErr != nil {
+		t.Fatalf("warm refresh search error: %v", warmMsg.searchErr)
+	}
+	if !hasSessionResultID(warmMsg.results, "new-hit") {
+		t.Fatalf("warm refresh results missing new matching transcript: %+v", warmMsg.results)
+	}
+	if hasSessionResultID(warmMsg.results, "new-miss") || hasSessionResultID(warmMsg.results, "cached-miss") {
+		t.Fatalf("warm refresh used empty query instead of preserved text query: %+v", warmMsg.results)
+	}
+
+	updated, _ = got.Update(warmMsg)
+	got = updated.(Model)
+	if !hasSessionResultID(got.sessionResults, "new-hit") {
+		t.Fatalf("active-query warm refresh did not publish new matching transcript: %+v", got.sessionResults)
+	}
+	if hasSessionResultID(got.sessionResults, "new-miss") {
+		t.Fatalf("active-query warm refresh published non-matching transcript: %+v", got.sessionResults)
+	}
+}
+
 func TestSessionWarmRefreshDoneUpdatesResults(t *testing.T) {
 	refreshed := transcript.Result{
 		Meta: transcript.SessionMeta{ID: "refreshed", Harness: harness.Claude, LastAt: time.Now()},

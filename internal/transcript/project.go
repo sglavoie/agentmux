@@ -14,19 +14,28 @@ import (
 // When no configured project matches, it falls back to the base name of the
 // directory so the search view always has something to display.
 func ResolveProject(cwd string, projects []config.Session) string {
+	return matchProject(cwd, projects).title
+}
+
+type projectMatch struct {
+	title   string
+	profile string
+}
+
+func matchProject(cwd string, projects []config.Session) projectMatch {
 	abs := absPath(cwd)
 	for _, p := range projects {
 		if p.Directory == "" {
 			continue
 		}
 		if absPath(p.Directory) == abs {
-			return p.Title
+			return projectMatch{title: p.Title, profile: p.EffectiveProfile()}
 		}
 	}
 	if abs == "" {
-		return ""
+		return projectMatch{}
 	}
-	return filepath.Base(abs)
+	return projectMatch{title: filepath.Base(abs)}
 }
 
 // absPath expands `~` and converts to an absolute, symlink-evaluated path.

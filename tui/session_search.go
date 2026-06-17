@@ -260,12 +260,8 @@ func formatSessionRow(res transcript.Result, acctColor map[string]string, maxWid
 	if project == "" {
 		project = "(unknown)"
 	}
-	profile := res.Meta.Profile
-	hname := res.Meta.Harness
-	tag := "[" + profile + "/" + hname + "]"
-	if profile == "" {
-		tag = "[" + hname + "]"
-	}
+	profile := res.Meta.DisplayProfile()
+	tag := sessionProfileTag(res.Meta)
 	tagColored := accountStyle(acctColor[profile]).Render(tag)
 
 	var matchFrag string
@@ -284,6 +280,36 @@ func formatSessionRow(res transcript.Result, acctColor map[string]string, maxWid
 		body += "  " + styleDim.Render(runewidth.Truncate(preview, maxRunes(maxWidth-runewidth.StringWidth(body)-2), "…"))
 	}
 	return runewidth.Truncate(body, maxWidth, "…")
+}
+
+func sessionProfileTag(meta transcript.SessionMeta) string {
+	profile := sessionProfileLabel(meta)
+	if profile == "" {
+		return "[" + meta.Harness + "]"
+	}
+	return "[" + profile + "/" + meta.Harness + "]"
+}
+
+func sessionProfileLabel(meta transcript.SessionMeta) string {
+	profile := meta.DisplayProfile()
+	if profile == "" {
+		return ""
+	}
+	profiles := meta.ProfileNames()
+	if len(profiles) <= 1 {
+		return profile
+	}
+	extra := len(profiles)
+	for _, candidate := range profiles {
+		if candidate == profile {
+			extra--
+			break
+		}
+	}
+	if extra <= 0 {
+		return profile
+	}
+	return fmt.Sprintf("%s+%d", profile, extra)
 }
 
 func maxRunes(n int) int {

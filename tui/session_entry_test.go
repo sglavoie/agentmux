@@ -2,9 +2,13 @@ package tui
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -70,11 +74,14 @@ func TestEnterSessionSearchReusesWarmedResultsOnRepeatedEntry(t *testing.T) {
 	updated, cmd := m.Update(keyPress("S"))
 	got := updated.(Model)
 
-	if cmd != nil {
-		t.Fatalf("first warmed entry returned cmd %T; want immediate reuse", cmd)
+	if cmd == nil {
+		t.Fatal("first warmed entry returned nil cmd; want background refresh")
 	}
 	if got.sessionLoading {
 		t.Fatal("sessionLoading=true after warmed entry")
+	}
+	if !got.sessionRefreshInFlight {
+		t.Fatal("sessionRefreshInFlight=false after warmed entry")
 	}
 	if got.sessionSearchSeq != 7 {
 		t.Fatalf("sessionSearchSeq = %d, want unchanged 7", got.sessionSearchSeq)
@@ -103,6 +110,225 @@ func TestEnterSessionSearchReusesWarmedResultsOnRepeatedEntry(t *testing.T) {
 	}
 }
 
+func TestEnterSessionSearchWithWarmCacheRefreshesAndShowsNewTranscript(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude-home")
+	transcriptPath := filepath.Join(home, "projects", "-tmp-foo", "sess-new.jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+		t.Fatalf("mkdir transcript dir: %v", err)
+	}
+	if err := os.WriteFile(transcriptPath, []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	info, err := os.Stat(transcriptPath)
+	if err != nil {
+		t.Fatalf("stat transcript: %v", err)
+	}
+
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	warmed := transcript.SessionMeta{
+		ID: "old", Harness: harness.Claude, Profile: "work", Project: "Foo",
+		MessageCount: 1,
+		Snippet:      "old cached row", LastAt: now.Add(-time.Hour),
+	}
+	idx := writeTranscriptIndex(t, map[string]transcript.SessionMeta{
+		"claude:old": warmed,
+	})
+	readers := map[string]transcript.Reader{
+		harness.Claude: sessionSearchTestReader{
+			harness: harness.Claude,
+			discover: func(homeDir string, _ transcript.DiscoverOptions) ([]transcript.SessionMeta, error) {
+				if homeDir != home {
+					t.Errorf("Discover homeDir = %q, want %q", homeDir, home)
+				}
+				return []transcript.SessionMeta{{
+					ID:           "new",
+					Harness:      harness.Claude,
+					CWD:          "/tmp/foo",
+					StartedAt:    now,
+					LastAt:       now,
+					Path:         transcriptPath,
+					FileSize:     info.Size(),
+					FileModTime:  info.ModTime(),
+					MessageCount: 2,
+					Snippet:      "newly written row",
+				}}, nil
+			},
+		},
+	}
+	m := Model{
+		mode:              ModeList,
+		width:             100,
+		height:            30,
+		cfg:               &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}},
+		transcriptIndex:   idx,
+		transcriptReaders: readers,
+		sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
+	}
+
+	updated, cmd := m.Update(keyPress("S"))
+	got := updated.(Model)
+	if cmd == nil {
+		t.Fatal("warm Past Sessions re-entry returned nil cmd; want background refresh for newly written transcripts")
+	}
+	if got.mode != ModeSessionSearch {
+		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+	}
+	if !got.sessionRefreshInFlight {
+		t.Fatal("warm Past Sessions re-entry did not mark refresh in flight")
+	}
+	if got.sessionLoading {
+		t.Fatal("warm Past Sessions re-entry hid warmed rows behind a loading state")
+	}
+	if len(got.sessionResults) != 1 || got.sessionResults[0].Meta.ID != "old" {
+		t.Fatalf("warmed rows changed before refresh finished: %+v", got.sessionResults)
+	}
+
+	msg := drainCmd(t, cmd)
+	switch msg := msg.(type) {
+	case sessionWarmRefreshDoneMsg:
+		if msg.refreshErr != nil {
+			t.Fatalf("warm refresh error: %v", msg.refreshErr)
+		}
+		if msg.searchErr != nil {
+			t.Fatalf("warm refresh search error: %v", msg.searchErr)
+		}
+		updated, _ = got.Update(msg)
+		got = updated.(Model)
+	case sessionsRefreshDoneMsg:
+		if msg.err != nil {
+			t.Fatalf("refresh error: %v", msg.err)
+		}
+		updated, searchCmd := got.Update(msg)
+		got = updated.(Model)
+		doneMsg, ok := drainCmd(t, searchCmd).(sessionSearchDoneMsg)
+		if !ok {
+			t.Fatalf("refresh follow-up produced %T, want sessionSearchDoneMsg", doneMsg)
+		}
+		if doneMsg.err != nil {
+			t.Fatalf("refresh follow-up search error: %v", doneMsg.err)
+		}
+		updated, _ = got.Update(doneMsg)
+		got = updated.(Model)
+	default:
+		t.Fatalf("warm Past Sessions re-entry produced %T, want refresh completion message", msg)
+	}
+
+	if got.sessionRefreshInFlight {
+		t.Fatal("sessionRefreshInFlight remained true after refresh completion")
+	}
+	if !hasSessionResultID(got.sessionResults, "new") {
+		t.Fatalf("refreshed results missing newly written transcript: %+v", got.sessionResults)
+	}
+}
+
+func TestEnterSessionSearchWithPreservedQueryRefreshesMatchingRows(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude-home")
+	transcriptPath := filepath.Join(home, "projects", "-tmp-foo", "sess-new.jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+		t.Fatalf("mkdir transcript dir: %v", err)
+	}
+	if err := os.WriteFile(transcriptPath, []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	info, err := os.Stat(transcriptPath)
+	if err != nil {
+		t.Fatalf("stat transcript: %v", err)
+	}
+
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	warmed := transcript.SessionMeta{
+		ID: "old", Harness: harness.Claude, Profile: "work", Project: "Foo",
+		MessageCount: 1,
+		Snippet:      "old cached needle row", LastAt: now.Add(-time.Hour),
+	}
+	idx := writeTranscriptIndex(t, map[string]transcript.SessionMeta{
+		"claude:old": warmed,
+	})
+	if err := idx.WriteSearchText("claude:old", "old cached needle row"); err != nil {
+		t.Fatalf("WriteSearchText old: %v", err)
+	}
+	readers := map[string]transcript.Reader{
+		harness.Claude: sessionSearchTestReader{
+			harness: harness.Claude,
+			discover: func(homeDir string, _ transcript.DiscoverOptions) ([]transcript.SessionMeta, error) {
+				if homeDir != home {
+					t.Errorf("Discover homeDir = %q, want %q", homeDir, home)
+				}
+				return []transcript.SessionMeta{{
+					ID:           "new",
+					Harness:      harness.Claude,
+					CWD:          "/tmp/foo",
+					StartedAt:    now,
+					LastAt:       now,
+					Path:         transcriptPath,
+					FileSize:     info.Size(),
+					FileModTime:  info.ModTime(),
+					MessageCount: 2,
+					Snippet:      "fresh needle row",
+					SearchText:   "fresh needle row",
+				}}, nil
+			},
+		},
+	}
+	m := Model{
+		mode:              ModeList,
+		width:             100,
+		height:            30,
+		cfg:               &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}},
+		transcriptIndex:   idx,
+		transcriptReaders: readers,
+		sessionQuery:      "needle",
+		sessionSearchSeq:  7,
+		sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
+	}
+
+	updated, cmd := m.Update(keyPress("S"))
+	got := updated.(Model)
+	if cmd == nil {
+		t.Fatal("warm Past Sessions re-entry returned nil cmd; want background refresh")
+	}
+	if got.sessionLoading {
+		t.Fatal("preserved-query warm entry hid warmed rows behind a loading state")
+	}
+	if len(got.sessionResults) != 1 || got.sessionResults[0].Meta.ID != "old" {
+		t.Fatalf("warmed rows changed before refresh finished: %+v", got.sessionResults)
+	}
+
+	msg, ok := drainCmd(t, cmd).(sessionWarmRefreshDoneMsg)
+	if !ok {
+		t.Fatalf("warm Past Sessions re-entry produced %T, want sessionWarmRefreshDoneMsg", msg)
+	}
+	if msg.seq != 7 {
+		t.Fatalf("warm refresh seq = %d, want preserved query seq 7", msg.seq)
+	}
+	if msg.refreshErr != nil {
+		t.Fatalf("warm refresh error: %v", msg.refreshErr)
+	}
+	if msg.searchErr != nil {
+		t.Fatalf("warm refresh search error: %v", msg.searchErr)
+	}
+	if !hasSessionResultID(msg.results, "new") {
+		t.Fatalf("warm refresh query results missing newly matching transcript: %+v", msg.results)
+	}
+
+	updated, _ = got.Update(msg)
+	got = updated.(Model)
+	if !hasSessionResultID(got.sessionResults, "new") {
+		t.Fatalf("refreshed preserved-query results missing new transcript: %+v", got.sessionResults)
+	}
+}
+
+func hasSessionResultID(results []transcript.Result, id string) bool {
+	for _, result := range results {
+		if result.Meta.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
@@ -119,6 +345,9 @@ func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testin
 	}
 	if got.mode != ModeSessionSearch {
 		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+	}
+	if !got.sessionRefreshInFlight {
+		t.Fatal("project session search did not start a background refresh")
 	}
 	if got.sessionSearchSeq != seq+1 {
 		t.Fatalf("sessionSearchSeq = %d, want %d", got.sessionSearchSeq, seq+1)
@@ -223,6 +452,9 @@ func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testin
 	if cmd == nil {
 		t.Fatal("project session search returned nil cmd; want debounced search")
 	}
+	if !got.sessionRefreshInFlight {
+		t.Fatal("project session search did not start a background refresh")
+	}
 	if got.sessionQuery != "" {
 		t.Fatalf("sessionQuery = %q, want cleared", got.sessionQuery)
 	}
@@ -247,11 +479,14 @@ func TestDashboardUppercaseSDoesNotApplyProjectShortcut(t *testing.T) {
 	updated, cmd := m.Update(keyPress("S"))
 	got := updated.(Model)
 
-	if cmd != nil {
-		t.Fatalf("dashboard S with warmed cache returned cmd %T, want nil", cmd)
+	if cmd == nil {
+		t.Fatal("dashboard S with warmed cache returned nil cmd; want background refresh")
 	}
 	if got.mode != ModeSessionSearch {
 		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+	}
+	if !got.sessionRefreshInFlight {
+		t.Fatal("dashboard S with warmed cache did not start a background refresh")
 	}
 	if singleChipValue(got.filterProject) != "" {
 		t.Fatalf("filterProject = %#v, want empty global project chip", got.filterProject)
