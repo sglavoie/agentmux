@@ -1,6 +1,8 @@
 package indicator
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -24,6 +26,12 @@ import (
 var resetFlowStopDelay = 500 * time.Millisecond
 
 var indicatorLoopDiscover = agentloop.Discover
+
+const (
+	agentSessionLoopStarted     = "AgentSessionLoopStarted"
+	agentSessionLoopTurnStarted = "AgentSessionLoopTurnStarted"
+	agentSessionLoopFinished    = "AgentSessionLoopFinished"
+)
 
 type indicatorKittyClient interface {
 	ListWindows() ([]kitty.OSWindow, error)
@@ -115,6 +123,22 @@ func runWithDeps(
 		slog.Debug("indicator: kitty lookup failed", "err", err)
 	}
 
+	if isAgentSessionLoopEvent(eventOrAction) {
+		handled, err := runLoopLifecycleEventWithTargets(
+			eventOrAction,
+			action,
+			amxBin,
+			payload,
+			pipeMode,
+			client,
+			dc,
+			windows,
+		)
+		if handled || err != nil {
+			return err
+		}
+	}
+
 	contextLimitDetected := payloadHasContextLimit(payload)
 	if !contextLimitDetected && shouldProbeWindowForContextLimit(eventOrAction, action) {
 		text, textErr := client.GetText(kitty.MatchWindowByID(windowID), "screen")
@@ -180,7 +204,7 @@ func runWithDeps(
 		if skip {
 			return nil
 		}
-		return finalizeTitleUpdate(tab, win, windowID, nextIcon, eventOrAction, payload, client)
+		return finalizeTitleUpdate(tab, win, windowID, nextIcon, eventOrAction, payload, client, windows)
 	}
 	if !resp.OK {
 		return fmt.Errorf("indicator: daemon error: %s", resp.Error)
@@ -194,10 +218,292 @@ func runWithDeps(
 		if eventOrAction != "AgentSessionLoopFinished" {
 			return nil
 		}
-		return finalizeTitleUpdate(tab, win, windowID, currentIconState, eventOrAction, payload, client)
+		return finalizeTitleUpdate(tab, win, windowID, currentIconState, eventOrAction, payload, client, windows)
 	}
 
-	return finalizeTitleUpdate(tab, win, windowID, resp.IconState, eventOrAction, payload, client)
+	return finalizeTitleUpdate(tab, win, windowID, resp.IconState, eventOrAction, payload, client, windows)
+}
+
+type loopLifecycleTarget struct {
+	windowID  int
+	tab       *kitty.Tab
+	win       *kitty.Window
+	workspace agentloop.WorkspaceTarget
+}
+
+func runLoopLifecycleEventWithTargets(
+	eventOrAction string,
+	action string,
+	amxBin string,
+	payload HookPayload,
+	pipeMode bool,
+	client kittyTitleSetter,
+	dc indicatorDaemonClient,
+	windows []kitty.OSWindow,
+) (bool, error) {
+	targets, openTargets := loopLifecycleTargets(windows, payload)
+	if len(targets) == 0 {
+		return false, nil
+	}
+
+	var errs []error
+	for _, target := range targets {
+		if err := runLoopLifecycleTarget(
+			eventOrAction,
+			action,
+			amxBin,
+			payload,
+			pipeMode,
+			client,
+			dc,
+			target,
+			openTargets,
+		); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return true, errors.Join(errs...)
+}
+
+func runLoopLifecycleTarget(
+	eventOrAction string,
+	action string,
+	amxBin string,
+	payload HookPayload,
+	pipeMode bool,
+	client kittyTitleSetter,
+	dc indicatorDaemonClient,
+	target loopLifecycleTarget,
+	openTargets []agentloop.WorkspaceTarget,
+) error {
+	parts := palette.ParseTitleParts(target.tab.Title)
+	sessionTitle := parts.Base
+	currentIconState := parts.State
+	titleMuted := parts.Muted
+
+	var profile, harnessName string
+	muted := titleMuted
+	if target.win != nil {
+		profile = target.win.UserVars.EffectiveProfile()
+		harnessName = target.win.UserVars.EffectiveHarness()
+		muted = titleMuted || target.win.UserVars.Mute != ""
+	}
+
+	log := slog.With(
+		"window_id", target.windowID,
+		"profile", profile,
+		"harness", harnessName,
+		"event", eventOrAction,
+		"action", action,
+		"source", payload.Source,
+		"payload_cwd", payload.CWD,
+		"payload_harness", payload.Harness,
+		"payload_window_id", payload.EffectiveKittyWindowID(),
+		"payload_state_path", payload.StatePath,
+		"pipe_mode", pipeMode,
+	)
+	log.Debug("indicator: routing loop lifecycle event to target window")
+
+	resp, err := dc.SendWithAutoStart(buildStateUpdateRequest(
+		target.windowID,
+		action,
+		eventOrAction,
+		payload,
+		sessionTitle,
+		profile,
+		harnessName,
+		currentIconState,
+		pipeMode,
+		false,
+		false,
+		false,
+		muted,
+	), amxBin)
+	if err != nil {
+		log.Debug("indicator: daemon unavailable, updating target title without guard", "err", err)
+		nextIcon, skip := daemonDownIconState(action, currentIconState, false, harnessName, false)
+		if skip {
+			nextIcon = currentIconState
+		}
+		return finalizeLoopLifecycleTargetTitleUpdate(target, nextIcon, eventOrAction, client, openTargets)
+	}
+	if !resp.OK {
+		return fmt.Errorf("indicator: daemon error: %s", resp.Error)
+	}
+
+	iconState := resp.IconState
+	if !resp.Allowed || iconState == daemon.IconStatePreserve {
+		iconState = currentIconState
+	}
+	return finalizeLoopLifecycleTargetTitleUpdate(target, iconState, eventOrAction, client, openTargets)
+}
+
+func finalizeLoopLifecycleTargetTitleUpdate(
+	target loopLifecycleTarget,
+	iconState string,
+	eventOrAction string,
+	client kittyTitleSetter,
+	openTargets []agentloop.WorkspaceTarget,
+) error {
+	return updateTitleWithLoopMarker(
+		target.windowID,
+		iconState,
+		client,
+		target.tab,
+		loopMarkerForLifecycleTarget(eventOrAction, target.workspace, openTargets),
+	)
+}
+
+func loopLifecycleTargets(windows []kitty.OSWindow, payload HookPayload) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
+	allTargets, openTargets := loopLifecycleWindowTargets(windows)
+	payloadTarget := loopPayloadWorkspaceTarget(payload)
+	if payloadTarget.CWD == "" && payloadTarget.WindowID <= 0 {
+		return nil, openTargets
+	}
+
+	candidates := []agentloop.Candidate{{
+		CWD:      payloadTarget.CWD,
+		Harness:  payloadTarget.Harness,
+		WindowID: payloadTarget.WindowID,
+	}}
+	targets := make([]loopLifecycleTarget, 0, len(allTargets))
+	seenTabs := make(map[int]struct{})
+	for _, target := range allTargets {
+		matches, err := agentloop.HasMatchingWorkspace(candidates, target.workspace, openTargets)
+		if err != nil {
+			slog.Debug("indicator: loop lifecycle target match failed",
+				"window_id", target.windowID,
+				"directory", target.workspace.CWD,
+				"harness", target.workspace.Harness,
+				"err", err,
+			)
+			continue
+		}
+		if !matches {
+			continue
+		}
+		if _, ok := seenTabs[target.tab.ID]; ok {
+			continue
+		}
+		seenTabs[target.tab.ID] = struct{}{}
+		targets = append(targets, target)
+	}
+	return targets, openTargets
+}
+
+func loopLifecycleWindowTargets(windows []kitty.OSWindow) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
+	targets := make([]loopLifecycleTarget, 0)
+	openTargets := make([]agentloop.WorkspaceTarget, 0)
+	for wi := range windows {
+		for ti := range windows[wi].Tabs {
+			tab := &windows[wi].Tabs[ti]
+			for wini := range tab.Windows {
+				win := &tab.Windows[wini]
+				workspace, ok := managedWindowWorkspaceTarget(*win)
+				if !ok {
+					continue
+				}
+				targets = append(targets, loopLifecycleTarget{
+					windowID:  win.ID,
+					tab:       tab,
+					win:       win,
+					workspace: workspace,
+				})
+				openTargets = append(openTargets, workspace)
+			}
+		}
+	}
+	return targets, openTargets
+}
+
+func managedWindowWorkspaceTarget(win kitty.Window) (agentloop.WorkspaceTarget, bool) {
+	if win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
+		return agentloop.WorkspaceTarget{}, false
+	}
+	directory := windowDirectoryHint(win)
+	if directory == "" {
+		return agentloop.WorkspaceTarget{}, false
+	}
+	return agentloop.WorkspaceTarget{
+		CWD:      directory,
+		Harness:  win.UserVars.EffectiveHarness(),
+		WindowID: win.ID,
+	}, true
+}
+
+func loopPayloadWorkspaceTarget(payload HookPayload) agentloop.WorkspaceTarget {
+	cwd := strings.TrimSpace(payload.CWD)
+	harnessName := normalizeKnownLoopHarness(payload.Harness)
+	windowID := payload.EffectiveKittyWindowID()
+	if (cwd == "" || harnessName == "" || windowID <= 0) && strings.TrimSpace(payload.StatePath) != "" {
+		stateCWD, stateHarness, stateWindowID, ok := readLoopStateWorkspace(payload.StatePath)
+		if ok {
+			if cwd == "" {
+				cwd = stateCWD
+			}
+			if harnessName == "" {
+				harnessName = stateHarness
+			}
+			if windowID <= 0 {
+				windowID = stateWindowID
+			}
+		}
+	}
+	return agentloop.WorkspaceTarget{CWD: cwd, Harness: harnessName, WindowID: windowID}
+}
+
+type loopStateWorkspace struct {
+	CWD           string `json:"cwd"`
+	Harness       string `json:"harness"`
+	KittyWindowID int    `json:"kitty_window_id"`
+	ActiveTurn    *struct {
+		Harness string `json:"harness"`
+	} `json:"active_turn"`
+}
+
+func readLoopStateWorkspace(statePath string) (cwd string, harnessName string, windowID int, ok bool) {
+	data, err := os.ReadFile(strings.TrimSpace(statePath))
+	if err != nil {
+		slog.Debug("indicator: loop state payload read failed", "state_path", statePath, "err", err)
+		return "", "", 0, false
+	}
+	var state loopStateWorkspace
+	if err := json.Unmarshal(data, &state); err != nil {
+		slog.Debug("indicator: loop state payload decode failed", "state_path", statePath, "err", err)
+		return "", "", 0, false
+	}
+	harnessName = normalizeKnownLoopHarness(state.Harness)
+	if state.ActiveTurn != nil {
+		if activeHarness := normalizeKnownLoopHarness(state.ActiveTurn.Harness); activeHarness != "" {
+			harnessName = activeHarness
+		}
+	}
+	if state.KittyWindowID > 0 {
+		windowID = state.KittyWindowID
+	}
+	return strings.TrimSpace(state.CWD), harnessName, windowID, true
+}
+
+func normalizeKnownLoopHarness(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case harness.Codex:
+		return harness.Codex
+	case harness.Copilot:
+		return harness.Copilot
+	case harness.Claude:
+		return harness.Claude
+	default:
+		return ""
+	}
+}
+
+func isAgentSessionLoopEvent(eventOrAction string) bool {
+	switch eventOrAction {
+	case agentSessionLoopStarted, agentSessionLoopTurnStarted, agentSessionLoopFinished:
+		return true
+	default:
+		return false
+	}
 }
 
 func buildStateUpdateRequest(
@@ -266,21 +572,42 @@ func shouldDelayResetSensitiveStop(eventOrAction, action string, payload HookPay
 // previously caused Copilot CLI to log every such call as
 // `Hook execution failed: HookExitCodeError` even when the event was captured
 // correctly (and, on permissionRequest hooks, could be treated as a deny).
-func finalizeTitleUpdate(tab *kitty.Tab, win *kitty.Window, windowID int, iconState string, eventOrAction string, payload HookPayload, client kittyTitleSetter) error {
+func finalizeTitleUpdate(tab *kitty.Tab, win *kitty.Window, windowID int, iconState string, eventOrAction string, payload HookPayload, client kittyTitleSetter, windows []kitty.OSWindow) error {
 	if tab == nil {
 		slog.Debug("indicator: tab not found after daemon update; skipping title update", "window_id", windowID)
 		return nil
 	}
 
-	return updateTitleWithLoopMarker(windowID, iconState, client, tab, loopMarkerForFinishedRun(eventOrAction, tab, win, payload))
+	return updateTitleWithLoopMarker(windowID, iconState, client, tab, loopMarkerForLifecycleRun(eventOrAction, tab, win, payload, windows))
 }
 
-func loopMarkerForFinishedRun(eventOrAction string, tab *kitty.Tab, win *kitty.Window, payload HookPayload) *bool {
-	if eventOrAction != "AgentSessionLoopFinished" || tab == nil {
+func loopMarkerForLifecycleRun(eventOrAction string, tab *kitty.Tab, win *kitty.Window, payload HookPayload, windows []kitty.OSWindow) *bool {
+	if !isAgentSessionLoopEvent(eventOrAction) || tab == nil {
 		return nil
 	}
-	directory := strings.TrimSpace(payload.CWD)
-	if directory != "" {
+
+	payloadTarget := loopPayloadWorkspaceTarget(payload)
+	if eventOrAction == agentSessionLoopStarted || eventOrAction == agentSessionLoopTurnStarted {
+		if payloadTarget.WindowID > 0 && win != nil && payloadTarget.WindowID == win.ID {
+			return boolPtr(true)
+		}
+		if payloadTarget.CWD != "" {
+			match, known, err := payloadCWDMatchesKnownTabDirectory(payloadTarget.CWD, tab)
+			if err != nil {
+				slog.Debug("indicator: preserving loop marker after loop start; payload directory match failed", "cwd", payloadTarget.CWD, "err", err)
+				return nil
+			}
+			if known && !match {
+				slog.Debug("indicator: preserving loop marker after loop start; payload cwd differs from tab directory", "cwd", payloadTarget.CWD)
+				return nil
+			}
+		}
+		return boolPtr(true)
+	}
+
+	directory := payloadTarget.CWD
+	payloadMatchesWindow := payloadTarget.WindowID > 0 && win != nil && payloadTarget.WindowID == win.ID
+	if directory != "" && !payloadMatchesWindow {
 		match, known, err := payloadCWDMatchesKnownTabDirectory(directory, tab)
 		if err != nil {
 			slog.Debug("indicator: preserving loop marker after loop finish; payload directory match failed", "cwd", directory, "err", err)
@@ -298,17 +625,64 @@ func loopMarkerForFinishedRun(eventOrAction string, tab *kitty.Tab, win *kitty.W
 		slog.Debug("indicator: preserving loop marker after loop finish; window directory missing")
 		return nil
 	}
-	candidates, err := indicatorLoopDiscover(agentloop.DiscoverOptions{})
-	if err != nil {
-		slog.Debug("indicator: preserving loop marker after loop finish; discovery failed", "err", err)
+	harnessName := payloadTarget.Harness
+	if win != nil {
+		if h := win.UserVars.EffectiveHarness(); h != "" {
+			harnessName = h
+		}
+	}
+	_, openTargets := loopLifecycleWindowTargets(windows)
+	if len(openTargets) == 0 {
+		openTargets = workspaceTargetsForTab(tab)
+	}
+	return loopMarkerForLifecycleTarget(
+		eventOrAction,
+		agentloop.WorkspaceTarget{CWD: directory, Harness: harnessName, WindowID: payloadTarget.WindowID},
+		openTargets,
+	)
+}
+
+func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.WorkspaceTarget, openTargets []agentloop.WorkspaceTarget) *bool {
+	switch eventOrAction {
+	case agentSessionLoopStarted, agentSessionLoopTurnStarted:
+		return boolPtr(true)
+	case agentSessionLoopFinished:
+		if strings.TrimSpace(target.CWD) == "" && target.WindowID <= 0 {
+			slog.Debug("indicator: preserving loop marker after loop finish; target directory missing")
+			return nil
+		}
+		candidates, err := indicatorLoopDiscover(agentloop.DiscoverOptions{})
+		if err != nil {
+			slog.Debug("indicator: preserving loop marker after loop finish; discovery failed", "err", err)
+			return nil
+		}
+		looping, err := agentloop.HasMatchingWorkspace(candidates, target, openTargets)
+		if err != nil {
+			slog.Debug("indicator: preserving loop marker after loop finish; workspace match failed", "directory", target.CWD, "harness", target.Harness, "window_id", target.WindowID, "err", err)
+			return nil
+		}
+		return boolPtr(looping)
+	default:
 		return nil
 	}
-	looping, err := agentloop.HasMatchingCWD(candidates, directory)
-	if err != nil {
-		slog.Debug("indicator: preserving loop marker after loop finish; directory match failed", "directory", directory, "err", err)
+}
+
+func workspaceTargetsForTab(tab *kitty.Tab) []agentloop.WorkspaceTarget {
+	if tab == nil {
 		return nil
 	}
-	return &looping
+	targets := make([]agentloop.WorkspaceTarget, 0, len(tab.Windows))
+	for i := range tab.Windows {
+		target, ok := managedWindowWorkspaceTarget(tab.Windows[i])
+		if ok {
+			targets = append(targets, target)
+		}
+	}
+	return targets
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 func payloadCWDMatchesKnownTabDirectory(cwd string, tab *kitty.Tab) (match bool, known bool, err error) {

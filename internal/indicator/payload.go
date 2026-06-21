@@ -31,8 +31,12 @@ type HookPayload struct {
 	Reason                string `json:"reason"`
 	Source                string `json:"source"`
 	CWD                   string `json:"cwd"`
+	Harness               string `json:"harness"`
+	KittyWindowID         int    `json:"kitty_window_id"`
+	WindowID              int    `json:"window_id"`
 	PlanDir               string `json:"plan_dir"`
 	RunID                 string `json:"run_id"`
+	StatePath             string `json:"state_path"`
 	RunFinishedAt         string `json:"run_finished_at"`
 	Prompt                string `json:"prompt"`
 	InitialPrompt         string `json:"initial_prompt"`
@@ -102,6 +106,16 @@ func (p HookPayload) EffectivePrompt() string {
 
 func (p HookPayload) EffectiveToolName() string {
 	return firstNonBlank(p.ToolName, p.ToolNameCamel)
+}
+
+func (p HookPayload) EffectiveKittyWindowID() int {
+	if p.KittyWindowID > 0 {
+		return p.KittyWindowID
+	}
+	if p.WindowID > 0 {
+		return p.WindowID
+	}
+	return 0
 }
 
 func firstNonBlank(values ...string) string {

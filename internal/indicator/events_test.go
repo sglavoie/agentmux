@@ -17,6 +17,8 @@ func TestResolveAction_AllEvents(t *testing.T) {
 		action string
 	}{
 		{"SessionStart", "idle"},
+		{"AgentSessionLoopStarted", "active"},
+		{"AgentSessionLoopTurnStarted", "active"},
 		{"AgentSessionLoopFinished", "idle"},
 		{"Setup", "active"},
 		{"UserPromptSubmit", "active"},

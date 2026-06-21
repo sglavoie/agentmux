@@ -32,10 +32,12 @@ func planViewerRowsForWidth(lines []string, width int) []planViewerRow {
 	for i, line := range lines {
 		wrapped := strings.Split(lipgloss.Wrap(line, wrapWidth, ""), "\n")
 		for _, text := range wrapped {
-			rows = append(rows, planViewerRow{
-				text:       text,
-				sourceLine: i,
-			})
+			for _, hardWrapped := range displayWrapHard(text, wrapWidth) {
+				rows = append(rows, planViewerRow{
+					text:       hardWrapped,
+					sourceLine: i,
+				})
+			}
 		}
 	}
 	return rows

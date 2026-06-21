@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	runewidth "github.com/mattn/go-runewidth"
-
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -43,7 +41,7 @@ func renderSessionView(m Model) string {
 		if project == "" {
 			project = "(unknown)"
 		}
-		header = fmt.Sprintf("Transcript: %s  %s", project, sessionProfileTag(*m.viewerSession))
+		header = fmt.Sprintf("Transcript: %s  %s", displayRenderTitleIcon(project), sessionProfileTag(*m.viewerSession))
 	}
 	if m.viewerLoading {
 		header += "  " + styleDim.Render("(loading…)")
@@ -148,7 +146,7 @@ func formatViewerLine(msg transcript.Message, maxWidth int) string {
 	roleTag := fmt.Sprintf("[%s] ", role)
 	full := prefix + roleTag + body
 
-	full = runewidth.Truncate(full, maxRunes(maxWidth), "…")
+	full = displayTruncate(full, maxRunes(maxWidth), "…")
 
 	switch role {
 	case "assistant":

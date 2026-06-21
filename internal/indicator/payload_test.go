@@ -96,6 +96,49 @@ func TestDecodeHookPayload_ParsesPromptAndSource(t *testing.T) {
 	}
 }
 
+func TestDecodeHookPayload_ParsesLoopWorkspaceFields(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"hook_event_name": "AgentSessionLoopTurnStarted",
+		"source": "agent_session_loop",
+		"cwd": "/work/trad-x",
+		"harness": "codex",
+		"kitty_window_id": 51,
+		"state_path": "/tmp/asl/state.json"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(loop fields) error: %v", err)
+	}
+	if payload.CWD != "/work/trad-x" {
+		t.Fatalf("CWD = %q, want /work/trad-x", payload.CWD)
+	}
+	if payload.Harness != "codex" {
+		t.Fatalf("Harness = %q, want codex", payload.Harness)
+	}
+	if payload.EffectiveKittyWindowID() != 51 {
+		t.Fatalf("EffectiveKittyWindowID = %d, want 51", payload.EffectiveKittyWindowID())
+	}
+	if payload.StatePath != "/tmp/asl/state.json" {
+		t.Fatalf("StatePath = %q, want /tmp/asl/state.json", payload.StatePath)
+	}
+}
+
+func TestHookPayload_EffectiveKittyWindowID(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload HookPayload
+		want    int
+	}{
+		{name: "kitty window id wins", payload: HookPayload{KittyWindowID: 51, WindowID: 52}, want: 51},
+		{name: "window id fallback", payload: HookPayload{WindowID: 52}, want: 52},
+		{name: "non-positive ignored", payload: HookPayload{KittyWindowID: -1, WindowID: 0}, want: 0},
+	}
+	for _, tc := range cases {
+		if got := tc.payload.EffectiveKittyWindowID(); got != tc.want {
+			t.Errorf("%s: EffectiveKittyWindowID() = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestDecodeHookPayload_PreservesCodexFields(t *testing.T) {
 	payload, err := DecodeHookPayload(strings.NewReader(`{
 		"hook_event_name": "Stop",

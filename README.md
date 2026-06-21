@@ -122,9 +122,12 @@ Key flows:
 - `?`: show the full keymap
 
 Rows marked with `🔁` have at least one active `agent-session-loop` run whose
-cwd matches the project row. Agent Mux also mirrors `🔁` into matching Kitty
-project tab titles while loops are active, preserving existing state, star, and
-mute icons. Finished runs stop counting as active when loop discovery sees
+workspace matches the project row. Loop matching canonicalizes the workspace
+path, prefers the same harness when a matching managed Kitty tab or row is open,
+and falls back to legacy CWD-only matching for older loop state or unknown
+harnesses. Agent Mux also mirrors `🔁` into the Kitty project tab that owns the
+loop while it is active, preserving existing state, star, and mute icons.
+Finished runs stop counting as active when loop discovery sees
 `run_finished_at` in `state.json`, and the `AgentSessionLoopFinished` hook
 clears active-class icons while reconciling the tab-title `🔁` marker.
 Run and tail loops outside the dashboard with `agent-session-loop` directly.
@@ -262,6 +265,16 @@ Hook installation is harness-aware:
 - **Codex**: writes `$CODEX_HOME/hooks.json`
 
 The hook command is `amx hook-indicator <event>`.
+
+`agent-session-loop` / `asl` uses that same hook endpoint when `amx` is on
+`PATH`. It emits `AgentSessionLoopStarted`, `AgentSessionLoopTurnStarted`, and
+`AgentSessionLoopFinished` with JSON that includes `source`, `reason`, `run_id`,
+`plan_dir`, `cwd`, `state_path`, and `harness`. Start payloads use the run's
+top-level harness; turn-start payloads use `active_turn.harness`; finish
+payloads use the last completed turn harness when present. A mid-run harness
+switch moves and clears the loop marker on the matching project tab. Agent Mux
+also reads `state_path` when a lifecycle payload needs to recover `cwd` or
+harness, using `active_turn.harness` before top-level `harness`.
 
 Copilot and Codex hook files are user-level for a given harness home, so any CLI
 surface that reuses that home — including VS Code or another non-Kitty session
@@ -574,7 +587,10 @@ just test
   `amx daemon export-events --current-window --last 50` for
   `AgentSessionLoopFinished`, then inspect the loop `state.json` for
   `run_finished_at`. If the marker remains, confirm no other active loop state
-  still has the same `cwd`.
+  still matches the same workspace and harness. Legacy loop state without a
+  recognized harness still matches by CWD, and if no same-harness managed Kitty
+  tab is open, Agent Mux falls back to the same workspace rather than updating an
+  unrelated caller tab.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

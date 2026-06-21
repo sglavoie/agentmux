@@ -74,6 +74,36 @@ func TestPickerPreviewRenderShowsConfigBlock(t *testing.T) {
 	}
 }
 
+func TestPickerPreviewEmojiTitleReservesIconColumn(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
+		Accounts: []config.Account{{Name: "work", Color: "blue"}},
+		Sessions: []config.Session{
+			{Title: "🗣commscoach", Directory: "/home/user/commscoach", Account: "work"},
+		},
+	}
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	m := NewModel(cfg, client)
+	m = loadSessions(m, nil)
+	m = pressKey(m, "l")
+
+	header := strings.SplitN(stripAnsi(renderPickerPreview(m, 0, 40, 6)), "\n", 2)[0]
+	if !strings.Contains(header, "🗣commscoach") {
+		t.Fatalf("picker preview header should keep title icon tight, got %q", header)
+	}
+}
+
+func TestPickerPreviewStyledFieldTruncationPreservesAnsi(t *testing.T) {
+	m := pickerModel(t)
+	raw := renderPickerPreview(m, 0, 4, 6)
+	lines := strings.Split(raw, "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected picker preview field line, got %q", raw)
+	}
+	assertStyledTruncatedLine(t, "picker preview field", lines[1], 4)
+}
+
 func TestPickerPreviewRootKeepsFooterAboveStatusBar(t *testing.T) {
 	m := pickerModel(t)
 	m.width, m.height = 100, 14

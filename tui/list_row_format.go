@@ -4,9 +4,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
-
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -43,32 +40,24 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	// stable; only filled when the session is locked.
 	lockCol := "  "
 	if s.Locked {
-		lockCol = palette.LockIcon()
-		if w := runewidth.StringWidth(lockCol); w < lockColumnWidth {
-			lockCol += strings.Repeat(" ", lockColumnWidth-w)
-		}
+		lockCol = displayPadRight(palette.LockIcon(), lockColumnWidth)
 	}
 
 	// Mute indicator column. Always reserved (2 cells) so column alignment is
 	// stable; only filled when the session is muted.
 	muteCol := "  "
 	if s.Muted {
-		muteCol = palette.MuteIcon()
-		if w := runewidth.StringWidth(muteCol); w < muteColumnWidth {
-			muteCol += strings.Repeat(" ", muteColumnWidth-w)
-		}
+		muteCol = displayPadRight(palette.MuteIcon(), muteColumnWidth)
 	}
 
-	// State icon at the start for instant scanning.
-	iconCol := "  "
+	// State icon at the start for instant scanning. displayPadIconCell pads
+	// the empty-state placeholder to the same 2-cell column reserved for
+	// glyph rows.
+	icon := ""
 	if s.State != "" {
-		icon := palette.StateIcon(s.State)
-		iconW := iconDisplayWidth(icon)
-		if pad := 2 - iconW; pad > 0 {
-			icon += strings.Repeat(" ", pad)
-		}
-		iconCol = icon
+		icon = palette.StateIcon(s.State)
 	}
+	iconCol := displayPadIconCell(icon)
 
 	// Account prefix badge (first rune of account, uppercased). Use the first
 	// rune rather than the first byte so a multibyte account name produces a
@@ -101,7 +90,7 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 		if emoji != "" {
 			text = emoji + " " + label
 		}
-		pad := harnessColWidth - runewidth.StringWidth(text)
+		pad := harnessColWidth - displayWidth(text)
 		if pad < 0 {
 			pad = 0
 		}
@@ -110,16 +99,21 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 		harnessCell = strings.Repeat(" ", harnessColWidth)
 	}
 
-	// Title: use the project title padded to titleColWidth.
-	title := runewidth.Truncate(runningSessionDisplayTitle(s), titleColWidth, "…")
-	paddedTitle := title + strings.Repeat(" ", titleColWidth-runewidth.StringWidth(title))
-	title = accountStyle(identityColor).Render(paddedTitle)
+	// Title: project title, with a leading pictographic grapheme padded to the
+	// fixed 2-cell title-icon column so emoji-prefixed titles align with each
+	// other regardless of whether the source glyph measures as 1 or 2 cells.
+	// Truncated to titleColWidth (grapheme-atomic) and right-padded to fill the
+	// column.
+	titleText := displayRenderTitleIcon(runningSessionDisplayTitle(s))
+	titleText = displayTruncate(titleText, titleColWidth, "…")
+	paddedTitle := displayPadRight(titleText, titleColWidth)
+	title := accountStyle(identityColor).Render(paddedTitle)
 
 	// Directory: truncated.
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		used := lockColumnWidth + muteColumnWidth + runewidth.StringWidth(activeLoopCell) + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3 + runewidth.StringWidth(ageCell)
+		used := lockColumnWidth + muteColumnWidth + displayWidth(activeLoopCell) + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3 + displayWidth(ageCell)
 		// lock (2) + mute (2) + optional loop + icon+space (3) + "[X] " badge (4)
 		//   + harness (10) + space (1) + title (20) + separators before dir (3)
 		//   + optional age cell.
@@ -129,53 +123,8 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 		}
 		maxDir = available
 	}
-	dir = truncateDirLeft(dir, maxDir)
+	dir = displayTruncateLeft(dir, maxDir, "…")
 	dir = styleDim.Render(dir)
 
 	return lockCol + muteCol + activeLoopCell + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
-}
-
-func truncateDirLeft(dir string, maxWidth int) string {
-	if maxWidth <= 0 {
-		return ""
-	}
-	if runewidth.StringWidth(dir) <= maxWidth {
-		return dir
-	}
-	if maxWidth == 1 {
-		return "…"
-	}
-	runes := []rune(dir)
-	for len(runes) > 0 && runewidth.StringWidth(string(runes))+1 > maxWidth {
-		runes = runes[1:]
-	}
-	return "…" + string(runes)
-}
-
-// iconDisplayWidth returns the visual cell width of a state icon. We rely
-// on go-runewidth's measurement; FE0F variation selectors are reported as
-// zero-width which matches how Kitty actually renders these glyphs as a
-// single cell. The caller (padIconCell / formatRow) is responsible for
-// padding to the 2-cell icon column.
-func iconDisplayWidth(icon string) int {
-	return runewidth.StringWidth(icon)
-}
-
-// padIconCell returns icon padded to exactly 2 visual cells so the icon
-// column stays a stable width regardless of which state glyph is rendered.
-func padIconCell(icon string) string {
-	w := iconDisplayWidth(icon)
-	if w >= 2 {
-		return icon
-	}
-	return icon + strings.Repeat(" ", 2-w)
-}
-
-func centerInWidth(s string, width int) string {
-	w := lipgloss.Width(s)
-	if w >= width {
-		return s
-	}
-	pad := (width - w) / 2
-	return strings.Repeat(" ", pad) + s
 }

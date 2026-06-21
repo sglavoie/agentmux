@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 type statusSeverity int
@@ -271,13 +270,10 @@ func fitStatusBarText(text string, width int) string {
 	if width <= 0 {
 		return text
 	}
-	if runewidth.StringWidth(text) > width {
-		text = runewidth.Truncate(text, width, "...")
+	if displayWidth(text) > width {
+		text = displayTruncate(text, width, "...")
 	}
-	if pad := width - runewidth.StringWidth(text); pad > 0 {
-		text += strings.Repeat(" ", pad)
-	}
-	return text
+	return displayPadRight(text, width)
 }
 
 func oneLineStatusText(text string) string {

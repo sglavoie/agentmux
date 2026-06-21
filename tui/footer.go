@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -146,19 +144,19 @@ func listFooterLines(m Model, selectedLine string) []string {
 // fit m.width.
 func listFooterLine2(m Model, navFragments []string) string {
 	sep := styleFooter.Render("  ")
-	sepW := lipgloss.Width(sep)
+	sepW := displayStyledWidth(sep)
 
 	frags := navFragments
 	if pos := listPositionFragment(m); pos != "" {
 		// The position fragment sits before the nav hints with a wider
 		// three-space gap so the eye chunks it as a separate group.
 		gap := styleFooter.Render("   ")
-		gapW := lipgloss.Width(gap)
+		gapW := displayStyledWidth(gap)
 		tokens := make([]footerToken, 0, len(frags)+1)
 		posRendered := styleFooter.Render(pos)
 		tokens = append(tokens, footerToken{
 			rendered: posRendered,
-			width:    lipgloss.Width(posRendered),
+			width:    displayStyledWidth(posRendered),
 			sep:      gap,
 			sepWidth: gapW,
 		})
@@ -166,7 +164,7 @@ func listFooterLine2(m Model, navFragments []string) string {
 			rendered := styleFooter.Render(f)
 			tok := footerToken{
 				rendered: rendered,
-				width:    lipgloss.Width(rendered),
+				width:    displayStyledWidth(rendered),
 			}
 			if i < len(frags)-1 {
 				tok.sep = sep
@@ -183,7 +181,7 @@ func listFooterLine2(m Model, navFragments []string) string {
 		rendered := styleFooter.Render(f)
 		tok := footerToken{
 			rendered: rendered,
-			width:    lipgloss.Width(rendered),
+			width:    displayStyledWidth(rendered),
 		}
 		if i < len(frags)-1 {
 			tok.sep = sep
@@ -205,7 +203,7 @@ func listFooterLine2Leads(m Model) (string, string) {
 		s := m.filtered[m.cursor]
 		if g := StateGloss(s.State); g != "" {
 			icon := palette.StateIcon(s.State)
-			glossText := padIconCell(icon) + " " + g
+			glossText := displayPadIconCell(icon) + " " + g
 			lead := indent + stateAccentStyle(s.State).Render(glossText) + styleFooter.Render(" — ")
 			return lead, indent
 		}
@@ -315,7 +313,7 @@ func listFooterGlobalLine(m Model) string {
 func listFooterSectionsLine(m Model, sections []string) string {
 	const indent = "  "
 	innerSep := styleFooter.Render(" · ")
-	innerSepW := lipgloss.Width(innerSep)
+	innerSepW := displayStyledWidth(innerSep)
 
 	var tokens []footerToken
 	for _, sec := range sections {
@@ -333,7 +331,7 @@ func listFooterSectionsLine(m Model, sections []string) string {
 			}
 			tok := footerToken{
 				rendered: rendered,
-				width:    lipgloss.Width(rendered),
+				width:    displayStyledWidth(rendered),
 			}
 			if i < len(entries)-1 || hasLaterEntries(sections, sec) {
 				tok.sep = innerSep
@@ -363,7 +361,7 @@ func hasLaterEntries(sections []string, current string) bool {
 
 // footerToken pairs a styled rendered string with its visible width and an
 // optional separator that follows it within a section. Pre-measuring with
-// lipgloss.Width lets us account for ANSI styling correctly.
+// displayStyledWidth lets us account for ANSI styling correctly.
 type footerToken struct {
 	rendered string
 	width    int
@@ -397,8 +395,8 @@ func wrapFooterLine(firstLineLead, continuationIndent string, tokens []footerTok
 		return sb.String()
 	}
 
-	leadW := lipgloss.Width(firstLineLead)
-	contW := lipgloss.Width(continuationIndent)
+	leadW := displayStyledWidth(firstLineLead)
+	contW := displayStyledWidth(continuationIndent)
 
 	var out strings.Builder
 	out.WriteString(firstLineLead)

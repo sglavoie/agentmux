@@ -169,7 +169,7 @@ func TestActiveLoopRefreshDropsStaleSequence(t *testing.T) {
 	}
 }
 
-func TestActiveLoopsForSelectedRowMatchesCanonicalCWD(t *testing.T) {
+func TestActiveLoopsForSelectedRowMatchesCanonicalWorkspace(t *testing.T) {
 	root := t.TempDir()
 	realDir := filepath.Join(root, "project")
 	if err := os.Mkdir(realDir, 0o755); err != nil {
@@ -182,12 +182,122 @@ func TestActiveLoopsForSelectedRowMatchesCanonicalCWD(t *testing.T) {
 
 	match := agentloop.Candidate{PlanDir: "/plans/match", CWD: realDir}
 	other := agentloop.Candidate{PlanDir: "/plans/other", CWD: filepath.Join(root, "other")}
-	m := loadSessions(testModel(), []session.RunningSession{{Directory: linkDir}})
+	target := session.RunningSession{Directory: linkDir}
+	m := loadSessions(testModel(), []session.RunningSession{target})
 	m.activeLoopCandidates = []agentloop.Candidate{other, match}
 
-	got := m.activeLoopsForDirectory(linkDir)
+	got := m.activeLoopsForSession(target)
 	if !reflect.DeepEqual(got, []agentloop.Candidate{match}) {
 		t.Fatalf("selected-row active loops = %#v, want match", got)
+	}
+}
+
+func TestActiveLoopsForSelectedRowPrefersSameHarness(t *testing.T) {
+	root := t.TempDir()
+	workspace := mkdirTestDir(t, root, "project")
+	codexSession := session.RunningSession{
+		WindowID:  101,
+		Base:      "api-codex",
+		Directory: workspace,
+		Harness:   "codex",
+	}
+	copilotSession := session.RunningSession{
+		WindowID:  202,
+		Base:      "api-copilot",
+		Directory: workspace,
+		Harness:   "copilot",
+	}
+	copilotLoop := agentloop.Candidate{
+		PlanDir: "/plans/copilot",
+		CWD:     workspace,
+		Harness: "copilot",
+	}
+	m := loadSessions(testModel(), []session.RunningSession{codexSession, copilotSession})
+	m.activeLoopCandidates = []agentloop.Candidate{copilotLoop}
+
+	if got := m.activeLoopsForSession(copilotSession); !reflect.DeepEqual(got, []agentloop.Candidate{copilotLoop}) {
+		t.Fatalf("copilot row active loops = %#v, want copilot loop", got)
+	}
+	if got := m.activeLoopsForSession(codexSession); len(got) != 0 {
+		t.Fatalf("codex row active loops = %#v, want none when same-harness tab exists", got)
+	}
+}
+
+func TestActiveLoopsForSelectedRowMarksNonDefaultProjectRowNotCaller(t *testing.T) {
+	root := t.TempDir()
+	callerDir := mkdirTestDir(t, root, "scripts")
+	workspace := mkdirTestDir(t, root, "project")
+	callerSession := session.RunningSession{
+		WindowID:  42,
+		Base:      "scripts",
+		Directory: callerDir,
+		Harness:   "claude",
+	}
+	codexSession := session.RunningSession{
+		WindowID:  101,
+		Base:      "project-codex",
+		Directory: workspace,
+		Harness:   "codex",
+	}
+	copilotSession := session.RunningSession{
+		WindowID:  202,
+		Base:      "project-copilot",
+		Directory: workspace,
+		Harness:   "copilot",
+	}
+	copilotLoop := agentloop.Candidate{
+		PlanDir: "/plans/project",
+		CWD:     workspace,
+		Harness: "copilot",
+	}
+	m := loadSessions(testModel(), []session.RunningSession{
+		callerSession,
+		codexSession,
+		copilotSession,
+	})
+	m.activeLoopCandidates = []agentloop.Candidate{copilotLoop}
+
+	if got := m.activeLoopsForSession(copilotSession); !reflect.DeepEqual(got, []agentloop.Candidate{copilotLoop}) {
+		t.Fatalf("copilot project row active loops = %#v, want copilot loop", got)
+	}
+	if got := m.activeLoopsForSession(codexSession); len(got) != 0 {
+		t.Fatalf("codex project row active loops = %#v, want none while copilot row owns loop", got)
+	}
+	if got := m.activeLoopsForSession(callerSession); len(got) != 0 {
+		t.Fatalf("caller row active loops = %#v, want none for different workspace", got)
+	}
+}
+
+func TestActiveLoopsForSelectedRowUsesWindowIDBeforeWorkspace(t *testing.T) {
+	root := t.TempDir()
+	workspace := mkdirTestDir(t, root, "project")
+	worktree := mkdirTestDir(t, root, "project--ws14")
+	targetSession := session.RunningSession{
+		WindowID:  101,
+		Base:      "project-codex",
+		Directory: workspace,
+		Harness:   "codex",
+	}
+	otherSession := session.RunningSession{
+		WindowID:  202,
+		Base:      "project-codex-2",
+		Directory: workspace,
+		Harness:   "codex",
+	}
+	loop := agentloop.Candidate{
+		PlanDir:  "/plans/project",
+		CWD:      worktree,
+		Harness:  "codex",
+		WindowID: 101,
+	}
+	m := loadSessions(testModel(), []session.RunningSession{targetSession, otherSession})
+	m.activeLoopCandidates = []agentloop.Candidate{loop}
+
+	if got := m.activeLoopsForSession(targetSession); !reflect.DeepEqual(got, []agentloop.Candidate{loop}) {
+		t.Fatalf("target row active loops = %#v, want window-specific loop", got)
+	}
+	if got := m.activeLoopsForSession(otherSession); len(got) != 0 {
+		t.Fatalf("other row active loops = %#v, want none for different window", got)
 	}
 }
 
@@ -278,6 +388,167 @@ func TestActiveLoopRefreshSyncsKittyTabLoopMarkers(t *testing.T) {
 			}),
 		},
 	}
+	if !reflect.DeepEqual(client.setCalls, wantCalls) {
+		t.Fatalf("SetTabTitle calls = %#v, want %#v", client.setCalls, wantCalls)
+	}
+}
+
+func TestActiveLoopRefreshSyncsSameHarnessKittyTabLoopMarker(t *testing.T) {
+	root := t.TempDir()
+	workspace := mkdirTestDir(t, root, "api")
+	codexCurrent := palette.BuildTitleParts(palette.TitleParts{Base: "api-codex"})
+	copilotCurrent := palette.BuildTitleParts(palette.TitleParts{Base: "api-copilot"})
+	client := &fakeActiveLoopTitleSyncClient{
+		windows: []kitty.OSWindow{{
+			Tabs: []kitty.Tab{
+				{ID: 10, Title: codexCurrent, Windows: []kitty.Window{{ID: 101}}},
+				{ID: 20, Title: copilotCurrent, Windows: []kitty.Window{{ID: 202}}},
+			},
+		}},
+	}
+
+	m := testModel()
+	m.client = client
+	m.activeLoopRefreshSeq = 12
+	m = loadSessions(m, []session.RunningSession{
+		{WindowID: 101, Base: "api-codex", Directory: workspace, Harness: "codex"},
+		{WindowID: 202, Base: "api-copilot", Directory: workspace, Harness: "copilot"},
+	})
+
+	candidates := []agentloop.Candidate{{
+		PlanDir: "/plans/copilot",
+		CWD:     workspace,
+		Harness: "copilot",
+	}}
+	updated, cmd := m.Update(activeLoopsMsg{seq: 12, candidates: candidates})
+	got := updated.(Model)
+	if !reflect.DeepEqual(got.activeLoopCandidates, candidates) {
+		t.Fatalf("active loops = %#v, want refreshed candidates", got.activeLoopCandidates)
+	}
+	if cmd == nil {
+		t.Fatal("accepted active loop refresh did not dispatch title sync")
+	}
+	msg, ok := cmd().(activeLoopTitleSyncMsg)
+	if !ok {
+		t.Fatalf("title sync cmd returned %T, want activeLoopTitleSyncMsg", msg)
+	}
+	if msg.err != nil {
+		t.Fatalf("title sync err = %v, want nil", msg.err)
+	}
+
+	wantCalls := []activeLoopTitleSetCall{{
+		match: kitty.MatchTabByID(20),
+		title: palette.BuildTitleParts(palette.TitleParts{
+			Base:    "api-copilot",
+			Looping: true,
+		}),
+	}}
+	if !reflect.DeepEqual(client.setCalls, wantCalls) {
+		t.Fatalf("SetTabTitle calls = %#v, want %#v", client.setCalls, wantCalls)
+	}
+}
+
+func TestActiveLoopRefreshSyncsWindowIDBeforeWorkspace(t *testing.T) {
+	root := t.TempDir()
+	workspace := mkdirTestDir(t, root, "api")
+	worktree := mkdirTestDir(t, root, "api--ws14")
+	firstCurrent := palette.BuildTitleParts(palette.TitleParts{Base: "api"})
+	secondCurrent := palette.BuildTitleParts(palette.TitleParts{Base: "api-copy"})
+	client := &fakeActiveLoopTitleSyncClient{
+		windows: []kitty.OSWindow{{
+			Tabs: []kitty.Tab{
+				{ID: 10, Title: firstCurrent, Windows: []kitty.Window{{ID: 101}}},
+				{ID: 20, Title: secondCurrent, Windows: []kitty.Window{{ID: 202}}},
+			},
+		}},
+	}
+
+	m := testModel()
+	m.client = client
+	m.activeLoopRefreshSeq = 14
+	m = loadSessions(m, []session.RunningSession{
+		{WindowID: 101, Base: "api", Directory: workspace, Harness: "codex"},
+		{WindowID: 202, Base: "api-copy", Directory: workspace, Harness: "codex"},
+	})
+
+	candidates := []agentloop.Candidate{{
+		PlanDir:  "/plans/api",
+		CWD:      worktree,
+		Harness:  "codex",
+		WindowID: 101,
+	}}
+	_, cmd := m.Update(activeLoopsMsg{seq: 14, candidates: candidates})
+	if cmd == nil {
+		t.Fatal("accepted active loop refresh did not dispatch title sync")
+	}
+	msg, ok := cmd().(activeLoopTitleSyncMsg)
+	if !ok {
+		t.Fatalf("title sync cmd returned %T, want activeLoopTitleSyncMsg", msg)
+	}
+	if msg.err != nil {
+		t.Fatalf("title sync err = %v, want nil", msg.err)
+	}
+
+	wantCalls := []activeLoopTitleSetCall{{
+		match: kitty.MatchTabByID(10),
+		title: palette.BuildTitleParts(palette.TitleParts{
+			Base:    "api",
+			Looping: true,
+		}),
+	}}
+	if !reflect.DeepEqual(client.setCalls, wantCalls) {
+		t.Fatalf("SetTabTitle calls = %#v, want %#v", client.setCalls, wantCalls)
+	}
+}
+
+func TestActiveLoopRefreshFallsBackToCWDTabWhenSameHarnessMissing(t *testing.T) {
+	root := t.TempDir()
+	workspace := mkdirTestDir(t, root, "api")
+	current := palette.BuildTitleParts(palette.TitleParts{Base: "api-codex"})
+	client := &fakeActiveLoopTitleSyncClient{
+		windows: []kitty.OSWindow{{
+			Tabs: []kitty.Tab{{
+				ID:      10,
+				Title:   current,
+				Windows: []kitty.Window{{ID: 101}},
+			}},
+		}},
+	}
+
+	m := testModel()
+	m.client = client
+	m.activeLoopRefreshSeq = 13
+	m = loadSessions(m, []session.RunningSession{{
+		WindowID:  101,
+		Base:      "api-codex",
+		Directory: workspace,
+		Harness:   "codex",
+	}})
+
+	candidates := []agentloop.Candidate{{
+		PlanDir: "/plans/copilot",
+		CWD:     workspace,
+		Harness: "copilot",
+	}}
+	_, cmd := m.Update(activeLoopsMsg{seq: 13, candidates: candidates})
+	if cmd == nil {
+		t.Fatal("accepted active loop refresh did not dispatch title sync")
+	}
+	msg, ok := cmd().(activeLoopTitleSyncMsg)
+	if !ok {
+		t.Fatalf("title sync cmd returned %T, want activeLoopTitleSyncMsg", msg)
+	}
+	if msg.err != nil {
+		t.Fatalf("title sync err = %v, want nil", msg.err)
+	}
+
+	wantCalls := []activeLoopTitleSetCall{{
+		match: kitty.MatchTabByID(10),
+		title: palette.BuildTitleParts(palette.TitleParts{
+			Base:    "api-codex",
+			Looping: true,
+		}),
+	}}
 	if !reflect.DeepEqual(client.setCalls, wantCalls) {
 		t.Fatalf("SetTabTitle calls = %#v, want %#v", client.setCalls, wantCalls)
 	}

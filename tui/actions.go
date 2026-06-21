@@ -237,7 +237,7 @@ func renderActions(m Model, descWidth int) string {
 	indent := strings.Repeat(" ", actionDescIndent)
 
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render("Actions for "+runningSessionDisplayTitle(m.targetSession)) + "\n\n")
+	sb.WriteString(styleHeader.Render("Actions for "+displayRenderTitleIcon(runningSessionDisplayTitle(m.targetSession))) + "\n\n")
 	for _, a := range actionsFor(m) {
 		avail := a.available(m)
 		keyCol := fmt.Sprintf("%-2s  %-18s", a.keyDisplay, a.label)

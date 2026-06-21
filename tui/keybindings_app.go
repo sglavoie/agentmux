@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sglavoie/agentmux/internal/kittykeys"
 )
@@ -47,7 +46,7 @@ func (m keybindingsModel) View() tea.View {
 				continue
 			}
 			key := a.Key
-			padding := 16 - runewidth.StringWidth(key)
+			padding := 16 - displayWidth(key)
 			if padding < 1 {
 				padding = 1
 			}

@@ -31,7 +31,7 @@ func syncActiveLoopTabTitles(client kitty.KittyClient, sessions []session.Runnin
 		return fmt.Errorf("list kitty windows: %w", err)
 	}
 
-	activeCWDs := canonicalActiveLoopCWDs(candidates)
+	openTargets := activeLoopWorkspaceTargets(sessions)
 	var errs []error
 	for _, s := range sessions {
 		if s.WindowID == 0 {
@@ -41,7 +41,11 @@ func syncActiveLoopTabTitles(client kitty.KittyClient, sessions []session.Runnin
 		if !ok {
 			continue
 		}
-		looping, err := activeLoopingForSessionDirectory(activeCWDs, s.Directory)
+		looping, err := agentloop.HasMatchingWorkspace(
+			candidates,
+			agentloop.WorkspaceTarget{CWD: s.Directory, Harness: s.Harness, WindowID: s.WindowID},
+			openTargets,
+		)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", sessionDiagnosticName(s), err))
 			continue
@@ -58,33 +62,6 @@ func syncActiveLoopTabTitles(client kitty.KittyClient, sessions []session.Runnin
 		}
 	}
 	return errors.Join(errs...)
-}
-
-func canonicalActiveLoopCWDs(candidates []agentloop.Candidate) map[string]struct{} {
-	active := make(map[string]struct{}, len(candidates))
-	for _, candidate := range candidates {
-		if candidate.CWD == "" {
-			continue
-		}
-		cwd, err := agentloop.CanonicalizePath(candidate.CWD)
-		if err != nil {
-			continue
-		}
-		active[cwd] = struct{}{}
-	}
-	return active
-}
-
-func activeLoopingForSessionDirectory(activeCWDs map[string]struct{}, directory string) (bool, error) {
-	if directory == "" {
-		return false, nil
-	}
-	cwd, err := agentloop.CanonicalizePath(directory)
-	if err != nil {
-		return false, fmt.Errorf("resolve directory %s: %w", directory, err)
-	}
-	_, ok := activeCWDs[cwd]
-	return ok, nil
 }
 
 func sessionDiagnosticName(s session.RunningSession) string {

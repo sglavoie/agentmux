@@ -10,7 +10,6 @@ package tui
 import (
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -49,7 +48,7 @@ func composeOverlay(base, popup string, baseWidth, baseHeight, startCol, startRo
 		if row < 0 || row >= len(baseLines) {
 			continue
 		}
-		lineWidth := lipgloss.Width(popupLine)
+		lineWidth := displayStyledWidth(popupLine)
 		if lineWidth < maxPopupWidth {
 			popupLine += strings.Repeat(" ", maxPopupWidth-lineWidth)
 		}
@@ -87,11 +86,11 @@ func topCenterOverlay(base, popup string, baseWidth, baseHeight int, dim bool) s
 }
 
 // popupWidth returns the widest rendered line in popup, accounting for ANSI
-// escape sequences via lipgloss.Width.
+// escape sequences via displayStyledWidth.
 func popupWidth(popup string) int {
 	width := 0
 	for _, line := range strings.Split(popup, "\n") {
-		if w := lipgloss.Width(line); w > width {
+		if w := displayStyledWidth(line); w > width {
 			width = w
 		}
 	}
@@ -114,17 +113,17 @@ func dimContent(content string) string {
 // totalWidth when shorter; the popup region is sliced out with ansi.Cut so any
 // existing ANSI escapes outside the overlay window survive.
 func overlayLineAt(baseLine, overlayStr string, startCol, totalWidth int) string {
-	baseW := lipgloss.Width(baseLine)
+	baseW := displayStyledWidth(baseLine)
 	if baseW < totalWidth {
 		baseLine += strings.Repeat(" ", totalWidth-baseW)
 	}
 
-	overlayWidth := lipgloss.Width(overlayStr)
+	overlayWidth := displayStyledWidth(overlayStr)
 
 	left := ""
 	if startCol > 0 {
 		left = ansi.Cut(baseLine, 0, startCol)
-		leftWidth := lipgloss.Width(left)
+		leftWidth := displayStyledWidth(left)
 		if leftWidth < startCol {
 			left += strings.Repeat(" ", startCol-leftWidth)
 		}

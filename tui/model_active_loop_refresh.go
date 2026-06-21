@@ -2,6 +2,7 @@ package tui
 
 import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/session"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -18,10 +19,26 @@ func activeLoopRefreshCmd(seq int) tea.Cmd {
 	}
 }
 
-func (m Model) activeLoopsForDirectory(directory string) []agentloop.Candidate {
-	matches, err := agentloop.MatchingCWD(m.activeLoopCandidates, directory)
+func (m Model) activeLoopsForSession(s session.RunningSession) []agentloop.Candidate {
+	matches, err := agentloop.MatchingWorkspace(
+		m.activeLoopCandidates,
+		agentloop.WorkspaceTarget{CWD: s.Directory, Harness: s.Harness, WindowID: s.WindowID},
+		activeLoopWorkspaceTargets(m.sessions),
+	)
 	if err != nil {
 		return nil
 	}
 	return matches
+}
+
+func activeLoopWorkspaceTargets(sessions []session.RunningSession) []agentloop.WorkspaceTarget {
+	targets := make([]agentloop.WorkspaceTarget, 0, len(sessions))
+	for _, s := range sessions {
+		targets = append(targets, agentloop.WorkspaceTarget{
+			CWD:      s.Directory,
+			Harness:  s.Harness,
+			WindowID: s.WindowID,
+		})
+	}
+	return targets
 }

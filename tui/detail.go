@@ -6,8 +6,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	runewidth "github.com/mattn/go-runewidth"
-
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -130,7 +128,7 @@ func isTerminalAction(action string) bool {
 // session ended in the most-recent-first event list.
 func sessionEndedSeparator(width int) string {
 	const label = " session ended "
-	labelW := runewidth.StringWidth(label)
+	labelW := displayWidth(label)
 	if width <= labelW {
 		return styleDim.Render(strings.TrimSpace(label))
 	}
@@ -179,12 +177,7 @@ func padRight(s string, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	truncated := runewidth.Truncate(s, width, "…")
-	w := runewidth.StringWidth(truncated)
-	if w < width {
-		truncated += strings.Repeat(" ", width-w)
-	}
-	return truncated
+	return displayPadRight(displayTruncate(s, width, "…"), width)
 }
 
 // detailHeader renders the two-line pane header: badge + state icon +
@@ -213,7 +206,7 @@ func detailHeader(m Model) string {
 		icon = palette.StateIcon(s.State) + " "
 	}
 
-	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, runningSessionDisplayTitle(s), s.WindowID)
+	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, displayRenderTitleIcon(runningSessionDisplayTitle(s)), s.WindowID)
 
 	state := s.State
 	if state == "" {
@@ -262,7 +255,7 @@ func detailRow(ev daemon.SessionEvent, now time.Time, width int) string {
 	}
 	toolStr := ""
 	if ev.ToolName != "" && toolWidth > 0 {
-		toolStr = runewidth.Truncate(ev.ToolName, toolWidth, "…")
+		toolStr = displayTruncate(ev.ToolName, toolWidth, "…")
 	}
 
 	gap := strings.Repeat(" ", detailColumnGap)

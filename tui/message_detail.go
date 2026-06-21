@@ -42,7 +42,9 @@ func messageDetailBodyLines(m Model) []string {
 			continue
 		}
 		wrapped := wrapStyle.Render(p)
-		lines = append(lines, strings.Split(wrapped, "\n")...)
+		for _, line := range strings.Split(wrapped, "\n") {
+			lines = append(lines, displayWrapHard(line, maxWidth)...)
+		}
 	}
 	return lines
 }

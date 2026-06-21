@@ -2,8 +2,6 @@ package tui
 
 import (
 	"strings"
-
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 func renderPathRow(label, path string, maxWidth int) string {
@@ -15,7 +13,7 @@ func renderPathRow(label, path string, maxWidth int) string {
 		maxWidth = 120
 	}
 	row := "  " + label + ": " + path
-	return styleDim.Render(runewidth.Truncate(row, maxWidth, "…"))
+	return styleDim.Render(displayTruncate(row, maxWidth, "…"))
 }
 
 func pathRowLines(path string) int {

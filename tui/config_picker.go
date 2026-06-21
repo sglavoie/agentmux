@@ -2,8 +2,6 @@ package tui
 
 import (
 	"strings"
-
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 // renderConfigPicker renders the profile picker overlay for restart/launch overrides.
@@ -15,22 +13,22 @@ func renderConfigPicker(m Model) string {
 
 	maxName, maxHarness := 0, 0
 	for _, acc := range m.configPickerAccounts {
-		if n := runewidth.StringWidth(acc.Name); n > maxName {
+		if n := displayWidth(acc.Name); n > maxName {
 			maxName = n
 		}
-		if h := runewidth.StringWidth(harnessDisplayText(m.cfg, acc.EffectiveHarness())); h > maxHarness {
+		if h := displayWidth(harnessDisplayText(m.cfg, acc.EffectiveHarness())); h > maxHarness {
 			maxHarness = h
 		}
 	}
 	harnessColor := buildHarnessColorMap(m)
 	for i, acc := range m.configPickerAccounts {
-		namePad := maxName - runewidth.StringWidth(acc.Name)
+		namePad := maxName - displayWidth(acc.Name)
 		if namePad < 0 {
 			namePad = 0
 		}
 		name := accountStyle(acc.Color).Render(acc.Name) + strings.Repeat(" ", namePad)
 		harnessText := harnessDisplayText(m.cfg, acc.EffectiveHarness())
-		pad := maxHarness - runewidth.StringWidth(harnessText)
+		pad := maxHarness - displayWidth(harnessText)
 		if pad < 0 {
 			pad = 0
 		}

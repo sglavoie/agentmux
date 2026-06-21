@@ -179,7 +179,7 @@ func deleteTargetLabel(t transcript.SessionMeta) string {
 	if proj == "" {
 		proj = t.ID
 	}
-	return fmt.Sprintf("%q", proj)
+	return fmt.Sprintf("%q", displayRenderTitleIcon(proj))
 }
 
 func deleteTargetDetail(t transcript.SessionMeta) string {

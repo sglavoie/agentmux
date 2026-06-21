@@ -31,7 +31,7 @@ func renderConfirm(m Model) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render(fmt.Sprintf("%s %q?", verb, runningSessionDisplayTitle(m.targetSession))))
+	sb.WriteString(styleHeader.Render(fmt.Sprintf("%s %q?", verb, displayRenderTitleIcon(runningSessionDisplayTitle(m.targetSession)))))
 	sb.WriteByte('\n')
 	if m.confirmConsequence != "" {
 		sb.WriteString(styleDim.Render(m.confirmConsequence))

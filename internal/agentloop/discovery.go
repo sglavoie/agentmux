@@ -14,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 const (
@@ -38,6 +40,8 @@ type Candidate struct {
 	PlanDir  string
 	StateDir string
 	CWD      string
+	Harness  string
+	WindowID int
 	PID      int
 
 	LockCreatedAt    time.Time
@@ -48,6 +52,14 @@ type Candidate struct {
 	RunID         string
 	ActiveSession int
 	ActiveTurn    int
+}
+
+// WorkspaceTarget describes an open workspace session that can receive loop
+// marker state.
+type WorkspaceTarget struct {
+	CWD      string
+	Harness  string
+	WindowID int
 }
 
 // DefaultStateRoot mirrors agent-session-loop's operational state location.
@@ -153,10 +165,61 @@ func MatchingCWD(candidates []Candidate, selectedDir string) ([]Candidate, error
 	return matches, nil
 }
 
+// MatchingWorkspace returns loop candidates for target's workspace, preferring
+// candidates with target's harness when present. If a different same-workspace
+// harness has an open target, that harness owns the loop marker; otherwise the
+// function falls back to CWD-only workspace matching for legacy state.
+func MatchingWorkspace(candidates []Candidate, target WorkspaceTarget, openTargets []WorkspaceTarget) ([]Candidate, error) {
+	workspaceCandidates := candidates
+	if target.WindowID > 0 {
+		matches := matchingWindow(candidates, target.WindowID)
+		if len(matches) > 0 {
+			return matches, nil
+		}
+		workspaceCandidates = candidatesWithoutWindowID(candidates)
+	}
+
+	if target.CWD == "" {
+		return nil, nil
+	}
+	selectedCanonical, err := CanonicalizePath(target.CWD)
+	if err != nil {
+		return nil, fmt.Errorf("agentloop: resolving selected directory %s: %w", target.CWD, err)
+	}
+
+	matches := matchingCanonicalCWD(workspaceCandidates, selectedCanonical)
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	targetHarness := normalizeKnownHarness(target.Harness)
+	if targetHarness != "" {
+		sameHarness := filterHarness(matches, targetHarness)
+		if len(sameHarness) > 0 {
+			return sameHarness, nil
+		}
+	}
+
+	if workspaceHasOpenCandidateHarness(matches, selectedCanonical, openTargets) {
+		return nil, nil
+	}
+	return matches, nil
+}
+
 // HasMatchingCWD reports whether any candidate's cwd matches selectedDir after
 // canonicalization.
 func HasMatchingCWD(candidates []Candidate, selectedDir string) (bool, error) {
 	matches, err := MatchingCWD(candidates, selectedDir)
+	if err != nil {
+		return false, err
+	}
+	return len(matches) > 0, nil
+}
+
+// HasMatchingWorkspace reports whether target owns a loop marker under
+// MatchingWorkspace's workspace/harness rules.
+func HasMatchingWorkspace(candidates []Candidate, target WorkspaceTarget, openTargets []WorkspaceTarget) (bool, error) {
+	matches, err := MatchingWorkspace(candidates, target, openTargets)
 	if err != nil {
 		return false, err
 	}
@@ -194,14 +257,17 @@ type stateFile struct {
 	RunID         string          `json:"run_id"`
 	PlanDir       string          `json:"plan_dir"`
 	CWD           string          `json:"cwd"`
+	Harness       string          `json:"harness"`
 	RunStartedAt  string          `json:"run_started_at"`
 	RunFinishedAt json.RawMessage `json:"run_finished_at"`
 	ActiveTurn    *activeTurn     `json:"active_turn"`
+	KittyWindowID int             `json:"kitty_window_id"`
 }
 
 type activeTurn struct {
-	TurnIndex int `json:"turn_index"`
-	Session   int `json:"session"`
+	TurnIndex int    `json:"turn_index"`
+	Session   int    `json:"session"`
+	Harness   string `json:"harness"`
 }
 
 func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
@@ -247,10 +313,17 @@ func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
 		activeTurnIndex = state.ActiveTurn.TurnIndex
 	}
 
+	candidateHarness := effectiveHarness(state)
+	windowID := 0
+	if state.KittyWindowID > 0 {
+		windowID = state.KittyWindowID
+	}
 	return Candidate{
 		PlanDir:          planDir,
 		StateDir:         stateDir,
 		CWD:              cwd,
+		Harness:          candidateHarness,
+		WindowID:         windowID,
 		PID:              lock.pid,
 		LockCreatedAt:    parseTimestamp(lock.createdAt),
 		LockCreatedAtRaw: lock.createdAt,
@@ -260,6 +333,104 @@ func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
 		ActiveSession:    activeSession,
 		ActiveTurn:       activeTurnIndex,
 	}, true
+}
+
+func matchingWindow(candidates []Candidate, windowID int) []Candidate {
+	matches := make([]Candidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.WindowID <= 0 {
+			continue
+		}
+		if candidate.WindowID == windowID {
+			matches = append(matches, candidate)
+		}
+	}
+	return matches
+}
+
+func candidatesWithoutWindowID(candidates []Candidate) []Candidate {
+	matches := make([]Candidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.WindowID <= 0 {
+			matches = append(matches, candidate)
+		}
+	}
+	return matches
+}
+
+func matchingCanonicalCWD(candidates []Candidate, selectedCanonical string) []Candidate {
+	matches := make([]Candidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.CWD == "" {
+			continue
+		}
+		cwd, err := CanonicalizePath(candidate.CWD)
+		if err != nil {
+			continue
+		}
+		if cwd == selectedCanonical {
+			matches = append(matches, candidate)
+		}
+	}
+	return matches
+}
+
+func filterHarness(candidates []Candidate, targetHarness string) []Candidate {
+	matches := make([]Candidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Harness == targetHarness {
+			matches = append(matches, candidate)
+		}
+	}
+	return matches
+}
+
+func workspaceHasOpenCandidateHarness(candidates []Candidate, selectedCanonical string, openTargets []WorkspaceTarget) bool {
+	openHarnesses := make(map[string]struct{})
+	for _, target := range openTargets {
+		if target.CWD == "" {
+			continue
+		}
+		cwd, err := CanonicalizePath(target.CWD)
+		if err != nil || cwd != selectedCanonical {
+			continue
+		}
+		targetHarness := normalizeKnownHarness(target.Harness)
+		if targetHarness != "" {
+			openHarnesses[targetHarness] = struct{}{}
+		}
+	}
+	for _, candidate := range candidates {
+		if candidate.Harness == "" {
+			continue
+		}
+		if _, ok := openHarnesses[candidate.Harness]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func effectiveHarness(state stateFile) string {
+	if state.ActiveTurn != nil {
+		if h := normalizeKnownHarness(state.ActiveTurn.Harness); h != "" {
+			return h
+		}
+	}
+	return normalizeKnownHarness(state.Harness)
+}
+
+func normalizeKnownHarness(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case harness.Codex:
+		return harness.Codex
+	case harness.Copilot:
+		return harness.Copilot
+	case harness.Claude:
+		return harness.Claude
+	default:
+		return ""
+	}
 }
 
 func hasRunFinishedAt(raw json.RawMessage) bool {

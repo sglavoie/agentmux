@@ -1,7 +1,9 @@
 package indicator
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -338,22 +340,26 @@ func TestRunWithDeps_AgentSessionLoopFinishedUsesPayloadCWDForSplitTab(t *testin
 		payloadCWD string
 		candidates []agentloop.Candidate
 		wantTitle  string
+		wantMatch  string
 	}{
 		{
 			name:       "clears loop marker from loop pane without user vars",
 			payloadCWD: dir,
 			wantTitle:  "api",
+			wantMatch:  "window_id:41",
 		},
 		{
 			name:       "keeps loop marker when another active loop remains",
 			payloadCWD: dir,
 			candidates: []agentloop.Candidate{{CWD: dir}},
 			wantTitle:  loopTitle,
+			wantMatch:  "window_id:41",
 		},
 		{
 			name:       "preserves loop marker when payload cwd belongs elsewhere",
 			payloadCWD: otherDir,
 			wantTitle:  loopTitle,
+			wantMatch:  "window_id:42",
 		},
 	}
 
@@ -404,10 +410,546 @@ func TestRunWithDeps_AgentSessionLoopFinishedUsesPayloadCWDForSplitTab(t *testin
 			if len(kittyClient.setTitleCalls) != 1 {
 				t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
 			}
-			if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:42", title: tc.wantTitle}) {
-				t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], tc.wantTitle)
+			if kittyClient.setTitleCalls[0] != (setTitleCall{match: tc.wantMatch, title: tc.wantTitle}) {
+				t.Fatalf("SetTabTitle call = %+v, want %s/%q", kittyClient.setTitleCalls[0], tc.wantMatch, tc.wantTitle)
 			}
 		})
+	}
+}
+
+func TestRunWithDeps_AgentSessionLoopStartedTargetsPayloadWorkspace(t *testing.T) {
+	targetDir := t.TempDir()
+	callerDir := t.TempDir()
+	targetTitle := "Trad-X"
+	wantTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "Trad-X",
+		State:   "bolt",
+		Looping: true,
+	})
+
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{
+				{
+					ID:    100,
+					Title: "scripts",
+					Windows: []kitty.Window{{
+						ID: 42,
+						UserVars: kitty.UserVars{
+							Profile:      "scripts",
+							Harness:      "claude",
+							AMXDirectory: callerDir,
+						},
+					}},
+				},
+				{
+					ID:    101,
+					Title: targetTitle,
+					Windows: []kitty.Window{{
+						ID: 101,
+						UserVars: kitty.UserVars{
+							Profile:      "work",
+							Harness:      "codex",
+							AMXDirectory: targetDir,
+						},
+					}},
+				},
+			},
+		}},
+	}
+
+	err := runWithDeps(
+		"AgentSessionLoopStarted",
+		42,
+		"/tmp/amx",
+		HookPayload{Source: "agent_session_loop", CWD: targetDir, Harness: "codex"},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(kittyClient.setTitleCalls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+	}
+	if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:101", title: wantTitle}) {
+		t.Fatalf("SetTabTitle call = %+v, want window_id:101/%q", kittyClient.setTitleCalls[0], wantTitle)
+	}
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 1 || reqs[0].WindowID != 101 || reqs[0].Event != "AgentSessionLoopStarted" || reqs[0].Action != "active" {
+		t.Fatalf("daemon requests = %+v, want one active AgentSessionLoopStarted request for window 101", reqs)
+	}
+}
+
+func TestRunWithDeps_AgentSessionLoopStartedTargetsPayloadWindowIDBeforeWorkspace(t *testing.T) {
+	targetDir := t.TempDir()
+	worktreeDir := t.TempDir()
+	callerDir := t.TempDir()
+	wantTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "Trad-X",
+		State:   "bolt",
+		Looping: true,
+	})
+
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{
+				{
+					ID:    100,
+					Title: "scripts",
+					Windows: []kitty.Window{{
+						ID: 42,
+						UserVars: kitty.UserVars{
+							Profile:      "scripts",
+							Harness:      "claude",
+							AMXDirectory: callerDir,
+						},
+					}},
+				},
+				{
+					ID:    101,
+					Title: "Trad-X",
+					Windows: []kitty.Window{{
+						ID: 101,
+						UserVars: kitty.UserVars{
+							Profile:      "work",
+							Harness:      "codex",
+							AMXDirectory: targetDir,
+						},
+					}},
+				},
+			},
+		}},
+	}
+
+	err := runWithDeps(
+		"AgentSessionLoopStarted",
+		42,
+		"/tmp/amx",
+		HookPayload{Source: "agent_session_loop", CWD: worktreeDir, Harness: "codex", KittyWindowID: 101},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(kittyClient.setTitleCalls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+	}
+	if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:101", title: wantTitle}) {
+		t.Fatalf("SetTabTitle call = %+v, want window_id:101/%q", kittyClient.setTitleCalls[0], wantTitle)
+	}
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 1 || reqs[0].WindowID != 101 || reqs[0].Event != "AgentSessionLoopStarted" || reqs[0].Action != "active" {
+		t.Fatalf("daemon requests = %+v, want one active AgentSessionLoopStarted request for window 101", reqs)
+	}
+}
+
+func TestRunWithDeps_AgentSessionLoopStartedUsesStatePathHarnessPreference(t *testing.T) {
+	targetDir := t.TempDir()
+	callerDir := t.TempDir()
+
+	cases := []struct {
+		name  string
+		event string
+		state map[string]any
+	}{
+		{
+			name:  "top-level harness selects non-default project tab",
+			event: "AgentSessionLoopStarted",
+			state: map[string]any{
+				"cwd":     targetDir,
+				"harness": "copilot",
+			},
+		},
+		{
+			name:  "active-turn harness overrides top-level harness",
+			event: "AgentSessionLoopTurnStarted",
+			state: map[string]any{
+				"cwd":     targetDir,
+				"harness": "codex",
+				"active_turn": map[string]any{
+					"harness": "copilot",
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			statePath := writeLoopStateFile(t, tc.state)
+			wantTitle := palette.BuildTitleParts(palette.TitleParts{
+				Base:    "project-copilot",
+				State:   "bolt",
+				Looping: true,
+			})
+			handler := daemon.NewHandler(
+				daemon.NewStateGuard(time.Hour),
+				daemon.NewNotifier(&config.NotificationConfig{}),
+			)
+			daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+			kittyClient := &fakeIndicatorKittyClient{
+				windows: []kitty.OSWindow{{
+					ID: 1,
+					Tabs: []kitty.Tab{
+						{
+							ID:    100,
+							Title: "scripts",
+							Windows: []kitty.Window{{
+								ID: 42,
+								UserVars: kitty.UserVars{
+									Profile:      "scripts",
+									Harness:      "claude",
+									AMXDirectory: callerDir,
+								},
+							}},
+						},
+						{
+							ID:    101,
+							Title: "project-codex",
+							Windows: []kitty.Window{{
+								ID: 101,
+								UserVars: kitty.UserVars{
+									Profile:      "work-codex",
+									Harness:      "codex",
+									AMXDirectory: targetDir,
+								},
+							}},
+						},
+						{
+							ID:    102,
+							Title: "project-copilot",
+							Windows: []kitty.Window{{
+								ID: 102,
+								UserVars: kitty.UserVars{
+									Profile:      "work-copilot",
+									Harness:      "copilot",
+									AMXDirectory: targetDir,
+								},
+							}},
+						},
+					},
+				}},
+			}
+
+			err := runWithDeps(
+				tc.event,
+				42,
+				"/tmp/amx",
+				HookPayload{Source: "agent_session_loop", StatePath: statePath},
+				false,
+				kittyClient,
+				daemonClient,
+			)
+			if err != nil {
+				t.Fatalf("runWithDeps() error = %v", err)
+			}
+			if len(kittyClient.setTitleCalls) != 1 {
+				t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+			}
+			if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:102", title: wantTitle}) {
+				t.Fatalf("SetTabTitle call = %+v, want window_id:102/%q", kittyClient.setTitleCalls[0], wantTitle)
+			}
+			reqs := daemonClient.snapshot()
+			if len(reqs) != 1 || reqs[0].WindowID != 102 || reqs[0].Event != tc.event || reqs[0].Action != "active" {
+				t.Fatalf("daemon requests = %+v, want one active %s request for window 102", reqs, tc.event)
+			}
+		})
+	}
+}
+
+func TestRunWithDeps_AgentSessionLoopFinishedTargetsPayloadWorkspaceOnly(t *testing.T) {
+	targetDir := t.TempDir()
+	callerDir := t.TempDir()
+	codexLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "Trad-X",
+		State:   "bolt",
+		Looping: true,
+	})
+	claudeLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "Trad-X Claude",
+		State:   "bolt",
+		Looping: true,
+	})
+
+	stubIndicatorLoopDiscover(t, nil, nil)
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{
+				{
+					ID:    100,
+					Title: "scripts",
+					Windows: []kitty.Window{{
+						ID: 42,
+						UserVars: kitty.UserVars{
+							Profile:      "scripts",
+							Harness:      "claude",
+							AMXDirectory: callerDir,
+						},
+					}},
+				},
+				{
+					ID:    101,
+					Title: codexLoopTitle,
+					Windows: []kitty.Window{{
+						ID: 101,
+						UserVars: kitty.UserVars{
+							Profile:      "work-codex",
+							Harness:      "codex",
+							AMXDirectory: targetDir,
+						},
+					}},
+				},
+				{
+					ID:    102,
+					Title: claudeLoopTitle,
+					Windows: []kitty.Window{{
+						ID: 102,
+						UserVars: kitty.UserVars{
+							Profile:      "work-claude",
+							Harness:      "claude",
+							AMXDirectory: targetDir,
+						},
+					}},
+				},
+			},
+		}},
+	}
+
+	err := runWithDeps(
+		"AgentSessionLoopFinished",
+		42,
+		"/tmp/amx",
+		HookPayload{Source: "agent_session_loop", Reason: "run_finished", CWD: targetDir, Harness: "codex"},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(kittyClient.setTitleCalls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+	}
+	if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:101", title: "Trad-X"}) {
+		t.Fatalf("SetTabTitle call = %+v, want window_id:101/Trad-X", kittyClient.setTitleCalls[0])
+	}
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 1 || reqs[0].WindowID != 101 || reqs[0].Event != "AgentSessionLoopFinished" || reqs[0].Action != "idle" {
+		t.Fatalf("daemon requests = %+v, want one idle AgentSessionLoopFinished request for window 101", reqs)
+	}
+}
+
+func TestRunWithDeps_AgentSessionLoopFinishedTargetsPayloadWindowIDBeforeWorkspace(t *testing.T) {
+	targetDir := t.TempDir()
+	worktreeDir := t.TempDir()
+	callerDir := t.TempDir()
+	codexLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "Trad-X",
+		State:   "bolt",
+		Looping: true,
+	})
+	copilotLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "Trad-X Copilot",
+		State:   "bolt",
+		Looping: true,
+	})
+
+	stubIndicatorLoopDiscover(t, nil, nil)
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{
+				{
+					ID:    100,
+					Title: "scripts",
+					Windows: []kitty.Window{{
+						ID: 42,
+						UserVars: kitty.UserVars{
+							Profile:      "scripts",
+							Harness:      "claude",
+							AMXDirectory: callerDir,
+						},
+					}},
+				},
+				{
+					ID:    101,
+					Title: codexLoopTitle,
+					Windows: []kitty.Window{{
+						ID: 101,
+						UserVars: kitty.UserVars{
+							Profile:      "work-codex",
+							Harness:      "codex",
+							AMXDirectory: targetDir,
+						},
+					}},
+				},
+				{
+					ID:    102,
+					Title: copilotLoopTitle,
+					Windows: []kitty.Window{{
+						ID: 102,
+						UserVars: kitty.UserVars{
+							Profile:      "work-copilot",
+							Harness:      "copilot",
+							AMXDirectory: targetDir,
+						},
+					}},
+				},
+			},
+		}},
+	}
+
+	err := runWithDeps(
+		"AgentSessionLoopFinished",
+		42,
+		"/tmp/amx",
+		HookPayload{
+			Source:        "agent_session_loop",
+			Reason:        "run_finished",
+			CWD:           worktreeDir,
+			Harness:       "codex",
+			KittyWindowID: 101,
+		},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(kittyClient.setTitleCalls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+	}
+	if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:101", title: "Trad-X"}) {
+		t.Fatalf("SetTabTitle call = %+v, want window_id:101/Trad-X", kittyClient.setTitleCalls[0])
+	}
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 1 || reqs[0].WindowID != 101 || reqs[0].Event != "AgentSessionLoopFinished" || reqs[0].Action != "idle" {
+		t.Fatalf("daemon requests = %+v, want one idle AgentSessionLoopFinished request for window 101", reqs)
+	}
+}
+
+func TestRunWithDeps_AgentSessionLoopFinishedClearsNonDefaultProjectTabNotCaller(t *testing.T) {
+	targetDir := t.TempDir()
+	callerDir := t.TempDir()
+	callerLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "scripts",
+		State:   "bolt",
+		Looping: true,
+	})
+	codexLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "project-codex",
+		State:   "bolt",
+		Looping: true,
+	})
+	copilotLoopTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "project-copilot",
+		State:   "bolt",
+		Looping: true,
+	})
+
+	stubIndicatorLoopDiscover(t, nil, nil)
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{
+				{
+					ID:    100,
+					Title: callerLoopTitle,
+					Windows: []kitty.Window{{
+						ID: 42,
+						UserVars: kitty.UserVars{
+							Profile:      "scripts",
+							Harness:      "claude",
+							AMXDirectory: callerDir,
+						},
+					}},
+				},
+				{
+					ID:    101,
+					Title: codexLoopTitle,
+					Windows: []kitty.Window{{
+						ID: 101,
+						UserVars: kitty.UserVars{
+							Profile:      "work-codex",
+							Harness:      "codex",
+							AMXDirectory: targetDir,
+						},
+					}},
+				},
+				{
+					ID:    102,
+					Title: copilotLoopTitle,
+					Windows: []kitty.Window{{
+						ID: 102,
+						UserVars: kitty.UserVars{
+							Profile:      "work-copilot",
+							Harness:      "copilot",
+							AMXDirectory: targetDir,
+						},
+					}},
+				},
+			},
+		}},
+	}
+
+	err := runWithDeps(
+		"AgentSessionLoopFinished",
+		42,
+		"/tmp/amx",
+		HookPayload{
+			Source:  "agent_session_loop",
+			Reason:  "run_finished",
+			CWD:     targetDir,
+			Harness: "copilot",
+		},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(kittyClient.setTitleCalls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+	}
+	if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:102", title: "project-copilot"}) {
+		t.Fatalf("SetTabTitle call = %+v, want window_id:102/project-copilot", kittyClient.setTitleCalls[0])
+	}
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 1 || reqs[0].WindowID != 102 || reqs[0].Event != "AgentSessionLoopFinished" || reqs[0].Action != "idle" {
+		t.Fatalf("daemon requests = %+v, want one idle AgentSessionLoopFinished request for window 102", reqs)
 	}
 }
 
@@ -455,6 +997,19 @@ func stubIndicatorLoopDiscover(t *testing.T, candidates []agentloop.Candidate, e
 	t.Cleanup(func() {
 		indicatorLoopDiscover = old
 	})
+}
+
+func writeLoopStateFile(t *testing.T, payload map[string]any) string {
+	t.Helper()
+	statePath := t.TempDir() + "/state.json"
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal loop state: %v", err)
+	}
+	if err := os.WriteFile(statePath, data, 0o644); err != nil {
+		t.Fatalf("write loop state: %v", err)
+	}
+	return statePath
 }
 
 func TestRunWithDeps_MissingWindowIDInsideKittyErrors(t *testing.T) {

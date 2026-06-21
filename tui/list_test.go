@@ -366,6 +366,91 @@ func TestFormatRowAcctBadgeUnicode(t *testing.T) {
 	}
 }
 
+// TestFormatRowEmojiTitleColumnAlignment locks in that rows whose project
+// titles start with the project icon set used in the live dashboard
+// (🐱amX, 🧠BrainNotes, 🗣commscoach, 🧬curator, 🧰dev-helpers, •dotfiles)
+// keep the directory column at the same visual offset, and that
+// pictographic leading graphemes occupy the fixed 2-cell title-icon
+// column. Without grapheme-aware width, FE0F-bearing glyphs and narrow
+// pictographs shift the row tail by one or more cells.
+func TestFormatRowEmojiTitleColumnAlignment(t *testing.T) {
+	titles := []string{
+		"🐱amX",
+		"🧠BrainNotes",
+		"🗣commscoach",
+		"🧬curator",
+		"🧰dev-helpers",
+		"•dotfiles",
+	}
+	const dirText = "/work/project"
+
+	var dirOffset int
+	for i, title := range titles {
+		s := session.RunningSession{Base: title, Account: "work", Directory: dirText}
+		row := stripAnsi(formatRow(s, nil, nil, nil, 120, "", ""))
+		if !utf8.ValidString(row) {
+			t.Fatalf("title %q produced invalid UTF-8 row: %q", title, row)
+		}
+		idx := strings.Index(row, dirText)
+		if idx < 0 {
+			t.Fatalf("directory %q not found in row for title %q: %q", dirText, title, row)
+		}
+		offset := displayWidth(row[:idx])
+		if i == 0 {
+			dirOffset = offset
+			continue
+		}
+		if offset != dirOffset {
+			t.Errorf("directory column misaligned for %q: got cell %d, want %d (row=%q)", title, offset, dirOffset, row)
+		}
+	}
+
+	// Pictographic-prefixed titles must reserve a 2-cell icon column so
+	// the title body aligns across the dashboard icon set. Bullet-prefixed
+	// titles stay at their measured 1-cell width (the • marker is
+	// intentionally narrow).
+	emojiBodies := map[string]string{
+		"🐱amX":         "amX",
+		"🧠BrainNotes":  "BrainNotes",
+		"🗣commscoach":  "commscoach",
+		"🧬curator":     "curator",
+		"🧰dev-helpers": "dev-helpers",
+	}
+	var bodyOffset int
+	first := true
+	for title, body := range emojiBodies {
+		s := session.RunningSession{Base: title, Account: "work", Directory: dirText}
+		row := stripAnsi(formatRow(s, nil, nil, nil, 120, "", ""))
+		idx := strings.Index(row, body)
+		if idx < 0 {
+			t.Fatalf("title body %q not found in row for title %q: %q", body, title, row)
+		}
+		offset := displayWidth(row[:idx])
+		if first {
+			bodyOffset = offset
+			first = false
+			continue
+		}
+		if offset != bodyOffset {
+			t.Errorf("emoji-prefixed title body offset drift for %q: got %d, want %d (row=%q)", title, offset, bodyOffset, row)
+		}
+	}
+
+	// The bullet '•' is intentionally not promoted to the 2-cell title-icon
+	// column. Its body must therefore land one cell earlier than the
+	// emoji-prefixed bodies above so users still see the bullet as a narrow
+	// marker rather than a chunky icon.
+	sBullet := session.RunningSession{Base: "•dotfiles", Account: "work", Directory: dirText}
+	rowBullet := stripAnsi(formatRow(sBullet, nil, nil, nil, 120, "", ""))
+	bulletBody := strings.Index(rowBullet, "dotfiles")
+	if bulletBody < 0 {
+		t.Fatalf("bullet-prefixed title body not found in row: %q", rowBullet)
+	}
+	if got := displayWidth(rowBullet[:bulletBody]); got != bodyOffset-1 {
+		t.Errorf("bullet-prefixed body offset = %d, want %d (one cell before emoji bodies; row=%q)", got, bodyOffset-1, rowBullet)
+	}
+}
+
 // TestRenderLegendVisible asserts the legend strip renders icon→meaning
 // tokens for every known state when the terminal is tall enough.
 func TestRenderLegendVisible(t *testing.T) {

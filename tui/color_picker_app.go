@@ -168,8 +168,8 @@ func (m colorPickerModel) View() tea.View {
 
 	maxNameLen := 0
 	for _, name := range colorPickerOrder {
-		if len(name) > maxNameLen {
-			maxNameLen = len(name)
+		if w := displayWidth(name); w > maxNameLen {
+			maxNameLen = w
 		}
 	}
 
@@ -191,7 +191,7 @@ func (m colorPickerModel) View() tea.View {
 		suffix := ""
 		c, err := palette.Lookup(item.name)
 		if err == nil {
-			padded := item.name + strings.Repeat(" ", maxNameLen-len(item.name))
+			padded := displayPadRight(item.name, maxNameLen)
 			colorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(c.ForegroundHex()))
 			label := fmt.Sprintf("%s  %s  %s", prefix, item.emoji, colorStyle.Render(padded))
 			if item.name == m.ctx.DefaultColor {

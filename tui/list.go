@@ -3,8 +3,6 @@ package tui
 import (
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -61,7 +59,7 @@ func renderHeader(m Model) string {
 	right := strings.Join(rightParts, styleFooter.Render("   "))
 
 	if right != "" && m.width > 0 {
-		pad := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+		pad := m.width - displayStyledWidth(left) - displayStyledWidth(right)
 		if pad < 1 {
 			pad = 1
 		}
@@ -126,7 +124,7 @@ func renderHealthHints(m Model) string {
 	for _, h := range hints {
 		styled := styleFooter.Render(h)
 		if m.width > 0 {
-			pad := m.width - lipgloss.Width(styled)
+			pad := m.width - displayStyledWidth(styled)
 			if pad < 0 {
 				pad = 0
 			}
@@ -183,14 +181,14 @@ func renderChips(m Model, width int) string {
 	acctColor := buildProfileColorMap(m)
 
 	const chipSep = "  "
-	sepW := lipgloss.Width(chipSep)
+	sepW := displayStyledWidth(chipSep)
 
 	var lines []string
 	var line strings.Builder
 	lineW := 0
 	for i, c := range comps {
 		chip := renderChip(c, acctColor, i == m.focusedChipIdx)
-		chipW := lipgloss.Width(chip)
+		chipW := displayStyledWidth(chip)
 		add := chipW
 		if line.Len() > 0 {
 			add += sepW
@@ -253,7 +251,7 @@ func renderLegend(m Model) string {
 		if icon == "" {
 			continue
 		}
-		token := padIconCell(icon) + " " + gloss
+		token := displayPadIconCell(icon) + " " + gloss
 		tokens = append(tokens, stateAccentStyle(state).Render(token))
 	}
 	if len(tokens) == 0 {

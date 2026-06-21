@@ -5,9 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
-
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -154,7 +151,7 @@ func renderListAt(m Model, width, height int) string {
 		}
 		var activeLoopCell string
 		if activeLoopActive {
-			activeLoopCell = renderActiveLoopCell(len(m.activeLoopsForDirectory(s.Directory)) > 0)
+			activeLoopCell = renderActiveLoopCell(len(m.activeLoopsForSession(s)) > 0)
 		}
 		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, activeLoopCell, ageCell)
 		var styledRow string
@@ -238,9 +235,9 @@ func anyRowHasActivePulse(m Model) bool {
 }
 
 // anyVisibleRowHasActiveLoop reports whether any row in the rendered window
-// has at least one active agent-session-loop run whose cwd matches the row's
-// directory. The column is reserved for the current window only, so off-screen
-// active loops do not steal horizontal space.
+// owns an active agent-session-loop marker for its workspace and harness. The
+// column is reserved for the current window only, so off-screen active loops do
+// not steal horizontal space.
 func anyVisibleRowHasActiveLoop(m Model, startIdx, endIdx int) bool {
 	if len(m.activeLoopCandidates) == 0 {
 		return false
@@ -252,7 +249,7 @@ func anyVisibleRowHasActiveLoop(m Model, startIdx, endIdx int) bool {
 		endIdx = len(m.filtered)
 	}
 	for i := startIdx; i < endIdx; i++ {
-		if len(m.activeLoopsForDirectory(m.filtered[i].Directory)) > 0 {
+		if len(m.activeLoopsForSession(m.filtered[i])) > 0 {
 			return true
 		}
 	}
@@ -263,11 +260,7 @@ func renderActiveLoopCell(active bool) string {
 	if !active {
 		return strings.Repeat(" ", activeLoopColumnWidth)
 	}
-	cell := "🔁"
-	if pad := activeLoopColumnWidth - runewidth.StringWidth(cell); pad > 0 {
-		cell += strings.Repeat(" ", pad)
-	}
-	return cell
+	return displayPadRight("🔁", activeLoopColumnWidth)
 }
 
 // anyRowHasAge reports whether any filtered row carries a sweep-eligible
@@ -324,7 +317,7 @@ func renderAgeCell(ws daemon.WatchdogState, now time.Time) string {
 	if warning {
 		text = text + " " + ageWarningGlyph
 	}
-	pad := ageColumnWidth - 1 - runewidth.StringWidth(text)
+	pad := ageColumnWidth - 1 - displayWidth(text)
 	if pad < 0 {
 		pad = 0
 	}
@@ -362,13 +355,13 @@ func renderEmptyHero(m Model, width int) string {
 	}
 
 	if width <= 0 {
-		width = lipgloss.Width(title)
-		if w := lipgloss.Width(hint); w > width {
+		width = displayStyledWidth(title)
+		if w := displayStyledWidth(hint); w > width {
 			width = w
 		}
 	}
-	titleLine := centerInWidth(styleEmptyHero.Render(title), width)
-	hintLine := centerInWidth(styleDim.Render(hint), width)
+	titleLine := displayCenter(styleEmptyHero.Render(title), width)
+	hintLine := displayCenter(styleDim.Render(hint), width)
 	return titleLine + "\n\n" + hintLine + "\n"
 }
 

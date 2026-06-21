@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	runewidth "github.com/mattn/go-runewidth"
-
 	"github.com/sglavoie/agentmux/internal/plans"
 )
 
@@ -167,7 +165,7 @@ func formatPlanRow(res plans.Result, maxWidth int) string {
 		preview = ""
 	}
 	if preview != "" {
-		body += "  " + styleDim.Render(runewidth.Truncate(preview, maxRunes(maxWidth-runewidth.StringWidth(body)-2), "…"))
+		body += "  " + styleDim.Render(displayTruncate(preview, maxRunes(maxWidth-displayStyledWidth(body)-2), "…"))
 	}
-	return runewidth.Truncate(body, maxWidth, "…")
+	return displayStyledTruncate(body, maxWidth, "…")
 }

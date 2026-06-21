@@ -11,6 +11,8 @@ import (
 type loopSeed struct {
 	PID              int
 	CWD              string
+	Harness          string
+	KittyWindowID    int
 	RunID            string
 	RunStartedAt     string
 	RunFinishedAt    any
@@ -57,6 +59,12 @@ func TestDiscoverIncludesActiveLock(t *testing.T) {
 	}
 	if candidate.CWD != canonical(t, cwd) {
 		t.Errorf("CWD = %q, want %q", candidate.CWD, canonical(t, cwd))
+	}
+	if candidate.Harness != "" {
+		t.Errorf("Harness = %q, want empty legacy harness", candidate.Harness)
+	}
+	if candidate.WindowID != 0 {
+		t.Errorf("WindowID = %d, want empty legacy window id", candidate.WindowID)
 	}
 	if candidate.PID != 123 {
 		t.Errorf("PID = %d, want 123", candidate.PID)
@@ -211,6 +219,110 @@ func TestDiscoverRunFinishedAtBackwardCompatibleValues(t *testing.T) {
 	}
 }
 
+func TestDiscoverUsesActiveTurnHarnessBeforeTopLevelHarness(t *testing.T) {
+	root := t.TempDir()
+	seedLoop(t, root, filepath.Join(t.TempDir(), "plan"), loopSeed{
+		PID:           123,
+		CWD:           filepath.Join(t.TempDir(), "project"),
+		Harness:       "claude",
+		RunStartedAt:  "2026-06-04T13:05:00+00:00",
+		LockCreatedAt: "2026-06-04T13:00:00+00:00",
+		ActiveTurn:    &activeTurn{Session: 2, TurnIndex: 7, Harness: " CoPiLot "},
+	})
+
+	got, err := Discover(DiscoverOptions{
+		StateRoot:  root,
+		PIDRunning: func(int) bool { return true },
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(candidates) = %d, want 1", len(got))
+	}
+	if got[0].Harness != "copilot" {
+		t.Fatalf("Harness = %q, want copilot", got[0].Harness)
+	}
+}
+
+func TestDiscoverFallsBackToTopLevelHarness(t *testing.T) {
+	root := t.TempDir()
+	seedLoop(t, root, filepath.Join(t.TempDir(), "plan"), loopSeed{
+		PID:           123,
+		CWD:           filepath.Join(t.TempDir(), "project"),
+		Harness:       " CoDeX ",
+		RunStartedAt:  "2026-06-04T13:05:00+00:00",
+		LockCreatedAt: "2026-06-04T13:00:00+00:00",
+		ActiveTurn:    &activeTurn{Session: 2, TurnIndex: 7},
+	})
+
+	got, err := Discover(DiscoverOptions{
+		StateRoot:  root,
+		PIDRunning: func(int) bool { return true },
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(candidates) = %d, want 1", len(got))
+	}
+	if got[0].Harness != "codex" {
+		t.Fatalf("Harness = %q, want codex", got[0].Harness)
+	}
+}
+
+func TestDiscoverReadsKittyWindowID(t *testing.T) {
+	root := t.TempDir()
+	seedLoop(t, root, filepath.Join(t.TempDir(), "plan"), loopSeed{
+		PID:           123,
+		CWD:           filepath.Join(t.TempDir(), "project"),
+		Harness:       "codex",
+		KittyWindowID: 51,
+		RunStartedAt:  "2026-06-04T13:05:00+00:00",
+		LockCreatedAt: "2026-06-04T13:00:00+00:00",
+	})
+
+	got, err := Discover(DiscoverOptions{
+		StateRoot:  root,
+		PIDRunning: func(int) bool { return true },
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(candidates) = %d, want 1", len(got))
+	}
+	if got[0].WindowID != 51 {
+		t.Fatalf("WindowID = %d, want 51", got[0].WindowID)
+	}
+}
+
+func TestDiscoverLeavesUnknownHarnessEmpty(t *testing.T) {
+	root := t.TempDir()
+	seedLoop(t, root, filepath.Join(t.TempDir(), "plan"), loopSeed{
+		PID:           123,
+		CWD:           filepath.Join(t.TempDir(), "project"),
+		Harness:       "future-harness",
+		RunStartedAt:  "2026-06-04T13:05:00+00:00",
+		LockCreatedAt: "2026-06-04T13:00:00+00:00",
+		ActiveTurn:    &activeTurn{Session: 2, TurnIndex: 7, Harness: "other"},
+	})
+
+	got, err := Discover(DiscoverOptions{
+		StateRoot:  root,
+		PIDRunning: func(int) bool { return true },
+	})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(candidates) = %d, want 1", len(got))
+	}
+	if got[0].Harness != "" {
+		t.Fatalf("Harness = %q, want empty", got[0].Harness)
+	}
+}
+
 func TestDiscoverSkipsMalformedAndMissingFiles(t *testing.T) {
 	root := t.TempDir()
 
@@ -306,6 +418,9 @@ func TestDiscoverAllowsMissingCWDAndActiveTurn(t *testing.T) {
 		t.Errorf("active turn = session %d turn %d, want absent zeros",
 			got[0].ActiveSession, got[0].ActiveTurn)
 	}
+	if got[0].Harness != "" {
+		t.Errorf("Harness = %q, want empty", got[0].Harness)
+	}
 }
 
 func TestDiscoverMissingRootReturnsEmpty(t *testing.T) {
@@ -357,6 +472,147 @@ func TestMatchingCWDMatchesCanonicalCWD(t *testing.T) {
 	}
 	if hasMatch {
 		t.Fatal("HasMatchingCWD unmatched = true, want false")
+	}
+}
+
+func TestMatchingWorkspacePrefersSameHarnessWhenTargetIsOpen(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "project")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	copilotLoop := Candidate{PlanDir: "/plans/copilot", CWD: canonical(t, workspace), Harness: "copilot"}
+	openTargets := []WorkspaceTarget{
+		{CWD: workspace, Harness: "codex"},
+		{CWD: workspace, Harness: "copilot"},
+	}
+
+	matches, err := MatchingWorkspace([]Candidate{copilotLoop},
+		WorkspaceTarget{CWD: workspace, Harness: "copilot"}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace copilot: %v", err)
+	}
+	if len(matches) != 1 || matches[0].PlanDir != copilotLoop.PlanDir {
+		t.Fatalf("copilot matches = %#v, want copilot loop", matches)
+	}
+
+	matches, err = MatchingWorkspace([]Candidate{copilotLoop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex"}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace codex: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("codex matches = %#v, want none while copilot target is open", matches)
+	}
+}
+
+func TestMatchingWorkspaceFallsBackToCWDWhenNoSameHarnessTargetIsOpen(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "project")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	copilotLoop := Candidate{PlanDir: "/plans/copilot", CWD: canonical(t, workspace), Harness: "copilot"}
+	openTargets := []WorkspaceTarget{
+		{CWD: workspace, Harness: "codex"},
+	}
+
+	matches, err := MatchingWorkspace([]Candidate{copilotLoop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex"}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace: %v", err)
+	}
+	if len(matches) != 1 || matches[0].PlanDir != copilotLoop.PlanDir {
+		t.Fatalf("matches = %#v, want CWD fallback to copilot loop", matches)
+	}
+}
+
+func TestMatchingWorkspaceLegacyCandidateMatchesByCWD(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "project")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	legacyLoop := Candidate{PlanDir: "/plans/legacy", CWD: canonical(t, workspace)}
+	openTargets := []WorkspaceTarget{
+		{CWD: workspace, Harness: "codex"},
+		{CWD: workspace, Harness: "copilot"},
+	}
+
+	hasMatch, err := HasMatchingWorkspace([]Candidate{legacyLoop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex"}, openTargets)
+	if err != nil {
+		t.Fatalf("HasMatchingWorkspace codex: %v", err)
+	}
+	if !hasMatch {
+		t.Fatal("HasMatchingWorkspace codex = false, want true for legacy CWD match")
+	}
+
+	hasMatch, err = HasMatchingWorkspace([]Candidate{legacyLoop},
+		WorkspaceTarget{CWD: workspace, Harness: "copilot"}, openTargets)
+	if err != nil {
+		t.Fatalf("HasMatchingWorkspace copilot: %v", err)
+	}
+	if !hasMatch {
+		t.Fatal("HasMatchingWorkspace copilot = false, want true for legacy CWD match")
+	}
+}
+
+func TestMatchingWorkspaceUsesWindowIDBeforeCWD(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "project")
+	worktree := filepath.Join(base, "project--ws14")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	loop := Candidate{
+		PlanDir:  "/plans/window",
+		CWD:      canonical(t, worktree),
+		Harness:  "codex",
+		WindowID: 51,
+	}
+	openTargets := []WorkspaceTarget{
+		{CWD: workspace, Harness: "codex", WindowID: 51},
+		{CWD: workspace, Harness: "codex", WindowID: 52},
+	}
+
+	matches, err := MatchingWorkspace([]Candidate{loop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex", WindowID: 51}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace same window: %v", err)
+	}
+	if len(matches) != 1 || matches[0].PlanDir != loop.PlanDir {
+		t.Fatalf("same-window matches = %#v, want window-specific loop", matches)
+	}
+
+	matches, err = MatchingWorkspace([]Candidate{loop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex", WindowID: 52}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace different window: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("different-window matches = %#v, want none", matches)
+	}
+
+	legacyLoop := Candidate{
+		PlanDir: "/plans/legacy",
+		CWD:     canonical(t, workspace),
+		Harness: "codex",
+	}
+	matches, err = MatchingWorkspace([]Candidate{loop, legacyLoop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex", WindowID: 52}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace legacy fallback: %v", err)
+	}
+	if len(matches) != 1 || matches[0].PlanDir != legacyLoop.PlanDir {
+		t.Fatalf("legacy fallback matches = %#v, want legacy CWD loop", matches)
 	}
 }
 
@@ -414,11 +670,21 @@ func seedLoop(t *testing.T, stateRoot, planDir string, seed loopSeed) string {
 	if seed.CWD != "" {
 		state["cwd"] = seed.CWD
 	}
+	if seed.Harness != "" {
+		state["harness"] = seed.Harness
+	}
+	if seed.KittyWindowID > 0 {
+		state["kitty_window_id"] = seed.KittyWindowID
+	}
 	if seed.ActiveTurn != nil {
-		state["active_turn"] = map[string]any{
+		activeTurnState := map[string]any{
 			"session":    seed.ActiveTurn.Session,
 			"turn_index": seed.ActiveTurn.TurnIndex,
 		}
+		if seed.ActiveTurn.Harness != "" {
+			activeTurnState["harness"] = seed.ActiveTurn.Harness
+		}
+		state["active_turn"] = activeTurnState
 	}
 	if seed.HasRunFinishedAt {
 		state["run_finished_at"] = seed.RunFinishedAt

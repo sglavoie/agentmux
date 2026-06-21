@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	runewidth "github.com/mattn/go-runewidth"
-
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -260,6 +258,7 @@ func formatSessionRow(res transcript.Result, acctColor map[string]string, maxWid
 	if project == "" {
 		project = "(unknown)"
 	}
+	project = displayRenderTitleIcon(project)
 	profile := res.Meta.DisplayProfile()
 	tag := sessionProfileTag(res.Meta)
 	tagColored := accountStyle(acctColor[profile]).Render(tag)
@@ -277,9 +276,9 @@ func formatSessionRow(res transcript.Result, acctColor map[string]string, maxWid
 	head := fmt.Sprintf("  %s  %s  ", when, project)
 	body := head + tagColored + matchFrag
 	if preview != "" {
-		body += "  " + styleDim.Render(runewidth.Truncate(preview, maxRunes(maxWidth-runewidth.StringWidth(body)-2), "…"))
+		body += "  " + styleDim.Render(displayTruncate(preview, maxRunes(maxWidth-displayStyledWidth(body)-2), "…"))
 	}
-	return runewidth.Truncate(body, maxWidth, "…")
+	return displayStyledTruncate(body, maxWidth, "…")
 }
 
 func sessionProfileTag(meta transcript.SessionMeta) string {

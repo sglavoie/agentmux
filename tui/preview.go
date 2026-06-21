@@ -5,7 +5,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -49,11 +48,12 @@ func renderPreview(width, height int, sess session.RunningSession, text, errText
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	// One-line header with project-identity-colored title.
+	// One-line header with project-identity-colored title. Pictographic
+	// titles reserve the fixed 2-cell title-icon column so emoji-prefixed
+	// projects align with each other across surfaces.
 	colorName := projectIdentityColor(sess, acctColor, cfg)
-	header := accountStyle(colorName).Render(
-		runewidth.Truncate(runningSessionDisplayTitle(sess), width, "…"),
-	)
+	title := displayTruncate(displayRenderTitleIcon(runningSessionDisplayTitle(sess)), width, "…")
+	header := accountStyle(colorName).Render(title)
 
 	body := previewBody(width, height-1, sess, text, errText)
 	return header + "\n" + body
@@ -67,11 +67,11 @@ func previewBody(width, height int, sess session.RunningSession, text, errText s
 	var lines []string
 	switch {
 	case errText != "":
-		lines = []string{styleError.Render(runewidth.Truncate("error: "+errText, width, "…"))}
+		lines = []string{styleError.Render(displayTruncate("error: "+errText, width, "…"))}
 	case sess.WindowID == 0:
-		lines = []string{styleDim.Render("(session not running)")}
+		lines = []string{styleDim.Render(displayTruncate("(session not running)", width, "…"))}
 	case text == "":
-		lines = []string{styleDim.Render("(loading…)")}
+		lines = []string{styleDim.Render(displayTruncate("(loading…)", width, "…"))}
 	default:
 		raw := strings.Split(strings.TrimRight(text, "\n"), "\n")
 		// Take the last `height` lines.
@@ -80,7 +80,7 @@ func previewBody(width, height int, sess session.RunningSession, text, errText s
 		}
 		lines = make([]string, len(raw))
 		for i, ln := range raw {
-			lines[i] = runewidth.Truncate(ln, width, "…")
+			lines[i] = displayTruncate(ln, width, "…")
 		}
 	}
 	// Pad up to height.

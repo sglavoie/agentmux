@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 // phaseTermLine renders the closing "└─" line for a phase, styled by the
@@ -146,7 +144,7 @@ func renderTimelineLines(
 			dur := phase.phaseDuration()
 			suffix := " " + dur + " gap"
 			prefix := "  ·  Idle "
-			dashW := width - runewidth.StringWidth(prefix) - runewidth.StringWidth(suffix)
+			dashW := width - displayWidth(prefix) - displayWidth(suffix)
 			if dashW < 0 {
 				dashW = 0
 			}
@@ -160,7 +158,7 @@ func renderTimelineLines(
 			const sepLabel = " /compact "
 			prefix := "  ────"
 			suffix := "──── " + ts
-			dashW := width - runewidth.StringWidth(prefix) - runewidth.StringWidth(sepLabel) - runewidth.StringWidth(suffix)
+			dashW := width - displayWidth(prefix) - displayWidth(sepLabel) - displayWidth(suffix)
 			if dashW < 0 {
 				dashW = 0
 			}

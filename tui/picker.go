@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -133,12 +132,12 @@ func renderPickerList(m Model, height int) string {
 	harnessColW := 0
 	for _, origIdx := range m.pickerFilteredIdx {
 		sess := m.pickerSessionWithResolvedProfile(origIdx)
-		w := 4 + runewidth.StringWidth(configSessionDisplayTitle(sess))
+		w := 4 + displayWidth(displayRenderTitleIcon(configSessionDisplayTitle(sess)))
 		if w > titleColW {
 			titleColW = w
 		}
 		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
-			hw := runewidth.StringWidth(pickerHarnessCellText(m.cfg, acc))
+			hw := displayWidth(pickerHarnessCellText(m.cfg, acc))
 			if hw > harnessColW {
 				harnessColW = hw
 			}
@@ -205,9 +204,9 @@ func renderPickerList(m Model, height int) string {
 			prefix = "[*] "
 		}
 
-		title := configSessionDisplayTitle(sess)
+		title := displayRenderTitleIcon(configSessionDisplayTitle(sess))
 		coloredTitle := accountStyle(acctColor[defaultProfile]).Render(title)
-		titlePad := titleColW - (4 + runewidth.StringWidth(title))
+		titlePad := titleColW - (4 + displayWidth(title))
 		if titlePad < 0 {
 			titlePad = 0
 		}
@@ -215,7 +214,7 @@ func renderPickerList(m Model, height int) string {
 		var harnessCell string
 		if acc, ok := findAccountByName(m.cfg.Accounts, sess.EffectiveProfile()); ok {
 			text := pickerHarnessCellText(m.cfg, acc)
-			pad := harnessColW - runewidth.StringWidth(text)
+			pad := harnessColW - displayWidth(text)
 			if pad < 0 {
 				pad = 0
 			}
@@ -259,7 +258,7 @@ func renderPickerHeader(m Model, header string) string {
 	if right == "" || m.width <= 0 {
 		return left + "\n"
 	}
-	pad := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	pad := m.width - displayStyledWidth(left) - displayStyledWidth(right)
 	if pad < 1 {
 		return left + "\n"
 	}
@@ -279,7 +278,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 
 	lines := make([]string, 0, height)
 	header := accountStyle(acctColor[defaultProfile]).Render(
-		runewidth.Truncate(configSessionDisplayTitle(sess), width, "…"),
+		displayTruncate(displayRenderTitleIcon(configSessionDisplayTitle(sess)), width, "…"),
 	)
 	lines = append(lines, header)
 
@@ -288,7 +287,7 @@ func renderPickerPreview(m Model, origIdx, width, height int) string {
 			return
 		}
 		body := styleDim.Render(label+": ") + value
-		lines = append(lines, runewidth.Truncate(body, width, "…"))
+		lines = append(lines, displayStyledTruncate(body, width, "…"))
 	}
 	addField("title", sess.Title)
 	addField("dir", sess.Directory)
@@ -348,7 +347,7 @@ func pickerScrollbackTail(text, errText string, height, width int) []string {
 		return nil
 	}
 	if errText != "" {
-		return []string{styleError.Render(runewidth.Truncate("error: "+errText, width, "…"))}
+		return []string{styleError.Render(displayTruncate("error: "+errText, width, "…"))}
 	}
 	if text == "" {
 		return []string{styleDim.Render("(loading…)")}
@@ -359,7 +358,7 @@ func pickerScrollbackTail(text, errText string, height, width int) []string {
 	}
 	out := make([]string, len(raw))
 	for i, ln := range raw {
-		out[i] = runewidth.Truncate(ln, width, "…")
+		out[i] = displayTruncate(ln, width, "…")
 	}
 	return out
 }
