@@ -616,6 +616,92 @@ func TestMatchingWorkspaceUsesWindowIDBeforeCWD(t *testing.T) {
 	}
 }
 
+func TestMatchingWorkspaceFallsBackWhenCandidateWindowIDIsUnmanaged(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "project")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Candidate's WindowID points at an ASL pane nested inside the managed
+	// tab; that ID is not part of the managed session set.
+	const aslPaneWindowID = 99
+	const managedWindowID = 51
+
+	loop := Candidate{
+		PlanDir:  "/plans/asl-pane",
+		CWD:      canonical(t, workspace),
+		Harness:  "codex",
+		WindowID: aslPaneWindowID,
+	}
+	openTargets := []WorkspaceTarget{
+		{CWD: workspace, Harness: "codex", WindowID: managedWindowID},
+	}
+
+	matches, err := MatchingWorkspace([]Candidate{loop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex", WindowID: managedWindowID}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace: %v", err)
+	}
+	if len(matches) != 1 || matches[0].PlanDir != loop.PlanDir {
+		t.Fatalf("matches = %#v, want unmanaged-WindowID loop to fall back to CWD", matches)
+	}
+}
+
+func TestMatchingWorkspaceDoesNotFallBackWhenCandidateWindowIDIsAnotherManagedWindow(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "project")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	loop := Candidate{
+		PlanDir:  "/plans/other-managed",
+		CWD:      canonical(t, workspace),
+		Harness:  "codex",
+		WindowID: 51,
+	}
+	openTargets := []WorkspaceTarget{
+		{CWD: workspace, Harness: "codex", WindowID: 51},
+		{CWD: workspace, Harness: "codex", WindowID: 52},
+	}
+
+	matches, err := MatchingWorkspace([]Candidate{loop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex", WindowID: 52}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("matches = %#v, want none; loop is tied to another managed window", matches)
+	}
+}
+
+func TestMatchingWorkspaceLegacyNoWindowIDStillFallsBack(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "project")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	legacyLoop := Candidate{
+		PlanDir: "/plans/legacy-no-window",
+		CWD:     canonical(t, workspace),
+		Harness: "codex",
+	}
+	openTargets := []WorkspaceTarget{
+		{CWD: workspace, Harness: "codex", WindowID: 51},
+	}
+
+	matches, err := MatchingWorkspace([]Candidate{legacyLoop},
+		WorkspaceTarget{CWD: workspace, Harness: "codex", WindowID: 51}, openTargets)
+	if err != nil {
+		t.Fatalf("MatchingWorkspace: %v", err)
+	}
+	if len(matches) != 1 || matches[0].PlanDir != legacyLoop.PlanDir {
+		t.Fatalf("matches = %#v, want legacy CWD fallback to still work", matches)
+	}
+}
+
 func TestSortCandidatesNewestFirstWithTieBreaks(t *testing.T) {
 	base := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 	candidates := []Candidate{

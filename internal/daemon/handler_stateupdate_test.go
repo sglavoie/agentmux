@@ -46,6 +46,9 @@ func TestHandler_AllActionIconStates(t *testing.T) {
 		{"clear", IconStatePreserve},
 		// user_clear is the TUI-initiated true wipe — icon goes empty.
 		{"user_clear", ""},
+		// loop_marker never paints an icon: ASL lifecycle signals are
+		// marker-only and must preserve whatever the user is currently seeing.
+		{"loop_marker", IconStatePreserve},
 	}
 	for _, tc := range cases {
 		h := newTestHandler()

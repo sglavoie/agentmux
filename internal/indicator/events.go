@@ -12,8 +12,11 @@ var eventToAction = map[string]string{
 	"sessionStart": "idle",
 	"SessionStart": "idle",
 	// Internal Agent Mux signals from agent_session_loop loop lifecycle changes.
-	"AgentSessionLoopStarted":     "active",
-	"AgentSessionLoopTurnStarted": "active",
+	// Start and turn-start are marker-only: they tell the daemon to record an ASL
+	// lifecycle event without painting a bolt icon, so the existing harness state
+	// (whatever the user is actually waiting on) stays visible underneath 🔁.
+	"AgentSessionLoopStarted":     "loop_marker",
+	"AgentSessionLoopTurnStarted": "loop_marker",
 	"AgentSessionLoopFinished":    "idle",
 
 	// Active: the harness is processing.
@@ -90,12 +93,15 @@ var ignoredEvents = map[string]bool{
 
 // validActions is the set of canonical action names accepted from CLI callers.
 // user_clear is included so the TUI can request a true icon wipe (event-driven
-// idle/clear now preserve the current icon).
+// idle/clear now preserve the current icon). loop_marker is included so direct
+// `amx hook-indicator loop_marker` calls (and tests that exercise the action
+// surface) resolve to the daemon-only marker action.
 var validActions = map[string]bool{
 	"active": true, "stop": true, "permission": true,
 	"failure": true, "stop_failure": true,
 	"subagent": true, "compact": true, "elicitation": true,
 	"idle": true, "clear": true, "user_clear": true,
+	"loop_marker": true,
 }
 
 // ResolveAction maps an event name or action name to a canonical action.

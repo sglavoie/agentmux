@@ -803,7 +803,11 @@ func daemonDownIconState(action, currentIconState string, preservesIcon bool, ha
 			return "", true
 		}
 	}
-	return daemon.IconState(action), false
+	next = daemon.IconState(action)
+	if next == daemon.IconStatePreserve {
+		return "", true
+	}
+	return next, false
 }
 
 func updateTitle(windowID int, iconState string, client kittyTitleSetter, tab *kitty.Tab) error {

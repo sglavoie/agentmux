@@ -17,6 +17,10 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return Response{OK: false, Error: "unknown action: " + req.Action}
 	}
 
+	if req.Action == "loop_marker" {
+		return h.handleLoopMarkerStateUpdate(req)
+	}
+
 	receivedAt := time.Now()
 	h.stateMu.Lock()
 	req = h.applyResetFlowLocked(req)
@@ -417,4 +421,39 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	h.stateMu.Unlock()
 
 	return Response{OK: true, Allowed: true, IconState: iconState}
+}
+
+// handleLoopMarkerStateUpdate records an ASL lifecycle signal without
+// disturbing the visible state machine. The marker is event/activity metadata
+// only — it appends to the per-window event log, refreshes the durable export
+// snapshot, and keeps the hook-silence latch armed so a profile that is only
+// emitting loop markers still counts as alive. It deliberately skips the guard,
+// lastAction, notifications, stale tracking, and icon resolution paths so a
+// running ASL loop cannot introduce or disturb a bolt icon.
+func (h *Handler) handleLoopMarkerStateUpdate(req Request) Response {
+	receivedAt := time.Now()
+	h.stateMu.Lock()
+	h.touchWindowMetadataLocked(req)
+	if req.Muted {
+		h.mutedWindows[req.WindowID] = true
+	} else {
+		delete(h.mutedWindows, req.WindowID)
+	}
+	if req.Account != "" {
+		accountKey := strings.ToLower(req.Account)
+		h.lastSeenEventAt[accountKey] = receivedAt
+		delete(h.notifiedHookSilence, accountKey)
+	}
+	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve))
+	h.stateMu.Unlock()
+
+	slog.Debug("loop marker received",
+		"window_id", req.WindowID,
+		"account", req.Account,
+		"event", req.Event,
+		"action", req.Action,
+		"source", req.Source,
+	)
+
+	return Response{OK: true, Allowed: true, IconState: IconStatePreserve}
 }

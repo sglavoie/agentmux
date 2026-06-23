@@ -185,10 +185,13 @@ type SessionEvent struct {
 
 // actionPriority maps each action name to its guard priority.
 // Higher priority states block lower priority state updates.
+// loop_marker is at priority 0 because it never participates in guard
+// transitions; the handler intercepts it before TryUpdate is reached.
 var actionPriority = map[string]int{
 	"user_clear":   -1,
 	"clear":        -1,
 	"idle":         0,
+	"loop_marker":  0,
 	"active":       1,
 	"compact":      1,
 	"subagent":     2,
@@ -201,7 +204,8 @@ var actionPriority = map[string]int{
 
 // actionIconState maps each action to the palette icon state name.
 // Recoverable tool failures render as "warning"; terminal stop failures stay on
-// the sticky "error" icon.
+// the sticky "error" icon. loop_marker maps to IconStatePreserve because the
+// daemon must never paint a fresh state icon for an ASL lifecycle signal.
 var actionIconState = map[string]string{
 	"active":       "bolt",
 	"compact":      "compact",
@@ -214,6 +218,7 @@ var actionIconState = map[string]string{
 	"idle":         "",
 	"clear":        "",
 	"user_clear":   "",
+	"loop_marker":  IconStatePreserve,
 }
 
 // Priority returns the priority for an action, or 0 for unknown actions.

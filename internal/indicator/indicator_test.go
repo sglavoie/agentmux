@@ -423,7 +423,6 @@ func TestRunWithDeps_AgentSessionLoopStartedTargetsPayloadWorkspace(t *testing.T
 	targetTitle := "Trad-X"
 	wantTitle := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "Trad-X",
-		State:   "bolt",
 		Looping: true,
 	})
 
@@ -483,8 +482,8 @@ func TestRunWithDeps_AgentSessionLoopStartedTargetsPayloadWorkspace(t *testing.T
 		t.Fatalf("SetTabTitle call = %+v, want window_id:101/%q", kittyClient.setTitleCalls[0], wantTitle)
 	}
 	reqs := daemonClient.snapshot()
-	if len(reqs) != 1 || reqs[0].WindowID != 101 || reqs[0].Event != "AgentSessionLoopStarted" || reqs[0].Action != "active" {
-		t.Fatalf("daemon requests = %+v, want one active AgentSessionLoopStarted request for window 101", reqs)
+	if len(reqs) != 1 || reqs[0].WindowID != 101 || reqs[0].Event != "AgentSessionLoopStarted" || reqs[0].Action != "loop_marker" {
+		t.Fatalf("daemon requests = %+v, want one loop_marker AgentSessionLoopStarted request for window 101", reqs)
 	}
 }
 
@@ -494,7 +493,6 @@ func TestRunWithDeps_AgentSessionLoopStartedTargetsPayloadWindowIDBeforeWorkspac
 	callerDir := t.TempDir()
 	wantTitle := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "Trad-X",
-		State:   "bolt",
 		Looping: true,
 	})
 
@@ -554,8 +552,8 @@ func TestRunWithDeps_AgentSessionLoopStartedTargetsPayloadWindowIDBeforeWorkspac
 		t.Fatalf("SetTabTitle call = %+v, want window_id:101/%q", kittyClient.setTitleCalls[0], wantTitle)
 	}
 	reqs := daemonClient.snapshot()
-	if len(reqs) != 1 || reqs[0].WindowID != 101 || reqs[0].Event != "AgentSessionLoopStarted" || reqs[0].Action != "active" {
-		t.Fatalf("daemon requests = %+v, want one active AgentSessionLoopStarted request for window 101", reqs)
+	if len(reqs) != 1 || reqs[0].WindowID != 101 || reqs[0].Event != "AgentSessionLoopStarted" || reqs[0].Action != "loop_marker" {
+		t.Fatalf("daemon requests = %+v, want one loop_marker AgentSessionLoopStarted request for window 101", reqs)
 	}
 }
 
@@ -594,7 +592,6 @@ func TestRunWithDeps_AgentSessionLoopStartedUsesStatePathHarnessPreference(t *te
 			statePath := writeLoopStateFile(t, tc.state)
 			wantTitle := palette.BuildTitleParts(palette.TitleParts{
 				Base:    "project-copilot",
-				State:   "bolt",
 				Looping: true,
 			})
 			handler := daemon.NewHandler(
@@ -665,8 +662,8 @@ func TestRunWithDeps_AgentSessionLoopStartedUsesStatePathHarnessPreference(t *te
 				t.Fatalf("SetTabTitle call = %+v, want window_id:102/%q", kittyClient.setTitleCalls[0], wantTitle)
 			}
 			reqs := daemonClient.snapshot()
-			if len(reqs) != 1 || reqs[0].WindowID != 102 || reqs[0].Event != tc.event || reqs[0].Action != "active" {
-				t.Fatalf("daemon requests = %+v, want one active %s request for window 102", reqs, tc.event)
+			if len(reqs) != 1 || reqs[0].WindowID != 102 || reqs[0].Event != tc.event || reqs[0].Action != "loop_marker" {
+				t.Fatalf("daemon requests = %+v, want one loop_marker %s request for window 102", reqs, tc.event)
 			}
 		})
 	}
@@ -983,6 +980,235 @@ func TestRunWithDeps_NonKittyHookIsSilentNoOp(t *testing.T) {
 	}
 	if len(daemonClient.reqs) != 0 {
 		t.Fatalf("daemon requests = %d, want 0", len(daemonClient.reqs))
+	}
+}
+
+// TestRunWithDeps_AgentSessionLoopStartedSplitTabLiveLayouts exercises the
+// three live-shaped split-tab scenarios called out by the loop-marker plan:
+//
+//   - "scripts": the ASL pane was launched inside the project tab and copied
+//     amx_* user vars from its parent, so it is a managed window itself.
+//   - "LogScanner": the ASL pane lacks amx_* user vars; the project pane in
+//     the same tab is the only managed window. Routing must fall back from the
+//     payload's window ID to CWD/harness matching against the project pane.
+//   - "sis": the tab already carries a sticky stop icon (no longer cleared by
+//     a fresh active event because the start lifecycle is marker-only). The
+//     existing state icon must survive while only 🔁 is added.
+//
+// All three shapes share the same expected daemon contract — exactly one
+// loop_marker request — and the same title-update invariants: tab base name
+// and existing state icon preserved, Looping flipped to true.
+func TestRunWithDeps_AgentSessionLoopStartedSplitTabLiveLayouts(t *testing.T) {
+	projectDir := t.TempDir()
+	boltTitle := palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "bolt"})
+	boltLoopTitle := palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "bolt", Looping: true})
+	stopTitle := palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop"})
+	stopLoopTitle := palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop", Looping: true})
+
+	projectPaneVars := kitty.UserVars{
+		Profile:      "api",
+		Harness:      "claude",
+		AMXDirectory: projectDir,
+	}
+
+	cases := []struct {
+		name        string
+		tabTitle    string
+		aslPaneVars kitty.UserVars
+		wantMatch   string
+		wantTitle   string
+	}{
+		{
+			name:        "scripts: ASL pane has copied amx_* vars and adds 🔁",
+			tabTitle:    boltTitle,
+			aslPaneVars: projectPaneVars,
+			wantMatch:   "window_id:43",
+			wantTitle:   boltLoopTitle,
+		},
+		{
+			name:        "LogScanner: ASL pane lacks amx_*, project pane owns metadata",
+			tabTitle:    boltTitle,
+			aslPaneVars: kitty.UserVars{},
+			wantMatch:   "window_id:42",
+			wantTitle:   boltLoopTitle,
+		},
+		{
+			name:        "sis: sticky stop icon remains while 🔁 is added",
+			tabTitle:    stopTitle,
+			aslPaneVars: kitty.UserVars{},
+			wantMatch:   "window_id:42",
+			wantTitle:   stopLoopTitle,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := daemon.NewHandler(
+				daemon.NewStateGuard(time.Hour),
+				daemon.NewNotifier(&config.NotificationConfig{}),
+			)
+			daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+			kittyClient := &fakeIndicatorKittyClient{
+				windows: []kitty.OSWindow{{
+					ID: 1,
+					Tabs: []kitty.Tab{{
+						ID:    100,
+						Title: tc.tabTitle,
+						Windows: []kitty.Window{
+							{ID: 42, UserVars: projectPaneVars},
+							{ID: 43, UserVars: tc.aslPaneVars},
+						},
+					}},
+				}},
+			}
+
+			err := runWithDeps(
+				"AgentSessionLoopStarted",
+				43,
+				"/tmp/amx",
+				HookPayload{
+					Source:        "agent_session_loop",
+					CWD:           projectDir,
+					Harness:       "claude",
+					KittyWindowID: 43,
+				},
+				false,
+				kittyClient,
+				daemonClient,
+			)
+			if err != nil {
+				t.Fatalf("runWithDeps() error = %v", err)
+			}
+			if len(kittyClient.setTitleCalls) != 1 {
+				t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+			}
+			if kittyClient.setTitleCalls[0] != (setTitleCall{match: tc.wantMatch, title: tc.wantTitle}) {
+				t.Fatalf("SetTabTitle call = %+v, want %s/%q", kittyClient.setTitleCalls[0], tc.wantMatch, tc.wantTitle)
+			}
+			reqs := daemonClient.snapshot()
+			if len(reqs) != 1 {
+				t.Fatalf("daemon requests = %+v, want exactly one loop_marker request", reqs)
+			}
+			if reqs[0].Action != "loop_marker" || reqs[0].Event != "AgentSessionLoopStarted" {
+				t.Fatalf("daemon request = %+v, want loop_marker / AgentSessionLoopStarted", reqs[0])
+			}
+		})
+	}
+}
+
+func TestRunWithDeps_AgentSessionLoopStartedDaemonDownPreservesStateIcon(t *testing.T) {
+	projectDir := t.TempDir()
+	cases := []struct {
+		state string
+	}{
+		{state: "bolt"},
+		{state: "stop"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.state, func(t *testing.T) {
+			title := palette.BuildTitleParts(palette.TitleParts{Base: "api", State: tc.state})
+			wantTitle := palette.BuildTitleParts(palette.TitleParts{Base: "api", State: tc.state, Looping: true})
+			kittyClient := &fakeIndicatorKittyClient{
+				windows: fakeIndicatorWindowsWithDirectory(42, title, "api", "claude", projectDir),
+			}
+			daemonClient := &fakeIndicatorDaemonClient{err: errors.New("daemon down")}
+
+			err := runWithDeps(
+				"AgentSessionLoopStarted",
+				42,
+				"/tmp/amx",
+				HookPayload{
+					Source:        "agent_session_loop",
+					CWD:           projectDir,
+					Harness:       "claude",
+					KittyWindowID: 42,
+				},
+				false,
+				kittyClient,
+				daemonClient,
+			)
+			if err != nil {
+				t.Fatalf("runWithDeps() error = %v", err)
+			}
+			if len(kittyClient.setTitleCalls) != 1 {
+				t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+			}
+			if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:42", title: wantTitle}) {
+				t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], wantTitle)
+			}
+			if len(daemonClient.reqs) != 1 || daemonClient.reqs[0].Action != "loop_marker" {
+				t.Fatalf("daemon requests = %+v, want one loop_marker request", daemonClient.reqs)
+			}
+		})
+	}
+}
+
+// TestRunWithDeps_AgentSessionLoopFinishedSplitTabClearsOnlyLoopMarker
+// verifies the finish-side complement to the split-tab live-shaped scenarios:
+// when no active loop remains for the project workspace, finish reconciliation
+// clears 🔁 from the project pane's tab while preserving the existing state
+// icon — including a sticky stop icon — and the unmanaged ASL pane in the same
+// tab is not retargeted.
+func TestRunWithDeps_AgentSessionLoopFinishedSplitTabClearsOnlyLoopMarker(t *testing.T) {
+	projectDir := t.TempDir()
+	stopLoopTitle := palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop", Looping: true})
+	stopTitle := palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop"})
+
+	stubIndicatorLoopDiscover(t, nil, nil)
+	handler := daemon.NewHandler(
+		daemon.NewStateGuard(time.Hour),
+		daemon.NewNotifier(&config.NotificationConfig{}),
+	)
+	daemonClient := &handlerBackedIndicatorDaemonClient{h: handler}
+	kittyClient := &fakeIndicatorKittyClient{
+		windows: []kitty.OSWindow{{
+			ID: 1,
+			Tabs: []kitty.Tab{{
+				ID:    100,
+				Title: stopLoopTitle,
+				Windows: []kitty.Window{
+					{
+						ID: 42,
+						UserVars: kitty.UserVars{
+							Profile:      "api",
+							Harness:      "claude",
+							AMXDirectory: projectDir,
+						},
+					},
+					{ID: 43},
+				},
+			}},
+		}},
+	}
+
+	err := runWithDeps(
+		"AgentSessionLoopFinished",
+		43,
+		"/tmp/amx",
+		HookPayload{
+			Source:        "agent_session_loop",
+			Reason:        "run_finished",
+			CWD:           projectDir,
+			Harness:       "claude",
+			KittyWindowID: 43,
+		},
+		false,
+		kittyClient,
+		daemonClient,
+	)
+	if err != nil {
+		t.Fatalf("runWithDeps() error = %v", err)
+	}
+	if len(kittyClient.setTitleCalls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(kittyClient.setTitleCalls), kittyClient.setTitleCalls)
+	}
+	if kittyClient.setTitleCalls[0] != (setTitleCall{match: "window_id:42", title: stopTitle}) {
+		t.Fatalf("SetTabTitle call = %+v, want window_id:42/%q", kittyClient.setTitleCalls[0], stopTitle)
+	}
+	reqs := daemonClient.snapshot()
+	if len(reqs) != 1 || reqs[0].Event != "AgentSessionLoopFinished" || reqs[0].Action != "idle" || reqs[0].WindowID != 42 {
+		t.Fatalf("daemon requests = %+v, want one idle AgentSessionLoopFinished request for window 42", reqs)
 	}
 }
 

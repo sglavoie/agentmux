@@ -169,6 +169,12 @@ func MatchingCWD(candidates []Candidate, selectedDir string) ([]Candidate, error
 // candidates with target's harness when present. If a different same-workspace
 // harness has an open target, that harness owns the loop marker; otherwise the
 // function falls back to CWD-only workspace matching for legacy state.
+//
+// Candidate WindowID is treated as authoritative only when it identifies a
+// managed window in openTargets. A candidate whose WindowID points outside the
+// managed set (for example, an ASL pane nested inside a managed tab) is still
+// eligible for CWD/harness fallback so the loop marker reaches the managed
+// session that owns the workspace.
 func MatchingWorkspace(candidates []Candidate, target WorkspaceTarget, openTargets []WorkspaceTarget) ([]Candidate, error) {
 	workspaceCandidates := candidates
 	if target.WindowID > 0 {
@@ -176,7 +182,7 @@ func MatchingWorkspace(candidates []Candidate, target WorkspaceTarget, openTarge
 		if len(matches) > 0 {
 			return matches, nil
 		}
-		workspaceCandidates = candidatesWithoutWindowID(candidates)
+		workspaceCandidates = candidatesEligibleForWindowFallback(candidates, managedWindowIDs(openTargets, target.WindowID))
 	}
 
 	if target.CWD == "" {
@@ -348,14 +354,31 @@ func matchingWindow(candidates []Candidate, windowID int) []Candidate {
 	return matches
 }
 
-func candidatesWithoutWindowID(candidates []Candidate) []Candidate {
+func candidatesEligibleForWindowFallback(candidates []Candidate, managed map[int]struct{}) []Candidate {
 	matches := make([]Candidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		if candidate.WindowID <= 0 {
 			matches = append(matches, candidate)
+			continue
+		}
+		if _, isManaged := managed[candidate.WindowID]; !isManaged {
+			matches = append(matches, candidate)
 		}
 	}
 	return matches
+}
+
+func managedWindowIDs(openTargets []WorkspaceTarget, targetWindowID int) map[int]struct{} {
+	managed := make(map[int]struct{}, len(openTargets)+1)
+	for _, target := range openTargets {
+		if target.WindowID > 0 {
+			managed[target.WindowID] = struct{}{}
+		}
+	}
+	if targetWindowID > 0 {
+		managed[targetWindowID] = struct{}{}
+	}
+	return managed
 }
 
 func matchingCanonicalCWD(candidates []Candidate, selectedCanonical string) []Candidate {
