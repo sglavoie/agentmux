@@ -136,8 +136,8 @@ func (m *colorPickerModel) apply() {
 
 	err = m.ctx.Client.SetTabColor(
 		kitty.MatchTabByID(m.ctx.TabID),
-		c.ActiveBg, c.InactiveBg,
-		palette.ActiveFg, palette.InactiveFg,
+		kitty.TabColorDefault, c.InactiveBg,
+		kitty.TabColorDefault, palette.InactiveFg,
 	)
 	if err != nil {
 		m.err = fmt.Errorf("set tab color: %w", err)

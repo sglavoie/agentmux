@@ -10,7 +10,7 @@ Remote control is enabled in `kitty.conf` with `allow_remote_control yes` or by 
 
 All commands use the form `kitten @ [--to SOCKET] COMMAND [OPTIONS]`. The older `kitty @` form still works but `kitten @` is preferred. Without `--to`, commands use `KITTY_LISTEN_ON`. Add `--no-response` to skip waiting for confirmation.
 
-## Commands Used by cc-manager
+## Commands Used by Agent Mux
 
 ### `kitten @ ls`
 
@@ -31,7 +31,7 @@ Creates new windows or tabs. Key options for this project:
 
 ### `kitten @ set-tab-color`
 
-Sets tab bar colors for specific tabs. Color fields include `active_bg`, `active_fg`, `inactive_bg`, `inactive_fg`. Colors are specified as hex values (e.g., `active_bg=#ff0000`). Pass `none` to reset a field to defaults. Use `--match` to target specific tabs.
+Sets tab bar colors for specific tabs. Color fields include `active_bg`, `active_fg`, `inactive_bg`, `inactive_fg`. Colors are specified as hex values (e.g., `active_bg=#ff0000`). Pass `NONE` to reset a field to defaults. Use `--match` to target specific tabs.
 
 ### `kitten @ close-tab`
 
@@ -51,7 +51,7 @@ The `--match` flag uses `field:query` syntax. For tab-level commands, available 
 
 Combine expressions with Boolean operators: `and`, `or`, `not`, and parentheses. Example: `not state:focused and state:parent_focused`.
 
-The `var` field matches user variables set via `--var` at launch time, which is how cc-manager identifies its managed tabs (`var:cc_account`).
+The `var` field matches user variables set via `--var` at launch time, which is how Agent Mux identifies its managed tabs (`var:cc_account`).
 
 ## Security
 

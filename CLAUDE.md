@@ -196,8 +196,9 @@ The dashboard shows the profile separately via its badge (`[W]`, `[P]`,
 etc.), and colors harness-name cells from `[harness_colors]`. State icons
 (bolt `⚡`, stop `⏹`, key `🔑`, error `✗`), the star marker (`★`), and the
 mute marker (`🔇`) are layered on top of the base title by
-`palette.BuildTitleFull()`. The Kitty tab-bar accent color comes from each
-profile's `color`, not from the harness.
+`palette.BuildTitleFull()`. The inactive Kitty tab-bar accent color comes from
+each profile's `color`, not from the harness; active tab colors reset to
+`kitty.conf` defaults.
 
 When a Claude session stalls at the context limit, the assistant turn never completes cleanly. Sometimes no hook fires at all (the bolt ⚡ stays stuck), and sometimes an upstream event resolves to `idle`/`clear` and wipes the bolt to empty before any state can land. The daemon's periodic Claude screen probe (`internal/daemon/claude_context_limit_probe.go`) covers both cases: it scans bolt, subagent, and empty-state Claude windows for the recovery banner and swaps the icon to error ❗ via the `stop_failure` action. Opt out with `[defaults.watchdog].claude_context_limit_probe = false`.
 

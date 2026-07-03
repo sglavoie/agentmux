@@ -129,17 +129,24 @@ func TestColorPicker_EnterAppliesColor(t *testing.T) {
 		t.Fatalf("unexpected error: %v", m.err)
 	}
 
-	// Verify SetTabColor
+	// Verify SetTabColor: active colors reset to kitty.conf, inactive colors
+	// keep the selected profile accent.
 	if len(client.tabColorCalls) != 1 {
 		t.Fatalf("SetTabColor calls = %d, want 1", len(client.tabColorCalls))
 	}
 	call := client.tabColorCalls[0]
 	redColor, _ := palette.Lookup("red")
-	if call.activeBg != redColor.ActiveBg {
-		t.Errorf("activeBg = %q, want %q", call.activeBg, redColor.ActiveBg)
+	if call.activeBg != kitty.TabColorDefault {
+		t.Errorf("activeBg = %q, want %q", call.activeBg, kitty.TabColorDefault)
 	}
-	if call.activeFg != palette.ActiveFg {
-		t.Errorf("activeFg = %q, want %q", call.activeFg, palette.ActiveFg)
+	if call.activeFg != kitty.TabColorDefault {
+		t.Errorf("activeFg = %q, want %q", call.activeFg, kitty.TabColorDefault)
+	}
+	if call.inactiveBg != redColor.InactiveBg {
+		t.Errorf("inactiveBg = %q, want %q", call.inactiveBg, redColor.InactiveBg)
+	}
+	if call.inactiveFg != palette.InactiveFg {
+		t.Errorf("inactiveFg = %q, want %q", call.inactiveFg, palette.InactiveFg)
 	}
 
 	// Verify SetUserVars (managed tab)
@@ -172,8 +179,15 @@ func TestColorPicker_EnterOnResetAppliesDefault(t *testing.T) {
 		t.Fatalf("SetTabColor calls = %d, want 1", len(client.tabColorCalls))
 	}
 	blueColor, _ := palette.Lookup("blue")
-	if client.tabColorCalls[0].activeBg != blueColor.ActiveBg {
-		t.Errorf("reset applied activeBg = %q, want %q (blue default)", client.tabColorCalls[0].activeBg, blueColor.ActiveBg)
+	call := client.tabColorCalls[0]
+	if call.activeBg != kitty.TabColorDefault {
+		t.Errorf("reset applied activeBg = %q, want %q", call.activeBg, kitty.TabColorDefault)
+	}
+	if call.activeFg != kitty.TabColorDefault {
+		t.Errorf("reset applied activeFg = %q, want %q", call.activeFg, kitty.TabColorDefault)
+	}
+	if call.inactiveBg != blueColor.InactiveBg {
+		t.Errorf("reset applied inactiveBg = %q, want %q (blue default)", call.inactiveBg, blueColor.InactiveBg)
 	}
 }
 

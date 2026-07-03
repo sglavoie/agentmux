@@ -168,9 +168,9 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	}
 	launchDebug.Printf("Launch: LaunchTab succeeded")
 
-	// Apply tab color with exponential backoff retry. The Kitty tab accent
-	// tracks the launch profile's configured color, matching the README
-	// contract and the open/open-in-editor helpers.
+	// Apply tab color with exponential backoff retry. Agent Mux owns the
+	// inactive profile accent; active colors reset to kitty.conf so the focused
+	// tab remains prominent even when the tab has a profile color.
 	if color, err := palette.Lookup(acc.Color); err == nil {
 		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
 			// Tab color is cosmetic — degrade to a Warn-level log so the
@@ -238,7 +238,7 @@ func applyColorWithRetry(client kitty.KittyClient, beforeIDs map[int]bool, forma
 				for _, tab := range osw.Tabs {
 					if !beforeIDs[tab.ID] && palette.StripIcons(tab.Title) == formattedTitle {
 						matchExpr := kitty.MatchTabByID(tab.ID)
-						if setErr := client.SetTabColor(matchExpr, color.ActiveBg, color.InactiveBg, palette.ActiveFg, palette.InactiveFg); setErr != nil {
+						if setErr := client.SetTabColor(matchExpr, kitty.TabColorDefault, color.InactiveBg, kitty.TabColorDefault, palette.InactiveFg); setErr != nil {
 							lastErr = fmt.Errorf("setting tab color: %w", setErr)
 						} else {
 							return nil

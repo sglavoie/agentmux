@@ -137,9 +137,9 @@ type Account struct {
 	ConfigDir string `toml:"config_dir"`
 	// Color is the required per-profile palette color used to render the
 	// project title (picker, main list, detail header, preview headers,
-	// and account chips/badges) and the Kitty tab-bar accent for every
-	// session launched under this profile. Validation rejects an empty or
-	// invalid value.
+	// account chips/badges) and inactive Kitty tab-bar accent. Active tab
+	// colors come from kitty.conf. Validation rejects an empty or invalid
+	// value.
 	Color    string         `toml:"color"`
 	Args     []string       `toml:"args"`
 	Watchdog WatchdogConfig `toml:"watchdog"` // per-profile override; zero fields fall back to defaults at read time

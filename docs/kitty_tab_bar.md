@@ -31,8 +31,8 @@ Colors are specified as hex values (e.g., `#ff0000`) or named colors.
 
 ## Per-Tab Color Overrides
 
-The `kitten @ set-tab-color` remote control command overrides these defaults on a per-tab basis. It accepts fields: `active_bg`, `active_fg`, `inactive_bg`, `inactive_fg`. This is the mechanism cc-manager uses to apply account-specific colors to each session tab. Pass `none` to reset a field back to the default from `kitty.conf`.
+The `kitten @ set-tab-color` remote control command overrides these defaults on a per-tab basis. It accepts fields: `active_bg`, `active_fg`, `inactive_bg`, `inactive_fg`. Agent Mux uses this command to apply profile-specific inactive colors to session tabs. Pass `NONE` to reset a field back to the default from `kitty.conf`.
 
-## Relevance to cc-manager
+## Relevance to Agent Mux
 
-The project uses `kitten @ set-tab-color` at launch time to color-code each tab based on the account's configured color. The 10-color palette (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan) maps named colors to hex values for `active_bg` and `inactive_bg`. The `active_fg` and `inactive_fg` are typically set to black or white for contrast.
+The project uses `kitten @ set-tab-color` at launch time to color-code each tab based on the profile's configured color. The 10-color palette (green, blue, red, orange, purple, teal, pink, yellow, gray, cyan) maps named colors to inactive tab backgrounds; active tab foreground/background values are reset to `NONE` so the active tab uses `kitty.conf`.

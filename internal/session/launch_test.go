@@ -357,8 +357,8 @@ func TestLaunch_ColorRetryUsesTabIDWithDuplicateTitles(t *testing.T) {
 }
 
 // TestLaunch_ColorTracksLaunchProfile verifies that when a session is
-// launched under an override profile, the Kitty tab-bar accent follows the
-// chosen launch profile rather than the project's default profile.
+// launched under an override profile, the inactive Kitty tab-bar accent follows
+// the chosen launch profile rather than the project's default profile.
 func TestLaunch_ColorTracksLaunchProfile(t *testing.T) {
 	empty := loadFixture(t, "kitty_ls_empty.json")
 
@@ -390,7 +390,7 @@ func TestLaunch_ColorTracksLaunchProfile(t *testing.T) {
 
 	// Launch under the override profile (work/blue). Even though the project's
 	// configured default is personal/yellow, the new tab should use the launch
-	// profile's blue accent.
+	// profile's blue inactive accent while resetting active colors to kitty.conf.
 	sess := config.Session{Title: "api", Account: "work", Profile: "work", Directory: "/tmp/api"}
 	overrideAcc := cfg.Accounts[0] // work
 	defaultAcc := cfg.Accounts[1]  // personal
@@ -427,11 +427,17 @@ func TestLaunch_ColorTracksLaunchProfile(t *testing.T) {
 	}
 
 	joined := strings.Join(setTabColorArgs, " ")
-	if !strings.Contains(joined, "active_bg="+blue.ActiveBg) {
-		t.Errorf("expected set-tab-color to use the launch profile (blue) active_bg=%q; args: %v", blue.ActiveBg, setTabColorArgs)
+	if !strings.Contains(joined, "active_bg="+kitty.TabColorDefault) {
+		t.Errorf("expected set-tab-color to reset active_bg=%q; args: %v", kitty.TabColorDefault, setTabColorArgs)
 	}
-	if strings.Contains(joined, "active_bg="+yellow.ActiveBg) {
-		t.Errorf("expected set-tab-color NOT to use the project default (yellow) active_bg=%q; args: %v", yellow.ActiveBg, setTabColorArgs)
+	if !strings.Contains(joined, "active_fg="+kitty.TabColorDefault) {
+		t.Errorf("expected set-tab-color to reset active_fg=%q; args: %v", kitty.TabColorDefault, setTabColorArgs)
+	}
+	if !strings.Contains(joined, "inactive_bg="+blue.InactiveBg) {
+		t.Errorf("expected set-tab-color to use the launch profile (blue) inactive_bg=%q; args: %v", blue.InactiveBg, setTabColorArgs)
+	}
+	if strings.Contains(joined, "inactive_bg="+yellow.InactiveBg) {
+		t.Errorf("expected set-tab-color NOT to use the project default (yellow) inactive_bg=%q; args: %v", yellow.InactiveBg, setTabColorArgs)
 	}
 }
 

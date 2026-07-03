@@ -192,9 +192,9 @@ codex   = "purple"
 #             Copilot exports COPILOT_HOME=<home_dir>.
 #             Codex exports CODEX_HOME=<home_dir>.
 #   color     Per-profile palette color used to render the project title in
-#             the dashboard list, picker, detail header, and account chips,
-#             AND the Kitty tab-bar accent on every session launched under
-#             this profile. Valid colors: green, blue, red, orange, purple,
+#             the dashboard list, picker, detail header, account chips, and
+#             inactive Kitty tab-bar accent. Active tab colors come from
+#             kitty.conf. Valid colors: green, blue, red, orange, purple,
 #             teal, pink, yellow, gray, cyan.
 #
 # Optional fields:
