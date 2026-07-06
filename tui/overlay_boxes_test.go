@@ -36,6 +36,35 @@ func TestRenderActionsBox(t *testing.T) {
 	}
 }
 
+func TestRenderActionsBoxExpandsForActionRows(t *testing.T) {
+	m := loadSessions(testModelWithSessions(), makeSessions())
+	m = pressKey(m, "a")
+	m.width, m.height = 120, 40
+
+	raw := renderActionsBox(m)
+	lines := strings.Split(strings.TrimRight(stripAnsi(raw), "\n"), "\n")
+	if len(lines) == 0 {
+		t.Fatal("expected actions box output")
+	}
+	if w := runewidth.StringWidth(lines[0]); w <= 70 {
+		t.Fatalf("box width = %d, want wider than old 70-column cap:\n%s", w, stripAnsi(raw))
+	}
+
+	var editorLine string
+	for _, line := range lines {
+		if strings.Contains(line, "O   open in editor") {
+			editorLine = line
+			break
+		}
+	}
+	if editorLine == "" {
+		t.Fatalf("expected open-in-editor row in output:\n%s", stripAnsi(raw))
+	}
+	if !strings.Contains(editorLine, "$VISUAL/$EDITOR (or defaults.editor)") {
+		t.Fatalf("open-in-editor row should keep description on one line, got %q\nfull output:\n%s", editorLine, stripAnsi(raw))
+	}
+}
+
 func TestRenderActionsBoxNarrowClamps(t *testing.T) {
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "a")

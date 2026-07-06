@@ -304,24 +304,36 @@ func wrapText(s string, width int) []string {
 
 // renderActionsBox wraps renderActions in styleOverlayBox so the actions
 // overlay can be composited as a centered modal on top of the dimmed
-// dashboard. styleOverlayBox.Width sets the outer box width (including
-// the 1-col border and 1-col padding on each side), so the usable text
-// column is innerWidth-4 and the description column budget is
-// innerWidth-4-actionDescIndent. The outer width is capped at 70 and
-// clamped to m.width-4 on narrow terminals to leave a 2-col margin.
+// dashboard. The box grows to fit the widest unwrapped action row and
+// clamps to m.width-4 on narrow terminals to leave a 2-col margin.
 func renderActionsBox(m Model) string {
-	innerWidth := 70
-	if avail := m.width - 4; avail < innerWidth {
-		innerWidth = avail
+	frameWidth := styleOverlayBox.GetHorizontalFrameSize()
+	content := strings.TrimRight(renderActions(m, naturalActionsDescWidth(m)), "\n")
+	boxWidth := 70
+	if contentWidth := popupWidth(content) + frameWidth; contentWidth > boxWidth {
+		boxWidth = contentWidth
 	}
-	if innerWidth < 1 {
-		innerWidth = 1
+	if avail := m.width - 4; avail < boxWidth {
+		boxWidth = avail
 	}
-	descWidth := innerWidth - 4 - actionDescIndent
+	if boxWidth < 1 {
+		boxWidth = 1
+	}
+	descWidth := boxWidth - frameWidth - actionDescIndent
 	if descWidth < 1 {
 		descWidth = 1
 	}
-	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderActions(m, descWidth), "\n"))
+	return styleOverlayBox.Width(boxWidth).Render(strings.TrimRight(renderActions(m, descWidth), "\n"))
+}
+
+func naturalActionsDescWidth(m Model) int {
+	width := 1
+	for _, a := range actionsFor(m) {
+		if w := displayWidth(a.description); w > width {
+			width = w
+		}
+	}
+	return width
 }
 
 // findConfigSession resolves a running session back to its configured project
