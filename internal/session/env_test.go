@@ -111,7 +111,22 @@ func TestResolveEnv_SetsCLAUDE_CONFIG_DIR(t *testing.T) {
 	sess := config.Session{Account: "work"}
 	env := session.ResolveEnv(sess, acc)
 	if _, ok := env["CLAUDE_CONFIG_DIR"]; !ok {
-		t.Error("expected CLAUDE_CONFIG_DIR to be set for non-default config dir")
+		t.Error("expected CLAUDE_CONFIG_DIR to be set for profile config dir")
+	}
+}
+
+func TestResolveEnv_SetsCLAUDE_CONFIG_DIRForDefaultHome(t *testing.T) {
+	defaultDir := harness.DefaultHomeDir("claude")
+	acc := config.Account{
+		Name:    "claude-default",
+		Harness: "claude",
+		HomeDir: defaultDir,
+		Color:   "blue",
+	}
+	sess := config.Session{Profile: "claude-default"}
+	env := session.ResolveEnv(sess, acc)
+	if got := env["CLAUDE_CONFIG_DIR"]; got != defaultDir {
+		t.Errorf("CLAUDE_CONFIG_DIR: got %q, want %q", got, defaultDir)
 	}
 }
 
@@ -119,9 +134,12 @@ func TestResolveEnv_SessionOverrides(t *testing.T) {
 	acc := config.Account{Name: "work", ConfigDir: "~/.config/claude-work"}
 	sess := config.Session{
 		Account: "work",
-		Env:     map[string]string{"DEBUG": "1", "NODE_ENV": "development"},
+		Env:     map[string]string{"CLAUDE_CONFIG_DIR": "/tmp/project-claude", "DEBUG": "1", "NODE_ENV": "development"},
 	}
 	env := session.ResolveEnv(sess, acc)
+	if env["CLAUDE_CONFIG_DIR"] != "/tmp/project-claude" {
+		t.Errorf("CLAUDE_CONFIG_DIR: got %q, want %q", env["CLAUDE_CONFIG_DIR"], "/tmp/project-claude")
+	}
 	if env["DEBUG"] != "1" {
 		t.Errorf("DEBUG: got %q, want %q", env["DEBUG"], "1")
 	}
@@ -148,7 +166,7 @@ func TestResolveEnv_CopilotSetsCorrectEnvVar(t *testing.T) {
 	}
 }
 
-func TestResolveEnv_CopilotDefaultHomeDirSetsNoEnvVar(t *testing.T) {
+func TestResolveEnv_CopilotDefaultHomeDirSetsEnvVar(t *testing.T) {
 	defaultDir := harness.DefaultHomeDir("copilot")
 	acc := config.Account{
 		Name:    "copilot-default",
@@ -158,8 +176,8 @@ func TestResolveEnv_CopilotDefaultHomeDirSetsNoEnvVar(t *testing.T) {
 	}
 	sess := config.Session{Profile: "copilot-default"}
 	env := session.ResolveEnv(sess, acc)
-	if _, ok := env["COPILOT_HOME"]; ok {
-		t.Errorf("COPILOT_HOME should not be set when HomeDir equals the harness default")
+	if got := env["COPILOT_HOME"]; got != defaultDir {
+		t.Errorf("COPILOT_HOME: got %q, want %q", got, defaultDir)
 	}
 }
 
@@ -181,7 +199,7 @@ func TestResolveEnv_CodexSetsCorrectEnvVar(t *testing.T) {
 	}
 }
 
-func TestResolveEnv_CodexDefaultHomeDirSetsNoEnvVar(t *testing.T) {
+func TestResolveEnv_CodexDefaultHomeDirSetsEnvVar(t *testing.T) {
 	defaultDir := harness.DefaultHomeDir("codex")
 	acc := config.Account{
 		Name:    "codex-default",
@@ -191,7 +209,7 @@ func TestResolveEnv_CodexDefaultHomeDirSetsNoEnvVar(t *testing.T) {
 	}
 	sess := config.Session{Profile: "codex-default"}
 	env := session.ResolveEnv(sess, acc)
-	if _, ok := env["CODEX_HOME"]; ok {
-		t.Errorf("CODEX_HOME should not be set when HomeDir equals the harness default")
+	if got := env["CODEX_HOME"]; got != defaultDir {
+		t.Errorf("CODEX_HOME: got %q, want %q", got, defaultDir)
 	}
 }

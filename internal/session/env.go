@@ -10,8 +10,7 @@ import (
 )
 
 // ResolveEnv builds the env map passed as --env flags to kitten @ launch.
-// It includes KITTY_LISTEN_ON, a harness-specific home/config env var when
-// non-default, and
+// It includes KITTY_LISTEN_ON, the harness-specific home/config env var, and
 // session-level overrides from sess.Env.
 func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 	env := make(map[string]string)
@@ -21,8 +20,7 @@ func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 	}
 
 	homeDir := config.ExpandTilde(acc.EffectiveHomeDir())
-	defaultDir := harness.DefaultHomeDir(acc.EffectiveHarness())
-	if homeDir != "" && homeDir != defaultDir {
+	if homeDir != "" {
 		if envVar := harness.EnvVar(acc.EffectiveHarness()); envVar != "" {
 			env[envVar] = homeDir
 		}

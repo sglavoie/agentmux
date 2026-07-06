@@ -65,6 +65,13 @@ func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
 		if !argMap["--var=cc_flags=--dangerously-skip-permissions"] {
 			t.Errorf("expected cc_flags arg in args: %v", c.Args)
 		}
+		expectedHome := config.ExpandTilde("~/.config/claude-work")
+		if !argMap["--env=CLAUDE_CONFIG_DIR="+expectedHome] {
+			t.Errorf("expected CLAUDE_CONFIG_DIR launch env in args: %v", c.Args)
+		}
+		if !argMap["exec env CLAUDE_CONFIG_DIR="+expectedHome+" claude --dangerously-skip-permissions"] {
+			t.Errorf("expected shell command to pin CLAUDE_CONFIG_DIR in args: %v", c.Args)
+		}
 		// Empty Kitty: no --location flag, Kitty uses its default placement.
 		for _, a := range c.Args {
 			if strings.HasPrefix(a, "--location") {
@@ -75,6 +82,49 @@ func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
 	if !launchCalled {
 		t.Error("expected kitten @ launch to be called")
 	}
+}
+
+func TestLaunch_ProjectHarnessEnvOverridePinnedAtExec(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{
+		lsResponses: [][]byte{empty, empty, empty, empty, empty},
+	}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+
+	sess := config.Session{
+		Title:     "override-env",
+		Account:   "work",
+		Directory: "/tmp/override-env",
+		Env:       map[string]string{"CLAUDE_CONFIG_DIR": "/tmp/project-claude"},
+	}
+	acc := cfg.Accounts[0]
+
+	if err := session.Launch(client, sess, acc, cfg); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	for _, c := range runner.Calls {
+		if c.Name != "kitten" {
+			continue
+		}
+		argSet := make(map[string]bool)
+		for _, arg := range c.Args {
+			argSet[arg] = true
+		}
+		if !argSet["launch"] {
+			continue
+		}
+		if !argSet["--env=CLAUDE_CONFIG_DIR=/tmp/project-claude"] {
+			t.Errorf("expected project CLAUDE_CONFIG_DIR override in args: %v", c.Args)
+		}
+		if !argSet["exec env CLAUDE_CONFIG_DIR=/tmp/project-claude claude"] {
+			t.Errorf("expected shell command to pin project CLAUDE_CONFIG_DIR override: %v", c.Args)
+		}
+		return
+	}
+
+	t.Error("expected kitten @ launch to be called")
 }
 
 // TestLaunch_StoresExplicitFlags verifies that Launch stores project-explicit
@@ -206,7 +256,7 @@ func TestLaunch_MixedHarnessUsesProfileArgs(t *testing.T) {
 
 		sawCopilot := false
 		for _, arg := range c.Args {
-			if strings.Contains(arg, "exec copilot --model gpt-5") {
+			if strings.Contains(arg, "exec env COPILOT_HOME="+config.ExpandTilde("~/.copilot-work")+" copilot --model gpt-5") {
 				sawCopilot = true
 			}
 			if strings.Contains(arg, "--dangerously-skip-permissions") {
@@ -274,8 +324,9 @@ func TestLaunch_QuotesArgsWithSpacesAndMetacharacters(t *testing.T) {
 		}
 
 		sawQuotedShellCmd := false
+		expectedShellCmd := "exec env CLAUDE_CONFIG_DIR=" + config.ExpandTilde("~/.config/claude-work") + " claude " + wantArgs
 		for _, arg := range c.Args {
-			if arg == "exec claude "+wantArgs {
+			if arg == expectedShellCmd {
 				sawQuotedShellCmd = true
 				break
 			}

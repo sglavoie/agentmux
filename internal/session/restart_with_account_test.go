@@ -195,7 +195,7 @@ func TestRestartWithAccount_MixedHarnessRecomputesTargetProfileArgs(t *testing.T
 
 			sawCopilot := false
 			for _, arg := range c.Args {
-				if strings.Contains(arg, "exec copilot --model gpt-5") {
+				if strings.Contains(arg, "exec env COPILOT_HOME="+config.ExpandTilde("~/.copilot-work")+" copilot --model gpt-5") {
 					sawCopilot = true
 				}
 				if strings.Contains(arg, "--dangerously-skip-permissions") {

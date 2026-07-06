@@ -359,8 +359,9 @@ func TestRestart_QuotedExplicitArgsRoundTrip(t *testing.T) {
 		}
 
 		sawQuotedShellCmd := false
+		expectedShellCmd := "exec env CLAUDE_CONFIG_DIR=" + config.ExpandTilde("~/.config/claude-work") + " claude " + quoted
 		for _, arg := range c.Args {
-			if arg == "exec claude "+quoted {
+			if arg == expectedShellCmd {
 				sawQuotedShellCmd = true
 				break
 			}

@@ -143,10 +143,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	harnessName := acc.EffectiveHarness()
 	userVars := BuildUserVars(sess, acc, cfg.Defaults)
 
-	shellCmd := "exec " + shellQuoteWord(harness.Executable(harnessName))
-	if args != "" {
-		shellCmd += " " + args
-	}
+	shellCmd := buildHarnessShellCommand(harnessName, args, env)
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/zsh"
@@ -187,6 +184,20 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	}
 
 	return nil
+}
+
+func buildHarnessShellCommand(harnessName, args string, env map[string]string) string {
+	parts := []string{"exec"}
+	if envVar := harness.EnvVar(harnessName); envVar != "" {
+		if envVal, ok := env[envVar]; ok {
+			parts = append(parts, "env", shellQuoteWord(envVar+"="+envVal))
+		}
+	}
+	parts = append(parts, shellQuoteWord(harness.Executable(harnessName)))
+	if args != "" {
+		parts = append(parts, args)
+	}
+	return strings.Join(parts, " ")
 }
 
 func effectiveSessionProfile(sess config.Session, acc config.Account) string {
