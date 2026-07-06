@@ -1,0 +1,262 @@
+package tui
+
+import (
+	"errors"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/overrides"
+	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/transcript"
+)
+
+// uitestTestdataDir is the repo-root testdata/uitest directory relative to the
+// tui package.
+func uitestTestdataDir(name string) string {
+	return filepath.Join("..", "testdata", "uitest", name)
+}
+
+// setenvFunc adapts t.Setenv (which auto-restores at test end) to the
+// error-returning callback shape NewUITestConfigDriver expects (matching
+// os.Setenv for the CLI path).
+func setenvFunc(t *testing.T) func(string, string) error {
+	return func(k, v string) error {
+		t.Setenv(k, v)
+		return nil
+	}
+}
+
+func TestUITestFixtureNamesAreSortedAndKnown(t *testing.T) {
+	names := UITestFixtureNames()
+	want := []string{"actions", "basic", "wide_profiles"}
+	if len(names) != len(want) {
+		t.Fatalf("expected %d fixtures, got %v", len(want), names)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("fixture names not sorted/complete: got %v, want %v", names, want)
+		}
+	}
+}
+
+func TestUITestFixtureByNameUnknownReturnsStructuredError(t *testing.T) {
+	_, err := UITestFixtureByName("does-not-exist")
+	if err == nil {
+		t.Fatal("expected error for unknown fixture")
+	}
+	var fe *UITestFixtureError
+	if !errors.As(err, &fe) {
+		t.Fatalf("expected *UITestFixtureError, got %T: %v", err, err)
+	}
+	if fe.Name != "does-not-exist" {
+		t.Errorf("expected error to name the bad fixture, got %q", fe.Name)
+	}
+	if len(fe.Known) == 0 {
+		t.Error("expected error to list known fixtures")
+	}
+}
+
+func TestUITestFixtureDriverLoadsSessionsWithoutLiveKitty(t *testing.T) {
+	fx, err := UITestFixtureByName("basic")
+	if err != nil {
+		t.Fatalf("basic fixture: %v", err)
+	}
+	d, client := NewUITestFixtureDriver(fx, UITestSize{})
+	if got := len(d.Model().sessions); got != 3 {
+		t.Fatalf("expected 3 loaded sessions, got %d", got)
+	}
+	// Construction enumerates sessions through ListWindows (a read) only; it
+	// must not have attempted any mutating/focus Kitty calls.
+	if len(client.Calls) != 0 {
+		t.Fatalf("expected no trapped Kitty calls after construction, got %+v", client.Calls)
+	}
+	obs := d.Observe()
+	if obs.Mode != "list" {
+		t.Fatalf("expected initial mode list, got %q", obs.Mode)
+	}
+	if obs.Size != fx.Size {
+		t.Fatalf("expected fixture default size %+v, got %+v", fx.Size, obs.Size)
+	}
+}
+
+func TestUITestFixtureDriverPartialSizeUsesFixtureDefaults(t *testing.T) {
+	fx, err := UITestFixtureByName("basic")
+	if err != nil {
+		t.Fatalf("basic fixture: %v", err)
+	}
+	// The basic fixture defaults to 100x32; each override below supplies one
+	// dimension and must inherit the fixture default for the omitted one.
+	cases := []struct {
+		name string
+		in   UITestSize
+		want UITestSize
+	}{
+		{"width only", UITestSize{Width: 140}, UITestSize{Width: 140, Height: fx.Size.Height}},
+		{"height only", UITestSize{Height: 48}, UITestSize{Width: fx.Size.Width, Height: 48}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, _ := NewUITestFixtureDriver(fx, tc.in)
+			if got := d.Observe().Size; got != tc.want {
+				t.Fatalf("partial %+v resolved to %+v, want %+v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestUITestFixtureActionsOverlayOpens(t *testing.T) {
+	fx, err := UITestFixtureByName("actions")
+	if err != nil {
+		t.Fatalf("actions fixture: %v", err)
+	}
+	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
+	if err := d.Key("a"); err != nil {
+		t.Fatalf("press a: %v", err)
+	}
+	obs := d.Observe()
+	if obs.Mode != "actions" {
+		t.Fatalf("expected actions overlay to open, got mode %q", obs.Mode)
+	}
+	joined := strings.Join(obs.Screen.Lines, "\n")
+	if !strings.Contains(joined, "Actions for") {
+		t.Fatalf("expected actions overlay header, screen was:\n%s", joined)
+	}
+}
+
+func TestUITestFixtureConfigPickerOpens(t *testing.T) {
+	fx, err := UITestFixtureByName("wide_profiles")
+	if err != nil {
+		t.Fatalf("wide_profiles fixture: %v", err)
+	}
+	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
+	if err := d.Key("C"); err != nil {
+		t.Fatalf("press C: %v", err)
+	}
+	obs := d.Observe()
+	if obs.Mode != "config_picker" {
+		t.Fatalf("expected config picker to open, got mode %q", obs.Mode)
+	}
+	joined := strings.Join(obs.Screen.Lines, "\n")
+	if !strings.Contains(joined, "copilot-enterprise-review-board") {
+		t.Fatalf("expected a long profile name in the picker, screen was:\n%s", joined)
+	}
+}
+
+func TestUITestKittyClientReturnsFixtureWindowsAndRecordsCalls(t *testing.T) {
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
+	)}
+	client := NewUITestKittyClient(windows)
+
+	got, err := client.ListWindows()
+	if err != nil {
+		t.Fatalf("ListWindows: %v", err)
+	}
+	if len(got) != 1 || got[0].Tabs[0].Title != "🦊api" {
+		t.Fatalf("expected fixture windows echoed back, got %+v", got)
+	}
+
+	if err := client.FocusTab("id:1"); err != nil {
+		t.Fatalf("FocusTab: %v", err)
+	}
+	if err := client.CloseTab("id:1"); err != nil {
+		t.Fatalf("CloseTab: %v", err)
+	}
+	if err := client.LaunchTab(kitty.LaunchOpts{Title: "new"}); err != nil {
+		t.Fatalf("LaunchTab: %v", err)
+	}
+	if err := client.SetUserVars("id:11", map[string]string{"amx_profile": "work"}); err != nil {
+		t.Fatalf("SetUserVars: %v", err)
+	}
+
+	if len(client.Calls) != 4 {
+		t.Fatalf("expected 4 recorded calls, got %d: %+v", len(client.Calls), client.Calls)
+	}
+	if focus := client.CallsFor("FocusTab"); len(focus) != 1 || focus[0].Match != "id:1" {
+		t.Fatalf("expected recorded FocusTab id:1, got %+v", focus)
+	}
+	if launch := client.CallsFor("LaunchTab"); len(launch) != 1 || launch[0].Opts == nil || launch[0].Opts.Title != "new" {
+		t.Fatalf("expected recorded LaunchTab with opts, got %+v", launch)
+	}
+	if vars := client.CallsFor("SetUserVars"); len(vars) != 1 || vars[0].Vars["amx_profile"] != "work" {
+		t.Fatalf("expected recorded SetUserVars, got %+v", vars)
+	}
+
+	// GetText is a read and returns canned data without recording.
+	if text, err := client.GetText("id:11", "screen"); err != nil || text != "" {
+		t.Fatalf("expected empty canned GetText, got %q err=%v", text, err)
+	}
+}
+
+func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
+	// Ensure the lowercase config override cannot leak a real path through
+	// DefaultConfigPath's precedence.
+	t.Setenv("amx_CONFIG", "")
+
+	root := t.TempDir()
+	d, client, env, err := NewUITestConfigDriver(
+		root,
+		uitestTestdataDir("basic_config.toml"),
+		nil,
+		UITestSize{Width: 100, Height: 32},
+		setenvFunc(t),
+	)
+	if err != nil {
+		t.Fatalf("NewUITestConfigDriver: %v", err)
+	}
+	if client == nil || d == nil {
+		t.Fatal("expected non-nil driver and client")
+	}
+
+	if !strings.HasPrefix(env.Home, root) {
+		t.Fatalf("staged HOME %q not under temp root %q", env.Home, root)
+	}
+
+	// Every user-path helper must now resolve under the staged, throwaway root.
+	if got := config.DefaultConfigPath(); got != env.ConfigPath {
+		t.Fatalf("config path not staged: got %q want %q", got, env.ConfigPath)
+	}
+	ovPath, err := overrides.Path()
+	if err != nil {
+		t.Fatalf("overrides.Path: %v", err)
+	}
+	for label, got := range map[string]string{
+		"overrides":  ovPath,
+		"plans":      plans.IndexPath(),
+		"transcript": transcript.IndexPath(),
+		"daemon":     daemon.SocketPath(),
+	} {
+		if !strings.HasPrefix(got, env.Home) {
+			t.Fatalf("%s path %q escaped staged HOME %q", label, got, env.Home)
+		}
+	}
+
+	// The loaded config came from the staged copy, not any real file.
+	if got := len(d.Model().cfg.Accounts); got != 2 {
+		t.Fatalf("expected 2 profiles from staged config, got %d", got)
+	}
+	if len(client.Calls) != 0 {
+		t.Fatalf("expected no trapped Kitty calls, got %+v", client.Calls)
+	}
+}
+
+func TestUITestConfigDriverUnknownConfigErrors(t *testing.T) {
+	root := t.TempDir()
+	_, _, _, err := NewUITestConfigDriver(
+		root,
+		uitestTestdataDir("does_not_exist.toml"),
+		nil,
+		UITestSize{Width: 80, Height: 24},
+		setenvFunc(t),
+	)
+	if err == nil {
+		t.Fatal("expected error for missing config file")
+	}
+	if !strings.Contains(err.Error(), "reading config") {
+		t.Fatalf("expected reading-config error, got %v", err)
+	}
+}

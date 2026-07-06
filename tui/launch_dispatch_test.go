@@ -2,7 +2,6 @@ package tui
 
 import (
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -66,17 +65,16 @@ func collectLeafMsgs(t *testing.T, cmd tea.Cmd) []tea.Msg {
 
 func flattenMsg(t *testing.T, msg tea.Msg) []tea.Msg {
 	t.Helper()
-	v := reflect.ValueOf(msg)
-	if v.Kind() != reflect.Slice {
+	// Reuse the production harness's slice detection (uitest_driver.go) so the
+	// test helper and the driver agree on what counts as a batch/sequence
+	// message. Leaf messages fall through unchanged; batch components are
+	// executed and flattened recursively.
+	cmds, ok := uitestFlattenCmds(msg)
+	if !ok {
 		return []tea.Msg{msg}
 	}
 	var out []tea.Msg
-	for i := 0; i < v.Len(); i++ {
-		elem := v.Index(i).Interface()
-		inner, ok := elem.(tea.Cmd)
-		if !ok || inner == nil {
-			continue
-		}
+	for _, inner := range cmds {
 		out = append(out, flattenMsg(t, inner())...)
 	}
 	return out

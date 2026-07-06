@@ -1,0 +1,13 @@
+{
+  "name": "baseline-layout",
+  "fixture": "basic",
+  "size": { "width": 120, "height": 40 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "api" },
+    { "type": "contains_text", "text": "backend" },
+    { "type": "contains_text", "text": "dotfiles" },
+    { "type": "kitty_calls", "op": "LaunchTab", "count": 0 }
+  ]
+}

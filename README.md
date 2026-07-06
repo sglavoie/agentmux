@@ -567,6 +567,20 @@ just build
 just test
 ```
 
+### TUI layout regression harness
+
+A hidden developer command, `amx tui-test`, drives the dashboard model
+in-process against built-in fixtures to catch overlay/modal sizing regressions
+(the actions overlay and profile picker width bugs, for example). It never
+launches Kitty and never touches your real config or data. See
+[`docs/tui-testing/README.md`](docs/tui-testing/README.md) for the command
+surface, scenario schema, and committed example scenarios, or run the examples
+directly:
+
+```bash
+amx tui-test run docs/tui-testing/scenarios/*.json
+```
+
 ## Troubleshooting
 
 - **No projects appear**: run `amx config validate` and confirm the config is

@@ -1,0 +1,12 @@
+{
+  "name": "actions-popup-fit",
+  "fixture": "actions",
+  "size": { "width": 120, "height": 40 },
+  "actions": [{ "type": "key", "key": "a" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "actions" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "Actions for" },
+    { "type": "contains_text", "text": "monorepo-services-authentication-gateway" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "resize-stress",
+  "fixture": "basic",
+  "size": { "width": 120, "height": 40 },
+  "actions": [
+    { "type": "resize", "width": 100, "height": 30 },
+    { "type": "resize", "width": 140, "height": 50 },
+    { "type": "resize", "width": 80, "height": 24 },
+    { "type": "resize", "width": 120, "height": 40 }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "dotfiles" }
+  ]
+}

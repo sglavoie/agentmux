@@ -1,0 +1,39 @@
+# Wide-profiles config-backed harness fixture: several profiles with long names
+# and long home directories so the profile (config) picker box must grow to fit
+# its widest row. Loaded through a staged, throwaway HOME.
+[defaults]
+sort = "alpha"
+refresh_interval = 2
+
+[harness_emojis]
+claude = "🦊"
+codex = "🤖"
+copilot = "🧑"
+
+[harness_colors]
+claude = "blue"
+codex = "green"
+copilot = "purple"
+
+[[profiles]]
+name = "claude-production-primary"
+harness = "claude"
+home_dir = "~/.config/agent-mux/homes/claude-production-primary-workspace"
+color = "blue"
+
+[[profiles]]
+name = "codex-experimental-sandbox"
+harness = "codex"
+home_dir = "~/.config/agent-mux/homes/codex-experimental-sandbox-workspace"
+color = "green"
+
+[[profiles]]
+name = "copilot-enterprise-review-board"
+harness = "copilot"
+home_dir = "~/.config/agent-mux/homes/copilot-enterprise-review-board-workspace"
+color = "purple"
+
+[[projects]]
+title = "platform-services-monorepo"
+directory = "~/projects/platform-services-monorepo"
+profile = "claude-production-primary"

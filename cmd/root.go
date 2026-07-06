@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -39,6 +40,17 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		var exitErr *ExitError
+		if errors.As(err, &exitErr) {
+			// The command already emitted its own output (and mapped the
+			// failure to a specific code). Only print when it did not present a
+			// complete structured result, so JSON runs are not followed by a
+			// redundant stderr line.
+			if !exitErr.Quiet && exitErr.Err != nil {
+				fmt.Fprintln(os.Stderr, exitErr.Error())
+			}
+			os.Exit(exitErr.Code)
+		}
 		os.Exit(1)
 	}
 }
@@ -102,5 +114,5 @@ func configureLogging(enabled bool) {
 func init() {
 	rootCmd.Version = version
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug output")
-	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, transcriptsCmd)
+	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, transcriptsCmd, tuiTestCmd)
 }

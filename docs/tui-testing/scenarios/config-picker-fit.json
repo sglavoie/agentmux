@@ -1,0 +1,12 @@
+{
+  "name": "config-picker-fit",
+  "fixture": "wide_profiles",
+  "size": { "width": 140, "height": 40 },
+  "actions": [{ "type": "key", "key": "C" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "config_picker" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "claude-production-primary" },
+    { "type": "contains_text", "text": "copilot-enterprise-review-board" }
+  ]
+}

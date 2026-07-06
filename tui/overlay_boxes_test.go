@@ -253,6 +253,26 @@ func TestRenderHelpBoxNarrowClamps(t *testing.T) {
 	}
 }
 
+// TestOverlayBoxesFitAtWidthViaModalDetector ties the actions and config-picker
+// box sizing (the regression the "size box to fit its widest row" commits fixed)
+// to the harness modal-fit detector: at a wide terminal both boxes must render
+// at their natural width, so the detector reports no width overflow. If a future
+// change reintroduces a fixed-width cap that clips the widest row, the detector's
+// natural-vs-rendered width comparison fails here.
+func TestOverlayBoxesFitAtWidthViaModalDetector(t *testing.T) {
+	actions := loadSessions(testModelWithSessions(), makeSessions())
+	actions = pressKey(actions, "a")
+	actions.width, actions.height = 140, 50
+	if hasIssueType(detectModalFitIssues(actions), UITestIssueModalWidthOverflow) {
+		t.Errorf("actions box should render at natural width at 140x50; detector reported width overflow")
+	}
+
+	cp := configPickerModalAt(140, 50)
+	if hasIssueType(detectModalFitIssues(cp), UITestIssueModalWidthOverflow) {
+		t.Errorf("config picker box should render at natural width at 140x50; detector reported width overflow")
+	}
+}
+
 func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 	actions := loadSessions(testModelWithSessions(), makeSessions())
 	actions = pressKey(actions, "a")

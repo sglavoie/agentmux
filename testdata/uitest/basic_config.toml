@@ -1,0 +1,41 @@
+# Basic config-backed harness fixture: two Claude "work" projects plus a Codex
+# "personal" project. Loaded through a staged, throwaway HOME so a harness run
+# never touches the operator's real config.
+[defaults]
+sort = "alpha"
+refresh_interval = 2
+
+[harness_emojis]
+claude = "🦊"
+codex = "🤖"
+
+[harness_colors]
+claude = "blue"
+codex = "green"
+
+[[profiles]]
+name = "work"
+harness = "claude"
+home_dir = "~/.config/agent-mux/homes/work"
+color = "blue"
+
+[[profiles]]
+name = "personal"
+harness = "codex"
+home_dir = "~/.config/agent-mux/homes/personal"
+color = "green"
+
+[[projects]]
+title = "api"
+directory = "~/projects/api"
+profile = "work"
+
+[[projects]]
+title = "backend"
+directory = "~/projects/backend"
+profile = "work"
+
+[[projects]]
+title = "dotfiles"
+directory = "~/dotfiles"
+profile = "personal"

@@ -1,0 +1,81 @@
+package tui
+
+import (
+	"encoding/json"
+	"reflect"
+	"testing"
+)
+
+// TestUITestActionTypeValid locks in the closed set of scenario action kinds:
+// the first harness version supports key/text/resize/tick and nothing else.
+func TestUITestActionTypeValid(t *testing.T) {
+	valid := []UITestActionType{
+		UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick,
+	}
+	for _, at := range valid {
+		if !at.Valid() {
+			t.Errorf("UITestActionType(%q).Valid() = false, want true", at)
+		}
+	}
+	for _, at := range []UITestActionType{"", "command", "sleep", "KEY"} {
+		if at.Valid() {
+			t.Errorf("UITestActionType(%q).Valid() = true, want false", at)
+		}
+	}
+}
+
+// TestUITestResultJSONRoundTrip verifies the JSON-facing contract types marshal
+// and unmarshal without loss, so the CLI output stays stable across sessions.
+func TestUITestResultJSONRoundTrip(t *testing.T) {
+	orig := UITestResult{
+		Name:   "profile-picker-fits",
+		Passed: false,
+		Screen: UITestScreen{
+			Size:   UITestSize{Width: 80, Height: 24},
+			Lines:  []string{"header", "body line"},
+			Width:  9,
+			Height: 2,
+			Issues: []UITestLayoutIssue{
+				{Type: UITestIssueLineWidthOverflow, Line: 1, Actual: 90, Limit: 80},
+				{Type: UITestIssueModalWidthOverflow, Actual: 42, Limit: 40, Detail: "actions overlay clipped"},
+			},
+		},
+		Failures: []UITestAssertionFailure{
+			{Kind: "layout", Message: "modal width overflow"},
+		},
+	}
+
+	data, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatalf("marshal UITestResult: %v", err)
+	}
+
+	var got UITestResult
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal UITestResult: %v", err)
+	}
+	if !reflect.DeepEqual(got, orig) {
+		t.Fatalf("round-trip mismatch:\n got  %+v\n want %+v", got, orig)
+	}
+}
+
+// TestUITestActionJSONOmitsZeroFields confirms only the fields relevant to a
+// given action Type are emitted, keeping scenario output compact and readable.
+func TestUITestActionJSONOmitsZeroFields(t *testing.T) {
+	data, err := json.Marshal(UITestAction{Type: UITestActionKey, Key: "enter"})
+	if err != nil {
+		t.Fatalf("marshal UITestAction: %v", err)
+	}
+	got := string(data)
+	if want := `{"type":"key","key":"enter"}`; got != want {
+		t.Fatalf("key action JSON = %s, want %s", got, want)
+	}
+
+	resizeData, err := json.Marshal(UITestAction{Type: UITestActionResize, Width: 100, Height: 40})
+	if err != nil {
+		t.Fatalf("marshal resize UITestAction: %v", err)
+	}
+	if want := `{"type":"resize","width":100,"height":40}`; string(resizeData) != want {
+		t.Fatalf("resize action JSON = %s, want %s", resizeData, want)
+	}
+}
