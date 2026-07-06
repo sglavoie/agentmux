@@ -61,15 +61,19 @@ func renderConfigPicker(m Model) string {
 
 // renderConfigPickerBox wraps renderConfigPicker in styleOverlayBox so the
 // profile picker can be composited as a centered modal on top of the dimmed
-// base view. The inner width is capped at 60 columns and clamped to
+// base view. The box grows to fit rendered profile rows and clamps to
 // m.width-4 on narrow terminals.
 func renderConfigPickerBox(m Model) string {
-	innerWidth := 60
-	if avail := m.width - 4; avail < innerWidth {
-		innerWidth = avail
+	content := strings.TrimRight(renderConfigPicker(m), "\n")
+	boxWidth := 60
+	if contentWidth := popupWidth(content) + styleOverlayBox.GetHorizontalFrameSize(); contentWidth > boxWidth {
+		boxWidth = contentWidth
 	}
-	if innerWidth < 1 {
-		innerWidth = 1
+	if avail := m.width - 4; avail < boxWidth {
+		boxWidth = avail
 	}
-	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderConfigPicker(m), "\n"))
+	if boxWidth < 1 {
+		boxWidth = 1
+	}
+	return styleOverlayBox.Width(boxWidth).Render(content)
 }

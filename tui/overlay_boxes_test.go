@@ -6,6 +6,7 @@ import (
 
 	runewidth "github.com/mattn/go-runewidth"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -118,6 +119,80 @@ func TestRenderConfigPickerBoxDashboardLaunchHeader(t *testing.T) {
 	plain := stripAnsi(renderConfigPickerBox(m))
 	if !strings.Contains(plain, "Launch new session with profile") {
 		t.Errorf("expected dashboard launch header, got %q", plain)
+	}
+}
+
+func TestRenderConfigPickerBoxExpandsForProfileRows(t *testing.T) {
+	m := testModel()
+	m.cfg.HarnessEmojis = map[string]string{
+		"claude":  "⭕",
+		"codex":   "📟",
+		"copilot": "🚁",
+	}
+	m.cfg.Accounts = []config.Account{
+		{Name: "personal-codex", Color: "purple", Harness: "codex", HomeDir: "/Users/sglavoie/.codex"},
+		{Name: "personal-claude", Color: "yellow", Harness: "claude", HomeDir: "/Users/sglavoie/.claude"},
+		{Name: "tradition-codex", Color: "purple", Harness: "codex", HomeDir: "/Users/sglavoie/.codex"},
+		{Name: "tradition-claude", Color: "blue", Harness: "claude", HomeDir: "/Users/sglavoie/.claude-personal"},
+		{Name: "vta-codex", Color: "purple", Harness: "codex", HomeDir: "/Users/sglavoie/.codex"},
+		{Name: "vta-claude", Color: "yellow", Harness: "claude", HomeDir: "/Users/sglavoie/.claude"},
+		{Name: "copilot", Color: "green", Harness: "copilot", HomeDir: "/Users/sglavoie/.copilot"},
+	}
+	m.targetSession = session.RunningSession{TabID: 1, Base: "🧠BrainNotes", Project: "🧠BrainNotes", Account: "vta-claude", Harness: "claude"}
+	m.configPickerAccounts = m.cfg.Accounts
+	m.configPickerCurrent = "vta-claude"
+	m.configPickerCursor = 5
+	m.configPickerPurpose = ConfigPickerLauncherOverride
+	m.configPickerReturnMode = ModePicker
+	m.mode = ModeConfigPicker
+	m.width, m.height = 120, 40
+
+	raw := renderConfigPickerBox(m)
+	lines := strings.Split(strings.TrimRight(stripAnsi(raw), "\n"), "\n")
+	if len(lines) == 0 {
+		t.Fatal("expected config picker box output")
+	}
+	if w := runewidth.StringWidth(lines[0]); w <= 60 {
+		t.Fatalf("box width = %d, want wider than old 60-column cap:\n%s", w, stripAnsi(raw))
+	}
+
+	var currentLine string
+	for _, line := range lines {
+		if strings.Contains(line, "vta-claude") {
+			currentLine = line
+			break
+		}
+	}
+	if currentLine == "" {
+		t.Fatalf("expected vta-claude row in output:\n%s", stripAnsi(raw))
+	}
+	for _, want := range []string{"⭕ claude", "/Users/sglavoie/.claude", "(current)"} {
+		if !strings.Contains(currentLine, want) {
+			t.Fatalf("current row should keep %q on one line, got %q\nfull output:\n%s", want, currentLine, stripAnsi(raw))
+		}
+	}
+}
+
+func TestRenderConfigPickerBoxNarrowClamps(t *testing.T) {
+	m := testModel()
+	m.cfg.HarnessEmojis = map[string]string{"claude": "⭕"}
+	m.cfg.Accounts = []config.Account{
+		{Name: "tradition-claude", Color: "blue", Harness: "claude", HomeDir: "/Users/sglavoie/.claude-personal"},
+	}
+	m.targetSession = session.RunningSession{TabID: 1, Base: "🧠BrainNotes", Project: "🧠BrainNotes", Account: "tradition-claude", Harness: "claude"}
+	m.configPickerAccounts = m.cfg.Accounts
+	m.configPickerCurrent = "tradition-claude"
+	m.configPickerCursor = 0
+	m.configPickerPurpose = ConfigPickerLauncherOverride
+	m.configPickerReturnMode = ModePicker
+	m.mode = ModeConfigPicker
+	m.width, m.height = 40, 20
+
+	raw := renderConfigPickerBox(m)
+	for _, line := range strings.Split(strings.TrimRight(raw, "\n"), "\n") {
+		if w := runewidth.StringWidth(stripAnsi(line)); w > m.width {
+			t.Errorf("box line exceeded m.width=%d (got %d): %q", m.width, w, line)
+		}
 	}
 }
 
