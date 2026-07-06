@@ -241,7 +241,7 @@ func renderLegend(m Model) string {
 	if m.height > 0 && m.height < legendMinHeight {
 		return ""
 	}
-	var tokens []string
+	var tokens []footerToken
 	for _, state := range legendStates {
 		gloss := StateGloss(state)
 		if gloss == "" {
@@ -252,11 +252,17 @@ func renderLegend(m Model) string {
 			continue
 		}
 		token := displayPadIconCell(icon) + " " + gloss
-		tokens = append(tokens, stateAccentStyle(state).Render(token))
+		tokens = append(tokens, footerRenderedToken(stateAccentStyle(state).Render(token)))
 	}
 	if len(tokens) == 0 {
 		return ""
 	}
 	sep := styleFooter.Render("   ")
-	return "  " + styleFooter.Render("icons:") + "  " + strings.Join(tokens, sep) + "\n"
+	sepW := displayStyledWidth(sep)
+	for i := 0; i < len(tokens)-1; i++ {
+		tokens[i].sep = sep
+		tokens[i].sepWidth = sepW
+	}
+	lead := "  " + styleFooter.Render("icons:") + "  "
+	return wrapFooterLine(lead, "  ", tokens, m.width) + "\n"
 }

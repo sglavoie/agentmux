@@ -245,8 +245,7 @@ func renderSplit(m Model) string {
 // for separately by callers.
 func footerBudgetLines(m Model) int {
 	if m.mode == ModePicker {
-		// Picker footer is always two lines regardless of preview state.
-		return pickerFooterLines
+		return pickerFooterLineCount(m)
 	}
 	if m.mode != ModeList {
 		return 2

@@ -17,7 +17,7 @@ const statusBarLines = 1
 // Elements (each contributes its row count when visible):
 //   - header + health hints                                             (1..3)
 //   - deprecation banner (when undismissed and at least one entry)        (2)
-//   - legend (omitted when m.height > 0 && m.height < legendMinHeight)    (1)
+//   - legend (omitted when m.height > 0 && m.height < legendMinHeight)    (1..n)
 //   - chips (when activeFilter has at least one component)                (1)
 //   - spacer where the inline filter hint used to sit in ModeList          (1)
 //
@@ -30,9 +30,7 @@ func chromeAboveListLines(m Model) int {
 	if !m.deprecationDismissed && len(m.deprecations) > 0 {
 		n += 2
 	}
-	if m.height <= 0 || m.height >= legendMinHeight {
-		n++
-	}
+	n += legendLineCount(m)
 	if len(m.activeFilter.Components()) > 0 {
 		n++
 	}
@@ -40,6 +38,10 @@ func chromeAboveListLines(m Model) int {
 		n++ // spacer is always one line in ModeList
 	}
 	return n
+}
+
+func legendLineCount(m Model) int {
+	return len(rootSectionLines(renderLegend(m)))
 }
 
 // healthHintLines mirrors renderHealthHints' line count without rendering

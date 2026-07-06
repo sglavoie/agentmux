@@ -119,7 +119,12 @@ func TestPickerPreviewRootKeepsFooterAboveStatusBar(t *testing.T) {
 	if !strings.Contains(last, "Launch Sessions") {
 		t.Fatalf("final row = %q, want picker status", last)
 	}
-	footer := strings.Join(lines[len(lines)-3:len(lines)-1], "\n")
+	footerLines := rootFooterLines(m)
+	footerStart := len(lines) - statusBarLines - len(footerLines)
+	if footerStart < 0 {
+		t.Fatalf("footer start underflow: lines=%d footer=%d", len(lines), len(footerLines))
+	}
+	footer := strings.Join(lines[footerStart:len(lines)-statusBarLines], "\n")
 	for _, want := range []string{"space: toggle", "DSL:"} {
 		if !strings.Contains(footer, want) {
 			t.Fatalf("picker footer above status missing %q:\n%s", want, footer)

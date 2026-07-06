@@ -134,7 +134,7 @@ func TestTUITestFixtureAdHoc(t *testing.T) {
 // TestTUITestFixturePartialSizeUsesFixtureDefault pins the fix for a partial
 // size override at the CLI layer: passing only --width must report the fixture's
 // default height in the JSON observation rather than a literal 0 for the omitted
-// dimension. The wide_profiles fixture defaults to 120x36.
+// dimension. The wide_profiles fixture defaults to 140x36.
 func TestTUITestFixturePartialSizeUsesFixtureDefault(t *testing.T) {
 	stdout, stderr, err := runRootArgs(t, "tui-test", "fixture", "wide_profiles", "--width", "140", "--json")
 	if err != nil {
@@ -312,6 +312,53 @@ func TestTUITestConfigPickerWidthRegression(t *testing.T) {
 	if _, stderr, err := runRootArgs(t, "tui-test", "fixture", "wide_profiles",
 		"--width", "140", "--height", "40", "--key", "C", "--json"); err != nil {
 		t.Errorf("wide config picker should exit cleanly, got error %v (stderr=%q)", err, stderr)
+	}
+}
+
+func TestTUITestWrappedFooterLayoutRegressions(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "dashboard legend wraps at 80 cols",
+			args: []string{"tui-test", "fixture", "basic", "--width", "80", "--height", "24", "--json"},
+		},
+		{
+			name: "picker footer wraps at 110 cols",
+			args: []string{"tui-test", "fixture", "basic", "--width", "110", "--height", "32", "--key", "l", "--json"},
+		},
+		{
+			name: "session search footer wraps at 64 cols",
+			args: []string{"tui-test", "fixture", "basic", "--width", "64", "--height", "18", "--key", "S", "--json"},
+		},
+		{
+			name: "plan search footer wraps at 60 cols",
+			args: []string{"tui-test", "fixture", "basic", "--width", "60", "--height", "18", "--key", "P", "--json"},
+		},
+		{
+			name: "wide profile fixture default fits config picker",
+			args: []string{"tui-test", "fixture", "wide_profiles", "--key", "C", "--json"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, err := runRootArgs(t, tc.args...)
+			if err != nil {
+				t.Fatalf("fixture run returned error: %v (stderr=%q, stdout=%q)", err, stderr, stdout)
+			}
+			var obs []tui.UITestObservation
+			if err := json.Unmarshal([]byte(stdout), &obs); err != nil {
+				t.Fatalf("fixture run did not emit JSON observations: %v\noutput=%q", err, stdout)
+			}
+			if len(obs) == 0 {
+				t.Fatal("expected at least one observation")
+			}
+			if issues := obs[len(obs)-1].Screen.Issues; len(issues) > 0 {
+				t.Fatalf("final observation has layout issues: %+v", issues)
+			}
+		})
 	}
 }
 

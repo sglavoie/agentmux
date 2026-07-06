@@ -295,7 +295,7 @@ func wideProfilesFixture() UITestFixture {
 	return UITestFixture{
 		Name:        "wide_profiles",
 		Description: "long profile names and home dirs for exercising the profile picker width",
-		Size:        UITestSize{Width: 120, Height: 36},
+		Size:        UITestSize{Width: 140, Height: 36},
 		Config:      cfg,
 		Windows:     windows,
 	}

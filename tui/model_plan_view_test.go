@@ -163,7 +163,7 @@ func TestPlanViewerPageKeysScrollWrappedRowsWithinOneLogicalLine(t *testing.T) {
 	m := Model{
 		mode:             ModePlanView,
 		width:            8,
-		height:           8,
+		height:           16,
 		planViewerLines:  []string{"abcdefghijklmnopqrstuvwxTAIL"},
 		planViewerCursor: 0,
 	}

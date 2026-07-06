@@ -22,10 +22,10 @@ func scrollModel() Model {
 
 func TestListChromeLines_BaselineModeList(t *testing.T) {
 	m := scrollModel()
-	// Baseline: header(1) + legend(1) + spacer(1) + padding row(1)
-	// + footerBudgetLines (preview off -> 4) + status bar(1) = 9.
+	// Baseline: header(1) + wrapped legend + spacer(1) + padding row(1)
+	// + footerBudgetLines (preview off -> 4) + status bar(1).
 	got := listChromeLines(m)
-	want := 1 + 1 + 1 + 1 + 4 + statusBarLines
+	want := 1 + legendLineCount(m) + 1 + 1 + 4 + statusBarLines
 	if got != want {
 		t.Errorf("baseline chrome: got %d want %d", got, want)
 	}
@@ -73,10 +73,11 @@ func TestListChromeLines_HealthHintsAddHeaderLines(t *testing.T) {
 func TestListChromeLines_LegendDroppedBelowLegendMinHeight(t *testing.T) {
 	m := scrollModel()
 	base := listChromeLines(m)
+	legendLines := legendLineCount(m)
 	m.height = legendMinHeight - 1 // legend omitted
 	got := listChromeLines(m)
-	if got != base-1 {
-		t.Errorf("legend hidden on short term: got %d want %d", got, base-1)
+	if got != base-legendLines {
+		t.Errorf("legend hidden on short term: got %d want %d", got, base-legendLines)
 	}
 }
 
