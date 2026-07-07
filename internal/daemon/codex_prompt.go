@@ -30,6 +30,16 @@ var codexComposerLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*(?:Use /s
 var codexContextZeroLineRE = regexp.MustCompile(`(?i)\bcontext\b.*(?:^|[^0-9])0\s*%`)
 var codexLabeledTranscriptLineRE = regexp.MustCompile(`(?i)^\s*(?:user|codex|assistant|system)\s*:`)
 
+// codexWorkedForLineRE matches Codex's completed-turn status line ("Worked for
+// 1m 30s"). The trailing digit requirement anchors on a real duration so
+// transcript prose such as "worked for the previous release" cannot match.
+var codexWorkedForLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*worked for\s+\d`)
+
+// codexWorkingStatusLineRE matches Codex's in-progress status line ("Working
+// (5s • Esc to interrupt)"). A later match than the Worked-for line means the
+// turn is still active, so the completed-turn classifier bails.
+var codexWorkingStatusLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*working\b`)
+
 // ClassifyCodexPromptScreen classifies a visible Codex prompt from screen text.
 //
 // It intentionally requires prompt footer or choice evidence so old transcript
@@ -59,6 +69,44 @@ func ClassifyCodexPromptScreen(screen string) (CodexPromptClassification, bool) 
 	default:
 		return CodexPromptClassification{}, false
 	}
+}
+
+// ClassifyCodexCompletedTurnScreen reports whether a Codex screen scrape shows a
+// finished assistant turn that is safe to treat as a stop transition.
+//
+// It is deliberately conservative: false negatives are acceptable, false
+// positives are not. It returns true only when the screen is not a visible
+// prompt, the latest visible Codex status line is a completed "Worked for …"
+// line (with no later "Working (…)" line), and an empty composer prompt appears
+// after that status line. This mirrors the completed-turn state Codex leaves on
+// screen when the assistant finishes but no Stop hook arrives.
+func ClassifyCodexCompletedTurnScreen(screen string) bool {
+	if _, ok := ClassifyCodexPromptScreen(screen); ok {
+		return false
+	}
+
+	lines := strings.Split(screen, "\n")
+	workedForIdx := -1
+	latestStatusIsWorked := false
+	for i, line := range lines {
+		switch {
+		case codexWorkedForLineRE.MatchString(line):
+			workedForIdx = i
+			latestStatusIsWorked = true
+		case codexWorkingStatusLineRE.MatchString(line):
+			latestStatusIsWorked = false
+		}
+	}
+	if workedForIdx < 0 || !latestStatusIsWorked {
+		return false
+	}
+
+	for i := workedForIdx + 1; i < len(lines); i++ {
+		if codexComposerLineRE.MatchString(lines[i]) {
+			return true
+		}
+	}
+	return false
 }
 
 func codexPromptResult(kind CodexPromptKind, action string) CodexPromptClassification {

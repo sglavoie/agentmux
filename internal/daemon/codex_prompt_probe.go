@@ -14,6 +14,7 @@ import (
 const (
 	screenPromptProbeEvent  = "ScreenPromptProbe"
 	screenClearProbeEvent   = "ScreenClearProbe"
+	screenStopProbeEvent    = "ScreenStopProbe"
 	screenPromptProbeSource = "codex_screen"
 )
 
@@ -49,6 +50,14 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 					continue
 				}
 				h.probeCodexWindow(now, win.ID, tab.Title, parts, win.UserVars)
+				// Completed-turn fallback: only a still-bolt tab can be a stuck
+				// active turn. Prompt classification above wins first (it clears the
+				// bolt to key/question when a prompt is visible), and the completed
+				// classifier bails on any visible prompt, so this only fires when no
+				// prompt was found and the turn genuinely finished with no Stop hook.
+				if parts.State == "bolt" {
+					h.probeCodexCompletedTurnWindow(win.ID, tab.Title, parts, win.UserVars)
+				}
 			}
 		}
 	}
@@ -190,6 +199,59 @@ func (h *Handler) probeCodexClearWindow(
 	}
 	if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
 		slog.Debug("codex clear probe: set tab title failed", "window_id", windowID, "err", err)
+	}
+}
+
+// probeCodexCompletedTurnWindow recovers a Codex tab whose bolt icon is stuck on
+// a finished assistant turn. Codex sometimes leaves the completed-turn UI on
+// screen without emitting a Stop hook, so the daemon treats the screen as
+// authoritative and drives a synthetic `stop` through the normal state-update
+// path. The stop guard priority (2) outranks the stuck active (1), so this
+// breaks through, but protected states never reach here because the caller only
+// invokes this for a `bolt` tab.
+func (h *Handler) probeCodexCompletedTurnWindow(
+	windowID int,
+	tabTitle string,
+	titleParts palette.TitleParts,
+	userVars kitty.UserVars,
+) {
+	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(windowID), "screen")
+	if err != nil {
+		slog.Debug("codex stop probe: get screen failed", "window_id", windowID, "err", err)
+		return
+	}
+	if !ClassifyCodexCompletedTurnScreen(screen) {
+		return
+	}
+
+	resp := h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         windowID,
+		Action:           "stop",
+		Event:            screenStopProbeEvent,
+		Source:           screenPromptProbeSource,
+		Account:          userVars.EffectiveProfile(),
+		Harness:          harness.Codex,
+		SessionTitle:     titleParts.Base,
+		CurrentIconState: titleParts.State,
+		Muted:            titleParts.Muted || userVars.Mute != "",
+	})
+	if !resp.OK {
+		slog.Debug("codex stop probe: state update failed", "window_id", windowID, "err", resp.Error)
+		return
+	}
+	if !resp.Allowed || resp.IconState == IconStatePreserve {
+		return
+	}
+
+	newParts := titleParts
+	newParts.State = resp.IconState
+	newTitle := palette.BuildTitleParts(newParts)
+	if newTitle == tabTitle {
+		return
+	}
+	if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
+		slog.Debug("codex stop probe: set tab title failed", "window_id", windowID, "err", err)
 	}
 }
 

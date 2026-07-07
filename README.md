@@ -431,7 +431,10 @@ present. Codex screen prompt detection appears as synthetic
 `prompt_kind` values such as `edit_approval`, `request_user_input`,
 `command_approval`, and `permission_grant`. Codex idle `/clear` recovery can
 appear as `event: "ScreenClearProbe"` with `action: "user_clear"`,
-`source: "codex_screen"`, and `reset_flow: true`.
+`source: "codex_screen"`, and `reset_flow: true`. A stuck active Codex tab
+whose turn finished without a `Stop` hook appears as
+`event: "ScreenStopProbe"` with `action: "stop"`, `source: "codex_screen"`,
+`result_icon_state: "stop"`, and `current_icon_state: "bolt"`.
 
 Codex 0.133.0 and 0.134.0 expose edit approvals and `request_user_input` waits
 through TUI/server-request flows rather than normal lifecycle hooks. Agent Mux
@@ -440,7 +443,13 @@ best-effort Kitty screen fallback to classify visible Codex prompts, including
 the 0.134.0 bottom-pane question UI, while preserving terminal, warning, and
 error states. A separate conservative stop-only fallback recognizes Codex's
 cleared idle UI after `/clear` when full Kitty scrollback no longer contains a
-transcript. The daemon runs these probes every 1.5s.
+transcript. A third conservative fallback repairs a stuck bolt on a completed
+turn: when an active Codex tab still shows the bolt icon but its latest visible
+status is `Worked for …` with an empty composer and no visible prompt, the
+daemon drives the existing `stop` transition (`event: "ScreenStopProbe"`) so the
+icon settles on `⏹` instead of staying `⚡`. It only fires on bolt tabs and never
+downgrades protected attention states (`key`, `question`, `error`, `warning`,
+`subagent`, `compact`). The daemon runs these probes every 1.5s.
 
 The primary live-debug workflow is the current tab:
 
@@ -591,8 +600,11 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   and `amx config hooks-sync` to restore terminal hooks like
   `sessionEnd`/`Stop`/`agentStop` and the child-complete `TeammateIdle` hook.
   Current releases also recover across daemon restarts on the next cleanup
-  event. For Copilot, also upgrade to version `1.0.45` or newer, because
-  older releases had `agentStop` hook issues.
+  event. For Codex, a completed-turn screen fallback also settles a stuck bolt
+  on `⏹` when the tab shows `Worked for …` with an empty composer; look for
+  `event: "ScreenStopProbe"` in `amx daemon export-events --window <id>` to
+  confirm it fired. For Copilot, also upgrade to version `1.0.45` or newer,
+  because older releases had `agentStop` hook issues.
 - **`/clear` still shows a stop icon or stop notification**: inspect
   `amx daemon export-events --window <id>`. Claude/Copilot should show the
   documented hook reset payloads; Codex may show `ScreenClearProbe` when idle

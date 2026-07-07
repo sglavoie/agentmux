@@ -273,6 +273,115 @@ func TestClassifyCodexClearScreen(t *testing.T) {
 	}
 }
 
+func TestClassifyCodexCompletedTurnScreen(t *testing.T) {
+	cases := []struct {
+		name   string
+		screen string
+		want   bool
+	}{
+		{
+			name:   "completed turn with composer",
+			screen: codexCompletedTurnScreen,
+			want:   true,
+		},
+		{
+			name:   "active working turn",
+			screen: codexWorkingTurnScreen,
+			want:   false,
+		},
+		{
+			name:   "prompt screen takes precedence",
+			screen: codexCompletedThenPromptScreen,
+			want:   false,
+		},
+		{
+			name:   "worked for resumed to working",
+			screen: codexWorkedThenWorkingScreen,
+			want:   false,
+		},
+		{
+			name:   "worked for without trailing composer",
+			screen: codexWorkedForNoComposerScreen,
+			want:   false,
+		},
+		{
+			name:   "transcript prose mentioning worked for",
+			screen: codexWorkedForProseScreen,
+			want:   false,
+		},
+		{
+			name:   "no status line at all",
+			screen: codexClearedComposerOnlyScreen,
+			want:   false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClassifyCodexCompletedTurnScreen(tc.screen); got != tc.want {
+				t.Fatalf("ClassifyCodexCompletedTurnScreen() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+const codexCompletedTurnScreen = `
+• Ran tests
+  go test ./internal/daemon
+
+• Worked for 1m 30s
+
+› Use /skills to list available skills
+
+gpt-5.5 xhigh · ~/1_dev_projects/sglavoie_agentmux · Context 12% used
+`
+
+const codexWorkingTurnScreen = `
+• Worked for 1m 30s
+
+• Working (5s • Esc to interrupt)
+
+›
+`
+
+const codexCompletedThenPromptScreen = `
+• Worked for 45s
+
+▌ Would you like to make the following edits?
+
+  src/app.go
+  + return nil
+
+› 1. Yes, apply these edits
+  2. No, keep editing
+
+Press enter to confirm
+`
+
+const codexWorkedThenWorkingScreen = `
+• Worked for 12s
+
+• Working (3s • Esc to interrupt)
+
+  reading files…
+`
+
+const codexWorkedForNoComposerScreen = `
+• Worked for 20s
+
+• Ran build
+  go build ./...
+`
+
+const codexWorkedForProseScreen = `
+• The migration worked for the staging cluster last week.
+• Ran tests
+
+› Use /skills to list available skills
+
+context 8% · gpt-5-codex · default · Plan mode
+`
+
 const codexReportedClearedScreen = `
 ╭─────────────────────────────────────────────────╮
 │ >_ OpenAI Codex (v0.137.0)                      │
