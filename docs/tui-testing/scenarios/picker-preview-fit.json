@@ -1,0 +1,13 @@
+{
+  "name": "picker-preview-fit",
+  "fixture": "wide_profiles",
+  "size": { "width": 120, "height": 36 },
+  "actions": [
+    { "type": "key", "key": "l" },
+    { "type": "key", "key": "p" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "picker" },
+    { "type": "no_layout_issues" }
+  ]
+}

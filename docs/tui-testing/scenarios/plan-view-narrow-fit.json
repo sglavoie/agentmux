@@ -1,0 +1,13 @@
+{
+  "name": "plan-view-narrow-fit",
+  "fixture": "basic",
+  "size": { "width": 60, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "P" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "plan_view" },
+    { "type": "no_layout_issues" }
+  ]
+}

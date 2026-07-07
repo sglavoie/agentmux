@@ -41,10 +41,16 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 	// The four documented layout classes must all be present so the examples
 	// stay in lock-step with the docs.
 	want := map[string]bool{
-		"baseline-layout.json":   false,
-		"actions-popup-fit.json": false,
-		"config-picker-fit.json": false,
-		"resize-stress.json":     false,
+		"baseline-layout.json":          false,
+		"actions-popup-fit.json":        false,
+		"config-picker-fit.json":        false,
+		"resize-stress.json":            false,
+		"picker-fit.json":               false,
+		"picker-preview-fit.json":       false,
+		"plan-view-fit.json":            false,
+		"session-search-chips-fit.json": false,
+		"search-narrow-fit.json":        false,
+		"list-preview-narrow-fit.json":  false,
 	}
 
 	for _, name := range jsonFiles {

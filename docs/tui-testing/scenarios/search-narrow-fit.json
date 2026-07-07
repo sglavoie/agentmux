@@ -1,0 +1,10 @@
+{
+  "name": "search-narrow-fit",
+  "fixture": "basic",
+  "size": { "width": 40, "height": 32 },
+  "actions": [{ "type": "key", "key": "/" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "search" },
+    { "type": "no_layout_issues" }
+  ]
+}

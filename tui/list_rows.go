@@ -171,6 +171,14 @@ func renderListAt(m Model, width, height int) string {
 		if pulseActive {
 			styledRow = pulsePrefix(m, s) + styledRow
 		}
+		// Safety clamp at the render boundary. formatRow has a fixed-column
+		// floor (minListRowWidth) it cannot shrink below, so when the pane is
+		// narrower than that floor the composed row would otherwise draw past
+		// the terminal edge. displayStyledTruncate is ANSI-aware and keeps the
+		// trailing style resets intact after the visible cut.
+		if width > 0 {
+			styledRow = displayStyledTruncate(styledRow, width, "…")
+		}
 		sb.WriteString(styledRow)
 		sb.WriteByte('\n')
 	}

@@ -23,12 +23,13 @@ func planSearchVisibleHeight(m Model) int {
 }
 
 func planSearchErrorLines(m Model) int {
+	width := planViewerWrapWidth(m.width)
 	n := 0
-	if m.planRefreshErr != nil {
-		n++
+	if err := m.planRefreshErr; err != nil {
+		n += len(displayWrapHard("refresh error: "+err.Error(), width))
 	}
-	if m.planSearchErr != nil {
-		n++
+	if err := m.planSearchErr; err != nil {
+		n += len(displayWrapHard("search error: "+err.Error(), width))
 	}
 	return n
 }
@@ -78,11 +79,16 @@ func renderPlanSearch(m Model) string {
 	}
 	sb.WriteByte('\n')
 
+	wrapWidth := planViewerWrapWidth(m.width)
 	if err := m.planRefreshErr; err != nil {
-		sb.WriteString(styleError.Render("refresh error: "+err.Error()) + "\n")
+		for _, line := range displayWrapHard("refresh error: "+err.Error(), wrapWidth) {
+			sb.WriteString(styleError.Render(line) + "\n")
+		}
 	}
 	if err := m.planSearchErr; err != nil {
-		sb.WriteString(styleError.Render("search error: "+err.Error()) + "\n")
+		for _, line := range displayWrapHard("search error: "+err.Error(), wrapWidth) {
+			sb.WriteString(styleError.Render(line) + "\n")
+		}
 	}
 
 	height := planSearchVisibleHeight(m)

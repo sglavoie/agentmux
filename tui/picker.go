@@ -233,6 +233,16 @@ func renderPickerList(m Model, height int) string {
 			line += "  " + styleDim.Render(fmt.Sprintf("(%d running)", runningCount))
 		}
 
+		// Clamp the composed row to the effective list width. renderPicker
+		// threads listModel.width = listWidth when the preview pane is on, so
+		// the left column never overruns the "list │ preview" split; with the
+		// preview off, m.width is the full terminal width. Without this the row
+		// (built by concatenation with content-derived column widths) can draw
+		// past the terminal edge and corrupt the layout.
+		if m.width > 0 {
+			line = displayStyledTruncate(line, m.width, "…")
+		}
+
 		if i == m.pickerCursor {
 			sb.WriteString(styleSelected.Render(line))
 		} else {

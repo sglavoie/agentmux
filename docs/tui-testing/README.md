@@ -235,6 +235,12 @@ layout classes this harness targets:
 | [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions overlay fits after pressing `a` on a long-titled session |
 | [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits after pressing `C` with long profile names |
 | [`resize-stress.json`](scenarios/resize-stress.json) | `basic` | the dashboard survives a sequence of resizes and ends clean |
+| [`picker-fit.json`](scenarios/picker-fit.json) | `actions` | launch picker rows stay within width after pressing `l` |
+| [`picker-preview-fit.json`](scenarios/picker-preview-fit.json) | `actions` | launch picker list+preview split fits after pressing `l` then `p` |
+| [`plan-view-fit.json`](scenarios/plan-view-fit.json) | `basic` | plan viewer read-error line wraps to width after `P` then `enter` |
+| [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after pressing `S` |
+| [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | filter-mode list rows truncate to width at a sub-floor terminal after `/` |
+| [`list-preview-narrow-fit.json`](scenarios/list-preview-narrow-fit.json) | `actions` | list+preview split falls back to the plain list below the row-column floor after `p` |
 
 Run them all:
 

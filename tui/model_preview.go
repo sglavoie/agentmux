@@ -233,6 +233,15 @@ func renderSplit(m Model) string {
 		previewWidth = m.width - 20
 	}
 	listWidth := m.width - previewWidth - 1
+	// A horizontal split shrinks the list to listWidth, but formatRow cannot
+	// lay out its fixed columns below minListRowWidth. Below the floor the list
+	// column can only be truncated, which pairs a cramped, elided list with the
+	// preview; fall back to the full-width plain list instead (mirrors the
+	// paneHeight<4 || m.width<20 guard above). The plain list is itself clamped
+	// to m.width by renderListAt's safety truncation.
+	if listWidth < minListRowWidth() {
+		return renderList(m)
+	}
 	listView := renderListAt(m, listWidth, paneHeight)
 	previewView := renderPreview(previewWidth, paneHeight, sess, m.previewText, m.previewError, acctColor, m.cfg)
 	divider := strings.Repeat(styleDim.Render("│")+"\n", paneHeight)

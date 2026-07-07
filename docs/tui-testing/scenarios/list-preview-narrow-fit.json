@@ -1,0 +1,10 @@
+{
+  "name": "list-preview-narrow-fit",
+  "fixture": "actions",
+  "size": { "width": 60, "height": 32 },
+  "actions": [{ "type": "key", "key": "p" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "picker-fit",
+  "fixture": "actions",
+  "size": { "width": 90, "height": 32 },
+  "actions": [{ "type": "key", "key": "l" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "picker" },
+    { "type": "no_layout_issues" }
+  ]
+}

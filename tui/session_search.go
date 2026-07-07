@@ -111,7 +111,11 @@ func renderSessionSearchChips(m Model) string {
 	} else {
 		parts = append(parts, styleDim.Render("[r] project: any"))
 	}
-	return "  " + strings.Join(parts, "   ")
+	chips := "  " + strings.Join(parts, "   ")
+	if m.width > 0 {
+		chips = displayStyledTruncate(chips, m.width, "…")
+	}
+	return chips
 }
 
 func singleChipValue(s []string) string {

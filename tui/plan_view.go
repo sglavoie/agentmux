@@ -25,7 +25,11 @@ func renderPlanView(m Model) string {
 		header += "  " + styleSearch.Render(fmt.Sprintf("match %d/%d",
 			m.planViewerMatchIdx+1, len(m.planViewerMatchLines)))
 	}
-	sb.WriteString(styleHeader.Render(header))
+	renderedHeader := styleHeader.Render(header)
+	if m.width > 0 {
+		renderedHeader = displayStyledTruncate(renderedHeader, m.width, "…")
+	}
+	sb.WriteString(renderedHeader)
 	sb.WriteByte('\n')
 	if row := renderPathRow("plan path", currentPlanViewPath(m), m.width); row != "" {
 		sb.WriteString(row)
@@ -34,7 +38,10 @@ func renderPlanView(m Model) string {
 	sb.WriteByte('\n')
 
 	if err := m.planViewerLoadErr; err != nil {
-		sb.WriteString(styleError.Render("read error: "+err.Error()) + "\n")
+		for _, line := range displayWrapHard("read error: "+err.Error(), planViewerWrapWidth(m.width)) {
+			sb.WriteString(styleError.Render(line))
+			sb.WriteByte('\n')
+		}
 	}
 
 	height := planViewerVisibleHeight(m)

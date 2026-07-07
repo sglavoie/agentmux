@@ -35,6 +35,21 @@ func harnessLabel(h string) string {
 // foreground for that cell. When the configured emoji is empty, the cell
 // collapses to just "<label>" so unconfigured users don't see a stray leading
 // space.
+// minListRowWidth is the narrowest width at which formatRow can lay out its
+// fixed columns before the directory column: lock + mute + state icon + a
+// space + the "[X]" account badge + a space + the harness cell + a space +
+// the title column + the two separator spaces that precede the directory.
+// The dynamic columns (loop, age, pulse, group border) are excluded because
+// they are only reserved when a row needs them. Below this floor the row can
+// no longer shrink, so renderListAt clamps it and renderSplit falls back to
+// the plain full-width list.
+func minListRowWidth() int {
+	return lockColumnWidth + muteColumnWidth + titleIconCellWidth + 1 + // lock + mute + icon + space
+		3 + 1 + // "[X]" badge + space
+		harnessColWidth + 1 + // harness cell + space
+		titleColWidth + 2 // title + separators before dir
+}
+
 func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, activeLoopCell, ageCell string) string {
 	// Lock indicator column. Always reserved (2 cells) so column alignment is
 	// stable; only filled when the session is locked.
