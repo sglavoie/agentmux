@@ -132,14 +132,26 @@ func helpOverlayInnerHeight(m Model) int {
 	}
 	// Inside the box we render: title (1) + blank (1) + ▲ slot (1) +
 	// content (≥ helpMinVisible) + ▼ slot (1). Ensure the inner height is
-	// large enough to fit that floor even on tiny terminals.
+	// large enough to fit that floor when possible; on shorter terminals,
+	// shrink the content window so the boxed popup still fits above the
+	// footer and status rows.
 	minInner := helpMinVisible + 4
-	avail := rootBodyHeight(m) - 6 // border (2) + safety margin (4)
+	fit := rootBodyHeight(m) - styleOverlayBox.GetVerticalFrameSize()
+	if fit < 0 {
+		return 0
+	}
+	avail := fit - 4 // safety margin
 	if avail < minInner {
+		if fit < minInner {
+			return fit
+		}
 		return minInner
 	}
 	if avail > 30 {
 		avail = 30
+	}
+	if avail > fit {
+		avail = fit
 	}
 	return avail
 }
@@ -154,7 +166,10 @@ func helpVisibleHeight(m Model) int {
 	}
 	v := inner - 4
 	if v < helpMinVisible {
-		return helpMinVisible
+		if v < 0 {
+			return 0
+		}
+		return v
 	}
 	return v
 }
@@ -168,7 +183,10 @@ func helpScrollBounds(m Model, visibleHeight int) (total, visible int) {
 	if m.height == 0 {
 		return total, total
 	}
-	visible = max(helpMinVisible, min(total, visibleHeight))
+	if visibleHeight < 0 {
+		visibleHeight = 0
+	}
+	visible = min(total, visibleHeight)
 	return total, visible
 }
 

@@ -77,9 +77,13 @@ func centerOverlay(base, popup string, baseWidth, baseHeight int, dim bool) stri
 // vertically as content is added or removed.
 func topCenterOverlay(base, popup string, baseWidth, baseHeight int, dim bool) string {
 	popupW := popupWidth(popup)
+	popupH := 0
+	if popup != "" {
+		popupH = strings.Count(popup, "\n") + 1
+	}
 	startCol := max((baseWidth-popupW)/2, 0)
 	startRow := 1
-	if baseHeight <= 1 {
+	if baseHeight <= 1 || popupH >= baseHeight {
 		startRow = 0
 	}
 	return composeOverlay(base, popup, baseWidth, baseHeight, startCol, startRow, dim)

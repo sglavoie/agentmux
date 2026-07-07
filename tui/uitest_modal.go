@@ -111,7 +111,7 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 	// clip decision matches production compositing.
 	startRow := (availH - realH) / 2
 	if modalIsTopAnchored(m.mode) {
-		if availH > 1 {
+		if availH > 1 && realH < availH {
 			startRow = 1
 		} else {
 			startRow = 0

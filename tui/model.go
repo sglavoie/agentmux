@@ -81,6 +81,10 @@ type Model struct {
 	// last error from a close/restart action
 	actionErr error
 
+	// actionsOffset is the first visible rendered action row in the per-row
+	// actions overlay. Reset to 0 whenever the overlay is opened or closed.
+	actionsOffset int
+
 	// config picker mode
 	configPickerAccounts   []config.Account
 	configPickerCursor     int

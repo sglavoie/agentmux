@@ -78,8 +78,8 @@ func clampTimelineScroll(m *Model, phases []timelinePhase) {
 	lines := renderTimelineLines(phases, renderWidth, m.detailTimelineFold, m.detailShowSuppressed, m.detailShowTimestamps)
 	innerH := detailOverlayInnerHeight(*m)
 	visibleH := innerH - detailInnerChrome
-	if visibleH < detailMinVisible {
-		visibleH = detailMinVisible
+	if visibleH < 0 {
+		visibleH = 0
 	}
 	maxOffset := len(lines) - visibleH
 	if maxOffset < 0 {

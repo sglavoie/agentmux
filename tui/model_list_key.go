@@ -259,6 +259,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if len(m.filtered) > 0 {
 				m.targetSession = m.filtered[m.cursor]
 				m.actionErr = nil
+				m.actionsOffset = 0
 				m.mode = ModeActions
 			}
 			return m, nil

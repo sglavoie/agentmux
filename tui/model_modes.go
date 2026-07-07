@@ -56,12 +56,66 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // action's keyMatch runs it. Unavailable or unknown keys are ignored.
 func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	s := msg.String()
+	total, visible := actionsScrollBounds(m)
+	maxOffset := total - visible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
 	switch s {
 	case keyEsc, keyQ:
 		m.mode = ModeList
+		m.actionsOffset = 0
 		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
+	case keyJ, keyDown:
+		if m.actionsOffset < maxOffset {
+			m.actionsOffset++
+		}
+		return m, nil
+	case keyK, keyUp:
+		if m.actionsOffset > 0 {
+			m.actionsOffset--
+		}
+		return m, nil
+	case keyPgDown, keyCtrlF:
+		m.actionsOffset += visible
+		if m.actionsOffset > maxOffset {
+			m.actionsOffset = maxOffset
+		}
+		return m, nil
+	case keyPgUp, keyCtrlB:
+		m.actionsOffset -= visible
+		if m.actionsOffset < 0 {
+			m.actionsOffset = 0
+		}
+		return m, nil
+	case keyCtrlD:
+		step := visible / 2
+		if step < 1 {
+			step = 1
+		}
+		m.actionsOffset += step
+		if m.actionsOffset > maxOffset {
+			m.actionsOffset = maxOffset
+		}
+		return m, nil
+	case keyCtrlU:
+		step := visible / 2
+		if step < 1 {
+			step = 1
+		}
+		m.actionsOffset -= step
+		if m.actionsOffset < 0 {
+			m.actionsOffset = 0
+		}
+		return m, nil
+	case keyG:
+		m.actionsOffset = 0
+		return m, nil
+	case keyGG:
+		m.actionsOffset = maxOffset
+		return m, nil
 	}
 	for _, a := range actionsFor(m) {
 		if s != a.keyMatch {
@@ -70,7 +124,9 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !a.available(m) {
 			return m, nil
 		}
-		return a.run(m)
+		next, cmd := a.run(m)
+		next.actionsOffset = 0
+		return next, cmd
 	}
 	return m, nil
 }
@@ -229,8 +285,8 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		tlLines := renderTimelineLines(phases, renderWidth, m.detailTimelineFold, m.detailShowSuppressed, m.detailShowTimestamps)
 		innerH := detailOverlayInnerHeight(m)
 		tlVisible := innerH - detailInnerChrome
-		if tlVisible < detailMinVisible {
-			tlVisible = detailMinVisible
+		if tlVisible < 0 {
+			tlVisible = 0
 		}
 		tlMax := len(tlLines) - tlVisible
 		if tlMax < 0 {

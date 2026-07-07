@@ -95,9 +95,9 @@ func TestUITestModalConfigPickerWidthOverflow(t *testing.T) {
 // TestUITestModalDetectsHeightOverflow verifies that a modal taller than the
 // body area root composition gives it is reported as modal_height_overflow.
 func TestUITestModalDetectsHeightOverflow(t *testing.T) {
-	iss := detectModalFitIssues(actionsModalAt(80, 24))
+	iss := detectModalFitIssues(actionsModalAt(120, 8))
 	if !hasIssueType(iss, UITestIssueModalHeightOverflow) {
-		t.Fatalf("expected modal_height_overflow for actions at 80x24, got %v", iss)
+		t.Fatalf("expected modal_height_overflow for actions at 120x8, got %v", iss)
 	}
 	for _, i := range iss {
 		if i.Type == UITestIssueModalHeightOverflow && i.Actual <= i.Limit {
@@ -106,14 +106,12 @@ func TestUITestModalDetectsHeightOverflow(t *testing.T) {
 	}
 }
 
-// TestUITestModalClippedByRoot sweeps the top-anchored config picker across body
-// heights and pins the placement-clip behavior: when the picker is too tall it
-// reports height overflow, at the exact boundary where its rows equal the body
-// area the one-row top anchor pushes it off (modal_clipped_by_root), and once
-// there is room it reports nothing. Height overflow and placement clip are
-// mutually exclusive.
-func TestUITestModalClippedByRoot(t *testing.T) {
-	var sawHeight, sawClip, sawClean bool
+// TestUITestModalTopAnchoredBoundaryFits sweeps the top-anchored config picker
+// across body heights. When the picker is too tall it reports height overflow;
+// at and above the exact fit boundary it anchors at a row that keeps the bottom
+// border visible, so modal_clipped_by_root should not appear.
+func TestUITestModalTopAnchoredBoundaryFits(t *testing.T) {
+	var sawHeight, sawClean bool
 	for h := 6; h <= 16; h++ {
 		iss := detectModalFitIssues(configPickerModalAt(120, h))
 		if len(iss) > 1 {
@@ -124,20 +122,18 @@ func TestUITestModalClippedByRoot(t *testing.T) {
 		if height && clip {
 			t.Fatalf("h=%d: height overflow and placement clip must be mutually exclusive", h)
 		}
+		if clip {
+			t.Fatalf("h=%d: top-anchored picker should avoid placement clipping, got %v", h, iss)
+		}
 		switch {
 		case height:
 			sawHeight = true
-		case clip:
-			sawClip = true
 		case len(iss) == 0:
 			sawClean = true
 		}
 	}
 	if !sawHeight {
 		t.Error("expected some short terminal to report modal_height_overflow")
-	}
-	if !sawClip {
-		t.Error("expected the boundary terminal to report modal_clipped_by_root")
 	}
 	if !sawClean {
 		t.Error("expected some terminal to fit the config picker with no issues")

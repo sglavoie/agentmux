@@ -187,8 +187,8 @@ func renderTimeline(m Model) string {
 
 	innerH := detailOverlayInnerHeight(m)
 	visibleH := innerH - detailInnerChrome
-	if visibleH < detailMinVisible {
-		visibleH = detailMinVisible
+	if visibleH < 0 {
+		visibleH = 0
 	}
 
 	total := len(lines)

@@ -40,6 +40,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	// dead rows before the viewport reacts.
 	clampDetailScroll(&m)
 	clampHelpOffset(&m)
+	clampActionsOffset(&m)
 	clampMessageDetailScroll(&m)
 	clampListOffset(&m)
 	scrollListToCursor(&m)
