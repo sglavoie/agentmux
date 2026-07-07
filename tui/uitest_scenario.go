@@ -158,6 +158,13 @@ func validateUITestAssertion(a UITestAssertion, modeNames map[string]bool) error
 		if a.Value == "" {
 			return fmt.Errorf("%s assertion requires a value", a.Type)
 		}
+	case UITestAssertExcludesLayoutIssue:
+		if a.Value == "" {
+			return fmt.Errorf("excludes_layout_issue assertion requires a value (the issue type)")
+		}
+		if !uitestKnownLayoutIssueType(a.Value) {
+			return fmt.Errorf("excludes_layout_issue assertion has unknown issue type %q", a.Value)
+		}
 	case UITestAssertKittyCalls:
 		if a.Op == "" {
 			return fmt.Errorf("kitty_calls assertion requires an op")
@@ -263,6 +270,13 @@ func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model
 	case UITestAssertNoLayoutIssues:
 		if n := len(final.Screen.Issues); n > 0 {
 			return uitestAssertionFail(a, fmt.Sprintf("found %d layout issue(s); first: %s", n, final.Screen.Issues[0].Type))
+		}
+	case UITestAssertExcludesLayoutIssue:
+		want := UITestLayoutIssueType(a.Value)
+		for _, iss := range final.Screen.Issues {
+			if iss.Type == want {
+				return uitestAssertionFail(a, fmt.Sprintf("screen unexpectedly has %s issue: %s", want, iss.Detail))
+			}
 		}
 	case UITestAssertContainsText:
 		if !strings.Contains(uitestScreenText(final), a.Text) {

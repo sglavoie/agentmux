@@ -57,20 +57,22 @@ func renderSessionSearch(m Model) string {
 	if len(states) > 0 {
 		header += "  " + styleDim.Render("("+strings.Join(states, ", ")+")")
 	}
-	sb.WriteString(styleHeader.Render(header))
+	sb.WriteString(clampSearchLine(styleHeader.Render(header), m.width))
 	sb.WriteByte('\n')
 
 	sb.WriteString(renderSessionSearchChips(m))
 	sb.WriteByte('\n')
 
+	var queryBar string
 	switch {
 	case m.sessionSearchMode:
-		sb.WriteString(styleSearch.Render("/") + m.sessionQuery + "█")
+		queryBar = styleSearch.Render("/") + m.sessionQuery + "█"
 	case m.sessionQuery != "":
-		sb.WriteString(styleSearch.Render("/") + m.sessionQuery)
+		queryBar = styleSearch.Render("/") + m.sessionQuery
 	default:
-		sb.WriteString(styleDim.Render("press / to search transcript content"))
+		queryBar = styleDim.Render("press / to search transcript content")
 	}
+	sb.WriteString(clampSearchLine(queryBar, m.width))
 	sb.WriteByte('\n')
 
 	if row := renderPathRow("session path", selectedSessionSearchPath(m), m.width); row != "" {
@@ -89,6 +91,17 @@ func renderSessionSearch(m Model) string {
 	height := sessionSearchVisibleHeight(m)
 	sb.WriteString(renderSessionSearchList(m, height))
 	return sb.String()
+}
+
+// clampSearchLine hard-clamps a single composed (styled) line to width so the
+// search-mode header, hint, and query bar cannot overflow narrow terminals.
+// Mirrors the per-line chip clamp; a non-positive width (pre-resize) is a
+// no-op.
+func clampSearchLine(line string, width int) string {
+	if width <= 0 {
+		return line
+	}
+	return displayStyledTruncate(line, width, "…")
 }
 
 // renderSessionSearchChips returns a one-line summary of the active chip

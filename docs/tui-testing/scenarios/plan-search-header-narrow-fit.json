@@ -1,0 +1,10 @@
+{
+  "name": "plan-search-header-narrow-fit",
+  "fixture": "basic",
+  "size": { "width": 30, "height": 24 },
+  "actions": [{ "type": "key", "key": "P" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "plan_search" },
+    { "type": "no_layout_issues" }
+  ]
+}

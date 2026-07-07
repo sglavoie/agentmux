@@ -1,0 +1,14 @@
+{
+  "name": "help-modal-scroll-bottom",
+  "fixture": "basic",
+  "size": { "width": 30, "height": 40 },
+  "actions": [
+    { "type": "key", "key": "?" },
+    { "type": "key", "key": "G" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "help" },
+    { "type": "excludes_layout_issue", "value": "modal_height_overflow" },
+    { "type": "contains_text", "text": "least-frequent" }
+  ]
+}

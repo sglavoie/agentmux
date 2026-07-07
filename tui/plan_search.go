@@ -61,17 +61,19 @@ func renderPlanSearch(m Model) string {
 		header += "  " + styleDim.Render(fmt.Sprintf("[%d result%s · sort: %s]",
 			count, plural(count), planSortLabel(m.planSortMode)))
 	}
-	sb.WriteString(styleHeader.Render(header))
+	sb.WriteString(clampSearchLine(styleHeader.Render(header), m.width))
 	sb.WriteByte('\n')
 
+	var queryBar string
 	switch {
 	case m.planSearchMode:
-		sb.WriteString(styleSearch.Render("/") + m.planQuery + "█")
+		queryBar = styleSearch.Render("/") + m.planQuery + "█"
 	case m.planQuery != "":
-		sb.WriteString(styleSearch.Render("/") + m.planQuery)
+		queryBar = styleSearch.Render("/") + m.planQuery
 	default:
-		sb.WriteString(styleDim.Render("press / to search plan content"))
+		queryBar = styleDim.Render("press / to search plan content")
 	}
+	sb.WriteString(clampSearchLine(queryBar, m.width))
 	sb.WriteByte('\n')
 	if row := renderPathRow("plan path", selectedPlanSearchPath(m), m.width); row != "" {
 		sb.WriteString(row)

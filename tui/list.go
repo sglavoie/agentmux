@@ -63,7 +63,13 @@ func renderHeader(m Model) string {
 		if pad < 1 {
 			pad = 1
 		}
-		out := left + strings.Repeat(" ", pad) + right + "\n"
+		line := left + strings.Repeat(" ", pad) + right
+		// Final hard-clamp: at very narrow widths the title plus filter hint /
+		// health pips exceed the terminal even with the pad collapsed to 1, so
+		// truncate the composed row to m.width. Mirrors the per-line clamp in
+		// footer.go and the per-row clamp in list_rows.go.
+		line = displayStyledTruncate(line, m.width, "…")
+		out := line + "\n"
 		if hint := renderHealthHints(m); hint != "" {
 			out += hint
 		}
@@ -188,6 +194,12 @@ func renderChips(m Model, width int) string {
 	lineW := 0
 	for i, c := range comps {
 		chip := renderChip(c, acctColor, i == m.focusedChipIdx)
+		// A single chip whose label exceeds the terminal is never split by the
+		// wrap loop below, so clamp it to width first (mirrors the guard in
+		// renderSessionSearchChips at session_search.go).
+		if width > 0 {
+			chip = displayStyledTruncate(chip, width, "…")
+		}
 		chipW := displayStyledWidth(chip)
 		add := chipW
 		if line.Len() > 0 {

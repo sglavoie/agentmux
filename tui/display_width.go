@@ -267,6 +267,76 @@ func displayWrapHard(s string, width int) []string {
 	return lines
 }
 
+// displayStyledWrapHard splits ANSI-styled s into display-width-bounded rows
+// without splitting grapheme clusters or ANSI escape sequences. It is the
+// style-aware counterpart to displayWrapHard: escape sequences are copied
+// whole and cost zero display width, so each returned row measures at most
+// width visible cells. The line's leading style (the run of escape sequences
+// before the first visible grapheme) is re-emitted at the start of every
+// continuation row and a reset is appended when a row wraps, so a hard split
+// through a `<SGR>text<reset>` line keeps its color on every row.
+//
+// An empty string yields a single empty row so blank separator lines survive
+// wrapping. When width <= 0 or s already fits, s is returned as a single row.
+func displayStyledWrapHard(s string, width int) []string {
+	if s == "" {
+		return []string{""}
+	}
+	if width <= 0 || displayStyledWidth(s) <= width {
+		return []string{s}
+	}
+	const reset = "\x1b[0m"
+	prefix := leadingANSISequences(s)
+
+	var lines []string
+	var b strings.Builder
+	used := 0
+	state := -1
+	rest := s
+	for len(rest) > 0 {
+		if n := displayANSISequenceLen(rest); n > 0 {
+			b.WriteString(rest[:n])
+			rest = rest[n:]
+			state = -1
+			continue
+		}
+
+		var cluster string
+		cluster, rest, _, state = uniseg.FirstGraphemeClusterInString(rest, state)
+		w := displayGraphemeWidth(cluster)
+		if used > 0 && used+w > width {
+			b.WriteString(reset)
+			lines = append(lines, b.String())
+			b.Reset()
+			b.WriteString(prefix)
+			used = 0
+		}
+		b.WriteString(cluster)
+		used += w
+	}
+	if b.Len() > 0 {
+		lines = append(lines, b.String())
+	}
+	return lines
+}
+
+// leadingANSISequences returns the run of ANSI escape sequences at the start
+// of s, before the first visible grapheme cluster. displayStyledWrapHard
+// re-emits this so each wrapped continuation row re-opens the line's style.
+func leadingANSISequences(s string) string {
+	var b strings.Builder
+	rest := s
+	for len(rest) > 0 {
+		n := displayANSISequenceLen(rest)
+		if n == 0 {
+			break
+		}
+		b.WriteString(rest[:n])
+		rest = rest[n:]
+	}
+	return b.String()
+}
+
 // titleIconCell returns the fixed cell width reserved for a leading
 // title-icon column.
 func titleIconCell() int { return titleIconCellWidth }

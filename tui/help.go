@@ -102,6 +102,48 @@ func helpContentLines() []string {
 	return lines
 }
 
+// helpBoxInnerWidth returns the value passed to styleOverlayBox.Width for the
+// help overlay: 70 columns, clamped to m.width-4 on narrow terminals and
+// floored at 1. renderHelpBox and the content wrapper share it so the scroll
+// math counts the same display rows lipgloss ultimately renders.
+func helpBoxInnerWidth(m Model) int {
+	innerWidth := 70
+	if avail := m.width - 4; avail < innerWidth {
+		innerWidth = avail
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	return innerWidth
+}
+
+// helpContentWidth returns the cell width a help content line may occupy
+// before styleOverlayBox would re-wrap it. styleOverlayBox.Width(...) fixes
+// the total rendered width (border + Padding(0, 1) included), so the text
+// area is that width minus the box's horizontal frame. Wrapping to this width
+// guarantees each row renders as a single display line inside the box, keeping
+// the scroll math's row count in step with what lipgloss draws.
+func helpContentWidth(m Model) int {
+	w := helpBoxInnerWidth(m) - styleOverlayBox.GetHorizontalFrameSize()
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// helpWrappedContentLines wraps each styled helpContentLines() entry to the
+// overlay's content width so total, offset, visible, and the ▲/▼ indicators
+// all operate on display rows rather than logical lines. Blank separators are
+// preserved as blank rows.
+func helpWrappedContentLines(m Model) []string {
+	width := helpContentWidth(m)
+	var out []string
+	for _, line := range helpContentLines() {
+		out = append(out, displayStyledWrapHard(line, width)...)
+	}
+	return out
+}
+
 // clampHelpOffset pins m.helpOffset to the [0, maxOffset] range at the
 // model's current dimensions. Mirrors clampDetailScroll: called from the
 // WindowSizeMsg handler so a viewport shrink doesn't leave a stale offset
@@ -179,10 +221,13 @@ func helpVisibleHeight(m Model) int {
 // When the model has no height yet (pre-WindowSizeMsg) the visible window
 // equals the total so scroll keys become no-ops naturally.
 func helpScrollBounds(m Model, visibleHeight int) (total, visible int) {
-	total = len(helpContentLines())
 	if m.height == 0 {
+		// Pre-resize: renderHelp emits every logical line verbatim, so the
+		// bounds count logical lines and scroll keys stay no-ops.
+		total = len(helpContentLines())
 		return total, total
 	}
+	total = len(helpWrappedContentLines(m))
 	if visibleHeight < 0 {
 		visibleHeight = 0
 	}
@@ -196,19 +241,20 @@ func helpScrollBounds(m Model, visibleHeight int) (total, visible int) {
 // slot for each indicator unconditionally so the overlay does not jitter
 // as the user scrolls.
 func renderHelp(m Model) string {
-	lines := helpContentLines()
-
 	var sb strings.Builder
 	sb.WriteString(styleHeader.Render("Keyboard Shortcuts") + "\n\n")
 
 	if m.height == 0 {
 		// Pre-resize: emit every line verbatim so behavior matches the
 		// pre-scroll implementation until the first WindowSizeMsg lands.
-		sb.WriteString(strings.Join(lines, "\n"))
+		sb.WriteString(strings.Join(helpContentLines(), "\n"))
 		sb.WriteByte('\n')
 		return sb.String()
 	}
 
+	// Wrap to display rows before windowing so total/offset/visible and the
+	// ▲/▼ indicators count the same rows the overlay box renders.
+	lines := helpWrappedContentLines(m)
 	n := len(lines)
 	_, visible := helpScrollBounds(m, helpVisibleHeight(m))
 	offset := m.helpOffset
@@ -246,12 +292,5 @@ func renderHelp(m Model) string {
 // dashboard. The inner width is capped at 70 columns and clamped to
 // m.width-4 on narrow terminals.
 func renderHelpBox(m Model) string {
-	innerWidth := 70
-	if avail := m.width - 4; avail < innerWidth {
-		innerWidth = avail
-	}
-	if innerWidth < 1 {
-		innerWidth = 1
-	}
-	return styleOverlayBox.Width(innerWidth).Render(strings.TrimRight(renderHelp(m), "\n"))
+	return styleOverlayBox.Width(helpBoxInnerWidth(m)).Render(strings.TrimRight(renderHelp(m), "\n"))
 }

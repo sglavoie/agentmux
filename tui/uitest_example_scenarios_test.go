@@ -51,6 +51,15 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"session-search-chips-fit.json": false,
 		"search-narrow-fit.json":        false,
 		"list-preview-narrow-fit.json":  false,
+		"footer-gloss-narrow-fit.json":  false,
+		"legend-narrow-fit.json":        false,
+		"picker-dsl-narrow-fit.json":    false,
+
+		"session-search-header-narrow-fit.json": false,
+		"plan-search-header-narrow-fit.json":    false,
+
+		"help-modal-narrow-fit.json":    false,
+		"help-modal-scroll-bottom.json": false,
 	}
 
 	for _, name := range jsonFiles {

@@ -1,0 +1,11 @@
+{
+  "name": "help-modal-narrow-fit",
+  "fixture": "basic",
+  "size": { "width": 30, "height": 40 },
+  "actions": [{ "type": "key", "key": "?" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "help" },
+    { "type": "excludes_layout_issue", "value": "modal_height_overflow" },
+    { "type": "excludes_layout_issue", "value": "modal_clipped_by_root" }
+  ]
+}

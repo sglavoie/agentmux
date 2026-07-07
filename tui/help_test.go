@@ -149,6 +149,58 @@ func TestHelpScrollKeys(t *testing.T) {
 	})
 }
 
+// TestHelpScrollBoundsCountWrappedRows verifies that at a narrow width the
+// scroll bounds count wrapped display rows, not logical lines. Fix #5: the box
+// wraps each help entry to its content width, so total must exceed the logical
+// line count or the modal renders taller than the visible window budgeted for
+// it (the modal_height_overflow the harness caught at W=30 H=40).
+func TestHelpScrollBoundsCountWrappedRows(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.mode = ModeHelp
+	m.width = 30
+	m.height = 40
+
+	logical := len(helpContentLines())
+	wrapped := len(helpWrappedContentLines(m))
+	if wrapped <= logical {
+		t.Fatalf("expected wrapped row count (%d) to exceed logical line count (%d) at width 30", wrapped, logical)
+	}
+
+	total, _ := helpScrollBounds(m, helpVisibleHeight(m))
+	if total != wrapped {
+		t.Fatalf("expected helpScrollBounds total (%d) to equal wrapped row count (%d)", total, wrapped)
+	}
+}
+
+// TestHelpScrollReachesBottom verifies that pressing G at a narrow width scrolls
+// to the last wrapped help row so the bottom of the overlay is reachable. With
+// the pre-fix logical-line scroll math the offset stopped short and the footer
+// overflow footnote stayed clipped off-screen.
+func TestHelpScrollReachesBottom(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m.mode = ModeHelp
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 40})
+	m = updated.(Model)
+
+	m = pressKey(m, "G")
+
+	total, visible := helpScrollBounds(m, helpVisibleHeight(m))
+	maxOffset := total - visible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.helpOffset != maxOffset {
+		t.Fatalf("expected G to scroll to max offset %d, got %d", maxOffset, m.helpOffset)
+	}
+
+	// The final help row (footer-overflow footnote) must render within the
+	// visible window once scrolled to the bottom.
+	out := stripAnsi(renderHelp(m))
+	if !strings.Contains(out, "least-frequent") {
+		t.Errorf("expected the last help row to be visible after G, got:\n%s", out)
+	}
+}
+
 // TestHelpOffsetClampsOnResize verifies a viewport expansion drops
 // m.helpOffset into the new [0, maxOffset] range. When the terminal grows
 // taller, more content fits on-screen and maxOffset shrinks; without the

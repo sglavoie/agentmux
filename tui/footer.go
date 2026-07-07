@@ -447,8 +447,9 @@ func wrapFooterLine(firstLineLead, continuationIndent string, tokens []footerTok
 	leadW := displayStyledWidth(firstLineLead)
 	contW := displayStyledWidth(continuationIndent)
 
-	var out strings.Builder
-	out.WriteString(firstLineLead)
+	var lines []string
+	var cur strings.Builder
+	cur.WriteString(firstLineLead)
 
 	lineW := leadW
 	lineHasToken := false
@@ -462,22 +463,33 @@ func wrapFooterLine(firstLineLead, continuationIndent string, tokens []footerTok
 			cost += pendingSepW
 		}
 		if lineHasToken && lineW+cost > maxWidth {
-			out.WriteString("\n")
-			out.WriteString(continuationIndent)
+			lines = append(lines, cur.String())
+			cur.Reset()
+			cur.WriteString(continuationIndent)
 			lineW = contW
 			lineHasToken = false
 			cost = t.width
 		}
 		if lineHasToken {
-			out.WriteString(pendingSep)
+			cur.WriteString(pendingSep)
 		}
-		out.WriteString(t.rendered)
+		cur.WriteString(t.rendered)
 		lineW += cost
 		lineHasToken = true
 		pendingSep = t.sep
 		pendingSepW = t.sepWidth
 	}
-	return out.String()
+	lines = append(lines, cur.String())
+
+	// Final per-line hard clamp: a lead that alone exceeds maxWidth (the
+	// ModeList state gloss, #1) or a single token wider than the terminal
+	// (the legend entry #3 or the picker DSL hint #4) is never split by the
+	// wrap loop above, so truncate every emitted display line to maxWidth.
+	// Mirrors the per-row/per-line safety clamp in list_rows.go and picker.go.
+	for i, line := range lines {
+		lines[i] = displayStyledTruncate(line, maxWidth, "…")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // footerEntriesForSection returns the palette entries whose section matches

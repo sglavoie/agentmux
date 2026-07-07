@@ -73,6 +73,21 @@ const (
 	UITestIssueModalClippedByRoot UITestLayoutIssueType = "modal_clipped_by_root"
 )
 
+// uitestKnownLayoutIssueType reports whether s names a layout issue type the
+// harness can emit. It gates the excludes_layout_issue assertion so a scenario
+// naming a typo'd or renamed issue fails validation instead of passing
+// vacuously (the issue it excludes could never appear).
+func uitestKnownLayoutIssueType(s string) bool {
+	switch UITestLayoutIssueType(s) {
+	case UITestIssueInvalidUTF8, UITestIssueLineWidthOverflow,
+		UITestIssueScreenHeightOverflow, UITestIssueModalWidthOverflow,
+		UITestIssueModalHeightOverflow, UITestIssueModalClippedByRoot:
+		return true
+	default:
+		return false
+	}
+}
+
 // UITestLayoutIssue records one detected layout problem. Line is 0-based and
 // only meaningful for per-line issues. Actual/Limit describe the overflow: for
 // width issues they are measured cells vs. terminal width; for height issues
@@ -126,6 +141,12 @@ const (
 	// no layout issues attached (line/height overflow, invalid UTF-8, and the
 	// modal-fit issues layered on in a later session).
 	UITestAssertNoLayoutIssues UITestAssertionType = "no_layout_issues"
+	// UITestAssertExcludesLayoutIssue passes when the final observation's screen
+	// carries no layout issue whose type equals Value. It scopes the layout
+	// guarantee to a single issue kind so a scenario can assert (for example)
+	// that a modal does not overflow the terminal height while tolerating the
+	// deliberately-flagged width reflow modals report at narrow widths.
+	UITestAssertExcludesLayoutIssue UITestAssertionType = "excludes_layout_issue"
 	// UITestAssertContainsText passes when the final screen contains Text.
 	UITestAssertContainsText UITestAssertionType = "contains_text"
 	// UITestAssertExcludesText passes when the final screen does not contain Text.
@@ -149,7 +170,8 @@ const (
 // Valid reports whether t is one of the recognized assertion kinds.
 func (t UITestAssertionType) Valid() bool {
 	switch t {
-	case UITestAssertNoLayoutIssues, UITestAssertContainsText, UITestAssertExcludesText,
+	case UITestAssertNoLayoutIssues, UITestAssertExcludesLayoutIssue,
+		UITestAssertContainsText, UITestAssertExcludesText,
 		UITestAssertModeEquals, UITestAssertSelectedTitle, UITestAssertSelectedProfile,
 		UITestAssertKittyCalls, UITestAssertCursorEquals:
 		return true
@@ -164,7 +186,7 @@ type UITestAssertion struct {
 	Type   UITestAssertionType `json:"type"`
 	Text   string              `json:"text,omitempty"`   // contains_text / excludes_text
 	Mode   string              `json:"mode,omitempty"`   // mode_equals
-	Value  string              `json:"value,omitempty"`  // selected_title / selected_profile
+	Value  string              `json:"value,omitempty"`  // selected_title / selected_profile / excludes_layout_issue (issue type)
 	Op     string              `json:"op,omitempty"`     // kitty_calls operation name
 	Count  *int                `json:"count,omitempty"`  // kitty_calls: exact count when set; >=1 when nil
 	Cursor int                 `json:"cursor,omitempty"` // cursor_equals

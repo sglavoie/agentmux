@@ -1,0 +1,10 @@
+{
+  "name": "picker-dsl-narrow-fit",
+  "fixture": "basic",
+  "size": { "width": 20, "height": 24 },
+  "actions": [{ "type": "key", "key": "l" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "picker" },
+    { "type": "no_layout_issues" }
+  ]
+}

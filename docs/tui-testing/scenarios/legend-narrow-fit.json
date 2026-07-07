@@ -1,0 +1,9 @@
+{
+  "name": "legend-narrow-fit",
+  "fixture": "actions",
+  "size": { "width": 20, "height": 40 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "no_layout_issues" }
+  ]
+}
