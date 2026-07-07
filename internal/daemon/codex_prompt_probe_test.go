@@ -133,6 +133,43 @@ func TestProbeCodexScreenPrompts_RequestUserInputReplacesBoltWithQuestion(t *tes
 	}
 }
 
+func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestion(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeForegroundWindows(
+			42,
+			palette.BuildTitle("W:api", "bolt", false),
+			[]string{"/opt/homebrew/bin/codex", "--yolo"},
+		),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): codexRequestUserInputScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	calls := fake.titleCalls()
+	if len(calls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(calls))
+	}
+	if want := palette.BuildTitle("W:api", "question", false); calls[0].title != want {
+		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
+	}
+	if got := h.guard.Current(42); got != "elicitation" {
+		t.Fatalf("guard.Current = %q, want elicitation", got)
+	}
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(resp.Events) != 1 {
+		t.Fatalf("events = %d, want 1", len(resp.Events))
+	}
+	ev := resp.Events[0]
+	if ev.PromptKind != string(CodexPromptRequestUserInput) || ev.ResultIconState != "question" {
+		t.Fatalf("event = %+v, want request_user_input/question", ev)
+	}
+}
+
 func TestProbeCodexScreenPrompts_PreservesLoopMarkerAndHarnessEmoji(t *testing.T) {
 	h := newTestHandler()
 	tabTitle := palette.BuildTitleParts(palette.TitleParts{
@@ -304,6 +341,31 @@ func TestProbeCodexScreenPrompts_IgnoresNonCodexManagedWindows(t *testing.T) {
 	}
 }
 
+func TestProbeCodexScreenPrompts_IgnoresUnmanagedNonCodexForeground(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeForegroundWindows(
+			42,
+			palette.BuildTitle("W:api", "bolt", false),
+			[]string{"/bin/zsh"},
+		),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): codexRequestUserInputScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("SetTabTitle calls = %d, want 0", got)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(resp.Events) != 0 {
+		t.Fatalf("events = %d, want 0", len(resp.Events))
+	}
+}
+
 func TestProbeCodexScreenPrompts_MissedPromptKeepsQuestionState(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{
@@ -328,6 +390,28 @@ func TestProbeCodexScreenPrompts_MissedPromptKeepsQuestionState(t *testing.T) {
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
+	}
+}
+
+func codexProbeForegroundWindows(windowID int, tabTitle string, foregroundCmdline []string) []kitty.OSWindow {
+	return []kitty.OSWindow{
+		{
+			ID: 1,
+			Tabs: []kitty.Tab{
+				{
+					ID:    100,
+					Title: tabTitle,
+					Windows: []kitty.Window{
+						{
+							ID: windowID,
+							ForegroundProcesses: []kitty.ForegroundProcess{
+								{Cmdline: foregroundCmdline},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

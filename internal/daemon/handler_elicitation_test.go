@@ -31,9 +31,61 @@ func TestHandler_ElicitationResultClearsGuard(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "ElicitationResult"})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("active after elicitation: want icon_state=bolt, got %+v", resp)
+	}
+}
+
+func TestHandler_PendingElicitationSuppressesOrdinaryActive(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
+
+	resp := h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "active",
+		Event:            "PreToolUse",
+		ToolName:         "Bash",
+		CurrentIconState: "question",
+	})
+	if !resp.OK || resp.Allowed {
+		t.Fatalf("ordinary active while question pending: want allowed=false, got %+v", resp)
+	}
+	if got := h.guard.Current(1); got != "elicitation" {
+		t.Fatalf("guard.Current = %q, want elicitation", got)
+	}
+
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
+	if len(detail.Events) != 2 {
+		t.Fatalf("events = %d, want 2 (%+v)", len(detail.Events), detail.Events)
+	}
+	ev := detail.Events[1]
+	if !ev.Suppressed || ev.SuppressionReason != suppressionReasonElicitationPending {
+		t.Fatalf("second event = %+v, want suppressed %q", ev, suppressionReasonElicitationPending)
+	}
+	if ev.ResultIconState != IconStatePreserve || ev.CurrentIconState != "question" {
+		t.Fatalf("second event icons = current %q result %q, want question -> preserve", ev.CurrentIconState, ev.ResultIconState)
+	}
+}
+
+func TestHandler_RequestUserInputCompletionClearsElicitation(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
+
+	resp := h.Handle(Request{
+		Type:             TypeStateUpdate,
+		WindowID:         1,
+		Action:           "active",
+		Event:            "PostToolUse",
+		ToolName:         "request_user_input",
+		CurrentIconState: "question",
+	})
+	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+		t.Fatalf("request_user_input completion should restore active icon, got %+v", resp)
+	}
+	if got := h.guard.Current(1); got != "active" {
+		t.Fatalf("guard.Current = %q, want active", got)
 	}
 }
 

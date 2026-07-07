@@ -2,6 +2,8 @@ package daemon
 
 import (
 	"log/slog"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -36,7 +38,7 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 		for _, tab := range ow.Tabs {
 			parts := palette.ParseTitleParts(tab.Title)
 			for _, win := range tab.Windows {
-				if win.UserVars.EffectiveHarness() != harness.Codex {
+				if !codexPromptProbeShouldScan(win) {
 					continue
 				}
 				if parts.State == "stop" {
@@ -50,6 +52,36 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 			}
 		}
 	}
+}
+
+func codexPromptProbeShouldScan(win kitty.Window) bool {
+	switch win.UserVars.EffectiveHarness() {
+	case harness.Codex:
+		return true
+	case "":
+		return codexPromptProbeHasCodexForeground(win)
+	default:
+		return false
+	}
+}
+
+func codexPromptProbeHasCodexForeground(win kitty.Window) bool {
+	if codexPromptProbeCmdlineIsCodex(win.Cmdline) {
+		return true
+	}
+	for _, proc := range win.ForegroundProcesses {
+		if codexPromptProbeCmdlineIsCodex(proc.Cmdline) {
+			return true
+		}
+	}
+	return false
+}
+
+func codexPromptProbeCmdlineIsCodex(cmdline []string) bool {
+	if len(cmdline) == 0 {
+		return false
+	}
+	return strings.EqualFold(filepath.Base(cmdline[0]), "codex")
 }
 
 func codexPromptProbeCanOverwrite(iconState string) bool {

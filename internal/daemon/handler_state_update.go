@@ -79,6 +79,17 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.stateMu.Unlock()
 		return Response{OK: true, Allowed: false}
 	}
+	if shouldSuppressPendingElicitationActive(req, prevAction) {
+		slog.Debug("pending elicitation active suppression",
+			"window_id", req.WindowID,
+			"event", req.Event,
+			"tool_name", req.ToolName,
+		)
+		h.stateMu.Lock()
+		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonElicitationPending))
+		h.stateMu.Unlock()
+		return Response{OK: true, Allowed: false}
+	}
 
 	// Only terminal/idle transitions invalidate a pending permission notification.
 	// PostToolUse/active/subagent events are normal companions to a real

@@ -100,6 +100,48 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 	}
 }
 
+func TestResolveAction_RequestUserInputToolPrompt(t *testing.T) {
+	cases := []struct {
+		name    string
+		event   string
+		payload HookPayload
+		want    string
+	}{
+		{
+			name:    "Codex request_user_input start shows question icon",
+			event:   "PreToolUse",
+			payload: HookPayload{ToolName: "request_user_input"},
+			want:    "elicitation",
+		},
+		{
+			name:    "camel case tool name is normalized",
+			event:   "preToolUse",
+			payload: HookPayload{ToolNameCamel: " request_user_input "},
+			want:    "elicitation",
+		},
+		{
+			name:    "request_user_input completion resumes active icon",
+			event:   "PostToolUse",
+			payload: HookPayload{ToolName: "request_user_input"},
+			want:    "active",
+		},
+		{
+			name:    "ordinary tools remain active",
+			event:   "PreToolUse",
+			payload: HookPayload{ToolName: "Bash"},
+			want:    "active",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveAction(tc.event, tc.payload)
+			if !ok || got != tc.want {
+				t.Fatalf("ResolveAction(%q, %+v) = (%q, %v), want (%q, true)", tc.event, tc.payload, got, ok, tc.want)
+			}
+		})
+	}
+}
+
 func TestResolveAction_ContextLimitNotificationShowsStopFailure(t *testing.T) {
 	payload := HookPayload{
 		Title:   "Context limit reached",

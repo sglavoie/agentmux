@@ -122,6 +122,9 @@ func ResolveAction(input string, payload HookPayload) (action string, ok bool) {
 	if action, ok := resolveNotificationAction(input, payload); ok {
 		return action, true
 	}
+	if action, ok := resolveToolAction(input, payload); ok {
+		return action, true
+	}
 	if a, found := eventToAction[input]; found {
 		return a, true
 	}
@@ -205,6 +208,20 @@ func resolveNotificationAction(input string, payload HookPayload) (string, bool)
 		return "elicitation", true
 	case "agent_idle":
 		return "stop", true
+	default:
+		return "", false
+	}
+}
+
+func resolveToolAction(input string, payload HookPayload) (string, bool) {
+	if normalizeLifecycleValue(payload.EffectiveToolName()) != "request_user_input" {
+		return "", false
+	}
+	switch input {
+	case "PreToolUse", "preToolUse":
+		return "elicitation", true
+	case "PostToolUse", "postToolUse":
+		return "active", true
 	default:
 		return "", false
 	}

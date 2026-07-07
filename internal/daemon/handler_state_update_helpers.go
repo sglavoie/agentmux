@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"strings"
 	"time"
 )
 
@@ -10,6 +11,7 @@ const (
 	suppressionReasonCopilotMidSubagent   = "copilot_mid_subagent"
 	suppressionReasonCopilotPendingPrompt = "copilot_pending_prompt"
 	suppressionReasonActiveAfterTerminal  = "active_after_terminal"
+	suppressionReasonElicitationPending   = "elicitation_pending"
 )
 
 func actionFromIconState(iconState string) string {
@@ -68,4 +70,25 @@ func suppressedSessionEvent(req Request, action, suppressionReason string) Sessi
 	ev.Suppressed = true
 	ev.SuppressionReason = suppressionReason
 	return ev
+}
+
+func shouldSuppressPendingElicitationActive(req Request, prevAction string) bool {
+	if req.PreservesIcon || isCopilotRequest(req) || prevAction != "elicitation" || req.Action != "active" {
+		return false
+	}
+	return !isElicitationResolutionEvent(req)
+}
+
+func isElicitationResolutionEvent(req Request) bool {
+	if req.IsPrompt {
+		return true
+	}
+	switch req.Event {
+	case "ElicitationResult":
+		return true
+	case "PostToolUse", "postToolUse":
+		return strings.EqualFold(strings.TrimSpace(req.ToolName), "request_user_input")
+	default:
+		return false
+	}
 }
