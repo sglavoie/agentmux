@@ -29,6 +29,62 @@ func TestResolveProject(t *testing.T) {
 	}
 }
 
+func TestResolveProjectMatchesSubdirectories(t *testing.T) {
+	projects := []config.Session{
+		{Title: "API", Directory: "/abs/projects/api"},
+		{Title: "Web", Directory: "/abs/projects/web"},
+	}
+	// A session run in a subdirectory groups under the parent project.
+	if got := ResolveProject("/abs/projects/api/java-tts", projects); got != "API" {
+		t.Errorf("subdir match = %q, want API", got)
+	}
+	// Deeper nesting still resolves to the ancestor project.
+	if got := ResolveProject("/abs/projects/api/a/b/c", projects); got != "API" {
+		t.Errorf("deep subdir match = %q, want API", got)
+	}
+	// Path-boundary: a sibling with the project title as a name prefix must
+	// NOT match ("/abs/projects/api" must not match "/abs/projects/api-v2").
+	if got := ResolveProject("/abs/projects/api-v2", projects); got != "api-v2" {
+		t.Errorf("boundary non-match = %q, want api-v2 (basename)", got)
+	}
+}
+
+func TestResolveProjectLongestPrefixWins(t *testing.T) {
+	// The more specific (longer) ancestor directory wins when one project
+	// directory is nested inside another.
+	projects := []config.Session{
+		{Title: "Outer", Directory: "/abs/projects/mono"},
+		{Title: "Inner", Directory: "/abs/projects/mono/service"},
+	}
+	if got := ResolveProject("/abs/projects/mono/service/pkg", projects); got != "Inner" {
+		t.Errorf("longest-prefix match = %q, want Inner", got)
+	}
+	if got := ResolveProject("/abs/projects/mono/other", projects); got != "Outer" {
+		t.Errorf("outer subdir match = %q, want Outer", got)
+	}
+	// Exact match on the outer directory still prefers the exact project.
+	if got := ResolveProject("/abs/projects/mono", projects); got != "Outer" {
+		t.Errorf("exact outer match = %q, want Outer", got)
+	}
+}
+
+func TestResolveProjectMatchesSymlinkedSubdirectory(t *testing.T) {
+	root := t.TempDir()
+	realDir := filepath.Join(root, "real")
+	if err := os.MkdirAll(filepath.Join(realDir, "sub"), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	linkDir := filepath.Join(root, "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	projects := []config.Session{{Title: "API", Directory: linkDir}}
+	if got := ResolveProject(filepath.Join(realDir, "sub"), projects); got != "API" {
+		t.Errorf("symlinked subdir match = %q, want API", got)
+	}
+}
+
 func TestResolveProjectMatchesSymlinkEquivalentPaths(t *testing.T) {
 	root := t.TempDir()
 	realDir := filepath.Join(root, "real")
