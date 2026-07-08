@@ -134,6 +134,12 @@ func (h *Handler) probeCodexWindow(
 	}
 	h.recordCodexPromptProbeState(now, windowID, titleParts.Base, titleParts.State, userVars, classification, iconState)
 	if iconState != titleParts.State {
+		// Notify only on the state transition so a still-visible prompt does not
+		// re-dispatch every probe tick; the notifier's per-(window, action)
+		// cooldown and permission debounce dedupe against any hook-path
+		// notification for the same prompt. pipeMode is deliberately false: the
+		// probe only scans interactive Codex windows.
+		h.maybeNotify(windowID, titleParts.Base, userVars.EffectiveProfile(), classification.Action, false)
 		newParts := titleParts
 		newParts.State = iconState
 		newTitle := palette.BuildTitleParts(newParts)
@@ -269,6 +275,8 @@ func (h *Handler) recordCodexPromptProbeState(
 
 	h.activity[windowID] = now
 	h.lastSessionTitle[windowID] = baseTitle
+	// The probe only scans interactive Codex windows — same reason
+	// probeCodexWindow's maybeNotify passes pipeMode=false.
 	h.lastPipeMode[windowID] = false
 	profile := userVars.EffectiveProfile()
 	if profile != "" {

@@ -81,6 +81,9 @@ func (h *Handler) probeClaudeContextLimitWindow(
 		h.stateMu.Unlock()
 		return
 	}
+	// Capture pipeMode before recordClaudeContextLimitProbeState resets it to
+	// false so the notify block below sees the value hooks last reported.
+	pipeMode := h.lastPipeMode[windowID]
 	h.stateMu.Unlock()
 
 	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(windowID), "screen")
@@ -115,10 +118,9 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	if h.notifier != nil {
 		// The screen-based probe only fires on interactive Claude sessions —
 		// pipe-mode windows cannot show the context-limit banner. We still pass
-		// the resolved pipeMode through MaybeNotify so the notifier's own
+		// the pre-recorded pipeMode through MaybeNotify so the notifier's own
 		// suppression remains the single source of truth.
 		h.stateMu.Lock()
-		pipeMode := h.lastPipeMode[windowID]
 		account := h.lastAccount[windowID]
 		h.stateMu.Unlock()
 		h.notifier.MaybeNotify(windowID, titleParts.Base, account, claudeContextLimitProbeAction, pipeMode)

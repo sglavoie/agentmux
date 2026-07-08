@@ -2,8 +2,10 @@ package daemon
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -168,6 +170,93 @@ func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestio
 	if ev.PromptKind != string(CodexPromptRequestUserInput) || ev.ResultIconState != "question" {
 		t.Fatalf("event = %+v, want request_user_input/question", ev)
 	}
+}
+
+// TestProbeCodexScreenPrompts_DetectedPromptNotifiesOnceOnTransition pins the
+// probe notification path: a screen-probe-detected prompt (the probe exists
+// precisely because Codex hooks miss these) must fire exactly one macOS
+// notification on the state transition, and a second tick with the prompt
+// still visible must not re-dispatch.
+func TestProbeCodexScreenPrompts_DetectedPromptNotifiesOnceOnTransition(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Permission: true})
+		h := NewHandler(guard, notifier)
+		fake := &fakeKittyClient{
+			windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+				Profile: "work",
+				Harness: "codex",
+			}),
+			getText: map[string]string{
+				kitty.MatchWindowByID(42): codexRequestUserInputScreen,
+			},
+		}
+		h.SetKittyClient(fake)
+		h.guard.TryUpdate(42, "active", false)
+
+		now := time.Now()
+		h.ProbeCodexScreenPrompts(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("first probe dispatches = %d; want 1", got)
+		}
+		call := rec.snapshot()[0]
+		if call.windowID != 42 || call.account != "work" || call.title != "W:api" {
+			t.Fatalf("dispatch = %+v, want window 42 / work / W:api", call)
+		}
+		if call.subtitle != "User input requested" {
+			t.Fatalf("dispatch subtitle = %q, want %q", call.subtitle, "User input requested")
+		}
+
+		// Second tick: same prompt still on screen, tab title now shows ❓ —
+		// no transition, so no additional dispatch.
+		fake.mu.Lock()
+		fake.windows[0].Tabs[0].Title = palette.BuildTitle("W:api", "question", false)
+		fake.mu.Unlock()
+		h.ProbeCodexScreenPrompts(now.Add(2 * time.Second))
+		synctest.Wait()
+
+		if got := rec.len(); got != 1 {
+			t.Fatalf("second probe total dispatches = %d; want 1 (no per-tick spam)", got)
+		}
+	})
+}
+
+// TestProbeCodexScreenPrompts_DetectedPromptMutedWindowNoDispatch verifies the
+// probe notification honors the mute gate: the icon still swaps, but the
+// notifier's isMuted closure (wired to Handler.IsMuted, as in daemon.Run)
+// suppresses the dispatch.
+func TestProbeCodexScreenPrompts_DetectedPromptMutedWindowNoDispatch(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Permission: true})
+		h := NewHandler(guard, notifier)
+		notifier.SetIsMuted(h.IsMuted)
+		fake := &fakeKittyClient{
+			windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+				Profile: "work",
+				Harness: "codex",
+			}),
+			getText: map[string]string{
+				kitty.MatchWindowByID(42): codexRequestUserInputScreen,
+			},
+		}
+		h.SetKittyClient(fake)
+		h.stateMu.Lock()
+		h.mutedWindows[42] = true
+		h.stateMu.Unlock()
+
+		h.ProbeCodexScreenPrompts(time.Now())
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("muted window dispatches = %d; want 0", got)
+		}
+		if got := len(fake.titleCalls()); got != 1 {
+			t.Fatalf("SetTabTitle calls = %d, want 1 (icon swap must still happen)", got)
+		}
+	})
 }
 
 func TestProbeCodexScreenPrompts_PreservesLoopMarkerAndHarnessEmoji(t *testing.T) {

@@ -68,7 +68,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	h.stateMu.Unlock()
 	syntheticStop := shouldSynthesizeCopilotCompactStop(req, prevAction)
 	if shouldSuppressCopilotPendingPrompt(req, prevAction) {
-		h.guard.TryUpdate(req.WindowID, "permission", false)
+		// Re-arm the actual prior state — prevAction is "permission" or
+		// "elicitation" here. Re-arming "permission" unconditionally would
+		// upgrade a pending ❓ guard (priority 2) to 🔑 (priority 3), blocking a
+		// re-fired elicitation within the guard window.
+		h.guard.TryUpdate(req.WindowID, prevAction, false)
 		slog.Debug("copilot pending prompt suppression",
 			"window_id", req.WindowID,
 			"event", req.Event,

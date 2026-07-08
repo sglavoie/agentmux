@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -233,6 +234,36 @@ func TestProbeClaudeContextLimit_DedupesWithinEpisode(t *testing.T) {
 	if len(resp.Events) != 1 {
 		t.Fatalf("events = %d, want 1 (dedup should skip the second event)", len(resp.Events))
 	}
+}
+
+// TestProbeClaudeContextLimit_PreRecordedPipeModeReachesNotifier pins the Bug 5
+// fix: the probe must capture lastPipeMode BEFORE recordClaudeContextLimitProbeState
+// resets it to false, so MaybeNotify sees the value hooks last reported. A
+// pre-recorded pipe-mode window therefore gets the ❗ icon swap but no dispatch.
+func TestProbeClaudeContextLimit_PreRecordedPipeModeReachesNotifier(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newClaudeContextLimitProbeTestHandler()
+		fake.windows = codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{
+			Profile: "work",
+			Harness: "claude",
+		})
+		fake.getText = map[string]string{
+			kitty.MatchWindowByID(42): claudeContextLimitScreen,
+		}
+		h.stateMu.Lock()
+		h.lastPipeMode[42] = true
+		h.stateMu.Unlock()
+
+		h.ProbeClaudeContextLimit(time.Now())
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("pipe-mode window dispatches = %d; want 0 (pre-recorded pipeMode must reach MaybeNotify)", got)
+		}
+		if got := len(fake.titleCalls()); got != 1 {
+			t.Fatalf("SetTabTitle calls = %d, want 1 (icon swap is independent of notification)", got)
+		}
+	})
 }
 
 func TestProbeClaudeContextLimit_NoMarker_NoOp(t *testing.T) {

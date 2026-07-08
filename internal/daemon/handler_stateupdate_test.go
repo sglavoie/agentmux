@@ -252,3 +252,64 @@ func TestHandler_StateUpdateRefreshesMutedWindowsCache(t *testing.T) {
 		t.Fatal("mutedWindows cache should be cleared after Muted=false update")
 	}
 }
+
+// TestHandler_AutoCompactResumeKeepsBolt covers the PostCompact matcher split
+// for automatic mid-turn compaction: PostCompactAuto resolves to "active", so
+// the bolt must return after the compact icon (same-priority replacement), no
+// "Session stopped" notification may fire while Claude is still working, and
+// the active-after-terminal barrier must not arm against later tool events.
+func TestHandler_AutoCompactResumeKeepsBolt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
+		h := NewHandler(guard, notifier)
+
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "compact", Event: "PreCompact"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "compact" {
+			t.Fatalf("PreCompact: want compact icon, got %+v", resp)
+		}
+
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostCompactAuto"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+			t.Fatalf("PostCompactAuto: want bolt restored, got %+v", resp)
+		}
+
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
+			t.Fatalf("PostToolUse after auto compact: want bolt without active-after-terminal suppression, got %+v", resp)
+		}
+
+		synctest.Wait()
+		if got := rec.len(); got != 0 {
+			t.Fatalf("auto compact fired %d notifications, want 0: %+v", got, rec.snapshot())
+		}
+	})
+}
+
+// TestHandler_ManualCompactStopPersists covers the manual half of the
+// PostCompact matcher split: PostCompactManual resolves to "stop", so the ⏹
+// icon must land, notify, and persist — the active-after-terminal barrier
+// suppresses follow-up non-prompt active events until the next user prompt.
+func TestHandler_ManualCompactStopPersists(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
+		h := NewHandler(guard, notifier)
+
+		h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "compact", Event: "PreCompact"})
+		resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "PostCompactManual"})
+		if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
+			t.Fatalf("PostCompactManual: want stop icon, got %+v", resp)
+		}
+
+		resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse"})
+		if !resp.OK || resp.Allowed {
+			t.Fatalf("PostToolUse after manual compact: want active-after-terminal suppression, got %+v", resp)
+		}
+
+		synctest.Wait()
+		if got := rec.len(); got != 1 {
+			t.Fatalf("manual compact fired %d notifications, want 1 stop notification: %+v", got, rec.snapshot())
+		}
+	})
+}

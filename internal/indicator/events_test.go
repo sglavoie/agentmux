@@ -27,6 +27,8 @@ func TestResolveAction_AllEvents(t *testing.T) {
 		{"SubagentStart", "subagent"},
 		{"PreCompact", "compact"},
 		{"PostCompact", "stop"},
+		{"PostCompactManual", "stop"},
+		{"PostCompactAuto", "active"},
 		{"PostToolUse", "active"},
 		{"PostToolBatch", "active"},
 		{"SubagentStop", "active"},

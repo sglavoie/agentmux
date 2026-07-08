@@ -34,8 +34,17 @@ var eventToAction = map[string]string{
 	"TaskCreated":         "active",
 	"TaskCompleted":       "active",
 	"TeammateIdle":        "active",
-	"PostCompact":         "stop",
 	"ElicitationResult":   "active",
+
+	// PostCompact fires for both manual /compact and automatic mid-turn
+	// compaction. The Claude hook config splits them via matcher groups that
+	// dispatch these pseudo-events: manual is a turn end, auto happens while
+	// Claude is still working. Bare PostCompact keeps its historical "stop"
+	// mapping for Codex (whose hooks.json has no matcher support) and for
+	// Claude accounts that have not re-run `amx config hooks-sync`.
+	"PostCompact":       "stop",
+	"PostCompactManual": "stop",
+	"PostCompactAuto":   "active",
 
 	// Subagent: subagent is running.
 	"subagentStart": "subagent",

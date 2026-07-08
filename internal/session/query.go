@@ -3,6 +3,7 @@ package session
 import (
 	"log/slog"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -488,7 +489,20 @@ func titleFallbackBases(cfg *config.Config, base string) []string {
 	if cfg == nil {
 		return bases
 	}
+	// Longest emoji first (ties broken lexicographically) so overlapping
+	// prefixes yield the same candidate order on every run — map iteration
+	// order must not decide which configured session a ghost tab resolves to.
+	emojis := make([]string, 0, len(cfg.HarnessEmojis))
 	for _, emoji := range cfg.HarnessEmojis {
+		emojis = append(emojis, emoji)
+	}
+	sort.Slice(emojis, func(i, j int) bool {
+		if len(emojis[i]) != len(emojis[j]) {
+			return len(emojis[i]) > len(emojis[j])
+		}
+		return emojis[i] < emojis[j]
+	})
+	for _, emoji := range emojis {
 		if emoji == "" || !strings.HasPrefix(base, emoji) {
 			continue
 		}

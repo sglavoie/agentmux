@@ -174,6 +174,62 @@ func TestValidate_HarnessEmojisMissingEntryCitesProfiles(t *testing.T) {
 	}
 }
 
+// TestValidate_HarnessEmojisParserCollisionRejected pins that any glyph the
+// title parser would consume as a leading marker is rejected — U+FE0F
+// variation-selector variants of state icons and the star/mute/loop markers
+// included — and that the error names the marker that consumed it. The
+// validator round-trips the value through palette.ParseTitleParts, so it
+// cannot drift from the parser's fallback rules.
+func TestValidate_HarnessEmojisParserCollisionRejected(t *testing.T) {
+	cases := []struct {
+		name   string
+		emoji  string
+		marker string
+	}{
+		{"plain warning fallback", "⚠", "warning"},
+		{"bolt with variation selector", "⚡️", "bolt"},
+		{"star marker", "★", "star marker"},
+		{"mute marker", "🔇", "mute marker"},
+		{"loop marker", "🔁", "loop marker"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{
+				HarnessEmojis: map[string]string{"claude": tc.emoji},
+				Profiles: []config.Account{
+					{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+				},
+			}
+			err := config.Validate(cfg)
+			if err == nil {
+				t.Fatalf("expected validation error for parser-collision emoji %q, got nil", tc.emoji)
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, "[harness_emojis].claude") {
+				t.Errorf("expected per-harness location in error, got %q", msg)
+			}
+			if !strings.Contains(msg, tc.marker) {
+				t.Errorf("expected error to name the %q marker, got %q", tc.marker, msg)
+			}
+		})
+	}
+}
+
+// TestValidate_HarnessEmojisBenignEmojiAccepted pins that a glyph the title
+// parser does not consume (🦀) still validates cleanly under the round-trip
+// probe — the collision check must not over-reject ordinary emojis.
+func TestValidate_HarnessEmojisBenignEmojiAccepted(t *testing.T) {
+	cfg := &config.Config{
+		HarnessEmojis: map[string]string{"claude": "🦀"},
+		Profiles: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"},
+		},
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatalf("benign emoji must validate cleanly: %v", err)
+	}
+}
+
 // TestValidate_HarnessEmojisStateIconCollisionRejected pins that a glyph
 // listed in the palette state-icon table is rejected. Otherwise the tab
 // title parser would consume the harness emoji as if it were a state, and

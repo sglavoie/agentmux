@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // validateHarnessEmojis checks the [harness_emojis] table: every used
@@ -42,10 +43,10 @@ func validateHarnessEmojis(cfg *Config) []string {
 			))
 			continue
 		}
-		if state, ok := stateIcons[v]; ok {
+		if marker, ok := titleMarkerCollision(v); ok {
 			errs = append(errs, fmt.Sprintf(
-				"[harness_emojis].%s: %q collides with the %q state icon — tab titles parse the first emoji as state\n  → pick a glyph not in {%s}",
-				k, v, state, stateIconList(stateIcons),
+				"[harness_emojis].%s: %q collides with the %s — tab titles parse leading marker glyphs before the project name\n  → pick a glyph not in {%s} and not one of the %s/%s/%s star/mute/loop markers",
+				k, v, marker, stateIconList(stateIcons), palette.StarIcon(), palette.MuteIcon(), palette.LoopIcon(),
 			))
 		}
 	}
@@ -73,6 +74,31 @@ func validateHarnessEmojis(cfg *Config) []string {
 		))
 	}
 	return errs
+}
+
+// titleMarkerCollision probes v through the real title parser: if
+// ParseTitleParts would consume v as a leading marker — a state icon,
+// one of its U+FE0F-stripped fallbacks, or the star/mute/loop markers —
+// it returns a human-readable name for whichever marker consumed it.
+// Round-tripping through the parser keeps validation in lockstep with the
+// fallback rules in palette instead of duplicating them here.
+func titleMarkerCollision(v string) (marker string, collides bool) {
+	probe := v + "x"
+	parts := palette.ParseTitleParts(probe)
+	if parts.Base == probe {
+		return "", false
+	}
+	switch {
+	case parts.State != "":
+		return fmt.Sprintf("%q state icon", parts.State), true
+	case parts.Starred:
+		return fmt.Sprintf("star marker (%s)", palette.StarIcon()), true
+	case parts.Muted:
+		return fmt.Sprintf("mute marker (%s)", palette.MuteIcon()), true
+	case parts.Looping:
+		return fmt.Sprintf("loop marker (%s)", palette.LoopIcon()), true
+	}
+	return "title parser prefix", true
 }
 
 // validateHarnessColors checks the optional [harness_colors] table. When the

@@ -93,12 +93,41 @@ func TestMergeInstallsNewEvents(t *testing.T) {
 		"TeammateIdle",
 		"ConfigChange",
 		"PreCompact",
-		"PostCompact",
 		"PermissionDenied",
 		"Elicitation",
 		"ElicitationResult",
 	} {
 		checkHookCommand(t, hooks, event, testBin+" hook-indicator "+event)
+	}
+
+	// PostCompact is installed as two matcher groups (manual/auto) dispatching
+	// distinct pseudo-events instead of a single matcherless group.
+	groups, ok := hooks["PostCompact"].([]any)
+	if !ok || len(groups) != 2 {
+		t.Fatalf("PostCompact: want 2 matcher groups, got %v", hooks["PostCompact"])
+	}
+	wantByMatcher := map[string]string{
+		"manual": testBin + " hook-indicator PostCompactManual",
+		"auto":   testBin + " hook-indicator PostCompactAuto",
+	}
+	for _, g := range groups {
+		group := g.(map[string]any)
+		matcher, _ := group["matcher"].(string)
+		wantCmd, ok := wantByMatcher[matcher]
+		if !ok {
+			t.Fatalf("PostCompact: unexpected matcher %q", matcher)
+		}
+		delete(wantByMatcher, matcher)
+		entries := group["hooks"].([]any)
+		if len(entries) != 1 {
+			t.Fatalf("PostCompact matcher %q: want 1 hook entry, got %v", matcher, entries)
+		}
+		if cmd, _ := entries[0].(map[string]any)["command"].(string); cmd != wantCmd {
+			t.Errorf("PostCompact matcher %q: got command %q, want %q", matcher, cmd, wantCmd)
+		}
+	}
+	if len(wantByMatcher) > 0 {
+		t.Errorf("PostCompact missing matcher groups: %v", wantByMatcher)
 	}
 }
 

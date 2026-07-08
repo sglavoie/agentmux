@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -404,8 +405,18 @@ func wrapText(s string, width int) []string {
 	for _, word := range strings.Fields(s) {
 		for len(word) > width {
 			flush()
-			lines = append(lines, word[:width])
-			word = word[width:]
+			// Back the cut off to a rune boundary so a multi-byte word is
+			// never sliced mid-rune; a single rune wider than the byte
+			// budget is emitted whole rather than garbled.
+			cut := width
+			for cut > 0 && !utf8.RuneStart(word[cut]) {
+				cut--
+			}
+			if cut == 0 {
+				_, cut = utf8.DecodeRuneInString(word)
+			}
+			lines = append(lines, word[:cut])
+			word = word[cut:]
 		}
 		if cur.Len() == 0 {
 			cur.WriteString(word)

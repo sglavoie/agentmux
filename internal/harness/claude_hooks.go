@@ -159,6 +159,29 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 		if disabled[event] {
 			continue
 		}
+		// Claude Code fires PostCompact for both manual /compact and automatic
+		// mid-turn compaction; the payload carries no trigger field, so only
+		// hook-config matchers can tell them apart. Install two matcher groups
+		// dispatching distinct pseudo-events: manual compaction is a turn end
+		// (stop), auto compaction happens mid-turn while Claude keeps working
+		// (active). The map key stays "PostCompact" so disabled_events and
+		// ParseInstalledEvents keep operating on the real event name — and
+		// disabling PostCompact drops both groups.
+		if event == "PostCompact" {
+			hooks[event] = []hookGroup{
+				{Matcher: "manual", Hooks: []hookEntry{{
+					Type:    "command",
+					Command: amxCommand + " hook-indicator PostCompactManual",
+					Async:   boolPtr(true),
+				}}},
+				{Matcher: "auto", Hooks: []hookEntry{{
+					Type:    "command",
+					Command: amxCommand + " hook-indicator PostCompactAuto",
+					Async:   boolPtr(true),
+				}}},
+			}
+			continue
+		}
 		hooks[event] = []hookGroup{
 			{Hooks: []hookEntry{{
 				Type:    "command",
