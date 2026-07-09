@@ -378,6 +378,33 @@ func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testin
 	}
 }
 
+func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T) {
+	m := sessionSearchFilterModel(t)
+	m.mode = ModeList
+	m.filtered = []session.RunningSession{{
+		TabID:     1,
+		WindowID:  10,
+		Base:      "vta_ss_oidc_op_worker-security-audit",
+		Project:   "sis",
+		Profile:   "vta-claude",
+		Directory: "/Users/sglavoie/1_dev_projects/vta_ss_oidc_op_worker-security-audit",
+	}}
+	m.cursor = 0
+
+	updated, cmd := m.Update(keyPress("s"))
+	got := updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("project session search returned nil cmd; want debounced search")
+	}
+	if singleChipValue(got.filterProject) != "sis" {
+		t.Fatalf("filterProject = %#v, want sis", got.filterProject)
+	}
+	if out := stripAnsi(renderSessionSearch(got)); !strings.Contains(out, "project: sis") {
+		t.Fatalf("project chip was not visible after worktree project search entry:\n%s", out)
+	}
+}
+
 func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	m := loadSessions(testModel(), []session.RunningSession{{TabID: 1, WindowID: 10, Base: "Foo"}})
 	m.sessionCacheLoadInFlight = true

@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/projectresolve"
 )
 
 // RunningSession is a currently open managed harness tab in Kitty.
@@ -102,6 +103,19 @@ type titleFallbackMatch struct {
 	sess config.Session
 }
 
+type projectMatchContext struct {
+	cfg      *config.Config
+	resolver projectresolve.Resolver
+}
+
+func newProjectMatchContext(cfg *config.Config) projectMatchContext {
+	ctx := projectMatchContext{cfg: cfg}
+	if cfg != nil {
+		ctx.resolver = projectresolve.NewWithGit(configuredProjects(cfg))
+	}
+	return ctx
+}
+
 // List returns all managed running sessions from Kitty.
 // A tab is "managed" if any of its windows has cc_account set (non-empty).
 func List(client kitty.KittyClient) ([]RunningSession, error) {
@@ -162,7 +176,7 @@ func FindByWindowID(sessions []RunningSession, windowID int) (RunningSession, bo
 	return RunningSession{}, false
 }
 
-func tabToRunningSession(tab kitty.Tab, cfg *config.Config) (rs RunningSession, ghost *GhostTab, ok bool) {
+func tabToRunningSession(tab kitty.Tab, ctx projectMatchContext) (rs RunningSession, ghost *GhostTab, ok bool) {
 	var fallback *kitty.Window
 	for i := range tab.Windows {
 		win := &tab.Windows[i]
@@ -170,8 +184,8 @@ func tabToRunningSession(tab kitty.Tab, cfg *config.Config) (rs RunningSession, 
 			continue
 		}
 		if win.IsActive {
-			if cfg != nil {
-				if rs, ghost, ok := managedWindowOverride(tab, *win, cfg); ok {
+			if ctx.cfg != nil {
+				if rs, ghost, ok := managedWindowOverride(tab, *win, ctx); ok {
 					return rs, ghost, true
 				}
 			}
@@ -182,18 +196,18 @@ func tabToRunningSession(tab kitty.Tab, cfg *config.Config) (rs RunningSession, 
 		}
 	}
 	if fallback != nil {
-		if cfg != nil {
-			if rs, ghost, ok := managedWindowOverride(tab, *fallback, cfg); ok {
+		if ctx.cfg != nil {
+			if rs, ghost, ok := managedWindowOverride(tab, *fallback, ctx); ok {
 				return rs, ghost, true
 			}
 		}
 		return runningSessionFromWindow(tab, *fallback), nil, true
 	}
-	if cfg != nil {
-		if rs, ghost, ok := titleFallback(tab, cfg); ok {
+	if ctx.cfg != nil {
+		if rs, ghost, ok := titleFallback(tab, ctx.cfg); ok {
 			return rs, ghost, true
 		}
-		if rs, ghost, ok := cwdFallback(tab, cfg); ok {
+		if rs, ghost, ok := cwdFallback(tab, ctx); ok {
 			return rs, ghost, true
 		}
 	}
@@ -241,10 +255,10 @@ func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab
 // This happens when a user reuses a Kitty window for a new Codex/Claude session:
 // Kitty can keep the old user vars and even an old window CWD, while the
 // foreground harness process has moved to the new project.
-func managedWindowOverride(tab kitty.Tab, win kitty.Window, cfg *config.Config) (RunningSession, *GhostTab, bool) {
+func managedWindowOverride(tab kitty.Tab, win kitty.Window, ctx projectMatchContext) (RunningSession, *GhostTab, bool) {
 	cwd := windowHarnessCWD(win)
 	if cwd != "" {
-		matches := cwdFallbackMatches(cfg, cwd)
+		matches := cwdFallbackMatches(ctx, cwd)
 		if len(matches) != 1 {
 			return RunningSession{}, nil, false
 		}
@@ -254,12 +268,12 @@ func managedWindowOverride(tab kitty.Tab, win kitty.Window, cfg *config.Config) 
 		}
 
 		_, state, starred, muted := palette.ParseTitleFull(tab.Title)
-		return fallbackSessionFromMatch(tab, win.ID, match, match.sess.Title, state, starred, muted, cfg)
+		return fallbackSessionFromMatch(tab, win.ID, match, match.sess.Title, state, starred, muted, ctx.cfg)
 	}
 
-	if match, base, state, starred, muted, ok := matchTabTitleFallback(tab, cfg); ok {
+	if match, base, state, starred, muted, ok := matchTabTitleFallback(tab, ctx.cfg); ok {
 		if !windowMatchesConfigSession(win, match) {
-			return fallbackSessionFromMatch(tab, win.ID, match, base, state, starred, muted, cfg)
+			return fallbackSessionFromMatch(tab, win.ID, match, base, state, starred, muted, ctx.cfg)
 		}
 	}
 	return RunningSession{}, nil, false
@@ -277,7 +291,7 @@ func matchTabTitleFallback(tab kitty.Tab, cfg *config.Config) (titleFallbackMatc
 // cwdFallback recognizes a tab by the working directory of its active window
 // when no window carries amx user vars and the title no longer identifies the
 // configured project. The CWD must resolve to exactly one configured project.
-func cwdFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab, bool) {
+func cwdFallback(tab kitty.Tab, ctx projectMatchContext) (RunningSession, *GhostTab, bool) {
 	if len(tab.Windows) == 0 {
 		return RunningSession{}, nil, false
 	}
@@ -287,7 +301,7 @@ func cwdFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab, 
 		if strings.TrimSpace(cwd) == "" {
 			continue
 		}
-		matches := cwdFallbackMatches(cfg, cwd)
+		matches := cwdFallbackMatches(ctx, cwd)
 		if len(matches) != 1 {
 			slog.Debug("cwd fallback skipped",
 				"tab_id", tab.ID,
@@ -304,7 +318,7 @@ func cwdFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab, 
 
 		_, state, starred, muted := palette.ParseTitleFull(tab.Title)
 		m := matches[0]
-		return fallbackSessionFromMatch(tab, win.ID, m, m.sess.Title, state, starred, muted, cfg)
+		return fallbackSessionFromMatch(tab, win.ID, m, m.sess.Title, state, starred, muted, ctx.cfg)
 	}
 
 	return RunningSession{}, nil, false
@@ -435,21 +449,22 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 }
 
 func runningSessionsFromOSWindows(osWindows []kitty.OSWindow, cfg *config.Config) ([]RunningSession, []GhostTab) {
+	ctx := newProjectMatchContext(cfg)
 	var sessions []RunningSession
 	var ghosts []GhostTab
 	for _, osw := range osWindows {
-		s, g := runningSessionsFromTabs(osw.Tabs, cfg)
+		s, g := runningSessionsFromTabs(osw.Tabs, ctx)
 		sessions = append(sessions, s...)
 		ghosts = append(ghosts, g...)
 	}
 	return sessions, ghosts
 }
 
-func runningSessionsFromTabs(tabs []kitty.Tab, cfg *config.Config) ([]RunningSession, []GhostTab) {
+func runningSessionsFromTabs(tabs []kitty.Tab, ctx projectMatchContext) ([]RunningSession, []GhostTab) {
 	sessions := make([]RunningSession, 0, len(tabs))
 	var ghosts []GhostTab
 	for _, tab := range tabs {
-		rs, ghost, ok := tabToRunningSession(tab, cfg)
+		rs, ghost, ok := tabToRunningSession(tab, ctx)
 		if !ok {
 			continue
 		}
@@ -516,18 +531,26 @@ func titleFallbackBases(cfg *config.Config, base string) []string {
 	return bases
 }
 
-func cwdFallbackMatches(cfg *config.Config, cwd string) []titleFallbackMatch {
-	target, ok := canonicalFallbackDir(cwd)
-	if !ok {
+func cwdFallbackMatches(ctx projectMatchContext, cwd string) []titleFallbackMatch {
+	if ctx.cfg == nil {
 		return nil
 	}
-	return configuredSessionMatches(cfg, func(acc config.Account, sess config.Session) bool {
-		if !strings.EqualFold(sess.EffectiveProfile(), acc.Name) {
-			return false
+	projectMatches := ctx.resolver.Matches(cwd)
+	if len(projectMatches) == 0 {
+		return nil
+	}
+
+	accounts := configuredAccounts(ctx.cfg)
+	matches := make([]titleFallbackMatch, 0, len(projectMatches))
+	for _, projectMatch := range projectMatches {
+		sess := projectMatch.Project
+		for _, acc := range accounts {
+			if strings.EqualFold(sess.EffectiveProfile(), acc.Name) {
+				matches = append(matches, titleFallbackMatch{acc: acc, sess: sess})
+			}
 		}
-		dir, ok := canonicalFallbackDir(sess.Directory)
-		return ok && dir == target
-	})
+	}
+	return matches
 }
 
 func canonicalFallbackDir(path string) (string, bool) {
@@ -585,14 +608,34 @@ func cmdlineContainsHarness(cmdline []string) bool {
 
 func configuredSessionMatches(cfg *config.Config, matchFn func(config.Account, config.Session) bool) []titleFallbackMatch {
 	var matches []titleFallbackMatch
-	for _, acc := range cfg.Accounts {
-		for _, sess := range cfg.Sessions {
+	for _, acc := range configuredAccounts(cfg) {
+		for _, sess := range configuredProjects(cfg) {
 			if matchFn(acc, sess) {
 				matches = append(matches, titleFallbackMatch{acc: acc, sess: sess})
 			}
 		}
 	}
 	return matches
+}
+
+func configuredAccounts(cfg *config.Config) []config.Account {
+	if cfg == nil {
+		return nil
+	}
+	if len(cfg.Accounts) > 0 {
+		return cfg.Accounts
+	}
+	return cfg.Profiles
+}
+
+func configuredProjects(cfg *config.Config) []config.Session {
+	if cfg == nil {
+		return nil
+	}
+	if len(cfg.Sessions) > 0 {
+		return cfg.Sessions
+	}
+	return cfg.Projects
 }
 
 func targetOSWindow(osWindows []kitty.OSWindow) *kitty.OSWindow {

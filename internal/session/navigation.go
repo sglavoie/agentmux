@@ -44,7 +44,7 @@ func managedTabRelative(tabs []kitty.Tab, currentTabIdx, direction int) (kitty.T
 
 	for offset := 1; offset < n; offset++ {
 		idx := (currentTabIdx + (offset * step) + n) % n
-		if _, _, ok := tabToRunningSession(tabs[idx], nil); ok {
+		if _, _, ok := tabToRunningSession(tabs[idx], projectMatchContext{}); ok {
 			return tabs[idx], true
 		}
 	}

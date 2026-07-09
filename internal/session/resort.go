@@ -31,7 +31,7 @@ func Resort(client kitty.KittyClient, mode string) error {
 }
 
 func resortWindow(client kitty.KittyClient, tabs []kitty.Tab, mode string) error {
-	running, _ := runningSessionsFromTabs(tabs, nil)
+	running, _ := runningSessionsFromTabs(tabs, projectMatchContext{})
 	desired := SortRunning(running, mode)
 	if len(desired) < 2 {
 		return nil

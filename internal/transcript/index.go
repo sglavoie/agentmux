@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/searchstore"
 )
 
@@ -192,7 +193,7 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 	// days <= 0 → unlimited; leave cutoff zero so MinTime.IsZero() is true
 	// in each reader and no file is filtered by age.
 
-	projectResolver := newProjectResolverWithGit(cfg.Projects, newGitProjectMetadataProvider())
+	projectResolver := projectresolve.NewWithGit(cfg.Projects)
 
 	var firstErr error
 	var discovered []SessionMeta
@@ -213,10 +214,10 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 			continue
 		}
 		for _, meta := range metas {
-			project := projectResolver.resolve(meta.CWD)
-			meta.Project = project.title
+			project := projectResolver.ResolveOrFallback(meta.CWD)
+			meta.Project = project.Title
 			meta.Profiles = append([]string(nil), group.profiles...)
-			meta.Profile = displayProfileForGroup(cfg, meta.Project, project.profile, group.profiles)
+			meta.Profile = displayProfileForGroup(cfg, meta.Project, project.Profile, group.profiles)
 			discovered = append(discovered, meta)
 		}
 	}

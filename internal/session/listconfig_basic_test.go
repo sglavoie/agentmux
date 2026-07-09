@@ -2,6 +2,9 @@ package session_test
 
 import (
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -263,6 +266,61 @@ func TestListWithConfig_CWDFallback_HappyPath(t *testing.T) {
 	}
 }
 
+func TestListWithConfig_CWDFallbackMatchesLinkedGitWorktree(t *testing.T) {
+	git := requireSessionGit(t)
+	root := t.TempDir()
+	repo := filepath.Join(root, "vta_ss_oidc_op_worker")
+	linked := filepath.Join(root, "vta_ss_oidc_op_worker-security-audit")
+	if err := os.Mkdir(repo, 0o755); err != nil {
+		t.Fatalf("Mkdir repo: %v", err)
+	}
+	runSessionGit(t, git, repo, "init")
+	runSessionGit(t, git, repo, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "--no-verify", "-m", "initial")
+	runSessionGit(t, git, repo, "worktree", "add", "-b", "security/audit-extended", linked)
+
+	client := newClientFromWindows(t, []kitty.OSWindow{{
+		ID:       1,
+		IsActive: true,
+		Tabs: []kitty.Tab{{
+			ID:       66,
+			IsActive: true,
+			Title:    "vta_ss_oidc_op_worker-security-audit",
+			Windows: []kitty.Window{{
+				ID:       67,
+				IsActive: true,
+				CWD:      linked,
+				ForegroundProcesses: []kitty.ForegroundProcess{{
+					Cmdline: []string{"claude"},
+					CWD:     linked,
+				}},
+			}},
+		}},
+	}})
+
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "vta-claude", Harness: "claude"}},
+		Sessions: []config.Session{{Title: "sis", Profile: "vta-claude", Directory: repo}},
+	}
+
+	sessions, ghosts, err := session.ListWithConfig(client, cfg)
+	if err != nil {
+		t.Fatalf("ListWithConfig: %v", err)
+	}
+	if len(sessions) != 1 || len(ghosts) != 1 {
+		t.Fatalf("expected 1 session + 1 ghost, got %d/%d", len(sessions), len(ghosts))
+	}
+	rs := sessions[0]
+	if rs.Project != "sis" || rs.Profile != "vta-claude" || rs.Directory != repo {
+		t.Fatalf("session = %+v, want vta-claude/sis at %q", rs, repo)
+	}
+	if got, want := rs.Key, session.SessionKey("vta-claude", "sis"); got != want {
+		t.Fatalf("Key = %q, want %q", got, want)
+	}
+	if ghosts[0].Project != "sis" || ghosts[0].Profile != "vta-claude" || ghosts[0].WindowID != 67 {
+		t.Fatalf("ghost = %+v, want vta-claude/sis on window 67", ghosts[0])
+	}
+}
+
 func TestListWithConfig_ManagedWindowRepairsStaleUserVarsFromForegroundCWD(t *testing.T) {
 	analyticsDir := t.TempDir()
 	logScannerDir := t.TempDir()
@@ -463,5 +521,29 @@ func TestListWithConfig_TitleFallbackBeatsCWDFallback(t *testing.T) {
 	}
 	if sessions[0].Project != "api" || sessions[0].Directory != apiDir {
 		t.Fatalf("session = %+v, want title fallback api at %q", sessions[0], apiDir)
+	}
+}
+
+func requireSessionGit(t *testing.T) string {
+	t.Helper()
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not available")
+	}
+	return git
+}
+
+func runSessionGit(t *testing.T, git, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command(git, append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Agent Mux",
+		"GIT_AUTHOR_EMAIL=agentmux@example.invalid",
+		"GIT_COMMITTER_NAME=Agent Mux",
+		"GIT_COMMITTER_EMAIL=agentmux@example.invalid",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, out)
 	}
 }
