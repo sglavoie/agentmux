@@ -193,6 +193,83 @@ func TestRefresh_DuplicateProjectTitleUsesMatchedDirectoryProfile(t *testing.T) 
 	}
 }
 
+func TestRefresh_GitLinkedWorktreeUsesConfiguredParentProjectAndProfile(t *testing.T) {
+	git := requireGit(t)
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+	linked := filepath.Join(tmp, "linked-worktree")
+	if err := os.Mkdir(repo, 0o755); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	runGit(t, git, repo, "init")
+	runGit(t, git, repo, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "--no-verify", "-m", "initial")
+
+	projectDir := filepath.Join(repo, "services", "api")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll projectDir: %v", err)
+	}
+	runGit(t, git, repo, "worktree", "add", "-b", "feature/refresh-index", linked)
+	linkedCWD := filepath.Join(linked, "services", "api", "cmd")
+	if err := os.MkdirAll(linkedCWD, 0o755); err != nil {
+		t.Fatalf("MkdirAll linkedCWD: %v", err)
+	}
+
+	home := filepath.Join(tmp, "claude-home")
+	transcriptPath := filepath.Join(home, "projects", "linked-worktree", "sess-linked.jsonl")
+	info := writeTranscript(t, transcriptPath, "{}\n")
+
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: harness.Claude, HomeDir: home},
+			{Name: "personal", Harness: harness.Claude, HomeDir: home},
+		},
+		Projects: []config.Session{{
+			Title:     "API",
+			Directory: projectDir,
+			Profile:   "work",
+		}},
+	}
+	fr := &fakeReader{
+		harness: harness.Claude,
+		discover: func(homeDir string, _ DiscoverOptions) ([]SessionMeta, error) {
+			if homeDir != home {
+				t.Errorf("Discover homeDir = %q, want %q", homeDir, home)
+			}
+			return []SessionMeta{{
+				ID:           "sess-linked",
+				Harness:      harness.Claude,
+				CWD:          linkedCWD,
+				StartedAt:    time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC),
+				LastAt:       time.Date(2026, 5, 1, 12, 5, 0, 0, time.UTC),
+				Path:         transcriptPath,
+				FileSize:     info.Size(),
+				FileModTime:  info.ModTime(),
+				MessageCount: 3,
+				Snippet:      "linked worktree",
+			}}, nil
+		},
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	got, ok := idx.Get(IndexKey(harness.Claude, "sess-linked"))
+	if !ok {
+		t.Fatalf("entry missing after Refresh")
+	}
+	if got.Project != "API" {
+		t.Fatalf("Project = %q, want API", got.Project)
+	}
+	if got.Profile != "work" {
+		t.Fatalf("Profile = %q, want linked worktree matched profile work", got.Profile)
+	}
+	if !slices.Equal(got.Profiles, []string{"work", "personal"}) {
+		t.Fatalf("Profiles = %v, want [work personal]", got.Profiles)
+	}
+}
+
 func TestRefresh_CodexSharedHomeRealDataStyleSessionVisible(t *testing.T) {
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "codex-home")
