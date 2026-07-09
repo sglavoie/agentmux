@@ -35,32 +35,59 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 		return
 	}
 
-	for _, ow := range windows {
-		for _, tab := range ow.Tabs {
+	for i := range windows {
+		for j := range windows[i].Tabs {
+			tab := &windows[i].Tabs[j]
 			parts := palette.ParseTitleParts(tab.Title)
-			for _, win := range tab.Windows {
-				if !codexPromptProbeShouldScan(win) {
-					continue
-				}
-				if parts.State == "stop" {
-					h.probeCodexClearWindow(now, win.ID, tab.Title, parts, win.UserVars)
-					continue
-				}
-				if !codexPromptProbeCanOverwrite(parts.State) {
-					continue
-				}
-				h.probeCodexWindow(now, win.ID, tab.Title, parts, win.UserVars)
-				// Completed-turn fallback: only a still-bolt tab can be a stuck
-				// active turn. Prompt classification above wins first (it clears the
-				// bolt to key/question when a prompt is visible), and the completed
-				// classifier bails on any visible prompt, so this only fires when no
-				// prompt was found and the turn genuinely finished with no Stop hook.
-				if parts.State == "bolt" {
-					h.probeCodexCompletedTurnWindow(win.ID, tab.Title, parts, win.UserVars)
-				}
+			win, ok := codexPromptProbeTarget(tab)
+			if !ok {
+				continue
+			}
+			if parts.State == "stop" {
+				h.probeCodexClearWindow(now, win.ID, tab.Title, parts, win.UserVars)
+				continue
+			}
+			if !codexPromptProbeCanOverwrite(parts.State) {
+				continue
+			}
+			h.probeCodexWindow(now, win.ID, tab.Title, parts, win.UserVars)
+			// Completed-turn fallback: only a still-bolt tab can be a stuck
+			// active turn. Prompt classification above wins first (it clears the
+			// bolt to key/question when a prompt is visible), and the completed
+			// classifier bails on any visible prompt, so this only fires when no
+			// prompt was found and the turn genuinely finished with no Stop hook.
+			if parts.State == "bolt" {
+				h.probeCodexCompletedTurnWindow(win.ID, tab.Title, parts, win.UserVars)
 			}
 		}
 	}
+}
+
+func codexPromptProbeTarget(tab *kitty.Tab) (*kitty.Window, bool) {
+	if owner, ok := kitty.FindTabTitleOwner(tab); ok {
+		return owner, owner.UserVars.EffectiveHarness() == harness.Codex
+	}
+	if tab == nil {
+		return nil, false
+	}
+
+	var fallback *kitty.Window
+	for i := range tab.Windows {
+		win := &tab.Windows[i]
+		if !codexPromptProbeShouldScan(*win) {
+			continue
+		}
+		if fallback == nil {
+			fallback = win
+		}
+		if win.IsActive {
+			return win, true
+		}
+	}
+	if fallback == nil {
+		return nil, false
+	}
+	return fallback, true
 }
 
 func codexPromptProbeShouldScan(win kitty.Window) bool {

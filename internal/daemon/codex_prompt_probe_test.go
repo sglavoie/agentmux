@@ -172,6 +172,52 @@ func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestio
 	}
 }
 
+func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingNotification(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Permission: true})
+		h := NewHandler(guard, notifier)
+		fake := &fakeKittyClient{
+			windows: codexProbeSplitWindows(
+				palette.BuildTitle("W:api", "bolt", false),
+				kitty.Window{
+					ID:       42,
+					UserVars: kitty.UserVars{Profile: "work", Harness: "codex"},
+				},
+				kitty.Window{
+					ID:       43,
+					IsActive: true,
+					ForegroundProcesses: []kitty.ForegroundProcess{
+						{Cmdline: []string{"/opt/homebrew/bin/codex", "--yolo"}},
+					},
+				},
+			),
+			getText: map[string]string{
+				kitty.MatchWindowByID(43): codexRequestUserInputScreen,
+			},
+		}
+		h.SetKittyClient(fake)
+		h.guard.TryUpdate(43, "active", false)
+
+		h.ProbeCodexScreenPrompts(time.Now())
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 from unmanaged sibling", got)
+		}
+		if got := len(fake.titleCalls()); got != 0 {
+			t.Fatalf("SetTabTitle calls = %d, want 0", got)
+		}
+		resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+		if len(resp.Events) != 0 {
+			t.Fatalf("sibling events = %d, want 0", len(resp.Events))
+		}
+		if got := h.guard.Current(43); got != "active" {
+			t.Fatalf("sibling guard.Current = %q, want active", got)
+		}
+	})
+}
+
 // TestProbeCodexScreenPrompts_DetectedPromptNotifiesOnceOnTransition pins the
 // probe notification path: a screen-probe-detected prompt (the probe exists
 // precisely because Codex hooks miss these) must fire exactly one macOS
@@ -376,6 +422,45 @@ func TestProbeCodexScreenPrompts_ClearScreenKeepsStopWithTranscriptScrollback(t 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
+	}
+}
+
+func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingClearProbe(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeSplitWindows(
+			palette.BuildTitle("W:api", "stop", false),
+			kitty.Window{
+				ID:       42,
+				UserVars: kitty.UserVars{Profile: "work", Harness: "codex"},
+			},
+			kitty.Window{
+				ID:       43,
+				IsActive: true,
+				ForegroundProcesses: []kitty.ForegroundProcess{
+					{Cmdline: []string{"/opt/homebrew/bin/codex", "--yolo"}},
+				},
+			},
+		),
+		getTextByExtent: map[getTextKey]string{
+			{match: kitty.MatchWindowByID(43), extent: "screen"}: codexReportedClearedScreen,
+			{match: kitty.MatchWindowByID(43), extent: "all"}:    codexReportedClearedScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	h.guard.TryUpdate(43, "stop", false)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("SetTabTitle calls = %d, want 0", got)
+	}
+	if got := h.guard.Current(43); got != "stop" {
+		t.Fatalf("sibling guard.Current = %q, want stop", got)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(resp.Events) != 0 {
+		t.Fatalf("sibling events = %d, want 0", len(resp.Events))
 	}
 }
 
@@ -599,6 +684,130 @@ func TestProbeCodexScreenPrompts_CompletedTurnForcesCodexForForeground(t *testin
 	}
 }
 
+func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingStopProbe(t *testing.T) {
+	h := newTestHandler()
+	boltTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "📟AiBroker",
+		State:   "bolt",
+		Looping: true,
+	})
+	fake := &fakeKittyClient{
+		windows: codexProbeSplitWindows(
+			boltTitle,
+			kitty.Window{
+				ID:       42,
+				UserVars: kitty.UserVars{Profile: "work", Harness: "codex"},
+			},
+			kitty.Window{
+				ID:       43,
+				IsActive: true,
+				ForegroundProcesses: []kitty.ForegroundProcess{
+					{Cmdline: []string{"/opt/homebrew/bin/codex", "--yolo"}},
+				},
+			},
+		),
+		getText: map[string]string{
+			kitty.MatchWindowByID(43): codexCompletedTurnScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	h.guard.TryUpdate(43, "active", false)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("SetTabTitle calls = %d, want 0", got)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(resp.Events) != 0 {
+		t.Fatalf("sibling events = %d, want 0", len(resp.Events))
+	}
+	if got := h.guard.Current(43); got != "active" {
+		t.Fatalf("sibling guard.Current = %q, want active", got)
+	}
+}
+
+func TestProbeCodexScreenPrompts_ManagedNonCodexOwnerSuppressesUnmanagedCodexSibling(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeSplitWindows(
+			palette.BuildTitle("W:api", "bolt", false),
+			kitty.Window{
+				ID:       42,
+				UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+			},
+			kitty.Window{
+				ID:       43,
+				IsActive: true,
+				ForegroundProcesses: []kitty.ForegroundProcess{
+					{Cmdline: []string{"/opt/homebrew/bin/codex", "--yolo"}},
+				},
+			},
+		),
+		getText: map[string]string{
+			kitty.MatchWindowByID(43): codexRequestUserInputScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	h.guard.TryUpdate(43, "active", false)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("SetTabTitle calls = %d, want 0", got)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(resp.Events) != 0 {
+		t.Fatalf("sibling events = %d, want 0", len(resp.Events))
+	}
+}
+
+func TestProbeCodexScreenPrompts_UnmanagedTabProbesOnlyActiveCodexForeground(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeSplitWindows(
+			palette.BuildTitle("W:api", "bolt", false),
+			kitty.Window{
+				ID: 42,
+				ForegroundProcesses: []kitty.ForegroundProcess{
+					{Cmdline: []string{"/opt/homebrew/bin/codex", "--yolo"}},
+				},
+			},
+			kitty.Window{
+				ID:       43,
+				IsActive: true,
+				ForegroundProcesses: []kitty.ForegroundProcess{
+					{Cmdline: []string{"/opt/homebrew/bin/codex", "--yolo"}},
+				},
+			},
+		),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): codexRequestUserInputScreen,
+			kitty.MatchWindowByID(43): codexCommandApprovalScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+	calls := fake.titleCalls()
+	if len(calls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(calls))
+	}
+	if calls[0].match != kitty.MatchTabByWindowID(43) {
+		t.Fatalf("SetTabTitle match = %q, want %q", calls[0].match, kitty.MatchTabByWindowID(43))
+	}
+	if want := palette.BuildTitle("W:api", "key", false); calls[0].title != want {
+		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
+	}
+	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
+		t.Fatalf("inactive foreground events = %d, want 0", len(resp.Events))
+	}
+	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43}); len(resp.Events) != 1 {
+		t.Fatalf("active foreground events = %d, want 1", len(resp.Events))
+	}
+}
+
 func codexProbeForegroundWindows(windowID int, tabTitle string, foregroundCmdline []string) []kitty.OSWindow {
 	return []kitty.OSWindow{
 		{
@@ -615,6 +824,21 @@ func codexProbeForegroundWindows(windowID int, tabTitle string, foregroundCmdlin
 							},
 						},
 					},
+				},
+			},
+		},
+	}
+}
+
+func codexProbeSplitWindows(tabTitle string, windows ...kitty.Window) []kitty.OSWindow {
+	return []kitty.OSWindow{
+		{
+			ID: 1,
+			Tabs: []kitty.Tab{
+				{
+					ID:      100,
+					Title:   tabTitle,
+					Windows: windows,
 				},
 			},
 		},

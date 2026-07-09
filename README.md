@@ -450,6 +450,10 @@ daemon drives the existing `stop` transition (`event: "ScreenStopProbe"`) so the
 icon settles on `⏹` instead of staying `⚡`. It only fires on bolt tabs and never
 downgrades protected attention states (`key`, `question`, `error`, `warning`,
 `subagent`, `compact`). The daemon runs these probes every 1.5s.
+In split Kitty tabs, screen probes read only the tab-title owner: the active
+managed pane, or the first managed pane if none is active. Sibling panes cannot
+overwrite the shared title with Claude context-limit detection or Codex
+`ScreenPromptProbe`, `ScreenClearProbe`, or `ScreenStopProbe` events.
 
 The primary live-debug workflow is the current tab:
 
@@ -603,8 +607,10 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   event. For Codex, a completed-turn screen fallback also settles a stuck bolt
   on `⏹` when the tab shows `Worked for …` with an empty composer; look for
   `event: "ScreenStopProbe"` in `amx daemon export-events --window <id>` to
-  confirm it fired. For Copilot, also upgrade to version `1.0.45` or newer,
-  because older releases had `agentStop` hook issues.
+  confirm it fired. In split panes, run the export against the managed
+  tab-title owner because sibling panes do not drive screen-probe title changes.
+  For Copilot, also upgrade to version `1.0.45` or newer, because older
+  releases had `agentStop` hook issues.
 - **`/clear` still shows a stop icon or stop notification**: inspect
   `amx daemon export-events --window <id>`. Claude/Copilot should show the
   documented hook reset payloads; Codex may show `ScreenClearProbe` when idle

@@ -16,11 +16,11 @@ const (
 	claudeContextLimitProbeAction = "stop_failure"
 )
 
-// ProbeClaudeContextLimit scans managed Claude windows whose current icon is
-// either active-class (bolt, subagent) or empty for the "Context limit
-// reached" recovery banner. When found, the window's icon is swapped to the
-// error state via the stop_failure action so the user has a visual signal
-// that the session is stuck and needs /compact or /clear.
+// ProbeClaudeContextLimit scans each tab's managed Claude title owner when the
+// current icon is either active-class (bolt, subagent) or empty for the
+// "Context limit reached" recovery banner. When found, the window's icon is
+// swapped to the error state via the stop_failure action so the user has a
+// visual signal that the session is stuck and needs /compact or /clear.
 //
 // Empty state is included because some upstream Claude hook events resolve
 // to "idle" or "clear" and wipe the bolt to empty before the probe ticks;
@@ -44,20 +44,31 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 		return
 	}
 
-	for _, ow := range windows {
-		for _, tab := range ow.Tabs {
+	for i := range windows {
+		for j := range windows[i].Tabs {
+			tab := &windows[i].Tabs[j]
 			parts := palette.ParseTitleParts(tab.Title)
 			if !claudeContextLimitProbeCanOverwrite(parts.State) {
 				continue
 			}
-			for _, win := range tab.Windows {
-				if win.UserVars.EffectiveHarness() != harness.Claude {
-					continue
-				}
-				h.probeClaudeContextLimitWindow(now, win.ID, tab.Title, parts, win.UserVars)
+			win, ok := claudeContextLimitProbeTarget(tab)
+			if !ok {
+				continue
 			}
+			h.probeClaudeContextLimitWindow(now, win.ID, tab.Title, parts, win.UserVars)
 		}
 	}
+}
+
+// Claude deliberately probes only the managed tab-title owner. Unlike the
+// Codex prompt probe, it has no unmanaged foreground fallback because context
+// limit recovery should only mutate windows already owned by Claude hooks.
+func claudeContextLimitProbeTarget(tab *kitty.Tab) (*kitty.Window, bool) {
+	owner, ok := kitty.FindTabTitleOwner(tab)
+	if !ok {
+		return nil, false
+	}
+	return owner, owner.UserVars.EffectiveHarness() == harness.Claude
 }
 
 func claudeContextLimitProbeCanOverwrite(iconState string) bool {

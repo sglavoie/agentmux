@@ -97,6 +97,71 @@ func TestFindWindowLocationByID(t *testing.T) {
 	}
 }
 
+func TestFindTabTitleOwner(t *testing.T) {
+	tests := []struct {
+		name      string
+		tab       Tab
+		wantID    int
+		wantFound bool
+	}{
+		{
+			name: "active managed owner",
+			tab: Tab{Windows: []Window{
+				{ID: 1, UserVars: UserVars{Profile: "work"}},
+				{ID: 2, IsActive: true, UserVars: UserVars{Harness: harness.Codex}},
+			}},
+			wantID:    2,
+			wantFound: true,
+		},
+		{
+			name: "falls back to first managed window",
+			tab: Tab{Windows: []Window{
+				{ID: 1, UserVars: UserVars{Profile: "work"}},
+				{ID: 2, UserVars: UserVars{Harness: harness.Copilot}},
+			}},
+			wantID:    1,
+			wantFound: true,
+		},
+		{
+			name: "unmanaged tab has no owner",
+			tab: Tab{Windows: []Window{
+				{ID: 1, IsActive: true},
+				{ID: 2},
+			}},
+			wantFound: false,
+		},
+		{
+			name: "active unmanaged split pane does not own managed tab",
+			tab: Tab{Windows: []Window{
+				{ID: 1, IsActive: true},
+				{ID: 2, UserVars: UserVars{Account: "legacy-work"}},
+				{ID: 3, UserVars: UserVars{Profile: "work"}},
+			}},
+			wantID:    2,
+			wantFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := FindTabTitleOwner(&tt.tab)
+			if found != tt.wantFound {
+				t.Fatalf("found = %v, want %v", found, tt.wantFound)
+			}
+			if !found {
+				return
+			}
+			if got.ID != tt.wantID {
+				t.Errorf("owner ID = %d, want %d", got.ID, tt.wantID)
+			}
+		})
+	}
+
+	if _, found := FindTabTitleOwner(nil); found {
+		t.Fatal("nil tab should not have an owner")
+	}
+}
+
 func TestIsDashboardCmdline(t *testing.T) {
 	tests := []struct {
 		name    string

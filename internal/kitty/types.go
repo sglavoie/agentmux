@@ -67,6 +67,39 @@ func FindWindowLocationByID(osWindows []OSWindow, windowID int) (*OSWindow, *Tab
 	return nil, nil, nil, false
 }
 
+// FindTabTitleOwner returns the managed window responsible for a tab title.
+// Active managed windows win; otherwise the first managed window owns the tab.
+func FindTabTitleOwner(tab *Tab) (*Window, bool) {
+	if tab == nil {
+		return nil, false
+	}
+
+	var firstManaged *Window
+	for i := range tab.Windows {
+		win := &tab.Windows[i]
+		if !isManagedTabTitleWindow(win) {
+			continue
+		}
+		if firstManaged == nil {
+			firstManaged = win
+		}
+		if win.IsActive {
+			return win, true
+		}
+	}
+	if firstManaged == nil {
+		return nil, false
+	}
+	return firstManaged, true
+}
+
+func isManagedTabTitleWindow(win *Window) bool {
+	if win == nil {
+		return false
+	}
+	return win.UserVars.EffectiveProfile() != "" || win.UserVars.EffectiveHarness() != ""
+}
+
 // DashboardLocation identifies where an existing dashboard is running.
 type DashboardLocation struct {
 	TabID    int

@@ -330,6 +330,9 @@ func (h *Handler) clearStaleTitle(windowID int, fallbackTitle string) {
 	if !ok {
 		return
 	}
+	if owner, ok := kitty.FindTabTitleOwner(tab); ok && owner.ID != windowID {
+		return
+	}
 	parts := palette.ParseTitleParts(tab.Title)
 	parts.State = ""
 	newTitle := palette.BuildTitleParts(parts)

@@ -139,6 +139,16 @@ func runWithDeps(
 		}
 	}
 
+	if shouldNoOpForTabTitleOwner(eventOrAction, tab, windowID) {
+		owner, _ := kitty.FindTabTitleOwner(tab)
+		slog.Debug("indicator: hook window does not own tab title, ignoring normal event",
+			"window_id", windowID,
+			"owner_window_id", owner.ID,
+			"event", eventOrAction,
+		)
+		return nil
+	}
+
 	contextLimitDetected := payloadHasContextLimit(payload)
 	if !contextLimitDetected && shouldProbeWindowForContextLimit(eventOrAction, action) {
 		text, textErr := client.GetText(kitty.MatchWindowByID(windowID), "screen")
@@ -222,6 +232,14 @@ func runWithDeps(
 	}
 
 	return finalizeTitleUpdate(tab, win, windowID, resp.IconState, eventOrAction, payload, client, windows)
+}
+
+func shouldNoOpForTabTitleOwner(eventOrAction string, tab *kitty.Tab, windowID int) bool {
+	if isAgentSessionLoopEvent(eventOrAction) {
+		return false
+	}
+	owner, ok := kitty.FindTabTitleOwner(tab)
+	return ok && owner.ID != windowID
 }
 
 type loopLifecycleTarget struct {

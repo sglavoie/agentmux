@@ -206,6 +206,115 @@ func TestProbeClaudeContextLimit_PreservesLoopMarkerAndHarnessEmoji(t *testing.T
 	}
 }
 
+func TestProbeClaudeContextLimit_SplitTabOwnerStillDetectsContextLimit(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeSplitWindows(
+			palette.BuildTitle("api", "bolt", false),
+			kitty.Window{
+				ID:       42,
+				IsActive: true,
+				UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+			},
+			kitty.Window{
+				ID:       43,
+				UserVars: kitty.UserVars{Profile: "scratch", Harness: "claude"},
+			},
+		),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): claudeContextLimitScreen,
+			kitty.MatchWindowByID(43): claudeContextLimitScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	h.ProbeClaudeContextLimit(time.Unix(1_700_000_000, 0))
+
+	calls := fake.titleCalls()
+	if len(calls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1", len(calls))
+	}
+	if calls[0].match != kitty.MatchTabByWindowID(42) {
+		t.Fatalf("SetTabTitle match = %q, want %q", calls[0].match, kitty.MatchTabByWindowID(42))
+	}
+	if want := palette.BuildTitle("api", "error", false); calls[0].title != want {
+		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
+	}
+
+	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(resp.Events) != 1 {
+		t.Fatalf("owner events = %d, want 1", len(resp.Events))
+	}
+	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43}); len(resp.Events) != 0 {
+		t.Fatalf("non-owner events = %d, want 0", len(resp.Events))
+	}
+}
+
+func TestProbeClaudeContextLimit_SplitTabNonOwnerCannotOverwriteManagedOwner(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeSplitWindows(
+			palette.BuildTitle("api", "bolt", false),
+			kitty.Window{
+				ID:       42,
+				IsActive: true,
+				UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+			},
+			kitty.Window{
+				ID:       43,
+				UserVars: kitty.UserVars{Profile: "scratch", Harness: "claude"},
+			},
+		),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): "ordinary shell output\n",
+			kitty.MatchWindowByID(43): claudeContextLimitScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	h.ProbeClaudeContextLimit(time.Unix(1_700_000_000, 0))
+
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("SetTabTitle calls = %d, want 0", got)
+	}
+	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
+		t.Fatalf("owner events = %d, want 0", len(resp.Events))
+	}
+	if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43}); len(resp.Events) != 0 {
+		t.Fatalf("non-owner events = %d, want 0", len(resp.Events))
+	}
+}
+
+func TestProbeClaudeContextLimit_UnmanagedClaudeForegroundNoOp(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: codexProbeForegroundWindows(
+			42,
+			palette.BuildTitle("api", "bolt", false),
+			[]string{"/opt/homebrew/bin/claude"},
+		),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): claudeContextLimitScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+
+	h.ProbeClaudeContextLimit(time.Unix(1_700_000_000, 0))
+
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("SetTabTitle calls = %d, want 0", got)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(resp.Events) != 0 {
+		t.Fatalf("events = %d, want 0", len(resp.Events))
+	}
+	h.stateMu.Lock()
+	notified := h.contextLimitNotified[42]
+	h.stateMu.Unlock()
+	if notified {
+		t.Fatalf("contextLimitNotified[42] = true, want false")
+	}
+}
+
 func TestProbeClaudeContextLimit_DedupesWithinEpisode(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{
