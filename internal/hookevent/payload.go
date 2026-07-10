@@ -30,6 +30,7 @@ type HookPayload struct {
 	StopReasonCamel       string `json:"stopReason"`
 	Reason                string `json:"reason"`
 	Source                string `json:"source"`
+	Trigger               string `json:"trigger"`
 	CWD                   string `json:"cwd"`
 	Harness               string `json:"harness"`
 	KittyWindowID         int    `json:"kitty_window_id"`

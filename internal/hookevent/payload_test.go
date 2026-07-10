@@ -144,6 +144,7 @@ func TestDecodeHookPayload_PreservesCodexFields(t *testing.T) {
 		"hook_event_name": "Stop",
 		"tool_name": "Bash",
 		"source": "startup",
+		"trigger": "auto",
 		"prompt": "/compact now",
 		"stop_reason": "end_turn"
 	}`))
@@ -158,6 +159,9 @@ func TestDecodeHookPayload_PreservesCodexFields(t *testing.T) {
 	}
 	if payload.Source != "startup" {
 		t.Fatalf("Source = %q, want startup", payload.Source)
+	}
+	if payload.Trigger != "auto" {
+		t.Fatalf("Trigger = %q, want auto", payload.Trigger)
 	}
 	if payload.EffectivePrompt() != "/compact now" {
 		t.Fatalf("EffectivePrompt = %q, want /compact now", payload.EffectivePrompt())

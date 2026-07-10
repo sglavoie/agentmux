@@ -102,6 +102,28 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 	}
 }
 
+func TestResolveAction_PostCompactTrigger(t *testing.T) {
+	cases := []struct {
+		name    string
+		trigger string
+		want    string
+	}{
+		{name: "automatic compaction resumes active turn", trigger: "auto", want: "active"},
+		{name: "manual compaction stops at prompt", trigger: "manual", want: "stop"},
+		{name: "trigger is normalized", trigger: " Auto \t", want: "active"},
+		{name: "missing trigger keeps conservative fallback", want: "stop"},
+		{name: "unknown trigger keeps conservative fallback", trigger: "scheduled", want: "stop"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveAction("PostCompact", HookPayload{Trigger: tc.trigger})
+			if !ok || got != tc.want {
+				t.Fatalf("ResolveAction(PostCompact, trigger=%q) = (%q, %v), want (%q, true)", tc.trigger, got, ok, tc.want)
+			}
+		})
+	}
+}
+
 func TestResolveAction_RequestUserInputToolPrompt(t *testing.T) {
 	cases := []struct {
 		name    string

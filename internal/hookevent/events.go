@@ -38,10 +38,10 @@ var eventToAction = map[string]string{
 
 	// PostCompact fires for both manual /compact and automatic mid-turn
 	// compaction. The Claude hook config splits them via matcher groups that
-	// dispatch these pseudo-events: manual is a turn end, auto happens while
-	// Claude is still working. Bare PostCompact keeps its historical "stop"
-	// mapping for Codex (whose hooks.json has no matcher support) and for
-	// Claude accounts that have not re-run `amx config hooks-sync`.
+	// dispatch these pseudo-events because Claude does not include the trigger
+	// in its payload. Codex does include payload.trigger, so ResolveAction
+	// classifies its bare PostCompact dynamically. The static fallback remains
+	// "stop" for legacy or malformed payloads without a recognized trigger.
 	"PostCompact":       "stop",
 	"PostCompactManual": "stop",
 	"PostCompactAuto":   "active",
@@ -134,10 +134,31 @@ func ResolveAction(input string, payload HookPayload) (action string, ok bool) {
 	if action, ok := resolveToolAction(input, payload); ok {
 		return action, true
 	}
+	if action, ok := resolveCompactAction(input, payload); ok {
+		return action, true
+	}
 	if a, found := eventToAction[input]; found {
 		return a, true
 	}
 	return "", false
+}
+
+// resolveCompactAction distinguishes Codex's manual and automatic compaction
+// completions. Automatic compaction resumes the same active turn, while a
+// manual /compact finishes at the prompt. Unknown or absent trigger values
+// deliberately fall through to eventToAction's conservative stop fallback.
+func resolveCompactAction(input string, payload HookPayload) (string, bool) {
+	if input != "PostCompact" {
+		return "", false
+	}
+	switch normalizeLifecycleValue(payload.Trigger) {
+	case "auto":
+		return "active", true
+	case "manual":
+		return "stop", true
+	default:
+		return "", false
+	}
 }
 
 // IsIgnoredEvent reports whether an event is recognized but intentionally has no

@@ -314,8 +314,10 @@ Current Codex events mapped by Agent Mux include:
 - `SubagentStop`
 - `Stop`
 
-Codex's `PostCompact` hook is treated as terminal, so a completed compaction
-run lands on the same stop icon (⏹) path as `Stop`.
+Codex's `PostCompact` hook is classified from its `trigger` payload. Automatic
+mid-turn compaction restores the active bolt (⚡) because Codex continues the
+same turn; manual `/compact` lands on the stop icon (⏹). Missing or unknown
+trigger values keep the conservative terminal behavior for compatibility.
 
 Current Copilot events mapped by Agent Mux include:
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -60,6 +61,121 @@ func TestHandler_HookEventEnrichesFromKittySnapshot(t *testing.T) {
 	if st == nil || st.LastPipeMode != true || st.LastAccount != "work" {
 		t.Fatalf("state = %+v; want pipe mode and account from snapshot/request", st)
 	}
+}
+
+func TestHandler_HookEventCodexAutoCompactRestoresBolt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
+		h := NewHandler(guard, notifier)
+		fake := &fakeKittyClient{
+			windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
+				ID:       42,
+				UserVars: kitty.UserVars{Profile: "work", Harness: harness.Codex},
+			}}),
+		}
+		h.SetKittyClient(fake)
+
+		for _, event := range []struct {
+			name    string
+			payload hookevent.HookPayload
+		}{
+			{name: "PreCompact", payload: hookevent.HookPayload{Trigger: "auto"}},
+			{name: "PostCompact", payload: hookevent.HookPayload{Trigger: "auto"}},
+			{name: "PostToolUse"},
+		} {
+			resp := h.Handle(Request{
+				Type:        TypeHookEvent,
+				WindowID:    42,
+				Event:       event.name,
+				PayloadJSON: hookPayloadJSON(t, event.payload),
+			})
+			if !resp.OK {
+				t.Fatalf("%s response = %+v", event.name, resp)
+			}
+		}
+
+		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		if len(detail.Events) != 3 {
+			t.Fatalf("events = %d, want 3 (%+v)", len(detail.Events), detail.Events)
+		}
+		wantActions := []string{"compact", "active", "active"}
+		wantIcons := []string{"compact", "bolt", "bolt"}
+		for i, event := range detail.Events {
+			if event.Suppressed || event.Action != wantActions[i] || event.ResultIconState != wantIcons[i] {
+				t.Fatalf("event[%d] = %+v; want allowed action=%q icon=%q", i, event, wantActions[i], wantIcons[i])
+			}
+		}
+
+		h.stateMu.Lock()
+		state := h.store[42]
+		h.stateMu.Unlock()
+		if state == nil || state.LastAction != "active" || state.DesiredIcon != "bolt" {
+			t.Fatalf("state = %+v; want active bolt after automatic compaction", state)
+		}
+
+		synctest.Wait()
+		if got := rec.len(); got != 0 {
+			t.Fatalf("automatic compaction fired %d stop notifications, want 0: %+v", got, rec.snapshot())
+		}
+	})
+}
+
+func TestHandler_HookEventCodexManualCompactRemainsStopped(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		guard := NewStateGuard(time.Hour)
+		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
+		h := NewHandler(guard, notifier)
+		fake := &fakeKittyClient{
+			windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
+				ID:       42,
+				UserVars: kitty.UserVars{Profile: "work", Harness: harness.Codex},
+			}}),
+		}
+		h.SetKittyClient(fake)
+
+		for _, event := range []struct {
+			name    string
+			payload hookevent.HookPayload
+		}{
+			{name: "PreCompact", payload: hookevent.HookPayload{Trigger: "manual"}},
+			{name: "PostCompact", payload: hookevent.HookPayload{Trigger: "manual"}},
+			{name: "PostToolUse"},
+		} {
+			resp := h.Handle(Request{
+				Type:        TypeHookEvent,
+				WindowID:    42,
+				Event:       event.name,
+				PayloadJSON: hookPayloadJSON(t, event.payload),
+			})
+			if !resp.OK {
+				t.Fatalf("%s response = %+v", event.name, resp)
+			}
+		}
+
+		detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		if len(detail.Events) != 3 {
+			t.Fatalf("events = %d, want 3 (%+v)", len(detail.Events), detail.Events)
+		}
+		if event := detail.Events[1]; event.Suppressed || event.Action != "stop" || event.ResultIconState != "stop" {
+			t.Fatalf("PostCompact event = %+v; want allowed stop icon", event)
+		}
+		if event := detail.Events[2]; !event.Suppressed || event.Action != "active" || event.SuppressionReason != suppressionReasonActiveAfterTerminal {
+			t.Fatalf("PostToolUse event = %+v; want active-after-terminal suppression", event)
+		}
+
+		h.stateMu.Lock()
+		state := h.store[42]
+		h.stateMu.Unlock()
+		if state == nil || state.LastAction != "stop" || state.DesiredIcon != "stop" {
+			t.Fatalf("state = %+v; want manual compaction to remain stopped", state)
+		}
+
+		synctest.Wait()
+		if got := rec.len(); got != 1 {
+			t.Fatalf("manual compaction fired %d stop notifications, want 1: %+v", got, rec.snapshot())
+		}
+	})
 }
 
 func TestHandler_HookEventOwnerMismatchNoOps(t *testing.T) {
