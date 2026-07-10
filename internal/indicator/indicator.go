@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // maxHookPayloadBytes leaves room for the TypeHookEvent JSON envelope within
@@ -36,10 +37,13 @@ func Run(event string, windowID int, amxBin string) error {
 }
 
 func runWithDeps(event string, windowID int, amxBin, payloadJSON string, pipeMode bool, client indicatorDaemonClient) error {
-	listenOn := strings.TrimSpace(os.Getenv("KITTY_LISTEN_ON"))
-	if listenOn == "" {
+	if strings.TrimSpace(os.Getenv("KITTY_LISTEN_ON")) == "" {
 		return nil
 	}
+	// Forward only a transferable endpoint. A process-local "fd:" descriptor is
+	// useless to the detached daemon; when normalization yields nothing the
+	// daemon falls back to its own established Kitty client.
+	listenOn := kitty.NormalizedListenAddressFromEnv()
 
 	windowID, err := resolveHookWindowID(windowID)
 	if err != nil {

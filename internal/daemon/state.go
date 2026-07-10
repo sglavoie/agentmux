@@ -168,7 +168,9 @@ func (h *Handler) signalRender() {
 
 func (h *Handler) rememberKittySocketLocked(windowID int, socket string) {
 	socket = strings.TrimSpace(socket)
-	if socket == "" {
+	// Never let an unusable value (empty or a process-local "fd:" descriptor)
+	// replace an existing stable socket in per-window or fallback storage.
+	if !isReusableKittySocket(socket) {
 		return
 	}
 	if h.kittySockets == nil {
@@ -177,6 +179,16 @@ func (h *Handler) rememberKittySocketLocked(windowID int, socket string) {
 	h.kittySockets[windowID] = socket
 	h.lastKittyListenOn = socket
 	h.syncRendererMetadataLocked(windowID)
+}
+
+// isReusableKittySocket reports whether socket is a transferable Kitty
+// remote-control endpoint that a different process (the detached daemon) can
+// dial. It defers to kitty.IsReusableListenAddress so per-window/fallback
+// storage and the listener normalization path share one validation rule:
+// empty values, process-local "fd:" descriptors, prefix-only "unix:"/"tcp:"
+// endpoints, and unknown forms are all rejected rather than guessed at.
+func isReusableKittySocket(socket string) bool {
+	return kitty.IsReusableListenAddress(socket)
 }
 
 func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {

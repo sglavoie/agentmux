@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -314,6 +315,18 @@ func (h *Handler) kittyClientForWindow(windowID int) kittyTitleClient {
 	client := h.kittyClient
 	h.stateMu.Unlock()
 	return scopedKittyClient(client, socket)
+}
+
+// hookKittyClient returns the Kitty client used for hook-time ListWindows and
+// GetText calls, scoped to the stable socket carried by the request. It falls
+// back to the daemon's established client only when the request has no reusable
+// (transferable) address, so a stale indicator forwarding an "fd:" descriptor
+// cannot force a dial through a process-local endpoint.
+func (h *Handler) hookKittyClient(req Request) kittyTitleClient {
+	if isReusableKittySocket(req.KittyListenOn) {
+		return scopedKittyClient(h.kittyClient, strings.TrimSpace(req.KittyListenOn))
+	}
+	return h.kittyClient
 }
 
 func scopedKittyClient(client kittyTitleClient, socket string) kittyTitleClient {

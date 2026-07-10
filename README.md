@@ -31,6 +31,15 @@ allow_remote_control yes
 listen_on unix:/tmp/kitty-{kitty_pid}
 ```
 
+The `listen_on unix:` socket matters for more than the dashboard: it is the only
+endpoint the detached daemon can dial. Kitty hands a `launch
+--allow-remote-control` child (such as the F8 keybinding) a process-local
+`fd:N` descriptor in `KITTY_LISTEN_ON`, which is meaningless to any other
+process. Agent Mux normalizes that `fd:N` back to `unix:/tmp/kitty-<kitty_pid>`
+before forwarding it, and never persists or dials a raw `fd:` endpoint. If the
+`listen_on` line is missing, the daemon cannot reach Kitty from a hook fired by
+such a child.
+
 ## Install
 
 ```bash
@@ -404,6 +413,24 @@ The base title, `★`, and `🔇` remain owned by their existing writers. Hooks 
 forward raw events, window/socket context, and pipe-mode detection; they
 auto-start the daemon when needed, log a dropped delivery, and exit successfully.
 
+Because F8 and agent-session-loop hooks can fire from any pane in a split tab,
+the daemon retargets them to the tab's managed title owner rather than writing
+titles from the indicator:
+
+- **F8 (`user_clear`)** clears only the owner's state icon. It is retargeted to
+  the managed owner from whichever pane pressed the binding — owner, managed
+  non-owner, or unmanaged sibling — so the wipe always lands on the daemon-owned
+  title and is never dropped as an owner mismatch. `🔁`, the base title, harness
+  emoji, `★`, and `🔇` are all preserved. A tab with no managed owner is a
+  successful no-op that creates no durable state.
+- **Active-loop sibling routing** lets an `agent-session-loop` running in an
+  *unmanaged* split pane drive its managed owner's state machine. The daemon
+  routes the sibling's ordinary hooks (bolt, stop, permission, failure, compact,
+  question, subagent) to the owner only when loop discovery returns a live,
+  unfinished candidate whose window ID exactly matches the source pane. CWD or
+  harness similarity alone never authorizes routing, so ordinary sibling agents
+  and inactive managed panes keep their `owner_mismatch` suppression.
+
 For the acceptance record, required live-client transitions, and dogfood
 checklist, see [Daemon State Acceptance Evidence](docs/daemon_state_acceptance.md).
 
@@ -644,6 +671,27 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   recognized harness still matches by CWD, and if no same-harness managed Kitty
   tab is open, Agent Mux falls back to the same workspace rather than updating an
   unrelated caller tab.
+- **F8 does nothing from a split pane**: F8 clears the tab's managed state icon
+  regardless of which pane is focused. Inspect
+  `amx daemon export-events --window <owner-id>` (the managed tab-title owner,
+  not the pane you pressed F8 in) and confirm a non-suppressed `user_clear`
+  event on the owner. If the owner shows `owner_mismatch` for `user_clear`, the
+  tab has no managed owner or the daemon predates the routing fix — run
+  `amx daemon restart` after `just install`.
+- **A loop running in a split pane doesn't drive the tab**: an
+  `agent-session-loop` started in an *unmanaged* sibling pane only routes to the
+  managed owner when loop discovery finds a live, unfinished candidate whose
+  window ID matches that pane exactly. Inspect
+  `amx daemon export-events --window <owner-id>` and confirm the loop's states
+  land on the owner (not `owner_mismatch` on the source pane). If the marker or
+  states stay put, confirm the loop's `state.json` has no `run_finished_at`, the
+  PID is still live, and the source pane's window ID matches the discovered
+  candidate.
+- **Daemon can't reach Kitty after an F8-triggered auto-start**: check that the
+  window's renderer metadata records a `unix:`/`tcp:` socket, never `fd:`.
+  `amx doctor` reports known Kitty sockets and renderer drift; a `fd:` value or
+  render failures indicate a stale binary — `just install` then
+  `amx daemon restart`.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

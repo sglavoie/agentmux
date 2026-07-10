@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -69,6 +70,24 @@ type Handler struct {
 	kittySockets      map[int]string
 	lastKittyListenOn string
 	lastRenderTickAt  time.Time
+
+	// activeLoopCache memoizes agent-session-loop discovery for the ASL
+	// sibling-pane routing exception (handler_asl_routing.go). Discovery scans
+	// on-disk loop state, so a hook burst from the same pane must not rescan on
+	// every event. Entries are valid for at most renderInterval and are
+	// invalidated whenever a loop lifecycle event (started, turn started,
+	// finished) changes the active set. The cache is rebuilt lazily, including
+	// after a daemon restart, and is never persisted in amx_state. Guarded by
+	// stateMu.
+	activeLoopCache      []agentloop.Candidate
+	activeLoopCacheAt    time.Time
+	activeLoopCacheValid bool
+	// activeLoopCacheGen counts lifecycle invalidations. A scan captures the
+	// generation before releasing stateMu to discover, and only publishes its
+	// result if the generation still matches on re-lock. This prevents a slow
+	// scan that started before invalidateActiveLoopCache from overwriting the
+	// newer (empty) state with a stale candidate set.
+	activeLoopCacheGen uint64
 
 	// claudeContextLimitProbeEnabled gates ProbeClaudeContextLimit. Set from
 	// [defaults.watchdog].claude_context_limit_probe at daemon startup.

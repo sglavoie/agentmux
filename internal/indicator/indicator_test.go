@@ -40,6 +40,41 @@ func TestRunWithDeps_DropsUnavailableDaemonEventWithinBudget(t *testing.T) {
 	}
 }
 
+func TestRunWithDeps_ForwardsNormalizedFDAddress(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "fd:34")
+	t.Setenv("KITTY_PID", "4242")
+	client := &fakeDaemonClient{}
+
+	if err := runWithDeps("Stop", 42, "/tmp/amx", `{}`, false, client); err != nil {
+		t.Fatalf("runWithDeps() error = %v, want nil", err)
+	}
+	if client.calls != 1 {
+		t.Fatalf("daemon calls = %d, want 1", client.calls)
+	}
+	if got := client.reqs[0].KittyListenOn; got != "unix:/tmp/kitty-4242" {
+		t.Fatalf("forwarded KittyListenOn = %q, want normalized unix:/tmp/kitty-4242", got)
+	}
+}
+
+func TestRunWithDeps_ForwardsEmptyWhenFDUnresolvable(t *testing.T) {
+	// Inside Kitty (raw KITTY_LISTEN_ON set) but the fd: cannot be normalized
+	// without a PID: still contact the daemon, forwarding an empty address so
+	// the daemon falls back to its own established client.
+	t.Setenv("KITTY_LISTEN_ON", "fd:34")
+	t.Setenv("KITTY_PID", "")
+	client := &fakeDaemonClient{}
+
+	if err := runWithDeps("Stop", 42, "/tmp/amx", `{}`, false, client); err != nil {
+		t.Fatalf("runWithDeps() error = %v, want nil", err)
+	}
+	if client.calls != 1 {
+		t.Fatalf("daemon calls = %d, want 1 (fd: is still inside Kitty)", client.calls)
+	}
+	if got := client.reqs[0].KittyListenOn; got != "" {
+		t.Fatalf("forwarded KittyListenOn = %q, want empty for unresolvable fd:", got)
+	}
+}
+
 func TestRunWithDeps_OutsideKittyDoesNotContactDaemon(t *testing.T) {
 	t.Setenv("KITTY_LISTEN_ON", "")
 	client := &fakeDaemonClient{}

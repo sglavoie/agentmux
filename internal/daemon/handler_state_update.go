@@ -21,6 +21,15 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		return h.handleLoopMarkerStateUpdate(req)
 	}
 
+	// A newer prompt or explicit wipe supersedes a stop still held in the
+	// reset-defer window; drop it before this update lands so the debounced stop
+	// cannot fire afterward and repaint a stale icon. The deferred stop's own
+	// commit deletes its map entry before calling handleStateUpdate, so this is a
+	// no-op on that path.
+	if supersedesDeferredResetStop(req) {
+		h.cancelPendingResetStop(req.WindowID)
+	}
+
 	receivedAt := time.Now()
 	h.stateMu.Lock()
 	req = h.applyResetFlowLocked(req)

@@ -1,0 +1,406 @@
+package daemon
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
+)
+
+// seedOwnerState seeds the guard, desired icon, and last action a managed
+// window is currently showing so a follow-up user_clear has something to wipe.
+func seedOwnerState(h *Handler, windowID int, action, icon string) {
+	h.guard.TryUpdate(windowID, action, false)
+	h.stateMu.Lock()
+	st := h.ensureWindowStateLocked(windowID)
+	st.DesiredIcon = icon
+	st.StateSet = true
+	st.LastAction = action
+	h.stateMu.Unlock()
+}
+
+func TestHandler_UserClearWipesManagedPaneIcons(t *testing.T) {
+	cases := []struct {
+		action string
+		icon   string
+	}{
+		{"stop", "stop"},
+		{"permission", "key"},
+		{"failure", "warning"},
+		{"stop_failure", "error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.icon, func(t *testing.T) {
+			h := newTestHandler()
+			fake := &fakeKittyClient{windows: hookEventWindows(
+				palette.BuildTitle("api", tc.icon, false),
+				[]kitty.Window{{
+					ID:       42,
+					IsActive: true,
+					UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+				}},
+			)}
+			h.SetKittyClient(fake)
+			seedOwnerState(h, 42, tc.action, tc.icon)
+
+			resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+			if !resp.OK {
+				t.Fatalf("user_clear response = %+v", resp)
+			}
+
+			h.stateMu.Lock()
+			st := h.store[42]
+			h.stateMu.Unlock()
+			if st == nil || st.DesiredIcon != "" || !st.StateSet || !st.Dirty {
+				t.Fatalf("state = %+v; want empty desired icon, StateSet, dirty", st)
+			}
+			if st.LastAction != "" {
+				t.Fatalf("LastAction = %q; want cleared", st.LastAction)
+			}
+			if g := h.guard.Current(42); g != "" {
+				t.Fatalf("guard = %q; want cleared", g)
+			}
+			detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+			if len(detail.Events) != 1 || detail.Events[0].Action != "user_clear" || detail.Events[0].Suppressed {
+				t.Fatalf("events = %+v; want one allowed user_clear", detail.Events)
+			}
+		})
+	}
+}
+
+func TestHandler_UserClearFromUnmanagedSiblingTargetsOwner(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
+		palette.BuildTitle("api", "stop", false),
+		[]kitty.Window{
+			{ID: 42, IsActive: false, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude}},
+			{ID: 43, IsActive: true}, // unmanaged sibling: F8 pressed here
+		},
+	)}
+	h.SetKittyClient(fake)
+	seedOwnerState(h, 42, "stop", "stop")
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	h.stateMu.Lock()
+	owner := h.store[42]
+	h.stateMu.Unlock()
+	if owner == nil || owner.DesiredIcon != "" || !owner.Dirty {
+		t.Fatalf("owner state = %+v; want cleared and dirty", owner)
+	}
+	if g := h.guard.Current(42); g != "" {
+		t.Fatalf("owner guard = %q; want cleared", g)
+	}
+
+	// The source pane must not log an owner_mismatch suppression.
+	srcDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	for _, ev := range srcDetail.Events {
+		if ev.SuppressionReason == suppressionReasonOwnerMismatch {
+			t.Fatalf("source event = %+v; want no owner_mismatch", ev)
+		}
+	}
+	// The clear is logged against the owner.
+	ownerDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(ownerDetail.Events) != 1 || ownerDetail.Events[0].Action != "user_clear" || ownerDetail.Events[0].Suppressed {
+		t.Fatalf("owner events = %+v; want one allowed user_clear", ownerDetail.Events)
+	}
+}
+
+func TestHandler_UserClearFromManagedNonOwnerTargetsOwner(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
+		palette.BuildTitle("api", "key", false),
+		[]kitty.Window{
+			{ID: 42, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Codex}},     // owner
+			{ID: 43, IsActive: false, UserVars: kitty.UserVars{Profile: "scratch", Harness: harness.Codex}}, // managed non-owner
+		},
+	)}
+	h.SetKittyClient(fake)
+	seedOwnerState(h, 42, "permission", "key")
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	h.stateMu.Lock()
+	owner := h.store[42]
+	src := h.store[43]
+	h.stateMu.Unlock()
+	if owner == nil || owner.DesiredIcon != "" || !owner.Dirty {
+		t.Fatalf("owner state = %+v; want cleared and dirty", owner)
+	}
+	if src != nil && (src.DesiredIcon != "" || src.StateSet) {
+		t.Fatalf("source state = %+v; managed non-owner must not gain a desired icon", src)
+	}
+	srcDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	for _, ev := range srcDetail.Events {
+		if ev.SuppressionReason == suppressionReasonOwnerMismatch {
+			t.Fatalf("source event = %+v; want no owner_mismatch", ev)
+		}
+	}
+}
+
+func TestHandler_UserClearNoOwnerLeavesTabUnchanged(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
+		"api",
+		[]kitty.Window{{ID: 43, IsActive: true}}, // no managed pane
+	)}
+	h.SetKittyClient(fake)
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	// No durable renderer state may be created for an ownerless tab.
+	h.stateMu.Lock()
+	st := h.store[43]
+	h.stateMu.Unlock()
+	if st != nil && (st.DesiredIcon != "" || st.StateSet || st.Dirty) {
+		t.Fatalf("state = %+v; ownerless user_clear must not create renderer state", st)
+	}
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(detail.Events) != 0 {
+		t.Fatalf("events = %+v; want none for ownerless no-op", detail.Events)
+	}
+
+	// The renderer must not touch the tab title either.
+	h.renderSnapshot(fake.windows)
+	if calls := fake.titleCalls(); len(calls) != 0 {
+		t.Fatalf("SetTabTitle calls = %+v; want none", calls)
+	}
+}
+
+// TestHandler_UserClearOwnerlessTabWithGlyphCreatesNoSourceState verifies that
+// F8 on an ownerless tab is a pure no-op that never mutates source state, even
+// when the tab already shows a state glyph (so context resolution parses a
+// non-empty current icon). Before the fix, context resolution recorded the
+// source pane's mute snapshot and thereby created a durable store entry for a
+// window that has nothing to wipe.
+func TestHandler_UserClearOwnerlessTabWithGlyphCreatesNoSourceState(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
+		palette.BuildTitle("api", "stop", false), // ownerless tab already showing a glyph
+		[]kitty.Window{{ID: 43, IsActive: true}}, // no managed pane owns the tab
+	)}
+	h.SetKittyClient(fake)
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	// No source entry at all — not merely an entry with empty render fields.
+	h.stateMu.Lock()
+	_, exists := h.store[43]
+	h.stateMu.Unlock()
+	if exists {
+		t.Fatalf("source window gained a state entry; ownerless F8 must not mutate source state before owner selection")
+	}
+
+	// And the renderer must not touch the tab title either.
+	h.renderSnapshot(fake.windows)
+	if calls := fake.titleCalls(); len(calls) != 0 {
+		t.Fatalf("SetTabTitle calls = %+v; want none for an ownerless no-op", calls)
+	}
+}
+
+// TestHandler_UserClearKittyLookupFailureWipesSourceFallback verifies that when
+// the Kitty snapshot cannot be read, F8 is not silently dropped. Because title
+// ownership is unknown, the wipe falls back to the source pane that fired the
+// clear rather than vanishing.
+func TestHandler_UserClearKittyLookupFailureWipesSourceFallback(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{
+		windows: hookEventWindows(palette.BuildTitle("api", "stop", false), []kitty.Window{{
+			ID:       42,
+			IsActive: true,
+			UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+		}}),
+		listErr: errors.New("kitty unavailable"),
+	}
+	h.SetKittyClient(fake)
+	seedOwnerState(h, 42, "stop", "stop")
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	h.stateMu.Lock()
+	st := h.store[42]
+	h.stateMu.Unlock()
+	if st == nil || st.DesiredIcon != "" || !st.StateSet {
+		t.Fatalf("state = %+v; a lookup failure must still wipe the source pane icon", st)
+	}
+	if g := h.guard.Current(42); g != "" {
+		t.Fatalf("guard = %q; want cleared on the fallback wipe", g)
+	}
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) != 1 || detail.Events[0].Action != "user_clear" || detail.Events[0].Suppressed {
+		t.Fatalf("events = %+v; want one allowed user_clear on the fallback source pane", detail.Events)
+	}
+}
+
+func TestHandler_UserClearPreservesForeignTitleParts(t *testing.T) {
+	h := newTestHandler()
+	liveTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "W:renamed",
+		State:   "stop",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
+	want := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "W:renamed",
+		State:   "",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
+	fake := &fakeKittyClient{windows: hookEventWindows(liveTitle, []kitty.Window{{
+		ID:       42,
+		IsActive: true,
+		UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+	}})}
+	h.SetKittyClient(fake)
+
+	seedOwnerState(h, 42, "stop", "stop")
+	h.stateMu.Lock()
+	st := h.ensureWindowStateLocked(42)
+	st.Looping = true
+	st.LoopingSet = true
+	h.stateMu.Unlock()
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	h.renderSnapshot(fake.windows)
+	calls := fake.titleCalls()
+	if len(calls) != 1 {
+		t.Fatalf("SetTabTitle calls = %d, want 1 (%+v)", len(calls), calls)
+	}
+	if calls[0].title != want {
+		t.Fatalf("SetTabTitle title = %q, want %q", calls[0].title, want)
+	}
+}
+
+func TestHandler_UserClearClearsGuardAndActionButKeepsLoop(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: hookEventWindows(
+		palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "error", Looping: true}),
+		[]kitty.Window{{
+			ID:       42,
+			IsActive: true,
+			UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+		}},
+	)}
+	h.SetKittyClient(fake)
+
+	seedOwnerState(h, 42, "stop_failure", "error")
+	h.stateMu.Lock()
+	st := h.ensureWindowStateLocked(42)
+	st.LastActiveEvent = "PreToolUse"
+	st.Looping = true
+	st.LoopingSet = true
+	h.stateMu.Unlock()
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	h.stateMu.Lock()
+	st = h.store[42]
+	h.stateMu.Unlock()
+	if g := h.guard.Current(42); g != "" {
+		t.Fatalf("guard = %q; want cleared", g)
+	}
+	if st.LastAction != "" || st.LastActiveEvent != "" || st.DesiredIcon != "" {
+		t.Fatalf("state = %+v; want last action/event and desired icon cleared", st)
+	}
+	if !st.Looping || !st.LoopingSet {
+		t.Fatalf("state = %+v; loop state must remain authoritative", st)
+	}
+}
+
+func TestHandler_UserClearConvergesDriftedTitleAndResetsFailures(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: hookEventWindows(
+		palette.BuildTitle("api", "stop", false), // live title drifted to stop
+		[]kitty.Window{{
+			ID:       42,
+			IsActive: true,
+			UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+		}},
+	)}
+	h.SetKittyClient(fake)
+
+	seedOwnerState(h, 42, "stop", "stop")
+	h.stateMu.Lock()
+	st := h.ensureWindowStateLocked(42)
+	st.RenderFailures = 2
+	st.LastRenderError = "boom"
+	h.stateMu.Unlock()
+
+	resp := h.Handle(Request{
+		Type:          TypeHookEvent,
+		WindowID:      42,
+		Event:         "user_clear",
+		KittyListenOn: "unix:/tmp/kitty-1",
+	})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	h.renderSnapshot(fake.windows)
+	calls := fake.titleCalls()
+	want := palette.BuildTitle("api", "", false)
+	if len(calls) != 1 || calls[0].title != want {
+		t.Fatalf("SetTabTitle calls = %+v; want one converging to %q", calls, want)
+	}
+
+	h.stateMu.Lock()
+	st = h.store[42]
+	h.stateMu.Unlock()
+	if st.Dirty || st.RenderFailures != 0 || st.LastRenderError != "" {
+		t.Fatalf("state = %+v; successful render must reset failure counters and dirty flag", st)
+	}
+}
+
+func TestHandler_UserClearThenPromptSetsBolt(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: hookEventWindows(
+		palette.BuildTitle("api", "stop", false),
+		[]kitty.Window{{
+			ID:       42,
+			IsActive: true,
+			UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+		}},
+	)}
+	h.SetKittyClient(fake)
+	seedOwnerState(h, 42, "stop", "stop")
+
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "user_clear"}); !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit"}); !resp.OK {
+		t.Fatalf("UserPromptSubmit response = %+v", resp)
+	}
+
+	h.stateMu.Lock()
+	st := h.store[42]
+	h.stateMu.Unlock()
+	if st == nil || st.DesiredIcon != "bolt" {
+		t.Fatalf("state = %+v; want bolt after post-clear prompt", st)
+	}
+}

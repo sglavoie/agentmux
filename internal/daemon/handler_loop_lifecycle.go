@@ -101,9 +101,9 @@ func (h *Handler) handleLoopLifecycleTarget(
 }
 
 func loopLifecycleTargets(windows []kitty.OSWindow, payload hookevent.HookPayload) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
-	allTargets, openTargets := loopLifecycleWindowTargets(windows)
 	payloadTarget := loopPayloadWorkspaceTarget(payload)
 	if payloadTarget.CWD == "" && payloadTarget.WindowID <= 0 {
+		_, openTargets := loopLifecycleWindowTargets(windows)
 		return nil, openTargets
 	}
 
@@ -112,8 +112,19 @@ func loopLifecycleTargets(windows []kitty.OSWindow, payload hookevent.HookPayloa
 		Harness:  payloadTarget.Harness,
 		WindowID: payloadTarget.WindowID,
 	}}
+	return matchManagedLoopTargets(windows, candidates)
+}
+
+// matchManagedLoopTargets selects the title-owner window of each tab whose
+// workspace matches any of candidates under the shared MatchingWorkspace policy,
+// and returns the open managed targets that policy considered. It is the single
+// workspace-matching seam reused by both loop lifecycle fan-out and ASL
+// sibling-pane state routing, so neither path grows a second ownership policy.
+// loopLifecycleWindowTargets already resolves one target per tab, so no
+// additional per-tab deduplication is required here.
+func matchManagedLoopTargets(windows []kitty.OSWindow, candidates []agentloop.Candidate) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
+	allTargets, openTargets := loopLifecycleWindowTargets(windows)
 	targets := make([]loopLifecycleTarget, 0, len(allTargets))
-	seenTabs := make(map[int]struct{})
 	for _, target := range allTargets {
 		matches, err := agentloop.HasMatchingWorkspace(candidates, target.workspace, openTargets)
 		if err != nil {
@@ -128,15 +139,17 @@ func loopLifecycleTargets(windows []kitty.OSWindow, payload hookevent.HookPayloa
 		if !matches {
 			continue
 		}
-		if _, ok := seenTabs[target.tab.ID]; ok {
-			continue
-		}
-		seenTabs[target.tab.ID] = struct{}{}
 		targets = append(targets, target)
 	}
 	return targets, openTargets
 }
 
+// loopLifecycleWindowTargets resolves one fan-out target per tab — the window
+// that actually owns the tab title (kitty.FindTabTitleOwner: the active managed
+// window, else the first managed one) — so loop state lands on the same pane the
+// renderer writes to rather than on the first managed window in Kitty order.
+// openTargets still enumerates every managed window's workspace so
+// HasMatchingWorkspace can weigh sibling harnesses in the same workspace.
 func loopLifecycleWindowTargets(windows []kitty.OSWindow) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
 	targets := make([]loopLifecycleTarget, 0)
 	openTargets := make([]agentloop.WorkspaceTarget, 0)
@@ -149,14 +162,22 @@ func loopLifecycleWindowTargets(windows []kitty.OSWindow) ([]loopLifecycleTarget
 				if !ok {
 					continue
 				}
-				targets = append(targets, loopLifecycleTarget{
-					windowID:  win.ID,
-					tab:       tab,
-					win:       win,
-					workspace: workspace,
-				})
 				openTargets = append(openTargets, workspace)
 			}
+			owner, ok := kitty.FindTabTitleOwner(tab)
+			if !ok {
+				continue
+			}
+			workspace, ok := managedWindowWorkspaceTarget(*owner)
+			if !ok {
+				continue
+			}
+			targets = append(targets, loopLifecycleTarget{
+				windowID:  owner.ID,
+				tab:       tab,
+				win:       owner,
+				workspace: workspace,
+			})
 		}
 	}
 	return targets, openTargets

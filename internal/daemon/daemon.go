@@ -52,7 +52,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}()
 
 	kittyRunner := kitty.NewRealRunner()
-	kittyClient := kitty.NewClient(kittyRunner)
+	kittyClient := newDaemonKittyClient(kittyRunner)
 	handler.SetKittyClient(kittyClient)
 	notifier.SetFocus(kittyClient)
 	global, perAccount := buildStaleThresholds(cfg)
@@ -87,6 +87,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			return nil
 		}
 	}
+}
+
+// newDaemonKittyClient builds the daemon's Kitty client from the current
+// environment, normalizing KITTY_LISTEN_ON so a daemon auto-started by an F8
+// `launch --allow-remote-control` child does not inherit an unusable
+// process-local "fd:" descriptor. An empty normalized address leaves the
+// client without a socket, matching kitty.NewClient's behavior outside Kitty.
+func newDaemonKittyClient(runner kitty.CommandRunner) *kitty.SubprocessClient {
+	return kitty.NewClientWithSocket(runner, kitty.NormalizedListenAddressFromEnv())
 }
 
 // Ping checks whether the daemon is reachable on the default socket.

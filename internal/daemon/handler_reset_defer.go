@@ -42,6 +42,41 @@ func (h *Handler) deferResetSensitiveStop(req Request, payload hookevent.HookPay
 	return true
 }
 
+// cancelPendingResetStop drops any deferred reset stop still waiting on the
+// debounce timer for windowID. Called when a newer authoritative event
+// supersedes the held stop so it can no longer fire and repaint a stale icon.
+func (h *Handler) cancelPendingResetStop(windowID int) {
+	h.stateMu.Lock()
+	if pending, ok := h.pendingResetStops[windowID]; ok {
+		if pending.timer != nil {
+			pending.timer.Stop()
+		}
+		delete(h.pendingResetStops, windowID)
+	}
+	h.stateMu.Unlock()
+}
+
+// supersedesDeferredResetStop reports whether an incoming state update should
+// cancel a stop still held in the reset-defer window. A fresh prompt (a new
+// turn) or an explicit wipe (user_clear/clear) makes the held stop stale, so it
+// must not paint. Reset-flow cleanup (req.ResetFlow) is deliberately excluded:
+// the deferred stop is kept so applyResetFlowLocked can fold it into the same
+// user_clear when its timer commits.
+func supersedesDeferredResetStop(req Request) bool {
+	if req.ResetFlow {
+		return false
+	}
+	if req.IsPrompt {
+		return true
+	}
+	switch req.Action {
+	case "user_clear", "clear":
+		return true
+	default:
+		return false
+	}
+}
+
 func (h *Handler) commitDeferredResetStop(req Request, seq uint64) {
 	h.stateMu.Lock()
 	pending, ok := h.pendingResetStops[req.WindowID]
