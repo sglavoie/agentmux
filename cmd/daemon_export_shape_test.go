@@ -11,7 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV4Payload(t *testing.T) {
+func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV5Payload(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	now := time.Unix(1_700_000_100, 0)
@@ -33,7 +33,10 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV4Payload(t *testing.T) {
 				},
 				WindowMetadata: map[int]daemon.WindowDebugMetadata{
 					42: {
-						Stats: daemon.WindowDebugStats{EventCount: 2, FirstEventAt: 1_700_000_000, LastEventAt: 1_700_000_001},
+						Stats: daemon.WindowDebugStats{
+							EventCount: 2, FirstEventAt: 1_700_000_000, LastEventAt: 1_700_000_001,
+							SuppressionReasons: map[string]int{"guard_blocked": 2},
+						},
 						Durable: daemon.WindowDebugDurable{
 							SessionTitle:    "W:api",
 							Profile:         "work",
@@ -41,6 +44,10 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV4Payload(t *testing.T) {
 							ActivityAt:      1_700_000_001,
 							LastAction:      "elicitation",
 							LastActiveEvent: "PreToolUse",
+						},
+						Renderer: daemon.WindowDebugRenderer{
+							DesiredIcon: "question", StateSet: true, Looping: true, LoopingSet: true, RenderFailures: 3,
+							LastRenderError: "set title: unavailable", KittyListenOn: "unix:/tmp/kitty-42",
 						},
 					},
 					77: {
@@ -113,8 +120,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV4Payload(t *testing.T) {
 	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
 		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
 	}
-	if payload.SchemaVersion != 4 {
-		t.Fatalf("schema_version = %d; want 4", payload.SchemaVersion)
+	if payload.SchemaVersion != 5 {
+		t.Fatalf("schema_version = %d; want 5", payload.SchemaVersion)
 	}
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())
@@ -139,6 +146,14 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV4Payload(t *testing.T) {
 	}
 	if window42.Durable.SessionTitle != "W:api" {
 		t.Fatalf("window 42 durable.session_title = %q; want W:api", window42.Durable.SessionTitle)
+	}
+	if window42.Renderer.DesiredIcon != "question" || !window42.Renderer.StateSet || !window42.Renderer.Looping || !window42.Renderer.LoopingSet ||
+		window42.Renderer.RenderFailures != 3 || window42.Renderer.LastRenderError != "set title: unavailable" ||
+		window42.Renderer.KittyListenOn != "unix:/tmp/kitty-42" {
+		t.Fatalf("window 42 renderer = %+v", window42.Renderer)
+	}
+	if got := window42.Stats.SuppressionReasons["guard_blocked"]; got != 2 {
+		t.Fatalf("window 42 suppression reasons = %+v; want guard_blocked=2", window42.Stats.SuppressionReasons)
 	}
 	if !window42.Live.Found || window42.Live.TabID != 91 || window42.Live.OSWindowID != 900 || window42.Live.TabTitle != "⚡W:api" ||
 		window42.Live.BaseTitle != "W:api" || window42.Live.IconState != "bolt" || window42.Live.WindowTitle != "api window" ||

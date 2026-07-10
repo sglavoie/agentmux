@@ -27,10 +27,6 @@ type activeLoopsMsg struct {
 	err        error
 }
 
-// activeLoopTitleSyncMsg carries the nonfatal result of syncing loop markers
-// into live Kitty tab titles.
-type activeLoopTitleSyncMsg struct{ err error }
-
 // errMsg carries an error from a Kitty query.
 type errMsg struct{ err error }
 

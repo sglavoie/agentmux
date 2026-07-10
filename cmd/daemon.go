@@ -166,13 +166,18 @@ func daemonExportLiveMetadata(osWindows []kitty.OSWindow, snapshot daemon.Events
 		if rs, ok := session.FindByWindowID(sessions, id); ok {
 			live.BaseTitle = rs.Base
 			live.IconState = rs.State
+			live.Looping = rs.Looping
 			live.Starred = rs.Starred
 			live.Project = rs.Project
 			live.Profile = rs.Profile
 			live.Harness = rs.Harness
 			live.Directory = rs.Directory
 		} else {
-			live.BaseTitle, live.IconState, live.Starred = palette.ParseTitle(tab.Title)
+			parts := palette.ParseTitleParts(tab.Title)
+			live.BaseTitle = parts.Base
+			live.IconState = parts.State
+			live.Looping = parts.Looping
+			live.Starred = parts.Starred
 			live.Profile = win.UserVars.EffectiveProfile()
 			live.Harness = win.UserVars.EffectiveHarness()
 			live.Directory = win.UserVars.EffectiveDirectory()
@@ -207,6 +212,7 @@ func buildDaemonExportPayload(snapshot daemon.EventsExport, health daemon.Health
 		if durable, ok := snapshot.WindowMetadata[id]; ok {
 			window.Stats = durable.Stats
 			window.Durable = durable.Durable
+			window.Renderer = durable.Renderer
 		}
 		if events, ok := snapshot.EventsByWindow[id]; ok {
 			window.Events = daemonExportTrimEvents(events, last)
@@ -252,8 +258,8 @@ func resolveDaemonExportWindowID(cmd *cobra.Command) (int, error) {
 
 var daemonExportEventsCmd = &cobra.Command{
 	Use:   "export-events",
-	Short: "Dump schema-v4 hook event history as JSON for investigation",
-	Long: `Export the daemon's schema-v4 investigation snapshot as JSON.
+	Short: "Dump schema-v5 hook event history as JSON for investigation",
+	Long: `Export the daemon's schema-v5 investigation snapshot as JSON.
 
 The payload is organized as a per-window array so each entry carries its own
 event list, durable daemon metadata, and best-effort live Kitty/session

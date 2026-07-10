@@ -8,24 +8,22 @@ func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T)
 	h := newTestHandler()
 
 	h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "compact",
-		Event:            "preCompact",
-		SessionTitle:     "W:api",
-		Account:          "work",
-		CurrentIconState: "bolt",
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Harness:      "copilot",
+		Action:       "compact",
+		Event:        "preCompact",
+		SessionTitle: "W:api",
+		Account:      "work",
 	})
 	h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "idle",
-		Event:            "notification",
-		SessionTitle:     "W:api",
-		Account:          "work",
-		CurrentIconState: "compact",
+		Type:         TypeStateUpdate,
+		WindowID:     1,
+		Harness:      "copilot",
+		Action:       "idle",
+		Event:        "notification",
+		SessionTitle: "W:api",
+		Account:      "work",
 	})
 
 	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 1})
@@ -54,6 +52,33 @@ func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T)
 	}
 	if meta.Durable.Harness != "copilot" {
 		t.Fatalf("harness = %q; want copilot", meta.Durable.Harness)
+	}
+}
+
+func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "failure", KittyListenOn: "unix:/tmp/kitty-7"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "permission"}) // blocked by failure guard
+
+	h.stateMu.Lock()
+	st := h.store[7]
+	st.RenderFailures = 3
+	st.LastRenderError = "set user vars: kitty unavailable"
+	h.syncRendererMetadataLocked(7)
+	h.stateMu.Unlock()
+
+	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 7})
+	if !resp.OK {
+		t.Fatalf("events export: want OK=true, got %+v", resp)
+	}
+	meta := resp.WindowMetadata[7]
+	if meta.Renderer.DesiredIcon != "warning" || !meta.Renderer.StateSet || meta.Renderer.RenderFailures != 3 ||
+		meta.Renderer.LastRenderError != "set user vars: kitty unavailable" ||
+		meta.Renderer.KittyListenOn != "unix:/tmp/kitty-7" {
+		t.Fatalf("renderer metadata = %+v", meta.Renderer)
+	}
+	if got := meta.Stats.SuppressionReasons[suppressionReasonGuardBlocked]; got != 1 {
+		t.Fatalf("suppression reasons = %+v; want %s=1", meta.Stats.SuppressionReasons, suppressionReasonGuardBlocked)
 	}
 }
 

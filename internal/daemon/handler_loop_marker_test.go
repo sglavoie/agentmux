@@ -53,8 +53,8 @@ func TestHandler_LoopMarkerDoesNotDisturbGuardOrLastAction(t *testing.T) {
 			})
 
 			h.stateMu.Lock()
-			wantLastAction := h.lastAction[1]
-			wantLastActiveEvent := h.lastActiveEvent[1]
+			wantLastAction := h.store[1].LastAction
+			wantLastActiveEvent := h.store[1].LastActiveEvent
 			h.stateMu.Unlock()
 			wantGuard := h.guard.Current(1)
 
@@ -74,8 +74,8 @@ func TestHandler_LoopMarkerDoesNotDisturbGuardOrLastAction(t *testing.T) {
 			}
 
 			h.stateMu.Lock()
-			gotLastAction := h.lastAction[1]
-			gotLastActiveEvent := h.lastActiveEvent[1]
+			gotLastAction := h.store[1].LastAction
+			gotLastActiveEvent := h.store[1].LastActiveEvent
 			h.stateMu.Unlock()
 			if gotLastAction != wantLastAction {
 				t.Fatalf("lastAction after loop_marker = %q, want %q (untouched)", gotLastAction, wantLastAction)
@@ -166,8 +166,8 @@ func TestHandler_LoopMarkerLeavesStaleTrackingUntouched(t *testing.T) {
 	h := newTestHandler()
 
 	h.stateMu.Lock()
-	h.notifiedStale[1] = true
-	h.contextLimitNotified[1] = true
+	h.ensureWindowStateLocked(1).NotifiedStale = true
+	h.ensureWindowStateLocked(1).ContextLimitNotified = true
 	h.stateMu.Unlock()
 
 	resp := h.Handle(Request{
@@ -182,8 +182,8 @@ func TestHandler_LoopMarkerLeavesStaleTrackingUntouched(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	stillStale := h.notifiedStale[1]
-	stillContextLimit := h.contextLimitNotified[1]
+	stillStale := h.store[1].NotifiedStale
+	stillContextLimit := h.store[1].ContextLimitNotified
 	h.stateMu.Unlock()
 	if !stillStale {
 		t.Fatal("loop_marker cleared notifiedStale latch; want untouched")

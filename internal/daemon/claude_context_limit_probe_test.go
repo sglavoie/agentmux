@@ -87,8 +87,8 @@ func TestProbeClaudeContextLimit_BoltSwapsToError(t *testing.T) {
 
 	h.stateMu.Lock()
 	meta := h.windowMetadata[42]
-	notified := h.contextLimitNotified[42]
-	lastAction := h.lastAction[42]
+	notified := h.store[42].ContextLimitNotified
+	lastAction := h.store[42].LastAction
 	h.stateMu.Unlock()
 	if meta.Durable.Harness != "claude" || meta.Durable.Profile != "work" || meta.Durable.LastAction != "stop_failure" {
 		t.Fatalf("durable metadata = %+v, want claude/work/stop_failure", meta.Durable)
@@ -138,7 +138,7 @@ func TestProbeClaudeContextLimit_EmptyStateSwapsToError(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	notified := h.contextLimitNotified[42]
+	notified := h.store[42].ContextLimitNotified
 	h.stateMu.Unlock()
 	if !notified {
 		t.Fatalf("contextLimitNotified[42] = false, want true")
@@ -308,7 +308,8 @@ func TestProbeClaudeContextLimit_UnmanagedClaudeForegroundNoOp(t *testing.T) {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
 	}
 	h.stateMu.Lock()
-	notified := h.contextLimitNotified[42]
+	st, ok := h.store[42]
+	notified := ok && st.ContextLimitNotified
 	h.stateMu.Unlock()
 	if notified {
 		t.Fatalf("contextLimitNotified[42] = true, want false")
@@ -360,7 +361,7 @@ func TestProbeClaudeContextLimit_PreRecordedPipeModeReachesNotifier(t *testing.T
 			kitty.MatchWindowByID(42): claudeContextLimitScreen,
 		}
 		h.stateMu.Lock()
-		h.lastPipeMode[42] = true
+		h.ensureWindowStateLocked(42).LastPipeMode = true
 		h.stateMu.Unlock()
 
 		h.ProbeClaudeContextLimit(time.Now())
@@ -397,7 +398,8 @@ func TestProbeClaudeContextLimit_NoMarker_NoOp(t *testing.T) {
 		t.Fatalf("events = %d, want 0", len(resp.Events))
 	}
 	h.stateMu.Lock()
-	notified := h.contextLimitNotified[42]
+	st, ok := h.store[42]
+	notified := ok && st.ContextLimitNotified
 	h.stateMu.Unlock()
 	if notified {
 		t.Fatalf("contextLimitNotified[42] = true, want false")
@@ -450,8 +452,8 @@ func TestProbeClaudeContextLimit_RealScreen_BoltToError(t *testing.T) {
 
 	h.stateMu.Lock()
 	meta := h.windowMetadata[42]
-	notified := h.contextLimitNotified[42]
-	lastAction := h.lastAction[42]
+	notified := h.store[42].ContextLimitNotified
+	lastAction := h.store[42].LastAction
 	h.stateMu.Unlock()
 	if meta.Durable.Harness != "claude" || meta.Durable.Profile != "work" || meta.Durable.LastAction != "stop_failure" {
 		t.Fatalf("durable metadata = %+v, want claude/work/stop_failure", meta.Durable)
@@ -506,7 +508,7 @@ func TestProbeClaudeContextLimit_RealScreen_EmptyToError(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	notified := h.contextLimitNotified[42]
+	notified := h.store[42].ContextLimitNotified
 	h.stateMu.Unlock()
 	if !notified {
 		t.Fatalf("contextLimitNotified[42] = false, want true")

@@ -145,6 +145,37 @@ func (g *StateGuard) Current(windowID int) string {
 	return entry.action
 }
 
+// Snapshot returns the active guard entry for persistence. Expired guards are
+// treated as absent, matching Current.
+func (g *StateGuard) Snapshot(windowID int) (action string, expiresAt time.Time, ok bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	entry, exists := g.entries[windowID]
+	if !exists || time.Now().After(entry.expiresAt) {
+		return "", time.Time{}, false
+	}
+	return entry.action, entry.expiresAt, true
+}
+
+// Restore records a guard entry that was loaded from durable state. Expired or
+// unknown actions are ignored so stale user vars cannot resurrect old guards.
+func (g *StateGuard) Restore(windowID int, action string, expiresAt time.Time) {
+	if action == "" || time.Now().After(expiresAt) {
+		return
+	}
+	priority, ok := actionPriority[action]
+	if !ok {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.entries[windowID] = &guardEntry{
+		action:    action,
+		priority:  priority,
+		expiresAt: expiresAt,
+	}
+}
+
 // Clear removes any guard for windowID.
 func (g *StateGuard) Clear(windowID int) {
 	g.mu.Lock()

@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -87,6 +88,57 @@ func TestClient_SendHonorsDeadline(t *testing.T) {
 	}
 	if elapsed > 2*time.Second {
 		t.Fatalf("Send blocked beyond deadline (elapsed=%v); deadline=%v", elapsed, sendDeadline)
+	}
+}
+
+func TestClient_SendWithAutoStartHonorsFullDeadline(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-client-autostart-deadline-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	sockPath := filepath.Join(dir, "d.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			conn, acceptErr := ln.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = conn.Close() }()
+				buf := make([]byte, 1024)
+				_, _ = conn.Read(buf)
+				_, _ = io.Copy(io.Discard, conn)
+			}()
+		}
+	}()
+
+	oldSendDeadline := sendDeadline
+	sendDeadline = 100 * time.Millisecond
+	t.Cleanup(func() { sendDeadline = oldSendDeadline })
+	oldAutoStartDeadline := autoStartDeadline
+	autoStartDeadline = 220 * time.Millisecond
+	t.Cleanup(func() { autoStartDeadline = oldAutoStartDeadline })
+	oldRetryDelay := autoStartRetryDelay
+	autoStartRetryDelay = 10 * time.Millisecond
+	t.Cleanup(func() { autoStartRetryDelay = oldRetryDelay })
+	oldSpawn := spawnDetached
+	spawnDetached = func(string) error { return nil }
+	t.Cleanup(func() { spawnDetached = oldSpawn })
+
+	started := time.Now()
+	_, err = NewClientWithSocket(sockPath).SendWithAutoStart(Request{Type: TypeHealth}, "/tmp/amx")
+	if err == nil {
+		t.Fatal("SendWithAutoStart() error = nil, want deadline failure")
+	}
+	if elapsed := time.Since(started); elapsed > 350*time.Millisecond {
+		t.Fatalf("SendWithAutoStart() took %v, want bounded near %v", elapsed, autoStartDeadline)
 	}
 }
 

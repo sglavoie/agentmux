@@ -263,6 +263,7 @@ type UserVars struct {
 	AMXEnv           string `json:"amx_env"`
 	AMXGroups        string `json:"amx_groups"`
 	AMXDirectory     string `json:"amx_directory"`
+	AMXState         string `json:"amx_state"`
 	Account          string `json:"cc_account"`
 	ConfigDir        string `json:"cc_config_dir"`
 	Flags            string `json:"cc_flags"`

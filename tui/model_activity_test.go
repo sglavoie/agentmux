@@ -9,7 +9,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -178,24 +177,19 @@ func TestPickerProfileOverride_Persists(t *testing.T) {
 	}
 }
 
-func TestClearStatusCmdSetsTabTitle(t *testing.T) {
-	cfg := &config.Config{
-		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 300},
-		HarnessEmojis: map[string]string{"claude": "🦊"},
-		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
-	}
+func TestClearStatusCmdUsesDaemonWithoutWritingTabTitle(t *testing.T) {
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
-	title := palette.BuildTitleParts(palette.TitleParts{
-		Base:    "🦊api",
-		State:   "bolt",
-		Starred: true,
-		Muted:   true,
-		Looping: true,
-	})
+	oldDaemonRequest := daemonRequest
+	var gotRequest daemon.Request
+	daemonRequest = func(req daemon.Request) (daemon.Response, error) {
+		gotRequest = req
+		return daemon.Response{OK: true}, nil
+	}
+	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
 
 	target := session.RunningSession{
-		TabID: 7, WindowID: 99, Title: title, Base: "🦊api", State: "bolt", Account: "work", Starred: true, Muted: true,
+		TabID: 7, WindowID: 99, Base: "🦊api", State: "bolt", Account: "work", Starred: true, Muted: true, Looping: true,
 	}
 	msg := clearStatusCmd(client, target)()
 	done, ok := msg.(actionDoneMsg)
@@ -205,39 +199,10 @@ func TestClearStatusCmdSetsTabTitle(t *testing.T) {
 	if done.err != nil {
 		t.Errorf("expected nil error from mock Kitty client, got %v", done.err)
 	}
-	// Confirm the mock saw a kitten set-tab-title call scoped to the window.
-	found := false
-	var gotTitle string
-	for _, c := range runner.Calls {
-		if c.Name != "kitten" {
-			continue
-		}
-		hasCmd, hasMatch := false, false
-		for _, a := range c.Args {
-			if a == "set-tab-title" {
-				hasCmd = true
-			}
-			if a == "--match=window_id:99" {
-				hasMatch = true
-			}
-		}
-		if hasCmd && hasMatch {
-			found = true
-			gotTitle = c.Args[len(c.Args)-1]
-			break
-		}
+	if len(runner.Calls) != 0 {
+		t.Errorf("clear must not write Kitty titles, got calls: %v", runner.Calls)
 	}
-	if !found {
-		t.Errorf("expected kitten set-tab-title call with --match=window_id:99, got calls: %v", runner.Calls)
+	if gotRequest.Type != daemon.TypeStateUpdate || gotRequest.Action != "user_clear" || gotRequest.WindowID != 99 {
+		t.Errorf("daemon request = %+v, want user_clear for window 99", gotRequest)
 	}
-	wantTitle := palette.BuildTitleParts(palette.TitleParts{
-		Base:    "🦊api",
-		Starred: true,
-		Muted:   true,
-		Looping: true,
-	})
-	if gotTitle != wantTitle {
-		t.Errorf("set-tab-title value: got %q, want %q", gotTitle, wantTitle)
-	}
-	_ = cfg // cfg is built to mirror real model construction; only the runner is asserted
 }

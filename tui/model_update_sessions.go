@@ -33,9 +33,8 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 
 // handleActiveLoopsMsg stores the latest active-loop discovery result. Older
 // in-flight refreshes are ignored so a slow discovery cannot restore stale
-// candidates after a newer refresh has already completed. Accepted refreshes
-// also dispatch a nonfatal title sync so Kitty tabs mirror the active-loop
-// marker without trusting cached model titles.
+// candidates after a newer refresh has already completed. Tab loop markers
+// are rendered by the daemon; these candidates remain for detail views only.
 func (m Model) handleActiveLoopsMsg(msg activeLoopsMsg) (tea.Model, tea.Cmd) {
 	if msg.seq != m.activeLoopRefreshSeq {
 		return m, nil
@@ -45,12 +44,6 @@ func (m Model) handleActiveLoopsMsg(msg activeLoopsMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.activeLoopCandidates = append([]agentloop.Candidate(nil), msg.candidates...)
-	m.activeLoopTitleSyncErr = nil
-	return m, activeLoopTitleSyncCmd(m.client, m.sessions, m.activeLoopCandidates)
-}
-
-func (m Model) handleActiveLoopTitleSyncMsg(msg activeLoopTitleSyncMsg) (tea.Model, tea.Cmd) {
-	m.activeLoopTitleSyncErr = msg.err
 	return m, nil
 }
 

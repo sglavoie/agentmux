@@ -28,6 +28,7 @@ func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
 		}),
 		Base:    "🦊api",
 		State:   "bolt",
+		Looping: true,
 		Starred: true,
 	}
 

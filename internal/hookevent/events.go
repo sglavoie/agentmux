@@ -1,6 +1,6 @@
-// Package indicator implements the hook-indicator logic: event parsing,
-// state resolution, title updates, and daemon communication.
-package indicator
+// Package hookevent implements hook payload parsing and event-to-action
+// resolution shared by hook clients and the daemon.
+package hookevent
 
 // eventToAction is a shared map covering Claude (PascalCase) and Copilot
 // (camelCase) hook event names that directly map to a visible tab-state change.

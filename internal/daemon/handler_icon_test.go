@@ -21,31 +21,3 @@ func TestHandler_Health(t *testing.T) {
 		t.Errorf("UptimeSeconds = %d, want >= 0", resp.UptimeSeconds)
 	}
 }
-
-// TestActionFromIconState exhaustively pins the icon -> action recovery map.
-// The handler relies on this when the daemon restarts mid-flow: lastAction is
-// empty, so we fall back to the icon currently displayed in the tab title.
-// Drift between this map and palette icons would silently break post-restart
-// transitions (e.g. idle would no longer clear a stale bolt).
-func TestActionFromIconState(t *testing.T) {
-	cases := []struct {
-		iconState string
-		want      string
-	}{
-		{"bolt", "active"},
-		{"compact", "compact"},
-		{"subagent", "subagent"},
-		{"stop", "stop"},
-		{"key", "permission"},
-		{"warning", "failure"},
-		{"error", "stop_failure"},
-		{"question", "elicitation"},
-		{"", ""},
-		{"unknown", ""},
-	}
-	for _, tc := range cases {
-		if got := actionFromIconState(tc.iconState); got != tc.want {
-			t.Errorf("actionFromIconState(%q) = %q, want %q", tc.iconState, got, tc.want)
-		}
-	}
-}

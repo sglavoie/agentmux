@@ -142,7 +142,7 @@ func TestHandler_LoopFinishedClearsActiveClassOnly(t *testing.T) {
 	}
 }
 
-func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {
+func TestHandler_CleanupUsesRestoredDaemonState(t *testing.T) {
 	cases := []struct {
 		name     string
 		cleanup  string
@@ -165,18 +165,33 @@ func TestHandler_CleanupUsesCurrentTitleIconAfterDaemonRestart(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newTestHandler()
+			h.stateMu.Lock()
+			h.store[1] = &WindowState{LastAction: actionForIconStateForTest(tc.current), DesiredIcon: tc.current}
+			h.stateMu.Unlock()
 			resp := h.Handle(Request{
-				Type:             TypeStateUpdate,
-				WindowID:         1,
-				Action:           tc.cleanup,
-				Harness:          tc.harness,
-				CurrentIconState: tc.current,
+				Type:     TypeStateUpdate,
+				WindowID: 1,
+				Action:   tc.cleanup,
+				Harness:  tc.harness,
 			})
 			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIcon {
 				t.Fatalf("want icon_state=%q, got %+v", tc.wantIcon, resp)
 			}
 		})
 	}
+}
+
+func actionForIconStateForTest(iconState string) string {
+	return map[string]string{
+		"bolt":     "active",
+		"compact":  "compact",
+		"subagent": "subagent",
+		"stop":     "stop",
+		"key":      "permission",
+		"warning":  "failure",
+		"error":    "stop_failure",
+		"question": "elicitation",
+	}[iconState]
 }
 
 func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
@@ -188,11 +203,12 @@ func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	got, ok := h.activity[42]
+	st, ok := h.store[42]
 	h.stateMu.Unlock()
 	if !ok {
 		t.Fatalf("expected activity[42] to be recorded")
 	}
+	got := st.Activity
 	if got.Before(before) {
 		t.Fatalf("activity time %v is before request time %v", got, before)
 	}
@@ -203,7 +219,7 @@ func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "failure"})
 
 	h.stateMu.Lock()
-	delete(h.activity, 1)
+	h.store[1].Activity = time.Time{}
 	h.stateMu.Unlock()
 
 	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "permission"})
@@ -212,44 +228,38 @@ func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	_, ok := h.activity[1]
+	ok := !h.store[1].Activity.IsZero()
 	h.stateMu.Unlock()
 	if ok {
 		t.Fatalf("blocked update should not record activity")
 	}
 }
 
-// TestHandler_StateUpdateRefreshesMutedWindowsCache verifies that an inbound
-// Request with Muted=true populates the per-window cache that Notifier.IsMuted
-// consults, and that a subsequent request with Muted=false clears the entry.
-// This is the daemon-side half of session 3's gating contract: the title
-// remains the durable source of truth (via cc_mute on the kitty window), but
-// MaybeNotify and the sweep paths need an in-memory cache to consult.
-func TestHandler_StateUpdateRefreshesMutedWindowsCache(t *testing.T) {
+// TestHandler_StateUpdateUsesSnapshotDerivedMute verifies that state updates do
+// not affect the daemon's Kitty-derived mute cache.
+func TestHandler_StateUpdateUsesSnapshotDerivedMute(t *testing.T) {
 	h := newTestHandler()
 
 	if h.IsMuted(42) {
 		t.Fatal("window should default to unmuted")
 	}
 
-	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Muted: true})
+	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active"})
 	if !resp.OK || !resp.Allowed {
 		t.Fatalf("muted state update should still be allowed, got %+v", resp)
 	}
-	if !h.IsMuted(42) {
-		t.Fatal("mutedWindows cache should reflect Muted=true after handleStateUpdate")
-	}
-
-	// A separate window with Muted=false must not be polluted by the muted entry.
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 43, Action: "active"})
-	if h.IsMuted(43) {
-		t.Fatal("unmuted sibling window should not be marked muted")
-	}
-
-	// Toggling Muted back to false on the same window clears the cache.
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Muted: false})
 	if h.IsMuted(42) {
-		t.Fatal("mutedWindows cache should be cleared after Muted=false update")
+		t.Fatal("state updates must not populate the mute cache")
+	}
+
+	h.setMutedFromSnapshot(42, true)
+	if !h.IsMuted(42) {
+		t.Fatal("snapshot-derived mute state should populate the cache")
+	}
+
+	h.setMutedFromSnapshot(42, false)
+	if h.IsMuted(42) {
+		t.Fatal("snapshot-derived unmute should clear the cache")
 	}
 }
 

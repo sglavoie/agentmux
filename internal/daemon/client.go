@@ -41,16 +41,15 @@ func NewClientWithSocket(path string) *Client {
 	return &Client{socketPath: path}
 }
 
-// sendDeadline bounds total request/response time so a wedged or crashed
-// daemon cannot hang a hook script indefinitely. Hook commands are invoked
-// per Claude event and must return promptly. Exposed as a var (not const) so
-// tests can shrink it without sleeping for several seconds.
-var sendDeadline = 5 * time.Second
+// sendDeadline bounds one request/response exchange. autoStartDeadline bounds
+// the full hook-client path, including daemon start and retry, so a hook never
+// delays its harness by more than a small fraction of a second.
+var sendDeadline = 500 * time.Millisecond
+var autoStartDeadline = 800 * time.Millisecond
 
-var autoStartRetryDelay = 200 * time.Millisecond
+var autoStartRetryDelay = 50 * time.Millisecond
 var spawnDetached = SpawnDetached
 
-const autoStartRetryCount = 5
 const restartSocketPollCount = 20
 
 var restartSocketPollDelay = 50 * time.Millisecond
@@ -64,14 +63,21 @@ const maxResponseBytes = 1 << 20
 // Send sends req to the daemon and returns the response.
 // Returns an error if the daemon is not reachable.
 func (c *Client) Send(req Request) (Response, error) {
-	conn, err := net.DialTimeout("unix", c.socketPath, 2*time.Second)
+	return c.sendWithDeadline(req, sendDeadline)
+}
+
+func (c *Client) sendWithDeadline(req Request, timeout time.Duration) (Response, error) {
+	if timeout <= 0 {
+		return Response{}, errors.New("daemon request deadline elapsed")
+	}
+	conn, err := net.DialTimeout("unix", c.socketPath, timeout)
 	if err != nil {
 		return Response{}, fmt.Errorf("connecting to daemon: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 
 	// Bound the whole exchange so a stuck daemon cannot hang the caller.
-	_ = conn.SetDeadline(time.Now().Add(sendDeadline))
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -100,6 +106,20 @@ func (c *Client) Send(req Request) (Response, error) {
 	return resp, nil
 }
 
+func (c *Client) sendBefore(req Request, deadline time.Time) (Response, error) {
+	timeout := sendDeadline
+	if !deadline.IsZero() {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return Response{}, errors.New("daemon auto-start deadline elapsed")
+		}
+		if remaining < timeout {
+			timeout = remaining
+		}
+	}
+	return c.sendWithDeadline(req, timeout)
+}
+
 // Health is the result of a TypeHealth query. Alive is false when the
 // daemon is unreachable; in that case PID and Uptime are zero.
 type Health struct {
@@ -111,7 +131,11 @@ type Health struct {
 // Health pings the daemon and returns its liveness, PID and uptime. Never
 // returns an error — an unreachable daemon yields Health{Alive: false}.
 func (c *Client) Health() Health {
-	resp, err := c.Send(Request{Type: TypeHealth})
+	return c.healthBefore(time.Time{})
+}
+
+func (c *Client) healthBefore(deadline time.Time) Health {
+	resp, err := c.sendBefore(Request{Type: TypeHealth}, deadline)
 	if err != nil || !resp.OK {
 		return Health{}
 	}
@@ -137,14 +161,25 @@ func daemonSocketOlderThanBinary(socketPath, amxBin string) bool {
 	return binInfo.ModTime().After(socketInfo.ModTime())
 }
 
-func waitForSocketRemoval(socketPath string) {
+func waitForSocketRemovalBefore(socketPath string, deadline time.Time) {
 	for i := 0; i < restartSocketPollCount; i++ {
 		if _, err := os.Stat(socketPath); os.IsNotExist(err) {
 			slog.Debug("daemon client: restart socket removed", "socket_path", socketPath, "attempt", i+1)
 			return
 		}
+		if !deadline.IsZero() && time.Until(deadline) <= 0 {
+			break
+		}
 		slog.Debug("daemon client: waiting for old socket removal", "socket_path", socketPath, "attempt", i+1)
-		time.Sleep(restartSocketPollDelay)
+		delay := restartSocketPollDelay
+		if !deadline.IsZero() {
+			if remaining := time.Until(deadline); remaining < delay {
+				delay = remaining
+			}
+		}
+		if delay > 0 {
+			time.Sleep(delay)
+		}
 	}
 	slog.Debug("daemon client: old socket still present after restart wait", "socket_path", socketPath, "attempts", restartSocketPollCount)
 }
@@ -153,20 +188,23 @@ func waitForSocketRemoval(socketPath string) {
 // detached daemon using amxBin. It does not wait for the new socket to become
 // reachable; callers that need a live server should retry with Send afterward.
 func (c *Client) RestartDetached(amxBin string) error {
-	return c.restartDetached(amxBin, c.Health().Alive)
+	return c.restartDetachedBefore(amxBin, c.Health().Alive, time.Time{})
 }
 
-func (c *Client) restartDetached(amxBin string, daemonAlive bool) error {
+func (c *Client) restartDetachedBefore(amxBin string, daemonAlive bool, deadline time.Time) error {
 	if daemonAlive {
 		slog.Debug("daemon client: requesting daemon shutdown before restart", "socket_path", c.socketPath)
-		resp, err := c.Send(Request{Type: TypeShutdown})
+		resp, err := c.sendBefore(Request{Type: TypeShutdown}, deadline)
 		if err != nil {
 			return fmt.Errorf("shutting down daemon: %w", err)
 		}
 		if !resp.OK {
 			return fmt.Errorf("daemon error: %s", resp.Error)
 		}
-		waitForSocketRemoval(c.socketPath)
+		waitForSocketRemovalBefore(c.socketPath, deadline)
+	}
+	if !deadline.IsZero() && time.Until(deadline) <= 0 {
+		return errors.New("daemon auto-start deadline elapsed before spawn")
 	}
 	slog.Debug("daemon client: spawning detached daemon", "socket_path", c.socketPath, "amx_bin", amxBin)
 	if err := spawnDetached(amxBin); err != nil {
@@ -175,12 +213,18 @@ func (c *Client) restartDetached(amxBin string, daemonAlive bool) error {
 	return nil
 }
 
-func (c *Client) sendWithRetries(req Request, attempts int) (Response, error) {
+func (c *Client) sendWithRetries(req Request, deadline time.Time) (Response, error) {
 	var resp Response
-	var err error
-	for i := 0; i < attempts; i++ {
-		time.Sleep(autoStartRetryDelay)
-		resp, err = c.Send(req)
+	err := errors.New("daemon did not start in time")
+	for time.Until(deadline) > 0 {
+		delay := autoStartRetryDelay
+		if remaining := time.Until(deadline); remaining < delay {
+			delay = remaining
+		}
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		resp, err = c.sendBefore(req, deadline)
 		if err == nil {
 			return resp, nil
 		}
@@ -191,6 +235,7 @@ func (c *Client) sendWithRetries(req Request, attempts int) (Response, error) {
 // SendWithAutoStart sends req to the daemon, auto-starting it if not running.
 // amxBin is the path to the amx binary used for auto-start.
 func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error) {
+	deadline := time.Now().Add(autoStartDeadline)
 	restarted := false
 	var autoStartLock *os.File
 	defer func() {
@@ -205,11 +250,11 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 			if !errors.Is(lockErr, errAutoStartInProgress) {
 				return Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
 			}
-			resp, err := c.Send(req)
+			resp, err := c.sendBefore(req, deadline)
 			if err == nil {
 				return resp, nil
 			}
-			resp, retryErr := c.sendWithRetries(req, autoStartRetryCount)
+			resp, retryErr := c.sendWithRetries(req, deadline)
 			if retryErr == nil {
 				return resp, nil
 			}
@@ -217,20 +262,20 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 		}
 		autoStartLock = lock
 
-		if health := c.Health(); health.Alive {
+		if health := c.healthBefore(deadline); health.Alive {
 			slog.Debug("daemon client: restarting stale daemon for newer amx binary",
 				"socket_path", c.socketPath,
 				"amx_bin", amxBin,
 				"daemon_pid", health.PID,
 			)
-			if err := c.restartDetached(amxBin, true); err != nil {
+			if err := c.restartDetachedBefore(amxBin, true, deadline); err != nil {
 				return Response{}, fmt.Errorf("daemon auto-restart failed: %w", err)
 			}
 			restarted = true
 		}
 	}
 
-	resp, err := c.Send(req)
+	resp, err := c.sendBefore(req, deadline)
 	if err == nil {
 		return resp, nil
 	}
@@ -255,7 +300,7 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 		if autoStartLock != nil {
 			// Another process may have completed startup between our failed Send
 			// and acquiring the lock. Recheck before spawning.
-			resp, err = c.Send(req)
+			resp, err = c.sendBefore(req, deadline)
 			if err == nil {
 				return resp, nil
 			}
@@ -265,8 +310,8 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 		}
 	}
 
-	// Retry for up to 1s.
-	resp, err = c.sendWithRetries(req, autoStartRetryCount)
+	// Retry only for the remainder of the hook's auto-start budget.
+	resp, err = c.sendWithRetries(req, deadline)
 	if err == nil {
 		return resp, nil
 	}

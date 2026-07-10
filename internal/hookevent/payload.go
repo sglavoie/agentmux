@@ -1,4 +1,4 @@
-package indicator
+package hookevent
 
 import (
 	"bytes"
@@ -135,6 +135,10 @@ func firstNonBlank(values ...string) string {
 //     sessionStart.source == "new", but the interactive CLI can also terminate
 //     the current session with sessionEnd.reason == "user_exit" before the next
 //     session starts.
+func PayloadHasResetFlow(harnessName, event string, payload HookPayload) bool {
+	return payloadHasResetFlow(harnessName, event, payload)
+}
+
 func payloadHasResetFlow(harnessName, event string, payload HookPayload) bool {
 	switch strings.ToLower(strings.TrimSpace(harnessName)) {
 	case harness.Claude:

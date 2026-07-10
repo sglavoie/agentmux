@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -107,9 +106,8 @@ func TestRenderListActiveLoopColumnAlignsRows(t *testing.T) {
 	m.width = 120
 	m = loadSessions(m, []session.RunningSession{
 		{WindowID: 1, Account: "work", Base: "frontend", Directory: "/work/frontend"},
-		{WindowID: 2, Account: "work", Base: "backend", Directory: "/work/backend"},
+		{WindowID: 2, Account: "work", Base: "backend", Directory: "/work/backend", Looping: true},
 	})
-	m.activeLoopCandidates = []agentloop.Candidate{{PlanDir: "/plans/backend", CWD: "/work/backend"}}
 
 	out := stripAnsi(renderListAt(m, m.width, 0))
 	if count := strings.Count(out, "🔁"); count != 1 {
@@ -138,7 +136,8 @@ func TestRenderListOmitsActiveLoopColumnWhenNoVisibleRowMatches(t *testing.T) {
 		{WindowID: 2, Account: "work", Base: "middle", Directory: "/work/middle"},
 		{WindowID: 3, Account: "work", Base: "hidden", Directory: "/work/hidden"},
 	})
-	m.activeLoopCandidates = []agentloop.Candidate{{PlanDir: "/plans/hidden", CWD: "/work/hidden"}}
+	m.sessions[2].Looping = true
+	m.filtered[2].Looping = true
 	m.height = 12
 	m.listOffset = 0
 
@@ -161,9 +160,9 @@ func TestRenderListActiveLoopColumnFitsNarrowWidth(t *testing.T) {
 			Account:   "work",
 			Base:      "frontend-service",
 			Directory: "/a/very/long/project/path/that/must/truncate/frontend",
+			Looping:   true,
 		},
 	})
-	m.activeLoopCandidates = []agentloop.Candidate{{PlanDir: "/plans/frontend", CWD: "/a/very/long/project/path/that/must/truncate/frontend"}}
 
 	out := renderListAt(m, width, 0)
 	for i, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {

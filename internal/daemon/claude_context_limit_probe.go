@@ -43,7 +43,14 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 		slog.Debug("claude context-limit probe: list windows failed", "err", err)
 		return
 	}
+	h.ProbeClaudeContextLimitWithSnapshot(now, windows)
+	h.renderSnapshot(windows)
+}
 
+func (h *Handler) ProbeClaudeContextLimitWithSnapshot(now time.Time, windows []kitty.OSWindow) {
+	if !h.claudeContextLimitProbeEnabled {
+		return
+	}
 	for i := range windows {
 		for j := range windows[i].Tabs {
 			tab := &windows[i].Tabs[j]
@@ -55,7 +62,7 @@ func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
 			if !ok {
 				continue
 			}
-			h.probeClaudeContextLimitWindow(now, win.ID, tab.Title, parts, win.UserVars)
+			h.probeClaudeContextLimitWindow(now, win.ID, parts, win.UserVars)
 		}
 	}
 }
@@ -83,18 +90,21 @@ func claudeContextLimitProbeCanOverwrite(iconState string) bool {
 func (h *Handler) probeClaudeContextLimitWindow(
 	now time.Time,
 	windowID int,
-	tabTitle string,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) {
 	h.stateMu.Lock()
-	if h.contextLimitNotified[windowID] {
+	st, _ := h.windowStateLocked(windowID)
+	if st != nil && st.ContextLimitNotified {
 		h.stateMu.Unlock()
 		return
 	}
 	// Capture pipeMode before recordClaudeContextLimitProbeState resets it to
 	// false so the notify block below sees the value hooks last reported.
-	pipeMode := h.lastPipeMode[windowID]
+	pipeMode := false
+	if st != nil {
+		pipeMode = st.LastPipeMode
+	}
 	h.stateMu.Unlock()
 
 	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(windowID), "screen")
@@ -115,24 +125,16 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	resultIconState := IconState(claudeContextLimitProbeAction)
 	h.recordClaudeContextLimitProbeState(now, windowID, titleParts.Base, titleParts.State, userVars, resultIconState)
 
-	if resultIconState != titleParts.State {
-		newParts := titleParts
-		newParts.State = resultIconState
-		newTitle := palette.BuildTitleParts(newParts)
-		if newTitle != tabTitle {
-			if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
-				slog.Debug("claude context-limit probe: set tab title failed", "window_id", windowID, "err", err)
-			}
-		}
-	}
-
 	if h.notifier != nil {
 		// The screen-based probe only fires on interactive Claude sessions —
 		// pipe-mode windows cannot show the context-limit banner. We still pass
 		// the pre-recorded pipeMode through MaybeNotify so the notifier's own
 		// suppression remains the single source of truth.
 		h.stateMu.Lock()
-		account := h.lastAccount[windowID]
+		account := ""
+		if st, ok := h.windowStateLocked(windowID); ok {
+			account = st.LastAccount
+		}
 		h.stateMu.Unlock()
 		h.notifier.MaybeNotify(windowID, titleParts.Base, account, claudeContextLimitProbeAction, pipeMode)
 	}
@@ -149,16 +151,21 @@ func (h *Handler) recordClaudeContextLimitProbeState(
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 
-	h.activity[windowID] = now
-	h.lastSessionTitle[windowID] = baseTitle
-	h.lastPipeMode[windowID] = false
+	st := h.ensureWindowStateLocked(windowID)
+	st.Activity = now
+	st.LastSessionTitle = baseTitle
+	st.LastPipeMode = false
 	profile := userVars.EffectiveProfile()
 	if profile != "" {
-		h.lastAccount[windowID] = profile
+		st.LastAccount = profile
 	}
-	h.lastAction[windowID] = claudeContextLimitProbeAction
-	h.contextLimitNotified[windowID] = true
-	delete(h.notifiedStale, windowID)
+	st.LastHarness = harness.Claude
+	st.LastAction = claudeContextLimitProbeAction
+	st.ContextLimitNotified = true
+	st.NotifiedStale = false
+	st.DesiredIcon = resultIconState
+	st.StateSet = true
+	h.markWindowDirtyLocked(windowID)
 
 	meta := h.windowMetadata[windowID]
 	meta.Durable.SessionTitle = baseTitle

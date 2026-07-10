@@ -29,8 +29,9 @@ The codebase is a standard Go module. All functionality lives in the `amx` binar
 
 - `root.go` — `amx` default command: loads config, checks for existing dashboard, launches TUI. Version constant is here.
 - `config.go` — `amx config` subcommands: `init`, `edit`, `show`, `path`, `validate`, `hooks-sync`, `hooks-status`
-- `daemon.go` — `amx daemon` subcommands: `start`, `stop`, `status`
-- `hook_indicator.go` — `amx hook-indicator <event>`: internal command invoked by Claude Code hooks
+- `daemon.go` — `amx daemon` subcommands: `start`, `stop`, `status`, `restart`, `export-events`
+- `doctor.go` — `amx doctor`: summarizes daemon, Kitty, hook, renderer, and suppression health
+- `hook_indicator.go` — `amx hook-indicator <event>`: fire-and-forget client invoked by harness hooks
 
 **`internal/config/`** — Configuration loading and validation
 
@@ -64,19 +65,20 @@ The codebase is a standard Go module. All functionality lives in the `amx` binar
 
 **`internal/daemon/`** — IPC and state guarding
 
-- `daemon.go` — main daemon loop (Unix socket, 30-min idle timeout)
+- `daemon.go` — always-on daemon loop (Unix socket, renderer lifecycle, durable restore)
 - `server.go` / `client.go` — socket server and client (auto-start capable)
-- `handler.go` — request processing and notification dispatch
+- `handler.go` / `state.go` — request processing, durable per-window state, and notification dispatch
+- `renderer.go` — the single writer for state and loop title segments; persists `amx_state` on Kitty windows
 - `guard.go` — `StateGuard` prevents rapid icon state transitions
 - `notify.go` — macOS notification dispatch via `alerter` when installed, falling back to `osascript`
 - `protocol.go` — message types: `TypeStateUpdate`, `TypeStateQuery`, `TypeShutdown`
 
-Socket path: `~/.local/share/cc-manager/daemon.sock`
+Socket path: `~/.local/share/agent-mux/daemon.sock`
 
 **`internal/indicator/`** — Hook integration
 
-- `indicator.go` — entry point: resolves event → action, sends to daemon, updates tab title
-- `events.go` — `ResolveAction()` maps Claude Code event names to actions (`active`, `stop`, `permission`, `failure`, `idle`, `clear`)
+- `indicator.go` — thin hook client: forwards raw payload, window ID, socket, and pipe-mode context to the daemon; it always exits successfully
+- `internal/hookevent/` — daemon-owned payload parsing and event → action resolution
 - `pipe.go` — pipe mode detection (suppresses macOS notifications for `claude -p`)
 
 **`internal/hooks/`** — Claude settings integration
@@ -123,6 +125,7 @@ Socket path: `~/.local/share/cc-manager/daemon.sock`
 | `amx daemon stop` | Stop running daemon |
 | `amx daemon status` | Check daemon status |
 | `amx daemon export-events` | Dump per-window hook event history as JSON (for investigation) |
+| `amx doctor` | Diagnose daemon reachability, Kitty, hooks, renderer drift, and recent suppressions |
 | `amx hook-indicator <event>` | Handle a Claude Code hook event (called by hooks) |
 | `amx resort` | Reorder Kitty tabs to match the configured sort |
 
@@ -194,11 +197,12 @@ Tab titles carry the project title prefixed by the harness emoji from
 `[harness_emojis]` (last prefix, immediately before the project name).
 The dashboard shows the profile separately via its badge (`[W]`, `[P]`,
 etc.), and colors harness-name cells from `[harness_colors]`. State icons
-(bolt `⚡`, stop `⏹`, key `🔑`, error `✗`), the star marker (`★`), and the
-mute marker (`🔇`) are layered on top of the base title by
-`palette.BuildTitleFull()`. The inactive Kitty tab-bar accent color comes from
-each profile's `color`, not from the harness; active tab colors reset to
-`kitty.conf` defaults.
+(bolt `⚡`, stop `⏹`, key `🔑`, error `✗`) and the loop marker (`🔁`) are
+daemon-owned render output, not the state store. The daemon restores durable
+state from each window's `amx_state` user var and rewrites only those segments;
+the base title, star marker (`★`), and mute marker (`🔇`) keep their current
+writers. The inactive Kitty tab-bar accent color comes from each profile's
+`color`, not from the harness; active tab colors reset to `kitty.conf` defaults.
 
 When a Claude session stalls at the context limit, the assistant turn never completes cleanly. Sometimes no hook fires at all (the bolt ⚡ stays stuck), and sometimes an upstream event resolves to `idle`/`clear` and wipes the bolt to empty before any state can land. The daemon's periodic Claude screen probe (`internal/daemon/claude_context_limit_probe.go`) covers both cases: it scans bolt, subagent, and empty-state Claude windows for the recovery banner and swaps the icon to error ❗ via the `stop_failure` action. Opt out with `[defaults.watchdog].claude_context_limit_probe = false`.
 

@@ -21,6 +21,7 @@ type RunningSession struct {
 	Title            string // raw Kitty tab title (may include icons)
 	Base             string // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
 	State            string // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
+	Looping          bool   // daemon-owned loop marker; title-derived only when the daemon is unreachable
 	Starred          bool
 	Locked           bool
 	Muted            bool
@@ -59,30 +60,17 @@ func (rs RunningSession) EffectiveArgs() string {
 	return rs.Flags
 }
 
-// TitleParts returns the title components for rebuilds that need to preserve
-// markers not stored as first-class RunningSession fields yet.
+// TitleParts returns the title components for the remaining non-daemon title
+// writers (mute/star). State and looping come from first-class fields so a
+// stale tab title cannot overwrite the daemon-owned values.
 func (rs RunningSession) TitleParts() palette.TitleParts {
-	parts := palette.TitleParts{
+	return palette.TitleParts{
 		Base:    rs.Base,
 		State:   rs.State,
 		Starred: rs.Starred,
 		Muted:   rs.Muted,
+		Looping: rs.Looping,
 	}
-	if rs.Title == "" {
-		return parts
-	}
-
-	parsed := palette.ParseTitleParts(rs.Title)
-	if parts.Base == "" {
-		parts.Base = parsed.Base
-	}
-	if parts.State == "" {
-		parts.State = parsed.State
-	}
-	parts.Starred = parts.Starred || parsed.Starred
-	parts.Muted = parts.Muted || parsed.Muted
-	parts.Looping = parsed.Looping
-	return parts
 }
 
 // GhostTab is a managed tab whose anchor window (the one bearing amx user vars)
@@ -384,6 +372,7 @@ func fallbackSessionFromMatch(tab kitty.Tab, winID int, m titleFallbackMatch, ba
 		Title:            tab.Title,
 		Base:             base,
 		State:            state,
+		Looping:          palette.ParseTitleParts(tab.Title).Looping,
 		Starred:          starred,
 		Muted:            muted,
 		Project:          m.sess.Title,
@@ -412,7 +401,8 @@ func fallbackSessionFromMatch(tab kitty.Tab, winID int, m titleFallbackMatch, ba
 
 func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 	profile := win.UserVars.EffectiveProfile()
-	base, state, starred, muted := palette.ParseTitleFull(tab.Title)
+	parts := palette.ParseTitleParts(tab.Title)
+	base, state, starred, muted := parts.Base, parts.State, parts.Starred, parts.Muted
 	dir := win.UserVars.EffectiveDirectory()
 	if dir == "" {
 		dir = windowFallbackCWD(win)
@@ -430,6 +420,7 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 		Title:            tab.Title,
 		Base:             base,
 		State:            state,
+		Looping:          parts.Looping,
 		Starred:          starred,
 		Locked:           win.UserVars.Locked,
 		Muted:            muted || win.UserVars.Mute != "",

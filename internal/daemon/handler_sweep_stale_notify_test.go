@@ -22,10 +22,10 @@ func TestSweepStale_PipeModeSilent(t *testing.T) {
 
 		now := time.Now()
 		h.stateMu.Lock()
-		h.activity[42] = now.Add(-15 * time.Minute)
-		h.lastAction[42] = "active"
-		h.lastSessionTitle[42] = "W:api"
-		h.lastPipeMode[42] = true
+		h.ensureWindowStateLocked(42).Activity = now.Add(-15 * time.Minute)
+		h.ensureWindowStateLocked(42).LastAction = "active"
+		h.ensureWindowStateLocked(42).LastSessionTitle = "W:api"
+		h.ensureWindowStateLocked(42).LastPipeMode = true
 		h.stateMu.Unlock()
 
 		h.SweepStale(now)
@@ -39,7 +39,7 @@ func TestSweepStale_PipeModeSilent(t *testing.T) {
 			t.Fatalf("SetTabTitle = %+v; want one call with title %q", titles, clearedTitle)
 		}
 		h.stateMu.Lock()
-		_, has := h.lastAction[42]
+		has := h.store[42].LastAction != ""
 		h.stateMu.Unlock()
 		if has {
 			t.Fatalf("lastAction[42] still present after sweep")
@@ -58,9 +58,9 @@ func TestSweepStale_SingleShot(t *testing.T) {
 
 		now := time.Now()
 		h.stateMu.Lock()
-		h.activity[42] = now.Add(-15 * time.Minute)
-		h.lastAction[42] = "active"
-		h.lastSessionTitle[42] = "W:api"
+		h.ensureWindowStateLocked(42).Activity = now.Add(-15 * time.Minute)
+		h.ensureWindowStateLocked(42).LastAction = "active"
+		h.ensureWindowStateLocked(42).LastSessionTitle = "W:api"
 		h.stateMu.Unlock()
 
 		h.SweepStale(now)
@@ -87,9 +87,9 @@ func TestSweepStale_ReNotifyAfterRecovery(t *testing.T) {
 
 		now := time.Now()
 		h.stateMu.Lock()
-		h.activity[42] = now.Add(-15 * time.Minute)
-		h.lastAction[42] = "active"
-		h.lastSessionTitle[42] = "W:api"
+		h.ensureWindowStateLocked(42).Activity = now.Add(-15 * time.Minute)
+		h.ensureWindowStateLocked(42).LastAction = "active"
+		h.ensureWindowStateLocked(42).LastSessionTitle = "W:api"
 		h.stateMu.Unlock()
 
 		h.SweepStale(now)
@@ -98,12 +98,12 @@ func TestSweepStale_ReNotifyAfterRecovery(t *testing.T) {
 			t.Fatalf("first sweep: dispatches = %d; want 1", got)
 		}
 
-		// Simulate a fresh active event: Handle clears notifiedStale[42]
-		// and re-seeds lastAction[42] = "active".
+		// Simulate a fresh active event: Handle clears NotifiedStale and
+		// re-seeds LastAction = "active".
 		h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: "W:api"})
 
 		h.stateMu.Lock()
-		_, stillNotified := h.notifiedStale[42]
+		stillNotified := h.store[42].NotifiedStale
 		h.stateMu.Unlock()
 		if stillNotified {
 			t.Fatalf("notifiedStale[42] should be cleared by fresh active update")
@@ -124,7 +124,7 @@ func TestSweepStale_ReNotifyAfterRecovery(t *testing.T) {
 
 		now2 := time.Now()
 		h.stateMu.Lock()
-		h.activity[42] = now2.Add(-15 * time.Minute)
+		h.ensureWindowStateLocked(42).Activity = now2.Add(-15 * time.Minute)
 		h.stateMu.Unlock()
 
 		h.SweepStale(now2)
@@ -152,9 +152,9 @@ func TestSweepStale_NilKittyClient(t *testing.T) {
 
 		now := time.Now()
 		h.stateMu.Lock()
-		h.activity[42] = now.Add(-15 * time.Minute)
-		h.lastAction[42] = "active"
-		h.lastSessionTitle[42] = "W:api"
+		h.ensureWindowStateLocked(42).Activity = now.Add(-15 * time.Minute)
+		h.ensureWindowStateLocked(42).LastAction = "active"
+		h.ensureWindowStateLocked(42).LastSessionTitle = "W:api"
 		h.stateMu.Unlock()
 
 		h.SweepStale(now)
@@ -164,7 +164,7 @@ func TestSweepStale_NilKittyClient(t *testing.T) {
 			t.Fatalf("dispatches = %d; want 1", got)
 		}
 		h.stateMu.Lock()
-		_, has := h.lastAction[42]
+		has := h.store[42].LastAction != ""
 		h.stateMu.Unlock()
 		if has {
 			t.Fatalf("lastAction[42] still present after sweep")
@@ -183,9 +183,9 @@ func TestSweepStale_PreservesStarGlyph(t *testing.T) {
 
 		now := time.Now()
 		h.stateMu.Lock()
-		h.activity[42] = now.Add(-15 * time.Minute)
-		h.lastAction[42] = "active"
-		h.lastSessionTitle[42] = "W:api"
+		h.ensureWindowStateLocked(42).Activity = now.Add(-15 * time.Minute)
+		h.ensureWindowStateLocked(42).LastAction = "active"
+		h.ensureWindowStateLocked(42).LastSessionTitle = "W:api"
 		h.stateMu.Unlock()
 
 		h.SweepStale(now)
@@ -221,9 +221,9 @@ func TestSweepStale_PreservesLoopMarkerAndHarnessEmoji(t *testing.T) {
 
 		now := time.Now()
 		h.stateMu.Lock()
-		h.activity[42] = now.Add(-15 * time.Minute)
-		h.lastAction[42] = "active"
-		h.lastSessionTitle[42] = "🦊api"
+		h.ensureWindowStateLocked(42).Activity = now.Add(-15 * time.Minute)
+		h.ensureWindowStateLocked(42).LastAction = "active"
+		h.ensureWindowStateLocked(42).LastSessionTitle = "🦊api"
 		h.stateMu.Unlock()
 
 		h.SweepStale(now)
@@ -250,9 +250,9 @@ func TestSweepStale_ListWindowsErrorIsTolerated(t *testing.T) {
 
 		now := time.Now()
 		h.stateMu.Lock()
-		h.activity[42] = now.Add(-15 * time.Minute)
-		h.lastAction[42] = "active"
-		h.lastSessionTitle[42] = "W:api"
+		h.ensureWindowStateLocked(42).Activity = now.Add(-15 * time.Minute)
+		h.ensureWindowStateLocked(42).LastAction = "active"
+		h.ensureWindowStateLocked(42).LastSessionTitle = "W:api"
 		h.stateMu.Unlock()
 
 		h.SweepStale(now)
@@ -265,8 +265,8 @@ func TestSweepStale_ListWindowsErrorIsTolerated(t *testing.T) {
 			t.Fatalf("SetTabTitle calls = %d; want 0 (list failed)", got)
 		}
 		h.stateMu.Lock()
-		_, has := h.lastAction[42]
-		notified := h.notifiedStale[42]
+		has := h.store[42].LastAction != ""
+		notified := h.store[42].NotifiedStale
 		h.stateMu.Unlock()
 		if has {
 			t.Fatalf("lastAction[42] still present after sweep")

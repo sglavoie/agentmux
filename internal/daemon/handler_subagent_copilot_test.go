@@ -31,7 +31,7 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 			t.Fatalf("agentStop during subagent: want allowed=false, got %+v", resp)
 		}
 		h.stateMu.Lock()
-		count := h.subagentCount[1]
+		count := h.store[1].SubagentCount
 		h.stateMu.Unlock()
 		if count != 1 {
 			t.Fatalf("agentStop must not clear subagentCount; want 1, got %d", count)
@@ -155,10 +155,10 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 		}
 
 		h.stateMu.Lock()
-		_, present := h.subagentCount[1]
+		present := h.store[1].SubagentCount != 0
 		h.stateMu.Unlock()
 		if present {
-			t.Fatalf("sessionEnd must clear subagentCount entry; map still has window 1")
+			t.Fatalf("sessionEnd must clear subagentCount; count still nonzero")
 		}
 	})
 
@@ -209,12 +209,11 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 		// user approval is actually required.
 		h2 := newTestHandler()
 		resp = h2.Handle(Request{
-			Type:             TypeStateUpdate,
-			WindowID:         1,
-			Harness:          "copilot",
-			Action:           "permission",
-			Event:            "permissionRequest",
-			CurrentIconState: "bolt",
+			Type:     TypeStateUpdate,
+			WindowID: 1,
+			Harness:  "copilot",
+			Action:   "permission",
+			Event:    "permissionRequest",
 		})
 		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
 			t.Fatalf("permissionRequest with no subagent: want icon_state=%q, got %+v", IconStatePreserve, resp)
@@ -242,7 +241,6 @@ func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
 			Action:           "permission",
 			Event:            "notification",
 			NotificationType: "permission_prompt",
-			CurrentIconState: "bolt",
 		})
 		if !resp.OK || !resp.Allowed || resp.IconState != "key" {
 			t.Fatalf("setup: want key icon, got %+v", resp)
@@ -315,31 +313,28 @@ func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
 		// and the robot must appear once the subagent actually starts running.
 		h := newTestHandler()
 		h.Handle(Request{
-			Type:             TypeStateUpdate,
-			WindowID:         1,
-			Harness:          "copilot",
-			Action:           "active",
-			Event:            "postToolUse",
-			CurrentIconState: "bolt",
+			Type:     TypeStateUpdate,
+			WindowID: 1,
+			Harness:  "copilot",
+			Action:   "active",
+			Event:    "postToolUse",
 		})
 		resp := h.Handle(Request{
-			Type:             TypeStateUpdate,
-			WindowID:         1,
-			Harness:          "copilot",
-			Action:           "permission",
-			Event:            "permissionRequest",
-			CurrentIconState: "bolt",
+			Type:     TypeStateUpdate,
+			WindowID: 1,
+			Harness:  "copilot",
+			Action:   "permission",
+			Event:    "permissionRequest",
 		})
 		if !resp.OK || !resp.Allowed || resp.IconState != IconStatePreserve {
 			t.Fatalf("setup: want icon_state=%q, got %+v", IconStatePreserve, resp)
 		}
 		resp = h.Handle(Request{
-			Type:             TypeStateUpdate,
-			WindowID:         1,
-			Harness:          "copilot",
-			Action:           "subagent",
-			Event:            "subagentStart",
-			CurrentIconState: "bolt",
+			Type:     TypeStateUpdate,
+			WindowID: 1,
+			Harness:  "copilot",
+			Action:   "subagent",
+			Event:    "subagentStart",
 		})
 		if !resp.OK || !resp.Allowed || resp.IconState != "subagent" {
 			t.Fatalf("subagentStart: want icon_state=subagent, got %+v", resp)

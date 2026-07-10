@@ -102,7 +102,7 @@ func TestProbeClaudeContextLimit_RecoveryReArmsNotifier(t *testing.T) {
 		}
 
 		h.stateMu.Lock()
-		notified := h.contextLimitNotified[42]
+		notified := h.store[42].ContextLimitNotified
 		h.stateMu.Unlock()
 		if notified {
 			t.Fatalf("contextLimitNotified[42] = true after active recovery; want false")
@@ -144,7 +144,7 @@ func TestProbeClaudeContextLimit_UserClearReArmsNotifier(t *testing.T) {
 	h.ProbeClaudeContextLimit(time.Unix(1_700_000_000, 0))
 
 	h.stateMu.Lock()
-	notified := h.contextLimitNotified[42]
+	notified := h.store[42].ContextLimitNotified
 	h.stateMu.Unlock()
 	if !notified {
 		t.Fatalf("contextLimitNotified[42] = false after probe; want true")
@@ -162,7 +162,7 @@ func TestProbeClaudeContextLimit_UserClearReArmsNotifier(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	notified = h.contextLimitNotified[42]
+	notified = h.store[42].ContextLimitNotified
 	h.stateMu.Unlock()
 	if notified {
 		t.Fatalf("contextLimitNotified[42] = true after user_clear; want false")
@@ -188,7 +188,7 @@ func TestProbeClaudeContextLimit_ClosedWindowGCDropsFlag(t *testing.T) {
 	h.ProbeClaudeContextLimit(time.Unix(1_700_000_000, 0))
 
 	h.stateMu.Lock()
-	notified := h.contextLimitNotified[42]
+	notified := h.store[42].ContextLimitNotified
 	h.stateMu.Unlock()
 	if !notified {
 		t.Fatalf("contextLimitNotified[42] = false after probe; want true")
@@ -198,7 +198,7 @@ func TestProbeClaudeContextLimit_ClosedWindowGCDropsFlag(t *testing.T) {
 	h.pruneClosedWindows(map[int]bool{})
 
 	h.stateMu.Lock()
-	_, stillThere := h.contextLimitNotified[42]
+	_, stillThere := h.store[42]
 	h.stateMu.Unlock()
 	if stillThere {
 		t.Fatalf("contextLimitNotified[42] survived pruneClosedWindows; want GC'd")

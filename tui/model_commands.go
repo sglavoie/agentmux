@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"log/slog"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -9,9 +10,16 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
+
+var spawnDaemonDetached = daemon.SpawnDetached
+
+// daemonRequest is a narrow seam around the IPC client so fetch and clear
+// behavior can be tested without connecting to an operator's daemon.
+var daemonRequest = func(req daemon.Request) (daemon.Response, error) {
+	return daemon.NewClient().Send(req)
+}
 
 // healthCmd refreshes the daemon and/or hook health cached on the model.
 // Each section is only re-queried when the corresponding flag is set so
@@ -24,6 +32,11 @@ func healthCmd(cfg *config.Config, amxBin string, checkDaemon, checkHooks bool) 
 		if checkDaemon {
 			h := daemon.NewClient().Health()
 			msg.daemonAlive = h.Alive
+			if !h.Alive {
+				if err := spawnDaemonDetached(amxBin); err != nil {
+					slog.Debug("tui: starting daemon", "err", err)
+				}
+			}
 		}
 		if checkHooks {
 			summary, err := hooks.OverallHookHealth(cfg, amxBin)
@@ -41,9 +54,9 @@ func healthCmd(cfg *config.Config, amxBin string, checkDaemon, checkHooks bool) 
 	}
 }
 
-// fetchCmd queries Kitty for running sessions and the daemon for per-window
-// last-activity timestamps. Daemon errors are non-fatal — when unreachable
-// the activity map is nil and stateGroup treats every session as Active.
+// fetchCmd queries Kitty for session enumeration and the daemon for its
+// authoritative per-window state. When the daemon is unreachable, the session
+// list retains the state and loop markers parsed from live Kitty titles.
 //
 // Any "ghost" tabs surfaced by ListWithConfig (managed tabs whose anchor
 // window vanished but whose title or CWD still resolves uniquely in cfg) are
@@ -59,7 +72,10 @@ func fetchCmd(client kitty.KittyClient, cfg *config.Config, sortMode string) tea
 		if len(ghosts) > 0 {
 			session.ReanchorAll(client, ghosts, cfg.Defaults)
 		}
-		activity, watchdog := fetchDaemonState()
+		activity, watchdog, states := fetchDaemonState()
+		if states != nil {
+			applyDaemonStates(sessions, states)
+		}
 		return sessionsMsg{
 			sessions: session.SortRunning(sessions, sortMode),
 			activity: activity,
@@ -68,13 +84,13 @@ func fetchCmd(client kitty.KittyClient, cfg *config.Config, sortMode string) tea
 	}
 }
 
-// fetchDaemonState queries the daemon once for both last-activity timestamps
-// and the watchdog snapshot. Both maps are nil when the daemon is unreachable
-// or the query fails — callers must tolerate.
-func fetchDaemonState() (map[int]time.Time, map[int]daemon.WatchdogState) {
-	resp, err := daemon.NewClient().Send(daemon.Request{Type: daemon.TypeStateQuery})
-	if err != nil {
-		return nil, nil
+// fetchDaemonState queries the daemon once for activity, watchdog, icon, and
+// loop state. All maps are nil when the daemon is unreachable or rejects the
+// query, which tells fetchCmd to retain its title-derived fallback values.
+func fetchDaemonState() (map[int]time.Time, map[int]daemon.WatchdogState, map[int]daemon.WindowStateSnapshot) {
+	resp, err := daemonRequest(daemon.Request{Type: daemon.TypeStateQuery})
+	if err != nil || !resp.OK {
+		return nil, nil, nil
 	}
 	var activity map[int]time.Time
 	if resp.Activity != nil {
@@ -83,26 +99,38 @@ func fetchDaemonState() (map[int]time.Time, map[int]daemon.WatchdogState) {
 			activity[id] = time.Unix(secs, 0)
 		}
 	}
-	return activity, resp.Watchdog
+	return activity, resp.Watchdog, resp.States
 }
 
-// clearStatusCmd wipes a session's tab-title icon (via Kitty) and asks the
-// daemon to drop its guard via the user_clear action. The Kitty title write
-// is the user-visible result; daemon errors are swallowed because the
-// dashboard already updated the title directly.
-func clearStatusCmd(client kitty.KittyClient, s session.RunningSession) tea.Cmd {
+// applyDaemonStates overlays daemon-owned state onto Kitty-enumerated rows.
+// A reachable daemon is authoritative even for a freshly seen window without
+// a state entry: its dashboard state is empty until the daemon observes it.
+func applyDaemonStates(sessions []session.RunningSession, states map[int]daemon.WindowStateSnapshot) {
+	for i := range sessions {
+		state, ok := states[sessions[i].WindowID]
+		if !ok {
+			sessions[i].State = ""
+			sessions[i].Looping = false
+			continue
+		}
+		sessions[i].State = state.IconState
+		sessions[i].Looping = state.Looping
+	}
+}
+
+// clearStatusCmd asks the daemon to drop its guard via user_clear. The daemon
+// renderer owns the resulting title update, so this path never writes Kitty
+// titles directly. Transport errors remain nonfatal while the daemon is
+// restarting; the next refresh converges the state.
+func clearStatusCmd(_ kitty.KittyClient, s session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		parts := s.TitleParts()
-		parts.State = ""
-		newTitle := palette.BuildTitleParts(parts)
-		err := client.SetTabTitle(kitty.MatchTabByWindowID(s.WindowID), newTitle)
-		_, _ = daemon.NewClient().Send(daemon.Request{
+		_, _ = daemonRequest(daemon.Request{
 			Type:         daemon.TypeStateUpdate,
 			Action:       "user_clear",
 			WindowID:     s.WindowID,
 			SessionTitle: s.Base,
 		})
-		return actionDoneMsg{err: err}
+		return actionDoneMsg{}
 	}
 }
 

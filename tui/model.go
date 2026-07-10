@@ -71,12 +71,11 @@ type Model struct {
 	pickerSearchMode     bool   // true while / is active and filter input is open
 	pickerPreviewEnabled bool   // picker-local preview toggle, independent of ModeList
 
-	// active agent-session-loop runs shown by dashboard rows. This is refreshed
-	// in the background for passive dashboard and Kitty title markers.
-	activeLoopCandidates   []agentloop.Candidate
-	activeLoopRefreshErr   error
-	activeLoopRefreshSeq   int
-	activeLoopTitleSyncErr error
+	// active agent-session-loop runs retained for detail views. Dashboard loop
+	// markers come from the daemon's bulk state snapshot.
+	activeLoopCandidates []agentloop.Candidate
+	activeLoopRefreshErr error
+	activeLoopRefreshSeq int
 
 	// last error from a close/restart action
 	actionErr error
@@ -360,9 +359,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case activeLoopsMsg:
 		return m.handleActiveLoopsMsg(msg)
-
-	case activeLoopTitleSyncMsg:
-		return m.handleActiveLoopTitleSyncMsg(msg)
 
 	case errMsg:
 		m.err = msg.err

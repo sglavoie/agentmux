@@ -34,15 +34,16 @@ func shouldClearPendingReset(req Request, state resetFlowState) bool {
 // rewrites reset-related cleanup into user_clear so stop icons/notifications do
 // not surface during /clear, /reset, or /new flows. Caller must hold stateMu.
 func (h *Handler) applyResetFlowLocked(req Request) Request {
-	state := h.pendingReset[req.WindowID]
+	st := h.ensureWindowStateLocked(req.WindowID)
+	state := st.PendingReset
 	if req.ResetFlow {
 		if req.IsPrompt || state == resetFlowNone {
 			state = resetFlowRequested
 		}
-		h.pendingReset[req.WindowID] = state
+		st.PendingReset = state
 	} else if shouldClearPendingReset(req, state) {
-		delete(h.pendingReset, req.WindowID)
 		state = resetFlowNone
+		st.PendingReset = resetFlowNone
 	}
 
 	if state == resetFlowNone || !isResetCleanupAction(req.Action) {
@@ -54,12 +55,12 @@ func (h *Handler) applyResetFlowLocked(req Request) Request {
 	req.ResetFlow = true
 	switch originalAction {
 	case "user_clear":
-		delete(h.pendingReset, req.WindowID)
+		st.PendingReset = resetFlowNone
 	default:
 		// Keep the clearing marker through later idle/sessionStart/notification
 		// noise from the same reset flow; the next non-reset prompt or activity
 		// will clear it via shouldClearPendingReset.
-		h.pendingReset[req.WindowID] = resetFlowClearing
+		st.PendingReset = resetFlowClearing
 	}
 	return req
 }

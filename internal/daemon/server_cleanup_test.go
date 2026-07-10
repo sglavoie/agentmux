@@ -16,12 +16,11 @@ import (
 // SubagentStart/SubagentStop requests for the same window under -race to lock
 // in two properties of the reference-counted subagent gate:
 //
-//  1. The map mutex (stateMu) covers every read-modify-write of subagentCount.
+//  1. The state mutex (stateMu) covers every read-modify-write of SubagentCount.
 //     Without coverage, -race would flag concurrent ++/-- on the same key.
 //  2. The counter balances out to zero once every Start has a matching Stop,
-//     regardless of interleaving. Off-by-one bugs (e.g. forgetting to delete
-//     the zero entry, or skipping the decrement when wasTracked=false) would
-//     leak the key into subagentCount.
+//     regardless of interleaving. Off-by-one bugs (e.g. skipping the decrement
+//     when wasTracked=false) would leak a positive SubagentCount.
 //
 // Real-world Claude sessions are serial per window, so a race here would
 // indicate a structural locking bug, not a behavioural regression.
@@ -46,19 +45,16 @@ func TestHandler_ConcurrentSubagentRefCounting(t *testing.T) {
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	if got := h.subagentCount[1]; got != 0 {
+	if got := h.store[1].SubagentCount; got != 0 {
 		t.Fatalf("subagentCount[1] = %d after balanced Start/Stop cycles, want 0", got)
-	}
-	if _, ok := h.subagentCount[1]; ok {
-		t.Fatalf("subagentCount map should not retain zero-valued entries after final Stop")
 	}
 }
 
 // TestHandler_ConcurrentStateUpdatesDifferentWindows pins that the handler's
-// per-window state maps (activity, lastAction, lastActiveEvent, subagentCount)
-// are safe under concurrent updates targeting *different* windows. Each window
-// owns its own map slot under a single shared stateMu — the race detector
-// catches any unprotected read-modify-write of the shared map header.
+// per-window store is safe under concurrent updates targeting *different*
+// windows. Each window owns its own state entry under a single shared stateMu —
+// the race detector catches any unprotected read-modify-write of the shared map
+// header.
 func TestHandler_ConcurrentStateUpdatesDifferentWindows(t *testing.T) {
 	h := newTestHandler()
 

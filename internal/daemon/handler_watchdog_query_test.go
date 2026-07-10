@@ -8,19 +8,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 )
 
-func TestHandler_OnActivityCalled(t *testing.T) {
-	h := newTestHandler()
-	called := 0
-	h.onActivity = func() { called++ }
-
-	h.Handle(Request{Type: TypeStateQuery})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active"})
-
-	if called != 2 {
-		t.Fatalf("expected onActivity called 2 times, got %d", called)
-	}
-}
-
 // TestHandler_TracksLastSessionTitle verifies that the session title from
 // each state_update is recorded so the future stale-active sweep can fall
 // back to it when the live kitten lookup fails.
@@ -29,7 +16,7 @@ func TestHandler_TracksLastSessionTitle(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: "W:api"})
 
 	h.stateMu.Lock()
-	got := h.lastSessionTitle[42]
+	got := h.store[42].LastSessionTitle
 	h.stateMu.Unlock()
 	if got != "W:api" {
 		t.Fatalf("lastSessionTitle[42] = %q; want %q", got, "W:api")
@@ -44,7 +31,7 @@ func TestHandler_TracksPipeMode(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", PipeMode: true})
 
 	h.stateMu.Lock()
-	got := h.lastPipeMode[42]
+	got := h.store[42].LastPipeMode
 	h.stateMu.Unlock()
 	if !got {
 		t.Fatalf("lastPipeMode[42] = false; want true")
@@ -58,29 +45,28 @@ func TestHandler_NotifiedStaleClearedOnFreshEvent(t *testing.T) {
 	h := newTestHandler()
 
 	h.stateMu.Lock()
-	h.notifiedStale[42] = true
+	h.ensureWindowStateLocked(42).NotifiedStale = true
 	h.stateMu.Unlock()
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active"})
 
 	h.stateMu.Lock()
-	_, present := h.notifiedStale[42]
+	present := h.store[42].NotifiedStale
 	h.stateMu.Unlock()
 	if present {
 		t.Fatalf("notifiedStale[42] still present after fresh active event")
 	}
 }
 
-// TestHandler_CleanupOnTerminalAction verifies that terminal actions remove
-// the per-window entries from notifiedStale, lastSessionTitle, and
-// lastPipeMode so the maps cannot grow unbounded across long-lived daemons.
+// TestHandler_CleanupOnTerminalAction verifies that terminal actions clear
+// selected per-window state fields that should not outlive the session.
 func TestHandler_CleanupOnTerminalAction(t *testing.T) {
 	h := newTestHandler()
 
 	h.stateMu.Lock()
-	h.notifiedStale[42] = true
-	h.lastSessionTitle[42] = "W:api"
-	h.lastPipeMode[42] = true
+	h.ensureWindowStateLocked(42).NotifiedStale = true
+	h.ensureWindowStateLocked(42).LastSessionTitle = "W:api"
+	h.ensureWindowStateLocked(42).LastPipeMode = true
 	h.stateMu.Unlock()
 
 	// "stop" carries no SessionTitle / PipeMode in this test, so the
@@ -89,9 +75,9 @@ func TestHandler_CleanupOnTerminalAction(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop"})
 
 	h.stateMu.Lock()
-	_, staleOK := h.notifiedStale[42]
-	title := h.lastSessionTitle[42]
-	pipe := h.lastPipeMode[42]
+	staleOK := h.store[42].NotifiedStale
+	title := h.store[42].LastSessionTitle
+	pipe := h.store[42].LastPipeMode
 	h.stateMu.Unlock()
 
 	if staleOK {
@@ -112,7 +98,7 @@ func TestHandler_TracksLastAccount(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
 	h.stateMu.Lock()
-	got := h.lastAccount[42]
+	got := h.store[42].LastAccount
 	h.stateMu.Unlock()
 	if got != "work" {
 		t.Fatalf("lastAccount[42] = %q; want work", got)
@@ -120,18 +106,18 @@ func TestHandler_TracksLastAccount(t *testing.T) {
 }
 
 // TestHandler_LastAccountClearedOnTerminal verifies that terminal actions
-// remove the per-window account entry so the maps cannot grow unbounded.
+// clear the per-window account field.
 func TestHandler_LastAccountClearedOnTerminal(t *testing.T) {
 	h := newTestHandler()
 
 	h.stateMu.Lock()
-	h.lastAccount[42] = "work"
+	h.ensureWindowStateLocked(42).LastAccount = "work"
 	h.stateMu.Unlock()
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop"})
 
 	h.stateMu.Lock()
-	_, present := h.lastAccount[42]
+	present := h.store[42].LastAccount != ""
 	h.stateMu.Unlock()
 	if present {
 		t.Fatalf("lastAccount[42] still present after stop")

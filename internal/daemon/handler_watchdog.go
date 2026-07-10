@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // SetKittyClient injects the Kitty client used by the stale sweep to clear
@@ -134,73 +133,22 @@ func (h *Handler) anyStaleThresholdSet() bool {
 //
 // windowMetadata is intentionally preserved across closes so post-mortem
 // `amx daemon export-events` invocations still have identity/context for
-// sessions whose tabs have already disappeared. Every other per-window map
-// must be GC'd here — a session that closes without a terminal hook event
-// (e.g. user closes the tab with Cmd+W, daemon misses the SessionEnd) would
-// otherwise leak an entry per killed window for the daemon's lifetime, which
-// can also let notifiedStale latches survive into a hypothetical future
-// Kitty-ID reuse and silently suppress a notification.
+// sessions whose tabs have already disappeared. The live per-window store must
+// be GC'd here — a session that closes without a terminal hook event (e.g. user
+// closes the tab with Cmd+W, daemon misses the SessionEnd) would otherwise leak
+// an entry per killed window for the daemon's lifetime, which can also let
+// notifiedStale latches survive into a hypothetical future Kitty-ID reuse and
+// silently suppress a notification.
 func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 	h.stateMu.Lock()
 	closed := make(map[int]struct{})
-	collect := func(id int) {
+	for id := range h.store {
 		if !liveIDs[id] {
 			closed[id] = struct{}{}
 		}
 	}
-	for id := range h.eventLog {
-		collect(id)
-	}
-	for id := range h.activity {
-		collect(id)
-	}
-	for id := range h.lastAction {
-		collect(id)
-	}
-	for id := range h.lastAccount {
-		collect(id)
-	}
-	for id := range h.lastActiveEvent {
-		collect(id)
-	}
-	for id := range h.copilotToolPermissionState {
-		collect(id)
-	}
-	for id := range h.subagentCount {
-		collect(id)
-	}
-	for id := range h.notifiedStale {
-		collect(id)
-	}
-	for id := range h.contextLimitNotified {
-		collect(id)
-	}
-	for id := range h.lastSessionTitle {
-		collect(id)
-	}
-	for id := range h.lastPipeMode {
-		collect(id)
-	}
-	for id := range h.pendingReset {
-		collect(id)
-	}
-	for id := range h.mutedWindows {
-		collect(id)
-	}
 	for id := range closed {
-		delete(h.eventLog, id)
-		delete(h.activity, id)
-		delete(h.lastAction, id)
-		delete(h.lastAccount, id)
-		delete(h.lastActiveEvent, id)
-		delete(h.copilotToolPermissionState, id)
-		delete(h.subagentCount, id)
-		delete(h.notifiedStale, id)
-		delete(h.contextLimitNotified, id)
-		delete(h.lastSessionTitle, id)
-		delete(h.lastPipeMode, id)
-		delete(h.pendingReset, id)
-		delete(h.mutedWindows, id)
+		delete(h.store, id)
 	}
 	h.stateMu.Unlock()
 	// Notifier cooldown/pending entries are keyed by window ID too. Without
@@ -234,27 +182,27 @@ func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 // actionIconState. The notifier is the only subsystem that recognizes it as
 // an action name.
 func (h *Handler) SweepStale(now time.Time) {
+	var windows []kitty.OSWindow
 	// Prune eventLog entries for windows that Kitty no longer reports as live.
 	// Runs before the staleness scan so an event-log GC happens every sweep
 	// regardless of whether anyStaleThresholdSet() is true below.
 	if h.kittyClient != nil {
-		if windows, err := h.kittyClient.ListWindows(); err == nil {
-			liveIDs := make(map[int]bool)
-			for _, ow := range windows {
-				for _, tab := range ow.Tabs {
-					for _, w := range tab.Windows {
-						liveIDs[w.ID] = true
-					}
-				}
-			}
-			h.pruneClosedWindows(liveIDs)
+		if snapshot, err := h.kittyClient.ListWindows(); err == nil {
+			windows = snapshot
+			h.pruneClosedWindows(liveWindowIDs(windows))
 		} else {
 			slog.Debug("sweep: list windows failed for GC prune", "err", err)
 		}
 	}
+	changed := h.SweepStaleWithSnapshot(now, windows)
+	if changed && len(windows) > 0 {
+		h.renderSnapshot(windows)
+	}
+}
 
+func (h *Handler) SweepStaleWithSnapshot(now time.Time, _ []kitty.OSWindow) bool {
 	if !h.anyStaleThresholdSet() {
-		return
+		return false
 	}
 	type staleEntry struct {
 		windowID int
@@ -266,33 +214,37 @@ func (h *Handler) SweepStale(now time.Time) {
 	var stale []staleEntry
 
 	h.stateMu.Lock()
-	for windowID, last := range h.activity {
-		action := h.lastAction[windowID]
+	for windowID, st := range h.store {
+		action := st.LastAction
 		if action != "active" && action != "subagent" && action != "compact" {
 			continue
 		}
-		account := h.lastAccount[windowID]
+		account := st.LastAccount
 		threshold := h.resolveThreshold(account, action)
 		if threshold <= 0 {
 			continue
 		}
-		if now.Sub(last) < threshold {
+		if now.Sub(st.Activity) < threshold {
 			continue
 		}
-		title := h.lastSessionTitle[windowID]
-		pipe := h.lastPipeMode[windowID]
-		notify := !h.notifiedStale[windowID]
+		title := st.LastSessionTitle
+		pipe := st.LastPipeMode
+		notify := !st.NotifiedStale
 		if notify {
-			h.notifiedStale[windowID] = true
+			st.NotifiedStale = true
 		}
 		// Reset so the next idle/clear/active does not try to re-clear an icon
 		// we just cleared, and so the lastKnownAction fallback returns "".
 		// eventLog is intentionally preserved across the sweep so detail-pane
 		// history survives until the underlying Kitty window actually closes.
-		delete(h.lastAction, windowID)
-		delete(h.lastActiveEvent, windowID)
-		delete(h.copilotToolPermissionState, windowID)
-		delete(h.subagentCount, windowID)
+		st.LastAction = ""
+		st.LastActiveEvent = ""
+		st.CopilotToolPermissionState = copilotToolPermissionNone
+		st.SubagentCount = 0
+		st.DesiredIcon = ""
+		st.StateSet = true
+		h.syncRendererMetadataLocked(windowID)
+		h.markWindowDirtyLocked(windowID)
 		stale = append(stale, staleEntry{
 			windowID: windowID,
 			account:  account,
@@ -310,42 +262,8 @@ func (h *Handler) SweepStale(now time.Time) {
 		if s.notify && h.notifier != nil {
 			h.notifier.MaybeNotify(s.windowID, s.title, s.account, "stale", s.pipeMode)
 		}
-		if h.kittyClient != nil {
-			h.clearStaleTitle(s.windowID, s.title)
-		}
 	}
-}
-
-// clearStaleTitle removes any state icon from the tab containing windowID
-// while preserving the star glyph and base title. Best-effort: errors from
-// the Kitty client are logged at debug and swallowed so the sweep continues
-// to handle other windows.
-func (h *Handler) clearStaleTitle(windowID int, fallbackTitle string) {
-	windows, err := h.kittyClient.ListWindows()
-	if err != nil {
-		slog.Debug("sweep: list windows failed", "window_id", windowID, "err", err)
-		return
-	}
-	tab, _, ok := kitty.FindTabByWindowID(windows, windowID)
-	if !ok {
-		return
-	}
-	if owner, ok := kitty.FindTabTitleOwner(tab); ok && owner.ID != windowID {
-		return
-	}
-	parts := palette.ParseTitleParts(tab.Title)
-	parts.State = ""
-	newTitle := palette.BuildTitleParts(parts)
-	if newTitle == tab.Title {
-		return
-	}
-	if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
-		slog.Debug("sweep: set tab title failed",
-			"window_id", windowID,
-			"fallback_title", fallbackTitle,
-			"err", err,
-		)
-	}
+	return len(stale) > 0
 }
 
 // SweepHookSilence detects accounts whose most recent event predates the
@@ -372,7 +290,10 @@ func (h *Handler) SweepHookSilence(now time.Time) {
 		slog.Debug("hook-silence sweep: list windows failed", "err", err)
 		return
 	}
+	h.SweepHookSilenceWithSnapshot(now, windows)
+}
 
+func (h *Handler) SweepHookSilenceWithSnapshot(now time.Time, windows []kitty.OSWindow) {
 	running := make(map[string]bool)
 	for _, ow := range windows {
 		for _, tab := range ow.Tabs {

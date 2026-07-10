@@ -85,44 +85,40 @@ func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing
 		Action:           "elicitation",
 		Event:            "notification",
 		NotificationType: "elicitation_dialog",
-		CurrentIconState: "bolt",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "question" {
 		t.Fatalf("Copilot plan prompt: want question icon, got %+v", resp)
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "stop",
-		Event:            "agentStop",
-		CurrentIconState: "question",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Harness:  "copilot",
+		Action:   "stop",
+		Event:    "agentStop",
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("Copilot agentStop while prompt pending: want allowed=false, got %+v", resp)
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "active",
-		Event:            "postToolUse",
-		CurrentIconState: "question",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Harness:  "copilot",
+		Action:   "active",
+		Event:    "postToolUse",
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("Copilot trailing active while prompt pending: want allowed=false, got %+v", resp)
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "active",
-		Event:            "userPromptSubmitted",
-		IsPrompt:         true,
-		CurrentIconState: "question",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Harness:  "copilot",
+		Action:   "active",
+		Event:    "userPromptSubmitted",
+		IsPrompt: true,
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("Copilot user response should clear prompt icon, got %+v", resp)
@@ -146,12 +142,12 @@ func TestHandler_ResetFlowSuppressesStopNotification(t *testing.T) {
 		})
 
 		resp := h.Handle(Request{
-			Type:             TypeStateUpdate,
-			WindowID:         1,
-			Action:           "stop",
-			Event:            "Stop",
-			CurrentIconState: "bolt",
-			SessionTitle:     "W:api",
+			Type:     TypeStateUpdate,
+			WindowID: 1,
+			Action:   "stop",
+			Event:    "Stop",
+
+			SessionTitle: "W:api",
 		})
 		if !resp.OK || !resp.Allowed || resp.IconState != "" {
 			t.Fatalf("reset stop should clear without notifying, got %+v", resp)
@@ -183,31 +179,31 @@ func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T
 
 		for _, req := range []Request{
 			{
-				Type:             TypeStateUpdate,
-				WindowID:         1,
-				Harness:          "copilot",
-				Action:           "stop",
-				Event:            "agentStop",
-				CurrentIconState: "bolt",
-				SessionTitle:     "W:api",
+				Type:     TypeStateUpdate,
+				WindowID: 1,
+				Harness:  "copilot",
+				Action:   "stop",
+				Event:    "agentStop",
+
+				SessionTitle: "W:api",
 			},
 			{
-				Type:             TypeStateUpdate,
-				WindowID:         1,
-				Harness:          "copilot",
-				Action:           "stop",
-				Event:            "sessionEnd",
-				CurrentIconState: "",
-				SessionTitle:     "W:api",
+				Type:     TypeStateUpdate,
+				WindowID: 1,
+				Harness:  "copilot",
+				Action:   "stop",
+				Event:    "sessionEnd",
+
+				SessionTitle: "W:api",
 			},
 			{
-				Type:             TypeStateUpdate,
-				WindowID:         1,
-				Harness:          "copilot",
-				Action:           "idle",
-				Event:            "sessionStart",
-				CurrentIconState: "",
-				SessionTitle:     "W:api",
+				Type:     TypeStateUpdate,
+				WindowID: 1,
+				Harness:  "copilot",
+				Action:   "idle",
+				Event:    "sessionStart",
+
+				SessionTitle: "W:api",
 			},
 			{
 				Type:             TypeStateUpdate,
@@ -216,8 +212,8 @@ func TestHandler_CopilotResetFlowSuppressesTrailingIdleNotification(t *testing.T
 				Action:           "stop",
 				Event:            "notification",
 				NotificationType: "agent_idle",
-				CurrentIconState: "",
-				SessionTitle:     "W:api",
+
+				SessionTitle: "W:api",
 			},
 		} {
 			resp := h.Handle(req)
@@ -240,15 +236,15 @@ func TestHandler_CopilotUserExitSessionEndClearsWithoutNotification(t *testing.T
 		h := NewHandler(guard, notifier)
 
 		resp := h.Handle(Request{
-			Type:             TypeStateUpdate,
-			WindowID:         1,
-			Harness:          "copilot",
-			Action:           "stop",
-			Event:            "sessionEnd",
-			Reason:           "user_exit",
-			ResetFlow:        true,
-			CurrentIconState: "bolt",
-			SessionTitle:     "W:api",
+			Type:      TypeStateUpdate,
+			WindowID:  1,
+			Harness:   "copilot",
+			Action:    "stop",
+			Event:     "sessionEnd",
+			Reason:    "user_exit",
+			ResetFlow: true,
+
+			SessionTitle: "W:api",
 		})
 		if !resp.OK || !resp.Allowed || resp.IconState != "" {
 			t.Fatalf("sessionEnd(user_exit) should clear without notifying, got %+v", resp)

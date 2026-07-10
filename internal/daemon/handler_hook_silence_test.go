@@ -121,12 +121,11 @@ func TestSweepHookSilence_SuppressedEventCountsAsFresh(t *testing.T) {
 		h.stateMu.Unlock()
 
 		resp := h.Handle(Request{
-			Type:             TypeStateUpdate,
-			WindowID:         42,
-			Action:           "active",
-			Event:            "PostToolUse",
-			Account:          "work",
-			CurrentIconState: "stop",
+			Type:     TypeStateUpdate,
+			WindowID: 42,
+			Action:   "active",
+			Event:    "PostToolUse",
+			Account:  "work",
 		})
 		if !resp.OK || resp.Allowed {
 			t.Fatalf("active after terminal should be suppressed, got %+v", resp)

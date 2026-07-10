@@ -12,42 +12,23 @@ const (
 	suppressionReasonCopilotPendingPrompt = "copilot_pending_prompt"
 	suppressionReasonActiveAfterTerminal  = "active_after_terminal"
 	suppressionReasonElicitationPending   = "elicitation_pending"
+	suppressionReasonUnknownEvent         = "unknown_event"
+	suppressionReasonAutoApprovedPerm     = "auto_approved_permission"
+	suppressionReasonOwnerMismatch        = "owner_mismatch"
+	suppressionReasonIgnoredEvent         = "ignored_event"
 )
 
-func actionFromIconState(iconState string) string {
-	switch iconState {
-	case "bolt":
-		return "active"
-	case "compact":
-		return "compact"
-	case "subagent":
-		return "subagent"
-	case "stop":
-		return "stop"
-	case "key":
-		return "permission"
-	case "warning":
-		return "failure"
-	case "error":
-		return "stop_failure"
-	case "question":
-		return "elicitation"
-	default:
-		return ""
-	}
-}
-
-func (h *Handler) lastKnownAction(windowID int, currentIconState string) string {
+func (h *Handler) lastKnownState(windowID int) (action, iconState string) {
 	h.stateMu.Lock()
-	last := h.lastAction[windowID]
-	h.stateMu.Unlock()
-	if last != "" {
-		return last
+	if st, ok := h.windowStateLocked(windowID); ok {
+		action = st.LastAction
+		iconState = desiredIconForState(st)
 	}
-	return actionFromIconState(currentIconState)
+	h.stateMu.Unlock()
+	return action, iconState
 }
 
-func sessionEventFromRequest(req Request, action, resultIconState string) SessionEvent {
+func sessionEventFromRequest(req Request, action, resultIconState, currentIconState string) SessionEvent {
 	return SessionEvent{
 		At:               time.Now().Unix(),
 		Event:            req.Event,
@@ -56,7 +37,7 @@ func sessionEventFromRequest(req Request, action, resultIconState string) Sessio
 		Source:           req.Source,
 		PreservesIcon:    req.PreservesIcon,
 		ResultIconState:  resultIconState,
-		CurrentIconState: req.CurrentIconState,
+		CurrentIconState: currentIconState,
 		NotificationType: req.NotificationType,
 		StopReason:       req.StopReason,
 		Reason:           req.Reason,
@@ -65,8 +46,8 @@ func sessionEventFromRequest(req Request, action, resultIconState string) Sessio
 	}
 }
 
-func suppressedSessionEvent(req Request, action, suppressionReason string) SessionEvent {
-	ev := sessionEventFromRequest(req, action, IconStatePreserve)
+func suppressedSessionEvent(req Request, action, suppressionReason, currentIconState string) SessionEvent {
+	ev := sessionEventFromRequest(req, action, IconStatePreserve, currentIconState)
 	ev.Suppressed = true
 	ev.SuppressionReason = suppressionReason
 	return ev

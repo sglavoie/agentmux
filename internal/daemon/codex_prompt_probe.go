@@ -34,7 +34,11 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 		slog.Debug("codex prompt probe: list windows failed", "err", err)
 		return
 	}
+	h.ProbeCodexScreenPromptsWithSnapshot(now, windows)
+	h.renderSnapshot(windows)
+}
 
+func (h *Handler) ProbeCodexScreenPromptsWithSnapshot(now time.Time, windows []kitty.OSWindow) {
 	for i := range windows {
 		for j := range windows[i].Tabs {
 			tab := &windows[i].Tabs[j]
@@ -44,20 +48,20 @@ func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
 				continue
 			}
 			if parts.State == "stop" {
-				h.probeCodexClearWindow(now, win.ID, tab.Title, parts, win.UserVars)
+				h.probeCodexClearWindow(now, win.ID, parts, win.UserVars)
 				continue
 			}
 			if !codexPromptProbeCanOverwrite(parts.State) {
 				continue
 			}
-			h.probeCodexWindow(now, win.ID, tab.Title, parts, win.UserVars)
+			h.probeCodexWindow(now, win.ID, parts, win.UserVars)
 			// Completed-turn fallback: only a still-bolt tab can be a stuck
 			// active turn. Prompt classification above wins first (it clears the
 			// bolt to key/question when a prompt is visible), and the completed
 			// classifier bails on any visible prompt, so this only fires when no
 			// prompt was found and the turn genuinely finished with no Stop hook.
 			if parts.State == "bolt" {
-				h.probeCodexCompletedTurnWindow(win.ID, tab.Title, parts, win.UserVars)
+				h.probeCodexCompletedTurnWindow(win.ID, parts, win.UserVars)
 			}
 		}
 	}
@@ -132,7 +136,6 @@ func codexPromptProbeCanOverwrite(iconState string) bool {
 func (h *Handler) probeCodexWindow(
 	now time.Time,
 	windowID int,
-	tabTitle string,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) {
@@ -167,21 +170,12 @@ func (h *Handler) probeCodexWindow(
 		// notification for the same prompt. pipeMode is deliberately false: the
 		// probe only scans interactive Codex windows.
 		h.maybeNotify(windowID, titleParts.Base, userVars.EffectiveProfile(), classification.Action, false)
-		newParts := titleParts
-		newParts.State = iconState
-		newTitle := palette.BuildTitleParts(newParts)
-		if newTitle != tabTitle {
-			if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
-				slog.Debug("codex prompt probe: set tab title failed", "window_id", windowID, "err", err)
-			}
-		}
 	}
 }
 
 func (h *Handler) probeCodexClearWindow(
 	_ time.Time,
 	windowID int,
-	tabTitle string,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) {
@@ -202,6 +196,7 @@ func (h *Handler) probeCodexClearWindow(
 	if !ClassifyCodexClearScreen(screen, allText) {
 		return
 	}
+	h.setMutedFromSnapshot(windowID, titleParts.Muted || userVars.Mute != "")
 
 	resp := h.Handle(Request{
 		Type:             TypeStateUpdate,
@@ -212,9 +207,8 @@ func (h *Handler) probeCodexClearWindow(
 		Account:          userVars.EffectiveProfile(),
 		Harness:          harness.Codex,
 		SessionTitle:     titleParts.Base,
-		CurrentIconState: titleParts.State,
+		currentIconState: titleParts.State,
 		ResetFlow:        true,
-		Muted:            titleParts.Muted || userVars.Mute != "",
 	})
 	if !resp.OK {
 		slog.Debug("codex clear probe: state update failed", "window_id", windowID, "err", resp.Error)
@@ -222,16 +216,6 @@ func (h *Handler) probeCodexClearWindow(
 	}
 	if !resp.Allowed || resp.IconState == IconStatePreserve {
 		return
-	}
-
-	newParts := titleParts
-	newParts.State = resp.IconState
-	newTitle := palette.BuildTitleParts(newParts)
-	if newTitle == tabTitle {
-		return
-	}
-	if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
-		slog.Debug("codex clear probe: set tab title failed", "window_id", windowID, "err", err)
 	}
 }
 
@@ -244,7 +228,6 @@ func (h *Handler) probeCodexClearWindow(
 // invokes this for a `bolt` tab.
 func (h *Handler) probeCodexCompletedTurnWindow(
 	windowID int,
-	tabTitle string,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) {
@@ -256,6 +239,7 @@ func (h *Handler) probeCodexCompletedTurnWindow(
 	if !ClassifyCodexCompletedTurnScreen(screen) {
 		return
 	}
+	h.setMutedFromSnapshot(windowID, titleParts.Muted || userVars.Mute != "")
 
 	resp := h.Handle(Request{
 		Type:             TypeStateUpdate,
@@ -266,8 +250,7 @@ func (h *Handler) probeCodexCompletedTurnWindow(
 		Account:          userVars.EffectiveProfile(),
 		Harness:          harness.Codex,
 		SessionTitle:     titleParts.Base,
-		CurrentIconState: titleParts.State,
-		Muted:            titleParts.Muted || userVars.Mute != "",
+		currentIconState: titleParts.State,
 	})
 	if !resp.OK {
 		slog.Debug("codex stop probe: state update failed", "window_id", windowID, "err", resp.Error)
@@ -275,16 +258,6 @@ func (h *Handler) probeCodexCompletedTurnWindow(
 	}
 	if !resp.Allowed || resp.IconState == IconStatePreserve {
 		return
-	}
-
-	newParts := titleParts
-	newParts.State = resp.IconState
-	newTitle := palette.BuildTitleParts(newParts)
-	if newTitle == tabTitle {
-		return
-	}
-	if err := h.kittyClient.SetTabTitle(kitty.MatchTabByWindowID(windowID), newTitle); err != nil {
-		slog.Debug("codex stop probe: set tab title failed", "window_id", windowID, "err", err)
 	}
 }
 
@@ -300,20 +273,25 @@ func (h *Handler) recordCodexPromptProbeState(
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 
-	h.activity[windowID] = now
-	h.lastSessionTitle[windowID] = baseTitle
+	st := h.ensureWindowStateLocked(windowID)
+	st.Activity = now
+	st.LastSessionTitle = baseTitle
 	// The probe only scans interactive Codex windows — same reason
 	// probeCodexWindow's maybeNotify passes pipeMode=false.
-	h.lastPipeMode[windowID] = false
+	st.LastPipeMode = false
 	profile := userVars.EffectiveProfile()
 	if profile != "" {
-		h.lastAccount[windowID] = profile
+		st.LastAccount = profile
 	}
-	h.lastAction[windowID] = classification.Action
+	st.LastHarness = harness.Codex
+	st.LastAction = classification.Action
 	if classification.Action == "active" {
-		h.lastActiveEvent[windowID] = screenPromptProbeEvent
+		st.LastActiveEvent = screenPromptProbeEvent
 	}
-	delete(h.notifiedStale, windowID)
+	st.NotifiedStale = false
+	st.DesiredIcon = resultIconState
+	st.StateSet = true
+	h.markWindowDirtyLocked(windowID)
 
 	meta := h.windowMetadata[windowID]
 	meta.Durable.SessionTitle = baseTitle

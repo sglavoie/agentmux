@@ -234,7 +234,7 @@ func TestIPC_StateQueryWatchdogRoundtrip(t *testing.T) {
 	}
 }
 
-func TestIPC_IdleShutdown(t *testing.T) {
+func TestIPC_ShutdownRequest(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "amx-idle2-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)

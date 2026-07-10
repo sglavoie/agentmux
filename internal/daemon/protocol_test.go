@@ -20,7 +20,6 @@ func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 		ToolName:         "Bash",
 		Source:           "clear",
 		Harness:          "copilot",
-		CurrentIconState: "bolt",
 		NotificationType: "permission_prompt",
 		StopReason:       "context_limit_reached",
 		Reason:           "error",
@@ -47,7 +46,7 @@ func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 	if out.Harness != "copilot" {
 		t.Fatalf("Harness = %q, want %q", out.Harness, "copilot")
 	}
-	if out.CurrentIconState != "bolt" || out.NotificationType != "permission_prompt" ||
+	if out.NotificationType != "permission_prompt" ||
 		out.StopReason != "context_limit_reached" || out.Reason != "error" || !out.ContextLimit || !out.ResetFlow {
 		t.Fatalf("debug context mismatch: in=%+v out=%+v", in, out)
 	}
@@ -73,6 +72,26 @@ func TestRequest_OmittedToolNameMarshalsClean(t *testing.T) {
 	}
 	if got := string(data); strings.Contains(got, "source") {
 		t.Fatalf("expected source to be omitted, got: %s", got)
+	}
+	if got := string(data); strings.Contains(got, "current_icon_state") {
+		t.Fatalf("expected daemon-owned icon state to be absent from requests, got: %s", got)
+	}
+}
+
+func TestResponse_RoundtripCarriesStateSnapshots(t *testing.T) {
+	in := Response{OK: true, States: map[int]WindowStateSnapshot{
+		42: {IconState: "key", Looping: true, LastAction: "permission", LastEventAt: 1_700_000_000, GuardAction: "permission"},
+	}}
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("Marshal(Response): %v", err)
+	}
+	var out Response
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("Unmarshal(Response): %v", err)
+	}
+	if !reflect.DeepEqual(out.States, in.States) {
+		t.Fatalf("state snapshots = %#v, want %#v", out.States, in.States)
 	}
 }
 

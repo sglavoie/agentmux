@@ -1,4 +1,4 @@
-package indicator
+package hookevent
 
 import (
 	"strings"

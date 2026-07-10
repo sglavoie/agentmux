@@ -39,23 +39,22 @@ func TestHandler_ActiveBlockedAfterStopGuardExpiry(t *testing.T) {
 
 func TestHandler_ActiveBlockedByCurrentStopIconAfterDaemonRestart(t *testing.T) {
 	h := newTestHandler()
+	seedRestoredAction(t, h, "stop")
 
 	resp := h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		CurrentIconState: "stop",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("non-prompt active with current stop icon: want allowed=false, got %+v", resp)
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		IsPrompt:         true,
-		CurrentIconState: "stop",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
+		IsPrompt: true,
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("prompt active with current stop icon: want icon_state=bolt, got %+v", resp)
@@ -89,12 +88,12 @@ func TestHandler_ActiveBlockedAfterStopFailureGuardExpiry(t *testing.T) {
 
 func TestHandler_ActiveAllowedByCurrentWarningIconAfterDaemonRestart(t *testing.T) {
 	h := newTestHandler()
+	seedRestoredAction(t, h, "failure")
 
 	resp := h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		CurrentIconState: "warning",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("non-prompt active with current warning icon: want icon_state=bolt allowed=true, got %+v", resp)
@@ -107,12 +106,12 @@ func TestHandler_ActiveAllowedByCurrentWarningIconAfterDaemonRestart(t *testing.
 // unacknowledged stop failure.
 func TestHandler_ActiveBlockedByCurrentErrorIconAfterDaemonRestart(t *testing.T) {
 	h := newTestHandler()
+	seedRestoredAction(t, h, "stop_failure")
 
 	resp := h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		CurrentIconState: "error",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("non-prompt active with current error icon: want allowed=false, got %+v", resp)
@@ -120,13 +119,19 @@ func TestHandler_ActiveBlockedByCurrentErrorIconAfterDaemonRestart(t *testing.T)
 
 	// A prompt event still breaks through.
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		IsPrompt:         true,
-		CurrentIconState: "error",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
+		IsPrompt: true,
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("prompt active with current error icon: want icon_state=bolt, got %+v", resp)
 	}
+}
+
+func seedRestoredAction(t *testing.T, h *Handler, action string) {
+	t.Helper()
+	h.stateMu.Lock()
+	h.store[1] = &WindowState{LastAction: action, DesiredIcon: IconState(action)}
+	h.stateMu.Unlock()
 }

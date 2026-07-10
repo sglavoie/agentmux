@@ -36,6 +36,23 @@ func TestHandler_StateQueryReturnsActivity(t *testing.T) {
 	}
 }
 
+func TestHandler_StateQueryReturnsDaemonStateSnapshot(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "permission"})
+	h.stateMu.Lock()
+	h.store[7].Looping = true
+	h.stateMu.Unlock()
+
+	resp := h.Handle(Request{Type: TypeStateQuery})
+	got, ok := resp.States[7]
+	if !ok {
+		t.Fatalf("state query omitted window 7: %+v", resp.States)
+	}
+	if got.IconState != "key" || !got.Looping || got.LastAction != "permission" || got.LastEventAt == 0 || got.GuardAction != "permission" {
+		t.Fatalf("state snapshot = %+v, want key looping permission timestamp guard", got)
+	}
+}
+
 func TestHandler_PromptBypassesStopGuard(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop"})

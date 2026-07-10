@@ -106,7 +106,7 @@ func (n *Notifier) SetFocus(f focusClient) {
 
 // SetIsMuted installs the closure MaybeNotify consults to suppress
 // notifications for muted windows. The closure is typically Handler.IsMuted,
-// which reads the daemon's mutedWindows cache populated from Request.Muted.
+// which reads the daemon's muted-window cache populated from Kitty snapshots.
 // A nil closure (or one that returns false) leaves the gate open.
 func (n *Notifier) SetIsMuted(fn func(int) bool) {
 	n.mu.Lock()

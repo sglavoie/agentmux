@@ -13,9 +13,10 @@ var hookWindowID int
 
 var hookIndicatorCmd = &cobra.Command{
 	Use:   "hook-indicator <event>",
-	Short: "Update Kitty tab state from a harness hook (internal)",
-	Long: `Called by supported harness hooks to update the Kitty tab title and trigger
-notifications based on the current session state.
+	Short: "Forward harness hook state to the daemon (internal)",
+	Long: `Called by supported harness hooks to forward raw hook events to the daemon.
+The daemon updates Kitty tab state and triggers notifications based on the
+current session state.
 
 The first argument must be a harness event name (e.g. Stop, PermissionRequest,
 UserPromptSubmit). Unknown events are silently ignored.
@@ -33,7 +34,10 @@ For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
 			// Non-fatal: proceed without auto-start.
 			amxBin = "amx"
 		}
-		return indicator.Run(args[0], hookWindowID, amxBin)
+		if err := indicator.Run(args[0], hookWindowID, amxBin); err != nil {
+			ccerrors.Print(fmt.Errorf("processing hook event: %w", err))
+		}
+		return nil
 	},
 }
 

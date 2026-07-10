@@ -221,7 +221,13 @@ func TestHandler_SubagentCountCleanedUpAfterLastStop(t *testing.T) {
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	if got := len(h.subagentCount); got != 0 {
-		t.Fatalf("subagentCount has %d residual entries after normal stop cycles; want 0", got)
+	var residual int
+	for _, st := range h.store {
+		if st.SubagentCount != 0 {
+			residual++
+		}
+	}
+	if residual != 0 {
+		t.Fatalf("subagentCount has %d residual nonzero entries after normal stop cycles; want 0", residual)
 	}
 }

@@ -19,24 +19,22 @@ func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "idle",
-		Event:            "notification",
-		CurrentIconState: "compact",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Harness:  "copilot",
+		Action:   "idle",
+		Event:    "notification",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
 		t.Fatalf("Copilot compaction cleanup should synthesize stop icon, got %+v", resp)
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "active",
-		Event:            "postToolUse",
-		CurrentIconState: "stop",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Harness:  "copilot",
+		Action:   "active",
+		Event:    "postToolUse",
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("Copilot post-compaction stop should block non-prompt active follow-up, got %+v", resp)
@@ -78,7 +76,7 @@ func TestHandler_CopilotPendingPromptSuppressionKeepsElicitationGuard(t *testing
 	}
 
 	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "copilot",
-		Action: "active", Event: "postToolUse", CurrentIconState: "question"})
+		Action: "active", Event: "postToolUse"})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("speculative active during pending elicitation: want allowed=false, got %+v", resp)
 	}
@@ -88,7 +86,7 @@ func TestHandler_CopilotPendingPromptSuppressionKeepsElicitationGuard(t *testing
 
 	resp = h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Harness: "copilot",
 		Action: "elicitation", Event: "notification", NotificationType: "elicitation_dialog",
-		CurrentIconState: "question"})
+	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "question" {
 		t.Fatalf("re-fired elicitation should be allowed within the guard window, got %+v", resp)
 	}
@@ -103,7 +101,7 @@ func TestHandler_CopilotPendingPromptSuppressionKeepsElicitationGuard(t *testing
 func TestHandler_CopilotTurnEndDuringSubagentPreserves(t *testing.T) {
 	h := newTestHandler()
 	h.stateMu.Lock()
-	h.subagentCount[42] = 1
+	h.ensureWindowStateLocked(42).SubagentCount = 1
 	h.stateMu.Unlock()
 
 	resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Account: "work",

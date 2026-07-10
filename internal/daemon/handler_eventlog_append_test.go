@@ -11,12 +11,11 @@ func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		Event:            "PreToolUse",
-		ToolName:         "Bash",
-		CurrentIconState: "key",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
+		Event:    "PreToolUse",
+		ToolName: "Bash",
 	})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
@@ -36,8 +35,8 @@ func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
 	if ev.ResultIconState != "bolt" {
 		t.Errorf("event result_icon_state = %q; want bolt", ev.ResultIconState)
 	}
-	if ev.CurrentIconState != "key" {
-		t.Errorf("event current_icon_state = %q; want key", ev.CurrentIconState)
+	if ev.CurrentIconState != "" {
+		t.Errorf("event current_icon_state = %q; want empty without restored daemon state", ev.CurrentIconState)
 	}
 	if ev.At <= 0 {
 		t.Errorf("event At = %d; want > 0", ev.At)
@@ -52,7 +51,7 @@ func TestHandler_EventLog_AppendOnGuardSuppressed(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse", ToolName: "Read", CurrentIconState: "subagent"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PostToolUse", ToolName: "Read"})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
@@ -86,7 +85,7 @@ func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop", CurrentIconState: "subagent"})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "agentStop"})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
 	if !resp.OK {
@@ -116,15 +115,13 @@ func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) 
 		Action:           "elicitation",
 		Event:            "notification",
 		NotificationType: "elicitation_dialog",
-		CurrentIconState: "bolt",
 	})
 	h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "stop",
-		Event:            "agentStop",
-		CurrentIconState: "question",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Harness:  "copilot",
+		Action:   "stop",
+		Event:    "agentStop",
 	})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
@@ -154,11 +151,10 @@ func TestHandler_EventLog_AppendOnActiveAfterTerminalSuppression(t *testing.T) {
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop"})
 	h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		Event:            "PostToolUse",
-		CurrentIconState: "stop",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
+		Event:    "PostToolUse",
 	})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
@@ -187,12 +183,12 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 	h := newTestHandler()
 
 	h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "stop_failure",
-		Event:            "SessionEnd",
-		Source:           "clear",
-		CurrentIconState: "bolt",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "stop_failure",
+		Event:    "SessionEnd",
+		Source:   "clear",
+
 		NotificationType: "agent_idle",
 		StopReason:       "context_limit_reached",
 		Reason:           "error",
@@ -210,8 +206,8 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 	if ev.ResultIconState != "error" {
 		t.Fatalf("result_icon_state = %q; want error", ev.ResultIconState)
 	}
-	if ev.CurrentIconState != "bolt" {
-		t.Fatalf("current_icon_state = %q; want bolt", ev.CurrentIconState)
+	if ev.CurrentIconState != "" {
+		t.Fatalf("current_icon_state = %q; want empty without restored daemon state", ev.CurrentIconState)
 	}
 	if ev.NotificationType != "agent_idle" {
 		t.Fatalf("notification_type = %q; want agent_idle", ev.NotificationType)
@@ -235,13 +231,12 @@ func TestHandler_EventLog_LoopFinishedCarriesSourceAndReason(t *testing.T) {
 
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
 	h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "idle",
-		Event:            "AgentSessionLoopFinished",
-		Source:           "agent_session_loop",
-		Reason:           "run_finished",
-		CurrentIconState: "bolt",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "idle",
+		Event:    "AgentSessionLoopFinished",
+		Source:   "agent_session_loop",
+		Reason:   "run_finished",
 	})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})
@@ -282,12 +277,11 @@ func TestHandler_EventLog_RewrittenResetStopCarriesResetFlow(t *testing.T) {
 		ResetFlow: true,
 	})
 	h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Harness:          "copilot",
-		Action:           "stop",
-		Event:            "agentStop",
-		CurrentIconState: "bolt",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Harness:  "copilot",
+		Action:   "stop",
+		Event:    "agentStop",
 	})
 
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 1})

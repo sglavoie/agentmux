@@ -42,12 +42,11 @@ func TestHandler_PendingElicitationSuppressesOrdinaryActive(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
 
 	resp := h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		Event:            "PreToolUse",
-		ToolName:         "Bash",
-		CurrentIconState: "question",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
+		Event:    "PreToolUse",
+		ToolName: "Bash",
 	})
 	if !resp.OK || resp.Allowed {
 		t.Fatalf("ordinary active while question pending: want allowed=false, got %+v", resp)
@@ -74,12 +73,11 @@ func TestHandler_RequestUserInputCompletionClearsElicitation(t *testing.T) {
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "elicitation"})
 
 	resp := h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         1,
-		Action:           "active",
-		Event:            "PostToolUse",
-		ToolName:         "request_user_input",
-		CurrentIconState: "question",
+		Type:     TypeStateUpdate,
+		WindowID: 1,
+		Action:   "active",
+		Event:    "PostToolUse",
+		ToolName: "request_user_input",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("request_user_input completion should restore active icon, got %+v", resp)

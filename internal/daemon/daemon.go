@@ -14,13 +14,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-const idleTimeout = 30 * time.Minute
-
 // Run starts the daemon, blocks until it shuts down, and cleans up the socket.
 // Shutdown happens when:
 //   - ctx is cancelled
 //   - a TypeShutdown request is received
-//   - no requests arrive for idleTimeout (30 minutes)
 func Run(ctx context.Context, cfg *config.Config) error {
 	socketPath := SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
@@ -65,83 +62,23 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if cfg.Defaults.Watchdog.ClaudeContextLimitProbe != nil {
 		handler.SetClaudeContextLimitProbe(*cfg.Defaults.Watchdog.ClaudeContextLimitProbe)
 	}
+	handler.restoreStateFromKitty(time.Now())
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	notifier.SetParentContext(ctx)
 
-	// Idle timer: shut down after 30 minutes of no requests.
-	idleTimer := time.NewTimer(idleTimeout)
-	defer idleTimer.Stop()
-
-	// Sweep ticker: periodically clear stranded active-class icons.
-	sweepInterval := 30 * time.Second
-	sweepTicker := time.NewTicker(sweepInterval)
-	defer sweepTicker.Stop()
-
-	// Hook-silence ticker: account-level "no hook event in N hours" detector.
-	// Cadence is intentionally slower than the per-window sweep because hook
-	// silence is measured in hours, not seconds — a 5-min lag at the tail of a
-	// 4-hour threshold is acceptable.
-	hookSilenceInterval := 5 * time.Minute
-	hookSilenceTicker := time.NewTicker(hookSilenceInterval)
-	defer hookSilenceTicker.Stop()
-
-	// Prompt-probe ticker: Codex can show interactive prompts before hooks
-	// report a durable state. Keep this responsive but separate from the
-	// lower-frequency watchdog sweeps.
-	promptProbeInterval := 1500 * time.Millisecond
-	promptProbeTicker := time.NewTicker(promptProbeInterval)
-	defer promptProbeTicker.Stop()
-
-	// activityCh receives a signal on every handled request.
-	activityCh := make(chan struct{}, 1)
-	handler.onActivity = func() {
-		select {
-		case activityCh <- struct{}{}:
-		default:
-		}
-	}
 	handler.onShutdown = cancel
 
 	slog.Info("daemon: started", "socket", socketPath, "guard_duration", guardDur)
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(ctx) }()
+	go handler.runRenderer(ctx)
 	slog.Info("daemon: ready", "socket", socketPath)
 
 	for {
 		select {
-		case <-activityCh:
-			if !idleTimer.Stop() {
-				select {
-				case <-idleTimer.C:
-				default:
-				}
-			}
-			idleTimer.Reset(idleTimeout)
-
-		case <-idleTimer.C:
-			slog.Info("daemon: idle timeout, shutting down")
-			cancel()
-			return nil
-
-		case <-sweepTicker.C:
-			// Sweep is internal — it must not signal activityCh, since
-			// idleTimeout governs external request inactivity only.
-			handler.SweepStale(time.Now())
-
-		case <-hookSilenceTicker.C:
-			// Hook-silence sweep is also internal — same activityCh
-			// discipline as the per-window sweep.
-			handler.SweepHookSilence(time.Now())
-
-		case <-promptProbeTicker.C:
-			// Prompt probing is internal and best-effort. It should not keep
-			// an otherwise idle daemon alive.
-			handler.ProbeCodexScreenPrompts(time.Now())
-			handler.ProbeClaudeContextLimit(time.Now())
-
 		case err := <-serveErr:
 			return err
 

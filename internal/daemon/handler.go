@@ -16,6 +16,7 @@ type kittyTitleClient interface {
 	ListWindows() ([]kitty.OSWindow, error)
 	GetText(matchExpr, extent string) (string, error)
 	SetTabTitle(matchExpr, title string) error
+	SetUserVars(matchExpr string, vars map[string]string) error
 }
 
 // Handler processes daemon requests.
@@ -31,6 +32,8 @@ type Handler struct {
 	// Injected by daemon.Run; nil in unit tests that don't exercise the
 	// title-clear path.
 	kittyClient kittyTitleClient
+
+	renderCh chan struct{}
 
 	// staleThresholds holds per-action stale-detection durations, keyed by
 	// the action name ("active", "subagent", "compact"). A missing or zero
@@ -55,61 +58,17 @@ type Handler struct {
 	// falls back to hookSilenceThreshold.
 	perAccountHookSilence map[string]time.Duration
 
-	// stateMu protects activity, lastAction, and lastAccount.
-	stateMu  sync.Mutex
-	activity map[int]time.Time
+	// stateMu protects store, the account-level hook-silence maps, and
+	// windowMetadata. Per-window state lives under store so handlers mutate a
+	// single WindowState entry instead of a set of parallel maps.
+	stateMu           sync.Mutex
+	store             map[int]*WindowState
+	pendingResetStops map[int]pendingResetStop
+	nextResetStopSeq  uint64
 
-	// lastAction records the most recent non-idle/clear action per window.
-	// It outlives the state guard so that an idle event arriving after the
-	// guard expires can still detect a stale bolt and clear it.
-	lastAction map[int]string
-
-	// lastAccount records the most recent profile/account name per window so
-	// the sweep can resolve per-account threshold overrides without keeping a
-	// reference to the original Request. Lowercase-keyed lookups happen at
-	// read time, not write time.
-	lastAccount map[int]string
-
-	// lastActiveEvent records the hook event name that last set the "active"
-	// state, so isAutoApprovedPerm can distinguish PreToolUse (same-tool
-	// auto-approval) from PostToolUse (prior tool completed).
-	lastActiveEvent map[int]string
-
-	// copilotToolPermissionState tracks Copilot's tool-permission lifecycle per
-	// window. permissionRequest fires before Copilot decides whether a tool call
-	// is auto-allowed or needs a real prompt, so the daemon keeps a short-lived
-	// state machine:
-	//   - pending: permissionRequest fired; wait for either a real prompt or
-	//     later tool progress.
-	//   - autoApproved: the turn continued without user input, so any later
-	//     notification.permission_prompt is stale noise and should not replace the
-	//     current icon.
-	copilotToolPermissionState map[int]copilotToolPermissionState
-
-	// subagentCount tracks the number of active sub-agents per window.
-	// It is incremented on SubagentStart and decremented on SubagentStop.
-	// While the count is > 0, SubagentStop events are suppressed so the
-	// robot icon persists until all concurrent agents finish.
-	subagentCount map[int]int
-
-	// pendingReset tracks short-lived user-initiated session reset flows.
-	// requested means a slash-command reset was submitted and we are waiting for
-	// the stop/cleanup lifecycle; clearing means we have already translated at
-	// least one stop-like event to user_clear and are holding the marker long
-	// enough to absorb any late cleanup noise before the next normal turn clears
-	// it.
-	pendingReset map[int]resetFlowState
-
-	// notifiedStale tracks windows for which a stale-active notification has
-	// already fired in the current stall. Cleared on the next real state update
-	// for that window so a future stall produces a fresh notification.
-	notifiedStale map[int]bool
-
-	// contextLimitNotified marks windows already swapped to the error icon by
-	// ProbeClaudeContextLimit during the current stall episode. Cleared in
-	// handler_state_update.go when an "active"-class event re-enters the window
-	// (S3) and in pruneClosedWindows when the window closes (S3).
-	contextLimitNotified map[int]bool
+	kittySockets      map[int]string
+	lastKittyListenOn string
+	lastRenderTickAt  time.Time
 
 	// claudeContextLimitProbeEnabled gates ProbeClaudeContextLimit. Set from
 	// [defaults.watchdog].claude_context_limit_probe at daemon startup.
@@ -130,36 +89,11 @@ type Handler struct {
 	// lastSeenEventAt for rationale.
 	notifiedHookSilence map[string]bool
 
-	// lastSessionTitle records the session title from the most recent state
-	// update. Used by the sweep as a fallback if the live kitten lookup fails.
-	lastSessionTitle map[int]string
-
-	// lastPipeMode tracks whether the latest event for a window was pipe-mode
-	// so stale notifications honor the same silence rule.
-	lastPipeMode map[int]bool
-
-	// mutedWindows caches the most recent Request.Muted value per window so
-	// MaybeNotify (and sweep paths that lack a Request) can gate notifications
-	// without consulting Kitty. The kitty user var cc_mute remains the durable
-	// source of truth — the cache repopulates from the next inbound request
-	// after a daemon restart. Protected by stateMu.
-	mutedWindows map[int]bool
-
-	// eventLog stores a per-window ring buffer of recent state events. Bounded
-	// by maxEventsPerWindow; older entries are dropped from the front. Preserved
-	// across terminal transitions so export-events can inspect ended sessions;
-	// SweepStale drops entries once Kitty no longer reports the window.
-	eventLog map[int][]SessionEvent
-
 	// windowMetadata stores the durable per-window export snapshot. Unlike the
 	// live watchdog maps, terminal cleanup and closed-window GC intentionally do
 	// not clear this so post-mortem exports still have identity/context even
 	// after the original Kitty tab is gone.
 	windowMetadata map[int]WindowDebugMetadata
-
-	// onActivity is called on every successfully handled request.
-	// The daemon uses this to reset the idle timer.
-	onActivity func()
 
 	// onShutdown is called when a TypeShutdown request is received.
 	onShutdown func()
@@ -183,22 +117,13 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		staleThresholds:                make(map[string]time.Duration),
 		perAccountThresholds:           make(map[string]map[string]time.Duration),
 		perAccountHookSilence:          make(map[string]time.Duration),
-		activity:                       make(map[int]time.Time),
-		lastAction:                     make(map[int]string),
-		lastAccount:                    make(map[int]string),
-		lastActiveEvent:                make(map[int]string),
-		copilotToolPermissionState:     make(map[int]copilotToolPermissionState),
-		subagentCount:                  make(map[int]int),
-		pendingReset:                   make(map[int]resetFlowState),
-		notifiedStale:                  make(map[int]bool),
-		contextLimitNotified:           make(map[int]bool),
+		store:                          make(map[int]*WindowState),
+		pendingResetStops:              make(map[int]pendingResetStop),
+		renderCh:                       make(chan struct{}, 1),
+		kittySockets:                   make(map[int]string),
 		claudeContextLimitProbeEnabled: true,
 		lastSeenEventAt:                make(map[string]time.Time),
 		notifiedHookSilence:            make(map[string]bool),
-		lastSessionTitle:               make(map[int]string),
-		lastPipeMode:                   make(map[int]bool),
-		mutedWindows:                   make(map[int]bool),
-		eventLog:                       make(map[int][]SessionEvent),
 		windowMetadata:                 make(map[int]WindowDebugMetadata),
 	}
 }
@@ -207,6 +132,8 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 func (h *Handler) Handle(req Request) Response {
 	var resp Response
 	switch req.Type {
+	case TypeHookEvent:
+		resp = h.handleHookEvent(req)
 	case TypeStateUpdate:
 		resp = h.handleStateUpdate(req)
 	case TypeStateQuery:
@@ -222,9 +149,6 @@ func (h *Handler) Handle(req Request) Response {
 	default:
 		resp = Response{OK: false, Error: "unknown request type: " + string(req.Type)}
 	}
-	if resp.OK && h.onActivity != nil {
-		h.onActivity()
-	}
 	return resp
 }
 
@@ -238,26 +162,40 @@ func (h *Handler) handleHealth() Response {
 
 func (h *Handler) handleStateQuery() Response {
 	h.stateMu.Lock()
-	snapshot := make(map[int]int64, len(h.activity))
-	for id, t := range h.activity {
-		snapshot[id] = t.Unix()
+	states := make(map[int]WindowStateSnapshot, len(h.store))
+	snapshot := make(map[int]int64, len(h.store))
+	for id, st := range h.store {
+		state := WindowStateSnapshot{
+			IconState:   desiredIconForState(st),
+			Looping:     st.Looping,
+			LastAction:  st.LastAction,
+			GuardAction: st.GuardAction,
+		}
+		if st.Activity.IsZero() {
+			states[id] = state
+			continue
+		}
+		snapshot[id] = st.Activity.Unix()
+		state.LastEventAt = st.Activity.Unix()
+		states[id] = state
 	}
-	watchdog := make(map[int]WatchdogState, len(h.lastAction))
-	for id, action := range h.lastAction {
+	watchdog := make(map[int]WatchdogState, len(h.store))
+	for id, st := range h.store {
+		action := st.LastAction
 		if action != "active" && action != "subagent" && action != "compact" {
 			continue
 		}
 		entry := WatchdogState{LastAction: action}
-		if t, ok := h.activity[id]; ok {
-			entry.LastEventAt = t.Unix()
+		if !st.Activity.IsZero() {
+			entry.LastEventAt = st.Activity.Unix()
 		}
-		if d := h.resolveThreshold(h.lastAccount[id], action); d > 0 {
+		if d := h.resolveThreshold(st.LastAccount, action); d > 0 {
 			entry.ThresholdSec = int(d / time.Second)
 		}
 		watchdog[id] = entry
 	}
 	h.stateMu.Unlock()
-	return Response{OK: true, Activity: snapshot, Watchdog: watchdog}
+	return Response{OK: true, Activity: snapshot, Watchdog: watchdog, States: states}
 }
 
 // handleSessionDetail returns the per-window event ring buffer for req.WindowID.
@@ -265,7 +203,10 @@ func (h *Handler) handleStateQuery() Response {
 // distinguish "no daemon error" from "no events yet" without a nil check.
 func (h *Handler) handleSessionDetail(req Request) Response {
 	h.stateMu.Lock()
-	src := h.eventLog[req.WindowID]
+	var src []SessionEvent
+	if st, ok := h.windowStateLocked(req.WindowID); ok {
+		src = st.EventLog
+	}
 	events := make([]SessionEvent, len(src))
 	copy(events, src)
 	h.stateMu.Unlock()
@@ -282,37 +223,54 @@ func (h *Handler) handleEventsExport(req Request) Response {
 	out := make(map[int][]SessionEvent)
 	meta := make(map[int]WindowDebugMetadata)
 	if req.WindowID != 0 {
-		if src, ok := h.eventLog[req.WindowID]; ok {
-			cp := make([]SessionEvent, len(src))
-			copy(cp, src)
+		if st, ok := h.windowStateLocked(req.WindowID); ok && len(st.EventLog) > 0 {
+			cp := make([]SessionEvent, len(st.EventLog))
+			copy(cp, st.EventLog)
 			out[req.WindowID] = cp
 		}
 		if snapshot, ok := h.windowMetadata[req.WindowID]; ok {
-			meta[req.WindowID] = snapshot
+			meta[req.WindowID] = cloneWindowDebugMetadata(snapshot)
 		}
 	} else {
-		out = make(map[int][]SessionEvent, len(h.eventLog))
-		for id, src := range h.eventLog {
-			cp := make([]SessionEvent, len(src))
-			copy(cp, src)
+		out = make(map[int][]SessionEvent, len(h.store))
+		for id, st := range h.store {
+			if len(st.EventLog) == 0 {
+				continue
+			}
+			cp := make([]SessionEvent, len(st.EventLog))
+			copy(cp, st.EventLog)
 			out[id] = cp
 		}
 		meta = make(map[int]WindowDebugMetadata, len(h.windowMetadata))
 		for id, snapshot := range h.windowMetadata {
-			meta[id] = snapshot
+			meta[id] = cloneWindowDebugMetadata(snapshot)
 		}
 	}
 	h.stateMu.Unlock()
 	return Response{OK: true, EventsByWindow: out, WindowMetadata: meta}
 }
 
+func cloneWindowDebugMetadata(in WindowDebugMetadata) WindowDebugMetadata {
+	out := in
+	if in.Stats.SuppressionReasons == nil {
+		return out
+	}
+	out.Stats.SuppressionReasons = make(map[string]int, len(in.Stats.SuppressionReasons))
+	for reason, count := range in.Stats.SuppressionReasons {
+		out.Stats.SuppressionReasons[reason] = count
+	}
+	return out
+}
+
 // IsMuted reports whether the given window is currently marked as muted. The
-// daemon populates this cache from Request.Muted on every state update; sweep
-// paths that lack a Request consult it via the Notifier closure installed in
-// daemon.Run.
+// daemon refreshes this cache from Kitty snapshots; sweep paths that lack a
+// request consult it via the Notifier closure installed in daemon.Run.
 func (h *Handler) IsMuted(windowID int) bool {
 	h.stateMu.Lock()
-	muted := h.mutedWindows[windowID]
+	muted := false
+	if st, ok := h.windowStateLocked(windowID); ok {
+		muted = st.Muted
+	}
 	h.stateMu.Unlock()
 	return muted
 }

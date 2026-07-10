@@ -290,7 +290,7 @@ func TestProbeCodexScreenPrompts_DetectedPromptMutedWindowNoDispatch(t *testing.
 		}
 		h.SetKittyClient(fake)
 		h.stateMu.Lock()
-		h.mutedWindows[42] = true
+		h.ensureWindowStateLocked(42).Muted = true
 		h.stateMu.Unlock()
 
 		h.ProbeCodexScreenPrompts(time.Now())
@@ -617,7 +617,7 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 	}
 
 	h.stateMu.Lock()
-	lastAction := h.lastAction[42]
+	lastAction := h.store[42].LastAction
 	meta := h.windowMetadata[42]
 	h.stateMu.Unlock()
 	if lastAction != "stop" {

@@ -3,8 +3,8 @@
 Kitty-based session manager for agent harnesses such as **Claude Code**,
 **GitHub Copilot CLI**, and **OpenAI Codex**. It launches projects as Kitty
 tabs, keeps per-profile isolated homes (`CLAUDE_CONFIG_DIR`, `COPILOT_HOME`,
-`CODEX_HOME`), and updates tab titles
-with hook-driven status emojis through a small local daemon.
+`CODEX_HOME`), and uses an always-on local daemon to own durable tab-state
+rendering. Harness hooks are thin, fire-and-forget event clients.
 
 The binary is **`amx`**.
 
@@ -358,8 +358,8 @@ when the first token is `/clear`, `/reset`, or `/new`, plus the documented
 `sessionStart.source = new` lifecycle hint, but interactive Copilot sessions can
 also emit `/clear` first as `sessionEnd.reason = user_exit` and only start the
 next session on the next prompt. Agent Mux treats that user-driven session end
-as reset cleanup too. Terminal stop hooks pause briefly before reaching the
-daemon so late reset markers can win, and the daemon then rewrites the
+as reset cleanup too. The daemon defers reset-sensitive terminal stops so late
+reset markers can win, then rewrites the
 follow-up stop/idle cleanup path to `user_clear` so reset flows clear the tab
 without surfacing a stop icon or stop notification. If runtime behavior still
 diverges, inspect `amx daemon export-events --current-window --last 50` from
@@ -380,6 +380,7 @@ amx daemon restart
 amx daemon status
 amx daemon stop
 amx daemon export-events
+amx doctor
 ```
 
 It listens on:
@@ -396,23 +397,34 @@ replacement. Daemon startup intentionally avoids transcript maintenance; use
 the `amx transcripts ...` commands or the dashboard search path for transcript
 storage work.
 
+The daemon is the only writer for state icons and the `🔁` loop marker. Its
+state lives in each Kitty window's `amx_state` user var, so a restart restores
+the intended state and the renderer converges the live title on its next pass.
+The base title, `★`, and `🔇` remain owned by their existing writers. Hooks only
+forward raw events, window/socket context, and pipe-mode detection; they
+auto-start the daemon when needed, log a dropped delivery, and exit successfully.
+
+For the acceptance record, required live-client transitions, and dogfood
+checklist, see [Daemon State Acceptance Evidence](docs/daemon_state_acceptance.md).
+
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema-v4 JSON snapshot for investigation.
+`amx daemon export-events` writes a schema-v5 JSON snapshot for investigation.
 Top-level fields describe the export timestamp and daemon health; `windows` is
 an array of per-window entries, each carrying its own `stats`, `durable`,
-`live`, and `events` fields so a single window can be inspected without paired
-map lookups:
+`renderer`, `live`, and `events` fields so a single window can be inspected
+without paired map lookups:
 
 ```json
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "daemon": { "pid": 1234, "uptime_seconds": 97 },
   "windows": [
     {
       "window_id": 42,
       "stats": { ... },
       "durable": { ... },
+      "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0 },
       "live": { "found": true, ... },
       "events": [ ... ]
     }
@@ -422,7 +434,11 @@ map lookups:
 
 Durable metadata can outlive the live Kitty join after a tab closes;
 `live.found` flips to `false` when Kitty/session lookups are no longer
-available. Event rows keep the raw `event`/`action` fields plus lifecycle
+available. `stats.suppression_reasons` aggregates suppressed transitions by
+reason, while `renderer` reports desired icon/loop state (`looping_set` shows
+when the daemon has explicitly taken ownership), the known Kitty
+socket, and any consecutive render failure with its last error. Event rows keep
+the raw `event`/`action` fields plus lifecycle
 context such as `tool_name`, `source`, `result_icon_state`,
 `current_icon_state`, `notification_type`, `stop_reason`, `reason`,
 `prompt_kind`, `reset_flow`, and `suppressed`/`suppression_reason` when
@@ -460,6 +476,7 @@ The primary live-debug workflow is the current tab:
 ```bash
 amx daemon export-events --current-window
 amx daemon export-events --current-window --last 25
+amx doctor
 ```
 
 Trim every exported window to its trailing events without changing cumulative
@@ -596,6 +613,9 @@ amx tui-test run docs/tui-testing/scenarios/*.json
 
 ## Troubleshooting
 
+- **Icons or hooks look wrong**: run `amx doctor` first. It checks daemon
+  reachability and binary freshness, `kitten @ ls`, hooks for every configured
+  profile, renderer drift, known Kitty sockets, and recent suppression reasons.
 - **No projects appear**: run `amx config validate` and confirm the config is
   at `~/.config/agent-mux/config.toml`.
 - **Hooks are missing**: run `amx config hooks-status`, then

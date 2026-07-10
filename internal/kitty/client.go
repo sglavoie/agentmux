@@ -72,6 +72,14 @@ func NewClientWithSocket(runner CommandRunner, socket string) *SubprocessClient 
 	return &SubprocessClient{runner: runner, socket: socket}
 }
 
+// WithSocket returns a shallow copy that targets a specific Kitty remote
+// control socket. The runner is shared; the socket selection is per copy.
+func (c *SubprocessClient) WithSocket(socket string) *SubprocessClient {
+	cp := *c
+	cp.socket = socket
+	return &cp
+}
+
 func (c *SubprocessClient) kitten(args ...string) ([]byte, error) {
 	cmdArgs := []string{"@"}
 	if c.socket != "" {

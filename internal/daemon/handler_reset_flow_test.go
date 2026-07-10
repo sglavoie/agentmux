@@ -20,33 +20,30 @@ func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         42,
-		Action:           "stop",
-		Event:            "Stop",
-		CurrentIconState: "bolt",
+		Type:     TypeStateUpdate,
+		WindowID: 42,
+		Action:   "stop",
+		Event:    "Stop",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "" {
 		t.Fatalf("Stop during reset flow should clear instead of stop, got %+v", resp)
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         42,
-		Action:           "stop",
-		Event:            "SessionEnd",
-		CurrentIconState: "",
+		Type:     TypeStateUpdate,
+		WindowID: 42,
+		Action:   "stop",
+		Event:    "SessionEnd",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "" {
 		t.Fatalf("SessionEnd during reset cleanup should stay cleared, got %+v", resp)
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         42,
-		Action:           "idle",
-		Event:            "SessionStart",
-		CurrentIconState: "",
+		Type:     TypeStateUpdate,
+		WindowID: 42,
+		Action:   "idle",
+		Event:    "SessionStart",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "" {
 		t.Fatalf("SessionStart cleanup should finish reset with cleared icon, got %+v", resp)
@@ -54,7 +51,7 @@ func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	if _, ok := h.lastAction[42]; ok {
+	if h.store[42].LastAction != "" {
 		t.Fatal("lastAction should be cleared after reset flow finishes")
 	}
 }
@@ -77,28 +74,25 @@ func TestHandler_CopilotResetFlowUsesUserClear(t *testing.T) {
 
 	for _, req := range []Request{
 		{
-			Type:             TypeStateUpdate,
-			WindowID:         42,
-			Harness:          "copilot",
-			Action:           "stop",
-			Event:            "agentStop",
-			CurrentIconState: "bolt",
+			Type:     TypeStateUpdate,
+			WindowID: 42,
+			Harness:  "copilot",
+			Action:   "stop",
+			Event:    "agentStop",
 		},
 		{
-			Type:             TypeStateUpdate,
-			WindowID:         42,
-			Harness:          "copilot",
-			Action:           "stop",
-			Event:            "sessionEnd",
-			CurrentIconState: "",
+			Type:     TypeStateUpdate,
+			WindowID: 42,
+			Harness:  "copilot",
+			Action:   "stop",
+			Event:    "sessionEnd",
 		},
 		{
-			Type:             TypeStateUpdate,
-			WindowID:         42,
-			Harness:          "copilot",
-			Action:           "idle",
-			Event:            "sessionStart",
-			CurrentIconState: "",
+			Type:     TypeStateUpdate,
+			WindowID: 42,
+			Harness:  "copilot",
+			Action:   "idle",
+			Event:    "sessionStart",
 		},
 	} {
 		resp = h.Handle(req)
@@ -109,7 +103,7 @@ func TestHandler_CopilotResetFlowUsesUserClear(t *testing.T) {
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	if _, ok := h.lastAction[42]; ok {
+	if h.store[42].LastAction != "" {
 		t.Fatal("lastAction should be cleared after Copilot reset flow finishes")
 	}
 }
@@ -128,12 +122,11 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 	})
 
 	resp := h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         42,
-		Harness:          "copilot",
-		Action:           "stop",
-		Event:            "agentStop",
-		CurrentIconState: "bolt",
+		Type:     TypeStateUpdate,
+		WindowID: 42,
+		Harness:  "copilot",
+		Action:   "stop",
+		Event:    "agentStop",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "" {
 		t.Fatalf("reset stop should clear icon, got %+v", resp)
@@ -141,20 +134,18 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 
 	for _, req := range []Request{
 		{
-			Type:             TypeStateUpdate,
-			WindowID:         42,
-			Harness:          "copilot",
-			Action:           "stop",
-			Event:            "sessionEnd",
-			CurrentIconState: "",
+			Type:     TypeStateUpdate,
+			WindowID: 42,
+			Harness:  "copilot",
+			Action:   "stop",
+			Event:    "sessionEnd",
 		},
 		{
-			Type:             TypeStateUpdate,
-			WindowID:         42,
-			Harness:          "copilot",
-			Action:           "idle",
-			Event:            "sessionStart",
-			CurrentIconState: "",
+			Type:     TypeStateUpdate,
+			WindowID: 42,
+			Harness:  "copilot",
+			Action:   "idle",
+			Event:    "sessionStart",
 		},
 		{
 			Type:             TypeStateUpdate,
@@ -163,7 +154,6 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 			Action:           "stop",
 			Event:            "notification",
 			NotificationType: "agent_idle",
-			CurrentIconState: "",
 		},
 	} {
 		resp = h.Handle(req)
@@ -173,32 +163,30 @@ func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
 	}
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         42,
-		Harness:          "copilot",
-		Action:           "active",
-		Event:            "userPromptSubmitted",
-		IsPrompt:         true,
-		CurrentIconState: "",
+		Type:     TypeStateUpdate,
+		WindowID: 42,
+		Harness:  "copilot",
+		Action:   "active",
+		Event:    "userPromptSubmitted",
+		IsPrompt: true,
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
 		t.Fatalf("new non-reset prompt should start normal turn, got %+v", resp)
 	}
 
 	h.stateMu.Lock()
-	if _, ok := h.pendingReset[42]; ok {
+	if h.store[42].PendingReset != resetFlowNone {
 		h.stateMu.Unlock()
 		t.Fatal("pendingReset marker should be cleared once the next normal turn begins")
 	}
 	h.stateMu.Unlock()
 
 	resp = h.Handle(Request{
-		Type:             TypeStateUpdate,
-		WindowID:         42,
-		Harness:          "copilot",
-		Action:           "stop",
-		Event:            "agentStop",
-		CurrentIconState: "bolt",
+		Type:     TypeStateUpdate,
+		WindowID: 42,
+		Harness:  "copilot",
+		Action:   "stop",
+		Event:    "agentStop",
 	})
 	if !resp.OK || !resp.Allowed || resp.IconState != "stop" {
 		t.Fatalf("ordinary stop after reset flow should remain stop, got %+v", resp)

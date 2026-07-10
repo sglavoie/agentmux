@@ -151,7 +151,7 @@ func renderListAt(m Model, width, height int) string {
 		}
 		var activeLoopCell string
 		if activeLoopActive {
-			activeLoopCell = renderActiveLoopCell(len(m.activeLoopsForSession(s)) > 0)
+			activeLoopCell = renderActiveLoopCell(s.Looping)
 		}
 		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, activeLoopCell, ageCell)
 		var styledRow string
@@ -242,14 +242,11 @@ func anyRowHasActivePulse(m Model) bool {
 	return false
 }
 
-// anyVisibleRowHasActiveLoop reports whether any row in the rendered window
-// owns an active agent-session-loop marker for its workspace and harness. The
-// column is reserved for the current window only, so off-screen active loops do
-// not steal horizontal space.
+// anyVisibleRowHasActiveLoop reports whether the daemon's bulk state snapshot
+// marks any row in the rendered window as looping. The column is reserved for
+// the current window only, so off-screen active loops do not steal horizontal
+// space.
 func anyVisibleRowHasActiveLoop(m Model, startIdx, endIdx int) bool {
-	if len(m.activeLoopCandidates) == 0 {
-		return false
-	}
 	if startIdx < 0 {
 		startIdx = 0
 	}
@@ -257,7 +254,7 @@ func anyVisibleRowHasActiveLoop(m Model, startIdx, endIdx int) bool {
 		endIdx = len(m.filtered)
 	}
 	for i := startIdx; i < endIdx; i++ {
-		if len(m.activeLoopsForSession(m.filtered[i])) > 0 {
+		if m.filtered[i].Looping {
 			return true
 		}
 	}

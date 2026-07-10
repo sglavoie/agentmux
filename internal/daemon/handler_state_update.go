@@ -25,12 +25,10 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	h.stateMu.Lock()
 	req = h.applyResetFlowLocked(req)
 	h.touchWindowMetadataLocked(req)
-	if req.Muted {
-		h.mutedWindows[req.WindowID] = true
-	} else {
-		delete(h.mutedWindows, req.WindowID)
-	}
+	h.rememberKittySocketLocked(req.WindowID, req.KittyListenOn)
+	st := h.ensureWindowStateLocked(req.WindowID)
 	if req.Account != "" {
+		st.LastAccount = req.Account
 		accountKey := strings.ToLower(req.Account)
 		h.lastSeenEventAt[accountKey] = receivedAt
 		delete(h.notifiedHookSilence, accountKey)
@@ -47,21 +45,25 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		"reset_flow", req.ResetFlow,
 	)
 
-	prevAction := h.lastKnownAction(req.WindowID, req.CurrentIconState)
+	prevAction, currentIconState := h.lastKnownState(req.WindowID)
+	if currentIconState == "" {
+		currentIconState = req.currentIconState
+	}
 	h.stateMu.Lock()
-	prevActiveEvent := h.lastActiveEvent[req.WindowID]
-	copilotPermissionState := h.copilotToolPermissionState[req.WindowID]
+	st = h.ensureWindowStateLocked(req.WindowID)
+	prevActiveEvent := st.LastActiveEvent
+	copilotPermissionState := st.CopilotToolPermissionState
 	if shouldResetCopilotToolPermissionState(req) {
-		delete(h.copilotToolPermissionState, req.WindowID)
+		st.CopilotToolPermissionState = copilotToolPermissionNone
 		copilotPermissionState = copilotToolPermissionNone
 	}
 	if isCopilotElicitationPrompt(req) ||
 		(copilotPermissionState == copilotToolPermissionPending && isCopilotPermissionPromptNotification(req)) {
-		delete(h.copilotToolPermissionState, req.WindowID)
+		st.CopilotToolPermissionState = copilotToolPermissionNone
 		copilotPermissionState = copilotToolPermissionNone
 	} else if copilotPermissionState == copilotToolPermissionPending &&
 		shouldConfirmCopilotAutoApprovedToolPermission(req) {
-		h.copilotToolPermissionState[req.WindowID] = copilotToolPermissionAutoApproved
+		st.CopilotToolPermissionState = copilotToolPermissionAutoApproved
 		copilotPermissionState = copilotToolPermissionAutoApproved
 	}
 	priorAutoApprovedToolPrompt := copilotPermissionState == copilotToolPermissionAutoApproved
@@ -79,7 +81,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			"action", req.Action,
 		)
 		h.stateMu.Lock()
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotPendingPrompt))
+		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotPendingPrompt, currentIconState))
 		h.stateMu.Unlock()
 		return Response{OK: true, Allowed: false}
 	}
@@ -90,7 +92,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			"tool_name", req.ToolName,
 		)
 		h.stateMu.Lock()
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonElicitationPending))
+		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonElicitationPending, currentIconState))
 		h.stateMu.Unlock()
 		return Response{OK: true, Allowed: false}
 	}
@@ -111,7 +113,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// even when interleaved parent "active" events arrive.
 	if req.Action == "subagent" {
 		h.stateMu.Lock()
-		h.subagentCount[req.WindowID]++
+		st := h.ensureWindowStateLocked(req.WindowID)
+		st.SubagentCount++
 		h.updateDurableSubagentCountLocked(req.WindowID)
 		h.stateMu.Unlock()
 	}
@@ -119,16 +122,12 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// SubagentStop: decrement counter; suppress "active" while other agents run.
 	if req.Event == "SubagentStop" || req.Event == "subagentStop" {
 		h.stateMu.Lock()
-		wasTracked := h.subagentCount[req.WindowID] > 0
+		st := h.ensureWindowStateLocked(req.WindowID)
+		wasTracked := st.SubagentCount > 0
 		if wasTracked {
-			h.subagentCount[req.WindowID]--
+			st.SubagentCount--
 		}
-		remaining := h.subagentCount[req.WindowID]
-		if wasTracked && remaining == 0 {
-			// Drop the zero-valued entry so per-window state cannot accumulate
-			// indefinitely across many sessions that never hit a terminal event.
-			delete(h.subagentCount, req.WindowID)
-		}
+		remaining := st.SubagentCount
 		h.updateDurableSubagentCountLocked(req.WindowID)
 		h.stateMu.Unlock()
 
@@ -140,7 +139,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			// sees the failure even when sibling agents are still running.
 			h.guard.TryUpdate(req.WindowID, "subagent", false)
 			h.stateMu.Lock()
-			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonSubagentStillRunning))
+			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonSubagentStillRunning, currentIconState))
 			h.stateMu.Unlock()
 			return Response{OK: true, Allowed: false}
 		}
@@ -181,8 +180,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	// permissionRequest are suppressed by this gate.
 	if (req.Event == "agentStop" && req.Action != "stop_failure") || req.Event == "permissionRequest" {
 		h.stateMu.Lock()
-		running := h.subagentCount[req.WindowID] > 0
-		count := h.subagentCount[req.WindowID]
+		st := h.ensureWindowStateLocked(req.WindowID)
+		running := st.SubagentCount > 0
+		count := st.SubagentCount
 		h.stateMu.Unlock()
 		if running {
 			// Refresh the subagent guard so it does not expire while agents run.
@@ -197,7 +197,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 				"subagent_count", count,
 			)
 			h.stateMu.Lock()
-			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotMidSubagent))
+			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotMidSubagent, currentIconState))
 			h.stateMu.Unlock()
 			return Response{OK: true, Allowed: false}
 		}
@@ -212,18 +212,20 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.cancelPendingNotification(req.WindowID)
 		h.stateMu.Lock()
 		now := time.Now()
-		h.copilotToolPermissionState[req.WindowID] = copilotToolPermissionPending
-		h.activity[req.WindowID] = now
-		h.lastSessionTitle[req.WindowID] = req.SessionTitle
-		h.lastPipeMode[req.WindowID] = req.PipeMode
-		delete(h.notifiedStale, req.WindowID)
+		st := h.ensureWindowStateLocked(req.WindowID)
+		st.CopilotToolPermissionState = copilotToolPermissionPending
+		st.Activity = now
+		st.LastSessionTitle = req.SessionTitle
+		st.LastPipeMode = req.PipeMode
+		st.NotifiedStale = false
 		if req.Account != "" {
-			h.lastAccount[req.WindowID] = req.Account
+			st.LastAccount = req.Account
 		}
 		meta := h.windowMetadata[req.WindowID]
 		meta.Durable.ActivityAt = now.Unix()
 		h.windowMetadata[req.WindowID] = meta
-		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve))
+		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve, currentIconState))
+		h.markWindowDirtyLocked(req.WindowID)
 		h.stateMu.Unlock()
 		return Response{OK: true, Allowed: true, IconState: IconStatePreserve}
 	}
@@ -243,18 +245,19 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if req.Action == "stop" || req.Action == "stop_failure" || req.Action == "failure" ||
 		req.Action == "idle" || req.Action == "clear" || req.Action == "user_clear" {
 		h.stateMu.Lock()
+		st := h.ensureWindowStateLocked(req.WindowID)
 		if req.Action == "clear" || req.Action == "user_clear" {
-			delete(h.copilotToolPermissionState, req.WindowID)
+			st.CopilotToolPermissionState = copilotToolPermissionNone
 		}
-		delete(h.subagentCount, req.WindowID)
+		st.SubagentCount = 0
 		if req.Action != "user_clear" {
-			delete(h.pendingReset, req.WindowID)
+			st.PendingReset = resetFlowNone
 		}
-		delete(h.notifiedStale, req.WindowID)
-		delete(h.contextLimitNotified, req.WindowID)
-		delete(h.lastSessionTitle, req.WindowID)
-		delete(h.lastPipeMode, req.WindowID)
-		delete(h.lastAccount, req.WindowID)
+		st.NotifiedStale = false
+		st.ContextLimitNotified = false
+		st.LastSessionTitle = ""
+		st.LastPipeMode = false
+		st.LastAccount = ""
 		h.stateMu.Unlock()
 	}
 
@@ -269,7 +272,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		if prevAction == "stop" || prevAction == "stop_failure" {
 			h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, req.Action, req.PipeMode)
 			h.stateMu.Lock()
-			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonActiveAfterTerminal))
+			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonActiveAfterTerminal, currentIconState))
 			h.stateMu.Unlock()
 			return Response{OK: true, Allowed: false}
 		}
@@ -301,7 +304,7 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		// cooldown, so this cannot double-fire with the success path below.
 		h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, req.Action, req.PipeMode)
 		h.stateMu.Lock()
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked))
+		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked, currentIconState))
 		h.stateMu.Unlock()
 		return Response{OK: true, Allowed: false}
 	}
@@ -326,20 +329,21 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 
 	h.stateMu.Lock()
 	now := time.Now()
-	h.activity[req.WindowID] = now
-	h.lastSessionTitle[req.WindowID] = req.SessionTitle
-	h.lastPipeMode[req.WindowID] = req.PipeMode
+	st = h.ensureWindowStateLocked(req.WindowID)
+	st.Activity = now
+	st.LastSessionTitle = req.SessionTitle
+	st.LastPipeMode = req.PipeMode
 	if req.Account != "" {
-		h.lastAccount[req.WindowID] = req.Account
+		st.LastAccount = req.Account
 	}
 	if effective == "active" {
-		h.lastActiveEvent[req.WindowID] = req.Event
+		st.LastActiveEvent = req.Event
 	}
 	if isCopilotAutoApprovedPerm {
-		h.copilotToolPermissionState[req.WindowID] = copilotToolPermissionAutoApproved
+		st.CopilotToolPermissionState = copilotToolPermissionAutoApproved
 	} else if effective == "permission" && isCopilotRequest(req) &&
 		isCopilotPermissionPromptNotification(req) {
-		delete(h.copilotToolPermissionState, req.WindowID)
+		st.CopilotToolPermissionState = copilotToolPermissionNone
 	}
 	// Record the last substantive action so idle/clear can detect a stale bolt
 	// even after the state guard has expired. Preserve-current events keep the
@@ -351,9 +355,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		recordedAction = "stop"
 	}
 	if recordedAction != "" && recordedAction != "idle" && recordedAction != "clear" && recordedAction != "user_clear" && !isAutoApprovedPerm {
-		h.lastAction[req.WindowID] = recordedAction
-		delete(h.notifiedStale, req.WindowID)
-		delete(h.contextLimitNotified, req.WindowID)
+		st.LastAction = recordedAction
+		st.NotifiedStale = false
+		st.ContextLimitNotified = false
 	}
 	meta := h.windowMetadata[req.WindowID]
 	meta.Durable.ActivityAt = now.Unix()
@@ -396,8 +400,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			// Agent finished — clear the active indicator and reset tracking.
 			iconState = ""
 			h.stateMu.Lock()
-			delete(h.lastAction, req.WindowID)
-			delete(h.lastActiveEvent, req.WindowID)
+			st := h.ensureWindowStateLocked(req.WindowID)
+			st.LastAction = ""
+			st.LastActiveEvent = ""
 			h.stateMu.Unlock()
 		case "compact":
 			if syntheticStop {
@@ -405,8 +410,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			} else {
 				iconState = ""
 				h.stateMu.Lock()
-				delete(h.lastAction, req.WindowID)
-				delete(h.lastActiveEvent, req.WindowID)
+				st := h.ensureWindowStateLocked(req.WindowID)
+				st.LastAction = ""
+				st.LastActiveEvent = ""
 				h.stateMu.Unlock()
 			}
 		default:
@@ -417,8 +423,9 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		// Explicit wipe (from the TUI or a reset flow) — reset lastAction so a
 		// future idle doesn't try to clear an icon that no longer exists.
 		h.stateMu.Lock()
-		delete(h.lastAction, req.WindowID)
-		delete(h.lastActiveEvent, req.WindowID)
+		st := h.ensureWindowStateLocked(req.WindowID)
+		st.LastAction = ""
+		st.LastActiveEvent = ""
 		h.stateMu.Unlock()
 	}
 	if isCopilotAutoApprovedPerm {
@@ -432,7 +439,18 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	if syntheticStop {
 		loggedAction = "stop"
 	}
-	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, loggedAction, iconState))
+	if iconState != IconStatePreserve {
+		st := h.ensureWindowStateLocked(req.WindowID)
+		st.DesiredIcon = iconState
+		st.StateSet = true
+	}
+	if isAutoApprovedPerm {
+		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, loggedAction, suppressionReasonAutoApprovedPerm, currentIconState))
+	} else {
+		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, loggedAction, iconState, currentIconState))
+	}
+	h.syncRendererMetadataLocked(req.WindowID)
+	h.markWindowDirtyLocked(req.WindowID)
 	h.stateMu.Unlock()
 
 	return Response{OK: true, Allowed: true, IconState: iconState}
@@ -449,17 +467,24 @@ func (h *Handler) handleLoopMarkerStateUpdate(req Request) Response {
 	receivedAt := time.Now()
 	h.stateMu.Lock()
 	h.touchWindowMetadataLocked(req)
-	if req.Muted {
-		h.mutedWindows[req.WindowID] = true
-	} else {
-		delete(h.mutedWindows, req.WindowID)
-	}
+	h.rememberKittySocketLocked(req.WindowID, req.KittyListenOn)
+	st := h.ensureWindowStateLocked(req.WindowID)
 	if req.Account != "" {
 		accountKey := strings.ToLower(req.Account)
 		h.lastSeenEventAt[accountKey] = receivedAt
 		delete(h.notifiedHookSilence, accountKey)
 	}
-	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve))
+	switch req.Event {
+	case "AgentSessionLoopStarted", "AgentSessionLoopTurnStarted":
+		st.Looping = true
+		st.LoopingSet = true
+	case "AgentSessionLoopFinished":
+		st.Looping = false
+		st.LoopingSet = true
+	}
+	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve, desiredIconForState(st)))
+	h.syncRendererMetadataLocked(req.WindowID)
+	h.markWindowDirtyLocked(req.WindowID)
 	h.stateMu.Unlock()
 
 	slog.Debug("loop marker received",
