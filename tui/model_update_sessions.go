@@ -26,6 +26,18 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
 	m.sortFiltered()
 	m.cursor = restoreCursorByIdentity(m.filtered, prior, m.lastActivity, m.idleThreshold)
+	selectionIsNew := msg.selectionToken == "" || msg.selectionToken != m.lastSelectionRequestToken
+	if msg.selectionTabID > 0 && selectionIsNew {
+		for i, running := range m.filtered {
+			if running.TabID == msg.selectionTabID {
+				m.cursor = i
+				break
+			}
+		}
+	}
+	if msg.selectionToken != "" {
+		m.lastSelectionRequestToken = msg.selectionToken
+	}
 	clampListOffset(&m)
 	scrollListToCursor(&m)
 	return m, nil

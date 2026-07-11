@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -17,6 +18,7 @@ import (
 const version = "0.5.0"
 
 var debug bool
+var dashboardSourceWindowID int
 
 var rootCmd = &cobra.Command{
 	Use:   "amx",
@@ -32,10 +34,14 @@ var rootCmd = &cobra.Command{
 		}
 		runner := kitty.NewRealRunner()
 		client := kitty.NewClient(runner)
-		if focusExistingDashboard(client) {
+		sourceWindowID := dashboardSourceWindowID
+		if sourceWindowID <= 0 {
+			sourceWindowID = windowIDFromEnv()
+		}
+		if focusExistingDashboard(client, sourceWindowID) {
 			return nil
 		}
-		return tui.Run(cfg, client)
+		return tui.RunFromWindow(cfg, client, sourceWindowID)
 	},
 }
 
@@ -56,7 +62,7 @@ func Execute() {
 	}
 }
 
-func focusExistingDashboard(client kitty.KittyClient) bool {
+func focusExistingDashboard(client kitty.KittyClient, sourceWindowID int) bool {
 	osWindows, err := client.ListWindows()
 	if err != nil {
 		return false
@@ -65,8 +71,20 @@ func focusExistingDashboard(client kitty.KittyClient) bool {
 	if !found {
 		return false
 	}
+	var sourceTabID int
+	if sourceWindowID > 0 {
+		if sourceTab, _, ok := kitty.FindTabByWindowID(osWindows, sourceWindowID); ok {
+			sourceTabID = sourceTab.ID
+		}
+	}
 	if err := client.FocusTab(kitty.MatchTabByID(loc.TabID)); err != nil {
 		return false
+	}
+	if sourceTabID > 0 {
+		request := strconv.Itoa(sourceTabID) + ":" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		_ = client.SetUserVars(kitty.MatchWindowByID(loc.WindowID), map[string]string{
+			kitty.DashboardSelectionVar: request,
+		})
 	}
 	_ = client.FocusWindow(kitty.MatchWindowByID(loc.WindowID))
 	fmt.Fprintln(os.Stderr, "Agent Mux dashboard already running — focused existing tab.")
@@ -119,5 +137,6 @@ func init() {
 	buildinfo.SetVersion(version)
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug output")
+	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
 	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, transcriptsCmd, tuiTestCmd)
 }

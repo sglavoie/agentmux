@@ -24,8 +24,8 @@ func TestDashboardBindingLaunchesAMXRootOverlay(t *testing.T) {
 	if dashboard.LaunchType != "overlay" {
 		t.Fatalf("dashboard LaunchType = %q, want overlay", dashboard.LaunchType)
 	}
-	if dashboard.AmxCommand != "" {
-		t.Fatalf("dashboard AmxCommand = %q, want empty amx root command", dashboard.AmxCommand)
+	if dashboard.AmxCommand != "--window-id @active-kitty-window-id" {
+		t.Fatalf("dashboard AmxCommand = %q, want active Kitty window ID", dashboard.AmxCommand)
 	}
 	if dashboard.Description != "open or focus Agent Mux dashboard" {
 		t.Fatalf("dashboard Description = %q", dashboard.Description)
@@ -75,7 +75,7 @@ func TestScrollbackMarkerBindingDescribesConfiguredMarkers(t *testing.T) {
 func TestConfigLineGeneratesAMXRootDashboardLaunch(t *testing.T) {
 	dashboard := findAction(t, "ctrl+shift+d")
 
-	want := "map ctrl+shift+d launch --type=overlay --allow-remote-control amx"
+	want := "map ctrl+shift+d launch --type=overlay --allow-remote-control amx --window-id @active-kitty-window-id"
 	if got := dashboard.ConfigLine(); got != want {
 		t.Fatalf("dashboard ConfigLine() = %q, want %q", got, want)
 	}

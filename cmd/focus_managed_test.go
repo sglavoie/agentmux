@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -53,6 +54,12 @@ func TestFocusManagedTab_NoManagedTargetIsNoOp(t *testing.T) {
 type fakeFocusManagedClient struct {
 	windows    []kitty.OSWindow
 	focusCalls []string
+	userVars   []fakeUserVarsCall
+}
+
+type fakeUserVarsCall struct {
+	match string
+	vars  map[string]string
 }
 
 func (f *fakeFocusManagedClient) ListWindows() ([]kitty.OSWindow, error) {
@@ -100,8 +107,42 @@ func (f *fakeFocusManagedClient) LaunchOverlayPager(string) error {
 	return nil
 }
 
-func (f *fakeFocusManagedClient) SetUserVars(string, map[string]string) error {
+func (f *fakeFocusManagedClient) SetUserVars(match string, vars map[string]string) error {
+	f.userVars = append(f.userVars, fakeUserVarsCall{match: match, vars: vars})
 	return nil
+}
+
+func TestFocusExistingDashboardRequestsSourceTabSelection(t *testing.T) {
+	client := &fakeFocusManagedClient{windows: []kitty.OSWindow{{
+		Tabs: []kitty.Tab{
+			testManagedTab(10, 101, "api"),
+			{
+				ID: 90,
+				Windows: []kitty.Window{{
+					ID:                  901,
+					ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"amx"}}},
+				}},
+			},
+		},
+	}}}
+
+	if !focusExistingDashboard(client, 101) {
+		t.Fatal("focusExistingDashboard returned false, want true")
+	}
+	if len(client.focusCalls) != 1 || client.focusCalls[0] != kitty.MatchTabByID(90) {
+		t.Fatalf("focus calls = %v, want dashboard tab 90", client.focusCalls)
+	}
+	if len(client.userVars) != 1 {
+		t.Fatalf("selection request calls = %d, want 1", len(client.userVars))
+	}
+	call := client.userVars[0]
+	if call.match != kitty.MatchWindowByID(901) {
+		t.Fatalf("selection request match = %q, want dashboard window 901", call.match)
+	}
+	request := call.vars[kitty.DashboardSelectionVar]
+	if !strings.HasPrefix(request, "10:") || len(strings.TrimPrefix(request, "10:")) == 0 {
+		t.Fatalf("selection request = %q, want tab 10 with a token", request)
+	}
 }
 
 func testManagedTab(tabID, windowID int, title string) kitty.Tab {

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -64,24 +66,72 @@ func healthCmd(cfg *config.Config, amxBin string, checkDaemon, checkHooks bool) 
 // silently retried on the next tick because fallback detection re-detects
 // the same tab.
 func fetchCmd(client kitty.KittyClient, cfg *config.Config, sortMode string) tea.Cmd {
+	return initialFetchCmd(client, cfg, sortMode, 0)
+}
+
+// initialFetchCmd additionally resolves sourceWindowID to its containing
+// Kitty tab. The resulting tab ID is consumed by the startup sessions update
+// to select that tab's managed dashboard row, including when the source is a
+// non-anchor pane in a split tab.
+func initialFetchCmd(client kitty.KittyClient, cfg *config.Config, sortMode string, sourceWindowID int) tea.Cmd {
 	return func() tea.Msg {
-		sessions, ghosts, err := session.ListWithConfig(client, cfg)
+		osWindows, err := client.ListWindows()
 		if err != nil {
 			return errMsg{err: err}
 		}
+		sessions, ghosts := session.ListFromOSWindowsWithConfig(osWindows, cfg)
 		if len(ghosts) > 0 {
 			session.ReanchorAll(client, ghosts, cfg.Defaults)
+		}
+		var sourceTabID int
+		if sourceWindowID > 0 {
+			if tab, _, found := kitty.FindTabByWindowID(osWindows, sourceWindowID); found {
+				sourceTabID = tab.ID
+			}
+		}
+		selectionToken := ""
+		if requestedTabID, token, dashboardWindowID := dashboardSelectionRequest(osWindows); requestedTabID > 0 {
+			sourceTabID = requestedTabID
+			selectionToken = token
+			_ = client.SetUserVars(kitty.MatchWindowByID(dashboardWindowID), map[string]string{
+				kitty.DashboardSelectionVar: "",
+			})
 		}
 		activity, watchdog, states := fetchDaemonState()
 		if states != nil {
 			applyDaemonStates(sessions, states)
 		}
 		return sessionsMsg{
-			sessions: session.SortRunning(sessions, sortMode),
-			activity: activity,
-			watchdog: watchdog,
+			sessions:       session.SortRunning(sessions, sortMode),
+			activity:       activity,
+			watchdog:       watchdog,
+			selectionTabID: sourceTabID,
+			selectionToken: selectionToken,
 		}
 	}
+}
+
+func dashboardSelectionRequest(osWindows []kitty.OSWindow) (tabID int, token string, dashboardWindowID int) {
+	for _, osWindow := range osWindows {
+		for _, tab := range osWindow.Tabs {
+			for _, window := range tab.Windows {
+				request := window.UserVars.DashboardSelect
+				if request == "" {
+					continue
+				}
+				parts := strings.SplitN(request, ":", 2)
+				if len(parts) != 2 || parts[1] == "" {
+					continue
+				}
+				id, err := strconv.Atoi(parts[0])
+				if err != nil || id <= 0 {
+					continue
+				}
+				return id, parts[1], window.ID
+			}
+		}
+	}
+	return 0, "", 0
 }
 
 // fetchDaemonState queries the daemon once for activity, watchdog, icon, and

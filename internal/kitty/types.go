@@ -137,12 +137,20 @@ func isDashboardCmdline(cmdline []string) bool {
 	if base != "amx" {
 		return false
 	}
-	for _, arg := range cmdline[1:] {
+	for i := 1; i < len(cmdline); i++ {
+		arg := cmdline[i]
 		if arg == "--" {
 			return true
 		}
 		if isInfoOnlyRootFlag(arg) {
 			return false
+		}
+		if arg == "--window-id" {
+			if i+1 >= len(cmdline) {
+				return false
+			}
+			i++
+			continue
 		}
 		if !strings.HasPrefix(arg, "-") {
 			return false
@@ -264,6 +272,7 @@ type UserVars struct {
 	AMXGroups        string `json:"amx_groups"`
 	AMXDirectory     string `json:"amx_directory"`
 	AMXState         string `json:"amx_state"`
+	DashboardSelect  string `json:"amx_dashboard_select"`
 	Account          string `json:"cc_account"`
 	ConfigDir        string `json:"cc_config_dir"`
 	Flags            string `json:"cc_flags"`
@@ -276,6 +285,10 @@ type UserVars struct {
 	CWD              string `json:"cc_cwd"`
 	Locked           bool   `json:"-"`
 }
+
+// DashboardSelectionVar is the Kitty user variable used to deliver a
+// one-time "select this tab" request to an already-running dashboard.
+const DashboardSelectionVar = "amx_dashboard_select"
 
 func (u *UserVars) UnmarshalJSON(data []byte) error {
 	type alias UserVars

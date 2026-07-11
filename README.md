@@ -109,7 +109,9 @@ amx
 ```
 
 This opens the dashboard, or focuses the existing dashboard tab if one is
-already running.
+already running. When opened with the bundled `Ctrl+Shift+D` binding, the
+dashboard selects the running session from the Kitty tab that triggered it;
+an unmanaged source tab leaves the current/default dashboard selection alone.
 
 Key flows:
 

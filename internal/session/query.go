@@ -119,6 +119,14 @@ func ListFromOSWindows(osWindows []kitty.OSWindow) []RunningSession {
 	return sessions
 }
 
+// ListFromOSWindowsWithConfig returns managed sessions and recoverable ghost
+// tabs from an already-fetched kitten-@-ls payload. It is the config-aware
+// counterpart to ListFromOSWindows and lets callers retain the raw Kitty
+// topology for related lookups without issuing a second remote-control query.
+func ListFromOSWindowsWithConfig(osWindows []kitty.OSWindow, cfg *config.Config) ([]RunningSession, []GhostTab) {
+	return runningSessionsFromOSWindows(osWindows, cfg)
+}
+
 // ListWithConfig returns running sessions plus any "ghost" tabs whose anchor
 // window is gone but whose tab resolves unambiguously to a configured project.
 // Title matching is tried first, including legacy "<initial>:<project>"
@@ -130,7 +138,7 @@ func ListWithConfig(client kitty.KittyClient, cfg *config.Config) (sessions []Ru
 	if err != nil {
 		return nil, nil, err
 	}
-	sessions, ghosts = runningSessionsFromOSWindows(osWindows, cfg)
+	sessions, ghosts = ListFromOSWindowsWithConfig(osWindows, cfg)
 	return sessions, ghosts, nil
 }
 

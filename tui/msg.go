@@ -15,9 +15,11 @@ type tickMsg struct{}
 // per-window last-activity timestamps and watchdog snapshot (nil if the
 // daemon is unreachable).
 type sessionsMsg struct {
-	sessions []session.RunningSession
-	activity map[int]time.Time
-	watchdog map[int]daemon.WatchdogState
+	sessions       []session.RunningSession
+	activity       map[int]time.Time
+	watchdog       map[int]daemon.WatchdogState
+	selectionTabID int
+	selectionToken string
 }
 
 // activeLoopsMsg carries the latest active agent-session-loop discovery result.

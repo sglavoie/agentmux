@@ -32,6 +32,153 @@ func TestSessionsMsg_RestoresCursorByTabIDWhenBaseDuplicates(t *testing.T) {
 	}
 }
 
+func TestSessionsMsg_InitialSourceTabSelectsMatchingSession(t *testing.T) {
+	m := testModel()
+	updated, _ := m.Update(sessionsMsg{
+		sessions: []session.RunningSession{
+			{TabID: 1, WindowID: 11, Base: "needs-permission", Account: "work", State: "key"},
+			{TabID: 2, WindowID: 22, Base: "source-tab", Account: "work"},
+		},
+		selectionTabID: 2,
+	})
+	m = updated.(Model)
+
+	if got := m.filtered[m.cursor].TabID; got != 2 {
+		t.Fatalf("initial cursor selected tab %d, want source tab 2", got)
+	}
+}
+
+func TestSessionsMsg_UnmappedInitialSourceDoesNotOverrideSelection(t *testing.T) {
+	m := loadSessions(testModel(), []session.RunningSession{
+		{TabID: 1, WindowID: 11, Base: "first", Account: "work"},
+		{TabID: 2, WindowID: 22, Base: "selected", Account: "work"},
+	})
+	for i := range m.filtered {
+		if m.filtered[i].TabID == 2 {
+			m.cursor = i
+		}
+	}
+
+	updated, _ := m.Update(sessionsMsg{
+		sessions: []session.RunningSession{
+			{TabID: 1, WindowID: 11, Base: "first", Account: "work"},
+			{TabID: 2, WindowID: 22, Base: "selected", Account: "work"},
+		},
+		selectionTabID: 999,
+	})
+	m = updated.(Model)
+
+	if got := m.filtered[m.cursor].TabID; got != 2 {
+		t.Fatalf("unmapped source changed selection to tab %d, want tab 2", got)
+	}
+}
+
+func TestSessionsMsg_InitialSourceWithNoSessionsLeavesCursorUnchanged(t *testing.T) {
+	m := testModel()
+	m.cursor = 0
+	updated, _ := m.Update(sessionsMsg{selectionTabID: 2})
+	m = updated.(Model)
+
+	if m.cursor != 0 || len(m.filtered) != 0 {
+		t.Fatalf("empty startup state = cursor %d, rows %d; want cursor 0 and no rows", m.cursor, len(m.filtered))
+	}
+}
+
+func TestSessionsMsg_DuplicateSelectionRequestDoesNotStealCursorAgain(t *testing.T) {
+	sessions := []session.RunningSession{
+		{TabID: 1, WindowID: 11, Base: "first", Account: "work"},
+		{TabID: 2, WindowID: 22, Base: "requested", Account: "work"},
+	}
+	m := testModel()
+	updated, _ := m.Update(sessionsMsg{
+		sessions:       sessions,
+		selectionTabID: 2,
+		selectionToken: "request-1",
+	})
+	m = updated.(Model)
+	for i := range m.filtered {
+		if m.filtered[i].TabID == 1 {
+			m.cursor = i
+		}
+	}
+
+	updated, _ = m.Update(sessionsMsg{
+		sessions:       sessions,
+		selectionTabID: 2,
+		selectionToken: "request-1",
+	})
+	m = updated.(Model)
+
+	if got := m.filtered[m.cursor].TabID; got != 1 {
+		t.Fatalf("duplicate request moved cursor to tab %d, want current tab 1", got)
+	}
+}
+
+func TestInitialFetchCmdConsumesExistingDashboardSelectionRequest(t *testing.T) {
+	oldDaemonRequest := daemonRequest
+	daemonRequest = func(daemon.Request) (daemon.Response, error) {
+		return daemon.Response{}, errors.New("daemon unavailable")
+	}
+	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
+
+	client := NewUITestKittyClient([]kitty.OSWindow{{
+		Tabs: []kitty.Tab{
+			{
+				ID:    7,
+				Title: "api",
+				Windows: []kitty.Window{{
+					ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+				}},
+			},
+			{
+				ID: 70,
+				Windows: []kitty.Window{{
+					ID: 700, UserVars: kitty.UserVars{DashboardSelect: "7:request-1"},
+				}},
+			},
+		},
+	}})
+
+	msg := fetchCmd(client, &config.Config{}, "alpha")().(sessionsMsg)
+	if msg.selectionTabID != 7 || msg.selectionToken != "request-1" {
+		t.Fatalf("selection request = tab %d token %q, want tab 7 token request-1", msg.selectionTabID, msg.selectionToken)
+	}
+	calls := client.CallsFor("SetUserVars")
+	if len(calls) != 1 || calls[0].Match != kitty.MatchWindowByID(700) || calls[0].Vars[kitty.DashboardSelectionVar] != "" {
+		t.Fatalf("request clear calls = %+v, want dashboard window 700 cleared", calls)
+	}
+}
+
+func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
+	oldDaemonRequest := daemonRequest
+	daemonRequest = func(daemon.Request) (daemon.Response, error) {
+		return daemon.Response{}, errors.New("daemon unavailable")
+	}
+	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
+
+	client := NewUITestKittyClient([]kitty.OSWindow{{
+		Tabs: []kitty.Tab{{
+			ID:    7,
+			Title: "api",
+			Windows: []kitty.Window{
+				{ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"}},
+				{ID: 99, IsActive: true},
+			},
+		}},
+	}})
+
+	msg, ok := initialFetchCmd(client, &config.Config{}, "alpha", 99)().(sessionsMsg)
+	if !ok {
+		t.Fatal("initialFetchCmd returned an unexpected message type")
+	}
+	if msg.selectionTabID != 7 {
+		t.Fatalf("source tab ID = %d, want 7", msg.selectionTabID)
+	}
+	if len(msg.sessions) != 1 || msg.sessions[0].TabID != 7 {
+		t.Fatalf("sessions = %+v, want one managed row for tab 7", msg.sessions)
+	}
+}
+
 func TestFetchCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 	oldDaemonRequest := daemonRequest
 	daemonRequest = func(req daemon.Request) (daemon.Response, error) {

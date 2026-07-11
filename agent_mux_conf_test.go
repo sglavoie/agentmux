@@ -45,6 +45,18 @@ func TestReadmeDocumentsFocusNextBinding(t *testing.T) {
 	}
 }
 
+func TestDashboardBindingPassesActiveWindowID(t *testing.T) {
+	conf, err := os.ReadFile("agent-mux.conf")
+	if err != nil {
+		t.Fatalf("ReadFile(agent-mux.conf): %v", err)
+	}
+
+	const binding = "map ctrl+shift+d  launch --type=overlay --allow-remote-control amx --window-id @active-kitty-window-id"
+	if !hasActiveConfigLine(string(conf), binding) {
+		t.Fatalf("agent-mux.conf missing dashboard source-window binding %q", binding)
+	}
+}
+
 func TestReadmeDocumentsPassiveLoopMarkers(t *testing.T) {
 	readme, err := os.ReadFile("README.md")
 	if err != nil {

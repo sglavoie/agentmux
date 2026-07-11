@@ -29,6 +29,12 @@ type Model struct {
 	filtered   []session.RunningSession // sessions after query+filter applied
 	cursor     int
 	listOffset int // top row index for the scrollable list view in ModeList
+	// initialSourceWindowID is the Kitty window from which the dashboard was
+	// opened. Only the startup fetch uses it to select the matching tab row.
+	initialSourceWindowID int
+	// lastSelectionRequestToken prevents a request left on a Kitty window
+	// after a failed best-effort clear from repeatedly stealing the cursor.
+	lastSelectionRequestToken string
 
 	// pendingJumpDir holds the direction of a pending bracket-key chord:
 	// 0 = no chord pending, +1 = ] pressed, -1 = [ pressed. Cleared on
@@ -290,6 +296,13 @@ type Model struct {
 
 // NewModel creates a dashboard model.
 func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
+	return NewModelFromWindow(cfg, client, 0)
+}
+
+// NewModelFromWindow creates a dashboard model that initially selects the
+// running session in the Kitty tab containing sourceWindowID. A zero or
+// unmapped ID leaves the dashboard's normal initial selection unchanged.
+func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) Model {
 	interval := time.Duration(cfg.Defaults.RefreshInterval) * time.Second
 	if interval <= 0 {
 		interval = 2 * time.Second
@@ -311,23 +324,24 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 		attn[s] = true
 	}
 	return Model{
-		client:           client,
-		cfg:              cfg,
-		interval:         interval,
-		sortMode:         sort,
-		attentionStates:  attn,
-		idleThreshold:    idle,
-		focusedChipIdx:   -1,
-		amxBin:           amxBin,
-		deprecations:     cfg.Deprecations,
-		messageDetailIdx: -1,
+		client:                client,
+		cfg:                   cfg,
+		interval:              interval,
+		sortMode:              sort,
+		attentionStates:       attn,
+		idleThreshold:         idle,
+		focusedChipIdx:        -1,
+		amxBin:                amxBin,
+		deprecations:          cfg.Deprecations,
+		messageDetailIdx:      -1,
+		initialSourceWindowID: sourceWindowID,
 	}
 }
 
 // Init starts the refresh ticker and fetches the first session list.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
-		fetchCmd(m.client, m.cfg, m.sortMode),
+		initialFetchCmd(m.client, m.cfg, m.sortMode, m.initialSourceWindowID),
 		activeLoopRefreshCmd(m.activeLoopRefreshSeq),
 		tickCmd(m.interval),
 		healthCmd(m.cfg, m.amxBin, true, true),
