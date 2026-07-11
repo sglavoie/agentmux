@@ -1,0 +1,16 @@
+{
+  "name": "palette return focus",
+  "fixture": "workspace_attention",
+  "size": {"width": 120, "height": 30},
+  "actions": [
+    {"type": "key", "key": "enter"},
+    {"type": "key", "key": ":"},
+    {"type": "key", "key": "esc"}
+  ],
+  "assertions": [
+    {"type": "mode_equals", "mode": "workspace"},
+    {"type": "contains_text", "text": "Attention"},
+    {"type": "contains_text", "text": "server"},
+    {"type": "no_layout_issues"}
+  ]
+}

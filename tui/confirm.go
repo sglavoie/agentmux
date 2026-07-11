@@ -9,8 +9,9 @@ import (
 // understands what pressing `y` will actually do. The transcript path is
 // omitted because RunningSession does not currently expose it.
 const (
-	closeConsequence   = "The Claude process exits; transcript persists."
-	restartConsequence = "The Claude process restarts; transcript persists and resumes via --resume if configured."
+	closeConsequence        = "The Claude process exits; transcript persists."
+	restartConsequence      = "The Claude process restarts; transcript persists and resumes via --resume if configured."
+	worktreeForkConsequence = "Creates a tracked Git worktree and forks there. Dirty sources are refused; CLI --allow-dirty omits uncommitted changes."
 )
 
 // renderConfirm renders the two-line confirmation overlay:
@@ -26,6 +27,8 @@ func renderConfirm(m Model) string {
 		verb = "Close"
 	case "restart":
 		verb = "Restart"
+	case "fork worktree":
+		verb = "Fork in new worktree"
 	default:
 		verb = m.confirmAction
 	}

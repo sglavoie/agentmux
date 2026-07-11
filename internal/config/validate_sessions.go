@@ -8,6 +8,7 @@ import (
 
 func validateSessions(sessions []Session, accounts []Account) []string {
 	var errs []string
+	seenProjectID := map[string]bool{}
 	// Key by lowercased profile name: runtime findAccount uses
 	// strings.EqualFold, so validation must accept the same set of references
 	// or it will reject configs that work fine at launch.
@@ -21,6 +22,21 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 	type projectKey struct{ profile, title string }
 	seenProject := map[projectKey]bool{}
 	for i, s := range sessions {
+		if !ValidProjectID(s.ID) {
+			errs = append(errs, fmt.Sprintf(
+				"project %q: id %q must match [a-z0-9][a-z0-9._-]*",
+				s.Title, s.ID,
+			))
+		} else if s.ID != "" {
+			id := NormalizeProjectID(s.ID)
+			if seenProjectID[id] {
+				errs = append(errs, fmt.Sprintf(
+					"duplicate project id %q\n  → project IDs must be globally unique (case-insensitive)",
+					s.ID,
+				))
+			}
+			seenProjectID[id] = true
+		}
 		if s.Title == "" {
 			errs = append(errs, fmt.Sprintf("project[%d]: title is required", i))
 		}

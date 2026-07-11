@@ -1,6 +1,8 @@
 package session_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -140,6 +142,31 @@ func TestOpenPathInEditor_LaunchesWithCorrectArgs(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestOpenPathInEditorUsesParentDirectoryForFile(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{lsResponses: [][]byte{empty, empty, empty}}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+	cfg.Defaults.Editor = "myeditor"
+	directory := t.TempDir()
+	path := filepath.Join(directory, "handoff.md")
+	if err := os.WriteFile(path, []byte("handoff"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.OpenPathInEditor(client, path, "handoff", cfg); err != nil {
+		t.Fatalf("OpenPathInEditor: %v", err)
+	}
+	for _, call := range runner.Calls {
+		if call.Name == "kitten" && containsInOrder(call.Args, []string{"myeditor", path}) {
+			if !containsInOrder(call.Args, []string{"--cwd=" + directory}) {
+				t.Fatalf("launch args = %v, want parent cwd %q", call.Args, directory)
+			}
+			return
+		}
+	}
+	t.Fatal("editor launch call not found")
 }
 
 // containsInOrder reports whether sub appears as a contiguous slice in s.

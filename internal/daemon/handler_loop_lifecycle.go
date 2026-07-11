@@ -93,6 +93,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 		false,
 		baseReq.KittyListenOn,
 	)
+	req.RequestID = baseReq.RequestID
 	// Stamp the ASL-source view for the shadow reducer, keyed against this
 	// fan-out target so the run's lease lands on the window that renders it.
 	normalized := NormalizedFromHook(eventOrAction, harnessName, baseReq.PayloadJSON, target.windowID)

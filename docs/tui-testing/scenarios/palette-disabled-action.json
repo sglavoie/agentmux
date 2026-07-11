@@ -1,0 +1,15 @@
+{
+  "name": "palette disabled action",
+  "fixture": "workspace_attention",
+  "size": {"width": 96, "height": 24},
+  "actions": [
+    {"type": "key", "key": ":"},
+    {"type": "text", "text": "close"}
+  ],
+  "assertions": [
+    {"type": "mode_equals", "mode": "palette"},
+    {"type": "contains_text", "text": "close"},
+    {"type": "contains_text", "text": "a running session is required"},
+    {"type": "no_layout_issues"}
+  ]
+}

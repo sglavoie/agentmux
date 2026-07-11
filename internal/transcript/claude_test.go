@@ -122,8 +122,32 @@ func TestClaudeReader_ReadMessages(t *testing.T) {
 	if !strings.Contains(msgs[1].Text, "[tool_use: read_file]") {
 		t.Errorf("msg[1].Text missing tool_use marker: %q", msgs[1].Text)
 	}
+	handoffText, ok := msgs[1].TextForHandoff()
+	if !ok || handoffText != "Sure, here is the plan." {
+		t.Errorf("msg[1] handoff text = %q, %v", handoffText, ok)
+	}
+	if strings.Contains(handoffText, "plan steps") || strings.Contains(handoffText, "read_file") {
+		t.Errorf("msg[1] handoff text leaked private/tool content: %q", handoffText)
+	}
 	if msgs[2].Role != "user" || msgs[2].Text != "Continue please." {
 		t.Errorf("msg[2] = %+v", msgs[2])
+	}
+}
+
+func TestClaudeMessageToolOnlyIsExcludedFromHandoff(t *testing.T) {
+	record := claudeRecord{
+		Type: "assistant",
+		Message: &claudeMessage{Role: "assistant", Content: []byte(`[
+			{"type":"thinking","thinking":"private"},
+			{"type":"tool_use","name":"shell"}
+		]`)},
+	}
+	message, ok := messageFromRecord(record)
+	if !ok {
+		t.Fatal("display message was unexpectedly dropped")
+	}
+	if _, ok := message.TextForHandoff(); ok {
+		t.Fatalf("tool-only message was handoff-safe: %#v", message)
 	}
 }
 

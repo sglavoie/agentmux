@@ -28,6 +28,13 @@ type exampleConfig struct {
 			KeepDays       int `toml:"keep_days"`
 			ScanMaxAgeDays int `toml:"scan_max_age_days"`
 		} `toml:"session_archive"`
+		Activity struct {
+			KeepDays int `toml:"keep_days"`
+		}
+		Handoff struct {
+			MaxBytes       int `toml:"max_bytes"`
+			RecentMessages int `toml:"recent_messages"`
+		}
 		Notifications struct {
 			Permission           bool
 			Stop                 bool

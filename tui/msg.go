@@ -18,6 +18,7 @@ type sessionsMsg struct {
 	sessions       []session.RunningSession
 	activity       map[int]time.Time
 	watchdog       map[int]daemon.WatchdogState
+	states         map[int]daemon.WindowStateSnapshot
 	selectionTabID int
 	selectionToken string
 }

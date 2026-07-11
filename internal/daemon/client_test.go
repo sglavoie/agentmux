@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
 	"net"
@@ -10,7 +11,39 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/activity"
 )
+
+func TestClientHealthIncludesActivityWriterMetrics(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-health-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	sockPath := filepath.Join(dir, "health.sock")
+	listener, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = bufio.NewReader(conn).ReadBytes('\n')
+		_ = json.NewEncoder(conn).Encode(Response{
+			OK: true, Ready: true, PID: 42,
+			ActivityWriter: &activity.Metrics{Queued: 7, Persisted: 6, Dropped: 1, Degraded: true},
+		})
+	}()
+	health := NewClientWithSocket(sockPath).Health()
+	if !health.Alive || health.ActivityWriter == nil || health.ActivityWriter.Queued != 7 || !health.ActivityWriter.Degraded {
+		t.Fatalf("health = %+v", health)
+	}
+}
 
 // TestSocketPath_FallsBackWhenHomeMissing pins that SocketPath returns an
 // absolute path even when the user's home directory cannot be resolved (e.g.

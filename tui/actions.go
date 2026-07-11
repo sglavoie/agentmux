@@ -1,16 +1,17 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/clipboard"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -41,7 +42,7 @@ func actionsFor(_ Model) []action {
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
 				cmd := focusCmd(m.client, m.targetSession.TabID)
-				m.mode = ModeList
+				m.exitActionsMode()
 				return m, cmd
 			},
 		},
@@ -55,7 +56,7 @@ func actionsFor(_ Model) []action {
 			},
 			run: func(m Model) (Model, tea.Cmd) {
 				cmd := peekCmd(m.client, m.targetSession.WindowID)
-				m.mode = ModeList
+				m.exitActionsMode()
 				return m, cmd
 			},
 		},
@@ -70,10 +71,12 @@ func actionsFor(_ Model) []action {
 				if m.cfg.Defaults.ConfirmDestructive {
 					m.confirmAction = "restart"
 					m.confirmConsequence = restartConsequence
+					m.confirmReturnMode = m.actionsReturnMode
+					m.actionsReturnMode = ModeList
 					m.mode = ModeConfirm
 					return m, nil
 				}
-				m.mode = ModeList
+				m.exitActionsMode()
 				cmd := m.restartWithToast(m.targetSession)
 				return m, cmd
 			},
@@ -89,7 +92,8 @@ func actionsFor(_ Model) []action {
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
 				m.configPickerPurpose = ConfigPickerRestartProfile
-				m.configPickerReturnMode = ModeList
+				m.configPickerReturnMode = m.actionsReturnMode
+				m.actionsReturnMode = ModeList
 				m.configPickerProjectIdx = -1
 				m.actionErr = nil
 				m.mode = ModeConfigPicker
@@ -107,7 +111,8 @@ func actionsFor(_ Model) []action {
 				m.configPickerCurrent = m.targetSession.EffectiveProfile()
 				m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.targetSession.EffectiveProfile())
 				m.configPickerPurpose = ConfigPickerDashboardLaunch
-				m.configPickerReturnMode = ModeList
+				m.configPickerReturnMode = m.actionsReturnMode
+				m.actionsReturnMode = ModeList
 				m.configPickerProjectIdx = -1
 				m.actionErr = nil
 				m.mode = ModeConfigPicker
@@ -125,7 +130,7 @@ func actionsFor(_ Model) []action {
 			run: func(m Model) (Model, tea.Cmd) {
 				cmd := clearStatusCmd(m.client, m.targetSession)
 				m.actionErr = nil
-				m.mode = ModeList
+				m.exitActionsMode()
 				return m, cmd
 			},
 		},
@@ -140,10 +145,12 @@ func actionsFor(_ Model) []action {
 				if m.cfg.Defaults.ConfirmDestructive {
 					m.confirmAction = "close"
 					m.confirmConsequence = closeConsequence
+					m.confirmReturnMode = m.actionsReturnMode
+					m.actionsReturnMode = ModeList
 					m.mode = ModeConfirm
 					return m, nil
 				}
-				m.mode = ModeList
+				m.exitActionsMode()
 				cmd := m.closeWithToast(m.targetSession)
 				return m, cmd
 			},
@@ -159,7 +166,7 @@ func actionsFor(_ Model) []action {
 			},
 			run: func(m Model) (Model, tea.Cmd) {
 				cs, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
-				m.mode = ModeList
+				m.exitActionsMode()
 				if !ok {
 					return m, nil
 				}
@@ -177,7 +184,7 @@ func actionsFor(_ Model) []action {
 			},
 			run: func(m Model) (Model, tea.Cmd) {
 				cs, ok := findConfigSession(m.cfg, m.targetSession.EffectiveProfile(), m.targetSession.EffectiveProject())
-				m.mode = ModeList
+				m.exitActionsMode()
 				if !ok {
 					return m, nil
 				}
@@ -192,7 +199,7 @@ func actionsFor(_ Model) []action {
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
 				title := runningSessionDisplayTitle(m.targetSession)
-				m.mode = ModeList
+				m.exitActionsMode()
 				return m, copyTitleCmd(title)
 			},
 		},
@@ -203,7 +210,7 @@ func actionsFor(_ Model) []action {
 			description: "toggle session lock (prevents close/restart/override)",
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
-				m.mode = ModeList
+				m.exitActionsMode()
 				return m, toggleLockCmd(m.client, m.targetSession)
 			},
 		},
@@ -214,11 +221,20 @@ func actionsFor(_ Model) []action {
 			description: "toggle session mute (suppresses macOS notifications)",
 			available:   func(Model) bool { return true },
 			run: func(m Model) (Model, tea.Cmd) {
-				m.mode = ModeList
+				m.exitActionsMode()
 				return m, toggleMuteCmd(m.client, m.targetSession)
 			},
 		},
 	}
+}
+
+func (m *Model) exitActionsMode() {
+	returnMode := m.actionsReturnMode
+	if returnMode != ModeWorkspace {
+		returnMode = ModeList
+	}
+	m.mode = returnMode
+	m.actionsReturnMode = ModeList
 }
 
 // actionDescIndent is the column at which wrapped description text must
@@ -565,15 +581,9 @@ func sessionWithProfile(sess config.Session, profileName string) config.Session 
 // Emits pickerOpenDoneMsg so the model can quit on success or surface the
 // error in the dashboard otherwise.
 func openDirActionCmd(m Model, cs config.Session) tea.Cmd {
-	accounts := m.cfg.Accounts
-	client := m.client
-	cfg := m.cfg
 	return func() tea.Msg {
-		acc, ok := findAccountByName(accounts, cs.EffectiveProfile())
-		if !ok {
-			return pickerOpenDoneMsg{err: fmt.Errorf("no matching account for profile %q", cs.EffectiveProfile())}
-		}
-		return pickerOpenDoneMsg{err: session.OpenDirectory(client, cs, acc, cfg)}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenDirectory, actions.Request{Project: &cs})
+		return pickerOpenDoneMsg{err: err}
 	}
 }
 
@@ -582,15 +592,9 @@ func openDirActionCmd(m Model, cs config.Session) tea.Cmd {
 // Emits pickerOpenDoneMsg so the model can quit on success or surface the
 // error in the dashboard otherwise.
 func openInEditorActionCmd(m Model, cs config.Session) tea.Cmd {
-	accounts := m.cfg.Accounts
-	client := m.client
-	cfg := m.cfg
 	return func() tea.Msg {
-		acc, ok := findAccountByName(accounts, cs.EffectiveProfile())
-		if !ok {
-			return pickerOpenDoneMsg{err: fmt.Errorf("no matching account for profile %q", cs.EffectiveProfile())}
-		}
-		return pickerOpenDoneMsg{err: session.OpenInEditor(client, cs, acc, cfg)}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenEditor, actions.Request{Project: &cs})
+		return pickerOpenDoneMsg{err: err}
 	}
 }
 
@@ -598,7 +602,9 @@ func openInEditorActionCmd(m Model, cs config.Session) tea.Cmd {
 // reported via actionDoneMsg so the dashboard surfaces them in the header.
 func copyTitleCmd(title string) tea.Cmd {
 	return func() tea.Msg {
-		return actionDoneMsg{err: copyToClipboard(title)}
+		target := session.RunningSession{Project: title, Base: title}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Clipboard: copyToClipboard}, actions.CopyTitle, actions.Request{Session: &target})
+		return actionDoneMsg{err: err}
 	}
 }
 
@@ -614,12 +620,7 @@ func copyTextCmd(text string) tea.Cmd {
 // sessions reject close/restart/override from the dashboard.
 func toggleLockCmd(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		var err error
-		if rs.Locked {
-			err = session.Unlock(client, rs.WindowID)
-		} else {
-			err = session.Lock(client, rs.WindowID)
-		}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.ToggleLock, actions.Request{Session: &rs})
 		return actionDoneMsg{err: err}
 	}
 }
@@ -632,19 +633,7 @@ func toggleLockCmd(client kitty.KittyClient, rs session.RunningSession) tea.Cmd 
 // seeds it.
 func toggleMuteCmd(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		var err error
-		if rs.Muted {
-			err = session.Unmute(client, rs.WindowID)
-		} else {
-			err = session.Mute(client, rs.WindowID)
-		}
-		if err == nil {
-			newMuted := !rs.Muted
-			parts := rs.TitleParts()
-			parts.Muted = newMuted
-			newTitle := palette.BuildTitleParts(parts)
-			err = client.SetTabTitle(kitty.MatchTabByWindowID(rs.WindowID), newTitle)
-		}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.ToggleMute, actions.Request{Session: &rs})
 		return actionDoneMsg{err: err}
 	}
 }

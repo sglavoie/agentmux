@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -162,14 +164,40 @@ func OpenPathInEditor(client kitty.KittyClient, path, title string, cfg *config.
 	}
 
 	expandedPath := config.ExpandTilde(path)
+	directory := expandedPath
+	if info, statErr := os.Stat(expandedPath); statErr == nil && !info.IsDir() {
+		directory = filepath.Dir(expandedPath)
+	}
 	launchOpts := kitty.LaunchOpts{
 		Title:     title,
-		Directory: expandedPath,
+		Directory: directory,
 		Cmdline:   append([]string{name}, append(editorArgs, expandedPath)...),
 	}
 
 	if err := client.LaunchTab(launchOpts); err != nil {
 		return fmt.Errorf("opening editor for %q: %w", title, err)
+	}
+	return nil
+}
+
+// EditPath runs the configured editor against one file or directory in the
+// current terminal. Unlike OpenPathInEditor it waits for the editor to exit,
+// which makes it suitable for workflows that must read a user's edits before
+// continuing (for example, finalizing a handoff pack).
+func EditPath(path string, cfg *config.Config) error {
+	if cfg == nil {
+		return fmt.Errorf("editing %q: configuration is required", path)
+	}
+	name, editorArgs, err := resolveEditor(cfg.Defaults.Editor)
+	if err != nil {
+		return fmt.Errorf("resolving editor for %q: %w", path, err)
+	}
+	cmd := exec.Command(name, append(editorArgs, path)...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("editing %q: %w", path, err)
 	}
 	return nil
 }

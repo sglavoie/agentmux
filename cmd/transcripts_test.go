@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -18,6 +20,7 @@ func resetTranscriptsCommandTestState(t *testing.T, indexPath string) {
 	oldIndexPath := transcriptsIndexPath
 	oldLoadConfig := transcriptsLoadConfig
 	oldReaders := transcriptsReaders
+	oldLoadIndex := transcriptsLoadIndex
 	oldRebuildAll := transcriptsRebuildAll
 	oldStatusOut := transcriptsStatusCmd.OutOrStdout()
 	oldCompactOut := transcriptsCompactCmd.OutOrStdout()
@@ -28,11 +31,20 @@ func resetTranscriptsCommandTestState(t *testing.T, indexPath string) {
 		transcriptsIndexPath = oldIndexPath
 		transcriptsLoadConfig = oldLoadConfig
 		transcriptsReaders = oldReaders
+		transcriptsLoadIndex = oldLoadIndex
 		transcriptsRebuildAll = oldRebuildAll
 		transcriptsStatusCmd.SetOut(oldStatusOut)
 		transcriptsCompactCmd.SetOut(oldCompactOut)
 		transcriptsRebuildCmd.SetOut(oldRebuildOut)
 	})
+	store := datastore.OpenTest(t)
+	transcriptsLoadIndex = func(path string, readers map[string]transcript.Reader) (*transcript.Index, error) {
+		idx, err := transcript.LoadIndexAt(path)
+		if err != nil {
+			return nil, err
+		}
+		return transcript.EnableSQLiteIndex(context.Background(), idx, store, readers), nil
+	}
 }
 
 type fakeTranscriptReader struct {
@@ -94,9 +106,10 @@ func TestTranscriptsCompactCommandPrintsSummary(t *testing.T) {
 		t.Fatalf("RunE: %v", err)
 	}
 	got := out.String()
-	if !strings.Contains(got, "compacted transcript index") ||
-		!strings.Contains(got, "legacy_search_text_entries: 1") ||
-		!strings.Contains(got, "sidecar_count: 1") {
+	if !strings.Contains(got, "verified SQLite transcript import") ||
+		!strings.Contains(got, "legacy_source_found: true") ||
+		!strings.Contains(got, "record_count: 1") ||
+		!strings.Contains(got, "search_document_count: 1") {
 		t.Fatalf("compact output did not include expected summary:\n%s", got)
 	}
 }
@@ -151,11 +164,11 @@ func TestTranscriptsRebuildCommandPrintsProfileMembershipSummary(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		"rebuilt transcript sidecars",
+		"rebuilt SQLite transcript search documents",
 		"visible_entries: 1",
 		"visible_profile_memberships: 2",
 		"shared_profile_entries: 1",
-		"sidecar_count: 1",
+		"search_document_count: 1",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("rebuild output missing %q:\n%s", want, got)

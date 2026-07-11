@@ -82,6 +82,8 @@ func keyPress(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: 'c', Text: "c"})
 	case "C":
 		return tea.KeyPressMsg(tea.Key{Code: 'C', Text: "C"})
+	case "H":
+		return tea.KeyPressMsg(tea.Key{Code: 'H', Text: "H"})
 	case " ":
 		return tea.KeyPressMsg(tea.Key{Code: ' '}) // no Text: String() returns "space"
 	case "enter":

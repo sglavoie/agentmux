@@ -40,6 +40,61 @@ func TestEnterSessionSearchStartsCacheLoadWhenCacheMissing(t *testing.T) {
 	}
 }
 
+func TestLegacySessionSearchKeepsEnterViewerAndAddsContinuityActions(t *testing.T) {
+	meta := transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "work", Project: "api"}
+	base := Model{
+		mode:              ModeSessionSearch,
+		cfg:               &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
+		transcriptReaders: map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
+		sessionResults:    []transcript.Result{{Meta: meta}},
+	}
+
+	updated, cmd := base.Update(keyPress("enter"))
+	if got := updated.(Model); got.mode != ModeSessionView || cmd == nil {
+		t.Fatalf("enter = mode %v cmd %T, want transcript viewer with read cmd", got.mode, cmd)
+	}
+	for _, key := range []string{"c", "f"} {
+		updated, cmd := base.Update(keyPress(key))
+		got := updated.(Model)
+		if got.mode != ModeSessionSearch || cmd == nil {
+			t.Fatalf("%s = mode %v cmd %T, want continuity command without leaving search", key, got.mode, cmd)
+		}
+	}
+	updated, cmd = base.Update(keyPress("w"))
+	got := updated.(Model)
+	if got.mode != ModeConfirm || cmd != nil || got.confirmAction != "fork worktree" || got.isolatedForkConversation == nil || got.isolatedForkConversation.ID != meta.ID {
+		t.Fatalf("w = mode %v action %q conversation=%+v cmd=%T, want isolated-fork confirmation", got.mode, got.confirmAction, got.isolatedForkConversation, cmd)
+	}
+	updated, cmd = got.Update(keyPress("n"))
+	got = updated.(Model)
+	if got.mode != ModeSessionSearch || got.isolatedForkConversation != nil || cmd != nil {
+		t.Fatalf("cancel worktree fork = mode %v conversation=%+v cmd=%T, want search with cleared request", got.mode, got.isolatedForkConversation, cmd)
+	}
+	for _, tc := range []struct {
+		key      string
+		wantEdit bool
+	}{
+		{key: "H"},
+		{key: "E", wantEdit: true},
+	} {
+		updated, cmd := base.Update(keyPress(tc.key))
+		got := updated.(Model)
+		if got.mode != ModeConfigPicker || cmd != nil {
+			t.Fatalf("%s = mode %v cmd %T, want profile picker without launch", tc.key, got.mode, cmd)
+		}
+		if got.configPickerPurpose != ConfigPickerHandoff || got.handoffConversation == nil || got.handoffConversation.ID != meta.ID || got.handoffEdit != tc.wantEdit {
+			t.Fatalf("%s handoff picker = %+v, want source handoff with edit=%v", tc.key, got, tc.wantEdit)
+		}
+	}
+
+	footer := stripAnsi(renderFooter(base))
+	for _, want := range []string{"enter view", "c continue", "f fork", "w worktree", "H handoff", "E edit handoff"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("footer = %q, want %q", footer, want)
+		}
+	}
+}
+
 func TestEnterSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	m := testModel()
 	m.sessionCacheLoadInFlight = true

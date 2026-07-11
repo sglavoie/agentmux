@@ -7,8 +7,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -30,17 +32,19 @@ type sessionsRefreshDoneMsg struct {
 // startup see a loading state instead of doing a duplicate synchronous load.
 type sessionCacheLoadStartedMsg struct{}
 
-// sessionCacheLoadDoneMsg carries the startup transcripts.json load and its
-// immediate empty-query search result. seq is the sessionSearchSeq snapshot
-// from Init; if the user has already typed a newer query, the loaded index is
-// retained but the empty-query results are not allowed to overwrite it.
+// sessionCacheLoadDoneMsg carries the startup SQLite facade activation (with
+// legacy fallback) and its immediate empty-query search result. seq is the
+// sessionSearchSeq snapshot from Init; if the user has already typed a newer
+// query, the loaded index is retained but the empty-query results are not
+// allowed to overwrite it.
 type sessionCacheLoadDoneMsg struct {
-	seq       int
-	idx       *transcript.Index
-	readers   map[string]transcript.Reader
-	results   []transcript.Result
-	loadErr   error
-	searchErr error
+	seq         int
+	idx         *transcript.Index
+	readers     map[string]transcript.Reader
+	results     []transcript.Result
+	loadErr     error
+	degradedErr error
+	searchErr   error
 }
 
 // sessionWarmRefreshDoneMsg carries the background refresh/prune result that
@@ -244,6 +248,50 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			return m, nil
 		}
 		return m.enterSessionView(m.sessionResults[m.sessionCursor].Meta)
+	case keyC:
+		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
+			return m, nil
+		}
+		return m, conversationActionCmd(m.client, m.cfg, m.transcriptReaders, m.sessionResults[m.sessionCursor].Meta, actions.Continue)
+	case keyF:
+		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
+			return m, nil
+		}
+		return m, conversationActionCmd(m.client, m.cfg, m.transcriptReaders, m.sessionResults[m.sessionCursor].Meta, actions.Fork)
+	case keyWorktreeFork:
+		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
+			return m, nil
+		}
+		meta := m.sessionResults[m.sessionCursor].Meta
+		m.isolatedForkConversation = &meta
+		m.targetSession = session.RunningSession{Base: meta.Project, Project: meta.Project, Directory: meta.CWD, Profile: meta.DisplayProfile(), Account: meta.DisplayProfile(), Harness: meta.Harness}
+		m.confirmAction = "fork worktree"
+		m.confirmConsequence = worktreeForkConsequence
+		m.confirmReturnMode = ModeSessionSearch
+		m.mode = ModeConfirm
+		return m, nil
+	case "H", "E":
+		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
+			return m, nil
+		}
+		meta := m.sessionResults[m.sessionCursor].Meta
+		m.handoffConversation = &meta
+		m.targetSession = session.RunningSession{
+			Base: meta.Project, Project: meta.Project, Directory: meta.CWD,
+			Profile: meta.DisplayProfile(), Account: meta.DisplayProfile(), Harness: meta.Harness,
+		}
+		m.configPickerAccounts = m.cfg.Accounts
+		if len(m.configPickerAccounts) == 0 {
+			m.configPickerAccounts = m.cfg.Profiles
+		}
+		m.configPickerCurrent = meta.DisplayProfile()
+		m.configPickerCursor = pickerAccountIndex(m.configPickerAccounts, m.configPickerCurrent)
+		m.configPickerPurpose = ConfigPickerHandoff
+		m.configPickerReturnMode = ModeSessionSearch
+		m.configPickerProjectIdx = -1
+		m.handoffEdit = msg.String() == "E"
+		m.mode = ModeConfigPicker
+		return m, nil
 	case keyD:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
@@ -282,11 +330,12 @@ func sessionCacheLoadCmd(seq int) tea.Cmd {
 		}
 		results, searchErr := transcript.Search(idx, readers, transcript.Query{})
 		return sessionCacheLoadDoneMsg{
-			seq:       seq,
-			idx:       idx,
-			readers:   readers,
-			results:   results,
-			searchErr: searchErr,
+			seq:         seq,
+			idx:         idx,
+			readers:     readers,
+			results:     results,
+			degradedErr: idx.DegradedReason(),
+			searchErr:   searchErr,
 		}
 	}
 }
@@ -351,13 +400,17 @@ func refreshAndPruneSessions(idx *transcript.Index, cfg *config.Config, readers 
 	} else if hidden > 0 {
 		slog.Debug("transcript.prune", "hidden", hidden)
 	}
+	degradedErr := idx.DegradedReason()
 	if refreshErr != nil && pruneErr != nil {
 		return fmt.Errorf("refresh failed: %v; prune failed: %w", refreshErr, pruneErr)
 	}
 	if refreshErr != nil {
 		return refreshErr
 	}
-	return pruneErr
+	if pruneErr != nil {
+		return pruneErr
+	}
+	return degradedErr
 }
 
 // currentSessionQuery snapshots the chip filters + text query into a

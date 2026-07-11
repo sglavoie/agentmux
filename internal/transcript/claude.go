@@ -226,7 +226,34 @@ func messageFromRecord(rec claudeRecord) (Message, bool) {
 	if role == "" {
 		role = rec.Type
 	}
-	return Message{Role: role, Text: text, Timestamp: ts}, true
+	handoffText := flattenClaudeHandoffContent(rec.Message.Content)
+	return Message{Role: role, Text: text, Timestamp: ts, handoffText: &handoffText}, true
+}
+
+// flattenClaudeHandoffContent retains ordinary visible text while excluding
+// thinking, tool_use, and tool_result blocks. flattenClaudeContent remains the
+// richer display/search representation used by existing transcript features.
+func flattenClaudeHandoffContent(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var plain string
+	if err := json.Unmarshal(raw, &plain); err == nil {
+		return plain
+	}
+	var blocks []map[string]any
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return ""
+	}
+	var out strings.Builder
+	for _, block := range blocks {
+		if blockType, _ := block["type"].(string); blockType == "text" {
+			if text, _ := block["text"].(string); text != "" {
+				appendClaudeContentLine(&out, text)
+			}
+		}
+	}
+	return out.String()
 }
 
 // flattenClaudeContent reduces the polymorphic `message.content` payload to

@@ -79,7 +79,9 @@ func (h *Handler) runScreenProbes(ctx context.Context) {
 // before the public socket is bound. A slow or wedged Kitty must not delay the
 // daemon coming up: past this budget the daemon starts degraded and the
 // maintenance loop reconciles on its next successful tick.
-const initialSnapshotBudget = 750 * time.Millisecond
+// Keep this below the public socket-readiness budget. A snapshot that misses
+// this deadline is reconciled by the maintenance loop after degraded startup.
+const initialSnapshotBudget = 400 * time.Millisecond
 
 // restoreStateFromKittyBounded runs the initial snapshot+restore under a
 // timeout. It returns (true, "") when the restore completed within timeout, and

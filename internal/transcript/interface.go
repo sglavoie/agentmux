@@ -107,6 +107,29 @@ type Message struct {
 	Role      string    `json:"role"`
 	Text      string    `json:"text"`
 	Timestamp time.Time `json:"timestamp"`
+
+	// handoffText is populated by readers whose display/search Text can also
+	// contain hidden reasoning or tool payloads. A nil value means Text is
+	// already safe for a normal user/assistant transcript handoff.
+	handoffText *string
+}
+
+// TextForHandoff returns only content suitable for a generated context pack.
+// The boolean is false for non-user/assistant roles, empty messages, and
+// reader-recognized records containing only private/tool payloads.
+func (m Message) TextForHandoff() (string, bool) {
+	role := strings.ToLower(strings.TrimSpace(m.Role))
+	if role != "user" && role != "assistant" {
+		return "", false
+	}
+	text := m.Text
+	if m.handoffText != nil {
+		text = *m.handoffText
+	}
+	if text == "" {
+		return "", false
+	}
+	return text, true
 }
 
 // LookupFunc lets Discover skip a full parse when the index already has a

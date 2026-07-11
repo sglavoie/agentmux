@@ -14,7 +14,7 @@ import (
 // like production key handling once fed to Model.Update.
 //
 // Accepted specs:
-//   - named keys: enter, esc, tab, backspace, space, up, down, left, right,
+//   - named keys: enter, esc, tab, shift+tab, backspace, space, up, down, left, right,
 //     home, end, pgup, pgdown
 //   - control chords: ctrl+<printable>, e.g. ctrl+c, ctrl+d
 //   - any single printable rune, e.g. "j", "/", "?"
@@ -53,6 +53,8 @@ func namedUITestKey(spec string) (tea.KeyPressMsg, bool) {
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc}), true
 	case "tab":
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}), true
+	case "shift+tab":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyTab, Mod: tea.ModShift}), true
 	case "backspace":
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyBackspace}), true
 	case "space":

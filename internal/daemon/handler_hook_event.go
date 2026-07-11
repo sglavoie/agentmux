@@ -141,6 +141,7 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		resetFlowDetected,
 		ctx.req.KittyListenOn,
 	)
+	stateReq.RequestID = ctx.req.RequestID
 	// Stamp the source-scoped view for the shadow reducer while the raw payload
 	// is still in hand. A deferred stop keeps the stamp and delivers it at
 	// commit time.
@@ -231,6 +232,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		false, // resetFlowDetected: F8 is a manual wipe, not a reset flow
 		ctx.req.KittyListenOn,
 	)
+	stateReq.RequestID = ctx.req.RequestID
 	// The wipe was retargeted, so normalize against the target window: the
 	// shadow reducer must acknowledge the owner's facts, not the source pane's.
 	normalized := NormalizedFromHook(eventOrAction, harnessName, ctx.req.PayloadJSON, targetID)

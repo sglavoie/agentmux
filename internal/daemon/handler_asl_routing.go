@@ -174,6 +174,7 @@ func (h *Handler) routeActiveLoopSiblingTarget(
 		resetFlowDetected,
 		ctx.req.KittyListenOn,
 	)
+	stateReq.RequestID = ctx.req.RequestID
 	// Stamp the source-scoped view for the shadow reducer against the managed
 	// target: a routed sibling hook advances the owner's fact map, exactly as
 	// its legacy transition advances the owner's state machine.

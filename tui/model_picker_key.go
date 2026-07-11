@@ -1,10 +1,11 @@
 package tui
 
 import (
-	"fmt"
+	"context"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -174,15 +175,9 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]
 			sess := m.pickerSessionWithResolvedProfile(origIdx)
-			accounts := m.cfg.Accounts
-			client := m.client
-			cfg := m.cfg
 			return m, func() tea.Msg {
-				acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
-				if !ok {
-					return pickerOpenDoneMsg{err: fmt.Errorf("no matching account for profile %q", sess.EffectiveProfile())}
-				}
-				return pickerOpenDoneMsg{err: session.OpenInEditor(client, sess, acc, cfg)}
+				_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenEditor, actions.Request{Project: &sess})
+				return pickerOpenDoneMsg{err: err}
 			}
 		}
 		return m, nil

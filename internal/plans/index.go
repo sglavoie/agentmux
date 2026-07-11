@@ -1,6 +1,7 @@
 package plans
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,14 +30,21 @@ func IndexPath() string {
 	return filepath.Join(home, ".local", "share", "agent-mux", "plans.json")
 }
 
-// Index is the in-memory + on-disk cache of discovered plan metadata.
-// The mutex guards in-process races between Refresh, Save, Delete, and
-// List on a single instance; cross-process correctness is out of scope.
+// Index is the compatibility facade for discovered plan metadata. After a
+// successful migration it serves SQLite while retaining the in-memory JSON
+// snapshot for read fallback. The mutex guards in-process races between
+// Refresh, Save, Delete, and List on a single instance.
 type Index struct {
 	mu      sync.Mutex
 	path    string
 	store   *searchstore.Store
 	entries map[string]PlanMeta
+
+	// repo is enabled after the legacy JSON index has been imported. Keeping
+	// entries in memory preserves the exact legacy path if opening SQLite or
+	// importing the rollback source fails.
+	repo           *Repository
+	degradedReason error
 }
 
 // indexFile is the on-disk wrapper used for JSON serialization. A
@@ -48,7 +56,7 @@ type indexFile struct {
 
 // LoadIndex reads the index from the default IndexPath.
 func LoadIndex() (*Index, error) {
-	return LoadIndexAt(IndexPath())
+	return LoadSQLiteIndex(IndexPath())
 }
 
 // LoadIndexAt reads the index from path. A missing file is not an
@@ -81,6 +89,13 @@ func (i *Index) Path() string { return i.path }
 
 // Len returns the number of entries currently held in memory.
 func (i *Index) Len() int {
+	if repo := i.repository(); repo != nil {
+		entries, err := repo.List(context.Background())
+		if err == nil {
+			return len(entries)
+		}
+		slog.Debug("plans.index: SQLite length failed; using compatibility cache", "err", err)
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return len(i.entries)
@@ -89,6 +104,13 @@ func (i *Index) Len() int {
 // Get returns a snapshot of one entry by key. The boolean reports
 // whether the entry was found.
 func (i *Index) Get(key string) (PlanMeta, bool) {
+	if repo := i.repository(); repo != nil {
+		meta, found, err := repo.Get(context.Background(), key)
+		if err == nil {
+			return meta, found
+		}
+		slog.Debug("plans.index: SQLite get failed; using compatibility cache", "key", key, "err", err)
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	m, ok := i.entries[key]
@@ -98,6 +120,13 @@ func (i *Index) Get(key string) (PlanMeta, bool) {
 // List returns a copy of every entry, sorted by ModTime descending so
 // the most recently touched plan appears first.
 func (i *Index) List() []PlanMeta {
+	if repo := i.repository(); repo != nil {
+		entries, err := repo.List(context.Background())
+		if err == nil {
+			return entries
+		}
+		slog.Debug("plans.index: SQLite list failed; using compatibility cache", "err", err)
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	out := make([]PlanMeta, 0, len(i.entries))
@@ -110,9 +139,52 @@ func (i *Index) List() []PlanMeta {
 	return out
 }
 
+// ListByWorkspace returns plans explicitly linked to workspaceID. Link data
+// lives in SQLite, so a degraded compatibility-only index returns no linked
+// rows rather than inferring associations from plan names or contents.
+func (i *Index) ListByWorkspace(workspaceID string) ([]PlanMeta, error) {
+	if workspaceID == "" {
+		return nil, nil
+	}
+	if repo := i.repository(); repo != nil {
+		return repo.ListByWorkspace(context.Background(), workspaceID)
+	}
+	return nil, nil
+}
+
+// LinkWorkspace records one explicit plan-to-workspace association. It never
+// infers a workspace from plan text or display names.
+func (i *Index) LinkWorkspace(planKey, workspaceID string) error {
+	repo := i.repository()
+	if repo == nil {
+		if reason := i.DegradedReason(); reason != nil {
+			return reason
+		}
+		return errors.New("plans: SQLite repository is not enabled")
+	}
+	return repo.LinkWorkspace(context.Background(), planKey, workspaceID)
+}
+
+// UnlinkWorkspace removes one explicit plan-to-workspace association.
+func (i *Index) UnlinkWorkspace(planKey, workspaceID string) error {
+	repo := i.repository()
+	if repo == nil {
+		if reason := i.DegradedReason(); reason != nil {
+			return reason
+		}
+		return errors.New("plans: SQLite repository is not enabled")
+	}
+	return repo.UnlinkWorkspace(context.Background(), planKey, workspaceID)
+}
+
 // Save serializes the index to disk atomically (write-to-tmp + rename)
 // so a crash mid-write never leaves a half-written JSON file in place.
 func (i *Index) Save() error {
+	// SQLite commits are handled by Repository methods. The JSON index remains
+	// an untouched compatibility/rollback source once the facade is enabled.
+	if i.UsesSQLite() {
+		return nil
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.saveLocked()
@@ -154,6 +226,9 @@ func (i *Index) saveLocked() (retErr error) {
 // File-level deletion of the underlying plan directory is intentionally
 // deferred — the TUI may add it in a later session.
 func (i *Index) Delete(key string) error {
+	if i.UsesSQLite() {
+		return i.deleteSQLite(key)
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	if _, ok := i.entries[key]; !ok {
@@ -172,6 +247,9 @@ func (i *Index) Delete(key string) error {
 // contains eligible markdown. Per-plan failures are logged and skipped —
 // a single unreadable plan must not hide the rest.
 func (i *Index) Refresh(root string) error {
+	if i.UsesSQLite() {
+		return i.refreshSQLite(root)
+	}
 	if root == "" {
 		return errors.New("plans: Refresh requires a non-empty root path")
 	}

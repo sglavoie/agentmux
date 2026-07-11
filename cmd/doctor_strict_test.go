@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/activity"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/datastore"
 )
 
 // setUpDoctorFixture installs a healthy socket/binary/config environment plus
@@ -163,5 +166,36 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	// Text sections must be suppressed in JSON mode.
 	if strings.Contains(out.String(), "Agent Mux doctor") {
 		t.Fatalf("JSON output contains text sections:\n%s", out.String())
+	}
+}
+
+func TestDoctorStrictIncludesDatastoreFTSAndActivityWriterFailures(t *testing.T) {
+	build := doctorTestBuild
+	health := daemon.Health{
+		Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build,
+		ActivityWriter: &activity.Metrics{Queued: 3, Persisted: 1, Dropped: 1, WriteFailures: 2, Degraded: true, LastError: "disk unavailable"},
+	}
+	setUpDoctorFixture(t, health, daemon.EventsExport{})
+	doctorInspectDatastore = func(context.Context) (datastore.Status, error) {
+		return datastore.Status{
+			SchemaVersion: 2, CurrentSchemaVersion: 3, Integrity: "ok", SecurePermissions: false,
+			PermissionIssues: []string{"database mode is 0644; want 0600"},
+			Search:           datastore.SearchStatus{DocumentCount: 4, FTSRowCount: 3, Integrity: "ok", Fresh: false},
+		}, nil
+	}
+	doctorStrict = true
+	var out bytes.Buffer
+	doctorCmd.SetOut(&out)
+	err := runDoctor(doctorCmd, nil)
+	var exitErr *ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure {
+		t.Fatalf("error = %v, want strict health failure", err)
+	}
+	for _, want := range []string{
+		"[datastore_migration]", "[fts_freshness]", "[datastore_permissions]", "[activity_writer]",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("doctor output missing %q:\n%s", want, out.String())
+		}
 	}
 }

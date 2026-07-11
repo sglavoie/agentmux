@@ -127,6 +127,34 @@ func TestLaunch_ProjectHarnessEnvOverridePinnedAtExec(t *testing.T) {
 	t.Error("expected kitten @ launch to be called")
 }
 
+func TestLaunchFreshIncludesHandoffInstruction(t *testing.T) {
+	empty := loadFixture(t, "kitty_ls_empty.json")
+	runner := &sequentialLSRunner{lsResponses: [][]byte{empty, empty, empty, empty, empty}}
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := buildTestConfig()
+	sess := config.Session{Title: "api", Account: "work", Directory: "/tmp/source-worktree"}
+	prompt := `Read the handoff pack at "/tmp/handoff.md" before taking action. Verify all assumptions.`
+
+	if err := session.LaunchFresh(client, sess, cfg.Accounts[0], cfg, prompt); err != nil {
+		t.Fatalf("LaunchFresh: %v", err)
+	}
+	for _, call := range runner.Calls {
+		if call.Name != "kitten" || !hasArg(call.Args, "launch") {
+			continue
+		}
+		if !hasArg(call.Args, "--cwd=/tmp/source-worktree") {
+			t.Fatalf("launch args = %v, want source worktree CWD", call.Args)
+		}
+		for _, arg := range call.Args {
+			if strings.Contains(arg, "Read the handoff pack") && strings.Contains(arg, "Verify all assumptions") {
+				return
+			}
+		}
+		t.Fatalf("launch args = %v, want fresh handoff instruction", call.Args)
+	}
+	t.Fatal("expected kitten @ launch")
+}
+
 // TestLaunch_StoresExplicitFlags verifies that Launch stores project-explicit
 // args separately from the effective launch args.
 func TestLaunch_StoresExplicitFlags(t *testing.T) {

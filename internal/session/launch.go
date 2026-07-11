@@ -89,6 +89,18 @@ func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defa
 // LaunchPolicyDedupExisting, which returns nil silently if the session is
 // already running.
 func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, policies ...LaunchPolicy) error {
+	return launchFresh(client, sess, acc, cfg, "", policies...)
+}
+
+// LaunchFresh starts a new harness conversation with an optional initial
+// instruction. It deliberately bypasses the project-key deduplication guard:
+// callers use it for a new handoff or another explicitly requested fresh
+// session, where an existing tab for the same project is not a substitute.
+func LaunchFresh(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, initialPrompt string) error {
+	return launchFresh(client, sess, acc, cfg, initialPrompt, LaunchPolicyAlwaysNewInstance)
+}
+
+func launchFresh(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, initialPrompt string, policies ...LaunchPolicy) error {
 	formattedTitle := FormatTitle(sess, acc, cfg)
 	policy := LaunchPolicyDedupExisting
 	if len(policies) > 0 {
@@ -116,6 +128,53 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 		launchDebug.Printf("Launch: dedup skipped")
 	}
 
+	// Build the structured fresh invocation before rendering it through the
+	// shared shell-quoting boundary. Resume/fork callers use the same seam.
+	invocation, err := BuildInvocation(sess, acc, cfg.Defaults, harness.InvocationFresh, "", initialPrompt)
+	if err != nil {
+		return fmt.Errorf("building fresh invocation for %q: %w", formattedTitle, err)
+	}
+	return launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, policy)
+}
+
+// LaunchContinuity launches a native resume or fork in a new Kitty tab. The
+// harness adapter owns the exact argument order; this helper owns the same
+// Kitty environment, title, user-vars, placement, and cosmetic color behavior
+// as a normal launch. Continuity deliberately bypasses project-key dedup: a
+// previously indexed conversation may not be live even when another instance
+// of that project is open.
+func LaunchContinuity(
+	client kitty.KittyClient,
+	sess config.Session,
+	acc config.Account,
+	cfg *config.Config,
+	kind harness.InvocationKind,
+	sessionID string,
+	initialPrompt string,
+) error {
+	if kind != harness.InvocationResume && kind != harness.InvocationFork {
+		return fmt.Errorf("launching continuity session: unsupported operation %q", kind)
+	}
+	if cfg == nil {
+		return fmt.Errorf("launching continuity session: configuration is required")
+	}
+	formattedTitle := FormatTitle(sess, acc, cfg)
+	invocation, err := BuildInvocation(sess, acc, cfg.Defaults, kind, sessionID, initialPrompt)
+	if err != nil {
+		return fmt.Errorf("building %s invocation for %q: %w", kind, formattedTitle, err)
+	}
+	return launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, LaunchPolicyAlwaysNewInstance)
+}
+
+// launchInvocation carries the Kitty-facing half shared by normal and
+// continuity launches. The caller must have already built the harness-owned
+// invocation, so this function never reconstructs CLI arguments.
+func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, formattedTitle string, invocation harness.Invocation, policy LaunchPolicy) error {
+	osWindows, err := client.ListWindows()
+	if err != nil {
+		return fmt.Errorf("listing running sessions: %w", err)
+	}
+
 	// Record pre-launch tab IDs for color retry later. We include *every* tab
 	// (managed and unmanaged) so a pre-existing tab whose title coincides with
 	// formattedTitle cannot be misidentified as the newly launched tab and
@@ -136,24 +195,18 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Build env, user vars, and shell command.
-	env := ResolveEnv(sess, acc)
-	args := ResolveArgs(sess, acc, cfg.Defaults)
-	projectDir := config.ExpandTilde(sess.Directory)
 	harnessName := acc.EffectiveHarness()
 	userVars := BuildUserVars(sess, acc, cfg.Defaults)
-
-	shellCmd := buildHarnessShellCommand(harnessName, args, env)
+	shellCmd := RenderInvocation(invocation)
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/zsh"
 	}
-
 	launchOpts := kitty.LaunchOpts{
 		Title:     formattedTitle,
-		Directory: projectDir,
+		Directory: invocation.CWD,
 		Location:  locationArg(loc),
-		Env:       env,
+		Env:       invocation.Environment,
 		UserVars:  userVars,
 		Cmdline:   []string{shell, "-lic", shellCmd},
 	}
@@ -170,9 +223,6 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 	// tab remains prominent even when the tab has a profile color.
 	if color, err := palette.Lookup(acc.Color); err == nil {
 		if colorErr := applyColorWithRetry(client, beforeIDs, formattedTitle, color); colorErr != nil {
-			// Tab color is cosmetic — degrade to a Warn-level log so the
-			// failure is visible in `amx daemon start --debug` output
-			// rather than silently swallowed. The session itself is fine.
 			slog.Warn("applying tab color after launch",
 				"title", formattedTitle,
 				"account", acc.Name,
@@ -182,22 +232,7 @@ func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, c
 			)
 		}
 	}
-
 	return nil
-}
-
-func buildHarnessShellCommand(harnessName, args string, env map[string]string) string {
-	parts := []string{"exec"}
-	if envVar := harness.EnvVar(harnessName); envVar != "" {
-		if envVal, ok := env[envVar]; ok {
-			parts = append(parts, "env", shellQuoteWord(envVar+"="+envVal))
-		}
-	}
-	parts = append(parts, shellQuoteWord(harness.Executable(harnessName)))
-	if args != "" {
-		parts = append(parts, args)
-	}
-	return strings.Join(parts, " ")
 }
 
 func effectiveSessionProfile(sess config.Session, acc config.Account) string {

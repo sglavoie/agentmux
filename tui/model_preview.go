@@ -23,6 +23,12 @@ func (m Model) render() string {
 	var sb strings.Builder
 
 	switch m.mode {
+	case ModePalette:
+		base := renderPaletteBase(m)
+		overlayH := rootBodyHeight(m)
+		sb.WriteString(topCenterOverlay(base, renderPaletteBox(m), m.width, overlayH, true))
+	case ModeWorkspace:
+		sb.WriteString(renderWorkspaceHome(m))
 	case ModePicker:
 		// Picker replaces both header and list.
 		sb.WriteString(renderPicker(m))
@@ -34,6 +40,8 @@ func (m Model) render() string {
 		// Plan search owns its full layout — like ModeSessionSearch, the
 		// dashboard list must not render underneath.
 		sb.WriteString(renderPlanSearch(m))
+	case ModeUnifiedSearch:
+		sb.WriteString(renderUnifiedSearch(m))
 	case ModePlanView:
 		// Plan viewer owns its full layout — like ModeSessionView, the
 		// dashboard list must not render underneath.
@@ -60,7 +68,9 @@ func (m Model) render() string {
 		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
 	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail:
 		var base string
-		if m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker {
+		if workspaceOverlayBase(m) {
+			base = renderWorkspaceHome(m)
+		} else if m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker {
 			base = renderPicker(m)
 		} else {
 			base = renderDashboard(m)
@@ -108,6 +118,23 @@ func (m Model) render() string {
 	}
 
 	return composeRootView(sb.String(), m)
+}
+
+func workspaceOverlayBase(m Model) bool {
+	switch m.mode {
+	case ModeActions:
+		return m.actionsReturnMode == ModeWorkspace
+	case ModeConfirm:
+		return m.confirmReturnMode == ModeWorkspace
+	case ModeConfigPicker:
+		return m.configPickerReturnMode == ModeWorkspace
+	case ModeHelp:
+		return m.helpReturnMode == ModeWorkspace
+	case ModeDetail:
+		return m.detailReturnMode == ModeWorkspace
+	default:
+		return false
+	}
 }
 
 func composeRootView(body string, m Model) string {

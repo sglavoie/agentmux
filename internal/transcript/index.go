@@ -49,6 +49,12 @@ type Index struct {
 	path    string
 	store   *searchstore.Store
 	entries map[string]SessionMeta
+
+	// repo is enabled only after the compatibility import has completed.
+	// Keeping the legacy entries in memory lets an initialization failure use
+	// exactly the same read path as older releases.
+	repo           *Repository
+	degradedReason error
 }
 
 // saveLockedHookForTest lets same-package tests count successful persistence
@@ -66,7 +72,7 @@ type indexFile struct {
 // LoadIndex reads the index from the default IndexPath. A missing file
 // is not an error — it yields an empty, ready-to-populate Index.
 func LoadIndex() (*Index, error) {
-	return LoadIndexAt(IndexPath())
+	return LoadSQLiteIndex(IndexPath(), defaultTranscriptReaders())
 }
 
 // LoadIndexAt reads the index from path. Used by tests and any future
@@ -105,6 +111,14 @@ func (i *Index) Path() string { return i.path }
 
 // Len returns the number of entries currently held in memory.
 func (i *Index) Len() int {
+	if i.UsesSQLite() {
+		entries, err := i.repositoryList(ListFilter{IncludeHidden: true})
+		if err != nil {
+			slog.Debug("transcript.index: SQLite length failed; using compatibility cache", "err", err)
+		} else {
+			return len(entries)
+		}
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return len(i.entries)
@@ -113,6 +127,12 @@ func (i *Index) Len() int {
 // Save serializes the index to disk atomically (write-to-tmp + rename)
 // so a crash mid-write never leaves a half-written JSON file in place.
 func (i *Index) Save() error {
+	// SQLite mutations are committed by Repository methods. Do not rewrite
+	// the compatibility JSON after the cutover: it remains a read-only
+	// rollback source for this release.
+	if i.UsesSQLite() {
+		return nil
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.saveLocked()
@@ -135,6 +155,9 @@ func (i *Index) Save() error {
 // is returned so callers can surface it if desired, but on-disk state
 // is still updated for the profiles that succeeded.
 func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
+	if i.UsesSQLite() {
+		return i.refreshSQLite(cfg, readers)
+	}
 	if cfg == nil {
 		return errors.New("transcript: Refresh requires a non-nil config")
 	}
@@ -244,14 +267,16 @@ func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
 		}
 		if meta.SearchText != "" {
 			if meta.HiddenFromIndex {
-				if err := i.DeleteSearchText(key); err != nil {
+				// This is the legacy refresh path and i.mu is held below, so
+				// bypass the SQLite-aware sidecar facade.
+				if err := i.store.Delete(key); err != nil {
 					slog.Debug("transcript.index: hidden search sidecar cleanup failed",
 						"key", key, "err", err)
 					if firstErr == nil {
 						firstErr = err
 					}
 				}
-			} else if err := i.WriteSearchText(key, meta.SearchText); err != nil {
+			} else if err := i.store.Write(key, meta.SearchText); err != nil {
 				slog.Debug("transcript.index: search sidecar write failed",
 					"key", key, "err", err)
 				if firstErr == nil {
@@ -289,6 +314,9 @@ func discoveredMetaStillFresh(meta SessionMeta) bool {
 // a missing file is not an error). Save is called before returning so
 // callers do not need a separate Save() to persist the deletion.
 func (i *Index) Delete(key string, alsoFile bool) error {
+	if i.UsesSQLite() {
+		return i.deleteSQLite(key, alsoFile)
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
@@ -306,7 +334,8 @@ func (i *Index) Delete(key string, alsoFile bool) error {
 			return fmt.Errorf("removing transcript file %s: %w", entry.Path, err)
 		}
 	}
-	if err := i.DeleteSearchText(key); err != nil {
+	// The legacy path still holds i.mu; do not re-enter the facade here.
+	if err := i.store.Delete(key); err != nil {
 		i.entries[key] = entry
 		return fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err)
 	}
@@ -316,6 +345,14 @@ func (i *Index) Delete(key string, alsoFile bool) error {
 // Get returns a snapshot of one entry by key. The boolean reports
 // whether the entry was found.
 func (i *Index) Get(key string) (SessionMeta, bool) {
+	if i.UsesSQLite() {
+		meta, ok, err := i.repositoryGet(key)
+		if err != nil {
+			slog.Debug("transcript.index: SQLite get failed; using compatibility cache", "key", key, "err", err)
+		} else {
+			return meta, ok
+		}
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	m, ok := i.entries[key]
@@ -326,6 +363,9 @@ func (i *Index) Get(key string) (SessionMeta, bool) {
 // the TUI when the user chooses "remove from index only". A non-existent
 // key returns an error so callers cannot silently lose state.
 func (i *Index) SetHidden(key string, hidden bool) error {
+	if i.UsesSQLite() {
+		return i.setHiddenSQLite(key, hidden)
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	entry, ok := i.entries[key]
@@ -333,7 +373,8 @@ func (i *Index) SetHidden(key string, hidden bool) error {
 		return fmt.Errorf("transcript: no index entry for %q", key)
 	}
 	if hidden {
-		if err := i.DeleteSearchText(key); err != nil {
+		// The legacy path holds i.mu; delete the legacy sidecar directly.
+		if err := i.store.Delete(key); err != nil {
 			return fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err)
 		}
 		entry.SearchText = ""
@@ -361,6 +402,14 @@ type ListFilter struct {
 // List returns a copy of all entries that match the filter, sorted by
 // LastAt descending so the most recent session appears first.
 func (i *Index) List(filter ListFilter) []SessionMeta {
+	if i.UsesSQLite() {
+		entries, err := i.repositoryList(filter)
+		if err != nil {
+			slog.Debug("transcript.index: SQLite list failed; using compatibility cache", "err", err)
+		} else {
+			return entries
+		}
+	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 

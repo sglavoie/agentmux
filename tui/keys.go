@@ -10,6 +10,7 @@ const (
 	keyGG               = "G"
 	keySlash            = "/"
 	keyF                = "f"
+	keyWorktreeFork     = "w" // ModeSessionSearch: confirm an isolated Git worktree fork
 	keyA                = "a"
 	keyO                = "o"
 	keyL                = "l"
@@ -65,8 +66,11 @@ const (
 	keyCtrlB  = "ctrl+b" // move up by one page in scrollable views
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
+	keyWorkspaceLive = "v" // toggles the legacy live-session power view
+	keyPalette       = ":" // opens the global context-aware command palette
 
-	keyTab = "tab"
+	keyTab      = "tab"
+	keyShiftTab = "shift+tab"
 
 	// Numeric chip-removal keys (ModeList only). 1 removes the first chip,
 	// 2 the second, and so on up to 9.

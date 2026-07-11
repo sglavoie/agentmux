@@ -192,6 +192,15 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.SessionArchive.ScanMaxAgeDays == 0 {
 		cfg.Defaults.SessionArchive.ScanMaxAgeDays = cfg.Defaults.SessionArchive.KeepDays
 	}
+	if cfg.Defaults.Activity.KeepDays == 0 {
+		cfg.Defaults.Activity.KeepDays = 30
+	}
+	if cfg.Defaults.Handoff.MaxBytes == 0 {
+		cfg.Defaults.Handoff.MaxBytes = 64 * 1024
+	}
+	if cfg.Defaults.Handoff.RecentMessages == 0 {
+		cfg.Defaults.Handoff.RecentMessages = 12
+	}
 	if cfg.Defaults.Preview.Direction == "" {
 		cfg.Defaults.Preview.Direction = "horizontal"
 	}

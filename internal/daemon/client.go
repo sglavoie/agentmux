@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/activity"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 )
 
@@ -152,6 +153,7 @@ type Health struct {
 	DegradedReason string
 	Build          *buildinfo.Info
 	Metrics        *MetricsSnapshot
+	ActivityWriter *activity.Metrics
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -173,6 +175,7 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		DegradedReason: resp.DegradedReason,
 		Build:          resp.Build,
 		Metrics:        resp.Metrics,
+		ActivityWriter: resp.ActivityWriter,
 	}
 }
 

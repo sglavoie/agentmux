@@ -15,6 +15,8 @@ package daemon
 import (
 	"log/slog"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/activity"
 )
 
 // maxShadowMismatches bounds the per-window mismatch ring kept for export.
@@ -120,6 +122,7 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	}
 
 	notify := false
+	var journalItem *activity.Item
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(req.WindowID)
 	if st.Reducer == nil {
@@ -201,6 +204,16 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 		h.shouldNotifySourceEventLocked(st, n.SourceEventID) {
 		notify = true
 	}
+	// Classify only after the reducer has accepted the normalized event. A
+	// duplicate/reordered/suppressed delivery must never create journal noise,
+	// and the current conversation is now the reducer's authoritative mapping.
+	if identity, ok := st.CurrentConversation(now.Unix()); ok {
+		if item, meaningful := meaningfulActivity(n, req, decision, identity.Harness, identity.SessionID, h.activityBootID, h.eventSeq, now); meaningful {
+			journalItem = &item
+		}
+	} else if item, meaningful := meaningfulActivity(n, req, decision, "", "", h.activityBootID, h.eventSeq, now); meaningful {
+		journalItem = &item
+	}
 
 	// Persist reducer changes with the next render pass. Duplicates and
 	// suppressions leave the durable payload untouched, so only real fact
@@ -218,6 +231,9 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 		}
 	}
 	h.stateMu.Unlock()
+	if journalItem != nil {
+		h.enqueueActivity(*journalItem)
+	}
 
 	switch {
 	case decision == DecisionAcknowledged:

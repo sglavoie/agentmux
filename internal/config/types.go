@@ -1,6 +1,7 @@
 package config
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -52,6 +53,8 @@ type Defaults struct {
 	StaleActiveThreshold int                  `toml:"stale_active_threshold"` // deprecated: use [defaults.watchdog].active; mirrored on load
 	Watchdog             WatchdogConfig       `toml:"watchdog"`               // per-state stale-detection thresholds (seconds)
 	SessionArchive       SessionArchiveConfig `toml:"session_archive"`        // retention policy for the searchable session-transcript index
+	Activity             ActivityConfig       `toml:"activity"`               // retention policy for durable meaningful-activity records
+	Handoff              HandoffConfig        `toml:"handoff"`                // bounded cross-harness context-pack generation
 	Args                 []string             `toml:"args"`                   // preferred shared launch args
 	ClaudeFlags          []string             `toml:"claude_flags"`           // legacy alias for args
 	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // direct dashboard r always confirms; when true, close/actions-overlay restart use modal confirm instead of toast paths
@@ -103,6 +106,21 @@ type SessionArchiveConfig struct {
 	ScanMaxAgeDays int `toml:"scan_max_age_days"` // 0 → fall back to KeepDays; <0 → unlimited (scan everything)
 }
 
+// ActivityConfig controls retention for the durable work journal. A zero value
+// is filled by applyDefaults so configurations written before activity support
+// retain the standard thirty-day history.
+type ActivityConfig struct {
+	KeepDays int `toml:"keep_days"`
+}
+
+// HandoffConfig controls the size and transcript window used when generating
+// local handoff packs. Zero values are filled by applyDefaults so existing
+// configurations keep working without a [defaults.handoff] block.
+type HandoffConfig struct {
+	MaxBytes       int `toml:"max_bytes"`
+	RecentMessages int `toml:"recent_messages"`
+}
+
 // NotificationConfig controls which macOS notifications fire.
 //
 // StopFailure is *bool so the load path can distinguish "user omitted the key"
@@ -149,6 +167,10 @@ type Account struct {
 // deprecated internal type name because much of the codebase still uses it
 // while the user-facing config is moving to `projects`.
 type Session struct {
+	// ID is an optional stable, user-configured identifier for a project. It
+	// intentionally uses omitempty so rendering a legacy configuration does
+	// not introduce id = "" entries.
+	ID          string            `toml:"id,omitempty"`
 	Title       string            `toml:"title"`
 	Directory   string            `toml:"directory"`
 	Profile     string            `toml:"profile"`
@@ -157,6 +179,21 @@ type Session struct {
 	ClaudeFlags []string          `toml:"claude_flags"` // legacy alias for args
 	Env         map[string]string `toml:"env"`
 	Groups      []string          `toml:"groups"`
+}
+
+var projectIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+
+// NormalizeProjectID returns the case-insensitive lookup form for a project
+// ID. Config validation still requires users to write the canonical lowercase
+// form, but callers resolving a selector can use this helper safely.
+func NormalizeProjectID(id string) string {
+	return strings.ToLower(strings.TrimSpace(id))
+}
+
+// ValidProjectID reports whether id is already in its canonical, portable
+// form. IDs are optional, so an empty value is valid.
+func ValidProjectID(id string) bool {
+	return id == "" || (id == NormalizeProjectID(id) && projectIDPattern.MatchString(id))
 }
 
 // HooksConfig is the top-level [hooks] table.

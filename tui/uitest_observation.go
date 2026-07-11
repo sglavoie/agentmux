@@ -40,6 +40,10 @@ func uitestCursor(m Model) int {
 		return m.pickerCursor
 	case ModeConfigPicker:
 		return m.configPickerCursor
+	case ModePalette:
+		return m.paletteCursor
+	case ModeUnifiedSearch:
+		return m.unifiedCursor
 	default:
 		return m.cursor
 	}
@@ -50,6 +54,12 @@ func uitestCursor(m Model) int {
 // values fall back to "unknown" rather than panicking.
 func uitestModeName(mode Mode) string {
 	switch mode {
+	case ModePalette:
+		return "palette"
+	case ModeWorkspace:
+		return "workspace"
+	case ModeUnifiedSearch:
+		return "unified_search"
 	case ModeList:
 		return "list"
 	case ModeSearch:

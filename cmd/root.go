@@ -22,8 +22,8 @@ var dashboardSourceWindowID int
 
 var rootCmd = &cobra.Command{
 	Use:   "amx",
-	Short: "Agent Mux multi-harness session manager for Kitty",
-	Long:  "amx manages Claude Code, Copilot, and other supported harness sessions as Kitty tabs with color-coded profiles and an interactive dashboard.",
+	Short: "Kitty-first multi-harness project workbench",
+	Long:  "amx groups projects, worktrees, conversations, plans, handoffs, search, and durable activity while managing Claude Code, Copilot, and Codex sessions as Kitty tabs.",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		configureLogging(debugEnabled())
 	},
@@ -138,5 +138,5 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, transcriptsCmd, tuiTestCmd)
+	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, planCmd, resortCmd, searchCmd, sessionCmd, transcriptsCmd, tuiTestCmd, workspaceCmd)
 }

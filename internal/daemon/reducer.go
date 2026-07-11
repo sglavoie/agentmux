@@ -1,5 +1,7 @@
 package daemon
 
+import "github.com/sglavoie/agentmux/internal/conversation"
+
 // This file introduces a side-effect-free state reducer. It is deliberately
 // decoupled from the live Handler, StateGuard, WindowState, renderer, and Kitty
 // I/O: it reads no clock (callers pass `now`), touches no globals, and performs
@@ -39,6 +41,56 @@ const (
 type SourceID struct {
 	Kind SourceKind
 	Key  string
+}
+
+// CurrentConversation returns the newest still-live parent harness identity.
+// Only SourceHarness facts can establish it: subagent facts carry a parent
+// session for lifecycle accounting, but do not prove that parent still owns the
+// managed tab. Acknowledged/expired facts are stale, and a persisted source key
+// must exactly agree with its fact session ID so malformed restored state cannot
+// create a live mapping.
+func (r *Reducer) CurrentConversation(now int64) (conversation.Identity, bool) {
+	if r == nil {
+		return conversation.Identity{}, false
+	}
+
+	var current *sourceFact
+	var identity conversation.Identity
+	for _, fact := range r.facts {
+		if fact.source.Kind != SourceHarness || !conversationFactLive(fact, now) {
+			continue
+		}
+		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
+		if !ok || fact.source.Key != candidate.Harness+":"+candidate.SessionID {
+			continue
+		}
+		if current == nil || moreRecent(fact, current) {
+			current = fact
+			identity = candidate
+		}
+	}
+	return identity, current != nil
+}
+
+func conversationFactLive(fact *sourceFact, now int64) bool {
+	if fact == nil || !fact.set || fact.acked {
+		return false
+	}
+	// Keep a clean terminal fact only through the same retention interval used
+	// by Compact. A sticky failure remains current until it is acknowledged or
+	// replaced by a newer parent fact.
+	if fact.terminated && fact.icon != "error" && tombstoneRetentionSeconds > 0 && now-fact.terminalAt >= tombstoneRetentionSeconds {
+		return false
+	}
+	return true
+}
+
+func harnessFromSourceKey(key, sessionID string) string {
+	suffix := ":" + sessionID
+	if sessionID == "" || len(key) <= len(suffix) || key[len(key)-len(suffix):] != suffix {
+		return ""
+	}
+	return key[:len(key)-len(suffix)]
 }
 
 // ASL run phases. A run holds a live loop lease (🔁) from its first non-finished

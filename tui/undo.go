@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -158,11 +160,10 @@ func (m *Model) undoLastCmd() tea.Cmd {
 	}
 
 	sess := entry.snapshot
-	acc := entry.account
 	cfg := m.cfg
 	client := m.client
 	launch := func() tea.Msg {
-		err := session.Launch(client, sess, acc, cfg, session.LaunchPolicyAlwaysNewInstance)
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.Launch, actions.Request{Project: &sess})
 		return actionDoneMsg{err: err}
 	}
 

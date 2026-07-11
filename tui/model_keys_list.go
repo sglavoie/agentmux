@@ -6,6 +6,12 @@ import (
 
 // handleKey dispatches key events by current mode.
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.mode == ModePalette {
+		return m.handlePaletteKey(msg)
+	}
+	if msg.String() == keyPalette && m.paletteCanOpen() {
+		return m.enterPalette(), nil
+	}
 	switch m.mode {
 	case ModeSearch:
 		return m.handleSearchKey(msg)
@@ -25,6 +31,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleSessionSearchKey(msg)
 	case ModePlanSearch:
 		return m.handlePlanSearchKey(msg)
+	case ModeUnifiedSearch:
+		return m.handleUnifiedSearchKey(msg)
 	case ModePlanView:
 		return m.handlePlanViewKey(msg)
 	case ModeSessionView:
@@ -35,6 +43,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleDeleteChoiceKey(msg)
 	case ModeChipPicker:
 		return m.handleChipPickerKey(msg)
+	case ModeWorkspace:
+		return m.handleWorkspaceKey(msg)
 	default:
 		return m.handleListKey(msg)
 	}
@@ -105,15 +115,31 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyY:
-		m.mode = ModeList
+		m.mode = m.confirmReturnMode
+		if m.mode == ModeConfirm {
+			m.mode = ModeList
+		}
+		m.confirmReturnMode = ModeList
 		switch m.confirmAction {
 		case "close":
 			return m, closeCmd(m.client, m.targetSession.TabID)
 		case "restart":
 			return m, restartCmd(m.client, m.targetSession, m.cfg)
+		case "fork worktree":
+			if m.isolatedForkConversation == nil {
+				return m, nil
+			}
+			meta := *m.isolatedForkConversation
+			m.isolatedForkConversation = nil
+			return m, conversationWorktreeForkCmd(m.client, m.cfg, m.transcriptReaders, meta)
 		}
 	case keyN, keyEsc:
-		m.mode = ModeList
+		m.isolatedForkConversation = nil
+		m.mode = m.confirmReturnMode
+		if m.mode == ModeConfirm {
+			m.mode = ModeList
+		}
+		m.confirmReturnMode = ModeList
 	case keyCtrlC, keyQ:
 		return m, tea.Quit
 	}

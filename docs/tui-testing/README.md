@@ -9,6 +9,17 @@ It never launches a live Kitty instance, never talks to a real terminal, and
 never reads or writes the operator's real config or data. Every run is
 deterministic and isolated, so it is safe to run in CI or from an agent.
 
+The repository acceptance gate runs every scenario, including both split-pane
+wide layouts and narrow/short drill-down layouts:
+
+```bash
+just tui-scenarios
+just acceptance
+```
+
+See [`../acceptance.md`](../acceptance.md) for the cross-package workflow
+coverage matrix.
+
 The command is hidden from `amx --help` on purpose: it is a testing tool, not
 part of the normal user workflow.
 
@@ -97,6 +108,11 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `actions` | one session with a very long title | stresses the actions overlay box width |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
 
+Workspace scenarios also use hermetic, scenario-only fixtures: `workspace_empty`,
+`workspace_attention`, `workspace_profiles`, and `workspace_worktrees`. They
+inject an immutable workspace snapshot directly, so their coverage never reads
+an operator's datastore, transcripts, plans, or Git checkout.
+
 The `basic` fixture's list is state/profile-grouped, not globally
 alpha-sorted: the cursor starts on `dotfiles` (personal).
 
@@ -143,7 +159,7 @@ silently selecting nothing.
 
 **Key names** accepted by `key` actions:
 
-- named: `enter`, `esc`, `tab`, `backspace`, `space`, `up`, `down`, `left`,
+- named: `enter`, `esc`, `tab`, `shift+tab`, `backspace`, `space`, `up`, `down`, `left`,
   `right`, `home`, `end`, `pgup`, `pgdown`
 - control chords: `ctrl+<printable>`, e.g. `ctrl+c`
 - any single printable rune, e.g. `j`, `/`, `?`, `a`, `C`
@@ -163,7 +179,8 @@ silently selecting nothing.
 
 **Mode names**: `list`, `search`, `confirm`, `picker`, `config_picker`,
 `help`, `detail`, `actions`, `session_search`, `session_view`,
-`delete_choice`, `chip_picker`, `message_detail`, `plan_search`, `plan_view`.
+`delete_choice`, `chip_picker`, `message_detail`, `plan_search`, `plan_view`,
+`workspace`, `palette`, `unified_search`.
 
 **Kitty `op` names** recorded by the no-op client: `LaunchTab`,
 `LaunchOverlay`, `CloseTab`, `MoveTab`, `SetTabColor`, `SetTabTitle`,
@@ -241,6 +258,20 @@ layout classes this harness targets:
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after pressing `S` |
 | [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | filter-mode list rows truncate to width at a sub-floor terminal after `/` |
 | [`list-preview-narrow-fit.json`](scenarios/list-preview-narrow-fit.json) | `actions` | list+preview split falls back to the plain list below the row-column floor after `p` |
+| [`workspace-empty.json`](scenarios/workspace-empty.json) | `workspace_empty` | default workspace home handles an empty project set |
+| [`workspace-wide-attention.json`](scenarios/workspace-wide-attention.json) | `workspace_attention` | split project/detail panes preserve attention, live, conversation, plan, and activity sections |
+| [`workspace-narrow-drill.json`](scenarios/workspace-narrow-drill.json) | `workspace_attention` | narrow terminals open the same detail ordering with Enter |
+| [`workspace-short-drill.json`](scenarios/workspace-short-drill.json) | `workspace_attention` | short terminals retain a usable full-width drill-down |
+| [`workspace-multi-profile.json`](scenarios/workspace-multi-profile.json) | `workspace_profiles` | project home stays legible with multiple launch profiles |
+| [`workspace-worktrees.json`](scenarios/workspace-worktrees.json) | `workspace_worktrees` | live rows retain their linked-worktree context |
+| [`workspace-activity.json`](scenarios/workspace-activity.json) | `workspace_attention` | durable activity rows navigate to their related live session |
+| [`workspace-unread.json`](scenarios/workspace-unread.json) | `workspace_attention` | unread counts and concise meaningful transitions remain visible |
+| [`workspace-activity-order.json`](scenarios/workspace-activity-order.json) | `workspace_attention` | live urgency remains ahead of durable activity ordering cues |
+| [`palette-narrow.json`](scenarios/palette-narrow.json) | `workspace_attention` | global command palette stays usable on a narrow terminal |
+| [`palette-disabled-action.json`](scenarios/palette-disabled-action.json) | `workspace_attention` | unavailable actions remain visible with a context reason |
+| [`palette-filtering.json`](scenarios/palette-filtering.json) | `workspace_attention` | palette text filtering narrows the action set deterministically |
+| [`palette-parameter-picker.json`](scenarios/palette-parameter-picker.json) | `workspace_profiles` | launch actions reuse the profile picker and selected workspace |
+| [`palette-return-focus.json`](scenarios/palette-return-focus.json) | `workspace_attention` | closing the palette restores the originating workspace detail focus |
 
 Run them all:
 

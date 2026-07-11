@@ -1,6 +1,10 @@
 package daemon
 
-import "github.com/sglavoie/agentmux/internal/buildinfo"
+import (
+	"github.com/sglavoie/agentmux/internal/activity"
+	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/conversation"
+)
 
 // MessageType identifies the kind of IPC request.
 type MessageType string
@@ -95,6 +99,9 @@ type Response struct {
 	// latency, for diagnostics surfaces.
 	Build   *buildinfo.Info  `json:"build,omitempty"`
 	Metrics *MetricsSnapshot `json:"metrics,omitempty"`
+	// ActivityWriter reports the asynchronous work-journal pipeline. A full
+	// queue or SQLite failure is visible here but never changes hook responses.
+	ActivityWriter *activity.Metrics `json:"activity_writer,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial
 	// snapshot+restore before binding the public socket. DegradedReason explains
 	// why it started (or remains) degraded when Ready is false.
@@ -111,6 +118,10 @@ type WindowStateSnapshot struct {
 	LastAction  string `json:"last_action"`
 	LastEventAt int64  `json:"last_event_at"`
 	GuardAction string `json:"guard_action"`
+	// Conversation is derived from live parent-harness reducer facts. It is
+	// absent for identity-less state, preserving the former response shape for
+	// clients that do not use live-conversation continuity.
+	Conversation *conversation.Identity `json:"conversation,omitempty"`
 }
 
 // WindowDebugMetadata is the daemon's per-window export snapshot. The live

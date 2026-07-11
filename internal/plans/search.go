@@ -1,6 +1,7 @@
 package plans
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -39,13 +40,14 @@ type Result struct {
 	Preview string
 }
 
-// Search runs q against idx. Per-plan sidecar read errors are logged at
-// debug level and the plan is dropped from the results rather than
-// aborting the whole query — a vanished sidecar (raced with a pruner)
-// must not crash the picker.
+// Search runs q against idx. The compatibility path tolerates per-plan
+// sidecar read failures; SQLite uses the durable repository search document.
 func Search(idx *Index, q Query) ([]Result, error) {
 	if idx == nil {
 		return nil, errors.New("plans: Search requires a non-nil index")
+	}
+	if idx.UsesSQLite() {
+		return searchSQLite(idx, q)
 	}
 
 	metas := idx.List()
@@ -97,6 +99,56 @@ func Search(idx *Index, q Query) ([]Result, error) {
 		results = append(results, Result{Meta: m, Matches: count, Preview: preview})
 	}
 
+	SortResults(results, q.Sort)
+	return results, nil
+}
+
+// searchSQLite preserves the legacy literal substring count, preview, and
+// stable ordering behavior while reading the durable search corpus. A missing
+// document retains the existing snippet-only fallback; it never rewrites a
+// compatibility sidecar or reinterprets a plan directory during a search.
+func searchSQLite(idx *Index, q Query) ([]Result, error) {
+	repo := idx.repository()
+	if repo == nil {
+		return nil, errors.New("plans: SQLite repository is not enabled")
+	}
+	metas, err := repo.List(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	needle := strings.ToLower(strings.TrimSpace(q.Text))
+	results := make([]Result, 0, len(metas))
+	if needle == "" {
+		for _, meta := range metas {
+			results = append(results, Result{Meta: meta, Preview: meta.Snippet})
+		}
+		SortResults(results, q.Sort)
+		return results, nil
+	}
+	for _, meta := range metas {
+		snippetPreview := ""
+		if meta.Snippet != "" && strings.Contains(strings.ToLower(meta.Snippet), needle) {
+			snippetPreview = meta.Snippet
+		}
+		searchText, found, err := repo.SearchText(context.Background(), PlanKey(meta.DirPath))
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			if snippetPreview != "" {
+				results = append(results, Result{Meta: meta, Matches: 1, Preview: snippetPreview})
+			}
+			continue
+		}
+		count, preview := countMatchesInSearchText(searchText, needle)
+		if count == 0 {
+			continue
+		}
+		if snippetPreview != "" {
+			preview = snippetPreview
+		}
+		results = append(results, Result{Meta: meta, Matches: count, Preview: preview})
+	}
 	SortResults(results, q.Sort)
 	return results, nil
 }

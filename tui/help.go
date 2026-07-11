@@ -32,6 +32,7 @@ var helpSections = []struct {
 		"  }         next attention session + focus tab",
 		"  {         previous attention session + focus tab",
 		"  tab       focus next filter chip",
+		"  v         open/leave the live-session power view",
 		"  esc       clear filter / back out of overlay",
 	}},
 	{"Bracket jump", []string{
@@ -73,9 +74,14 @@ var helpSections = []struct {
 		"  1 – 9     remove filter chip at that position",
 	}},
 	{"App", []string{
+		"  :         open the palette (includes Unified search)",
 		"  ?         show / hide this help",
 		"  d         show session detail (hook event log)",
 		"  S         search past session transcripts",
+		"  H         handoff selected past session to another profile",
+		"  E         edit a handoff pack before launching its target",
+		"  w         fork selected past session in an isolated Git worktree",
+		"  P         search saved plans",
 		"  q         quit",
 		"  ctrl+c    quit",
 	}},

@@ -46,6 +46,15 @@ func validateDefaults(d *Defaults) []string {
 	if d.SessionArchive.ScanMaxAgeDays < -1 {
 		errs = append(errs, "defaults.session_archive.scan_max_age_days must be >= -1")
 	}
+	if d.Activity.KeepDays < 0 {
+		errs = append(errs, "defaults.activity.keep_days must be >= 0")
+	}
+	if d.Handoff.MaxBytes < 0 {
+		errs = append(errs, "defaults.handoff.max_bytes must be >= 0")
+	}
+	if d.Handoff.RecentMessages < 0 {
+		errs = append(errs, "defaults.handoff.recent_messages must be >= 0")
+	}
 	if d.Preview.Direction != "" && !ValidPreviewDirection(d.Preview.Direction) {
 		errs = append(errs, fmt.Sprintf(
 			"invalid defaults.preview.direction %q: must be one of horizontal, vertical",

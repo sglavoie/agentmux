@@ -9,6 +9,12 @@ func (f fakeHarness) DefaultHomeDir() string               { return "/fake/home"
 func (f fakeHarness) PipeModeTokens() []string             { return []string{"--fake"} }
 func (f fakeHarness) HookContract() HookContract           { return fakeHookContract{} }
 func (f fakeHarness) TranscriptsDir(homeDir string) string { return homeDir + "/transcripts" }
+func (f fakeHarness) InvocationCapabilities() InvocationCapabilities {
+	return allNativeInvocationCapabilities
+}
+func (f fakeHarness) BuildInvocation(kind InvocationKind, input InvocationInput) (Invocation, error) {
+	return newInvocation(f, input, withPrompt(append([]string(nil), input.ProfileArgs...), input.InitialPrompt)), nil
+}
 
 type fakeHookContract struct{}
 

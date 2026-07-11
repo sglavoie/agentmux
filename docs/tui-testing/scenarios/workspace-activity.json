@@ -1,0 +1,20 @@
+{
+  "name": "workspace durable activity navigation",
+  "fixture": "workspace_attention",
+  "size": {"width": 120, "height": 30},
+  "actions": [
+    {"type": "key", "key": "tab"},
+    {"type": "key", "key": "j"},
+    {"type": "key", "key": "j"},
+    {"type": "key", "key": "j"},
+    {"type": "key", "key": "j"},
+    {"type": "key", "key": "j"},
+    {"type": "key", "key": "enter"}
+  ],
+  "assertions": [
+    {"type": "mode_equals", "mode": "workspace"},
+    {"type": "contains_text", "text": "Permission requested"},
+    {"type": "kitty_calls", "op": "FocusTab", "count": 1},
+    {"type": "no_layout_issues"}
+  ]
+}

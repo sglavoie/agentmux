@@ -14,7 +14,12 @@ func (i *Index) saveLocked() (retErr error) {
 		if meta.SearchText == "" {
 			continue
 		}
-		if err := i.WriteSearchText(key, meta.SearchText); err != nil {
+		// saveLocked is only used by the legacy path and is called with
+		// i.mu already held. Going through WriteSearchText would re-enter
+		// the SQLite-aware facade, which needs the same mutex to determine
+		// the active backend. Keep legacy persistence direct to its sidecar
+		// store instead.
+		if err := i.store.Write(key, meta.SearchText); err != nil {
 			return err
 		}
 	}

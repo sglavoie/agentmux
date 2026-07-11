@@ -6,13 +6,16 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
+	unifiedsearch "github.com/sglavoie/agentmux/internal/search"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/internal/workspace"
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -65,6 +68,7 @@ type Model struct {
 	// confirm mode
 	confirmAction      string
 	confirmConsequence string
+	confirmReturnMode  Mode
 
 	// picker mode
 	pickerSessions       []config.Session
@@ -89,6 +93,34 @@ type Model struct {
 	// actionsOffset is the first visible rendered action row in the per-row
 	// actions overlay. Reset to 0 whenever the overlay is opened or closed.
 	actionsOffset int
+	// actionsReturnMode preserves the source surface behind the generic row
+	// actions overlay. Its zero value is ModeList for legacy callers.
+	actionsReturnMode Mode
+
+	// command palette state. paletteReturnMode preserves the exact surface
+	// (and its cursor/filter state) that was visible when ':' opened the
+	// palette. Entries are derived on demand from that surface's selection and
+	// the latest workspace projection, so they never retain stale entity
+	// pointers across refreshes.
+	paletteQuery      string
+	paletteCursor     int
+	paletteOffset     int
+	paletteReturnMode Mode
+	paletteMessage    string
+
+	// unified search is the FTS5-backed cross-entity surface opened from the
+	// palette. Its query accepts normal text plus explicit type:/workspace:/
+	// harness:/profile:/from:/to: filter tokens; S and P retain their separate
+	// literal transcript/plan search state below.
+	unifiedQuery      string
+	unifiedResults    []unifiedsearch.Result
+	unifiedCursor     int
+	unifiedOffset     int
+	unifiedInput      bool
+	unifiedLoading    bool
+	unifiedSearchErr  error
+	unifiedSearchSeq  int
+	unifiedReturnMode Mode
 
 	// config picker mode
 	configPickerAccounts   []config.Account
@@ -97,6 +129,17 @@ type Model struct {
 	configPickerPurpose    ConfigPickerPurpose
 	configPickerReturnMode Mode
 	configPickerProjectIdx int
+	// handoffConversation is populated only while the profile picker is
+	// choosing a target for an indexed-conversation handoff.
+	handoffConversation *transcript.SessionMeta
+	// handoffEdit keeps the selected handoff flow explicit while its target
+	// profile is being chosen. H starts the fast flow; E opens the generated
+	// draft in the configured editor before the target harness is launched.
+	handoffEdit bool
+	// isolatedForkConversation is retained only while the explicit worktree
+	// fork confirmation is visible. Unlike the ordinary in-place fork, this
+	// path creates durable Git state and therefore always asks first.
+	isolatedForkConversation *transcript.SessionMeta
 
 	// picker launch overrides: project index -> profile name
 	pickerProfileOverride map[int]string
@@ -105,6 +148,11 @@ type Model struct {
 	// Empty when the daemon is unreachable; treated as "Active" by stateGroup.
 	lastActivity  map[int]time.Time
 	idleThreshold time.Duration
+	// daemonStates is the raw state-query result captured with the live Kitty
+	// list. The workspace projection consumes it asynchronously after each
+	// refresh; list rendering continues to use the state already applied to
+	// sessions above.
+	daemonStates map[int]daemon.WindowStateSnapshot
 
 	// watchdog snapshot: window_id → last sweep-eligible action plus the
 	// resolved threshold for that window. Populated alongside lastActivity
@@ -153,15 +201,17 @@ type Model struct {
 
 	// helpOffset is the first visible line index in the scrollable help
 	// overlay (ModeHelp). Reset to 0 whenever the overlay is opened or closed.
-	helpOffset int
+	helpOffset     int
+	helpReturnMode Mode
 
 	// detail pane state (ModeDetail). Fields are zeroed when the pane is
 	// closed so the placeholder render reads as a fresh state.
-	detailWindowID int                   // 0 when pane is closed
-	detailEvents   []daemon.SessionEvent // events from the daemon for detailWindowID
-	detailScroll   int                   // top row index for the scrollable view
-	detailLoading  bool                  // true while the daemon query is in flight
-	detailErr      error                 // last error from the daemon query
+	detailWindowID   int                   // 0 when pane is closed
+	detailEvents     []daemon.SessionEvent // events from the daemon for detailWindowID
+	detailScroll     int                   // top row index for the scrollable view
+	detailLoading    bool                  // true while the daemon query is in flight
+	detailErr        error                 // last error from the daemon query
+	detailReturnMode Mode
 
 	// timeline sub-view controls (within ModeDetail). All five are zeroed by exitDetailMode.
 	detailViewTimeline   bool
@@ -177,8 +227,9 @@ type Model struct {
 	transcriptReaders map[string]transcript.Reader
 
 	// background warm-up state for ModeSessionSearch. The startup cache load
-	// reads transcripts.json and populates sessionResults; the warm refresh
-	// then updates the same index without blocking the dashboard.
+	// activates the SQLite transcript facade (falling back to transcripts.json
+	// when needed) and populates sessionResults; the warm refresh then updates
+	// the same index without blocking the dashboard.
 	sessionCacheLoadInFlight bool
 	sessionRefreshInFlight   bool
 
@@ -292,17 +343,54 @@ type Model struct {
 	planViewerLoading    bool
 	planViewerLoadErr    error
 	planViewerLoadSeq    int
+
+	// workspaceSnapshot is the immutable, rendering-ready projection prepared
+	// in the background. Session 11 consumes it for the workspace-home view;
+	// the legacy live list remains the active renderer in this session.
+	workspaceSnapshot      workspace.Snapshot
+	workspaceCursor        int
+	workspaceFocus         workspaceFocus
+	workspaceDrillDown     bool
+	workspaceDetailCursor  int
+	workspaceProjectOffset int
+	workspaceDetailOffset  int
+	// workspaceConversationMeta retains the complete indexed metadata needed
+	// for a workspace conversation's smart-continue action. The rendering
+	// snapshot intentionally exposes only a safe display subset.
+	workspaceConversationMeta map[string]transcript.SessionMeta
+	workspaceProjectionSeq    int
+	workspaceLoading          bool
+	workspaceLoadErr          error
+	// workspaceProjectionDisabled keeps deterministic in-process UI fixtures
+	// from opening the operator's SQLite/index files. Production models leave
+	// it false; tests inject completed projection messages directly.
+	workspaceProjectionDisabled bool
+	// workspacePlansIndex is deliberately separate from plansIndex. The
+	// projection needs linked-plan metadata before the user enters plan search,
+	// but preloading it must not change the legacy P-mode lifecycle.
+	workspacePlansIndex *plans.Index
+	// workspaceActivityMarker owns read-marker persistence for automatic opens
+	// and palette actions. Tests inject a hermetic recorder; production lazily
+	// opens the default datastore for each short mutation.
+	workspaceActivityMarker actions.ActivityMarker
 }
 
 // NewModel creates a dashboard model.
 func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
-	return NewModelFromWindow(cfg, client, 0)
+	// NewModel remains the compatibility constructor used by embedders which
+	// explicitly want the historic running-session list. The interactive app
+	// uses NewModelFromWindow below and starts at the project workspace home.
+	return newModel(cfg, client, 0, ModeList)
 }
 
 // NewModelFromWindow creates a dashboard model that initially selects the
 // running session in the Kitty tab containing sourceWindowID. A zero or
 // unmapped ID leaves the dashboard's normal initial selection unchanged.
 func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) Model {
+	return newModel(cfg, client, sourceWindowID, ModeWorkspace)
+}
+
+func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, initialMode Mode) Model {
 	interval := time.Duration(cfg.Defaults.RefreshInterval) * time.Second
 	if interval <= 0 {
 		interval = 2 * time.Second
@@ -335,6 +423,7 @@ func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWind
 		deprecations:          cfg.Deprecations,
 		messageDetailIdx:      -1,
 		initialSourceWindowID: sourceWindowID,
+		mode:                  initialMode,
 	}
 }
 
@@ -370,6 +459,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionsMsg:
 		return m.handleSessionsMsg(msg)
+
+	case workspaceProjectionMsg:
+		return m.handleWorkspaceProjectionMsg(msg)
 
 	case activeLoopsMsg:
 		return m.handleActiveLoopsMsg(msg)
@@ -432,6 +524,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case planSearchDoneMsg:
 		return m.handlePlanSearchDone(msg)
+
+	case unifiedSearchDebounceMsg:
+		return m.handleUnifiedSearchDebounce(msg)
+
+	case unifiedSearchDoneMsg:
+		return m.handleUnifiedSearchDone(msg)
 
 	case planEditorErrMsg:
 		return m.handlePlanEditorErr(msg)

@@ -16,6 +16,7 @@ package tui
 // the model.
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -26,6 +27,16 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
+
+type uitestActivityMarker struct{}
+
+func (uitestActivityMarker) MarkWorkspaceRead(context.Context, string, string, time.Time) (bool, error) {
+	return true, nil
+}
+
+func (uitestActivityMarker) MarkAllWorkspacesRead(context.Context, string) (int64, error) {
+	return 1, nil
+}
 
 const (
 	// uitestDrainMaxSteps bounds how many commands a single action may drain.
@@ -56,6 +67,11 @@ func NewUITestDriver(cfg *config.Config, client kitty.KittyClient, size UITestSi
 // NewUITestDriverModel wraps an existing Model — useful when a test has already
 // loaded sessions or otherwise prepared state — and applies the initial size.
 func NewUITestDriverModel(m Model, size UITestSize) *UITestDriver {
+	// Fixture drivers must remain hermetic: their direct sessionsMsg updates
+	// exercise the legacy renderer, while workspace projection tests inject a
+	// completed message explicitly instead of opening real indexes or SQLite.
+	m.workspaceProjectionDisabled = true
+	m.workspaceActivityMarker = uitestActivityMarker{}
 	d := &UITestDriver{model: m}
 	d.applySize(size)
 	return d
@@ -79,6 +95,13 @@ func NewUITestFixtureDriver(fx UITestFixture, size UITestSize) (*UITestDriver, *
 	client := NewUITestKittyClient(fx.Windows)
 	d := NewUITestDriver(fx.Config, client, size)
 	d.loadSessionsFrom(client, fx.Config)
+	if fx.WorkspaceHome {
+		d.model.mode = ModeWorkspace
+		d.model.workspaceSnapshot = fx.WorkspaceSnapshot
+		d.model.workspaceCursor = 0
+		d.model.workspaceFocus = workspaceFocusProjects
+		d.model.clampWorkspaceSelection()
+	}
 	return d, client
 }
 

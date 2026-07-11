@@ -70,7 +70,7 @@ func renderSessionSearch(m Model) string {
 	case m.sessionQuery != "":
 		queryBar = styleSearch.Render("/") + m.sessionQuery
 	default:
-		queryBar = styleDim.Render("press / to search transcript content")
+		queryBar = styleDim.Render("press / to search · enter view · c continue · f fork · w worktree fork · H handoff · E edit handoff")
 	}
 	sb.WriteString(clampSearchLine(queryBar, m.width))
 	sb.WriteByte('\n')

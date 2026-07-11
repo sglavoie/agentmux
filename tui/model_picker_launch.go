@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -22,7 +24,10 @@ func (m Model) restartWithAccountCmd(acc config.Account) tea.Cmd {
 				msg = actionDoneMsg{err: fmt.Errorf("panic in restartWithAccount: %v", r)}
 			}
 		}()
-		return actionDoneMsg{err: session.RestartWithAccountTemplate(m.client, m.targetSession, sess, acc, m.cfg)}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Restart, actions.Request{
+			Session: &m.targetSession, Project: &sess, Parameters: map[string]string{"profile": acc.Name}, Confirmed: true,
+		})
+		return actionDoneMsg{err: err}
 	}
 }
 
@@ -58,19 +63,11 @@ func (m *Model) launchBatchCmd(todo []queuedLaunch, quitOnSuccess bool) tea.Cmd 
 	}
 
 	launchCmds := make([]tea.Cmd, 0, total)
-	accounts := m.cfg.Accounts
-	client := m.client
-	cfg := m.cfg
 	for _, q := range todo {
 		sess := q.sess
 		title := q.title
 		launchCmds = append(launchCmds, func() tea.Msg {
-			acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
-			if !ok {
-				err := fmt.Errorf("no matching account for profile %q", sess.EffectiveProfile())
-				return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
-			}
-			err := session.Launch(client, sess, acc, cfg, session.LaunchPolicyAlwaysNewInstance)
+			_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.Launch, actions.Request{Project: &sess})
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 		})
 	}
@@ -154,15 +151,9 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 
 // pickerOpenCmd opens the given session's directory in a plain shell tab.
 func pickerOpenCmd(m Model, sess config.Session) tea.Cmd {
-	accounts := m.cfg.Accounts
-	client := m.client
-	cfg := m.cfg
 	return func() tea.Msg {
-		acc, ok := findAccountByName(accounts, sess.EffectiveProfile())
-		if !ok {
-			return pickerOpenDoneMsg{err: fmt.Errorf("no matching account for profile %q", sess.EffectiveProfile())}
-		}
-		return pickerOpenDoneMsg{err: session.OpenDirectory(client, sess, acc, cfg)}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenDirectory, actions.Request{Project: &sess})
+		return pickerOpenDoneMsg{err: err}
 	}
 }
 

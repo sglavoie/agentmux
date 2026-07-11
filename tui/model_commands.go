@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -8,14 +9,21 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 var spawnDaemonDetached = daemon.SpawnDetached
+
+// sharedActionRegistry is intentionally package-level and stateless.  It
+// gives direct keyboard paths the same handlers as the actions overlay and
+// future CLI/palette callers without coupling the registry to Bubble Tea.
+var sharedActionRegistry = actions.DefaultRegistry()
 
 // daemonRequest is a narrow seam around the IPC client so fetch and clear
 // behavior can be tested without connecting to an operator's daemon.
@@ -105,6 +113,7 @@ func initialFetchCmd(client kitty.KittyClient, cfg *config.Config, sortMode stri
 			sessions:       session.SortRunning(sessions, sortMode),
 			activity:       activity,
 			watchdog:       watchdog,
+			states:         states,
 			selectionTabID: sourceTabID,
 			selectionToken: selectionToken,
 		}
@@ -174,34 +183,69 @@ func applyDaemonStates(sessions []session.RunningSession, states map[int]daemon.
 // restarting; the next refresh converges the state.
 func clearStatusCmd(_ kitty.KittyClient, s session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		_, _ = daemonRequest(daemon.Request{
-			Type:         daemon.TypeStateUpdate,
-			Action:       "user_clear",
-			WindowID:     s.WindowID,
-			SessionTitle: s.Base,
-		})
-		return actionDoneMsg{}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Daemon: daemonRequest}, actions.ClearStatus, actions.Request{Session: &s})
+		return actionDoneMsg{err: err}
 	}
 }
 
 // focusCmd focuses a tab by ID and returns focusDoneMsg.
 func focusCmd(client kitty.KittyClient, tabID int) tea.Cmd {
 	return func() tea.Msg {
-		return focusDoneMsg{err: client.FocusTab(kitty.MatchTabByID(tabID))}
+		target := session.RunningSession{TabID: tabID}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.Focus, actions.Request{Session: &target})
+		return focusDoneMsg{err: err}
 	}
 }
 
 // closeCmd closes a tab by ID and returns actionDoneMsg.
 func closeCmd(client kitty.KittyClient, tabID int) tea.Cmd {
 	return func() tea.Msg {
-		return actionDoneMsg{err: session.Close(client, tabID)}
+		target := session.RunningSession{TabID: tabID}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.Close, actions.Request{Session: &target, Confirmed: true})
+		return actionDoneMsg{err: err}
 	}
 }
 
 // restartCmd closes and relaunches a session and returns actionDoneMsg.
 func restartCmd(client kitty.KittyClient, running session.RunningSession, cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		return actionDoneMsg{err: session.Restart(client, running, cfg)}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: client, Config: cfg}, actions.Restart, actions.Request{Session: &running, Confirmed: true})
+		return actionDoneMsg{err: err}
+	}
+}
+
+// conversationActionCmd runs an indexed-conversation action away from the UI
+// loop. Continue performs the exact-live lookup in the shared action registry;
+// fork validates and launches only a native branch. Both preserve the legacy
+// session-search screen rather than overloading Enter's transcript viewer.
+func conversationActionCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
+	return func() tea.Msg {
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
+			Kitty: client, Config: cfg, Readers: readers, Daemon: daemonRequest,
+		}, actionID, actions.Request{Conversation: &meta})
+		return actionDoneMsg{err: err}
+	}
+}
+
+func conversationWorktreeForkCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, meta transcript.SessionMeta) tea.Cmd {
+	return func() tea.Msg {
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
+			Kitty: client, Config: cfg, Readers: readers, Daemon: daemonRequest,
+		}, actions.ForkWorktree, actions.Request{Conversation: &meta, Confirmed: true})
+		return actionDoneMsg{err: err}
+	}
+}
+
+func conversationHandoffCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, meta transcript.SessionMeta, profile string, edit bool) tea.Cmd {
+	return func() tea.Msg {
+		parameters := map[string]string{"profile": profile}
+		if edit {
+			parameters["edit"] = "true"
+		}
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
+			Kitty: client, Config: cfg, Readers: readers, Daemon: daemonRequest,
+		}, actions.Handoff, actions.Request{Conversation: &meta, Parameters: parameters})
+		return actionDoneMsg{err: err}
 	}
 }
 

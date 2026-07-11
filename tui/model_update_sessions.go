@@ -21,6 +21,7 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	}
 	m.lastActivity = msg.activity
 	m.watchdog = msg.watchdog
+	m.daemonStates = msg.states
 	m.sessions = msg.sessions
 	m.recordTransitions()
 	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
@@ -40,7 +41,7 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	}
 	clampListOffset(&m)
 	scrollListToCursor(&m)
-	return m, nil
+	return m, m.dispatchWorkspaceProjection()
 }
 
 // handleActiveLoopsMsg stores the latest active-loop discovery result. Older
@@ -168,7 +169,7 @@ func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Mode
 	}
 	m.transcriptIndex = msg.idx
 	m.transcriptReaders = msg.readers
-	m.sessionRefreshErr = nil
+	m.sessionRefreshErr = msg.degradedErr
 
 	var cmds []tea.Cmd
 	publishCachedResults := msg.seq == m.sessionSearchSeq && sessionQueryIsEmpty(m.currentSessionQuery())

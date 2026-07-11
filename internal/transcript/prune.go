@@ -19,6 +19,9 @@ func Prune(idx *Index, cfg *config.Config, now time.Time) (int, error) {
 	if idx == nil {
 		return 0, errors.New("transcript: Prune requires a non-nil index")
 	}
+	if idx.UsesSQLite() {
+		return idx.pruneSQLite(cfg, now)
+	}
 	if cfg == nil {
 		return 0, errors.New("transcript: Prune requires a non-nil config")
 	}
@@ -41,7 +44,9 @@ func Prune(idx *Index, cfg *config.Config, now time.Time) (int, error) {
 		}
 		meta.HiddenFromIndex = true
 		idx.entries[key] = meta
-		if err := idx.DeleteSearchText(key); err != nil {
+		// Prune's legacy branch holds idx.mu, so do not call the
+		// SQLite-aware facade (which also inspects that mutex).
+		if err := idx.store.Delete(key); err != nil {
 			return hidden, err
 		}
 		hidden++

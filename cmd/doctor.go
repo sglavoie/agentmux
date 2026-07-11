@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/activity"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
@@ -26,14 +29,22 @@ const doctorReportSchemaVersion = 1
 const exitHealthFailure = 2
 
 var (
-	newDoctorDaemonClient = func() daemonExportClient { return daemon.NewClient() }
-	newDoctorKitty        = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
-	doctorLoadConfig      = loadRunnableConfig
-	doctorExecutable      = os.Executable
-	doctorSocketPath      = daemon.SocketPath
-	doctorStat            = os.Stat
-	doctorNow             = time.Now
-	doctorCLIBuild        = buildinfo.Current
+	newDoctorDaemonClient  = func() daemonExportClient { return daemon.NewClient() }
+	newDoctorKitty         = func() kittyWindowLister { return kitty.NewClient(kitty.NewRealRunner()) }
+	doctorLoadConfig       = loadRunnableConfig
+	doctorExecutable       = os.Executable
+	doctorSocketPath       = daemon.SocketPath
+	doctorStat             = os.Stat
+	doctorNow              = time.Now
+	doctorCLIBuild         = buildinfo.Current
+	doctorInspectDatastore = func(ctx context.Context) (datastore.Status, error) {
+		store, err := datastore.Open(ctx)
+		if err != nil {
+			return datastore.Status{}, err
+		}
+		defer func() { _ = store.Close() }()
+		return store.Inspect(ctx)
+	}
 )
 
 var (
@@ -46,6 +57,7 @@ type doctorReport struct {
 	SchemaVersion int                `json:"schema_version"`
 	GeneratedAt   int64              `json:"generated_at"`
 	Daemon        doctorDaemonStatus `json:"daemon"`
+	Datastore     *datastore.Status  `json:"datastore,omitempty"`
 	CLIBuild      buildinfo.Info     `json:"cli_build"`
 	Findings      []doctorFinding    `json:"findings"`
 	// Healthy is true when no failure-severity finding is present; warnings
@@ -61,6 +73,7 @@ type doctorDaemonStatus struct {
 	UptimeSeconds  int64                   `json:"uptime_seconds,omitempty"`
 	Build          *buildinfo.Info         `json:"build,omitempty"`
 	Metrics        *daemon.MetricsSnapshot `json:"metrics,omitempty"`
+	ActivityWriter *activity.Metrics       `json:"activity_writer,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -115,6 +128,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		UptimeSeconds:  int64(health.Uptime / time.Second),
 		Build:          health.Build,
 		Metrics:        health.Metrics,
+		ActivityWriter: health.ActivityWriter,
 	}
 	if health.Alive {
 		if _, err := fmt.Fprintf(textOut, "daemon: running (pid %d, uptime %s)\n", health.PID, health.Uptime.Round(time.Second)); err != nil {
@@ -132,6 +146,57 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 
 	if err := writeDoctorSocketStatus(textOut, reportIssue("socket")); err != nil {
 		return err
+	}
+
+	datastoreStatus, datastoreErr := doctorInspectDatastore(commandContext(cmd))
+	if datastoreErr != nil {
+		if _, err := fmt.Fprintf(textOut, "datastore: unavailable (%s)\n", datastoreErr); err != nil {
+			return err
+		}
+		addFinding(severityFailure, checkDatastoreIntegrity, "datastore is unavailable: %s", datastoreErr)
+	} else {
+		report.Datastore = &datastoreStatus
+		if _, err := fmt.Fprintf(textOut, "datastore: schema %d/%d, integrity %s, imports %d\n",
+			datastoreStatus.SchemaVersion, datastoreStatus.CurrentSchemaVersion,
+			datastoreStatus.Integrity, len(datastoreStatus.Imports)); err != nil {
+			return err
+		}
+		if !datastoreStatus.MigrationCurrent {
+			addFinding(severityFailure, checkDatastoreMigration,
+				"database schema is %d; this binary requires %d",
+				datastoreStatus.SchemaVersion, datastoreStatus.CurrentSchemaVersion)
+		}
+		if datastoreStatus.Integrity != "ok" || datastoreStatus.ForeignKeyViolations != 0 {
+			addFinding(severityFailure, checkDatastoreIntegrity,
+				"quick_check=%q, foreign-key violations=%d",
+				datastoreStatus.Integrity, datastoreStatus.ForeignKeyViolations)
+		}
+		if !datastoreStatus.Search.Fresh {
+			addFinding(severityFailure, checkFTSFreshness,
+				"search documents=%d, FTS rows=%d, missing=%v, integrity=%q",
+				datastoreStatus.Search.DocumentCount, datastoreStatus.Search.FTSRowCount,
+				datastoreStatus.Search.MissingDocuments, datastoreStatus.Search.Integrity)
+		}
+		if !datastoreStatus.SecurePermissions {
+			addFinding(severityFailure, checkDatastorePermissions,
+				"insecure datastore artifacts: %s", strings.Join(datastoreStatus.PermissionIssues, "; "))
+		}
+	}
+
+	if health.Alive {
+		switch writer := health.ActivityWriter; {
+		case writer == nil:
+			addFinding(severityWarning, checkActivityWriter, "daemon reports no activity-writer health")
+		case writer.Degraded || writer.Dropped > 0 || writer.WriteFailures > 0:
+			addFinding(severityFailure, checkActivityWriter,
+				"degraded=%t, queued=%d, persisted=%d, dropped=%d, write failures=%d: %s",
+				writer.Degraded, writer.Queued, writer.Persisted, writer.Dropped,
+				writer.WriteFailures, writer.LastError)
+		default:
+			if _, err := fmt.Fprintf(textOut, "activity writer: healthy (queued %d, persisted %d)\n", writer.Queued, writer.Persisted); err != nil {
+				return err
+			}
+		}
 	}
 
 	var (

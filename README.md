@@ -1,10 +1,11 @@
 # Agent Mux
 
-Kitty-based session manager for agent harnesses such as **Claude Code**,
-**GitHub Copilot CLI**, and **OpenAI Codex**. It launches projects as Kitty
-tabs, keeps per-profile isolated homes (`CLAUDE_CONFIG_DIR`, `COPILOT_HOME`,
-`CODEX_HOME`), and uses an always-on local daemon to own durable tab-state
-rendering. Harness hooks are thin, fire-and-forget event clients.
+Kitty-first project workbench for **Claude Code**, **GitHub Copilot CLI**, and
+**OpenAI Codex**. It groups projects, worktrees, conversations, plans,
+handoffs, search, and activity; launches work as Kitty tabs; keeps per-profile
+isolated homes (`CLAUDE_CONFIG_DIR`, `COPILOT_HOME`, `CODEX_HOME`); and uses an
+always-on local daemon to own durable tab-state rendering. Harness hooks are
+thin, fire-and-forget event clients.
 
 The binary is **`amx`**.
 
@@ -102,6 +103,41 @@ remove or override it if you prefer a different trust flow.
 
 ## Usage
 
+### Project workbench and continuity
+
+The default TUI opens on a project-centric workspace home. It groups configured
+launch variants, linked Git worktrees, live Kitty tabs, indexed conversations,
+explicitly linked plans, and durable meaningful activity. `:` opens the global
+context-aware command palette, `/` opens unified full-text search, and `v`
+switches to the legacy live-session power view.
+
+The same workflows are scriptable. Machine-readable commands use one
+`{"schema_version":1,"data":...}` success envelope; failures use a structured
+`error` envelope and ambiguous selectors return candidates instead of guessing.
+
+```bash
+amx workspace list --json
+amx workspace discover
+amx workspace adopt <candidate> --profile work
+amx workspace adopt <candidate> --profile work --yes
+
+amx session continue codex <session-id>
+amx session fork claude <session-id>
+amx session fork-worktree codex <session-id> --yes
+amx session handoff claude:<session-id> --profile codex-work
+
+amx plan link <plan-path-or-unique-name> <workspace>
+amx plan unlink <plan-path-or-unique-name> <workspace>
+amx search "migration fallback" --type conversation --type plan
+```
+
+`session continue` focuses the exact live Kitty owner when one exists and
+otherwise resumes the closed conversation. Native forks are used for Claude
+and Codex. Copilot forks use a portable handoff because Copilot does not expose
+native fork semantics. Worktree forks create a tracked isolated Git worktree
+and never copy uncommitted changes unless `--allow-dirty` is explicitly
+confirmed.
+
 ### Dashboard
 
 ```bash
@@ -187,16 +223,15 @@ focusing the existing tab.
 Press `S` from the dashboard to open the past-session search across every
 configured profile and project. Press `s` from the dashboard or launcher to
 open the same search filtered to the highlighted project. During dashboard
-startup, amx loads the cached transcript index in the background and then
+startup, amx loads the SQLite conversation index in the background and then
 starts a slower scan of each profile's transcript directory (Claude
 `~/.claude/projects`, Copilot `~/.copilot/session-state`, Codex
 `~/.codex/sessions`). Opening past-session search usually shows the warmed
 cache immediately; while a scan is still running, existing rows stay visible
-and the header shows the scan status. Session metadata is stored at
-`~/.local/share/agent-mux/transcripts.json`; searchable transcript text is
-stored in per-session sidecars under
-`~/.local/share/agent-mux/transcripts.search/`. The daemon still never loads
-the transcript index or search sidecars.
+and the header shows the scan status. Active metadata and search documents live
+in `~/.local/share/agent-mux/agent-mux.db`. The former `transcripts.json` and
+`transcripts.search/` files remain untouched rollback inputs for this
+compatibility release; the daemon never loads them on its request path.
 
 When multiple configured profiles point at the same harness transcript home,
 amx scans that home once and stores one metadata row per physical transcript.
@@ -220,17 +255,28 @@ exact launch profile.
 Maintenance commands:
 
 ```bash
+amx index status
+amx index status --json
+amx index rebuild
 amx transcripts status
 amx transcripts compact
 amx transcripts rebuild --all
 ```
 
-`status` reports metadata and sidecar sizes, visible/hidden entry counts,
-profile membership counts, shared-profile entry counts, and missing sidecars.
-`compact` migrates legacy inline `search_text` fields into sidecars and rewrites
-`transcripts.json` as metadata-only JSON. `rebuild --all` deletes and rebuilds
-the sidecar store from configured transcript directories, temporarily disabling
-the scan-age cutoff for that pass.
+`index status` reports database integrity, schema/migration and compatibility
+import state, FTS freshness, secure filesystem modes, entity counts, and the
+running daemon's activity-writer health. `index rebuild` refreshes only derived
+conversation, plan, project-search, activity-search, and discovery projections.
+It fingerprints explicit plan links, handoff metadata, activity/read history,
+and managed-worktree relationships before and after the rebuild and fails if
+any protected state changes. The `transcripts` commands remain compatibility
+tools for the older transcript-only projection.
+
+Legacy JSON indexes and search sidecars are retained for one compatibility
+release. They can be removed later only after every supported prior version can
+upgrade directly, field experience shows SQLite fallback is no longer needed,
+and a documented database backup/export path exists. `amx index rebuild` never
+deletes them.
 
 Retention is controlled by `[defaults.session_archive] keep_days` (default
 30). Refresh and prune operations hide index entries older than `keep_days`;
@@ -650,7 +696,14 @@ The tab title is prefixed with an icon based on the latest hook event:
 ```bash
 just build
 just test
+just acceptance
+just check
 ```
+
+`just acceptance` runs the full Go suite, race-sensitive datastore/daemon
+tests, `go vet`, and every committed TUI scenario. `just check` adds the
+repository linter and is the final local/CI gate. The end-to-end coverage map is
+documented in [`docs/acceptance.md`](docs/acceptance.md).
 
 ### TUI layout regression harness
 
@@ -668,9 +721,13 @@ amx tui-test run docs/tui-testing/scenarios/*.json
 
 ## Troubleshooting
 
-- **Icons or hooks look wrong**: run `amx doctor` first. It checks daemon
+- **Icons, hooks, or indexed data look wrong**: run `amx doctor` first. It checks daemon
   reachability and binary freshness, `kitten @ ls`, hooks for every configured
-  profile, renderer drift, known Kitty sockets, and recent suppression reasons.
+  profile, renderer drift, known Kitty sockets, recent suppression reasons,
+  SQLite integrity/migrations/imports/FTS freshness, private file modes, and
+  activity-writer health. Use `amx index status` for the index-only view and
+  `amx index rebuild` to refresh derived data without deleting rollback files
+  or durable links/history.
   `amx doctor --json` emits a structured report; `--strict` also evaluates the
   correctness invariants (reducer/renderer agreement, ASL visibility, subagent
   visibility, render-generation drift, queue saturation, build identity) and

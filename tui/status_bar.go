@@ -104,6 +104,10 @@ func modeErrorStatus(m Model) (statusMessage, bool) {
 		if m.planRefreshErr != nil {
 			return statusMessage{Text: "Refresh error: " + m.planRefreshErr.Error(), Severity: statusError}, true
 		}
+	case ModeUnifiedSearch:
+		if m.unifiedSearchErr != nil {
+			return statusMessage{Text: "Search error: " + m.unifiedSearchErr.Error(), Severity: statusError}, true
+		}
 	case ModePlanView:
 		if m.planViewerLoadErr != nil {
 			return statusMessage{Text: "Read error: " + m.planViewerLoadErr.Error(), Severity: statusError}, true
@@ -132,6 +136,19 @@ func hookHealthDegraded(m Model) bool {
 
 func fallbackStatusText(m Model) string {
 	switch m.mode {
+	case ModePalette:
+		if strings.TrimSpace(m.paletteQuery) == "" {
+			return "Command palette"
+		}
+		return "Command palette: " + m.paletteQuery
+	case ModeWorkspace:
+		if m.workspaceLoading {
+			return "Workspaces: loading"
+		}
+		if m.workspaceLoadErr != nil {
+			return "Workspaces unavailable"
+		}
+		return fmt.Sprintf("Workspaces: %d project%s", len(m.workspaceSnapshot.Workspaces), plural(len(m.workspaceSnapshot.Workspaces)))
 	case ModeSearch:
 		if strings.TrimSpace(m.filterText) != "" {
 			return "Filter sessions: /" + m.filterText
@@ -181,6 +198,11 @@ func fallbackStatusText(m Model) string {
 		}
 		n := len(m.planResults)
 		return fmt.Sprintf("Plans: %d result%s", n, plural(n))
+	case ModeUnifiedSearch:
+		if m.unifiedLoading {
+			return "Unified Search: searching"
+		}
+		return fmt.Sprintf("Unified Search: %d result%s", len(m.unifiedResults), plural(len(m.unifiedResults)))
 	case ModePlanView:
 		return planViewStatusText(m)
 	default:

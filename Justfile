@@ -20,12 +20,23 @@ test:
 vet:
     go vet ./...
 
+# Run the concurrency-sensitive persistence and daemon suites under the race detector.
+race-core:
+    go test -race ./internal/datastore ./internal/daemon
+
+# Run every committed narrow/wide TUI acceptance scenario in isolation.
+tui-scenarios:
+    go run . tui-test run docs/tui-testing/scenarios/*.json
+
+# Product acceptance without the optional linter dependency.
+acceptance: test race-core vet tui-scenarios
+
 # Run linter
 lint:
     golangci-lint run
 
-# Run full check suite (test + vet + lint)
-check: test vet lint
+# Run the full repository gate.
+check: acceptance lint
 
 # Install binary, Kitty config, and a starter app config if missing.
 # The binary is staged beside the destination and renamed into place so the

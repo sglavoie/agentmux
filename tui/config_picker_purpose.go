@@ -9,6 +9,7 @@ const (
 	ConfigPickerRestartProfile
 	ConfigPickerLauncherOverride
 	ConfigPickerDashboardLaunch
+	ConfigPickerHandoff
 )
 
 func (m Model) activeConfigPickerPurpose() ConfigPickerPurpose {
@@ -29,6 +30,8 @@ func (p ConfigPickerPurpose) header() string {
 		return "Launch profile"
 	case ConfigPickerDashboardLaunch:
 		return "Launch new session with profile"
+	case ConfigPickerHandoff:
+		return "Handoff to profile"
 	default:
 		return "Choose profile"
 	}
@@ -38,7 +41,7 @@ func (p ConfigPickerPurpose) harnessWarning(currentHarness, selectedHarness stri
 	switch p {
 	case ConfigPickerLauncherOverride:
 		return fmt.Sprintf("Switching harness: %s → %s. Future launches will use this harness.", currentHarness, selectedHarness)
-	case ConfigPickerDashboardLaunch:
+	case ConfigPickerDashboardLaunch, ConfigPickerHandoff:
 		return fmt.Sprintf("Switching harness: %s → %s. New session will launch with this harness.", currentHarness, selectedHarness)
 	default:
 		return fmt.Sprintf("Switching harness: %s → %s. Session will restart.", currentHarness, selectedHarness)

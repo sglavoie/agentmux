@@ -1,0 +1,14 @@
+{
+  "name": "palette narrow",
+  "fixture": "workspace_attention",
+  "size": {"width": 60, "height": 20},
+  "actions": [
+    {"type": "key", "key": ":"}
+  ],
+  "assertions": [
+    {"type": "mode_equals", "mode": "palette"},
+    {"type": "contains_text", "text": "Command palette"},
+    {"type": "contains_text", "text": "action"},
+    {"type": "no_layout_issues"}
+  ]
+}

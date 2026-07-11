@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/activity"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -89,6 +91,16 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("daemon: binding socket %s: %w", socketPath, err)
 	}
+	// Bind the public socket before starting the activity worker. The worker's
+	// initial retention sweep may need to create and migrate SQLite; although
+	// that work runs in its own goroutine, starting it earlier can contend with
+	// the bounded Kitty restore and delay observable daemon readiness.
+	activityWriter := activity.NewWriter(activity.WriterOptions{
+		OpenStore: datastore.Open,
+		Keep:      time.Duration(cfg.Defaults.Activity.KeepDays) * 24 * time.Hour,
+	})
+	handler.SetActivityWriter(activityWriter)
+	defer activityWriter.Close()
 	defer func() {
 		server.Close()
 		_ = os.Remove(socketPath)

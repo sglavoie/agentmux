@@ -11,6 +11,10 @@ import (
 func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyEsc, keyQ:
+		if m.activeConfigPickerPurpose() == ConfigPickerHandoff {
+			m.handoffConversation = nil
+			m.handoffEdit = false
+		}
 		m.mode = m.configPickerReturnMode
 	case keyCtrlC:
 		return m, tea.Quit
@@ -23,6 +27,16 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			acc := m.configPickerAccounts[m.configPickerCursor]
 			purpose := m.activeConfigPickerPurpose()
 			m.mode = m.configPickerReturnMode
+			if purpose == ConfigPickerHandoff {
+				if m.handoffConversation == nil {
+					return m, nil
+				}
+				meta := *m.handoffConversation
+				edit := m.handoffEdit
+				m.handoffConversation = nil
+				m.handoffEdit = false
+				return m, conversationHandoffCmd(m.client, m.cfg, m.transcriptReaders, meta, acc.Name, edit)
+			}
 			if purpose == ConfigPickerLauncherOverride && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
 				defaultProfile := m.pickerSessions[m.configPickerProjectIdx].EffectiveProfile()
 				if strings.EqualFold(acc.Name, defaultProfile) {
@@ -63,7 +77,7 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	switch s {
 	case keyEsc, keyQ:
-		m.mode = ModeList
+		m.exitActionsMode()
 		m.actionsOffset = 0
 		return m, nil
 	case keyCtrlC:
@@ -136,6 +150,7 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // the daemon. Callers must guard against an empty session list.
 func (m Model) enterDetailMode(windowID int, startInTimeline bool) (tea.Model, tea.Cmd) {
 	m.clearJumpChord()
+	m.detailReturnMode = m.mode
 	m.mode = ModeDetail
 	m.detailWindowID = windowID
 	m.detailEvents = nil
@@ -146,16 +161,21 @@ func (m Model) enterDetailMode(windowID int, startInTimeline bool) (tea.Model, t
 	return m, sessionDetailCmd(windowID)
 }
 
-// exitDetailMode returns to ModeList and clears every detail-pane field so
+// exitDetailMode returns to its source surface and clears every detail-pane field so
 // the next entry starts from a clean state. No-op when the model is not in
 // ModeDetail.
 func (m *Model) exitDetailMode() {
-	m.mode = ModeList
+	returnMode := m.detailReturnMode
+	if returnMode != ModeWorkspace {
+		returnMode = ModeList
+	}
+	m.mode = returnMode
 	m.detailWindowID = 0
 	m.detailEvents = nil
 	m.detailScroll = 0
 	m.detailLoading = false
 	m.detailErr = nil
+	m.detailReturnMode = ModeList
 	m.detailViewTimeline = false
 	m.detailTimelineScroll = 0
 	m.detailTimelineFold = nil
@@ -367,7 +387,11 @@ func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	total, visible := helpScrollBounds(m, helpVisibleHeight(m))
 	switch msg.String() {
 	case keyEsc, keyQuestion, keyQ:
-		m.mode = ModeList
+		m.mode = m.helpReturnMode
+		if m.mode != ModeWorkspace {
+			m.mode = ModeList
+		}
+		m.helpReturnMode = ModeList
 		m.helpOffset = 0
 	case keyCtrlC:
 		return m, tea.Quit

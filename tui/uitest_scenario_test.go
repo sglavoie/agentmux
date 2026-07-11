@@ -124,7 +124,7 @@ func TestUITestScenarioRunRecordsFailures(t *testing.T) {
 		Fixture: "basic",
 		Size:    UITestSize{Width: 100, Height: 32},
 		Assertions: []UITestAssertion{
-			{Type: UITestAssertModeEquals, Mode: "actions"},        // fails: still list
+			{Type: UITestAssertModeEquals, Mode: "actions"},         // fails: still list
 			{Type: UITestAssertSelectedTitle, Value: "nonexistent"}, // fails
 			{Type: UITestAssertExcludesText, Text: "api"},           // fails: api is shown
 		},
@@ -156,7 +156,7 @@ func TestUITestScenarioKittyCalls(t *testing.T) {
 		Size:    UITestSize{Width: 100, Height: 32},
 		Actions: []UITestAction{{Type: UITestActionKey, Key: "enter"}},
 		Assertions: []UITestAssertion{
-			{Type: UITestAssertKittyCalls, Op: "FocusTab"},              // >= 1
+			{Type: UITestAssertKittyCalls, Op: "FocusTab"}, // >= 1
 			{Type: UITestAssertKittyCalls, Op: "FocusTab", Count: intPtr(1)},
 			{Type: UITestAssertKittyCalls, Op: "LaunchTab", Count: intPtr(0)},
 		},
@@ -281,7 +281,7 @@ func TestUITestAssertionValidation(t *testing.T) {
 // mappings never drift.
 func TestUITestAssertModeNamesAreValidatable(t *testing.T) {
 	modes := uitestModeNameSet()
-	for mode := ModeList; mode <= ModePlanView; mode++ {
+	for mode := ModeList; mode <= ModePalette; mode++ {
 		name := uitestModeName(mode)
 		if name == "unknown" {
 			t.Errorf("mode %d has no stable name", mode)

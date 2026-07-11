@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -87,6 +88,17 @@ type WindowState struct {
 	watchdogFactIdle map[SourceID]*factIdle
 }
 
+// CurrentConversation derives this window's current parent conversation from
+// the reducer facts. It deliberately does not consult LastHarness or any
+// separately persisted identity: both are descriptive metadata and can outlive
+// a reused Kitty pane.
+func (s WindowState) CurrentConversation(now int64) (conversation.Identity, bool) {
+	if s.Reducer == nil {
+		return conversation.Identity{}, false
+	}
+	return s.Reducer.CurrentConversation(now)
+}
+
 // stateUserVarSchemaV2 marks the current amx_state wire schema. v1 payloads
 // predate the field entirely (decoded Schema stays 0), so dual-read migration
 // keys off its absence.
@@ -121,6 +133,11 @@ type windowStateUserVar struct {
 	EffectiveKey     string               `json:"ey,omitempty"`
 	EffectiveGen     uint64               `json:"eg,omitempty"`
 	ShadowSeq        uint64               `json:"sq,omitempty"`
+	// Conversation is a redundant, reader-friendly projection of Facts. It is
+	// written for durable diagnostics but never trusted on restore; Facts remain
+	// the authoritative source and prevent a stale projection from claiming a
+	// reused Kitty window.
+	Conversation *conversation.Identity `json:"c,omitempty"`
 }
 
 // MarshalUserVar returns compact JSON for Kitty's amx_state user var. The
@@ -160,6 +177,10 @@ func (s WindowState) MarshalUserVar() (string, error) {
 	uv.EffectiveKey = s.Effective.Source.Key
 	uv.EffectiveGen = s.EffectiveGen
 	uv.ShadowSeq = s.ShadowSeq
+	if identity, ok := s.CurrentConversation(time.Now().Unix()); ok {
+		identityCopy := identity
+		uv.Conversation = &identityCopy
+	}
 	data, err := json.Marshal(uv)
 	if err != nil {
 		return "", err
@@ -172,8 +193,10 @@ func (s WindowState) MarshalUserVar() (string, error) {
 // readable: a v2 payload restores the reducer's source facts (including
 // acknowledgement cutoffs and ASL leases) and the effective generation, while
 // a v1 payload — which predates the schema discriminator — migrates its
-// scalar action and loop marker into synthetic legacy-source facts. Writing
-// always produces v2 (see MarshalUserVar), so v1 exists only on the read side.
+// scalar action and loop marker into synthetic legacy-source facts. The v2
+// conversation projection is intentionally re-derived from Facts rather than
+// trusted directly. Writing always produces v2 (see MarshalUserVar), so v1
+// exists only on the read side.
 func (s *WindowState) UnmarshalUserVar(value string) error {
 	if strings.TrimSpace(value) == "" {
 		*s = WindowState{}
