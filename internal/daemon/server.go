@@ -34,7 +34,7 @@ const maxRequestPayloadBytes = 1 << 20
 const badPayloadLogInterval = 100
 
 // connDeadline bounds a single request/response handshake on the server side.
-// It leaves a margin over the hook client's 500ms per-exchange deadline.
+// It leaves a margin over the hook client's 250ms per-exchange deadline.
 var connDeadline = time.Second
 
 // Server listens on a Unix domain socket and dispatches requests to a Handler.
@@ -42,6 +42,9 @@ var connDeadline = time.Second
 type Server struct {
 	handler     *Handler
 	ln          net.Listener
+	metrics     Metrics
+	dedupe      *dedupeCache
+	ingress     *ingressQueue
 	badPayloads atomic.Uint64
 	// wg tracks in-flight handleConn goroutines so shutdown can wait for them
 	// to finish draining instead of returning while a request is still being
@@ -82,7 +85,18 @@ func NewServer(socketPath string, handler *Handler) (*Server, error) {
 		_ = os.Remove(socketPath)
 		return nil, err
 	}
-	return &Server{handler: handler, ln: ln}, nil
+	s := &Server{handler: handler, ln: ln}
+	s.dedupe = newDedupeCache(&s.metrics)
+	s.ingress = newIngressQueue(s.handler.Handle, &s.metrics)
+	// Health responses report the server's request-outcome counters (queue
+	// saturation, queue latency) so diagnostics can see them over IPC.
+	handler.setMetricsSource(s.metrics.Snapshot)
+	return s, nil
+}
+
+// Metrics returns a snapshot of the server's request-outcome counters.
+func (s *Server) Metrics() MetricsSnapshot {
+	return s.metrics.Snapshot()
 }
 
 func disableListenerAutoUnlink(ln net.Listener) {
@@ -133,6 +147,11 @@ func (s *Server) Serve(ctx context.Context) error {
 func (s *Server) Close() {
 	_ = s.ln.Close()
 	s.wg.Wait()
+	// Stop the reducer consumer only after every connection goroutine has
+	// returned, so no in-flight submit can block on a closed queue.
+	if s.ingress != nil {
+		s.ingress.stop()
+	}
 }
 
 func (s *Server) handleConn(conn net.Conn) {
@@ -161,6 +180,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		if err := scanner.Err(); err != nil {
 			if errors.Is(err, bufio.ErrTooLong) {
 				count := s.badPayloads.Add(1)
+				s.metrics.rejected.Add(1)
 				slog.Warn("daemon: request payload exceeds limit", "limit", maxRequestPayloadBytes, "bad_payload_count", count)
 				writeResponse(w, Response{OK: false, Error: "request payload exceeds limit"})
 				return
@@ -172,6 +192,7 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 	payload := scanner.Bytes()
 	if err := json.Unmarshal(payload, &req); err != nil {
 		count := s.badPayloads.Add(1)
+		s.metrics.rejected.Add(1)
 		slog.Debug("daemon: bad request JSON", "err", err, "payload", truncateForLog(payload, maxPayloadLogLen), "bad_payload_count", count)
 		if count%badPayloadLogInterval == 0 {
 			slog.Info("daemon: cumulative malformed payloads received", "count", count)
@@ -180,8 +201,27 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		return
 	}
 
-	resp := s.handler.Handle(req)
+	// Deduplicate state-changing retries: a request carrying a stable ID is
+	// applied exactly once, so an ambiguous-timeout resend replays the original
+	// response instead of mutating the icon a second time. Legacy requests
+	// (empty ID) flow straight through. Deduplication happens BEFORE queue
+	// admission so a resend never consumes a second reducer slot.
+	resp := s.dedupe.do(req.RequestID, func() Response {
+		return s.process(req)
+	})
 	writeResponse(w, resp)
+}
+
+// process applies a request. State-changing requests flow through the serialized
+// reducer queue so their application order is deterministic and independent of
+// connection scheduling; read-only and control requests run inline so a query is
+// never serialized behind a burst of hook events. Acknowledgement returns as
+// soon as the reducer has applied the event — rendering happens asynchronously.
+func (s *Server) process(req Request) Response {
+	if s.ingress != nil && serializedRequest(req.Type) {
+		return s.ingress.submit(req)
+	}
+	return s.handler.Handle(req)
 }
 
 func writeResponse(w io.Writer, resp Response) {

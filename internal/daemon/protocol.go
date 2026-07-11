@@ -1,5 +1,7 @@
 package daemon
 
+import "github.com/sglavoie/agentmux/internal/buildinfo"
+
 // MessageType identifies the kind of IPC request.
 type MessageType string
 
@@ -24,25 +26,40 @@ type Request struct {
 	// state machine, but event exports can still record the live icon observed
 	// by daemon-side probes and snapshot enrichment.
 	currentIconState string
-	Type             MessageType `json:"type"`
-	WindowID         int         `json:"window_id,omitempty"`         // KITTY_WINDOW_ID
-	Action           string      `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear
-	Event            string      `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
-	PayloadJSON      string      `json:"payload_json,omitempty"`      // raw hook stdin payload for TypeHookEvent
-	ToolName         string      `json:"tool_name,omitempty"`         // tool name from PreToolUse/PostToolUse hook payloads
-	Source           string      `json:"source,omitempty"`            // raw source payload field
-	IsPrompt         bool        `json:"is_prompt,omitempty"`         // true if event is a user prompt submission
-	PreservesIcon    bool        `json:"preserves_icon,omitempty"`    // true if a non-terminal child-complete event should preserve current icon/guard semantics
-	Account          string      `json:"account,omitempty"`           // profile name from amx_profile or cc_account
-	Harness          string      `json:"harness,omitempty"`           // normalized harness name from amx_harness
-	SessionTitle     string      `json:"session_title,omitempty"`     // tab base title (e.g. "W:api")
-	PipeMode         bool        `json:"pipe_mode,omitempty"`         // suppress notifications when claude -p
-	KittyListenOn    string      `json:"kitty_listen_on,omitempty"`   // KITTY_LISTEN_ON for daemon-side Kitty writes
-	NotificationType string      `json:"notification_type,omitempty"` // normalized notification_type / notificationType payload field
-	StopReason       string      `json:"stop_reason,omitempty"`       // normalized stop_reason / stopReason payload field
-	Reason           string      `json:"reason,omitempty"`            // normalized reason payload field
-	ContextLimit     bool        `json:"context_limit,omitempty"`     // true when indicator detected a context-limit stop/failure
-	ResetFlow        bool        `json:"reset_flow,omitempty"`        // true when the event belongs to a user-initiated session reset flow
+	// normalized is the daemon-internal, source-scoped view of the underlying
+	// hook event, stamped by paths that hold the raw payload (hook routing,
+	// loop lifecycle fan-out, probe promotion). The shadow reducer consumes it;
+	// requests without it (legacy clients, sweeps) fall back to a synthesized
+	// legacy-source event. Never serialized: clients cannot inject identity.
+	normalized *NormalizedEvent
+	// routeDecision records how the daemon routed a hook event to its target
+	// window ("source", "owner", "source_fallback") for the event log. Daemon-
+	// internal: routing is a daemon decision, never client input.
+	routeDecision string
+	Type          MessageType `json:"type"`
+	// RequestID is a client-generated UUID identifying one logical request.
+	// It is reused verbatim across retries so the daemon can deduplicate an
+	// ambiguous-timeout resend and apply the underlying event exactly once.
+	// Legacy clients omit it; empty-ID requests are never deduplicated.
+	RequestID        string `json:"request_id,omitempty"`
+	WindowID         int    `json:"window_id,omitempty"`         // KITTY_WINDOW_ID
+	Action           string `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear
+	Event            string `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
+	PayloadJSON      string `json:"payload_json,omitempty"`      // raw hook stdin payload for TypeHookEvent
+	ToolName         string `json:"tool_name,omitempty"`         // tool name from PreToolUse/PostToolUse hook payloads
+	Source           string `json:"source,omitempty"`            // raw source payload field
+	IsPrompt         bool   `json:"is_prompt,omitempty"`         // true if event is a user prompt submission
+	PreservesIcon    bool   `json:"preserves_icon,omitempty"`    // true if a non-terminal child-complete event should preserve current icon/guard semantics
+	Account          string `json:"account,omitempty"`           // profile name from amx_profile or cc_account
+	Harness          string `json:"harness,omitempty"`           // normalized harness name from amx_harness
+	SessionTitle     string `json:"session_title,omitempty"`     // tab base title (e.g. "W:api")
+	PipeMode         bool   `json:"pipe_mode,omitempty"`         // suppress notifications when claude -p
+	KittyListenOn    string `json:"kitty_listen_on,omitempty"`   // KITTY_LISTEN_ON for daemon-side Kitty writes
+	NotificationType string `json:"notification_type,omitempty"` // normalized notification_type / notificationType payload field
+	StopReason       string `json:"stop_reason,omitempty"`       // normalized stop_reason / stopReason payload field
+	Reason           string `json:"reason,omitempty"`            // normalized reason payload field
+	ContextLimit     bool   `json:"context_limit,omitempty"`     // true when indicator detected a context-limit stop/failure
+	ResetFlow        bool   `json:"reset_flow,omitempty"`        // true when the event belongs to a user-initiated session reset flow
 }
 
 // Response is a JSON message sent by the daemon back to the client.
@@ -71,6 +88,18 @@ type Response struct {
 	// Fields populated for TypeHealth:
 	PID           int   `json:"pid,omitempty"`
 	UptimeSeconds int64 `json:"uptime_seconds,omitempty"`
+	// Build identifies the artifact the daemon is actually running (computed
+	// at daemon startup, before any on-disk replacement can happen), so a
+	// client can detect a CLI/daemon build mismatch. Metrics carries the
+	// server's request-outcome counters, including queue saturation and queue
+	// latency, for diagnostics surfaces.
+	Build   *buildinfo.Info  `json:"build,omitempty"`
+	Metrics *MetricsSnapshot `json:"metrics,omitempty"`
+	// Ready reports whether the daemon completed its bounded initial
+	// snapshot+restore before binding the public socket. DegradedReason explains
+	// why it started (or remains) degraded when Ready is false.
+	Ready          bool   `json:"ready"`
+	DegradedReason string `json:"degraded_reason,omitempty"`
 }
 
 // WindowStateSnapshot is the daemon-owned state needed by dashboard clients.
@@ -91,6 +120,65 @@ type WindowDebugMetadata struct {
 	Stats    WindowDebugStats    `json:"stats"`
 	Durable  WindowDebugDurable  `json:"durable"`
 	Renderer WindowDebugRenderer `json:"renderer"`
+	Shadow   WindowDebugShadow   `json:"shadow"`
+	Watchdog WindowDebugWatchdog `json:"watchdog"`
+}
+
+// WindowDebugWatchdog records the daemon's own synthetic interventions for a
+// window: watchdog expiries, ASL reconciliation, and window-close GC. The
+// fields are updated atomically (under the same lock) with the per-window
+// event ring so the durable export and the live event log can never disagree
+// about why the daemon changed state on its own.
+type WindowDebugWatchdog struct {
+	// LastEvent/LastReason/LastAt describe the most recent synthetic event
+	// (WatchdogStale, SourceExpired, ASLReconciled, WindowClosed).
+	LastEvent  string `json:"last_event,omitempty"`
+	LastReason string `json:"last_reason,omitempty"`
+	LastAt     int64  `json:"last_at,omitempty"`
+	// SourceExpiries counts individual source-fact expiries; StaleSweeps
+	// counts whole-window stale clears; Reconciles counts ASL lease
+	// seeds/releases performed by reconciliation.
+	SourceExpiries int `json:"source_expiries,omitempty"`
+	StaleSweeps    int `json:"stale_sweeps,omitempty"`
+	Reconciles     int `json:"reconciles,omitempty"`
+	// ClosedAt is non-zero while the window is a tombstone: its live state was
+	// garbage-collected and this metadata is retained (bounded) for
+	// post-mortem export only. Tombstones never count as renderer drift.
+	ClosedAt int64 `json:"closed_at,omitempty"`
+}
+
+// WindowDebugShadow reports the shadow reducer's view of a window: its current
+// effective state/generation and every recorded divergence from the legacy
+// state machine. The legacy path stays the single writer of visible state, so
+// mismatches here are diagnostic evidence for the reducer cutover, never a
+// behavior change.
+type WindowDebugShadow struct {
+	EffectiveIcon    string           `json:"effective_icon"`
+	EffectiveLooping bool             `json:"effective_looping"`
+	EffectiveGen     uint64           `json:"effective_gen"`
+	MismatchCount    int              `json:"mismatch_count"`
+	Mismatches       []ShadowMismatch `json:"mismatches,omitempty"`
+	// Facts is the reducer's live source-fact set, stamped at export time from
+	// the window's reducer (schema v6). Diagnostics use it to hold the visible
+	// icon accountable to the authoritative facts: an active ASL lease showing
+	// stop/empty, or a live subagent without 🤖, is a health failure.
+	Facts []SourceFactSnapshot `json:"facts,omitempty"`
+}
+
+// ShadowMismatch is one recorded divergence between the legacy render decision
+// and the shadow reducer's effective state, captured after both saw the same
+// event. The ring is bounded (maxShadowMismatches); MismatchCount stays
+// cumulative.
+type ShadowMismatch struct {
+	At            int64  `json:"at"`
+	Event         string `json:"event,omitempty"`
+	Action        string `json:"action,omitempty"`
+	LegacyIcon    string `json:"legacy_icon"`
+	ShadowIcon    string `json:"shadow_icon"`
+	LegacyLooping bool   `json:"legacy_looping"`
+	ShadowLooping bool   `json:"shadow_looping"`
+	SourceKind    string `json:"source_kind,omitempty"`
+	SourceKey     string `json:"source_key,omitempty"`
 }
 
 // WindowDebugRenderer is the daemon-owned rendering state for a window. It
@@ -104,6 +192,24 @@ type WindowDebugRenderer struct {
 	RenderFailures  int    `json:"render_failures"`
 	LastRenderError string `json:"last_render_error"`
 	KittyListenOn   string `json:"kitty_listen_on,omitempty"`
+
+	// Render-generation pipeline diagnostics. The window's Seq counter is its
+	// generation; each stage records the highest generation it has reached:
+	// queued (handed to the render queue), attempted (candidate built),
+	// persisted (amx_state landed), rendered (title landed or was already
+	// converged), failed (a Kitty write for that generation errored).
+	QueuedGen    uint64 `json:"queued_gen,omitempty"`
+	AttemptedGen uint64 `json:"attempted_gen,omitempty"`
+	PersistedGen uint64 `json:"persisted_gen,omitempty"`
+	RenderedGen  uint64 `json:"rendered_gen,omitempty"`
+	FailedGen    uint64 `json:"failed_gen,omitempty"`
+	// DirtySince is when the current dirty stretch began (unix seconds, 0 when
+	// clean); DirtyAgeSeconds is computed at export time from the live state.
+	// LastRenderLatencyMs is mark-dirty → fully-rendered for the most recent
+	// successful pass.
+	DirtySince          int64 `json:"dirty_since,omitempty"`
+	DirtyAgeSeconds     int64 `json:"dirty_age_seconds,omitempty"`
+	LastRenderLatencyMs int64 `json:"last_render_latency_ms,omitempty"`
 }
 
 // EventsExport is the typed daemon snapshot returned by Client.ExportEvents.
@@ -115,26 +221,36 @@ type EventsExport struct {
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
-// `amx daemon export-events`. Version 5 adds renderer diagnostics and
-// per-reason suppression counters to each window entry.
-const EventsExportSchemaVersion = 5
+// `amx daemon export-events`. Version 6 retains every v5 field and adds: the
+// per-window Watchdog section (synthetic daemon interventions + tombstone
+// marker), the reducer's live source facts, per-event daemon sequence /
+// nanosecond receipt time / normalized source identity / route decision, and
+// daemon-level readiness, build identity, and request metrics (queue
+// saturation and latency).
+const EventsExportSchemaVersion = 6
 
 // ExportEventsPayload is the CLI JSON envelope written by
-// `amx daemon export-events`.
+// `amx daemon export-events`. CLIBuild identifies the exporting CLI binary so
+// an investigation bundle records both artifacts (the daemon's own identity
+// lives under Daemon.Build).
 type ExportEventsPayload struct {
 	SchemaVersion int                  `json:"schema_version"`
 	ExportedAt    int64                `json:"exported_at"`
 	Daemon        ExportDaemonMetadata `json:"daemon"`
+	CLIBuild      *buildinfo.Info      `json:"cli_build,omitempty"`
 	Windows       []ExportWindow       `json:"windows"`
 }
 
 // ExportDaemonMetadata describes the daemon that produced this export.
 type ExportDaemonMetadata struct {
-	PID           int   `json:"pid"`
-	UptimeSeconds int64 `json:"uptime_seconds"`
+	PID           int              `json:"pid"`
+	UptimeSeconds int64            `json:"uptime_seconds"`
+	Ready         bool             `json:"ready"`
+	Build         *buildinfo.Info  `json:"build,omitempty"`
+	Metrics       *MetricsSnapshot `json:"metrics,omitempty"`
 }
 
-// ExportWindow is one per-window investigation entry in the schema-v5 payload.
+// ExportWindow is one per-window investigation entry in the schema-v6 payload.
 // Durable fields come from the daemon; Live is joined at export time from
 // Kitty/session lookups on a best-effort basis.
 type ExportWindow struct {
@@ -142,6 +258,8 @@ type ExportWindow struct {
 	Stats    WindowDebugStats    `json:"stats"`
 	Durable  WindowDebugDurable  `json:"durable"`
 	Renderer WindowDebugRenderer `json:"renderer"`
+	Shadow   WindowDebugShadow   `json:"shadow"`
+	Watchdog WindowDebugWatchdog `json:"watchdog"`
 	Live     WindowLiveMetadata  `json:"live"`
 	Events   []SessionEvent      `json:"events"`
 }
@@ -217,6 +335,22 @@ type SessionEvent struct {
 	Reason            string `json:"reason,omitempty"`             // normalized reason payload field
 	ContextLimit      bool   `json:"context_limit,omitempty"`      // true when indicator detected a context-limit stop/failure
 	ResetFlow         bool   `json:"reset_flow,omitempty"`         // true when the daemon treated the event as part of a reset flow
+
+	// Schema v6 receipt/identity fields. DaemonSeq is the daemon's global
+	// monotonic receipt sequence (assigned at append, restarts from 1 on a
+	// daemon restart); ReceivedAtNs is the nanosecond receipt time. SourceKind/
+	// SourceKey/SourceSeq are the normalized source identity carried by the
+	// underlying hook payload (empty for legacy clients and synthetic events).
+	// RouteDecision records how the daemon routed the event to this window:
+	// "source" (the firing pane owns the tab), "owner" (rerouted to the managed
+	// title owner), or "source_fallback" (ownership unknown, fell back to the
+	// firing pane).
+	DaemonSeq     uint64 `json:"daemon_seq,omitempty"`
+	ReceivedAtNs  int64  `json:"received_at_ns,omitempty"`
+	SourceKind    string `json:"source_kind,omitempty"`
+	SourceKey     string `json:"source_key,omitempty"`
+	SourceSeq     uint64 `json:"source_seq,omitempty"`
+	RouteDecision string `json:"route_decision,omitempty"`
 }
 
 // actionPriority maps each action name to its guard priority.
@@ -269,4 +403,12 @@ func Priority(action string) int {
 // IconState returns the icon state name for an action.
 func IconState(action string) string {
 	return actionIconState[action]
+}
+
+// IconPrecedence exposes the reducer's target icon precedence for diagnostics
+// consumers (doctor/audit): higher outranks lower, idle is 0. It lets an
+// invariant like "a live subagent must show 🤖 or higher-priority attention"
+// be evaluated outside this package without duplicating the ordering.
+func IconPrecedence(icon string) int {
+	return reducerIconPrecedence[icon]
 }

@@ -1,0 +1,200 @@
+package daemon
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestUserVarV2RoundTripPersistsFactsAndEffective(t *testing.T) {
+	r := NewReducer(ReducerConfig{})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, TurnID: "t1", At: 1710000100})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "stop_failure", Seq: 2, TurnID: "t1", At: 1710000200})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 5, At: 1710000300})
+
+	now := int64(1710000400)
+	state := WindowState{
+		LastAction:   "active",
+		Reducer:      r,
+		Effective:    r.Reduce(now),
+		EffectiveGen: 7,
+		ShadowSeq:    9,
+	}
+
+	encoded, err := state.MarshalUserVar()
+	if err != nil {
+		t.Fatalf("MarshalUserVar() error: %v", err)
+	}
+	if !strings.Contains(encoded, `"v":2`) {
+		t.Fatalf("MarshalUserVar() missing schema discriminator: %s", encoded)
+	}
+
+	var got WindowState
+	if err := got.UnmarshalUserVar(encoded); err != nil {
+		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	}
+	if got.Reducer == nil {
+		t.Fatalf("restored state has no reducer")
+	}
+	if !reflect.DeepEqual(got.Reducer.Facts(), r.Facts()) {
+		t.Fatalf("restored facts = %+v, want %+v", got.Reducer.Facts(), r.Facts())
+	}
+	if got.Effective != state.Effective {
+		t.Fatalf("Effective = %+v, want %+v", got.Effective, state.Effective)
+	}
+	if got.EffectiveGen != 7 || got.ShadowSeq != 9 {
+		t.Fatalf("EffectiveGen/ShadowSeq = %d/%d, want 7/9", got.EffectiveGen, got.ShadowSeq)
+	}
+	if before, after := r.Reduce(now), got.Reducer.Reduce(now); after != before {
+		t.Fatalf("restart equivalence broken: Reduce = %+v, want %+v", after, before)
+	}
+}
+
+func TestUserVarV2RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
+	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+	r := NewReducer(ReducerConfig{})
+	r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 1, At: 100})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "user"}, Action: "user_clear", Seq: 2, At: 101})
+
+	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
+	if err != nil {
+		t.Fatalf("MarshalUserVar() error: %v", err)
+	}
+	var got WindowState
+	if err := got.UnmarshalUserVar(encoded); err != nil {
+		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	}
+
+	facts := got.Reducer.Facts()
+	if len(facts) != 1 || !facts[0].Acked {
+		t.Fatalf("restored facts = %+v, want one acknowledged fact", facts)
+	}
+	if eff := got.Reducer.Reduce(102); eff.Icon != "" {
+		t.Fatalf("acked fact rendered %q after restore, want idle", eff.Icon)
+	}
+	// A newer event for the source re-arms it past the restored cutoff.
+	got.Reducer.Apply(ReducerEvent{Source: src, Action: "active", Seq: 3, At: 103})
+	if eff := got.Reducer.Reduce(104); eff.Icon != "bolt" {
+		t.Fatalf("post-restore event rendered %q, want bolt", eff.Icon)
+	}
+}
+
+func TestUserVarV2RestartEquivalenceAcrossSources(t *testing.T) {
+	events := []ReducerEvent{
+		{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, TurnID: "t1", At: 100},
+		{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 110},
+		{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhasePaused, Action: "permission", RunID: "run-1", Seq: 4, At: 120},
+		{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "stop", Seq: 2, TurnID: "t1", At: 130},
+	}
+	r := NewReducer(ReducerConfig{})
+	for _, ev := range events {
+		r.Apply(ev)
+	}
+
+	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
+	if err != nil {
+		t.Fatalf("MarshalUserVar() error: %v", err)
+	}
+	var got WindowState
+	if err := got.UnmarshalUserVar(encoded); err != nil {
+		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	}
+
+	for _, now := range []int64{131, 1000, 100000} {
+		before, after := r.Reduce(now), got.Reducer.Reduce(now)
+		if before != after {
+			t.Fatalf("Reduce(%d) after restart = %+v, want %+v", now, after, before)
+		}
+	}
+	// The ASL pause holds both the attention icon and the loop lease.
+	if eff := got.Reducer.Reduce(131); eff.Icon != "key" || !eff.Looping {
+		t.Fatalf("Reduce(131) = %+v, want key icon with live lease", eff)
+	}
+}
+
+func TestUserVarV2MigratesV1IntoSyntheticLegacySource(t *testing.T) {
+	// A v1 payload has no "v" discriminator; its scalar action and loop marker
+	// migrate into synthetic legacy/ASL facts.
+	raw := `{"a":"permission","l":true,"acct":"work","h":"codex","t":1710000001}`
+	var st WindowState
+	if err := st.UnmarshalUserVar(raw); err != nil {
+		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
+	}
+	if st.LastAction != "permission" || st.DesiredIcon != "key" {
+		t.Fatalf("legacy scalars = %q/%q, want permission/key", st.LastAction, st.DesiredIcon)
+	}
+	if st.Reducer == nil {
+		t.Fatalf("v1 migration produced no reducer")
+	}
+
+	facts := st.Reducer.Facts()
+	if len(facts) != 2 {
+		t.Fatalf("migrated facts = %+v, want legacy action + ASL lease", facts)
+	}
+	asl, legacy := facts[0], facts[1] // sorted by kind: "asl" < "legacy"
+	if asl.Kind != SourceASL || asl.Key != legacyV1MigrationKey || !asl.LeaseLive || asl.Phase != ASLPhaseBetween {
+		t.Fatalf("ASL lease fact = %+v", asl)
+	}
+	if legacy.Kind != SourceLegacy || legacy.Key != legacyV1MigrationKey || legacy.Icon != "key" || legacy.Terminated {
+		t.Fatalf("legacy fact = %+v", legacy)
+	}
+	if legacy.At != 1710000001 || legacy.Seq != 1 {
+		t.Fatalf("legacy fact timing = at %d seq %d, want 1710000001/1", legacy.At, legacy.Seq)
+	}
+
+	if st.Effective.Icon != "key" || !st.Effective.Looping {
+		t.Fatalf("Effective = %+v, want key + looping", st.Effective)
+	}
+	if st.ShadowSeq != 1 {
+		t.Fatalf("ShadowSeq = %d, want 1", st.ShadowSeq)
+	}
+	if eff := st.Reducer.Reduce(1710000002); eff.Icon != "key" || !eff.Looping {
+		t.Fatalf("Reduce after migration = %+v, want key + looping", eff)
+	}
+}
+
+func TestUserVarV2MigratesV1TerminalAction(t *testing.T) {
+	var st WindowState
+	if err := st.UnmarshalUserVar(`{"a":"stop_failure","t":5}`); err != nil {
+		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
+	}
+	facts := st.Reducer.Facts()
+	if len(facts) != 1 {
+		t.Fatalf("migrated facts = %+v, want one legacy fact", facts)
+	}
+	if !facts[0].Terminated || facts[0].TerminalAt != 5 || facts[0].Icon != "error" {
+		t.Fatalf("terminal fact = %+v, want terminated error at 5", facts[0])
+	}
+}
+
+func TestUserVarV2MigratesEmptyV1WithoutFacts(t *testing.T) {
+	var st WindowState
+	if err := st.UnmarshalUserVar(`{"acct":"work"}`); err != nil {
+		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
+	}
+	if st.Reducer != nil {
+		t.Fatalf("empty v1 payload migrated facts: %+v", st.Reducer.Facts())
+	}
+	if st.Effective != (EffectiveState{}) || st.ShadowSeq != 0 {
+		t.Fatalf("empty v1 payload set effective state: %+v seq %d", st.Effective, st.ShadowSeq)
+	}
+}
+
+func TestUserVarV2ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
+	// A payload whose ShadowSeq lags its fact sequences (e.g. written by a
+	// crashed daemon mid-update) must not hand out receipt sequences that the
+	// reducer would discard as reordered.
+	r := NewReducer(ReducerConfig{})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 40, At: 100})
+	encoded, err := (WindowState{Reducer: r, ShadowSeq: 2}).MarshalUserVar()
+	if err != nil {
+		t.Fatalf("MarshalUserVar() error: %v", err)
+	}
+	var got WindowState
+	if err := got.UnmarshalUserVar(encoded); err != nil {
+		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	}
+	if got.ShadowSeq != 40 {
+		t.Fatalf("ShadowSeq = %d, want lifted to max fact seq 40", got.ShadowSeq)
+	}
+}

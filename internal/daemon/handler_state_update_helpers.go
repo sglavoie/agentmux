@@ -29,8 +29,10 @@ func (h *Handler) lastKnownState(windowID int) (action, iconState string) {
 }
 
 func sessionEventFromRequest(req Request, action, resultIconState, currentIconState string) SessionEvent {
-	return SessionEvent{
-		At:               time.Now().Unix(),
+	now := time.Now()
+	ev := SessionEvent{
+		At:               now.Unix(),
+		ReceivedAtNs:     now.UnixNano(),
 		Event:            req.Event,
 		Action:           action,
 		ToolName:         req.ToolName,
@@ -43,7 +45,18 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 		Reason:           req.Reason,
 		ContextLimit:     req.ContextLimit,
 		ResetFlow:        req.ResetFlow,
+		RouteDecision:    req.routeDecision,
 	}
+	// The normalized stamp carries the source-scoped identity resolved from the
+	// raw payload; legacy clients and synthetic requests have none. A
+	// quarantined stamp keeps its identity fields for attribution — the reducer
+	// separately refuses to fold it.
+	if req.normalized != nil {
+		ev.SourceKind = string(req.normalized.Source.Kind)
+		ev.SourceKey = req.normalized.Source.Key
+		ev.SourceSeq = req.normalized.Seq
+	}
+	return ev
 }
 
 func suppressedSessionEvent(req Request, action, suppressionReason, currentIconState string) SessionEvent {

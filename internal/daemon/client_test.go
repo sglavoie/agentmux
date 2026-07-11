@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -163,6 +164,14 @@ func TestClient_RejectsOversizeResponse(t *testing.T) {
 	}
 	defer func() { _ = ln.Close() }()
 
+	// Lower the ceiling locally so the oversize path is exercised without
+	// shuttling the production 64 MiB bound through a socketpair. Must stay
+	// above the scanner's 64 KiB initial buffer: Scanner.Buffer takes the
+	// larger of max and cap(buf) as the effective ceiling.
+	oldMax := maxResponseBytes
+	maxResponseBytes = 128 << 10
+	t.Cleanup(func() { maxResponseBytes = oldMax })
+
 	// Server: emit a payload larger than maxResponseBytes with no newline so the
 	// client-side scanner exhausts its buffer.
 	huge := strings.Repeat("A", maxResponseBytes+128)
@@ -184,6 +193,62 @@ func TestClient_RejectsOversizeResponse(t *testing.T) {
 	}
 	if !strings.Contains(sendErr.Error(), "exceeds") {
 		t.Fatalf("expected explicit oversize error, got: %v", sendErr)
+	}
+}
+
+// TestClient_ExportEventsAboveLegacyCapRoundTrips pins the raised response
+// ceiling: a full events export larger than the previous 1 MiB client cap
+// must decode cleanly. Against the long-running production daemon the full
+// export (5000-event ring buffers per window) exceeded 1 MiB, so doctor and
+// audit degraded to a daemon_export failure finding instead of inspecting
+// the daemon — the regression this test locks out.
+func TestClient_ExportEventsAboveLegacyCapRoundTrips(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-client-bigexport-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	sockPath := filepath.Join(dir, "d.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	// A valid export response comfortably above the legacy 1 MiB ceiling:
+	// 4096 events carrying ~512B payload fields each (~2.5 MiB marshaled).
+	filler := strings.Repeat("x", 512)
+	events := make([]SessionEvent, 4096)
+	for i := range events {
+		events[i] = SessionEvent{At: int64(i), Event: "PostToolUse", Action: "active", Reason: filler}
+	}
+	resp := Response{OK: true, EventsByWindow: map[int][]SessionEvent{7: events}}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if len(data) <= 1<<20 {
+		t.Fatalf("test response is %d bytes; must exceed the legacy 1 MiB cap to pin the regression", len(data))
+	}
+	go func() {
+		conn, acceptErr := ln.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		buf := make([]byte, 1024)
+		_, _ = conn.Read(buf)
+		_, _ = conn.Write(append(data, '\n'))
+	}()
+
+	c := NewClientWithSocket(sockPath)
+	export, exportErr := c.ExportEvents(0)
+	if exportErr != nil {
+		t.Fatalf("ExportEvents: %v", exportErr)
+	}
+	if got := len(export.EventsByWindow[7]); got != len(events) {
+		t.Fatalf("EventsByWindow[7] length = %d, want %d", got, len(events))
 	}
 }
 

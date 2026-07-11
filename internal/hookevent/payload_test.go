@@ -255,6 +255,93 @@ func TestPayloadHasResetFlow(t *testing.T) {
 	}
 }
 
+func TestDecodeHookPayload_ParsesIdentityFields(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"hook_event_name": "SubagentStart",
+		"session_id": "sess-1",
+		"turn_id": "turn-9",
+		"tool_use_id": "tu-3",
+		"agent_id": "agent-7",
+		"agent_type": "explore",
+		"run_id": "run-42",
+		"source_sequence": "12",
+		"source_event_id": "evt-abc",
+		"emitted_time": "1700000000"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(identity) error: %v", err)
+	}
+	checks := map[string]struct{ got, want string }{
+		"session_id":      {payload.EffectiveSessionID(), "sess-1"},
+		"turn_id":         {payload.EffectiveTurnID(), "turn-9"},
+		"tool_use_id":     {payload.EffectiveToolUseID(), "tu-3"},
+		"agent_id":        {payload.EffectiveAgentID(), "agent-7"},
+		"agent_type":      {payload.EffectiveAgentType(), "explore"},
+		"run_id":          {payload.EffectiveRunID(), "run-42"},
+		"source_sequence": {payload.EffectiveSourceSequence(), "12"},
+		"source_event_id": {payload.EffectiveSourceEventID(), "evt-abc"},
+		"emitted_time":    {payload.EffectiveEmittedTime(), "1700000000"},
+	}
+	for name, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s: got %q, want %q", name, c.got, c.want)
+		}
+	}
+}
+
+func TestDecodeHookPayload_ParsesCamelIdentityFields(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"sessionId": "sess-c",
+		"turnId": "turn-c",
+		"toolUseId": "tu-c",
+		"agentId": "agent-c",
+		"agentType": "plan",
+		"runId": "run-c",
+		"sourceSequence": "7",
+		"sourceEventId": "evt-c",
+		"emittedTime": "1700000123"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(camel identity) error: %v", err)
+	}
+	checks := map[string]struct{ got, want string }{
+		"sessionId":      {payload.EffectiveSessionID(), "sess-c"},
+		"turnId":         {payload.EffectiveTurnID(), "turn-c"},
+		"toolUseId":      {payload.EffectiveToolUseID(), "tu-c"},
+		"agentId":        {payload.EffectiveAgentID(), "agent-c"},
+		"agentType":      {payload.EffectiveAgentType(), "plan"},
+		"runId":          {payload.EffectiveRunID(), "run-c"},
+		"sourceSequence": {payload.EffectiveSourceSequence(), "7"},
+		"sourceEventId":  {payload.EffectiveSourceEventID(), "evt-c"},
+		"emittedTime":    {payload.EffectiveEmittedTime(), "1700000123"},
+	}
+	for name, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s: got %q, want %q", name, c.got, c.want)
+		}
+	}
+}
+
+// TestHookPayload_IdentitySnakePreferredOverCamel confirms the snake-case
+// spelling wins and a blank snake value falls back to the camelCase alias,
+// matching the firstNonBlank convention used by the other effective accessors.
+func TestHookPayload_IdentitySnakePreferredOverCamel(t *testing.T) {
+	p := HookPayload{
+		SessionID: "snake", SessionIDCamel: "camel",
+		AgentID: " ", AgentIDCamel: "camel-agent",
+		RunID: "\t", RunIDCamel: "camel-run",
+	}
+	if got := p.EffectiveSessionID(); got != "snake" {
+		t.Errorf("EffectiveSessionID() = %q, want snake", got)
+	}
+	if got := p.EffectiveAgentID(); got != "camel-agent" {
+		t.Errorf("EffectiveAgentID() = %q, want camel-agent (blank snake falls back)", got)
+	}
+	if got := p.EffectiveRunID(); got != "camel-run" {
+		t.Errorf("EffectiveRunID() = %q, want camel-run (blank snake falls back)", got)
+	}
+}
+
 func TestDecodeHookPayload_InvalidJSON(t *testing.T) {
 	if _, err := DecodeHookPayload(strings.NewReader("{")); err == nil {
 		t.Fatal("DecodeHookPayload(invalid JSON) error = nil, want non-nil")

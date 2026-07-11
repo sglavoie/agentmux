@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
@@ -62,14 +63,33 @@ var daemonStopCmd = &cobra.Command{
 
 var daemonStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show daemon status",
+	Short: "Show daemon status, readiness, and build identity",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := daemonPing(); err != nil {
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "daemon: not running (%s)\n", daemonSocketPath())
+		out := cmd.OutOrStdout()
+		health := newDaemonExportClient().Health()
+		if !health.Alive {
+			_, err := fmt.Fprintf(out, "daemon: not running (%s)\n", daemonSocketPath())
 			return err
 		}
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "daemon: running (%s)\n", daemonSocketPath())
-		return err
+		if _, err := fmt.Fprintf(out, "daemon: running (%s)\n", daemonSocketPath()); err != nil {
+			return err
+		}
+		readiness := "true"
+		if !health.Ready {
+			readiness = "false"
+			if health.DegradedReason != "" {
+				readiness += " (" + health.DegradedReason + ")"
+			}
+		}
+		if _, err := fmt.Fprintf(out, "ready: %s\n", readiness); err != nil {
+			return err
+		}
+		if health.Build != nil {
+			if _, err := fmt.Fprintf(out, "build: %s\n", health.Build.String()); err != nil {
+				return err
+			}
+		}
+		return nil
 	},
 }
 
@@ -96,7 +116,6 @@ var (
 	daemonExportEventsLast          int
 	daemonExportEventsOutput        string
 	daemonExportEventsPretty        bool
-	daemonPing                      = daemon.Ping
 	daemonSocketPath                = daemon.SocketPath
 	newDaemonLifecycleClient        = func() daemonLifecycleClient { return daemon.NewClient() }
 	newDaemonExportClient           = func() daemonExportClient { return daemon.NewClient() }
@@ -213,6 +232,8 @@ func buildDaemonExportPayload(snapshot daemon.EventsExport, health daemon.Health
 			window.Stats = durable.Stats
 			window.Durable = durable.Durable
 			window.Renderer = durable.Renderer
+			window.Shadow = durable.Shadow
+			window.Watchdog = durable.Watchdog
 		}
 		if events, ok := snapshot.EventsByWindow[id]; ok {
 			window.Events = daemonExportTrimEvents(events, last)
@@ -220,14 +241,19 @@ func buildDaemonExportPayload(snapshot daemon.EventsExport, health daemon.Health
 		windows = append(windows, window)
 	}
 
+	cliBuild := buildinfo.Current()
 	return daemon.ExportEventsPayload{
 		SchemaVersion: daemon.EventsExportSchemaVersion,
 		ExportedAt:    exportedAt.Unix(),
 		Daemon: daemon.ExportDaemonMetadata{
 			PID:           health.PID,
 			UptimeSeconds: int64(health.Uptime / time.Second),
+			Ready:         health.Ready,
+			Build:         health.Build,
+			Metrics:       health.Metrics,
 		},
-		Windows: windows,
+		CLIBuild: &cliBuild,
+		Windows:  windows,
 	}
 }
 
@@ -258,8 +284,8 @@ func resolveDaemonExportWindowID(cmd *cobra.Command) (int, error) {
 
 var daemonExportEventsCmd = &cobra.Command{
 	Use:   "export-events",
-	Short: "Dump schema-v5 hook event history as JSON for investigation",
-	Long: `Export the daemon's schema-v5 investigation snapshot as JSON.
+	Short: "Dump schema-v6 hook event history as JSON for investigation",
+	Long: `Export the daemon's schema-v6 investigation snapshot as JSON.
 
 The payload is organized as a per-window array so each entry carries its own
 event list, durable daemon metadata, and best-effort live Kitty/session

@@ -12,7 +12,10 @@ import (
 )
 
 func newTestServer() *Server {
-	return &Server{handler: newTestHandler()}
+	s := &Server{handler: newTestHandler()}
+	s.dedupe = newDedupeCache(&s.metrics)
+	s.ingress = newIngressQueue(s.handler.Handle, &s.metrics)
+	return s
 }
 
 // errReader returns the same error from every Read call. Used to simulate a

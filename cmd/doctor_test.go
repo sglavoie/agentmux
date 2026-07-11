@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -22,6 +23,9 @@ func resetDoctorTestState(t *testing.T) {
 	oldSocketPath := doctorSocketPath
 	oldStat := doctorStat
 	oldNow := doctorNow
+	oldCLIBuild := doctorCLIBuild
+	oldJSON := doctorJSON
+	oldStrict := doctorStrict
 	oldOut := doctorCmd.OutOrStdout()
 	t.Cleanup(func() {
 		newDoctorDaemonClient = oldClient
@@ -31,9 +35,18 @@ func resetDoctorTestState(t *testing.T) {
 		doctorSocketPath = oldSocketPath
 		doctorStat = oldStat
 		doctorNow = oldNow
+		doctorCLIBuild = oldCLIBuild
+		doctorJSON = oldJSON
+		doctorStrict = oldStrict
 		doctorCmd.SetOut(oldOut)
 	})
+	doctorJSON = false
+	doctorStrict = false
 }
+
+// doctorTestBuild is a matching CLI/daemon artifact identity for tests that
+// exercise a healthy deployment.
+var doctorTestBuild = buildinfo.Info{Version: "1.2.3", Revision: "cafe0123", GoVersion: "go1.99", BinaryHash: "hash-a"}
 
 func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 	resetDoctorTestState(t)
@@ -54,9 +67,11 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	build := doctorTestBuild
+	doctorCLIBuild = func() buildinfo.Info { return build }
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
-			health: daemon.Health{Alive: true, PID: 4242, Uptime: 2 * time.Minute},
+			health: daemon.Health{Alive: true, PID: 4242, Uptime: 2 * time.Minute, Ready: true, Build: &build},
 			export: func(int) (daemon.EventsExport, error) {
 				return daemon.EventsExport{
 					EventsByWindow: map[int][]daemon.SessionEvent{42: {{

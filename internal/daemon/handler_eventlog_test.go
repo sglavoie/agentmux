@@ -40,11 +40,16 @@ func TestHandler_EventLog_PreservedAcrossStaleSweep(t *testing.T) {
 		if !resp.OK {
 			t.Fatalf("session detail: want OK=true, got %+v", resp)
 		}
-		if len(resp.Events) != 1 {
-			t.Fatalf("events after SweepStale = %d; want 1 (%+v)", len(resp.Events), resp.Events)
+		// The sweep appends its own synthetic WatchdogStale entry; the original
+		// history must still be there in front of it.
+		if len(resp.Events) != 2 {
+			t.Fatalf("events after SweepStale = %d; want 2 (%+v)", len(resp.Events), resp.Events)
 		}
 		if resp.Events[0].Event != "PreToolUse" {
 			t.Errorf("event = %+v; want PreToolUse", resp.Events[0])
+		}
+		if resp.Events[1].Event != eventWatchdogStale {
+			t.Errorf("event = %+v; want %s", resp.Events[1], eventWatchdogStale)
 		}
 	})
 }

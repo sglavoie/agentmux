@@ -7,16 +7,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV5Payload(t *testing.T) {
+func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV6Payload(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	now := time.Unix(1_700_000_100, 0)
+	daemonBuild := buildinfo.Info{Version: "9.9.9", Revision: "abc123", GoVersion: "go1.99", BinaryHash: "feedface"}
+	metrics := daemon.MetricsSnapshot{Accepted: 7, QueueFull: 0, QueueLastWaitNs: 1500}
 	client := &fakeDaemonExportClient{
-		health: daemon.Health{Alive: true, PID: 4321, Uptime: 2 * time.Minute},
+		health: daemon.Health{
+			Alive: true, PID: 4321, Uptime: 2 * time.Minute, Ready: true,
+			Build: &daemonBuild, Metrics: &metrics,
+		},
 		export: func(windowID int) (daemon.EventsExport, error) {
 			if windowID != 0 {
 				return daemon.EventsExport{}, fmt.Errorf("unexpected filter %d", windowID)
@@ -24,7 +30,11 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV5Payload(t *testing.T) {
 			return daemon.EventsExport{
 				EventsByWindow: map[int][]daemon.SessionEvent{
 					42: {
-						{At: 1_700_000_000, Event: "PreToolUse", Action: "active", Source: "new", ResultIconState: "bolt"},
+						{
+							At: 1_700_000_000, Event: "PreToolUse", Action: "active", Source: "new", ResultIconState: "bolt",
+							DaemonSeq: 11, ReceivedAtNs: 1_700_000_000_000_000_001,
+							SourceKind: "harness", SourceKey: "sess-1", SourceSeq: 3, RouteDecision: "source",
+						},
 						{At: 1_700_000_001, Event: "ScreenPromptProbe", Action: "elicitation", Source: "codex_screen", PromptKind: "edit_approval", ResultIconState: "question"},
 					},
 					77: {
@@ -48,6 +58,16 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV5Payload(t *testing.T) {
 						Renderer: daemon.WindowDebugRenderer{
 							DesiredIcon: "question", StateSet: true, Looping: true, LoopingSet: true, RenderFailures: 3,
 							LastRenderError: "set title: unavailable", KittyListenOn: "unix:/tmp/kitty-42",
+						},
+						Shadow: daemon.WindowDebugShadow{
+							EffectiveIcon: "question", EffectiveGen: 4,
+							Facts: []daemon.SourceFactSnapshot{{
+								Kind: daemon.SourceHarness, Key: "sess-1", Action: "elicitation", Icon: "question", Seq: 4,
+							}},
+						},
+						Watchdog: daemon.WindowDebugWatchdog{
+							LastEvent: "SourceExpired", LastReason: "stale active fact", LastAt: 1_700_000_001,
+							SourceExpiries: 2, StaleSweeps: 1, Reconciles: 3,
 						},
 					},
 					77: {
@@ -120,14 +140,23 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV5Payload(t *testing.T) {
 	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
 		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
 	}
-	if payload.SchemaVersion != 5 {
-		t.Fatalf("schema_version = %d; want 5", payload.SchemaVersion)
+	if payload.SchemaVersion != 6 {
+		t.Fatalf("schema_version = %d; want 6", payload.SchemaVersion)
 	}
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())
 	}
-	if payload.Daemon.PID != 4321 || payload.Daemon.UptimeSeconds != 120 {
-		t.Fatalf("daemon = %+v; want pid=4321 uptime_seconds=120", payload.Daemon)
+	if payload.Daemon.PID != 4321 || payload.Daemon.UptimeSeconds != 120 || !payload.Daemon.Ready {
+		t.Fatalf("daemon = %+v; want pid=4321 uptime_seconds=120 ready", payload.Daemon)
+	}
+	if payload.Daemon.Build == nil || payload.Daemon.Build.BinaryHash != "feedface" {
+		t.Fatalf("daemon build = %+v; want binary hash feedface", payload.Daemon.Build)
+	}
+	if payload.Daemon.Metrics == nil || payload.Daemon.Metrics.Accepted != 7 || payload.Daemon.Metrics.QueueLastWaitNs != 1500 {
+		t.Fatalf("daemon metrics = %+v; want accepted=7 queue_last_wait_ns=1500", payload.Daemon.Metrics)
+	}
+	if payload.CLIBuild == nil || payload.CLIBuild.Version == "" {
+		t.Fatalf("cli_build = %+v; want the exporting CLI's identity", payload.CLIBuild)
 	}
 	if len(payload.Windows) != 3 {
 		t.Fatalf("len(windows) = %d; want 3 (%+v)", len(payload.Windows), payload.Windows)
@@ -154,6 +183,19 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV5Payload(t *testing.T) {
 	}
 	if got := window42.Stats.SuppressionReasons["guard_blocked"]; got != 2 {
 		t.Fatalf("window 42 suppression reasons = %+v; want guard_blocked=2", window42.Stats.SuppressionReasons)
+	}
+	if window42.Events[0].DaemonSeq != 11 || window42.Events[0].ReceivedAtNs != 1_700_000_000_000_000_001 ||
+		window42.Events[0].SourceKind != "harness" || window42.Events[0].SourceKey != "sess-1" ||
+		window42.Events[0].SourceSeq != 3 || window42.Events[0].RouteDecision != "source" {
+		t.Fatalf("window 42 v6 event fields = %+v", window42.Events[0])
+	}
+	if len(window42.Shadow.Facts) != 1 || window42.Shadow.Facts[0].Kind != daemon.SourceHarness ||
+		window42.Shadow.Facts[0].Icon != "question" {
+		t.Fatalf("window 42 shadow facts = %+v", window42.Shadow.Facts)
+	}
+	if window42.Watchdog.LastEvent != "SourceExpired" || window42.Watchdog.SourceExpiries != 2 ||
+		window42.Watchdog.Reconciles != 3 {
+		t.Fatalf("window 42 watchdog = %+v", window42.Watchdog)
 	}
 	if !window42.Live.Found || window42.Live.TabID != 91 || window42.Live.OSWindowID != 900 || window42.Live.TabTitle != "⚡W:api" ||
 		window42.Live.BaseTitle != "W:api" || window42.Live.IconState != "bolt" || window42.Live.WindowTitle != "api window" ||

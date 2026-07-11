@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -41,6 +42,48 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	notifier := NewNotifier(&cfg.Defaults.Notifications)
 	handler := NewHandler(guard, notifier)
 	notifier.SetIsMuted(handler.IsMuted)
+	// Capture the artifact identity now, before any later `just install` can
+	// replace the on-disk binary under this running process: health must always
+	// report what the daemon is actually executing.
+	handler.SetBuildInfo(buildinfo.Current())
+
+	kittyRunner := kitty.NewRealRunner()
+	kittyClient := newDaemonKittyClient(kittyRunner)
+	// Assign the Kitty client on the startup goroutine before any server
+	// goroutine can read it. Set the field directly rather than via
+	// SetKittyClient: SetKittyClient primes the cache with an UNBOUNDED
+	// ListWindows, which a wedged Kitty could hang on before the bounded restore
+	// even runs. The bounded restore below is the authoritative initial snapshot.
+	handler.useKittyClient(kittyClient)
+	notifier.SetFocus(kittyClient)
+	global, perAccount := buildStaleThresholds(cfg)
+	handler.SetStaleThresholds(global, perAccount)
+	hsGlobal, hsPerAccount := buildHookSilenceThresholds(cfg)
+	handler.SetHookSilenceThresholds(hsGlobal, hsPerAccount)
+	if cfg.Defaults.Watchdog.ClaudeContextLimitProbe != nil {
+		handler.SetClaudeContextLimitProbe(*cfg.Defaults.Watchdog.ClaudeContextLimitProbe)
+	}
+	// The shadow reducer mirrors the same projections the legacy paths already
+	// consume: guard_duration for the legacy trailing-event grace and the
+	// watchdog thresholds for active-class staleness.
+	handler.SetReducerConfig(ReducerConfig{
+		GuardDuration: int64(cfg.Defaults.GuardDuration),
+		StaleActive:   int64(cfg.Defaults.Watchdog.Active),
+		StaleSubagent: int64(cfg.Defaults.Watchdog.Subagent),
+		StaleCompact:  int64(cfg.Defaults.Watchdog.Compact),
+	})
+
+	// Take one bounded initial Kitty snapshot and restore durable state BEFORE
+	// binding the public socket, so the first client request already sees
+	// restored state. A slow or wedged Kitty must not delay startup: past the
+	// budget the daemon comes up degraded and the maintenance loop reconciles.
+	if ready, reason := handler.restoreStateFromKittyBounded(time.Now(), initialSnapshotBudget); ready {
+		handler.MarkReady()
+		slog.Info("daemon: initial snapshot restored", "socket", socketPath)
+	} else {
+		handler.MarkDegraded(reason)
+		slog.Warn("daemon: starting degraded; initial snapshot did not complete in time", "reason", reason)
+	}
 
 	server, err := NewServer(socketPath, handler)
 	if err != nil {
@@ -50,19 +93,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		server.Close()
 		_ = os.Remove(socketPath)
 	}()
-
-	kittyRunner := kitty.NewRealRunner()
-	kittyClient := newDaemonKittyClient(kittyRunner)
-	handler.SetKittyClient(kittyClient)
-	notifier.SetFocus(kittyClient)
-	global, perAccount := buildStaleThresholds(cfg)
-	handler.SetStaleThresholds(global, perAccount)
-	hsGlobal, hsPerAccount := buildHookSilenceThresholds(cfg)
-	handler.SetHookSilenceThresholds(hsGlobal, hsPerAccount)
-	if cfg.Defaults.Watchdog.ClaudeContextLimitProbe != nil {
-		handler.SetClaudeContextLimitProbe(*cfg.Defaults.Watchdog.ClaudeContextLimitProbe)
-	}
-	handler.restoreStateFromKitty(time.Now())
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -74,7 +104,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(ctx) }()
-	go handler.runRenderer(ctx)
+	// Independent loops: snapshot maintenance (the periodic lister), the
+	// watchdog (the 1s staleness evaluator on in-process elapsed time), the
+	// render worker (the single Kitty writer), and the screen probes. A slow
+	// Kitty write or a wedged screen read stalls only its own loop — never
+	// snapshot publication, watchdog expiry, or event ingestion.
+	go handler.runMaintenance(ctx)
+	go handler.runWatchdog(ctx)
+	go handler.runRenderWorker(ctx)
+	go handler.runScreenProbes(ctx)
 	slog.Info("daemon: ready", "socket", socketPath)
 
 	for {

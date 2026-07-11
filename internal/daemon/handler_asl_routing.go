@@ -5,9 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
-	"github.com/sglavoie/agentmux/internal/contextlimit"
 	"github.com/sglavoie/agentmux/internal/hookevent"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -56,7 +54,8 @@ func (h *Handler) tryRouteActiveLoopSiblingHook(ctx hookEventContext, eventOrAct
 	}
 
 	targets, _ := matchManagedLoopTargets(ctx.windows, []agentloop.Candidate{candidate})
-	if len(targets) == 0 {
+	switch len(targets) {
+	case 0:
 		slog.Debug("asl sibling routing skipped: no managed target for active loop",
 			"window_id", ctx.req.WindowID,
 			"event", eventOrAction,
@@ -64,10 +63,23 @@ func (h *Handler) tryRouteActiveLoopSiblingHook(ctx hookEventContext, eventOrAct
 			"candidate_harness", candidate.Harness,
 		)
 		return false
+	case 1:
+		h.routeActiveLoopSiblingHook(ctx, candidate, targets, eventOrAction, action, payload)
+		return true
+	default:
+		// More than one managed owner matches this unmanaged pane's workspace, so
+		// which one should borrow its state machine is ambiguous. Borrowing state
+		// for a single pane requires a unique target; diagnose and leave state
+		// unchanged rather than fanning one pane's hook onto several owners.
+		slog.Debug("asl sibling routing skipped: ambiguous workspace match; leaving state unchanged",
+			"window_id", ctx.req.WindowID,
+			"event", eventOrAction,
+			"match_count", len(targets),
+			"candidate_cwd", candidate.CWD,
+			"candidate_harness", candidate.Harness,
+		)
+		return false
 	}
-
-	h.routeActiveLoopSiblingHook(ctx, candidate, targets, eventOrAction, action, payload)
-	return true
 }
 
 // routeActiveLoopSiblingHook resolves the source-dependent parts of the hook
@@ -87,24 +99,25 @@ func (h *Handler) routeActiveLoopSiblingHook(
 ) {
 	preservesIcon := hookevent.PreservesCurrent(eventOrAction) && action == "active"
 	contextLimitDetected := hookevent.PayloadHasContextLimit(payload)
-	if !contextLimitDetected && hookevent.ShouldProbeWindowForContextLimit(eventOrAction, action) && h.kittyClient != nil {
-		text, textErr := h.hookKittyClient(ctx.req).GetText(kitty.MatchWindowByID(ctx.req.WindowID), "screen")
-		if textErr != nil {
-			slog.Debug("asl sibling routing context-limit probe failed",
-				"window_id", ctx.req.WindowID,
-				"event", eventOrAction,
-				"err", textErr,
-			)
-		} else if contextlimit.ScreenShowsMarker(text) {
-			action = "stop_failure"
-			preservesIcon = false
-			contextLimitDetected = true
-		}
-	}
+	// As on the in-pane hook path, the source-pane screen read is a targeted
+	// asynchronous probe rather than an inline GetText: the base transitions
+	// land on the managed owners immediately, and the probe upgrades them to
+	// error if the banner is showing on the unmanaged source pane.
+	probeContextLimit := !contextLimitDetected && hookevent.ShouldProbeWindowForContextLimit(eventOrAction, action) && h.kittyClient != nil
 	resetFlowDetected := hookevent.PayloadHasResetFlow(candidate.Harness, eventOrAction, payload)
 
+	var probeTargets []contextLimitProbeTarget
 	for _, target := range targets {
-		h.routeActiveLoopSiblingTarget(ctx, target, eventOrAction, action, payload, preservesIcon, contextLimitDetected, resetFlowDetected)
+		probeTargets = append(probeTargets, h.routeActiveLoopSiblingTarget(ctx, target, eventOrAction, action, payload, preservesIcon, contextLimitDetected, resetFlowDetected))
+	}
+	if probeContextLimit {
+		h.enqueueContextLimitProbe(contextLimitProbe{
+			sourceWindowID: ctx.req.WindowID,
+			req:            ctx.req,
+			event:          eventOrAction,
+			payload:        payload,
+			targets:        probeTargets,
+		})
 	}
 }
 
@@ -123,7 +136,7 @@ func (h *Handler) routeActiveLoopSiblingTarget(
 	preservesIcon bool,
 	contextLimitDetected bool,
 	resetFlowDetected bool,
-) {
+) contextLimitProbeTarget {
 	parts := palette.ParseTitleParts(target.tab.Title)
 	profile := ""
 	harnessName := ""
@@ -134,6 +147,17 @@ func (h *Handler) routeActiveLoopSiblingTarget(
 		muted = muted || target.win.UserVars.Mute != ""
 	}
 	h.setMutedFromSnapshot(target.windowID, muted)
+
+	// Captured before dispatch so an asynchronous context-limit probe can later
+	// promote this managed owner to error with the same render context, even if
+	// the base transition below is deferred by the reset-stop debounce.
+	probeTarget := contextLimitProbeTarget{
+		windowID:     target.windowID,
+		sessionTitle: parts.Base,
+		profile:      profile,
+		harness:      harnessName,
+		currentIcon:  parts.State,
+	}
 
 	stateReq := buildHookStateUpdateRequest(
 		target.windowID,
@@ -150,10 +174,17 @@ func (h *Handler) routeActiveLoopSiblingTarget(
 		resetFlowDetected,
 		ctx.req.KittyListenOn,
 	)
+	// Stamp the source-scoped view for the shadow reducer against the managed
+	// target: a routed sibling hook advances the owner's fact map, exactly as
+	// its legacy transition advances the owner's state machine.
+	normalized := NormalizedFromHook(eventOrAction, harnessName, ctx.req.PayloadJSON, target.windowID)
+	stateReq.normalized = &normalized
+	stateReq.routeDecision = routeDecisionOwner
 	if h.deferResetSensitiveStop(stateReq, payload) {
-		return
+		return probeTarget
 	}
 	h.handleStateUpdate(stateReq)
+	return probeTarget
 }
 
 // activeLoopCandidates returns the current active agent-session-loop candidates,

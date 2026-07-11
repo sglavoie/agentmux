@@ -58,7 +58,10 @@ func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T)
 func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *testing.T) {
 	h := newTestHandler()
 	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "failure", KittyListenOn: "unix:/tmp/kitty-7"})
-	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "permission"}) // blocked by failure guard
+	// The legacy failure guard refuses the permission (logged as guard_blocked),
+	// but the reducer applies it: key outranks warning in the icon precedence,
+	// so the authoritative visible icon is the key.
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "permission"})
 
 	h.stateMu.Lock()
 	st := h.store[7]
@@ -72,7 +75,7 @@ func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *te
 		t.Fatalf("events export: want OK=true, got %+v", resp)
 	}
 	meta := resp.WindowMetadata[7]
-	if meta.Renderer.DesiredIcon != "warning" || !meta.Renderer.StateSet || meta.Renderer.RenderFailures != 3 ||
+	if meta.Renderer.DesiredIcon != "key" || !meta.Renderer.StateSet || meta.Renderer.RenderFailures != 3 ||
 		meta.Renderer.LastRenderError != "set user vars: kitty unavailable" ||
 		meta.Renderer.KittyListenOn != "unix:/tmp/kitty-7" {
 		t.Fatalf("renderer metadata = %+v", meta.Renderer)

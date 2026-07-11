@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -29,12 +30,31 @@ type Handler struct {
 	// uptime. Zero value means uptime should be reported as 0.
 	startedAt time.Time
 
+	// buildInfo identifies the artifact this daemon is running. Stamped once
+	// by daemon.Run at startup (before the on-disk binary can be replaced)
+	// and reported from TypeHealth so clients can detect a CLI/daemon build
+	// mismatch. Nil in unit tests that never set it.
+	buildInfo *buildinfo.Info
+
+	// metricsFn returns the owning server's request-outcome counters (queue
+	// saturation, queue latency) for TypeHealth and export surfaces. Installed
+	// by NewServer; nil when the handler runs without a server.
+	metricsFn func() MetricsSnapshot
+
+	// eventSeq is the daemon's global monotonic receipt sequence, stamped onto
+	// every event appended to a per-window ring so exports can totally order
+	// receipts across windows. Guarded by stateMu; restarts from zero with the
+	// daemon (receipt order is a process-lifetime notion).
+	eventSeq uint64
+
 	// kittyClient is used by the stale sweep to clear stranded tab-title icons.
 	// Injected by daemon.Run; nil in unit tests that don't exercise the
 	// title-clear path.
 	kittyClient kittyTitleClient
 
-	renderCh chan struct{}
+	// renderQueue is the latest-generation per-window render queue consumed by
+	// the render worker (renderqueue.go), the daemon's single Kitty writer.
+	renderQueue *renderQueue
 
 	// staleThresholds holds per-action stale-detection durations, keyed by
 	// the action name ("active", "subagent", "compact"). A missing or zero
@@ -69,7 +89,22 @@ type Handler struct {
 
 	kittySockets      map[int]string
 	lastKittyListenOn string
-	lastRenderTickAt  time.Time
+
+	// snapshots holds the immutable Kitty snapshot cache. The render/restore
+	// loop is the single lister and publishes into it; hook routing reads it
+	// without any Kitty I/O so a slow or wedged ListWindows can never delay a
+	// hook acknowledgement. Its own RWMutex keeps snapshot reads off stateMu.
+	snapshots snapshotStore
+
+	// readiness tracks whether the daemon completed its bounded initial
+	// snapshot+restore before binding the public socket, and, if not, why it
+	// started degraded. Exposed via TypeHealth. Guarded by its own mutex.
+	readiness readinessState
+
+	// probeRunner runs an asynchronous context-limit screen probe off the hook
+	// goroutine. Nil means spawn a goroutine (production); tests inject a
+	// synchronous runner for deterministic assertions.
+	probeRunner func(func())
 
 	// activeLoopCache memoizes agent-session-loop discovery for the ASL
 	// sibling-pane routing exception (handler_asl_routing.go). Discovery scans
@@ -88,6 +123,21 @@ type Handler struct {
 	// scan that started before invalidateActiveLoopCache from overwriting the
 	// newer (empty) state with a stale candidate set.
 	activeLoopCacheGen uint64
+
+	// aslMissStreak counts, per window lease, how many consecutive successful
+	// discoveries missed the lease's run. Reconciliation releases the lease at
+	// aslMissingRunThreshold; a discovery failure leaves the counters (and the
+	// leases) untouched. lastASLReconcileAt gates the periodic reconciliation
+	// cadence. Both guarded by stateMu.
+	aslMissStreak      map[aslLeaseRef]int
+	lastASLReconcileAt time.Time
+
+	// reducerCfg holds the deterministic thresholds handed to each window's
+	// shadow reducer. Set once at startup from [defaults.watchdog] and
+	// guard_duration (SetReducerConfig); the zero value disables the reducer's
+	// staleness self-heals and legacy grace, which is what unit tests want.
+	// Guarded by stateMu (per-window reducers are only touched under it).
+	reducerCfg ReducerConfig
 
 	// claudeContextLimitProbeEnabled gates ProbeClaudeContextLimit. Set from
 	// [defaults.watchdog].claude_context_limit_probe at daemon startup.
@@ -108,11 +158,27 @@ type Handler struct {
 	// lastSeenEventAt for rationale.
 	notifiedHookSilence map[string]bool
 
-	// windowMetadata stores the durable per-window export snapshot. Unlike the
-	// live watchdog maps, terminal cleanup and closed-window GC intentionally do
-	// not clear this so post-mortem exports still have identity/context even
-	// after the original Kitty tab is gone.
+	// hookSilenceIdle accumulates in-process observed idle time per account
+	// (lowercased), anchored to that account's lastSeenEventAt value. The
+	// hook-silence sweep expires on the accumulated duration rather than a
+	// wall-clock difference so a system sleep cannot fire a false silence
+	// notification on wake. Guarded by stateMu.
+	hookSilenceIdle map[string]*accountIdle
+
+	// windowMetadata stores the durable per-window export snapshot. Terminal
+	// cleanup intentionally does not clear this so post-mortem exports still
+	// have identity/context even after the original Kitty tab is gone;
+	// closed-window GC bounds it via windowTombstones below.
 	windowMetadata map[int]WindowDebugMetadata
+
+	// windowTombstones records when each closed window was garbage-collected.
+	// The tombstone is the retention lease for the window's durable metadata:
+	// entries expire after windowTombstoneRetention or once
+	// maxWindowTombstones is exceeded (oldest first, tracked by
+	// tombstoneOrder), and eviction deletes the windowMetadata entry too. A
+	// tombstoned window never counts as renderer drift. Guarded by stateMu.
+	windowTombstones map[int]time.Time
+	tombstoneOrder   []int
 
 	// onShutdown is called when a TypeShutdown request is received.
 	onShutdown func()
@@ -127,23 +193,34 @@ type Handler struct {
 // At ~50 windows × ~200 B/event, the upper bound stays around ~5 MB worst case.
 const maxEventsPerWindow = 5000
 
-// NewHandler creates a Handler with the given guard and notifier.
+// NewHandler creates a Handler with the given guard and notifier. The
+// reducer's trailing-event grace defaults to the guard duration so legacy
+// guard semantics and reducer suppression agree; daemon.Run overrides the
+// full threshold set via SetReducerConfig.
 func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
+	var cfg ReducerConfig
+	if guard != nil {
+		cfg.GuardDuration = int64(guard.duration / time.Second)
+	}
 	return &Handler{
 		guard:                          guard,
 		notifier:                       notifier,
+		reducerCfg:                     cfg,
 		startedAt:                      time.Now(),
 		staleThresholds:                make(map[string]time.Duration),
 		perAccountThresholds:           make(map[string]map[string]time.Duration),
 		perAccountHookSilence:          make(map[string]time.Duration),
 		store:                          make(map[int]*WindowState),
 		pendingResetStops:              make(map[int]pendingResetStop),
-		renderCh:                       make(chan struct{}, 1),
+		renderQueue:                    newRenderQueue(),
 		kittySockets:                   make(map[int]string),
 		claudeContextLimitProbeEnabled: true,
+		aslMissStreak:                  make(map[aslLeaseRef]int),
 		lastSeenEventAt:                make(map[string]time.Time),
 		notifiedHookSilence:            make(map[string]bool),
+		hookSilenceIdle:                make(map[string]*accountIdle),
 		windowMetadata:                 make(map[int]WindowDebugMetadata),
+		windowTombstones:               make(map[int]time.Time),
 	}
 }
 
@@ -176,7 +253,30 @@ func (h *Handler) handleHealth() Response {
 	if !h.startedAt.IsZero() {
 		uptime = int64(time.Since(h.startedAt).Seconds())
 	}
-	return Response{OK: true, PID: os.Getpid(), UptimeSeconds: uptime}
+	ready, degraded := h.Readiness()
+	resp := Response{OK: true, PID: os.Getpid(), UptimeSeconds: uptime, Ready: ready, DegradedReason: degraded}
+	if h.buildInfo != nil {
+		build := *h.buildInfo
+		resp.Build = &build
+	}
+	if h.metricsFn != nil {
+		metrics := h.metricsFn()
+		resp.Metrics = &metrics
+	}
+	return resp
+}
+
+// SetBuildInfo stamps the daemon's artifact identity for TypeHealth. Called
+// once at startup, before any request is served.
+func (h *Handler) SetBuildInfo(info buildinfo.Info) {
+	h.buildInfo = &info
+}
+
+// setMetricsSource installs the server's metrics snapshot function so health
+// responses carry request-outcome counters. Called by NewServer before the
+// socket accepts connections.
+func (h *Handler) setMetricsSource(fn func() MetricsSnapshot) {
+	h.metricsFn = fn
 }
 
 func (h *Handler) handleStateQuery() Response {
@@ -248,7 +348,7 @@ func (h *Handler) handleEventsExport(req Request) Response {
 			out[req.WindowID] = cp
 		}
 		if snapshot, ok := h.windowMetadata[req.WindowID]; ok {
-			meta[req.WindowID] = cloneWindowDebugMetadata(snapshot)
+			meta[req.WindowID] = h.exportEnrichLocked(req.WindowID, cloneWindowDebugMetadata(snapshot))
 		}
 	} else {
 		out = make(map[int][]SessionEvent, len(h.store))
@@ -262,23 +362,59 @@ func (h *Handler) handleEventsExport(req Request) Response {
 		}
 		meta = make(map[int]WindowDebugMetadata, len(h.windowMetadata))
 		for id, snapshot := range h.windowMetadata {
-			meta[id] = cloneWindowDebugMetadata(snapshot)
+			meta[id] = h.exportEnrichLocked(id, cloneWindowDebugMetadata(snapshot))
 		}
 	}
 	h.stateMu.Unlock()
 	return Response{OK: true, EventsByWindow: out, WindowMetadata: meta}
 }
 
+// exportEnrichLocked stamps live-only state onto an export snapshot: the
+// renderer dirty age (DirtySince in the metadata is copied at mutation time;
+// the age is computed at export time so a long-stuck window reads truthfully)
+// and the reducer's current source facts, so diagnostics can hold the visible
+// icon accountable to the authoritative fact set. Callers hold stateMu.
+func (h *Handler) exportEnrichLocked(windowID int, meta WindowDebugMetadata) WindowDebugMetadata {
+	st, ok := h.store[windowID]
+	if !ok {
+		return meta
+	}
+	if st.Dirty && !st.DirtySince.IsZero() {
+		meta.Renderer.DirtyAgeSeconds = int64(time.Since(st.DirtySince) / time.Second)
+	}
+	if st.Reducer != nil {
+		meta.Shadow.Facts = st.Reducer.Facts()
+	}
+	return meta
+}
+
 func cloneWindowDebugMetadata(in WindowDebugMetadata) WindowDebugMetadata {
 	out := in
-	if in.Stats.SuppressionReasons == nil {
-		return out
+	if in.Stats.SuppressionReasons != nil {
+		out.Stats.SuppressionReasons = make(map[string]int, len(in.Stats.SuppressionReasons))
+		for reason, count := range in.Stats.SuppressionReasons {
+			out.Stats.SuppressionReasons[reason] = count
+		}
 	}
-	out.Stats.SuppressionReasons = make(map[string]int, len(in.Stats.SuppressionReasons))
-	for reason, count := range in.Stats.SuppressionReasons {
-		out.Stats.SuppressionReasons[reason] = count
+	if in.Shadow.Mismatches != nil {
+		out.Shadow.Mismatches = make([]ShadowMismatch, len(in.Shadow.Mismatches))
+		copy(out.Shadow.Mismatches, in.Shadow.Mismatches)
 	}
 	return out
+}
+
+// SetReducerConfig installs the shadow reducer thresholds. Existing per-window
+// reducers are re-bound too, so a restore that ran before configuration (unit
+// tests, degraded startups) still ends up on the configured thresholds.
+func (h *Handler) SetReducerConfig(cfg ReducerConfig) {
+	h.stateMu.Lock()
+	h.reducerCfg = cfg
+	for _, st := range h.store {
+		if st.Reducer != nil {
+			st.Reducer.SetConfig(cfg)
+		}
+	}
+	h.stateMu.Unlock()
 }
 
 // IsMuted reports whether the given window is currently marked as muted. The

@@ -1,14 +1,25 @@
 package daemon
 
 import (
+	"time"
+
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // appendEventLocked records an event into the per-window ring buffer. The
 // caller must hold stateMu. Older entries are dropped from the front once the
-// slice would exceed maxEventsPerWindow.
+// slice would exceed maxEventsPerWindow. Every appended event is stamped with
+// the daemon's global receipt sequence and, when the producer did not set one,
+// a nanosecond receipt time — so exports can totally order receipts across
+// windows regardless of which path appended them.
 func (h *Handler) appendEventLocked(windowID int, event SessionEvent) {
 	st := h.ensureWindowStateLocked(windowID)
+
+	h.eventSeq++
+	event.DaemonSeq = h.eventSeq
+	if event.ReceivedAtNs == 0 {
+		event.ReceivedAtNs = time.Now().UnixNano()
+	}
 
 	meta := h.windowMetadata[windowID]
 	meta.Stats.EventCount++
@@ -44,6 +55,16 @@ func (h *Handler) syncRendererMetadataLocked(windowID int) {
 	meta.Renderer.LoopingSet = st.LoopingSet
 	meta.Renderer.RenderFailures = st.RenderFailures
 	meta.Renderer.LastRenderError = st.LastRenderError
+	meta.Renderer.QueuedGen = st.QueuedGen
+	meta.Renderer.AttemptedGen = st.AttemptedGen
+	meta.Renderer.PersistedGen = st.PersistedGen
+	meta.Renderer.RenderedGen = st.RenderedGen
+	meta.Renderer.FailedGen = st.FailedGen
+	meta.Renderer.DirtySince = 0
+	if st.Dirty && !st.DirtySince.IsZero() {
+		meta.Renderer.DirtySince = st.DirtySince.Unix()
+	}
+	meta.Renderer.LastRenderLatencyMs = st.LastRenderLatency.Milliseconds()
 	meta.Renderer.KittyListenOn = h.kittySockets[windowID]
 	if meta.Renderer.KittyListenOn == "" {
 		meta.Renderer.KittyListenOn = h.lastKittyListenOn

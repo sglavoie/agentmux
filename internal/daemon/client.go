@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 )
 
 // SocketPath returns the Unix socket path for the daemon. If the user's home
@@ -41,11 +43,16 @@ func NewClientWithSocket(path string) *Client {
 	return &Client{socketPath: path}
 }
 
-// sendDeadline bounds one request/response exchange. autoStartDeadline bounds
-// the full hook-client path, including daemon start and retry, so a hook never
-// delays its harness by more than a small fraction of a second.
-var sendDeadline = 500 * time.Millisecond
-var autoStartDeadline = 800 * time.Millisecond
+// sendDeadline bounds one request/response exchange with a live daemon. A
+// normal acknowledgement returns well within this budget; the ceiling only
+// guards against a wedged daemon. autoStartDeadline bounds the full hook-client
+// path, including a cold daemon start and retry, so a hook never delays its
+// harness beyond the two-second cold-start budget.
+const normalAckBudget = 250 * time.Millisecond
+const coldStartBudget = 2 * time.Second
+
+var sendDeadline = normalAckBudget
+var autoStartDeadline = coldStartBudget
 
 var autoStartRetryDelay = 50 * time.Millisecond
 var spawnDetached = SpawnDetached
@@ -55,10 +62,23 @@ const restartSocketPollCount = 20
 var restartSocketPollDelay = 50 * time.Millisecond
 
 // maxResponseBytes caps the response payload size the client will buffer.
-// It mirrors the server's request ceiling (1 MiB) so an oversize or
-// malformed response triggers an explicit error rather than bufio.Scanner's
-// silent 64 KiB truncation.
-const maxResponseBytes = 1 << 20
+// Requests stay bounded by the server's 1 MiB ceiling, but responses are
+// asymmetric: a full events export (TypeEventsExport, WindowID 0) carries
+// every window's event ring buffer and exceeds 1 MiB on a busy daemon —
+// observed live against the production daemon, where doctor and audit
+// degraded to a daemon_export failure finding. 64 MiB gives bulk
+// diagnostics generous headroom while still surfacing a runaway response
+// as an explicit error rather than bufio.Scanner's silent 64 KiB
+// truncation. The scanner allocates lazily (64 KiB initial), so the raised
+// ceiling costs nothing on small responses. A var so tests can pin the
+// oversize path without shuttling 64 MiB through a socket.
+var maxResponseBytes = 64 << 20
+
+// exportDeadline bounds the full events-export exchange. Bulk diagnostic
+// reads legitimately take longer than the 250ms hook-ack budget (the daemon
+// deep-copies and marshals every window's ring buffer), so ExportEvents
+// gets its own generous bound instead of inheriting sendDeadline.
+var exportDeadline = 5 * time.Second
 
 // Send sends req to the daemon and returns the response.
 // Returns an error if the daemon is not reachable.
@@ -121,11 +141,17 @@ func (c *Client) sendBefore(req Request, deadline time.Time) (Response, error) {
 }
 
 // Health is the result of a TypeHealth query. Alive is false when the
-// daemon is unreachable; in that case PID and Uptime are zero.
+// daemon is unreachable; in that case every other field is zero. Build and
+// Metrics are nil when the daemon predates them (or, for Metrics, when the
+// handler runs without a server).
 type Health struct {
-	Alive  bool
-	PID    int
-	Uptime time.Duration
+	Alive          bool
+	PID            int
+	Uptime         time.Duration
+	Ready          bool
+	DegradedReason string
+	Build          *buildinfo.Info
+	Metrics        *MetricsSnapshot
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -140,9 +166,13 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		return Health{}
 	}
 	return Health{
-		Alive:  true,
-		PID:    resp.PID,
-		Uptime: time.Duration(resp.UptimeSeconds) * time.Second,
+		Alive:          true,
+		PID:            resp.PID,
+		Uptime:         time.Duration(resp.UptimeSeconds) * time.Second,
+		Ready:          resp.Ready,
+		DegradedReason: resp.DegradedReason,
+		Build:          resp.Build,
+		Metrics:        resp.Metrics,
 	}
 }
 
@@ -326,7 +356,7 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 // for the richer CLI export so the command does not have to know about the
 // message-type constant or response-shape details.
 func (c *Client) ExportEvents(windowID int) (EventsExport, error) {
-	resp, err := c.Send(Request{Type: TypeEventsExport, WindowID: windowID})
+	resp, err := c.sendWithDeadline(Request{Type: TypeEventsExport, WindowID: windowID}, exportDeadline)
 	if err != nil {
 		return EventsExport{}, err
 	}

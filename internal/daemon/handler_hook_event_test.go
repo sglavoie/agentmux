@@ -271,6 +271,9 @@ func TestHandler_HookEventTabTitleOwnerStillUpdates(t *testing.T) {
 
 func TestHandler_HookEventScreenContextLimitPromotesStopFailure(t *testing.T) {
 	h := newTestHandler()
+	// Run the async context-limit probe inline so the promotion is deterministic
+	// while still exercising the asynchronous request path.
+	h.probeRunner = func(fn func()) { fn() }
 	tabTitle := palette.BuildTitle("api", "bolt", false)
 	fake := &fakeKittyClient{
 		windows: hookEventWindows(tabTitle, []kitty.Window{{
@@ -296,15 +299,23 @@ func TestHandler_HookEventScreenContextLimitPromotesStopFailure(t *testing.T) {
 		t.Fatalf("hook event response = %+v", resp)
 	}
 	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
-	if len(detail.Events) != 1 {
-		t.Fatalf("events = %d, want 1 (%+v)", len(detail.Events), detail.Events)
+	// The asynchronous probe appends a stop_failure upgrade once it sees the
+	// banner on the source screen. It is always the final applied event.
+	if len(detail.Events) == 0 {
+		t.Fatalf("events = 0; want at least the async stop_failure upgrade")
 	}
-	ev := detail.Events[0]
+	ev := detail.Events[len(detail.Events)-1]
 	if ev.Action != "stop_failure" || ev.ResultIconState != "error" || !ev.ContextLimit {
-		t.Fatalf("event = %+v; want stop_failure error context-limit", ev)
+		t.Fatalf("upgrade event = %+v; want stop_failure error context-limit", ev)
 	}
-	if ev.CurrentIconState != "bolt" || ev.NotificationType != "agent_idle" {
-		t.Fatalf("event context = %+v; want current bolt notification agent_idle", ev)
+	if ev.CurrentIconState != "bolt" {
+		t.Fatalf("upgrade event context = %+v; want current bolt", ev)
+	}
+	h.stateMu.Lock()
+	st := h.store[42]
+	h.stateMu.Unlock()
+	if st == nil || st.DesiredIcon != "error" {
+		t.Fatalf("state = %+v; want error icon after async context-limit promotion", st)
 	}
 }
 

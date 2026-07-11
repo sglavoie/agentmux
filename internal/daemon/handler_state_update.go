@@ -6,20 +6,65 @@ import (
 	"time"
 )
 
+// applyOutcome carries what the legacy state machine decided about a request
+// so the authoritative reducer step can fold the same event it processed.
+type applyOutcome struct {
+	// skipReduce marks a request the legacy machine consumed as a
+	// harness-specific quirk (copilot prompt bookkeeping, subagent reference
+	// counting, auto-approved permissions, preserve-current child completions).
+	// Those events carry no source-scoped fact: folding them into the reducer
+	// would repaint icons the quirk layer exists to hold back.
+	skipReduce bool
+	// reduceAction is the action the legacy machine settled on after
+	// reset-flow rewrites and copilot synthetic stops, so the reducer folds
+	// what actually happened rather than the pre-rewrite stamp.
+	reduceAction string
+	// notifyAction is the action notification decisions are made from. It
+	// tracks reduceAction except for synthetic copilot stops, which the legacy
+	// notifier never surfaced.
+	notifyAction string
+	// guardBlocked marks a request the legacy StateGuard refused. The event
+	// still reaches the reducer, which owns the visible outcome — the reducer
+	// step logs the authoritative suppression reason (or falls back to
+	// guard_blocked when the reducer did not suppress).
+	guardBlocked bool
+}
+
+// handleStateUpdate runs one state-changing request through the legacy state
+// machine (applyStateUpdate) for its guard bookkeeping, harness quirk
+// handling, and event logging — then folds the event into the window's
+// source-fact reducer, whose effective state is the authoritative visible
+// state (DesiredIcon + Looping). The legacy scalar decision is kept only as
+// divergence evidence in the shadow export. Suppressed transitions still
+// return OK, so the reducer sees them too and applies its own suppression
+// rules.
 func (h *Handler) handleStateUpdate(req Request) Response {
+	resp, outcome := h.applyStateUpdate(req)
+	if resp.OK && !outcome.skipReduce {
+		h.reduceStateUpdate(req, outcome, resp, time.Now())
+	}
+	return resp
+}
+
+func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
+	var outcome applyOutcome
 	if req.WindowID <= 0 {
-		return Response{OK: false, Error: "window_id is required for state_update"}
+		return Response{OK: false, Error: "window_id is required for state_update"}, outcome
 	}
 	if req.Action == "" {
-		return Response{OK: false, Error: "action is required for state_update"}
+		return Response{OK: false, Error: "action is required for state_update"}, outcome
 	}
 	if _, ok := actionPriority[req.Action]; !ok {
-		return Response{OK: false, Error: "unknown action: " + req.Action}
+		return Response{OK: false, Error: "unknown action: " + req.Action}, outcome
 	}
 
 	if req.Action == "loop_marker" {
-		return h.handleLoopMarkerStateUpdate(req)
+		return h.handleLoopMarkerStateUpdate(req), outcome
 	}
+
+	// Child-complete signals refresh activity bookkeeping while preserving the
+	// visible icon; they never become source facts.
+	outcome.skipReduce = req.PreservesIcon
 
 	// A newer prompt or explicit wipe supersedes a stop still held in the
 	// reset-defer window; drop it before this update lands so the debounced stop
@@ -33,9 +78,18 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	receivedAt := time.Now()
 	h.stateMu.Lock()
 	req = h.applyResetFlowLocked(req)
+	// A reset flow may have just rewritten the action (stop → user_clear); the
+	// reducer and notifier must see the settled action, not the raw stamp.
+	outcome.reduceAction = req.Action
+	outcome.notifyAction = req.Action
 	h.touchWindowMetadataLocked(req)
 	h.rememberKittySocketLocked(req.WindowID, req.KittyListenOn)
 	st := h.ensureWindowStateLocked(req.WindowID)
+	// Capture the visible state before any mutation so the final dirty mark
+	// can distinguish a visual change (immediate render) from activity-only
+	// bookkeeping (batched persistence).
+	visualIconBefore := desiredIconForState(st)
+	visualLoopingBefore := st.Looping
 	if req.Account != "" {
 		st.LastAccount = req.Account
 		accountKey := strings.ToLower(req.Account)
@@ -78,6 +132,12 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	priorAutoApprovedToolPrompt := copilotPermissionState == copilotToolPermissionAutoApproved
 	h.stateMu.Unlock()
 	syntheticStop := shouldSynthesizeCopilotCompactStop(req, prevAction)
+	if syntheticStop {
+		// The legacy machine records this idle as a stop; the reducer must fold
+		// the same synthetic stop. The notifier keeps the raw idle (legacy never
+		// notified synthetic copilot stops).
+		outcome.reduceAction = "stop"
+	}
 	if shouldSuppressCopilotPendingPrompt(req, prevAction) {
 		// Re-arm the actual prior state — prevAction is "permission" or
 		// "elicitation" here. Re-arming "permission" unconditionally would
@@ -92,7 +152,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.stateMu.Lock()
 		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotPendingPrompt, currentIconState))
 		h.stateMu.Unlock()
-		return Response{OK: true, Allowed: false}
+		outcome.skipReduce = true
+		return Response{OK: true, Allowed: false}, outcome
 	}
 	if shouldSuppressPendingElicitationActive(req, prevAction) {
 		slog.Debug("pending elicitation active suppression",
@@ -103,7 +164,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.stateMu.Lock()
 		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonElicitationPending, currentIconState))
 		h.stateMu.Unlock()
-		return Response{OK: true, Allowed: false}
+		outcome.skipReduce = true
+		return Response{OK: true, Allowed: false}, outcome
 	}
 
 	// Only terminal/idle transitions invalidate a pending permission notification.
@@ -146,11 +208,17 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			// a SubagentStop carrying a real failure (action == "stop_failure",
 			// e.g. stopReason = "error" / "max_tokens") must surface so the user
 			// sees the failure even when sibling agents are still running.
+			//
+			// The reducer still sees this stop (no skipReduce): it owns the
+			// per-agent facts and the balanced legacy multiset, and an
+			// intermediate stop must end that one agent's contribution — the
+			// remaining agents keep 🤖 through source-fact precedence, not
+			// through hiding the event.
 			h.guard.TryUpdate(req.WindowID, "subagent", false)
 			h.stateMu.Lock()
 			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonSubagentStillRunning, currentIconState))
 			h.stateMu.Unlock()
-			return Response{OK: true, Allowed: false}
+			return Response{OK: true, Allowed: false}, outcome
 		}
 		if wasTracked && remaining == 0 {
 			// Last agent finished — clear the subagent guard so the "active" below
@@ -208,7 +276,8 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 			h.stateMu.Lock()
 			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotMidSubagent, currentIconState))
 			h.stateMu.Unlock()
-			return Response{OK: true, Allowed: false}
+			outcome.skipReduce = true
+			return Response{OK: true, Allowed: false}, outcome
 		}
 	}
 
@@ -234,9 +303,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		meta.Durable.ActivityAt = now.Unix()
 		h.windowMetadata[req.WindowID] = meta
 		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve, currentIconState))
-		h.markWindowDirtyLocked(req.WindowID)
+		// The icon is preserved, so this is durable bookkeeping only.
+		h.markWindowActivityDirtyLocked(req.WindowID)
 		h.stateMu.Unlock()
-		return Response{OK: true, Allowed: true, IconState: IconStatePreserve}
+		outcome.skipReduce = true
+		return Response{OK: true, Allowed: true, IconState: IconStatePreserve}, outcome
 	}
 
 	// Terminal / cleanup states reset the subagent counter.
@@ -270,23 +341,11 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.stateMu.Unlock()
 	}
 
-	// Block non-prompt active events from overwriting a terminal stop state.
-	// PostToolBatch can race with Stop in async execution; once the stop guard
-	// expires, lastAction is the main barrier, with the current title icon as a
-	// restart-safe fallback after daemon auto-starts or restarts. This check
-	// runs BEFORE TryUpdate so a suppressed "active" cannot leave the guard
-	// armed at "active" — otherwise a subsequent idle would see prevGuard
-	// "active" and ask the indicator to clear the persisting stop icon.
-	if req.Action == "active" && !req.IsPrompt {
-		if prevAction == "stop" || prevAction == "stop_failure" {
-			h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, req.Action, req.PipeMode)
-			h.stateMu.Lock()
-			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonActiveAfterTerminal, currentIconState))
-			h.stateMu.Unlock()
-			return Response{OK: true, Allowed: false}
-		}
-	}
-
+	// The global active-after-terminal barrier that used to live here is gone:
+	// terminal trailing suppression is now the reducer's job, scoped to the
+	// same source and turn (with a guard_duration grace for unidentified
+	// events) so a genuinely new turn, tool call, or post-grace activity is
+	// authoritative recovery instead of being suppressed indefinitely.
 	prevGuard := h.guard.Current(req.WindowID)
 	preservedAction := ""
 	if req.PreservesIcon {
@@ -307,15 +366,18 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		"allowed", allowed,
 	)
 	if !allowed {
-		// The guard suppressed the icon transition, but the user's intent may
-		// still warrant a notification (permission/stop/failure/elicitation).
-		// Pass req.Action — the notifier filters by its own per-action config and
-		// cooldown, so this cannot double-fire with the success path below.
-		h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, req.Action, req.PipeMode)
-		h.stateMu.Lock()
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked, currentIconState))
-		h.stateMu.Unlock()
-		return Response{OK: true, Allowed: false}
+		// The guard suppressed the legacy icon transition; the reducer still
+		// sees the event and makes the authoritative visible-state and
+		// notification decisions — including which suppression reason the
+		// event log records. Requests the reducer never sees (preserve-icon
+		// child completions) log the legacy reason here.
+		outcome.guardBlocked = true
+		if outcome.skipReduce {
+			h.stateMu.Lock()
+			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonGuardBlocked, currentIconState))
+			h.stateMu.Unlock()
+		}
+		return Response{OK: true, Allowed: false}, outcome
 	}
 
 	// Auto-approved permission: the Claude harness can emit PermissionRequest
@@ -439,8 +501,19 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 	}
 	if isCopilotAutoApprovedPerm {
 		h.cancelPendingNotification(req.WindowID)
-	} else {
+	} else if isAutoApprovedPerm {
+		// The heuristic can misfire on a real prompt (Claude fires
+		// PermissionRequest after PreToolUse for genuinely blocking dialogs
+		// too), so the debounced notification still goes out even though the
+		// icon stays preserved: a truly auto-approved tool call's follow-up
+		// activity arrives within the debounce and the user ignores one toast,
+		// while a real prompt the user must see is never silently swallowed.
 		h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, effective, req.PipeMode)
+	}
+	if isAutoApprovedPerm {
+		// The permission resolved itself; there is no fact to fold and no key
+		// icon to surface.
+		outcome.skipReduce = true
 	}
 
 	h.stateMu.Lock()
@@ -459,10 +532,16 @@ func (h *Handler) handleStateUpdate(req Request) Response {
 		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, loggedAction, iconState, currentIconState))
 	}
 	h.syncRendererMetadataLocked(req.WindowID)
-	h.markWindowDirtyLocked(req.WindowID)
+	// Visual changes render immediately; everything else is batched
+	// persistence flushed by the next maintenance tick.
+	if st := h.ensureWindowStateLocked(req.WindowID); desiredIconForState(st) != visualIconBefore || st.Looping != visualLoopingBefore {
+		h.markWindowDirtyLocked(req.WindowID)
+	} else {
+		h.markWindowActivityDirtyLocked(req.WindowID)
+	}
 	h.stateMu.Unlock()
 
-	return Response{OK: true, Allowed: true, IconState: iconState}
+	return Response{OK: true, Allowed: true, IconState: iconState}, outcome
 }
 
 // handleLoopMarkerStateUpdate records an ASL lifecycle signal without
@@ -483,17 +562,27 @@ func (h *Handler) handleLoopMarkerStateUpdate(req Request) Response {
 		h.lastSeenEventAt[accountKey] = receivedAt
 		delete(h.notifiedHookSilence, accountKey)
 	}
+	loopingBefore, loopingSetBefore := st.Looping, st.LoopingSet
 	switch req.Event {
-	case "AgentSessionLoopStarted", "AgentSessionLoopTurnStarted":
+	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
+		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnFinished,
+		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
+		agentSessionLoopVerificationFinished, agentSessionLoopPaused:
 		st.Looping = true
 		st.LoopingSet = true
-	case "AgentSessionLoopFinished":
+	case agentSessionLoopFinished:
 		st.Looping = false
 		st.LoopingSet = true
 	}
 	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve, desiredIconForState(st)))
 	h.syncRendererMetadataLocked(req.WindowID)
-	h.markWindowDirtyLocked(req.WindowID)
+	// A heartbeat that leaves the marker as-is is activity bookkeeping; only a
+	// marker flip needs an immediate repaint.
+	if st.Looping != loopingBefore || st.LoopingSet != loopingSetBefore {
+		h.markWindowDirtyLocked(req.WindowID)
+	} else {
+		h.markWindowActivityDirtyLocked(req.WindowID)
+	}
 	h.stateMu.Unlock()
 
 	slog.Debug("loop marker received",

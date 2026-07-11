@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -149,36 +150,48 @@ func findExportWindow(t *testing.T, payload daemon.ExportEventsPayload, id int) 
 
 func resetDaemonStatusTestState(t *testing.T) {
 	t.Helper()
-	oldPing := daemonPing
+	oldClient := newDaemonExportClient
 	oldSocketPath := daemonSocketPath
 	oldOut := daemonStatusCmd.OutOrStdout()
 	t.Cleanup(func() {
-		daemonPing = oldPing
+		newDaemonExportClient = oldClient
 		daemonSocketPath = oldSocketPath
 		daemonStatusCmd.SetOut(oldOut)
 	})
 }
 
 func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
+	build := buildinfo.Info{Version: "9.9.9", Revision: "0123456789abcdef", GoVersion: "go1.99"}
 	cases := []struct {
-		name    string
-		pingErr error
-		want    string
+		name   string
+		health daemon.Health
+		want   string
 	}{
 		{
-			name: "running",
-			want: "daemon: running (/tmp/amx.sock)\n",
+			name:   "running ready with build",
+			health: daemon.Health{Alive: true, Ready: true, Build: &build},
+			want: "daemon: running (/tmp/amx.sock)\n" +
+				"ready: true\n" +
+				"build: " + build.String() + "\n",
 		},
 		{
-			name:    "not running",
-			pingErr: fmt.Errorf("connect: no such file"),
-			want:    "daemon: not running (/tmp/amx.sock)\n",
+			name:   "running degraded",
+			health: daemon.Health{Alive: true, Ready: false, DegradedReason: "initial snapshot timed out"},
+			want: "daemon: running (/tmp/amx.sock)\n" +
+				"ready: false (initial snapshot timed out)\n",
+		},
+		{
+			name: "not running",
+			want: "daemon: not running (/tmp/amx.sock)\n",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			resetDaemonStatusTestState(t)
-			daemonPing = func() error { return tc.pingErr }
+			health := tc.health
+			newDaemonExportClient = func() daemonExportClient {
+				return &fakeDaemonExportClient{health: health}
+			}
 			daemonSocketPath = func() string { return "/tmp/amx.sock" }
 
 			var out bytes.Buffer

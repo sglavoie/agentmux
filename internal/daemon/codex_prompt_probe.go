@@ -146,6 +146,10 @@ func (h *Handler) probeCodexWindow(
 	}
 	classification, ok := ClassifyCodexPromptScreen(screen)
 	if !ok {
+		// No prompt on screen: withdraw any earlier probe observation so an
+		// answered prompt cannot strand a key/question fact over the session's
+		// real activity.
+		h.retractCodexPromptObservation(now, windowID)
 		return
 	}
 
@@ -171,6 +175,24 @@ func (h *Handler) probeCodexWindow(
 		// probe only scans interactive Codex windows.
 		h.maybeNotify(windowID, titleParts.Base, userVars.EffectiveProfile(), classification.Action, false)
 	}
+}
+
+// retractCodexPromptObservation withdraws the screen probe's own fact once
+// the prompt it observed is gone, then republishes the reduced state.
+func (h *Handler) retractCodexPromptObservation(now time.Time, windowID int) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	st, ok := h.windowStateLocked(windowID)
+	if !ok || st.Reducer == nil {
+		return
+	}
+	source := SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}
+	st.ShadowSeq++
+	if !st.Reducer.Retract(source, st.ShadowSeq, now.Unix()) {
+		return
+	}
+	h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
+	h.markWindowDirtyLocked(windowID)
 }
 
 func (h *Handler) probeCodexClearWindow(
@@ -291,6 +313,24 @@ func (h *Handler) recordCodexPromptProbeState(
 	st.NotifiedStale = false
 	st.DesiredIcon = resultIconState
 	st.StateSet = true
+	// The reducer owns visible state, so the screen-probe observation must
+	// become a fact: fold it onto the probe's own source and publish the
+	// reduced outcome. The screen is authoritative for Codex (the probe only
+	// fires on states it may overwrite), so the event is marked as a prompt —
+	// it recovers a terminal fact the same way the legacy prompt bypass did.
+	if st.Reducer == nil {
+		st.Reducer = NewReducer(h.reducerCfg)
+	}
+	st.ShadowSeq++
+	st.Reducer.Apply(ReducerEvent{
+		Source: SourceID{Kind: SourceProbe, Key: screenPromptProbeSource},
+		Action: classification.Action,
+		Seq:    st.ShadowSeq,
+		At:     now.Unix(),
+		Prompt: true,
+	})
+	st.Reducer.Compact(now.Unix())
+	h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
 	h.markWindowDirtyLocked(windowID)
 
 	meta := h.windowMetadata[windowID]

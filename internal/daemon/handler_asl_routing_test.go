@@ -173,6 +173,8 @@ func TestHandler_ActiveLoopSiblingContextLimitProbesSourceRendersErrorOnOwner(t 
 	projectDir := t.TempDir()
 	stubDaemonLoopDiscover(t, []agentloop.Candidate{aslCandidate(43, projectDir)}, nil)
 	h := newTestHandler()
+	// Run the async context-limit probe inline for a deterministic promotion.
+	h.probeRunner = func(fn func()) { fn() }
 	fake := &fakeKittyClient{
 		windows: aslSiblingWindows(palette.BuildTitle("api", "bolt", false), projectDir, 42, 43),
 		getText: map[string]string{
@@ -197,9 +199,12 @@ func TestHandler_ActiveLoopSiblingContextLimitProbesSourceRendersErrorOnOwner(t 
 	if st == nil || st.DesiredIcon != "error" {
 		t.Fatalf("owner state = %+v; want error icon promoted from the source-pane context limit", st)
 	}
+	// The base transition routes to the owner first, then the source-pane probe
+	// upgrades it to stop_failure asynchronously.
 	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
-	if len(detail.Events) != 1 || detail.Events[0].Action != "stop_failure" || !detail.Events[0].ContextLimit {
-		t.Fatalf("owner events = %+v; want stop_failure context-limit on the owner", detail.Events)
+	last := detail.Events[len(detail.Events)-1]
+	if last.Action != "stop_failure" || !last.ContextLimit {
+		t.Fatalf("owner events = %+v; want a stop_failure context-limit upgrade on the owner", detail.Events)
 	}
 }
 
@@ -254,6 +259,64 @@ func TestHandler_ActiveLoopSiblingFallsBackToOwnerMismatch(t *testing.T) {
 				t.Fatalf("source events = %+v; want owner_mismatch suppression", detail.Events)
 			}
 		})
+	}
+}
+
+// TestHandler_ActiveLoopSiblingAmbiguousWorkspaceLeavesStateUnchanged verifies
+// the unique-match requirement: when an unmanaged sibling pane's active loop
+// matches more than one managed owner in the same workspace, routing which
+// owner should borrow the state machine is ambiguous, so the daemon diagnoses it
+// and leaves state unchanged — falling back to owner-mismatch suppression rather
+// than fanning one pane's hook onto several owners.
+func TestHandler_ActiveLoopSiblingAmbiguousWorkspaceLeavesStateUnchanged(t *testing.T) {
+	projectDir := t.TempDir()
+	// The loop runs on the unmanaged source pane 43 (in tab A, owned by managed
+	// window 42). A second managed tab B (owned by window 44) shares the exact
+	// same workspace, so the candidate matches both owners.
+	stubDaemonLoopDiscover(t, []agentloop.Candidate{aslCandidate(43, projectDir)}, nil)
+	h := newTestHandler()
+	windows := []kitty.OSWindow{{
+		ID: 1,
+		Tabs: []kitty.Tab{
+			{
+				ID:    100,
+				Title: "api",
+				Windows: []kitty.Window{
+					{ID: 42, IsActive: false, UserVars: kitty.UserVars{Profile: "api", Harness: harness.Claude, AMXDirectory: projectDir}},
+					{ID: 43, IsActive: true},
+				},
+			},
+			{
+				ID:    101,
+				Title: "api",
+				Windows: []kitty.Window{
+					{ID: 44, IsActive: true, UserVars: kitty.UserVars{Profile: "api", Harness: harness.Claude, AMXDirectory: projectDir}},
+				},
+			},
+		},
+	}}
+	fake := &fakeKittyClient{windows: windows}
+	h.SetKittyClient(fake)
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "PreToolUse"})
+	if !resp.OK {
+		t.Fatalf("hook response = %+v", resp)
+	}
+
+	h.stateMu.Lock()
+	owner42 := h.store[42]
+	owner44 := h.store[44]
+	h.stateMu.Unlock()
+	if owner42 != nil && owner42.DesiredIcon != "" {
+		t.Fatalf("owner 42 state = %+v; ambiguous match must leave it unchanged", owner42)
+	}
+	if owner44 != nil && owner44.DesiredIcon != "" {
+		t.Fatalf("owner 44 state = %+v; ambiguous match must leave it unchanged", owner44)
+	}
+	// The source pane records the ordinary owner-mismatch suppression instead.
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(detail.Events) != 1 || !detail.Events[0].Suppressed || detail.Events[0].SuppressionReason != suppressionReasonOwnerMismatch {
+		t.Fatalf("source events = %+v; want owner_mismatch suppression under ambiguity", detail.Events)
 	}
 }
 

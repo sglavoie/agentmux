@@ -141,12 +141,18 @@ func TestRendererRetriesFailedWrites(t *testing.T) {
 
 	h.renderSnapshot(fake.windows)
 
+	// amx_state is written before the title, so the failed title write leaves
+	// the state persisted (dirty cleared) with the failure recorded; the title
+	// retries from the persisted desired state.
 	h.stateMu.Lock()
 	dirtyAfterFailure := h.store[42].Dirty
 	failures := h.store[42].RenderFailures
 	h.stateMu.Unlock()
-	if !dirtyAfterFailure || failures != 1 {
-		t.Fatalf("after failure dirty=%v failures=%d, want dirty=true failures=1", dirtyAfterFailure, failures)
+	if dirtyAfterFailure || failures != 1 {
+		t.Fatalf("after title failure dirty=%v failures=%d, want dirty=false failures=1", dirtyAfterFailure, failures)
+	}
+	if got := len(fake.userVarsCalls()); got != 1 {
+		t.Fatalf("SetUserVars calls after failure = %d, want 1", got)
 	}
 
 	fake.mu.Lock()
@@ -161,6 +167,8 @@ func TestRendererRetriesFailedWrites(t *testing.T) {
 	if dirtyAfterRetry || failuresAfterRetry != 0 {
 		t.Fatalf("after retry dirty=%v failures=%d, want dirty=false failures=0", dirtyAfterRetry, failuresAfterRetry)
 	}
+	// The retry renders the title from the already-persisted state: no second
+	// amx_state write.
 	if got := len(fake.userVarsCalls()); got != 1 {
 		t.Fatalf("SetUserVars calls after retry = %d, want 1", got)
 	}
@@ -174,11 +182,24 @@ func TestRendererStaleSeqDoesNotClearDirty(t *testing.T) {
 	st.Seq = 2
 	h.stateMu.Unlock()
 
-	h.finishRenderCandidate(renderCandidate{windowID: 42, seq: 1, dirty: true}, nil)
+	// A persist completion for a superseded generation must never clear the
+	// newer generation's dirty state, and must hand the window back to the
+	// queue so the newer generation renders.
+	if cont := h.finishPersist(42, 1, nil); cont {
+		t.Fatalf("finishPersist for a stale generation reported continue=true")
+	}
 
 	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
-	if !h.store[42].Dirty {
-		t.Fatalf("stale render candidate cleared Dirty")
+	dirty := h.store[42].Dirty
+	persisted := h.store[42].PersistedGen
+	h.stateMu.Unlock()
+	if !dirty {
+		t.Fatalf("stale render completion cleared Dirty")
+	}
+	if persisted != 1 {
+		t.Fatalf("PersistedGen = %d, want 1", persisted)
+	}
+	if h.renderQueue.empty() {
+		t.Fatalf("superseded persist did not requeue the window")
 	}
 }

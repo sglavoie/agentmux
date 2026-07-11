@@ -1,0 +1,146 @@
+package cmd
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/daemon"
+)
+
+func resetAuditTestState(t *testing.T) {
+	t.Helper()
+	resetDoctorTestState(t)
+	oldDuration := auditDuration
+	oldJSON := auditJSON
+	oldNow := auditNow
+	oldSleep := auditSleep
+	oldOut := daemonAuditCmd.OutOrStdout()
+	t.Cleanup(func() {
+		auditDuration = oldDuration
+		auditJSON = oldJSON
+		auditNow = oldNow
+		auditSleep = oldSleep
+		daemonAuditCmd.SetOut(oldOut)
+	})
+}
+
+// installAuditFakeClock wires auditNow/auditSleep to a fake clock so a
+// multi-sample audit runs instantly and deterministically.
+func installAuditFakeClock(start time.Time) {
+	current := start
+	auditNow = func() time.Time { return current }
+	auditSleep = func(d time.Duration) { current = current.Add(d) }
+}
+
+func TestDaemonAuditSamplesOnCadenceAndExitsNonzeroOnViolations(t *testing.T) {
+	resetAuditTestState(t)
+	start := time.Unix(1_700_000_000, 0)
+	installAuditFakeClock(start)
+	auditDuration = 4 * time.Second
+	auditJSON = false
+
+	build := doctorTestBuild
+	doctorCLIBuild = func() buildinfo.Info { return build }
+	newDoctorDaemonClient = func() daemonExportClient {
+		return &fakeDaemonExportClient{
+			health: daemon.Health{Alive: true, Ready: true, Build: &build},
+			export: func(int) (daemon.EventsExport, error) {
+				return violatingDoctorSnapshot(start), nil
+			},
+		}
+	}
+	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+
+	var out bytes.Buffer
+	daemonAuditCmd.SetOut(&out)
+	err := runDaemonAudit(daemonAuditCmd, nil)
+
+	var exitErr *ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("err = %v; want *ExitError", err)
+	}
+	if exitErr.Code != exitHealthFailure {
+		t.Fatalf("exit code = %d; want %d", exitErr.Code, exitHealthFailure)
+	}
+	got := out.String()
+	// 4s at a 2s cadence: samples at t+0, t+2, t+4.
+	if !strings.Contains(got, "3 samples over 4s") {
+		t.Errorf("output missing sample count:\n%s", got)
+	}
+	// The same persistent violation must be deduplicated across samples.
+	if n := strings.Count(got, "[asl_active_state]"); n != 1 {
+		t.Errorf("asl_active_state reported %d times; want 1 (deduplicated):\n%s", n, got)
+	}
+	if !strings.Contains(got, "audit: 1 invariant violation(s)") {
+		t.Errorf("output missing violation verdict:\n%s", got)
+	}
+}
+
+func TestDaemonAuditCleanRunExitsZeroAndJSONReports(t *testing.T) {
+	resetAuditTestState(t)
+	start := time.Unix(1_700_000_000, 0)
+	installAuditFakeClock(start)
+	auditDuration = 2 * time.Second
+	auditJSON = true
+
+	build := doctorTestBuild
+	doctorCLIBuild = func() buildinfo.Info { return build }
+	newDoctorDaemonClient = func() daemonExportClient {
+		return &fakeDaemonExportClient{
+			health: daemon.Health{Alive: true, Ready: true, Build: &build},
+			export: func(int) (daemon.EventsExport, error) { return daemon.EventsExport{}, nil },
+		}
+	}
+	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+
+	var out bytes.Buffer
+	daemonAuditCmd.SetOut(&out)
+	if err := runDaemonAudit(daemonAuditCmd, nil); err != nil {
+		t.Fatalf("clean audit: %v", err)
+	}
+
+	var report auditReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("output is not a single JSON report: %v\n%s", err, out.String())
+	}
+	if !report.Healthy || report.Samples < 1 || report.SchemaVersion != auditReportSchemaVersion {
+		t.Fatalf("report = %+v; want healthy with at least one sample", report)
+	}
+}
+
+func TestDaemonAuditUnreachableDaemonIsAViolation(t *testing.T) {
+	resetAuditTestState(t)
+	installAuditFakeClock(time.Unix(1_700_000_000, 0))
+	auditDuration = 2 * time.Second
+	auditJSON = false
+
+	newDoctorDaemonClient = func() daemonExportClient {
+		return &fakeDaemonExportClient{health: daemon.Health{}}
+	}
+	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+
+	var out bytes.Buffer
+	daemonAuditCmd.SetOut(&out)
+	err := runDaemonAudit(daemonAuditCmd, nil)
+
+	var exitErr *ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("err = %v; want *ExitError", err)
+	}
+	if !strings.Contains(out.String(), "[daemon_unreachable]") {
+		t.Errorf("output missing daemon_unreachable finding:\n%s", out.String())
+	}
+}
+
+func TestDaemonAuditRejectsNonPositiveDuration(t *testing.T) {
+	resetAuditTestState(t)
+	auditDuration = 0
+	if err := runDaemonAudit(daemonAuditCmd, nil); err == nil {
+		t.Fatal("expected an error for --duration 0")
+	}
+}

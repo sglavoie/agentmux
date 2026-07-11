@@ -7,13 +7,16 @@ import (
 )
 
 // dialedSocket returns the value passed to `kitten @ --to <socket>` in the
-// first recorded call, or "" plus false when the client dialed without a
-// socket (no `--to` flag).
+// most recent recorded call, or "" plus false when the client dialed without a
+// socket (no `--to` flag). The most-recent call is what the assertion targets:
+// SetKittyClient primes the snapshot cache with one initial ListWindows through
+// the daemon's own socket, so the client-under-test's dial is the later one.
 func dialedSocket(runner *kitty.MockRunner) (string, bool) {
-	for _, c := range runner.Calls {
-		for i, a := range c.Args {
-			if a == "--to" && i+1 < len(c.Args) {
-				return c.Args[i+1], true
+	for i := len(runner.Calls) - 1; i >= 0; i-- {
+		args := runner.Calls[i].Args
+		for j, a := range args {
+			if a == "--to" && j+1 < len(args) {
+				return args[j+1], true
 			}
 		}
 	}
@@ -123,13 +126,13 @@ func TestIsReusableKittySocket(t *testing.T) {
 	cases := map[string]bool{
 		"unix:/tmp/kitty-1": true,
 		"tcp:localhost:900": true,
-		" unix:/tmp/k ":      true,
-		"fd:34":              false,
-		"":                   false,
-		"   ":                false,
-		"/tmp/kitty-guess":   false,
-		"unix:":              false,
-		"tcp:":               false,
+		" unix:/tmp/k ":     true,
+		"fd:34":             false,
+		"":                  false,
+		"   ":               false,
+		"/tmp/kitty-guess":  false,
+		"unix:":             false,
+		"tcp:":              false,
 	}
 	for socket, want := range cases {
 		if got := isReusableKittySocket(socket); got != want {

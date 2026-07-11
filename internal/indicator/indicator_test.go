@@ -100,6 +100,35 @@ func TestRunWithDeps_InvalidWindowExitsZero(t *testing.T) {
 	}
 }
 
+func TestRunWithDeps_AttachesRequestID(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
+	client := &fakeDaemonClient{}
+
+	if err := runWithDeps("Stop", 42, "/tmp/amx", `{}`, false, client); err != nil {
+		t.Fatalf("runWithDeps() error = %v, want nil", err)
+	}
+	if client.calls != 1 {
+		t.Fatalf("daemon calls = %d, want 1", client.calls)
+	}
+	if got := client.reqs[0].RequestID; got == "" {
+		t.Fatal("RequestID is empty; hook requests must carry a dedup ID")
+	}
+}
+
+func TestNewRequestID_UniqueAndWellFormed(t *testing.T) {
+	seen := make(map[string]bool)
+	for i := 0; i < 1000; i++ {
+		id := newRequestID()
+		if len(id) != 36 { // 8-4-4-4-12 hex UUID
+			t.Fatalf("request ID %q has length %d; want 36", id, len(id))
+		}
+		if seen[id] {
+			t.Fatalf("duplicate request ID generated: %q", id)
+		}
+		seen[id] = true
+	}
+}
+
 func TestRunWithDeps_DaemonRejectionStillExitsZero(t *testing.T) {
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	client := &fakeDaemonClient{resp: daemon.Response{OK: false, Error: "bad event"}}

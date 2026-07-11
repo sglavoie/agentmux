@@ -114,20 +114,20 @@ func TestSweepStale_ReNotifyAfterRecovery(t *testing.T) {
 		// because no time.Sleep was called.
 		h.notifier.ResetCooldown(42)
 
-		// Re-stall: backdate activity and refresh the title fixture (the
+		// Re-stall: let synctest time pass so both the scalar activity AND the
+		// reducer fact the fresh active event created age past the threshold
+		// (the watchdog expires individual facts on their own age, so
+		// backdating just the Activity scalar would leave a fresh bolt fact
+		// legitimately holding the icon). Refresh the title fixture — the
 		// previous sweep cleared the icon, so re-seed with the bolt title to
-		// confirm the second sweep clears it again).
+		// confirm the second sweep clears it again.
+		time.Sleep(15 * time.Minute)
 		fake.mu.Lock()
 		fake.setTitleCalls = nil
 		fake.windows = fakeOSWindowsWithTab(42, palette.BuildTitle("W:api", "bolt", false))
 		fake.mu.Unlock()
 
-		now2 := time.Now()
-		h.stateMu.Lock()
-		h.ensureWindowStateLocked(42).Activity = now2.Add(-15 * time.Minute)
-		h.stateMu.Unlock()
-
-		h.SweepStale(now2)
+		h.SweepStale(time.Now())
 		synctest.Wait()
 
 		if got := rec.len(); got != 2 {

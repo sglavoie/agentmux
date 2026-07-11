@@ -16,6 +16,7 @@ import (
 type fakeKittyClient struct {
 	mu               sync.Mutex
 	windows          []kitty.OSWindow
+	listCalls        int
 	listErr          error
 	getText          map[string]string
 	getTextByExtent  map[getTextKey]string
@@ -24,6 +25,16 @@ type fakeKittyClient struct {
 	setUserVarsErr   error
 	setTitleCalls    []setTitleCall
 	setUserVarsCalls []setUserVarsCall
+	// ops records SetUserVars/SetTabTitle invocations in one shared sequence so
+	// ordered-write tests can assert persistence landed before the title.
+	ops []string
+	// beforeSetUserVars/beforeSetTitle/beforeListWindows run at the start of
+	// the corresponding call WITHOUT holding f.mu, so a hook may take
+	// Handler.stateMu (to model a mid-write state change), sleep (to model
+	// injected Kitty latency), or block (to model a wedged Kitty).
+	beforeSetUserVars func(match string, vars map[string]string)
+	beforeSetTitle    func(match, title string)
+	beforeListWindows func()
 }
 
 type setTitleCall struct {
@@ -43,14 +54,33 @@ type getTextKey struct {
 
 func (f *fakeKittyClient) ListWindows() ([]kitty.OSWindow, error) {
 	f.mu.Lock()
+	hook := f.beforeListWindows
+	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.listCalls++
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	// Return a defensive copy so tests cannot accidentally mutate the fake's
-	// canned data through the returned slice.
+	// Return a deep copy: production snapshots are fresh JSON decodes per
+	// `kitten @ ls`, so a returned snapshot must never alias the fake's
+	// mutable canonical state (SetUserVars/SetTabTitle write into f.windows
+	// while concurrent readers walk previously returned snapshots).
 	out := make([]kitty.OSWindow, len(f.windows))
 	copy(out, f.windows)
+	for i := range out {
+		tabs := make([]kitty.Tab, len(out[i].Tabs))
+		copy(tabs, out[i].Tabs)
+		for j := range tabs {
+			wins := make([]kitty.Window, len(tabs[j].Windows))
+			copy(wins, tabs[j].Windows)
+			tabs[j].Windows = wins
+		}
+		out[i].Tabs = tabs
+	}
 	return out, nil
 }
 
@@ -70,7 +100,14 @@ func (f *fakeKittyClient) GetText(matchExpr, extent string) (string, error) {
 
 func (f *fakeKittyClient) SetTabTitle(matchExpr, title string) error {
 	f.mu.Lock()
+	hook := f.beforeSetTitle
+	f.mu.Unlock()
+	if hook != nil {
+		hook(matchExpr, title)
+	}
+	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.ops = append(f.ops, "title "+matchExpr)
 	f.setTitleCalls = append(f.setTitleCalls, setTitleCall{match: matchExpr, title: title})
 	if f.setTitleErr != nil {
 		return f.setTitleErr
@@ -92,7 +129,14 @@ func (f *fakeKittyClient) SetTabTitle(matchExpr, title string) error {
 
 func (f *fakeKittyClient) SetUserVars(matchExpr string, vars map[string]string) error {
 	f.mu.Lock()
+	hook := f.beforeSetUserVars
+	f.mu.Unlock()
+	if hook != nil {
+		hook(matchExpr, vars)
+	}
+	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.ops = append(f.ops, "uservars "+matchExpr)
 	cp := make(map[string]string, len(vars))
 	for k, v := range vars {
 		cp[k] = v
@@ -119,12 +163,28 @@ func (f *fakeKittyClient) SetUserVars(matchExpr string, vars map[string]string) 
 	return nil
 }
 
+// listCallCount returns how many times ListWindows was invoked.
+func (f *fakeKittyClient) listCallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.listCalls
+}
+
 // titleCalls returns a copy of recorded SetTabTitle calls.
 func (f *fakeKittyClient) titleCalls() []setTitleCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]setTitleCall, len(f.setTitleCalls))
 	copy(out, f.setTitleCalls)
+	return out
+}
+
+// opsLog returns a copy of the shared write-order log.
+func (f *fakeKittyClient) opsLog() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, len(f.ops))
+	copy(out, f.ops)
 	return out
 }
 

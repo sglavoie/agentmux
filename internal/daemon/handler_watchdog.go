@@ -13,6 +13,20 @@ import (
 // stranded tab-title icons. Passing nil disables the title-clear step
 // (notifications still fire). Safe to call once before the sweep runs.
 func (h *Handler) SetKittyClient(client kittyTitleClient) {
+	h.useKittyClient(client)
+	// Prime the snapshot cache immediately so the hook path has something to
+	// route against before the first render tick. The render/restore loop keeps
+	// it fresh afterward; a list error here just leaves the cache cold. This
+	// list is synchronous, so production startup uses useKittyClient + the
+	// bounded restore instead, and only tests and simple callers rely on the
+	// prime here.
+	h.primeSnapshot(time.Now())
+}
+
+// useKittyClient installs the Kitty client without priming the snapshot cache.
+// Production startup uses this so an unbounded ListWindows can never block the
+// daemon before its bounded initial restore runs.
+func (h *Handler) useKittyClient(client kittyTitleClient) {
 	h.kittyClient = client
 }
 
@@ -127,19 +141,72 @@ func (h *Handler) anyStaleThresholdSet() bool {
 	return false
 }
 
+const (
+	// windowTombstoneRetention bounds how long a closed window's durable
+	// metadata survives for post-mortem export after its live state is GC'd.
+	windowTombstoneRetention = 24 * time.Hour
+	// maxWindowTombstones bounds the tombstone count; past it the oldest
+	// tombstones (and their durable metadata) are evicted first.
+	maxWindowTombstones = 1000
+)
+
+// Synthetic daemon-emitted event names. They never cross the IPC wire as
+// requests; the watchdog, reconciliation, and closed-window GC append them so
+// the per-window event log and the durable export metadata record why the
+// daemon changed state on its own.
+const (
+	eventWatchdogStale = "WatchdogStale"
+	eventSourceExpired = "SourceExpired"
+	eventASLReconciled = "ASLReconciled"
+	eventWindowClosed  = "WindowClosed"
+)
+
+// appendWatchdogEventLocked records one synthetic daemon event atomically in
+// both diagnostic surfaces: the current per-window event ring (via
+// appendEventLocked, which also maintains the durable Stats counters) and the
+// durable watchdog section of the export metadata. Callers hold stateMu.
+func (h *Handler) appendWatchdogEventLocked(windowID int, at time.Time, event, action, source, reason string) {
+	h.appendEventLocked(windowID, SessionEvent{
+		At:     at.Unix(),
+		Event:  event,
+		Action: action,
+		Source: source,
+		Reason: reason,
+	})
+	meta := h.windowMetadata[windowID]
+	meta.Watchdog.LastEvent = event
+	meta.Watchdog.LastReason = reason
+	meta.Watchdog.LastAt = at.Unix()
+	switch event {
+	case eventSourceExpired:
+		meta.Watchdog.SourceExpiries++
+	case eventWatchdogStale:
+		meta.Watchdog.StaleSweeps++
+	case eventASLReconciled:
+		meta.Watchdog.Reconciles++
+	}
+	h.windowMetadata[windowID] = meta
+}
+
 // pruneClosedWindows drops per-window state for windows that Kitty no longer
-// reports as live. Called from SweepStale once the live set has been
-// materialised from kitty.ListWindows().
+// reports as live. Called from the maintenance tick once the live set has
+// been materialised from kitty.ListWindows().
 //
-// windowMetadata is intentionally preserved across closes so post-mortem
+// The live per-window store must be GC'd here — a session that closes without
+// a terminal hook event (e.g. user closes the tab with Cmd+W, daemon misses
+// the SessionEnd) would otherwise leak an entry per killed window for the
+// daemon's lifetime, which can also let notifiedStale latches survive into a
+// future Kitty-ID reuse and silently suppress a notification. Alongside the
+// store, the close cancels everything keyed by the window: its pending render
+// queue entry, notifier timers/cooldowns, guard entry, remembered Kitty
+// socket, and ASL miss streaks.
+//
+// windowMetadata is preserved behind a bounded tombstone so post-mortem
 // `amx daemon export-events` invocations still have identity/context for
-// sessions whose tabs have already disappeared. The live per-window store must
-// be GC'd here — a session that closes without a terminal hook event (e.g. user
-// closes the tab with Cmd+W, daemon misses the SessionEnd) would otherwise leak
-// an entry per killed window for the daemon's lifetime, which can also let
-// notifiedStale latches survive into a hypothetical future Kitty-ID reuse and
-// silently suppress a notification.
-func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
+// sessions whose tabs have already disappeared; the tombstone (and the
+// metadata with it) expires after windowTombstoneRetention or once
+// maxWindowTombstones is exceeded.
+func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 	h.stateMu.Lock()
 	closed := make(map[int]struct{})
 	for id := range h.store {
@@ -149,25 +216,108 @@ func (h *Handler) pruneClosedWindows(liveIDs map[int]bool) {
 	}
 	for id := range closed {
 		delete(h.store, id)
+		delete(h.kittySockets, id)
+		h.recordWindowClosedLocked(id, now)
 	}
+	// ASL miss streaks are per-window leases; a closed window can never
+	// corroborate a run again, so its streaks go with it.
+	for ref := range h.aslMissStreak {
+		if _, ok := closed[ref.windowID]; ok {
+			delete(h.aslMissStreak, ref)
+		}
+	}
+	// A tombstoned ID that Kitty reports live again is a reused window, not a
+	// closed one: resurrect it so its diagnostics resume live and it can count
+	// as renderer drift again.
+	for id := range liveIDs {
+		h.reviveTombstoneLocked(id)
+	}
+	h.expireTombstonesLocked(now)
 	h.stateMu.Unlock()
-	// Notifier cooldown/pending entries are keyed by window ID too. Without
-	// cleanup the notifier's per-(window, action) cooldown map grows linearly
-	// with closed windows, and a stale pending permission timer for a dead
-	// window would fire (and harmlessly dispatch under the old session title)
-	// well after the window itself is gone.
-	if h.notifier != nil {
-		for id := range closed {
+
+	for id := range closed {
+		// The pending render entry for a closed window is cancelled outright;
+		// an in-flight render cannot be cancelled, but its completion
+		// bookkeeping already tolerates the deleted state.
+		if h.renderQueue != nil {
+			h.renderQueue.purge(id)
+		}
+		// Notifier cooldown/pending entries are keyed by window ID too. Without
+		// cleanup the notifier's per-(window, action) cooldown map grows
+		// linearly with closed windows, and a stale pending permission timer
+		// for a dead window would fire well after the window itself is gone.
+		if h.notifier != nil {
 			h.notifier.PurgeWindow(id)
 		}
-	}
-	// State-guard entries are keyed by window ID and otherwise only removed by
-	// idle/clear/user_clear events. A window closed without firing a terminal
-	// hook would leak its guardEntry for the daemon's lifetime.
-	if h.guard != nil {
-		for id := range closed {
+		// State-guard entries are keyed by window ID and otherwise only removed
+		// by idle/clear/user_clear events. A window closed without firing a
+		// terminal hook would leak its guardEntry for the daemon's lifetime.
+		if h.guard != nil {
 			h.guard.Clear(id)
 		}
+	}
+}
+
+// recordWindowClosedLocked stamps the durable diagnostics for a closed window
+// and starts (or refreshes) its bounded tombstone. Callers hold stateMu.
+func (h *Handler) recordWindowClosedLocked(windowID int, now time.Time) {
+	meta := h.windowMetadata[windowID]
+	meta.Watchdog.LastEvent = eventWindowClosed
+	meta.Watchdog.LastReason = "window no longer reported by kitty; live state garbage-collected"
+	meta.Watchdog.LastAt = now.Unix()
+	meta.Watchdog.ClosedAt = now.Unix()
+	h.windowMetadata[windowID] = meta
+	if h.windowTombstones == nil {
+		h.windowTombstones = make(map[int]time.Time)
+	}
+	if _, ok := h.windowTombstones[windowID]; !ok {
+		h.tombstoneOrder = append(h.tombstoneOrder, windowID)
+	}
+	h.windowTombstones[windowID] = now
+}
+
+// reviveTombstoneLocked clears a window's tombstone when the ID is live again
+// (Kitty ID reuse, or an event racing the close re-created state). Callers
+// hold stateMu.
+func (h *Handler) reviveTombstoneLocked(windowID int) {
+	if _, ok := h.windowTombstones[windowID]; !ok {
+		return
+	}
+	delete(h.windowTombstones, windowID)
+	for i, id := range h.tombstoneOrder {
+		if id == windowID {
+			h.tombstoneOrder = append(h.tombstoneOrder[:i:i], h.tombstoneOrder[i+1:]...)
+			break
+		}
+	}
+	meta := h.windowMetadata[windowID]
+	meta.Watchdog.ClosedAt = 0
+	h.windowMetadata[windowID] = meta
+}
+
+// expireTombstonesLocked enforces the tombstone bound: entries older than
+// windowTombstoneRetention, or beyond maxWindowTombstones (oldest first), are
+// dropped together with their durable metadata. Callers hold stateMu.
+func (h *Handler) expireTombstonesLocked(now time.Time) {
+	keep := h.tombstoneOrder[:0]
+	for _, id := range h.tombstoneOrder {
+		closedAt, ok := h.windowTombstones[id]
+		if !ok {
+			continue
+		}
+		if now.Sub(closedAt) >= windowTombstoneRetention {
+			delete(h.windowTombstones, id)
+			delete(h.windowMetadata, id)
+			continue
+		}
+		keep = append(keep, id)
+	}
+	h.tombstoneOrder = keep
+	for len(h.tombstoneOrder) > maxWindowTombstones {
+		id := h.tombstoneOrder[0]
+		h.tombstoneOrder = h.tombstoneOrder[1:]
+		delete(h.windowTombstones, id)
+		delete(h.windowMetadata, id)
 	}
 }
 
@@ -189,7 +339,7 @@ func (h *Handler) SweepStale(now time.Time) {
 	if h.kittyClient != nil {
 		if snapshot, err := h.kittyClient.ListWindows(); err == nil {
 			windows = snapshot
-			h.pruneClosedWindows(liveWindowIDs(windows))
+			h.pruneClosedWindows(now, liveWindowIDs(windows))
 		} else {
 			slog.Debug("sweep: list windows failed for GC prune", "err", err)
 		}
@@ -200,7 +350,23 @@ func (h *Handler) SweepStale(now time.Time) {
 	}
 }
 
-func (h *Handler) SweepStaleWithSnapshot(now time.Time, _ []kitty.OSWindow) bool {
+// SweepStaleWithSnapshot runs one staleness pass without advancing the
+// monotonic idle accumulation (credit 0): entries not yet tracked are seeded
+// from their wall-clock age, so a one-shot call over pre-aged state expires it
+// immediately. The production watchdog loop calls sweepStale directly with the
+// tick's observed elapsed credit instead.
+func (h *Handler) SweepStaleWithSnapshot(now time.Time, windows []kitty.OSWindow) bool {
+	return h.sweepStale(now, windows, 0, false)
+}
+
+// sweepStale evaluates per-fact and per-window staleness. Idleness is the
+// accumulated in-process observed time (see advanceWindowIdle/advanceFactIdle)
+// — activity timestamps are never rewritten and never compared across a
+// scheduling gap. Individual source facts expire on their own thresholds
+// (SourceExpired); the whole-window legacy scalar clears — with its one-shot
+// "Session idle" notification — only when the window as a whole has been idle
+// past its threshold (WatchdogStale).
+func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Duration, gapTick bool) bool {
 	if !h.anyStaleThresholdSet() {
 		return false
 	}
@@ -212,46 +378,77 @@ func (h *Handler) SweepStaleWithSnapshot(now time.Time, _ []kitty.OSWindow) bool
 		notify   bool
 	}
 	var stale []staleEntry
+	changedWindows := 0
 
 	h.stateMu.Lock()
 	for windowID, st := range h.store {
-		action := st.LastAction
-		if action != "active" && action != "subagent" && action != "compact" {
-			continue
-		}
 		account := st.LastAccount
-		threshold := h.resolveThreshold(account, action)
-		if threshold <= 0 {
-			continue
+		expired, aslExecuting := h.expireStaleFactsLocked(windowID, st, now, credit, gapTick)
+
+		action := st.LastAction
+		windowStale := false
+		if action == "active" || action == "subagent" || action == "compact" {
+			if threshold := h.resolveThreshold(account, action); threshold > 0 {
+				idle := advanceWindowIdle(st, now, credit, gapTick)
+				// An authoritative ASL turn or verification lease is live
+				// evidence the loop is still working this window; the bolt is
+				// not cleared out from under it.
+				windowStale = idle >= threshold && (action != "active" || !aslExecuting)
+			}
+		} else {
+			st.watchdogSeeded = false
+			st.watchdogIdle = 0
 		}
-		if now.Sub(st.Activity) < threshold {
-			continue
+
+		switch {
+		case windowStale:
+			title := st.LastSessionTitle
+			pipe := st.LastPipeMode
+			notify := !st.NotifiedStale
+			if notify {
+				st.NotifiedStale = true
+			}
+			// Reset so the next idle/clear/active does not try to re-clear an
+			// icon we just cleared, and so the lastKnownAction fallback returns
+			// "". eventLog is intentionally preserved across the sweep so
+			// detail-pane history survives until the Kitty window closes.
+			st.LastAction = ""
+			st.LastActiveEvent = ""
+			st.CopilotToolPermissionState = copilotToolPermissionNone
+			st.SubagentCount = 0
+			st.DesiredIcon = ""
+			st.StateSet = true
+			if st.Reducer != nil {
+				// The stale facts were already expired individually above;
+				// re-reduce so surviving facts (attention/terminal icons, ASL
+				// leases) keep the tab rather than being wiped with the scalar.
+				h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
+			}
+			h.appendWatchdogEventLocked(windowID, now, eventWatchdogStale, "stale", "",
+				"no activity for "+st.watchdogIdle.Truncate(time.Second).String()+
+					" (threshold "+h.resolveThreshold(account, action).String()+")")
+			h.syncRendererMetadataLocked(windowID)
+			h.markWindowDirtyLocked(windowID)
+			stale = append(stale, staleEntry{
+				windowID: windowID,
+				account:  account,
+				title:    title,
+				pipeMode: pipe,
+				notify:   notify,
+			})
+		case expired > 0:
+			// Per-fact expiry without a whole-window clear: publish the new
+			// reduction; only an actual visible change forces a Kitty write.
+			before := st.Effective
+			h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
+			h.syncRendererMetadataLocked(windowID)
+			if st.Effective != before {
+				h.markWindowDirtyLocked(windowID)
+			} else {
+				h.markWindowActivityDirtyLocked(windowID)
+			}
+			changedWindows++
 		}
-		title := st.LastSessionTitle
-		pipe := st.LastPipeMode
-		notify := !st.NotifiedStale
-		if notify {
-			st.NotifiedStale = true
-		}
-		// Reset so the next idle/clear/active does not try to re-clear an icon
-		// we just cleared, and so the lastKnownAction fallback returns "".
-		// eventLog is intentionally preserved across the sweep so detail-pane
-		// history survives until the underlying Kitty window actually closes.
-		st.LastAction = ""
-		st.LastActiveEvent = ""
-		st.CopilotToolPermissionState = copilotToolPermissionNone
-		st.SubagentCount = 0
-		st.DesiredIcon = ""
-		st.StateSet = true
-		h.syncRendererMetadataLocked(windowID)
-		h.markWindowDirtyLocked(windowID)
-		stale = append(stale, staleEntry{
-			windowID: windowID,
-			account:  account,
-			title:    title,
-			pipeMode: pipe,
-			notify:   notify,
-		})
 	}
 	h.stateMu.Unlock()
 
@@ -263,7 +460,87 @@ func (h *Handler) SweepStaleWithSnapshot(now time.Time, _ []kitty.OSWindow) bool
 			h.notifier.MaybeNotify(s.windowID, s.title, s.account, "stale", s.pipeMode)
 		}
 	}
-	return len(stale) > 0
+	return len(stale) > 0 || changedWindows > 0
+}
+
+// staleActionForIcon maps an active-class icon back to the threshold action
+// name used by [defaults.watchdog]. Non-active-class icons return "" — they
+// are never expired by the watchdog.
+func staleActionForIcon(icon string) string {
+	switch icon {
+	case "bolt":
+		return "active"
+	case "subagent":
+		return "subagent"
+	case "compact":
+		return "compact"
+	}
+	return ""
+}
+
+// expireStaleFactsLocked advances the per-fact idle accumulators for one
+// window and expires the individual source facts whose accumulated idle time
+// exceeded their per-icon threshold. It reports how many facts expired and
+// whether an authoritative ASL lease is currently executing (a live
+// turn/verification lease the watchdog has NOT judged stale) — while one is,
+// bolt facts from other sources are protected: a long tool call that emits no
+// hooks must not lose its ⚡ while the loop's heartbeats prove work is still
+// running. The ASL fact itself still expires on its own threshold (heartbeats
+// keep a healthy run's fact fresh); it then loses ⚡ but keeps 🔁 — only a
+// finish event or two-miss reconciliation releases the lease. Callers hold
+// stateMu.
+func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time.Time, credit time.Duration, gapTick bool) (expired int, aslExecuting bool) {
+	if st.Reducer == nil {
+		return 0, false
+	}
+	type pendingExpiry struct {
+		fact      SourceFactSnapshot
+		threshold time.Duration
+		idle      time.Duration
+	}
+	var expiries []pendingExpiry
+	seen := make(map[SourceID]bool)
+	for _, fact := range st.Reducer.Facts() {
+		src := fact.Source()
+		action := staleActionForIcon(fact.Icon)
+		if action == "" || fact.Acked {
+			continue
+		}
+		seen[src] = true
+		threshold := h.resolveThreshold(st.LastAccount, action)
+		idle := advanceFactIdle(st, fact, now, credit, gapTick)
+		factStale := threshold > 0 && idle >= threshold
+		if fact.Kind == SourceASL && fact.LeaseLive && !factStale &&
+			(fact.Phase == ASLPhaseTurn || fact.Phase == ASLPhaseVerification) {
+			aslExecuting = true
+		}
+		if factStale {
+			expiries = append(expiries, pendingExpiry{fact: fact, threshold: threshold, idle: idle})
+		}
+	}
+	// Accumulators for facts that no longer contribute an active-class icon
+	// (retired, acked, or advanced to another state) are dropped so the map
+	// cannot grow with dead sources.
+	for src := range st.watchdogFactIdle {
+		if !seen[src] {
+			delete(st.watchdogFactIdle, src)
+		}
+	}
+	for _, p := range expiries {
+		if aslExecuting && p.fact.Icon == "bolt" && p.fact.Kind != SourceASL {
+			continue
+		}
+		if !st.Reducer.ExpireFact(p.fact.Source(), p.fact.Seq) {
+			continue
+		}
+		delete(st.watchdogFactIdle, p.fact.Source())
+		expired++
+		h.appendWatchdogEventLocked(windowID, now, eventSourceExpired, p.fact.Action,
+			string(p.fact.Kind)+":"+p.fact.Key,
+			p.fact.Icon+" fact idle for "+p.idle.Truncate(time.Second).String()+
+				" (threshold "+p.threshold.String()+")")
+	}
+	return expired, aslExecuting
 }
 
 // SweepHookSilence detects accounts whose most recent event predates the
@@ -294,6 +571,15 @@ func (h *Handler) SweepHookSilence(now time.Time) {
 }
 
 func (h *Handler) SweepHookSilenceWithSnapshot(now time.Time, windows []kitty.OSWindow) {
+	h.sweepHookSilence(now, windows, 0, false)
+}
+
+// sweepHookSilence evaluates account-level hook silence on the same monotonic
+// accumulation the stale sweep uses: an account's silence grows only by
+// in-process observed elapsed time (seeded from wall-clock age on first
+// observation), so a system sleep cannot fire a false "hooks silent"
+// notification the moment the daemon wakes.
+func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, credit time.Duration, gapTick bool) {
 	running := make(map[string]bool)
 	for _, ow := range windows {
 		for _, tab := range ow.Tabs {
@@ -327,7 +613,19 @@ func (h *Handler) SweepHookSilenceWithSnapshot(now time.Time, windows []kitty.OS
 			// will seed lastSeenEventAt and arm the detector.
 			continue
 		}
-		if now.Sub(last) < threshold {
+		entry := h.hookSilenceIdle[accountKey]
+		if entry == nil || !entry.anchor.Equal(last) {
+			entry = &accountIdle{anchor: last}
+			if !gapTick {
+				if age := now.Sub(last); age > 0 {
+					entry.idle = age
+				}
+			}
+			h.hookSilenceIdle[accountKey] = entry
+		} else {
+			entry.idle += credit
+		}
+		if entry.idle < threshold {
 			continue
 		}
 		if h.notifiedHookSilence[accountKey] {

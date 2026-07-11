@@ -12,12 +12,21 @@ var eventToAction = map[string]string{
 	"sessionStart": "idle",
 	"SessionStart": "idle",
 	// Internal Agent Mux signals from agent_session_loop loop lifecycle changes.
-	// Start and turn-start are marker-only: they tell the daemon to record an ASL
-	// lifecycle event without painting a bolt icon, so the existing harness state
-	// (whatever the user is actually waiting on) stays visible underneath 🔁.
-	"AgentSessionLoopStarted":     "loop_marker",
-	"AgentSessionLoopTurnStarted": "loop_marker",
-	"AgentSessionLoopFinished":    "idle",
+	// Everything except the final run finish is marker-only: it tells the daemon
+	// to record an ASL lifecycle event without painting a legacy icon, so the
+	// existing harness state (whatever the user is actually waiting on) stays
+	// visible underneath 🔁. The daemon's reducer derives the per-run phase
+	// (turn, verification, between, paused, finished) from the event name and
+	// owns the authoritative icon + loop lease.
+	"AgentSessionLoopStarted":               "loop_marker",
+	"AgentSessionLoopTurnStarted":           "loop_marker",
+	"AgentSessionLoopTurnHeartbeat":         "loop_marker",
+	"AgentSessionLoopTurnFinished":          "loop_marker",
+	"AgentSessionLoopVerificationStarted":   "loop_marker",
+	"AgentSessionLoopVerificationHeartbeat": "loop_marker",
+	"AgentSessionLoopVerificationFinished":  "loop_marker",
+	"AgentSessionLoopPaused":                "loop_marker",
+	"AgentSessionLoopFinished":              "idle",
 
 	// Active: the harness is processing.
 	"Setup":               "active",

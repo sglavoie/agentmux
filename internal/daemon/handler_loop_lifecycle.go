@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -14,9 +15,15 @@ import (
 )
 
 const (
-	agentSessionLoopStarted     = "AgentSessionLoopStarted"
-	agentSessionLoopTurnStarted = "AgentSessionLoopTurnStarted"
-	agentSessionLoopFinished    = "AgentSessionLoopFinished"
+	agentSessionLoopStarted               = "AgentSessionLoopStarted"
+	agentSessionLoopTurnStarted           = "AgentSessionLoopTurnStarted"
+	agentSessionLoopTurnHeartbeat         = "AgentSessionLoopTurnHeartbeat"
+	agentSessionLoopTurnFinished          = "AgentSessionLoopTurnFinished"
+	agentSessionLoopVerificationStarted   = "AgentSessionLoopVerificationStarted"
+	agentSessionLoopVerificationHeartbeat = "AgentSessionLoopVerificationHeartbeat"
+	agentSessionLoopVerificationFinished  = "AgentSessionLoopVerificationFinished"
+	agentSessionLoopPaused                = "AgentSessionLoopPaused"
+	agentSessionLoopFinished              = "AgentSessionLoopFinished"
 )
 
 var daemonLoopDiscover = agentloop.Discover
@@ -42,6 +49,12 @@ func (h *Handler) handleLoopLifecycleHookEvent(
 
 	for _, target := range targets {
 		h.handleLoopLifecycleTarget(eventOrAction, action, payload, baseReq, target, openTargets)
+	}
+	// A finish that carries no run identity cannot name which per-run lease it
+	// releases. Instead of clearing every run, reconcile the window's leases
+	// against on-disk loop state so only genuinely finished runs lose 🔁.
+	if eventOrAction == agentSessionLoopFinished && payload.EffectiveRunID() == "" {
+		h.ReconcileASLLeases(time.Now(), windows)
 	}
 	return true
 }
@@ -80,6 +93,10 @@ func (h *Handler) handleLoopLifecycleTarget(
 		false,
 		baseReq.KittyListenOn,
 	)
+	// Stamp the ASL-source view for the shadow reducer, keyed against this
+	// fan-out target so the run's lease lands on the window that renders it.
+	normalized := NormalizedFromHook(eventOrAction, harnessName, baseReq.PayloadJSON, target.windowID)
+	req.normalized = &normalized
 	resp := h.handleStateUpdate(req)
 	if !resp.OK {
 		slog.Debug("loop lifecycle target state update failed",
@@ -93,9 +110,21 @@ func (h *Handler) handleLoopLifecycleTarget(
 	if marker := loopMarkerForLifecycleTarget(eventOrAction, target.workspace, openTargets); marker != nil {
 		h.stateMu.Lock()
 		st := h.ensureWindowStateLocked(target.windowID)
-		st.Looping = *marker
-		st.LoopingSet = true
-		h.markWindowDirtyLocked(target.windowID)
+		// The reducer's per-run leases are authoritative once any ASL fact has
+		// reached it (reduceStateUpdate already published the reduced verdict
+		// above). The discovery-derived marker only stands in for windows whose
+		// reducer holds no ASL knowledge — a quarantined stamp, or pre-cutover
+		// state.
+		loopingBefore, loopingSetBefore := st.Looping, st.LoopingSet
+		if st.Reducer == nil || !st.Reducer.LoopStateKnown() {
+			st.Looping = *marker
+			st.LoopingSet = true
+		}
+		if st.Looping != loopingBefore || st.LoopingSet != loopingSetBefore {
+			h.markWindowDirtyLocked(target.windowID)
+		} else {
+			h.markWindowActivityDirtyLocked(target.windowID)
+		}
 		h.stateMu.Unlock()
 	}
 }
@@ -266,7 +295,11 @@ func normalizeKnownLoopHarness(raw string) string {
 
 func isAgentSessionLoopEvent(eventOrAction string) bool {
 	switch eventOrAction {
-	case agentSessionLoopStarted, agentSessionLoopTurnStarted, agentSessionLoopFinished:
+	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
+		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnFinished,
+		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
+		agentSessionLoopVerificationFinished, agentSessionLoopPaused,
+		agentSessionLoopFinished:
 		return true
 	default:
 		return false
@@ -275,7 +308,13 @@ func isAgentSessionLoopEvent(eventOrAction string) bool {
 
 func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.WorkspaceTarget, openTargets []agentloop.WorkspaceTarget) *bool {
 	switch eventOrAction {
-	case agentSessionLoopStarted, agentSessionLoopTurnStarted:
+	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
+		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnFinished,
+		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
+		agentSessionLoopVerificationFinished, agentSessionLoopPaused:
+		// Every non-final lifecycle event asserts the loop marker: turns and
+		// verification are active work, between-turn signals keep the lease, and
+		// a paused run still owns 🔁 while it awaits a human.
 		return boolPtr(true)
 	case agentSessionLoopFinished:
 		if strings.TrimSpace(target.CWD) == "" && target.WindowID <= 0 {

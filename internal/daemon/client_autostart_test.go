@@ -306,6 +306,71 @@ func TestClient_SendWithAutoStart_BurstSpawnsOnce(t *testing.T) {
 	}
 }
 
+// TestClient_SendWithAutoStart_RetryReusesRequestID pins that the request ID
+// generated once by the caller survives the auto-start + retry path unchanged:
+// the daemon that finally answers sees the same ID the first (failed) attempt
+// would have carried, which is what lets it deduplicate an ambiguous resend.
+func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-client-reqid-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	socketPath := filepath.Join(dir, "daemon.sock")
+	amxBin := filepath.Join(dir, "amx")
+	if err := os.WriteFile(amxBin, []byte("binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile(binary): %v", err)
+	}
+
+	prevRetryDelay := autoStartRetryDelay
+	autoStartRetryDelay = 20 * time.Millisecond
+	t.Cleanup(func() { autoStartRetryDelay = prevRetryDelay })
+
+	seen := make(chan string, 4)
+	var stop func()
+	prevSpawn := spawnDetached
+	spawnDetached = func(path string) error {
+		// The socket does not exist yet, so the first Send fails with connect
+		// refused; only after this spawn brings up the recorder does the retry
+		// succeed. The recorder captures the request ID it receives.
+		time.Sleep(30 * time.Millisecond)
+		stop = startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
+			seen <- req.RequestID
+			return Response{OK: true, Allowed: true, IconState: "bolt"}, true
+		})
+		return nil
+	}
+	t.Cleanup(func() {
+		spawnDetached = prevSpawn
+		if stop != nil {
+			stop()
+		}
+	})
+
+	c := NewClientWithSocket(socketPath)
+	resp, err := c.SendWithAutoStart(Request{
+		Type:      TypeStateUpdate,
+		RequestID: "stable-id-123",
+		WindowID:  4,
+		Action:    "active",
+	}, amxBin)
+	if err != nil {
+		t.Fatalf("SendWithAutoStart: %v", err)
+	}
+	if !resp.OK || resp.IconState != "bolt" {
+		t.Fatalf("response = %+v, want OK/bolt", resp)
+	}
+	select {
+	case got := <-seen:
+		if got != "stable-id-123" {
+			t.Fatalf("daemon saw request ID %q, want stable-id-123 (must survive retry)", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for retried request")
+	}
+}
+
 func startTestDaemonServer(t *testing.T, socketPath string, handler func(Request) (Response, bool)) func() {
 	t.Helper()
 

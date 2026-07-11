@@ -2,6 +2,8 @@ package indicator
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -53,6 +55,7 @@ func runWithDeps(event string, windowID int, amxBin, payloadJSON string, pipeMod
 
 	resp, err := client.SendWithAutoStart(daemon.Request{
 		Type:          daemon.TypeHookEvent,
+		RequestID:     newRequestID(),
 		WindowID:      windowID,
 		Event:         event,
 		PayloadJSON:   payloadJSON,
@@ -65,6 +68,31 @@ func runWithDeps(event string, windowID int, amxBin, payloadJSON string, pipeMod
 		slog.Warn("indicator: daemon rejected hook event; dropping it", "event", event, "window_id", windowID, "error", resp.Error)
 	}
 	return nil
+}
+
+// newRequestID returns a random UUIDv4 string identifying one hook-indicator
+// invocation. The same ID travels with every auto-start retry of that
+// invocation (the client resends the identical Request), so the daemon can
+// apply the underlying event exactly once even when an ambiguous response
+// timeout forces a resend. A crypto/rand failure is treated as fatal to the ID
+// only: we fall back to an empty ID (legacy, non-deduplicated) rather than
+// reusing a predictable value that could collide across invocations.
+func newRequestID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		slog.Warn("indicator: request ID generation failed; sending legacy non-deduplicated request", "err", err)
+		return ""
+	}
+	// RFC 4122 version 4 / variant bits.
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		hex.EncodeToString(b[0:4]),
+		hex.EncodeToString(b[4:6]),
+		hex.EncodeToString(b[6:8]),
+		hex.EncodeToString(b[8:10]),
+		hex.EncodeToString(b[10:16]),
+	)
 }
 
 func readHookPayloadJSON(stdin *os.File) (string, error) {

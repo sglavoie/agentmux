@@ -195,7 +195,7 @@ func TestProbeClaudeContextLimit_ClosedWindowGCDropsFlag(t *testing.T) {
 	}
 
 	// Kitty no longer reports window 42 → pruneClosedWindows should drop it.
-	h.pruneClosedWindows(map[int]bool{})
+	h.pruneClosedWindows(time.Now(), map[int]bool{})
 
 	h.stateMu.Lock()
 	_, stillThere := h.store[42]

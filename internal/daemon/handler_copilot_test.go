@@ -36,8 +36,13 @@ func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 		Action:   "active",
 		Event:    "postToolUse",
 	})
-	if !resp.OK || resp.Allowed {
-		t.Fatalf("Copilot post-compaction stop should block non-prompt active follow-up, got %+v", resp)
+	if !resp.OK {
+		t.Fatalf("Copilot post-compaction active follow-up: %+v", resp)
+	}
+	// The reducer folded the cleanup as a synthetic terminal stop, so a
+	// trailing non-prompt active within the grace must not revive the bolt.
+	if eff, icon := windowEffective(t, h, 1); eff.Icon != "stop" || icon != "stop" {
+		t.Fatalf("visible state after trailing active = %+v/%q, want stop preserved", eff, icon)
 	}
 }
 

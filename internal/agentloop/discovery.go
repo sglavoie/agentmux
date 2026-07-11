@@ -28,11 +28,27 @@ const (
 // PIDChecker reports whether a process id still represents a running process.
 type PIDChecker func(pid int) bool
 
+// Run phases derived from persisted loop state. The string values match the
+// daemon reducer's ASL phase vocabulary so a discovered candidate's phase can
+// seed a lease without translation.
+const (
+	PhaseTurn         = "turn"         // a session turn is executing
+	PhaseVerification = "verification" // a verification pass is running
+	PhaseBetween      = "between"      // run alive, idle between turns
+	PhasePaused       = "paused"       // run paused awaiting a human
+)
+
 // DiscoverOptions controls active loop discovery. Empty fields use production
 // defaults, while tests can inject a state root and PID checker.
 type DiscoverOptions struct {
 	StateRoot  string
 	PIDRunning PIDChecker
+	// IncludePaused also returns paused runs. A pause finalizes the loop
+	// process (the lock PID dies and run_finished_at is written), so paused
+	// runs are invisible to the default liveness checks even though they are
+	// still awaiting a human. Only reconciliation opts in: routing and loop
+	// marker consumers must keep seeing live processes only.
+	IncludePaused bool
 }
 
 // Candidate is one active agent-session-loop run discovered from state files.
@@ -52,6 +68,18 @@ type Candidate struct {
 	RunID         string
 	ActiveSession int
 	ActiveTurn    int
+
+	// Phase is the run's derived lifecycle phase (PhaseTurn, PhaseVerification,
+	// PhaseBetween, or PhasePaused). ActiveVerification reports whether a
+	// verification pass is in flight, Paused whether the run is paused awaiting
+	// a human, and HeartbeatAt the most recent liveness signal persisted by the
+	// run (the active turn's last heartbeat, or the verification's current
+	// check start). HeartbeatAtRaw preserves the unparsed timestamp.
+	Phase              string
+	ActiveVerification bool
+	Paused             bool
+	HeartbeatAt        time.Time
+	HeartbeatAtRaw     string
 }
 
 // WorkspaceTarget describes an open workspace session that can receive loop
@@ -115,7 +143,7 @@ func Discover(opts DiscoverOptions) ([]Candidate, error) {
 		if err != nil {
 			continue
 		}
-		candidate, ok := readCandidate(stateDir, pidRunning)
+		candidate, ok := readCandidate(stateDir, pidRunning, opts.IncludePaused)
 		if ok {
 			candidates = append(candidates, candidate)
 		}
@@ -260,25 +288,53 @@ func IsPIDRunning(pid int) bool {
 }
 
 type stateFile struct {
-	RunID         string          `json:"run_id"`
-	PlanDir       string          `json:"plan_dir"`
-	CWD           string          `json:"cwd"`
-	Harness       string          `json:"harness"`
-	RunStartedAt  string          `json:"run_started_at"`
-	RunFinishedAt json.RawMessage `json:"run_finished_at"`
-	ActiveTurn    *activeTurn     `json:"active_turn"`
-	KittyWindowID int             `json:"kitty_window_id"`
+	RunID              string              `json:"run_id"`
+	PlanDir            string              `json:"plan_dir"`
+	CWD                string              `json:"cwd"`
+	Harness            string              `json:"harness"`
+	RunStartedAt       string              `json:"run_started_at"`
+	RunFinishedAt      json.RawMessage     `json:"run_finished_at"`
+	Paused             bool                `json:"paused"`
+	ActiveTurn         *activeTurn         `json:"active_turn"`
+	ActiveVerification *activeVerification `json:"active_verification"`
+	KittyWindowID      int                 `json:"kitty_window_id"`
 }
 
 type activeTurn struct {
-	TurnIndex int    `json:"turn_index"`
-	Session   int    `json:"session"`
-	Harness   string `json:"harness"`
+	TurnIndex       int      `json:"turn_index"`
+	Session         looseInt `json:"session"`
+	Harness         string   `json:"harness"`
+	LastHeartbeatAt string   `json:"last_heartbeat_at"`
 }
 
-func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
+type activeVerification struct {
+	TurnIndex             int      `json:"turn_index"`
+	Session               looseInt `json:"session"`
+	StartedAt             string   `json:"started_at"`
+	CurrentCheckStartedAt string   `json:"current_check_started_at"`
+	LastHeartbeatAt       string   `json:"last_heartbeat_at"`
+}
+
+// looseInt decodes a state-file session identifier that agent-session-loop may
+// persist as a number or a dotted string (e.g. "33.3" for an inserted
+// sub-session). A non-integer value degrades to 0 instead of failing the whole
+// state decode — dropping a live run from discovery because its session label
+// is not an integer would let reconciliation revoke a healthy lease.
+type looseInt int
+
+func (l *looseInt) UnmarshalJSON(data []byte) error {
+	var n int
+	if err := json.Unmarshal(data, &n); err == nil {
+		*l = looseInt(n)
+		return nil
+	}
+	*l = 0
+	return nil
+}
+
+func readCandidate(stateDir string, pidRunning PIDChecker, includePaused bool) (Candidate, bool) {
 	lock, ok := readLock(filepath.Join(stateDir, lockFileName))
-	if !ok || !pidRunning(lock.pid) {
+	if !ok {
 		return Candidate{}, false
 	}
 
@@ -294,8 +350,18 @@ func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
 	if !ok {
 		return Candidate{}, false
 	}
-	if hasRunFinishedAt(state.RunFinishedAt) {
-		return Candidate{}, false
+	// A pause finalizes the loop process: run_finished_at is written and the
+	// lock PID dies even though the run is still awaiting a human. Callers that
+	// opted in via IncludePaused see it anyway; every other consumer keeps the
+	// liveness contract (running PID, unfinished run).
+	pausedCandidate := includePaused && state.Paused
+	if !pausedCandidate {
+		if !pidRunning(lock.pid) {
+			return Candidate{}, false
+		}
+		if hasRunFinishedAt(state.RunFinishedAt) {
+			return Candidate{}, false
+		}
 	}
 	if state.PlanDir != "" {
 		statePlanDir, err := CanonicalizePath(state.PlanDir)
@@ -315,7 +381,7 @@ func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
 	activeSession := 0
 	activeTurnIndex := 0
 	if state.ActiveTurn != nil {
-		activeSession = state.ActiveTurn.Session
+		activeSession = int(state.ActiveTurn.Session)
 		activeTurnIndex = state.ActiveTurn.TurnIndex
 	}
 
@@ -324,21 +390,65 @@ func readCandidate(stateDir string, pidRunning PIDChecker) (Candidate, bool) {
 	if state.KittyWindowID > 0 {
 		windowID = state.KittyWindowID
 	}
+	heartbeatRaw := heartbeatTimestamp(state)
 	return Candidate{
-		PlanDir:          planDir,
-		StateDir:         stateDir,
-		CWD:              cwd,
-		Harness:          candidateHarness,
-		WindowID:         windowID,
-		PID:              lock.pid,
-		LockCreatedAt:    parseTimestamp(lock.createdAt),
-		LockCreatedAtRaw: lock.createdAt,
-		RunStartedAt:     parseTimestamp(state.RunStartedAt),
-		RunStartedAtRaw:  state.RunStartedAt,
-		RunID:            state.RunID,
-		ActiveSession:    activeSession,
-		ActiveTurn:       activeTurnIndex,
+		PlanDir:            planDir,
+		StateDir:           stateDir,
+		CWD:                cwd,
+		Harness:            candidateHarness,
+		WindowID:           windowID,
+		PID:                lock.pid,
+		LockCreatedAt:      parseTimestamp(lock.createdAt),
+		LockCreatedAtRaw:   lock.createdAt,
+		RunStartedAt:       parseTimestamp(state.RunStartedAt),
+		RunStartedAtRaw:    state.RunStartedAt,
+		RunID:              state.RunID,
+		ActiveSession:      activeSession,
+		ActiveTurn:         activeTurnIndex,
+		Phase:              statePhase(state),
+		ActiveVerification: state.ActiveVerification != nil,
+		Paused:             state.Paused,
+		HeartbeatAt:        parseTimestamp(heartbeatRaw),
+		HeartbeatAtRaw:     heartbeatRaw,
 	}, true
+}
+
+// statePhase derives the run's lifecycle phase from persisted state. Pause wins
+// (a paused run's active turn/verification snapshots are already cleared, but a
+// racing writer must still classify as paused); an in-flight verification
+// outranks the turn it verifies; an active turn is executing; anything else is
+// alive between turns.
+func statePhase(state stateFile) string {
+	switch {
+	case state.Paused:
+		return PhasePaused
+	case state.ActiveVerification != nil:
+		return PhaseVerification
+	case state.ActiveTurn != nil:
+		return PhaseTurn
+	default:
+		return PhaseBetween
+	}
+}
+
+// heartbeatTimestamp picks the freshest liveness timestamp the run persists:
+// the active turn's per-heartbeat stamp, else the verification's per-heartbeat
+// stamp (persisted by newer loops), else the verification's current check
+// start, else the verification start.
+func heartbeatTimestamp(state stateFile) string {
+	if state.ActiveTurn != nil && strings.TrimSpace(state.ActiveTurn.LastHeartbeatAt) != "" {
+		return state.ActiveTurn.LastHeartbeatAt
+	}
+	if state.ActiveVerification != nil {
+		if raw := strings.TrimSpace(state.ActiveVerification.LastHeartbeatAt); raw != "" {
+			return raw
+		}
+		if raw := strings.TrimSpace(state.ActiveVerification.CurrentCheckStartedAt); raw != "" {
+			return raw
+		}
+		return strings.TrimSpace(state.ActiveVerification.StartedAt)
+	}
+	return ""
 }
 
 func matchingWindow(candidates []Candidate, windowID int) []Candidate {

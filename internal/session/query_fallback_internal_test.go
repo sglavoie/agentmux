@@ -17,9 +17,9 @@ import (
 func TestTitleFallbackBases_DeterministicOrderWithOverlappingEmojis(t *testing.T) {
 	cfg := &config.Config{
 		HarnessEmojis: map[string]string{
-			"claude":  "⚡",       // 3 bytes, byte-prefix of the codex emoji
+			"claude":  "⚡",  // 3 bytes, byte-prefix of the codex emoji
 			"codex":   "⚡️", // 6 bytes: bolt + variation selector
-			"copilot": "🦀",       // 4 bytes, never matches the base below
+			"copilot": "🦀",  // 4 bytes, never matches the base below
 		},
 	}
 	base := "⚡️api"

@@ -276,9 +276,20 @@ Hook installation is harness-aware:
 The hook command is `amx hook-indicator <event>`.
 
 `agent-session-loop` / `asl` uses that same hook endpoint when `amx` is on
-`PATH`. It emits `AgentSessionLoopStarted`, `AgentSessionLoopTurnStarted`, and
+`PATH`. It emits `AgentSessionLoopStarted`, `AgentSessionLoopTurnStarted`,
+`AgentSessionLoopTurnHeartbeat`, `AgentSessionLoopTurnFinished`,
+`AgentSessionLoopVerificationStarted`, `AgentSessionLoopVerificationHeartbeat`,
+`AgentSessionLoopVerificationFinished`, `AgentSessionLoopPaused`, and
 `AgentSessionLoopFinished` with JSON that includes `source`, `reason`, `run_id`,
-`plan_dir`, `cwd`, `state_path`, and `harness`. Start payloads use the run's
+`plan_dir`, `cwd`, `state_path`, and `harness`. Every event carries the run's
+`run_id` and a persisted monotonic source sequence, so the daemon keys one
+lease per run: overlapping runs in one workspace hold independent facts, a
+run's turn/verification phases render ⚡🔁, between-turns and paused states
+keep 🔁, and one run finishing never changes another run's state (verified
+live with two overlapping runs in a single window). Turn and verification
+heartbeats re-assert the lease every 30 seconds. `ASL_AGENT_MUX_NOTIFY=off`
+disables the emission entirely; the ASL test suite forces it off so nested
+test runs never leak events into a live daemon (also verified live). Start payloads use the run's
 top-level harness; turn-start payloads use `active_turn.harness`; finish
 payloads use the last completed turn harness when present. A mid-run harness
 switch moves and clears the loop marker on the matching project tab. Agent Mux
@@ -438,28 +449,41 @@ checklist, see [Daemon State Acceptance Evidence](docs/daemon_state_acceptance.m
 
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema-v5 JSON snapshot for investigation.
+`amx daemon export-events` writes a schema-v6 JSON snapshot for investigation.
+Version 6 retains every v5 field and adds the daemon's global receipt sequence
+and nanosecond receipt time per event, normalized source identity
+(`source_kind`/`source_key`/`source_seq`), the route decision (`source`,
+`owner`, or `source_fallback`), the reducer's effective state and live source
+facts per window (`shadow`), watchdog reasons, render generations, IPC queue
+latency, and the build identity of both the exporting CLI and the daemon.
 Top-level fields describe the export timestamp and daemon health; `windows` is
 an array of per-window entries, each carrying its own `stats`, `durable`,
-`renderer`, `live`, and `events` fields so a single window can be inspected
-without paired map lookups:
+`renderer`, `shadow`, `watchdog`, `live`, and `events` fields so a single
+window can be inspected without paired map lookups:
 
 ```json
 {
-  "schema_version": 5,
-  "daemon": { "pid": 1234, "uptime_seconds": 97 },
+  "schema_version": 6,
+  "daemon": { "pid": 1234, "uptime_seconds": 97, "ready": true, "build": { ... }, "metrics": { ... } },
+  "cli_build": { ... },
   "windows": [
     {
       "window_id": 42,
       "stats": { ... },
       "durable": { ... },
-      "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0 },
+      "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0, "queued_gen": 7, "rendered_gen": 7 },
+      "shadow": { "effective_icon": "bolt", "effective_looping": true, "facts": [ ... ] },
+      "watchdog": { "last_event": "...", "last_reason": "..." },
       "live": { "found": true, ... },
       "events": [ ... ]
     }
   ]
 }
 ```
+
+The full export can exceed 1 MiB on a busy daemon; the IPC client accepts
+responses up to 64 MiB, and `--window`/`--current-window` bound the payload to
+one window when investigating a single tab.
 
 Durable metadata can outlive the live Kitty join after a tab closes;
 `live.found` flips to `false` when Kitty/session lookups are no longer
@@ -645,6 +669,24 @@ amx tui-test run docs/tui-testing/scenarios/*.json
 - **Icons or hooks look wrong**: run `amx doctor` first. It checks daemon
   reachability and binary freshness, `kitten @ ls`, hooks for every configured
   profile, renderer drift, known Kitty sockets, and recent suppression reasons.
+  `amx doctor --json` emits a structured report; `--strict` also evaluates the
+  correctness invariants (reducer/renderer agreement, ASL visibility, subagent
+  visibility, render-generation drift, queue saturation, build identity) and
+  exits 2 on any failure.
+- **Suspected intermittent state bugs**: run
+  `amx daemon audit --duration 10m --json`. It samples the invariants every
+  two seconds for the duration, deduplicates findings, and exits 2 if any
+  failure-severity violation was observed in any sample. The daemon must stay
+  up for the whole window — a restart mid-audit records `daemon_unreachable`.
+- **Deploying a new build**: use `just install` (stages the binary beside the
+  destination and renames it into place, so the replacement is atomic) or
+  `just install-restart-smoke` (install, restart the daemon, wait for
+  `ready: true`, then gate on `amx doctor --strict`, which verifies the CLI
+  and daemon are the same artifact by build hash). Durable per-window state is
+  restored from `amx_state` Kitty user vars across the restart; restore
+  republishes each window's reduced state, so a terminal icon whose
+  unacknowledged fact aged past the one-hour tombstone retention while the
+  daemon was down clears on restart instead of pinning stale state.
 - **No projects appear**: run `amx config validate` and confirm the config is
   at `~/.config/agent-mux/config.toml`.
 - **Hooks are missing**: run `amx config hooks-status`, then

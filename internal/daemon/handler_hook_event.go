@@ -5,10 +5,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/contextlimit"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+)
+
+// Route decisions recorded onto SessionEvent.RouteDecision: the firing pane
+// was the target itself, the event was rerouted to the tab's managed title
+// owner, or ownership could not be resolved and the daemon fell back to the
+// firing pane.
+const (
+	routeDecisionSource         = "source"
+	routeDecisionOwner          = "owner"
+	routeDecisionSourceFallback = "source_fallback"
 )
 
 type hookEventContext struct {
@@ -106,20 +115,11 @@ func (h *Handler) handleHookEvent(req Request) Response {
 
 	preservesIcon := hookevent.PreservesCurrent(eventOrAction) && action == "active"
 	contextLimitDetected := hookevent.PayloadHasContextLimit(payload)
-	if !contextLimitDetected && hookevent.ShouldProbeWindowForContextLimit(eventOrAction, action) && h.kittyClient != nil {
-		text, textErr := h.hookKittyClient(ctx.req).GetText(kitty.MatchWindowByID(ctx.req.WindowID), "screen")
-		if textErr != nil {
-			slog.Debug("hook event context-limit probe failed",
-				"window_id", ctx.req.WindowID,
-				"event", eventOrAction,
-				"err", textErr,
-			)
-		} else if contextlimit.ScreenShowsMarker(text) {
-			action = "stop_failure"
-			preservesIcon = false
-			contextLimitDetected = true
-		}
-	}
+	// The screen read that used to promote this event to stop_failure inline is
+	// now a targeted asynchronous probe: dispatch the base event immediately and
+	// let the probe upgrade the icon to error if the banner is present, so a slow
+	// GetText can never delay the acknowledgement.
+	probeContextLimit := !contextLimitDetected && hookevent.ShouldProbeWindowForContextLimit(eventOrAction, action) && h.kittyClient != nil
 
 	// The source pane is the state target on this path, so record its snapshot
 	// mute now (notification suppression consults it inside handleStateUpdate).
@@ -141,10 +141,31 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		resetFlowDetected,
 		ctx.req.KittyListenOn,
 	)
-	if h.deferResetSensitiveStop(stateReq, payload) {
-		return Response{OK: true}
+	// Stamp the source-scoped view for the shadow reducer while the raw payload
+	// is still in hand. A deferred stop keeps the stamp and delivers it at
+	// commit time.
+	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, req.PayloadJSON, ctx.req.WindowID)
+	stateReq.normalized = &normalized
+	stateReq.routeDecision = routeDecisionSource
+	deferred := h.deferResetSensitiveStop(stateReq, payload)
+	if !deferred {
+		h.handleStateUpdate(stateReq)
 	}
-	h.handleStateUpdate(stateReq)
+	if probeContextLimit {
+		h.enqueueContextLimitProbe(contextLimitProbe{
+			sourceWindowID: ctx.req.WindowID,
+			req:            ctx.req,
+			event:          eventOrAction,
+			payload:        payload,
+			targets: []contextLimitProbeTarget{{
+				windowID:     ctx.req.WindowID,
+				sessionTitle: ctx.req.SessionTitle,
+				profile:      ctx.req.Account,
+				harness:      ctx.req.Harness,
+				currentIcon:  ctx.req.currentIconState,
+			}},
+		})
+	}
 	return Response{OK: true}
 }
 
@@ -210,6 +231,16 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		false, // resetFlowDetected: F8 is a manual wipe, not a reset flow
 		ctx.req.KittyListenOn,
 	)
+	// The wipe was retargeted, so normalize against the target window: the
+	// shadow reducer must acknowledge the owner's facts, not the source pane's.
+	normalized := NormalizedFromHook(eventOrAction, harnessName, ctx.req.PayloadJSON, targetID)
+	stateReq.normalized = &normalized
+	switch {
+	case ctx.owner != nil:
+		stateReq.routeDecision = routeDecisionOwner
+	case ctx.lookupFailed:
+		stateReq.routeDecision = routeDecisionSourceFallback
+	}
 	h.handleStateUpdate(stateReq)
 	return Response{OK: true}
 }
@@ -222,9 +253,15 @@ func (h *Handler) resolveHookEventContext(req Request) hookEventContext {
 	if h.kittyClient == nil {
 		return ctx
 	}
-	windows, err := h.hookKittyClient(ctx.req).ListWindows()
-	if err != nil {
-		slog.Debug("hook event kitty lookup failed", "window_id", ctx.req.WindowID, "err", err)
+	// Route against the last published snapshot instead of a live ListWindows.
+	// A slow or wedged Kitty must never delay hook acknowledgement, so the
+	// maintenance loop is the only lister. A cold cache (no snapshot published
+	// yet — the daemon started degraded and has not reconciled) is treated like
+	// an unreadable tab so a user_clear falls back to the source pane rather
+	// than silently dropping.
+	windows, _, ready := h.cachedSnapshot()
+	if !ready {
+		slog.Debug("hook event snapshot cache cold; routing from request only", "window_id", ctx.req.WindowID)
 		ctx.lookupFailed = true
 		return ctx
 	}

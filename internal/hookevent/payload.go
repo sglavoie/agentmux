@@ -29,6 +29,7 @@ type HookPayload struct {
 	StopReason            string `json:"stop_reason"`
 	StopReasonCamel       string `json:"stopReason"`
 	Reason                string `json:"reason"`
+	PauseReason           string `json:"pause_reason"`
 	Source                string `json:"source"`
 	Trigger               string `json:"trigger"`
 	CWD                   string `json:"cwd"`
@@ -37,6 +38,7 @@ type HookPayload struct {
 	WindowID              int    `json:"window_id"`
 	PlanDir               string `json:"plan_dir"`
 	RunID                 string `json:"run_id"`
+	RunIDCamel            string `json:"runId"`
 	StatePath             string `json:"state_path"`
 	RunFinishedAt         string `json:"run_finished_at"`
 	Prompt                string `json:"prompt"`
@@ -46,6 +48,29 @@ type HookPayload struct {
 	Message               string `json:"message"`
 	ToolName              string `json:"tool_name"`
 	ToolNameCamel         string `json:"toolName"`
+
+	// Identity fields carried by the normalized event schema. Each supports the
+	// snake-case preferred spelling plus a camelCase fallback so both harness
+	// dialects normalize to the same source key. source_sequence and emitted_time
+	// are wire-encoded as strings (a numeric spelling that fails JSON decoding is
+	// caught upstream and quarantined rather than silently zeroed). Prompt bodies
+	// are deliberately absent from the identity set: they never key a source.
+	SessionID           string `json:"session_id"`
+	SessionIDCamel      string `json:"sessionId"`
+	TurnID              string `json:"turn_id"`
+	TurnIDCamel         string `json:"turnId"`
+	ToolUseID           string `json:"tool_use_id"`
+	ToolUseIDCamel      string `json:"toolUseId"`
+	AgentID             string `json:"agent_id"`
+	AgentIDCamel        string `json:"agentId"`
+	AgentType           string `json:"agent_type"`
+	AgentTypeCamel      string `json:"agentType"`
+	SourceSequence      string `json:"source_sequence"`
+	SourceSequenceCamel string `json:"sourceSequence"`
+	SourceEventID       string `json:"source_event_id"`
+	SourceEventIDCamel  string `json:"sourceEventId"`
+	EmittedTime         string `json:"emitted_time"`
+	EmittedTimeCamel    string `json:"emittedTime"`
 }
 
 // ReadHookPayload decodes hook JSON from stdin when stdin is piped. Interactive
@@ -107,6 +132,53 @@ func (p HookPayload) EffectivePrompt() string {
 
 func (p HookPayload) EffectiveToolName() string {
 	return firstNonBlank(p.ToolName, p.ToolNameCamel)
+}
+
+// EffectivePauseReason returns the agent-session-loop pause reason, preferring
+// the dedicated pause_reason field and falling back to the generic reason the
+// loop's hook payload builder always carries.
+func (p HookPayload) EffectivePauseReason() string {
+	return firstNonBlank(p.PauseReason, p.Reason)
+}
+
+// EffectiveSessionID, EffectiveTurnID, and the other identity accessors prefer
+// the snake-case spelling and fall back to the camelCase alias, mirroring the
+// existing firstNonBlank pattern for tool name and prompt. They let both harness
+// dialects resolve to the same normalized identity.
+func (p HookPayload) EffectiveSessionID() string {
+	return firstNonBlank(p.SessionID, p.SessionIDCamel)
+}
+
+func (p HookPayload) EffectiveTurnID() string {
+	return firstNonBlank(p.TurnID, p.TurnIDCamel)
+}
+
+func (p HookPayload) EffectiveToolUseID() string {
+	return firstNonBlank(p.ToolUseID, p.ToolUseIDCamel)
+}
+
+func (p HookPayload) EffectiveAgentID() string {
+	return firstNonBlank(p.AgentID, p.AgentIDCamel)
+}
+
+func (p HookPayload) EffectiveAgentType() string {
+	return firstNonBlank(p.AgentType, p.AgentTypeCamel)
+}
+
+func (p HookPayload) EffectiveRunID() string {
+	return firstNonBlank(p.RunID, p.RunIDCamel)
+}
+
+func (p HookPayload) EffectiveSourceSequence() string {
+	return firstNonBlank(p.SourceSequence, p.SourceSequenceCamel)
+}
+
+func (p HookPayload) EffectiveSourceEventID() string {
+	return firstNonBlank(p.SourceEventID, p.SourceEventIDCamel)
+}
+
+func (p HookPayload) EffectiveEmittedTime() string {
+	return firstNonBlank(p.EmittedTime, p.EmittedTimeCamel)
 }
 
 func (p HookPayload) EffectiveKittyWindowID() int {

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui"
 	"github.com/spf13/cobra"
@@ -112,7 +113,11 @@ func configureLogging(enabled bool) {
 }
 
 func init() {
-	rootCmd.Version = version
+	// Version output carries the full artifact identity (VCS revision, dirty
+	// marker, build time, Go version, binary hash) so an installed CLI can be
+	// matched against the daemon's reported build.
+	buildinfo.SetVersion(version)
+	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug output")
 	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, transcriptsCmd, tuiTestCmd)
 }
