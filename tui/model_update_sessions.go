@@ -5,7 +5,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/plans"
-	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 // handleSessionsMsg processes a sessionsMsg: rebuilds the session list,
@@ -150,64 +149,6 @@ func (m Model) handleDetailEvents(msg detailEventsMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleSessionCacheLoadStarted(sessionCacheLoadStartedMsg) (tea.Model, tea.Cmd) {
-	m.sessionCacheLoadInFlight = true
-	m.sessionRefreshErr = nil
-	return m, nil
-}
-
-// handleSessionCacheLoadDone stores the startup-loaded index/readers and, if
-// no newer user search has been dispatched, publishes the cached empty-query
-// results before starting a background refresh/prune.
-func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Model, tea.Cmd) {
-	m.sessionCacheLoadInFlight = false
-	if msg.loadErr != nil {
-		m.sessionRefreshErr = msg.loadErr
-		m.sessionSearchErr = nil
-		m.sessionLoading = false
-		return m, nil
-	}
-	m.transcriptIndex = msg.idx
-	m.transcriptReaders = msg.readers
-	m.sessionRefreshErr = msg.degradedErr
-
-	var cmds []tea.Cmd
-	publishCachedResults := msg.seq == m.sessionSearchSeq && sessionQueryIsEmpty(m.currentSessionQuery())
-	if publishCachedResults {
-		m.sessionSearchErr = msg.searchErr
-		m.sessionResults = msg.results
-		m.sessionLoading = false
-		if m.sessionCursor >= len(m.sessionResults) {
-			m.sessionCursor = len(m.sessionResults) - 1
-			if m.sessionCursor < 0 {
-				m.sessionCursor = 0
-			}
-		}
-		scrollSessionSearchToCursor(&m)
-	} else if m.mode == ModeSessionSearch {
-		m.sessionLoading = true
-		cmds = append(cmds, runSessionSearchCmd(m.sessionSearchSeq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery()))
-	} else {
-		m.sessionLoading = false
-	}
-
-	if !m.sessionRefreshInFlight {
-		m.sessionRefreshInFlight = true
-		warmSeq := msg.seq
-		warmQuery := transcript.Query{}
-		if !publishCachedResults {
-			if m.mode == ModeSessionSearch {
-				warmSeq = m.sessionSearchSeq
-				warmQuery = m.currentSessionQuery()
-			} else {
-				warmSeq = -1
-			}
-		}
-		cmds = append(cmds, sessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, warmSeq, warmQuery))
-	}
-	return m, tea.Batch(cmds...)
-}
-
 // handleSessionWarmRefreshDone publishes the background refresh result if no
 // newer user search has superseded the startup empty-query search.
 func (m Model) handleSessionWarmRefreshDone(msg sessionWarmRefreshDoneMsg) (tea.Model, tea.Cmd) {
@@ -242,7 +183,7 @@ func (m Model) handleSessionsRefreshDone(msg sessionsRefreshDoneMsg) (tea.Model,
 		// A newer dispatch is already in flight; defer to it.
 		return m, nil
 	}
-	return m, runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
+	return m, m.runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
 }
 
 // handleSessionSearchDebounce processes a sessionSearchDebounceMsg: drops
@@ -253,16 +194,12 @@ func (m Model) handleSessionSearchDebounce(msg sessionSearchDebounceMsg) (tea.Mo
 		return m, nil
 	}
 	if m.transcriptIndex == nil {
-		if m.sessionCacheLoadInFlight {
-			return m, nil
-		}
-		m.sessionCacheLoadInFlight = true
-		return m, startupSessionWarmupCmd(m.sessionSearchSeq)
+		return m, m.dispatchDataServicesInit()
 	}
 	if m.transcriptReaders == nil {
 		m.transcriptReaders = buildTranscriptReaders()
 	}
-	return m, runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
+	return m, m.runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
 }
 
 // handleSessionSearchDone processes a sessionSearchDoneMsg: updates the
@@ -291,7 +228,7 @@ func (m Model) handlePlansRefreshDone(msg plansRefreshDoneMsg) (tea.Model, tea.C
 	if msg.seq < m.planSearchSeq {
 		return m, nil
 	}
-	return m, runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
+	return m, m.runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
 }
 
 // handlePlanSearchDebounce processes a planSearchDebounceMsg: drops stale
@@ -300,7 +237,7 @@ func (m Model) handlePlanSearchDebounce(msg planSearchDebounceMsg) (tea.Model, t
 	if msg.seq != m.planSearchSeq {
 		return m, nil
 	}
-	return m, runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
+	return m, m.runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
 }
 
 // handlePlanSearchDone processes a planSearchDoneMsg: updates the plan

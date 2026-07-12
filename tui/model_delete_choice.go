@@ -121,7 +121,7 @@ func (m Model) applyDeleteChoice(alsoFile bool) (tea.Model, tea.Cmd) {
 	m.sessionSearchSeq++
 	m.sessionLoading = true
 	m.sessionSearchErr = nil
-	cmds = append(cmds, runSessionSearchCmd(m.sessionSearchSeq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery()))
+	cmds = append(cmds, m.runSessionSearchCmd(m.sessionSearchSeq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery()))
 	return m, tea.Batch(cmds...)
 }
 

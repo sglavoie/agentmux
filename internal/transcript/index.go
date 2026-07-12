@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/searchstore"
 )
@@ -55,6 +56,24 @@ type Index struct {
 	// exactly the same read path as older releases.
 	repo           *Repository
 	degradedReason error
+	ownedStore     *datastore.Store
+}
+
+// Close releases the datastore only when this facade was created by the
+// compatibility wrapper that opened it. Store-injected facades borrow their
+// caller's pool, so Close is deliberately a no-op for them.
+func (i *Index) Close() error {
+	if i == nil {
+		return nil
+	}
+	i.mu.Lock()
+	store := i.ownedStore
+	i.ownedStore = nil
+	i.mu.Unlock()
+	if store == nil {
+		return nil
+	}
+	return store.Close()
 }
 
 // saveLockedHookForTest lets same-package tests count successful persistence

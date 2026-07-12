@@ -37,13 +37,24 @@ var (
 	doctorStat             = os.Stat
 	doctorNow              = time.Now
 	doctorCLIBuild         = buildinfo.Current
-	doctorInspectDatastore = func(ctx context.Context) (datastore.Status, error) {
+	doctorInspectDatastore = func(ctx context.Context, verifySearch bool) (datastore.Status, error) {
 		store, err := datastore.Open(ctx)
 		if err != nil {
 			return datastore.Status{}, err
 		}
 		defer func() { _ = store.Close() }()
-		return store.Inspect(ctx)
+		status, err := store.Inspect(ctx)
+		if err != nil || !verifySearch {
+			return status, err
+		}
+		if err := store.VerifySearchIndex(ctx); err != nil {
+			status.Search.Integrity = err.Error()
+			status.Search.Fresh = false
+			status.Healthy = false
+			return status, nil
+		}
+		status.Search.IntegrityVerified = true
+		return status, nil
 	}
 )
 
@@ -148,7 +159,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	datastoreStatus, datastoreErr := doctorInspectDatastore(commandContext(cmd))
+	datastoreStatus, datastoreErr := doctorInspectDatastore(commandContext(cmd), doctorStrict)
 	if datastoreErr != nil {
 		if _, err := fmt.Fprintf(textOut, "datastore: unavailable (%s)\n", datastoreErr); err != nil {
 			return err
@@ -173,9 +184,14 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		}
 		if !datastoreStatus.Search.Fresh {
 			addFinding(severityFailure, checkFTSFreshness,
-				"search documents=%d, FTS rows=%d, missing=%v, integrity=%q",
+				"search documents=%d, FTS rows=%d, missing=%v, repairable=%v, unavailable=%v, inconsistent=%v, integrity=%q",
 				datastoreStatus.Search.DocumentCount, datastoreStatus.Search.FTSRowCount,
-				datastoreStatus.Search.MissingDocuments, datastoreStatus.Search.Integrity)
+				datastoreStatus.Search.MissingDocuments, datastoreStatus.Search.RepairableMissingDocuments,
+				datastoreStatus.Search.UnavailablePlaceholders, datastoreStatus.Search.InconsistentDocuments,
+				datastoreStatus.Search.Integrity)
+		}
+		for _, warning := range datastoreStatus.Search.Warnings {
+			addFinding(severityWarning, checkFTSFreshness, "%s", warning)
 		}
 		if !datastoreStatus.SecurePermissions {
 			addFinding(severityFailure, checkDatastorePermissions,

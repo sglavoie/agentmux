@@ -270,6 +270,12 @@ func (m Model) handleWorkspaceKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModeHelp
 		return m, nil
 	}
+	// Loading and genuinely empty workspace lists have no project or detail
+	// selection. Keep their navigation keys inert instead of moving focus into
+	// an invisible empty pane.
+	if len(m.workspaceSnapshot.Workspaces) == 0 {
+		return m, nil
+	}
 
 	if m.workspaceFocus == workspaceFocusProjects && !m.workspaceDrillDown {
 		switch key {
@@ -369,7 +375,7 @@ func (m Model) workspacePrimaryAction(item workspaceDetailItem, key string) (tea
 		if readers == nil {
 			readers = buildTranscriptReaders()
 		}
-		return m, conversationActionCmd(m.client, m.cfg, readers, meta, actions.Continue)
+		return m, m.conversationActionCmd(readers, meta, actions.Continue)
 	case workspaceDetailPlan:
 		if key != keyEnter {
 			return m, nil
@@ -399,7 +405,7 @@ func (m Model) workspacePrimaryAction(item workspaceDetailItem, key string) (tea
 				if readers == nil {
 					readers = buildTranscriptReaders()
 				}
-				return m, conversationActionCmd(m.client, m.cfg, readers, meta, actions.Continue)
+				return m, m.conversationActionCmd(readers, meta, actions.Continue)
 			}
 		}
 		return m, m.workspaceToast("activity has no available live or indexed target")
@@ -415,7 +421,7 @@ func (m Model) workspaceLiveAction(running session.RunningSession, key string) (
 		return m, peekCmd(m.client, running.WindowID)
 	case keyClearStatus:
 		if stateGroup(running, m.lastActivity, m.idleThreshold) == 0 {
-			return m, clearStatusCmd(m.client, running)
+			return m, m.clearStatusCmd(running)
 		}
 	case keyLock:
 		return m, toggleLockCmd(m.client, running)
@@ -506,6 +512,10 @@ func renderWorkspaceHome(m Model) string {
 		return sb.String()
 	}
 	if len(m.workspaceSnapshot.Workspaces) == 0 {
+		if m.workspaceLoadErr != nil {
+			sb.WriteString(styleDim.Render("Workspace data is unavailable; retrying in the background.") + "\n")
+			return sb.String()
+		}
 		sb.WriteString(styleHeader.Render("Workspaces") + "\n")
 		sb.WriteString(styleDim.Render("No configured projects. Add [[projects]] entries to start a workspace.") + "\n")
 		return sb.String()

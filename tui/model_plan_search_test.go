@@ -116,6 +116,24 @@ func TestEnterPlanSearch_TransitionsModeAndDispatchesRefresh(t *testing.T) {
 	}
 }
 
+func TestEnterPlanSearchLoadsSQLiteFacadeAsynchronously(t *testing.T) {
+	m := Model{mode: ModeList, cfg: &config.Config{}, dataServices: &DataServices{}}
+	updated, loadCmd := m.enterPlanSearch()
+	m = updated.(Model)
+	if loadCmd == nil || !m.dataServicesInitInFlight || !m.planLoading || m.planSearchSeq != 0 {
+		t.Fatalf("async load = cmd %v services-loading %v loading %v seq %d", loadCmd != nil, m.dataServicesInitInFlight, m.planLoading, m.planSearchSeq)
+	}
+	index, err := plans.LoadIndexAt(filepath.Join(t.TempDir(), "plans.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, refreshCmd := m.Update(dataServicesReadyMsg{snapshot: dataServicesSnapshot{planIndex: index}})
+	m = updated.(Model)
+	if refreshCmd == nil || m.dataServicesInitInFlight || m.plansIndex != index || m.planSearchSeq != 1 {
+		t.Fatalf("loaded facade = cmd %v services-loading %v index %p seq %d", refreshCmd != nil, m.dataServicesInitInFlight, m.plansIndex, m.planSearchSeq)
+	}
+}
+
 // TestPlanSearch_TypingShrinksResultSet drives the dispatch chain end to end:
 // ModePlanSearch → "/" → "needle" → debounce → search → done. After the
 // final planSearchDoneMsg the model's planResults must contain only the

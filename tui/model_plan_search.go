@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -50,20 +52,18 @@ func (m Model) enterPlanSearch() (tea.Model, tea.Cmd) {
 	m.planSearchErr = nil
 
 	if m.plansIndex == nil {
-		idx, err := plans.LoadIndex()
-		if err != nil {
-			m.planRefreshErr = err
-			m.planLoading = false
-			return m, nil
-		}
-		m.plansIndex = idx
+		m.planLoading = true
+		return m, m.dispatchDataServicesInit()
 	}
+	return m.startPlanSearchRefresh()
+}
 
+func (m Model) startPlanSearchRefresh() (tea.Model, tea.Cmd) {
 	m.planLoading = true
 	m.planSearchSeq++
 	seq := m.planSearchSeq
 	var cmds []tea.Cmd
-	cmds = append(cmds, plansRefreshCmd(m.plansIndex, m.cfg, seq))
+	cmds = append(cmds, m.runPlansRefreshCmd(m.plansIndex, m.cfg, seq))
 	if c := m.pushToast(Toast{
 		Severity: toastInfo,
 		Text:     "Scanning plans…",
@@ -239,6 +239,13 @@ func runPlanSearchCmd(seq int, idx *plans.Index, q plans.Query) tea.Cmd {
 	}
 }
 
+func (m Model) runPlanSearchCmd(seq int, idx *plans.Index, q plans.Query) tea.Cmd {
+	if m.planSearchCommand != nil {
+		return m.planSearchCommand(seq, idx, q)
+	}
+	return runPlanSearchCmd(seq, idx, q)
+}
+
 // plansRefreshCmd runs Index.Refresh off-thread, then emits a
 // plansRefreshDoneMsg. The seq is forwarded to the follow-up search dispatch
 // so the result chain stays cancellable.
@@ -247,6 +254,28 @@ func plansRefreshCmd(idx *plans.Index, cfg *config.Config, seq int) tea.Cmd {
 		err := idx.Refresh(config.ExpandTilde(cfg.Defaults.PlansDirectory))
 		return plansRefreshDoneMsg{err: err, seq: seq}
 	}
+}
+
+func (m Model) runPlansRefreshCmd(idx *plans.Index, cfg *config.Config, seq int) tea.Cmd {
+	if m.planRefreshCommand != nil {
+		return m.planRefreshCommand(idx, cfg, seq)
+	}
+	if m.dataServices != nil {
+		ctx := m.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		return func() tea.Msg {
+			err := m.dataServices.WithWriter(ctx, func(services dataServicesSnapshot) error {
+				if services.planIndex != idx {
+					return fmt.Errorf("plan index is not owned by TUI data services")
+				}
+				return idx.Refresh(config.ExpandTilde(cfg.Defaults.PlansDirectory))
+			})
+			return plansRefreshDoneMsg{err: err, seq: seq}
+		}
+	}
+	return plansRefreshCmd(idx, cfg, seq)
 }
 
 // openPlanInEditorCmd invokes session.OpenPathInEditor against the plan's

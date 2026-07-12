@@ -8,6 +8,7 @@ package tui
 // those are supplied by the caller through cfg and client.
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -48,8 +49,12 @@ func RunUITestModel(m Model, opts UITestOptions, actions []UITestAction) ([]UITe
 
 // runUITestActions captures the initial observation, then applies each action
 // and captures an observation after it. Shared by both public entry points.
-func runUITestActions(d *UITestDriver, actions []UITestAction) ([]UITestObservation, error) {
-	obs := make([]UITestObservation, 0, len(actions)+1)
+func runUITestActions(d *UITestDriver, actions []UITestAction) (obs []UITestObservation, retErr error) {
+	defer func() { retErr = errors.Join(retErr, d.Close()) }()
+	if err := d.Err(); err != nil {
+		return nil, err
+	}
+	obs = make([]UITestObservation, 0, len(actions)+1)
 	obs = append(obs, d.Observe())
 	for i, a := range actions {
 		if err := d.Apply(a); err != nil {

@@ -2,52 +2,34 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/activity"
-	"github.com/sglavoie/agentmux/internal/datastore"
 )
 
-// defaultWorkspaceActivityMarker keeps the shared action registry independent
-// from datastore construction. Each palette/automatic mutation is short-lived
-// and owns its connection lifetime; projection reads continue on their own
-// background connection.
-type defaultWorkspaceActivityMarker struct{}
+type unavailableWorkspaceActivityMarker struct{}
 
-func (defaultWorkspaceActivityMarker) MarkWorkspaceRead(ctx context.Context, workspaceID, readerID string, through time.Time) (bool, error) {
-	store, err := datastore.Open(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = store.Close() }()
-	repo, err := activity.NewRepository(store)
-	if err != nil {
-		return false, err
-	}
-	return repo.MarkWorkspaceRead(ctx, workspaceID, readerID, through)
+func (unavailableWorkspaceActivityMarker) MarkWorkspaceRead(context.Context, string, string, time.Time) (bool, error) {
+	return false, errors.New("workspace activity services are not ready")
 }
 
-func (defaultWorkspaceActivityMarker) MarkAllWorkspacesRead(ctx context.Context, readerID string) (int64, error) {
-	store, err := datastore.Open(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = store.Close() }()
-	repo, err := activity.NewRepository(store)
-	if err != nil {
-		return 0, err
-	}
-	return repo.MarkAllWorkspacesRead(ctx, readerID)
+func (unavailableWorkspaceActivityMarker) MarkAllWorkspacesRead(context.Context, string) (int64, error) {
+	return 0, errors.New("workspace activity services are not ready")
 }
 
 func (m Model) activityMarker() actions.ActivityMarker {
 	if m.workspaceActivityMarker != nil {
 		return m.workspaceActivityMarker
 	}
-	return defaultWorkspaceActivityMarker{}
+	if m.dataServices != nil {
+		if services, ready := m.dataServices.Snapshot(); ready && services.activityRepository != nil {
+			return services.activityRepository
+		}
+	}
+	return unavailableWorkspaceActivityMarker{}
 }
 
 // markSelectedWorkspaceRead advances only through the immutable batch already

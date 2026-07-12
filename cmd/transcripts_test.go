@@ -3,23 +3,28 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/compatimport"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/searchstore"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
-func resetTranscriptsCommandTestState(t *testing.T, indexPath string) {
+func resetTranscriptsCommandTestState(t *testing.T, indexPath string) *datastore.Store {
 	t.Helper()
 	oldIndexPath := transcriptsIndexPath
 	oldLoadConfig := transcriptsLoadConfig
 	oldReaders := transcriptsReaders
+	oldOpenStore := transcriptsOpenStore
 	oldLoadIndex := transcriptsLoadIndex
 	oldRebuildAll := transcriptsRebuildAll
 	oldStatusOut := transcriptsStatusCmd.OutOrStdout()
@@ -31,6 +36,7 @@ func resetTranscriptsCommandTestState(t *testing.T, indexPath string) {
 		transcriptsIndexPath = oldIndexPath
 		transcriptsLoadConfig = oldLoadConfig
 		transcriptsReaders = oldReaders
+		transcriptsOpenStore = oldOpenStore
 		transcriptsLoadIndex = oldLoadIndex
 		transcriptsRebuildAll = oldRebuildAll
 		transcriptsStatusCmd.SetOut(oldStatusOut)
@@ -38,13 +44,11 @@ func resetTranscriptsCommandTestState(t *testing.T, indexPath string) {
 		transcriptsRebuildCmd.SetOut(oldRebuildOut)
 	})
 	store := datastore.OpenTest(t)
-	transcriptsLoadIndex = func(path string, readers map[string]transcript.Reader) (*transcript.Index, error) {
-		idx, err := transcript.LoadIndexAt(path)
-		if err != nil {
-			return nil, err
-		}
-		return transcript.EnableSQLiteIndex(context.Background(), idx, store, readers), nil
+	transcriptsOpenStore = func(context.Context) (*datastore.Store, error) { return store, nil }
+	transcriptsLoadIndex = func(ctx context.Context, path string, borrowed *datastore.Store, readers map[string]transcript.Reader, mode compatimport.SyncMode) (*transcript.Index, error) {
+		return transcript.LoadSQLiteIndexWithStore(ctx, path, borrowed, readers, mode)
 	}
+	return store
 }
 
 type fakeTranscriptReader struct {
@@ -64,17 +68,44 @@ func (f fakeTranscriptReader) ReadMessages(string) ([]transcript.Message, error)
 
 func TestTranscriptsStatusCommandPrintsStoreStatus(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "transcripts.json")
-	resetTranscriptsCommandTestState(t, path)
+	store := resetTranscriptsCommandTestState(t, path)
 	key := transcript.IndexKey(harness.Claude, "s1")
-	body := `{"entries":{"` + key + `":{"id":"s1","harness":"claude","profile":"work","profiles":["work","personal"],"message_count":1}}}`
+	repo, err := transcript.NewRepository(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Upsert(context.Background(), transcript.SessionMeta{
+		ID: "sqlite-only", Harness: harness.Claude, Profile: "work", Profiles: []string{"work", "personal"}, MessageCount: 1,
+	}, "durable body"); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"entries":{"` + key + `":{"id":"s1","harness":"claude","profile":"rollback","message_count":1}}}`
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
+	}
+	// A directory at the sidecar-body path is a filesystem read spy: any
+	// compatibility sync attempt would reject it before status could succeed.
+	if err := os.MkdirAll(searchstore.New(path).Path(key), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	before := transcriptStatusMutationSnapshot(t, store)
+	dbPath := store.Path()
+	openCalls := 0
+	transcriptsOpenStore = func(ctx context.Context) (*datastore.Store, error) {
+		openCalls++
+		return datastore.OpenPath(ctx, dbPath)
 	}
 
 	var out bytes.Buffer
 	transcriptsStatusCmd.SetOut(&out)
 	if err := transcriptsStatusCmd.RunE(transcriptsStatusCmd, nil); err != nil {
 		t.Fatalf("RunE: %v", err)
+	}
+	if err := transcriptsStatusCmd.RunE(transcriptsStatusCmd, nil); err != nil {
+		t.Fatalf("second RunE: %v", err)
+	}
+	if openCalls != 2 {
+		t.Fatalf("status datastore opens = %d, want exactly one per invocation", openCalls)
 	}
 	got := out.String()
 	for _, want := range []string{
@@ -83,12 +114,64 @@ func TestTranscriptsStatusCommandPrintsStoreStatus(t *testing.T) {
 		"hidden_entries: 0",
 		"visible_profile_memberships: 2",
 		"shared_profile_entries: 1",
-		"missing_sidecars: 1",
+		"search_document_count: 1",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status output missing %q:\n%s", want, got)
 		}
 	}
+	afterStore, err := datastore.OpenPath(context.Background(), dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = afterStore.Close() }()
+	after := transcriptStatusMutationSnapshot(t, afterStore)
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("status mutated imports/entities:\n before=%v\n after=%v", before, after)
+	}
+}
+
+type statusMutationSnapshot struct {
+	EntityCounts []int64
+	Imports      []string
+}
+
+func transcriptStatusMutationSnapshot(t *testing.T, store *datastore.Store) statusMutationSnapshot {
+	t.Helper()
+	queries := []string{
+		`SELECT count(*) FROM import_records`,
+		`SELECT count(*) FROM legacy_import_entries`,
+		`SELECT count(*) FROM conversations`,
+		`SELECT count(*) FROM profile_memberships`,
+		`SELECT count(*) FROM search_documents`,
+	}
+	values := make([]int64, len(queries))
+	for i, query := range queries {
+		if err := store.DB().QueryRow(query).Scan(&values[i]); err != nil {
+			t.Fatalf("snapshot query %q: %v", query, err)
+		}
+	}
+	rows, err := store.DB().Query(`
+		SELECT source_name, source_path, fingerprint, completed_at_ns, record_count
+		FROM import_records ORDER BY source_name
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	imports := make([]string, 0)
+	for rows.Next() {
+		var sourceName, sourcePath, fingerprint string
+		var completedAt, recordCount int64
+		if err := rows.Scan(&sourceName, &sourcePath, &fingerprint, &completedAt, &recordCount); err != nil {
+			t.Fatal(err)
+		}
+		imports = append(imports, fmt.Sprintf("%s|%s|%s|%d|%d", sourceName, sourcePath, fingerprint, completedAt, recordCount))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return statusMutationSnapshot{EntityCounts: values, Imports: imports}
 }
 
 func TestTranscriptsCompactCommandPrintsSummary(t *testing.T) {

@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -164,6 +166,69 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 		}
 		return nil
 	})
+}
+
+// RepairMissingSearchDocuments reconstructs derived handoff documents from
+// intact artifacts. Missing artifacts remain durable unavailable placeholders.
+func (r *Repository) RepairMissingSearchDocuments(ctx context.Context) (int, error) {
+	rows, err := r.store.DB().QueryContext(ctx, handoffSelect+`
+		WHERE NOT EXISTS (
+			SELECT 1 FROM search_documents d
+			WHERE d.entity_type = ? AND d.entity_id = handoffs.id
+		)
+		ORDER BY id
+	`, handoffSearchEntityType)
+	if err != nil {
+		return 0, fmt.Errorf("handoff: listing repairable search documents: %w", err)
+	}
+	records := make([]Record, 0)
+	for rows.Next() {
+		record, scanErr := scanRecord(rows)
+		if scanErr != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("handoff: scanning repairable search document: %w", scanErr)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("handoff: closing repairable search documents: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("handoff: iterating repairable search documents: %w", err)
+	}
+
+	repaired := 0
+	for _, record := range records {
+		content, readErr := os.ReadFile(record.Path)
+		if readErr != nil {
+			if errors.Is(readErr, fs.ErrNotExist) {
+				continue
+			}
+			return repaired, fmt.Errorf("handoff: read repair source %q: %w", record.ID, readErr)
+		}
+		sum := sha256.Sum256(content)
+		if got := fmt.Sprintf("%x", sum[:]); got != record.ContentHash {
+			return repaired, fmt.Errorf("handoff: repair source %q does not match durable content hash", record.ID)
+		}
+		_, err := r.store.DB().ExecContext(ctx, `
+			INSERT INTO search_documents (
+				entity_type, entity_id, workspace_id, occurred_at_ns, title,
+				normalized_content, updated_at_ns
+			) VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(entity_type, entity_id) DO UPDATE SET
+				workspace_id = excluded.workspace_id,
+				occurred_at_ns = excluded.occurred_at_ns,
+				title = excluded.title,
+				normalized_content = excluded.normalized_content,
+				updated_at_ns = excluded.updated_at_ns
+		`, handoffSearchEntityType, record.ID, nullableString(record.WorkspaceID), record.UpdatedAt.UnixNano(),
+			"Handoff "+record.ID, truncateUTF8(string(content), searchContentBytes), record.UpdatedAt.UnixNano())
+		if err != nil {
+			return repaired, fmt.Errorf("handoff: repairing search document %q: %w", record.ID, err)
+		}
+		repaired++
+	}
+	return repaired, nil
 }
 
 func validateRecord(record Record) error {

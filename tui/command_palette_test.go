@@ -31,6 +31,7 @@ func TestPaletteSubsequenceScorePrefersExactPrefix(t *testing.T) {
 func TestPaletteDiscoversEveryRegisteredActionAndNavigationKind(t *testing.T) {
 	fixture := workspaceAttentionFixture()
 	driver, _ := NewUITestFixtureDriver(fixture, fixture.Size)
+	cleanupUITestDriver(t, driver)
 	m := driver.Model().enterPalette()
 	entries := paletteEntries(m)
 
@@ -57,6 +58,7 @@ func TestPaletteDiscoversEveryRegisteredActionAndNavigationKind(t *testing.T) {
 func TestPaletteUnavailableActionShowsReasonAndDoesNotExit(t *testing.T) {
 	fixture := workspaceAttentionFixture()
 	driver, _ := NewUITestFixtureDriver(fixture, fixture.Size)
+	cleanupUITestDriver(t, driver)
 	if err := driver.Key(keyPalette); err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +80,7 @@ func TestPaletteUnavailableActionShowsReasonAndDoesNotExit(t *testing.T) {
 func TestPaletteWorkspaceItemContextAndReturnFocus(t *testing.T) {
 	fixture := workspaceAttentionFixture()
 	driver, _ := NewUITestFixtureDriver(fixture, fixture.Size)
+	cleanupUITestDriver(t, driver)
 	if err := driver.Key(keyEnter); err != nil {
 		t.Fatal(err)
 	}
@@ -107,6 +110,7 @@ func TestPaletteWorkspaceItemContextAndReturnFocus(t *testing.T) {
 func TestPaletteLaunchReusesProfilePicker(t *testing.T) {
 	fixture := workspaceProfilesFixture()
 	driver, _ := NewUITestFixtureDriver(fixture, fixture.Size)
+	cleanupUITestDriver(t, driver)
 	if err := driver.Key(keyPalette); err != nil {
 		t.Fatal(err)
 	}
@@ -134,6 +138,7 @@ func TestPaletteLaunchReusesProfilePicker(t *testing.T) {
 func TestPaletteActionExecutesThroughSharedHandler(t *testing.T) {
 	fixture := workspaceAttentionFixture()
 	driver, client := NewUITestFixtureDriver(fixture, fixture.Size)
+	cleanupUITestDriver(t, driver)
 	for _, key := range []string{keyEnter, keyPalette} {
 		if err := driver.Key(key); err != nil {
 			t.Fatal(err)

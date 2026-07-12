@@ -10,25 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/datastore"
-	"github.com/sglavoie/agentmux/internal/plans"
 	unifiedsearch "github.com/sglavoie/agentmux/internal/search"
 	"github.com/sglavoie/agentmux/internal/session"
-	"github.com/sglavoie/agentmux/internal/transcript"
 )
-
-var unifiedSearchExecute = func(ctx context.Context, query unifiedsearch.Query) ([]unifiedsearch.Result, error) {
-	store, err := datastore.Open(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = store.Close() }()
-	service, err := unifiedsearch.New(store)
-	if err != nil {
-		return nil, err
-	}
-	return service.Search(ctx, query)
-}
 
 type unifiedSearchDebounceMsg struct{ seq int }
 
@@ -69,6 +53,8 @@ func (m *Model) exitUnifiedSearch() {
 	m.unifiedLoading = false
 	m.unifiedSearchErr = nil
 	m.unifiedReturnMode = ModeWorkspace
+	m.pendingUnifiedPlanID = ""
+	m.pendingUnifiedConversationID = ""
 }
 
 func (m Model) handleUnifiedSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -163,14 +149,29 @@ func (m Model) handleUnifiedSearchDebounce(msg unifiedSearchDebounceMsg) (tea.Mo
 		return m, nil
 	}
 	text := m.unifiedQuery
+	ctx := m.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return m, func() tea.Msg {
 		query, err := parseUnifiedSearchQuery(text)
 		if err != nil {
 			return unifiedSearchDoneMsg{seq: msg.seq, err: err}
 		}
-		results, err := unifiedSearchExecute(context.Background(), query)
+		results, err := m.executeUnifiedSearch(ctx, query)
 		return unifiedSearchDoneMsg{seq: msg.seq, results: results, err: err}
 	}
+}
+
+func (m Model) executeUnifiedSearch(ctx context.Context, query unifiedsearch.Query) ([]unifiedsearch.Result, error) {
+	if m.dataServices == nil {
+		return nil, errors.New("unified search services are not ready")
+	}
+	snapshot, ready := m.dataServices.Snapshot()
+	if !ready || snapshot.unifiedSearch == nil {
+		return nil, errors.New("unified search services are not ready")
+	}
+	return snapshot.unifiedSearch.Search(ctx, query)
 }
 
 func (m Model) handleUnifiedSearchDone(msg unifiedSearchDoneMsg) (tea.Model, tea.Cmd) {
@@ -301,12 +302,9 @@ func (m Model) openUnifiedSearchResult() (tea.Model, tea.Cmd) {
 		m.unifiedSearchErr = fmt.Errorf("workspace %q is not in the current projection", workspaceID)
 	case unifiedsearch.EntityConversation:
 		if m.transcriptIndex == nil {
-			index, err := transcript.LoadIndex()
-			if err != nil {
-				m.unifiedSearchErr = err
-				return m, nil
-			}
-			m.transcriptIndex = index
+			m.pendingUnifiedConversationID = result.EntityID
+			m.unifiedLoading = true
+			return m, m.dispatchDataServicesInit()
 		}
 		meta, found := m.transcriptIndex.Get(result.EntityID)
 		if !found {
@@ -319,12 +317,9 @@ func (m Model) openUnifiedSearchResult() (tea.Model, tea.Cmd) {
 		return m, paletteActionCmd(m, actions.Continue, actions.Request{Conversation: &meta})
 	case unifiedsearch.EntityPlan:
 		if m.plansIndex == nil {
-			index, err := plans.LoadIndex()
-			if err != nil {
-				m.unifiedSearchErr = err
-				return m, nil
-			}
-			m.plansIndex = index
+			m.pendingUnifiedPlanID = result.EntityID
+			m.unifiedLoading = true
+			return m, m.dispatchDataServicesInit()
 		}
 		meta, found := m.plansIndex.Get(result.EntityID)
 		if !found {

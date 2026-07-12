@@ -196,7 +196,7 @@ func CompactSQLite(idx *Index, readers map[string]Reader) (CompactResult, error)
 		}
 		return CompactResult{StatusBefore: before}, errors.New("transcript: SQLite repository is not enabled")
 	}
-	importResult, err := repo.ImportLegacyIndex(context.Background(), idx.path, readers)
+	importResult, err := repo.ForceImportLegacyIndex(context.Background(), idx.path, readers)
 	if err != nil {
 		return CompactResult{StatusBefore: before}, err
 	}

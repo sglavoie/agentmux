@@ -35,7 +35,7 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				edit := m.handoffEdit
 				m.handoffConversation = nil
 				m.handoffEdit = false
-				return m, conversationHandoffCmd(m.client, m.cfg, m.transcriptReaders, meta, acc.Name, edit)
+				return m, m.conversationHandoffCmd(meta, acc.Name, edit)
 			}
 			if purpose == ConfigPickerLauncherOverride && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
 				defaultProfile := m.pickerSessions[m.configPickerProjectIdx].EffectiveProfile()

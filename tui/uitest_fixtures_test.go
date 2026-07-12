@@ -66,6 +66,7 @@ func TestUITestFixtureDriverLoadsSessionsWithoutLiveKitty(t *testing.T) {
 		t.Fatalf("basic fixture: %v", err)
 	}
 	d, client := NewUITestFixtureDriver(fx, UITestSize{})
+	cleanupUITestDriver(t, d)
 	if got := len(d.Model().sessions); got != 3 {
 		t.Fatalf("expected 3 loaded sessions, got %d", got)
 	}
@@ -101,6 +102,7 @@ func TestUITestFixtureDriverPartialSizeUsesFixtureDefaults(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			d, _ := NewUITestFixtureDriver(fx, tc.in)
+			cleanupUITestDriver(t, d)
 			if got := d.Observe().Size; got != tc.want {
 				t.Fatalf("partial %+v resolved to %+v, want %+v", tc.in, got, tc.want)
 			}
@@ -114,6 +116,7 @@ func TestUITestFixtureActionsOverlayOpens(t *testing.T) {
 		t.Fatalf("actions fixture: %v", err)
 	}
 	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
+	cleanupUITestDriver(t, d)
 	if err := d.Key("a"); err != nil {
 		t.Fatalf("press a: %v", err)
 	}
@@ -133,6 +136,7 @@ func TestUITestFixtureConfigPickerOpens(t *testing.T) {
 		t.Fatalf("wide_profiles fixture: %v", err)
 	}
 	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
+	cleanupUITestDriver(t, d)
 	if err := d.Key("C"); err != nil {
 		t.Fatalf("press C: %v", err)
 	}
@@ -208,6 +212,7 @@ func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewUITestConfigDriver: %v", err)
 	}
+	cleanupUITestDriver(t, d)
 	if client == nil || d == nil {
 		t.Fatal("expected non-nil driver and client")
 	}

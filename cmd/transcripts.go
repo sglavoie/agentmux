@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/sglavoie/agentmux/internal/compatimport"
+	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/spf13/cobra"
@@ -14,7 +16,8 @@ var (
 	transcriptsIndexPath  = transcript.IndexPath
 	transcriptsLoadConfig = loadRunnableConfig
 	transcriptsReaders    = transcriptReaders
-	transcriptsLoadIndex  = transcript.LoadSQLiteIndex
+	transcriptsOpenStore  = datastore.Open
+	transcriptsLoadIndex  = transcript.LoadSQLiteIndexWithStore
 )
 
 var transcriptsCmd = &cobra.Command{
@@ -26,7 +29,13 @@ var transcriptsStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show SQLite transcript index status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		idx, err := transcriptsLoadIndex(transcriptsIndexPath(), transcriptsReaders())
+		ctx := commandContext(cmd)
+		store, err := transcriptsOpenStore(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = store.Close() }()
+		idx, err := transcriptsLoadIndex(ctx, transcriptsIndexPath(), store, transcriptsReaders(), compatimport.SyncSkip)
 		if err != nil {
 			return err
 		}
@@ -43,8 +52,14 @@ var transcriptsCompactCmd = &cobra.Command{
 	Use:   "compact",
 	Short: "Verify the idempotent legacy-to-SQLite transcript import",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := commandContext(cmd)
+		store, err := transcriptsOpenStore(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = store.Close() }()
 		readers := transcriptsReaders()
-		idx, err := transcriptsLoadIndex(transcriptsIndexPath(), readers)
+		idx, err := transcriptsLoadIndex(ctx, transcriptsIndexPath(), store, readers, compatimport.SyncSkip)
 		if err != nil {
 			return err
 		}
@@ -65,12 +80,18 @@ var transcriptsRebuildCmd = &cobra.Command{
 	Use:   "rebuild",
 	Short: "Refresh transcripts from configured profiles and rebuild SQLite search documents",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := commandContext(cmd)
 		cfg, err := transcriptsLoadConfig()
 		if err != nil {
 			return err
 		}
+		store, err := transcriptsOpenStore(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = store.Close() }()
 		readers := transcriptsReaders()
-		idx, err := transcriptsLoadIndex(transcriptsIndexPath(), readers)
+		idx, err := transcriptsLoadIndex(ctx, transcriptsIndexPath(), store, readers, compatimport.SyncForce)
 		if err != nil {
 			return err
 		}

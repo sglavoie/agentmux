@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/plans"
 	searchsvc "github.com/sglavoie/agentmux/internal/search"
 	"github.com/sglavoie/agentmux/internal/workspace"
 )
@@ -30,6 +32,33 @@ func TestPaletteOpensUnifiedSearchAndPreservesReturnMode(t *testing.T) {
 	got = pressKey(got, keyEsc)
 	if got.mode != ModeWorkspace {
 		t.Fatalf("mode after esc = %v, want workspace", got.mode)
+	}
+}
+
+func TestUnifiedPlanResultWaitsForAsyncPlanIndex(t *testing.T) {
+	root := t.TempDir()
+	planDir := seedPlanDir(t, root, "release-aabb112233cc", map[string]string{"manifest.md": "# Release"})
+	index, err := plans.LoadIndexAt(filepath.Join(t.TempDir(), "plans.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := index.Refresh(root); err != nil {
+		t.Fatal(err)
+	}
+	planID := plans.PlanKey(planDir)
+	m := testModel()
+	m.mode = ModeUnifiedSearch
+	m.plansIndex = nil
+	m.unifiedResults = []searchsvc.Result{{EntityType: searchsvc.EntityPlan, EntityID: planID}}
+	updated, loadCmd := m.openUnifiedSearchResult()
+	m = updated.(Model)
+	if loadCmd == nil || !m.dataServicesInitInFlight || !m.unifiedLoading || m.pendingUnifiedPlanID != planID {
+		t.Fatalf("pending plan = cmd %v services-loading %v unified-loading %v id %q", loadCmd != nil, m.dataServicesInitInFlight, m.unifiedLoading, m.pendingUnifiedPlanID)
+	}
+	updated, _ = m.Update(dataServicesReadyMsg{snapshot: dataServicesSnapshot{planIndex: index}})
+	m = updated.(Model)
+	if m.mode != ModePlanView || m.pendingUnifiedPlanID != "" || m.unifiedLoading {
+		t.Fatalf("resolved plan = mode %v pending %q loading %v", m.mode, m.pendingUnifiedPlanID, m.unifiedLoading)
 	}
 }
 

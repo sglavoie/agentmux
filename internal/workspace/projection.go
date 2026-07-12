@@ -60,10 +60,12 @@ type ActivitySource interface {
 	ListForWorkspaces(context.Context, []string, string, int) (map[string]activity.Feed, error)
 }
 
-// SnapshotOptions supplies the external state joined into a workspace
-// snapshot. The service builds configured workspace definitions itself; all
-// other inputs are point-in-time values captured by the caller.
+// SnapshotOptions supplies the point-in-time external state joined into a
+// workspace snapshot. ProjectSnapshot receives its immutable catalog as a
+// separate argument so synchronization cannot be hidden in routine polling.
 type SnapshotOptions struct {
+	// Config is retained only for BuildSnapshot compatibility. ProjectSnapshot
+	// ignores it because its catalog has already been synchronized explicitly.
 	Config           *config.Config
 	LiveSessions     []session.RunningSession
 	DaemonStates     map[int]daemon.WindowStateSnapshot
@@ -74,6 +76,10 @@ type SnapshotOptions struct {
 	ActivityReaderID string
 	ActivityLimit    int
 	Now              time.Time
+	// SkipGitMetadata omits current branch/status/ahead-behind probes. Workspace
+	// identity and worktree discovery are unaffected. This is useful for clients
+	// such as the dashboard that do not render the Git field.
+	SkipGitMetadata bool
 }
 
 // Snapshot is a single, self-contained projection suitable for rendering.
@@ -181,18 +187,28 @@ type Conversation struct {
 	Snippet      string
 }
 
-// BuildSnapshot combines the current configuration projection with live
-// Kitty/daemon state, indexed conversations and linked plans. It never keeps
-// references to mutable caller data, making the returned value safe to retain
-// until a later refresh replaces it.
+// BuildSnapshot is a compatibility wrapper. It performs explicit
+// synchronization from Config, then delegates to the read-only ProjectSnapshot
+// function. Routine polling must retain and reuse a catalog directly.
 func (s *Service) BuildSnapshot(ctx context.Context, opts SnapshotOptions) (Snapshot, error) {
 	if opts.Config == nil {
 		return Snapshot{}, errors.New("workspace: snapshot requires a non-nil config")
 	}
-	workspaces, err := s.Build(ctx, opts.Config)
+	catalog, err := s.Synchronize(ctx, opts.Config)
 	if err != nil {
 		return Snapshot{}, err
 	}
+	return ProjectSnapshot(ctx, catalog, opts)
+}
+
+// ProjectSnapshot joins an already synchronized catalog with live and indexed
+// state. It performs no workspace SQL mutation or Git topology discovery. The
+// returned value deep-copies both catalog and caller-owned mutable inputs.
+func ProjectSnapshot(ctx context.Context, catalog Catalog, opts SnapshotOptions) (Snapshot, error) {
+	if !catalog.Synchronized() {
+		return Snapshot{}, errors.New("workspace: projection requires a synchronized catalog")
+	}
+	workspaces := catalog.Workspaces()
 	now := opts.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -212,7 +228,9 @@ func (s *Service) BuildSnapshot(ctx context.Context, opts SnapshotOptions) (Snap
 			item.Plans = cloneLinkedPlans(linked)
 			sortLinkedPlans(item.Plans)
 		}
-		item.Git = currentGitMetadata(ctx, item.Worktrees)
+		if !opts.SkipGitMetadata {
+			item.Git = currentGitMetadata(ctx, item.Worktrees)
+		}
 		snapshot.Workspaces[i] = item
 	}
 	if opts.ActivityFeed != nil && len(snapshot.Workspaces) > 0 {

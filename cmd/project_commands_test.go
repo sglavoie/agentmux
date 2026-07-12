@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/compatimport"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -48,6 +49,10 @@ func resetProjectCommandsTestState(t *testing.T) {
 	oldPlanListOut := planListCmd.OutOrStdout()
 	oldPlanLinkOut := planLinkCmd.OutOrStdout()
 	oldPlanUnlinkOut := planUnlinkCmd.OutOrStdout()
+	testDBPath := filepath.Join(t.TempDir(), "project-commands.db")
+	projectCommandsOpenStore = func(ctx context.Context) (*datastore.Store, error) {
+		return datastore.OpenPath(ctx, testDBPath)
+	}
 
 	t.Cleanup(func() {
 		projectCommandsLoadConfig = oldLoadConfig
@@ -148,10 +153,12 @@ claude = "🦊"
 	}
 	projectCommandsOpenStore = func(context.Context) (*datastore.Store, error) { return datastore.OpenPath(ctx, dbPath) }
 	projectCommandsConfigPath = func() string { return configPath }
-	projectCommandsLoadSessionIndex = func(string, map[string]transcript.Reader) (*transcript.Index, error) {
+	projectCommandsLoadSessionIndex = func(context.Context, string, *datastore.Store, map[string]transcript.Reader, compatimport.SyncMode) (*transcript.Index, error) {
 		return nil, errors.New("not available")
 	}
-	projectCommandsLoadPlanIndex = func(string) (*plans.Index, error) { return nil, errors.New("not available") }
+	projectCommandsLoadPlanIndex = func(context.Context, string, *datastore.Store, compatimport.SyncMode) (*plans.Index, error) {
+		return nil, errors.New("not available")
+	}
 	projectCommandsNewKitty = func() kitty.KittyClient {
 		return kitty.NewClientWithSocket(kitty.NewMockRunner(nil), "")
 	}
@@ -255,10 +262,12 @@ func TestSessionAndPlanListJSONAreDeterministic(t *testing.T) {
 	}
 	projectCommandsSessionIndexPath = func() string { return sessionPath }
 	projectCommandsPlanIndexPath = func() string { return planPath }
-	projectCommandsLoadSessionIndex = func(path string, _ map[string]transcript.Reader) (*transcript.Index, error) {
+	projectCommandsLoadSessionIndex = func(_ context.Context, path string, _ *datastore.Store, _ map[string]transcript.Reader, _ compatimport.SyncMode) (*transcript.Index, error) {
 		return transcript.LoadIndexAt(path)
 	}
-	projectCommandsLoadPlanIndex = plans.LoadIndexAt
+	projectCommandsLoadPlanIndex = func(_ context.Context, path string, _ *datastore.Store, _ compatimport.SyncMode) (*plans.Index, error) {
+		return plans.LoadIndexAt(path)
+	}
 	projectCommandsSessionReaders = func() map[string]transcript.Reader {
 		return map[string]transcript.Reader{harness.Codex: transcript.NewCodexReader()}
 	}
@@ -326,7 +335,9 @@ func TestPlanLinkAndUnlinkUseExplicitSelectorsAndSchemaV1(t *testing.T) {
 		return &config.Config{Projects: []config.Session{{ID: "api", Title: "API", Directory: projectDir, Profile: "work"}}}, nil
 	}
 	projectCommandsOpenStore = func(context.Context) (*datastore.Store, error) { return datastore.OpenPath(ctx, dbPath) }
-	projectCommandsLoadPlanIndex = func(string) (*plans.Index, error) { return planIndex, nil }
+	projectCommandsLoadPlanIndex = func(context.Context, string, *datastore.Store, compatimport.SyncMode) (*plans.Index, error) {
+		return planIndex, nil
+	}
 
 	if err := planLinkCmd.Flags().Set("json", "true"); err != nil {
 		t.Fatal(err)
@@ -377,7 +388,9 @@ func TestPlanLinkAmbiguityReturnsCandidatesAndNeverGuesses(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	projectCommandsLoadPlanIndex = func(string) (*plans.Index, error) { return idx, nil }
+	projectCommandsLoadPlanIndex = func(context.Context, string, *datastore.Store, compatimport.SyncMode) (*plans.Index, error) {
+		return idx, nil
+	}
 	if err := planLinkCmd.Flags().Set("json", "true"); err != nil {
 		t.Fatal(err)
 	}

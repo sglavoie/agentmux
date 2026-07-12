@@ -142,11 +142,17 @@ func fallbackStatusText(m Model) string {
 		}
 		return "Command palette: " + m.paletteQuery
 	case ModeWorkspace:
-		if m.workspaceLoading {
+		if m.workspaceLoading && len(m.workspaceSnapshot.Workspaces) == 0 {
 			return "Workspaces: loading"
 		}
 		if m.workspaceLoadErr != nil {
+			if len(m.workspaceSnapshot.Workspaces) > 0 {
+				return fmt.Sprintf("Workspaces: %d project%s · refresh failed", len(m.workspaceSnapshot.Workspaces), plural(len(m.workspaceSnapshot.Workspaces)))
+			}
 			return "Workspaces unavailable"
+		}
+		if m.workspaceProjectionInFlight && len(m.workspaceSnapshot.Workspaces) > 0 {
+			return fmt.Sprintf("Workspaces: %d project%s · refreshing", len(m.workspaceSnapshot.Workspaces), plural(len(m.workspaceSnapshot.Workspaces)))
 		}
 		return fmt.Sprintf("Workspaces: %d project%s", len(m.workspaceSnapshot.Workspaces), plural(len(m.workspaceSnapshot.Workspaces)))
 	case ModeSearch:

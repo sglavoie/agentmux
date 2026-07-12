@@ -83,6 +83,49 @@ func TestArtifactStoreWritesPrivateDraftAndFinalAndIndexesMetadata(t *testing.T)
 	}
 }
 
+func TestRepositoryRepairsAvailableArtifactAndKeepsMissingPlaceholder(t *testing.T) {
+	ctx := context.Background()
+	store := datastore.OpenTest(t)
+	repository, err := NewRepository(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	availablePath := filepath.Join(root, "available.md")
+	availableContent := []byte("# Available\nrecovered handoff")
+	if err := os.WriteFile(availablePath, availableContent, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	missingContent := []byte("# Missing")
+	for _, fixture := range []struct {
+		id      string
+		path    string
+		content []byte
+	}{
+		{id: "available", path: availablePath, content: availableContent},
+		{id: "missing", path: filepath.Join(root, "missing.md"), content: missingContent},
+	} {
+		sum := sha256.Sum256(fixture.content)
+		_, err := repository.Save(ctx, Record{
+			ID: fixture.id, Path: fixture.path, ContentHash: fmt.Sprintf("%x", sum[:]), Status: StatusFinal,
+		}, fixture.id, fixture.content)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.DB().ExecContext(ctx, `DELETE FROM search_documents WHERE entity_type = 'handoff'`); err != nil {
+		t.Fatal(err)
+	}
+	repaired, err := repository.RepairMissingSearchDocuments(ctx)
+	if err != nil || repaired != 1 {
+		t.Fatalf("RepairMissingSearchDocuments = %d, %v", repaired, err)
+	}
+	var count int
+	if err := store.DB().QueryRowContext(ctx, `SELECT count(*) FROM search_documents WHERE entity_type = 'handoff'`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("handoff search documents = %d, %v", count, err)
+	}
+}
+
 func TestRepositoryRejectsMismatchedHashAndArtifactDirectorySymlink(t *testing.T) {
 	store := datastore.OpenTest(t)
 	repository, err := NewRepository(store)

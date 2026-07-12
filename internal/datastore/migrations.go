@@ -25,13 +25,35 @@ var migrations = []migration{
 		version: 3,
 		apply:   applyWorkspaceCandidateSchema,
 	},
+	{
+		version: 4,
+		apply:   applyLegacyImportEntrySchema,
+	},
+	{
+		version: 5,
+		apply:   applyWorkspaceSearchMembershipSchema,
+	},
 }
 
 func migrate(ctx context.Context, db *sql.DB, available []migration) error {
 	if err := validateMigrations(available); err != nil {
 		return err
 	}
-	version, err := schemaVersion(ctx, db)
+	tx, err := beginMigrationTransaction(ctx, db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version INTEGER PRIMARY KEY,
+			applied_at_ns INTEGER NOT NULL
+		)
+	`); err != nil {
+		return fmt.Errorf("datastore: create migration table: %w", err)
+	}
+	version, err := schemaVersion(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -43,9 +65,18 @@ func migrate(ctx context.Context, db *sql.DB, available []migration) error {
 		if m.version <= version {
 			continue
 		}
-		if err := applyMigration(ctx, db, m); err != nil {
-			return err
+		if err := m.apply(ctx, tx); err != nil {
+			return fmt.Errorf("datastore: apply migration %d: %w", m.version, err)
 		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schema_migrations (version, applied_at_ns) VALUES (?, unixepoch('subsec') * 1000000000)`,
+			m.version,
+		); err != nil {
+			return fmt.Errorf("datastore: record migration %d: %w", m.version, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("datastore: commit migrations: %w", err)
 	}
 	return nil
 }
@@ -65,36 +96,25 @@ func validateMigrations(available []migration) error {
 	return nil
 }
 
-func applyMigration(ctx context.Context, db *sql.DB, m migration) (retErr error) {
-	tx, err := db.BeginTx(ctx, nil)
+func beginMigrationTransaction(ctx context.Context, db *sql.DB) (*sql.Tx, error) {
+	var tx *sql.Tx
+	err := retrySQLiteBusy(ctx, func() error {
+		var err error
+		tx, err = db.BeginTx(ctx, nil)
+		return err
+	})
 	if err != nil {
-		return fmt.Errorf("datastore: begin migration %d: %w", m.version, err)
+		return nil, fmt.Errorf("datastore: begin migration transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version INTEGER PRIMARY KEY,
-			applied_at_ns INTEGER NOT NULL
-		)
-	`); err != nil {
-		return fmt.Errorf("datastore: create migration table: %w", err)
-	}
-	if err := m.apply(ctx, tx); err != nil {
-		return fmt.Errorf("datastore: apply migration %d: %w", m.version, err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO schema_migrations (version, applied_at_ns) VALUES (?, unixepoch('subsec') * 1000000000)`,
-		m.version,
-	); err != nil {
-		return fmt.Errorf("datastore: record migration %d: %w", m.version, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("datastore: commit migration %d: %w", m.version, err)
-	}
-	return nil
+	return tx, nil
 }
 
-func schemaVersion(ctx context.Context, db *sql.DB) (int, error) {
+type migrationQuerier interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func schemaVersion(ctx context.Context, db migrationQuerier) (int, error) {
 	var exists int
 	if err := db.QueryRowContext(ctx, `
 		SELECT EXISTS(
@@ -188,6 +208,71 @@ func applyWorkspaceCandidateSchema(ctx context.Context, tx *sql.Tx) error {
 			PRIMARY KEY (candidate_id, source_type, source_id, observed_path, hint)
 		)`,
 		`CREATE INDEX workspace_candidate_observations_candidate_idx ON workspace_candidate_observations(candidate_id, source_type)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applyLegacyImportEntrySchema adds a per-entry compatibility ledger. The
+// source-level import_records row remains the cheap manifest gate, while this
+// table identifies which entries actually need their search bodies reopened.
+func applyLegacyImportEntrySchema(ctx context.Context, tx *sql.Tx) error {
+	for _, statement := range []string{
+		`CREATE TABLE legacy_import_entries (
+			source_name TEXT NOT NULL REFERENCES import_records(source_name) ON DELETE CASCADE,
+			entity_key TEXT NOT NULL,
+			metadata_hash TEXT NOT NULL,
+			sidecar_size INTEGER NOT NULL,
+			sidecar_mtime_ns INTEGER NOT NULL,
+			content_hash TEXT NOT NULL,
+			last_imported_at_ns INTEGER NOT NULL,
+			PRIMARY KEY (source_name, entity_key)
+		)`,
+		`CREATE INDEX legacy_import_entries_source_idx ON legacy_import_entries(source_name, last_imported_at_ns)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applyWorkspaceSearchMembershipSchema records every configured launch
+// profile and harness for a workspace. Existing databases only know the
+// scalar defaults on project search documents, so seed those values here;
+// the next explicit workspace synchronization replaces them with the full
+// current variant set.
+func applyWorkspaceSearchMembershipSchema(ctx context.Context, tx *sql.Tx) error {
+	for _, statement := range []string{
+		`CREATE TABLE workspace_profile_memberships (
+			workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+			profile_name TEXT NOT NULL COLLATE NOCASE,
+			position INTEGER NOT NULL DEFAULT 0,
+			created_at_ns INTEGER NOT NULL,
+			PRIMARY KEY (workspace_id, profile_name)
+		)`,
+		`CREATE INDEX workspace_profile_memberships_lookup_idx ON workspace_profile_memberships(lower(profile_name), workspace_id)`,
+		`CREATE TABLE workspace_harness_memberships (
+			workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+			harness TEXT NOT NULL COLLATE NOCASE,
+			position INTEGER NOT NULL DEFAULT 0,
+			created_at_ns INTEGER NOT NULL,
+			PRIMARY KEY (workspace_id, harness)
+		)`,
+		`CREATE INDEX workspace_harness_memberships_lookup_idx ON workspace_harness_memberships(lower(harness), workspace_id)`,
+		`INSERT OR IGNORE INTO workspace_profile_memberships (workspace_id, profile_name, position, created_at_ns)
+		 SELECT workspace_id, profile_name, 0, updated_at_ns
+		 FROM search_documents
+		 WHERE entity_type = 'project' AND workspace_id IS NOT NULL
+			AND profile_name IS NOT NULL AND trim(profile_name) <> ''`,
+		`INSERT OR IGNORE INTO workspace_harness_memberships (workspace_id, harness, position, created_at_ns)
+		 SELECT workspace_id, harness, 0, updated_at_ns
+		 FROM search_documents
+		 WHERE entity_type = 'project' AND workspace_id IS NOT NULL
+			AND harness IS NOT NULL AND trim(harness) <> ''`,
 	} {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return err

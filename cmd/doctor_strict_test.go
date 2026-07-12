@@ -176,7 +176,9 @@ func TestDoctorStrictIncludesDatastoreFTSAndActivityWriterFailures(t *testing.T)
 		ActivityWriter: &activity.Metrics{Queued: 3, Persisted: 1, Dropped: 1, WriteFailures: 2, Degraded: true, LastError: "disk unavailable"},
 	}
 	setUpDoctorFixture(t, health, daemon.EventsExport{})
-	doctorInspectDatastore = func(context.Context) (datastore.Status, error) {
+	verified := false
+	doctorInspectDatastore = func(_ context.Context, verifySearch bool) (datastore.Status, error) {
+		verified = verifySearch
 		return datastore.Status{
 			SchemaVersion: 2, CurrentSchemaVersion: 3, Integrity: "ok", SecurePermissions: false,
 			PermissionIssues: []string{"database mode is 0644; want 0600"},
@@ -187,6 +189,9 @@ func TestDoctorStrictIncludesDatastoreFTSAndActivityWriterFailures(t *testing.T)
 	var out bytes.Buffer
 	doctorCmd.SetOut(&out)
 	err := runDoctor(doctorCmd, nil)
+	if !verified {
+		t.Fatal("strict doctor did not request explicit FTS verification")
+	}
 	var exitErr *ExitError
 	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure {
 		t.Fatalf("error = %v, want strict health failure", err)

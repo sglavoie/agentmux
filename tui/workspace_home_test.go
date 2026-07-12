@@ -35,7 +35,9 @@ func workspaceHomeFixtureDriver(t *testing.T, size UITestSize) (*UITestDriver, *
 	if err != nil {
 		t.Fatalf("workspace fixture: %v", err)
 	}
-	return NewUITestFixtureDriver(fx, size)
+	d, client := NewUITestFixtureDriver(fx, size)
+	cleanupUITestDriver(t, d)
+	return d, client
 }
 
 func TestRunConstructorStartsAtWorkspaceHome(t *testing.T) {
@@ -46,6 +48,26 @@ func TestRunConstructorStartsAtWorkspaceHome(t *testing.T) {
 	m := NewModelFromWindow(fx.Config, NewUITestKittyClient(fx.Windows), 0)
 	if m.mode != ModeWorkspace {
 		t.Fatalf("Run model mode = %v, want ModeWorkspace", m.mode)
+	}
+	if !m.workspaceLoading {
+		t.Fatal("workspace constructor should render an initial loading state before Init dispatches")
+	}
+}
+
+func TestEmptyWorkspaceNavigationDoesNotEnterInvisibleDetail(t *testing.T) {
+	fx, err := UITestFixtureByName("workspace_empty")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := NewUITestFixtureDriver(fx, UITestSize{Width: 80, Height: 24})
+	cleanupUITestDriver(t, d)
+	for _, key := range []string{"enter", "tab", "j", "G"} {
+		if err := d.Key(key); err != nil {
+			t.Fatal(err)
+		}
+		if d.Model().workspaceFocus != workspaceFocusProjects || d.Model().workspaceDrillDown {
+			t.Fatalf("%s moved empty workspace into detail: focus %v drill %v", key, d.Model().workspaceFocus, d.Model().workspaceDrillDown)
+		}
 	}
 }
 

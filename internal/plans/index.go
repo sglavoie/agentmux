@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/searchstore"
 )
 
@@ -45,6 +46,24 @@ type Index struct {
 	// importing the rollback source fails.
 	repo           *Repository
 	degradedReason error
+	ownedStore     *datastore.Store
+}
+
+// Close releases the datastore only for facades created by LoadSQLiteIndex.
+// Store-injected facades borrow their caller's pool and therefore do not close
+// it, even when several such facades share the same store.
+func (i *Index) Close() error {
+	if i == nil {
+		return nil
+	}
+	i.mu.Lock()
+	store := i.ownedStore
+	i.ownedStore = nil
+	i.mu.Unlock()
+	if store == nil {
+		return nil
+	}
+	return store.Close()
 }
 
 // indexFile is the on-disk wrapper used for JSON serialization. A

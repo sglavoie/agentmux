@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -25,26 +26,6 @@ const sessionSearchDebounce = 250 * time.Millisecond
 type sessionsRefreshDoneMsg struct {
 	err error
 	seq int // sessionSearchSeq snapshot at dispatch time
-}
-
-// sessionCacheLoadStartedMsg marks the startup cache read as in-flight. It is
-// emitted before the load command so users entering Past Sessions during
-// startup see a loading state instead of doing a duplicate synchronous load.
-type sessionCacheLoadStartedMsg struct{}
-
-// sessionCacheLoadDoneMsg carries the startup SQLite facade activation (with
-// legacy fallback) and its immediate empty-query search result. seq is the
-// sessionSearchSeq snapshot from Init; if the user has already typed a newer
-// query, the loaded index is retained but the empty-query results are not
-// allowed to overwrite it.
-type sessionCacheLoadDoneMsg struct {
-	seq         int
-	idx         *transcript.Index
-	readers     map[string]transcript.Reader
-	results     []transcript.Result
-	loadErr     error
-	degradedErr error
-	searchErr   error
 }
 
 // sessionWarmRefreshDoneMsg carries the background refresh/prune result that
@@ -91,17 +72,9 @@ func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
 
 	if m.transcriptIndex == nil {
 		m.sessionLoading = len(m.sessionResults) == 0
-		if m.sessionCacheLoadInFlight {
-			return m, nil
-		}
-		m.sessionCacheLoadInFlight = true
-		return m, startupSessionWarmupCmd(m.sessionSearchSeq)
+		return m, m.dispatchDataServicesInit()
 	}
 
-	if m.sessionCacheLoadInFlight {
-		m.sessionLoading = len(m.sessionResults) == 0
-		return m, nil
-	}
 	if m.sessionRefreshInFlight {
 		m.sessionLoading = false
 		return m, nil
@@ -109,7 +82,7 @@ func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
 
 	m.sessionLoading = false
 	m.sessionRefreshInFlight = true
-	return m, sessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, m.sessionSearchSeq, m.currentSessionQuery())
+	return m, m.runSessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, m.sessionSearchSeq, m.currentSessionQuery())
 }
 
 // enterSessionSearchForProject resets Past Sessions to a single project chip
@@ -126,14 +99,14 @@ func (m Model) enterSessionSearchForProject(project string) (tea.Model, tea.Cmd)
 
 	updated, cmd := m.enterSessionSearch()
 	m = updated.(Model)
-	if m.transcriptIndex == nil || m.sessionCacheLoadInFlight {
+	if m.transcriptIndex == nil || m.dataServicesInitInFlight {
 		return m, cmd
 	}
 	searchCmd := m.dispatchSessionSearch()
 	if cmd == nil {
 		return m, searchCmd
 	}
-	refreshCmd := sessionsRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, m.sessionSearchSeq)
+	refreshCmd := m.runSessionsRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, m.sessionSearchSeq)
 	return m, tea.Batch(searchCmd, refreshCmd)
 }
 
@@ -252,12 +225,12 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		return m, conversationActionCmd(m.client, m.cfg, m.transcriptReaders, m.sessionResults[m.sessionCursor].Meta, actions.Continue)
+		return m, m.conversationActionCmd(m.transcriptReaders, m.sessionResults[m.sessionCursor].Meta, actions.Continue)
 	case keyF:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		return m, conversationActionCmd(m.client, m.cfg, m.transcriptReaders, m.sessionResults[m.sessionCursor].Meta, actions.Fork)
+		return m, m.conversationActionCmd(m.transcriptReaders, m.sessionResults[m.sessionCursor].Meta, actions.Fork)
 	case keyWorktreeFork:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
@@ -315,43 +288,6 @@ func (m *Model) dispatchSessionSearch() tea.Cmd {
 	})
 }
 
-func startupSessionWarmupCmd(seq int) tea.Cmd {
-	return tea.Sequence(
-		func() tea.Msg { return sessionCacheLoadStartedMsg{} },
-		sessionCacheLoadCmd(seq),
-	)
-}
-
-func sessionCacheLoadCmd(seq int) tea.Cmd {
-	return func() tea.Msg {
-		idx, readers, err := loadTranscriptCache()
-		if err != nil {
-			return sessionCacheLoadDoneMsg{seq: seq, loadErr: err}
-		}
-		results, searchErr := transcript.Search(idx, readers, transcript.Query{})
-		return sessionCacheLoadDoneMsg{
-			seq:         seq,
-			idx:         idx,
-			readers:     readers,
-			results:     results,
-			degradedErr: idx.DegradedReason(),
-			searchErr:   searchErr,
-		}
-	}
-}
-
-func loadTranscriptCache() (*transcript.Index, map[string]transcript.Reader, error) {
-	idx, err := transcript.LoadIndex()
-	if err != nil {
-		return nil, nil, err
-	}
-	return idx, buildTranscriptReaders(), nil
-}
-
-func sessionQueryIsEmpty(q transcript.Query) bool {
-	return q.Text == "" && len(q.Harness) == 0 && len(q.Profile) == 0 && len(q.Project) == 0
-}
-
 func buildTranscriptReaders() map[string]transcript.Reader {
 	return map[string]transcript.Reader{
 		harness.Claude:  transcript.NewClaudeReader(),
@@ -368,6 +304,13 @@ func runSessionSearchCmd(seq int, idx *transcript.Index, readers map[string]tran
 		results, err := transcript.Search(idx, readers, q)
 		return sessionSearchDoneMsg{seq: seq, results: results, err: err}
 	}
+}
+
+func (m Model) runSessionSearchCmd(seq int, idx *transcript.Index, readers map[string]transcript.Reader, q transcript.Query) tea.Cmd {
+	if m.sessionSearchCommand != nil {
+		return m.sessionSearchCommand(seq, q)
+	}
+	return runSessionSearchCmd(seq, idx, readers, q)
 }
 
 // sessionsRefreshCmd runs Index.Refresh and retention pruning off-thread, then
@@ -389,6 +332,51 @@ func sessionWarmRefreshCmd(idx *transcript.Index, cfg *config.Config, readers ma
 			refreshErr: refreshErr,
 			searchErr:  searchErr,
 		}
+	}
+}
+
+func (m Model) runSessionWarmRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader, seq int, q transcript.Query) tea.Cmd {
+	if m.sessionWarmRefreshCommand != nil {
+		return m.sessionWarmRefreshCommand(seq, q)
+	}
+	if m.dataServices == nil {
+		return sessionWarmRefreshCmd(idx, cfg, readers, seq, q)
+	}
+	ctx := m.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return func() tea.Msg {
+		refreshErr := m.dataServices.WithWriter(ctx, func(services dataServicesSnapshot) error {
+			if services.transcriptIndex != idx {
+				return fmt.Errorf("transcript index is not owned by TUI data services")
+			}
+			return refreshAndPruneSessions(idx, cfg, readers)
+		})
+		results, searchErr := transcript.Search(idx, readers, q)
+		return sessionWarmRefreshDoneMsg{seq: seq, results: results, refreshErr: refreshErr, searchErr: searchErr}
+	}
+}
+
+func (m Model) runSessionsRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader, seq int) tea.Cmd {
+	if m.sessionRefreshCommand != nil {
+		return m.sessionRefreshCommand(seq)
+	}
+	if m.dataServices == nil {
+		return sessionsRefreshCmd(idx, cfg, readers, seq)
+	}
+	ctx := m.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return func() tea.Msg {
+		err := m.dataServices.WithWriter(ctx, func(services dataServicesSnapshot) error {
+			if services.transcriptIndex != idx {
+				return fmt.Errorf("transcript index is not owned by TUI data services")
+			}
+			return refreshAndPruneSessions(idx, cfg, readers)
+		})
+		return sessionsRefreshDoneMsg{err: err, seq: seq}
 	}
 }
 

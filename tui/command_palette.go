@@ -430,7 +430,7 @@ func paletteDependencies(m Model) actions.Dependencies {
 		Kitty:     m.client,
 		Config:    m.cfg,
 		Clipboard: copyToClipboard,
-		Daemon:    daemonRequest,
+		Daemon:    m.actionDaemon(),
 		Readers:   readers,
 		Activity:  m.activityMarker(),
 	}
@@ -694,8 +694,12 @@ func (m Model) runPaletteEntry(entry paletteEntry) (tea.Model, tea.Cmd) {
 
 func paletteActionCmd(m Model, id actions.ID, request actions.Request) tea.Cmd {
 	deps := paletteDependencies(m)
+	ctx := m.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return func() tea.Msg {
-		_, err := sharedActionRegistry.Execute(context.Background(), deps, id, request)
+		_, err := sharedActionRegistry.Execute(ctx, deps, id, request)
 		switch id {
 		case actions.Focus:
 			return focusDoneMsg{err: err}

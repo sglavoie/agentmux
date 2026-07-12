@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -18,8 +20,10 @@ const transcriptSearchEntityType = "conversation"
 // The file-backed Index remains the active compatibility facade until the
 // cutover; this type deliberately has no side effects on legacy artifacts.
 type Repository struct {
-	store *datastore.Store
-	now   func() time.Time
+	store                   *datastore.Store
+	now                     func() time.Time
+	legacyImportTransaction func(context.Context, func(*sql.Tx) error) error
+	legacySidecarRead       func(indexPath, key string) (string, error)
 }
 
 // ImportRecord describes the last completed import for a legacy source.
@@ -36,7 +40,12 @@ func NewRepository(store *datastore.Store) (*Repository, error) {
 	if store == nil || store.DB() == nil {
 		return nil, errors.New("transcript: repository requires an open datastore")
 	}
-	return &Repository{store: store, now: time.Now}, nil
+	return &Repository{
+		store:                   store,
+		now:                     time.Now,
+		legacyImportTransaction: store.Transaction,
+		legacySidecarRead:       readLegacySidecar,
+	}, nil
 }
 
 // Upsert replaces metadata, profile memberships, and searchable content for a
@@ -108,6 +117,64 @@ func (r *Repository) ClearSearchDocuments(ctx context.Context) error {
 		}
 		return nil
 	})
+}
+
+// RepairMissingSearchDocuments reconstructs searchable transcript bodies for
+// visible durable conversations whose source file still exists. Missing source
+// files are retained as unavailable metadata placeholders and are not errors.
+func (r *Repository) RepairMissingSearchDocuments(ctx context.Context, readers map[string]Reader) (int, error) {
+	rows, err := r.store.DB().QueryContext(ctx, conversationSelect+`
+		WHERE hidden = 0 AND message_count > 0
+		AND NOT EXISTS (
+			SELECT 1 FROM search_documents d
+			WHERE d.entity_type = ? AND d.entity_id = conversations.harness || ':' || conversations.session_id
+		)
+		ORDER BY harness, session_id
+	`, transcriptSearchEntityType)
+	if err != nil {
+		return 0, fmt.Errorf("transcript: listing repairable search documents: %w", err)
+	}
+	type missing struct{ meta SessionMeta }
+	items := make([]missing, 0)
+	for rows.Next() {
+		_, meta, scanErr := scanConversation(rows)
+		if scanErr != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("transcript: scanning repairable search document: %w", scanErr)
+		}
+		items = append(items, missing{meta: meta})
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("transcript: closing repairable search documents: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("transcript: iterating repairable search documents: %w", err)
+	}
+
+	repaired := 0
+	for _, item := range items {
+		if info, statErr := os.Stat(item.meta.Path); statErr != nil {
+			if errors.Is(statErr, fs.ErrNotExist) {
+				continue
+			}
+			return repaired, fmt.Errorf("transcript: inspect source for %q: %w", IndexKey(item.meta.Harness, item.meta.ID), statErr)
+		} else if !info.Mode().IsRegular() {
+			continue
+		}
+		reader := readers[item.meta.Harness]
+		if reader == nil {
+			return repaired, fmt.Errorf("transcript: repair %q: no reader for harness %q", IndexKey(item.meta.Harness, item.meta.ID), item.meta.Harness)
+		}
+		messages, readErr := reader.ReadMessages(item.meta.Path)
+		if readErr != nil {
+			return repaired, fmt.Errorf("transcript: repair %q from %s: %w", IndexKey(item.meta.Harness, item.meta.ID), item.meta.Path, readErr)
+		}
+		if err := r.SetSearchText(ctx, item.meta.Harness, item.meta.ID, messagesSearchText(messages)); err != nil {
+			return repaired, err
+		}
+		repaired++
+	}
+	return repaired, nil
 }
 
 // SearchText returns the normalized content associated with one conversation.

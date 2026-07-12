@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestDefaultPathUsesAgentMuxDataDirectory(t *testing.T) {
@@ -60,7 +61,8 @@ func TestOpenPathInitializesPrivateWALDatabaseAndTargetSchema(t *testing.T) {
 		"conversations", "profile_memberships", "plans", "plan_files", "plan_workspace_links",
 		"search_documents", "search_documents_fts", "handoffs", "activity_items",
 		"workspace_read_markers", "live_conversation_mappings", "import_records", "managed_worktrees",
-		"workspace_candidates", "workspace_candidate_observations",
+		"workspace_candidates", "workspace_candidate_observations", "legacy_import_entries",
+		"workspace_profile_memberships", "workspace_harness_memberships",
 	} {
 		var found string
 		err := store.DB().QueryRow(`SELECT name FROM sqlite_master WHERE name = ?`, table).Scan(&found)
@@ -106,6 +108,151 @@ func TestActivityIdentityMigrationPreservesVersionOneRows(t *testing.T) {
 	}
 	if dedupeKey.Valid || harnessName.Valid || sessionID.Valid || windowID.Valid {
 		t.Fatalf("legacy row gained identity data: dedupe=%+v harness=%+v session=%+v window=%+v", dedupeKey, harnessName, sessionID, windowID)
+	}
+}
+
+func TestConcurrentOpenPathInitializesAndUpgradesIndependentPools(t *testing.T) {
+	for _, initialVersion := range []int{0, 1, 2, 3, 4} {
+		initialVersion := initialVersion
+		t.Run(fmt.Sprintf("from-v%d", initialVersion), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "data", DatabaseFileName)
+			if initialVersion > 0 {
+				if err := os.MkdirAll(filepath.Dir(path), dataDirectoryMode); err != nil {
+					t.Fatalf("create data directory: %v", err)
+				}
+				db, err := sql.Open("sqlite", sqliteDSN(path))
+				if err != nil {
+					t.Fatalf("open v%d database: %v", initialVersion, err)
+				}
+				if err := migrate(context.Background(), db, migrations[:initialVersion]); err != nil {
+					_ = db.Close()
+					t.Fatalf("create v%d database: %v", initialVersion, err)
+				}
+				if err := db.Close(); err != nil {
+					t.Fatalf("close v%d database: %v", initialVersion, err)
+				}
+			}
+
+			const openers = 16
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			start := make(chan struct{})
+			stores := make([]*Store, openers)
+			errs := make(chan error, openers)
+			var wg sync.WaitGroup
+			for i := 0; i < openers; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					<-start
+					store, err := OpenPath(ctx, path)
+					if err == nil {
+						stores[i] = store
+					}
+					errs <- err
+				}(i)
+			}
+			close(start)
+			wg.Wait()
+			close(errs)
+			for err := range errs {
+				if err != nil {
+					t.Errorf("concurrent OpenPath from v%d: %v", initialVersion, err)
+				}
+			}
+			for _, store := range stores {
+				if store != nil {
+					defer func(store *Store) { _ = store.Close() }(store)
+				}
+			}
+			if t.Failed() {
+				t.FailNow()
+			}
+
+			seenHandles := make(map[*sql.DB]struct{}, openers)
+			for i, store := range stores {
+				if store == nil {
+					t.Fatalf("store %d is nil", i)
+				}
+				if _, exists := seenHandles[store.DB()]; exists {
+					t.Fatalf("store %d reused another opener's *sql.DB handle", i)
+				}
+				seenHandles[store.DB()] = struct{}{}
+				if got, err := store.SchemaVersion(ctx); err != nil || got != CurrentSchemaVersion {
+					t.Fatalf("store %d schema version = %d, %v; want %d, nil", i, got, err, CurrentSchemaVersion)
+				}
+			}
+
+			var historyCount, maxVersion int
+			if err := stores[0].DB().QueryRowContext(ctx,
+				`SELECT count(*), max(version) FROM schema_migrations`,
+			).Scan(&historyCount, &maxVersion); err != nil {
+				t.Fatalf("read migration history: %v", err)
+			}
+			if historyCount != CurrentSchemaVersion || maxVersion != CurrentSchemaVersion {
+				t.Fatalf("migration history = count %d max %d, want %d and %d", historyCount, maxVersion, CurrentSchemaVersion, CurrentSchemaVersion)
+			}
+
+			if err := stores[0].Transaction(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `CREATE TABLE concurrent_open_probe (id INTEGER PRIMARY KEY)`)
+				return err
+			}); err != nil {
+				t.Fatalf("create WAL artifact probe: %v", err)
+			}
+			assertMode(t, filepath.Dir(path), dataDirectoryMode)
+			for _, artifact := range []string{path, path + "-wal", path + "-shm"} {
+				assertMode(t, artifact, databaseFileMode)
+			}
+		})
+	}
+}
+
+func TestWorkspaceSearchMembershipMigrationBackfillsDefaultsAndCascades(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), DatabaseFileName)
+	db, err := sql.Open("sqlite", sqliteDSN(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := migrate(ctx, db, migrations[:4]); err != nil {
+		t.Fatalf("create v4 schema: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO workspaces (id, canonical_path, display_name, created_at_ns, updated_at_ns)
+		VALUES ('ws-a', '/repo/a', 'Alpha', 1, 1);
+		INSERT INTO search_documents (
+			entity_type, entity_id, workspace_id, harness, profile_name,
+			title, normalized_content, updated_at_ns
+		) VALUES ('project', 'ws-a', 'ws-a', 'Codex', 'Work', 'Alpha', 'alpha', 42)
+	`); err != nil {
+		t.Fatalf("seed v4 project: %v", err)
+	}
+	if err := migrate(ctx, db, migrations); err != nil {
+		t.Fatalf("upgrade to v5: %v", err)
+	}
+
+	var profile, harnessName string
+	if err := db.QueryRowContext(ctx, `SELECT profile_name FROM workspace_profile_memberships WHERE workspace_id = 'ws-a'`).Scan(&profile); err != nil {
+		t.Fatalf("read backfilled profile: %v", err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT harness FROM workspace_harness_memberships WHERE workspace_id = 'ws-a'`).Scan(&harnessName); err != nil {
+		t.Fatalf("read backfilled harness: %v", err)
+	}
+	if profile != "Work" || harnessName != "Codex" {
+		t.Fatalf("backfilled memberships = profile %q harness %q", profile, harnessName)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM workspaces WHERE id = 'ws-a'`); err != nil {
+		t.Fatalf("delete workspace: %v", err)
+	}
+	for _, table := range []string{"workspace_profile_memberships", "workspace_harness_memberships"} {
+		var count int
+		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM `+table).Scan(&count); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("%s retained %d rows after workspace deletion", table, count)
+		}
 	}
 }
 
@@ -164,6 +311,134 @@ func TestInspectReportsMigrationIntegrityFTSImportsAndPermissions(t *testing.T) 
 	}
 	if len(status.Imports) != 1 || status.Imports[0].SourceName != "legacy-test" || status.Imports[0].RecordCount != 3 {
 		t.Fatalf("imports = %+v", status.Imports)
+	}
+}
+
+func TestInspectClassifiesRepairableAndUnavailableMissingDocumentsReadOnly(t *testing.T) {
+	store := OpenTest(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	transcriptPath := filepath.Join(root, "conversation.jsonl")
+	planPath := filepath.Join(root, "plan")
+	handoffPath := filepath.Join(root, "handoff.md")
+	for path, content := range map[string]string{
+		transcriptPath:                         "{}\n",
+		filepath.Join(planPath, "manifest.md"): "# Plan\n",
+		handoffPath:                            "# Handoff\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	missingTranscript := filepath.Join(root, "missing.jsonl")
+	missingPlan := filepath.Join(root, "missing-plan")
+	missingHandoff := filepath.Join(root, "missing-handoff.md")
+	if _, err := store.DB().ExecContext(ctx, `
+		INSERT INTO workspaces (id, canonical_path, display_name, created_at_ns, updated_at_ns)
+		VALUES ('ws', '/repo', 'Repo', 1, 1);
+		INSERT INTO conversations (harness, session_id, source_path, message_count, created_at_ns, updated_at_ns)
+		VALUES ('codex', 'repairable', ?, 1, 1, 1), ('codex', 'unavailable', ?, 1, 1, 1);
+		INSERT INTO plans (id, path, display_name, created_at_ns, updated_at_ns)
+		VALUES (?, ?, 'Repairable', 1, 1), (?, ?, 'Unavailable', 1, 1);
+		INSERT INTO plan_workspace_links (plan_id, workspace_id, created_at_ns) VALUES (?, 'ws', 1);
+		INSERT INTO handoffs (id, workspace_id, path, content_hash, status, created_at_ns, updated_at_ns)
+		VALUES ('repairable', 'ws', ?, 'hash', 'final', 1, 1),
+		       ('unavailable', 'ws', ?, 'hash', 'final', 1, 1);
+		INSERT INTO activity_items (workspace_id, kind, summary, metadata_json, occurred_at_ns, created_at_ns)
+		VALUES ('ws', 'complete', 'durable activity', '{}', 1, 1)
+	`, transcriptPath, missingTranscript, planPath, planPath, missingPlan, missingPlan,
+		missingPlan, handoffPath, missingHandoff); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := store.Inspect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for entityType, want := range map[string]int{"conversation": 1, "plan": 1, "handoff": 1, "activity": 1} {
+		if got := status.Search.RepairableMissingDocuments[entityType]; got != want {
+			t.Errorf("repairable %s = %d, want %d", entityType, got, want)
+		}
+	}
+	for _, entityType := range []string{"conversation", "plan", "handoff"} {
+		if got := status.Search.UnavailablePlaceholders[entityType]; got != 1 {
+			t.Errorf("unavailable %s = %d, want 1", entityType, got)
+		}
+	}
+	if status.Healthy || status.Search.Fresh {
+		t.Fatalf("repairable gaps reported healthy: %+v", status.Search)
+	}
+
+	if _, err := store.DB().ExecContext(ctx, `
+		INSERT INTO search_documents (entity_type, entity_id, title, normalized_content, updated_at_ns)
+		VALUES ('conversation', 'codex:repairable', 'conversation', 'body', 1),
+		       ('plan', ?, 'plan', 'body', 1),
+		       ('handoff', 'repairable', 'handoff', 'body', 1),
+		       ('activity', '1', 'activity', 'body', 1)
+	`, planPath); err != nil {
+		t.Fatal(err)
+	}
+	store.DB().SetMaxOpenConns(1)
+	if _, err := store.DB().ExecContext(ctx, `PRAGMA query_only = ON`); err != nil {
+		t.Fatal(err)
+	}
+	status, err = store.Inspect(ctx)
+	if err != nil {
+		t.Fatalf("Inspect on query-only connection: %v", err)
+	}
+	if !status.Healthy || !status.Search.Fresh || status.Search.IntegrityVerified {
+		t.Fatalf("unavailable placeholders should warn but remain healthy: %+v", status.Search)
+	}
+	if len(status.Search.Warnings) != 3 {
+		t.Fatalf("warnings = %v, want three unavailable placeholder warnings", status.Search.Warnings)
+	}
+}
+
+func TestInspectDetectsFTSRelationshipCorruptionAndExplicitRebuildVerifies(t *testing.T) {
+	store := OpenTest(t)
+	ctx := context.Background()
+	if _, err := store.DB().ExecContext(ctx, `
+		INSERT INTO search_documents (entity_type, entity_id, title, normalized_content, updated_at_ns)
+		VALUES ('project', 'derived', 'Derived', 'searchable body', 1)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	var rowID int64
+	var title, content string
+	if err := store.DB().QueryRowContext(ctx, `
+		SELECT id, title, normalized_content FROM search_documents WHERE entity_id = 'derived'
+	`).Scan(&rowID, &title, &content); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().ExecContext(ctx, `
+		INSERT INTO search_documents_fts(search_documents_fts, rowid, title, normalized_content)
+		VALUES ('delete', ?, ?, ?)
+	`, rowID, title, content); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := store.Inspect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Healthy || status.Search.Fresh || status.Search.FTSRowCount != 0 || status.Search.InconsistentDocuments["fts_missing_rows"] != 1 {
+		t.Fatalf("corrupt FTS status = %+v", status.Search)
+	}
+	if err := store.VerifySearchIndex(ctx); err == nil {
+		t.Fatal("VerifySearchIndex unexpectedly accepted corrupt external-content index")
+	}
+	if err := store.RebuildSearchIndex(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.VerifySearchIndex(ctx); err != nil {
+		t.Fatalf("VerifySearchIndex after rebuild: %v", err)
+	}
+	status, err = store.Inspect(ctx)
+	if err != nil || !status.Healthy || !status.Search.Fresh || status.Search.FTSRowCount != 1 {
+		t.Fatalf("rebuilt FTS status = %+v, %v", status.Search, err)
 	}
 }
 
@@ -235,33 +510,53 @@ func TestMigrationsRejectFutureVersion(t *testing.T) {
 	}
 }
 
-func TestFailedMigrationRollsBackAndLeavesPriorSchemaUsable(t *testing.T) {
-	store := OpenTest(t)
+func TestFailedMigrationRollsBackAllPendingVersionsAndLeavesPriorSchemaUsable(t *testing.T) {
 	ctx := context.Background()
-	failing := append([]migration{}, migrations...)
-	failing = append(failing, migration{
-		version: CurrentSchemaVersion + 1,
-		apply: func(ctx context.Context, tx *sql.Tx) error {
-			if _, err := tx.ExecContext(ctx, `CREATE TABLE should_not_survive (id INTEGER PRIMARY KEY)`); err != nil {
-				return err
-			}
-			return errors.New("injected migration failure")
-		},
-	})
+	path := filepath.Join(t.TempDir(), DatabaseFileName)
+	db, err := sql.Open("sqlite", sqliteDSN(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := migrate(ctx, db, migrations[:1]); err != nil {
+		t.Fatalf("create v1 schema: %v", err)
+	}
 
-	err := migrate(ctx, store.DB(), failing)
+	failing := []migration{
+		migrations[0],
+		{
+			version: 2,
+			apply: func(ctx context.Context, tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `CREATE TABLE pending_v2_should_not_survive (id INTEGER PRIMARY KEY)`)
+				return err
+			},
+		},
+		{
+			version: 3,
+			apply: func(ctx context.Context, tx *sql.Tx) error {
+				if _, err := tx.ExecContext(ctx, `CREATE TABLE pending_v3_should_not_survive (id INTEGER PRIMARY KEY)`); err != nil {
+					return err
+				}
+				return errors.New("injected migration failure")
+			},
+		},
+	}
+
+	err = migrate(ctx, db, failing)
 	if err == nil {
 		t.Fatal("migrate unexpectedly succeeded")
 	}
-	if got, err := store.SchemaVersion(ctx); err != nil || got != CurrentSchemaVersion {
-		t.Fatalf("SchemaVersion after failed migration = %d, %v; want %d, nil", got, err, CurrentSchemaVersion)
+	if got, err := schemaVersion(ctx, db); err != nil || got != 1 {
+		t.Fatalf("schemaVersion after failed migration = %d, %v; want 1, nil", got, err)
 	}
-	var name string
-	err = store.DB().QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE name = 'should_not_survive'`).Scan(&name)
-	if !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("failed migration table lookup = %v, want sql.ErrNoRows", err)
+	for _, table := range []string{"pending_v2_should_not_survive", "pending_v3_should_not_survive"} {
+		var name string
+		err = db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE name = ?`, table).Scan(&name)
+		if !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("failed migration table %s lookup = %v, want sql.ErrNoRows", table, err)
+		}
 	}
-	if err := store.DB().QueryRowContext(ctx, `SELECT count(*) FROM workspaces`).Scan(new(int)); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM workspaces`).Scan(new(int)); err != nil {
 		t.Fatalf("prior schema is not usable: %v", err)
 	}
 }

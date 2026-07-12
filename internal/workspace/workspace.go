@@ -87,6 +87,27 @@ type CWDMatch struct {
 	Projects  []config.Session
 }
 
+// Catalog is an immutable, synchronized view of the currently configured
+// workspaces and Git topology. Its contents are deliberately private; callers
+// receive deep copies so a retained catalog cannot be changed through config
+// slices, maps, or returned workspace values.
+type Catalog struct {
+	workspaces   []Workspace
+	synchronized bool
+}
+
+// Synchronized reports whether the catalog came from a successful
+// Synchronize call. An empty configuration still produces a synchronized
+// catalog, so len(Workspaces()) cannot represent this state.
+func (c Catalog) Synchronized() bool {
+	return c.synchronized
+}
+
+// Workspaces returns a deep copy of the catalog's current workspaces.
+func (c Catalog) Workspaces() []Workspace {
+	return cloneWorkspaces(c.workspaces)
+}
+
 // Service owns the datastore projection for configured workspaces.
 type Service struct {
 	store *datastore.Store
@@ -97,16 +118,17 @@ func New(store *datastore.Store) *Service {
 	return &Service{store: store}
 }
 
-// Build groups cfg's configured entries, persists stable IDs and historical
-// path aliases, and returns the current configuration projection. Git-backed
-// entries group by their shared Git common directory; non-Git entries group by
-// their canonical physical directory.
-func (s *Service) Build(ctx context.Context, cfg *config.Config) ([]Workspace, error) {
+// Synchronize groups cfg's configured entries, persists stable IDs and
+// historical metadata, reconciles the latest Git topology, and returns an
+// immutable current catalog. Git-backed entries group by their shared Git
+// common directory; non-Git entries group by their canonical physical
+// directory.
+func (s *Service) Synchronize(ctx context.Context, cfg *config.Config) (Catalog, error) {
 	if s == nil || s.store == nil {
-		return nil, errors.New("workspace: nil datastore")
+		return Catalog{}, errors.New("workspace: nil datastore")
 	}
 	if cfg == nil {
-		return nil, errors.New("workspace: nil config")
+		return Catalog{}, errors.New("workspace: nil config")
 	}
 
 	projects := cfg.Projects
@@ -118,19 +140,34 @@ func (s *Service) Build(ctx context.Context, cfg *config.Config) ([]Workspace, e
 	}
 	defs, err := buildDefinitions(ctx, projects)
 	if err != nil {
-		return nil, err
+		return Catalog{}, err
 	}
 	if len(defs) == 0 {
 		if err := s.store.Transaction(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `DELETE FROM search_documents WHERE entity_type = ?`, workspaceSearchEntityType)
-			return err
+			for _, statement := range []string{
+				`DELETE FROM workspace_profile_memberships`,
+				`DELETE FROM workspace_harness_memberships`,
+			} {
+				if _, err := tx.ExecContext(ctx, statement); err != nil {
+					return fmt.Errorf("workspace: clear empty search projection: %w", err)
+				}
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM search_documents WHERE entity_type = ?`, workspaceSearchEntityType); err != nil {
+				return fmt.Errorf("workspace: clear empty search projection: %w", err)
+			}
+			return nil
 		}); err != nil {
-			return nil, err
+			return Catalog{}, err
 		}
-		return nil, nil
+		return Catalog{synchronized: true}, nil
 	}
 	for i := range defs {
 		defs[i].harness = configuredHarness(cfg, defs[i].projects[0].EffectiveProfile())
+		for _, project := range defs[i].projects {
+			profile := strings.TrimSpace(project.EffectiveProfile())
+			defs[i].profiles = appendUniqueFold(defs[i].profiles, profile)
+			defs[i].harnesses = appendUniqueFold(defs[i].harnesses, configuredHarness(cfg, profile))
+		}
 	}
 
 	if err := s.store.Transaction(ctx, func(tx *sql.Tx) error {
@@ -143,18 +180,30 @@ func (s *Service) Build(ctx context.Context, cfg *config.Config) ([]Workspace, e
 		}
 		return removeStaleSearchDocuments(ctx, tx, defs)
 	}); err != nil {
-		return nil, err
+		return Catalog{}, err
 	}
 
 	workspaces := make([]Workspace, 0, len(defs))
 	for _, def := range defs {
 		persisted, err := loadWorkspace(ctx, s.store.DB(), def.id)
 		if err != nil {
-			return nil, err
+			return Catalog{}, err
 		}
 		workspaces = append(workspaces, def.workspace(persisted))
 	}
-	return workspaces, nil
+	return Catalog{workspaces: cloneWorkspaces(workspaces), synchronized: true}, nil
+}
+
+// Build is the compatibility entry point for callers that want a synchronized
+// workspace slice immediately. Long-running consumers should retain the
+// Catalog returned by Synchronize and project from it without synchronizing on
+// every poll.
+func (s *Service) Build(ctx context.Context, cfg *config.Config) ([]Workspace, error) {
+	catalog, err := s.Synchronize(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return catalog.Workspaces(), nil
 }
 
 // Resolve builds the current workspace projection then resolves selector by
@@ -244,6 +293,8 @@ type definition struct {
 	titles              []string
 	git                 *gitRepository
 	harness             string
+	profiles            []string
+	harnesses           []string
 }
 
 func buildDefinitions(ctx context.Context, projects []config.Session) ([]definition, error) {
@@ -297,18 +348,51 @@ func repoOrNil(repo gitRepository, found bool) *gitRepository {
 }
 
 func (d definition) workspace(p persistedWorkspace) Workspace {
-	variants := append([]config.Session(nil), d.projects[1:]...)
+	variants := cloneConfiguredSessions(d.projects[1:])
 	return Workspace{
 		ID:                  p.id,
 		ConfiguredProjectID: p.configuredProjectID,
 		CanonicalPath:       p.canonicalPath,
 		DisplayName:         p.displayName,
-		Aliases:             p.aliases,
-		DefaultLaunch:       d.projects[0],
+		Aliases:             append([]string(nil), p.aliases...),
+		DefaultLaunch:       cloneConfiguredSession(d.projects[0]),
 		LaunchVariants:      variants,
 		TitleAliases:        append([]string(nil), d.titles...),
-		Worktrees:           p.worktrees,
+		Worktrees:           d.currentWorktrees(p.worktrees),
 	}
+}
+
+// currentWorktrees filters durable history through the latest Git discovery.
+// Removed checkout rows remain available for historical references, but they
+// are not part of the current catalog exposed to TUI and CLI consumers.
+func (d definition) currentWorktrees(persisted []WorktreeContext) []WorktreeContext {
+	if d.git == nil {
+		return nil
+	}
+	current := make(map[string]bool, len(d.git.worktrees))
+	for _, discovered := range d.git.worktrees {
+		current[discovered.path] = true
+	}
+	worktrees := make([]WorktreeContext, 0, len(current))
+	for _, context := range persisted {
+		if current[context.CanonicalPath] {
+			worktrees = append(worktrees, context)
+		}
+	}
+	return worktrees
+}
+
+func cloneWorkspaces(in []Workspace) []Workspace {
+	out := make([]Workspace, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].Aliases = append([]string(nil), in[i].Aliases...)
+		out[i].DefaultLaunch = cloneConfiguredSession(in[i].DefaultLaunch)
+		out[i].LaunchVariants = cloneConfiguredSessions(in[i].LaunchVariants)
+		out[i].TitleAliases = append([]string(nil), in[i].TitleAliases...)
+		out[i].Worktrees = append([]WorktreeContext(nil), in[i].Worktrees...)
+	}
+	return out
 }
 
 type persistedWorkspace struct {
@@ -374,6 +458,9 @@ func syncDefinition(ctx context.Context, tx *sql.Tx, def *definition) (string, e
 	if err := upsertSearchDocument(ctx, tx, id, *def, now); err != nil {
 		return "", err
 	}
+	if err := replaceSearchMemberships(ctx, tx, id, *def, now); err != nil {
+		return "", err
+	}
 	// Preserve every discovery observation after this identity is explicitly
 	// adopted instead of deleting its candidate history.
 	if _, err := tx.ExecContext(ctx, `
@@ -383,6 +470,34 @@ func syncDefinition(ctx context.Context, tx *sql.Tx, def *definition) (string, e
 		return "", fmt.Errorf("workspace: merge candidate history: %w", err)
 	}
 	return id, nil
+}
+
+func replaceSearchMemberships(ctx context.Context, tx *sql.Tx, id string, def definition, now int64) error {
+	for _, statement := range []string{
+		`DELETE FROM workspace_profile_memberships WHERE workspace_id = ?`,
+		`DELETE FROM workspace_harness_memberships WHERE workspace_id = ?`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement, id); err != nil {
+			return fmt.Errorf("workspace: clear search memberships for %q: %w", id, err)
+		}
+	}
+	for position, profile := range def.profiles {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO workspace_profile_memberships (workspace_id, profile_name, position, created_at_ns)
+			VALUES (?, ?, ?, ?)
+		`, id, profile, position, now); err != nil {
+			return fmt.Errorf("workspace: add profile membership %q for %q: %w", profile, id, err)
+		}
+	}
+	for position, harnessName := range def.harnesses {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO workspace_harness_memberships (workspace_id, harness, position, created_at_ns)
+			VALUES (?, ?, ?, ?)
+		`, id, harnessName, position, now); err != nil {
+			return fmt.Errorf("workspace: add harness membership %q for %q: %w", harnessName, id, err)
+		}
+	}
+	return nil
 }
 
 func upsertSearchDocument(ctx context.Context, tx *sql.Tx, id string, def definition, now int64) error {
@@ -435,6 +550,15 @@ func removeStaleSearchDocuments(ctx context.Context, tx *sql.Tx, defs []definiti
 	)
 	if err != nil {
 		return fmt.Errorf("workspace: remove stale search documents: %w", err)
+	}
+	for _, table := range []string{"workspace_profile_memberships", "workspace_harness_memberships"} {
+		membershipArgs := append([]any(nil), args[1:]...)
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM `+table+` WHERE workspace_id NOT IN (`+placeholders+`)`,
+			membershipArgs...,
+		); err != nil {
+			return fmt.Errorf("workspace: remove stale %s: %w", table, err)
+		}
 	}
 	return nil
 }

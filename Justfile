@@ -20,9 +20,10 @@ test:
 vet:
     go vet ./...
 
-# Run the concurrency-sensitive persistence and daemon suites under the race detector.
+# Run the concurrency-sensitive persistence, daemon, workspace, and TUI
+# datastore-lifecycle suites under the race detector.
 race-core:
-    go test -race ./internal/datastore ./internal/daemon
+    go test -race ./internal/datastore ./internal/workspace ./internal/daemon ./tui
 
 # Run every committed narrow/wide TUI acceptance scenario in isolation.
 tui-scenarios:

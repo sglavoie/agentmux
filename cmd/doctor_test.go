@@ -46,7 +46,7 @@ func resetDoctorTestState(t *testing.T) {
 	})
 	doctorJSON = false
 	doctorStrict = false
-	doctorInspectDatastore = func(context.Context) (datastore.Status, error) {
+	doctorInspectDatastore = func(context.Context, bool) (datastore.Status, error) {
 		return datastore.Status{
 			SchemaVersion: datastore.CurrentSchemaVersion, CurrentSchemaVersion: datastore.CurrentSchemaVersion,
 			MigrationCurrent: true, Integrity: "ok", SecurePermissions: true,

@@ -4,6 +4,7 @@ package search
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -80,6 +81,8 @@ type Result struct {
 	WorkspaceID   string     `json:"workspace_id,omitempty"`
 	Harness       string     `json:"harness,omitempty"`
 	Profile       string     `json:"profile,omitempty"`
+	Harnesses     []string   `json:"harnesses,omitempty"`
+	Profiles      []string   `json:"profiles,omitempty"`
 	OccurredAt    time.Time  `json:"occurred_at,omitzero"`
 	Title         string     `json:"title"`
 	Snippet       string     `json:"snippet"`
@@ -153,7 +156,7 @@ func (s *Service) Search(ctx context.Context, query Query) ([]Result, error) {
 	}
 	appendInFilter(&where, &args, "d.entity_type", entityTypeStrings(types))
 	appendWorkspaceFilter(&where, &args, query.Workspaces)
-	appendInFilter(&where, &args, "lower(d.harness)", lowerValues(query.Harnesses))
+	appendHarnessFilter(&where, &args, query.Harnesses)
 	appendProfileFilter(&where, &args, query.Profiles)
 	if !query.From.IsZero() {
 		where = append(where, "d.occurred_at_ns >= ?")
@@ -214,6 +217,12 @@ func (s *Service) Search(ctx context.Context, query Query) ([]Result, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("search: iterate results: %w", err)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("search: close result rows: %w", err)
+	}
+	if err := populateProjectMemberships(ctx, s.store.DB(), results); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
@@ -265,6 +274,25 @@ func appendWorkspaceFilter(where *[]string, args *[]any, values []string) {
 	}
 }
 
+func appendHarnessFilter(where *[]string, args *[]any, values []string) {
+	values = lowerValues(values)
+	if len(values) == 0 {
+		return
+	}
+	ph := placeholders(len(values))
+	*where = append(*where, `(lower(d.harness) IN (`+ph+`)
+		OR (d.entity_type = 'project' AND EXISTS (
+			SELECT 1 FROM workspace_harness_memberships whm
+			WHERE whm.workspace_id = d.workspace_id
+				AND lower(whm.harness) IN (`+ph+`)
+		)))`)
+	for repeat := 0; repeat < 2; repeat++ {
+		for _, value := range values {
+			*args = append(*args, value)
+		}
+	}
+}
+
 func appendProfileFilter(where *[]string, args *[]any, values []string) {
 	values = lowerValues(values)
 	if len(values) == 0 {
@@ -277,12 +305,80 @@ func appendProfileFilter(where *[]string, args *[]any, values []string) {
 			JOIN profile_memberships pm ON pm.conversation_id = c.id
 			WHERE c.harness || ':' || c.session_id = d.entity_id
 				AND lower(pm.profile_name) IN (`+ph+`)
+		))
+		OR (d.entity_type = 'project' AND EXISTS (
+			SELECT 1 FROM workspace_profile_memberships wpm
+			WHERE wpm.workspace_id = d.workspace_id
+				AND lower(wpm.profile_name) IN (`+ph+`)
 		)))`)
-	for repeat := 0; repeat < 2; repeat++ {
+	for repeat := 0; repeat < 3; repeat++ {
 		for _, value := range values {
 			*args = append(*args, value)
 		}
 	}
+}
+
+func populateProjectMemberships(ctx context.Context, db *sql.DB, results []Result) error {
+	workspaceIDs := make([]string, 0)
+	resultIndexes := make(map[string][]int)
+	for i := range results {
+		if results[i].EntityType != EntityProject || results[i].WorkspaceID == "" {
+			continue
+		}
+		if _, ok := resultIndexes[results[i].WorkspaceID]; !ok {
+			workspaceIDs = append(workspaceIDs, results[i].WorkspaceID)
+		}
+		resultIndexes[results[i].WorkspaceID] = append(resultIndexes[results[i].WorkspaceID], i)
+	}
+	if len(workspaceIDs) == 0 {
+		return nil
+	}
+
+	profiles, err := loadWorkspaceMemberships(ctx, db,
+		"workspace_profile_memberships", "profile_name", workspaceIDs)
+	if err != nil {
+		return fmt.Errorf("search: load project profile memberships: %w", err)
+	}
+	harnesses, err := loadWorkspaceMemberships(ctx, db,
+		"workspace_harness_memberships", "harness", workspaceIDs)
+	if err != nil {
+		return fmt.Errorf("search: load project harness memberships: %w", err)
+	}
+	for workspaceID, indexes := range resultIndexes {
+		for _, index := range indexes {
+			results[index].Profiles = append([]string(nil), profiles[workspaceID]...)
+			results[index].Harnesses = append([]string(nil), harnesses[workspaceID]...)
+		}
+	}
+	return nil
+}
+
+func loadWorkspaceMemberships(ctx context.Context, db *sql.DB, table, valueColumn string, workspaceIDs []string) (map[string][]string, error) {
+	statement := `SELECT workspace_id, ` + valueColumn + ` FROM ` + table + `
+		WHERE workspace_id IN (` + placeholders(len(workspaceIDs)) + `)
+		ORDER BY workspace_id, position, lower(` + valueColumn + `), ` + valueColumn
+	args := make([]any, 0, len(workspaceIDs))
+	for _, workspaceID := range workspaceIDs {
+		args = append(args, workspaceID)
+	}
+	rows, err := db.QueryContext(ctx, statement, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	memberships := make(map[string][]string, len(workspaceIDs))
+	for rows.Next() {
+		var workspaceID, value string
+		if err := rows.Scan(&workspaceID, &value); err != nil {
+			return nil, err
+		}
+		memberships[workspaceID] = append(memberships[workspaceID], value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return memberships, nil
 }
 
 func placeholders(count int) string { return strings.TrimSuffix(strings.Repeat("?,", count), ",") }

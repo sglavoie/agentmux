@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,8 +21,10 @@ const planSearchEntityType = "plan"
 // Repository stores plan metadata, viewer file lists, literal-search content,
 // and explicit workspace links in SQLite. It never changes plan directories.
 type Repository struct {
-	store *datastore.Store
-	now   func() time.Time
+	store                   *datastore.Store
+	now                     func() time.Time
+	legacyImportTransaction func(context.Context, func(*sql.Tx) error) error
+	legacySidecarRead       func(indexPath, key string) (string, error)
 }
 
 // ImportRecord describes a completed import from the compatibility plan
@@ -39,7 +43,12 @@ func NewRepository(store *datastore.Store) (*Repository, error) {
 	if store == nil || store.DB() == nil {
 		return nil, errors.New("plans: repository requires an open datastore")
 	}
-	return &Repository{store: store, now: time.Now}, nil
+	return &Repository{
+		store:                   store,
+		now:                     time.Now,
+		legacyImportTransaction: store.Transaction,
+		legacySidecarRead:       readLegacySidecar,
+	}, nil
 }
 
 // Upsert replaces a plan's metadata, file list, and searchable content. The
@@ -164,6 +173,61 @@ func (r *Repository) ClearSearchDocuments(ctx context.Context) error {
 		}
 		return nil
 	})
+}
+
+// RepairMissingSearchDocuments rebuilds searchable plan bodies from plan
+// directories that still exist. Referenced plans whose directories vanished
+// remain visible as durable unavailable placeholders.
+func (r *Repository) RepairMissingSearchDocuments(ctx context.Context) (int, error) {
+	rows, err := r.store.DB().QueryContext(ctx, planSelect+`
+		WHERE NOT EXISTS (
+			SELECT 1 FROM search_documents d
+			WHERE d.entity_type = ? AND d.entity_id = plans.id
+		)
+		ORDER BY id
+	`, planSearchEntityType)
+	if err != nil {
+		return 0, fmt.Errorf("plans: listing repairable search documents: %w", err)
+	}
+	metas := make([]PlanMeta, 0)
+	for rows.Next() {
+		meta, scanErr := r.scanPlan(ctx, rows)
+		if scanErr != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("plans: scanning repairable search document: %w", scanErr)
+		}
+		metas = append(metas, meta)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("plans: closing repairable search documents: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("plans: iterating repairable search documents: %w", err)
+	}
+
+	repaired := 0
+	for _, meta := range metas {
+		if info, statErr := os.Stat(meta.DirPath); statErr != nil {
+			if errors.Is(statErr, fs.ErrNotExist) {
+				continue
+			}
+			return repaired, fmt.Errorf("plans: inspect source for %q: %w", PlanKey(meta.DirPath), statErr)
+		} else if !info.IsDir() {
+			continue
+		}
+		refreshed, content, scanErr := scanPlanDirectory(meta.DirPath)
+		if scanErr != nil {
+			return repaired, fmt.Errorf("plans: repair %q: %w", PlanKey(meta.DirPath), scanErr)
+		}
+		if refreshed == nil {
+			return repaired, fmt.Errorf("plans: repair %q: source contains no eligible markdown files", PlanKey(meta.DirPath))
+		}
+		if err := r.SetSearchText(ctx, PlanKey(meta.DirPath), content); err != nil {
+			return repaired, err
+		}
+		repaired++
+	}
+	return repaired, nil
 }
 
 // HasDurableReferences reports whether deleting a derived plan row would also

@@ -61,6 +61,32 @@ func TestRepositoryInsertBatchIsIdempotentAndIndexesActivity(t *testing.T) {
 	}
 }
 
+func TestRepositoryRepairsSearchDocumentFromDurableActivity(t *testing.T) {
+	ctx := context.Background()
+	store := datastore.OpenTest(t)
+	repo, err := NewRepository(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.InsertBatch(ctx, []Item{{Kind: "complete", Summary: "durable outcome", MetadataJSON: `{"ok":true}`}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().ExecContext(ctx, `DELETE FROM search_documents WHERE entity_type = 'activity'`); err != nil {
+		t.Fatal(err)
+	}
+	repaired, err := repo.RepairMissingSearchDocuments(ctx)
+	if err != nil || repaired != 1 {
+		t.Fatalf("RepairMissingSearchDocuments = %d, %v", repaired, err)
+	}
+	var content string
+	if err := store.DB().QueryRowContext(ctx, `SELECT normalized_content FROM search_documents WHERE entity_type = 'activity'`).Scan(&content); err != nil {
+		t.Fatal(err)
+	}
+	if content != "durable outcome\n{\"ok\":true}" {
+		t.Fatalf("repaired activity content = %q", content)
+	}
+}
+
 func TestWorkspaceFeedReadHighWaterPersistsAndLoadsOldestUnreadBatch(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), datastore.DatabaseFileName)

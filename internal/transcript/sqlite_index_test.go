@@ -41,6 +41,46 @@ func TestEnableSQLiteIndexFallbackRetainsLegacyReadPathAndReason(t *testing.T) {
 	}
 }
 
+func TestLoadSQLiteIndexWrapperOwnsAndClosesStore(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	idx, err := LoadSQLiteIndex(filepath.Join(t.TempDir(), "transcripts.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := idx.repository()
+	if repo == nil {
+		t.Fatalf("wrapper facade degraded: %v", idx.DegradedReason())
+	}
+	if err := idx.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	if err := repo.store.DB().PingContext(context.Background()); err == nil {
+		t.Fatal("owned wrapper store remained open after Close")
+	}
+}
+
+func TestEnableSQLiteIndexImportFailureDoesNotCloseBorrowedStore(t *testing.T) {
+	idx := newTestIndex(t)
+	if err := idx.SetEntryForTest(IndexKey(harness.Claude, "borrowed"), SessionMeta{
+		ID: "borrowed", Harness: harness.Claude, MessageCount: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	store := datastore.OpenTest(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	idx = EnableSQLiteIndex(ctx, idx, store, nil)
+	if idx.UsesSQLite() || idx.DegradedReason() == nil {
+		t.Fatalf("import failure did not degrade facade: SQLite=%t reason=%v", idx.UsesSQLite(), idx.DegradedReason())
+	}
+	if err := store.DB().PingContext(context.Background()); err != nil {
+		t.Fatalf("import failure closed borrowed store: %v", err)
+	}
+}
+
 func TestSQLiteIndexFacadeSearchHideAndDeleteLeaveLegacySidecarUntouched(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

@@ -191,6 +191,19 @@ func TestBuildSnapshotIncludesLinkedWorktreeAndCurrentGitMetadata(t *testing.T) 
 	if linkedGit == nil || !linkedGit.Available || linkedGit.Branch != "feature/workspace" || linkedGit.Head == "" {
 		t.Errorf("linked Git metadata = %#v, want available feature branch with head", linkedGit)
 	}
+
+	withoutGit, err := New(datastore.OpenTest(t)).BuildSnapshot(ctx, SnapshotOptions{
+		Config:          workspaceConfig(config.Session{ID: "repo", Title: "Repo", Directory: primary, Profile: "work"}),
+		LiveSessions:    []session.RunningSession{{WindowID: 9, Project: "Repo", Profile: "work", Directory: linkedCWD}},
+		Now:             time.Now(),
+		SkipGitMetadata: true,
+	})
+	if err != nil {
+		t.Fatalf("BuildSnapshot without Git metadata: %v", err)
+	}
+	if got := withoutGit.Workspaces[0]; len(got.Git) != 0 || len(got.Worktrees) != 2 || got.LiveSessions[0].WorktreePath != projectresolve.AbsPath(linked) {
+		t.Errorf("skip Git snapshot = Git %#v worktrees %#v live %#v", got.Git, got.Worktrees, got.LiveSessions)
+	}
 }
 
 func TestBuildSnapshotKeepsNoLiveWorkspaceAndMarksDegradedDaemon(t *testing.T) {
@@ -244,5 +257,50 @@ func TestBuildSnapshotUsesDirectLegacySessionsAlias(t *testing.T) {
 	}
 	if len(snapshot.Workspaces) != 1 || snapshot.Workspaces[0].ID != "legacy" {
 		t.Errorf("legacy sessions snapshot = %#v, want workspace legacy", snapshot.Workspaces)
+	}
+}
+
+func TestProjectSnapshotRemainsReadOnlyBesideUnrelatedWriter(t *testing.T) {
+	ctx := context.Background()
+	reader := datastore.OpenTest(t)
+	service := New(reader)
+	catalog, err := service.Synchronize(ctx, workspaceConfig(config.Session{
+		ID: "api", Title: "API", Directory: t.TempDir(), Profile: "work",
+	}))
+	if err != nil {
+		t.Fatalf("Synchronize: %v", err)
+	}
+	feed, err := activity.NewRepository(reader)
+	if err != nil {
+		t.Fatalf("activity repository: %v", err)
+	}
+
+	writer, err := datastore.OpenPath(ctx, reader.Path())
+	if err != nil {
+		t.Fatalf("open independent writer: %v", err)
+	}
+	t.Cleanup(func() { _ = writer.Close() })
+	tx, err := writer.DB().BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin writer: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `UPDATE workspaces SET display_name = display_name WHERE id = 'api'`); err != nil {
+		t.Fatalf("hold writer transaction: %v", err)
+	}
+
+	projectionCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	snapshot, err := ProjectSnapshot(projectionCtx, catalog, SnapshotOptions{
+		ActivityFeed:     feed,
+		ActivityReaderID: activity.DefaultReaderID,
+		ActivityLimit:    1,
+		SkipGitMetadata:  true,
+	})
+	if err != nil {
+		t.Fatalf("ProjectSnapshot beside writer: %v", err)
+	}
+	if len(snapshot.Workspaces) != 1 || snapshot.Workspaces[0].ID != "api" {
+		t.Fatalf("snapshot beside writer = %#v", snapshot.Workspaces)
 	}
 }

@@ -26,8 +26,8 @@ func TestEnterSessionSearchStartsCacheLoadWhenCacheMissing(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("entering without a transcript cache returned nil cmd; want cache load")
 	}
-	if !got.sessionCacheLoadInFlight {
-		t.Fatal("sessionCacheLoadInFlight=false after starting cache load")
+	if !got.dataServicesInitInFlight {
+		t.Fatal("dataServicesInitInFlight=false after starting service load")
 	}
 	if !got.sessionLoading {
 		t.Fatal("sessionLoading=false with no cached rows available")
@@ -97,7 +97,7 @@ func TestLegacySessionSearchKeepsEnterViewerAndAddsContinuityActions(t *testing.
 
 func TestEnterSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	m := testModel()
-	m.sessionCacheLoadInFlight = true
+	m.dataServicesInitInFlight = true
 
 	updated, cmd := m.Update(keyPress("S"))
 	got := updated.(Model)
@@ -108,8 +108,8 @@ func TestEnterSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("entering during cache load returned duplicate cmd %T", cmd)
 	}
-	if !got.sessionCacheLoadInFlight {
-		t.Fatal("sessionCacheLoadInFlight was cleared while entering")
+	if !got.dataServicesInitInFlight {
+		t.Fatal("dataServicesInitInFlight was cleared while entering")
 	}
 	if !got.sessionLoading {
 		t.Fatal("sessionLoading=false while waiting for the first cache result set")
@@ -462,7 +462,7 @@ func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T)
 
 func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	m := loadSessions(testModel(), []session.RunningSession{{TabID: 1, WindowID: 10, Base: "Foo"}})
-	m.sessionCacheLoadInFlight = true
+	m.dataServicesInitInFlight = true
 	seq := m.sessionSearchSeq
 
 	updated, cmd := m.Update(keyPress("s"))
@@ -474,8 +474,8 @@ func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.
 	if got.mode != ModeSessionSearch {
 		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
 	}
-	if !got.sessionCacheLoadInFlight {
-		t.Fatal("sessionCacheLoadInFlight was cleared while entering project session search")
+	if !got.dataServicesInitInFlight {
+		t.Fatal("dataServicesInitInFlight was cleared while entering project session search")
 	}
 	if !got.sessionLoading {
 		t.Fatal("sessionLoading=false while waiting for first project-filtered cache result")
@@ -729,7 +729,7 @@ func TestRenderSessionSearchDistinguishesStatusAndErrors(t *testing.T) {
 		width:                    100,
 		height:                   30,
 		sessionLoading:           true,
-		sessionCacheLoadInFlight: true,
+		dataServicesInitInFlight: true,
 		sessionRefreshInFlight:   true,
 		sessionRefreshErr:        errors.New("cache unavailable"),
 		sessionSearchErr:         errors.New("sidecar denied"),

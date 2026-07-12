@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 	_ "modernc.org/sqlite"
@@ -24,10 +25,15 @@ const (
 	// DatabaseFileName is the stable name for the SQLite database.
 	DatabaseFileName = "agent-mux.db"
 	// CurrentSchemaVersion is the newest schema this binary understands.
-	CurrentSchemaVersion = 3
+	CurrentSchemaVersion = 5
 
 	dataDirectoryMode os.FileMode = 0o700
 	databaseFileMode  os.FileMode = 0o600
+
+	busyRetryAttempts = 8
+	busyRetryMinDelay = 10 * time.Millisecond
+	busyRetryMaxDelay = 250 * time.Millisecond
+	sqliteBusyCode    = 5
 )
 
 // ErrFutureSchemaVersion reports a database created by a newer Agent Mux.
@@ -93,7 +99,7 @@ func OpenPath(ctx context.Context, path string) (*Store, error) {
 	db.SetMaxIdleConns(8)
 
 	store := &Store{db: db, path: absPath}
-	if err := db.PingContext(ctx); err != nil {
+	if err := retrySQLiteBusy(ctx, func() error { return db.PingContext(ctx) }); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("datastore: connecting to %s: %w", absPath, err)
 	}
@@ -102,6 +108,10 @@ func OpenPath(ctx context.Context, path string) (*Store, error) {
 		return nil, err
 	}
 	if err := migrate(ctx, db, migrations); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := configureWAL(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -183,12 +193,64 @@ func sqliteDSN(path string) string {
 	query := url.Values{}
 	query.Add("_pragma", "busy_timeout(5000)")
 	query.Add("_pragma", "foreign_keys(ON)")
-	query.Add("_pragma", "journal_mode(WAL)")
 	query.Add("_pragma", "synchronous(NORMAL)")
 	// Begin write transactions immediately so a competing writer waits under
 	// busy_timeout before it reads stale state and attempts its own migration.
 	query.Set("_txlock", "immediate")
 	return (&url.URL{Scheme: "file", Path: path, RawQuery: query.Encode()}).String()
+}
+
+// configureWAL changes SQLite's persistent journal mode only after schema
+// initialization has committed. A failed PRAGMA that reports SQLITE_BUSY is
+// safe to retry because SQLite did not change the journal mode. Other errors
+// return immediately, and a successful statement is never repeated.
+func configureWAL(ctx context.Context, db *sql.DB) error {
+	var journalMode string
+	err := retrySQLiteBusy(ctx, func() error {
+		return db.QueryRowContext(ctx, `PRAGMA journal_mode(WAL)`).Scan(&journalMode)
+	})
+	if err != nil {
+		return fmt.Errorf("datastore: enabling WAL journal mode: %w", err)
+	}
+	if journalMode != "wal" {
+		return fmt.Errorf("datastore: enabling WAL journal mode returned %q", journalMode)
+	}
+	return nil
+}
+
+// retrySQLiteBusy bounds retries of operations whose SQLITE_BUSY result means
+// they are known not to have executed. Callers must not use it around commits
+// or arbitrary transaction callbacks because their outcome may be ambiguous.
+func retrySQLiteBusy(ctx context.Context, operation func() error) error {
+	var err error
+	for attempt := 0; attempt < busyRetryAttempts; attempt++ {
+		if err = operation(); err == nil || !isSQLiteBusy(err) {
+			return err
+		}
+		if attempt == busyRetryAttempts-1 {
+			break
+		}
+
+		delay := busyRetryMinDelay << attempt
+		if delay > busyRetryMaxDelay {
+			delay = busyRetryMaxDelay
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return err
+}
+
+func isSQLiteBusy(err error) bool {
+	var sqliteErr interface{ Code() int }
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == sqliteBusyCode
 }
 
 func ensurePrivateDirectory(path string) error {

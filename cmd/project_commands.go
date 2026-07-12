@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/compatimport"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon"
@@ -31,8 +32,8 @@ import (
 var (
 	projectCommandsLoadConfig       = loadRunnableConfig
 	projectCommandsOpenStore        = datastore.Open
-	projectCommandsLoadPlanIndex    = plans.LoadSQLiteIndex
-	projectCommandsLoadSessionIndex = transcript.LoadSQLiteIndex
+	projectCommandsLoadPlanIndex    = plans.LoadSQLiteIndexWithStore
+	projectCommandsLoadSessionIndex = transcript.LoadSQLiteIndexWithStore
 	projectCommandsPlanIndexPath    = plans.IndexPath
 	projectCommandsSessionIndexPath = transcript.IndexPath
 	projectCommandsSessionReaders   = transcriptReaders
@@ -212,7 +213,13 @@ var sessionListCmd = &cobra.Command{
 	Short: "List indexed conversation sessions",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
-		idx, err := projectCommandsLoadSessionIndex(projectCommandsSessionIndexPath(), projectCommandsSessionReaders())
+		ctx := commandContext(cmd)
+		store, err := projectCommandsOpenStore(ctx)
+		if err != nil {
+			return commandFailure(cmd, jsonOutput, "datastore_error", err)
+		}
+		defer func() { _ = store.Close() }()
+		idx, err := projectCommandsLoadSessionIndex(ctx, projectCommandsSessionIndexPath(), store, projectCommandsSessionReaders(), compatimport.SyncIfChanged)
 		if err != nil {
 			return commandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
@@ -319,7 +326,13 @@ var sessionForkWorktreeCmd = &cobra.Command{
 			return commandFailure(cmd, jsonOutput, "config_error", err)
 		}
 		readers := projectCommandsSessionReaders()
-		idx, err := projectCommandsLoadSessionIndex(projectCommandsSessionIndexPath(), readers)
+		ctx := commandContext(cmd)
+		store, err := projectCommandsOpenStore(ctx)
+		if err != nil {
+			return commandFailure(cmd, jsonOutput, "datastore_error", err)
+		}
+		defer func() { _ = store.Close() }()
+		idx, err := projectCommandsLoadSessionIndex(ctx, projectCommandsSessionIndexPath(), store, readers, compatimport.SyncIfChanged)
 		if err != nil {
 			return commandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
@@ -364,7 +377,13 @@ var sessionHandoffCmd = &cobra.Command{
 			return commandFailure(cmd, jsonOutput, "config_error", err)
 		}
 		readers := projectCommandsSessionReaders()
-		idx, err := projectCommandsLoadSessionIndex(projectCommandsSessionIndexPath(), readers)
+		ctx := commandContext(cmd)
+		store, err := projectCommandsOpenStore(ctx)
+		if err != nil {
+			return commandFailure(cmd, jsonOutput, "datastore_error", err)
+		}
+		defer func() { _ = store.Close() }()
+		idx, err := projectCommandsLoadSessionIndex(ctx, projectCommandsSessionIndexPath(), store, readers, compatimport.SyncIfChanged)
 		if err != nil {
 			return commandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 		}
@@ -393,7 +412,13 @@ var planListCmd = &cobra.Command{
 	Short: "List indexed plans",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
-		idx, err := projectCommandsLoadPlanIndex(projectCommandsPlanIndexPath())
+		ctx := commandContext(cmd)
+		store, err := projectCommandsOpenStore(ctx)
+		if err != nil {
+			return commandFailure(cmd, jsonOutput, "datastore_error", err)
+		}
+		defer func() { _ = store.Close() }()
+		idx, err := projectCommandsLoadPlanIndex(ctx, projectCommandsPlanIndexPath(), store, compatimport.SyncIfChanged)
 		if err != nil {
 			return commandFailure(cmd, jsonOutput, "plan_index_unavailable", err)
 		}
@@ -432,7 +457,13 @@ func newPlanWorkspaceCommand(name string, link bool) *cobra.Command {
 			if len(args) != 2 {
 				return commandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("plan %s accepts exactly a plan and workspace selector", name))
 			}
-			idx, err := projectCommandsLoadPlanIndex(projectCommandsPlanIndexPath())
+			ctx := commandContext(cmd)
+			store, err := projectCommandsOpenStore(ctx)
+			if err != nil {
+				return commandFailure(cmd, jsonOutput, "datastore_error", err)
+			}
+			defer func() { _ = store.Close() }()
+			idx, err := projectCommandsLoadPlanIndex(ctx, projectCommandsPlanIndexPath(), store, compatimport.SyncIfChanged)
 			if err != nil {
 				return commandFailure(cmd, jsonOutput, "plan_index_unavailable", err)
 			}
@@ -444,12 +475,7 @@ func newPlanWorkspaceCommand(name string, link bool) *cobra.Command {
 			if err != nil {
 				return commandFailure(cmd, jsonOutput, "config_error", err)
 			}
-			store, err := projectCommandsOpenStore(commandContext(cmd))
-			if err != nil {
-				return commandFailure(cmd, jsonOutput, "datastore_error", err)
-			}
-			defer func() { _ = store.Close() }()
-			workspaceItem, err := workspace.New(store).Resolve(commandContext(cmd), cfg, args[1])
+			workspaceItem, err := workspace.New(store).Resolve(ctx, cfg, args[1])
 			if err != nil {
 				return workspaceCommandError(cmd, jsonOutput, err)
 			}
@@ -534,11 +560,11 @@ func discoverProjectCandidates(ctx context.Context, cfg *config.Config, store *d
 		}
 	}
 	var conversations []transcript.SessionMeta
-	if idx, err := projectCommandsLoadSessionIndex(projectCommandsSessionIndexPath(), projectCommandsSessionReaders()); err == nil {
+	if idx, err := projectCommandsLoadSessionIndex(ctx, projectCommandsSessionIndexPath(), store, projectCommandsSessionReaders(), compatimport.SyncIfChanged); err == nil {
 		conversations = idx.List(transcript.ListFilter{})
 	}
 	var evidence []workspace.PlanEvidence
-	if idx, err := projectCommandsLoadPlanIndex(projectCommandsPlanIndexPath()); err == nil {
+	if idx, err := projectCommandsLoadPlanIndex(ctx, projectCommandsPlanIndexPath(), store, compatimport.SyncIfChanged); err == nil {
 		evidence = collectPlanEvidence(idx.List(), projectCommandsReadFile)
 	}
 	return workspace.New(store).DiscoverCandidates(ctx, workspace.DiscoveryOptions{
@@ -597,7 +623,13 @@ func newConversationActionCommand(name string, actionID actions.ID, short string
 				return commandFailure(cmd, jsonOutput, "config_error", err)
 			}
 			readers := projectCommandsSessionReaders()
-			idx, err := projectCommandsLoadSessionIndex(projectCommandsSessionIndexPath(), readers)
+			ctx := commandContext(cmd)
+			store, err := projectCommandsOpenStore(ctx)
+			if err != nil {
+				return commandFailure(cmd, jsonOutput, "datastore_error", err)
+			}
+			defer func() { _ = store.Close() }()
+			idx, err := projectCommandsLoadSessionIndex(ctx, projectCommandsSessionIndexPath(), store, readers, compatimport.SyncIfChanged)
 			if err != nil {
 				return commandFailure(cmd, jsonOutput, "session_index_unavailable", err)
 			}

@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -119,12 +120,25 @@ func TestImportLegacyIndexEquivalentAndIdempotent(t *testing.T) {
 		t.Fatalf("read updated_at before rerun: %v", err)
 	}
 	repo.now = func() time.Time { return now.Add(time.Hour) }
+	sidecarReads := 0
+	writeTransactions := 0
+	repo.legacySidecarRead = func(indexPath, key string) (string, error) {
+		sidecarReads++
+		return readLegacySidecar(indexPath, key)
+	}
+	repo.legacyImportTransaction = func(ctx context.Context, fn func(*sql.Tx) error) error {
+		writeTransactions++
+		return store.Transaction(ctx, fn)
+	}
 	result2, err := repo.ImportLegacyIndex(ctx, indexPath, readers)
 	if err != nil {
 		t.Fatalf("second ImportLegacyIndex: %v", err)
 	}
 	if result2.Imported || result2.Fingerprint != result.Fingerprint || result2.RecordCount != 3 {
 		t.Fatalf("second result = %#v", result2)
+	}
+	if sidecarReads != 0 || writeTransactions != 0 {
+		t.Fatalf("warm sync work: sidecar reads=%d write transactions=%d, want 0 and 0", sidecarReads, writeTransactions)
 	}
 	var count int
 	var updatedAfter int64
@@ -149,6 +163,13 @@ func TestImportLegacyIndexEquivalentAndIdempotent(t *testing.T) {
 	}
 	if _, err := os.Stat(legacyStore.Path("codex:missing-sidecar")); !os.IsNotExist(err) {
 		t.Fatalf("missing sidecar was written during import: err=%v", err)
+	}
+	forced, err := repo.ForceImportLegacyIndex(ctx, indexPath, readers)
+	if err != nil || !forced.Imported {
+		t.Fatalf("ForceImportLegacyIndex = %#v, %v", forced, err)
+	}
+	if sidecarReads != 2 || writeTransactions != 1 {
+		t.Fatalf("forced sync work: sidecar reads=%d write transactions=%d, want 2 and 1", sidecarReads, writeTransactions)
 	}
 }
 

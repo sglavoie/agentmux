@@ -25,11 +25,16 @@ type ImportStatus struct {
 
 // SearchStatus summarizes the external-content FTS projection.
 type SearchStatus struct {
-	DocumentCount    int            `json:"document_count"`
-	FTSRowCount      int            `json:"fts_row_count"`
-	MissingDocuments map[string]int `json:"missing_documents"`
-	Integrity        string         `json:"integrity"`
-	Fresh            bool           `json:"fresh"`
+	DocumentCount              int            `json:"document_count"`
+	FTSRowCount                int            `json:"fts_row_count"`
+	MissingDocuments           map[string]int `json:"missing_documents"`
+	RepairableMissingDocuments map[string]int `json:"repairable_missing_documents"`
+	UnavailablePlaceholders    map[string]int `json:"unavailable_placeholders"`
+	InconsistentDocuments      map[string]int `json:"inconsistent_documents"`
+	Integrity                  string         `json:"integrity"`
+	IntegrityVerified          bool           `json:"integrity_verified"`
+	Warnings                   []string       `json:"warnings,omitempty"`
+	Fresh                      bool           `json:"fresh"`
 }
 
 // Status is the operational state of the durable Agent Mux datastore.
@@ -114,35 +119,146 @@ func (s *Store) Inspect(ctx context.Context) (Status, error) {
 		}
 		status.EntityCounts[table] = count
 	}
-	status.Search.DocumentCount = int(status.EntityCounts["search_documents"])
-	status.Search.MissingDocuments = make(map[string]int)
-	missingQueries := map[string]string{
-		"conversation": `SELECT count(*) FROM conversations c WHERE c.hidden = 0 AND c.message_count > 0 AND NOT EXISTS (SELECT 1 FROM search_documents d WHERE d.entity_type = 'conversation' AND d.entity_id = c.harness || ':' || c.session_id)`,
-		"plan":         `SELECT count(*) FROM plans p WHERE NOT EXISTS (SELECT 1 FROM search_documents d WHERE d.entity_type = 'plan' AND d.entity_id = p.id)`,
-		"handoff":      `SELECT count(*) FROM handoffs h WHERE NOT EXISTS (SELECT 1 FROM search_documents d WHERE d.entity_type = 'handoff' AND d.entity_id = h.id)`,
-		"activity":     `SELECT count(*) FROM activity_items a WHERE NOT EXISTS (SELECT 1 FROM search_documents d WHERE d.entity_type = 'activity' AND d.entity_id = CAST(a.id AS TEXT))`,
+	status.Search, err = s.inspectSearch(ctx, int(status.EntityCounts["search_documents"]))
+	if err != nil {
+		return Status{}, err
 	}
-	missingTotal := 0
-	for entityType, query := range missingQueries {
-		var missing int
-		if err := s.db.QueryRowContext(ctx, query).Scan(&missing); err != nil {
-			return Status{}, fmt.Errorf("datastore: count missing %s search documents: %w", entityType, err)
-		}
-		status.Search.MissingDocuments[entityType] = missing
-		missingTotal += missing
-	}
-	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM search_documents_fts`).Scan(&status.Search.FTSRowCount); err != nil {
-		return Status{}, fmt.Errorf("datastore: count FTS rows: %w", err)
-	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO search_documents_fts(search_documents_fts) VALUES ('integrity-check')`); err != nil {
-		status.Search.Integrity = err.Error()
-	} else {
-		status.Search.Integrity = "ok"
-	}
-	status.Search.Fresh = status.Search.Integrity == "ok" && status.Search.DocumentCount == status.Search.FTSRowCount && missingTotal == 0
 	status.Healthy = status.MigrationCurrent && status.Integrity == "ok" &&
 		status.ForeignKeyViolations == 0 && status.SecurePermissions && status.Search.Fresh
 	return status, nil
+}
+
+type missingSearchSource struct {
+	entityType string
+	query      string
+	wantDir    bool
+}
+
+func (s *Store) inspectSearch(ctx context.Context, documentCount int) (SearchStatus, error) {
+	status := SearchStatus{
+		DocumentCount:              documentCount,
+		MissingDocuments:           make(map[string]int),
+		RepairableMissingDocuments: make(map[string]int),
+		UnavailablePlaceholders:    make(map[string]int),
+		InconsistentDocuments:      make(map[string]int),
+	}
+	for _, entityType := range []string{"conversation", "plan", "handoff", "activity"} {
+		status.MissingDocuments[entityType] = 0
+		status.RepairableMissingDocuments[entityType] = 0
+		status.UnavailablePlaceholders[entityType] = 0
+	}
+	sources := []missingSearchSource{
+		{
+			entityType: "conversation",
+			query: `SELECT c.source_path FROM conversations c
+				WHERE c.hidden = 0 AND c.message_count > 0
+				AND NOT EXISTS (SELECT 1 FROM search_documents d
+					WHERE d.entity_type = 'conversation' AND d.entity_id = c.harness || ':' || c.session_id)`,
+		},
+		{
+			entityType: "plan",
+			query: `SELECT p.path FROM plans p
+				WHERE NOT EXISTS (SELECT 1 FROM search_documents d
+					WHERE d.entity_type = 'plan' AND d.entity_id = p.id)`,
+			wantDir: true,
+		},
+		{
+			entityType: "handoff",
+			query: `SELECT h.path FROM handoffs h
+				WHERE NOT EXISTS (SELECT 1 FROM search_documents d
+					WHERE d.entity_type = 'handoff' AND d.entity_id = h.id)`,
+		},
+	}
+	repairableTotal := 0
+	for _, source := range sources {
+		rows, err := s.db.QueryContext(ctx, source.query)
+		if err != nil {
+			return SearchStatus{}, fmt.Errorf("datastore: list missing %s search documents: %w", source.entityType, err)
+		}
+		for rows.Next() {
+			var path string
+			if err := rows.Scan(&path); err != nil {
+				_ = rows.Close()
+				return SearchStatus{}, fmt.Errorf("datastore: scan missing %s search document: %w", source.entityType, err)
+			}
+			status.MissingDocuments[source.entityType]++
+			if searchSourceAvailable(path, source.wantDir) {
+				status.RepairableMissingDocuments[source.entityType]++
+				repairableTotal++
+			} else {
+				status.UnavailablePlaceholders[source.entityType]++
+			}
+		}
+		if err := rows.Close(); err != nil {
+			return SearchStatus{}, fmt.Errorf("datastore: close missing %s search documents: %w", source.entityType, err)
+		}
+		if err := rows.Err(); err != nil {
+			return SearchStatus{}, fmt.Errorf("datastore: iterate missing %s search documents: %w", source.entityType, err)
+		}
+	}
+
+	var missingActivity int
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT count(*) FROM activity_items a
+		WHERE NOT EXISTS (SELECT 1 FROM search_documents d
+			WHERE d.entity_type = 'activity' AND d.entity_id = CAST(a.id AS TEXT))
+	`).Scan(&missingActivity); err != nil {
+		return SearchStatus{}, fmt.Errorf("datastore: count missing activity search documents: %w", err)
+	}
+	status.MissingDocuments["activity"] = missingActivity
+	status.RepairableMissingDocuments["activity"] = missingActivity
+	repairableTotal += missingActivity
+
+	// External-content FTS tables return content rows for ordinary unfiltered
+	// SELECTs even when the index itself is empty. The docsize shadow table is
+	// the read-only source of truth for actual indexed row relationships.
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM search_documents_fts_docsize`).Scan(&status.FTSRowCount); err != nil {
+		return SearchStatus{}, fmt.Errorf("datastore: count indexed FTS rows: %w", err)
+	}
+	consistencyQueries := map[string]string{
+		"fts_missing_rows": `SELECT count(*) FROM search_documents d
+			WHERE NOT EXISTS (SELECT 1 FROM search_documents_fts_docsize f WHERE f.id = d.id)`,
+		"fts_orphan_rows": `SELECT count(*) FROM search_documents_fts_docsize f
+			WHERE NOT EXISTS (SELECT 1 FROM search_documents d WHERE d.id = f.id)`,
+	}
+	inconsistentTotal := 0
+	for name, query := range consistencyQueries {
+		var count int
+		if err := s.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
+			return SearchStatus{}, fmt.Errorf("datastore: inspect %s: %w", name, err)
+		}
+		status.InconsistentDocuments[name] = count
+		inconsistentTotal += count
+	}
+	if inconsistentTotal == 0 && status.DocumentCount == status.FTSRowCount {
+		status.Integrity = "ok"
+	} else {
+		status.Integrity = fmt.Sprintf("FTS/content relationships disagree (%d inconsistent rows)", inconsistentTotal)
+	}
+	for _, entityType := range []string{"conversation", "plan", "handoff", "activity"} {
+		if unavailable := status.UnavailablePlaceholders[entityType]; unavailable > 0 {
+			status.Warnings = append(status.Warnings,
+				fmt.Sprintf("%d %s search placeholder(s) unavailable because source data disappeared", unavailable, entityType))
+		}
+	}
+	status.Fresh = status.Integrity == "ok" && repairableTotal == 0
+	return status, nil
+}
+
+func searchSourceAvailable(path string, wantDir bool) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		// Permission and transient I/O failures are repairable failures. Only a
+		// definitely absent source is an intentionally retained placeholder.
+		return !os.IsNotExist(err)
+	}
+	if wantDir {
+		return info.IsDir()
+	}
+	return info.Mode().IsRegular()
 }
 
 // RebuildSearchIndex reconstructs the external-content FTS index from the
@@ -156,6 +272,22 @@ func (s *Store) RebuildSearchIndex(ctx context.Context) error {
 		return fmt.Errorf("datastore: rebuild FTS index: %w", err)
 	}
 	return s.enforcePermissions()
+}
+
+// VerifySearchIndex runs FTS5's mutating external-content integrity command.
+// Ordinary status deliberately does not call this method; explicit rebuilds
+// and strict verification are the only production callers.
+func (s *Store) VerifySearchIndex(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("datastore: verify search index on nil store")
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO search_documents_fts(search_documents_fts, rank)
+		VALUES ('integrity-check', 1)
+	`); err != nil {
+		return fmt.Errorf("datastore: verify FTS index: %w", err)
+	}
+	return nil
 }
 
 func pragmaCheck(ctx context.Context, db *sql.DB, query string) (string, error) {
@@ -251,6 +383,10 @@ func (s *Store) SnapshotProtectedState(ctx context.Context) (ProtectedState, err
 		name  string
 		query string
 	}{
+		{"workspaces", `SELECT id, canonical_path, display_name, configured_project_id, created_at_ns FROM workspaces ORDER BY id`},
+		{"workspace_aliases", `SELECT workspace_id, alias FROM workspace_aliases ORDER BY workspace_id, alias`},
+		{"conversations", `SELECT id, harness, session_id, workspace_id, worktree_context_id, hidden, created_at_ns FROM conversations ORDER BY id`},
+		{"profile_memberships", `SELECT conversation_id, profile_name, is_display_profile, position FROM profile_memberships ORDER BY conversation_id, position, profile_name`},
 		{"plan_workspace_links", `SELECT plan_id, workspace_id, created_at_ns FROM plan_workspace_links ORDER BY plan_id, workspace_id`},
 		{"handoffs", `SELECT id, workspace_id, conversation_id, plan_id, path, content_hash, status, created_at_ns, updated_at_ns FROM handoffs ORDER BY id`},
 		{"activity_items", `SELECT id, handoff_id, dedupe_key, harness, session_id, window_id, kind, summary, metadata_json, occurred_at_ns, created_at_ns FROM activity_items ORDER BY id`},

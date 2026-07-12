@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 
 	"github.com/sglavoie/agentmux/internal/activity"
+	"github.com/sglavoie/agentmux/internal/compatimport"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/datastore"
+	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -41,6 +43,8 @@ type indexRebuildData struct {
 	Conversations       int                      `json:"conversations"`
 	Plans               int                      `json:"plans"`
 	DiscoveryCandidates int                      `json:"discovery_candidates"`
+	RepairedDocuments   map[string]int           `json:"repaired_documents"`
+	Unavailable         map[string]int           `json:"unavailable_placeholders"`
 	ProtectedState      datastore.ProtectedState `json:"protected_state"`
 }
 
@@ -91,6 +95,8 @@ var indexRebuildCmd = &cobra.Command{
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "rebuilt derived indexes: %d conversations, %d plans, %d discovery candidates\n",
 			result.Conversations, result.Plans, result.DiscoveryCandidates)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "protected_state_sha256: %s\n", result.ProtectedState.SHA256)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "repaired_search_documents: %v\n", result.RepairedDocuments)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "unavailable_placeholders: %v\n", result.Unavailable)
 		health := indexDaemonHealth()
 		printIndexStatus(cmd, indexStatusData{Datastore: result.Datastore, DaemonReachable: health.Alive, ActivityWriter: health.ActivityWriter})
 		return nil
@@ -124,11 +130,11 @@ func rebuildIndexes(ctx context.Context) (indexRebuildData, error) {
 	}
 
 	readers := indexReaders()
-	conversationIndex = transcript.EnableSQLiteIndex(ctx, conversationIndex, store, readers)
+	conversationIndex = transcript.EnableSQLiteIndexWithMode(ctx, conversationIndex, store, readers, compatimport.SyncForce)
 	if !conversationIndex.UsesSQLite() {
 		return indexRebuildData{}, conversationIndex.DegradedReason()
 	}
-	planIndex = plans.EnableSQLiteIndex(ctx, planIndex, store)
+	planIndex = plans.EnableSQLiteIndexWithMode(ctx, planIndex, store, compatimport.SyncForce)
 	if !planIndex.UsesSQLite() {
 		return indexRebuildData{}, planIndex.DegradedReason()
 	}
@@ -159,6 +165,33 @@ func rebuildIndexes(ctx context.Context) (indexRebuildData, error) {
 	if err := activityRepository.Backfill(ctx); err != nil {
 		return indexRebuildData{}, err
 	}
+	repaired := make(map[string]int)
+	transcriptRepository, err := transcript.NewRepository(store)
+	if err != nil {
+		return indexRebuildData{}, err
+	}
+	if repaired["conversation"], err = transcriptRepository.RepairMissingSearchDocuments(ctx, readers); err != nil {
+		return indexRebuildData{}, err
+	}
+	planRepository, err := plans.NewRepository(store)
+	if err != nil {
+		return indexRebuildData{}, err
+	}
+	if repaired["plan"], err = planRepository.RepairMissingSearchDocuments(ctx); err != nil {
+		return indexRebuildData{}, err
+	}
+	handoffRepository, err := handoff.NewRepository(store)
+	if err != nil {
+		return indexRebuildData{}, err
+	}
+	if repaired["handoff"], err = handoffRepository.RepairMissingSearchDocuments(ctx); err != nil {
+		return indexRebuildData{}, err
+	}
+	repairedActivity, err := activityRepository.RepairMissingSearchDocuments(ctx)
+	if err != nil {
+		return indexRebuildData{}, err
+	}
+	repaired["activity"] = int(repairedActivity)
 
 	live := make([]session.RunningSession, 0)
 	if client := indexNewKitty(); client != nil {
@@ -177,6 +210,9 @@ func rebuildIndexes(ctx context.Context) (indexRebuildData, error) {
 	if err := store.RebuildSearchIndex(ctx); err != nil {
 		return indexRebuildData{}, err
 	}
+	if err := store.VerifySearchIndex(ctx); err != nil {
+		return indexRebuildData{}, err
+	}
 	after, err := store.SnapshotProtectedState(ctx)
 	if err != nil {
 		return indexRebuildData{}, err
@@ -193,9 +229,11 @@ func rebuildIndexes(ctx context.Context) (indexRebuildData, error) {
 			status.Integrity, status.SchemaVersion, status.CurrentSchemaVersion,
 			status.ForeignKeyViolations, status.SecurePermissions, status.Search.Fresh)
 	}
+	status.Search.IntegrityVerified = true
 	return indexRebuildData{
 		Datastore: status, Conversations: len(conversationIndex.List(transcript.ListFilter{IncludeHidden: true})),
-		Plans: len(planIndex.List()), DiscoveryCandidates: len(candidates), ProtectedState: after,
+		Plans: len(planIndex.List()), DiscoveryCandidates: len(candidates), RepairedDocuments: repaired,
+		Unavailable: status.Search.UnavailablePlaceholders, ProtectedState: after,
 	}, nil
 }
 
@@ -210,6 +248,13 @@ func printIndexStatus(cmd *cobra.Command, data indexStatusData) {
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "search_documents: %d\n", status.Search.DocumentCount)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "fts_rows: %d\n", status.Search.FTSRowCount)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "missing_search_documents: %v\n", status.Search.MissingDocuments)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "repairable_missing_search_documents: %v\n", status.Search.RepairableMissingDocuments)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "unavailable_search_placeholders: %v\n", status.Search.UnavailablePlaceholders)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "inconsistent_search_documents: %v\n", status.Search.InconsistentDocuments)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "fts_integrity_verified: %t\n", status.Search.IntegrityVerified)
+	for _, warning := range status.Search.Warnings {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "warning: %s\n", warning)
+	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "fts_fresh: %t\n", status.Search.Fresh)
 	if data.ActivityWriter != nil {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "activity_writer: degraded=%t queued=%d persisted=%d dropped=%d failures=%d\n",

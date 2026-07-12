@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/compatimport"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/datastore"
@@ -89,7 +90,7 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 		}, nil
 	}
 	projectCommandsSessionIndexPath = func() string { return indexPath }
-	projectCommandsLoadSessionIndex = func(path string, _ map[string]transcript.Reader) (*transcript.Index, error) {
+	projectCommandsLoadSessionIndex = func(_ context.Context, path string, _ *datastore.Store, _ map[string]transcript.Reader, _ compatimport.SyncMode) (*transcript.Index, error) {
 		return transcript.LoadIndexAt(path)
 	}
 	projectCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -179,7 +180,7 @@ func TestSessionForkCLIUsesPortableCopilotHandoff(t *testing.T) {
 		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Copilot}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
 	}
 	projectCommandsSessionIndexPath = func() string { return indexPath }
-	projectCommandsLoadSessionIndex = func(path string, _ map[string]transcript.Reader) (*transcript.Index, error) {
+	projectCommandsLoadSessionIndex = func(_ context.Context, path string, _ *datastore.Store, _ map[string]transcript.Reader, _ compatimport.SyncMode) (*transcript.Index, error) {
 		return transcript.LoadIndexAt(path)
 	}
 	projectCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -221,7 +222,7 @@ func TestSessionForkWorktreeCLIRequiresConfirmationAndPassesDirtyOverride(t *tes
 		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}, Projects: []config.Session{{ID: "api", Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
 	}
 	projectCommandsSessionIndexPath = func() string { return indexPath }
-	projectCommandsLoadSessionIndex = func(path string, _ map[string]transcript.Reader) (*transcript.Index, error) {
+	projectCommandsLoadSessionIndex = func(_ context.Context, path string, _ *datastore.Store, _ map[string]transcript.Reader, _ compatimport.SyncMode) (*transcript.Index, error) {
 		return transcript.LoadIndexAt(path)
 	}
 	projectCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -261,7 +262,7 @@ func TestSessionHandoffCLICreateOnlyAndPartialJSON(t *testing.T) {
 		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}}, nil
 	}
 	projectCommandsSessionIndexPath = func() string { return indexPath }
-	projectCommandsLoadSessionIndex = func(path string, _ map[string]transcript.Reader) (*transcript.Index, error) {
+	projectCommandsLoadSessionIndex = func(_ context.Context, path string, _ *datastore.Store, _ map[string]transcript.Reader, _ compatimport.SyncMode) (*transcript.Index, error) {
 		return transcript.LoadIndexAt(path)
 	}
 	projectCommandsSessionReaders = func() map[string]transcript.Reader {

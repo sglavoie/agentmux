@@ -13,18 +13,23 @@ func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 	m.sweepRecentTransitions()
 	m.activeLoopRefreshSeq++
 	cmds := []tea.Cmd{
-		fetchCmd(m.client, m.cfg, m.sortMode),
-		activeLoopRefreshCmd(m.activeLoopRefreshSeq),
+		m.runInitialFetchCmd(0),
+		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		tickCmd(m.interval),
 	}
 	now := time.Now()
 	checkDaemon := now.Sub(m.daemonHealthCheckedAt) >= daemonHealthInterval
 	checkHooks := now.Sub(m.hookHealthCheckedAt) >= hookHealthInterval
 	if checkDaemon || checkHooks {
-		cmds = append(cmds, healthCmd(m.cfg, m.amxBin, checkDaemon, checkHooks))
+		cmds = append(cmds, m.runHealthCmd(checkDaemon, checkHooks))
 	}
 	if m.mode == ModeDetail && m.detailWindowID != 0 {
-		cmds = append(cmds, sessionDetailCmd(m.detailWindowID))
+		cmds = append(cmds, m.runSessionDetailCmd(m.detailWindowID))
+	}
+	if m.workspaceLoadErr != nil && !m.workspaceProjectionInFlight {
+		if cmd := m.dispatchWorkspaceProjection(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
 	return m, tea.Batch(cmds...)
 }

@@ -2,10 +2,12 @@ package plans
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -161,9 +163,22 @@ func TestImportLegacyIndexIsIdempotentAndReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo.now = func() time.Time { return now.Add(time.Hour) }
+	sidecarReads := 0
+	writeTransactions := 0
+	repo.legacySidecarRead = func(indexPath, key string) (string, error) {
+		sidecarReads++
+		return readLegacySidecar(indexPath, key)
+	}
+	repo.legacyImportTransaction = func(ctx context.Context, fn func(*sql.Tx) error) error {
+		writeTransactions++
+		return store.Transaction(ctx, fn)
+	}
 	result, err = repo.ImportLegacyIndex(ctx, indexPath)
 	if err != nil || result.Imported {
 		t.Fatalf("second ImportLegacyIndex = %#v, %v", result, err)
+	}
+	if sidecarReads != 0 || writeTransactions != 0 {
+		t.Fatalf("warm sync work: sidecar reads=%d write transactions=%d, want 0 and 0", sidecarReads, writeTransactions)
 	}
 	var updatedAfter int64
 	if err := store.DB().QueryRow(`SELECT updated_at_ns FROM plans WHERE id = ?`, PlanKey(meta.DirPath)).Scan(&updatedAfter); err != nil {
@@ -179,6 +194,13 @@ func TestImportLegacyIndexIsIdempotentAndReadOnly(t *testing.T) {
 	}
 	if updatedAfter != updatedBefore {
 		t.Fatalf("idempotent import updated row: before=%d after=%d", updatedBefore, updatedAfter)
+	}
+	result, err = repo.ForceImportLegacyIndex(ctx, indexPath)
+	if err != nil || !result.Imported {
+		t.Fatalf("ForceImportLegacyIndex = %#v, %v", result, err)
+	}
+	if sidecarReads != 1 || writeTransactions != 1 {
+		t.Fatalf("forced sync work: sidecar reads=%d write transactions=%d, want 1 and 1", sidecarReads, writeTransactions)
 	}
 }
 
@@ -267,5 +289,37 @@ func TestSQLiteRefreshPreservesReferencedMissingPlanAndExplicitLink(t *testing.T
 	}
 	if _, found, err := repo.SearchText(ctx, PlanKey(planDir)); err != nil || found {
 		t.Fatalf("stale search document found=%t err=%v", found, err)
+	}
+}
+
+func TestRepositoryRepairsSearchFromAvailablePlanAndKeepsMissingPlaceholder(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newTestRepository(t)
+	root := t.TempDir()
+	planDir := seedPlanDir(t, root, "repairable-aabb112233cc", map[string]string{
+		"manifest.md": "# Repairable\nrecovered plan body",
+	})
+	missingDir := filepath.Join(root, "missing-aabb112233cc")
+	for _, meta := range []PlanMeta{
+		{Name: "Repairable", DirPath: planDir, Files: []string{"manifest.md"}},
+		{Name: "Missing", DirPath: missingDir, Files: []string{"manifest.md"}},
+	} {
+		if err := repo.Upsert(ctx, meta, "stale"); err != nil {
+			t.Fatal(err)
+		}
+		if err := repo.DeleteSearchText(ctx, PlanKey(meta.DirPath)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repaired, err := repo.RepairMissingSearchDocuments(ctx)
+	if err != nil || repaired != 1 {
+		t.Fatalf("RepairMissingSearchDocuments = %d, %v", repaired, err)
+	}
+	content, found, err := repo.SearchText(ctx, PlanKey(planDir))
+	if err != nil || !found || !strings.Contains(content, "recovered plan body") {
+		t.Fatalf("repaired content = %q, %t, %v", content, found, err)
+	}
+	if _, found, err := repo.SearchText(ctx, PlanKey(missingDir)); err != nil || found {
+		t.Fatalf("unavailable placeholder search document found=%t err=%v", found, err)
 	}
 }

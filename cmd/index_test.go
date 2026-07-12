@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -55,6 +56,27 @@ func TestIndexStatusJSONIncludesOperationalAndWriterHealth(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agent-mux.db")
 	indexOpenStore = func(context.Context) (*datastore.Store, error) { return datastore.OpenPath(ctx, path) }
+	seed, err := datastore.OpenPath(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := transcript.NewRepository(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Upsert(ctx, transcript.SessionMeta{ID: "status", Harness: harness.Claude, MessageCount: 1}, "body"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := seed.DB().ExecContext(ctx, `
+		INSERT INTO import_records (source_name, source_path, fingerprint, completed_at_ns, record_count)
+		VALUES ('status-snapshot', '/rollback.json', 'fingerprint', 1, 1)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	before := transcriptStatusMutationSnapshot(t, seed)
+	if err := seed.Close(); err != nil {
+		t.Fatal(err)
+	}
 	indexDaemonHealth = func() daemon.Health {
 		return daemon.Health{Alive: true, ActivityWriter: &activity.Metrics{Queued: 4, Persisted: 4}}
 	}
@@ -66,16 +88,28 @@ func TestIndexStatusJSONIncludesOperationalAndWriterHealth(t *testing.T) {
 	if err := indexStatusCmd.RunE(indexStatusCmd, nil); err != nil {
 		t.Fatal(err)
 	}
+	payloadBytes := append([]byte(nil), out.Bytes()...)
+	if err := indexStatusCmd.RunE(indexStatusCmd, nil); err != nil {
+		t.Fatal(err)
+	}
 	var payload struct {
 		SchemaVersion int             `json:"schema_version"`
 		Data          indexStatusData `json:"data"`
 	}
-	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
 		t.Fatalf("decode: %v\n%s", err, out.String())
 	}
 	if payload.SchemaVersion != JSONSchemaVersion || !payload.Data.Datastore.Healthy ||
 		payload.Data.ActivityWriter == nil || payload.Data.ActivityWriter.Persisted != 4 {
 		t.Fatalf("payload = %+v", payload)
+	}
+	verify, err := datastore.OpenPath(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = verify.Close() }()
+	if after := transcriptStatusMutationSnapshot(t, verify); !reflect.DeepEqual(after, before) {
+		t.Fatalf("index status mutated imports/entities: before=%v after=%v", before, after)
 	}
 }
 
@@ -121,6 +155,20 @@ func TestIndexRebuildPreservesDurableStateAndRefreshesDerivedData(t *testing.T) 
 	if err != nil || len(workspaces) != 1 {
 		t.Fatalf("Build = %+v, %v", workspaces, err)
 	}
+	transcriptRepo, err := transcript.NewRepository(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := transcriptRepo.Upsert(ctx, transcript.SessionMeta{
+		ID: "session-1", Harness: harness.Claude, Profile: "work", Profiles: []string{"work"}, Path: sourcePath, CWD: projectDir,
+		FileSize: info.Size(), FileModTime: info.ModTime(), MessageCount: 1,
+		StartedAt: time.Now().Add(-time.Hour), LastAt: time.Now(),
+	}, "stale conversation body"); err != nil {
+		t.Fatal(err)
+	}
+	if err := transcriptRepo.DeleteSearchText(ctx, harness.Claude, "session-1"); err != nil {
+		t.Fatal(err)
+	}
 	planRepo, _ := plans.NewRepository(store)
 	planMeta := plans.PlanMeta{Name: "delivery", DirPath: planDir, Files: []string{"manifest.md"}, ModTime: time.Now()}
 	if err := planRepo.Upsert(ctx, planMeta, "old derived body"); err != nil {
@@ -151,9 +199,30 @@ func TestIndexRebuildPreservesDurableStateAndRefreshesDerivedData(t *testing.T) 
 		workspaces[0].ID, now, workspaces[0].ID, now); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.DB().ExecContext(ctx, `
+		DELETE FROM search_documents WHERE entity_type IN ('handoff', 'activity')
+	`); err != nil {
+		t.Fatal(err)
+	}
+	var corruptRowID int64
+	var corruptTitle, corruptContent string
+	if err := store.DB().QueryRowContext(ctx, `
+		SELECT id, title, normalized_content FROM search_documents WHERE entity_type = 'project' LIMIT 1
+	`).Scan(&corruptRowID, &corruptTitle, &corruptContent); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().ExecContext(ctx, `
+		INSERT INTO search_documents_fts(search_documents_fts, rowid, title, normalized_content)
+		VALUES ('delete', ?, ?, ?)
+	`, corruptRowID, corruptTitle, corruptContent); err != nil {
+		t.Fatal(err)
+	}
 	protectedBefore, err := store.SnapshotProtectedState(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if protectedBefore.Counts["workspaces"] != 1 || protectedBefore.Counts["conversations"] != 1 {
+		t.Fatalf("protected source counts = %v", protectedBefore.Counts)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
@@ -178,8 +247,11 @@ func TestIndexRebuildPreservesDurableStateAndRefreshesDerivedData(t *testing.T) 
 	if err != nil {
 		t.Fatalf("rebuildIndexes: %v", err)
 	}
-	if result.Conversations != 1 || result.Plans != 1 || !result.Datastore.Healthy {
+	if result.Conversations != 1 || result.Plans != 1 || !result.Datastore.Healthy || !result.Datastore.Search.IntegrityVerified {
 		t.Fatalf("result = %+v", result)
+	}
+	if result.RepairedDocuments["activity"] != 1 || result.Unavailable["handoff"] != 1 {
+		t.Fatalf("repair classification = repaired %v unavailable %v", result.RepairedDocuments, result.Unavailable)
 	}
 	if result.ProtectedState.SHA256 != protectedBefore.SHA256 {
 		t.Fatalf("protected state changed: before %+v after %+v", protectedBefore, result.ProtectedState)
@@ -192,5 +264,15 @@ func TestIndexRebuildPreservesDurableStateAndRefreshesDerivedData(t *testing.T) 
 	var content string
 	if err := verify.DB().QueryRowContext(ctx, `SELECT normalized_content FROM search_documents WHERE entity_type = 'conversation'`).Scan(&content); err != nil || content != "fresh conversation body" {
 		t.Fatalf("conversation search content = %q, %v", content, err)
+	}
+	var activityDocuments, handoffDocuments int
+	if err := verify.DB().QueryRowContext(ctx, `SELECT count(*) FROM search_documents WHERE entity_type = 'activity'`).Scan(&activityDocuments); err != nil {
+		t.Fatal(err)
+	}
+	if err := verify.DB().QueryRowContext(ctx, `SELECT count(*) FROM search_documents WHERE entity_type = 'handoff'`).Scan(&handoffDocuments); err != nil {
+		t.Fatal(err)
+	}
+	if activityDocuments != 1 || handoffDocuments != 0 {
+		t.Fatalf("derived repair counts: activity=%d handoff=%d", activityDocuments, handoffDocuments)
 	}
 }

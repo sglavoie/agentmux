@@ -2,15 +2,13 @@ package tui
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	activityjournal "github.com/sglavoie/agentmux/internal/activity"
-	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
-	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -22,9 +20,9 @@ import (
 // replace a newer Kitty/daemon refresh.
 type workspaceProjectionMsg struct {
 	seq           int
+	catalog       workspace.Catalog
 	snapshot      workspace.Snapshot
 	conversations map[string]transcript.SessionMeta
-	planIndex     *plans.Index
 	err           error
 }
 
@@ -60,34 +58,57 @@ func (m *Model) dispatchWorkspaceProjection() tea.Cmd {
 	if m.cfg == nil || m.workspaceProjectionDisabled {
 		return nil
 	}
+	if m.dataServices != nil {
+		if _, ready := m.dataServices.Snapshot(); !ready {
+			return nil
+		}
+	}
+	if m.workspaceProjectionInFlight {
+		m.workspaceProjectionQueued = true
+		return nil
+	}
 	m.workspaceProjectionSeq++
-	m.workspaceLoading = true
-	m.workspaceLoadErr = nil
+	m.workspaceProjectionInFlight = true
+	if m.workspaceSnapshot.GeneratedAt.IsZero() && m.workspaceLoadErr == nil {
+		m.workspaceLoading = true
+	}
+	var services dataServicesSnapshot
+	if m.dataServices != nil {
+		services, _ = m.dataServices.Snapshot()
+	}
+	if services.transcriptIndex == nil {
+		services.transcriptIndex = m.transcriptIndex
+	}
+	if services.planIndex == nil {
+		services.planIndex = m.plansIndex
+	}
+	if !services.workspaceCatalog.Synchronized() {
+		services.workspaceCatalog = m.workspaceCatalog
+	}
+	ctx := m.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return workspaceProjectionCmd(
+		ctx,
 		m.workspaceProjectionSeq,
-		m.cfg,
 		append([]session.RunningSession(nil), m.sessions...),
 		cloneDaemonStateSnapshots(m.daemonStates),
 		cloneWorkspaceActivity(m.lastActivity),
-		m.transcriptIndex,
-		m.workspacePlansIndex,
+		services,
 	)
 }
 
-func workspaceProjectionCmd(seq int, cfg *config.Config, live []session.RunningSession, states map[int]daemon.WindowStateSnapshot, activity map[int]time.Time, transcriptIndex *transcript.Index, planIndex *plans.Index) tea.Cmd {
+func workspaceProjectionCmd(ctx context.Context, seq int, live []session.RunningSession, states map[int]daemon.WindowStateSnapshot, activity map[int]time.Time, services dataServicesSnapshot) tea.Cmd {
 	return func() tea.Msg {
-		warnings := make([]string, 0, 2)
-		if transcriptIndex == nil {
-			var err error
-			transcriptIndex, err = transcript.LoadIndex()
-			if err != nil {
-				warnings = append(warnings, "recent conversations: "+err.Error())
-			}
+		if err := ctx.Err(); err != nil {
+			return workspaceProjectionMsg{seq: seq, err: err}
 		}
+		warnings := make([]string, 0, 2)
 		conversations := make([]transcript.SessionMeta, 0)
-		if transcriptIndex != nil {
-			conversations = transcriptIndex.List(transcript.ListFilter{})
-			if err := transcriptIndex.DegradedReason(); err != nil {
+		if services.transcriptIndex != nil {
+			conversations = services.transcriptIndex.List(transcript.ListFilter{})
+			if err := services.transcriptIndex.DegradedReason(); err != nil {
 				warnings = append(warnings, "recent conversations: "+err.Error())
 			}
 		}
@@ -96,48 +117,37 @@ func workspaceProjectionCmd(seq int, cfg *config.Config, live []session.RunningS
 			conversationMeta[transcript.IndexKey(meta.Harness, meta.ID)] = cloneWorkspaceConversationMeta(meta)
 		}
 
-		if planIndex == nil {
-			var err error
-			planIndex, err = plans.LoadIndex()
-			if err != nil {
-				warnings = append(warnings, "linked plans: "+err.Error())
-			}
-		}
-		if planIndex != nil {
-			if err := planIndex.DegradedReason(); err != nil {
+		if services.planIndex != nil {
+			if err := services.planIndex.DegradedReason(); err != nil {
 				warnings = append(warnings, "linked plans: "+err.Error())
 			}
 		}
 
-		store, err := datastore.Open(context.Background())
-		if err != nil {
-			return workspaceProjectionMsg{seq: seq, conversations: conversationMeta, planIndex: planIndex, err: fmt.Errorf("opening workspace datastore: %w", err)}
+		if !services.workspaceCatalog.Synchronized() {
+			return workspaceProjectionMsg{seq: seq, conversations: conversationMeta, err: errors.New("workspace data services are not ready")}
 		}
-		defer func() { _ = store.Close() }()
-
 		var source workspace.PlanSource
-		if planIndex != nil {
-			source = workspacePlanSource{index: planIndex}
+		if services.planIndex != nil {
+			source = workspacePlanSource{index: services.planIndex}
 		}
-		activityRepo, err := activityjournal.NewRepository(store)
-		if err != nil {
-			return workspaceProjectionMsg{seq: seq, conversations: conversationMeta, planIndex: planIndex, err: err}
+		if services.activityRepository == nil {
+			return workspaceProjectionMsg{seq: seq, conversations: conversationMeta, err: errors.New("workspace activity repository is not ready")}
 		}
-		snapshot, err := workspace.New(store).BuildSnapshot(context.Background(), workspace.SnapshotOptions{
-			Config:           cfg,
+		snapshot, err := workspace.ProjectSnapshot(ctx, services.workspaceCatalog, workspace.SnapshotOptions{
 			LiveSessions:     live,
 			DaemonStates:     states,
 			Activity:         activity,
 			Conversations:    conversations,
 			Plans:            source,
-			ActivityFeed:     activityRepo,
+			ActivityFeed:     services.activityRepository,
 			ActivityReaderID: activityjournal.DefaultReaderID,
+			SkipGitMetadata:  true,
 		})
 		if err != nil {
-			return workspaceProjectionMsg{seq: seq, conversations: conversationMeta, planIndex: planIndex, err: err}
+			return workspaceProjectionMsg{seq: seq, conversations: conversationMeta, err: err}
 		}
 		snapshot.Warnings = append(snapshot.Warnings, warnings...)
-		return workspaceProjectionMsg{seq: seq, snapshot: snapshot, conversations: conversationMeta, planIndex: planIndex}
+		return workspaceProjectionMsg{seq: seq, catalog: services.workspaceCatalog, snapshot: snapshot, conversations: conversationMeta}
 	}
 }
 
@@ -167,13 +177,15 @@ func (m Model) handleWorkspaceProjectionMsg(msg workspaceProjectionMsg) (tea.Mod
 	if msg.seq != m.workspaceProjectionSeq {
 		return m, nil
 	}
+	m.workspaceProjectionInFlight = false
 	m.workspaceLoading = false
 	if msg.err != nil {
 		m.workspaceLoadErr = msg.err
-		return m, nil
+		return m.finishWorkspaceProjection()
 	}
-	if m.workspacePlansIndex == nil && msg.planIndex != nil {
-		m.workspacePlansIndex = msg.planIndex
+	m.workspaceLoadErr = nil
+	if msg.catalog.Synchronized() {
+		m.workspaceCatalog = msg.catalog
 	}
 	selectedID := selectedWorkspaceID(m.workspaceSnapshot, m.workspaceCursor)
 	selectedDetailID := selectedWorkspaceDetailID(m)
@@ -182,7 +194,15 @@ func (m Model) handleWorkspaceProjectionMsg(msg workspaceProjectionMsg) (tea.Mod
 	m.workspaceCursor = workspaceCursorForID(m.workspaceSnapshot.Workspaces, selectedID)
 	m.workspaceDetailCursor = workspaceDetailCursorForID(m, selectedDetailID)
 	m.clampWorkspaceSelection()
-	return m, nil
+	return m.finishWorkspaceProjection()
+}
+
+func (m Model) finishWorkspaceProjection() (tea.Model, tea.Cmd) {
+	if !m.workspaceProjectionQueued {
+		return m, nil
+	}
+	m.workspaceProjectionQueued = false
+	return m, m.dispatchWorkspaceProjection()
 }
 
 func selectedWorkspaceDetailID(m Model) string {

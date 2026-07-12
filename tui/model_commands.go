@@ -182,10 +182,18 @@ func applyDaemonStates(sessions []session.RunningSession, states map[int]daemon.
 // titles directly. Transport errors remain nonfatal while the daemon is
 // restarting; the next refresh converges the state.
 func clearStatusCmd(_ kitty.KittyClient, s session.RunningSession) tea.Cmd {
+	return clearStatusWithDaemonCmd(daemonRequest, s)
+}
+
+func clearStatusWithDaemonCmd(request func(daemon.Request) (daemon.Response, error), s session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Daemon: daemonRequest}, actions.ClearStatus, actions.Request{Session: &s})
+		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Daemon: request}, actions.ClearStatus, actions.Request{Session: &s})
 		return actionDoneMsg{err: err}
 	}
+}
+
+func (m Model) clearStatusCmd(s session.RunningSession) tea.Cmd {
+	return clearStatusWithDaemonCmd(m.actionDaemon(), s)
 }
 
 // focusCmd focuses a tab by ID and returns focusDoneMsg.
@@ -214,39 +222,58 @@ func restartCmd(client kitty.KittyClient, running session.RunningSession, cfg *c
 	}
 }
 
-// conversationActionCmd runs an indexed-conversation action away from the UI
-// loop. Continue performs the exact-live lookup in the shared action registry;
-// fork validates and launches only a native branch. Both preserve the legacy
-// session-search screen rather than overloading Enter's transcript viewer.
-func conversationActionCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
+// conversationActionWithDaemonCmd runs an indexed-conversation action away
+// from the UI loop. Continue performs the exact-live lookup in the shared
+// action registry; fork validates and launches only a native branch. Both
+// preserve the session-search screen rather than overloading Enter's viewer.
+func conversationActionWithDaemonCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, request func(daemon.Request) (daemon.Response, error), meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
 	return func() tea.Msg {
 		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
-			Kitty: client, Config: cfg, Readers: readers, Daemon: daemonRequest,
+			Kitty: client, Config: cfg, Readers: readers, Daemon: request,
 		}, actionID, actions.Request{Conversation: &meta})
 		return actionDoneMsg{err: err}
 	}
 }
 
-func conversationWorktreeForkCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, meta transcript.SessionMeta) tea.Cmd {
+func (m Model) conversationActionCmd(readers map[string]transcript.Reader, meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
+	return conversationActionWithDaemonCmd(m.client, m.cfg, readers, m.actionDaemon(), meta, actionID)
+}
+
+func conversationWorktreeForkWithDaemonCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, request func(daemon.Request) (daemon.Response, error), meta transcript.SessionMeta) tea.Cmd {
 	return func() tea.Msg {
 		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
-			Kitty: client, Config: cfg, Readers: readers, Daemon: daemonRequest,
+			Kitty: client, Config: cfg, Readers: readers, Daemon: request,
 		}, actions.ForkWorktree, actions.Request{Conversation: &meta, Confirmed: true})
 		return actionDoneMsg{err: err}
 	}
 }
 
-func conversationHandoffCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, meta transcript.SessionMeta, profile string, edit bool) tea.Cmd {
+func (m Model) conversationWorktreeForkCmd(meta transcript.SessionMeta) tea.Cmd {
+	return conversationWorktreeForkWithDaemonCmd(m.client, m.cfg, m.transcriptReaders, m.actionDaemon(), meta)
+}
+
+func conversationHandoffWithDaemonCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, request func(daemon.Request) (daemon.Response, error), meta transcript.SessionMeta, profile string, edit bool) tea.Cmd {
 	return func() tea.Msg {
 		parameters := map[string]string{"profile": profile}
 		if edit {
 			parameters["edit"] = "true"
 		}
 		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
-			Kitty: client, Config: cfg, Readers: readers, Daemon: daemonRequest,
+			Kitty: client, Config: cfg, Readers: readers, Daemon: request,
 		}, actions.Handoff, actions.Request{Conversation: &meta, Parameters: parameters})
 		return actionDoneMsg{err: err}
 	}
+}
+
+func (m Model) conversationHandoffCmd(meta transcript.SessionMeta, profile string, edit bool) tea.Cmd {
+	return conversationHandoffWithDaemonCmd(m.client, m.cfg, m.transcriptReaders, m.actionDaemon(), meta, profile, edit)
+}
+
+func (m Model) actionDaemon() func(daemon.Request) (daemon.Response, error) {
+	if m.daemonCommand != nil {
+		return m.daemonCommand
+	}
+	return daemonRequest
 }
 
 // resortCmd reorders managed Kitty tabs to match SortRunning's expected

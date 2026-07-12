@@ -265,18 +265,91 @@ amx transcripts rebuild --all
 
 `index status` reports database integrity, schema/migration and compatibility
 import state, FTS freshness, secure filesystem modes, entity counts, and the
-running daemon's activity-writer health. `index rebuild` refreshes only derived
-conversation, plan, project-search, activity-search, and discovery projections.
-It fingerprints explicit plan links, handoff metadata, activity/read history,
+running daemon's activity-writer health. Once the schema is current, ordinary
+`index status`, `transcripts status`, and `doctor` inspection is read-only: it
+does not synchronize compatibility files, repair search documents, or run the
+FTS5 integrity-check. Its FTS freshness result is a read-only comparison of
+search documents with FTS docsize rows; `fts_integrity_verified: false` means
+that count-consistent FTS corruption can still be present. Run `amx doctor
+--strict` for the authoritative FTS5 integrity-check, or run `amx index
+rebuild` when an explicit derived-index repair is also appropriate; both
+commands verify the external-content FTS index.
+
+Missing search documents are split into two categories. A **repairable** row
+still has a surviving transcript, plan, handoff artifact, or durable activity
+record from which search content can be reconstructed. An **unavailable
+placeholder** has lost its source artifact; Agent Mux retains its durable
+metadata, reports a warning, and does not make an otherwise consistent store
+unhealthy. `index rebuild` is the explicit repair surface: it refreshes derived
+conversation, plan, project-search, handoff-search, activity-search, and
+discovery projections, verifies the external-content FTS index, and reports
+anything that remained unavailable. It fingerprints explicit plan links,
+handoff metadata, activity/read history, workspace conversation membership,
 and managed-worktree relationships before and after the rebuild and fails if
-any protected state changes. The `transcripts` commands remain compatibility
-tools for the older transcript-only projection.
+protected state changes. The `transcripts` commands remain compatibility tools
+for the older transcript-only projection.
+
+Every long-running process owns one datastore pool. CLI commands open one pool
+at command entry, the daemon activity worker owns one for its lifetime, and the
+TUI injects one process-scoped pool into transcript, plan, workspace, activity,
+and unified-search services. Routine dashboard refresh projects from an
+immutable synchronized workspace catalog and performs only reads; configuration
+or Git discovery writes occur only at the explicit workspace synchronization
+boundary. See [`docs/datastore_ownership.md`](docs/datastore_ownership.md).
 
 Legacy JSON indexes and search sidecars are retained for one compatibility
 release. They can be removed later only after every supported prior version can
 upgrade directly, field experience shows SQLite fallback is no longer needed,
 and a documented database backup/export path exists. `amx index rebuild` never
-deletes them.
+deletes them. Normal startup compares normalized metadata plus sidecar
+size/mtime and reads only changed sidecar bodies; an unchanged warm startup
+does not begin a compatibility write transaction. Removing a rollback entry
+does not delete the durable SQLite row. A binary also refuses a future schema
+version instead of attempting a downgrade.
+
+Before an operator-data repair, install the intended binary, capture status,
+and make an online SQLite backup. Review the reported repairable and unavailable
+counts before running the rebuild:
+
+```bash
+amx_bin="$HOME/.local/bin/amx"
+db="$HOME/.local/share/agent-mux/agent-mux.db"
+backup="${db}.$(date +%Y%m%d-%H%M%S).bak"
+
+"$amx_bin" index status --json | tee /tmp/amx-index-before.json
+sqlite3 "$db" ".backup '$backup'"
+chmod 600 "$backup"
+
+# Explicit operator-confirmed repair; do not automate this step.
+"$amx_bin" index rebuild
+"$amx_bin" index status --json | tee /tmp/amx-index-after.json
+```
+
+Keep the backup until the before/after entity counts, import records, protected
+state hash, and FTS health are satisfactory. Unavailable-placeholder warnings
+may remain after a successful rebuild when their source artifacts no longer
+exist; restore the source or keep the placeholder. To reverse the database
+change, stop Agent Mux processes, preserve the repaired database for diagnosis,
+and restore the backup as `agent-mux.db` with mode `0600` before restarting.
+
+If the initial status command itself reports `database disk image is
+malformed`, do not proceed directly to rebuild and do not rely on `.backup`
+being able to traverse the damaged B-tree. Stop the daemon first and preserve
+the database plus any WAL/SHM companions byte-for-byte for recovery analysis:
+
+```bash
+"$amx_bin" daemon stop
+recovery="$HOME/.local/share/agent-mux-recovery-$(date +%Y%m%d-%H%M%S)"
+mkdir -m 700 "$recovery"
+cp -p "$db" "$recovery/"
+for companion in "$db-wal" "$db-shm"; do
+  if [ -e "$companion" ]; then cp -p "$companion" "$recovery/"; fi
+done
+```
+
+Only after that preservation step should an operator choose between an
+explicit `"$amx_bin" index rebuild` attempt (appropriate when diagnostics
+isolate corruption to derived FTS state) and lower-level SQLite recovery.
 
 Retention is controlled by `[defaults.session_archive] keep_days` (default
 30). Refresh and prune operations hide index entries older than `keep_days`;
@@ -700,10 +773,11 @@ just acceptance
 just check
 ```
 
-`just acceptance` runs the full Go suite, race-sensitive datastore/daemon
-tests, `go vet`, and every committed TUI scenario. `just check` adds the
-repository linter and is the final local/CI gate. The end-to-end coverage map is
-documented in [`docs/acceptance.md`](docs/acceptance.md).
+`just acceptance` runs the full Go suite, race-sensitive datastore, workspace,
+daemon, and TUI datastore-lifecycle tests, `go vet`, and every committed TUI
+scenario. `just check` adds the repository linter and is the final local/CI
+gate. The end-to-end coverage map is documented in
+[`docs/acceptance.md`](docs/acceptance.md).
 
 ### TUI layout regression harness
 

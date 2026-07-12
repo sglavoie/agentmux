@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/compatimport"
 	"github.com/sglavoie/agentmux/internal/datastore"
 )
 
@@ -27,15 +28,43 @@ func LoadSQLiteIndex(path string) (*Index, error) {
 		idx.setDegradedReason(err)
 		return idx, nil
 	}
-	return EnableSQLiteIndex(context.Background(), idx, store), nil
+	idx.mu.Lock()
+	idx.ownedStore = store
+	idx.mu.Unlock()
+	return enableSQLiteIndex(context.Background(), idx, store, compatimport.SyncIfChanged), nil
+}
+
+// LoadSQLiteIndexWithStore loads compatibility metadata and attaches the
+// caller-owned store with an explicit synchronization policy. The returned
+// facade borrows store and never closes it.
+func LoadSQLiteIndexWithStore(ctx context.Context, path string, store *datastore.Store, mode compatimport.SyncMode) (*Index, error) {
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		return nil, err
+	}
+	return enableSQLiteIndex(ctx, idx, store, mode), nil
 }
 
 // EnableSQLiteIndex activates SQLite for an existing compatibility index.
 // Import failures leave that index usable and never alter plan directories,
 // plans.json, or its sidecars.
 func EnableSQLiteIndex(ctx context.Context, idx *Index, store *datastore.Store) *Index {
+	return enableSQLiteIndex(ctx, idx, store, compatimport.SyncIfChanged)
+}
+
+// EnableSQLiteIndexWithMode attaches a borrowed store to an already-decoded
+// compatibility facade using the requested synchronization policy.
+func EnableSQLiteIndexWithMode(ctx context.Context, idx *Index, store *datastore.Store, mode compatimport.SyncMode) *Index {
+	return enableSQLiteIndex(ctx, idx, store, mode)
+}
+
+func enableSQLiteIndex(ctx context.Context, idx *Index, store *datastore.Store, mode compatimport.SyncMode) *Index {
 	if idx == nil {
 		return nil
+	}
+	if !mode.Valid() {
+		idx.setDegradedReason(fmt.Errorf("invalid compatibility sync mode %d", mode))
+		return idx
 	}
 	if store == nil {
 		idx.setDegradedReason(errors.New("SQLite datastore is unavailable"))
@@ -44,12 +73,18 @@ func EnableSQLiteIndex(ctx context.Context, idx *Index, store *datastore.Store) 
 	repo, err := NewRepository(store)
 	if err != nil {
 		idx.setDegradedReason(err)
-		_ = store.Close()
 		return idx
 	}
-	if _, err := repo.ImportLegacyIndex(ctx, idx.path); err != nil {
-		idx.setDegradedReason(err)
-		_ = store.Close()
+	var syncErr error
+	switch mode {
+	case compatimport.SyncSkip:
+	case compatimport.SyncIfChanged:
+		_, syncErr = repo.ImportLegacyIndex(ctx, idx.path)
+	case compatimport.SyncForce:
+		_, syncErr = repo.ForceImportLegacyIndex(ctx, idx.path)
+	}
+	if syncErr != nil {
+		idx.setDegradedReason(syncErr)
 		return idx
 	}
 	idx.mu.Lock()

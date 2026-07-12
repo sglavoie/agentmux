@@ -176,6 +176,35 @@ func (r *Repository) Backfill(ctx context.Context) error {
 	})
 }
 
+// RepairMissingSearchDocuments recreates derived activity documents entirely
+// from durable journal rows; no external source artifact is required.
+func (r *Repository) RepairMissingSearchDocuments(ctx context.Context) (int64, error) {
+	result, err := r.store.DB().ExecContext(ctx, `
+		INSERT INTO search_documents (
+			entity_type, entity_id, workspace_id, harness, occurred_at_ns,
+			title, normalized_content, updated_at_ns
+		)
+		SELECT ?, CAST(a.id AS TEXT), a.workspace_id, a.harness, a.occurred_at_ns,
+			a.summary, a.summary || char(10) || a.metadata_json, a.created_at_ns
+		FROM activity_items a
+		WHERE NOT EXISTS (
+			SELECT 1 FROM search_documents d
+			WHERE d.entity_type = ? AND d.entity_id = CAST(a.id AS TEXT)
+		)
+		ON CONFLICT(entity_type, entity_id) DO UPDATE SET
+			workspace_id = excluded.workspace_id,
+			harness = excluded.harness,
+			occurred_at_ns = excluded.occurred_at_ns,
+			title = excluded.title,
+			normalized_content = excluded.normalized_content,
+			updated_at_ns = excluded.updated_at_ns
+	`, searchEntityType, searchEntityType)
+	if err != nil {
+		return 0, fmt.Errorf("activity: repairing search documents: %w", err)
+	}
+	return result.RowsAffected()
+}
+
 // ListForWorkspaces returns one bounded, deterministic feed for every supplied
 // workspace ID. Unknown IDs are represented by an empty feed rather than an
 // error so configuration churn cannot make the whole workspace home fail.

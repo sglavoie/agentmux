@@ -131,7 +131,7 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			meta := *m.isolatedForkConversation
 			m.isolatedForkConversation = nil
-			return m, conversationWorktreeForkCmd(m.client, m.cfg, m.transcriptReaders, meta)
+			return m, m.conversationWorktreeForkCmd(meta)
 		}
 	case keyN, keyEsc:
 		m.isolatedForkConversation = nil

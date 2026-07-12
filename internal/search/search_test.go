@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +78,13 @@ func TestSearchReturnsAllEntityTypesWithStableMetadata(t *testing.T) {
 	if seen[EntityHandoff].Target != "/handoffs/one.md" {
 		t.Errorf("handoff target = %q", seen[EntityHandoff].Target)
 	}
+	project := seen[EntityProject]
+	if project.Harness != "codex" || project.Profile != "work" {
+		t.Errorf("project scalar defaults changed: harness %q profile %q", project.Harness, project.Profile)
+	}
+	if !slices.Equal(project.Harnesses, []string{"codex", "claude"}) || !slices.Equal(project.Profiles, []string{"work", "personal"}) {
+		t.Errorf("project memberships = harnesses %v profiles %v", project.Harnesses, project.Profiles)
+	}
 
 	again, err := service.Search(ctx, Query{Text: "shared needle", Limit: 20})
 	if err != nil {
@@ -140,6 +148,31 @@ func TestSearchQuotedANDUnicodeAndFilters(t *testing.T) {
 		t.Fatalf("filtered results = %#v", filtered)
 	}
 
+	projectVariant, err := service.Search(ctx, Query{
+		Text: "shared needle", Types: []EntityType{EntityProject},
+		Workspaces: []string{"ws-a"}, Harnesses: []string{"CLAUDE"},
+		Profiles: []string{"PERSONAL"}, To: to,
+	})
+	if err != nil {
+		t.Fatalf("project variant Search: %v", err)
+	}
+	if len(projectVariant) != 1 || projectVariant[0].EntityID != "ws-a" {
+		t.Fatalf("project variant results = %#v", projectVariant)
+	}
+	if projectVariant[0].Harness != "codex" || projectVariant[0].Profile != "work" {
+		t.Fatalf("project variant scalar defaults changed: %#v", projectVariant[0])
+	}
+
+	planByProjectProfile, err := service.Search(ctx, Query{
+		Text: "shared needle", Types: []EntityType{EntityPlan}, Profiles: []string{"personal"},
+	})
+	if err != nil {
+		t.Fatalf("plan project-profile Search: %v", err)
+	}
+	if len(planByProjectProfile) != 0 {
+		t.Fatalf("project profile membership leaked to plan results: %#v", planByProjectProfile)
+	}
+
 	plans, err := service.Search(ctx, Query{
 		Text: "shared needle", Types: []EntityType{EntityPlan}, Workspaces: []string{"ws-a"},
 	})
@@ -182,6 +215,8 @@ func insertSearchFixtures(t *testing.T, store *datastore.Store) {
 		args  []any
 	}{
 		{`INSERT INTO workspaces (id, canonical_path, display_name, created_at_ns, updated_at_ns) VALUES ('ws-a', '/repo/a', 'Alpha', ?, ?)`, []any{now, now}},
+		{`INSERT INTO workspace_profile_memberships (workspace_id, profile_name, position, created_at_ns) VALUES ('ws-a', 'work', 0, ?), ('ws-a', 'personal', 1, ?)`, []any{now, now}},
+		{`INSERT INTO workspace_harness_memberships (workspace_id, harness, position, created_at_ns) VALUES ('ws-a', 'codex', 0, ?), ('ws-a', 'claude', 1, ?)`, []any{now, now}},
 		{`INSERT INTO conversations (harness, session_id, workspace_id, display_profile, source_path, last_at_ns, created_at_ns, updated_at_ns) VALUES ('codex', 'conv-1', 'ws-a', 'work', '/transcripts/one.jsonl', ?, ?, ?)`, []any{when, now, now}},
 		{`INSERT INTO profile_memberships (conversation_id, profile_name, position, created_at_ns) SELECT id, 'shared-profile', 0, ? FROM conversations WHERE session_id = 'conv-1'`, []any{now}},
 		{`INSERT INTO plans (id, path, display_name, mod_time_ns, created_at_ns, updated_at_ns) VALUES ('plan-1', '/plans/one', 'Plan One', ?, ?, ?)`, []any{when, now, now}},

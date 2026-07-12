@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -21,11 +22,18 @@ import (
 // Model is the root Bubble Tea model for the dashboard.
 type Model struct {
 	// deps
-	client          kitty.KittyClient
-	cfg             *config.Config
-	interval        time.Duration
-	sortMode        string
-	attentionStates map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
+	client                     kitty.KittyClient
+	cfg                        *config.Config
+	ctx                        context.Context
+	dataServices               *DataServices
+	dataServicesInitInFlight   bool
+	dataServicesRetryAttempt   int
+	dataServicesRetryScheduled bool
+	interval                   time.Duration
+	sortMode                   string
+	attentionStates            map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
+	backgroundCommands         modelBackgroundCommands
+	daemonCommand              func(daemon.Request) (daemon.Response, error)
 
 	// session state
 	sessions   []session.RunningSession // sorted full list
@@ -112,15 +120,17 @@ type Model struct {
 	// palette. Its query accepts normal text plus explicit type:/workspace:/
 	// harness:/profile:/from:/to: filter tokens; S and P retain their separate
 	// literal transcript/plan search state below.
-	unifiedQuery      string
-	unifiedResults    []unifiedsearch.Result
-	unifiedCursor     int
-	unifiedOffset     int
-	unifiedInput      bool
-	unifiedLoading    bool
-	unifiedSearchErr  error
-	unifiedSearchSeq  int
-	unifiedReturnMode Mode
+	unifiedQuery                 string
+	unifiedResults               []unifiedsearch.Result
+	unifiedCursor                int
+	unifiedOffset                int
+	unifiedInput                 bool
+	unifiedLoading               bool
+	unifiedSearchErr             error
+	unifiedSearchSeq             int
+	unifiedReturnMode            Mode
+	pendingUnifiedPlanID         string
+	pendingUnifiedConversationID string
 
 	// config picker mode
 	configPickerAccounts   []config.Account
@@ -226,12 +236,10 @@ type Model struct {
 	transcriptIndex   *transcript.Index
 	transcriptReaders map[string]transcript.Reader
 
-	// background warm-up state for ModeSessionSearch. The startup cache load
-	// activates the SQLite transcript facade (falling back to transcripts.json
-	// when needed) and populates sessionResults; the warm refresh then updates
-	// the same index without blocking the dashboard.
-	sessionCacheLoadInFlight bool
-	sessionRefreshInFlight   bool
+	// Background refresh state for ModeSessionSearch. Service initialization
+	// supplies the process-owned facade; entering the surface may then refresh
+	// that facade through the shared writer gate.
+	sessionRefreshInFlight bool
 
 	// session search view (ModeSessionSearch). sessionResults holds the
 	// most recent transcript.Search output. sessionQuery is the free-text
@@ -308,18 +316,23 @@ type Model struct {
 	// plans.Search output; planQuery is the text typed after `/`. planSearchMode
 	// is true while editing planQuery. planSearchSeq dedupes in-flight
 	// refresh/search dispatches the same way sessionSearchSeq does.
-	plansIndex         *plans.Index
-	planQuery          string
-	planResults        []plans.Result
-	planCursor         int
-	planOffset         int
-	planSearchMode     bool
-	planLoading        bool
-	planRefreshErr     error
-	planSearchErr      error
-	planSearchSeq      int
-	planSortMode       plans.SortMode // cycled with `s`; zero value = SortByMatches
-	planViewReturnMode Mode
+	plansIndex                *plans.Index
+	planRefreshCommand        func(*plans.Index, *config.Config, int) tea.Cmd
+	planSearchCommand         func(int, *plans.Index, plans.Query) tea.Cmd
+	sessionWarmRefreshCommand func(int, transcript.Query) tea.Cmd
+	sessionRefreshCommand     func(int) tea.Cmd
+	sessionSearchCommand      func(int, transcript.Query) tea.Cmd
+	planQuery                 string
+	planResults               []plans.Result
+	planCursor                int
+	planOffset                int
+	planSearchMode            bool
+	planLoading               bool
+	planRefreshErr            error
+	planSearchErr             error
+	planSearchSeq             int
+	planSortMode              plans.SortMode // cycled with `s`; zero value = SortByMatches
+	planViewReturnMode        Mode
 
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
 	// user opened with Enter; nil when the viewer is closed. planViewerLines
@@ -357,18 +370,17 @@ type Model struct {
 	// workspaceConversationMeta retains the complete indexed metadata needed
 	// for a workspace conversation's smart-continue action. The rendering
 	// snapshot intentionally exposes only a safe display subset.
-	workspaceConversationMeta map[string]transcript.SessionMeta
-	workspaceProjectionSeq    int
-	workspaceLoading          bool
-	workspaceLoadErr          error
+	workspaceConversationMeta   map[string]transcript.SessionMeta
+	workspaceCatalog            workspace.Catalog
+	workspaceProjectionSeq      int
+	workspaceLoading            bool
+	workspaceLoadErr            error
+	workspaceProjectionInFlight bool
+	workspaceProjectionQueued   bool
 	// workspaceProjectionDisabled keeps deterministic in-process UI fixtures
 	// from opening the operator's SQLite/index files. Production models leave
 	// it false; tests inject completed projection messages directly.
 	workspaceProjectionDisabled bool
-	// workspacePlansIndex is deliberately separate from plansIndex. The
-	// projection needs linked-plan metadata before the user enters plan search,
-	// but preloading it must not change the legacy P-mode lifecycle.
-	workspacePlansIndex *plans.Index
 	// workspaceActivityMarker owns read-marker persistence for automatic opens
 	// and palette actions. Tests inject a hermetic recorder; production lazily
 	// opens the default datastore for each short mutation.
@@ -383,6 +395,13 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 	return newModel(cfg, client, 0, ModeList)
 }
 
+// NewModelWithDataServices creates the compatibility list model with an
+// injected process owner. Tests and embedders can use this to control the TUI
+// datastore lifecycle explicitly.
+func NewModelWithDataServices(cfg *config.Config, client kitty.KittyClient, services *DataServices) Model {
+	return newModelWithDataServices(context.Background(), cfg, client, 0, ModeList, services)
+}
+
 // NewModelFromWindow creates a dashboard model that initially selects the
 // running session in the Kitty tab containing sourceWindowID. A zero or
 // unmapped ID leaves the dashboard's normal initial selection unchanged.
@@ -390,7 +409,33 @@ func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWind
 	return newModel(cfg, client, sourceWindowID, ModeWorkspace)
 }
 
+// NewModelFromWindowWithDataServices creates the workspace model with an
+// injected process owner.
+func NewModelFromWindowWithDataServices(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, services *DataServices) Model {
+	return newModelWithDataServices(context.Background(), cfg, client, sourceWindowID, ModeWorkspace, services)
+}
+
+// Close releases the model's process-scoped data services. RunFromWindow
+// calls this lifecycle operation automatically; embedders that construct and
+// run a Model directly should defer it themselves.
+func (m Model) Close() error {
+	if m.dataServices == nil {
+		return nil
+	}
+	return m.dataServices.Close()
+}
+
 func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, initialMode Mode) Model {
+	return newModelWithDataServices(context.Background(), cfg, client, sourceWindowID, initialMode, NewDataServices())
+}
+
+func newModelWithDataServices(ctx context.Context, cfg *config.Config, client kitty.KittyClient, sourceWindowID int, initialMode Mode, services *DataServices) Model {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if services == nil {
+		services = NewDataServices()
+	}
 	interval := time.Duration(cfg.Defaults.RefreshInterval) * time.Second
 	if interval <= 0 {
 		interval = 2 * time.Second
@@ -414,9 +459,13 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 	return Model{
 		client:                client,
 		cfg:                   cfg,
+		ctx:                   ctx,
+		dataServices:          services,
 		interval:              interval,
 		sortMode:              sort,
 		attentionStates:       attn,
+		backgroundCommands:    defaultModelBackgroundCommands(),
+		daemonCommand:         daemonRequest,
 		idleThreshold:         idle,
 		focusedChipIdx:        -1,
 		amxBin:                amxBin,
@@ -424,18 +473,20 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 		messageDetailIdx:      -1,
 		initialSourceWindowID: sourceWindowID,
 		mode:                  initialMode,
+		workspaceLoading:      initialMode == ModeWorkspace,
 	}
 }
 
 // Init starts the refresh ticker and fetches the first session list.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
-		initialFetchCmd(m.client, m.cfg, m.sortMode, m.initialSourceWindowID),
-		activeLoopRefreshCmd(m.activeLoopRefreshSeq),
+	cmds := []tea.Cmd{
+		m.runInitialFetchCmd(m.initialSourceWindowID),
+		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		tickCmd(m.interval),
-		healthCmd(m.cfg, m.amxBin, true, true),
-		startupSessionWarmupCmd(m.sessionSearchSeq),
-	)
+		m.runHealthCmd(true, true),
+		func() tea.Msg { return dataServicesInitRequestMsg{} },
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles incoming messages.
@@ -459,6 +510,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionsMsg:
 		return m.handleSessionsMsg(msg)
+
+	case dataServicesInitRequestMsg:
+		return m, m.dispatchDataServicesInit()
+
+	case dataServicesReadyMsg:
+		return m.handleDataServicesReady(msg)
+
+	case dataServicesRetryMsg:
+		m.dataServicesRetryScheduled = false
+		return m, m.dispatchDataServicesInit()
 
 	case workspaceProjectionMsg:
 		return m.handleWorkspaceProjectionMsg(msg)
@@ -497,12 +558,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case detailEventsMsg:
 		return m.handleDetailEvents(msg)
-
-	case sessionCacheLoadStartedMsg:
-		return m.handleSessionCacheLoadStarted(msg)
-
-	case sessionCacheLoadDoneMsg:
-		return m.handleSessionCacheLoadDone(msg)
 
 	case sessionWarmRefreshDoneMsg:
 		return m.handleSessionWarmRefreshDone(msg)

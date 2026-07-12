@@ -43,7 +43,16 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.workspaceFocus = workspaceFocusProjects
 		m.workspaceDrillDown = false
 		m.clampWorkspaceSelection()
-		return m, nil
+		var cmds []tea.Cmd
+		if cmd := m.dispatchWorkspaceProjection(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if m.plansIndex == nil {
+			if cmd := m.dispatchDataServicesInit(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
 
 	case keyJ, keyDown:
 		m.cursor = clamp(m.cursor+1, 0, len(m.filtered)-1)
@@ -345,7 +354,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.actionErr = nil
-				return m, clearStatusCmd(m.client, m.targetSession)
+				return m, m.clearStatusCmd(m.targetSession)
 			}
 			return m, nil
 		case keyLock:

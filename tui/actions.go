@@ -128,7 +128,7 @@ func actionsFor(_ Model) []action {
 				return stateGroup(m.targetSession, m.lastActivity, m.idleThreshold) == 0
 			},
 			run: func(m Model) (Model, tea.Cmd) {
-				cmd := clearStatusCmd(m.client, m.targetSession)
+				cmd := m.clearStatusCmd(m.targetSession)
 				m.actionErr = nil
 				m.exitActionsMode()
 				return m, cmd

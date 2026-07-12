@@ -1,11 +1,21 @@
 package tui
 
 import (
+	"os"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
+
+func cleanupUITestDriver(t testing.TB, d *UITestDriver) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := d.Close(); err != nil {
+			t.Errorf("closing UI test driver: %v", err)
+		}
+	})
+}
 
 // TestUITestDriverOpenActionsAndResize drives the real model through a key press
 // that opens the actions overlay and a resize, verifying an observation is
@@ -14,6 +24,7 @@ func TestUITestDriverOpenActionsAndResize(t *testing.T) {
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
 	d := NewUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
+	cleanupUITestDriver(t, d)
 
 	obs0 := d.Observe()
 	if obs0.Mode != "list" {
@@ -54,6 +65,7 @@ func TestUITestDriverTextTypesEachRune(t *testing.T) {
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
 	d := NewUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
+	cleanupUITestDriver(t, d)
 
 	if err := d.Key("/"); err != nil {
 		t.Fatalf("Key(/) error: %v", err)
@@ -75,6 +87,7 @@ func TestUITestDriverTextTypesEachRune(t *testing.T) {
 func TestUITestDriverTickDrainsWithoutBlocking(t *testing.T) {
 	m := testModelWithSessions()
 	d := NewUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
+	cleanupUITestDriver(t, d)
 
 	done := make(chan struct{})
 	go func() {
@@ -96,6 +109,7 @@ func TestUITestDriverTickDrainsWithoutBlocking(t *testing.T) {
 // error rather than mutating the model.
 func TestUITestDriverKeyRejectsBadSpec(t *testing.T) {
 	d := NewUITestDriver(testModelWithSessions().cfg, testModel().client, UITestSize{Width: 80, Height: 24})
+	cleanupUITestDriver(t, d)
 	if err := d.Key("nope"); err == nil {
 		t.Fatal("expected error for multi-rune key spec")
 	}
@@ -122,23 +136,61 @@ func TestUITestDriverFlattenCmds(t *testing.T) {
 	}
 }
 
-// TestUITestDriverRunCmdTimeout verifies fast commands return their message and
-// slow (future/scheduled) commands are abandoned.
-func TestUITestDriverRunCmdTimeout(t *testing.T) {
+// TestUITestDriverSkipsTimersBeforeLaunch verifies scheduled effects are the
+// only commands omitted by the harness and never start a goroutine.
+func TestUITestDriverSkipsTimersBeforeLaunch(t *testing.T) {
+	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
+	cleanupUITestDriver(t, d)
+
 	fast := func() tea.Msg { return tickMsg{} }
-	if msg, ok := runUITestCmd(fast, 50*time.Millisecond); !ok || msg == nil {
-		t.Fatalf("expected fast command to return a message, got ok=%v msg=%v", ok, msg)
+	if msg, ran, err := d.runCommand(fast); err != nil || !ran || msg == nil {
+		t.Fatalf("expected fast command to return a message, got ran=%v msg=%v err=%v", ran, msg, err)
 	}
 
-	slow := func() tea.Msg {
-		time.Sleep(200 * time.Millisecond)
+	started := false
+	timer := tea.Tick(time.Hour, func(time.Time) tea.Msg {
+		started = true
 		return tickMsg{}
+	})
+	if msg, ran, err := d.runCommand(timer); err != nil || ran || msg != nil {
+		t.Fatalf("timer command = ran=%v msg=%v err=%v, want skipped", ran, msg, err)
 	}
-	if _, ok := runUITestCmd(slow, 20*time.Millisecond); ok {
-		t.Fatal("expected slow command to be abandoned")
+	if started {
+		t.Fatal("timer callback unexpectedly started")
 	}
+	if _, ran, err := d.runCommand(nil); err != nil || ran {
+		t.Fatalf("nil command = ran=%v err=%v", ran, err)
+	}
+}
 
-	if _, ok := runUITestCmd(nil, 20*time.Millisecond); ok {
-		t.Fatal("expected nil command to report not-ok")
+func TestUITestDriverCloseCancelsAndJoinsStartedCommandBeforeRemovingRoot(t *testing.T) {
+	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
+	root := d.tempRoot
+	started := make(chan struct{})
+	finished := make(chan struct{})
+	runDone := make(chan error, 1)
+	go func() {
+		_, _, err := d.runCommand(func() tea.Msg {
+			close(started)
+			<-d.Context().Done()
+			close(finished)
+			return nil
+		})
+		runDone <- err
+	}()
+	<-started
+	if err := d.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	select {
+	case <-finished:
+	default:
+		t.Fatal("Close returned before the tracked command finished")
+	}
+	if err := <-runDone; err == nil {
+		t.Fatal("cancelled command unexpectedly returned no error")
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("fixture root still exists after Close: %v", err)
 	}
 }

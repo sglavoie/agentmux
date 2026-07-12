@@ -2,6 +2,8 @@ package transcript
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -116,6 +118,43 @@ func TestRepositoryRoundTripFreshnessAndHiddenState(t *testing.T) {
 	listed, err = repo.List(ctx, ListFilter{IncludeHidden: true})
 	if err != nil || len(listed) != 1 || !listed[0].HiddenFromIndex {
 		t.Fatalf("hidden List: %#v err=%v", listed, err)
+	}
+}
+
+func TestRepositoryRepairsSearchFromAvailableTranscriptAndKeepsMissingPlaceholder(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newTestRepository(t)
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, meta := range []SessionMeta{
+		{ID: "repairable", Harness: "codex", Path: path, MessageCount: 1},
+		{ID: "unavailable", Harness: "codex", Path: filepath.Join(t.TempDir(), "missing.jsonl"), MessageCount: 1},
+	} {
+		if err := repo.Upsert(ctx, meta, "stale"); err != nil {
+			t.Fatal(err)
+		}
+		if err := repo.DeleteSearchText(ctx, meta.Harness, meta.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	readers := map[string]Reader{"codex": readerFunc{harness: "codex", read: func(got string) ([]Message, error) {
+		if got != path {
+			t.Fatalf("ReadMessages path = %q, want %q", got, path)
+		}
+		return []Message{{Role: "user", Text: "Recovered transcript body"}}, nil
+	}}}
+	repaired, err := repo.RepairMissingSearchDocuments(ctx, readers)
+	if err != nil || repaired != 1 {
+		t.Fatalf("RepairMissingSearchDocuments = %d, %v", repaired, err)
+	}
+	content, found, err := repo.SearchText(ctx, "codex", "repairable")
+	if err != nil || !found || content != "recovered transcript body" {
+		t.Fatalf("repaired content = %q, %t, %v", content, found, err)
+	}
+	if _, found, err := repo.SearchText(ctx, "codex", "unavailable"); err != nil || found {
+		t.Fatalf("unavailable placeholder search document found=%t err=%v", found, err)
 	}
 }
 

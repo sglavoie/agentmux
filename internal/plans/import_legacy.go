@@ -3,9 +3,7 @@ package plans
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/sglavoie/agentmux/internal/compatimport"
 	"github.com/sglavoie/agentmux/internal/searchstore"
 )
 
@@ -30,15 +29,27 @@ type LegacyImportResult struct {
 }
 
 type legacyImportEntry struct {
-	key        string
-	meta       PlanMeta
-	searchText string
+	manifest    compatimport.ManifestEntry
+	meta        PlanMeta
+	searchText  string
+	action      compatimport.Action
+	contentHash string
 }
 
-// ImportLegacyIndex imports current plan metadata and sidecar contents in one
-// transaction. Neither plan directories nor compatibility artifacts are ever
-// written by this method.
+// ImportLegacyIndex imports current plan metadata and only new or changed
+// sidecar contents in one transaction. Plan directories and compatibility
+// artifacts are never written by this method.
 func (r *Repository) ImportLegacyIndex(ctx context.Context, indexPath string) (LegacyImportResult, error) {
+	return r.importLegacyIndex(ctx, indexPath, false)
+}
+
+// ForceImportLegacyIndex re-reads every compatibility entry and refreshes its
+// derived SQLite rows. It is reserved for explicit maintenance commands.
+func (r *Repository) ForceImportLegacyIndex(ctx context.Context, indexPath string) (LegacyImportResult, error) {
+	return r.importLegacyIndex(ctx, indexPath, true)
+}
+
+func (r *Repository) importLegacyIndex(ctx context.Context, indexPath string, force bool) (LegacyImportResult, error) {
 	if indexPath == "" {
 		return LegacyImportResult{}, errors.New("plans: legacy index path is empty")
 	}
@@ -57,29 +68,96 @@ func (r *Repository) ImportLegacyIndex(ctx context.Context, indexPath string) (L
 	if err != nil {
 		return LegacyImportResult{SourceFound: true}, fmt.Errorf("plans: decoding legacy index %s: %w", absPath, err)
 	}
-	entries, err := resolveLegacySearchText(absPath, legacy.Entries)
+	entries, err := prepareLegacyPlanEntries(absPath, legacy.Entries)
 	if err != nil {
 		return LegacyImportResult{SourceFound: true}, err
 	}
-	fingerprint := legacyPlanFingerprint(raw, entries)
+	manifest := make([]compatimport.ManifestEntry, len(entries))
+	for i := range entries {
+		manifest[i] = entries[i].manifest
+	}
+	fingerprint := compatimport.ManifestFingerprint(raw, manifest)
 	result := LegacyImportResult{SourceFound: true, Fingerprint: fingerprint, RecordCount: len(entries)}
 
-	err = r.store.Transaction(ctx, func(tx *sql.Tx) error {
+	prior, hasPrior, err := r.LastImport(ctx, legacyPlanImportSource)
+	if err != nil {
+		return result, err
+	}
+	if !force && hasPrior && prior.Fingerprint == fingerprint {
+		return result, nil
+	}
+	ledger, err := compatimport.LoadLedger(ctx, r.store.DB(), legacyPlanImportSource)
+	if err != nil {
+		return result, fmt.Errorf("plans: reading legacy entry ledger: %w", err)
+	}
+	priorCompletedAtNS := int64(0)
+	if hasPrior {
+		priorCompletedAtNS = prior.CompletedAt.UnixNano()
+	}
+	for i := range entries {
+		entry := &entries[i]
+		if force {
+			entry.action = compatimport.Refresh
+			entry.searchText, err = r.legacySidecarRead(absPath, entry.manifest.Key)
+			if errors.Is(err, fs.ErrNotExist) {
+				entry.searchText = ""
+				err = nil
+			}
+			if err != nil {
+				return result, fmt.Errorf("plans: reading legacy search sidecar for %q: %w", entry.manifest.Key, err)
+			}
+			entry.contentHash = compatimport.ContentHash(entry.searchText)
+			continue
+		}
+		storedContent := ""
+		canSeed := false
+		ledgerEntry, hasLedger := ledger[entry.manifest.Key]
+		if !hasLedger && hasPrior {
+			storedContent, canSeed, err = r.canSeedLegacyPlanEntry(ctx, *entry)
+			if err != nil {
+				return result, err
+			}
+		}
+		entry.action = compatimport.Decide(entry.manifest, ledgerEntry, hasLedger, canSeed, priorCompletedAtNS)
+		switch entry.action {
+		case compatimport.Unchanged:
+			continue
+		case compatimport.Seed:
+			entry.searchText = storedContent
+		case compatimport.Refresh:
+			entry.searchText, err = r.legacySidecarRead(absPath, entry.manifest.Key)
+			if errors.Is(err, fs.ErrNotExist) {
+				entry.searchText = ""
+				err = nil
+			}
+			if err != nil {
+				return result, fmt.Errorf("plans: reading legacy search sidecar for %q: %w", entry.manifest.Key, err)
+			}
+		}
+		entry.contentHash = compatimport.ContentHash(entry.searchText)
+	}
+
+	importedAtNS := r.now().UnixNano()
+	err = r.legacyImportTransaction(ctx, func(tx *sql.Tx) error {
 		var existing string
 		err := tx.QueryRowContext(ctx, `SELECT fingerprint FROM import_records WHERE source_name = ?`, legacyPlanImportSource).Scan(&existing)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("plans: checking legacy import record: %w", err)
 		}
-		if err == nil && existing == fingerprint {
+		if !force && err == nil && existing == fingerprint {
 			return nil
 		}
-		for _, entry := range entries {
+		for i := range entries {
+			entry := &entries[i]
+			if entry.action != compatimport.Refresh {
+				continue
+			}
 			searchText := entry.searchText
 			if err := r.upsertTx(ctx, tx, entry.meta, &searchText); err != nil {
-				return fmt.Errorf("plans: importing legacy entry %q: %w", entry.key, err)
+				return fmt.Errorf("plans: importing legacy entry %q: %w", entry.manifest.Key, err)
 			}
 		}
-		_, err = tx.ExecContext(ctx, `
+		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO import_records (source_name, source_path, fingerprint, completed_at_ns, record_count)
 			VALUES (?, ?, ?, ?, ?)
 			ON CONFLICT(source_name) DO UPDATE SET
@@ -87,17 +165,99 @@ func (r *Repository) ImportLegacyIndex(ctx context.Context, indexPath string) (L
 				fingerprint = excluded.fingerprint,
 				completed_at_ns = excluded.completed_at_ns,
 				record_count = excluded.record_count
-		`, legacyPlanImportSource, absPath, fingerprint, r.now().UnixNano(), len(entries))
-		if err != nil {
+		`, legacyPlanImportSource, absPath, fingerprint, importedAtNS, len(entries)); err != nil {
 			return fmt.Errorf("plans: recording legacy import completion: %w", err)
+		}
+		for _, entry := range entries {
+			if entry.action == compatimport.Unchanged {
+				continue
+			}
+			if err := compatimport.UpsertLedgerTx(ctx, tx, legacyPlanImportSource, compatimport.LedgerEntry{
+				ManifestEntry:    entry.manifest,
+				ContentHash:      entry.contentHash,
+				LastImportedAtNS: importedAtNS,
+			}); err != nil {
+				return fmt.Errorf("plans: %w", err)
+			}
 		}
 		result.Imported = true
 		return nil
 	})
 	if err != nil {
-		return LegacyImportResult{SourceFound: true, Fingerprint: fingerprint, RecordCount: len(entries)}, err
+		return result, err
 	}
 	return result, nil
+}
+
+func prepareLegacyPlanEntries(indexPath string, metas map[string]PlanMeta) ([]legacyImportEntry, error) {
+	store := searchstore.New(indexPath)
+	keys := make([]string, 0, len(metas))
+	for key := range metas {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	entries := make([]legacyImportEntry, 0, len(keys))
+	for _, key := range keys {
+		meta := metas[key]
+		if meta.DirPath == "" {
+			return nil, fmt.Errorf("plans: legacy entry %q is missing its directory path", key)
+		}
+		if expected := PlanKey(meta.DirPath); key != expected {
+			return nil, fmt.Errorf("plans: legacy entry %q has directory identity %q", key, expected)
+		}
+		meta = normalizeLegacyPlanMetadata(meta)
+		metadataHash, err := compatimport.MetadataHash(meta)
+		if err != nil {
+			return nil, fmt.Errorf("plans: hashing legacy metadata for %q: %w", key, err)
+		}
+		stat, err := compatimport.StatSidecar(store.Path(key))
+		if err != nil {
+			return nil, fmt.Errorf("plans: stating legacy search sidecar for %q: %w", key, err)
+		}
+		entries = append(entries, legacyImportEntry{
+			manifest: compatimport.ManifestEntry{Key: key, MetadataHash: metadataHash, Sidecar: stat},
+			meta:     meta,
+		})
+	}
+	return entries, nil
+}
+
+func normalizeLegacyPlanMetadata(meta PlanMeta) PlanMeta {
+	if meta.Name == "" {
+		meta.Name = DisplayName(filepath.Base(meta.DirPath))
+	}
+	meta.Files = append([]string(nil), meta.Files...)
+	sort.Strings(meta.Files)
+	meta.ModTime = meta.ModTime.UTC()
+	meta.SearchText = ""
+	return meta
+}
+
+func (r *Repository) canSeedLegacyPlanEntry(ctx context.Context, entry legacyImportEntry) (string, bool, error) {
+	stored, ok, err := r.Get(ctx, entry.manifest.Key)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		return "", false, nil
+	}
+	stored = normalizeLegacyPlanMetadata(stored)
+	hash, err := compatimport.MetadataHash(stored)
+	if err != nil {
+		return "", false, fmt.Errorf("plans: hashing stored metadata for %q: %w", entry.manifest.Key, err)
+	}
+	if hash != entry.manifest.MetadataHash {
+		return "", false, nil
+	}
+	content, found, err := r.SearchText(ctx, entry.manifest.Key)
+	if err != nil {
+		return "", false, err
+	}
+	return content, found, nil
+}
+
+func readLegacySidecar(indexPath, key string) (string, error) {
+	return searchstore.New(indexPath).Read(key)
 }
 
 // LegacyPlanImportRecord returns the last completed compatibility import.
@@ -143,43 +303,4 @@ func decodeLegacyPlanIndex(raw []byte) (indexFile, error) {
 		legacy.Entries = make(map[string]PlanMeta)
 	}
 	return legacy, nil
-}
-
-func resolveLegacySearchText(indexPath string, metas map[string]PlanMeta) ([]legacyImportEntry, error) {
-	store := searchstore.New(indexPath)
-	keys := make([]string, 0, len(metas))
-	for key := range metas {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	entries := make([]legacyImportEntry, 0, len(keys))
-	for _, key := range keys {
-		meta := metas[key]
-		if meta.DirPath == "" {
-			return nil, fmt.Errorf("plans: legacy entry %q is missing its directory path", key)
-		}
-		if expected := PlanKey(meta.DirPath); key != expected {
-			return nil, fmt.Errorf("plans: legacy entry %q has directory identity %q", key, expected)
-		}
-		content, err := store.Read(key)
-		if errors.Is(err, fs.ErrNotExist) {
-			content = ""
-		} else if err != nil {
-			return nil, fmt.Errorf("plans: reading legacy search sidecar for %q: %w", key, err)
-		}
-		entries = append(entries, legacyImportEntry{key: key, meta: meta, searchText: content})
-	}
-	return entries, nil
-}
-
-func legacyPlanFingerprint(raw []byte, entries []legacyImportEntry) string {
-	hash := sha256.New()
-	_, _ = hash.Write(raw)
-	for _, entry := range entries {
-		_, _ = hash.Write([]byte{0})
-		_, _ = hash.Write([]byte(entry.key))
-		_, _ = hash.Write([]byte{0})
-		_, _ = hash.Write([]byte(entry.searchText))
-	}
-	return hex.EncodeToString(hash.Sum(nil))
 }
