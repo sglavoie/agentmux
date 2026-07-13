@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ const (
 	busyRetryMinDelay = 10 * time.Millisecond
 	busyRetryMaxDelay = 250 * time.Millisecond
 	sqliteBusyCode    = 5
+	sqliteCorruptCode = 11
 )
 
 // ErrFutureSchemaVersion reports a database created by a newer Agent Mux.
@@ -43,8 +45,11 @@ var ErrFutureSchemaVersion = errors.New("datastore: unsupported future schema ve
 
 // Store is an opened, migrated SQLite database.
 type Store struct {
-	db   *sql.DB
-	path string
+	db           *sql.DB
+	path         string
+	recoveryLock *recoveryLock
+	closeMu      sync.Mutex
+	closed       bool
 }
 
 // DefaultPath returns the location for Agent Mux's durable database. It
@@ -73,17 +78,54 @@ func Open(ctx context.Context) (*Store, error) {
 // OpenPath opens and migrates the database at path. It is primarily useful to
 // callers that explicitly manage an Agent Mux data directory and to tests.
 func OpenPath(ctx context.Context, path string) (*Store, error) {
+	absPath, err := prepareDatabasePath(path)
+	if err != nil {
+		return nil, err
+	}
+	lock, err := acquireSharedRecoveryLock(ctx, absPath)
+	if err != nil {
+		return nil, err
+	}
+	store, err := openPathUnderRecoveryLock(ctx, absPath)
+	if err != nil {
+		return nil, errors.Join(err, lock.Close())
+	}
+	store.recoveryLock = lock
+	return store, nil
+}
+
+// prepareDatabasePath resolves the stable path and creates its private parent
+// directory. Callers performing recovery can use it before acquiring the
+// exclusive recovery lock, then call openPathUnderRecoveryLock without
+// reacquiring or downgrading it.
+func prepareDatabasePath(path string) (string, error) {
 	if path == "" {
-		return nil, errors.New("datastore: database path is empty")
+		return "", errors.New("datastore: database path is empty")
 	}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("datastore: resolving database path %q: %w", path, err)
+		return "", fmt.Errorf("datastore: resolving database path %q: %w", path, err)
 	}
 	absPath = filepath.Clean(absPath)
 	if err := ensurePrivateDirectory(filepath.Dir(absPath)); err != nil {
-		return nil, err
+		return "", err
 	}
+	return absPath, nil
+}
+
+// openPathUnderRecoveryLock opens and initializes absPath while its caller
+// holds either a shared or exclusive recovery lock. The caller retains lock
+// ownership on both success and failure, allowing recovery to keep exclusive
+// ownership through validation and rollback. Every failure closes the SQL
+// pool; an ordinary OpenPath additionally closes its shared lock.
+func openPathUnderRecoveryLock(ctx context.Context, absPath string) (_ *Store, retErr error) {
+	store := &Store{path: absPath}
+	defer func() {
+		if retErr != nil {
+			retErr = errors.Join(retErr, store.Close())
+		}
+	}()
+
 	if err := rejectSymlink(absPath, "database"); err != nil {
 		return nil, err
 	}
@@ -92,31 +134,26 @@ func OpenPath(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("datastore: opening %s: %w", absPath, err)
 	}
+	store.db = db
 	// WAL permits readers to continue while a writer has a transaction. SQLite
 	// still has one writer at a time; the busy timeout in the DSN waits for it
 	// instead of immediately surfacing a transient "database is locked" error.
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(8)
 
-	store := &Store{db: db, path: absPath}
 	if err := retrySQLiteBusy(ctx, func() error { return db.PingContext(ctx) }); err != nil {
-		_ = db.Close()
 		return nil, fmt.Errorf("datastore: connecting to %s: %w", absPath, err)
 	}
 	if err := store.enforcePermissions(); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	if err := migrate(ctx, db, migrations); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	if err := configureWAL(ctx, db); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	if err := store.enforcePermissions(); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	return store, nil
@@ -146,12 +183,28 @@ func (s *Store) DB() *sql.DB { return s.db }
 // Path returns the absolute path of the opened database.
 func (s *Store) Path() string { return s.path }
 
-// Close releases all database connections.
+// Close releases all database connections before releasing the recovery lock.
+// It preserves errors from both operations and is safe to call repeatedly.
 func (s *Store) Close() error {
-	if s == nil || s.db == nil {
+	if s == nil {
 		return nil
 	}
-	return s.db.Close()
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+
+	var dbErr error
+	if s.db != nil {
+		dbErr = s.db.Close()
+	}
+	var lockErr error
+	if s.recoveryLock != nil {
+		lockErr = s.recoveryLock.Close()
+	}
+	return errors.Join(dbErr, lockErr)
 }
 
 // SchemaVersion returns the latest migration recorded in this database.
@@ -251,6 +304,14 @@ func retrySQLiteBusy(ctx context.Context, operation func() error) error {
 func isSQLiteBusy(err error) bool {
 	var sqliteErr interface{ Code() int }
 	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == sqliteBusyCode
+}
+
+// IsCorruption reports whether err wraps a modernc SQLite error whose primary
+// result code is SQLITE_CORRUPT. Masking the low byte also recognizes extended
+// corruption result codes without depending on localized error text.
+func IsCorruption(err error) bool {
+	var sqliteErr interface{ Code() int }
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == sqliteCorruptCode
 }
 
 func ensurePrivateDirectory(path string) error {
