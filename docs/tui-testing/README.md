@@ -258,7 +258,7 @@ layout classes this harness targets:
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after pressing `S` |
 | [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | filter-mode list rows truncate to width at a sub-floor terminal after `/` |
 | [`list-preview-narrow-fit.json`](scenarios/list-preview-narrow-fit.json) | `actions` | list+preview split falls back to the plain list below the row-column floor after `p` |
-| [`workspace-empty.json`](scenarios/workspace-empty.json) | `workspace_empty` | default workspace home handles an empty project set |
+| [`workspace-empty.json`](scenarios/workspace-empty.json) | `workspace_empty` | secondary Workbench view handles an empty project set |
 | [`workspace-wide-attention.json`](scenarios/workspace-wide-attention.json) | `workspace_attention` | split project/detail panes preserve attention, live, conversation, plan, and activity sections |
 | [`workspace-narrow-drill.json`](scenarios/workspace-narrow-drill.json) | `workspace_attention` | narrow terminals open the same detail ordering with Enter |
 | [`workspace-short-drill.json`](scenarios/workspace-short-drill.json) | `workspace_attention` | short terminals retain a usable full-width drill-down |

@@ -32,7 +32,7 @@ var helpSections = []struct {
 		"  }         next attention session + focus tab",
 		"  {         previous attention session + focus tab",
 		"  tab       focus next filter chip",
-		"  v         open/leave the live-session power view",
+		"  v         toggle live sessions / Workbench",
 		"  esc       clear filter / back out of overlay",
 	}},
 	{"Bracket jump", []string{

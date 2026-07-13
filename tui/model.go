@@ -367,8 +367,7 @@ type Model struct {
 	planViewerLoadSeq    int
 
 	// workspaceSnapshot is the immutable, rendering-ready projection prepared
-	// in the background. Session 11 consumes it for the workspace-home view;
-	// the legacy live list remains the active renderer in this session.
+	// in the background for the secondary workspace-home view.
 	workspaceSnapshot      workspace.Snapshot
 	workspaceCursor        int
 	workspaceFocus         workspaceFocus
@@ -398,9 +397,8 @@ type Model struct {
 
 // NewModel creates a dashboard model.
 func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
-	// NewModel remains the compatibility constructor used by embedders which
-	// explicitly want the historic running-session list. The interactive app
-	// uses NewModelFromWindow below and starts at the project workspace home.
+	// The dashboard opens on the running-session list. The project workspace
+	// home remains available as a secondary view through the v key.
 	return newModel(cfg, client, 0, ModeList)
 }
 
@@ -415,13 +413,13 @@ func NewModelWithDataServices(cfg *config.Config, client kitty.KittyClient, serv
 // running session in the Kitty tab containing sourceWindowID. A zero or
 // unmapped ID leaves the dashboard's normal initial selection unchanged.
 func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) Model {
-	return newModel(cfg, client, sourceWindowID, ModeWorkspace)
+	return newModel(cfg, client, sourceWindowID, ModeList)
 }
 
-// NewModelFromWindowWithDataServices creates the workspace model with an
+// NewModelFromWindowWithDataServices creates the live-session model with an
 // injected process owner.
 func NewModelFromWindowWithDataServices(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, services *DataServices) Model {
-	return newModelWithDataServices(context.Background(), cfg, client, sourceWindowID, ModeWorkspace, services)
+	return newModelWithDataServices(context.Background(), cfg, client, sourceWindowID, ModeList, services)
 }
 
 // Close releases the model's process-scoped data services. RunFromWindow

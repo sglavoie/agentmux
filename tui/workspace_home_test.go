@@ -40,17 +40,32 @@ func workspaceHomeFixtureDriver(t *testing.T, size UITestSize) (*UITestDriver, *
 	return d, client
 }
 
-func TestRunConstructorStartsAtWorkspaceHome(t *testing.T) {
+func TestWindowAwareConstructorsStartAtLiveSessions(t *testing.T) {
 	fx, err := UITestFixtureByName("workspace_attention")
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := NewModelFromWindow(fx.Config, NewUITestKittyClient(fx.Windows), 0)
-	if m.mode != ModeWorkspace {
-		t.Fatalf("Run model mode = %v, want ModeWorkspace", m.mode)
-	}
-	if !m.workspaceLoading {
-		t.Fatal("workspace constructor should render an initial loading state before Init dispatches")
+	client := NewUITestKittyClient(fx.Windows)
+	standard := NewModelFromWindow(fx.Config, client, 11)
+	t.Cleanup(func() { _ = standard.Close() })
+	injected := NewModelFromWindowWithDataServices(fx.Config, client, 11, NewDataServices())
+	t.Cleanup(func() { _ = injected.Close() })
+
+	for name, m := range map[string]Model{
+		"standard":               standard,
+		"injected data services": injected,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if m.mode != ModeList {
+				t.Fatalf("window-aware model mode = %v, want ModeList", m.mode)
+			}
+			if m.workspaceLoading {
+				t.Fatal("live-session startup should not render the Workbench loading state")
+			}
+			if m.initialSourceWindowID != 11 {
+				t.Fatalf("initial source window = %d, want 11", m.initialSourceWindowID)
+			}
+		})
 	}
 }
 

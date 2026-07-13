@@ -43,7 +43,7 @@ func RunFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID 
 			return errors.Join(err, services.Close())
 		}
 	}
-	m := newModelWithDataServices(ctx, cfg, client, sourceWindowID, ModeWorkspace, services)
+	m := newModelWithDataServices(ctx, cfg, client, sourceWindowID, ModeList, services)
 	if handoff.Result.Replaced {
 		// Preserve the one-shot guard and the operator-visible quarantine path
 		// across exec while the fresh process performs the ordinary rebuild.

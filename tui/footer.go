@@ -366,6 +366,7 @@ var listFooterPalette = []footerEntry{
 		return ok
 	}},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
+	{"v", "workbench", footerSectionApp, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
 	{"P", "plans", footerSectionApp, func(Model) bool { return true }},
 	{"R", "resort", footerSectionApp, func(Model) bool { return true }},

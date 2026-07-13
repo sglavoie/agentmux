@@ -103,13 +103,15 @@ remove or override it if you prefer a different trust flow.
 
 ## Usage
 
-### Project workbench and continuity
+### Dashboard views and continuity
 
-The default TUI opens on a project-centric workspace home. It groups configured
-launch variants, linked Git worktrees, live Kitty tabs, indexed conversations,
-explicitly linked plans, and durable meaningful activity. `:` opens the global
-context-aware command palette, `/` opens unified full-text search, and `v`
-switches to the legacy live-session power view.
+The default TUI opens on the live-session dashboard and selects the session
+from the Kitty tab that opened it when possible. Press `v` to switch to the
+secondary project Workbench, which groups configured launch variants, linked
+Git worktrees, live Kitty tabs, indexed conversations, explicitly linked plans,
+and durable meaningful activity. Press `v` again to return to live sessions.
+`:` opens the global context-aware command palette, and `/` filters the
+live-session list.
 
 The same workflows are scriptable. Machine-readable commands use one
 `{"schema_version":1,"data":...}` success envelope; failures use a structured

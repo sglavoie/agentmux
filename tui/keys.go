@@ -66,7 +66,7 @@ const (
 	keyCtrlB  = "ctrl+b" // move up by one page in scrollable views
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
-	keyWorkspaceLive = "v" // toggles the legacy live-session power view
+	keyWorkspaceLive = "v" // toggles the live-session and Workbench views
 	keyPalette       = ":" // opens the global context-aware command palette
 
 	keyTab      = "tab"

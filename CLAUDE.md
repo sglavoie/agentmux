@@ -7,7 +7,7 @@ Guidance for coding agents working in Agent Mux.
 Agent Mux is a Kitty-first, multi-harness project workbench for Claude Code,
 GitHub Copilot CLI, and OpenAI Codex. The `amx` binary owns:
 
-- a project-centric Bubble Tea workspace and legacy live-session power view;
+- a live-session Bubble Tea dashboard and secondary project Workbench view;
 - exact conversation continuity (focus live, resume closed, native or portable fork);
 - isolated managed Git worktrees and deterministic cross-harness handoff packs;
 - SQLite-backed conversation, plan, workspace, search, activity, discovery, and relationship data;
@@ -72,8 +72,8 @@ and managed-worktree relationships.
   and monotonic read markers.
 - `internal/daemon`: IPC, reducer facts, durable Kitty state, activity emission,
   diagnostics, and the single renderer writer.
-- `tui`: workspace home, command palette, unified/specialized search, legacy
-  session view, and deterministic in-process scenario harness.
+- `tui`: live-session dashboard, secondary workspace home, command palette,
+  unified/specialized search, and deterministic in-process scenario harness.
 
 ### Identity and safety rules
 

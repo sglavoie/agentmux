@@ -253,6 +253,9 @@ func TestFooterChangesWithMode(t *testing.T) {
 	if !strings.Contains(listFooter, "/: filter") {
 		t.Errorf("list footer missing unified filter hint, got:\n%s", listFooter)
 	}
+	if !strings.Contains(listFooter, "v workbench") {
+		t.Errorf("list footer missing secondary Workbench hint, got:\n%s", listFooter)
+	}
 
 	m.mode = ModeSearch
 	searchFooter := renderFooter(m)
