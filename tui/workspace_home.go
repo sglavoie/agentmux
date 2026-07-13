@@ -504,7 +504,26 @@ func (m *Model) workspaceToast(text string) tea.Cmd {
 func renderWorkspaceHome(m Model) string {
 	var sb strings.Builder
 	sb.WriteString(renderHeader(m))
-	if m.workspaceLoadErr != nil {
+	if m.dataServicesRecoveryActive() {
+		sb.WriteString(styleDim.Render("Database corruption detected; preserving and rebuilding workspace data…") + "\n")
+		if len(m.workspaceSnapshot.Workspaces) == 0 {
+			return sb.String()
+		}
+	} else if m.dataServicesRecoveryTerminal() {
+		detail := "Automatic database recovery stopped."
+		if m.dataServicesRecoveryErr != nil {
+			detail = "Database recovery: " + m.dataServicesRecoveryErr.Error()
+		}
+		sb.WriteString(styleError.Render(detail) + "\n")
+		sb.WriteString(styleDim.Render("Run `amx doctor`, resolve the datastore error, then restart the workbench.") + "\n")
+		if len(m.workspaceSnapshot.Workspaces) == 0 {
+			return sb.String()
+		}
+	} else if m.dataServicesRecoveryState == dataServicesRecoverySucceeded && m.workspaceLoadErr == nil {
+		if msg, ok := dataServicesRecoveryStatus(m); ok {
+			sb.WriteString(styleDim.Render(msg.Text) + "\n")
+		}
+	} else if m.workspaceLoadErr != nil {
 		sb.WriteString(styleError.Render("Workspace load: "+m.workspaceLoadErr.Error()) + "\n")
 	}
 	if m.workspaceLoading && len(m.workspaceSnapshot.Workspaces) == 0 {
@@ -513,7 +532,7 @@ func renderWorkspaceHome(m Model) string {
 	}
 	if len(m.workspaceSnapshot.Workspaces) == 0 {
 		if m.workspaceLoadErr != nil {
-			sb.WriteString(styleDim.Render("Workspace data is unavailable; retrying in the background.") + "\n")
+			sb.WriteString(styleDim.Render("Workspace data is temporarily unavailable; another initialization attempt is scheduled.") + "\n")
 			return sb.String()
 		}
 		sb.WriteString(styleHeader.Render("Workspaces") + "\n")

@@ -6,11 +6,11 @@ The project-workbench acceptance gate is:
 just acceptance
 ```
 
-It runs `go test ./...`, race-sensitive datastore, workspace, daemon, and TUI
-datastore-lifecycle suites, `go vet ./...`, and every committed TUI scenario.
-`just check` adds `golangci-lint` and is the final repository gate. Every test
-in the persistence acceptance matrix uses a temporary file-backed datastore
-and isolated compatibility paths.
+It runs `go test ./...`, race-sensitive datastore, workspace, daemon,
+daemon-recovery, and TUI datastore-lifecycle suites, `go vet ./...`, and every
+committed TUI scenario. `just check` adds `golangci-lint` and is the final
+repository gate. Every test in the persistence acceptance matrix uses a
+temporary file-backed datastore and isolated compatibility paths.
 
 ## Workflow coverage
 
@@ -37,6 +37,8 @@ and isolated compatibility paths.
 | Long transcript refresh retains the dashboard snapshot | `tui.TestAcceptanceLongTranscriptRefreshRetainsLastGoodDashboardSnapshot` blocks a real SQLite-backed transcript discovery pass and proves warmed transcript rows plus the last workspace snapshot remain published until completion. |
 | Warm startup performs no sidecar-body reads | `internal/transcript.TestImportLegacyIndexEquivalentAndIdempotent` and `internal/plans.TestImportLegacyIndexIsIdempotentAndReadOnly` instrument the compatibility readers and write transactions; the second unchanged sync performs neither. |
 | Periodic workspace refresh performs zero datastore writes | `tui.TestAcceptancePeriodicWorkspaceProjectionPerformsZeroDatastoreWrites` executes three real projections and observes SQLite `data_version` from an independent connection. `internal/workspace.TestProjectSnapshotRemainsReadOnlyBesideUnrelatedWriter` also proves projection remains available beside a writer. |
+| Truncated profile-membership corruption self-heals once | `tui.TestAcceptanceCorruptProfileMembershipRecoversCompatibilityDashboardOnce` relocates and truncates a real membership B-tree so normal initialization returns the locally observed wrapped `SQLITE_CORRUPT`, then proves candidate close, daemon-stop ordering, one DB/WAL/SHM quarantine, manifest retention, clean replacement, pre-rebuild process handoff to a fresh data-service owner, compatibility transcript/plan import while the daemon remains stopped, post-rebuild restart, workspace projection, and unified search. `tui` app lifecycle tests pin the consumed-once re-exec handoff and restart fallback; `internal/datastorerecovery` tests independently pin immediate restart on recovery failure and deferred restart after successful replacement. |
+| Transient initialization never authorizes replacement | `tui.TestAcceptanceTransientInitializationRetriesWithoutReplacement` fails one normal open, drives the bounded retry transition, reaches a healthy snapshot on the second open, and proves no recovery directory or recovery call was produced. |
 | Multi-profile and multi-harness project search | `internal/workspace.TestBuildGroupsProfilesAndPersistsGeneratedWorkspaceID` synchronizes launch variants then filters the unified project result by a non-default harness/profile while retaining scalar defaults. |
 | Unavailable placeholders and explicit repair | `internal/datastore.TestInspectClassifiesRepairableAndUnavailableMissingDocumentsReadOnly` classifies missing sources without mutation; `cmd.TestIndexRebuildPreservesDurableStateAndRefreshesDerivedData` explicitly repairs reconstructable documents, reports unavailable handoffs, verifies FTS, and preserves protected state. |
 

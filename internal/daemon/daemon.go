@@ -100,11 +100,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		Keep:      time.Duration(cfg.Defaults.Activity.KeepDays) * 24 * time.Hour,
 	})
 	handler.SetActivityWriter(activityWriter)
-	defer activityWriter.Close()
-	defer func() {
-		server.Close()
-		_ = os.Remove(socketPath)
-	}()
+	defer closeDaemonResources(server.Close, activityWriter.Close, func() error {
+		return os.Remove(socketPath)
+	})
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -137,6 +135,18 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			return nil
 		}
 	}
+}
+
+// closeDaemonResources defines the shutdown publication boundary. Closing the
+// server first stops new work and drains every in-flight handler. Writer.Close
+// then performs its bounded final flush and does not return until its owned
+// datastore is closed. Only then may the public socket disappear and allow a
+// recovery client to proceed. Run's earlier daemon-lock defer executes after
+// this function returns.
+func closeDaemonResources(closeServer, closeActivity func(), removeSocket func() error) {
+	closeServer()
+	closeActivity()
+	_ = removeSocket()
 }
 
 // newDaemonKittyClient builds the daemon's Kitty client from the current

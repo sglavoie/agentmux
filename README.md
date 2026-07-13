@@ -297,6 +297,13 @@ immutable synchronized workspace catalog and performs only reads; configuration
 or Git discovery writes occur only at the explicit workspace synchronization
 boundary. See [`docs/datastore_ownership.md`](docs/datastore_ownership.md).
 
+Each open pool also holds a shared advisory recovery lock for its full
+lifetime. The dashboard can replace the datastore only after a failed
+data-service candidate has closed, the daemon has completed its ordered
+shutdown, and recovery has acquired the exclusive lock. This prevents any
+cooperating process from retaining a writable handle to a quarantined database
+inode.
+
 Legacy JSON indexes and search sidecars are retained for one compatibility
 release. They can be removed later only after every supported prior version can
 upgrade directly, field experience shows SQLite fallback is no longer needed,
@@ -306,6 +313,43 @@ size/mtime and reads only changed sidecar bodies; an unchanged warm startup
 does not begin a compatibility write transaction. Removing a rollback entry
 does not delete the durable SQLite row. A binary also refuses a future schema
 version instead of attempting a downgrade.
+
+### Automatic workbench corruption recovery
+
+The dashboard performs one automatic replacement only when normal data-service
+initialization returns an error that wraps SQLite primary result code 11
+(`SQLITE_CORRUPT`). It does not scan the complete database on startup and does
+not treat lock contention, I/O errors, migration failures, or other transient
+initialization failures as permission to replace data. Those failures continue
+through the bounded retry path. Ordinary `amx index status`, `amx transcripts
+status`, and `amx doctor` remain read-only and never initiate replacement.
+
+For confirmed corruption, the dashboard closes its failed datastore candidate,
+stops a live daemon and waits for its activity store to close, then moves the
+database and any `-wal`/`-shm` companions into:
+
+```text
+$HOME/.local/share/agent-mux/recovery/<UTC timestamp>/
+```
+
+The private quarantine includes `manifest.json` with artifact paths, sizes,
+modes, timestamps, SHA-256 digests, the wrapped corruption reason, and the
+replacement outcome. Quarantines are retained indefinitely; Agent Mux never
+prunes them automatically. Recovery creates and validates a new database, then
+cleanly re-execs the dashboard before reopening that pathname. This process
+boundary discards SQLite WAL/shared-memory mappings associated with the
+quarantined inode. The fresh dashboard keeps a previously live daemon stopped
+while ordinary initialization reimports the retained `transcripts.json`,
+`plans.json`, and search sidecars, synchronizes configured workspaces, and
+rebuilds unified search state. The daemon restarts only after that write-heavy
+rebuild is complete.
+
+Compatibility transcripts and plans plus configured workspace identities are
+therefore reconstructed from their existing sources. Workbench-only activity,
+read markers, explicit links, handoffs stored only in SQLite, and managed-
+worktree tracking may be lost. The dashboard makes only one automatic attempt
+per recovery handoff; a failed replacement or repeated corruption stops with
+manual `amx doctor` guidance instead of entering a retry loop.
 
 Before an operator-data repair, install the intended binary, capture status,
 and make an online SQLite backup. Review the reported repairable and unavailable
@@ -334,8 +378,11 @@ and restore the backup as `agent-mux.db` with mode `0600` before restarting.
 
 If the initial status command itself reports `database disk image is
 malformed`, do not proceed directly to rebuild and do not rely on `.backup`
-being able to traverse the damaged B-tree. Stop the daemon first and preserve
-the database plus any WAL/SHM companions byte-for-byte for recovery analysis:
+being able to traverse the damaged B-tree. Opening the dashboard with the
+intended binary invokes the automatic quarantine-and-replace path above. If the
+dashboard cannot be opened, or an operator intentionally chooses manual
+analysis instead, stop the daemon first and preserve the database plus any
+WAL/SHM companions byte-for-byte:
 
 ```bash
 "$amx_bin" daemon stop
@@ -349,7 +396,10 @@ done
 
 Only after that preservation step should an operator choose between an
 explicit `"$amx_bin" index rebuild` attempt (appropriate when diagnostics
-isolate corruption to derived FTS state) and lower-level SQLite recovery.
+isolate corruption to derived FTS state), restoring a known-good database
+backup with mode `0600`, and lower-level SQLite recovery. Keep both automatic
+quarantines and manual preservation directories until the replacement has been
+verified and any forensic need has passed.
 
 Retention is controlled by `[defaults.session_archive] keep_days` (default
 30). Refresh and prune operations hide index entries older than `keep_days`;

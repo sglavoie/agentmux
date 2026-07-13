@@ -28,8 +28,12 @@ var rootCmd = &cobra.Command{
 		configureLogging(debugEnabled())
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		recoveryReexec := tui.RecoveryReexecPending()
 		cfg, err := loadRunnableConfig()
 		if err != nil {
+			if recoveryReexec {
+				return errors.Join(err, tui.AbortRecoveryReexec())
+			}
 			return err
 		}
 		runner := kitty.NewRealRunner()
@@ -38,7 +42,7 @@ var rootCmd = &cobra.Command{
 		if sourceWindowID <= 0 {
 			sourceWindowID = windowIDFromEnv()
 		}
-		if focusExistingDashboard(client, sourceWindowID) {
+		if !recoveryReexec && focusExistingDashboard(client, sourceWindowID) {
 			return nil
 		}
 		return tui.RunFromWindow(cfg, client, sourceWindowID)

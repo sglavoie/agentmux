@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	unifiedsearch "github.com/sglavoie/agentmux/internal/search"
@@ -29,11 +30,19 @@ type Model struct {
 	dataServicesInitInFlight   bool
 	dataServicesRetryAttempt   int
 	dataServicesRetryScheduled bool
-	interval                   time.Duration
-	sortMode                   string
-	attentionStates            map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
-	backgroundCommands         modelBackgroundCommands
-	daemonCommand              func(daemon.Request) (daemon.Response, error)
+	dataServicesRecoveryState  dataServicesRecoveryState
+	dataServicesRecoveryResult datastore.RecoveryResult
+	dataServicesRecoveryErr    error
+	// dataServicesProcessRestartRequested is set only after this process has
+	// replaced a corrupt database. The Bubble Tea program must exit without
+	// reopening SQLite so RunFromWindow can re-exec into a process with fresh
+	// modernc SQLite and WAL state.
+	dataServicesProcessRestartRequested bool
+	interval                            time.Duration
+	sortMode                            string
+	attentionStates                     map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
+	backgroundCommands                  modelBackgroundCommands
+	daemonCommand                       func(daemon.Request) (daemon.Response, error)
 
 	// session state
 	sessions   []session.RunningSession // sorted full list
@@ -520,6 +529,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case dataServicesRetryMsg:
 		m.dataServicesRetryScheduled = false
 		return m, m.dispatchDataServicesInit()
+
+	case dataServicesRecoveryRequestMsg:
+		return m.handleDataServicesRecoveryRequest(msg)
+
+	case dataServicesRecoveryReadyMsg:
+		return m.handleDataServicesRecoveryReady(msg)
 
 	case workspaceProjectionMsg:
 		return m.handleWorkspaceProjectionMsg(msg)

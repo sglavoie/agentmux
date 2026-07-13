@@ -27,8 +27,9 @@ func waitForTestSocket(t *testing.T, socketPath string) {
 // shutdown request arrives, the daemon must remove the socket file before
 // returning and release its single-instance lock so a follow-up Run() on the
 // same path is not blocked by leftovers from the prior process. The defer
-// chain is: server.Close() (waits for handlers via wg), os.Remove(socketPath),
-// then releaseDaemonLock.
+// chain is: server.Close() (waits for handlers via wg), activity Writer.Close()
+// (flushes and closes its datastore), os.Remove(socketPath), then
+// releaseDaemonLock.
 func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "amx-run-cleanup-*")
 	if err != nil {
@@ -89,6 +90,23 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	}
 	if _, err := os.Stat(daemonLockPath(socketPath)); !os.IsNotExist(err) {
 		t.Fatalf("lock file should have been removed; stat err = %v", err)
+	}
+}
+
+func TestCloseDaemonResourcesClosesActivityStoreBeforeSocketRemoval(t *testing.T) {
+	steps := make([]string, 0, 3)
+	closeDaemonResources(
+		func() { steps = append(steps, "server-drained") },
+		// activity.Writer.Close does not return until its worker defer has
+		// closed the owned datastore; this callback represents that boundary.
+		func() { steps = append(steps, "activity-store-closed") },
+		func() error {
+			steps = append(steps, "socket-removed")
+			return nil
+		},
+	)
+	if got, want := strings.Join(steps, ","), "server-drained,activity-store-closed,socket-removed"; got != want {
+		t.Fatalf("teardown order = %s, want %s", got, want)
 	}
 }
 

@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -14,6 +16,131 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/activity"
 )
+
+func newShutdownTestSocketPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "amx-shutdown-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "daemon.sock")
+}
+
+func TestClientShutdownAndWaitWaitsPastAcknowledgement(t *testing.T) {
+	socketPath := newShutdownTestSocketPath(t)
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	disableListenerAutoUnlink(listener)
+	acknowledged := make(chan struct{})
+	allowTeardown := make(chan struct{})
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = bufio.NewReader(conn).ReadBytes('\n')
+		_ = json.NewEncoder(conn).Encode(Response{OK: true})
+		close(acknowledged)
+		<-allowTeardown
+		_ = listener.Close()
+		_ = os.Remove(socketPath)
+	}()
+	t.Cleanup(func() {
+		_ = listener.Close()
+		select {
+		case <-allowTeardown:
+		default:
+			close(allowTeardown)
+		}
+		<-serverDone
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- NewClientWithSocket(socketPath).ShutdownAndWait(ctx) }()
+
+	select {
+	case <-acknowledged:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown request was not acknowledged")
+	}
+	select {
+	case err := <-result:
+		t.Fatalf("ShutdownAndWait returned at acknowledgement boundary: %v", err)
+	case <-time.After(75 * time.Millisecond):
+	}
+	close(allowTeardown)
+	if err := <-result; err != nil {
+		t.Fatalf("ShutdownAndWait: %v", err)
+	}
+}
+
+func TestClientShutdownAndWaitAlreadyStopped(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := NewClientWithSocket(newShutdownTestSocketPath(t)).ShutdownAndWait(ctx); err != nil {
+		t.Fatalf("ShutdownAndWait on stopped daemon: %v", err)
+	}
+}
+
+func TestClientShutdownAndWaitRejectsFailedAcknowledgement(t *testing.T) {
+	socketPath := newShutdownTestSocketPath(t)
+	stop := startTestDaemonServer(t, socketPath, func(Request) (Response, bool) {
+		return Response{OK: false, Error: "shutdown disabled"}, true
+	})
+	t.Cleanup(stop)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := NewClientWithSocket(socketPath).ShutdownAndWait(ctx)
+	if err == nil || !strings.Contains(err.Error(), "rejected shutdown") || !strings.Contains(err.Error(), "shutdown disabled") {
+		t.Fatalf("ShutdownAndWait error = %v, want explicit rejection", err)
+	}
+}
+
+func TestClientShutdownAndWaitHonorsTimeoutAndCancellation(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		cancel     bool
+		want       error
+		wantPhrase string
+	}{
+		{name: "deadline", want: context.DeadlineExceeded, wantPhrase: "timed out"},
+		{name: "cancellation", cancel: true, want: context.Canceled, wantPhrase: "waiting for daemon teardown"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			socketPath := newShutdownTestSocketPath(t)
+			acknowledged := make(chan struct{}, 1)
+			stop := startTestDaemonServer(t, socketPath, func(Request) (Response, bool) {
+				acknowledged <- struct{}{}
+				return Response{OK: true}, true
+			})
+			t.Cleanup(stop)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 125*time.Millisecond)
+			if test.cancel {
+				go func() {
+					<-acknowledged
+					time.Sleep(25 * time.Millisecond)
+					cancel()
+				}()
+			} else {
+				defer cancel()
+			}
+			err := NewClientWithSocket(socketPath).ShutdownAndWait(ctx)
+			if !errors.Is(err, test.want) || !strings.Contains(err.Error(), test.wantPhrase) {
+				t.Fatalf("ShutdownAndWait error = %v, want %v containing %q", err, test.want, test.wantPhrase)
+			}
+		})
+	}
+}
 
 func TestClientHealthIncludesActivityWriterMetrics(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "amx-health-*")

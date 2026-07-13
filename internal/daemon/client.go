@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/activity"
@@ -91,14 +93,32 @@ func (c *Client) sendWithDeadline(req Request, timeout time.Duration) (Response,
 	if timeout <= 0 {
 		return Response{}, errors.New("daemon request deadline elapsed")
 	}
-	conn, err := net.DialTimeout("unix", c.socketPath, timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return c.sendWithContext(ctx, req)
+}
+
+func (c *Client) sendWithContext(ctx context.Context, req Request) (Response, error) {
+	if ctx == nil {
+		return Response{}, errors.New("daemon request context is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return Response{}, err
+	}
+	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", c.socketPath)
 	if err != nil {
 		return Response{}, fmt.Errorf("connecting to daemon: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 
-	// Bound the whole exchange so a stuck daemon cannot hang the caller.
-	_ = conn.SetDeadline(time.Now().Add(timeout))
+	// DialContext covers only connection setup. Close the established socket on
+	// later cancellation too so a daemon that accepts but never responds cannot
+	// outlive the caller's context.
+	stopCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopCancel()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
 
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -106,6 +126,9 @@ func (c *Client) sendWithDeadline(req Request, timeout time.Duration) (Response,
 	}
 	data = append(data, '\n')
 	if _, err := conn.Write(data); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return Response{}, ctxErr
+		}
 		return Response{}, fmt.Errorf("sending request: %w", err)
 	}
 
@@ -114,6 +137,9 @@ func (c *Client) sendWithDeadline(req Request, timeout time.Duration) (Response,
 	scanner.Buffer(make([]byte, 0, 64*1024), maxResponseBytes)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return Response{}, ctxErr
+			}
 			if errors.Is(err, bufio.ErrTooLong) {
 				return Response{}, fmt.Errorf("daemon response exceeds %d bytes", maxResponseBytes)
 			}
@@ -194,27 +220,72 @@ func daemonSocketOlderThanBinary(socketPath, amxBin string) bool {
 	return binInfo.ModTime().After(socketInfo.ModTime())
 }
 
-func waitForSocketRemovalBefore(socketPath string, deadline time.Time) {
-	for i := 0; i < restartSocketPollCount; i++ {
-		if _, err := os.Stat(socketPath); os.IsNotExist(err) {
-			slog.Debug("daemon client: restart socket removed", "socket_path", socketPath, "attempt", i+1)
-			return
+// ShutdownAndWait asks a live daemon to stop and waits until its original
+// socket has been unpublished. Run removes that socket only after handlers
+// drain and the activity writer closes its datastore, making this a complete
+// recovery-safe teardown barrier rather than a shutdown acknowledgement.
+// An absent or refused socket is treated as an already-stopped daemon.
+func (c *Client) ShutdownAndWait(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("daemon shutdown context is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	originalSocket, statErr := os.Stat(c.socketPath)
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return fmt.Errorf("inspecting daemon socket before shutdown: %w", statErr)
+	}
+	resp, err := c.sendWithContext(ctx, Request{Type: TypeShutdown})
+	if err != nil {
+		if os.IsNotExist(statErr) || daemonConnectionRefused(err) {
+			return nil
 		}
-		if !deadline.IsZero() && time.Until(deadline) <= 0 {
-			break
+		if _, currentErr := os.Stat(c.socketPath); os.IsNotExist(currentErr) {
+			return nil
 		}
-		slog.Debug("daemon client: waiting for old socket removal", "socket_path", socketPath, "attempt", i+1)
-		delay := restartSocketPollDelay
-		if !deadline.IsZero() {
-			if remaining := time.Until(deadline); remaining < delay {
-				delay = remaining
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("requesting daemon shutdown timed out: %w", err)
+		}
+		return fmt.Errorf("requesting daemon shutdown: %w", err)
+	}
+	if !resp.OK {
+		return fmt.Errorf("daemon rejected shutdown: %s", resp.Error)
+	}
+
+	for attempt := 1; ; attempt++ {
+		currentSocket, currentErr := os.Stat(c.socketPath)
+		switch {
+		case os.IsNotExist(currentErr):
+			slog.Debug("daemon client: shutdown socket removed", "socket_path", c.socketPath, "attempt", attempt)
+			return nil
+		case currentErr != nil:
+			return fmt.Errorf("inspecting daemon socket during shutdown: %w", currentErr)
+		case originalSocket != nil && !os.SameFile(originalSocket, currentSocket):
+			// A hook may auto-start a replacement immediately after the old
+			// daemon removes its socket. A different inode proves the original
+			// teardown boundary was crossed even if polling missed the gap.
+			return nil
+		}
+
+		timer := time.NewTimer(restartSocketPollDelay)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
 			}
-		}
-		if delay > 0 {
-			time.Sleep(delay)
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return fmt.Errorf("waiting for daemon teardown timed out: %w", ctx.Err())
+			}
+			return fmt.Errorf("waiting for daemon teardown: %w", ctx.Err())
+		case <-timer.C:
 		}
 	}
-	slog.Debug("daemon client: old socket still present after restart wait", "socket_path", socketPath, "attempts", restartSocketPollCount)
+}
+
+func daemonConnectionRefused(err error) bool {
+	return errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ENOENT)
 }
 
 // RestartDetached stops the current daemon if it is running, then starts a new
@@ -227,14 +298,18 @@ func (c *Client) RestartDetached(amxBin string) error {
 func (c *Client) restartDetachedBefore(amxBin string, daemonAlive bool, deadline time.Time) error {
 	if daemonAlive {
 		slog.Debug("daemon client: requesting daemon shutdown before restart", "socket_path", c.socketPath)
-		resp, err := c.sendBefore(Request{Type: TypeShutdown}, deadline)
+		var shutdownCtx context.Context
+		var cancel context.CancelFunc
+		if deadline.IsZero() {
+			shutdownCtx, cancel = context.WithTimeout(context.Background(), time.Duration(restartSocketPollCount)*restartSocketPollDelay)
+		} else {
+			shutdownCtx, cancel = context.WithDeadline(context.Background(), deadline)
+		}
+		err := c.ShutdownAndWait(shutdownCtx)
+		cancel()
 		if err != nil {
 			return fmt.Errorf("shutting down daemon: %w", err)
 		}
-		if !resp.OK {
-			return fmt.Errorf("daemon error: %s", resp.Error)
-		}
-		waitForSocketRemovalBefore(c.socketPath, deadline)
 	}
 	if !deadline.IsZero() && time.Until(deadline) <= 0 {
 		return errors.New("daemon auto-start deadline elapsed before spawn")
