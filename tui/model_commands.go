@@ -22,7 +22,7 @@ var spawnDaemonDetached = daemon.SpawnDetached
 
 // sharedActionRegistry is intentionally package-level and stateless.  It
 // gives direct keyboard paths the same handlers as the actions overlay and
-// future CLI/palette callers without coupling the registry to Bubble Tea.
+// other callers without coupling the registry to Bubble Tea.
 var sharedActionRegistry = actions.DefaultRegistry()
 
 // daemonRequest is a narrow seam around the IPC client so fetch and clear

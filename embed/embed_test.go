@@ -28,9 +28,6 @@ type exampleConfig struct {
 			KeepDays       int `toml:"keep_days"`
 			ScanMaxAgeDays int `toml:"scan_max_age_days"`
 		} `toml:"session_archive"`
-		Activity struct {
-			KeepDays int `toml:"keep_days"`
-		}
 		Handoff struct {
 			MaxBytes       int `toml:"max_bytes"`
 			RecentMessages int `toml:"recent_messages"`
@@ -69,6 +66,18 @@ func TestExampleConfigIsValidTOML(t *testing.T) {
 
 	if _, ok := decoded["defaults"]; !ok {
 		t.Fatal("ExampleConfig is missing [defaults]")
+	}
+}
+
+func TestExampleConfigOmitsRetiredActivityDefaults(t *testing.T) {
+	if strings.Contains(ExampleConfig, "[defaults.activity]") {
+		t.Fatal("ExampleConfig still advertises retired defaults.activity settings")
+	}
+}
+
+func TestExampleConfigOmitsRetiredProjectID(t *testing.T) {
+	if strings.Contains(ExampleConfig, "# "+"id =") || strings.Contains(ExampleConfig, "project "+"ID") {
+		t.Fatal("ExampleConfig still advertises retired project id settings")
 	}
 }
 

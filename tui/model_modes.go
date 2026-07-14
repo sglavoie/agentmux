@@ -150,7 +150,6 @@ func (m Model) handleActionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // the daemon. Callers must guard against an empty session list.
 func (m Model) enterDetailMode(windowID int, startInTimeline bool) (tea.Model, tea.Cmd) {
 	m.clearJumpChord()
-	m.detailReturnMode = m.mode
 	m.mode = ModeDetail
 	m.detailWindowID = windowID
 	m.detailEvents = nil
@@ -161,21 +160,16 @@ func (m Model) enterDetailMode(windowID int, startInTimeline bool) (tea.Model, t
 	return m, sessionDetailCmd(windowID)
 }
 
-// exitDetailMode returns to its source surface and clears every detail-pane field so
+// exitDetailMode returns to ModeList and clears every detail-pane field so
 // the next entry starts from a clean state. No-op when the model is not in
 // ModeDetail.
 func (m *Model) exitDetailMode() {
-	returnMode := m.detailReturnMode
-	if returnMode != ModeWorkspace {
-		returnMode = ModeList
-	}
-	m.mode = returnMode
+	m.mode = ModeList
 	m.detailWindowID = 0
 	m.detailEvents = nil
 	m.detailScroll = 0
 	m.detailLoading = false
 	m.detailErr = nil
-	m.detailReturnMode = ModeList
 	m.detailViewTimeline = false
 	m.detailTimelineScroll = 0
 	m.detailTimelineFold = nil
@@ -387,11 +381,7 @@ func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	total, visible := helpScrollBounds(m, helpVisibleHeight(m))
 	switch msg.String() {
 	case keyEsc, keyQuestion, keyQ:
-		m.mode = m.helpReturnMode
-		if m.mode != ModeWorkspace {
-			m.mode = ModeList
-		}
-		m.helpReturnMode = ModeList
+		m.mode = ModeList
 		m.helpOffset = 0
 	case keyCtrlC:
 		return m, tea.Quit

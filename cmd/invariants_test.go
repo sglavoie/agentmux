@@ -1,6 +1,14 @@
 package cmd
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +17,81 @@ import (
 )
 
 var invariantNow = time.Unix(1_700_000_000, 0)
+
+func TestSourceTreeHasNoRetiredPlatformStacks(t *testing.T) {
+	root := ".."
+	retiredPackages := []string{
+		"activity",
+		"compatimport",
+		"datastore",
+		"datastorerecovery",
+		"search",
+		"workspace",
+	}
+	for _, name := range retiredPackages {
+		directory := filepath.Join("internal", name)
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(directory))); err == nil {
+			t.Errorf("retired platform directory still exists: %s", directory)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", directory, err)
+		}
+	}
+
+	retiredImports := make(map[string]bool, len(retiredPackages))
+	for _, name := range retiredPackages {
+		retiredImports["github.com/sglavoie/agentmux/internal/"+name] = true
+	}
+
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" || entry.Name() == "vendor" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) != ".go" {
+			return nil
+		}
+
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			return err
+		}
+		for _, spec := range file.Imports {
+			importPath, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				return err
+			}
+			for retiredImport := range retiredImports {
+				if importPath == retiredImport || strings.HasPrefix(importPath, retiredImport+"/") {
+					t.Errorf("%s imports retired platform package %s", path, importPath)
+				}
+			}
+		}
+
+		if strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			literal, ok := node.(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				return true
+			}
+			value, err := strconv.Unquote(literal.Value)
+			if err == nil && strings.Contains(value, "agent-mux.db") {
+				t.Errorf("%s contains a retired database pathname", path)
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 func healthyTestHealth(build buildinfo.Info) daemon.Health {
 	b := build

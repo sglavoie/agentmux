@@ -30,7 +30,6 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 	out := stripAnsi(renderHelp(m))
 
 	for _, frag := range []string{
-		"v         toggle live sessions / Workbench",
 		"x         clear session icon",
 		"X         close session (confirm)",
 		"C         launch new session with profile selection",

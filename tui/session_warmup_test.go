@@ -48,6 +48,56 @@ func sessionWarmupTestConfig() *config.Config {
 	}
 }
 
+func TestSessionCacheLoadMissingIndexStartsEmptyWarmRefresh(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	msg, ok := drainCmd(t, sessionCacheLoadCmd(3)).(sessionCacheLoadDoneMsg)
+	if !ok {
+		t.Fatalf("sessionCacheLoadCmd produced %T, want sessionCacheLoadDoneMsg", msg)
+	}
+	if msg.seq != 3 || msg.loadErr != nil || msg.searchErr != nil || msg.idx == nil {
+		t.Fatalf("cold cache load = seq %d idx %p load %v search %v", msg.seq, msg.idx, msg.loadErr, msg.searchErr)
+	}
+	if msg.idx.Len() != 0 || len(msg.results) != 0 {
+		t.Fatalf("cold cache snapshot = len %d results %d", msg.idx.Len(), len(msg.results))
+	}
+
+	m := Model{cfg: sessionWarmupTestConfig(), sessionCacheLoadInFlight: true, sessionLoading: true}
+	updated, cmd := m.Update(msg)
+	got := updated.(Model)
+	if got.sessionCacheLoadInFlight || !got.sessionRefreshInFlight || got.sessionLoading || got.transcriptIndex == nil || cmd == nil {
+		t.Fatalf("cold cache handoff = cache-loading %v refreshing %v loading %v index %p cmd %v", got.sessionCacheLoadInFlight, got.sessionRefreshInFlight, got.sessionLoading, got.transcriptIndex, cmd != nil)
+	}
+}
+
+func TestSessionCacheLoadMalformedIndexPublishesRecoveringSnapshot(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := defaultTranscriptIndexPath(home)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{not-json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	msg := drainCmd(t, sessionCacheLoadCmd(4)).(sessionCacheLoadDoneMsg)
+	if msg.idx == nil || msg.loadErr == nil || msg.searchErr != nil {
+		t.Fatalf("recovering cache load = idx %p load %v search %v", msg.idx, msg.loadErr, msg.searchErr)
+	}
+	if matches, _ := filepath.Glob(path + ".corrupt-*"); len(matches) != 1 {
+		t.Fatalf("quarantined caches = %v, want one", matches)
+	}
+
+	m := Model{mode: ModeSessionSearch, cfg: sessionWarmupTestConfig(), sessionCacheLoadInFlight: true, sessionLoading: true, sessionSearchSeq: 4}
+	updated, cmd := m.Update(msg)
+	got := updated.(Model)
+	if got.transcriptIndex == nil || got.sessionRefreshErr == nil || !got.sessionRefreshInFlight || got.sessionLoading || cmd == nil {
+		t.Fatalf("recovered snapshot = index %p refreshErr %v refreshing %v loading %v cmd %v", got.transcriptIndex, got.sessionRefreshErr, got.sessionRefreshInFlight, got.sessionLoading, cmd != nil)
+	}
+}
+
 func TestInitSessionWarmupLoadsCacheAndProducesResults(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -88,39 +138,35 @@ func TestInitSessionWarmupLoadsCacheAndProducesResults(t *testing.T) {
 		t.Fatalf("Init batch length = %d, want 5 startup commands", len(batch))
 	}
 
-	request, ok := batch[len(batch)-1]().(dataServicesInitRequestMsg)
+	msgs := flattenMsg(t, batch[len(batch)-1]())
+	if len(msgs) != 2 {
+		t.Fatalf("warmup produced %d messages, want start + done", len(msgs))
+	}
+	if _, ok := msgs[0].(sessionCacheLoadStartedMsg); !ok {
+		t.Fatalf("first warmup msg = %T, want sessionCacheLoadStartedMsg", msgs[0])
+	}
+	done, ok := msgs[1].(sessionCacheLoadDoneMsg)
 	if !ok {
-		t.Fatalf("startup service message = %T, want dataServicesInitRequestMsg", batch[len(batch)-1]())
+		t.Fatalf("second warmup msg = %T, want sessionCacheLoadDoneMsg", msgs[1])
 	}
-	updated, initCmd := m.Update(request)
-	m = updated.(Model)
-	if initCmd == nil || !m.dataServicesInitInFlight {
-		t.Fatalf("service initialization = cmd %v in-flight %v", initCmd != nil, m.dataServicesInitInFlight)
+	if done.loadErr != nil || done.searchErr != nil {
+		t.Fatalf("cache load errors = load %v search %v", done.loadErr, done.searchErr)
 	}
-	done, ok := initCmd().(dataServicesReadyMsg)
-	if !ok {
-		t.Fatalf("service initialization produced unexpected message")
-	}
-	if done.err != nil {
-		t.Fatalf("service initialization error: %v", done.err)
-	}
-	if done.snapshot.transcriptSearchErr != nil {
-		t.Fatalf("cache search error: %v", done.snapshot.transcriptSearchErr)
-	}
-	if done.snapshot.transcriptIndex == nil {
+	if done.idx == nil {
 		t.Fatal("cache load returned nil index")
 	}
-	if len(done.snapshot.transcriptReaders) != 3 {
-		t.Fatalf("reader count = %d, want 3", len(done.snapshot.transcriptReaders))
+	if len(done.readers) != 3 {
+		t.Fatalf("reader count = %d, want 3", len(done.readers))
 	}
-	if len(done.snapshot.transcriptResults) != 1 {
-		t.Fatalf("result count = %d, want only the visible cached session", len(done.snapshot.transcriptResults))
+	if len(done.results) != 1 {
+		t.Fatalf("result count = %d, want only the visible cached session", len(done.results))
 	}
-	if got := done.snapshot.transcriptResults[0].Meta.ID; got != "new" {
+	if got := done.results[0].Meta.ID; got != "new" {
 		t.Fatalf("result ID = %q, want new", got)
 	}
-	if err := m.dataServices.Close(); err != nil {
-		t.Fatalf("close data services: %v", err)
+	databasePath := filepath.Join(home, ".local", "share", "agent-mux", "agent-mux.db")
+	if _, err := os.Stat(databasePath); !os.IsNotExist(err) {
+		t.Fatalf("startup created database %s: %v", databasePath, err)
 	}
 }
 

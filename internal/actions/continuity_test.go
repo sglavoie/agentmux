@@ -3,10 +3,12 @@ package actions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
@@ -238,7 +240,7 @@ func TestForkUsesPortableHandoffForCopilot(t *testing.T) {
 	reader := &continuityReader{harness: harness.Copilot}
 	meta := continuityMeta(t, harness.Copilot, "source-1", "work")
 	runner := &continuityHandoff{result: handoff.Result{
-		Artifact:      handoff.Artifact{Record: handoff.Record{ID: "handoff-1", Path: "/tmp/handoff-1.md", Status: handoff.StatusFinal}},
+		Artifact:      handoff.Artifact{ID: "handoff-1", Path: "/tmp/handoff-1.md", Status: handoff.StatusFinal},
 		TargetProfile: "work", TargetHarness: harness.Copilot, Launched: true, Label: "Portable fork",
 	}}
 	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
@@ -261,12 +263,12 @@ func TestForkUsesPortableHandoffForCopilot(t *testing.T) {
 	}
 }
 
-func TestForkWorktreeLaunchesNativeForkInManagedContext(t *testing.T) {
+func TestForkWorktreeLaunchesNativeForkAndRetainsSuccessfulWorktree(t *testing.T) {
 	client := &continuityKitty{}
 	reader := &continuityReader{harness: harness.Codex}
 	meta := continuityMeta(t, harness.Codex, "source-1", "work")
 	managed := &continuityWorktree{created: worktree.Result{
-		ID: "mwt-1", WorkspaceID: "api", Path: t.TempDir(), Branch: "amx/api/source-1", SourceRoot: t.TempDir(),
+		ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", BaseRef: "HEAD", SourceRoot: t.TempDir(),
 	}}
 	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
 		Kitty: client, Config: continuityConfig(harness.Codex), Readers: map[string]transcript.Reader{harness.Codex: reader}, Worktree: managed,
@@ -274,14 +276,23 @@ func TestForkWorktreeLaunchesNativeForkInManagedContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ForkWorktree: %v", err)
 	}
-	if len(managed.requests) != 1 || managed.requests[0].SourceCWD != meta.CWD || managed.requests[0].AllowDirty {
+	if len(managed.requests) != 1 || managed.requests[0].SourceCWD != meta.CWD || managed.requests[0].ProjectLabel != meta.Project || managed.requests[0].AllowDirty {
 		t.Fatalf("worktree requests = %+v", managed.requests)
 	}
 	if len(client.launched) != 1 || client.launched[0].Directory != managed.created.Path {
-		t.Fatalf("launches = %+v, want managed directory %q", client.launched, managed.created.Path)
+		t.Fatalf("launches = %+v, want isolated directory %q", client.launched, managed.created.Path)
 	}
 	if got := result.Data["fork_kind"]; got != "isolated" {
 		t.Fatalf("fork_kind = %v, want isolated", got)
+	}
+	worktreeData, ok := result.Data["worktree"].(map[string]any)
+	if !ok || worktreeData["project"] != "api" || worktreeData["path"] != managed.created.Path ||
+		worktreeData["branch"] != managed.created.Branch || worktreeData["base_ref"] != "HEAD" ||
+		worktreeData["source_root"] != managed.created.SourceRoot {
+		t.Fatalf("worktree result data = %#v", result.Data["worktree"])
+	}
+	if _, exists := worktreeData["workspace_id"]; exists {
+		t.Fatalf("worktree result retained workspace identity: %#v", worktreeData)
 	}
 	if len(managed.removed) != 0 {
 		t.Fatalf("successful launch removed worktree: %+v", managed.removed)
@@ -292,9 +303,9 @@ func TestForkWorktreeUsesPortableLaunchDirectoryAndCleansUpFailure(t *testing.T)
 	client := &continuityKitty{}
 	reader := &continuityReader{harness: harness.Copilot}
 	meta := continuityMeta(t, harness.Copilot, "source-1", "work")
-	managed := &continuityWorktree{created: worktree.Result{ID: "mwt-1", WorkspaceID: "api", Path: t.TempDir(), Branch: "amx/api/source-1", SourceRoot: t.TempDir()}}
+	managed := &continuityWorktree{created: worktree.Result{ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", BaseRef: "HEAD", SourceRoot: t.TempDir()}}
 	runner := &continuityHandoff{result: handoff.Result{
-		Artifact:      handoff.Artifact{Record: handoff.Record{ID: "handoff-1", Path: "/tmp/handoff-1.md", Status: handoff.StatusFinal}},
+		Artifact:      handoff.Artifact{ID: "handoff-1", Path: "/tmp/handoff-1.md", Status: handoff.StatusFinal},
 		TargetProfile: "work", TargetHarness: harness.Copilot, Launched: true, Label: "Portable isolated fork",
 	}}
 	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
@@ -318,13 +329,16 @@ func TestForkWorktreeUsesPortableLaunchDirectoryAndCleansUpFailure(t *testing.T)
 	if err == nil || len(managed.removed) != 1 {
 		t.Fatalf("failed portable launch error=%v cleanup=%+v, want unused worktree cleanup", err, managed.removed)
 	}
+	if managed.removed[0] != managed.created {
+		t.Fatalf("cleanup result = %+v, want returned worktree %+v", managed.removed[0], managed.created)
+	}
 }
 
 func TestForkWorktreeCleansUpWhenNativeLaunchFails(t *testing.T) {
 	client := &continuityKitty{launchErr: errors.New("Kitty unavailable")}
 	reader := &continuityReader{harness: harness.Claude}
 	meta := continuityMeta(t, harness.Claude, "source-1", "work")
-	managed := &continuityWorktree{created: worktree.Result{ID: "mwt-1", WorkspaceID: "api", Path: t.TempDir(), Branch: "amx/api/source-1", SourceRoot: t.TempDir()}}
+	managed := &continuityWorktree{created: worktree.Result{ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", BaseRef: "HEAD", SourceRoot: t.TempDir()}}
 	_, err := DefaultRegistry().Execute(context.Background(), Dependencies{
 		Kitty: client, Config: continuityConfig(harness.Claude), Readers: map[string]transcript.Reader{harness.Claude: reader}, Worktree: managed,
 	}, ForkWorktree, Request{Conversation: &meta, Confirmed: true})
@@ -334,13 +348,32 @@ func TestForkWorktreeCleansUpWhenNativeLaunchFails(t *testing.T) {
 	}
 }
 
+func TestForkWorktreeReportsGitCheckoutErrorsWithoutWorkspaceConcepts(t *testing.T) {
+	reader := &continuityReader{harness: harness.Codex}
+	meta := continuityMeta(t, harness.Codex, "source-1", "work")
+	runner := &continuityWorktree{createErr: fmt.Errorf("probe failed: %w", worktree.ErrNotGitCheckout)}
+	_, err := DefaultRegistry().Execute(context.Background(), Dependencies{
+		Kitty: &continuityKitty{}, Config: continuityConfig(harness.Codex),
+		Readers: map[string]transcript.Reader{harness.Codex: reader}, Worktree: runner,
+	}, ForkWorktree, Request{Conversation: &meta, Confirmed: true})
+	var actionErr *Error
+	if !errors.As(err, &actionErr) || actionErr.Code != "git_unavailable" {
+		t.Fatalf("error = %v, want git_unavailable", err)
+	}
+}
+
 func TestHandoffReportsFinalArtifactAfterLaunchFailure(t *testing.T) {
 	client := &continuityKitty{}
 	reader := &continuityReader{harness: harness.Claude}
 	meta := continuityMeta(t, harness.Claude, "source-1", "work")
+	createdAt := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(time.Minute)
 	runner := &continuityHandoff{
-		result: handoff.Result{Artifact: handoff.Artifact{Record: handoff.Record{ID: "handoff-1", Path: "/tmp/handoff-1.md", Status: handoff.StatusFinal}}, TargetProfile: "target", TargetHarness: harness.Codex},
-		err:    &handoff.PartialLaunchError{Err: errors.New("Kitty unavailable")},
+		result: handoff.Result{Artifact: handoff.Artifact{
+			ID: "handoff-1", Path: "/tmp/handoff-1.md", ContentHash: "sha256", Status: handoff.StatusFinal,
+			CreatedAt: createdAt, UpdatedAt: updatedAt,
+		}, TargetProfile: "target", TargetHarness: harness.Codex},
+		err: &handoff.PartialLaunchError{Err: errors.New("Kitty unavailable")},
 	}
 	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
 		Kitty: client, Config: &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
@@ -350,7 +383,8 @@ func TestHandoffReportsFinalArtifactAfterLaunchFailure(t *testing.T) {
 	if !errors.As(err, &partial) || partial.ActionError.Code != "partial_launch_failed" {
 		t.Fatalf("error = %#v, want typed partial launch failure", err)
 	}
-	if result.Action != Handoff || result.Data["path"] != "/tmp/handoff-1.md" || result.Data["status"] != handoff.StatusFinal {
+	if result.Action != Handoff || result.Data["path"] != "/tmp/handoff-1.md" || result.Data["status"] != handoff.StatusFinal ||
+		result.Data["content_hash"] != "sha256" || result.Data["created_at"] != createdAt || result.Data["updated_at"] != updatedAt {
 		t.Fatalf("partial result = %+v, want finalized artifact metadata", result)
 	}
 }

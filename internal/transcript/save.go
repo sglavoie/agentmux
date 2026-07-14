@@ -2,66 +2,43 @@ package transcript
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
+	"errors"
+	"fmt"
+
+	"github.com/sglavoie/agentmux/internal/cachefile"
 )
 
-func (i *Index) saveLocked() (retErr error) {
-	if err := os.MkdirAll(filepath.Dir(i.path), 0o755); err != nil {
-		return err
-	}
+var writeTranscriptIndex = cachefile.WriteFileAtomic
+
+// saveLocked persists metadata even when one or more legacy inline search
+// bodies cannot be migrated to sidecars. Successfully migrated bodies are
+// removed from i.entries; failed bodies remain inline in both memory and the
+// metadata JSON so a later load/save can retry without losing search data.
+// The first return value contains those retryable sidecar warnings, while the
+// second reports whether the authoritative metadata write itself failed.
+func (i *Index) saveLocked() (warning, persistErr error) {
 	for key, meta := range i.entries {
 		if meta.SearchText == "" {
 			continue
 		}
-		// saveLocked is only used by the legacy path and is called with
-		// i.mu already held. Going through WriteSearchText would re-enter
-		// the SQLite-aware facade, which needs the same mutex to determine
-		// the active backend. Keep legacy persistence direct to its sidecar
-		// store instead.
+		// The caller already holds i.mu, so persist directly through the
+		// sidecar store before writing the metadata cache.
 		if err := i.store.Write(key, meta.SearchText); err != nil {
-			return err
+			warning = errors.Join(warning, fmt.Errorf("migrating transcript search sidecar %s: %w", key, err))
+			continue
 		}
+		meta.SearchText = ""
+		i.entries[key] = meta
 	}
-	data, err := json.MarshalIndent(indexFile{Entries: metadataOnlyEntries(i.entries)}, "", "  ")
+	data, err := json.MarshalIndent(indexFile{Entries: i.entries}, "", "  ")
 	if err != nil {
-		return err
+		return warning, err
 	}
-	tmp := i.path + ".tmp"
-	tf, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if retErr != nil {
-			_ = os.Remove(tmp)
-		}
-	}()
-	if _, err := tf.Write(data); err != nil {
-		_ = tf.Close()
-		return err
-	}
-	if err := tf.Sync(); err != nil {
-		_ = tf.Close()
-		return err
-	}
-	if err := tf.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, i.path); err != nil {
-		return err
+	if err := writeTranscriptIndex(i.path, data, 0o644); err != nil {
+		return warning, err
 	}
 	if saveLockedHookForTest != nil {
 		saveLockedHookForTest()
 	}
-	return nil
-}
-
-func metadataOnlyEntries(entries map[string]SessionMeta) map[string]SessionMeta {
-	out := make(map[string]SessionMeta, len(entries))
-	for key, meta := range entries {
-		meta.SearchText = ""
-		out[key] = meta
-	}
-	return out
+	return warning, nil
 }

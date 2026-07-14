@@ -1,48 +1,30 @@
 package tui
 
 import (
-	"context"
 	"os"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
-	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
-	unifiedsearch "github.com/sglavoie/agentmux/internal/search"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
-	"github.com/sglavoie/agentmux/internal/workspace"
 )
 
 // Model is the root Bubble Tea model for the dashboard.
 type Model struct {
 	// deps
-	client                     kitty.KittyClient
-	cfg                        *config.Config
-	ctx                        context.Context
-	dataServices               *DataServices
-	dataServicesInitInFlight   bool
-	dataServicesRetryAttempt   int
-	dataServicesRetryScheduled bool
-	dataServicesRecoveryState  dataServicesRecoveryState
-	dataServicesRecoveryResult datastore.RecoveryResult
-	dataServicesRecoveryErr    error
-	// dataServicesProcessRestartRequested is set only after this process has
-	// replaced a corrupt database. The Bubble Tea program must exit without
-	// reopening SQLite so RunFromWindow can re-exec into a process with fresh
-	// modernc SQLite and WAL state.
-	dataServicesProcessRestartRequested bool
-	interval                            time.Duration
-	sortMode                            string
-	attentionStates                     map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
-	backgroundCommands                  modelBackgroundCommands
-	daemonCommand                       func(daemon.Request) (daemon.Response, error)
+	client             kitty.KittyClient
+	cfg                *config.Config
+	interval           time.Duration
+	sortMode           string
+	attentionStates    map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
+	backgroundCommands modelBackgroundCommands
+	daemonCommand      func(daemon.Request) (daemon.Response, error)
 
 	// session state
 	sessions   []session.RunningSession // sorted full list
@@ -65,7 +47,7 @@ type Model struct {
 	// mode
 	mode Mode
 
-	// filter (unified search + account + state DSL)
+	// running-session filter (profile + state DSL)
 	filterText     string          // live input while in ModeSearch
 	activeFilter   Filter          // committed filter applied to filtered
 	savedFilter    Filter          // snapshot taken on enter; restored on Esc
@@ -114,33 +96,6 @@ type Model struct {
 	// actions overlay. Its zero value is ModeList for legacy callers.
 	actionsReturnMode Mode
 
-	// command palette state. paletteReturnMode preserves the exact surface
-	// (and its cursor/filter state) that was visible when ':' opened the
-	// palette. Entries are derived on demand from that surface's selection and
-	// the latest workspace projection, so they never retain stale entity
-	// pointers across refreshes.
-	paletteQuery      string
-	paletteCursor     int
-	paletteOffset     int
-	paletteReturnMode Mode
-	paletteMessage    string
-
-	// unified search is the FTS5-backed cross-entity surface opened from the
-	// palette. Its query accepts normal text plus explicit type:/workspace:/
-	// harness:/profile:/from:/to: filter tokens; S and P retain their separate
-	// literal transcript/plan search state below.
-	unifiedQuery                 string
-	unifiedResults               []unifiedsearch.Result
-	unifiedCursor                int
-	unifiedOffset                int
-	unifiedInput                 bool
-	unifiedLoading               bool
-	unifiedSearchErr             error
-	unifiedSearchSeq             int
-	unifiedReturnMode            Mode
-	pendingUnifiedPlanID         string
-	pendingUnifiedConversationID string
-
 	// config picker mode
 	configPickerAccounts   []config.Account
 	configPickerCursor     int
@@ -167,12 +122,6 @@ type Model struct {
 	// Empty when the daemon is unreachable; treated as "Active" by stateGroup.
 	lastActivity  map[int]time.Time
 	idleThreshold time.Duration
-	// daemonStates is the raw state-query result captured with the live Kitty
-	// list. The workspace projection consumes it asynchronously after each
-	// refresh; list rendering continues to use the state already applied to
-	// sessions above.
-	daemonStates map[int]daemon.WindowStateSnapshot
-
 	// watchdog snapshot: window_id → last sweep-eligible action plus the
 	// resolved threshold for that window. Populated alongside lastActivity
 	// from the same TypeStateQuery round-trip; nil when the daemon is
@@ -220,17 +169,15 @@ type Model struct {
 
 	// helpOffset is the first visible line index in the scrollable help
 	// overlay (ModeHelp). Reset to 0 whenever the overlay is opened or closed.
-	helpOffset     int
-	helpReturnMode Mode
+	helpOffset int
 
 	// detail pane state (ModeDetail). Fields are zeroed when the pane is
 	// closed so the placeholder render reads as a fresh state.
-	detailWindowID   int                   // 0 when pane is closed
-	detailEvents     []daemon.SessionEvent // events from the daemon for detailWindowID
-	detailScroll     int                   // top row index for the scrollable view
-	detailLoading    bool                  // true while the daemon query is in flight
-	detailErr        error                 // last error from the daemon query
-	detailReturnMode Mode
+	detailWindowID int                   // 0 when pane is closed
+	detailEvents   []daemon.SessionEvent // events from the daemon for detailWindowID
+	detailScroll   int                   // top row index for the scrollable view
+	detailLoading  bool                  // true while the daemon query is in flight
+	detailErr      error                 // last error from the daemon query
 
 	// timeline sub-view controls (within ModeDetail). All five are zeroed by exitDetailMode.
 	detailViewTimeline   bool
@@ -239,16 +186,15 @@ type Model struct {
 	detailShowSuppressed bool
 	detailShowTimestamps bool
 
-	// transcript index + per-harness readers built once on demand and
-	// reused across every ModeSessionSearch refresh/search. transcriptIndex
-	// is nil until the first entry into ModeSessionSearch.
+	// transcript index + per-harness readers are loaded from the filesystem
+	// cache at startup and reused across every ModeSessionSearch refresh/search.
 	transcriptIndex   *transcript.Index
 	transcriptReaders map[string]transcript.Reader
 
-	// Background refresh state for ModeSessionSearch. Service initialization
-	// supplies the process-owned facade; entering the surface may then refresh
-	// that facade through the shared writer gate.
-	sessionRefreshInFlight bool
+	// Background warm-up state for ModeSessionSearch. The startup cache load
+	// publishes warm rows before the slower source refresh and retention prune.
+	sessionCacheLoadInFlight bool
+	sessionRefreshInFlight   bool
 
 	// session search view (ModeSessionSearch). sessionResults holds the
 	// most recent transcript.Search output. sessionQuery is the free-text
@@ -326,6 +272,7 @@ type Model struct {
 	// is true while editing planQuery. planSearchSeq dedupes in-flight
 	// refresh/search dispatches the same way sessionSearchSeq does.
 	plansIndex                *plans.Index
+	planCacheLoadInFlight     bool
 	planRefreshCommand        func(*plans.Index, *config.Config, int) tea.Cmd
 	planSearchCommand         func(int, *plans.Index, plans.Query) tea.Cmd
 	sessionWarmRefreshCommand func(int, transcript.Query) tea.Cmd
@@ -341,7 +288,6 @@ type Model struct {
 	planSearchErr             error
 	planSearchSeq             int
 	planSortMode              plans.SortMode // cycled with `s`; zero value = SortByMatches
-	planViewReturnMode        Mode
 
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
 	// user opened with Enter; nil when the viewer is closed. planViewerLines
@@ -365,48 +311,11 @@ type Model struct {
 	planViewerLoading    bool
 	planViewerLoadErr    error
 	planViewerLoadSeq    int
-
-	// workspaceSnapshot is the immutable, rendering-ready projection prepared
-	// in the background for the secondary workspace-home view.
-	workspaceSnapshot      workspace.Snapshot
-	workspaceCursor        int
-	workspaceFocus         workspaceFocus
-	workspaceDrillDown     bool
-	workspaceDetailCursor  int
-	workspaceProjectOffset int
-	workspaceDetailOffset  int
-	// workspaceConversationMeta retains the complete indexed metadata needed
-	// for a workspace conversation's smart-continue action. The rendering
-	// snapshot intentionally exposes only a safe display subset.
-	workspaceConversationMeta   map[string]transcript.SessionMeta
-	workspaceCatalog            workspace.Catalog
-	workspaceProjectionSeq      int
-	workspaceLoading            bool
-	workspaceLoadErr            error
-	workspaceProjectionInFlight bool
-	workspaceProjectionQueued   bool
-	// workspaceProjectionDisabled keeps deterministic in-process UI fixtures
-	// from opening the operator's SQLite/index files. Production models leave
-	// it false; tests inject completed projection messages directly.
-	workspaceProjectionDisabled bool
-	// workspaceActivityMarker owns read-marker persistence for automatic opens
-	// and palette actions. Tests inject a hermetic recorder; production lazily
-	// opens the default datastore for each short mutation.
-	workspaceActivityMarker actions.ActivityMarker
 }
 
 // NewModel creates a dashboard model.
 func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
-	// The dashboard opens on the running-session list. The project workspace
-	// home remains available as a secondary view through the v key.
 	return newModel(cfg, client, 0, ModeList)
-}
-
-// NewModelWithDataServices creates the compatibility list model with an
-// injected process owner. Tests and embedders can use this to control the TUI
-// datastore lifecycle explicitly.
-func NewModelWithDataServices(cfg *config.Config, client kitty.KittyClient, services *DataServices) Model {
-	return newModelWithDataServices(context.Background(), cfg, client, 0, ModeList, services)
 }
 
 // NewModelFromWindow creates a dashboard model that initially selects the
@@ -416,33 +325,7 @@ func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWind
 	return newModel(cfg, client, sourceWindowID, ModeList)
 }
 
-// NewModelFromWindowWithDataServices creates the live-session model with an
-// injected process owner.
-func NewModelFromWindowWithDataServices(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, services *DataServices) Model {
-	return newModelWithDataServices(context.Background(), cfg, client, sourceWindowID, ModeList, services)
-}
-
-// Close releases the model's process-scoped data services. RunFromWindow
-// calls this lifecycle operation automatically; embedders that construct and
-// run a Model directly should defer it themselves.
-func (m Model) Close() error {
-	if m.dataServices == nil {
-		return nil
-	}
-	return m.dataServices.Close()
-}
-
 func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, initialMode Mode) Model {
-	return newModelWithDataServices(context.Background(), cfg, client, sourceWindowID, initialMode, NewDataServices())
-}
-
-func newModelWithDataServices(ctx context.Context, cfg *config.Config, client kitty.KittyClient, sourceWindowID int, initialMode Mode, services *DataServices) Model {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if services == nil {
-		services = NewDataServices()
-	}
 	interval := time.Duration(cfg.Defaults.RefreshInterval) * time.Second
 	if interval <= 0 {
 		interval = 2 * time.Second
@@ -466,8 +349,6 @@ func newModelWithDataServices(ctx context.Context, cfg *config.Config, client ki
 	return Model{
 		client:                client,
 		cfg:                   cfg,
-		ctx:                   ctx,
-		dataServices:          services,
 		interval:              interval,
 		sortMode:              sort,
 		attentionStates:       attn,
@@ -480,7 +361,6 @@ func newModelWithDataServices(ctx context.Context, cfg *config.Config, client ki
 		messageDetailIdx:      -1,
 		initialSourceWindowID: sourceWindowID,
 		mode:                  initialMode,
-		workspaceLoading:      initialMode == ModeWorkspace,
 	}
 }
 
@@ -491,7 +371,7 @@ func (m Model) Init() tea.Cmd {
 		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		tickCmd(m.interval),
 		m.runHealthCmd(true, true),
-		func() tea.Msg { return dataServicesInitRequestMsg{} },
+		startupSessionWarmupCmd(m.sessionSearchSeq),
 	}
 	return tea.Batch(cmds...)
 }
@@ -517,25 +397,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionsMsg:
 		return m.handleSessionsMsg(msg)
-
-	case dataServicesInitRequestMsg:
-		return m, m.dispatchDataServicesInit()
-
-	case dataServicesReadyMsg:
-		return m.handleDataServicesReady(msg)
-
-	case dataServicesRetryMsg:
-		m.dataServicesRetryScheduled = false
-		return m, m.dispatchDataServicesInit()
-
-	case dataServicesRecoveryRequestMsg:
-		return m.handleDataServicesRecoveryRequest(msg)
-
-	case dataServicesRecoveryReadyMsg:
-		return m.handleDataServicesRecoveryReady(msg)
-
-	case workspaceProjectionMsg:
-		return m.handleWorkspaceProjectionMsg(msg)
 
 	case activeLoopsMsg:
 		return m.handleActiveLoopsMsg(msg)
@@ -572,6 +433,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detailEventsMsg:
 		return m.handleDetailEvents(msg)
 
+	case sessionCacheLoadStartedMsg:
+		return m.handleSessionCacheLoadStarted(msg)
+
+	case sessionCacheLoadDoneMsg:
+		return m.handleSessionCacheLoadDone(msg)
+
 	case sessionWarmRefreshDoneMsg:
 		return m.handleSessionWarmRefreshDone(msg)
 
@@ -584,20 +451,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionSearchDoneMsg:
 		return m.handleSessionSearchDone(msg)
 
+	case transcriptDeleteDoneMsg:
+		return m.handleTranscriptDeleteDone(msg)
+
 	case plansRefreshDoneMsg:
 		return m.handlePlansRefreshDone(msg)
+
+	case planCacheLoadDoneMsg:
+		return m.handlePlanCacheLoadDone(msg)
 
 	case planSearchDebounceMsg:
 		return m.handlePlanSearchDebounce(msg)
 
 	case planSearchDoneMsg:
 		return m.handlePlanSearchDone(msg)
-
-	case unifiedSearchDebounceMsg:
-		return m.handleUnifiedSearchDebounce(msg)
-
-	case unifiedSearchDoneMsg:
-		return m.handleUnifiedSearchDone(msg)
 
 	case planEditorErrMsg:
 		return m.handlePlanEditorErr(msg)

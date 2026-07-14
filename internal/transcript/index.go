@@ -1,21 +1,18 @@
 package transcript
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/datastore"
-	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/searchstore"
 )
 
@@ -39,46 +36,26 @@ func IndexKey(harness, id string) string {
 	return harness + ":" + id
 }
 
-// Index is the in-memory + on-disk cache of discovered transcript
-// metadata. Concurrent callers (the daemon's pruner and the TUI's search
-// view) each hold their own *Index value; the mutex guards against
-// in-process races between Refresh, Save, Delete, and List on a single
-// instance. Cross-process correctness is intentionally out of scope —
-// see context.md ("No cross-process locking").
+// Index is the in-memory + on-disk cache of discovered transcript metadata.
+// The mutex guards one instance, while a stable advisory lock coordinates
+// independent instances and processes during filesystem mutations.
 type Index struct {
 	mu      sync.Mutex
 	path    string
 	store   *searchstore.Store
 	entries map[string]SessionMeta
 
-	// repo is enabled only after the compatibility import has completed.
-	// Keeping the legacy entries in memory lets an initialization failure use
-	// exactly the same read path as older releases.
-	repo           *Repository
-	degradedReason error
-	ownedStore     *datastore.Store
-}
-
-// Close releases the datastore only when this facade was created by the
-// compatibility wrapper that opened it. Store-injected facades borrow their
-// caller's pool, so Close is deliberately a no-op for them.
-func (i *Index) Close() error {
-	if i == nil {
-		return nil
-	}
-	i.mu.Lock()
-	store := i.ownedStore
-	i.ownedStore = nil
-	i.mu.Unlock()
-	if store == nil {
-		return nil
-	}
-	return store.Close()
+	filesystemBase  map[string]SessionMeta
+	filesystemDirty bool
 }
 
 // saveLockedHookForTest lets same-package tests count successful persistence
 // operations without changing the production save path.
 var saveLockedHookForTest func()
+
+// readTranscriptIndexFile is a test seam for distinguishing cache read
+// failures from malformed JSON without changing the production read path.
+var readTranscriptIndexFile = os.ReadFile
 
 // indexFile is the on-disk wrapper used for JSON serialization. A struct
 // with a single field is used (instead of marshalling the bare map) so
@@ -91,37 +68,36 @@ type indexFile struct {
 // LoadIndex reads the index from the default IndexPath. A missing file
 // is not an error — it yields an empty, ready-to-populate Index.
 func LoadIndex() (*Index, error) {
-	return LoadSQLiteIndex(IndexPath(), defaultTranscriptReaders())
+	return LoadIndexAt(IndexPath())
 }
 
-// LoadIndexAt reads the index from path. Used by tests and any future
-// caller that needs to point at a non-default location.
-func LoadIndexAt(path string) (*Index, error) {
+// loadIndexAtStrict decodes a complete metadata file without recovery. Public
+// callers use LoadIndexAt, which quarantines malformed disposable caches.
+func loadIndexAtStrict(path string) (*Index, error) {
 	idx := &Index{path: path, entries: make(map[string]SessionMeta)}
 	idx.store = searchstore.New(idx.path)
-	f, err := os.Open(path)
+	data, err := readTranscriptIndexFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return idx, nil
 		}
 		return nil, err
 	}
-	defer func() { _ = f.Close() }()
+	if len(data) == 0 {
+		return idx, nil
+	}
 
-	dec := json.NewDecoder(f)
+	dec := json.NewDecoder(bytes.NewReader(data))
 	if err := idx.decodeIndexFile(dec); err != nil {
-		if errors.Is(err, io.EOF) {
-			return idx, nil
-		}
-		return nil, fmt.Errorf("decoding transcript index %s: %w", path, err)
+		return nil, &indexDecodeError{path: path, err: err}
 	}
 	if tok, err := dec.Token(); err != nil {
 		if errors.Is(err, io.EOF) {
-			return idx, nil
+			return idx, idx.migrateLegacySearchText()
 		}
-		return nil, fmt.Errorf("decoding transcript index %s: %w", path, err)
+		return nil, &indexDecodeError{path: path, err: err}
 	} else {
-		return nil, fmt.Errorf("decoding transcript index %s: trailing data after top-level object: %v", path, tok)
+		return nil, &indexDecodeError{path: path, err: fmt.Errorf("trailing data after top-level object: %v", tok)}
 	}
 }
 
@@ -130,14 +106,6 @@ func (i *Index) Path() string { return i.path }
 
 // Len returns the number of entries currently held in memory.
 func (i *Index) Len() int {
-	if i.UsesSQLite() {
-		entries, err := i.repositoryList(ListFilter{IncludeHidden: true})
-		if err != nil {
-			slog.Debug("transcript.index: SQLite length failed; using compatibility cache", "err", err)
-		} else {
-			return len(entries)
-		}
-	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return len(i.entries)
@@ -146,15 +114,7 @@ func (i *Index) Len() int {
 // Save serializes the index to disk atomically (write-to-tmp + rename)
 // so a crash mid-write never leaves a half-written JSON file in place.
 func (i *Index) Save() error {
-	// SQLite mutations are committed by Repository methods. Do not rewrite
-	// the compatibility JSON after the cutover: it remains a read-only
-	// rollback source for this release.
-	if i.UsesSQLite() {
-		return nil
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	return i.saveLocked()
+	return i.saveFilesystem()
 }
 
 // Refresh re-walks every configured profile's transcripts directory via
@@ -169,152 +129,11 @@ func (i *Index) Save() error {
 // references are tolerated; the TUI can surface a "missing" indicator
 // when opening such an entry, and Delete + Prune handle real removal.
 //
-// Errors from a single profile are logged and skipped — one broken
-// home directory must not hide the rest. The first error encountered
-// is returned so callers can surface it if desired, but on-disk state
-// is still updated for the profiles that succeeded.
+// Errors from a single profile do not hide discoveries from other profiles or
+// useful partial results. Warnings are returned after the usable discoveries
+// have been merged and persisted.
 func (i *Index) Refresh(cfg *config.Config, readers map[string]Reader) error {
-	if i.UsesSQLite() {
-		return i.refreshSQLite(cfg, readers)
-	}
-	if cfg == nil {
-		return errors.New("transcript: Refresh requires a non-nil config")
-	}
-	if readers == nil {
-		return errors.New("transcript: Refresh requires at least one reader")
-	}
-
-	// Snapshot the existing entries by Path so each reader's Discover can
-	// short-circuit a parse when the on-disk file is byte-identical to the
-	// cached metadata. Path keying is used (rather than IndexKey) because
-	// the harness id is sometimes only known after parsing the first line
-	// of the file (Codex), so it is unavailable at the discovery-walk stage.
-	i.mu.Lock()
-	snapshot := make(map[string]SessionMeta, len(i.entries))
-	byPath := make(map[string]SessionMeta, len(i.entries))
-	for key, meta := range i.entries {
-		snapshot[key] = meta
-		if meta.Path != "" {
-			byPath[meta.Path] = meta
-		}
-	}
-	i.mu.Unlock()
-
-	lookup := func(path string, size int64, mtime time.Time) (SessionMeta, bool) {
-		meta, ok := byPath[path]
-		if !ok {
-			return SessionMeta{}, false
-		}
-		if meta.FileSize != size || !meta.FileModTime.Equal(mtime) {
-			return SessionMeta{}, false
-		}
-		if meta.SearchText != "" {
-			return meta, true
-		}
-		if meta.HiddenFromIndex || meta.MessageCount == 0 {
-			return meta, true
-		}
-		key := IndexKey(meta.Harness, meta.ID)
-		exists, err := i.SearchTextExists(key)
-		if err != nil {
-			slog.Debug("transcript.index: search sidecar stat failed",
-				"key", key, "err", err)
-			return SessionMeta{}, false
-		}
-		if !exists {
-			return SessionMeta{}, false
-		}
-		return meta, true
-	}
-
-	days := cfg.Defaults.SessionArchive.ScanMaxAgeDays
-	var cutoff time.Time
-	if days > 0 {
-		cutoff = time.Now().Add(-time.Duration(days) * 24 * time.Hour)
-	}
-	// days <= 0 → unlimited; leave cutoff zero so MinTime.IsZero() is true
-	// in each reader and no file is filtered by age.
-
-	projectResolver := projectresolve.NewWithGit(cfg.Projects)
-
-	var firstErr error
-	var discovered []SessionMeta
-	for _, group := range transcriptHomeGroups(cfg) {
-		reader, ok := readers[group.harnessName]
-		if !ok {
-			slog.Debug("transcript.index: no reader for harness",
-				"harness", group.harnessName, "profiles", group.profiles)
-			continue
-		}
-		metas, err := reader.Discover(group.home, DiscoverOptions{Cached: lookup, MinTime: cutoff})
-		if err != nil {
-			slog.Debug("transcript.index: discover failed",
-				"harness", group.harnessName, "home", group.home, "profiles", group.profiles, "err", err)
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		for _, meta := range metas {
-			project := projectResolver.ResolveOrFallback(meta.CWD)
-			meta.Project = project.Title
-			meta.Profiles = append([]string(nil), group.profiles...)
-			meta.Profile = displayProfileForGroup(cfg, meta.Project, project.Profile, group.profiles)
-			discovered = append(discovered, meta)
-		}
-	}
-
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	for _, meta := range discovered {
-		key := IndexKey(meta.Harness, meta.ID)
-		existing, exists := i.entries[key]
-		if _, existedAtSnapshot := snapshot[key]; existedAtSnapshot && !exists {
-			continue
-		}
-		if !discoveredMetaStillFresh(meta) {
-			continue
-		}
-		if exists {
-			meta.HiddenFromIndex = existing.HiddenFromIndex
-			if meta.SearchText == "" && existing.FileSize == meta.FileSize && existing.FileModTime.Equal(meta.FileModTime) {
-				meta.MessageCount = existing.MessageCount
-				meta.Snippet = existing.Snippet
-				meta.StartedAt = existing.StartedAt
-				meta.LastAt = existing.LastAt
-			}
-		}
-		if meta.SearchText != "" {
-			if meta.HiddenFromIndex {
-				// This is the legacy refresh path and i.mu is held below, so
-				// bypass the SQLite-aware sidecar facade.
-				if err := i.store.Delete(key); err != nil {
-					slog.Debug("transcript.index: hidden search sidecar cleanup failed",
-						"key", key, "err", err)
-					if firstErr == nil {
-						firstErr = err
-					}
-				}
-			} else if err := i.store.Write(key, meta.SearchText); err != nil {
-				slog.Debug("transcript.index: search sidecar write failed",
-					"key", key, "err", err)
-				if firstErr == nil {
-					firstErr = err
-				}
-			}
-			meta.SearchText = ""
-		}
-		i.entries[key] = meta
-	}
-	// Persist the refreshed index so newly-populated SearchText survives a
-	// process restart. Save failures are logged and swallowed — a broken
-	// disk must not turn a successful in-memory refresh into a Refresh
-	// error, and the caller can still operate against the in-memory copy.
-	if err := i.saveLocked(); err != nil {
-		slog.Debug("transcript.index: save after refresh failed",
-			"path", i.path, "err", err)
-	}
-	return firstErr
+	return i.refreshFilesystem(cfg, readers)
 }
 
 func discoveredMetaStillFresh(meta SessionMeta) bool {
@@ -328,50 +147,32 @@ func discoveredMetaStillFresh(meta SessionMeta) bool {
 	return info.Size() == meta.FileSize && info.ModTime().Equal(meta.FileModTime)
 }
 
+// SourceDeletedError reports that Delete removed the authoritative transcript
+// file but could not persist the follow-up cache mutation. Callers can use
+// errors.As to distinguish this partial success from a failure that left the
+// source untouched.
+type SourceDeletedError struct {
+	Path string
+	Err  error
+}
+
+func (e *SourceDeletedError) Error() string {
+	return fmt.Sprintf("transcript file %s was deleted, but updating the transcript cache failed: %v", e.Path, e.Err)
+}
+
+func (e *SourceDeletedError) Unwrap() error { return e.Err }
+
 // Delete removes the entry with the given key. When alsoFile is true,
 // the underlying transcript file on disk is also removed (best effort:
 // a missing file is not an error). Save is called before returning so
 // callers do not need a separate Save() to persist the deletion.
 func (i *Index) Delete(key string, alsoFile bool) error {
-	if i.UsesSQLite() {
-		return i.deleteSQLite(key, alsoFile)
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	entry, ok := i.entries[key]
-	if !ok {
-		return fmt.Errorf("transcript: no index entry for %q", key)
-	}
-	delete(i.entries, key)
-
-	if alsoFile && entry.Path != "" {
-		if err := os.Remove(entry.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			// Re-insert so the on-disk state remains consistent with
-			// in-memory state when the file removal fails partway.
-			i.entries[key] = entry
-			return fmt.Errorf("removing transcript file %s: %w", entry.Path, err)
-		}
-	}
-	// The legacy path still holds i.mu; do not re-enter the facade here.
-	if err := i.store.Delete(key); err != nil {
-		i.entries[key] = entry
-		return fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err)
-	}
-	return i.saveLocked()
+	return i.deleteFilesystem(key, alsoFile)
 }
 
 // Get returns a snapshot of one entry by key. The boolean reports
 // whether the entry was found.
 func (i *Index) Get(key string) (SessionMeta, bool) {
-	if i.UsesSQLite() {
-		meta, ok, err := i.repositoryGet(key)
-		if err != nil {
-			slog.Debug("transcript.index: SQLite get failed; using compatibility cache", "key", key, "err", err)
-		} else {
-			return meta, ok
-		}
-	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	m, ok := i.entries[key]
@@ -382,29 +183,7 @@ func (i *Index) Get(key string) (SessionMeta, bool) {
 // the TUI when the user chooses "remove from index only". A non-existent
 // key returns an error so callers cannot silently lose state.
 func (i *Index) SetHidden(key string, hidden bool) error {
-	if i.UsesSQLite() {
-		return i.setHiddenSQLite(key, hidden)
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	entry, ok := i.entries[key]
-	if !ok {
-		return fmt.Errorf("transcript: no index entry for %q", key)
-	}
-	if hidden {
-		// The legacy path holds i.mu; delete the legacy sidecar directly.
-		if err := i.store.Delete(key); err != nil {
-			return fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err)
-		}
-		entry.SearchText = ""
-	}
-	if entry.HiddenFromIndex == hidden {
-		i.entries[key] = entry
-		return nil
-	}
-	entry.HiddenFromIndex = hidden
-	i.entries[key] = entry
-	return i.saveLocked()
+	return i.setHiddenFilesystem(key, hidden)
 }
 
 // ListFilter narrows the result of List. An empty slice for a field is
@@ -421,14 +200,6 @@ type ListFilter struct {
 // List returns a copy of all entries that match the filter, sorted by
 // LastAt descending so the most recent session appears first.
 func (i *Index) List(filter ListFilter) []SessionMeta {
-	if i.UsesSQLite() {
-		entries, err := i.repositoryList(filter)
-		if err != nil {
-			slog.Debug("transcript.index: SQLite list failed; using compatibility cache", "err", err)
-		} else {
-			return entries
-		}
-	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 

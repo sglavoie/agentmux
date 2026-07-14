@@ -48,6 +48,17 @@ func (s *Store) Write(key, text string) (retErr error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	// A directory, FIFO, or other non-regular object cannot be atomically
+	// replaced by rename on every supported Unix. Treat it as a corrupt cache
+	// entry and remove it first. Regular files remain in place until the final
+	// rename so readers always see either the old or the new complete content.
+	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
 	tf, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
@@ -70,6 +81,31 @@ func (s *Store) Write(key, text string) (retErr error) {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// Readable reports whether key has a regular sidecar that can be opened for
+// reading. It intentionally does not read the entire search corpus; callers
+// use it only to decide whether a source reparse is necessary.
+func (s *Store) Readable(key string) (bool, error) {
+	path := s.Path(key)
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	if err := file.Close(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Read returns the sidecar contents for key. A missing sidecar surfaces

@@ -1,0 +1,14 @@
+{
+  "name": "session-fork-continuity",
+  "fixture": "basic",
+  "size": { "width": 100, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "S" },
+    { "type": "key", "key": "f" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "session_search" },
+    { "type": "kitty_calls", "op": "LaunchTab", "count": 1 },
+    { "type": "no_layout_issues" }
+  ]
+}

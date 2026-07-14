@@ -13,8 +13,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/sglavoie/agentmux/internal/activity"
 )
 
 func newShutdownTestSocketPath(t *testing.T) string {
@@ -142,7 +140,7 @@ func TestClientShutdownAndWaitHonorsTimeoutAndCancellation(t *testing.T) {
 	}
 }
 
-func TestClientHealthIncludesActivityWriterMetrics(t *testing.T) {
+func TestClientHealthIncludesDaemonDiagnostics(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "amx-health-*")
 	if err != nil {
 		t.Fatal(err)
@@ -162,12 +160,15 @@ func TestClientHealthIncludesActivityWriterMetrics(t *testing.T) {
 		defer func() { _ = conn.Close() }()
 		_, _ = bufio.NewReader(conn).ReadBytes('\n')
 		_ = json.NewEncoder(conn).Encode(Response{
-			OK: true, Ready: true, PID: 42,
-			ActivityWriter: &activity.Metrics{Queued: 7, Persisted: 6, Dropped: 1, Degraded: true},
+			OK: true, PID: 42, UptimeSeconds: 7, Ready: false,
+			DegradedReason: "initial snapshot timed out",
+			Metrics:        &MetricsSnapshot{Accepted: 6, QueueFull: 1},
 		})
 	}()
 	health := NewClientWithSocket(sockPath).Health()
-	if !health.Alive || health.ActivityWriter == nil || health.ActivityWriter.Queued != 7 || !health.ActivityWriter.Degraded {
+	if !health.Alive || health.PID != 42 || health.Uptime != 7*time.Second || health.Ready ||
+		health.DegradedReason != "initial snapshot timed out" || health.Metrics == nil ||
+		health.Metrics.Accepted != 6 || health.Metrics.QueueFull != 1 {
 		t.Fatalf("health = %+v", health)
 	}
 }

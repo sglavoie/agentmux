@@ -5,16 +5,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -23,23 +19,10 @@ const (
 	omittedGitField  = "(omitted to satisfy max_bytes)"
 )
 
-type preparedPlan struct {
-	name      string
-	directory string
-	paths     []string
-	excerpts  []planExcerpt
-}
-
-type planExcerpt struct {
-	path string
-	text string
-}
-
 type renderInput struct {
 	source    Source
 	goal      string
 	messages  []messageView
-	plans     []preparedPlan
 	git       GitState
 	paths     []string
 	omissions []Omission
@@ -62,15 +45,11 @@ func (b *Builder) Build(ctx context.Context, source Source, options Options) (Pa
 	if err != nil {
 		return Pack{}, err
 	}
-	if strings.TrimSpace(source.Goal) == "" {
-		return Pack{}, fmt.Errorf("handoff: original user goal is empty")
-	}
 	if strings.TrimSpace(source.CWD) == "" {
 		return Pack{}, fmt.Errorf("handoff: source CWD is empty")
 	}
 
 	paths, pathOmissions := collectSourcePaths(source)
-	plansPrepared, planOmissions := preparePlans(source.LinkedPlans, opts.PlanExcerptBytes)
 	messages, messageOmissions := selectMessages(source.Messages, opts.RecentMessages)
 	inspector := b.git
 	if inspector == nil {
@@ -78,10 +57,9 @@ func (b *Builder) Build(ctx context.Context, source Source, options Options) (Pa
 	}
 	git := inspector.Inspect(ctx, source.CWD, opts.GitTimeout)
 
-	baseOmissions := append(pathOmissions, planOmissions...)
-	baseOmissions = append(baseOmissions, messageOmissions...)
+	baseOmissions := append(pathOmissions, messageOmissions...)
 	input := renderInput{
-		source: source, goal: source.Goal, messages: messages, plans: plansPrepared,
+		source: source, goal: sourceGoal(source), messages: messages,
 		git: git, paths: paths, omissions: baseOmissions,
 	}
 	boundLargeGitFields(&input)
@@ -100,9 +78,6 @@ func (b *Builder) Build(ctx context.Context, source Source, options Options) (Pa
 		if len(input.messages) > 0 {
 			input.messages = input.messages[1:]
 			budgetDroppedMessages++
-			continue
-		}
-		if removeLastExcerpt(&input) {
 			continue
 		}
 		if input.git.Available && input.git.DiffStat != "" && input.git.DiffStat != omittedGitField {
@@ -138,9 +113,6 @@ func normalizeOptions(options Options) (Options, error) {
 	if options.RecentMessages == 0 {
 		options.RecentMessages = defaults.RecentMessages
 	}
-	if options.PlanExcerptBytes == 0 {
-		options.PlanExcerptBytes = defaults.PlanExcerptBytes
-	}
 	if options.GitTimeout == 0 {
 		options.GitTimeout = defaults.GitTimeout
 	}
@@ -150,9 +122,6 @@ func normalizeOptions(options Options) (Options, error) {
 	if options.RecentMessages < 0 {
 		return Options{}, fmt.Errorf("handoff: recent_messages must be non-negative")
 	}
-	if options.PlanExcerptBytes < 0 {
-		return Options{}, fmt.Errorf("handoff: plan excerpt limit must be non-negative")
-	}
 	if options.GitTimeout < 0 {
 		return Options{}, fmt.Errorf("handoff: Git timeout must be non-negative")
 	}
@@ -160,7 +129,7 @@ func normalizeOptions(options Options) (Options, error) {
 }
 
 func collectSourcePaths(source Source) ([]string, []Omission) {
-	paths := make([]string, 0, 2+len(source.LinkedPlans)*2)
+	paths := make([]string, 0, 2)
 	omissions := make([]Omission, 0)
 	add := func(kind, path string) {
 		if path == "" {
@@ -176,12 +145,6 @@ func collectSourcePaths(source Source) ([]string, []Omission) {
 	}
 	add("working directory", source.CWD)
 	add("transcript", source.TranscriptPath)
-	for _, plan := range source.LinkedPlans {
-		add("linked plan directory", plan.DirPath)
-		for _, file := range plan.Files {
-			add("linked plan file", planFilePath(plan.DirPath, file))
-		}
-	}
 	sort.Strings(paths)
 	paths = compactStrings(paths)
 	return paths, omissions
@@ -210,94 +173,6 @@ func selectMessages(messages []transcript.Message, recent int) ([]messageView, [
 	return eligible, omissions
 }
 
-func preparePlans(metas []plans.PlanMeta, totalLimit int) ([]preparedPlan, []Omission) {
-	ordered := append([]plans.PlanMeta(nil), metas...)
-	sort.Slice(ordered, func(i, j int) bool {
-		if ordered[i].DirPath != ordered[j].DirPath {
-			return ordered[i].DirPath < ordered[j].DirPath
-		}
-		return ordered[i].Name < ordered[j].Name
-	})
-	remaining := totalLimit
-	prepared := make([]preparedPlan, 0, len(ordered))
-	omissions := make([]Omission, 0)
-	for _, meta := range ordered {
-		planName := strings.TrimSpace(meta.Name)
-		if planName == "" && meta.DirPath != "" {
-			planName = filepath.Base(filepath.Clean(meta.DirPath))
-		}
-		if planName == "" {
-			planName = "(unnamed plan)"
-		}
-		plan := preparedPlan{name: planName}
-		if meta.DirPath == "" {
-			plan.directory = "(not supplied)"
-			omissions = append(omissions, Omission{Kind: "plan source", Detail: "linked plan directory was not supplied"})
-		} else {
-			plan.directory = absoluteClean(meta.DirPath)
-		}
-		files := append([]string(nil), meta.Files...)
-		sort.Strings(files)
-		if len(files) == 0 {
-			omissions = append(omissions, Omission{Kind: "plan source", Detail: "linked plan has no source files: " + plan.directory})
-		}
-		for _, file := range files {
-			if meta.DirPath == "" && !filepath.IsAbs(file) {
-				omissions = append(omissions, Omission{Kind: "plan excerpt", Detail: "omitted because the plan directory is missing: " + file})
-				continue
-			}
-			path := absoluteClean(planFilePath(meta.DirPath, file))
-			plan.paths = append(plan.paths, path)
-			if remaining <= 0 {
-				omissions = append(omissions, Omission{Kind: "plan excerpt", Detail: "omitted by plan excerpt cap: " + path})
-				continue
-			}
-			text, used, truncated, reason := readBoundedRegularFile(path, remaining)
-			if reason != "" {
-				omissions = append(omissions, Omission{Kind: "plan excerpt", Detail: reason + ": " + path})
-				continue
-			}
-			plan.excerpts = append(plan.excerpts, planExcerpt{path: path, text: text})
-			remaining -= used
-			if truncated {
-				omissions = append(omissions, Omission{Kind: "plan excerpt", Detail: fmt.Sprintf("truncated at %d bytes by plan excerpt cap: %s", used, path)})
-			}
-		}
-		prepared = append(prepared, plan)
-	}
-	return prepared, omissions
-}
-
-func readBoundedRegularFile(path string, limit int) (string, int, bool, string) {
-	info, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", 0, false, "source file missing"
-		}
-		return "", 0, false, "source file stat failed"
-	}
-	if !info.Mode().IsRegular() {
-		return "", 0, false, "source path is not a regular file"
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return "", 0, false, "source file read failed"
-	}
-	defer func() { _ = f.Close() }()
-	data, err := io.ReadAll(io.LimitReader(f, int64(limit)+1))
-	if err != nil {
-		return "", 0, false, "source file read failed"
-	}
-	truncated := len(data) > limit
-	if truncated {
-		data = data[:limit]
-		for len(data) > 0 && !utf8.Valid(data) {
-			data = data[:len(data)-1]
-		}
-	}
-	return string(data), len(data), truncated, ""
-}
-
 func boundLargeGitFields(input *renderInput) {
 	if len(input.git.Status) > gitFieldMaxBytes {
 		old := len(input.git.Status)
@@ -311,31 +186,13 @@ func boundLargeGitFields(input *renderInput) {
 	}
 }
 
-func removeLastExcerpt(input *renderInput) bool {
-	for i := len(input.plans) - 1; i >= 0; i-- {
-		last := len(input.plans[i].excerpts) - 1
-		if last < 0 {
-			continue
-		}
-		path := input.plans[i].excerpts[last].path
-		input.plans[i].excerpts = input.plans[i].excerpts[:last]
-		input.omissions = append(input.omissions, Omission{Kind: "plan excerpt", Detail: "omitted to satisfy max_bytes: " + path})
-		return true
-	}
-	return false
-}
-
 func renderPack(input renderInput, budgetDroppedMessages int) []byte {
 	var out bytes.Buffer
 	out.WriteString("# Agent Mux Handoff Pack\n\n")
 	out.WriteString("## Provenance\n\n")
-	writeField(&out, "Workspace ID", input.source.WorkspaceID)
-	writeField(&out, "Workspace", input.source.WorkspaceName)
+	writeField(&out, "Project", input.source.ProjectLabel)
 	writeField(&out, "Source harness", input.source.Harness)
 	writeField(&out, "Source session", input.source.SessionID)
-	if input.source.ConversationID != nil {
-		writeField(&out, "Conversation row", strconv.FormatInt(*input.source.ConversationID, 10))
-	}
 	if !input.source.CapturedAt.IsZero() {
 		writeField(&out, "Snapshot time", input.source.CapturedAt.UTC().Format(time.RFC3339Nano))
 	}
@@ -362,31 +219,6 @@ func renderPack(input renderInput, budgetDroppedMessages int) []byte {
 		out.WriteString("\n\n")
 		writeFenced(&out, message.text)
 		out.WriteByte('\n')
-	}
-
-	out.WriteString("## Linked Plans\n\n")
-	if len(input.plans) == 0 {
-		out.WriteString("No plans are explicitly linked.\n\n")
-	}
-	for _, plan := range input.plans {
-		out.WriteString("### ")
-		out.WriteString(singleLine(plan.name))
-		out.WriteString("\n\n- Directory: `")
-		out.WriteString(escapeBackticks(plan.directory))
-		out.WriteString("`\n")
-		for _, path := range plan.paths {
-			out.WriteString("- Source file: `")
-			out.WriteString(escapeBackticks(path))
-			out.WriteString("`\n")
-		}
-		out.WriteByte('\n')
-		for _, excerpt := range plan.excerpts {
-			out.WriteString("#### Excerpt: `")
-			out.WriteString(escapeBackticks(excerpt.path))
-			out.WriteString("`\n\n")
-			writeFenced(&out, excerpt.text)
-			out.WriteByte('\n')
-		}
 	}
 
 	out.WriteString("## Git Snapshot\n\n")
@@ -462,19 +294,24 @@ func writeFenced(out *bytes.Buffer, text string) {
 	out.WriteByte('\n')
 }
 
-func planFilePath(directory, file string) string {
-	if filepath.IsAbs(file) {
-		return file
-	}
-	return filepath.Join(directory, file)
-}
-
 func absoluteClean(path string) string {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return filepath.Clean(path)
 	}
 	return filepath.Clean(abs)
+}
+
+func sourceGoal(source Source) string {
+	for _, message := range source.Messages {
+		if text, ok := message.TextForHandoff(); ok && strings.EqualFold(strings.TrimSpace(message.Role), "user") {
+			return text
+		}
+	}
+	if project := strings.TrimSpace(source.ProjectLabel); project != "" {
+		return "Continue the indexed conversation for " + project + "."
+	}
+	return "Continue the indexed conversation."
 }
 
 func compactStrings(values []string) []string {

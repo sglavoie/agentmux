@@ -1,67 +1,68 @@
 # Product acceptance
 
-The project-workbench acceptance gate is:
+The product acceptance gate is:
 
 ```bash
 just acceptance
 ```
 
-It runs `go test ./...`, race-sensitive datastore, workspace, daemon,
-daemon-recovery, and TUI datastore-lifecycle suites, `go vet ./...`, and every
-committed TUI scenario. `just check` adds `golangci-lint` and is the final
-repository gate. Every test in the persistence acceptance matrix uses a
-temporary file-backed datastore and isolated compatibility paths.
+It runs `go test ./...`, the race-sensitive transcript, plan, handoff,
+worktree, daemon, and TUI suites, `go vet ./...`, and every committed TUI
+scenario. `just check` adds `golangci-lint` and is the final repository gate.
+All persistence tests use temporary homes, transcript sources, plan roots, and
+cache paths.
 
 ## Workflow coverage
 
 | Workflow | Automated coverage |
 | --- | --- |
-| Focus an exact live conversation | `internal/actions.TestContinueFocusesOnlyAnExactLiveConversation`; `cmd.TestSessionLaunchAndFocusCLIUseWorkspaceAndLiveTabSelectors` |
-| Resume a closed conversation | `internal/actions.TestContinueLaunchesNativeResumeForEachSupportedHarness`; `cmd.TestSessionContinueCLIUsesExactNativeInvocation` |
-| Native Claude/Codex fork | `internal/actions.TestForkUsesNativeSupportAndPreservesSource` |
-| Portable Copilot fork | `internal/actions.TestForkUsesPortableHandoffForCopilot`; `cmd.TestSessionForkCLIUsesPortableCopilotHandoff` |
-| Isolated worktree fork | `internal/actions.TestForkWorktreeLaunchesNativeForkInManagedContext`; `internal/worktree.TestCreateTracksIsolatedWorktreeAndRemoveUnusedCleansIt` |
-| Cross-harness handoff | `internal/handoff.TestWorkflowLaunchesEverySourceTargetHarnessCombination`; `cmd.TestSessionHandoffCLICreateOnlyAndPartialJSON` |
-| Explicit plan linking | `cmd.TestPlanLinkAndUnlinkUseExplicitSelectorsAndSchemaV1`; ambiguity is fail-closed in `cmd.TestPlanLinkAmbiguityReturnsCandidatesAndNeverGuesses` |
-| Activity persistence and restart dedupe | `internal/daemon.TestMeaningfulActivityPersistsAfterReducerAndExcludesHookNoise`; `internal/daemon.TestMeaningfulActivityDedupesAcrossDaemonRestartByRequestID` |
-| Discovery and safe adoption | `internal/workspace` discovery tests; `internal/config` concurrent-change/rollback tests; `cmd.TestWorkspaceAdoptPreviewsExactBlockThenRequiresExplicitYes` |
-| Legacy migration and database fallback | `internal/transcript.TestEnableSQLiteIndexFallbackRetainsLegacyReadPathAndReason`; `internal/plans.TestEnableSQLiteIndexFallbackRetainsLegacyPlans`; datastore migration rollback/future-version tests |
-| Safe derived rebuild | `cmd.TestIndexRebuildPreservesDurableStateAndRefreshesDerivedData`; `internal/plans.TestSQLiteRefreshPreservesReferencedMissingPlanAndExplicitLink` |
-| Narrow and wide TUI layouts | all JSON scenarios under `docs/tui-testing/scenarios`, including workspace split/drill-down, palette, activity, multi-profile, and worktree layouts |
+| Focus or resume an exact conversation | `internal/actions` continuity tests and `cmd` session command tests cover live focus, native resume, selector errors, and schema-v1 output. |
+| Native and portable forks | `internal/actions` covers native Claude/Codex forks and portable Copilot handoff forks without mutating the source conversation. |
+| Isolated worktree fork | `internal/worktree`, `internal/actions`, and `cmd` cover clean/dirty repositories, linked worktrees, collision handling, launch compensation, and explicit confirmation. |
+| Cross-harness handoff | `internal/handoff` covers every source/target harness pair, private standalone artifacts, edited drafts, bounded context, and partial launch failure. |
+| Past Sessions | `internal/transcript` and `tui` cover cold and warm cache loading, source refresh, filtering, viewer actions, deletion hiding, pruning, stale-result guards, and last-good rows. |
+| Plans | `internal/plans` and `tui` cover filesystem discovery, source fallback, search-sidecar repair, lazy warmup, selection continuity, and last-good rows. |
+| Narrow and wide TUI layouts | All JSON scenarios under `docs/tui-testing/scenarios` cover the live dashboard, overlays, Past Sessions, Plans, and their viewers. |
+| TUI continuity | The hermetic `session-fork-continuity` scenario enters Past Sessions and launches a native fork through the shared action registry while recording, rather than executing, the Kitty launch. |
 
-## Release-candidate persistence coverage
+## Filesystem persistence coverage
 
 | Acceptance case | Automated evidence |
 | --- | --- |
-| Concurrent fresh daemon, TUI, and CLI startup | `tui.TestAcceptanceConcurrentFreshStartupAcrossDaemonTUIAndCLI` opens three independent process-role pools against one fresh file while the daemon persists activity and the TUI publishes its complete service snapshot. `internal/datastore.TestConcurrentOpenPathInitializesAndUpgradesIndependentPools` expands this across every supported prior schema. |
-| Long transcript refresh retains the dashboard snapshot | `tui.TestAcceptanceLongTranscriptRefreshRetainsLastGoodDashboardSnapshot` blocks a real SQLite-backed transcript discovery pass and proves warmed transcript rows plus the last workspace snapshot remain published until completion. |
-| Warm startup performs no sidecar-body reads | `internal/transcript.TestImportLegacyIndexEquivalentAndIdempotent` and `internal/plans.TestImportLegacyIndexIsIdempotentAndReadOnly` instrument the compatibility readers and write transactions; the second unchanged sync performs neither. |
-| Periodic workspace refresh performs zero datastore writes | `tui.TestAcceptancePeriodicWorkspaceProjectionPerformsZeroDatastoreWrites` executes three real projections and observes SQLite `data_version` from an independent connection. `internal/workspace.TestProjectSnapshotRemainsReadOnlyBesideUnrelatedWriter` also proves projection remains available beside a writer. |
-| Truncated profile-membership corruption self-heals once | `tui.TestAcceptanceCorruptProfileMembershipRecoversCompatibilityDashboardOnce` relocates and truncates a real membership B-tree so normal initialization returns the locally observed wrapped `SQLITE_CORRUPT`, then proves candidate close, daemon-stop ordering, one DB/WAL/SHM quarantine, manifest retention, clean replacement, pre-rebuild process handoff to a fresh data-service owner, compatibility transcript/plan import while daemon startup is gated, a truncating WAL checkpoint, post-rebuild restoration of prior daemon liveness, workspace projection, and unified search. `tui.TestDataServicesInitialize_CheckpointFailureKeepsRebuildGateAndDaemonStopped` proves a failed checkpoint retains the gate and restart intent until one successful retry completes them; `TestDataServicesInitialize_FinishFailureRemainsRetryable` proves failures before gate removal and after gate removal remain retryable without publishing readiness or restarting the daemon more than once. `tui.TestRecoveryReexecFailureKeepsGateAcrossProcessExit` and `TestRecoveryConfigFailureKeepsGateAcrossProcessExit` terminate the owning process, prove daemon startup still returns `ErrRebuildInProgress`, then claim, checkpoint, and finalize the durable marker from a fresh owner. `internal/datastore.TestRebuildGateBlocksStartupUntilReleased`, `TestRebuildGateWaitsForInflightDaemonStartup`, `TestFinishRebuildGateConsumesCrossExecMetadata`, `TestRebuildGateActiveRemovesUnlockedCrashResidue`, `TestRebuildGateDurableMarkerSurvivesUnlockedOwnerExitAndCanBeClaimed`, and `TestCheckpointPublishesWALIntoMainDatabase` pin startup serialization, ordinary crash-residue cleanup, durable post-replacement ownership, and the checkpoint boundary; `internal/daemon.TestRunRefusesHookAutoStartDuringDatastoreRebuild`, `TestRunDoesNotCrossRebuildGatePublishedDuringStartup`, and `TestOpenDaemonActivityStoreRefusesActiveRebuildGate` pin socket and deferred-SQLite refusal; `internal/datastorerecovery.TestCoordinateForRebuildWaitsForInflightDaemonStartupBeforeHealth`, `TestCoordinateForRebuildKeepsDaemonGateThroughDeferredRebuild`, and `TestCoordinateForRebuildStillReturnsGateFinishWhenDaemonWasStopped` pin in-flight startup ordering and prior-liveness semantics. |
-| Transient initialization never authorizes replacement | `tui.TestAcceptanceTransientInitializationRetriesWithoutReplacement` fails one normal open, drives the bounded retry transition, reaches a healthy snapshot on the second open, and proves no recovery directory or recovery call was produced. |
-| Multi-profile and multi-harness project search | `internal/workspace.TestBuildGroupsProfilesAndPersistsGeneratedWorkspaceID` synchronizes launch variants then filters the unified project result by a non-default harness/profile while retaining scalar defaults. |
-| Unavailable placeholders and explicit repair | `internal/datastore.TestInspectClassifiesRepairableAndUnavailableMissingDocumentsReadOnly` classifies missing sources without mutation; `cmd.TestIndexRebuildPreservesDurableStateAndRefreshesDerivedData` explicitly repairs reconstructable documents, reports unavailable handoffs, verifies FTS, and preserves protected state. |
+| Corrupt metadata recovers without losing sources | Transcript and plan filesystem tests quarantine malformed metadata, rebuild from authoritative files, and retain usable snapshots alongside warnings. |
+| Concurrent writers preserve discovered entries | Transcript and plan race tests synchronize through stable lock sidecars, reload under lock, and merge dirty snapshots before atomic replacement. |
+| Search sidecars are disposable | Transcript and plan search tests reconstruct missing or invalid sidecars from source content and retain last-good inline text when persistence fails. |
+| Startup remains source-backed | TUI warmup and hermetic tests prove Past Sessions and Plans initialize from private filesystem caches and do not create retired platform state. |
+| Handoffs remain standalone | Handoff artifact and workflow tests verify private Markdown output, local metadata, hash validation, edit handling, and launch-independent persistence. |
+| Retired stacks cannot return silently | `cmd.TestSourceTreeHasNoRetiredPlatformStacks` rejects obsolete package directories or imports and forbids the retired state-file pathname in production Go sources. |
+| Warm and partial UI refreshes retain useful rows | `tui.TestAcceptanceWarmPastSessionsStayVisibleAndPartialRefreshPublishesSuccessfulRows`, plan last-good acceptance, and filesystem partial-discovery tests keep warm or successful rows visible while surfacing warnings. |
+| Continuity assets obey launch lifetime | Handoff workflow tests retain private final artifacts after successful and failed target launches; action/worktree tests retain successful Git worktrees and compensate only the newly created worktree after launch failure. |
+| No command path recreates SQLite | TUI, daemon, doctor, and session-command acceptance tests run under temporary homes and assert the complete retired artifact allowlist remains absent. Production-source invariants independently reject the old database pathname. |
 
-All command JSON tests use schema version 1. Selector tests require exact IDs,
-paths, or unique names; ambiguous matches return ordered candidates and never
-select one implicitly. New index health and rebuild fields are additive inside
-the schema-v1 data envelope; existing scalar search `harness` and `profile`
-fields remain unchanged while project membership arrays are additive.
+Filesystem metadata and search sidecars are disposable caches. Harness transcript
+files, plan directories, handoff artifacts, Git repositories/worktrees, and
+`config.toml` remain authoritative. Cache files and lock sidecars use private
+or source-appropriate modes, and explicit destructive actions retain their
+confirmation boundaries.
 
-## Compatibility-release rollback policy
+## Installed release smoke
 
-`transcripts.json`, `plans.json`, and their search sidecars remain read-only
-rollback artifacts. Normal SQLite import, status, and rebuild operations never
-rewrite or delete them. Incremental import records per-entry metadata and
-sidecar fingerprints in SQLite, reads sidecar bodies only for changed entries,
-and retains durable rows when rollback entries disappear. Removal is deferred
-until:
+After `just acceptance` succeeds, an upgrade from a legacy SQLite build uses a
+manual, one-off deployment flow:
 
-1. every supported pre-SQLite release can upgrade directly;
-2. field experience shows database fallback is no longer needed;
-3. a documented database backup/export and restore workflow exists; and
-4. one compatibility release has elapsed after those conditions are met.
+1. Build the new binary, stop the installed daemon, and verify its socket and
+   process have exited.
+2. Preserve `transcripts.json`, `plans.json`, both search directories,
+   `handoffs/`, `worktrees/`, `launch_overrides.json`, and ordinary daemon lock
+   files.
+3. Remove only `agent-mux.db`, its `-wal` and `-shm` files,
+   `agent-mux.db.recovery.lock`, `agent-mux.db.rebuild`,
+   `agent-mux.db.rebuild-startup.lock`, and the database `recovery/` directory.
+4. Install atomically, restart the daemon, and run `amx daemon status`,
+   `amx doctor --strict`, and `amx session list`. Open Past Sessions and Plans.
+5. Confirm the retired artifacts remain absent. No automatic cleanup or
+   migration is added for later runs.
 
-The SQLite database, handoff artifacts, and Agent Mux data directory must retain
-private `0600`/`0700` permissions. `amx doctor --strict` and `amx index status`
-enforce this operationally.
+Record `just acceptance`, optional `just check`, installed daemon/doctor/session
+smoke, cache population, and the post-smoke filesystem inventory in the release
+handoff.

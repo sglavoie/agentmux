@@ -14,13 +14,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
-	"github.com/sglavoie/agentmux/internal/session"
-	"github.com/sglavoie/agentmux/internal/workspace"
 )
 
 // UITestKittyCall records one Kitty operation the harness client received.
@@ -138,10 +135,6 @@ type UITestFixture struct {
 	Size        UITestSize
 	Config      *config.Config
 	Windows     []kitty.OSWindow
-	// WorkspaceHome and WorkspaceSnapshot opt a fixture into the project
-	// dashboard without loading a user's datastore, indexes, or Git state.
-	WorkspaceHome     bool
-	WorkspaceSnapshot workspace.Snapshot
 }
 
 // uitestFixtureBuilders maps a fixture name to a constructor. Each constructor
@@ -151,17 +144,6 @@ var uitestFixtureBuilders = map[string]func() UITestFixture{
 	"basic":         basicFixture,
 	"actions":       actionsFixture,
 	"wide_profiles": wideProfilesFixture,
-}
-
-// workspaceUITestFixtureBuilders are focused layout fixtures. They stay out
-// of the long-standing public fixture picker so existing automation which
-// enumerates that small compatibility set remains stable; scenarios can still
-// select them by their explicit names.
-var workspaceUITestFixtureBuilders = map[string]func() UITestFixture{
-	"workspace_empty":     workspaceEmptyFixture,
-	"workspace_attention": workspaceAttentionFixture,
-	"workspace_profiles":  workspaceProfilesFixture,
-	"workspace_worktrees": workspaceWorktreesFixture,
 }
 
 // UITestFixtureError reports a request for an unknown built-in fixture and
@@ -190,9 +172,6 @@ func UITestFixtureNames() []string {
 // *UITestFixtureError when the name is not recognized.
 func UITestFixtureByName(name string) (UITestFixture, error) {
 	build, ok := uitestFixtureBuilders[name]
-	if !ok {
-		build, ok = workspaceUITestFixtureBuilders[name]
-	}
 	if !ok {
 		return UITestFixture{}, &UITestFixtureError{Name: name, Known: UITestFixtureNames()}
 	}
@@ -320,109 +299,6 @@ func wideProfilesFixture() UITestFixture {
 		Config:      cfg,
 		Windows:     windows,
 	}
-}
-
-func workspaceFixtureConfig() *config.Config {
-	return &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		Accounts: []config.Account{
-			{Name: "work", Harness: "claude", Color: "blue"},
-			{Name: "review", Harness: "codex", Color: "green"},
-		},
-		Sessions: []config.Session{
-			{Title: "api", Directory: "/work/api", Profile: "work"},
-			{Title: "frontend", Directory: "/work/frontend", Profile: "review"},
-		},
-	}
-}
-
-func workspaceEmptyFixture() UITestFixture {
-	return UITestFixture{
-		Name:              "workspace_empty",
-		Description:       "empty project workspace home",
-		Size:              UITestSize{Width: 100, Height: 24},
-		Config:            workspaceFixtureConfig(),
-		WorkspaceHome:     true,
-		WorkspaceSnapshot: workspace.Snapshot{},
-	}
-}
-
-func workspaceAttentionFixture() UITestFixture {
-	now := time.Now()
-	api := workspace.WorkspaceSnapshot{
-		ID:          "api",
-		DisplayName: "api",
-		Urgency:     workspace.UrgencyAttention,
-		LiveSessions: []workspace.LiveSession{
-			{Session: session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Project: "api", Profile: "work", Account: "work", State: "key"}},
-			{Session: session.RunningSession{TabID: 2, WindowID: 12, Base: "worker", Project: "api", Profile: "work", Account: "work", State: "error"}},
-			{Session: session.RunningSession{TabID: 3, WindowID: 13, Base: "server", Project: "api", Profile: "work", Account: "work", State: "bolt"}},
-		},
-		Conversations: []workspace.Conversation{{ID: "conv-api", Harness: "claude", Profile: "work", Project: "api"}},
-		Plans:         []workspace.LinkedPlan{{ID: "plan-api", Name: "api migration", Directory: "/plans/api", Files: []string{"plan.md"}}},
-		Activity: []workspace.ActivityItem{
-			{ID: 2, Harness: "claude", SessionID: "conv-api", WindowID: 11, Kind: "attention_permission", Summary: "Permission requested", OccurredAt: now.Add(-time.Minute), Unread: true},
-			{ID: 1, Harness: "claude", SessionID: "conv-api", WindowID: 11, Kind: "prompt", Summary: "Prompt submitted", OccurredAt: now.Add(-2 * time.Minute), Unread: true},
-		},
-		UnreadCount:           2,
-		ActivityLoadedThrough: now.Add(-time.Minute),
-		LastDurableActivityAt: now.Add(-time.Minute),
-	}
-	frontend := workspace.WorkspaceSnapshot{
-		ID:          "frontend",
-		DisplayName: "frontend",
-		Urgency:     workspace.UrgencyActive,
-		LiveSessions: []workspace.LiveSession{
-			{Session: session.RunningSession{TabID: 4, WindowID: 14, Base: "frontend", Project: "frontend", Profile: "review", Account: "review", State: "bolt"}},
-		},
-	}
-	return UITestFixture{
-		Name:              "workspace_attention",
-		Description:       "attention-heavy workspace with live, recent, and plan detail sections",
-		Size:              UITestSize{Width: 120, Height: 30},
-		Config:            workspaceFixtureConfig(),
-		WorkspaceHome:     true,
-		WorkspaceSnapshot: workspace.Snapshot{Workspaces: []workspace.WorkspaceSnapshot{api, frontend}},
-	}
-}
-
-func workspaceProfilesFixture() UITestFixture {
-	base := workspaceAttentionFixture()
-	base.Name = "workspace_profiles"
-	base.Description = "workspace with multiple configured launch profiles"
-	base.WorkspaceSnapshot.Workspaces = []workspace.WorkspaceSnapshot{{
-		ID:            "platform",
-		DisplayName:   "platform",
-		Urgency:       workspace.UrgencyRecent,
-		DefaultLaunch: config.Session{Title: "platform", Directory: "/work/platform", Profile: "work"},
-		LaunchVariants: []config.Session{
-			{Title: "platform", Directory: "/work/platform", Profile: "review"},
-			{Title: "platform", Directory: "/work/platform", Profile: "work", Args: []string{"--safe"}},
-		},
-		LiveSessions: []workspace.LiveSession{
-			{Session: session.RunningSession{TabID: 8, WindowID: 18, Base: "platform", Project: "platform", Profile: "review", Account: "review", State: "bolt"}},
-		},
-	}}
-	return base
-}
-
-func workspaceWorktreesFixture() UITestFixture {
-	base := workspaceAttentionFixture()
-	base.Name = "workspace_worktrees"
-	base.Description = "workspace with primary and linked worktree contexts"
-	base.WorkspaceSnapshot.Workspaces = []workspace.WorkspaceSnapshot{{
-		ID:          "monorepo",
-		DisplayName: "monorepo",
-		Urgency:     workspace.UrgencyActive,
-		Worktrees: []workspace.WorktreeContext{
-			{ID: "primary", WorkspaceID: "monorepo", CanonicalPath: "/work/monorepo", IsPrimary: true, Branch: "main"},
-			{ID: "feature", WorkspaceID: "monorepo", CanonicalPath: "/work/monorepo-feature", Branch: "feature/workspace"},
-		},
-		LiveSessions: []workspace.LiveSession{
-			{Session: session.RunningSession{TabID: 9, WindowID: 19, Base: "feature", Project: "monorepo", Profile: "work", Account: "work", State: "bolt"}, WorktreePath: "/work/monorepo-feature"},
-		},
-	}}
-	return base
 }
 
 // UITestConfigEnv captures the throwaway locations a config-backed harness run

@@ -2,8 +2,8 @@
 // stored on disk under a configurable root (default
 // ~/.local/share/agent-plans). Each top-level directory is treated as a
 // single plan whose search corpus is the concatenation of every .md file
-// at depth <= 2 inside it. SQLite is the active metadata/search repository;
-// JSON and sidecars remain read-only compatibility sources for this release.
+// at depth <= 2 inside it. Atomic JSON metadata and search sidecars are
+// disposable caches; the markdown directories remain authoritative.
 package plans
 
 import (
@@ -12,9 +12,8 @@ import (
 )
 
 // PlanMeta describes a single agent-plan directory. SearchText is the
-// transient, lowercased concatenation of every .md file body. It is stored in
-// SQLite after the cutover and remains absent from compatibility JSON, which
-// is why its JSON tag is "-".
+// transient, lowercased concatenation of every .md file body. It is persisted
+// in a search sidecar and remains absent from metadata JSON.
 type PlanMeta struct {
 	Name       string    `json:"name"`
 	DirPath    string    `json:"dir_path"`

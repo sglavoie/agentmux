@@ -5,6 +5,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 // handleSessionsMsg processes a sessionsMsg: rebuilds the session list,
@@ -20,7 +21,6 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	}
 	m.lastActivity = msg.activity
 	m.watchdog = msg.watchdog
-	m.daemonStates = msg.states
 	m.sessions = msg.sessions
 	m.recordTransitions()
 	m.filtered = applyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
@@ -40,7 +40,7 @@ func (m Model) handleSessionsMsg(msg sessionsMsg) (tea.Model, tea.Cmd) {
 	}
 	clampListOffset(&m)
 	scrollListToCursor(&m)
-	return m, m.dispatchWorkspaceProjection()
+	return m, nil
 }
 
 // handleActiveLoopsMsg stores the latest active-loop discovery result. Older
@@ -149,6 +149,58 @@ func (m Model) handleDetailEvents(msg detailEventsMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleSessionCacheLoadStarted(sessionCacheLoadStartedMsg) (tea.Model, tea.Cmd) {
+	m.sessionCacheLoadInFlight = true
+	m.sessionRefreshErr = nil
+	return m, nil
+}
+
+// handleSessionCacheLoadDone publishes a usable filesystem snapshot even when
+// loading returned a recovery warning, then starts the slower refresh/prune.
+func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Model, tea.Cmd) {
+	m.sessionCacheLoadInFlight = false
+	m.sessionRefreshErr = msg.loadErr
+	if msg.idx == nil {
+		m.sessionSearchErr = nil
+		m.sessionLoading = false
+		return m, nil
+	}
+
+	m.transcriptIndex = msg.idx
+	m.transcriptReaders = msg.readers
+
+	var cmds []tea.Cmd
+	publishCachedResults := msg.seq == m.sessionSearchSeq && sessionQueryIsEmpty(m.currentSessionQuery())
+	if publishCachedResults {
+		m.sessionSearchErr = msg.searchErr
+		if msg.searchErr == nil {
+			m.publishSessionResults(msg.results)
+		}
+		m.sessionLoading = false
+	} else if m.mode == ModeSessionSearch {
+		m.sessionLoading = true
+		cmds = append(cmds, m.runSessionSearchCmd(m.sessionSearchSeq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery()))
+	} else {
+		m.sessionLoading = false
+	}
+
+	if !m.sessionRefreshInFlight {
+		m.sessionRefreshInFlight = true
+		warmSeq := msg.seq
+		warmQuery := transcript.Query{}
+		if !publishCachedResults {
+			if m.mode == ModeSessionSearch {
+				warmSeq = m.sessionSearchSeq
+				warmQuery = m.currentSessionQuery()
+			} else {
+				warmSeq = -1
+			}
+		}
+		cmds = append(cmds, m.runSessionWarmRefreshCmd(m.transcriptIndex, m.cfg, m.transcriptReaders, warmSeq, warmQuery))
+	}
+	return m, tea.Batch(cmds...)
+}
+
 // handleSessionWarmRefreshDone publishes the background refresh result if no
 // newer user search has superseded the startup empty-query search.
 func (m Model) handleSessionWarmRefreshDone(msg sessionWarmRefreshDoneMsg) (tea.Model, tea.Cmd) {
@@ -158,15 +210,10 @@ func (m Model) handleSessionWarmRefreshDone(msg sessionWarmRefreshDoneMsg) (tea.
 		return m, nil
 	}
 	m.sessionSearchErr = msg.searchErr
-	m.sessionResults = msg.results
-	m.sessionLoading = false
-	if m.sessionCursor >= len(m.sessionResults) {
-		m.sessionCursor = len(m.sessionResults) - 1
-		if m.sessionCursor < 0 {
-			m.sessionCursor = 0
-		}
+	if msg.searchErr == nil {
+		m.publishSessionResults(msg.results)
 	}
-	scrollSessionSearchToCursor(&m)
+	m.sessionLoading = false
 	return m, nil
 }
 
@@ -194,7 +241,11 @@ func (m Model) handleSessionSearchDebounce(msg sessionSearchDebounceMsg) (tea.Mo
 		return m, nil
 	}
 	if m.transcriptIndex == nil {
-		return m, m.dispatchDataServicesInit()
+		if m.sessionCacheLoadInFlight {
+			return m, nil
+		}
+		m.sessionCacheLoadInFlight = true
+		return m, startupSessionWarmupCmd(m.sessionSearchSeq)
 	}
 	if m.transcriptReaders == nil {
 		m.transcriptReaders = buildTranscriptReaders()
@@ -210,15 +261,37 @@ func (m Model) handleSessionSearchDone(msg sessionSearchDoneMsg) (tea.Model, tea
 	}
 	m.sessionLoading = false
 	m.sessionSearchErr = msg.err
-	m.sessionResults = msg.results
+	if msg.err == nil {
+		m.publishSessionResults(msg.results)
+	}
+	return m, nil
+}
+
+// publishSessionResults keeps the currently selected transcript selected when
+// a same-query refresh changes row ordering, then clamps if it disappeared.
+func (m *Model) publishSessionResults(results []transcript.Result) {
+	selectedKey := ""
+	if m.sessionCursor >= 0 && m.sessionCursor < len(m.sessionResults) {
+		meta := m.sessionResults[m.sessionCursor].Meta
+		selectedKey = transcript.IndexKey(meta.Harness, meta.ID)
+	}
+	m.sessionResults = results
+	if selectedKey != "" {
+		for index, result := range m.sessionResults {
+			if transcript.IndexKey(result.Meta.Harness, result.Meta.ID) == selectedKey {
+				m.sessionCursor = index
+				scrollSessionSearchToCursor(m)
+				return
+			}
+		}
+	}
 	if m.sessionCursor >= len(m.sessionResults) {
 		m.sessionCursor = len(m.sessionResults) - 1
 		if m.sessionCursor < 0 {
 			m.sessionCursor = 0
 		}
 	}
-	scrollSessionSearchToCursor(&m)
-	return m, nil
+	scrollSessionSearchToCursor(m)
 }
 
 // handlePlansRefreshDone processes a plansRefreshDoneMsg: records any refresh
@@ -231,10 +304,38 @@ func (m Model) handlePlansRefreshDone(msg plansRefreshDoneMsg) (tea.Model, tea.C
 	return m, m.runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
 }
 
+// handlePlanCacheLoadDone publishes usable warm rows from the recovering
+// filesystem cache, then starts the slower source refresh. A stale load still
+// installs the index, but its rows never overwrite a newer query.
+func (m Model) handlePlanCacheLoadDone(msg planCacheLoadDoneMsg) (tea.Model, tea.Cmd) {
+	m.planCacheLoadInFlight = false
+	m.planRefreshErr = msg.loadErr
+	if msg.idx == nil {
+		m.planLoading = false
+		m.planSearchErr = msg.searchErr
+		return m, nil
+	}
+	m.plansIndex = msg.idx
+	if msg.seq == m.planSearchSeq {
+		m.planSearchErr = msg.searchErr
+		if msg.searchErr == nil {
+			m.publishPlanResults(msg.results)
+		}
+	}
+	if m.mode != ModePlanSearch {
+		m.planLoading = false
+		return m, nil
+	}
+	return m.startPlanSearchRefresh()
+}
+
 // handlePlanSearchDebounce processes a planSearchDebounceMsg: drops stale
 // debounce ticks and fires the plan search for the current seq.
 func (m Model) handlePlanSearchDebounce(msg planSearchDebounceMsg) (tea.Model, tea.Cmd) {
 	if msg.seq != m.planSearchSeq {
+		return m, nil
+	}
+	if m.plansIndex == nil {
 		return m, nil
 	}
 	return m, m.runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
@@ -248,19 +349,39 @@ func (m Model) handlePlanSearchDone(msg planSearchDoneMsg) (tea.Model, tea.Cmd) 
 	}
 	m.planLoading = false
 	m.planSearchErr = msg.err
-	m.planResults = msg.results
-	// Belt-and-suspenders: the in-search sort already honours
-	// Query.Sort, but the cycle keystroke path mutates m.planSortMode
-	// without re-issuing a search, so re-sort here on every receive.
+	if msg.err == nil {
+		m.publishPlanResults(msg.results)
+	}
+	return m, nil
+}
+
+// publishPlanResults retains the selected plan across refresh reordering and
+// leaves the last-good rows untouched when callers report a search failure.
+func (m *Model) publishPlanResults(results []plans.Result) {
+	selectedPath := ""
+	if m.planCursor >= 0 && m.planCursor < len(m.planResults) {
+		selectedPath = m.planResults[m.planCursor].Meta.DirPath
+	}
+	m.planResults = results
+	// Belt-and-suspenders: Search already honours Query.Sort, but the cycle
+	// keystroke mutates planSortMode without issuing a new search.
 	plans.SortResults(m.planResults, m.planSortMode)
+	if selectedPath != "" {
+		for index, result := range m.planResults {
+			if result.Meta.DirPath == selectedPath {
+				m.planCursor = index
+				scrollPlanSearchToCursor(m)
+				return
+			}
+		}
+	}
 	if m.planCursor >= len(m.planResults) {
 		m.planCursor = len(m.planResults) - 1
 		if m.planCursor < 0 {
 			m.planCursor = 0
 		}
 	}
-	scrollPlanSearchToCursor(&m)
-	return m, nil
+	scrollPlanSearchToCursor(m)
 }
 
 // handlePlanEditorErr processes a planEditorErrMsg: pushes an error toast.

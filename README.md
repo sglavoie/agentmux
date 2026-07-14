@@ -1,8 +1,8 @@
 # Agent Mux
 
-Kitty-first project workbench for **Claude Code**, **GitHub Copilot CLI**, and
-**OpenAI Codex**. It groups projects, worktrees, conversations, plans,
-handoffs, search, and activity; launches work as Kitty tabs; keeps per-profile
+Kitty-first session manager for **Claude Code**, **GitHub Copilot CLI**, and
+**OpenAI Codex**. It groups live sessions and configured launch targets,
+preserves transcript and plan history, supports continuity handoffs, keeps per-profile
 isolated homes (`CLAUDE_CONFIG_DIR`, `COPILOT_HOME`, `CODEX_HOME`); and uses an
 always-on local daemon to own durable tab-state rendering. Harness hooks are
 thin, fire-and-forget event clients.
@@ -14,6 +14,8 @@ The binary is **`amx`**.
 - manages multiple configured projects from one Bubble Tea dashboard,
 - supports multiple harness profiles side by side,
 - gives each project a default profile, but lets you override it for one launch,
+- searches filesystem-backed Past Sessions and Plans without a database,
+- creates standalone handoff files and ordinary Git worktrees for continuity,
 - syncs hook commands into each profile so tab icons track agent state,
 - keeps the current Kitty/daemon/tab-color workflow intact.
 
@@ -106,31 +108,20 @@ remove or override it if you prefer a different trust flow.
 ### Dashboard views and continuity
 
 The default TUI opens on the live-session dashboard and selects the session
-from the Kitty tab that opened it when possible. Press `v` to switch to the
-secondary project Workbench, which groups configured launch variants, linked
-Git worktrees, live Kitty tabs, indexed conversations, explicitly linked plans,
-and durable meaningful activity. Press `v` again to return to live sessions.
-`:` opens the global context-aware command palette, and `/` filters the
-live-session list.
+from the Kitty tab that opened it when possible. `/` filters the live-session
+list; `S` opens Past Sessions and `P` opens Plans.
 
 The same workflows are scriptable. Machine-readable commands use one
 `{"schema_version":1,"data":...}` success envelope; failures use a structured
 `error` envelope and ambiguous selectors return candidates instead of guessing.
 
 ```bash
-amx workspace list --json
-amx workspace discover
-amx workspace adopt <candidate> --profile work
-amx workspace adopt <candidate> --profile work --yes
-
+amx session list --json
 amx session continue codex <session-id>
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes
 amx session handoff claude:<session-id> --profile codex-work
 
-amx plan link <plan-path-or-unique-name> <workspace>
-amx plan unlink <plan-path-or-unique-name> <workspace>
-amx search "migration fallback" --type conversation --type plan
 ```
 
 `session continue` focuses the exact live Kitty owner when one exists and
@@ -222,196 +213,104 @@ focusing the existing tab.
 
 ### Past sessions
 
-Press `S` from the dashboard to open the past-session search across every
-configured profile and project. Press `s` from the dashboard or launcher to
-open the same search filtered to the highlighted project. During dashboard
-startup, amx loads the SQLite conversation index in the background and then
-starts a slower scan of each profile's transcript directory (Claude
-`~/.claude/projects`, Copilot `~/.copilot/session-state`, Codex
-`~/.codex/sessions`). Opening past-session search usually shows the warmed
-cache immediately; while a scan is still running, existing rows stay visible
-and the header shows the scan status. Active metadata and search documents live
-in `~/.local/share/agent-mux/agent-mux.db`. The former `transcripts.json` and
-`transcripts.search/` files remain untouched rollback inputs for this
-compatibility release; the daemon never loads them on its request path.
+Press `S` from the dashboard to search past sessions across every configured
+profile and project. Press `s` from the dashboard or launcher to open the same
+view filtered to the highlighted project. Agent Mux warms the filesystem cache
+at `~/.local/share/agent-mux/transcripts.json`, then refreshes it from the
+configured Claude, Copilot, and Codex transcript directories in the background.
+Existing rows remain visible during refreshes.
 
-When multiple configured profiles point at the same harness transcript home,
-amx scans that home once and stores one metadata row per physical transcript.
-Those rows keep a stable display profile but are searchable under every
-candidate profile because older transcript files do not reliably encode the
-exact launch profile.
+The JSON metadata file and `transcripts.search/` sidecars are disposable
+caches. If either is missing, malformed, or partially unreadable, Agent Mux
+quarantines or rebuilds the affected cache from transcript source files. Stable
+`.lock` sidecars coordinate writers across processes, and cache replacement
+uses atomic renames. Transcript source files remain authoritative and are not
+rewritten by refresh or search.
 
-- `/` enters a free-text query; results stream the matching JSONL on demand
-  and show the per-session match count.
-- `h`, `p`, `r` open single-value chip pickers for harness, profile, and
-  project; press `/` inside a chip picker to filter its options.
-- `enter` opens the transcript viewer (role-coded lines, visible transcript
-  path, `n`/`N` jumps between matches, `j`/`k`, `g`/`G`, and `Ctrl+d/u/f/b`
-  for scrolling, `y` copies the selected message text, `Y` copies the full
-  transcript path). Search results also show the selected transcript path and
-  support `Y` path copy.
-- `d` opens a three-way delete prompt: `i` hides the row from the index only
-  (file kept on disk; rescans do not resurrect it), `f` also removes the
-  underlying JSONL file (irreversible).
+When multiple profiles point at the same harness transcript home, Agent Mux
+scans that home once and stores one metadata row per physical transcript. Those
+rows keep a stable display profile but remain searchable under every candidate
+profile because older transcript files do not reliably encode the exact launch
+profile.
+
+- `/` enters a free-text query; results scan matching source transcripts on
+  demand and show the per-session match count.
+- `h`, `p`, and `r` open single-value chip pickers for harness, profile,
+  and project.
+- `enter` opens the transcript viewer; `n`/`N` move between matches,
+  `j`/`k`, `g`/`G`, and `Ctrl+d/u/f/b` scroll, `y` copies the selected
+  message, and `Y` copies the transcript path.
+- `c` continues the selected conversation, `f` forks it, `w` creates an
+  isolated Git worktree fork, `H` creates a handoff, and `E` creates an
+  editable handoff.
+- `d` opens a three-way delete prompt: `i` hides the cache row while keeping
+  the source file, and `f` also removes the source transcript after explicit
+  confirmation.
 
 Maintenance commands:
 
 ```bash
-amx index status
-amx index status --json
-amx index rebuild
 amx transcripts status
 amx transcripts compact
 amx transcripts rebuild --all
 ```
 
-`index status` reports database integrity, schema/migration and compatibility
-import state, FTS freshness, secure filesystem modes, entity counts, and the
-running daemon's activity-writer health. Once the schema is current, ordinary
-`index status`, `transcripts status`, and `doctor` inspection is read-only: it
-does not synchronize compatibility files, repair search documents, or run the
-FTS5 integrity-check. Its FTS freshness result is a read-only comparison of
-search documents with FTS docsize rows; `fts_integrity_verified: false` means
-that count-consistent FTS corruption can still be present. Run `amx doctor
---strict` for the authoritative FTS5 integrity-check, or run `amx index
-rebuild` when an explicit derived-index repair is also appropriate; both
-commands verify the external-content FTS index.
+Retention is controlled by `[defaults.session_archive] keep_days` (default
+30). Refresh and prune operations hide cache entries older than `keep_days`;
+the on-disk transcript files remain intact unless explicitly deleted. Each
+refresh only walks files modified within `scan_max_age_days` days (default:
+inherits `keep_days`). Set it to `-1` for an unbounded walk.
 
-Missing search documents are split into two categories. A **repairable** row
-still has a surviving transcript, plan, handoff artifact, or durable activity
-record from which search content can be reconstructed. An **unavailable
-placeholder** has lost its source artifact; Agent Mux retains its durable
-metadata, reports a warning, and does not make an otherwise consistent store
-unhealthy. `index rebuild` is the explicit repair surface: it refreshes derived
-conversation, plan, project-search, handoff-search, activity-search, and
-discovery projections, verifies the external-content FTS index, and reports
-anything that remained unavailable. It fingerprints explicit plan links,
-handoff metadata, activity/read history, workspace conversation membership,
-and managed-worktree relationships before and after the rebuild and fails if
-protected state changes. The `transcripts` commands remain compatibility tools
-for the older transcript-only projection.
+### Plans and local storage
 
-Every long-running process owns one datastore pool. CLI commands open one pool
-at command entry, the daemon activity worker owns one for its lifetime, and the
-TUI injects one process-scoped pool into transcript, plan, workspace, activity,
-and unified-search services. Routine dashboard refresh projects from an
-immutable synchronized workspace catalog and performs only reads; configuration
-or Git discovery writes occur only at the explicit workspace synchronization
-boundary. See [`docs/datastore_ownership.md`](docs/datastore_ownership.md).
+Press `P` to search saved plan directories. Agent Mux loads warm rows from the
+filesystem cache first and refreshes the configured `plans_directory` in the
+background. A missing or malformed cache is quarantined and rebuilt from the
+plan directories; an unreadable plan never blanks rows that were read
+successfully. In Plans, `/` searches, `enter` opens the viewer, `Y` copies the
+plan directory, and the viewer supports `j`/`k`, `g`/`G`,
+`Ctrl+d/u/f/b`, and `y` to copy the selected raw line.
 
-Each open pool also holds a shared advisory recovery lock for its full
-lifetime. The dashboard can replace the datastore only after a failed
-data-service candidate has closed, the daemon has completed its ordered
-shutdown, and recovery has acquired the exclusive lock. This prevents any
-cooperating process from retaining a writable handle to a quarantined database
-inode.
+Agent Mux does not use SQLite. Local files have deliberately narrow ownership:
 
-Legacy JSON indexes and search sidecars are retained for one compatibility
-release. They can be removed later only after every supported prior version can
-upgrade directly, field experience shows SQLite fallback is no longer needed,
-and a documented database backup/export path exists. `amx index rebuild` never
-deletes them. Normal startup compares normalized metadata plus sidecar
-size/mtime and reads only changed sidecar bodies; an unchanged warm startup
-does not begin a compatibility write transaction. Removing a rollback entry
-does not delete the durable SQLite row. A binary also refuses a future schema
-version instead of attempting a downgrade.
+| Path | Ownership and cleanup |
+| --- | --- |
+| `~/.local/share/agent-mux/transcripts.json` and `transcripts.search/` | Disposable metadata and search caches rebuilt from harness transcript files. Malformed metadata is renamed with a `.corrupt-<timestamp>` suffix. |
+| `~/.local/share/agent-mux/plans.json` and `plans.search/` | Disposable metadata and search caches rebuilt from directories under `plans_directory`. |
+| `~/.local/share/agent-mux/handoffs/` | Private standalone Markdown artifacts. Successful and partially launched handoffs remain until you delete them. |
+| `~/.local/share/agent-mux/worktrees/` | Ordinary registered Git worktrees. Successful launches remain until you remove them with Git; a failed launch removes only the worktree created for that attempt. |
+| `~/.local/share/agent-mux/launch_overrides.json` | One-time launcher choices; independent of transcript and plan caches. |
+| `daemon.sock`, `daemon.lock`, and `daemon.autostart.lock` | Ordinary daemon coordination files, not database state. |
 
-### Automatic workbench corruption recovery
+The corresponding `.lock` sidecars are stable advisory locks and may remain
+between runs. Do not delete the whole `agent-mux` data directory to repair a
+cache: transcript files, plan directories, handoffs, worktrees, configuration,
+and launch overrides have separate lifecycles.
 
-The dashboard performs one automatic replacement only when normal data-service
-initialization returns an error that wraps SQLite primary result code 11
-(`SQLITE_CORRUPT`). It does not scan the complete database on startup and does
-not treat lock contention, I/O errors, migration failures, or other transient
-initialization failures as permission to replace data. Those failures continue
-through the bounded retry path. Ordinary `amx index status`, `amx transcripts
-status`, and `amx doctor` remain read-only and never initiate replacement.
+### One-off cleanup after upgrading from a SQLite release
 
-For confirmed corruption, the dashboard closes its failed datastore candidate,
-stops a live daemon and waits for its activity store to close, then moves the
-database and any `-wal`/`-shm` companions into:
+Old installations may still contain retired database artifacts. This is a
+manual deployment cleanup, not a recurring migration. First build and pass
+`just acceptance`, stop the installed daemon, and confirm `amx daemon status`
+no longer reports it running. Preserve the caches and assets in the table
+above, then remove only these entries from
+`~/.local/share/agent-mux/`:
 
 ```text
-$HOME/.local/share/agent-mux/recovery/<UTC timestamp>/
+agent-mux.db
+agent-mux.db-wal
+agent-mux.db-shm
+agent-mux.db.recovery.lock
+agent-mux.db.rebuild
+agent-mux.db.rebuild-startup.lock
+recovery/
 ```
 
-The private quarantine includes `manifest.json` with artifact paths, sizes,
-modes, timestamps, SHA-256 digests, the wrapped corruption reason, and the
-replacement outcome. Quarantines are retained indefinitely; Agent Mux never
-prunes them automatically. Recovery creates and validates a new database, then
-cleanly re-execs the dashboard before reopening that pathname. This process
-boundary discards SQLite WAL/shared-memory mappings associated with the
-quarantined inode. The fresh dashboard keeps a previously live daemon stopped
-while ordinary initialization reimports the retained `transcripts.json`,
-`plans.json`, and search sidecars, synchronizes configured workspaces, and
-rebuilds unified search state. The daemon restarts only after that write-heavy
-rebuild is complete.
-
-Compatibility transcripts and plans plus configured workspace identities are
-therefore reconstructed from their existing sources. Workbench-only activity,
-read markers, explicit links, handoffs stored only in SQLite, and managed-
-worktree tracking may be lost. The dashboard makes only one automatic attempt
-per recovery handoff; a failed replacement or repeated corruption stops with
-manual `amx doctor` guidance instead of entering a retry loop.
-
-Before an operator-data repair, install the intended binary, capture status,
-and make an online SQLite backup. Review the reported repairable and unavailable
-counts before running the rebuild:
-
-```bash
-amx_bin="$HOME/.local/bin/amx"
-db="$HOME/.local/share/agent-mux/agent-mux.db"
-backup="${db}.$(date +%Y%m%d-%H%M%S).bak"
-
-"$amx_bin" index status --json | tee /tmp/amx-index-before.json
-sqlite3 "$db" ".backup '$backup'"
-chmod 600 "$backup"
-
-# Explicit operator-confirmed repair; do not automate this step.
-"$amx_bin" index rebuild
-"$amx_bin" index status --json | tee /tmp/amx-index-after.json
-```
-
-Keep the backup until the before/after entity counts, import records, protected
-state hash, and FTS health are satisfactory. Unavailable-placeholder warnings
-may remain after a successful rebuild when their source artifacts no longer
-exist; restore the source or keep the placeholder. To reverse the database
-change, stop Agent Mux processes, preserve the repaired database for diagnosis,
-and restore the backup as `agent-mux.db` with mode `0600` before restarting.
-
-If the initial status command itself reports `database disk image is
-malformed`, do not proceed directly to rebuild and do not rely on `.backup`
-being able to traverse the damaged B-tree. Opening the dashboard with the
-intended binary invokes the automatic quarantine-and-replace path above. If the
-dashboard cannot be opened, or an operator intentionally chooses manual
-analysis instead, stop the daemon first and preserve the database plus any
-WAL/SHM companions byte-for-byte:
-
-```bash
-"$amx_bin" daemon stop
-recovery="$HOME/.local/share/agent-mux-recovery-$(date +%Y%m%d-%H%M%S)"
-mkdir -m 700 "$recovery"
-cp -p "$db" "$recovery/"
-for companion in "$db-wal" "$db-shm"; do
-  if [ -e "$companion" ]; then cp -p "$companion" "$recovery/"; fi
-done
-```
-
-Only after that preservation step should an operator choose between an
-explicit `"$amx_bin" index rebuild` attempt (appropriate when diagnostics
-isolate corruption to derived FTS state), restoring a known-good database
-backup with mode `0600`, and lower-level SQLite recovery. Keep both automatic
-quarantines and manual preservation directories until the replacement has been
-verified and any forensic need has passed.
-
-Retention is controlled by `[defaults.session_archive] keep_days` (default
-30). Refresh and prune operations hide index entries older than `keep_days`;
-the on-disk transcript files are left intact. Set `keep_days = 0` to use the
-default; negative values are rejected at validation time.
-
-Each refresh of the past-session list only walks files modified within
-`scan_max_age_days` days (default: inherits `keep_days`). Set to `0` to
-inherit `keep_days`, or to `-1` for an unbounded walk; existing index
-entries remain searchable past the cutoff until `keep_days` retires them.
+Install atomically with `just install`, restart with `amx daemon start`, and
+verify `amx daemon status`, `amx doctor --strict`, `amx session list`, Past
+Sessions, and Plans. Recheck the allowlist above afterward; none of the files
+or the `recovery/` directory should be recreated. Future runs never delete
+these legacy paths automatically.
 
 ### Filter DSL
 
@@ -870,8 +769,8 @@ just acceptance
 just check
 ```
 
-`just acceptance` runs the full Go suite, race-sensitive datastore, workspace,
-daemon, and TUI datastore-lifecycle tests, `go vet`, and every committed TUI
+`just acceptance` runs the full Go suite, race-sensitive transcript, plan,
+handoff, worktree, daemon, and TUI tests, `go vet`, and every committed TUI
 scenario. `just check` adds the repository linter and is the final local/CI
 gate. The end-to-end coverage map is documented in
 [`docs/acceptance.md`](docs/acceptance.md).
@@ -892,13 +791,12 @@ amx tui-test run docs/tui-testing/scenarios/*.json
 
 ## Troubleshooting
 
-- **Icons, hooks, or indexed data look wrong**: run `amx doctor` first. It checks daemon
+- **Icons, hooks, or cached transcript data look wrong**: run `amx doctor` first. It checks daemon
   reachability and binary freshness, `kitten @ ls`, hooks for every configured
   profile, renderer drift, known Kitty sockets, recent suppression reasons,
-  SQLite integrity/migrations/imports/FTS freshness, private file modes, and
-  activity-writer health. Use `amx index status` for the index-only view and
-  `amx index rebuild` to refresh derived data without deleting rollback files
-  or durable links/history.
+  and the reducer/renderer health surface. Use `amx transcripts status` to
+  inspect the filesystem transcript cache and `amx transcripts rebuild --all`
+  to reconstruct it from source transcripts.
   `amx doctor --json` emits a structured report; `--strict` also evaluates the
   correctness invariants (reducer/renderer agreement, ASL visibility, subagent
   visibility, render-generation drift, queue saturation, build identity) and

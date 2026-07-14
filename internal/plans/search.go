@@ -1,10 +1,11 @@
 package plans
 
 import (
-	"context"
 	"errors"
-	"io/fs"
+	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -40,16 +41,12 @@ type Result struct {
 	Preview string
 }
 
-// Search runs q against idx. The compatibility path tolerates per-plan
-// sidecar read failures; SQLite uses the durable repository search document.
+// Search runs q against idx and tolerates per-plan sidecar read failures by
+// falling back to the authoritative markdown files.
 func Search(idx *Index, q Query) ([]Result, error) {
 	if idx == nil {
 		return nil, errors.New("plans: Search requires a non-nil index")
 	}
-	if idx.UsesSQLite() {
-		return searchSQLite(idx, q)
-	}
-
 	metas := idx.List()
 	needle := strings.ToLower(strings.TrimSpace(q.Text))
 	results := make([]Result, 0, len(metas))
@@ -75,22 +72,31 @@ func Search(idx *Index, q Query) ([]Result, error) {
 			snippetPreview = m.Snippet
 		}
 		key := PlanKey(m.DirPath)
-		searchText, err := idx.store.Read(key)
-		if err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
-				slog.Debug("plans.search: sidecar read failed",
-					"path", idx.store.Path(key), "err", err)
+		searchText := m.SearchText
+		if searchText == "" {
+			var sidecarErr error
+			searchText, sidecarErr = idx.store.Read(key)
+			if sidecarErr != nil {
+				slog.Debug("plans.search: sidecar cache miss", "path", idx.store.Path(key), "err", sidecarErr)
+				var sourceErr error
+				searchText, sourceErr = readPlanSearchText(m)
+				if sourceErr != nil {
+					slog.Debug("plans.search: partial source read", "dir", m.DirPath, "err", sourceErr)
+				}
+				// Only cache a complete corpus. The current search still uses
+				// partial source text and the snippet fallback when available.
+				if sourceErr == nil {
+					if repairErr := idx.store.Write(key, searchText); repairErr != nil {
+						slog.Debug("plans.search: sidecar repair failed", "path", idx.store.Path(key), "err", repairErr)
+					}
+				}
 			}
-			// Missing sidecar: skip the entry. Rebuilding sidecars is
-			// the index's job (Refresh); doing it here would risk
-			// repeated rebuilds on every keystroke.
-			if snippetPreview != "" {
-				results = append(results, Result{Meta: m, Matches: 1, Preview: snippetPreview})
-			}
-			continue
 		}
 		count, preview := countMatchesInSearchText(searchText, needle)
 		if count == 0 {
+			if snippetPreview != "" {
+				results = append(results, Result{Meta: m, Matches: 1, Preview: snippetPreview})
+			}
 			continue
 		}
 		if snippetPreview != "" {
@@ -103,54 +109,21 @@ func Search(idx *Index, q Query) ([]Result, error) {
 	return results, nil
 }
 
-// searchSQLite preserves the legacy literal substring count, preview, and
-// stable ordering behavior while reading the durable search corpus. A missing
-// document retains the existing snippet-only fallback; it never rewrites a
-// compatibility sidecar or reinterprets a plan directory during a search.
-func searchSQLite(idx *Index, q Query) ([]Result, error) {
-	repo := idx.repository()
-	if repo == nil {
-		return nil, errors.New("plans: SQLite repository is not enabled")
-	}
-	metas, err := repo.List(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	needle := strings.ToLower(strings.TrimSpace(q.Text))
-	results := make([]Result, 0, len(metas))
-	if needle == "" {
-		for _, meta := range metas {
-			results = append(results, Result{Meta: meta, Preview: meta.Snippet})
-		}
-		SortResults(results, q.Sort)
-		return results, nil
-	}
-	for _, meta := range metas {
-		snippetPreview := ""
-		if meta.Snippet != "" && strings.Contains(strings.ToLower(meta.Snippet), needle) {
-			snippetPreview = meta.Snippet
-		}
-		searchText, found, err := repo.SearchText(context.Background(), PlanKey(meta.DirPath))
+func readPlanSearchText(meta PlanMeta) (string, error) {
+	var builder strings.Builder
+	var readWarning error
+	for _, rel := range meta.Files {
+		data, err := os.ReadFile(filepath.Join(meta.DirPath, rel))
 		if err != nil {
-			return nil, err
-		}
-		if !found {
-			if snippetPreview != "" {
-				results = append(results, Result{Meta: meta, Matches: 1, Preview: snippetPreview})
-			}
+			readWarning = errors.Join(readWarning, fmt.Errorf("reading %s: %w", rel, err))
 			continue
 		}
-		count, preview := countMatchesInSearchText(searchText, needle)
-		if count == 0 {
-			continue
+		if builder.Len() > 0 {
+			builder.WriteByte('\n')
 		}
-		if snippetPreview != "" {
-			preview = snippetPreview
-		}
-		results = append(results, Result{Meta: meta, Matches: count, Preview: preview})
+		builder.WriteString(strings.ToLower(string(data)))
 	}
-	SortResults(results, q.Sort)
-	return results, nil
+	return builder.String(), readWarning
 }
 
 // countMatchesInSearchText counts case-insensitive occurrences of needle

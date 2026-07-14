@@ -3,8 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/sglavoie/agentmux/internal/compatimport"
-	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/spf13/cobra"
@@ -16,30 +14,18 @@ var (
 	transcriptsIndexPath  = transcript.IndexPath
 	transcriptsLoadConfig = loadRunnableConfig
 	transcriptsReaders    = transcriptReaders
-	transcriptsOpenStore  = datastore.Open
-	transcriptsLoadIndex  = transcript.LoadSQLiteIndexWithStore
 )
 
 var transcriptsCmd = &cobra.Command{
 	Use:   "transcripts",
-	Short: "Inspect and maintain the SQLite transcript search index",
+	Short: "Inspect and maintain the transcript search index",
 }
 
 var transcriptsStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show SQLite transcript index status",
+	Short: "Show transcript index and sidecar status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := commandContext(cmd)
-		store, err := transcriptsOpenStore(ctx)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = store.Close() }()
-		idx, err := transcriptsLoadIndex(ctx, transcriptsIndexPath(), store, transcriptsReaders(), compatimport.SyncSkip)
-		if err != nil {
-			return err
-		}
-		status, err := idx.Status()
+		status, err := transcript.Status(transcriptsIndexPath())
 		if err != nil {
 			return err
 		}
@@ -50,77 +36,50 @@ var transcriptsStatusCmd = &cobra.Command{
 
 var transcriptsCompactCmd = &cobra.Command{
 	Use:   "compact",
-	Short: "Verify the idempotent legacy-to-SQLite transcript import",
+	Short: "Migrate legacy search text and rewrite metadata-only JSON",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := commandContext(cmd)
-		store, err := transcriptsOpenStore(ctx)
+		result, err := transcript.Compact(transcriptsIndexPath())
 		if err != nil {
 			return err
 		}
-		defer func() { _ = store.Close() }()
-		readers := transcriptsReaders()
-		idx, err := transcriptsLoadIndex(ctx, transcriptsIndexPath(), store, readers, compatimport.SyncSkip)
-		if err != nil {
-			return err
-		}
-		result, err := transcript.CompactSQLite(idx, readers)
-		if err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "verified SQLite transcript import\n")
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "legacy_source_found: %t\n", result.Import.SourceFound)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "legacy_imported: %t\n", result.Import.Imported)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "record_count: %d\n", result.Import.RecordCount)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "search_document_count: %d\n", result.StatusAfter.SearchDocumentCount)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "compacted transcript index\n")
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "legacy_search_text_entries: %d\n", result.LegacyFields)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_before: %d\n", result.StatusBefore.MetadataSize)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_after: %d\n", result.StatusAfter.MetadataSize)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.StatusAfter.SidecarCount)
+		printTranscriptWarnings(cmd, result.Warnings)
 		return nil
 	},
 }
 
 var transcriptsRebuildCmd = &cobra.Command{
 	Use:   "rebuild",
-	Short: "Refresh transcripts from configured profiles and rebuild SQLite search documents",
+	Short: "Refresh transcripts from configured profiles and rebuild sidecars",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := commandContext(cmd)
 		cfg, err := transcriptsLoadConfig()
 		if err != nil {
 			return err
 		}
-		store, err := transcriptsOpenStore(ctx)
+		result, err := transcript.Rebuild(transcriptsIndexPath(), cfg, transcriptsReaders(), transcriptsRebuildAll)
 		if err != nil {
 			return err
 		}
-		defer func() { _ = store.Close() }()
-		readers := transcriptsReaders()
-		idx, err := transcriptsLoadIndex(ctx, transcriptsIndexPath(), store, readers, compatimport.SyncForce)
-		if err != nil {
-			return err
-		}
-		result, err := transcript.RebuildSQLite(idx, cfg, readers, transcriptsRebuildAll)
-		if err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "rebuilt SQLite transcript search documents\n")
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "rebuilt transcript sidecars\n")
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_path: %s\n", result.Status.MetadataPath)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_entries: %d\n", result.Status.VisibleEntries)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_entries: %d\n", result.Status.HiddenEntries)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "visible_profile_memberships: %d\n", result.Status.VisibleProfileMemberships)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_profile_memberships: %d\n", result.Status.HiddenProfileMemberships)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "shared_profile_entries: %d\n", result.Status.SharedProfileEntries)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "search_document_count: %d\n", result.Status.SearchDocumentCount)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "missing_search_documents: %d\n", result.Status.MissingSearchDocuments)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.Status.SidecarCount)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "missing_sidecars: %d\n", result.Status.MissingSidecars)
+		printTranscriptWarnings(cmd, result.Warnings)
 		return nil
 	},
 }
 
 func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 	out := cmd.OutOrStdout()
-	_, _ = fmt.Fprintf(out, "backend: %s\n", status.Backend)
-	if status.DatabasePath != "" {
-		_, _ = fmt.Fprintf(out, "database_path: %s\n", status.DatabasePath)
-	}
-	if status.DegradedReason != "" {
-		_, _ = fmt.Fprintf(out, "degraded_reason: %s\n", status.DegradedReason)
-	}
 	_, _ = fmt.Fprintf(out, "metadata_path: %s\n", status.MetadataPath)
 	_, _ = fmt.Fprintf(out, "metadata_size: %d\n", status.MetadataSize)
 	_, _ = fmt.Fprintf(out, "sidecar_dir: %s\n", status.SidecarDir)
@@ -132,8 +91,13 @@ func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 	_, _ = fmt.Fprintf(out, "hidden_profile_memberships: %d\n", status.HiddenProfileMemberships)
 	_, _ = fmt.Fprintf(out, "shared_profile_entries: %d\n", status.SharedProfileEntries)
 	_, _ = fmt.Fprintf(out, "missing_sidecars: %d\n", status.MissingSidecars)
-	_, _ = fmt.Fprintf(out, "search_document_count: %d\n", status.SearchDocumentCount)
-	_, _ = fmt.Fprintf(out, "missing_search_documents: %d\n", status.MissingSearchDocuments)
+	printTranscriptWarnings(cmd, status.Warnings)
+}
+
+func printTranscriptWarnings(cmd *cobra.Command, warnings []string) {
+	for _, warning := range warnings {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "warning: %s\n", warning)
+	}
 }
 
 func transcriptReaders() map[string]transcript.Reader {

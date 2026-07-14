@@ -19,7 +19,4 @@ const (
 	ModeMessageDetail      // full-message overlay opened from ModeSessionView
 	ModePlanSearch         // searchable list of past agent-plan directories
 	ModePlanView           // inline pager for a single plan directory
-	ModeWorkspace          // project-centric workspace home (secondary dashboard view)
-	ModeUnifiedSearch      // cross-entity FTS5 search opened from the command palette
-	ModePalette            // global context-aware command and navigation palette
 )

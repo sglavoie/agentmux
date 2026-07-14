@@ -62,6 +62,35 @@ func TestRootHelp(t *testing.T) {
 	if !strings.Contains(stdout, "resort") {
 		t.Errorf("root help should list public commands like resort, got:\n%s", stdout)
 	}
+	for _, removed := range []string{"index", "plan", "search", "workspace"} {
+		if strings.Contains(stdout, "  "+removed+" ") {
+			t.Errorf("root help must not list removed command %q, got:\n%s", removed, stdout)
+		}
+	}
+	if !strings.Contains(stdout, "multi-harness session manager") {
+		t.Errorf("root help has stale product description:\n%s", stdout)
+	}
+}
+
+func TestRemovedCommandsAreNotRegistered(t *testing.T) {
+	rootNames := make(map[string]bool)
+	for _, command := range rootCmd.Commands() {
+		rootNames[command.Name()] = true
+	}
+	for _, removed := range []string{"index", "plan", "search", "workspace"} {
+		if rootNames[removed] {
+			t.Errorf("root command %q remains registered", removed)
+		}
+	}
+	sessionNames := make(map[string]bool)
+	for _, command := range sessionCmd.Commands() {
+		sessionNames[command.Name()] = true
+	}
+	for _, removed := range []string{"launch", "focus"} {
+		if sessionNames[removed] {
+			t.Errorf("session command %q remains registered", removed)
+		}
+	}
 }
 
 func TestTUITestListFixtures(t *testing.T) {

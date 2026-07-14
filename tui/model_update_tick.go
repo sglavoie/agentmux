@@ -26,11 +26,6 @@ func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 	if m.mode == ModeDetail && m.detailWindowID != 0 {
 		cmds = append(cmds, m.runSessionDetailCmd(m.detailWindowID))
 	}
-	if m.workspaceLoadErr != nil && !m.workspaceProjectionInFlight {
-		if cmd := m.dispatchWorkspaceProjection(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	}
 	return m, tea.Batch(cmds...)
 }
 

@@ -30,11 +30,6 @@ func renderStatusBar(m Model) string {
 }
 
 func currentStatusMessage(m Model, now time.Time) statusMessage {
-	if m.dataServicesRecoveryActive() || m.dataServicesRecoveryTerminal() {
-		if msg, ok := dataServicesRecoveryStatus(m); ok {
-			return msg
-		}
-	}
 	if msg, ok := latestActiveToastStatus(m, now); ok {
 		return msg
 	}
@@ -80,39 +75,10 @@ func fallbackStatusMessage(m Model) statusMessage {
 	if msg, ok := modeErrorStatus(m); ok {
 		return msg
 	}
-	if msg, ok := dataServicesRecoveryStatus(m); ok {
-		return msg
-	}
 	if daemonHealthDegraded(m) || hookHealthDegraded(m) {
 		return statusMessage{Text: "Health degraded", Severity: statusWarning}
 	}
 	return statusMessage{Text: fallbackStatusText(m), Severity: statusIdle}
-}
-
-func dataServicesRecoveryStatus(m Model) (statusMessage, bool) {
-	switch m.dataServicesRecoveryState {
-	case dataServicesRecoveryRequested, dataServicesRecoveryInFlight:
-		return statusMessage{
-			Text:     "Database corruption detected; preserving and rebuilding workspace data…",
-			Severity: statusWarning,
-		}, true
-	case dataServicesRecoverySucceeded:
-		if m.dataServicesRecoveryResult.Replaced {
-			if path := strings.TrimSpace(m.dataServicesRecoveryResult.QuarantineDir); path != "" {
-				return statusMessage{Text: "Database recovered; corrupt files preserved at " + path, Severity: statusSuccess}, true
-			}
-			return statusMessage{Text: "Database recovered; workspace data rebuilt", Severity: statusSuccess}, true
-		}
-		return statusMessage{Text: "Database was repaired by another process; workspace data reloaded", Severity: statusSuccess}, true
-	case dataServicesRecoveryFailed, dataServicesRecoveryAlreadyAttempted:
-		text := "Database recovery stopped"
-		if m.dataServicesRecoveryErr != nil {
-			text += ": " + m.dataServicesRecoveryErr.Error()
-		}
-		return statusMessage{Text: text, Severity: statusError}, true
-	default:
-		return statusMessage{}, false
-	}
 }
 
 func modeErrorStatus(m Model) (statusMessage, bool) {
@@ -137,10 +103,6 @@ func modeErrorStatus(m Model) (statusMessage, bool) {
 		}
 		if m.planRefreshErr != nil {
 			return statusMessage{Text: "Refresh error: " + m.planRefreshErr.Error(), Severity: statusError}, true
-		}
-	case ModeUnifiedSearch:
-		if m.unifiedSearchErr != nil {
-			return statusMessage{Text: "Search error: " + m.unifiedSearchErr.Error(), Severity: statusError}, true
 		}
 	case ModePlanView:
 		if m.planViewerLoadErr != nil {
@@ -170,25 +132,6 @@ func hookHealthDegraded(m Model) bool {
 
 func fallbackStatusText(m Model) string {
 	switch m.mode {
-	case ModePalette:
-		if strings.TrimSpace(m.paletteQuery) == "" {
-			return "Command palette"
-		}
-		return "Command palette: " + m.paletteQuery
-	case ModeWorkspace:
-		if m.workspaceLoading && len(m.workspaceSnapshot.Workspaces) == 0 {
-			return "Workspaces: loading"
-		}
-		if m.workspaceLoadErr != nil {
-			if len(m.workspaceSnapshot.Workspaces) > 0 {
-				return fmt.Sprintf("Workspaces: %d project%s · refresh failed", len(m.workspaceSnapshot.Workspaces), plural(len(m.workspaceSnapshot.Workspaces)))
-			}
-			return "Workspaces unavailable"
-		}
-		if m.workspaceProjectionInFlight && len(m.workspaceSnapshot.Workspaces) > 0 {
-			return fmt.Sprintf("Workspaces: %d project%s · refreshing", len(m.workspaceSnapshot.Workspaces), plural(len(m.workspaceSnapshot.Workspaces)))
-		}
-		return fmt.Sprintf("Workspaces: %d project%s", len(m.workspaceSnapshot.Workspaces), plural(len(m.workspaceSnapshot.Workspaces)))
 	case ModeSearch:
 		if strings.TrimSpace(m.filterText) != "" {
 			return "Filter sessions: /" + m.filterText
@@ -238,11 +181,6 @@ func fallbackStatusText(m Model) string {
 		}
 		n := len(m.planResults)
 		return fmt.Sprintf("Plans: %d result%s", n, plural(n))
-	case ModeUnifiedSearch:
-		if m.unifiedLoading {
-			return "Unified Search: searching"
-		}
-		return fmt.Sprintf("Unified Search: %d result%s", len(m.unifiedResults), plural(len(m.unifiedResults)))
 	case ModePlanView:
 		return planViewStatusText(m)
 	default:

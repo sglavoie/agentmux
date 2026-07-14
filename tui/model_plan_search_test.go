@@ -116,21 +116,68 @@ func TestEnterPlanSearch_TransitionsModeAndDispatchesRefresh(t *testing.T) {
 	}
 }
 
-func TestEnterPlanSearchLoadsSQLiteFacadeAsynchronously(t *testing.T) {
-	m := Model{mode: ModeList, cfg: &config.Config{}, dataServices: &DataServices{}}
-	updated, loadCmd := m.enterPlanSearch()
-	m = updated.(Model)
-	if loadCmd == nil || !m.dataServicesInitInFlight || !m.planLoading || m.planSearchSeq != 0 {
-		t.Fatalf("async load = cmd %v services-loading %v loading %v seq %d", loadCmd != nil, m.dataServicesInitInFlight, m.planLoading, m.planSearchSeq)
-	}
-	index, err := plans.LoadIndexAt(filepath.Join(t.TempDir(), "plans.json"))
+func TestEnterPlanSearchLoadsFilesystemCacheAsynchronously(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	planRoot := t.TempDir()
+	seedPlanDir(t, planRoot, "warm-aabb112233cc", map[string]string{
+		"manifest.md": "# Warm plan\n\nfilesystem cache row",
+	})
+	seed, err := plans.LoadIndex()
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, refreshCmd := m.Update(dataServicesReadyMsg{snapshot: dataServicesSnapshot{planIndex: index}})
+	if err := seed.Refresh(planRoot); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{}
+	cfg.Defaults.PlansDirectory = planRoot
+	m := Model{mode: ModeList, cfg: cfg}
+	updated, loadCmd := m.enterPlanSearch()
 	m = updated.(Model)
-	if refreshCmd == nil || m.dataServicesInitInFlight || m.plansIndex != index || m.planSearchSeq != 1 {
-		t.Fatalf("loaded facade = cmd %v services-loading %v index %p seq %d", refreshCmd != nil, m.dataServicesInitInFlight, m.plansIndex, m.planSearchSeq)
+	if loadCmd == nil || !m.planCacheLoadInFlight || !m.planLoading || m.planSearchSeq != 1 {
+		t.Fatalf("async load = cmd %v cache-loading %v loading %v seq %d", loadCmd != nil, m.planCacheLoadInFlight, m.planLoading, m.planSearchSeq)
+	}
+	loaded, ok := loadCmd().(planCacheLoadDoneMsg)
+	if !ok || loaded.idx == nil || len(loaded.results) != 1 {
+		t.Fatalf("cache load = %T index %p results %d", loaded, loaded.idx, len(loaded.results))
+	}
+	updated, refreshCmd := m.Update(loaded)
+	m = updated.(Model)
+	if refreshCmd == nil || m.planCacheLoadInFlight || m.plansIndex != loaded.idx || m.planSearchSeq != 2 || len(m.planResults) != 1 {
+		t.Fatalf("loaded cache = cmd %v cache-loading %v index %p seq %d results %d", refreshCmd != nil, m.planCacheLoadInFlight, m.plansIndex, m.planSearchSeq, len(m.planResults))
+	}
+}
+
+func TestPlanSearchResultsPreserveSelectionAndLastGoodRows(t *testing.T) {
+	m, _ := planSearchTestModel(t)
+	m.planCursor = 1
+	selectedPath := m.planResults[m.planCursor].Meta.DirPath
+	selected := m.planResults[1]
+	selected.Matches = 2
+	other := m.planResults[0]
+	other.Matches = 1
+
+	updated, _ := m.Update(planSearchDoneMsg{
+		seq: m.planSearchSeq, results: []plans.Result{selected, other},
+	})
+	m = updated.(Model)
+	if m.planCursor != 0 || m.planResults[m.planCursor].Meta.DirPath != selectedPath {
+		t.Fatalf("selection after reorder = cursor %d path %q, want %q", m.planCursor, m.planResults[m.planCursor].Meta.DirPath, selectedPath)
+	}
+
+	lastGood := append([]plans.Result(nil), m.planResults...)
+	m.planSearchSeq++
+	updated, _ = m.Update(planSearchDoneMsg{seq: m.planSearchSeq, err: os.ErrPermission})
+	m = updated.(Model)
+	if len(m.planResults) != len(lastGood) || m.planResults[0].Meta.DirPath != lastGood[0].Meta.DirPath {
+		t.Fatalf("search error replaced last-good rows: before %+v after %+v", lastGood, m.planResults)
+	}
+
+	updated, _ = m.Update(planSearchDoneMsg{seq: m.planSearchSeq - 1, results: nil})
+	m = updated.(Model)
+	if len(m.planResults) != len(lastGood) {
+		t.Fatalf("stale search cleared rows: before %d after %d", len(lastGood), len(m.planResults))
 	}
 }
 

@@ -1,9 +1,7 @@
 package transcript
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"log/slog"
 	"sort"
@@ -46,10 +44,6 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 	if idx == nil {
 		return nil, errors.New("transcript: Search requires a non-nil index")
 	}
-	if idx.UsesSQLite() {
-		return searchSQLite(idx, readers, q)
-	}
-
 	metas := idx.List(ListFilter{
 		Harness: q.Harness,
 		Profile: q.Profile,
@@ -80,7 +74,11 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		// transcript body. Substring search and match counting avoid JSONL
 		// reopen/decoding while keeping the in-memory index metadata-only.
 		key := IndexKey(m.Harness, m.ID)
-		searchText, err := idx.ReadSearchText(key)
+		searchText := m.SearchText
+		var err error
+		if searchText == "" {
+			searchText, err = idx.ReadSearchText(key)
+		}
 		if err == nil {
 			count, preview := countMatchesInSearchText(searchText, needle)
 			if count == 0 {
@@ -128,83 +126,6 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		results = append(results, Result{Meta: m, Matches: count, Preview: preview})
 	}
 
-	sortResults(results)
-	return results, nil
-}
-
-// searchSQLite preserves literal substring counts and previews while taking
-// content from SQLite. Missing documents follow the existing Reader fallback
-// and repair SQLite only, never the compatibility sidecars.
-func searchSQLite(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
-	repo := idx.repository()
-	if repo == nil {
-		return nil, errors.New("transcript: SQLite repository is not enabled")
-	}
-	metas, err := repo.List(context.Background(), ListFilter{
-		Harness: q.Harness,
-		Profile: q.Profile,
-		Project: q.Project,
-	})
-	if err != nil {
-		return nil, err
-	}
-	needle := strings.ToLower(strings.TrimSpace(q.Text))
-	results := make([]Result, 0, len(metas))
-	if needle == "" {
-		for _, meta := range metas {
-			results = append(results, Result{Meta: meta, Preview: meta.Snippet})
-		}
-		sortResults(results)
-		return results, nil
-	}
-
-	ctx := context.Background()
-	for _, meta := range metas {
-		snippetPreview := ""
-		if meta.Snippet != "" && strings.Contains(strings.ToLower(meta.Snippet), needle) {
-			snippetPreview = meta.Snippet
-		}
-		searchText, found, err := repo.SearchText(ctx, meta.Harness, meta.ID)
-		if err != nil {
-			return nil, fmt.Errorf("transcript: reading SQLite search document for %q: %w", IndexKey(meta.Harness, meta.ID), err)
-		}
-		if found {
-			count, preview := countMatchesInSearchText(strings.ToLower(searchText), needle)
-			if count == 0 {
-				continue
-			}
-			if snippetPreview != "" {
-				preview = snippetPreview
-			}
-			results = append(results, Result{Meta: meta, Matches: count, Preview: preview})
-			continue
-		}
-
-		if readers == nil {
-			return nil, errors.New("transcript: Search with text requires readers")
-		}
-		reader, ok := readers[meta.Harness]
-		if !ok || reader == nil {
-			slog.Debug("transcript.search: no reader for harness", "harness", meta.Harness, "id", meta.ID)
-			continue
-		}
-		messages, err := reader.ReadMessages(meta.Path)
-		if err != nil {
-			slog.Debug("transcript.search: read failed", "path", meta.Path, "err", err)
-			continue
-		}
-		if err := repo.SetSearchText(ctx, meta.Harness, meta.ID, messagesSearchText(messages)); err != nil {
-			slog.Debug("transcript.search: SQLite search-document repair failed", "key", IndexKey(meta.Harness, meta.ID), "err", err)
-		}
-		count, preview := countMatches(messages, needle)
-		if count == 0 {
-			continue
-		}
-		if snippetPreview != "" {
-			preview = snippetPreview
-		}
-		results = append(results, Result{Meta: meta, Matches: count, Preview: preview})
-	}
 	sortResults(results)
 	return results, nil
 }

@@ -341,38 +341,6 @@ a fixture/test, validated by the automated gate below):
 - Copilot user abort — `type: abort`, `data.reason: user_initiated`, with no
   native `agentStop`, re-confirmed live against 1.0.70.
 
-**Datastore recurrence, root cause, and installed repair (2026-07-13):** the
-earlier recovery at
-`~/.local/share/agent-mux/recovery/20260713T232547.527014000Z` did not end the
-corruption loop. Five quarantined databases and a sixth live reproduction all
-showed physical tail loss, usually under the FTS5 data root: B-tree pages
-pointed beyond the main file's EOF while no WAL artifact remained. The decisive
-reproduction began with a healthy **608,022,528-byte**, **148,443-page** database;
-`amx daemon restart` reduced it to the fresh schema's **303,104 bytes**, after
-which `PRAGMA quick_check` returned `SQLITE_CORRUPT`.
-
-Process and sidecar sampling exposed the race. Recovery correctly deferred its
-own restart callback, but live hook traffic auto-started another daemon in the
-teardown gap. That daemon opened the fresh 74-page database while the TUI's
-compatibility/FTS rebuild was still growing a roughly 589 MB WAL. Its later
-close discarded the WAL state and restored the stale physical boundary.
-
-The installed repair was exercised through the supported TUI recovery at
-`~/.local/share/agent-mux/recovery/20260714T044928.431588000Z`. The new
-cross-exec rebuild gate remained present and **no daemon PID existed** throughout
-the import. At completion, the sequence was observed directly: main database
-**608,022,528 bytes**, WAL **589,003,472 bytes**, then the explicit checkpoint
-reduced the WAL to **0**, then the gate disappeared and daemon PID 81461 started.
-`PRAGMA quick_check` returned `ok`, `PRAGMA foreign_key_check` returned no rows,
-and the restored database contained 3,207 conversations, 252 plans, 26
-workspaces, 3,485 search documents, and 3,459 import ledger rows.
-
-A subsequent graceful `amx daemon restart` preserved **608,022,528 bytes** and
-**148,443 pages** with the TUI still open; both integrity checks remained clean.
-Closing the recovery TUI also preserved those values. This acceptance covers
-the recovery gate and restart regression only; it does not change the separate
-unchecked manual drill rows below.
-
 ## Session 4 regression drills
 
 Session 4 was the original daemon-state refactor session that introduced these

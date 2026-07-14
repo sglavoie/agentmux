@@ -24,12 +24,7 @@ type planFilesLoadedMsg struct {
 // the async file-read. A value copy of the meta is held so the viewer is
 // not invalidated if the underlying index entry is mutated mid-read.
 func (m Model) enterPlanView(meta plans.PlanMeta) (tea.Model, tea.Cmd) {
-	returnMode := m.mode
-	if returnMode != ModePlanSearch && returnMode != ModeWorkspace && returnMode != ModeUnifiedSearch {
-		returnMode = ModePlanSearch
-	}
 	m.mode = ModePlanView
-	m.planViewReturnMode = returnMode
 	metaCopy := meta
 	m.viewerPlan = &metaCopy
 	m.planViewerLines = nil
@@ -48,12 +43,7 @@ func (m Model) enterPlanView(meta plans.PlanMeta) (tea.Model, tea.Cmd) {
 // viewer-local field. The picker state (query, results, cursor) is preserved
 // so the user lands back on the same row they entered from.
 func (m *Model) exitPlanView() {
-	returnMode := m.planViewReturnMode
-	if returnMode != ModePlanSearch && returnMode != ModeWorkspace && returnMode != ModeUnifiedSearch {
-		returnMode = ModePlanSearch
-	}
-	m.mode = returnMode
-	m.planViewReturnMode = 0
+	m.mode = ModePlanSearch
 	m.viewerPlan = nil
 	m.planViewerLines = nil
 	m.planViewerCursor = 0
@@ -125,11 +115,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Return to the picker with the editable text query active so the
 		// user can refine the query without re-traversing the navigation
 		// stack.
-		returnMode := m.planViewReturnMode
-		if returnMode != ModePlanSearch {
-			returnMode = ModePlanSearch
-		}
-		m.mode = returnMode
+		m.mode = ModePlanSearch
 		m.planSearchMode = true
 		return m, nil
 	case keyY:

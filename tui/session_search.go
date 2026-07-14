@@ -254,7 +254,7 @@ func sessionLoadingLabel(m Model) string {
 	if !m.sessionLoading {
 		return ""
 	}
-	if m.dataServicesInitInFlight || m.transcriptIndex == nil {
+	if m.sessionCacheLoadInFlight || m.transcriptIndex == nil {
 		return "loading cache…"
 	}
 	return "searching…"

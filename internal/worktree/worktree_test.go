@@ -11,22 +11,28 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/datastore"
 )
 
-func TestCreateTracksIsolatedWorktreeAndRemoveUnusedCleansIt(t *testing.T) {
+func TestCreateReturnsGitAuthoritativeWorktreeAndRemoveUnusedCleansIt(t *testing.T) {
 	repo := testRepository(t)
-	dbPath := filepath.Join(t.TempDir(), "agent-mux.db")
-	workflow := testWorkflow(t, dbPath)
+	destinationRoot := filepath.Join(t.TempDir(), "worktrees")
+	workflow := testWorkflow(destinationRoot)
 	cfg := testConfig(repo)
 
 	result, err := workflow.Create(context.Background(), Request{Config: cfg, SourceCWD: repo, SessionID: "session-1234567890"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	wantParent := filepath.Join(filepath.Dir(dbPath), "worktrees", "api")
+	wantParent := filepath.Join(destinationRoot, "api")
 	if !strings.HasPrefix(result.Path, wantParent+string(os.PathSeparator)) {
-		t.Fatalf("worktree path = %q, want managed parent %q", result.Path, wantParent)
+		t.Fatalf("worktree path = %q, want project parent %q", result.Path, wantParent)
+	}
+	wantSourceRoot, err := canonicalDirectory(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ProjectLabel != "api" || result.BaseRef != "HEAD" || result.SourceRoot != wantSourceRoot {
+		t.Fatalf("result = %+v, want configured project and Git source", result)
 	}
 	if result.Branch != "amx/api/session-1234-20260711T120000Z" {
 		t.Fatalf("branch = %q", result.Branch)
@@ -35,17 +41,8 @@ func TestCreateTracksIsolatedWorktreeAndRemoveUnusedCleansIt(t *testing.T) {
 		t.Fatalf("worktree branch = %q, want %q", got, result.Branch)
 	}
 
-	store, err := datastore.OpenPath(context.Background(), dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = store.Close() }()
-	var status, contextID string
-	if err := store.DB().QueryRow(`SELECT status, worktree_context_id FROM managed_worktrees WHERE id = ?`, result.ID).Scan(&status, &contextID); err != nil {
-		t.Fatalf("managed row: %v", err)
-	}
-	if status != managedStatusActive || contextID != result.WorktreeContextID || contextID == "" {
-		t.Fatalf("managed row = status=%q context=%q, result=%+v", status, contextID, result)
+	if _, err := os.Stat(result.Path); err != nil {
+		t.Fatalf("successful worktree was not retained: %v", err)
 	}
 
 	if err := workflow.RemoveUnused(context.Background(), result); err != nil {
@@ -54,22 +51,75 @@ func TestCreateTracksIsolatedWorktreeAndRemoveUnusedCleansIt(t *testing.T) {
 	if _, err := os.Stat(result.Path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("removed worktree stat error = %v, want not exist", err)
 	}
-	var count int
-	if err := store.DB().QueryRow(`SELECT count(*) FROM managed_worktrees WHERE id = ?`, result.ID).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 0 {
-		t.Fatalf("managed record count = %d, want 0", count)
-	}
 	if err := exec.Command("git", "-C", repo, "show-ref", "--verify", "--quiet", "refs/heads/"+result.Branch).Run(); err == nil {
 		t.Fatalf("branch %q remains after unused cleanup", result.Branch)
 	}
 }
 
+func TestCreateAcceptsUnconfiguredRepositoryAndUsesExplicitTranscriptLabel(t *testing.T) {
+	repo := testRepository(t)
+	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
+
+	result, err := workflow.Create(context.Background(), Request{
+		ProjectLabel: "Transcript Project", SourceCWD: repo, SessionID: "source-1",
+	})
+	if err != nil {
+		t.Fatalf("Create unconfigured repository: %v", err)
+	}
+	if result.ProjectLabel != "Transcript Project" || !strings.Contains(result.Path, string(os.PathSeparator)+"transcript-project"+string(os.PathSeparator)) ||
+		!strings.HasPrefix(result.Branch, "amx/transcript-project/") {
+		t.Fatalf("result = %+v, want transcript label and slug", result)
+	}
+	if err := workflow.RemoveUnused(context.Background(), result); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateUsesRepositoryBasenameWithoutProjectHints(t *testing.T) {
+	repo := testRepository(t)
+	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
+
+	result, err := workflow.Create(context.Background(), Request{SourceCWD: repo, SessionID: "source-1"})
+	if err != nil {
+		t.Fatalf("Create unconfigured repository: %v", err)
+	}
+	if result.ProjectLabel != filepath.Base(repo) {
+		t.Fatalf("project label = %q, want repository basename %q", result.ProjectLabel, filepath.Base(repo))
+	}
+	if err := workflow.RemoveUnused(context.Background(), result); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateMatchesConfiguredProjectFromLinkedWorktree(t *testing.T) {
+	repo := testRepository(t)
+	linked := filepath.Join(t.TempDir(), "linked")
+	gitRun(t, repo, "worktree", "add", "-b", "linked-source", linked, "HEAD")
+	t.Cleanup(func() {
+		_ = exec.Command("git", "-C", repo, "worktree", "remove", "--force", linked).Run()
+		_ = exec.Command("git", "-C", repo, "branch", "-D", "linked-source").Run()
+	})
+	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
+
+	result, err := workflow.Create(context.Background(), Request{Config: testConfig(repo), SourceCWD: linked, SessionID: "source-1"})
+	if err != nil {
+		t.Fatalf("Create from linked worktree: %v", err)
+	}
+	wantSourceRoot, err := canonicalDirectory(linked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ProjectLabel != "api" || result.SourceRoot != wantSourceRoot {
+		t.Fatalf("result = %+v, want configured label and linked source root", result)
+	}
+	if err := workflow.RemoveUnused(context.Background(), result); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCreateRefusesDirtySourceUnlessExplicitlyAllowed(t *testing.T) {
 	repo := testRepository(t)
-	dbPath := filepath.Join(t.TempDir(), "agent-mux.db")
-	workflow := testWorkflow(t, dbPath)
+	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 	if err := os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("not committed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +141,7 @@ func TestCreateRefusesDirtySourceUnlessExplicitlyAllowed(t *testing.T) {
 
 func TestCreateResolvesBranchAndPathCollisionsDeterministically(t *testing.T) {
 	repo := testRepository(t)
-	workflow := testWorkflow(t, filepath.Join(t.TempDir(), "agent-mux.db"))
+	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 	request := Request{Config: testConfig(repo), SourceCWD: repo, SessionID: "source-1"}
 	first, err := workflow.Create(context.Background(), request)
 	if err != nil {
@@ -115,23 +165,78 @@ func TestCreateResolvesBranchAndPathCollisionsDeterministically(t *testing.T) {
 	}
 }
 
-func testWorkflow(t *testing.T, path string) *Workflow {
-	t.Helper()
-	var next int
-	return &Workflow{
-		openStore: func(ctx context.Context) (*datastore.Store, error) { return datastore.OpenPath(ctx, path) },
-		now:       func() time.Time { return time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC) },
-		newID: func(prefix string) (string, error) {
-			next++
-			return prefix + "-test-" + string(rune('0'+next)), nil
+func TestCreateChecksPathAndBranchCollisionsIndependently(t *testing.T) {
+	const (
+		leaf       = "source-1-20260711T120000Z"
+		baseBranch = "amx/api/" + leaf
+	)
+	for _, tc := range []struct {
+		name    string
+		occupy  func(*testing.T, string, string)
+		cleanup func(*testing.T, string)
+	}{
+		{
+			name: "path",
+			occupy: func(t *testing.T, repo, destinationRoot string) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Join(destinationRoot, "api", leaf), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			},
 		},
+		{
+			name: "branch",
+			occupy: func(t *testing.T, repo, destinationRoot string) {
+				t.Helper()
+				gitRun(t, repo, "branch", baseBranch)
+			},
+			cleanup: func(t *testing.T, repo string) {
+				t.Helper()
+				gitRun(t, repo, "branch", "-D", baseBranch)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := testRepository(t)
+			destinationRoot := filepath.Join(t.TempDir(), "worktrees")
+			tc.occupy(t, repo, destinationRoot)
+			workflow := testWorkflow(destinationRoot)
+			result, err := workflow.Create(context.Background(), Request{Config: testConfig(repo), SourceCWD: repo, SessionID: "source-1"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasSuffix(result.Branch, "-2") || !strings.HasSuffix(result.Path, "-2") {
+				t.Fatalf("collision name = branch %q path %q, want deterministic -2 suffix", result.Branch, result.Path)
+			}
+			if err := workflow.RemoveUnused(context.Background(), result); err != nil {
+				t.Fatal(err)
+			}
+			if tc.cleanup != nil {
+				tc.cleanup(t, repo)
+			}
+		})
+	}
+}
+
+func TestCreateReportsNonGitCheckout(t *testing.T) {
+	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
+	_, err := workflow.Create(context.Background(), Request{SourceCWD: t.TempDir(), SessionID: "source-1"})
+	if !errors.Is(err, ErrNotGitCheckout) {
+		t.Fatalf("Create error = %v, want ErrNotGitCheckout", err)
+	}
+}
+
+func testWorkflow(destinationRoot string) *Workflow {
+	return &Workflow{
+		directory: func() (string, error) { return destinationRoot, nil },
+		now:       func() time.Time { return time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC) },
 	}
 }
 
 func testConfig(repo string) *config.Config {
 	return &config.Config{
 		Accounts: []config.Account{{Name: "work", Harness: "codex"}},
-		Projects: []config.Session{{ID: "api", Title: "api", Directory: repo, Profile: "work"}},
+		Projects: []config.Session{{Title: "api", Directory: repo, Profile: "work"}},
 	}
 }
 

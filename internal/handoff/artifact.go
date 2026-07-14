@@ -1,7 +1,6 @@
 package handoff
 
 import (
-	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -15,32 +14,36 @@ import (
 const (
 	artifactDirectoryMode fs.FileMode = 0o700
 	artifactFileMode      fs.FileMode = 0o600
+	StatusDraft                       = "draft"
+	StatusFinal                       = "final"
 )
 
 var artifactIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 type WriteRequest struct {
-	ID             string
-	Status         string
-	WorkspaceID    string
-	ConversationID *int64
-	PlanID         string
-	Title          string
-	Content        []byte
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID        string
+	Status    string
+	Content   []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
+// Artifact is the complete local metadata for one generated handoff file.
+// The file itself is authoritative; this metadata is returned to callers and
+// is not persisted in a database.
 type Artifact struct {
-	Record Record
+	ID          string
+	Path        string
+	ContentHash string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
-// ArtifactStore writes private Markdown artifacts and records their hashes.
-// Draft and final writes use distinct filenames so an edited draft can remain
-// inspectable after finalization.
+// ArtifactStore writes private Markdown artifacts. Draft and final writes use
+// distinct filenames so an edited draft remains inspectable after finalization.
 type ArtifactStore struct {
-	directory  string
-	repository *Repository
+	directory string
 }
 
 func DefaultDirectory() (string, error) {
@@ -54,10 +57,7 @@ func DefaultDirectory() (string, error) {
 	return filepath.Join(home, ".local", "share", "agent-mux", "handoffs"), nil
 }
 
-func NewArtifactStore(directory string, repository *Repository) (*ArtifactStore, error) {
-	if repository == nil {
-		return nil, errors.New("handoff: artifact store requires a metadata repository")
-	}
+func NewArtifactStore(directory string) (*ArtifactStore, error) {
 	if directory == "" {
 		return nil, errors.New("handoff: artifact directory is empty")
 	}
@@ -65,10 +65,10 @@ func NewArtifactStore(directory string, repository *Repository) (*ArtifactStore,
 	if err != nil {
 		return nil, fmt.Errorf("handoff: resolving artifact directory: %w", err)
 	}
-	return &ArtifactStore{directory: filepath.Clean(abs), repository: repository}, nil
+	return &ArtifactStore{directory: filepath.Clean(abs)}, nil
 }
 
-func (s *ArtifactStore) Write(ctx context.Context, request WriteRequest) (Artifact, error) {
+func (s *ArtifactStore) Write(request WriteRequest) (Artifact, error) {
 	if !artifactIDPattern.MatchString(request.ID) {
 		return Artifact{}, fmt.Errorf("handoff: invalid artifact ID %q", request.ID)
 	}
@@ -86,50 +86,38 @@ func (s *ArtifactStore) Write(ctx context.Context, request WriteRequest) (Artifa
 		suffix = ".draft.md"
 	}
 	path := filepath.Join(s.directory, request.ID+suffix)
-	previous, existed, err := readExistingArtifact(path)
-	if err != nil {
+	if err := validateArtifactTarget(path); err != nil {
 		return Artifact{}, err
 	}
 	if err := atomicWritePrivate(path, request.Content); err != nil {
 		return Artifact{}, err
 	}
 	sum := sha256.Sum256(request.Content)
-	record, err := s.repository.Save(ctx, Record{
-		ID: request.ID, WorkspaceID: request.WorkspaceID, ConversationID: request.ConversationID,
-		PlanID: request.PlanID, Path: path, ContentHash: fmt.Sprintf("%x", sum[:]), Status: request.Status,
-		CreatedAt: request.CreatedAt, UpdatedAt: request.UpdatedAt,
-	}, request.Title, request.Content)
-	if err != nil {
-		if existed {
-			if restoreErr := atomicWritePrivate(path, previous); restoreErr != nil {
-				return Artifact{}, fmt.Errorf("%w; restoring previous artifact: %v", err, restoreErr)
-			}
-		} else {
-			if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
-				return Artifact{}, fmt.Errorf("%w; removing unindexed artifact: %v", err, removeErr)
-			}
-		}
-		return Artifact{}, err
+	now := time.Now().UTC()
+	if request.CreatedAt.IsZero() {
+		request.CreatedAt = now
 	}
-	return Artifact{Record: record}, nil
+	if request.UpdatedAt.IsZero() {
+		request.UpdatedAt = now
+	}
+	return Artifact{
+		ID: request.ID, Path: path, ContentHash: fmt.Sprintf("%x", sum[:]), Status: request.Status,
+		CreatedAt: request.CreatedAt, UpdatedAt: request.UpdatedAt,
+	}, nil
 }
 
-func readExistingArtifact(path string) ([]byte, bool, error) {
+func validateArtifactTarget(path string) error {
 	info, err := os.Lstat(path)
 	if os.IsNotExist(err) {
-		return nil, false, nil
+		return nil
 	}
 	if err != nil {
-		return nil, false, fmt.Errorf("handoff: inspecting existing artifact: %w", err)
+		return fmt.Errorf("handoff: inspecting existing artifact: %w", err)
 	}
 	if !info.Mode().IsRegular() {
-		return nil, false, fmt.Errorf("handoff: existing artifact %s is not a regular file", path)
+		return fmt.Errorf("handoff: existing artifact %s is not a regular file", path)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, false, fmt.Errorf("handoff: reading existing artifact: %w", err)
-	}
-	return data, true, nil
+	return nil
 }
 
 func ensurePrivateDirectory(path string) error {

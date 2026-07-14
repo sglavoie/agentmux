@@ -79,9 +79,9 @@ func TestSearch_SnippetMatchSurvivesMissingSidecar(t *testing.T) {
 	idx, planA, _ := seedTwoPlans(t)
 
 	// "Alpha" is in planA's snippet (manifest.md first line) but not
-	// in planB's. Deleting planA's sidecar means Search cannot count
-	// the corpus exactly, but the snippet match should still surface
-	// the plan.
+	// in planB's. Deleting planA's sidecar makes the source files the
+	// authoritative fallback; Search should return the exact count and
+	// repair the disposable sidecar.
 	key := PlanKey(planA)
 	if err := os.Remove(idx.store.Path(key)); err != nil {
 		t.Fatalf("removing planA sidecar: %v", err)
@@ -98,11 +98,14 @@ func TestSearch_SnippetMatchSurvivesMissingSidecar(t *testing.T) {
 	if got.Meta.DirPath != planA {
 		t.Errorf("Meta.DirPath = %q, want %q", got.Meta.DirPath, planA)
 	}
-	if got.Matches != 1 {
-		t.Errorf("Matches = %d, want 1 (missing sidecar falls back to snippet match)", got.Matches)
+	if got.Matches != 2 {
+		t.Errorf("Matches = %d, want 2 after source fallback", got.Matches)
 	}
 	if got.Preview != got.Meta.Snippet {
 		t.Errorf("Preview = %q, want Meta.Snippet %q", got.Preview, got.Meta.Snippet)
+	}
+	if _, err := os.Stat(idx.store.Path(key)); err != nil {
+		t.Errorf("missing sidecar was not repaired: %v", err)
 	}
 }
 
@@ -209,25 +212,25 @@ func TestSearch_UnicodeAndMixedCase(t *testing.T) {
 	}
 }
 
-func TestSearch_MissingSidecarSkippedSilently(t *testing.T) {
+func TestSearch_MissingSidecarReadsSourceAndRepairs(t *testing.T) {
 	idx, planA, planB := seedTwoPlans(t)
 
-	// Delete planA's sidecar. Searching for a body-only needle that
-	// would only match planA must skip planA cleanly without erroring.
-	// Use a needle in planB's body so we have a non-empty baseline to
-	// confirm Search itself works.
+	// Delete planA's sidecar. A body-only match must be recovered from
+	// the authoritative Markdown source without affecting planB.
 	if err := os.Remove(idx.store.Path(PlanKey(planA))); err != nil {
 		t.Fatalf("removing planA sidecar: %v", err)
 	}
 
-	// "Foo" is body-only in planA — with the sidecar gone, it should
-	// be skipped (and there's no match in planB), so results are empty.
+	// "Foo" is body-only in planA, so source fallback should find it.
 	results, err := Search(idx, Query{Text: "Foo"})
 	if err != nil {
 		t.Fatalf("Search after sidecar delete: %v", err)
 	}
-	if len(results) != 0 {
-		t.Errorf("len(results) = %d, want 0 (planA sidecar missing, no planB match)", len(results))
+	if len(results) != 1 || results[0].Meta.DirPath != planA {
+		t.Fatalf("source fallback results = %+v, want planA", results)
+	}
+	if _, err := os.Stat(idx.store.Path(PlanKey(planA))); err != nil {
+		t.Errorf("missing sidecar was not repaired: %v", err)
 	}
 
 	// "widgets" is body-only in planB — its sidecar is intact, so the

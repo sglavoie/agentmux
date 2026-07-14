@@ -10,10 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/activity"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -23,33 +21,19 @@ import (
 //   - ctx is cancelled
 //   - a TypeShutdown request is received
 func Run(ctx context.Context, cfg *config.Config) error {
-	return run(ctx, cfg, runDependencies{
-		openActivityStore: openDaemonActivityStore,
-	})
+	return run(ctx, cfg, runDependencies{})
 }
 
 type runDependencies struct {
-	beforeDatastoreStartup    func()
 	beforeStartupConfirmation func(context.Context)
 	afterStartupPublication   func()
-	openActivityStore         func(context.Context) (*datastore.Store, error)
 }
 
-func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr error) {
+func run(ctx context.Context, cfg *config.Config, deps runDependencies) error {
 	socketPath := SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		return fmt.Errorf("daemon: creating socket directory: %w", err)
 	}
-	if deps.beforeDatastoreStartup != nil {
-		deps.beforeDatastoreStartup()
-	}
-	startupLease, err := datastore.BeginDefaultDaemonStartup(ctx)
-	if err != nil {
-		return fmt.Errorf("daemon: entering datastore startup gate: %w", err)
-	}
-	defer func() {
-		retErr = errors.Join(retErr, startupLease.Release())
-	}()
 
 	slog.Info("daemon: acquiring single-instance lock", "socket", socketPath, "lock", daemonLockPath(socketPath))
 	lockFile, err := acquireDaemonLock(socketPath)
@@ -116,26 +100,9 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	if err != nil {
 		return fmt.Errorf("daemon: binding socket %s: %w", socketPath, err)
 	}
-	// Bind the public socket before starting the activity worker. The worker's
-	// initial retention sweep may need to create and migrate SQLite; although
-	// that work runs in its own goroutine, starting it earlier can contend with
-	// the bounded Kitty restore and delay observable daemon readiness.
-	openActivityStore := deps.openActivityStore
-	if openActivityStore == nil {
-		openActivityStore = openDaemonActivityStore
-	}
-	activityWriter := activity.NewWriter(activity.WriterOptions{
-		OpenStore: openActivityStore,
-		Keep:      time.Duration(cfg.Defaults.Activity.KeepDays) * 24 * time.Hour,
-	})
-	handler.SetActivityWriter(activityWriter)
 	defer func() {
-		retErr = errors.Join(retErr, closeDaemonResources(
-			server.Close,
-			startupLease.Release,
-			activityWriter.Close,
-			func() error { return os.Remove(socketPath) },
-		))
+		server.Close()
+		_ = os.Remove(socketPath)
 	}()
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -160,9 +127,6 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		default:
 		}
 		return fmt.Errorf("daemon: confirming startup publication: %w", err)
-	}
-	if err := startupLease.Release(); err != nil {
-		return fmt.Errorf("daemon: publishing completed datastore startup: %w", err)
 	}
 	if deps.afterStartupPublication != nil {
 		deps.afterStartupPublication()
@@ -205,45 +169,6 @@ func confirmDaemonServing(ctx context.Context, socketPath string) error {
 		return fmt.Errorf("health probe reached pid %d, want startup pid %d", resp.PID, os.Getpid())
 	}
 	return nil
-}
-
-func openDaemonActivityStore(ctx context.Context) (*datastore.Store, error) {
-	startupLease, err := datastore.BeginDefaultDaemonStartup(ctx)
-	if err != nil {
-		return nil, err
-	}
-	store, openErr := datastore.Open(ctx)
-	releaseErr := startupLease.Release()
-	if openErr != nil {
-		return nil, errors.Join(openErr, releaseErr)
-	}
-	if releaseErr != nil {
-		return nil, errors.Join(releaseErr, store.Close())
-	}
-	return store, nil
-}
-
-// closeDaemonResources defines the shutdown publication boundary. Closing the
-// server first stops new work and drains every in-flight handler. Startup
-// serialization must then be released before Writer.Close joins the worker: a
-// production retention sweep may be waiting on that same serialization before
-// it can open SQLite. The writer's opener still reacquires serialization around
-// SQLite, so a concurrent rebuild publication either waits for that open or
-// publishes its gate first and makes the open fail closed. Writer.Close does not
-// return until its owned datastore is closed. Only then may the public socket
-// disappear and allow a recovery client to proceed. Run's earlier daemon-lock
-// defer executes after this function returns.
-func closeDaemonResources(
-	closeServer func(),
-	releaseStartup func() error,
-	closeActivity func(),
-	removeSocket func() error,
-) error {
-	closeServer()
-	releaseErr := releaseStartup()
-	closeActivity()
-	_ = removeSocket()
-	return releaseErr
 }
 
 // newDaemonKittyClient builds the daemon's Kitty client from the current

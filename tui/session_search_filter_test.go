@@ -2,22 +2,25 @@ package tui
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/cachefile"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
-// writeTranscriptIndex serializes a hand-crafted index to disk so a TUI
-// test can load it via transcript.LoadIndexAt without exporting the
-// transcript package's private state. Returns the loaded *Index.
+// writeTranscriptIndex serializes a hand-crafted index to disk so a TUI test
+// can load the same recovering filesystem cache used by production without
+// exporting the transcript package's private state.
 func writeTranscriptIndex(t *testing.T, entries map[string]transcript.SessionMeta) *transcript.Index {
 	t.Helper()
 	dir := t.TempDir()
@@ -197,6 +200,38 @@ func TestSessionSearch_StaleRefreshDoesNotOverwriteTypedResults(t *testing.T) {
 	}
 }
 
+func TestSessionSearchErrorsRetainLastGoodResults(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		msg  tea.Msg
+	}{
+		{
+			name: "query",
+			msg: sessionSearchDoneMsg{
+				seq: 0,
+				err: errors.New("sidecar unavailable"),
+			},
+		},
+		{
+			name: "warm refresh query",
+			msg: sessionWarmRefreshDoneMsg{
+				seq:       0,
+				searchErr: errors.New("source unreadable"),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := sessionSearchFilterModel(t)
+			before := append([]transcript.Result(nil), m.sessionResults...)
+			updated, _ := m.Update(tc.msg)
+			got := updated.(Model)
+			if got.sessionSearchErr == nil || !reflect.DeepEqual(got.sessionResults, before) {
+				t.Fatalf("search failure = err %v results %+v, want retained %+v", got.sessionSearchErr, got.sessionResults, before)
+			}
+		})
+	}
+}
+
 func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -222,12 +257,28 @@ func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := sessionSearchFilterModel(t)
 			target := m.sessionResults[0].Meta
+			target.Path = filepath.Join(t.TempDir(), "source.jsonl")
+			if err := os.WriteFile(target.Path, []byte("{}\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			other := m.sessionResults[1].Meta
+			m.transcriptIndex = writeTranscriptIndex(t, map[string]transcript.SessionMeta{
+				transcript.IndexKey(target.Harness, target.ID): target,
+				transcript.IndexKey(other.Harness, other.ID):   other,
+			})
+			if err := m.transcriptIndex.WriteSearchText(transcript.IndexKey(target.Harness, target.ID), "alpha needle beta"); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.transcriptIndex.WriteSearchText(transcript.IndexKey(other.Harness, other.ID), "no match here"); err != nil {
+				t.Fatal(err)
+			}
+			m.sessionResults[0].Meta = target
 			staleSeq := m.sessionSearchSeq
 			m.sessionRefreshInFlight = true
 			m.mode = ModeDeleteChoice
 			m.deleteTarget = &target
 
-			updated, _ := m.Update(keyPress(tc.key))
+			updated, mutationCmd := m.Update(keyPress(tc.key))
 			m = updated.(Model)
 			if m.mode != ModeSessionSearch {
 				t.Fatalf("mode = %v, want ModeSessionSearch", m.mode)
@@ -237,6 +288,23 @@ func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
 			}
 			if m.sessionSearchSeq <= staleSeq {
 				t.Fatalf("sessionSearchSeq = %d, want > stale seq %d", m.sessionSearchSeq, staleSeq)
+			}
+			dispatchSeq := m.sessionSearchSeq
+			if len(m.toasts) != 0 {
+				t.Fatalf("toast published before async mutation completed: %+v", m.toasts)
+			}
+
+			mutationMsg := drainCmd(t, mutationCmd)
+			if _, ok := mutationMsg.(transcriptDeleteDoneMsg); !ok {
+				t.Fatalf("mutation command produced %T, want transcriptDeleteDoneMsg", mutationMsg)
+			}
+			updated, followupCmd := m.Update(mutationMsg)
+			m = updated.(Model)
+			if followupCmd == nil {
+				t.Fatal("delete completion did not dispatch a follow-up search")
+			}
+			if m.sessionSearchSeq <= dispatchSeq {
+				t.Fatalf("completion sessionSearchSeq = %d, want > dispatch seq %d", m.sessionSearchSeq, dispatchSeq)
 			}
 			if len(m.toasts) == 0 || !strings.Contains(m.toasts[0].Text, tc.wantToast) {
 				t.Fatalf("toast = %+v, want text containing %q", m.toasts, tc.wantToast)
@@ -250,6 +318,13 @@ func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
 			}
 			if exists && gotMeta.HiddenFromIndex != tc.wantHidden {
 				t.Fatalf("HiddenFromIndex = %v, want %v", gotMeta.HiddenFromIndex, tc.wantHidden)
+			}
+			_, statErr := os.Stat(target.Path)
+			if tc.wantEntry && statErr != nil {
+				t.Fatalf("index-only hide removed source file: %v", statErr)
+			}
+			if !tc.wantEntry && !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("source deletion stat error = %v, want not exist", statErr)
 			}
 
 			results, err := transcript.Search(m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
@@ -278,6 +353,106 @@ func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
 				t.Fatalf("late warm refresh resurrected deleted target: %+v", m.sessionResults)
 			}
 		})
+	}
+}
+
+func TestDeleteChoiceMutationWaitsForCacheLockOutsideUpdate(t *testing.T) {
+	m := sessionSearchFilterModel(t)
+	target := m.sessionResults[0].Meta
+	m.mode = ModeDeleteChoice
+	m.deleteTarget = &target
+
+	lockHeld := make(chan struct{})
+	releaseLock := make(chan struct{})
+	lockDone := make(chan error, 1)
+	go func() {
+		lockDone <- cachefile.WithExclusive(m.transcriptIndex.Path(), func() error {
+			close(lockHeld)
+			<-releaseLock
+			return nil
+		})
+	}()
+	select {
+	case <-lockHeld:
+	case err := <-lockDone:
+		t.Fatalf("acquiring cache lock: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out acquiring cache lock")
+	}
+
+	type updateResult struct {
+		model tea.Model
+		cmd   tea.Cmd
+	}
+	updateDone := make(chan updateResult, 1)
+	go func() {
+		updated, cmd := m.Update(keyPress("i"))
+		updateDone <- updateResult{model: updated, cmd: cmd}
+	}()
+
+	var result updateResult
+	select {
+	case result = <-updateDone:
+	case <-time.After(500 * time.Millisecond):
+		close(releaseLock)
+		<-lockDone
+		t.Fatal("delete key blocked Update on the cache advisory lock")
+	}
+	if got := result.model.(Model); got.mode != ModeSessionSearch {
+		close(releaseLock)
+		<-lockDone
+		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+	}
+	if result.cmd == nil {
+		close(releaseLock)
+		<-lockDone
+		t.Fatal("delete key returned nil mutation command")
+	}
+
+	mutationDone := make(chan tea.Msg, 1)
+	go func() { mutationDone <- result.cmd() }()
+	select {
+	case msg := <-mutationDone:
+		close(releaseLock)
+		<-lockDone
+		t.Fatalf("mutation completed while cache lock was held: %T", msg)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(releaseLock)
+	if err := <-lockDone; err != nil {
+		t.Fatalf("releasing cache lock: %v", err)
+	}
+	select {
+	case msg := <-mutationDone:
+		if _, ok := msg.(transcriptDeleteDoneMsg); !ok {
+			t.Fatalf("mutation command produced %T, want transcriptDeleteDoneMsg", msg)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("mutation did not resume after cache lock was released")
+	}
+}
+
+func TestTranscriptDeletePartialSuccessUsesWarningToast(t *testing.T) {
+	m := sessionSearchFilterModel(t)
+	target := m.sessionResults[0].Meta
+	updated, _ := m.Update(transcriptDeleteDoneMsg{
+		target:   target,
+		alsoFile: true,
+		err: &transcript.SourceDeletedError{
+			Path: target.Path,
+			Err:  errors.New("disk full"),
+		},
+	})
+	got := updated.(Model)
+	if len(got.toasts) != 1 {
+		t.Fatalf("toasts = %+v, want one partial-success warning", got.toasts)
+	}
+	if got.toasts[0].Severity != toastWarning {
+		t.Fatalf("toast severity = %v, want warning", got.toasts[0].Severity)
+	}
+	if text := got.toasts[0].Text; !strings.Contains(text, "Deleted transcript file") || !strings.Contains(text, "index update failed") || strings.Contains(text, "Delete failed") {
+		t.Fatalf("partial-success toast = %q", text)
 	}
 }
 

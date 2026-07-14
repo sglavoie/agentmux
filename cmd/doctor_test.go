@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
-	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -26,7 +24,6 @@ func resetDoctorTestState(t *testing.T) {
 	oldStat := doctorStat
 	oldNow := doctorNow
 	oldCLIBuild := doctorCLIBuild
-	oldInspectDatastore := doctorInspectDatastore
 	oldJSON := doctorJSON
 	oldStrict := doctorStrict
 	oldOut := doctorCmd.OutOrStdout()
@@ -39,20 +36,12 @@ func resetDoctorTestState(t *testing.T) {
 		doctorStat = oldStat
 		doctorNow = oldNow
 		doctorCLIBuild = oldCLIBuild
-		doctorInspectDatastore = oldInspectDatastore
 		doctorJSON = oldJSON
 		doctorStrict = oldStrict
 		doctorCmd.SetOut(oldOut)
 	})
 	doctorJSON = false
 	doctorStrict = false
-	doctorInspectDatastore = func(context.Context, bool) (datastore.Status, error) {
-		return datastore.Status{
-			SchemaVersion: datastore.CurrentSchemaVersion, CurrentSchemaVersion: datastore.CurrentSchemaVersion,
-			MigrationCurrent: true, Integrity: "ok", SecurePermissions: true,
-			Search: datastore.SearchStatus{Integrity: "ok", Fresh: true}, Healthy: true,
-		}, nil
-	}
 }
 
 // doctorTestBuild is a matching CLI/daemon artifact identity for tests that

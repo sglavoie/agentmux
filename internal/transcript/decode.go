@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -69,12 +70,6 @@ func (i *Index) decodeEntries(dec *json.Decoder) error {
 		if err := dec.Decode(&meta); err != nil {
 			return err
 		}
-		if meta.SearchText != "" {
-			if err := i.WriteSearchText(key, meta.SearchText); err != nil {
-				return err
-			}
-			meta.SearchText = ""
-		}
 		i.entries[key] = meta
 	}
 	tok, err = dec.Token()
@@ -86,6 +81,26 @@ func (i *Index) decodeEntries(dec *json.Decoder) error {
 		return fmt.Errorf("expected entries object end, got %v", tok)
 	}
 	return nil
+}
+
+// migrateLegacySearchText runs only after the complete metadata document has
+// parsed successfully. Keeping persistence out of the decoder ensures a
+// sidecar write failure is a cache warning, never a false JSON-corruption
+// signal. Failed bodies remain inline in memory for Search and a later Save.
+func (i *Index) migrateLegacySearchText() error {
+	var warning error
+	for key, meta := range i.entries {
+		if meta.SearchText == "" {
+			continue
+		}
+		if err := i.store.Write(key, meta.SearchText); err != nil {
+			warning = errors.Join(warning, fmt.Errorf("migrating transcript search sidecar %s: %w", key, err))
+			continue
+		}
+		meta.SearchText = ""
+		i.entries[key] = meta
+	}
+	return warning
 }
 
 func skipJSONValue(dec *json.Decoder) error {

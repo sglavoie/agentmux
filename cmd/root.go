@@ -22,18 +22,14 @@ var dashboardSourceWindowID int
 
 var rootCmd = &cobra.Command{
 	Use:   "amx",
-	Short: "Kitty-first multi-harness project workbench",
-	Long:  "amx groups projects, worktrees, conversations, plans, handoffs, search, and durable activity while managing Claude Code, Copilot, and Codex sessions as Kitty tabs.",
+	Short: "Agent Mux multi-harness session manager for Kitty",
+	Long:  "Agent Mux is a multi-harness session manager for Kitty. It manages Claude Code, Copilot, Codex, and other supported harness sessions as color-coded tabs with an interactive dashboard.",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		configureLogging(debugEnabled())
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		recoveryReexec := tui.RecoveryReexecPending()
 		cfg, err := loadRunnableConfig()
 		if err != nil {
-			if recoveryReexec {
-				return errors.Join(err, tui.AbortRecoveryReexec())
-			}
 			return err
 		}
 		runner := kitty.NewRealRunner()
@@ -42,7 +38,7 @@ var rootCmd = &cobra.Command{
 		if sourceWindowID <= 0 {
 			sourceWindowID = windowIDFromEnv()
 		}
-		if !recoveryReexec && focusExistingDashboard(client, sourceWindowID) {
+		if focusExistingDashboard(client, sourceWindowID) {
 			return nil
 		}
 		return tui.RunFromWindow(cfg, client, sourceWindowID)
@@ -142,5 +138,5 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, planCmd, resortCmd, searchCmd, sessionCmd, transcriptsCmd, tuiTestCmd, workspaceCmd)
+	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, sessionCmd, transcriptsCmd, tuiTestCmd)
 }

@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -21,32 +20,19 @@ func (f fixedGitInspector) Inspect(context.Context, string, time.Duration) GitSt
 
 func TestBuilderDeterministicIncludesSourcesAndExcludesToolPayloads(t *testing.T) {
 	dir := t.TempDir()
-	planDir := filepath.Join(dir, "plan")
-	if err := os.Mkdir(planDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	manifest := filepath.Join(planDir, "manifest.md")
-	session := filepath.Join(planDir, "session-1.md")
-	if err := os.WriteFile(manifest, []byte("# Manifest\nverified plan context"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(session, []byte("# Session\nimplementation details"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	transcriptPath := filepath.Join(dir, "source.jsonl")
 	if err := os.WriteFile(transcriptPath, []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	baseTime := time.Date(2026, 7, 11, 10, 0, 0, 0, time.FixedZone("offset", -6*60*60))
 	source := Source{
-		WorkspaceID: "workspace-1", WorkspaceName: "Example", Harness: "codex", SessionID: "session-1",
-		CapturedAt: baseTime, Goal: "Implement deterministic handoffs.", CWD: dir, TranscriptPath: transcriptPath,
+		ProjectLabel: "Example", Harness: "codex", SessionID: "session-1",
+		CapturedAt: baseTime, CWD: dir, TranscriptPath: transcriptPath,
 		Messages: []transcript.Message{
-			{Role: "user", Text: "first request", Timestamp: baseTime},
+			{Role: "user", Text: "Implement deterministic handoffs.", Timestamp: baseTime},
 			{Role: "tool", Text: "secret tool payload", Timestamp: baseTime.Add(time.Minute)},
 			{Role: "assistant", Text: "latest answer", Timestamp: baseTime.Add(2 * time.Minute)},
 		},
-		LinkedPlans: []plans.PlanMeta{{Name: "Plan", DirPath: planDir, Files: []string{"session-1.md", "manifest.md"}}},
 	}
 	builder := NewBuilderWithGit(fixedGitInspector{state: GitState{
 		Available: true, Kind: "git", Branch: "main", Head: "0123456789abcdef", Status: " M file.go", DiffStat: " file.go | 1 +",
@@ -64,8 +50,8 @@ func TestBuilderDeterministicIncludesSourcesAndExcludesToolPayloads(t *testing.T
 	}
 	text := string(first.Content)
 	for _, want := range []string{
-		"Implement deterministic handoffs.", "first request", "latest answer", "verified plan context",
-		manifest, session, transcriptPath, "0123456789abcdef", "non-user/assistant or empty message(s) excluded",
+		"Project: `Example`", "Implement deterministic handoffs.", "latest answer",
+		transcriptPath, "0123456789abcdef", "non-user/assistant or empty message(s) excluded",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("pack missing %q", want)
@@ -73,6 +59,11 @@ func TestBuilderDeterministicIncludesSourcesAndExcludesToolPayloads(t *testing.T
 	}
 	if strings.Contains(text, "secret tool payload") {
 		t.Error("tool payload leaked into pack")
+	}
+	for _, removed := range []string{"Workspace ID", "Conversation row", "Linked Plans"} {
+		if strings.Contains(text, removed) {
+			t.Errorf("pack retained removed metadata %q", removed)
+		}
 	}
 	if len(first.Content) > DefaultMaxBytes {
 		t.Fatalf("pack has %d bytes, limit %d", len(first.Content), DefaultMaxBytes)
@@ -82,15 +73,16 @@ func TestBuilderDeterministicIncludesSourcesAndExcludesToolPayloads(t *testing.T
 func TestBuilderBudgetDropsOldestRecentMessagesFirst(t *testing.T) {
 	dir := t.TempDir()
 	source := Source{
-		Goal: "Keep the newest context.", CWD: dir, TranscriptPath: filepath.Join(dir, "source.jsonl"),
+		ProjectLabel: "bounded", CWD: dir, TranscriptPath: filepath.Join(dir, "source.jsonl"),
 		Messages: []transcript.Message{
-			{Role: "user", Text: "oldest-marker " + strings.Repeat("a", 1400)},
+			{Role: "user", Text: "Keep the newest context."},
+			{Role: "assistant", Text: "oldest-marker " + strings.Repeat("a", 1400)},
 			{Role: "assistant", Text: "middle-marker " + strings.Repeat("b", 400)},
 			{Role: "user", Text: "newest-marker"},
 		},
 	}
 	builder := NewBuilderWithGit(fixedGitInspector{state: GitState{Kind: "non-git", Detail: "working directory is not a Git worktree"}})
-	pack, err := builder.Build(context.Background(), source, Options{MaxBytes: 1800, RecentMessages: 3})
+	pack, err := builder.Build(context.Background(), source, Options{MaxBytes: 1800, RecentMessages: 4})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -109,12 +101,11 @@ func TestBuilderBudgetDropsOldestRecentMessagesFirst(t *testing.T) {
 	}
 }
 
-func TestBuilderDocumentsMalformedPlanSourceAndNonGitProject(t *testing.T) {
+func TestBuilderDocumentsMissingTranscriptPathAndNonGitProject(t *testing.T) {
 	dir := t.TempDir()
-	missing := filepath.Join(dir, "plan", "missing.md")
 	source := Source{
-		Goal: "Continue safely.", CWD: dir, TranscriptPath: filepath.Join(dir, "missing.jsonl"),
-		LinkedPlans: []plans.PlanMeta{{Name: "Broken", DirPath: filepath.Dir(missing), Files: []string{"missing.md"}}},
+		ProjectLabel: "Example", CWD: dir,
+		Messages: []transcript.Message{{Role: "user", Text: "Continue safely."}},
 	}
 	builder := NewBuilderWithGit(fixedGitInspector{state: GitState{Kind: "non-git", Detail: "working directory is not a Git worktree"}})
 	pack, err := builder.Build(context.Background(), source, Options{})
@@ -122,7 +113,7 @@ func TestBuilderDocumentsMalformedPlanSourceAndNonGitProject(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 	text := string(pack.Content)
-	for _, want := range []string{"State: unavailable", "non-git", "source file missing", missing} {
+	for _, want := range []string{"State: unavailable", "non-git", "transcript path was not supplied"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("pack missing %q", want)
 		}
@@ -136,7 +127,8 @@ func TestBuilderDocumentsTimedOutGitInspection(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 	pack, err := NewBuilder().Build(ctx, Source{
-		Goal: "Continue.", CWD: t.TempDir(), TranscriptPath: "/tmp/source.jsonl",
+		ProjectLabel: "Example", CWD: t.TempDir(), TranscriptPath: "/tmp/source.jsonl",
+		Messages: []transcript.Message{{Role: "user", Text: "Continue."}},
 	}, Options{})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
@@ -148,10 +140,10 @@ func TestBuilderDocumentsTimedOutGitInspection(t *testing.T) {
 
 func TestBuilderRejectsMalformedRequiredSourceAndTinyBudget(t *testing.T) {
 	builder := NewBuilderWithGit(fixedGitInspector{})
-	if _, err := builder.Build(context.Background(), Source{CWD: t.TempDir()}, Options{}); err == nil {
-		t.Fatal("empty goal was accepted")
+	if _, err := builder.Build(context.Background(), Source{}, Options{}); err == nil {
+		t.Fatal("empty CWD was accepted")
 	}
-	_, err := builder.Build(context.Background(), Source{Goal: "goal", CWD: t.TempDir()}, Options{MaxBytes: MinimumMaxBytes - 1})
+	_, err := builder.Build(context.Background(), Source{ProjectLabel: "Example", CWD: t.TempDir()}, Options{MaxBytes: MinimumMaxBytes - 1})
 	if !errors.Is(err, ErrBudgetTooSmall) {
 		t.Fatalf("tiny-budget error = %v", err)
 	}

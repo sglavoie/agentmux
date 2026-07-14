@@ -4,13 +4,13 @@ Guidance for coding agents working in Agent Mux.
 
 ## Project overview
 
-Agent Mux is a Kitty-first, multi-harness project workbench for Claude Code,
+Agent Mux is a Kitty-first, multi-harness session manager for Claude Code,
 GitHub Copilot CLI, and OpenAI Codex. The `amx` binary owns:
 
-- a live-session Bubble Tea dashboard and secondary project Workbench view;
+- a live-session Bubble Tea dashboard with Past Sessions and Plans views;
 - exact conversation continuity (focus live, resume closed, native or portable fork);
 - isolated managed Git worktrees and deterministic cross-harness handoff packs;
-- SQLite-backed conversation, plan, workspace, search, activity, discovery, and relationship data;
+- filesystem-backed transcript and plan caches with disposable search sidecars;
 - an always-on local daemon that reduces hook events and exclusively renders Kitty state.
 
 Kitty operations stay behind `internal/kitty` and session/action seams. Domain
@@ -28,7 +28,7 @@ just check        # acceptance plus golangci-lint
 just install-restart-smoke
 ```
 
-Use `amx doctor --strict`, `amx index status`, and `amx --version` when
+Use `amx doctor --strict`, `amx transcripts status`, and `amx --version` when
 validating an installed artifact. The CLI and daemon build identities must
 match.
 
@@ -36,57 +36,62 @@ match.
 
 ### Durable and source data
 
-`internal/datastore` owns `~/.local/share/agent-mux/agent-mux.db`, migrations,
-WAL policy, transactions, integrity checks, and private permissions. SQLite is
-the active index/relationship store. These remain authoritative source
-artifacts and must not be rewritten as a side effect of indexing:
+These are the authoritative source artifacts and must not be rewritten as a
+side effect of indexing:
 
 - harness transcript files;
 - saved plan directories;
 - `config.toml`;
 - handoff Markdown artifacts.
 
-`transcripts.json`, `plans.json`, and search sidecars are read-only rollback
-inputs for the compatibility release. `amx index rebuild` refreshes derived
-conversation, plan, search, project, activity-link, and discovery projections
-while preserving explicit plan links, handoff metadata, activity/read history,
-and managed-worktree relationships.
+`transcripts.json`, `plans.json`, and their search sidecars are disposable
+caches. Refresh, rebuild, and corruption quarantine may replace them, but the
+source transcript and plan files remain untouched. Cache replacement uses
+stable advisory lock sidecars plus atomic file renames.
+
+The default cache paths are `~/.local/share/agent-mux/transcripts.json` and
+`plans.json`, with sibling `transcripts.search/` and `plans.search/`
+directories. `handoffs/`, `worktrees/`, and `launch_overrides.json` are
+independent user assets, not cache internals. Successful handoffs and worktrees
+survive launch; compensation may remove only the worktree created by the
+failed request.
+
+There is no SQLite runtime or migration path. Never add automatic deletion of
+legacy database files. A one-off operator cleanup must stop the installed
+daemon first and use the exact allowlist documented in README; it must preserve
+caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 
 ### Main packages
 
 - `cmd`: Cobra surfaces, common schema-v1 JSON envelopes, safe selector errors,
-  doctor/index operations, and hidden TUI scenario commands.
+  doctor/transcript maintenance, and hidden TUI scenario commands.
 - `internal/actions`: shared typed action registry used by CLI and TUI.
-- `internal/workspace`: stable repository/directory identity, configured launch
-  variants, worktree contexts, project snapshots, and discovery candidates.
 - `internal/conversation`: canonical `(harness, session_id)` identity.
 - `internal/session`: Kitty-backed lifecycle, exact live-owner resolution, and
   harness invocation construction.
 - `internal/harness`: adapter-owned fresh/resume/fork argv and capability metadata.
-- `internal/transcript`, `internal/plans`: SQLite facades with legacy read fallback.
-- `internal/search`: safe FTS5 query compiler and cross-entity result service.
+- `internal/transcript`, `internal/plans`: filesystem discovery, metadata caches,
+  source-backed search, pruning, and corruption recovery.
+- `internal/cachefile`, `internal/searchstore`: shared atomic cache primitives
+  and disposable search-sidecar storage.
 - `internal/handoff`: bounded deterministic pack creation, private artifacts,
-  metadata, and cross-harness launch workflow.
+  and cross-harness launch workflow.
 - `internal/worktree`: bounded managed Git worktree creation and cleanup.
-- `internal/activity`: prompt-free durable outcomes, asynchronous writer, feeds,
-  and monotonic read markers.
-- `internal/daemon`: IPC, reducer facts, durable Kitty state, activity emission,
+- `internal/daemon`: IPC, reducer facts, durable Kitty state, live activity evidence,
   diagnostics, and the single renderer writer.
-- `tui`: live-session dashboard, secondary workspace home, command palette,
-  unified/specialized search, and deterministic in-process scenario harness.
+- `tui`: live-session dashboard, specialized transcript/plan search, and
+  deterministic in-process scenario harness.
 
 ### Identity and safety rules
 
 - Conversation identity is `(harness, session_id)`; live instance identity is
   the freshly validated Kitty window/title owner.
-- Workspace identity is the Git common directory or canonical physical path.
-  Configured project `id` values are case-insensitively unique stable selectors.
-- Plan/workspace links are explicit. Path/title matches are suggestions only.
+- Configured projects are launch templates identified by profile and title;
+  continuity actions use exact transcript identities.
 - Ambiguous selectors return ordered candidates and never guess.
-- Handoff/worktree/adoption mutations require explicit confirmation where
+- Handoff/worktree mutations require explicit confirmation where
   exposed by the command/action contract.
-- Activity stores classified outcomes only, never raw prompts or hook payloads.
-- Do not hold locks or perform SQLite work on the hook acknowledgement path.
+- Hook acknowledgement remains prompt-free and does not perform cache refreshes.
 
 ## Configuration
 
@@ -101,9 +106,6 @@ refresh_interval = 2
 guard_duration = 1
 plans_directory = "~/.local/share/agent-plans"
 
-[defaults.activity]
-keep_days = 30
-
 [defaults.handoff]
 max_bytes = 65536
 recent_messages = 12
@@ -115,7 +117,6 @@ home_dir = "~/.codex-work"
 color = "purple"
 
 [[projects]]
-id = "api"
 title = "API"
 directory = "~/projects/api"
 profile = "codex-work"
@@ -127,8 +128,7 @@ or project, not in shared defaults. The full commented template is
 
 ## Command and JSON conventions
 
-Workbench commands live under `workspace`, `session`, `plan`, `search`, and
-`index`. Successful `--json` output uses
+Retained continuity commands live under `session`. Successful `--json` output uses
 `{"schema_version":1,"data":...}`. Failures use the common structured error
 envelope; partial durable success returns data with a nonzero quiet exit.
 `doctor --json` is a versioned diagnostic report with the same top-level schema
@@ -136,7 +136,7 @@ version but intentionally includes health fields directly.
 
 When adding a command:
 
-1. provide dependency seams for filesystem, datastore, daemon, and Kitty work;
+1. provide dependency seams for filesystem, daemon, and Kitty work;
 2. preserve text and JSON exit-code consistency;
 3. use `missingParameter`, `commandFailure`, and candidate-bearing ambiguity errors;
 4. add the command to the JSON surface audit when it supports `--json`.
@@ -155,13 +155,19 @@ starts with:
 
 ```bash
 amx doctor --strict
-amx index status
+amx transcripts status
 amx daemon export-events --current-window --last 50
 ```
 
+Release acceptance must keep explicit coverage for warm Past Sessions,
+partial transcript/plan failures, CLI and TUI continuity, handoff/worktree
+retention and compensation, and the absence of retired database artifacts from
+TUI, daemon, doctor, and session-command paths. Every JSON file in
+`docs/tui-testing/scenarios/` is both discovered by `just tui-scenarios` and
+executed in-package; keep the documented scenario inventory exact.
+
 `amx doctor` must retain the existing daemon/reducer/renderer invariants when
-new datastore or writer checks are added. Stable finding identifiers are JSON
-consumer contracts.
+new checks are added. Stable finding identifiers are JSON consumer contracts.
 
 ## Adding a harness
 

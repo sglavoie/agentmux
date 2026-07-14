@@ -1,7 +1,6 @@
 package transcript
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,9 +13,6 @@ import (
 // StoreStatus summarizes the on-disk transcript metadata file and search
 // sidecar store without exposing per-session search text to daemon callers.
 type StoreStatus struct {
-	Backend                   string
-	DatabasePath              string
-	DegradedReason            string
 	MetadataPath              string
 	MetadataSize              int64
 	SidecarDir                string
@@ -29,19 +25,25 @@ type StoreStatus struct {
 	SharedProfileEntries      int
 	MissingSidecars           int
 	MissingSidecarKeys        []string
-	SearchDocumentCount       int
-	MissingSearchDocuments    int
-	MissingSearchDocumentKeys []string
+	Warnings                  []string
 }
 
 // Status returns filesystem and entry counts for a transcript index.
 func Status(path string) (StoreStatus, error) {
-	idx, err := LoadIndexAt(path)
+	idx, loadWarning, err := loadMaintenanceIndex(path)
 	if err != nil {
 		return StoreStatus{}, err
 	}
+	status, err := statusForIndex(path, idx)
+	if err != nil {
+		return StoreStatus{}, err
+	}
+	status.Warnings = appendWarning(status.Warnings, loadWarning)
+	return status, nil
+}
+
+func statusForIndex(path string, idx *Index) (StoreStatus, error) {
 	status := StoreStatus{
-		Backend:      "legacy",
 		MetadataPath: path,
 		SidecarDir:   idx.SearchStoreDir(),
 	}
@@ -85,140 +87,27 @@ func Status(path string) (StoreStatus, error) {
 	return status, nil
 }
 
-// Status reports the active facade state. SQLite status intentionally does
-// not inspect legacy sidecars after cutover; they remain on disk solely as a
-// compatibility rollback source.
-func (i *Index) Status() (StoreStatus, error) {
-	if i == nil {
-		return StoreStatus{}, errors.New("transcript: Status requires a non-nil index")
-	}
-	if repo := i.repository(); repo != nil {
-		return repositoryStatus(context.Background(), repo, i.path)
-	}
-	status, err := Status(i.path)
-	if err != nil {
-		return StoreStatus{}, err
-	}
-	if reason := i.DegradedReason(); reason != nil {
-		status.DegradedReason = reason.Error()
-	}
-	return status, nil
-}
-
-func repositoryStatus(ctx context.Context, repo *Repository, legacyPath string) (StoreStatus, error) {
-	status := StoreStatus{
-		Backend:      "sqlite",
-		DatabasePath: repo.store.Path(),
-		MetadataPath: legacyPath,
-	}
-	var err error
-	if err = repo.store.DB().QueryRowContext(ctx, `SELECT count(*) FROM conversations WHERE hidden = 0`).Scan(&status.VisibleEntries); err != nil {
-		return StoreStatus{}, fmt.Errorf("transcript: counting visible SQLite conversations: %w", err)
-	}
-	if err = repo.store.DB().QueryRowContext(ctx, `SELECT count(*) FROM conversations WHERE hidden = 1`).Scan(&status.HiddenEntries); err != nil {
-		return StoreStatus{}, fmt.Errorf("transcript: counting hidden SQLite conversations: %w", err)
-	}
-	if err = repo.store.DB().QueryRowContext(ctx, `
-		SELECT count(*) FROM profile_memberships p
-		JOIN conversations c ON c.id = p.conversation_id WHERE c.hidden = 0
-	`).Scan(&status.VisibleProfileMemberships); err != nil {
-		return StoreStatus{}, fmt.Errorf("transcript: counting visible SQLite profile memberships: %w", err)
-	}
-	if err = repo.store.DB().QueryRowContext(ctx, `
-		SELECT count(*) FROM profile_memberships p
-		JOIN conversations c ON c.id = p.conversation_id WHERE c.hidden = 1
-	`).Scan(&status.HiddenProfileMemberships); err != nil {
-		return StoreStatus{}, fmt.Errorf("transcript: counting hidden SQLite profile memberships: %w", err)
-	}
-	if err = repo.store.DB().QueryRowContext(ctx, `
-		SELECT count(*) FROM (
-			SELECT c.id FROM conversations c
-			JOIN profile_memberships p ON p.conversation_id = c.id
-			WHERE c.hidden = 0 GROUP BY c.id HAVING count(*) > 1
-		)
-	`).Scan(&status.SharedProfileEntries); err != nil {
-		return StoreStatus{}, fmt.Errorf("transcript: counting shared SQLite conversations: %w", err)
-	}
-	if err = repo.store.DB().QueryRowContext(ctx, `
-		SELECT count(*) FROM search_documents WHERE entity_type = ?
-	`, transcriptSearchEntityType).Scan(&status.SearchDocumentCount); err != nil {
-		return StoreStatus{}, fmt.Errorf("transcript: counting SQLite search documents: %w", err)
-	}
-	rows, err := repo.store.DB().QueryContext(ctx, `
-		SELECT c.harness, c.session_id FROM conversations c
-		WHERE c.hidden = 0 AND c.message_count > 0
-		AND NOT EXISTS (
-			SELECT 1 FROM search_documents d
-			WHERE d.entity_type = ? AND d.entity_id = c.harness || ':' || c.session_id
-		)
-		ORDER BY c.harness, c.session_id
-	`, transcriptSearchEntityType)
-	if err != nil {
-		return StoreStatus{}, fmt.Errorf("transcript: listing missing SQLite search documents: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var harness, sessionID string
-		if err := rows.Scan(&harness, &sessionID); err != nil {
-			return StoreStatus{}, fmt.Errorf("transcript: scanning missing SQLite search document: %w", err)
-		}
-		status.MissingSearchDocumentKeys = append(status.MissingSearchDocumentKeys, IndexKey(harness, sessionID))
-	}
-	if err := rows.Err(); err != nil {
-		return StoreStatus{}, fmt.Errorf("transcript: iterating missing SQLite search documents: %w", err)
-	}
-	status.MissingSearchDocuments = len(status.MissingSearchDocumentKeys)
-	return status, nil
-}
-
 // CompactResult reports what compact observed and rewrote.
 type CompactResult struct {
 	StatusBefore StoreStatus
 	StatusAfter  StoreStatus
 	LegacyFields int
-	Import       LegacyImportResult
-}
-
-// CompactSQLite verifies/imports the untouched legacy index into SQLite. It
-// is idempotent and never rewrites transcripts.json or its sidecars.
-func CompactSQLite(idx *Index, readers map[string]Reader) (CompactResult, error) {
-	if idx == nil {
-		return CompactResult{}, errors.New("transcript: CompactSQLite requires a non-nil index")
-	}
-	before, err := idx.Status()
-	if err != nil {
-		return CompactResult{}, err
-	}
-	repo := idx.repository()
-	if repo == nil {
-		if reason := idx.DegradedReason(); reason != nil {
-			return CompactResult{StatusBefore: before}, reason
-		}
-		return CompactResult{StatusBefore: before}, errors.New("transcript: SQLite repository is not enabled")
-	}
-	importResult, err := repo.ForceImportLegacyIndex(context.Background(), idx.path, readers)
-	if err != nil {
-		return CompactResult{StatusBefore: before}, err
-	}
-	after, err := idx.Status()
-	if err != nil {
-		return CompactResult{}, err
-	}
-	return CompactResult{StatusBefore: before, StatusAfter: after, Import: importResult}, nil
+	Warnings     []string
 }
 
 // Compact migrates legacy inline search_text into sidecars and rewrites the
 // metadata file without search text.
 func Compact(path string) (CompactResult, error) {
-	before, err := Status(path)
+	idx, loadWarning, err := loadMaintenanceIndex(path)
 	if err != nil {
 		return CompactResult{}, err
 	}
+	before, err := statusForIndex(path, idx)
+	if err != nil {
+		return CompactResult{}, err
+	}
+	before.Warnings = appendWarning(before.Warnings, loadWarning)
 	legacyFields, err := countLegacySearchTextFields(path)
-	if err != nil {
-		return CompactResult{}, err
-	}
-	idx, err := LoadIndexAt(path)
 	if err != nil {
 		return CompactResult{}, err
 	}
@@ -229,43 +118,15 @@ func Compact(path string) (CompactResult, error) {
 	if err != nil {
 		return CompactResult{}, err
 	}
-	return CompactResult{StatusBefore: before, StatusAfter: after, LegacyFields: legacyFields}, nil
+	warnings := append([]string(nil), before.Warnings...)
+	warnings = append(warnings, after.Warnings...)
+	return CompactResult{StatusBefore: before, StatusAfter: after, LegacyFields: legacyFields, Warnings: warnings}, nil
 }
 
 // RebuildResult reports the state after a sidecar rebuild.
 type RebuildResult struct {
-	Status StoreStatus
-}
-
-// RebuildSQLite forces source transcript parsing and upserts refreshed SQLite
-// search documents. Existing documents remain available if source discovery
-// fails partway through; compatibility sidecars are never removed or rewritten.
-func RebuildSQLite(idx *Index, cfg *config.Config, readers map[string]Reader, includeAll bool) (RebuildResult, error) {
-	if idx == nil {
-		return RebuildResult{}, errors.New("transcript: RebuildSQLite requires a non-nil index")
-	}
-	if cfg == nil {
-		return RebuildResult{}, errors.New("transcript: Rebuild requires a non-nil config")
-	}
-	repo := idx.repository()
-	if repo == nil {
-		if reason := idx.DegradedReason(); reason != nil {
-			return RebuildResult{}, reason
-		}
-		return RebuildResult{}, errors.New("transcript: SQLite repository is not enabled")
-	}
-	refreshCfg := *cfg
-	if includeAll {
-		refreshCfg.Defaults.SessionArchive.ScanMaxAgeDays = -1
-	}
-	if err := idx.refreshSQLiteSources(&refreshCfg, readers, true); err != nil {
-		return RebuildResult{}, err
-	}
-	status, err := idx.Status()
-	if err != nil {
-		return RebuildResult{}, err
-	}
-	return RebuildResult{Status: status}, nil
+	Status   StoreStatus
+	Warnings []string
 }
 
 // Rebuild refreshes configured profiles and rebuilds search sidecars. When
@@ -274,25 +135,52 @@ func Rebuild(path string, cfg *config.Config, readers map[string]Reader, include
 	if cfg == nil {
 		return RebuildResult{}, errors.New("transcript: Rebuild requires a non-nil config")
 	}
-	idx, err := LoadIndexAt(path)
+	idx, loadWarning, err := loadMaintenanceIndex(path)
 	if err != nil {
-		return RebuildResult{}, err
-	}
-	if err := os.RemoveAll(idx.SearchStoreDir()); err != nil {
 		return RebuildResult{}, err
 	}
 	refreshCfg := *cfg
 	if includeAll {
 		refreshCfg.Defaults.SessionArchive.ScanMaxAgeDays = -1
 	}
-	if err := idx.Refresh(&refreshCfg, readers); err != nil {
+	// rebuildFilesystem reparses every source, then resets and rewrites the
+	// sidecar store inside the same cachefile.WithExclusive section.
+	if err := idx.rebuildFilesystem(&refreshCfg, readers); err != nil {
 		return RebuildResult{}, err
 	}
 	status, err := Status(path)
 	if err != nil {
 		return RebuildResult{}, err
 	}
-	return RebuildResult{Status: status}, nil
+	warnings := appendWarning(nil, loadWarning)
+	warnings = append(warnings, status.Warnings...)
+	return RebuildResult{Status: status, Warnings: warnings}, nil
+}
+
+// loadMaintenanceIndex separates a usable recovering load from a hard cache
+// read or lock failure. Corruption warnings are usable because LoadIndexAt has
+// quarantined the malformed cache; legacy sidecar migration warnings are also
+// usable because their inline search text remains in the dirty snapshot.
+func loadMaintenanceIndex(path string) (*Index, error, error) {
+	idx, warning := LoadIndexAt(path)
+	if warning == nil {
+		return idx, nil, nil
+	}
+	if idx == nil {
+		return nil, nil, warning
+	}
+	var decodeErr *indexDecodeError
+	if errors.As(warning, &decodeErr) || idx.filesystemDirty {
+		return idx, warning, nil
+	}
+	return nil, nil, warning
+}
+
+func appendWarning(warnings []string, warning error) []string {
+	if warning == nil {
+		return warnings
+	}
+	return append(warnings, warning.Error())
 }
 
 func countLegacySearchTextFields(path string) (int, error) {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/cachefile"
 	"github.com/sglavoie/agentmux/internal/config"
 )
 
@@ -19,43 +20,43 @@ func Prune(idx *Index, cfg *config.Config, now time.Time) (int, error) {
 	if idx == nil {
 		return 0, errors.New("transcript: Prune requires a non-nil index")
 	}
-	if idx.UsesSQLite() {
-		return idx.pruneSQLite(cfg, now)
-	}
+	return idx.pruneFilesystem(cfg, now)
+}
+
+func (idx *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int, retErr error) {
 	if cfg == nil {
 		return 0, errors.New("transcript: Prune requires a non-nil config")
 	}
-
 	keepDays := cfg.Defaults.SessionArchive.KeepDays
 	if keepDays <= 0 {
 		return 0, nil
 	}
 	cutoff := now.Add(-time.Duration(keepDays) * 24 * time.Hour)
-
-	hidden := 0
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	for key, meta := range idx.entries {
-		if meta.HiddenFromIndex {
-			continue
+	err := cachefile.WithExclusive(idx.path, func() error {
+		idx.mu.Lock()
+		defer idx.mu.Unlock()
+		canPersist, warning := idx.reloadFilesystemLocked()
+		if !canPersist {
+			return warning
 		}
-		if meta.LastAt.IsZero() || !meta.LastAt.Before(cutoff) {
-			continue
+		for key, meta := range idx.entries {
+			if meta.HiddenFromIndex || meta.LastAt.IsZero() || !meta.LastAt.Before(cutoff) {
+				continue
+			}
+			meta.HiddenFromIndex = true
+			meta.SearchText = ""
+			idx.entries[key] = meta
+			idx.filesystemDirty = true
+			if sidecarErr := idx.store.Delete(key); sidecarErr != nil {
+				return errors.Join(warning, sidecarErr)
+			}
+			hidden++
 		}
-		meta.HiddenFromIndex = true
-		idx.entries[key] = meta
-		// Prune's legacy branch holds idx.mu, so do not call the
-		// SQLite-aware facade (which also inspects that mutex).
-		if err := idx.store.Delete(key); err != nil {
-			return hidden, err
+		if hidden == 0 {
+			return warning
 		}
-		hidden++
-	}
-	if hidden == 0 {
-		return 0, nil
-	}
-	if err := idx.saveLocked(); err != nil {
-		return hidden, err
-	}
-	return hidden, nil
+		persistWarning, persistErr := idx.persistFilesystemLocked()
+		return errors.Join(warning, persistWarning, persistErr)
+	})
+	return hidden, err
 }

@@ -38,28 +38,30 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		t.Fatalf("no example scenarios found in %s", exampleScenariosDir)
 	}
 
-	// The four documented layout classes must all be present so the examples
-	// stay in lock-step with the docs.
+	// Keep this exact inventory in lock-step with docs/tui-testing/README.md.
+	// Every committed file is still executed below; rejecting untracked names
+	// prevents the documentation and acceptance recipe from silently diverging.
 	want := map[string]bool{
-		"baseline-layout.json":          false,
-		"actions-popup-fit.json":        false,
-		"config-picker-fit.json":        false,
-		"resize-stress.json":            false,
-		"picker-fit.json":               false,
-		"picker-preview-fit.json":       false,
-		"plan-view-fit.json":            false,
-		"session-search-chips-fit.json": false,
-		"search-narrow-fit.json":        false,
-		"list-preview-narrow-fit.json":  false,
-		"footer-gloss-narrow-fit.json":  false,
-		"legend-narrow-fit.json":        false,
-		"picker-dsl-narrow-fit.json":    false,
-
-		"session-search-header-narrow-fit.json": false,
+		"actions-popup-fit.json":                false,
+		"baseline-layout.json":                  false,
+		"config-picker-fit.json":                false,
+		"footer-gloss-narrow-fit.json":          false,
+		"help-modal-narrow-fit.json":            false,
+		"help-modal-scroll-bottom.json":         false,
+		"legend-narrow-fit.json":                false,
+		"list-preview-narrow-fit.json":          false,
+		"picker-dsl-narrow-fit.json":            false,
+		"picker-fit.json":                       false,
+		"picker-preview-fit.json":               false,
 		"plan-search-header-narrow-fit.json":    false,
-
-		"help-modal-narrow-fit.json":    false,
-		"help-modal-scroll-bottom.json": false,
+		"plan-search-narrow-fit.json":           false,
+		"plan-view-fit.json":                    false,
+		"plan-view-narrow-fit.json":             false,
+		"resize-stress.json":                    false,
+		"search-narrow-fit.json":                false,
+		"session-fork-continuity.json":          false,
+		"session-search-chips-fit.json":         false,
+		"session-search-header-narrow-fit.json": false,
 	}
 
 	for _, name := range jsonFiles {
@@ -73,7 +75,9 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 			t.Errorf("%s: committed examples must be fixture-backed, got config %q", name, sc.Config)
 			continue
 		}
-		if _, tracked := want[name]; tracked {
+		if _, tracked := want[name]; !tracked {
+			t.Errorf("undocumented scenario %s is not in the exact acceptance inventory", name)
+		} else {
 			want[name] = true
 		}
 		res, err := RunUITestScenario(sc, UITestScenarioEnv{})
@@ -88,7 +92,7 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 
 	for name, seen := range want {
 		if !seen {
-			t.Errorf("documented example scenario %s is missing", name)
+			t.Errorf("documented acceptance scenario %s is missing", name)
 		}
 	}
 }

@@ -1,16 +1,13 @@
 package tui
 
 import (
-	"context"
-	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	unifiedsearch "github.com/sglavoie/agentmux/internal/search"
 )
 
-func TestUITestDriverSeedsHermeticTranscriptPlanAndUnifiedServices(t *testing.T) {
+func TestUITestDriverSeedsHermeticFilesystemIndexes(t *testing.T) {
 	t.Setenv("HOME", filepath.Join(t.TempDir(), "operator-sentinel-home"))
 	fx, err := UITestFixtureByName("basic")
 	if err != nil {
@@ -19,18 +16,17 @@ func TestUITestDriverSeedsHermeticTranscriptPlanAndUnifiedServices(t *testing.T)
 	d, _ := NewUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
-	snapshot, ready := d.model.dataServices.Snapshot()
-	if !ready {
-		t.Fatal("fixture data services are not ready")
-	}
 	for label, path := range map[string]string{
-		"datastore":  d.model.dataServices.store.Path(),
-		"transcript": snapshot.transcriptIndex.Path(),
-		"plans":      snapshot.planIndex.Path(),
+		"transcript": d.model.transcriptIndex.Path(),
+		"plans":      d.model.plansIndex.Path(),
 	} {
 		if !strings.HasPrefix(path, d.tempRoot+string(filepath.Separator)) {
 			t.Fatalf("%s path %q escaped fixture root %q", label, path, d.tempRoot)
 		}
+	}
+	databasePath := filepath.Join(d.tempRoot, "data", "agent-mux.db")
+	if _, err := os.Stat(databasePath); !os.IsNotExist(err) {
+		t.Fatalf("unexpected fixture database %s: %v", databasePath, err)
 	}
 
 	if err := d.Key("S"); err != nil {
@@ -55,29 +51,20 @@ func TestUITestDriverSeedsHermeticTranscriptPlanAndUnifiedServices(t *testing.T)
 		t.Fatalf("plan view did not settle on fixture content: %q", got)
 	}
 
-	results, err := snapshot.unifiedSearch.Search(context.Background(), unifiedsearch.Query{Text: "deterministic"})
-	if err != nil {
-		t.Fatalf("unified fixture search: %v", err)
-	}
-	seen := map[unifiedsearch.EntityType]bool{}
-	for _, result := range results {
-		seen[result.EntityType] = true
-	}
-	if !seen[unifiedsearch.EntityConversation] || !seen[unifiedsearch.EntityPlan] {
-		t.Fatalf("unified fixture search types = %+v", seen)
-	}
 }
 
-func TestUITestDriverFailsFastInsteadOfOpeningDefaultDataServices(t *testing.T) {
+func TestUITestDriverDoesNotCreateDefaultDatabase(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	d := NewUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
-	services := d.model.dataServices
-	services.stateMu.Lock()
-	services.ready = false
-	services.stateMu.Unlock()
-	_, err := services.Initialize(context.Background(), d.model.cfg)
-	if !errors.Is(err, errUITestLiveDataAccess) {
-		t.Fatalf("Initialize error = %v, want hermetic live-access failure", err)
+	for _, path := range []string{
+		filepath.Join(home, ".local", "share", "agent-mux", "agent-mux.db"),
+		filepath.Join(d.tempRoot, "data", "agent-mux.db"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("unexpected database %s: %v", path, err)
+		}
 	}
 }
 
@@ -106,7 +93,7 @@ func TestUITestDriverActionDaemonFailsFast(t *testing.T) {
 	}
 }
 
-func TestUITestScenariosRepeatWithoutSQLiteCleanupFaults(t *testing.T) {
+func TestUITestScenariosRepeatWithoutFilesystemCleanupFaults(t *testing.T) {
 	for i := 0; i < 12; i++ {
 		for _, actions := range [][]UITestAction{
 			{{Type: UITestActionKey, Key: "P"}, {Type: UITestActionKey, Key: "enter"}},

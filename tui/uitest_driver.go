@@ -9,7 +9,7 @@ package tui
 // slice-shaped batch/sequence messages, so a single Update can fan out into
 // many follow-up commands. Scheduled tea.Tick/tea.Every effects are identified
 // before launch and skipped. Every other command is tracked to completion (or
-// cancellation) so no SQLite or filesystem goroutine can outlive cleanup.
+// cancellation) so no filesystem goroutine can outlive cleanup.
 
 import (
 	"context"
@@ -20,7 +20,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -31,16 +30,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
-
-type uitestActivityMarker struct{}
-
-func (uitestActivityMarker) MarkWorkspaceRead(context.Context, string, string, time.Time) (bool, error) {
-	return true, nil
-}
-
-func (uitestActivityMarker) MarkAllWorkspacesRead(context.Context, string) (int64, error) {
-	return 1, nil
-}
 
 const (
 	// uitestDrainMaxSteps bounds how many commands a single action may drain.
@@ -110,34 +99,17 @@ func NewUITestDriverModel(m Model, size UITestSize) *UITestDriver {
 
 func newUITestDriverModel(m Model, size UITestSize, tempParent string) (*UITestDriver, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	services, snapshot, tempRoot, err := newHermeticUITestServices(ctx, tempParent)
+	snapshot, tempRoot, err := newHermeticUITestSnapshot(tempParent)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	// The driver owns the supplied model lifecycle. Its former service owner is
-	// closed before the hermetic owner is installed; normal constructors have
-	// not initialized it, so this cannot open or touch operator data.
-	if err := m.Close(); err != nil {
-		cancel()
-		_ = services.Close()
-		_ = os.RemoveAll(tempRoot)
-		return nil, fmt.Errorf("uitest: closing replaced data services: %w", err)
-	}
-	m.ctx = ctx
-	m.dataServices = services
 	m.transcriptIndex = snapshot.transcriptIndex
 	m.transcriptReaders = snapshot.transcriptReaders
 	m.sessionResults = append([]transcript.Result(nil), snapshot.transcriptResults...)
 	m.plansIndex = snapshot.planIndex
-	m.workspaceCatalog = snapshot.workspaceCatalog
 	m.backgroundCommands = hermeticModelBackgroundCommands()
-	// Fixture drivers must remain hermetic: their direct sessionsMsg updates
-	// exercise the legacy renderer, while workspace projection tests inject a
-	// completed message explicitly instead of opening real indexes or SQLite.
-	m.workspaceProjectionDisabled = true
-	m.workspaceActivityMarker = uitestActivityMarker{}
-	// Plan fixtures exercise navigation and layout, not filesystem/SQLite scan
+	// Plan fixtures exercise navigation and layout, not filesystem scan
 	// latency. Supply deterministic command results so the driver never relies
 	// on a 50ms wall-clock race or the operator's real plan index.
 	m.planRefreshCommand = func(_ *plans.Index, _ *config.Config, seq int) tea.Cmd {
@@ -219,13 +191,6 @@ func NewUITestFixtureDriver(fx UITestFixture, size UITestSize) (*UITestDriver, *
 	client := NewUITestKittyClient(fx.Windows)
 	d := NewUITestDriver(fx.Config, client, size)
 	d.loadSessionsFrom(client, fx.Config)
-	if fx.WorkspaceHome {
-		d.model.mode = ModeWorkspace
-		d.model.workspaceSnapshot = fx.WorkspaceSnapshot
-		d.model.workspaceCursor = 0
-		d.model.workspaceFocus = workspaceFocusProjects
-		d.model.clampWorkspaceSelection()
-	}
 	return d, client
 }
 
@@ -275,8 +240,8 @@ func (d *UITestDriver) Model() Model { return d.model }
 // fixture commands that can block on I/O.
 func (d *UITestDriver) Context() context.Context { return d.ctx }
 
-// Close cancels pending work, joins every started command, closes the single
-// fixture datastore pool, and only then removes the temporary directory.
+// Close cancels pending work, joins every started command, and only then
+// removes the temporary directory.
 func (d *UITestDriver) Close() error {
 	if d == nil {
 		return nil
@@ -287,7 +252,7 @@ func (d *UITestDriver) Close() error {
 		d.cancel()
 		d.commandMu.Unlock()
 		d.commands.Wait()
-		d.closeErr = errors.Join(d.model.Close(), os.RemoveAll(d.tempRoot))
+		d.closeErr = os.RemoveAll(d.tempRoot)
 	})
 	return d.closeErr
 }

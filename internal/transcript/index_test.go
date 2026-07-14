@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -118,7 +119,8 @@ func (i *Index) SetEntryForTest(key string, meta SessionMeta) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	i.entries[key] = meta
-	return i.saveLocked()
+	warning, persistErr := i.saveLocked()
+	return errors.Join(warning, persistErr)
 }
 
 func must(t *testing.T, err error) {

@@ -38,21 +38,6 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case keyCtrlC, keyQ:
 		return m, tea.Quit
-	case keyWorkspaceLive:
-		m.mode = ModeWorkspace
-		m.workspaceFocus = workspaceFocusProjects
-		m.workspaceDrillDown = false
-		m.clampWorkspaceSelection()
-		var cmds []tea.Cmd
-		if cmd := m.dispatchWorkspaceProjection(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		if m.plansIndex == nil {
-			if cmd := m.dispatchDataServicesInit(); cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-		return m, tea.Batch(cmds...)
 
 	case keyJ, keyDown:
 		m.cursor = clamp(m.cursor+1, 0, len(m.filtered)-1)

@@ -229,11 +229,7 @@ func actionsFor(_ Model) []action {
 }
 
 func (m *Model) exitActionsMode() {
-	returnMode := m.actionsReturnMode
-	if returnMode != ModeWorkspace {
-		returnMode = ModeList
-	}
-	m.mode = returnMode
+	m.mode = ModeList
 	m.actionsReturnMode = ModeList
 }
 

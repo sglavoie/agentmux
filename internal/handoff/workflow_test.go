@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/datastore"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -37,7 +36,6 @@ func (workflowGit) Inspect(context.Context, string, time.Duration) GitState {
 
 func testWorkflow(t *testing.T, launch func(kitty.KittyClient, config.Session, config.Account, *config.Config, string) error, edit func(string, *config.Config) error) *Workflow {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "agent-mux.db")
 	artifactDirectory := filepath.Join(t.TempDir(), "handoffs")
 	if launch == nil {
 		launch = func(kitty.KittyClient, config.Session, config.Account, *config.Config, string) error { return nil }
@@ -46,10 +44,7 @@ func testWorkflow(t *testing.T, launch func(kitty.KittyClient, config.Session, c
 		edit = func(string, *config.Config) error { return nil }
 	}
 	return &Workflow{
-		builder: NewBuilderWithGit(workflowGit{}),
-		openStore: func(ctx context.Context) (*datastore.Store, error) {
-			return datastore.OpenPath(ctx, dbPath)
-		},
+		builder:           NewBuilderWithGit(workflowGit{}),
 		artifactDirectory: func() (string, error) { return artifactDirectory, nil },
 		edit:              edit,
 		launch:            launch,
@@ -89,17 +84,21 @@ func TestWorkflowLaunchesEverySourceTargetHarnessCombination(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Run: %v", err)
 				}
-				if !result.Launched || result.Artifact.Record.Status != StatusFinal {
+				if !result.Launched || result.Artifact.Status != StatusFinal {
 					t.Fatalf("result = %+v, want a finalized launched handoff", result)
 				}
 				if gotSession.Directory != cwd || gotSession.EffectiveProfile() != targetProfile || gotAccount.EffectiveHarness() != targetHarness {
 					t.Fatalf("launch context = session=%+v account=%+v, want source cwd and target profile/harness", gotSession, gotAccount)
 				}
-				if !strings.Contains(gotPrompt, result.Artifact.Record.Path) || !strings.Contains(gotPrompt, "Verify all assumptions") {
+				if !strings.Contains(gotPrompt, result.Artifact.Path) || !strings.Contains(gotPrompt, "Verify all assumptions") {
 					t.Fatalf("prompt = %q, want handoff path and stale-assumption instruction", gotPrompt)
 				}
-				if info, err := os.Stat(result.Artifact.Record.Path); err != nil || info.Mode().Perm() != 0o600 {
+				if info, err := os.Stat(result.Artifact.Path); err != nil || info.Mode().Perm() != 0o600 {
 					t.Fatalf("final artifact = %v, %v; want private regular file", info, err)
+				}
+				content, err := os.ReadFile(result.Artifact.Path)
+				if err != nil || !strings.Contains(string(content), "Project: `api`") {
+					t.Fatalf("artifact project label: %v\n%s", err, content)
 				}
 			})
 		}
@@ -124,16 +123,18 @@ func TestWorkflowEditFinalizesEditedDraftBeforeLaunch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if result.DraftPath == "" || result.Artifact.Record.Path == "" || result.Launched {
+	if result.DraftPath == "" || result.Artifact.Path == "" || result.Launched {
 		t.Fatalf("result = %+v, want retained draft and finalized create-only artifact", result)
 	}
-	final, err := os.ReadFile(result.Artifact.Record.Path)
+	final, err := os.ReadFile(result.Artifact.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(final) != "# Edited Handoff\n\nUse current tests.\n" {
 		t.Fatalf("final content = %q, want edited draft content", final)
 	}
+	requireMode(t, result.DraftPath, 0o600)
+	requireMode(t, result.Artifact.Path, 0o600)
 }
 
 func TestWorkflowRetainsFinalArtifactWhenLaunchFails(t *testing.T) {
@@ -155,11 +156,30 @@ func TestWorkflowRetainsFinalArtifactWhenLaunchFails(t *testing.T) {
 	if !errors.As(err, &partial) {
 		t.Fatalf("error = %v, want PartialLaunchError", err)
 	}
-	if result.Artifact.Record.Status != StatusFinal || result.Artifact.Record.Path == "" {
+	if result.Artifact.Status != StatusFinal || result.Artifact.Path == "" {
 		t.Fatalf("partial result = %+v, want finalized artifact", result)
 	}
-	if _, statErr := os.Stat(result.Artifact.Record.Path); statErr != nil {
+	if _, statErr := os.Stat(result.Artifact.Path); statErr != nil {
 		t.Fatalf("final artifact was not retained: %v", statErr)
+	}
+}
+
+func TestProjectLabelPrefersTranscriptThenRepositoryThenSession(t *testing.T) {
+	tests := []struct {
+		name   string
+		source transcript.SessionMeta
+		want   string
+	}{
+		{name: "transcript metadata", source: transcript.SessionMeta{Project: " API ", CWD: "/src/repository", ID: "session-1"}, want: "API"},
+		{name: "repository basename", source: transcript.SessionMeta{CWD: "/src/repository", ID: "session-1"}, want: "repository"},
+		{name: "session ID", source: transcript.SessionMeta{CWD: string(filepath.Separator), ID: "session-1"}, want: "session-1"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := projectLabel(test.source); got != test.want {
+				t.Fatalf("projectLabel() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 

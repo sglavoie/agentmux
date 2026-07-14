@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/activity"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 )
 
@@ -179,7 +178,6 @@ type Health struct {
 	DegradedReason string
 	Build          *buildinfo.Info
 	Metrics        *MetricsSnapshot
-	ActivityWriter *activity.Metrics
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -201,7 +199,6 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		DegradedReason: resp.DegradedReason,
 		Build:          resp.Build,
 		Metrics:        resp.Metrics,
-		ActivityWriter: resp.ActivityWriter,
 	}
 }
 
@@ -222,8 +219,8 @@ func daemonSocketOlderThanBinary(socketPath, amxBin string) bool {
 
 // ShutdownAndWait asks a live daemon to stop and waits until its original
 // socket has been unpublished. Run removes that socket only after handlers
-// drain and the activity writer closes its datastore, making this a complete
-// recovery-safe teardown barrier rather than a shutdown acknowledgement.
+// drain, making this a complete teardown barrier rather than a shutdown
+// acknowledgement.
 // An absent or refused socket is treated as an already-stopped daemon.
 func (c *Client) ShutdownAndWait(ctx context.Context) error {
 	if ctx == nil {

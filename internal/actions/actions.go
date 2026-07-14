@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/sglavoie/agentmux/internal/clipboard"
 	"github.com/sglavoie/agentmux/internal/config"
@@ -27,8 +26,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/worktree"
 )
 
-// ID is a stable action identifier.  IDs are part of the boundary shared by
-// the TUI, CLI, and future palette rather than presentation labels.
+// ID is a stable action identifier shared by the TUI and CLI rather than a
+// presentation label.
 type ID string
 
 const (
@@ -46,37 +45,16 @@ const (
 	ToggleMute    ID = "session.toggle_mute"
 	Close         ID = "session.close"
 	Restart       ID = "session.restart"
-	MarkAllRead   ID = "workspace.mark_all_read"
-	MarkRead      ID = "workspace.mark_read"
-	AdoptProject  ID = "workspace.adopt"
 )
 
 // EntityKind identifies a typed target accepted by an action.
 type EntityKind string
 
 const (
-	EntityRunningSession   EntityKind = "running_session"
-	EntityProject          EntityKind = "project"
-	EntityConversation     EntityKind = "conversation"
-	EntityWorkspace        EntityKind = "workspace"
-	EntityProjectCandidate EntityKind = "project_candidate"
+	EntityRunningSession EntityKind = "running_session"
+	EntityProject        EntityKind = "project"
+	EntityConversation   EntityKind = "conversation"
 )
-
-// ActivityMarker is the durable read-state seam used by workspace actions.
-// Implementations own datastore lifetime; the registry remains presentation
-// neutral and does not open operator files itself.
-type ActivityMarker interface {
-	MarkWorkspaceRead(context.Context, string, string, time.Time) (bool, error)
-	MarkAllWorkspacesRead(context.Context, string) (int64, error)
-}
-
-// WorkspaceTarget carries the stable workspace ID and the exact activity
-// high-water loaded by the caller. Using a typed timestamp prevents an action
-// from accidentally acknowledging later arrivals.
-type WorkspaceTarget struct {
-	ID            string
-	LoadedThrough time.Time
-}
 
 // EntityRequirement declares the target an action needs before it can run.
 type EntityRequirement struct {
@@ -132,8 +110,6 @@ type Dependencies struct {
 	Readers   map[string]transcript.Reader
 	Handoff   handoff.Runner
 	Worktree  worktree.Runner
-	Activity  ActivityMarker
-	Adopter   config.ProjectAdopter
 }
 
 // Request holds the typed targets and plain parameters supplied to one action.
@@ -143,8 +119,6 @@ type Request struct {
 	Session      *session.RunningSession
 	Project      *config.Session
 	Conversation *transcript.SessionMeta
-	Workspace    *WorkspaceTarget
-	Candidate    *ProjectCandidateTarget
 	Parameters   map[string]string
 	Confirmed    bool
 }
@@ -155,14 +129,6 @@ type Result struct {
 	Changed bool           `json:"changed"`
 	Message string         `json:"message,omitempty"`
 	Data    map[string]any `json:"data,omitempty"`
-}
-
-// ProjectCandidateTarget is the immutable discovery identity consumed by an
-// adoption action. The action never reinterprets weak plan-title hints.
-type ProjectCandidateTarget struct {
-	ID            string
-	CanonicalPath string
-	DisplayName   string
 }
 
 // Error is a stable action error suitable for a JSON error envelope.
@@ -321,14 +287,6 @@ func validateEntities(definition Definition, request Request) error {
 			if request.Conversation == nil {
 				return &Error{Code: "missing_entity", Action: definition.ID, Message: "an indexed conversation is required"}
 			}
-		case EntityWorkspace:
-			if request.Workspace == nil || strings.TrimSpace(request.Workspace.ID) == "" {
-				return &Error{Code: "missing_entity", Action: definition.ID, Message: "a workspace is required"}
-			}
-		case EntityProjectCandidate:
-			if request.Candidate == nil || strings.TrimSpace(request.Candidate.ID) == "" || strings.TrimSpace(request.Candidate.CanonicalPath) == "" {
-				return &Error{Code: "missing_entity", Action: definition.ID, Message: "a discovered project candidate is required"}
-			}
 		default:
 			return &Error{Code: "invalid_action", Action: definition.ID, Message: fmt.Sprintf("unknown entity requirement %q", requirement.Kind)}
 		}
@@ -358,47 +316,7 @@ func defaultDefinitions() []Definition {
 	sessionRequirement := []EntityRequirement{{Kind: EntityRunningSession, Description: "live managed session"}}
 	projectRequirement := []EntityRequirement{{Kind: EntityProject, Description: "configured project"}}
 	conversationRequirement := []EntityRequirement{{Kind: EntityConversation, Description: "indexed conversation"}}
-	workspaceRequirement := []EntityRequirement{{Kind: EntityWorkspace, Description: "configured workspace"}}
-	candidateRequirement := []EntityRequirement{{Kind: EntityProjectCandidate, Description: "discovered unconfigured project"}}
 	return []Definition{
-		{
-			ID: AdoptProject, Label: "adopt project", Description: "append a discovered project to config.toml", Requires: candidateRequirement,
-			Parameters: []ParameterSchema{
-				{Name: "profile", Type: "string", Description: "target configured profile", Required: true},
-				{Name: "title", Type: "string", Description: "optional project title"},
-			},
-			Confirmation: Confirmation{Required: true, Prompt: "append the previewed [[projects]] block to config.toml?"},
-			available: func(deps Dependencies, request Request) Availability {
-				if deps.Config == nil {
-					return Availability{Reason: "configuration is unavailable"}
-				}
-				profile := strings.TrimSpace(request.Parameters["profile"])
-				if _, ok := accountByName(deps.Config, profile); !ok {
-					return Availability{Reason: fmt.Sprintf("no matching profile %q", profile)}
-				}
-				return Availability{Available: true}
-			},
-			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
-				if deps.Adopter == nil {
-					return Result{}, dependencyError(AdoptProject, "configuration adopter")
-				}
-				title := strings.TrimSpace(request.Parameters["title"])
-				if title == "" {
-					title = request.Candidate.DisplayName
-				}
-				adoption, err := deps.Adopter.AdoptProject(ctx, config.Session{
-					Title: title, Directory: request.Candidate.CanonicalPath,
-					Profile: strings.TrimSpace(request.Parameters["profile"]),
-				})
-				if err != nil {
-					return Result{}, err
-				}
-				return Result{Changed: true, Message: "adopted project", Data: map[string]any{
-					"candidate_id": request.Candidate.ID, "config_path": adoption.Path,
-					"backup_path": adoption.BackupPath, "block": adoption.Block,
-				}}, nil
-			},
-		},
 		{
 			ID: Focus, Label: "focus tab", Description: "focus the session's Kitty tab", Requires: sessionRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
@@ -445,7 +363,7 @@ func defaultDefinitions() []Definition {
 			},
 		},
 		{
-			ID: ForkWorktree, Label: "fork in new worktree", Description: "start an isolated branch in a managed Git worktree", Requires: conversationRequirement,
+			ID: ForkWorktree, Label: "fork in new worktree", Description: "start an isolated branch in a Git worktree", Requires: conversationRequirement,
 			Parameters:   []ParameterSchema{{Name: "allow_dirty", Type: "boolean", Description: "allow a dirty source; uncommitted changes are not copied"}},
 			Confirmation: Confirmation{Required: true, Prompt: "create an isolated worktree fork? If --allow-dirty is used, uncommitted source changes will not be copied."},
 			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
@@ -609,41 +527,6 @@ func defaultDefinitions() []Definition {
 				return Result{Changed: true, Message: "restarted session"}, nil
 			},
 		},
-		{
-			ID: MarkRead, Label: "mark workspace read", Description: "mark the selected workspace's loaded activity read", Requires: workspaceRequirement,
-			available: func(deps Dependencies, request Request) Availability {
-				if deps.Activity == nil {
-					return Availability{Reason: "activity read state is unavailable"}
-				}
-				if request.Workspace.LoadedThrough.IsZero() {
-					return Availability{Reason: "the workspace has no loaded unread activity"}
-				}
-				return Availability{Available: true}
-			},
-			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
-				changed, err := deps.Activity.MarkWorkspaceRead(ctx, request.Workspace.ID, "local", request.Workspace.LoadedThrough)
-				if err != nil {
-					return Result{}, err
-				}
-				return Result{Changed: changed, Message: "marked workspace activity read"}, nil
-			},
-		},
-		{
-			ID: MarkAllRead, Label: "mark all workspaces read", Description: "mark current durable activity read in every workspace",
-			available: func(deps Dependencies, _ Request) Availability {
-				if deps.Activity == nil {
-					return Availability{Reason: "activity read state is unavailable"}
-				}
-				return Availability{Available: true}
-			},
-			execute: func(ctx context.Context, deps Dependencies, _ Request) (Result, error) {
-				changed, err := deps.Activity.MarkAllWorkspacesRead(ctx, "local")
-				if err != nil {
-					return Result{}, err
-				}
-				return Result{Changed: changed > 0, Message: "marked all workspace activity read", Data: map[string]any{"workspaces": changed}}, nil
-			},
-		},
 	}
 }
 
@@ -798,21 +681,21 @@ func handoffConversation(ctx context.Context, deps Dependencies, meta transcript
 		result.Data["fork_kind"] = "portable"
 	} else if workflowResult.Launched {
 		result.Message = "launched fresh handoff target"
-	} else if workflowResult.Artifact.Record.Path != "" {
-		result.Message = "finalized handoff pack: " + workflowResult.Artifact.Record.Path
+	} else if workflowResult.Artifact.Path != "" {
+		result.Message = "finalized handoff pack: " + workflowResult.Artifact.Path
 	}
 	if err == nil {
 		return result, nil
 	}
 	var partial *handoff.PartialLaunchError
 	if errors.As(err, &partial) {
-		result.Message = "handoff pack finalized at " + workflowResult.Artifact.Record.Path + "; target launch failed"
+		result.Message = "handoff pack finalized at " + workflowResult.Artifact.Path + "; target launch failed"
 		return result, &PartialResultError{ActionError: &Error{Code: "partial_launch_failed", Action: Handoff, Message: err.Error()}}
 	}
 	return result, &Error{Code: "handoff_failed", Action: Handoff, Message: err.Error()}
 }
 
-// forkConversationInWorktree creates an explicit managed checkout before
+// forkConversationInWorktree creates an explicit Git checkout before
 // starting the native or portable fork. The in-place Fork action intentionally
 // remains separate: it never creates Git state and keeps its existing launch
 // context unchanged.
@@ -833,7 +716,7 @@ func forkConversationInWorktree(ctx context.Context, deps Dependencies, meta tra
 		runner = worktree.NewWorkflow()
 	}
 	isolated, err := runner.Create(ctx, worktree.Request{
-		Config: deps.Config, SourceCWD: meta.CWD, SessionID: identity.SessionID, AllowDirty: allowDirty,
+		Config: deps.Config, ProjectLabel: meta.Project, SourceCWD: meta.CWD, SessionID: identity.SessionID, AllowDirty: allowDirty,
 	})
 	if err != nil {
 		return Result{}, worktreeActionError(err)
@@ -877,7 +760,8 @@ func addIsolatedWorktreeResult(result Result, isolated worktree.Result) Result {
 	result.Changed = true
 	result.Data["fork_kind"] = "isolated"
 	result.Data["worktree"] = map[string]any{
-		"id": isolated.ID, "workspace_id": isolated.WorkspaceID, "path": isolated.Path, "branch": isolated.Branch,
+		"project": isolated.ProjectLabel, "path": isolated.Path, "branch": isolated.Branch,
+		"base_ref": isolated.BaseRef, "source_root": isolated.SourceRoot,
 	}
 	if result.Message == "started portable fork from finalized handoff pack" {
 		result.Message = "started portable fork in isolated worktree"
@@ -889,17 +773,20 @@ func worktreeActionError(err error) error {
 	if errors.Is(err, worktree.ErrDirtySource) {
 		return &Error{Code: "dirty_source", Action: ForkWorktree, Message: err.Error()}
 	}
-	if errors.Is(err, worktree.ErrNoWorkspace) {
-		return &Error{Code: "workspace_unavailable", Action: ForkWorktree, Message: err.Error()}
+	if errors.Is(err, worktree.ErrNotGitCheckout) {
+		return &Error{Code: "git_unavailable", Action: ForkWorktree, Message: err.Error()}
 	}
 	return &Error{Code: "worktree_failed", Action: ForkWorktree, Message: err.Error()}
 }
 
 func resultFromHandoff(result handoff.Result) Result {
 	data := map[string]any{
-		"handoff_id":     result.Artifact.Record.ID,
-		"path":           result.Artifact.Record.Path,
-		"status":         result.Artifact.Record.Status,
+		"handoff_id":     result.Artifact.ID,
+		"path":           result.Artifact.Path,
+		"content_hash":   result.Artifact.ContentHash,
+		"status":         result.Artifact.Status,
+		"created_at":     result.Artifact.CreatedAt,
+		"updated_at":     result.Artifact.UpdatedAt,
 		"target_profile": result.TargetProfile,
 		"target_harness": result.TargetHarness,
 		"launched":       result.Launched,
@@ -910,7 +797,7 @@ func resultFromHandoff(result handoff.Result) Result {
 	if result.Label != "" {
 		data["label"] = result.Label
 	}
-	return Result{Changed: result.Artifact.Record.Path != "", Data: data}
+	return Result{Changed: result.Artifact.Path != "", Data: data}
 }
 
 func parameterBool(parameters map[string]string, name string) bool {

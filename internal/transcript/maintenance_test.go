@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"golang.org/x/sys/unix"
 )
 
 func TestStatusReportsCountsAndMissingSidecars(t *testing.T) {
@@ -48,6 +50,21 @@ func TestStatusReportsCountsAndMissingSidecars(t *testing.T) {
 		status.MissingSidecarKeys[0] != IndexKey(harness.Codex, "visible-missing") {
 		t.Fatalf("missing sidecars = %d %v", status.MissingSidecars, status.MissingSidecarKeys)
 	}
+}
+
+func TestStatusMalformedMetadataQuarantinesAndReportsWarning(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	writeMalformedMetadata(t, path)
+
+	status, err := Status(path)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	requireQuarantineWarning(t, status.Warnings)
+	if status.MetadataPath != path || status.VisibleEntries != 0 || status.HiddenEntries != 0 {
+		t.Fatalf("status after recovery = %+v", status)
+	}
+	requireQuarantinedMetadata(t, path)
 }
 
 func TestCompactMigratesLegacySearchTextAndRewritesMetadataOnly(t *testing.T) {
@@ -94,6 +111,24 @@ func TestCompactMigratesLegacySearchTextAndRewritesMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestCompactMalformedMetadataQuarantinesAndRepairsInOneRun(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	writeMalformedMetadata(t, path)
+
+	result, err := Compact(path)
+	if err != nil {
+		t.Fatalf("Compact: %v", err)
+	}
+	requireQuarantineWarning(t, result.Warnings)
+	requireQuarantinedMetadata(t, path)
+	if result.LegacyFields != 0 || result.StatusAfter.MetadataSize == 0 {
+		t.Fatalf("compact result after recovery = %+v", result)
+	}
+	if idx, err := loadIndexAtStrict(path); err != nil || idx == nil {
+		t.Fatalf("strict load after compact = %#v, %v", idx, err)
+	}
+}
+
 func TestRebuildDeletesOldSidecarsAndHonorsAllOption(t *testing.T) {
 	tmp := t.TempDir()
 	idx, err := LoadIndexAt(filepath.Join(tmp, "transcripts.json"))
@@ -135,5 +170,131 @@ func TestRebuildDeletesOldSidecarsAndHonorsAllOption(t *testing.T) {
 	}
 	if _, err := os.Stat(idx.SearchTextPath(staleKey)); !os.IsNotExist(err) {
 		t.Fatalf("stale sidecar still exists or stat failed: %v", err)
+	}
+}
+
+func TestRebuildReparsesCachedTranscriptsBeforeResettingSidecars(t *testing.T) {
+	cfg, readers, transcriptPath := filesystemTranscriptFixture(t)
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Refresh(cfg, readers); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(transcriptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	usedCachedEntry := false
+	parseCount := 0
+	reader := readers[harness.Claude].(*fakeReader)
+	reader.discover = func(_ string, opts DiscoverOptions) ([]SessionMeta, error) {
+		if cached, ok := opts.Cached(transcriptPath, info.Size(), info.ModTime()); ok {
+			usedCachedEntry = true
+			return []SessionMeta{cached}, nil
+		}
+		parseCount++
+		return []SessionMeta{{
+			ID: "session", Harness: harness.Claude, Path: transcriptPath,
+			FileSize: info.Size(), FileModTime: info.ModTime(),
+			MessageCount: 1, SearchText: "rebuilt needle",
+		}}, nil
+	}
+
+	if _, err := Rebuild(path, cfg, readers, true); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	if usedCachedEntry || parseCount != 1 {
+		t.Fatalf("rebuild discovery used cached entry = %v, parse count = %d; want false/1", usedCachedEntry, parseCount)
+	}
+	if got, err := idx.ReadSearchText(IndexKey(harness.Claude, "session")); err != nil || got != "rebuilt needle" {
+		t.Fatalf("rebuilt sidecar = %q, %v", got, err)
+	}
+}
+
+func TestRebuildRemovesSidecarsWhileHoldingAdvisoryLock(t *testing.T) {
+	cfg, readers, _ := filesystemTranscriptFixture(t)
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Refresh(cfg, readers); err != nil {
+		t.Fatal(err)
+	}
+
+	removedUnderLock := false
+	originalRemove := removeTranscriptSearchStore
+	removeTranscriptSearchStore = func(dir string) error {
+		lockFile, openErr := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+		if openErr != nil {
+			return openErr
+		}
+		defer func() { _ = lockFile.Close() }()
+		lockErr := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+		if lockErr == nil {
+			_ = unix.Flock(int(lockFile.Fd()), unix.LOCK_UN)
+			return errors.New("transcript search sidecars removed without advisory lock")
+		}
+		if !errors.Is(lockErr, unix.EWOULDBLOCK) && !errors.Is(lockErr, unix.EAGAIN) {
+			return lockErr
+		}
+		removedUnderLock = true
+		return os.RemoveAll(dir)
+	}
+	t.Cleanup(func() { removeTranscriptSearchStore = originalRemove })
+
+	if _, err := Rebuild(path, cfg, readers, true); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	if !removedUnderLock {
+		t.Fatal("Rebuild did not reset search sidecars")
+	}
+}
+
+func TestRebuildMalformedMetadataQuarantinesAndRepairsInOneRun(t *testing.T) {
+	cfg, readers, _ := filesystemTranscriptFixture(t)
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	writeMalformedMetadata(t, path)
+
+	result, err := Rebuild(path, cfg, readers, true)
+	if err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	requireQuarantineWarning(t, result.Warnings)
+	requireQuarantinedMetadata(t, path)
+	if result.Status.VisibleEntries != 1 || result.Status.SidecarCount != 1 || result.Status.MissingSidecars != 0 {
+		t.Fatalf("status after rebuild = %+v", result.Status)
+	}
+	if idx, err := loadIndexAtStrict(path); err != nil || idx == nil {
+		t.Fatalf("strict load after rebuild = %#v, %v", idx, err)
+	}
+}
+
+func writeMalformedMetadata(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(`{"entries":`), 0o644); err != nil {
+		t.Fatalf("WriteFile malformed metadata: %v", err)
+	}
+}
+
+func requireQuarantineWarning(t *testing.T, warnings []string) {
+	t.Helper()
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "transcript cache quarantined as") {
+		t.Fatalf("warnings = %q, want one quarantine warning", warnings)
+	}
+}
+
+func requireQuarantinedMetadata(t *testing.T, path string) {
+	t.Helper()
+	matches, err := filepath.Glob(path + ".corrupt-*")
+	if err != nil {
+		t.Fatalf("Glob quarantine: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("quarantine files = %v, want one", matches)
 	}
 }

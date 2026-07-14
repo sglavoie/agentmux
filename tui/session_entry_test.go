@@ -26,8 +26,8 @@ func TestEnterSessionSearchStartsCacheLoadWhenCacheMissing(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("entering without a transcript cache returned nil cmd; want cache load")
 	}
-	if !got.dataServicesInitInFlight {
-		t.Fatal("dataServicesInitInFlight=false after starting service load")
+	if !got.sessionCacheLoadInFlight {
+		t.Fatal("sessionCacheLoadInFlight=false after starting cache load")
 	}
 	if !got.sessionLoading {
 		t.Fatal("sessionLoading=false with no cached rows available")
@@ -43,10 +43,11 @@ func TestEnterSessionSearchStartsCacheLoadWhenCacheMissing(t *testing.T) {
 func TestLegacySessionSearchKeepsEnterViewerAndAddsContinuityActions(t *testing.T) {
 	meta := transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "work", Project: "api"}
 	base := Model{
-		mode:              ModeSessionSearch,
-		cfg:               &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
-		transcriptReaders: map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
-		sessionResults:    []transcript.Result{{Meta: meta}},
+		mode:                   ModeSessionSearch,
+		cfg:                    &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
+		transcriptReaders:      map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
+		sessionResults:         []transcript.Result{{Meta: meta}},
+		sessionRefreshInFlight: true,
 	}
 
 	updated, cmd := base.Update(keyPress("enter"))
@@ -97,7 +98,7 @@ func TestLegacySessionSearchKeepsEnterViewerAndAddsContinuityActions(t *testing.
 
 func TestEnterSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	m := testModel()
-	m.dataServicesInitInFlight = true
+	m.sessionCacheLoadInFlight = true
 
 	updated, cmd := m.Update(keyPress("S"))
 	got := updated.(Model)
@@ -108,8 +109,8 @@ func TestEnterSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	if cmd != nil {
 		t.Fatalf("entering during cache load returned duplicate cmd %T", cmd)
 	}
-	if !got.dataServicesInitInFlight {
-		t.Fatal("dataServicesInitInFlight was cleared while entering")
+	if !got.sessionCacheLoadInFlight {
+		t.Fatal("sessionCacheLoadInFlight was cleared while entering")
 	}
 	if !got.sessionLoading {
 		t.Fatal("sessionLoading=false while waiting for the first cache result set")
@@ -462,7 +463,7 @@ func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T)
 
 func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 	m := loadSessions(testModel(), []session.RunningSession{{TabID: 1, WindowID: 10, Base: "Foo"}})
-	m.dataServicesInitInFlight = true
+	m.sessionCacheLoadInFlight = true
 	seq := m.sessionSearchSeq
 
 	updated, cmd := m.Update(keyPress("s"))
@@ -474,8 +475,8 @@ func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.
 	if got.mode != ModeSessionSearch {
 		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
 	}
-	if !got.dataServicesInitInFlight {
-		t.Fatal("dataServicesInitInFlight was cleared while entering project session search")
+	if !got.sessionCacheLoadInFlight {
+		t.Fatal("sessionCacheLoadInFlight was cleared while entering project session search")
 	}
 	if !got.sessionLoading {
 		t.Fatal("sessionLoading=false while waiting for first project-filtered cache result")
@@ -616,6 +617,46 @@ func TestSessionWarmRefreshDoneDoesNotOverwriteNewerSearchResults(t *testing.T) 
 	}
 }
 
+func TestSessionSearchResultPreservesNewerSelection(t *testing.T) {
+	m := sessionSearchFilterModel(t)
+	m.sessionSearchSeq = 3
+	m.sessionCursor = 1
+	selectedID := m.sessionResults[m.sessionCursor].Meta.ID
+
+	updated, _ := m.Update(sessionSearchDoneMsg{
+		seq: 3,
+		results: []transcript.Result{
+			m.sessionResults[1],
+			m.sessionResults[0],
+		},
+	})
+	got := updated.(Model)
+	if got.sessionCursor != 0 || got.sessionResults[got.sessionCursor].Meta.ID != selectedID {
+		t.Fatalf("selection moved after reordered result: cursor=%d results=%+v", got.sessionCursor, got.sessionResults)
+	}
+}
+
+func TestSessionViewerStaleResultCannotOverwriteNewerSelection(t *testing.T) {
+	m := Model{
+		mode:             ModeSessionView,
+		viewerSession:    &transcript.SessionMeta{ID: "newer", Harness: harness.Claude},
+		viewerMessages:   []transcript.Message{{Text: "newer selection"}},
+		viewerLoading:    true,
+		viewerLoadSeq:    2,
+		viewerCursor:     0,
+		viewerMatchIdx:   0,
+		viewerMatchLines: []int{0},
+	}
+	updated, cmd := m.Update(viewerMessagesLoadedMsg{
+		seq:      1,
+		messages: []transcript.Message{{Text: "stale selection"}},
+	})
+	got := updated.(Model)
+	if cmd != nil || !got.viewerLoading || got.viewerSession.ID != "newer" || len(got.viewerMessages) != 1 || got.viewerMessages[0].Text != "newer selection" {
+		t.Fatalf("stale viewer result changed newer selection: %+v", got)
+	}
+}
+
 func TestRenderSessionSearchKeepsWarmedResultsVisibleDuringBackgroundScan(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 	m.sessionRefreshInFlight = true
@@ -729,7 +770,7 @@ func TestRenderSessionSearchDistinguishesStatusAndErrors(t *testing.T) {
 		width:                    100,
 		height:                   30,
 		sessionLoading:           true,
-		dataServicesInitInFlight: true,
+		sessionCacheLoadInFlight: true,
 		sessionRefreshInFlight:   true,
 		sessionRefreshErr:        errors.New("cache unavailable"),
 		sessionSearchErr:         errors.New("sidecar denied"),

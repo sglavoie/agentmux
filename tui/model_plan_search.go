@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"context"
-	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -23,6 +21,17 @@ type planEditorErrMsg struct{ err error }
 type plansRefreshDoneMsg struct {
 	err error
 	seq int // planSearchSeq snapshot at dispatch time
+}
+
+// planCacheLoadDoneMsg carries the lazy recovering filesystem-cache snapshot
+// and a search of its warm rows. loadErr may be a non-fatal quarantine or
+// read warning when idx is non-nil.
+type planCacheLoadDoneMsg struct {
+	seq       int
+	idx       *plans.Index
+	results   []plans.Result
+	loadErr   error
+	searchErr error
 }
 
 // planSearchDebounceMsg fires after sessionSearchDebounce. The handler
@@ -53,9 +62,31 @@ func (m Model) enterPlanSearch() (tea.Model, tea.Cmd) {
 
 	if m.plansIndex == nil {
 		m.planLoading = true
-		return m, m.dispatchDataServicesInit()
+		if m.planCacheLoadInFlight {
+			return m, nil
+		}
+		m.planCacheLoadInFlight = true
+		m.planSearchSeq++
+		return m, planCacheLoadCmd(m.planSearchSeq, m.currentPlanQuery())
 	}
 	return m.startPlanSearchRefresh()
+}
+
+// planCacheLoadCmd lazily loads the default recovering filesystem cache and
+// searches its warm snapshot before the slower source refresh begins.
+func planCacheLoadCmd(seq int, query plans.Query) tea.Cmd {
+	return func() tea.Msg {
+		idx, loadErr := plans.LoadIndex()
+		var results []plans.Result
+		var searchErr error
+		if idx != nil {
+			results, searchErr = plans.Search(idx, query)
+		}
+		return planCacheLoadDoneMsg{
+			seq: seq, idx: idx, results: results,
+			loadErr: loadErr, searchErr: searchErr,
+		}
+	}
 }
 
 func (m Model) startPlanSearchRefresh() (tea.Model, tea.Cmd) {
@@ -259,21 +290,6 @@ func plansRefreshCmd(idx *plans.Index, cfg *config.Config, seq int) tea.Cmd {
 func (m Model) runPlansRefreshCmd(idx *plans.Index, cfg *config.Config, seq int) tea.Cmd {
 	if m.planRefreshCommand != nil {
 		return m.planRefreshCommand(idx, cfg, seq)
-	}
-	if m.dataServices != nil {
-		ctx := m.ctx
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		return func() tea.Msg {
-			err := m.dataServices.WithWriter(ctx, func(services dataServicesSnapshot) error {
-				if services.planIndex != idx {
-					return fmt.Errorf("plan index is not owned by TUI data services")
-				}
-				return idx.Refresh(config.ExpandTilde(cfg.Defaults.PlansDirectory))
-			})
-			return plansRefreshDoneMsg{err: err, seq: seq}
-		}
 	}
 	return plansRefreshCmd(idx, cfg, seq)
 }

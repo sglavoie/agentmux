@@ -9,8 +9,8 @@ It never launches a live Kitty instance, never talks to a real terminal, and
 never reads or writes the operator's real config or data. Every run is
 deterministic and isolated, so it is safe to run in CI or from an agent.
 
-The repository acceptance gate runs every scenario, including both split-pane
-wide layouts and narrow/short drill-down layouts:
+The repository acceptance gate runs every committed wide and narrow layout
+scenario:
 
 ```bash
 just tui-scenarios
@@ -108,11 +108,6 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `actions` | one session with a very long title | stresses the actions overlay box width |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
 
-Workspace scenarios also use hermetic, scenario-only fixtures: `workspace_empty`,
-`workspace_attention`, `workspace_profiles`, and `workspace_worktrees`. They
-inject an immutable workspace snapshot directly, so their coverage never reads
-an operator's datastore, transcripts, plans, or Git checkout.
-
 The `basic` fixture's list is state/profile-grouped, not globally
 alpha-sorted: the cursor starts on `dotfiles` (personal).
 
@@ -179,8 +174,7 @@ silently selecting nothing.
 
 **Mode names**: `list`, `search`, `confirm`, `picker`, `config_picker`,
 `help`, `detail`, `actions`, `session_search`, `session_view`,
-`delete_choice`, `chip_picker`, `message_detail`, `plan_search`, `plan_view`,
-`workspace`, `palette`, `unified_search`.
+`delete_choice`, `chip_picker`, `message_detail`, `plan_search`, and `plan_view`.
 
 **Kitty `op` names** recorded by the no-op client: `LaunchTab`,
 `LaunchOverlay`, `CloseTab`, `MoveTab`, `SetTabColor`, `SetTabTitle`,
@@ -241,48 +235,45 @@ On a scenario failure (code `2`) the harness prints its structured result and
 exits with no extra stderr line. Only invalid-input errors (code `3`) print a
 single reason line.
 
-## Example scenarios
+## Committed scenarios
 
-The [`scenarios/`](scenarios) directory holds committed examples covering the
-layout classes this harness targets:
+The [`scenarios/`](scenarios) directory is the complete committed acceptance
+inventory. `just tui-scenarios` passes `scenarios/*.json` to the harness, and
+the in-package scenario test independently discovers and executes every JSON
+file. The exact inventory is:
 
 | File | Fixture | Covers |
 | --- | --- | --- |
 | [`baseline-layout.json`](scenarios/baseline-layout.json) | `basic` | dashboard list renders clean with all projects visible |
 | [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions overlay fits after pressing `a` on a long-titled session |
 | [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits after pressing `C` with long profile names |
+| [`footer-gloss-narrow-fit.json`](scenarios/footer-gloss-narrow-fit.json) | `basic` | narrow footer keeps the surviving dashboard hints readable |
+| [`help-modal-narrow-fit.json`](scenarios/help-modal-narrow-fit.json) | `basic` | help remains bounded in a narrow viewport |
+| [`help-modal-scroll-bottom.json`](scenarios/help-modal-scroll-bottom.json) | `basic` | help scroll reaches the final surviving bindings |
+| [`legend-narrow-fit.json`](scenarios/legend-narrow-fit.json) | `actions` | live-session legend remains bounded at narrow width |
+| [`list-preview-narrow-fit.json`](scenarios/list-preview-narrow-fit.json) | `actions` | list+preview falls back to the plain list below the row-column floor |
+| [`picker-dsl-narrow-fit.json`](scenarios/picker-dsl-narrow-fit.json) | `basic` | launcher DSL/help text clamps at narrow width |
 | [`resize-stress.json`](scenarios/resize-stress.json) | `basic` | the dashboard survives a sequence of resizes and ends clean |
 | [`picker-fit.json`](scenarios/picker-fit.json) | `actions` | launch picker rows stay within width after pressing `l` |
 | [`picker-preview-fit.json`](scenarios/picker-preview-fit.json) | `actions` | launch picker list+preview split fits after pressing `l` then `p` |
+| [`plan-search-header-narrow-fit.json`](scenarios/plan-search-header-narrow-fit.json) | `basic` | Plans header and filters fit at narrow width |
+| [`plan-search-narrow-fit.json`](scenarios/plan-search-narrow-fit.json) | `basic` | Plans results fit at narrow width |
 | [`plan-view-fit.json`](scenarios/plan-view-fit.json) | `basic` | plan viewer read-error line wraps to width after `P` then `enter` |
+| [`plan-view-narrow-fit.json`](scenarios/plan-view-narrow-fit.json) | `basic` | plan viewer remains bounded at narrow width |
+| [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | live-list filter rows truncate at a sub-floor terminal after `/` |
+| [`session-fork-continuity.json`](scenarios/session-fork-continuity.json) | `basic` | Past Sessions dispatches a native fork through the shared action registry |
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after pressing `S` |
-| [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | filter-mode list rows truncate to width at a sub-floor terminal after `/` |
-| [`list-preview-narrow-fit.json`](scenarios/list-preview-narrow-fit.json) | `actions` | list+preview split falls back to the plain list below the row-column floor after `p` |
-| [`workspace-empty.json`](scenarios/workspace-empty.json) | `workspace_empty` | secondary Workbench view handles an empty project set |
-| [`workspace-wide-attention.json`](scenarios/workspace-wide-attention.json) | `workspace_attention` | split project/detail panes preserve attention, live, conversation, plan, and activity sections |
-| [`workspace-narrow-drill.json`](scenarios/workspace-narrow-drill.json) | `workspace_attention` | narrow terminals open the same detail ordering with Enter |
-| [`workspace-short-drill.json`](scenarios/workspace-short-drill.json) | `workspace_attention` | short terminals retain a usable full-width drill-down |
-| [`workspace-multi-profile.json`](scenarios/workspace-multi-profile.json) | `workspace_profiles` | project home stays legible with multiple launch profiles |
-| [`workspace-worktrees.json`](scenarios/workspace-worktrees.json) | `workspace_worktrees` | live rows retain their linked-worktree context |
-| [`workspace-activity.json`](scenarios/workspace-activity.json) | `workspace_attention` | durable activity rows navigate to their related live session |
-| [`workspace-unread.json`](scenarios/workspace-unread.json) | `workspace_attention` | unread counts and concise meaningful transitions remain visible |
-| [`workspace-activity-order.json`](scenarios/workspace-activity-order.json) | `workspace_attention` | live urgency remains ahead of durable activity ordering cues |
-| [`palette-narrow.json`](scenarios/palette-narrow.json) | `workspace_attention` | global command palette stays usable on a narrow terminal |
-| [`palette-disabled-action.json`](scenarios/palette-disabled-action.json) | `workspace_attention` | unavailable actions remain visible with a context reason |
-| [`palette-filtering.json`](scenarios/palette-filtering.json) | `workspace_attention` | palette text filtering narrows the action set deterministically |
-| [`palette-parameter-picker.json`](scenarios/palette-parameter-picker.json) | `workspace_profiles` | launch actions reuse the profile picker and selected workspace |
-| [`palette-return-focus.json`](scenarios/palette-return-focus.json) | `workspace_attention` | closing the palette restores the originating workspace detail focus |
-
+| [`session-search-header-narrow-fit.json`](scenarios/session-search-header-narrow-fit.json) | `basic` | Past Sessions header and filters fit at narrow width |
 Run them all:
 
 ```bash
 amx tui-test run docs/tui-testing/scenarios/*.json
 ```
 
-These examples are exercised in-package by
+These scenarios are exercised in-package by
 `tui/uitest_example_scenarios_test.go`, so `just test` fails if a committed
-example stops parsing or regresses a layout guarantee — the documentation and
-the harness cannot drift apart.
+scenario stops parsing, regresses a guarantee, or differs from this documented
+inventory. Retired palette and Workbench modes are not valid scenario modes.
 
 ### Sizing note
 

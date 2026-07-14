@@ -10,20 +10,6 @@ import (
 func renderFooter(m Model) string {
 	var lines []string
 	switch m.mode {
-	case ModePalette:
-		lines = nonEmptyFooterLines(
-			footerLine(m.width, "  ", "type: filter", "j/k: move", "enter: run/open", "esc: return"),
-		)
-	case ModeWorkspace:
-		if m.workspaceDrillDown || m.workspaceFocus == workspaceFocusDetail {
-			lines = nonEmptyFooterLines(
-				footerLine(m.width, "  ", "j/k: move", "enter: open", ": commands", "tab: projects", "v: live sessions", "esc: back"),
-			)
-		} else {
-			lines = nonEmptyFooterLines(
-				footerLine(m.width, "  ", "j/k: workspaces", "enter/tab: details", ": commands", "v: live sessions", "?: help", "q: quit"),
-			)
-		}
 	case ModeSearch:
 		lines = nonEmptyFooterLines(
 			footerLine(m.width, " · ", "filter: @profile", "!state", "word", "\\@/\\! literal"),
@@ -70,11 +56,6 @@ func renderFooter(m Model) string {
 			footerLine(m.width, " · ", "/ filter", "enter view", "o editor", "s sort", "Y path", "esc back"),
 			footerLine(m.width, " · ", "j/k up/down", "g/G top/bot", "ctrl+d/u half", "ctrl+f/b page"),
 		)
-	case ModeUnifiedSearch:
-		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "/ edit", "enter primary action", "esc clear/back", "j/k move", "g/G top/bot"),
-			footerLine(m.width, " · ", "filters: type:", "workspace:", "harness:", "profile:", "from:", "to:"),
-		)
 	case ModePlanView:
 		lines = nonEmptyFooterLines(
 			footerLine(m.width, " · ", "/ search", "n/N match", "y copy", "Y path", "o editor", "esc back"),
@@ -112,7 +93,6 @@ func renderFooter(m Model) string {
 				"}/{: nav+focus",
 				"enter: focus",
 				"a: actions",
-				": commands",
 				"/: filter",
 				"?: help",
 				"q: quit",
@@ -366,7 +346,6 @@ var listFooterPalette = []footerEntry{
 		return ok
 	}},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
-	{"v", "workbench", footerSectionApp, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
 	{"P", "plans", footerSectionApp, func(Model) bool { return true }},
 	{"R", "resort", footerSectionApp, func(Model) bool { return true }},

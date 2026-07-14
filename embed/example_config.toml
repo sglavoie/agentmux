@@ -54,6 +54,13 @@ confirm_destructive = false
 # Filesystem root scanned by the `P` keybinding to list past plans.
 # Each top-level directory under this root is treated as one plan.
 # plans_directory = "~/.local/share/agent-plans"
+# Plans in that directory and harness transcript files remain authoritative.
+# Agent Mux keeps only disposable filesystem caches at:
+#   ~/.local/share/agent-mux/transcripts.json + transcripts.search/
+#   ~/.local/share/agent-mux/plans.json       + plans.search/
+# Corrupt cache metadata is quarantined and rebuilt; no SQLite database is
+# created. Standalone handoffs, Git worktrees, and launch_overrides.json are
+# separate user assets and are never removed by cache maintenance.
 
 # Preview pane shown by the `p` keybinding. Direction chooses a side-by-side
 # split ("horizontal") or stacked split ("vertical"). Ratio is the fraction of
@@ -98,11 +105,10 @@ hook_silence = 14400
 # Set to false to disable the probe entirely. Default: true.
 # claude_context_limit_probe = true
 
-# Session archive: retention policy for the searchable SQLite conversation
-# index. The older transcripts.json and transcripts.search files remain
-# untouched rollback artifacts for this compatibility release. Refresh/prune
-# operations hide entries older than keep_days; harness transcript files on
-# disk are left intact. Set keep_days to 0 to use the default.
+# Session archive: retention policy for the searchable filesystem transcript
+# cache. Refresh/prune operations hide entries older than keep_days; harness
+# transcript files on disk are left intact. Set keep_days to 0 to use the
+# default.
 # scan_max_age_days bounds the per-refresh transcript walk: files whose
 # mtime is older than the cutoff are skipped without opening, while
 # existing index entries remain searchable until keep_days retires them.
@@ -110,11 +116,6 @@ hook_silence = 14400
 # [defaults.session_archive]
 # keep_days = 30
 # scan_max_age_days = 30
-
-# Durable meaningful-activity retention. Raw prompts and hook payloads are not
-# stored in this journal.
-[defaults.activity]
-keep_days = 30
 
 # Cross-harness handoff packs are private local artifacts. max_bytes bounds the
 # complete Markdown file; recent_messages selects the newest visible messages
@@ -252,9 +253,6 @@ codex   = "purple"
 #              this file.
 #
 # Optional fields:
-#   id         Stable globally unique project ID. Use lowercase letters,
-#              numbers, dot, underscore, or hyphen; this becomes the preferred
-#              workspace selector.
 #   args       Flags passed to this session only. Override profile args.
 #              Omit or leave empty to inherit the profile's args.
 #   env        Key/value pairs injected into the session's environment.
@@ -262,7 +260,6 @@ codex   = "purple"
 
 # Example project:
 # [[projects]]
-# id = "dotfiles"
 # title = "dotfiles"
 # directory = "~"
 # profile = "claude-work"

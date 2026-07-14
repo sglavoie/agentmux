@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/activity"
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -42,13 +41,6 @@ type Handler struct {
 	// saturation, queue latency) for TypeHealth and export surfaces. Installed
 	// by NewServer; nil when the handler runs without a server.
 	metricsFn func() MetricsSnapshot
-
-	// activityWriter is intentionally separate from render/state persistence:
-	// it receives compact records after reduction through a nonblocking bounded
-	// queue, so SQLite can never slow a hook acknowledgement or title update.
-	activityMu     sync.RWMutex
-	activityWriter *activity.Writer
-	activityBootID string
 
 	// eventSeq is the daemon's global monotonic receipt sequence, stamped onto
 	// every event appended to a per-window ring so exports can totally order
@@ -257,7 +249,6 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		notifier:                       notifier,
 		reducerCfg:                     cfg,
 		startedAt:                      time.Now(),
-		activityBootID:                 newActivityBootID(),
 		staleThresholds:                make(map[string]time.Duration),
 		perAccountThresholds:           make(map[string]map[string]time.Duration),
 		perAccountHookSilence:          make(map[string]time.Duration),
@@ -317,40 +308,7 @@ func (h *Handler) handleHealth() Response {
 		metrics := h.metricsFn()
 		resp.Metrics = &metrics
 	}
-	if metrics := h.activityWriterMetrics(); metrics != nil {
-		resp.ActivityWriter = metrics
-	}
 	return resp
-}
-
-// SetActivityWriter installs the asynchronous durable activity backend. It is
-// normally called exactly once by Run before the public socket is bound; the
-// setter remains exported so focused handler tests can inject a file-backed
-// writer without changing hook processing.
-func (h *Handler) SetActivityWriter(writer *activity.Writer) {
-	h.activityMu.Lock()
-	h.activityWriter = writer
-	h.activityMu.Unlock()
-}
-
-func (h *Handler) activityWriterMetrics() *activity.Metrics {
-	h.activityMu.RLock()
-	writer := h.activityWriter
-	h.activityMu.RUnlock()
-	if writer == nil {
-		return nil
-	}
-	metrics := writer.Metrics()
-	return &metrics
-}
-
-func (h *Handler) enqueueActivity(item activity.Item) {
-	h.activityMu.RLock()
-	writer := h.activityWriter
-	h.activityMu.RUnlock()
-	if writer != nil {
-		writer.Enqueue(item)
-	}
 }
 
 // SetBuildInfo stamps the daemon's artifact identity for TypeHealth. Called

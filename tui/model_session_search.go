@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -26,6 +25,22 @@ const sessionSearchDebounce = 250 * time.Millisecond
 type sessionsRefreshDoneMsg struct {
 	err error
 	seq int // sessionSearchSeq snapshot at dispatch time
+}
+
+// sessionCacheLoadStartedMsg marks the startup cache read as in-flight. It is
+// emitted before the load command so entry during startup joins that work.
+type sessionCacheLoadStartedMsg struct{}
+
+// sessionCacheLoadDoneMsg carries the recovering filesystem-cache snapshot
+// and its immediate empty-query search. loadErr may be a non-fatal recovery
+// warning when idx is non-nil.
+type sessionCacheLoadDoneMsg struct {
+	seq       int
+	idx       *transcript.Index
+	readers   map[string]transcript.Reader
+	results   []transcript.Result
+	loadErr   error
+	searchErr error
 }
 
 // sessionWarmRefreshDoneMsg carries the background refresh/prune result that
@@ -72,9 +87,17 @@ func (m Model) enterSessionSearch() (tea.Model, tea.Cmd) {
 
 	if m.transcriptIndex == nil {
 		m.sessionLoading = len(m.sessionResults) == 0
-		return m, m.dispatchDataServicesInit()
+		if m.sessionCacheLoadInFlight {
+			return m, nil
+		}
+		m.sessionCacheLoadInFlight = true
+		return m, startupSessionWarmupCmd(m.sessionSearchSeq)
 	}
 
+	if m.sessionCacheLoadInFlight {
+		m.sessionLoading = len(m.sessionResults) == 0
+		return m, nil
+	}
 	if m.sessionRefreshInFlight {
 		m.sessionLoading = false
 		return m, nil
@@ -99,7 +122,7 @@ func (m Model) enterSessionSearchForProject(project string) (tea.Model, tea.Cmd)
 
 	updated, cmd := m.enterSessionSearch()
 	m = updated.(Model)
-	if m.transcriptIndex == nil || m.dataServicesInitInFlight {
+	if m.transcriptIndex == nil || m.sessionCacheLoadInFlight {
 		return m, cmd
 	}
 	searchCmd := m.dispatchSessionSearch()
@@ -288,6 +311,43 @@ func (m *Model) dispatchSessionSearch() tea.Cmd {
 	})
 }
 
+func startupSessionWarmupCmd(seq int) tea.Cmd {
+	return tea.Sequence(
+		func() tea.Msg { return sessionCacheLoadStartedMsg{} },
+		sessionCacheLoadCmd(seq),
+	)
+}
+
+func sessionCacheLoadCmd(seq int) tea.Cmd {
+	return func() tea.Msg {
+		idx, readers, loadErr := loadTranscriptCache()
+		if idx == nil {
+			return sessionCacheLoadDoneMsg{seq: seq, loadErr: loadErr}
+		}
+		results, searchErr := transcript.Search(idx, readers, transcript.Query{})
+		return sessionCacheLoadDoneMsg{
+			seq:       seq,
+			idx:       idx,
+			readers:   readers,
+			results:   results,
+			loadErr:   loadErr,
+			searchErr: searchErr,
+		}
+	}
+}
+
+func loadTranscriptCache() (*transcript.Index, map[string]transcript.Reader, error) {
+	idx, err := transcript.LoadIndex()
+	if idx == nil {
+		return nil, nil, err
+	}
+	return idx, buildTranscriptReaders(), err
+}
+
+func sessionQueryIsEmpty(q transcript.Query) bool {
+	return q.Text == "" && len(q.Harness) == 0 && len(q.Profile) == 0 && len(q.Project) == 0
+}
+
 func buildTranscriptReaders() map[string]transcript.Reader {
 	return map[string]transcript.Reader{
 		harness.Claude:  transcript.NewClaudeReader(),
@@ -339,45 +399,14 @@ func (m Model) runSessionWarmRefreshCmd(idx *transcript.Index, cfg *config.Confi
 	if m.sessionWarmRefreshCommand != nil {
 		return m.sessionWarmRefreshCommand(seq, q)
 	}
-	if m.dataServices == nil {
-		return sessionWarmRefreshCmd(idx, cfg, readers, seq, q)
-	}
-	ctx := m.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return func() tea.Msg {
-		refreshErr := m.dataServices.WithWriter(ctx, func(services dataServicesSnapshot) error {
-			if services.transcriptIndex != idx {
-				return fmt.Errorf("transcript index is not owned by TUI data services")
-			}
-			return refreshAndPruneSessions(idx, cfg, readers)
-		})
-		results, searchErr := transcript.Search(idx, readers, q)
-		return sessionWarmRefreshDoneMsg{seq: seq, results: results, refreshErr: refreshErr, searchErr: searchErr}
-	}
+	return sessionWarmRefreshCmd(idx, cfg, readers, seq, q)
 }
 
 func (m Model) runSessionsRefreshCmd(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader, seq int) tea.Cmd {
 	if m.sessionRefreshCommand != nil {
 		return m.sessionRefreshCommand(seq)
 	}
-	if m.dataServices == nil {
-		return sessionsRefreshCmd(idx, cfg, readers, seq)
-	}
-	ctx := m.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return func() tea.Msg {
-		err := m.dataServices.WithWriter(ctx, func(services dataServicesSnapshot) error {
-			if services.transcriptIndex != idx {
-				return fmt.Errorf("transcript index is not owned by TUI data services")
-			}
-			return refreshAndPruneSessions(idx, cfg, readers)
-		})
-		return sessionsRefreshDoneMsg{err: err, seq: seq}
-	}
+	return sessionsRefreshCmd(idx, cfg, readers, seq)
 }
 
 func refreshAndPruneSessions(idx *transcript.Index, cfg *config.Config, readers map[string]transcript.Reader) error {
@@ -388,7 +417,6 @@ func refreshAndPruneSessions(idx *transcript.Index, cfg *config.Config, readers 
 	} else if hidden > 0 {
 		slog.Debug("transcript.prune", "hidden", hidden)
 	}
-	degradedErr := idx.DegradedReason()
 	if refreshErr != nil && pruneErr != nil {
 		return fmt.Errorf("refresh failed: %v; prune failed: %w", refreshErr, pruneErr)
 	}
@@ -398,7 +426,7 @@ func refreshAndPruneSessions(idx *transcript.Index, cfg *config.Config, readers 
 	if pruneErr != nil {
 		return pruneErr
 	}
-	return degradedErr
+	return nil
 }
 
 // currentSessionQuery snapshots the chip filters + text query into a

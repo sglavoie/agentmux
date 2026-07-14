@@ -34,23 +34,3 @@ func TestHandoffRejectsNegativeValues(t *testing.T) {
 		}
 	}
 }
-
-func TestActivityDefaultsAndValidation(t *testing.T) {
-	cfg, err := parseConfig([]byte(""))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := cfg.Defaults.Activity.KeepDays; got != 30 {
-		t.Fatalf("activity default keep_days = %d, want 30", got)
-	}
-	cfg, err = parseConfig([]byte("[defaults.activity]\nkeep_days = 7\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := cfg.Defaults.Activity.KeepDays; got != 7 {
-		t.Fatalf("activity override keep_days = %d, want 7", got)
-	}
-	if err := Validate(&Config{Defaults: Defaults{Activity: ActivityConfig{KeepDays: -1}}}); err == nil || !strings.Contains(err.Error(), "defaults.activity.keep_days") {
-		t.Fatalf("negative activity keep_days error = %v", err)
-	}
-}

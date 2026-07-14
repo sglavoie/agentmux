@@ -6,12 +6,6 @@ import (
 
 // handleKey dispatches key events by current mode.
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.mode == ModePalette {
-		return m.handlePaletteKey(msg)
-	}
-	if msg.String() == keyPalette && m.paletteCanOpen() {
-		return m.enterPalette(), nil
-	}
 	switch m.mode {
 	case ModeSearch:
 		return m.handleSearchKey(msg)
@@ -31,8 +25,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleSessionSearchKey(msg)
 	case ModePlanSearch:
 		return m.handlePlanSearchKey(msg)
-	case ModeUnifiedSearch:
-		return m.handleUnifiedSearchKey(msg)
 	case ModePlanView:
 		return m.handlePlanViewKey(msg)
 	case ModeSessionView:
@@ -43,8 +35,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleDeleteChoiceKey(msg)
 	case ModeChipPicker:
 		return m.handleChipPickerKey(msg)
-	case ModeWorkspace:
-		return m.handleWorkspaceKey(msg)
 	default:
 		return m.handleListKey(msg)
 	}

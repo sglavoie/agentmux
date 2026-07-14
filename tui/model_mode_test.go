@@ -72,6 +72,14 @@ func TestFKeyDoesNotEnterFilter(t *testing.T) {
 	}
 }
 
+func TestVKeyDoesNotLeaveLiveList(t *testing.T) {
+	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "v")
+	if m.mode != ModeList {
+		t.Fatalf("expected ModeList after v, got %d", m.mode)
+	}
+}
+
 func TestFilterEscRestoresSavedFilter(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	// Commit a filter first.
@@ -253,10 +261,6 @@ func TestFooterChangesWithMode(t *testing.T) {
 	if !strings.Contains(listFooter, "/: filter") {
 		t.Errorf("list footer missing unified filter hint, got:\n%s", listFooter)
 	}
-	if !strings.Contains(listFooter, "v workbench") {
-		t.Errorf("list footer missing secondary Workbench hint, got:\n%s", listFooter)
-	}
-
 	m.mode = ModeSearch
 	searchFooter := renderFooter(m)
 	if !strings.Contains(searchFooter, "enter: apply") {

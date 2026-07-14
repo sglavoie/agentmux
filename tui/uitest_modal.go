@@ -36,12 +36,6 @@ const uitestModalNaturalSize = 10000
 // is already caught by the screen-level height/width checks.
 func modalBoxRenderer(mode Mode) func(Model) string {
 	switch mode {
-	// The palette renderer is width-responsive by design: rows are truncated
-	// before the box is built, so the root screen checks are the authoritative
-	// fit gate. Treating its wide-viewport label lengths as a required natural
-	// width would incorrectly report every narrow palette as squeezed.
-	case ModePalette:
-		return nil
 	case ModeActions:
 		return renderActionsBox
 	case ModeConfirm:

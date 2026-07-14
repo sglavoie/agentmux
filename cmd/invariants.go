@@ -35,11 +35,6 @@ const (
 	checkHarnessDrift          = "harness_drift"
 	checkClosedTombstone       = "closed_tombstone"
 	checkAcknowledgedState     = "acknowledged_state"
-	checkDatastoreIntegrity    = "datastore_integrity"
-	checkDatastoreMigration    = "datastore_migration"
-	checkDatastorePermissions  = "datastore_permissions"
-	checkFTSFreshness          = "fts_freshness"
-	checkActivityWriter        = "activity_writer"
 )
 
 // activeAfterTerminalGracePeriod is the window over which repeated

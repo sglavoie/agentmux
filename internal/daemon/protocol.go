@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"github.com/sglavoie/agentmux/internal/activity"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/conversation"
 )
@@ -99,9 +98,6 @@ type Response struct {
 	// latency, for diagnostics surfaces.
 	Build   *buildinfo.Info  `json:"build,omitempty"`
 	Metrics *MetricsSnapshot `json:"metrics,omitempty"`
-	// ActivityWriter reports the asynchronous work-journal pipeline. A full
-	// queue or SQLite failure is visible here but never changes hook responses.
-	ActivityWriter *activity.Metrics `json:"activity_writer,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial restore
 	// before binding the public socket, or — after a degraded start — later
 	// recovered when a maintenance tick restored durable state from a
