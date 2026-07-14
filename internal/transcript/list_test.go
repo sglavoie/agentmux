@@ -116,6 +116,40 @@ func TestSessionMeta_ProfileMembershipHelpers(t *testing.T) {
 	}
 }
 
+func TestSessionMeta_ProjectMembershipHelpers(t *testing.T) {
+	meta := SessionMeta{
+		Project:  "SS",
+		Projects: []string{"SS", "streamutil", "SS", ""},
+	}
+	gotProjects := meta.ProjectNames()
+	wantProjects := []string{"SS", "streamutil"}
+	if len(gotProjects) != len(wantProjects) {
+		t.Fatalf("ProjectNames len = %d, want %d: %#v", len(gotProjects), len(wantProjects), gotProjects)
+	}
+	for i := range wantProjects {
+		if gotProjects[i] != wantProjects[i] {
+			t.Fatalf("ProjectNames[%d] = %q, want %q; full=%#v", i, gotProjects[i], wantProjects[i], gotProjects)
+		}
+	}
+	if !meta.MatchesAnyProject(nil) {
+		t.Fatal("MatchesAnyProject with no requested projects should be unfiltered")
+	}
+	if !meta.MatchesAnyProject([]string{"streamutil"}) {
+		t.Fatal("MatchesAnyProject did not match Projects membership")
+	}
+	if meta.MatchesAnyProject([]string{"unrelated"}) {
+		t.Fatal("MatchesAnyProject matched unrelated project")
+	}
+
+	legacy := SessionMeta{Project: "legacy"}
+	if got := legacy.ProjectNames(); len(got) != 1 || got[0] != "legacy" {
+		t.Fatalf("legacy ProjectNames = %#v, want [legacy]", got)
+	}
+	if !legacy.MatchesAnyProject([]string{"legacy"}) {
+		t.Fatal("legacy project fallback did not match Project")
+	}
+}
+
 func TestDisplayProfileForGroupPrefersProjectDefaultWithinGroup(t *testing.T) {
 	cfg := &config.Config{
 		Projects: []config.Session{{

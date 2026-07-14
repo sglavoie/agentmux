@@ -328,6 +328,73 @@ func TestChipPickerProfileSelectionMatchesSharedHomeMembership(t *testing.T) {
 	}
 }
 
+func TestChipPickerProjectSelectionMatchesSharedDirectoryMembership(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	shared := transcript.SessionMeta{
+		ID:       "shared-project",
+		Harness:  harness.Claude,
+		Profile:  "work",
+		Project:  "Foo",
+		Projects: []string{"Foo", "Bar"},
+		LastAt:   now,
+		Snippet:  "shared directory transcript",
+	}
+	other := transcript.SessionMeta{
+		ID:      "other-project",
+		Harness: harness.Claude,
+		Profile: "work",
+		Project: "baz",
+		LastAt:  now.Add(-time.Hour),
+		Snippet: "other project transcript",
+	}
+	m := chipPickerSearchModel(t)
+	m.transcriptIndex = writeTranscriptIndex(t, map[string]transcript.SessionMeta{
+		"claude:shared-project": shared,
+		"claude:other-project":  other,
+	})
+	m.transcriptReaders = map[string]transcript.Reader{}
+	m.sessionResults = []transcript.Result{
+		{Meta: shared, Preview: shared.Snippet},
+		{Meta: other, Preview: other.Snippet},
+	}
+
+	m = enterProjectChipPickerForTest(t, m)
+	m = pressKey(m, "/")
+	m = typeString(m, "Bar")
+	m = pressKey(m, "enter")
+
+	updated, cmd := m.Update(keyPress("enter"))
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("selecting Bar returned nil cmd, want debounced session search")
+	}
+	if !slices.Equal(m.filterProject, []string{"Bar"}) {
+		t.Fatalf("filterProject = %#v, want [Bar]", m.filterProject)
+	}
+
+	updated, searchCmd := m.Update(sessionSearchDebounceMsg{seq: m.sessionSearchSeq})
+	m = updated.(Model)
+	doneMsg, ok := drainCmd(t, searchCmd).(sessionSearchDoneMsg)
+	if !ok {
+		t.Fatalf("project selection debounce produced %T, want sessionSearchDoneMsg", doneMsg)
+	}
+	if doneMsg.err != nil {
+		t.Fatalf("project-filtered search returned error: %v", doneMsg.err)
+	}
+	updated, _ = m.Update(doneMsg)
+	m = updated.(Model)
+	if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != shared.ID {
+		t.Fatalf("Bar project filter results = %+v, want only shared transcript", m.sessionResults)
+	}
+	if m.sessionResults[0].Meta.Project != "Foo" {
+		t.Fatalf("stored result project = %q, want stable primary Foo", m.sessionResults[0].Meta.Project)
+	}
+	row := stripAnsi(renderSessionSearchList(m, 10))
+	if !strings.Contains(row, "Bar") || strings.Contains(row, "Foo") {
+		t.Fatalf("filtered shared-project row did not use selected alias:\n%s", row)
+	}
+}
+
 func TestChipPickerNoMatchStateIsSafe(t *testing.T) {
 	for _, tc := range chipPickerSearchCases() {
 		t.Run(tc.name, func(t *testing.T) {

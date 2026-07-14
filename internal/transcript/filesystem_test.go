@@ -38,6 +38,27 @@ func filesystemTranscriptFixture(t *testing.T) (*config.Config, map[string]Reade
 	return cfg, map[string]Reader{harness.Claude: reader}, path
 }
 
+func TestCloneSessionEntriesDeepCopiesMemberships(t *testing.T) {
+	original := map[string]SessionMeta{
+		"claude:shared": {
+			Profiles: []string{"work", "personal"},
+			Projects: []string{"SS", "streamutil"},
+		},
+	}
+	cloned := cloneSessionEntries(original)
+	meta := cloned["claude:shared"]
+	meta.Profiles[0] = "changed-profile"
+	meta.Projects[0] = "changed-project"
+	cloned["claude:shared"] = meta
+
+	if got := original["claude:shared"].Profiles[0]; got != "work" {
+		t.Fatalf("original Profiles[0] = %q after clone mutation, want work", got)
+	}
+	if got := original["claude:shared"].Projects[0]; got != "SS" {
+		t.Fatalf("original Projects[0] = %q after clone mutation, want SS", got)
+	}
+}
+
 func TestFilesystemLoadStrictDiagnosticsAndMalformedRecovery(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")

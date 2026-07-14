@@ -23,7 +23,7 @@ var transcriptsCmd = &cobra.Command{
 
 var transcriptsStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show transcript index and sidecar status",
+	Short: "Show transcript index, sidecar, and orphan usage",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		status, err := transcript.Status(transcriptsIndexPath())
 		if err != nil {
@@ -36,7 +36,7 @@ var transcriptsStatusCmd = &cobra.Command{
 
 var transcriptsCompactCmd = &cobra.Command{
 	Use:   "compact",
-	Short: "Migrate legacy search text and rewrite metadata-only JSON",
+	Short: "Migrate legacy search text and remove orphan sidecars",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		result, err := transcript.Compact(transcriptsIndexPath())
 		if err != nil {
@@ -47,6 +47,8 @@ var transcriptsCompactCmd = &cobra.Command{
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_before: %d\n", result.StatusBefore.MetadataSize)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "metadata_size_after: %d\n", result.StatusAfter.MetadataSize)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.StatusAfter.SidecarCount)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecars_removed: %d\n", result.RemovedOrphanSidecars)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecar_size_removed: %d\n", result.RemovedOrphanSidecarSize)
 		printTranscriptWarnings(cmd, result.Warnings)
 		return nil
 	},
@@ -54,7 +56,7 @@ var transcriptsCompactCmd = &cobra.Command{
 
 var transcriptsRebuildCmd = &cobra.Command{
 	Use:   "rebuild",
-	Short: "Refresh transcripts from configured profiles and rebuild sidecars",
+	Short: "Reparse transcripts from configured profiles and reset sidecars",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := transcriptsLoadConfig()
 		if err != nil {
@@ -72,6 +74,8 @@ var transcriptsRebuildCmd = &cobra.Command{
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "hidden_profile_memberships: %d\n", result.Status.HiddenProfileMemberships)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "shared_profile_entries: %d\n", result.Status.SharedProfileEntries)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "sidecar_count: %d\n", result.Status.SidecarCount)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecars: %d\n", result.Status.OrphanSidecars)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "orphan_sidecar_size: %d\n", result.Status.OrphanSidecarSize)
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "missing_sidecars: %d\n", result.Status.MissingSidecars)
 		printTranscriptWarnings(cmd, result.Warnings)
 		return nil
@@ -85,6 +89,8 @@ func printTranscriptStatus(cmd *cobra.Command, status transcript.StoreStatus) {
 	_, _ = fmt.Fprintf(out, "sidecar_dir: %s\n", status.SidecarDir)
 	_, _ = fmt.Fprintf(out, "sidecar_size: %d\n", status.SidecarSize)
 	_, _ = fmt.Fprintf(out, "sidecar_count: %d\n", status.SidecarCount)
+	_, _ = fmt.Fprintf(out, "orphan_sidecars: %d\n", status.OrphanSidecars)
+	_, _ = fmt.Fprintf(out, "orphan_sidecar_size: %d\n", status.OrphanSidecarSize)
 	_, _ = fmt.Fprintf(out, "visible_entries: %d\n", status.VisibleEntries)
 	_, _ = fmt.Fprintf(out, "hidden_entries: %d\n", status.HiddenEntries)
 	_, _ = fmt.Fprintf(out, "visible_profile_memberships: %d\n", status.VisibleProfileMemberships)

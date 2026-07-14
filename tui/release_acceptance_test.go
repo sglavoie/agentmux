@@ -5,12 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -234,6 +236,79 @@ func TestAcceptanceTUIContinuityForkUsesFilesystemSnapshotWithoutDatabase(t *tes
 		t.Fatalf("mode after continuity fork = %v, want Past Sessions", mode)
 	}
 	assertNoRetiredDatabaseArtifacts(t, home)
+}
+
+func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext(t *testing.T) {
+	root := t.TempDir()
+	sharedDir := filepath.Join(root, "shared")
+	if err := os.MkdirAll(sharedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sourcePath := filepath.Join(root, "shared-session.jsonl")
+	if err := os.WriteFile(sourcePath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	meta := transcript.SessionMeta{
+		ID:       "shared-session",
+		Harness:  harness.Claude,
+		Profile:  "work",
+		Project:  "SS",
+		Projects: []string{"SS", "streamutil"},
+		CWD:      sharedDir,
+		Path:     sourcePath,
+	}
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "work", Harness: harness.Claude}},
+		Projects: []config.Session{
+			{Title: "SS", Directory: sharedDir, Profile: "work"},
+			{Title: "streamutil", Directory: sharedDir, Profile: "work"},
+		},
+	}
+	reader := sessionSearchTestReader{harness: harness.Claude}
+
+	for _, key := range []string{"c", "f"} {
+		t.Run(key, func(t *testing.T) {
+			client := NewUITestKittyClient(nil)
+			m := Model{
+				mode:              ModeSessionSearch,
+				cfg:               cfg,
+				client:            client,
+				filterProject:     []string{"streamutil"},
+				transcriptReaders: map[string]transcript.Reader{harness.Claude: reader},
+				sessionResults:    []transcript.Result{{Meta: meta}},
+				daemonCommand: func(daemon.Request) (daemon.Response, error) {
+					return daemon.Response{OK: true}, nil
+				},
+			}
+
+			updated, cmd := m.Update(keyPress(key))
+			got := updated.(Model)
+			if cmd == nil || got.mode != ModeSessionSearch {
+				t.Fatalf("%s = mode %v cmd %T, want continuity command in Past Sessions", key, got.mode, cmd)
+			}
+			done, ok := cmd().(actionDoneMsg)
+			if !ok {
+				t.Fatalf("%s command produced unexpected message", key)
+			}
+			if done.err != nil {
+				t.Fatalf("%s action failed: %v", key, done.err)
+			}
+			launches := client.CallsFor("LaunchTab")
+			if len(launches) != 1 || launches[0].Opts == nil {
+				t.Fatalf("%s LaunchTab calls = %+v, want one launch", key, launches)
+			}
+			opts := launches[0].Opts
+			if opts.UserVars["amx_project"] != "streamutil" || opts.Directory != sharedDir {
+				t.Fatalf("%s launch = project %q directory %q, want streamutil and %q", key, opts.UserVars["amx_project"], opts.Directory, sharedDir)
+			}
+			if !strings.Contains(strings.Join(opts.Cmdline, " "), meta.ID) {
+				t.Fatalf("%s launch command %q did not retain transcript ID %q", key, strings.Join(opts.Cmdline, " "), meta.ID)
+			}
+			if m.sessionResults[0].Meta.Project != "SS" {
+				t.Fatalf("%s mutated stored project to %q", key, m.sessionResults[0].Meta.Project)
+			}
+		})
+	}
 }
 
 type blockingAcceptanceReader struct {

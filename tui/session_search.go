@@ -173,6 +173,7 @@ func renderSessionSearchList(m Model, height int) string {
 
 	for i := window.start; i < window.end; i++ {
 		res := m.sessionResults[i]
+		res.Meta = m.contextualSessionMeta(res.Meta)
 		line := formatSessionRow(res, acctColor, maxWidth)
 		if i == m.sessionCursor {
 			sb.WriteString(styleSelected.Render(line))

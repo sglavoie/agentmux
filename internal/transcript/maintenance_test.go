@@ -3,6 +3,7 @@ package transcript
 import (
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,9 @@ func TestStatusReportsCountsAndMissingSidecars(t *testing.T) {
 	if err := idx.WriteSearchText(IndexKey(harness.Claude, "visible-ok"), "body"); err != nil {
 		t.Fatalf("WriteSearchText: %v", err)
 	}
+	if err := idx.WriteSearchText(IndexKey(harness.Claude, "orphan"), "unused"); err != nil {
+		t.Fatalf("WriteSearchText orphan: %v", err)
+	}
 	if err := idx.Save(); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -43,8 +47,11 @@ func TestStatusReportsCountsAndMissingSidecars(t *testing.T) {
 		t.Fatalf("profile counts = visible memberships %d hidden memberships %d shared entries %d, want 3/1/1",
 			status.VisibleProfileMemberships, status.HiddenProfileMemberships, status.SharedProfileEntries)
 	}
-	if status.SidecarCount != 1 || status.SidecarSize != int64(len("body")) {
-		t.Fatalf("sidecar stats = count %d size %d, want 1/%d", status.SidecarCount, status.SidecarSize, len("body"))
+	if status.SidecarCount != 2 || status.SidecarSize != int64(len("body")+len("unused")) {
+		t.Fatalf("sidecar stats = count %d size %d, want 2/%d", status.SidecarCount, status.SidecarSize, len("body")+len("unused"))
+	}
+	if status.OrphanSidecars != 1 || status.OrphanSidecarSize != int64(len("unused")) {
+		t.Fatalf("orphan stats = count %d size %d, want 1/%d", status.OrphanSidecars, status.OrphanSidecarSize, len("unused"))
 	}
 	if status.MissingSidecars != 1 || len(status.MissingSidecarKeys) != 1 ||
 		status.MissingSidecarKeys[0] != IndexKey(harness.Codex, "visible-missing") {
@@ -129,6 +136,258 @@ func TestCompactMalformedMetadataQuarantinesAndRepairsInOneRun(t *testing.T) {
 	}
 }
 
+func TestCompactRemovesOnlyOrphanRegularSidecars(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "transcripts.json")
+	sourcePath := filepath.Join(dir, "source.jsonl")
+	if err := os.WriteFile(sourcePath, []byte("authoritative transcript"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referencedKey := IndexKey(harness.Claude, "referenced")
+	idx.entries[referencedKey] = SessionMeta{
+		ID: "referenced", Harness: harness.Claude, Path: sourcePath, MessageCount: 1,
+	}
+	if err := idx.WriteSearchText(referencedKey, "referenced body"); err != nil {
+		t.Fatal(err)
+	}
+	orphanKey := IndexKey(harness.Codex, "orphan")
+	if err := idx.WriteSearchText(orphanKey, "orphan body"); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	notesPath := filepath.Join(idx.SearchStoreDir(), "notes.md")
+	if err := os.WriteFile(notesPath, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	temporaryPath := idx.SearchTextPath("temporary") + ".tmp"
+	if err := os.WriteFile(temporaryPath, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	directoryPath := idx.SearchTextPath("directory")
+	if err := os.Mkdir(directoryPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "symlink-target")
+	if err := os.WriteFile(target, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlinkPath := idx.SearchTextPath("symlink")
+	if err := os.Symlink(target, symlinkPath); err != nil {
+		t.Skipf("creating symlink: %v", err)
+	}
+
+	result, err := Compact(path)
+	if err != nil {
+		t.Fatalf("Compact: %v", err)
+	}
+	if result.RemovedOrphanSidecars != 1 || result.RemovedOrphanSidecarSize != int64(len("orphan body")) {
+		t.Fatalf("removed orphan stats = %d/%d, want 1/%d", result.RemovedOrphanSidecars, result.RemovedOrphanSidecarSize, len("orphan body"))
+	}
+	if result.StatusBefore.OrphanSidecars != 1 || result.StatusAfter.OrphanSidecars != 0 {
+		t.Fatalf("orphan status before/after = %d/%d, want 1/0", result.StatusBefore.OrphanSidecars, result.StatusAfter.OrphanSidecars)
+	}
+	if result.StatusAfter.SidecarCount != 1 {
+		t.Fatalf("sidecar count after = %d, want 1", result.StatusAfter.SidecarCount)
+	}
+	for _, preserved := range []string{idx.SearchTextPath(referencedKey), sourcePath, notesPath, temporaryPath, directoryPath, symlinkPath, target} {
+		if _, err := os.Lstat(preserved); err != nil {
+			t.Errorf("preserved artifact %s: %v", preserved, err)
+		}
+	}
+	if _, err := os.Stat(idx.SearchTextPath(orphanKey)); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("orphan sidecar still exists or stat failed: %v", err)
+	}
+}
+
+func TestCompactPrunesAfterPersistenceWhileHoldingAdvisoryLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	key := IndexKey(harness.Claude, "legacy")
+	body, err := json.Marshal(indexFile{Entries: map[string]SessionMeta{
+		key: {ID: "legacy", Harness: harness.Claude, MessageCount: 1, SearchText: "legacy body"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	idx := newFilesystemIndex(path)
+	if err := idx.WriteSearchText(IndexKey(harness.Codex, "orphan"), "orphan"); err != nil {
+		t.Fatal(err)
+	}
+
+	removedUnderLock := false
+	metadataPersisted := false
+	originalRemove := removeTranscriptSearchSidecar
+	removeTranscriptSearchSidecar = func(sidecarPath string) error {
+		lockFile, openErr := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+		if openErr != nil {
+			return openErr
+		}
+		defer func() { _ = lockFile.Close() }()
+		lockErr := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+		if lockErr == nil {
+			_ = unix.Flock(int(lockFile.Fd()), unix.LOCK_UN)
+			return errors.New("transcript orphan sidecar removed without advisory lock")
+		}
+		if !errors.Is(lockErr, unix.EWOULDBLOCK) && !errors.Is(lockErr, unix.EAGAIN) {
+			return lockErr
+		}
+		removedUnderLock = true
+		metadata, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if strings.Contains(string(metadata), "search_text") {
+			return errors.New("orphan pruning ran before legacy metadata migration persisted")
+		}
+		metadataPersisted = true
+		return os.Remove(sidecarPath)
+	}
+	t.Cleanup(func() { removeTranscriptSearchSidecar = originalRemove })
+
+	result, err := Compact(path)
+	if err != nil {
+		t.Fatalf("Compact: %v", err)
+	}
+	if !removedUnderLock || !metadataPersisted {
+		t.Fatalf("compact removal lock/persistence checks = %v/%v, want true/true", removedUnderLock, metadataPersisted)
+	}
+	if result.LegacyFields != 1 || result.RemovedOrphanSidecars != 1 {
+		t.Fatalf("compact result = legacy %d removed %d, want 1/1", result.LegacyFields, result.RemovedOrphanSidecars)
+	}
+}
+
+func TestCompactFailuresBeforePruningPreserveOrphans(t *testing.T) {
+	t.Run("initial load", func(t *testing.T) {
+		path, orphanPath := compactOrphanFixture(t)
+		originalRead := readTranscriptIndexFile
+		readTranscriptIndexFile = func(string) ([]byte, error) { return nil, errors.New("read failed") }
+		t.Cleanup(func() { readTranscriptIndexFile = originalRead })
+
+		if _, err := Compact(path); err == nil {
+			t.Fatal("Compact succeeded after initial load failure")
+		}
+		if _, err := os.Stat(orphanPath); err != nil {
+			t.Fatalf("orphan removed after initial load failure: %v", err)
+		}
+	})
+
+	t.Run("locked reload", func(t *testing.T) {
+		path, orphanPath := compactOrphanFixture(t)
+		originalRead := readTranscriptIndexFile
+		reads := 0
+		readTranscriptIndexFile = func(readPath string) ([]byte, error) {
+			reads++
+			if reads == 2 {
+				return nil, errors.New("reload failed")
+			}
+			return originalRead(readPath)
+		}
+		t.Cleanup(func() { readTranscriptIndexFile = originalRead })
+
+		if _, err := Compact(path); err == nil {
+			t.Fatal("Compact succeeded after locked reload failure")
+		}
+		if _, err := os.Stat(orphanPath); err != nil {
+			t.Fatalf("orphan removed after locked reload failure: %v", err)
+		}
+	})
+
+	t.Run("metadata write", func(t *testing.T) {
+		path, orphanPath := compactOrphanFixture(t)
+		originalWrite := writeTranscriptIndex
+		writeTranscriptIndex = func(string, []byte, os.FileMode) error { return errors.New("disk full") }
+		t.Cleanup(func() { writeTranscriptIndex = originalWrite })
+
+		if _, err := Compact(path); err == nil {
+			t.Fatal("Compact succeeded after metadata write failure")
+		}
+		if _, err := os.Stat(orphanPath); err != nil {
+			t.Fatalf("orphan removed after metadata write failure: %v", err)
+		}
+	})
+}
+
+func TestCompactPartialDeletionReturnsActualRemovalAndPreservesReferences(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referencedKey := IndexKey(harness.Claude, "referenced")
+	idx.entries[referencedKey] = SessionMeta{ID: "referenced", Harness: harness.Claude, MessageCount: 1}
+	if err := idx.WriteSearchText(referencedKey, "referenced"); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Save(); err != nil {
+		t.Fatal(err)
+	}
+	orphanKeys := []string{IndexKey(harness.Codex, "orphan-a"), IndexKey(harness.Copilot, "orphan-b")}
+	for _, key := range orphanKeys {
+		if err := idx.WriteSearchText(key, "orphan"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	removeCalls := 0
+	originalRemove := removeTranscriptSearchSidecar
+	removeTranscriptSearchSidecar = func(sidecarPath string) error {
+		removeCalls++
+		if removeCalls == 2 {
+			return errors.New("injected removal failure")
+		}
+		return os.Remove(sidecarPath)
+	}
+	t.Cleanup(func() { removeTranscriptSearchSidecar = originalRemove })
+
+	result, err := Compact(path)
+	if err == nil || !strings.Contains(err.Error(), "injected removal failure") {
+		t.Fatalf("Compact error = %v, want injected removal failure", err)
+	}
+	if result.RemovedOrphanSidecars != 1 || result.RemovedOrphanSidecarSize != int64(len("orphan")) {
+		t.Fatalf("partial removed stats = %d/%d, want 1/%d", result.RemovedOrphanSidecars, result.RemovedOrphanSidecarSize, len("orphan"))
+	}
+	if ok, err := idx.SearchTextExists(referencedKey); err != nil || !ok {
+		t.Fatalf("referenced sidecar preserved = %v, %v", ok, err)
+	}
+	remaining := 0
+	for _, key := range orphanKeys {
+		if _, err := os.Stat(idx.SearchTextPath(key)); err == nil {
+			remaining++
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			t.Fatal(err)
+		}
+	}
+	if remaining != 1 {
+		t.Fatalf("remaining orphan sidecars = %d, want 1", remaining)
+	}
+}
+
+func compactOrphanFixture(t *testing.T) (path string, orphanPath string) {
+	t.Helper()
+	path = filepath.Join(t.TempDir(), "transcripts.json")
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Save(); err != nil {
+		t.Fatal(err)
+	}
+	orphanKey := IndexKey(harness.Claude, "orphan")
+	if err := idx.WriteSearchText(orphanKey, "orphan"); err != nil {
+		t.Fatal(err)
+	}
+	return path, idx.SearchTextPath(orphanKey)
+}
+
 func TestRebuildDeletesOldSidecarsAndHonorsAllOption(t *testing.T) {
 	tmp := t.TempDir()
 	idx, err := LoadIndexAt(filepath.Join(tmp, "transcripts.json"))
@@ -165,8 +424,8 @@ func TestRebuildDeletesOldSidecarsAndHonorsAllOption(t *testing.T) {
 	if !gotMinTime.IsZero() {
 		t.Fatalf("Rebuild --all MinTime = %v, want zero", gotMinTime)
 	}
-	if result.Status.SidecarCount != 1 || result.Status.MissingSidecars != 0 {
-		t.Fatalf("status after rebuild = sidecars %d missing %d", result.Status.SidecarCount, result.Status.MissingSidecars)
+	if result.Status.SidecarCount != 1 || result.Status.MissingSidecars != 0 || result.Status.OrphanSidecars != 0 {
+		t.Fatalf("status after rebuild = sidecars %d missing %d orphans %d", result.Status.SidecarCount, result.Status.MissingSidecars, result.Status.OrphanSidecars)
 	}
 	if _, err := os.Stat(idx.SearchTextPath(staleKey)); !os.IsNotExist(err) {
 		t.Fatalf("stale sidecar still exists or stat failed: %v", err)

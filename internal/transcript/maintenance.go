@@ -18,6 +18,8 @@ type StoreStatus struct {
 	SidecarDir                string
 	SidecarCount              int
 	SidecarSize               int64
+	OrphanSidecars            int
+	OrphanSidecarSize         int64
 	VisibleEntries            int
 	HiddenEntries             int
 	VisibleProfileMemberships int
@@ -52,12 +54,20 @@ func statusForIndex(path string, idx *Index) (StoreStatus, error) {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return StoreStatus{}, err
 	}
-	count, size, err := idx.SearchStoreStats()
+	idx.mu.Lock()
+	keys := make([]string, 0, len(idx.entries))
+	for key := range idx.entries {
+		keys = append(keys, key)
+	}
+	idx.mu.Unlock()
+	inventory, err := idx.store.Inventory(keys)
 	if err != nil {
 		return StoreStatus{}, err
 	}
-	status.SidecarCount = count
-	status.SidecarSize = size
+	status.SidecarCount = inventory.Count
+	status.SidecarSize = inventory.Size
+	status.OrphanSidecars = len(inventory.Orphans)
+	status.OrphanSidecarSize = inventory.OrphanSize
 
 	for _, meta := range idx.List(ListFilter{IncludeHidden: true}) {
 		key := IndexKey(meta.Harness, meta.ID)
@@ -89,14 +99,16 @@ func statusForIndex(path string, idx *Index) (StoreStatus, error) {
 
 // CompactResult reports what compact observed and rewrote.
 type CompactResult struct {
-	StatusBefore StoreStatus
-	StatusAfter  StoreStatus
-	LegacyFields int
-	Warnings     []string
+	StatusBefore             StoreStatus
+	StatusAfter              StoreStatus
+	LegacyFields             int
+	RemovedOrphanSidecars    int
+	RemovedOrphanSidecarSize int64
+	Warnings                 []string
 }
 
-// Compact migrates legacy inline search_text into sidecars and rewrites the
-// metadata file without search text.
+// Compact migrates legacy inline search_text, rewrites metadata, and removes
+// regular hashed sidecars that are absent from the latest cache snapshot.
 func Compact(path string) (CompactResult, error) {
 	idx, loadWarning, err := loadMaintenanceIndex(path)
 	if err != nil {
@@ -107,20 +119,27 @@ func Compact(path string) (CompactResult, error) {
 		return CompactResult{}, err
 	}
 	before.Warnings = appendWarning(before.Warnings, loadWarning)
-	legacyFields, err := countLegacySearchTextFields(path)
-	if err != nil {
-		return CompactResult{}, err
+	compact, compactErr := idx.compactFilesystem()
+	warnings := append([]string(nil), before.Warnings...)
+	warnings = appendWarning(warnings, compact.Warning)
+	result := CompactResult{
+		StatusBefore:             before,
+		LegacyFields:             compact.LegacyFields,
+		RemovedOrphanSidecars:    compact.RemovedOrphanSidecars,
+		RemovedOrphanSidecarSize: compact.RemovedOrphanSidecarSize,
+		Warnings:                 warnings,
 	}
-	if err := idx.Save(); err != nil {
-		return CompactResult{}, err
+	if compactErr != nil {
+		return result, compactErr
 	}
 	after, err := Status(path)
 	if err != nil {
-		return CompactResult{}, err
+		return result, err
 	}
-	warnings := append([]string(nil), before.Warnings...)
 	warnings = append(warnings, after.Warnings...)
-	return CompactResult{StatusBefore: before, StatusAfter: after, LegacyFields: legacyFields, Warnings: warnings}, nil
+	result.StatusAfter = after
+	result.Warnings = warnings
+	return result, nil
 }
 
 // RebuildResult reports the state after a sidecar rebuild.

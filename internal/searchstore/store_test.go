@@ -278,3 +278,62 @@ func TestStats_CountsRegularTxtFilesOnly(t *testing.T) {
 		t.Errorf("size = %d, want %d", size, len("aaa")+len("bbbbb"))
 	}
 }
+
+func TestInventoryClassifiesExpectedMissingAndOrphanSidecars(t *testing.T) {
+	s := newTestStore(t)
+	const (
+		referencedKey = "claude:referenced"
+		missingKey    = "codex:missing"
+		directoryKey  = "copilot:directory"
+		symlinkKey    = "claude:symlink"
+		orphanKey     = "codex:orphan"
+	)
+	if err := s.Write(referencedKey, "referenced"); err != nil {
+		t.Fatalf("Write referenced: %v", err)
+	}
+	if err := s.Write(orphanKey, "orphan"); err != nil {
+		t.Fatalf("Write orphan: %v", err)
+	}
+	if err := os.Mkdir(s.Path(directoryKey), 0o755); err != nil {
+		t.Fatalf("Mkdir hash-named artifact: %v", err)
+	}
+	target := filepath.Join(t.TempDir(), "target.txt")
+	if err := os.WriteFile(target, []byte("outside"), 0o644); err != nil {
+		t.Fatalf("WriteFile symlink target: %v", err)
+	}
+	if err := os.Symlink(target, s.Path(symlinkKey)); err != nil {
+		t.Skipf("creating symlink: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir(), strings.Repeat("g", sha256.Size*2)+".txt"), []byte("malformed"), 0o644); err != nil {
+		t.Fatalf("WriteFile malformed name: %v", err)
+	}
+	if err := os.WriteFile(s.Path(referencedKey)+".tmp", []byte("temporary"), 0o644); err != nil {
+		t.Fatalf("WriteFile temporary artifact: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir(), "notes.md"), []byte("unrelated"), 0o644); err != nil {
+		t.Fatalf("WriteFile unrelated artifact: %v", err)
+	}
+
+	inventory, err := s.Inventory([]string{referencedKey, missingKey, directoryKey, symlinkKey})
+	if err != nil {
+		t.Fatalf("Inventory: %v", err)
+	}
+	if inventory.Count != 2 || inventory.Size != int64(len("referenced")+len("orphan")) {
+		t.Fatalf("sidecars = count %d size %d, want 2/%d", inventory.Count, inventory.Size, len("referenced")+len("orphan"))
+	}
+	wantMissing := []string{missingKey, directoryKey, symlinkKey}
+	if len(inventory.MissingKeys) != len(wantMissing) {
+		t.Fatalf("MissingKeys = %v, want %v", inventory.MissingKeys, wantMissing)
+	}
+	for i, want := range wantMissing {
+		if inventory.MissingKeys[i] != want {
+			t.Fatalf("MissingKeys = %v, want %v", inventory.MissingKeys, wantMissing)
+		}
+	}
+	if len(inventory.Orphans) != 1 || inventory.Orphans[0].Path != s.Path(orphanKey) || inventory.Orphans[0].Size != int64(len("orphan")) {
+		t.Fatalf("Orphans = %+v, want only %s", inventory.Orphans, s.Path(orphanKey))
+	}
+	if inventory.OrphanSize != int64(len("orphan")) {
+		t.Fatalf("OrphanSize = %d, want %d", inventory.OrphanSize, len("orphan"))
+	}
+}

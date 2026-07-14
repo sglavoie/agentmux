@@ -233,6 +233,14 @@ rows keep a stable display profile but remain searchable under every candidate
 profile because older transcript files do not reliably encode the exact launch
 profile.
 
+Projects configured with the same directory intentionally share that
+directory's transcript history. The first configured project remains the
+stable title in unfiltered Past Sessions, while selecting another shared
+project alias shows that alias in result rows and carries it through viewing,
+continuing, forking, handoff, and deletion prompts. The project picker remains
+configuration-backed, so every configured alias stays selectable even when it
+is not the stored primary title.
+
 - `/` enters a free-text query; results scan matching source transcripts on
   demand and show the per-session match count.
 - `h`, `p`, and `r` open single-value chip pickers for harness, profile,
@@ -255,6 +263,15 @@ amx transcripts compact
 amx transcripts rebuild --all
 ```
 
+`status` is read-only and reports metadata, sidecar, missing-sidecar, and
+orphan-sidecar usage. `compact` takes the transcript cache lock, migrates any
+legacy inline search text, persists metadata, and then removes only regular
+hash-named sidecars that are no longer referenced by a cache key. It preserves
+referenced sidecars, transcript source files, temporary files, symlinks,
+directories, and unrelated artifacts. `rebuild --all` is the complete reset:
+it reparses every discoverable source transcript and recreates the entire
+disposable sidecar store. Normal refreshes never compact orphan sidecars.
+
 Retention is controlled by `[defaults.session_archive] keep_days` (default
 30). Refresh and prune operations hide cache entries older than `keep_days`;
 the on-disk transcript files remain intact unless explicitly deleted. Each
@@ -275,7 +292,7 @@ Agent Mux does not use SQLite. Local files have deliberately narrow ownership:
 
 | Path | Ownership and cleanup |
 | --- | --- |
-| `~/.local/share/agent-mux/transcripts.json` and `transcripts.search/` | Disposable metadata and search caches rebuilt from harness transcript files. Malformed metadata is renamed with a `.corrupt-<timestamp>` suffix. |
+| `~/.local/share/agent-mux/transcripts.json` and `transcripts.search/` | Disposable metadata and search caches rebuilt from harness transcript files. Malformed metadata is renamed with a `.corrupt-<timestamp>` suffix; orphan sidecars are measured by `transcripts status`, pruned explicitly by `transcripts compact`, or fully reset by `transcripts rebuild --all`. |
 | `~/.local/share/agent-mux/plans.json` and `plans.search/` | Disposable metadata and search caches rebuilt from directories under `plans_directory`. |
 | `~/.local/share/agent-mux/handoffs/` | Private standalone Markdown artifacts. Successful and partially launched handoffs remain until you delete them. |
 | `~/.local/share/agent-mux/worktrees/` | Ordinary registered Git worktrees. Successful launches remain until you remove them with Git; a failed launch removes only the worktree created for that attempt. |

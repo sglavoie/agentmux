@@ -3,6 +3,7 @@ package transcript
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -126,6 +127,10 @@ func TestRefresh_MissingSidecarInvalidatesUnchangedCache(t *testing.T) {
 
 func TestRefresh_PreservesEntriesBeyondCutoff(t *testing.T) {
 	tmp := t.TempDir()
+	projectDir := filepath.Join(tmp, "shared-project")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll project: %v", err)
+	}
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-old.jsonl")
 	writeTranscript(t, transcriptPath, "{}\n")
 
@@ -147,6 +152,10 @@ func TestRefresh_PreservesEntriesBeyondCutoff(t *testing.T) {
 			Harness: harness.Claude,
 			HomeDir: filepath.Join(tmp, "home"),
 		}},
+		Projects: []config.Session{
+			{Title: "SS", Directory: projectDir, Profile: "work"},
+			{Title: "streamutil", Directory: projectDir, Profile: "work"},
+		},
 	}
 
 	var sawPaths []string
@@ -170,15 +179,19 @@ func TestRefresh_PreservesEntriesBeyondCutoff(t *testing.T) {
 	idx := newTestIndex(t)
 	key := IndexKey(harness.Claude, "sess-old")
 	primed := SessionMeta{
-		ID:           "sess-old",
-		Harness:      harness.Claude,
-		Path:         transcriptPath,
-		FileSize:     stat.Size(),
-		FileModTime:  stat.ModTime(),
-		MessageCount: 99,
-		Snippet:      "ancient",
-		StartedAt:    oldTime,
-		LastAt:       oldTime,
+		ID:              "sess-old",
+		Harness:         harness.Claude,
+		Profile:         "work",
+		Project:         "legacy-project",
+		CWD:             projectDir,
+		Path:            transcriptPath,
+		FileSize:        stat.Size(),
+		FileModTime:     stat.ModTime(),
+		MessageCount:    99,
+		Snippet:         "ancient",
+		StartedAt:       oldTime,
+		LastAt:          oldTime,
+		HiddenFromIndex: true,
 	}
 	must(t, idx.SetEntryForTest(key, primed))
 
@@ -197,6 +210,20 @@ func TestRefresh_PreservesEntriesBeyondCutoff(t *testing.T) {
 	}
 	if got.Snippet != "ancient" {
 		t.Errorf("Snippet = %q, want %q (untouched)", got.Snippet, "ancient")
+	}
+	if got.Project != "SS" || !slices.Equal(got.Projects, []string{"SS", "streamutil"}) {
+		t.Fatalf("old cached project classification = %q %#v, want SS [SS streamutil]", got.Project, got.Projects)
+	}
+	if !got.HiddenFromIndex {
+		t.Fatal("old cached entry lost HiddenFromIndex during metadata-only reclassification")
+	}
+	persisted, err := LoadIndexAt(idx.Path())
+	if err != nil {
+		t.Fatalf("LoadIndexAt persisted cache: %v", err)
+	}
+	persistedMeta, ok := persisted.Get(key)
+	if !ok || persistedMeta.Project != "SS" || !slices.Equal(persistedMeta.Projects, []string{"SS", "streamutil"}) {
+		t.Fatalf("persisted old classification = %+v found=%t", persistedMeta, ok)
 	}
 }
 

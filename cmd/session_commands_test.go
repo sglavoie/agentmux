@@ -148,7 +148,13 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 	discoverCalls := 0
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: dir}}}, nil
+		return &config.Config{
+			Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: dir}},
+			Projects: []config.Session{
+				{Title: "Primary", Directory: dir, Profile: "work"},
+				{Title: "Alias", Directory: dir, Profile: "work"},
+			},
+		}, nil
 	}
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
 		return map[string]transcript.Reader{harness.Codex: sessionCommandReader{
@@ -174,6 +180,10 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 	if payload.SchemaVersion != JSONSchemaVersion || len(payload.Data.Sessions) != 1 || payload.Data.Sessions[0].ID != meta.ID {
 		t.Fatalf("payload = %+v", payload)
 	}
+	view := payload.Data.Sessions[0]
+	if view.Project != "Primary" || strings.Join(view.Projects, ",") != "Primary,Alias" {
+		t.Fatalf("session JSON projects = %q %#v, want Primary [Primary Alias]", view.Project, view.Projects)
+	}
 	persisted, err := transcript.LoadIndexAt(indexPath)
 	if err != nil {
 		t.Fatal(err)
@@ -189,7 +199,7 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 	if err := sessionListCmd.RunE(sessionListCmd, nil); err != nil {
 		t.Fatalf("text list: %v", err)
 	}
-	if got := out.String(); !strings.Contains(got, "codex\twork\t") || !strings.Contains(got, "\tfresh\n") {
+	if got := out.String(); !strings.Contains(got, "codex\twork\tPrimary\t") || !strings.Contains(got, "\tfresh\n") || strings.Contains(got, "Alias") {
 		t.Fatalf("text list = %q", got)
 	}
 	assertNoRetiredDatabaseState(t, home, "session list")

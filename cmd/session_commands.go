@@ -286,6 +286,7 @@ type sessionView struct {
 	Profile      string    `json:"profile"`
 	Profiles     []string  `json:"profiles"`
 	Project      string    `json:"project"`
+	Projects     []string  `json:"projects"`
 	CWD          string    `json:"cwd"`
 	StartedAt    time.Time `json:"started_at"`
 	LastAt       time.Time `json:"last_at"`
@@ -299,7 +300,7 @@ type sessionView struct {
 func sessionViews(items []transcript.SessionMeta) []sessionView {
 	out := make([]sessionView, 0, len(items))
 	for _, item := range items {
-		out = append(out, sessionView{ID: item.ID, Harness: item.Harness, Profile: item.DisplayProfile(), Profiles: append([]string{}, item.ProfileNames()...), Project: item.Project, CWD: item.CWD, StartedAt: item.StartedAt, LastAt: item.LastAt, Path: item.Path, FileSize: item.FileSize, FileModTime: item.FileModTime, MessageCount: item.MessageCount, Snippet: item.Snippet})
+		out = append(out, sessionView{ID: item.ID, Harness: item.Harness, Profile: item.DisplayProfile(), Profiles: append([]string{}, item.ProfileNames()...), Project: item.Project, Projects: append([]string{}, item.ProjectNames()...), CWD: item.CWD, StartedAt: item.StartedAt, LastAt: item.LastAt, Path: item.Path, FileSize: item.FileSize, FileModTime: item.FileModTime, MessageCount: item.MessageCount, Snippet: item.Snippet})
 	}
 	return out
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/searchstore"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -58,6 +59,9 @@ func TestTranscriptsStatusCommandPrintsStoreStatus(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
+	if err := searchstore.New(path).Write("claude:orphan", "junk"); err != nil {
+		t.Fatalf("Write orphan sidecar: %v", err)
+	}
 
 	var out bytes.Buffer
 	transcriptsStatusCmd.SetOut(&out)
@@ -72,6 +76,8 @@ func TestTranscriptsStatusCommandPrintsStoreStatus(t *testing.T) {
 		"visible_profile_memberships: 2",
 		"shared_profile_entries: 1",
 		"missing_sidecars: 1",
+		"orphan_sidecars: 1",
+		"orphan_sidecar_size: 4",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status output missing %q:\n%s", want, got)
@@ -100,6 +106,9 @@ func TestTranscriptsCompactCommandPrintsSummary(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
+	if err := searchstore.New(path).Write("claude:orphan", "unused"); err != nil {
+		t.Fatalf("Write orphan sidecar: %v", err)
+	}
 
 	var out bytes.Buffer
 	transcriptsCompactCmd.SetOut(&out)
@@ -109,7 +118,9 @@ func TestTranscriptsCompactCommandPrintsSummary(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, "compacted transcript index") ||
 		!strings.Contains(got, "legacy_search_text_entries: 1") ||
-		!strings.Contains(got, "sidecar_count: 1") {
+		!strings.Contains(got, "sidecar_count: 1") ||
+		!strings.Contains(got, "orphan_sidecars_removed: 1") ||
+		!strings.Contains(got, "orphan_sidecar_size_removed: 6") {
 		t.Fatalf("compact output did not include expected summary:\n%s", got)
 	}
 }
@@ -185,6 +196,8 @@ func TestTranscriptsRebuildCommandPrintsProfileMembershipSummary(t *testing.T) {
 		"visible_profile_memberships: 2",
 		"shared_profile_entries: 1",
 		"sidecar_count: 1",
+		"orphan_sidecars: 0",
+		"orphan_sidecar_size: 0",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("rebuild output missing %q:\n%s", want, got)

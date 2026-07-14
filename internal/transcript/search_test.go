@@ -82,6 +82,36 @@ func TestSearch_ProfileFilterMatchesProfilesMembership(t *testing.T) {
 	}
 }
 
+func TestSearch_ProjectFilterMatchesProjectsMembership(t *testing.T) {
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:shared", SessionMeta{
+		ID:       "shared",
+		Harness:  harness.Claude,
+		Project:  "SS",
+		Projects: []string{"SS", "streamutil"},
+		Snippet:  "shared project",
+		LastAt:   time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC),
+	}))
+
+	for _, project := range []string{"SS", "streamutil"} {
+		results, err := Search(idx, nil, Query{Project: []string{project}})
+		if err != nil {
+			t.Fatalf("Search project %q: %v", project, err)
+		}
+		if len(results) != 1 || results[0].Meta.ID != "shared" {
+			t.Fatalf("project membership search %q returned %+v, want shared", project, results)
+		}
+	}
+
+	results, err := Search(idx, nil, Query{Project: []string{"unrelated"}})
+	if err != nil {
+		t.Fatalf("Search unrelated project: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("unrelated project search returned %+v, want no results", results)
+	}
+}
+
 func TestSearch_TextFiltersAndCountsMatches(t *testing.T) {
 	idx := newTestIndex(t)
 	hitKey := "claude:hit"

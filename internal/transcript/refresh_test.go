@@ -136,6 +136,122 @@ func TestRefresh_SharedHomeProfilesKeepStableDisplayAndFilterMembership(t *testi
 	}
 }
 
+func TestRefresh_DuplicateDirectoryProjectsKeepOrderedMembership(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude-home")
+	projectDir := filepath.Join(tmp, "shared-project")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll project: %v", err)
+	}
+	transcriptPath := filepath.Join(home, "projects", "shared", "sess-shared-project.jsonl")
+	info := writeTranscript(t, transcriptPath, "{}\n")
+
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: harness.Claude, HomeDir: home},
+			{Name: "personal", Harness: harness.Claude, HomeDir: home},
+		},
+		Projects: []config.Session{
+			{Title: "SS", Directory: projectDir, Profile: "work"},
+			{Title: "streamutil", Directory: projectDir, Profile: "personal"},
+		},
+	}
+	fr := &fakeReader{
+		harness: harness.Claude,
+		discover: func(string, DiscoverOptions) ([]SessionMeta, error) {
+			return []SessionMeta{{
+				ID: "sess-shared-project", Harness: harness.Claude, CWD: projectDir,
+				Path: transcriptPath, FileSize: info.Size(), FileModTime: info.ModTime(),
+				MessageCount: 1, Snippet: "shared project",
+			}}, nil
+		},
+	}
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	key := IndexKey(harness.Claude, "sess-shared-project")
+	got, ok := idx.Get(key)
+	if !ok {
+		t.Fatal("shared-project entry missing after Refresh")
+	}
+	if got.Project != "SS" || !slices.Equal(got.Projects, []string{"SS", "streamutil"}) {
+		t.Fatalf("project classification = %q %#v, want SS [SS streamutil]", got.Project, got.Projects)
+	}
+	if got.Profile != "work" {
+		t.Fatalf("display Profile = %q, want first match profile work", got.Profile)
+	}
+	for _, project := range []string{"SS", "streamutil"} {
+		matches := idx.List(ListFilter{Project: []string{project}})
+		if len(matches) != 1 || matches[0].ID != got.ID {
+			t.Fatalf("project filter %q returned %+v, want shared session", project, matches)
+		}
+	}
+	if matches := idx.List(ListFilter{Project: []string{"unrelated"}}); len(matches) != 0 {
+		t.Fatalf("unrelated project filter returned %+v", matches)
+	}
+
+	cfg.Projects[0], cfg.Projects[1] = cfg.Projects[1], cfg.Projects[0]
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("Refresh after configuration reorder: %v", err)
+	}
+	got, _ = idx.Get(key)
+	if got.Project != "streamutil" || !slices.Equal(got.Projects, []string{"streamutil", "SS"}) {
+		t.Fatalf("reordered classification = %q %#v, want streamutil [streamutil SS]", got.Project, got.Projects)
+	}
+	if got.Profile != "personal" {
+		t.Fatalf("reordered display Profile = %q, want first match profile personal", got.Profile)
+	}
+
+	saves := 0
+	saveLockedHookForTest = func() { saves++ }
+	t.Cleanup(func() { saveLockedHookForTest = nil })
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("unchanged Refresh: %v", err)
+	}
+	if saves != 0 {
+		t.Fatalf("unchanged project classification persisted cache %d times, want 0", saves)
+	}
+}
+
+func TestRefresh_CachedEntryWithoutCWDKeepsProjectMetadata(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude-home")
+	transcriptPath := filepath.Join(home, "projects", "legacy", "sess-no-cwd.jsonl")
+	info := writeTranscript(t, transcriptPath, "{}\n")
+	key := IndexKey(harness.Claude, "sess-no-cwd")
+
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest(key, SessionMeta{
+		ID: "sess-no-cwd", Harness: harness.Claude, Profile: "work",
+		Project: "Legacy", Projects: []string{"Legacy", "Legacy Alias"},
+		Path: transcriptPath, FileSize: info.Size(), FileModTime: info.ModTime(),
+	}))
+	fr := &fakeReader{
+		harness: harness.Claude,
+		discover: func(_ string, opts DiscoverOptions) ([]SessionMeta, error) {
+			cached, ok := opts.Cached(transcriptPath, info.Size(), info.ModTime())
+			if !ok {
+				t.Fatal("cached entry without CWD was reparsed")
+			}
+			return []SessionMeta{cached}, nil
+		},
+	}
+	cfg := &config.Config{
+		Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}},
+		Projects: []config.Session{{Title: "Other", Directory: filepath.Join(tmp, "other")}},
+	}
+
+	if err := idx.Refresh(cfg, map[string]Reader{harness.Claude: fr}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	got, ok := idx.Get(key)
+	if !ok || got.Project != "Legacy" || !slices.Equal(got.Projects, []string{"Legacy", "Legacy Alias"}) {
+		t.Fatalf("cached no-CWD project metadata = %+v found=%t", got, ok)
+	}
+}
+
 func TestRefresh_DuplicateProjectTitleUsesMatchedDirectoryProfile(t *testing.T) {
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "claude-home")
@@ -223,11 +339,10 @@ func TestRefresh_GitLinkedWorktreeUsesConfiguredParentProjectAndProfile(t *testi
 			{Name: "work", Harness: harness.Claude, HomeDir: home},
 			{Name: "personal", Harness: harness.Claude, HomeDir: home},
 		},
-		Projects: []config.Session{{
-			Title:     "API",
-			Directory: projectDir,
-			Profile:   "work",
-		}},
+		Projects: []config.Session{
+			{Title: "API", Directory: projectDir, Profile: "work"},
+			{Title: "API-alias", Directory: projectDir, Profile: "personal"},
+		},
 	}
 	fr := &fakeReader{
 		harness: harness.Claude,
@@ -261,6 +376,9 @@ func TestRefresh_GitLinkedWorktreeUsesConfiguredParentProjectAndProfile(t *testi
 	}
 	if got.Project != "API" {
 		t.Fatalf("Project = %q, want API", got.Project)
+	}
+	if !slices.Equal(got.Projects, []string{"API", "API-alias"}) {
+		t.Fatalf("Projects = %v, want [API API-alias]", got.Projects)
 	}
 	if got.Profile != "work" {
 		t.Fatalf("Profile = %q, want linked worktree matched profile work", got.Profile)

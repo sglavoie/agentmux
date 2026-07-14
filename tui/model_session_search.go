@@ -243,22 +243,24 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		return m.enterSessionView(m.sessionResults[m.sessionCursor].Meta)
+		return m.enterSessionView(m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta))
 	case keyC:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		return m, m.conversationActionCmd(m.transcriptReaders, m.sessionResults[m.sessionCursor].Meta, actions.Continue)
+		meta := m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta)
+		return m, m.conversationActionCmd(m.transcriptReaders, meta, actions.Continue)
 	case keyF:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		return m, m.conversationActionCmd(m.transcriptReaders, m.sessionResults[m.sessionCursor].Meta, actions.Fork)
+		meta := m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta)
+		return m, m.conversationActionCmd(m.transcriptReaders, meta, actions.Fork)
 	case keyWorktreeFork:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		meta := m.sessionResults[m.sessionCursor].Meta
+		meta := m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta)
 		m.isolatedForkConversation = &meta
 		m.targetSession = session.RunningSession{Base: meta.Project, Project: meta.Project, Directory: meta.CWD, Profile: meta.DisplayProfile(), Account: meta.DisplayProfile(), Harness: meta.Harness}
 		m.confirmAction = "fork worktree"
@@ -270,7 +272,7 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		meta := m.sessionResults[m.sessionCursor].Meta
+		meta := m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta)
 		m.handoffConversation = &meta
 		m.targetSession = session.RunningSession{
 			Base: meta.Project, Project: meta.Project, Directory: meta.CWD,
@@ -292,9 +294,21 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		return m.enterDeleteChoice(m.sessionResults[m.sessionCursor].Meta)
+		return m.enterDeleteChoice(m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta))
 	}
 	return m, nil
+}
+
+// contextualSessionMeta returns a copy whose primary project reflects the
+// active single project chip when that alias belongs to the transcript. The
+// cached search result remains the stable primary metadata; only rendering
+// and actions launched from the filtered view receive the contextual title.
+func (m Model) contextualSessionMeta(meta transcript.SessionMeta) transcript.SessionMeta {
+	if len(m.filterProject) != 1 || m.filterProject[0] == "" || !meta.MatchesAnyProject(m.filterProject) {
+		return meta
+	}
+	meta.Project = m.filterProject[0]
+	return meta
 }
 
 // dispatchSessionSearch returns a tea.Cmd that fires after the debounce

@@ -214,7 +214,7 @@ func (i *Index) List(filter ListFilter) []SessionMeta {
 		if !meta.MatchesAnyProfile(filter.Profile) {
 			continue
 		}
-		if !matchAny(meta.Project, filter.Project) {
+		if !meta.MatchesAnyProject(filter.Project) {
 			continue
 		}
 		out = append(out, meta)

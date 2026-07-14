@@ -32,6 +32,10 @@ var quarantineTranscriptIndex = cachefile.Quarantine
 // reset disposable sidecars while holding the cache advisory lock.
 var removeTranscriptSearchStore = os.RemoveAll
 
+// removeTranscriptSearchSidecar is a test seam for verifying that compact
+// prunes individual orphan sidecars while holding the cache advisory lock.
+var removeTranscriptSearchSidecar = os.Remove
+
 // LoadIndexAt loads a JSON cache with corruption recovery and advisory-locked
 // filesystem mutations. A non-nil index may be returned with a warning;
 // callers should keep that usable snapshot and surface the warning separately.
@@ -154,6 +158,73 @@ func (i *Index) saveFilesystem() error {
 		persistWarning, persistErr := i.persistFilesystemLocked()
 		return errors.Join(warning, persistWarning, persistErr)
 	})
+}
+
+type filesystemCompactResult struct {
+	LegacyFields             int
+	RemovedOrphanSidecars    int
+	RemovedOrphanSidecarSize int64
+	Warning                  error
+}
+
+// compactFilesystem reloads and persists the latest metadata snapshot before
+// pruning any orphan sidecars. The advisory lock covers legacy-field counting
+// through removal so reporting and reachability use one coherent cache state.
+func (i *Index) compactFilesystem() (result filesystemCompactResult, err error) {
+	err = cachefile.WithExclusive(i.path, func() error {
+		i.mu.Lock()
+		defer i.mu.Unlock()
+
+		legacyFields, countErr := countLegacySearchTextFields(i.path)
+		if countErr != nil {
+			return countErr
+		}
+		result.LegacyFields = legacyFields
+
+		canPersist, reloadWarning := i.reloadFilesystemLocked()
+		if !canPersist {
+			return reloadWarning
+		}
+		persistWarning, persistErr := i.persistFilesystemLocked()
+		if persistErr != nil {
+			return errors.Join(reloadWarning, persistWarning, persistErr)
+		}
+		if persistWarning != nil {
+			return errors.Join(reloadWarning, persistWarning)
+		}
+		if reloadWarning != nil {
+			var decodeErr *indexDecodeError
+			if !errors.As(reloadWarning, &decodeErr) {
+				return reloadWarning
+			}
+			result.Warning = errors.Join(result.Warning, reloadWarning)
+		}
+
+		keys := make([]string, 0, len(i.entries))
+		for key := range i.entries {
+			keys = append(keys, key)
+		}
+		inventory, inventoryErr := i.store.Inventory(keys)
+		if inventoryErr != nil {
+			return inventoryErr
+		}
+		for _, orphan := range inventory.Orphans {
+			info, statErr := os.Lstat(orphan.Path)
+			if statErr != nil {
+				return fmt.Errorf("checking orphan transcript search sidecar %s: %w", orphan.Path, statErr)
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("orphan transcript search sidecar %s is no longer a regular file", orphan.Path)
+			}
+			if removeErr := removeTranscriptSearchSidecar(orphan.Path); removeErr != nil {
+				return fmt.Errorf("removing orphan transcript search sidecar %s: %w", orphan.Path, removeErr)
+			}
+			result.RemovedOrphanSidecars++
+			result.RemovedOrphanSidecarSize += info.Size()
+		}
+		return nil
+	})
+	return result, err
 }
 
 func (i *Index) deleteFilesystem(key string, alsoFile bool) error {
@@ -286,10 +357,8 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 		}
 		// Readers may return useful discoveries with an error. Keep them.
 		for _, meta := range metas {
-			project := projectResolver.ResolveOrFallback(meta.CWD)
-			meta.Project = project.Title
 			meta.Profiles = append([]string(nil), group.profiles...)
-			meta.Profile = displayProfileForGroup(cfg, meta.Project, project.Profile, group.profiles)
+			meta = classifySessionProject(meta, cfg, projectResolver)
 			discovered = append(discovered, meta)
 		}
 	}
@@ -307,6 +376,14 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			if err := removeTranscriptSearchStore(i.SearchStoreDir()); err != nil {
 				return fmt.Errorf("removing transcript search sidecars: %w", err)
 			}
+		}
+		for key, meta := range i.entries {
+			classified := classifySessionProject(meta, cfg, projectResolver)
+			if reflect.DeepEqual(classified, meta) {
+				continue
+			}
+			i.entries[key] = classified
+			i.filesystemDirty = true
 		}
 		for _, meta := range discovered {
 			key := IndexKey(meta.Harness, meta.ID)
@@ -337,8 +414,13 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 				}
 				meta.SearchText = ""
 			}
-			i.entries[key] = meta
-			i.filesystemDirty = true
+			if !exists || !reflect.DeepEqual(existing, meta) {
+				i.entries[key] = meta
+				i.filesystemDirty = true
+			}
+		}
+		if !i.filesystemDirty {
+			return nil
 		}
 		persistWarning, persistErr := i.persistFilesystemLocked()
 		mergeWarning = errors.Join(mergeWarning, persistWarning, persistErr)
@@ -351,9 +433,34 @@ func cloneSessionEntries(entries map[string]SessionMeta) map[string]SessionMeta 
 	out := make(map[string]SessionMeta, len(entries))
 	for key, meta := range entries {
 		meta.Profiles = append([]string(nil), meta.Profiles...)
+		meta.Projects = append([]string(nil), meta.Projects...)
 		out[key] = meta
 	}
 	return out
+}
+
+func classifySessionProject(meta SessionMeta, cfg *config.Config, resolver projectresolve.Resolver) SessionMeta {
+	if meta.CWD == "" {
+		return meta
+	}
+
+	matches := resolver.Matches(meta.CWD)
+	if len(matches) == 0 {
+		fallback := resolver.ResolveOrFallback(meta.CWD)
+		meta.Project = fallback.Title
+		meta.Projects = nil
+		meta.Profile = displayProfileForGroup(cfg, meta.Project, "", meta.ProfileNames())
+		return meta
+	}
+
+	projects := make([]string, 0, len(matches))
+	for _, match := range matches {
+		projects = append(projects, match.Title)
+	}
+	meta.Project = matches[0].Title
+	meta.Projects = cleanProjectNames(projects)
+	meta.Profile = displayProfileForGroup(cfg, meta.Project, matches[0].Profile, meta.ProfileNames())
+	return meta
 }
 
 func applySessionDiff(target, current, base map[string]SessionMeta) {

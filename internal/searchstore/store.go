@@ -18,6 +18,23 @@ type Store struct {
 	dir string
 }
 
+// SidecarFile describes one regular hash-named sidecar found by Inventory.
+type SidecarFile struct {
+	Path string
+	Size int64
+}
+
+// Inventory summarizes regular hash-named sidecars relative to an expected
+// set of opaque keys. Directories, symlinks, temporary files, and unrelated
+// artifacts are ignored.
+type Inventory struct {
+	Count       int
+	Size        int64
+	MissingKeys []string
+	Orphans     []SidecarFile
+	OrphanSize  int64
+}
+
 // New returns a Store whose directory mirrors the legacy
 // transcript.Index.SearchStoreDir derivation: strip the index path's
 // extension and append ".search". When the index path has no extension,
@@ -149,18 +166,32 @@ func (s *Store) Delete(key string) error {
 	return err
 }
 
-// Stats returns the number and total byte size of regular hashed .txt sidecar
-// files in the store's directory. A missing directory is treated as empty
-// (returns 0, 0, nil) rather than an error so a freshly constructed Store
-// whose directory has not been created yet is reported as empty.
-func (s *Store) Stats() (count int, size int64, err error) {
+// Inventory classifies regular hashed .txt sidecars against keys expected by
+// the current metadata cache. A missing directory is treated as empty. The
+// returned orphan paths are safe candidates for explicit maintenance; this
+// method never removes files.
+func (s *Store) Inventory(keys []string) (Inventory, error) {
+	expected := make(map[string]string, len(keys))
+	orderedKeys := make([]string, 0, len(keys))
+	for _, key := range keys {
+		name := filepath.Base(s.Path(key))
+		if _, ok := expected[name]; ok {
+			continue
+		}
+		expected[name] = key
+		orderedKeys = append(orderedKeys, key)
+	}
+
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return 0, 0, nil
+			return Inventory{MissingKeys: orderedKeys}, nil
 		}
-		return 0, 0, err
+		return Inventory{}, err
 	}
+
+	var inventory Inventory
+	found := make(map[string]struct{}, len(expected))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -170,15 +201,40 @@ func (s *Store) Stats() (count int, size int64, err error) {
 		}
 		info, err := entry.Info()
 		if err != nil {
-			return 0, 0, err
+			return Inventory{}, err
 		}
 		if !info.Mode().IsRegular() {
 			continue
 		}
-		count++
-		size += info.Size()
+		inventory.Count++
+		inventory.Size += info.Size()
+		if _, ok := expected[entry.Name()]; ok {
+			found[entry.Name()] = struct{}{}
+			continue
+		}
+		inventory.Orphans = append(inventory.Orphans, SidecarFile{
+			Path: filepath.Join(s.dir, entry.Name()),
+			Size: info.Size(),
+		})
+		inventory.OrphanSize += info.Size()
 	}
-	return count, size, nil
+	for _, key := range orderedKeys {
+		name := filepath.Base(s.Path(key))
+		if _, ok := found[name]; !ok {
+			inventory.MissingKeys = append(inventory.MissingKeys, key)
+		}
+	}
+	return inventory, nil
+}
+
+// Stats returns the number and total byte size of regular hashed .txt sidecar
+// files in the store's directory.
+func (s *Store) Stats() (count int, size int64, err error) {
+	inventory, err := s.Inventory(nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	return inventory.Count, inventory.Size, nil
 }
 
 func isSidecarName(name string) bool {

@@ -20,6 +20,7 @@ type SessionMeta struct {
 	Profile      string    `json:"profile"`
 	Profiles     []string  `json:"profiles,omitempty"`
 	Project      string    `json:"project"`
+	Projects     []string  `json:"projects,omitempty"`
 	CWD          string    `json:"cwd"`
 	StartedAt    time.Time `json:"started_at"`
 	LastAt       time.Time `json:"last_at"`
@@ -81,6 +82,34 @@ func (m SessionMeta) MatchesAnyProfile(profiles []string) bool {
 	return false
 }
 
+// ProjectNames returns the filter-membership projects for a session.
+// New metadata uses Projects; legacy metadata falls back to Project.
+func (m SessionMeta) ProjectNames() []string {
+	if projects := cleanProjectNames(m.Projects); len(projects) > 0 {
+		return projects
+	}
+	if m.Project == "" {
+		return nil
+	}
+	return []string{m.Project}
+}
+
+// MatchesAnyProject reports whether this session belongs to any requested
+// project. An empty requested set means no project filter.
+func (m SessionMeta) MatchesAnyProject(projects []string) bool {
+	if len(projects) == 0 {
+		return true
+	}
+	for _, project := range m.ProjectNames() {
+		for _, requested := range projects {
+			if project == requested {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func cleanProfileNames(profiles []string) []string {
 	if len(profiles) == 0 {
 		return nil
@@ -96,6 +125,25 @@ func cleanProfileNames(profiles []string) []string {
 		}
 		seen[profile] = struct{}{}
 		out = append(out, profile)
+	}
+	return out
+}
+
+func cleanProjectNames(projects []string) []string {
+	if len(projects) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(projects))
+	seen := make(map[string]struct{}, len(projects))
+	for _, project := range projects {
+		if project == "" {
+			continue
+		}
+		if _, ok := seen[project]; ok {
+			continue
+		}
+		seen[project] = struct{}{}
+		out = append(out, project)
 	}
 	return out
 }
