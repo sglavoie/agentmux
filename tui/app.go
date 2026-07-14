@@ -20,7 +20,7 @@ const recoveryReexecEnv = "AMX_INTERNAL_DATASTORE_RECOVERY_REEXEC"
 
 type recoveryProcessHandoff struct {
 	Result        datastore.RecoveryResult `json:"result"`
-	RestartDaemon bool                     `json:"restart_daemon"`
+	FinishRebuild bool                     `json:"finish_rebuild"`
 }
 
 // Run launches the dashboard TUI. It blocks until the user quits.
@@ -36,9 +36,23 @@ func RunFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID 
 		return err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	var finishRebuild func() error
+	if handoff.FinishRebuild {
+		finishRebuild = finishRebuildFromCurrentExecutable()
+	} else {
+		claimedGate, pendingResult, claimErr := datastore.ClaimDefaultPendingRebuildGate(ctx)
+		if claimErr != nil {
+			cancel()
+			return fmt.Errorf("claiming pending datastore rebuild: %w", claimErr)
+		}
+		if claimedGate != nil {
+			handoff = recoveryProcessHandoff{Result: pendingResult, FinishRebuild: true}
+			finishRebuild = finishRebuildFromClaimedGate(claimedGate)
+		}
+	}
 	services := NewDataServices()
-	if handoff.RestartDaemon {
-		if err := services.deferDaemonRestartAfterRecovery(restartDaemonFromCurrentExecutable); err != nil {
+	if finishRebuild != nil {
+		if err := services.deferRebuildFinishAfterRecovery(finishRebuild); err != nil {
 			cancel()
 			return errors.Join(err, services.Close())
 		}
@@ -62,18 +76,19 @@ func RecoveryReexecPending() bool {
 	return strings.TrimSpace(os.Getenv(recoveryReexecEnv)) != ""
 }
 
-// AbortRecoveryReexec restores daemon liveness when the CLI cannot reach
+// AbortRecoveryReexec consumes the process handoff when the CLI cannot reach
 // RunFromWindow (for example because configuration loading failed after exec).
-// It consumes the marker so an enclosing process cannot retry the handoff.
+// It deliberately leaves rebuild completion unconsumed: without compatibility
+// imports and a checkpoint, reopening daemon startup would be unsafe.
 func AbortRecoveryReexec() error {
 	handoff, err := consumeRecoveryProcessHandoff()
 	if err != nil {
 		return err
 	}
-	if !handoff.RestartDaemon {
+	if !handoff.FinishRebuild {
 		return nil
 	}
-	return restartDaemonFromCurrentExecutable()
+	return errors.New("datastore rebuild remains gated because fresh dashboard initialization did not start")
 }
 
 func consumeRecoveryProcessHandoff() (recoveryProcessHandoff, error) {
@@ -107,29 +122,22 @@ func finishDashboardRun(
 		return errors.Join(runErr, services.Close())
 	}
 
-	restartDaemon := services.takeDaemonRestartForProcessHandoff()
+	finishRebuild := services.takeRebuildFinishForProcessHandoff()
 	if closeErr := services.Close(); closeErr != nil {
-		return errors.Join(runErr, closeErr, invokeRecoveryRestart(restartDaemon))
+		return errors.Join(runErr, closeErr)
 	}
 	if reexec == nil {
-		return errors.Join(runErr, errors.New("restarting dashboard after datastore recovery: re-exec is unavailable"), invokeRecoveryRestart(restartDaemon))
+		return errors.Join(runErr, errors.New("restarting dashboard after datastore recovery: re-exec is unavailable; datastore rebuild remains gated"))
 	}
-	reexecErr := reexec(m.dataServicesRecoveryResult, restartDaemon != nil)
+	reexecErr := reexec(m.dataServicesRecoveryResult, finishRebuild != nil)
 	if reexecErr == nil {
 		reexecErr = errors.New("restarting dashboard after datastore recovery: re-exec returned without replacing the process")
 	}
-	return errors.Join(runErr, reexecErr, invokeRecoveryRestart(restartDaemon))
+	return errors.Join(runErr, reexecErr, errors.New("datastore rebuild remains gated until a fresh dashboard completes its checkpoint"))
 }
 
-func invokeRecoveryRestart(restart func() error) error {
-	if restart == nil {
-		return nil
-	}
-	return restart()
-}
-
-func reexecDashboard(result datastore.RecoveryResult, restartDaemon bool) error {
-	handoff, err := json.Marshal(recoveryProcessHandoff{Result: result, RestartDaemon: restartDaemon})
+func reexecDashboard(result datastore.RecoveryResult, finishRebuild bool) error {
+	handoff, err := json.Marshal(recoveryProcessHandoff{Result: result, FinishRebuild: finishRebuild})
 	if err != nil {
 		return fmt.Errorf("encoding datastore recovery process handoff: %w", err)
 	}
@@ -151,13 +159,55 @@ func reexecDashboard(result datastore.RecoveryResult, restartDaemon bool) error 
 	return nil
 }
 
-func restartDaemonFromCurrentExecutable() error {
-	executable, err := os.Executable()
+type rebuildFinisher struct {
+	finishGate      func() (bool, error)
+	executable      func() (string, error)
+	restart         func(string) error
+	gateFinished    bool
+	restartRequired bool
+}
+
+// finishRebuildFromCurrentExecutable returns one process-owned completion
+// callback. The callback preserves its partial stage across Initialize retries:
+// after gate removal succeeds, executable lookup or daemon spawn failures retry
+// only the restart and never attempt to consume the removed gate again.
+func finishRebuildFromCurrentExecutable() func() error {
+	finisher := &rebuildFinisher{
+		finishGate: datastore.FinishDefaultRebuildGate,
+		executable: os.Executable,
+		restart:    daemon.SpawnDetached,
+	}
+	return finisher.finish
+}
+
+func finishRebuildFromClaimedGate(gate *datastore.RebuildGate) func() error {
+	finisher := &rebuildFinisher{
+		finishGate: gate.Finish,
+		executable: os.Executable,
+		restart:    daemon.SpawnDetached,
+	}
+	return finisher.finish
+}
+
+func (f *rebuildFinisher) finish() error {
+	if !f.gateFinished {
+		restartDaemon, err := f.finishGate()
+		if err != nil {
+			return fmt.Errorf("finishing datastore rebuild gate: %w", err)
+		}
+		f.gateFinished = true
+		f.restartRequired = restartDaemon
+	}
+	if !f.restartRequired {
+		return nil
+	}
+	executable, err := f.executable()
 	if err != nil {
 		return fmt.Errorf("resolving daemon executable after datastore recovery: %w", err)
 	}
-	if err := daemon.SpawnDetached(executable); err != nil {
+	if err := f.restart(executable); err != nil {
 		return fmt.Errorf("restarting daemon after datastore recovery: %w", err)
 	}
+	f.restartRequired = false
 	return nil
 }

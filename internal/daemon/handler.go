@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 // kittyTitleClient is the narrow subset of kitty.KittyClient that the daemon
@@ -90,10 +91,17 @@ type Handler struct {
 	// stateMu protects store, the account-level hook-silence maps, and
 	// windowMetadata. Per-window state lives under store so handlers mutate a
 	// single WindowState entry instead of a set of parallel maps.
-	stateMu           sync.Mutex
-	store             map[int]*WindowState
-	pendingResetStops map[int]pendingResetStop
-	nextResetStopSeq  uint64
+	stateMu sync.Mutex
+	store   map[int]*WindowState
+
+	// resetStopCommitMu linearizes a claimed deferred reset-sensitive Stop's
+	// final state application with events that supersede it. Callers acquire it
+	// before stateMu; the callback does not hold either lock while invoking the
+	// test seam below.
+	resetStopCommitMu             sync.Mutex
+	pendingResetStops             map[int]pendingResetStop
+	nextResetStopSeq              uint64
+	afterDeferredStopClaimForTest func(windowID int, seq uint64)
 
 	kittySockets      map[int]string
 	lastKittyListenOn string
@@ -140,6 +148,22 @@ type Handler struct {
 	aslMissStreak      map[aslLeaseRef]int
 	lastASLReconcileAt time.Time
 
+	// idleSampleStreak counts, per window probe source, how many consecutive
+	// stabilized idle screen samples an adapter has observed before an
+	// AuthoritativeIdle may settle stale interactive work. Screen adapters that
+	// require stabilized evidence (Codex/Claude reads) accumulate here; the
+	// count is cleared after activity, a classifier failure, a protected-state
+	// change, or window closure. Guarded by stateMu.
+	idleSampleStreak map[idleSampleRef]int
+
+	// idleSampleGen records, per window probe source, the evidence generation
+	// (e.g. a Copilot transcript's byte size) the current stabilization streak is
+	// accumulating against. A sample observing a different generation restarts the
+	// streak, so consecutive agreeing samples must describe the SAME evidence
+	// state — a probe source whose evidence advances on every new record cannot
+	// converge across two distinct intermediate terminals. Guarded by stateMu.
+	idleSampleGen map[idleSampleRef]int64
+
 	// reducerCfg holds the deterministic thresholds handed to each window's
 	// shadow reducer. Set once at startup from [defaults.watchdog] and
 	// guard_duration (SetReducerConfig); the zero value disables the reducer's
@@ -151,6 +175,24 @@ type Handler struct {
 	// [defaults.watchdog].claude_context_limit_probe at daemon startup.
 	// Defaults to true; an explicit `false` skips the probe entirely.
 	claudeContextLimitProbeEnabled bool
+
+	// copilotTranscriptHomes and copilotDefaultHome resolve a managed Copilot
+	// tab's interactive session transcript for the transcript stop probe.
+	// copilotTranscriptHomes is the ordered set of configured Copilot profile
+	// home directories (already ~-expanded); copilotDefaultHome is the default
+	// Copilot home used when no configured profile holds the transcript. Both
+	// are set once at startup (SetCopilotTranscriptHomes) before the probe loop
+	// starts and are never mutated afterward, so the probe reads them without a
+	// lock — matching claudeContextLimitProbeEnabled.
+	copilotTranscriptHomes []string
+	copilotDefaultHome     string
+
+	// copilotLifecycleReader reads a resolved Copilot transcript's terminal
+	// evidence for the transcript stop probe. Defaults to
+	// transcript.ReadCopilotLifecycle (NewHandler); tests inject a reader to
+	// model a slow read racing a concurrent prompt, or to drive specific
+	// evidence, without threading fixture timing through the resolver.
+	copilotLifecycleReader func(path string) (transcript.CopilotLifecycleEvidence, error)
 
 	// lastSeenEventAt records the most recent event timestamp per account
 	// (any action, any window). The hook-silence sweep compares this against
@@ -224,7 +266,10 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		renderQueue:                    newRenderQueue(),
 		kittySockets:                   make(map[int]string),
 		claudeContextLimitProbeEnabled: true,
+		copilotLifecycleReader:         transcript.ReadCopilotLifecycle,
 		aslMissStreak:                  make(map[aslLeaseRef]int),
+		idleSampleStreak:               make(map[idleSampleRef]int),
+		idleSampleGen:                  make(map[idleSampleRef]int64),
 		lastSeenEventAt:                make(map[string]time.Time),
 		notifiedHookSilence:            make(map[string]bool),
 		hookSilenceIdle:                make(map[string]*accountIdle),

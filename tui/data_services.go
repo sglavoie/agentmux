@@ -34,11 +34,13 @@ type DataServices struct {
 	closed   bool
 	store    *datastore.Store
 	snapshot dataServicesSnapshot
-	// restartAfterRecovery is guarded by writerMu. A previously live daemon
-	// stays stopped until the first replacement initialization attempt has
-	// finished all compatibility writes and workspace synchronization.
-	restartAfterRecovery func() error
-	closeErr             error
+	// finishAfterRecovery is guarded by writerMu. It keeps every daemon start,
+	// including hook auto-start, blocked until the replacement has checkpointed
+	// all compatibility writes and workspace synchronization. Ownership remains
+	// here until the completion callback succeeds so initialization retries can
+	// resume a failed gate finalization or daemon restart.
+	finishAfterRecovery func() error
+	closeErr            error
 }
 
 type dataServicesSnapshot struct {
@@ -54,14 +56,15 @@ type dataServicesSnapshot struct {
 }
 
 type dataServicesDependencies struct {
-	openStore      func(context.Context) (*datastore.Store, error)
-	closeStore     func(*datastore.Store) error
-	loadTranscript func(context.Context, *datastore.Store) (*transcript.Index, map[string]transcript.Reader, error)
-	loadPlans      func(context.Context, *datastore.Store) (*plans.Index, error)
-	newWorkspace   func(*datastore.Store) *workspace.Service
-	newActivity    func(*datastore.Store) (*activityjournal.Repository, error)
-	newSearch      func(*datastore.Store) (*unifiedsearch.Service, error)
-	recoverCorrupt func(context.Context, error) (datastore.RecoveryResult, func() error, error)
+	openStore       func(context.Context) (*datastore.Store, error)
+	closeStore      func(*datastore.Store) error
+	loadTranscript  func(context.Context, *datastore.Store) (*transcript.Index, map[string]transcript.Reader, error)
+	loadPlans       func(context.Context, *datastore.Store) (*plans.Index, error)
+	newWorkspace    func(*datastore.Store) *workspace.Service
+	newActivity     func(*datastore.Store) (*activityjournal.Repository, error)
+	newSearch       func(*datastore.Store) (*unifiedsearch.Service, error)
+	checkpointStore func(context.Context, *datastore.Store) error
+	recoverCorrupt  func(context.Context, error) (datastore.RecoveryResult, func() error, error)
 }
 
 type dataServicesInitRequestMsg struct{}
@@ -133,10 +136,11 @@ func defaultDataServicesDependencies() dataServicesDependencies {
 		loadPlans: func(ctx context.Context, store *datastore.Store) (*plans.Index, error) {
 			return plans.LoadSQLiteIndexWithStore(ctx, plans.IndexPath(), store, compatimport.SyncIfChanged)
 		},
-		newWorkspace:   workspace.New,
-		newActivity:    activityjournal.NewRepository,
-		newSearch:      unifiedsearch.New,
-		recoverCorrupt: datastorerecovery.RecoverForRebuild,
+		newWorkspace:    workspace.New,
+		newActivity:     activityjournal.NewRepository,
+		newSearch:       unifiedsearch.New,
+		checkpointStore: func(ctx context.Context, store *datastore.Store) error { return store.Checkpoint(ctx) },
+		recoverCorrupt:  datastorerecovery.RecoverForRebuild,
 	}
 }
 
@@ -149,11 +153,6 @@ func (s *DataServices) Initialize(ctx context.Context, cfg *config.Config) (_ da
 	}
 	s.writerMu.Lock()
 	defer s.writerMu.Unlock()
-	defer func() {
-		if retErr != nil {
-			retErr = errors.Join(retErr, s.restartDaemonAfterRecovery())
-		}
-	}()
 
 	s.stateMu.RLock()
 	if s.closed {
@@ -231,8 +230,17 @@ func (s *DataServices) Initialize(ctx context.Context, cfg *config.Config) (_ da
 		transcriptResults:   results,
 		transcriptSearchErr: searchErr,
 	}
-	if err := s.restartDaemonAfterRecovery(); err != nil {
-		return dataServicesSnapshot{}, fmt.Errorf("restarting daemon after datastore rebuild: %w", err)
+	if s.finishAfterRecovery != nil {
+		checkpointStore := s.deps.checkpointStore
+		if checkpointStore == nil {
+			checkpointStore = func(ctx context.Context, store *datastore.Store) error { return store.Checkpoint(ctx) }
+		}
+		if err := checkpointStore(ctx, store); err != nil {
+			return dataServicesSnapshot{}, fmt.Errorf("checkpointing rebuilt datastore: %w", err)
+		}
+		if err := s.finishRebuildAfterRecovery(); err != nil {
+			return dataServicesSnapshot{}, fmt.Errorf("finishing datastore rebuild: %w", err)
+		}
 	}
 	s.stateMu.Lock()
 	if s.closed {
@@ -284,50 +292,53 @@ func (s *DataServices) RecoverCorruption(ctx context.Context, cause error) (data
 	if s.deps.recoverCorrupt == nil {
 		return datastore.RecoveryResult{}, errors.New("tui data services: corruption recovery is unavailable")
 	}
-	result, restart, err := s.deps.recoverCorrupt(ctx, cause)
-	if restart != nil {
-		if s.restartAfterRecovery != nil {
-			return result, errors.Join(err, errors.New("tui data services: daemon restart is already pending"))
+	result, finish, err := s.deps.recoverCorrupt(ctx, cause)
+	if finish != nil {
+		if s.finishAfterRecovery != nil {
+			return result, errors.Join(err, errors.New("tui data services: rebuild completion is already pending"))
 		}
-		s.restartAfterRecovery = restart
+		s.finishAfterRecovery = finish
 	}
 	return result, err
 }
 
-func (s *DataServices) restartDaemonAfterRecovery() error {
-	restart := s.restartAfterRecovery
-	s.restartAfterRecovery = nil
-	if restart == nil {
+func (s *DataServices) finishRebuildAfterRecovery() error {
+	finish := s.finishAfterRecovery
+	if finish == nil {
 		return nil
 	}
-	return restart()
+	if err := finish(); err != nil {
+		return err
+	}
+	s.finishAfterRecovery = nil
+	return nil
 }
 
-// takeDaemonRestartForProcessHandoff transfers responsibility for restoring a
-// previously live daemon out of this process. It is used only after successful
-// replacement, immediately before the dashboard closes all process-owned
-// resources and re-execs. If re-exec fails, the old process invokes the
-// returned fallback itself.
-func (s *DataServices) takeDaemonRestartForProcessHandoff() func() error {
+// takeRebuildFinishForProcessHandoff transfers responsibility for releasing the
+// rebuild gate and conditionally restoring prior daemon liveness out of this
+// process. It is used only after successful replacement, immediately before
+// the dashboard closes all process-owned resources and re-execs. A failed
+// re-exec deliberately leaves the returned completion unconsumed.
+func (s *DataServices) takeRebuildFinishForProcessHandoff() func() error {
 	if s == nil {
 		return nil
 	}
 	s.writerMu.Lock()
 	defer s.writerMu.Unlock()
-	restart := s.restartAfterRecovery
-	s.restartAfterRecovery = nil
-	return restart
+	finish := s.finishAfterRecovery
+	s.finishAfterRecovery = nil
+	return finish
 }
 
-// deferDaemonRestartAfterRecovery installs daemon restart ownership received
-// from a pre-recovery dashboard process. The fresh process invokes it only
-// after compatibility import and workspace synchronization, or from Close on
-// an early exit.
-func (s *DataServices) deferDaemonRestartAfterRecovery(restart func() error) error {
+// deferRebuildFinishAfterRecovery installs completion ownership received from a
+// pre-recovery dashboard process. The fresh process invokes it only after the
+// rebuilt datastore is checkpointed. Early exits deliberately leave the gate
+// owned so they cannot restart the daemon over an unpublished replacement.
+func (s *DataServices) deferRebuildFinishAfterRecovery(finish func() error) error {
 	if s == nil {
 		return errors.New("tui data services: nil owner")
 	}
-	if restart == nil {
+	if finish == nil {
 		return nil
 	}
 	s.writerMu.Lock()
@@ -341,10 +352,10 @@ func (s *DataServices) deferDaemonRestartAfterRecovery(restart func() error) err
 	if ready {
 		return errors.New("tui data services: services are already ready")
 	}
-	if s.restartAfterRecovery != nil {
-		return errors.New("tui data services: daemon restart is already pending")
+	if s.finishAfterRecovery != nil {
+		return errors.New("tui data services: rebuild completion is already pending")
 	}
-	s.restartAfterRecovery = restart
+	s.finishAfterRecovery = finish
 	return nil
 }
 
@@ -394,7 +405,9 @@ func (s *DataServices) Close() error {
 		if store != nil {
 			s.closeErr = s.deps.closeStore(store)
 		}
-		s.closeErr = errors.Join(s.closeErr, s.restartDaemonAfterRecovery())
+		if s.finishAfterRecovery != nil {
+			s.closeErr = errors.Join(s.closeErr, errors.New("tui data services: datastore rebuild remains gated before checkpoint completion"))
+		}
 	})
 	return s.closeErr
 }

@@ -207,6 +207,24 @@ func (s *Store) Close() error {
 	return errors.Join(dbErr, lockErr)
 }
 
+// Checkpoint flushes every committed WAL frame into the main database and
+// truncates the WAL. Recovery calls it after rebuilding compatibility state and
+// before daemon startup is re-enabled, establishing one durable publication
+// boundary for the replacement database.
+func (s *Store) Checkpoint(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return errors.New("datastore: checkpoint on nil store")
+	}
+	var busy, logFrames, checkpointed int
+	if err := s.db.QueryRowContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &logFrames, &checkpointed); err != nil {
+		return fmt.Errorf("datastore: checkpointing WAL: %w", err)
+	}
+	if busy != 0 {
+		return fmt.Errorf("datastore: checkpointing WAL remained busy (%d of %d frames checkpointed)", checkpointed, logFrames)
+	}
+	return s.enforcePermissions()
+}
+
 // SchemaVersion returns the latest migration recorded in this database.
 func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 	if s == nil || s.db == nil {

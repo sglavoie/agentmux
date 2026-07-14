@@ -123,6 +123,90 @@ func TestServer_CloseWaitsForInflightHandlers(t *testing.T) {
 	}
 }
 
+// TestServer_CloseSerializesAcceptRegistration exercises the lifecycle gap
+// after Accept has returned but before the handler is registered with wg. Close
+// must publish shutdown before it drains the group, causing the accepted socket
+// to be rejected without ever entering Handler after ingress has stopped.
+func TestServer_CloseSerializesAcceptRegistration(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-srvregistration-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "d.sock")
+
+	server, err := NewServer(socketPath, newTestHandler())
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	accepted := make(chan struct{})
+	resumeRegistration := make(chan struct{})
+	server.afterAccept = func() {
+		close(accepted)
+		<-resumeRegistration
+	}
+	handlerStarted := make(chan struct{}, 1)
+	server.onConnStart = func() { handlerStarted <- struct{}{} }
+
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve(context.Background()) }()
+
+	conn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	select {
+	case <-accepted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not pause between Accept and handler registration")
+	}
+
+	closeReturned := make(chan struct{})
+	go func() {
+		server.Close()
+		close(closeReturned)
+	}()
+
+	select {
+	case <-closeReturned:
+		// The unregistered socket is not part of the handler drain. Once Close
+		// publishes shutdown, resuming registration must reject it.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not return while registration was paused")
+	}
+	close(resumeRegistration)
+
+	select {
+	case err := <-serveDone:
+		if err != nil {
+			t.Fatalf("Serve after Close: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return after rejected registration resumed")
+	}
+
+	select {
+	case <-handlerStarted:
+		t.Fatal("accepted connection entered Handler after Close returned")
+	default:
+	}
+
+	// The complete shutdown sequence is idempotent, including ingress stop.
+	repeatedCloseReturned := make(chan struct{})
+	go func() {
+		server.Close()
+		close(repeatedCloseReturned)
+	}()
+	select {
+	case <-repeatedCloseReturned:
+	case <-time.After(2 * time.Second):
+		t.Fatal("repeated Close deadlocked")
+	}
+}
+
 // TestServer_HandshakeDeadlineReleasesIdleConn verifies that a client which
 // opens a connection but never sends data does not pin a handler goroutine
 // indefinitely. The server enforces a per-connection deadline so a stuck or

@@ -68,9 +68,9 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 
 	// A newer prompt or explicit wipe supersedes a stop still held in the
 	// reset-defer window; drop it before this update lands so the debounced stop
-	// cannot fire afterward and repaint a stale icon. The deferred stop's own
-	// commit deletes its map entry before calling handleStateUpdate, so this is a
-	// no-op on that path.
+	// cannot fire afterward and repaint a stale icon. This cancellation is also
+	// serialized with a timer callback that has fired and claimed its generation,
+	// so it either invalidates that claim or waits for the Stop to apply first.
 	if supersedesDeferredResetStop(req) {
 		h.cancelPendingResetStop(req.WindowID)
 	}

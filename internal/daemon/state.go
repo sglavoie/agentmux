@@ -52,20 +52,25 @@ type WindowState struct {
 	DirtySince        time.Time
 	LastRenderLatency time.Duration
 
-	// Shadow reducer state (source-scoped facts). The reducer runs beside the
-	// legacy scalar machine above: handleStateUpdate feeds it, schema-v2
-	// persistence carries it across restarts, and its effective state is
-	// compared against the legacy render decision — but it never drives the
-	// visible icon. Reducer is nil until the first shadow-reduced event (or a
-	// v2/v1 restore) touches this window.
+	// Shadow reducer state (source-scoped facts).
+	// Reducer is the authoritative source for this window's visible icon and
+	// loop state: handleStateUpdate feeds it, and reduceStateUpdate publishes
+	// its reduced effective state through publishEffectiveLocked as the visible
+	// icon and looping. schema-v2 persistence carries it across restarts. The
+	// legacy scalar machine above (LastAction, Looping, DesiredIcon, …) is
+	// retained for wire/restore compatibility and as divergence evidence
+	// (mismatches recorded against the reduced outcome), not as the visible-state
+	// writer. Reducer is nil until the first shadow-reduced event (or a v2/v1
+	// restore) touches this window.
 	Reducer *Reducer
 	// Effective is the last shadow-reduced outcome; EffectiveGen increments
 	// each time it changes so restarts and exports can order generations.
 	Effective    EffectiveState
 	EffectiveGen uint64
-	// ShadowSeq is the daemon-assigned per-window receipt sequence stamped
-	// onto reduced events that carry no source_sequence, so per-source
-	// monotonicity still holds for today's sequence-less harness payloads.
+	// ShadowSeq is the daemon-assigned per-window receipt generation. It
+	// advances for every receipt-relevant state transition, including a
+	// reset-sensitive stop held for deferred application; reduced events that
+	// carry no source_sequence also use it as their per-source sequence.
 	ShadowSeq uint64
 
 	// notifiedSourceEvents dedupes reducer-transition notification decisions
@@ -97,6 +102,16 @@ func (s WindowState) CurrentConversation(now int64) (conversation.Identity, bool
 		return conversation.Identity{}, false
 	}
 	return s.Reducer.CurrentConversation(now)
+}
+
+// CurrentInteractiveConversation derives this window's current interactive parent
+// conversation, never falling back to a sole pipe-mode child. It shares the
+// descriptive-metadata caveats of CurrentConversation.
+func (s WindowState) CurrentInteractiveConversation(now int64) (conversation.Identity, bool) {
+	if s.Reducer == nil {
+		return conversation.Identity{}, false
+	}
+	return s.Reducer.CurrentInteractiveConversation(now)
 }
 
 // stateUserVarSchemaV2 marks the current amx_state wire schema. v1 payloads
@@ -142,10 +157,12 @@ type windowStateUserVar struct {
 
 // MarshalUserVar returns compact JSON for Kitty's amx_state user var. The
 // event ring buffer is intentionally not persisted. It always writes schema
-// v2: the legacy scalar fields stay authoritative for the visible icon, and
-// the shadow reducer's facts and effective generation ride alongside. The
-// facts were already bounded by Compact on the shadow path, so only
-// live/recent facts reach the payload.
+// v2: the reducer's facts and effective generation are the authoritative record
+// of the visible icon and looping, and the legacy scalar fields ride alongside
+// as compatibility metadata and divergence evidence (older readers and v1
+// restore still parse them; they no longer write the visible state). The facts
+// were already bounded by Compact on the shadow path, so only live/recent facts
+// reach the payload.
 func (s WindowState) MarshalUserVar() (string, error) {
 	uv := windowStateUserVar{
 		Schema:                     stateUserVarSchemaV2,
@@ -407,6 +424,25 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 			tab := windows[i].Tabs[j]
 			for k := range windows[i].Tabs[j].Windows {
 				win := windows[i].Tabs[j].Windows[k]
+				if existing, live := h.store[win.ID]; live {
+					// Restore is a one-shot startup seeding of durable state.
+					// A window that already holds in-process state was populated
+					// either by an earlier restore or, during a degraded startup,
+					// by a hook event that landed after the bounded snapshot timed
+					// out. A late-completing startup restore (or the maintenance
+					// recovery restore) must never overwrite those newer reducer
+					// facts, ASL leases, or activity, so the accepted in-process
+					// state stays authoritative. But a hook creates state for its
+					// own source only, so blindly skipping the window permanently
+					// loses every disjoint durable fact the persisted amx_state
+					// still carries (a live ASL lease, pipe child, subagent, or
+					// attention/error contribution). Merge those disjoint facts
+					// in without touching any same-source in-process fact; the
+					// merge is idempotent, so repeated maintenance ticks and a
+					// late startup completion cannot duplicate or regress it.
+					h.mergePersistedFactsLocked(win.ID, existing, win, now)
+					continue
+				}
 				if win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
 					continue
 				}
@@ -463,4 +499,71 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 			}
 		}
 	}
+}
+
+// mergePersistedFactsLocked folds the disjoint still-live reducer facts carried
+// by a window's persisted amx_state into the accepted in-process state that a
+// degraded-window hook already created. It is the merge half of the restore
+// skip guard: the in-process state stays authoritative (Reducer.MergeDisjoint
+// only adds sources the window does not already hold), so no accepted hook
+// fact, sequence, reset flow, conversation identity, render generation, or
+// timestamp is ever rolled backward. Merging nothing (no persisted facts, all
+// same-source, or a malformed payload) leaves the window exactly as the hook
+// left it, which keeps the operation idempotent across repeated maintenance
+// ticks and a late-completing startup restore. Callers hold stateMu.
+func (h *Handler) mergePersistedFactsLocked(windowID int, st *WindowState, win kitty.Window, now time.Time) {
+	if win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
+		return
+	}
+	if strings.TrimSpace(win.UserVars.AMXState) == "" {
+		return
+	}
+	var persisted WindowState
+	if err := persisted.UnmarshalUserVar(win.UserVars.AMXState); err != nil {
+		slog.Warn("renderer: discarded invalid restored state on merge", "window_id", windowID, "err", err)
+		return
+	}
+	if persisted.Reducer == nil {
+		return
+	}
+	facts := persisted.Reducer.Facts()
+	if len(facts) == 0 {
+		return
+	}
+	if st.Reducer == nil {
+		st.Reducer = NewReducer(h.reducerCfg)
+	}
+	if st.Reducer.MergeDisjoint(facts) == 0 {
+		return
+	}
+	// Re-bind the daemon's configured thresholds (the merged facts arrived from a
+	// zero-threshold deserializer) and move any v1-migrated legacy/ASL facts onto
+	// the window's live key so post-restart events collide with them exactly as a
+	// full restore would.
+	st.Reducer.SetConfig(h.reducerCfg)
+	if st.Reducer.RekeyMigratedFacts(windowID) && st.Effective.Source.Key == legacyV1MigrationKey {
+		st.Effective.Source.Key = windowKey(windowID)
+	}
+	st.Reducer.Compact(now.Unix())
+	// A nonzero merge imported disjoint facts — a real reducer mutation — so
+	// advance the window-wide receipt generation at least once, independently of
+	// the merged facts' per-source sequences: an authoritative idle observation
+	// captured before this merge must be discarded rather than allowed to settle
+	// over the newly surfaced state. Then never hand out a receipt sequence at or
+	// below a merged fact's, or the reducer would discard the next live event for
+	// that source as reordered.
+	st.ShadowSeq++
+	if maxSeq := st.Reducer.MaxSeq(); st.ShadowSeq < maxSeq {
+		st.ShadowSeq = maxSeq
+	}
+	// Republish from the full merged fact set. publishEffectiveLocked only ever
+	// advances the effective generation, so a merged ASL lease (🔁) or disjoint
+	// attention/error fact surfaces without regressing the hook's own icon.
+	h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
+	if !st.Dirty {
+		st.DirtySince = now
+	}
+	st.Dirty = true
+	st.Seq++
+	h.syncRendererMetadataLocked(windowID)
 }

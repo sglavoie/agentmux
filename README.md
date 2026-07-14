@@ -521,8 +521,14 @@ Current Copilot events mapped by Agent Mux include:
 
 `agentStop` is the terminal Copilot turn-end hook — the direct analogue of
 Claude's `Stop` event — and resolves to the stop action (⏹ icon).
-`notification` payloads with `notification_type = agent_idle` also resolve to
-the stop action. Copilot `permissionRequest` fires earlier, before the
+`notification` payloads with `notification_type = agent_idle` are treated as
+**background-agent** notifications for Copilot and are ignored for main-session
+state: they no longer resolve to the stop action, so a background agent going
+idle can never falsely stop the interactive turn (the tab keeps its current
+`⚡`). Subagent lifecycle hooks (`subagentStart`/`subagentStop`) remain
+responsible for the 🤖 subagent icon. This is harness-specific: Claude
+`agent_idle` still resolves to stop. Copilot `permissionRequest` fires earlier,
+before the
 permission service decides whether a tool call is auto-allowed, denied by rules,
 or escalated to a real user prompt, so Agent Mux treats that hook as
 pre-permission activity and preserves the current icon until the outcome is
@@ -622,13 +628,29 @@ checklist, see [Daemon State Acceptance Evidence](docs/daemon_state_acceptance.m
 
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema-v6 JSON snapshot for investigation.
-Version 6 retains every v5 field and adds the daemon's global receipt sequence
-and nanosecond receipt time per event, normalized source identity
-(`source_kind`/`source_key`/`source_seq`), the route decision (`source`,
-`owner`, or `source_fallback`), the reducer's effective state and live source
-facts per window (`shadow`), watchdog reasons, render generations, IPC queue
-latency, and the build identity of both the exporting CLI and the daemon.
+`amx daemon export-events` writes a schema-v7 JSON snapshot for investigation.
+Version 7 retains every v6 field and adds the interactive-ownership `pm` flag to
+pipe-mode source facts (`shadow.facts[].pm`) plus the reducer-wide causal order
+`o` used to compare equal-timestamp facts across sources (`shadow.facts[].o`).
+Each `shadow.facts[]` entry serializes the reducer's `SourceFactSnapshot`
+directly, so it uses that type's
+compact wire keys — `k` (source kind), `y` (source key), `i` (icon), `o`
+(source-independent causal application order), plus `pm`
+— rather than descriptive spellings. The flag is presence-encoded:
+`pm: true` marks a fact owned by a non-interactive pipe-mode child (a
+`claude -p` / `codex exec` / `copilot -p` process), while an **absent** `pm`
+field marks the interactive harness owner — the flag is serialized with
+`omitempty`, so `false` is never emitted on the wire and the interactive owner
+is signaled by the field's absence, not by `pm: false`. Diagnostics use it to
+tell an interactive owner apart from a pipe-mode child sharing the tab, which is
+why an interactive idle probe can retire a stale interactive bolt without ever
+disturbing live pipe-mode work. Version 6 retains every v5 field and adds the
+daemon's global receipt sequence and nanosecond receipt time per event,
+normalized source identity (`source_kind`/`source_key`/`source_seq`), the route
+decision (`source`, `owner`, or `source_fallback`), the reducer's effective
+state and live source facts per window (`shadow`), watchdog reasons, render
+generations, IPC queue latency, and the build identity of both the exporting CLI
+and the daemon.
 Top-level fields describe the export timestamp and daemon health; `windows` is
 an array of per-window entries, each carrying its own `stats`, `durable`,
 `renderer`, `shadow`, `watchdog`, `live`, and `events` fields so a single
@@ -636,7 +658,7 @@ window can be inspected without paired map lookups:
 
 ```json
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "daemon": { "pid": 1234, "uptime_seconds": 97, "ready": true, "build": { ... }, "metrics": { ... } },
   "cli_build": { ... },
   "windows": [
@@ -645,7 +667,7 @@ window can be inspected without paired map lookups:
       "stats": { ... },
       "durable": { ... },
       "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0, "queued_gen": 7, "rendered_gen": 7 },
-      "shadow": { "effective_icon": "bolt", "effective_looping": true, "facts": [ ... ] },
+      "shadow": { "effective_icon": "bolt", "effective_looping": true, "facts": [ { "k": "harness", "y": "sess-pipe", "i": "bolt", "o": 10, "pm": true }, { "k": "harness", "y": "sess-1", "i": "bolt", "o": 11 } ] },
       "watchdog": { "last_event": "...", "last_reason": "..." },
       "live": { "found": true, ... },
       "events": [ ... ]
@@ -673,10 +695,33 @@ present. Codex screen prompt detection appears as synthetic
 `prompt_kind` values such as `edit_approval`, `request_user_input`,
 `command_approval`, and `permission_grant`. Codex idle `/clear` recovery can
 appear as `event: "ScreenClearProbe"` with `action: "user_clear"`,
-`source: "codex_screen"`, and `reset_flow: true`. A stuck active Codex tab
-whose turn finished without a `Stop` hook appears as
-`event: "ScreenStopProbe"` with `action: "stop"`, `source: "codex_screen"`,
-`result_icon_state: "stop"`, and `current_icon_state: "bolt"`.
+`source: "codex_screen"`, and `reset_flow: true`.
+
+Each harness also has a conservative **stop fallback** for a turn that finished
+without a native terminal hook. All three route their synthetic stop through the
+same race-safe authoritative-idle path, so each emits a watchdog-shaped row
+whose `action` is the **actual reduced icon** (not the requested stop — a probe
+masked by a live ASL lease, a newer interactive `⚡`, or a higher-precedence
+attention/error icon records the icon that actually won), whose `source` is a
+distinct `probe:<harness>` key, and whose `reason` reads
+`authoritative idle (<harness>) settled visible state "…"→"…"`. These rows no
+longer carry the legacy `result_icon_state`/`current_icon_state` fields. The
+three are told apart by event name and source key:
+
+- **Codex** — `event: "ScreenStopProbe"`, `source: "probe:codex_screen"`. Fires
+  when an active Codex tab still shows `⚡` but its latest visible status is
+  `Worked for …` (completion) or the TUI interrupted marker, with an empty
+  composer and no visible prompt.
+- **Claude** — `event: "ScreenStopProbe"`, `source: "probe:claude_screen"`
+  (same event name as Codex, distinct source). Fires on a stuck Claude `⚡`
+  whose composer is idle (two consecutive samples) or that shows Claude's
+  interruption marker (one sample). Native `Notification/idle_prompt` is the
+  primary Claude stop; this screen probe is the interruption/no-hook fallback.
+- **Copilot** — `event: "TranscriptStopProbe"`,
+  `source: "probe:copilot_transcript"`. Reads no screen: it consults the
+  interactive session transcript's latest state-bearing event and settles only
+  on a terminal record. Native `agentStop`/`sessionEnd` remain the primary
+  Copilot stop.
 
 Codex 0.133.0 and 0.134.0 expose edit approvals and `request_user_input` waits
 through TUI/server-request flows rather than normal lifecycle hooks. Agent Mux
@@ -685,13 +730,13 @@ best-effort Kitty screen fallback to classify visible Codex prompts, including
 the 0.134.0 bottom-pane question UI, while preserving terminal, warning, and
 error states. A separate conservative stop-only fallback recognizes Codex's
 cleared idle UI after `/clear` when full Kitty scrollback no longer contains a
-transcript. A third conservative fallback repairs a stuck bolt on a completed
-turn: when an active Codex tab still shows the bolt icon but its latest visible
-status is `Worked for …` with an empty composer and no visible prompt, the
-daemon drives the existing `stop` transition (`event: "ScreenStopProbe"`) so the
-icon settles on `⏹` instead of staying `⚡`. It only fires on bolt tabs and never
-downgrades protected attention states (`key`, `question`, `error`, `warning`,
-`subagent`, `compact`). The daemon runs these probes every 1.5s.
+transcript. The per-harness stop fallbacks described above (Codex/Claude
+`ScreenStopProbe`, Copilot `TranscriptStopProbe`) repair a turn that finished
+without a native terminal hook so the icon settles on `⏹` instead of staying
+`⚡`. Each fires only on a stuck `bolt` tab and never downgrades protected
+attention states (`key`, `question`, `error`, `warning`, `subagent`, `compact`),
+and never retires pipe-mode, subagent, or live ASL facts. The daemon runs these
+probes on the same periodic probe loop as the renderer tick (every 2s).
 In split Kitty tabs, screen probes read only the tab-title owner: the active
 managed pane, or the first managed pane if none is active. Sibling panes cannot
 overwrite the shared title with Claude context-limit detection or Codex

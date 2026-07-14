@@ -13,9 +13,10 @@ package daemon
 //     writes, and sleep-like scheduling gaps cannot distort expiry.
 //   - runRenderWorker (renderqueue.go): the single Kitty writer, driven by the
 //     latest-generation per-window render queue.
-//   - runScreenProbes (this file): Codex prompt and Claude context-limit
-//     screen probes, reading the cached snapshot and doing their own GetText
-//     round-trips off both loops above.
+//   - runScreenProbes (this file): Codex prompt, Claude context-limit, Claude
+//     idle stop screen probes, and the Copilot transcript stop probe, reading
+//     the cached snapshot and doing their own GetText/transcript round-trips off
+//     both loops above.
 //   - Event reduction is already independent: the serialized ingress consumer
 //     (ingress.go) acknowledges after reduction and never waits on rendering.
 
@@ -52,11 +53,12 @@ func (h *Handler) runMaintenance(ctx context.Context) {
 	}
 }
 
-// runScreenProbes drives the Codex prompt and Claude context-limit screen
-// probes on their own loop. The probes read the cached snapshot (published by
-// the maintenance loop and the render worker) and perform GetText round-trips
-// that must never delay snapshot maintenance or rendering; a wedged screen
-// read simply stalls this loop until it returns.
+// runScreenProbes drives the Codex prompt, Claude context-limit, Claude idle
+// stop, and Copilot transcript stop probes on their own loop. The probes read
+// the cached snapshot (published by
+// the maintenance loop and the render worker) and perform GetText/transcript
+// round-trips that must never delay snapshot maintenance or rendering; a wedged
+// screen read or transcript read simply stalls this loop until it returns.
 func (h *Handler) runScreenProbes(ctx context.Context) {
 	ticker := time.NewTicker(renderInterval)
 	defer ticker.Stop()
@@ -65,14 +67,27 @@ func (h *Handler) runScreenProbes(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			windows, _, ready := h.cachedSnapshot()
+			snapshot, ready := h.cachedScreenProbeSnapshot()
 			if !ready {
 				continue
 			}
-			h.ProbeCodexScreenPromptsWithSnapshot(now, windows)
-			h.ProbeClaudeContextLimitWithSnapshot(now, windows)
+			h.runScreenProbesWithSnapshot(now, snapshot)
 		}
 	}
+}
+
+func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
+	h.probeCodexScreenPromptsWithSnapshot(now, snapshot)
+	// Context-limit probing runs before the idle stop probe so a
+	// context-limited Claude tab is settled to the error state first; the idle
+	// classifier additionally bails on the context-limit marker, so the two
+	// never fight over the same tab.
+	h.probeClaudeContextLimitWithSnapshot(now, snapshot)
+	h.probeClaudeScreenStopWithSnapshot(now, snapshot)
+	// The Copilot transcript stop probe reads no screen: it consults the
+	// interactive session transcript's latest state-bearing event to recover a
+	// stuck ⚡ whose native agentStop/sessionEnd hook was lost.
+	h.probeCopilotTranscriptStopWithSnapshot(now, snapshot)
 }
 
 // initialSnapshotBudget bounds the one-shot startup snapshot+restore taken
@@ -84,40 +99,64 @@ func (h *Handler) runScreenProbes(ctx context.Context) {
 const initialSnapshotBudget = 400 * time.Millisecond
 
 // restoreStateFromKittyBounded runs the initial snapshot+restore under a
-// timeout. It returns (true, "") when the restore completed within timeout, and
-// (false, reason) when it timed out. On timeout the restore goroutine keeps
-// running and reconciles late; it only ever writes mutex-guarded state
-// (snapshot cache, per-window store, renderer bookkeeping), so it is safe for it
-// to outlive this call and overlap the maintenance loop.
+// timeout. It returns (true, "") only when the initial Kitty snapshot actually
+// succeeded and restore completed within timeout; it returns (false, reason)
+// both when the restore timed out AND when it finished fast because the initial
+// ListWindows failed. Reporting a fast list failure as degraded (rather than
+// ready over a cold cache and empty store) is essential: MarkReady would
+// otherwise stop the maintenance loop from ever restoring durable amx_state, so
+// a transient startup error would become permanent reducer-state loss for the
+// daemon lifetime. On timeout the restore goroutine keeps running and
+// reconciles late; it only ever writes mutex-guarded state (snapshot cache,
+// per-window store, renderer bookkeeping), so it is safe for it to outlive this
+// call and overlap the maintenance loop.
 func (h *Handler) restoreStateFromKittyBounded(now time.Time, timeout time.Duration) (bool, string) {
-	done := make(chan struct{})
+	type restoreResult struct {
+		ok  bool
+		err error
+	}
+	done := make(chan restoreResult, 1)
 	go func() {
-		h.restoreStateFromKitty(now)
-		close(done)
+		ok, err := h.restoreStateFromKitty(now)
+		done <- restoreResult{ok: ok, err: err}
 	}()
 	select {
-	case <-done:
-		return true, ""
+	case res := <-done:
+		if res.ok {
+			return true, ""
+		}
+		if res.err != nil {
+			return false, "initial kitty snapshot failed: " + res.err.Error()
+		}
+		return false, "initial kitty snapshot unavailable"
 	case <-time.After(timeout):
 		return false, "initial kitty snapshot exceeded " + timeout.String()
 	}
 }
 
-func (h *Handler) restoreStateFromKitty(now time.Time) {
+// restoreStateFromKitty takes the initial Kitty snapshot and restores durable
+// state from it. It returns (true, nil) only when ListWindows succeeded and the
+// snapshot was published/restored; (false, err) when the initial list failed;
+// and (false, nil) when no Kitty client is configured. A false return must be
+// treated as a degraded startup so the maintenance loop still owns the durable
+// restore.
+func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
 	client := h.kittyClientForList()
 	if client == nil {
-		return
+		return false, nil
 	}
+	reducerReceipts := h.captureSnapshotReducerReceipts()
 	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("renderer: startup list windows failed", "err", err)
-		return
+		return false, err
 	}
 	// Publish before restore so the hook path can route against the initial
 	// snapshot the moment restore finishes.
-	h.publishSnapshot(windows, now)
+	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
 	h.restoreFromUserVars(windows, now)
 	h.renderSnapshot(windows)
+	return true, nil
 }
 
 // maintenanceTick lists windows once and runs the maintenance pass over the
@@ -127,22 +166,41 @@ func (h *Handler) maintenanceTick(now time.Time) {
 	if client == nil {
 		return
 	}
+	reducerReceipts := h.captureSnapshotReducerReceipts()
 	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("maintenance: list windows failed", "err", err)
 		return
 	}
-	h.runSnapshotTick(now, windows)
+	// A daemon whose bounded startup snapshot timed out is only temporarily
+	// degraded. Restore the durable amx_state this first successful list carries
+	// BEFORE advertising ready, so a health check or startup smoke never observes
+	// ready over an empty or partial store. For a window that already holds
+	// in-process state (a hook event that landed during the degraded window, or a
+	// late-completing startup restore), restoreFromUserVars keeps that accepted
+	// state authoritative and merges in only the disjoint durable facts the
+	// persisted payload still carries — never overwriting a same-source in-process
+	// fact — so no accepted hook state is rolled back while a live ASL lease, pipe
+	// child, subagent, or attention/error contribution is not silently dropped.
+	// runSnapshotTickWithReceipts then enqueues the freshly restored windows for rendering.
+	recovering := false
+	if ready, _ := h.Readiness(); !ready {
+		recovering = true
+		h.restoreFromUserVars(windows, now)
+	}
+	h.runSnapshotTickWithReceipts(now, windows, reducerReceipts)
+	if recovering {
+		h.MarkReady()
+	}
 }
 
-func (h *Handler) runSnapshotTick(now time.Time, windows []kitty.OSWindow) {
+func (h *Handler) runSnapshotTickWithReceipts(now time.Time, windows []kitty.OSWindow, reducerReceipts map[int]uint64) {
 	// The maintenance loop is the periodic Kitty lister: publish the fresh
 	// snapshot so hook routing reads it instead of calling ListWindows itself.
 	// Staleness evaluation deliberately does not live here: the independent
 	// watchdog loop owns it, measuring idleness with in-process elapsed time
 	// instead of rewriting activity timestamps after tick gaps.
-	h.publishSnapshot(windows, now)
-	h.refreshMutedFromSnapshot(windows)
+	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
 	h.pruneClosedWindows(now, liveWindowIDs(windows))
 	// First tick doubles as the startup reconciliation; afterwards the interval
 	// gate keeps it to every aslReconcileInterval.
@@ -156,6 +214,12 @@ func (h *Handler) runSnapshotTick(now time.Time, windows []kitty.OSWindow) {
 func (h *Handler) refreshMutedFromSnapshot(windows []kitty.OSWindow) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
+	h.refreshMutedFromSnapshotLocked(windows)
+}
+
+// refreshMutedFromSnapshotLocked refreshes the window mute cache from one
+// immutable Kitty snapshot. Callers hold stateMu.
+func (h *Handler) refreshMutedFromSnapshotLocked(windows []kitty.OSWindow) {
 	for i := range windows {
 		for j := range windows[i].Tabs {
 			tabMuted := palette.ParseTitleParts(windows[i].Tabs[j].Title).Muted

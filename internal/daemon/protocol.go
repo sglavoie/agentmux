@@ -102,8 +102,10 @@ type Response struct {
 	// ActivityWriter reports the asynchronous work-journal pipeline. A full
 	// queue or SQLite failure is visible here but never changes hook responses.
 	ActivityWriter *activity.Metrics `json:"activity_writer,omitempty"`
-	// Ready reports whether the daemon completed its bounded initial
-	// snapshot+restore before binding the public socket. DegradedReason explains
+	// Ready reports whether the daemon completed its bounded initial restore
+	// before binding the public socket, or — after a degraded start — later
+	// recovered when a maintenance tick restored durable state from a
+	// successful snapshot and marked the daemon ready. DegradedReason explains
 	// why it started (or remains) degraded when Ready is false.
 	Ready          bool   `json:"ready"`
 	DegradedReason string `json:"degraded_reason,omitempty"`
@@ -160,9 +162,11 @@ type WindowDebugWatchdog struct {
 
 // WindowDebugShadow reports the shadow reducer's view of a window: its current
 // effective state/generation and every recorded divergence from the legacy
-// state machine. The legacy path stays the single writer of visible state, so
-// mismatches here are diagnostic evidence for the reducer cutover, never a
-// behavior change.
+// state machine. The reducer's effective state is the authoritative visible
+// icon and loop state (published by reduceStateUpdate through
+// publishEffectiveLocked); the recorded mismatches are diagnostic evidence of
+// where the retired legacy scalar machine would have differed, never a separate
+// visible-state writer or a behavior change.
 type WindowDebugShadow struct {
 	EffectiveIcon    string           `json:"effective_icon"`
 	EffectiveLooping bool             `json:"effective_looping"`
@@ -170,7 +174,7 @@ type WindowDebugShadow struct {
 	MismatchCount    int              `json:"mismatch_count"`
 	Mismatches       []ShadowMismatch `json:"mismatches,omitempty"`
 	// Facts is the reducer's live source-fact set, stamped at export time from
-	// the window's reducer (schema v6). Diagnostics use it to hold the visible
+	// the window's reducer (schema v7). Diagnostics use it to hold the visible
 	// icon accountable to the authoritative facts: an active ASL lease showing
 	// stop/empty, or a live subagent without 🤖, is a health failure.
 	Facts []SourceFactSnapshot `json:"facts,omitempty"`
@@ -232,13 +236,16 @@ type EventsExport struct {
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
-// `amx daemon export-events`. Version 6 retains every v5 field and adds: the
-// per-window Watchdog section (synthetic daemon interventions + tombstone
-// marker), the reducer's live source facts, per-event daemon sequence /
-// nanosecond receipt time / normalized source identity / route decision, and
-// daemon-level readiness, build identity, and request metrics (queue
-// saturation and latency).
-const EventsExportSchemaVersion = 6
+// `amx daemon export-events`. Version 7 retains every v6 field and adds the
+// interactive-ownership `pm` flag on exported source facts (a fact from a
+// non-interactive `claude -p` child), so diagnostics can tell an interactive
+// harness owner apart from a pipe-mode child. Version 6 added: the per-window
+// Watchdog section (synthetic daemon interventions + tombstone marker), the
+// reducer's live source facts, per-event daemon sequence / nanosecond receipt
+// time / normalized source identity / route decision, and daemon-level
+// readiness, build identity, and request metrics (queue saturation and
+// latency).
+const EventsExportSchemaVersion = 7
 
 // ExportEventsPayload is the CLI JSON envelope written by
 // `amx daemon export-events`. CLIBuild identifies the exporting CLI binary so
@@ -261,7 +268,7 @@ type ExportDaemonMetadata struct {
 	Metrics       *MetricsSnapshot `json:"metrics,omitempty"`
 }
 
-// ExportWindow is one per-window investigation entry in the schema-v6 payload.
+// ExportWindow is one per-window investigation entry in the schema-v7 payload.
 // Durable fields come from the daemon; Live is joined at export time from
 // Kitty/session lookups on a best-effort basis.
 type ExportWindow struct {

@@ -13,8 +13,9 @@ import (
 var resetFlowStopDelay = 500 * time.Millisecond
 
 type pendingResetStop struct {
-	timer *time.Timer
-	seq   uint64
+	timer   *time.Timer
+	seq     uint64
+	claimed bool
 }
 
 func (h *Handler) deferResetSensitiveStop(req Request, payload hookevent.HookPayload) bool {
@@ -34,6 +35,14 @@ func (h *Handler) deferResetSensitiveStop(req Request, payload hookevent.HookPay
 	}
 	h.nextResetStopSeq++
 	seq := h.nextResetStopSeq
+	// Accepting the deferred stop is a window-scoped state transition even
+	// though its reducer fact is not applied until the timer commits. Advance
+	// the receipt now so an off-lock screen observation captured before this
+	// stop cannot clear or cancel it as if no event had landed. A clear that
+	// captures after this point may cancel this exact pending generation while
+	// holding stateMu; replacing it with another deferred stop advances the
+	// receipt again and makes that older clear observation stale.
+	h.ensureWindowStateLocked(req.WindowID).ShadowSeq++
 	timer := time.AfterFunc(resetFlowStopDelay, func() {
 		h.commitDeferredResetStop(req, seq)
 	})
@@ -46,14 +55,26 @@ func (h *Handler) deferResetSensitiveStop(req Request, payload hookevent.HookPay
 // debounce timer for windowID. Called when a newer authoritative event
 // supersedes the held stop so it can no longer fire and repaint a stale icon.
 func (h *Handler) cancelPendingResetStop(windowID int) {
+	h.resetStopCommitMu.Lock()
+	defer h.resetStopCommitMu.Unlock()
+
 	h.stateMu.Lock()
+	h.cancelPendingResetStopLocked(windowID)
+	h.stateMu.Unlock()
+}
+
+// cancelPendingResetStopLocked is the state-critical variant used when the
+// pending or claimed stop must be removed atomically with another window
+// mutation. Callers hold resetStopCommitMu and stateMu, in that order, so a
+// callback cannot pass its final claim check until the superseding mutation
+// has either canceled it or completed after it.
+func (h *Handler) cancelPendingResetStopLocked(windowID int) {
 	if pending, ok := h.pendingResetStops[windowID]; ok {
 		if pending.timer != nil {
 			pending.timer.Stop()
 		}
 		delete(h.pendingResetStops, windowID)
 	}
-	h.stateMu.Unlock()
 }
 
 // supersedesDeferredResetStop reports whether an incoming state update should
@@ -84,10 +105,40 @@ func (h *Handler) commitDeferredResetStop(req Request, seq uint64) {
 		h.stateMu.Unlock()
 		return
 	}
-	delete(h.pendingResetStops, req.WindowID)
+	// Keep the claimed generation addressable until its reducer application is
+	// complete. A receipt-valid Codex clear that lands before the final commit
+	// boundary can therefore cancel this callback even after its timer fired.
+	pending.claimed = true
+	h.pendingResetStops[req.WindowID] = pending
+	h.stateMu.Unlock()
+
+	if h.afterDeferredStopClaimForTest != nil {
+		h.afterDeferredStopClaimForTest(req.WindowID, seq)
+	}
+
+	// The commit mutex is the linearization boundary with Codex clear (and the
+	// ordinary superseding-event cancellation prelude). Revalidate the claimed
+	// map entry after acquiring it: if clear won while the callback was between
+	// claim and application, the entry is gone and this callback is inert. If
+	// the callback wins, superseding events wait until the Stop has advanced the
+	// reducer receipt and then make their decision against that applied state.
+	h.resetStopCommitMu.Lock()
+	defer h.resetStopCommitMu.Unlock()
+	h.stateMu.Lock()
+	pending, ok = h.pendingResetStops[req.WindowID]
+	if !ok || pending.seq != seq || !pending.claimed {
+		h.stateMu.Unlock()
+		return
+	}
 	h.stateMu.Unlock()
 
 	h.handleStateUpdate(req)
+
+	h.stateMu.Lock()
+	if pending, ok := h.pendingResetStops[req.WindowID]; ok && pending.seq == seq {
+		delete(h.pendingResetStops, req.WindowID)
+	}
+	h.stateMu.Unlock()
 }
 
 func shouldDeferResetSensitiveStop(req Request, payload hookevent.HookPayload) bool {

@@ -229,9 +229,8 @@ var fuzzCfgs = map[string]ReducerConfig{
 	"production": {GuardDuration: 5, StaleActive: 600, StaleSubagent: 1800, StaleCompact: 180},
 }
 
-// reduceView compares outcomes ignoring the winning Source: precedence ties
-// with identical (At, Seq) break on map order, which is deliberately allowed —
-// the visible icon and loop marker are what the user sees.
+// reduceView compares outcomes ignoring the winning Source: the visible icon
+// and loop marker are what the user sees.
 type reduceView struct {
 	Icon    string
 	Looping bool
@@ -337,12 +336,12 @@ func TestFuzzReducerRestartEquivalenceEveryPrefix(t *testing.T) {
 // outcome, and no invalid-kind fact may ever appear.
 func TestFuzzReducerUnknownAndMalformedEventsPreserveState(t *testing.T) {
 	junk := []NormalizedEvent{
-		NormalizedFromHook("Stop", "claude", `{"source_sequence":"not-a-number"}`, 42),
-		NormalizedFromHook("PreToolUse", "claude", `{"emitted_time":"NaN"}`, 42),
-		NormalizedFromHook("Stop", "claude", `{"broken json`, 42),
-		NormalizedFromHook("TotallyUnknownEvent", "claude", `{}`, 42),
-		NormalizedFromHook("InstructionsLoaded", "claude", `{}`, 42),
-		NormalizedFromHook("AgentSessionLoopFinished", "claude", `{"run_id":"run-1","source_sequence":"boom"}`, 42),
+		NormalizedFromHook("Stop", "claude", `{"source_sequence":"not-a-number"}`, 42, false),
+		NormalizedFromHook("PreToolUse", "claude", `{"emitted_time":"NaN"}`, 42, false),
+		NormalizedFromHook("Stop", "claude", `{"broken json`, 42, false),
+		NormalizedFromHook("TotallyUnknownEvent", "claude", `{}`, 42, false),
+		NormalizedFromHook("InstructionsLoaded", "claude", `{}`, 42, false),
+		NormalizedFromHook("AgentSessionLoopFinished", "claude", `{"run_id":"run-1","source_sequence":"boom"}`, 42, false),
 	}
 	for i, n := range junk {
 		if n.Deliverable() {
@@ -383,9 +382,9 @@ func TestFuzzReducerUnknownAndMalformedEventsPreserveState(t *testing.T) {
 // fuzzOracleReduce independently recomputes the visible outcome from the
 // exported fact snapshots: looping is any live ASL lease; each unacked,
 // non-stale fact contributes its icon; ⏹ is masked while a lease is live; the
-// highest precedence wins with (At, Seq) recency breaking ties. It returns the
-// candidate icons at the winning recency so ambiguous ties (identical At and
-// Seq across sources) accept either icon.
+// highest precedence wins with (At, CausalOrder) recency breaking ties. It
+// returns the candidate icons at the winning recency so legacy facts with an
+// identical zero order accept either icon.
 func fuzzOracleReduce(cfg ReducerConfig, facts []SourceFactSnapshot, now int64) (icons map[string]bool, looping bool) {
 	stale := func(f SourceFactSnapshot) bool {
 		var threshold int64
@@ -406,7 +405,7 @@ func fuzzOracleReduce(cfg ReducerConfig, facts []SourceFactSnapshot, now int64) 
 	}
 	bestPrec := -1
 	var bestAt int64
-	var bestSeq uint64
+	var bestOrder uint64
 	icons = map[string]bool{}
 	for _, f := range facts {
 		if f.Acked || f.Icon == "" || stale(f) {
@@ -417,10 +416,10 @@ func fuzzOracleReduce(cfg ReducerConfig, facts []SourceFactSnapshot, now int64) 
 		}
 		prec := IconPrecedence(f.Icon)
 		switch {
-		case prec > bestPrec, prec == bestPrec && (f.At > bestAt || (f.At == bestAt && f.Seq > bestSeq)):
-			bestPrec, bestAt, bestSeq = prec, f.At, f.Seq
+		case prec > bestPrec, prec == bestPrec && (f.At > bestAt || (f.At == bestAt && f.CausalOrder > bestOrder)):
+			bestPrec, bestAt, bestOrder = prec, f.At, f.CausalOrder
 			icons = map[string]bool{f.Icon: true}
-		case prec == bestPrec && f.At == bestAt && f.Seq == bestSeq:
+		case prec == bestPrec && f.At == bestAt && f.CausalOrder == bestOrder:
 			icons[f.Icon] = true // genuine tie: either icon is acceptable
 		}
 	}

@@ -88,6 +88,12 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 			ok:      false,
 		},
 		{
+			name:    "idle_prompt without harness context stays generic idle",
+			payload: HookPayload{NotificationType: "idle_prompt"},
+			want:    "idle",
+			ok:      true,
+		},
+		{
 			name:    "notification type is normalized before resolving",
 			payload: HookPayload{NotificationTypeCamel: " Permission_Prompt "},
 			want:    "permission",
@@ -98,6 +104,190 @@ func TestResolveAction_NotificationPayloads(t *testing.T) {
 		got, ok := ResolveAction("notification", tc.payload)
 		if ok != tc.ok || got != tc.want {
 			t.Errorf("%s: ResolveAction(notification, %+v) = (%q, %v), want (%q, %v)", tc.name, tc.payload, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+// TestResolveActionForHarness_ClaudeIdlePrompt locks in the harness-aware
+// notification contract: Claude's idle_prompt is an authoritative stop, but
+// only when the harness is Claude. Other harnesses (and the agnostic wrapper)
+// leave the unrecognized notification type as the generic idle fallback so a
+// future harness reusing the name is not silently promoted to stop.
+func TestResolveActionForHarness_ClaudeIdlePrompt(t *testing.T) {
+	cases := []struct {
+		name    string
+		event   string
+		harness string
+		payload HookPayload
+		want    string
+		ok      bool
+	}{
+		{
+			name:    "claude idle_prompt resolves to stop",
+			event:   "Notification",
+			harness: "claude",
+			payload: HookPayload{NotificationType: "idle_prompt"},
+			want:    "stop",
+			ok:      true,
+		},
+		{
+			name:    "claude idle_prompt camel + mixed case",
+			event:   "notification",
+			harness: "Claude",
+			payload: HookPayload{NotificationTypeCamel: " Idle_Prompt "},
+			want:    "stop",
+			ok:      true,
+		},
+		{
+			name:    "codex idle_prompt falls back to generic idle, never stop",
+			event:   "Notification",
+			harness: "codex",
+			payload: HookPayload{NotificationType: "idle_prompt"},
+			want:    "idle",
+			ok:      true,
+		},
+		{
+			name:    "empty harness idle_prompt falls back to generic idle, never stop",
+			event:   "Notification",
+			harness: "",
+			payload: HookPayload{NotificationType: "idle_prompt"},
+			want:    "idle",
+			ok:      true,
+		},
+		{
+			name:    "claude permission_prompt is unchanged by harness",
+			event:   "Notification",
+			harness: "claude",
+			payload: HookPayload{NotificationType: "permission_prompt"},
+			want:    "permission",
+			ok:      true,
+		},
+		{
+			name:    "claude agent_idle stays stop",
+			event:   "Notification",
+			harness: "claude",
+			payload: HookPayload{NotificationType: "agent_idle"},
+			want:    "stop",
+			ok:      true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveActionForHarness(tc.event, tc.payload, tc.harness)
+			if ok != tc.ok || got != tc.want {
+				t.Fatalf("ResolveActionForHarness(%q, %+v, %q) = (%q, %v), want (%q, %v)", tc.event, tc.payload, tc.harness, got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
+// TestResolveActionForHarness_CopilotAgentIdleIgnored locks in the harness-aware
+// notification contract for Copilot: agent_idle is a background-agent idle
+// signal, not a main-session stop, so it is ignored for Copilot while remaining
+// a stop for Claude and the agnostic wrapper. Native agentStop/sessionEnd stay
+// the primary terminal signals for Copilot.
+func TestResolveActionForHarness_CopilotAgentIdleIgnored(t *testing.T) {
+	cases := []struct {
+		name    string
+		event   string
+		harness string
+		payload HookPayload
+		want    string
+		ok      bool
+	}{
+		{
+			name:    "copilot agent_idle is ignored, never stop",
+			event:   "notification",
+			harness: "copilot",
+			payload: HookPayload{NotificationType: "agent_idle"},
+			ok:      false,
+		},
+		{
+			name:    "copilot agent_idle camel + mixed case is ignored",
+			event:   "Notification",
+			harness: "Copilot",
+			payload: HookPayload{NotificationTypeCamel: " Agent_Idle "},
+			ok:      false,
+		},
+		{
+			name:    "copilot agentStop remains the primary terminal stop",
+			event:   "agentStop",
+			harness: "copilot",
+			payload: HookPayload{StopReasonCamel: "end_turn"},
+			want:    "stop",
+			ok:      true,
+		},
+		{
+			name:    "copilot sessionEnd remains a stop",
+			event:   "sessionEnd",
+			harness: "copilot",
+			want:    "stop",
+			ok:      true,
+		},
+		{
+			name:    "claude agent_idle still resolves to stop",
+			event:   "Notification",
+			harness: "claude",
+			payload: HookPayload{NotificationType: "agent_idle"},
+			want:    "stop",
+			ok:      true,
+		},
+		{
+			name:    "agnostic agent_idle still resolves to stop",
+			event:   "notification",
+			harness: "",
+			payload: HookPayload{NotificationType: "agent_idle"},
+			want:    "stop",
+			ok:      true,
+		},
+		{
+			name:    "copilot permission_prompt is unaffected",
+			event:   "notification",
+			harness: "copilot",
+			payload: HookPayload{NotificationType: "permission_prompt"},
+			want:    "permission",
+			ok:      true,
+		},
+		{
+			name:    "copilot elicitation_dialog is unaffected",
+			event:   "notification",
+			harness: "copilot",
+			payload: HookPayload{NotificationType: "elicitation_dialog"},
+			want:    "elicitation",
+			ok:      true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveActionForHarness(tc.event, tc.payload, tc.harness)
+			if ok != tc.ok || got != tc.want {
+				t.Fatalf("ResolveActionForHarness(%q, %+v, %q) = (%q, %v), want (%q, %v)", tc.event, tc.payload, tc.harness, got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
+// TestIsIgnoredEventForHarness pins the harness-aware ignore rule: Copilot
+// agent_idle is ignored (a background-agent notification), but the agnostic and
+// Claude variants are not, so their agent_idle still resolves to a stop.
+func TestIsIgnoredEventForHarness(t *testing.T) {
+	cases := []struct {
+		event   string
+		harness string
+		payload HookPayload
+		want    bool
+	}{
+		{"Notification", "copilot", HookPayload{NotificationType: "agent_idle"}, true},
+		{"notification", "Copilot", HookPayload{NotificationTypeCamel: " Agent_Idle "}, true},
+		{"Notification", "claude", HookPayload{NotificationType: "agent_idle"}, false},
+		{"Notification", "", HookPayload{NotificationType: "agent_idle"}, false},
+		{"Notification", "copilot", HookPayload{NotificationType: "permission_prompt"}, false},
+		{"Notification", "copilot", HookPayload{NotificationType: "shell_completed"}, true},
+		{"InstructionsLoaded", "copilot", HookPayload{}, true},
+	}
+	for _, tc := range cases {
+		if got := IsIgnoredEventForHarness(tc.event, tc.payload, tc.harness); got != tc.want {
+			t.Errorf("IsIgnoredEventForHarness(%q, %+v, %q) = %v, want %v", tc.event, tc.payload, tc.harness, got, tc.want)
 		}
 	}
 }

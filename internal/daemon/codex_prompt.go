@@ -26,7 +26,13 @@ type CodexPromptClassification struct {
 }
 
 var codexChoiceLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*\d+\.`)
-var codexComposerLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*(?:Use /skills to list available skills)?\s*$`)
+
+// Codex renders the empty composer with a dim placeholder. Kitty's get-text
+// output intentionally drops styling, so the placeholder is indistinguishable
+// from ordinary text and must be recognized explicitly. Keep this list narrow:
+// accepting arbitrary text after the chevron would let an old transcript prompt
+// satisfy the terminal-screen classifiers.
+var codexComposerLineRE = regexp.MustCompile(`(?m)^\s*(?:\x{203a}|>)\s*(?:(?:Use /skills to list available skills)|(?:Find and fix a bug in @filename))?\s*$`)
 var codexContextZeroLineRE = regexp.MustCompile(`(?i)\bcontext\b.*(?:^|[^0-9])0\s*%`)
 var codexLabeledTranscriptLineRE = regexp.MustCompile(`(?i)^\s*(?:user|codex|assistant|system)\s*:`)
 
@@ -39,6 +45,15 @@ var codexWorkedForLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*worked for\s+\
 // (5s • Esc to interrupt)"). A later match than the Worked-for line means the
 // turn is still active, so the completed-turn classifier bails.
 var codexWorkingStatusLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*working\b`)
+
+// codexInterruptedLineRE matches Codex's TUI-generated interrupted-turn marker
+// ("⏹ Interrupted", "• Interrupted by user", "⚠ Conversation interrupted …").
+// Like codexWorkedForLineRE it anchors the keyword to the start of the status
+// line (after any bullet/warning-glyph decoration) so transcript prose that
+// merely narrates an interruption — or Codex's own "Working (… Esc to
+// interrupt)" spinner, which begins with "Working" and never with "interrupted"
+// — cannot match.
+var codexInterruptedLineRE = regexp.MustCompile(`(?i)^[^\p{L}\p{N}]*(?:conversation\s+)?interrupted\b`)
 
 // ClassifyCodexPromptScreen classifies a visible Codex prompt from screen text.
 //
@@ -102,6 +117,45 @@ func ClassifyCodexCompletedTurnScreen(screen string) bool {
 	}
 
 	for i := workedForIdx + 1; i < len(lines); i++ {
+		if codexComposerLineRE.MatchString(lines[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+// ClassifyCodexInterruptedTurnScreen reports whether a Codex screen scrape shows
+// a turn the user interrupted (Esc/Ctrl-C) that is safe to treat as a stop
+// transition.
+//
+// It shares the completed-turn classifier's conservatism and evidence shape:
+// the screen must not be a visible prompt, the latest Codex status line must be
+// the TUI-generated interrupted-turn marker (with no later "Working (…)" line
+// that would mean the turn resumed), and an empty composer prompt must follow
+// that marker. Codex leaves this state on screen after an interruption, and —
+// exactly the case native hooks miss — no Stop hook arrives.
+func ClassifyCodexInterruptedTurnScreen(screen string) bool {
+	if _, ok := ClassifyCodexPromptScreen(screen); ok {
+		return false
+	}
+
+	lines := strings.Split(screen, "\n")
+	interruptedIdx := -1
+	latestStatusIsInterrupted := false
+	for i, line := range lines {
+		switch {
+		case codexInterruptedLineRE.MatchString(line):
+			interruptedIdx = i
+			latestStatusIsInterrupted = true
+		case codexWorkingStatusLineRE.MatchString(line):
+			latestStatusIsInterrupted = false
+		}
+	}
+	if interruptedIdx < 0 || !latestStatusIsInterrupted {
+		return false
+	}
+
+	for i := interruptedIdx + 1; i < len(lines); i++ {
 		if codexComposerLineRE.MatchString(lines[i]) {
 			return true
 		}

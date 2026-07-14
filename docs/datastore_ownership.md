@@ -17,6 +17,28 @@ errors. The stable lock file is not operator data and remains in place between
 opens; descriptor locking, not lock-file creation or deletion, defines
 ownership.
 
+Corruption replacement adds a separate rebuild gate at
+`agent-mux.db.rebuild`. Its exclusive descriptor survives the dashboard's
+re-exec, while the private marker records the owner PID, whether prior daemon
+liveness must be restored, and (after successful replacement) a durable pending
+rebuild result. Gate publication and daemon startup serialize on the
+stable descriptor lock `agent-mux.db.rebuild-startup.lock`. A daemon holds that
+lock from before checking the marker until it has answered a health request on
+its bound socket. Recovery holds the same lock while publishing the marker, then
+checks health only after every earlier startup has either become reachable or
+exited. Thus a daemon that wins is stopped before replacement, while a recovery
+that wins makes the daemon exit before socket publication or SQLite open. The
+daemon activity writer reacquires the same serialization immediately around its
+deferred SQLite open so it cannot cross a gate published after daemon startup.
+An actively locked marker rejects hook auto-start and explicit starts. An
+unlocked ordinary marker left before replacement is crash residue and is
+removed on the next check. Once replacement succeeds, the marker is durable:
+loss of the advisory descriptor no longer authorizes daemon SQLite access, and
+ordinary auto-start leaves the marker intact. The marker pathname is removed
+only after the replacement's compatibility state is checkpointed durably. The
+stable startup lock file is never removed; descriptor locking, not file
+creation, defines ownership.
+
 ## Index facades
 
 - `transcript.LoadSQLiteIndex` and `plans.LoadSQLiteIndex` are compatibility
@@ -45,7 +67,8 @@ ledger rows. Removing a rollback entry never deletes the durable SQLite row.
 - `internal/handoff.Workflow` and `internal/worktree.Workflow` intentionally
   open one short-lived store per explicit workflow execution, then close it.
 - The daemon activity writer owns its worker-lifetime store through the writer
-  lifecycle.
+  lifecycle. Its deferred open crosses the daemon-startup serialization lock so
+  an already-running worker cannot open SQLite after recovery publishes a gate.
 - `tui.DataServices` owns one TUI-process pool. Unified search, workspace
   activity, workspace projection, transcript search, and plan search all reuse
   the injected snapshot and never open independent pools.
@@ -57,29 +80,52 @@ Automatic replacement begins only after TUI data-service initialization wraps
 dispatched. `DataServices.writerMu` remains the TUI shutdown barrier around the
 operation, so refresh work and `Close` cannot overlap destructive recovery.
 
-The daemon recovery coordinator uses this order when the daemon is live:
+The daemon recovery coordinator uses this order:
 
-1. resolve the currently running executable;
-2. request shutdown and wait until the old socket inode is removed or replaced;
-3. let daemon server drain finish, close the activity writer and its Store, and
+1. acquire the stable daemon-startup serialization lock, publish and lock the
+   rebuild gate, then release serialization before inspecting daemon health;
+   this waits out any earlier in-flight startup and rejects every later one;
+2. record whether the daemon was live and, when it was, resolve its executable;
+3. request shutdown and wait until the old socket inode is removed or replaced;
+4. let daemon server drain finish, close the activity writer and its Store, and
    only then remove the old socket;
-4. acquire the datastore's exclusive recovery lock;
-5. recheck corruption against a private DB/WAL/SHM snapshot, quarantine the
+5. acquire the datastore's exclusive recovery lock;
+6. recheck corruption against a private DB/WAL/SHM snapshot, quarantine the
    authoritative artifacts, create and validate the replacement, then
    downgrade the exclusive descriptor for the validated Store;
-6. close the recovering TUI owner and re-exec the dashboard so no process-local
+7. close the recovering TUI owner and re-exec the dashboard so no process-local
    SQLite WAL/shared-memory mapping can survive the same-path replacement;
-7. transfer the one-shot recovery result and any pending daemon restart to the
-   fresh process through a consumed-once private handoff;
-8. keep the daemon stopped while the fresh TUI imports transcript/plan
+8. transfer the one-shot recovery result and rebuild-completion responsibility
+   to the fresh process through a consumed-once private handoff;
+9. keep every daemon start blocked while the fresh TUI imports transcript/plan
    compatibility state and synchronizes workspaces through its process-owned
-   Store; and
-9. restart the previously live daemon after the rebuild attempt finishes.
+   Store;
+10. run `PRAGMA wal_checkpoint(TRUNCATE)` so the rebuilt page count is durable
+    in the main database before removing the rebuild marker; and
+11. restart the daemon only when it was live before recovery.
 
 If replacement itself fails, the coordinator restarts the daemon before
-returning the failure. If re-exec fails, the recovering process invokes its
-transferred restart fallback. If the fresh TUI exits before rebuilding,
-`DataServices.Close` owns the same deferred restart responsibility.
+returning the failure because the replacement was never published. After a
+successful replacement, rebuild completion is stricter: failed re-exec,
+configuration loading, compatibility synchronization, checkpointing, or an
+early fresh-TUI exit leaves the rebuild gate owned and the daemon stopped.
+Only a fresh TUI initialization that completes the required truncating
+checkpoint may consume completion ownership and restore prior daemon liveness.
+Completion ownership remains pending until both gate finalization and any
+required daemon restart succeed. An initialization retry rebuilds and
+checkpoints its fresh candidate again; if gate removal already succeeded, the
+process-owned completion resumes at executable resolution and daemon spawn
+without trying to remove the now-absent marker or losing its restart intent.
+If the re-exec fails or the re-execed process cannot load configuration, process
+exit closes the advisory descriptor but leaves the durable marker and restart
+intent behind. After correcting the launch or configuration problem, the
+operator should run `amx` again. The fresh dashboard claims that unlocked
+durable marker under daemon-startup serialization, performs ordinary
+compatibility import and workspace synchronization, checkpoints, and only then
+removes the marker and restores prior daemon liveness. Operators must not delete
+`agent-mux.db.rebuild` merely because its recorded PID has exited; if a fresh
+dashboard cannot claim or initialize it, preserve the database, recovery
+quarantine, and marker for explicit repair rather than allowing daemon startup.
 
 The private recheck matters because even read-only SQLite inspection can create
 or rewrite shared-memory state. Recovery never mutates the authoritative
@@ -90,8 +136,8 @@ or TUI pool from retaining a writable handle to the old inode.
 The recovery command itself does not import compatibility data. It publishes a
 healthy empty schema and releases its validation Store; the fresh process's
 ordinary TUI initialization owns transcript/plan compatibility import,
-workspace synchronization, and search reconstruction before releasing the
-deferred daemon restart. The re-exec boundary is load-bearing: closing Go-level
+workspace synchronization, search reconstruction, and the final WAL checkpoint
+before releasing the rebuild gate. The re-exec boundary is load-bearing: closing Go-level
 Store values alone does not guarantee that the SQLite implementation has
 dropped process-scoped WAL state for a pathname whose inode was replaced.
 

@@ -2,13 +2,16 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/datastore"
 )
 
 func waitForTestSocket(t *testing.T, socketPath string) {
@@ -51,19 +54,26 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	runErr := make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	published := make(chan struct{})
 
-	go func() { runErr <- Run(ctx, cfg) }()
+	go func() {
+		runErr <- run(ctx, cfg, runDependencies{
+			afterStartupPublication: func() { close(published) },
+			openActivityStore:       openDaemonActivityStore,
+		})
+	}()
 
-	// Wait for the socket to appear.
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	// Socket creation precedes Serve and the startup health confirmation. Wait
+	// for the completed publication boundary before exercising shutdown.
+	select {
+	case <-published:
+	case err := <-runErr:
+		t.Fatalf("Run returned before startup publication: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not complete startup publication")
 	}
 	if _, err := os.Stat(socketPath); err != nil {
-		t.Fatalf("socket not created: %v", err)
+		t.Fatalf("published socket missing: %v", err)
 	}
 
 	// Send shutdown request via real socket round-trip.
@@ -93,10 +103,142 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	}
 }
 
-func TestCloseDaemonResourcesClosesActivityStoreBeforeSocketRemoval(t *testing.T) {
-	steps := make([]string, 0, 3)
-	closeDaemonResources(
+func TestRun_ShutdownAcceptedDuringStartupReturnsCleanly(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-run-startup-shutdown-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	t.Setenv("HOME", dir)
+
+	startupConfirmationPaused := make(chan struct{})
+	runErr := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() {
+		runErr <- run(ctx, &config.Config{}, runDependencies{
+			beforeStartupConfirmation: func(startupCtx context.Context) {
+				close(startupConfirmationPaused)
+				<-startupCtx.Done()
+			},
+			openActivityStore: openDaemonActivityStore,
+		})
+	}()
+
+	select {
+	case <-startupConfirmationPaused:
+	case err := <-runErr:
+		t.Fatalf("Run returned before startup confirmation: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not reach startup confirmation")
+	}
+
+	resp, err := NewClientWithSocket(SocketPath()).Send(Request{Type: TypeShutdown})
+	if err != nil {
+		t.Fatalf("shutdown Send during startup: %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("shutdown response during startup: %+v", resp)
+	}
+
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("Run returned error after accepting startup shutdown: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not return after accepting startup shutdown")
+	}
+	if _, err := os.Stat(SocketPath()); !os.IsNotExist(err) {
+		t.Fatalf("socket file should have been removed; stat err = %v", err)
+	}
+}
+
+func TestRun_ShutdownAcceptedDuringStartupWithActivityRetentionReturnsPromptly(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "amx-run-startup-activity-shutdown-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	t.Setenv("HOME", dir)
+
+	startupConfirmationPaused := make(chan struct{})
+	activityOpenStarted := make(chan struct{})
+	activityOpenReturned := make(chan struct{})
+	runErr := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cfg := &config.Config{}
+	cfg.Defaults.Activity.KeepDays = 30
+	go func() {
+		runErr <- run(ctx, cfg, runDependencies{
+			beforeStartupConfirmation: func(startupCtx context.Context) {
+				close(startupConfirmationPaused)
+				<-startupCtx.Done()
+			},
+			openActivityStore: func(openCtx context.Context) (*datastore.Store, error) {
+				close(activityOpenStarted)
+				store, openErr := openDaemonActivityStore(openCtx)
+				close(activityOpenReturned)
+				return store, openErr
+			},
+		})
+	}()
+
+	select {
+	case <-startupConfirmationPaused:
+	case err := <-runErr:
+		t.Fatalf("Run returned before startup confirmation: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not reach startup confirmation")
+	}
+	select {
+	case <-activityOpenStarted:
+	case err := <-runErr:
+		t.Fatalf("Run returned before the activity retention sweep opened its store: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("activity retention sweep did not attempt to open its store")
+	}
+	select {
+	case <-activityOpenReturned:
+		t.Fatal("activity retention sweep crossed the startup lease before publication")
+	default:
+	}
+
+	resp, err := NewClientWithSocket(SocketPath()).Send(Request{Type: TypeShutdown})
+	if err != nil {
+		t.Fatalf("shutdown Send during startup: %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("shutdown response during startup: %+v", resp)
+	}
+
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("Run returned error after accepting startup shutdown: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run waited for the activity writer datastore-open timeout after shutdown")
+	}
+	select {
+	case <-activityOpenReturned:
+	default:
+		t.Fatal("Run returned before the activity opener completed")
+	}
+	if _, err := os.Stat(SocketPath()); !os.IsNotExist(err) {
+		t.Fatalf("socket file should have been removed; stat err = %v", err)
+	}
+}
+
+func TestCloseDaemonResourcesReleasesStartupBeforeClosingActivityStore(t *testing.T) {
+	steps := make([]string, 0, 4)
+	if err := closeDaemonResources(
 		func() { steps = append(steps, "server-drained") },
+		func() error {
+			steps = append(steps, "startup-released")
+			return nil
+		},
 		// activity.Writer.Close does not return until its worker defer has
 		// closed the owned datastore; this callback represents that boundary.
 		func() { steps = append(steps, "activity-store-closed") },
@@ -104,8 +246,10 @@ func TestCloseDaemonResourcesClosesActivityStoreBeforeSocketRemoval(t *testing.T
 			steps = append(steps, "socket-removed")
 			return nil
 		},
-	)
-	if got, want := strings.Join(steps, ","), "server-drained,activity-store-closed,socket-removed"; got != want {
+	); err != nil {
+		t.Fatalf("closeDaemonResources: %v", err)
+	}
+	if got, want := strings.Join(steps, ","), "server-drained,startup-released,activity-store-closed,socket-removed"; got != want {
 		t.Fatalf("teardown order = %s, want %s", got, want)
 	}
 }
@@ -175,6 +319,100 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 	}
 }
 
+func TestRunRefusesHookAutoStartDuringDatastoreRebuild(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	gate, err := datastore.BeginDefaultRebuildGate()
+	if err != nil {
+		t.Fatalf("begin rebuild gate: %v", err)
+	}
+	t.Cleanup(func() { _ = gate.Release() })
+
+	err = Run(t.Context(), &config.Config{})
+	if !errors.Is(err, datastore.ErrRebuildInProgress) {
+		t.Fatalf("Run error = %v, want ErrRebuildInProgress", err)
+	}
+	if _, statErr := os.Stat(SocketPath()); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("blocked daemon published socket: %v", statErr)
+	}
+}
+
+func TestRunDoesNotCrossRebuildGatePublishedDuringStartup(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	startupPaused := make(chan struct{})
+	resumeStartup := make(chan struct{})
+	var datastoreOpens atomic.Int32
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- run(t.Context(), &config.Config{}, runDependencies{
+			beforeDatastoreStartup: func() {
+				close(startupPaused)
+				<-resumeStartup
+			},
+			openActivityStore: func(ctx context.Context) (*datastore.Store, error) {
+				datastoreOpens.Add(1)
+				return datastore.Open(ctx)
+			},
+		})
+	}()
+
+	select {
+	case <-startupPaused:
+	case <-time.After(3 * time.Second):
+		close(resumeStartup)
+		t.Fatal("daemon did not reach the pre-gate startup pause")
+	}
+
+	gate, err := datastore.BeginDefaultRebuildGate()
+	if err != nil {
+		close(resumeStartup)
+		t.Fatalf("publish rebuild gate while daemon startup is paused: %v", err)
+	}
+	t.Cleanup(func() { _ = gate.Release() })
+	close(resumeStartup)
+
+	select {
+	case err := <-runErr:
+		if !errors.Is(err, datastore.ErrRebuildInProgress) {
+			t.Fatalf("Run error = %v, want ErrRebuildInProgress", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("daemon startup did not stop at the published rebuild gate")
+	}
+
+	if _, err := os.Lstat(SocketPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("blocked daemon published socket: %v", err)
+	}
+	if got := datastoreOpens.Load(); got != 0 {
+		t.Fatalf("blocked daemon opened SQLite %d times, want 0", got)
+	}
+}
+
+func TestOpenDaemonActivityStoreRefusesActiveRebuildGate(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	gate, err := datastore.BeginDefaultRebuildGate()
+	if err != nil {
+		t.Fatalf("begin rebuild gate: %v", err)
+	}
+	t.Cleanup(func() { _ = gate.Release() })
+
+	store, err := openDaemonActivityStore(t.Context())
+	if store != nil {
+		_ = store.Close()
+		t.Fatal("activity writer opened SQLite while rebuild gate was active")
+	}
+	if !errors.Is(err, datastore.ErrRebuildInProgress) {
+		t.Fatalf("activity store open error = %v, want ErrRebuildInProgress", err)
+	}
+	databasePath, err := datastore.DefaultPath()
+	if err != nil {
+		t.Fatalf("resolve datastore path: %v", err)
+	}
+	if _, err := os.Lstat(databasePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("blocked activity writer created datastore: %v", err)
+	}
+}
+
 func TestRun_BindsSocketWithHugeMalformedTranscriptIndex(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "amx-run-huge-index-*")
 	if err != nil {
@@ -198,26 +436,33 @@ func TestRun_BindsSocketWithHugeMalformedTranscriptIndex(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	runErr := make(chan error, 1)
-	go func() { runErr <- Run(ctx, cfg) }()
+	published := make(chan struct{})
+	go func() {
+		runErr <- run(ctx, cfg, runDependencies{
+			afterStartupPublication: func() { close(published) },
+			openActivityStore:       openDaemonActivityStore,
+		})
+	}()
 
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
+	select {
+	case <-published:
+		if _, err := os.Stat(socketPath); err != nil {
 			cancel()
-			select {
-			case err := <-runErr:
-				if err != nil {
-					t.Fatalf("Run returned error: %v", err)
-				}
-			case <-time.After(3 * time.Second):
-				t.Fatal("Run did not return after cancel")
-			}
-			return
+			t.Fatalf("published daemon socket: %v", err)
 		}
-		time.Sleep(10 * time.Millisecond)
+		cancel()
+		select {
+		case err := <-runErr:
+			if err != nil {
+				t.Fatalf("Run returned error: %v", err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("Run did not return after cancel")
+		}
+	case <-time.After(500 * time.Millisecond):
+		cancel()
+		t.Fatalf("daemon not published promptly with huge malformed transcripts.json at %s", indexPath)
 	}
-	cancel()
-	t.Fatalf("socket not created promptly with huge malformed transcripts.json at %s", indexPath)
 }
 
 func TestRun_StaleSocketIsNotRemovedWhenLockHeld(t *testing.T) {

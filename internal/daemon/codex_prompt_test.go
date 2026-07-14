@@ -325,6 +325,68 @@ func TestClassifyCodexCompletedTurnScreen(t *testing.T) {
 	}
 }
 
+func TestClassifyCodexInterruptedTurnScreen(t *testing.T) {
+	cases := []struct {
+		name   string
+		screen string
+		want   bool
+	}{
+		{
+			name:   "interrupted turn with composer",
+			screen: codexInterruptedTurnScreen,
+			want:   true,
+		},
+		{
+			name:   "conversation interrupted with composer",
+			screen: codexConversationInterruptedScreen,
+			want:   true,
+		},
+		{
+			name:   "installed 0.144.3 interruption with dim composer placeholder",
+			screen: codexInstalledInterruptedTurnScreen,
+			want:   true,
+		},
+		{
+			name:   "interrupted then resumed to working",
+			screen: codexInterruptedThenWorkingScreen,
+			want:   false,
+		},
+		{
+			name:   "interrupted without trailing composer",
+			screen: codexInterruptedNoComposerScreen,
+			want:   false,
+		},
+		{
+			name:   "prompt screen takes precedence",
+			screen: codexInterruptedThenPromptScreen,
+			want:   false,
+		},
+		{
+			name:   "transcript prose mentioning interrupted",
+			screen: codexInterruptedProseScreen,
+			want:   false,
+		},
+		{
+			name:   "working spinner esc-to-interrupt is not interrupted",
+			screen: codexWorkingTurnScreen,
+			want:   false,
+		},
+		{
+			name:   "no status line at all",
+			screen: codexClearedComposerOnlyScreen,
+			want:   false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClassifyCodexInterruptedTurnScreen(tc.screen); got != tc.want {
+				t.Fatalf("ClassifyCodexInterruptedTurnScreen() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 const codexCompletedTurnScreen = `
 • Ran tests
   go test ./internal/daemon
@@ -375,6 +437,75 @@ const codexWorkedForNoComposerScreen = `
 
 const codexWorkedForProseScreen = `
 • The migration worked for the staging cluster last week.
+• Ran tests
+
+› Use /skills to list available skills
+
+context 8% · gpt-5-codex · default · Plan mode
+`
+
+const codexInterruptedTurnScreen = `
+• Ran tests
+  go test ./internal/daemon
+
+⏹ Interrupted by user
+
+› Use /skills to list available skills
+
+gpt-5.5 xhigh · ~/1_dev_projects/sglavoie_agentmux · Context 12% used
+`
+
+const codexConversationInterruptedScreen = `
+• Reading files…
+
+⚠ Conversation interrupted — tell the model what to do differently
+
+›
+
+context 8% · gpt-5-codex · default · Plan mode
+`
+
+const codexInstalledInterruptedTurnScreen = `
+• I’ll run the command and wait for it to finish.
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Hit /feedback to report the issue.
+
+› Find and fix a bug in @filename
+
+gpt-5.6-sol xhigh · ~/1_dev_projects/sglavoie_agentmux
+`
+
+const codexInterruptedThenWorkingScreen = `
+⏹ Interrupted by user
+
+• Working (3s • Esc to interrupt)
+
+  reading files…
+`
+
+const codexInterruptedNoComposerScreen = `
+⏹ Interrupted by user
+
+• Ran build
+  go build ./...
+`
+
+const codexInterruptedThenPromptScreen = `
+⏹ Interrupted by user
+
+▌ Would you like to make the following edits?
+
+  src/app.go
+  + return nil
+
+› 1. Yes, apply these edits
+  2. No, keep editing
+
+Press enter to confirm
+`
+
+const codexInterruptedProseScreen = `
+• The deploy was interrupted for the staging cluster last week.
 • Ran tests
 
 › Use /skills to list available skills

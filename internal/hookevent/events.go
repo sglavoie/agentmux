@@ -2,6 +2,12 @@
 // resolution shared by hook clients and the daemon.
 package hookevent
 
+import (
+	"strings"
+
+	"github.com/sglavoie/agentmux/internal/harness"
+)
+
 // eventToAction is a shared map covering Claude (PascalCase) and Copilot
 // (camelCase) hook event names that directly map to a visible tab-state change.
 // Notification hooks are resolved separately because their payload subtype is
@@ -127,8 +133,24 @@ var validActions = map[string]bool{
 // If input is a known event name, it is mapped to an action, using hook payload
 // when needed (e.g. typed Notification hooks).
 // Unknown inputs return ("", false).
+//
+// ResolveAction is the harness-agnostic compatibility wrapper retained for
+// callers that have no harness context. It delegates to ResolveActionForHarness
+// with an empty harness, so harness-specific notification semantics (Claude's
+// idle_prompt authoritative stop) are not applied.
 func ResolveAction(input string, payload HookPayload) (action string, ok bool) {
-	if IsIgnoredEvent(input, payload) {
+	return ResolveActionForHarness(input, payload, "")
+}
+
+// ResolveActionForHarness is the harness-aware resolver. It behaves exactly like
+// ResolveAction except that notification resolution consults harnessName so a
+// harness's own terminal notification is honored: Claude documents idle_prompt
+// as "Claude is done", which is an authoritative stop even though native Stop
+// does not always fire (notably after a user interruption). A later prompt
+// supersedes the stop through normal reducer recency, so no special-casing is
+// needed beyond resolving the notification to stop.
+func ResolveActionForHarness(input string, payload HookPayload, harnessName string) (action string, ok bool) {
+	if IsIgnoredEventForHarness(input, payload, harnessName) {
 		return "", false
 	}
 	if action, ok := resolveFailureAction(input, payload); ok {
@@ -137,7 +159,7 @@ func ResolveAction(input string, payload HookPayload) (action string, ok bool) {
 	if validActions[input] {
 		return input, true
 	}
-	if action, ok := resolveNotificationAction(input, payload); ok {
+	if action, ok := resolveNotificationAction(input, payload, harnessName); ok {
 		return action, true
 	}
 	if action, ok := resolveToolAction(input, payload); ok {
@@ -171,8 +193,24 @@ func resolveCompactAction(input string, payload HookPayload) (string, bool) {
 }
 
 // IsIgnoredEvent reports whether an event is recognized but intentionally has no
-// tab-icon effect.
+// tab-icon effect. It is the harness-agnostic wrapper; callers with a harness in
+// hand should use IsIgnoredEventForHarness so harness-specific ignore rules
+// (Copilot's background agent_idle notification) apply.
 func IsIgnoredEvent(input string, payload HookPayload) bool {
+	return IsIgnoredEventForHarness(input, payload, "")
+}
+
+// IsIgnoredEventForHarness is the harness-aware ignore check. Beyond the
+// harness-agnostic ignore set, Copilot's agent_idle notification is a
+// background-agent idle signal, not a main-session stop: Copilot documents
+// agentStop as the main-turn terminal event, so the interactive session's stop
+// comes from native agentStop/sessionEnd or the daemon's transcript stop probe,
+// and subagent lifecycle facts remain responsible for 🤖. Ignoring it for
+// Copilot prevents a background agent going idle from falsely stopping the
+// interactive session. Other harnesses (and the agnostic wrapper) keep the
+// agent_idle → stop mapping, so a harness that documents agent_idle as a real
+// stop is unaffected.
+func IsIgnoredEventForHarness(input string, payload HookPayload, harnessName string) bool {
 	if ignoredEvents[input] {
 		return true
 	}
@@ -182,6 +220,8 @@ func IsIgnoredEvent(input string, payload HookPayload) bool {
 	switch normalizedNotificationType(payload) {
 	case "shell_completed", "shell_detached_completed", "agent_completed":
 		return true
+	case "agent_idle":
+		return isCopilotHarness(harnessName)
 	default:
 		return false
 	}
@@ -233,7 +273,7 @@ func isContextLimitCarrier(input string) bool {
 	}
 }
 
-func resolveNotificationAction(input string, payload HookPayload) (string, bool) {
+func resolveNotificationAction(input string, payload HookPayload, harnessName string) (string, bool) {
 	if !isNotificationEvent(input) {
 		return "", false
 	}
@@ -247,9 +287,36 @@ func resolveNotificationAction(input string, payload HookPayload) (string, bool)
 		return "elicitation", true
 	case "agent_idle":
 		return "stop", true
+	case "idle_prompt":
+		// Claude's idle_prompt notification is its documented "Claude is done"
+		// signal — an authoritative stop. Native Stop does not always fire
+		// (notably after a user interruption), so this notification is Claude's
+		// own terminal evidence. Gate it on the Claude harness: the type is
+		// Claude-specific, and the harness-agnostic wrapper deliberately leaves
+		// it as the generic idle fallback so a future harness reusing the name
+		// is not silently promoted to stop.
+		if isClaudeHarness(harnessName) {
+			return "stop", true
+		}
+		return "", false
 	default:
 		return "", false
 	}
+}
+
+// isClaudeHarness reports whether name identifies the Claude harness. Unlike
+// harness.Normalize it does not default an empty name to Claude: the
+// harness-agnostic ResolveAction wrapper must not apply Claude-specific
+// notification semantics.
+func isClaudeHarness(name string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), harness.Claude)
+}
+
+// isCopilotHarness reports whether name identifies the GitHub Copilot harness.
+// Like isClaudeHarness it does not default an empty name to any harness: the
+// agnostic wrapper must not apply Copilot-specific notification semantics.
+func isCopilotHarness(name string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), harness.Copilot)
 }
 
 func resolveToolAction(input string, payload HookPayload) (string, bool) {

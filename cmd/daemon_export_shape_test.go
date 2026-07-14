@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +16,146 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV6Payload(t *testing.T) {
+// TestDaemonStateAcceptanceDocSchemaV7READMEFactKeys pins the schema-v7
+// export-events example in README.md to the actual wire shape of
+// daemon.SourceFactSnapshot. WindowDebugShadow.Facts serializes that type
+// directly, so shadow.facts[] entries can only use its compact JSON tags
+// (k/y/i/pm/...), never descriptive spellings like kind/key/icon. The prior
+// round-trip test in this file exercised the Go type but never guarded the raw
+// key spelling in the documentation snippet, letting the example drift to keys
+// that amx daemon export-events cannot emit.
+func TestDaemonStateAcceptanceDocSchemaV7READMEFactKeys(t *testing.T) {
+	data, err := os.ReadFile("../README.md")
+	if err != nil {
+		t.Fatalf("ReadFile(../README.md): %v", err)
+	}
+
+	facts := extractSchemaV7ExampleFacts(t, string(data))
+	if len(facts) == 0 {
+		t.Fatalf("README schema-v7 example has no shadow.facts entries")
+	}
+
+	valid := sourceFactSnapshotWireTags()
+	for i, fact := range facts {
+		for key := range fact {
+			if !valid[key] {
+				t.Fatalf("README schema-v7 facts[%d] uses key %q, which is not a SourceFactSnapshot wire tag (valid: %v)", i, key, sortedKeys(valid))
+			}
+		}
+	}
+
+	// The example must show the compact ownership keys and a pipe-mode fact so
+	// operators see the real wire spelling and the presence-encoded pm flag.
+	var sawPipeMode bool
+	for _, fact := range facts {
+		for _, need := range []string{"k", "y", "i"} {
+			if _, ok := fact[need]; !ok {
+				t.Fatalf("README schema-v7 fact object missing compact key %q: %v", need, fact)
+			}
+		}
+		raw, ok := fact["pm"]
+		if !ok {
+			continue
+		}
+		var snap daemon.SourceFactSnapshot
+		blob, err := json.Marshal(fact)
+		if err != nil {
+			t.Fatalf("re-marshal example fact: %v", err)
+		}
+		if err := json.Unmarshal(blob, &snap); err != nil {
+			t.Fatalf("decode example fact into SourceFactSnapshot: %v", err)
+		}
+		var pm bool
+		if err := json.Unmarshal(raw, &pm); err != nil {
+			t.Fatalf("decode pm value %s: %v", raw, err)
+		}
+		if pm != snap.PipeMode {
+			t.Fatalf("example pm=%v does not round-trip through SourceFactSnapshot (%v)", pm, snap.PipeMode)
+		}
+		if pm {
+			sawPipeMode = true
+		}
+	}
+	if !sawPipeMode {
+		t.Fatalf("README schema-v7 example must include a pipe-mode fact with pm:true")
+	}
+}
+
+// extractSchemaV7ExampleFacts returns the shadow.facts array from the schema-v7
+// export example decoded as a list of raw JSON objects.
+func extractSchemaV7ExampleFacts(t *testing.T, readme string) []map[string]json.RawMessage {
+	t.Helper()
+
+	marker := "\"schema_version\": 7"
+	start := strings.Index(readme, marker)
+	if start < 0 {
+		t.Fatalf("README missing schema_version 7 example")
+	}
+	rest := readme[start:]
+	idx := strings.Index(rest, "\"facts\"")
+	if idx < 0 {
+		t.Fatalf("schema-v7 example missing a facts array")
+	}
+	rest = rest[idx:]
+	open := strings.IndexByte(rest, '[')
+	if open < 0 {
+		t.Fatalf("facts array has no opening bracket")
+	}
+	depth := 0
+	end := -1
+	for i := open; i < len(rest); i++ {
+		switch rest[i] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				end = i
+			}
+		}
+		if end >= 0 {
+			break
+		}
+	}
+	if end < 0 {
+		t.Fatalf("facts array has no closing bracket")
+	}
+
+	var facts []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(rest[open:end+1]), &facts); err != nil {
+		t.Fatalf("decode facts array %q: %v", rest[open:end+1], err)
+	}
+	return facts
+}
+
+// sourceFactSnapshotWireTags returns the set of JSON tag names emitted by
+// daemon.SourceFactSnapshot.
+func sourceFactSnapshotWireTags() map[string]bool {
+	tags := map[string]bool{}
+	rt := reflect.TypeOf(daemon.SourceFactSnapshot{})
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		name := strings.Split(tag, ",")[0]
+		if name != "" {
+			tags[name] = true
+		}
+	}
+	return tags
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV7Payload(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	now := time.Unix(1_700_000_100, 0)
@@ -63,6 +206,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV6Payload(t *testing.T) {
 							EffectiveIcon: "question", EffectiveGen: 4,
 							Facts: []daemon.SourceFactSnapshot{{
 								Kind: daemon.SourceHarness, Key: "sess-1", Action: "elicitation", Icon: "question", Seq: 4,
+								PipeMode: true,
 							}},
 						},
 						Watchdog: daemon.WindowDebugWatchdog{
@@ -140,8 +284,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV6Payload(t *testing.T) {
 	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
 		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
 	}
-	if payload.SchemaVersion != 6 {
-		t.Fatalf("schema_version = %d; want 6", payload.SchemaVersion)
+	if payload.SchemaVersion != 7 {
+		t.Fatalf("schema_version = %d; want 7", payload.SchemaVersion)
 	}
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())
@@ -190,7 +334,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV6Payload(t *testing.T) {
 		t.Fatalf("window 42 v6 event fields = %+v", window42.Events[0])
 	}
 	if len(window42.Shadow.Facts) != 1 || window42.Shadow.Facts[0].Kind != daemon.SourceHarness ||
-		window42.Shadow.Facts[0].Icon != "question" {
+		window42.Shadow.Facts[0].Icon != "question" || !window42.Shadow.Facts[0].PipeMode {
 		t.Fatalf("window 42 shadow facts = %+v", window42.Shadow.Facts)
 	}
 	if window42.Watchdog.LastEvent != "SourceExpired" || window42.Watchdog.SourceExpiries != 2 ||

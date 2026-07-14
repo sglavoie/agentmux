@@ -8,9 +8,9 @@ package daemon
 // (or ASL phase), and quarantines anything malformed so a bad sequence can never
 // shadow a later real event or paint a terminal icon.
 //
-// Like reducer.go, nothing here is wired into production rendering yet. It is
-// pure: NormalizedFromHook is a deterministic function of its inputs and reads
-// no clock, so the same payload always normalizes to the same event.
+// Normalization is pure: NormalizedFromHook is a deterministic function of its
+// inputs and reads no clock, so the same payload always normalizes to the same
+// event.
 
 import (
 	"fmt"
@@ -61,6 +61,14 @@ type NormalizedEvent struct {
 	Prompt  bool
 	ToolUse string
 
+	// PipeMode marks a hook fired by a non-interactive `claude -p` invocation.
+	// It stamps interactive ownership onto the reducer fact: an interactive
+	// (non-pipe) harness session owns the tab and may retire an older
+	// interactive session's stale active fact, while pipe-mode children are
+	// protected and never masked by interactive supersession. Absent (false) is
+	// interactive, the backward-compatible default.
+	PipeMode bool
+
 	// ASL-only. Phase selects the reducer icon + loop lease; for a paused run the
 	// attention icon comes from Action.
 	RunID string
@@ -81,11 +89,12 @@ type NormalizedEvent struct {
 	// Event is the raw hook event name, retained for audit/logging only — never
 	// an input to icon logic.
 	Event string
-	// AgentType is retained for later source-scoped aggregation (session 7). It
-	// never affects the icon.
+	// AgentType is retained for audit/diagnostic attribution only. It never
+	// affects the icon.
 	AgentType string
-	// SourceEventID is the upstream event identity, retained so retries can be
-	// recognized by later sessions. It does not affect reduction here.
+	// SourceEventID is the upstream event identity. Notification dedup keys on
+	// it (shouldNotifySourceEventLocked) so a redelivered event never notifies
+	// twice. It does not affect reduction.
 	SourceEventID string
 
 	// Invalid marks a quarantined payload. Reason carries the diagnostic. An
@@ -116,6 +125,7 @@ func (n NormalizedEvent) ReducerEvent() ReducerEvent {
 		At:            n.At,
 		Prompt:        n.Prompt,
 		ToolUse:       n.ToolUse,
+		PipeMode:      n.PipeMode,
 		RunID:         n.RunID,
 		Phase:         n.Phase,
 		SessionID:     n.SessionID,
@@ -142,16 +152,18 @@ func inert(event, reason string) NormalizedEvent {
 	return NormalizedEvent{Event: event, Reason: reason}
 }
 
-// NormalizedFromHook turns a raw hook delivery into a NormalizedEvent. It is the
-// production boundary a later session wires in front of the reducer; today it is
-// exercised by tests. The result is a deterministic function of the inputs:
+// NormalizedFromHook turns a raw hook delivery into a NormalizedEvent. It is
+// the production boundary in front of the reducer: every hook delivery path
+// (direct hook events, ASL routing, loop lifecycle) normalizes through it
+// before reduceStateUpdate. The result is a deterministic function of the
+// inputs:
 //
 //   - Unparseable JSON, or a present-but-malformed numeric identity field, is
 //     quarantined as invalid_payload and can never mutate visible state.
 //   - An unrecognized or intentionally ignored event is inert (empty action).
 //   - Everything else carries a stable source key, the resolved action or ASL
 //     phase, and the parsed identity/timing fields.
-func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int) NormalizedEvent {
+func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int, pipeMode bool) NormalizedEvent {
 	event = strings.TrimSpace(event)
 
 	payload, err := hookevent.DecodeHookPayload(strings.NewReader(payloadJSON))
@@ -160,14 +172,14 @@ func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int) No
 	}
 
 	if isAgentSessionLoopEvent(event) {
-		return normalizeASLEvent(event, payload, windowID)
+		return normalizeASLEvent(event, payload, windowID, pipeMode)
 	}
 
-	if hookevent.IsIgnoredEvent(event, payload) {
+	if hookevent.IsIgnoredEventForHarness(event, payload, harnessName) {
 		return inert(event, reasonIgnoredEvent)
 	}
 
-	action, ok := hookevent.ResolveAction(event, payload)
+	action, ok := hookevent.ResolveActionForHarness(event, payload, harnessName)
 	if !ok {
 		return inert(event, reasonUnknownEvent)
 	}
@@ -215,6 +227,7 @@ func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int) No
 		At:            at,
 		Prompt:        hookevent.IsPromptEvent(event),
 		ToolUse:       payload.EffectiveToolUseID(),
+		PipeMode:      pipeMode,
 		Event:         event,
 		AgentType:     payload.EffectiveAgentType(),
 		SourceEventID: payload.EffectiveSourceEventID(),
@@ -231,7 +244,7 @@ func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int) No
 // the run is still a stable SourceASL bucket rather than being quarantined.
 // A paused run additionally carries the attention action derived from its pause
 // reason: the reducer renders it as the matching attention icon plus 🔁.
-func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int) NormalizedEvent {
+func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int, pipeMode bool) NormalizedEvent {
 	seq, at, err := parseSourceSeqAt(payload)
 	if err != nil {
 		return quarantine(event, fmt.Sprintf("%s: %v", InvalidPayloadReason, err))
@@ -250,6 +263,7 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 		Action:        action,
 		Seq:           seq,
 		At:            at,
+		PipeMode:      pipeMode,
 		RunID:         runID,
 		Phase:         aslPhaseForEvent(event),
 		TurnID:        payload.EffectiveTurnID(),
@@ -327,9 +341,9 @@ func normalizeSource(event, harnessName, action string, payload hookevent.HookPa
 // daemon-originated, non-harness bucket) with a distinct key.
 func userActionSource() SourceID { return SourceID{Kind: SourceProbe, Key: "user"} }
 
-// ProbeSource is the explicit synthetic source for daemon-side screen probes
-// (e.g. the context-limit banner detector). It is exported so the probe path a
-// later session wires in can attribute its synthesized events consistently.
+// ProbeSource is the explicit synthetic source for the hook-path context-limit
+// probe (runContextLimitProbe), which attributes its daemon-synthesized
+// stop_failure promotions to the probe rather than to the harness session.
 func ProbeSource() SourceID { return SourceID{Kind: SourceProbe, Key: "context_limit"} }
 
 // harnessSourceKey builds "harness:session" when a session id is present, and
@@ -395,7 +409,7 @@ func isSessionEndEvent(event string) bool {
 // their string payload fields. Absent fields yield zero (no sequence / no
 // timestamp). A present-but-unparseable field returns an error so the caller can
 // quarantine: an untrustworthy sequence could otherwise shadow a later real
-// event, and this is exactly the case Session 1 requires never reach Apply.
+// event, which must never reach Apply.
 func parseSourceSeqAt(payload hookevent.HookPayload) (seq uint64, at int64, err error) {
 	if raw := strings.TrimSpace(payload.EffectiveSourceSequence()); raw != "" {
 		v, perr := strconv.ParseUint(raw, 10, 64)

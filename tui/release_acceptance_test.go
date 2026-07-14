@@ -148,8 +148,8 @@ func TestAcceptanceCorruptProfileMembershipRecoversCompatibilityDashboardOnce(t 
 	// Model the process boundary explicitly: the recovering owner transfers
 	// daemon-restart responsibility and closes without touching SQLite again;
 	// a fresh owner performs the ordinary compatibility rebuild.
-	restartDaemon := services.takeDaemonRestartForProcessHandoff()
-	if restartDaemon == nil {
+	finishRebuild := services.takeRebuildFinishForProcessHandoff()
+	if finishRebuild == nil {
 		t.Fatal("recovery did not transfer the pending daemon restart")
 	}
 	if err := services.Close(); err != nil {
@@ -159,7 +159,7 @@ func TestAcceptanceCorruptProfileMembershipRecoversCompatibilityDashboardOnce(t 
 		t.Fatal("pre-exec owner restarted daemon before the fresh-process rebuild")
 	}
 	freshServices := newDataServices(deps)
-	if err := freshServices.deferDaemonRestartAfterRecovery(restartDaemon); err != nil {
+	if err := freshServices.deferRebuildFinishAfterRecovery(finishRebuild); err != nil {
 		t.Fatalf("receive daemon restart in fresh process: %v", err)
 	}
 	services = freshServices

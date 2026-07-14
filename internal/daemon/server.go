@@ -46,10 +46,20 @@ type Server struct {
 	dedupe      *dedupeCache
 	ingress     *ingressQueue
 	badPayloads atomic.Uint64
+	// registrationMu serializes accepted-connection registration with the
+	// beginning of Close. Once closing is set, no new handler can be added to
+	// wg, so Close may wait and then stop ingress without racing a late submitter.
+	registrationMu sync.Mutex
+	closing        bool
+	closeOnce      sync.Once
 	// wg tracks in-flight handleConn goroutines so shutdown can wait for them
 	// to finish draining instead of returning while a request is still being
 	// processed.
 	wg sync.WaitGroup
+	// afterAccept, when non-nil, is invoked synchronously after Accept returns
+	// and before the connection is registered with wg. Test-only hook used to
+	// exercise shutdown at that exact lifecycle boundary.
+	afterAccept func()
 	// onConnStart, when non-nil, is invoked synchronously inside handleConn
 	// before any I/O occurs. Test-only hook used to deterministically observe
 	// that a handler goroutine has registered with wg without polling.
@@ -134,10 +144,27 @@ func (s *Server) Serve(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			default:
-				return err
 			}
+			s.registrationMu.Lock()
+			closing := s.closing
+			s.registrationMu.Unlock()
+			if closing {
+				return nil
+			}
+			return err
+		}
+		if s.afterAccept != nil {
+			s.afterAccept()
+		}
+
+		s.registrationMu.Lock()
+		if s.closing {
+			s.registrationMu.Unlock()
+			_ = conn.Close()
+			return nil
 		}
 		s.wg.Add(1)
+		s.registrationMu.Unlock()
 		go s.handleConn(conn)
 	}
 }
@@ -145,13 +172,26 @@ func (s *Server) Serve(ctx context.Context) error {
 // Close shuts down the listener and waits for any in-flight handlers to
 // finish. It is safe to call Close after Serve has already returned.
 func (s *Server) Close() {
-	_ = s.ln.Close()
-	s.wg.Wait()
-	// Stop the reducer consumer only after every connection goroutine has
-	// returned, so no in-flight submit can block on a closed queue.
-	if s.ingress != nil {
-		s.ingress.stop()
-	}
+	s.closeOnce.Do(func() {
+		// Holding registrationMu across the shutdown publication and listener
+		// close makes it impossible for an accepted connection to call wg.Add
+		// after the drain begins. A connection already past registration is in
+		// wg; one still between Accept and registration observes closing and is
+		// rejected without entering Handler.
+		s.registrationMu.Lock()
+		s.closing = true
+		if s.ln != nil {
+			_ = s.ln.Close()
+		}
+		s.registrationMu.Unlock()
+
+		s.wg.Wait()
+		// Stop the reducer consumer only after every connection goroutine has
+		// returned, so no in-flight submit can block on a closed queue.
+		if s.ingress != nil {
+			s.ingress.stop()
+		}
+	})
 }
 
 func (s *Server) handleConn(conn net.Conn) {

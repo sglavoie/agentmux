@@ -110,7 +110,7 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			n := NormalizedFromHook(tc.event, tc.harness, tc.payload, tc.windowID)
+			n := NormalizedFromHook(tc.event, tc.harness, tc.payload, tc.windowID, false)
 			if n.Invalid {
 				t.Fatalf("unexpected quarantine: %s", n.Reason)
 			}
@@ -132,9 +132,9 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 // facts because of spelling.
 func TestNormalizeCamelAndSnakeAgree(t *testing.T) {
 	snake := NormalizedFromHook("SubagentStart", "claude",
-		`{"agent_id":"agent-7","turn_id":"turn-9","source_sequence":"5","emitted_time":"1700000000"}`, 51)
+		`{"agent_id":"agent-7","turn_id":"turn-9","source_sequence":"5","emitted_time":"1700000000"}`, 51, false)
 	camel := NormalizedFromHook("SubagentStart", "claude",
-		`{"agentId":"agent-7","turnId":"turn-9","sourceSequence":"5","emittedTime":"1700000000"}`, 51)
+		`{"agentId":"agent-7","turnId":"turn-9","sourceSequence":"5","emittedTime":"1700000000"}`, 51, false)
 	if snake.Source != camel.Source {
 		t.Fatalf("source mismatch: snake %+v vs camel %+v", snake.Source, camel.Source)
 	}
@@ -150,8 +150,8 @@ func TestNormalizeCamelAndSnakeAgree(t *testing.T) {
 // payload normalizes to the identical event every time.
 func TestNormalizeDeterministic(t *testing.T) {
 	payload := `{"session_id":"sess-1","turn_id":"turn-9","source_sequence":"3","emitted_time":"1700000000"}`
-	a := NormalizedFromHook("PreToolUse", "claude", payload, 51)
-	b := NormalizedFromHook("PreToolUse", "claude", payload, 51)
+	a := NormalizedFromHook("PreToolUse", "claude", payload, 51, false)
+	b := NormalizedFromHook("PreToolUse", "claude", payload, 51, false)
 	if a != b {
 		t.Fatalf("normalization not deterministic:\n a=%+v\n b=%+v", a, b)
 	}
@@ -173,7 +173,7 @@ func TestNormalizeQuarantinesMalformed(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			n := NormalizedFromHook(tc.event, "claude", tc.payload, 51)
+			n := NormalizedFromHook(tc.event, "claude", tc.payload, 51, false)
 			if !n.Invalid {
 				t.Fatalf("event = %+v, want quarantined", n)
 			}
@@ -202,7 +202,7 @@ func TestNormalizeQuarantinesMalformed(t *testing.T) {
 // ignored events resolve to no action, are not deliverable, and never mutate a
 // fact — but are distinct from malformed quarantine (their payload was fine).
 func TestNormalizeUnknownAndIgnoredAreInert(t *testing.T) {
-	unknown := NormalizedFromHook("TotallyMadeUpEvent", "claude", `{}`, 51)
+	unknown := NormalizedFromHook("TotallyMadeUpEvent", "claude", `{}`, 51, false)
 	if unknown.Invalid {
 		t.Fatalf("unknown event should be inert, not quarantined: %+v", unknown)
 	}
@@ -213,7 +213,7 @@ func TestNormalizeUnknownAndIgnoredAreInert(t *testing.T) {
 		t.Errorf("unknown reason = %q, want %q", unknown.Reason, reasonUnknownEvent)
 	}
 
-	ignored := NormalizedFromHook("InstructionsLoaded", "claude", `{}`, 51)
+	ignored := NormalizedFromHook("InstructionsLoaded", "claude", `{}`, 51, false)
 	if ignored.Deliverable() || ignored.Reason != reasonIgnoredEvent {
 		t.Fatalf("ignored event should be inert with ignored reason: %+v", ignored)
 	}
@@ -241,7 +241,7 @@ func TestNormalizeCannotProduceTerminalState(t *testing.T) {
 	for _, ev := range events {
 		for _, p := range hostile {
 			r := NewReducer(zeroCfg)
-			r.ApplyNormalized(NormalizedFromHook(ev, "claude", p, 51))
+			r.ApplyNormalized(NormalizedFromHook(ev, "claude", p, 51, false))
 			got := r.Reduce(1000)
 			if got.Icon == "stop" || got.Icon == "error" {
 				t.Fatalf("event=%q payload=%q produced terminal icon %q", ev, p, got.Icon)
@@ -254,7 +254,7 @@ func TestNormalizeCannotProduceTerminalState(t *testing.T) {
 // through ApplyNormalized into the same fact an equivalent ReducerEvent would.
 func TestNormalizedApplyFeedsReducer(t *testing.T) {
 	n := NormalizedFromHook("PermissionRequest", "claude",
-		`{"session_id":"sess-1","source_sequence":"4","emitted_time":"1700000000"}`, 51)
+		`{"session_id":"sess-1","source_sequence":"4","emitted_time":"1700000000"}`, 51, false)
 	if !n.Deliverable() {
 		t.Fatalf("expected deliverable event, got %+v", n)
 	}
@@ -280,9 +280,31 @@ func TestProbeSourceIsSynthetic(t *testing.T) {
 // TestNormalizeUsesHarnessNormalization confirms the harness name is normalized
 // into the source key so "Claude" and "claude" collapse onto one source.
 func TestNormalizeUsesHarnessNormalization(t *testing.T) {
-	mixed := NormalizedFromHook("UserPromptSubmit", "Claude", `{"session_id":"s"}`, 1)
+	mixed := NormalizedFromHook("UserPromptSubmit", "Claude", `{"session_id":"s"}`, 1, false)
 	want := SourceID{Kind: SourceHarness, Key: harness.Normalize("Claude") + ":s"}
 	if mixed.Source != want {
 		t.Fatalf("source = %+v, want %+v", mixed.Source, want)
+	}
+}
+
+// TestNormalizeClaudeIdlePromptResolvesToStop confirms the harness-aware resolver
+// is threaded through NormalizedFromHook: a Claude Notification/idle_prompt is an
+// authoritative stop, while the same notification from another harness stays the
+// generic idle fallback (never a stop). A later prompt supersedes the stop
+// through ordinary reducer recency, so no special-casing is needed here.
+func TestNormalizeClaudeIdlePromptResolvesToStop(t *testing.T) {
+	payload := `{"session_id":"s","notification_type":"idle_prompt"}`
+
+	claude := NormalizedFromHook("Notification", "claude", payload, 7, false)
+	if claude.Action != "stop" {
+		t.Fatalf("claude idle_prompt action = %q, want stop", claude.Action)
+	}
+
+	codex := NormalizedFromHook("Notification", "codex", payload, 7, false)
+	if codex.Action == "stop" {
+		t.Fatalf("codex idle_prompt action = %q, want the generic idle fallback, never stop", codex.Action)
+	}
+	if codex.Action != "idle" {
+		t.Fatalf("codex idle_prompt action = %q, want idle", codex.Action)
 	}
 }

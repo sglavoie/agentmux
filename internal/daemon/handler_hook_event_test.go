@@ -644,6 +644,55 @@ func TestHandler_HookEventDeferredResetStopSupersededByPromptAndClear(t *testing
 	})
 }
 
+func TestHandler_CopilotLateInitialSessionStartPreservesPromptAndAllowsStop(t *testing.T) {
+	oldDelay := resetFlowStopDelay
+	resetFlowStopDelay = 0
+	t.Cleanup(func() { resetFlowStopDelay = oldDelay })
+
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "", false), []kitty.Window{{
+		ID:       42,
+		IsActive: true,
+		UserVars: kitty.UserVars{Profile: "copilot", Harness: "copilot"},
+	}})}
+	h.SetKittyClient(fake)
+
+	promptPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1"})
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "userPromptSubmitted", PayloadJSON: promptPayload}); !resp.OK {
+		t.Fatalf("userPromptSubmitted response = %+v", resp)
+	}
+
+	startPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1", Source: "new"})
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "sessionStart", PayloadJSON: startPayload}); !resp.OK {
+		t.Fatalf("sessionStart response = %+v", resp)
+	}
+	h.stateMu.Lock()
+	if got := h.store[42].DesiredIcon; got != "bolt" {
+		h.stateMu.Unlock()
+		t.Fatalf("late initial sessionStart desired icon = %q, want bolt", got)
+	}
+	h.stateMu.Unlock()
+
+	stopPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1", StopReasonCamel: "end_turn"})
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "agentStop", PayloadJSON: stopPayload}); !resp.OK {
+		t.Fatalf("agentStop response = %+v", resp)
+	}
+	h.stateMu.Lock()
+	if got := h.store[42].DesiredIcon; got != "stop" {
+		h.stateMu.Unlock()
+		t.Fatalf("agentStop desired icon = %q, want stop", got)
+	}
+	h.stateMu.Unlock()
+
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) != 3 {
+		t.Fatalf("events = %+v, want prompt/start/stop", detail.Events)
+	}
+	if detail.Events[1].ResetFlow || detail.Events[1].ResultIconState != IconStatePreserve {
+		t.Fatalf("late sessionStart event = %+v, want non-reset preserve", detail.Events[1])
+	}
+}
+
 func TestHandler_HookEventAutoApprovedPermissionLogsSuppressionReason(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{

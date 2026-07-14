@@ -62,7 +62,7 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		return Response{OK: true}
 	}
 
-	if hookevent.IsIgnoredEvent(eventOrAction, payload) {
+	if hookevent.IsIgnoredEventForHarness(eventOrAction, payload, ctx.req.Harness) {
 		ctx.req.Event = eventOrAction
 		h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonIgnoredEvent)
 		slog.Debug("hook event intentionally ignored",
@@ -73,7 +73,7 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		return Response{OK: true}
 	}
 
-	action, ok := hookevent.ResolveAction(eventOrAction, payload)
+	action, ok := hookevent.ResolveActionForHarness(eventOrAction, payload, ctx.req.Harness)
 	if !ok {
 		ctx.req.Event = eventOrAction
 		h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonUnknownEvent)
@@ -113,7 +113,10 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		return Response{OK: true}
 	}
 
-	preservesIcon := hookevent.PreservesCurrent(eventOrAction) && action == "active"
+	lateCopilotStart := h.shouldPreserveLateCopilotSessionStart(
+		ctx.req.WindowID, ctx.req.Harness, eventOrAction, payload,
+	)
+	preservesIcon := (hookevent.PreservesCurrent(eventOrAction) && action == "active") || lateCopilotStart
 	contextLimitDetected := hookevent.PayloadHasContextLimit(payload)
 	// The screen read that used to promote this event to stop_failure inline is
 	// now a targeted asynchronous probe: dispatch the base event immediately and
@@ -125,7 +128,7 @@ func (h *Handler) handleHookEvent(req Request) Response {
 	// mute now (notification suppression consults it inside handleStateUpdate).
 	h.setMutedFromSnapshot(ctx.req.WindowID, ctx.muted)
 
-	resetFlowDetected := hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload)
+	resetFlowDetected := hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload) && !lateCopilotStart
 	stateReq := buildHookStateUpdateRequest(
 		ctx.req.WindowID,
 		action,
@@ -145,7 +148,7 @@ func (h *Handler) handleHookEvent(req Request) Response {
 	// Stamp the source-scoped view for the shadow reducer while the raw payload
 	// is still in hand. A deferred stop keeps the stamp and delivers it at
 	// commit time.
-	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, req.PayloadJSON, ctx.req.WindowID)
+	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, req.PayloadJSON, ctx.req.WindowID, ctx.req.PipeMode)
 	stateReq.normalized = &normalized
 	stateReq.routeDecision = routeDecisionSource
 	deferred := h.deferResetSensitiveStop(stateReq, payload)
@@ -168,6 +171,37 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		})
 	}
 	return Response{OK: true}
+}
+
+// shouldPreserveLateCopilotSessionStart recognizes Copilot 1.0.70's initial
+// hook ordering: the first userPromptSubmitted for a session may reach the
+// daemon before sessionStart(source:"new") for that same session. The latter
+// is startup bookkeeping, not a /new reset. Treat it as preserve-current only
+// when the reducer already has that exact Copilot session as the live owner.
+// A genuine /new carries a different session ID and retains reset semantics.
+func (h *Handler) shouldPreserveLateCopilotSessionStart(
+	windowID int,
+	harnessName string,
+	event string,
+	payload hookevent.HookPayload,
+) bool {
+	if !strings.EqualFold(strings.TrimSpace(harnessName), "copilot") || event != "sessionStart" ||
+		!strings.EqualFold(strings.TrimSpace(payload.Source), "new") {
+		return false
+	}
+	sessionID := strings.TrimSpace(payload.EffectiveSessionID())
+	if sessionID == "" {
+		return false
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	st := h.store[windowID]
+	if st == nil || st.Reducer == nil {
+		return false
+	}
+	current, ok := st.Reducer.CurrentConversation(time.Now().Unix())
+	return ok && strings.EqualFold(current.Harness, "copilot") && current.SessionID == sessionID
 }
 
 // handleUserClearHookEvent routes a keybinding/TUI user_clear (F8) to the tab's
@@ -235,7 +269,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	stateReq.RequestID = ctx.req.RequestID
 	// The wipe was retargeted, so normalize against the target window: the
 	// shadow reducer must acknowledge the owner's facts, not the source pane's.
-	normalized := NormalizedFromHook(eventOrAction, harnessName, ctx.req.PayloadJSON, targetID)
+	normalized := NormalizedFromHook(eventOrAction, harnessName, ctx.req.PayloadJSON, targetID, ctx.req.PipeMode)
 	stateReq.normalized = &normalized
 	switch {
 	case ctx.owner != nil:

@@ -1,6 +1,6 @@
 package cmd
 
-// Shared invariant evaluation over the daemon's schema-v6 export snapshot.
+// Shared invariant evaluation over the daemon's schema-v7 export snapshot.
 // `amx doctor` evaluates one snapshot; `amx daemon audit` re-evaluates every
 // sample interval. Severities: a "failure" is an observed correctness
 // violation (strict doctor and audit exit nonzero on any), a "warning" is

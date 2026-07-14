@@ -101,6 +101,17 @@ func replayTraces(projectDir string) []replayTrace {
 			},
 		},
 		{
+			// Cross-harness prompt-after-stop: a clean native completion reaches
+			// 🛑, and a later prompt in the SAME session always restores ⚡.
+			name:    "claude-stop-then-reprompt",
+			harness: "claude",
+			steps: []replayStep{
+				{"UserPromptSubmit", pl(1, `"session_id":"sess-000c","turn_id":"turn-1"`), "bolt", false},
+				{"Stop", pl(2, `"session_id":"sess-000c","turn_id":"turn-1","stop_reason":"end_turn"`), "stop", false},
+				{"UserPromptSubmit", pl(3, `"session_id":"sess-000c","turn_id":"turn-2"`), "bolt", false},
+			},
+		},
+		{
 			name:    "codex-single-turn",
 			harness: "codex",
 			steps: []replayStep{
@@ -125,6 +136,19 @@ func replayTraces(projectDir string) []replayTrace {
 			},
 		},
 		{
+			// Stale interactive source replacement through the full hook path: a
+			// brand-new interactive session's prompt retires the older session's
+			// interactive active fact, so the visible icon stays ⚡ on the new
+			// owner and the new session's terminal is the one that settles 🛑.
+			name:    "codex-session-replacement",
+			harness: "codex",
+			steps: []replayStep{
+				{"userPromptSubmitted", plc(1, `"sessionId":"sess-000a","turnId":"turn-1"`), "bolt", false},
+				{"userPromptSubmitted", plc(2, `"sessionId":"sess-000b","turnId":"turn-1"`), "bolt", false},
+				{"agentStop", plc(3, `"sessionId":"sess-000b","turnId":"turn-1","stopReason":"end_turn"`), "stop", false},
+			},
+		},
+		{
 			name:    "claude-compaction-matcher-split",
 			harness: "claude",
 			steps: []replayStep{
@@ -138,7 +162,7 @@ func replayTraces(projectDir string) []replayTrace {
 			},
 		},
 		{
-			name:    "copilot-permission-and-idle",
+			name:    "copilot-permission-and-stop",
 			harness: "copilot",
 			steps: []replayStep{
 				{"sessionStart", plc(1, `"sessionId":"sess-0005","source":"resume"`), "", false},
@@ -147,7 +171,23 @@ func replayTraces(projectDir string) []replayTrace {
 				// Copilot pending prompts resolve on preToolUse (the gated tool
 				// actually started); a trailing postToolUse would keep the 🔑.
 				{"preToolUse", plc(4, `"sessionId":"sess-0005","turnId":"turn-1","toolUseId":"tool-1"`), "bolt", false},
-				{"notification", plc(5, `"sessionId":"sess-0005","notificationType":"agent_idle"`), "stop", false},
+				// agent_idle is a background-agent notification, not a main-session
+				// stop: it is ignored and the interactive turn's bolt is preserved.
+				{"notification", plc(5, `"sessionId":"sess-0005","notificationType":"agent_idle"`), "bolt", false},
+				// The main turn's terminal state comes from the native agentStop hook.
+				{"agentStop", plc(6, `"sessionId":"sess-0005","turnId":"turn-1","stopReason":"end_turn"`), "stop", false},
+			},
+		},
+		{
+			// Copilot native terminal + prompt-after-stop, mirroring the Claude
+			// and Codex reprompt traces so all three harnesses share the same
+			// stop→⚡ convergence contract via their native terminal hook.
+			name:    "copilot-stop-then-reprompt",
+			harness: "copilot",
+			steps: []replayStep{
+				{"userPromptSubmitted", plc(1, `"sessionId":"sess-000d","turnId":"turn-1"`), "bolt", false},
+				{"agentStop", plc(2, `"sessionId":"sess-000d","turnId":"turn-1","stopReason":"end_turn"`), "stop", false},
+				{"userPromptSubmitted", plc(3, `"sessionId":"sess-000d","turnId":"turn-2"`), "bolt", false},
 			},
 		},
 		{

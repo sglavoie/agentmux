@@ -93,12 +93,13 @@ func (h *Handler) refreshAfterGap(now time.Time) {
 	if client == nil {
 		return
 	}
+	reducerReceipts := h.captureSnapshotReducerReceipts()
 	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("watchdog: post-gap kitty refresh failed", "err", err)
 		return
 	}
-	h.publishSnapshot(windows, now)
+	h.publishSnapshotWithReceipts(windows, reducerReceipts, now)
 	h.ReconcileASLLeases(now, windows)
 }
 

@@ -82,6 +82,23 @@ func (h *Handler) SetClaudeContextLimitProbe(enabled bool) {
 	h.claudeContextLimitProbeEnabled = enabled
 }
 
+// SetCopilotTranscriptHomes installs the Copilot home directories the transcript
+// stop probe resolves a managed tab's interactive session transcript against.
+// profileHomes is the ordered set of configured Copilot profile homes (the
+// caller must ~-expand them; ResolveCopilotTranscript joins verbatim);
+// defaultHome is harness.DefaultHomeDir(harness.Copilot). Safe to call once
+// before the probe ticker fires.
+func (h *Handler) SetCopilotTranscriptHomes(profileHomes []string, defaultHome string) {
+	homes := make([]string, 0, len(profileHomes))
+	for _, home := range profileHomes {
+		if home != "" {
+			homes = append(homes, home)
+		}
+	}
+	h.copilotTranscriptHomes = homes
+	h.copilotDefaultHome = defaultHome
+}
+
 // SetHookSilenceThresholds configures the global and per-account hook-silence
 // thresholds consumed by SweepHookSilence. The global value applies whenever a
 // per-account override is missing or zero. A global value of 0 disables the
@@ -155,10 +172,11 @@ const (
 // the per-window event log and the durable export metadata record why the
 // daemon changed state on its own.
 const (
-	eventWatchdogStale = "WatchdogStale"
-	eventSourceExpired = "SourceExpired"
-	eventASLReconciled = "ASLReconciled"
-	eventWindowClosed  = "WindowClosed"
+	eventWatchdogStale     = "WatchdogStale"
+	eventSourceExpired     = "SourceExpired"
+	eventASLReconciled     = "ASLReconciled"
+	eventWindowClosed      = "WindowClosed"
+	eventAuthoritativeIdle = "AuthoritativeIdle"
 )
 
 // appendWatchdogEventLocked records one synthetic daemon event atomically in
@@ -224,6 +242,19 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 	for ref := range h.aslMissStreak {
 		if _, ok := closed[ref.windowID]; ok {
 			delete(h.aslMissStreak, ref)
+		}
+	}
+	// Idle-sample stabilization streaks are per-window too: a closed window's
+	// pane can produce no further screen evidence, so its streaks (and the
+	// evidence generations they track) go with it.
+	for ref := range h.idleSampleStreak {
+		if _, ok := closed[ref.windowID]; ok {
+			delete(h.idleSampleStreak, ref)
+		}
+	}
+	for ref := range h.idleSampleGen {
+		if _, ok := closed[ref.windowID]; ok {
+			delete(h.idleSampleGen, ref)
 		}
 	}
 	// A tombstoned ID that Kitty reports live again is a reused window, not a
@@ -539,6 +570,14 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time
 			string(p.fact.Kind)+":"+p.fact.Key,
 			p.fact.Icon+" fact idle for "+p.idle.Truncate(time.Second).String()+
 				" (threshold "+p.threshold.String()+")")
+	}
+	// A watchdog expiry acknowledges live source facts in place, a real reducer
+	// mutation that carries no per-source sequence of its own. Advance the
+	// window-wide receipt generation once so an authoritative idle observation
+	// captured before this sweep is discarded rather than allowed to settle over
+	// the freshly self-healed state.
+	if expired > 0 {
+		st.ShadowSeq++
 	}
 	return expired, aslExecuting
 }

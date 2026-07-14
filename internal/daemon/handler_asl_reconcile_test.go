@@ -38,7 +38,7 @@ func TestNormalizeASLLifecyclePhases(t *testing.T) {
 		{"AgentSessionLoopFinished", `{"run_id":"r1"}`, ASLPhaseFinished, ""},
 	}
 	for _, tc := range cases {
-		n := NormalizedFromHook(tc.event, "claude", tc.payload, 42)
+		n := NormalizedFromHook(tc.event, "claude", tc.payload, 42, false)
 		if n.Invalid || !n.Deliverable() {
 			t.Errorf("%s: normalized = %+v; want deliverable", tc.event, n)
 			continue

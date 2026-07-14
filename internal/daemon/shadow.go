@@ -132,6 +132,7 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	// receipt sequence so per-source monotonicity (duplicate/reorder handling)
 	// still holds. Sequenced events advance the counter instead, so a later
 	// sequence-less event can never be shadowed by an earlier sequenced one.
+	seqBeforeApply := st.ShadowSeq
 	if n.Seq == 0 {
 		st.ShadowSeq++
 		n.Seq = st.ShadowSeq
@@ -143,6 +144,28 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	}
 
 	decision := st.Reducer.ApplyNormalized(n)
+	reducerMutated := decision == DecisionApplied || decision == DecisionAcknowledged || decision == DecisionSuppressed
+	// ShadowSeq is the window-wide receipt generation applyAuthoritativeIdle
+	// captures before a slow off-lock screen/transcript read and re-checks under
+	// the lock: any reducer mutation since capture must bump it so a stale idle
+	// probe is discarded rather than allowed to retire newer work. The block
+	// above only advances it for a sequence-less or higher explicit sequence, so
+	// an accepted (or acknowledged) event carrying a per-source sequence at or
+	// below the current window value would otherwise leave the generation
+	// unchanged — letting a different source mutate the reducer between an idle
+	// probe's evidence capture and application without invalidating it. Advance
+	// the generation here on every real fact mutation, independently of the
+	// event's per-source sequence and without rewriting the fact's own wire seq
+	// (n.Seq is already folded in), so per-source monotonicity is preserved. A
+	// suppressed decision (idle preserving an attention/terminal icon, or a
+	// terminated source dropping trailing activity) still advances the mutated
+	// source's per-source sequence, so it is a real mutation and participates in
+	// the invalidation rule too; duplicate, reordered, and quarantined decisions
+	// change no fact and are deliberately excluded so they never spuriously
+	// advance the generation.
+	if reducerMutated && st.ShadowSeq == seqBeforeApply {
+		st.ShadowSeq++
+	}
 	compacted := st.Reducer.Compact(now.Unix())
 	effective := st.Reducer.Reduce(now.Unix())
 
@@ -215,20 +238,28 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 		journalItem = &item
 	}
 
-	// Persist reducer changes with the next render pass. Duplicates and
-	// suppressions leave the durable payload untouched, so only real fact
-	// mutations (or a visible-state overwrite of the legacy decision) mark the
-	// window dirty. Only a change to what the user actually sees (icon or loop
-	// marker vs the pre-reduce visible state) queues an immediate render;
-	// fact-only mutations are batched persistence.
+	// Persist reducer changes with the next render pass. A suppressed decision
+	// still advances the affected source's durable sequence cutoff, so it is a
+	// real mutation even though the contributed icon is preserved. Duplicates,
+	// reordered deliveries, and quarantined/inert events remain clean. Only a
+	// change to what the user actually sees (icon or loop marker vs the
+	// pre-reduce visible state) queues an immediate render; fact-only mutations
+	// are batched persistence.
 	visual := effective.Icon != legacyIcon || st.Looping != legacyLooping
-	if decision == DecisionApplied || decision == DecisionAcknowledged || compacted > 0 || changed || visual {
+	if reducerMutated || compacted > 0 || changed || visual {
 		h.syncRendererMetadataLocked(req.WindowID)
 		if visual {
 			h.markWindowDirtyLocked(req.WindowID)
 		} else {
 			h.markWindowActivityDirtyLocked(req.WindowID)
 		}
+	}
+	// A real reducer event (new activity, a protected-state change, or a user
+	// clear) resets any in-flight idle-sample stabilization for the window: the
+	// screen has changed, so an adapter's consecutive-idle streak must restart
+	// from zero rather than settle stale work over the fresh state.
+	if decision == DecisionApplied || decision == DecisionAcknowledged {
+		h.clearIdleSamplesForWindowLocked(req.WindowID)
 	}
 	h.stateMu.Unlock()
 	if journalItem != nil {

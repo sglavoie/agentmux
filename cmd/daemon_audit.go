@@ -42,7 +42,7 @@ type auditReport struct {
 var daemonAuditCmd = &cobra.Command{
 	Use:   "audit",
 	Short: "Sample daemon invariants for a duration; exit nonzero on violations",
-	Long: `Audit the running daemon: every two seconds, capture the schema-v6 export
+	Long: `Audit the running daemon: every two seconds, capture the schema-v7 export
 snapshot and evaluate the correctness invariants (active ASL work must be
 visible, live subagents must show their icon, reducer and renderer must agree,
 render generations must not drift, queues must not saturate, and the daemon

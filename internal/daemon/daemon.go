@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/datastore"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -22,10 +23,33 @@ import (
 //   - ctx is cancelled
 //   - a TypeShutdown request is received
 func Run(ctx context.Context, cfg *config.Config) error {
+	return run(ctx, cfg, runDependencies{
+		openActivityStore: openDaemonActivityStore,
+	})
+}
+
+type runDependencies struct {
+	beforeDatastoreStartup    func()
+	beforeStartupConfirmation func(context.Context)
+	afterStartupPublication   func()
+	openActivityStore         func(context.Context) (*datastore.Store, error)
+}
+
+func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr error) {
 	socketPath := SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		return fmt.Errorf("daemon: creating socket directory: %w", err)
 	}
+	if deps.beforeDatastoreStartup != nil {
+		deps.beforeDatastoreStartup()
+	}
+	startupLease, err := datastore.BeginDefaultDaemonStartup(ctx)
+	if err != nil {
+		return fmt.Errorf("daemon: entering datastore startup gate: %w", err)
+	}
+	defer func() {
+		retErr = errors.Join(retErr, startupLease.Release())
+	}()
 
 	slog.Info("daemon: acquiring single-instance lock", "socket", socketPath, "lock", daemonLockPath(socketPath))
 	lockFile, err := acquireDaemonLock(socketPath)
@@ -65,6 +89,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if cfg.Defaults.Watchdog.ClaudeContextLimitProbe != nil {
 		handler.SetClaudeContextLimitProbe(*cfg.Defaults.Watchdog.ClaudeContextLimitProbe)
 	}
+	handler.SetCopilotTranscriptHomes(copilotProfileHomes(cfg), config.ExpandTilde(harness.DefaultHomeDir(harness.Copilot)))
 	// The shadow reducer mirrors the same projections the legacy paths already
 	// consume: guard_duration for the legacy trailing-event grace and the
 	// watchdog thresholds for active-class staleness.
@@ -95,25 +120,54 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	// initial retention sweep may need to create and migrate SQLite; although
 	// that work runs in its own goroutine, starting it earlier can contend with
 	// the bounded Kitty restore and delay observable daemon readiness.
+	openActivityStore := deps.openActivityStore
+	if openActivityStore == nil {
+		openActivityStore = openDaemonActivityStore
+	}
 	activityWriter := activity.NewWriter(activity.WriterOptions{
-		OpenStore: datastore.Open,
+		OpenStore: openActivityStore,
 		Keep:      time.Duration(cfg.Defaults.Activity.KeepDays) * 24 * time.Hour,
 	})
 	handler.SetActivityWriter(activityWriter)
-	defer closeDaemonResources(server.Close, activityWriter.Close, func() error {
-		return os.Remove(socketPath)
-	})
+	defer func() {
+		retErr = errors.Join(retErr, closeDaemonResources(
+			server.Close,
+			startupLease.Release,
+			activityWriter.Close,
+			func() error { return os.Remove(socketPath) },
+		))
+	}()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	notifier.SetParentContext(ctx)
 
-	handler.onShutdown = cancel
-
-	slog.Info("daemon: started", "socket", socketPath, "guard_duration", guardDur)
+	shutdownAccepted := make(chan struct{})
+	handler.onShutdown = func() {
+		close(shutdownAccepted)
+		cancel()
+	}
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(ctx) }()
+	if deps.beforeStartupConfirmation != nil {
+		deps.beforeStartupConfirmation(ctx)
+	}
+	if err := confirmDaemonServing(ctx, socketPath); err != nil {
+		select {
+		case <-shutdownAccepted:
+			return nil
+		default:
+		}
+		return fmt.Errorf("daemon: confirming startup publication: %w", err)
+	}
+	if err := startupLease.Release(); err != nil {
+		return fmt.Errorf("daemon: publishing completed datastore startup: %w", err)
+	}
+	if deps.afterStartupPublication != nil {
+		deps.afterStartupPublication()
+	}
+	slog.Info("daemon: started", "socket", socketPath, "guard_duration", guardDur)
 	// Independent loops: snapshot maintenance (the periodic lister), the
 	// watchdog (the 1s staleness evaluator on in-process elapsed time), the
 	// render worker (the single Kitty writer), and the screen probes. A slow
@@ -137,16 +191,59 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 }
 
+func confirmDaemonServing(ctx context.Context, socketPath string) error {
+	probeCtx, cancel := context.WithTimeout(ctx, normalAckBudget)
+	defer cancel()
+	resp, err := NewClientWithSocket(socketPath).sendWithContext(probeCtx, Request{Type: TypeHealth})
+	if err != nil {
+		return err
+	}
+	if !resp.OK {
+		return fmt.Errorf("health probe was rejected: %s", resp.Error)
+	}
+	if resp.PID != os.Getpid() {
+		return fmt.Errorf("health probe reached pid %d, want startup pid %d", resp.PID, os.Getpid())
+	}
+	return nil
+}
+
+func openDaemonActivityStore(ctx context.Context) (*datastore.Store, error) {
+	startupLease, err := datastore.BeginDefaultDaemonStartup(ctx)
+	if err != nil {
+		return nil, err
+	}
+	store, openErr := datastore.Open(ctx)
+	releaseErr := startupLease.Release()
+	if openErr != nil {
+		return nil, errors.Join(openErr, releaseErr)
+	}
+	if releaseErr != nil {
+		return nil, errors.Join(releaseErr, store.Close())
+	}
+	return store, nil
+}
+
 // closeDaemonResources defines the shutdown publication boundary. Closing the
-// server first stops new work and drains every in-flight handler. Writer.Close
-// then performs its bounded final flush and does not return until its owned
-// datastore is closed. Only then may the public socket disappear and allow a
-// recovery client to proceed. Run's earlier daemon-lock defer executes after
-// this function returns.
-func closeDaemonResources(closeServer, closeActivity func(), removeSocket func() error) {
+// server first stops new work and drains every in-flight handler. Startup
+// serialization must then be released before Writer.Close joins the worker: a
+// production retention sweep may be waiting on that same serialization before
+// it can open SQLite. The writer's opener still reacquires serialization around
+// SQLite, so a concurrent rebuild publication either waits for that open or
+// publishes its gate first and makes the open fail closed. Writer.Close does not
+// return until its owned datastore is closed. Only then may the public socket
+// disappear and allow a recovery client to proceed. Run's earlier daemon-lock
+// defer executes after this function returns.
+func closeDaemonResources(
+	closeServer func(),
+	releaseStartup func() error,
+	closeActivity func(),
+	removeSocket func() error,
+) error {
 	closeServer()
+	releaseErr := releaseStartup()
 	closeActivity()
 	_ = removeSocket()
+	return releaseErr
 }
 
 // newDaemonKittyClient builds the daemon's Kitty client from the current
@@ -197,6 +294,30 @@ func buildStaleThresholds(cfg *config.Config) (map[string]time.Duration, map[str
 		perAccount[strings.ToLower(p.Name)] = inner
 	}
 	return global, perAccount
+}
+
+// copilotProfileHomes gathers the ~-expanded home directories of every
+// configured Copilot profile, in configured order, for the transcript stop
+// probe's session resolver. internal/transcript stays free of internal/config
+// to avoid an import cycle, so the daemon does the profile filtering and tilde
+// expansion here (ResolveCopilotTranscript joins the homes verbatim). Duplicate
+// homes are collapsed so multiple Copilot profiles sharing a home are probed
+// once.
+func copilotProfileHomes(cfg *config.Config) []string {
+	var homes []string
+	seen := make(map[string]bool)
+	for _, p := range cfg.Profiles {
+		if p.Harness != harness.Copilot {
+			continue
+		}
+		home := config.ExpandTilde(p.HomeDir)
+		if home == "" || seen[home] {
+			continue
+		}
+		seen[home] = true
+		homes = append(homes, home)
+	}
+	return homes
 }
 
 // buildHookSilenceThresholds projects cfg.Defaults.Watchdog.HookSilence and

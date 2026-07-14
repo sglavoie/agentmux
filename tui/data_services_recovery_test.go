@@ -12,8 +12,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/compatimport"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/datastore"
+	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -226,7 +228,7 @@ func TestDataServicesRecoveryCancellationAndQuitDoNotPublishState(t *testing.T) 
 	}
 }
 
-func TestDataServicesCloseRestartsDaemonWhenRebuildNeverStarts(t *testing.T) {
+func TestDataServicesCloseKeepsDaemonStoppedWhenRecoveryRebuildNeverStarts(t *testing.T) {
 	var restarts atomic.Int32
 	services := newDataServices(dataServicesDependencies{
 		recoverCorrupt: func(context.Context, error) (datastore.RecoveryResult, func() error, error) {
@@ -240,15 +242,281 @@ func TestDataServicesCloseRestartsDaemonWhenRebuildNeverStarts(t *testing.T) {
 	if err != nil || !result.Replaced || restarts.Load() != 0 {
 		t.Fatalf("recovery = %+v error %v restarts %d", result, err, restarts.Load())
 	}
-	if err := services.Close(); err != nil {
-		t.Fatalf("close services: %v", err)
+	if err := services.Close(); err == nil || !strings.Contains(err.Error(), "rebuild remains gated") {
+		t.Fatalf("close services = %v, want gated rebuild error", err)
 	}
-	if restarts.Load() != 1 {
-		t.Fatalf("close restarts = %d, want 1", restarts.Load())
+	if restarts.Load() != 0 {
+		t.Fatalf("close restarts = %d, want 0", restarts.Load())
 	}
-	if err := services.Close(); err != nil || restarts.Load() != 1 {
+	if err := services.Close(); err == nil || restarts.Load() != 0 {
 		t.Fatalf("second close = %v restarts %d", err, restarts.Load())
 	}
+}
+
+func TestDataServicesInitialize_CheckpointFailureKeepsRebuildGateAndDaemonStopped(t *testing.T) {
+	root := t.TempDir()
+	databasePath := filepath.Join(root, datastore.DatabaseFileName)
+	gate, err := datastore.BeginRebuildGate(databasePath)
+	if err != nil {
+		t.Fatalf("begin rebuild gate: %v", err)
+	}
+	t.Cleanup(func() { _ = gate.Release() })
+	if err := gate.SetRestartDaemon(true); err != nil {
+		t.Fatalf("record pending daemon restart: %v", err)
+	}
+
+	var checkpointCalls atomic.Int32
+	var daemonSpawns atomic.Int32
+	checkpointFailure := errors.New("forced checkpoint failure")
+	deps := defaultDataServicesDependencies()
+	deps.openStore = func(ctx context.Context) (*datastore.Store, error) {
+		return datastore.OpenPath(ctx, databasePath)
+	}
+	deps.loadTranscript = func(ctx context.Context, store *datastore.Store) (*transcript.Index, map[string]transcript.Reader, error) {
+		readers := buildTranscriptReaders()
+		index, err := transcript.LoadSQLiteIndexWithStore(
+			ctx,
+			filepath.Join(root, "transcripts.json"),
+			store,
+			readers,
+			compatimport.SyncIfChanged,
+		)
+		return index, readers, err
+	}
+	deps.loadPlans = func(ctx context.Context, store *datastore.Store) (*plans.Index, error) {
+		return plans.LoadSQLiteIndexWithStore(
+			ctx,
+			filepath.Join(root, "plans.json"),
+			store,
+			compatimport.SyncIfChanged,
+		)
+	}
+	deps.checkpointStore = func(ctx context.Context, store *datastore.Store) error {
+		if checkpointCalls.Add(1) == 1 {
+			return checkpointFailure
+		}
+		return store.Checkpoint(ctx)
+	}
+	deps.recoverCorrupt = func(context.Context, error) (datastore.RecoveryResult, func() error, error) {
+		finish := func() error {
+			restartDaemon, err := datastore.FinishRebuildGate(databasePath)
+			if err != nil {
+				return err
+			}
+			if restartDaemon {
+				daemonSpawns.Add(1)
+			}
+			return nil
+		}
+		return datastore.RecoveryResult{Replaced: true, DatabasePath: databasePath}, finish, nil
+	}
+
+	services := newDataServices(deps)
+	result, err := services.RecoverCorruption(t.Context(), testCorruptionError())
+	if err != nil || !result.Replaced {
+		t.Fatalf("recover corruption = %+v, %v", result, err)
+	}
+
+	if _, err := services.Initialize(t.Context(), &config.Config{}); !errors.Is(err, checkpointFailure) {
+		t.Fatalf("first Initialize error = %v, want checkpoint failure", err)
+	}
+	if _, ready := services.Snapshot(); ready {
+		t.Fatal("failed checkpoint published a ready data-service snapshot")
+	}
+	if active, err := datastore.RebuildGateActive(databasePath); err != nil || !active {
+		t.Fatalf("gate after checkpoint failure = %v, %v; want active", active, err)
+	}
+	if daemonSpawns.Load() != 0 {
+		t.Fatalf("daemon spawns after checkpoint failure = %d, want 0", daemonSpawns.Load())
+	}
+
+	if _, err := services.Initialize(t.Context(), &config.Config{}); err != nil {
+		t.Fatalf("retry Initialize: %v", err)
+	}
+	if active, err := datastore.RebuildGateActive(databasePath); err != nil || active {
+		t.Fatalf("gate after successful checkpoint = %v, %v; want inactive", active, err)
+	}
+	if checkpointCalls.Load() != 2 || daemonSpawns.Load() != 1 {
+		t.Fatalf("successful retry = checkpoints %d spawns %d, want 2 and 1", checkpointCalls.Load(), daemonSpawns.Load())
+	}
+
+	if _, err := services.Initialize(t.Context(), &config.Config{}); err != nil {
+		t.Fatalf("ready Initialize: %v", err)
+	}
+	if checkpointCalls.Load() != 2 || daemonSpawns.Load() != 1 {
+		t.Fatalf("completion was not exactly once: checkpoints %d spawns %d", checkpointCalls.Load(), daemonSpawns.Load())
+	}
+	if err := services.Close(); err != nil {
+		t.Fatalf("Close after successful rebuild: %v", err)
+	}
+}
+
+func TestDataServicesInitialize_FinishFailureRemainsRetryable(t *testing.T) {
+	t.Run("failure before gate removal", func(t *testing.T) {
+		root := t.TempDir()
+		databasePath := filepath.Join(root, datastore.DatabaseFileName)
+		gate, err := datastore.BeginRebuildGate(databasePath)
+		if err != nil {
+			t.Fatalf("begin rebuild gate: %v", err)
+		}
+		t.Cleanup(func() { _ = gate.Release() })
+		if err := gate.SetRestartDaemon(true); err != nil {
+			t.Fatalf("record pending daemon restart: %v", err)
+		}
+
+		finishFailure := errors.New("forced gate finish failure")
+		var gateFinishCalls atomic.Int32
+		var daemonSpawns atomic.Int32
+		finisher := &rebuildFinisher{
+			finishGate: func() (bool, error) {
+				if gateFinishCalls.Add(1) == 1 {
+					return false, finishFailure
+				}
+				return datastore.FinishRebuildGate(databasePath)
+			},
+			executable: func() (string, error) { return "/installed/amx", nil },
+			restart: func(string) error {
+				daemonSpawns.Add(1)
+				return nil
+			},
+		}
+		var checkpointCalls atomic.Int32
+		services := newRebuildFinishRetryTestServices(t, root, databasePath, finisher.finish, &checkpointCalls)
+
+		if _, err := services.Initialize(t.Context(), &config.Config{}); !errors.Is(err, finishFailure) {
+			t.Fatalf("first Initialize error = %v, want gate finish failure", err)
+		}
+		if _, ready := services.Snapshot(); ready {
+			t.Fatal("failed gate finish published a ready data-service snapshot")
+		}
+		if active, err := datastore.RebuildGateActive(databasePath); err != nil || !active {
+			t.Fatalf("gate after finish failure = %v, %v; want active", active, err)
+		}
+		if checkpointCalls.Load() != 1 || gateFinishCalls.Load() != 1 || daemonSpawns.Load() != 0 {
+			t.Fatalf("failed finish = checkpoints %d gate finishes %d spawns %d, want 1, 1, 0", checkpointCalls.Load(), gateFinishCalls.Load(), daemonSpawns.Load())
+		}
+
+		if _, err := services.Initialize(t.Context(), &config.Config{}); err != nil {
+			t.Fatalf("retry Initialize: %v", err)
+		}
+		if active, err := datastore.RebuildGateActive(databasePath); err != nil || active {
+			t.Fatalf("gate after successful retry = %v, %v; want inactive", active, err)
+		}
+		if checkpointCalls.Load() != 2 || gateFinishCalls.Load() != 2 || daemonSpawns.Load() != 1 {
+			t.Fatalf("successful retry = checkpoints %d gate finishes %d spawns %d, want 2, 2, 1", checkpointCalls.Load(), gateFinishCalls.Load(), daemonSpawns.Load())
+		}
+
+		if _, err := services.Initialize(t.Context(), &config.Config{}); err != nil {
+			t.Fatalf("ready Initialize: %v", err)
+		}
+		if checkpointCalls.Load() != 2 || gateFinishCalls.Load() != 2 || daemonSpawns.Load() != 1 {
+			t.Fatalf("completion was not exactly once: checkpoints %d gate finishes %d spawns %d", checkpointCalls.Load(), gateFinishCalls.Load(), daemonSpawns.Load())
+		}
+	})
+
+	t.Run("daemon restart failure after gate removal", func(t *testing.T) {
+		root := t.TempDir()
+		databasePath := filepath.Join(root, datastore.DatabaseFileName)
+		gate, err := datastore.BeginRebuildGate(databasePath)
+		if err != nil {
+			t.Fatalf("begin rebuild gate: %v", err)
+		}
+		t.Cleanup(func() { _ = gate.Release() })
+		if err := gate.SetRestartDaemon(true); err != nil {
+			t.Fatalf("record pending daemon restart: %v", err)
+		}
+
+		restartFailure := errors.New("forced daemon restart failure")
+		var gateFinishCalls atomic.Int32
+		var daemonSpawnAttempts atomic.Int32
+		var daemonSpawns atomic.Int32
+		finisher := &rebuildFinisher{
+			finishGate: func() (bool, error) {
+				gateFinishCalls.Add(1)
+				return datastore.FinishRebuildGate(databasePath)
+			},
+			executable: func() (string, error) { return "/installed/amx", nil },
+			restart: func(string) error {
+				if daemonSpawnAttempts.Add(1) == 1 {
+					return restartFailure
+				}
+				daemonSpawns.Add(1)
+				return nil
+			},
+		}
+		var checkpointCalls atomic.Int32
+		services := newRebuildFinishRetryTestServices(t, root, databasePath, finisher.finish, &checkpointCalls)
+
+		if _, err := services.Initialize(t.Context(), &config.Config{}); !errors.Is(err, restartFailure) {
+			t.Fatalf("first Initialize error = %v, want daemon restart failure", err)
+		}
+		if _, ready := services.Snapshot(); ready {
+			t.Fatal("failed daemon restart published a ready data-service snapshot")
+		}
+		if active, err := datastore.RebuildGateActive(databasePath); err != nil || active {
+			t.Fatalf("gate after daemon restart failure = %v, %v; want inactive", active, err)
+		}
+		if checkpointCalls.Load() != 1 || gateFinishCalls.Load() != 1 || daemonSpawnAttempts.Load() != 1 || daemonSpawns.Load() != 0 {
+			t.Fatalf("failed restart = checkpoints %d gate finishes %d spawn attempts %d successful spawns %d, want 1, 1, 1, 0", checkpointCalls.Load(), gateFinishCalls.Load(), daemonSpawnAttempts.Load(), daemonSpawns.Load())
+		}
+
+		if _, err := services.Initialize(t.Context(), &config.Config{}); err != nil {
+			t.Fatalf("retry Initialize: %v", err)
+		}
+		if checkpointCalls.Load() != 2 || gateFinishCalls.Load() != 1 || daemonSpawnAttempts.Load() != 2 || daemonSpawns.Load() != 1 {
+			t.Fatalf("successful restart retry = checkpoints %d gate finishes %d spawn attempts %d successful spawns %d, want 2, 1, 2, 1", checkpointCalls.Load(), gateFinishCalls.Load(), daemonSpawnAttempts.Load(), daemonSpawns.Load())
+		}
+
+		if _, err := services.Initialize(t.Context(), &config.Config{}); err != nil {
+			t.Fatalf("ready Initialize: %v", err)
+		}
+		if checkpointCalls.Load() != 2 || gateFinishCalls.Load() != 1 || daemonSpawnAttempts.Load() != 2 || daemonSpawns.Load() != 1 {
+			t.Fatalf("completion was not exactly once: checkpoints %d gate finishes %d spawn attempts %d successful spawns %d", checkpointCalls.Load(), gateFinishCalls.Load(), daemonSpawnAttempts.Load(), daemonSpawns.Load())
+		}
+	})
+}
+
+func newRebuildFinishRetryTestServices(
+	t *testing.T,
+	root string,
+	databasePath string,
+	finish func() error,
+	checkpointCalls *atomic.Int32,
+) *DataServices {
+	t.Helper()
+	deps := defaultDataServicesDependencies()
+	deps.openStore = func(ctx context.Context) (*datastore.Store, error) {
+		return datastore.OpenPath(ctx, databasePath)
+	}
+	deps.loadTranscript = func(ctx context.Context, store *datastore.Store) (*transcript.Index, map[string]transcript.Reader, error) {
+		readers := buildTranscriptReaders()
+		index, err := transcript.LoadSQLiteIndexWithStore(
+			ctx,
+			filepath.Join(root, "transcripts.json"),
+			store,
+			readers,
+			compatimport.SyncIfChanged,
+		)
+		return index, readers, err
+	}
+	deps.loadPlans = func(ctx context.Context, store *datastore.Store) (*plans.Index, error) {
+		return plans.LoadSQLiteIndexWithStore(
+			ctx,
+			filepath.Join(root, "plans.json"),
+			store,
+			compatimport.SyncIfChanged,
+		)
+	}
+	deps.checkpointStore = func(ctx context.Context, store *datastore.Store) error {
+		checkpointCalls.Add(1)
+		return store.Checkpoint(ctx)
+	}
+	services := newDataServices(deps)
+	if err := services.deferRebuildFinishAfterRecovery(finish); err != nil {
+		t.Fatalf("defer rebuild finish: %v", err)
+	}
+	t.Cleanup(func() { _ = services.Close() })
+	return services
 }
 
 func TestDataServicesRecoveryRenderingStates(t *testing.T) {

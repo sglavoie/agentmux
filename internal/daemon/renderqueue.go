@@ -174,6 +174,7 @@ func (h *Handler) drainRenderQueue() {
 	if client == nil {
 		return
 	}
+	reducerReceipts := h.captureSnapshotReducerReceipts()
 	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("render worker: list windows failed", "err", err)
@@ -181,7 +182,7 @@ func (h *Handler) drainRenderQueue() {
 	}
 	// Freshen the shared snapshot too: the hook path routes against it, and a
 	// render-demand list is strictly newer than the last maintenance tick.
-	h.publishSnapshot(windows, time.Now())
+	h.publishSnapshotWithReceipts(windows, reducerReceipts, time.Now())
 	h.drainRenderQueueWith(windows)
 }
 
@@ -204,16 +205,29 @@ func (h *Handler) drainRenderQueueWith(windows []kitty.OSWindow) {
 // tab's title). The generation captured at candidate build is revalidated
 // immediately before each Kitty write.
 func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
-	tab, _, found := kitty.FindTabByWindowID(windows, windowID)
+	tab, liveWindow, found := kitty.FindTabByWindowID(windows, windowID)
 	if !found {
 		tab = nil
+		liveWindow = nil
 	}
+	ready, degradedReason := h.Readiness()
 
 	h.stateMu.Lock()
 	st, ok := h.windowStateLocked(windowID)
 	if !ok {
 		h.stateMu.Unlock()
 		return
+	}
+	// A hook accepted after a degraded startup can enqueue this render before
+	// maintenance performs the first successful durable restore. The fresh
+	// ListWindows snapshot used by this pass still carries the pre-startup
+	// amx_state, so fold its disjoint reducer facts into the accepted in-process
+	// state before building the payload. Same-source hook facts remain
+	// authoritative, while acknowledged cutoffs and live ASL leases survive the
+	// first write. mergePersistedFactsLocked advances Seq for a real merge, so
+	// the ordinary generation checks below protect the merged candidate too.
+	if !ready && degradedReason != "" && liveWindow != nil {
+		h.mergePersistedFactsLocked(windowID, st, *liveWindow, time.Now())
 	}
 	seq := st.Seq
 	if seq > st.AttemptedGen {

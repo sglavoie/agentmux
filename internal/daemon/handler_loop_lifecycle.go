@@ -96,7 +96,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 	req.RequestID = baseReq.RequestID
 	// Stamp the ASL-source view for the shadow reducer, keyed against this
 	// fan-out target so the run's lease lands on the window that renders it.
-	normalized := NormalizedFromHook(eventOrAction, harnessName, baseReq.PayloadJSON, target.windowID)
+	normalized := NormalizedFromHook(eventOrAction, harnessName, baseReq.PayloadJSON, target.windowID, baseReq.PipeMode)
 	req.normalized = &normalized
 	resp := h.handleStateUpdate(req)
 	if !resp.OK {

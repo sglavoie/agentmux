@@ -28,13 +28,15 @@ type fakeKittyClient struct {
 	// ops records SetUserVars/SetTabTitle invocations in one shared sequence so
 	// ordered-write tests can assert persistence landed before the title.
 	ops []string
-	// beforeSetUserVars/beforeSetTitle/beforeListWindows run at the start of
-	// the corresponding call WITHOUT holding f.mu, so a hook may take
-	// Handler.stateMu (to model a mid-write state change), sleep (to model
-	// injected Kitty latency), or block (to model a wedged Kitty).
+	// beforeSetUserVars/beforeSetTitle/beforeListWindows/beforeGetText run at the
+	// start of the corresponding call WITHOUT holding f.mu, so a hook may take
+	// Handler.stateMu (to model a mid-write state change, e.g. a prompt landing
+	// during a slow screen read), sleep (to model injected Kitty latency), or
+	// block (to model a wedged Kitty).
 	beforeSetUserVars func(match string, vars map[string]string)
 	beforeSetTitle    func(match, title string)
 	beforeListWindows func()
+	beforeGetText     func(match, extent string)
 }
 
 type setTitleCall struct {
@@ -85,6 +87,12 @@ func (f *fakeKittyClient) ListWindows() ([]kitty.OSWindow, error) {
 }
 
 func (f *fakeKittyClient) GetText(matchExpr, extent string) (string, error) {
+	f.mu.Lock()
+	hook := f.beforeGetText
+	f.mu.Unlock()
+	if hook != nil {
+		hook(matchExpr, extent)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.getTextErr != nil {

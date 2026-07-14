@@ -2,19 +2,22 @@ package daemon
 
 import "github.com/sglavoie/agentmux/internal/conversation"
 
-// This file introduces a side-effect-free state reducer. It is deliberately
-// decoupled from the live Handler, StateGuard, WindowState, renderer, and Kitty
-// I/O: it reads no clock (callers pass `now`), touches no globals, and performs
-// no rendering. Production behavior is unchanged — nothing in this file is wired
-// into handleStateUpdate yet. Later sessions consume it (session 2 for hook
-// normalization, session 5 for schema-v2 persistence).
+// This file implements the side-effect-free state reducer that owns each
+// window's visible state in production: reduceStateUpdate folds every
+// normalized hook event into it and publishes the reduced result (via
+// publishEffectiveLocked) as the authoritative visible icon and loop state,
+// and its facts persist as the schema-v2 user-var payload. The reducer itself
+// stays deliberately decoupled from the live Handler, StateGuard, WindowState,
+// renderer, and Kitty I/O: it reads no clock (callers pass `now`), touches no
+// globals, and performs no rendering.
 //
 // The model replaces the tab's last-write-wins scalar action with source-scoped
 // facts. Each fact-producing source (the main harness session, an individual
 // subagent, an ASL run, a daemon probe, or a legacy unidentified client) keeps
 // its own last-known state. Reduce() collapses every live fact into exactly one
-// visible icon by the target precedence and one loop marker, deterministically
-// and independent of arrival order.
+// visible icon by the target precedence and one loop marker. Per-source replay
+// remains order-independent through Seq; equal-timestamp facts from different
+// sources follow the reducer's source-independent causal application order.
 
 // SourceKind categorizes the origin of a fact. Identity matters for terminal
 // suppression: identified sources suppress only their own same-turn trailing
@@ -43,13 +46,32 @@ type SourceID struct {
 	Key  string
 }
 
-// CurrentConversation returns the newest still-live parent harness identity.
-// Only SourceHarness facts can establish it: subagent facts carry a parent
-// session for lifecycle accounting, but do not prove that parent still owns the
-// managed tab. Acknowledged/expired facts are stale, and a persisted source key
+// CurrentConversation returns the still-live parent harness identity that owns
+// the managed tab. Only SourceHarness facts can establish it: subagent facts
+// carry a parent session for lifecycle accounting, but do not prove that parent
+// still owns the managed tab. The interactive owner wins over a newer pipe-mode
+// `claude -p` child (which shares the parent-harness kind but is a background
+// invocation the user is not driving); among facts of the same pipe-ness the
+// newest wins. Acknowledged/expired facts are stale, and a persisted source key
 // must exactly agree with its fact session ID so malformed restored state cannot
 // create a live mapping.
 func (r *Reducer) CurrentConversation(now int64) (conversation.Identity, bool) {
+	return r.currentConversation(now, false)
+}
+
+// CurrentInteractiveConversation is the interactive-only counterpart to
+// CurrentConversation: it returns the still-live interactive parent identity and
+// never falls back to a sole pipe-mode `claude -p` child. The Copilot transcript
+// probe uses it to resolve the session backing a stuck ⚡ so a background pipe
+// invocation can never select the transcript the probe settles: a pipe-only
+// window resolves to no interactive conversation and the probe bails before any
+// transcript resolution or read. CurrentConversation's pipe-fallback semantics
+// remain correct for descriptive callers that just want the owning conversation.
+func (r *Reducer) CurrentInteractiveConversation(now int64) (conversation.Identity, bool) {
+	return r.currentConversation(now, true)
+}
+
+func (r *Reducer) currentConversation(now int64, interactiveOnly bool) (conversation.Identity, bool) {
 	if r == nil {
 		return conversation.Identity{}, false
 	}
@@ -60,16 +82,31 @@ func (r *Reducer) CurrentConversation(now int64) (conversation.Identity, bool) {
 		if fact.source.Kind != SourceHarness || !conversationFactLive(fact, now) {
 			continue
 		}
+		if interactiveOnly && fact.pipeMode {
+			continue
+		}
 		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
 		if !ok || fact.source.Key != candidate.Harness+":"+candidate.SessionID {
 			continue
 		}
-		if current == nil || moreRecent(fact, current) {
+		if current == nil || moreCurrentConversation(fact, current) {
 			current = fact
 			identity = candidate
 		}
 	}
 	return identity, current != nil
+}
+
+// moreCurrentConversation reports whether f is a better current-conversation
+// owner than best. An interactive fact always beats a pipe-mode one regardless
+// of recency, so a `claude -p` child cannot displace the interactive session
+// the user is watching; among facts of the same pipe-ness, the more recent one
+// wins.
+func moreCurrentConversation(f, best *sourceFact) bool {
+	if f.pipeMode != best.pipeMode {
+		return !f.pipeMode
+	}
+	return moreRecent(f, best)
 }
 
 func conversationFactLive(fact *sourceFact, now int64) bool {
@@ -138,6 +175,11 @@ type ReducerEvent struct {
 	// TurnID to distinguish an identifiable trailing completion of the
 	// terminated turn from a genuinely new tool call.
 	ToolUse string
+	// PipeMode marks a non-interactive `claude -p` hook. It stamps interactive
+	// ownership on the fact: an interactive (non-pipe) harness session may
+	// retire an older interactive session's stale active fact, while pipe-mode
+	// facts are protected from that supersession. Absent (false) is interactive.
+	PipeMode bool
 
 	// ASL-only. Phase selects the contributed icon and lease; for ASLPhasePaused
 	// the attention icon comes from Action.
@@ -194,7 +236,8 @@ type ReducerTrace struct {
 // reducerIconPrecedence encodes the target icon precedence from the plan. It is
 // intentionally distinct from actionPriority (the legacy guard order): here a
 // recoverable warning outranks a subagent, permission and question share a tier,
-// and stop sits just above idle. Higher wins; ties break on recency (Seq).
+// and stop sits just above idle. Higher wins; ties break on recency (emitted
+// time, then source-independent causal application order).
 //
 //	error > (key | question) > warning > subagent > compact > bolt > stop > idle
 var reducerIconPrecedence = map[string]int{
@@ -249,13 +292,23 @@ type sourceFact struct {
 	action string
 	icon   string
 	seq    uint64
-	turnID string
-	at     int64
-	acked  bool
+	// causalOrder is the reducer-wide application generation assigned whenever
+	// this fact accepts a mutation. Unlike seq, it is comparable across sources
+	// and therefore safely orders facts emitted in the same Unix second.
+	causalOrder uint64
+	turnID      string
+	at          int64
+	acked       bool
 
 	// toolUse is the most recent tool-use identity seen from this source, kept
 	// so a terminal event can pin which tool call was in flight when it landed.
 	toolUse string
+
+	// pipeMode marks a non-interactive `claude -p` harness source. Interactive
+	// ownership consults it: an interactive harness terminal event or prompt
+	// retires older interactive active facts, but never a pipe-mode one, and
+	// CurrentConversation prefers the interactive owner over a pipe-mode child.
+	pipeMode bool
 
 	// sessionID is the parent harness session this fact belongs to (subagent
 	// facts group by it); agents is the balanced identity-less agent multiset
@@ -277,19 +330,97 @@ type sourceFact struct {
 	terminalAt      int64
 }
 
+// supersessionMark records a window-level supersession transition by the applied
+// event's recency: emitted time first, then per-source sequence — but only
+// against facts of the transition's own source, because a per-source sequence
+// carries no causal order across sources. user_clear, a prompt's terminal
+// acknowledgement, and interactive active-class retirement all act by mutating
+// the facts present when they run (acking/retiring them in place); they leave no
+// durable fact a later import could collide with. The mark captures the
+// transition so MergeDisjoint can replay it against facts imported afterward —
+// the degraded-startup ordering where a hook is accepted before the first
+// persisted-fact restore and older persisted facts are merged in later.
+//
+// Marks are in-process only and never serialized: the merge always runs on the
+// same reducer shortly after the transition, and a full Restore already carries
+// the transition baked into each persisted fact's acked flag.
+type supersessionMark struct {
+	set    bool
+	at     int64
+	seq    uint64
+	source SourceID
+}
+
+// record advances the mark to the more recent of its current value and the given
+// transition, so the newest transition of its class is the cutoff. Recordings
+// happen in application order on one serialized reducer, so a same-timestamp
+// transition from a different source is later work and advances the mark; the
+// per-source sequence breaks a tie only within the same source.
+func (m *supersessionMark) record(source SourceID, at int64, seq uint64) {
+	if !m.set || at > m.at || (at == m.at && (source != m.source || seq > m.seq)) {
+		m.set, m.at, m.seq, m.source = true, at, seq, source
+	}
+}
+
+// notNewerThan reports whether f is not strictly more recent than the mark, so f
+// existed at or before the transition the mark records and is therefore subject
+// to its supersession. An unset mark supersedes nothing. Recency is the emitted
+// time first; on a timestamp tie the per-source sequence decides only when f
+// belongs to the mark's own source. A same-timestamp fact from any other source
+// is not newer: its sequence is an unrelated per-source counter (during degraded
+// startup the fresh in-process reducer starts at low sequences while the older
+// persisted generation may carry arbitrarily high ones), and every fact this
+// runs against was imported from the pre-restore persisted generation, which
+// cannot causally follow a transition this process accepted.
+func (m supersessionMark) notNewerThan(f *sourceFact) bool {
+	if !m.set {
+		return false
+	}
+	if f.at != m.at {
+		return f.at < m.at
+	}
+	if f.source == m.source {
+		return f.seq <= m.seq
+	}
+	return true
+}
+
 // Reducer accumulates source facts and reduces them to one EffectiveState. It
 // is not safe for concurrent use; callers serialize Apply/Reduce (the live
 // Handler already holds stateMu for its equivalent). It holds no clock: Reduce
 // takes `now`.
 type Reducer struct {
-	cfg    ReducerConfig
-	facts  map[SourceID]*sourceFact
-	traces []ReducerTrace
+	cfg             ReducerConfig
+	facts           map[SourceID]*sourceFact
+	traces          []ReducerTrace
+	nextCausalOrder uint64
+
+	// mergeCausalFloor is the highest causal order imported by MergeDisjoint.
+	// Facts above it are the in-process generation and are shifted when a later
+	// merge introduces a wider persisted order range. It is in-process only: a
+	// full Restore already receives one coherent persisted order domain.
+	mergeCausalFloor uint64
+
+	// Window-level supersession watermarks (see supersessionMark). In-process
+	// only, never serialized. MergeDisjoint replays them against later-imported
+	// disjoint facts so a degraded-startup hook accepted before the first restore
+	// is not undone by merging older persisted facts.
+	clearCutoff       supersessionMark // user_clear/reset acknowledged everything visible
+	promptCutoff      supersessionMark // a prompt acked stuck terminal facts on other sources
+	interactiveCutoff supersessionMark // a prompt/terminal retired older interactive active facts
 }
 
 // NewReducer returns an empty reducer with the given thresholds.
 func NewReducer(cfg ReducerConfig) *Reducer {
 	return &Reducer{cfg: cfg, facts: make(map[SourceID]*sourceFact)}
+}
+
+// stampCausalOrder records one accepted reducer mutation on f. Per-source Seq
+// continues to own duplicate/reordered rejection; this independent generation
+// exists only for cross-source causal comparisons and durable replay of them.
+func (r *Reducer) stampCausalOrder(f *sourceFact) {
+	r.nextCausalOrder++
+	f.causalOrder = r.nextCausalOrder
 }
 
 // resolve turns an event into its contributed action, icon, and loop lease.
@@ -350,6 +481,10 @@ func (r *Reducer) ApplyNormalized(n NormalizedEvent) ReducerDecision {
 func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	if ev.Action == "user_clear" {
 		r.acknowledgeAll()
+		// Record the clear so a later MergeDisjoint acknowledges any pre-clear
+		// persisted fact imported after the fact (the facts present now were just
+		// acknowledged; ones still unseen leave no fact to collide with).
+		r.clearCutoff.record(ev.Source, ev.At, ev.Seq)
 		r.traces = append(r.traces, ReducerTrace{
 			Source:   ev.Source,
 			Seq:      ev.Seq,
@@ -420,6 +555,7 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	if (action == "idle" || action == "clear") && ev.Source.Kind != SourceASL &&
 		f.set && !f.acked && idlePreservesIcon(f.icon) {
 		f.seq = ev.Seq
+		r.stampCausalOrder(f)
 		r.traces = append(r.traces, ReducerTrace{
 			Source:   ev.Source,
 			Seq:      ev.Seq,
@@ -435,6 +571,7 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 		// Advance the sequence so this event is not reprocessed, but keep the
 		// terminal fact: trailing activity must not reassert the icon.
 		f.seq = ev.Seq
+		r.stampCausalOrder(f)
 		r.traces = append(r.traces, ReducerTrace{
 			Source:   ev.Source,
 			Seq:      ev.Seq,
@@ -453,6 +590,8 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	f.action = action
 	f.icon = icon
 	f.acked = false
+	f.pipeMode = ev.PipeMode
+	r.stampCausalOrder(f)
 	if ev.ToolUse != "" {
 		f.toolUse = ev.ToolUse
 	}
@@ -476,6 +615,7 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	}
 
 	r.supersede(f, ev, action, icon)
+	r.supersedeInteractiveActive(f, ev, action)
 
 	reason := ""
 	if ev.EndsSession {
@@ -600,6 +740,10 @@ func (r *Reducer) supersede(applied *sourceFact, ev ReducerEvent, action, icon s
 	if !ev.Prompt || isTerminalAction(action) {
 		return
 	}
+	// Record the prompt so a later MergeDisjoint acknowledges any older persisted
+	// terminal fact imported after the fact, exactly as this loop acks the
+	// terminal facts already present.
+	r.promptCutoff.record(ev.Source, ev.At, ev.Seq)
 	for _, f := range r.facts {
 		if f == applied || !f.set || f.acked {
 			continue
@@ -608,6 +752,185 @@ func (r *Reducer) supersede(applied *sourceFact, ev ReducerEvent, action, icon s
 			f.acked = true
 		}
 	}
+}
+
+// supersedeInteractiveActive lets the current interactive harness session
+// retire an OLDER interactive harness session's stale active-class fact so it
+// can no longer mask the current session's ⚡ or ⏹. It runs when an interactive
+// (non-pipe) harness source either starts a new turn (a direct prompt) or
+// reaches a native terminal state: without it, an old interactive session that
+// left a bolt outranks the current session's stop (bolt > stop) and the tab
+// never converges to 🛑.
+//
+// Only genuinely superseded facts are acknowledged: other interactive harness
+// sources contributing an active-class icon (bolt/compact) that is not more
+// recent than the applied fact. Pipe-mode `claude -p` work, subagents, ASL
+// leases, attention icons (key/question), warnings, and terminal errors are
+// concurrent state a stale-session cleanup must never retire, so they are left
+// untouched.
+func (r *Reducer) supersedeInteractiveActive(applied *sourceFact, ev ReducerEvent, action string) {
+	if applied.source.Kind != SourceHarness || applied.pipeMode {
+		return
+	}
+	if !ev.Prompt && !isTerminalAction(action) {
+		return
+	}
+	r.retireOlderInteractiveActive(applied)
+}
+
+// retireOlderInteractiveActive acknowledges every OTHER interactive harness
+// active-class fact (bolt/compact) that is not more recent than `applied`, so a
+// current interactive terminal/prompt event — or an authoritative idle
+// observation whose probe fact stands in for `applied` — can no longer be
+// masked by a stale session's ⚡. Pipe-mode `claude -p` children, subagents,
+// ASL leases, attention icons (key/question), warnings, and terminal errors are
+// concurrent background/protected state a stale-session cleanup must never
+// retire, so they are left untouched.
+func (r *Reducer) retireOlderInteractiveActive(applied *sourceFact) {
+	// Record the retirement so a later MergeDisjoint retires any older persisted
+	// interactive active-class fact imported after the fact, exactly as this loop
+	// retires the ones already present.
+	r.interactiveCutoff.record(applied.source, applied.at, applied.seq)
+	for _, f := range r.facts {
+		if f == applied || !f.set || f.acked {
+			continue
+		}
+		if f.source.Kind != SourceHarness || f.pipeMode {
+			continue
+		}
+		switch f.icon {
+		case "bolt", "compact":
+		default:
+			continue
+		}
+		// A newer interactive session is genuine current work, not a stale bolt:
+		// never let an older session's terminal event retire it.
+		if moreRecent(f, applied) {
+			continue
+		}
+		f.acked = true
+	}
+}
+
+// SettleAuthoritativeIdle folds an authoritative idle observation into the
+// reducer. The observation is external evidence (a stabilized screen read) that
+// the interactive session is done even though no native terminal hook arrived.
+// It applies a probe-sourced stop under `probe` and retires every eligible
+// OLDER interactive harness active-class fact so a stale session's ⚡ can no
+// longer mask the idle, reusing the exact exclusions of
+// supersedeInteractiveActive: pipe-mode `claude -p` children, subagents, ASL
+// leases, attention (key/question), warnings, and terminal errors are never
+// retired. The probe stop is an ordinary terminal fact, so a live ASL lease
+// masks it at reduce time, a higher-precedence attention/error icon outranks
+// it, and a later prompt acknowledges it — the observation settles stale work
+// without overwriting newer activity or any protected/background state. It
+// reports the Apply decision: DecisionApplied when the probe fact advanced, and
+// a duplicate/reordered decision (no retirement performed) when `seq` is not
+// newer than the probe source's existing fact.
+//
+// sessionID is the interactive conversation the settle retires. It is stamped
+// onto the probe fact (inert for a probe source, which CurrentConversation and
+// clearSessionAgents never consult) purely as a memo: because the settle acks
+// the interactive fact, CurrentConversation can no longer name the session, so
+// the probe fact is the only remaining record of which transcript backs this
+// synthetic stop. A same-source recovery (ProbeStopRecovery /
+// RecoverInteractiveFromProbeStop) reads it to re-consult that transcript when
+// a post-settle append may have stranded the stop.
+func (r *Reducer) SettleAuthoritativeIdle(probe SourceID, seq uint64, at int64, sessionID string) ReducerDecision {
+	decision := r.Apply(ReducerEvent{Source: probe, Action: "stop", Seq: seq, At: at, SessionID: sessionID})
+	if decision != DecisionApplied {
+		return decision
+	}
+	r.retireOlderInteractiveActive(r.facts[probe])
+	return decision
+}
+
+// ProbeStopRecovery reports whether `probe`'s own synthetic terminal stop is the
+// SOLE visible contribution to the window at time `now` — the exact state a
+// post-settle transcript append can strand — and, when so, returns the
+// interactive session the stop was settled against (the memo stamped by
+// SettleAuthoritativeIdle). It is the guard for a same-source recovery: the
+// probe stop may be taken back only when nothing else is on screen, so recovery
+// can never overwrite a native terminal, a newer interactive bolt, a pipe-mode
+// child, a subagent, an attention/warning/error icon, or a live ASL lease. Any
+// such fact contributing a visible icon (or a live lease) makes the window's
+// state more than this probe's synthetic stop, and ok is false. It also returns
+// false when the probe holds no live terminated stop or carries no session memo.
+func (r *Reducer) ProbeStopRecovery(probe SourceID, now int64) (sessionID string, ok bool) {
+	f := r.facts[probe]
+	if f == nil || !f.set || f.acked || !f.terminated || r.visibleIcon(f, now) != "stop" || f.sessionID == "" {
+		return "", false
+	}
+	for _, other := range r.facts {
+		if other == f {
+			continue
+		}
+		if r.visibleIcon(other, now) != "" {
+			return "", false
+		}
+		if other.source.Kind == SourceASL && other.leaseLive {
+			return "", false
+		}
+	}
+	return f.sessionID, true
+}
+
+// RecoverInteractiveFromProbeStop takes back this probe's own synthetic terminal
+// stop after fresh transcript evidence re-classified the interactive session
+// Active — the post-settle-append race the two-sample gate and the apply-time
+// freshness check bound but cannot make atomic. It is the counterpart to
+// SettleAuthoritativeIdle: rather than fabricating a new probe icon, it undoes
+// the exact supersession the settle performed — the probe stop fact is
+// acknowledged (withdrawn, not deleted, so a later re-settle re-terminates it
+// cleanly) and the same-session interactive harness fact the settle retired is
+// reinstated to its live ⚡, refreshing only its timestamp so it neither
+// self-heals as stale nor jumps ahead of a future settle. The session then owns
+// the tab again and CurrentConversation can name it, so the ordinary bolt→stop
+// probe cycle resumes with no external hook or prompt.
+//
+// Callers hold the ProbeStopRecovery guard, so this acts only when the probe
+// stop is the sole visible contribution. It reinstates only a retired (acked),
+// interactive (non-pipe) harness active-class bolt/compact fact for the memo
+// session — never a pipe-mode child, subagent, ASL, attention, warning, or
+// terminal fact. Reports whether it recovered.
+func (r *Reducer) RecoverInteractiveFromProbeStop(probe SourceID, sessionID string, at int64) bool {
+	pf := r.facts[probe]
+	if pf == nil || !pf.set || pf.acked || !pf.terminated || pf.icon != "stop" {
+		return false
+	}
+	var reinstate *sourceFact
+	for _, f := range r.facts {
+		if f == pf || f.source.Kind != SourceHarness || f.pipeMode {
+			continue
+		}
+		if !f.set || !f.acked || f.terminated || f.sessionID != sessionID {
+			continue
+		}
+		switch f.icon {
+		case "bolt", "compact":
+		default:
+			continue
+		}
+		if reinstate == nil || moreRecent(f, reinstate) {
+			reinstate = f
+		}
+	}
+	if reinstate == nil {
+		return false
+	}
+	reinstate.acked = false
+	reinstate.at = at
+	r.stampCausalOrder(reinstate)
+	pf.acked = true
+	r.traces = append(r.traces, ReducerTrace{
+		Source:   probe,
+		Seq:      pf.seq,
+		Action:   "idle",
+		Icon:     "",
+		Decision: DecisionApplied,
+		Reason:   "probe recovered its synthetic stop; interactive session reinstated after newer active evidence",
+	})
+	return true
 }
 
 // LoopStateKnown reports whether any ASL run has ever contributed a fact, so
@@ -621,6 +944,12 @@ func (r *Reducer) LoopStateKnown() bool {
 		}
 	}
 	return false
+}
+
+// canRetract reports whether Retract would withdraw a live contribution.
+func (r *Reducer) canRetract(source SourceID) bool {
+	f := r.facts[source]
+	return f != nil && f.set && !f.terminated && f.icon != "" && !f.acked
 }
 
 // Retract withdraws a source's non-terminal contribution, bypassing the
@@ -642,6 +971,7 @@ func (r *Reducer) Retract(source SourceID, seq uint64, at int64) bool {
 	f.action = "idle"
 	f.icon = ""
 	f.at = at
+	r.stampCausalOrder(f)
 	r.traces = append(r.traces, ReducerTrace{
 		Source:   source,
 		Seq:      f.seq,
@@ -736,19 +1066,32 @@ func (r *Reducer) visibleIcon(f *sourceFact, now int64) string {
 	return f.icon
 }
 
-// moreRecent breaks a same-precedence tie between two facts. Emitted timestamp
-// is comparable across sources, so it decides first; per-source Seq is the
-// deterministic fallback when two facts share a timestamp.
+// moreRecent breaks a recency tie between two facts. Emitted timestamp is
+// comparable across sources, so it decides first. Facts in the same Unix second
+// use the reducer-wide causal application order; a per-source Seq is consulted
+// only for the same source (the fact map normally makes that branch redundant).
+// Legacy payloads written before causalOrder use a stable source-ID fallback,
+// never an unrelated source's sequence.
 func moreRecent(f, best *sourceFact) bool {
 	if f.at != best.at {
 		return f.at > best.at
 	}
-	return f.seq > best.seq
+	if f.causalOrder != best.causalOrder {
+		return f.causalOrder > best.causalOrder
+	}
+	if f.source == best.source {
+		return f.seq > best.seq
+	}
+	if f.source.Kind != best.source.Kind {
+		return f.source.Kind > best.source.Kind
+	}
+	return f.source.Key > best.source.Key
 }
 
 // Reduce collapses all facts into one EffectiveState at time `now`. The loop
 // marker is set when any ASL run holds a live lease, independent of which icon
-// wins. The icon is the highest-precedence visible fact, ties broken by Seq.
+// wins. The icon is the highest-precedence visible fact, ties broken by emitted
+// time and then source-independent causal application order.
 //
 // While any ASL lease is live, ⏹ contributions are masked: between turns the
 // loop is still running, so the harness stop that ended the previous turn (and

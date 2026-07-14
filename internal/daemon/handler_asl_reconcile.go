@@ -232,6 +232,15 @@ func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 	if decision != DecisionApplied {
 		return false
 	}
+	if !exists {
+		// A first-time seed stamps the fact at sequence 0 (so the run's own future
+		// events supersede it), which leaves the receipt generation untouched
+		// above. It is still a real reducer mutation, so advance the window-wide
+		// receipt generation here — decoupled from the fact's own wire sequence —
+		// so an authoritative idle observation captured before the seed is
+		// discarded rather than allowed to retire the freshly seeded lease.
+		st.ShadowSeq++
+	}
 	h.appendWatchdogEventLocked(seed.windowID, now, eventASLReconciled, "lease_seeded",
 		string(SourceASL)+":"+seed.key,
 		"discovery seeded run "+seed.candidate.RunID+" (phase "+phase+")")
