@@ -11,9 +11,9 @@ package daemon
 //   - restart (snapshot → restore through the real amx_state wire schema) after
 //     EVERY prefix is equivalent to the uninterrupted run;
 //   - unknown and malformed payloads never mutate facts;
-//   - one source's event never mutates another source's fact (except the two
-//     designed cross-source actions: prompt recovery-ack and session-end
-//     subagent clearing);
+//   - one source's event never mutates another source's fact except for the
+//     designed cross-source actions: prompt recovery-ack, session-end subagent
+//     clearing, and finished-ASL retirement of older interactive active facts;
 //   - the reduced icon always matches an independently computed precedence
 //     oracle (active work never resolves to stopped, live agent sets keep 🤖
 //     precedence, looping mirrors live ASL leases).
@@ -437,9 +437,9 @@ func fuzzOracleReduce(cfg ReducerConfig, facts []SourceFactSnapshot, now int64) 
 //     precedence, so any visible active-class fact outranks it);
 //   - a visible 🤖 fact is never outranked by bolt/compact/stop/idle;
 //   - the loop marker mirrors live ASL leases exactly;
-//   - no event mutates another source's fact, except the two designed
-//     cross-source actions (prompt recovery-ack, session-end agent clearing)
-//     and window-level user_clear.
+//   - no event mutates another source's fact, except the designed cross-source
+//     actions (prompt recovery-ack, session-end agent clearing, finished-ASL
+//     retirement of older interactive active facts) and window-level user_clear.
 func TestFuzzReducerInvariantsEveryStep(t *testing.T) {
 	for cfgName, cfg := range fuzzCfgs {
 		for _, seed := range fuzzSeeds {
@@ -479,7 +479,7 @@ func TestFuzzReducerInvariantsEveryStep(t *testing.T) {
 						if src == ev.Source {
 							continue
 						}
-						if !reflect.DeepEqual(after[src], f) {
+						if !reflect.DeepEqual(after[src], f) && !allowedASLFinishRetirement(ev, f, after[src]) {
 							t.Fatalf("cfg=%s seed=%d step=%d: event %+v mutated foreign source %+v\nbefore=%+v\nafter =%+v",
 								cfgName, seed, i, ev, src, f, after[src])
 						}
@@ -507,11 +507,11 @@ func factsBySource(facts []SourceFactSnapshot) map[SourceID]SourceFactSnapshot {
 	return out
 }
 
-// TestFuzzReducerTerminalNeverCrossSource pins the session assertion "one
-// source cannot terminate another" in its sharpest form: a terminal event
-// (stop, stop_failure, ASL finish) leaves every other source's fact — active
-// or not — byte-identical.
-func TestFuzzReducerTerminalNeverCrossSource(t *testing.T) {
+// TestFuzzReducerTerminalCrossSourceIsolation pins terminal isolation: native
+// stop/stop_failure events leave every other source byte-identical, while an
+// ASL finish may perform only its narrow retirement of an older interactive
+// bolt/compact fact.
+func TestFuzzReducerTerminalCrossSourceIsolation(t *testing.T) {
 	for _, seed := range fuzzSeeds {
 		trace := newFuzzGen(seed).trace(fuzzTraceLen, false)
 		r := NewReducer(fuzzCfgs["production"])
@@ -528,10 +528,26 @@ func TestFuzzReducerTerminalNeverCrossSource(t *testing.T) {
 				if src == ev.Source {
 					continue
 				}
-				if !reflect.DeepEqual(after[src], f) {
+				if !reflect.DeepEqual(after[src], f) && !allowedASLFinishRetirement(ev, f, after[src]) {
 					t.Fatalf("seed=%d step=%d: terminal %+v mutated foreign source %+v", seed, i, ev, src)
 				}
 			}
 		}
 	}
+}
+
+// allowedASLFinishRetirement recognizes the one cross-source mutation owned by
+// an ASL finish. It deliberately checks the complete snapshot delta so the fuzz
+// invariant still rejects retirement of pipe/protected facts or any mutation
+// beyond acknowledgement at the finish timestamp.
+func allowedASLFinishRetirement(ev ReducerEvent, before, after SourceFactSnapshot) bool {
+	if ev.Source.Kind != SourceASL || ev.Phase != ASLPhaseFinished ||
+		before.Kind != SourceHarness || before.PipeMode || before.Acked ||
+		(before.Icon != "bolt" && before.Icon != "compact") {
+		return false
+	}
+	want := before
+	want.Acked = true
+	want.AckedAt = ev.At
+	return reflect.DeepEqual(after, want)
 }

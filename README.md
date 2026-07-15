@@ -383,7 +383,12 @@ lease per run: overlapping runs in one workspace hold independent facts, a
 run's turn/verification phases render ⚡🔁, between-turns and paused states
 keep 🔁, and one run finishing never changes another run's state (verified
 live with two overlapping runs in a single window). Turn and verification
-heartbeats re-assert the lease every 30 seconds. `ASL_AGENT_MUX_NOTIFY=off`
+heartbeats re-assert the lease every 30 seconds.
+When the final run finishes, that terminal boundary also retires an older
+interactive `bolt`/`compact` fact, so a lost Codex/Claude `Stop` or Copilot
+`agentStop` cannot leave `⚡` masking the run's `🛑`; newer activity, pipe-mode
+children, subagents, and attention/error states remain protected.
+`ASL_AGENT_MUX_NOTIFY=off`
 disables the emission entirely; the ASL test suite forces it off so nested
 test runs never leak events into a live daemon (also verified live). Start payloads use the run's
 top-level harness; turn-start payloads use `active_turn.harness`; finish
@@ -423,7 +428,7 @@ Current Codex events mapped by Agent Mux include:
 
 Codex's `PostCompact` hook is classified from its `trigger` payload. Automatic
 mid-turn compaction restores the active bolt (⚡) because Codex continues the
-same turn; manual `/compact` lands on the stop icon (⏹). Missing or unknown
+same turn; manual `/compact` lands on the stop icon (🛑). Missing or unknown
 trigger values keep the conservative terminal behavior for compatibility.
 
 Current Copilot events mapped by Agent Mux include:
@@ -443,7 +448,7 @@ Current Copilot events mapped by Agent Mux include:
 - `notification`
 
 `agentStop` is the terminal Copilot turn-end hook — the direct analogue of
-Claude's `Stop` event — and resolves to the stop action (⏹ icon).
+Claude's `Stop` event — and resolves to the stop action (🛑 icon).
 `notification` payloads with `notification_type = agent_idle` are treated as
 **background-agent** notifications for Copilot and are ignored for main-session
 state: they no longer resolve to the stop action, so a background agent going
@@ -468,7 +473,7 @@ not replace the current icon.
 `sessionEnd` remains the session-level terminal hook. Copilot still does not
 document a `postCompact` hook; if a compaction run ends with only an
 idle/cleanup follow-up after `preCompact`, Agent Mux promotes the compact state
-to ⏹ instead of silently clearing the tab icon.
+to 🛑 instead of silently clearing the tab icon.
 
 Claude hook support remains in place alongside Copilot; `Stop` and
 `SessionEnd` are terminal. `TeammateIdle` is the lone non-terminal
@@ -676,7 +681,7 @@ error states. A separate conservative stop-only fallback recognizes Codex's
 cleared idle UI after `/clear` when full Kitty scrollback no longer contains a
 transcript. The per-harness stop fallbacks described above (Codex/Claude
 `ScreenStopProbe`, Copilot `TranscriptStopProbe`) repair a turn that finished
-without a native terminal hook so the icon settles on `⏹` instead of staying
+without a native terminal hook so the icon settles on `🛑` instead of staying
 `⚡`. Each fires only on a stuck `bolt` tab and never downgrades protected
 attention states (`key`, `question`, `error`, `warning`, `subagent`, `compact`),
 and never retires pipe-mode, subagent, or live ASL facts. The daemon runs these
@@ -888,7 +893,7 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   `sessionEnd`/`Stop`/`agentStop` and the child-complete `TeammateIdle` hook.
   Current releases also recover across daemon restarts on the next cleanup
   event. For Codex, a completed-turn screen fallback also settles a stuck bolt
-  on `⏹` when the tab shows `Worked for …` with an empty composer; look for
+  on `🛑` when the tab shows `Worked for …` with an empty composer; look for
   `event: "ScreenStopProbe"` in `amx daemon export-events --window <id>` to
   confirm it fired. In split panes, run the export against the managed
   tab-title owner because sibling panes do not drive screen-probe title changes.

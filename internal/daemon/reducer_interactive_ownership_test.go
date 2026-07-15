@@ -115,6 +115,88 @@ func TestCrossHarnessTerminalRetiresOlderInteractiveActive(t *testing.T) {
 	}
 }
 
+// TestASLFinishRetiresOlderInteractiveActive is the missing-terminal-hook
+// regression: an ASL finish is authoritative foreground completion even when
+// the provider never emitted its native Stop/agentStop. The run's stop must
+// retire the provider's older bolt, which otherwise wins by icon precedence.
+func TestASLFinishRetiresOlderInteractiveActive(t *testing.T) {
+	for _, harnessName := range []string{"codex", "claude", "copilot"} {
+		t.Run(harnessName, func(t *testing.T) {
+			r := NewReducer(zeroCfg)
+			source := SourceID{Kind: SourceHarness, Key: harnessName + ":session-1"}
+			r.Apply(ReducerEvent{
+				Source: source, Action: "active", SessionID: "session-1",
+				Seq: 1, At: 100,
+			})
+			r.Apply(ReducerEvent{
+				Source: SourceID{Kind: SourceASL, Key: "run-1"},
+				RunID:  "run-1", Phase: ASLPhaseFinished, Seq: 2, At: 200,
+			})
+
+			if got := r.Reduce(200); got.Icon != "stop" || got.Source.Kind != SourceASL {
+				t.Fatalf("Reduce = %+v, want the finished run's stop", got)
+			}
+			if active := r.facts[source]; active == nil || !active.acked {
+				t.Fatalf("older %s bolt was not retired: %+v", harnessName, active)
+			}
+		})
+	}
+}
+
+// TestASLFinishPreservesNewerAndProtectedWork keeps the finish boundary narrow:
+// it may retire only older interactive bolt/compact facts. Genuine newer work,
+// pipe-mode children, subagents, and attention states remain authoritative.
+func TestASLFinishPreservesNewerAndProtectedWork(t *testing.T) {
+	tests := []struct {
+		name     string
+		seed     ReducerEvent
+		wantIcon string
+	}{
+		{
+			name: "newer interactive activity",
+			seed: ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:new"},
+				Action: "active", Seq: 1, At: 300},
+			wantIcon: "bolt",
+		},
+		{
+			name: "pipe-mode child",
+			seed: ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:pipe"},
+				Action: "active", Seq: 1, At: 100, PipeMode: true},
+			wantIcon: "bolt",
+		},
+		{
+			name: "subagent",
+			seed: ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"},
+				Action: "subagent", Seq: 1, At: 100},
+			wantIcon: "subagent",
+		},
+		{
+			name: "attention",
+			seed: ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:prompt"},
+				Action: "permission", Seq: 1, At: 100},
+			wantIcon: "key",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewReducer(zeroCfg)
+			r.Apply(tc.seed)
+			r.Apply(ReducerEvent{
+				Source: SourceID{Kind: SourceASL, Key: "run-1"},
+				RunID:  "run-1", Phase: ASLPhaseFinished, Seq: 1, At: 200,
+			})
+
+			if got := r.Reduce(300); got.Icon != tc.wantIcon {
+				t.Fatalf("Reduce = %+v, want preserved %q", got, tc.wantIcon)
+			}
+			if fact := r.facts[tc.seed.Source]; fact == nil || fact.acked {
+				t.Fatalf("protected fact was retired: %+v", fact)
+			}
+		})
+	}
+}
+
 // TestInteractiveTerminalPreservesProtectedFacts proves the supersession is
 // narrow: pipe-mode work, subagents, ASL leases, and interactive attention /
 // warning facts all survive the current session's stop.
@@ -481,6 +563,27 @@ func TestMergeDisjointHonorsSupersessionCutoffs(t *testing.T) {
 		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:att"}, false)
 		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:err"}, false)
 		acked(t, r, SourceID{Kind: SourceHarness, Key: "claude:new"}, false)
+	})
+
+	t.Run("ASL finish retires an older interactive active imported later", func(t *testing.T) {
+		r := NewReducer(zeroCfg)
+		// The run finish lands while startup restore is still unavailable. Its
+		// cutoff must cover the stale provider bolt when MergeDisjoint imports it.
+		r.Apply(ReducerEvent{
+			Source: SourceID{Kind: SourceASL, Key: "run-1"}, RunID: "run-1",
+			Phase: ASLPhaseFinished, Seq: 2, At: 200,
+		})
+		imports := []SourceFactSnapshot{
+			snapshot(SourceHarness, "codex:old", "bolt", 1, 100),
+			{Kind: SourceHarness, Key: "codex:pipe", Icon: "bolt", Seq: 1, At: 100, PipeMode: true},
+			snapshot(SourceHarness, "codex:new", "bolt", 1, 300),
+		}
+		if got := r.MergeDisjoint(imports); got != len(imports) {
+			t.Fatalf("merged %d facts, want %d", got, len(imports))
+		}
+		acked(t, r, SourceID{Kind: SourceHarness, Key: "codex:old"}, true)
+		acked(t, r, SourceID{Kind: SourceHarness, Key: "codex:pipe"}, false)
+		acked(t, r, SourceID{Kind: SourceHarness, Key: "codex:new"}, false)
 	})
 
 	t.Run("prompt acknowledges older terminals and retires older interactive active", func(t *testing.T) {

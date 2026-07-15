@@ -328,6 +328,17 @@ func TestHookEventOverlappingRunsKeepIndependentLeases(t *testing.T) {
 	h.SetKittyClient(fake)
 	stubDaemonLoopDiscover(t, nil, nil)
 
+	// Seed the real provider bolt that used to survive both finished ASL facts
+	// when Claude's native Stop was missing. Finishing run-A must retire it while
+	// run-B's independent lease continues to own the loop marker.
+	resp := h.Handle(Request{
+		Type: TypeHookEvent, WindowID: 42, Event: "UserPromptSubmit",
+		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1", TurnID: "turn-1"}),
+	})
+	if !resp.OK {
+		t.Fatalf("UserPromptSubmit response = %+v", resp)
+	}
+
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopTurnStarted", projectDir, hookevent.HookPayload{RunID: "run-A"})
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopStarted", projectDir, hookevent.HookPayload{RunID: "run-B"})
 	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "bolt" {

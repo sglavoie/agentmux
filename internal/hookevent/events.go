@@ -69,7 +69,7 @@ var eventToAction = map[string]string{
 	"preCompact": "compact",
 	"PreCompact": "compact",
 
-	// Stop: session or turn completed. The agent stopped working; user sees ⏹.
+	// Stop: session or turn completed. The agent stopped working; user sees 🛑.
 	"agentStop":  "stop",
 	"sessionEnd": "stop",
 	"Stop":       "stop",

@@ -243,8 +243,9 @@ func (r *Reducer) MergeDisjoint(facts []SourceFactSnapshot) int {
 //     acknowledgeAll leaves a live ASL loop looping through a clear.
 //   - a prompt acknowledged stuck terminal facts on every other source, so an
 //     older imported terminal fact cannot mask the prompt's bolt.
-//   - a prompt or interactive terminal retired older interactive active-class
-//     (bolt/compact) facts, so a stale ⚡ cannot mask the current result.
+//   - a prompt, interactive terminal, or finished ASL run retired older
+//     interactive active-class (bolt/compact) facts, so a stale ⚡ cannot mask
+//     the current result.
 //
 // Pipe-mode `claude -p` children, subagents, ASL leases, attention (key/
 // question), warnings, and terminal errors are concurrent background/protected

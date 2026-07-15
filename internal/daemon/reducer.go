@@ -439,7 +439,7 @@ type Reducer struct {
 	// is not undone by merging older persisted facts.
 	clearCutoff       supersessionMark // user_clear/reset acknowledged everything visible
 	promptCutoff      supersessionMark // a prompt acked stuck terminal facts on other sources
-	interactiveCutoff supersessionMark // a prompt/terminal retired older interactive active facts
+	interactiveCutoff supersessionMark // a prompt/terminal/run finish retired older interactive active facts
 }
 
 // HasLiveOriginRoute reports whether this reducer still owns the identified
@@ -901,13 +901,14 @@ func (r *Reducer) supersede(applied *sourceFact, ev ReducerEvent, action, icon s
 	}
 }
 
-// supersedeInteractiveActive lets the current interactive harness session
-// retire an OLDER interactive harness session's stale active-class fact so it
-// can no longer mask the current session's ⚡ or ⏹. It runs when an interactive
-// (non-pipe) harness source either starts a new turn (a direct prompt) or
-// reaches a native terminal state: without it, an old interactive session that
-// left a bolt outranks the current session's stop (bolt > stop) and the tab
-// never converges to 🛑.
+// supersedeInteractiveActive lets authoritative foreground completion retire an
+// OLDER interactive harness session's stale active-class fact so it can no
+// longer mask the current outcome. It runs when an interactive (non-pipe)
+// harness source either starts a new turn (a direct prompt) or reaches a native
+// terminal state, and when an ASL run reaches its finished phase. Without the
+// ASL case, a harness that misses its native terminal hook leaves a bolt that
+// outranks the run's stop (bolt > stop), so AgentSessionLoopFinished releases
+// the loop marker but the tab never converges to 🛑.
 //
 // Only genuinely superseded facts are acknowledged: other interactive harness
 // sources contributing an active-class icon (bolt/compact) that is not more
@@ -916,10 +917,10 @@ func (r *Reducer) supersede(applied *sourceFact, ev ReducerEvent, action, icon s
 // concurrent state a stale-session cleanup must never retire, so they are left
 // untouched.
 func (r *Reducer) supersedeInteractiveActive(applied *sourceFact, ev ReducerEvent, action string) {
-	if applied.source.Kind != SourceHarness || applied.pipeMode {
-		return
-	}
-	if !ev.Prompt && !isTerminalAction(action) {
+	harnessBoundary := applied.source.Kind == SourceHarness && !applied.pipeMode &&
+		(ev.Prompt || isTerminalAction(action))
+	aslBoundary := applied.source.Kind == SourceASL && ev.Phase == ASLPhaseFinished
+	if !harnessBoundary && !aslBoundary {
 		return
 	}
 	r.retireOlderInteractiveActive(applied)
@@ -927,9 +928,9 @@ func (r *Reducer) supersedeInteractiveActive(applied *sourceFact, ev ReducerEven
 
 // retireOlderInteractiveActive acknowledges every OTHER interactive harness
 // active-class fact (bolt/compact) that is not more recent than `applied`, so a
-// current interactive terminal/prompt event — or an authoritative idle
-// observation whose probe fact stands in for `applied` — can no longer be
-// masked by a stale session's ⚡. Pipe-mode `claude -p` children, subagents,
+// current interactive terminal/prompt event, an authoritative idle observation
+// whose probe fact stands in for `applied`, or a finished ASL run can no longer
+// be masked by a stale session's ⚡. Pipe-mode `claude -p` children, subagents,
 // ASL leases, attention icons (key/question), warnings, and terminal errors are
 // concurrent background/protected state a stale-session cleanup must never
 // retire, so they are left untouched.

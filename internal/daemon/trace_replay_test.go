@@ -52,7 +52,7 @@ func pl(seq int, extra string) string {
 	return "{" + body + "}"
 }
 
-// plc is pl in the camelCase dialect (Codex/Copilot payload spelling).
+// plc is pl in the camelCase dialect used by Copilot payloads.
 func plc(seq int, extra string) string {
 	body := fmt.Sprintf(`"sourceSequence":"%d","emittedTime":"%d"`, seq, replayEmitBase+int64(seq))
 	if extra != "" {
@@ -115,22 +115,22 @@ func replayTraces(projectDir string) []replayTrace {
 			name:    "codex-single-turn",
 			harness: "codex",
 			steps: []replayStep{
-				{"sessionStart", plc(1, `"sessionId":"sess-0002"`), "", false},
-				{"userPromptSubmitted", plc(2, `"sessionId":"sess-0002","turnId":"turn-1"`), "bolt", false},
-				{"preToolUse", plc(3, `"sessionId":"sess-0002","turnId":"turn-1","toolUseId":"tool-1"`), "bolt", false},
-				{"postToolUse", plc(4, `"sessionId":"sess-0002","turnId":"turn-1","toolUseId":"tool-1"`), "bolt", false},
-				{"agentStop", plc(5, `"sessionId":"sess-0002","turnId":"turn-1","stopReason":"end_turn"`), "stop", false},
+				{"SessionStart", pl(1, `"session_id":"sess-0002"`), "", false},
+				{"UserPromptSubmit", pl(2, `"session_id":"sess-0002","turn_id":"turn-1"`), "bolt", false},
+				{"PreToolUse", pl(3, `"session_id":"sess-0002","turn_id":"turn-1","tool_use_id":"tool-1"`), "bolt", false},
+				{"PostToolUse", pl(4, `"session_id":"sess-0002","turn_id":"turn-1","tool_use_id":"tool-1"`), "bolt", false},
+				{"Stop", pl(5, `"session_id":"sess-0002","turn_id":"turn-1","stop_reason":"end_turn"`), "stop", false},
 			},
 		},
 		{
 			name:    "codex-compaction-auto-and-manual",
 			harness: "codex",
 			steps: []replayStep{
-				{"userPromptSubmitted", pl(1, `"session_id":"sess-0003","turn_id":"turn-1"`), "bolt", false},
-				{"preCompact", pl(2, `"session_id":"sess-0003","turn_id":"turn-1"`), "compact", false},
+				{"UserPromptSubmit", pl(1, `"session_id":"sess-0003","turn_id":"turn-1"`), "bolt", false},
+				{"PreCompact", pl(2, `"session_id":"sess-0003","turn_id":"turn-1"`), "compact", false},
 				// Codex stamps the trigger: auto-compaction resumes the turn.
 				{"PostCompact", pl(3, `"session_id":"sess-0003","turn_id":"turn-1","trigger":"auto"`), "bolt", false},
-				{"preCompact", pl(4, `"session_id":"sess-0003","turn_id":"turn-1"`), "compact", false},
+				{"PreCompact", pl(4, `"session_id":"sess-0003","turn_id":"turn-1"`), "compact", false},
 				// A manual /compact finishes at the prompt.
 				{"PostCompact", pl(5, `"session_id":"sess-0003","turn_id":"turn-1","trigger":"manual"`), "stop", false},
 			},
@@ -143,9 +143,9 @@ func replayTraces(projectDir string) []replayTrace {
 			name:    "codex-session-replacement",
 			harness: "codex",
 			steps: []replayStep{
-				{"userPromptSubmitted", plc(1, `"sessionId":"sess-000a","turnId":"turn-1"`), "bolt", false},
-				{"userPromptSubmitted", plc(2, `"sessionId":"sess-000b","turnId":"turn-1"`), "bolt", false},
-				{"agentStop", plc(3, `"sessionId":"sess-000b","turnId":"turn-1","stopReason":"end_turn"`), "stop", false},
+				{"UserPromptSubmit", pl(1, `"session_id":"sess-000a","turn_id":"turn-1"`), "bolt", false},
+				{"UserPromptSubmit", pl(2, `"session_id":"sess-000b","turn_id":"turn-1"`), "bolt", false},
+				{"Stop", pl(3, `"session_id":"sess-000b","turn_id":"turn-1","stop_reason":"end_turn"`), "stop", false},
 			},
 		},
 		{
@@ -220,6 +220,38 @@ func replayTraces(projectDir string) []replayTrace {
 			},
 		},
 		{
+			name:    "asl-claude-finish-without-native-stop",
+			harness: "claude",
+			steps: []replayStep{
+				{"UserPromptSubmit", pl(1, `"session_id":"sess-asl-claude","turn_id":"turn-1"`), "bolt", false},
+				{"AgentSessionLoopTurnStarted", aslPlForHarness(projectDir, "claude", "run-claude", 1, ""), "bolt", true},
+				// No native Stop arrives. The authoritative run finish retires the
+				// completed turn's older interactive bolt and surfaces 🛑.
+				{"AgentSessionLoopFinished", aslPlForHarness(projectDir, "claude", "run-claude", 2, ""), "stop", false},
+				{"UserPromptSubmit", pl(3, `"session_id":"sess-asl-claude","turn_id":"turn-2"`), "bolt", false},
+			},
+		},
+		{
+			name:    "asl-codex-finish-without-native-stop",
+			harness: "codex",
+			steps: []replayStep{
+				{"UserPromptSubmit", pl(1, `"session_id":"sess-asl-codex","turn_id":"turn-1"`), "bolt", false},
+				{"AgentSessionLoopTurnStarted", aslPlForHarness(projectDir, "codex", "run-codex", 1, ""), "bolt", true},
+				{"AgentSessionLoopFinished", aslPlForHarness(projectDir, "codex", "run-codex", 2, ""), "stop", false},
+				{"UserPromptSubmit", pl(3, `"session_id":"sess-asl-codex","turn_id":"turn-2"`), "bolt", false},
+			},
+		},
+		{
+			name:    "asl-copilot-finish-without-native-stop",
+			harness: "copilot",
+			steps: []replayStep{
+				{"userPromptSubmitted", plc(1, `"sessionId":"sess-asl-copilot","turnId":"turn-1"`), "bolt", false},
+				{"AgentSessionLoopTurnStarted", aslPlForHarness(projectDir, "copilot", "run-copilot", 1, ""), "bolt", true},
+				{"AgentSessionLoopFinished", aslPlForHarness(projectDir, "copilot", "run-copilot", 2, ""), "stop", false},
+				{"userPromptSubmitted", plc(3, `"sessionId":"sess-asl-copilot","turnId":"turn-2"`), "bolt", false},
+			},
+		},
+		{
 			name:    "asl-run-lifecycle",
 			harness: "claude",
 			steps: []replayStep{
@@ -253,7 +285,11 @@ func replayTraces(projectDir string) []replayTrace {
 // aslPl builds a sanitized agent_session_loop lifecycle payload rooted at the
 // fixture project directory.
 func aslPl(projectDir, runID string, seq int, extra string) string {
-	body := fmt.Sprintf(`"source":"agent_session_loop","cwd":%q,"harness":"claude","run_id":%q`, projectDir, runID)
+	return aslPlForHarness(projectDir, "claude", runID, seq, extra)
+}
+
+func aslPlForHarness(projectDir, harnessName, runID string, seq int, extra string) string {
+	body := fmt.Sprintf(`"source":"agent_session_loop","cwd":%q,"harness":%q,"run_id":%q`, projectDir, harnessName, runID)
 	if extra != "" {
 		body += "," + extra
 	}
