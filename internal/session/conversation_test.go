@@ -12,14 +12,17 @@ import (
 func TestResolveLiveConversationRequiresExactCurrentOwner(t *testing.T) {
 	target := conversation.Identity{Harness: "claude", SessionID: "session-1"}
 	owner := kitty.Window{ID: 10, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", Project: "api"}}
-	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{{ID: 100, Title: "api", Windows: []kitty.Window{owner}}}}}
+	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{
+		{ID: 99, Title: "shell", Windows: []kitty.Window{{ID: 9, IsActive: true}}},
+		{ID: 100, Title: "api", Windows: []kitty.Window{owner}},
+	}}}
 	states := map[int]daemon.WindowStateSnapshot{10: {Conversation: &target}}
 
 	got, ok := session.ResolveLiveConversation(target, states, windows)
 	if !ok {
 		t.Fatal("exact live owner should resolve")
 	}
-	if got.TabID != 100 || got.WindowID != 10 || got.Harness != "claude" || got.Project != "api" {
+	if got.TabID != 100 || got.TabNumber != 2 || got.WindowID != 10 || got.Harness != "claude" || got.Project != "api" {
 		t.Fatalf("resolved session = %+v", got)
 	}
 }

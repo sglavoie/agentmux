@@ -75,6 +75,7 @@ func TestCrossModeDashboardListWidthAcrossFixture(t *testing.T) {
 	for i, tc := range emojiTitleFixture {
 		running = append(running, session.RunningSession{
 			TabID:     i + 1,
+			TabNumber: i + 1,
 			WindowID:  i + 100,
 			Base:      tc.title,
 			Project:   tc.title,

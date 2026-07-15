@@ -22,13 +22,13 @@ func TestFormatRowLockIconPresentWhenLocked(t *testing.T) {
 	}
 	acctColor := map[string]string{"work": "blue"}
 
-	unlocked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", ""))
+	unlocked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", "", ""))
 	if strings.Contains(unlocked, palette.LockIcon()) {
 		t.Fatalf("unlocked row should not contain %q; got %q", palette.LockIcon(), unlocked)
 	}
 
 	s.Locked = true
-	locked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", ""))
+	locked := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", "", ""))
 	if !strings.Contains(locked, palette.LockIcon()) {
 		t.Fatalf("locked row should contain %q; got %q", palette.LockIcon(), locked)
 	}
@@ -47,15 +47,56 @@ func TestFormatRowMuteIconPresentWhenMuted(t *testing.T) {
 	}
 	acctColor := map[string]string{"work": "blue"}
 
-	unmuted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", ""))
+	unmuted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", "", ""))
 	if strings.Contains(unmuted, palette.MuteIcon()) {
 		t.Fatalf("unmuted row should not contain %q; got %q", palette.MuteIcon(), unmuted)
 	}
 
 	s.Muted = true
-	muted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", ""))
+	muted := stripAnsi(formatRow(s, acctColor, nil, nil, 120, "", "", ""))
 	if !strings.Contains(muted, palette.MuteIcon()) {
 		t.Fatalf("muted row should contain %q; got %q", palette.MuteIcon(), muted)
+	}
+}
+
+func TestTabNumberColumnAlignsSingleAndMultiDigitNumbers(t *testing.T) {
+	sessions := []session.RunningSession{
+		{TabNumber: 2},
+		{TabNumber: 12},
+		{},
+	}
+	width := tabNumberColumnWidth(sessions)
+	if width != 4 {
+		t.Fatalf("tab number column width = %d, want 4", width)
+	}
+	if got := renderTabNumberCell(2, width); got != " 2: " {
+		t.Errorf("single-digit cell = %q, want %q", got, " 2: ")
+	}
+	if got := renderTabNumberCell(12, width); got != "12: " {
+		t.Errorf("multi-digit cell = %q, want %q", got, "12: ")
+	}
+	if got := renderTabNumberCell(0, width); got != "    " {
+		t.Errorf("unknown cell = %q, want four spaces", got)
+	}
+}
+
+func TestRenderListPrefixesRowsWithTabNumbers(t *testing.T) {
+	m := testModel()
+	m.width = 120
+	m = loadSessions(m, []session.RunningSession{
+		{TabID: 20, TabNumber: 2, WindowID: 1, Account: "work", Base: "api", Directory: "/work/api"},
+		{TabID: 120, TabNumber: 12, WindowID: 2, Account: "work", Base: "backend", Directory: "/work/backend"},
+	})
+
+	lines := strings.Split(strings.TrimRight(stripAnsi(renderListAt(m, m.width, 0)), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("rendered lines = %d, want 2: %q", len(lines), lines)
+	}
+	if !strings.HasPrefix(lines[0], " 2: ") || !strings.Contains(lines[0], "api") {
+		t.Errorf("first row = %q, want tab 2 api row", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "12: ") || !strings.Contains(lines[1], "backend") {
+		t.Errorf("second row = %q, want tab 12 backend row", lines[1])
 	}
 }
 
@@ -156,6 +197,7 @@ func TestRenderListActiveLoopColumnFitsNarrowWidth(t *testing.T) {
 	m.width = width
 	m = loadSessions(m, []session.RunningSession{
 		{
+			TabNumber: 12,
 			WindowID:  1,
 			Account:   "work",
 			Base:      "frontend-service",

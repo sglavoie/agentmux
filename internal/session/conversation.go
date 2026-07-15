@@ -59,7 +59,7 @@ func ResolveLiveConversationStatus(
 		if state.Conversation == nil || !target.Equal(*state.Conversation) {
 			continue
 		}
-		_, tab, window, ok := kitty.FindWindowLocationByID(osWindows, windowID)
+		osWindow, tab, window, ok := kitty.FindWindowLocationByID(osWindows, windowID)
 		if !ok {
 			// The daemon snapshot is stale: Kitty no longer reports its window.
 			continue
@@ -76,6 +76,7 @@ func ResolveLiveConversationStatus(
 		}
 
 		candidate := runningSessionFromWindow(*tab, *owner)
+		candidate.TabNumber = tabNumberByID(osWindow.Tabs, tab.ID)
 		if found {
 			return RunningSession{}, LiveConversationAmbiguous
 		}

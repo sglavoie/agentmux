@@ -127,6 +127,58 @@ func TestListFromOSWindows_AndFindByWindowID(t *testing.T) {
 	}
 }
 
+func TestListFromOSWindows_AssignsPhysicalTabNumbers(t *testing.T) {
+	managedTab := func(tabID, windowID int, title string) kitty.Tab {
+		return kitty.Tab{
+			ID:    tabID,
+			Title: title,
+			Windows: []kitty.Window{{
+				ID:       windowID,
+				IsActive: true,
+				UserVars: kitty.UserVars{Profile: "work", Harness: "claude", Project: title},
+			}},
+		}
+	}
+	unmanagedTab := func(tabID, windowID int) kitty.Tab {
+		return kitty.Tab{ID: tabID, Title: "shell", Windows: []kitty.Window{{ID: windowID, IsActive: true}}}
+	}
+
+	osWindows := []kitty.OSWindow{
+		{ID: 1, Tabs: []kitty.Tab{
+			unmanagedTab(101, 1001),
+			managedTab(102, 1002, "zeta"),
+			unmanagedTab(103, 1003),
+			managedTab(104, 1004, "alpha"),
+		}},
+		{ID: 2, Tabs: []kitty.Tab{
+			managedTab(201, 2001, "beta"),
+		}},
+	}
+
+	sessions := session.ListFromOSWindows(osWindows)
+	if len(sessions) != 3 {
+		t.Fatalf("sessions = %d, want 3", len(sessions))
+	}
+
+	wantByTabID := map[int]int{102: 2, 104: 4, 201: 1}
+	for _, got := range sessions {
+		if want := wantByTabID[got.TabID]; got.TabNumber != want {
+			t.Errorf("tab ID %d number = %d, want %d", got.TabID, got.TabNumber, want)
+		}
+	}
+
+	sorted := session.SortRunning(sessions, "alpha")
+	wantSorted := []struct {
+		base      string
+		tabNumber int
+	}{{"alpha", 4}, {"beta", 1}, {"zeta", 2}}
+	for i, want := range wantSorted {
+		if sorted[i].Base != want.base || sorted[i].TabNumber != want.tabNumber {
+			t.Errorf("sorted[%d] = %q tab %d, want %q tab %d", i, sorted[i].Base, sorted[i].TabNumber, want.base, want.tabNumber)
+		}
+	}
+}
+
 func TestFind_NotFound(t *testing.T) {
 	client := newClientWithFixture(t, "kitty_ls.json")
 	sessions, _ := session.List(client)

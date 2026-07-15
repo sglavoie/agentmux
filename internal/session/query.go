@@ -16,6 +16,7 @@ import (
 // RunningSession is a currently open managed harness tab in Kitty.
 type RunningSession struct {
 	TabID            int
+	TabNumber        int // 1-based physical position within the containing Kitty OS window
 	WindowID         int
 	Key              string
 	Title            string // raw Kitty tab title (may include icons)
@@ -462,17 +463,32 @@ func runningSessionsFromOSWindows(osWindows []kitty.OSWindow, cfg *config.Config
 func runningSessionsFromTabs(tabs []kitty.Tab, ctx projectMatchContext) ([]RunningSession, []GhostTab) {
 	sessions := make([]RunningSession, 0, len(tabs))
 	var ghosts []GhostTab
-	for _, tab := range tabs {
+	for i, tab := range tabs {
 		rs, ghost, ok := tabToRunningSession(tab, ctx)
 		if !ok {
 			continue
 		}
+		// Kitty's user-facing tab number is the tab's 1-based physical
+		// position within its OS window. Assign it before managed tabs are
+		// filtered so unmanaged tabs still occupy their visible positions.
+		rs.TabNumber = i + 1
 		sessions = append(sessions, rs)
 		if ghost != nil {
 			ghosts = append(ghosts, *ghost)
 		}
 	}
 	return sessions, ghosts
+}
+
+// tabNumberByID returns the 1-based physical position of tabID within one
+// Kitty OS window. A zero result means the tab was not present.
+func tabNumberByID(tabs []kitty.Tab, tabID int) int {
+	for i, tab := range tabs {
+		if tab.ID == tabID {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 func titleFallbackMatches(cfg *config.Config, base string) ([]titleFallbackMatch, string, string) {

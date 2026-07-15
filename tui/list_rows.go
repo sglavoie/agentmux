@@ -35,6 +35,11 @@ const lockColumnWidth = 2
 // rows stay aligned regardless of which sessions in the view are muted.
 const muteColumnWidth = 2
 
+// minimumTabNumberColumnWidth fits a one-digit tab number, a colon, and one
+// trailing space (for example, "1: "). Wider result sets expand this column
+// dynamically so multi-digit numbers remain aligned.
+const minimumTabNumberColumnWidth = 3
+
 // activeLoopColumnWidth is the visual width reserved for the active
 // agent-session-loop indicator (🔁 = 2 cells + 1 trailing space). It is only
 // reserved when at least one rendered row has a matching active loop.
@@ -119,6 +124,7 @@ func renderListAt(m Model, width, height int) string {
 		}
 	}
 	activeLoopActive := anyVisibleRowHasActiveLoop(m, startIdx, endIdx)
+	tabNumberWidth := tabNumberColumnWidth(m.filtered)
 
 	var sb strings.Builder
 	if showTop {
@@ -153,7 +159,8 @@ func renderListAt(m Model, width, height int) string {
 		if activeLoopActive {
 			activeLoopCell = renderActiveLoopCell(s.Looping)
 		}
-		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, activeLoopCell, ageCell)
+		tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
+		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, tabNumberCell, activeLoopCell, ageCell)
 		var styledRow string
 		switch {
 		case i == m.cursor:
