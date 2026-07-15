@@ -372,6 +372,62 @@ func TestListWithConfig_ManagedWindowRepairsStaleUserVarsFromForegroundCWD(t *te
 	}
 }
 
+func TestListWithConfig_ManagedWindowPreservesRuntimeProfileOverride(t *testing.T) {
+	projectDir := t.TempDir()
+	client := newClientFromWindows(t, []kitty.OSWindow{{
+		ID:       1,
+		IsActive: true,
+		Tabs: []kitty.Tab{{
+			ID:       68,
+			IsActive: true,
+			Title:    "sis",
+			Windows: []kitty.Window{{
+				ID:       201,
+				IsActive: true,
+				CWD:      projectDir,
+				UserVars: kitty.UserVars{
+					Profile:      "tradition-claude",
+					Account:      "tradition-claude",
+					Harness:      "claude",
+					Project:      "sis",
+					AMXDirectory: projectDir,
+				},
+				ForegroundProcesses: []kitty.ForegroundProcess{{
+					Cmdline: []string{"claude", "--dangerously-skip-permissions"},
+					CWD:     projectDir,
+				}},
+			}},
+		}},
+	}})
+
+	cfg := &config.Config{
+		Accounts: []config.Account{
+			{Name: "vta-claude", Harness: "claude"},
+			{Name: "tradition-claude", Harness: "claude"},
+		},
+		Sessions: []config.Session{{
+			Title: "sis", Profile: "vta-claude", Directory: projectDir,
+		}},
+	}
+
+	sessions, ghosts, err := session.ListWithConfig(client, cfg)
+	if err != nil {
+		t.Fatalf("ListWithConfig: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if len(ghosts) != 0 {
+		t.Fatalf("runtime profile override produced %d ghost repair(s), want 0", len(ghosts))
+	}
+	if got := sessions[0].EffectiveProfile(); got != "tradition-claude" {
+		t.Fatalf("effective profile = %q, want runtime override tradition-claude", got)
+	}
+	if got, want := sessions[0].Key, session.SessionKey("tradition-claude", "sis"); got != want {
+		t.Fatalf("session key = %q, want %q", got, want)
+	}
+}
+
 func TestListWithConfig_ManagedWindowRepairsStaleUserVarsFromHarnessEmojiTitle(t *testing.T) {
 	analyticsDir := t.TempDir()
 	logScannerDir := t.TempDir()

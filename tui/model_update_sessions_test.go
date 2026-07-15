@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -240,5 +241,83 @@ func TestFetchCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
 	msg := fetchCmd(client, &config.Config{Defaults: config.Defaults{Sort: "alpha"}}, "alpha")().(sessionsMsg)
 	if got := msg.sessions[0]; got.State != "stop" || !got.Looping {
 		t.Fatalf("session state = %+v, want title-derived stop + looping fallback", got)
+	}
+}
+
+func TestFetchCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
+	oldDaemonRequest := daemonRequest
+	daemonRequest = func(daemon.Request) (daemon.Response, error) {
+		return daemon.Response{}, errors.New("daemon unavailable")
+	}
+	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
+
+	const projectDir = "/projects/sis"
+	client := NewUITestKittyClient([]kitty.OSWindow{{
+		Tabs: []kitty.Tab{{
+			ID:    68,
+			Title: "sis",
+			Windows: []kitty.Window{{
+				ID:       201,
+				IsActive: true,
+				CWD:      projectDir,
+				UserVars: kitty.UserVars{
+					Profile:      "tradition-claude",
+					Account:      "tradition-claude",
+					Harness:      "claude",
+					Project:      "sis",
+					AMXDirectory: projectDir,
+				},
+				ForegroundProcesses: []kitty.ForegroundProcess{{
+					Cmdline: []string{"claude", "--dangerously-skip-permissions"},
+					CWD:     projectDir,
+				}},
+			}},
+		}},
+	}})
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "vta-claude", Harness: "claude", Color: "red"},
+			{Name: "tradition-claude", Harness: "claude", Color: "blue"},
+		},
+		Sessions: []config.Session{{
+			Title: "sis", Profile: "vta-claude", Directory: projectDir,
+		}},
+	}
+
+	msg := fetchCmd(client, cfg, "alpha")().(sessionsMsg)
+	if len(msg.sessions) != 1 || msg.sessions[0].EffectiveProfile() != "tradition-claude" {
+		t.Fatalf("fetched sessions = %+v, want tradition-claude/sis", msg.sessions)
+	}
+	if calls := client.CallsFor("SetUserVars"); len(calls) != 0 {
+		t.Fatalf("runtime profile override was re-anchored: %+v", calls)
+	}
+
+	m := NewModel(cfg, client)
+	updated, _ := m.Update(msg)
+	m = updated.(Model)
+	m = pressKey(m, "c")
+	if m.configPickerCurrent != "tradition-claude" {
+		t.Fatalf("picker current profile = %q, want tradition-claude", m.configPickerCurrent)
+	}
+	out := stripAnsi(renderConfigPicker(m))
+	var traditionRow string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "tradition-claude") {
+			traditionRow = line
+			break
+		}
+	}
+	if !strings.Contains(traditionRow, "(current)") {
+		t.Fatalf("picker did not mark tradition-claude current:\n%s", out)
+	}
+
+	m = pressKey(m, "k") // tradition-claude -> vta-claude
+	updated, cmd := m.Update(keyPress("enter"))
+	if updated.(Model).mode != ModeList {
+		t.Fatalf("mode after choosing vta-claude = %d, want ModeList", updated.(Model).mode)
+	}
+	if cmd == nil {
+		t.Fatal("choosing vta-claude was suppressed as current profile")
 	}
 }

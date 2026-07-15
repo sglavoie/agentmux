@@ -341,13 +341,10 @@ func fallbackWindowsByPriority(tab kitty.Tab) []kitty.Window {
 }
 
 func windowMatchesConfigSession(win kitty.Window, m titleFallbackMatch) bool {
-	profile := m.sess.EffectiveProfile()
-	if profile == "" {
-		profile = m.acc.Name
-	}
-	if current := win.UserVars.EffectiveProfile(); current != "" && !strings.EqualFold(current, profile) {
-		return false
-	}
+	// The profile stored on a managed window is the runtime launch identity.
+	// It may legitimately differ from the configured project's default after a
+	// one-time launch override or dashboard profile switch, so profile drift is
+	// not evidence that the window was reused for another project.
 	if win.UserVars.Project != "" && win.UserVars.Project != m.sess.Title {
 		return false
 	}
