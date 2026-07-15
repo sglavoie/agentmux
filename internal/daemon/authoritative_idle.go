@@ -49,8 +49,13 @@ type AuthoritativeIdle struct {
 	Harness             string
 	CapturedSeq         uint64
 	CapturedSnapshotGen uint64
-	At                  int64
-	RequiredSamples     int
+	// ProbeBinding, when present, strengthens the ordinary target receipt and
+	// snapshot-generation checks with the exact producer session, source pane,
+	// and source receipt captured by a route-aware adapter. Legacy/direct
+	// adapters may leave it zero-valued and retain the original checks.
+	ProbeBinding    screenProbeBinding
+	At              int64
+	RequiredSamples int
 
 	SessionTitle  string
 	Account       string
@@ -150,47 +155,6 @@ func (h *Handler) windowReceiptLocked(windowID int) uint64 {
 // check stays atomic.
 func (h *Handler) windowReceiptCurrentLocked(windowID int, capturedSeq uint64) bool {
 	return h.windowReceiptLocked(windowID) == capturedSeq
-}
-
-// screenProbeEligibilityCurrentLocked binds snapshot routing to both reducer
-// freshness and the current effective state/owner. The receipt rejects work
-// accepted after capture; the state/owner check also rejects a freshly listed
-// but not-yet-rendered stale title whose eligibility disagrees with the reducer.
-// A missing in-process state is represented by an empty icon so probes that
-// intentionally repair title-only drift (notably Codex clear) can opt in.
-func (h *Handler) screenProbeEligibilityCurrentLocked(
-	windowID int,
-	capturedSeq uint64,
-	capturedSnapshotGen uint64,
-	expectedHarness string,
-	eligible func(string) bool,
-) bool {
-	if !h.screenProbeGenerationCurrentLocked(capturedSnapshotGen) ||
-		!h.windowReceiptCurrentLocked(windowID, capturedSeq) {
-		return false
-	}
-	st, ok := h.windowStateLocked(windowID)
-	if !ok || st == nil {
-		return eligible("")
-	}
-	if st.LastHarness != "" {
-		if currentHarness := harness.Normalize(st.LastHarness); currentHarness != harness.Normalize(expectedHarness) {
-			return false
-		}
-	}
-	return eligible(st.Effective.Icon)
-}
-
-func (h *Handler) screenProbeEligibilityCurrent(
-	windowID int,
-	capturedSeq uint64,
-	capturedSnapshotGen uint64,
-	expectedHarness string,
-	eligible func(string) bool,
-) bool {
-	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
-	return h.screenProbeEligibilityCurrentLocked(windowID, capturedSeq, capturedSnapshotGen, expectedHarness, eligible)
 }
 
 // idleSampleRef keys the consecutive idle-sample stabilization streak by window
@@ -300,7 +264,13 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	// mute assignment and reducer mutation below: a mute-only snapshot change
 	// cannot be overwritten by an older observation whose reducer receipt still
 	// happens to match.
-	if st.ShadowSeq != obs.CapturedSeq || !h.screenProbeGenerationCurrentLocked(obs.CapturedSnapshotGen) {
+	fresh := st.ShadowSeq == obs.CapturedSeq && h.screenProbeGenerationCurrentLocked(obs.CapturedSnapshotGen)
+	if obs.ProbeBinding.valid() {
+		fresh = obs.ProbeBinding.TargetWindowID == obs.WindowID &&
+			obs.ProbeBinding.TargetReceipt == obs.CapturedSeq &&
+			h.screenProbeBindingCurrentLocked(obs.ProbeBinding)
+	}
+	if !fresh {
 		h.clearIdleSampleLocked(ref)
 		h.stateMu.Unlock()
 		return false
@@ -343,8 +313,12 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	if at == 0 {
 		at = time.Now().Unix()
 	}
+	originWindowID := obs.WindowID
+	if obs.ProbeBinding.SourceWindowID > 0 {
+		originWindowID = obs.ProbeBinding.SourceWindowID
+	}
 	st.ShadowSeq++
-	decision := st.Reducer.SettleAuthoritativeIdle(obs.Source, st.ShadowSeq, at, obs.SessionID)
+	decision := st.Reducer.SettleAuthoritativeIdle(obs.Source, st.ShadowSeq, at, obs.SessionID, originWindowID)
 	if decision != DecisionApplied {
 		// The probe fact did not advance (a newer same-source fact already
 		// exists). Nothing to publish; reset the streak so the next stretch of
@@ -371,7 +345,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	if diagnosticEvent == "" {
 		diagnosticEvent = eventAuthoritativeIdle
 	}
-	h.appendWatchdogEventLocked(obs.WindowID, time.Unix(at, 0), diagnosticEvent, resultAction,
+	h.appendWatchdogEventLocked(obs.WindowID, originWindowID, time.Unix(at, 0), diagnosticEvent, resultAction,
 		string(obs.Source.Kind)+":"+obs.Source.Key,
 		fmt.Sprintf("authoritative idle (%s) settled visible state %q→%q",
 			idleHarnessLabel(obs.Harness), before.Icon, effective.Icon))

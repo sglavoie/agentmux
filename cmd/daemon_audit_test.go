@@ -113,6 +113,50 @@ func TestDaemonAuditCleanRunExitsZeroAndJSONReports(t *testing.T) {
 	}
 }
 
+func TestDaemonAuditOwnerMismatchTraceUsesSharedFindingsAndFails(t *testing.T) {
+	resetAuditTestState(t)
+	start := time.Unix(1_700_000_000, 0)
+	installAuditFakeClock(start)
+	auditDuration = 4 * time.Second
+	auditJSON = true
+
+	build := doctorTestBuild
+	doctorCLIBuild = func() buildinfo.Info { return build }
+	newDoctorDaemonClient = func() daemonExportClient {
+		return &fakeDaemonExportClient{
+			health: daemon.Health{Alive: true, Ready: true, Build: &build},
+			export: func(int) (daemon.EventsExport, error) {
+				return ownerMismatchDoctorSnapshot(start), nil
+			},
+		}
+	}
+	newDoctorKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+
+	var out bytes.Buffer
+	daemonAuditCmd.SetOut(&out)
+	err := runDaemonAudit(daemonAuditCmd, nil)
+	var exitErr *ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure || !exitErr.Quiet {
+		t.Fatalf("err = %+v; want quiet JSON audit health failure", err)
+	}
+
+	var report auditReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("output is not a single JSON report: %v\n%s", err, out.String())
+	}
+	if report.Healthy || report.Samples != 3 {
+		t.Fatalf("report = %+v; want unhealthy with 3 samples", report)
+	}
+	prompt := findingsByCheck(report.Findings, checkOwnerMismatchPrompt)
+	if len(prompt) != 1 || prompt[0].Severity != severityFailure || prompt[0].WindowID != 7 {
+		t.Fatalf("deduplicated owner_mismatch_prompt findings = %+v; want one window-7 failure", prompt)
+	}
+	burst := findingsByCheck(report.Findings, checkOwnerMismatchBurst)
+	if len(burst) != 1 || burst[0].Severity != severityWarning || burst[0].WindowID != 7 {
+		t.Fatalf("deduplicated owner_mismatch_burst findings = %+v; want one window-7 warning", burst)
+	}
+}
+
 func TestDaemonAuditUnreachableDaemonIsAViolation(t *testing.T) {
 	resetAuditTestState(t)
 	installAuditFakeClock(time.Unix(1_700_000_000, 0))

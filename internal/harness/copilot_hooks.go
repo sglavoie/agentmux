@@ -117,8 +117,8 @@ func buildCopilotHooks(disabledEvents []string, amxBin string) copilotHooksFile 
 		}
 		hooks[event] = []copilotHookDef{{
 			Type:       "command",
-			Bash:       bashCommand + " hook-indicator " + event,
-			Powershell: powershellCommand + " hook-indicator " + event,
+			Bash:       bashCommand + " hook-indicator " + event + " --harness=" + Copilot,
+			Powershell: powershellCommand + " hook-indicator " + event + " --harness=" + Copilot,
 			TimeoutSec: 5,
 		}}
 	}

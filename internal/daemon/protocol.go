@@ -39,7 +39,13 @@ type Request struct {
 	// window ("source", "owner", "source_fallback") for the event log. Daemon-
 	// internal: routing is a daemon decision, never client input.
 	routeDecision string
-	Type          MessageType `json:"type"`
+	// targetHarness is daemon-internal managed-window metadata. Harness is the
+	// event producer; targetHarness identifies the pane whose durable title
+	// metadata is updated after routing. Direct legacy state_update requests
+	// leave targetHarnessSet false and use Harness for both roles.
+	targetHarness    string
+	targetHarnessSet bool
+	Type             MessageType `json:"type"`
 	// RequestID is a client-generated UUID identifying one logical request.
 	// It is reused verbatim across retries so the daemon can deduplicate an
 	// ambiguous-timeout resend and apply the underlying event exactly once.
@@ -54,7 +60,7 @@ type Request struct {
 	IsPrompt         bool   `json:"is_prompt,omitempty"`         // true if event is a user prompt submission
 	PreservesIcon    bool   `json:"preserves_icon,omitempty"`    // true if a non-terminal child-complete event should preserve current icon/guard semantics
 	Account          string `json:"account,omitempty"`           // profile name from amx_profile or cc_account
-	Harness          string `json:"harness,omitempty"`           // normalized harness name from amx_harness
+	Harness          string `json:"harness,omitempty"`           // event-producing harness; unknown/legacy producers may be empty
 	SessionTitle     string `json:"session_title,omitempty"`     // tab base title (e.g. "W:api")
 	PipeMode         bool   `json:"pipe_mode,omitempty"`         // suppress notifications when claude -p
 	KittyListenOn    string `json:"kitty_listen_on,omitempty"`   // KITTY_LISTEN_ON for daemon-side Kitty writes
@@ -170,7 +176,7 @@ type WindowDebugShadow struct {
 	MismatchCount    int              `json:"mismatch_count"`
 	Mismatches       []ShadowMismatch `json:"mismatches,omitempty"`
 	// Facts is the reducer's live source-fact set, stamped at export time from
-	// the window's reducer (schema v7). Diagnostics use it to hold the visible
+	// the window's reducer (schema v8). Diagnostics use it to hold the visible
 	// icon accountable to the authoritative facts: an active ASL lease showing
 	// stop/empty, or a live subagent without 🤖, is a health failure.
 	Facts []SourceFactSnapshot `json:"facts,omitempty"`
@@ -232,16 +238,17 @@ type EventsExport struct {
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
-// `amx daemon export-events`. Version 7 retains every v6 field and adds the
-// interactive-ownership `pm` flag on exported source facts (a fact from a
-// non-interactive `claude -p` child), so diagnostics can tell an interactive
-// harness owner apart from a pipe-mode child. Version 6 added: the per-window
+// `amx daemon export-events`. Version 8 retains every v7 field and adds durable
+// fact acknowledgement/origin evidence plus each event's producer pane origin.
+// Version 7 added the interactive-ownership `pm` flag on exported source facts
+// (a fact from a non-interactive `claude -p` child), so diagnostics can tell an
+// interactive harness owner apart from a pipe-mode child. Version 6 added: the per-window
 // Watchdog section (synthetic daemon interventions + tombstone marker), the
 // reducer's live source facts, per-event daemon sequence / nanosecond receipt
 // time / normalized source identity / route decision, and daemon-level
 // readiness, build identity, and request metrics (queue saturation and
 // latency).
-const EventsExportSchemaVersion = 7
+const EventsExportSchemaVersion = 8
 
 // ExportEventsPayload is the CLI JSON envelope written by
 // `amx daemon export-events`. CLIBuild identifies the exporting CLI binary so
@@ -264,7 +271,7 @@ type ExportDaemonMetadata struct {
 	Metrics       *MetricsSnapshot `json:"metrics,omitempty"`
 }
 
-// ExportWindow is one per-window investigation entry in the schema-v7 payload.
+// ExportWindow is one per-window investigation entry in the current payload.
 // Durable fields come from the daemon; Live is joined at export time from
 // Kitty/session lookups on a best-effort basis.
 type ExportWindow struct {
@@ -365,6 +372,11 @@ type SessionEvent struct {
 	SourceKey     string `json:"source_key,omitempty"`
 	SourceSeq     uint64 `json:"source_seq,omitempty"`
 	RouteDecision string `json:"route_decision,omitempty"`
+
+	// Schema v8 producer-route evidence. OriginWindowID is the pane where the
+	// event originated, which may differ from the exported target window when an
+	// unmanaged sibling borrows a managed title owner.
+	OriginWindowID int `json:"origin_window_id,omitempty"`
 }
 
 // actionPriority maps each action name to its guard priority.

@@ -255,7 +255,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 	// mirroring the SubagentStop failure-surfacing rule above. Only the benign
 	// per-turn agentStop (resolved as active + preserve-current) and speculative
 	// permissionRequest are suppressed by this gate.
-	if (req.Event == "agentStop" && req.Action != "stop_failure") || req.Event == "permissionRequest" {
+	if isCopilotRequest(req) && ((req.Event == "agentStop" && req.Action != "stop_failure") || req.Event == "permissionRequest") {
 		h.stateMu.Lock()
 		st := h.ensureWindowStateLocked(req.WindowID)
 		running := st.SubagentCount > 0

@@ -64,31 +64,13 @@ func (h *Handler) probeClaudeContextLimitWithSnapshot(now time.Time, snapshot sc
 	if !h.claudeContextLimitProbeEnabled {
 		return
 	}
-	for i := range snapshot.windows {
-		for j := range snapshot.windows[i].Tabs {
-			tab := &snapshot.windows[i].Tabs[j]
-			parts := palette.ParseTitleParts(tab.Title)
-			if !claudeContextLimitProbeCanOverwrite(parts.State) {
-				continue
-			}
-			win, ok := claudeContextLimitProbeTarget(tab)
-			if !ok {
-				continue
-			}
-			h.probeClaudeContextLimitWindow(now, win.ID, parts, win.UserVars, snapshot.receipt(win.ID), snapshot.gen)
+	for _, binding := range h.screenProbeBindings(snapshot, harness.Claude) {
+		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
+		if !ok {
+			continue
 		}
+		h.probeClaudeContextLimitWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars)
 	}
-}
-
-// Claude deliberately probes only the managed tab-title owner. Unlike the
-// Codex prompt probe, it has no unmanaged foreground fallback because context
-// limit recovery should only mutate windows already owned by Claude hooks.
-func claudeContextLimitProbeTarget(tab *kitty.Tab) (*kitty.Window, bool) {
-	owner, ok := kitty.FindTabTitleOwner(tab)
-	if !ok {
-		return nil, false
-	}
-	return owner, owner.UserVars.EffectiveHarness() == harness.Claude
 }
 
 func claudeContextLimitProbeCanOverwrite(iconState string) bool {
@@ -102,25 +84,28 @@ func claudeContextLimitProbeCanOverwrite(iconState string) bool {
 
 func (h *Handler) probeClaudeContextLimitWindow(
 	now time.Time,
-	windowID int,
+	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
-	capturedSeq uint64,
-	capturedSnapshotGen uint64,
 ) {
+	targetWindowID := binding.TargetWindowID
 	h.stateMu.Lock()
-	if !h.screenProbeEligibilityCurrentLocked(windowID, capturedSeq, capturedSnapshotGen, harness.Claude, func(icon string) bool {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
 		return claudeContextLimitProbeCanOverwrite(icon)
 	}) {
 		h.stateMu.Unlock()
-		slog.Debug("claude context-limit probe: discarded stale snapshot", "window_id", windowID)
+		slog.Debug("claude context-limit probe: discarded stale snapshot",
+			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID)
 		return
 	}
-	st, _ := h.windowStateLocked(windowID)
+	st, _ := h.windowStateLocked(targetWindowID)
 	if st != nil && st.ContextLimitNotified {
 		h.stateMu.Unlock()
 		return
 	}
+	baseTitle := titleParts.Base
+	profile := userVars.EffectiveProfile()
+	currentIconState := titleParts.State
 	// Capture pipeMode before recordClaudeContextLimitProbeStateLocked resets
 	// it to false so the notify block below sees the value hooks last reported.
 	// The window-wide receipt arrived with the cached snapshot and was just
@@ -128,12 +113,20 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	pipeMode := false
 	if st != nil {
 		pipeMode = st.LastPipeMode
+		if st.LastSessionTitle != "" {
+			baseTitle = st.LastSessionTitle
+		}
+		if st.LastAccount != "" {
+			profile = st.LastAccount
+		}
+		currentIconState = st.Effective.Icon
 	}
 	h.stateMu.Unlock()
 
-	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(windowID), "screen")
+	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
 	if err != nil {
-		slog.Debug("claude context-limit probe: get-text failed", "window_id", windowID, "err", err)
+		slog.Debug("claude context-limit probe: get-text failed", "source_window_id", binding.SourceWindowID,
+			"target_window_id", targetWindowID, "err", err)
 		return
 	}
 	if !contextlimit.ScreenShowsMarker(screen) {
@@ -149,19 +142,24 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	// through the guard call and the reducer application keeps them atomic with
 	// this check; stateMu → guard.mu is an established ordering
 	// (markWindowStateDirtyLocked snapshots the guard under stateMu).
-	if !h.screenProbeGenerationCurrentLocked(capturedSnapshotGen) ||
-		!h.windowReceiptCurrentLocked(windowID, capturedSeq) {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
+		return claudeContextLimitProbeCanOverwrite(icon)
+	}) {
 		h.stateMu.Unlock()
-		slog.Debug("claude context-limit probe: discarded stale observation", "window_id", windowID)
+		slog.Debug("claude context-limit probe: discarded stale observation",
+			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID)
 		return
 	}
-	allowed, _ := h.guard.TryUpdate(windowID, claudeContextLimitProbeAction, true)
+	allowed, _ := h.guard.TryUpdate(targetWindowID, claudeContextLimitProbeAction, true)
 	if !allowed {
 		h.stateMu.Unlock()
-		slog.Debug("claude context-limit probe: guard blocked stop_failure", "window_id", windowID)
+		slog.Debug("claude context-limit probe: guard blocked stop_failure", "window_id", targetWindowID)
 		return
 	}
-	before, effective, account := h.recordClaudeContextLimitProbeStateLocked(now, windowID, titleParts.Base, titleParts.State, userVars)
+	before, effective, account := h.recordClaudeContextLimitProbeStateLocked(
+		now, targetWindowID, baseTitle, currentIconState, profile, userVars, binding.legacyDirectManaged,
+		binding.SourceWindowID,
+	)
 	h.stateMu.Unlock()
 
 	if h.notifier != nil {
@@ -176,7 +174,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 		// the pre-recorded pipeMode through MaybeNotify so the notifier's own
 		// suppression remains the single source of truth.
 		if effective.Icon == "error" && before.Icon != "error" {
-			h.notifier.MaybeNotify(windowID, titleParts.Base, account, claudeContextLimitProbeAction, pipeMode)
+			h.notifier.MaybeNotify(targetWindowID, baseTitle, account, claudeContextLimitProbeAction, pipeMode)
 		}
 	}
 }
@@ -197,18 +195,29 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 	windowID int,
 	baseTitle string,
 	currentIconState string,
+	profile string,
 	userVars kitty.UserVars,
+	legacyDirectManaged bool,
+	originWindowID int,
 ) (before, effective EffectiveState, account string) {
 	st := h.ensureWindowStateLocked(windowID)
 	before = st.Effective
 	st.Activity = now
 	st.LastSessionTitle = baseTitle
 	st.LastPipeMode = false
-	profile := userVars.EffectiveProfile()
-	if profile != "" {
+	if profile != "" && st.LastAccount == "" {
 		st.LastAccount = profile
 	}
-	st.LastHarness = harness.Claude
+	// Probe evidence describes the producer, not the managed target. Preserve a
+	// routed Codex/Copilot target's durable ownership and only fill ownership on
+	// the legacy direct-managed path where no hook metadata exists yet.
+	targetHarness := harness.NormalizeKnown(userVars.EffectiveHarness())
+	if targetHarness == "" && legacyDirectManaged {
+		targetHarness = harness.Claude
+	}
+	if st.LastHarness == "" && targetHarness != "" {
+		st.LastHarness = targetHarness
+	}
 	st.LastAction = claudeContextLimitProbeAction
 	st.ContextLimitNotified = true
 	st.NotifiedStale = false
@@ -225,10 +234,11 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 	}
 	st.ShadowSeq++
 	st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceProbe, Key: claudeContextLimitFactSource},
-		Action: claudeContextLimitProbeAction,
-		Seq:    st.ShadowSeq,
-		At:     now.Unix(),
+		Source:         SourceID{Kind: SourceProbe, Key: claudeContextLimitFactSource},
+		Action:         claudeContextLimitProbeAction,
+		Seq:            st.ShadowSeq,
+		At:             now.Unix(),
+		OriginWindowID: originWindowID,
 	})
 	st.Reducer.Compact(now.Unix())
 	effective = st.Reducer.Reduce(now.Unix())
@@ -237,8 +247,12 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 
 	meta := h.windowMetadata[windowID]
 	meta.Durable.SessionTitle = baseTitle
-	meta.Durable.Profile = profile
-	meta.Durable.Harness = harness.Claude
+	if meta.Durable.Profile == "" && profile != "" {
+		meta.Durable.Profile = profile
+	}
+	if meta.Durable.Harness == "" && targetHarness != "" {
+		meta.Durable.Harness = targetHarness
+	}
 	meta.Durable.PipeMode = false
 	meta.Durable.ActivityAt = now.Unix()
 	meta.Durable.LastAction = claudeContextLimitProbeAction
@@ -254,6 +268,7 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 		ResultIconState:  effective.Icon,
 		CurrentIconState: currentIconState,
 		ContextLimit:     true,
+		OriginWindowID:   originWindowID,
 	})
 	return before, effective, st.LastAccount
 }

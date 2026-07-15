@@ -10,6 +10,9 @@ import (
 )
 
 var hookWindowID int
+var hookHarness string
+
+var runHookIndicator = indicator.Run
 
 var hookIndicatorCmd = &cobra.Command{
 	Use:   "hook-indicator <event>",
@@ -34,7 +37,7 @@ For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
 			// Non-fatal: proceed without auto-start.
 			amxBin = "amx"
 		}
-		if err := indicator.Run(args[0], hookWindowID, amxBin); err != nil {
+		if err := runHookIndicator(args[0], hookWindowID, hookHarness, amxBin); err != nil {
 			ccerrors.Print(fmt.Errorf("processing hook event: %w", err))
 		}
 		return nil
@@ -44,4 +47,6 @@ For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
 func init() {
 	hookIndicatorCmd.Flags().IntVar(&hookWindowID, "window-id", 0,
 		"Kitty window ID (defaults to $KITTY_WINDOW_ID)")
+	hookIndicatorCmd.Flags().StringVar(&hookHarness, "harness", "",
+		"event-producing harness (claude, codex, or copilot)")
 }

@@ -21,11 +21,11 @@ import (
 // error when the source pane's screen shows the context-limit banner. It carries
 // the render context a stop_failure state update needs, captured at hook time.
 type contextLimitProbeTarget struct {
-	windowID     int
-	sessionTitle string
-	profile      string
-	harness      string
-	currentIcon  string
+	windowID      int
+	sessionTitle  string
+	profile       string
+	targetHarness string
+	currentIcon   string
 }
 
 // contextLimitProbe describes a single asynchronous screen read. sourceWindowID
@@ -83,7 +83,8 @@ func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
 			p.payload,
 			t.sessionTitle,
 			t.profile,
-			t.harness,
+			p.req.Harness,
+			t.targetHarness,
 			t.currentIcon,
 			p.req.PipeMode,
 			false, // preservesIcon: an error promotion never preserves the current icon
@@ -94,9 +95,10 @@ func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
 		// The promotion is daemon-synthesized, so its shadow fact is attributed
 		// to the probe source rather than the harness session.
 		normalized := NormalizedEvent{
-			Source: ProbeSource(),
-			Action: "stop_failure",
-			Event:  p.event,
+			Source:         ProbeSource(),
+			Action:         "stop_failure",
+			Event:          p.event,
+			OriginWindowID: p.sourceWindowID,
 		}
 		stateReq.normalized = &normalized
 		h.handleStateUpdate(stateReq)

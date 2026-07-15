@@ -1,13 +1,26 @@
 package daemon
 
 import (
+	"strings"
+
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 func isCopilotRequest(req Request) bool {
-	if harness.Normalize(req.Harness) == "copilot" {
+	if harness.NormalizeKnown(req.Harness) == harness.Copilot {
 		return true
 	}
+	if req.targetHarnessSet {
+		// Hook-origin requests explicitly separate producer and target roles. An
+		// empty producer there is unknown and must stay harness-agnostic.
+		return false
+	}
+	if strings.TrimSpace(req.Harness) != "" {
+		// An explicit unsupported producer is unknown, not legacy omission.
+		return false
+	}
+	// Backward compatibility for legacy direct state_update clients that did
+	// not serialize Harness and relied on the event dialect instead.
 	switch req.Event {
 	case "sessionStart", "sessionEnd", "userPromptSubmitted", "preToolUse",
 		"postToolUse", "postToolUseFailure", "permissionRequest", "agentStop",
@@ -19,12 +32,13 @@ func isCopilotRequest(req Request) bool {
 	}
 }
 
-// isClaudeRequest reports whether the request originated from the Claude
-// harness. Empty Harness is treated as Claude for backward compatibility with
-// hook payloads emitted before per-harness routing existed.
+// isClaudeRequest reports whether the request originated from a known Claude
+// producer. Missing and unknown producers retain harness-agnostic semantics.
 func isClaudeRequest(req Request) bool {
-	norm := harness.Normalize(req.Harness)
-	return norm == "" || norm == harness.Claude
+	if known := harness.NormalizeKnown(req.Harness); known != "" {
+		return known == harness.Claude
+	}
+	return !req.targetHarnessSet && strings.TrimSpace(req.Harness) == ""
 }
 
 func isCopilotPermissionResolutionEvent(req Request) bool {

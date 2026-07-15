@@ -44,6 +44,15 @@ func TestNormalizeHarnessSourceKeys(t *testing.T) {
 			wantAction: "active",
 		},
 		{
+			name:       "unknown producer uses legacy window despite session identity",
+			event:      "UserPromptSubmit",
+			harness:    "future-harness",
+			payload:    `{"session_id":"sess-unknown"}`,
+			windowID:   78,
+			wantSource: SourceID{Kind: SourceLegacy, Key: "win:78"},
+			wantAction: "active",
+		},
+		{
 			name:       "subagent keyed by agent id",
 			event:      "SubagentStart",
 			harness:    "claude",
@@ -284,6 +293,17 @@ func TestNormalizeUsesHarnessNormalization(t *testing.T) {
 	want := SourceID{Kind: SourceHarness, Key: harness.Normalize("Claude") + ":s"}
 	if mixed.Source != want {
 		t.Fatalf("source = %+v, want %+v", mixed.Source, want)
+	}
+}
+
+func TestNormalizeUnknownProducerUsesHarnessAgnosticNotificationSemantics(t *testing.T) {
+	payload := `{"session_id":"s","notification_type":"idle_prompt"}`
+	unknown := NormalizedFromHook("Notification", "future-harness", payload, 7, false)
+	if unknown.Action != "idle" {
+		t.Fatalf("unknown producer idle_prompt action = %q, want generic idle", unknown.Action)
+	}
+	if unknown.Source != (SourceID{Kind: SourceLegacy, Key: "win:7"}) {
+		t.Fatalf("unknown producer source = %+v, want legacy win:7", unknown.Source)
 	}
 }
 

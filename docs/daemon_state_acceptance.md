@@ -181,6 +181,113 @@ watchdog expiry at exactly the 600s threshold — the same expiry class that
 failed audit 1 — now with `desired == shadow == "stop"` at the moment of
 expiry.
 
+## Cross-harness route diagnostics (session 6)
+
+The shared `doctor`/`daemon audit` evaluator now turns the previously healthy
+OrderBook suppression burst into stable structured findings. The automated
+contract uses a 19-event synthetic trace (one prompt plus 18 non-prompt
+`owner_mismatch` suppressions on one window) and pins the same check, severity,
+window, 15-minute scope, and exit behavior in text doctor, JSON doctor, and
+repeated audit samples.
+
+| Stable check | Severity | Trigger |
+| --- | --- | --- |
+| `owner_mismatch_prompt` | failure | Any direct `UserPromptSubmit` or `userPromptSubmitted` suppressed as `owner_mismatch` within 15 minutes. |
+| `owner_mismatch_burst` | warning | Three or more non-prompt `owner_mismatch` suppressions on one window within 15 minutes. |
+| `unknown_producer_fact` | warning | An unacknowledged window-scoped legacy fact contributes an icon or live lease without a known producer harness. |
+| `acknowledged_fact_pressure` | warning / failure | 49–64 evictable acknowledged nonterminal facts warn; more than 64 fails. Live ASL leases, terminal history, and unacknowledged facts are excluded. |
+
+Automated evidence lives in `cmd/invariants_test.go`,
+`cmd/doctor_strict_test.go`, and `cmd/daemon_audit_test.go`. Correctly routed
+cross-harness traces carry `route_decision: "owner"`, retain the producer pane
+in `origin_window_id`, and produce none of the mismatch findings. Ordinary
+acknowledged history remains an informational `acknowledged_state` finding.
+
+For the next installed acceptance run, retain all of the following:
+
+- `amx config hooks-status` showing every generated hook in sync and stamped
+  with its producer `--harness` flag;
+- `amx doctor --strict` and a repeated `amx daemon audit --duration 10m --json`
+  with no new mismatch, unknown-producer, or pressure failures;
+- schema-v8 exports for both the managed target and unmanaged producer panes,
+  showing the producer-derived source key/origin, managed target ownership, and
+  terminal route continuity after focus moves;
+- a negative inactive-unmanaged trace that remains `owner_mismatch` without
+  causing a prompt failure.
+
+### Cross-harness route repair installed acceptance (2026-07-14)
+
+Session 7 of the cross-harness route-repair plan ran against the real idle
+`OrderBook` split tab after installing the cumulative Sessions 1–6 diff. The
+installed CLI and daemon both reported version 0.5.0, revision
+`e9bc7d16cec0-dirty`, and binary sha256 `6b746e1408e9…`.
+
+| Evidence | Result |
+| --- | --- |
+| `just check` | passed after repairing the seven lint findings caught by its first run and again after the live retention repair — repository tests, race-core, vet, all 20 committed TUI scenarios, and `golangci-lint run` (`0 issues`) |
+| `amx config hooks-sync` then `amx config hooks-status` | updated the shared Codex, both Claude, and Copilot hook files; all 7 configured profiles reported `in_sync`, and generated commands carried their producer `--harness` stamp |
+| `just install-restart-smoke` | passed after hook synchronization — atomic install, daemon restart/readiness, exact CLI/daemon build parity, and strict doctor `overall: clean` |
+| `amx doctor --strict --json` after the main route | exit 0, `healthy: true`, no findings; daemon metrics showed no rejected, duplicate, or queue-full requests |
+| `amx daemon audit --duration 10m --json` | exit 0 — 295 samples from epoch 1784077653 through 1784078252, `healthy: true`, empty findings |
+| `git diff --check` | clean |
+
+Live `OrderBook` topology: managed Codex target **28** was stopped, while
+unmanaged Claude pane **165** was active. A real Claude prompt ran `sleep 8`
+and returned `LIVE_ROUTE_OK`. After the retention repair and final reinstall,
+the same real topology ran `sleep 5` and returned `FINAL_ROUTE_OK`.
+`UserPromptSubmit` rendered `⚡` in **447 ms**; focus then moved to window 28 at
+epoch-ns `1784077629256119000`, before the Claude `Stop` at
+`1784077644957944000`. The title and reducer converged to `🛑`/`stop` on target
+28.
+
+`amx daemon export-events --window 28 --last 100` returned schema 8 and five
+producer-attributed rows (`UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+`PostToolBatch`, `Stop`). Every row used
+`source_key: claude:b173b517-d136-4880-8a2f-5e142de7df53`,
+`origin_window_id: 165`, and `route_decision: owner`; no row was suppressed.
+The routed terminal fact retained `ow: 165`, while durable target metadata
+remained `profile: tradition-codex`, `harness: codex`. The producer-pane export
+for window 165 remained state-free, confirming that the source did not become
+a second renderer. Target 28 retained 7 facts total and only 5 evictable
+acknowledged facts, below the 64-fact cap.
+
+Additional installed dogfood:
+
+- Inactive managed window 175 accepted its own stamped Codex prompt as
+  `route_decision: source` and reduced to `bolt/bolt` while active owner 28 and
+  the shared title stayed stopped. Focusing 175 revealed its bolt; its terminal
+  converged to `stop/stop`. The disposable pane was then closed.
+- Inactive unmanaged window 166 emitted one stamped Claude `PreToolUse`. Its
+  own export recorded `suppression_reason: owner_mismatch`; target 28 stayed
+  `stop/stop` at the same effective generation. One non-prompt isolation event
+  remained below the burst threshold and produced no doctor finding.
+- Disposable ownerless window 176 preserved stamped Codex identity through
+  prompt and terminal: durable harness `codex`, source key
+  `codex:ownerless-codex-s7`, origin 176, `route_decision: source`. It was
+  closed after convergence.
+- An independent live exact-ASL sibling route remained active without
+  intervention: unmanaged Claude pane 144 carried live run
+  `20260714T232728347326Z-27822` into managed Codex target 143. Schema-8 facts
+  and ASL heartbeats retained `ow`/`origin_window_id: 144`; ordinary Claude
+  tool rows were owner-routed and the target showed `⚡🔁` with zero
+  `owner_mismatch` rows.
+
+The first 10-minute audit attempt exposed one otherwise-idle acknowledged fact
+on window 112 crossing the one-hour boundary without being compacted. The
+watchdog now applies fixed retention compaction on every tick independently of
+configurable stale thresholds, advances the reducer receipt, and marks an
+invisible retention-only mutation dirty for persistence. The new integration
+test is
+`TestSweepStale_CompactsAcknowledgedFactsWithoutStaleThresholds`. After the
+final reinstall, window 112 exported zero facts and zero render failures.
+
+Two setup outcomes were intentional and resolved, not flaky product failures:
+the first installed smoke ran before the required hook upgrade and therefore
+failed strict doctor on seven drifted profiles; after `hooks-sync`, the exact
+smoke command passed. The first remote prompt injection placed text in Claude's
+composer without submitting it; a real remote Enter key submitted the same
+prompt and produced the accepted trace above.
+
 ## Manual live evidence log
 
 For each client, exercise and record every required icon transition: **bolt**,

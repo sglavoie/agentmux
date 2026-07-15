@@ -27,6 +27,27 @@ func TestNormalize(t *testing.T) {
 	}
 }
 
+func TestNormalizeKnown(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"", ""},
+		{"   ", ""},
+		{"Claude", "claude"},
+		{" COPILOT ", "copilot"},
+		{"Codex", "codex"},
+		{"future-harness", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			if got := NormalizeKnown(tc.input); got != tc.want {
+				t.Errorf("NormalizeKnown(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestValid(t *testing.T) {
 	cases := []struct {
 		input string

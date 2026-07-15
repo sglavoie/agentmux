@@ -63,6 +63,107 @@ func TestHandler_HookEventEnrichesFromKittySnapshot(t *testing.T) {
 	}
 }
 
+func TestHandler_HookEventKeepsStampedProducerSeparateFromTargetMetadata(t *testing.T) {
+	h := newTestHandler()
+	h.SetKittyClient(&fakeKittyClient{
+		windows: hookEventWindows("api", []kitty.Window{{
+			ID:       42,
+			UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+		}}),
+	})
+
+	resp := h.Handle(Request{
+		Type:        TypeHookEvent,
+		WindowID:    42,
+		Event:       "UserPromptSubmit",
+		Harness:     " Codex ",
+		PayloadJSON: `{"session_id":"codex-session"}`,
+	})
+	if !resp.OK {
+		t.Fatalf("hook event response = %+v", resp)
+	}
+
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) != 1 {
+		t.Fatalf("events = %+v, want one producer-stamped event", detail.Events)
+	}
+	event := detail.Events[0]
+	if event.SourceKind != string(SourceHarness) || event.SourceKey != "codex:codex-session" {
+		t.Fatalf("normalized source = %q/%q, want harness/codex:codex-session", event.SourceKind, event.SourceKey)
+	}
+
+	h.stateMu.Lock()
+	meta := h.windowMetadata[42]
+	h.stateMu.Unlock()
+	if meta.Durable.Harness != harness.Claude {
+		t.Fatalf("durable target harness = %q, want claude", meta.Durable.Harness)
+	}
+}
+
+func TestHandler_HookEventExplicitUnknownProducerIsNotInferredFromTarget(t *testing.T) {
+	h := newTestHandler()
+	h.SetKittyClient(&fakeKittyClient{
+		windows: hookEventWindows("api", []kitty.Window{{
+			ID:       42,
+			UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+		}}),
+	})
+
+	resp := h.Handle(Request{
+		Type:        TypeHookEvent,
+		WindowID:    42,
+		Event:       "Notification",
+		Harness:     "future-harness",
+		PayloadJSON: `{"session_id":"unknown-session","notification_type":"idle_prompt"}`,
+	})
+	if !resp.OK {
+		t.Fatalf("hook event response = %+v", resp)
+	}
+
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) != 1 {
+		t.Fatalf("events = %+v, want one unknown-producer event", detail.Events)
+	}
+	event := detail.Events[0]
+	if event.Action != "idle" {
+		t.Fatalf("unknown-producer action = %q, want harness-agnostic idle", event.Action)
+	}
+	if event.SourceKind != string(SourceLegacy) || event.SourceKey != "win:42" {
+		t.Fatalf("unknown-producer source = %q/%q, want legacy/win:42", event.SourceKind, event.SourceKey)
+	}
+
+	h.stateMu.Lock()
+	meta := h.windowMetadata[42]
+	h.stateMu.Unlock()
+	if meta.Durable.Harness != harness.Claude {
+		t.Fatalf("durable target harness = %q, want claude", meta.Durable.Harness)
+	}
+}
+
+func TestHandler_HookEventUnknownProducerDoesNotAcquireCopilotPermissionBehavior(t *testing.T) {
+	h := newTestHandler()
+	h.SetKittyClient(&fakeKittyClient{
+		windows: hookEventWindows("api", []kitty.Window{{
+			ID:       42,
+			UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude},
+		}}),
+	})
+
+	resp := h.Handle(Request{
+		Type:     TypeHookEvent,
+		WindowID: 42,
+		Event:    "permissionRequest",
+		Harness:  "future-harness",
+	})
+	if !resp.OK {
+		t.Fatalf("hook event response = %+v", resp)
+	}
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) != 1 || detail.Events[0].ResultIconState != "key" {
+		t.Fatalf("unknown-producer permission events = %+v, want generic key transition", detail.Events)
+	}
+}
+
 func TestHandler_HookEventCodexAutoCompactRestoresBolt(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		guard := NewStateGuard(time.Hour)
@@ -179,73 +280,35 @@ func TestHandler_HookEventCodexManualCompactRemainsStopped(t *testing.T) {
 }
 
 func TestHandler_HookEventOwnerMismatchNoOps(t *testing.T) {
-	cases := []struct {
-		name        string
-		event       string
-		payload     hookevent.HookPayload
-		windowID    int
-		windows     []kitty.Window
-		wantAction  string
-		wantHarness string
-	}{
-		{
-			name:     "unmanaged sibling",
-			event:    "Notification",
-			payload:  hookevent.HookPayload{NotificationType: "agent_idle"},
-			windowID: 43,
-			windows: []kitty.Window{
-				{ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude}},
-				{ID: 43, IsActive: true},
-			},
-			wantAction: "stop",
-		},
-		{
-			name:     "managed non-owner",
-			event:    "PreToolUse",
-			windowID: 43,
-			windows: []kitty.Window{
-				{ID: 42, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Codex}},
-				{ID: 43, UserVars: kitty.UserVars{Profile: "scratch", Harness: harness.Codex}},
-			},
-			wantAction:  "active",
-			wantHarness: harness.Codex,
-		},
+	stubDaemonLoopDiscover(t, nil, nil)
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: hookEventWindows("api", []kitty.Window{
+		{ID: 42, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude}},
+		{ID: 43, IsActive: false},
+	})}
+	h.SetKittyClient(fake)
+
+	resp := h.Handle(Request{
+		Type:        TypeHookEvent,
+		WindowID:    43,
+		Event:       "Notification",
+		Harness:     harness.Claude,
+		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "inactive", NotificationType: "agent_idle"}),
+	})
+	if !resp.OK {
+		t.Fatalf("hook event response = %+v", resp)
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			h := newTestHandler()
-			fake := &fakeKittyClient{windows: hookEventWindows("api", tc.windows)}
-			h.SetKittyClient(fake)
-
-			resp := h.Handle(Request{
-				Type:        TypeHookEvent,
-				WindowID:    tc.windowID,
-				Event:       tc.event,
-				PayloadJSON: hookPayloadJSON(t, tc.payload),
-			})
-			if !resp.OK {
-				t.Fatalf("hook event response = %+v", resp)
-			}
-
-			detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: tc.windowID})
-			if len(detail.Events) != 1 {
-				t.Fatalf("events = %d, want 1 (%+v)", len(detail.Events), detail.Events)
-			}
-			ev := detail.Events[0]
-			if !ev.Suppressed || ev.SuppressionReason != suppressionReasonOwnerMismatch {
-				t.Fatalf("event = %+v; want owner_mismatch suppression", ev)
-			}
-			if ev.Action != tc.wantAction {
-				t.Fatalf("action = %q; want %q", ev.Action, tc.wantAction)
-			}
-			h.stateMu.Lock()
-			st := h.store[tc.windowID]
-			h.stateMu.Unlock()
-			if st == nil || st.DesiredIcon != "" {
-				t.Fatalf("state = %+v; owner mismatch should not set a desired icon", st)
-			}
-		})
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(detail.Events) != 1 || !detail.Events[0].Suppressed ||
+		detail.Events[0].SuppressionReason != suppressionReasonOwnerMismatch {
+		t.Fatalf("events = %+v; want owner_mismatch suppression", detail.Events)
+	}
+	h.stateMu.Lock()
+	st := h.store[43]
+	h.stateMu.Unlock()
+	if st == nil || st.DesiredIcon != "" {
+		t.Fatalf("state = %+v; owner mismatch should not set a desired icon", st)
 	}
 }
 

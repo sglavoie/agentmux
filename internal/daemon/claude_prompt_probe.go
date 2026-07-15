@@ -49,41 +49,24 @@ func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
 }
 
 // ProbeClaudeScreenStopWithSnapshot runs the Claude idle stop probe against an
-// already-published Kitty snapshot. It reuses the context-limit probe's managed
-// title-owner selection (only the Claude tab-title owner is scanned, never an
-// unmanaged foreground sibling) and only considers a tab whose current icon is a
-// stuck ⚡: any other visible state is either already terminal or a
-// higher-precedence icon the idle path must never downgrade.
+// already-published Kitty snapshot. Direct sessions retain the managed
+// title-owner selection; a borrowed session follows its live reducer binding to
+// read the unmanaged producer pane and apply the result to the managed target.
+// Only a target whose current reduced icon is a stuck ⚡ is considered: any
+// other visible state is either already terminal or a higher-precedence icon
+// the idle path must never downgrade.
 func (h *Handler) ProbeClaudeScreenStopWithSnapshot(now time.Time, windows []kitty.OSWindow) {
 	h.probeClaudeScreenStopWithSnapshot(now, h.screenProbeSnapshotForWindows(windows))
 }
 
 func (h *Handler) probeClaudeScreenStopWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
-	for i := range snapshot.windows {
-		for j := range snapshot.windows[i].Tabs {
-			tab := &snapshot.windows[i].Tabs[j]
-			parts := palette.ParseTitleParts(tab.Title)
-			if !claudeStopProbeCanOverwrite(parts.State) {
-				continue
-			}
-			win, ok := claudeContextLimitProbeTarget(tab)
-			if !ok {
-				continue
-			}
-			h.probeClaudeIdleWindow(now, win.ID, parts, win.UserVars, snapshot.receipt(win.ID), snapshot.gen)
+	for _, binding := range h.screenProbeBindings(snapshot, harness.Claude) {
+		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
+		if !ok {
+			continue
 		}
+		h.probeClaudeIdleWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars)
 	}
-}
-
-// claudeStopProbeCanOverwrite reports whether the current visible icon is a
-// stuck active turn the idle probe may settle. Only ⚡ (bolt) qualifies: a
-// completed session already shows 🛑, and question/permission/error/warning/
-// subagent/compact are protected states the idle path must never downgrade. The
-// reducer's own precedence is the final guard (a live ASL lease, subagent, or
-// pipe-mode fact still wins at reduce time even for a bolt tab), so this filter
-// is an early-exit, not the safety boundary.
-func claudeStopProbeCanOverwrite(iconState string) bool {
-	return iconState == "bolt"
 }
 
 // probeClaudeIdleWindow recovers a Claude tab whose ⚡ is stuck on a finished
@@ -101,38 +84,53 @@ func claudeStopProbeCanOverwrite(iconState string) bool {
 // across two consecutive samples first.
 func (h *Handler) probeClaudeIdleWindow(
 	now time.Time,
-	windowID int,
+	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
-	capturedSeq uint64,
-	capturedSnapshotGen uint64,
 ) {
 	source := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
+	targetWindowID := binding.TargetWindowID
 
 	// Revalidate the snapshot receipt before the off-lock GetText. A window with no
 	// reducer facts (an unmanaged/foreground-only bolt) has no stale interactive
 	// work for the probe to settle, so bail without a screen read and drop any
 	// in-flight stabilization streak.
 	h.stateMu.Lock()
-	if !h.screenProbeEligibilityCurrentLocked(windowID, capturedSeq, capturedSnapshotGen, harness.Claude, func(icon string) bool {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
 		return icon == "bolt"
 	}) {
 		h.stateMu.Unlock()
-		slog.Debug("claude stop probe: discarded stale snapshot", "window_id", windowID)
+		slog.Debug("claude stop probe: discarded stale snapshot",
+			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID)
 		return
 	}
-	st, ok := h.windowStateLocked(windowID)
+	st, ok := h.windowStateLocked(targetWindowID)
 	if !ok || st.Reducer == nil {
-		h.clearIdleSampleLocked(idleSampleRef{windowID: windowID, key: source.Key})
+		h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
 		h.stateMu.Unlock()
 		return
 	}
+	sessionTitle := titleParts.Base
+	account := userVars.EffectiveProfile()
+	pipeMode := st.LastPipeMode
+	muted := userVars.Mute != ""
+	if binding.SourceWindowID == targetWindowID {
+		muted = muted || titleParts.Muted
+	}
+	if st.LastSessionTitle != "" {
+		sessionTitle = st.LastSessionTitle
+	}
+	if st.LastAccount != "" {
+		account = st.LastAccount
+	}
+	muted = muted || st.Muted
 	h.stateMu.Unlock()
 
-	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(windowID), "screen")
+	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
 	if err != nil {
-		slog.Debug("claude stop probe: get screen failed", "window_id", windowID, "err", err)
-		h.ClearIdleSample(windowID, source)
+		slog.Debug("claude stop probe: get screen failed", "source_window_id", binding.SourceWindowID,
+			"target_window_id", targetWindowID, "err", err)
+		h.ClearIdleSample(targetWindowID, source)
 		return
 	}
 
@@ -141,7 +139,7 @@ func (h *Handler) probeClaudeIdleWindow(
 		// Still working, a queued-input composer, a blocking prompt, a
 		// context-limited screen, or unrelated output: reset the stabilization
 		// streak so a later transient idle frame cannot settle live work.
-		h.ClearIdleSample(windowID, source)
+		h.ClearIdleSample(targetWindowID, source)
 		return
 	}
 	required := claudeIdleProbeRequiredSamples
@@ -150,18 +148,19 @@ func (h *Handler) probeClaudeIdleWindow(
 	}
 
 	h.applyAuthoritativeIdle(AuthoritativeIdle{
-		WindowID:            windowID,
+		WindowID:            targetWindowID,
 		Source:              source,
 		Harness:             harness.Claude,
-		CapturedSeq:         capturedSeq,
-		CapturedSnapshotGen: capturedSnapshotGen,
+		CapturedSeq:         binding.TargetReceipt,
+		CapturedSnapshotGen: binding.SnapshotGen,
+		ProbeBinding:        binding,
 		At:                  now.Unix(),
 		RequiredSamples:     required,
-		SessionTitle:        titleParts.Base,
-		Account:             userVars.EffectiveProfile(),
-		PipeMode:            false,
-		Muted:               titleParts.Muted || userVars.Mute != "",
-		SourceEventID:       fmt.Sprintf("claude-screen-stop:%d:%d", windowID, capturedSeq),
+		SessionTitle:        sessionTitle,
+		Account:             account,
+		PipeMode:            pipeMode,
+		Muted:               muted,
+		SourceEventID:       fmt.Sprintf("claude-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
 		DiagnosticEvent:     screenStopProbeEvent,
 	})
 }

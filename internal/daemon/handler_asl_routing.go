@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -30,10 +32,9 @@ func (h *Handler) tryRouteActiveLoopSiblingHook(ctx hookEventContext, eventOrAct
 	if ctx.win == nil {
 		return false
 	}
-	// The exception exists for unmanaged split panes borrowing their tab's
-	// managed state machine. A managed non-owner carries its own profile/harness
-	// and must keep ordinary owner-mismatch isolation, even when an exact active
-	// loop candidate identifies its window.
+	// The exception exists only for unmanaged split panes borrowing a managed
+	// state machine. A managed non-owner carries and updates its own reducer via
+	// the ordinary source path, even when an exact loop candidate identifies it.
 	if ctx.win.UserVars.EffectiveProfile() != "" || ctx.win.UserVars.EffectiveHarness() != "" {
 		return false
 	}
@@ -52,6 +53,20 @@ func (h *Handler) tryRouteActiveLoopSiblingHook(ctx hookEventContext, eventOrAct
 	if !ok {
 		return false
 	}
+	// Exact ASL evidence may supply the producer for legacy unstamped hooks. It
+	// never comes from the managed target, so cross-harness routing retains the
+	// loop candidate's event dialect and source identity.
+	if ctx.req.Harness == "" {
+		ctx.req.Harness = harness.NormalizeKnown(candidate.Harness)
+		if hookevent.IsIgnoredEventForHarness(eventOrAction, payload, ctx.req.Harness) {
+			ctx.req.Event = eventOrAction
+			h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonIgnoredEvent)
+			return true
+		}
+		if resolved, resolvedOK := hookevent.ResolveActionForHarness(eventOrAction, payload, ctx.req.Harness); resolvedOK {
+			action = resolved
+		}
+	}
 
 	targets, _ := matchManagedLoopTargets(ctx.windows, []agentloop.Candidate{candidate})
 	switch len(targets) {
@@ -64,7 +79,7 @@ func (h *Handler) tryRouteActiveLoopSiblingHook(ctx hookEventContext, eventOrAct
 		)
 		return false
 	case 1:
-		h.routeActiveLoopSiblingHook(ctx, candidate, targets, eventOrAction, action, payload)
+		h.routeUnmanagedHook(ctx, targets, eventOrAction, action, payload)
 		return true
 	default:
 		// More than one managed owner matches this unmanaged pane's workspace, so
@@ -82,33 +97,26 @@ func (h *Handler) tryRouteActiveLoopSiblingHook(ctx hookEventContext, eventOrAct
 	}
 }
 
-// routeActiveLoopSiblingHook resolves the source-dependent parts of the hook
-// once against the real source pane, then drives each managed target through
-// the normal state-update path. Source-dependent resolution stays tied to the
-// origin pane: the context-limit banner is only visible on the pane that
-// stalled, the source pipe mode and payload details ride along unchanged, and
-// reset semantics follow the loop's own harness (the unmanaged source pane
-// carries no managed harness user var, so the candidate supplies it).
-func (h *Handler) routeActiveLoopSiblingHook(
+// routeUnmanagedHook resolves source-dependent parts once against the real
+// source pane, then drives the selected managed target through the normal
+// state-update path. It is shared by focus/prompt routes and exact ASL routes.
+func (h *Handler) routeUnmanagedHook(
 	ctx hookEventContext,
-	candidate agentloop.Candidate,
 	targets []loopLifecycleTarget,
 	eventOrAction string,
 	action string,
 	payload hookevent.HookPayload,
 ) {
-	preservesIcon := hookevent.PreservesCurrent(eventOrAction) && action == "active"
 	contextLimitDetected := hookevent.PayloadHasContextLimit(payload)
 	// As on the in-pane hook path, the source-pane screen read is a targeted
 	// asynchronous probe rather than an inline GetText: the base transitions
 	// land on the managed owners immediately, and the probe upgrades them to
 	// error if the banner is showing on the unmanaged source pane.
 	probeContextLimit := !contextLimitDetected && hookevent.ShouldProbeWindowForContextLimit(eventOrAction, action) && h.kittyClient != nil
-	resetFlowDetected := hookevent.PayloadHasResetFlow(candidate.Harness, eventOrAction, payload)
 
 	var probeTargets []contextLimitProbeTarget
 	for _, target := range targets {
-		probeTargets = append(probeTargets, h.routeActiveLoopSiblingTarget(ctx, target, eventOrAction, action, payload, preservesIcon, contextLimitDetected, resetFlowDetected))
+		probeTargets = append(probeTargets, h.routeUnmanagedHookTarget(ctx, target, eventOrAction, action, payload, contextLimitDetected))
 	}
 	if probeContextLimit {
 		h.enqueueContextLimitProbe(contextLimitProbe{
@@ -121,23 +129,33 @@ func (h *Handler) routeActiveLoopSiblingHook(
 	}
 }
 
-// routeActiveLoopSiblingTarget builds and dispatches one managed target's state
+// routeUnmanagedHookTarget builds and dispatches one managed target's state
 // update. Every state-dependent field — session title, current icon, profile,
 // mute, and (through handleStateUpdate) the guard, notification target, event
 // log, and renderer state — is read from the managed target, never from the
 // unmanaged source pane. The loop marker is untouched here, so a routed
 // transition preserves an in-flight 🔁.
-func (h *Handler) routeActiveLoopSiblingTarget(
+func (h *Handler) routeUnmanagedHookTarget(
 	ctx hookEventContext,
 	target loopLifecycleTarget,
 	eventOrAction string,
 	action string,
 	payload hookevent.HookPayload,
-	preservesIcon bool,
 	contextLimitDetected bool,
-	resetFlowDetected bool,
 ) contextLimitProbeTarget {
+	lateCopilotStart := h.shouldPreserveLateCopilotSessionStart(
+		target.windowID, ctx.req.Harness, eventOrAction, payload,
+	)
+	preservesIcon := (hookevent.PreservesCurrent(eventOrAction) && action == "active") || lateCopilotStart
+	resetFlowDetected := hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload) && !lateCopilotStart
 	parts := palette.ParseTitleParts(target.tab.Title)
+	currentIcon := parts.State
+	if owner, ok := kitty.FindTabTitleOwner(target.tab); ok && owner.ID != target.windowID {
+		// A sticky route may target an inactive managed pane after focus moved.
+		// Its own reducer state, not the newly active pane's shared title, is the
+		// correct legacy/current-icon context for the terminal transition.
+		_, currentIcon = h.lastKnownState(target.windowID)
+	}
 	profile := ""
 	harnessName := ""
 	muted := parts.Muted
@@ -152,11 +170,11 @@ func (h *Handler) routeActiveLoopSiblingTarget(
 	// promote this managed owner to error with the same render context, even if
 	// the base transition below is deferred by the reset-stop debounce.
 	probeTarget := contextLimitProbeTarget{
-		windowID:     target.windowID,
-		sessionTitle: parts.Base,
-		profile:      profile,
-		harness:      harnessName,
-		currentIcon:  parts.State,
+		windowID:      target.windowID,
+		sessionTitle:  parts.Base,
+		profile:       profile,
+		targetHarness: harnessName,
+		currentIcon:   currentIcon,
 	}
 
 	stateReq := buildHookStateUpdateRequest(
@@ -166,8 +184,9 @@ func (h *Handler) routeActiveLoopSiblingTarget(
 		payload,
 		parts.Base,
 		profile,
+		ctx.req.Harness,
 		harnessName,
-		parts.State,
+		currentIcon,
 		ctx.req.PipeMode,
 		preservesIcon,
 		contextLimitDetected,
@@ -178,7 +197,7 @@ func (h *Handler) routeActiveLoopSiblingTarget(
 	// Stamp the source-scoped view for the shadow reducer against the managed
 	// target: a routed sibling hook advances the owner's fact map, exactly as
 	// its legacy transition advances the owner's state machine.
-	normalized := NormalizedFromHook(eventOrAction, harnessName, ctx.req.PayloadJSON, target.windowID, ctx.req.PipeMode)
+	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, ctx.req.PayloadJSON, ctx.req.WindowID, ctx.req.PipeMode)
 	stateReq.normalized = &normalized
 	stateReq.routeDecision = routeDecisionOwner
 	if h.deferResetSensitiveStop(stateReq, payload) {
@@ -241,19 +260,21 @@ func (h *Handler) invalidateActiveLoopCache() {
 	h.stateMu.Unlock()
 }
 
-// exactActiveLoopCandidate returns the discovered candidate whose WindowID
-// exactly identifies windowID. Every returned candidate is already live and
-// unfinished (agentloop.Discover guarantees it), so an exact window match is a
-// sufficient authorization signal; a zero or mismatched WindowID never
-// authorizes routing.
+// exactActiveLoopCandidate returns the unique discovered candidate whose
+// WindowID identifies windowID. Every candidate is already live and unfinished
+// (agentloop.Discover guarantees it), but duplicate exact matches are still
+// ambiguous and fail closed; zero or mismatched IDs never authorize routing.
 func exactActiveLoopCandidate(candidates []agentloop.Candidate, windowID int) (agentloop.Candidate, bool) {
 	if windowID <= 0 {
 		return agentloop.Candidate{}, false
 	}
+	var match agentloop.Candidate
+	matches := 0
 	for _, candidate := range candidates {
 		if candidate.WindowID == windowID {
-			return candidate, true
+			match = candidate
+			matches++
 		}
 	}
-	return agentloop.Candidate{}, false
+	return match, matches == 1
 }

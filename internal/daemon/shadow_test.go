@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"testing/synctest"
@@ -424,19 +425,91 @@ func TestShadowReducerRetentionExpiresTerminalFactsAfterTombstoneWindow(t *testi
 	}
 }
 
-func TestShadowReducerRetentionKeepsAckedNonTerminalFacts(t *testing.T) {
+func TestShadowReducerRetentionExpiresAckedNonTerminalFactsAfterWindow(t *testing.T) {
 	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
 	r := NewReducer(ReducerConfig{})
 	r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100})
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "user"}, Action: "user_clear", Seq: 6, At: 101})
 
-	if removed := r.Compact(102); removed != 0 {
-		t.Fatalf("acked non-terminal fact compacted: removed %d", removed)
+	if facts := r.Facts(); len(facts) != 1 || facts[0].AckedAt != 101 {
+		t.Fatalf("acknowledgement timestamp = %+v; want 101", facts)
+	}
+	if removed := r.Compact(101 + acknowledgedFactRetentionSeconds - 1); removed != 0 {
+		t.Fatalf("acked non-terminal fact compacted early: removed %d", removed)
 	}
 	// The retained fact still guards sequence monotonicity: replaying the old
 	// event stays a no-op.
 	if dec := r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100}); dec != DecisionDuplicate {
 		t.Fatalf("replayed event decision = %s, want duplicate", dec)
+	}
+	if removed := r.Compact(101 + acknowledgedFactRetentionSeconds); removed != 1 {
+		t.Fatalf("acked non-terminal fact survived retention boundary: removed %d", removed)
+	}
+}
+
+func TestShadowReducerRetentionCapsNewestAcknowledgedFactsDeterministically(t *testing.T) {
+	r := NewReducer(ReducerConfig{})
+	for i := 0; i < maxAcknowledgedFacts+6; i++ {
+		r.Apply(ReducerEvent{
+			Source: SourceID{Kind: SourceHarness, Key: fmt.Sprintf("claude:%02d", i)},
+			Action: "active", Seq: 1, At: int64(100 + i),
+		})
+	}
+	r.Apply(ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 1000})
+
+	if removed := r.Compact(1001); removed != 6 {
+		t.Fatalf("Compact cap removed %d facts, want 6", removed)
+	}
+	facts := r.Facts()
+	if len(facts) != maxAcknowledgedFacts {
+		t.Fatalf("retained facts = %d, want %d", len(facts), maxAcknowledgedFacts)
+	}
+	for i, fact := range facts {
+		want := fmt.Sprintf("claude:%02d", i+6)
+		if fact.Key != want || fact.AckedAt != 1000 {
+			t.Fatalf("facts[%d] = %+v, want newest %s acked at 1000", i, fact, want)
+		}
+	}
+}
+
+func TestShadowReducerRetentionUsesSourceIdentityAsFinalEvictionTieBreak(t *testing.T) {
+	facts := make([]SourceFactSnapshot, 0, maxAcknowledgedFacts+2)
+	for i := 0; i < maxAcknowledgedFacts+1; i++ {
+		facts = append(facts, SourceFactSnapshot{
+			Kind: SourceProbe, Key: fmt.Sprintf("probe:%02d", i), Action: "active", Icon: "bolt",
+			Seq: 1, CausalOrder: 1, At: 100, Acked: true, AckedAt: 200,
+		})
+	}
+	facts = append(facts, SourceFactSnapshot{
+		Kind: SourceHarness, Key: "claude:first", Action: "active", Icon: "bolt",
+		Seq: 1, CausalOrder: 1, At: 100, Acked: true, AckedAt: 200,
+	})
+	r := NewReducer(ReducerConfig{})
+	r.Restore(facts)
+
+	if removed := r.Compact(201); removed != 2 {
+		t.Fatalf("Compact tied cap removed %d facts, want 2", removed)
+	}
+	retained := r.Facts()
+	if got := retained[0].Source(); got != (SourceID{Kind: SourceProbe, Key: "probe:01"}) {
+		t.Fatalf("first retained source = %+v; want probe:01 after kind/key tie-break eviction", got)
+	}
+}
+
+func TestShadowReducerRetentionPreservesUnackedFactsAndLiveASLLeases(t *testing.T) {
+	r := NewReducer(ReducerConfig{})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:acked"}, Action: "active", Seq: 1, At: 100})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: 100})
+	r.Apply(ReducerEvent{Source: userActionSource(), Action: "user_clear", Seq: 1, At: 101})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:live"}, Action: "active", Seq: 1, At: 102})
+
+	if removed := r.Compact(101 + acknowledgedFactRetentionSeconds); removed != 1 {
+		t.Fatalf("Compact removed %d facts, want only expired acknowledged harness fact", removed)
+	}
+	retained := r.Facts()
+	if len(retained) != 2 || retained[0].Kind != SourceASL || !retained[0].Acked || !retained[0].LeaseLive ||
+		retained[1].Key != "claude:live" || retained[1].Acked {
+		t.Fatalf("retained exemptions = %+v", retained)
 	}
 }
 

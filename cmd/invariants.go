@@ -1,6 +1,6 @@
 package cmd
 
-// Shared invariant evaluation over the daemon's schema-v7 export snapshot.
+// Shared invariant evaluation over the daemon's schema-v8 export snapshot.
 // `amx doctor` evaluates one snapshot; `amx daemon audit` re-evaluates every
 // sample interval. Severities: a "failure" is an observed correctness
 // violation (strict doctor and audit exit nonzero on any), a "warning" is
@@ -35,6 +35,16 @@ const (
 	checkHarnessDrift          = "harness_drift"
 	checkClosedTombstone       = "closed_tombstone"
 	checkAcknowledgedState     = "acknowledged_state"
+	checkOwnerMismatchPrompt   = "owner_mismatch_prompt"
+	checkOwnerMismatchBurst    = "owner_mismatch_burst"
+	checkUnknownProducerFact   = "unknown_producer_fact"
+	checkAcknowledgedPressure  = "acknowledged_fact_pressure"
+)
+
+const (
+	ownerMismatchBurstCount          = 3
+	acknowledgedPressureWarningCount = 49
+	acknowledgedPressureFailureCount = 64
 )
 
 // activeAfterTerminalGracePeriod is the window over which repeated
@@ -76,8 +86,16 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 		})
 	}
 
-	ids := make([]int, 0, len(snapshot.WindowMetadata))
+	ids := make([]int, 0, len(snapshot.WindowMetadata)+len(snapshot.EventsByWindow))
+	seenIDs := make(map[int]struct{}, cap(ids))
 	for id := range snapshot.WindowMetadata {
+		seenIDs[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	for id := range snapshot.EventsByWindow {
+		if _, ok := seenIDs[id]; ok {
+			continue
+		}
 		ids = append(ids, id)
 	}
 	sort.Ints(ids)
@@ -93,6 +111,35 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 
 		desired := meta.Renderer.DesiredIcon
 		facts := meta.Shadow.Facts
+
+		// owner_mismatch means an event-producing pane could not be safely
+		// associated with a managed target. A direct prompt is authoritative
+		// focus evidence and must always route, so even one recent prompt mismatch
+		// is a correctness failure. Non-prompt traffic can legitimately race with
+		// focus changes, but a burst on one pane is suspicious.
+		mismatchCutoff := now.Add(-doctorSuppressionWindow).Unix()
+		promptMismatches := 0
+		nonPromptMismatches := 0
+		for _, event := range snapshot.EventsByWindow[id] {
+			if !event.Suppressed || event.SuppressionReason != "owner_mismatch" || event.At < mismatchCutoff {
+				continue
+			}
+			if isPromptSessionEvent(event) {
+				promptMismatches++
+			} else {
+				nonPromptMismatches++
+			}
+		}
+		if promptMismatches > 0 {
+			add(severityFailure, checkOwnerMismatchPrompt, id,
+				"%d prompt event(s) suppressed as owner_mismatch within %s",
+				promptMismatches, doctorSuppressionWindow)
+		}
+		if nonPromptMismatches >= ownerMismatchBurstCount {
+			add(severityWarning, checkOwnerMismatchBurst, id,
+				"%d non-prompt event(s) suppressed as owner_mismatch within %s",
+				nonPromptMismatches, doctorSuppressionWindow)
+		}
 
 		// Active ASL work (a live turn/verification lease) must never render as
 		// stopped or empty: the loop is executing right now.
@@ -132,6 +179,21 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 				"live subagent facts present but the window shows icon %q (below 🤖 precedence)", desired)
 		}
 
+		// An unacknowledged window-scoped legacy fact has no known producer
+		// harness. If it contributes visible state or a lease, attribution and
+		// route continuity are degraded even when the reduced icon is plausible.
+		unknownProducerFacts := 0
+		for _, fact := range facts {
+			if isUnknownProducerFact(fact) {
+				unknownProducerFacts++
+			}
+		}
+		if unknownProducerFacts > 0 {
+			add(severityWarning, checkUnknownProducerFact, id,
+				"%d unacknowledged legacy/window fact(s) contribute an icon or live lease",
+				unknownProducerFacts)
+		}
+
 		// Repeated active_after_terminal suppressions inside the grace period:
 		// the source keeps producing activity the terminal fact keeps eating.
 		cutoff := now.Add(-activeAfterTerminalGracePeriod).Unix()
@@ -168,7 +230,26 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 				meta.Renderer.QueuedGen, meta.Renderer.RenderedGen, meta.Renderer.FailedGen)
 		}
 
-		// Acknowledged historical state is expected residue, not a problem.
+		// Acknowledged nonterminal facts are bounded replay cutoffs. Approaching
+		// the cap is worth surfacing; exceeding it means compaction failed. Live
+		// ASL leases stay outside the count because they still drive looping.
+		acknowledgedPressure := 0
+		for _, fact := range facts {
+			if isEvictableAcknowledgedFact(fact) {
+				acknowledgedPressure++
+			}
+		}
+		if acknowledgedPressure >= acknowledgedPressureWarningCount {
+			severity := severityWarning
+			if acknowledgedPressure > acknowledgedPressureFailureCount {
+				severity = severityFailure
+			}
+			add(severity, checkAcknowledgedPressure, id,
+				"%d evictable acknowledged facts retained (warning at %d; maximum %d)",
+				acknowledgedPressure, acknowledgedPressureWarningCount, acknowledgedPressureFailureCount)
+		}
+
+		// Ordinary acknowledged historical state remains informational.
 		if len(facts) > 0 && allFactsAcked(facts) {
 			add(severityInfo, checkAcknowledgedState, id,
 				"all %d source facts are acknowledged; retained as history", len(facts))
@@ -205,6 +286,29 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 	}
 
 	return findings
+}
+
+func isPromptSessionEvent(event daemon.SessionEvent) bool {
+	switch strings.ToLower(strings.TrimSpace(event.Event)) {
+	case "userpromptsubmit", "userpromptsubmitted":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUnknownProducerFact(fact daemon.SourceFactSnapshot) bool {
+	if fact.Kind != daemon.SourceLegacy || fact.Acked || (fact.Icon == "" && !fact.LeaseLive) {
+		return false
+	}
+	return strings.HasPrefix(fact.Key, "win:") || strings.HasPrefix(fact.Key, "window:")
+}
+
+func isEvictableAcknowledgedFact(fact daemon.SourceFactSnapshot) bool {
+	if !fact.Acked || fact.Terminated {
+		return false
+	}
+	return fact.Kind != daemon.SourceASL || !fact.LeaseLive
 }
 
 func hasASLFact(facts []daemon.SourceFactSnapshot) bool {

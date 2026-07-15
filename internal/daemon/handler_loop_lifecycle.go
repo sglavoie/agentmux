@@ -85,6 +85,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 		payload,
 		parts.Base,
 		profile,
+		baseReq.Harness,
 		harnessName,
 		parts.State,
 		baseReq.PipeMode,
@@ -94,9 +95,13 @@ func (h *Handler) handleLoopLifecycleTarget(
 		baseReq.KittyListenOn,
 	)
 	req.RequestID = baseReq.RequestID
-	// Stamp the ASL-source view for the shadow reducer, keyed against this
-	// fan-out target so the run's lease lands on the window that renders it.
-	normalized := NormalizedFromHook(eventOrAction, harnessName, baseReq.PayloadJSON, target.windowID, baseReq.PipeMode)
+	// The fact lands on the managed target but retains the pane identified by
+	// the request/payload as its origin for route-aware probes and diagnostics.
+	originWindowID := baseReq.WindowID
+	if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {
+		originWindowID = payloadWindowID
+	}
+	normalized := NormalizedFromHook(eventOrAction, baseReq.Harness, baseReq.PayloadJSON, originWindowID, baseReq.PipeMode)
 	req.normalized = &normalized
 	resp := h.handleStateUpdate(req)
 	if !resp.OK {

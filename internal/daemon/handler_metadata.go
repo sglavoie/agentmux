@@ -81,8 +81,14 @@ func (h *Handler) touchWindowMetadataLocked(req Request) {
 	if req.Account != "" {
 		meta.Durable.Profile = req.Account
 	}
-	if req.Harness != "" {
-		st.LastHarness = harness.Normalize(req.Harness)
+	targetHarness := req.targetHarness
+	if !req.targetHarnessSet {
+		// Backward compatibility for direct state_update clients, which predate
+		// the producer/target split and use Harness for both roles.
+		targetHarness = req.Harness
+	}
+	if targetHarness != "" {
+		st.LastHarness = harness.Normalize(targetHarness)
 		meta.Durable.Harness = st.LastHarness
 	}
 	meta.Durable.PipeMode = req.PipeMode

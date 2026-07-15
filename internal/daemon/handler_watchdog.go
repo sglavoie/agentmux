@@ -183,13 +183,17 @@ const (
 // both diagnostic surfaces: the current per-window event ring (via
 // appendEventLocked, which also maintains the durable Stats counters) and the
 // durable watchdog section of the export metadata. Callers hold stateMu.
-func (h *Handler) appendWatchdogEventLocked(windowID int, at time.Time, event, action, source, reason string) {
+func (h *Handler) appendWatchdogEventLocked(windowID, originWindowID int, at time.Time, event, action, source, reason string) {
+	if originWindowID <= 0 {
+		originWindowID = windowID
+	}
 	h.appendEventLocked(windowID, SessionEvent{
-		At:     at.Unix(),
-		Event:  event,
-		Action: action,
-		Source: source,
-		Reason: reason,
+		At:             at.Unix(),
+		Event:          event,
+		Action:         action,
+		Source:         source,
+		Reason:         reason,
+		OriginWindowID: originWindowID,
 	})
 	meta := h.windowMetadata[windowID]
 	meta.Watchdog.LastEvent = event
@@ -390,17 +394,18 @@ func (h *Handler) SweepStaleWithSnapshot(now time.Time, windows []kitty.OSWindow
 	return h.sweepStale(now, windows, 0, false)
 }
 
-// sweepStale evaluates per-fact and per-window staleness. Idleness is the
-// accumulated in-process observed time (see advanceWindowIdle/advanceFactIdle)
-// — activity timestamps are never rewritten and never compared across a
-// scheduling gap. Individual source facts expire on their own thresholds
-// (SourceExpired); the whole-window legacy scalar clears — with its one-shot
-// "Session idle" notification — only when the window as a whole has been idle
-// past its threshold (WatchdogStale).
+// sweepStale evaluates reducer retention plus per-fact and per-window
+// staleness. Acknowledged retention is fixed internal policy and runs even when
+// every configurable stale threshold is disabled; otherwise an idle window
+// could retain an acknowledged cutoff forever after it crosses the one-hour
+// boundary. Idleness is the accumulated in-process observed time (see
+// advanceWindowIdle/advanceFactIdle) — activity timestamps are never rewritten
+// and never compared across a scheduling gap. Individual source facts expire
+// on their own thresholds (SourceExpired); the whole-window legacy scalar
+// clears — with its one-shot "Session idle" notification — only when the
+// window as a whole has been idle past its threshold (WatchdogStale).
 func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Duration, gapTick bool) bool {
-	if !h.anyStaleThresholdSet() {
-		return false
-	}
+	staleThresholdsEnabled := h.anyStaleThresholdSet()
 	type staleEntry struct {
 		windowID int
 		account  string
@@ -413,12 +418,27 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 
 	h.stateMu.Lock()
 	for windowID, st := range h.store {
+		compacted := 0
+		if st.Reducer != nil {
+			compacted = st.Reducer.Compact(now.Unix())
+			if compacted > 0 {
+				// Retention compaction is a reducer mutation even though acknowledged
+				// facts do not contribute visible state. Advance the receipt so a
+				// screen observation captured before compaction cannot settle over a
+				// different persisted fact set.
+				st.ShadowSeq++
+			}
+		}
+
 		account := st.LastAccount
-		expired, aslExecuting := h.expireStaleFactsLocked(windowID, st, now, credit, gapTick)
+		expired, aslExecuting := 0, false
+		if staleThresholdsEnabled {
+			expired, aslExecuting = h.expireStaleFactsLocked(windowID, st, now, credit, gapTick)
+		}
 
 		action := st.LastAction
 		windowStale := false
-		if action == "active" || action == "subagent" || action == "compact" {
+		if staleThresholdsEnabled && (action == "active" || action == "subagent" || action == "compact") {
 			if threshold := h.resolveThreshold(account, action); threshold > 0 {
 				idle := advanceWindowIdle(st, now, credit, gapTick)
 				// An authoritative ASL turn or verification lease is live
@@ -426,7 +446,7 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 				// not cleared out from under it.
 				windowStale = idle >= threshold && (action != "active" || !aslExecuting)
 			}
-		} else {
+		} else if staleThresholdsEnabled {
 			st.watchdogSeeded = false
 			st.watchdogIdle = 0
 		}
@@ -455,7 +475,7 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 				// leases) keep the tab rather than being wiped with the scalar.
 				h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
 			}
-			h.appendWatchdogEventLocked(windowID, now, eventWatchdogStale, "stale", "",
+			h.appendWatchdogEventLocked(windowID, windowID, now, eventWatchdogStale, "stale", "",
 				"no activity for "+st.watchdogIdle.Truncate(time.Second).String()+
 					" (threshold "+h.resolveThreshold(account, action).String()+")")
 			h.syncRendererMetadataLocked(windowID)
@@ -467,9 +487,11 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 				pipeMode: pipe,
 				notify:   notify,
 			})
-		case expired > 0:
-			// Per-fact expiry without a whole-window clear: publish the new
-			// reduction; only an actual visible change forces a Kitty write.
+		case compacted > 0 || expired > 0:
+			// Retention compaction or per-fact expiry without a whole-window
+			// clear: publish the new reduction; only an actual visible change
+			// forces a Kitty write. An invisible retention-only mutation still
+			// marks persistence dirty so amx_state drops the expired cutoffs.
 			before := st.Effective
 			h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
 			h.syncRendererMetadataLocked(windowID)
@@ -561,12 +583,12 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *WindowState, now time
 		if aslExecuting && p.fact.Icon == "bolt" && p.fact.Kind != SourceASL {
 			continue
 		}
-		if !st.Reducer.ExpireFact(p.fact.Source(), p.fact.Seq) {
+		if !st.Reducer.ExpireFact(p.fact.Source(), p.fact.Seq, now.Unix()) {
 			continue
 		}
 		delete(st.watchdogFactIdle, p.fact.Source())
 		expired++
-		h.appendWatchdogEventLocked(windowID, now, eventSourceExpired, p.fact.Action,
+		h.appendWatchdogEventLocked(windowID, p.fact.OriginWindowID, now, eventSourceExpired, p.fact.Action,
 			string(p.fact.Kind)+":"+p.fact.Key,
 			p.fact.Icon+" fact idle for "+p.idle.Truncate(time.Second).String()+
 				" (threshold "+p.threshold.String()+")")

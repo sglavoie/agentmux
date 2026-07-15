@@ -171,12 +171,12 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 			hooks[event] = []hookGroup{
 				{Matcher: "manual", Hooks: []hookEntry{{
 					Type:    "command",
-					Command: amxCommand + " hook-indicator PostCompactManual",
+					Command: amxCommand + " hook-indicator PostCompactManual --harness=" + Claude,
 					Async:   boolPtr(true),
 				}}},
 				{Matcher: "auto", Hooks: []hookEntry{{
 					Type:    "command",
-					Command: amxCommand + " hook-indicator PostCompactAuto",
+					Command: amxCommand + " hook-indicator PostCompactAuto --harness=" + Claude,
 					Async:   boolPtr(true),
 				}}},
 			}
@@ -185,7 +185,7 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 		hooks[event] = []hookGroup{
 			{Hooks: []hookEntry{{
 				Type:    "command",
-				Command: amxCommand + " hook-indicator " + event,
+				Command: amxCommand + " hook-indicator " + event + " --harness=" + Claude,
 				Async:   boolPtr(true),
 			}}},
 		}

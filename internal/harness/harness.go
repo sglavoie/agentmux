@@ -20,6 +20,23 @@ func Normalize(name string) string {
 	return name
 }
 
+// NormalizeKnown returns the canonical name for a supported harness. Missing
+// and unknown values return empty so event-producer identity is never guessed.
+// Configuration paths that intentionally default missing values to Claude
+// should continue to use Normalize.
+func NormalizeKnown(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case Claude:
+		return Claude
+	case Copilot:
+		return Copilot
+	case Codex:
+		return Codex
+	default:
+		return ""
+	}
+}
+
 // Valid reports whether name identifies a supported harness.
 func Valid(name string) bool {
 	_, ok := registry[Normalize(name)]

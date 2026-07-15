@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -26,7 +27,7 @@ type indicatorDaemonClient interface {
 
 // Run is the hook entry point. Hooks are fire-and-forget: all event-processing
 // failures are logged and intentionally reported as success to the harness.
-func Run(event string, windowID int, amxBin string) error {
+func Run(event string, windowID int, producerHarness, amxBin string) error {
 	if strings.TrimSpace(os.Getenv("KITTY_LISTEN_ON")) == "" {
 		return nil
 	}
@@ -35,10 +36,10 @@ func Run(event string, windowID int, amxBin string) error {
 		slog.Warn("indicator: ignoring unreadable hook payload", "event", event, "err", err)
 		payloadJSON = ""
 	}
-	return runWithDeps(event, windowID, amxBin, payloadJSON, IsPipeMode(), daemon.NewClient())
+	return runWithDeps(event, windowID, producerHarness, amxBin, payloadJSON, IsPipeMode(), daemon.NewClient())
 }
 
-func runWithDeps(event string, windowID int, amxBin, payloadJSON string, pipeMode bool, client indicatorDaemonClient) error {
+func runWithDeps(event string, windowID int, producerHarness, amxBin, payloadJSON string, pipeMode bool, client indicatorDaemonClient) error {
 	if strings.TrimSpace(os.Getenv("KITTY_LISTEN_ON")) == "" {
 		return nil
 	}
@@ -53,11 +54,22 @@ func runWithDeps(event string, windowID int, amxBin, payloadJSON string, pipeMod
 		return nil
 	}
 
+	rawProducer := strings.TrimSpace(producerHarness)
+	producerHarness = harness.NormalizeKnown(rawProducer)
+	if rawProducer != "" && producerHarness == "" {
+		// Preserve the explicit value on the wire so the daemon can distinguish
+		// an unsupported producer from an omitted producer. The daemon then
+		// canonicalizes it to unknown without inferring from the target pane.
+		slog.Warn("indicator: unsupported producer harness; forwarding as unknown", "harness", rawProducer)
+		producerHarness = rawProducer
+	}
+
 	resp, err := client.SendWithAutoStart(daemon.Request{
 		Type:          daemon.TypeHookEvent,
 		RequestID:     newRequestID(),
 		WindowID:      windowID,
 		Event:         event,
+		Harness:       producerHarness,
 		PayloadJSON:   payloadJSON,
 		KittyListenOn: listenOn,
 		PipeMode:      pipeMode,

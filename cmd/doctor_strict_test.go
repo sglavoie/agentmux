@@ -71,6 +71,26 @@ func violatingDoctorSnapshot(now time.Time) daemon.EventsExport {
 	}
 }
 
+func ownerMismatchDoctorSnapshot(now time.Time) daemon.EventsExport {
+	events := make([]daemon.SessionEvent, 0, 19)
+	events = append(events, daemon.SessionEvent{
+		At: now.Unix(), Event: "UserPromptSubmit", Action: "active",
+		Suppressed: true, SuppressionReason: "owner_mismatch",
+	})
+	for i := 0; i < 18; i++ {
+		events = append(events, daemon.SessionEvent{
+			At: now.Unix(), Event: "PreToolUse", Action: "active",
+			Suppressed: true, SuppressionReason: "owner_mismatch",
+		})
+	}
+	return daemon.EventsExport{
+		EventsByWindow: map[int][]daemon.SessionEvent{7: events},
+		WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {
+			Durable: daemon.WindowDebugDurable{SessionTitle: "OrderBook"},
+		}},
+	}
+}
+
 func TestDoctorStrictExitsNonzeroOnHealthFailures(t *testing.T) {
 	build := doctorTestBuild
 	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
@@ -113,6 +133,35 @@ func TestDoctorStrictPassesOnCleanDeployment(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "overall: clean") {
 		t.Errorf("doctor output missing overall: clean:\n%s", out.String())
+	}
+}
+
+func TestDoctorOwnerMismatchTraceRendersSharedFindingsAndFailsStrict(t *testing.T) {
+	build := doctorTestBuild
+	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	now := time.Unix(1_700_000_000, 0)
+	setUpDoctorFixture(t, health, ownerMismatchDoctorSnapshot(now))
+	doctorStrict = true
+
+	var out bytes.Buffer
+	doctorCmd.SetOut(&out)
+	err := runDoctor(doctorCmd, nil)
+
+	var exitErr *ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure || exitErr.Quiet {
+		t.Fatalf("err = %+v; want visible strict health failure", err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"health failures:",
+		"[owner_mismatch_prompt] window 7: 1 prompt event(s) suppressed as owner_mismatch within 15m0s",
+		"warnings:",
+		"[owner_mismatch_burst] window 7: 18 non-prompt event(s) suppressed as owner_mismatch within 15m0s",
+		"overall: issues detected",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("doctor output missing %q:\n%s", want, got)
+		}
 	}
 }
 
@@ -163,5 +212,38 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	// Text sections must be suppressed in JSON mode.
 	if strings.Contains(out.String(), "Agent Mux doctor") {
 		t.Fatalf("JSON output contains text sections:\n%s", out.String())
+	}
+}
+
+func TestDoctorJSONOwnerMismatchTraceMatchesTextSeverityAndWindow(t *testing.T) {
+	build := doctorTestBuild
+	health := daemon.Health{Alive: true, Ready: true, PID: 77, Uptime: time.Minute, Build: &build}
+	now := time.Unix(1_700_000_000, 0)
+	setUpDoctorFixture(t, health, ownerMismatchDoctorSnapshot(now))
+	doctorJSON = true
+	doctorStrict = true
+
+	var out bytes.Buffer
+	doctorCmd.SetOut(&out)
+	err := runDoctor(doctorCmd, nil)
+	var exitErr *ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure || !exitErr.Quiet {
+		t.Fatalf("err = %+v; want quiet JSON strict health failure", err)
+	}
+
+	var report doctorReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("output is not a single JSON report: %v\n%s", err, out.String())
+	}
+	prompt := findingsByCheck(report.Findings, checkOwnerMismatchPrompt)
+	if len(prompt) != 1 || prompt[0].Severity != severityFailure || prompt[0].WindowID != 7 {
+		t.Fatalf("owner_mismatch_prompt findings = %+v; want one window-7 failure", prompt)
+	}
+	burst := findingsByCheck(report.Findings, checkOwnerMismatchBurst)
+	if len(burst) != 1 || burst[0].Severity != severityWarning || burst[0].WindowID != 7 {
+		t.Fatalf("owner_mismatch_burst findings = %+v; want one window-7 warning", burst)
+	}
+	if report.Healthy {
+		t.Fatal("owner_mismatch prompt failure must make the JSON report unhealthy")
 	}
 }

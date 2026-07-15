@@ -46,6 +46,7 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 		ContextLimit:     req.ContextLimit,
 		ResetFlow:        req.ResetFlow,
 		RouteDecision:    req.routeDecision,
+		OriginWindowID:   req.WindowID,
 	}
 	// The normalized stamp carries the source-scoped identity resolved from the
 	// raw payload; legacy clients and synthetic requests have none. A
@@ -55,6 +56,9 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 		ev.SourceKind = string(req.normalized.Source.Kind)
 		ev.SourceKey = req.normalized.Source.Key
 		ev.SourceSeq = req.normalized.Seq
+		if req.normalized.OriginWindowID > 0 {
+			ev.OriginWindowID = req.normalized.OriginWindowID
+		}
 	}
 	return ev
 }

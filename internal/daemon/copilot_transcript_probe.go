@@ -60,44 +60,96 @@ func (h *Handler) ProbeCopilotTranscriptStop(now time.Time) {
 }
 
 // ProbeCopilotTranscriptStopWithSnapshot runs the Copilot transcript stop probe
-// against an already-published Kitty snapshot. Only the Copilot tab-title owner
-// is scanned (never an unmanaged foreground sibling), and only a tab whose
-// current icon is a stuck ⚡: any other visible state is either already terminal
-// or a higher-precedence icon (🤖 subagent, 🔁 ASL, key/question/warning/error)
-// the idle path must never downgrade. Unlike the Codex/Claude probes this reads
-// no screen — the authoritative evidence is the session transcript's latest
-// state-bearing event.
+// against an already-published Kitty snapshot. Direct sessions retain the
+// Copilot title-owner rule; borrowed sessions follow their exact producer route
+// to the managed target. Only a target whose reduced icon is a stuck ⚡ or this
+// probe's recoverable synthetic 🛑 is considered. Unlike the Codex/Claude probes
+// this reads no screen — the authoritative evidence is the matching producer
+// session's transcript.
 func (h *Handler) ProbeCopilotTranscriptStopWithSnapshot(now time.Time, windows []kitty.OSWindow) {
 	h.probeCopilotTranscriptStopWithSnapshot(now, h.screenProbeSnapshotForWindows(windows))
 }
 
 func (h *Handler) probeCopilotTranscriptStopWithSnapshot(now time.Time, snapshot screenProbeSnapshot) {
-	for i := range snapshot.windows {
-		for j := range snapshot.windows[i].Tabs {
-			tab := &snapshot.windows[i].Tabs[j]
-			parts := palette.ParseTitleParts(tab.Title)
-			if !copilotTranscriptStopProbeCanOverwrite(parts.State) {
-				continue
-			}
-			win, ok := copilotTranscriptProbeTarget(tab)
-			if !ok {
-				continue
-			}
-			h.probeCopilotTranscriptWindow(now, win.ID, parts, win.UserVars, snapshot.receipt(win.ID), snapshot.gen)
+	for _, binding := range h.copilotTranscriptProbeBindings(now, snapshot) {
+		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.TargetWindowID)
+		if !ok {
+			continue
 		}
+		h.probeCopilotTranscriptWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars)
 	}
 }
 
-// copilotTranscriptProbeTarget returns the tab's managed title owner when it is a
-// Copilot-managed window. Like the Claude probes (and unlike the Codex prompt
-// probe) it has no unmanaged-foreground fallback: a tab with no managed title
-// owner has no interactive session identity to resolve a transcript against.
-func copilotTranscriptProbeTarget(tab *kitty.Tab) (*kitty.Window, bool) {
-	owner, ok := kitty.FindTabTitleOwner(tab)
-	if !ok {
-		return nil, false
+// copilotTranscriptProbeBindings combines live interactive producer routes with
+// exact post-settle recovery routes. Recovery is derived from the probe stop's
+// session memo and the retired producer fact, so it retains the original source
+// pane without making that terminal session eligible for ordinary continuation.
+func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot screenProbeSnapshot) []screenProbeBinding {
+	bindings := h.screenProbeBindings(snapshot, harness.Copilot)
+	source := SourceID{Kind: SourceProbe, Key: copilotTranscriptStopProbeSource}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	if !h.screenProbeGenerationCurrentLocked(snapshot.gen) {
+		return nil
 	}
-	return owner, owner.UserVars.EffectiveHarness() == harness.Copilot
+	var recovery []screenProbeBinding
+	for i := range snapshot.windows {
+		for j := range snapshot.windows[i].Tabs {
+			for k := range snapshot.windows[i].Tabs[j].Windows {
+				target := &snapshot.windows[i].Tabs[j].Windows[k]
+				if target.UserVars.EffectiveProfile() == "" && target.UserVars.EffectiveHarness() == "" {
+					continue
+				}
+				st, ok := h.windowStateLocked(target.ID)
+				if !ok || st == nil || st.Reducer == nil {
+					continue
+				}
+				identity, sourceWindowID, ok := st.Reducer.ProbeStopRecoveryRoute(
+					source, harness.Copilot, target.ID, now.Unix(),
+				)
+				if !ok {
+					continue
+				}
+				if _, _, _, found := kitty.FindWindowLocationByID(snapshot.windows, sourceWindowID); !found {
+					continue
+				}
+				binding := screenProbeBinding{
+					Producer:       identity,
+					SourceWindowID: sourceWindowID,
+					TargetWindowID: target.ID,
+					SourceReceipt:  snapshot.receipt(sourceWindowID),
+					TargetReceipt:  snapshot.receipt(target.ID),
+					SnapshotGen:    snapshot.gen,
+					recoverySource: source,
+					recoveryAt:     now.Unix(),
+				}
+				if h.screenProbeBindingCurrentLocked(binding) {
+					recovery = append(recovery, binding)
+				}
+			}
+		}
+	}
+
+	// One producer/source pair may recover at most one managed target. Duplicate
+	// restored facts fail closed rather than fanning one transcript observation
+	// across two panes.
+	type routeKey struct {
+		producer string
+		session  string
+		source   int
+	}
+	counts := make(map[routeKey]int, len(recovery))
+	for _, binding := range recovery {
+		counts[routeKey{producer: binding.Producer.Harness, session: binding.Producer.SessionID, source: binding.SourceWindowID}]++
+	}
+	for _, binding := range recovery {
+		key := routeKey{producer: binding.Producer.Harness, session: binding.Producer.SessionID, source: binding.SourceWindowID}
+		if counts[key] == 1 {
+			bindings = append(bindings, binding)
+		}
+	}
+	return bindings
 }
 
 // copilotTranscriptStopProbeCanOverwrite reports whether the current visible
@@ -132,11 +184,10 @@ func copilotTranscriptStopProbeCanOverwrite(iconState string) bool {
 //     stateMu BEFORE the slow off-lock transcript read, so a concurrent prompt
 //     (or any reducer event) landing anywhere after snapshot capture discards
 //     the stale route/read;
-//   - the session ID comes from the reducer's CurrentInteractiveConversation,
-//     which resolves ONLY a live interactive owner and never falls back to a
-//     sole pipe-mode `copilot -p` child, so a background pipe invocation never
-//     selects the transcript the probe settles nor overwrites the parent-session
-//     memo a masked probe stop needs for post-stat recovery;
+//   - the session ID comes from the binding's exact live Copilot producer fact
+//     (or the exact retired fact memoized by this probe's recoverable stop), so a
+//     pipe-only child and another harness's conversation can never select the
+//     transcript the probe settles;
 //   - only a CopilotLifecycleTerminal evidence state drives the synthetic stop.
 //     Active, Unknown, a missing/unreadable file, a malformed tail, an unsafe
 //     session ID, or a missing profile home all fail closed: the stabilization
@@ -166,16 +217,15 @@ func copilotTranscriptStopProbeCanOverwrite(iconState string) bool {
 // non-probe-owned 🛑 bails before any transcript I/O.
 func (h *Handler) probeCopilotTranscriptWindow(
 	now time.Time,
-	windowID int,
+	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
-	capturedSeq uint64,
-	capturedSnapshotGen uint64,
 ) {
+	windowID := binding.TargetWindowID
 	source := SourceID{Kind: SourceProbe, Key: copilotTranscriptStopProbeSource}
 	ref := idleSampleRef{windowID: windowID, key: source.Key}
 
-	// Revalidate the snapshot receipt and resolve which session's transcript
+	// Revalidate the complete producer/source/target binding and resolve which session's transcript
 	// backs this tab before the off-lock read. A stop tab is a recovery candidate: the
 	// interactive fact was retired by the settle, so its session comes from the
 	// probe fact's memo (ProbeStopRecovery), which also confirms the stop is this
@@ -183,11 +233,10 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	// recover and we bail before any transcript I/O. A bolt tab uses the live
 	// interactive conversation, as before.
 	h.stateMu.Lock()
-	if !h.screenProbeEligibilityCurrentLocked(windowID, capturedSeq, capturedSnapshotGen, harness.Copilot, func(icon string) bool {
-		return icon == titleParts.State
-	}) {
+	if !h.screenProbeBindingCurrentLocked(binding) {
 		h.stateMu.Unlock()
-		slog.Debug("copilot transcript probe: discarded stale snapshot", "window_id", windowID)
+		slog.Debug("copilot transcript probe: discarded stale snapshot", "source_window_id", binding.SourceWindowID,
+			"target_window_id", windowID)
 		return
 	}
 	st, ok := h.windowStateLocked(windowID)
@@ -196,7 +245,11 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		h.stateMu.Unlock()
 		return
 	}
-	recovering := titleParts.State == "stop"
+	if !copilotTranscriptStopProbeCanOverwrite(st.Effective.Icon) {
+		h.stateMu.Unlock()
+		return
+	}
+	recovering := st.Effective.Icon == "stop"
 	var sessionID string
 	if recovering {
 		sessionID, ok = st.Reducer.ProbeStopRecovery(source, now.Unix())
@@ -207,9 +260,17 @@ func (h *Handler) probeCopilotTranscriptWindow(
 			h.stateMu.Unlock()
 			return
 		}
-	} else if identity, hasConversation := st.CurrentInteractiveConversation(now.Unix()); hasConversation &&
-		identity.Harness == harness.Copilot && identity.SessionID != "" {
-		sessionID = identity.SessionID
+	} else if st.Reducer.HasLiveProducerRoute(binding.Producer, binding.SourceWindowID, binding.TargetWindowID) {
+		sessionID = binding.Producer.SessionID
+	}
+	sessionTitle := titleParts.Base
+	account := userVars.EffectiveProfile()
+	muted := titleParts.Muted || userVars.Mute != "" || st.Muted
+	if st.LastSessionTitle != "" {
+		sessionTitle = st.LastSessionTitle
+	}
+	if st.LastAccount != "" {
+		account = st.LastAccount
 	}
 	h.stateMu.Unlock()
 
@@ -242,7 +303,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		// Recovery: only fresh Active evidence takes the stranded stop back. A
 		// still-terminal read (the common case: the stop was real) or any
 		// untrustworthy evidence leaves 🛑 in place.
-		h.recoverCopilotTranscriptStop(now, windowID, source, capturedSeq, capturedSnapshotGen, evidence.State)
+		h.recoverCopilotTranscriptStop(now, binding, source, evidence.State)
 		return
 	}
 
@@ -296,19 +357,20 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		WindowID:            windowID,
 		Source:              source,
 		Harness:             harness.Copilot,
-		CapturedSeq:         capturedSeq,
-		CapturedSnapshotGen: capturedSnapshotGen,
+		CapturedSeq:         binding.TargetReceipt,
+		CapturedSnapshotGen: binding.SnapshotGen,
+		ProbeBinding:        binding,
 		At:                  now.Unix(),
 		RequiredSamples:     requiredSamples,
 		Generation:          generation,
 		ConfirmStable:       confirmStable,
 		ConfirmNotify:       confirmNotify,
-		SessionTitle:        titleParts.Base,
-		Account:             userVars.EffectiveProfile(),
+		SessionTitle:        sessionTitle,
+		Account:             account,
 		PipeMode:            false,
-		Muted:               titleParts.Muted || userVars.Mute != "",
+		Muted:               muted,
 		SessionID:           sessionID,
-		SourceEventID:       fmt.Sprintf("copilot-transcript-stop:%d:%d", windowID, capturedSeq),
+		SourceEventID:       fmt.Sprintf("copilot-transcript-stop:%d:%d:%d", binding.SourceWindowID, windowID, binding.TargetReceipt),
 		DiagnosticEvent:     copilotTranscriptStopProbeEvent,
 	})
 }
@@ -324,10 +386,8 @@ func (h *Handler) probeCopilotTranscriptWindow(
 // discarded and the stop left intact.
 func (h *Handler) recoverCopilotTranscriptStop(
 	now time.Time,
-	windowID int,
+	binding screenProbeBinding,
 	source SourceID,
-	capturedSeq uint64,
-	capturedSnapshotGen uint64,
 	state transcript.CopilotLifecycleState,
 ) {
 	if state != transcript.CopilotLifecycleActive {
@@ -336,6 +396,7 @@ func (h *Handler) recoverCopilotTranscriptStop(
 		return
 	}
 
+	windowID := binding.TargetWindowID
 	h.stateMu.Lock()
 	st, ok := h.windowStateLocked(windowID)
 	if !ok || st.Reducer == nil {
@@ -344,7 +405,7 @@ func (h *Handler) recoverCopilotTranscriptStop(
 	}
 	// A reducer event landed during the read (native hook, a fresh prompt): it
 	// already owns convergence and may have retired the probe stop, so discard.
-	if st.ShadowSeq != capturedSeq || !h.screenProbeGenerationCurrentLocked(capturedSnapshotGen) {
+	if !h.screenProbeBindingCurrentLocked(binding) {
 		h.stateMu.Unlock()
 		return
 	}
@@ -352,7 +413,7 @@ func (h *Handler) recoverCopilotTranscriptStop(
 	// contribution and recover the memoized session — this is the atomic
 	// freshness-plus-mutation the settle path's ConfirmStable could not be.
 	sessionID, stillRecovering := st.Reducer.ProbeStopRecovery(source, now.Unix())
-	if !stillRecovering {
+	if !stillRecovering || sessionID != binding.Producer.SessionID {
 		h.stateMu.Unlock()
 		return
 	}
@@ -375,7 +436,7 @@ func (h *Handler) recoverCopilotTranscriptStop(
 	if resultAction == "" {
 		resultAction = "idle"
 	}
-	h.appendWatchdogEventLocked(windowID, time.Unix(at, 0), copilotTranscriptStopProbeEvent, resultAction,
+	h.appendWatchdogEventLocked(windowID, binding.SourceWindowID, time.Unix(at, 0), copilotTranscriptStopProbeEvent, resultAction,
 		string(source.Kind)+":"+source.Key,
 		fmt.Sprintf("copilot transcript recovery superseded synthetic stop %q→%q after a post-stat active append",
 			before.Icon, effective.Icon))

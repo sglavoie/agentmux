@@ -56,7 +56,7 @@ type WindowState struct {
 	// Reducer is the authoritative source for this window's visible icon and
 	// loop state: handleStateUpdate feeds it, and reduceStateUpdate publishes
 	// its reduced effective state through publishEffectiveLocked as the visible
-	// icon and looping. schema-v2 persistence carries it across restarts. The
+	// icon and looping. Schema-v3 persistence carries it across restarts. The
 	// legacy scalar machine above (LastAction, Looping, DesiredIcon, …) is
 	// retained for wire/restore compatibility and as divergence evidence
 	// (mismatches recorded against the reduced outcome), not as the visible-state
@@ -114,10 +114,13 @@ func (s WindowState) CurrentInteractiveConversation(now int64) (conversation.Ide
 	return s.Reducer.CurrentInteractiveConversation(now)
 }
 
-// stateUserVarSchemaV2 marks the current amx_state wire schema. v1 payloads
-// predate the field entirely (decoded Schema stays 0), so dual-read migration
-// keys off its absence.
-const stateUserVarSchemaV2 = 2
+// amx_state schema versions. v1 payloads predate the discriminator entirely
+// (decoded Schema stays 0). v2 introduced source facts; v3 adds durable route
+// origins and acknowledgement timestamps to those facts.
+const (
+	stateUserVarSchemaV2 = 2
+	stateUserVarSchemaV3 = 3
+)
 
 // legacyV1MigrationKey is the synthetic source key given to facts migrated
 // from a schema-v1 payload, whose scalar action carries no source identity.
@@ -140,7 +143,7 @@ type windowStateUserVar struct {
 	Harness                    string                     `json:"h,omitempty"`
 	LastEventAt                int64                      `json:"t,omitempty"`
 
-	// Schema v2: bounded source facts plus the shadow effective generation.
+	// Schema v2+: bounded source facts plus the shadow effective generation.
 	Facts            []SourceFactSnapshot `json:"f,omitempty"`
 	EffectiveIcon    string               `json:"ei,omitempty"`
 	EffectiveLooping bool                 `json:"el,omitempty"`
@@ -157,7 +160,7 @@ type windowStateUserVar struct {
 
 // MarshalUserVar returns compact JSON for Kitty's amx_state user var. The
 // event ring buffer is intentionally not persisted. It always writes schema
-// v2: the reducer's facts and effective generation are the authoritative record
+// v3: the reducer's facts and effective generation are the authoritative record
 // of the visible icon and looping, and the legacy scalar fields ride alongside
 // as compatibility metadata and divergence evidence (older readers and v1
 // restore still parse them; they no longer write the visible state). The facts
@@ -165,7 +168,7 @@ type windowStateUserVar struct {
 // reach the payload.
 func (s WindowState) MarshalUserVar() (string, error) {
 	uv := windowStateUserVar{
-		Schema:                     stateUserVarSchemaV2,
+		Schema:                     stateUserVarSchemaV3,
 		Action:                     s.LastAction,
 		GuardAction:                s.GuardAction,
 		CopilotToolPermissionState: s.CopilotToolPermissionState,
@@ -206,13 +209,13 @@ func (s WindowState) MarshalUserVar() (string, error) {
 }
 
 // UnmarshalUserVar restores WindowState from Kitty's amx_state user var.
-// The event ring buffer is intentionally left empty. Both wire schemas are
-// readable: a v2 payload restores the reducer's source facts (including
+// The event ring buffer is intentionally left empty. All wire schemas are
+// readable: v2/v3 payloads restore the reducer's source facts (including
 // acknowledgement cutoffs and ASL leases) and the effective generation, while
 // a v1 payload — which predates the schema discriminator — migrates its
-// scalar action and loop marker into synthetic legacy-source facts. The v2
+// scalar action and loop marker into synthetic legacy-source facts. The v2+
 // conversation projection is intentionally re-derived from Facts rather than
-// trusted directly. Writing always produces v2 (see MarshalUserVar), so v1
+// trusted directly. Writing always produces v3 (see MarshalUserVar), so v1/v2
 // exists only on the read side.
 func (s *WindowState) UnmarshalUserVar(value string) error {
 	if strings.TrimSpace(value) == "" {
@@ -248,7 +251,7 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 	s.DesiredIcon = IconState(s.LastAction)
 	if uv.Schema >= stateUserVarSchemaV2 {
 		s.restoreReducerV2(uv)
-		// The reducer is authoritative for visible state, so a v2 restore with
+		// The reducer is authoritative for visible state, so a v2/v3 restore with
 		// facts resumes from the persisted effective state rather than the
 		// legacy scalar (they only diverge for payloads written before the
 		// cutover). A fact-less payload keeps the legacy-derived view.
@@ -262,7 +265,7 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 	return nil
 }
 
-// restoreReducerV2 rebuilds the shadow reducer from a schema-v2 payload. The
+// restoreReducerV2 rebuilds the shadow reducer from a schema-v2/v3 payload. The
 // reducer is created with zero thresholds; the restore path re-binds the
 // daemon's configured ReducerConfig afterward (restoreFromUserVars), since a
 // deserializer has no access to the owning Handler.

@@ -143,6 +143,46 @@ func TestWatchdogTick_ExpiresOnAccumulatedIdle(t *testing.T) {
 	})
 }
 
+// TestSweepStale_CompactsAcknowledgedFactsWithoutStaleThresholds pins the
+// fixed retention policy to the periodic watchdog. An otherwise-idle window
+// must drop an acknowledged cutoff when it crosses one hour even when the user
+// disables every configurable active/subagent/compact stale threshold.
+func TestSweepStale_CompactsAcknowledgedFactsWithoutStaleThresholds(t *testing.T) {
+	h, _, _ := newSweepTestHandler(0)
+	base := time.Unix(1_700_000_000, 0)
+
+	h.stateMu.Lock()
+	st := h.ensureWindowStateLocked(42)
+	st.Reducer = NewReducer(h.reducerCfg)
+	st.Reducer.Restore([]SourceFactSnapshot{{
+		Kind: SourceHarness, Key: "codex:old", Action: "active", Icon: "bolt",
+		Seq: 7, CausalOrder: 7, At: base.Unix(), Acked: true, AckedAt: base.Unix(),
+	}})
+	st.ShadowSeq = 7
+	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(base.Unix()))
+	st.Dirty = false
+	st.DirtySince = time.Time{}
+	h.stateMu.Unlock()
+
+	changed := h.SweepStaleWithSnapshot(base.Add(time.Duration(acknowledgedFactRetentionSeconds)*time.Second), nil)
+	if !changed {
+		t.Fatal("retention-only watchdog pass reported no change")
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	st = h.store[42]
+	if facts := st.Reducer.Facts(); len(facts) != 0 {
+		t.Fatalf("facts after retention boundary = %+v; want none", facts)
+	}
+	if st.ShadowSeq != 8 {
+		t.Fatalf("ShadowSeq = %d; want 8 after retention mutation", st.ShadowSeq)
+	}
+	if !st.Dirty || st.DirtySince.IsZero() {
+		t.Fatalf("retention mutation was not queued for persistence: dirty=%t since=%v", st.Dirty, st.DirtySince)
+	}
+}
+
 // TestWatchdogTick_SleepGapDoesNotExpire pins the sleep-like-gap contract: a
 // tick arriving hours late credits only one interval toward idleness, never
 // rewrites activity timestamps, and refreshes the Kitty snapshot and the ASL

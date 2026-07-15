@@ -59,7 +59,7 @@ func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 // omitted from the wire payload (omitempty), so existing daemons that do not
 // know the field still see a clean request shape.
 func TestRequest_OmittedToolNameMarshalsClean(t *testing.T) {
-	in := Request{Type: TypeStateQuery}
+	in := Request{Type: TypeStateQuery, targetHarness: "claude", targetHarnessSet: true}
 	data, err := json.Marshal(in)
 	if err != nil {
 		t.Fatalf("Marshal(Request): %v", err)
@@ -75,6 +75,9 @@ func TestRequest_OmittedToolNameMarshalsClean(t *testing.T) {
 	}
 	if got := string(data); strings.Contains(got, "current_icon_state") {
 		t.Fatalf("expected daemon-owned icon state to be absent from requests, got: %s", got)
+	}
+	if got := string(data); strings.Contains(got, "target_harness") {
+		t.Fatalf("expected daemon-only target harness to be absent from requests, got: %s", got)
 	}
 }
 
@@ -111,6 +114,7 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 				PromptKind:       "edit_approval",
 				ResultIconState:  "question",
 				CurrentIconState: "bolt",
+				OriginWindowID:   91,
 			},
 			{
 				At:                1700000001,
@@ -148,6 +152,7 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 		PromptKind:       "edit_approval",
 		ResultIconState:  "question",
 		CurrentIconState: "bolt",
+		OriginWindowID:   91,
 	}) {
 		t.Fatalf("Events[0] = %+v", out.Events[0])
 	}
@@ -196,6 +201,7 @@ func TestSessionEvent_OmitsZeroOptionalFields(t *testing.T) {
 		"prompt_kind",
 		"context_limit",
 		"reset_flow",
+		"origin_window_id",
 	} {
 		if strings.Contains(got, field) {
 			t.Fatalf("expected %s to be omitted, got: %s", field, got)

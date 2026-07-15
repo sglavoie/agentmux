@@ -43,6 +43,24 @@ func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
 	}
 }
 
+func TestHandler_EventLog_CarriesRoutedOriginWindow(t *testing.T) {
+	h := newTestHandler()
+	normalized := NormalizedEvent{
+		Source: SourceID{Kind: SourceHarness, Key: "claude:s1"},
+		Action: "active", Seq: 1, At: 100, OriginWindowID: 91,
+	}
+	h.Handle(Request{
+		Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse",
+		normalized: &normalized, routeDecision: routeDecisionOwner,
+	})
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(resp.Events) != 1 || resp.Events[0].OriginWindowID != 91 ||
+		resp.Events[0].RouteDecision != routeDecisionOwner {
+		t.Fatalf("routed event row = %+v; want origin 91 and owner route", resp.Events)
+	}
+}
+
 // TestHandler_EventLog_AppendOnGuardSuppressed exercises the guard-suppressed
 // return at the top of handleStateUpdate: a subagent guard suppresses a
 // follow-up "active" (priority 1 < subagent priority 2), and the suppressed

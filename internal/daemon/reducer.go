@@ -166,6 +166,9 @@ type ReducerEvent struct {
 	Seq    uint64
 	TurnID string
 	At     int64
+	// OriginWindowID identifies the pane that produced this fact. It can differ
+	// from the reducer's managed window when an unmanaged sibling borrows it.
+	OriginWindowID int
 
 	// Prompt marks a direct user prompt submission. A prompt is authoritative
 	// recovery: it bypasses terminal trailing suppression for its own source and
@@ -299,6 +302,10 @@ type sourceFact struct {
 	turnID      string
 	at          int64
 	acked       bool
+	ackedAt     int64
+	// originWindowID is runtime route metadata. Persistence is introduced with
+	// the schema-v3 migration; until then restored legacy facts safely carry 0.
+	originWindowID int
 
 	// toolUse is the most recent tool-use identity seen from this source, kept
 	// so a terminal event can pin which tool call was in flight when it landed.
@@ -349,6 +356,31 @@ type supersessionMark struct {
 	at     int64
 	seq    uint64
 	source SourceID
+}
+
+// acknowledge marks a fact as withdrawn at a deterministic event time. Live
+// callers pass the event/observation timestamp that caused the withdrawal. The
+// fallback keeps synthetic or legacy zero-time events deterministic while
+// preserving 0 as the wire-level "timestamp absent" sentinel.
+func (f *sourceFact) acknowledge(at int64) {
+	if at <= 0 {
+		at = f.at
+		if f.terminalAt > at {
+			at = f.terminalAt
+		}
+		if at <= 0 {
+			at = 1
+		}
+	}
+	f.acked = true
+	f.ackedAt = at
+}
+
+// reactivate makes a fact live again and clears the acknowledgement timestamp
+// as one invariant-preserving operation.
+func (f *sourceFact) reactivate() {
+	f.acked = false
+	f.ackedAt = 0
 }
 
 // record advances the mark to the more recent of its current value and the given
@@ -408,6 +440,120 @@ type Reducer struct {
 	clearCutoff       supersessionMark // user_clear/reset acknowledged everything visible
 	promptCutoff      supersessionMark // a prompt acked stuck terminal facts on other sources
 	interactiveCutoff supersessionMark // a prompt/terminal retired older interactive active facts
+}
+
+// HasLiveOriginRoute reports whether this reducer still owns the identified
+// harness session from originWindowID. A terminal or acknowledged fact is not
+// a route lease: the terminal event itself is admitted while the preceding
+// live fact exists, then its application closes ordinary continuation.
+func (r *Reducer) HasLiveOriginRoute(source SourceID, sessionID string, originWindowID int) bool {
+	if r == nil || source.Kind != SourceHarness || sessionID == "" || originWindowID <= 0 {
+		return false
+	}
+	f := r.facts[source]
+	return f != nil && f.set && !f.acked && !f.terminated &&
+		f.sessionID == sessionID && f.originWindowID == originWindowID
+}
+
+// CurrentLiveProducerRoute returns the newest live interactive harness route
+// for producerHarness. originWindowID is the pane that emitted the producer
+// fact; legacy/direct facts that predate origin stamping resolve to
+// targetWindowID. Unlike CurrentInteractiveConversation, terminal facts are
+// deliberately excluded: a screen probe may observe and settle only a producer
+// binding that still owns live work.
+func (r *Reducer) CurrentLiveProducerRoute(producerHarness string, targetWindowID int) (conversation.Identity, int, bool) {
+	if r == nil || producerHarness == "" || targetWindowID <= 0 {
+		return conversation.Identity{}, 0, false
+	}
+
+	var current *sourceFact
+	var identity conversation.Identity
+	originWindowID := 0
+	for _, fact := range r.facts {
+		if fact.source.Kind != SourceHarness || !fact.set || fact.acked || fact.terminated || fact.pipeMode {
+			continue
+		}
+		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
+		if !ok || candidate.Harness != producerHarness || fact.source.Key != candidate.Harness+":"+candidate.SessionID {
+			continue
+		}
+		if current == nil || moreRecent(fact, current) {
+			current = fact
+			identity = candidate
+			originWindowID = fact.originWindowID
+			if originWindowID <= 0 {
+				originWindowID = targetWindowID
+			}
+		}
+	}
+	return identity, originWindowID, current != nil
+}
+
+// HasLiveProducerRoute reports whether the exact producer/session/source pane
+// binding still owns live interactive work on this reducer. targetWindowID is
+// used only for legacy direct facts whose runtime origin was not stamped.
+func (r *Reducer) HasLiveProducerRoute(identity conversation.Identity, sourceWindowID, targetWindowID int) bool {
+	if r == nil || !identity.Valid() || sourceWindowID <= 0 || targetWindowID <= 0 {
+		return false
+	}
+	f := r.facts[SourceID{Kind: SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
+	if f == nil || !f.set || f.acked || f.terminated || f.pipeMode || f.sessionID != identity.SessionID {
+		return false
+	}
+	originWindowID := f.originWindowID
+	if originWindowID <= 0 {
+		originWindowID = targetWindowID
+	}
+	return originWindowID == sourceWindowID
+}
+
+// CurrentTerminalProducerRoute returns the newest unacknowledged interactive
+// terminal fact for producerHarness and its runtime origin. It is intentionally
+// separate from CurrentLiveProducerRoute: terminal facts do not authorize
+// ordinary continuation, but a probe may use this exact binding for bounded
+// post-terminal evidence such as a routed Codex /clear observation.
+func (r *Reducer) CurrentTerminalProducerRoute(producerHarness string, targetWindowID int, now int64) (conversation.Identity, int, bool) {
+	if r == nil || producerHarness == "" || targetWindowID <= 0 {
+		return conversation.Identity{}, 0, false
+	}
+
+	var current *sourceFact
+	var identity conversation.Identity
+	originWindowID := 0
+	for _, fact := range r.facts {
+		if fact.source.Kind != SourceHarness || !conversationFactLive(fact, now) || !fact.terminated || fact.pipeMode {
+			continue
+		}
+		candidate, ok := conversation.New(harnessFromSourceKey(fact.source.Key, fact.sessionID), fact.sessionID)
+		if !ok || candidate.Harness != producerHarness || fact.source.Key != candidate.Harness+":"+candidate.SessionID {
+			continue
+		}
+		if current == nil || moreRecent(fact, current) {
+			current = fact
+			identity = candidate
+			originWindowID = fact.originWindowID
+			if originWindowID <= 0 {
+				originWindowID = targetWindowID
+			}
+		}
+	}
+	return identity, originWindowID, current != nil
+}
+
+// HasTerminalProducerRoute revalidates an exact post-terminal producer route.
+func (r *Reducer) HasTerminalProducerRoute(identity conversation.Identity, sourceWindowID, targetWindowID int, now int64) bool {
+	if r == nil || !identity.Valid() || sourceWindowID <= 0 || targetWindowID <= 0 {
+		return false
+	}
+	f := r.facts[SourceID{Kind: SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
+	if !conversationFactLive(f, now) || !f.terminated || f.pipeMode || f.sessionID != identity.SessionID {
+		return false
+	}
+	originWindowID := f.originWindowID
+	if originWindowID <= 0 {
+		originWindowID = targetWindowID
+	}
+	return originWindowID == sourceWindowID
 }
 
 // NewReducer returns an empty reducer with the given thresholds.
@@ -480,7 +626,7 @@ func (r *Reducer) ApplyNormalized(n NormalizedEvent) ReducerDecision {
 //     guard_duration grace, after which activity self-heals.
 func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	if ev.Action == "user_clear" {
-		r.acknowledgeAll()
+		r.acknowledgeAll(ev.At)
 		// Record the clear so a later MergeDisjoint acknowledges any pre-clear
 		// persisted fact imported after the fact (the facts present now were just
 		// acknowledged; ones still unseen leave no fact to collide with).
@@ -587,9 +733,10 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	f.seq = ev.Seq
 	f.at = ev.At
 	f.turnID = ev.TurnID
+	f.originWindowID = ev.OriginWindowID
 	f.action = action
 	f.icon = icon
-	f.acked = false
+	f.reactivate()
 	f.pipeMode = ev.PipeMode
 	r.stampCausalOrder(f)
 	if ev.ToolUse != "" {
@@ -749,7 +896,7 @@ func (r *Reducer) supersede(applied *sourceFact, ev ReducerEvent, action, icon s
 			continue
 		}
 		if f.terminated {
-			f.acked = true
+			f.acknowledge(ev.At)
 		}
 	}
 }
@@ -808,7 +955,7 @@ func (r *Reducer) retireOlderInteractiveActive(applied *sourceFact) {
 		if moreRecent(f, applied) {
 			continue
 		}
-		f.acked = true
+		f.acknowledge(applied.at)
 	}
 }
 
@@ -836,8 +983,17 @@ func (r *Reducer) retireOlderInteractiveActive(applied *sourceFact) {
 // synthetic stop. A same-source recovery (ProbeStopRecovery /
 // RecoverInteractiveFromProbeStop) reads it to re-consult that transcript when
 // a post-settle append may have stranded the stop.
-func (r *Reducer) SettleAuthoritativeIdle(probe SourceID, seq uint64, at int64, sessionID string) ReducerDecision {
-	decision := r.Apply(ReducerEvent{Source: probe, Action: "stop", Seq: seq, At: at, SessionID: sessionID})
+func (r *Reducer) SettleAuthoritativeIdle(
+	probe SourceID,
+	seq uint64,
+	at int64,
+	sessionID string,
+	originWindowID int,
+) ReducerDecision {
+	decision := r.Apply(ReducerEvent{
+		Source: probe, Action: "stop", Seq: seq, At: at,
+		SessionID: sessionID, OriginWindowID: originWindowID,
+	})
 	if decision != DecisionApplied {
 		return decision
 	}
@@ -873,6 +1029,41 @@ func (r *Reducer) ProbeStopRecovery(probe SourceID, now int64) (sessionID string
 		}
 	}
 	return f.sessionID, true
+}
+
+// ProbeStopRecoveryRoute resolves the exact interactive producer fact retired
+// by a probe-owned synthetic stop. The returned source pane comes from that
+// fact's runtime origin, so post-settle transcript recovery keeps the same
+// producer/source/target binding and cannot select a pipe child or another
+// harness's conversation.
+func (r *Reducer) ProbeStopRecoveryRoute(
+	probe SourceID,
+	producerHarness string,
+	targetWindowID int,
+	now int64,
+) (conversation.Identity, int, bool) {
+	sessionID, ok := r.ProbeStopRecovery(probe, now)
+	if !ok || producerHarness == "" || targetWindowID <= 0 {
+		return conversation.Identity{}, 0, false
+	}
+	identity, ok := conversation.New(producerHarness, sessionID)
+	if !ok {
+		return conversation.Identity{}, 0, false
+	}
+	f := r.facts[SourceID{Kind: SourceHarness, Key: identity.Harness + ":" + identity.SessionID}]
+	if f == nil || !f.set || !f.acked || f.terminated || f.pipeMode || f.sessionID != sessionID {
+		return conversation.Identity{}, 0, false
+	}
+	switch f.icon {
+	case "bolt", "compact":
+	default:
+		return conversation.Identity{}, 0, false
+	}
+	originWindowID := f.originWindowID
+	if originWindowID <= 0 {
+		originWindowID = targetWindowID
+	}
+	return identity, originWindowID, true
 }
 
 // RecoverInteractiveFromProbeStop takes back this probe's own synthetic terminal
@@ -918,10 +1109,10 @@ func (r *Reducer) RecoverInteractiveFromProbeStop(probe SourceID, sessionID stri
 	if reinstate == nil {
 		return false
 	}
-	reinstate.acked = false
+	reinstate.reactivate()
 	reinstate.at = at
 	r.stampCausalOrder(reinstate)
-	pf.acked = true
+	pf.acknowledge(at)
 	r.traces = append(r.traces, ReducerTrace{
 		Source:   probe,
 		Seq:      pf.seq,
@@ -987,14 +1178,14 @@ func (r *Reducer) Retract(source SourceID, seq uint64, at int64) bool {
 // wedged session's self-heal is reflected in the authoritative facts; leases
 // and attention/terminal facts are untouched, and the next real event from
 // the source clears the acknowledgement.
-func (r *Reducer) AckActiveClass() {
+func (r *Reducer) AckActiveClass(at int64) {
 	for _, f := range r.facts {
 		if !f.set || f.acked {
 			continue
 		}
 		switch f.icon {
 		case "bolt", "subagent", "compact":
-			f.acked = true
+			f.acknowledge(at)
 			// A swept 🤖 also rebalances the identity-less agent multiset: the
 			// self-heal must not leave a stale count that would inflate the
 			// next real start.
@@ -1011,7 +1202,7 @@ func (r *Reducer) AckActiveClass() {
 // until the user acts. ASL loop leases survive, mirroring AckActiveClass: an
 // expired turn fact loses its ⚡ but keeps 🔁 until a finish event or
 // reconciliation releases the run. Reports whether the fact changed.
-func (r *Reducer) ExpireFact(source SourceID, seq uint64) bool {
+func (r *Reducer) ExpireFact(source SourceID, seq uint64, at int64) bool {
 	f := r.facts[source]
 	if f == nil || !f.set || f.acked || f.seq != seq {
 		return false
@@ -1021,7 +1212,7 @@ func (r *Reducer) ExpireFact(source SourceID, seq uint64) bool {
 	default:
 		return false
 	}
-	f.acked = true
+	f.acknowledge(at)
 	// An expired 🤖 also rebalances the identity-less agent multiset so the
 	// stale count cannot inflate the next real start.
 	f.agents = 0
@@ -1032,9 +1223,9 @@ func (r *Reducer) ExpireFact(source SourceID, seq uint64) bool {
 // leaving ASL loop leases untouched. A subsequent higher-Seq event clears the
 // ack for its source. It also rebalances every identity-less agent multiset:
 // the 🤖 the user just dismissed must not reappear from a stale count.
-func (r *Reducer) acknowledgeAll() {
+func (r *Reducer) acknowledgeAll(at int64) {
 	for _, f := range r.facts {
-		f.acked = true
+		f.acknowledge(at)
 		f.agents = 0
 	}
 }

@@ -97,7 +97,7 @@ func TestMergeInstallsNewEvents(t *testing.T) {
 		"Elicitation",
 		"ElicitationResult",
 	} {
-		checkHookCommand(t, hooks, event, testBin+" hook-indicator "+event)
+		checkHookCommand(t, hooks, event, testBin+" hook-indicator "+event+" --harness=claude")
 	}
 
 	// PostCompact is installed as two matcher groups (manual/auto) dispatching
@@ -107,8 +107,8 @@ func TestMergeInstallsNewEvents(t *testing.T) {
 		t.Fatalf("PostCompact: want 2 matcher groups, got %v", hooks["PostCompact"])
 	}
 	wantByMatcher := map[string]string{
-		"manual": testBin + " hook-indicator PostCompactManual",
-		"auto":   testBin + " hook-indicator PostCompactAuto",
+		"manual": testBin + " hook-indicator PostCompactManual --harness=claude",
+		"auto":   testBin + " hook-indicator PostCompactAuto --harness=claude",
 	}
 	for _, g := range groups {
 		group := g.(map[string]any)

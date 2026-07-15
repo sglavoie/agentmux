@@ -362,7 +362,14 @@ Hook installation is harness-aware:
 - **Copilot**: writes `$COPILOT_HOME/hooks/agent-mux.json`
 - **Codex**: writes `$CODEX_HOME/hooks.json`
 
-The hook command is `amx hook-indicator <event>`.
+The hook command is
+`amx hook-indicator <event> --harness=<claude|codex|copilot>`. Generated hooks
+always include `--harness` so the daemon knows which harness produced the
+event, even when the event is routed to a tab owned by another harness. The
+flag remains optional for legacy or manual invocations; an omitted or unknown
+producer stays explicitly unidentified instead of being guessed as Claude.
+`amx config hooks-status` detects older unstamped generated hooks; run
+`amx config hooks-sync` to resynchronize them.
 
 `agent-session-loop` / `asl` uses that same hook endpoint when `amx` is on
 `PATH`. It emits `AgentSessionLoopStarted`, `AgentSessionLoopTurnStarted`,
@@ -517,13 +524,24 @@ storage work.
 The daemon is the only writer for state icons and the `🔁` loop marker. Its
 state lives in each Kitty window's `amx_state` user var, so a restart restores
 the intended state and the renderer converges the live title on its next pass.
+`amx_state` schema v3 persists each fact's producer-pane origin (`ow`) and
+acknowledgement time (`aa`), while retaining readers for v1 and v2 payloads.
+Acknowledged nonterminal replay cutoffs expire after one hour and are capped at
+the newest 64; unacknowledged facts and live ASL leases are never removed by
+that cap.
 The base title, `★`, and `🔇` remain owned by their existing writers. Hooks only
 forward raw events, window/socket context, and pipe-mode detection; they
 auto-start the daemon when needed, log a dropped delivery, and exit successfully.
 
-Because F8 and agent-session-loop hooks can fire from any pane in a split tab,
-the daemon retargets them to the tab's managed title owner rather than writing
-titles from the indicator:
+Producer identity and title ownership are separate. The producer harness and
+origin pane determine event semantics and source identity; the active managed
+pane supplies the durable profile/harness metadata and is the only pane that
+renders the shared title. Every managed pane still persists its own state, so
+focusing another managed pane reveals that pane's reducer state without
+cross-contamination.
+
+Because hooks can fire from any pane in a split tab, the daemon applies an
+active-pane route policy rather than writing titles from the indicator:
 
 - **F8 (`user_clear`)** clears only the owner's state icon. It is retargeted to
   the managed owner from whichever pane pressed the binding — owner, managed
@@ -531,27 +549,31 @@ titles from the indicator:
   title and is never dropped as an owner mismatch. `🔁`, the base title, harness
   emoji, `★`, and `🔇` are all preserved. A tab with no managed owner is a
   successful no-op that creates no durable state.
-- **Active-loop sibling routing** lets an `agent-session-loop` running in an
-  *unmanaged* split pane drive its managed owner's state machine. The daemon
-  routes the sibling's ordinary hooks (bolt, stop, permission, failure, compact,
-  question, subagent) to the owner only when loop discovery returns a live,
-  unfinished candidate whose window ID exactly matches the source pane. CWD or
-  harness similarity alone never authorizes routing, so ordinary sibling agents
-  and inactive managed panes keep their `owner_mismatch` suppression.
+- **Unmanaged producer routing** lets the active unmanaged pane borrow exactly
+  one managed target. A direct user prompt is authoritative focus evidence even
+  if the cached Kitty snapshot lags; an exact live ASL candidate also authorizes
+  its source pane. Once accepted, the producer/session/origin/target route stays
+  valid through that session's terminal event after focus moves. A new inactive
+  unmanaged session, an ambiguous target, or CWD/harness similarity alone is
+  rejected as `owner_mismatch`.
 
 For the acceptance record, required live-client transitions, and dogfood
 checklist, see [Daemon State Acceptance Evidence](docs/daemon_state_acceptance.md).
 
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema-v7 JSON snapshot for investigation.
-Version 7 retains every v6 field and adds the interactive-ownership `pm` flag to
+`amx daemon export-events` writes a schema-v8 JSON snapshot for investigation.
+Version 8 retains every v7 field and adds producer-pane origins to events
+(`events[].origin_window_id`) and source facts (`shadow.facts[].ow`), plus the
+acknowledgement timestamp `shadow.facts[].aa` for acknowledged facts. Version 7
+retains every v6 field and adds the interactive-ownership `pm` flag to
 pipe-mode source facts (`shadow.facts[].pm`) plus the reducer-wide causal order
 `o` used to compare equal-timestamp facts across sources (`shadow.facts[].o`).
 Each `shadow.facts[]` entry serializes the reducer's `SourceFactSnapshot`
 directly, so it uses that type's
 compact wire keys — `k` (source kind), `y` (source key), `i` (icon), `o`
-(source-independent causal application order), plus `pm`
+(source-independent causal application order), `ow` (producer pane), `aa`
+(acknowledgement time), plus `pm`
 — rather than descriptive spellings. The flag is presence-encoded:
 `pm: true` marks a fact owned by a non-interactive pipe-mode child (a
 `claude -p` / `codex exec` / `copilot -p` process), while an **absent** `pm`
@@ -574,7 +596,7 @@ window can be inspected without paired map lookups:
 
 ```json
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "daemon": { "pid": 1234, "uptime_seconds": 97, "ready": true, "build": { ... }, "metrics": { ... } },
   "cli_build": { ... },
   "windows": [
@@ -583,10 +605,10 @@ window can be inspected without paired map lookups:
       "stats": { ... },
       "durable": { ... },
       "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0, "queued_gen": 7, "rendered_gen": 7 },
-      "shadow": { "effective_icon": "bolt", "effective_looping": true, "facts": [ { "k": "harness", "y": "sess-pipe", "i": "bolt", "o": 10, "pm": true }, { "k": "harness", "y": "sess-1", "i": "bolt", "o": 11 } ] },
+      "shadow": { "effective_icon": "bolt", "effective_looping": true, "facts": [ { "k": "harness", "y": "sess-pipe", "i": "bolt", "o": 10, "ow": 91, "pm": true }, { "k": "harness", "y": "sess-1", "i": "bolt", "o": 11, "ow": 42 }, { "k": "harness", "y": "sess-old", "i": "bolt", "o": 9, "ak": true, "aa": 1700000000, "ow": 91 } ] },
       "watchdog": { "last_event": "...", "last_reason": "..." },
       "live": { "found": true, ... },
-      "events": [ ... ]
+      "events": [ { "at": 1700000001, "event": "Stop", "action": "stop", "result_icon_state": "stop", "source_kind": "harness", "source_key": "claude:sess-1", "route_decision": "owner", "origin_window_id": 91 } ]
     }
   ]
 }
@@ -612,6 +634,12 @@ present. Codex screen prompt detection appears as synthetic
 `command_approval`, and `permission_grant`. Codex idle `/clear` recovery can
 appear as `event: "ScreenClearProbe"` with `action: "user_clear"`,
 `source: "codex_screen"`, and `reset_flow: true`.
+
+In the example, window 91 produced the Claude event while managed window 42
+owns the exported reducer and shared tab title. `origin_window_id` and the
+producer-derived `source_key` stay with the producer; `route_decision: "owner"`
+records the retargeting. Correctly routed cross-harness events are not
+`owner_mismatch` suppressions.
 
 Each harness also has a conservative **stop fallback** for a turn that finished
 without a native terminal hook. All three route their synthetic stop through the
@@ -816,8 +844,13 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   to reconstruct it from source transcripts.
   `amx doctor --json` emits a structured report; `--strict` also evaluates the
   correctness invariants (reducer/renderer agreement, ASL visibility, subagent
-  visibility, render-generation drift, queue saturation, build identity) and
-  exits 2 on any failure.
+  visibility, producer routing, acknowledged-fact pressure, render-generation
+  drift, queue saturation, build identity) and exits 2 on any failure. The
+  stable routing/retention checks are `owner_mismatch_prompt` (failure for any
+  recent prompt mismatch), `owner_mismatch_burst` (warning for at least three
+  recent non-prompt mismatches on one window), `unknown_producer_fact`
+  (warning), and `acknowledged_fact_pressure` (warning at 49–64 evictable
+  acknowledged facts; failure above 64). Their event window is 15 minutes.
 - **Suspected intermittent state bugs**: run
   `amx daemon audit --duration 10m --json`. It samples the invariants every
   two seconds for the duration, deduplicates findings, and exits 2 if any
@@ -836,6 +869,20 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   at `~/.config/agent-mux/config.toml`.
 - **Hooks are missing**: run `amx config hooks-status`, then
   `amx config hooks-sync`.
+- **Doctor reports `owner_mismatch_prompt`, `owner_mismatch_burst`, or
+  `unknown_producer_fact`**: run `amx config hooks-status` and resynchronize
+  with `amx config hooks-sync` if generated commands lack `--harness`. Then
+  inspect both the managed target and producer panes with
+  `amx daemon export-events --window <id> --last 50`: a routed row should keep
+  the producer's `origin_window_id` and `source_key` while recording
+  `route_decision: "owner"`. A new inactive unmanaged session should remain
+  suppressed; a direct prompt from the focused pane should not.
+- **Doctor reports `acknowledged_fact_pressure`**: inspect
+  `shadow.facts[]` in `amx daemon export-events`. Schema-v3 `aa` timestamps mark
+  acknowledged replay cutoffs; nonterminal cutoffs are retained for one hour
+  and capped at 64. Live ASL leases and unacknowledged facts are intentionally
+  exempt. A failure above 64 means the running daemon has not applied current
+  compaction logic; restart from the installed current binary.
 - **The bolt icon stays after the agent is done**: run `amx config hooks-status`
   and `amx config hooks-sync` to restore terminal hooks like
   `sessionEnd`/`Stop`/`agentStop` and the child-complete `TeammateIdle` hook.

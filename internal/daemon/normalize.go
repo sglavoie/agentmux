@@ -53,6 +53,10 @@ type NormalizedEvent struct {
 	Seq    uint64 // per-source monotonic sequence parsed from source_sequence
 	TurnID string // scopes identified terminal suppression
 	At     int64  // emitted unix timestamp for staleness/recency ordering
+	// OriginWindowID is the pane that produced the event. It deliberately stays
+	// distinct from the reducer window: unmanaged panes can borrow a managed
+	// target while their facts retain the producer pane for route continuity.
+	OriginWindowID int
 
 	// Prompt marks a direct user prompt submission — authoritative recovery
 	// from terminal states. ToolUse carries the event's tool-use identity so a
@@ -118,19 +122,20 @@ func (n NormalizedEvent) Deliverable() bool {
 // It is only meaningful for deliverable events; callers gate on Deliverable().
 func (n NormalizedEvent) ReducerEvent() ReducerEvent {
 	return ReducerEvent{
-		Source:        n.Source,
-		Action:        n.Action,
-		Seq:           n.Seq,
-		TurnID:        n.TurnID,
-		At:            n.At,
-		Prompt:        n.Prompt,
-		ToolUse:       n.ToolUse,
-		PipeMode:      n.PipeMode,
-		RunID:         n.RunID,
-		Phase:         n.Phase,
-		SessionID:     n.SessionID,
-		EndsSession:   n.EndsSession,
-		SubagentDelta: n.SubagentDelta,
+		Source:         n.Source,
+		Action:         n.Action,
+		Seq:            n.Seq,
+		TurnID:         n.TurnID,
+		At:             n.At,
+		OriginWindowID: n.OriginWindowID,
+		Prompt:         n.Prompt,
+		ToolUse:        n.ToolUse,
+		PipeMode:       n.PipeMode,
+		RunID:          n.RunID,
+		Phase:          n.Phase,
+		SessionID:      n.SessionID,
+		EndsSession:    n.EndsSession,
+		SubagentDelta:  n.SubagentDelta,
 	}
 }
 
@@ -165,6 +170,7 @@ func inert(event, reason string) NormalizedEvent {
 //     phase, and the parsed identity/timing fields.
 func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int, pipeMode bool) NormalizedEvent {
 	event = strings.TrimSpace(event)
+	harnessName = harness.NormalizeKnown(harnessName)
 
 	payload, err := hookevent.DecodeHookPayload(strings.NewReader(payloadJSON))
 	if err != nil {
@@ -220,20 +226,21 @@ func NormalizedFromHook(event, harnessName, payloadJSON string, windowID int, pi
 	}
 
 	return NormalizedEvent{
-		Source:        normalizeSource(event, harnessName, action, payload, windowID),
-		Action:        action,
-		Seq:           seq,
-		TurnID:        payload.EffectiveTurnID(),
-		At:            at,
-		Prompt:        hookevent.IsPromptEvent(event),
-		ToolUse:       payload.EffectiveToolUseID(),
-		PipeMode:      pipeMode,
-		Event:         event,
-		AgentType:     payload.EffectiveAgentType(),
-		SourceEventID: payload.EffectiveSourceEventID(),
-		SessionID:     payload.EffectiveSessionID(),
-		EndsSession:   isSessionEndEvent(event),
-		SubagentDelta: subagentDelta,
+		Source:         normalizeSource(event, harnessName, action, payload, windowID),
+		Action:         action,
+		Seq:            seq,
+		TurnID:         payload.EffectiveTurnID(),
+		At:             at,
+		OriginWindowID: windowID,
+		Prompt:         hookevent.IsPromptEvent(event),
+		ToolUse:        payload.EffectiveToolUseID(),
+		PipeMode:       pipeMode,
+		Event:          event,
+		AgentType:      payload.EffectiveAgentType(),
+		SourceEventID:  payload.EffectiveSourceEventID(),
+		SessionID:      payload.EffectiveSessionID(),
+		EndsSession:    isSessionEndEvent(event),
+		SubagentDelta:  subagentDelta,
 	}
 }
 
@@ -259,16 +266,17 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 		action = aslPausedAttentionAction(payload.EffectivePauseReason())
 	}
 	return NormalizedEvent{
-		Source:        SourceID{Kind: SourceASL, Key: key},
-		Action:        action,
-		Seq:           seq,
-		At:            at,
-		PipeMode:      pipeMode,
-		RunID:         runID,
-		Phase:         aslPhaseForEvent(event),
-		TurnID:        payload.EffectiveTurnID(),
-		Event:         event,
-		SourceEventID: payload.EffectiveSourceEventID(),
+		Source:         SourceID{Kind: SourceASL, Key: key},
+		Action:         action,
+		Seq:            seq,
+		At:             at,
+		OriginWindowID: windowID,
+		PipeMode:       pipeMode,
+		RunID:          runID,
+		Phase:          aslPhaseForEvent(event),
+		TurnID:         payload.EffectiveTurnID(),
+		Event:          event,
+		SourceEventID:  payload.EffectiveSourceEventID(),
 	}
 }
 
@@ -325,6 +333,11 @@ func normalizeSource(event, harnessName, action string, payload hookevent.HookPa
 	switch {
 	case action == "user_clear":
 		return userActionSource()
+	case harness.NormalizeKnown(harnessName) == "":
+		// Missing and unsupported producers must not acquire a harness identity
+		// from payload session data or from configuration's default-to-Claude
+		// normalization. Keep them in the legacy per-window bucket.
+		return SourceID{Kind: SourceLegacy, Key: windowKey(windowID)}
 	case isSubagentEvent(event):
 		if agentID := payload.EffectiveAgentID(); agentID != "" {
 			return SourceID{Kind: SourceSubagent, Key: agentID}
@@ -349,8 +362,10 @@ func ProbeSource() SourceID { return SourceID{Kind: SourceProbe, Key: "context_l
 // harnessSourceKey builds "harness:session" when a session id is present, and
 // falls back to the origin window otherwise.
 func harnessSourceKey(harnessName string, payload hookevent.HookPayload, windowID int) string {
-	if sid := payload.EffectiveSessionID(); sid != "" {
-		return harness.Normalize(harnessName) + ":" + sid
+	if known := harness.NormalizeKnown(harnessName); known != "" {
+		if sid := payload.EffectiveSessionID(); sid != "" {
+			return known + ":" + sid
+		}
 	}
 	return windowKey(windowID)
 }

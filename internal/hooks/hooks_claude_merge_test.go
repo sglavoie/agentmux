@@ -50,7 +50,7 @@ func TestMergeFreshWrite(t *testing.T) {
 	}
 
 	// Verify UserPromptSubmit uses event-name format.
-	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit")
+	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit --harness=claude")
 }
 
 // TestMergeExcludesWorktreeHooks pins the CLAUDE.md guarantee that the
@@ -287,7 +287,7 @@ func TestMergePreservesSettingsSymlink(t *testing.T) {
 		t.Fatalf("json.Unmarshal target: %v", err)
 	}
 	hooks := s["hooks"].(map[string]any)
-	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit")
+	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit --harness=claude")
 
 	bak, err := os.ReadFile(targetPath + ".bak")
 	if err != nil {
@@ -358,7 +358,7 @@ func TestMergePreservesSettingsSymlinkChain(t *testing.T) {
 		t.Fatalf("json.Unmarshal target: %v", err)
 	}
 	hooks := s["hooks"].(map[string]any)
-	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit")
+	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit --harness=claude")
 
 	bak, err := os.ReadFile(targetPath + ".bak")
 	if err != nil {

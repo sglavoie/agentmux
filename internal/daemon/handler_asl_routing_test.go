@@ -15,16 +15,17 @@ import (
 
 // aslSiblingWindows builds a split tab whose title owner is the managed window
 // ownerID (rooted at projectDir) and whose sourceID pane is an unmanaged split
-// running an agent-session-loop. The source is the active pane so tests confirm
-// title ownership stays with the managed pane regardless of focus.
+// running an agent-session-loop. The source is deliberately inactive: these
+// tests exercise exact ASL authorization rather than ordinary active-pane
+// borrowing.
 func aslSiblingWindows(tabTitle, projectDir string, ownerID, sourceID int) []kitty.OSWindow {
 	return fakeOSWindowsWithSplitTab(tabTitle, []kitty.Window{
 		{
 			ID:       ownerID,
-			IsActive: false,
+			IsActive: true,
 			UserVars: kitty.UserVars{Profile: "api", Harness: harness.Claude, AMXDirectory: projectDir},
 		},
-		{ID: sourceID, IsActive: true},
+		{ID: sourceID, IsActive: false},
 	})
 }
 
@@ -75,6 +76,44 @@ func TestHandler_ActiveLoopSiblingRoutesActivityToOwner(t *testing.T) {
 	srcDetail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
 	if len(srcDetail.Events) != 0 {
 		t.Fatalf("source events = %+v; want none on the routed source pane", srcDetail.Events)
+	}
+}
+
+func TestHandler_ActiveLoopSiblingRetargetKeepsProducerIdentity(t *testing.T) {
+	projectDir := t.TempDir()
+	stubDaemonLoopDiscover(t, []agentloop.Candidate{aslCandidate(43, projectDir)}, nil)
+
+	h := newTestHandler()
+	h.SetKittyClient(&fakeKittyClient{windows: aslSiblingWindows("api", projectDir, 42, 43)})
+
+	resp := h.Handle(Request{
+		Type:        TypeHookEvent,
+		WindowID:    43,
+		Event:       "UserPromptSubmit",
+		Harness:     harness.Codex,
+		PayloadJSON: `{"session_id":"routed-codex"}`,
+	})
+	if !resp.OK {
+		t.Fatalf("hook response = %+v", resp)
+	}
+
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) != 1 {
+		t.Fatalf("owner events = %+v, want one routed event", detail.Events)
+	}
+	event := detail.Events[0]
+	if event.RouteDecision != routeDecisionOwner {
+		t.Fatalf("route decision = %q, want owner", event.RouteDecision)
+	}
+	if event.SourceKind != string(SourceHarness) || event.SourceKey != "codex:routed-codex" {
+		t.Fatalf("routed source = %q/%q, want harness/codex:routed-codex", event.SourceKind, event.SourceKey)
+	}
+
+	h.stateMu.Lock()
+	meta := h.windowMetadata[42]
+	h.stateMu.Unlock()
+	if meta.Durable.Harness != harness.Claude {
+		t.Fatalf("durable target harness = %q, want claude", meta.Durable.Harness)
 	}
 }
 
@@ -228,6 +267,15 @@ func TestHandler_ActiveLoopSiblingFallsBackToOwnerMismatch(t *testing.T) {
 			},
 		},
 		{
+			name: "multiple exact candidates are ambiguous",
+			build: func(projectDir string) ([]agentloop.Candidate, error) {
+				return []agentloop.Candidate{
+					aslCandidate(43, projectDir),
+					aslCandidate(43, projectDir),
+				}, nil
+			},
+		},
+		{
 			name: "exact candidate but no managed workspace target",
 			build: func(string) ([]agentloop.Candidate, error) {
 				return []agentloop.Candidate{aslCandidate(43, "/nonexistent/other-project")}, nil
@@ -282,8 +330,8 @@ func TestHandler_ActiveLoopSiblingAmbiguousWorkspaceLeavesStateUnchanged(t *test
 				ID:    100,
 				Title: "api",
 				Windows: []kitty.Window{
-					{ID: 42, IsActive: false, UserVars: kitty.UserVars{Profile: "api", Harness: harness.Claude, AMXDirectory: projectDir}},
-					{ID: 43, IsActive: true},
+					{ID: 42, IsActive: true, UserVars: kitty.UserVars{Profile: "api", Harness: harness.Claude, AMXDirectory: projectDir}},
+					{ID: 43, IsActive: false},
 				},
 			},
 			{
@@ -320,16 +368,12 @@ func TestHandler_ActiveLoopSiblingAmbiguousWorkspaceLeavesStateUnchanged(t *test
 	}
 }
 
-// TestHandler_ActiveLoopManagedNonOwnerStaysIsolated verifies that a managed
-// non-owner pane keeps ordinary owner-mismatch isolation even when an exact
-// active-loop candidate identifies its window. The sibling exception is only for
-// unmanaged splits borrowing the tab's managed state machine; a pane that
-// carries its own profile/harness must never route its hooks to the title owner.
-func TestHandler_ActiveLoopManagedNonOwnerStaysIsolated(t *testing.T) {
+// TestHandler_ActiveLoopManagedNonOwnerUsesOwnState verifies that managed panes
+// never borrow the active title owner's reducer, even when an exact loop
+// candidate happens to identify the pane.
+func TestHandler_ActiveLoopManagedNonOwnerUsesOwnState(t *testing.T) {
 	projectDir := t.TempDir()
-	// Even with an exact active-loop candidate for the source window, a managed
-	// non-owner must short-circuit before loop discovery ever runs, so a stub
-	// that fails on invocation proves the sibling exception is never entered.
+	// Managed panes short-circuit before loop discovery and use their own state.
 	var calls int
 	old := daemonLoopDiscover
 	daemonLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
@@ -363,13 +407,17 @@ func TestHandler_ActiveLoopManagedNonOwnerStaysIsolated(t *testing.T) {
 
 	h.stateMu.Lock()
 	owner := h.store[42]
+	source := h.store[43]
 	h.stateMu.Unlock()
 	if owner != nil && owner.DesiredIcon != "" {
-		t.Fatalf("owner state = %+v; want untouched (managed non-owner must not route)", owner)
+		t.Fatalf("owner state = %+v; want untouched", owner)
+	}
+	if source == nil || source.DesiredIcon != "bolt" {
+		t.Fatalf("managed source state = %+v; want its own bolt", source)
 	}
 	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
-	if len(detail.Events) != 1 || !detail.Events[0].Suppressed || detail.Events[0].SuppressionReason != suppressionReasonOwnerMismatch {
-		t.Fatalf("source events = %+v; want owner_mismatch suppression", detail.Events)
+	if len(detail.Events) != 1 || detail.Events[0].Suppressed || detail.Events[0].RouteDecision != routeDecisionSource {
+		t.Fatalf("source events = %+v; want an allowed source-owned event", detail.Events)
 	}
 }
 

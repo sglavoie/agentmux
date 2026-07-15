@@ -262,8 +262,8 @@ func TestMergeCodexReplacesPriorAmxEntries(t *testing.T) {
 			cmd, _ := entry["command"].(string)
 			if strings.Contains(cmd, "hook-indicator Stop") {
 				amxCount++
-				if cmd != testBin+" hook-indicator Stop" {
-					t.Fatalf("amx hook command = %q, want %q", cmd, testBin+" hook-indicator Stop")
+				if cmd != testBin+" hook-indicator Stop --harness=codex" {
+					t.Fatalf("amx hook command = %q, want %q", cmd, testBin+" hook-indicator Stop --harness=codex")
 				}
 			}
 		}

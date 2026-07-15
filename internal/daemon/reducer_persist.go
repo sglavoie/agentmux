@@ -1,7 +1,7 @@
 package daemon
 
 // This file is the reducer's persistence seam. The fact map itself stays
-// unexported; schema-v2 user-var serialization and startup restoration go
+// unexported; schema-v3 user-var serialization and startup restoration go
 // through the Facts/Restore snapshot pair, and the Compact retention policy
 // keeps both the live map and the persisted payload bounded to live/recent
 // facts.
@@ -14,6 +14,15 @@ import "sort"
 // while keeping the persisted amx_state payload from accreting dead sources.
 const tombstoneRetentionSeconds int64 = 3600
 
+// acknowledgedFactRetentionSeconds and maxAcknowledgedFacts bound withdrawn
+// nonterminal source cutoffs. Keeping a recent tail still absorbs ordinary
+// duplicate/reordered deliveries, while old sessions cannot grow amx_state
+// without limit.
+const (
+	acknowledgedFactRetentionSeconds int64 = 3600
+	maxAcknowledgedFacts             int   = 64
+)
+
 // subagentStopRetentionSeconds bounds how long a completed subagent's
 // icon-less tombstone is retained. Within the window, duplicate stops and a
 // start arriving after its own stop (reordered delivery) collapse onto the
@@ -22,7 +31,7 @@ const tombstoneRetentionSeconds int64 = 3600
 const subagentStopRetentionSeconds int64 = 300
 
 // SourceFactSnapshot is the exported, durable view of one source fact. Field
-// names mirror sourceFact; the compact JSON tags are the schema-v2 user-var
+// names mirror sourceFact; the compact JSON tags are the schema-v3 user-var
 // wire form (amx_state must stay small), so this one struct is both the
 // snapshot seam and the persisted shape.
 type SourceFactSnapshot struct {
@@ -39,7 +48,12 @@ type SourceFactSnapshot struct {
 	TurnID      string `json:"tn,omitempty"`
 	At          int64  `json:"t,omitempty"`
 	Acked       bool   `json:"ak,omitempty"`
-	ToolUse     string `json:"tu,omitempty"`
+	AckedAt     int64  `json:"aa,omitempty"`
+	// OriginWindowID is the pane that produced a routed fact. It differs from
+	// the reducer/window carrying this snapshot when an unmanaged sibling borrows
+	// a managed title owner.
+	OriginWindowID int    `json:"ow,omitempty"`
+	ToolUse        string `json:"tu,omitempty"`
 
 	// PipeMode records whether this harness source is a non-interactive
 	// `claude -p` child. Absent (false) restores as interactive, so a payload
@@ -86,6 +100,8 @@ func (r *Reducer) Facts() []SourceFactSnapshot {
 			TurnID:          f.turnID,
 			At:              f.at,
 			Acked:           f.acked,
+			AckedAt:         f.ackedAt,
+			OriginWindowID:  f.originWindowID,
 			ToolUse:         f.toolUse,
 			PipeMode:        f.pipeMode,
 			SessionID:       f.sessionID,
@@ -236,18 +252,29 @@ func (r *Reducer) MergeDisjoint(facts []SourceFactSnapshot) int {
 // path — and any of them is left intact unless a user_clear (which dismisses
 // everything visible) covers it.
 func (r *Reducer) reconcileMergedFact(f *sourceFact) {
+	acknowledge := false
+	ackedAt := int64(0)
 	if r.clearCutoff.notNewerThan(f) {
-		f.acked = true
+		acknowledge = true
+		ackedAt = r.clearCutoff.at
 		f.agents = 0
-		return
 	}
 	if f.terminated && r.promptCutoff.notNewerThan(f) {
-		f.acked = true
+		acknowledge = true
+		if r.promptCutoff.at > ackedAt {
+			ackedAt = r.promptCutoff.at
+		}
 	}
 	if f.source.Kind == SourceHarness && !f.pipeMode &&
 		(f.icon == "bolt" || f.icon == "compact") &&
 		r.interactiveCutoff.notNewerThan(f) {
-		f.acked = true
+		acknowledge = true
+		if r.interactiveCutoff.at > ackedAt {
+			ackedAt = r.interactiveCutoff.at
+		}
+	}
+	if acknowledge {
+		f.acknowledge(ackedAt)
 	}
 }
 
@@ -255,6 +282,19 @@ func (r *Reducer) reconcileMergedFact(f *sourceFact) {
 // Restore (full rebuild) and MergeDisjoint (additive merge) share it so the two
 // persistence entry points can never drift on which fields survive a restart.
 func sourceFactFromSnapshot(s SourceFactSnapshot) *sourceFact {
+	ackedAt := s.AckedAt
+	if s.Acked && ackedAt <= 0 {
+		ackedAt = s.At
+		if s.TerminalAt > ackedAt {
+			ackedAt = s.TerminalAt
+		}
+		if ackedAt <= 0 {
+			ackedAt = 1
+		}
+	}
+	if !s.Acked {
+		ackedAt = 0
+	}
 	return &sourceFact{
 		source:          s.Source(),
 		set:             true,
@@ -265,6 +305,8 @@ func sourceFactFromSnapshot(s SourceFactSnapshot) *sourceFact {
 		turnID:          s.TurnID,
 		at:              s.At,
 		acked:           s.Acked,
+		ackedAt:         ackedAt,
+		originWindowID:  s.OriginWindowID,
 		toolUse:         s.ToolUse,
 		pipeMode:        s.PipeMode,
 		sessionID:       s.SessionID,
@@ -290,7 +332,7 @@ func (r *Reducer) SetConfig(cfg ReducerConfig) { r.cfg = cfg }
 // terminal fact and the window's next legacy event would be distinct sources,
 // so a restored ⏹ would lose to any trailing bolt with no same-source
 // suppression, and a migrated ASL lease could never be released by a live
-// finish event. If a live fact already occupies the destination (a v2 payload
+// finish event. If a live fact already occupies the destination (a v2/v3 payload
 // can carry both), the higher-sequence fact wins. Reports whether any fact
 // moved.
 func (r *Reducer) RekeyMigratedFacts(windowID int) bool {
@@ -351,13 +393,29 @@ func (r *Reducer) MaxSeq() uint64 {
 //
 // An unacknowledged terminal FAILURE (error icon) never expires: it stays
 // sticky until the user acknowledges it or the same source recovers with a
-// real new state. Non-terminal facts are never compacted here — active-class
-// staleness is a render-time concern (visibleIcon), not a retention one, and
-// the fact's Seq still guards against duplicate/reordered replays.
+// real new state. Unacknowledged nonterminal facts are never compacted here —
+// active-class staleness is a render-time concern (visibleIcon), not a
+// retention one. Acknowledged nonterminal facts remain recent replay cutoffs
+// for one hour and are capped at the newest 64. A live ASL lease is exempt even
+// when acknowledged because it still contributes the loop marker.
 func (r *Reducer) Compact(now int64) int {
 	removed := 0
+	type acknowledgedCandidate struct {
+		id SourceID
+		f  *sourceFact
+	}
+	candidates := make([]acknowledgedCandidate, 0)
 	for id, f := range r.facts {
-		if !f.set || !f.terminated {
+		if !f.set {
+			continue
+		}
+		if id.Kind == SourceASL && f.leaseLive {
+			continue
+		}
+		if !f.terminated {
+			if f.acked {
+				candidates = append(candidates, acknowledgedCandidate{id: id, f: f})
+			}
 			continue
 		}
 		switch {
@@ -374,6 +432,35 @@ func (r *Reducer) Compact(now int64) int {
 			continue
 		}
 		delete(r.facts, id)
+		removed++
+	}
+
+	retained := candidates[:0]
+	for _, candidate := range candidates {
+		if acknowledgedFactRetentionSeconds > 0 &&
+			now-candidate.f.ackedAt >= acknowledgedFactRetentionSeconds {
+			delete(r.facts, candidate.id)
+			removed++
+			continue
+		}
+		retained = append(retained, candidate)
+	}
+	sort.Slice(retained, func(i, j int) bool {
+		left, right := retained[i], retained[j]
+		if left.f.ackedAt != right.f.ackedAt {
+			return left.f.ackedAt < right.f.ackedAt
+		}
+		if left.f.causalOrder != right.f.causalOrder {
+			return left.f.causalOrder < right.f.causalOrder
+		}
+		if left.id.Kind != right.id.Kind {
+			return left.id.Kind < right.id.Kind
+		}
+		return left.id.Key < right.id.Key
+	})
+	for len(retained) > maxAcknowledgedFacts {
+		delete(r.facts, retained[0].id)
+		retained = retained[1:]
 		removed++
 	}
 	return removed

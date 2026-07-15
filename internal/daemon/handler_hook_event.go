@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -94,22 +95,33 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		return h.handleUserClearHookEvent(ctx, eventOrAction, action, payload)
 	}
 
-	if shouldNoOpForTabTitleOwner(eventOrAction, ctx.tab, ctx.req.WindowID) {
-		// A non-owner pane running an active agent-session-loop drives the tab's
-		// managed state machine; reroute its hooks to the managed owner before
-		// falling back to generic owner-mismatch suppression.
+	if shouldResolveUnmanagedHookRoute(eventOrAction, ctx) {
+		// A previously accepted session stays bound to its original managed
+		// target through its terminal event, even if focus has since moved.
+		normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, ctx.req.PayloadJSON, ctx.req.WindowID, ctx.req.PipeMode)
+		ctx.req.normalized = &normalized
+		if target, matches := h.rememberedManagedHookTarget(ctx, normalized); matches == 1 {
+			h.routeUnmanagedHook(ctx, []loopLifecycleTarget{target}, eventOrAction, action, payload)
+			return Response{OK: true}
+		} else if matches > 1 {
+			h.suppressOwnerMismatch(ctx, eventOrAction, action)
+			return Response{OK: true}
+		}
+
+		// A direct prompt is authoritative focus evidence even when the cached
+		// Kitty snapshot lags. Other new ordinary sessions must be visibly active.
+		if hookevent.IsPromptEvent(eventOrAction) || (ctx.win != nil && ctx.win.IsActive) {
+			target := managedHookTarget(ctx.tab, ctx.owner)
+			h.routeUnmanagedHook(ctx, []loopLifecycleTarget{target}, eventOrAction, action, payload)
+			return Response{OK: true}
+		}
+
+		// An inactive unmanaged pane may still borrow a target when an exact live
+		// agent-session-loop candidate provides independent authorization.
 		if h.tryRouteActiveLoopSiblingHook(ctx, eventOrAction, action, payload) {
 			return Response{OK: true}
 		}
-		ctx.req.Event = eventOrAction
-		h.appendSuppressedHookEvent(ctx.req, action, suppressionReasonOwnerMismatch)
-		if owner, ok := kitty.FindTabTitleOwner(ctx.tab); ok {
-			slog.Debug("hook event ignored: window does not own tab title",
-				"window_id", ctx.req.WindowID,
-				"owner_window_id", owner.ID,
-				"event", eventOrAction,
-			)
-		}
+		h.suppressOwnerMismatch(ctx, eventOrAction, action)
 		return Response{OK: true}
 	}
 
@@ -137,6 +149,7 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		ctx.req.SessionTitle,
 		ctx.req.Account,
 		ctx.req.Harness,
+		ctx.req.targetHarness,
 		ctx.req.currentIconState,
 		ctx.req.PipeMode,
 		preservesIcon,
@@ -162,11 +175,11 @@ func (h *Handler) handleHookEvent(req Request) Response {
 			event:          eventOrAction,
 			payload:        payload,
 			targets: []contextLimitProbeTarget{{
-				windowID:     ctx.req.WindowID,
-				sessionTitle: ctx.req.SessionTitle,
-				profile:      ctx.req.Account,
-				harness:      ctx.req.Harness,
-				currentIcon:  ctx.req.currentIconState,
+				windowID:      ctx.req.WindowID,
+				sessionTitle:  ctx.req.SessionTitle,
+				profile:       ctx.req.Account,
+				targetHarness: ctx.req.targetHarness,
+				currentIcon:   ctx.req.currentIconState,
 			}},
 		})
 	}
@@ -258,6 +271,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		payload,
 		ctx.req.SessionTitle,
 		profile,
+		ctx.req.Harness,
 		harnessName,
 		ctx.req.currentIconState,
 		ctx.req.PipeMode,
@@ -269,7 +283,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	stateReq.RequestID = ctx.req.RequestID
 	// The wipe was retargeted, so normalize against the target window: the
 	// shadow reducer must acknowledge the owner's facts, not the source pane's.
-	normalized := NormalizedFromHook(eventOrAction, harnessName, ctx.req.PayloadJSON, targetID, ctx.req.PipeMode)
+	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, ctx.req.PayloadJSON, targetID, ctx.req.PipeMode)
 	stateReq.normalized = &normalized
 	switch {
 	case ctx.owner != nil:
@@ -282,6 +296,14 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 }
 
 func (h *Handler) resolveHookEventContext(req Request) hookEventContext {
+	producerProvided := strings.TrimSpace(req.Harness) != ""
+	req.Harness = harness.NormalizeKnown(req.Harness)
+	// With no managed snapshot target, a stamped producer is also the best
+	// durable identity for the source pane. A managed source overrides this
+	// below, and an unmanaged routed source receives its selected target's
+	// metadata when the routed request is built.
+	req.targetHarness = req.Harness
+	req.targetHarnessSet = true
 	ctx := hookEventContext{req: req}
 	if ctx.req.WindowID <= 0 {
 		return ctx
@@ -314,8 +336,27 @@ func (h *Handler) resolveHookEventContext(req Request) hookEventContext {
 	parts := palette.ParseTitleParts(tab.Title)
 	ctx.req.SessionTitle = parts.Base
 	ctx.req.currentIconState = parts.State
+	if ctx.owner != nil && ctx.owner.ID != ctx.req.WindowID &&
+		(win.UserVars.EffectiveProfile() != "" || win.UserVars.EffectiveHarness() != "") {
+		// The shared title reflects the active managed owner, not this managed
+		// pane. Seed its legacy compatibility path from its own reduced state so
+		// another pane's attention/terminal icon cannot guard-block the update.
+		_, ctx.req.currentIconState = h.lastKnownState(ctx.req.WindowID)
+	}
 	ctx.req.Account = win.UserVars.EffectiveProfile()
-	ctx.req.Harness = win.UserVars.EffectiveHarness()
+	if managedHarness := harness.NormalizeKnown(win.UserVars.EffectiveHarness()); managedHarness != "" {
+		ctx.req.targetHarness = managedHarness
+	} else if ctx.owner != nil && win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
+		// This is an unmanaged source inside a managed tab. Do not let a
+		// suppressed event stamp producer identity as durable target metadata;
+		// an accepted route will supply the selected managed target explicitly.
+		ctx.req.targetHarness = ""
+	}
+	if !producerProvided {
+		// Legacy unstamped hooks can infer a producer only from the actual source
+		// pane, and only when that pane names a supported managed harness.
+		ctx.req.Harness = ctx.req.targetHarness
+	}
 	// Record the mute state on ctx rather than mutating the daemon store here:
 	// context resolution must stay side-effect free so a no-op path (an
 	// ownerless F8) never creates durable renderer state for the source pane.
@@ -324,12 +365,14 @@ func (h *Handler) resolveHookEventContext(req Request) hookEventContext {
 	return ctx
 }
 
-func shouldNoOpForTabTitleOwner(eventOrAction string, tab *kitty.Tab, windowID int) bool {
+func shouldResolveUnmanagedHookRoute(eventOrAction string, ctx hookEventContext) bool {
 	if isAgentSessionLoopEvent(eventOrAction) {
 		return false
 	}
-	owner, ok := kitty.FindTabTitleOwner(tab)
-	return ok && owner.ID != windowID
+	if ctx.win == nil || ctx.owner == nil || ctx.owner.ID == ctx.req.WindowID {
+		return false
+	}
+	return ctx.win.UserVars.EffectiveProfile() == "" && ctx.win.UserVars.EffectiveHarness() == ""
 }
 
 func buildHookStateUpdateRequest(
@@ -339,7 +382,8 @@ func buildHookStateUpdateRequest(
 	payload hookevent.HookPayload,
 	sessionTitle string,
 	profile string,
-	harnessName string,
+	producerHarness string,
+	targetHarness string,
 	currentIconState string,
 	pipeMode bool,
 	preservesIcon bool,
@@ -360,7 +404,9 @@ func buildHookStateUpdateRequest(
 		KittyListenOn:    strings.TrimSpace(kittyListenOn),
 		SessionTitle:     sessionTitle,
 		Account:          profile,
-		Harness:          harnessName,
+		Harness:          harness.NormalizeKnown(producerHarness),
+		targetHarness:    harness.NormalizeKnown(targetHarness),
+		targetHarnessSet: true,
 		currentIconState: currentIconState,
 		NotificationType: payload.EffectiveNotificationType(),
 		StopReason:       payload.EffectiveStopReason(),

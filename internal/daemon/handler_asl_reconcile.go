@@ -152,14 +152,15 @@ func (h *Handler) reconcileASLCandidates(now time.Time, windows []kitty.OSWindow
 			delete(h.aslMissStreak, ref)
 			st.ShadowSeq++
 			st.Reducer.Apply(ReducerEvent{
-				Source: SourceID{Kind: SourceASL, Key: fact.Key},
-				Seq:    st.ShadowSeq,
-				At:     now.Unix(),
-				RunID:  fact.RunID,
-				Phase:  ASLPhaseFinished,
+				Source:         SourceID{Kind: SourceASL, Key: fact.Key},
+				Seq:            st.ShadowSeq,
+				At:             now.Unix(),
+				OriginWindowID: fact.OriginWindowID,
+				RunID:          fact.RunID,
+				Phase:          ASLPhaseFinished,
 			})
 			changedWindows[windowID] = true
-			h.appendWatchdogEventLocked(windowID, now, eventASLReconciled, "lease_released",
+			h.appendWatchdogEventLocked(windowID, fact.OriginWindowID, now, eventASLReconciled, "lease_released",
 				string(SourceASL)+":"+fact.Key,
 				"run "+fact.RunID+" missing from consecutive discoveries; lease released")
 			slog.Debug("asl reconcile released missing run lease",
@@ -222,12 +223,17 @@ func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 		seq = st.ShadowSeq
 	}
 	phase := aslPhaseForDiscovered(seed.candidate.Phase)
+	originWindowID := seed.candidate.WindowID
+	if originWindowID <= 0 {
+		originWindowID = seed.windowID
+	}
 	decision := st.Reducer.Apply(ReducerEvent{
-		Source: SourceID{Kind: SourceASL, Key: seed.key},
-		Seq:    seq,
-		At:     now.Unix(),
-		RunID:  seed.candidate.RunID,
-		Phase:  phase,
+		Source:         SourceID{Kind: SourceASL, Key: seed.key},
+		Seq:            seq,
+		At:             now.Unix(),
+		OriginWindowID: originWindowID,
+		RunID:          seed.candidate.RunID,
+		Phase:          phase,
 	})
 	if decision != DecisionApplied {
 		return false
@@ -241,7 +247,7 @@ func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 		// discarded rather than allowed to retire the freshly seeded lease.
 		st.ShadowSeq++
 	}
-	h.appendWatchdogEventLocked(seed.windowID, now, eventASLReconciled, "lease_seeded",
+	h.appendWatchdogEventLocked(seed.windowID, originWindowID, now, eventASLReconciled, "lease_seeded",
 		string(SourceASL)+":"+seed.key,
 		"discovery seeded run "+seed.candidate.RunID+" (phase "+phase+")")
 	slog.Debug("asl reconcile seeded run lease",

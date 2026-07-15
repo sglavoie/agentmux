@@ -52,7 +52,7 @@ func TestBuildHooksQuoteAmxBinWithSpaces(t *testing.T) {
 	amxBin := "/Users/foo bar/bin/amx"
 
 	claudeCommand := buildClaudeHooks(nil, amxBin)["Stop"][0].Hooks[0].Command
-	if want := "'/Users/foo bar/bin/amx' hook-indicator Stop"; claudeCommand != want {
+	if want := "'/Users/foo bar/bin/amx' hook-indicator Stop --harness=claude"; claudeCommand != want {
 		t.Fatalf("buildClaudeHooks command = %q, want %q", claudeCommand, want)
 	}
 	if !isAmxHookEntry(hookEntry{Type: "command", Command: claudeCommand}) {
@@ -60,7 +60,7 @@ func TestBuildHooksQuoteAmxBinWithSpaces(t *testing.T) {
 	}
 
 	codexCommand := buildCodexHooks(nil, amxBin)["Stop"][0].Hooks[0].Command
-	if want := "'/Users/foo bar/bin/amx' hook-indicator Stop"; codexCommand != want {
+	if want := "'/Users/foo bar/bin/amx' hook-indicator Stop --harness=codex"; codexCommand != want {
 		t.Fatalf("buildCodexHooks command = %q, want %q", codexCommand, want)
 	}
 	if !isAmxHookEntry(hookEntry{Type: "command", Command: codexCommand}) {
@@ -68,10 +68,10 @@ func TestBuildHooksQuoteAmxBinWithSpaces(t *testing.T) {
 	}
 
 	copilotDef := buildCopilotHooks(nil, amxBin).Hooks["agentStop"][0]
-	if want := "'/Users/foo bar/bin/amx' hook-indicator agentStop"; copilotDef.Bash != want {
+	if want := "'/Users/foo bar/bin/amx' hook-indicator agentStop --harness=copilot"; copilotDef.Bash != want {
 		t.Fatalf("buildCopilotHooks bash command = %q, want %q", copilotDef.Bash, want)
 	}
-	if want := "'/Users/foo bar/bin/amx' hook-indicator agentStop"; copilotDef.Powershell != want {
+	if want := "'/Users/foo bar/bin/amx' hook-indicator agentStop --harness=copilot"; copilotDef.Powershell != want {
 		t.Fatalf("buildCopilotHooks powershell command = %q, want %q", copilotDef.Powershell, want)
 	}
 	if !isAmxCopilotHookDef(copilotDef) {
@@ -81,7 +81,7 @@ func TestBuildHooksQuoteAmxBinWithSpaces(t *testing.T) {
 
 func TestBuildCopilotHooksEscapesPowershellSingleQuote(t *testing.T) {
 	def := buildCopilotHooks(nil, `C:\Users\O'Brien\bin\amx.exe`).Hooks["agentStop"][0]
-	if want := `'C:\Users\O''Brien\bin\amx.exe' hook-indicator agentStop`; def.Powershell != want {
+	if want := `'C:\Users\O''Brien\bin\amx.exe' hook-indicator agentStop --harness=copilot`; def.Powershell != want {
 		t.Fatalf("buildCopilotHooks powershell command = %q, want %q", def.Powershell, want)
 	}
 }

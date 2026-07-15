@@ -146,7 +146,7 @@ func buildCodexHooks(disabledEvents []string, amxBin string) map[string][]hookGr
 		hooks[event] = []hookGroup{
 			{Hooks: []hookEntry{{
 				Type:    "command",
-				Command: amxCommand + " hook-indicator " + event,
+				Command: amxCommand + " hook-indicator " + event + " --harness=" + Codex,
 				Timeout: 5,
 			}}},
 		}

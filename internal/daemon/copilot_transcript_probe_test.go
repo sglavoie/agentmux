@@ -564,7 +564,7 @@ func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecove
 	// the sole visible contribution again, so the tab reverts to 🛑.
 	h.stateMu.Lock()
 	st := h.store[42]
-	st.Reducer.facts[SourceID{Kind: SourceHarness, Key: "copilot:sess-pipe"}].acked = true
+	st.Reducer.facts[SourceID{Kind: SourceHarness, Key: "copilot:sess-pipe"}].acknowledge(base.Unix())
 	st.ShadowSeq++
 	st.Reducer.Compact(base.Unix())
 	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(base.Unix()))

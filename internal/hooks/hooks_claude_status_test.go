@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // Status tests
@@ -103,6 +104,52 @@ func TestStatusDrifted(t *testing.T) {
 	}
 	if results[0].Status != SyncDrifted {
 		t.Errorf("expected drifted, got %q", results[0].Status)
+	}
+}
+
+func TestStatusReportsUnstampedGeneratedHooksAsDriftedAndResyncs(t *testing.T) {
+	for _, harnessName := range harness.Names() {
+		t.Run(harnessName, func(t *testing.T) {
+			homeDir := t.TempDir()
+			account := config.Account{Name: "work", HomeDir: homeDir, Harness: harnessName}
+			cfg := makeConfig([]config.Account{account}, nil)
+
+			if _, err := MergeAll(cfg, "", testBin); err != nil {
+				t.Fatalf("seed stamped hooks: %v", err)
+			}
+			path := harness.Lookup(harnessName).HookContract().InstallPath(homeDir)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read generated hooks: %v", err)
+			}
+			unstamped := strings.ReplaceAll(string(data), " --harness="+harnessName, "")
+			if unstamped == string(data) {
+				t.Fatalf("generated hooks contain no %s producer stamps", harnessName)
+			}
+			if err := os.WriteFile(path, []byte(unstamped), 0o644); err != nil {
+				t.Fatalf("write unstamped hooks: %v", err)
+			}
+
+			statuses, err := StatusAll(cfg, testBin)
+			if err != nil {
+				t.Fatalf("StatusAll: %v", err)
+			}
+			if len(statuses) != 1 || statuses[0].Status != SyncDrifted {
+				t.Fatalf("unstamped status = %+v, want drifted", statuses)
+			}
+
+			results, err := MergeAll(cfg, "", testBin)
+			if err != nil {
+				t.Fatalf("resync unstamped hooks: %v", err)
+			}
+			if len(results) != 1 || results[0].Status != MergeUpdated {
+				t.Fatalf("resync result = %+v, want updated", results)
+			}
+			statuses, err = StatusAll(cfg, testBin)
+			if err != nil || len(statuses) != 1 || statuses[0].Status != SyncInSync {
+				t.Fatalf("resynced status = %+v, err = %v; want in_sync", statuses, err)
+			}
+		})
 	}
 }
 

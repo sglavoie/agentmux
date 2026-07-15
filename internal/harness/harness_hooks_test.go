@@ -35,8 +35,8 @@ func TestClaudeHooksPostCompactMatcherSplit(t *testing.T) {
 		t.Fatalf("PostCompact groups = %d, want 2 matcher groups", len(groups))
 	}
 	want := map[string]string{
-		"manual": "amx hook-indicator PostCompactManual",
-		"auto":   "amx hook-indicator PostCompactAuto",
+		"manual": "amx hook-indicator PostCompactManual --harness=claude",
+		"auto":   "amx hook-indicator PostCompactAuto --harness=claude",
 	}
 	for _, g := range groups {
 		wantCmd, ok := want[g.Matcher]
@@ -96,7 +96,7 @@ func TestClaudeMergeDataPostCompactIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MergeData (first) err: %v", err)
 	}
-	for _, cmd := range []string{"amx hook-indicator PostCompactManual", "amx hook-indicator PostCompactAuto"} {
+	for _, cmd := range []string{"amx hook-indicator PostCompactManual --harness=claude", "amx hook-indicator PostCompactAuto --harness=claude"} {
 		if !strings.Contains(string(first), cmd) {
 			t.Fatalf("merged settings missing %q:\n%s", cmd, first)
 		}

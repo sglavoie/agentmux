@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func TestUserVarV2RoundTripPersistsFactsAndEffective(t *testing.T) {
+func TestUserVarV3RoundTripPersistsFactsAndEffective(t *testing.T) {
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, TurnID: "t1", At: 1710000100})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, TurnID: "t1", At: 1710000100, OriginWindowID: 91})
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "stop_failure", Seq: 2, TurnID: "t1", At: 1710000200})
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 5, At: 1710000300})
 
@@ -25,7 +25,7 @@ func TestUserVarV2RoundTripPersistsFactsAndEffective(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalUserVar() error: %v", err)
 	}
-	if !strings.Contains(encoded, `"v":2`) {
+	if !strings.Contains(encoded, `"v":3`) {
 		t.Fatalf("MarshalUserVar() missing schema discriminator: %s", encoded)
 	}
 
@@ -50,7 +50,7 @@ func TestUserVarV2RoundTripPersistsFactsAndEffective(t *testing.T) {
 	}
 }
 
-func TestUserVarV2RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
+func TestUserVarV3RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
 	r := NewReducer(ReducerConfig{})
 	r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 1, At: 100})
@@ -66,7 +66,7 @@ func TestUserVarV2RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 	}
 
 	facts := got.Reducer.Facts()
-	if len(facts) != 1 || !facts[0].Acked {
+	if len(facts) != 1 || !facts[0].Acked || facts[0].AckedAt != 101 {
 		t.Fatalf("restored facts = %+v, want one acknowledged fact", facts)
 	}
 	if eff := got.Reducer.Reduce(102); eff.Icon != "" {
@@ -79,7 +79,61 @@ func TestUserVarV2RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 	}
 }
 
-func TestUserVarV2RestartEquivalenceAcrossSources(t *testing.T) {
+func TestUserVarV3RestoresV2WithDeterministicAcknowledgementSeed(t *testing.T) {
+	raw := `{"v":2,"f":[{"k":"harness","y":"claude:active","a":"active","i":"bolt","q":5,"t":123,"ak":true},{"k":"harness","y":"claude:terminal","a":"stop","i":"stop","q":6,"t":100,"ak":true,"tm":true,"ta":200},{"k":"probe","y":"zero","a":"active","i":"bolt","q":7,"ak":true}],"sq":7}`
+	var st WindowState
+	if err := st.UnmarshalUserVar(raw); err != nil {
+		t.Fatalf("UnmarshalUserVar(v2) error: %v", err)
+	}
+	if st.Reducer == nil {
+		t.Fatal("v2 restore produced no reducer")
+	}
+	facts := st.Reducer.Facts()
+	if got := facts[0].AckedAt; got != 123 {
+		t.Fatalf("active legacy AckedAt = %d; want At seed 123", got)
+	}
+	if got := facts[1].AckedAt; got != 200 {
+		t.Fatalf("terminal legacy AckedAt = %d; want TerminalAt seed 200", got)
+	}
+	if got := facts[2].AckedAt; got != 1 {
+		t.Fatalf("zero-time legacy AckedAt = %d; want deterministic floor 1", got)
+	}
+	for _, fact := range facts {
+		if fact.OriginWindowID != 0 {
+			t.Fatalf("v2 fact unexpectedly restored origin: %+v", fact)
+		}
+	}
+}
+
+func TestUserVarV3RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
+	source := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+	r := NewReducer(ReducerConfig{})
+	r.Apply(ReducerEvent{
+		Source: source, Action: "active", SessionID: "s1", Seq: 1, At: 100,
+		OriginWindowID: 91,
+	})
+	encoded, err := (WindowState{Reducer: r, ShadowSeq: 1}).MarshalUserVar()
+	if err != nil {
+		t.Fatalf("MarshalUserVar() error: %v", err)
+	}
+	var restored WindowState
+	if err := restored.UnmarshalUserVar(encoded); err != nil {
+		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	}
+	if !restored.Reducer.HasLiveOriginRoute(source, "s1", 91) {
+		t.Fatalf("restored reducer lost routed origin: %+v", restored.Reducer.Facts())
+	}
+	restored.Reducer.Apply(ReducerEvent{
+		Source: source, Action: "stop", SessionID: "s1", Seq: 2, At: 101,
+		OriginWindowID: 91,
+	})
+	facts := restored.Reducer.Facts()
+	if len(facts) != 1 || !facts[0].Terminated || facts[0].OriginWindowID != 91 {
+		t.Fatalf("terminal continuation after restart = %+v", facts)
+	}
+}
+
+func TestUserVarV3RestartEquivalenceAcrossSources(t *testing.T) {
 	events := []ReducerEvent{
 		{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, TurnID: "t1", At: 100},
 		{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 110},
@@ -112,7 +166,7 @@ func TestUserVarV2RestartEquivalenceAcrossSources(t *testing.T) {
 	}
 }
 
-func TestUserVarV2MigratesV1IntoSyntheticLegacySource(t *testing.T) {
+func TestUserVarV3MigratesV1IntoSyntheticLegacySource(t *testing.T) {
 	// A v1 payload has no "v" discriminator; its scalar action and loop marker
 	// migrate into synthetic legacy/ASL facts.
 	raw := `{"a":"permission","l":true,"acct":"work","h":"codex","t":1710000001}`
@@ -153,7 +207,7 @@ func TestUserVarV2MigratesV1IntoSyntheticLegacySource(t *testing.T) {
 	}
 }
 
-func TestUserVarV2MigratesV1TerminalAction(t *testing.T) {
+func TestUserVarV3MigratesV1TerminalAction(t *testing.T) {
 	var st WindowState
 	if err := st.UnmarshalUserVar(`{"a":"stop_failure","t":5}`); err != nil {
 		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
@@ -167,7 +221,7 @@ func TestUserVarV2MigratesV1TerminalAction(t *testing.T) {
 	}
 }
 
-func TestUserVarV2MigratesEmptyV1WithoutFacts(t *testing.T) {
+func TestUserVarV3MigratesEmptyV1WithoutFacts(t *testing.T) {
 	var st WindowState
 	if err := st.UnmarshalUserVar(`{"acct":"work"}`); err != nil {
 		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
@@ -180,7 +234,7 @@ func TestUserVarV2MigratesEmptyV1WithoutFacts(t *testing.T) {
 	}
 }
 
-func TestUserVarV2ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
+func TestUserVarV3ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
 	// A payload whose ShadowSeq lags its fact sequences (e.g. written by a
 	// crashed daemon mid-update) must not hand out receipt sequences that the
 	// reducer would discard as reordered.

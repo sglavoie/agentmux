@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -170,6 +171,13 @@ func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestio
 	ev := resp.Events[0]
 	if ev.PromptKind != string(CodexPromptRequestUserInput) || ev.ResultIconState != "question" {
 		t.Fatalf("event = %+v, want request_user_input/question", ev)
+	}
+	h.stateMu.Lock()
+	meta := h.windowMetadata[42]
+	lastHarness := h.store[42].LastHarness
+	h.stateMu.Unlock()
+	if meta.Durable.Harness != harness.Codex || lastHarness != harness.Codex {
+		t.Fatalf("ownerless Codex identity = durable %q LastHarness %q, want explicit codex", meta.Durable.Harness, lastHarness)
 	}
 }
 
@@ -605,10 +613,10 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		}
 
 		parts := palette.ParseTitleParts(palette.BuildTitle("W:api", "stop", false))
-		h.applyCodexClearObservation(time.Now(), 42, parts, kitty.UserVars{
+		h.applyCodexClearObservation(time.Now(), directCodexProbeBinding(42, capturedSeq, 0), parts, kitty.UserVars{
 			Profile: "work",
 			Harness: "codex",
-		}, capturedSeq, 0)
+		})
 
 		h.stateMu.Lock()
 		pendingAfter, stillPending := h.pendingResetStops[42]
@@ -686,10 +694,10 @@ func TestCodexClearDeferredStopClaimRace(t *testing.T) {
 	// claim remains current and can win the final commit boundary.
 	capturedSeq := h.captureWindowReceipt(42)
 	parts := palette.ParseTitleParts(palette.BuildTitle("W:api", "stop", false))
-	h.applyCodexClearObservation(time.Unix(1_700_000_000, 0), 42, parts, kitty.UserVars{
+	h.applyCodexClearObservation(time.Unix(1_700_000_000, 0), directCodexProbeBinding(42, capturedSeq, 0), parts, kitty.UserVars{
 		Profile: "work",
 		Harness: "codex",
-	}, capturedSeq, 0)
+	})
 
 	h.stateMu.Lock()
 	_, stillPending := h.pendingResetStops[42]
@@ -941,7 +949,7 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 				afterInjection = snapshot()
 			}
 
-			h.probeCodexClearWindow(time.Now(), 42, parts, userVars, h.captureWindowReceipt(42), 0)
+			h.probeCodexClearWindow(time.Now(), directCodexProbeBinding(42, h.captureWindowReceipt(42), 0), parts, userVars)
 			defer h.cancelPendingNotification(42)
 
 			if !injected || reads != 2 {
@@ -1647,6 +1655,19 @@ func codexSeedActiveBolt(t *testing.T, h *Handler, windowID int, session string,
 	st.Dirty = false
 	st.DirtySince = time.Time{}
 	return st.ShadowSeq
+}
+
+func directCodexProbeBinding(windowID int, receipt, snapshotGen uint64) screenProbeBinding {
+	binding := screenProbeBinding{
+		SourceWindowID:      windowID,
+		TargetWindowID:      windowID,
+		SourceReceipt:       receipt,
+		TargetReceipt:       receipt,
+		SnapshotGen:         snapshotGen,
+		legacyDirectManaged: true,
+	}
+	binding.Producer.Harness = harness.Codex
+	return binding
 }
 
 // lastEventNamed returns the most recent event with the given name.
