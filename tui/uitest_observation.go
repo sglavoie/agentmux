@@ -40,6 +40,8 @@ func uitestCursor(m Model) int {
 		return m.pickerCursor
 	case ModeConfigPicker:
 		return m.configPickerCursor
+	case ModeCommandPalette:
+		return m.commandCursor
 	default:
 		return m.cursor
 	}
@@ -80,6 +82,8 @@ func uitestModeName(mode Mode) string {
 		return "plan_search"
 	case ModePlanView:
 		return "plan_view"
+	case ModeCommandPalette:
+		return "command_palette"
 	default:
 		return "unknown"
 	}

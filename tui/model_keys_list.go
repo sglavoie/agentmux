@@ -27,6 +27,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handlePlanSearchKey(msg)
 	case ModePlanView:
 		return m.handlePlanViewKey(msg)
+	case ModeCommandPalette:
+		return m.handleCommandPaletteKey(msg)
 	case ModeSessionView:
 		return m.handleSessionViewKey(msg)
 	case ModeMessageDetail:

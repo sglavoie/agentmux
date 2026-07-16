@@ -144,6 +144,9 @@ an unmanaged source tab leaves the current/default dashboard selection alone.
 
 Key flows:
 
+- `:`: open the command palette from the main dashboard list; type to search,
+  use `↑`/`↓` or `Ctrl+n`/`Ctrl+p` to move, `Backspace` to edit, `Enter` to run,
+  `Esc` to close, and `Ctrl+c` to quit
 - `l`: open the launcher
 - `r`: restart the selected running session, after confirmation
 - `c`: restart the selected running session under another profile
@@ -160,6 +163,14 @@ Key flows:
   lines, supports less-style `Ctrl+d/u/f/b` paging, and `y` copies the selected
   raw line
 - `?`: show the full keymap
+
+The command palette searches command titles, descriptions, aliases, and shown
+shortcuts with case-insensitive, whitespace-separated AND terms. Disabled
+commands remain visible with an inline reason and can be selected, but `Enter`
+does nothing on them. Its shortcut labels are references: printable keys edit
+the query while the palette is open. All existing dashboard shortcuts remain
+available directly from the main list, and `:` does not open the palette from
+other modes.
 
 Rows marked with `🔁` have at least one active `agent-session-loop` run whose
 workspace matches the project row. Loop matching canonicalizes the workspace
@@ -915,8 +926,8 @@ gate. The end-to-end coverage map is documented in
 
 A hidden developer command, `amx tui-test`, drives the dashboard model
 in-process against built-in fixtures to catch overlay/modal sizing regressions
-(the actions overlay and profile picker width bugs, for example). It never
-launches Kitty and never touches your real config or data. See
+(including wide, narrow, filtered, scrolled, and executed command-palette
+flows). It never launches Kitty and never touches your real config or data. See
 [`docs/tui-testing/README.md`](docs/tui-testing/README.md) for the command
 surface, scenario schema, and committed example scenarios, or run the examples
 directly:

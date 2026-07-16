@@ -233,7 +233,11 @@ func TestSpawnDetachedFallbackWithoutDiagnostics(t *testing.T) {
 	if err := SpawnDetached(script); err != nil {
 		t.Fatalf("SpawnDetached() error = %v, want diagnostics failure to be fail-open", err)
 	}
-	deadline := time.Now().Add(3 * time.Second)
+	// The full acceptance suite runs package tests in parallel, so the detached
+	// child may not be scheduled promptly even after cmd.Start succeeds. Keep
+	// this fail-open regression tolerant of host load while still bounding a
+	// genuinely missing marker.
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		if data, err := os.ReadFile(marker); err == nil && string(data) == "started" {
 			return

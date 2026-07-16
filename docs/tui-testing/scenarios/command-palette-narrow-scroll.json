@@ -1,0 +1,26 @@
+{
+  "name": "command-palette-narrow-scroll",
+  "fixture": "basic",
+  "size": { "width": 40, "height": 18 },
+  "actions": [
+    { "type": "key", "key": ":" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" },
+    { "type": "key", "key": "down" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "command_palette" },
+    { "type": "cursor_equals", "cursor": 10 },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "Lock Session" },
+    { "type": "contains_text", "text": "▲" },
+    { "type": "contains_text", "text": "▼" }
+  ]
+}

@@ -31,6 +31,8 @@ func renderFooter(m Model) string {
 		lines = nonEmptyFooterLines(footerLine(m.width, "  ", "j/k: up/down", "g/G: top/bottom", "esc/?/q: close help"))
 	case ModeActions:
 		lines = nonEmptyFooterLines(footerLine(m.width, "  ", "<key>: run action", "esc/q: back"))
+	case ModeCommandPalette:
+		lines = nonEmptyFooterLines(footerLine(m.width, " · ", "↑/↓ or ctrl+n/p move", "enter run", "esc close", "ctrl+c quit"))
 	case ModeDetail:
 		// Inner box footer already carries the scroll position and detail
 		// keymap; the outer hint area stays blank so the dimmed dashboard
@@ -346,6 +348,7 @@ var listFooterPalette = []footerEntry{
 		return ok
 	}},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
+	{":", "command palette", footerSectionApp, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
 	{"P", "plans", footerSectionApp, func(Model) bool { return true }},
 	{"R", "resort", footerSectionApp, func(Model) bool { return true }},

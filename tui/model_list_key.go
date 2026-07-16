@@ -181,6 +181,9 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keySlash:
 		m.enterFilter("")
 
+	case keyColon:
+		m.openCommandPalette()
+
 	case keyEnter:
 		if m.focusedChipIdx >= 0 {
 			m.applyFilterChange(m.activeFilter.RemoveComponent(m.focusedChipIdx))

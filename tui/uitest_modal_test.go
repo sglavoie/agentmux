@@ -182,7 +182,7 @@ func TestUITestModalUnsizedModelIsSkipped(t *testing.T) {
 func TestUITestModalBoxRendererCoversOverlayModes(t *testing.T) {
 	modal := []Mode{
 		ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp,
-		ModeDetail, ModeDeleteChoice, ModeChipPicker,
+		ModeDetail, ModeDeleteChoice, ModeChipPicker, ModeCommandPalette,
 	}
 	for _, mode := range modal {
 		if modalBoxRenderer(mode) == nil {

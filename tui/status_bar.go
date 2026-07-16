@@ -158,6 +158,9 @@ func fallbackStatusText(m Model) string {
 		return "Session details"
 	case ModeActions:
 		return "Session actions"
+	case ModeCommandPalette:
+		n := len(m.commandResults)
+		return fmt.Sprintf("Command Palette: %d result%s", n, plural(n))
 	case ModeSessionSearch:
 		if m.sessionLoading {
 			return "Past Sessions: loading"

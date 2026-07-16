@@ -50,6 +50,8 @@ func modalBoxRenderer(mode Mode) func(Model) string {
 		return renderDeleteChoiceBox
 	case ModeChipPicker:
 		return renderChipPickerBox
+	case ModeCommandPalette:
+		return renderCommandPaletteBox
 	default:
 		return nil
 	}
@@ -93,7 +95,7 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 	mode := uitestModeName(m.mode)
 	var issues []UITestLayoutIssue
 
-	if naturalW > realW {
+	if naturalW > realW && !modalUsesResponsiveWidth(m.mode) {
 		issues = append(issues, UITestLayoutIssue{
 			Type:   UITestIssueModalWidthOverflow,
 			Actual: naturalW,
@@ -139,6 +141,14 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 	}
 
 	return issues
+}
+
+// modalUsesResponsiveWidth reports modals whose narrow rendering is a complete
+// alternate layout rather than a clipped version of their natural-width
+// content. The command palette deliberately wraps descriptions and disabled
+// reasons to the live content width, so its m.width-4 clamp is not overflow.
+func modalUsesResponsiveWidth(mode Mode) bool {
+	return mode == ModeCommandPalette
 }
 
 // popupLineCount returns the number of rows a popup box occupies, matching the

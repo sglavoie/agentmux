@@ -44,6 +44,10 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 	want := map[string]bool{
 		"actions-popup-fit.json":                false,
 		"baseline-layout.json":                  false,
+		"command-palette-execute-help.json":     false,
+		"command-palette-filter.json":           false,
+		"command-palette-narrow-scroll.json":    false,
+		"command-palette-wide.json":             false,
 		"config-picker-fit.json":                false,
 		"footer-gloss-narrow-fit.json":          false,
 		"help-modal-narrow-fit.json":            false,

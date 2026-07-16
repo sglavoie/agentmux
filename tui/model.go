@@ -47,6 +47,15 @@ type Model struct {
 	// mode
 	mode Mode
 
+	// command palette state (ModeCommandPalette). commandContext snapshots the
+	// dashboard row selected at entry so refreshes cannot retarget an action.
+	// commandResults preserves catalog/group order after query filtering.
+	commandQuery   string
+	commandResults []command
+	commandCursor  int
+	commandOffset  int
+	commandContext commandContext
+
 	// running-session filter (profile + state DSL)
 	filterText     string          // live input while in ModeSearch
 	activeFilter   Filter          // committed filter applied to filtered

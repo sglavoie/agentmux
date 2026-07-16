@@ -1,0 +1,17 @@
+{
+  "name": "command-palette-wide",
+  "fixture": "basic",
+  "size": { "width": 120, "height": 40 },
+  "actions": [{ "type": "key", "key": ":" }],
+  "assertions": [
+    { "type": "mode_equals", "mode": "command_palette" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "Command Palette" },
+    { "type": "contains_text", "text": "Session: dotfiles · personal" },
+    { "type": "contains_text", "text": "Focus Selected Session" },
+    { "type": "contains_text", "text": "unavailable: session" },
+    { "type": "contains_text", "text": "is not active" },
+    { "type": "contains_text", "text": "Command Palette: 24 results" }
+  ]
+}

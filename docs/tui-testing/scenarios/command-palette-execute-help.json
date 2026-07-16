@@ -1,0 +1,17 @@
+{
+  "name": "command-palette-execute-help",
+  "fixture": "basic",
+  "size": { "width": 100, "height": 36 },
+  "actions": [
+    { "type": "key", "key": ":" },
+    { "type": "text", "text": "keyboard" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "help" },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": "Keyboard Shortcuts" },
+    { "type": "kitty_calls", "op": "LaunchTab", "count": 0 },
+    { "type": "kitty_calls", "op": "CloseTab", "count": 0 }
+  ]
+}

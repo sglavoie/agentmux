@@ -73,6 +73,7 @@ var helpSections = []struct {
 		"  1 – 9     remove filter chip at that position",
 	}},
 	{"App", []string{
+		"  :         open command palette",
 		"  ?         show / hide this help",
 		"  d         show session detail (hook event log)",
 		"  S         search past session transcripts",

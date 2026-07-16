@@ -1,0 +1,18 @@
+{
+  "name": "command-palette-filter",
+  "fixture": "basic",
+  "size": { "width": 80, "height": 28 },
+  "actions": [
+    { "type": "key", "key": ":" },
+    { "type": "text", "text": "plans" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "command_palette" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "no_layout_issues" },
+    { "type": "contains_text", "text": ":plans▌" },
+    { "type": "contains_text", "text": "Search Plans" },
+    { "type": "contains_text", "text": "Command Palette: 1 result" },
+    { "type": "excludes_text", "text": "Focus Selected Session" }
+  ]
+}

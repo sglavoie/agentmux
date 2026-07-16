@@ -9,6 +9,7 @@ const (
 	keyG                = "g"
 	keyGG               = "G"
 	keySlash            = "/"
+	keyColon            = ":" // opens ModeCommandPalette from ModeList only
 	keyF                = "f"
 	keyWorktreeFork     = "w" // ModeSessionSearch: confirm an isolated Git worktree fork
 	keyA                = "a"
@@ -64,6 +65,8 @@ const (
 	keyCtrlU  = "ctrl+u" // move up by half a page in scrollable views
 	keyCtrlF  = "ctrl+f" // move down by one page in scrollable views
 	keyCtrlB  = "ctrl+b" // move up by one page in scrollable views
+	keyCtrlN  = "ctrl+n" // move down in searchable command menus
+	keyCtrlP  = "ctrl+p" // move up in searchable command menus
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
 

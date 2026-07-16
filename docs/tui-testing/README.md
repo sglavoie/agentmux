@@ -174,7 +174,8 @@ silently selecting nothing.
 
 **Mode names**: `list`, `search`, `confirm`, `picker`, `config_picker`,
 `help`, `detail`, `actions`, `session_search`, `session_view`,
-`delete_choice`, `chip_picker`, `message_detail`, `plan_search`, and `plan_view`.
+`delete_choice`, `chip_picker`, `message_detail`, `plan_search`, `plan_view`,
+and `command_palette`.
 
 **Kitty `op` names** recorded by the no-op client: `LaunchTab`,
 `LaunchOverlay`, `CloseTab`, `MoveTab`, `SetTabColor`, `SetTabTitle`,
@@ -246,6 +247,10 @@ file. The exact inventory is:
 | --- | --- | --- |
 | [`baseline-layout.json`](scenarios/baseline-layout.json) | `basic` | dashboard list renders clean with all projects visible |
 | [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions overlay fits after pressing `a` on a long-titled session |
+| [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without Kitty mutations |
+| [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
+| [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |
+| [`command-palette-wide.json`](scenarios/command-palette-wide.json) | `basic` | wide empty-query palette shows grouped commands and inline disabled reasons |
 | [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits after pressing `C` with long profile names |
 | [`footer-gloss-narrow-fit.json`](scenarios/footer-gloss-narrow-fit.json) | `basic` | narrow footer keeps the surviving dashboard hints readable |
 | [`help-modal-narrow-fit.json`](scenarios/help-modal-narrow-fit.json) | `basic` | help remains bounded in a narrow viewport |

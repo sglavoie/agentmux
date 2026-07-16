@@ -103,6 +103,7 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 		{name: "help", m: Model{mode: ModeHelp, width: 80}, want: "Help"},
 		{name: "detail", m: Model{mode: ModeDetail, width: 80, detailWindowID: 17}, want: "Session details: window 17"},
 		{name: "actions", m: Model{mode: ModeActions, width: 80}, want: "Session actions"},
+		{name: "command palette", m: Model{mode: ModeCommandPalette, width: 80, commandResults: make([]command, 3)}, want: "Command Palette: 3 results"},
 		{name: "session search", m: Model{mode: ModeSessionSearch, width: 80, sessionResults: []transcript.Result{{}, {}}}, want: "Past Sessions: 2 results"},
 		{
 			name: "session view",

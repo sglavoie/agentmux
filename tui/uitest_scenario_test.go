@@ -281,7 +281,7 @@ func TestUITestAssertionValidation(t *testing.T) {
 // mappings never drift.
 func TestUITestAssertModeNamesAreValidatable(t *testing.T) {
 	modes := uitestModeNameSet()
-	for mode := ModeList; mode <= ModePlanView; mode++ {
+	for mode := ModeList; mode <= ModeCommandPalette; mode++ {
 		name := uitestModeName(mode)
 		if name == "unknown" {
 			t.Errorf("mode %d has no stable name", mode)
