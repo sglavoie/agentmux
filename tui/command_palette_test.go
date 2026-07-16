@@ -207,6 +207,16 @@ func TestCommandPaletteNavigationClampsAndVisitsDisabledRows(t *testing.T) {
 	if m.commandCursor != 1 {
 		t.Fatalf("Ctrl+n cursor = %d, want 1", m.commandCursor)
 	}
+	updated, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'j', Mod: tea.ModCtrl}))
+	m = updated.(Model)
+	if m.commandCursor != 2 {
+		t.Fatalf("Ctrl+j cursor = %d, want 2", m.commandCursor)
+	}
+	updated, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'k', Mod: tea.ModCtrl}))
+	m = updated.(Model)
+	if m.commandCursor != 1 {
+		t.Fatalf("Ctrl+k cursor = %d, want 1", m.commandCursor)
+	}
 	for i := 0; i < 10; i++ {
 		m = pressKey(m, keyDown)
 	}

@@ -32,7 +32,7 @@ func renderFooter(m Model) string {
 	case ModeActions:
 		lines = nonEmptyFooterLines(footerLine(m.width, "  ", "<key>: run action", "esc/q: back"))
 	case ModeCommandPalette:
-		lines = nonEmptyFooterLines(footerLine(m.width, " · ", "↑/↓ or ctrl+n/p move", "enter run", "esc close", "ctrl+c quit"))
+		lines = nonEmptyFooterLines(footerLine(m.width, " · ", "↑/↓ or ctrl+j/k or ctrl+n/p move", "enter run", "esc close", "ctrl+c quit"))
 	case ModeDetail:
 		// Inner box footer already carries the scroll position and detail
 		// keymap; the outer hint area stays blank so the dimmed dashboard

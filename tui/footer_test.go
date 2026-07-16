@@ -182,7 +182,7 @@ func TestViewerFootersAdvertiseCopy(t *testing.T) {
 
 func TestCommandPaletteFooterHints(t *testing.T) {
 	out := stripAnsi(renderFooter(Model{mode: ModeCommandPalette, width: 100}))
-	for _, want := range []string{"ctrl+n/p move", "enter run", "esc close", "ctrl+c quit"} {
+	for _, want := range []string{"ctrl+j/k", "ctrl+n/p move", "enter run", "esc close", "ctrl+c quit"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("palette footer = %q, want %q", out, want)
 		}

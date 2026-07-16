@@ -115,14 +115,14 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		m.recomputeCommandPaletteResults()
 		return m, nil
 
-	case keyUp, keyCtrlP:
+	case keyUp, keyCtrlK, keyCtrlP:
 		if m.commandCursor > 0 {
 			m.commandCursor--
 		}
 		scrollCommandPaletteToCursor(&m)
 		return m, nil
 
-	case keyDown, keyCtrlN:
+	case keyDown, keyCtrlJ, keyCtrlN:
 		if m.commandCursor+1 < len(m.commandResults) {
 			m.commandCursor++
 		}

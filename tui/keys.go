@@ -65,6 +65,8 @@ const (
 	keyCtrlU  = "ctrl+u" // move up by half a page in scrollable views
 	keyCtrlF  = "ctrl+f" // move down by one page in scrollable views
 	keyCtrlB  = "ctrl+b" // move up by one page in scrollable views
+	keyCtrlJ  = "ctrl+j" // move down in searchable command menus
+	keyCtrlK  = "ctrl+k" // move up in searchable command menus
 	keyCtrlN  = "ctrl+n" // move down in searchable command menus
 	keyCtrlP  = "ctrl+p" // move up in searchable command menus
 

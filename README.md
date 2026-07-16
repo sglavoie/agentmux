@@ -145,8 +145,8 @@ an unmanaged source tab leaves the current/default dashboard selection alone.
 Key flows:
 
 - `:`: open the command palette from the main dashboard list; type to search,
-  use `↑`/`↓` or `Ctrl+n`/`Ctrl+p` to move, `Backspace` to edit, `Enter` to run,
-  `Esc` to close, and `Ctrl+c` to quit
+  use `↑`/`↓`, `Ctrl+j`/`Ctrl+k`, or `Ctrl+n`/`Ctrl+p` to move, `Backspace`
+  to edit, `Enter` to run, `Esc` to close, and `Ctrl+c` to quit
 - `l`: open the launcher
 - `r`: restart the selected running session, after confirmation
 - `c`: restart the selected running session under another profile
