@@ -26,9 +26,9 @@ func TestHandler_CopilotAutoApprovedPermissionSuppressesNotification(t *testing.
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 		notifier := NewNotifier(cfg)
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
 			calls = append(calls, subtitle)
-			return false, nil
+			return deliveredResult(interactionUnavailable), nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -55,9 +55,9 @@ func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t
 		cfg := &config.NotificationConfig{Permission: true, PermissionDebounceMs: 100}
 		notifier := NewNotifier(cfg)
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
 			calls = append(calls, subtitle)
-			return false, nil
+			return deliveredResult(interactionUnavailable), nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -170,11 +170,11 @@ func TestHandler_PermissionCancelledByTerminalAction(t *testing.T) {
 		notifier := NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return false, nil
+			return deliveredResult(interactionUnavailable), nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -205,11 +205,11 @@ func TestHandler_PermissionNotificationFiresWhenGuardBlocks(t *testing.T) {
 		notifier := NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return false, nil
+			return deliveredResult(interactionUnavailable), nil
 		}
 		h := NewHandler(guard, notifier)
 

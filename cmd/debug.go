@@ -56,6 +56,9 @@ var debugTailLimit int
 var debugProbeJSON bool
 var debugExplainJSON bool
 var debugExplainLast int
+var debugExplainGraphDepth int
+var debugExplainMaxNodes int
+var debugExplainMaxEdges int
 
 var debugCmd = &cobra.Command{
 	Use:   "debug",
@@ -117,6 +120,9 @@ func init() {
 	debugProbeCmd.Flags().BoolVar(&debugProbeJSON, "json", false, "write schema-versioned JSON")
 	debugExplainCmd.Flags().BoolVar(&debugExplainJSON, "json", false, "write the complete schema-versioned evidence graph as JSON")
 	debugExplainCmd.Flags().IntVarP(&debugExplainLast, "last", "n", 10, "explain the last N matching causal histories")
+	debugExplainCmd.Flags().IntVar(&debugExplainGraphDepth, "graph-depth", debugger.DefaultExplainGraphDepth, "follow causal links up to N hops (1-4)")
+	debugExplainCmd.Flags().IntVar(&debugExplainMaxNodes, "max-nodes", debugger.DefaultExplainMaxNodes, "limit the evidence graph to N nodes (1-2000)")
+	debugExplainCmd.Flags().IntVar(&debugExplainMaxEdges, "max-edges", debugger.DefaultExplainMaxEdges, "limit the evidence graph to N edges (1-8000)")
 
 	debugCmd.AddCommand(debugStatusCmd, debugTailCmd, debugProbeCmd, debugExplainCmd)
 }
@@ -207,10 +213,11 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 			}
 		}
 	}
-	if _, err := fmt.Fprintf(out, "journal: %s enabled=%t path=%s files=%d records=%d bytes=%d spool=%d corrupt=%d quarantined=%d quota=%d\n",
+	if _, err := fmt.Fprintf(out, "journal: %s enabled=%t path=%s files=%d records=%d bytes=%d spool=%d spool_bytes=%d total_bytes=%d corrupt=%d quarantined=%d quota=%d\n",
 		report.Journal.Verdict, report.Journal.Enabled, report.Journal.Path,
 		report.Journal.Health.Files, report.Journal.Health.Records, report.Journal.Health.Bytes,
-		report.Journal.Health.SpoolFiles, report.Journal.Health.CorruptLines,
+		report.Journal.Health.SpoolFiles, report.Journal.Health.SpoolBytes,
+		report.Journal.Health.Bytes+report.Journal.Health.SpoolBytes, report.Journal.Health.CorruptLines,
 		report.Journal.Health.QuarantinedFiles, report.Journal.MaxBytes); err != nil {
 		return err
 	}
@@ -290,8 +297,8 @@ func runDebugTail(cmd *cobra.Command, _ []string) error {
 		if debugTailJSON {
 			return writeIndentedJSON(cmd.OutOrStdout(), report)
 		}
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Agent Mux debug tail (schema %d; records=%d; corrupt=%d; reconciled=%d)\n",
-			report.SchemaVersion, len(report.Records), report.CorruptLines, report.ReconciledRecords); err != nil {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Agent Mux debug tail (schema %d; records=%d; scanned=%d; corrupt=%d)\n",
+			report.SchemaVersion, len(report.Records), report.JournalSnapshot.RecordsScanned, report.JournalSnapshot.CorruptLines); err != nil {
 			return err
 		}
 		for _, record := range report.Records {
@@ -305,18 +312,15 @@ func runDebugTail(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if !debugTailJSON {
-		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Agent Mux debug tail follow (schema 1)"); err != nil {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Agent Mux debug tail follow (schema %d)\n", debugger.TailSchemaVersion); err != nil {
 			return err
 		}
 	}
-	err = debugger.Follow(ctx, journal, options, func(record diagnostics.TraceEnvelope) error {
+	err = debugger.FollowWithMetadata(ctx, journal, options, func(record debugger.TailFollowRecord) error {
 		if debugTailJSON {
-			return writeJSONLine(cmd.OutOrStdout(), struct {
-				SchemaVersion int                       `json:"schema_version"`
-				Record        diagnostics.TraceEnvelope `json:"record"`
-			}{SchemaVersion: debugger.TailSchemaVersion, Record: record})
+			return writeJSONLine(cmd.OutOrStdout(), record)
 		}
-		return writeDebugRecord(cmd.OutOrStdout(), record)
+		return writeDebugRecord(cmd.OutOrStdout(), record.Record)
 	})
 	if errors.Is(err, context.Canceled) && ctx.Err() != nil {
 		return nil
@@ -385,6 +389,15 @@ func runDebugExplain(cmd *cobra.Command, _ []string) error {
 	if debugExplainLast < 0 {
 		return fmt.Errorf("--last must not be negative")
 	}
+	if debugExplainGraphDepth < debugger.MinExplainGraphDepth || debugExplainGraphDepth > debugger.MaxExplainGraphDepth {
+		return fmt.Errorf("--graph-depth must be between %d and %d", debugger.MinExplainGraphDepth, debugger.MaxExplainGraphDepth)
+	}
+	if debugExplainMaxNodes < debugger.MinExplainMaxNodes || debugExplainMaxNodes > debugger.MaxExplainMaxNodes {
+		return fmt.Errorf("--max-nodes must be between %d and %d", debugger.MinExplainMaxNodes, debugger.MaxExplainMaxNodes)
+	}
+	if debugExplainMaxEdges < debugger.MinExplainMaxEdges || debugExplainMaxEdges > debugger.MaxExplainMaxEdges {
+		return fmt.Errorf("--max-edges must be between %d and %d", debugger.MinExplainMaxEdges, debugger.MaxExplainMaxEdges)
+	}
 	paths, err := debugPaths()
 	if err != nil {
 		return err
@@ -413,7 +426,9 @@ func runDebugExplain(cmd *cobra.Command, _ []string) error {
 		statusError = "hook activation evidence unavailable: " + configErr.Error()
 	}
 	report, err := debugger.Explain(cmd.Context(), journal, debugger.ExplainOptions{
-		Selector: selector, Recent: debugExplainLast, Hooks: hookReport, StatusError: statusError, Now: now,
+		Selector: selector, Recent: debugExplainLast,
+		GraphDepth: debugExplainGraphDepth, MaxNodes: debugExplainMaxNodes, MaxEdges: debugExplainMaxEdges,
+		Hooks: hookReport, StatusError: statusError, Now: now,
 	})
 	if err != nil {
 		return err
@@ -439,9 +454,16 @@ func writeDebugExplainText(out io.Writer, report debugger.ExplanationReport) err
 			return err
 		}
 	}
-	if _, err := fmt.Fprintf(out, "evidence graph: nodes=%d edges=%d corrupt=%d reconciled=%d\n",
-		len(report.Graph.Nodes), len(report.Graph.Edges), report.Journal.CorruptLines, report.Journal.ReconciledRecords); err != nil {
+	if _, err := fmt.Fprintf(out, "evidence graph: nodes=%d edges=%d depth=%d max_nodes=%d max_edges=%d scanned=%d corrupt=%d\n",
+		len(report.Graph.Nodes), len(report.Graph.Edges), report.Limits.GraphDepth, report.Limits.MaxNodes, report.Limits.MaxEdges,
+		report.JournalSnapshot.RecordsScanned, report.JournalSnapshot.CorruptLines); err != nil {
 		return err
+	}
+	if report.Truncation.Truncated {
+		if _, err := fmt.Fprintf(out, "warning: evidence graph truncated (%s; pruned node candidates=%d edge candidates=%d)\n",
+			strings.Join(report.Truncation.Reasons, ","), report.Truncation.PrunedNodeCandidates, report.Truncation.PrunedEdgeCandidates); err != nil {
+			return err
+		}
 	}
 	for _, node := range report.Graph.Nodes {
 		if node.Record == nil {

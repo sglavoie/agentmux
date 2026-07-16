@@ -564,6 +564,7 @@ func TestCodexClearProbeDoesNotJournalUnderStateLock(t *testing.T) {
 	stateLockAcquired := make(chan struct{})
 	go func() {
 		h.stateMu.Lock()
+		_ = len(h.store) // Protected observation proves the lock is available.
 		h.stateMu.Unlock()
 		close(stateLockAcquired)
 	}()

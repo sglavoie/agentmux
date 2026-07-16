@@ -44,20 +44,20 @@ var (
 	}
 	shareAllowedKeys = allowedShareKeys(`
 		action activation after alive asl_run_id attempt availability before binary_hash build build_matches build_time bytes
-		cause certainty check check_error classification cli cli_build cli_version code corrupt_lines count coverage daemon
+		bytes_scanned cause certainty check check_error classification cli cli_build cli_version code corrupt_lines count coverage daemon
 		daemon_sequence decision degraded degraded_reason delivery diagnostics dirty disabled edges enabled ended_at entries error
 		event evidence evidence_graph evidence_ids expected_sequences expires_at external files files_read findings finished_at
-		first_failed_stage first_missing_stage from generated_at go_version harness harness_counts harness_session_id health healthy
-		hook_silence_seconds hook_status hooks id identity issues journal journal_enabled journal_keep_days journal_max_mib kind
+		first_failed_stage first_missing_stage from generated_at go_version graph_depth harness harness_counts harness_session_id health healthy
+		hook_silence_seconds hook_status hooks id identity issues journal journal_enabled journal_keep_days journal_max_mib journal_snapshot journal_snapshot_scope kind legacy_claim_files
 		kitty_available last_seen last_seen_age_seconds last_seen_events latency_ms launch_id launch_max_bytes level local_only
-		managed max_bytes message missing_steps mode module native native_keep_days native_logging native_max_mib
-		native_session_max_mib nodes normalized_source_id normalized_source_sequence observed_at observed_steps outcome outcomes
+		limits managed max_bytes max_edges max_nodes message missing_steps mode module native native_keep_days native_logging native_max_mib
+		native_session_max_mib nodes normalized_source_id normalized_source_sequence observed_at observed_schemas observed_steps oldest_spool_mod_time outcome outcomes
 		override parent_trace_id path payload_hmac payload_size pid producer_source_id producer_source_sequence profile profile_count
-		profiles project_count quota_bytes raw_sources ready reason recent record records relation render_generation request_id revision
+		profiles project_count pruned_edge_candidates pruned_node_candidates quota_bytes raw_sources ready reason reasons recent record records records_matched records_scanned relation render_generation request_id revision
 		route_decision run_id schema_version scope selector session_id sessions silent source source_event_id source_event_ids source_id
 		source_key source_kind source_sequence span_id stage stages started_at status storage success suggested_commands summary sync timestamp to tool_use_id
-		trace_id transform truncated turn_id unmanaged uptime_seconds value verdict verified_cli_version version warning warnings
-		window_id reducer_action reducer_reason normalization_outcome used_fallback_identity
+		trace_id transform truncated truncation turn_id unmanaged uptime_seconds value verdict verified_cli_version version warning warnings
+		window_id reducer_action reducer_reason normalization_outcome used_fallback_identity segment_files_read spool_files spool_files_read spool_bytes duplicates_omitted quarantined_files latest_observed_at
 	`)
 )
 
@@ -277,7 +277,7 @@ func isShareStringField(key string) bool {
 	switch key {
 	case "mode", "status", "stage", "outcome", "reason", "verdict", "coverage", "harness", "event", "action",
 		"level", "component", "error_class", "classification", "certainty", "kind", "scope", "check", "source",
-		"format", "member", "decision", "availability", "go_version", "version", "revision":
+		"format", "member", "decision", "availability", "go_version", "version", "revision", "reasons", "journal_snapshot_scope":
 		return true
 	default:
 		return false
@@ -285,7 +285,7 @@ func isShareStringField(key string) bool {
 }
 
 func isTimeField(key string) bool {
-	return strings.HasSuffix(key, "_at") || key == "timestamp" || key == "time"
+	return strings.HasSuffix(key, "_at") || strings.HasSuffix(key, "_time") || key == "timestamp" || key == "time"
 }
 
 func containsSecretMarker(value string) bool {

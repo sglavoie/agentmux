@@ -997,7 +997,7 @@ func readReplayBundle(ctx context.Context, inputPath string, reader io.Reader) (
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		return replaySource{}, fmt.Errorf("debugger: invalid bundle manifest: %w", err)
 	}
-	if manifest.SchemaVersion != BundleSchemaVersion {
+	if !supportedBundleSchema(manifest.SchemaVersion) {
 		return replaySource{}, fmt.Errorf("debugger: unsupported bundle schema %d", manifest.SchemaVersion)
 	}
 	if manifest.Mode != BundleModeShare && manifest.Mode != BundleModeForensic {
@@ -1029,6 +1029,9 @@ func readReplayBundle(ctx context.Context, inputPath string, reader io.Reader) (
 	if err != nil {
 		return replaySource{}, err
 	}
+	if schema != manifest.SchemaVersion {
+		return replaySource{}, fmt.Errorf("debugger: bundle schema %d does not match causal-records schema %d", manifest.SchemaVersion, schema)
+	}
 	source := replaySource{
 		input: ReplayInput{Path: inputPath, Format: "bundle", SchemaVersion: schema, BundleMode: manifest.Mode,
 			LocalOnly: manifest.LocalOnly, Records: len(records), CorruptLines: corrupt, Truncated: manifest.Truncated},
@@ -1048,28 +1051,45 @@ func readReplayBundle(ctx context.Context, inputPath string, reader io.Reader) (
 
 func decodeCausalRecords(data []byte) ([]replayRecord, int, int, error) {
 	var wrapper struct {
-		SchemaVersion int               `json:"schema_version"`
-		CorruptLines  int               `json:"corrupt_lines"`
-		Records       []json.RawMessage `json:"records"`
+		SchemaVersion   int                             `json:"schema_version"`
+		CorruptLines    int                             `json:"corrupt_lines"`
+		JournalSnapshot *diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+		Records         []json.RawMessage               `json:"records"`
 	}
 	if err := json.Unmarshal(data, &wrapper); err != nil {
 		return nil, 0, 0, fmt.Errorf("debugger: invalid causal-records.json: %w", err)
 	}
-	if wrapper.SchemaVersion != BundleSchemaVersion {
+	if !supportedBundleSchema(wrapper.SchemaVersion) {
 		return nil, wrapper.SchemaVersion, 0, fmt.Errorf("debugger: unsupported causal-records schema %d", wrapper.SchemaVersion)
 	}
-	if wrapper.CorruptLines < 0 {
+	corruptLines := wrapper.CorruptLines
+	if wrapper.SchemaVersion == BundleSchemaVersion {
+		if wrapper.JournalSnapshot == nil {
+			return nil, wrapper.SchemaVersion, 0, fmt.Errorf("debugger: causal-records schema %d is missing journal_snapshot", wrapper.SchemaVersion)
+		}
+		stats := *wrapper.JournalSnapshot
+		if stats.SegmentFilesRead < 0 || stats.SpoolFilesRead < 0 || stats.BytesScanned < 0 || stats.RecordsScanned < 0 ||
+			stats.RecordsMatched < 0 || stats.DuplicatesOmitted < 0 || stats.CorruptLines < 0 {
+			return nil, wrapper.SchemaVersion, 0, fmt.Errorf("debugger: causal-records journal_snapshot values must not be negative")
+		}
+		corruptLines = stats.CorruptLines
+	}
+	if corruptLines < 0 {
 		return nil, wrapper.SchemaVersion, 0, fmt.Errorf("debugger: causal-records corrupt_lines must not be negative")
 	}
 	records := make([]replayRecord, 0, len(wrapper.Records))
 	for index, raw := range wrapper.Records {
 		record, err := decodeFlexibleTrace(raw)
 		if err != nil {
-			return nil, wrapper.SchemaVersion, wrapper.CorruptLines, fmt.Errorf("debugger: causal record %d: %w", index+1, err)
+			return nil, wrapper.SchemaVersion, corruptLines, fmt.Errorf("debugger: causal record %d: %w", index+1, err)
 		}
 		records = append(records, record)
 	}
-	return records, wrapper.SchemaVersion, wrapper.CorruptLines, nil
+	return records, wrapper.SchemaVersion, corruptLines, nil
+}
+
+func supportedBundleSchema(schema int) bool {
+	return schema == bundleSchemaVersionV1 || schema == bundleSchemaVersionV2
 }
 
 func decodeEventsExport(inputPath string, data []byte) (replaySource, error) {

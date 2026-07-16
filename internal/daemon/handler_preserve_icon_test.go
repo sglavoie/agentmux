@@ -35,7 +35,9 @@ func TestHandler_PreserveCurrentRestoresPreviousState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			guard := NewStateGuard(50 * time.Millisecond)
 			notifier := NewNotifier(&config.NotificationConfig{})
-			notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
+			notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
+				return deliveredResult(interactionUnavailable), nil
+			}
 			h := NewHandler(guard, notifier)
 
 			resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
@@ -80,11 +82,11 @@ func TestHandler_ChildCompleteEventsDoNotNotifyStop(t *testing.T) {
 				notifier := NewNotifier(cfg)
 				var mu sync.Mutex
 				var calls []string
-				notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
+				notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
 					mu.Lock()
 					calls = append(calls, subtitle)
 					mu.Unlock()
-					return false, nil
+					return deliveredResult(interactionUnavailable), nil
 				}
 				h := NewHandler(guard, notifier)
 

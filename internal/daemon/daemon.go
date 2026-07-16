@@ -33,20 +33,6 @@ type runDependencies struct {
 }
 
 func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr error) {
-	recorder, recorderErr := newLifecycleRecorder(cfg)
-	if recorderErr != nil {
-		slog.Warn("daemon: diagnostic journal unavailable", "error", recorderErr)
-	} else if recorder != nil {
-		recorder.maintain(ctx)
-		recorder.record("daemon.startup", "started", "process_entered", map[string]string{"pid": fmt.Sprint(os.Getpid())})
-		defer func() {
-			if retErr != nil {
-				recorder.record("daemon.exit", "error", retErr.Error(), nil)
-				return
-			}
-			recorder.record("daemon.exit", "success", "shutdown_complete", nil)
-		}()
-	}
 	socketPath := SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		return fmt.Errorf("daemon: creating socket directory: %w", err)
@@ -57,14 +43,43 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	if err != nil {
 		if errors.Is(err, errDaemonAlreadyRunning) {
 			slog.Info("daemon: duplicate start exiting", "socket", socketPath, "lock", daemonLockPath(socketPath))
-			recorder.record("daemon.lock", "skipped", "already_running", map[string]string{"socket": socketPath})
 			return nil
 		}
 		return fmt.Errorf("daemon: acquiring lock %s: %w", daemonLockPath(socketPath), err)
 	}
 	defer releaseDaemonLock(socketPath, lockFile)
 	slog.Info("daemon: acquired single-instance lock", "socket", socketPath, "lock", daemonLockPath(socketPath))
+
+	recorder, recorderErr := newLifecycleRecorder(cfg)
+	if recorderErr != nil {
+		slog.Warn("daemon: diagnostic journal unavailable", "error", recorderErr)
+	} else if recorder != nil {
+		recorder.record("daemon.startup", "started", "process_entered", map[string]string{"pid": fmt.Sprint(os.Getpid())})
+		defer func() {
+			if retErr != nil {
+				recorder.record("daemon.exit", "error", retErr.Error(), nil)
+				return
+			}
+			recorder.record("daemon.exit", "success", "shutdown_complete", nil)
+		}()
+	}
 	recorder.record("daemon.lock", "success", "acquired", map[string]string{"socket": socketPath})
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	journalMaintenanceDone := make(chan struct{})
+	if recorder == nil {
+		close(journalMaintenanceDone)
+	} else {
+		go func() {
+			recorder.runJournalMaintenance(ctx)
+			close(journalMaintenanceDone)
+		}()
+	}
+	defer func() {
+		cancel()
+		<-journalMaintenanceDone
+	}()
 
 	guardDur := time.Duration(cfg.Defaults.GuardDuration) * time.Second
 	guard := NewStateGuard(guardDur)
@@ -137,8 +152,6 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		_ = os.Remove(socketPath)
 	}()
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	notifier.SetParentContext(ctx)
 
 	shutdownAccepted := make(chan struct{})

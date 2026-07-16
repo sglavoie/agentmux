@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -254,54 +255,39 @@ func TestClient_SendHonorsDeadline(t *testing.T) {
 }
 
 func TestClient_SendWithAutoStartHonorsFullDeadline(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "amx-client-autostart-deadline-*")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	synctest.Test(t, func(t *testing.T) {
+		oldSendDeadline := sendDeadline
+		sendDeadline = 100 * time.Millisecond
+		defer func() { sendDeadline = oldSendDeadline }()
+		oldAutoStartDeadline := autoStartDeadline
+		autoStartDeadline = 220 * time.Millisecond
+		defer func() { autoStartDeadline = oldAutoStartDeadline }()
+		oldRetryDelay := autoStartRetryDelay
+		autoStartRetryDelay = 10 * time.Millisecond
+		defer func() { autoStartRetryDelay = oldRetryDelay }()
+		oldSpawn := spawnDetached
+		spawnDetached = func(string) error { return nil }
+		defer func() { spawnDetached = oldSpawn }()
 
-	sockPath := filepath.Join(dir, "d.sock")
-	ln, err := net.Listen("unix", sockPath)
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	t.Cleanup(func() { _ = ln.Close() })
-	go func() {
-		for {
-			conn, acceptErr := ln.Accept()
-			if acceptErr != nil {
-				return
-			}
+		client := NewClientWithSocket(filepath.Join(t.TempDir(), "d.sock"))
+		client.dialContext = func(context.Context, string, string) (net.Conn, error) {
+			clientConn, serverConn := net.Pipe()
 			go func() {
-				defer func() { _ = conn.Close() }()
-				buf := make([]byte, 1024)
-				_, _ = conn.Read(buf)
-				_, _ = io.Copy(io.Discard, conn)
+				defer func() { _ = serverConn.Close() }()
+				_, _ = io.Copy(io.Discard, serverConn)
 			}()
+			return clientConn, nil
 		}
-	}()
 
-	oldSendDeadline := sendDeadline
-	sendDeadline = 100 * time.Millisecond
-	t.Cleanup(func() { sendDeadline = oldSendDeadline })
-	oldAutoStartDeadline := autoStartDeadline
-	autoStartDeadline = 220 * time.Millisecond
-	t.Cleanup(func() { autoStartDeadline = oldAutoStartDeadline })
-	oldRetryDelay := autoStartRetryDelay
-	autoStartRetryDelay = 10 * time.Millisecond
-	t.Cleanup(func() { autoStartRetryDelay = oldRetryDelay })
-	oldSpawn := spawnDetached
-	spawnDetached = func(string) error { return nil }
-	t.Cleanup(func() { spawnDetached = oldSpawn })
-
-	started := time.Now()
-	_, err = NewClientWithSocket(sockPath).SendWithAutoStart(Request{Type: TypeHealth}, "/tmp/amx")
-	if err == nil {
-		t.Fatal("SendWithAutoStart() error = nil, want deadline failure")
-	}
-	if elapsed := time.Since(started); elapsed > 350*time.Millisecond {
-		t.Fatalf("SendWithAutoStart() took %v, want bounded near %v", elapsed, autoStartDeadline)
-	}
+		started := time.Now()
+		_, err := client.SendWithAutoStart(Request{Type: TypeHealth}, "/tmp/amx")
+		if err == nil {
+			t.Fatal("SendWithAutoStart() error = nil, want deadline failure")
+		}
+		if elapsed := time.Since(started); elapsed != autoStartDeadline {
+			t.Fatalf("SendWithAutoStart() took %v, want exact full deadline %v", elapsed, autoStartDeadline)
+		}
+	})
 }
 
 // TestClient_RejectsOversizeResponse pins the client-side ceiling: a daemon

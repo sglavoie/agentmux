@@ -42,20 +42,20 @@ func TestDebugJSONCommandSurfaceIsVersioned(t *testing.T) {
 	}
 
 	schemas := []struct {
-		name    string
-		version int
+		name          string
+		version, want int
 	}{
-		{name: "status", version: debugger.StatusSchemaVersion},
-		{name: "tail", version: debugger.TailSchemaVersion},
-		{name: "probe", version: debugger.ProbeSchemaVersion},
-		{name: "explain", version: debugger.ExplainSchemaVersion},
-		{name: "capture", version: debugger.CaptureSchemaVersion},
-		{name: "bundle", version: debugger.BundleSchemaVersion},
-		{name: "replay", version: debugger.ReplaySchemaVersion},
+		{name: "status", version: debugger.StatusSchemaVersion, want: 2},
+		{name: "tail", version: debugger.TailSchemaVersion, want: 2},
+		{name: "probe", version: debugger.ProbeSchemaVersion, want: 1},
+		{name: "explain", version: debugger.ExplainSchemaVersion, want: 2},
+		{name: "capture", version: debugger.CaptureSchemaVersion, want: 1},
+		{name: "bundle", version: debugger.BundleSchemaVersion, want: 2},
+		{name: "replay", version: debugger.ReplaySchemaVersion, want: 1},
 	}
 	for _, schema := range schemas {
-		if schema.version != 1 {
-			t.Errorf("unexpected debug %s JSON schema version %d", schema.name, schema.version)
+		if schema.version != schema.want {
+			t.Errorf("unexpected debug %s JSON schema version %d; want %d", schema.name, schema.version, schema.want)
 		}
 	}
 }

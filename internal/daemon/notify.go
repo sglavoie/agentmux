@@ -158,7 +158,7 @@ func (n *Notifier) IsMuted(windowID int) bool {
 // SetParentContext installs the daemon's lifecycle context as the parent of
 // every dispatch's bounded context. Once wired, cancelling the daemon ctx
 // terminates any in-flight alerter subprocess immediately rather than waiting
-// for the per-dispatch timeout (up to alerterDispatchTimeout, i.e. 5 minutes).
+// for the per-dispatch timeout (up to alerterDispatchTimeout, i.e. 6m).
 // Defaults to context.Background() so tests and pre-wiring call sites keep
 // working without explicit setup.
 func (n *Notifier) SetParentContext(ctx context.Context) {
@@ -303,15 +303,33 @@ func (n *Notifier) runDispatch(windowID int, account, title, subtitle, action st
 	n.mu.Unlock()
 	ctx, cancel := context.WithTimeout(parent, n.dispatchTimeout)
 	defer cancel()
-	clicked, err := n.dispatch(ctx, windowID, account, title, subtitle)
+	result, err := n.dispatch(ctx, windowID, account, title, subtitle)
 	if err != nil {
-		slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
+		outcome, reason := "failed", "send_failed"
+		switch {
+		case parent.Err() != nil:
+			outcome, reason = "cancelled", "daemon_shutdown"
+		case errors.Is(ctx.Err(), context.DeadlineExceeded):
+			reason = "backend_timeout"
+		}
+		slog.Warn("notifier: dispatch did not complete", "err", err, "outcome", outcome, "reason", reason, "title", title, "subtitle", subtitle)
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: outcome, Reason: reason})
+		return
+	}
+	if result.delivery != deliveryDelivered {
+		slog.Warn("notifier: backend returned success without delivery", "delivery", result.delivery, "title", title, "subtitle", subtitle)
 		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "failed", Reason: "send_failed"})
 		return
 	}
 	n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "sent", Reason: "send_success"})
-	if !clicked {
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "not_clicked"})
+	if result.interaction != interactionClicked {
+		reason := result.interaction
+		switch reason {
+		case interactionTimeout, interactionDismissed, interactionReplied, interactionUnavailable, interactionUnknown:
+		default:
+			reason = interactionUnknown
+		}
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: string(reason)})
 		return
 	}
 	slog.Debug("notifier: clicked", "window_id", windowID, "account", account, "title", title, "subtitle", subtitle)

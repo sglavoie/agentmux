@@ -24,6 +24,24 @@ just --justfile /Users/sglavoie/scripts/justfile --working-directory /Users/sgla
 These commands cover acknowledged ASL delivery and installation without
 changing `/Users/sglavoie/scripts/claude/.claude/settings.json`.
 
+## Diagnostic regression acceptance
+
+`status`, `tail`, `explain`, and `bundle` use schema v2 and share
+`journal_snapshot` scan accounting. Their journal reads are immutable snapshots:
+they merge segment and spool evidence in memory while the daemon alone owns
+60-second promotion and 15-minute retention. `tail --last` applies its limit
+after event-time ordering. Exact explain queries default to `--graph-depth 2`,
+`--max-nodes 250`, and `--max-edges 1000` and publish explicit truncation
+metadata. `replay` remains schema v1 while accepting both v1 and v2 diagnostic
+bundles and causal-record wrappers.
+
+| Reproduced failure | Automated regression | Installed/live evidence |
+| --- | --- | --- |
+| A delivered alerter notification became `failed/send_failed` at 300 seconds | `internal/daemon` pins the five-minute protocol timeout, one-minute wrapper grace, structured interaction result, cancellation, and exactly one terminal disposition | An untouched disposable notification records `sent/send_success` and later `suppressed/interaction_timeout`, never `failed/send_failed`; explain returns `notification_suppression`. Backend/wrapper failures separately return `notification_failure`. |
+| `tail --last` returned stale append-order evidence | `internal/diagnostics` and `internal/debugger` cover delayed spool records, merged deduplication, deterministic event-time ordering, and follow cursors across promotion | The installed tail's last record has the newest matching `observed_at`. |
+| Exact explain expanded into an unbounded unrelated graph | `internal/debugger` covers typed breadth-first causal traversal, contextual non-frontiers, high fan-out, depth/node/edge pruning, and deterministic output | A bounded exact query stays within its requested limits and reports every applied truncation reason. |
+| A large debug read held the journal lock and forced writer spool bursts | Snapshot concurrency tests hold parsing open while writers append, prove descriptors use fixed byte ceilings, and assert reader paths are mutation-free | Baseline and post-read spool counts do not increase because of `status`, `tail`, `explain`, or bundle journal reads; renderer evidence continues during the read. |
+
 ## Workflow coverage
 
 | Workflow | Automated coverage |
@@ -36,8 +54,8 @@ changing `/Users/sglavoie/scripts/claude/.claude/settings.json`.
 | Plans | `internal/plans` and `tui` cover filesystem discovery, source fallback, search-sidecar repair, lazy warmup, selection continuity, and last-good rows. |
 | Narrow and wide TUI layouts | All JSON scenarios under `docs/tui-testing/scenarios` cover the live dashboard, overlays, Past Sessions, Plans, and their viewers. |
 | TUI continuity | The hermetic `session-fork-continuity` scenario enters Past Sessions and launches a native fork through the shared action registry while recording, rather than executing, the Kitty launch. |
-| Diagnostic pipeline | `cmd.TestAcceptanceDiagnosticPipeline` drives the real hook command adapter through journal persistence and Unix IPC into an in-process daemon with fake Kitty, then checks duplicate acknowledgement, renderer writes, notification suppression, a share bundle, offline replay, and ASL source-event explanation. |
-| Debug workflow | `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow` pins AgentMux 0.6.0, schema v9 documentation, the `amx debug status` → `amx debug explain` → `amx debug bundle` → `amx debug replay` workflow, and every required failure-matrix row. |
+| Diagnostic pipeline | `cmd.TestAcceptanceDiagnosticPipeline` drives the real hook command adapter through journal persistence and Unix IPC into an in-process daemon with fake Kitty, then checks duplicate acknowledgement, renderer writes, notification suppression, a schema-v2 snapshot-backed share bundle and offline replay, and a bounded ASL source-event explanation. `internal/debugger.TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence` rewrites that bundle as schema v1 and verifies v1/v2-compatible replay. |
+| Debug workflow | `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow` pins AgentMux 0.6.0, schema v9 export documentation, the schema-v2 snapshot contract, event-time tail semantics, explain graph defaults, v1/v2 bundle replay, the `amx debug status` → `amx debug explain` → `amx debug bundle` → `amx debug replay` workflow, and every required failure-matrix row including distinct notification failure and suppression. |
 | Bundle secrecy and traversal | `internal/debugger` tests plant a secret corpus, verify share/forensic redaction, exclude raw sources, reject symlink publication, build flat deterministic archives, and replay portable share evidence. |
 | Restart and replay equivalence | `internal/daemon` restart-prefix tests and `internal/debugger` golden replay tests cover restored reducer state, daemon sequence resets, ordering, routing, ASL phases, duplicate requests, coalesced renders, and explicit schema-v8 limitations. |
 | ASL delivery correlation | `/Users/sglavoie/scripts/tests` covers stable UUIDv5 request IDs, bounded retry/backoff, duplicates, permanent failures, legacy fallback, missing binaries, exhaustion, metrics/tail/Workbench visibility; `internal/debugger.TestExplainCorrelatesASLSourceDeliveryDaemonAndRenderEvidence` pins the cross-repository graph. |
@@ -90,6 +108,20 @@ amx debug bundle --mode share -o agent-mux-debug.tar.gz
 amx debug replay agent-mux-debug.tar.gz
 ```
 
+For the installed-artifact diagnostic record, save `amx debug status --json`,
+`amx debug tail --last 50 --json`, `amx debug probe --json`, and one exact
+`amx debug explain --source-event <id> --graph-depth 1 --max-nodes 25
+--max-edges 50 --json`. Assert the explanation has at most 25 nodes and 50
+edges and that its `limits`, `truncation`, and `journal_snapshot` fields match
+the invocation. Create a share bundle, inspect `manifest.json`, and replay the
+same archive. The CLI/daemon build match from status and strict doctor must
+identify the exact artifact installed by `just install-restart-smoke`.
+
+Before the reads, record `.journal.health.spool_files` and the newest matching
+`observed_at`; record both again afterward. A read-only workflow must not create
+a spool burst, and `tail --last` must retain the newest event-time evidence even
+when delayed spool records exist.
+
 The failure matrix, native-log privacy defaults, bundle sharing policy, ASL
 delivery outcomes, and provider drill are in [Debugging event delivery](debugging.md).
 
@@ -126,3 +158,20 @@ permission/elicitation, terminal, and failure paths in a managed Kitty session.
 Retain a schema v9 export or `amx debug explain --source-event <id> --json` for
 each path. Do not infer that this drill ran from an automated pass, and do not
 incur provider/model usage merely to complete the automated gate.
+
+Native-notification timeout evidence is a separate provider-free live check:
+
+1. Launch a disposable, unfocused Kitty window with a unique AgentMux-managed
+   session identity. Record its window ID, the UTC start time, and baseline
+   spool count; never reuse an active user session.
+2. Send one terminal lifecycle event from the disposable window and leave the
+   native notification untouched for the complete five-minute alerter protocol
+   timeout. Keep the window alive so daemon renderer activity continues.
+3. Query that exact window and time range. Require dispatch
+   `sent/send_success`, then focus `suppressed/interaction_timeout`, with no
+   `failed/send_failed` or `failed/backend_timeout`. A bounded exact explanation
+   must classify the no-interaction result as `notification_suppression`.
+4. Confirm renderer events continued, the final spool count did not show a
+   reader-induced burst, and `tail --last` ends at the newest event time.
+5. Close only the disposable Kitty window after preserving the status, tail,
+   explain, bundle, and replay evidence.

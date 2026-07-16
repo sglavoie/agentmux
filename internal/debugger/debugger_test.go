@@ -65,7 +65,7 @@ func TestSelectorNormalizesHarnessAndParsesTimeBounds(t *testing.T) {
 	}
 }
 
-func TestTailWorksOfflineReconcilesSpoolAndToleratesCorruptRecords(t *testing.T) {
+func TestTailWorksOfflineReadsSpoolAndToleratesCorruptRecords(t *testing.T) {
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -103,8 +103,12 @@ func TestTailWorksOfflineReconcilesSpoolAndToleratesCorruptRecords(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Records) != 2 || report.CorruptLines != 1 || report.ReconciledRecords != 1 {
+	if len(report.Records) != 2 || report.JournalSnapshot.CorruptLines != 1 ||
+		report.JournalSnapshot.SegmentFilesRead != 1 || report.JournalSnapshot.SpoolFilesRead != 1 {
 		t.Fatalf("tail report = %+v", report)
+	}
+	if _, err := os.Stat(filepath.Join(paths.SpoolDir, "journal-123.jsonl")); err != nil {
+		t.Fatalf("tail mutated spool evidence: %v", err)
 	}
 }
 

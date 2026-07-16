@@ -52,11 +52,11 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 		notifier := NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return false, nil
+			return deliveredResult(interactionUnavailable), nil
 		}
 		h := NewHandler(guard, notifier)
 
@@ -273,11 +273,11 @@ func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
 		notifier := NewNotifier(cfg)
 		var mu sync.Mutex
 		var calls []string
-		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (bool, error) {
+		notifier.dispatch = func(_ context.Context, _ int, _, _, subtitle string) (dispatchResult, error) {
 			mu.Lock()
 			calls = append(calls, subtitle)
 			mu.Unlock()
-			return false, nil
+			return deliveredResult(interactionUnavailable), nil
 		}
 		h := NewHandler(guard, notifier)
 

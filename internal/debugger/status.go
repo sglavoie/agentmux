@@ -14,7 +14,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-const StatusSchemaVersion = 1
+const (
+	StatusSchemaVersion = 2
+	spoolWarningAge     = 2 * time.Minute
+)
 
 type DaemonHealthClient interface {
 	Health() daemon.Health
@@ -60,17 +63,18 @@ type JournalReport struct {
 }
 
 type StatusReport struct {
-	SchemaVersion  int                         `json:"schema_version"`
-	GeneratedAt    time.Time                   `json:"generated_at"`
-	Selector       Selector                    `json:"selector"`
-	Verdict        Verdict                     `json:"verdict"`
-	Healthy        bool                        `json:"healthy"`
-	Daemon         DaemonReport                `json:"daemon"`
-	Hooks          HookReport                  `json:"hooks"`
-	Journal        JournalReport               `json:"journal"`
-	Native         NativeReport                `json:"native"`
-	LastSeenEvents []diagnostics.TraceEnvelope `json:"last_seen_events"`
-	Findings       []Finding                   `json:"findings"`
+	SchemaVersion   int                            `json:"schema_version"`
+	GeneratedAt     time.Time                      `json:"generated_at"`
+	Selector        Selector                       `json:"selector"`
+	Verdict         Verdict                        `json:"verdict"`
+	Healthy         bool                           `json:"healthy"`
+	Daemon          DaemonReport                   `json:"daemon"`
+	Hooks           HookReport                     `json:"hooks"`
+	Journal         JournalReport                  `json:"journal"`
+	JournalSnapshot diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+	Native          NativeReport                   `json:"native"`
+	LastSeenEvents  []diagnostics.TraceEnvelope    `json:"last_seen_events"`
+	Findings        []Finding                      `json:"findings"`
 }
 
 // CollectStatus assembles offline evidence first and treats daemon/Kitty
@@ -146,7 +150,7 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 		if options.Config != nil {
 			policy = options.Config.Defaults.Diagnostics
 		}
-		report.Journal = inspectJournal(ctx, paths, policy, options.Journal, options.Selector, &report)
+		report.Journal = inspectJournal(ctx, paths, policy, options.Journal, options.Selector, options.Now, &report)
 
 		var windows []kitty.OSWindow
 		kittyAvailable := false
@@ -179,7 +183,7 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 	return report, nil
 }
 
-func inspectJournal(ctx context.Context, paths diagnostics.Paths, policy config.DiagnosticsConfig, journal *diagnostics.Journal, selector Selector, report *StatusReport) JournalReport {
+func inspectJournal(ctx context.Context, paths diagnostics.Paths, policy config.DiagnosticsConfig, journal *diagnostics.Journal, selector Selector, now time.Time, report *StatusReport) JournalReport {
 	result := JournalReport{
 		Verdict: VerdictHealthy, Enabled: policy.JournalEnabledValue(), Path: paths.JournalDir,
 		MaxBytes: int64(policy.JournalMaxMiB) << 20,
@@ -199,25 +203,30 @@ func inspectJournal(ctx context.Context, paths diagnostics.Paths, policy config.
 			return result
 		}
 	}
-	health, err := journal.Inspect(ctx)
+	snapshot, err := journal.Snapshot(ctx, selector.JournalSelector(20), nil)
 	if err != nil {
 		result.Verdict = VerdictUnavailable
 		result.Error = err.Error()
 		report.add(VerdictUnavailable, "journal_unavailable", err.Error())
 		return result
 	}
+	report.JournalSnapshot = snapshot.Statistics
+	report.LastSeenEvents = snapshot.Records
+	health := snapshot.Health
 	result.Health = health
 	if health.CorruptLines > 0 || health.QuarantinedFiles > 0 {
 		result.Verdict = VerdictWarning
 		report.add(VerdictWarning, "journal_corruption", fmt.Sprintf("journal has %d corrupt line(s) and %d quarantined file(s)", health.CorruptLines, health.QuarantinedFiles))
 	}
-	if health.SpoolFiles > 0 {
+	oldSpool := health.SpoolFiles > 0 && !health.OldestSpoolModTime.IsZero() && !health.OldestSpoolModTime.After(now.Add(-spoolWarningAge))
+	if health.LegacyClaimFiles > 0 || oldSpool {
 		result.Verdict = VerdictWarning
-		report.add(VerdictWarning, "journal_spool_pending", fmt.Sprintf("%d emergency spool file(s) await reconciliation", health.SpoolFiles))
+		report.add(VerdictWarning, "journal_spool_stale", fmt.Sprintf("%d pending spool file(s) require maintenance (%d legacy recovery claim(s))", health.SpoolFiles, health.LegacyClaimFiles))
 	}
-	if result.MaxBytes > 0 && health.Bytes > result.MaxBytes {
+	totalBytes := health.Bytes + health.SpoolBytes
+	if result.MaxBytes > 0 && totalBytes > result.MaxBytes {
 		result.Verdict = VerdictWarning
-		report.add(VerdictWarning, "journal_quota", fmt.Sprintf("journal exceeds its quota by %d bytes", health.Bytes-result.MaxBytes))
+		report.add(VerdictWarning, "journal_quota", fmt.Sprintf("journal and pending spool evidence exceed their quota by %d bytes", totalBytes-result.MaxBytes))
 	}
 	for _, schema := range health.ObservedSchemas {
 		if schema != diagnostics.SchemaVersion {
@@ -225,14 +234,6 @@ func inspectJournal(ctx context.Context, paths diagnostics.Paths, policy config.
 			report.add(VerdictWarning, "journal_schema", fmt.Sprintf("journal contains unsupported schema version %d", schema))
 		}
 	}
-	read, err := journal.ReadTolerant(ctx, selector.JournalSelector(20))
-	if err != nil {
-		result.Verdict = VerdictUnavailable
-		result.Error = err.Error()
-		report.add(VerdictUnavailable, "journal_read", err.Error())
-		return result
-	}
-	report.LastSeenEvents = read.Records
 	return result
 }
 

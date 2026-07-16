@@ -94,8 +94,8 @@ func TestNotifier_NoFocusOnDispatchError(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true}
 		n := NewNotifier(cfg)
-		n.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) {
-			return true, errors.New("boom")
+		n.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
+			return deliveredResult(interactionClicked), errors.New("boom")
 		}
 		focus := &fakeFocusClient{}
 		n.SetFocus(focus)
@@ -139,7 +139,7 @@ func TestNotifier_FocusOnClick_HookSilenceFallsBackToAccount(t *testing.T) {
 
 // TestNotifier_FocusOnClick_NoTargetIsNoop locks in that a click without a
 // real window ID and without an account is silently ignored — the dispatcher
-// returns (true, nil) but there is nothing to focus, so neither branch
+// returns a delivered click but there is nothing to focus, so neither branch
 // should fire and the goroutine must not panic.
 func TestNotifier_FocusOnClick_NoTargetIsNoop(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {

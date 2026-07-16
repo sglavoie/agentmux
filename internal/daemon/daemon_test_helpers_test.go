@@ -49,8 +49,8 @@ func (r *callRecorder) snapshot() []notifyCall {
 	return out
 }
 
-// setClickResult controls the bool returned by the recorder's dispatch stub
-// so Session 3 tests can simulate the user clicking the notification body.
+// setClickResult controls the interaction returned by the recorder's dispatch
+// stub so focus tests can simulate the user clicking the notification body.
 func (r *callRecorder) setClickResult(v bool) {
 	r.mu.Lock()
 	r.clickResult = v
@@ -60,7 +60,7 @@ func (r *callRecorder) setClickResult(v bool) {
 func newTestNotifier(cfg *config.NotificationConfig) (*Notifier, *callRecorder) {
 	n := NewNotifier(cfg)
 	rec := &callRecorder{}
-	n.dispatch = func(_ context.Context, windowID int, account, title, subtitle string) (bool, error) {
+	n.dispatch = func(_ context.Context, windowID int, account, title, subtitle string) (dispatchResult, error) {
 		rec.mu.Lock()
 		clicked := rec.clickResult
 		rec.mu.Unlock()
@@ -71,7 +71,10 @@ func newTestNotifier(cfg *config.NotificationConfig) (*Notifier, *callRecorder) 
 			subtitle: subtitle,
 			clicked:  clicked,
 		})
-		return clicked, nil
+		if clicked {
+			return deliveredResult(interactionClicked), nil
+		}
+		return deliveredResult(interactionUnavailable), nil
 	}
 	return n, rec
 }
@@ -79,7 +82,9 @@ func newTestNotifier(cfg *config.NotificationConfig) (*Notifier, *callRecorder) 
 func newTestHandler() *Handler {
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
+	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
+		return deliveredResult(interactionUnavailable), nil
+	}
 	return NewHandler(guard, notifier)
 }
 

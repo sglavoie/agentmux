@@ -36,7 +36,9 @@ func TestHandler_AutoApprovedPermission(t *testing.T) {
 		// --- Case 2: active guard expired → manual-permission path, key shows ---
 		guard := NewStateGuard(time.Nanosecond)
 		notifier := NewNotifier(&config.NotificationConfig{})
-		notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
+		notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
+			return deliveredResult(interactionUnavailable), nil
+		}
 		h2 := NewHandler(guard, notifier)
 
 		h2.Handle(Request{Type: TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})

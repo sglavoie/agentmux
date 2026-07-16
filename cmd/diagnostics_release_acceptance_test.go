@@ -266,7 +266,11 @@ func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := string(data)
-		for _, required := range []string{"amx debug status", "amx debug explain", "amx debug bundle", "schema v9"} {
+		for _, required := range []string{
+			"amx debug status", "amx debug explain", "amx debug bundle", "schema v9",
+			"schema v2", "journal_snapshot", "event-time", "--graph-depth",
+			"notification_failure", "v1 and v2", "causal-record wrappers",
+		} {
 			if !strings.Contains(text, required) {
 				t.Errorf("%s does not document %q", path, required)
 			}
@@ -279,7 +283,7 @@ func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
 	for _, failure := range []string{
 		"Disabled or untrusted hook", "Invalid payload", "Missing Kitty", "Daemon unavailable",
 		"Retry exhaustion", "Duplicate delivery", "Queue saturation", "Route mismatch",
-		"Quarantined identity", "Reducer suppression", "Render failure", "Notification suppression",
+		"Quarantined identity", "Reducer suppression", "Render failure", "Notification dispatch failure", "Notification suppression",
 		"Quota exhaustion", "Restart recovery",
 	} {
 		if !bytes.Contains(failureMatrix, []byte(failure)) {

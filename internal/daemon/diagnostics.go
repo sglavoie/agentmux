@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -9,6 +10,29 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
+
+const (
+	journalPromotionInterval = 60 * time.Second
+	journalRetentionInterval = 15 * time.Minute
+	journalMaintenanceBudget = 5 * time.Second
+)
+
+type journalMaintainer interface {
+	PromoteSpool(context.Context) (diagnostics.MaintenanceReport, error)
+	RotateAndRetain(context.Context) (diagnostics.MaintenanceReport, error)
+}
+
+type journalMaintenanceSchedule struct {
+	promotionInterval time.Duration
+	retentionInterval time.Duration
+	passBudget        time.Duration
+}
+
+var productionJournalMaintenanceSchedule = journalMaintenanceSchedule{
+	promotionInterval: journalPromotionInterval,
+	retentionInterval: journalRetentionInterval,
+	passBudget:        journalMaintenanceBudget,
+}
 
 type lifecycleRecorder struct {
 	journal *diagnostics.Journal
@@ -54,20 +78,69 @@ func (r *lifecycleRecorder) record(stage, outcome, reason string, evidence map[s
 	r.journal.TryAppend(ctx, envelope)
 }
 
-func (r *lifecycleRecorder) maintain(ctx context.Context) {
+func (r *lifecycleRecorder) runJournalMaintenance(ctx context.Context) {
 	if r == nil {
 		return
 	}
-	report, err := r.journal.Maintain(ctx)
-	if err != nil {
-		r.record("journal.maintenance", "error", err.Error(), nil)
+	runJournalMaintenance(ctx, r.journal, r.record, productionJournalMaintenanceSchedule)
+}
+
+func runJournalMaintenance(
+	ctx context.Context,
+	journal journalMaintainer,
+	record func(string, string, string, map[string]string),
+	schedule journalMaintenanceSchedule,
+) {
+	if journal == nil {
 		return
 	}
-	r.record("journal.maintenance", "success", "startup", map[string]string{
-		"reconciled_records": fmt.Sprint(report.ReconciledRecords),
-		"reconciled_files":   fmt.Sprint(report.ReconciledFiles),
-		"quarantined_files":  fmt.Sprint(len(report.QuarantinedFiles)),
-		"rotated_files":      fmt.Sprint(report.RotatedFiles),
-		"removed_files":      fmt.Sprint(report.RemovedFiles),
-	})
+	if record == nil {
+		record = func(string, string, string, map[string]string) {}
+	}
+	runPass := func(reason string, maintain func(context.Context) (diagnostics.MaintenanceReport, error)) {
+		passCtx, cancel := context.WithTimeout(ctx, schedule.passBudget)
+		report, err := maintain(passCtx)
+		cancel()
+		if parentErr := ctx.Err(); err != nil && parentErr != nil && errors.Is(err, parentErr) {
+			return
+		}
+		evidence := map[string]string{
+			"promoted_records":  fmt.Sprint(report.PromotedRecords),
+			"promoted_files":    fmt.Sprint(report.PromotedFiles),
+			"busy_spool_files":  fmt.Sprint(report.BusySpoolFiles),
+			"corrupt_lines":     fmt.Sprint(report.CorruptLines),
+			"quarantined_files": fmt.Sprint(len(report.QuarantinedFiles)),
+			"rotated_files":     fmt.Sprint(report.RotatedFiles),
+			"removed_files":     fmt.Sprint(report.RemovedFiles),
+			"removed_bytes":     fmt.Sprint(report.RemovedBytes),
+		}
+		if err != nil {
+			record("journal.maintenance", "error", reason+": "+err.Error(), evidence)
+			return
+		}
+		record("journal.maintenance", "success", reason, evidence)
+	}
+
+	runPass("startup_spool_promotion", journal.PromoteSpool)
+	if ctx.Err() != nil {
+		return
+	}
+	runPass("startup_rotation_retention", journal.RotateAndRetain)
+	if ctx.Err() != nil {
+		return
+	}
+	promotionTicker := time.NewTicker(schedule.promotionInterval)
+	retentionTicker := time.NewTicker(schedule.retentionInterval)
+	defer promotionTicker.Stop()
+	defer retentionTicker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-promotionTicker.C:
+			runPass("periodic_spool_promotion", journal.PromoteSpool)
+		case <-retentionTicker.C:
+			runPass("periodic_rotation_retention", journal.RotateAndRetain)
+		}
+	}
 }

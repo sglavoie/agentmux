@@ -528,6 +528,25 @@ session, ASL run, event, trace, request, upstream source event, stage, outcome,
 and time range. See [Debugging event delivery](docs/debugging.md) for the
 failure matrix, privacy model, bundle guidance, and operator smoke procedure.
 
+`status`, `tail`, `explain`, and `bundle` use schema v2. Their diagnostic reads
+capture fixed byte prefixes from journal segments and emergency spool files,
+then release the shared storage lock before parsing. Readers never promote
+spool files or run retention; the daemon owns promotion every 60 seconds and
+retention every 15 minutes. Each v2 result includes `journal_snapshot` counters
+for files, bytes, records, matches, duplicates, and corrupt lines scanned.
+
+`tail --last N` merges segment and spool evidence, sorts it by event time, and
+only then keeps the newest N records, so a delayed spool write cannot displace
+newer evidence. This event-time ordering is pinned by acceptance tests. Exact
+`explain` queries are bounded by `--graph-depth 2`,
+`--max-nodes 250`, and `--max-edges 1000` by default; JSON exposes the applied
+limits and truncation counts, while text output warns when candidates were
+pruned. `replay` remains schema v1 and accepts both v1 and v2 diagnostic
+bundles and causal-record wrappers. Explanations classify failed delivery,
+backend timeout, or focus failure as `notification_failure`; intentional
+cancellation, dismissal, policy suppression, and no-interaction outcomes such
+as `interaction_timeout` remain `notification_suppression`.
+
 It listens on:
 
 ```text

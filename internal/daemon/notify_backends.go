@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,23 +21,55 @@ import (
 // the longer alerterDispatchTimeout instead.
 const notifyDispatchTimeout = 5 * time.Second
 
-// alerterDispatchTimeout bounds how long a single alerter invocation may
-// wait for user interaction. alerter exits when the user clicks, dismisses,
-// or times out; this cap is an upper bound for the worst case where the user
-// never interacts and Notification Center swallows the alert. The
-// exec.CommandContext underlying runAlerter still terminates the subprocess
-// promptly on daemon shutdown via context cancellation.
-const alerterDispatchTimeout = 5 * time.Minute
+// alerterProtocolTimeout is sent to alerter so a notification that receives
+// no interaction still exits successfully with @TIMEOUT. The process context
+// gets a bounded grace period beyond that protocol timeout. Notification
+// Center can delay delivery enough that alerter's own countdown starts several
+// seconds after process launch, so a one-minute grace avoids racing the
+// backend's successful @TIMEOUT token while still bounding a genuinely stuck
+// process.
+const (
+	alerterProtocolTimeout = 5 * time.Minute
+	alerterTimeoutGrace    = time.Minute
+	alerterDispatchTimeout = alerterProtocolTimeout + alerterTimeoutGrace
+)
 
-// dispatchFn is the signature each backend implements. The bool reports
-// whether the user clicked the notification body (alerter only); osascript
-// always returns false because its notifications cannot relay interaction.
+type deliveryOutcome string
+
+const deliveryDelivered deliveryOutcome = "delivered"
+
+type interactionOutcome string
+
+const (
+	interactionClicked     interactionOutcome = "clicked"
+	interactionTimeout     interactionOutcome = "interaction_timeout"
+	interactionDismissed   interactionOutcome = "dismissed"
+	interactionReplied     interactionOutcome = "replied"
+	interactionUnavailable interactionOutcome = "interaction_unavailable"
+	interactionUnknown     interactionOutcome = "interaction_unknown"
+)
+
+// dispatchResult keeps successful delivery separate from the user's terminal
+// interaction. Backends return an error when delivery itself fails; a
+// successful result always records deliveryDelivered and an explicit
+// interaction value.
+type dispatchResult struct {
+	delivery    deliveryOutcome
+	interaction interactionOutcome
+}
+
+func deliveredResult(interaction interactionOutcome) dispatchResult {
+	return dispatchResult{delivery: deliveryDelivered, interaction: interaction}
+}
+
+// dispatchFn is the signature each backend implements. The result reports
+// both successful delivery and the terminal interaction (when available).
 // windowID and account identify the focus target for click handling: a
 // positive windowID maps to a real Kitty window; a non-empty account is
 // used when windowID is synthetic (e.g. hook-silence sweeps). Backends
 // ignore both parameters — the Notifier's focusForClick uses them after
 // the backend returns.
-type dispatchFn func(ctx context.Context, windowID int, account, title, subtitle string) (bool, error)
+type dispatchFn func(ctx context.Context, windowID int, account, title, subtitle string) (dispatchResult, error)
 
 // dispatcher bundles a backend's dispatch function with the timeout the
 // runDispatch goroutine should use. Bundling avoids a mismatch where the
@@ -57,12 +90,15 @@ func selectDispatcher() dispatcher {
 	return dispatcher{fn: runOsascript, timeout: notifyDispatchTimeout}
 }
 
-func runOsascript(ctx context.Context, _ int, _ string, title, subtitle string) (bool, error) {
+func runOsascript(ctx context.Context, _ int, _ string, title, subtitle string) (dispatchResult, error) {
 	script := fmt.Sprintf(
 		`display notification "" with title %s subtitle %s`,
 		quoteAppleScript(title), quoteAppleScript(subtitle),
 	)
-	return false, exec.CommandContext(ctx, "osascript", "-e", script).Run()
+	if err := exec.CommandContext(ctx, "osascript", "-e", script).Run(); err != nil {
+		return dispatchResult{}, err
+	}
+	return deliveredResult(interactionUnavailable), nil
 }
 
 // quoteAppleScript wraps s in a double-quoted AppleScript string literal.
@@ -97,32 +133,38 @@ func quoteAppleScript(s string) string {
 }
 
 func alerterArgs(title, subtitle string) []string {
-	return []string{"--title", title, "--subtitle", subtitle, "--message", ""}
+	timeoutSeconds := strconv.FormatInt(int64(alerterProtocolTimeout/time.Second), 10)
+	return []string{"--title", title, "--subtitle", subtitle, "--message", "", "--timeout", timeoutSeconds}
 }
 
-func runAlerter(ctx context.Context, _ int, _ string, title, subtitle string) (bool, error) {
+func runAlerter(ctx context.Context, _ int, _ string, title, subtitle string) (dispatchResult, error) {
 	out, err := exec.CommandContext(ctx, "alerter", alerterArgs(title, subtitle)...).Output()
 	if err != nil {
-		return false, err
+		return dispatchResult{}, err
 	}
 	return parseAlerterOutput(out), nil
 }
 
-// parseAlerterOutput reports whether the user clicked the notification body.
+// parseAlerterOutput reports the terminal delivery and interaction outcome.
 // alerter prints exactly one of @CONTENTCLICKED, @ACTIONCLICKED, @CLOSED,
-// @TIMEOUT, @REPLIED, or @CONTENTCLOSED on stdout when it exits. Only the
-// two "click" outcomes count as an explicit request to focus; everything
-// else (dismissal, timeout, reply, empty/garbled output) is treated as no
-// click so the caller does not steal focus on a passive dismissal.
-func parseAlerterOutput(stdout []byte) bool {
+// @TIMEOUT, @REPLIED, or @CONTENTCLOSED on stdout when it exits. Unknown or
+// empty successful output remains a delivered notification but never requests
+// focus.
+func parseAlerterOutput(stdout []byte) dispatchResult {
 	line := strings.TrimSpace(string(stdout))
 	if i := strings.IndexAny(line, "\r\n"); i >= 0 {
 		line = line[:i]
 	}
 	switch line {
 	case "@CONTENTCLICKED", "@ACTIONCLICKED":
-		return true
+		return deliveredResult(interactionClicked)
+	case "@TIMEOUT":
+		return deliveredResult(interactionTimeout)
+	case "@CLOSED", "@CONTENTCLOSED":
+		return deliveredResult(interactionDismissed)
+	case "@REPLIED":
+		return deliveredResult(interactionReplied)
 	default:
-		return false
+		return deliveredResult(interactionUnknown)
 	}
 }

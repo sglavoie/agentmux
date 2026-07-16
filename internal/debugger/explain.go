@@ -12,7 +12,25 @@ import (
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
-const ExplainSchemaVersion = 1
+const ExplainSchemaVersion = 2
+
+const (
+	DefaultExplainGraphDepth = 2
+	MinExplainGraphDepth     = 1
+	MaxExplainGraphDepth     = 4
+	DefaultExplainMaxNodes   = 250
+	MinExplainMaxNodes       = 1
+	MaxExplainMaxNodes       = 2000
+	DefaultExplainMaxEdges   = 1000
+	MinExplainMaxEdges       = 1
+	MaxExplainMaxEdges       = 8000
+)
+
+const (
+	TruncationGraphDepth = "graph_depth"
+	TruncationMaxNodes   = "max_nodes"
+	TruncationMaxEdges   = "max_edges"
+)
 
 const (
 	CauseHookDisabled            = "hook_disabled"
@@ -27,6 +45,7 @@ const (
 	CauseQuarantine              = "quarantine"
 	CauseReducerSuppression      = "reducer_suppression"
 	CauseRenderFailure           = "render_failure"
+	CauseNotificationFailure     = "notification_failure"
 	CauseNotificationSuppression = "notification_suppression"
 	CauseSuccessfulCompletion    = "successful_completion"
 	CauseInsufficientEvidence    = "insufficient_evidence"
@@ -40,9 +59,25 @@ const (
 type ExplainOptions struct {
 	Selector    Selector
 	Recent      int
+	GraphDepth  int
+	MaxNodes    int
+	MaxEdges    int
 	Hooks       *HookReport
 	StatusError string
 	Now         time.Time
+}
+
+type ExplanationLimits struct {
+	GraphDepth int `json:"graph_depth"`
+	MaxNodes   int `json:"max_nodes"`
+	MaxEdges   int `json:"max_edges"`
+}
+
+type ExplanationTruncation struct {
+	Truncated            bool     `json:"truncated"`
+	Reasons              []string `json:"reasons"`
+	PrunedNodeCandidates int      `json:"pruned_node_candidates"`
+	PrunedEdgeCandidates int      `json:"pruned_edge_candidates"`
 }
 
 type ExplanationCause struct {
@@ -104,28 +139,23 @@ type ExpectedSequenceDiagnostic struct {
 	Message       string   `json:"message"`
 }
 
-type ExplanationJournal struct {
-	FilesRead         int `json:"files_read"`
-	CorruptLines      int `json:"corrupt_lines"`
-	ReconciledFiles   int `json:"reconciled_files"`
-	ReconciledRecords int `json:"reconciled_records"`
-}
-
 type ExplanationReport struct {
-	SchemaVersion     int                          `json:"schema_version"`
-	GeneratedAt       time.Time                    `json:"generated_at"`
-	Selector          Selector                     `json:"selector"`
-	Recent            int                          `json:"recent"`
-	Cause             ExplanationCause             `json:"cause"`
-	Graph             EvidenceGraph                `json:"evidence_graph"`
-	ExpectedSequences []ExpectedSequenceDiagnostic `json:"expected_sequences"`
-	SuggestedCommands []string                     `json:"suggested_commands"`
-	Journal           ExplanationJournal           `json:"journal"`
-	Warnings          []string                     `json:"warnings,omitempty"`
+	SchemaVersion     int                            `json:"schema_version"`
+	GeneratedAt       time.Time                      `json:"generated_at"`
+	Selector          Selector                       `json:"selector"`
+	Recent            int                            `json:"recent"`
+	Limits            ExplanationLimits              `json:"limits"`
+	Truncation        ExplanationTruncation          `json:"truncation"`
+	Cause             ExplanationCause               `json:"cause"`
+	Graph             EvidenceGraph                  `json:"evidence_graph"`
+	ExpectedSequences []ExpectedSequenceDiagnostic   `json:"expected_sequences"`
+	SuggestedCommands []string                       `json:"suggested_commands"`
+	JournalSnapshot   diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+	Warnings          []string                       `json:"warnings,omitempty"`
 }
 
-// Explain reconciles and tolerantly reads the durable journal, then constructs
-// a bounded causal graph. It never contacts or mutates the daemon.
+// Explain reads a tolerant durable-journal snapshot, then constructs a bounded
+// causal graph. It never contacts or mutates the daemon.
 func Explain(ctx context.Context, journal *diagnostics.Journal, options ExplainOptions) (ExplanationReport, error) {
 	if journal == nil {
 		return ExplanationReport{}, fmt.Errorf("debugger: journal is nil")
@@ -143,10 +173,7 @@ func Explain(ctx context.Context, journal *diagnostics.Journal, options ExplainO
 		return ExplanationReport{}, err
 	}
 	report := buildExplanation(options, tail.Records)
-	report.Journal = ExplanationJournal{
-		FilesRead: tail.FilesRead, CorruptLines: tail.CorruptLines,
-		ReconciledFiles: tail.ReconciledFiles, ReconciledRecords: tail.ReconciledRecords,
-	}
+	report.JournalSnapshot = tail.JournalSnapshot
 	return report, nil
 }
 
@@ -167,11 +194,18 @@ func normalizeExplainOptions(options *ExplainOptions) error {
 	if options.Recent < 0 {
 		return fmt.Errorf("explain recent count must not be negative")
 	}
+	setExplainOptionDefaults(options)
+	if options.GraphDepth < MinExplainGraphDepth || options.GraphDepth > MaxExplainGraphDepth {
+		return fmt.Errorf("explain graph depth must be between %d and %d", MinExplainGraphDepth, MaxExplainGraphDepth)
+	}
+	if options.MaxNodes < MinExplainMaxNodes || options.MaxNodes > MaxExplainMaxNodes {
+		return fmt.Errorf("explain max nodes must be between %d and %d", MinExplainMaxNodes, MaxExplainMaxNodes)
+	}
+	if options.MaxEdges < MinExplainMaxEdges || options.MaxEdges > MaxExplainMaxEdges {
+		return fmt.Errorf("explain max edges must be between %d and %d", MinExplainMaxEdges, MaxExplainMaxEdges)
+	}
 	if err := options.Selector.Normalize(); err != nil {
 		return err
-	}
-	if options.Recent == 0 {
-		options.Recent = 10
 	}
 	if options.Now.IsZero() {
 		options.Now = time.Now().UTC()
@@ -181,12 +215,37 @@ func normalizeExplainOptions(options *ExplainOptions) error {
 	return nil
 }
 
+func setExplainOptionDefaults(options *ExplainOptions) {
+	if options.Recent == 0 {
+		options.Recent = 10
+	}
+	if options.GraphDepth == 0 {
+		options.GraphDepth = DefaultExplainGraphDepth
+	}
+	if options.MaxNodes == 0 {
+		options.MaxNodes = DefaultExplainMaxNodes
+	}
+	if options.MaxEdges == 0 {
+		options.MaxEdges = DefaultExplainMaxEdges
+	}
+}
+
 func buildExplanation(options ExplainOptions, records []diagnostics.TraceEnvelope) ExplanationReport {
-	selected := selectExplanationRecords(records, options.Selector, options.Recent)
-	graph, nodeIDs := buildEvidenceGraph(selected, relevantHookProfiles(options.Hooks, options.Selector))
+	setExplainOptionDefaults(&options)
+	selected, truncation := traverseExplanationRecords(records, options)
+	graph, nodeIDs := buildEvidenceGraph(
+		selected,
+		relevantHookProfiles(options.Hooks, options.Selector),
+		options.MaxNodes,
+		options.MaxEdges,
+		&truncation,
+	)
+	finalizeExplanationTruncation(&truncation)
 	report := ExplanationReport{
 		SchemaVersion: ExplainSchemaVersion, GeneratedAt: options.Now, Selector: options.Selector,
-		Recent: options.Recent, Graph: graph, ExpectedSequences: expectedSequences(selected, nodeIDs),
+		Recent:     options.Recent,
+		Limits:     ExplanationLimits{GraphDepth: options.GraphDepth, MaxNodes: options.MaxNodes, MaxEdges: options.MaxEdges},
+		Truncation: truncation, Graph: graph, ExpectedSequences: expectedSequences(selected, nodeIDs),
 		SuggestedCommands: make([]string, 0),
 	}
 	if options.StatusError != "" {
@@ -197,56 +256,127 @@ func buildExplanation(options ExplainOptions, records []diagnostics.TraceEnvelop
 	return report
 }
 
-func selectExplanationRecords(records []diagnostics.TraceEnvelope, selector Selector, recent int) []diagnostics.TraceEnvelope {
+func traverseExplanationRecords(records []diagnostics.TraceEnvelope, options ExplainOptions) ([]diagnostics.TraceEnvelope, ExplanationTruncation) {
 	all := append([]diagnostics.TraceEnvelope(nil), records...)
 	sortEnvelopes(all)
-	seed := make(map[int]struct{})
-	exact := selector.TraceID != "" || selector.RequestID != "" || selector.SourceEventID != ""
-	for i, record := range all {
-		if recordMatchesSelector(record, selector) {
-			seed[i] = struct{}{}
+	index := buildExplanationIndex(all)
+	seeds := explanationSeedIndices(all, options.Selector, options.Recent)
+	if len(seeds) == 0 {
+		return nil, ExplanationTruncation{Reasons: make([]string, 0)}
+	}
+
+	admitted := make(map[int]struct{}, minInt(len(all), options.MaxNodes))
+	causal := make(map[int]struct{}, minInt(len(all), options.MaxNodes))
+	prunedNodes := make(map[int]map[string]struct{})
+	truncation := ExplanationTruncation{Reasons: make([]string, 0)}
+	markPruned := func(candidate int, reason string) {
+		if _, ok := admitted[candidate]; ok {
+			return
+		}
+		reasons := prunedNodes[candidate]
+		if reasons == nil {
+			reasons = make(map[string]struct{})
+			prunedNodes[candidate] = reasons
+		}
+		reasons[reason] = struct{}{}
+	}
+	admitCausal := func(candidate int) bool {
+		if _, ok := causal[candidate]; ok {
+			return false
+		}
+		if _, ok := admitted[candidate]; !ok {
+			if len(admitted) >= options.MaxNodes {
+				markPruned(candidate, TruncationMaxNodes)
+				return false
+			}
+			admitted[candidate] = struct{}{}
+			delete(prunedNodes, candidate)
+		}
+		causal[candidate] = struct{}{}
+		return true
+	}
+
+	frontier := make([]int, 0, len(seeds))
+	for _, candidate := range seeds {
+		if admitCausal(candidate) {
+			frontier = append(frontier, candidate)
 		}
 	}
-	if !exact && len(seed) > recent {
-		indices := make([]int, 0, len(seed))
-		for i := range seed {
+	for depth := 0; depth < options.GraphDepth && len(frontier) > 0; depth++ {
+		candidates := index.causalCandidates(frontier, causal)
+		next := make([]int, 0, len(candidates))
+		for _, candidate := range candidates {
+			if admitCausal(candidate) {
+				next = append(next, candidate)
+			}
+		}
+		frontier = next
+	}
+	// Inspect only the next causal frontier. This reports directly pruned depth
+	// candidates without recursively calculating an unbounded omitted total.
+	for _, candidate := range index.causalCandidates(frontier, causal) {
+		markPruned(candidate, TruncationGraphDepth)
+	}
+
+	// Context records are attached only after causal traversal so a high-fan-out
+	// render/session/tool join cannot consume capacity needed by causal evidence.
+	causalIndices := sortedExplanationIndices(causal)
+	retractedDepthFrontier := make([]int, 0)
+	for _, candidate := range index.contextualCandidates(causalIndices, admitted) {
+		if len(admitted) >= options.MaxNodes {
+			markPruned(candidate, TruncationMaxNodes)
+			continue
+		}
+		_, wasDepthPruned := prunedNodes[candidate][TruncationGraphDepth]
+		admitted[candidate] = struct{}{}
+		delete(prunedNodes, candidate)
+		if wasDepthPruned {
+			retractedDepthFrontier = append(retractedDepthFrontier, candidate)
+		}
+	}
+	// A contextually admitted depth-frontier record may expose a direct causal
+	// child that remains excluded. Inspect that next frontier once without
+	// admitting it or recursively fanning out from contextual evidence.
+	for _, candidate := range index.causalCandidates(retractedDepthFrontier, admitted) {
+		markPruned(candidate, TruncationGraphDepth)
+	}
+
+	for _, reasons := range prunedNodes {
+		for reason := range reasons {
+			addExplanationTruncationReason(&truncation, reason)
+		}
+	}
+	truncation.PrunedNodeCandidates = len(prunedNodes)
+	selected := make([]diagnostics.TraceEnvelope, 0, len(admitted))
+	for _, candidate := range sortedExplanationIndices(admitted) {
+		selected = append(selected, all[candidate])
+	}
+	return selected, truncation
+}
+
+func explanationSeedIndices(records []diagnostics.TraceEnvelope, selector Selector, recent int) []int {
+	indices := make([]int, 0)
+	for i, record := range records {
+		if recordMatchesSelector(record, selector) {
 			indices = append(indices, i)
 		}
-		sort.Ints(indices)
-		seed = make(map[int]struct{}, recent)
-		seen := make(map[string]struct{})
-		for i := len(indices) - 1; i >= 0 && len(seed) < recent; i-- {
-			idx := indices[i]
-			key := causalAnchor(all[idx])
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-			seed[idx] = struct{}{}
+	}
+	exact := selector.TraceID != "" || selector.RequestID != "" || selector.SourceEventID != ""
+	if exact || len(indices) <= recent {
+		return indices
+	}
+	selected := make([]int, 0, recent)
+	seen := make(map[string]struct{})
+	for i := len(indices) - 1; i >= 0 && len(selected) < recent; i-- {
+		candidate := indices[i]
+		anchor := causalAnchor(records[candidate])
+		if _, ok := seen[anchor]; ok {
+			continue
 		}
+		seen[anchor] = struct{}{}
+		selected = append(selected, candidate)
 	}
-	if len(seed) == 0 {
-		return nil
-	}
-	for changed := true; changed; {
-		changed = false
-		joins := collectStrongJoins(all, seed)
-		for i, record := range all {
-			if _, ok := seed[i]; ok {
-				continue
-			}
-			if joins.matches(record) {
-				seed[i] = struct{}{}
-				changed = true
-			}
-		}
-	}
-	selected := make([]diagnostics.TraceEnvelope, 0, len(seed))
-	for i, record := range all {
-		if _, ok := seed[i]; ok {
-			selected = append(selected, record)
-		}
-	}
+	sort.Ints(selected)
 	return selected
 }
 
@@ -284,71 +414,125 @@ func causalAnchor(record diagnostics.TraceEnvelope) string {
 	return "record:" + record.SourceID + ":" + strconv.FormatUint(record.SourceSequence, 10) + ":" + record.SpanID
 }
 
-type strongJoins struct {
-	traces, parentTraces, requests, sourceEvents, generations, launches map[string]struct{}
-	turns, toolUses, subagents, sessions, runs                          map[string]struct{}
+type explanationIndex struct {
+	records      []diagnostics.TraceEnvelope
+	traces       map[string][]int
+	parentTraces map[string][]int
+	requests     map[string][]int
+	sourceEvents map[string][]int
+	generations  map[string][]int
+	launches     map[string][]int
+	turns        map[string][]int
+	toolUses     map[string][]int
+	subagents    map[string][]int
+	sessions     map[string][]int
+	runs         map[string][]int
 }
 
-func collectStrongJoins(records []diagnostics.TraceEnvelope, selected map[int]struct{}) strongJoins {
-	j := strongJoins{
-		traces: map[string]struct{}{}, parentTraces: map[string]struct{}{}, requests: map[string]struct{}{},
-		sourceEvents: map[string]struct{}{}, generations: map[string]struct{}{}, launches: map[string]struct{}{},
-		turns: map[string]struct{}{}, toolUses: map[string]struct{}{}, subagents: map[string]struct{}{},
-		sessions: map[string]struct{}{}, runs: map[string]struct{}{},
+func buildExplanationIndex(records []diagnostics.TraceEnvelope) explanationIndex {
+	index := explanationIndex{
+		records: records, traces: make(map[string][]int), parentTraces: make(map[string][]int),
+		requests: make(map[string][]int), sourceEvents: make(map[string][]int), generations: make(map[string][]int),
+		launches: make(map[string][]int), turns: make(map[string][]int), toolUses: make(map[string][]int),
+		subagents: make(map[string][]int), sessions: make(map[string][]int), runs: make(map[string][]int),
 	}
-	for i := range selected {
-		r := records[i]
-		addJoin(j.traces, r.TraceID)
-		addJoin(j.parentTraces, r.ParentTraceID)
-		addJoin(j.requests, r.RequestID)
-		for _, id := range sourceEventIDs(r) {
-			addJoin(j.sourceEvents, id)
+	for i, record := range records {
+		addExplanationIndex(index.traces, record.TraceID, i)
+		addExplanationIndex(index.parentTraces, record.ParentTraceID, i)
+		addExplanationIndex(index.requests, record.RequestID, i)
+		for _, id := range sourceEventIDs(record) {
+			addExplanationIndex(index.sourceEvents, id, i)
 		}
-		addJoin(j.generations, renderGenerationKey(r))
-		addJoin(j.launches, r.LaunchID)
-		addJoin(j.turns, scopedRecordID(r, r.Evidence["turn_id"]))
-		addJoin(j.toolUses, scopedRecordID(r, r.Evidence["tool_use_id"]))
-		if r.Evidence["source_kind"] == "subagent" {
-			addJoin(j.subagents, scopedRecordID(r, r.Evidence["source_key"]))
+		addExplanationIndex(index.generations, renderGenerationKey(record), i)
+		addExplanationIndex(index.launches, record.LaunchID, i)
+		addExplanationIndex(index.turns, scopedRecordID(record, record.Evidence["turn_id"]), i)
+		addExplanationIndex(index.toolUses, scopedRecordID(record, record.Evidence["tool_use_id"]), i)
+		if record.Evidence["source_kind"] == "subagent" {
+			addExplanationIndex(index.subagents, scopedRecordID(record, record.Evidence["source_key"]), i)
 		}
-		addJoin(j.sessions, r.SessionID)
-		addJoin(j.runs, r.RunID)
+		addExplanationIndex(index.sessions, record.SessionID, i)
+		addExplanationIndex(index.runs, record.RunID, i)
 	}
-	return j
+	return index
 }
 
-func (j strongJoins) matches(record diagnostics.TraceEnvelope) bool {
-	if hasJoin(j.traces, record.TraceID) || hasJoin(j.traces, record.ParentTraceID) ||
-		hasJoin(j.parentTraces, record.TraceID) || hasJoin(j.requests, record.RequestID) ||
-		hasJoin(j.generations, renderGenerationKey(record)) || hasJoin(j.launches, record.LaunchID) ||
-		hasJoin(j.turns, scopedRecordID(record, record.Evidence["turn_id"])) ||
-		hasJoin(j.toolUses, scopedRecordID(record, record.Evidence["tool_use_id"])) ||
-		record.Evidence["source_kind"] == "subagent" && hasJoin(j.subagents, scopedRecordID(record, record.Evidence["source_key"])) {
-		return true
-	}
-	if record.Stage == "session.launch" && (hasJoin(j.sessions, record.SessionID) || hasJoin(j.runs, record.RunID)) {
-		return true
-	}
-	for _, id := range sourceEventIDs(record) {
-		if hasJoin(j.sourceEvents, id) {
-			return true
+func (index explanationIndex) causalCandidates(frontier []int, admitted map[int]struct{}) []int {
+	candidates := make(map[int]struct{})
+	for _, current := range frontier {
+		record := index.records[current]
+		addExplanationCandidates(candidates, index.traces[record.TraceID])
+		addExplanationCandidates(candidates, index.requests[record.RequestID])
+		for _, id := range sourceEventIDs(record) {
+			addExplanationCandidates(candidates, index.sourceEvents[id])
 		}
+		addExplanationCandidates(candidates, index.traces[record.ParentTraceID])
+		addExplanationCandidates(candidates, index.parentTraces[record.TraceID])
 	}
-	return false
+	return newExplanationCandidates(candidates, admitted)
 }
 
-func addJoin(set map[string]struct{}, value string) {
-	if value != "" {
-		set[value] = struct{}{}
+func (index explanationIndex) contextualCandidates(causal []int, admitted map[int]struct{}) []int {
+	candidates := make(map[int]struct{})
+	for _, current := range causal {
+		record := index.records[current]
+		addExplanationCandidates(candidates, index.generations[renderGenerationKey(record)])
+		addExplanationCandidates(candidates, index.launches[record.LaunchID])
+		addExplanationCandidates(candidates, index.turns[scopedRecordID(record, record.Evidence["turn_id"])])
+		addExplanationCandidates(candidates, index.toolUses[scopedRecordID(record, record.Evidence["tool_use_id"])])
+		if record.Evidence["source_kind"] == "subagent" {
+			addExplanationCandidates(candidates, index.subagents[scopedRecordID(record, record.Evidence["source_key"])])
+		}
+		addExplanationCandidates(candidates, index.sessions[record.SessionID])
+		addExplanationCandidates(candidates, index.runs[record.RunID])
+	}
+	return newExplanationCandidates(candidates, admitted)
+}
+
+func addExplanationIndex(index map[string][]int, key string, record int) {
+	if key != "" {
+		index[key] = append(index[key], record)
 	}
 }
 
-func hasJoin(set map[string]struct{}, value string) bool {
-	if value == "" {
-		return false
+func addExplanationCandidates(candidates map[int]struct{}, records []int) {
+	for _, record := range records {
+		candidates[record] = struct{}{}
 	}
-	_, ok := set[value]
-	return ok
+}
+
+func newExplanationCandidates(candidates, admitted map[int]struct{}) []int {
+	for candidate := range admitted {
+		delete(candidates, candidate)
+	}
+	return sortedExplanationIndices(candidates)
+}
+
+func sortedExplanationIndices(values map[int]struct{}) []int {
+	indices := make([]int, 0, len(values))
+	for value := range values {
+		indices = append(indices, value)
+	}
+	sort.Ints(indices)
+	return indices
+}
+
+func addExplanationTruncationReason(truncation *ExplanationTruncation, reason string) {
+	if !containsString(truncation.Reasons, reason) {
+		truncation.Reasons = append(truncation.Reasons, reason)
+	}
+}
+
+func finalizeExplanationTruncation(truncation *ExplanationTruncation) {
+	rank := map[string]int{TruncationGraphDepth: 0, TruncationMaxNodes: 1, TruncationMaxEdges: 2}
+	sort.Slice(truncation.Reasons, func(i, j int) bool { return rank[truncation.Reasons[i]] < rank[truncation.Reasons[j]] })
+	truncation.Truncated = len(truncation.Reasons) > 0
+}
+
+func minInt(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 func scopedRecordID(record diagnostics.TraceEnvelope, id string) string {
@@ -404,10 +588,22 @@ func relevantHookProfiles(report *HookReport, selector Selector) []HookProfile {
 		}
 		profiles = append(profiles, profile)
 	}
+	sort.SliceStable(profiles, func(i, j int) bool {
+		if profiles[i].Profile != profiles[j].Profile {
+			return profiles[i].Profile < profiles[j].Profile
+		}
+		return profiles[i].Harness < profiles[j].Harness
+	})
 	return profiles
 }
 
-func buildEvidenceGraph(records []diagnostics.TraceEnvelope, hooks []HookProfile) (EvidenceGraph, []string) {
+func buildEvidenceGraph(
+	records []diagnostics.TraceEnvelope,
+	hooks []HookProfile,
+	maxNodes int,
+	maxEdges int,
+	truncation *ExplanationTruncation,
+) (EvidenceGraph, []string) {
 	graph := EvidenceGraph{Nodes: make([]EvidenceNode, 0, len(records)+len(hooks)), Edges: make([]EvidenceEdge, 0)}
 	nodeIDs := make([]string, len(records))
 	used := make(map[string]int)
@@ -424,12 +620,23 @@ func buildEvidenceGraph(records []diagnostics.TraceEnvelope, hooks []HookProfile
 		graph.Nodes = append(graph.Nodes, EvidenceNode{ID: id, Kind: "trace", Identity: evidenceIdentity(record), Record: &copyRecord})
 	}
 	for i := range hooks {
+		if len(graph.Nodes) >= maxNodes {
+			truncation.PrunedNodeCandidates++
+			addExplanationTruncationReason(truncation, TruncationMaxNodes)
+			continue
+		}
 		profile := hooks[i]
 		id := "hook:" + profile.Profile + ":" + profile.Harness
 		copyProfile := profile
 		graph.Nodes = append(graph.Nodes, EvidenceNode{ID: id, Kind: "hook_status", Hook: &copyProfile})
 	}
-	graph.Edges = graphEdges(graph.Nodes)
+	edgeCandidates := graphEdges(graph.Nodes)
+	if len(edgeCandidates) > maxEdges {
+		truncation.PrunedEdgeCandidates = len(edgeCandidates) - maxEdges
+		addExplanationTruncationReason(truncation, TruncationMaxEdges)
+		edgeCandidates = edgeCandidates[:maxEdges]
+	}
+	graph.Edges = edgeCandidates
 	return graph, nodeIDs
 }
 
@@ -632,8 +839,10 @@ func classifyFailureRecord(record diagnostics.TraceEnvelope) (string, string, bo
 		return CauseQuarantine, "The daemon quarantined the event or used an explicitly untrusted compatibility identity.", true
 	case strings.HasPrefix(stage, "daemon.renderer.") && (strings.HasSuffix(stage, ".failed") || outcome == "failed" || outcome == "error"):
 		return CauseRenderFailure, "The renderer recorded a terminal failure for the causal generation.", true
-	case strings.HasPrefix(stage, "daemon.notification.") && (outcome == "suppressed" || outcome == "cancelled" || outcome == "failed"):
-		return CauseNotificationSuppression, "The notification path recorded a suppression, cancellation, or failed dispatch.", true
+	case notificationFailure(stage, outcome, reason):
+		return CauseNotificationFailure, "The notification path recorded a dispatch, backend, or click-focus failure.", true
+	case strings.HasPrefix(stage, "daemon.notification.") && (outcome == "suppressed" || outcome == "cancelled"):
+		return CauseNotificationSuppression, "The notification path recorded an intentional suppression, cancellation, dismissal, or lack of interaction.", true
 	case stage == "daemon.decision" && (outcome == "suppressed" || outcome == "bypassed"):
 		return CauseReducerSuppression, "The daemon recorded a reducer suppression or intentional reducer bypass.", true
 	case strings.HasPrefix(stage, "hook.") && (outcome == "error" || outcome == "failed" || outcome == "rejected" || outcome == "retryable_failure" || outcome == "permanent_failure"):
@@ -641,6 +850,16 @@ func classifyFailureRecord(record diagnostics.TraceEnvelope) (string, string, bo
 	default:
 		return "", "", false
 	}
+}
+
+func notificationFailure(stage, outcome, reason string) bool {
+	if !strings.HasPrefix(stage, "daemon.notification.") || outcome != "failed" && outcome != "error" {
+		return false
+	}
+	if reason == "daemon_shutdown" {
+		return false
+	}
+	return strings.HasSuffix(stage, ".dispatch") || strings.HasSuffix(stage, ".backend") || strings.HasSuffix(stage, ".focus")
 }
 
 func isSuccessfulTerminal(record diagnostics.TraceEnvelope) bool {
@@ -888,7 +1107,7 @@ func suggestedCommands(cause ExplanationCause, records []diagnostics.TraceEnvelo
 			}
 			add(command)
 		}
-	case CauseInvalidPayload, CauseDuplicate, CauseQuarantine, CauseReducerSuppression, CauseRenderFailure, CauseNotificationSuppression:
+	case CauseInvalidPayload, CauseDuplicate, CauseQuarantine, CauseReducerSuppression, CauseRenderFailure, CauseNotificationFailure, CauseNotificationSuppression:
 		if safeCommandToken(requestID) {
 			add("amx debug tail --request " + requestID)
 		}

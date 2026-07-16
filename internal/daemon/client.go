@@ -35,17 +35,22 @@ func SocketPath() string {
 
 // Client connects to the daemon socket and sends single request/response pairs.
 type Client struct {
-	socketPath string
+	socketPath  string
+	dialContext func(context.Context, string, string) (net.Conn, error)
+}
+
+func defaultDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return (&net.Dialer{}).DialContext(ctx, network, address)
 }
 
 // NewClient returns a Client targeting the default socket path.
 func NewClient() *Client {
-	return &Client{socketPath: SocketPath()}
+	return &Client{socketPath: SocketPath(), dialContext: defaultDialContext}
 }
 
 // NewClientWithSocket returns a Client targeting an explicit socket path (for tests).
 func NewClientWithSocket(path string) *Client {
-	return &Client{socketPath: path}
+	return &Client{socketPath: path, dialContext: defaultDialContext}
 }
 
 // sendDeadline bounds one request/response exchange with a live daemon. A
@@ -125,7 +130,11 @@ func (c *Client) sendWithContext(ctx context.Context, req Request) (Response, er
 	if err := ctx.Err(); err != nil {
 		return Response{}, err
 	}
-	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", c.socketPath)
+	dialContext := c.dialContext
+	if dialContext == nil {
+		dialContext = defaultDialContext
+	}
+	conn, err := dialContext(ctx, "unix", c.socketPath)
 	if err != nil {
 		return Response{}, fmt.Errorf("connecting to daemon: %w", err)
 	}

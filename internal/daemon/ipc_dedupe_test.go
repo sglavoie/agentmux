@@ -25,7 +25,9 @@ func newTestServerWithRef(t *testing.T) (string, *Server) {
 
 	guard := NewStateGuard(time.Hour)
 	notifier := NewNotifier(&config.NotificationConfig{})
-	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (bool, error) { return false, nil }
+	notifier.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
+		return deliveredResult(interactionUnavailable), nil
+	}
 	handler := NewHandler(guard, notifier)
 
 	server, err := NewServer(socketPath, handler)

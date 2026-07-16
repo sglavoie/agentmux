@@ -15,8 +15,8 @@ import (
 func TestNotificationDispatchFailurePersistsTerminalJournalOutcome(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		n := NewNotifier(&config.NotificationConfig{Stop: true})
-		n.dispatch = func(context.Context, int, string, string, string) (bool, error) {
-			return false, errors.New("backend unavailable")
+		n.dispatch = func(context.Context, int, string, string, string) (dispatchResult, error) {
+			return dispatchResult{}, errors.New("backend unavailable")
 		}
 		h := NewHandler(NewStateGuard(time.Hour), n)
 		journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
@@ -50,7 +50,7 @@ func TestNotificationDispatchFailurePersistsTerminalJournalOutcome(t *testing.T)
 
 func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 	got := alerterArgs("W:api", "Session stopped")
-	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", ""}
+	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", "", "--timeout", "300"}
 	if len(got) != len(want) {
 		t.Fatalf("alerterArgs len = %d, want %d (%v)", len(got), len(want), got)
 	}
@@ -58,6 +58,18 @@ func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("alerterArgs[%d] = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestAlerterDispatchTimeoutIncludesProtocolGrace(t *testing.T) {
+	if got, want := alerterProtocolTimeout, 300*time.Second; got != want {
+		t.Fatalf("alerterProtocolTimeout = %s, want %s", got, want)
+	}
+	if got, want := alerterTimeoutGrace, time.Minute; got != want {
+		t.Fatalf("alerterTimeoutGrace = %s, want %s", got, want)
+	}
+	if got, want := alerterDispatchTimeout, alerterProtocolTimeout+time.Minute; got != want {
+		t.Fatalf("alerterDispatchTimeout = %s, want %s", got, want)
 	}
 }
 
@@ -75,7 +87,9 @@ func TestNotifier_DispatchHonorsContextTimeout(t *testing.T) {
 		var inflight atomic.Int32
 		var peakInflight atomic.Int32
 		returned := make(chan error, 4)
-		n.dispatch = func(ctx context.Context, _ int, _, _, _ string) (bool, error) {
+		dispositions := make(chan NotificationDisposition, 16)
+		n.SetObserver(func(disposition NotificationDisposition) { dispositions <- disposition })
+		n.dispatch = func(ctx context.Context, _ int, _, _, _ string) (dispatchResult, error) {
 			cur := inflight.Add(1)
 			defer inflight.Add(-1)
 			for {
@@ -86,7 +100,7 @@ func TestNotifier_DispatchHonorsContextTimeout(t *testing.T) {
 			}
 			<-ctx.Done()
 			returned <- ctx.Err()
-			return false, ctx.Err()
+			return dispatchResult{}, ctx.Err()
 		}
 
 		n.MaybeNotify(1, "W:api", "", "stop", false)
@@ -100,6 +114,9 @@ func TestNotifier_DispatchHonorsContextTimeout(t *testing.T) {
 			}
 		default:
 			t.Fatal("dispatch goroutine did not return after the context timeout — leak detected")
+		}
+		if !drainDispositionKeys(dispositions)["dispatch:failed:backend_timeout"] {
+			t.Fatal("wrapper expiry was not recorded as dispatch:failed:backend_timeout")
 		}
 
 		// Now drive a burst to confirm dispatches do not accumulate without bound:
@@ -196,7 +213,7 @@ func TestNotifier_RecorderClickKnobFlowsThroughDispatch(t *testing.T) {
 
 // TestNotifier_ParentContextCancellationStopsDispatch locks in the fix for
 // the latent bug where runDispatch derived its bounded context from
-// context.Background(). Under the 5-minute alerter timeout, that meant
+// context.Background(). Under the alerter protocol timeout plus grace, that meant
 // `amx daemon stop` could leave an alerter subprocess running for up to five
 // minutes. The dispatch ctx must now be a child of the parent installed via
 // SetParentContext, so cancelling the daemon's ctx propagates immediately.
@@ -212,10 +229,12 @@ func TestNotifier_ParentContextCancellationStopsDispatch(t *testing.T) {
 		n.SetParentContext(parent)
 
 		returned := make(chan error, 1)
-		n.dispatch = func(ctx context.Context, _ int, _, _, _ string) (bool, error) {
+		dispositions := make(chan NotificationDisposition, 8)
+		n.SetObserver(func(disposition NotificationDisposition) { dispositions <- disposition })
+		n.dispatch = func(ctx context.Context, _ int, _, _, _ string) (dispatchResult, error) {
 			<-ctx.Done()
 			returned <- ctx.Err()
-			return false, ctx.Err()
+			return dispatchResult{}, ctx.Err()
 		}
 
 		n.MaybeNotify(1, "W:api", "", "stop", false)
@@ -239,45 +258,99 @@ func TestNotifier_ParentContextCancellationStopsDispatch(t *testing.T) {
 		default:
 			t.Fatal("dispatch did not return after parent ctx cancel — runDispatch is detached from the daemon lifecycle")
 		}
+		if !drainDispositionKeys(dispositions)["dispatch:cancelled:daemon_shutdown"] {
+			t.Fatal("parent cancellation was not recorded as dispatch:cancelled:daemon_shutdown")
+		}
 	})
 }
 
-// TestParseAlerterOutput pins which alerter stdout tokens are interpreted as
-// an explicit click. Only @CONTENTCLICKED and @ACTIONCLICKED indicate the
-// user wants the source window focused; every other outcome (timeout, close,
-// reply, content-close, empty, garbled) must remain false so a passive
-// dismissal cannot yank focus away from whatever the user is currently doing.
+func TestNotifier_DispatchSuppressesFocusForTerminalInteraction(t *testing.T) {
+	cases := []struct {
+		name        string
+		interaction interactionOutcome
+		wantReason  string
+	}{
+		{"timeout", interactionTimeout, "interaction_timeout"},
+		{"dismissed", interactionDismissed, "dismissed"},
+		{"replied", interactionReplied, "replied"},
+		{"unavailable", interactionUnavailable, "interaction_unavailable"},
+		{"unknown", interactionUnknown, "interaction_unknown"},
+		{"unrecognized", interactionOutcome("future-token"), "interaction_unknown"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := NewNotifier(&config.NotificationConfig{Stop: true})
+			n.dispatch = func(context.Context, int, string, string, string) (dispatchResult, error) {
+				return deliveredResult(tc.interaction), nil
+			}
+			var dispositions []NotificationDisposition
+			n.SetObserver(func(disposition NotificationDisposition) {
+				dispositions = append(dispositions, disposition)
+			})
+
+			n.runDispatch(42, "work", "W:api", "Session stopped", "stop", NotificationTrace{})
+
+			seen := make(map[string]bool)
+			for _, disposition := range dispositions {
+				seen[disposition.Stage+":"+disposition.Outcome+":"+disposition.Reason] = true
+			}
+			if !seen["dispatch:sent:send_success"] {
+				t.Fatalf("successful delivery missing from dispositions: %+v", dispositions)
+			}
+			want := "focus:suppressed:" + tc.wantReason
+			if !seen[want] {
+				t.Fatalf("missing %q from dispositions: %+v", want, dispositions)
+			}
+		})
+	}
+}
+
+// TestParseAlerterOutput pins the delivery and interaction result for every
+// documented alerter terminal token. Unknown successful output remains
+// delivered but must never request focus.
 func TestParseAlerterOutput(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string
-		want bool
+		want dispatchResult
 	}{
-		{"content-clicked", "@CONTENTCLICKED", true},
-		{"action-clicked", "@ACTIONCLICKED", true},
-		{"timeout", "@TIMEOUT", false},
-		{"closed", "@CLOSED", false},
-		{"replied", "@REPLIED", false},
-		{"content-closed", "@CONTENTCLOSED", false},
-		{"empty", "", false},
-		{"whitespace-only", "   \t\n  ", false},
-		{"garbage", "what is this", false},
-		{"trailing-newline", "@CONTENTCLICKED\n", true},
-		{"leading-whitespace", "  @CONTENTCLICKED", true},
-		{"two-lines-keeps-first", "@CONTENTCLICKED\n@REPLIED", true},
-		{"two-lines-non-click-first", "@TIMEOUT\n@CONTENTCLICKED", false},
+		{"content-clicked", "@CONTENTCLICKED", deliveredResult(interactionClicked)},
+		{"action-clicked", "@ACTIONCLICKED", deliveredResult(interactionClicked)},
+		{"timeout", "@TIMEOUT", deliveredResult(interactionTimeout)},
+		{"closed", "@CLOSED", deliveredResult(interactionDismissed)},
+		{"replied", "@REPLIED", deliveredResult(interactionReplied)},
+		{"content-closed", "@CONTENTCLOSED", deliveredResult(interactionDismissed)},
+		{"empty", "", deliveredResult(interactionUnknown)},
+		{"whitespace-only", "   \t\n  ", deliveredResult(interactionUnknown)},
+		{"garbage", "what is this", deliveredResult(interactionUnknown)},
+		{"trailing-newline", "@CONTENTCLICKED\n", deliveredResult(interactionClicked)},
+		{"leading-whitespace", "  @CONTENTCLICKED", deliveredResult(interactionClicked)},
+		{"two-lines-keeps-first", "@CONTENTCLICKED\n@REPLIED", deliveredResult(interactionClicked)},
+		{"two-lines-non-click-first", "@TIMEOUT\n@CONTENTCLICKED", deliveredResult(interactionTimeout)},
 		// alerter emits uppercase tokens; case-sensitive matching is
 		// intentional so a future stdout format change does not silently
 		// start treating arbitrary text as a click.
-		{"lowercase-content-clicked", "@contentclicked", false},
-		{"lowercase-action-clicked", "@actionclicked", false},
-		{"mixed-case-content-clicked", "@ContentClicked", false},
+		{"lowercase-content-clicked", "@contentclicked", deliveredResult(interactionUnknown)},
+		{"lowercase-action-clicked", "@actionclicked", deliveredResult(interactionUnknown)},
+		{"mixed-case-content-clicked", "@ContentClicked", deliveredResult(interactionUnknown)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := parseAlerterOutput([]byte(tc.in)); got != tc.want {
-				t.Errorf("parseAlerterOutput(%q) = %v, want %v", tc.in, got, tc.want)
+				t.Errorf("parseAlerterOutput(%q) = %+v, want %+v", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+func drainDispositionKeys(dispositions <-chan NotificationDisposition) map[string]bool {
+	seen := make(map[string]bool)
+	for {
+		select {
+		case disposition := <-dispositions:
+			seen[disposition.Stage+":"+disposition.Outcome+":"+disposition.Reason] = true
+		default:
+			return seen
+		}
 	}
 }

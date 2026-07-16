@@ -137,10 +137,10 @@ Retained continuity commands live under `session`. Successful `--json` output us
 envelope; partial durable success returns data with a nonzero quiet exit.
 `doctor --json` is a versioned diagnostic report with the same top-level schema
 version but intentionally includes health fields directly. The `debug` report
-families (`status`, `tail`, `probe`, `explain`, `capture`, `bundle`, and
-`replay`) likewise emit command-specific schema-v1 reports directly rather than
-using the common `data` wrapper; `debug tail --follow --json` emits one
-schema-v1 record wrapper per JSON line.
+families likewise emit command-specific reports directly rather than using the
+common `data` wrapper: `status`, `tail`, `explain`, and `bundle` use schema v2,
+while `probe`, `capture`, and `replay` remain on schema v1. `debug tail
+--follow --json` emits one schema-v2 record wrapper per JSON line.
 
 When adding a command:
 

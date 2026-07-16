@@ -284,7 +284,7 @@ func TestNotifierRecordsExplicitDispositionReasons(t *testing.T) {
 			"decision:scheduled:dispatch",
 			"dispatch:attempted:backend_started",
 			"dispatch:sent:send_success",
-			"focus:suppressed:not_clicked",
+			"focus:suppressed:interaction_unavailable",
 			"decision:suppressed:cooldown",
 			"decision:suppressed:pipe_mode",
 			"decision:suppressed:unsupported_action",

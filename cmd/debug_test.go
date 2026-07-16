@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +30,18 @@ type debugTestKitty struct{ err error }
 func (k debugTestKitty) ListWindows() ([]kitty.OSWindow, error) { return nil, k.err }
 
 type debugTestProbe struct{}
+
+type cancelBuffer struct {
+	bytes.Buffer
+	cancel context.CancelFunc
+	once   sync.Once
+}
+
+func (w *cancelBuffer) Write(data []byte) (int, error) {
+	written, err := w.Buffer.Write(data)
+	w.once.Do(w.cancel)
+	return written, err
+}
 
 func (debugTestProbe) SendWithAutoStartObserved(request daemon.Request, _ string, observer daemon.DeliveryObserver) (daemon.Response, error) {
 	observer(daemon.DeliveryStageEvent{Stage: daemon.DeliveryStageIPCAttempt, Attempt: 1, Outcome: "success"})
@@ -58,6 +72,9 @@ func resetDebugTestState(t *testing.T) {
 	oldProbeJSON := debugProbeJSON
 	oldExplainJSON := debugExplainJSON
 	oldExplainLast := debugExplainLast
+	oldExplainGraphDepth := debugExplainGraphDepth
+	oldExplainMaxNodes := debugExplainMaxNodes
+	oldExplainMaxEdges := debugExplainMaxEdges
 	oldReplayJSON := debugReplayJSON
 	oldStatusOut := debugStatusCmd.OutOrStdout()
 	oldTailOut := debugTailCmd.OutOrStdout()
@@ -81,6 +98,9 @@ func resetDebugTestState(t *testing.T) {
 		debugProbeJSON = oldProbeJSON
 		debugExplainJSON = oldExplainJSON
 		debugExplainLast = oldExplainLast
+		debugExplainGraphDepth = oldExplainGraphDepth
+		debugExplainMaxNodes = oldExplainMaxNodes
+		debugExplainMaxEdges = oldExplainMaxEdges
 		debugReplayJSON = oldReplayJSON
 		debugStatusCmd.SetOut(oldStatusOut)
 		debugTailCmd.SetOut(oldTailOut)
@@ -96,6 +116,9 @@ func resetDebugTestState(t *testing.T) {
 	debugProbeJSON = false
 	debugExplainJSON = false
 	debugExplainLast = 10
+	debugExplainGraphDepth = debugger.DefaultExplainGraphDepth
+	debugExplainMaxNodes = debugger.DefaultExplainMaxNodes
+	debugExplainMaxEdges = debugger.DefaultExplainMaxEdges
 	debugReplayJSON = false
 }
 
@@ -125,8 +148,64 @@ func TestDebugStatusJSONIsVersionedAndUsefulOffline(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("decode: %v\n%s", err, out.String())
 	}
-	if report.SchemaVersion != debugger.StatusSchemaVersion || report.Daemon.Alive || report.Journal.Path != paths.JournalDir {
+	if report.SchemaVersion != debugger.StatusSchemaVersion || debugger.StatusSchemaVersion != 2 || report.Daemon.Alive || report.Journal.Path != paths.JournalDir {
 		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestDebugTailJSONAndFollowWrapperAreV2Snapshots(t *testing.T) {
+	for _, follow := range []bool{false, true} {
+		t.Run(map[bool]string{false: "tail", true: "follow"}[follow], func(t *testing.T) {
+			resetDebugTestState(t)
+			paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+			journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			record := diagnostics.NewEnvelope("cmd.tail")
+			record.TraceID = "trace-tail-v2"
+			if err := journal.Append(t.Context(), record); err != nil {
+				t.Fatal(err)
+			}
+			debugPaths = func() (diagnostics.Paths, error) { return paths, nil }
+			debugLoadConfig = func() (*config.Config, error) { return nil, errors.New("offline config") }
+			debugTailJSON = true
+			debugTailFollow = follow
+			debugTailLimit = 1
+
+			if follow {
+				ctx, cancel := context.WithCancel(t.Context())
+				oldContext := debugTailCmd.Context()
+				debugTailCmd.SetContext(ctx)
+				t.Cleanup(func() { debugTailCmd.SetContext(oldContext) })
+				out := &cancelBuffer{cancel: cancel}
+				debugTailCmd.SetOut(out)
+				if err := debugTailCmd.RunE(debugTailCmd, nil); err != nil {
+					t.Fatal(err)
+				}
+				var wrapper debugger.TailFollowRecord
+				if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &wrapper); err != nil {
+					t.Fatalf("decode follow wrapper: %v\n%s", err, out.String())
+				}
+				if wrapper.SchemaVersion != 2 || wrapper.Record.TraceID != "trace-tail-v2" || wrapper.JournalSnapshot.RecordsMatched != 1 {
+					t.Fatalf("follow wrapper = %+v", wrapper)
+				}
+				return
+			}
+
+			var out bytes.Buffer
+			debugTailCmd.SetOut(&out)
+			if err := debugTailCmd.RunE(debugTailCmd, nil); err != nil {
+				t.Fatal(err)
+			}
+			var report debugger.TailReport
+			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+				t.Fatalf("decode tail report: %v\n%s", err, out.String())
+			}
+			if report.SchemaVersion != 2 || len(report.Records) != 1 || report.JournalSnapshot.RecordsMatched != 1 {
+				t.Fatalf("tail report = %+v", report)
+			}
+		})
 	}
 }
 
@@ -184,9 +263,46 @@ func TestDebugExplainJSONCitesOfflineEvidence(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("decode: %v\n%s", err, out.String())
 	}
-	if report.SchemaVersion != debugger.ExplainSchemaVersion || report.Cause.Classification != debugger.CauseRenderFailure ||
-		len(report.Cause.EvidenceIDs) != 1 || len(report.Graph.Nodes) != 1 {
+	if report.SchemaVersion != debugger.ExplainSchemaVersion || debugger.ExplainSchemaVersion != 2 ||
+		report.Cause.Classification != debugger.CauseRenderFailure || len(report.Cause.EvidenceIDs) != 1 ||
+		len(report.Graph.Nodes) != 1 || report.Limits.GraphDepth != debugger.DefaultExplainGraphDepth ||
+		report.JournalSnapshot.RecordsMatched != 1 {
 		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestDebugExplainValidatesGraphLimitsBeforeStorage(t *testing.T) {
+	resetDebugTestState(t)
+	storageCalled := false
+	debugPaths = func() (diagnostics.Paths, error) {
+		storageCalled = true
+		return diagnostics.Paths{}, errors.New("storage should not be reached")
+	}
+	debugExplainMaxNodes = 0
+	err := debugExplainCmd.RunE(debugExplainCmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "--max-nodes") {
+		t.Fatalf("limit error = %v", err)
+	}
+	if storageCalled {
+		t.Fatal("invalid graph limits reached diagnostic storage")
+	}
+}
+
+func TestDebugExplainTextWarnsWhenGraphIsTruncated(t *testing.T) {
+	report := debugger.ExplanationReport{
+		SchemaVersion: debugger.ExplainSchemaVersion,
+		Cause:         debugger.ExplanationCause{Classification: debugger.CauseInsufficientEvidence, Certainty: debugger.CertaintyUncertain},
+		Limits:        debugger.ExplanationLimits{GraphDepth: 1, MaxNodes: 1, MaxEdges: 1},
+		Truncation: debugger.ExplanationTruncation{
+			Truncated: true, Reasons: []string{debugger.TruncationMaxNodes}, PrunedNodeCandidates: 3,
+		},
+	}
+	var out bytes.Buffer
+	if err := writeDebugExplainText(&out, report); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "warning: evidence graph truncated (max_nodes; pruned node candidates=3 edge candidates=0)") {
+		t.Fatalf("text output omitted truncation warning:\n%s", out.String())
 	}
 }
 
@@ -199,6 +315,16 @@ func TestDebugCommandRegistersSharedSelectorsAndSubcommands(t *testing.T) {
 	for _, name := range []string{"status", "tail", "probe", "explain", "capture", "bundle", "replay"} {
 		if command, _, err := debugCmd.Find([]string{name}); err != nil || command == nil || command.Name() != name {
 			t.Errorf("debug subcommand %s missing: command=%v err=%v", name, command, err)
+		}
+	}
+	for _, name := range []string{"json", "follow", "last"} {
+		if debugTailCmd.Flags().Lookup(name) == nil {
+			t.Errorf("debug tail is missing --%s", name)
+		}
+	}
+	for _, name := range []string{"json", "last", "graph-depth", "max-nodes", "max-edges"} {
+		if debugExplainCmd.Flags().Lookup(name) == nil {
+			t.Errorf("debug explain is missing --%s", name)
 		}
 	}
 	if buildinfo.Current().Version == "" {

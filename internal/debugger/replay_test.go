@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -240,6 +241,131 @@ func TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence(t *testing.T)
 		if strings.Contains(string(encoded), rawID) {
 			t.Fatalf("portable replay exposed unhashed identifier %q: %s", rawID, encoded)
 		}
+	}
+	legacy := filepath.Join(t.TempDir(), "share-v1.tar.gz")
+	rewriteBundleAsV1(t, output, legacy)
+	legacyReport, err := Replay(t.Context(), legacy, ReplayOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacyReport.Input.Format != "bundle" || legacyReport.Input.SchemaVersion != 1 ||
+		!legacyReport.Success || !legacyReport.Complete {
+		t.Fatalf("legacy bundle replay report = %+v", legacyReport)
+	}
+}
+
+func TestReplayASLRecordsExtractedFromV2Bundle(t *testing.T) {
+	fixture, paths := newReplayFixture(t)
+	fixture.appendDecision(t, "trace-asl-standalone", "request-asl-standalone", "AgentSessionLoopTurnStarted", daemon.ReducerEvent{
+		Source: daemon.SourceID{Kind: daemon.SourceASL, Key: "run-standalone"}, Seq: 1, At: 200,
+		OriginWindowID: 42, RunID: "run-standalone", Phase: daemon.ASLPhaseTurn,
+	}, false, 0)
+	fixture.appendDecision(t, "trace-unrelated", "request-unrelated", "UserPromptSubmit", daemon.ReducerEvent{
+		Source: daemon.SourceID{Kind: daemon.SourceHarness, Key: "claude:unrelated"}, Action: "active", Seq: 1,
+		At: 201, OriginWindowID: 42, Prompt: true, TurnID: "turn-unrelated", SessionID: "unrelated",
+	}, false, 0)
+	bundlePath := filepath.Join(t.TempDir(), "share.tar.gz")
+	if _, err := CreateBundle(t.Context(), BundleOptions{
+		Paths: paths, OutputPath: bundlePath, Mode: BundleModeShare, Journal: fixture.journal,
+		Now: time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC), Build: buildinfo.Info{Version: "test"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	members := readBundleMembers(t, bundlePath)
+	aslRecords := members["asl-records.json"]
+	if !bytes.Contains(aslRecords, []byte(`"journal_snapshot"`)) {
+		t.Fatalf("v2 ASL records omitted snapshot metadata: %s", aslRecords)
+	}
+	var aslWrapper struct {
+		JournalSnapshotScope string                         `json:"journal_snapshot_scope"`
+		JournalSnapshot      diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+		Records              []json.RawMessage              `json:"records"`
+	}
+	if err := json.Unmarshal(aslRecords, &aslWrapper); err != nil {
+		t.Fatalf("decode v2 ASL records: %v\n%s", err, aslRecords)
+	}
+	if aslWrapper.JournalSnapshotScope != "source_snapshot" ||
+		aslWrapper.JournalSnapshot.RecordsMatched != 2 || len(aslWrapper.Records) != 1 {
+		t.Fatalf("v2 ASL snapshot scope = %q snapshot %+v records %d", aslWrapper.JournalSnapshotScope, aslWrapper.JournalSnapshot, len(aslWrapper.Records))
+	}
+	bundleReport, err := Replay(t.Context(), bundlePath, ReplayOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bundleReport.Input.Format != "bundle" || !bundleReport.Success || !bundleReport.Complete {
+		t.Fatalf("full bundle replay report = %+v", bundleReport)
+	}
+	standalonePath := filepath.Join(t.TempDir(), "asl-records.json")
+	if err := os.WriteFile(standalonePath, aslRecords, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Replay(t.Context(), standalonePath, ReplayOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Input.Format != "causal-records" || report.Input.SchemaVersion != BundleSchemaVersion ||
+		report.Input.Records != 1 || !report.Success || !report.Complete {
+		t.Fatalf("standalone ASL replay report = %+v", report)
+	}
+}
+
+func rewriteBundleAsV1(t *testing.T, source, output string) {
+	t.Helper()
+	members := readBundleMembers(t, source)
+	var causal struct {
+		SchemaVersion   int                            `json:"schema_version"`
+		Selector        json.RawMessage                `json:"selector"`
+		JournalSnapshot diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+		Records         []json.RawMessage              `json:"records"`
+	}
+	if err := json.Unmarshal(members["causal-records.json"], &causal); err != nil {
+		t.Fatal(err)
+	}
+	legacyCausal := struct {
+		SchemaVersion int               `json:"schema_version"`
+		Selector      json.RawMessage   `json:"selector"`
+		CorruptLines  int               `json:"corrupt_lines"`
+		Records       []json.RawMessage `json:"records"`
+	}{
+		SchemaVersion: 1, Selector: causal.Selector,
+		CorruptLines: causal.JournalSnapshot.CorruptLines, Records: causal.Records,
+	}
+	causalData, err := json.MarshalIndent(legacyCausal, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	causalData = append(causalData, '\n')
+	members["causal-records.json"] = causalData
+
+	var manifest BundleManifest
+	if err := json.Unmarshal(members["manifest.json"], &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifest.SchemaVersion = 1
+	for index := range manifest.Entries {
+		if manifest.Entries[index].Member == "causal-records.json" {
+			manifest.Entries[index].Bytes = len(causalData)
+		}
+	}
+	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	members["manifest.json"] = append(manifestData, '\n')
+
+	names := make([]string, 0, len(members))
+	for name := range members {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	bundleMembers := make([]bundleMember, 0, len(names))
+	for _, name := range names {
+		bundleMembers = append(bundleMembers, bundleMember{name: name, data: members[name]})
+	}
+	if err := writeBundleAtomic(output, time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC), bundleMembers); err != nil {
+		t.Fatal(err)
 	}
 }
 

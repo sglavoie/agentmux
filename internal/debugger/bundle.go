@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	BundleSchemaVersion = 1
-	maxBundleRecords    = 10000
-	maxNativeFileBytes  = int64(256 << 10)
-	maxNativeTotalBytes = int64(2 << 20)
+	bundleSchemaVersionV1 = 1
+	bundleSchemaVersionV2 = 2
+	BundleSchemaVersion   = bundleSchemaVersionV2
+	maxBundleRecords      = 10000
+	maxNativeFileBytes    = int64(256 << 10)
+	maxNativeTotalBytes   = int64(2 << 20)
 )
 
 type BundleOptions struct {
@@ -194,21 +196,18 @@ func CreateBundle(ctx context.Context, options BundleOptions) (BundleResult, err
 			return BundleResult{}, err
 		}
 	}
-	read, err := journal.ReadTolerant(ctx, options.Selector.JournalSelector(0))
+	snapshot, err := journal.Snapshot(ctx, options.Selector.JournalSelector(maxBundleRecords), nil)
 	if err != nil {
 		return BundleResult{}, err
 	}
-	records := read.Records
-	if len(records) > maxBundleRecords {
-		records = records[len(records)-maxBundleRecords:]
-		manifest.Truncated = true
-	}
+	records := snapshot.Records
+	manifest.Truncated = snapshot.Statistics.RecordsMatched > len(records)
 	causal := struct {
-		SchemaVersion int                         `json:"schema_version"`
-		Selector      Selector                    `json:"selector"`
-		CorruptLines  int                         `json:"corrupt_lines"`
-		Records       []diagnostics.TraceEnvelope `json:"records"`
-	}{BundleSchemaVersion, options.Selector, read.CorruptLines, records}
+		SchemaVersion   int                            `json:"schema_version"`
+		Selector        Selector                       `json:"selector"`
+		JournalSnapshot diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+		Records         []diagnostics.TraceEnvelope    `json:"records"`
+	}{BundleSchemaVersion, options.Selector, snapshot.Statistics, records}
 	if err := addJSON("causal-records.json", "diagnostic journal", "tolerant read and structured redaction", causal); err != nil {
 		return BundleResult{}, err
 	}
@@ -218,16 +217,27 @@ func CreateBundle(ctx context.Context, options BundleOptions) (BundleResult, err
 			aslRecords = append(aslRecords, record)
 		}
 	}
-	if err := addJSON("asl-records.json", "applicable diagnostic journal records", "ASL/run filter and structured redaction", map[string]any{
-		"schema_version": BundleSchemaVersion, "records": aslRecords,
-	}); err != nil {
+	asl := struct {
+		SchemaVersion        int                            `json:"schema_version"`
+		JournalSnapshotScope string                         `json:"journal_snapshot_scope"`
+		JournalSnapshot      diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+		Records              []diagnostics.TraceEnvelope    `json:"records"`
+	}{BundleSchemaVersion, "source_snapshot", snapshot.Statistics, aslRecords}
+	if err := addJSON("asl-records.json", "applicable diagnostic journal records", "ASL/run filter and structured redaction", asl); err != nil {
 		return BundleResult{}, err
 	}
-	explanation, explainErr := ExplainRecords(ExplainOptions{Selector: options.Selector, Recent: 10, Now: options.Now}, records)
+	explanation, explainErr := ExplainRecords(ExplainOptions{
+		Selector: options.Selector, Recent: 10, Now: options.Now,
+		GraphDepth: DefaultExplainGraphDepth, MaxNodes: DefaultExplainMaxNodes, MaxEdges: DefaultExplainMaxEdges,
+	}, records)
 	if explainErr != nil {
 		manifest.Entries = append(manifest.Entries, BundleManifestEntry{Member: "explanation.json", Source: "causal explanation", Decision: "unavailable", Reason: "explanation could not be generated"})
-	} else if err := addJSON("explanation.json", "causal explanation", "pure offline explanation and structured redaction", explanation); err != nil {
-		return BundleResult{}, err
+	} else {
+		explanation.JournalSnapshot = snapshot.Statistics
+		manifest.Truncated = manifest.Truncated || explanation.Truncation.Truncated
+		if err := addJSON("explanation.json", "causal explanation", "bounded pure offline explanation and structured redaction", explanation); err != nil {
+			return BundleResult{}, err
+		}
 	}
 
 	nativeData, nativeCount, nativeTruncated, nativeErr := redactedNativeExcerpts(options.Paths, options.NativeSessions, options.Selector, redactor)

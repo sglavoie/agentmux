@@ -35,6 +35,9 @@ type JournalOptions struct {
 }
 
 type MaintenanceReport struct {
+	PromotedRecords   int
+	PromotedFiles     int
+	BusySpoolFiles    int
 	ReconciledRecords int
 	ReconciledFiles   int
 	CorruptLines      int
@@ -55,15 +58,17 @@ type ReadReport struct {
 
 // JournalHealth is a read-only snapshot of durable diagnostic storage.
 type JournalHealth struct {
-	Files            int
-	Bytes            int64
-	SpoolFiles       int
-	SpoolBytes       int64
-	QuarantinedFiles int
-	CorruptLines     int
-	Records          int
-	LatestObservedAt time.Time
-	ObservedSchemas  []int
+	Files              int       `json:"files"`
+	Bytes              int64     `json:"bytes"`
+	SpoolFiles         int       `json:"spool_files"`
+	SpoolBytes         int64     `json:"spool_bytes"`
+	OldestSpoolModTime time.Time `json:"oldest_spool_mod_time,omitempty"`
+	LegacyClaimFiles   int       `json:"legacy_claim_files"`
+	QuarantinedFiles   int       `json:"quarantined_files"`
+	CorruptLines       int       `json:"corrupt_lines"`
+	Records            int       `json:"records"`
+	LatestObservedAt   time.Time `json:"latest_observed_at,omitempty"`
+	ObservedSchemas    []int     `json:"observed_schemas"`
 }
 
 type Journal struct {
@@ -83,11 +88,15 @@ func NewJournal(paths Paths, options JournalOptions) (*Journal, error) {
 	if err != nil {
 		return nil, err
 	}
+	lockPath := filepath.Join(paths.JournalDir, "events.lock")
+	if err := initializeFileLock(lockPath); err != nil {
+		return nil, err
+	}
 	options = normalizeJournalOptions(options)
 	return &Journal{
 		paths: paths, opts: options, key: key,
 		current: paths.JournalFile,
-		lock:    filepath.Join(paths.JournalDir, "events.lock"),
+		lock:    lockPath,
 	}, nil
 }
 
@@ -282,60 +291,155 @@ func (j *Journal) Maintain(ctx context.Context) (MaintenanceReport, error) {
 	if j == nil {
 		return report, errors.New("diagnostics: nil journal")
 	}
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	promotion, err := j.PromoteSpool(ctx)
+	report.merge(promotion)
 	if err != nil {
 		return report, err
 	}
-	defer releaseFileLock(lock)
-
-	if quarantine, err := repairJSONLTail(j.current, j.opts.Now()); err != nil {
-		return report, err
-	} else if quarantine != "" {
-		report.QuarantinedFiles = append(report.QuarantinedFiles, quarantine)
-	}
-	if err := j.reconcileSpoolLocked(&report); err != nil {
-		return report, err
-	}
-	if info, err := os.Stat(j.current); err == nil && info.Size() > j.opts.SegmentBytes {
-		if _, err := j.rotateLocked(); err != nil {
-			return report, err
-		}
-		report.RotatedFiles++
-	} else if err != nil && !os.IsNotExist(err) {
-		return report, err
-	}
-	if err := j.applyRetentionLocked(&report); err != nil {
-		return report, err
-	}
-	return report, nil
+	retention, err := j.RotateAndRetain(ctx)
+	report.merge(retention)
+	return report, err
 }
 
-// ReconcileSpool merges emergency spool records without rotating segments or
-// applying retention. It is the bounded preparation used by offline readers:
-// a stopped daemon is not required, and later valid records survive an
-// isolated corrupt spool line.
+func (r *MaintenanceReport) merge(other MaintenanceReport) {
+	r.PromotedRecords += other.PromotedRecords
+	r.PromotedFiles += other.PromotedFiles
+	r.BusySpoolFiles += other.BusySpoolFiles
+	r.ReconciledRecords += other.ReconciledRecords
+	r.ReconciledFiles += other.ReconciledFiles
+	r.CorruptLines += other.CorruptLines
+	r.QuarantinedFiles = append(r.QuarantinedFiles, other.QuarantinedFiles...)
+	r.RotatedFiles += other.RotatedFiles
+	r.RemovedFiles += other.RemovedFiles
+	r.RemovedBytes += other.RemovedBytes
+}
+
+// PromoteSpool publishes emergency spool evidence as immutable journal
+// segments. A fresh spool is first claimed under its own non-blocking file
+// lock. Validation and quarantine happen without the global journal lock; the
+// lock is held only for the final atomic rename into the journal directory.
+func (j *Journal) PromoteSpool(ctx context.Context) (MaintenanceReport, error) {
+	return j.promoteSpool(ctx, spoolPromotionHooks{})
+}
+
+// ReconcileSpool is the compatibility name used by v1 debugger callers. New
+// daemon maintenance should call PromoteSpool; the operation no longer copies
+// records into the active journal line by line.
 func (j *Journal) ReconcileSpool(ctx context.Context) (MaintenanceReport, error) {
+	return j.PromoteSpool(ctx)
+}
+
+type spoolPromotionHooks struct {
+	afterClaim      func(string) error
+	afterValidation func(string) error
+	beforePublish   func(string) error
+	afterPublish    func(string) error
+}
+
+type claimedSpool struct {
+	file   *os.File
+	path   string
+	legacy bool
+}
+
+func (j *Journal) promoteSpool(ctx context.Context, hooks spoolPromotionHooks) (MaintenanceReport, error) {
 	var report MaintenanceReport
 	if j == nil {
 		return report, errors.New("diagnostics: nil journal")
 	}
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	if err := ctxError(ctx); err != nil {
+		return report, err
+	}
+	entries, err := os.ReadDir(j.paths.SpoolDir)
 	if err != nil {
 		return report, err
 	}
-	defer releaseFileLock(lock)
-	if err := j.reconcileSpoolLocked(&report); err != nil {
-		return report, err
+	for _, entry := range entries {
+		if err := ctxError(ctx); err != nil {
+			return report, err
+		}
+		name := entry.Name()
+		if entry.IsDir() || !isSpoolClaimName(name) && !isSpoolSourceName(name) {
+			continue
+		}
+		claim, busy, err := j.claimSpool(filepath.Join(j.paths.SpoolDir, name), name)
+		if err != nil {
+			return report, err
+		}
+		if busy {
+			report.BusySpoolFiles++
+			continue
+		}
+		if claim == nil {
+			continue
+		}
+		if err := j.prepareAndPublishSpool(ctx, claim, &report, hooks); err != nil {
+			return report, err
+		}
 	}
 	return report, nil
 }
 
-func (j *Journal) reconcileSpoolLocked(report *MaintenanceReport) error {
-	return j.reconcileSpoolLockedWithAppender(report, j.appendLineLocked)
+func (j *Journal) claimSpool(path, name string) (*claimedSpool, bool, error) {
+	if err := validateRegularTarget(path); err != nil {
+		return nil, false, err
+	}
+	file, err := os.OpenFile(path, os.O_RDWR, fileMode)
+	if os.IsNotExist(err) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	closeFile := func() { _ = file.Close() }
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		closeFile()
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+	if err := file.Chmod(fileMode); err != nil {
+		_ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
+		closeFile()
+		return nil, false, err
+	}
+	fail := func(err error) (*claimedSpool, bool, error) {
+		_ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
+		closeFile()
+		return nil, false, err
+	}
+	lockedInfo, err := file.Stat()
+	if err != nil {
+		return fail(err)
+	}
+	pathInfo, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return fail(nil)
+	}
+	if err != nil {
+		return fail(err)
+	}
+	if !os.SameFile(lockedInfo, pathInfo) {
+		return fail(nil)
+	}
+	claimPath := path
+	legacy := isLegacySpoolClaimName(name)
+	if isSpoolSourceName(name) {
+		claimPath = filepath.Join(j.paths.SpoolDir, fmt.Sprintf(
+			"journal-%d-promoting-%d-%d.claim", os.Getpid(), rotationSequence.Add(1), j.opts.Now().UnixNano(),
+		))
+		if err := os.Rename(path, claimPath); err != nil {
+			if os.IsNotExist(err) {
+				return fail(nil)
+			}
+			return fail(err)
+		}
+		if err := syncDirectory(j.paths.SpoolDir); err != nil {
+			return fail(err)
+		}
+	}
+	return &claimedSpool{file: file, path: claimPath, legacy: legacy}, false, nil
 }
 
 type journalRecordIdentity struct {
@@ -354,136 +458,335 @@ func recordIdentity(record []byte) (journalRecordIdentity, bool) {
 	return journalRecordIdentity{sourceID: identity.SourceID, sourceSequence: identity.SourceSequence}, true
 }
 
-func (j *Journal) journalRecordIdentitiesLocked() (map[journalRecordIdentity]struct{}, error) {
-	files, err := j.segmentFilesLocked(true)
-	if err != nil {
-		return nil, err
-	}
-	identities := make(map[journalRecordIdentity]struct{})
-	for _, file := range files {
-		if _, err := readJSONLTolerant(file.path, func(envelope TraceEnvelope) {
-			if envelope.SourceID != "" && envelope.SourceSequence != 0 {
-				identities[journalRecordIdentity{sourceID: envelope.SourceID, sourceSequence: envelope.SourceSequence}] = struct{}{}
-			}
-		}); err != nil {
-			return nil, err
-		}
-	}
-	return identities, nil
-}
-
 func isSpoolClaimName(name string) bool {
-	if !strings.HasPrefix(name, "journal-") || !strings.Contains(name, "-reconciling-") {
+	if !strings.HasPrefix(name, "journal-") {
 		return false
 	}
-	return strings.HasSuffix(name, ".claim") || strings.HasSuffix(name, ".jsonl")
+	isClaim := strings.Contains(name, "-reconciling-") || strings.Contains(name, "-promoting-")
+	return isClaim && (strings.HasSuffix(name, ".claim") || strings.HasSuffix(name, ".jsonl"))
+}
+
+func isLegacySpoolClaimName(name string) bool {
+	return strings.HasPrefix(name, "journal-") && strings.Contains(name, "-reconciling-") &&
+		(strings.HasSuffix(name, ".claim") || strings.HasSuffix(name, ".jsonl"))
 }
 
 func isSpoolSourceName(name string) bool {
 	return strings.HasPrefix(name, "journal-") && strings.HasSuffix(name, ".jsonl") && !isSpoolClaimName(name)
 }
 
-func (j *Journal) reconcileSpoolLockedWithAppender(report *MaintenanceReport, appendRecord func([]byte) error) error {
-	entries, err := os.ReadDir(j.paths.SpoolDir)
-	if err != nil {
-		return err
-	}
-	spoolEntries := make([]os.DirEntry, 0, len(entries))
-	for _, entry := range entries {
-		name := entry.Name()
-		if !entry.IsDir() && (isSpoolClaimName(name) || isSpoolSourceName(name)) {
-			spoolEntries = append(spoolEntries, entry)
+func (j *Journal) prepareAndPublishSpool(ctx context.Context, claim *claimedSpool, report *MaintenanceReport, hooks spoolPromotionHooks) (retErr error) {
+	defer func() {
+		if claim.file != nil {
+			_ = unix.Flock(int(claim.file.Fd()), unix.LOCK_UN)
+			_ = claim.file.Close()
 		}
-	}
-	if len(spoolEntries) == 0 {
-		return nil
-	}
-	if err := j.repairIncompleteTailLocked(); err != nil {
-		return err
-	}
-	identities, err := j.journalRecordIdentitiesLocked()
-	if err != nil {
-		return err
-	}
-	for _, entry := range spoolEntries {
-		name := entry.Name()
-		isClaim := isSpoolClaimName(name)
-		path := filepath.Join(j.paths.SpoolDir, name)
-		if err := validateRegularTarget(path); err != nil {
+	}()
+	if hooks.afterClaim != nil {
+		if err := hooks.afterClaim(claim.path); err != nil {
 			return err
 		}
-		file, err := os.OpenFile(path, os.O_RDWR, fileMode)
+	}
+	data, err := io.ReadAll(claim.file)
+	if err != nil {
+		return err
+	}
+	valid, invalid, corruptLines := tolerantJSONLParts(data)
+	report.CorruptLines += corruptLines
+	if len(invalid) > 0 {
+		quarantine := claim.path + ".partial-corrupt"
+		if err := atomicWritePrivate(quarantine, invalid); err != nil {
+			return err
+		}
+		report.QuarantinedFiles = append(report.QuarantinedFiles, quarantine)
+	}
+	if claim.legacy {
+		identities, err := j.publishedRecordIdentities(ctx)
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
 			return err
 		}
-		if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
-			_ = file.Close()
-			return err
-		}
-		claim := path
-		if !isClaim {
-			claim = filepath.Join(j.paths.SpoolDir, fmt.Sprintf("journal-%d-reconciling-%d-%d.claim", os.Getpid(), rotationSequence.Add(1), j.opts.Now().UnixNano()))
-			if err := os.Rename(path, claim); err != nil {
-				_ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
-				_ = file.Close()
-				if os.IsNotExist(err) {
-					continue
-				}
-				return err
-			}
-		}
-		data, readErr := io.ReadAll(file)
-		if readErr != nil {
-			_ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
-			_ = file.Close()
-			return readErr
-		}
-		valid, invalid, corruptLines := tolerantJSONLParts(data)
-		report.CorruptLines += corruptLines
-		if len(invalid) > 0 {
-			quarantine := claim + ".partial-corrupt"
-			if err := atomicWritePrivate(quarantine, invalid); err != nil {
-				_ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
-				_ = file.Close()
-				return err
-			}
-			report.QuarantinedFiles = append(report.QuarantinedFiles, quarantine)
-		}
+		filtered := valid[:0]
 		for _, line := range valid {
-			if len(line) == 0 {
-				continue
-			}
-			identity, hasIdentity := recordIdentity(line)
-			if hasIdentity {
-				if _, alreadyReconciled := identities[identity]; alreadyReconciled {
+			identity, ok := recordIdentity(line)
+			if ok {
+				if _, duplicate := identities[identity]; duplicate {
 					continue
 				}
-			}
-			record := append(append([]byte(nil), line...), '\n')
-			if err := appendRecord(record); err != nil {
-				_ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
-				_ = file.Close()
-				return err
-			}
-			if hasIdentity {
 				identities[identity] = struct{}{}
 			}
-			report.ReconciledRecords++
+			filtered = append(filtered, line)
 		}
-		unlockErr := unix.Flock(int(file.Fd()), unix.LOCK_UN)
-		closeErr := file.Close()
-		if err := errors.Join(unlockErr, closeErr); err != nil {
+		valid = filtered
+	}
+	validData := make([]byte, 0, len(data))
+	for _, line := range valid {
+		validData = append(validData, line...)
+		validData = append(validData, '\n')
+	}
+	if len(invalid) > 0 || claim.legacy {
+		if err := rewriteLockedSpoolClaim(claim, validData); err != nil {
 			return err
 		}
-		if err := os.Remove(claim); err != nil && !os.IsNotExist(err) {
+	}
+	if hooks.afterValidation != nil {
+		if err := hooks.afterValidation(claim.path); err != nil {
+			return err
+		}
+	}
+	if err := ctxError(ctx); err != nil {
+		return err
+	}
+	if len(valid) == 0 {
+		if err := os.Remove(claim.path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err := syncDirectory(j.paths.SpoolDir); err != nil {
 			return err
 		}
 		report.ReconciledFiles++
+		return nil
+	}
+	if hooks.beforePublish != nil {
+		if err := hooks.beforePublish(claim.path); err != nil {
+			return err
+		}
+	}
+	segment, err := j.publishSpoolClaim(ctx, claim.path)
+	if err != nil {
+		return err
+	}
+	report.PromotedRecords += len(valid)
+	report.PromotedFiles++
+	// Preserve the v1 counters until debugger reports move to snapshot metadata.
+	report.ReconciledRecords += len(valid)
+	report.ReconciledFiles++
+	if hooks.afterPublish != nil {
+		return hooks.afterPublish(segment)
 	}
 	return nil
+}
+
+// rewriteLockedSpoolClaim atomically replaces a claim while preserving its
+// cross-process exclusivity. The replacement inode is locked before it enters
+// the spool namespace, then ownership is transferred to claim.file before the
+// old inode is unlocked. A competing maintainer therefore observes either the
+// old locked inode or the new locked inode throughout the rewrite.
+func rewriteLockedSpoolClaim(claim *claimedSpool, data []byte) (retErr error) {
+	if claim == nil || claim.file == nil {
+		return errors.New("diagnostics: rewriting unlocked spool claim")
+	}
+	directory := filepath.Dir(claim.path)
+	if err := ensurePrivateDirectory(directory); err != nil {
+		return err
+	}
+	if err := validateRegularTarget(claim.path); err != nil {
+		return err
+	}
+	temp, err := os.CreateTemp(directory, "."+filepath.Base(claim.path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tempPath := temp.Name()
+	defer func() {
+		if temp != nil {
+			_ = unix.Flock(int(temp.Fd()), unix.LOCK_UN)
+			_ = temp.Close()
+		}
+		if retErr != nil {
+			_ = os.Remove(tempPath)
+		}
+	}()
+	if err := temp.Chmod(fileMode); err != nil {
+		return err
+	}
+	if err := unix.Flock(int(temp.Fd()), unix.LOCK_EX); err != nil {
+		return err
+	}
+	written, writeErr := temp.Write(data)
+	if writeErr == nil && written != len(data) {
+		writeErr = io.ErrShortWrite
+	}
+	if err := errors.Join(writeErr, temp.Sync()); err != nil {
+		return err
+	}
+	lockedInfo, err := claim.file.Stat()
+	if err != nil {
+		return err
+	}
+	pathInfo, err := os.Stat(claim.path)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(lockedInfo, pathInfo) {
+		return fmt.Errorf("diagnostics: spool claim changed during rewrite: %s", claim.path)
+	}
+	if err := os.Rename(tempPath, claim.path); err != nil {
+		return err
+	}
+
+	old := claim.file
+	claim.file = temp
+	temp = nil
+	return errors.Join(
+		syncDirectory(directory),
+		unix.Flock(int(old.Fd()), unix.LOCK_UN),
+		old.Close(),
+	)
+}
+
+func (j *Journal) publishedRecordIdentities(ctx context.Context) (map[journalRecordIdentity]struct{}, error) {
+	j.mu.Lock()
+	lock, err := acquireSharedFileLock(ctx, j.lock, j.opts.LockTimeout)
+	if err != nil {
+		j.mu.Unlock()
+		return nil, err
+	}
+	entries, err := os.ReadDir(j.paths.JournalDir)
+	if err != nil {
+		releaseFileLock(lock)
+		j.mu.Unlock()
+		return nil, err
+	}
+	var files []snapshotFile
+	for _, entry := range entries {
+		if err := ctxError(ctx); err != nil {
+			closeSnapshotFiles(files)
+			releaseFileLock(lock)
+			j.mu.Unlock()
+			return nil, err
+		}
+		name := entry.Name()
+		if entry.IsDir() || !isSnapshotSegmentName(name) {
+			continue
+		}
+		captured, err := openSnapshotFile(filepath.Join(j.paths.JournalDir, name), snapshotSegment, name != "events.jsonl", nil)
+		if err != nil {
+			closeSnapshotFiles(files)
+			releaseFileLock(lock)
+			j.mu.Unlock()
+			return nil, err
+		}
+		if captured != nil {
+			files = append(files, *captured)
+		}
+	}
+	releaseFileLock(lock)
+	j.mu.Unlock()
+	defer closeSnapshotFiles(files)
+	identities := make(map[journalRecordIdentity]struct{})
+	for _, file := range files {
+		_, _, _, err := scanSnapshotFile(ctx, file, func(_ []byte, envelope TraceEnvelope) {
+			if envelope.SourceID != "" && envelope.SourceSequence != 0 {
+				identities[journalRecordIdentity{sourceID: envelope.SourceID, sourceSequence: envelope.SourceSequence}] = struct{}{}
+			}
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return identities, nil
+}
+
+func (j *Journal) publishSpoolClaim(ctx context.Context, claim string) (string, error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	if err != nil {
+		return "", err
+	}
+	defer releaseFileLock(lock)
+	segment := filepath.Join(j.paths.JournalDir, fmt.Sprintf(
+		"events-spool-%s-%d-%06d.jsonl", timestamp(j.opts.Now()), os.Getpid(), rotationSequence.Add(1),
+	))
+	if err := os.Rename(claim, segment); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("diagnostics: spool claim disappeared before publication: %w", err)
+		}
+		return "", fmt.Errorf("diagnostics: publishing spool segment: %w", err)
+	}
+	if err := errors.Join(syncDirectory(j.paths.JournalDir), syncDirectory(j.paths.SpoolDir)); err != nil {
+		return segment, err
+	}
+	return segment, nil
+}
+
+// RotateAndRetain rotates an oversized active journal and applies age and
+// quota retention. The directory scan and retention calculation happen
+// without storage locks; candidates are revalidated under a short exclusive
+// lock immediately before removal.
+func (j *Journal) RotateAndRetain(ctx context.Context) (MaintenanceReport, error) {
+	var report MaintenanceReport
+	if j == nil {
+		return report, errors.New("diagnostics: nil journal")
+	}
+	if err := ctxError(ctx); err != nil {
+		return report, err
+	}
+	j.mu.Lock()
+	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	if err != nil {
+		j.mu.Unlock()
+		return report, err
+	}
+	if info, statErr := os.Stat(j.current); statErr == nil && info.Size() > j.opts.SegmentBytes {
+		if _, err := j.rotateLocked(); err != nil {
+			releaseFileLock(lock)
+			j.mu.Unlock()
+			return report, err
+		}
+		report.RotatedFiles++
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		releaseFileLock(lock)
+		j.mu.Unlock()
+		return report, statErr
+	}
+	releaseFileLock(lock)
+	j.mu.Unlock()
+
+	files, err := j.retentionFiles(ctx)
+	if err != nil {
+		return report, err
+	}
+	candidates := j.retentionCandidates(files)
+	if len(candidates) == 0 {
+		return report, nil
+	}
+	j.mu.Lock()
+	lock, err = acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	if err != nil {
+		j.mu.Unlock()
+		return report, err
+	}
+	defer func() {
+		releaseFileLock(lock)
+		j.mu.Unlock()
+	}()
+	for _, candidate := range candidates {
+		if err := ctxError(ctx); err != nil {
+			return report, err
+		}
+		info, err := os.Stat(candidate.path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return report, err
+		}
+		if candidate.info == nil || !os.SameFile(candidate.info, info) {
+			continue
+		}
+		if err := os.Remove(candidate.path); err != nil && !os.IsNotExist(err) {
+			return report, err
+		}
+		report.RemovedFiles++
+		report.RemovedBytes += candidate.size
+	}
+	if report.RemovedFiles > 0 {
+		if err := syncDirectory(j.paths.JournalDir); err != nil {
+			return report, err
+		}
+	}
+	return report, nil
 }
 
 func (j *Journal) rotateLocked() (string, error) {
@@ -501,6 +804,9 @@ func (j *Journal) rotateLocked() (string, error) {
 	if err := os.Rename(j.current, rotated); err != nil {
 		return "", fmt.Errorf("diagnostics: rotating journal: %w", err)
 	}
+	if err := syncDirectory(j.paths.JournalDir); err != nil {
+		return rotated, err
+	}
 	return rotated, nil
 }
 
@@ -509,14 +815,11 @@ type retainedFile struct {
 	name      string
 	size      int64
 	modTime   time.Time
+	info      os.FileInfo
 	protected bool
 }
 
-func (j *Journal) applyRetentionLocked(report *MaintenanceReport) error {
-	files, err := j.retentionFilesLocked()
-	if err != nil {
-		return err
-	}
+func (j *Journal) retentionCandidates(files []retainedFile) []retainedFile {
 	now := j.opts.Now()
 	var total int64
 	for _, file := range files {
@@ -526,6 +829,7 @@ func (j *Journal) applyRetentionLocked(report *MaintenanceReport) error {
 	if j.opts.KeepDays > 0 {
 		cutoff = now.Add(-time.Duration(j.opts.KeepDays) * 24 * time.Hour)
 	}
+	var candidates []retainedFile
 	for _, file := range files {
 		if file.path == j.current {
 			continue
@@ -535,23 +839,22 @@ func (j *Journal) applyRetentionLocked(report *MaintenanceReport) error {
 		if !removeForAge && !removeForSize {
 			continue
 		}
-		if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
-			return err
-		}
 		total -= file.size
-		report.RemovedFiles++
-		report.RemovedBytes += file.size
+		candidates = append(candidates, file)
 	}
-	return nil
+	return candidates
 }
 
-func (j *Journal) retentionFilesLocked() ([]retainedFile, error) {
+func (j *Journal) retentionFiles(ctx context.Context) ([]retainedFile, error) {
 	entries, err := os.ReadDir(j.paths.JournalDir)
 	if err != nil {
 		return nil, err
 	}
 	var files []retainedFile
 	for _, entry := range entries {
+		if err := ctxError(ctx); err != nil {
+			return nil, err
+		}
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasPrefix(name, "events") || name == filepath.Base(j.lock) || strings.Contains(name, ".tmp") {
 			continue
@@ -564,10 +867,7 @@ func (j *Journal) retentionFilesLocked() ([]retainedFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := os.Chmod(path, fileMode); err != nil {
-			return nil, err
-		}
-		files = append(files, retainedFile{path: path, name: name, size: info.Size(), modTime: info.ModTime()})
+		files = append(files, retainedFile{path: path, name: name, size: info.Size(), modTime: info.ModTime(), info: info})
 	}
 	sort.Slice(files, func(a, b int) bool {
 		if files[a].modTime.Equal(files[b].modTime) {
@@ -982,7 +1282,11 @@ func atomicWritePrivate(path string, data []byte) (retErr error) {
 	if err := os.Rename(tempPath, path); err != nil {
 		return err
 	}
-	directory, err := os.Open(filepath.Dir(path))
+	return syncDirectory(filepath.Dir(path))
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
 	if err != nil {
 		return err
 	}
@@ -1014,13 +1318,48 @@ func acquireFileLock(ctx context.Context, path string, timeout time.Duration) (*
 	return file, nil
 }
 
+func initializeFileLock(path string) error {
+	if err := validateRegularTarget(path); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, fileMode)
+	if err != nil {
+		return err
+	}
+	return errors.Join(file.Chmod(fileMode), file.Close())
+}
+
+// acquireSharedFileLock opens the lock prepared by NewJournal without
+// creating or chmodding anything on the snapshot read path.
+func acquireSharedFileLock(ctx context.Context, path string, timeout time.Duration) (*os.File, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := validateRegularTarget(path); err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(path, os.O_RDWR, fileMode)
+	if err != nil {
+		return nil, err
+	}
+	if err := acquireOpenFileLockMode(ctx, file, timeout, unix.LOCK_SH); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return file, nil
+}
+
 func acquireOpenFileLock(ctx context.Context, file *os.File, timeout time.Duration) error {
+	return acquireOpenFileLockMode(ctx, file, timeout, unix.LOCK_EX)
+}
+
+func acquireOpenFileLockMode(ctx context.Context, file *os.File, timeout time.Duration, mode int) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	deadline := time.Now().Add(timeout)
 	for {
-		err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+		err := unix.Flock(int(file.Fd()), mode|unix.LOCK_NB)
 		if err == nil {
 			return nil
 		}

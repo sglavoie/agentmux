@@ -17,8 +17,10 @@ amx debug explain --source-event <source-event-id>
 All four commands accept the same selectors: `--harness`, `--profile`,
 `--window`, `--session`, `--asl-run`, `--event`, `--trace`, `--request`,
 `--source-event`, `--stage`, `--outcome`, `--after`, and `--before`. Use
-`--json` for the stable schema-versioned result. `tail --follow` follows only
-new persisted records; it does not require a running daemon.
+`--json` for the stable schema-versioned result. `status`, `tail`, and `explain`
+reports use schema v2; bundle manifests and causal-record wrappers also use
+schema v2. `probe`, `capture`, and `replay` remain schema v1. `tail --follow`
+follows only new persisted records and does not require a running daemon.
 
 When the first report is inconclusive, capture the exact selector and preserve
 a redacted artifact:
@@ -36,7 +38,41 @@ mutate either one.
 `replay` is strictly offline. It accepts an immutable journal directory, debug
 bundle, or `export-events` file and reconstructs routing, reducer decisions,
 restart boundaries, duplicate suppression, and render groups without opening a
-Kitty connection or daemon socket.
+Kitty connection or daemon socket. Its schema-v1 report accepts both v1 and v2
+diagnostic bundles and causal-record wrappers.
+
+## Read-only snapshots, ordering, and graph limits
+
+Every diagnostic journal read captures fixed byte prefixes from the active
+segment, immutable segments, and emergency spool files under a short shared
+lock. File parsing happens after the lock is released. The merged snapshot
+deduplicates overlapping segment/spool evidence, tolerates corrupt lines, and
+does not rename, promote, reconcile, rotate, quarantine, or delete storage.
+Only the daemon performs durable maintenance: it attempts spool promotion every
+60 seconds and retention every 15 minutes, with a five-second budget per pass.
+Readers remain useful while the daemon is offline because unpromoted spool
+records are included directly in memory.
+
+Schema-v2 `status`, `tail`, `explain`, and bundle evidence carry the shared
+`journal_snapshot` object. It reports `segment_files_read`,
+`spool_files_read`, `bytes_scanned`, `records_scanned`, `records_matched`,
+`duplicates_omitted`, and `corrupt_lines`. `records_matched` is counted before
+an output limit is applied.
+
+`tail --last N` merges all captured evidence, sorts by `observed_at` with stable
+identity tie-breakers, and then selects the newest N matching records. This is
+event-time ordering, not file append order: a delayed emergency spool write
+cannot push a newer segment event out of the result. Follow mode uses
+inode/offset cursors plus stable record identities so promotion or legacy claim
+replacement does not replay an already emitted record.
+
+Exact-ID explain selectors choose graph seeds, not an unbounded transitive
+closure. The defaults are `--graph-depth 2`, `--max-nodes 250`, and
+`--max-edges 1000`; accepted ranges are 1–4, 1–2,000, and 1–8,000. Values are
+validated before the journal scan. Schema v2 publishes `limits`, `truncation`,
+and `journal_snapshot`; a text report beginning `warning: evidence graph
+truncated` lists the limiting reasons and directly pruned node/edge candidate
+counts.
 
 ## Storage, defaults, and privacy
 
@@ -49,7 +85,7 @@ Diagnostic state lives below `$XDG_STATE_HOME/agent-mux`, falling back to
 | `daemon/` | Structured operational daemon logs | No hook payload bodies |
 | `native/<launch-id>/` | Harness-native debug output for an AgentMux-managed launch | Yes; private local data |
 | `captures/` | Explicit temporary hook-payload captures | Yes; only after `amx debug capture start --include-hook-payloads` confirmation |
-| `spool/` | Emergency journal records awaiting reconciliation | Causal metadata only |
+| `spool/` | Emergency journal records awaiting daemon-owned promotion | Causal metadata only |
 
 Directories are `0700`; files and generated bundles are `0600`. Managed paths
 reject symlinks, archive output is a flat controlled member set, and bundle
@@ -166,7 +202,8 @@ request, or source-event ID from `tail`.
 | Quarantined identity | `quarantined` decision with synthesized fallback identity and low confidence | Fix missing/malformed session identity; do not infer ownership from titles |
 | Reducer suppression | Decision reason such as reordered, duplicate source sequence, guard, or protected-state precedence | Inspect before/after reducer evidence in `debug explain --json` |
 | Render failure | `daemon.renderer.failed`, retained dirty generation, and doctor renderer drift | Restore Kitty remote control; the same generation remains retryable |
-| Notification suppression | `daemon.notification.decision` with `muted`, `pipe_mode`, `config_disabled`, `cooldown`, or `unsupported_action` | Change notification policy only if the suppression was unintended |
+| Notification dispatch failure | `daemon.notification.dispatch` or `daemon.notification.focus` failed with `send_failed`, `backend_timeout`, or `focus_failed`; explanation `notification_failure` | Inspect the backend error and daemon lifecycle; do not treat delivery failure as policy suppression |
+| Notification suppression | `daemon.notification.decision` or `daemon.notification.focus` suppressed with `muted`, `pipe_mode`, `config_disabled`, `cooldown`, `unsupported_action`, `interaction_timeout`, or dismissal; `daemon.notification.dispatch` cancelled with `daemon_shutdown`; explanation `notification_suppression` | Change notification policy only if the suppression was unintended |
 | Quota exhaustion | Capture/native status reports the bounded quota and denied or pruned write | Stop/purge capture or reduce retention; active native launches remain protected |
 | Restart recovery | Daemon lifecycle boundary plus restored reducer facts and later render generation | Compare CLI/daemon build, then replay the journal or bundle offline |
 
@@ -189,3 +226,14 @@ Actual provider smoke is operator-attended and deliberately separate:
 5. Create a share bundle only if the evidence must leave the machine; inspect
    its manifest first. Do not mark a live provider row complete unless an
    operator intentionally incurred and recorded the provider/model usage.
+
+The native-notification protocol smoke does not require provider/model usage.
+Create a disposable, unfocused Kitty window with a unique managed session ID,
+send one terminal lifecycle event from that window, and leave the notification
+untouched through alerter's five-minute protocol timeout. Keep the disposable
+window open so renderer ticks continue. The exact-window tail must contain
+`daemon.notification.dispatch` as `sent/send_success`, followed by
+`daemon.notification.focus` as `suppressed/interaction_timeout`, with no
+`failed/send_failed` or `failed/backend_timeout`. Record the baseline and final
+spool counts, newest `observed_at`, and bounded exact-explain node/edge counts,
+then close only the disposable window.

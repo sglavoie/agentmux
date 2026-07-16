@@ -296,7 +296,200 @@ func TestAppendSpoolLockIsBounded(t *testing.T) {
 	}
 }
 
-func TestSpoolAppendSurvivesConcurrentReconcile(t *testing.T) {
+func TestPromoteSpoolSkipsBusyActiveWriter(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
+	record, err := json.Marshal(testEnvelope("spool.busy", "busy"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(spoolPath, append(record, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	active, err := os.OpenFile(spoolPath, os.O_RDWR, fileMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Flock(int(active.Fd()), unix.LOCK_EX); err != nil {
+		_ = active.Close()
+		t.Fatal(err)
+	}
+
+	report, err := journal.PromoteSpool(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.BusySpoolFiles != 1 || report.PromotedFiles != 0 {
+		t.Fatalf("busy promotion = %+v", report)
+	}
+	if _, err := os.Stat(spoolPath); err != nil {
+		t.Fatalf("busy spool was claimed: %v", err)
+	}
+	if err := errors.Join(unix.Flock(int(active.Fd()), unix.LOCK_UN), active.Close()); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err = journal.PromoteSpool(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.PromotedFiles != 1 || report.PromotedRecords != 1 {
+		t.Fatalf("retry promotion = %+v", report)
+	}
+}
+
+func TestSpoolPromotionIsAtomicForConcurrentSnapshots(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
+	record, _ := json.Marshal(testEnvelope("spool.snapshot", "atomic"))
+	if err := os.WriteFile(spoolPath, append(record, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(spoolPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed := make(chan string, 1)
+	release := make(chan struct{})
+	promoted := make(chan error, 1)
+	go func() {
+		_, err := journal.promoteSpool(context.Background(), spoolPromotionHooks{afterClaim: func(path string) error {
+			claimed <- path
+			<-release
+			return nil
+		}})
+		promoted <- err
+	}()
+	claimPath := <-claimed
+	if _, err := os.Stat(claimPath); err != nil {
+		t.Fatalf("claimed spool missing: %v", err)
+	}
+	during, err := journal.Snapshot(context.Background(), Selector{Stages: []string{"spool.snapshot"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(during.Records) != 1 || during.Statistics.SpoolFilesRead != 1 {
+		t.Fatalf("snapshot during promotion = %+v", during)
+	}
+	close(release)
+	if err := <-promoted; err != nil {
+		t.Fatal(err)
+	}
+	segments, err := filepath.Glob(filepath.Join(paths.JournalDir, "events-spool-*.jsonl"))
+	if err != nil || len(segments) != 1 {
+		t.Fatalf("promoted segments = %v, err = %v", segments, err)
+	}
+	after, err := os.Stat(segments[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) {
+		t.Fatal("promotion copied the spool instead of atomically renaming its inode")
+	}
+	if after.Mode().Perm() != fileMode {
+		t.Fatalf("promoted segment mode = %o, want %o", after.Mode().Perm(), fileMode)
+	}
+	delta, err := journal.Snapshot(context.Background(), Selector{Stages: []string{"spool.snapshot"}}, &during.Cursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(delta.Records) != 0 {
+		t.Fatalf("renamed inode replayed through snapshot cursor: %+v", delta.Records)
+	}
+}
+
+func TestSpoolPromotionQuarantinesCorruptAndPartialLines(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	record, _ := json.Marshal(testEnvelope("spool.corrupt", "valid"))
+	spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
+	data := append(append(append(record, '\n'), []byte("{broken}\n")...), []byte(`{"partial":true}`)...)
+	if err := os.WriteFile(spoolPath, data, fileMode); err != nil {
+		t.Fatal(err)
+	}
+	report, err := journal.PromoteSpool(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.PromotedRecords != 1 || report.PromotedFiles != 1 || report.CorruptLines != 2 || len(report.QuarantinedFiles) != 1 {
+		t.Fatalf("corrupt promotion = %+v", report)
+	}
+	quarantine, err := os.ReadFile(report.QuarantinedFiles[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(quarantine, []byte("{broken}")) || !bytes.Contains(quarantine, []byte(`{"partial":true}`)) {
+		t.Fatalf("quarantine = %q", quarantine)
+	}
+	snapshot, err := journal.Snapshot(context.Background(), Selector{Stages: []string{"spool.corrupt"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Records) != 1 || snapshot.Records[0].RequestID != "valid" {
+		t.Fatalf("promoted valid evidence = %+v", snapshot.Records)
+	}
+}
+
+func TestSpoolPromotionKeepsRewrittenClaimLockedThroughPublish(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	competitor, err := NewJournal(paths, JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := json.Marshal(testEnvelope("spool.locked-rewrite", "preserved"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
+	data := append(append(record, '\n'), []byte("{broken}\n")...)
+	if err := os.WriteFile(spoolPath, data, fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	validated := make(chan string, 1)
+	release := make(chan struct{})
+	type promotionResult struct {
+		report MaintenanceReport
+		err    error
+	}
+	firstDone := make(chan promotionResult, 1)
+	go func() {
+		report, err := journal.promoteSpool(context.Background(), spoolPromotionHooks{
+			beforePublish: func(path string) error {
+				validated <- path
+				<-release
+				return nil
+			},
+		})
+		firstDone <- promotionResult{report: report, err: err}
+	}()
+	claimPath := <-validated
+
+	competingReport, competingErr := competitor.PromoteSpool(context.Background())
+	close(release)
+	first := <-firstDone
+
+	if competingErr != nil {
+		t.Fatalf("competing promotion failed instead of skipping locked claim: %v", competingErr)
+	}
+	if competingReport.BusySpoolFiles != 1 || competingReport.PromotedFiles != 0 {
+		t.Fatalf("competing promotion = %+v, want one busy claim", competingReport)
+	}
+	if first.err != nil {
+		t.Fatalf("claim owner promotion: %v", first.err)
+	}
+	if first.report.PromotedFiles != 1 || first.report.PromotedRecords != 1 {
+		t.Fatalf("claim owner promotion = %+v", first.report)
+	}
+	if _, err := os.Stat(claimPath); !os.IsNotExist(err) {
+		t.Fatalf("published claim still exists: %v", err)
+	}
+	segments, err := filepath.Glob(filepath.Join(paths.JournalDir, "events-spool-*.jsonl"))
+	if err != nil || len(segments) != 1 {
+		t.Fatalf("published segments = %v, err = %v", segments, err)
+	}
+}
+
+func TestSpoolAppendSurvivesConcurrentPromotion(t *testing.T) {
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 2 * time.Second})
 	firstJSON, err := json.Marshal(testEnvelope("spool.concurrent", "before-claim"))
 	if err != nil {
@@ -323,32 +516,27 @@ func TestSpoolAppendSurvivesConcurrentReconcile(t *testing.T) {
 	}
 
 	opened := make(chan struct{})
+	releaseWriter := make(chan struct{})
 	writerDone := make(chan error, 1)
 	go func() {
-		writerDone <- journal.appendSpoolWithOpenHook(context.Background(), secondJSON, func() { close(opened) })
+		writerDone <- journal.appendSpoolWithOpenHook(context.Background(), secondJSON, func() {
+			close(opened)
+			<-releaseWriter
+		})
 	}()
 	<-opened
 
-	claim := filepath.Join(paths.SpoolDir, "journal-test-reconciling-1.claim")
-	if err := os.Rename(spoolPath, claim); err != nil {
+	if err := errors.Join(unix.Flock(int(claimedFile.Fd()), unix.LOCK_UN), claimedFile.Close()); err != nil {
 		t.Fatal(err)
 	}
-	claimedData, err := os.ReadFile(claim)
+	firstReport, err := journal.PromoteSpool(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := journal.appendLineLocked(claimedData); err != nil {
-		t.Fatal(err)
+	if firstReport.PromotedRecords != 1 || firstReport.PromotedFiles != 1 {
+		t.Fatalf("first promotion = %+v", firstReport)
 	}
-	if err := unix.Flock(int(claimedFile.Fd()), unix.LOCK_UN); err != nil {
-		t.Fatal(err)
-	}
-	if err := claimedFile.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(claim); err != nil {
-		t.Fatal(err)
-	}
+	close(releaseWriter)
 
 	select {
 	case err := <-writerDone:
@@ -359,12 +547,12 @@ func TestSpoolAppendSurvivesConcurrentReconcile(t *testing.T) {
 		t.Fatal("blocked spool writer did not retry the stable path")
 	}
 
-	report, err := journal.ReconcileSpool(context.Background())
+	report, err := journal.PromoteSpool(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.ReconciledRecords != 1 || report.ReconciledFiles != 1 {
-		t.Fatalf("reconciliation = %+v", report)
+	if report.PromotedRecords != 1 || report.PromotedFiles != 1 {
+		t.Fatalf("second promotion = %+v", report)
 	}
 	records, err := journal.Read(context.Background(), Selector{Stages: []string{"spool.concurrent"}})
 	if err != nil {
@@ -379,64 +567,107 @@ func TestSpoolAppendSurvivesConcurrentReconcile(t *testing.T) {
 	}
 }
 
-func TestSpoolReconcileClaimResumesAfterPartialFailureWithoutDuplicates(t *testing.T) {
+func TestSpoolPromotionRestartBoundariesAreRetrySafe(t *testing.T) {
+	injectedFailure := errors.New("injected crash")
+	tests := []struct {
+		name  string
+		hooks spoolPromotionHooks
+	}{
+		{name: "after-claim", hooks: spoolPromotionHooks{afterClaim: func(string) error { return injectedFailure }}},
+		{name: "after-validation", hooks: spoolPromotionHooks{afterValidation: func(string) error { return injectedFailure }}},
+		{name: "after-publication", hooks: spoolPromotionHooks{afterPublish: func(string) error { return injectedFailure }}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			journal, paths := testJournal(t, JournalOptions{})
+			record, err := json.Marshal(testEnvelope("spool.restart", test.name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
+			if err := os.WriteFile(spoolPath, append(record, '\n'), fileMode); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := journal.promoteSpool(context.Background(), test.hooks); !errors.Is(err, injectedFailure) {
+				t.Fatalf("injected promotion error = %v", err)
+			}
+
+			restarted, err := NewJournal(paths, JournalOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := restarted.PromoteSpool(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err := restarted.Snapshot(context.Background(), Selector{Stages: []string{"spool.restart"}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(snapshot.Records) != 1 || snapshot.Records[0].RequestID != test.name {
+				t.Fatalf("restart evidence = %+v", snapshot.Records)
+			}
+			claims, err := filepath.Glob(filepath.Join(paths.SpoolDir, "journal-*.claim"))
+			if err != nil || len(claims) != 0 {
+				t.Fatalf("claims after restart = %v, err = %v", claims, err)
+			}
+		})
+	}
+}
+
+func TestLegacySpoolClaimDeduplicatesPartialCopies(t *testing.T) {
 	journal, paths := testJournal(t, JournalOptions{})
-	var spoolData []byte
-	for _, requestID := range []string{"committed-before-failure", "pending-after-failure"} {
-		record, err := json.Marshal(testEnvelope("spool.claim", requestID))
-		if err != nil {
-			t.Fatal(err)
-		}
-		spoolData = append(spoolData, record...)
-		spoolData = append(spoolData, '\n')
-	}
-	spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
-	if err := os.WriteFile(spoolPath, spoolData, fileMode); err != nil {
+	first := testEnvelope("spool.legacy", "already-copied")
+	second := testEnvelope("spool.legacy", "not-yet-copied")
+	if err := journal.Append(context.Background(), first); err != nil {
 		t.Fatal(err)
 	}
-
-	injectedFailure := errors.New("injected append failure")
-	appendCalls := 0
-	var firstReport MaintenanceReport
-	err := journal.reconcileSpoolLockedWithAppender(&firstReport, func(record []byte) error {
-		appendCalls++
-		if appendCalls == 2 {
-			return injectedFailure
-		}
-		return journal.appendLineLocked(record)
-	})
-	if !errors.Is(err, injectedFailure) {
-		t.Fatalf("first reconciliation error = %v, want injected failure", err)
+	firstJSON, _ := json.Marshal(first)
+	secondJSON, _ := json.Marshal(second)
+	claim := filepath.Join(paths.SpoolDir, "journal-4242-reconciling-1.claim")
+	data := append(append(append(firstJSON, '\n'), secondJSON...), '\n')
+	if err := os.WriteFile(claim, data, fileMode); err != nil {
+		t.Fatal(err)
 	}
-	if firstReport.ReconciledRecords != 1 || firstReport.ReconciledFiles != 0 {
-		t.Fatalf("partial reconciliation = %+v", firstReport)
-	}
-	claims, err := filepath.Glob(filepath.Join(paths.SpoolDir, "journal-*-reconciling-*.claim"))
-	if err != nil || len(claims) != 1 {
-		t.Fatalf("surviving claims = %v, err = %v", claims, err)
-	}
-
-	retryReport, err := journal.ReconcileSpool(context.Background())
+	report, err := journal.PromoteSpool(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if retryReport.ReconciledRecords != 1 || retryReport.ReconciledFiles != 1 {
-		t.Fatalf("retry reconciliation = %+v", retryReport)
+	if report.PromotedRecords != 1 || report.PromotedFiles != 1 {
+		t.Fatalf("legacy promotion = %+v", report)
 	}
-	records, err := journal.Read(context.Background(), Selector{Stages: []string{"spool.claim"}})
+	snapshot, err := journal.Snapshot(context.Background(), Selector{Stages: []string{"spool.legacy"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	counts := make(map[string]int)
-	for _, record := range records {
-		counts[record.RequestID]++
+	if len(snapshot.Records) != 2 || snapshot.Statistics.DuplicatesOmitted != 0 {
+		t.Fatalf("legacy records = %+v statistics=%+v", snapshot.Records, snapshot.Statistics)
 	}
-	if len(records) != 2 || counts["committed-before-failure"] != 1 || counts["pending-after-failure"] != 1 {
-		t.Fatalf("records after claim retry = %+v", records)
+}
+
+func TestPromotionCancellationLeavesClaimForRestart(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	record, _ := json.Marshal(testEnvelope("spool.cancel", "preserved"))
+	if err := os.WriteFile(filepath.Join(paths.SpoolDir, "journal-4242.jsonl"), append(record, '\n'), fileMode); err != nil {
+		t.Fatal(err)
 	}
-	claims, _ = filepath.Glob(filepath.Join(paths.SpoolDir, "journal-*-reconciling-*.claim"))
-	if len(claims) != 0 {
-		t.Fatalf("claims remain after successful retry: %v", claims)
+	ctx, cancel := context.WithCancel(context.Background())
+	_, err := journal.promoteSpool(ctx, spoolPromotionHooks{afterClaim: func(string) error {
+		cancel()
+		return nil
+	}})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled promotion error = %v", err)
+	}
+	claims, _ := filepath.Glob(filepath.Join(paths.SpoolDir, "journal-*.claim"))
+	if len(claims) != 1 {
+		t.Fatalf("cancelled promotion claims = %v", claims)
+	}
+	restarted, err := NewJournal(paths, JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restarted.PromoteSpool(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 

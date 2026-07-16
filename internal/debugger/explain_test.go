@@ -3,6 +3,8 @@ package debugger
 import (
 	"context"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +42,13 @@ func TestExplanationClassifiesEveryInstrumentedBoundary(t *testing.T) {
 		{"quarantine", explanationRecord("daemon.decision", "quarantined", daemon.DecisionReasonUntrustedIdentityFallback), CauseQuarantine},
 		{"reducer suppression", explanationRecord("daemon.decision", "suppressed", daemon.DecisionReasonGuardBlocked), CauseReducerSuppression},
 		{"render failure", explanationRecord("daemon.renderer.failed", "failed", "render_title"), CauseRenderFailure},
+		{"notification dispatch failure", explanationRecord("daemon.notification.dispatch", "failed", "send_failed"), CauseNotificationFailure},
+		{"notification backend timeout", explanationRecord("daemon.notification.dispatch", "failed", "backend_timeout"), CauseNotificationFailure},
+		{"notification focus failure", explanationRecord("daemon.notification.focus", "failed", "focus_failed"), CauseNotificationFailure},
 		{"notification suppression", explanationRecord("daemon.notification.decision", "suppressed", "config_disabled"), CauseNotificationSuppression},
+		{"notification interaction timeout", explanationRecord("daemon.notification.focus", "suppressed", "interaction_timeout"), CauseNotificationSuppression},
+		{"notification dismissal", explanationRecord("daemon.notification.focus", "suppressed", "dismissed"), CauseNotificationSuppression},
+		{"notification daemon shutdown", explanationRecord("daemon.notification.dispatch", "cancelled", "daemon_shutdown"), CauseNotificationSuppression},
 		{"success", explanationRecord("daemon.renderer.rendered", "success", "render_complete"), CauseSuccessfulCompletion},
 	}
 	saturated := explanationRecord("daemon.decision", "applied", "")
@@ -113,11 +121,191 @@ func TestExplanationRefusesToInferProducerAbsence(t *testing.T) {
 func TestExplainRecordsIsPureAndValidatesOptions(t *testing.T) {
 	record := explanationRecord("daemon.renderer.rendered", "success", "render_complete")
 	report, err := ExplainRecords(ExplainOptions{Selector: Selector{RequestID: "request-1"}}, []diagnostics.TraceEnvelope{record})
-	if err != nil || report.Cause.Classification != CauseSuccessfulCompletion || report.Journal != (ExplanationJournal{}) {
+	if err != nil || report.Cause.Classification != CauseSuccessfulCompletion || report.JournalSnapshot != (diagnostics.SnapshotStatistics{}) {
 		t.Fatalf("pure report = %+v, err = %v", report, err)
+	}
+	if report.SchemaVersion != 2 || report.Limits != (ExplanationLimits{
+		GraphDepth: DefaultExplainGraphDepth, MaxNodes: DefaultExplainMaxNodes, MaxEdges: DefaultExplainMaxEdges,
+	}) {
+		t.Fatalf("defaults = schema %d limits %+v", report.SchemaVersion, report.Limits)
 	}
 	if _, err := ExplainRecords(ExplainOptions{Recent: -1}, nil); err == nil {
 		t.Fatal("negative pure explain limit was accepted")
+	}
+	for _, options := range []ExplainOptions{
+		{GraphDepth: MaxExplainGraphDepth + 1},
+		{MaxNodes: MaxExplainMaxNodes + 1},
+		{MaxEdges: MaxExplainMaxEdges + 1},
+	} {
+		if _, err := ExplainRecords(options, nil); err == nil {
+			t.Fatalf("invalid graph options were accepted: %+v", options)
+		}
+	}
+}
+
+func TestExplanationTraversalDoesNotFanOutFromContext(t *testing.T) {
+	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	record := func(offset int, traceID, requestID, generation string) diagnostics.TraceEnvelope {
+		r := diagnostics.NewEnvelope("daemon.decision")
+		r.ObservedAt = base.Add(time.Duration(offset) * time.Millisecond)
+		r.TraceID = traceID
+		r.RequestID = requestID
+		r.WindowID = 42
+		r.Evidence = map[string]string{}
+		if generation != "" {
+			r.Evidence["render_generation"] = generation
+		}
+		return r
+	}
+	seed := record(0, "trace-selected", "request-selected", "7")
+	contextRecord := record(1, "trace-unrelated", "request-unrelated", "7")
+	unrelatedHistory := record(2, "trace-unrelated", "request-unrelated-history", "")
+	report := buildExplanation(ExplainOptions{
+		Selector: Selector{RequestID: "request-selected"}, Recent: 10, Now: base,
+	}, []diagnostics.TraceEnvelope{unrelatedHistory, contextRecord, seed})
+	if len(report.Graph.Nodes) != 2 {
+		t.Fatalf("contextual join recursively fanned out: %+v", report.Graph.Nodes)
+	}
+	for _, node := range report.Graph.Nodes {
+		if node.Record != nil && node.Record.RequestID == "request-unrelated-history" {
+			t.Fatalf("unrelated trace history was admitted through a contextual record: %+v", node)
+		}
+	}
+}
+
+func TestExplanationTraversalRetractsDepthPruningForContextuallyAdmittedRecord(t *testing.T) {
+	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	record := func(offset int, stage, traceID, parentTraceID, requestID string) diagnostics.TraceEnvelope {
+		r := diagnostics.NewEnvelope(stage)
+		r.ObservedAt = base.Add(time.Duration(offset) * time.Millisecond)
+		r.TraceID = traceID
+		r.ParentTraceID = parentTraceID
+		r.RequestID = requestID
+		r.SessionID = "session-shared"
+		r.Evidence = map[string]string{}
+		return r
+	}
+	report := buildExplanation(ExplainOptions{
+		Selector: Selector{RequestID: "request-root"}, Recent: 10, GraphDepth: 1, MaxNodes: 10, MaxEdges: 20, Now: base,
+	}, []diagnostics.TraceEnvelope{
+		record(0, "root", "trace-0", "", "request-root"),
+		record(1, "middle", "trace-1", "trace-0", "request-middle"),
+		record(2, "leaf", "trace-2", "trace-1", "request-leaf"),
+	})
+
+	if len(report.Graph.Nodes) != 3 || report.Truncation.Truncated || len(report.Truncation.Reasons) != 0 ||
+		report.Truncation.PrunedNodeCandidates != 0 || report.Truncation.PrunedEdgeCandidates != 0 {
+		t.Fatalf("contextually completed depth frontier = nodes %d truncation %+v", len(report.Graph.Nodes), report.Truncation)
+	}
+	foundLeafParent := false
+	for _, edge := range report.Graph.Edges {
+		if edge.Relation == "parent_trace_id" && edge.Value == "trace-1" {
+			foundLeafParent = true
+			break
+		}
+	}
+	if !foundLeafParent {
+		t.Fatalf("contextually admitted leaf is missing its parent trace edge: %+v", report.Graph.Edges)
+	}
+}
+
+func TestExplanationTraversalReportsDepthBelowContextuallyAdmittedRecord(t *testing.T) {
+	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	record := func(offset int, stage, traceID, parentTraceID, requestID, sessionID string) diagnostics.TraceEnvelope {
+		r := diagnostics.NewEnvelope(stage)
+		r.ObservedAt = base.Add(time.Duration(offset) * time.Millisecond)
+		r.TraceID = traceID
+		r.ParentTraceID = parentTraceID
+		r.RequestID = requestID
+		r.SessionID = sessionID
+		r.Evidence = map[string]string{}
+		return r
+	}
+	report := buildExplanation(ExplainOptions{
+		Selector: Selector{RequestID: "request-root"}, Recent: 10, GraphDepth: 1, MaxNodes: 10, MaxEdges: 20, Now: base,
+	}, []diagnostics.TraceEnvelope{
+		record(0, "root", "trace-0", "", "request-root", "session-shared"),
+		record(1, "first", "trace-1", "trace-0", "request-first", "session-shared"),
+		record(2, "contextual", "trace-2", "trace-1", "request-contextual", "session-shared"),
+		record(3, "excluded", "trace-3", "trace-2", "request-excluded", "session-isolated"),
+	})
+
+	if len(report.Graph.Nodes) != 3 || !report.Truncation.Truncated ||
+		!containsString(report.Truncation.Reasons, TruncationGraphDepth) ||
+		report.Truncation.PrunedNodeCandidates != 1 || report.Truncation.PrunedEdgeCandidates != 0 {
+		t.Fatalf("depth below contextual admission = nodes %d truncation %+v", len(report.Graph.Nodes), report.Truncation)
+	}
+	for _, node := range report.Graph.Nodes {
+		if node.Record != nil && node.Record.TraceID == "trace-3" {
+			t.Fatalf("depth-pruned causal child was admitted: %+v", node)
+		}
+	}
+}
+
+func TestExplanationTraversalAppliesDepthNodeAndEdgeLimitsDeterministically(t *testing.T) {
+	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	root := diagnostics.NewEnvelope("root")
+	root.ObservedAt = base
+	root.TraceID = "trace-0"
+	root.RequestID = "request-root"
+	root.Evidence = map[string]string{}
+	chain := []diagnostics.TraceEnvelope{root}
+	for i := 1; i <= 3; i++ {
+		record := diagnostics.NewEnvelope("child")
+		record.ObservedAt = base.Add(time.Duration(i) * time.Millisecond)
+		record.TraceID = "trace-" + string(rune('0'+i))
+		record.ParentTraceID = "trace-" + string(rune('0'+i-1))
+		record.Evidence = map[string]string{}
+		chain = append(chain, record)
+	}
+	depthReport := buildExplanation(ExplainOptions{
+		Selector: Selector{RequestID: "request-root"}, Recent: 10, GraphDepth: 2, MaxNodes: 10, MaxEdges: 20, Now: base,
+	}, chain)
+	if len(depthReport.Graph.Nodes) != 3 || !depthReport.Truncation.Truncated ||
+		!containsString(depthReport.Truncation.Reasons, TruncationGraphDepth) || depthReport.Truncation.PrunedNodeCandidates != 1 {
+		t.Fatalf("depth-limited report = %+v", depthReport)
+	}
+
+	highFanout := make([]diagnostics.TraceEnvelope, 0, 401)
+	seed := diagnostics.NewEnvelope("seed")
+	seed.ObservedAt = base
+	seed.TraceID = "fanout-seed"
+	seed.RequestID = "fanout-request"
+	seed.WindowID = 42
+	seed.Evidence = map[string]string{"render_generation": "9"}
+	highFanout = append(highFanout, seed)
+	for i := 0; i < 400; i++ {
+		record := diagnostics.NewEnvelope("context")
+		record.ObservedAt = base.Add(time.Duration(i+1) * time.Microsecond)
+		record.TraceID = "context-" + strconv.Itoa(i)
+		record.RequestID = "context-request-" + strconv.Itoa(i)
+		record.WindowID = 42
+		record.Evidence = map[string]string{"render_generation": "9"}
+		highFanout = append(highFanout, record)
+	}
+	options := ExplainOptions{Selector: Selector{RequestID: "fanout-request"}, Recent: 10, Now: base}
+	first := buildExplanation(options, highFanout)
+	for left, right := 0, len(highFanout)-1; left < right; left, right = left+1, right-1 {
+		highFanout[left], highFanout[right] = highFanout[right], highFanout[left]
+	}
+	second := buildExplanation(options, highFanout)
+	if len(first.Graph.Nodes) != DefaultExplainMaxNodes || len(first.Graph.Edges) > DefaultExplainMaxEdges ||
+		first.Truncation.PrunedNodeCandidates != 151 || !containsString(first.Truncation.Reasons, TruncationMaxNodes) {
+		t.Fatalf("default high-fan-out bounds = nodes %d edges %d truncation %+v", len(first.Graph.Nodes), len(first.Graph.Edges), first.Truncation)
+	}
+	if !reflect.DeepEqual(first.Graph, second.Graph) || !reflect.DeepEqual(first.Truncation, second.Truncation) {
+		t.Fatal("bounded traversal changed when input order was reversed")
+	}
+	for left, right := 0, len(highFanout)-1; left < right; left, right = left+1, right-1 {
+		highFanout[left], highFanout[right] = highFanout[right], highFanout[left]
+	}
+
+	edgeReport := buildExplanation(ExplainOptions{
+		Selector: Selector{RequestID: "fanout-request"}, Recent: 10, GraphDepth: 1, MaxNodes: 10, MaxEdges: 2, Now: base,
+	}, highFanout[:5])
+	if len(edgeReport.Graph.Edges) != 2 || edgeReport.Truncation.PrunedEdgeCandidates == 0 ||
+		!containsString(edgeReport.Truncation.Reasons, TruncationMaxEdges) {
+		t.Fatalf("edge-limited report = edges %d truncation %+v", len(edgeReport.Graph.Edges), edgeReport.Truncation)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -105,6 +106,37 @@ func TestShareBundleExcludesSecretCorpusRawSourcesAndIsDeterministic(t *testing.
 	if !bytes.Contains(members["manifest.json"], []byte("raw capture material is never an archive input")) {
 		t.Fatal("manifest does not explain raw capture exclusion")
 	}
+	if !bytes.Contains(members["causal-records.json"], []byte(`"journal_snapshot"`)) ||
+		!bytes.Contains(members["causal-records.json"], []byte(`"records_matched": 1`)) ||
+		!bytes.Contains(members["causal-records.json"], []byte(`"segment_files_read": 1`)) {
+		t.Fatalf("share causal records omitted snapshot metadata: %s", members["causal-records.json"])
+	}
+	var asl struct {
+		SchemaVersion        int                            `json:"schema_version"`
+		JournalSnapshotScope string                         `json:"journal_snapshot_scope"`
+		JournalSnapshot      diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+		Records              []diagnostics.TraceEnvelope    `json:"records"`
+	}
+	if err := json.Unmarshal(members["asl-records.json"], &asl); err != nil {
+		t.Fatalf("decode ASL records: %v\n%s", err, members["asl-records.json"])
+	}
+	if asl.SchemaVersion != 2 || asl.JournalSnapshotScope != "source_snapshot" ||
+		asl.JournalSnapshot.RecordsMatched != 1 || len(asl.Records) != 0 {
+		t.Fatalf("share ASL snapshot scope = schema %d scope %q snapshot %+v records %d", asl.SchemaVersion, asl.JournalSnapshotScope, asl.JournalSnapshot, len(asl.Records))
+	}
+	var explanation struct {
+		SchemaVersion   int                            `json:"schema_version"`
+		Limits          ExplanationLimits              `json:"limits"`
+		JournalSnapshot diagnostics.SnapshotStatistics `json:"journal_snapshot"`
+	}
+	if err := json.Unmarshal(members["explanation.json"], &explanation); err != nil {
+		t.Fatalf("decode bounded explanation: %v\n%s", err, members["explanation.json"])
+	}
+	if explanation.SchemaVersion != 2 || explanation.Limits != (ExplanationLimits{
+		GraphDepth: DefaultExplainGraphDepth, MaxNodes: DefaultExplainMaxNodes, MaxEdges: DefaultExplainMaxEdges,
+	}) || explanation.JournalSnapshot.RecordsMatched != 1 {
+		t.Fatalf("bundle explanation limits/snapshot = schema %d limits %+v snapshot %+v", explanation.SchemaVersion, explanation.Limits, explanation.JournalSnapshot)
+	}
 	if mode := mustMode(t, first); mode.Perm() != 0o600 {
 		t.Fatalf("bundle mode = %o, want 0600", mode.Perm())
 	}
@@ -130,6 +162,25 @@ func TestShareBundleScopeIdentifiersAreHMACRedacted(t *testing.T) {
 	}
 	if !bytes.Contains(data, []byte(hashedScope)) {
 		t.Fatalf("share explanation omitted HMAC scope: %s", data)
+	}
+}
+
+func TestShareBundlePreservesControlledExplanationTruncation(t *testing.T) {
+	redactor := newBundleRedactor(BundleModeShare, func(string) string {
+		return "hmac-sha256:identifier-redacted"
+	}, nil)
+	data, err := redactor.JSON(ExplanationReport{
+		Limits: ExplanationLimits{GraphDepth: 2, MaxNodes: 250, MaxEdges: 1000},
+		Truncation: ExplanationTruncation{
+			Truncated: true, Reasons: []string{TruncationMaxNodes}, PrunedNodeCandidates: 3,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte(`"reasons": [`)) || !bytes.Contains(data, []byte(`"max_nodes"`)) ||
+		!bytes.Contains(data, []byte(`"pruned_node_candidates": 3`)) {
+		t.Fatalf("share explanation lost controlled truncation metadata: %s", data)
 	}
 }
 
