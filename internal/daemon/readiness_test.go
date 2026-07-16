@@ -293,13 +293,14 @@ func TestMaintenanceTick_RestoresAmxStateBeforeReadyAndLateStartupCannotRollBack
 func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 	h := newTestHandler()
 	now := time.Now()
+	process := HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 
 	// Persisted multi-source durable state for window 42: an interactive harness
 	// "active" fact, a live between-turns ASL lease, and an OLDER legacy
 	// window-keyed fact that collides with the source the degraded-window hook
 	// will create.
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix()})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, At: now.Unix(), HarnessProcess: process})
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseBetween, RunID: "run-1", Seq: 1, At: now.Unix()})
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceLegacy, Key: windowKey(42)}, Action: "active", Seq: 1, At: now.Add(-time.Minute).Unix()})
 	encoded, err := WindowState{
@@ -386,13 +387,13 @@ func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 		}
 		return nil
 	}
-	haveHarness := func(facts []SourceFactSnapshot) bool {
+	harnessFact := func(facts []SourceFactSnapshot) *SourceFactSnapshot {
 		for i := range facts {
 			if facts[i].Kind == SourceHarness && facts[i].Key == "claude:s1" {
-				return true
+				return &facts[i]
 			}
 		}
-		return false
+		return nil
 	}
 
 	// The new hook fact wins the same-source conflict: the legacy window source
@@ -402,8 +403,9 @@ func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 		t.Fatalf("same-source hook fact lost the conflict: %+v", lf)
 	}
 	// The disjoint persisted facts survived the merge.
-	if !haveHarness(mergedFacts) {
-		t.Fatal("disjoint persisted harness fact was not merged")
+	if hf := harnessFact(mergedFacts); hf == nil || hf.HarnessProcessHarness != process.Harness ||
+		hf.HarnessProcessPID != process.PID || hf.HarnessProcessStartToken != process.StartToken {
+		t.Fatalf("disjoint persisted harness process fact was not merged intact: %+v", hf)
 	}
 	if exists, live := merged.Reducer.LeaseState("run-1"); !exists || !live {
 		t.Fatalf("durable ASL lease not merged: exists=%v live=%v", exists, live)
@@ -435,6 +437,9 @@ func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 	}
 	if lf := legacyFact(afterFacts); lf == nil || lf.Action != "permission" {
 		t.Fatalf("late startup restore rolled back the hook fact: %+v", lf)
+	}
+	if hf := harnessFact(afterFacts); hf == nil || hf.HarnessProcessPID != process.PID || hf.HarnessProcessStartToken != process.StartToken {
+		t.Fatalf("late startup restore changed durable process identity: %+v", hf)
 	}
 	if exists, live := after.Reducer.LeaseState("run-1"); !exists || !live {
 		t.Fatalf("late startup restore dropped the merged ASL lease: exists=%v live=%v", exists, live)

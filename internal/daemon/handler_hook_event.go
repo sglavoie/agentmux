@@ -128,7 +128,7 @@ func (h *Handler) handleHookEvent(req Request) Response {
 	if shouldResolveUnmanagedHookRoute(eventOrAction, ctx) {
 		// A previously accepted session stays bound to its original managed
 		// target through its terminal event, even if focus has since moved.
-		normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, ctx.req.PayloadJSON, ctx.req.WindowID, ctx.req.PipeMode)
+		normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 		ctx.req.normalized = &normalized
 		if target, matches := h.rememberedManagedHookTarget(ctx, normalized); matches == 1 {
 			ctx.req.routeEvidence.StickyMatches = matches
@@ -197,7 +197,7 @@ func (h *Handler) handleHookEvent(req Request) Response {
 	// Stamp the source-scoped view for the shadow reducer while the raw payload
 	// is still in hand. A deferred stop keeps the stamp and delivers it at
 	// commit time.
-	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, req.PayloadJSON, ctx.req.WindowID, ctx.req.PipeMode)
+	normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 	stateReq.normalized = &normalized
 	stateReq.routeDecision = routeDecisionSource
 	stateReq.normalizationOutcome = normalizationOutcomeFor(normalized)
@@ -322,7 +322,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	propagateIngressTrace(&stateReq, ctx.req)
 	// The wipe was retargeted, so normalize against the target window: the
 	// shadow reducer must acknowledge the owner's facts, not the source pane's.
-	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, ctx.req.PayloadJSON, targetID, ctx.req.PipeMode)
+	normalized := normalizedFromHookRequest(eventOrAction, ctx.req, targetID)
 	stateReq.normalized = &normalized
 	switch {
 	case ctx.owner != nil:

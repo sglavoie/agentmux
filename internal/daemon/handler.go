@@ -70,6 +70,20 @@ type Handler struct {
 	// the render worker (renderqueue.go), the daemon's single Kitty writer.
 	renderQueue *renderQueue
 
+	// processInspector observes the validated PID/start-token fingerprints
+	// retained by reducer facts. The lifecycle loop always calls it off stateMu;
+	// tests replace it with a controllable inspector to exercise stale-observation
+	// rejection and shutdown. The dedicated mutex permits live replacement without
+	// coupling a potentially slow process-table read to stateMu.
+	processInspectorMu sync.RWMutex
+	processInspector   HarnessProcessInspector
+	// processDiagnosticsMu rate-limits lifecycle inspection-failure journal
+	// records independently of stateMu. Healthy one-second polls are never
+	// journaled; committed settlements are recorded separately without rate
+	// limiting.
+	processDiagnosticsMu           sync.Mutex
+	lastProcessInspectionFailureAt time.Time
+
 	// staleThresholds holds per-action stale-detection durations, keyed by
 	// the action name ("active", "subagent", "compact"). A missing or zero
 	// value for an action disables the sweep for that action. The sweep is
@@ -268,6 +282,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		store:                          make(map[int]*WindowState),
 		pendingResetStops:              make(map[int]pendingResetStop),
 		renderQueue:                    newRenderQueue(),
+		processInspector:               newPSHarnessProcessInspector(),
 		kittySockets:                   make(map[int]string),
 		claudeContextLimitProbeEnabled: true,
 		copilotLifecycleReader:         transcript.ReadCopilotLifecycle,

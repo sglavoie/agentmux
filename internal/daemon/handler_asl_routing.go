@@ -199,7 +199,7 @@ func (h *Handler) routeUnmanagedHookTarget(
 	// Stamp the source-scoped view for the shadow reducer against the managed
 	// target: a routed sibling hook advances the owner's fact map, exactly as
 	// its legacy transition advances the owner's state machine.
-	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, ctx.req.PayloadJSON, ctx.req.WindowID, ctx.req.PipeMode)
+	normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 	stateReq.normalized = &normalized
 	stateReq.routeDecision = routeDecisionOwner
 	stateReq.normalizationOutcome = normalizationOutcomeFor(normalized)

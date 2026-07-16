@@ -168,7 +168,7 @@ func (n *Notifier) SetParentContext(ctx context.Context) {
 }
 
 // SetObserver installs a fail-open disposition observer. Handler uses it to
-// update schema-v9 event links and persist durable diagnostic journal rows.
+// update schema-v9+ event links and persist durable diagnostic journal rows.
 func (n *Notifier) SetObserver(observer func(NotificationDisposition)) {
 	n.observerMu.Lock()
 	n.observer = observer

@@ -206,6 +206,62 @@ func TestShareBundleProfileIdentifiersAreNotEmbeddedInChecks(t *testing.T) {
 	}
 }
 
+func TestBundleRedactionAllowsOnlySafeProcessLifecycleEvidence(t *testing.T) {
+	input := map[string]any{"evidence": map[string]string{
+		"event":                  "HarnessProcessExited",
+		"process_harness":        "claude",
+		"process_pid":            "4242",
+		"process_start_token":    "Thu Jul 16 10:20:30 2026",
+		"process_observation":    "replaced_instance",
+		"process_mode":           "pipe",
+		"withdrawn_facts":        "1",
+		"terminal_hook_evidence": "absent",
+		"render_generation":      "9",
+		"command_line":           "claude -p PROMPT-CANARY",
+		"command":                "claude -p COMMAND-CANARY",
+		"args":                   "--prompt ARGS-CANARY",
+		"prompt":                 "PROMPT-CANARY",
+		"payload":                "PAYLOAD-CANARY",
+		"path":                   "/Users/alice/private/project",
+	}}
+	for _, mode := range []BundleMode{BundleModeShare, BundleModeForensic} {
+		t.Run(string(mode), func(t *testing.T) {
+			redactor := newBundleRedactor(mode, func(string) string {
+				return "hmac-sha256:identifier-redacted"
+			}, nil)
+			data, err := redactor.JSON(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, safe := range []string{
+				"HarnessProcessExited", "claude", "4242", "Thu Jul 16 10:20:30 2026",
+				"replaced_instance", "pipe", "absent",
+			} {
+				if !bytes.Contains(data, []byte(safe)) {
+					t.Errorf("%s bundle omitted safe process evidence %q: %s", mode, safe, data)
+				}
+			}
+			for _, sensitive := range []string{
+				"claude -p PROMPT-CANARY", "claude -p COMMAND-CANARY", "--prompt ARGS-CANARY",
+				"PROMPT-CANARY", "PAYLOAD-CANARY", "/Users/alice/private/project",
+			} {
+				if bytes.Contains(data, []byte(sensitive)) {
+					t.Errorf("%s bundle leaked lifecycle-adjacent value %q: %s", mode, sensitive, data)
+				}
+			}
+		})
+	}
+
+	redactor := newBundleRedactor(BundleModeShare, func(string) string { return "hmac-sha256:redacted" }, nil)
+	data, err := redactor.JSON(map[string]any{"process_start_token": "secret prompt content hidden here"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte("secret prompt content hidden here")) || !bytes.Contains(data, []byte("[redacted]")) {
+		t.Fatalf("mislabeled process token escaped redaction: %s", data)
+	}
+}
+
 func TestForensicBundleRemainsRedactedAndCarriesLocalOnlyWarning(t *testing.T) {
 	now := time.Date(2026, 7, 15, 13, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))

@@ -55,9 +55,10 @@ bundles and causal-record wrappers.
 | Narrow and wide TUI layouts | All JSON scenarios under `docs/tui-testing/scenarios` cover the live dashboard, overlays, Past Sessions, Plans, and their viewers. |
 | TUI continuity | The hermetic `session-fork-continuity` scenario enters Past Sessions and launches a native fork through the shared action registry while recording, rather than executing, the Kitty launch. |
 | Diagnostic pipeline | `cmd.TestAcceptanceDiagnosticPipeline` drives the real hook command adapter through journal persistence and Unix IPC into an in-process daemon with fake Kitty, then checks duplicate acknowledgement, renderer writes, notification suppression, a schema-v2 snapshot-backed share bundle and offline replay, and a bounded ASL source-event explanation. `internal/debugger.TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence` rewrites that bundle as schema v1 and verifies v1/v2-compatible replay. |
-| Debug workflow | `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow` pins AgentMux 0.6.0, schema v9 export documentation, the schema-v2 snapshot contract, event-time tail semantics, explain graph defaults, v1/v2 bundle replay, the `amx debug status` → `amx debug explain` → `amx debug bundle` → `amx debug replay` workflow, and every required failure-matrix row including distinct notification failure and suppression. |
+| Harness process lifecycle | `cmd.TestAcceptanceHarnessProcessLifecyclePipeline` uses a real Unix socket plus controllable `ps` and fake Kitty boundaries to prove cross-harness pipe and interactive exits, parent/child and concurrent isolation, attention preservation, native-hook races, reset and ASL exclusions, schema-v4 restart settlement, schema-v10 diagnostics, and linked renderer completion. The automated/live boundary and optional installed drill are documented in [Process-Lifecycle Acceptance](acceptance-testing.md). |
+| Debug workflow | `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow` pins AgentMux 0.6.0, schema v10 export documentation, the schema-v2 snapshot contract, event-time tail semantics, explain graph defaults, v1/v2 bundle replay, the `amx debug status` → `amx debug explain` → `amx debug bundle` → `amx debug replay` workflow, and every required failure-matrix row including distinct notification failure and suppression. |
 | Bundle secrecy and traversal | `internal/debugger` tests plant a secret corpus, verify share/forensic redaction, exclude raw sources, reject symlink publication, build flat deterministic archives, and replay portable share evidence. |
-| Restart and replay equivalence | `internal/daemon` restart-prefix tests and `internal/debugger` golden replay tests cover restored reducer state, daemon sequence resets, ordering, routing, ASL phases, duplicate requests, coalesced renders, and explicit schema-v8 limitations. |
+| Restart and replay equivalence | `internal/daemon` restart-prefix tests and `internal/debugger` golden replay tests cover restored reducer state including exact process ownership, daemon sequence resets, ordering, routing, ASL phases, duplicate requests, coalesced renders, and explicit schema-v8/v9 limitations. |
 | ASL delivery correlation | `/Users/sglavoie/scripts/tests` covers stable UUIDv5 request IDs, bounded retry/backoff, duplicates, permanent failures, legacy fallback, missing binaries, exhaustion, metrics/tail/Workbench visibility; `internal/debugger.TestExplainCorrelatesASLSourceDeliveryDaemonAndRenderEvidence` pins the cross-repository graph. |
 
 ## Filesystem persistence coverage
@@ -97,9 +98,9 @@ CLI/daemon build identities. Hook synchronization happens afterward because a
 public hook contract changed: the safe Claude observers must be installed
 before the final strict-doctor record is retained.
 
-The release uses schema v9 for `amx daemon export-events` by default. Acceptance
-also retains `amx daemon export-events --schema 8` coverage as an explicit
-compatibility projection. For first-line diagnosis use:
+The release uses schema v10 for `amx daemon export-events` by default. Acceptance
+also retains `--schema 9` and `--schema 8` coverage as explicit compatibility
+projections that omit v10 process fields. For first-line diagnosis use:
 
 ```bash
 amx debug status
@@ -155,7 +156,7 @@ delivery, replay, bundle, and correlation behavior.
 Actual provider smoke is a separate operator-attended record. For each installed
 provider, record the CLI version and intentionally exercise prompt, tool,
 permission/elicitation, terminal, and failure paths in a managed Kitty session.
-Retain a schema v9 export or `amx debug explain --source-event <id> --json` for
+Retain a schema v10 export or `amx debug explain --source-event <id> --json` for
 each path. Do not infer that this drill ran from an automated pass, and do not
 incur provider/model usage merely to complete the automated gate.
 

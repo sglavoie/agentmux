@@ -6,9 +6,10 @@ import (
 	"testing"
 )
 
-func TestUserVarV3RoundTripPersistsFactsAndEffective(t *testing.T) {
+func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
+	process := HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, TurnID: "t1", At: 1710000100, OriginWindowID: 91})
+	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, TurnID: "t1", At: 1710000100, OriginWindowID: 91, HarnessProcess: process})
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "stop_failure", Seq: 2, TurnID: "t1", At: 1710000200})
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 5, At: 1710000300})
 
@@ -25,8 +26,13 @@ func TestUserVarV3RoundTripPersistsFactsAndEffective(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalUserVar() error: %v", err)
 	}
-	if !strings.Contains(encoded, `"v":3`) {
+	if !strings.Contains(encoded, `"v":4`) {
 		t.Fatalf("MarshalUserVar() missing schema discriminator: %s", encoded)
+	}
+	for _, fragment := range []string{`"pv":1`, `"ph":"claude"`, `"pp":4321`, `"pt":"Mon Jul 13 10:11:12 2026"`} {
+		if !strings.Contains(encoded, fragment) {
+			t.Fatalf("MarshalUserVar() missing process field %s: %s", fragment, encoded)
+		}
 	}
 
 	var got WindowState
@@ -50,10 +56,11 @@ func TestUserVarV3RoundTripPersistsFactsAndEffective(t *testing.T) {
 	}
 }
 
-func TestUserVarV3RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
+func TestUserVarV4RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 	src := SourceID{Kind: SourceHarness, Key: "claude:s1"}
+	process := HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 	r := NewReducer(ReducerConfig{})
-	r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 1, At: 100})
+	r.Apply(ReducerEvent{Source: src, Action: "active", Seq: 1, At: 100, HarnessProcess: process})
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceProbe, Key: "user"}, Action: "user_clear", Seq: 2, At: 101})
 
 	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
@@ -66,7 +73,9 @@ func TestUserVarV3RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 	}
 
 	facts := got.Reducer.Facts()
-	if len(facts) != 1 || !facts[0].Acked || facts[0].AckedAt != 101 {
+	if len(facts) != 1 || !facts[0].Acked || facts[0].AckedAt != 101 ||
+		facts[0].HarnessProcessHarness != process.Harness || facts[0].HarnessProcessPID != process.PID ||
+		facts[0].HarnessProcessStartToken != process.StartToken {
 		t.Fatalf("restored facts = %+v, want one acknowledged fact", facts)
 	}
 	if eff := got.Reducer.Reduce(102); eff.Icon != "" {
@@ -79,7 +88,7 @@ func TestUserVarV3RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 	}
 }
 
-func TestUserVarV3RestoresV2WithDeterministicAcknowledgementSeed(t *testing.T) {
+func TestUserVarV4RestoresV2WithDeterministicAcknowledgementSeed(t *testing.T) {
 	raw := `{"v":2,"f":[{"k":"harness","y":"claude:active","a":"active","i":"bolt","q":5,"t":123,"ak":true},{"k":"harness","y":"claude:terminal","a":"stop","i":"stop","q":6,"t":100,"ak":true,"tm":true,"ta":200},{"k":"probe","y":"zero","a":"active","i":"bolt","q":7,"ak":true}],"sq":7}`
 	var st WindowState
 	if err := st.UnmarshalUserVar(raw); err != nil {
@@ -105,7 +114,7 @@ func TestUserVarV3RestoresV2WithDeterministicAcknowledgementSeed(t *testing.T) {
 	}
 }
 
-func TestUserVarV3RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
+func TestUserVarV4RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
 	source := SourceID{Kind: SourceHarness, Key: "claude:s1"}
 	r := NewReducer(ReducerConfig{})
 	r.Apply(ReducerEvent{
@@ -133,7 +142,7 @@ func TestUserVarV3RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
 	}
 }
 
-func TestUserVarV3RestartEquivalenceAcrossSources(t *testing.T) {
+func TestUserVarV4RestartEquivalenceAcrossSources(t *testing.T) {
 	events := []ReducerEvent{
 		{Source: SourceID{Kind: SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, TurnID: "t1", At: 100},
 		{Source: SourceID{Kind: SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 110},
@@ -166,7 +175,7 @@ func TestUserVarV3RestartEquivalenceAcrossSources(t *testing.T) {
 	}
 }
 
-func TestUserVarV3MigratesV1IntoSyntheticLegacySource(t *testing.T) {
+func TestUserVarV4MigratesV1IntoSyntheticLegacySource(t *testing.T) {
 	// A v1 payload has no "v" discriminator; its scalar action and loop marker
 	// migrate into synthetic legacy/ASL facts.
 	raw := `{"a":"permission","l":true,"acct":"work","h":"codex","t":1710000001}`
@@ -207,7 +216,7 @@ func TestUserVarV3MigratesV1IntoSyntheticLegacySource(t *testing.T) {
 	}
 }
 
-func TestUserVarV3MigratesV1TerminalAction(t *testing.T) {
+func TestUserVarV4MigratesV1TerminalAction(t *testing.T) {
 	var st WindowState
 	if err := st.UnmarshalUserVar(`{"a":"stop_failure","t":5}`); err != nil {
 		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
@@ -221,7 +230,7 @@ func TestUserVarV3MigratesV1TerminalAction(t *testing.T) {
 	}
 }
 
-func TestUserVarV3MigratesEmptyV1WithoutFacts(t *testing.T) {
+func TestUserVarV4MigratesEmptyV1WithoutFacts(t *testing.T) {
 	var st WindowState
 	if err := st.UnmarshalUserVar(`{"acct":"work"}`); err != nil {
 		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
@@ -234,7 +243,7 @@ func TestUserVarV3MigratesEmptyV1WithoutFacts(t *testing.T) {
 	}
 }
 
-func TestUserVarV3ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
+func TestUserVarV4ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
 	// A payload whose ShadowSeq lags its fact sequences (e.g. written by a
 	// crashed daemon mid-update) must not hand out receipt sequences that the
 	// reducer would discard as reordered.
@@ -250,5 +259,94 @@ func TestUserVarV3ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
 	}
 	if got.ShadowSeq != 40 {
 		t.Fatalf("ShadowSeq = %d, want lifted to max fact seq 40", got.ShadowSeq)
+	}
+}
+
+func TestUserVarV4DropsInvalidProcessMetadataWithoutLosingFacts(t *testing.T) {
+	raw := `{"v":4,"pv":1,"f":[` +
+		`{"k":"harness","y":"claude:valid","a":"active","i":"bolt","ph":"claude","pp":4321,"pt":"Mon Jul 13 10:11:12 2026"},` +
+		`{"k":"harness","y":"claude:partial","a":"active","i":"bolt","ph":"claude","pp":4322},` +
+		`{"k":"harness","y":"claude:mismatch","a":"active","i":"bolt","ph":"codex","pp":4323,"pt":"token"},` +
+		`{"k":"asl","y":"run-1","p":"between","ll":true,"ph":"claude","pp":4324,"pt":"token"}]}`
+
+	var got WindowState
+	if err := got.UnmarshalUserVar(raw); err != nil {
+		t.Fatalf("UnmarshalUserVar(v4) error: %v", err)
+	}
+	if got.Reducer == nil {
+		t.Fatal("v4 restore produced no reducer")
+	}
+	facts := got.Reducer.Facts()
+	if len(facts) != 4 {
+		t.Fatalf("restored facts = %+v, want all four underlying facts", facts)
+	}
+	for _, fact := range facts {
+		switch fact.Key {
+		case "claude:valid":
+			if fact.HarnessProcessHarness != "claude" || fact.HarnessProcessPID != 4321 || fact.HarnessProcessStartToken != "Mon Jul 13 10:11:12 2026" {
+				t.Fatalf("valid process identity = %+v", fact)
+			}
+		default:
+			if fact.HarnessProcessHarness != "" || fact.HarnessProcessPID != 0 || fact.HarnessProcessStartToken != "" {
+				t.Fatalf("invalid process identity survived on %s: %+v", fact.Key, fact)
+			}
+		}
+	}
+}
+
+func TestUserVarV4DropsPreUTCTokenOwnershipWithoutLosingFacts(t *testing.T) {
+	// Early v4 writers persisted locale-stable but timezone-dependent lstart
+	// values and had no payload-level token marker. Comparing one of those
+	// opaque values with a newly UTC-rendered token could falsely report PID
+	// reuse, so restore the contribution but deliberately leave it untracked.
+	raw := `{"v":4,"f":[{"k":"harness","y":"claude:s1","a":"active","i":"bolt","ph":"claude","pp":4321,"pt":"Mon Jul 13 10:11:12 2026"}]}`
+	var got WindowState
+	if err := got.UnmarshalUserVar(raw); err != nil {
+		t.Fatalf("UnmarshalUserVar(pre-marker v4) error: %v", err)
+	}
+	facts := got.Reducer.Facts()
+	if len(facts) != 1 || facts[0].Icon != "bolt" {
+		t.Fatalf("pre-marker v4 lost underlying fact: %+v", facts)
+	}
+	if facts[0].HarnessProcessHarness != "" || facts[0].HarnessProcessPID != 0 || facts[0].HarnessProcessStartToken != "" {
+		t.Fatalf("pre-marker v4 retained unsafe lifecycle ownership: %+v", facts[0])
+	}
+}
+
+func TestUserVarV2AndV3IgnoreInjectedProcessMetadata(t *testing.T) {
+	for _, schema := range []string{"2", "3"} {
+		t.Run("v"+schema, func(t *testing.T) {
+			raw := `{"v":` + schema + `,"f":[{"k":"harness","y":"claude:s1","a":"active","i":"bolt","ph":"claude","pp":4321,"pt":"Mon Jul 13 10:11:12 2026"}]}`
+			var got WindowState
+			if err := got.UnmarshalUserVar(raw); err != nil {
+				t.Fatalf("UnmarshalUserVar(v%s) error: %v", schema, err)
+			}
+			facts := got.Reducer.Facts()
+			if len(facts) != 1 || facts[0].HarnessProcessHarness != "" || facts[0].HarnessProcessPID != 0 || facts[0].HarnessProcessStartToken != "" {
+				t.Fatalf("v%s facts retained lifecycle fingerprint: %+v", schema, facts)
+			}
+		})
+	}
+}
+
+func TestUserVarV4RestoredProcessCanSettleExit(t *testing.T) {
+	process := HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
+	r := NewReducer(ReducerConfig{})
+	r.Apply(ReducerEvent{
+		Source: SourceID{Kind: SourceHarness, Key: "claude:pipe"}, Action: "active",
+		Seq: 1, At: 100, PipeMode: true, HarnessProcess: process,
+	})
+	encoded, err := (WindowState{Reducer: r, Effective: r.Reduce(100), ShadowSeq: 1}).MarshalUserVar()
+	if err != nil {
+		t.Fatalf("MarshalUserVar() error: %v", err)
+	}
+	var restored WindowState
+	if err := restored.UnmarshalUserVar(encoded); err != nil {
+		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	}
+
+	result := restored.Reducer.SettleHarnessProcessExit(process, 101, HarnessProcessExitOptions{PipeMode: true})
+	if !result.Changed || result.WithdrawnFacts != 1 || result.After.Icon != "" {
+		t.Fatalf("restored process settlement = %+v", result)
 	}
 }

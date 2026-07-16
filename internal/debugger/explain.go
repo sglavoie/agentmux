@@ -33,22 +33,23 @@ const (
 )
 
 const (
-	CauseHookDisabled            = "hook_disabled"
-	CauseHookUntrusted           = "hook_untrusted"
-	CauseProducerAbsence         = "producer_absence"
-	CauseOutsideKitty            = "outside_kitty"
-	CauseInvalidPayload          = "invalid_payload"
-	CauseDeliveryFailure         = "delivery_failure"
-	CauseDuplicate               = "duplicate"
-	CauseSaturation              = "saturation"
-	CauseOwnerMismatch           = "owner_mismatch"
-	CauseQuarantine              = "quarantine"
-	CauseReducerSuppression      = "reducer_suppression"
-	CauseRenderFailure           = "render_failure"
-	CauseNotificationFailure     = "notification_failure"
-	CauseNotificationSuppression = "notification_suppression"
-	CauseSuccessfulCompletion    = "successful_completion"
-	CauseInsufficientEvidence    = "insufficient_evidence"
+	CauseHookDisabled             = "hook_disabled"
+	CauseHookUntrusted            = "hook_untrusted"
+	CauseProducerAbsence          = "producer_absence"
+	CauseOutsideKitty             = "outside_kitty"
+	CauseInvalidPayload           = "invalid_payload"
+	CauseDeliveryFailure          = "delivery_failure"
+	CauseDuplicate                = "duplicate"
+	CauseSaturation               = "saturation"
+	CauseOwnerMismatch            = "owner_mismatch"
+	CauseQuarantine               = "quarantine"
+	CauseReducerSuppression       = "reducer_suppression"
+	CauseRenderFailure            = "render_failure"
+	CauseNotificationFailure      = "notification_failure"
+	CauseNotificationSuppression  = "notification_suppression"
+	CauseProcessLifecycleRecovery = "process_lifecycle_recovery"
+	CauseSuccessfulCompletion     = "successful_completion"
+	CauseInsufficientEvidence     = "insufficient_evidence"
 )
 
 const (
@@ -765,6 +766,14 @@ func explainCause(records []diagnostics.TraceEnvelope, nodeIDs []string, nodes [
 			}
 		}
 	}
+	for i, record := range records {
+		if summary, ok := processLifecycleRecoverySummary(record); ok {
+			return ExplanationCause{
+				Classification: CauseProcessLifecycleRecovery, Certainty: CertaintyProven,
+				Summary: summary, EvidenceIDs: []string{nodeIDs[i]},
+			}
+		}
+	}
 	if len(records) == 0 {
 		for _, node := range nodes {
 			if node.Hook == nil || node.Hook.Activation != "failure" {
@@ -805,6 +814,21 @@ func explainCause(records []diagnostics.TraceEnvelope, nodeIDs []string, nodes [
 		Classification: CauseInsufficientEvidence, Certainty: CertaintyUncertain,
 		Summary: summary, FirstMissingStage: missing, EvidenceIDs: []string{},
 	}
+}
+
+func processLifecycleRecoverySummary(record diagnostics.TraceEnvelope) (string, bool) {
+	if record.Stage != "daemon.process_lifecycle" || record.Outcome != "settled" {
+		return "", false
+	}
+	switch record.Reason {
+	case daemon.HarnessProcessExitReasonPipe, daemon.HarnessProcessExitReasonInteractive, daemon.HarnessProcessExitReasonReset:
+	default:
+		return "", false
+	}
+	if record.Evidence["terminal_hook_evidence"] != "absent" {
+		return "", false
+	}
+	return "No terminal hook was observed; the daemon retired the bolt after the exact harness process exited.", true
 }
 
 func hookIssueAppliesToEvent(code, message, event string) bool {
@@ -1110,6 +1134,11 @@ func suggestedCommands(cause ExplanationCause, records []diagnostics.TraceEnvelo
 	case CauseInvalidPayload, CauseDuplicate, CauseQuarantine, CauseReducerSuppression, CauseRenderFailure, CauseNotificationFailure, CauseNotificationSuppression:
 		if safeCommandToken(requestID) {
 			add("amx debug tail --request " + requestID)
+		}
+	case CauseProcessLifecycleRecovery:
+		if windowID > 0 {
+			add("amx debug tail --stage daemon.process_lifecycle --window " + strconv.Itoa(windowID))
+			add("amx daemon export-events --window " + strconv.Itoa(windowID) + " --last 100")
 		}
 	}
 	return commands

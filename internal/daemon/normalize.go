@@ -72,6 +72,11 @@ type NormalizedEvent struct {
 	// protected and never masked by interactive supersession. Absent (false) is
 	// interactive, the backward-compatible default.
 	PipeMode bool
+	// HarnessProcess is populated only by normalizedFromHookRequest after the
+	// daemon validates the hook-supplied fingerprint. Its zero value means no
+	// process ownership. ASL lifecycle and daemon-synthesized probe facts never
+	// receive this identity.
+	HarnessProcess HarnessProcessIdentity
 
 	// ASL-only. Phase selects the reducer icon + loop lease; for a paused run the
 	// attention icon comes from Action.
@@ -108,6 +113,21 @@ type NormalizedEvent struct {
 	Reason  string
 }
 
+// normalizedFromHookRequest centralizes request validation and process-identity
+// stamping for every hook-routing path. NormalizedFromHook stays pure and
+// transport-agnostic for reducer tests and replay; this seam adds a complete
+// validated identity only to ordinary harness, legacy, and subagent facts.
+func normalizedFromHookRequest(event string, req Request, windowID int) NormalizedEvent {
+	normalized := NormalizedFromHook(event, req.Harness, req.PayloadJSON, windowID, req.PipeMode)
+	switch normalized.Source.Kind {
+	case SourceHarness, SourceLegacy, SourceSubagent:
+		if identity := validatedHarnessProcessIdentity(req.Harness, req.HarnessProcess); identity != nil {
+			normalized.HarnessProcess = *identity
+		}
+	}
+	return normalized
+}
+
 // Deliverable reports whether the event should fold into the reducer. Invalid
 // (quarantined) and inert (unknown/ignored → empty action, no ASL phase) events
 // are not deliverable: they must not mutate any source fact.
@@ -131,6 +151,7 @@ func (n NormalizedEvent) ReducerEvent() ReducerEvent {
 		Prompt:         n.Prompt,
 		ToolUse:        n.ToolUse,
 		PipeMode:       n.PipeMode,
+		HarnessProcess: n.HarnessProcess,
 		RunID:          n.RunID,
 		Phase:          n.Phase,
 		SessionID:      n.SessionID,

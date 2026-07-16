@@ -168,6 +168,19 @@ func cloneSessionEvent(in SessionEvent) SessionEvent {
 	out := in
 	out.RouteEvidence = cloneRoutingEvidence(in.RouteEvidence)
 	out.ProbeTraceIDs = append([]string(nil), in.ProbeTraceIDs...)
+	out.ProcessSources = append([]ProcessLifecycleSourceEvidence(nil), in.ProcessSources...)
+	if in.WithdrawnFacts != nil {
+		value := *in.WithdrawnFacts
+		out.WithdrawnFacts = &value
+	}
+	if in.ClearedSubagents != nil {
+		value := *in.ClearedSubagents
+		out.ClearedSubagents = &value
+	}
+	if in.SynthesizedStop != nil {
+		value := *in.SynthesizedStop
+		out.SynthesizedStop = &value
+	}
 	if in.ReducerInput != nil {
 		input := *in.ReducerInput
 		out.ReducerInput = &input
@@ -291,6 +304,10 @@ func propagateIngressTrace(dst *Request, src Request) {
 	dst.PayloadEncoding = src.PayloadEncoding
 	dst.PayloadCaptured = src.PayloadCaptured
 	dst.ProducerHarness = src.ProducerHarness
+	if src.HarnessProcess != nil {
+		identity := *src.HarnessProcess
+		dst.HarnessProcess = &identity
+	}
 	dst.parseOutcome = src.parseOutcome
 	dst.normalizationOutcome = src.normalizationOutcome
 	dst.routeEvidence = cloneRoutingEvidence(src.routeEvidence)

@@ -356,6 +356,9 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 		RequestID: "stable-id-123",
 		WindowID:  4,
 		Action:    "active",
+		HarnessProcess: &HarnessProcessIdentity{
+			Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026",
+		},
 	}, amxBin, func(stage DeliveryStageEvent) {
 		stageMu.Lock()
 		stages = append(stages, stage)
@@ -374,6 +377,11 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 		}
 		if got.Attempt <= 1 {
 			t.Fatalf("daemon saw attempt %d, want a retry attempt greater than 1", got.Attempt)
+		}
+		if got.HarnessProcess == nil || *got.HarnessProcess != (HarnessProcessIdentity{
+			Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026",
+		}) {
+			t.Fatalf("daemon saw process identity %+v, want retry payload unchanged", got.HarnessProcess)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for retried request")

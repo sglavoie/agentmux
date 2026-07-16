@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
@@ -22,7 +24,7 @@ const (
 )
 
 var (
-	secretFieldPattern  = regexp.MustCompile(`(?i)(authorization|cookie|credential|password|passwd|secret|token|api[_ -]?key|private[_ -]?key|prompt|tool[_ -]?(input|output|content|arguments?)|message|transcript|payload|content)`)
+	secretFieldPattern  = regexp.MustCompile(`(?i)(authorization|cookie|credential|password|passwd|secret|token|api[_ -]?key|private[_ -]?key|prompt|tool[_ -]?(input|output|content|arguments?)|command[_ -]?line|cmdline|argv|message|transcript|payload|content)`)
 	identifierPattern   = regexp.MustCompile(`(?i)(^|_)(id|ids|profile|window|session|run|launch|trace|request|source_event|binary_hash)$`)
 	safeTokenPattern    = regexp.MustCompile(`^[A-Za-z0-9_.:/@+-]{1,160}$`)
 	absolutePathPattern = regexp.MustCompile(`(^|[\s"'(=])(/(?:Users|home|tmp|private|var|etc|opt|Volumes)/[^\s"',;)\]}]+)`)
@@ -40,6 +42,7 @@ var (
 		regexp.MustCompile(`(?i)(password|passwd|secret|token|api[_ -]?key|authorization|cookie)\s*[:=]\s*[^\s,;]+`),
 		regexp.MustCompile(`(?i)https?://[^/@:\s]+:[^/@\s]+@`),
 		regexp.MustCompile(`(?i)(prompt|tool[_ -]?(input|output|content|arguments?)|message|transcript|payload|content)\s*[:=].*`),
+		regexp.MustCompile(`(?i)(command[_ -]?line|cmdline|argv)\s*[:=].*`),
 		regexp.MustCompile(`(?s)-----BEGIN [^-]+-----.*?-----END [^-]+-----`),
 	}
 	shareAllowedKeys = allowedShareKeys(`
@@ -58,6 +61,10 @@ var (
 		source_key source_kind source_sequence span_id stage stages started_at status storage success suggested_commands summary sync timestamp to tool_use_id
 		trace_id transform truncated truncation turn_id unmanaged uptime_seconds value verdict verified_cli_version version warning warnings
 		window_id reducer_action reducer_reason normalization_outcome used_fallback_identity segment_files_read spool_files spool_files_read spool_bytes duplicates_omitted quarantined_files latest_observed_at
+		process_harness process_pid process_start_token process_observation process_mode process_sources withdrawn_facts cleared_subagents synthesized_stop terminal_hook_evidence
+		process_exits last_process_exit_reason last_process_exit_observation last_process_exit_at attempted_processes unknown_processes pipe_mode
+		before_icon before_looping before_source_kind before_source_key after_icon after_looping after_source_kind after_source_key icon looping origin_window_id
+		effective_before effective_after result_icon_state
 	`)
 )
 
@@ -103,14 +110,16 @@ func (r *bundleRedactor) JSON(value any) ([]byte, error) {
 
 func (r *bundleRedactor) value(key string, value any) any {
 	lower := strings.ToLower(strings.TrimSpace(key))
-	if secretFieldPattern.MatchString(lower) {
+	if isSecretFieldKey(lower) && lower != "process_start_token" {
 		return "[redacted]"
 	}
 	switch typed := value.(type) {
 	case map[string]any:
 		out := make(map[string]any, len(typed))
 		for childKey, child := range typed {
-			if r.mode == BundleModeShare && (!isShareAllowedKey(childKey) || secretFieldPattern.MatchString(childKey)) {
+			lowerChild := strings.ToLower(strings.TrimSpace(childKey))
+			if r.mode == BundleModeShare && (!isShareAllowedKey(childKey) ||
+				isSecretFieldKey(lowerChild) && lowerChild != "process_start_token") {
 				continue
 			}
 			out[childKey] = r.value(childKey, child)
@@ -134,6 +143,11 @@ func (r *bundleRedactor) value(key string, value any) any {
 	}
 }
 
+func isSecretFieldKey(key string) bool {
+	key = strings.ToLower(strings.TrimSpace(key))
+	return key == "command" || key == "args" || secretFieldPattern.MatchString(key)
+}
+
 func allowedShareKeys(values string) map[string]bool {
 	result := make(map[string]bool)
 	for _, value := range strings.Fields(values) {
@@ -149,6 +163,12 @@ func isShareAllowedKey(key string) bool {
 
 func (r *bundleRedactor) stringValue(key, value string) string {
 	value = r.scrub(value)
+	if key == "process_start_token" {
+		if diagnostics.IsSafeProcessStartTokenEvidence(value) {
+			return value
+		}
+		return "[redacted]"
+	}
 	if isIdentifierKey(key) && value != "" && r.hash != nil {
 		parts := strings.Split(value, ",")
 		for i := range parts {
@@ -188,6 +208,9 @@ func (r *bundleRedactor) stringValue(key, value string) string {
 		return r.hash(value)
 	}
 	if key == "event" && value != "" {
+		if value == daemon.EventHarnessProcessExited {
+			return value
+		}
 		payload := hookevent.HookPayload{}
 		if _, known := hookevent.ResolveAction(value, payload); !known && !hookevent.IsIgnoredEvent(value, payload) && r.hash != nil {
 			return r.hash(value)
@@ -217,8 +240,13 @@ func (r *bundleRedactor) stringValue(key, value string) string {
 
 func isShareEvidenceScalar(key, value string) bool {
 	switch key {
-	case "attempt", "daemon_sequence", "generation", "render_generation", "source_sequence":
+	case "attempt", "daemon_sequence", "generation", "render_generation", "source_sequence", "process_pid",
+		"withdrawn_facts", "cleared_subagents", "process_exits", "last_process_exit_at",
+		"attempted_processes", "unknown_processes", "origin_window_id":
 		_, err := strconv.ParseUint(value, 10, 64)
+		return err == nil
+	case "pipe_mode", "before_looping", "after_looping", "synthesized_stop":
+		_, err := strconv.ParseBool(value)
 		return err == nil
 	case "source_generations":
 		if value == "" {
@@ -277,7 +305,9 @@ func isShareStringField(key string) bool {
 	switch key {
 	case "mode", "status", "stage", "outcome", "reason", "verdict", "coverage", "harness", "event", "action",
 		"level", "component", "error_class", "classification", "certainty", "kind", "scope", "check", "source",
-		"format", "member", "decision", "availability", "go_version", "version", "revision", "reasons", "journal_snapshot_scope":
+		"format", "member", "decision", "availability", "go_version", "version", "revision", "reasons", "journal_snapshot_scope",
+		"process_harness", "process_observation", "process_mode", "terminal_hook_evidence", "last_process_exit_reason",
+		"last_process_exit_observation", "before_icon", "after_icon", "before_source_kind", "after_source_kind":
 		return true
 	default:
 		return false

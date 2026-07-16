@@ -42,12 +42,13 @@ type auditReport struct {
 var daemonAuditCmd = &cobra.Command{
 	Use:   "audit",
 	Short: "Sample daemon invariants for a duration; exit nonzero on violations",
-	Long: `Audit the running daemon: every two seconds, capture the current schema-v9 export
+	Long: `Audit the running daemon: every two seconds, capture the current schema-v10 export
 snapshot and evaluate the correctness invariants (active ASL work must be
 visible, live subagents must show their icon, producer routes must not suppress
 prompts or burst mismatches, fact retention must remain bounded, reducer and
-renderer must agree, render generations must not drift, queues must not
-saturate, and the daemon must run the same artifact as this CLI). Any failure
+renderer must agree, persisted process identities must be well formed, render
+generations must not drift, queues must not saturate, and the daemon must run
+the same artifact as this CLI). Any failure
 observed in any sample makes the command exit nonzero.`,
 	Args: cobra.NoArgs,
 	// A violation exit is a structured result (ExitError), not a usage problem;

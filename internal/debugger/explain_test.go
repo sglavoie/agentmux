@@ -69,6 +69,51 @@ func TestExplanationClassifiesEveryInstrumentedBoundary(t *testing.T) {
 	}
 }
 
+func TestExplanationClassifiesProcessExitRecoveryWithoutOverridingRendererFailures(t *testing.T) {
+	lifecycle := explanationRecord("daemon.process_lifecycle", "settled", daemon.HarnessProcessExitReasonInteractive)
+	lifecycle.RequestID = ""
+	lifecycle.Evidence = map[string]string{
+		"event": daemon.EventHarnessProcessExited, "terminal_hook_evidence": "absent",
+		"render_generation": "7", "process_observation": string(daemon.HarnessProcessMissing),
+	}
+	report := buildExplanation(ExplainOptions{Selector: Selector{WindowID: 42}, Recent: 10, Now: time.Now()}, []diagnostics.TraceEnvelope{lifecycle})
+	if report.Cause.Classification != CauseProcessLifecycleRecovery || report.Cause.Certainty != CertaintyProven ||
+		!strings.Contains(report.Cause.Summary, "No terminal hook") || len(report.Cause.EvidenceIDs) != 1 {
+		t.Fatalf("process lifecycle cause = %+v", report.Cause)
+	}
+	wantCommands := []string{
+		"amx debug tail --stage daemon.process_lifecycle --window 42",
+		"amx daemon export-events --window 42 --last 100",
+	}
+	if !reflect.DeepEqual(report.SuggestedCommands, wantCommands) {
+		t.Fatalf("process lifecycle commands = %v, want %v", report.SuggestedCommands, wantCommands)
+	}
+
+	withTerminal := lifecycle
+	withTerminal.Evidence = map[string]string{"terminal_hook_evidence": "observed"}
+	nativeRendered := explanationRecord("daemon.renderer.rendered", "success", "render_complete")
+	nativeRendered.RequestID = ""
+	nativeRendered.Evidence = map[string]string{"generation": "7"}
+	report = buildExplanation(ExplainOptions{Selector: Selector{WindowID: 42}, Recent: 10, Now: time.Now()}, []diagnostics.TraceEnvelope{withTerminal, nativeRendered})
+	if report.Cause.Classification != CauseSuccessfulCompletion {
+		t.Fatalf("native terminal completion was misclassified: %+v", report.Cause)
+	}
+
+	renderFailure := explanationRecord("daemon.renderer.failed", "failed", "render_title")
+	renderFailure.RequestID = ""
+	renderFailure.Evidence = map[string]string{"generation": "7"}
+	report = buildExplanation(ExplainOptions{Selector: Selector{WindowID: 42}, Recent: 10, Now: time.Now()}, []diagnostics.TraceEnvelope{lifecycle, renderFailure})
+	if report.Cause.Classification != CauseRenderFailure {
+		t.Fatalf("renderer failure was hidden by lifecycle recovery: %+v", report.Cause)
+	}
+
+	inspectionFailure := explanationRecord("daemon.process_lifecycle", "degraded", "inspection_unknown")
+	report = buildExplanation(ExplainOptions{Selector: Selector{WindowID: 42}, Recent: 10, Now: time.Now()}, []diagnostics.TraceEnvelope{inspectionFailure})
+	if report.Cause.Classification != CauseInsufficientEvidence {
+		t.Fatalf("inspection failure was misclassified as process recovery: %+v", report.Cause)
+	}
+}
+
 func TestExplanationClassifiesDisabledAndUntrustedHookEvidence(t *testing.T) {
 	for _, test := range []struct {
 		name, code, want string

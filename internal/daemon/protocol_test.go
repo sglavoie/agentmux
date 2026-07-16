@@ -55,6 +55,71 @@ func TestRequest_RoundtripCarriesDebugContext(t *testing.T) {
 	}
 }
 
+func TestRequest_RoundtripCarriesOptionalHarnessProcessIdentity(t *testing.T) {
+	in := Request{
+		Type: TypeHookEvent, ProducerHarness: "claude", Harness: "claude",
+		HarnessProcess: &HarnessProcessIdentity{
+			Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026",
+		},
+	}
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serialized := string(data)
+	if strings.Contains(serialized, "secret prompt") || strings.Contains(serialized, "command_line") {
+		t.Fatalf("request leaked process command evidence: %s", serialized)
+	}
+	var out Request
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(out.HarnessProcess, in.HarnessProcess) {
+		t.Fatalf("HarnessProcess = %+v, want %+v", out.HarnessProcess, in.HarnessProcess)
+	}
+
+	data, err = json.Marshal(Request{Type: TypeHookEvent, ProducerHarness: "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "harness_process") {
+		t.Fatalf("absent identity was not omitted: %s", data)
+	}
+}
+
+func TestValidatedHarnessProcessIdentity(t *testing.T) {
+	valid := validatedHarnessProcessIdentity(" Claude ", &HarnessProcessIdentity{
+		Harness: "CLAUDE", PID: 42, StartToken: " Thu  Jul  16  10:20:30  2026 ",
+	})
+	if valid == nil || *valid != (HarnessProcessIdentity{
+		Harness: "claude", PID: 42, StartToken: "Thu Jul 16 10:20:30 2026",
+	}) {
+		t.Fatalf("validated identity = %+v", valid)
+	}
+
+	for _, tc := range []struct {
+		name     string
+		producer string
+		identity *HarnessProcessIdentity
+	}{
+		{name: "absent", producer: "claude"},
+		{name: "missing producer", identity: &HarnessProcessIdentity{Harness: "claude", PID: 42, StartToken: "token"}},
+		{name: "unknown producer", producer: "future", identity: &HarnessProcessIdentity{Harness: "future", PID: 42, StartToken: "token"}},
+		{name: "mismatched producer", producer: "claude", identity: &HarnessProcessIdentity{Harness: "codex", PID: 42, StartToken: "token"}},
+		{name: "missing pid", producer: "claude", identity: &HarnessProcessIdentity{Harness: "claude", StartToken: "token"}},
+		{name: "pid one", producer: "claude", identity: &HarnessProcessIdentity{Harness: "claude", PID: 1, StartToken: "token"}},
+		{name: "pid over platform maximum", producer: "claude", identity: &HarnessProcessIdentity{Harness: "claude", PID: maxHarnessProcessPID() + 1, StartToken: "token"}},
+		{name: "missing start token", producer: "claude", identity: &HarnessProcessIdentity{Harness: "claude", PID: 42}},
+		{name: "oversized start token", producer: "claude", identity: &HarnessProcessIdentity{Harness: "claude", PID: 42, StartToken: strings.Repeat("x", 129)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := validatedHarnessProcessIdentity(tc.producer, tc.identity); got != nil {
+				t.Fatalf("validated identity = %+v, want nil", got)
+			}
+		})
+	}
+}
+
 // TestRequest_OmittedToolNameMarshalsClean pins that an empty ToolName is
 // omitted from the wire payload (omitempty), so existing daemons that do not
 // know the field still see a clean request shape.

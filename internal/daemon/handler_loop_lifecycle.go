@@ -110,7 +110,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 	if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {
 		originWindowID = payloadWindowID
 	}
-	normalized := NormalizedFromHook(eventOrAction, baseReq.Harness, baseReq.PayloadJSON, originWindowID, baseReq.PipeMode)
+	normalized := normalizedFromHookRequest(eventOrAction, baseReq, originWindowID)
 	req.normalized = &normalized
 	req.normalizationOutcome = normalizationOutcomeFor(normalized)
 	resp := h.handleStateUpdate(req)

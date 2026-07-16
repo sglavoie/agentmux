@@ -186,12 +186,14 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	slog.Info("daemon: started", "socket", socketPath, "guard_duration", guardDur)
 	recorder.record("daemon.started", "success", "socket_published", map[string]string{"socket": socketPath})
 	// Independent loops: snapshot maintenance (the periodic lister), the
-	// watchdog (the 1s staleness evaluator on in-process elapsed time), the
-	// render worker (the single Kitty writer), and the screen probes. A slow
-	// Kitty write or a wedged screen read stalls only its own loop — never
-	// snapshot publication, watchdog expiry, or event ingestion.
+	// watchdog (the 1s staleness evaluator on in-process elapsed time), harness
+	// process lifecycle reconciliation, the render worker (the single Kitty
+	// writer), and the screen probes. A slow Kitty write, process-table query, or
+	// wedged screen read stalls only its own loop — never snapshot publication,
+	// watchdog expiry, or event ingestion.
 	go handler.runMaintenance(ctx)
 	go handler.runWatchdog(ctx)
+	go handler.runHarnessProcessLifecycle(ctx)
 	renderWorkerDone := make(chan struct{})
 	go func() {
 		handler.runRenderWorker(ctx)

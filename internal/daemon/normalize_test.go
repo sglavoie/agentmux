@@ -166,6 +166,53 @@ func TestNormalizeDeterministic(t *testing.T) {
 	}
 }
 
+func TestNormalizedFromHookRequestStampsOnlyOrdinaryValidatedSources(t *testing.T) {
+	identity := &HarnessProcessIdentity{Harness: "claude", PID: 42, StartToken: "Thu Jul 16 10:20:30 2026"}
+	want := *identity
+	for _, tc := range []struct {
+		name    string
+		event   string
+		payload string
+		want    bool
+	}{
+		{name: "parent harness", event: "UserPromptSubmit", payload: `{"session_id":"session-1"}`, want: true},
+		{name: "identified subagent", event: "SubagentStart", payload: `{"agent_id":"agent-1","session_id":"session-1"}`, want: true},
+		{name: "legacy subagent bucket", event: "SubagentStart", payload: `{"session_id":"session-1"}`, want: true},
+		{name: "ASL lifecycle excluded", event: "AgentSessionLoopTurnStarted", payload: `{"run_id":"run-1"}`},
+		{name: "user action excluded", event: "user_clear", payload: `{}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := normalizeProducerFields(Request{
+				ProducerHarness: "claude", HarnessProcess: identity, PayloadJSON: tc.payload,
+			})
+			normalized := normalizedFromHookRequest(tc.event, req, 51)
+			if tc.want && normalized.HarnessProcess != want {
+				t.Fatalf("HarnessProcess = %+v, want %+v", normalized.HarnessProcess, want)
+			}
+			if !tc.want && normalized.HarnessProcess != (HarnessProcessIdentity{}) {
+				t.Fatalf("HarnessProcess = %+v, want zero identity", normalized.HarnessProcess)
+			}
+		})
+	}
+}
+
+func TestNormalizedFromHookRequestDropsInvalidOrMismatchedIdentity(t *testing.T) {
+	for _, identity := range []*HarnessProcessIdentity{
+		{Harness: "codex", PID: 42, StartToken: "Thu Jul 16 10:20:30 2026"},
+		{Harness: "claude", PID: 0, StartToken: "Thu Jul 16 10:20:30 2026"},
+		{Harness: "claude", PID: 42},
+	} {
+		req := Request{
+			Harness: "claude", HarnessProcess: identity,
+			PayloadJSON: `{"session_id":"session-1"}`,
+		}
+		normalized := normalizedFromHookRequest("UserPromptSubmit", req, 51)
+		if normalized.HarnessProcess != (HarnessProcessIdentity{}) {
+			t.Fatalf("identity %+v stamped as %+v", identity, normalized.HarnessProcess)
+		}
+	}
+}
+
 // TestNormalizeQuarantinesMalformed proves malformed payloads and untrustworthy
 // numeric identity fields are quarantined as invalid_payload and can never
 // mutate visible state when handed to the reducer.

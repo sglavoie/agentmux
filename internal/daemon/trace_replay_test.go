@@ -32,9 +32,11 @@ type replayStep struct {
 }
 
 type replayTrace struct {
-	name    string
-	harness string
-	steps   []replayStep
+	name     string
+	harness  string
+	process  HarnessProcessIdentity
+	pipeMode bool
+	steps    []replayStep
 }
 
 // replayEmitBase anchors sanitized emitted_time values just behind the wall
@@ -72,6 +74,19 @@ func replayTraces(projectDir string) []replayTrace {
 				{"PreToolUse", pl(3, `"session_id":"sess-0001","turn_id":"turn-1","tool_use_id":"tool-1","tool_name":"Bash"`), "bolt", false},
 				{"PostToolUse", pl(4, `"session_id":"sess-0001","turn_id":"turn-1","tool_use_id":"tool-1","tool_name":"Bash"`), "bolt", false},
 				{"Stop", pl(5, `"session_id":"sess-0001","turn_id":"turn-1","stop_reason":"end_turn"`), "stop", false},
+			},
+		},
+		{
+			// Keep an unterminated pipe child in the trace corpus so the normal
+			// production hook path and every-prefix restart oracle compare the
+			// complete schema-v4 process fingerprint, not only icon/loop state.
+			name:     "claude-pipe-process-owned-active",
+			harness:  "claude",
+			process:  HarnessProcessIdentity{Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026"},
+			pipeMode: true,
+			steps: []replayStep{
+				{"SessionStart", pl(1, `"session_id":"sess-pipe-0001","source":"startup"`), "", false},
+				{"UserPromptSubmit", pl(2, `"session_id":"sess-pipe-0001","turn_id":"turn-1"`), "bolt", false},
 			},
 		},
 		{
@@ -322,9 +337,17 @@ func newReplayHandler(t *testing.T, harnessName, projectDir string) (*Handler, [
 	return h, windows
 }
 
-func replayHookStep(t *testing.T, h *Handler, step replayStep) {
+func replayHookStep(t *testing.T, h *Handler, trace replayTrace, step replayStep) {
 	t.Helper()
-	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: step.event, PayloadJSON: step.payload})
+	req := Request{Type: TypeHookEvent, WindowID: 42, Event: step.event, PayloadJSON: step.payload}
+	if trace.process != (HarnessProcessIdentity{}) {
+		process := trace.process
+		req.Harness = trace.harness
+		req.ProducerHarness = trace.harness
+		req.HarnessProcess = &process
+		req.PipeMode = trace.pipeMode
+	}
+	resp := h.Handle(req)
 	if !resp.OK {
 		t.Fatalf("%s: response = %+v", step.event, resp)
 	}
@@ -353,7 +376,7 @@ func TestTraceReplaySanitizedWaypoints(t *testing.T) {
 		t.Run(trace.name, func(t *testing.T) {
 			h, _ := newReplayHandler(t, trace.harness, projectDir)
 			for i, step := range trace.steps {
-				replayHookStep(t, h, step)
+				replayHookStep(t, h, trace, step)
 				icon, looping, _ := replayVisibleState(t, h)
 				if icon != step.wantIcon || looping != step.wantLoop {
 					t.Fatalf("step %d (%s): icon=%q looping=%v; want %q/%v",
@@ -373,8 +396,8 @@ func TestTraceReplayDuplicateDeliveryIdempotent(t *testing.T) {
 		t.Run(trace.name, func(t *testing.T) {
 			h, _ := newReplayHandler(t, trace.harness, projectDir)
 			for i, step := range trace.steps {
-				replayHookStep(t, h, step)
-				replayHookStep(t, h, step) // duplicate delivery
+				replayHookStep(t, h, trace, step)
+				replayHookStep(t, h, trace, step) // duplicate delivery
 				icon, looping, _ := replayVisibleState(t, h)
 				if icon != step.wantIcon || looping != step.wantLoop {
 					t.Fatalf("step %d (%s) after duplicate: icon=%q looping=%v; want %q/%v",
@@ -396,14 +419,14 @@ func TestTraceReplayRestartEquivalenceEveryPrefix(t *testing.T) {
 		t.Run(trace.name, func(t *testing.T) {
 			full, _ := newReplayHandler(t, trace.harness, projectDir)
 			for _, step := range trace.steps {
-				replayHookStep(t, full, step)
+				replayHookStep(t, full, trace, step)
 			}
 			wantIcon, wantLoop, wantFacts := replayVisibleState(t, full)
 
 			for k := 0; k <= len(trace.steps); k++ {
 				pre, _ := newReplayHandler(t, trace.harness, projectDir)
 				for _, step := range trace.steps[:k] {
-					replayHookStep(t, pre, step)
+					replayHookStep(t, pre, trace, step)
 				}
 
 				post, _ := newReplayHandler(t, trace.harness, projectDir)
@@ -429,7 +452,7 @@ func TestTraceReplayRestartEquivalenceEveryPrefix(t *testing.T) {
 					), time.Now())
 				}
 				for _, step := range trace.steps[k:] {
-					replayHookStep(t, post, step)
+					replayHookStep(t, post, trace, step)
 				}
 
 				gotIcon, gotLoop, gotFacts := replayVisibleState(t, post)

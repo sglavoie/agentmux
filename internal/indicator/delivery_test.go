@@ -177,7 +177,7 @@ func TestDeliverPayloadWithDepsStructuredOutcomes(t *testing.T) {
 			recorder := &deliveryRecorder{traceID: "trace-1", requestID: "request-1", event: "Stop"}
 			result := deliverPayloadWithDeps(
 				"Stop", 42, "claude", "/tmp/amx", `{"source_event_id":"event-7"}`,
-				false, "trace-1", "request-1", "event-7", 29, "hmac-1",
+				false, nil, "trace-1", "request-1", "event-7", 29, "hmac-1",
 				client, recorder, time.Now(),
 			)
 			if result.Status != tc.status || result.Reason != tc.reason || result.Retryable != (tc.status == DeliveryRetryableFailure) {
@@ -193,6 +193,64 @@ func TestDeliverPayloadWithDepsStructuredOutcomes(t *testing.T) {
 				t.Fatalf("structured request = %+v", req)
 			}
 		})
+	}
+}
+
+func TestDeliverPayloadWithDepsForwardsHarnessProcessIdentity(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
+	client := &fakeDaemonClient{resp: daemon.Response{OK: true}}
+	identity := &daemon.HarnessProcessIdentity{
+		Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026",
+	}
+
+	deliverPayloadWithDeps(
+		"Stop", 42, "claude", "/tmp/amx", `{}`, true, identity,
+		"trace-1", "request-1", "", 2, "", client,
+		&deliveryRecorder{traceID: "trace-1", requestID: "request-1", event: "Stop"}, time.Now(),
+	)
+	if client.calls != 1 || client.reqs[0].HarnessProcess == nil || *client.reqs[0].HarnessProcess != *identity {
+		t.Fatalf("forwarded request = %+v", client.reqs)
+	}
+}
+
+func TestHookProcessDetectionJournalsCompleteDegradedAndAbsentIdentity(t *testing.T) {
+	paths := diagnostics.PathsForRoot(t.TempDir())
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := &deliveryRecorder{
+		journal: journal, traceID: "trace-process", requestID: "request-process",
+		event: "PreToolUse", harness: "claude", windowID: 42,
+	}
+	recorder.recordProcessDetection(HarnessProcessDiscovery{
+		Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026", PipeMode: true, Trackable: true,
+	})
+	recorder.recordProcessDetection(HarnessProcessDiscovery{
+		Harness: "claude", PID: 4243, PipeMode: true,
+	})
+	recorder.recordProcessDetection(HarnessProcessDiscovery{})
+
+	records, err := journal.Read(context.Background(), diagnostics.Selector{
+		RequestID: "request-process", Stages: []string{"hook.process_detection"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("process detection records = %+v", records)
+	}
+	if records[0].Outcome != "success" || records[0].Reason != "complete_identity" ||
+		records[0].Evidence["process_harness"] != "claude" || records[0].Evidence["process_pid"] != "4242" ||
+		records[0].Evidence["process_start_token"] != "Thu Jul 16 10:20:30 2026" || records[0].Evidence["pipe_mode"] != "true" {
+		t.Fatalf("complete process detection = %+v", records[0])
+	}
+	if records[1].Outcome != "degraded" || records[1].Reason != "incomplete_identity" ||
+		records[1].Evidence["process_pid"] != "4243" || records[1].Evidence["process_start_token"] != "" {
+		t.Fatalf("degraded process detection = %+v", records[1])
+	}
+	if records[2].Outcome != "absent" || records[2].Reason != "identity_absent" {
+		t.Fatalf("absent process detection = %+v", records[2])
 	}
 }
 

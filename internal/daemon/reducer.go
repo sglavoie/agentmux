@@ -183,6 +183,11 @@ type ReducerEvent struct {
 	// retire an older interactive session's stale active fact, while pipe-mode
 	// facts are protected from that supersession. Absent (false) is interactive.
 	PipeMode bool
+	// HarnessProcess is the validated, non-sensitive process fingerprint that
+	// produced this event. Ordinary harness, legacy, and subagent sources retain
+	// it; the zero value deliberately clears any older ownership on an accepted
+	// event. ASL and probe sources never retain process ownership.
+	HarnessProcess HarnessProcessIdentity
 
 	// ASL-only. Phase selects the contributed icon and lease; for ASLPhasePaused
 	// the attention icon comes from Action.
@@ -304,7 +309,7 @@ type sourceFact struct {
 	acked       bool
 	ackedAt     int64
 	// originWindowID is runtime route metadata. Persistence is introduced with
-	// the schema-v3 migration; until then restored legacy facts safely carry 0.
+	// the schema-v3 migration; restored older facts safely carry 0.
 	originWindowID int
 
 	// toolUse is the most recent tool-use identity seen from this source, kept
@@ -316,6 +321,9 @@ type sourceFact struct {
 	// retires older interactive active facts, but never a pipe-mode one, and
 	// CurrentConversation prefers the interactive owner over a pipe-mode child.
 	pipeMode bool
+	// harnessProcess ties this fact to the exact OS process that emitted it.
+	// The zero value means the source has no safely attributable process.
+	harnessProcess HarnessProcessIdentity
 
 	// sessionID is the parent harness session this fact belongs to (subagent
 	// facts group by it); agents is the balanced identity-less agent multiset
@@ -665,6 +673,13 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 		return decision
 	}
 
+	// Process ownership and invocation mode follow every accepted source
+	// sequence, including a suppressed idle/trailing event. A missing or invalid
+	// replacement clears stale ownership so a resumed session cannot inherit the
+	// old process; a valid replacement must carry its settlement policy with it.
+	f.harnessProcess = reducerHarnessProcessIdentity(ev)
+	f.pipeMode = ev.PipeMode
+
 	action, icon, leaseLive := r.resolve(ev)
 
 	// Identity-less subagent lifecycle events adjust the source's balanced
@@ -737,7 +752,6 @@ func (r *Reducer) Apply(ev ReducerEvent) ReducerDecision {
 	f.action = action
 	f.icon = icon
 	f.reactivate()
-	f.pipeMode = ev.PipeMode
 	r.stampCausalOrder(f)
 	if ev.ToolUse != "" {
 		f.toolUse = ev.ToolUse

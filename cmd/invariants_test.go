@@ -322,6 +322,46 @@ func TestInvariantUnknownProducerFactWarnings(t *testing.T) {
 	}
 }
 
+func TestInvariantMalformedProcessIdentityUsesPersistedFactsOnly(t *testing.T) {
+	valid := daemon.SourceFactSnapshot{
+		Kind: daemon.SourceHarness, Key: "claude:s1", Icon: "bolt",
+		HarnessProcessHarness: "claude", HarnessProcessPID: 4242,
+		HarnessProcessStartToken: "Thu Jul 16 10:20:30 2026",
+	}
+	cases := []struct {
+		name string
+		fact daemon.SourceFactSnapshot
+		want bool
+	}{
+		{"complete identity passes", valid, false},
+		{"absent identity passes", daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "claude:s1"}, false},
+		{"partial identity fails", daemon.SourceFactSnapshot{Kind: daemon.SourceHarness, Key: "claude:s1", HarnessProcessPID: 4242}, true},
+		{"producer mismatch fails", daemon.SourceFactSnapshot{
+			Kind: daemon.SourceHarness, Key: "claude:s1", HarnessProcessHarness: "codex", HarnessProcessPID: 4242,
+			HarnessProcessStartToken: "Thu Jul 16 10:20:30 2026",
+		}, true},
+		{"ASL ownership fails", daemon.SourceFactSnapshot{
+			Kind: daemon.SourceASL, Key: "run-1", HarnessProcessHarness: "claude", HarnessProcessPID: 4242,
+			HarnessProcessStartToken: "Thu Jul 16 10:20:30 2026",
+		}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{7: {
+				Shadow: daemon.WindowDebugShadow{Facts: []daemon.SourceFactSnapshot{tc.fact}},
+			}}}
+			findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
+			got := findingsByCheck(findings, checkMalformedProcessIdentity)
+			if (len(got) > 0) != tc.want {
+				t.Fatalf("malformed_process_identity findings = %+v; want failure=%t", got, tc.want)
+			}
+			if len(got) > 0 && got[0].Severity != severityFailure {
+				t.Fatalf("malformed_process_identity severity = %q; want failure", got[0].Severity)
+			}
+		})
+	}
+}
+
 func TestInvariantAcknowledgedFactPressureBoundaries(t *testing.T) {
 	facts := func(n int) []daemon.SourceFactSnapshot {
 		out := make([]daemon.SourceFactSnapshot, 0, n)

@@ -34,6 +34,21 @@ const (
 
 const DeliveryAcknowledgementSchemaVersion = 1
 
+// EventHarnessProcessExited is the stable synthetic event emitted when the
+// daemon retires state owned by one exact harness PID/start-token fingerprint.
+// It is a public diagnostic contract; native hook event names remain unchanged.
+const EventHarnessProcessExited = "HarnessProcessExited"
+
+// HarnessProcessIdentity is the exact, non-sensitive process fingerprint
+// discovered by a hook client. StartToken is the normalized opaque `ps lstart`
+// value; consumers compare it byte-for-byte and never parse it as a timestamp.
+// Command lines and arguments are intentionally absent from this transport.
+type HarnessProcessIdentity struct {
+	Harness    string `json:"harness"`
+	PID        int    `json:"pid"`
+	StartToken string `json:"start_token"`
+}
+
 // DeliveryAcknowledgement describes what the daemon did with one structured
 // hook delivery. It contains identifiers and routing metadata only; raw hook
 // payloads never appear in acknowledgements.
@@ -116,25 +131,28 @@ type Request struct {
 	PayloadCaptured bool `json:"payload_captured,omitempty"`
 	// ProducerHarness is the explicit producer identity used by new clients.
 	// Harness remains populated for backward compatibility with older daemons.
-	ProducerHarness  string `json:"producer_harness,omitempty"`
-	WindowID         int    `json:"window_id,omitempty"`         // KITTY_WINDOW_ID
-	Action           string `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear
-	Event            string `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
-	PayloadJSON      string `json:"payload_json,omitempty"`      // raw hook stdin payload for TypeHookEvent
-	ToolName         string `json:"tool_name,omitempty"`         // tool name from PreToolUse/PostToolUse hook payloads
-	Source           string `json:"source,omitempty"`            // raw source payload field
-	IsPrompt         bool   `json:"is_prompt,omitempty"`         // true if event is a user prompt submission
-	PreservesIcon    bool   `json:"preserves_icon,omitempty"`    // true if a non-terminal child-complete event should preserve current icon/guard semantics
-	Account          string `json:"account,omitempty"`           // profile name from amx_profile or cc_account
-	Harness          string `json:"harness,omitempty"`           // event-producing harness; unknown/legacy producers may be empty
-	SessionTitle     string `json:"session_title,omitempty"`     // tab base title (e.g. "W:api")
-	PipeMode         bool   `json:"pipe_mode,omitempty"`         // suppress notifications when claude -p
-	KittyListenOn    string `json:"kitty_listen_on,omitempty"`   // KITTY_LISTEN_ON for daemon-side Kitty writes
-	NotificationType string `json:"notification_type,omitempty"` // normalized notification_type / notificationType payload field
-	StopReason       string `json:"stop_reason,omitempty"`       // normalized stop_reason / stopReason payload field
-	Reason           string `json:"reason,omitempty"`            // normalized reason payload field
-	ContextLimit     bool   `json:"context_limit,omitempty"`     // true when indicator detected a context-limit stop/failure
-	ResetFlow        bool   `json:"reset_flow,omitempty"`        // true when the event belongs to a user-initiated session reset flow
+	ProducerHarness string `json:"producer_harness,omitempty"`
+	// HarnessProcess is optional and accepted only when its canonical harness
+	// matches ProducerHarness/Harness and its PID/start token are complete.
+	HarnessProcess   *HarnessProcessIdentity `json:"harness_process,omitempty"`
+	WindowID         int                     `json:"window_id,omitempty"`         // KITTY_WINDOW_ID
+	Action           string                  `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear
+	Event            string                  `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
+	PayloadJSON      string                  `json:"payload_json,omitempty"`      // raw hook stdin payload for TypeHookEvent
+	ToolName         string                  `json:"tool_name,omitempty"`         // tool name from PreToolUse/PostToolUse hook payloads
+	Source           string                  `json:"source,omitempty"`            // raw source payload field
+	IsPrompt         bool                    `json:"is_prompt,omitempty"`         // true if event is a user prompt submission
+	PreservesIcon    bool                    `json:"preserves_icon,omitempty"`    // true if a non-terminal child-complete event should preserve current icon/guard semantics
+	Account          string                  `json:"account,omitempty"`           // profile name from amx_profile or cc_account
+	Harness          string                  `json:"harness,omitempty"`           // event-producing harness; unknown/legacy producers may be empty
+	SessionTitle     string                  `json:"session_title,omitempty"`     // tab base title (e.g. "W:api")
+	PipeMode         bool                    `json:"pipe_mode,omitempty"`         // suppress notifications when claude -p
+	KittyListenOn    string                  `json:"kitty_listen_on,omitempty"`   // KITTY_LISTEN_ON for daemon-side Kitty writes
+	NotificationType string                  `json:"notification_type,omitempty"` // normalized notification_type / notificationType payload field
+	StopReason       string                  `json:"stop_reason,omitempty"`       // normalized stop_reason / stopReason payload field
+	Reason           string                  `json:"reason,omitempty"`            // normalized reason payload field
+	ContextLimit     bool                    `json:"context_limit,omitempty"`     // true when indicator detected a context-limit stop/failure
+	ResetFlow        bool                    `json:"reset_flow,omitempty"`        // true when the event belongs to a user-initiated session reset flow
 }
 
 // Response is a JSON message sent by the daemon back to the client.
@@ -216,7 +234,8 @@ type WindowDebugMetadata struct {
 // about why the daemon changed state on its own.
 type WindowDebugWatchdog struct {
 	// LastEvent/LastReason/LastAt describe the most recent synthetic event
-	// (WatchdogStale, SourceExpired, ASLReconciled, WindowClosed).
+	// (WatchdogStale, SourceExpired, ASLReconciled, WindowClosed,
+	// HarnessProcessExited).
 	LastEvent  string `json:"last_event,omitempty"`
 	LastReason string `json:"last_reason,omitempty"`
 	LastAt     int64  `json:"last_at,omitempty"`
@@ -226,6 +245,13 @@ type WindowDebugWatchdog struct {
 	SourceExpiries int `json:"source_expiries,omitempty"`
 	StaleSweeps    int `json:"stale_sweeps,omitempty"`
 	Reconciles     int `json:"reconciles,omitempty"`
+	// ProcessExits counts committed exact-fingerprint settlements. The last
+	// process fields remain separate from LastEvent/LastReason so a later
+	// unrelated watchdog intervention cannot erase the lifecycle diagnosis.
+	ProcessExits               int    `json:"process_exits,omitempty"`
+	LastProcessExitReason      string `json:"last_process_exit_reason,omitempty"`
+	LastProcessExitObservation string `json:"last_process_exit_observation,omitempty"`
+	LastProcessExitAt          int64  `json:"last_process_exit_at,omitempty"`
 	// ClosedAt is non-zero while the window is a tombstone: its live state was
 	// garbage-collected and this metadata is retained (bounded) for
 	// post-mortem export only. Tombstones never count as renderer drift.
@@ -246,7 +272,7 @@ type WindowDebugShadow struct {
 	MismatchCount    int              `json:"mismatch_count"`
 	Mismatches       []ShadowMismatch `json:"mismatches,omitempty"`
 	// Facts is the reducer's live source-fact set, stamped at export time from
-	// the window's reducer (schema v8). Diagnostics use it to hold the visible
+	// the window's reducer. Diagnostics use it to hold the visible
 	// icon accountable to the authoritative facts: an active ASL lease showing
 	// stop/empty, or a live subagent without 🤖, is a health failure.
 	Facts []SourceFactSnapshot `json:"facts,omitempty"`
@@ -334,7 +360,9 @@ type EventsExport struct {
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
-// `amx daemon export-events`. Version 9 adds causal decision evidence plus
+// `amx daemon export-events`. Version 10 adds safe harness-process lifecycle
+// metadata to source facts, synthetic exit events, and intervention counters.
+// Version 9 adds causal decision evidence plus
 // asynchronous render, notification, and probe links. Version 8 retains every v7 field and adds durable
 // fact acknowledgement/origin evidence plus each event's producer pane origin.
 // Version 7 added the interactive-ownership `pm` flag on exported source facts
@@ -346,7 +374,8 @@ type EventsExport struct {
 // readiness, build identity, and request metrics (queue saturation and
 // latency).
 const (
-	EventsExportSchemaVersion = 9
+	EventsExportSchemaVersion = 10
+	EventsExportSchemaV9      = 9
 	EventsExportSchemaV8      = 8
 )
 
@@ -480,7 +509,7 @@ type SessionEvent struct {
 
 	// Causal decision fields correlate hook ingress, sanitized normalization,
 	// routing, and the authoritative reducer transition. These fields are
-	// emitted by schema v9 and intentionally exclude raw payloads,
+	// emitted by schemas v9+ and intentionally exclude raw payloads,
 	// prompt bodies, and tool arguments.
 	TraceID              string                  `json:"trace_id,omitempty"`
 	ParentTraceID        string                  `json:"parent_trace_id,omitempty"`
@@ -525,14 +554,37 @@ type SessionEvent struct {
 	NotificationReason  string   `json:"notification_reason,omitempty"`
 	ProbeTraceIDs       []string `json:"probe_trace_ids,omitempty"`
 
+	// Schema-v10 harness-process lifecycle evidence. These fields occur only on
+	// EventHarnessProcessExited rows and contain bounded state-machine metadata,
+	// never command lines, arguments, prompts, payloads, or filesystem paths.
+	ProcessHarness       string                           `json:"process_harness,omitempty"`
+	ProcessPID           int                              `json:"process_pid,omitempty"`
+	ProcessStartToken    string                           `json:"process_start_token,omitempty"`
+	ProcessObservation   string                           `json:"process_observation,omitempty"`
+	ProcessMode          string                           `json:"process_mode,omitempty"`
+	ProcessSources       []ProcessLifecycleSourceEvidence `json:"process_sources,omitempty"`
+	WithdrawnFacts       *int                             `json:"withdrawn_facts,omitempty"`
+	ClearedSubagents     *int                             `json:"cleared_subagents,omitempty"`
+	SynthesizedStop      *bool                            `json:"synthesized_stop,omitempty"`
+	TerminalHookEvidence string                           `json:"terminal_hook_evidence,omitempty"`
+
 	// eventRef exists only while appendEventLocked stamps the daemon sequence.
 	// Stored/exported events always clear it.
 	eventRef *sessionEventReference
 }
 
+// ProcessLifecycleSourceEvidence identifies a reducer source affected by one
+// exact process settlement. OriginWindowID is the producing pane when known;
+// it falls back to the owning window for legacy facts.
+type ProcessLifecycleSourceEvidence struct {
+	SourceKind     string `json:"source_kind"`
+	SourceKey      string `json:"source_key,omitempty"`
+	OriginWindowID int    `json:"origin_window_id,omitempty"`
+}
+
 // ReducerInputEvidence is the complete sanitized input needed to replay one
 // reducer admission without the original hook payload, daemon, or Kitty. It is
-// emitted only by schema v9. Every field is state-machine metadata; prompt
+// emitted only by schemas v9+. Every field is state-machine metadata; prompt
 // bodies, tool arguments, filesystem paths, and native-log content are never
 // retained here.
 type ReducerInputEvidence struct {

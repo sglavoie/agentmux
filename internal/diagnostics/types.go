@@ -124,7 +124,21 @@ func SanitizeEvidence(input map[string]string) map[string]string {
 		}
 		value := cleanEvidenceText(rawValue, 2048)
 		lower := strings.ToLower(key)
-		for _, sensitive := range []string{"authorization", "cookie", "password", "secret", "token", "payload", "prompt", "transcript"} {
+		if lower == "process_start_token" {
+			if !IsSafeProcessStartTokenEvidence(value) {
+				value = "[redacted]"
+			}
+			out[key] = value
+			continue
+		}
+		if lower == "command" || lower == "args" {
+			out[key] = "[redacted]"
+			continue
+		}
+		for _, sensitive := range []string{
+			"authorization", "cookie", "password", "secret", "token", "payload", "prompt", "transcript",
+			"command_line", "cmdline", "argv", "arguments",
+		} {
 			if strings.Contains(lower, sensitive) {
 				value = "[redacted]"
 				break
@@ -136,6 +150,22 @@ func SanitizeEvidence(input map[string]string) map[string]string {
 		return nil
 	}
 	return out
+}
+
+// IsSafeProcessStartTokenEvidence validates the narrow scalar shape emitted by
+// C-locale `ps lstart`. Lifecycle code treats the token as opaque; this helper
+// only prevents a mislabeled free-form prompt, path, or command line from
+// crossing the journal/share boundary under the safe field name.
+func IsSafeProcessStartTokenEvidence(value string) bool {
+	if len(value) == 0 || len(value) > 128 {
+		return false
+	}
+	fields := strings.Fields(value)
+	if len(fields) != 5 || strings.Join(fields, " ") != value {
+		return false
+	}
+	_, err := time.Parse("Mon Jan 2 15:04:05 2006", value)
+	return err == nil
 }
 
 func cleanEvidenceText(value string, max int) string {

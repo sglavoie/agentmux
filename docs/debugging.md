@@ -74,6 +74,34 @@ and `journal_snapshot`; a text report beginning `warning: evidence graph
 truncated` lists the limiting reasons and directly pruned node/edge candidate
 counts.
 
+## Tracing a harness process exit
+
+When `spec commit` (or another pipe-mode invocation) leaves a bolt behind,
+capture the Kitty window ID before reproducing it, then trace both discovery
+and settlement:
+
+```bash
+spec commit
+amx debug tail --stage hook.process_detection --window "$KITTY_WINDOW_ID" --last 20 --json
+amx debug tail --stage daemon.process_lifecycle --window "$KITTY_WINDOW_ID" --last 20 --json
+amx debug explain --window "$KITTY_WINDOW_ID" --json
+amx daemon export-events --window "$KITTY_WINDOW_ID" --last 100 --pretty=false |
+  jq '.windows[] as $w | $w.events[] | select(.event == "HarnessProcessExited") as $exit | {exit: $exit, render: [$w.renderer.generations[]? | select(.generation == $exit.render_generation)]}'
+```
+
+`hook.process_detection` records `complete_identity`, `incomplete_identity`, or
+`identity_absent`. A committed `daemon.process_lifecycle` record and matching
+`HarnessProcessExited` event use one of the public reasons
+`pipe_process_exited`, `interactive_process_exited`, or
+`reset_process_exited`. The event carries the exact safe process fingerprint,
+missing-versus-replaced observation, affected reducer sources, actual
+before/after effective state, withdrawn/cleared counts, terminal-hook evidence,
+and `render_generation`. Match that generation against
+`renderer.generations[]` to prove the title update completed. The
+`process_lifecycle_recovery` explanation explicitly reports when no terminal
+hook was observed. Command lines, prompts, arguments, payloads, transcripts,
+and arbitrary paths are absent from this evidence.
+
 ## Storage, defaults, and privacy
 
 Diagnostic state lives below `$XDG_STATE_HOME/agent-mux`, falling back to
@@ -159,11 +187,13 @@ interactive session. Unknown future events are retained as rejected evidence
 without reducer mutation.
 
 `amx daemon export-events` remains the compatibility snapshot. It emits schema
-v9 by default, adding trace/request/source-event identities, sanitized reducer
-input and outcome evidence, routing evidence, saturation attribution, render
-generations, notification dispositions, and child probe links. Consumers that
-need the previous shape can request `--schema 8`; schema v8 is an explicit
-projection and never receives v9-only fields accidentally.
+v10 by default, adding safe harness-process lifecycle fields and intervention
+counters to the schema-v9 trace/request/source-event identities, sanitized
+reducer input and outcome evidence, routing evidence, saturation attribution, render generations,
+notification dispositions, and child probe links. Consumers can request
+`--schema 9` for the previous complete causal shape or `--schema 8` for the
+pre-causal shape; both are explicit projections and never receive v10 process
+fields accidentally.
 
 ## ASL delivery outcomes
 
@@ -201,6 +231,7 @@ request, or source-event ID from `tail`.
 | Route mismatch | `owner_mismatch` routing evidence with rejected alternatives | Compare producer and managed-owner identity; resync stamped hooks |
 | Quarantined identity | `quarantined` decision with synthesized fallback identity and low confidence | Fix missing/malformed session identity; do not infer ownership from titles |
 | Reducer suppression | Decision reason such as reordered, duplicate source sequence, guard, or protected-state precedence | Inspect before/after reducer evidence in `debug explain --json` |
+| Missing terminal hook / process exit | `hook.process_detection`, a committed `daemon.process_lifecycle`, `HarnessProcessExited`, and explanation `process_lifecycle_recovery` share the exact fingerprint and render generation | Use the tracing commands above; distinguish `missing` from `replaced_instance`, then confirm the linked renderer generation completed |
 | Render failure | `daemon.renderer.failed`, retained dirty generation, and doctor renderer drift | Restore Kitty remote control; the same generation remains retryable |
 | Notification dispatch failure | `daemon.notification.dispatch` or `daemon.notification.focus` failed with `send_failed`, `backend_timeout`, or `focus_failed`; explanation `notification_failure` | Inspect the backend error and daemon lifecycle; do not treat delivery failure as policy suppression |
 | Notification suppression | `daemon.notification.decision` or `daemon.notification.focus` suppressed with `muted`, `pipe_mode`, `config_disabled`, `cooldown`, `unsupported_action`, `interaction_timeout`, or dismissal; `daemon.notification.dispatch` cancelled with `daemon_shutdown`; explanation `notification_suppression` | Change notification policy only if the suppression was unintended |
@@ -222,7 +253,7 @@ Actual provider smoke is operator-attended and deliberately separate:
 3. In one managed session for Claude, Codex, and Copilot, record the CLI version
    and exercise prompt, tool, permission/elicitation, terminal, and error paths.
 4. For each path, retain `amx debug explain --source-event <id> --json` or a
-   schema v9 `amx daemon export-events --window <id>` snapshot.
+   schema v10 `amx daemon export-events --window <id>` snapshot.
 5. Create a share bundle only if the evidence must leave the machine; inspect
    its manifest first. Do not mark a live provider row complete unless an
    operator intentionally incurred and recorded the provider/model usage.

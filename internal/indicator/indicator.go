@@ -95,8 +95,10 @@ func deliverFromStdinWithDeps(
 	recorder.record("hook.validation", "success", "payload_valid", map[string]string{
 		"source_event_id_present": fmt.Sprint(payload.EffectiveSourceEventID() != ""),
 	}, 0)
+	discovery := DiscoverHarnessProcess(producerHarness)
+	recorder.recordProcessDetection(discovery)
 	result := deliverPayloadWithDeps(
-		event, windowID, producerHarness, amxBin, payloadJSON, IsPipeMode(),
+		event, windowID, producerHarness, amxBin, payloadJSON, discovery.PipeMode, discovery.Identity(),
 		traceID, requestID, payload.EffectiveSourceEventID(), payloadSize, payloadHMAC,
 		client, recorder, started,
 	)
@@ -109,7 +111,7 @@ func runWithDeps(event string, windowID int, producerHarness, amxBin, payloadJSO
 	requestID := traceID
 	payload, _ := hookevent.DecodeHookPayload(strings.NewReader(payloadJSON))
 	_ = deliverPayloadWithDeps(
-		event, windowID, producerHarness, amxBin, payloadJSON, pipeMode,
+		event, windowID, producerHarness, amxBin, payloadJSON, pipeMode, nil,
 		traceID, requestID, payload.EffectiveSourceEventID(), int64(len(payloadJSON)), "",
 		client, &deliveryRecorder{traceID: traceID, requestID: requestID, event: event}, started,
 	)

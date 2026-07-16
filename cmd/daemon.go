@@ -306,12 +306,12 @@ func resolveDaemonExportWindowID(cmd *cobra.Command) (int, error) {
 var daemonExportEventsCmd = &cobra.Command{
 	Use:   "export-events",
 	Short: "Dump hook event history as JSON for investigation",
-	Long: `Export the daemon's schema-v9 investigation snapshot as JSON.
+	Long: `Export the daemon's schema-v10 investigation snapshot as JSON.
 
 The payload is organized as a per-window array so each entry carries its own
 event list, durable daemon metadata, and best-effort live Kitty/session
-metadata without paired map lookups. Use --schema 8 for compatibility with
-pre-causal consumers.`,
+metadata without paired map lookups. Use --schema 9 for the previous complete
+causal shape or --schema 8 for pre-causal consumers.`,
 	Example: `  amx daemon export-events
   amx daemon export-events --current-window
   amx daemon export-events --current-window --last 25
@@ -322,8 +322,10 @@ pre-causal consumers.`,
 		if daemonExportEventsLast < 0 {
 			return fmt.Errorf("--last must be >= 0")
 		}
-		if daemonExportEventsSchema != daemon.EventsExportSchemaV8 && daemonExportEventsSchema != daemon.EventsExportSchemaVersion {
-			return fmt.Errorf("--schema must be 8 or 9")
+		if daemonExportEventsSchema != daemon.EventsExportSchemaV8 &&
+			daemonExportEventsSchema != daemon.EventsExportSchemaV9 &&
+			daemonExportEventsSchema != daemon.EventsExportSchemaVersion {
+			return fmt.Errorf("--schema must be 8, 9, or 10")
 		}
 		requestedWindowID, err := resolveDaemonExportWindowID(cmd)
 		if err != nil {
@@ -384,7 +386,7 @@ func init() {
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "Keep only the last N events per exported window (0 = no limit)")
 	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "Write JSON to this file instead of stdout")
 	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "Pretty-print JSON with 2-space indent")
-	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", daemon.EventsExportSchemaVersion, "Export schema version (8 or 9)")
+	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", daemon.EventsExportSchemaVersion, "Export schema version (8, 9, or 10)")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd, daemonRestartCmd, daemonExportEventsCmd)
 }

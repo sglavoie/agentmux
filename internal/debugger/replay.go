@@ -1099,7 +1099,9 @@ func decodeEventsExport(inputPath string, data []byte) (replaySource, error) {
 	if err := json.Unmarshal(data, &header); err != nil {
 		return replaySource{}, err
 	}
-	if header.SchemaVersion != daemon.EventsExportSchemaVersion && header.SchemaVersion != daemon.EventsExportSchemaV8 {
+	if header.SchemaVersion != daemon.EventsExportSchemaVersion &&
+		header.SchemaVersion != daemon.EventsExportSchemaV9 &&
+		header.SchemaVersion != daemon.EventsExportSchemaV8 {
 		return replaySource{}, fmt.Errorf("debugger: unsupported events export schema %d", header.SchemaVersion)
 	}
 	var payload struct {
@@ -1114,7 +1116,7 @@ func decodeEventsExport(inputPath string, data []byte) (replaySource, error) {
 	records := make([]replayRecord, 0)
 	for _, window := range payload.Windows {
 		for _, event := range window.Events {
-			records = append(records, replayRecordFromSessionEvent(window.WindowID, event, header.SchemaVersion == daemon.EventsExportSchemaV8))
+			records = append(records, replayRecordFromSessionEvent(window.WindowID, event, header.SchemaVersion))
 		}
 	}
 	source := replaySource{input: ReplayInput{Path: inputPath, Format: "events-export", SchemaVersion: header.SchemaVersion, Records: len(records)}, records: records}
@@ -1124,7 +1126,8 @@ func decodeEventsExport(inputPath string, data []byte) (replaySource, error) {
 	return source, nil
 }
 
-func replayRecordFromSessionEvent(windowID int, event daemon.SessionEvent, legacyV8 bool) replayRecord {
+func replayRecordFromSessionEvent(windowID int, event daemon.SessionEvent, schemaVersion int) replayRecord {
+	legacyV8 := schemaVersion == daemon.EventsExportSchemaV8
 	evidence := map[string]string{
 		"replay.event": event.Event, "replay.action": event.ReducerInputAction,
 		"replay.source_kind": event.SourceKind, "replay.source_key": event.SourceKey,
@@ -1177,19 +1180,12 @@ func replayRecordFromSessionEvent(windowID int, event daemon.SessionEvent, legac
 		observedAt = time.Unix(0, event.ReceivedAtNs).UTC()
 	}
 	return replayRecord{
-		schemaVersion: headerSchema(legacyV8), traceID: event.TraceID, requestID: event.RequestID,
+		schemaVersion: schemaVersion, traceID: event.TraceID, requestID: event.RequestID,
 		sourceEventID: event.SourceEventID, harness: event.ProducerHarness, profile: event.Profile,
 		sessionID: event.SessionID, windowID: strconv.Itoa(windowID), runID: event.RunID,
 		stage: "daemon.decision", outcome: string(event.ReducerDecision), reason: event.DecisionReason,
 		observedAt: observedAt, evidence: evidence, legacyV8: legacyV8,
 	}
-}
-
-func headerSchema(legacy bool) int {
-	if legacy {
-		return daemon.EventsExportSchemaV8
-	}
-	return daemon.EventsExportSchemaVersion
 }
 
 func encodeSessionEventState(out map[string]string, prefix string, state *daemon.EffectiveStateEvidence) {

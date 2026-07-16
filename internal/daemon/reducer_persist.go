@@ -1,7 +1,7 @@
 package daemon
 
 // This file is the reducer's persistence seam. The fact map itself stays
-// unexported; schema-v3 user-var serialization and startup restoration go
+// unexported; schema-v4 user-var serialization and startup restoration go
 // through the Facts/Restore snapshot pair, and the Compact retention policy
 // keeps both the live map and the persisted payload bounded to live/recent
 // facts.
@@ -31,7 +31,7 @@ const (
 const subagentStopRetentionSeconds int64 = 300
 
 // SourceFactSnapshot is the exported, durable view of one source fact. Field
-// names mirror sourceFact; the compact JSON tags are the schema-v3 user-var
+// names mirror sourceFact; the compact JSON tags are the schema-v4 user-var
 // wire form (amx_state must stay small), so this one struct is both the
 // snapshot seam and the persisted shape.
 type SourceFactSnapshot struct {
@@ -54,6 +54,15 @@ type SourceFactSnapshot struct {
 	// a managed title owner.
 	OriginWindowID int    `json:"ow,omitempty"`
 	ToolUse        string `json:"tu,omitempty"`
+
+	// Harness process ownership is safe lifecycle metadata, never command-line
+	// content. The three fields are deliberately flat and compact because this
+	// snapshot is persisted in Kitty's size-sensitive amx_state user var.
+	// Partial or source-incompatible triples are discarded during restoration
+	// without invalidating the containing fact.
+	HarnessProcessHarness    string `json:"ph,omitempty"`
+	HarnessProcessPID        int    `json:"pp,omitempty"`
+	HarnessProcessStartToken string `json:"pt,omitempty"`
 
 	// PipeMode records whether this harness source is a non-interactive
 	// `claude -p` child. Absent (false) restores as interactive, so a payload
@@ -82,6 +91,21 @@ type SourceFactSnapshot struct {
 // Source reconstructs the fact's map key.
 func (s SourceFactSnapshot) Source() SourceID { return SourceID{Kind: s.Kind, Key: s.Key} }
 
+// HasMalformedHarnessProcessIdentity reports a partial, source-incompatible,
+// or non-canonical persisted process fingerprint. It performs validation over
+// the exported snapshot only and never consults the live process table.
+func (s SourceFactSnapshot) HasMalformedHarnessProcessIdentity() bool {
+	present := s.HarnessProcessHarness != "" || s.HarnessProcessPID != 0 || s.HarnessProcessStartToken != ""
+	if !present {
+		return false
+	}
+	identity := restoredHarnessProcessIdentity(s)
+	return identity == (HarnessProcessIdentity{}) ||
+		identity.Harness != s.HarnessProcessHarness ||
+		identity.PID != s.HarnessProcessPID ||
+		identity.StartToken != s.HarnessProcessStartToken
+}
+
 // Facts returns a deterministic snapshot of every set fact, ordered by source
 // kind then key so serialized payloads are stable across runs.
 func (r *Reducer) Facts() []SourceFactSnapshot {
@@ -91,28 +115,31 @@ func (r *Reducer) Facts() []SourceFactSnapshot {
 			continue
 		}
 		out = append(out, SourceFactSnapshot{
-			Kind:            f.source.Kind,
-			Key:             f.source.Key,
-			Action:          f.action,
-			Icon:            f.icon,
-			Seq:             f.seq,
-			CausalOrder:     f.causalOrder,
-			TurnID:          f.turnID,
-			At:              f.at,
-			Acked:           f.acked,
-			AckedAt:         f.ackedAt,
-			OriginWindowID:  f.originWindowID,
-			ToolUse:         f.toolUse,
-			PipeMode:        f.pipeMode,
-			SessionID:       f.sessionID,
-			Agents:          f.agents,
-			RunID:           f.runID,
-			Phase:           f.phase,
-			LeaseLive:       f.leaseLive,
-			Terminated:      f.terminated,
-			TerminalTurn:    f.terminalTurn,
-			TerminalToolUse: f.terminalToolUse,
-			TerminalAt:      f.terminalAt,
+			Kind:                     f.source.Kind,
+			Key:                      f.source.Key,
+			Action:                   f.action,
+			Icon:                     f.icon,
+			Seq:                      f.seq,
+			CausalOrder:              f.causalOrder,
+			TurnID:                   f.turnID,
+			At:                       f.at,
+			Acked:                    f.acked,
+			AckedAt:                  f.ackedAt,
+			OriginWindowID:           f.originWindowID,
+			ToolUse:                  f.toolUse,
+			HarnessProcessHarness:    f.harnessProcess.Harness,
+			HarnessProcessPID:        f.harnessProcess.PID,
+			HarnessProcessStartToken: f.harnessProcess.StartToken,
+			PipeMode:                 f.pipeMode,
+			SessionID:                f.sessionID,
+			Agents:                   f.agents,
+			RunID:                    f.runID,
+			Phase:                    f.phase,
+			LeaseLive:                f.leaseLive,
+			Terminated:               f.terminated,
+			TerminalTurn:             f.terminalTurn,
+			TerminalToolUse:          f.terminalToolUse,
+			TerminalAt:               f.terminalAt,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -309,6 +336,7 @@ func sourceFactFromSnapshot(s SourceFactSnapshot) *sourceFact {
 		ackedAt:         ackedAt,
 		originWindowID:  s.OriginWindowID,
 		toolUse:         s.ToolUse,
+		harnessProcess:  restoredHarnessProcessIdentity(s),
 		pipeMode:        s.PipeMode,
 		sessionID:       s.SessionID,
 		agents:          s.Agents,
@@ -322,6 +350,28 @@ func sourceFactFromSnapshot(s SourceFactSnapshot) *sourceFact {
 	}
 }
 
+// restoredHarnessProcessIdentity validates lifecycle metadata independently
+// from the containing fact. A malformed or partial fingerprint becomes the
+// zero identity while the fact itself remains restorable. Reusing the reducer
+// admission boundary also enforces ordinary-source ownership and the harness
+// source-key match for SourceHarness facts.
+func restoredHarnessProcessIdentity(s SourceFactSnapshot) HarnessProcessIdentity {
+	return reducerHarnessProcessIdentity(ReducerEvent{
+		Source: s.Source(),
+		HarnessProcess: HarnessProcessIdentity{
+			Harness:    s.HarnessProcessHarness,
+			PID:        s.HarnessProcessPID,
+			StartToken: s.HarnessProcessStartToken,
+		},
+	})
+}
+
+func (s *SourceFactSnapshot) clearHarnessProcessIdentity() {
+	s.HarnessProcessHarness = ""
+	s.HarnessProcessPID = 0
+	s.HarnessProcessStartToken = ""
+}
+
 // SetConfig replaces the reducer's thresholds. Restoration deserializes facts
 // before the owning Handler is known, so the restore path re-binds the
 // daemon's configured thresholds afterward.
@@ -333,7 +383,7 @@ func (r *Reducer) SetConfig(cfg ReducerConfig) { r.cfg = cfg }
 // terminal fact and the window's next legacy event would be distinct sources,
 // so a restored ⏹ would lose to any trailing bolt with no same-source
 // suppression, and a migrated ASL lease could never be released by a live
-// finish event. If a live fact already occupies the destination (a v2/v3 payload
+// finish event. If a live fact already occupies the destination (a v2/v3/v4 payload
 // can carry both), the higher-sequence fact wins. Reports whether any fact
 // moved.
 func (r *Reducer) RekeyMigratedFacts(windowID int) bool {

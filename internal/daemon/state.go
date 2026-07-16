@@ -57,7 +57,7 @@ type WindowState struct {
 	// Reducer is the authoritative source for this window's visible icon and
 	// loop state: handleStateUpdate feeds it, and reduceStateUpdate publishes
 	// its reduced effective state through publishEffectiveLocked as the visible
-	// icon and looping. Schema-v3 persistence carries it across restarts. The
+	// icon and looping. Schema-v4 persistence carries it across restarts. The
 	// legacy scalar machine above (LastAction, Looping, DesiredIcon, …) is
 	// retained for wire/restore compatibility and as divergence evidence
 	// (mismatches recorded against the reduced outcome), not as the visible-state
@@ -116,11 +116,19 @@ func (s WindowState) CurrentInteractiveConversation(now int64) (conversation.Ide
 }
 
 // amx_state schema versions. v1 payloads predate the discriminator entirely
-// (decoded Schema stays 0). v2 introduced source facts; v3 adds durable route
-// origins and acknowledgement timestamps to those facts.
+// (decoded Schema stays 0). v2 introduced source facts; v3 added durable route
+// origins and acknowledgement timestamps; v4 adds validated harness-process
+// ownership to eligible facts.
 const (
 	stateUserVarSchemaV2 = 2
 	stateUserVarSchemaV3 = 3
+	stateUserVarSchemaV4 = 4
+
+	// harnessProcessTokenVersionUTC distinguishes process fingerprints written
+	// after both ps producers began pinning TZ=UTC. Early schema-v4 payloads
+	// omitted this marker and may contain tokens rendered in any timezone; their
+	// underlying facts remain valid, but lifecycle ownership must fail open.
+	harnessProcessTokenVersionUTC = 1
 )
 
 // legacyV1MigrationKey is the synthetic source key given to facts migrated
@@ -143,6 +151,7 @@ type windowStateUserVar struct {
 	Account                    string                     `json:"acct,omitempty"`
 	Harness                    string                     `json:"h,omitempty"`
 	LastEventAt                int64                      `json:"t,omitempty"`
+	ProcessTokenVersion        int                        `json:"pv,omitempty"`
 
 	// Schema v2+: bounded source facts plus the shadow effective generation.
 	Facts            []SourceFactSnapshot `json:"f,omitempty"`
@@ -161,7 +170,7 @@ type windowStateUserVar struct {
 
 // MarshalUserVar returns compact JSON for Kitty's amx_state user var. The
 // event ring buffer is intentionally not persisted. It always writes schema
-// v3: the reducer's facts and effective generation are the authoritative record
+// v4: the reducer's facts and effective generation are the authoritative record
 // of the visible icon and looping, and the legacy scalar fields ride alongside
 // as compatibility metadata and divergence evidence (older readers and v1
 // restore still parse them; they no longer write the visible state). The facts
@@ -169,7 +178,7 @@ type windowStateUserVar struct {
 // reach the payload.
 func (s WindowState) MarshalUserVar() (string, error) {
 	uv := windowStateUserVar{
-		Schema:                     stateUserVarSchemaV3,
+		Schema:                     stateUserVarSchemaV4,
 		Action:                     s.LastAction,
 		GuardAction:                s.GuardAction,
 		CopilotToolPermissionState: s.CopilotToolPermissionState,
@@ -191,6 +200,13 @@ func (s WindowState) MarshalUserVar() (string, error) {
 	}
 	if s.Reducer != nil {
 		uv.Facts = s.Reducer.Facts()
+		for _, fact := range uv.Facts {
+			if fact.HarnessProcessHarness != "" || fact.HarnessProcessPID != 0 ||
+				fact.HarnessProcessStartToken != "" {
+				uv.ProcessTokenVersion = harnessProcessTokenVersionUTC
+				break
+			}
+		}
 	}
 	uv.EffectiveIcon = s.Effective.Icon
 	uv.EffectiveLooping = s.Effective.Looping
@@ -211,13 +227,16 @@ func (s WindowState) MarshalUserVar() (string, error) {
 
 // UnmarshalUserVar restores WindowState from Kitty's amx_state user var.
 // The event ring buffer is intentionally left empty. All wire schemas are
-// readable: v2/v3 payloads restore the reducer's source facts (including
+// readable: v2/v3/v4 payloads restore the reducer's source facts (including
 // acknowledgement cutoffs and ASL leases) and the effective generation, while
 // a v1 payload — which predates the schema discriminator — migrates its
 // scalar action and loop marker into synthetic legacy-source facts. The v2+
 // conversation projection is intentionally re-derived from Facts rather than
-// trusted directly. Writing always produces v3 (see MarshalUserVar), so v1/v2
-// exists only on the read side.
+// trusted directly. Writing always produces v4 (see MarshalUserVar), so v1-v3
+// exist only on the read side. Process ownership is admitted only from v4
+// payloads whose token-version marker proves their ps lstart values were
+// rendered under UTC. Older schemas and pre-marker v4 payloads keep their
+// watchdog-only fallback even if process fields are present.
 func (s *WindowState) UnmarshalUserVar(value string) error {
 	if strings.TrimSpace(value) == "" {
 		*s = WindowState{}
@@ -252,7 +271,7 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 	s.DesiredIcon = IconState(s.LastAction)
 	if uv.Schema >= stateUserVarSchemaV2 {
 		s.restoreReducerV2(uv)
-		// The reducer is authoritative for visible state, so a v2/v3 restore with
+		// The reducer is authoritative for visible state, so a v2/v3/v4 restore with
 		// facts resumes from the persisted effective state rather than the
 		// legacy scalar (they only diverge for payloads written before the
 		// cutover). A fact-less payload keeps the legacy-derived view.
@@ -266,14 +285,21 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 	return nil
 }
 
-// restoreReducerV2 rebuilds the shadow reducer from a schema-v2/v3 payload. The
+// restoreReducerV2 rebuilds the shadow reducer from a schema-v2/v3/v4 payload. The
 // reducer is created with zero thresholds; the restore path re-binds the
 // daemon's configured ReducerConfig afterward (restoreFromUserVars), since a
 // deserializer has no access to the owning Handler.
 func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 	if len(uv.Facts) > 0 {
+		facts := uv.Facts
+		if uv.Schema < stateUserVarSchemaV4 || uv.ProcessTokenVersion != harnessProcessTokenVersionUTC {
+			facts = append([]SourceFactSnapshot(nil), facts...)
+			for i := range facts {
+				facts[i].clearHarnessProcessIdentity()
+			}
+		}
 		r := NewReducer(ReducerConfig{})
-		r.Restore(uv.Facts)
+		r.Restore(facts)
 		s.Reducer = r
 	}
 	s.Effective = EffectiveState{

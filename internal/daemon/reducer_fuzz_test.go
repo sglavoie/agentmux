@@ -4,8 +4,9 @@ package daemon
 // seeds through math/rand, so a failure reproduces deterministically: rerun the
 // same seed and the same trace replays. The generator produces the full source
 // mix (harness turns, identified subagents, identity-less subagent buckets, ASL
-// runs, probes, user_clear) with duplicated, reordered, and delayed deliveries,
-// and the assertions are the session's reliability invariants:
+// runs, probes, user_clear) with process fingerprints, missing replacements,
+// duplicated, reordered, and delayed deliveries, and the assertions are the
+// session's reliability invariants:
 //
 //   - duplicate redelivery is idempotent;
 //   - restart (snapshot → restore through the real amx_state wire schema) after
@@ -52,6 +53,10 @@ var fuzzSources = struct {
 	userSrc:  SourceID{Kind: SourceProbe, Key: "user"},
 	session:  "sess-0001",
 	runNames: []string{"run-1", "run-2"},
+}
+
+var fuzzHarnessProcess = HarnessProcessIdentity{
+	Harness: "claude", PID: 5001, StartToken: "Thu Jul 16 10:30:30 2026",
 }
 
 // fuzzGen produces one deterministic event trace. Per-source sequences are
@@ -149,6 +154,9 @@ func (g *fuzzGen) harnessEvent() ReducerEvent {
 	if action == "stop" && g.rng.Intn(4) == 0 {
 		ev.EndsSession = true // SessionEnd: clears the session's remaining agents
 	}
+	if g.rng.Intn(4) != 0 {
+		ev.HarnessProcess = fuzzHarnessProcess
+	}
 	return ev
 }
 
@@ -161,13 +169,17 @@ func (g *fuzzGen) subagentEvent() ReducerEvent {
 	case 1:
 		action = "stop_failure" // failure-carrying stop: sticky error
 	}
-	return ReducerEvent{
+	ev := ReducerEvent{
 		Source:    src,
 		Action:    action,
 		Seq:       g.nextSeq(src),
 		At:        g.nextAt(),
 		SessionID: fuzzSources.session,
 	}
+	if g.rng.Intn(4) != 0 {
+		ev.HarnessProcess = fuzzHarnessProcess
+	}
+	return ev
 }
 
 func (g *fuzzGen) aslEvent() ReducerEvent {
@@ -189,6 +201,11 @@ func (g *fuzzGen) aslEvent() ReducerEvent {
 			ev.Action = "failure"
 		}
 	}
+	// Even direct/replay callers cannot attach process ownership to an ASL
+	// lease; the reducer must discard this otherwise-valid fingerprint.
+	if g.rng.Intn(3) == 0 {
+		ev.HarnessProcess = fuzzHarnessProcess
+	}
 	return ev
 }
 
@@ -199,7 +216,7 @@ func (g *fuzzGen) bucketEvent() ReducerEvent {
 		delta = -1
 		action = "idle" // identity-less clean stop normalizes to idle
 	}
-	return ReducerEvent{
+	ev := ReducerEvent{
 		Source:        fuzzSources.bucket,
 		Action:        action,
 		Seq:           g.nextSeq(fuzzSources.bucket),
@@ -207,6 +224,10 @@ func (g *fuzzGen) bucketEvent() ReducerEvent {
 		SessionID:     fuzzSources.session,
 		SubagentDelta: delta,
 	}
+	if g.rng.Intn(4) != 0 {
+		ev.HarnessProcess = fuzzHarnessProcess
+	}
+	return ev
 }
 
 func (g *fuzzGen) probeEvent() ReducerEvent {
@@ -550,4 +571,82 @@ func allowedASLFinishRetirement(ev ReducerEvent, before, after SourceFactSnapsho
 	want.Acked = true
 	want.AckedAt = ev.At
 	return reflect.DeepEqual(after, want)
+}
+
+// TestFuzzReducerProcessExitInvariants layers deterministic process settlement
+// onto every generated mixed-source trace. It proves exact-fingerprint
+// isolation, ASL exclusion, independent precedence-oracle agreement, and
+// idempotence for both pipe and interactive policy.
+func TestFuzzReducerProcessExitInvariants(t *testing.T) {
+	for cfgName, cfg := range fuzzCfgs {
+		for _, seed := range fuzzSeeds {
+			trace := newFuzzGen(seed).trace(fuzzTraceLen, true)
+			r := NewReducer(cfg)
+			for _, ev := range trace {
+				r.Apply(ev)
+			}
+
+			at := int64(2_000_000 + seed)
+			pipeMode := seed%2 == 0
+			targetSource := SourceID{Kind: SourceHarness, Key: "claude:exit-target"}
+			target := processReducerEvent(targetSource, "active", 1, at, "exit-target", pipeMode, fuzzHarnessProcess)
+			targetAgent := processReducerEvent(
+				SourceID{Kind: SourceSubagent, Key: fmt.Sprintf("exit-agent-%d", seed)},
+				"subagent", 1, at+1, "exit-target", pipeMode, fuzzHarnessProcess,
+			)
+			r.Apply(target)
+			r.Apply(targetAgent)
+
+			otherIdentity := fuzzHarnessProcess
+			otherIdentity.PID++
+			otherSource := SourceID{Kind: SourceHarness, Key: fmt.Sprintf("claude:other-%d", seed)}
+			r.Apply(processReducerEvent(otherSource, "permission", 1, at+2, "other", true, otherIdentity))
+
+			aslSource := SourceID{Kind: SourceASL, Key: fmt.Sprintf("exit-run-%d", seed)}
+			r.Apply(ReducerEvent{Source: aslSource, RunID: aslSource.Key, Phase: ASLPhaseBetween, Seq: 1, At: at + 3})
+			// The reducer operation must reject ASL even if restored/corrupt state
+			// somehow carries an exact process fingerprint.
+			r.facts[aslSource].harnessProcess = fuzzHarnessProcess
+
+			otherBefore := *r.facts[otherSource]
+			aslBefore := *r.facts[aslSource]
+			before := r.Reduce(at + 4)
+			result := r.SettleHarnessProcessExit(
+				fuzzHarnessProcess,
+				at+4,
+				HarnessProcessExitOptions{PipeMode: pipeMode},
+			)
+			if !result.Changed || result.Before != before || result.After != r.Reduce(at+4) {
+				t.Fatalf("cfg=%s seed=%d: inconsistent settlement result %+v", cfgName, seed, result)
+			}
+			if pipeMode {
+				if result.SynthesizedStop || result.WithdrawnFacts != 2 || result.ClearedSubagents != 0 {
+					t.Fatalf("cfg=%s seed=%d: pipe result = %+v", cfgName, seed, result)
+				}
+			} else if !result.SynthesizedStop || result.WithdrawnFacts != 0 || result.ClearedSubagents != 1 {
+				t.Fatalf("cfg=%s seed=%d: interactive result = %+v", cfgName, seed, result)
+			}
+			if after := *r.facts[otherSource]; !reflect.DeepEqual(after, otherBefore) {
+				t.Fatalf("cfg=%s seed=%d: unrelated process changed\nbefore=%+v\nafter =%+v", cfgName, seed, otherBefore, after)
+			}
+			if after := *r.facts[aslSource]; !reflect.DeepEqual(after, aslBefore) {
+				t.Fatalf("cfg=%s seed=%d: ASL fact changed\nbefore=%+v\nafter =%+v", cfgName, seed, aslBefore, after)
+			}
+
+			wantIcons, wantLooping := fuzzOracleReduce(cfg, r.Facts(), at+4)
+			if !wantIcons[result.After.Icon] || result.After.Looping != wantLooping {
+				t.Fatalf("cfg=%s seed=%d: after=%+v; oracle wants icons=%v looping=%v", cfgName, seed, result.After, wantIcons, wantLooping)
+			}
+
+			afterFirst := cloneReducerSourceFacts(r)
+			again := r.SettleHarnessProcessExit(
+				fuzzHarnessProcess,
+				at+5,
+				HarnessProcessExitOptions{PipeMode: pipeMode},
+			)
+			if again.Changed || !reflect.DeepEqual(cloneReducerSourceFacts(r), afterFirst) {
+				t.Fatalf("cfg=%s seed=%d: duplicate settlement mutated state: %+v", cfgName, seed, again)
+			}
+		}
+	}
 }

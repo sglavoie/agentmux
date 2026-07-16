@@ -142,6 +142,27 @@ func (r *deliveryRecorder) record(stage, outcome, reason string, evidence map[st
 	r.append(r.envelope(stage, outcome, reason, evidence, latencyMS))
 }
 
+func (r *deliveryRecorder) recordProcessDetection(discovery HarnessProcessDiscovery) {
+	evidence := map[string]string{
+		"pipe_mode": fmt.Sprint(discovery.PipeMode),
+	}
+	outcome, reason := "absent", "identity_absent"
+	if discovery.Harness != "" {
+		evidence["process_harness"] = discovery.Harness
+	}
+	if discovery.PID > 0 {
+		evidence["process_pid"] = fmt.Sprint(discovery.PID)
+	}
+	switch {
+	case discovery.Trackable:
+		outcome, reason = "success", "complete_identity"
+		evidence["process_start_token"] = discovery.StartToken
+	case discovery.Harness != "" && discovery.PID > 0:
+		outcome, reason = "degraded", "incomplete_identity"
+	}
+	r.record("hook.process_detection", outcome, reason, evidence, 0)
+}
+
 func (r *deliveryRecorder) recordPayload(payload []byte, outcome, reason string) (size int64, hmac string) {
 	size = int64(len(payload))
 	if r == nil {
@@ -238,6 +259,7 @@ func deliverPayloadWithDeps(
 	windowID int,
 	producerHarness, amxBin, payloadJSON string,
 	pipeMode bool,
+	harnessProcess *daemon.HarnessProcessIdentity,
 	traceID, requestID, sourceEventID string,
 	payloadSize int64,
 	payloadHMAC string,
@@ -281,6 +303,7 @@ func deliverPayloadWithDeps(
 		PayloadEncoding: "json",
 		PayloadCaptured: recorder.payloadCaptured,
 		ProducerHarness: producerHarness,
+		HarnessProcess:  harnessProcess,
 		WindowID:        resolvedWindowID,
 		Event:           event,
 		Harness:         producerHarness,

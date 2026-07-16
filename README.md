@@ -564,14 +564,20 @@ storage work.
 The daemon is the only writer for state icons and the `🔁` loop marker. Its
 state lives in each Kitty window's `amx_state` user var, so a restart restores
 the intended state and the renderer converges the live title on its next pass.
-`amx_state` schema v3 persists each fact's producer-pane origin (`ow`) and
-acknowledgement time (`aa`), while retaining readers for v1 and v2 payloads.
+`amx_state` schema v4 persists each eligible fact's validated harness-process
+fingerprint (`ph` harness, `pp` PID, and opaque `pt` start token) alongside the
+schema-v3 producer-pane origin (`ow`) and acknowledgement time (`aa`). A compact
+payload marker (`pv:1`) records that process tokens were rendered under the
+pinned UTC timezone. Readers retain v1-v4 compatibility; v1-v3 facts and early
+v4 payloads without that marker restore without lifecycle ownership and continue
+using watchdog fallback.
 Acknowledged nonterminal replay cutoffs expire after one hour and are capped at
 the newest 64; unacknowledged facts and live ASL leases are never removed by
 that cap.
 The base title, `★`, and `🔇` remain owned by their existing writers. Hooks only
-forward raw events, window/socket context, and pipe-mode detection; they
-auto-start the daemon when needed, log a dropped delivery, and exit successfully.
+forward raw events, window/socket context, pipe-mode detection, and the safe
+process fingerprint; they auto-start the daemon when needed, log a dropped
+delivery, and exit successfully.
 
 Producer identity and title ownership are separate. The producer harness and
 origin pane determine event semantics and source identity; the active managed
@@ -599,16 +605,23 @@ active-pane route policy rather than writing titles from the indicator:
 
 For the acceptance record, required live-client transitions, and dogfood
 checklist, see [Daemon State Acceptance Evidence](docs/daemon_state_acceptance.md).
+The hermetic process-exit fixture and optional installed drill are documented in
+[Process-Lifecycle Acceptance](docs/acceptance-testing.md).
 
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema v9 JSON snapshot for investigation.
-Version 9 adds causal trace/request/source-event identities, sanitized reducer
+`amx daemon export-events` writes a schema v10 JSON snapshot for investigation.
+Version 10 adds the safe `ph`/`pp`/`pt` harness-process fingerprint to eligible
+source facts, enriched `HarnessProcessExited` events, and process-exit counters
+under `watchdog`. The opaque start token detects PID reuse; command lines,
+prompts, arguments, and paths are never included. Version 9 adds causal
+trace/request/source-event identities, sanitized reducer
 inputs and outcomes, routing evidence, request-scoped saturation, bounded
 render generations, notification dispositions, and child-probe links. Raw
 payloads, prompts, tool arguments, and transcript text are not included.
-Pass `--schema 8` for the previous contract; it is an explicit compatibility
-projection that cannot accidentally expose v9-only fields.
+Pass `--schema 9` for the previous complete causal contract or `--schema 8` for
+the pre-causal contract. Both are explicit compatibility projections: schema 9
+cannot expose v10 process fields, and schema 8 cannot expose v9 or v10 fields.
 
 Version 8 retains every v7 field and adds producer-pane origins to events
 (`events[].origin_window_id`) and source facts (`shadow.facts[].ow`), plus the
@@ -616,11 +629,11 @@ acknowledgement timestamp `shadow.facts[].aa` for acknowledged facts. Version 7
 retains every v6 field and adds the interactive-ownership `pm` flag to
 pipe-mode source facts (`shadow.facts[].pm`) plus the reducer-wide causal order
 `o` used to compare equal-timestamp facts across sources (`shadow.facts[].o`).
-Each `shadow.facts[]` entry serializes the reducer's `SourceFactSnapshot`
-directly, so it uses that type's
+Each schema-v10 `shadow.facts[]` entry serializes the reducer's
+`SourceFactSnapshot` directly, so it uses that type's
 compact wire keys — `k` (source kind), `y` (source key), `i` (icon), `o`
 (source-independent causal application order), `ow` (producer pane), `aa`
-(acknowledgement time), plus `pm`
+(acknowledgement time), `ph`/`pp`/`pt` (validated process identity), plus `pm`
 — rather than descriptive spellings. The flag is presence-encoded:
 `pm: true` marks a fact owned by a non-interactive pipe-mode child (a
 `claude -p` / `codex exec` / `copilot -p` process), while an **absent** `pm`
@@ -643,7 +656,7 @@ window can be inspected without paired map lookups:
 
 ```json
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "daemon": { "pid": 1234, "uptime_seconds": 97, "ready": true, "build": { ... }, "metrics": { ... } },
   "cli_build": { ... },
   "windows": [
@@ -652,8 +665,8 @@ window can be inspected without paired map lookups:
       "stats": { ... },
       "durable": { ... },
       "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0, "queued_gen": 7, "rendered_gen": 7, "generations": [ { "generation": 7, "source_event_ids": ["run-1:2"], "stage": "rendered", "outcome": "success" } ] },
-      "shadow": { "effective_icon": "bolt", "effective_looping": true, "facts": [ { "k": "harness", "y": "sess-pipe", "i": "bolt", "o": 10, "ow": 91, "pm": true }, { "k": "harness", "y": "sess-1", "i": "bolt", "o": 11, "ow": 42 }, { "k": "harness", "y": "sess-old", "i": "bolt", "o": 9, "ak": true, "aa": 1700000000, "ow": 91 } ] },
-      "watchdog": { "last_event": "...", "last_reason": "..." },
+      "shadow": { "effective_icon": "bolt", "effective_looping": true, "facts": [ { "k": "harness", "y": "claude:sess-pipe", "i": "bolt", "o": 10, "ow": 91, "ph": "claude", "pp": 4321, "pt": "Mon Jul 13 10:11:12 2026", "pm": true }, { "k": "harness", "y": "claude:sess-1", "i": "bolt", "o": 11, "ow": 42, "ph": "claude", "pp": 4322, "pt": "Mon Jul 13 10:15:20 2026" }, { "k": "harness", "y": "claude:sess-old", "i": "bolt", "o": 9, "ak": true, "aa": 1700000000, "ow": 91 } ] },
+      "watchdog": { "last_event": "HarnessProcessExited", "last_reason": "pipe_process_exited", "process_exits": 1, "last_process_exit_reason": "pipe_process_exited", "last_process_exit_observation": "missing" },
       "live": { "found": true, ... },
       "events": [ { "at": 1700000001, "event": "Stop", "action": "stop", "result_icon_state": "stop", "trace_id": "…", "request_id": "…", "source_event_id": "run-1:2", "parse_outcome": "decoded", "normalization_outcome": "normalized", "source_kind": "harness", "source_key": "claude:sess-1", "route_decision": "owner", "origin_window_id": 91, "reducer_decision": "applied", "render_generation": 7, "render_outcome": "success" } ]
     }
@@ -924,13 +937,17 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   to reconstruct it from source transcripts.
   `amx doctor --json` emits a structured report; `--strict` also evaluates the
   correctness invariants (reducer/renderer agreement, ASL visibility, subagent
-  visibility, producer routing, acknowledged-fact pressure, render-generation
-  drift, queue saturation, build identity) and exits 2 on any failure. The
+  visibility, producer routing, acknowledged-fact pressure, persisted process
+  identity, render-generation drift, queue saturation, build identity) and
+  exits 2 on any failure. The
   stable routing/retention checks are `owner_mismatch_prompt` (failure for any
   recent prompt mismatch), `owner_mismatch_burst` (warning for at least three
   recent non-prompt mismatches on one window), `unknown_producer_fact`
   (warning), and `acknowledged_fact_pressure` (warning at 49–64 evictable
-  acknowledged facts; failure above 64). Their event window is 15 minutes.
+  acknowledged facts; failure above 64). `malformed_process_identity` fails
+  when an exported persisted fact contains a partial, invalid, or
+  source-incompatible process fingerprint; it does not perform a live process
+  scan. Their event window is 15 minutes.
 - **Suspected intermittent state bugs**: preserve a causal snapshot with
   `amx debug bundle --mode share`, validate it with `amx debug replay`, then run
   `amx daemon audit --duration 10m --json`. It samples the invariants every

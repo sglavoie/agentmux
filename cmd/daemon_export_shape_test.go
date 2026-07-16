@@ -16,7 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// TestDaemonStateAcceptanceDocSchemaV9READMEFactKeys pins the schema-v9
+// TestDaemonStateAcceptanceDocSchemaV10READMEFactKeys pins the schema-v10
 // export-events example in README.md to the actual wire shape of
 // daemon.SourceFactSnapshot. WindowDebugShadow.Facts serializes that type
 // directly, so shadow.facts[] entries can only use its compact JSON tags
@@ -24,34 +24,34 @@ import (
 // round-trip test in this file exercised the Go type but never guarded the raw
 // key spelling in the documentation snippet, letting the example drift to keys
 // that amx daemon export-events cannot emit.
-func TestDaemonStateAcceptanceDocSchemaV9READMEFactKeys(t *testing.T) {
+func TestDaemonStateAcceptanceDocSchemaV10READMEFactKeys(t *testing.T) {
 	data, err := os.ReadFile("../README.md")
 	if err != nil {
 		t.Fatalf("ReadFile(../README.md): %v", err)
 	}
 
 	readme := string(data)
-	facts := extractSchemaV9ExampleFacts(t, readme)
+	facts := extractSchemaV10ExampleFacts(t, readme)
 	if len(facts) == 0 {
-		t.Fatalf("README schema-v9 example has no shadow.facts entries")
+		t.Fatalf("README schema-v10 example has no shadow.facts entries")
 	}
 
 	valid := sourceFactSnapshotWireTags()
 	for i, fact := range facts {
 		for key := range fact {
 			if !valid[key] {
-				t.Fatalf("README schema-v9 facts[%d] uses key %q, which is not a SourceFactSnapshot wire tag (valid: %v)", i, key, sortedKeys(valid))
+				t.Fatalf("README schema-v10 facts[%d] uses key %q, which is not a SourceFactSnapshot wire tag (valid: %v)", i, key, sortedKeys(valid))
 			}
 		}
 	}
 
 	// The example must show the compact ownership keys and a pipe-mode fact so
 	// operators see the real wire spelling and the presence-encoded pm flag.
-	var sawPipeMode, sawOrigin, sawAckedAt bool
+	var sawPipeMode, sawOrigin, sawAckedAt, sawProcess bool
 	for _, fact := range facts {
 		for _, need := range []string{"k", "y", "i"} {
 			if _, ok := fact[need]; !ok {
-				t.Fatalf("README schema-v9 fact object missing compact key %q: %v", need, fact)
+				t.Fatalf("README schema-v10 fact object missing compact key %q: %v", need, fact)
 			}
 		}
 		var snap daemon.SourceFactSnapshot
@@ -80,16 +80,31 @@ func TestDaemonStateAcceptanceDocSchemaV9READMEFactKeys(t *testing.T) {
 		if snap.Acked && snap.AckedAt > 0 {
 			sawAckedAt = true
 		}
+		processFields := 0
+		for _, key := range []string{"ph", "pp", "pt"} {
+			if _, ok := fact[key]; ok {
+				processFields++
+			}
+		}
+		if processFields != 0 && processFields != 3 {
+			t.Fatalf("README schema-v10 fact has partial process identity: %v", fact)
+		}
+		if processFields == 3 && snap.HarnessProcessHarness != "" && snap.HarnessProcessPID > 1 && snap.HarnessProcessStartToken != "" {
+			sawProcess = true
+		}
 	}
 	if !sawPipeMode {
-		t.Fatalf("README schema-v9 example must include a pipe-mode fact with pm:true")
+		t.Fatalf("README schema-v10 example must include a pipe-mode fact with pm:true")
 	}
 	if !sawOrigin || !sawAckedAt {
-		t.Fatalf("README schema-v9 example must include ow origin and an acknowledged aa timestamp")
+		t.Fatalf("README schema-v10 example must include ow origin and an acknowledged aa timestamp")
 	}
-	for _, want := range []string{`--schema 8`, `"reducer_decision": "applied"`, `"generations"`} {
+	if !sawProcess {
+		t.Fatalf("README schema-v10 example must include a complete ph/pp/pt process identity")
+	}
+	for _, want := range []string{`--schema 8`, `--schema 9`, `"reducer_decision": "applied"`, `"generations"`} {
 		if !strings.Contains(readme, want) {
-			t.Errorf("README schema-v9 guidance missing %q", want)
+			t.Errorf("README schema-v10 guidance missing %q", want)
 		}
 	}
 }
@@ -102,7 +117,7 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 	readme := string(readmeData)
 	for _, want := range []string{
 		"--harness=<claude|codex|copilot>",
-		"`amx_state` schema v3",
+		"`amx_state` schema v4",
 		"`owner_mismatch_prompt`",
 		"`owner_mismatch_burst`",
 		"`unknown_producer_fact`",
@@ -134,20 +149,20 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 	}
 }
 
-// extractSchemaV9ExampleFacts returns the shadow.facts array from the schema-v9
+// extractSchemaV10ExampleFacts returns the shadow.facts array from the schema-v10
 // export example decoded as a list of raw JSON objects.
-func extractSchemaV9ExampleFacts(t *testing.T, readme string) []map[string]json.RawMessage {
+func extractSchemaV10ExampleFacts(t *testing.T, readme string) []map[string]json.RawMessage {
 	t.Helper()
 
-	marker := "\"schema_version\": 9"
+	marker := "\"schema_version\": 10"
 	start := strings.Index(readme, marker)
 	if start < 0 {
-		t.Fatalf("README missing schema_version 9 example")
+		t.Fatalf("README missing schema_version 10 example")
 	}
 	rest := readme[start:]
 	idx := strings.Index(rest, "\"facts\"")
 	if idx < 0 {
-		t.Fatalf("schema-v9 example missing a facts array")
+		t.Fatalf("schema-v10 example missing a facts array")
 	}
 	rest = rest[idx:]
 	open := strings.IndexByte(rest, '[')
@@ -208,7 +223,7 @@ func sortedKeys(m map[string]bool) []string {
 	return out
 }
 
-func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV9Payload(t *testing.T) {
+func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	now := time.Unix(1_700_000_100, 0)
@@ -260,6 +275,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV9Payload(t *testing.T) {
 							Facts: []daemon.SourceFactSnapshot{{
 								Kind: daemon.SourceHarness, Key: "sess-1", Action: "elicitation", Icon: "question", Seq: 4,
 								PipeMode: true, Acked: true, AckedAt: 1_700_000_001, OriginWindowID: 91,
+								HarnessProcessHarness: "codex", HarnessProcessPID: 4321,
+								HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
 							}},
 						},
 						Watchdog: daemon.WindowDebugWatchdog{
@@ -337,8 +354,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV9Payload(t *testing.T) {
 	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
 		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
 	}
-	if payload.SchemaVersion != 9 {
-		t.Fatalf("schema_version = %d; want 9", payload.SchemaVersion)
+	if payload.SchemaVersion != 10 {
+		t.Fatalf("schema_version = %d; want 10", payload.SchemaVersion)
 	}
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())
@@ -390,7 +407,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV9Payload(t *testing.T) {
 	if len(window42.Shadow.Facts) != 1 || window42.Shadow.Facts[0].Kind != daemon.SourceHarness ||
 		window42.Shadow.Facts[0].Icon != "question" || !window42.Shadow.Facts[0].PipeMode ||
 		!window42.Shadow.Facts[0].Acked || window42.Shadow.Facts[0].AckedAt != 1_700_000_001 ||
-		window42.Shadow.Facts[0].OriginWindowID != 91 {
+		window42.Shadow.Facts[0].OriginWindowID != 91 || window42.Shadow.Facts[0].HarnessProcessHarness != "codex" ||
+		window42.Shadow.Facts[0].HarnessProcessPID != 4321 || window42.Shadow.Facts[0].HarnessProcessStartToken != "Mon Jul 13 10:11:12 2026" {
 		t.Fatalf("window 42 shadow facts = %+v", window42.Shadow.Facts)
 	}
 	if window42.Watchdog.LastEvent != "SourceExpired" || window42.Watchdog.SourceExpiries != 2 ||
@@ -568,9 +586,16 @@ func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
 					At: 1, Event: "Stop", Action: "stop", ResultIconState: "stop",
 					TraceID: "trace-v9", DecisionReason: "accepted", RenderGeneration: 2,
 				}}},
-				WindowMetadata: map[int]daemon.WindowDebugMetadata{42: {Renderer: daemon.WindowDebugRenderer{
-					Generations: []daemon.RenderGenerationTrace{{Generation: 2, TraceIDs: []string{"trace-v9"}, Stage: "rendered"}},
-				}}},
+				WindowMetadata: map[int]daemon.WindowDebugMetadata{42: {
+					Renderer: daemon.WindowDebugRenderer{
+						Generations: []daemon.RenderGenerationTrace{{Generation: 2, TraceIDs: []string{"trace-v9"}, Stage: "rendered"}},
+					},
+					Shadow: daemon.WindowDebugShadow{Facts: []daemon.SourceFactSnapshot{{
+						Kind: daemon.SourceHarness, Key: "claude:s1", Icon: "bolt",
+						HarnessProcessHarness: "claude", HarnessProcessPID: 4321,
+						HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
+					}}},
+				}},
 			}, nil
 		},
 	}
@@ -599,5 +624,68 @@ func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
 	event := window["events"].([]any)[0].(map[string]any)
 	if _, ok := event["trace_id"]; ok {
 		t.Fatalf("schema 8 leaked causal event fields: %v", event)
+	}
+	fact := window["shadow"].(map[string]any)["facts"].([]any)[0].(map[string]any)
+	for _, key := range []string{"ph", "pp", "pt"} {
+		if _, ok := fact[key]; ok {
+			t.Fatalf("schema 8 leaked process field %q: %v", key, fact)
+		}
+	}
+}
+
+func TestDaemonExportEventsCommandSchema9PreservesCausalFieldsWithoutProcessIdentity(t *testing.T) {
+	resetDaemonExportTestState(t)
+	client := &fakeDaemonExportClient{
+		health: daemon.Health{Alive: true},
+		export: func(int) (daemon.EventsExport, error) {
+			return daemon.EventsExport{
+				EventsByWindow: map[int][]daemon.SessionEvent{42: {{
+					At: 1, Event: "Stop", Action: "stop", ResultIconState: "stop",
+					TraceID: "trace-v9", DecisionReason: "accepted", RenderGeneration: 2,
+				}}},
+				WindowMetadata: map[int]daemon.WindowDebugMetadata{42: {
+					Renderer: daemon.WindowDebugRenderer{
+						Generations: []daemon.RenderGenerationTrace{{Generation: 2, TraceIDs: []string{"trace-v9"}, Stage: "rendered"}},
+					},
+					Shadow: daemon.WindowDebugShadow{Facts: []daemon.SourceFactSnapshot{{
+						Kind: daemon.SourceHarness, Key: "claude:s1", Icon: "bolt", CausalOrder: 1,
+						HarnessProcessHarness: "claude", HarnessProcessPID: 4321,
+						HarnessProcessStartToken: "Mon Jul 13 10:11:12 2026",
+					}}},
+				}},
+			}, nil
+		},
+	}
+	newDaemonExportClient = func() daemonExportClient { return client }
+	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	daemonExportEventsSchema = daemon.EventsExportSchemaV9
+	daemonExportEventsPretty = false
+	daemonExportEventsWindow = 42
+	var out bytes.Buffer
+	daemonExportEventsCmd.SetOut(&out)
+
+	if err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(out.Bytes(), &raw); err != nil {
+		t.Fatalf("Unmarshal: %v\n%s", err, out.String())
+	}
+	if got := int(raw["schema_version"].(float64)); got != 9 {
+		t.Fatalf("schema_version = %d; want 9", got)
+	}
+	window := raw["windows"].([]any)[0].(map[string]any)
+	if _, ok := window["renderer"].(map[string]any)["generations"]; !ok {
+		t.Fatalf("schema 9 lost renderer generations: %v", window)
+	}
+	event := window["events"].([]any)[0].(map[string]any)
+	if event["trace_id"] != "trace-v9" {
+		t.Fatalf("schema 9 lost causal event fields: %v", event)
+	}
+	fact := window["shadow"].(map[string]any)["facts"].([]any)[0].(map[string]any)
+	for _, key := range []string{"ph", "pp", "pt"} {
+		if _, ok := fact[key]; ok {
+			t.Fatalf("schema 9 leaked process field %q: %v", key, fact)
+		}
 	}
 }
