@@ -1,6 +1,6 @@
 package cmd
 
-// Shared invariant evaluation over the daemon's schema-v8 export snapshot.
+// Shared invariant evaluation over the daemon's schema-v9 export snapshot.
 // `amx doctor` evaluates one snapshot; `amx daemon audit` re-evaluates every
 // sample interval. Severities: a "failure" is an observed correctness
 // violation (strict doctor and audit exit nonzero on any), a "warning" is
@@ -31,6 +31,7 @@ const (
 	checkShadowCurrentMismatch = "shadow_current_mismatch"
 	checkQueueSaturation       = "queue_saturation"
 	checkRenderGenerationDrift = "render_generation_drift"
+	checkRenderCausalBound     = "render_causal_bound"
 	checkBuildMismatch         = "build_mismatch"
 	checkHarnessDrift          = "harness_drift"
 	checkClosedTombstone       = "closed_tombstone"
@@ -228,6 +229,17 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 				"window dirty for %ds (max %ds); queued gen %d, rendered gen %d, failed gen %d",
 				meta.Renderer.DirtyAgeSeconds, renderGenerationDriftMaxSeconds,
 				meta.Renderer.QueuedGen, meta.Renderer.RenderedGen, meta.Renderer.FailedGen)
+		}
+
+		for _, generation := range meta.Renderer.Generations {
+			if len(generation.TraceIDs) > daemon.MaxRenderCausalIDs ||
+				len(generation.RequestIDs) > daemon.MaxRenderCausalIDs ||
+				len(generation.SourceEventIDs) > daemon.MaxRenderCausalIDs {
+				add(severityFailure, checkRenderCausalBound, id,
+					"render generation %d exceeds the %d-ID causal bound (traces=%d requests=%d source_events=%d)",
+					generation.Generation, daemon.MaxRenderCausalIDs, len(generation.TraceIDs),
+					len(generation.RequestIDs), len(generation.SourceEventIDs))
+			}
 		}
 
 		// Acknowledged nonterminal facts are bounded replay cutoffs. Approaching

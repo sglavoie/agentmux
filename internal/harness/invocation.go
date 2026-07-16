@@ -31,6 +31,9 @@ func newInvocation(h Impl, input InvocationInput, args []string) Invocation {
 		Environment:   cloneEnvironment(input.Environment),
 		CWD:           input.CWD,
 		InitialPrompt: input.InitialPrompt,
+		SessionID:     input.SessionID,
+		LaunchID:      input.NativeLogging.LaunchID,
+		NativeLogging: input.nativeLogging,
 	}
 }
 

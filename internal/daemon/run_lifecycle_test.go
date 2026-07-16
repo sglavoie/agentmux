@@ -280,6 +280,11 @@ func TestRun_BindsSocketWithHugeMalformedTranscriptIndex(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
 	t.Setenv("HOME", dir)
+	// This regression measures whether a huge malformed transcript index delays
+	// startup. Keep the unrelated bounded Kitty snapshot from consuming its
+	// 400 ms production budget: an empty tool path makes the initial snapshot
+	// fail immediately and leaves the 500 ms assertion focused on transcript I/O.
+	t.Setenv("PATH", t.TempDir())
 
 	socketPath := SocketPath()
 	indexPath := filepath.Join(dir, ".local", "share", "agent-mux", "transcripts.json")

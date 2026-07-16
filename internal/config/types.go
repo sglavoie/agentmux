@@ -53,6 +53,7 @@ type Defaults struct {
 	Watchdog             WatchdogConfig       `toml:"watchdog"`               // per-state stale-detection thresholds (seconds)
 	SessionArchive       SessionArchiveConfig `toml:"session_archive"`        // retention policy for the searchable session-transcript index
 	Handoff              HandoffConfig        `toml:"handoff"`                // bounded cross-harness context-pack generation
+	Diagnostics          DiagnosticsConfig    `toml:"diagnostics"`            // private event journal and native/daemon log retention
 	Args                 []string             `toml:"args"`                   // preferred shared launch args
 	ClaudeFlags          []string             `toml:"claude_flags"`           // legacy alias for args
 	ConfirmDestructive   bool                 `toml:"confirm_destructive"`    // direct dashboard r always confirms; when true, close/actions-overlay restart use modal confirm instead of toast paths
@@ -61,6 +62,27 @@ type Defaults struct {
 	Jump                 JumpConfig           `toml:"jump"`            // bracket-key (]/[ and }/{) attention-state navigation
 	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the `O` keybinding (Open in editor)
 	PlansDirectory       string               `toml:"plans_directory"` // root for the `P` keybinding's plans index; defaults to ~/.local/share/agent-plans
+}
+
+// DiagnosticsConfig controls private diagnostic persistence. Pointer booleans
+// preserve the difference between an omitted key (the safe observable default
+// is enabled) and an explicit false value.
+type DiagnosticsConfig struct {
+	JournalEnabled      *bool `toml:"journal_enabled"`
+	JournalKeepDays     int   `toml:"journal_keep_days"`
+	JournalMaxMiB       int   `toml:"journal_max_mib"`
+	NativeLogging       *bool `toml:"native_logging"`
+	NativeKeepDays      int   `toml:"native_keep_days"`
+	NativeMaxMiB        int   `toml:"native_max_mib"`
+	NativeSessionMaxMiB int   `toml:"native_session_max_mib"`
+}
+
+func (d DiagnosticsConfig) JournalEnabledValue() bool {
+	return d.JournalEnabled == nil || *d.JournalEnabled
+}
+
+func (d DiagnosticsConfig) NativeLoggingValue() bool {
+	return d.NativeLogging == nil || *d.NativeLogging
 }
 
 // JumpConfig controls which session states the TUI bracket-key navigation

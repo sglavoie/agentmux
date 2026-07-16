@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"sort"
@@ -35,12 +36,31 @@ var daemonStartCmd = &cobra.Command{
 			ccerrors.Print(err)
 			return err
 		}
+		logger, closer, logDir, err := daemon.NewOperationalLogger(
+			cfg.Defaults.Diagnostics,
+			debugEnabled(),
+			os.Getenv("AMX_DAEMON_DETACHED") != "1",
+		)
+		if err != nil {
+			return fmt.Errorf("initializing daemon logging: %w", err)
+		}
+		previousLogger := slog.Default()
+		slog.SetDefault(logger)
+		defer func() {
+			slog.SetDefault(previousLogger)
+			_ = closer.Close()
+		}()
+		slog.Info("daemon: structured logging initialized", "directory", logDir)
 
 		ctx, cancel := signal.NotifyContext(context.Background(),
 			os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 
-		return daemon.Run(ctx, cfg)
+		err = daemon.Run(ctx, cfg)
+		if err != nil {
+			slog.Error("daemon: stopped with failure", "error", err)
+		}
+		return err
 	},
 }
 
@@ -116,6 +136,7 @@ var (
 	daemonExportEventsLast          int
 	daemonExportEventsOutput        string
 	daemonExportEventsPretty        bool
+	daemonExportEventsSchema        int
 	daemonSocketPath                = daemon.SocketPath
 	newDaemonLifecycleClient        = func() daemonLifecycleClient { return daemon.NewClient() }
 	newDaemonExportClient           = func() daemonExportClient { return daemon.NewClient() }
@@ -284,12 +305,13 @@ func resolveDaemonExportWindowID(cmd *cobra.Command) (int, error) {
 
 var daemonExportEventsCmd = &cobra.Command{
 	Use:   "export-events",
-	Short: "Dump schema-v8 hook event history as JSON for investigation",
-	Long: `Export the daemon's schema-v8 investigation snapshot as JSON.
+	Short: "Dump hook event history as JSON for investigation",
+	Long: `Export the daemon's schema-v9 investigation snapshot as JSON.
 
 The payload is organized as a per-window array so each entry carries its own
 event list, durable daemon metadata, and best-effort live Kitty/session
-metadata without paired map lookups.`,
+metadata without paired map lookups. Use --schema 8 for compatibility with
+pre-causal consumers.`,
 	Example: `  amx daemon export-events
   amx daemon export-events --current-window
   amx daemon export-events --current-window --last 25
@@ -299,6 +321,9 @@ metadata without paired map lookups.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if daemonExportEventsLast < 0 {
 			return fmt.Errorf("--last must be >= 0")
+		}
+		if daemonExportEventsSchema != daemon.EventsExportSchemaV8 && daemonExportEventsSchema != daemon.EventsExportSchemaVersion {
+			return fmt.Errorf("--schema must be 8 or 9")
 		}
 		requestedWindowID, err := resolveDaemonExportWindowID(cmd)
 		if err != nil {
@@ -322,15 +347,19 @@ metadata without paired map lookups.`,
 		}
 
 		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, requestedWindowID, daemonExportEventsLast, daemonExportNow())
+		projected, err := daemon.ProjectExportEventsPayload(payload, daemonExportEventsSchema)
+		if err != nil {
+			return err
+		}
 
 		var (
 			data      []byte
 			encodeErr error
 		)
 		if daemonExportEventsPretty {
-			data, encodeErr = json.MarshalIndent(payload, "", "  ")
+			data, encodeErr = json.MarshalIndent(projected, "", "  ")
 		} else {
-			data, encodeErr = json.Marshal(payload)
+			data, encodeErr = json.Marshal(projected)
 		}
 		if encodeErr != nil {
 			return fmt.Errorf("encode events: %w", encodeErr)
@@ -355,6 +384,7 @@ func init() {
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "Keep only the last N events per exported window (0 = no limit)")
 	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "Write JSON to this file instead of stdout")
 	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "Pretty-print JSON with 2-space indent")
+	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", daemon.EventsExportSchemaVersion, "Export schema version (8 or 9)")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd, daemonRestartCmd, daemonExportEventsCmd)
 }

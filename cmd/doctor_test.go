@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +13,9 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -24,6 +29,7 @@ func resetDoctorTestState(t *testing.T) {
 	oldStat := doctorStat
 	oldNow := doctorNow
 	oldCLIBuild := doctorCLIBuild
+	oldDiagnosticPaths := doctorDiagnosticPaths
 	oldJSON := doctorJSON
 	oldStrict := doctorStrict
 	oldOut := doctorCmd.OutOrStdout()
@@ -36,12 +42,17 @@ func resetDoctorTestState(t *testing.T) {
 		doctorStat = oldStat
 		doctorNow = oldNow
 		doctorCLIBuild = oldCLIBuild
+		doctorDiagnosticPaths = oldDiagnosticPaths
 		doctorJSON = oldJSON
 		doctorStrict = oldStrict
 		doctorCmd.SetOut(oldOut)
 	})
 	doctorJSON = false
 	doctorStrict = false
+	diagnosticRoot := filepath.Join(t.TempDir(), "diagnostics")
+	doctorDiagnosticPaths = func() (diagnostics.Paths, error) {
+		return diagnostics.PathsForRoot(diagnosticRoot), nil
+	}
 }
 
 // doctorTestBuild is a matching CLI/daemon artifact identity for tests that
@@ -119,5 +130,114 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("doctor output missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestDoctorRendererTreatsSharedTabAsConvergedWhenAnyPaneMatches(t *testing.T) {
+	snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
+		42: {Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, Looping: false, LoopingSet: true}},
+		43: {Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, Looping: true, LoopingSet: true}},
+	}}
+	liveByID := map[int]daemon.WindowLiveMetadata{
+		42: {Found: true, OSWindowID: 1, TabID: 7, IconState: "bolt", Looping: false},
+		43: {Found: true, OSWindowID: 1, TabID: 7, IconState: "bolt", Looping: false},
+	}
+
+	var out bytes.Buffer
+	var failures []string
+	if err := writeDoctorRenderer(&out, snapshot, liveByID, true, func(format string, args ...any) {
+		failures = append(failures, fmt.Sprintf(format, args...))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "renderer drift: none") {
+		t.Fatalf("shared-tab renderer output = %q, want no drift", out.String())
+	}
+	if len(failures) != 0 {
+		t.Fatalf("shared-tab renderer failures = %v, want none", failures)
+	}
+}
+
+func TestDoctorReportsVerifiedDisabledHooksAsFailure(t *testing.T) {
+	resetDoctorTestState(t)
+	home := t.TempDir()
+	binary := filepath.Join(t.TempDir(), "amx")
+	if err := os.WriteFile(filepath.Join(home, "settings.json"), []byte(`{"disableAllHooks":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Accounts: []config.Account{{
+		Name: "work", Harness: harness.Claude, HomeDir: home,
+	}}}
+	if _, err := hooks.MergeAll(cfg, "", binary); err != nil {
+		t.Fatalf("MergeAll: %v", err)
+	}
+	doctorLoadConfig = func() (*config.Config, error) { return cfg, nil }
+	doctorExecutable = func() (string, error) { return binary, nil }
+
+	var out bytes.Buffer
+	var failures []string
+	err := writeDoctorHooks(&out, func(format string, args ...any) {
+		failures = append(failures, fmt.Sprintf(format, args...))
+	}, func(string, ...any) {})
+	if err != nil {
+		t.Fatalf("writeDoctorHooks: %v", err)
+	}
+	if !strings.Contains(out.String(), "activation=failure") {
+		t.Fatalf("doctor hook output did not report activation failure:\n%s", out.String())
+	}
+	if !slices.ContainsFunc(failures, func(message string) bool {
+		return strings.Contains(message, "disableAllHooks=true")
+	}) {
+		t.Fatalf("doctor failures = %v, want disableAllHooks evidence", failures)
+	}
+}
+
+func TestDoctorReportsNativeCoverageAndDefersActivePruning(t *testing.T) {
+	resetDoctorTestState(t)
+	enabled := true
+	cfg := &config.Config{Defaults: config.Defaults{Diagnostics: config.DiagnosticsConfig{
+		NativeLogging: &enabled, NativeKeepDays: 14, NativeMaxMiB: 1, NativeSessionMaxMiB: 1,
+	}}}
+	doctorLoadConfig = func() (*config.Config, error) { return cfg, nil }
+	paths, err := doctorDiagnosticPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	launchID := "88888888-8888-4888-8888-888888888888"
+	dir, err := diagnostics.EnsureNativeLaunch(paths, launchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeLog := filepath.Join(dir, "debug.log")
+	if err := os.WriteFile(activeLog, make([]byte, 2<<20), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{
+		{Windows: []kitty.Window{{UserVars: kitty.UserVars{Profile: "managed", LaunchID: launchID, NativeCoverage: "managed"}}}},
+		{Windows: []kitty.Window{{UserVars: kitty.UserVars{Profile: "external", LaunchID: "99999999-9999-4999-8999-999999999999", NativeCoverage: "external"}}}},
+		{Windows: []kitty.Window{{UserVars: kitty.UserVars{Profile: "degraded", LaunchID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", NativeCoverage: "degraded"}}}},
+		{Windows: []kitty.Window{{ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"/usr/local/bin/codex"}}}}}},
+	}}}
+	var out bytes.Buffer
+	var warnings []string
+	if err := writeDoctorNativeLogs(&out, windows, true, func(format string, args ...any) {
+		warnings = append(warnings, fmt.Sprintf(format, args...))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"native privacy: raw local logs",
+		"native coverage: managed=1 external=1 degraded=1 disabled=0 unmanaged=1",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("native doctor output missing %q:\n%s", want, out.String())
+		}
+	}
+	if !slices.ContainsFunc(warnings, func(value string) bool { return strings.Contains(value, "pruning is deferred until exit") }) ||
+		!slices.ContainsFunc(warnings, func(value string) bool { return strings.Contains(value, "coverage cannot be guaranteed") }) {
+		t.Fatalf("warnings = %v", warnings)
+	}
+	if info, err := os.Stat(activeLog); err != nil || info.Size() != 2<<20 {
+		t.Fatalf("active log was mutated: info=%v err=%v", info, err)
 	}
 }

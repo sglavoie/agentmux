@@ -51,6 +51,7 @@ type WindowState struct {
 	FailedGen         uint64
 	DirtySince        time.Time
 	LastRenderLatency time.Duration
+	RenderGenerations []RenderGenerationTrace
 
 	// Shadow reducer state (source-scoped facts).
 	// Reducer is the authoritative source for this window's visible icon and

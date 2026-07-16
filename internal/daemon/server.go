@@ -240,15 +240,40 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		writeResponse(w, Response{OK: false, Error: "invalid JSON"})
 		return
 	}
+	req = ensureRequestTraceID(req)
 
 	// Deduplicate state-changing retries: a request carrying a stable ID is
 	// applied exactly once, so an ambiguous-timeout resend replays the original
 	// response instead of mutating the icon a second time. Legacy requests
 	// (empty ID) flow straight through. Deduplication happens BEFORE queue
 	// admission so a resend never consumes a second reducer slot.
-	resp := s.dedupe.do(req.RequestID, func() Response {
-		return s.process(req)
-	})
+	var resp Response
+	if serializedRequest(req.Type) {
+		resp = s.dedupe.doObserved(req.RequestID, func(saturated bool) Response {
+			if saturated {
+				req.saturationReason = appendSaturationReason(req.saturationReason, "dedupe_cache")
+			}
+			return s.process(req)
+		})
+	} else {
+		// Read-only and diagnostic requests must reflect current state rather
+		// than replaying a cached snapshot merely because a caller supplied an
+		// ID. Only reducer-bound ingress needs at-most-once application.
+		resp = s.process(req)
+	}
+	if resp.Delivery != nil {
+		// The dedupe cache owns the original response. Stamp the current wire
+		// attempt onto a copy so replaying attempt N never mutates the cached
+		// acknowledgement retained for later duplicates.
+		resp.Delivery = cloneDeliveryAcknowledgement(resp.Delivery)
+		resp.Delivery.TraceID = req.TraceID
+		resp.Delivery.RequestID = req.RequestID
+		resp.Delivery.SourceEventID = req.SourceEventID
+		resp.Delivery.Attempt = req.Attempt
+		if resp.Delivery.Status == DeliveryAcknowledgementDuplicate {
+			s.handler.recordDuplicateDelivery(req, resp.Delivery)
+		}
+	}
 	writeResponse(w, resp)
 }
 

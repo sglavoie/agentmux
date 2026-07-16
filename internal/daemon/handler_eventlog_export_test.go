@@ -1,8 +1,60 @@
 package daemon
 
 import (
+	"encoding/json"
 	"testing"
 )
+
+func TestProjectExportEventsPayloadV8RemovesSchemaV9CausalFields(t *testing.T) {
+	payload := ExportEventsPayload{
+		SchemaVersion: EventsExportSchemaVersion,
+		Windows: []ExportWindow{{
+			WindowID: 7,
+			Renderer: WindowDebugRenderer{
+				DesiredIcon: "bolt", QueuedGen: 3,
+				Generations: []RenderGenerationTrace{{Generation: 3, TraceIDs: []string{"trace-1"}, Stage: "rendered"}},
+			},
+			Events: []SessionEvent{{
+				At: 1, Event: "PreToolUse", Action: "active", ResultIconState: "bolt",
+				DaemonSeq: 2, OriginWindowID: 8, TraceID: "trace-1", RequestID: "request-1",
+				DecisionReason: DecisionReasonAccepted, RenderGeneration: 3, RenderOutcome: "rendered",
+				NotificationOutcome: "sent", ProbeTraceIDs: []string{"probe-1"},
+			}},
+		}},
+	}
+
+	projected, err := ProjectExportEventsPayload(payload, EventsExportSchemaV8)
+	if err != nil {
+		t.Fatalf("ProjectExportEventsPayload: %v", err)
+	}
+	data, err := json.Marshal(projected)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if got := int(raw["schema_version"].(float64)); got != EventsExportSchemaV8 {
+		t.Fatalf("schema_version = %d; want 8", got)
+	}
+	window := raw["windows"].([]any)[0].(map[string]any)
+	renderer := window["renderer"].(map[string]any)
+	if _, ok := renderer["generations"]; ok {
+		t.Fatalf("schema v8 renderer leaked generations: %v", renderer)
+	}
+	event := window["events"].([]any)[0].(map[string]any)
+	for _, key := range []string{"trace_id", "request_id", "decision_reason", "render_generation", "notification_outcome", "probe_trace_ids"} {
+		if _, ok := event[key]; ok {
+			t.Fatalf("schema v8 event leaked %q: %v", key, event)
+		}
+	}
+	for _, key := range []string{"daemon_seq", "origin_window_id", "result_icon_state"} {
+		if _, ok := event[key]; !ok {
+			t.Fatalf("schema v8 event lost prior field %q: %v", key, event)
+		}
+	}
+}
 
 func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 	h := newTestHandler()

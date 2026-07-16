@@ -12,11 +12,15 @@ import (
 // the daemon's global receipt sequence and, when the producer did not set one,
 // a nanosecond receipt time — so exports can totally order receipts across
 // windows regardless of which path appended them.
-func (h *Handler) appendEventLocked(windowID int, event SessionEvent) {
+func (h *Handler) appendEventLocked(windowID int, event SessionEvent) SessionEvent {
 	st := h.ensureWindowStateLocked(windowID)
 
 	h.eventSeq++
 	event.DaemonSeq = h.eventSeq
+	if event.eventRef != nil {
+		event.eventRef.daemonSeq = event.DaemonSeq
+		event.eventRef = nil
+	}
 	if event.ReceivedAtNs == 0 {
 		event.ReceivedAtNs = time.Now().UnixNano()
 	}
@@ -41,6 +45,7 @@ func (h *Handler) appendEventLocked(windowID int, event SessionEvent) {
 		buf = buf[len(buf)-maxEventsPerWindow:]
 	}
 	st.EventLog = buf
+	return event
 }
 
 func (h *Handler) syncRendererMetadataLocked(windowID int) {
@@ -65,6 +70,7 @@ func (h *Handler) syncRendererMetadataLocked(windowID int) {
 		meta.Renderer.DirtySince = st.DirtySince.Unix()
 	}
 	meta.Renderer.LastRenderLatencyMs = st.LastRenderLatency.Milliseconds()
+	meta.Renderer.Generations = cloneRenderGenerationTraces(st.RenderGenerations)
 	meta.Renderer.KittyListenOn = h.kittySockets[windowID]
 	if meta.Renderer.KittyListenOn == "" {
 		meta.Renderer.KittyListenOn = h.lastKittyListenOn

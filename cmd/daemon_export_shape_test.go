@@ -16,7 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// TestDaemonStateAcceptanceDocSchemaV8READMEFactKeys pins the schema-v8
+// TestDaemonStateAcceptanceDocSchemaV9READMEFactKeys pins the schema-v9
 // export-events example in README.md to the actual wire shape of
 // daemon.SourceFactSnapshot. WindowDebugShadow.Facts serializes that type
 // directly, so shadow.facts[] entries can only use its compact JSON tags
@@ -24,22 +24,23 @@ import (
 // round-trip test in this file exercised the Go type but never guarded the raw
 // key spelling in the documentation snippet, letting the example drift to keys
 // that amx daemon export-events cannot emit.
-func TestDaemonStateAcceptanceDocSchemaV8READMEFactKeys(t *testing.T) {
+func TestDaemonStateAcceptanceDocSchemaV9READMEFactKeys(t *testing.T) {
 	data, err := os.ReadFile("../README.md")
 	if err != nil {
 		t.Fatalf("ReadFile(../README.md): %v", err)
 	}
 
-	facts := extractSchemaV8ExampleFacts(t, string(data))
+	readme := string(data)
+	facts := extractSchemaV9ExampleFacts(t, readme)
 	if len(facts) == 0 {
-		t.Fatalf("README schema-v8 example has no shadow.facts entries")
+		t.Fatalf("README schema-v9 example has no shadow.facts entries")
 	}
 
 	valid := sourceFactSnapshotWireTags()
 	for i, fact := range facts {
 		for key := range fact {
 			if !valid[key] {
-				t.Fatalf("README schema-v8 facts[%d] uses key %q, which is not a SourceFactSnapshot wire tag (valid: %v)", i, key, sortedKeys(valid))
+				t.Fatalf("README schema-v9 facts[%d] uses key %q, which is not a SourceFactSnapshot wire tag (valid: %v)", i, key, sortedKeys(valid))
 			}
 		}
 	}
@@ -50,7 +51,7 @@ func TestDaemonStateAcceptanceDocSchemaV8READMEFactKeys(t *testing.T) {
 	for _, fact := range facts {
 		for _, need := range []string{"k", "y", "i"} {
 			if _, ok := fact[need]; !ok {
-				t.Fatalf("README schema-v8 fact object missing compact key %q: %v", need, fact)
+				t.Fatalf("README schema-v9 fact object missing compact key %q: %v", need, fact)
 			}
 		}
 		var snap daemon.SourceFactSnapshot
@@ -81,10 +82,15 @@ func TestDaemonStateAcceptanceDocSchemaV8READMEFactKeys(t *testing.T) {
 		}
 	}
 	if !sawPipeMode {
-		t.Fatalf("README schema-v8 example must include a pipe-mode fact with pm:true")
+		t.Fatalf("README schema-v9 example must include a pipe-mode fact with pm:true")
 	}
 	if !sawOrigin || !sawAckedAt {
-		t.Fatalf("README schema-v8 example must include ow origin and an acknowledged aa timestamp")
+		t.Fatalf("README schema-v9 example must include ow origin and an acknowledged aa timestamp")
+	}
+	for _, want := range []string{`--schema 8`, `"reducer_decision": "applied"`, `"generations"`} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README schema-v9 guidance missing %q", want)
+		}
 	}
 }
 
@@ -128,20 +134,20 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 	}
 }
 
-// extractSchemaV8ExampleFacts returns the shadow.facts array from the schema-v8
+// extractSchemaV9ExampleFacts returns the shadow.facts array from the schema-v9
 // export example decoded as a list of raw JSON objects.
-func extractSchemaV8ExampleFacts(t *testing.T, readme string) []map[string]json.RawMessage {
+func extractSchemaV9ExampleFacts(t *testing.T, readme string) []map[string]json.RawMessage {
 	t.Helper()
 
-	marker := "\"schema_version\": 8"
+	marker := "\"schema_version\": 9"
 	start := strings.Index(readme, marker)
 	if start < 0 {
-		t.Fatalf("README missing schema_version 8 example")
+		t.Fatalf("README missing schema_version 9 example")
 	}
 	rest := readme[start:]
 	idx := strings.Index(rest, "\"facts\"")
 	if idx < 0 {
-		t.Fatalf("schema-v8 example missing a facts array")
+		t.Fatalf("schema-v9 example missing a facts array")
 	}
 	rest = rest[idx:]
 	open := strings.IndexByte(rest, '[')
@@ -202,7 +208,7 @@ func sortedKeys(m map[string]bool) []string {
 	return out
 }
 
-func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV8Payload(t *testing.T) {
+func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV9Payload(t *testing.T) {
 	resetDaemonExportTestState(t)
 
 	now := time.Unix(1_700_000_100, 0)
@@ -331,8 +337,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV8Payload(t *testing.T) {
 	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
 		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
 	}
-	if payload.SchemaVersion != 8 {
-		t.Fatalf("schema_version = %d; want 8", payload.SchemaVersion)
+	if payload.SchemaVersion != 9 {
+		t.Fatalf("schema_version = %d; want 9", payload.SchemaVersion)
 	}
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())
@@ -549,5 +555,49 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.
 	}
 	if !window42.Live.Found {
 		t.Fatalf("window 42 live.found = false; want true")
+	}
+}
+
+func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
+	resetDaemonExportTestState(t)
+	client := &fakeDaemonExportClient{
+		health: daemon.Health{Alive: true},
+		export: func(int) (daemon.EventsExport, error) {
+			return daemon.EventsExport{
+				EventsByWindow: map[int][]daemon.SessionEvent{42: {{
+					At: 1, Event: "Stop", Action: "stop", ResultIconState: "stop",
+					TraceID: "trace-v9", DecisionReason: "accepted", RenderGeneration: 2,
+				}}},
+				WindowMetadata: map[int]daemon.WindowDebugMetadata{42: {Renderer: daemon.WindowDebugRenderer{
+					Generations: []daemon.RenderGenerationTrace{{Generation: 2, TraceIDs: []string{"trace-v9"}, Stage: "rendered"}},
+				}}},
+			}, nil
+		},
+	}
+	newDaemonExportClient = func() daemonExportClient { return client }
+	newDaemonExportKitty = func() kittyWindowLister { return fakeKittyWindowLister{} }
+	daemonExportEventsSchema = daemon.EventsExportSchemaV8
+	daemonExportEventsPretty = false
+	daemonExportEventsWindow = 42
+	var out bytes.Buffer
+	daemonExportEventsCmd.SetOut(&out)
+
+	if err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(out.Bytes(), &raw); err != nil {
+		t.Fatalf("Unmarshal: %v\n%s", err, out.String())
+	}
+	if got := int(raw["schema_version"].(float64)); got != 8 {
+		t.Fatalf("schema_version = %d; want 8", got)
+	}
+	window := raw["windows"].([]any)[0].(map[string]any)
+	if _, ok := window["renderer"].(map[string]any)["generations"]; ok {
+		t.Fatalf("schema 8 leaked renderer generations: %v", window)
+	}
+	event := window["events"].([]any)[0].(map[string]any)
+	if _, ok := event["trace_id"]; ok {
+		t.Fatalf("schema 8 leaked causal event fields: %v", event)
 	}
 }

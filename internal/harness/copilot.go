@@ -26,15 +26,20 @@ func (copilotHarness) InvocationCapabilities() InvocationCapabilities {
 
 func (h copilotHarness) BuildInvocation(kind InvocationKind, input InvocationInput) (Invocation, error) {
 	args := append([]string(nil), input.ProfileArgs...)
+	args = applyNativeLogging(h.Name(), &input, args)
 	switch kind {
 	case InvocationFresh:
-		return newInvocation(h, input, withPrompt(args, input.InitialPrompt)), nil
+		invocation := newInvocation(h, input, withPrompt(args, input.InitialPrompt))
+		invocation.Kind = kind
+		return invocation, nil
 	case InvocationResume:
 		if err := requireSessionID(h, kind, input); err != nil {
 			return Invocation{}, err
 		}
 		args = append(args, "--resume="+input.SessionID)
-		return newInvocation(h, input, withPrompt(args, input.InitialPrompt)), nil
+		invocation := newInvocation(h, input, withPrompt(args, input.InitialPrompt))
+		invocation.Kind = kind
+		return invocation, nil
 	case InvocationFork:
 		return Invocation{}, unsupportedInvocation(h, kind)
 	default:

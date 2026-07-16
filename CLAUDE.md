@@ -79,6 +79,10 @@ caches, handoffs, worktrees, launch overrides, and ordinary daemon locks.
 - `internal/worktree`: bounded managed Git worktree creation and cleanup.
 - `internal/daemon`: IPC, reducer facts, durable Kitty state, live activity evidence,
   diagnostics, and the single renderer writer.
+- `internal/diagnostics`: private fail-open causal journals, operational and
+  native logs, temporary raw captures, and bounded diagnostic storage.
+- `internal/debugger`: offline-first status, query, explanation, bundle, and
+  replay services shared by debug, doctor, and hook-status surfaces.
 - `tui`: live-session dashboard, specialized transcript/plan search, and
   deterministic in-process scenario harness.
 
@@ -132,7 +136,11 @@ Retained continuity commands live under `session`. Successful `--json` output us
 `{"schema_version":1,"data":...}`. Failures use the common structured error
 envelope; partial durable success returns data with a nonzero quiet exit.
 `doctor --json` is a versioned diagnostic report with the same top-level schema
-version but intentionally includes health fields directly.
+version but intentionally includes health fields directly. The `debug` report
+families (`status`, `tail`, `probe`, `explain`, `capture`, `bundle`, and
+`replay`) likewise emit command-specific schema-v1 reports directly rather than
+using the common `data` wrapper; `debug tail --follow --json` emits one
+schema-v1 record wrapper per JSON line.
 
 When adding a command:
 

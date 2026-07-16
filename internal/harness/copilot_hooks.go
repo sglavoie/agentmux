@@ -21,24 +21,35 @@ type copilotHookDef struct {
 	TimeoutSec int    `json:"timeoutSec,omitempty"`
 }
 
-// copilotHookEvents lists the GitHub Copilot CLI hook events Agent Mux installs.
-var copilotHookEvents = []string{
-	"sessionStart",
-	"sessionEnd",
-	"userPromptSubmitted",
-	"preToolUse",
-	"postToolUse",
-	"postToolUseFailure",
-	"permissionRequest",
-	"agentStop",
-	"subagentStart",
-	"subagentStop",
-	"errorOccurred",
-	"preCompact",
-	"notification",
+const (
+	copilotHooksDocumentation = "https://docs.github.com/en/copilot/reference/hooks-reference"
+	copilotHooksVerifiedCLI   = "1.0.70"
+)
+
+var copilotHookMatrix = []HookEventContract{
+	{CanonicalName: "sessionStart", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "sessionEnd", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "userPromptSubmitted", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "preToolUse", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "postToolUse", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "postToolUseFailure", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "permissionRequest", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, SpecialSemantics: "fires before Copilot permission resolution and may be non-blocking until an explicit prompt", DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "agentStop", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "subagentStart", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "subagentStop", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "errorOccurred", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "preCompact", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
+	{CanonicalName: "notification", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, SpecialSemantics: "notification_type decides whether the event changes state or remains observational", DocumentationSource: copilotHooksDocumentation, VerifiedCLIVersion: copilotHooksVerifiedCLI},
 }
 
+// copilotHookEvents lists the GitHub Copilot CLI hook events Agent Mux installs.
+var copilotHookEvents = installedHookEventNames(copilotHookMatrix)
+
 type copilotHookContract struct{}
+
+func (copilotHookContract) EventMatrix() []HookEventContract {
+	return cloneHookEventMatrix(copilotHookMatrix)
+}
 
 func (copilotHookContract) InstallPath(homeDir string) string {
 	return filepath.Join(homeDir, "hooks", HookFileName())

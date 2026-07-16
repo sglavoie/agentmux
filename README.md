@@ -512,6 +512,22 @@ amx daemon export-events
 amx doctor
 ```
 
+For delivery and state problems, the first-line workflow is offline-first:
+
+```bash
+amx debug status
+amx debug tail --last 50
+amx debug probe
+amx debug explain --source-event <source-event-id>
+amx debug bundle --mode share -o agent-mux-debug.tar.gz
+amx debug replay agent-mux-debug.tar.gz
+```
+
+The commands share selectors for harness, profile, Kitty window, native
+session, ASL run, event, trace, request, upstream source event, stage, outcome,
+and time range. See [Debugging event delivery](docs/debugging.md) for the
+failure matrix, privacy model, bundle guidance, and operator smoke procedure.
+
 It listens on:
 
 ```text
@@ -567,7 +583,14 @@ checklist, see [Daemon State Acceptance Evidence](docs/daemon_state_acceptance.m
 
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema-v8 JSON snapshot for investigation.
+`amx daemon export-events` writes a schema v9 JSON snapshot for investigation.
+Version 9 adds causal trace/request/source-event identities, sanitized reducer
+inputs and outcomes, routing evidence, request-scoped saturation, bounded
+render generations, notification dispositions, and child-probe links. Raw
+payloads, prompts, tool arguments, and transcript text are not included.
+Pass `--schema 8` for the previous contract; it is an explicit compatibility
+projection that cannot accidentally expose v9-only fields.
+
 Version 8 retains every v7 field and adds producer-pane origins to events
 (`events[].origin_window_id`) and source facts (`shadow.facts[].ow`), plus the
 acknowledgement timestamp `shadow.facts[].aa` for acknowledged facts. Version 7
@@ -601,7 +624,7 @@ window can be inspected without paired map lookups:
 
 ```json
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "daemon": { "pid": 1234, "uptime_seconds": 97, "ready": true, "build": { ... }, "metrics": { ... } },
   "cli_build": { ... },
   "windows": [
@@ -609,11 +632,11 @@ window can be inspected without paired map lookups:
       "window_id": 42,
       "stats": { ... },
       "durable": { ... },
-      "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0, "queued_gen": 7, "rendered_gen": 7 },
+      "renderer": { "desired_icon": "bolt", "state_set": true, "render_failures": 0, "queued_gen": 7, "rendered_gen": 7, "generations": [ { "generation": 7, "source_event_ids": ["run-1:2"], "stage": "rendered", "outcome": "success" } ] },
       "shadow": { "effective_icon": "bolt", "effective_looping": true, "facts": [ { "k": "harness", "y": "sess-pipe", "i": "bolt", "o": 10, "ow": 91, "pm": true }, { "k": "harness", "y": "sess-1", "i": "bolt", "o": 11, "ow": 42 }, { "k": "harness", "y": "sess-old", "i": "bolt", "o": 9, "ak": true, "aa": 1700000000, "ow": 91 } ] },
       "watchdog": { "last_event": "...", "last_reason": "..." },
       "live": { "found": true, ... },
-      "events": [ { "at": 1700000001, "event": "Stop", "action": "stop", "result_icon_state": "stop", "source_kind": "harness", "source_key": "claude:sess-1", "route_decision": "owner", "origin_window_id": 91 } ]
+      "events": [ { "at": 1700000001, "event": "Stop", "action": "stop", "result_icon_state": "stop", "trace_id": "…", "request_id": "…", "source_event_id": "run-1:2", "parse_outcome": "decoded", "normalization_outcome": "normalized", "source_kind": "harness", "source_key": "claude:sess-1", "route_decision": "owner", "origin_window_id": 91, "reducer_decision": "applied", "render_generation": 7, "render_outcome": "success" } ]
     }
   ]
 }
@@ -691,13 +714,20 @@ managed pane, or the first managed pane if none is active. Sibling panes cannot
 overwrite the shared title with Claude context-limit detection or Codex
 `ScreenPromptProbe`, `ScreenClearProbe`, or `ScreenStopProbe` events.
 
-The primary live-debug workflow is the current tab:
+The primary debug workflow starts from persisted evidence and remains useful
+when Kitty or the daemon is unavailable:
 
 ```bash
-amx daemon export-events --current-window
-amx daemon export-events --current-window --last 25
-amx doctor
+amx debug status
+amx debug tail --window "$KITTY_WINDOW_ID" --last 25
+amx debug explain --window "$KITTY_WINDOW_ID"
+amx debug bundle --window "$KITTY_WINDOW_ID" --mode share
+amx debug replay agent-mux-debug-*-share.tar.gz
 ```
+
+Use `amx debug probe --window "$KITTY_WINDOW_ID"` for a live, read-only
+transport/routing check. `export-events` remains the compatibility and daemon
+snapshot surface:
 
 Trim every exported window to its trailing events without changing cumulative
 `stats`:
@@ -718,6 +748,30 @@ run outside Kitty (or when combined with `--window`). `--window ID` still works
 for explicit targeting, and `--output PATH` writes the JSON to a file instead of
 stdout. The export is read-only and does not auto-start the daemon, so the
 buffer of a still-running investigation session is never replaced.
+
+### Diagnostic and native-log privacy
+
+Diagnostic state lives at `$XDG_STATE_HOME/agent-mux`, or
+`~/.local/state/agent-mux` when `XDG_STATE_HOME` is unset. Journals contain
+bounded causal metadata and local-key payload HMACs. Daemon logs are structured.
+Both use private directories (`0700`) and files (`0600`).
+
+AgentMux-managed sessions enable native harness debug logging by default under
+`native/<launch-id>/`. These logs are raw local data and may contain prompts,
+tool arguments, paths, source text, and provider output. Defaults retain them
+for 14 days, cap aggregate native storage at 1024 MiB, and cap one launch at
+128 MiB. Set `[defaults.diagnostics] native_logging = false` to opt out.
+Explicit harness logging controls take precedence and are diagnosed as
+external, degraded, or disabled when Agent Mux cannot enforce their path,
+level, permissions, or retention.
+
+Raw hook payload capture is off by default and requires an explicit, temporary
+`amx debug capture start --include-hook-payloads` authorization. Raw captures
+and raw native logs are never included in bundles. Share bundles use strict
+field allowlists, HMAC identifiers, path aliases, and controlled native-log
+excerpts. Forensic bundles remain redacted but are marked local-only and must
+not be shared. See [Debugging event delivery](docs/debugging.md) for quotas,
+capture expiry, bundle modes, and sharing guidance.
 
 ## Watchdog
 
@@ -841,8 +895,10 @@ amx tui-test run docs/tui-testing/scenarios/*.json
 
 ## Troubleshooting
 
-- **Icons, hooks, or cached transcript data look wrong**: run `amx doctor` first. It checks daemon
-  reachability and binary freshness, `kitten @ ls`, hooks for every configured
+- **Icons, hooks, or cached transcript data look wrong**: run `amx debug status`
+  first, then `amx debug explain` with the trace/request/source-event ID from
+  `amx debug tail`. `amx doctor` adds live checks for daemon reachability and
+  binary freshness, `kitten @ ls`, hooks for every configured
   profile, renderer drift, known Kitty sockets, recent suppression reasons,
   and the reducer/renderer health surface. Use `amx transcripts status` to
   inspect the filesystem transcript cache and `amx transcripts rebuild --all`
@@ -856,7 +912,8 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   recent non-prompt mismatches on one window), `unknown_producer_fact`
   (warning), and `acknowledged_fact_pressure` (warning at 49–64 evictable
   acknowledged facts; failure above 64). Their event window is 15 minutes.
-- **Suspected intermittent state bugs**: run
+- **Suspected intermittent state bugs**: preserve a causal snapshot with
+  `amx debug bundle --mode share`, validate it with `amx debug replay`, then run
   `amx daemon audit --duration 10m --json`. It samples the invariants every
   two seconds for the duration, deduplicates findings, and exits 2 if any
   failure-severity violation was observed in any sample. The daemon must stay

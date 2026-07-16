@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -465,6 +466,21 @@ func TestInvariantRenderGenerationDriftAndQueueSaturation(t *testing.T) {
 	}
 	if got := findingsByCheck(findings, checkQueueSaturation); len(got) != 1 {
 		t.Fatalf("queue_saturation findings = %+v; want one", got)
+	}
+}
+
+func TestInvariantRenderCausalIDsAreBounded(t *testing.T) {
+	over := make([]string, daemon.MaxRenderCausalIDs+1)
+	for i := range over {
+		over[i] = fmt.Sprintf("trace-%d", i)
+	}
+	snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
+		7: {Renderer: daemon.WindowDebugRenderer{Generations: []daemon.RenderGenerationTrace{{Generation: 9, TraceIDs: over}}}},
+	}}
+	findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
+	got := findingsByCheck(findings, checkRenderCausalBound)
+	if len(got) != 1 || got[0].WindowID != 7 {
+		t.Fatalf("render_causal_bound findings = %+v; want exactly window 7", got)
 	}
 }
 

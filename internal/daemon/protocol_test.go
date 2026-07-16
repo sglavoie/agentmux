@@ -144,7 +144,7 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 	if len(out.Events) != 2 {
 		t.Fatalf("len(Events) = %d, want 2", len(out.Events))
 	}
-	if out.Events[0] != (SessionEvent{
+	if !reflect.DeepEqual(out.Events[0], SessionEvent{
 		At:               1700000000,
 		Event:            "ScreenPromptProbe",
 		Action:           "elicitation",
@@ -156,7 +156,7 @@ func TestResponse_RoundtripCarriesEvents(t *testing.T) {
 	}) {
 		t.Fatalf("Events[0] = %+v", out.Events[0])
 	}
-	if out.Events[1] != (SessionEvent{
+	if !reflect.DeepEqual(out.Events[1], SessionEvent{
 		At:                1700000001,
 		Event:             "Stop",
 		Action:            "stop",

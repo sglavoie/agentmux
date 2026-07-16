@@ -124,6 +124,23 @@ hook_silence = 14400
 max_bytes = 65536
 recent_messages = 12
 
+# Private diagnostic state is stored below $XDG_STATE_HOME/agent-mux (or
+# ~/.local/state/agent-mux). Journal entries contain causal metadata and HMACs,
+# never raw hook payloads. Native harness logs are raw and may contain prompts,
+# tool arguments, paths, or model output. Agent Mux keeps their directories
+# private (0700), launches managed writers under umask 077, never includes them
+# unredacted in a diagnostic bundle, and defers quota pruning for active writers.
+# Explicit harness logging flags or RUST_LOG settings take precedence; `amx
+# doctor` labels their coverage external or degraded instead of replacing them.
+[defaults.diagnostics]
+journal_enabled = true
+journal_keep_days = 14
+journal_max_mib = 256
+native_logging = true
+native_keep_days = 14
+native_max_mib = 1024
+native_session_max_mib = 128
+
 # Bracket-key navigation: the set of session states that ]/[ (cursor jump)
 # and }/{ (cursor jump + Kitty tab focus) treat as "attention". Defaults to
 # the four states below — add "stop" to also land on cleanly stopped

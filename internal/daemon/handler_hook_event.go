@@ -47,17 +47,37 @@ type hookEventContext struct {
 func (h *Handler) handleHookEvent(req Request) Response {
 	eventOrAction := strings.TrimSpace(req.Event)
 	if eventOrAction == "" {
+		ctx := h.resolveHookEventContext(req)
+		ctx.req.parseOutcome = ParseOutcomeMissingEvent
+		ctx.req.normalizationOutcome = NormalizationOutcomeNotApplicable
+		ctx.req.routeDecision = routeDecisionRejected
+		chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, DecisionReasonMissingEvent, nil)
+		h.appendSuppressedHookEvent(ctx.req, "", DecisionReasonMissingEvent)
 		slog.Debug("hook event ignored: missing event")
 		return Response{OK: true}
 	}
 
 	payload, err := hookevent.DecodeHookPayload(strings.NewReader(req.PayloadJSON))
 	if err != nil {
-		slog.Warn("hook event payload unreadable; continuing with empty payload", "event", eventOrAction, "err", err)
-		payload = hookevent.HookPayload{}
+		ctx := h.resolveHookEventContext(req)
+		ctx.req.parseOutcome = ParseOutcomeInvalid
+		ctx.req.normalizationOutcome = NormalizationOutcomeQuarantined
+		invalid := quarantine(eventOrAction, DecisionReasonInvalidPayload)
+		ctx.req.normalized = &invalid
+		ctx.req.routeDecision = routeDecisionRejected
+		chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, DecisionReasonInvalidPayload, nil)
+		if ctx.req.WindowID > 0 {
+			ctx.req.Event = eventOrAction
+			h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonInvalidPayload)
+		}
+		slog.Warn("hook event payload unreadable; rejecting delivery", "event", eventOrAction, "err", err)
+		return Response{OK: true}
 	}
 
 	ctx := h.resolveHookEventContext(req)
+	ctx.req.parseOutcome = ParseOutcomeDecoded
+	ctx.req.routeEvidence.PromptCandidate = hookevent.IsPromptEvent(eventOrAction)
+	ctx.req.routeEvidence.FocusCandidate = ctx.win != nil && ctx.win.IsActive
 	if ctx.req.WindowID <= 0 {
 		slog.Debug("hook event ignored: missing window ID", "event", eventOrAction)
 		return Response{OK: true}
@@ -65,6 +85,11 @@ func (h *Handler) handleHookEvent(req Request) Response {
 
 	if hookevent.IsIgnoredEventForHarness(eventOrAction, payload, ctx.req.Harness) {
 		ctx.req.Event = eventOrAction
+		ctx.req.normalizationOutcome = NormalizationOutcomeIgnored
+		normalized := inert(eventOrAction, reasonIgnoredEvent)
+		ctx.req.normalized = &normalized
+		ctx.req.routeDecision = routeDecisionRejected
+		chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, DecisionReasonIgnoredEvent, nil)
 		h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonIgnoredEvent)
 		slog.Debug("hook event intentionally ignored",
 			"window_id", ctx.req.WindowID,
@@ -77,6 +102,11 @@ func (h *Handler) handleHookEvent(req Request) Response {
 	action, ok := hookevent.ResolveActionForHarness(eventOrAction, payload, ctx.req.Harness)
 	if !ok {
 		ctx.req.Event = eventOrAction
+		ctx.req.normalizationOutcome = NormalizationOutcomeUnknown
+		normalized := inert(eventOrAction, reasonUnknownEvent)
+		ctx.req.normalized = &normalized
+		ctx.req.routeDecision = routeDecisionRejected
+		chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, DecisionReasonUnknownEvent, nil)
 		h.appendSuppressedHookEvent(ctx.req, "", suppressionReasonUnknownEvent)
 		slog.Debug("hook event unknown, ignoring", "window_id", ctx.req.WindowID, "event", eventOrAction)
 		return Response{OK: true}
@@ -101,9 +131,12 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, ctx.req.PayloadJSON, ctx.req.WindowID, ctx.req.PipeMode)
 		ctx.req.normalized = &normalized
 		if target, matches := h.rememberedManagedHookTarget(ctx, normalized); matches == 1 {
+			ctx.req.routeEvidence.StickyMatches = matches
+			ctx.req.routeEvidence.SelectionReason = "sticky"
 			h.routeUnmanagedHook(ctx, []loopLifecycleTarget{target}, eventOrAction, action, payload)
 			return Response{OK: true}
 		} else if matches > 1 {
+			ctx.req.routeEvidence.StickyMatches = matches
 			h.suppressOwnerMismatch(ctx, eventOrAction, action)
 			return Response{OK: true}
 		}
@@ -111,6 +144,9 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		// A direct prompt is authoritative focus evidence even when the cached
 		// Kitty snapshot lags. Other new ordinary sessions must be visibly active.
 		if hookevent.IsPromptEvent(eventOrAction) || (ctx.win != nil && ctx.win.IsActive) {
+			ctx.req.routeEvidence.PromptCandidate = hookevent.IsPromptEvent(eventOrAction)
+			ctx.req.routeEvidence.FocusCandidate = ctx.win != nil && ctx.win.IsActive
+			ctx.req.routeEvidence.SelectionReason = "prompt_or_focus"
 			target := managedHookTarget(ctx.tab, ctx.owner)
 			h.routeUnmanagedHook(ctx, []loopLifecycleTarget{target}, eventOrAction, action, payload)
 			return Response{OK: true}
@@ -157,13 +193,16 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		resetFlowDetected,
 		ctx.req.KittyListenOn,
 	)
-	stateReq.RequestID = ctx.req.RequestID
+	propagateIngressTrace(&stateReq, ctx.req)
 	// Stamp the source-scoped view for the shadow reducer while the raw payload
 	// is still in hand. A deferred stop keeps the stamp and delivers it at
 	// commit time.
 	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, req.PayloadJSON, ctx.req.WindowID, ctx.req.PipeMode)
 	stateReq.normalized = &normalized
 	stateReq.routeDecision = routeDecisionSource
+	stateReq.normalizationOutcome = normalizationOutcomeFor(normalized)
+	chooseRoute(ctx.req.routeEvidence, routeDecisionSource, "source", ctx.win)
+	stateReq.routeEvidence = cloneRoutingEvidence(ctx.req.routeEvidence)
 	deferred := h.deferResetSensitiveStop(stateReq, payload)
 	if !deferred {
 		h.handleStateUpdate(stateReq)
@@ -280,7 +319,7 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 		false, // resetFlowDetected: F8 is a manual wipe, not a reset flow
 		ctx.req.KittyListenOn,
 	)
-	stateReq.RequestID = ctx.req.RequestID
+	propagateIngressTrace(&stateReq, ctx.req)
 	// The wipe was retargeted, so normalize against the target window: the
 	// shadow reducer must acknowledge the owner's facts, not the source pane's.
 	normalized := NormalizedFromHook(eventOrAction, ctx.req.Harness, ctx.req.PayloadJSON, targetID, ctx.req.PipeMode)
@@ -288,9 +327,13 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	switch {
 	case ctx.owner != nil:
 		stateReq.routeDecision = routeDecisionOwner
+		chooseRoute(ctx.req.routeEvidence, routeDecisionOwner, "user_clear_owner", ctx.owner)
 	case ctx.lookupFailed:
 		stateReq.routeDecision = routeDecisionSourceFallback
+		chooseRoute(ctx.req.routeEvidence, routeDecisionSourceFallback, "lookup_fallback", ctx.win)
 	}
+	stateReq.normalizationOutcome = normalizationOutcomeFor(normalized)
+	stateReq.routeEvidence = cloneRoutingEvidence(ctx.req.routeEvidence)
 	h.handleStateUpdate(stateReq)
 	return Response{OK: true}
 }
@@ -304,11 +347,13 @@ func (h *Handler) resolveHookEventContext(req Request) hookEventContext {
 	// metadata when the routed request is built.
 	req.targetHarness = req.Harness
 	req.targetHarnessSet = true
+	req.routeEvidence = newRoutingEvidence(req.WindowID)
 	ctx := hookEventContext{req: req}
 	if ctx.req.WindowID <= 0 {
 		return ctx
 	}
 	if h.kittyClient == nil {
+		ctx.req.routeEvidence.LookupOutcome = routeLookupRequestOnly
 		return ctx
 	}
 	// Route against the last published snapshot instead of a live ListWindows.
@@ -321,18 +366,24 @@ func (h *Handler) resolveHookEventContext(req Request) hookEventContext {
 	if !ready {
 		slog.Debug("hook event snapshot cache cold; routing from request only", "window_id", ctx.req.WindowID)
 		ctx.lookupFailed = true
+		ctx.req.routeEvidence.LookupOutcome = routeLookupSnapshotUnavailable
 		return ctx
 	}
+	ctx.req.routeEvidence.SnapshotReady = true
 	ctx.windows = windows
 	tab, win, found := kitty.FindTabByWindowID(windows, ctx.req.WindowID)
 	if !found {
+		ctx.req.routeEvidence.LookupOutcome = routeLookupSourceNotFound
 		return ctx
 	}
+	ctx.req.routeEvidence.LookupOutcome = routeLookupSourceFound
+	ctx.req.routeEvidence.SourceMatched = true
 	ctx.tab = tab
 	ctx.win = win
 	if owner, ok := kitty.FindTabTitleOwner(tab); ok {
 		ctx.owner = owner
 	}
+	populateRoutingCandidates(ctx.req.routeEvidence, tab, win, ctx.owner)
 	parts := palette.ParseTitleParts(tab.Title)
 	ctx.req.SessionTitle = parts.Base
 	ctx.req.currentIconState = parts.State
@@ -430,6 +481,21 @@ func (h *Handler) appendSuppressedHookEvent(req Request, action, suppressionReas
 		h.lastSeenEventAt[accountKey] = time.Now()
 		delete(h.notifiedHookSilence, accountKey)
 	}
-	h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, action, suppressionReason, desiredIconForState(st)))
+	effective := effectiveStateEvidence(st.Effective)
+	event := suppressedSessionEvent(req, action, suppressionReason, desiredIconForState(st))
+	event.DecisionReason = suppressionReason
+	event.ReducerDecision = DecisionSuppressed
+	event.ReducerReason = suppressionReason
+	event.ReducerInputAction = action
+	event.RouteEvidence = ensureDirectRouteEvidence(req)
+	event.EffectiveBefore = &effective
+	event.EffectiveAfter = &effective
+	if suppressionReason == DecisionReasonInvalidPayload {
+		event.ReducerDecision = DecisionQuarantined
+		event.Quarantined = true
+		event.IdentityConfidence = IdentityConfidenceInvalid
+	}
+	event = h.appendEventLocked(req.WindowID, event)
 	h.stateMu.Unlock()
+	h.recordDecisionEvent(event)
 }

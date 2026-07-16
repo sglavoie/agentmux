@@ -516,6 +516,72 @@ func TestProbeCodexScreenPrompts_ClearScreenKeepsStopWithTranscriptScrollback(t 
 	}
 }
 
+func TestCodexClearProbeDoesNotJournalUnderStateLock(t *testing.T) {
+	notifier := NewNotifier(&config.NotificationConfig{
+		Permission:           true,
+		PermissionDebounceMs: 60_000,
+	})
+	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	notifier.MaybeNotifyTraced(42, "W:api", "work", "permission", false, NotificationTrace{
+		TraceID: "trace-codex-clear-pending",
+	})
+
+	observerStarted := make(chan NotificationDisposition, 1)
+	releaseObserver := make(chan struct{})
+	released := false
+	defer func() {
+		if !released {
+			close(releaseObserver)
+		}
+	}()
+	notifier.SetObserver(func(disposition NotificationDisposition) {
+		observerStarted <- disposition
+		<-releaseObserver
+	})
+
+	capturedSeq := h.captureWindowReceipt(42)
+	parts := palette.ParseTitleParts(palette.BuildTitle("W:api", "stop", false))
+	clearDone := make(chan struct{})
+	go func() {
+		h.applyCodexClearObservation(
+			time.Unix(1_700_000_000, 0),
+			directCodexProbeBinding(42, capturedSeq, 0),
+			parts,
+			kitty.UserVars{Profile: "work", Harness: "codex"},
+		)
+		close(clearDone)
+	}()
+
+	select {
+	case disposition := <-observerStarted:
+		if disposition.Outcome != "cancelled" || disposition.Reason != "superseded" {
+			t.Fatalf("disposition = %+v, want cancelled/superseded", disposition)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("pending-notification cancellation observer was not invoked")
+	}
+
+	stateLockAcquired := make(chan struct{})
+	go func() {
+		h.stateMu.Lock()
+		h.stateMu.Unlock()
+		close(stateLockAcquired)
+	}()
+	select {
+	case <-stateLockAcquired:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("notification disposition observer held stateMu during Codex clear")
+	}
+
+	close(releaseObserver)
+	released = true
+	select {
+	case <-clearDone:
+	case <-time.After(time.Second):
+		t.Fatal("Codex clear did not finish after disposition observer was released")
+	}
+}
+
 // TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely covers the
 // ordering where a reset-sensitive Stop has been acknowledged into the
 // debounce map but has not reached the reducer. A receipt-valid clear must

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -22,15 +24,55 @@ const (
 	SyncMissing SyncStatus = "missing"
 )
 
+// ActivationVerdict describes whether installed hooks can actually run for a
+// profile. It is intentionally separate from file synchronization: a byte-for-
+// byte current file can still be disabled by settings, launch flags, trust, or
+// managed policy.
+type ActivationVerdict string
+
+const (
+	ActivationHealthy    ActivationVerdict = "healthy"
+	ActivationFailure    ActivationVerdict = "failure"
+	ActivationUnverified ActivationVerdict = "unverified"
+)
+
+// ActivationIssue is one piece of evidence contributing to a profile's
+// activation verdict. Failure means verified breakage; unverified means the
+// available local evidence cannot prove the hooks will execute.
+type ActivationIssue struct {
+	Verdict ActivationVerdict
+	Code    string
+	Message string
+	Path    string
+}
+
 // AccountStatus holds the sync status for one account. Err is non-nil when
 // the per-account check itself failed (e.g. permission denied reading the
 // settings file); Status is undefined in that case.
 type AccountStatus struct {
-	Account string
-	Harness string
-	Path    string
-	Status  SyncStatus
-	Err     error
+	Account            string
+	Harness            string
+	Path               string
+	Status             SyncStatus
+	Activation         ActivationVerdict
+	ActivationIssues   []ActivationIssue
+	CLIVersion         string
+	VerifiedCLIVersion string
+	LastSeen           time.Time
+	Err                error
+}
+
+// ActivationSummary returns a compact rendering of the evidence that prevents
+// a healthy verdict.
+func (s AccountStatus) ActivationSummary() string {
+	if len(s.ActivationIssues) == 0 {
+		return "active and recently observed"
+	}
+	parts := make([]string, 0, len(s.ActivationIssues))
+	for _, issue := range s.ActivationIssues {
+		parts = append(parts, issue.Message)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // HookHealthSummary aggregates hook sync status across all profiles,
@@ -73,8 +115,9 @@ func OverallHookHealth(cfg *config.Config, amxBin string) (HookHealthSummary, er
 	return summary, err
 }
 
-// StatusAll returns the hooks sync status for every configured profile.
-// amxBin is the absolute path to the amx binary (used to determine expected commands).
+// StatusAll returns hook-file synchronization and activation evidence for every
+// configured profile. amxBin is the absolute path to the amx binary (used to
+// determine expected commands).
 //
 // Per-account failures do not short-circuit the loop: the failing entry is
 // returned with Err populated, and the joined error covers every account
@@ -84,6 +127,7 @@ func OverallHookHealth(cfg *config.Config, amxBin string) (HookHealthSummary, er
 func StatusAll(cfg *config.Config, amxBin string) ([]AccountStatus, error) {
 	results := make([]AccountStatus, 0, len(cfg.Accounts))
 	var errs []error
+	evaluator := newActivationEvaluator(cfg)
 	for _, account := range cfg.Accounts {
 		override := accountOverride(cfg, account.Name)
 		status, err := checkStatus(account, override, amxBin)
@@ -101,6 +145,7 @@ func StatusAll(cfg *config.Config, amxBin string) ([]AccountStatus, error) {
 			status.Err = err
 			errs = append(errs, fmt.Errorf("%s: %w", account.Name, err))
 		}
+		evaluator.evaluate(account, override, &status)
 		results = append(results, status)
 	}
 	return results, errors.Join(errs...)

@@ -29,15 +29,20 @@ func (h codexHarness) BuildInvocation(kind InvocationKind, input InvocationInput
 	// profile arguments first so a custom model, sandbox mode, or config layer
 	// applies consistently to fresh and continuity launches.
 	args := append([]string(nil), input.ProfileArgs...)
+	args = applyNativeLogging(h.Name(), &input, args)
 	switch kind {
 	case InvocationFresh:
-		return newInvocation(h, input, withPrompt(args, input.InitialPrompt)), nil
+		invocation := newInvocation(h, input, withPrompt(args, input.InitialPrompt))
+		invocation.Kind = kind
+		return invocation, nil
 	case InvocationResume, InvocationFork:
 		if err := requireSessionID(h, kind, input); err != nil {
 			return Invocation{}, err
 		}
 		args = append(args, string(kind), input.SessionID)
-		return newInvocation(h, input, withPrompt(args, input.InitialPrompt)), nil
+		invocation := newInvocation(h, input, withPrompt(args, input.InitialPrompt))
+		invocation.Kind = kind
+		return invocation, nil
 	default:
 		return Invocation{}, unsupportedInvocation(h, kind)
 	}

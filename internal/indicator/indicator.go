@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
-	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
 // maxHookPayloadBytes leaves room for the TypeHookEvent JSON envelope within
@@ -21,64 +22,97 @@ import (
 // daemon owns parsing, event resolution, and all Kitty interactions.
 const maxHookPayloadBytes = 256 << 10
 
+var errHookPayloadOversized = errors.New("hook payload exceeds forwarding limit")
+
 type indicatorDaemonClient interface {
 	SendWithAutoStart(req daemon.Request, amxBin string) (daemon.Response, error)
 }
 
+var getenv = os.Getenv
+
 // Run is the hook entry point. Hooks are fire-and-forget: all event-processing
 // failures are logged and intentionally reported as success to the harness.
 func Run(event string, windowID int, producerHarness, amxBin string) error {
-	if strings.TrimSpace(os.Getenv("KITTY_LISTEN_ON")) == "" {
-		return nil
+	_ = Deliver(event, windowID, producerHarness, amxBin, DeliveryOptions{})
+	return nil
+}
+
+// Deliver executes one hook delivery and returns its structured outcome. The
+// trace/request identity is allocated before stdin is read, so even unreadable
+// input can be correlated with a durable final result.
+func Deliver(event string, windowID int, producerHarness, amxBin string, options DeliveryOptions) DeliveryResult {
+	return deliverFromStdinWithDeps(event, windowID, producerHarness, amxBin, options, os.Stdin, daemon.NewClient())
+}
+
+func deliverFromStdinWithDeps(
+	event string,
+	windowID int,
+	producerHarness, amxBin string,
+	options DeliveryOptions,
+	stdin *os.File,
+	client indicatorDaemonClient,
+) DeliveryResult {
+	started := time.Now()
+	traceID := newRequestID()
+	requestID := strings.TrimSpace(options.RequestID)
+	if requestID == "" {
+		requestID = traceID
 	}
-	payloadJSON, err := readHookPayloadJSON(os.Stdin)
-	if err != nil {
-		slog.Warn("indicator: ignoring unreadable hook payload", "event", event, "err", err)
+	recorder := newDeliveryRecorder(traceID, requestID, event, producerHarness, windowID)
+	finish := func(result DeliveryResult) DeliveryResult {
+		result.LatencyMS = float64(time.Since(started)) / float64(time.Millisecond)
+		recorder.complete(result)
+		return result
+	}
+
+	payloadJSON, err := readHookPayloadJSON(stdin)
+	var payloadSize int64
+	var payloadHMAC string
+	switch {
+	case errors.Is(err, errHookPayloadOversized):
+		slog.Warn("indicator: degrading oversized hook payload to empty", "event", event, "err", err)
+		payloadSize, payloadHMAC = recorder.recordPayload([]byte(payloadJSON), "degraded", "payload_oversized")
+		recorder.captureRawPayload(event, windowID, producerHarness, payloadJSON, true)
 		payloadJSON = ""
+	case err != nil:
+		slog.Warn("indicator: ignoring unreadable hook payload", "event", event, "err", err)
+		recorder.recordPayload(nil, "error", "payload_unreadable")
+		recorder.record("hook.validation", "rejected", "payload_unreadable", map[string]string{"error": err.Error()}, 0)
+		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "payload_unreadable", nil))
+	default:
+		payloadSize, payloadHMAC = recorder.recordPayload([]byte(payloadJSON), "success", "payload_read")
+		recorder.captureRawPayload(event, windowID, producerHarness, payloadJSON, false)
 	}
-	return runWithDeps(event, windowID, producerHarness, amxBin, payloadJSON, IsPipeMode(), daemon.NewClient())
+	payload, err := hookevent.DecodeHookPayload(strings.NewReader(payloadJSON))
+	if err != nil {
+		recorder.record("hook.validation", "rejected", "invalid_payload", map[string]string{"error": err.Error()}, 0)
+		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_payload", nil))
+	}
+	if !validRequestID(requestID) {
+		recorder.record("hook.validation", "rejected", "invalid_request_id", nil, 0)
+		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_request_id", nil))
+	}
+	recorder.record("hook.validation", "success", "payload_valid", map[string]string{
+		"source_event_id_present": fmt.Sprint(payload.EffectiveSourceEventID() != ""),
+	}, 0)
+	result := deliverPayloadWithDeps(
+		event, windowID, producerHarness, amxBin, payloadJSON, IsPipeMode(),
+		traceID, requestID, payload.EffectiveSourceEventID(), payloadSize, payloadHMAC,
+		client, recorder, started,
+	)
+	return finish(result)
 }
 
 func runWithDeps(event string, windowID int, producerHarness, amxBin, payloadJSON string, pipeMode bool, client indicatorDaemonClient) error {
-	if strings.TrimSpace(os.Getenv("KITTY_LISTEN_ON")) == "" {
-		return nil
-	}
-	// Forward only a transferable endpoint. A process-local "fd:" descriptor is
-	// useless to the detached daemon; when normalization yields nothing the
-	// daemon falls back to its own established Kitty client.
-	listenOn := kitty.NormalizedListenAddressFromEnv()
-
-	windowID, err := resolveHookWindowID(windowID)
-	if err != nil {
-		slog.Warn("indicator: ignoring hook with invalid Kitty window", "event", event, "err", err)
-		return nil
-	}
-
-	rawProducer := strings.TrimSpace(producerHarness)
-	producerHarness = harness.NormalizeKnown(rawProducer)
-	if rawProducer != "" && producerHarness == "" {
-		// Preserve the explicit value on the wire so the daemon can distinguish
-		// an unsupported producer from an omitted producer. The daemon then
-		// canonicalizes it to unknown without inferring from the target pane.
-		slog.Warn("indicator: unsupported producer harness; forwarding as unknown", "harness", rawProducer)
-		producerHarness = rawProducer
-	}
-
-	resp, err := client.SendWithAutoStart(daemon.Request{
-		Type:          daemon.TypeHookEvent,
-		RequestID:     newRequestID(),
-		WindowID:      windowID,
-		Event:         event,
-		Harness:       producerHarness,
-		PayloadJSON:   payloadJSON,
-		KittyListenOn: listenOn,
-		PipeMode:      pipeMode,
-	}, amxBin)
-	if err != nil {
-		slog.Warn("indicator: daemon unavailable; dropping hook event", "event", event, "window_id", windowID, "err", err)
-	} else if !resp.OK {
-		slog.Warn("indicator: daemon rejected hook event; dropping it", "event", event, "window_id", windowID, "error", resp.Error)
-	}
+	started := time.Now()
+	traceID := newRequestID()
+	requestID := traceID
+	payload, _ := hookevent.DecodeHookPayload(strings.NewReader(payloadJSON))
+	_ = deliverPayloadWithDeps(
+		event, windowID, producerHarness, amxBin, payloadJSON, pipeMode,
+		traceID, requestID, payload.EffectiveSourceEventID(), int64(len(payloadJSON)), "",
+		client, &deliveryRecorder{traceID: traceID, requestID: requestID, event: event}, started,
+	)
 	return nil
 }
 
@@ -124,7 +158,11 @@ func readHookPayloadJSON(stdin *os.File) (string, error) {
 		return "", fmt.Errorf("read hook payload: %w", err)
 	}
 	if len(data) > maxHookPayloadBytes {
-		return "", fmt.Errorf("hook payload exceeds %d bytes", maxHookPayloadBytes)
+		// Return the bounded prefix alongside the sentinel error so an explicitly
+		// authorized raw capture can preserve evidence without allowing the hook
+		// process to buffer an unbounded payload. The daemon receives an empty
+		// payload, which DecodeHookPayload intentionally accepts.
+		return string(bytes.TrimSpace(data)), fmt.Errorf("%w: %d bytes", errHookPayloadOversized, maxHookPayloadBytes)
 	}
 	return string(bytes.TrimSpace(data)), nil
 }

@@ -30,35 +30,52 @@ type hookGroup struct {
 	Hooks   []hookEntry `json:"hooks"`
 }
 
-// claudeHookEvents lists the Claude Code events Agent Mux installs hooks for.
-var claudeHookEvents = []string{
-	"SessionStart",
-	"Setup",
-	"UserPromptSubmit",
-	"UserPromptExpansion",
-	"PreToolUse",
-	"SubagentStart",
-	"SubagentStop",
-	"PostToolUse",
-	"PostToolUseFailure",
-	"PostToolBatch",
-	"PermissionRequest",
-	"PermissionDenied",
-	"Stop",
-	"StopFailure",
-	"TaskCreated",
-	"TaskCompleted",
-	"TeammateIdle",
-	"SessionEnd",
-	"Notification",
-	"ConfigChange",
-	"PreCompact",
-	"PostCompact",
-	"Elicitation",
-	"ElicitationResult",
+const (
+	claudeHooksDocumentation = "https://code.claude.com/docs/en/hooks"
+	claudeHooksVerifiedCLI   = "2.1.195"
+)
+
+var claudeHookMatrix = []HookEventContract{
+	{CanonicalName: "SessionStart", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "Setup", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "InstructionsLoaded", Behavior: HookObserverOnly, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "UserPromptSubmit", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "UserPromptExpansion", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "MessageDisplay", Behavior: HookObserverOnly, Installation: HookInstalled, DisableSupported: true, SpecialSemantics: "display-only stream batches are recorded without returning displayContent", DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "PreToolUse", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "PermissionRequest", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "PostToolUse", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "PostToolUseFailure", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "PostToolBatch", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "PermissionDenied", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "Notification", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, SpecialSemantics: "notification_type decides permission stop or observer behavior", DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "SubagentStart", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "SubagentStop", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "TaskCreated", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "TaskCompleted", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "Stop", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "StopFailure", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "TeammateIdle", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "ConfigChange", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "CwdChanged", Behavior: HookObserverOnly, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "FileChanged", Behavior: HookObserverOnly, Installation: HookUnsupported, DisableSupported: false, SpecialSemantics: "requires an explicit bounded literal watch-path matcher policy", DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "WorktreeCreate", Behavior: HookStateChanging, Installation: HookUnsupported, DisableSupported: false, SpecialSemantics: "replaces Claude's default worktree creation and must return a valid worktree path", DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "WorktreeRemove", Behavior: HookObserverOnly, Installation: HookInstalled, DisableSupported: true, SpecialSemantics: "cleanup notification is recorded but Agent Mux never removes the worktree", DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "PreCompact", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "PostCompact", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, SpecialSemantics: "manual and automatic matcher groups dispatch distinct Agent Mux pseudo-events", DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "SessionEnd", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "Elicitation", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
+	{CanonicalName: "ElicitationResult", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: claudeHooksDocumentation, VerifiedCLIVersion: claudeHooksVerifiedCLI},
 }
 
+// claudeHookEvents lists the Claude Code events Agent Mux installs hooks for.
+var claudeHookEvents = installedHookEventNames(claudeHookMatrix)
+
 type claudeHookContract struct{}
+
+func (claudeHookContract) EventMatrix() []HookEventContract {
+	return cloneHookEventMatrix(claudeHookMatrix)
+}
 
 func (claudeHookContract) InstallPath(homeDir string) string {
 	return filepath.Join(homeDir, "settings.json")

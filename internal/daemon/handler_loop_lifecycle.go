@@ -94,7 +94,16 @@ func (h *Handler) handleLoopLifecycleTarget(
 		false,
 		baseReq.KittyListenOn,
 	)
-	req.RequestID = baseReq.RequestID
+	propagateIngressTrace(&req, baseReq)
+	if req.routeEvidence == nil {
+		req.routeEvidence = newRoutingEvidence(baseReq.WindowID)
+	}
+	req.routeEvidence.ConsideredWindows = nil
+	req.routeEvidence.RejectedAlternatives = nil
+	req.routeEvidence.ASLMatches = 1
+	populateRoutingCandidates(req.routeEvidence, target.tab, routingWindowByID(target.tab, baseReq.WindowID), target.win)
+	chooseRoute(req.routeEvidence, routeDecisionOwner, "asl_workspace", target.win)
+	req.routeDecision = routeDecisionOwner
 	// The fact lands on the managed target but retains the pane identified by
 	// the request/payload as its origin for route-aware probes and diagnostics.
 	originWindowID := baseReq.WindowID
@@ -103,6 +112,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 	}
 	normalized := NormalizedFromHook(eventOrAction, baseReq.Harness, baseReq.PayloadJSON, originWindowID, baseReq.PipeMode)
 	req.normalized = &normalized
+	req.normalizationOutcome = normalizationOutcomeFor(normalized)
 	resp := h.handleStateUpdate(req)
 	if !resp.OK {
 		slog.Debug("loop lifecycle target state update failed",

@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -359,9 +360,9 @@ func TestRestart_QuotedExplicitArgsRoundTrip(t *testing.T) {
 		}
 
 		sawQuotedShellCmd := false
-		expectedShellCmd := "exec env CLAUDE_CONFIG_DIR=" + config.ExpandTilde("~/.config/claude-work") + " claude " + quoted
+		expectedShellCmd := "umask 077 && exec env CLAUDE_CONFIG_DIR=" + config.ExpandTilde("~/.config/claude-work") + " claude " + quoted + " --debug-file "
 		for _, arg := range c.Args {
-			if arg == expectedShellCmd {
+			if strings.Contains(arg, expectedShellCmd) {
 				sawQuotedShellCmd = true
 				break
 			}

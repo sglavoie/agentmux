@@ -98,9 +98,7 @@ var eventToAction = map[string]string{
 	"Notification": "idle",
 
 	// Clear: state reset.
-	"ConfigChange":   "clear",
-	"WorktreeCreate": "clear",
-	"WorktreeRemove": "clear",
+	"ConfigChange": "clear",
 }
 
 // ignoredEvents are known hook events that Agent Mux currently does not map to
@@ -109,7 +107,10 @@ var eventToAction = map[string]string{
 // these hooks are installed for other purposes.
 var ignoredEvents = map[string]bool{
 	"InstructionsLoaded": true,
+	"MessageDisplay":     true,
 	"CwdChanged":         true,
+	"WorktreeCreate":     true,
+	"WorktreeRemove":     true,
 	// FileChanged requires a per-hook matcher field; amx does not configure any
 	// matchers so Claude Code will never fire it, but recognize it defensively.
 	"FileChanged": true,
@@ -211,6 +212,11 @@ func IsIgnoredEvent(input string, payload HookPayload) bool {
 // agent_idle → stop mapping, so a harness that documents agent_idle as a real
 // stop is unaffected.
 func IsIgnoredEventForHarness(input string, payload HookPayload, harnessName string) bool {
+	for _, contract := range harness.HookEventMatrix(harnessName) {
+		if contract.CanonicalName == input && contract.Behavior == harness.HookObserverOnly {
+			return true
+		}
+	}
 	if ignoredEvents[input] {
 		return true
 	}

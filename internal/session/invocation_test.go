@@ -53,3 +53,18 @@ func TestRenderInvocation_QuotesAfterHarnessOrdersArgs(t *testing.T) {
 		t.Errorf("RenderInvocation() = %q, want %q", got, want)
 	}
 }
+
+func TestRenderInvocationPinsCodexNativeLogLevel(t *testing.T) {
+	invocation := harness.Invocation{
+		Harness:    harness.Codex,
+		Executable: "codex",
+		Environment: map[string]string{
+			"CODEX_HOME": "/tmp/codex home",
+			"RUST_LOG":   "codex_core=trace,info",
+		},
+		NativeLogging: harness.NativeLogging{Coverage: harness.NativeLogExternal},
+	}
+	if got, want := RenderInvocation(invocation), "exec env 'CODEX_HOME=/tmp/codex home' RUST_LOG=codex_core=trace,info codex"; got != want {
+		t.Errorf("RenderInvocation() = %q, want %q", got, want)
+	}
+}

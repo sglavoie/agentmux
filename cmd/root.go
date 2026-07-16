@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.5.0"
+const version = "0.6.0"
 
 var debug bool
 var dashboardSourceWindowID int
@@ -138,5 +138,5 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, sessionCmd, transcriptsCmd, tuiTestCmd)
+	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, debugCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, sessionCmd, transcriptsCmd, tuiTestCmd)
 }

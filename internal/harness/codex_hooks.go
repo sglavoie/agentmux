@@ -9,21 +9,32 @@ import (
 	"sort"
 )
 
-// codexHookEvents lists the Codex hook events Agent Mux installs.
-var codexHookEvents = []string{
-	"SessionStart",
-	"UserPromptSubmit",
-	"PreToolUse",
-	"PermissionRequest",
-	"PostToolUse",
-	"PreCompact",
-	"PostCompact",
-	"SubagentStart",
-	"SubagentStop",
-	"Stop",
+const (
+	codexHooksDocumentation = "https://learn.chatgpt.com/docs/hooks"
+	codexHooksVerifiedCLI   = "0.144.4"
+)
+
+var codexHookMatrix = []HookEventContract{
+	{CanonicalName: "SessionStart", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "UserPromptSubmit", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "PreToolUse", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "PermissionRequest", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "PostToolUse", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "PreCompact", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, SpecialSemantics: "matcher distinguishes manual and automatic compaction", DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "PostCompact", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, SpecialSemantics: "payload trigger distinguishes manual stop from automatic active continuation", DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "SubagentStart", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "SubagentStop", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
+	{CanonicalName: "Stop", Behavior: HookStateChanging, Installation: HookInstalled, DisableSupported: true, DocumentationSource: codexHooksDocumentation, VerifiedCLIVersion: codexHooksVerifiedCLI},
 }
 
+// codexHookEvents lists the Codex hook events Agent Mux installs.
+var codexHookEvents = installedHookEventNames(codexHookMatrix)
+
 type codexHookContract struct{}
+
+func (codexHookContract) EventMatrix() []HookEventContract {
+	return cloneHookEventMatrix(codexHookMatrix)
+}
 
 func (codexHookContract) InstallPath(homeDir string) string {
 	return filepath.Join(homeDir, "hooks.json")

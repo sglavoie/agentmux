@@ -13,11 +13,13 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -53,6 +55,30 @@ type notifyKey struct {
 	action   string
 }
 
+// NotificationTrace carries sanitized correlation identity into asynchronous
+// debounce, dispatch, and click-focus work.
+type NotificationTrace struct {
+	TraceID       string
+	RequestID     string
+	SourceEventID string
+	Harness       string
+	Profile       string
+	SessionID     string
+	RunID         string
+}
+
+// NotificationDisposition is one explicit notification decision or terminal
+// asynchronous outcome. It intentionally excludes notification body content.
+type NotificationDisposition struct {
+	Trace      NotificationTrace
+	WindowID   int
+	Action     string
+	Stage      string
+	Outcome    string
+	Reason     string
+	ObservedAt time.Time
+}
+
 // focusClient is the narrow subset of the Kitty client that the Notifier
 // uses to surface the originating tab/window after a notification click.
 // kitty.SubprocessClient satisfies this interface implicitly. Declaring it
@@ -67,6 +93,8 @@ type focusClient interface {
 // the selected backend (alerter when installed, osascript otherwise).
 type Notifier struct {
 	mu              sync.Mutex
+	observerMu      sync.RWMutex
+	observer        func(NotificationDisposition)
 	last            map[notifyKey]time.Time // last dispatched notification time per (window_id, action)
 	pending         map[int]pendingNotification
 	nextPendingSeq  uint64
@@ -139,6 +167,24 @@ func (n *Notifier) SetParentContext(ctx context.Context) {
 	n.ctx = ctx
 }
 
+// SetObserver installs a fail-open disposition observer. Handler uses it to
+// update schema-v9 event links and persist durable diagnostic journal rows.
+func (n *Notifier) SetObserver(observer func(NotificationDisposition)) {
+	n.observerMu.Lock()
+	n.observer = observer
+	n.observerMu.Unlock()
+}
+
+func (n *Notifier) emitDisposition(disposition NotificationDisposition) {
+	disposition.ObservedAt = time.Now().UTC()
+	n.observerMu.RLock()
+	observer := n.observer
+	n.observerMu.RUnlock()
+	if observer != nil {
+		observer(disposition)
+	}
+}
+
 // MaybeNotify fires a notification for the given window if:
 //   - the action is notifyable (stop/permission/failure)
 //   - the corresponding config flag is enabled
@@ -158,21 +204,41 @@ func (n *Notifier) SetParentContext(ctx context.Context) {
 // when the caller does not know the account; click-target resolution
 // silently no-ops in that case.
 func (n *Notifier) MaybeNotify(windowID int, sessionTitle, account, action string, pipeMode bool) {
+	n.MaybeNotifyTraced(windowID, sessionTitle, account, action, pipeMode, NotificationTrace{})
+}
+
+// MaybeNotifyTraced is MaybeNotify with causal identity retained across every
+// suppression, debounce, dispatch, and focus outcome.
+func (n *Notifier) MaybeNotifyTraced(windowID int, sessionTitle, account, action string, pipeMode bool, trace NotificationTrace) {
+	if trace.TraceID == "" {
+		trace.TraceID = diagnostics.NewTraceID()
+	}
+	trace.Profile = firstNonEmpty(trace.Profile, account)
+	emit := func(stage, outcome, reason string) {
+		n.emitDisposition(NotificationDisposition{
+			Trace: trace, WindowID: windowID, Action: action,
+			Stage: stage, Outcome: outcome, Reason: reason,
+		})
+	}
 	if pipeMode {
+		emit("decision", "suppressed", "pipe_mode")
 		return
 	}
 	if n.IsMuted(windowID) {
+		emit("decision", "suppressed", "muted")
 		return
 	}
 	if !notifyableActions[action] {
+		emit("decision", "suppressed", "unsupported_action")
 		return
 	}
 	if !n.actionEnabled(action) {
+		emit("decision", "suppressed", "config_disabled")
 		return
 	}
 
 	n.mu.Lock()
-	defer n.mu.Unlock()
+	var dispositions []NotificationDisposition
 
 	title := sessionTitle
 	if title == "" {
@@ -181,24 +247,48 @@ func (n *Notifier) MaybeNotify(windowID int, sessionTitle, account, action strin
 	subtitle := notificationLabels[action]
 
 	if action != "permission" {
-		n.cancelPendingLocked(windowID)
+		if disposition, ok := n.cancelPendingLocked(windowID, "superseded"); ok {
+			dispositions = append(dispositions, disposition)
+		}
 	}
 
 	key := notifyKey{windowID: windowID, action: action}
 	now := n.now()
 	if action == "permission" && n.debounce > 0 {
 		if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
+			n.mu.Unlock()
+			for _, disposition := range dispositions {
+				n.emitDisposition(disposition)
+			}
+			emit("decision", "suppressed", "cooldown")
 			return
 		}
-		n.schedulePermissionLocked(windowID, account, title, subtitle)
+		if disposition, ok := n.schedulePermissionLocked(windowID, account, title, subtitle, trace); ok {
+			dispositions = append(dispositions, disposition)
+		}
+		n.mu.Unlock()
+		for _, disposition := range dispositions {
+			n.emitDisposition(disposition)
+		}
+		emit("decision", "scheduled", "debounce")
 		return
 	}
 
 	if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
+		n.mu.Unlock()
+		for _, disposition := range dispositions {
+			n.emitDisposition(disposition)
+		}
+		emit("decision", "suppressed", "cooldown")
 		return
 	}
 	n.last[key] = now
-	go n.runDispatch(windowID, account, title, subtitle)
+	n.mu.Unlock()
+	for _, disposition := range dispositions {
+		n.emitDisposition(disposition)
+	}
+	emit("decision", "scheduled", "dispatch")
+	go n.runDispatch(windowID, account, title, subtitle, action, trace)
 }
 
 // runDispatch invokes the configured dispatcher under a bounded context. The
@@ -206,7 +296,8 @@ func (n *Notifier) MaybeNotify(windowID int, sessionTitle, account, action strin
 // ctx.Done — the real osascript/alerter backends do via exec.CommandContext.
 // windowID and account are forwarded so Session 3's focus closure can map
 // a clicked notification back to the right Kitty window.
-func (n *Notifier) runDispatch(windowID int, account, title, subtitle string) {
+func (n *Notifier) runDispatch(windowID int, account, title, subtitle, action string, trace NotificationTrace) {
+	n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "attempted", Reason: "backend_started"})
 	n.mu.Lock()
 	parent := n.ctx
 	n.mu.Unlock()
@@ -215,9 +306,12 @@ func (n *Notifier) runDispatch(windowID int, account, title, subtitle string) {
 	clicked, err := n.dispatch(ctx, windowID, account, title, subtitle)
 	if err != nil {
 		slog.Warn("notifier: dispatch failed", "err", err, "title", title, "subtitle", subtitle)
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "failed", Reason: "send_failed"})
 		return
 	}
+	n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "sent", Reason: "send_success"})
 	if !clicked {
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "not_clicked"})
 		return
 	}
 	slog.Debug("notifier: clicked", "window_id", windowID, "account", account, "title", title, "subtitle", subtitle)
@@ -225,9 +319,18 @@ func (n *Notifier) runDispatch(windowID int, account, title, subtitle string) {
 	focus := n.focus
 	n.mu.Unlock()
 	if focus == nil {
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_unavailable"})
 		return
 	}
-	n.focusForClick(focus, windowID, account)
+	if windowID <= 0 && account == "" {
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_target_missing"})
+		return
+	}
+	if err := n.focusForClick(focus, windowID, account); err != nil {
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "failed", Reason: "focus_failed"})
+		return
+	}
+	n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "focused", Reason: "focus_success"})
 }
 
 // focusForClick brings the source of a clicked notification back to the
@@ -235,22 +338,27 @@ func (n *Notifier) runDispatch(windowID int, account, title, subtitle string) {
 // cmd/root.go:47-62. Errors are logged at debug and swallowed: the
 // notification subprocess has already returned, the window may have been
 // closed in the meantime, and propagating the error would only spam logs.
-func (n *Notifier) focusForClick(focus focusClient, windowID int, account string) {
+func (n *Notifier) focusForClick(focus focusClient, windowID int, account string) error {
+	var errs []error
 	switch {
 	case windowID > 0:
 		if err := focus.FocusTab(kitty.MatchTabByWindowID(windowID)); err != nil {
 			slog.Debug("notifier: focus tab failed", "err", err, "window_id", windowID)
+			errs = append(errs, err)
 		}
 		if err := focus.FocusWindow(kitty.MatchWindowByID(windowID)); err != nil {
 			slog.Debug("notifier: focus window failed", "err", err, "window_id", windowID)
+			errs = append(errs, err)
 		}
 	case account != "":
 		if err := focus.FocusWindow(kitty.MatchAccountWindows(account)); err != nil {
 			slog.Debug("notifier: focus account window failed", "err", err, "account", account)
+			errs = append(errs, err)
 		}
 	default:
 		slog.Debug("notifier: click had no focus target", "window_id", windowID)
 	}
+	return errors.Join(errs...)
 }
 
 func (n *Notifier) actionEnabled(action string) bool {
@@ -290,11 +398,14 @@ func (n *Notifier) ResetCooldown(windowID int) {
 // permission notification for a window that no longer exists).
 func (n *Notifier) PurgeWindow(windowID int) {
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	for k := range n.last {
 		if k.windowID == windowID {
 			delete(n.last, k)
 		}
 	}
-	n.cancelPendingLocked(windowID)
+	disposition, cancelled := n.cancelPendingLocked(windowID, "window_closed")
+	n.mu.Unlock()
+	if cancelled {
+		n.emitDisposition(disposition)
+	}
 }

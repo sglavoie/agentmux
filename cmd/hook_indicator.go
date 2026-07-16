@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -11,8 +12,11 @@ import (
 
 var hookWindowID int
 var hookHarness string
+var hookRequestID string
+var hookJSON bool
+var hookStrict bool
 
-var runHookIndicator = indicator.Run
+var runHookIndicator = indicator.Deliver
 
 var hookIndicatorCmd = &cobra.Command{
 	Use:   "hook-indicator <event>",
@@ -22,7 +26,8 @@ The daemon updates Kitty tab state and triggers notifications based on the
 current session state.
 
 The first argument must be a harness event name (e.g. Stop, PermissionRequest,
-UserPromptSubmit). Unknown events are silently ignored.
+UserPromptSubmit). Unknown events are recorded as permanent non-delivery
+evidence while legacy hook invocations remain fail-open.
 
 Hooks that fire outside Kitty (for example from another Copilot or Codex CLI
 surface sharing the same harness home) are treated as successful no-ops.
@@ -37,8 +42,24 @@ For hooks running inside Kitty, KITTY_WINDOW_ID must be set in the environment
 			// Non-fatal: proceed without auto-start.
 			amxBin = "amx"
 		}
-		if err := runHookIndicator(args[0], hookWindowID, hookHarness, amxBin); err != nil {
-			ccerrors.Print(fmt.Errorf("processing hook event: %w", err))
+		result := runHookIndicator(args[0], hookWindowID, hookHarness, amxBin, indicator.DeliveryOptions{
+			RequestID: hookRequestID,
+		})
+		if hookJSON {
+			if err := json.NewEncoder(cmd.OutOrStdout()).Encode(result); err != nil {
+				return fmt.Errorf("encoding hook delivery result: %w", err)
+			}
+		}
+		if hookStrict && !result.Successful() {
+			code := 2
+			if result.Retryable {
+				code = 75
+			}
+			return &ExitError{
+				Code:  code,
+				Err:   fmt.Errorf("hook delivery %s: %s", result.Status, result.Reason),
+				Quiet: hookJSON,
+			}
 		}
 		return nil
 	},
@@ -49,4 +70,10 @@ func init() {
 		"Kitty window ID (defaults to $KITTY_WINDOW_ID)")
 	hookIndicatorCmd.Flags().StringVar(&hookHarness, "harness", "",
 		"event-producing harness (claude, codex, or copilot)")
+	hookIndicatorCmd.Flags().StringVar(&hookRequestID, "request-id", "",
+		"stable delivery request ID (generated when omitted)")
+	hookIndicatorCmd.Flags().BoolVar(&hookJSON, "json", false,
+		"write the structured delivery result as JSON")
+	hookIndicatorCmd.Flags().BoolVar(&hookStrict, "strict", false,
+		"return 75 for retryable failure or 2 for permanent non-delivery")
 }

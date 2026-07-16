@@ -32,7 +32,7 @@ const maxShadowMismatches = 50
 // loses its icon. A loop_marker without a stamp synthesizes a window-keyed
 // ASL lease event from the lifecycle event name so legacy loop clients keep
 // their 🔁.
-func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEvent, bool) {
+func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEvent, bool, string, bool) {
 	if req.normalized != nil && !req.normalized.Invalid {
 		n := *req.normalized
 		// The legacy machine may have rewritten the action after the stamp was
@@ -47,12 +47,13 @@ func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEv
 			n.Source.Kind != SourceSubagent && n.SubagentDelta == 0 {
 			n.Action = outcome.reduceAction
 		}
-		return n, true
+		return n, true, identityConfidenceFor(n), false
 	}
+	untrustedFallback := req.normalized != nil && req.normalized.Invalid
 	if req.Action == "loop_marker" {
 		phase := aslPhaseForEvent(req.Event)
 		if phase == "" {
-			return NormalizedEvent{}, false
+			return NormalizedEvent{}, false, "", untrustedFallback
 		}
 		n := NormalizedEvent{
 			Source: SourceID{Kind: SourceASL, Key: windowKey(req.WindowID)},
@@ -62,14 +63,14 @@ func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEv
 		if phase == ASLPhasePaused {
 			n.Action = aslPausedAttentionAction(req.Reason)
 		}
-		return n, true
+		return n, true, IdentityConfidenceDaemon, untrustedFallback
 	}
 	action := outcome.reduceAction
 	if action == "" {
 		action = req.Action
 	}
 	if action == "" {
-		return NormalizedEvent{}, false
+		return NormalizedEvent{}, false, "", untrustedFallback
 	}
 	// Un-stamped subagent lifecycle requests (legacy state_update clients,
 	// direct calls) carry no agent or session identity; aggregate them as a
@@ -92,9 +93,13 @@ func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEv
 				n.Action = "idle"
 			}
 		}
-		return n, true
+		confidence := IdentityConfidenceLegacySynthesized
+		if untrustedFallback {
+			confidence = IdentityConfidenceUntrustedFallback
+		}
+		return n, true, confidence, untrustedFallback
 	}
-	return NormalizedEvent{
+	n := NormalizedEvent{
 		Source: SourceID{Kind: SourceLegacy, Key: windowKey(req.WindowID)},
 		Action: action,
 		Event:  req.Event,
@@ -103,7 +108,12 @@ func reduceNormalizedForRequest(req Request, outcome applyOutcome) (NormalizedEv
 		// machine's terminal self-heal by letting any terminal action end the
 		// window's sessions, so lost subagent stops cannot strand 🤖.
 		EndsSession: isTerminalAction(action),
-	}, true
+	}
+	confidence := IdentityConfidenceLegacySynthesized
+	if untrustedFallback {
+		confidence = IdentityConfidenceUntrustedFallback
+	}
+	return n, true, confidence, untrustedFallback
 }
 
 // reduceStateUpdate folds one settled request into the window's reducer and
@@ -114,9 +124,12 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	if req.WindowID <= 0 {
 		return
 	}
-	n, ok := reduceNormalizedForRequest(req, outcome)
+	n, ok, identityConfidence, usedFallbackIdentity := reduceNormalizedForRequest(req, outcome)
 	if !ok {
 		return
+	}
+	if n.SourceEventID == "" {
+		n.SourceEventID = req.SourceEventID
 	}
 
 	notify := false
@@ -125,6 +138,7 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	if st.Reducer == nil {
 		st.Reducer = NewReducer(h.reducerCfg)
 	}
+	effectiveBefore := st.Effective
 	// Today's harness payloads carry no source_sequence; assign the window's
 	// receipt sequence so per-source monotonicity (duplicate/reorder handling)
 	// still holds. Sequenced events advance the counter instead, so a later
@@ -141,6 +155,7 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	}
 
 	decision := st.Reducer.ApplyNormalized(n)
+	reducerTrace, _ := st.Reducer.LatestTrace()
 	reducerMutated := decision == DecisionApplied || decision == DecisionAcknowledged || decision == DecisionSuppressed
 	// ShadowSeq is the window-wide receipt generation applyAuthoritativeIdle
 	// captures before a slow off-lock screen/transcript read and re-checks under
@@ -214,12 +229,6 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	// reason so the event still appears exactly once. Idle/clear preservation
 	// is not logged: the legacy path already appended its own allowed event
 	// with the same preserved outcome.
-	if decision == DecisionSuppressed && n.Action != "idle" && n.Action != "clear" {
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, n.Action, suppressionReasonActiveAfterTerminal, legacyIcon))
-	} else if outcome.guardBlocked {
-		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, n.Action, suppressionReasonGuardBlocked, legacyIcon))
-	}
-
 	if decision == DecisionApplied && notifyableActions[outcome.notifyAction] &&
 		h.shouldNotifySourceEventLocked(st, n.SourceEventID) {
 		notify = true
@@ -247,13 +256,18 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	if decision == DecisionApplied || decision == DecisionAcknowledged {
 		h.clearIdleSamplesForWindowLocked(req.WindowID)
 	}
+	completedEvent := h.finalizeReducerDecisionLocked(
+		req, n, reducerTrace, effectiveBefore, effective,
+		identityConfidence, usedFallbackIdentity, outcome,
+	)
 	h.stateMu.Unlock()
+	h.recordDecisionEvent(completedEvent)
 
 	switch {
 	case decision == DecisionAcknowledged:
 		h.cancelPendingNotification(req.WindowID)
 	case notify:
-		h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, outcome.notifyAction, req.PipeMode)
+		h.maybeNotifyTraced(req.WindowID, req.SessionTitle, req.Account, outcome.notifyAction, req.PipeMode, notificationTraceFromEvent(completedEvent))
 	}
 }
 

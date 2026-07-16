@@ -273,9 +273,12 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 	for id := range closed {
 		// The pending render entry for a closed window is cancelled outright;
 		// an in-flight render cannot be cancelled, but its completion
-		// bookkeeping already tolerates the deleted state.
+		// bookkeeping already tolerates the deleted state. Persist the pending
+		// queued-stage trace only after both stateMu and the queue mutex are free.
 		if h.renderQueue != nil {
-			h.renderQueue.purge(id)
+			if trace, purged := h.renderQueue.purge(id); purged {
+				h.recordRenderGenerationBounded(trace, id)
+			}
 		}
 		// Notifier cooldown/pending entries are keyed by window ID too. Without
 		// cleanup the notifier's per-(window, action) cooldown map grows

@@ -1,9 +1,11 @@
 package daemon
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -35,6 +37,13 @@ func (b *blockingProbeKittyClient) GetText(matchExpr, extent string) (string, er
 // after the read completes.
 func TestHandler_HookEventSlowProbeDoesNotDelayAck(t *testing.T) {
 	h := newTestHandler()
+	disableStopFailure := false
+	h.notifier.cfg.StopFailure = &disableStopFailure
+	journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.setDecisionJournal(journal)
 	client := &blockingProbeKittyClient{
 		fakeKittyClient: &fakeKittyClient{
 			windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
@@ -51,10 +60,13 @@ func TestHandler_HookEventSlowProbeDoesNotDelayAck(t *testing.T) {
 	done := make(chan Response, 1)
 	go func() {
 		done <- h.Handle(Request{
-			Type:        TypeHookEvent,
-			WindowID:    42,
-			Event:       "Notification",
-			PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{NotificationType: "agent_idle"}),
+			Type:          TypeHookEvent,
+			WindowID:      42,
+			Event:         "Notification",
+			TraceID:       "parent-trace",
+			RequestID:     "parent-request",
+			SourceEventID: "parent-event",
+			PayloadJSON:   hookPayloadJSON(t, hookevent.HookPayload{NotificationType: "agent_idle"}),
 		})
 	}()
 
@@ -91,6 +103,55 @@ func TestHandler_HookEventSlowProbeDoesNotDelayAck(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("state icon = %q; want error after the async probe completed", icon)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) == 0 {
+		t.Fatalf("probe-linked event history = %+v", detail.Events)
+	}
+	childTraceID := ""
+	for _, event := range detail.Events {
+		if event.TraceID == "parent-trace" && len(event.ProbeTraceIDs) > 0 {
+			childTraceID = event.ProbeTraceIDs[0]
+		}
+		if event.ParentTraceID == "parent-trace" {
+			childTraceID = event.TraceID
+		}
+	}
+	if childTraceID == "" || childTraceID == "parent-trace" {
+		t.Fatalf("probe child trace = %q; want distinct child identity in %+v", childTraceID, detail.Events)
+	}
+	foundPromotion := false
+	for _, event := range detail.Events {
+		if event.TraceID == childTraceID && event.ContextLimit {
+			foundPromotion = true
+			break
+		}
+	}
+	if !foundPromotion {
+		t.Fatalf("probe promotion does not carry child trace %q: %+v", childTraceID, detail.Events)
+	}
+
+	deadline = time.Now().Add(2 * time.Second)
+	for {
+		records, readErr := journal.Read(context.Background(), diagnostics.Selector{TraceID: childTraceID})
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		completed := false
+		for _, record := range records {
+			if record.Stage == "daemon.probe.completed" && record.ParentTraceID == "parent-trace" && record.Reason == "marker_promoted" {
+				completed = true
+				break
+			}
+		}
+		if completed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("probe journal lacks linked terminal outcome: %+v", records)
 		}
 		time.Sleep(2 * time.Millisecond)
 	}

@@ -294,7 +294,7 @@ func TestConfigHooksStatusCommandWritesToCommandOutput(t *testing.T) {
 		"ACCOUNT",
 		"work",
 		"missing",
-		"hint: drifted or missing hooks",
+		"hint: run `amx config hooks-sync`",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("hooks-status output missing %q:\n%s", want, got)

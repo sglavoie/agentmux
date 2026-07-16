@@ -213,6 +213,19 @@ func TestFormatRelativeAge(t *testing.T) {
 	}
 }
 
+func TestDetailRowShowsCompactTraceAndDecisiveReason(t *testing.T) {
+	event := daemon.SessionEvent{
+		At: time.Unix(100, 0).Unix(), Event: "PostToolUse", Action: "active",
+		ToolName: "Bash", TraceID: "1234567890abcdef", DecisionReason: "accepted",
+	}
+	row := stripAnsi(detailRow(event, time.Unix(101, 0), 96))
+	for _, want := range []string{"Bash", "t:12345678", "accepted"} {
+		if !strings.Contains(row, want) {
+			t.Fatalf("detail row missing %q: %q", want, row)
+		}
+	}
+}
+
 func TestDetailPageScrollKeys(t *testing.T) {
 	m := detailModel(t)
 	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3

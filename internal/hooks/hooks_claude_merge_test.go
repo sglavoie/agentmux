@@ -44,21 +44,21 @@ func TestMergeFreshWrite(t *testing.T) {
 		t.Fatal("hooks key missing or wrong type")
 	}
 
-	// Should have entries for all installed Claude icon-relevant events.
-	if got := len(hooks); got != 24 {
-		t.Errorf("expected 24 hook events, got %d", got)
+	// Should have entries for all installed Claude state and observer events.
+	if got := len(hooks); got != 28 {
+		t.Errorf("expected 28 hook events, got %d", got)
 	}
 
-	// Verify UserPromptSubmit uses event-name format.
+	// Verify both state-changing and observer-only events use event-name format.
 	checkHookCommand(t, hooks, "UserPromptSubmit", testBin+" hook-indicator UserPromptSubmit --harness=claude")
+	for _, event := range []string{"InstructionsLoaded", "MessageDisplay", "CwdChanged", "WorktreeRemove"} {
+		checkHookCommand(t, hooks, event, testBin+" hook-indicator "+event+" --harness=claude")
+	}
 }
 
-// TestMergeExcludesWorktreeHooks pins the CLAUDE.md guarantee that the
-// WorktreeCreate and WorktreeRemove control hooks are never installed:
-// these hooks must print the worktree path on stdout, which amx hook-indicator
-// does not, and installing them breaks subagent spawning with
-// "WorktreeCreate hook failed: no successful output".
-func TestMergeExcludesWorktreeHooks(t *testing.T) {
+// TestMergeExcludesSpecialSemanticsHooks pins the guarantee that hooks needing
+// output or a bounded matcher policy are never installed accidentally.
+func TestMergeExcludesSpecialSemanticsHooks(t *testing.T) {
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "claude")
 
@@ -78,9 +78,9 @@ func TestMergeExcludesWorktreeHooks(t *testing.T) {
 		t.Fatalf("json.Unmarshal: %v", err)
 	}
 	hooks := s["hooks"].(map[string]any)
-	for _, banned := range []string{"WorktreeCreate", "WorktreeRemove"} {
+	for _, banned := range []string{"FileChanged", "WorktreeCreate"} {
 		if _, ok := hooks[banned]; ok {
-			t.Errorf("%s must never be installed (would break subagent spawning)", banned)
+			t.Errorf("%s must never be installed without its special-semantics policy", banned)
 		}
 	}
 }

@@ -52,6 +52,24 @@ func validateDefaults(d *Defaults) []string {
 	if d.Handoff.RecentMessages < 0 {
 		errs = append(errs, "defaults.handoff.recent_messages must be >= 0")
 	}
+	if d.Diagnostics.JournalKeepDays < 0 {
+		errs = append(errs, "defaults.diagnostics.journal_keep_days must be >= 0")
+	}
+	if d.Diagnostics.JournalMaxMiB < 0 {
+		errs = append(errs, "defaults.diagnostics.journal_max_mib must be >= 0")
+	}
+	if d.Diagnostics.NativeKeepDays < 0 {
+		errs = append(errs, "defaults.diagnostics.native_keep_days must be >= 0")
+	}
+	if d.Diagnostics.NativeMaxMiB < 0 {
+		errs = append(errs, "defaults.diagnostics.native_max_mib must be >= 0")
+	}
+	if d.Diagnostics.NativeSessionMaxMiB < 0 {
+		errs = append(errs, "defaults.diagnostics.native_session_max_mib must be >= 0")
+	}
+	if d.Diagnostics.NativeMaxMiB > 0 && d.Diagnostics.NativeSessionMaxMiB > d.Diagnostics.NativeMaxMiB {
+		errs = append(errs, "defaults.diagnostics.native_session_max_mib must be <= native_max_mib")
+	}
 	if d.Preview.Direction != "" && !ValidPreviewDirection(d.Preview.Direction) {
 		errs = append(errs, fmt.Sprintf(
 			"invalid defaults.preview.direction %q: must be one of horizontal, vertical",

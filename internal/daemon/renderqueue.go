@@ -41,30 +41,39 @@ import (
 // (enqueueRenderLocked), never the reverse — queue methods never touch
 // handler state.
 type renderQueue struct {
-	mu       sync.Mutex
-	pending  map[int]bool
-	order    []int
-	inflight map[int]bool
+	mu           sync.Mutex
+	pending      map[int]bool
+	queuedTraces map[int]RenderGenerationTrace
+	order        []int
+	inflight     map[int]bool
 	// wake is the coalesced worker signal: capacity one, non-blocking sends.
 	wake chan struct{}
 }
 
+type queuedRender struct {
+	windowID int
+	trace    RenderGenerationTrace
+}
+
 func newRenderQueue() *renderQueue {
 	return &renderQueue{
-		pending:  make(map[int]bool),
-		inflight: make(map[int]bool),
-		wake:     make(chan struct{}, 1),
+		pending:      make(map[int]bool),
+		queuedTraces: make(map[int]RenderGenerationTrace),
+		inflight:     make(map[int]bool),
+		wake:         make(chan struct{}, 1),
 	}
 }
 
-// enqueue adds a window to the queue (idempotent while pending) and wakes the
-// worker. Safe to call while holding Handler.stateMu.
-func (q *renderQueue) enqueue(windowID int) {
+// enqueue adds a window to the queue and carries its latest queued-stage trace
+// to the worker. Safe to call while holding Handler.stateMu: it performs no
+// diagnostic I/O.
+func (q *renderQueue) enqueue(windowID int, trace RenderGenerationTrace) {
 	q.mu.Lock()
 	if !q.pending[windowID] {
 		q.pending[windowID] = true
 		q.order = append(q.order, windowID)
 	}
+	q.queuedTraces[windowID] = cloneRenderGenerationTrace(trace)
 	q.mu.Unlock()
 	q.signal()
 }
@@ -79,7 +88,7 @@ func (q *renderQueue) signal() {
 // acquire pops the oldest pending window that is not already being rendered
 // and marks it in flight. ok is false when nothing is available (empty queue
 // or every pending window is in flight elsewhere).
-func (q *renderQueue) acquire() (windowID int, ok bool) {
+func (q *renderQueue) acquire() (windowID int, trace RenderGenerationTrace, ok bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	for i, id := range q.order {
@@ -87,11 +96,13 @@ func (q *renderQueue) acquire() (windowID int, ok bool) {
 			continue
 		}
 		q.order = append(q.order[:i:i], q.order[i+1:]...)
+		trace = q.queuedTraces[id]
 		delete(q.pending, id)
+		delete(q.queuedTraces, id)
 		q.inflight[id] = true
-		return id, true
+		return id, trace, true
 	}
-	return 0, false
+	return 0, RenderGenerationTrace{}, false
 }
 
 // release ends a window's in-flight render. If the window was re-enqueued
@@ -107,22 +118,51 @@ func (q *renderQueue) release(windowID int) {
 	}
 }
 
-// purge drops a window's pending entry, if any. Closed-window GC uses it so a
-// queued render for a dead window is cancelled instead of failing its Kitty
-// write. An in-flight render cannot be cancelled; its completion bookkeeping
-// already tolerates the deleted state.
-func (q *renderQueue) purge(windowID int) {
+// purge removes and returns a window's pending entry, if any. Closed-window GC
+// uses it so a queued render for a dead window is cancelled instead of failing
+// its Kitty write, then persists the returned queued-stage trace after this
+// queue lock has been released. An in-flight render cannot be cancelled; its
+// completion bookkeeping already tolerates the deleted state.
+func (q *renderQueue) purge(windowID int) (RenderGenerationTrace, bool) {
 	q.mu.Lock()
+	defer q.mu.Unlock()
 	if q.pending[windowID] {
+		trace := cloneRenderGenerationTrace(q.queuedTraces[windowID])
 		delete(q.pending, windowID)
+		delete(q.queuedTraces, windowID)
 		for i, id := range q.order {
 			if id == windowID {
 				q.order = append(q.order[:i:i], q.order[i+1:]...)
 				break
 			}
 		}
+		return trace, true
 	}
-	q.mu.Unlock()
+	return RenderGenerationTrace{}, false
+}
+
+// discardPending atomically transfers every pending queue entry to the caller
+// for off-lock queued-stage persistence during worker shutdown. In-flight
+// entries have already had their queued stage persisted by acquire and are not
+// represented in pending.
+func (q *renderQueue) discardPending() []queuedRender {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	discarded := make([]queuedRender, 0, len(q.pending))
+	for _, windowID := range q.order {
+		if !q.pending[windowID] {
+			continue
+		}
+		discarded = append(discarded, queuedRender{
+			windowID: windowID,
+			trace:    cloneRenderGenerationTrace(q.queuedTraces[windowID]),
+		})
+	}
+	q.pending = make(map[int]bool)
+	q.queuedTraces = make(map[int]RenderGenerationTrace)
+	q.order = nil
+	return discarded
 }
 
 func (q *renderQueue) empty() bool {
@@ -131,14 +171,18 @@ func (q *renderQueue) empty() bool {
 	return len(q.pending) == 0
 }
 
-// enqueueRenderLocked queues a window for rendering and records the queued
-// generation. Callers hold stateMu.
+// enqueueRenderLocked queues a window for rendering. The queued-stage trace is
+// persisted by the render drainer after stateMu has been released.
 func (h *Handler) enqueueRenderLocked(windowID int, st *WindowState) {
-	if st != nil && st.Seq > st.QueuedGen {
+	if st == nil {
+		return
+	}
+	if st.Seq > st.QueuedGen {
 		st.QueuedGen = st.Seq
 	}
+	trace := h.markRenderStageLocked(windowID, st.Seq, renderStageQueued, "pending", "latest_generation", true)
 	if h.renderQueue != nil {
-		h.renderQueue.enqueue(windowID)
+		h.renderQueue.enqueue(windowID, trace)
 	}
 }
 
@@ -146,6 +190,7 @@ func (h *Handler) enqueueRenderLocked(windowID int, st *WindowState) {
 // wake, coalesces the burst behind a short debounce, and drains the queue
 // against one fresh Kitty snapshot per drain.
 func (h *Handler) runRenderWorker(ctx context.Context) {
+	defer h.persistDiscardedRenderQueue()
 	for {
 		select {
 		case <-ctx.Done():
@@ -160,6 +205,18 @@ func (h *Handler) runRenderWorker(ctx context.Context) {
 		case <-timer.C:
 		}
 		h.drainRenderQueue()
+	}
+}
+
+// persistDiscardedRenderQueue preserves the queued-stage causal row for every
+// render the worker abandons at shutdown. discardPending releases the queue
+// mutex before any bounded journal I/O begins.
+func (h *Handler) persistDiscardedRenderQueue() {
+	if h.renderQueue == nil {
+		return
+	}
+	for _, entry := range h.renderQueue.discardPending() {
+		h.recordRenderGenerationBounded(entry.trace, entry.windowID)
 	}
 }
 
@@ -191,10 +248,11 @@ func (h *Handler) drainRenderQueue() {
 // same loop.
 func (h *Handler) drainRenderQueueWith(windows []kitty.OSWindow) {
 	for {
-		windowID, ok := h.renderQueue.acquire()
+		windowID, queuedTrace, ok := h.renderQueue.acquire()
 		if !ok {
 			return
 		}
+		h.recordRenderGenerationBounded(queuedTrace, windowID)
 		h.renderQueuedWindow(windowID, windows)
 		h.renderQueue.release(windowID)
 	}
@@ -233,6 +291,7 @@ func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
 	if seq > st.AttemptedGen {
 		st.AttemptedGen = seq
 	}
+	attemptTrace := h.markRenderStageLocked(windowID, seq, renderStageAttempted, "pending", "candidate_built", true)
 	dirty := st.Dirty
 	dirtySince := st.DirtySince
 	userVar := ""
@@ -245,8 +304,9 @@ func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
 			}
 			st.RenderFailures++
 			st.LastRenderError = err.Error()
-			h.syncRendererMetadataLocked(windowID)
+			failedTrace := h.markRenderStageLocked(windowID, seq, renderStageFailed, "failed", "marshal_state", false)
 			h.stateMu.Unlock()
+			h.recordRenderGeneration(failedTrace, windowID)
 			return
 		}
 	}
@@ -259,8 +319,10 @@ func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
 		}
 	}
 	h.stateMu.Unlock()
+	h.recordRenderGenerationBounded(attemptTrace, windowID)
 
 	if !dirty && nextTitle == "" {
+		h.finishTitle(windowID, seq, dirtySince, nil)
 		return
 	}
 	// A window with pending durable state but no live tab in this snapshot
@@ -315,15 +377,17 @@ func desiredTabTitleLocked(tab *kitty.Tab, st *WindowState) string {
 // batched (activity-only).
 func (h *Handler) renderGenerationCurrent(windowID int, seq uint64) bool {
 	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
 	st, ok := h.windowStateLocked(windowID)
 	if !ok {
+		h.stateMu.Unlock()
 		return false
 	}
 	if st.Seq == seq {
+		h.stateMu.Unlock()
 		return true
 	}
 	h.enqueueRenderLocked(windowID, st)
+	h.stateMu.Unlock()
 	return false
 }
 
@@ -333,9 +397,9 @@ func (h *Handler) renderGenerationCurrent(windowID int, seq uint64) bool {
 // already stale and the newer generation owns the next pass.
 func (h *Handler) finishPersist(windowID int, seq uint64, renderErr error) bool {
 	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
 	st, ok := h.windowStateLocked(windowID)
 	if !ok {
+		h.stateMu.Unlock()
 		return false
 	}
 	if renderErr != nil {
@@ -344,21 +408,26 @@ func (h *Handler) finishPersist(windowID int, seq uint64, renderErr error) bool 
 		}
 		st.RenderFailures++
 		st.LastRenderError = renderErr.Error()
-		h.syncRendererMetadataLocked(windowID)
+		trace := h.markRenderStageLocked(windowID, seq, renderStageFailed, "failed", "persist_state", false)
 		h.warnRenderFailureLocked(windowID, st, renderErr)
+		h.stateMu.Unlock()
+		h.recordRenderGeneration(trace, windowID)
 		return false
 	}
 	if seq > st.PersistedGen {
 		st.PersistedGen = seq
 	}
+	trace := h.markRenderStageLocked(windowID, seq, renderStagePersisted, "success", "state_persisted", false)
 	if st.Seq != seq {
-		h.syncRendererMetadataLocked(windowID)
 		h.enqueueRenderLocked(windowID, st)
+		h.stateMu.Unlock()
+		h.recordRenderGenerationBounded(trace, windowID)
 		return false
 	}
 	st.Dirty = false
 	st.DirtySince = time.Time{}
-	h.syncRendererMetadataLocked(windowID)
+	h.stateMu.Unlock()
+	h.recordRenderGenerationBounded(trace, windowID)
 	return true
 }
 
@@ -368,9 +437,9 @@ func (h *Handler) finishPersist(windowID int, seq uint64, renderErr error) bool 
 // failure/drift flush without rewriting amx_state.
 func (h *Handler) finishTitle(windowID int, seq uint64, dirtySince time.Time, renderErr error) {
 	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
 	st, ok := h.windowStateLocked(windowID)
 	if !ok {
+		h.stateMu.Unlock()
 		return
 	}
 	if renderErr != nil {
@@ -379,8 +448,10 @@ func (h *Handler) finishTitle(windowID int, seq uint64, dirtySince time.Time, re
 		}
 		st.RenderFailures++
 		st.LastRenderError = renderErr.Error()
-		h.syncRendererMetadataLocked(windowID)
+		trace := h.markRenderStageLocked(windowID, seq, renderStageFailed, "failed", "render_title", false)
 		h.warnRenderFailureLocked(windowID, st, renderErr)
+		h.stateMu.Unlock()
+		h.recordRenderGeneration(trace, windowID)
 		return
 	}
 	if seq > st.RenderedGen {
@@ -393,7 +464,9 @@ func (h *Handler) finishTitle(windowID int, seq uint64, dirtySince time.Time, re
 			st.LastRenderLatency = time.Since(dirtySince)
 		}
 	}
-	h.syncRendererMetadataLocked(windowID)
+	trace := h.markRenderStageLocked(windowID, seq, renderStageRendered, "success", "render_complete", false)
+	h.stateMu.Unlock()
+	h.recordRenderGenerationBounded(trace, windowID)
 }
 
 func (h *Handler) warnRenderFailureLocked(windowID int, st *WindowState, renderErr error) {

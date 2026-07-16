@@ -15,6 +15,10 @@ type applyOutcome struct {
 	// Those events carry no source-scoped fact: folding them into the reducer
 	// would repaint icons the quirk layer exists to hold back.
 	skipReduce bool
+	// skipReason is the stable taxonomy entry explaining an intentional reducer
+	// bypass. It is persisted even when the legacy event row was otherwise
+	// marked allowed (for example a preserve-current completion).
+	skipReason string
 	// reduceAction is the action the legacy machine settled on after
 	// reset-flow rewrites and copilot synthetic stops, so the reducer folds
 	// what actually happened rather than the pre-rewrite stamp.
@@ -39,9 +43,22 @@ type applyOutcome struct {
 // return OK, so the reducer sees them too and applies its own suppression
 // rules.
 func (h *Handler) handleStateUpdate(req Request) Response {
+	if req.Type == "" {
+		req.Type = TypeStateUpdate
+	}
+	req = ensureRequestTraceID(req)
+	if req.eventRef == nil {
+		req.eventRef = &sessionEventReference{}
+	}
+	if req.parseOutcome == "" {
+		req.parseOutcome = ParseOutcomeSynthetic
+	}
+	before := h.effectiveStateForTrace(req.WindowID)
 	resp, outcome := h.applyStateUpdate(req)
 	if resp.OK && !outcome.skipReduce {
 		h.reduceStateUpdate(req, outcome, resp, time.Now())
+	} else if resp.OK {
+		h.finalizeBypassedStateUpdate(req, outcome, before)
 	}
 	return resp
 }
@@ -65,6 +82,9 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 	// Child-complete signals refresh activity bookkeeping while preserving the
 	// visible icon; they never become source facts.
 	outcome.skipReduce = req.PreservesIcon
+	if req.PreservesIcon {
+		outcome.skipReason = DecisionReasonPreservesIcon
+	}
 
 	// A newer prompt or explicit wipe supersedes a stop still held in the
 	// reset-defer window; drop it before this update lands so the debounced stop
@@ -77,7 +97,11 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 
 	receivedAt := time.Now()
 	h.stateMu.Lock()
+	inputAction := req.Action
 	req = h.applyResetFlowLocked(req)
+	if req.Action != inputAction {
+		req.normalizationOutcome = NormalizationOutcomeReducerRewrite
+	}
 	// A reset flow may have just rewritten the action (stop → user_clear); the
 	// reducer and notifier must see the settled action, not the raw stamp.
 	outcome.reduceAction = req.Action
@@ -153,6 +177,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotPendingPrompt, currentIconState))
 		h.stateMu.Unlock()
 		outcome.skipReduce = true
+		outcome.skipReason = DecisionReasonCopilotPendingPrompt
 		return Response{OK: true, Allowed: false}, outcome
 	}
 	if shouldSuppressPendingElicitationActive(req, prevAction) {
@@ -165,6 +190,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonElicitationPending, currentIconState))
 		h.stateMu.Unlock()
 		outcome.skipReduce = true
+		outcome.skipReason = DecisionReasonElicitationPending
 		return Response{OK: true, Allowed: false}, outcome
 	}
 
@@ -277,6 +303,7 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 			h.appendEventLocked(req.WindowID, suppressedSessionEvent(req, req.Action, suppressionReasonCopilotMidSubagent, currentIconState))
 			h.stateMu.Unlock()
 			outcome.skipReduce = true
+			outcome.skipReason = DecisionReasonCopilotMidSubagent
 			return Response{OK: true, Allowed: false}, outcome
 		}
 	}
@@ -304,9 +331,11 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		h.windowMetadata[req.WindowID] = meta
 		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve, currentIconState))
 		// The icon is preserved, so this is durable bookkeeping only.
+		h.linkRequestRenderGenerationLocked(req, st.Seq+1)
 		h.markWindowActivityDirtyLocked(req.WindowID)
 		h.stateMu.Unlock()
 		outcome.skipReduce = true
+		outcome.skipReason = DecisionReasonReducerBypassed
 		return Response{OK: true, Allowed: true, IconState: IconStatePreserve}, outcome
 	}
 
@@ -508,12 +537,13 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		// icon stays preserved: a truly auto-approved tool call's follow-up
 		// activity arrives within the debounce and the user ignores one toast,
 		// while a real prompt the user must see is never silently swallowed.
-		h.maybeNotify(req.WindowID, req.SessionTitle, req.Account, effective, req.PipeMode)
+		h.maybeNotifyTraced(req.WindowID, req.SessionTitle, req.Account, effective, req.PipeMode, notificationTraceFromRequest(req))
 	}
 	if isAutoApprovedPerm {
 		// The permission resolved itself; there is no fact to fold and no key
 		// icon to surface.
 		outcome.skipReduce = true
+		outcome.skipReason = DecisionReasonAutoApprovedPermission
 	}
 
 	h.stateMu.Lock()
@@ -531,6 +561,8 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 	} else {
 		h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, loggedAction, iconState, currentIconState))
 	}
+	st = h.ensureWindowStateLocked(req.WindowID)
+	h.linkRequestRenderGenerationLocked(req, st.Seq+1)
 	h.syncRendererMetadataLocked(req.WindowID)
 	// Visual changes render immediately; everything else is batched
 	// persistence flushed by the next maintenance tick.
@@ -575,6 +607,7 @@ func (h *Handler) handleLoopMarkerStateUpdate(req Request) Response {
 		st.LoopingSet = true
 	}
 	h.appendEventLocked(req.WindowID, sessionEventFromRequest(req, req.Action, IconStatePreserve, desiredIconForState(st)))
+	h.linkRequestRenderGenerationLocked(req, st.Seq+1)
 	h.syncRendererMetadataLocked(req.WindowID)
 	// A heartbeat that leaves the marker as-is is activity bookkeeping; only a
 	// marker flip needs an immediate repaint.

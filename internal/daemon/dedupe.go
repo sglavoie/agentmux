@@ -119,9 +119,15 @@ func newDedupeCache(metrics *Metrics) *dedupeCache {
 // it holds no cache lock while running so unrelated requests proceed in
 // parallel.
 func (c *dedupeCache) do(id string, compute func() Response) Response {
+	return c.doObserved(id, func(bool) Response { return compute() })
+}
+
+// doObserved is do with request-scoped saturation attribution. The callback
+// receives true only when the bounded dedupe cache could not retain this ID.
+func (c *dedupeCache) doObserved(id string, compute func(saturated bool) Response) Response {
 	if id == "" {
 		c.metrics.accepted.Add(1)
-		return compute()
+		return compute(false)
 	}
 
 	c.mu.Lock()
@@ -133,9 +139,15 @@ func (c *dedupeCache) do(id string, compute func() Response) Response {
 			c.metrics.duplicate.Add(1)
 			select {
 			case <-e.done:
-				return e.resp
+				resp := e.resp
+				resp.Delivery = cloneDeliveryAcknowledgement(resp.Delivery)
+				if resp.Delivery != nil {
+					resp.Delivery.Status = DeliveryAcknowledgementDuplicate
+					resp.Delivery.Reason = "request_replayed"
+				}
+				return resp
 			case <-time.After(c.waitTimeout):
-				return Response{OK: false, Error: "duplicate request wait timed out"}
+				return Response{OK: false, Error: "duplicate request wait timed out", Retryable: true}
 			}
 		}
 		// The prior entry has expired; drop it and re-admit as a fresh request.
@@ -150,7 +162,7 @@ func (c *dedupeCache) do(id string, compute func() Response) Response {
 		// queue-full metric rather than a hard rejection that drops the event.
 		c.mu.Unlock()
 		c.metrics.queueFull.Add(1)
-		return compute()
+		return compute(true)
 	}
 
 	e := &dedupeEntry{done: make(chan struct{})}
@@ -158,7 +170,7 @@ func (c *dedupeCache) do(id string, compute func() Response) Response {
 	c.mu.Unlock()
 
 	c.metrics.accepted.Add(1)
-	resp := compute()
+	resp := compute(false)
 
 	c.mu.Lock()
 	e.resp = resp

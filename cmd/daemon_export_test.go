@@ -82,6 +82,7 @@ func resetDaemonExportTestState(t *testing.T) {
 	oldLast := daemonExportEventsLast
 	oldOutput := daemonExportEventsOutput
 	oldPretty := daemonExportEventsPretty
+	oldSchema := daemonExportEventsSchema
 	oldOut := daemonExportEventsCmd.OutOrStdout()
 
 	t.Cleanup(func() {
@@ -93,6 +94,7 @@ func resetDaemonExportTestState(t *testing.T) {
 		daemonExportEventsLast = oldLast
 		daemonExportEventsOutput = oldOutput
 		daemonExportEventsPretty = oldPretty
+		daemonExportEventsSchema = oldSchema
 		daemonExportEventsCmd.SetOut(oldOut)
 	})
 }

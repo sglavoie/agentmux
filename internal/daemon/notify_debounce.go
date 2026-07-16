@@ -7,13 +7,14 @@ import "time"
 type pendingNotification struct {
 	timer *time.Timer
 	seq   uint64
+	trace NotificationTrace
 }
 
-func (n *Notifier) schedulePermissionLocked(windowID int, account, title, subtitle string) {
-	n.cancelPendingLocked(windowID)
+func (n *Notifier) schedulePermissionLocked(windowID int, account, title, subtitle string, trace NotificationTrace) (NotificationDisposition, bool) {
+	cancelled, hadPending := n.cancelPendingLocked(windowID, "debounce_refreshed")
 	n.nextPendingSeq++
 	seq := n.nextPendingSeq
-	entry := pendingNotification{seq: seq}
+	entry := pendingNotification{seq: seq, trace: trace}
 	entry.timer = time.AfterFunc(n.debounce, func() {
 		n.mu.Lock()
 		pending, ok := n.pending[windowID]
@@ -27,26 +28,41 @@ func (n *Notifier) schedulePermissionLocked(windowID int, account, title, subtit
 		now := n.now()
 		if last, ok := n.last[key]; ok && now.Sub(last) < cooldownDuration {
 			n.mu.Unlock()
+			n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: "permission", Stage: "decision", Outcome: "suppressed", Reason: "cooldown"})
 			return
 		}
 		n.last[key] = now
 		n.mu.Unlock()
 
-		n.runDispatch(windowID, account, title, subtitle)
+		n.runDispatch(windowID, account, title, subtitle, "permission", trace)
 	})
 	n.pending[windowID] = entry
+	return cancelled, hadPending
 }
 
-func (n *Notifier) cancelPendingLocked(windowID int) {
+func (n *Notifier) cancelPendingLocked(windowID int, reason string) (NotificationDisposition, bool) {
 	if pending, ok := n.pending[windowID]; ok {
 		pending.timer.Stop()
 		delete(n.pending, windowID)
+		return NotificationDisposition{Trace: pending.trace, WindowID: windowID, Action: "permission", Stage: "decision", Outcome: "cancelled", Reason: reason}, true
 	}
+	return NotificationDisposition{}, false
+}
+
+// cancelPending removes any pending permission notification for windowID and
+// returns its disposition without invoking the observer. Callers that hold
+// broader locks can therefore defer observer work until those locks are free.
+func (n *Notifier) cancelPending(windowID int) (NotificationDisposition, bool) {
+	n.mu.Lock()
+	disposition, cancelled := n.cancelPendingLocked(windowID, "superseded")
+	n.mu.Unlock()
+	return disposition, cancelled
 }
 
 // CancelPending cancels any pending permission notification for windowID.
 func (n *Notifier) CancelPending(windowID int) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.cancelPendingLocked(windowID)
+	disposition, cancelled := n.cancelPending(windowID)
+	if cancelled {
+		n.emitDisposition(disposition)
+	}
 }

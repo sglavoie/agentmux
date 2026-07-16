@@ -1,9 +1,11 @@
 package daemon
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -39,6 +41,8 @@ type contextLimitProbe struct {
 	event          string
 	payload        hookevent.HookPayload
 	targets        []contextLimitProbeTarget
+	traceID        string
+	parentTraceID  string
 }
 
 // runProbeAsync runs fn off the hook goroutine. Production spawns a goroutine so
@@ -59,6 +63,18 @@ func (h *Handler) enqueueContextLimitProbe(p contextLimitProbe) {
 	if h.kittyClient == nil || p.sourceWindowID <= 0 || len(p.targets) == 0 {
 		return
 	}
+	if p.traceID == "" {
+		p.traceID = diagnostics.NewTraceID()
+	}
+	p.parentTraceID = p.req.TraceID
+	targetIDs := make([]int, 0, len(p.targets))
+	for _, target := range p.targets {
+		targetIDs = append(targetIDs, target.windowID)
+	}
+	h.linkProbeChild(p.parentTraceID, p.traceID, targetIDs)
+	h.recordProbeStageBounded(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "queued", "pending", "screen_read_scheduled", map[string]string{
+		"event": p.event, "target_count": fmt.Sprint(len(p.targets)),
+	})
 	h.runProbeAsync(func() { h.runContextLimitProbe(p) })
 }
 
@@ -67,12 +83,17 @@ func (h *Handler) enqueueContextLimitProbe(p contextLimitProbe) {
 // goroutine; a read error or a clean screen leaves the base event's outcome
 // untouched.
 func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
+	h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "attempted", "pending", "screen_read_started", map[string]string{
+		"event": p.event,
+	})
 	text, err := h.hookKittyClient(p.req).GetText(kitty.MatchWindowByID(p.sourceWindowID), "screen")
 	if err != nil {
 		slog.Debug("context-limit probe failed", "window_id", p.sourceWindowID, "event", p.event, "err", err)
+		h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "completed", "failed", "screen_read_failed", map[string]string{"event": p.event})
 		return
 	}
 	if !contextlimit.ScreenShowsMarker(text) {
+		h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "completed", "success", "marker_absent", map[string]string{"event": p.event})
 		return
 	}
 	for _, t := range p.targets {
@@ -101,6 +122,15 @@ func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
 			OriginWindowID: p.sourceWindowID,
 		}
 		stateReq.normalized = &normalized
+		stateReq.TraceID = p.traceID
+		stateReq.parentTraceID = p.parentTraceID
+		stateReq.SourceEventID = firstNonEmpty(p.req.SourceEventID, p.req.RequestID, p.traceID) + ":context-limit-probe"
+		stateReq.PayloadHMAC = p.req.PayloadHMAC
+		stateReq.PayloadSize = p.req.PayloadSize
+		stateReq.PayloadEncoding = p.req.PayloadEncoding
 		h.handleStateUpdate(stateReq)
 	}
+	h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "completed", "success", "marker_promoted", map[string]string{
+		"event": p.event, "target_count": fmt.Sprint(len(p.targets)),
+	})
 }

@@ -250,7 +250,7 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 	if opts.Directory != meta.CWD || opts.UserVars["amx_harness"] != harness.Codex || opts.UserVars["amx_profile"] != "work" {
 		t.Fatalf("launch context = %+v, want indexed source context", opts)
 	}
-	if got := strings.Join(opts.Cmdline, " "); !strings.Contains(got, "codex --project-flag resume session-1") {
+	if got := strings.Join(opts.Cmdline, " "); !strings.Contains(got, "codex --project-flag -c log_dir=") || !strings.Contains(got, " resume session-1") {
 		t.Fatalf("command = %q, want Codex resume argv", got)
 	}
 	var payload struct {

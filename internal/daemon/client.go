@@ -11,10 +11,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
 // SocketPath returns the Unix socket path for the daemon. If the user's home
@@ -52,6 +55,24 @@ func NewClientWithSocket(path string) *Client {
 // harness beyond the two-second cold-start budget.
 const normalAckBudget = 250 * time.Millisecond
 const coldStartBudget = 2 * time.Second
+
+const (
+	DeliveryStageIPCAttempt      = "ipc_attempt"
+	DeliveryStageDaemonAutostart = "daemon_autostart"
+)
+
+// DeliveryStageEvent reports one bounded client transport stage. The hook
+// indicator uses it to persist attempt/autostart evidence while Client keeps
+// ownership of retries and deadline enforcement.
+type DeliveryStageEvent struct {
+	Stage     string
+	Attempt   int
+	Outcome   string
+	Reason    string
+	LatencyMS float64
+}
+
+type DeliveryObserver func(DeliveryStageEvent)
 
 var sendDeadline = normalAckBudget
 var autoStartDeadline = coldStartBudget
@@ -318,7 +339,50 @@ func (c *Client) restartDetachedBefore(amxBin string, daemonAlive bool, deadline
 	return nil
 }
 
-func (c *Client) sendWithRetries(req Request, deadline time.Time) (Response, error) {
+type observedRequestSender struct {
+	client   *Client
+	req      Request
+	deadline time.Time
+	observer DeliveryObserver
+	attempt  int
+}
+
+func (s *observedRequestSender) send() (Response, error) {
+	s.attempt++
+	req := s.req
+	req.Attempt = s.attempt
+	started := time.Now()
+	resp, err := s.client.sendBefore(req, s.deadline)
+	event := DeliveryStageEvent{
+		Stage:     DeliveryStageIPCAttempt,
+		Attempt:   s.attempt,
+		Outcome:   "success",
+		Reason:    "acknowledged",
+		LatencyMS: float64(time.Since(started)) / float64(time.Millisecond),
+	}
+	if err != nil {
+		event.Outcome = "error"
+		event.Reason = err.Error()
+	}
+	if s.observer != nil {
+		s.observer(event)
+	}
+	return resp, err
+}
+
+func observeDeliveryStage(observer DeliveryObserver, stage, outcome, reason string, started time.Time) {
+	if observer == nil {
+		return
+	}
+	observer(DeliveryStageEvent{
+		Stage:     stage,
+		Outcome:   outcome,
+		Reason:    reason,
+		LatencyMS: float64(time.Since(started)) / float64(time.Millisecond),
+	})
+}
+
+func (c *Client) sendWithRetriesObserved(sender *observedRequestSender, deadline time.Time) (Response, error) {
 	var resp Response
 	err := errors.New("daemon did not start in time")
 	for time.Until(deadline) > 0 {
@@ -329,7 +393,7 @@ func (c *Client) sendWithRetries(req Request, deadline time.Time) (Response, err
 		if delay > 0 {
 			time.Sleep(delay)
 		}
-		resp, err = c.sendBefore(req, deadline)
+		resp, err = sender.send()
 		if err == nil {
 			return resp, nil
 		}
@@ -340,7 +404,15 @@ func (c *Client) sendWithRetries(req Request, deadline time.Time) (Response, err
 // SendWithAutoStart sends req to the daemon, auto-starting it if not running.
 // amxBin is the path to the amx binary used for auto-start.
 func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error) {
+	return c.SendWithAutoStartObserved(req, amxBin, nil)
+}
+
+// SendWithAutoStartObserved is SendWithAutoStart with additive transport-stage
+// observation. The observer runs synchronously after each attempt or autostart
+// action; callers must keep it bounded and fail-open.
+func (c *Client) SendWithAutoStartObserved(req Request, amxBin string, observer DeliveryObserver) (Response, error) {
 	deadline := time.Now().Add(autoStartDeadline)
+	sender := &observedRequestSender{client: c, req: req, deadline: deadline, observer: observer}
 	restarted := false
 	var autoStartLock *os.File
 	defer func() {
@@ -355,11 +427,12 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 			if !errors.Is(lockErr, errAutoStartInProgress) {
 				return Response{}, fmt.Errorf("daemon auto-start lock failed: %w", lockErr)
 			}
-			resp, err := c.sendBefore(req, deadline)
+			observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "waiting", "another_client_starting", time.Now())
+			resp, err := sender.send()
 			if err == nil {
 				return resp, nil
 			}
-			resp, retryErr := c.sendWithRetries(req, deadline)
+			resp, retryErr := c.sendWithRetriesObserved(sender, deadline)
 			if retryErr == nil {
 				return resp, nil
 			}
@@ -373,14 +446,17 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 				"amx_bin", amxBin,
 				"daemon_pid", health.PID,
 			)
+			started := time.Now()
 			if err := c.restartDetachedBefore(amxBin, true, deadline); err != nil {
+				observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "error", err.Error(), started)
 				return Response{}, fmt.Errorf("daemon auto-restart failed: %w", err)
 			}
+			observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "success", "stale_daemon_restarted", started)
 			restarted = true
 		}
 	}
 
-	resp, err := c.sendBefore(req, deadline)
+	resp, err := sender.send()
 	if err == nil {
 		return resp, nil
 	}
@@ -405,18 +481,21 @@ func (c *Client) SendWithAutoStart(req Request, amxBin string) (Response, error)
 		if autoStartLock != nil {
 			// Another process may have completed startup between our failed Send
 			// and acquiring the lock. Recheck before spawning.
-			resp, err = c.sendBefore(req, deadline)
+			resp, err = sender.send()
 			if err == nil {
 				return resp, nil
 			}
+			started := time.Now()
 			if startErr := spawnDetached(amxBin); startErr != nil {
+				observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "error", startErr.Error(), started)
 				return Response{}, fmt.Errorf("daemon auto-start failed: %w", startErr)
 			}
+			observeDeliveryStage(observer, DeliveryStageDaemonAutostart, "success", "daemon_spawned", started)
 		}
 	}
 
 	// Retry only for the remainder of the hook's auto-start budget.
-	resp, err = c.sendWithRetries(req, deadline)
+	resp, err = c.sendWithRetriesObserved(sender, deadline)
 	if err == nil {
 		return resp, nil
 	}
@@ -444,14 +523,53 @@ func (c *Client) ExportEvents(windowID int) (EventsExport, error) {
 	}, nil
 }
 
-// SpawnDetached starts `amxBin daemon start` in a new session with stdio
-// detached, freeing the calling terminal immediately. The spawned process
-// survives the parent's termination. Does not wait for the daemon socket
-// to become reachable.
+// SpawnDetached starts `amxBin daemon start` in a new session. Stdio is
+// detached from the caller and inherited by a private bootstrap log when the
+// diagnostics directory is available. Diagnostics setup is fail-open: if the
+// private log cannot be created, the daemon is still started with nil stdio.
 func SpawnDetached(amxBin string) error {
 	cmd := exec.Command(amxBin, "daemon", "start")
-	cmd.Stdout = nil
-	cmd.Stderr = nil
 	cmd.SysProcAttr = detachSysProcAttr()
-	return cmd.Start()
+
+	var bootstrap *os.File
+	if paths, err := diagnostics.DefaultPaths(); err == nil {
+		launchID := strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		if file, bootstrapPath, openErr := diagnostics.OpenBootstrapLog(paths, launchID); openErr == nil {
+			bootstrap = file
+			cmd.Stdout = bootstrap
+			cmd.Stderr = bootstrap
+			cmd.Env = environmentWithOverrides(os.Environ(),
+				daemonDetachedEnv+"=1",
+				daemonLaunchIDEnv+"="+launchID,
+				daemonBootstrapEnv+"="+bootstrapPath,
+			)
+		}
+	}
+	if err := cmd.Start(); err != nil {
+		if bootstrap != nil {
+			return errors.Join(err, bootstrap.Close())
+		}
+		return err
+	}
+	_ = cmd.Process.Release()
+	if bootstrap != nil {
+		_ = bootstrap.Close()
+	}
+	return nil
+}
+
+func environmentWithOverrides(base []string, overrides ...string) []string {
+	keys := make(map[string]bool, len(overrides))
+	for _, override := range overrides {
+		key, _, _ := strings.Cut(override, "=")
+		keys[key] = true
+	}
+	result := make([]string, 0, len(base)+len(overrides))
+	for _, entry := range base {
+		key, _, _ := strings.Cut(entry, "=")
+		if !keys[key] {
+			result = append(result, entry)
+		}
+	}
+	return append(result, overrides...)
 }

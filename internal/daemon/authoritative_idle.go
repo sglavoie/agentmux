@@ -62,6 +62,7 @@ type AuthoritativeIdle struct {
 	PipeMode      bool
 	Muted         bool
 	SourceEventID string
+	TraceID       string
 
 	// SessionID names the interactive conversation this observation settles. It
 	// is stamped onto the probe fact so a same-source recovery can re-consult the
@@ -349,6 +350,15 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 		string(obs.Source.Kind)+":"+obs.Source.Key,
 		fmt.Sprintf("authoritative idle (%s) settled visible state %q→%q",
 			idleHarnessLabel(obs.Harness), before.Icon, effective.Icon))
+	if len(st.EventLog) > 0 && obs.TraceID != "" {
+		event := &st.EventLog[len(st.EventLog)-1]
+		event.TraceID = obs.TraceID
+		event.SourceEventID = obs.SourceEventID
+		event.ProducerHarness = obs.Harness
+		event.Profile = obs.Account
+		event.SessionID = obs.SessionID
+		h.linkSessionEventRenderGenerationLocked(obs.WindowID, st, event, obs.TraceID, "", obs.SourceEventID, st.Seq+1)
+	}
 	h.syncRendererMetadataLocked(obs.WindowID)
 
 	if effective != before {
@@ -376,7 +386,10 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 		notify = false
 	}
 	if notify {
-		h.maybeNotify(obs.WindowID, title, account, "stop", pipe)
+		h.maybeNotifyTraced(obs.WindowID, title, account, "stop", pipe, NotificationTrace{
+			TraceID: obs.TraceID, SourceEventID: obs.SourceEventID,
+			Harness: obs.Harness, Profile: account, SessionID: obs.SessionID,
+		})
 	}
 	return true
 }

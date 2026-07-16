@@ -209,9 +209,13 @@ For the next installed acceptance run, retain all of the following:
   with its producer `--harness` flag;
 - `amx doctor --strict` and a repeated `amx daemon audit --duration 10m --json`
   with no new mismatch, unknown-producer, or pressure failures;
-- schema-v8 exports for both the managed target and unmanaged producer panes,
-  showing the producer-derived source key/origin, managed target ownership, and
-  terminal route continuity after focus moves;
+- default schema v9 exports for both the managed target and unmanaged producer
+  panes, showing trace/request/source-event correlation, producer-derived
+  source key/origin, managed target ownership, reducer outcomes, async render
+  links, and terminal route continuity after focus moves;
+- one `--schema 8` export confirming the explicit compatibility projection
+  omits v9-only causal and async-effect fields while retaining the v8 route and
+  producer-origin contract;
 - a negative inactive-unmanaged trace that remains `owner_mismatch` without
   causing a prompt failure.
 

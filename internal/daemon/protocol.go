@@ -9,17 +9,51 @@ import (
 type MessageType string
 
 const (
-	TypeStateUpdate   MessageType = "state_update"
-	TypeHookEvent     MessageType = "hook_event"
-	TypeStateQuery    MessageType = "state_query"
-	TypeSessionDetail MessageType = "session_detail"
-	TypeEventsExport  MessageType = "events_export"
-	TypeShutdown      MessageType = "shutdown"
-	TypeHealth        MessageType = "health"
+	TypeStateUpdate     MessageType = "state_update"
+	TypeHookEvent       MessageType = "hook_event"
+	TypeDiagnosticProbe MessageType = "diagnostic_probe"
+	TypeStateQuery      MessageType = "state_query"
+	TypeSessionDetail   MessageType = "session_detail"
+	TypeEventsExport    MessageType = "events_export"
+	TypeShutdown        MessageType = "shutdown"
+	TypeHealth          MessageType = "health"
 
 	// IconStatePreserve signals the client to keep the current icon unchanged.
 	IconStatePreserve = "preserve"
 )
+
+// Delivery acknowledgement statuses are additive to the legacy OK/Error
+// response pair. Hook clients use them to distinguish an original acceptance
+// from an idempotent replay or a permanent ingress rejection without parsing
+// stderr or daemon error text.
+const (
+	DeliveryAcknowledgementAccepted  = "accepted"
+	DeliveryAcknowledgementDuplicate = "duplicate"
+	DeliveryAcknowledgementRejected  = "rejected"
+)
+
+const DeliveryAcknowledgementSchemaVersion = 1
+
+// DeliveryAcknowledgement describes what the daemon did with one structured
+// hook delivery. It contains identifiers and routing metadata only; raw hook
+// payloads never appear in acknowledgements.
+type DeliveryAcknowledgement struct {
+	SchemaVersion   int    `json:"schema_version"`
+	Status          string `json:"status"`
+	Reason          string `json:"reason,omitempty"`
+	TraceID         string `json:"trace_id,omitempty"`
+	RequestID       string `json:"request_id,omitempty"`
+	SourceEventID   string `json:"source_event_id,omitempty"`
+	Attempt         int    `json:"attempt,omitempty"`
+	ProducerHarness string `json:"producer_harness,omitempty"`
+	TargetHarness   string `json:"target_harness,omitempty"`
+	Profile         string `json:"profile,omitempty"`
+	SourceWindowID  int    `json:"source_window_id,omitempty"`
+	TargetWindowID  int    `json:"target_window_id,omitempty"`
+	RouteDecision   string `json:"route_decision,omitempty"`
+	SnapshotReady   bool   `json:"snapshot_ready,omitempty"`
+	WindowFound     bool   `json:"window_found,omitempty"`
+}
 
 // Request is a JSON message sent by a client to the daemon over the Unix socket.
 // One request per connection; the connection is closed after the response.
@@ -45,12 +79,44 @@ type Request struct {
 	// leave targetHarnessSet false and use Harness for both roles.
 	targetHarness    string
 	targetHarnessSet bool
+	// parseOutcome, normalizationOutcome, and routeEvidence are daemon-owned
+	// causal context. Hook clients cannot inject them; routing copies them onto
+	// the internal state-update request after decoding the raw delivery.
+	parseOutcome         string
+	normalizationOutcome string
+	routeEvidence        *RoutingEvidence
+	// eventRef links the legacy event-log append to the reducer finalization for
+	// this request without relying on "last event" ordering. It is process-local
+	// and never serialized.
+	eventRef *sessionEventReference
+	// parentTraceID links daemon-synthesized async work to its originating trace.
+	// It is daemon-internal so clients cannot forge causal ancestry.
+	parentTraceID string
+	// saturationReason attributes bounded-capacity degradation to this request.
+	// It is daemon-owned and appears only in sanitized decision evidence.
+	saturationReason string
 	Type             MessageType `json:"type"`
 	// RequestID is a client-generated UUID identifying one logical request.
 	// It is reused verbatim across retries so the daemon can deduplicate an
 	// ambiguous-timeout resend and apply the underlying event exactly once.
 	// Legacy clients omit it; empty-ID requests are never deduplicated.
-	RequestID        string `json:"request_id,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	// TraceID correlates every client, IPC, and daemon stage for one delivery.
+	// RequestID remains the idempotency key and may be reused by an acknowledged
+	// retry; TraceID identifies the current diagnostic trace.
+	TraceID         string `json:"trace_id,omitempty"`
+	SourceEventID   string `json:"source_event_id,omitempty"`
+	Attempt         int    `json:"attempt,omitempty"`
+	PayloadSize     int64  `json:"payload_size,omitempty"`
+	PayloadHMAC     string `json:"payload_hmac,omitempty"`
+	PayloadEncoding string `json:"payload_encoding,omitempty"`
+	// PayloadCaptured tells a new daemon that the hook client already wrote
+	// this raw payload into the explicitly authorized temporary capture. Legacy
+	// clients omit it, allowing the daemon to perform the same scoped check.
+	PayloadCaptured bool `json:"payload_captured,omitempty"`
+	// ProducerHarness is the explicit producer identity used by new clients.
+	// Harness remains populated for backward compatibility with older daemons.
+	ProducerHarness  string `json:"producer_harness,omitempty"`
 	WindowID         int    `json:"window_id,omitempty"`         // KITTY_WINDOW_ID
 	Action           string `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear
 	Event            string `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
@@ -75,6 +141,10 @@ type Request struct {
 type Response struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
+	// Retryable classifies a rejected request without requiring clients to
+	// inspect Error. Delivery is populated for hook and diagnostic-probe ingress.
+	Retryable bool                     `json:"retryable,omitempty"`
+	Delivery  *DeliveryAcknowledgement `json:"delivery,omitempty"`
 	// Fields populated for TypeStateUpdate:
 	Allowed   bool   `json:"allowed,omitempty"`    // whether guard permitted the transition
 	IconState string `json:"icon_state,omitempty"` // icon name to show ("bolt","stop","key","warning","error","")
@@ -227,6 +297,32 @@ type WindowDebugRenderer struct {
 	DirtySince          int64 `json:"dirty_since,omitempty"`
 	DirtyAgeSeconds     int64 `json:"dirty_age_seconds,omitempty"`
 	LastRenderLatencyMs int64 `json:"last_render_latency_ms,omitempty"`
+
+	// Generations is the bounded schema-v9 causal history for asynchronous
+	// rendering. A latest-generation pass may contain several source generations
+	// and request IDs when queue coalescing folded a burst into one Kitty write.
+	Generations []RenderGenerationTrace `json:"generations,omitempty"`
+}
+
+// MaxRenderCausalIDs bounds the number of request/trace identities retained by
+// one coalesced render generation. The renderer never waits on an unbounded
+// amount of diagnostic work, even under a sustained hook burst.
+const MaxRenderCausalIDs = 32
+
+// RenderGenerationTrace describes one queued render generation and the bounded
+// many-to-one causal set that produced it. SourceGenerations retains the
+// generations folded into Generation; the ID slices are de-duplicated and
+// capped at MaxRenderCausalIDs.
+type RenderGenerationTrace struct {
+	Generation        uint64   `json:"generation"`
+	SourceGenerations []uint64 `json:"source_generations,omitempty"`
+	TraceIDs          []string `json:"trace_ids,omitempty"`
+	RequestIDs        []string `json:"request_ids,omitempty"`
+	SourceEventIDs    []string `json:"source_event_ids,omitempty"`
+	Stage             string   `json:"stage"`
+	Outcome           string   `json:"outcome,omitempty"`
+	Reason            string   `json:"reason,omitempty"`
+	UpdatedAt         int64    `json:"updated_at,omitempty"`
 }
 
 // EventsExport is the typed daemon snapshot returned by Client.ExportEvents.
@@ -238,7 +334,8 @@ type EventsExport struct {
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
-// `amx daemon export-events`. Version 8 retains every v7 field and adds durable
+// `amx daemon export-events`. Version 9 adds causal decision evidence plus
+// asynchronous render, notification, and probe links. Version 8 retains every v7 field and adds durable
 // fact acknowledgement/origin evidence plus each event's producer pane origin.
 // Version 7 added the interactive-ownership `pm` flag on exported source facts
 // (a fact from a non-interactive `claude -p` child), so diagnostics can tell an
@@ -248,7 +345,10 @@ type EventsExport struct {
 // time / normalized source identity / route decision, and daemon-level
 // readiness, build identity, and request metrics (queue saturation and
 // latency).
-const EventsExportSchemaVersion = 8
+const (
+	EventsExportSchemaVersion = 9
+	EventsExportSchemaV8      = 8
+)
 
 // ExportEventsPayload is the CLI JSON envelope written by
 // `amx daemon export-events`. CLIBuild identifies the exporting CLI binary so
@@ -377,6 +477,76 @@ type SessionEvent struct {
 	// event originated, which may differ from the exported target window when an
 	// unmanaged sibling borrows a managed title owner.
 	OriginWindowID int `json:"origin_window_id,omitempty"`
+
+	// Causal decision fields correlate hook ingress, sanitized normalization,
+	// routing, and the authoritative reducer transition. These fields are
+	// emitted by schema v9 and intentionally exclude raw payloads,
+	// prompt bodies, and tool arguments.
+	TraceID              string                  `json:"trace_id,omitempty"`
+	ParentTraceID        string                  `json:"parent_trace_id,omitempty"`
+	RequestID            string                  `json:"request_id,omitempty"`
+	SourceEventID        string                  `json:"source_event_id,omitempty"`
+	Attempt              int                     `json:"attempt,omitempty"`
+	PayloadSize          int64                   `json:"payload_size,omitempty"`
+	PayloadHMAC          string                  `json:"payload_hmac,omitempty"`
+	PayloadEncoding      string                  `json:"payload_encoding,omitempty"`
+	ParseOutcome         string                  `json:"parse_outcome,omitempty"`
+	NormalizationOutcome string                  `json:"normalization_outcome,omitempty"`
+	IdentityConfidence   string                  `json:"identity_confidence,omitempty"`
+	UsedFallbackIdentity bool                    `json:"used_fallback_identity,omitempty"`
+	ProducerHarness      string                  `json:"producer_harness,omitempty"`
+	TargetHarness        string                  `json:"target_harness,omitempty"`
+	Profile              string                  `json:"profile,omitempty"`
+	SessionID            string                  `json:"session_id,omitempty"`
+	RunID                string                  `json:"run_id,omitempty"`
+	TurnID               string                  `json:"turn_id,omitempty"`
+	ToolUseID            string                  `json:"tool_use_id,omitempty"`
+	SaturationReason     string                  `json:"saturation_reason,omitempty"`
+	TargetWindowID       int                     `json:"target_window_id,omitempty"`
+	ReducerInputAction   string                  `json:"reducer_input_action,omitempty"`
+	ReducerInput         *ReducerInputEvidence   `json:"reducer_input,omitempty"`
+	ReducerDecision      ReducerDecision         `json:"reducer_decision,omitempty"`
+	ReducerReason        string                  `json:"reducer_reason,omitempty"`
+	DecisionReason       string                  `json:"decision_reason,omitempty"`
+	Quarantined          bool                    `json:"quarantined,omitempty"`
+	EffectiveBefore      *EffectiveStateEvidence `json:"effective_before,omitempty"`
+	EffectiveAfter       *EffectiveStateEvidence `json:"effective_after,omitempty"`
+	RouteEvidence        *RoutingEvidence        `json:"route_evidence,omitempty"`
+
+	// Schema-v9 asynchronous effect links. RenderGeneration points into the
+	// renderer generation history; terminal outcomes are copied back onto the
+	// event when available. ProbeTraceIDs contains child traces only, never
+	// captured screen or transcript content.
+	RenderGeneration    uint64   `json:"render_generation,omitempty"`
+	RenderOutcome       string   `json:"render_outcome,omitempty"`
+	RenderReason        string   `json:"render_reason,omitempty"`
+	NotificationTrace   string   `json:"notification_trace_id,omitempty"`
+	NotificationOutcome string   `json:"notification_outcome,omitempty"`
+	NotificationReason  string   `json:"notification_reason,omitempty"`
+	ProbeTraceIDs       []string `json:"probe_trace_ids,omitempty"`
+
+	// eventRef exists only while appendEventLocked stamps the daemon sequence.
+	// Stored/exported events always clear it.
+	eventRef *sessionEventReference
+}
+
+// ReducerInputEvidence is the complete sanitized input needed to replay one
+// reducer admission without the original hook payload, daemon, or Kitty. It is
+// emitted only by schema v9. Every field is state-machine metadata; prompt
+// bodies, tool arguments, filesystem paths, and native-log content are never
+// retained here.
+type ReducerInputEvidence struct {
+	EmittedAt      int64  `json:"emitted_at"`
+	OriginWindowID int    `json:"origin_window_id,omitempty"`
+	Prompt         bool   `json:"prompt,omitempty"`
+	PipeMode       bool   `json:"pipe_mode,omitempty"`
+	ASLPhase       string `json:"asl_phase,omitempty"`
+	EndsSession    bool   `json:"ends_session,omitempty"`
+	SubagentDelta  int    `json:"subagent_delta,omitempty"`
+	GuardDuration  int64  `json:"guard_duration,omitempty"`
+	StaleActive    int64  `json:"stale_active,omitempty"`
+	StaleSubagent  int64  `json:"stale_subagent,omitempty"`
+	StaleCompact   int64  `json:"stale_compact,omitempty"`
 }
 
 // actionPriority maps each action name to its guard priority.

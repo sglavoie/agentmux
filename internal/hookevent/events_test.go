@@ -46,8 +46,6 @@ func TestResolveAction_AllEvents(t *testing.T) {
 		{"Notification", "idle"},
 		{"TeammateIdle", "active"},
 		{"ConfigChange", "clear"},
-		{"WorktreeCreate", "clear"},
-		{"WorktreeRemove", "clear"},
 	}
 	for _, tc := range cases {
 		got, ok := ResolveAction(tc.event, HookPayload{})
@@ -522,8 +520,11 @@ func TestIsIgnoredEvent(t *testing.T) {
 		want    bool
 	}{
 		{"InstructionsLoaded", HookPayload{}, true},
+		{"MessageDisplay", HookPayload{}, true},
 		{"CwdChanged", HookPayload{}, true},
 		{"FileChanged", HookPayload{}, true},
+		{"WorktreeCreate", HookPayload{}, true},
+		{"WorktreeRemove", HookPayload{}, true},
 		{"Notification", HookPayload{NotificationType: "shell_completed"}, true},
 		{"Notification", HookPayload{NotificationTypeCamel: " Shell_Completed "}, true},
 		{"Notification", HookPayload{NotificationType: "agent_idle"}, false},

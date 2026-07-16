@@ -32,6 +32,15 @@ type exampleConfig struct {
 			MaxBytes       int `toml:"max_bytes"`
 			RecentMessages int `toml:"recent_messages"`
 		}
+		Diagnostics struct {
+			JournalEnabled      *bool `toml:"journal_enabled"`
+			JournalKeepDays     int   `toml:"journal_keep_days"`
+			JournalMaxMiB       int   `toml:"journal_max_mib"`
+			NativeLogging       *bool `toml:"native_logging"`
+			NativeKeepDays      int   `toml:"native_keep_days"`
+			NativeMaxMiB        int   `toml:"native_max_mib"`
+			NativeSessionMaxMiB int   `toml:"native_session_max_mib"`
+		}
 		Notifications struct {
 			Permission           bool
 			Stop                 bool
@@ -122,6 +131,20 @@ func TestExampleConfigIncludesStopFailureNotificationToggle(t *testing.T) {
 	}
 	if !*decoded.Defaults.Notifications.StopFailure {
 		t.Fatal("defaults.notifications.stop_failure = false, want true")
+	}
+}
+
+func TestExampleConfigIncludesDiagnosticDefaults(t *testing.T) {
+	var decoded exampleConfig
+	if _, err := toml.Decode(ExampleConfig, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	d := decoded.Defaults.Diagnostics
+	if d.JournalEnabled == nil || !*d.JournalEnabled || d.NativeLogging == nil || !*d.NativeLogging {
+		t.Fatalf("diagnostic enable defaults = %+v", d)
+	}
+	if d.JournalKeepDays != 14 || d.JournalMaxMiB != 256 || d.NativeKeepDays != 14 || d.NativeMaxMiB != 1024 || d.NativeSessionMaxMiB != 128 {
+		t.Fatalf("diagnostic retention defaults = %+v", d)
 	}
 }
 

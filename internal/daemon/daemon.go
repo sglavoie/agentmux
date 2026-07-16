@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
@@ -27,9 +29,24 @@ func Run(ctx context.Context, cfg *config.Config) error {
 type runDependencies struct {
 	beforeStartupConfirmation func(context.Context)
 	afterStartupPublication   func()
+	afterRenderWorkerShutdown func()
 }
 
-func run(ctx context.Context, cfg *config.Config, deps runDependencies) error {
+func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr error) {
+	recorder, recorderErr := newLifecycleRecorder(cfg)
+	if recorderErr != nil {
+		slog.Warn("daemon: diagnostic journal unavailable", "error", recorderErr)
+	} else if recorder != nil {
+		recorder.maintain(ctx)
+		recorder.record("daemon.startup", "started", "process_entered", map[string]string{"pid": fmt.Sprint(os.Getpid())})
+		defer func() {
+			if retErr != nil {
+				recorder.record("daemon.exit", "error", retErr.Error(), nil)
+				return
+			}
+			recorder.record("daemon.exit", "success", "shutdown_complete", nil)
+		}()
+	}
 	socketPath := SocketPath()
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
 		return fmt.Errorf("daemon: creating socket directory: %w", err)
@@ -40,17 +57,30 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) error {
 	if err != nil {
 		if errors.Is(err, errDaemonAlreadyRunning) {
 			slog.Info("daemon: duplicate start exiting", "socket", socketPath, "lock", daemonLockPath(socketPath))
+			recorder.record("daemon.lock", "skipped", "already_running", map[string]string{"socket": socketPath})
 			return nil
 		}
 		return fmt.Errorf("daemon: acquiring lock %s: %w", daemonLockPath(socketPath), err)
 	}
 	defer releaseDaemonLock(socketPath, lockFile)
 	slog.Info("daemon: acquired single-instance lock", "socket", socketPath, "lock", daemonLockPath(socketPath))
+	recorder.record("daemon.lock", "success", "acquired", map[string]string{"socket": socketPath})
 
 	guardDur := time.Duration(cfg.Defaults.GuardDuration) * time.Second
 	guard := NewStateGuard(guardDur)
 	notifier := NewNotifier(&cfg.Defaults.Notifications)
 	handler := NewHandler(guard, notifier)
+	if recorder != nil {
+		handler.setDecisionJournal(recorder.journal)
+	}
+	if paths, pathsErr := diagnostics.DefaultPaths(); pathsErr == nil {
+		if captureStore, captureErr := diagnostics.NewCaptureStore(paths, diagnostics.CaptureOptions{}); captureErr == nil {
+			handler.setCaptureStore(captureStore)
+			maintenanceCtx, cancelMaintenance := context.WithTimeout(ctx, 250*time.Millisecond)
+			_, _ = captureStore.Maintain(maintenanceCtx)
+			cancelMaintenance()
+		}
+	}
 	notifier.SetIsMuted(handler.IsMuted)
 	// Capture the artifact identity now, before any later `just install` can
 	// replace the on-disk binary under this running process: health must always
@@ -91,9 +121,11 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) error {
 	if ready, reason := handler.restoreStateFromKittyBounded(time.Now(), initialSnapshotBudget); ready {
 		handler.MarkReady()
 		slog.Info("daemon: initial snapshot restored", "socket", socketPath)
+		recorder.record("daemon.snapshot", "success", "restored", nil)
 	} else {
 		handler.MarkDegraded(reason)
 		slog.Warn("daemon: starting degraded; initial snapshot did not complete in time", "reason", reason)
+		recorder.record("daemon.snapshot", "degraded", reason, nil)
 	}
 
 	server, err := NewServer(socketPath, handler)
@@ -110,7 +142,14 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) error {
 	notifier.SetParentContext(ctx)
 
 	shutdownAccepted := make(chan struct{})
+	var shutdownRecord sync.Once
+	recordShutdown := func(reason string) {
+		shutdownRecord.Do(func() {
+			recorder.record("daemon.shutdown", "started", reason, nil)
+		})
+	}
 	handler.onShutdown = func() {
+		recordShutdown("request_accepted")
 		close(shutdownAccepted)
 		cancel()
 	}
@@ -132,6 +171,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) error {
 		deps.afterStartupPublication()
 	}
 	slog.Info("daemon: started", "socket", socketPath, "guard_duration", guardDur)
+	recorder.record("daemon.started", "success", "socket_published", map[string]string{"socket": socketPath})
 	// Independent loops: snapshot maintenance (the periodic lister), the
 	// watchdog (the 1s staleness evaluator on in-process elapsed time), the
 	// render worker (the single Kitty writer), and the screen probes. A slow
@@ -139,17 +179,32 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) error {
 	// snapshot publication, watchdog expiry, or event ingestion.
 	go handler.runMaintenance(ctx)
 	go handler.runWatchdog(ctx)
-	go handler.runRenderWorker(ctx)
+	renderWorkerDone := make(chan struct{})
+	go func() {
+		handler.runRenderWorker(ctx)
+		if deps.afterRenderWorkerShutdown != nil {
+			deps.afterRenderWorkerShutdown()
+		}
+		close(renderWorkerDone)
+	}()
 	go handler.runScreenProbes(ctx)
 	slog.Info("daemon: ready", "socket", socketPath)
+	recorder.record("daemon.ready", "success", "maintenance_loops_started", nil)
+	waitForRenderWorker := func() {
+		cancel()
+		<-renderWorkerDone
+	}
 
 	for {
 		select {
 		case err := <-serveErr:
+			waitForRenderWorker()
 			return err
 
 		case <-ctx.Done():
 			slog.Info("daemon: shutting down")
+			recordShutdown("context_cancelled")
+			waitForRenderWorker()
 			return nil
 		}
 	}

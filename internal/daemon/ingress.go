@@ -83,8 +83,19 @@ func (q *ingressQueue) submit(req Request) Response {
 		if q.metrics != nil {
 			q.metrics.queueFull.Add(1)
 		}
+		req.saturationReason = appendSaturationReason(req.saturationReason, "ingress_queue")
 		return q.handle(req)
 	}
+}
+
+func appendSaturationReason(existing, reason string) string {
+	if existing == "" {
+		return reason
+	}
+	if existing == reason {
+		return existing
+	}
+	return existing + "," + reason
 }
 
 // stop closes the queue and waits for the consumer to drain any buffered items.

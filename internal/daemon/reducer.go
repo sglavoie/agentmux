@@ -1335,6 +1335,16 @@ func (r *Reducer) Traces() []ReducerTrace {
 	return out
 }
 
+// LatestTrace returns the most recent Apply/ApplyNormalized audit outcome.
+// The handler uses it to persist the exact reducer reason alongside the
+// SessionEvent without copying the reducer's entire trace history per event.
+func (r *Reducer) LatestTrace() (ReducerTrace, bool) {
+	if r == nil || len(r.traces) == 0 {
+		return ReducerTrace{}, false
+	}
+	return r.traces[len(r.traces)-1], true
+}
+
 // Replay applies a sequence of events to a fresh reducer and returns the final
 // effective state. It is a convenience for deterministic replay/order tests.
 func Replay(cfg ReducerConfig, now int64, events ...ReducerEvent) EffectiveState {

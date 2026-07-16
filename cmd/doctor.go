@@ -11,7 +11,8 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
-	"github.com/sglavoie/agentmux/internal/hooks"
+	"github.com/sglavoie/agentmux/internal/debugger"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
 )
@@ -34,6 +35,7 @@ var (
 	doctorStat            = os.Stat
 	doctorNow             = time.Now
 	doctorCLIBuild        = buildinfo.Current
+	doctorDiagnosticPaths = diagnostics.DefaultPaths
 )
 
 var (
@@ -165,8 +167,15 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	}
+	if err := writeDoctorNativeLogs(textOut, windows, kittyOK, func(format string, args ...any) {
+		addFinding(severityWarning, "native_logging", format, args...)
+	}); err != nil {
+		return err
+	}
 
-	if err := writeDoctorHooks(textOut, reportIssue("hooks")); err != nil {
+	if err := writeDoctorHooks(textOut, reportIssue("hooks"), func(format string, args ...any) {
+		addFinding(severityWarning, "hooks_unverified", format, args...)
+	}); err != nil {
 		return err
 	}
 
@@ -219,6 +228,80 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	return nil
+}
+
+func writeDoctorNativeLogs(out io.Writer, windows []kitty.OSWindow, kittyOK bool, reportWarning func(string, ...any)) error {
+	cfg, err := doctorLoadConfig()
+	if err != nil {
+		if _, writeErr := fmt.Fprintf(out, "native logs: config unavailable (%s)\n", err); writeErr != nil {
+			return writeErr
+		}
+		reportWarning("native logging status unavailable: %s", err)
+		return nil
+	}
+	policy := cfg.Defaults.Diagnostics
+	if !policy.NativeLoggingValue() {
+		_, err := fmt.Fprintln(out, "native logs: disabled by defaults.diagnostics.native_logging")
+		return err
+	}
+	paths, err := doctorDiagnosticPaths()
+	if err != nil {
+		if _, writeErr := fmt.Fprintf(out, "native logs: state path unavailable (%s)\n", err); writeErr != nil {
+			return writeErr
+		}
+		reportWarning("native logging state path unavailable: %s", err)
+		return nil
+	}
+	native := debugger.InspectNative(paths, policy, windows, kittyOK, debugger.Selector{}, doctorNow())
+	if native.Error != "" {
+		if _, writeErr := fmt.Fprintf(out, "native logs: unavailable (%s)\n", native.Error); writeErr != nil {
+			return writeErr
+		}
+		reportWarning("native log storage cannot be inspected: %s", native.Error)
+		return nil
+	}
+	if _, err := fmt.Fprintf(out, "native logs: %s (%s across %d launches; %d active)\n",
+		paths.NativeDir, formatDoctorBytes(native.Storage.TotalBytes), native.Storage.Launches, native.Storage.ActiveLaunches); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(out, "native privacy: raw local logs; managed directories are 0700 and files are created with umask 077; bundles redact them"); err != nil {
+		return err
+	}
+
+	if !kittyOK {
+		if _, err := fmt.Fprintln(out, "native coverage: unavailable (Kitty is unreachable)"); err != nil {
+			return err
+		}
+	} else {
+		if _, err := fmt.Fprintf(out, "native coverage: managed=%d external=%d degraded=%d disabled=%d unmanaged=%d\n",
+			native.Coverage.Managed, native.Coverage.External, native.Coverage.Degraded, native.Coverage.Disabled, native.Coverage.Unmanaged); err != nil {
+			return err
+		}
+		if native.Coverage.Degraded > 0 {
+			reportWarning("%d managed session(s) have degraded native logging controls", native.Coverage.Degraded)
+		}
+		if native.Coverage.Unmanaged > 0 {
+			reportWarning("%d harness session(s) are externally launched or lack Agent Mux native logging metadata; coverage cannot be guaranteed", native.Coverage.Unmanaged)
+		}
+	}
+	if native.Storage.ActiveExcessBytes > 0 {
+		reportWarning("active native log writers exceed per-launch targets by %s; pruning is deferred until exit", formatDoctorBytes(native.Storage.ActiveExcessBytes))
+	}
+	if native.Storage.ExcessBytes > 0 {
+		reportWarning("native log storage exceeds the aggregate target by %s; active launches remain protected", formatDoctorBytes(native.Storage.ExcessBytes))
+	}
+	if len(native.Storage.Errors) > 0 {
+		reportWarning("native log storage has %d unreadable or unexpected entries", len(native.Storage.Errors))
+	}
+	return nil
+}
+
+func formatDoctorBytes(value int64) string {
+	const mib = int64(1 << 20)
+	if value < mib {
+		return fmt.Sprintf("%d B", value)
+	}
+	return fmt.Sprintf("%.1f MiB", float64(value)/float64(mib))
 }
 
 // writeDoctorFindings renders the structured findings grouped by severity.
@@ -283,7 +366,7 @@ func writeDoctorSocketStatus(out io.Writer, reportIssue func(string, ...any)) er
 	return err
 }
 
-func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any)) error {
+func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnverified func(string, ...any)) error {
 	cfg, err := doctorLoadConfig()
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(out, "hooks: config unavailable (%s)\n", err); writeErr != nil {
@@ -300,29 +383,32 @@ func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any)) error {
 		reportIssue("hook status binary unavailable: %s", err)
 		return nil
 	}
-	statuses, statusErr := hooks.StatusAll(cfg, binary)
-	if len(statuses) == 0 {
+	report := debugger.InspectHooks(cfg, binary, doctorNow())
+	if len(report.Profiles) == 0 {
 		if _, err := fmt.Fprintln(out, "hooks: no configured profiles"); err != nil {
 			return err
 		}
 	}
-	for _, status := range statuses {
-		if status.Err != nil {
-			if _, err := fmt.Fprintf(out, "hooks: %s (%s): error (%s)\n", status.Account, status.Harness, status.Err); err != nil {
+	for _, status := range report.Profiles {
+		if status.CheckError != "" {
+			if _, err := fmt.Fprintf(out, "hooks: %s (%s): error (%s)\n", status.Profile, status.Harness, status.CheckError); err != nil {
 				return err
 			}
-			reportIssue("hooks for %s cannot be checked: %s", status.Account, status.Err)
+			reportIssue("hooks for %s cannot be checked: %s", status.Profile, status.CheckError)
 			continue
 		}
-		if _, err := fmt.Fprintf(out, "hooks: %s (%s): %s\n", status.Account, status.Harness, status.Status); err != nil {
+		if _, err := fmt.Fprintf(out, "hooks: %s (%s): sync=%s activation=%s\n", status.Profile, status.Harness, status.Sync, status.Activation); err != nil {
 			return err
 		}
-		if status.Status != hooks.SyncInSync {
-			reportIssue("hooks for %s are %s", status.Account, status.Status)
+		switch status.Verdict {
+		case debugger.VerdictFailure:
+			reportIssue("hooks for %s require attention: %s", status.Profile, status.Detail())
+		case debugger.VerdictWarning:
+			reportUnverified("hooks for %s are unverified: %s", status.Profile, status.Detail())
 		}
 	}
-	if statusErr != nil {
-		reportIssue("hook status errors: %s", statusErr)
+	if report.Error != "" {
+		reportIssue("hook status errors: %s", report.Error)
 	}
 	return nil
 }
@@ -354,6 +440,26 @@ func writeDoctorRenderer(out io.Writer, snapshot daemon.EventsExport, liveByID m
 		_, err := fmt.Fprintln(out, "renderer drift: unavailable (Kitty is unreachable)")
 		return err
 	}
+	type tabKey struct {
+		osWindowID int
+		tabID      int
+	}
+	// Kitty exposes one title per tab, not per pane. When multiple exported
+	// windows share a tab, independent renderer states can legitimately differ;
+	// the visible title is converged if it matches any asserted pane state.
+	convergedTabs := make(map[tabKey]bool)
+	for _, id := range ids {
+		renderer := snapshot.WindowMetadata[id].Renderer
+		live := liveByID[id]
+		if !live.Found || !renderer.StateSet && !renderer.LoopingSet {
+			continue
+		}
+		stateMatches := !renderer.StateSet || renderer.DesiredIcon == live.IconState
+		loopingMatches := !renderer.LoopingSet || renderer.Looping == live.Looping
+		if stateMatches && loopingMatches {
+			convergedTabs[tabKey{osWindowID: live.OSWindowID, tabID: live.TabID}] = true
+		}
+	}
 	drift := make([]string, 0)
 	for _, id := range ids {
 		renderer := snapshot.WindowMetadata[id].Renderer
@@ -370,7 +476,8 @@ func writeDoctorRenderer(out io.Writer, snapshot daemon.EventsExport, liveByID m
 			}
 			continue
 		}
-		if (renderer.StateSet && renderer.DesiredIcon != live.IconState) || (renderer.LoopingSet && renderer.Looping != live.Looping) {
+		tabConverged := convergedTabs[tabKey{osWindowID: live.OSWindowID, tabID: live.TabID}]
+		if !tabConverged && ((renderer.StateSet && renderer.DesiredIcon != live.IconState) || (renderer.LoopingSet && renderer.Looping != live.Looping)) {
 			drift = append(drift, fmt.Sprintf("window %d wants icon=%q looping=%t; has icon=%q looping=%t", id, renderer.DesiredIcon, renderer.Looping, live.IconState, live.Looping))
 		}
 		if renderer.RenderFailures > 0 {

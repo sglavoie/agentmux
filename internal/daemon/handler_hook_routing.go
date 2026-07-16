@@ -53,6 +53,12 @@ func managedHookTarget(tab *kitty.Tab, win *kitty.Window) loopLifecycleTarget {
 
 func (h *Handler) suppressOwnerMismatch(ctx hookEventContext, eventOrAction, action string) {
 	ctx.req.Event = eventOrAction
+	ctx.req.routeDecision = routeDecisionRejected
+	chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, DecisionReasonOwnerMismatch, nil)
+	if ctx.owner != nil {
+		ctx.req.routeEvidence.RejectedAlternatives = append(ctx.req.routeEvidence.RejectedAlternatives,
+			RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: DecisionReasonOwnerMismatch})
+	}
 	h.appendSuppressedHookEvent(ctx.req, action, suppressionReasonOwnerMismatch)
 	if ctx.owner != nil {
 		slog.Debug("hook event ignored: unmanaged pane is not authorized to borrow the tab title owner",

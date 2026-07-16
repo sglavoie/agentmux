@@ -6,9 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/debugger"
 	ccerrors "github.com/sglavoie/agentmux/internal/errors"
 	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/spf13/cobra"
@@ -230,7 +232,7 @@ var configHooksSyncCmd = &cobra.Command{
 
 var configHooksStatusCmd = &cobra.Command{
 	Use:   "hooks-status",
-	Short: "Show hooks sync status per profile",
+	Short: "Show hook sync and activation status per profile",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := loadRunnableConfig()
 		if err != nil {
@@ -241,46 +243,46 @@ var configHooksStatusCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("resolving amx binary: %w", err)
 		}
-		statuses, statusErr := hooks.StatusAll(cfg, bin)
+		report := debugger.InspectHooks(cfg, bin, time.Now())
 		out := cmd.OutOrStdout()
 		errOut := cmd.ErrOrStderr()
-		if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %s\n", "ACCOUNT", "HARNESS", "STATUS", "PATH"); err != nil {
+		if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %-12s %s\n", "ACCOUNT", "HARNESS", "SYNC", "ACTIVATION", "DETAIL"); err != nil {
 			return err
 		}
-		needsResync := false
-		for _, s := range statuses {
-			if s.Err != nil {
-				if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %s\n", s.Account, s.Harness, "error", s.Err.Error()); err != nil {
+		needsAttention := false
+		for _, s := range report.Profiles {
+			if s.CheckError != "" {
+				if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %-12s %s\n", s.Profile, s.Harness, "error", hooks.ActivationFailure, s.CheckError); err != nil {
 					return err
 				}
-				needsResync = true
+				needsAttention = true
 				continue
 			}
-			if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %s\n", s.Account, s.Harness, s.Status, s.Path); err != nil {
+			if _, err := fmt.Fprintf(out, "%-20s %-10s %-10s %-12s %s\n", s.Profile, s.Harness, s.Sync, s.Activation, s.Detail()); err != nil {
 				return err
 			}
-			if s.Status != hooks.SyncInSync {
-				needsResync = true
+			if s.Verdict != debugger.VerdictHealthy {
+				needsAttention = true
 			}
 		}
-		if statusErr != nil {
+		if report.Error != "" {
 			if _, err := fmt.Fprintln(errOut); err != nil {
 				return err
 			}
-			if _, err := fmt.Fprintf(errOut, "error: %s\n", statusErr); err != nil {
+			if _, err := fmt.Fprintf(errOut, "error: %s\n", report.Error); err != nil {
 				return err
 			}
 		}
-		if needsResync {
+		if needsAttention {
 			if _, err := fmt.Fprintln(out); err != nil {
 				return err
 			}
-			if _, err := fmt.Fprintln(out, "hint: drifted or missing hooks can strand tab icons; run `amx config hooks-sync` to restore terminal hooks like Stop/SessionEnd/agentStop and child-complete hooks like TeammateIdle."); err != nil {
+			if _, err := fmt.Fprintln(out, "hint: run `amx config hooks-sync` for drifted or missing files; activation details identify disabling settings, launch flags, and trust records, while CLI-version or last-seen gaps remain unverified."); err != nil {
 				return err
 			}
 		}
-		if statusErr != nil {
-			return statusErr
+		if report.Error != "" {
+			return fmt.Errorf("%s", report.Error)
 		}
 		return nil
 	},

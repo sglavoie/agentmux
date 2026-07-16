@@ -149,6 +149,59 @@ func TestKnownEvents_Codex(t *testing.T) {
 	}
 }
 
+func TestHookEventMatricesClassifyEveryKnownEvent(t *testing.T) {
+	wantCounts := map[string]int{Claude: 30, Copilot: 13, Codex: 10}
+	for _, name := range Names() {
+		t.Run(name, func(t *testing.T) {
+			matrix := HookEventMatrix(name)
+			if len(matrix) != wantCounts[name] {
+				t.Fatalf("HookEventMatrix(%s) entries = %d, want %d", name, len(matrix), wantCounts[name])
+			}
+			seen := make(map[string]bool, len(matrix))
+			for _, event := range matrix {
+				if event.CanonicalName == "" || seen[event.CanonicalName] {
+					t.Fatalf("invalid or duplicate matrix event %+v", event)
+				}
+				seen[event.CanonicalName] = true
+				if event.Behavior != HookStateChanging && event.Behavior != HookObserverOnly {
+					t.Errorf("%s behavior = %q", event.CanonicalName, event.Behavior)
+				}
+				if event.Installation != HookInstalled && event.Installation != HookUnsupported {
+					t.Errorf("%s installation = %q", event.CanonicalName, event.Installation)
+				}
+				if event.DocumentationSource == "" || event.VerifiedCLIVersion == "" {
+					t.Errorf("%s missing documentation/version evidence", event.CanonicalName)
+				}
+				if event.Installation == HookUnsupported && event.DisableSupported {
+					t.Errorf("unsupported event %s must not be configurable for installation", event.CanonicalName)
+				}
+			}
+		})
+	}
+}
+
+func TestClaudeObserverAndSpecialSemanticsClassifications(t *testing.T) {
+	byName := make(map[string]HookEventContract)
+	for _, event := range HookEventMatrix(Claude) {
+		byName[event.CanonicalName] = event
+	}
+	for _, name := range []string{"InstructionsLoaded", "MessageDisplay", "CwdChanged", "WorktreeRemove"} {
+		event := byName[name]
+		if event.Behavior != HookObserverOnly || event.Installation != HookInstalled || !event.DisableSupported {
+			t.Errorf("%s classification = %+v", name, event)
+		}
+	}
+	for _, name := range []string{"FileChanged", "WorktreeCreate"} {
+		event := byName[name]
+		if event.Installation != HookUnsupported || event.DisableSupported || event.SpecialSemantics == "" {
+			t.Errorf("%s classification = %+v", name, event)
+		}
+		if slices.Contains(KnownEvents(Claude), name) {
+			t.Errorf("KnownEvents(claude) includes unsupported %s", name)
+		}
+	}
+}
+
 func TestCodexHooksIncludeCompletionSignals(t *testing.T) {
 	hooks := buildCodexHooks(nil, "amx")
 	for _, event := range []string{"Stop", "PostCompact", "SubagentStop"} {

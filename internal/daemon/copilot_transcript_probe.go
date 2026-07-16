@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -281,12 +282,23 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		h.ClearIdleSample(windowID, source)
 		return
 	}
+	probeTraceID := diagnostics.NewTraceID()
+	probeSourceEventID := fmt.Sprintf("copilot-transcript-probe:%d:%d:%d", binding.SourceWindowID, windowID, binding.TargetReceipt)
+	probeReq := Request{
+		TraceID: probeTraceID, SourceEventID: probeSourceEventID,
+		Harness: harness.Copilot, Account: account, WindowID: windowID,
+	}
+	h.recordProbeStage(probeTraceID, "", probeReq, windowID, "attempted", "pending", "transcript_read_started", map[string]string{
+		"source_window_id": fmt.Sprint(binding.SourceWindowID),
+		"session_id":       sessionID,
+	})
 
 	path, err := transcript.ResolveCopilotTranscript(sessionID, h.copilotTranscriptHomes, h.copilotDefaultHome)
 	if err != nil {
 		// An unsafe session ID or no configured Copilot home to resolve against:
 		// no observation.
 		slog.Debug("copilot transcript probe: resolve failed", "window_id", windowID, "err", err)
+		h.recordProbeStage(probeTraceID, "", probeReq, windowID, "completed", "failed", "transcript_resolve_failed", nil)
 		h.ClearIdleSample(windowID, source)
 		return
 	}
@@ -295,6 +307,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	if err != nil {
 		// Missing/unreadable file or a malformed tail: fail closed, never settle.
 		slog.Debug("copilot transcript probe: read failed", "window_id", windowID, "path", path, "err", err)
+		h.recordProbeStage(probeTraceID, "", probeReq, windowID, "completed", "failed", "transcript_read_failed", nil)
 		h.ClearIdleSample(windowID, source)
 		return
 	}
@@ -304,6 +317,9 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		// still-terminal read (the common case: the stop was real) or any
 		// untrustworthy evidence leaves 🛑 in place.
 		h.recoverCopilotTranscriptStop(now, binding, source, evidence.State)
+		h.recordProbeStage(probeTraceID, "", probeReq, windowID, "completed", "success", "recovery_evaluated", map[string]string{
+			"lifecycle_state": fmt.Sprint(evidence.State),
+		})
 		return
 	}
 
@@ -312,6 +328,9 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		// event. Reset the stabilization streak so a later transient frame cannot
 		// settle live work.
 		h.ClearIdleSample(windowID, source)
+		h.recordProbeStage(probeTraceID, "", probeReq, windowID, "completed", "success", "non_terminal", map[string]string{
+			"lifecycle_state": fmt.Sprint(evidence.State),
+		})
 		return
 	}
 	// A normal completion (assistant.turn_end) is the intermediate-prone signal:
@@ -353,7 +372,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		}
 	}
 
-	h.applyAuthoritativeIdle(AuthoritativeIdle{
+	applied := h.applyAuthoritativeIdle(AuthoritativeIdle{
 		WindowID:            windowID,
 		Source:              source,
 		Harness:             harness.Copilot,
@@ -370,8 +389,16 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		PipeMode:            false,
 		Muted:               muted,
 		SessionID:           sessionID,
-		SourceEventID:       fmt.Sprintf("copilot-transcript-stop:%d:%d:%d", binding.SourceWindowID, windowID, binding.TargetReceipt),
+		SourceEventID:       probeSourceEventID,
+		TraceID:             probeTraceID,
 		DiagnosticEvent:     copilotTranscriptStopProbeEvent,
+	})
+	outcome, reason := "pending", "stabilizing_or_stale"
+	if applied {
+		outcome, reason = "success", "terminal_applied"
+	}
+	h.recordProbeStage(probeTraceID, "", probeReq, windowID, "completed", outcome, reason, map[string]string{
+		"event_type": fmt.Sprint(evidence.EventType),
 	})
 }
 

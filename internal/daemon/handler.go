@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -26,6 +27,18 @@ type kittyTitleClient interface {
 type Handler struct {
 	guard    *StateGuard
 	notifier *Notifier
+	// decisionJournal receives complete sanitized core decision records after
+	// the in-memory SessionEvent has been finalized. Nil keeps diagnostics
+	// disabled and every write remains fail-open.
+	decisionJournal *diagnostics.Journal
+	// captureStore is consulted only for explicitly authorized temporary raw
+	// captures. Nil and every write error are fail-open for hook delivery.
+	captureStore             *diagnostics.CaptureStore
+	captureMaintenanceMu     sync.Mutex
+	lastCaptureMaintenanceAt time.Time
+	asyncMu                  sync.Mutex
+	notificationEffects      map[string]NotificationDisposition
+	notificationEffectOrder  []string
 
 	// startedAt records the daemon start time so health queries can report
 	// uptime. Zero value means uptime should be reported as 0.
@@ -244,7 +257,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 	if guard != nil {
 		cfg.GuardDuration = int64(guard.duration / time.Second)
 	}
-	return &Handler{
+	h := &Handler{
 		guard:                          guard,
 		notifier:                       notifier,
 		reducerCfg:                     cfg,
@@ -266,15 +279,26 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		hookSilenceIdle:                make(map[string]*accountIdle),
 		windowMetadata:                 make(map[int]WindowDebugMetadata),
 		windowTombstones:               make(map[int]time.Time),
+		notificationEffects:            make(map[string]NotificationDisposition),
 	}
+	if notifier != nil {
+		notifier.SetObserver(h.recordNotificationDispositionBounded)
+	}
+	return h
 }
 
 // Handle processes a Request and returns a Response.
 func (h *Handler) Handle(req Request) Response {
+	req = normalizeProducerFields(req)
+	req = ensureRequestTraceID(req)
 	var resp Response
 	switch req.Type {
 	case TypeHookEvent:
+		h.captureHookPayload(req)
 		resp = h.handleHookEvent(req)
+		resp = h.attachHookDeliveryAcknowledgement(req, resp)
+	case TypeDiagnosticProbe:
+		resp = h.handleDiagnosticProbe(req)
 	case TypeStateUpdate:
 		resp = h.handleStateUpdate(req)
 	case TypeStateQuery:
@@ -377,7 +401,9 @@ func (h *Handler) handleSessionDetail(req Request) Response {
 		src = st.EventLog
 	}
 	events := make([]SessionEvent, len(src))
-	copy(events, src)
+	for i := range src {
+		events[i] = h.enrichNotificationEvent(req.WindowID, cloneSessionEvent(src[i]))
+	}
 	h.stateMu.Unlock()
 	return Response{OK: true, Events: events}
 }
@@ -394,7 +420,9 @@ func (h *Handler) handleEventsExport(req Request) Response {
 	if req.WindowID != 0 {
 		if st, ok := h.windowStateLocked(req.WindowID); ok && len(st.EventLog) > 0 {
 			cp := make([]SessionEvent, len(st.EventLog))
-			copy(cp, st.EventLog)
+			for i := range st.EventLog {
+				cp[i] = h.enrichNotificationEvent(req.WindowID, cloneSessionEvent(st.EventLog[i]))
+			}
 			out[req.WindowID] = cp
 		}
 		if snapshot, ok := h.windowMetadata[req.WindowID]; ok {
@@ -407,7 +435,9 @@ func (h *Handler) handleEventsExport(req Request) Response {
 				continue
 			}
 			cp := make([]SessionEvent, len(st.EventLog))
-			copy(cp, st.EventLog)
+			for i := range st.EventLog {
+				cp[i] = h.enrichNotificationEvent(id, cloneSessionEvent(st.EventLog[i]))
+			}
 			out[id] = cp
 		}
 		meta = make(map[int]WindowDebugMetadata, len(h.windowMetadata))
@@ -450,6 +480,7 @@ func cloneWindowDebugMetadata(in WindowDebugMetadata) WindowDebugMetadata {
 		out.Shadow.Mismatches = make([]ShadowMismatch, len(in.Shadow.Mismatches))
 		copy(out.Shadow.Mismatches, in.Shadow.Mismatches)
 	}
+	out.Renderer.Generations = cloneRenderGenerationTraces(in.Renderer.Generations)
 	return out
 }
 
@@ -492,6 +523,13 @@ func (h *Handler) maybeNotify(windowID int, sessionTitle, account, action string
 		return
 	}
 	h.notifier.MaybeNotify(windowID, sessionTitle, account, action, pipeMode)
+}
+
+func (h *Handler) maybeNotifyTraced(windowID int, sessionTitle, account, action string, pipeMode bool, trace NotificationTrace) {
+	if h.notifier == nil {
+		return
+	}
+	h.notifier.MaybeNotifyTraced(windowID, sessionTitle, account, action, pipeMode, trace)
 }
 
 func (h *Handler) handleShutdown() Response {

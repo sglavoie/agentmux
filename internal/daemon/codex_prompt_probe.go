@@ -389,9 +389,11 @@ func (h *Handler) probeCodexClearWindow(
 // mutation — mute cache, pending notification, guard, reset bookkeeping,
 // reducer, audit, persistence generation, or renderer queue — so a prompt or
 // protected state accepted during either screen read survives unchanged.
-// Holding stateMu through the guard and notifier calls is safe: stateMu →
-// guard.mu is already established by markWindowStateDirtyLocked, and notifier
-// cancellation never calls back into Handler state.
+// Holding stateMu through the guard update and pending-notification removal is
+// safe: stateMu → guard.mu is already established by
+// markWindowStateDirtyLocked. Notification disposition observers can perform
+// Handler work, so cancellation is collected here but emitted only after both
+// stateMu and resetStopCommitMu are released.
 //
 // This is intentionally a probe-specific application path rather than a call
 // to Handle: the ordinary state-update pipeline releases stateMu between its
@@ -428,10 +430,17 @@ func (h *Handler) applyCodexClearObservation(
 	// paused before this boundary remains cancelable below; a callback that
 	// already crossed it applies first and advances the receipt before this
 	// observation can recheck freshness.
+	var pendingDisposition NotificationDisposition
+	var pendingCancelled bool
 	h.resetStopCommitMu.Lock()
-	defer h.resetStopCommitMu.Unlock()
 	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
+	defer func() {
+		h.stateMu.Unlock()
+		h.resetStopCommitMu.Unlock()
+		if pendingCancelled {
+			h.notifier.emitDisposition(pendingDisposition)
+		}
+	}()
 	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
 		return icon == "" || icon == "stop"
 	}) {
@@ -475,7 +484,9 @@ func (h *Handler) applyCodexClearObservation(
 	// notification. These calls stay inside the receipt critical section so a
 	// later event cannot be cleared after it has advanced the reducer receipt.
 	h.guard.TryUpdate(windowID, "user_clear", false)
-	h.cancelPendingNotification(windowID)
+	if h.notifier != nil {
+		pendingDisposition, pendingCancelled = h.notifier.cancelPending(windowID)
+	}
 
 	if st.Reducer == nil {
 		st.Reducer = NewReducer(h.reducerCfg)

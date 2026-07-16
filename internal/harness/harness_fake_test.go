@@ -18,6 +18,7 @@ func (f fakeHarness) BuildInvocation(kind InvocationKind, input InvocationInput)
 
 type fakeHookContract struct{}
 
+func (fakeHookContract) EventMatrix() []HookEventContract  { return nil }
 func (fakeHookContract) InstallPath(homeDir string) string { return homeDir + "/fake-hooks.json" }
 func (fakeHookContract) MergeData(_ []byte, _ []string, _ string) ([]byte, error) {
 	return []byte("{}\n"), nil

@@ -38,6 +38,13 @@ type RunningSession struct {
 	ExplicitFlagsSet bool     // true when cc_explicit_flags was present in Kitty user vars
 	Env              string   // from amx_env / legacy cc_env (raw serialized)
 	Groups           []string // decoded from cc_groups user var (\x1f-delimited)
+	LaunchID         string
+	NativeCoverage   string
+	NativeLogPath    string
+	NativeLogLevel   string
+	NativeOverride   string
+	HarnessSessionID string
+	ASLRunID         string
 }
 
 func (rs RunningSession) EffectiveProfile() string {
@@ -442,6 +449,13 @@ func runningSessionFromWindow(tab kitty.Tab, win kitty.Window) RunningSession {
 		ExplicitFlagsSet: win.UserVars.ExplicitFlagsSet,
 		Env:              win.UserVars.EffectiveEnv(),
 		Groups:           decodeGroups(win.UserVars.EffectiveGroups()),
+		LaunchID:         win.UserVars.LaunchID,
+		NativeCoverage:   win.UserVars.NativeCoverage,
+		NativeLogPath:    win.UserVars.NativeLogPath,
+		NativeLogLevel:   win.UserVars.NativeLogLevel,
+		NativeOverride:   win.UserVars.NativeOverride,
+		HarnessSessionID: win.UserVars.HarnessSessionID,
+		ASLRunID:         win.UserVars.ASLRunID,
 	}
 }
 

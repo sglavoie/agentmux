@@ -242,10 +242,9 @@ func detailHeader(m Model) string {
 	return styleHeader.Render(line1) + "\n" + styleDim.Render(strings.Join(meta, " · "))
 }
 
-// detailRow renders one event row. Suppressed events dim the arrow and
-// append a marker glyph; non-suppressed events render in the neutral row
-// style with an accented tool name. The Tool column flexes to fill any
-// remaining width.
+// detailRow renders one event row. Suppressed events dim the arrow and append
+// a marker glyph. The flexible detail column exposes tool, compact trace ID,
+// and the decisive reason without disturbing the fixed event/action columns.
 func detailRow(ev daemon.SessionEvent, now time.Time, width int) string {
 	timeCell := padRight(formatRelativeAge(time.Unix(ev.At, 0), now), detailColTime)
 	eventCell := padRight(ev.Event, detailColEvent)
@@ -270,13 +269,34 @@ func detailRow(ev daemon.SessionEvent, now time.Time, width int) string {
 	if toolWidth < 0 {
 		toolWidth = 0
 	}
-	toolStr := ""
-	if ev.ToolName != "" && toolWidth > 0 {
-		toolStr = displayTruncate(ev.ToolName, toolWidth, "…")
+	details := make([]string, 0, 3)
+	if ev.ToolName != "" {
+		details = append(details, ev.ToolName)
+	}
+	if ev.TraceID != "" {
+		traceID := ev.TraceID
+		if len(traceID) > 8 {
+			traceID = traceID[:8]
+		}
+		details = append(details, "t:"+traceID)
+	}
+	reason := ev.DecisionReason
+	if reason == "" {
+		reason = ev.SuppressionReason
+	}
+	if reason == "" {
+		reason = ev.NotificationReason
+	}
+	if reason != "" {
+		details = append(details, reason)
+	}
+	detailStr := ""
+	if toolWidth > 0 {
+		detailStr = displayTruncate(strings.Join(details, " · "), toolWidth, "…")
 	}
 
 	gap := strings.Repeat(" ", detailColumnGap)
-	row := timeCell + gap + eventCell + gap + arrowCell + gap + actionCell + gap + detailToolStyle.Render(toolStr) + gap + markerGlyph
+	row := timeCell + gap + eventCell + gap + arrowCell + gap + actionCell + gap + detailToolStyle.Render(detailStr) + gap + markerGlyph
 	return detailRowStyle.Render(row)
 }
 

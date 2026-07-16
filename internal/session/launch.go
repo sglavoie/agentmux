@@ -1,13 +1,16 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -85,6 +88,18 @@ func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defa
 	return userVars
 }
 
+func buildLaunchUserVars(sess config.Session, acc config.Account, defaults config.Defaults, invocation harness.Invocation) map[string]string {
+	vars := BuildUserVars(sess, acc, defaults)
+	vars["amx_launch_id"] = invocation.LaunchID
+	vars["amx_native_coverage"] = string(invocation.NativeLogging.Coverage)
+	vars["amx_native_log_path"] = invocation.NativeLogging.Path
+	vars["amx_native_log_level"] = invocation.NativeLogging.Level
+	vars["amx_native_override"] = invocation.NativeLogging.Override
+	vars["amx_harness_session"] = invocation.SessionID
+	vars["amx_asl_run_id"] = invocationRunID(invocation)
+	return vars
+}
+
 // Launch launches a single session from config. The default policy is
 // LaunchPolicyDedupExisting, which returns nil silently if the session is
 // already running.
@@ -130,7 +145,7 @@ func launchFresh(client kitty.KittyClient, sess config.Session, acc config.Accou
 
 	// Build the structured fresh invocation before rendering it through the
 	// shared shell-quoting boundary. Resume/fork callers use the same seam.
-	invocation, err := BuildInvocation(sess, acc, cfg.Defaults, harness.InvocationFresh, "", initialPrompt)
+	invocation, err := buildLaunchInvocation(sess, acc, cfg.Defaults, harness.InvocationFresh, "", initialPrompt)
 	if err != nil {
 		return fmt.Errorf("building fresh invocation for %q: %w", formattedTitle, err)
 	}
@@ -159,7 +174,7 @@ func LaunchContinuity(
 		return fmt.Errorf("launching continuity session: configuration is required")
 	}
 	formattedTitle := FormatTitle(sess, acc, cfg)
-	invocation, err := BuildInvocation(sess, acc, cfg.Defaults, kind, sessionID, initialPrompt)
+	invocation, err := buildLaunchInvocation(sess, acc, cfg.Defaults, kind, sessionID, initialPrompt)
 	if err != nil {
 		return fmt.Errorf("building %s invocation for %q: %w", kind, formattedTitle, err)
 	}
@@ -196,7 +211,8 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 	}
 
 	harnessName := acc.EffectiveHarness()
-	userVars := BuildUserVars(sess, acc, cfg.Defaults)
+	userVars := buildLaunchUserVars(sess, acc, cfg.Defaults, invocation)
+	nativeReport := maintainNativeBeforeLaunch(cfg, osWindows, invocation.LaunchID)
 	shellCmd := RenderInvocation(invocation)
 	shell := os.Getenv("SHELL")
 	if shell == "" {
@@ -214,9 +230,11 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q harness=%q loc=%q env=%v cmd=%v", launchOpts.Title, launchOpts.Directory, harnessName, launchOpts.Location, launchOpts.Env, launchOpts.Cmdline)
 	if err := client.LaunchTab(launchOpts); err != nil {
 		launchDebug.Printf("Launch: LaunchTab error: %v", err)
+		recordHarnessLaunch(cfg, sess, acc, invocation, "error", err.Error(), nativeReport)
 		return fmt.Errorf("launching session %q: %w", formattedTitle, err)
 	}
 	launchDebug.Printf("Launch: LaunchTab succeeded")
+	recordHarnessLaunch(cfg, sess, acc, invocation, "success", "launched", nativeReport)
 
 	// Apply tab color with exponential backoff retry. Agent Mux owns the
 	// inactive profile accent; active colors reset to kitty.conf so the focused
@@ -233,6 +251,96 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 		}
 	}
 	return nil
+}
+
+func maintainNativeBeforeLaunch(cfg *config.Config, windows []kitty.OSWindow, launchID string) diagnostics.NativeReport {
+	if cfg == nil || !cfg.Defaults.Diagnostics.NativeLoggingValue() {
+		return diagnostics.NativeReport{}
+	}
+	paths, err := diagnostics.DefaultPaths()
+	if err != nil {
+		return diagnostics.NativeReport{Errors: []string{err.Error()}}
+	}
+	active := activeLaunchIDs(windows)
+	if launchID != "" {
+		active[launchID] = struct{}{}
+	}
+	report, err := diagnostics.MaintainNative(paths, nativeOptions(cfg.Defaults.Diagnostics), active)
+	if err != nil {
+		report.Errors = append(report.Errors, err.Error())
+	}
+	return report
+}
+
+func nativeOptions(policy config.DiagnosticsConfig) diagnostics.NativeOptions {
+	return diagnostics.NativeOptions{
+		KeepDays:       policy.NativeKeepDays,
+		MaxBytes:       int64(policy.NativeMaxMiB) << 20,
+		LaunchMaxBytes: int64(policy.NativeSessionMaxMiB) << 20,
+	}
+}
+
+func activeLaunchIDs(windows []kitty.OSWindow) map[string]struct{} {
+	active := make(map[string]struct{})
+	for _, osWindow := range windows {
+		for _, tab := range osWindow.Tabs {
+			for _, window := range tab.Windows {
+				if window.UserVars.LaunchID != "" {
+					active[window.UserVars.LaunchID] = struct{}{}
+				}
+			}
+		}
+	}
+	return active
+}
+
+func recordHarnessLaunch(cfg *config.Config, sess config.Session, acc config.Account, invocation harness.Invocation, outcome, reason string, nativeReport diagnostics.NativeReport) {
+	if cfg == nil || !cfg.Defaults.Diagnostics.JournalEnabledValue() {
+		return
+	}
+	paths, err := diagnostics.DefaultPaths()
+	if err != nil {
+		return
+	}
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{
+		KeepDays: cfg.Defaults.Diagnostics.JournalKeepDays,
+		MaxBytes: int64(cfg.Defaults.Diagnostics.JournalMaxMiB) << 20,
+	})
+	if err != nil {
+		return
+	}
+	envelope := diagnostics.NewEnvelope("session.launch")
+	envelope.LaunchID = invocation.LaunchID
+	envelope.Harness = invocation.Harness
+	envelope.Profile = effectiveSessionProfile(sess, acc)
+	envelope.SessionID = invocation.SessionID
+	envelope.RunID = invocationRunID(invocation)
+	envelope.Outcome = outcome
+	envelope.Reason = reason
+	envelope.Evidence = map[string]string{
+		"project":                    sess.Title,
+		"operation":                  string(invocation.Kind),
+		"native_coverage":            string(invocation.NativeLogging.Coverage),
+		"native_path":                invocation.NativeLogging.Path,
+		"native_level":               invocation.NativeLogging.Level,
+		"native_override":            invocation.NativeLogging.Override,
+		"native_total_bytes":         strconv.FormatInt(nativeReport.TotalBytes, 10),
+		"native_excess_bytes":        strconv.FormatInt(nativeReport.ExcessBytes, 10),
+		"native_active_excess_bytes": strconv.FormatInt(nativeReport.ActiveExcessBytes, 10),
+		"native_maintenance_errors":  strconv.Itoa(len(nativeReport.Errors)),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	journal.TryAppend(ctx, envelope)
+}
+
+func invocationRunID(invocation harness.Invocation) string {
+	for _, key := range []string{"AMX_ASL_RUN_ID", "ASL_RUN_ID", "AGENT_SESSION_LOOP_RUN_ID"} {
+		if value := strings.TrimSpace(invocation.Environment[key]); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func effectiveSessionProfile(sess config.Session, acc config.Account) string {

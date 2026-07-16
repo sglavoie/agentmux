@@ -69,19 +69,33 @@ func HookFileName() string {
 // hooks.overrides.<profile>.disabled_events before they become silent no-ops.
 // Returns nil for unknown harness names.
 func KnownEvents(name string) []string {
-	switch Normalize(name) {
-	case Claude:
-		out := make([]string, len(claudeHookEvents))
-		copy(out, claudeHookEvents)
-		return out
-	case Copilot:
-		out := make([]string, len(copilotHookEvents))
-		copy(out, copilotHookEvents)
-		return out
-	case Codex:
-		out := make([]string, len(codexHookEvents))
-		copy(out, codexHookEvents)
-		return out
+	if !Valid(name) {
+		return nil
 	}
-	return nil
+	return installedHookEventNames(Lookup(name).HookContract().EventMatrix())
+}
+
+// HookEventMatrix returns the complete event classification for name,
+// including explicitly unsupported events. Unknown harnesses return nil.
+func HookEventMatrix(name string) []HookEventContract {
+	if !Valid(name) {
+		return nil
+	}
+	return Lookup(name).HookContract().EventMatrix()
+}
+
+func installedHookEventNames(matrix []HookEventContract) []string {
+	events := make([]string, 0, len(matrix))
+	for _, event := range matrix {
+		if event.Installation == HookInstalled && event.DisableSupported {
+			events = append(events, event.CanonicalName)
+		}
+	}
+	return events
+}
+
+func cloneHookEventMatrix(matrix []HookEventContract) []HookEventContract {
+	out := make([]HookEventContract, len(matrix))
+	copy(out, matrix)
+	return out
 }

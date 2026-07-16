@@ -69,8 +69,14 @@ func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
 		if !argMap["--env=CLAUDE_CONFIG_DIR="+expectedHome] {
 			t.Errorf("expected CLAUDE_CONFIG_DIR launch env in args: %v", c.Args)
 		}
-		if !argMap["exec env CLAUDE_CONFIG_DIR="+expectedHome+" claude --dangerously-skip-permissions"] {
-			t.Errorf("expected shell command to pin CLAUDE_CONFIG_DIR in args: %v", c.Args)
+		sawNativeCommand := false
+		for _, arg := range c.Args {
+			if strings.Contains(arg, "umask 077 && exec env CLAUDE_CONFIG_DIR="+expectedHome+" claude --dangerously-skip-permissions --debug-file ") {
+				sawNativeCommand = true
+			}
+		}
+		if !sawNativeCommand {
+			t.Errorf("expected private native-log shell command in args: %v", c.Args)
 		}
 		// Empty Kitty: no --location flag, Kitty uses its default placement.
 		for _, a := range c.Args {
@@ -118,8 +124,14 @@ func TestLaunch_ProjectHarnessEnvOverridePinnedAtExec(t *testing.T) {
 		if !argSet["--env=CLAUDE_CONFIG_DIR=/tmp/project-claude"] {
 			t.Errorf("expected project CLAUDE_CONFIG_DIR override in args: %v", c.Args)
 		}
-		if !argSet["exec env CLAUDE_CONFIG_DIR=/tmp/project-claude claude"] {
-			t.Errorf("expected shell command to pin project CLAUDE_CONFIG_DIR override: %v", c.Args)
+		sawNativeCommand := false
+		for _, arg := range c.Args {
+			if strings.Contains(arg, "umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/project-claude claude --debug-file ") {
+				sawNativeCommand = true
+			}
+		}
+		if !sawNativeCommand {
+			t.Errorf("expected private native-log shell command with project CLAUDE_CONFIG_DIR override: %v", c.Args)
 		}
 		return
 	}
@@ -352,9 +364,9 @@ func TestLaunch_QuotesArgsWithSpacesAndMetacharacters(t *testing.T) {
 		}
 
 		sawQuotedShellCmd := false
-		expectedShellCmd := "exec env CLAUDE_CONFIG_DIR=" + config.ExpandTilde("~/.config/claude-work") + " claude " + wantArgs
+		expectedShellCmd := "umask 077 && exec env CLAUDE_CONFIG_DIR=" + config.ExpandTilde("~/.config/claude-work") + " claude " + wantArgs + " --debug-file "
 		for _, arg := range c.Args {
-			if arg == expectedShellCmd {
+			if strings.Contains(arg, expectedShellCmd) {
 				sawQuotedShellCmd = true
 				break
 			}

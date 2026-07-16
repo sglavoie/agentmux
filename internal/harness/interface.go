@@ -27,6 +27,39 @@ type InvocationInput struct {
 	CWD           string
 	SessionID     string
 	InitialPrompt string
+	NativeLogging NativeLoggingRequest
+
+	nativeLogging NativeLogging
+}
+
+// NativeLoggingRequest describes the private Agent Mux directory available to
+// a harness invocation. Harness adapters remain responsible for detecting
+// equivalent user controls and for placing any injected flags in the correct
+// CLI-global segment.
+type NativeLoggingRequest struct {
+	Enabled   bool
+	LaunchID  string
+	Directory string
+}
+
+// NativeLogCoverage is the effective ownership/health of native harness logs.
+type NativeLogCoverage string
+
+const (
+	NativeLogManaged  NativeLogCoverage = "managed"
+	NativeLogExternal NativeLogCoverage = "external"
+	NativeLogDegraded NativeLogCoverage = "degraded"
+	NativeLogDisabled NativeLogCoverage = "disabled"
+)
+
+// NativeLogging records the controls that will actually reach the harness.
+// Path is a file for Claude and a directory for Codex/Copilot.
+type NativeLogging struct {
+	Coverage         NativeLogCoverage
+	Path             string
+	Level            string
+	Override         string
+	ManagedDirectory bool
 }
 
 // Invocation is a structured harness launch specification. Args is already
@@ -39,6 +72,10 @@ type Invocation struct {
 	Environment   map[string]string
 	CWD           string
 	InitialPrompt string
+	Kind          InvocationKind
+	SessionID     string
+	LaunchID      string
+	NativeLogging NativeLogging
 }
 
 // OperationCapability describes whether a native harness operation is
@@ -91,8 +128,44 @@ func (e *UnsupportedInvocationError) Error() string {
 
 func (*UnsupportedInvocationError) Unwrap() error { return ErrUnsupportedInvocation }
 
+// HookEventBehavior describes whether an event is allowed to mutate Agent
+// Mux's reducer state. Observer-only events are still delivered and recorded,
+// but they must never change icons, routing ownership, or notifications.
+type HookEventBehavior string
+
+const (
+	HookStateChanging HookEventBehavior = "state_changing"
+	HookObserverOnly  HookEventBehavior = "observer_only"
+)
+
+// HookEventInstallation records whether Agent Mux installs an event. Events
+// with special output or matcher contracts remain in the matrix as explicitly
+// unsupported so adding a vendor event can never make it install by accident.
+type HookEventInstallation string
+
+const (
+	HookInstalled   HookEventInstallation = "installed"
+	HookUnsupported HookEventInstallation = "unsupported"
+)
+
+// HookEventContract is one row in a harness's complete hook contract matrix.
+// DocumentationSource and VerifiedCLIVersion make contract staleness visible
+// when a newer CLI is installed than the version this row was checked against.
+type HookEventContract struct {
+	CanonicalName       string
+	Behavior            HookEventBehavior
+	Installation        HookEventInstallation
+	DisableSupported    bool
+	SpecialSemantics    string
+	DocumentationSource string
+	VerifiedCLIVersion  string
+}
+
 // HookContract encapsulates harness-specific hook installation logic.
 type HookContract interface {
+	// EventMatrix returns one explicit classification for every documented
+	// event known to this Agent Mux release.
+	EventMatrix() []HookEventContract
 	// InstallPath returns the absolute path to the hooks file for the given homeDir.
 	InstallPath(homeDir string) string
 	// MergeData produces the complete new file bytes to write, given existing file

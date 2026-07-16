@@ -418,7 +418,10 @@ func TestHandler_HookEventIgnoredAndUnknownAreLoggedSuppressions(t *testing.T) {
 		event  string
 		reason string
 	}{
-		{name: "ignored", event: "InstructionsLoaded", reason: suppressionReasonIgnoredEvent},
+		{name: "instructions observer", event: "InstructionsLoaded", reason: suppressionReasonIgnoredEvent},
+		{name: "message observer", event: "MessageDisplay", reason: suppressionReasonIgnoredEvent},
+		{name: "cwd observer", event: "CwdChanged", reason: suppressionReasonIgnoredEvent},
+		{name: "worktree observer", event: "WorktreeRemove", reason: suppressionReasonIgnoredEvent},
 		{name: "unknown", event: "BogusEvent", reason: suppressionReasonUnknownEvent},
 	}
 	for _, tc := range cases {
@@ -441,6 +444,14 @@ func TestHandler_HookEventIgnoredAndUnknownAreLoggedSuppressions(t *testing.T) {
 			ev := detail.Events[0]
 			if !ev.Suppressed || ev.SuppressionReason != tc.reason || ev.Event != tc.event {
 				t.Fatalf("event = %+v; want suppression reason %q", ev, tc.reason)
+			}
+			if tc.reason == suppressionReasonIgnoredEvent {
+				h.stateMu.Lock()
+				state := h.store[42]
+				h.stateMu.Unlock()
+				if state == nil || state.Reducer != nil || state.StateSet || state.LastAction != "" || state.DesiredIcon != "" {
+					t.Fatalf("observer event mutated reducer/renderer state: %+v", state)
+				}
 			}
 		})
 	}

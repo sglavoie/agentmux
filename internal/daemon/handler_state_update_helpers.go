@@ -6,16 +6,17 @@ import (
 )
 
 const (
-	suppressionReasonGuardBlocked         = "guard_blocked"
-	suppressionReasonSubagentStillRunning = "subagent_still_running"
-	suppressionReasonCopilotMidSubagent   = "copilot_mid_subagent"
-	suppressionReasonCopilotPendingPrompt = "copilot_pending_prompt"
-	suppressionReasonActiveAfterTerminal  = "active_after_terminal"
-	suppressionReasonElicitationPending   = "elicitation_pending"
-	suppressionReasonUnknownEvent         = "unknown_event"
-	suppressionReasonAutoApprovedPerm     = "auto_approved_permission"
-	suppressionReasonOwnerMismatch        = "owner_mismatch"
-	suppressionReasonIgnoredEvent         = "ignored_event"
+	suppressionReasonGuardBlocked         = DecisionReasonGuardBlocked
+	suppressionReasonSubagentStillRunning = DecisionReasonSubagentStillRunning
+	suppressionReasonCopilotMidSubagent   = DecisionReasonCopilotMidSubagent
+	suppressionReasonCopilotPendingPrompt = DecisionReasonCopilotPendingPrompt
+	suppressionReasonActiveAfterTerminal  = DecisionReasonActiveAfterTerminal
+	suppressionReasonElicitationPending   = DecisionReasonElicitationPending
+	suppressionReasonUnknownEvent         = DecisionReasonUnknownEvent
+	suppressionReasonAutoApprovedPerm     = DecisionReasonAutoApprovedPermission
+	suppressionReasonOwnerMismatch        = DecisionReasonOwnerMismatch
+	suppressionReasonIgnoredEvent         = DecisionReasonIgnoredEvent
+	suppressionReasonInvalidPayload       = DecisionReasonInvalidPayload
 )
 
 func (h *Handler) lastKnownState(windowID int) (action, iconState string) {
@@ -31,22 +32,39 @@ func (h *Handler) lastKnownState(windowID int) (action, iconState string) {
 func sessionEventFromRequest(req Request, action, resultIconState, currentIconState string) SessionEvent {
 	now := time.Now()
 	ev := SessionEvent{
-		At:               now.Unix(),
-		ReceivedAtNs:     now.UnixNano(),
-		Event:            req.Event,
-		Action:           action,
-		ToolName:         req.ToolName,
-		Source:           req.Source,
-		PreservesIcon:    req.PreservesIcon,
-		ResultIconState:  resultIconState,
-		CurrentIconState: currentIconState,
-		NotificationType: req.NotificationType,
-		StopReason:       req.StopReason,
-		Reason:           req.Reason,
-		ContextLimit:     req.ContextLimit,
-		ResetFlow:        req.ResetFlow,
-		RouteDecision:    req.routeDecision,
-		OriginWindowID:   req.WindowID,
+		At:                   now.Unix(),
+		ReceivedAtNs:         now.UnixNano(),
+		Event:                req.Event,
+		Action:               action,
+		ToolName:             req.ToolName,
+		Source:               req.Source,
+		PreservesIcon:        req.PreservesIcon,
+		ResultIconState:      resultIconState,
+		CurrentIconState:     currentIconState,
+		NotificationType:     req.NotificationType,
+		StopReason:           req.StopReason,
+		Reason:               req.Reason,
+		ContextLimit:         req.ContextLimit,
+		ResetFlow:            req.ResetFlow,
+		RouteDecision:        req.routeDecision,
+		OriginWindowID:       req.WindowID,
+		TraceID:              req.TraceID,
+		ParentTraceID:        req.parentTraceID,
+		RequestID:            req.RequestID,
+		SourceEventID:        req.SourceEventID,
+		Attempt:              req.Attempt,
+		PayloadSize:          req.PayloadSize,
+		PayloadHMAC:          req.PayloadHMAC,
+		PayloadEncoding:      req.PayloadEncoding,
+		ParseOutcome:         req.parseOutcome,
+		NormalizationOutcome: req.normalizationOutcome,
+		ProducerHarness:      req.Harness,
+		TargetHarness:        req.targetHarness,
+		Profile:              req.Account,
+		SaturationReason:     req.saturationReason,
+		TargetWindowID:       req.WindowID,
+		RouteEvidence:        cloneRoutingEvidence(req.routeEvidence),
+		eventRef:             req.eventRef,
 	}
 	// The normalized stamp carries the source-scoped identity resolved from the
 	// raw payload; legacy clients and synthetic requests have none. A
@@ -56,9 +74,29 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 		ev.SourceKind = string(req.normalized.Source.Kind)
 		ev.SourceKey = req.normalized.Source.Key
 		ev.SourceSeq = req.normalized.Seq
+		ev.IdentityConfidence = identityConfidenceFor(*req.normalized)
+		ev.SessionID = req.normalized.SessionID
+		ev.RunID = req.normalized.RunID
+		ev.TurnID = req.normalized.TurnID
+		ev.ToolUseID = req.normalized.ToolUse
+		if ev.SourceEventID == "" {
+			ev.SourceEventID = req.normalized.SourceEventID
+		}
+		if ev.NormalizationOutcome == "" {
+			ev.NormalizationOutcome = normalizationOutcomeFor(*req.normalized)
+		}
 		if req.normalized.OriginWindowID > 0 {
 			ev.OriginWindowID = req.normalized.OriginWindowID
 		}
+	}
+	if ev.ParseOutcome == "" {
+		ev.ParseOutcome = ParseOutcomeSynthetic
+	}
+	if ev.NormalizationOutcome == "" {
+		ev.NormalizationOutcome = NormalizationOutcomeNotApplicable
+	}
+	if ev.RouteEvidence != nil && ev.RouteEvidence.TargetWindowID > 0 {
+		ev.TargetWindowID = ev.RouteEvidence.TargetWindowID
 	}
 	return ev
 }

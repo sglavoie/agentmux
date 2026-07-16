@@ -327,7 +327,9 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 	autoStartRetryDelay = 20 * time.Millisecond
 	t.Cleanup(func() { autoStartRetryDelay = prevRetryDelay })
 
-	seen := make(chan string, 4)
+	seen := make(chan Request, 4)
+	var stageMu sync.Mutex
+	var stages []DeliveryStageEvent
 	var stop func()
 	prevSpawn := spawnDetached
 	spawnDetached = func(path string) error {
@@ -336,7 +338,7 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 		// succeed. The recorder captures the request ID it receives.
 		time.Sleep(30 * time.Millisecond)
 		stop = startTestDaemonServer(t, socketPath, func(req Request) (Response, bool) {
-			seen <- req.RequestID
+			seen <- req
 			return Response{OK: true, Allowed: true, IconState: "bolt"}, true
 		})
 		return nil
@@ -349,12 +351,16 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 	})
 
 	c := NewClientWithSocket(socketPath)
-	resp, err := c.SendWithAutoStart(Request{
+	resp, err := c.SendWithAutoStartObserved(Request{
 		Type:      TypeStateUpdate,
 		RequestID: "stable-id-123",
 		WindowID:  4,
 		Action:    "active",
-	}, amxBin)
+	}, amxBin, func(stage DeliveryStageEvent) {
+		stageMu.Lock()
+		stages = append(stages, stage)
+		stageMu.Unlock()
+	})
 	if err != nil {
 		t.Fatalf("SendWithAutoStart: %v", err)
 	}
@@ -363,11 +369,30 @@ func TestClient_SendWithAutoStart_RetryReusesRequestID(t *testing.T) {
 	}
 	select {
 	case got := <-seen:
-		if got != "stable-id-123" {
-			t.Fatalf("daemon saw request ID %q, want stable-id-123 (must survive retry)", got)
+		if got.RequestID != "stable-id-123" {
+			t.Fatalf("daemon saw request ID %q, want stable-id-123 (must survive retry)", got.RequestID)
+		}
+		if got.Attempt <= 1 {
+			t.Fatalf("daemon saw attempt %d, want a retry attempt greater than 1", got.Attempt)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for retried request")
+	}
+	stageMu.Lock()
+	defer stageMu.Unlock()
+	var sawAutostart, sawFailedAttempt, sawSuccessfulAttempt bool
+	for _, stage := range stages {
+		switch {
+		case stage.Stage == DeliveryStageDaemonAutostart && stage.Outcome == "success":
+			sawAutostart = true
+		case stage.Stage == DeliveryStageIPCAttempt && stage.Outcome == "error":
+			sawFailedAttempt = true
+		case stage.Stage == DeliveryStageIPCAttempt && stage.Outcome == "success" && stage.Attempt > 1:
+			sawSuccessfulAttempt = true
+		}
+	}
+	if !sawAutostart || !sawFailedAttempt || !sawSuccessfulAttempt {
+		t.Fatalf("delivery stages = %+v", stages)
 	}
 }
 

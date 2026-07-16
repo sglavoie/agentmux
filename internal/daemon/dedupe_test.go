@@ -142,11 +142,18 @@ func TestDedupeCache_QueueFullDegradesButRuns(t *testing.T) {
 	c.do("a", run)
 	c.do("b", run)
 	// Cache now holds two non-expired completed entries.
-	c.do("c", run)
+	observedSaturation := false
+	c.doObserved("c", func(saturated bool) Response {
+		observedSaturation = saturated
+		return run()
+	})
 
 	snap := m.Snapshot()
 	if snap.QueueFull != 1 {
 		t.Errorf("QueueFull = %d; want 1", snap.QueueFull)
+	}
+	if !observedSaturation {
+		t.Error("dedupe saturation was not attributed to the request callback")
 	}
 	if snap.Accepted != 2 {
 		t.Errorf("Accepted = %d; want 2 (the two cached admits only)", snap.Accepted)

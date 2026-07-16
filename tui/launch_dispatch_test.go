@@ -629,7 +629,7 @@ func TestDashboardLaunch_CrossHarnessUsesConfiguredProjectTemplate(t *testing.T)
 		t.Fatalf("expected empty explicit-flags marker for inherited args, got %q", got)
 	}
 	cmdline := strings.Join(opts.Cmdline, "\x00")
-	if !strings.Contains(cmdline, "exec env CODEX_HOME="+config.ExpandTilde("~/.codex")+" codex --model gpt-5") {
+	if !strings.Contains(cmdline, "exec env CODEX_HOME="+config.ExpandTilde("~/.codex")+" RUST_LOG=debug codex --model gpt-5") {
 		t.Fatalf("expected Codex command with target args, got %v", opts.Cmdline)
 	}
 	if strings.Contains(cmdline, "--dangerously-skip-permissions") || strings.Contains(cmdline, "--shared-default") {
@@ -707,7 +707,7 @@ func TestDashboardRestartProfile_CrossHarnessUsesConfiguredProjectTemplate(t *te
 		t.Fatalf("expected target profile args, got cc_flags=%q", got)
 	}
 	cmdline := strings.Join(opts.Cmdline, "\x00")
-	if !strings.Contains(cmdline, "exec env CODEX_HOME="+config.ExpandTilde("~/.codex")+" codex --model gpt-5") {
+	if !strings.Contains(cmdline, "exec env CODEX_HOME="+config.ExpandTilde("~/.codex")+" RUST_LOG=debug codex --model gpt-5") {
 		t.Fatalf("expected Codex command with target args, got %v", opts.Cmdline)
 	}
 	if strings.Contains(cmdline, "--dangerously-skip-permissions") || strings.Contains(cmdline, "--shared-default") {

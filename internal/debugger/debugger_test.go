@@ -1,0 +1,175 @@
+package debugger
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/kitty"
+)
+
+type testHealthClient struct{ health daemon.Health }
+
+func (c testHealthClient) Health() daemon.Health { return c.health }
+
+type testKittyClient struct {
+	windows []kitty.OSWindow
+	err     error
+}
+
+func (c testKittyClient) ListWindows() ([]kitty.OSWindow, error) { return c.windows, c.err }
+
+type testProbeClient struct {
+	request daemon.Request
+}
+
+func (c *testProbeClient) SendWithAutoStartObserved(request daemon.Request, _ string, observer daemon.DeliveryObserver) (daemon.Response, error) {
+	c.request = request
+	observer(daemon.DeliveryStageEvent{Stage: daemon.DeliveryStageIPCAttempt, Attempt: 1, Outcome: "success", Reason: "acknowledged", LatencyMS: 1.25})
+	return daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
+		SchemaVersion: daemon.DeliveryAcknowledgementSchemaVersion,
+		Status:        daemon.DeliveryAcknowledgementAccepted, Reason: "routing_discovered",
+		TraceID: request.TraceID, RequestID: request.RequestID,
+		ProducerHarness: harness.Claude, TargetHarness: harness.Codex,
+		Profile: "work", SourceWindowID: 43, TargetWindowID: 42,
+		RouteDecision: "owner", SnapshotReady: true, WindowFound: true,
+	}}, nil
+}
+
+func TestSelectorNormalizesHarnessAndParsesTimeBounds(t *testing.T) {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	after, err := ParseTimeBound("30m", now)
+	if err != nil || !after.Equal(now.Add(-30*time.Minute)) {
+		t.Fatalf("after = %s, err = %v", after, err)
+	}
+	selector := Selector{Harness: " Claude ", Outcomes: []string{"success", "success", ""}, After: after, Before: now}
+	if err := selector.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if selector.Harness != harness.Claude || len(selector.Outcomes) != 1 {
+		t.Fatalf("selector = %+v", selector)
+	}
+	selector.After = now.Add(time.Minute)
+	if err := selector.Normalize(); err == nil {
+		t.Fatal("inverted time range was accepted")
+	}
+}
+
+func TestTailWorksOfflineReconcilesSpoolAndToleratesCorruptRecords(t *testing.T) {
+	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := diagnostics.NewEnvelope("hook.delivery")
+	record.RequestID = "main"
+	record.Harness = harness.Claude
+	record.Outcome = "accepted"
+	record.Evidence = map[string]string{"event": "Stop"}
+	if err := journal.Append(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(paths.JournalFile, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString("{bad}\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+	spooled := diagnostics.NewEnvelope("hook.delivery")
+	spooled.RequestID = "spooled"
+	spooled.Harness = harness.Claude
+	spooled.Outcome = "accepted"
+	spooled.Evidence = map[string]string{"event": "Stop"}
+	data, _ := json.Marshal(spooled)
+	if err := os.WriteFile(filepath.Join(paths.SpoolDir, "journal-123.jsonl"), append(data, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Tail(context.Background(), journal, TailOptions{
+		Selector: Selector{Harness: "Claude", Event: "Stop", Outcomes: []string{"accepted"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Records) != 2 || report.CorruptLines != 1 || report.ReconciledRecords != 1 {
+		t.Fatalf("tail report = %+v", report)
+	}
+}
+
+func TestCollectStatusRemainsUsefulWithDaemonAndKittyUnavailable(t *testing.T) {
+	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := diagnostics.NewEnvelope("hook.delivery")
+	record.RequestID = "offline-evidence"
+	record.Harness = harness.Codex
+	record.Outcome = "accepted"
+	if err := journal.Append(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	enabled := true
+	cfg := &config.Config{Defaults: config.Defaults{Diagnostics: config.DiagnosticsConfig{
+		JournalEnabled: &enabled, JournalKeepDays: 14, JournalMaxMiB: 256,
+		NativeLogging: &enabled, NativeKeepDays: 14, NativeMaxMiB: 1024, NativeSessionMaxMiB: 128,
+	}}}
+	report, err := CollectStatus(context.Background(), StatusOptions{
+		Config: cfg, Paths: paths, Journal: journal,
+		Daemon: testHealthClient{}, Kitty: testKittyClient{err: errors.New("Kitty offline")},
+		AMXBin: "/tmp/amx", CLIBuild: buildinfo.Info{Version: "test"},
+		Now: time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC), Selector: Selector{RequestID: "offline-evidence"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Daemon.Alive || report.Journal.Health.Records != 1 || len(report.LastSeenEvents) != 1 || report.LastSeenEvents[0].RequestID != "offline-evidence" {
+		t.Fatalf("offline status = %+v", report)
+	}
+	if !strings.Contains(report.Findings[0].Message, "persisted diagnostics") {
+		t.Fatalf("findings = %+v", report.Findings)
+	}
+}
+
+func TestInspectNativeFindsManagedAndUnmanagedSessions(t *testing.T) {
+	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	if err := paths.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	enabled := true
+	policy := config.DiagnosticsConfig{NativeLogging: &enabled, NativeMaxMiB: 1, NativeSessionMaxMiB: 1}
+	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{
+		{Windows: []kitty.Window{{ID: 1, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude, LaunchID: "11111111-1111-4111-8111-111111111111", NativeCoverage: "managed"}}}},
+		{Windows: []kitty.Window{{ID: 2, ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"/usr/bin/codex"}}}}}},
+	}}}
+	report := InspectNative(paths, policy, windows, true, Selector{}, time.Now())
+	if report.Coverage.Managed != 1 || report.Coverage.Unmanaged != 1 || len(report.Sessions) != 2 || report.Verdict != VerdictWarning {
+		t.Fatalf("native report = %+v", report)
+	}
+}
+
+func TestProbeReportsEveryObservedTransportStageAndScope(t *testing.T) {
+	client := &testProbeClient{}
+	report := Probe(client, ProbeOptions{WindowID: 43, Harness: "Claude", RequestID: "request-1", TraceID: "trace-1", AMXBin: "/tmp/amx"})
+	if !report.Success || len(report.Stages) != 2 || report.Stages[0].Stage != daemon.DeliveryStageIPCAttempt || report.Stages[1].Stage != "daemon_acknowledgement" {
+		t.Fatalf("probe report = %+v", report)
+	}
+	if client.request.Type != daemon.TypeDiagnosticProbe || client.request.WindowID != 43 || client.request.RequestID != "request-1" {
+		t.Fatalf("probe request = %+v", client.request)
+	}
+	if !strings.Contains(report.Scope, "does not prove") || !strings.Contains(report.Scope, "without changing reducer") {
+		t.Fatalf("scope = %q", report.Scope)
+	}
+}

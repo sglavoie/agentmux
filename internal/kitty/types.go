@@ -272,6 +272,13 @@ type UserVars struct {
 	AMXGroups        string `json:"amx_groups"`
 	AMXDirectory     string `json:"amx_directory"`
 	AMXState         string `json:"amx_state"`
+	LaunchID         string `json:"amx_launch_id"`
+	NativeCoverage   string `json:"amx_native_coverage"`
+	NativeLogPath    string `json:"amx_native_log_path"`
+	NativeLogLevel   string `json:"amx_native_log_level"`
+	NativeOverride   string `json:"amx_native_override"`
+	HarnessSessionID string `json:"amx_harness_session"`
+	ASLRunID         string `json:"amx_asl_run_id"`
 	DashboardSelect  string `json:"amx_dashboard_select"`
 	Account          string `json:"cc_account"`
 	ConfigDir        string `json:"cc_config_dir"`

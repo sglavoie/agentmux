@@ -198,6 +198,29 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.Handoff.RecentMessages == 0 {
 		cfg.Defaults.Handoff.RecentMessages = 12
 	}
+	if cfg.Defaults.Diagnostics.JournalEnabled == nil {
+		t := true
+		cfg.Defaults.Diagnostics.JournalEnabled = &t
+	}
+	if cfg.Defaults.Diagnostics.JournalKeepDays == 0 {
+		cfg.Defaults.Diagnostics.JournalKeepDays = 14
+	}
+	if cfg.Defaults.Diagnostics.JournalMaxMiB == 0 {
+		cfg.Defaults.Diagnostics.JournalMaxMiB = 256
+	}
+	if cfg.Defaults.Diagnostics.NativeLogging == nil {
+		t := true
+		cfg.Defaults.Diagnostics.NativeLogging = &t
+	}
+	if cfg.Defaults.Diagnostics.NativeKeepDays == 0 {
+		cfg.Defaults.Diagnostics.NativeKeepDays = 14
+	}
+	if cfg.Defaults.Diagnostics.NativeMaxMiB == 0 {
+		cfg.Defaults.Diagnostics.NativeMaxMiB = 1024
+	}
+	if cfg.Defaults.Diagnostics.NativeSessionMaxMiB == 0 {
+		cfg.Defaults.Diagnostics.NativeSessionMaxMiB = 128
+	}
 	if cfg.Defaults.Preview.Direction == "" {
 		cfg.Defaults.Preview.Direction = "horizontal"
 	}

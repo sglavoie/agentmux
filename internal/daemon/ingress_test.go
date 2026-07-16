@@ -75,11 +75,13 @@ func TestIngressQueue_AckWaitsForReduction(t *testing.T) {
 // still be processed (never dropped) and must bump the shared queueFull metric.
 func TestIngressQueue_FullDegradesInlineAndCountsQueueFull(t *testing.T) {
 	entered := make(chan struct{}, 8)
+	saturation := make(chan string, 8)
 	release := make(chan struct{})
 	var releaseOnce sync.Once
 	releaseAll := func() { releaseOnce.Do(func() { close(release) }) }
 
-	handle := func(_ Request) Response {
+	handle := func(req Request) Response {
+		saturation <- req.saturationReason
 		entered <- struct{}{}
 		<-release
 		return Response{OK: true}
@@ -96,6 +98,7 @@ func TestIngressQueue_FullDegradesInlineAndCountsQueueFull(t *testing.T) {
 	// entry, the buffer is empty and the consumer is not receiving.
 	go q.submit(Request{Type: TypeStateUpdate})
 	<-entered
+	<-saturation
 
 	// Fill the single buffer slot directly and deterministically.
 	q.ch <- queueItem{req: Request{Type: TypeStateUpdate}, result: make(chan Response, 1)}
@@ -115,6 +118,14 @@ func TestIngressQueue_FullDegradesInlineAndCountsQueueFull(t *testing.T) {
 	}
 	if got := metrics.queueFull.Load(); got != 1 {
 		t.Fatalf("queueFull = %d; want exactly 1", got)
+	}
+	select {
+	case got := <-saturation:
+		if got != "ingress_queue" {
+			t.Fatalf("overflow saturation reason = %q; want ingress_queue", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("overflow request did not expose request-scoped saturation evidence")
 	}
 
 	// The overflow request is processed, not dropped: release everything and the

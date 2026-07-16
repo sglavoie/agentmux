@@ -1,16 +1,28 @@
 # Product acceptance
 
-The product acceptance gate is:
+The AgentMux 0.6.0 product acceptance gate is:
 
 ```bash
-just acceptance
+just check
 ```
 
 It runs `go test ./...`, the race-sensitive transcript, plan, handoff,
-worktree, daemon, and TUI suites, `go vet ./...`, and every committed TUI
-scenario. `just check` adds `golangci-lint` and is the final repository gate.
+worktree, daemon, and TUI suites, `go vet ./...`, every committed TUI
+scenario, and `golangci-lint`. `just acceptance` is the same gate without the
+optional linter dependency.
 All persistence tests use temporary homes, transcript sources, plan roots, and
 cache paths.
+
+The cross-repository release gate is:
+
+```bash
+just --justfile /Users/sglavoie/scripts/justfile --working-directory /Users/sglavoie/scripts test-all
+just --justfile /Users/sglavoie/scripts/justfile --working-directory /Users/sglavoie/scripts lint
+just --justfile /Users/sglavoie/scripts/justfile --working-directory /Users/sglavoie/scripts verify-asl-install
+```
+
+These commands cover acknowledged ASL delivery and installation without
+changing `/Users/sglavoie/scripts/claude/.claude/settings.json`.
 
 ## Workflow coverage
 
@@ -24,6 +36,11 @@ cache paths.
 | Plans | `internal/plans` and `tui` cover filesystem discovery, source fallback, search-sidecar repair, lazy warmup, selection continuity, and last-good rows. |
 | Narrow and wide TUI layouts | All JSON scenarios under `docs/tui-testing/scenarios` cover the live dashboard, overlays, Past Sessions, Plans, and their viewers. |
 | TUI continuity | The hermetic `session-fork-continuity` scenario enters Past Sessions and launches a native fork through the shared action registry while recording, rather than executing, the Kitty launch. |
+| Diagnostic pipeline | `cmd.TestAcceptanceDiagnosticPipeline` drives the real hook command adapter through journal persistence and Unix IPC into an in-process daemon with fake Kitty, then checks duplicate acknowledgement, renderer writes, notification suppression, a share bundle, offline replay, and ASL source-event explanation. |
+| Debug workflow | `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow` pins AgentMux 0.6.0, schema v9 documentation, the `amx debug status` → `amx debug explain` → `amx debug bundle` → `amx debug replay` workflow, and every required failure-matrix row. |
+| Bundle secrecy and traversal | `internal/debugger` tests plant a secret corpus, verify share/forensic redaction, exclude raw sources, reject symlink publication, build flat deterministic archives, and replay portable share evidence. |
+| Restart and replay equivalence | `internal/daemon` restart-prefix tests and `internal/debugger` golden replay tests cover restored reducer state, daemon sequence resets, ordering, routing, ASL phases, duplicate requests, coalesced renders, and explicit schema-v8 limitations. |
+| ASL delivery correlation | `/Users/sglavoie/scripts/tests` covers stable UUIDv5 request IDs, bounded retry/backoff, duplicates, permanent failures, legacy fallback, missing binaries, exhaustion, metrics/tail/Workbench visibility; `internal/debugger.TestExplainCorrelatesASLSourceDeliveryDaemonAndRenderEvidence` pins the cross-repository graph. |
 
 ## Filesystem persistence coverage
 
@@ -47,6 +64,35 @@ confirmation boundaries.
 
 ## Installed release smoke
 
+After both repository gates pass, install and validate the same artifact:
+
+```bash
+just install-restart-smoke
+amx config hooks-sync
+amx config hooks-status
+amx doctor --strict
+```
+
+`install-restart-smoke` builds and atomically installs the binary, restarts the
+daemon, waits for `ready: true`, and runs strict doctor against matching
+CLI/daemon build identities. Hook synchronization happens afterward because a
+public hook contract changed: the safe Claude observers must be installed
+before the final strict-doctor record is retained.
+
+The release uses schema v9 for `amx daemon export-events` by default. Acceptance
+also retains `amx daemon export-events --schema 8` coverage as an explicit
+compatibility projection. For first-line diagnosis use:
+
+```bash
+amx debug status
+amx debug explain --source-event <id>
+amx debug bundle --mode share -o agent-mux-debug.tar.gz
+amx debug replay agent-mux-debug.tar.gz
+```
+
+The failure matrix, native-log privacy defaults, bundle sharing policy, ASL
+delivery outcomes, and provider drill are in [Debugging event delivery](debugging.md).
+
 After `just acceptance` succeeds, an upgrade from a legacy SQLite build uses a
 manual, one-off deployment flow:
 
@@ -66,3 +112,17 @@ manual, one-off deployment flow:
 Record `just acceptance`, optional `just check`, installed daemon/doctor/session
 smoke, cache population, and the post-smoke filesystem inventory in the release
 handoff.
+
+## Automated versus live-provider evidence
+
+The automated diagnostic fixture has no model usage. It substitutes a local
+fake Kitty executable and never contacts Claude, Codex, Copilot, a real Kitty
+instance, or a notification backend. It is the completion gate for deterministic
+delivery, replay, bundle, and correlation behavior.
+
+Actual provider smoke is a separate operator-attended record. For each installed
+provider, record the CLI version and intentionally exercise prompt, tool,
+permission/elicitation, terminal, and failure paths in a managed Kitty session.
+Retain a schema v9 export or `amx debug explain --source-event <id> --json` for
+each path. Do not infer that this drill ran from an automated pass, and do not
+incur provider/model usage merely to complete the automated gate.
