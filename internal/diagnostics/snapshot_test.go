@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,7 +32,7 @@ func snapshotJSONLine(t *testing.T, envelope TraceEnvelope) []byte {
 	return append(data, '\n')
 }
 
-func TestJournalSnapshotReleasesLocksBeforeSlowPrefixRead(t *testing.T) {
+func TestJournalSnapshotVisitorRunsAfterLocksAreReleased(t *testing.T) {
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 100 * time.Millisecond})
 	base := time.Date(2026, 7, 16, 1, 0, 0, 0, time.UTC)
 	var data bytes.Buffer
@@ -45,21 +46,26 @@ func TestJournalSnapshotReleasesLocksBeforeSlowPrefixRead(t *testing.T) {
 	}
 	prefixBytes := int64(data.Len())
 
-	captured := make(chan struct{})
-	releaseRead := make(chan struct{})
+	visitorStarted := make(chan struct{})
+	releaseVisitor := make(chan struct{})
 	type snapshotResult struct {
 		snapshot JournalSnapshot
 		err      error
 	}
 	result := make(chan snapshotResult, 1)
+	visited := 0
 	go func() {
-		snapshot, err := journal.snapshot(context.Background(), Selector{}, nil, func() {
-			close(captured)
-			<-releaseRead
+		snapshot, err := journal.SnapshotWithVisitor(context.Background(), Selector{}, nil, func(TraceEnvelope) error {
+			visited++
+			if visited == 1 {
+				close(visitorStarted)
+				<-releaseVisitor
+			}
+			return nil
 		})
 		result <- snapshotResult{snapshot: snapshot, err: err}
 	}()
-	<-captured
+	<-visitorStarted
 
 	writer := snapshotEnvelope("writer", 1, "during-snapshot", base.Add(time.Hour))
 	writerDone := make(chan error, 1)
@@ -76,11 +82,14 @@ func TestJournalSnapshotReleasesLocksBeforeSlowPrefixRead(t *testing.T) {
 	if err != nil || len(spools) != 0 {
 		t.Fatalf("append fell back to spool during snapshot: files=%v err=%v", spools, err)
 	}
-	close(releaseRead)
+	close(releaseVisitor)
 
 	first := <-result
 	if first.err != nil {
 		t.Fatal(first.err)
+	}
+	if visited != 512 {
+		t.Fatalf("visitor records = %d, want 512", visited)
 	}
 	if len(first.snapshot.Records) != 512 {
 		t.Fatalf("fixed prefix records = %d, want 512", len(first.snapshot.Records))
@@ -126,9 +135,16 @@ func TestJournalSnapshotMergesOrdersAndAdvancesIncompleteCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, err := journal.Snapshot(context.Background(), Selector{Limit: 2}, nil)
+	var visited []string
+	first, err := journal.SnapshotWithVisitor(context.Background(), Selector{Limit: 2}, nil, func(envelope TraceEnvelope) error {
+		visited = append(visited, envelope.RequestID)
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if want := []string{"duplicate", "late", "legacy", "early"}; !reflect.DeepEqual(visited, want) {
+		t.Fatalf("visitor journal order = %v, want %v", visited, want)
 	}
 	if got := []string{first.Records[0].RequestID, first.Records[1].RequestID}; !reflect.DeepEqual(got, []string{"late", "legacy"}) {
 		t.Fatalf("limited event-time order = %v, want [late legacy]", got)
@@ -142,6 +158,21 @@ func TestJournalSnapshotMergesOrdersAndAdvancesIncompleteCursor(t *testing.T) {
 		t.Fatalf("snapshot health = %+v", first.Health)
 	}
 
+	var filteredVisited []string
+	filtered, err := journal.SnapshotWithVisitor(context.Background(), Selector{RequestID: "late", Limit: 1}, nil, func(envelope TraceEnvelope) error {
+		filteredVisited = append(filteredVisited, envelope.RequestID)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered.Records) != 1 || filtered.Records[0].RequestID != "late" || filtered.Statistics.RecordsMatched != 1 {
+		t.Fatalf("filtered snapshot = records %+v statistics %+v", filtered.Records, filtered.Statistics)
+	}
+	if !reflect.DeepEqual(filteredVisited, visited) {
+		t.Fatalf("selector changed visitor records: got %v, want %v", filteredVisited, visited)
+	}
+
 	spool, err := os.OpenFile(spoolPath, os.O_WRONLY|os.O_APPEND, fileMode)
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +184,11 @@ func TestJournalSnapshotMergesOrdersAndAdvancesIncompleteCursor(t *testing.T) {
 	if err := spool.Close(); err != nil {
 		t.Fatal(err)
 	}
-	delta, err := journal.Snapshot(context.Background(), Selector{Limit: 2}, &first.Cursor)
+	var deltaVisited []string
+	delta, err := journal.SnapshotWithVisitor(context.Background(), Selector{Limit: 2}, &first.Cursor, func(envelope TraceEnvelope) error {
+		deltaVisited = append(deltaVisited, envelope.RequestID)
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,6 +197,9 @@ func TestJournalSnapshotMergesOrdersAndAdvancesIncompleteCursor(t *testing.T) {
 	}
 	if delta.Statistics.RecordsScanned != 1 || delta.Statistics.CorruptLines != 0 {
 		t.Fatalf("completed trailing record statistics = %+v", delta.Statistics)
+	}
+	if !reflect.DeepEqual(deltaVisited, []string{"partial"}) {
+		t.Fatalf("delta visitor records = %v, want [partial]", deltaVisited)
 	}
 
 	claimPath := filepath.Join(paths.SpoolDir, "journal-4242-reconciling-1.claim")
@@ -190,6 +228,151 @@ func TestJournalSnapshotMergesOrdersAndAdvancesIncompleteCursor(t *testing.T) {
 	}
 	if len(rotated.Records) != 1 || rotated.Records[0].RequestID != "after-rotation" {
 		t.Fatalf("rotation delta = %+v", rotated.Records)
+	}
+}
+
+func TestJournalSnapshotVisitorErrorsDoNotAdvanceCursor(t *testing.T) {
+	t.Run("visitor error", func(t *testing.T) {
+		journal, _ := testJournal(t, JournalOptions{})
+		base := time.Date(2026, 7, 16, 2, 30, 0, 0, time.UTC)
+		if err := journal.Append(context.Background(), snapshotEnvelope("source", 1, "baseline", base)); err != nil {
+			t.Fatal(err)
+		}
+		baseline, err := journal.Snapshot(context.Background(), Selector{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for sequence, requestID := range []string{"delta-one", "delta-two"} {
+			if err := journal.Append(context.Background(), snapshotEnvelope("source", uint64(sequence+2), requestID, base.Add(time.Duration(sequence+1)*time.Minute))); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		visitorErr := errors.New("visitor failed")
+		visited := 0
+		failed, err := journal.SnapshotWithVisitor(context.Background(), Selector{}, &baseline.Cursor, func(TraceEnvelope) error {
+			visited++
+			return visitorErr
+		})
+		if !errors.Is(err, visitorErr) {
+			t.Fatalf("visitor error = %v, want %v", err, visitorErr)
+		}
+		if visited != 1 {
+			t.Fatalf("visitor calls after failure = %d, want 1", visited)
+		}
+		if failed.Cursor.offsets != nil || failed.Cursor.missingCaptures != nil {
+			t.Fatalf("failed traversal returned advancing cursor: %+v", failed.Cursor)
+		}
+
+		retry, err := journal.Snapshot(context.Background(), Selector{}, &baseline.Cursor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(retry.Records) != 2 {
+			t.Fatalf("retry record count = %d, want 2", len(retry.Records))
+		}
+		if got := []string{retry.Records[0].RequestID, retry.Records[1].RequestID}; !reflect.DeepEqual(got, []string{"delta-one", "delta-two"}) {
+			t.Fatalf("retry records = %v, want both deltas", got)
+		}
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		journal, _ := testJournal(t, JournalOptions{})
+		base := time.Date(2026, 7, 16, 2, 45, 0, 0, time.UTC)
+		if err := journal.Append(context.Background(), snapshotEnvelope("source", 1, "baseline", base)); err != nil {
+			t.Fatal(err)
+		}
+		baseline, err := journal.Snapshot(context.Background(), Selector{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for sequence, requestID := range []string{"delta-one", "delta-two"} {
+			if err := journal.Append(context.Background(), snapshotEnvelope("source", uint64(sequence+2), requestID, base.Add(time.Duration(sequence+1)*time.Minute))); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		visited := 0
+		failed, err := journal.SnapshotWithVisitor(ctx, Selector{}, &baseline.Cursor, func(TraceEnvelope) error {
+			visited++
+			cancel()
+			return nil
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancellation error = %v, want %v", err, context.Canceled)
+		}
+		if visited != 1 {
+			t.Fatalf("visitor calls after cancellation = %d, want 1", visited)
+		}
+		if failed.Cursor.offsets != nil || failed.Cursor.missingCaptures != nil {
+			t.Fatalf("cancelled traversal returned advancing cursor: %+v", failed.Cursor)
+		}
+
+		retry, err := journal.Snapshot(context.Background(), Selector{}, &baseline.Cursor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(retry.Records) != 2 {
+			t.Fatalf("retry record count = %d, want 2", len(retry.Records))
+		}
+		if got := []string{retry.Records[0].RequestID, retry.Records[1].RequestID}; !reflect.DeepEqual(got, []string{"delta-one", "delta-two"}) {
+			t.Fatalf("retry records = %v, want both deltas", got)
+		}
+	})
+}
+
+func TestJournalSnapshotVisitorFailureAcrossFilesDoesNotAdvanceCursor(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	base := time.Date(2026, 7, 16, 2, 55, 0, 0, time.UTC)
+	firstFileRecords := []TraceEnvelope{
+		snapshotEnvelope("first-file", 1, "first-one", base),
+		snapshotEnvelope("first-file", 2, "first-two", base.Add(time.Minute)),
+	}
+	var firstFileData bytes.Buffer
+	for _, envelope := range firstFileRecords {
+		firstFileData.Write(snapshotJSONLine(t, envelope))
+	}
+	firstFilePath := filepath.Join(paths.JournalDir, "events-20260716T025500.000000000Z-1-000001.jsonl")
+	if err := os.WriteFile(firstFilePath, firstFileData.Bytes(), fileMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.JournalFile, snapshotJSONLine(t, snapshotEnvelope("second-file", 1, "second-one", base.Add(2*time.Minute))), fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	visitorErr := errors.New("second-file visitor failed")
+	var visited []string
+	failed, err := journal.SnapshotWithVisitor(context.Background(), Selector{}, nil, func(envelope TraceEnvelope) error {
+		visited = append(visited, envelope.RequestID)
+		if envelope.RequestID == "second-one" {
+			return visitorErr
+		}
+		return nil
+	})
+	if !errors.Is(err, visitorErr) {
+		t.Fatalf("visitor error = %v, want %v", err, visitorErr)
+	}
+	if want := []string{"first-one", "first-two", "second-one"}; !reflect.DeepEqual(visited, want) {
+		t.Fatalf("visited records before failure = %v, want %v", visited, want)
+	}
+	if failed.Statistics.SegmentFilesRead != 2 {
+		t.Fatalf("segment files read before failure = %d, want 2", failed.Statistics.SegmentFilesRead)
+	}
+	if len(failed.Cursor.offsets) != 0 || len(failed.Cursor.missingCaptures) != 0 {
+		t.Fatalf("failed traversal returned advancing cursor: %+v", failed.Cursor)
+	}
+
+	var retryVisited []string
+	_, err = journal.SnapshotWithVisitor(context.Background(), Selector{}, &failed.Cursor, func(envelope TraceEnvelope) error {
+		retryVisited = append(retryVisited, envelope.RequestID)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"first-one", "first-two", "second-one"}; !reflect.DeepEqual(retryVisited, want) {
+		t.Fatalf("retry visitor records = %v, want first-file records redelivered as %v", retryVisited, want)
 	}
 }
 
@@ -360,7 +543,8 @@ func TestJournalSnapshotReadPathDoesNotChmodOrQuarantine(t *testing.T) {
 		t.Fatal(err)
 	}
 	spoolPath := filepath.Join(paths.SpoolDir, "journal-6161.jsonl")
-	if err := os.WriteFile(spoolPath, append(snapshotJSONLine(t, snapshotEnvelope("spool", 1, "spool", base)), []byte("{broken}\n")...), 0o644); err != nil {
+	spoolData := append([]byte("{broken}\n"), snapshotJSONLine(t, snapshotEnvelope("spool", 1, "spool", base))...)
+	if err := os.WriteFile(spoolPath, spoolData, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(paths.JournalFile, 0o640); err != nil {
@@ -378,12 +562,19 @@ func TestJournalSnapshotReadPathDoesNotChmodOrQuarantine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	snapshot, err := journal.Snapshot(context.Background(), Selector{}, nil)
+	var visited []string
+	snapshot, err := journal.SnapshotWithVisitor(context.Background(), Selector{}, nil, func(envelope TraceEnvelope) error {
+		visited = append(visited, envelope.RequestID)
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if snapshot.Statistics.CorruptLines != 1 || len(snapshot.Records) != 2 {
 		t.Fatalf("tolerant read = records %d statistics %+v", len(snapshot.Records), snapshot.Statistics)
+	}
+	if !reflect.DeepEqual(visited, []string{"segment", "spool"}) {
+		t.Fatalf("visitor did not tolerate corrupt line: records %v", visited)
 	}
 	afterSegment, err := os.Stat(paths.JournalFile)
 	if err != nil {

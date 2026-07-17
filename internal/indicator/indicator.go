@@ -1,7 +1,6 @@
 package indicator
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -17,10 +16,15 @@ import (
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
-// maxHookPayloadBytes leaves room for the TypeHookEvent JSON envelope within
-// the daemon's 1 MiB request limit. The hook forwards the raw payload so the
-// daemon owns parsing, event resolution, and all Kitty interactions.
-const maxHookPayloadBytes = 256 << 10
+const (
+	// maxRawHookPayloadBytes leaves room for the TypeHookEvent JSON envelope
+	// within the daemon's 1 MiB request limit. Payloads through this size are
+	// forwarded byte-for-byte.
+	maxRawHookPayloadBytes = 256 << 10
+	// maxHookPayloadBytes is the largest original hook payload accepted. Larger
+	// valid payloads are compacted before being placed in the daemon envelope.
+	maxHookPayloadBytes = 1 << 20
+)
 
 var errHookPayloadOversized = errors.New("hook payload exceeds forwarding limit")
 
@@ -29,6 +33,7 @@ type indicatorDaemonClient interface {
 }
 
 var getenv = os.Getenv
+var discoverHarnessProcessForDelivery = DiscoverHarnessProcess
 
 // Run is the hook entry point. Hooks are fire-and-forget: all event-processing
 // failures are logged and intentionally reported as success to the harness.
@@ -70,10 +75,15 @@ func deliverFromStdinWithDeps(
 	var payloadHMAC string
 	switch {
 	case errors.Is(err, errHookPayloadOversized):
-		slog.Warn("indicator: degrading oversized hook payload to empty", "event", event, "err", err)
-		payloadSize, payloadHMAC = recorder.recordPayload([]byte(payloadJSON), "degraded", "payload_oversized")
+		slog.Warn("indicator: rejecting oversized hook payload", "event", event, "err", err)
+		payloadSize, payloadHMAC = recorder.recordPayload([]byte(payloadJSON), "rejected", "payload_oversized")
 		recorder.captureRawPayload(event, windowID, producerHarness, payloadJSON, true)
-		payloadJSON = ""
+		recorder.record("hook.validation", "rejected", "payload_oversized", map[string]string{
+			"observed_bytes": fmt.Sprint(payloadSize),
+			"limit_bytes":    fmt.Sprint(maxHookPayloadBytes),
+			"payload_hmac":   payloadHMAC,
+		}, 0)
+		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "payload_oversized", nil))
 	case err != nil:
 		slog.Warn("indicator: ignoring unreadable hook payload", "event", event, "err", err)
 		recorder.recordPayload(nil, "error", "payload_unreadable")
@@ -95,11 +105,34 @@ func deliverFromStdinWithDeps(
 	recorder.record("hook.validation", "success", "payload_valid", map[string]string{
 		"source_event_id_present": fmt.Sprint(payload.EffectiveSourceEventID() != ""),
 	}, 0)
-	discovery := DiscoverHarnessProcess(producerHarness)
+	contextLimit := hookevent.PayloadHasContextLimit(payload)
+	resetFlow := hookevent.PayloadHasResetFlow(producerHarness, event, payload)
+	payloadEncoding := "json"
+	forwardPayloadJSON := payloadJSON
+	if payloadSize > maxRawHookPayloadBytes {
+		compact, compactErr := hookevent.CompactHookPayload(payload)
+		if compactErr != nil {
+			recorder.record("hook.validation", "rejected", "invalid_payload", map[string]string{"error": compactErr.Error()}, 0)
+			return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_payload", nil))
+		}
+		if len(compact) > maxRawHookPayloadBytes {
+			slog.Warn("indicator: rejecting oversized compact hook payload", "event", event, "bytes", len(compact))
+			recorder.record("hook.validation", "rejected", "payload_oversized", map[string]string{
+				"observed_bytes": fmt.Sprint(len(compact)),
+				"limit_bytes":    fmt.Sprint(maxRawHookPayloadBytes),
+				"payload_hmac":   payloadHMAC,
+			}, 0)
+			return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "payload_oversized", nil))
+		}
+		forwardPayloadJSON = string(compact)
+		payloadEncoding = "json_compact"
+	}
+	discovery := discoverHarnessProcessForDelivery(producerHarness)
 	recorder.recordProcessDetection(discovery)
 	result := deliverPayloadWithDeps(
-		event, windowID, producerHarness, amxBin, payloadJSON, discovery.PipeMode, discovery.Identity(),
+		event, windowID, producerHarness, amxBin, forwardPayloadJSON, discovery.PipeMode, discovery.Identity(),
 		traceID, requestID, payload.EffectiveSourceEventID(), payloadSize, payloadHMAC,
+		payloadEncoding, contextLimit, resetFlow,
 		client, recorder, started,
 	)
 	return finish(result)
@@ -113,6 +146,7 @@ func runWithDeps(event string, windowID int, producerHarness, amxBin, payloadJSO
 	_ = deliverPayloadWithDeps(
 		event, windowID, producerHarness, amxBin, payloadJSON, pipeMode, nil,
 		traceID, requestID, payload.EffectiveSourceEventID(), int64(len(payloadJSON)), "",
+		"json", hookevent.PayloadHasContextLimit(payload), hookevent.PayloadHasResetFlow(producerHarness, event, payload),
 		client, &deliveryRecorder{traceID: traceID, requestID: requestID, event: event}, started,
 	)
 	return nil
@@ -160,13 +194,11 @@ func readHookPayloadJSON(stdin *os.File) (string, error) {
 		return "", fmt.Errorf("read hook payload: %w", err)
 	}
 	if len(data) > maxHookPayloadBytes {
-		// Return the bounded prefix alongside the sentinel error so an explicitly
-		// authorized raw capture can preserve evidence without allowing the hook
-		// process to buffer an unbounded payload. The daemon receives an empty
-		// payload, which DecodeHookPayload intentionally accepts.
-		return string(bytes.TrimSpace(data)), fmt.Errorf("%w: %d bytes", errHookPayloadOversized, maxHookPayloadBytes)
+		// Return the bounded prefix alongside the sentinel error so diagnostics
+		// can preserve truncated evidence without buffering unbounded input.
+		return string(data), fmt.Errorf("%w: %d bytes", errHookPayloadOversized, maxHookPayloadBytes)
 	}
-	return string(bytes.TrimSpace(data)), nil
+	return string(data), nil
 }
 
 func resolveHookWindowID(windowID int) (int, error) {

@@ -385,3 +385,108 @@ func TestDecodeHookPayload_AcceptsLargeButValidInput(t *testing.T) {
 		t.Fatalf("Message len = %d, want %d", len(p.Message), len(padding))
 	}
 }
+
+func TestCompactHookPayloadCanonicalizesSemanticAllowlist(t *testing.T) {
+	original := HookPayload{
+		HookEventName:         "AgentSessionLoopPaused",
+		NotificationTypeCamel: "permission_prompt",
+		StopReasonCamel:       "end_turn",
+		Reason:                "blocked",
+		PauseReason:           "question",
+		Source:                "agent_session_loop",
+		Trigger:               "manual",
+		CWD:                   "/work/project",
+		Harness:               "codex",
+		WindowID:              52,
+		PlanDir:               "/plans/run",
+		RunIDCamel:            "run-7",
+		StatePath:             "/plans/run/state.json",
+		RunFinishedAt:         "2026-07-16T22:00:00Z",
+		ToolNameCamel:         "Bash",
+		SessionIDCamel:        "session-7",
+		TurnIDCamel:           "turn-8",
+		ToolUseIDCamel:        "tool-9",
+		AgentIDCamel:          "agent-10",
+		AgentTypeCamel:        "explore",
+		SourceSequenceCamel:   "11",
+		SourceEventIDCamel:    "event-12",
+		EmittedTimeCamel:      "1700000000",
+		Prompt:                strings.Repeat("ordinary prompt", 1000),
+		Title:                 strings.Repeat("ordinary title", 1000),
+		Message:               strings.Repeat("ordinary message", 1000),
+	}
+	encoded, err := CompactHookPayload(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) >= len(original.Prompt)+len(original.Title)+len(original.Message) ||
+		strings.Contains(string(encoded), "ordinary prompt") || strings.Contains(string(encoded), "ordinary title") || strings.Contains(string(encoded), "ordinary message") {
+		t.Fatalf("compact payload retained bulk free text: %s", encoded)
+	}
+	decoded, err := DecodeHookPayload(strings.NewReader(string(encoded)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.HookEventName != original.HookEventName ||
+		decoded.EffectiveNotificationType() != "permission_prompt" || decoded.EffectiveStopReason() != "end_turn" ||
+		decoded.Reason != "blocked" || decoded.EffectivePauseReason() != "question" || decoded.Source != original.Source ||
+		decoded.Trigger != original.Trigger || decoded.CWD != original.CWD || decoded.Harness != original.Harness ||
+		decoded.EffectiveKittyWindowID() != 52 || decoded.PlanDir != original.PlanDir || decoded.EffectiveRunID() != "run-7" ||
+		decoded.StatePath != original.StatePath || decoded.RunFinishedAt != original.RunFinishedAt ||
+		decoded.EffectiveToolName() != "Bash" || decoded.EffectiveSessionID() != "session-7" ||
+		decoded.EffectiveTurnID() != "turn-8" || decoded.EffectiveToolUseID() != "tool-9" ||
+		decoded.EffectiveAgentID() != "agent-10" || decoded.EffectiveAgentType() != "explore" ||
+		decoded.EffectiveSourceSequence() != "11" || decoded.EffectiveSourceEventID() != "event-12" ||
+		decoded.EffectiveEmittedTime() != "1700000000" {
+		t.Fatalf("decoded compact payload = %+v", decoded)
+	}
+	if decoded.EffectivePrompt() != "" || decoded.Title != "" || decoded.Message != "" {
+		t.Fatalf("ordinary free text survived compaction: %+v", decoded)
+	}
+}
+
+func TestCompactHookPayloadPreservesOnlyResetAndContextLimitText(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		harness     string
+		event       string
+		payload     HookPayload
+		wantPrompt  string
+		wantContext bool
+		wantReset   bool
+	}{
+		{
+			name: "reset command only", harness: "copilot", event: "userPromptSubmitted",
+			payload:    HookPayload{Prompt: " /CLEAR discard " + strings.Repeat("private transcript ", 1000)},
+			wantPrompt: "/clear", wantReset: true,
+		},
+		{
+			name: "context marker only", harness: "claude", event: "Stop",
+			payload:     HookPayload{Title: "Context limit reached", Message: "/compact or /clear to continue " + strings.Repeat("private transcript ", 1000)},
+			wantContext: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			encoded, err := CompactHookPayload(tc.payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(encoded), "private transcript") {
+				t.Fatalf("compact payload retained bulk text: %s", encoded)
+			}
+			decoded, err := DecodeHookPayload(strings.NewReader(string(encoded)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if decoded.EffectivePrompt() != tc.wantPrompt {
+				t.Fatalf("compact prompt = %q, want %q", decoded.EffectivePrompt(), tc.wantPrompt)
+			}
+			if got := PayloadHasContextLimit(decoded); got != tc.wantContext {
+				t.Fatalf("context-limit classification = %t, want %t", got, tc.wantContext)
+			}
+			if got := PayloadHasResetFlow(tc.harness, tc.event, decoded); got != tc.wantReset {
+				t.Fatalf("reset-flow classification = %t, want %t", got, tc.wantReset)
+			}
+		})
+	}
+}

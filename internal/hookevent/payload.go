@@ -218,6 +218,8 @@ func payloadHasResetFlow(harnessName, event string, payload HookPayload) bool {
 		return claudePayloadHasResetFlow(event, payload)
 	case harness.Copilot:
 		return copilotPayloadHasResetFlow(event, payload)
+	case harness.Codex:
+		return false
 	default:
 		return claudePayloadHasResetFlow(event, payload) || copilotPayloadHasResetFlow(event, payload)
 	}

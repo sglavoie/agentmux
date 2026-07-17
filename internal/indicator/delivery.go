@@ -263,6 +263,9 @@ func deliverPayloadWithDeps(
 	traceID, requestID, sourceEventID string,
 	payloadSize int64,
 	payloadHMAC string,
+	payloadEncoding string,
+	contextLimit bool,
+	resetFlow bool,
 	client indicatorDaemonClient,
 	recorder *deliveryRecorder,
 	started time.Time,
@@ -300,7 +303,7 @@ func deliverPayloadWithDeps(
 		SourceEventID:   sourceEventID,
 		PayloadSize:     payloadSize,
 		PayloadHMAC:     payloadHMAC,
-		PayloadEncoding: "json",
+		PayloadEncoding: payloadEncoding,
 		PayloadCaptured: recorder.payloadCaptured,
 		ProducerHarness: producerHarness,
 		HarnessProcess:  harnessProcess,
@@ -310,6 +313,8 @@ func deliverPayloadWithDeps(
 		PayloadJSON:     payloadJSON,
 		KittyListenOn:   listenOn,
 		PipeMode:        pipeMode,
+		ContextLimit:    contextLimit,
+		ResetFlow:       resetFlow,
 	}
 
 	observer := func(stage daemon.DeliveryStageEvent) {

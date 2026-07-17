@@ -57,6 +57,10 @@ type JournalSnapshot struct {
 	Cursor     SnapshotCursor     `json:"-"`
 }
 
+// SnapshotVisitor observes each valid, deduplicated record in journal file
+// order before selector filtering and result limiting are applied.
+type SnapshotVisitor func(TraceEnvelope) error
+
 type snapshotFileKind uint8
 
 const (
@@ -89,12 +93,24 @@ type snapshotRecordIdentity struct {
 // call reads only file deltas. Cursors are tied to a stable selector stream;
 // callers should start with nil when changing selectors.
 func (j *Journal) Snapshot(ctx context.Context, selector Selector, cursor *SnapshotCursor) (JournalSnapshot, error) {
-	return j.snapshot(ctx, selector, cursor, nil)
+	return j.SnapshotWithVisitor(ctx, selector, cursor, nil)
+}
+
+// SnapshotWithVisitor captures a journal snapshot and calls visitor for every
+// valid, deduplicated record in the captured file prefixes. The visitor runs
+// after the journal mutex and filesystem lock have been released. A visitor
+// error stops traversal, and the returned snapshot has no advancing cursor.
+func (j *Journal) SnapshotWithVisitor(ctx context.Context, selector Selector, cursor *SnapshotCursor, visitor SnapshotVisitor) (JournalSnapshot, error) {
+	return j.snapshotWithVisitor(ctx, selector, cursor, visitor, nil)
 }
 
 // snapshot exposes the post-capture boundary to deterministic concurrency
 // tests. Production callers always pass a nil hook.
 func (j *Journal) snapshot(ctx context.Context, selector Selector, cursor *SnapshotCursor, afterCapture func()) (JournalSnapshot, error) {
+	return j.snapshotWithVisitor(ctx, selector, cursor, nil, afterCapture)
+}
+
+func (j *Journal) snapshotWithVisitor(ctx context.Context, selector Selector, cursor *SnapshotCursor, visitor SnapshotVisitor, afterCapture func()) (JournalSnapshot, error) {
 	var snapshot JournalSnapshot
 	if j == nil {
 		return snapshot, errors.New("diagnostics: nil journal")
@@ -108,8 +124,10 @@ func (j *Journal) snapshot(ctx context.Context, selector Selector, cursor *Snaps
 	if cursor != nil {
 		offsetCapacity += len(cursor.offsets)
 	}
-	snapshot.Cursor.offsets = make(map[snapshotFileIdentity]int64, offsetCapacity)
-	snapshot.Cursor.missingCaptures = make(map[snapshotFileIdentity]int)
+	nextCursor := SnapshotCursor{
+		offsets:         make(map[snapshotFileIdentity]int64, offsetCapacity),
+		missingCaptures: make(map[snapshotFileIdentity]int),
+	}
 	if cursor != nil {
 		capturedIdentities := make(map[snapshotFileIdentity]struct{}, len(files))
 		for _, captured := range files {
@@ -123,8 +141,8 @@ func (j *Journal) snapshot(ctx context.Context, selector Selector, cursor *Snaps
 			if missing > snapshotCursorMissingCaptureGrace {
 				continue
 			}
-			snapshot.Cursor.offsets[identity] = offset
-			snapshot.Cursor.missingCaptures[identity] = missing
+			nextCursor.offsets[identity] = offset
+			nextCursor.missingCaptures[identity] = missing
 		}
 	}
 	defer closeSnapshotFiles(files)
@@ -144,12 +162,12 @@ func (j *Journal) snapshot(ctx context.Context, selector Selector, cursor *Snaps
 		} else {
 			snapshot.Statistics.SpoolFilesRead++
 		}
-		end, bytesRead, corrupt, readErr := scanSnapshotFile(ctx, captured, func(raw []byte, envelope TraceEnvelope) {
+		end, bytesRead, corrupt, readErr := scanSnapshotFile(ctx, captured, func(raw []byte, envelope TraceEnvelope) error {
 			snapshot.Statistics.RecordsScanned++
 			identity := snapshotIdentity(raw, envelope)
 			if _, duplicate := seen[identity]; duplicate {
 				snapshot.Statistics.DuplicatesOmitted++
-				return
+				return nil
 			}
 			seen[identity] = struct{}{}
 			snapshot.Health.Records++
@@ -157,16 +175,22 @@ func (j *Journal) snapshot(ctx context.Context, selector Selector, cursor *Snaps
 			if envelope.ObservedAt.After(snapshot.Health.LatestObservedAt) {
 				snapshot.Health.LatestObservedAt = envelope.ObservedAt
 			}
+			if visitor != nil {
+				if err := visitor(envelope); err != nil {
+					return fmt.Errorf("diagnostics: snapshot visitor: %w", err)
+				}
+			}
 			if selector.matches(envelope) {
 				snapshot.Records = append(snapshot.Records, envelope)
 			}
+			return nil
 		})
 		snapshot.Statistics.BytesScanned += bytesRead
 		snapshot.Statistics.CorruptLines += corrupt
-		snapshot.Cursor.offsets[captured.identity] = end
 		if readErr != nil {
 			return snapshot, readErr
 		}
+		nextCursor.offsets[captured.identity] = end
 	}
 
 	snapshot.Health.CorruptLines = snapshot.Statistics.CorruptLines
@@ -181,6 +205,7 @@ func (j *Journal) snapshot(ctx context.Context, selector Selector, cursor *Snaps
 	if selector.Limit > 0 && len(snapshot.Records) > selector.Limit {
 		snapshot.Records = snapshot.Records[len(snapshot.Records)-selector.Limit:]
 	}
+	snapshot.Cursor = nextCursor
 	return snapshot, nil
 }
 
@@ -358,7 +383,7 @@ func snapshotIdentityFromInfo(info os.FileInfo) (snapshotFileIdentity, error) {
 	return snapshotFileIdentity{device: uint64(stat.Dev), inode: uint64(stat.Ino)}, nil
 }
 
-func scanSnapshotFile(ctx context.Context, captured snapshotFile, visit func([]byte, TraceEnvelope)) (int64, int64, int, error) {
+func scanSnapshotFile(ctx context.Context, captured snapshotFile, visit func([]byte, TraceEnvelope) error) (int64, int64, int, error) {
 	end := captured.start
 	if captured.start == captured.limit {
 		return end, 0, 0, nil
@@ -381,7 +406,12 @@ func scanSnapshotFile(ctx context.Context, captured snapshotFile, visit func([]b
 				if decodeErr := json.Unmarshal(trimmed, &envelope); decodeErr != nil {
 					corrupt++
 				} else {
-					visit(trimmed, envelope)
+					if visitErr := visit(trimmed, envelope); visitErr != nil {
+						return end, bytesRead, corrupt, visitErr
+					}
+					if ctxErr := ctxError(ctx); ctxErr != nil {
+						return end, bytesRead, corrupt, ctxErr
+					}
 				}
 			}
 		}

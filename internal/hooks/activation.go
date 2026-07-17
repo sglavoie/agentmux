@@ -19,7 +19,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -27,7 +26,6 @@ const defaultLastSeenWindow = 4 * time.Hour
 
 var (
 	activationVersionProbe      = probeHarnessVersion
-	activationLastSeenProbe     = probeLastSeen
 	activationClaudeManagedRoot = claudeManagedSettingsRoot
 )
 
@@ -37,9 +35,11 @@ type versionEvidence struct {
 }
 
 type activationEvaluator struct {
-	cfg      *config.Config
-	now      time.Time
-	versions map[string]versionEvidence
+	cfg         *config.Config
+	now         time.Time
+	versions    map[string]versionEvidence
+	evidence    *StatusEvidence
+	evidenceErr error
 }
 
 type activationContext struct {
@@ -48,11 +48,13 @@ type activationContext struct {
 	args []string
 }
 
-func newActivationEvaluator(cfg *config.Config) *activationEvaluator {
+func newActivationEvaluator(cfg *config.Config, evidence *StatusEvidence, evidenceErr error) *activationEvaluator {
 	return &activationEvaluator{
-		cfg:      cfg,
-		now:      time.Now().UTC(),
-		versions: make(map[string]versionEvidence),
+		cfg:         cfg,
+		now:         time.Now().UTC(),
+		versions:    make(map[string]versionEvidence),
+		evidence:    evidence,
+		evidenceErr: evidenceErr,
 	}
 }
 
@@ -99,10 +101,12 @@ func (e *activationEvaluator) evaluate(account config.Account, override config.A
 		e.inspectCopilot(account, contexts, status)
 	}
 
-	lastSeen, err := activationLastSeenProbe(context.Background(), e.cfg, account.EffectiveHarness(), account.Name)
-	if err != nil {
-		addActivationIssue(status, ActivationUnverified, "last_seen_unavailable", "recent hook evidence unavailable: "+err.Error(), "")
-	} else if lastSeen.IsZero() {
+	if e.evidenceErr != nil {
+		addActivationIssue(status, ActivationUnverified, "last_seen_unavailable", "recent hook evidence unavailable: "+e.evidenceErr.Error(), "")
+		return
+	}
+	lastSeen := e.evidence.latest(account.EffectiveHarness(), account.Name)
+	if lastSeen.IsZero() {
 		addActivationIssue(status, ActivationUnverified, "last_seen_missing", "no hook event has been observed in the diagnostic journal", "")
 	} else {
 		status.LastSeen = lastSeen
@@ -268,44 +272,6 @@ func compareVersions(left, right string) (int, bool) {
 		}
 	}
 	return 0, true
-}
-
-func probeLastSeen(ctx context.Context, cfg *config.Config, harnessName, profile string) (time.Time, error) {
-	if cfg != nil && !cfg.Defaults.Diagnostics.JournalEnabledValue() {
-		return time.Time{}, errors.New("diagnostic journal is disabled")
-	}
-	paths, err := diagnostics.DefaultPaths()
-	if err != nil {
-		return time.Time{}, err
-	}
-	if _, err := os.Stat(paths.JournalDir); os.IsNotExist(err) {
-		return time.Time{}, nil
-	} else if err != nil {
-		return time.Time{}, err
-	}
-	options := diagnostics.JournalOptions{}
-	if cfg != nil {
-		options.KeepDays = cfg.Defaults.Diagnostics.JournalKeepDays
-		options.MaxBytes = int64(cfg.Defaults.Diagnostics.JournalMaxMiB) << 20
-	}
-	journal, err := diagnostics.NewJournal(paths, options)
-	if err != nil {
-		return time.Time{}, err
-	}
-	records, err := journal.Read(ctx, diagnostics.Selector{Harness: harnessName, Profile: profile, Limit: 256})
-	if err != nil {
-		return time.Time{}, err
-	}
-	var latest time.Time
-	for _, record := range records {
-		if !strings.HasPrefix(record.Stage, "hook.") {
-			continue
-		}
-		if record.ObservedAt.After(latest) {
-			latest = record.ObservedAt
-		}
-	}
-	return latest, nil
 }
 
 // Codex activation ----------------------------------------------------------

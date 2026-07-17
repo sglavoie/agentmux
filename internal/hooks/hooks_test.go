@@ -3,12 +3,27 @@ package hooks
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
 )
+
+func TestMain(m *testing.M) {
+	testRoot, err := os.MkdirTemp("", "agentmux-hooks-test-")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("XDG_STATE_HOME", filepath.Join(testRoot, "state")); err != nil {
+		_ = os.RemoveAll(testRoot)
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(testRoot)
+	os.Exit(code)
+}
 
 // currentUmask reads (and restores) the process umask so a fresh-write
 // permissions test can predict the actual mode that os.OpenFile applied.

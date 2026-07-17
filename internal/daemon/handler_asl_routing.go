@@ -109,7 +109,8 @@ func (h *Handler) routeUnmanagedHook(
 	action string,
 	payload hookevent.HookPayload,
 ) {
-	contextLimitDetected := hookevent.PayloadHasContextLimit(payload)
+	contextLimitDetected := hookevent.PayloadHasContextLimit(payload) ||
+		(ctx.req.PayloadEncoding == "json_compact" && ctx.req.ContextLimit)
 	// As on the in-pane hook path, the source-pane screen read is a targeted
 	// asynchronous probe rather than an inline GetText: the base transitions
 	// land on the managed owners immediately, and the probe upgrades them to
@@ -149,7 +150,8 @@ func (h *Handler) routeUnmanagedHookTarget(
 		target.windowID, ctx.req.Harness, eventOrAction, payload,
 	)
 	preservesIcon := (hookevent.PreservesCurrent(eventOrAction) && action == "active") || lateCopilotStart
-	resetFlowDetected := hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload) && !lateCopilotStart
+	resetFlowDetected := (hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload) ||
+		(ctx.req.PayloadEncoding == "json_compact" && ctx.req.ResetFlow)) && !lateCopilotStart
 	parts := palette.ParseTitleParts(target.tab.Title)
 	currentIcon := parts.State
 	if owner, ok := kitty.FindTabTitleOwner(target.tab); ok && owner.ID != target.windowID {

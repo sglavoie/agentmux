@@ -165,7 +165,8 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		ctx.req.WindowID, ctx.req.Harness, eventOrAction, payload,
 	)
 	preservesIcon := (hookevent.PreservesCurrent(eventOrAction) && action == "active") || lateCopilotStart
-	contextLimitDetected := hookevent.PayloadHasContextLimit(payload)
+	contextLimitDetected := hookevent.PayloadHasContextLimit(payload) ||
+		(ctx.req.PayloadEncoding == "json_compact" && ctx.req.ContextLimit)
 	// The screen read that used to promote this event to stop_failure inline is
 	// now a targeted asynchronous probe: dispatch the base event immediately and
 	// let the probe upgrade the icon to error if the banner is present, so a slow
@@ -176,7 +177,8 @@ func (h *Handler) handleHookEvent(req Request) Response {
 	// mute now (notification suppression consults it inside handleStateUpdate).
 	h.setMutedFromSnapshot(ctx.req.WindowID, ctx.muted)
 
-	resetFlowDetected := hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload) && !lateCopilotStart
+	resetFlowDetected := (hookevent.PayloadHasResetFlow(ctx.req.Harness, eventOrAction, payload) ||
+		(ctx.req.PayloadEncoding == "json_compact" && ctx.req.ResetFlow)) && !lateCopilotStart
 	stateReq := buildHookStateUpdateRequest(
 		ctx.req.WindowID,
 		action,

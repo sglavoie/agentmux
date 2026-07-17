@@ -35,16 +35,21 @@ type JournalOptions struct {
 }
 
 type MaintenanceReport struct {
-	PromotedRecords   int
-	PromotedFiles     int
-	BusySpoolFiles    int
-	ReconciledRecords int
-	ReconciledFiles   int
-	CorruptLines      int
-	QuarantinedFiles  []string
-	RotatedFiles      int
-	RemovedFiles      int
-	RemovedBytes      int64
+	PromotedRecords             int
+	PromotedFiles               int
+	BusySpoolFiles              int
+	ReconciledRecords           int
+	ReconciledFiles             int
+	CorruptLines                int
+	QuarantinedFiles            []string
+	CompactionInputFiles        int
+	CompactionInputBytes        int64
+	CompactionOutputFiles       int
+	CompactionOutputBytes       int64
+	CompactionDuplicatesOmitted int
+	RotatedFiles                int
+	RemovedFiles                int
+	RemovedBytes                int64
 }
 
 // ReadReport describes a best-effort journal read. Corrupt JSONL records are
@@ -309,6 +314,11 @@ func (r *MaintenanceReport) merge(other MaintenanceReport) {
 	r.ReconciledFiles += other.ReconciledFiles
 	r.CorruptLines += other.CorruptLines
 	r.QuarantinedFiles = append(r.QuarantinedFiles, other.QuarantinedFiles...)
+	r.CompactionInputFiles += other.CompactionInputFiles
+	r.CompactionInputBytes += other.CompactionInputBytes
+	r.CompactionOutputFiles += other.CompactionOutputFiles
+	r.CompactionOutputBytes += other.CompactionOutputBytes
+	r.CompactionDuplicatesOmitted += other.CompactionDuplicatesOmitted
 	r.RotatedFiles += other.RotatedFiles
 	r.RemovedFiles += other.RemovedFiles
 	r.RemovedBytes += other.RemovedBytes
@@ -675,10 +685,11 @@ func (j *Journal) publishedRecordIdentities(ctx context.Context) (map[journalRec
 	defer closeSnapshotFiles(files)
 	identities := make(map[journalRecordIdentity]struct{})
 	for _, file := range files {
-		_, _, _, err := scanSnapshotFile(ctx, file, func(_ []byte, envelope TraceEnvelope) {
+		_, _, _, err := scanSnapshotFile(ctx, file, func(_ []byte, envelope TraceEnvelope) error {
 			if envelope.SourceID != "" && envelope.SourceSequence != 0 {
 				identities[journalRecordIdentity{sourceID: envelope.SourceID, sourceSequence: envelope.SourceSequence}] = struct{}{}
 			}
+			return nil
 		})
 		if err != nil {
 			return nil, err

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,6 +61,191 @@ func TestCollectStatusUsesOneSnapshotForHealthAndLatestEvents(t *testing.T) {
 	if _, err := os.Stat(spoolPath); err != nil {
 		t.Fatalf("status mutated spool evidence: %v", err)
 	}
+}
+
+func TestCollectStatusUsesOneTraversalForSelectedDisplayAndAllHookEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workObserved := now.Add(-time.Minute)
+	personalObserved := now.Add(-2 * time.Minute)
+	work := snapshotConsumerRecord("work-hook", workObserved, 1)
+	work.Stage, work.Harness, work.Profile = "hook.received", " CLAUDE ", "work"
+	personal := snapshotConsumerRecord("personal-hook", personalObserved, 2)
+	personal.Stage, personal.Harness, personal.Profile = "hook.completed", "claude", "personal"
+	for _, record := range []diagnostics.TraceEnvelope{work, personal} {
+		if err := journal.Append(t.Context(), record); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	oldSnapshot := statusJournalSnapshot
+	traversals := 0
+	visitedProfiles := make(map[string]bool)
+	statusJournalSnapshot = func(ctx context.Context, journal *diagnostics.Journal, selector diagnostics.Selector, visitor diagnostics.SnapshotVisitor) (diagnostics.JournalSnapshot, error) {
+		traversals++
+		return journal.SnapshotWithVisitor(ctx, selector, nil, func(envelope diagnostics.TraceEnvelope) error {
+			if strings.HasPrefix(envelope.Stage, "hook.") {
+				visitedProfiles[envelope.Profile] = true
+			}
+			return visitor(envelope)
+		})
+	}
+	t.Cleanup(func() { statusJournalSnapshot = oldSnapshot })
+
+	cfg := enabledDiagnosticsConfig(256)
+	cfg.Accounts = []config.Account{
+		{Name: "work", Harness: "claude", HomeDir: t.TempDir()},
+		{Name: "personal", Harness: "claude", HomeDir: t.TempDir()},
+	}
+	report, err := CollectStatus(t.Context(), StatusOptions{
+		Config: cfg, Paths: paths, Journal: journal, Daemon: testHealthClient{},
+		AMXBin: "/tmp/amx", Now: now, CLIBuild: buildinfo.Info{Version: "test"}, Selector: Selector{Profile: "work"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if traversals != 1 {
+		t.Fatalf("journal traversals = %d, want 1", traversals)
+	}
+	if !visitedProfiles["work"] || !visitedProfiles["personal"] {
+		t.Fatalf("visitor profiles = %v, want work and personal", visitedProfiles)
+	}
+	if report.JournalSnapshot.RecordsScanned != 2 || report.JournalSnapshot.RecordsMatched != 1 || len(report.LastSeenEvents) != 1 || report.LastSeenEvents[0].Profile != "work" {
+		t.Fatalf("selected journal display = snapshot %+v records %+v", report.JournalSnapshot, report.LastSeenEvents)
+	}
+	if len(report.Hooks.Profiles) != 1 || report.Hooks.Profiles[0].Profile != "work" || report.Hooks.Profiles[0].LastSeen == nil || !report.Hooks.Profiles[0].LastSeen.Equal(workObserved) {
+		t.Fatalf("selected hook profiles = %+v", report.Hooks.Profiles)
+	}
+}
+
+func TestAcceptanceSinglePassStatusSurvivesTinySegmentCompaction(t *testing.T) {
+	stateBase := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateBase)
+	paths := diagnostics.PathsForRoot(filepath.Join(stateBase, "agent-mux"))
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const tinySegmentCount = 2000
+	base := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
+	wantLastSeen := make(map[string]time.Time)
+	segmentSetupStarted := time.Now()
+	for i := 0; i < tinySegmentCount; i++ {
+		profile, harnessName := "work", "claude"
+		if i%2 == 1 {
+			profile, harnessName = "personal", "codex"
+		}
+		observed := base.Add(time.Duration(i) * time.Millisecond)
+		record := snapshotConsumerRecord(fmt.Sprintf("acceptance-%04d", i), observed, uint64(i+1))
+		record.Stage, record.Profile, record.Harness = "hook.received", profile, harnessName
+		// Use the production immutable name emitted by spool promotion. Creating
+		// the already-promoted fixture directly avoids thousands of directory
+		// fsyncs while preserving the diagnostic and compaction surface under test.
+		writeSnapshotConsumerRecords(t, filepath.Join(paths.JournalDir, fmt.Sprintf("events-spool-acceptance-%04d.jsonl", i)), record)
+		wantLastSeen[profile] = observed
+	}
+	segmentSetupElapsed := time.Since(segmentSetupStarted)
+	segmentsBefore := acceptanceSegmentFiles(t, paths)
+	if len(segmentsBefore) != tinySegmentCount {
+		t.Fatalf("promoted segments = %d, want %d", len(segmentsBefore), tinySegmentCount)
+	}
+
+	cfg := enabledDiagnosticsConfig(256)
+	cfg.Defaults.Watchdog.HookSilence = 4 * 60 * 60
+	cfg.Accounts = []config.Account{
+		{Name: "work", Harness: "claude", HomeDir: t.TempDir()},
+		{Name: "personal", Harness: "codex", HomeDir: t.TempDir()},
+	}
+	statusOptions := StatusOptions{
+		Config: cfg, Paths: paths, Journal: journal, Daemon: testHealthClient{},
+		AMXBin: "/tmp/amx", Now: base.Add(time.Hour), CLIBuild: buildinfo.Info{Version: "test"},
+	}
+	oldSnapshot := statusJournalSnapshot
+	traversals := 0
+	statusJournalSnapshot = func(ctx context.Context, journal *diagnostics.Journal, selector diagnostics.Selector, visitor diagnostics.SnapshotVisitor) (diagnostics.JournalSnapshot, error) {
+		traversals++
+		return journal.SnapshotWithVisitor(ctx, selector, nil, visitor)
+	}
+	t.Cleanup(func() { statusJournalSnapshot = oldSnapshot })
+
+	statusStarted := time.Now()
+	before, err := CollectStatus(t.Context(), statusOptions)
+	beforeStatusElapsed := time.Since(statusStarted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if traversals != 1 {
+		t.Fatalf("status traversals = %d, want one", traversals)
+	}
+	if before.JournalSnapshot.SegmentFilesRead != tinySegmentCount || before.JournalSnapshot.RecordsScanned != tinySegmentCount {
+		t.Fatalf("pre-compaction status snapshot = %+v", before.JournalSnapshot)
+	}
+	for _, profile := range before.Hooks.Profiles {
+		want := wantLastSeen[profile.Profile]
+		if profile.LastSeen == nil || !profile.LastSeen.Equal(want) {
+			t.Fatalf("profile %q last seen = %v, want %s", profile.Profile, profile.LastSeen, want)
+		}
+	}
+	beforeHooks := acceptanceHookStatusDigest(before.Hooks)
+	if len(beforeHooks) != len(wantLastSeen) {
+		t.Fatalf("hook profiles = %v, want %d profiles", beforeHooks, len(wantLastSeen))
+	}
+	beforeSnapshot, err := journal.Snapshot(t.Context(), diagnostics.Selector{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(beforeSnapshot.Records) != tinySegmentCount {
+		t.Fatalf("pre-compaction records = %d, want %d", len(beforeSnapshot.Records), tinySegmentCount)
+	}
+
+	compactionStarted := time.Now()
+	previousFiles := len(segmentsBefore)
+	compactionPasses := 0
+	for compactionPasses < 10 {
+		compactionPasses++
+		report, compactErr := journal.Compact(t.Context())
+		if compactErr != nil {
+			t.Fatal(compactErr)
+		}
+		currentFiles := len(acceptanceSegmentFiles(t, paths))
+		if report.CompactionInputFiles == 0 || currentFiles >= previousFiles {
+			break
+		}
+		previousFiles = currentFiles
+	}
+	compactionElapsed := time.Since(compactionStarted)
+	segmentsAfter := acceptanceSegmentFiles(t, paths)
+	if len(segmentsAfter) > 2 {
+		t.Fatalf("compaction file count = %d -> %d, want at most 2 segments", len(segmentsBefore), len(segmentsAfter))
+	}
+	afterSnapshot, err := journal.Snapshot(t.Context(), diagnostics.Selector{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(afterSnapshot.Records) != len(beforeSnapshot.Records) || afterSnapshot.Statistics.DuplicatesOmitted != 0 {
+		t.Fatalf("post-compaction records/stats = %d/%+v, want %d unique records", len(afterSnapshot.Records), afterSnapshot.Statistics, len(beforeSnapshot.Records))
+	}
+
+	statusStarted = time.Now()
+	after, err := CollectStatus(t.Context(), statusOptions)
+	afterStatusElapsed := time.Since(statusStarted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if traversals != 2 {
+		t.Fatalf("two status reports used %d traversals, want two", traversals)
+	}
+	if got := acceptanceHookStatusDigest(after.Hooks); !maps.Equal(got, beforeHooks) {
+		t.Fatalf("hook verdict/last-seen digest changed after compaction: before=%v after=%v", beforeHooks, got)
+	}
+	t.Logf("synthetic diagnostics acceptance: segment_setup=%s status_before=%s status_after=%s compaction=%s passes=%d files=%d->%d scans=%d->%d records=%d",
+		segmentSetupElapsed, beforeStatusElapsed, afterStatusElapsed, compactionElapsed, compactionPasses,
+		len(segmentsBefore), len(segmentsAfter), before.JournalSnapshot.RecordsScanned, after.JournalSnapshot.RecordsScanned, len(afterSnapshot.Records))
 }
 
 func TestCollectStatusWarnsForStaleOrLegacySpoolAndCountsSpoolQuota(t *testing.T) {
@@ -453,6 +639,27 @@ func writeSnapshotConsumerRecords(t *testing.T, path string, records ...diagnost
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func acceptanceSegmentFiles(t *testing.T, paths diagnostics.Paths) []string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(paths.JournalDir, "events-*.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+func acceptanceHookStatusDigest(report HookReport) map[string]string {
+	digest := make(map[string]string, len(report.Profiles))
+	for _, profile := range report.Profiles {
+		lastSeen := ""
+		if profile.LastSeen != nil {
+			lastSeen = profile.LastSeen.UTC().Format(time.RFC3339Nano)
+		}
+		digest[profile.Harness+"/"+profile.Profile] = fmt.Sprintf("%s|%s|%t", profile.Verdict, lastSeen, profile.Silent)
+	}
+	return digest
 }
 
 func enabledDiagnosticsConfig(maxMiB int) *config.Config {

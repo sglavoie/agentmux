@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -125,9 +126,20 @@ func OverallHookHealth(cfg *config.Config, amxBin string) (HookHealthSummary, er
 // surface every reachable profile even when one account's settings file
 // is unreadable.
 func StatusAll(cfg *config.Config, amxBin string) ([]AccountStatus, error) {
+	evidence, evidenceErr := activationEvidenceProbe(context.Background(), cfg)
+	return StatusAllWithEvidence(cfg, amxBin, evidence, evidenceErr)
+}
+
+// StatusAllWithEvidence evaluates every configured profile using hook records
+// gathered by a caller-owned journal traversal. evidenceErr is shared by all
+// profiles so an unavailable journal does not trigger per-account retries.
+func StatusAllWithEvidence(cfg *config.Config, amxBin string, evidence *StatusEvidence, evidenceErr error) ([]AccountStatus, error) {
+	if cfg == nil {
+		return nil, errors.New("hooks: configuration is unavailable")
+	}
 	results := make([]AccountStatus, 0, len(cfg.Accounts))
 	var errs []error
-	evaluator := newActivationEvaluator(cfg)
+	evaluator := newActivationEvaluator(cfg, evidence, evidenceErr)
 	for _, account := range cfg.Accounts {
 		override := accountOverride(cfg, account.Name)
 		status, err := checkStatus(account, override, amxBin)

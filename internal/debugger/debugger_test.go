@@ -147,6 +147,105 @@ func TestCollectStatusRemainsUsefulWithDaemonAndKittyUnavailable(t *testing.T) {
 	}
 }
 
+func TestCollectStatusEmitsEmptyLastSeenEventsWhenJournalUnavailable(t *testing.T) {
+	disabled := false
+	enabled := true
+	openFailurePaths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	if err := os.MkdirAll(openFailurePaths.Root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(openFailurePaths.JournalDir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name  string
+		paths diagnostics.Paths
+		cfg   *config.Config
+	}{
+		{
+			name:  "disabled",
+			paths: diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state")),
+			cfg: &config.Config{Defaults: config.Defaults{Diagnostics: config.DiagnosticsConfig{
+				JournalEnabled: &disabled,
+				NativeLogging:  &disabled,
+			}}},
+		},
+		{
+			name:  "open failure",
+			paths: openFailurePaths,
+			cfg: &config.Config{Defaults: config.Defaults{Diagnostics: config.DiagnosticsConfig{
+				JournalEnabled: &enabled,
+				NativeLogging:  &disabled,
+			}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			report, err := CollectStatus(t.Context(), StatusOptions{
+				Config: test.cfg, Paths: test.paths, Daemon: testHealthClient{},
+				AMXBin: "/tmp/amx", CLIBuild: buildinfo.Info{Version: "test"},
+				Now: time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var payload struct {
+				LastSeenEvents json.RawMessage `json:"last_seen_events"`
+			}
+			if err := json.Unmarshal(data, &payload); err != nil {
+				t.Fatal(err)
+			}
+			if got := string(payload.LastSeenEvents); got != "[]" {
+				t.Fatalf("last_seen_events = %s, want [] in %s", got, data)
+			}
+		})
+	}
+}
+
+func TestCollectStatusEmitsEmptyLastSeenEventsWhenJournalHealthyButEmpty(t *testing.T) {
+	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled := true
+	disabled := false
+	report, err := CollectStatus(t.Context(), StatusOptions{
+		Config: &config.Config{Defaults: config.Defaults{Diagnostics: config.DiagnosticsConfig{
+			JournalEnabled: &enabled,
+			NativeLogging:  &disabled,
+		}}},
+		Paths: paths, Journal: journal, Daemon: testHealthClient{},
+		AMXBin: "/tmp/amx", CLIBuild: buildinfo.Info{Version: "test"},
+		Now: time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Journal.Enabled || report.Journal.Verdict != VerdictHealthy || report.Journal.Error != "" {
+		t.Fatalf("journal report = %+v, want enabled healthy empty journal", report.Journal)
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		LastSeenEvents json.RawMessage `json:"last_seen_events"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(payload.LastSeenEvents); got != "[]" {
+		t.Fatalf("last_seen_events = %s, want [] in %s", got, data)
+	}
+}
+
 func TestInspectNativeFindsManagedAndUnmanagedSessions(t *testing.T) {
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	if err := paths.Ensure(); err != nil {

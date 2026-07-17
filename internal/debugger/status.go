@@ -2,6 +2,7 @@ package debugger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/hooks"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -18,6 +20,10 @@ const (
 	StatusSchemaVersion = 2
 	spoolWarningAge     = 2 * time.Minute
 )
+
+var statusJournalSnapshot = func(ctx context.Context, journal *diagnostics.Journal, selector diagnostics.Selector, visitor diagnostics.SnapshotVisitor) (diagnostics.JournalSnapshot, error) {
+	return journal.SnapshotWithVisitor(ctx, selector, nil, visitor)
+}
 
 type DaemonHealthClient interface {
 	Health() daemon.Health
@@ -126,6 +132,28 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 		}
 	}
 
+	evidence := hooks.NewStatusEvidence()
+	var evidenceErr error
+	journalFindings := StatusReport{
+		Verdict:        VerdictHealthy,
+		Findings:       make([]Finding, 0),
+		LastSeenEvents: make([]diagnostics.TraceEnvelope, 0),
+	}
+	paths := options.Paths
+	if options.PathsError != nil {
+		evidenceErr = options.PathsError
+		report.Journal = JournalReport{Verdict: VerdictUnavailable, Error: options.PathsError.Error()}
+		report.Native = NativeReport{Verdict: VerdictUnavailable, Sessions: []NativeSession{}, Error: options.PathsError.Error()}
+	} else {
+		policy := config.DiagnosticsConfig{}
+		if options.Config != nil {
+			policy = options.Config.Defaults.Diagnostics
+		}
+		report.Journal, evidenceErr = inspectJournal(ctx, paths, policy, options.Journal, options.Selector, options.Now, evidence.Visit, &journalFindings)
+		report.JournalSnapshot = journalFindings.JournalSnapshot
+		report.LastSeenEvents = journalFindings.LastSeenEvents
+	}
+
 	if options.ConfigError != nil {
 		report.Hooks = HookReport{Verdict: VerdictUnavailable, Profiles: []HookProfile{}, Error: options.ConfigError.Error()}
 		report.add(VerdictUnavailable, "config_unavailable", options.ConfigError.Error())
@@ -133,24 +161,23 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 		if options.AMXBin == "" {
 			options.AMXBin, _ = os.Executable()
 		}
-		report.Hooks = InspectHooks(options.Config, options.AMXBin, options.Now)
+		report.Hooks = InspectHooksWithEvidence(options.Config, options.AMXBin, options.Now, evidence, evidenceErr)
 		filterHookProfiles(&report.Hooks, options.Selector)
 		for _, profile := range report.Hooks.Profiles {
 			report.addHookProfileFinding(profile)
 		}
 	}
 
-	paths := options.Paths
 	if options.PathsError != nil {
-		report.Journal = JournalReport{Verdict: VerdictUnavailable, Error: options.PathsError.Error()}
-		report.Native = NativeReport{Verdict: VerdictUnavailable, Sessions: []NativeSession{}, Error: options.PathsError.Error()}
 		report.add(VerdictUnavailable, "diagnostic_paths", options.PathsError.Error())
 	} else {
+		for _, finding := range journalFindings.Findings {
+			report.add(finding.Verdict, finding.Check, finding.Message)
+		}
 		policy := config.DiagnosticsConfig{}
 		if options.Config != nil {
 			policy = options.Config.Defaults.Diagnostics
 		}
-		report.Journal = inspectJournal(ctx, paths, policy, options.Journal, options.Selector, options.Now, &report)
 
 		var windows []kitty.OSWindow
 		kittyAvailable := false
@@ -183,13 +210,13 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 	return report, nil
 }
 
-func inspectJournal(ctx context.Context, paths diagnostics.Paths, policy config.DiagnosticsConfig, journal *diagnostics.Journal, selector Selector, now time.Time, report *StatusReport) JournalReport {
+func inspectJournal(ctx context.Context, paths diagnostics.Paths, policy config.DiagnosticsConfig, journal *diagnostics.Journal, selector Selector, now time.Time, visitor diagnostics.SnapshotVisitor, report *StatusReport) (JournalReport, error) {
 	result := JournalReport{
 		Verdict: VerdictHealthy, Enabled: policy.JournalEnabledValue(), Path: paths.JournalDir,
 		MaxBytes: int64(policy.JournalMaxMiB) << 20,
 	}
 	if !result.Enabled {
-		return result
+		return result, errors.New("diagnostic journal is disabled")
 	}
 	if journal == nil {
 		var err error
@@ -200,18 +227,21 @@ func inspectJournal(ctx context.Context, paths diagnostics.Paths, policy config.
 			result.Verdict = VerdictUnavailable
 			result.Error = err.Error()
 			report.add(VerdictUnavailable, "journal_unavailable", err.Error())
-			return result
+			return result, err
 		}
 	}
-	snapshot, err := journal.Snapshot(ctx, selector.JournalSelector(20), nil)
+	snapshot, err := statusJournalSnapshot(ctx, journal, selector.JournalSelector(20), visitor)
 	if err != nil {
 		result.Verdict = VerdictUnavailable
 		result.Error = err.Error()
 		report.add(VerdictUnavailable, "journal_unavailable", err.Error())
-		return result
+		return result, err
 	}
 	report.JournalSnapshot = snapshot.Statistics
 	report.LastSeenEvents = snapshot.Records
+	if report.LastSeenEvents == nil {
+		report.LastSeenEvents = make([]diagnostics.TraceEnvelope, 0)
+	}
 	health := snapshot.Health
 	result.Health = health
 	if health.CorruptLines > 0 || health.QuarantinedFiles > 0 {
@@ -234,7 +264,7 @@ func inspectJournal(ctx context.Context, paths diagnostics.Paths, policy config.
 			report.add(VerdictWarning, "journal_schema", fmt.Sprintf("journal contains unsupported schema version %d", schema))
 		}
 	}
-	return result
+	return result, nil
 }
 
 func filterHookProfiles(report *HookReport, selector Selector) {

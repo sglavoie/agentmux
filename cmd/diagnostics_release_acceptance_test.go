@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -77,10 +78,47 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 		t.Fatalf("duplicate ASL delivery = %+v, want duplicate", duplicate)
 	}
 
+	largeEventBase := time.Now().Unix()
+	largeClaudeActive := runAcceptanceHookCommandForHarness(t, "PreToolUse", "acceptance-large-claude-active", "claude", acceptancePaddedPayload(t, 300<<10, map[string]any{
+		"session_id": "acceptance-large-claude", "turn_id": "claude-turn", "tool_use_id": "claude-tool",
+		"source_sequence": "11", "source_event_id": "claude-large-active", "emitted_time": fmt.Sprint(largeEventBase), "tool_name": "Bash",
+	}))
+	largeCodexActive := runAcceptanceHookCommandForHarness(t, "PreToolUse", "acceptance-large-codex-active", "codex", acceptancePaddedPayload(t, 300<<10, map[string]any{
+		"sessionId": "acceptance-large-codex", "turnId": "codex-turn", "toolUseId": "codex-tool",
+		"sourceSequence": "21", "sourceEventId": "codex-large-active", "emittedTime": fmt.Sprint(largeEventBase + 2), "toolName": "Bash",
+	}))
+	largeClaudeStop := runAcceptanceHookCommandForHarness(t, "SessionEnd", "acceptance-large-claude-stop", "claude", acceptancePaddedPayload(t, 300<<10, map[string]any{
+		"session_id": "acceptance-large-claude", "turn_id": "claude-turn", "source_sequence": "12",
+		"source_event_id": "claude-large-stop", "emitted_time": fmt.Sprint(largeEventBase + 1), "reason": "user_exit",
+	}))
+	for name, result := range map[string]indicator.DeliveryResult{
+		"claude active": largeClaudeActive, "codex active": largeCodexActive, "claude stop": largeClaudeStop,
+	} {
+		if result.Status != indicator.DeliveryAccepted || result.DaemonAcknowledgement == nil {
+			t.Fatalf("large %s delivery = %+v, want accepted", name, result)
+		}
+	}
+	client := daemon.NewClient()
+	var exported daemon.EventsExport
+	waitForAcceptance(t, "large-payload reducer source isolation", func() bool {
+		var exportErr error
+		exported, exportErr = client.ExportEvents(42)
+		if exportErr != nil {
+			return false
+		}
+		facts := acceptanceFactsByKey(exported.WindowMetadata[42].Shadow.Facts)
+		claudeFact, claudeOK := facts["claude:acceptance-large-claude"]
+		codexFact, codexOK := facts["codex:acceptance-large-codex"]
+		return claudeOK && codexOK && claudeFact.Action == "stop" && claudeFact.Terminated &&
+			codexFact.Action == "active" && !codexFact.Acked && !codexFact.Terminated
+	})
+
 	// Elicitation is a real attention transition. The hook runs beneath the test
 	// harness (which may itself be a provider pipe-mode ancestor), and permission
 	// notifications are disabled, so the same causal trace must record either
 	// pipe-mode or config suppression without invoking a platform backend.
+	// It follows the mixed-source sequence so its pending guard cannot suppress
+	// the active transitions whose isolation this acceptance test verifies.
 	elicitationPayload := `{"session_id":"acceptance-session","turn_id":"acceptance-turn","cwd":"/workspace","source_sequence":"3","source_event_id":"acceptance-source-3","prompt":"PRIVATE-PROMPT-CANARY"}`
 	elicitation := runAcceptanceHookCommand(t, "Elicitation", "acceptance-elicitation-request", elicitationPayload)
 	if elicitation.Status != indicator.DeliveryAccepted {
@@ -88,7 +126,7 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 	}
 
 	paths := diagnostics.PathsForRoot(filepath.Join(stateBase, "agent-mux"))
-	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{LockTimeout: 2 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,6 +146,49 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 	if !hasAcceptanceStage(records, "daemon.notification.decision", "suppressed", "config_disabled") &&
 		!hasAcceptanceStage(records, "daemon.notification.decision", "suppressed", "pipe_mode") {
 		t.Fatalf("notification suppression did not use a safe reason")
+	}
+
+	largeRequests := map[string]string{
+		"acceptance-large-claude-active": "claude:acceptance-large-claude",
+		"acceptance-large-codex-active":  "codex:acceptance-large-codex",
+		"acceptance-large-claude-stop":   "claude:acceptance-large-claude",
+	}
+	seenLargeRequests := make(map[string]bool, len(largeRequests))
+	for _, event := range exported.EventsByWindow[42] {
+		wantSource, ok := largeRequests[event.RequestID]
+		if !ok {
+			continue
+		}
+		if event.PayloadEncoding != "json_compact" || event.SourceKey != wantSource {
+			t.Fatalf("large event %q = encoding %q source %q, want json_compact/%q", event.RequestID, event.PayloadEncoding, event.SourceKey, wantSource)
+		}
+		seenLargeRequests[event.RequestID] = true
+	}
+	if len(seenLargeRequests) != len(largeRequests) {
+		t.Fatalf("large request receipts = %v, want %v", seenLargeRequests, largeRequests)
+	}
+
+	beforeOverLimit, err := client.ExportEvents(42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventsBeforeOverLimit := len(beforeOverLimit.EventsByWindow[42])
+	overLimitPayload := acceptancePaddedPayload(t, (1<<20)+1, map[string]any{"session_id": "must-not-reach-daemon"})
+	strictResult, strictErr := runAcceptanceHookCommandMode(t, "PreToolUse", "acceptance-over-limit-strict", "claude", overLimitPayload, true)
+	var exitErr *ExitError
+	if !errors.As(strictErr, &exitErr) || exitErr.Code != 2 || strictResult.Status != indicator.DeliveryPermanentFailure || strictResult.Reason != "payload_oversized" {
+		t.Fatalf("strict over-limit result = %+v error=%#v, want permanent failure exit 2", strictResult, strictErr)
+	}
+	legacyResult, legacyErr := runAcceptanceHookCommandMode(t, "PreToolUse", "acceptance-over-limit-legacy", "claude", overLimitPayload, false)
+	if legacyErr != nil || legacyResult.Status != indicator.DeliveryPermanentFailure || legacyResult.Reason != "payload_oversized" {
+		t.Fatalf("legacy over-limit result = %+v error=%v, want fail-open nil error", legacyResult, legacyErr)
+	}
+	afterOverLimit, err := client.ExportEvents(42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(afterOverLimit.EventsByWindow[42]); got != eventsBeforeOverLimit {
+		t.Fatalf("over-limit payloads reached daemon reducer: events %d -> %d", eventsBeforeOverLimit, got)
 	}
 
 	commands, err := os.ReadFile(kittyLog)
@@ -191,16 +272,29 @@ func installAcceptanceKitten(t *testing.T, home, commandLog string) {
 }
 
 func runAcceptanceHookCommand(t *testing.T, event, requestID, payload string) indicator.DeliveryResult {
+	return runAcceptanceHookCommandForHarness(t, event, requestID, "claude", payload)
+}
+
+func runAcceptanceHookCommandForHarness(t *testing.T, event, requestID, harnessName, payload string) indicator.DeliveryResult {
+	t.Helper()
+	result, err := runAcceptanceHookCommandMode(t, event, requestID, harnessName, payload, true)
+	if err != nil {
+		t.Fatalf("hook-indicator %s: %v", event, err)
+	}
+	return result
+}
+
+func runAcceptanceHookCommandMode(t *testing.T, event, requestID, harnessName, payload string, strict bool) (indicator.DeliveryResult, error) {
 	t.Helper()
 	stdin, err := os.CreateTemp(t.TempDir(), "hook-payload-*.json")
 	if err != nil {
-		t.Fatal(err)
+		return indicator.DeliveryResult{}, err
 	}
 	if _, err := stdin.WriteString(payload); err != nil {
-		t.Fatal(err)
+		return indicator.DeliveryResult{}, err
 	}
 	if _, err := stdin.Seek(0, 0); err != nil {
-		t.Fatal(err)
+		return indicator.DeliveryResult{}, err
 	}
 	defer func() { _ = stdin.Close() }()
 
@@ -215,16 +309,34 @@ func runAcceptanceHookCommand(t *testing.T, event, requestID, payload string) in
 		hookIndicatorCmd.SetOut(oldOut)
 	}()
 	os.Stdin = stdin
-	hookWindowID, hookHarness, hookRequestID = 42, "claude", requestID
-	hookJSON, hookStrict = true, true
+	hookWindowID, hookHarness, hookRequestID = 42, harnessName, requestID
+	hookJSON, hookStrict = true, strict
 	var output bytes.Buffer
 	hookIndicatorCmd.SetOut(&output)
-	if err := hookIndicatorCmd.RunE(hookIndicatorCmd, []string{event}); err != nil {
-		t.Fatalf("hook-indicator %s: %v\n%s", event, err, output.String())
-	}
+	runErr := hookIndicatorCmd.RunE(hookIndicatorCmd, []string{event})
 	var result indicator.DeliveryResult
 	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
-		t.Fatalf("decode hook-indicator %s result: %v\n%s", event, err, output.String())
+		return indicator.DeliveryResult{}, fmt.Errorf("decode hook-indicator %s result: %w (%s)", event, err, output.String())
+	}
+	return result, runErr
+}
+
+func acceptancePaddedPayload(t *testing.T, paddingBytes int, fields map[string]any) string {
+	t.Helper()
+	fields["bulk_transcript"] = strings.Repeat("x", paddingBytes)
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(encoded)
+}
+
+func acceptanceFactsByKey(facts []daemon.SourceFactSnapshot) map[string]daemon.SourceFactSnapshot {
+	result := make(map[string]daemon.SourceFactSnapshot, len(facts))
+	for _, fact := range facts {
+		if fact.Kind == daemon.SourceHarness {
+			result[fact.Key] = fact
+		}
 	}
 	return result
 }
@@ -292,6 +404,23 @@ func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
 	}
 	if !bytes.Contains(failureMatrix, []byte("no model usage")) {
 		t.Error("provider smoke documentation does not state the automated no-model-usage boundary")
+	}
+	for _, required := range []string{
+		"one journal traversal", "payload_encoding=json_compact", "payload_oversized",
+		"compaction_input_files", "compaction_duplicates_omitted",
+	} {
+		if !bytes.Contains(failureMatrix, []byte(required)) {
+			t.Errorf("debugging documentation does not pin %q", required)
+		}
+	}
+	acceptanceDoc, err := os.ReadFile("../docs/acceptance.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"2,000-to-1", "json_compact", "strict exit 2", "informational"} {
+		if !bytes.Contains(acceptanceDoc, []byte(required)) {
+			t.Errorf("acceptance documentation does not pin %q", required)
+		}
 	}
 }
 

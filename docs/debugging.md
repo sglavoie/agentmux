@@ -48,10 +48,33 @@ segment, immutable segments, and emergency spool files under a short shared
 lock. File parsing happens after the lock is released. The merged snapshot
 deduplicates overlapping segment/spool evidence, tolerates corrupt lines, and
 does not rename, promote, reconcile, rotate, quarantine, or delete storage.
-Only the daemon performs durable maintenance: it attempts spool promotion every
-60 seconds and retention every 15 minutes, with a five-second budget per pass.
+`amx debug status` also gathers last-seen hook evidence for every configured
+profile while that same snapshot is traversed, before display selectors and
+limits are applied. Health, selected recent events, hook verdicts, and hook
+silence therefore require one journal traversal, regardless of profile count.
 Readers remain useful while the daemon is offline because unpromoted spool
 records are included directly in memory.
+
+Only the daemon performs durable maintenance. At startup it runs spool
+promotion, one bounded compaction pass, then rotation/retention. Every 60-second
+promotion tick is followed by one compaction pass; the 15-minute retention
+schedule is unchanged. Each operation receives its own five-second context, so
+compaction cannot consume the next operation's budget. Compaction selects at
+most 64 MiB of the oldest sealed `events-*.jsonl` inputs and incrementally
+rewrites them into approximately 16 MiB immutable segments. It never rewrites
+the active journal, spool/claim files, quarantine evidence, or unrelated
+temporary files. Valid records from corrupt inputs are published before the
+original damaged segment is moved intact into quarantine, and duplicate
+old/new segments left by an interrupted cleanup remain safe because snapshot
+traversal deduplicates them.
+
+Each pass records `journal.maintenance` evidence with a distinct startup or
+periodic reason. In addition to promotion, corruption, quarantine, rotation,
+and retention fields, the record includes `compaction_input_files`,
+`compaction_input_bytes`, `compaction_output_files`,
+`compaction_output_bytes`, and `compaction_duplicates_omitted`. Existing
+journals require no migration or blocking rewrite; repeated bounded passes
+converge as ordinary maintenance runs.
 
 Schema-v2 `status`, `tail`, `explain`, and bundle evidence carry the shared
 `journal_snapshot` object. It reports `segment_files_read`,
@@ -154,6 +177,17 @@ amx debug capture stop
 Non-interactive capture start also requires `--yes`. Captures expire after at
 most 60 minutes, share a fixed 64 MiB quota, are purged after 24 hours, and are
 never inputs to a bundle.
+
+Hook payload transport has two accepted encodings without changing delivery
+protocol v1. Payloads through 256 KiB are forwarded byte-for-byte with
+`payload_encoding=json`. Larger payloads through 1 MiB are validated in their
+original form, retain original byte-count/HMAC and authorized raw-capture
+evidence, then forward only an allowlisted semantic representation with
+`payload_encoding=json_compact`; bulk transcript or message text is omitted.
+Payloads above 1 MiB are rejected before process discovery, IPC, or reducer
+mutation with reason `payload_oversized`. Legacy hook entry points remain
+fail-open, while `hook-indicator --strict` returns exit status 2 for that
+permanent rejection.
 
 ## Bundle modes and sharing
 

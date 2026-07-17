@@ -19,6 +19,7 @@ const (
 
 type journalMaintainer interface {
 	PromoteSpool(context.Context) (diagnostics.MaintenanceReport, error)
+	Compact(context.Context) (diagnostics.MaintenanceReport, error)
 	RotateAndRetain(context.Context) (diagnostics.MaintenanceReport, error)
 }
 
@@ -105,14 +106,19 @@ func runJournalMaintenance(
 			return
 		}
 		evidence := map[string]string{
-			"promoted_records":  fmt.Sprint(report.PromotedRecords),
-			"promoted_files":    fmt.Sprint(report.PromotedFiles),
-			"busy_spool_files":  fmt.Sprint(report.BusySpoolFiles),
-			"corrupt_lines":     fmt.Sprint(report.CorruptLines),
-			"quarantined_files": fmt.Sprint(len(report.QuarantinedFiles)),
-			"rotated_files":     fmt.Sprint(report.RotatedFiles),
-			"removed_files":     fmt.Sprint(report.RemovedFiles),
-			"removed_bytes":     fmt.Sprint(report.RemovedBytes),
+			"promoted_records":              fmt.Sprint(report.PromotedRecords),
+			"promoted_files":                fmt.Sprint(report.PromotedFiles),
+			"busy_spool_files":              fmt.Sprint(report.BusySpoolFiles),
+			"corrupt_lines":                 fmt.Sprint(report.CorruptLines),
+			"quarantined_files":             fmt.Sprint(len(report.QuarantinedFiles)),
+			"compaction_input_files":        fmt.Sprint(report.CompactionInputFiles),
+			"compaction_input_bytes":        fmt.Sprint(report.CompactionInputBytes),
+			"compaction_output_files":       fmt.Sprint(report.CompactionOutputFiles),
+			"compaction_output_bytes":       fmt.Sprint(report.CompactionOutputBytes),
+			"compaction_duplicates_omitted": fmt.Sprint(report.CompactionDuplicatesOmitted),
+			"rotated_files":                 fmt.Sprint(report.RotatedFiles),
+			"removed_files":                 fmt.Sprint(report.RemovedFiles),
+			"removed_bytes":                 fmt.Sprint(report.RemovedBytes),
 		}
 		if err != nil {
 			record("journal.maintenance", "error", reason+": "+err.Error(), evidence)
@@ -122,6 +128,10 @@ func runJournalMaintenance(
 	}
 
 	runPass("startup_spool_promotion", journal.PromoteSpool)
+	if ctx.Err() != nil {
+		return
+	}
+	runPass("startup_compaction", journal.Compact)
 	if ctx.Err() != nil {
 		return
 	}
@@ -139,6 +149,10 @@ func runJournalMaintenance(
 			return
 		case <-promotionTicker.C:
 			runPass("periodic_spool_promotion", journal.PromoteSpool)
+			if ctx.Err() != nil {
+				return
+			}
+			runPass("periodic_compaction", journal.Compact)
 		case <-retentionTicker.C:
 			runPass("periodic_rotation_retention", journal.RotateAndRetain)
 		}

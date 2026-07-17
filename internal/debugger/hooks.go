@@ -75,13 +75,32 @@ type HookReport struct {
 // InspectHooks is the single verdict engine for hook contracts, activation,
 // trust, CLI compatibility, last-seen evidence, and hook silence.
 func InspectHooks(cfg *config.Config, amxBin string, now time.Time) HookReport {
-	report := HookReport{Verdict: VerdictHealthy, Profiles: make([]HookProfile, 0)}
 	if cfg == nil {
-		report.Verdict = VerdictUnavailable
-		report.Error = "configuration is unavailable"
-		return report
+		return unavailableHookReport()
 	}
 	statuses, err := hooks.StatusAll(cfg, amxBin)
+	return hookReportFromStatuses(cfg, now, statuses, err)
+}
+
+// InspectHooksWithEvidence evaluates hooks using evidence gathered by another
+// journal consumer, such as CollectStatus's displayed-record snapshot.
+func InspectHooksWithEvidence(cfg *config.Config, amxBin string, now time.Time, evidence *hooks.StatusEvidence, evidenceErr error) HookReport {
+	if cfg == nil {
+		return unavailableHookReport()
+	}
+	statuses, err := hooks.StatusAllWithEvidence(cfg, amxBin, evidence, evidenceErr)
+	return hookReportFromStatuses(cfg, now, statuses, err)
+}
+
+func unavailableHookReport() HookReport {
+	report := HookReport{Verdict: VerdictHealthy, Profiles: make([]HookProfile, 0)}
+	report.Verdict = VerdictUnavailable
+	report.Error = "configuration is unavailable"
+	return report
+}
+
+func hookReportFromStatuses(cfg *config.Config, now time.Time, statuses []hooks.AccountStatus, err error) HookReport {
+	report := HookReport{Verdict: VerdictHealthy, Profiles: make([]HookProfile, 0)}
 	if err != nil {
 		report.Error = err.Error()
 	}

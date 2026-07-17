@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
 
@@ -18,18 +19,26 @@ func stubActivationEvidence(t *testing.T, versions map[string]string) string {
 	t.Helper()
 	claudeRoot := t.TempDir()
 	oldVersionProbe := activationVersionProbe
-	oldLastSeenProbe := activationLastSeenProbe
+	oldEvidenceProbe := activationEvidenceProbe
 	oldClaudeRoot := activationClaudeManagedRoot
 	activationVersionProbe = func(_ context.Context, executable string) (string, error) {
 		return versions[executable], nil
 	}
-	activationLastSeenProbe = func(_ context.Context, _ *config.Config, _, _ string) (time.Time, error) {
-		return time.Now().UTC(), nil
+	activationEvidenceProbe = func(_ context.Context, cfg *config.Config) (*StatusEvidence, error) {
+		evidence := NewStatusEvidence()
+		if cfg != nil {
+			for _, account := range cfg.Accounts {
+				_ = evidence.Visit(diagnostics.TraceEnvelope{
+					Stage: "hook.test", Harness: account.EffectiveHarness(), Profile: account.Name, ObservedAt: time.Now().UTC(),
+				})
+			}
+		}
+		return evidence, nil
 	}
 	activationClaudeManagedRoot = func() string { return claudeRoot }
 	t.Cleanup(func() {
 		activationVersionProbe = oldVersionProbe
-		activationLastSeenProbe = oldLastSeenProbe
+		activationEvidenceProbe = oldEvidenceProbe
 		activationClaudeManagedRoot = oldClaudeRoot
 	})
 	return claudeRoot
@@ -332,8 +341,14 @@ func TestActivationNewerCLIIsUnverifiedNotHealthy(t *testing.T) {
 
 func TestStaleLastSeenEvidenceIsUnverifiedNotBroken(t *testing.T) {
 	stubActivationEvidence(t, map[string]string{"claude": "2.1.195"})
-	activationLastSeenProbe = func(_ context.Context, _ *config.Config, _, _ string) (time.Time, error) {
-		return time.Now().Add(-8 * time.Hour), nil
+	activationEvidenceProbe = func(_ context.Context, cfg *config.Config) (*StatusEvidence, error) {
+		evidence := NewStatusEvidence()
+		for _, account := range cfg.Accounts {
+			_ = evidence.Visit(diagnostics.TraceEnvelope{
+				Stage: "hook.test", Harness: account.EffectiveHarness(), Profile: account.Name, ObservedAt: time.Now().Add(-8 * time.Hour),
+			})
+		}
+		return evidence, nil
 	}
 	home := t.TempDir()
 	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}}
