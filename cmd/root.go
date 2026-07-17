@@ -138,5 +138,5 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab should be selected initially")
-	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, debugCmd, hookIndicatorCmd, keybindingsCmd, resortCmd, sessionCmd, transcriptsCmd, tuiTestCmd)
+	rootCmd.AddCommand(colorPickerCmd, configCmd, daemonCmd, debugCmd, hookIndicatorCmd, iconPickerCmd, keybindingsCmd, resortCmd, sessionCmd, transcriptsCmd, tuiTestCmd)
 }

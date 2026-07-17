@@ -255,6 +255,65 @@ func TestIsColorPickerCmdline(t *testing.T) {
 	}
 }
 
+func TestFindIconPickerWindow(t *testing.T) {
+	windows := []OSWindow{{
+		Tabs: []Tab{{
+			ID: 77,
+			Windows: []Window{
+				{ID: 700, ForegroundProcesses: []ForegroundProcess{{Cmdline: []string{"amx", "keybindings"}}}},
+				{ID: 701, ForegroundProcesses: []ForegroundProcess{{Cmdline: []string{"/usr/local/bin/amx", "icon-picker"}}}},
+			},
+		}},
+	}}
+
+	loc, found := FindIconPickerWindow(windows, 0)
+	if !found {
+		t.Fatal("expected to find icon picker")
+	}
+	if loc.TabID != 77 || loc.WindowID != 701 {
+		t.Fatalf("location = %+v, want tab 77 window 701", loc)
+	}
+	if _, found := FindIconPickerWindow(windows, 701); found {
+		t.Fatal("expected self-exclusion to prevent icon-picker match")
+	}
+	if _, found := FindIconPickerWindow(nil, 0); found {
+		t.Fatal("expected no match in nil slice")
+	}
+}
+
+func TestIsIconPickerCmdline(t *testing.T) {
+	tests := []struct {
+		name    string
+		cmdline []string
+		want    bool
+	}{
+		{"bare amx icon-picker", []string{"amx", "icon-picker"}, true},
+		{"full path", []string{"/usr/local/bin/amx", "icon-picker"}, true},
+		{"with debug root flag", []string{"amx", "--debug", "icon-picker"}, true},
+		{"with multiple root flags", []string{"amx", "--debug=false", "-v", "icon-picker"}, true},
+		{"root help invocation", []string{"amx", "--help", "icon-picker"}, false},
+		{"subcommand help invocation", []string{"amx", "icon-picker", "--help"}, false},
+		{"root version invocation", []string{"amx", "--version", "icon-picker"}, false},
+		{"subcommand version invocation", []string{"amx", "icon-picker", "--version"}, false},
+		{"terminator before subcommand", []string{"amx", "--", "icon-picker"}, false},
+		{"terminator after subcommand", []string{"amx", "icon-picker", "--"}, false},
+		{"other subcommand", []string{"amx", "color-picker"}, false},
+		{"trailing positional argument", []string{"amx", "icon-picker", "other"}, false},
+		{"bare amx", []string{"amx"}, false},
+		{"different binary", []string{"claude", "icon-picker"}, false},
+		{"empty", []string{}, false},
+		{"nil", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isIconPickerCmdline(tt.cmdline); got != tt.want {
+				t.Errorf("isIconPickerCmdline(%v) = %v, want %v", tt.cmdline, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUserVars_EffectiveHarness(t *testing.T) {
 	tests := []struct {
 		name string

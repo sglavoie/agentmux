@@ -32,6 +32,27 @@ func TestDashboardBindingLaunchesAMXRootOverlay(t *testing.T) {
 	}
 }
 
+func TestIconPickerBindingLaunchesF5Overlay(t *testing.T) {
+	picker := findAction(t, "f5")
+
+	if picker.Section != "Sessions" {
+		t.Fatalf("f5 Section = %q, want Sessions", picker.Section)
+	}
+	if picker.LaunchType != "overlay" {
+		t.Fatalf("f5 LaunchType = %q, want overlay", picker.LaunchType)
+	}
+	if picker.AmxCommand != "icon-picker" {
+		t.Fatalf("f5 AmxCommand = %q, want icon-picker", picker.AmxCommand)
+	}
+	if picker.Description != "set tab harness icon (overlay picker)" {
+		t.Fatalf("f5 Description = %q", picker.Description)
+	}
+	const want = "map f5 launch --type=overlay --allow-remote-control amx icon-picker"
+	if got := picker.ConfigLine(); got != want {
+		t.Fatalf("f5 ConfigLine() = %q, want %q", got, want)
+	}
+}
+
 func TestBackgroundBindingsPassActiveWindowID(t *testing.T) {
 	tests := map[string]string{
 		"f4":  "focus-next --window-id @active-kitty-window-id",

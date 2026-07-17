@@ -18,6 +18,7 @@ var Actions = []Action{
 	{Key: "f1", Section: "Overlays", Description: "show this keybinding reference", AmxCommand: "keybindings", LaunchType: "overlay"},
 	{Key: "ctrl+shift+d", Section: "Overlays", Description: "open or focus Agent Mux dashboard", AmxCommand: "--window-id @active-kitty-window-id", LaunchType: "overlay"},
 	// Session management
+	{Key: "f5", Section: "Sessions", Description: "set tab harness icon (overlay picker)", AmxCommand: "icon-picker", LaunchType: "overlay"},
 	{Key: "f6", Section: "Sessions", Description: "set tab color (overlay picker)", AmxCommand: "color-picker", LaunchType: "overlay"},
 	{Key: "f8", Section: "Sessions", Description: "clear markers and state icons from tab", AmxCommand: "hook-indicator user_clear --window-id @active-kitty-window-id", LaunchType: "background"},
 	{Key: "f10", Section: "Sessions", Description: "toggle mute on the focused tab (suppresses notifications)", AmxCommand: "mute-toggle --window-id @active-kitty-window-id", LaunchType: "background"},

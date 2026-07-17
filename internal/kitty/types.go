@@ -261,6 +261,56 @@ func isColorPickerCmdline(cmdline []string) bool {
 	return false
 }
 
+// FindIconPickerWindow scans all OS windows for a window whose foreground
+// process is amx icon-picker. excludeWindowID is skipped to avoid
+// self-detection (pass the current KITTY_WINDOW_ID).
+func FindIconPickerWindow(osWindows []OSWindow, excludeWindowID int) (*DashboardLocation, bool) {
+	for i := range osWindows {
+		for j := range osWindows[i].Tabs {
+			tab := &osWindows[i].Tabs[j]
+			for k := range tab.Windows {
+				w := &tab.Windows[k]
+				if w.ID == excludeWindowID {
+					continue
+				}
+				for _, fp := range w.ForegroundProcesses {
+					if isIconPickerCmdline(fp.Cmdline) {
+						return &DashboardLocation{TabID: tab.ID, WindowID: w.ID}, true
+					}
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+func isIconPickerCmdline(cmdline []string) bool {
+	if len(cmdline) < 2 || filepath.Base(cmdline[0]) != "amx" {
+		return false
+	}
+
+	foundSubcommand := false
+	for _, arg := range cmdline[1:] {
+		if arg == "--" || isInfoOnlyRootFlag(arg) {
+			return false
+		}
+		if foundSubcommand {
+			// icon-picker accepts no arguments or command-local flags. Scanning
+			// the complete argv also prevents help invocations from being
+			// mistaken for a live picker.
+			return false
+		}
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		if arg != "icon-picker" {
+			return false
+		}
+		foundSubcommand = true
+	}
+	return foundSubcommand
+}
+
 // UserVars holds Agent Mux user variables stored on a Kitty window.
 type UserVars struct {
 	Profile          string `json:"amx_profile"`

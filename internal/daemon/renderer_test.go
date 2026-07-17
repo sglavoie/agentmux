@@ -8,19 +8,19 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
-func TestRendererConvergesDriftAndPreservesForeignTitleParts(t *testing.T) {
+func TestRendererConvergesDriftAndPreservesOverriddenHarnessBadge(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
 
 	liveTitle := palette.BuildTitleParts(palette.TitleParts{
-		Base:    "W:renamed",
+		Base:    "📟W:renamed",
 		State:   "stop",
 		Starred: true,
 		Muted:   true,
 	})
 	want := palette.BuildTitleParts(palette.TitleParts{
-		Base:    "W:renamed",
+		Base:    "📟W:renamed",
 		State:   "bolt",
 		Starred: true,
 		Muted:   true,

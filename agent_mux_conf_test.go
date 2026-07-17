@@ -57,6 +57,18 @@ func TestDashboardBindingPassesActiveWindowID(t *testing.T) {
 	}
 }
 
+func TestAgentMuxConfContainsIconPickerBinding(t *testing.T) {
+	conf, err := os.ReadFile("agent-mux.conf")
+	if err != nil {
+		t.Fatalf("ReadFile(agent-mux.conf): %v", err)
+	}
+
+	const binding = "map f5 launch --type=overlay --allow-remote-control amx icon-picker"
+	if !hasActiveConfigLine(string(conf), binding) {
+		t.Fatalf("agent-mux.conf missing active icon-picker binding %q", binding)
+	}
+}
+
 func TestReadmeDocumentsPassiveLoopMarkers(t *testing.T) {
 	readme, err := os.ReadFile("README.md")
 	if err != nil {
