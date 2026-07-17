@@ -407,6 +407,12 @@ func writeDoctorHooks(out io.Writer, reportIssue func(string, ...any), reportUnv
 			reportUnverified("hooks for %s are unverified: %s", status.Profile, status.Detail())
 		}
 	}
+	if failures := report.DeliveryFailures; failures != nil && failures.Count > 0 {
+		if _, err := fmt.Fprintf(out, "hooks: %d delivery failure(s) recorded in the trailing hour\n", failures.Count); err != nil {
+			return err
+		}
+		reportUnverified("%d hook delivery failure(s) recorded in the trailing hour; deliveries during daemon restarts are dropped", failures.Count)
+	}
 	if report.Error != "" {
 		reportIssue("hook status errors: %s", report.Error)
 	}

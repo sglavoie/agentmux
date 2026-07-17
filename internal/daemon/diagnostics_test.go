@@ -662,3 +662,54 @@ func TestRunShutdownPersistsQueuedStageRows(t *testing.T) {
 		t.Fatalf("queued-stage record after Run shutdown = %+v", records[0])
 	}
 }
+
+func TestJournalMaintenanceWithConcurrentAppendersReportsNoLockTimeout(t *testing.T) {
+	journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	for worker := 0; worker < 4; worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for i := 0; ; i++ {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				envelope := diagnostics.NewEnvelope("maintenance.contention")
+				envelope.RequestID = fmt.Sprintf("%d-%d", worker, i)
+				envelope.Outcome = "success"
+				_ = journal.Append(context.Background(), envelope)
+			}
+		}(worker)
+	}
+
+	var recordsMu sync.Mutex
+	var failures []string
+	record := func(stage, outcome, reason string, _ map[string]string) {
+		if outcome == "error" {
+			recordsMu.Lock()
+			failures = append(failures, stage+"|"+outcome+"|"+reason)
+			recordsMu.Unlock()
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		cancel()
+	}()
+	runJournalMaintenance(ctx, journal, record, journalMaintenanceSchedule{
+		promotionInterval: 20 * time.Millisecond,
+		retentionInterval: 30 * time.Millisecond,
+		passBudget:        journalMaintenanceBudget,
+	})
+	close(stop)
+	wg.Wait()
+	if len(failures) != 0 {
+		t.Fatalf("maintenance passes under concurrent appenders reported errors: %v", failures)
+	}
+}

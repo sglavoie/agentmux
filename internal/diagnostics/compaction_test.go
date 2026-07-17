@@ -36,12 +36,30 @@ func TestJournalCompactThousandsOfTinySegmentsInChronologicalOrder(t *testing.T)
 		writeCompactionSegment(t, paths, fmt.Sprintf("events-tiny-%04d.jsonl", i), marshalCompactionRecord(t, record))
 	}
 
-	report, err := journal.Compact(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	// The per-commit input bound (maxCompactionInputFiles) keeps each exclusive
+	// unlink loop short, so a large backlog drains across multiple passes.
+	totalInputFiles := 0
+	for pass := 0; ; pass++ {
+		if pass > 2*segmentCount/maxCompactionInputFiles+4 {
+			t.Fatalf("compaction did not converge after %d passes", pass)
+		}
+		report, err := journal.Compact(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if report.CompactionInputFiles == 0 {
+			break
+		}
+		if report.CompactionInputFiles > maxCompactionInputFiles {
+			t.Fatalf("compaction pass exceeded input bound: %+v", report)
+		}
+		if report.CompactionDuplicatesOmitted != 0 {
+			t.Fatalf("compaction report = %+v", report)
+		}
+		totalInputFiles += report.CompactionInputFiles
 	}
-	if report.CompactionInputFiles != segmentCount || report.CompactionOutputFiles != 1 || report.CompactionDuplicatesOmitted != 0 {
-		t.Fatalf("compaction report = %+v", report)
+	if totalInputFiles < segmentCount {
+		t.Fatalf("compaction consumed %d input files, want at least %d", totalInputFiles, segmentCount)
 	}
 	activeAfter, err := os.ReadFile(paths.JournalFile)
 	if err != nil {
@@ -677,4 +695,77 @@ func assertCompactionRequests(t *testing.T, journal *Journal, stage string, coun
 			t.Fatalf("observable records missing request %d: %+v", i, snapshot.Records)
 		}
 	}
+}
+
+func TestJournalCompactCommitWindowDoesNotBlockAppend(t *testing.T) {
+	journal, paths := compactionJournalWithRecords(t, "compaction.commitwindow", 2)
+	appended := false
+	hooks := compactionHooks{
+		afterOutputRename: func(string) error {
+			if appended {
+				return nil
+			}
+			appended = true
+			// The exclusive events.lock commit window is open right now. The
+			// append path is guarded only by append.lock, so this must land in
+			// the active segment without waiting for the commit to finish.
+			done := make(chan error, 1)
+			go func() {
+				done <- journal.Append(context.Background(), testEnvelope("compaction.commitwindow.live", "during-commit"))
+			}()
+			select {
+			case err := <-done:
+				return err
+			case <-time.After(5 * time.Second):
+				return errors.New("Append blocked behind the exclusive compaction commit window")
+			}
+		},
+	}
+	if _, err := journal.compact(context.Background(), hooks); err != nil {
+		t.Fatal(err)
+	}
+	if !appended {
+		t.Fatal("commit window hook never ran")
+	}
+	spools, _ := filepath.Glob(filepath.Join(paths.SpoolDir, "journal-*.jsonl"))
+	if len(spools) != 0 {
+		t.Fatalf("append during commit fell back to spool: %v", spools)
+	}
+	records, err := journal.Read(context.Background(), Selector{Stages: []string{"compaction.commitwindow.live"}})
+	if err != nil || len(records) != 1 || records[0].RequestID != "during-commit" {
+		t.Fatalf("records appended during commit = %+v, err = %v", records, err)
+	}
+}
+
+func TestJournalCompactionOutlastsSharedReaderBeyondAppendTimeout(t *testing.T) {
+	journal, paths := compactionJournalWithRecords(t, "compaction.sharedreader", 2)
+	reader, err := os.OpenFile(filepath.Join(paths.JournalDir, "events.lock"), os.O_RDWR, fileMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Flock(int(reader.Fd()), unix.LOCK_SH); err != nil {
+		_ = reader.Close()
+		t.Fatal(err)
+	}
+	released := make(chan struct{})
+	go func() {
+		// Hold the shared sealed-namespace lock well past Append's 25 ms
+		// budget; the maintenance timeout must ride it out.
+		time.Sleep(150 * time.Millisecond)
+		_ = unix.Flock(int(reader.Fd()), unix.LOCK_UN)
+		close(released)
+	}()
+	t.Cleanup(func() {
+		<-released
+		_ = reader.Close()
+	})
+
+	report, err := journal.Compact(context.Background())
+	if err != nil {
+		t.Fatalf("compaction under a long shared reader = %v", err)
+	}
+	if report.CompactionInputFiles != 2 || report.CompactionOutputFiles != 1 {
+		t.Fatalf("compaction report = %+v", report)
+	}
+	assertCompactionRequests(t, journal, "compaction.sharedreader", 2)
 }

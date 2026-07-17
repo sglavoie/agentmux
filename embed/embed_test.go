@@ -33,13 +33,14 @@ type exampleConfig struct {
 			RecentMessages int `toml:"recent_messages"`
 		}
 		Diagnostics struct {
-			JournalEnabled      *bool `toml:"journal_enabled"`
-			JournalKeepDays     int   `toml:"journal_keep_days"`
-			JournalMaxMiB       int   `toml:"journal_max_mib"`
-			NativeLogging       *bool `toml:"native_logging"`
-			NativeKeepDays      int   `toml:"native_keep_days"`
-			NativeMaxMiB        int   `toml:"native_max_mib"`
-			NativeSessionMaxMiB int   `toml:"native_session_max_mib"`
+			JournalEnabled      *bool  `toml:"journal_enabled"`
+			JournalKeepDays     int    `toml:"journal_keep_days"`
+			JournalMaxMiB       int    `toml:"journal_max_mib"`
+			JournalDetail       string `toml:"journal_detail"`
+			NativeLogging       *bool  `toml:"native_logging"`
+			NativeKeepDays      int    `toml:"native_keep_days"`
+			NativeMaxMiB        int    `toml:"native_max_mib"`
+			NativeSessionMaxMiB int    `toml:"native_session_max_mib"`
 		}
 		Notifications struct {
 			Permission           bool

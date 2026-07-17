@@ -166,6 +166,9 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 		for _, profile := range report.Hooks.Profiles {
 			report.addHookProfileFinding(profile)
 		}
+		if failures := report.Hooks.DeliveryFailures; failures != nil && failures.Count > 0 {
+			report.add(VerdictWarning, "hook_delivery_failures", fmt.Sprintf("%d hook delivery failure(s) recorded in the trailing hour; deliveries during daemon restarts are dropped", failures.Count))
+		}
 	}
 
 	if options.PathsError != nil {

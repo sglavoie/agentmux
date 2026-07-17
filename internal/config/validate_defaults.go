@@ -58,6 +58,13 @@ func validateDefaults(d *Defaults) []string {
 	if d.Diagnostics.JournalMaxMiB < 0 {
 		errs = append(errs, "defaults.diagnostics.journal_max_mib must be >= 0")
 	}
+	if detail := strings.TrimSpace(d.Diagnostics.JournalDetail); detail != "" &&
+		!strings.EqualFold(detail, "standard") && !strings.EqualFold(detail, "full") {
+		errs = append(errs, fmt.Sprintf(
+			"invalid defaults.diagnostics.journal_detail %q: must be one of standard, full",
+			d.Diagnostics.JournalDetail,
+		))
+	}
 	if d.Diagnostics.NativeKeepDays < 0 {
 		errs = append(errs, "defaults.diagnostics.native_keep_days must be >= 0")
 	}

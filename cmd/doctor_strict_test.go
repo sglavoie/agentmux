@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
 // setUpDoctorFixture installs a healthy socket/binary/config environment plus
@@ -133,6 +135,45 @@ func TestDoctorStrictPassesOnCleanDeployment(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "overall: clean") {
 		t.Errorf("doctor output missing overall: clean:\n%s", out.String())
+	}
+}
+
+func TestDoctorStrictStaysGreenOnDeliveryFailureWarning(t *testing.T) {
+	build := doctorTestBuild
+	health := daemon.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
+	now := setUpDoctorFixture(t, health, daemon.EventsExport{})
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	paths, err := diagnostics.DefaultPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := diagnostics.NewEnvelope("hook.failure")
+	record.Outcome = "error"
+	record.Reason = "daemon_unavailable"
+	record.ObservedAt = now.UTC().Add(-10 * time.Minute)
+	if err := journal.Append(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	doctorStrict = true
+
+	var out bytes.Buffer
+	doctorCmd.SetOut(&out)
+	if err := runDoctor(doctorCmd, nil); err != nil {
+		t.Fatalf("strict doctor with warning-only delivery failures: %v", err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"hooks: 1 delivery failure(s) recorded in the trailing hour",
+		"warnings:",
+		"overall: clean",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("doctor output missing %q:\n%s", want, got)
+		}
 	}
 }
 

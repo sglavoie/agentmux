@@ -27,8 +27,9 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 	resp := h.Handle(Request{
 		Type: TypeHookEvent, WindowID: 43, Event: "UserPromptSubmit",
 		ProducerHarness: harness.Claude, Harness: harness.Claude,
-		PayloadJSON: hookPayloadJSON(t, payload),
-		TraceID:     "trace-7", RequestID: "request-7", SourceEventID: "source-7", Attempt: 2,
+		ProducerConfigDir: "/Users/dev/.claude-personal",
+		PayloadJSON:       hookPayloadJSON(t, payload),
+		TraceID:           "trace-7", RequestID: "request-7", SourceEventID: "source-7", Attempt: 2,
 		PayloadSize: 123, PayloadHMAC: "hmac:local", PayloadEncoding: "json",
 		saturationReason: "dedupe_cache",
 	})
@@ -61,6 +62,9 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 		event.Profile != "managed" || event.SessionID != "session-1" ||
 		event.SourceKind != string(SourceHarness) || event.SourceKey != "claude:session-1" || event.SourceSeq != 7 {
 		t.Fatalf("source/target evidence = %+v", event)
+	}
+	if event.ProducerConfigDir != "/Users/dev/.claude-personal" {
+		t.Fatalf("producer config dir = %q, want cross-window propagation of the producer home", event.ProducerConfigDir)
 	}
 	if event.ReducerInput == nil || !event.ReducerInput.Prompt || event.ReducerInput.OriginWindowID != 43 ||
 		event.ReducerInput.EmittedAt == 0 || event.ReducerInput.GuardDuration == 0 {
@@ -97,6 +101,7 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 		decision.Evidence["replay.version"] != "1" || decision.Evidence["replay.emitted_at"] == "" ||
 		decision.Evidence["replay.is_user_submission"] != "true" ||
 		decision.Evidence["saturation"] != "dedupe_cache" ||
+		decision.Evidence["producer_config_dir"] != "/Users/dev/.claude-personal" ||
 		!strings.Contains(string(encoded), "request-7") || strings.Contains(string(encoded), payload.Prompt) {
 		t.Fatalf("journal decision is incomplete or leaked prompt: %s", encoded)
 	}

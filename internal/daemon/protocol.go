@@ -132,6 +132,11 @@ type Request struct {
 	// ProducerHarness is the explicit producer identity used by new clients.
 	// Harness remains populated for backward compatibility with older daemons.
 	ProducerHarness string `json:"producer_harness,omitempty"`
+	// ProducerConfigDir is the producing harness's resolved home/config
+	// directory (config env var override or harness default), normalized by the
+	// hook client. It credits activation evidence to the producer's home even
+	// when routing attributes the event to another window's launch profile.
+	ProducerConfigDir string `json:"producer_config_dir,omitempty"`
 	// HarnessProcess is optional and accepted only when its canonical harness
 	// matches ProducerHarness/Harness and its PID/start token are complete.
 	HarnessProcess   *HarnessProcessIdentity `json:"harness_process,omitempty"`
@@ -524,6 +529,7 @@ type SessionEvent struct {
 	IdentityConfidence   string                  `json:"identity_confidence,omitempty"`
 	UsedFallbackIdentity bool                    `json:"used_fallback_identity,omitempty"`
 	ProducerHarness      string                  `json:"producer_harness,omitempty"`
+	ProducerConfigDir    string                  `json:"producer_config_dir,omitempty"`
 	TargetHarness        string                  `json:"target_harness,omitempty"`
 	Profile              string                  `json:"profile,omitempty"`
 	SessionID            string                  `json:"session_id,omitempty"`

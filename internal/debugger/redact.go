@@ -64,7 +64,9 @@ var (
 		process_harness process_pid process_start_token process_observation process_mode process_sources withdrawn_facts cleared_subagents synthesized_stop terminal_hook_evidence
 		process_exits last_process_exit_reason last_process_exit_observation last_process_exit_at attempted_processes unknown_processes pipe_mode
 		before_icon before_looping before_source_kind before_source_key after_icon after_looping after_source_kind after_source_key icon looping origin_window_id
-		effective_before effective_after result_icon_state
+		effective_before effective_after result_icon_state config_dir routed_profile producer_config_dir
+		trace_ids request_ids journal_detail
+		earliest_observed_at promoted_spool_files_read delivery_failures latest_at
 	`)
 )
 
@@ -307,7 +309,8 @@ func isShareStringField(key string) bool {
 		"level", "component", "error_class", "classification", "certainty", "kind", "scope", "check", "source",
 		"format", "member", "decision", "availability", "go_version", "version", "revision", "reasons", "journal_snapshot_scope",
 		"process_harness", "process_observation", "process_mode", "terminal_hook_evidence", "last_process_exit_reason",
-		"last_process_exit_observation", "before_icon", "after_icon", "before_source_kind", "after_source_kind":
+		"last_process_exit_observation", "before_icon", "after_icon", "before_source_kind", "after_source_kind",
+		"journal_detail":
 		return true
 	default:
 		return false

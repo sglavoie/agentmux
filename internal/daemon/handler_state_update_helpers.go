@@ -59,6 +59,7 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 		ParseOutcome:         req.parseOutcome,
 		NormalizationOutcome: req.normalizationOutcome,
 		ProducerHarness:      req.Harness,
+		ProducerConfigDir:    req.ProducerConfigDir,
 		TargetHarness:        req.targetHarness,
 		Profile:              req.Account,
 		SaturationReason:     req.saturationReason,

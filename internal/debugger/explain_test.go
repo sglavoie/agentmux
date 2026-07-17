@@ -498,6 +498,44 @@ func TestExplainReadsSourceEventGraphOffline(t *testing.T) {
 	}
 }
 
+func TestExplainSampledJournalStillReachesTerminalCause(t *testing.T) {
+	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A standard-detail (sampled) healthy event: intermediate hook success
+	// stages are absent, only the anchors survive, and the renderer stage is
+	// one coalesced record whose primary IDs belong to a different event.
+	delivery := explanationRecord("hook.delivery", "accepted", "accepted")
+	delivery.Evidence["retryable"] = "false"
+	decision := explanationRecord("daemon.decision", "applied", "reducer_applied")
+	rendered := explanationRecord("daemon.renderer.rendered", "success", "render_complete")
+	rendered.TraceID = "trace-other"
+	rendered.RequestID = "request-other"
+	rendered.Evidence = map[string]string{
+		"generation":       "3",
+		"trace_ids":        "trace-other,trace-1",
+		"request_ids":      "request-other,request-1",
+		"source_event_ids": "event-other,event-1",
+	}
+	for _, record := range []diagnostics.TraceEnvelope{delivery, decision, rendered} {
+		if err := journal.Append(context.Background(), record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report, err := Explain(context.Background(), journal, ExplainOptions{Selector: Selector{TraceID: "trace-1"}, Recent: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Cause.Classification != CauseSuccessfulCompletion {
+		t.Fatalf("sampled-fixture cause = %+v, want successful completion via coalesced renderer evidence", report.Cause)
+	}
+	if len(report.Graph.Nodes) != 3 {
+		t.Fatalf("sampled-fixture nodes = %+v, want delivery, decision, and coalesced render", report.Graph.Nodes)
+	}
+}
+
 func TestExplainCorrelatesASLSourceDeliveryDaemonAndRenderEvidence(t *testing.T) {
 	delivery := explanationRecord("hook.delivery", "accepted", "accepted")
 	delivery.TraceID = "trace-asl-delivery"

@@ -304,6 +304,7 @@ func propagateIngressTrace(dst *Request, src Request) {
 	dst.PayloadEncoding = src.PayloadEncoding
 	dst.PayloadCaptured = src.PayloadCaptured
 	dst.ProducerHarness = src.ProducerHarness
+	dst.ProducerConfigDir = src.ProducerConfigDir
 	if src.HarnessProcess != nil {
 		identity := *src.HarnessProcess
 		dst.HarnessProcess = &identity
@@ -352,6 +353,7 @@ func (h *Handler) recordDecisionEvent(event SessionEvent) {
 		"turn_id":                event.TurnID,
 		"tool_use_id":            event.ToolUseID,
 		"reducer_reason":         event.ReducerReason,
+		"producer_config_dir":    event.ProducerConfigDir,
 		"effective_before":       formatEffectiveEvidence(event.EffectiveBefore),
 		"effective_after":        formatEffectiveEvidence(event.EffectiveAfter),
 		"used_fallback_identity": fmt.Sprint(event.UsedFallbackIdentity),
@@ -657,6 +659,7 @@ func (h *Handler) finalizeReducerDecisionLocked(
 	event.IdentityConfidence = identityConfidence
 	event.UsedFallbackIdentity = usedFallbackIdentity
 	event.ProducerHarness = req.Harness
+	event.ProducerConfigDir = req.ProducerConfigDir
 	event.TargetHarness = req.targetHarness
 	if !req.targetHarnessSet {
 		event.TargetHarness = req.Harness

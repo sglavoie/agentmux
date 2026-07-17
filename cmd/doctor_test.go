@@ -192,6 +192,68 @@ func TestDoctorReportsVerifiedDisabledHooksAsFailure(t *testing.T) {
 	}
 }
 
+func TestDoctorHooksSummarizesDroppedDeliveries(t *testing.T) {
+	resetDoctorTestState(t)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	paths, err := diagnostics.DefaultPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A failed attempt that no retry resolves terminalizes into one dropped
+	// delivery: the hook.failure fallback plus the terminal hook.delivery share
+	// a request and must count exactly once.
+	requestID := "11111111-1111-4111-8111-111111111111"
+	attempt := diagnostics.NewEnvelope("hook.ipc_attempt")
+	attempt.Harness = harness.Claude
+	attempt.RequestID = requestID
+	attempt.Outcome = "error"
+	attempt.Reason = "daemon_unavailable"
+	if err := journal.Append(t.Context(), attempt); err != nil {
+		t.Fatal(err)
+	}
+	failure := diagnostics.NewEnvelope("hook.failure")
+	failure.Harness = harness.Claude
+	failure.RequestID = requestID
+	failure.Outcome = "error"
+	failure.Reason = "daemon_unavailable"
+	if err := journal.Append(t.Context(), failure); err != nil {
+		t.Fatal(err)
+	}
+	delivery := diagnostics.NewEnvelope("hook.delivery")
+	delivery.Harness = harness.Claude
+	delivery.RequestID = requestID
+	delivery.Outcome = "retryable_failure"
+	delivery.Reason = "daemon_unavailable"
+	if err := journal.Append(t.Context(), delivery); err != nil {
+		t.Fatal(err)
+	}
+	doctorLoadConfig = func() (*config.Config, error) { return &config.Config{}, nil }
+	doctorExecutable = func() (string, error) { return filepath.Join(t.TempDir(), "amx"), nil }
+
+	var out bytes.Buffer
+	var warnings []string
+	err = writeDoctorHooks(&out, func(format string, args ...any) {
+		t.Errorf("unexpected failure finding: %s", fmt.Sprintf(format, args...))
+	}, func(format string, args ...any) {
+		warnings = append(warnings, fmt.Sprintf(format, args...))
+	})
+	if err != nil {
+		t.Fatalf("writeDoctorHooks: %v", err)
+	}
+	if !strings.Contains(out.String(), "hooks: 1 delivery failure(s) recorded in the trailing hour") {
+		t.Fatalf("doctor hook output missing delivery-failure summary:\n%s", out.String())
+	}
+	if !slices.ContainsFunc(warnings, func(message string) bool {
+		return strings.Contains(message, "deliveries during daemon restarts are dropped")
+	}) {
+		t.Fatalf("doctor warnings = %v, want dropped-delivery note", warnings)
+	}
+}
+
 func TestDoctorReportsNativeCoverageAndDefersActivePruning(t *testing.T) {
 	resetDoctorTestState(t)
 	enabled := true

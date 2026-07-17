@@ -31,7 +31,13 @@ type JournalOptions struct {
 	MaxBytes     int64
 	SegmentBytes int64
 	LockTimeout  time.Duration
-	Now          func() time.Time
+	// MaintenanceLockTimeout bounds sealed-namespace lock waits on the
+	// maintenance paths (spool publication, compaction commit, retention,
+	// published-identity scans). It is deliberately longer than LockTimeout so
+	// maintenance outlasts shared readers instead of reporting lock timeouts,
+	// while Append keeps its short fail-open budget.
+	MaintenanceLockTimeout time.Duration
+	Now                    func() time.Time
 }
 
 type MaintenanceReport struct {
@@ -72,17 +78,44 @@ type JournalHealth struct {
 	QuarantinedFiles   int       `json:"quarantined_files"`
 	CorruptLines       int       `json:"corrupt_lines"`
 	Records            int       `json:"records"`
+	EarliestObservedAt time.Time `json:"earliest_observed_at,omitempty"`
 	LatestObservedAt   time.Time `json:"latest_observed_at,omitempty"`
 	ObservedSchemas    []int     `json:"observed_schemas"`
 }
 
+// Journal storage is guarded by two permanent lock sidecars:
+//
+//   - append.lock guards the active segment only (Append's tail repair, line
+//     appends, and size-triggered rotation);
+//   - events.lock guards the sealed-segment namespace (snapshot capture and
+//     published-identity scans shared; spool publication, compaction commit,
+//     and retention exclusive).
+//
+// Lock ordering is events.lock before append.lock wherever both are taken
+// (Read, ReadTolerant, Inspect, and snapshot capture's active-segment
+// enumeration), mirrored in-process by sealedMu before appendMu. Append takes
+// only append.lock, so hook writes never wait behind a maintenance commit
+// window; the split is safe because every sealed-side mutation revalidates its
+// candidate files by inode immediately before renaming or unlinking them.
+// Snapshot capture holds append.lock shared only while it lists and opens the
+// journal directory, so an append cannot rotate events.jsonl between the
+// listing and the open and make the capture omit the just-sealed segment.
+//
+// Mixed-build hazard: a pre-split build still takes only events.lock for its
+// Read tail repair, so it can atomically replace events.jsonl while a
+// post-split appender holds append.lock. The window is transient and
+// fail-open (at worst an in-flight record lands in a quarantined tail), and
+// the supported install path keeps CLI and daemon builds matched (doctor's
+// daemon_build_mismatch finding, `just install-restart-smoke`).
 type Journal struct {
-	paths   Paths
-	opts    JournalOptions
-	key     []byte
-	current string
-	lock    string
-	mu      sync.Mutex
+	paths      Paths
+	opts       JournalOptions
+	key        []byte
+	current    string
+	lock       string // events.lock: sealed-segment namespace
+	appendLock string // append.lock: active segment
+	sealedMu   sync.Mutex
+	appendMu   sync.Mutex
 }
 
 func NewJournal(paths Paths, options JournalOptions) (*Journal, error) {
@@ -97,11 +130,16 @@ func NewJournal(paths Paths, options JournalOptions) (*Journal, error) {
 	if err := initializeFileLock(lockPath); err != nil {
 		return nil, err
 	}
+	appendLockPath := filepath.Join(paths.JournalDir, "append.lock")
+	if err := initializeFileLock(appendLockPath); err != nil {
+		return nil, err
+	}
 	options = normalizeJournalOptions(options)
 	return &Journal{
 		paths: paths, opts: options, key: key,
-		current: paths.JournalFile,
-		lock:    lockPath,
+		current:    paths.JournalFile,
+		lock:       lockPath,
+		appendLock: appendLockPath,
 	}, nil
 }
 
@@ -117,6 +155,9 @@ func normalizeJournalOptions(options JournalOptions) JournalOptions {
 	}
 	if options.LockTimeout <= 0 {
 		options.LockTimeout = 25 * time.Millisecond
+	}
+	if options.MaintenanceLockTimeout <= 0 {
+		options.MaintenanceLockTimeout = 2 * time.Second
 	}
 	if options.Now == nil {
 		options.Now = time.Now
@@ -147,9 +188,9 @@ func (j *Journal) Append(ctx context.Context, envelope TraceEnvelope) error {
 	}
 	record = append(record, '\n')
 
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock, lockErr := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	j.appendMu.Lock()
+	defer j.appendMu.Unlock()
+	lock, lockErr := acquireFileLock(ctx, j.appendLock, j.opts.LockTimeout)
 	if lockErr != nil {
 		if spoolErr := j.appendSpool(ctx, record); spoolErr == nil {
 			return nil
@@ -645,16 +686,16 @@ func rewriteLockedSpoolClaim(claim *claimedSpool, data []byte) (retErr error) {
 }
 
 func (j *Journal) publishedRecordIdentities(ctx context.Context) (map[journalRecordIdentity]struct{}, error) {
-	j.mu.Lock()
-	lock, err := acquireSharedFileLock(ctx, j.lock, j.opts.LockTimeout)
+	j.sealedMu.Lock()
+	lock, err := acquireSharedFileLock(ctx, j.lock, j.opts.MaintenanceLockTimeout)
 	if err != nil {
-		j.mu.Unlock()
+		j.sealedMu.Unlock()
 		return nil, err
 	}
 	entries, err := os.ReadDir(j.paths.JournalDir)
 	if err != nil {
 		releaseFileLock(lock)
-		j.mu.Unlock()
+		j.sealedMu.Unlock()
 		return nil, err
 	}
 	var files []snapshotFile
@@ -662,7 +703,7 @@ func (j *Journal) publishedRecordIdentities(ctx context.Context) (map[journalRec
 		if err := ctxError(ctx); err != nil {
 			closeSnapshotFiles(files)
 			releaseFileLock(lock)
-			j.mu.Unlock()
+			j.sealedMu.Unlock()
 			return nil, err
 		}
 		name := entry.Name()
@@ -673,7 +714,7 @@ func (j *Journal) publishedRecordIdentities(ctx context.Context) (map[journalRec
 		if err != nil {
 			closeSnapshotFiles(files)
 			releaseFileLock(lock)
-			j.mu.Unlock()
+			j.sealedMu.Unlock()
 			return nil, err
 		}
 		if captured != nil {
@@ -681,7 +722,7 @@ func (j *Journal) publishedRecordIdentities(ctx context.Context) (map[journalRec
 		}
 	}
 	releaseFileLock(lock)
-	j.mu.Unlock()
+	j.sealedMu.Unlock()
 	defer closeSnapshotFiles(files)
 	identities := make(map[journalRecordIdentity]struct{})
 	for _, file := range files {
@@ -699,9 +740,9 @@ func (j *Journal) publishedRecordIdentities(ctx context.Context) (map[journalRec
 }
 
 func (j *Journal) publishSpoolClaim(ctx context.Context, claim string) (string, error) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	j.sealedMu.Lock()
+	defer j.sealedMu.Unlock()
+	lock, err := acquireFileLock(ctx, j.lock, j.opts.MaintenanceLockTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -733,26 +774,29 @@ func (j *Journal) RotateAndRetain(ctx context.Context) (MaintenanceReport, error
 	if err := ctxError(ctx); err != nil {
 		return report, err
 	}
-	j.mu.Lock()
-	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	// The oversized-active check mutates only the active segment, so it takes
+	// the append side; this also serializes with Append's own size-triggered
+	// rotation so two rotators never race on the same rename.
+	j.appendMu.Lock()
+	lock, err := acquireFileLock(ctx, j.appendLock, j.opts.MaintenanceLockTimeout)
 	if err != nil {
-		j.mu.Unlock()
+		j.appendMu.Unlock()
 		return report, err
 	}
 	if info, statErr := os.Stat(j.current); statErr == nil && info.Size() > j.opts.SegmentBytes {
 		if _, err := j.rotateLocked(); err != nil {
 			releaseFileLock(lock)
-			j.mu.Unlock()
+			j.appendMu.Unlock()
 			return report, err
 		}
 		report.RotatedFiles++
 	} else if statErr != nil && !os.IsNotExist(statErr) {
 		releaseFileLock(lock)
-		j.mu.Unlock()
+		j.appendMu.Unlock()
 		return report, statErr
 	}
 	releaseFileLock(lock)
-	j.mu.Unlock()
+	j.appendMu.Unlock()
 
 	files, err := j.retentionFiles(ctx)
 	if err != nil {
@@ -762,15 +806,15 @@ func (j *Journal) RotateAndRetain(ctx context.Context) (MaintenanceReport, error
 	if len(candidates) == 0 {
 		return report, nil
 	}
-	j.mu.Lock()
-	lock, err = acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	j.sealedMu.Lock()
+	lock, err = acquireFileLock(ctx, j.lock, j.opts.MaintenanceLockTimeout)
 	if err != nil {
-		j.mu.Unlock()
+		j.sealedMu.Unlock()
 		return report, err
 	}
 	defer func() {
 		releaseFileLock(lock)
-		j.mu.Unlock()
+		j.sealedMu.Unlock()
 	}()
 	for _, candidate := range candidates {
 		if err := ctxError(ctx); err != nil {
@@ -948,17 +992,44 @@ type Selector struct {
 	Limit         int
 }
 
+// lockJournalExclusive takes both storage locks in the canonical order —
+// events.lock before append.lock (sealedMu before appendMu in-process) — for
+// operations that need a consistent view spanning the sealed namespace and
+// the active segment. Release with unlockJournalExclusive.
+func (j *Journal) lockJournalExclusive(ctx context.Context) (sealed, active *os.File, err error) {
+	j.sealedMu.Lock()
+	sealed, err = acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	if err != nil {
+		j.sealedMu.Unlock()
+		return nil, nil, err
+	}
+	j.appendMu.Lock()
+	active, err = acquireFileLock(ctx, j.appendLock, j.opts.LockTimeout)
+	if err != nil {
+		j.appendMu.Unlock()
+		releaseFileLock(sealed)
+		j.sealedMu.Unlock()
+		return nil, nil, err
+	}
+	return sealed, active, nil
+}
+
+func (j *Journal) unlockJournalExclusive(sealed, active *os.File) {
+	releaseFileLock(active)
+	j.appendMu.Unlock()
+	releaseFileLock(sealed)
+	j.sealedMu.Unlock()
+}
+
 func (j *Journal) Read(ctx context.Context, selector Selector) ([]TraceEnvelope, error) {
 	if j == nil {
 		return nil, errors.New("diagnostics: nil journal")
 	}
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	sealed, active, err := j.lockJournalExclusive(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer releaseFileLock(lock)
+	defer j.unlockJournalExclusive(sealed, active)
 	if _, err := repairJSONLTail(j.current, j.opts.Now()); err != nil {
 		return nil, err
 	}
@@ -993,13 +1064,11 @@ func (j *Journal) ReadTolerant(ctx context.Context, selector Selector) (ReadRepo
 	if j == nil {
 		return report, errors.New("diagnostics: nil journal")
 	}
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	sealed, active, err := j.lockJournalExclusive(ctx)
 	if err != nil {
 		return report, err
 	}
-	defer releaseFileLock(lock)
+	defer j.unlockJournalExclusive(sealed, active)
 	files, err := j.segmentFilesLocked(true)
 	if err != nil {
 		return report, err
@@ -1032,13 +1101,11 @@ func (j *Journal) Inspect(ctx context.Context) (JournalHealth, error) {
 	if j == nil {
 		return health, errors.New("diagnostics: nil journal")
 	}
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	sealed, active, err := j.lockJournalExclusive(ctx)
 	if err != nil {
 		return health, err
 	}
-	defer releaseFileLock(lock)
+	defer j.unlockJournalExclusive(sealed, active)
 	files, err := j.segmentFilesLocked(true)
 	if err != nil {
 		return health, err
@@ -1048,6 +1115,10 @@ func (j *Journal) Inspect(ctx context.Context) (JournalHealth, error) {
 		corrupt, readErr := readJSONLTolerant(file.path, func(envelope TraceEnvelope) {
 			health.Records++
 			schemas[envelope.SchemaVersion] = struct{}{}
+			if !envelope.ObservedAt.IsZero() &&
+				(health.EarliestObservedAt.IsZero() || envelope.ObservedAt.Before(health.EarliestObservedAt)) {
+				health.EarliestObservedAt = envelope.ObservedAt
+			}
 			if envelope.ObservedAt.After(health.LatestObservedAt) {
 				health.LatestObservedAt = envelope.ObservedAt
 			}
@@ -1104,8 +1175,16 @@ func (s Selector) matches(envelope TraceEnvelope) bool {
 	if !s.Before.IsZero() && envelope.ObservedAt.After(s.Before) {
 		return false
 	}
-	if s.TraceID != "" && envelope.TraceID != s.TraceID || s.RequestID != "" && envelope.RequestID != s.RequestID ||
-		s.Harness != "" && envelope.Harness != s.Harness || s.Profile != "" && envelope.Profile != s.Profile ||
+	// Coalesced records (renderer stages) carry one primary trace/request ID
+	// plus the full causal set in trace_ids/request_ids evidence lists; an
+	// exact-ID selector must match through either representation.
+	if s.TraceID != "" && envelope.TraceID != s.TraceID && !envelopeHasEvidenceID(envelope, s.TraceID, "trace_ids") {
+		return false
+	}
+	if s.RequestID != "" && envelope.RequestID != s.RequestID && !envelopeHasEvidenceID(envelope, s.RequestID, "request_ids") {
+		return false
+	}
+	if s.Harness != "" && envelope.Harness != s.Harness || s.Profile != "" && envelope.Profile != s.Profile ||
 		s.SessionID != "" && envelope.SessionID != s.SessionID || s.WindowID != 0 && envelope.WindowID != s.WindowID ||
 		s.RunID != "" && envelope.RunID != s.RunID {
 		return false

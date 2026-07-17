@@ -223,7 +223,21 @@ func (h *Handler) recordRenderGeneration(trace RenderGenerationTrace, windowID i
 	if h == nil || h.decisionJournal == nil || trace.Generation == 0 {
 		return
 	}
-	evidence := map[string]string{
+	// Exactly one record per (generation, stage): coalesced causal IDs travel
+	// in the trace_ids/request_ids evidence lists, and Selector matching
+	// resolves TraceID/RequestID queries against those lists, so per-ID
+	// duplicate records are unnecessary volume.
+	envelope := diagnostics.NewEnvelope("daemon.renderer." + trace.Stage)
+	if len(trace.TraceIDs) > 0 {
+		envelope.TraceID = trace.TraceIDs[0]
+	}
+	if len(trace.RequestIDs) > 0 {
+		envelope.RequestID = trace.RequestIDs[0]
+	}
+	envelope.WindowID = windowID
+	envelope.Outcome = trace.Outcome
+	envelope.Reason = trace.Reason
+	envelope.Evidence = map[string]string{
 		"generation":         fmt.Sprint(trace.Generation),
 		"source_generations": formatUint64List(trace.SourceGenerations),
 		"trace_ids":          strings.Join(trace.TraceIDs, ","),
@@ -232,30 +246,7 @@ func (h *Handler) recordRenderGeneration(trace RenderGenerationTrace, windowID i
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	recordCount := len(trace.TraceIDs)
-	if len(trace.RequestIDs) > recordCount {
-		recordCount = len(trace.RequestIDs)
-	}
-	if recordCount == 0 {
-		recordCount = 1
-	}
-	for i := 0; i < recordCount; i++ {
-		if ctx.Err() != nil {
-			break
-		}
-		envelope := diagnostics.NewEnvelope("daemon.renderer." + trace.Stage)
-		if i < len(trace.TraceIDs) {
-			envelope.TraceID = trace.TraceIDs[i]
-		}
-		if i < len(trace.RequestIDs) {
-			envelope.RequestID = trace.RequestIDs[i]
-		}
-		envelope.WindowID = windowID
-		envelope.Outcome = trace.Outcome
-		envelope.Reason = trace.Reason
-		envelope.Evidence = evidence
-		h.decisionJournal.TryAppend(ctx, envelope)
-	}
+	h.decisionJournal.TryAppend(ctx, envelope)
 }
 
 func (h *Handler) recordRenderGenerationBounded(trace RenderGenerationTrace, windowID int) {

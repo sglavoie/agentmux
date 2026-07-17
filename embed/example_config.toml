@@ -136,6 +136,11 @@ recent_messages = 12
 journal_enabled = true
 journal_keep_days = 14
 journal_max_mib = 256
+# journal_detail controls hook-client journal volume. "standard" (the default)
+# suppresses healthy intermediate hook stages so each hook event costs a few
+# records: hook.delivery and every error/rejection/degraded outcome are always
+# written. "full" restores every per-stage success record for deep debugging.
+journal_detail = "standard"
 native_logging = true
 native_keep_days = 14
 native_max_mib = 1024

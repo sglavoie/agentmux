@@ -246,6 +246,96 @@ func TestCollectStatusEmitsEmptyLastSeenEventsWhenJournalHealthyButEmpty(t *test
 	}
 }
 
+func TestCollectStatusReportsHookDeliveryFailuresInTrailingHour(t *testing.T) {
+	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
+	for _, fixture := range []struct {
+		stage, requestID, outcome string
+		observedAt                time.Time
+	}{
+		// req "exhausted": a failed attempt plus a terminal failure delivery and
+		// its hook.failure — counts exactly once for the request.
+		{"hook.ipc_attempt", "exhausted", "error", now.Add(-10 * time.Minute)},
+		{"hook.failure", "exhausted", "error", now.Add(-9 * time.Minute)},
+		{"hook.delivery", "exhausted", "retryable_failure", now.Add(-9 * time.Minute)},
+		// req "retry-ok": a transient attempt error resolved by a later success —
+		// never counts as a dropped delivery.
+		{"hook.ipc_attempt", "retry-ok", "error", now.Add(-6 * time.Minute)},
+		{"hook.ipc_attempt", "retry-ok", "success", now.Add(-5 * time.Minute)},
+		{"hook.delivery", "retry-ok", "accepted", now.Add(-5 * time.Minute)},
+		// req "old": a terminal failure older than the trailing hour is excluded
+		// from the count but still anchors the journal's earliest horizon.
+		{"hook.delivery", "old", "permanent_failure", now.Add(-3 * time.Hour)},
+	} {
+		record := diagnostics.NewEnvelope(fixture.stage)
+		record.Harness = harness.Claude
+		record.RequestID = fixture.requestID
+		record.Outcome = fixture.outcome
+		record.ObservedAt = fixture.observedAt
+		if err := journal.Append(context.Background(), record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	enabled := true
+	disabled := false
+	cfg := &config.Config{Defaults: config.Defaults{Diagnostics: config.DiagnosticsConfig{
+		JournalEnabled: &enabled, NativeLogging: &disabled,
+	}}}
+	report, err := CollectStatus(context.Background(), StatusOptions{
+		Config: cfg, Paths: paths, Journal: journal, Daemon: testHealthClient{},
+		AMXBin: "/tmp/amx", CLIBuild: buildinfo.Info{Version: "test"}, Now: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failures := report.Hooks.DeliveryFailures
+	if failures == nil || failures.Count != 1 || failures.LatestAt == nil || !failures.LatestAt.Equal(now.Add(-9*time.Minute)) {
+		t.Fatalf("delivery failures = %+v, want count 1 latest %s", failures, now.Add(-9*time.Minute))
+	}
+	if !hasFinding(report.Findings, "hook_delivery_failures") {
+		t.Fatalf("findings = %+v, want hook_delivery_failures warning", report.Findings)
+	}
+	for _, finding := range report.Findings {
+		if finding.Check == "hook_delivery_failures" && finding.Verdict != VerdictWarning {
+			t.Fatalf("hook_delivery_failures verdict = %s, want warning", finding.Verdict)
+		}
+	}
+	if !report.Journal.Health.EarliestObservedAt.Equal(now.Add(-3 * time.Hour)) {
+		t.Fatalf("journal earliest observed = %s, want %s", report.Journal.Health.EarliestObservedAt, now.Add(-3*time.Hour))
+	}
+
+	// A journal without error-outcome delivery records reports zero and no finding.
+	quietPaths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	quietJournal, err := diagnostics.NewJournal(quietPaths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	quiet := diagnostics.NewEnvelope("hook.delivery")
+	quiet.Harness = harness.Claude
+	quiet.Outcome = "accepted"
+	quiet.ObservedAt = now.Add(-5 * time.Minute)
+	if err := quietJournal.Append(context.Background(), quiet); err != nil {
+		t.Fatal(err)
+	}
+	report, err = CollectStatus(context.Background(), StatusOptions{
+		Config: cfg, Paths: quietPaths, Journal: quietJournal, Daemon: testHealthClient{},
+		AMXBin: "/tmp/amx", CLIBuild: buildinfo.Info{Version: "test"}, Now: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failures := report.Hooks.DeliveryFailures; failures == nil || failures.Count != 0 || failures.LatestAt != nil {
+		t.Fatalf("quiet delivery failures = %+v, want count 0 without latest", failures)
+	}
+	if hasFinding(report.Findings, "hook_delivery_failures") {
+		t.Fatalf("findings = %+v, want no hook_delivery_failures finding", report.Findings)
+	}
+}
+
 func TestInspectNativeFindsManagedAndUnmanagedSessions(t *testing.T) {
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	if err := paths.Ensure(); err != nil {

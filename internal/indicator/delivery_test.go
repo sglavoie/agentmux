@@ -10,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
@@ -498,6 +500,83 @@ func hookPayloadFile(t *testing.T, payload string) *os.File {
 	return stdin
 }
 
+func TestDeliverResolvesProducerConfigDirFromEnvAndStampsEvidence(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
+	configDir := filepath.Join(t.TempDir(), "claude-personal")
+	t.Setenv("CLAUDE_CONFIG_DIR", configDir+string(os.PathSeparator))
+
+	oldDiscovery := discoverHarnessProcessForDelivery
+	discoverHarnessProcessForDelivery = func(string) HarnessProcessDiscovery { return HarnessProcessDiscovery{} }
+	t.Cleanup(func() { discoverHarnessProcessForDelivery = oldDiscovery })
+
+	client := &fakeDaemonClient{resp: daemon.Response{OK: true, Delivery: &daemon.DeliveryAcknowledgement{
+		SchemaVersion: 1, Status: daemon.DeliveryAcknowledgementAccepted, Reason: "accepted", Profile: "personal-codex",
+	}}}
+	result := deliverFromStdinWithDeps(
+		"PreToolUse", 42, "claude", "/tmp/amx", DeliveryOptions{RequestID: "producer-config-dir"},
+		hookPayloadFile(t, `{"session_id":"producer-session"}`), client,
+	)
+	if result.Status != DeliveryAccepted || client.calls != 1 {
+		t.Fatalf("delivery result = %+v, calls = %d", result, client.calls)
+	}
+	if got := client.reqs[0].ProducerConfigDir; got != configDir {
+		t.Fatalf("request producer config dir = %q, want cleaned %q", got, configDir)
+	}
+
+	paths, err := diagnostics.DefaultPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := journal.Read(context.Background(), diagnostics.Selector{RequestID: "producer-config-dir"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) == 0 {
+		t.Fatal("no journal records for delivery")
+	}
+	var sawDelivery bool
+	for _, record := range records {
+		if !strings.HasPrefix(record.Stage, "hook.") {
+			continue
+		}
+		if record.Evidence["config_dir"] != configDir {
+			t.Errorf("stage %s config_dir = %q, want %q", record.Stage, record.Evidence["config_dir"], configDir)
+		}
+		if record.Stage == "hook.delivery" {
+			sawDelivery = true
+			if record.Profile != "personal-codex" || record.Evidence["routed_profile"] != "personal-codex" {
+				t.Errorf("delivery record profile = %q routed_profile = %q, want routed ack profile on both", record.Profile, record.Evidence["routed_profile"])
+			}
+		}
+	}
+	if !sawDelivery {
+		t.Fatalf("journal records lack hook.delivery: %+v", records)
+	}
+}
+
+func TestResolveProducerConfigDirFallbacksAndUnknownHarness(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	if got, want := resolveProducerConfigDir("claude"), filepath.Clean(harness.DefaultHomeDir("claude")); got != want {
+		t.Fatalf("default home resolution = %q, want %q", got, want)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", "~/claude-home/")
+	if got, want := resolveProducerConfigDir("claude"), filepath.Clean(config.ExpandTilde("~/claude-home")); got != want {
+		t.Fatalf("tilde env resolution = %q, want %q", got, want)
+	}
+	if got := resolveProducerConfigDir("future-harness"); got != "" {
+		t.Fatalf("unknown harness config dir = %q, want empty", got)
+	}
+	if got := resolveProducerConfigDir(""); got != "" {
+		t.Fatalf("empty harness config dir = %q, want empty", got)
+	}
+}
+
 func TestDeliverPayloadWithDepsStructuredOutcomes(t *testing.T) {
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 
@@ -589,7 +668,7 @@ func TestHookProcessDetectionJournalsCompleteDegradedAndAbsentIdentity(t *testin
 		t.Fatal(err)
 	}
 	recorder := &deliveryRecorder{
-		journal: journal, traceID: "trace-process", requestID: "request-process",
+		journal: journal, detailFull: true, traceID: "trace-process", requestID: "request-process",
 		event: "PreToolUse", harness: "claude", windowID: 42,
 	}
 	recorder.recordProcessDetection(HarnessProcessDiscovery{
@@ -623,16 +702,16 @@ func TestHookProcessDetectionJournalsCompleteDegradedAndAbsentIdentity(t *testin
 	}
 }
 
-func TestDeliverPersistsEveryOutsideKittyExitStage(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("AMX_CONFIG", t.TempDir()+"/missing-config.toml")
+func deliverOutsideKitty(t *testing.T) (DeliveryResult, []diagnostics.TraceEnvelope, string) {
+	t.Helper()
 	t.Setenv("KITTY_LISTEN_ON", "")
 
+	const payload = `{"source_event_id":"source-1"}`
 	stdin, err := os.CreateTemp(t.TempDir(), "hook-payload-*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := stdin.WriteString(`{"source_event_id":"source-1"}`); err != nil {
+	if _, err := stdin.WriteString(payload); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := stdin.Seek(0, 0); err != nil {
@@ -663,6 +742,43 @@ func TestDeliverPersistsEveryOutsideKittyExitStage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return result, records, payload
+}
+
+func TestDeliverStandardDetailSamplesSuccessStagesAndStampsDelivery(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("AMX_CONFIG", t.TempDir()+"/missing-config.toml")
+
+	_, records, payload := deliverOutsideKitty(t)
+	stages := map[string]diagnostics.TraceEnvelope{}
+	for _, record := range records {
+		stages[record.Stage] = record
+	}
+	for _, stage := range []string{"hook.kitty_detection", "hook.delivery"} {
+		if _, ok := stages[stage]; !ok {
+			t.Errorf("missing always-written stage %q in %+v", stage, records)
+		}
+	}
+	for _, stage := range []string{"hook.payload_read", "hook.validation"} {
+		if _, ok := stages[stage]; ok {
+			t.Errorf("success-class stage %q not sampled away at standard detail: %+v", stage, records)
+		}
+	}
+	delivery := stages["hook.delivery"]
+	if delivery.PayloadHMAC == "" || delivery.PayloadSize != int64(len(payload)) {
+		t.Fatalf("hook.delivery payload identity = hmac:%q size:%d, want stamped from sampled payload_read", delivery.PayloadHMAC, delivery.PayloadSize)
+	}
+}
+
+func TestDeliverFullDetailPersistsEveryOutsideKittyExitStage(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("[defaults.diagnostics]\njournal_detail = \"full\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AMX_CONFIG", configPath)
+
+	_, records, _ := deliverOutsideKitty(t)
 	wantStages := map[string]bool{
 		"hook.payload_read":    false,
 		"hook.validation":      false,
@@ -676,7 +792,70 @@ func TestDeliverPersistsEveryOutsideKittyExitStage(t *testing.T) {
 	}
 	for stage, found := range wantStages {
 		if !found {
-			t.Errorf("missing stage %q in %+v", stage, records)
+			t.Errorf("missing stage %q at full detail in %+v", stage, records)
+		}
+	}
+}
+
+func TestHookRecorderStandardDetailKeepsEveryNonSuccessOutcome(t *testing.T) {
+	paths := diagnostics.PathsForRoot(t.TempDir())
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := &deliveryRecorder{
+		journal: journal, traceID: "trace-sample", requestID: "request-sample",
+		event: "PreToolUse", harness: "claude", windowID: 42,
+	}
+	// Success-class intermediates are suppressed at standard detail.
+	recorder.recordProcessDetection(HarnessProcessDiscovery{
+		Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026", Trackable: true,
+	})
+	recorder.recordProcessDetection(HarnessProcessDiscovery{})
+	recorder.record("hook.kitty_detection", "success", "kitty_detected", nil, 0)
+	recorder.record("hook.validation", "success", "payload_valid", nil, 0)
+	recorder.record("hook.acknowledgement", "success", "accepted", nil, 0)
+	// Non-success-class outcomes are never sampled.
+	recorder.recordProcessDetection(HarnessProcessDiscovery{Harness: "claude", PID: 4243})
+	recorder.record("hook.validation", "rejected", "invalid_payload", nil, 0)
+	recorder.record("hook.ipc_attempt", "error", "dial unix: no such file", nil, 0)
+
+	records, err := journal.Read(context.Background(), diagnostics.Selector{RequestID: "request-sample"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("standard-detail records = %+v, want only the degraded/rejected/error outcomes", records)
+	}
+	wantOutcomes := map[string]string{
+		"hook.process_detection": "degraded",
+		"hook.validation":        "rejected",
+		"hook.ipc_attempt":       "error",
+	}
+	for _, record := range records {
+		if wantOutcomes[record.Stage] != record.Outcome {
+			t.Errorf("persisted record = %s/%s, want %+v", record.Stage, record.Outcome, wantOutcomes)
+		}
+	}
+}
+
+func TestNewDeliveryRecorderReadsJournalDetailFromConfig(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	for _, tc := range []struct {
+		detail   string
+		wantFull bool
+	}{
+		{detail: "full", wantFull: true},
+		{detail: "standard", wantFull: false},
+	} {
+		configPath := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(configPath, []byte("[defaults.diagnostics]\njournal_detail = \""+tc.detail+"\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("AMX_CONFIG", configPath)
+		recorder := newDeliveryRecorder("trace-detail", "request-detail", "Stop", "claude", 42)
+		if recorder.detailFull != tc.wantFull {
+			t.Fatalf("journal_detail %q → detailFull = %t, want %t", tc.detail, recorder.detailFull, tc.wantFull)
 		}
 	}
 }

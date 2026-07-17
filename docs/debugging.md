@@ -78,9 +78,32 @@ converge as ordinary maintenance runs.
 
 Schema-v2 `status`, `tail`, `explain`, and bundle evidence carry the shared
 `journal_snapshot` object. It reports `segment_files_read`,
-`spool_files_read`, `bytes_scanned`, `records_scanned`, `records_matched`,
-`duplicates_omitted`, and `corrupt_lines`. `records_matched` is counted before
-an output limit is applied.
+`promoted_spool_files_read`, `spool_files_read`, `bytes_scanned`,
+`records_scanned`, `records_matched`, `duplicates_omitted`, and
+`corrupt_lines`. `records_matched` is counted before an output limit is
+applied. Promoted `events-spool-*` files live in the journal directory and are
+counted as segments; `promoted_spool_files_read` is the promoted subset, while
+`spool_files_read` covers only not-yet-promoted spool-directory files. Journal
+health additionally reports `earliest_observed_at` beside `latest_observed_at`
+so consumers can judge how far back the retained history actually reaches.
+
+When the journal horizon is shorter than a profile's hook verification window,
+hook status reports the `last_seen_horizon` issue instead of claiming
+`last_seen_missing`: pruned history cannot prove that hooks are silent. The
+status hooks report also carries `delivery_failures` (`count`, `latest_at`),
+counting one terminally failed delivery per request in the trailing hour,
+surfaced as the stable warning finding `hook_delivery_failures` and as a doctor
+summary line. Each request is terminalized exactly once: `hook.delivery` is the
+authoritative terminal record and its outcome decides success or failure, while
+an error-outcome `hook.failure` marks a request failed only as a legacy fallback
+when no correlated `hook.delivery` exists. Intermediate error-outcome
+`hook.ipc_attempt` records are ignored, so a transient transport error that a
+later successful or duplicate terminal delivery resolves never contributes to
+the count. Expect the warning to fire for up to an hour after a daemon restart:
+the daemon client performs bounded auto-start retries within the hook
+invocation's auto-start budget, but once that invocation exits there is no
+durable retry queue, so deliveries that never reached a live daemon in time are
+dropped by design.
 
 `tail --last N` merges all captured evidence, sorts by `observed_at` with stable
 identity tie-breakers, and then selects the newest N matching records. This is
@@ -154,11 +177,27 @@ launches and applies a grace period to newly created launch directories.
 journal_enabled = true
 journal_keep_days = 14
 journal_max_mib = 256
+journal_detail = "standard"
 native_logging = true
 native_keep_days = 14
 native_max_mib = 1024
 native_session_max_mib = 128
 ```
+
+At the default `journal_detail = "standard"`, the hook client samples healthy
+traffic: success-class intermediate stages (`hook.kitty_detection`,
+`hook.window_resolution`, `hook.payload_read`, `hook.validation`,
+`hook.process_detection`, `hook.capture`, `hook.ipc_attempt`,
+`hook.acknowledgement`) are not persisted, so one healthy hook event costs a
+few journal records instead of a dozen. `hook.delivery` is always written and
+carries the payload byte count and HMAC, and every error, rejection, or
+degraded outcome on any stage is always written. Renderer stages likewise emit
+one record per (generation, stage); coalesced trace/request IDs live in the
+`trace_ids`/`request_ids` evidence lists and exact-ID selectors match through
+them. As a consequence, `amx debug tail --stage hook.validation` (or any other
+intermediate stage) shows few or no rows on healthy traffic — failures still
+appear there. Set `journal_detail = "full"` to restore every per-stage success
+record while reproducing a problem.
 
 Set `native_logging = false` to opt out of AgentMux-managed raw logging. An
 explicit harness logging flag or environment setting always wins; `amx debug

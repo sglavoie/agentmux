@@ -105,13 +105,25 @@ func (e *activationEvaluator) evaluate(account config.Account, override config.A
 		addActivationIssue(status, ActivationUnverified, "last_seen_unavailable", "recent hook evidence unavailable: "+e.evidenceErr.Error(), "")
 		return
 	}
-	lastSeen := e.evidence.latest(account.EffectiveHarness(), account.Name)
+	evidenceHome := config.ExpandTilde(account.EffectiveHomeDir())
+	lastSeen := e.evidence.latestForHome(account.EffectiveHarness(), evidenceHome)
 	if lastSeen.IsZero() {
-		addActivationIssue(status, ActivationUnverified, "last_seen_missing", "no hook event has been observed in the diagnostic journal", "")
+		window := lastSeenWindow(e.cfg, account)
+		// A journal whose oldest record is younger than the verification window
+		// cannot prove silence: older hook evidence may simply have been pruned.
+		// Only an empty journal or one that covers the window justifies the
+		// stronger "missing" claim.
+		if horizon, journalNonEmpty := e.evidence.Horizon(e.now); journalNonEmpty && horizon < window {
+			addActivationIssue(status, ActivationUnverified, "last_seen_horizon", fmt.Sprintf(
+				"journal horizon (%s) is shorter than the hook verification window (%s); older hook evidence for home dir %s may have been pruned",
+				formatActivationWindow(horizon), formatActivationWindow(window), evidenceHome), "")
+		} else {
+			addActivationIssue(status, ActivationUnverified, "last_seen_missing", fmt.Sprintf("no hook event has been observed in the diagnostic journal for home dir %s", evidenceHome), "")
+		}
 	} else {
 		status.LastSeen = lastSeen
 		if age := e.now.Sub(lastSeen); age > lastSeenWindow(e.cfg, account) {
-			addActivationIssue(status, ActivationUnverified, "last_seen_stale", fmt.Sprintf("last hook evidence is stale (%s ago)", age.Round(time.Second)), "")
+			addActivationIssue(status, ActivationUnverified, "last_seen_stale", fmt.Sprintf("last hook evidence for home dir %s is stale (%s ago)", evidenceHome, age.Round(time.Second)), "")
 		}
 	}
 }
@@ -197,6 +209,20 @@ func lastSeenWindow(cfg *config.Config, account config.Account) time.Duration {
 		return defaultLastSeenWindow
 	}
 	return time.Duration(seconds) * time.Second
+}
+
+// formatActivationWindow trims whole hours/minutes ("4h", "12m") so horizon
+// messages stay readable; uneven durations fall back to Duration.String.
+func formatActivationWindow(d time.Duration) string {
+	d = d.Round(time.Second)
+	switch {
+	case d >= time.Hour && d%time.Hour == 0:
+		return fmt.Sprintf("%dh", d/time.Hour)
+	case d >= time.Minute && d%time.Minute == 0:
+		return fmt.Sprintf("%dm", d/time.Minute)
+	default:
+		return d.String()
+	}
 }
 
 func probeHarnessVersion(ctx context.Context, executable string) (string, error) {

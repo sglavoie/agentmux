@@ -68,17 +68,25 @@ type Defaults struct {
 // preserve the difference between an omitted key (the safe observable default
 // is enabled) and an explicit false value.
 type DiagnosticsConfig struct {
-	JournalEnabled      *bool `toml:"journal_enabled"`
-	JournalKeepDays     int   `toml:"journal_keep_days"`
-	JournalMaxMiB       int   `toml:"journal_max_mib"`
-	NativeLogging       *bool `toml:"native_logging"`
-	NativeKeepDays      int   `toml:"native_keep_days"`
-	NativeMaxMiB        int   `toml:"native_max_mib"`
-	NativeSessionMaxMiB int   `toml:"native_session_max_mib"`
+	JournalEnabled      *bool  `toml:"journal_enabled"`
+	JournalKeepDays     int    `toml:"journal_keep_days"`
+	JournalMaxMiB       int    `toml:"journal_max_mib"`
+	JournalDetail       string `toml:"journal_detail"` // "standard" (default) samples success-path hook stages; "full" persists every stage
+	NativeLogging       *bool  `toml:"native_logging"`
+	NativeKeepDays      int    `toml:"native_keep_days"`
+	NativeMaxMiB        int    `toml:"native_max_mib"`
+	NativeSessionMaxMiB int    `toml:"native_session_max_mib"`
 }
 
 func (d DiagnosticsConfig) JournalEnabledValue() bool {
 	return d.JournalEnabled == nil || *d.JournalEnabled
+}
+
+// JournalDetailFullValue reports whether journal_detail requests unsampled
+// per-stage hook persistence. Anything other than an explicit "full" keeps the
+// sampled "standard" detail so diagnostics remain fail-open on bad input.
+func (d DiagnosticsConfig) JournalDetailFullValue() bool {
+	return strings.EqualFold(strings.TrimSpace(d.JournalDetail), "full")
 }
 
 func (d DiagnosticsConfig) NativeLoggingValue() bool {

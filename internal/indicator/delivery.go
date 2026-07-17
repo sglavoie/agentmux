@@ -3,6 +3,7 @@ package indicator
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -67,12 +68,16 @@ type observedDaemonClient interface {
 type deliveryRecorder struct {
 	journal                 *diagnostics.Journal
 	capture                 bool
+	detailFull              bool
 	payloadCaptureAttempted bool
 	payloadCaptured         bool
 	traceID                 string
 	requestID               string
 	event                   string
 	harness                 string
+	configDir               string
+	payloadHMAC             string
+	payloadSize             int64
 	windowID                int
 }
 
@@ -81,6 +86,7 @@ func newDeliveryRecorder(traceID, requestID, event, producerHarness string, wind
 		traceID: traceID, requestID: requestID, event: strings.TrimSpace(event),
 		harness: canonicalHarness(producerHarness), windowID: windowID, capture: true,
 	}
+	recorder.configDir = resolveProducerConfigDir(recorder.harness)
 	paths, err := diagnostics.DefaultPaths()
 	if err != nil {
 		return recorder
@@ -90,6 +96,7 @@ func newDeliveryRecorder(traceID, requestID, event, producerHarness string, wind
 		if !cfg.Defaults.Diagnostics.JournalEnabledValue() {
 			return recorder
 		}
+		recorder.detailFull = cfg.Defaults.Diagnostics.JournalDetailFullValue()
 		options.KeepDays = cfg.Defaults.Diagnostics.JournalKeepDays
 		options.MaxBytes = int64(cfg.Defaults.Diagnostics.JournalMaxMiB) << 20
 	}
@@ -107,6 +114,25 @@ func canonicalHarness(value string) string {
 	return strings.TrimSpace(value)
 }
 
+// resolveProducerConfigDir resolves the producing harness's home/config
+// directory from its config env var (visible because the hook client runs
+// inside the harness process environment), falling back to the harness
+// default. Normalization matches the config side: tilde expansion plus
+// filepath.Clean, without resolving symlinks.
+func resolveProducerConfigDir(harnessName string) string {
+	if harness.NormalizeKnown(harnessName) == "" {
+		return ""
+	}
+	dir := strings.TrimSpace(getenv(harness.EnvVar(harnessName)))
+	if dir == "" {
+		dir = harness.DefaultHomeDir(harnessName)
+	}
+	if dir == "" {
+		return ""
+	}
+	return filepath.Clean(config.ExpandTilde(dir))
+}
+
 func (r *deliveryRecorder) envelope(stage, outcome, reason string, evidence map[string]string, latencyMS float64) diagnostics.TraceEnvelope {
 	envelope := diagnostics.NewEnvelope(stage)
 	envelope.TraceID = r.traceID
@@ -116,17 +142,50 @@ func (r *deliveryRecorder) envelope(stage, outcome, reason string, evidence map[
 	envelope.Outcome = outcome
 	envelope.Reason = reason
 	envelope.LatencyMS = latencyMS
+	if r.configDir != "" {
+		if evidence == nil {
+			evidence = make(map[string]string)
+		}
+		evidence["config_dir"] = r.configDir
+	}
 	envelope.Evidence = evidence
 	return envelope
+}
+
+func (r *deliveryRecorder) producerConfigDir() string {
+	if r == nil {
+		return ""
+	}
+	return r.configDir
 }
 
 func (r *deliveryRecorder) append(envelope diagnostics.TraceEnvelope) {
 	if r == nil || r.journal == nil {
 		return
 	}
+	if !r.shouldPersist(envelope) {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	r.journal.TryAppend(ctx, envelope)
+}
+
+// shouldPersist applies journal_detail sampling before the fail-open append.
+// hook.delivery is always written: it is the terminal per-event record and the
+// activation-evidence anchor. Every non-success-class outcome (error, failed,
+// rejected, degraded, retryable_failure, permanent_failure, ...) is always
+// written; only healthy intermediate stages are suppressed at standard detail.
+func (r *deliveryRecorder) shouldPersist(envelope diagnostics.TraceEnvelope) bool {
+	if r.detailFull || envelope.Stage == "hook.delivery" {
+		return true
+	}
+	switch envelope.Outcome {
+	case "success", "accepted", "absent":
+		return false
+	default:
+		return true
+	}
 }
 
 func (r *deliveryRecorder) record(stage, outcome, reason string, evidence map[string]string, latencyMS float64) {
@@ -173,6 +232,10 @@ func (r *deliveryRecorder) recordPayload(payload []byte, outcome, reason string)
 		r.journal.ProtectPayload(&envelope, payload)
 		hmac = envelope.PayloadHMAC
 	}
+	// Stash the payload identity so the always-written hook.delivery record
+	// retains it even when this success-path stage is sampled away.
+	r.payloadHMAC = hmac
+	r.payloadSize = size
 	r.append(envelope)
 	return size, hmac
 }
@@ -181,21 +244,24 @@ func (r *deliveryRecorder) complete(result DeliveryResult) {
 	if r == nil {
 		return
 	}
-	if ack := result.DaemonAcknowledgement; ack != nil {
+	evidence := map[string]string{"retryable": fmt.Sprint(result.Retryable)}
+	if r.event != "" {
+		evidence["event"] = r.event
+	}
+	ack := result.DaemonAcknowledgement
+	if ack != nil {
 		if ack.ProducerHarness != "" {
 			r.harness = canonicalHarness(ack.ProducerHarness)
 		}
-		envelope := r.envelope("hook.delivery", string(result.Status), result.Reason, map[string]string{
-			"event":     r.event,
-			"retryable": fmt.Sprint(result.Retryable),
-		}, result.LatencyMS)
-		envelope.Profile = ack.Profile
-		r.append(envelope)
-		return
+		evidence["routed_profile"] = ack.Profile
 	}
-	r.record("hook.delivery", string(result.Status), result.Reason, map[string]string{
-		"retryable": fmt.Sprint(result.Retryable),
-	}, result.LatencyMS)
+	envelope := r.envelope("hook.delivery", string(result.Status), result.Reason, evidence, result.LatencyMS)
+	if ack != nil {
+		envelope.Profile = ack.Profile
+	}
+	envelope.PayloadHMAC = r.payloadHMAC
+	envelope.PayloadSize = r.payloadSize
+	r.append(envelope)
 }
 
 func (r *deliveryRecorder) captureRawPayload(event string, windowID int, producerHarness, payloadJSON string, truncated bool) {
@@ -297,24 +363,25 @@ func deliverPayloadWithDeps(
 	}
 
 	req := daemon.Request{
-		Type:            daemon.TypeHookEvent,
-		RequestID:       requestID,
-		TraceID:         traceID,
-		SourceEventID:   sourceEventID,
-		PayloadSize:     payloadSize,
-		PayloadHMAC:     payloadHMAC,
-		PayloadEncoding: payloadEncoding,
-		PayloadCaptured: recorder.payloadCaptured,
-		ProducerHarness: producerHarness,
-		HarnessProcess:  harnessProcess,
-		WindowID:        resolvedWindowID,
-		Event:           event,
-		Harness:         producerHarness,
-		PayloadJSON:     payloadJSON,
-		KittyListenOn:   listenOn,
-		PipeMode:        pipeMode,
-		ContextLimit:    contextLimit,
-		ResetFlow:       resetFlow,
+		Type:              daemon.TypeHookEvent,
+		RequestID:         requestID,
+		TraceID:           traceID,
+		SourceEventID:     sourceEventID,
+		PayloadSize:       payloadSize,
+		PayloadHMAC:       payloadHMAC,
+		PayloadEncoding:   payloadEncoding,
+		PayloadCaptured:   recorder.payloadCaptured,
+		ProducerHarness:   producerHarness,
+		ProducerConfigDir: recorder.producerConfigDir(),
+		HarnessProcess:    harnessProcess,
+		WindowID:          resolvedWindowID,
+		Event:             event,
+		Harness:           producerHarness,
+		PayloadJSON:       payloadJSON,
+		KittyListenOn:     listenOn,
+		PipeMode:          pipeMode,
+		ContextLimit:      contextLimit,
+		ResetFlow:         resetFlow,
 	}
 
 	observer := func(stage daemon.DeliveryStageEvent) {

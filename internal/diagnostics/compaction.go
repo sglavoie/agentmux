@@ -16,7 +16,9 @@ import (
 
 const (
 	maxCompactionInputBytes int64 = 64 << 20
-	maxCompactionInputFiles       = 2048
+	// maxCompactionInputFiles bounds the per-commit unlink loop executed under
+	// the exclusive events.lock window; larger backlogs drain across passes.
+	maxCompactionInputFiles = 512
 )
 
 const compactionTempPrefix = ".events-compacting-"
@@ -148,15 +150,15 @@ func (j *Journal) captureCompactionCandidates(ctx context.Context) ([]compaction
 }
 
 func (j *Journal) captureCompactionCandidatesAfter(ctx context.Context, after *compactionCandidate) ([]compactionCandidate, error) {
-	j.mu.Lock()
-	lock, err := acquireSharedFileLock(ctx, j.lock, j.opts.LockTimeout)
+	j.sealedMu.Lock()
+	lock, err := acquireSharedFileLock(ctx, j.lock, j.opts.MaintenanceLockTimeout)
 	if err != nil {
-		j.mu.Unlock()
+		j.sealedMu.Unlock()
 		return nil, err
 	}
 	defer func() {
 		releaseFileLock(lock)
-		j.mu.Unlock()
+		j.sealedMu.Unlock()
 	}()
 
 	entries, err := os.ReadDir(j.paths.JournalDir)
@@ -425,9 +427,9 @@ func compactionOutputPaths(outputs []*preparedCompactionOutput, published bool) 
 // second process therefore cannot validate the same inputs after publication
 // but before cleanup and publish a duplicate copy.
 func (j *Journal) commitCompaction(ctx context.Context, candidates []compactionCandidate, outputs []*preparedCompactionOutput, report *MaintenanceReport, hooks compactionHooks) (bool, error) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock, err := acquireFileLock(ctx, j.lock, j.opts.LockTimeout)
+	j.sealedMu.Lock()
+	defer j.sealedMu.Unlock()
+	lock, err := acquireFileLock(ctx, j.lock, j.opts.MaintenanceLockTimeout)
 	if err != nil {
 		return false, err
 	}

@@ -206,8 +206,9 @@ func TestJournalSpoolsOnLockTimeoutAndReconciles(t *testing.T) {
 	// This test exercises fallback and reconciliation rather than the precise
 	// lock-wait budget. Leave enough scheduling headroom for the repository-wide
 	// package gate while still forcing the held journal lock to time out.
+	// Append is guarded only by append.lock, so that is the sidecar held here.
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 100 * time.Millisecond})
-	lockFile, err := os.OpenFile(filepath.Join(paths.JournalDir, "events.lock"), os.O_CREATE|os.O_RDWR, fileMode)
+	lockFile, err := os.OpenFile(filepath.Join(paths.JournalDir, "append.lock"), os.O_CREATE|os.O_RDWR, fileMode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -745,7 +746,7 @@ func TestJournalPrivatePermissionsHMACAndFailOpen(t *testing.T) {
 			t.Fatalf("directory %s mode = %v, err = %v", path, info.Mode().Perm(), err)
 		}
 	}
-	for _, path := range []string{paths.HMACKey, filepath.Join(paths.JournalDir, "events.jsonl"), filepath.Join(paths.JournalDir, "events.lock")} {
+	for _, path := range []string{paths.HMACKey, filepath.Join(paths.JournalDir, "events.jsonl"), filepath.Join(paths.JournalDir, "events.lock"), filepath.Join(paths.JournalDir, "append.lock")} {
 		info, err := os.Stat(path)
 		if err != nil || info.Mode().Perm() != fileMode {
 			t.Fatalf("file %s mode = %v, err = %v", path, info.Mode().Perm(), err)
@@ -804,6 +805,40 @@ func TestJournalSelectorsSanitizedEvidenceAndLimit(t *testing.T) {
 	bySourceEvent, err := journal.Read(context.Background(), Selector{SourceEventID: "source-2"})
 	if err != nil || len(bySourceEvent) != 1 || bySourceEvent[0].RequestID != "2" {
 		t.Fatalf("source-event records = %+v, err = %v", bySourceEvent, err)
+	}
+}
+
+func TestSelectorMatchesCoalescedTraceAndRequestIDEvidenceLists(t *testing.T) {
+	journal, _ := testJournal(t, JournalOptions{})
+	envelope := testEnvelope("daemon.renderer.rendered", "request-a")
+	envelope.TraceID = "trace-a"
+	envelope.Evidence = map[string]string{
+		"trace_ids":   "trace-a,trace-b",
+		"request_ids": "request-a,request-b",
+	}
+	if err := journal.Append(context.Background(), envelope); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name     string
+		selector Selector
+		want     int
+	}{
+		{name: "primary trace field", selector: Selector{TraceID: "trace-a"}, want: 1},
+		{name: "coalesced trace via evidence", selector: Selector{TraceID: "trace-b"}, want: 1},
+		{name: "unknown trace", selector: Selector{TraceID: "trace-c"}, want: 0},
+		{name: "primary request field", selector: Selector{RequestID: "request-a"}, want: 1},
+		{name: "coalesced request via evidence", selector: Selector{RequestID: "request-b"}, want: 1},
+		{name: "unknown request", selector: Selector{RequestID: "request-c"}, want: 0},
+		{name: "coalesced trace with stage filter", selector: Selector{TraceID: "trace-b", Stages: []string{"daemon.renderer.rendered"}}, want: 1},
+	} {
+		records, err := journal.Read(context.Background(), tc.selector)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if len(records) != tc.want {
+			t.Fatalf("%s: records = %+v, want %d", tc.name, records, tc.want)
+		}
 	}
 }
 
@@ -919,5 +954,203 @@ func TestDaemonLogWriterRotatesStructuredRecordsAndBootstrapIsPrivate(t *testing
 	info, err := os.Stat(bootstrapPath)
 	if err != nil || info.Mode().Perm() != fileMode {
 		t.Fatalf("bootstrap mode = %v, err = %v", info.Mode().Perm(), err)
+	}
+}
+
+func TestAppendDoesNotWaitOnSealedNamespaceLock(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	sealed, err := os.OpenFile(filepath.Join(paths.JournalDir, "events.lock"), os.O_RDWR, fileMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Flock(int(sealed.Fd()), unix.LOCK_EX); err != nil {
+		_ = sealed.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = unix.Flock(int(sealed.Fd()), unix.LOCK_UN)
+		_ = sealed.Close()
+	})
+
+	if err := journal.Append(context.Background(), testEnvelope("append.split", "sealed-held")); err != nil {
+		t.Fatalf("Append should not depend on events.lock: %v", err)
+	}
+	spools, _ := filepath.Glob(filepath.Join(paths.SpoolDir, "journal-*.jsonl"))
+	if len(spools) != 0 {
+		t.Fatalf("append fell back to spool while only events.lock was held: %v", spools)
+	}
+	data, err := os.ReadFile(paths.JournalFile)
+	if err != nil || !bytes.Contains(data, []byte("sealed-held")) {
+		t.Fatalf("active segment = %q, err = %v", data, err)
+	}
+}
+
+func TestReadTakesSealedThenAppendLockAndReleasesOnFailure(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{LockTimeout: 50 * time.Millisecond})
+	if err := journal.Append(context.Background(), testEnvelope("read.ordering", "seed")); err != nil {
+		t.Fatal(err)
+	}
+	holdLock := func(name string) *os.File {
+		t.Helper()
+		file, err := os.OpenFile(filepath.Join(paths.JournalDir, name), os.O_RDWR, fileMode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
+			_ = file.Close()
+			t.Fatal(err)
+		}
+		return file
+	}
+	release := func(file *os.File) {
+		_ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
+		_ = file.Close()
+	}
+
+	appendLock := holdLock("append.lock")
+	if _, err := journal.Read(context.Background(), Selector{}); !errors.Is(err, ErrLockTimeout) {
+		t.Fatalf("Read with append.lock held = %v, want %v", err, ErrLockTimeout)
+	}
+	// events.lock is acquired first, so the failed append.lock step must have
+	// released it again; a fresh exclusive claim proves that.
+	probe, err := os.OpenFile(filepath.Join(paths.JournalDir, "events.lock"), os.O_RDWR, fileMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Flock(int(probe.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		t.Fatalf("events.lock still held after failed Read: %v", err)
+	}
+	release(probe)
+	release(appendLock)
+
+	sealedLock := holdLock("events.lock")
+	if _, err := journal.Read(context.Background(), Selector{}); !errors.Is(err, ErrLockTimeout) {
+		t.Fatalf("Read with events.lock held = %v, want %v", err, ErrLockTimeout)
+	}
+	release(sealedLock)
+	records, err := journal.Read(context.Background(), Selector{Stages: []string{"read.ordering"}})
+	if err != nil || len(records) != 1 {
+		t.Fatalf("Read after releasing locks = %+v, err = %v", records, err)
+	}
+}
+
+func TestRotationUnderAppendLockProceedsDuringSharedSnapshotCapture(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{SegmentBytes: 1})
+	reader, err := os.OpenFile(filepath.Join(paths.JournalDir, "events.lock"), os.O_RDWR, fileMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A snapshot capture holds the sealed namespace shared; size-triggered
+	// rotation runs under append.lock and must not wait for it.
+	if err := unix.Flock(int(reader.Fd()), unix.LOCK_SH); err != nil {
+		_ = reader.Close()
+		t.Fatal(err)
+	}
+	const appendCount = 5
+	for i := 0; i < appendCount; i++ {
+		if err := journal.Append(context.Background(), testEnvelope("rotation.shared", strconv.Itoa(i))); err != nil {
+			t.Fatalf("append %d during shared capture = %v", i, err)
+		}
+	}
+	spools, _ := filepath.Glob(filepath.Join(paths.SpoolDir, "journal-*.jsonl"))
+	if len(spools) != 0 {
+		t.Fatalf("rotation-triggering appends fell back to spool: %v", spools)
+	}
+	rotated, _ := filepath.Glob(filepath.Join(paths.JournalDir, "events-*.jsonl"))
+	if len(rotated) != appendCount-1 {
+		t.Fatalf("rotated segments = %v, want %d", rotated, appendCount-1)
+	}
+	_ = unix.Flock(int(reader.Fd()), unix.LOCK_UN)
+	_ = reader.Close()
+
+	snapshot, err := journal.Snapshot(context.Background(), Selector{Stages: []string{"rotation.shared"}}, nil)
+	if err != nil || len(snapshot.Records) != appendCount || snapshot.Statistics.DuplicatesOmitted != 0 {
+		t.Fatalf("snapshot after rotation = records:%d stats:%+v err=%v", len(snapshot.Records), snapshot.Statistics, err)
+	}
+}
+
+func TestJournalSnapshotDoesNotOmitRotatedActiveSegment(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	const seeded = 4
+	requests := make(map[string]struct{}, seeded)
+	for i := 0; i < seeded; i++ {
+		request := "seeded-" + strconv.Itoa(i)
+		requests[request] = struct{}{}
+		if err := journal.Append(context.Background(), testEnvelope("rotation.omission", request)); err != nil {
+			t.Fatalf("seed append %d = %v", i, err)
+		}
+	}
+
+	// Between the capture's directory listing and its opens, model the rotation
+	// an in-flight append performs: rename events.jsonl into a sealed segment
+	// the listing never saw and recreate a fresh active file. A real appender
+	// rotates only under append.lock, so probing that lock exclusively is a
+	// faithful stand-in — it succeeds precisely when a concurrent rotation
+	// could interleave. The fix holds append.lock shared across enumerate+open,
+	// so the exclusive probe must fail and no rotation may slip in.
+	rotated := false
+	hook := func() {
+		probe, err := os.OpenFile(filepath.Join(paths.JournalDir, "append.lock"), os.O_RDWR, fileMode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = probe.Close() }()
+		lockErr := unix.Flock(int(probe.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+		if errors.Is(lockErr, unix.EWOULDBLOCK) || errors.Is(lockErr, unix.EAGAIN) {
+			return // append.lock is held by the capture: rotation is excluded.
+		}
+		if lockErr != nil {
+			t.Fatalf("probing append.lock during capture: %v", lockErr)
+		}
+		defer func() { _ = unix.Flock(int(probe.Fd()), unix.LOCK_UN) }()
+		sealed := filepath.Join(paths.JournalDir, "events-rotated-during-capture.jsonl")
+		if err := os.Rename(paths.JournalFile, sealed); err != nil {
+			t.Fatalf("rotating active segment: %v", err)
+		}
+		fresh := snapshotJSONLine(t, testEnvelope("rotation.omission", "fresh-active"))
+		if err := os.WriteFile(paths.JournalFile, fresh, fileMode); err != nil {
+			t.Fatalf("recreating active segment: %v", err)
+		}
+		rotated = true
+	}
+
+	snapshot, err := journal.snapshotWithVisitor(
+		context.Background(),
+		Selector{Stages: []string{"rotation.omission"}},
+		nil,
+		nil,
+		snapshotHooks{betweenEnumerateAndOpen: hook},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rotated {
+		t.Fatal("capture did not hold append.lock: a rotation interleaved between enumeration and open")
+	}
+	if snapshot.Statistics.DuplicatesOmitted != 0 {
+		t.Fatalf("snapshot omitted duplicates = %d, want 0", snapshot.Statistics.DuplicatesOmitted)
+	}
+	if len(snapshot.Records) != seeded {
+		t.Fatalf("snapshot records = %d, want all %d seeded records", len(snapshot.Records), seeded)
+	}
+	seen := make(map[string]int, seeded)
+	for _, record := range snapshot.Records {
+		seen[record.RequestID]++
+	}
+	for request := range requests {
+		if seen[request] != 1 {
+			t.Fatalf("record %q appeared %d times, want exactly once (%v)", request, seen[request], seen)
+		}
+	}
+}
+
+func TestMaintenanceLockTimeoutIsNormalized(t *testing.T) {
+	normalized := normalizeJournalOptions(JournalOptions{})
+	if normalized.MaintenanceLockTimeout != 2*time.Second {
+		t.Fatalf("default MaintenanceLockTimeout = %v, want 2s", normalized.MaintenanceLockTimeout)
+	}
+	custom := normalizeJournalOptions(JournalOptions{MaintenanceLockTimeout: 250 * time.Millisecond})
+	if custom.MaintenanceLockTimeout != 250*time.Millisecond {
+		t.Fatalf("custom MaintenanceLockTimeout = %v, want 250ms", custom.MaintenanceLockTimeout)
 	}
 }

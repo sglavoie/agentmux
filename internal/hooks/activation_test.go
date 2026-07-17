@@ -29,7 +29,9 @@ func stubActivationEvidence(t *testing.T, versions map[string]string) string {
 		if cfg != nil {
 			for _, account := range cfg.Accounts {
 				_ = evidence.Visit(diagnostics.TraceEnvelope{
-					Stage: "hook.test", Harness: account.EffectiveHarness(), Profile: account.Name, ObservedAt: time.Now().UTC(),
+					Stage: "hook.test", Harness: account.EffectiveHarness(),
+					Evidence:   map[string]string{"config_dir": config.ExpandTilde(account.EffectiveHomeDir())},
+					ObservedAt: time.Now().UTC(),
 				})
 			}
 		}

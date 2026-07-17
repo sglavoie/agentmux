@@ -20,13 +20,19 @@ import (
 // journal snapshot. RecordsMatched is measured before a selector limit is
 // applied, so callers can distinguish selection from output truncation.
 type SnapshotStatistics struct {
-	SegmentFilesRead  int   `json:"segment_files_read"`
-	SpoolFilesRead    int   `json:"spool_files_read"`
-	BytesScanned      int64 `json:"bytes_scanned"`
-	RecordsScanned    int   `json:"records_scanned"`
-	RecordsMatched    int   `json:"records_matched"`
-	DuplicatesOmitted int   `json:"duplicates_omitted"`
-	CorruptLines      int   `json:"corrupt_lines"`
+	// SegmentFilesRead counts every journal-dir file read, including spool
+	// files that maintenance already promoted into `events-spool-*` segments.
+	SegmentFilesRead int `json:"segment_files_read"`
+	// PromotedSpoolFilesRead is the subset of SegmentFilesRead whose base name
+	// carries the `events-spool-` promotion prefix. SpoolFilesRead counts only
+	// spool-dir files that have not been promoted yet.
+	PromotedSpoolFilesRead int   `json:"promoted_spool_files_read"`
+	SpoolFilesRead         int   `json:"spool_files_read"`
+	BytesScanned           int64 `json:"bytes_scanned"`
+	RecordsScanned         int   `json:"records_scanned"`
+	RecordsMatched         int   `json:"records_matched"`
+	DuplicatesOmitted      int   `json:"duplicates_omitted"`
+	CorruptLines           int   `json:"corrupt_lines"`
 }
 
 type snapshotFileIdentity struct {
@@ -101,21 +107,33 @@ func (j *Journal) Snapshot(ctx context.Context, selector Selector, cursor *Snaps
 // after the journal mutex and filesystem lock have been released. A visitor
 // error stops traversal, and the returned snapshot has no advancing cursor.
 func (j *Journal) SnapshotWithVisitor(ctx context.Context, selector Selector, cursor *SnapshotCursor, visitor SnapshotVisitor) (JournalSnapshot, error) {
-	return j.snapshotWithVisitor(ctx, selector, cursor, visitor, nil)
+	return j.snapshotWithVisitor(ctx, selector, cursor, visitor, snapshotHooks{})
+}
+
+// snapshotHooks exposes internal capture boundaries to deterministic
+// concurrency tests. Production callers always leave every field nil.
+type snapshotHooks struct {
+	// afterCapture runs once every file descriptor has been captured and both
+	// storage locks have been released.
+	afterCapture func()
+	// betweenEnumerateAndOpen runs inside the active-segment capture, after the
+	// journal directory has been listed but before any segment is opened, while
+	// events.lock and append.lock are still held.
+	betweenEnumerateAndOpen func()
 }
 
 // snapshot exposes the post-capture boundary to deterministic concurrency
 // tests. Production callers always pass a nil hook.
 func (j *Journal) snapshot(ctx context.Context, selector Selector, cursor *SnapshotCursor, afterCapture func()) (JournalSnapshot, error) {
-	return j.snapshotWithVisitor(ctx, selector, cursor, nil, afterCapture)
+	return j.snapshotWithVisitor(ctx, selector, cursor, nil, snapshotHooks{afterCapture: afterCapture})
 }
 
-func (j *Journal) snapshotWithVisitor(ctx context.Context, selector Selector, cursor *SnapshotCursor, visitor SnapshotVisitor, afterCapture func()) (JournalSnapshot, error) {
+func (j *Journal) snapshotWithVisitor(ctx context.Context, selector Selector, cursor *SnapshotCursor, visitor SnapshotVisitor, hooks snapshotHooks) (JournalSnapshot, error) {
 	var snapshot JournalSnapshot
 	if j == nil {
 		return snapshot, errors.New("diagnostics: nil journal")
 	}
-	files, health, err := j.captureSnapshotFiles(ctx, cursor)
+	files, health, err := j.captureSnapshotFiles(ctx, cursor, hooks.betweenEnumerateAndOpen)
 	if err != nil {
 		return snapshot, err
 	}
@@ -147,8 +165,8 @@ func (j *Journal) snapshotWithVisitor(ctx context.Context, selector Selector, cu
 	}
 	defer closeSnapshotFiles(files)
 
-	if afterCapture != nil {
-		afterCapture()
+	if hooks.afterCapture != nil {
+		hooks.afterCapture()
 	}
 	if err := ctxError(ctx); err != nil {
 		return snapshot, err
@@ -159,6 +177,9 @@ func (j *Journal) snapshotWithVisitor(ctx context.Context, selector Selector, cu
 	for _, captured := range files {
 		if captured.kind == snapshotSegment {
 			snapshot.Statistics.SegmentFilesRead++
+			if strings.HasPrefix(filepath.Base(captured.path), "events-spool-") {
+				snapshot.Statistics.PromotedSpoolFilesRead++
+			}
 		} else {
 			snapshot.Statistics.SpoolFilesRead++
 		}
@@ -172,6 +193,10 @@ func (j *Journal) snapshotWithVisitor(ctx context.Context, selector Selector, cu
 			seen[identity] = struct{}{}
 			snapshot.Health.Records++
 			schemas[envelope.SchemaVersion] = struct{}{}
+			if !envelope.ObservedAt.IsZero() &&
+				(snapshot.Health.EarliestObservedAt.IsZero() || envelope.ObservedAt.Before(snapshot.Health.EarliestObservedAt)) {
+				snapshot.Health.EarliestObservedAt = envelope.ObservedAt
+			}
 			if envelope.ObservedAt.After(snapshot.Health.LatestObservedAt) {
 				snapshot.Health.LatestObservedAt = envelope.ObservedAt
 			}
@@ -209,10 +234,10 @@ func (j *Journal) snapshotWithVisitor(ctx context.Context, selector Selector, cu
 	return snapshot, nil
 }
 
-func (j *Journal) captureSnapshotFiles(ctx context.Context, cursor *SnapshotCursor) ([]snapshotFile, JournalHealth, error) {
+func (j *Journal) captureSnapshotFiles(ctx context.Context, cursor *SnapshotCursor, betweenEnumerateAndOpen func()) ([]snapshotFile, JournalHealth, error) {
 	var health JournalHealth
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	j.sealedMu.Lock()
+	defer j.sealedMu.Unlock()
 	lock, err := acquireSharedFileLock(ctx, j.lock, j.opts.LockTimeout)
 	if err != nil {
 		return nil, health, err
@@ -226,36 +251,8 @@ func (j *Journal) captureSnapshotFiles(ctx context.Context, cursor *SnapshotCurs
 	}
 	known := make(map[snapshotFileIdentity]struct{})
 
-	journalEntries, err := os.ReadDir(j.paths.JournalDir)
-	if err != nil {
+	if err := j.captureJournalSegments(ctx, cursor, known, &captured, &health, betweenEnumerateAndOpen); err != nil {
 		return closeOnError(err)
-	}
-	for _, entry := range journalEntries {
-		if err := ctxError(ctx); err != nil {
-			return closeOnError(err)
-		}
-		name := entry.Name()
-		if !entry.IsDir() && strings.Contains(name, ".partial-") {
-			health.QuarantinedFiles++
-		}
-		if entry.IsDir() || !isSnapshotSegmentName(name) {
-			continue
-		}
-		file, openErr := openSnapshotFile(filepath.Join(j.paths.JournalDir, name), snapshotSegment, name != "events.jsonl", cursor)
-		if openErr != nil {
-			return closeOnError(openErr)
-		}
-		if file == nil {
-			continue
-		}
-		if _, duplicate := known[file.identity]; duplicate {
-			_ = file.file.Close()
-			continue
-		}
-		known[file.identity] = struct{}{}
-		captured = append(captured, *file)
-		health.Files++
-		health.Bytes += file.limit
 	}
 
 	spoolEntries, err := os.ReadDir(j.paths.SpoolDir)
@@ -304,6 +301,62 @@ func (j *Journal) captureSnapshotFiles(ctx context.Context, cursor *SnapshotCurs
 		}
 	}
 	return captured, health, nil
+}
+
+// captureJournalSegments lists and opens the sealed and active journal
+// segments while holding append.lock, so an in-flight append cannot rotate
+// events.jsonl between the directory listing and the open of a segment.
+// Without this serialization a rename could seal the active inode into a
+// segment name we never listed, and the capture would silently omit every
+// record in the just-rotated segment until a later snapshot. events.lock is
+// already held by the caller, so taking append.lock here preserves the
+// canonical events-before-append lock ordering (sealedMu before appendMu). The
+// lock is released before the caller scans the spool directory, which no
+// append-side rotation can perturb.
+func (j *Journal) captureJournalSegments(ctx context.Context, cursor *SnapshotCursor, known map[snapshotFileIdentity]struct{}, captured *[]snapshotFile, health *JournalHealth, betweenEnumerateAndOpen func()) error {
+	j.appendMu.Lock()
+	defer j.appendMu.Unlock()
+	appendLock, err := acquireSharedFileLock(ctx, j.appendLock, j.opts.LockTimeout)
+	if err != nil {
+		return err
+	}
+	defer releaseFileLock(appendLock)
+
+	journalEntries, err := os.ReadDir(j.paths.JournalDir)
+	if err != nil {
+		return err
+	}
+	if betweenEnumerateAndOpen != nil {
+		betweenEnumerateAndOpen()
+	}
+	for _, entry := range journalEntries {
+		if err := ctxError(ctx); err != nil {
+			return err
+		}
+		name := entry.Name()
+		if !entry.IsDir() && strings.Contains(name, ".partial-") {
+			health.QuarantinedFiles++
+		}
+		if entry.IsDir() || !isSnapshotSegmentName(name) {
+			continue
+		}
+		file, openErr := openSnapshotFile(filepath.Join(j.paths.JournalDir, name), snapshotSegment, name != "events.jsonl", cursor)
+		if openErr != nil {
+			return openErr
+		}
+		if file == nil {
+			continue
+		}
+		if _, duplicate := known[file.identity]; duplicate {
+			_ = file.file.Close()
+			continue
+		}
+		known[file.identity] = struct{}{}
+		*captured = append(*captured, *file)
+		health.Files++
+		health.Bytes += file.limit
+	}
+	return nil
 }
 
 func isSnapshotSegmentName(name string) bool {

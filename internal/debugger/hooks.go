@@ -1,6 +1,7 @@
 package debugger
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -66,20 +67,33 @@ func (p HookProfile) Detail() string {
 	return strings.Join(parts, "; ")
 }
 
+// HookDeliveryFailures summarizes terminally dropped hook deliveries in the
+// trailing hour — one count per request whose terminal record reports failure,
+// not per intermediate transport attempt. They are warning-level and
+// time-bounded: the hook client stays prompt-free, so a delivery that no retry
+// resolves within a daemon restart is lost by design.
+type HookDeliveryFailures struct {
+	Count    int        `json:"count"`
+	LatestAt *time.Time `json:"latest_at,omitempty"`
+}
+
 type HookReport struct {
-	Verdict  Verdict       `json:"verdict"`
-	Profiles []HookProfile `json:"profiles"`
-	Error    string        `json:"error,omitempty"`
+	Verdict          Verdict               `json:"verdict"`
+	Profiles         []HookProfile         `json:"profiles"`
+	DeliveryFailures *HookDeliveryFailures `json:"delivery_failures,omitempty"`
+	Error            string                `json:"error,omitempty"`
 }
 
 // InspectHooks is the single verdict engine for hook contracts, activation,
-// trust, CLI compatibility, last-seen evidence, and hook silence.
+// trust, CLI compatibility, last-seen evidence, and hook silence. It probes
+// the journal once and shares the evidence with the per-profile evaluation,
+// mirroring hooks.StatusAll.
 func InspectHooks(cfg *config.Config, amxBin string, now time.Time) HookReport {
 	if cfg == nil {
 		return unavailableHookReport()
 	}
-	statuses, err := hooks.StatusAll(cfg, amxBin)
-	return hookReportFromStatuses(cfg, now, statuses, err)
+	evidence, evidenceErr := hooks.ProbeStatusEvidence(context.Background(), cfg)
+	return InspectHooksWithEvidence(cfg, amxBin, now, evidence, evidenceErr)
 }
 
 // InspectHooksWithEvidence evaluates hooks using evidence gathered by another
@@ -89,7 +103,17 @@ func InspectHooksWithEvidence(cfg *config.Config, amxBin string, now time.Time, 
 		return unavailableHookReport()
 	}
 	statuses, err := hooks.StatusAllWithEvidence(cfg, amxBin, evidence, evidenceErr)
-	return hookReportFromStatuses(cfg, now, statuses, err)
+	report := hookReportFromStatuses(cfg, now, statuses, err)
+	if evidence != nil && evidenceErr == nil {
+		count, latest := evidence.DeliveryFailures(now)
+		failures := &HookDeliveryFailures{Count: count}
+		if !latest.IsZero() {
+			latestAt := latest.UTC()
+			failures.LatestAt = &latestAt
+		}
+		report.DeliveryFailures = failures
+	}
+	return report
 }
 
 func unavailableHookReport() HookReport {

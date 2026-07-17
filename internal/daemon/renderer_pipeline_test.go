@@ -405,6 +405,7 @@ func TestRenderGenerationJournalDoesNotBlockStateLock(t *testing.T) {
 		return file
 	}
 	lockFile(filepath.Join(paths.JournalDir, "events.lock"))
+	lockFile(filepath.Join(paths.JournalDir, "append.lock"))
 	lockFile(filepath.Join(paths.SpoolDir, "journal-"+fmt.Sprint(os.Getpid())+".jsonl"))
 
 	done := make(chan struct{})
@@ -546,6 +547,22 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 		if readErr != nil || len(records) == 0 {
 			t.Fatalf("trace %s cannot be followed to rendered: records=%+v err=%v", traceID, records, readErr)
 		}
+	}
+	renderedRecords, err := journal.Read(context.Background(), diagnostics.Selector{
+		Stages: []string{"daemon.renderer.rendered"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(renderedRecords) != 1 {
+		t.Fatalf("rendered-stage records = %+v, want exactly one per (generation, stage)", renderedRecords)
+	}
+	coalesced := renderedRecords[0]
+	if coalesced.Evidence["trace_ids"] != "trace-a,trace-b" || coalesced.Evidence["request_ids"] != "request-a,request-b" {
+		t.Fatalf("coalesced causal-ID evidence = %+v", coalesced.Evidence)
+	}
+	if coalesced.TraceID != "trace-a" || coalesced.RequestID != "request-a" {
+		t.Fatalf("coalesced primary IDs = %s/%s, want first coalesced trace/request", coalesced.TraceID, coalesced.RequestID)
 	}
 	disableStopFailure := false
 	h.notifier.cfg.StopFailure = &disableStopFailure

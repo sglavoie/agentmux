@@ -73,11 +73,12 @@ func TestHandler_HookEventKeepsStampedProducerSeparateFromTargetMetadata(t *test
 	})
 
 	resp := h.Handle(Request{
-		Type:        TypeHookEvent,
-		WindowID:    42,
-		Event:       "UserPromptSubmit",
-		Harness:     " Codex ",
-		PayloadJSON: `{"session_id":"codex-session"}`,
+		Type:              TypeHookEvent,
+		WindowID:          42,
+		Event:             "UserPromptSubmit",
+		Harness:           " Codex ",
+		ProducerConfigDir: "/Users/dev/.codex-work",
+		PayloadJSON:       `{"session_id":"codex-session"}`,
 	})
 	if !resp.OK {
 		t.Fatalf("hook event response = %+v", resp)
@@ -90,6 +91,9 @@ func TestHandler_HookEventKeepsStampedProducerSeparateFromTargetMetadata(t *test
 	event := detail.Events[0]
 	if event.SourceKind != string(SourceHarness) || event.SourceKey != "codex:codex-session" {
 		t.Fatalf("normalized source = %q/%q, want harness/codex:codex-session", event.SourceKind, event.SourceKey)
+	}
+	if event.ProducerConfigDir != "/Users/dev/.codex-work" {
+		t.Fatalf("producer config dir = %q, want stamped producer home preserved beside target metadata", event.ProducerConfigDir)
 	}
 
 	h.stateMu.Lock()

@@ -456,11 +456,12 @@ func renderCommandPalette(m Model) string {
 		styleDim.Render(displayTruncate(commandPaletteContextLine(m), width, "…")),
 		styleSearch.Render(commandPaletteInputLine(m, width)),
 	}
-	if topRows == 2 {
+	switch topRows {
+	case 2:
 		top = []string{top[0], top[2]}
-	} else if topRows == 1 {
+	case 1:
 		top = top[2:]
-	} else if topRows == 0 {
+	case 0:
 		top = nil
 	}
 

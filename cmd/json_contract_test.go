@@ -41,6 +41,11 @@ func TestDebugJSONCommandSurfaceIsVersioned(t *testing.T) {
 		}
 	}
 
+	// Additive fields carried by existing schema versions (no bump required):
+	// status/tail v2 health gained `earliest_observed_at`, the shared
+	// `journal_snapshot` object gained `promoted_spool_files_read`, and the
+	// status v2 hooks report gained `delivery_failures` {count, latest_at}
+	// beside the stable `hook_delivery_failures` warning finding.
 	schemas := []struct {
 		name          string
 		version, want int

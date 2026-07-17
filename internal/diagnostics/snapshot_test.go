@@ -32,6 +32,55 @@ func snapshotJSONLine(t *testing.T, envelope TraceEnvelope) []byte {
 	return append(data, '\n')
 }
 
+func TestJournalSnapshotTracksObservedHorizonAndPromotedSpoolCounts(t *testing.T) {
+	journal, paths := testJournal(t, JournalOptions{})
+	base := time.Date(2026, 7, 16, 1, 0, 0, 0, time.UTC)
+
+	// Mixed layout: a sealed segment (earliest record), a maintenance-promoted
+	// spool segment in the journal dir, the active journal, and one
+	// not-yet-promoted spool-dir file (latest record).
+	if err := os.WriteFile(filepath.Join(paths.JournalDir, "events-20260716-010000.jsonl"),
+		snapshotJSONLine(t, snapshotEnvelope("sealed", 1, "sealed-1", base)), fileMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.JournalDir, "events-spool-abc123-42-000001.jsonl"),
+		snapshotJSONLine(t, snapshotEnvelope("promoted", 1, "promoted-1", base.Add(time.Hour))), fileMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.JournalFile,
+		snapshotJSONLine(t, snapshotEnvelope("active", 1, "active-1", base.Add(2*time.Hour))), fileMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.SpoolDir, "journal-123.jsonl"),
+		snapshotJSONLine(t, snapshotEnvelope("spool", 1, "spool-1", base.Add(3*time.Hour))), fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := journal.Snapshot(context.Background(), Selector{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats := snapshot.Statistics
+	if stats.SegmentFilesRead != 3 || stats.PromotedSpoolFilesRead != 1 || stats.SpoolFilesRead != 1 {
+		t.Fatalf("statistics = %+v, want 3 segments (1 promoted) and 1 spool file", stats)
+	}
+	if !snapshot.Health.EarliestObservedAt.Equal(base) {
+		t.Fatalf("earliest observed = %s, want %s", snapshot.Health.EarliestObservedAt, base)
+	}
+	if !snapshot.Health.LatestObservedAt.Equal(base.Add(3 * time.Hour)) {
+		t.Fatalf("latest observed = %s, want %s", snapshot.Health.LatestObservedAt, base.Add(3*time.Hour))
+	}
+
+	health, err := journal.Inspect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Inspect reads journal-dir segments only; the spool record is excluded.
+	if !health.EarliestObservedAt.Equal(base) || !health.LatestObservedAt.Equal(base.Add(2*time.Hour)) {
+		t.Fatalf("inspect horizon = [%s, %s], want [%s, %s]", health.EarliestObservedAt, health.LatestObservedAt, base, base.Add(2*time.Hour))
+	}
+}
+
 func TestJournalSnapshotVisitorRunsAfterLocksAreReleased(t *testing.T) {
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 100 * time.Millisecond})
 	base := time.Date(2026, 7, 16, 1, 0, 0, 0, time.UTC)
