@@ -145,6 +145,7 @@ func TestRefresh_DuplicateDirectoryProjectsKeepOrderedMembership(t *testing.T) {
 	}
 	transcriptPath := filepath.Join(home, "projects", "shared", "sess-shared-project.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")
+	reportedModTime := info.ModTime().In(time.FixedZone("reader-zone", 60*60))
 
 	cfg := &config.Config{
 		Profiles: []config.Account{
@@ -161,7 +162,7 @@ func TestRefresh_DuplicateDirectoryProjectsKeepOrderedMembership(t *testing.T) {
 		discover: func(string, DiscoverOptions) ([]SessionMeta, error) {
 			return []SessionMeta{{
 				ID: "sess-shared-project", Harness: harness.Claude, CWD: projectDir,
-				Path: transcriptPath, FileSize: info.Size(), FileModTime: info.ModTime(),
+				Path: transcriptPath, FileSize: info.Size(), FileModTime: reportedModTime,
 				MessageCount: 1, Snippet: "shared project",
 			}}, nil
 		},

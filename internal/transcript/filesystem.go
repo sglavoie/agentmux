@@ -400,6 +400,10 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			if exists {
 				meta.HiddenFromIndex = existing.HiddenFromIndex
 				if meta.SearchText == "" && existing.FileSize == meta.FileSize && existing.FileModTime.Equal(meta.FileModTime) {
+					// Preserve the cached representation as well as the instant.
+					// JSON round trips can replace time.Local with time.UTC (or a
+					// fixed zone), which is Equal but not reflect.DeepEqual.
+					meta.FileModTime = existing.FileModTime
 					meta.MessageCount = existing.MessageCount
 					meta.Snippet = existing.Snippet
 					meta.StartedAt = existing.StartedAt
