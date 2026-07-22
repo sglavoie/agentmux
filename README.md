@@ -229,7 +229,9 @@ profile and project. Press `s` from the dashboard or launcher to open the same
 view filtered to the highlighted project. Agent Mux warms the filesystem cache
 at `~/.local/share/agent-mux/transcripts.json`, then refreshes it from the
 configured Claude, Copilot, and Codex transcript directories in the background.
-Existing rows remain visible during refreshes.
+Existing rows remain visible during refreshes. The header and sticky status bar
+mark them as cached while scanning, and the active text/chip query refreshes
+automatically when the scan completes.
 
 The JSON metadata file and `transcripts.search/` sidecars are disposable
 caches. If either is missing, malformed, or partially unreadable, Agent Mux

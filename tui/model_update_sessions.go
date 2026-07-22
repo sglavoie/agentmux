@@ -202,12 +202,14 @@ func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Mode
 }
 
 // handleSessionWarmRefreshDone publishes the background refresh result if no
-// newer user search has superseded the startup empty-query search.
+// newer user search has superseded the query captured at refresh start. When
+// the query did change, the refresh still updated the shared index, so issue a
+// new search against that index instead of leaving the visible rows stale.
 func (m Model) handleSessionWarmRefreshDone(msg sessionWarmRefreshDoneMsg) (tea.Model, tea.Cmd) {
 	m.sessionRefreshInFlight = false
 	m.sessionRefreshErr = msg.refreshErr
 	if msg.seq != m.sessionSearchSeq {
-		return m, nil
+		return m, m.searchCurrentSessionsAfterRefresh()
 	}
 	m.sessionSearchErr = msg.searchErr
 	if msg.searchErr == nil {
@@ -224,13 +226,29 @@ func (m Model) handleSessionsRefreshDone(msg sessionsRefreshDoneMsg) (tea.Model,
 	m.sessionRefreshErr = msg.err
 	// Always follow a refresh with a search dispatch — even on error,
 	// because Refresh updates whatever profiles succeeded and the old
-	// index entries are still usable. Reuse the seq the refresh was
-	// dispatched with so a chip change made mid-refresh wins.
-	if msg.seq < m.sessionSearchSeq {
-		// A newer dispatch is already in flight; defer to it.
-		return m, nil
+	// index entries are still usable. Start a new generation so any search
+	// that raced with the refresh cannot publish its pre-refresh snapshot
+	// after this follow-up completes.
+	return m, m.searchCurrentSessionsAfterRefresh()
+}
+
+// searchCurrentSessionsAfterRefresh invalidates searches that may have read
+// the pre-refresh index and immediately runs the latest text/chip query against
+// the refreshed snapshot. It intentionally skips the normal debounce: the
+// user has already waited for the filesystem scan to finish.
+func (m *Model) searchCurrentSessionsAfterRefresh() tea.Cmd {
+	if m.transcriptIndex == nil {
+		m.sessionLoading = false
+		return nil
 	}
-	return m, m.runSessionSearchCmd(msg.seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
+	if m.transcriptReaders == nil {
+		m.transcriptReaders = buildTranscriptReaders()
+	}
+	m.sessionSearchSeq++
+	seq := m.sessionSearchSeq
+	m.sessionLoading = true
+	m.sessionSearchErr = nil
+	return m.runSessionSearchCmd(seq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery())
 }
 
 // handleSessionSearchDebounce processes a sessionSearchDebounceMsg: drops

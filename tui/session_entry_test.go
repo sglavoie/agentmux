@@ -579,12 +579,15 @@ func TestDashboardUppercaseSDoesNotApplyProjectShortcut(t *testing.T) {
 	}
 }
 
-func TestSessionWarmRefreshDoneDoesNotOverwriteNewerSearchResults(t *testing.T) {
-	newer := transcript.Result{
-		Meta:    transcript.SessionMeta{ID: "newer", Harness: harness.Claude},
-		Matches: 1,
-		Preview: "newer query result",
-	}
+func TestSessionWarmRefreshDoneRerunsLatestProjectSearch(t *testing.T) {
+	old := transcript.SessionMeta{ID: "old", Harness: harness.Claude, Project: "Foo", LastAt: time.Now().Add(-time.Hour)}
+	fresh := transcript.SessionMeta{ID: "fresh", Harness: harness.Claude, Project: "Foo", LastAt: time.Now()}
+	other := transcript.SessionMeta{ID: "other", Harness: harness.Claude, Project: "Bar", LastAt: time.Now()}
+	idx := writeTranscriptIndex(t, map[string]transcript.SessionMeta{
+		"claude:old":   old,
+		"claude:fresh": fresh,
+		"claude:other": other,
+	})
 	stale := transcript.Result{
 		Meta:    transcript.SessionMeta{ID: "stale", Harness: harness.Claude},
 		Preview: "stale refresh result",
@@ -594,7 +597,10 @@ func TestSessionWarmRefreshDoneDoesNotOverwriteNewerSearchResults(t *testing.T) 
 		sessionSearchSeq:       5,
 		sessionRefreshInFlight: true,
 		sessionLoading:         true,
-		sessionResults:         []transcript.Result{newer},
+		sessionResults:         []transcript.Result{{Meta: old}},
+		filterProject:          []string{"Foo"},
+		transcriptIndex:        idx,
+		transcriptReaders:      map[string]transcript.Reader{},
 	}
 
 	updated, cmd := m.Update(sessionWarmRefreshDoneMsg{
@@ -603,8 +609,8 @@ func TestSessionWarmRefreshDoneDoesNotOverwriteNewerSearchResults(t *testing.T) 
 	})
 	got := updated.(Model)
 
-	if cmd != nil {
-		t.Fatalf("stale warm refresh returned cmd %T; want nil", cmd)
+	if cmd == nil {
+		t.Fatal("stale warm refresh returned nil; want latest-query follow-up")
 	}
 	if got.sessionRefreshInFlight {
 		t.Fatal("sessionRefreshInFlight remained true after stale warm refresh")
@@ -612,8 +618,27 @@ func TestSessionWarmRefreshDoneDoesNotOverwriteNewerSearchResults(t *testing.T) 
 	if !got.sessionLoading {
 		t.Fatal("sessionLoading was cleared even though the newer search is still in flight")
 	}
-	if len(got.sessionResults) != 1 || got.sessionResults[0].Meta.ID != "newer" {
+	if got.sessionSearchSeq != 6 {
+		t.Fatalf("sessionSearchSeq = %d, want 6", got.sessionSearchSeq)
+	}
+	if len(got.sessionResults) != 1 || got.sessionResults[0].Meta.ID != "old" {
 		t.Fatalf("stale warm refresh overwrote newer results: %+v", got.sessionResults)
+	}
+
+	done, ok := drainCmd(t, cmd).(sessionSearchDoneMsg)
+	if !ok {
+		t.Fatalf("warm refresh follow-up produced %T, want sessionSearchDoneMsg", done)
+	}
+	updated, _ = got.Update(done)
+	got = updated.(Model)
+	if len(got.sessionResults) != 2 || got.sessionResults[0].Meta.ID != "fresh" || got.sessionResults[1].Meta.ID != "old" {
+		t.Fatalf("latest project rows were not published after refresh: %+v", got.sessionResults)
+	}
+
+	updated, _ = got.Update(sessionSearchDoneMsg{seq: 5, results: []transcript.Result{{Meta: stale.Meta}}})
+	got = updated.(Model)
+	if len(got.sessionResults) != 2 || got.sessionResults[0].Meta.ID != "fresh" {
+		t.Fatalf("older in-flight search overwrote refreshed rows: %+v", got.sessionResults)
 	}
 }
 
@@ -668,6 +693,9 @@ func TestRenderSessionSearchKeepsWarmedResultsVisibleDuringBackgroundScan(t *tes
 	}
 	if !strings.Contains(out, "scanning transcripts") {
 		t.Fatalf("header did not show background scanning state:\n%s", out)
+	}
+	if !strings.Contains(renderSessionSearch(m), styleBanner.Render("scanning transcripts…")) {
+		t.Fatalf("header scanning state was not rendered with banner emphasis")
 	}
 	if strings.Contains(out, "(loading") {
 		t.Fatalf("background scan was rendered as query loading:\n%s", out)

@@ -141,3 +141,28 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 		})
 	}
 }
+
+func TestStatusBarPromotesTranscriptScanWithCachedResults(t *testing.T) {
+	m := Model{
+		mode:                   ModeSessionSearch,
+		width:                  100,
+		sessionRefreshInFlight: true,
+		sessionResults:         []transcript.Result{{}, {}},
+	}
+
+	msg := fallbackStatusMessage(m)
+	if msg.Severity != statusInfo {
+		t.Fatalf("scan status severity = %v, want %v", msg.Severity, statusInfo)
+	}
+	for _, want := range []string{"Scanning transcripts", "2 cached results", "updates automatically"} {
+		if !strings.Contains(msg.Text, want) {
+			t.Fatalf("scan status = %q, want %q", msg.Text, want)
+		}
+	}
+
+	m.sessionResults = nil
+	msg = fallbackStatusMessage(m)
+	if msg.Text != "Scanning transcripts… results will update automatically" {
+		t.Fatalf("empty scan status = %q", msg.Text)
+	}
+}

@@ -172,13 +172,10 @@ func TestSessionSearch_TypingShrinksResultSet(t *testing.T) {
 	}
 }
 
-// TestSessionSearch_StaleRefreshDoesNotOverwriteTypedResults locks in the
-// session-1 root-cause shape. A typed-query result set is in place; then a
-// late sessionsRefreshDoneMsg arrives bearing an older seq. The refresh
-// handler must drop it (msg.seq < m.sessionSearchSeq) instead of
-// dispatching a fresh empty-query search that would overwrite the
-// typed-query results.
-func TestSessionSearch_StaleRefreshDoesNotOverwriteTypedResults(t *testing.T) {
+// TestSessionSearch_StaleRefreshRerunsTypedQuery locks in the refresh/query
+// race: a late refresh must search the updated index with the current text
+// instead of leaving the pre-refresh rows in place.
+func TestSessionSearch_StaleRefreshRerunsTypedQuery(t *testing.T) {
 	m := sessionSearchFilterModel(t)
 
 	// Simulate the post-typing state: query set, seq advanced, results
@@ -190,13 +187,27 @@ func TestSessionSearch_StaleRefreshDoesNotOverwriteTypedResults(t *testing.T) {
 	}
 
 	// A stale refresh from before the user started typing arrives.
+	priorSeq := m.sessionSearchSeq
 	updated, cmd := m.Update(sessionsRefreshDoneMsg{seq: 1, err: nil})
 	m = updated.(Model)
-	if cmd != nil {
-		t.Errorf("stale refresh produced a follow-up cmd; want nil so the typed query stands")
+	if cmd == nil {
+		t.Fatal("stale refresh returned nil; want current-query follow-up")
+	}
+	if m.sessionSearchSeq != priorSeq+1 {
+		t.Fatalf("sessionSearchSeq = %d, want %d", m.sessionSearchSeq, priorSeq+1)
 	}
 	if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "hit" {
-		t.Errorf("typed-query results were overwritten by stale refresh: %+v", m.sessionResults)
+		t.Fatalf("refresh completion changed rows before follow-up: %+v", m.sessionResults)
+	}
+
+	done, ok := drainCmd(t, cmd).(sessionSearchDoneMsg)
+	if !ok {
+		t.Fatalf("refresh follow-up produced %T, want sessionSearchDoneMsg", done)
+	}
+	updated, _ = m.Update(done)
+	m = updated.(Model)
+	if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "hit" || m.sessionResults[0].Matches == 0 {
+		t.Errorf("current typed query was not republished after refresh: %+v", m.sessionResults)
 	}
 }
 
@@ -346,11 +357,20 @@ func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
 				results: []transcript.Result{{Meta: target, Preview: "stale warm refresh row"}},
 			})
 			m = updated.(Model)
-			if cmd != nil {
-				t.Fatalf("stale warm refresh returned cmd %T; want nil", cmd)
+			if cmd == nil {
+				t.Fatal("stale warm refresh returned nil; want current-query follow-up")
 			}
 			if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "miss" {
 				t.Fatalf("late warm refresh resurrected deleted target: %+v", m.sessionResults)
+			}
+			followup, ok := drainCmd(t, cmd).(sessionSearchDoneMsg)
+			if !ok {
+				t.Fatalf("stale warm refresh follow-up produced %T, want sessionSearchDoneMsg", followup)
+			}
+			updated, _ = m.Update(followup)
+			m = updated.(Model)
+			if len(m.sessionResults) != 1 || m.sessionResults[0].Meta.ID != "miss" {
+				t.Fatalf("post-refresh search resurrected deleted target: %+v", m.sessionResults)
 			}
 		})
 	}

@@ -52,10 +52,10 @@ func renderSessionSearch(m Model) string {
 		states = append(states, label)
 	}
 	if m.sessionRefreshInFlight {
-		states = append(states, "scanning transcripts…")
+		states = append(states, styleBanner.Render("scanning transcripts…"))
 	}
 	if len(states) > 0 {
-		header += "  " + styleDim.Render("("+strings.Join(states, ", ")+")")
+		header += "  (" + strings.Join(states, ", ") + ")"
 	}
 	sb.WriteString(clampSearchLine(styleHeader.Render(header), m.width))
 	sb.WriteByte('\n')

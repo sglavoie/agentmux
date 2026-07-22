@@ -78,6 +78,15 @@ func fallbackStatusMessage(m Model) statusMessage {
 	if daemonHealthDegraded(m) || hookHealthDegraded(m) {
 		return statusMessage{Text: "Health degraded", Severity: statusWarning}
 	}
+	if m.mode == ModeSessionSearch && m.sessionRefreshInFlight {
+		if count := len(m.sessionResults); count > 0 {
+			return statusMessage{
+				Text:     fmt.Sprintf("Scanning transcripts… showing %d cached result%s; updates automatically", count, plural(count)),
+				Severity: statusInfo,
+			}
+		}
+		return statusMessage{Text: "Scanning transcripts… results will update automatically", Severity: statusInfo}
+	}
 	return statusMessage{Text: fallbackStatusText(m), Severity: statusIdle}
 }
 
