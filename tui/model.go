@@ -225,9 +225,10 @@ type Model struct {
 	filterProfile     []string
 	filterProject     []string
 
-	// chip picker overlay (ModeChipPicker) opened from ModeSessionSearch when
-	// the user presses h/p/r to choose harness/profile/project. chipPickerKind
-	// selects which filter is being edited. chipPickerAllOptions is the full
+	// chip picker overlay (ModeChipPicker) opened from ModeSessionSearch or
+	// ModePlanSearch to choose a categorical filter. chipPickerKind selects
+	// which filter is being edited, while chipPickerReturnMode preserves the
+	// owning search view. chipPickerAllOptions is the full
 	// list captured at open time; chipPickerOptions is the visible list used by
 	// the cursor, renderer, and selection (the leading empty string represents
 	// "(any)" when visible). chipPickerCursor/Offset follow the same window
@@ -239,6 +240,7 @@ type Model struct {
 	chipPickerOffset     int
 	chipPickerQuery      string
 	chipPickerSearchMode bool
+	chipPickerReturnMode Mode
 
 	// session viewer (ModeSessionView). viewerSession is the metadata of the
 	// transcript currently being read; nil when the viewer is closed.
@@ -297,6 +299,7 @@ type Model struct {
 	planSearchErr             error
 	planSearchSeq             int
 	planSortMode              plans.SortMode // cycled with `s`; zero value = SortByMatches
+	planFilterProject         plans.ProjectFilter
 
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
 	// user opened with Enter; nil when the viewer is closed. planViewerLines

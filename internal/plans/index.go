@@ -12,6 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/searchstore"
 )
 
@@ -32,10 +35,11 @@ func IndexPath() string {
 // one instance, while a stable advisory lock coordinates independent instances
 // and processes during mutations.
 type Index struct {
-	mu      sync.Mutex
-	path    string
-	store   *searchstore.Store
-	entries map[string]PlanMeta
+	mu        sync.Mutex
+	path      string
+	stateRoot string
+	store     *searchstore.Store
+	entries   map[string]PlanMeta
 
 	filesystemBase  map[string]PlanMeta
 	filesystemDirty bool
@@ -50,7 +54,11 @@ type indexFile struct {
 
 // LoadIndex reads the index from the default IndexPath.
 func LoadIndex() (*Index, error) {
-	return LoadIndexAt(IndexPath())
+	idx, err := LoadIndexAt(IndexPath())
+	if idx != nil {
+		idx.stateRoot = agentloop.DefaultStateRoot()
+	}
+	return idx, err
 }
 
 // loadIndexAtStrict decodes a complete metadata file without recovery. Public
@@ -138,8 +146,8 @@ func (i *Index) Delete(key string) error {
 // entries whose backing directory has disappeared from disk or no longer
 // contains eligible markdown. Per-plan failures preserve cached or useful
 // partial rows and are returned as warnings without hiding the rest.
-func (i *Index) Refresh(root string) error {
-	return i.refreshFilesystem(root)
+func (i *Index) Refresh(root string, projects ...config.Session) error {
+	return i.refreshFilesystem(root, projects)
 }
 
 // refreshPlanLocked rebuilds the PlanMeta for a single plan directory or
@@ -148,7 +156,7 @@ func (i *Index) Refresh(root string) error {
 // supplies a private worker Index. The boolean reports whether SearchText was
 // rebuilt and must be written by the caller after its merge-time freshness
 // check.
-func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, bool, error) {
+func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolver) (*PlanMeta, bool, error) {
 	type fileInfo struct {
 		rel  string
 		size int64
@@ -210,17 +218,23 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, bool, error) {
 	}
 
 	displayName := DisplayName(filepath.Base(planDir))
+	cwd, associationErr := discoverPlanCWD(planDir, i.stateRoot)
 
 	// Cache hit: identical file list, aggregate size, and mtime means
 	// the corpus matches the cached snapshot. Reuse the cached snippet
 	// and skip the per-file read + sidecar rewrite when the search
 	// sidecar still exists; otherwise fall through to rebuild it.
 	cached, cachedOK := i.entries[PlanKey(planDir)]
+	if associationErr != nil && cachedOK {
+		return &cached, false, associationErr
+	}
 	if cachedOK && walkErr == nil && equalStrings(cached.Files, rels) && cached.Size == size && cached.ModTime.Equal(modTime) && i.sidecarExists(PlanKey(planDir)) {
 		cached.Files = rels
 		cached.Name = displayName
 		cached.DirPath = planDir
 		cached.SearchText = ""
+		cached.CWD = cwd
+		cached = classifyPlanProject(cached, resolver)
 		return &cached, false, nil
 	}
 
@@ -272,7 +286,9 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, bool, error) {
 		ModTime:    modTime,
 		Snippet:    snippet,
 		SearchText: searchBuilder.String(),
+		CWD:        cwd,
 	}
+	*meta = classifyPlanProject(*meta, resolver)
 	if walkErr != nil || readWarning != nil {
 		if cachedOK {
 			return &cached, false, errors.Join(walkErr, readWarning)
@@ -280,9 +296,9 @@ func (i *Index) refreshPlanLocked(planDir string) (*PlanMeta, bool, error) {
 		meta.Files = readableFiles
 		meta.Size = readableSize
 		meta.ModTime = readableModTime
-		return meta, true, errors.Join(walkErr, readWarning)
+		return meta, true, errors.Join(walkErr, readWarning, associationErr)
 	}
-	return meta, true, nil
+	return meta, true, associationErr
 }
 
 func (i *Index) sidecarExists(key string) bool {

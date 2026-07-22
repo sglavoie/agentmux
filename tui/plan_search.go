@@ -8,14 +8,13 @@ import (
 )
 
 // planSearchVisibleHeight returns the number of result rows that fit in the
-// root body area. Plans has no chip bar, so the chrome is one row lighter
-// than session search: header (1) + query bar (1) + blank (1), plus any
-// selected plan path row and inline error rows.
+// root body area. Chrome is header (1) + project chip (1) + query bar (1) +
+// blank (1), plus any selected plan path row and inline error rows.
 func planSearchVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
 	}
-	avail := rootBodyHeight(m) - 3 - pathRowLines(selectedPlanSearchPath(m)) - planSearchErrorLines(m)
+	avail := rootBodyHeight(m) - 4 - pathRowLines(selectedPlanSearchPath(m)) - planSearchErrorLines(m)
 	if avail < 1 {
 		return 1
 	}
@@ -47,9 +46,8 @@ func planSortLabel(mode plans.SortMode) string {
 	}
 }
 
-// renderPlanSearch renders the plan browser: header, query bar, and the
-// results list. Mirrors renderSessionSearch without the chip bar because plans
-// have no categorical filters.
+// renderPlanSearch renders the plan browser: header, project chip, query bar,
+// and results list.
 func renderPlanSearch(m Model) string {
 	var sb strings.Builder
 
@@ -62,6 +60,8 @@ func renderPlanSearch(m Model) string {
 			count, plural(count), planSortLabel(m.planSortMode)))
 	}
 	sb.WriteString(clampSearchLine(styleHeader.Render(header), m.width))
+	sb.WriteByte('\n')
+	sb.WriteString(renderPlanProjectChip(m))
 	sb.WriteByte('\n')
 
 	var queryBar string
@@ -100,6 +100,26 @@ func renderPlanSearch(m Model) string {
 
 func planSearchHeader(m Model) string {
 	return "Plans"
+}
+
+func renderPlanProjectChip(m Model) string {
+	label := "any"
+	active := false
+	switch m.planFilterProject.Kind {
+	case plans.ProjectNamed:
+		label = m.planFilterProject.Name
+		active = true
+	case plans.ProjectUnknown:
+		label = "Unknown"
+		active = true
+	}
+	chip := "[r] project: " + label
+	if active {
+		chip = styleChip.Render(chip)
+	} else {
+		chip = styleDim.Render(chip)
+	}
+	return clampSearchLine("  "+chip, m.width)
 }
 
 // renderPlanSearchList renders the scrollable results list. height is the
@@ -151,7 +171,7 @@ func renderPlanSearchList(m Model, height int) string {
 }
 
 // formatPlanRow returns a single-line summary of one plan result. Format:
-// "  <when>  <name>  <N files>  [m matches]?  <preview>"
+// "  <when>  [<project>]  <name>  <N files>  [m matches]?  <preview>"
 func formatPlanRow(res plans.Result, maxWidth int) string {
 	when := formatSessionWhen(res.Meta.ModTime)
 	name := res.Meta.Name
@@ -165,7 +185,12 @@ func formatPlanRow(res plans.Result, maxWidth int) string {
 		matchFrag = "  " + styleSearch.Render(fmt.Sprintf("(%d match%s)", res.Matches, matchPlural(res.Matches)))
 	}
 
-	head := fmt.Sprintf("  %s  %s  %s", when, name, styleDim.Render(fileFrag))
+	project := planProjectLabel(res.Meta)
+	projectFrag := styleChip.Render("[" + project + "]")
+	if len(res.Meta.ProjectNames()) == 0 {
+		projectFrag = styleDim.Render("[" + project + "]")
+	}
+	head := fmt.Sprintf("  %s  %s  %s  %s", when, projectFrag, name, styleDim.Render(fileFrag))
 	body := head + matchFrag
 
 	preview := res.Preview
@@ -176,4 +201,14 @@ func formatPlanRow(res plans.Result, maxWidth int) string {
 		body += "  " + styleDim.Render(displayTruncate(preview, maxRunes(maxWidth-displayStyledWidth(body)-2), "…"))
 	}
 	return displayStyledTruncate(body, maxWidth, "…")
+}
+
+func planProjectLabel(meta plans.PlanMeta) string {
+	if meta.Project != "" {
+		return meta.Project
+	}
+	if projects := meta.ProjectNames(); len(projects) > 0 {
+		return projects[0]
+	}
+	return "Unknown"
 }

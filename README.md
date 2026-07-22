@@ -158,10 +158,10 @@ Key flows:
 - `p`: toggle the preview pane
 - `d`: show the per-session hook event log (scrollable detail pane)
 - `S`: search past session transcripts across every configured profile
-- `P`: search saved agent plans; search and viewer screens show the selected
-  plan directory path, `Y` copies the full path, and the plan viewer wraps long
-  lines, supports less-style `Ctrl+d/u/f/b` paging, and `y` copies the selected
-  raw line
+- `P`: search saved agent plans; rows and the viewer show the configured
+  project title, `r` filters by project (including `Unknown`), `Y` copies the
+  full plan path, and the viewer wraps long lines, supports less-style
+  `Ctrl+d/u/f/b` paging, and `y` copies the selected raw line
 - `?`: show the full keymap
 
 The command palette searches command titles, descriptions, aliases, and shown
@@ -297,9 +297,23 @@ Press `P` to search saved plan directories. Agent Mux loads warm rows from the
 filesystem cache first and refreshes the configured `plans_directory` in the
 background. A missing or malformed cache is quarantined and rebuilt from the
 plan directories; an unreadable plan never blanks rows that were read
-successfully. In Plans, `/` searches, `enter` opens the viewer, `Y` copies the
-plan directory, and the viewer supports `j`/`k`, `g`/`G`,
+successfully. Each row and viewer header shows the associated configured
+project title. Press `r` to filter by the projects represented in the index or
+by `Unknown`; equally specific configuration aliases are separate filter
+choices and match the same plans. `/` searches, `enter` opens the viewer, `Y`
+copies the plan directory, and the viewer supports `j`/`k`, `g`/`G`,
 `Ctrl+d/u/f/b`, and `y` to copy the selected raw line.
+
+Project association is source-backed rather than inferred from plan prose.
+Agent Mux resolves the canonical plan workspace in this order: retained ASL
+run state, `plan-metadata.json`, then legacy
+`prepare-validation.json.codebase_root`. It maps that path to the most-specific
+configured project (including registered Git worktrees). A plan with no valid
+workspace metadata, or a workspace that matches no configured project, is
+shown as `Unknown`; if a previously valid source becomes malformed, the cache
+keeps its last-good association and surfaces a refresh warning. `asl prepare`
+and non-dry-run `asl run` write the versioned `plan-metadata.json` contract for
+new and resumed plans.
 
 Agent Mux does not use SQLite. Local files have deliberately narrow ownership:
 

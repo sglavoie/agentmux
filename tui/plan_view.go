@@ -16,8 +16,8 @@ func renderPlanView(m Model) string {
 		if name == "" {
 			name = "(unnamed)"
 		}
-		header = fmt.Sprintf("Plan: %s  (%d file%s)",
-			displayRenderTitleIcon(name), len(m.viewerPlan.Files), plural(len(m.viewerPlan.Files)))
+		header = fmt.Sprintf("Plan: %s  [project: %s]  (%d file%s)",
+			displayRenderTitleIcon(name), planProjectLabel(*m.viewerPlan), len(m.viewerPlan.Files), plural(len(m.viewerPlan.Files)))
 	}
 	if m.planViewerLoading {
 		header += "  " + styleDim.Render("(loading…)")

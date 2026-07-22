@@ -55,7 +55,7 @@ func renderFooter(m Model) string {
 		)
 	case ModePlanSearch:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "/ filter", "enter view", "o editor", "s sort", "Y path", "esc back"),
+			footerLine(m.width, " · ", "/ filter", "r project", "enter view", "o editor", "s sort", "Y path", "esc back"),
 			footerLine(m.width, " · ", "j/k up/down", "g/G top/bot", "ctrl+d/u half", "ctrl+f/b page"),
 		)
 	case ModePlanView:

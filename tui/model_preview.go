@@ -45,11 +45,14 @@ func (m Model) render() string {
 	case ModeMessageDetail:
 		sb.WriteString(renderMessageDetail(m))
 	case ModeDeleteChoice, ModeChipPicker:
-		// Modal overlays on top of ModeSessionSearch. The base view is
+		// Modal overlays on top of its owning search view. The base view is
 		// rendered then dimmed; the bordered popup is composited via
 		// line-splicing so the underlying list stays visible around it.
 		// See tui/overlay.go for the splicing algorithm.
 		base := renderSessionSearch(m)
+		if m.mode == ModeChipPicker && chipPickerSourceMode(m) == ModePlanSearch {
+			base = renderPlanSearch(m)
+		}
 		var popup string
 		if m.mode == ModeChipPicker {
 			popup = renderChipPickerBox(m)

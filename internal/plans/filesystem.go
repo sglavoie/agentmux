@@ -9,6 +9,8 @@ import (
 	"reflect"
 
 	"github.com/sglavoie/agentmux/internal/cachefile"
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/searchstore"
 )
 
@@ -166,7 +168,7 @@ func (i *Index) deleteFilesystem(key string) error {
 // refreshFilesystem scans without holding the cache lock, then reloads and
 // merges under the lock. Per-plan failures preserve cached rows, while useful
 // partial metadata from a new plan remains visible with a warning.
-func (i *Index) refreshFilesystem(root string) error {
+func (i *Index) refreshFilesystem(root string, projects []config.Session) error {
 	if root == "" {
 		return errors.New("plans: Refresh requires a non-empty root path")
 	}
@@ -185,7 +187,8 @@ func (i *Index) refreshFilesystem(root string) error {
 		return errors.Join(loadWarning, fmt.Errorf("reading plans root %s: %w", root, readErr))
 	}
 
-	worker := &Index{path: i.path, store: i.store, entries: clonePlanEntries(snapshot)}
+	worker := &Index{path: i.path, stateRoot: i.stateRoot, store: i.store, entries: clonePlanEntries(snapshot)}
+	resolver := projectresolve.NewWithGit(projects)
 	discovered := make(map[string]PlanMeta)
 	discoveredSearchText := make(map[string]bool)
 	removed := make(map[string]struct{})
@@ -201,7 +204,7 @@ func (i *Index) refreshFilesystem(root string) error {
 			removed[key] = struct{}{}
 			continue
 		}
-		meta, searchTextReady, planErr := worker.refreshPlanLocked(planDir)
+		meta, searchTextReady, planErr := worker.refreshPlanLocked(planDir, resolver)
 		if planErr != nil {
 			discoveryWarning = errors.Join(discoveryWarning, fmt.Errorf("refreshing plan %s: %w", planDir, planErr))
 		}
@@ -286,6 +289,7 @@ func clonePlanEntries(entries map[string]PlanMeta) map[string]PlanMeta {
 	out := make(map[string]PlanMeta, len(entries))
 	for key, meta := range entries {
 		meta.Files = append([]string(nil), meta.Files...)
+		meta.Projects = append([]string(nil), meta.Projects...)
 		out[key] = meta
 	}
 	return out

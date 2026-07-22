@@ -435,6 +435,46 @@ func TestDiscoverMissingRootReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestLookupPlanStateReturnsFinishedRunWorkspaceWithoutLiveness(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	cwd := filepath.Join(t.TempDir(), "repo")
+	stateDir := stateDirForPlan(t, root, planDir)
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(stateDir, stateFileName), map[string]any{
+		"plan_dir":        canonical(t, planDir),
+		"cwd":             cwd,
+		"run_finished_at": "2026-07-22T12:00:00Z",
+	})
+
+	got, found, err := LookupPlanState(planDir, root)
+	if err != nil || !found {
+		t.Fatalf("LookupPlanState = %#v, %v, %v", got, found, err)
+	}
+	if got.PlanDir != canonical(t, planDir) || got.CWD != canonical(t, cwd) || got.StateDir != canonical(t, stateDir) {
+		t.Fatalf("LookupPlanState = %#v", got)
+	}
+}
+
+func TestLookupPlanStateRejectsMismatchedEmbeddedPlan(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	stateDir := stateDirForPlan(t, root, planDir)
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(stateDir, stateFileName), map[string]any{
+		"plan_dir": filepath.Join(t.TempDir(), "other"),
+		"cwd":      filepath.Join(t.TempDir(), "repo"),
+	})
+
+	if _, found, err := LookupPlanState(planDir, root); err == nil || found {
+		t.Fatalf("LookupPlanState mismatch = found %v err %v", found, err)
+	}
+}
+
 func TestMatchingCWDMatchesCanonicalCWD(t *testing.T) {
 	base := t.TempDir()
 	realDir := filepath.Join(base, "real")

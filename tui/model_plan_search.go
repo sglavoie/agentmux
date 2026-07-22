@@ -159,6 +159,8 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	case keySlash:
 		m.planSearchMode = true
 		return m, nil
+	case keyR:
+		return m.enterChipPicker(chipPickerProject)
 	case keyJ, keyDown:
 		m.planCursor = clamp(m.planCursor+1, 0, len(m.planResults)-1)
 		scrollPlanSearchToCursor(&m)
@@ -282,7 +284,7 @@ func (m Model) runPlanSearchCmd(seq int, idx *plans.Index, q plans.Query) tea.Cm
 // so the result chain stays cancellable.
 func plansRefreshCmd(idx *plans.Index, cfg *config.Config, seq int) tea.Cmd {
 	return func() tea.Msg {
-		err := idx.Refresh(config.ExpandTilde(cfg.Defaults.PlansDirectory))
+		err := idx.Refresh(config.ExpandTilde(cfg.Defaults.PlansDirectory), cfg.Projects...)
 		return plansRefreshDoneMsg{err: err, seq: seq}
 	}
 }
@@ -307,7 +309,7 @@ func openPlanInEditorCmd(client kitty.KittyClient, meta plans.PlanMeta, cfg *con
 
 // currentPlanQuery snapshots the text query into a plans.Query value.
 func (m Model) currentPlanQuery() plans.Query {
-	return plans.Query{Text: m.planQuery, Sort: m.planSortMode}
+	return plans.Query{Text: m.planQuery, Sort: m.planSortMode, Project: m.planFilterProject}
 }
 
 // scrollPlanSearchToCursor keeps the cursor inside the visible window after

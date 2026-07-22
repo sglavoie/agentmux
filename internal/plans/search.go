@@ -21,12 +21,30 @@ const (
 	SortByModTime
 )
 
+// ProjectFilterKind selects whether a plan search includes every project, one
+// configured project title, or only plans without a configured-project match.
+type ProjectFilterKind int
+
+const (
+	ProjectAny ProjectFilterKind = iota
+	ProjectNamed
+	ProjectUnknown
+)
+
+// ProjectFilter is the single project chip applied to a plan query. Name is
+// consulted only for ProjectNamed and matches every alias in PlanMeta.Projects.
+type ProjectFilter struct {
+	Kind ProjectFilterKind
+	Name string
+}
+
 // Query describes a plan-search request. An empty Text returns every
 // indexed plan with Matches=0 and Preview falling back to the cached
 // snippet, sorted by ModTime descending.
 type Query struct {
-	Text string
-	Sort SortMode
+	Text    string
+	Sort    SortMode
+	Project ProjectFilter
 }
 
 // Result is one matching plan. Matches is the case-insensitive substring
@@ -50,6 +68,13 @@ func Search(idx *Index, q Query) ([]Result, error) {
 	metas := idx.List()
 	needle := strings.ToLower(strings.TrimSpace(q.Text))
 	results := make([]Result, 0, len(metas))
+	filtered := metas[:0]
+	for _, meta := range metas {
+		if projectFilterMatches(q.Project, meta) {
+			filtered = append(filtered, meta)
+		}
+	}
+	metas = filtered
 
 	if needle == "" {
 		for _, m := range metas {
@@ -107,6 +132,23 @@ func Search(idx *Index, q Query) ([]Result, error) {
 
 	SortResults(results, q.Sort)
 	return results, nil
+}
+
+func projectFilterMatches(filter ProjectFilter, meta PlanMeta) bool {
+	projects := meta.ProjectNames()
+	switch filter.Kind {
+	case ProjectNamed:
+		for _, project := range projects {
+			if project == filter.Name {
+				return true
+			}
+		}
+		return false
+	case ProjectUnknown:
+		return len(projects) == 0
+	default:
+		return true
+	}
 }
 
 func readPlanSearchText(meta PlanMeta) (string, error) {

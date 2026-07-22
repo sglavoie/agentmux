@@ -82,6 +82,14 @@ type Candidate struct {
 	HeartbeatAtRaw     string
 }
 
+// PlanState is the durable workspace association retained for a plan after
+// its ASL process exits. Unlike Candidate, it has no liveness requirement.
+type PlanState struct {
+	PlanDir  string
+	StateDir string
+	CWD      string
+}
+
 // WorkspaceTarget describes an open workspace session that can receive loop
 // marker state.
 type WorkspaceTarget struct {
@@ -106,6 +114,55 @@ func DefaultStateRoot() string {
 		return canonical
 	}
 	return filepath.Clean(root)
+}
+
+// LookupPlanState reads the durable state for one exact plan directory. A
+// missing state file or a valid state without cwd returns found=false. The
+// state-directory hash and embedded plan_dir must both match so callers never
+// classify a plan from unrelated or relocated state.
+func LookupPlanState(planDir, stateRoot string) (state PlanState, found bool, err error) {
+	canonicalPlan, err := CanonicalizePath(planDir)
+	if err != nil {
+		return PlanState{}, false, fmt.Errorf("agentloop: resolving plan directory %s: %w", planDir, err)
+	}
+	if canonicalPlan == "" {
+		return PlanState{}, false, errors.New("agentloop: plan directory is empty")
+	}
+	if stateRoot == "" {
+		stateRoot = DefaultStateRoot()
+	}
+	canonicalRoot, err := CanonicalizePath(stateRoot)
+	if err != nil {
+		return PlanState{}, false, fmt.Errorf("agentloop: resolving state root %s: %w", stateRoot, err)
+	}
+	stateDir := filepath.Join(canonicalRoot, pathSHA256(canonicalPlan))
+	statePath := filepath.Join(stateDir, stateFileName)
+	data, err := os.ReadFile(statePath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return PlanState{}, false, nil
+	}
+	if err != nil {
+		return PlanState{}, false, fmt.Errorf("agentloop: reading plan state %s: %w", statePath, err)
+	}
+	var persisted stateFile
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		return PlanState{}, false, fmt.Errorf("agentloop: decoding plan state %s: %w", statePath, err)
+	}
+	if strings.TrimSpace(persisted.PlanDir) == "" {
+		return PlanState{}, false, fmt.Errorf("agentloop: plan state %s has no plan_dir", statePath)
+	}
+	statePlan, err := CanonicalizePath(persisted.PlanDir)
+	if err != nil || statePlan != canonicalPlan {
+		return PlanState{}, false, fmt.Errorf("agentloop: plan state %s belongs to %q, not %q", statePath, persisted.PlanDir, canonicalPlan)
+	}
+	if strings.TrimSpace(persisted.CWD) == "" {
+		return PlanState{}, false, nil
+	}
+	cwd, err := CanonicalizePath(persisted.CWD)
+	if err != nil {
+		return PlanState{}, false, fmt.Errorf("agentloop: resolving plan state cwd %s: %w", persisted.CWD, err)
+	}
+	return PlanState{PlanDir: canonicalPlan, StateDir: stateDir, CWD: cwd}, true, nil
 }
 
 // Discover scans the configured state root and returns active candidates sorted

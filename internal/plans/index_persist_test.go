@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 func TestSaveLoadRoundtrip(t *testing.T) {
@@ -12,9 +14,11 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 		"manifest.md":  "# alpha title\nmore",
 		"session-1.md": "body text",
 	})
+	projectDir := canonicalPlanTestPath(t, filepath.Join(t.TempDir(), "project"))
+	writePlanJSON(t, filepath.Join(planDir, planMetadataFileName), map[string]any{"version": 1, "cwd": projectDir})
 
 	src := newTestIndex(t)
-	if err := src.Refresh(root); err != nil {
+	if err := src.Refresh(root, config.Session{Title: "Alpha project", Directory: projectDir}); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
 	want, ok := src.Get(PlanKey(planDir))
@@ -49,6 +53,19 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 	}
 	if got.Snippet != want.Snippet {
 		t.Errorf("Snippet: got %q want %q", got.Snippet, want.Snippet)
+	}
+	if got.CWD != want.CWD || got.Project != want.Project {
+		t.Errorf("association: got cwd/project %q/%q want %q/%q", got.CWD, got.Project, want.CWD, want.Project)
+	}
+	if len(got.Projects) != len(want.Projects) {
+		t.Errorf("Projects: got %#v want %#v", got.Projects, want.Projects)
+	} else {
+		for i := range got.Projects {
+			if got.Projects[i] != want.Projects[i] {
+				t.Errorf("Projects: got %#v want %#v", got.Projects, want.Projects)
+				break
+			}
+		}
 	}
 	if got.SearchText != "" {
 		t.Errorf("SearchText leaked into JSON: %q", got.SearchText)

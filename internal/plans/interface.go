@@ -17,11 +17,42 @@ import (
 type PlanMeta struct {
 	Name       string    `json:"name"`
 	DirPath    string    `json:"dir_path"`
+	CWD        string    `json:"cwd,omitempty"`
+	Project    string    `json:"project,omitempty"`
+	Projects   []string  `json:"projects,omitempty"`
 	Files      []string  `json:"files"`
 	Size       int64     `json:"size"`
 	ModTime    time.Time `json:"mod_time"`
 	Snippet    string    `json:"snippet"`
 	SearchText string    `json:"-"`
+}
+
+// ProjectNames returns every configured project tied for the most-specific
+// match. Older cache entries with only Project fall back to that single name.
+func (m PlanMeta) ProjectNames() []string {
+	if projects := cleanProjectNames(m.Projects); len(projects) > 0 {
+		return projects
+	}
+	if m.Project == "" {
+		return nil
+	}
+	return []string{m.Project}
+}
+
+func cleanProjectNames(projects []string) []string {
+	out := make([]string, 0, len(projects))
+	seen := make(map[string]struct{}, len(projects))
+	for _, project := range projects {
+		if project == "" {
+			continue
+		}
+		if _, ok := seen[project]; ok {
+			continue
+		}
+		seen[project] = struct{}{}
+		out = append(out, project)
+	}
+	return out
 }
 
 // PlanKey returns the stable lookup key for a plan directory. The

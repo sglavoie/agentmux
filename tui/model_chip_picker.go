@@ -6,10 +6,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/plans"
 )
 
-// chipPickerKind identifies which ModeSessionSearch chip filter the picker
-// overlay is editing.
+// chipPickerKind identifies which search-view chip filter the picker edits.
 type chipPickerKind int
 
 const (
@@ -18,6 +18,11 @@ const (
 	chipPickerProject
 )
 
+// chipPickerUnknownProjectValue is an internal option value whose display
+// label is "Unknown". A sentinel keeps a configured project literally named
+// "Unknown" distinct from plans that have no configured-project match.
+const chipPickerUnknownProjectValue = "\x00plans-project-unknown"
+
 // enterChipPicker opens the chip picker overlay for the given kind. The
 // option list is captured at open time (prepended with "" for the "(any)"
 // row) so a runtime config change can't shift the cursor under the user.
@@ -25,7 +30,12 @@ const (
 // when that value is still present in the option list; otherwise it lands on
 // the "(any)" row.
 func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
+	returnMode := m.mode
+	if returnMode != ModePlanSearch {
+		returnMode = ModeSessionSearch
+	}
 	m.mode = ModeChipPicker
+	m.chipPickerReturnMode = returnMode
 	m.chipPickerKind = kind
 	m.chipPickerQuery = ""
 	m.chipPickerSearchMode = false
@@ -40,8 +50,13 @@ func (m Model) enterChipPicker(kind chipPickerKind) (tea.Model, tea.Cmd) {
 		opts = profileNames(m)
 		current = singleChipValue(m.filterProfile)
 	case chipPickerProject:
-		opts = projectTitles(m)
-		current = singleChipValue(m.filterProject)
+		if returnMode == ModePlanSearch {
+			opts = planProjectOptions(m)
+			current = planProjectFilterOption(m.planFilterProject)
+		} else {
+			opts = projectTitles(m)
+			current = singleChipValue(m.filterProject)
+		}
 	}
 	options := make([]string, 0, len(opts)+1)
 	options = append(options, "")
@@ -104,7 +119,7 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.chipPickerSearchMode = true
 		return m, nil
 	case keyEsc, keyQ:
-		m.mode = ModeSessionSearch
+		m.mode = chipPickerSourceMode(m)
 		return m, nil
 	case keyJ, keyDown:
 		m.chipPickerCursor = clamp(m.chipPickerCursor+1, 0, len(m.chipPickerOptions)-1)
@@ -146,10 +161,22 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		if m.chipPickerCursor < 0 || m.chipPickerCursor >= len(m.chipPickerOptions) {
-			m.mode = ModeSessionSearch
+			m.mode = chipPickerSourceMode(m)
 			return m, nil
 		}
 		selected := m.chipPickerOptions[m.chipPickerCursor]
+		if chipPickerSourceMode(m) == ModePlanSearch && m.chipPickerKind == chipPickerProject {
+			switch selected {
+			case "":
+				m.planFilterProject = plans.ProjectFilter{Kind: plans.ProjectAny}
+			case chipPickerUnknownProjectValue:
+				m.planFilterProject = plans.ProjectFilter{Kind: plans.ProjectUnknown}
+			default:
+				m.planFilterProject = plans.ProjectFilter{Kind: plans.ProjectNamed, Name: selected}
+			}
+			m.mode = ModePlanSearch
+			return m, m.dispatchPlanSearch()
+		}
 		var next []string
 		if selected != "" {
 			next = []string{selected}
@@ -185,11 +212,87 @@ func filterChipPickerOptions(options []string, query string) []string {
 		if opt == "" {
 			continue
 		}
-		if strings.Contains(strings.ToLower(opt), q) {
+		if strings.Contains(strings.ToLower(chipPickerOptionLabel(opt)), q) {
 			filtered = append(filtered, opt)
 		}
 	}
 	return filtered
+}
+
+func chipPickerSourceMode(m Model) Mode {
+	if m.chipPickerReturnMode == ModePlanSearch {
+		return ModePlanSearch
+	}
+	return ModeSessionSearch
+}
+
+func chipPickerOptionLabel(option string) string {
+	if option == chipPickerUnknownProjectValue {
+		return "Unknown"
+	}
+	return option
+}
+
+func planProjectFilterOption(filter plans.ProjectFilter) string {
+	switch filter.Kind {
+	case plans.ProjectNamed:
+		return filter.Name
+	case plans.ProjectUnknown:
+		return chipPickerUnknownProjectValue
+	default:
+		return ""
+	}
+}
+
+// planProjectOptions returns only projects represented by indexed plans, in
+// configuration order, plus Unknown when at least one plan is unassociated.
+func planProjectOptions(m Model) []string {
+	var metas []plans.PlanMeta
+	if m.plansIndex != nil {
+		metas = m.plansIndex.List()
+	} else {
+		metas = make([]plans.PlanMeta, 0, len(m.planResults))
+		for _, result := range m.planResults {
+			metas = append(metas, result.Meta)
+		}
+	}
+
+	represented := make(map[string]bool)
+	unknown := false
+	for _, meta := range metas {
+		projects := meta.ProjectNames()
+		if len(projects) == 0 {
+			unknown = true
+		}
+		for _, project := range projects {
+			represented[project] = true
+		}
+	}
+
+	options := make([]string, 0, len(represented)+1)
+	seen := make(map[string]bool, len(represented))
+	if m.cfg != nil {
+		for _, project := range m.cfg.Projects {
+			if represented[project.Title] && !seen[project.Title] {
+				options = append(options, project.Title)
+				seen[project.Title] = true
+			}
+		}
+	}
+	// Preserve discoverability for a warm cache whose configuration has not
+	// yet completed its refresh, and for lightweight test models without cfg.
+	for _, meta := range metas {
+		for _, project := range meta.ProjectNames() {
+			if !seen[project] {
+				options = append(options, project)
+				seen[project] = true
+			}
+		}
+	}
+	if unknown {
+		options = append(options, chipPickerUnknownProjectValue)
+	}
+	return options
 }
 
 // scrollChipPickerToCursor keeps the cursor inside the visible window after

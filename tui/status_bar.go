@@ -92,7 +92,7 @@ func fallbackStatusMessage(m Model) statusMessage {
 
 func modeErrorStatus(m Model) (statusMessage, bool) {
 	switch m.mode {
-	case ModeSessionSearch, ModeDeleteChoice, ModeChipPicker:
+	case ModeSessionSearch, ModeDeleteChoice:
 		if m.sessionSearchErr != nil {
 			return statusMessage{Text: "Search error: " + m.sessionSearchErr.Error(), Severity: statusError}, true
 		}
@@ -101,6 +101,25 @@ func modeErrorStatus(m Model) (statusMessage, bool) {
 				Text:     sentenceCase(sessionRefreshErrorLabel(m)) + ": " + m.sessionRefreshErr.Error(),
 				Severity: statusError,
 			}, true
+		}
+	case ModeChipPicker:
+		if chipPickerSourceMode(m) == ModePlanSearch {
+			if m.planSearchErr != nil {
+				return statusMessage{Text: "Search error: " + m.planSearchErr.Error(), Severity: statusError}, true
+			}
+			if m.planRefreshErr != nil {
+				return statusMessage{Text: "Refresh error: " + m.planRefreshErr.Error(), Severity: statusError}, true
+			}
+		} else {
+			if m.sessionSearchErr != nil {
+				return statusMessage{Text: "Search error: " + m.sessionSearchErr.Error(), Severity: statusError}, true
+			}
+			if m.sessionRefreshErr != nil {
+				return statusMessage{
+					Text:     sentenceCase(sessionRefreshErrorLabel(m)) + ": " + m.sessionRefreshErr.Error(),
+					Severity: statusError,
+				}, true
+			}
 		}
 	case ModeSessionView, ModeMessageDetail:
 		if m.viewerLoadErr != nil {

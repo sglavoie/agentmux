@@ -3,8 +3,8 @@ package tui
 import "strings"
 
 // chipPickerVisibleHeight returns the number of option rows that fit in the
-// overlay. Capped at 12 so the ModeSessionSearch backdrop rendered beneath
-// the overlay stays partially visible on tall terminals.
+// overlay. Capped at 12 so the owning search backdrop rendered beneath the
+// overlay stays partially visible on tall terminals.
 func chipPickerVisibleHeight(m Model) int {
 	if m.height <= 0 {
 		return 0
@@ -27,7 +27,7 @@ func chipPickerVisibleHeight(m Model) int {
 	return avail
 }
 
-// renderChipPicker renders the chip picker overlay for ModeSessionSearch.
+// renderChipPicker renders the chip picker overlay for a search view.
 // The two-pass ▲/▼ budget logic mirrors renderSessionSearchList so the
 // cursor stays inside the visible window on small terminals.
 func renderChipPicker(m Model) string {
@@ -72,7 +72,7 @@ func renderChipPicker(m Model) string {
 
 	for i := window.start; i < window.end; i++ {
 		opt := m.chipPickerOptions[i]
-		label := opt
+		label := chipPickerOptionLabel(opt)
 		if opt == "" {
 			label = "(any)"
 		}
@@ -144,6 +144,9 @@ func currentChipValue(m Model) string {
 	case chipPickerProfile:
 		return singleChipValue(m.filterProfile)
 	case chipPickerProject:
+		if chipPickerSourceMode(m) == ModePlanSearch {
+			return planProjectFilterOption(m.planFilterProject)
+		}
 		return singleChipValue(m.filterProject)
 	}
 	return ""

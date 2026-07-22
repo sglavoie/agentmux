@@ -75,6 +75,26 @@ func TestSearch_EmptyQueryReturnsAllByModTimeDesc(t *testing.T) {
 	}
 }
 
+func TestSearch_ProjectFiltersMatchAliasesAndUnknown(t *testing.T) {
+	idx := newTestIndex(t)
+	idx.entries = map[string]PlanMeta{
+		"known": {
+			Name: "known", Project: "Primary",
+			Projects: []string{"Primary", "Alias"},
+		},
+		"unknown": {Name: "unknown"},
+	}
+
+	known, err := Search(idx, Query{Project: ProjectFilter{Kind: ProjectNamed, Name: "Alias"}})
+	if err != nil || len(known) != 1 || known[0].Meta.Name != "known" {
+		t.Fatalf("alias filter = %#v, %v", known, err)
+	}
+	unknown, err := Search(idx, Query{Project: ProjectFilter{Kind: ProjectUnknown}})
+	if err != nil || len(unknown) != 1 || unknown[0].Meta.Name != "unknown" {
+		t.Fatalf("unknown filter = %#v, %v", unknown, err)
+	}
+}
+
 func TestSearch_SnippetMatchSurvivesMissingSidecar(t *testing.T) {
 	idx, planA, _ := seedTwoPlans(t)
 
