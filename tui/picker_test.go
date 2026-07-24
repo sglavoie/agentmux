@@ -377,6 +377,9 @@ func TestPickerFooterShowsFilterControls(t *testing.T) {
 	if !strings.Contains(footer, "DSL: @profile, word") {
 		t.Errorf("expected picker footer to retain DSL hint, got:\n%s", footer)
 	}
+	if !strings.Contains(footer, "f: profile") {
+		t.Errorf("expected picker footer to advertise profile cycling, got:\n%s", footer)
+	}
 	if !strings.Contains(footer, "esc: clear/exit") {
 		t.Errorf("expected picker footer to advertise esc behavior, got:\n%s", footer)
 	}

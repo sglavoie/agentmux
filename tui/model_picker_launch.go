@@ -186,12 +186,69 @@ func applyPickerFilter(sessions []config.Session, query string) []int {
 	return out
 }
 
-// pickerFilteredIndices applies the launcher DSL and then performs a stable
-// partition so pinned projects float above unpinned projects. Because
-// pickerSessions is already in profile/title order, both partitions retain
-// that existing order.
+// pickerFilteredIndices applies the launcher DSL and cycled default-profile
+// filter, then performs a stable partition so pinned projects float above
+// unpinned projects. Because pickerSessions is already in profile/title order,
+// both partitions retain that existing order.
 func (m Model) pickerFilteredIndices(query string) []int {
-	return pinPickerIndices(applyPickerFilter(m.pickerSessions, query), m.pickerPinned)
+	indices := applyPickerFilter(m.pickerSessions, query)
+	indices = filterPickerIndicesByProfile(m.pickerSessions, indices, m.pickerProfileFilter)
+	return pinPickerIndices(indices, m.pickerPinned)
+}
+
+func filterPickerIndicesByProfile(sessions []config.Session, indices []int, profile string) []int {
+	if profile == "" {
+		return indices
+	}
+	out := make([]int, 0, len(indices))
+	for _, idx := range indices {
+		if idx < 0 || idx >= len(sessions) {
+			continue
+		}
+		if strings.EqualFold(sessions[idx].EffectiveProfile(), profile) {
+			out = append(out, idx)
+		}
+	}
+	return out
+}
+
+// pickerProjectProfiles returns unique configured default profiles in the
+// order they first appear in pickerSessions. The picker sorts that slice by
+// profile before calling this helper, so unused configured profiles are
+// omitted and the cycle follows the visible launcher group order.
+func pickerProjectProfiles(sessions []config.Session) []string {
+	profiles := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, sess := range sessions {
+		profile := sess.EffectiveProfile()
+		key := strings.ToLower(profile)
+		if profile == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		profiles = append(profiles, profile)
+	}
+	return profiles
+}
+
+func nextPickerProfileFilter(sessions []config.Session, current string) string {
+	profiles := pickerProjectProfiles(sessions)
+	if len(profiles) == 0 {
+		return ""
+	}
+	if current == "" {
+		return profiles[0]
+	}
+	for i, profile := range profiles {
+		if !strings.EqualFold(profile, current) {
+			continue
+		}
+		if i+1 < len(profiles) {
+			return profiles[i+1]
+		}
+		return ""
+	}
+	return profiles[0]
 }
 
 func pinPickerIndices(indices []int, pinned map[int]bool) []int {

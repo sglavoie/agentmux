@@ -234,6 +234,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerProfileOverride, m.pickerPinned = loadPickerState(m.pickerSessions)
 		m.pickerCursor = 0
 		m.pickerFilter = ""
+		m.pickerProfileFilter = ""
 		m.pickerSearchMode = false
 		m.pickerFilteredIdx = m.pickerFilteredIndices("")
 		m.mode = ModePicker

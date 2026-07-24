@@ -65,11 +65,13 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerSearchMode = true
 		return m, nil
 	case keyEsc:
-		// Two-stage Esc: first clears a non-empty filter; second exits picker.
-		if m.pickerFilter != "" {
+		// Two-stage Esc: first clears all active filters; second exits picker.
+		if m.pickerFilter != "" || m.pickerProfileFilter != "" {
 			m.pickerFilter = ""
+			m.pickerProfileFilter = ""
 			m.pickerFilteredIdx = m.pickerFilteredIndices("")
 			m.pickerCursor = 0
+			m.pickerOffset = 0
 			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 				return m, cmd
@@ -79,6 +81,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModeList
 		m.pickerProfileOverride = nil
 		m.pickerPinned = nil
+		m.pickerProfileFilter = ""
 		var cmds []tea.Cmd
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -149,6 +152,8 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case keyTogglePreview:
 		return m.togglePickerPreview()
+	case keyF:
+		return m.cyclePickerProfile()
 	case keyPinProject:
 		return m.togglePickerPin()
 	case keySpace:
@@ -212,6 +217,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerSelected = nil
 		m.pickerProfileOverride = nil
 		m.pickerPinned = nil
+		m.pickerProfileFilter = ""
 		return m, tea.Batch(cmd, m.resumeListPreviewTickCmd())
 	case keyBackspace:
 		if r := []rune(m.pickerFilter); len(r) > 0 {
@@ -227,6 +233,17 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	default:
 		return m, nil
 	}
+}
+
+// cyclePickerProfile advances the launcher's default-profile filter through
+// the project-backed profile groups and back to the empty "all" state.
+func (m Model) cyclePickerProfile() (tea.Model, tea.Cmd) {
+	m.pickerProfileFilter = nextPickerProfileFilter(m.pickerSessions, m.pickerProfileFilter)
+	m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
+	m.pickerCursor = 0
+	m.pickerOffset = 0
+	scrollPickerToCursor(&m)
+	return m, m.refreshPreviewForPickerCursor()
 }
 
 // togglePickerPin persists and applies the highlighted project's next pin

@@ -205,12 +205,18 @@ Launcher rows likewise show the project title only; profile information stays in
 its own badge/metadata columns.
 
 - press `/` to filter live,
+- `f` cycles project visibility through each default profile and back to all,
 - `space` toggles selection,
 - `enter` launches the selected projects,
 - `P` pins or unpins the highlighted project so pinned projects stay at the top,
 - `s` searches past session transcripts for the highlighted project,
 - `C` chooses a **one-time profile override** for the highlighted project,
 - `o` opens the highlighted project's directory instead of launching it.
+
+The profile cycle starts at **All** whenever the launcher opens, includes only
+profiles that own configured projects, and follows the launcher's alphabetical
+profile-group order. It matches each project's default profile and combines
+with any active `/` filter.
 
 Pins persist per user across Agent Mux restarts. Pinned and unpinned groups each
 retain the launcher's existing profile-then-project ordering, including while a

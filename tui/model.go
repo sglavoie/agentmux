@@ -86,6 +86,7 @@ type Model struct {
 	pickerCursor         int
 	pickerOffset         int    // top row index for the scrollable picker view
 	pickerFilter         string // live filter buffer (DSL)
+	pickerProfileFilter  string // cycled default-profile filter; empty means all profiles
 	pickerFilteredIdx    []int  // indices into pickerSessions for the filtered view
 	pickerSearchMode     bool   // true while / is active and filter input is open
 	pickerPreviewEnabled bool   // picker-local preview toggle, independent of ModeList

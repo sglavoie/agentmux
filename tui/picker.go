@@ -103,6 +103,11 @@ func renderPickerList(m Model, height int) string {
 	if selectedCount > 0 {
 		header += fmt.Sprintf("  [%d selected]", selectedCount)
 	}
+	profileLabel := "All"
+	if m.pickerProfileFilter != "" {
+		profileLabel = m.pickerProfileFilter
+	}
+	header += "  [profile: " + profileLabel + "]"
 	sb.WriteString(renderPickerHeader(m, header))
 	switch {
 	case m.pickerSearchMode:
@@ -267,6 +272,9 @@ func renderPickerList(m Model, height int) string {
 
 func renderPickerHeader(m Model, header string) string {
 	left := styleHeader.Render(header)
+	if m.width > 0 && displayStyledWidth(left) > m.width {
+		return displayStyledTruncate(left, m.width, "…") + "\n"
+	}
 	right := ""
 	if !m.pickerSearchMode && m.pickerFilter == "" {
 		right = styleDim.Render("press / to filter")

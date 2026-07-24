@@ -61,6 +61,7 @@ var helpSections = []struct {
 	}},
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
+		"  f         cycle launcher projects by default profile",
 		"  P         pin / unpin highlighted launcher project",
 		"  C         launch new session with profile selection",
 		"  o         open session directory in a plain shell tab",
