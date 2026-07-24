@@ -138,7 +138,6 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 	}
 	h.stateMu.Lock()
 	st = h.ensureWindowStateLocked(req.WindowID)
-	prevActiveEvent := st.LastActiveEvent
 	copilotPermissionState := st.CopilotToolPermissionState
 	if shouldResetCopilotToolPermissionState(req) {
 		st.CopilotToolPermissionState = copilotToolPermissionNone
@@ -409,17 +408,14 @@ func (h *Handler) applyStateUpdate(req Request) (Response, applyOutcome) {
 		return Response{OK: true, Allowed: false}, outcome
 	}
 
-	// Auto-approved permission: the Claude harness can emit PermissionRequest
-	// after PreToolUse for a tool that is already running, and Copilot can later
-	// emit a trailing notification.permission_prompt even after the turn already
-	// continued. In both cases there is nothing left for the user to approve, so
-	// preserve the current icon instead of surfacing the key. Other harnesses
-	// (e.g. Codex) use PreToolUse → PermissionRequest as the normal real
-	// permission flow and must not be caught by this heuristic.
+	// Auto-approved permission: Copilot can emit a trailing
+	// notification.permission_prompt even after the turn already continued. In
+	// that case there is nothing left for the user to approve, so preserve the
+	// current icon instead of surfacing the key. Claude and Codex both treat
+	// PreToolUse → PermissionRequest as a real, user-blocking prompt and must
+	// surface the key immediately, so neither is caught by this heuristic.
 	isAutoApprovedPerm := effective == "permission" &&
-		((isClaudeRequest(req) && prevGuard == "active" &&
-			(prevActiveEvent == "PreToolUse" || prevActiveEvent == "preToolUse")) ||
-			isCopilotTrailingAutoApprovedToolPermission(req, priorAutoApprovedToolPrompt))
+		isCopilotTrailingAutoApprovedToolPermission(req, priorAutoApprovedToolPrompt)
 
 	// Restrict the Copilot special-case to trailing notification.permission_prompt
 	// noise. Explicit user-blocking prompts like elicitation_dialog must still

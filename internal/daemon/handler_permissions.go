@@ -32,15 +32,6 @@ func isCopilotRequest(req Request) bool {
 	}
 }
 
-// isClaudeRequest reports whether the request originated from a known Claude
-// producer. Missing and unknown producers retain harness-agnostic semantics.
-func isClaudeRequest(req Request) bool {
-	if known := harness.NormalizeKnown(req.Harness); known != "" {
-		return known == harness.Claude
-	}
-	return !req.targetHarnessSet && strings.TrimSpace(req.Harness) == ""
-}
-
 func isCopilotPermissionResolutionEvent(req Request) bool {
 	if req.IsPrompt {
 		return true

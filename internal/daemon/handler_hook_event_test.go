@@ -771,7 +771,11 @@ func TestHandler_CopilotLateInitialSessionStartPreservesPromptAndAllowsStop(t *t
 	}
 }
 
-func TestHandler_HookEventAutoApprovedPermissionLogsSuppressionReason(t *testing.T) {
+// TestHandler_HookEventClaudePermissionRequestSurfacesKey pins the corrected
+// behavior: a Claude PreToolUse → PermissionRequest is a real, user-blocking
+// prompt, not an auto-approved tool. The PermissionRequest event is applied (not
+// suppressed) and surfaces the 🔑 icon.
+func TestHandler_HookEventClaudePermissionRequestSurfacesKey(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
 		ID:       42,
@@ -789,8 +793,8 @@ func TestHandler_HookEventAutoApprovedPermissionLogsSuppressionReason(t *testing
 		t.Fatalf("events = %+v; want two events", detail.Events)
 	}
 	ev := detail.Events[1]
-	if !ev.Suppressed || ev.SuppressionReason != suppressionReasonAutoApprovedPerm || ev.ResultIconState != IconStatePreserve {
-		t.Fatalf("event = %+v; want auto-approved permission suppression", ev)
+	if ev.Suppressed || ev.Action != "permission" || ev.ResultIconState != "key" {
+		t.Fatalf("event = %+v; want applied permission surfacing the key", ev)
 	}
 }
 
