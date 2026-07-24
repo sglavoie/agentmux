@@ -227,6 +227,19 @@ func TestMatchAccountCaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestMatchProfileUsesEffectiveProfile(t *testing.T) {
+	s := session.RunningSession{Base: "api", Profile: "modern", Account: "legacy"}
+	if !Parse("@modern").Match(s, nil, 0) {
+		t.Fatal("expected exact profile filter to use EffectiveProfile")
+	}
+	if Parse("@legacy").Match(s, nil, 0) {
+		t.Fatal("expected Profile to take precedence over the Account compatibility alias")
+	}
+	if !Parse("modern").Match(s, nil, 0) {
+		t.Fatal("expected bare substring to match EffectiveProfile")
+	}
+}
+
 func TestMatchStateBolt(t *testing.T) {
 	f := Parse("!bolt")
 	good := session.RunningSession{State: "bolt"}

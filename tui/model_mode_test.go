@@ -58,17 +58,18 @@ func TestModeSearchLiveAppliesEachKeystroke(t *testing.T) {
 	}
 }
 
-func TestFKeyDoesNotEnterFilter(t *testing.T) {
+func TestFKeyRemainsTextInFilterInput(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
+	m = pressKey(m, "/")
 	m = pressKey(m, "f")
-	if m.mode != ModeList {
-		t.Fatalf("expected ModeList after f, got %d", m.mode)
+	if m.mode != ModeSearch {
+		t.Fatalf("expected ModeSearch after /f, got %d", m.mode)
 	}
-	if m.filterText != "" {
-		t.Fatalf("expected empty filterText after f, got %q", m.filterText)
+	if m.filterText != "f" {
+		t.Fatalf("expected filterText=f after /f, got %q", m.filterText)
 	}
-	if !m.activeFilter.IsEmpty() {
-		t.Fatalf("expected f not to apply a filter, got %+v", m.activeFilter)
+	if m.activeFilter.Account != "" {
+		t.Fatalf("expected f in search input not to apply a profile filter, got %+v", m.activeFilter)
 	}
 }
 

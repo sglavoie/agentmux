@@ -88,7 +88,7 @@ func TestListFooterCommandRowsSplit(t *testing.T) {
 	if strings.Contains(lines[0], "l launch") {
 		t.Errorf("global launch command should move off line 1; got %q", lines[0])
 	}
-	for _, frag := range []string{"l launch", ": command palette", "S sessions", "P plans", "R resort"} {
+	for _, frag := range []string{"f profile", "l launch", ": command palette", "S sessions", "P plans", "R resort"} {
 		if !strings.Contains(lines[1], frag) {
 			t.Errorf("expected global command %q on line 2; got %q", frag, lines[1])
 		}
@@ -378,7 +378,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"e": false, "T": false, "r": false, "c": false,
 				"C": false, "s": false, "x": false, "X": false,
 				"o": false, "O": false,
-				"l": true, ":": true, "S": true, "P": true, "R": true,
+				"f": true, "l": true, ":": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -390,7 +390,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"e": false, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": true, "X": true,
 				"o": false, "O": false,
-				"l": true, ":": true, "S": true, "P": true, "R": true,
+				"f": true, "l": true, ":": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -402,7 +402,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"e": true, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
-				"l": true, ":": true, "S": true, "P": true, "R": true,
+				"f": true, "l": true, ":": true, "S": true, "P": true, "R": true,
 			},
 		},
 		{
@@ -414,7 +414,7 @@ func TestListFooterAvailability(t *testing.T) {
 				"e": false, "T": true, "r": true, "c": true,
 				"C": true, "s": true, "x": false, "X": true,
 				"o": false, "O": false,
-				"l": true, ":": true, "S": true, "P": true, "R": true,
+				"f": true, "l": true, ":": true, "S": true, "P": true, "R": true,
 			},
 		},
 	}

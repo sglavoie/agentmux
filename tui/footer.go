@@ -347,6 +347,7 @@ var listFooterPalette = []footerEntry{
 		_, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
 		return ok
 	}},
+	{"f", "profile", footerSectionLaunch, func(Model) bool { return true }},
 	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
 	{":", "command palette", footerSectionApp, func(Model) bool { return true }},
 	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},

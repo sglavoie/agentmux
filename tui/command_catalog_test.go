@@ -68,6 +68,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commandShowDetails, commandGroupSession, "Show Session Details", []string{"events", "hooks"}, "d"},
 		{commandShowTimeline, commandGroupSession, "Show Session Timeline", []string{"events", "phases"}, "T"},
 		{commandFilterSessions, commandGroupExplore, "Filter Sessions", []string{"find", "search"}, "/"},
+		{commandCycleProfileFilter, commandGroupExplore, "Cycle Profile Filter", []string{"account", "filter", "running"}, "f"},
 		{commandClearFilters, commandGroupExplore, "Clear Filters", []string{"chips", "reset"}, "esc"},
 		{commandOpenLauncher, commandGroupExplore, "Open Launcher", []string{"launch", "projects"}, "l"},
 		{commandSearchAllSessions, commandGroupExplore, "Search All Past Sessions", []string{"history", "transcripts"}, "S"},
@@ -145,6 +146,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commandShowDetails:        keyD,
 		commandShowTimeline:       keyOpenTimeline,
 		commandFilterSessions:     keySlash,
+		commandCycleProfileFilter: keyF,
 		commandClearFilters:       keyEsc,
 		commandOpenLauncher:       keyL,
 		commandSearchAllSessions:  keySessionSearch,
@@ -327,8 +329,8 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 			visible++
 		}
 	}
-	if visible != 24 {
-		t.Fatalf("clean catalog has %d visible commands, want 24", visible)
+	if visible != 25 {
+		t.Fatalf("clean catalog has %d visible commands, want 25", visible)
 	}
 }
 
@@ -575,6 +577,14 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 		got, cmd = commandByID(t, commandClearFilters).run(got, ctx)
 		if !got.activeFilter.IsEmpty() || got.cursor != 0 || cmd != nil {
 			t.Fatalf("clear result: filter=%+v cursor=%d cmd=%v", got.activeFilter, got.cursor, cmd != nil)
+		}
+	})
+
+	t.Run("cycle profile filter", func(t *testing.T) {
+		m, ctx, _ := commandTestModel(target)
+		got, cmd := commandByID(t, commandCycleProfileFilter).run(m, ctx)
+		if got.activeFilter.Account != "work" || got.activeFilter.Raw != "@work" || len(got.filtered) != 1 || cmd != nil {
+			t.Fatalf("cycle result: filter=%+v rows=%d cmd=%v", got.activeFilter, len(got.filtered), cmd != nil)
 		}
 	})
 

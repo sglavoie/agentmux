@@ -31,6 +31,7 @@ const (
 	commandShowDetails        commandID = "session.show-details"
 	commandShowTimeline       commandID = "session.show-timeline"
 	commandFilterSessions     commandID = "explore.filter-sessions"
+	commandCycleProfileFilter commandID = "explore.cycle-profile-filter"
 	commandClearFilters       commandID = "explore.clear-filters"
 	commandOpenLauncher       commandID = "explore.open-launcher"
 	commandSearchAllSessions  commandID = "explore.search-session-history"
@@ -440,6 +441,15 @@ func commandCatalog() []command {
 			execute: func(m Model, _ commandContext) (Model, tea.Cmd) {
 				m.enterFilter("")
 				return m, nil
+			},
+		},
+		{
+			id: commandCycleProfileFilter, group: commandGroupExplore,
+			title:       staticCommandTitle("Cycle Profile Filter"),
+			description: "Cycle running sessions by effective profile and back to all profiles.",
+			aliases:     []string{"account", "filter", "running"}, shortcut: keyF,
+			execute: func(m Model, _ commandContext) (Model, tea.Cmd) {
+				return m, m.cycleDashboardProfile()
 			},
 		},
 		{

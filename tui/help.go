@@ -61,7 +61,6 @@ var helpSections = []struct {
 	}},
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
-		"  f         cycle launcher projects by default profile",
 		"  P         pin / unpin highlighted launcher project",
 		"  C         launch new session with profile selection",
 		"  o         open session directory in a plain shell tab",
@@ -71,6 +70,7 @@ var helpSections = []struct {
 	}},
 	{"Filter", []string{
 		"  /         filter (DSL: @profile, !state, word)",
+		"  f         cycle profile (dashboard live / launcher default)",
 		"  esc       clear filter chips",
 		"  1 – 9     remove filter chip at that position",
 	}},

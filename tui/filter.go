@@ -64,7 +64,8 @@ func (f Filter) IsEmpty() bool {
 // are used only for the !active / !idle state aliases, which require
 // stateGroup classification.
 func (f Filter) Match(s session.RunningSession, lastActivity map[int]time.Time, idle time.Duration) bool {
-	if f.Account != "" && !strings.EqualFold(s.Account, f.Account) {
+	profile := s.EffectiveProfile()
+	if f.Account != "" && !strings.EqualFold(profile, f.Account) {
 		return false
 	}
 	if f.Harness != "" && !strings.EqualFold(s.Harness, f.Harness) {
@@ -76,7 +77,7 @@ func (f Filter) Match(s session.RunningSession, lastActivity map[int]time.Time, 
 	if len(f.Substrings) > 0 {
 		title := strings.ToLower(runningSessionDisplayTitle(s))
 		dir := strings.ToLower(s.Directory)
-		acct := strings.ToLower(s.Account)
+		acct := strings.ToLower(profile)
 		for _, sub := range f.Substrings {
 			needle := strings.ToLower(sub)
 			if !strings.Contains(title, needle) &&

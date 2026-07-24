@@ -27,23 +27,6 @@ func TestUnboundPrintableDoesNotStartDashboardFilter(t *testing.T) {
 	}
 }
 
-func TestFDoesNotEnterDashboardFilter(t *testing.T) {
-	m := loadSessions(testModel(), makeSessions())
-	full := len(m.filtered)
-
-	m = pressKey(m, "f")
-
-	if m.mode != ModeList {
-		t.Fatalf("expected f to leave dashboard in ModeList, got %d", m.mode)
-	}
-	if !m.activeFilter.IsEmpty() {
-		t.Fatalf("expected f not to apply a filter, got %+v", m.activeFilter)
-	}
-	if got := len(m.filtered); got != full {
-		t.Fatalf("expected f not to narrow list: got %d want %d", got, full)
-	}
-}
-
 func TestSlashEntersDashboardSearch(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 

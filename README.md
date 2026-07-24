@@ -147,6 +147,8 @@ Key flows:
 - `:`: open the command palette from the main dashboard list; type to search,
   use `↑`/`↓`, `Ctrl+j`/`Ctrl+k`, or `Ctrl+n`/`Ctrl+p` to move, `Backspace`
   to edit, `Enter` to run, `Esc` to close, and `Ctrl+c` to quit
+- `f`: cycle visible sessions through each currently running profile and back
+  to all profiles
 - `l`: open the launcher
 - `r`: restart the selected running session, after confirmation
 - `c`: restart the selected running session under another profile
@@ -163,6 +165,12 @@ Key flows:
   full plan path, and the viewer wraps long lines, supports less-style
   `Ctrl+d/u/f/b` paging, and `y` copies the selected raw line
 - `?`: show the full keymap
+
+The dashboard profile cycle is an `@profile` filter: it follows
+case-insensitive alphabetical profile order, preserves any active word,
+harness, and state filters, and includes profiles represented by current
+running sessions. The active profile appears as the existing filter chip;
+wrapping to **All** removes only that chip.
 
 The command palette searches command titles, descriptions, aliases, and shown
 shortcuts with case-insensitive, whitespace-separated AND terms. Disabled

@@ -2,7 +2,10 @@ package tui
 
 import (
 	"sort"
+	"strings"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -28,6 +31,64 @@ func (m *Model) applyFilterChange(f Filter) {
 	m.cursor = 0
 	m.focusedChipIdx = -1
 	scrollListToCursor(m)
+}
+
+// dashboardSessionProfiles returns unique effective profiles from the full
+// running-session set in case-insensitive alphabetical order. It deliberately
+// ignores m.filtered so text, harness, and state filters do not remove profiles
+// from the cycle.
+func dashboardSessionProfiles(sessions []session.RunningSession) []string {
+	profiles := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, running := range sessions {
+		profile := running.EffectiveProfile()
+		key := strings.ToLower(profile)
+		if profile == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		profiles = append(profiles, profile)
+	}
+	sort.SliceStable(profiles, func(i, j int) bool {
+		return strings.ToLower(profiles[i]) < strings.ToLower(profiles[j])
+	})
+	return profiles
+}
+
+// nextDashboardProfileFilter advances through the profiles represented by
+// running sessions and then wraps to the empty "all profiles" state. A current
+// profile that disappeared during refresh restarts the cycle at the first
+// running profile.
+func nextDashboardProfileFilter(sessions []session.RunningSession, current string) string {
+	profiles := dashboardSessionProfiles(sessions)
+	if len(profiles) == 0 {
+		return ""
+	}
+	if current == "" {
+		return profiles[0]
+	}
+	for i, profile := range profiles {
+		if !strings.EqualFold(profile, current) {
+			continue
+		}
+		if i+1 < len(profiles) {
+			return profiles[i+1]
+		}
+		return ""
+	}
+	return profiles[0]
+}
+
+// cycleDashboardProfile updates the dashboard's existing @profile filter
+// component while preserving all other DSL components.
+func (m *Model) cycleDashboardProfile() tea.Cmd {
+	next := nextDashboardProfileFilter(m.sessions, m.activeFilter.Account)
+	filter := m.activeFilter
+	filter.Account = next
+	filter.Raw = serializeFilter(filter)
+	m.applyFilterChange(filter)
+	m.listOffset = 0
+	return m.refreshPreviewForCursor()
 }
 
 // enterFilter switches into ModeSearch with the given pre-filled buffer and

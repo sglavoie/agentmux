@@ -181,6 +181,9 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keySlash:
 		m.enterFilter("")
 
+	case keyF:
+		return m, m.cycleDashboardProfile()
+
 	case keyColon:
 		m.openCommandPalette()
 
