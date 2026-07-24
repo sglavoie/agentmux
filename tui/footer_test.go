@@ -127,8 +127,73 @@ func TestListFooterHasNoSpacerAndZebraRowsSpanViewport(t *testing.T) {
 		t.Fatalf("expected navigation immediately after actions, got %q", plainLines[2])
 	}
 
+	assertZebraFooterRows(t, rendered, width)
+}
+
+func TestRootFootersHaveZebraRows(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{name: "dashboard list", m: Model{mode: ModeList, width: 72}},
+		{name: "dashboard search", m: Model{mode: ModeSearch, width: 72}},
+		{name: "confirmation", m: Model{mode: ModeConfirm, width: 72}},
+		{name: "session launcher", m: Model{mode: ModePicker, width: 72}},
+		{name: "config picker", m: Model{mode: ModeConfigPicker, width: 72}},
+		{name: "help", m: Model{mode: ModeHelp, width: 72}},
+		{name: "actions", m: Model{mode: ModeActions, width: 72}},
+		{name: "command palette", m: Model{mode: ModeCommandPalette, width: 72}},
+		{name: "session browser", m: Model{mode: ModeSessionSearch, width: 72}},
+		{name: "transcript viewer", m: Model{mode: ModeSessionView, width: 72}},
+		{name: "delete choice", m: Model{mode: ModeDeleteChoice, width: 72}},
+		{name: "chip picker", m: Model{mode: ModeChipPicker, width: 72}},
+		{name: "message reader", m: Model{mode: ModeMessageDetail, width: 72}},
+		{name: "plan browser", m: Model{mode: ModePlanSearch, width: 72}},
+		{name: "plan viewer", m: Model{mode: ModePlanView, width: 72}},
+		{name: "jump chord", m: Model{mode: ModeList, width: 72, pendingJumpDir: 1}},
+		{
+			name: "active filter",
+			m: Model{
+				mode:         ModeList,
+				width:        72,
+				activeFilter: Filter{Substrings: []string{"api"}},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertZebraFooterRows(t, renderFooter(tc.m), tc.m.width)
+		})
+	}
+}
+
+func TestFooterZebraExcludesViewsWithoutRootFooter(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{name: "detail overlay", m: Model{mode: ModeDetail, width: 72}},
+		{name: "dashboard preview", m: Model{mode: ModeList, width: 72, previewEnabled: true}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := renderFooter(tc.m); got != "" {
+				t.Errorf("renderFooter() = %q, want no root footer", got)
+			}
+		})
+	}
+}
+
+func assertZebraFooterRows(t *testing.T, rendered string, width int) {
+	t.Helper()
+	if rendered == "" {
+		t.Fatal("expected a root footer")
+	}
+
 	background := footerStripeBackgroundSequence()
-	for i, line := range rawLines {
+	for i, line := range strings.Split(rendered, "\n") {
 		if i%2 == 0 {
 			if !strings.HasPrefix(line, background) {
 				t.Errorf("row %d should start with zebra background", i)
@@ -144,37 +209,6 @@ func TestListFooterHasNoSpacerAndZebraRowsSpanViewport(t *testing.T) {
 		if strings.Contains(line, background) {
 			t.Errorf("row %d should retain the terminal's default background", i)
 		}
-	}
-}
-
-func TestListFooterZebraAppliesToTemporaryListStates(t *testing.T) {
-	cases := []struct {
-		name string
-		m    Model
-	}{
-		{name: "default", m: Model{mode: ModeList, width: 72}},
-		{name: "jump chord", m: Model{mode: ModeList, width: 72, pendingJumpDir: 1}},
-		{
-			name: "active filter",
-			m: Model{
-				mode:         ModeList,
-				width:        72,
-				activeFilter: Filter{Substrings: []string{"api"}},
-			},
-		},
-	}
-
-	background := footerStripeBackgroundSequence()
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			lines := strings.Split(renderFooter(tc.m), "\n")
-			for i, line := range lines {
-				hasBackground := strings.Contains(line, background)
-				if want := i%2 == 0; hasBackground != want {
-					t.Errorf("row %d zebra background = %v, want %v", i, hasBackground, want)
-				}
-			}
-		})
 	}
 }
 

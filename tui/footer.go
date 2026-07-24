@@ -86,9 +86,10 @@ func renderFooter(m Model) string {
 
 	var sb strings.Builder
 	if len(lines) > 0 {
-		if m.mode == ModeList {
-			lines = zebraFooterLines(lines, m.width)
-		}
+		// Every root-level footer shares the same alternating background so
+		// navigation hints remain visually consistent as the user moves
+		// between dashboard views and transient overlays.
+		lines = zebraFooterLines(lines, m.width)
 		sb.WriteString(strings.Join(lines, "\n"))
 	}
 	return sb.String()
@@ -204,9 +205,9 @@ func listFooterNavTokens(m Model) []string {
 }
 
 // zebraFooterLines flattens wrapped footer blocks into physical rows, then
-// applies the ModeList zebra treatment. The first row receives the dark
-// background and is padded to the viewport width; the next row retains the
-// terminal's default background, and so on.
+// applies the shared root-footer zebra treatment. The first row receives the
+// dark background and is padded to the viewport width; the next row retains
+// the terminal's default background, and so on.
 func zebraFooterLines(lines []string, maxWidth int) []string {
 	rows := strings.Split(strings.Join(lines, "\n"), "\n")
 	for i := range rows {
