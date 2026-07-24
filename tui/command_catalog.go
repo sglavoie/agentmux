@@ -569,11 +569,11 @@ func openLauncherCommand(m Model, _ commandContext) (Model, tea.Cmd) {
 	m.pickerSessions = sortPickerSessions(sessions)
 	m.pickerRunning = buildPickerRunning(m.sessions)
 	m.pickerSelected = make(map[int]bool)
-	m.pickerProfileOverride = loadPickerOverrides(m.pickerSessions)
+	m.pickerProfileOverride, m.pickerPinned = loadPickerState(m.pickerSessions)
 	m.pickerCursor = 0
 	m.pickerFilter = ""
 	m.pickerSearchMode = false
-	m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
+	m.pickerFilteredIdx = m.pickerFilteredIndices("")
 	m.mode = ModePicker
 	return m, m.refreshPreviewForPickerCursor()
 }

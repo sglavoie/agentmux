@@ -2,7 +2,10 @@ package tui
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/overrides"
 )
 
 func TestMain(m *testing.M) {
@@ -14,11 +17,20 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("XDG_STATE_HOME", stateRoot); err != nil {
 		panic(err)
 	}
+	previousOverrides, hadPreviousOverrides := os.LookupEnv(overrides.PathEnvVar)
+	if err := os.Setenv(overrides.PathEnvVar, filepath.Join(stateRoot, "launch_overrides.json")); err != nil {
+		panic(err)
+	}
 	code := m.Run()
 	if hadPrevious {
 		_ = os.Setenv("XDG_STATE_HOME", previous)
 	} else {
 		_ = os.Unsetenv("XDG_STATE_HOME")
+	}
+	if hadPreviousOverrides {
+		_ = os.Setenv(overrides.PathEnvVar, previousOverrides)
+	} else {
+		_ = os.Unsetenv(overrides.PathEnvVar)
 	}
 	_ = os.RemoveAll(stateRoot)
 	os.Exit(code)

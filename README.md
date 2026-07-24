@@ -207,9 +207,14 @@ its own badge/metadata columns.
 - press `/` to filter live,
 - `space` toggles selection,
 - `enter` launches the selected projects,
+- `P` pins or unpins the highlighted project so pinned projects stay at the top,
 - `s` searches past session transcripts for the highlighted project,
 - `C` chooses a **one-time profile override** for the highlighted project,
 - `o` opens the highlighted project's directory instead of launching it.
+
+Pins persist per user across Agent Mux restarts. Pinned and unpinned groups each
+retain the launcher's existing profile-then-project ordering, including while a
+filter is active.
 
 Overrides are useful for cross-harness launches. For example, a project such as
 `sis` can keep `profile = "vta"` as its Claude default while `C` launches that
@@ -323,7 +328,7 @@ Agent Mux does not use SQLite. Local files have deliberately narrow ownership:
 | `~/.local/share/agent-mux/plans.json` and `plans.search/` | Disposable metadata and search caches rebuilt from directories under `plans_directory`. |
 | `~/.local/share/agent-mux/handoffs/` | Private standalone Markdown artifacts. Successful and partially launched handoffs remain until you delete them. |
 | `~/.local/share/agent-mux/worktrees/` | Ordinary registered Git worktrees. Successful launches remain until you remove them with Git; a failed launch removes only the worktree created for that attempt. |
-| `~/.local/share/agent-mux/launch_overrides.json` | One-time launcher choices; independent of transcript and plan caches. |
+| `~/.local/share/agent-mux/launch_overrides.json` | Per-user launcher choices, including one-time profile overrides and pinned projects; independent of transcript and plan caches. |
 | `daemon.sock`, `daemon.lock`, and `daemon.autostart.lock` | Ordinary daemon coordination files, not database state. |
 
 The corresponding `.lock` sidecars are stable advisory locks and may remain

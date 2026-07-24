@@ -82,6 +82,7 @@ type Model struct {
 	pickerSessions       []config.Session
 	pickerRunning        map[string]int
 	pickerSelected       map[int]bool
+	pickerPinned         map[int]bool // project index -> persistent launcher pin
 	pickerCursor         int
 	pickerOffset         int    // top row index for the scrollable picker view
 	pickerFilter         string // live filter buffer (DSL)

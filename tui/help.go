@@ -61,6 +61,7 @@ var helpSections = []struct {
 	}},
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
+		"  P         pin / unpin highlighted launcher project",
 		"  C         launch new session with profile selection",
 		"  o         open session directory in a plain shell tab",
 		"  y         copy session title; in transcript/plan viewers, copy selection",
@@ -80,7 +81,7 @@ var helpSections = []struct {
 		"  H         handoff selected past session to another profile",
 		"  E         edit a handoff pack before launching its target",
 		"  w         fork selected past session in an isolated Git worktree",
-		"  P         search saved plans",
+		"  P         search saved plans (from dashboard)",
 		"  q         quit",
 		"  ctrl+c    quit",
 	}},

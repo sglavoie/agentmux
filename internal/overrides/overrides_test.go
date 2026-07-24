@@ -21,6 +21,9 @@ func TestLoadMissing(t *testing.T) {
 	if f.Entries == nil {
 		t.Fatal("expected entries to be a non-nil empty slice for missing file")
 	}
+	if f.PinnedProjects == nil {
+		t.Fatal("expected pinned projects to be a non-nil empty slice for missing file")
+	}
 }
 
 func TestLoadNullEntriesNormalizesToEmptySlice(t *testing.T) {
@@ -39,6 +42,9 @@ func TestLoadNullEntriesNormalizesToEmptySlice(t *testing.T) {
 	}
 	if f.Entries == nil {
 		t.Fatal("expected entries to be a non-nil empty slice")
+	}
+	if f.PinnedProjects == nil {
+		t.Fatal("expected missing v1 pinned projects to normalize to an empty slice")
 	}
 }
 
@@ -65,15 +71,15 @@ func TestLoadMissingVersionDefaultsToCurrentVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if f.Version != 1 {
-		t.Fatalf("Version: got %d, want 1", f.Version)
+	if f.Version != overrides.CurrentVersion {
+		t.Fatalf("Version: got %d, want %d", f.Version, overrides.CurrentVersion)
 	}
 }
 
 func TestLoadFutureVersionReturnsError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "overrides.json")
 	t.Setenv(overrides.PathEnvVar, path)
-	if err := os.WriteFile(path, []byte(`{"version":2,"entries":[]}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version":3,"entries":[]}`), 0o644); err != nil {
 		t.Fatalf("seed overrides file: %v", err)
 	}
 
@@ -86,10 +92,14 @@ func TestRoundTrip(t *testing.T) {
 	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "overrides.json"))
 
 	want := overrides.File{
-		Version: 1,
+		Version: overrides.CurrentVersion,
 		Entries: []overrides.Entry{
 			{ProjectTitle: "api", ProfileName: "work"},
 			{ProjectTitle: "dotfiles", ProfileName: "personal"},
+		},
+		PinnedProjects: []overrides.PinnedProject{
+			{ProfileName: "work", ProjectTitle: "api"},
+			{ProfileName: "personal", ProjectTitle: "dotfiles"},
 		},
 	}
 	if err := overrides.Save(want); err != nil {
@@ -110,13 +120,21 @@ func TestRoundTrip(t *testing.T) {
 			t.Errorf("Entries[%d]: got %+v, want %+v", i, got.Entries[i], e)
 		}
 	}
+	if len(got.PinnedProjects) != len(want.PinnedProjects) {
+		t.Fatalf("len(PinnedProjects): got %d, want %d", len(got.PinnedProjects), len(want.PinnedProjects))
+	}
+	for i, pin := range want.PinnedProjects {
+		if got.PinnedProjects[i] != pin {
+			t.Errorf("PinnedProjects[%d]: got %+v, want %+v", i, got.PinnedProjects[i], pin)
+		}
+	}
 }
 
 func TestSaveEmptyEntriesWritesArray(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "overrides.json")
 	t.Setenv(overrides.PathEnvVar, path)
 
-	if err := overrides.Save(overrides.File{Version: 1}); err != nil {
+	if err := overrides.Save(overrides.File{Version: overrides.CurrentVersion}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	raw, err := os.ReadFile(path)
@@ -133,6 +151,13 @@ func TestSaveEmptyEntriesWritesArray(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("entries length: got %d, want 0", len(entries))
+	}
+	pins, ok := decoded["pinned_projects"].([]any)
+	if !ok {
+		t.Fatalf("pinned_projects encoded as %T, want JSON array; raw=%s", decoded["pinned_projects"], raw)
+	}
+	if len(pins) != 0 {
+		t.Fatalf("pinned_projects length: got %d, want 0", len(pins))
 	}
 }
 
@@ -151,8 +176,8 @@ func TestSaveMissingVersionDefaultsToCurrentVersion(t *testing.T) {
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatalf("Unmarshal saved file: %v", err)
 	}
-	if decoded.Version != 1 {
-		t.Fatalf("Version: got %d, want 1; raw=%s", decoded.Version, raw)
+	if decoded.Version != overrides.CurrentVersion {
+		t.Fatalf("Version: got %d, want %d; raw=%s", decoded.Version, overrides.CurrentVersion, raw)
 	}
 }
 
@@ -160,7 +185,7 @@ func TestSaveFutureVersionReturnsError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "overrides.json")
 	t.Setenv(overrides.PathEnvVar, path)
 
-	err := overrides.Save(overrides.File{Version: 2})
+	err := overrides.Save(overrides.File{Version: overrides.CurrentVersion + 1})
 	if err == nil {
 		t.Fatal("expected error for unsupported future version")
 	}
@@ -175,8 +200,11 @@ func TestSaveAtomic(t *testing.T) {
 	t.Setenv(overrides.PathEnvVar, path)
 
 	f := overrides.File{
-		Version: 1,
+		Version: overrides.CurrentVersion,
 		Entries: []overrides.Entry{{ProjectTitle: "api", ProfileName: "work"}},
+		PinnedProjects: []overrides.PinnedProject{
+			{ProfileName: "work", ProjectTitle: "api"},
+		},
 	}
 	if err := overrides.Save(f); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -193,6 +221,9 @@ func TestSaveAtomic(t *testing.T) {
 	if len(got.Entries) != 1 || got.Entries[0].ProjectTitle != "api" {
 		t.Errorf("unexpected entries after Save: %v", got.Entries)
 	}
+	if len(got.PinnedProjects) != 1 || got.PinnedProjects[0].ProjectTitle != "api" {
+		t.Errorf("unexpected pinned projects after Save: %v", got.PinnedProjects)
+	}
 }
 
 func TestSaveIgnoresBlockedLegacyTempPath(t *testing.T) {
@@ -206,7 +237,7 @@ func TestSaveIgnoresBlockedLegacyTempPath(t *testing.T) {
 	}
 
 	f := overrides.File{
-		Version: 1,
+		Version: overrides.CurrentVersion,
 		Entries: []overrides.Entry{{ProjectTitle: "api", ProfileName: "work"}},
 	}
 	if err := overrides.Save(f); err != nil {
@@ -242,7 +273,7 @@ func TestSaveCleansUpTempOnRenameFailure(t *testing.T) {
 	}
 	t.Setenv(overrides.PathEnvVar, path)
 
-	err := overrides.Save(overrides.File{Version: 1})
+	err := overrides.Save(overrides.File{Version: overrides.CurrentVersion})
 	if err == nil {
 		t.Fatal("Save should have failed; destination is a non-empty directory")
 	}

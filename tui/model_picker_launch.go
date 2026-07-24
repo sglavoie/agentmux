@@ -186,6 +186,32 @@ func applyPickerFilter(sessions []config.Session, query string) []int {
 	return out
 }
 
+// pickerFilteredIndices applies the launcher DSL and then performs a stable
+// partition so pinned projects float above unpinned projects. Because
+// pickerSessions is already in profile/title order, both partitions retain
+// that existing order.
+func (m Model) pickerFilteredIndices(query string) []int {
+	return pinPickerIndices(applyPickerFilter(m.pickerSessions, query), m.pickerPinned)
+}
+
+func pinPickerIndices(indices []int, pinned map[int]bool) []int {
+	if len(indices) == 0 || len(pinned) == 0 {
+		return indices
+	}
+	out := make([]int, 0, len(indices))
+	for _, idx := range indices {
+		if pinned[idx] {
+			out = append(out, idx)
+		}
+	}
+	for _, idx := range indices {
+		if !pinned[idx] {
+			out = append(out, idx)
+		}
+	}
+	return out
+}
+
 // pickerAccountIndex returns the index of the named account in the slice, or 0 if not found.
 func pickerAccountIndex(accounts []config.Account, name string) int {
 	for i, a := range accounts {
@@ -213,19 +239,23 @@ func (m Model) pickerSessionWithResolvedProfile(origIdx int) config.Session {
 	return sessionWithProfile(m.pickerSessions[origIdx], m.pickerEffectiveProfile(origIdx))
 }
 
-// loadPickerOverrides loads persisted profile overrides from disk and maps
-// them to the current pickerSessions by title. Stale entries (titles no
-// longer in the session list) are pruned and the file is re-saved.
-func loadPickerOverrides(sessions []config.Session) map[int]string {
-	out := make(map[int]string)
+// loadPickerState loads persisted profile overrides and project pins. Profile
+// overrides retain their legacy title-only identity; pins use the configured
+// project's default (profile, title) identity so duplicate titles across
+// profiles remain independent. Stale and duplicate entries are pruned.
+func loadPickerState(sessions []config.Session) (map[int]string, map[int]bool) {
+	profileOverrides := make(map[int]string)
+	pinned := make(map[int]bool)
 	f, err := overrides.Load()
 	if err != nil {
 		slog.Debug("overrides: load error", "err", err)
-		return out
+		return profileOverrides, pinned
 	}
 	titleIdx := make(map[string]int, len(sessions))
+	projectIdx := make(map[string]int, len(sessions))
 	for i, s := range sessions {
 		titleIdx[s.Title] = i
+		projectIdx[session.SessionKey(s.EffectiveProfile(), s.Title)] = i
 	}
 	var pruned bool
 	var fresh []overrides.Entry
@@ -237,29 +267,66 @@ func loadPickerOverrides(sessions []config.Session) map[int]string {
 			continue
 		}
 		fresh = append(fresh, e)
-		out[idx] = e.ProfileName
+		profileOverrides[idx] = e.ProfileName
+	}
+	freshPins := make([]overrides.PinnedProject, 0, len(f.PinnedProjects))
+	seenPins := make(map[string]bool, len(f.PinnedProjects))
+	for _, pin := range f.PinnedProjects {
+		key := session.SessionKey(pin.ProfileName, pin.ProjectTitle)
+		idx, ok := projectIdx[key]
+		if !ok || seenPins[key] {
+			slog.Debug("overrides: pruning stale or duplicate pin",
+				"profile", pin.ProfileName, "title", pin.ProjectTitle)
+			pruned = true
+			continue
+		}
+		seenPins[key] = true
+		canonical := overrides.PinnedProject{
+			ProfileName:  sessions[idx].EffectiveProfile(),
+			ProjectTitle: sessions[idx].Title,
+		}
+		if canonical != pin {
+			pruned = true
+		}
+		freshPins = append(freshPins, canonical)
+		pinned[idx] = true
 	}
 	if pruned {
+		f.Version = overrides.CurrentVersion
 		f.Entries = fresh
+		f.PinnedProjects = freshPins
 		if err := overrides.Save(f); err != nil {
 			slog.Debug("overrides: save after prune error", "err", err)
 		}
 	}
-	return out
+	return profileOverrides, pinned
 }
 
-// savePickerOverrides writes the current pickerProfileOverride map to disk.
-func (m Model) savePickerOverrides() {
-	f := overrides.File{Version: 1}
-	for idx, profile := range m.pickerProfileOverride {
-		if idx >= 0 && idx < len(m.pickerSessions) {
+// savePickerState writes profile overrides and pins together so changing one
+// launcher preference cannot discard the other.
+func (m Model) savePickerState(profileOverrides map[int]string, pinned map[int]bool) error {
+	f := overrides.File{Version: overrides.CurrentVersion}
+	for idx := range m.pickerSessions {
+		if profile := profileOverrides[idx]; profile != "" {
 			f.Entries = append(f.Entries, overrides.Entry{
 				ProjectTitle: m.pickerSessions[idx].Title,
 				ProfileName:  profile,
 			})
 		}
+		if pinned[idx] {
+			f.PinnedProjects = append(f.PinnedProjects, overrides.PinnedProject{
+				ProfileName:  m.pickerSessions[idx].EffectiveProfile(),
+				ProjectTitle: m.pickerSessions[idx].Title,
+			})
+		}
 	}
-	if err := overrides.Save(f); err != nil {
+	return overrides.Save(f)
+}
+
+// savePickerOverrides persists an updated one-time profile choice while
+// retaining all project pins.
+func (m Model) savePickerOverrides() {
+	if err := m.savePickerState(m.pickerProfileOverride, m.pickerPinned); err != nil {
 		slog.Debug("overrides: save error", "err", err)
 	}
 }

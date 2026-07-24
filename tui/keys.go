@@ -39,6 +39,7 @@ const (
 	keyD                = "d" // dismisses the config deprecation banner; otherwise opens ModeDetail
 	keySessionSearch    = "S" // opens ModeSessionSearch (past harness transcripts)
 	keyPlanSearch       = "P" // opens ModePlanSearch (past agent plans)
+	keyPinProject       = "P" // ModePicker: pin/unpin the highlighted configured project
 	keySortPlan         = "s" // cycles the ModePlanSearch result-sort mode
 	keyToggleTimeline   = "t" // toggle flat list ↔ timeline in ModeDetail
 	keyToggleTimestamps = "T" // toggle timestamp column in timeline (ModeDetail)

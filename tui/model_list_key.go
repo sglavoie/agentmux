@@ -231,11 +231,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pickerSessions = sortPickerSessions(m.cfg.Sessions)
 		m.pickerRunning = buildPickerRunning(m.sessions)
 		m.pickerSelected = make(map[int]bool)
-		m.pickerProfileOverride = loadPickerOverrides(m.pickerSessions)
+		m.pickerProfileOverride, m.pickerPinned = loadPickerState(m.pickerSessions)
 		m.pickerCursor = 0
 		m.pickerFilter = ""
 		m.pickerSearchMode = false
-		m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
+		m.pickerFilteredIdx = m.pickerFilteredIndices("")
 		m.mode = ModePicker
 		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
 			return m, cmd

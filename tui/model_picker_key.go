@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"maps"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -18,7 +20,7 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // handlePickerSearchKey handles input while the picker is in search mode
 // (activated by pressing `/`). Only esc, enter, and backspace have special
-// meaning; every other printable character (including j, k, space, p, etc.)
+// meaning; every other printable character (including j, k, space, p, P, etc.)
 // is appended to the filter buffer so the user can type freely.
 func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -32,7 +34,7 @@ func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyBackspace:
 		if r := []rune(m.pickerFilter); len(r) > 0 {
 			m.pickerFilter = string(r[:len(r)-1])
-			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
 			m.pickerCursor = 0
 			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
@@ -43,7 +45,7 @@ func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	default:
 		if t := msg.Key().Text; t != "" {
 			m.pickerFilter += t
-			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
 			m.pickerCursor = 0
 			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
@@ -66,7 +68,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Two-stage Esc: first clears a non-empty filter; second exits picker.
 		if m.pickerFilter != "" {
 			m.pickerFilter = ""
-			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, "")
+			m.pickerFilteredIdx = m.pickerFilteredIndices("")
 			m.pickerCursor = 0
 			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
@@ -76,6 +78,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.mode = ModeList
 		m.pickerProfileOverride = nil
+		m.pickerPinned = nil
 		var cmds []tea.Cmd
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -146,6 +149,8 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case keyTogglePreview:
 		return m.togglePickerPreview()
+	case keyPinProject:
+		return m.togglePickerPin()
 	case keySpace:
 		if len(m.pickerFilteredIdx) == 0 {
 			return m, nil
@@ -206,11 +211,12 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModeList
 		m.pickerSelected = nil
 		m.pickerProfileOverride = nil
+		m.pickerPinned = nil
 		return m, tea.Batch(cmd, m.resumeListPreviewTickCmd())
 	case keyBackspace:
 		if r := []rune(m.pickerFilter); len(r) > 0 {
 			m.pickerFilter = string(r[:len(r)-1])
-			m.pickerFilteredIdx = applyPickerFilter(m.pickerSessions, m.pickerFilter)
+			m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
 			m.pickerCursor = 0
 			scrollPickerToCursor(&m)
 			if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
@@ -221,4 +227,60 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	default:
 		return m, nil
 	}
+}
+
+// togglePickerPin persists and applies the highlighted project's next pin
+// state. The visible index list is re-partitioned without reordering
+// pickerSessions, so selections and profile overrides remain attached to their
+// original project indices.
+func (m Model) togglePickerPin() (tea.Model, tea.Cmd) {
+	if len(m.pickerFilteredIdx) == 0 ||
+		m.pickerCursor < 0 || m.pickerCursor >= len(m.pickerFilteredIdx) {
+		return m, nil
+	}
+	origIdx := m.pickerFilteredIdx[m.pickerCursor]
+	if origIdx < 0 || origIdx >= len(m.pickerSessions) {
+		return m, nil
+	}
+
+	nextPinned := maps.Clone(m.pickerPinned)
+	if nextPinned == nil {
+		nextPinned = make(map[int]bool)
+	}
+	pinned := !nextPinned[origIdx]
+	if pinned {
+		nextPinned[origIdx] = true
+	} else {
+		delete(nextPinned, origIdx)
+	}
+	title := m.pickerSessions[origIdx].Title
+	if err := m.savePickerState(m.pickerProfileOverride, nextPinned); err != nil {
+		return m, m.pushToast(Toast{
+			Severity: toastError,
+			Text:     fmt.Sprintf("Could not update pin for %s: %s", title, err),
+		})
+	}
+
+	m.pickerPinned = nextPinned
+	m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
+	for i, idx := range m.pickerFilteredIdx {
+		if idx == origIdx {
+			m.pickerCursor = i
+			break
+		}
+	}
+	scrollPickerToCursor(&m)
+
+	action := "Unpinned"
+	if pinned {
+		action = "Pinned"
+	}
+	cmds := []tea.Cmd{m.pushToast(Toast{
+		Severity: toastSuccess,
+		Text:     fmt.Sprintf("%s %s", action, title),
+	})}
+	if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
 }

@@ -127,12 +127,13 @@ func renderPickerList(m Model, height int) string {
 
 	// Pre-pass: compute column widths over the filtered set so the harness
 	// cell and state-flag columns line up vertically. The checkbox prefix
-	// ("[ ] " / "[*] ") is always 4 cells wide regardless of selection.
+	// ("[ ] " / "[*] ") is always 4 cells wide and the fixed pin cell plus
+	// trailing space is titleIconCellWidth+1 cells.
 	titleColW := 0
 	harnessColW := 0
 	for _, origIdx := range m.pickerFilteredIdx {
 		sess := m.pickerSessionWithResolvedProfile(origIdx)
-		w := 4 + displayWidth(displayRenderTitleIcon(configSessionDisplayTitle(sess)))
+		w := 4 + titleIconCellWidth + 1 + displayWidth(displayRenderTitleIcon(configSessionDisplayTitle(sess)))
 		if w > titleColW {
 			titleColW = w
 		}
@@ -203,10 +204,15 @@ func renderPickerList(m Model, height int) string {
 		if m.pickerSelected[origIdx] {
 			prefix = "[*] "
 		}
+		pinIcon := ""
+		if m.pickerPinned[origIdx] {
+			pinIcon = "📌"
+		}
+		prefix += displayPadRight(pinIcon, titleIconCellWidth) + " "
 
 		title := displayRenderTitleIcon(configSessionDisplayTitle(sess))
 		coloredTitle := accountStyle(acctColor[defaultProfile]).Render(title)
-		titlePad := titleColW - (4 + displayWidth(title))
+		titlePad := titleColW - (4 + titleIconCellWidth + 1 + displayWidth(title))
 		if titlePad < 0 {
 			titlePad = 0
 		}
