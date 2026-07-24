@@ -5,6 +5,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
+const footerStripeBackgroundHex = "#2b2b2b"
+
 var (
 	styleSelected = lipgloss.NewStyle().Bold(true).Reverse(true)
 	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))

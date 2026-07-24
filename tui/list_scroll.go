@@ -83,8 +83,8 @@ func listVisibleHeight(m Model) int {
 	if m.height == 0 {
 		return len(m.filtered)
 	}
-	var h int
 	if m.previewEnabled && m.cfg != nil {
+		var h int
 		cfg := m.cfg.Defaults.Preview
 		footerLines := footerBudgetLines(m)
 		paneHeight := m.height - chromeAboveListLines(m) - 1 /* padding row */ - footerLines - statusBarLines
@@ -100,9 +100,24 @@ func listVisibleHeight(m Model) int {
 		} else {
 			h = paneHeight
 		}
-	} else {
-		h = m.height - listChromeLines(m)
+		if h < listMinVisible {
+			h = listMinVisible
+		}
+		return h
 	}
+
+	return listVisibleHeightForFooterLines(m, footerBudgetLines(m))
+}
+
+// listVisibleHeightForFooterLines derives the non-preview list height from an
+// explicit footer-row count. Keeping this small calculation separate lets the
+// footer budget and position indicator converge without recursively calling
+// listVisibleHeight through renderFooter.
+func listVisibleHeightForFooterLines(m Model, footerLines int) int {
+	if m.height == 0 {
+		return len(m.filtered)
+	}
+	h := m.height - chromeAboveListLines(m) - 1 /* padding row */ - footerLines - statusBarLines
 	if h < listMinVisible {
 		h = listMinVisible
 	}

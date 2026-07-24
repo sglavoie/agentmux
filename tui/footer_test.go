@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sglavoie/agentmux/internal/session"
@@ -64,13 +65,15 @@ func TestListFooterPaletteOrder(t *testing.T) {
 	}
 }
 
-// TestListFooterCommandRowsSplit asserts row-targeted commands and global app
-// commands render on separate rows and no longer mix middle-dot separators with
-// the former section bar.
-func TestListFooterCommandRowsSplit(t *testing.T) {
-	out := listFooterCommandBlock(Model{
+// TestListFooterActionsReflow asserts row-targeted and global app commands
+// share one wrapping flow. At this width the first global action must use the
+// space remaining after the final row action instead of starting a new block.
+func TestListFooterActionsReflow(t *testing.T) {
+	const width = 110
+	out := stripAnsi(listFooterActions(Model{
+		width:    width,
 		filtered: []session.RunningSession{{State: "bolt"}},
-	})
+	}))
 
 	if strings.Contains(out, "▏") {
 		t.Errorf("footer should not render section bars; got %q", out)
@@ -78,30 +81,105 @@ func TestListFooterCommandRowsSplit(t *testing.T) {
 
 	lines := strings.Split(out, "\n")
 	if len(lines) != 2 {
-		t.Fatalf("expected two command rows, got %d in %q", len(lines), out)
+		t.Fatalf("expected two reflowed action rows, got %d in %q", len(lines), out)
 	}
-	for _, frag := range []string{"e peek", "s project sessions", "O open in editor"} {
-		if !strings.Contains(lines[0], frag) {
-			t.Errorf("expected row command %q on line 1; got %q", frag, lines[0])
-		}
+	if !strings.Contains(lines[1], "O open in editor · f profile") {
+		t.Fatalf("expected global actions to continue after final row action; got %q", lines[1])
 	}
-	if strings.Contains(lines[0], "l launch") {
-		t.Errorf("global launch command should move off line 1; got %q", lines[0])
-	}
-	for _, frag := range []string{"f profile", "l launch", ": command palette", "S sessions", "P plans", "R resort"} {
-		if !strings.Contains(lines[1], frag) {
-			t.Errorf("expected global command %q on line 2; got %q", frag, lines[1])
+	for _, frag := range []string{
+		"e peek", "s project sessions", "O open in editor",
+		"f profile", "l launch", ": command palette", "S sessions", "P plans", "R resort",
+	} {
+		if !strings.Contains(out, frag) {
+			t.Errorf("expected action %q in reflowed footer; got %q", frag, out)
 		}
 	}
 	for _, stale := range []string{"F run plan", "t tail"} {
-		if strings.Contains(lines[1], stale) {
-			t.Errorf("stale loop command %q should not be advertised; got %q", stale, lines[1])
+		if strings.Contains(out, stale) {
+			t.Errorf("stale loop command %q should not be advertised; got %q", stale, out)
 		}
 	}
 }
 
+func TestListFooterHasNoSpacerAndZebraRowsSpanViewport(t *testing.T) {
+	const width = 110
+	m := Model{
+		mode:     ModeList,
+		width:    width,
+		filtered: []session.RunningSession{{State: "bolt"}},
+	}
+
+	rendered := renderFooter(m)
+	rawLines := strings.Split(rendered, "\n")
+	plainLines := strings.Split(stripAnsi(rendered), "\n")
+	if len(rawLines) < 3 {
+		t.Fatalf("expected wrapped actions followed by navigation, got %d rows:\n%s", len(rawLines), rendered)
+	}
+	for i, line := range plainLines {
+		if strings.TrimSpace(line) == "" {
+			t.Fatalf("unexpected blank footer row %d in:\n%s", i, stripAnsi(rendered))
+		}
+	}
+	if !strings.Contains(plainLines[1], "O open in editor · f profile") {
+		t.Fatalf("expected actions to reflow across the former section boundary, got %q", plainLines[1])
+	}
+	if !strings.Contains(plainLines[2], "j/k: up/down") {
+		t.Fatalf("expected navigation immediately after actions, got %q", plainLines[2])
+	}
+
+	background := footerStripeBackgroundSequence()
+	for i, line := range rawLines {
+		if i%2 == 0 {
+			if !strings.HasPrefix(line, background) {
+				t.Errorf("row %d should start with zebra background", i)
+			}
+			if got := displayStyledWidth(line); got != width {
+				t.Errorf("striped row %d width = %d, want full viewport width %d", i, got, width)
+			}
+			if !strings.Contains(line, ansi.ResetStyle+background) {
+				t.Errorf("striped row %d should reapply background after nested style resets", i)
+			}
+			continue
+		}
+		if strings.Contains(line, background) {
+			t.Errorf("row %d should retain the terminal's default background", i)
+		}
+	}
+}
+
+func TestListFooterZebraAppliesToTemporaryListStates(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{name: "default", m: Model{mode: ModeList, width: 72}},
+		{name: "jump chord", m: Model{mode: ModeList, width: 72, pendingJumpDir: 1}},
+		{
+			name: "active filter",
+			m: Model{
+				mode:         ModeList,
+				width:        72,
+				activeFilter: Filter{Substrings: []string{"api"}},
+			},
+		},
+	}
+
+	background := footerStripeBackgroundSequence()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lines := strings.Split(renderFooter(tc.m), "\n")
+			for i, line := range lines {
+				hasBackground := strings.Contains(line, background)
+				if want := i%2 == 0; hasBackground != want {
+					t.Errorf("row %d zebra background = %v, want %v", i, hasBackground, want)
+				}
+			}
+		})
+	}
+}
+
 func listFooterCommandBlock(m Model) string {
-	return stripAnsi(strings.Join([]string{listFooterLine1(m), listFooterGlobalLine(m)}, "\n"))
+	return stripAnsi(listFooterActions(m))
 }
 
 // TestListFooterKeyHintsAlwaysPresent locks in the discoverability
@@ -137,7 +215,7 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := stripAnsi(listFooterLine1(tc.m))
+			out := stripAnsi(listFooterActions(tc.m))
 			if !strings.Contains(out, "e peek") {
 				t.Errorf("expected `e peek` in footer; got %q", out)
 			}
@@ -146,10 +224,9 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 					t.Errorf("expected %q in footer; got %q", frag, out)
 				}
 			}
-			globalOut := stripAnsi(listFooterGlobalLine(tc.m))
 			for _, stale := range []string{"F run plan", "t tail"} {
-				if strings.Contains(globalOut, stale) {
-					t.Errorf("stale loop command %q should not be advertised; got %q", stale, globalOut)
+				if strings.Contains(out, stale) {
+					t.Errorf("stale loop command %q should not be advertised; got %q", stale, out)
 				}
 			}
 		})
@@ -291,15 +368,15 @@ func TestRootRenderListPreviewSuppressesFooterButKeepsStatusBar(t *testing.T) {
 	}
 }
 
-// TestListFooterLine1WrapsNarrow asserts that line 1 emits at least one
+// TestListFooterActionsWrapNarrow asserts that the action flow emits at least one
 // newline and every line fits within the configured terminal width when the
 // width is too narrow for the full palette.
-func TestListFooterLine1WrapsNarrow(t *testing.T) {
+func TestListFooterActionsWrapNarrow(t *testing.T) {
 	const width = 60
 	m := Model{width: width}
-	out := listFooterLine1(m)
+	out := listFooterActions(m)
 	if strings.Count(out, "\n") < 1 {
-		t.Fatalf("expected line1 to wrap at width %d, got single line:\n%s", width, out)
+		t.Fatalf("expected actions to wrap at width %d, got single line:\n%s", width, out)
 	}
 	for i, line := range strings.Split(out, "\n") {
 		if w := lipgloss.Width(line); w > width {
@@ -308,22 +385,22 @@ func TestListFooterLine1WrapsNarrow(t *testing.T) {
 	}
 }
 
-// TestListFooterLine1NoWrapWide asserts no wrapping happens when the width
+// TestListFooterActionsNoWrapWide asserts no wrapping happens when the width
 // comfortably exceeds the rendered palette.
-func TestListFooterLine1NoWrapWide(t *testing.T) {
-	m := Model{width: 200}
-	out := listFooterLine1(m)
+func TestListFooterActionsNoWrapWide(t *testing.T) {
+	m := Model{width: 260}
+	out := listFooterActions(m)
 	if strings.Contains(out, "\n") {
-		t.Errorf("expected line1 to fit on one line at width 200, got:\n%s", out)
+		t.Errorf("expected actions to fit on one line at width 260, got:\n%s", out)
 	}
 }
 
-// TestListFooterLine1ZeroWidth asserts that a zero-width model (before the
+// TestListFooterActionsZeroWidth asserts that a zero-width model (before the
 // first WindowSizeMsg) emits a single unwrapped line — preserving the
 // pre-wrap fallback behavior.
-func TestListFooterLine1ZeroWidth(t *testing.T) {
+func TestListFooterActionsZeroWidth(t *testing.T) {
 	m := Model{}
-	out := listFooterLine1(m)
+	out := listFooterActions(m)
 	if strings.Contains(out, "\n") {
 		t.Errorf("expected single line at zero width, got:\n%s", out)
 	}

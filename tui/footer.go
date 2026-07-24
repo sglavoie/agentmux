@@ -4,8 +4,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
+
+var footerStripeBackgroundANSI = ansi.Style{}.
+	BackgroundColor(ansi.HexColor(footerStripeBackgroundHex)).
+	String()
 
 func renderFooter(m Model) string {
 	var lines []string
@@ -72,49 +77,18 @@ func renderFooter(m Model) string {
 			footerRenderedToken(styleFooter.Render("[esc] cancel")),
 		))
 	default: // ModeList
-		switch {
-		case m.pendingJumpDir != 0:
-			// Bracket chord pending: show the chord vocabulary instead of
-			// the usual nav row so the user can complete or cancel.
-			arrow := "next"
-			if m.pendingJumpDir == -1 {
-				arrow = "prev"
-			}
-			lines = listFooterLines(m, footerLine(m.width, "  ",
-				fmt.Sprintf("jump %s: p)perm", arrow),
-				"e)fail", "a)active", "q)question", "s)stop", "c)compact", "b)sub", "]]/[[)attention", "(esc cancels)",
-			))
-		case m.previewEnabled:
-			// In preview mode the only binding shown is `p: hide preview`,
-			// which is rendered right-aligned in the title row.
-			lines = nil
-		default:
-			navTokens := []string{
-				"j/k: up/down",
-				"]/[: jump-chord",
-				"}/{: nav+focus",
-				"enter: focus",
-				"a: actions",
-				"/: filter",
-				"?: help",
-				"q: quit",
-				"p: preview",
-			}
-			if !m.activeFilter.IsEmpty() {
-				navTokens = append(navTokens, "esc: clear filters")
-				if n := len(m.activeFilter.Components()); n > 0 {
-					navTokens = append(navTokens,
-						fmt.Sprintf("1-%d: remove chip", n),
-						"tab: focus next",
-					)
-				}
-			}
-			lines = listFooterLines(m, listFooterLine2(m, navTokens))
+		position := ""
+		if m.pendingJumpDir == 0 && !m.previewEnabled {
+			position = listPositionFragment(m)
 		}
+		lines = listModeFooterLines(m, position)
 	}
 
 	var sb strings.Builder
 	if len(lines) > 0 {
+		if m.mode == ModeList {
+			lines = zebraFooterLines(lines, m.width)
+		}
 		sb.WriteString(strings.Join(lines, "\n"))
 	}
 	return sb.String()
@@ -173,14 +147,97 @@ func nonEmptyFooterLines(lines ...string) []string {
 }
 
 func listFooterLines(m Model, selectedLine string) []string {
-	lines := []string{
-		listFooterLine1(m),
-		listFooterGlobalLine(m),
-	}
+	lines := []string{listFooterActions(m)}
 	if selectedLine != "" {
-		lines = append(lines, "", selectedLine)
+		lines = append(lines, selectedLine)
 	}
 	return lines
+}
+
+// listModeFooterLines assembles the unstyled physical blocks for ModeList.
+// position is passed in by callers so layout budgeting can measure the same
+// footer without recursively asking listVisibleHeight for the position text.
+func listModeFooterLines(m Model, position string) []string {
+	switch {
+	case m.pendingJumpDir != 0:
+		// Bracket chord pending: show the chord vocabulary instead of
+		// the usual nav row so the user can complete or cancel.
+		arrow := "next"
+		if m.pendingJumpDir == -1 {
+			arrow = "prev"
+		}
+		return listFooterLines(m, footerLine(m.width, "  ",
+			fmt.Sprintf("jump %s: p)perm", arrow),
+			"e)fail", "a)active", "q)question", "s)stop", "c)compact", "b)sub", "]]/[[)attention", "(esc cancels)",
+		))
+	case m.previewEnabled:
+		// In preview mode the only binding shown is `p: hide preview`,
+		// which is rendered right-aligned in the title row.
+		return nil
+	default:
+		return listFooterLines(m, listFooterLine2WithPosition(m, listFooterNavTokens(m), position))
+	}
+}
+
+func listFooterNavTokens(m Model) []string {
+	navTokens := []string{
+		"j/k: up/down",
+		"]/[: jump-chord",
+		"}/{: nav+focus",
+		"enter: focus",
+		"a: actions",
+		"/: filter",
+		"?: help",
+		"q: quit",
+		"p: preview",
+	}
+	if !m.activeFilter.IsEmpty() {
+		navTokens = append(navTokens, "esc: clear filters")
+		if n := len(m.activeFilter.Components()); n > 0 {
+			navTokens = append(navTokens,
+				fmt.Sprintf("1-%d: remove chip", n),
+				"tab: focus next",
+			)
+		}
+	}
+	return navTokens
+}
+
+// zebraFooterLines flattens wrapped footer blocks into physical rows, then
+// applies the ModeList zebra treatment. The first row receives the dark
+// background and is padded to the viewport width; the next row retains the
+// terminal's default background, and so on.
+func zebraFooterLines(lines []string, maxWidth int) []string {
+	rows := strings.Split(strings.Join(lines, "\n"), "\n")
+	for i := range rows {
+		if i%2 == 0 {
+			rows[i] = renderFooterStripeRow(rows[i], maxWidth)
+		}
+	}
+	return rows
+}
+
+// renderFooterStripeRow adds a full-width background without flattening the
+// foreground styles already embedded in the row. Lipgloss resets attributes
+// after each styled token, so the background sequence is re-applied after
+// every reset before the remaining content and trailing padding are emitted.
+func renderFooterStripeRow(row string, maxWidth int) string {
+	background := footerStripeBackgroundSequence()
+
+	var sb strings.Builder
+	sb.WriteString(background)
+	sb.WriteString(strings.ReplaceAll(row, ansi.ResetStyle, ansi.ResetStyle+background))
+	if maxWidth > 0 {
+		if padding := maxWidth - displayStyledWidth(row); padding > 0 {
+			sb.WriteString(strings.Repeat(" ", padding))
+		}
+	}
+	sb.WriteString(ansi.ResetStyle)
+	return sb.String()
+}
+
+func footerStripeBackgroundSequence() string {
+	return footerStripeBackgroundANSI
 }
 
 // listFooterLine2 prefixes the navigation hints with a gloss of the cursor
@@ -194,47 +251,35 @@ func listFooterLines(m Model, selectedLine string) []string {
 // fragment is joined with the standard double-space separator and wrapped to
 // fit m.width.
 func listFooterLine2(m Model, navFragments []string) string {
+	return listFooterLine2WithPosition(m, navFragments, listPositionFragment(m))
+}
+
+func listFooterLine2WithPosition(m Model, navFragments []string, position string) string {
 	sep := styleFooter.Render("  ")
 	sepW := displayStyledWidth(sep)
 
-	frags := navFragments
-	if pos := listPositionFragment(m); pos != "" {
+	tokens := make([]footerToken, 0, len(navFragments)+1)
+	if position != "" {
 		// The position fragment sits before the nav hints with a wider
 		// three-space gap so the eye chunks it as a separate group.
 		gap := styleFooter.Render("   ")
 		gapW := displayStyledWidth(gap)
-		tokens := make([]footerToken, 0, len(frags)+1)
-		posRendered := styleFooter.Render(pos)
+		posRendered := styleFooter.Render(position)
 		tokens = append(tokens, footerToken{
 			rendered: posRendered,
 			width:    displayStyledWidth(posRendered),
 			sep:      gap,
 			sepWidth: gapW,
 		})
-		for i, f := range frags {
-			rendered := styleFooter.Render(f)
-			tok := footerToken{
-				rendered: rendered,
-				width:    displayStyledWidth(rendered),
-			}
-			if i < len(frags)-1 {
-				tok.sep = sep
-				tok.sepWidth = sepW
-			}
-			tokens = append(tokens, tok)
-		}
-		firstLead, contIndent := listFooterLine2Leads(m)
-		return wrapFooterLine(firstLead, contIndent, tokens, m.width)
 	}
 
-	tokens := make([]footerToken, 0, len(frags))
-	for i, f := range frags {
+	for i, f := range navFragments {
 		rendered := styleFooter.Render(f)
 		tok := footerToken{
 			rendered: rendered,
 			width:    displayStyledWidth(rendered),
 		}
-		if i < len(frags)-1 {
+		if i < len(navFragments)-1 {
 			tok.sep = sep
 			tok.sepWidth = sepW
 		}
@@ -266,11 +311,14 @@ func listFooterLine2Leads(m Model) (string, string) {
 // detailFooter) when the filtered list overflows the visible window.
 // Returns "" when everything fits or the model has not yet been resized.
 func listPositionFragment(m Model) string {
+	return listPositionFragmentForVisible(m, listVisibleHeight(m))
+}
+
+func listPositionFragmentForVisible(m Model, visible int) string {
 	total := len(m.filtered)
 	if total == 0 || m.height == 0 {
 		return ""
 	}
-	visible := listVisibleHeight(m)
 	if visible >= total {
 		return ""
 	}
@@ -285,12 +333,49 @@ func listPositionFragment(m Model) string {
 	return fmt.Sprintf("%d–%d of %d", start, end, total)
 }
 
+// listFooterBudgetLineCount measures the reflowed ModeList footer using the
+// same builders as renderFooter. Position text depends on the list height,
+// while list height depends on footer rows, so iterate the small calculation
+// to a stable row count rather than falling back to a hard-coded budget.
+func listFooterBudgetLineCount(m Model) int {
+	if m.previewEnabled {
+		return 0
+	}
+
+	position := ""
+	lineCount := countFooterPhysicalRows(listModeFooterLines(m, position))
+	maxLineCount := lineCount
+	for range 4 {
+		visible := listVisibleHeightForFooterLines(m, lineCount)
+		nextPosition := ""
+		if m.pendingJumpDir == 0 {
+			nextPosition = listPositionFragmentForVisible(m, visible)
+		}
+		nextLineCount := countFooterPhysicalRows(listModeFooterLines(m, nextPosition))
+		if nextLineCount > maxLineCount {
+			maxLineCount = nextLineCount
+		}
+		if nextLineCount == lineCount && nextPosition == position {
+			return nextLineCount
+		}
+		position = nextPosition
+		lineCount = nextLineCount
+	}
+	return maxLineCount
+}
+
+func countFooterPhysicalRows(lines []string) int {
+	if len(lines) == 0 {
+		return 0
+	}
+	return len(strings.Split(strings.Join(lines, "\n"), "\n"))
+}
+
 // footerEntry describes one slot in the stable footer palette. The palette is
 // rendered in declaration order regardless of the cursor row's state; only the
 // styling of each entry changes (available vs unavailable) so users always see
-// every action at the same on-screen position. `section` groups entries onto
-// command rows so users can map shortcuts to their semantic bucket (row
-// actions, launching, app-wide commands).
+// every action in the same sequence. `section` preserves each action's semantic
+// bucket (row actions, launching, app-wide commands) inside the shared wrap.
 type footerEntry struct {
 	key     string
 	label   string
@@ -355,12 +440,12 @@ var listFooterPalette = []footerEntry{
 	{"R", "resort", footerSectionApp, func(Model) bool { return true }},
 }
 
-func listFooterLine1(m Model) string {
-	return listFooterSectionsLine(m, []string{footerSectionRow})
-}
-
-func listFooterGlobalLine(m Model) string {
-	return listFooterSectionsLine(m, []string{footerSectionLaunch, footerSectionApp})
+func listFooterActions(m Model) string {
+	return listFooterSectionsLine(m, []string{
+		footerSectionRow,
+		footerSectionLaunch,
+		footerSectionApp,
+	})
 }
 
 func listFooterSectionsLine(m Model, sections []string) string {

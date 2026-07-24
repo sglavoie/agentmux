@@ -254,9 +254,10 @@ func renderSplit(m Model) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView) + "\n"
 }
 
-// footerBudgetLines returns the baseline number of footer rows reserved by
-// layout math and preview resize checks. The sticky status row is accounted
-// for separately by callers.
+// footerBudgetLines returns the number of footer rows reserved by layout math
+// and preview resize checks. ModeList measures its reflowed content; other
+// modes retain their established fixed budgets. The sticky status row is
+// accounted for separately by callers.
 func footerBudgetLines(m Model) int {
 	if m.mode == ModePicker {
 		return pickerFooterLineCount(m)
@@ -268,7 +269,7 @@ func footerBudgetLines(m Model) int {
 		// Footer keybindings are suppressed while preview owns the split pane.
 		return 0
 	}
-	return 4
+	return listFooterBudgetLineCount(m)
 }
 
 // dashboardPreviewEnableFooterLines returns the footer budget used to decide

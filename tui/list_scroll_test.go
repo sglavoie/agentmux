@@ -22,12 +22,45 @@ func scrollModel() Model {
 
 func TestListChromeLines_BaselineModeList(t *testing.T) {
 	m := scrollModel()
+	footerLines := footerBudgetLines(m)
+	if renderedLines := len(rootFooterLines(m)); footerLines != renderedLines {
+		t.Fatalf("footer budget = %d, rendered footer rows = %d", footerLines, renderedLines)
+	}
 	// Baseline: header(1) + wrapped legend + spacer(1) + padding row(1)
-	// + footerBudgetLines (preview off -> 4) + status bar(1).
+	// + the measured reflowed footer + status bar(1).
 	got := listChromeLines(m)
-	want := 1 + legendLineCount(m) + 1 + 1 + 4 + statusBarLines
+	want := 1 + legendLineCount(m) + 1 + 1 + footerLines + statusBarLines
 	if got != want {
 		t.Errorf("baseline chrome: got %d want %d", got, want)
+	}
+}
+
+func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
+	base := scrollModel()
+	base.width = 72
+	base.height = 18
+	base.filtered = makeRowsForScroll(20)
+
+	filtered := base
+	filtered.activeFilter = Filter{Substrings: []string{"api"}}
+	jump := base
+	jump.pendingJumpDir = 1
+
+	for _, tc := range []struct {
+		name string
+		m    Model
+	}{
+		{name: "overflowing list", m: base},
+		{name: "active filter", m: filtered},
+		{name: "jump chord", m: jump},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := footerBudgetLines(tc.m)
+			want := len(rootFooterLines(tc.m))
+			if got != want {
+				t.Fatalf("footer budget = %d, rendered footer rows = %d", got, want)
+			}
+		})
 	}
 }
 
@@ -93,13 +126,14 @@ func TestListChromeLines_ChipsAddOneLine(t *testing.T) {
 
 func TestListChromeLines_SpacerDropsOutsideModeList(t *testing.T) {
 	m := scrollModel()
+	listFooterLines := footerBudgetLines(m)
 	base := listChromeLines(m)
 	// Outside ModeList the spacer line is not emitted; the footer
 	// also flips back to its default but for this test we only assert the
 	// spacer delta by holding everything else constant.
 	m.mode = ModeHelp
 	got := listChromeLines(m)
-	want := base - 1 - 2 // spacer removed; footer drops from 4 lines to 2.
+	want := base - 1 - listFooterLines + footerBudgetLines(m)
 	if got != want {
 		t.Errorf("spacer outside ModeList: got %d want %d", got, want)
 	}
@@ -363,14 +397,14 @@ func TestScrollListToCursor_PreviewEnabledKeepsCursorVisible(t *testing.T) {
 
 func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) {
 	m := scrollModel()
-	m.height = 15 // short-terminal chrome leaves a 7-line list pane
+	m.height = 15 // short-terminal chrome leaves a 6-line list pane
 	m.filtered = makeRowsForScroll(20)
 	m.cursor = 10
 	m.listOffset = 0
 
 	visible := listVisibleHeight(m)
-	if visible != 7 {
-		t.Fatalf("test fixture expected visible=7, got %d", visible)
+	if visible != 6 {
+		t.Fatalf("test fixture expected visible=6, got %d", visible)
 	}
 
 	scrollListToCursor(&m)
