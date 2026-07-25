@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -168,16 +169,56 @@ var configPathCmd = &cobra.Command{
 
 var configValidateCmd = &cobra.Command{
 	Use:   "validate",
-	Short: "Validate config.toml",
+	Short: "Validate config.toml and project directories",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := loadRunnableConfig()
+		cfg, err := loadRunnableConfig()
 		if err != nil {
+			ccerrors.Print(err)
+			return err
+		}
+		if err := validateProjectDirectories(cfg.Projects); err != nil {
 			ccerrors.Print(err)
 			return err
 		}
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "config is valid")
 		return err
 	},
+}
+
+func validateProjectDirectories(projects []config.Session) error {
+	var errs []string
+	for _, project := range projects {
+		configuredPath := project.Directory
+		info, err := os.Stat(config.ExpandTilde(configuredPath))
+		if err != nil {
+			var reason string
+			if errors.Is(err, os.ErrNotExist) {
+				reason = "does not exist"
+			} else {
+				var pathErr *os.PathError
+				if errors.As(err, &pathErr) {
+					reason = fmt.Sprintf("cannot be inspected: %v", pathErr.Err)
+				} else {
+					reason = fmt.Sprintf("cannot be inspected: %v", err)
+				}
+			}
+			errs = append(errs, fmt.Sprintf(
+				"project %q: directory %q %s",
+				project.Title, configuredPath, reason,
+			))
+			continue
+		}
+		if !info.IsDir() {
+			errs = append(errs, fmt.Sprintf(
+				"project %q: directory %q is not a directory",
+				project.Title, configuredPath,
+			))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("invalid project directories:\n%s", strings.Join(errs, "\n"))
+	}
+	return nil
 }
 
 var configHooksSyncCmd = &cobra.Command{

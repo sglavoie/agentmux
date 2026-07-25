@@ -6,7 +6,7 @@
 #   amx config path      Print the resolved config file path.
 #   amx config edit      Open the config in $EDITOR.
 #   amx config show      Print the config file as-is.
-#   amx config validate  Validate config values and references.
+#   amx config validate  Validate config values, references, and project directories.
 #
 # This starter config is intentionally safe for first launch: it does not add
 # any profiles or projects until you uncomment and customize the examples

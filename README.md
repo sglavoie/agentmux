@@ -938,7 +938,7 @@ The tab title is prefixed with an icon based on the latest hook event:
 | `amx config edit` | open the config in `$EDITOR` |
 | `amx config show` | print the parsed config |
 | `amx config path` | print the config path |
-| `amx config validate` | validate the config |
+| `amx config validate` | validate the config and configured project directories |
 | `amx config hooks-sync` | sync hooks into all configured profiles |
 | `amx config hooks-status` | show hook sync status per profile |
 
