@@ -213,6 +213,15 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			return m, nil
 		}
 		return m, copyTextCmd(path)
+	case keyCopySessionID:
+		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
+			return m, nil
+		}
+		id := m.sessionResults[m.sessionCursor].Meta.ID
+		if id == "" {
+			return m, nil
+		}
+		return m, copyTextCmd(id)
 	case keyCtrlD:
 		step := halfPageStep(sessionSearchVisibleHeight(m))
 		m.sessionCursor = clamp(m.sessionCursor+step, 0, len(m.sessionResults)-1)

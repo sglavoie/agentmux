@@ -273,7 +273,7 @@ func TestViewerFootersAdvertiseCopy(t *testing.T) {
 		mode  Mode
 		wants []string
 	}{
-		{name: "session search", mode: ModeSessionSearch, wants: []string{"Y path"}},
+		{name: "session search", mode: ModeSessionSearch, wants: []string{"i ID", "Y path"}},
 		{name: "session viewer", mode: ModeSessionView, wants: []string{"y copy", "Y path"}},
 		{name: "plan search", mode: ModePlanSearch, wants: []string{"Y path"}},
 		{name: "plan viewer", mode: ModePlanView, wants: []string{"y copy", "Y path"}},

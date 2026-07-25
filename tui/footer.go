@@ -50,7 +50,7 @@ func renderFooter(m Model) string {
 		)
 	case ModeSessionSearch:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "/ filter", "h/p/r chips", "enter view", "c continue", "f fork", "w worktree", "H handoff", "E edit handoff", "d delete", "Y path", "esc back"),
+			footerLine(m.width, " · ", "/ filter", "h/p/r chips", "enter view", "c continue", "f fork", "w worktree", "H handoff", "E edit handoff", "d delete", "i ID", "Y path", "esc back"),
 			footerLine(m.width, "  ", "j/k: up/down", "ctrl+d/u: half", "ctrl+f/b: page", "g/G: top/bottom"),
 		)
 	case ModeSessionView:

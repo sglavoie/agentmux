@@ -12,6 +12,7 @@ const (
 	keyColon            = ":" // opens ModeCommandPalette from ModeList only
 	keyF                = "f"
 	keyWorktreeFork     = "w" // ModeSessionSearch: confirm an isolated Git worktree fork
+	keyCopySessionID    = "i" // ModeSessionSearch: copy the selected transcript's canonical session ID
 	keyA                = "a"
 	keyO                = "o"
 	keyL                = "l"

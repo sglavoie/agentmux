@@ -219,6 +219,104 @@ func TestSessionSearchCopyPathIgnoredDuringTextEntry(t *testing.T) {
 	}
 }
 
+func TestSessionSearchCopyIDCopiesSelectedSessionID(t *testing.T) {
+	const selectedID = "019f8b51-a61b-7531-95da-94149ba2852e"
+	m := Model{
+		mode: ModeSessionSearch,
+		sessionResults: []transcript.Result{
+			{Meta: transcript.SessionMeta{ID: "first-id", Path: "/tmp/first.jsonl"}},
+			{Meta: transcript.SessionMeta{
+				ID:   selectedID,
+				Path: "/Users/sglavoie/.codex/sessions/2026/07/22/rollout-2026-07-22T13-33-31-" + selectedID + ".jsonl",
+			}},
+		},
+		sessionCursor: 1,
+		width:         80,
+		height:        20,
+	}
+
+	updated, cmd := m.Update(keyPress("i"))
+	got := updated.(Model)
+	if got.mode != ModeSessionSearch {
+		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+	}
+	if copied := runViewerCopyCmd(t, cmd); copied != selectedID {
+		t.Fatalf("copied = %q, want selected session ID %q", copied, selectedID)
+	}
+}
+
+func TestSessionSearchCopyIDNoOpForEmptyOrInvalidSelection(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{
+			name: "empty results",
+			m:    Model{mode: ModeSessionSearch},
+		},
+		{
+			name: "cursor below zero",
+			m: Model{
+				mode:           ModeSessionSearch,
+				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{ID: "present"}}},
+				sessionCursor:  -1,
+			},
+		},
+		{
+			name: "cursor past end",
+			m: Model{
+				mode:           ModeSessionSearch,
+				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{ID: "present"}}},
+				sessionCursor:  1,
+			},
+		},
+		{
+			name: "empty ID",
+			m: Model{
+				mode:           ModeSessionSearch,
+				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
+				sessionCursor:  0,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated, cmd := tc.m.Update(keyPress("i"))
+			got := updated.(Model)
+			if got.mode != ModeSessionSearch {
+				t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
+			}
+			if cmd != nil {
+				t.Fatalf("cmd = %T, want nil", cmd)
+			}
+		})
+	}
+}
+
+func TestSessionSearchCopyIDIgnoredDuringTextEntry(t *testing.T) {
+	m := Model{
+		mode:              ModeSessionSearch,
+		sessionSearchMode: true,
+		sessionQuery:      "session:",
+		sessionResults: []transcript.Result{
+			{Meta: transcript.SessionMeta{ID: "selected"}},
+		},
+		sessionCursor: 0,
+		width:         80,
+		height:        20,
+	}
+
+	updated, cmd := m.Update(keyPress("i"))
+	got := updated.(Model)
+	if got.sessionQuery != "session:i" {
+		t.Fatalf("sessionQuery = %q, want typed i appended", got.sessionQuery)
+	}
+	if cmd == nil {
+		t.Fatal("cmd = nil, want search dispatch command")
+	}
+}
+
 func TestSessionViewerCopyPathCopiesTranscriptPath(t *testing.T) {
 	m := Model{
 		mode:          ModeSessionView,

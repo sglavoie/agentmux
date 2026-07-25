@@ -278,6 +278,7 @@ is not the stored primary title.
   demand and show the per-session match count.
 - `h`, `p`, and `r` open single-value chip pickers for harness, profile,
   and project.
+- `i` copies the selected session ID, and `Y` copies its transcript path.
 - `enter` opens the transcript viewer; `n`/`N` move between matches,
   `j`/`k`, `g`/`G`, and `Ctrl+d/u/f/b` scroll, `y` copies the selected
   message, and `Y` copies the transcript path.

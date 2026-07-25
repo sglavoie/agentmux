@@ -35,6 +35,7 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		"X         close session (confirm)",
 		"C         launch new session with profile selection",
 		"f         cycle profile (dashboard live / launcher default)",
+		"i         copy selected past session ID",
 		"Y         copy current transcript/plan path in search/view modes",
 	} {
 		if !strings.Contains(out, frag) {
