@@ -214,6 +214,7 @@ its own badge/metadata columns.
 
 - press `/` to filter live,
 - `f` cycles project visibility through each default profile and back to all,
+- `g` / `G` jump to the top / bottom,
 - `space` toggles selection,
 - `enter` launches the selected projects,
 - `P` pins or unpins the highlighted project so pinned projects stay at the top,

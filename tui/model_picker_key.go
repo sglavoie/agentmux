@@ -106,6 +106,23 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	case keyG:
+		m.pickerCursor = 0
+		scrollPickerToCursor(&m)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case keyGG:
+		m.pickerCursor = len(m.pickerFilteredIdx) - 1
+		if m.pickerCursor < 0 {
+			m.pickerCursor = 0
+		}
+		scrollPickerToCursor(&m)
+		if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
 	case keyCtrlD:
 		step := pickerVisibleHeight(m) / 2
 		if step < 1 {

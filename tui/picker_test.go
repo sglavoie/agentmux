@@ -383,6 +383,9 @@ func TestPickerFooterShowsFilterControls(t *testing.T) {
 	if !strings.Contains(footer, "esc: clear/exit") {
 		t.Errorf("expected picker footer to advertise esc behavior, got:\n%s", footer)
 	}
+	if !strings.Contains(footer, "g/G: top/bottom") {
+		t.Errorf("expected picker footer to advertise boundary navigation, got:\n%s", footer)
+	}
 }
 
 func TestApplyPickerFilterDSLSubstring(t *testing.T) {

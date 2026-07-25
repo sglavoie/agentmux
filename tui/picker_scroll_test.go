@@ -149,6 +149,30 @@ func TestHandlePickerKey_KFollowsCursorBackUp(t *testing.T) {
 	}
 }
 
+func TestHandlePickerKey_GAndShiftGJumpToBounds(t *testing.T) {
+	m := pickerScrollFixtureModel(t, 40, 15)
+	last := len(m.pickerFilteredIdx) - 1
+
+	m = pressKey(m, "G")
+	if m.pickerCursor != last {
+		t.Fatalf("cursor after G: got %d want %d", m.pickerCursor, last)
+	}
+	if m.pickerOffset == 0 {
+		t.Fatal("pickerOffset remained at top after G")
+	}
+	if out := stripAnsi(renderPickerList(m, pickerVisibleHeight(m))); !strings.Contains(out, indexedRowName(last)) {
+		t.Fatalf("last row not rendered after G; got %q", out)
+	}
+
+	m = pressKey(m, "g")
+	if m.pickerCursor != 0 {
+		t.Fatalf("cursor after g: got %d want 0", m.pickerCursor)
+	}
+	if m.pickerOffset != 0 {
+		t.Fatalf("pickerOffset after g: got %d want 0", m.pickerOffset)
+	}
+}
+
 func TestHandlePickerKey_CtrlDAdvancesByHalfPage(t *testing.T) {
 	m := pickerScrollFixtureModel(t, 40, 15)
 	visible := pickerVisibleHeight(m)
