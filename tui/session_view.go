@@ -29,6 +29,15 @@ func sessionViewErrorLines(m Model) int {
 	return 0
 }
 
+// viewerScrollHeight sizes the viewer's scroll window under the viewer's own
+// footer. Offsets are also recomputed when a transcript load lands behind an
+// overlay or a resize arrives from another mode, and those footers are not the
+// viewer's height, so reading m.mode there would size the wrong window.
+func viewerScrollHeight(m Model) int {
+	m.mode = ModeSessionView
+	return sessionViewVisibleHeight(m)
+}
+
 // renderSessionView renders the full ModeSessionView layout: a one-line
 // header summarising the transcript and a scrollable list of role-coded
 // message lines below.
@@ -210,7 +219,7 @@ func computeViewerMatches(msgs []transcript.Message, query string) []int {
 // rendered list.
 func scrollViewerToCursor(m *Model) {
 	total := len(m.viewerMessages)
-	height := sessionViewVisibleHeight(*m)
+	height := viewerScrollHeight(*m)
 	if height <= 0 || total == 0 {
 		m.viewerScroll = 0
 		return
@@ -250,7 +259,7 @@ func scrollViewerToCursor(m *Model) {
 // against a stale offset surviving a resize that shrinks the viewport.
 func clampViewerScroll(m *Model) {
 	total := len(m.viewerMessages)
-	visible := sessionViewVisibleHeight(*m)
+	visible := viewerScrollHeight(*m)
 	maxOffset := total - visible
 	if maxOffset < 0 {
 		maxOffset = 0

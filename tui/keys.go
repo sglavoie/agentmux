@@ -11,8 +11,8 @@ const (
 	keySlash            = "/"
 	keyColon            = ":" // opens ModeCommandPalette from ModeList only
 	keyF                = "f"
-	keyWorktreeFork     = "w" // ModeSessionSearch: confirm an isolated Git worktree fork
-	keyCopySessionID    = "i" // ModeSessionSearch: copy the selected transcript's canonical session ID
+	keyWorktreeFork     = "w" // Past Sessions search/viewer: confirm an isolated Git worktree fork
+	keyCopySessionID    = "i" // Past Sessions search/viewer: copy the transcript's canonical session ID
 	keyA                = "a"
 	keyO                = "o"
 	keyL                = "l"
@@ -29,7 +29,7 @@ const (
 	keyR                = "r"
 	keyU                = "u" // undo the most recent destructive action
 	keyBackspace        = "backspace"
-	keyQuestion         = "?" // opens ModeHelp overlay
+	keyQuestion         = "?" // opens ModeHelp overlay (dashboard, Past Sessions, Plans)
 	keyC                = "c" // opens ModeConfigPicker for profile override
 	keyDashboardLaunch  = "C" // opens ModeConfigPicker for dashboard launch
 	keyClearStatus      = "x" // clears the highlighted session's icon
@@ -41,7 +41,8 @@ const (
 	keySessionSearch    = "S" // opens ModeSessionSearch (past harness transcripts)
 	keyPlanSearch       = "P" // opens ModePlanSearch (past agent plans)
 	keyPinProject       = "P" // ModePicker: pin/unpin the highlighted configured project
-	keySortPlan         = "s" // cycles the ModePlanSearch result-sort mode
+	keySortPlan         = "o" // ModePlanSearch: cycles the result-sort mode
+	keyPlanOpenEditor   = "e" // ModePlanSearch/ModePlanView: open the plan directory in the editor
 	keyToggleTimeline   = "t" // toggle flat list ↔ timeline in ModeDetail
 	keyToggleTimestamps = "T" // toggle timestamp column in timeline (ModeDetail)
 	keyPhasePrev        = "[" // jump to previous phase header in timeline

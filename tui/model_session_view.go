@@ -3,6 +3,7 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -73,6 +74,9 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyEsc, keyQ:
 		m.exitSessionView()
 		return m, nil
+	case keyQuestion:
+		m.openHelp(ModeSessionView)
+		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyJ, keyDown:
@@ -141,6 +145,33 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.enterMessageDetail()
+	case keyC:
+		if m.viewerSession == nil {
+			return m, nil
+		}
+		return m, m.conversationActionCmd(m.transcriptReaders, *m.viewerSession, actions.Continue)
+	case keyF:
+		if m.viewerSession == nil {
+			return m, nil
+		}
+		return m, m.conversationActionCmd(m.transcriptReaders, *m.viewerSession, actions.Fork)
+	case keyWorktreeFork:
+		if m.viewerSession == nil {
+			return m, nil
+		}
+		m.startWorktreeForkConfirm(*m.viewerSession, ModeSessionView)
+		return m, nil
+	case "H", "E":
+		if m.viewerSession == nil {
+			return m, nil
+		}
+		m.startHandoffPicker(*m.viewerSession, ModeSessionView, msg.String() == "E")
+		return m, nil
+	case keyCopySessionID:
+		if m.viewerSession == nil || m.viewerSession.ID == "" {
+			return m, nil
+		}
+		return m, copyTextCmd(m.viewerSession.ID)
 	}
 	return m, nil
 }

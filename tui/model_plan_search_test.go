@@ -231,18 +231,18 @@ func TestPlanSearch_TypingShrinksResultSet(t *testing.T) {
 	}
 }
 
-// TestPlanSearchLowercaseSRemainsSortKey pins the mode-scoped key contract:
-// lowercase s sorts plan-search results and must not enter project-scoped
-// Past Sessions from this mode.
-func TestPlanSearchLowercaseSRemainsSortKey(t *testing.T) {
+// TestPlanSearchLowercaseOIsSortKey pins the mode-scoped key contract:
+// lowercase o cycles the plan-search sort order and must not open the plan
+// directory in an editor from this mode.
+func TestPlanSearchLowercaseOIsSortKey(t *testing.T) {
 	m, _ := planSearchTestModel(t)
 	m.planSortMode = plans.SortByMatches
 
-	updated, cmd := m.Update(keyPress("s"))
+	updated, cmd := m.Update(keyPress("o"))
 	got := updated.(Model)
 
 	if cmd != nil {
-		t.Fatalf("plan search s returned cmd %T, want nil", cmd)
+		t.Fatalf("plan search o returned cmd %T, want nil", cmd)
 	}
 	if got.mode != ModePlanSearch {
 		t.Fatalf("mode = %v, want ModePlanSearch", got.mode)
@@ -254,10 +254,10 @@ func TestPlanSearchLowercaseSRemainsSortKey(t *testing.T) {
 		t.Fatalf("filterProject = %#v, want unchanged empty project chip", got.filterProject)
 	}
 
-	updated, cmd = got.Update(keyPress("s"))
+	updated, cmd = got.Update(keyPress("o"))
 	got = updated.(Model)
 	if cmd != nil {
-		t.Fatalf("second plan search s returned cmd %T, want nil", cmd)
+		t.Fatalf("second plan search o returned cmd %T, want nil", cmd)
 	}
 	if got.mode != ModePlanSearch {
 		t.Fatalf("second mode = %v, want ModePlanSearch", got.mode)
@@ -267,14 +267,14 @@ func TestPlanSearchLowercaseSRemainsSortKey(t *testing.T) {
 	}
 }
 
-// TestPlanSearch_OpenInEditorInvokesLaunch verifies pressing `o` on a row
+// TestPlanSearch_OpenInEditorInvokesLaunch verifies pressing `e` on a row
 // dispatches a tea.Cmd that drives kitten @ launch with the plan's directory.
 func TestPlanSearch_OpenInEditorInvokesLaunch(t *testing.T) {
 	m, runner := planSearchTestModel(t)
 
-	_, cmd := m.Update(keyPress("o"))
+	_, cmd := m.Update(keyPress("e"))
 	if cmd == nil {
-		t.Fatal("`o` keypress produced nil cmd; want openPlanInEditorCmd")
+		t.Fatal("`e` keypress produced nil cmd; want openPlanInEditorCmd")
 	}
 
 	// Drain the command — it invokes session.OpenPathInEditor synchronously,
@@ -298,7 +298,7 @@ func TestPlanSearch_OpenInEditorInvokesLaunch(t *testing.T) {
 		}
 	}
 	if !launchCalled {
-		t.Error("expected kitten @ launch call after `o` keypress")
+		t.Error("expected kitten @ launch call after `e` keypress")
 	}
 }
 

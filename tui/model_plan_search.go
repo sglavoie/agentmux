@@ -159,6 +159,9 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	case keySlash:
 		m.planSearchMode = true
 		return m, nil
+	case keyQuestion:
+		m.openHelp(ModePlanSearch)
+		return m, nil
 	case keyR:
 		return m.enterChipPicker(chipPickerProject)
 	case keyJ, keyDown:
@@ -206,7 +209,7 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.planCursor = clamp(m.planCursor-step, 0, len(m.planResults)-1)
 		scrollPlanSearchToCursor(&m)
 		return m, nil
-	case keyO:
+	case keyPlanOpenEditor:
 		if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
 			return m, nil
 		}

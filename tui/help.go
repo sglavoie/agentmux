@@ -1,19 +1,51 @@
 package tui
 
-import "strings"
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
 
 // helpMinVisible is the floor on the visible content window. Even on
 // extremely short terminals we always render at least this many content
 // lines so the overlay stays useful.
 const helpMinVisible = 3
 
-// helpSections is the static list of sections rendered in the keyboard
-// shortcut overlay. Sections are ordered by frequency-of-use (Pareto);
+// openHelp raises the shortcut overlay from returnMode. Every mode that binds
+// `?` goes through here so handleHelpKey has a return target and the footer's
+// `? more` truncation marker always points at a live key.
+func (m *Model) openHelp(returnMode Mode) {
+	m.helpOffset = 0
+	m.helpReturnMode = returnMode
+	m.mode = ModeHelp
+}
+
+// helpBaseView renders the view the overlay was raised from so the dimmed
+// backdrop matches the mode esc returns to.
+func helpBaseView(m Model) string {
+	switch m.helpReturnMode {
+	case ModeSessionSearch:
+		return renderSessionSearch(m)
+	case ModeSessionView:
+		return renderSessionView(m)
+	case ModePlanSearch:
+		return renderPlanSearch(m)
+	case ModePlanView:
+		return renderPlanView(m)
+	default:
+		return renderDashboard(m)
+	}
+}
+
+// helpSections is the static list of dashboard-scoped sections rendered in the
+// keyboard shortcut overlay. Sections are ordered by frequency-of-use (Pareto);
 // the overlay is scrollable (see ▲/▼ indicators) so taller sections are
 // acceptable when grouping is more useful than capping length. Keys that
 // overload across modes (e.g. `tab`/`esc`) are listed under the section
 // where they're most often reached for; the footer/actions overlay
-// disclose mode-specific meanings inline.
+// disclose mode-specific meanings inline. Past Sessions and Plans keys are
+// not listed here — helpPaletteSections generates them from the footer
+// palettes so each of those bindings is declared exactly once.
 var helpSections = []struct {
 	name  string
 	lines []string
@@ -64,9 +96,7 @@ var helpSections = []struct {
 		"  P         pin / unpin highlighted launcher project",
 		"  C         launch new session with profile selection",
 		"  o         open session directory in a plain shell tab",
-		"  y         copy session title; in transcript/plan viewers, copy selection",
-		"  i         copy selected past session ID",
-		"  Y         copy current transcript/plan path in search/view modes",
+		"  y         copy session title",
 		"  p         toggle preview pane (also active in launcher)",
 	}},
 	{"Filter", []string{
@@ -80,9 +110,6 @@ var helpSections = []struct {
 		"  ?         show / hide this help",
 		"  d         show session detail (hook event log)",
 		"  S         search past session transcripts",
-		"  H         handoff selected past session to another profile",
-		"  E         edit a handoff pack before launching its target",
-		"  w         fork selected past session in an isolated Git worktree",
 		"  P         search saved plans (from dashboard)",
 		"  q         quit",
 		"  ctrl+c    quit",
@@ -93,6 +120,89 @@ var helpSections = []struct {
 // describing the `…` overflow indicator used in the row-action footer.
 const helpFooterOverflowLine = "  …         footer overflow — least-frequent row actions (y)"
 
+// helpPalette is one mode's footer palette tagged with the scope name the
+// overlay uses to disambiguate keys the section's palettes label differently or
+// declare in only one of the two modes.
+type helpPalette struct {
+	scope   string
+	entries []footerEntry
+}
+
+// helpPaletteSections are the sections generated from the Past Sessions and
+// Plans footer palettes. The palettes are the single source of truth for those
+// modes: narrow terminals drop their lowest-priority hints (nav keys first), so
+// the overlay is the only place the complete keymap is always visible.
+var helpPaletteSections = []struct {
+	name     string
+	palettes []helpPalette
+}{
+	{"Past Sessions", []helpPalette{
+		{"search", sessionSearchFooterPalette},
+		{"viewer", sessionViewFooterPalette},
+	}},
+	{"Plans", []helpPalette{
+		{"search", planSearchFooterPalette},
+		{"viewer", planViewFooterPalette},
+	}},
+}
+
+// helpKeyMeaning pairs a palette scope with the label that palette declares for
+// a key.
+type helpKeyMeaning struct {
+	scope string
+	label string
+}
+
+// helpPaletteLines renders palette entries into helpSections' padded two-column
+// layout, one line per key, ordered by the priority band of its first
+// declaration so actions precede the guessable navigation keys.
+func helpPaletteLines(palettes []helpPalette) []string {
+	var keys []string
+	first := make(map[string]footerEntry)
+	meanings := make(map[string][]helpKeyMeaning)
+	for _, palette := range palettes {
+		for _, e := range palette.entries {
+			if _, ok := first[e.key]; !ok {
+				first[e.key] = e
+				keys = append(keys, e.key)
+			}
+			meanings[e.key] = append(meanings[e.key], helpKeyMeaning{palette.scope, e.label})
+		}
+	}
+	sort.SliceStable(keys, func(i, j int) bool {
+		return first[keys[i]].priority < first[keys[j]].priority
+	})
+	lines := make([]string, 0, len(keys))
+	for _, key := range keys {
+		lines = append(lines, fmt.Sprintf("  %-10s%s", key, helpMeaningLabel(meanings[key], len(palettes))))
+	}
+	return lines
+}
+
+// helpMeaningLabel collapses one key's declarations into a single label. Only a
+// key that every palette of the section declares with the same label reads as a
+// bare label. Anything else keeps each meaning tagged with the scope that
+// declares it: palettes that disagree so a viewer-only meaning is never hidden
+// behind the search label, and keys bound in just one of the two modes so the
+// overlay never advertises a command that does nothing in its sibling.
+func helpMeaningLabel(meanings []helpKeyMeaning, palettes int) string {
+	same := len(meanings) == palettes
+	for _, m := range meanings[1:] {
+		if m.label != meanings[0].label {
+			same = false
+			break
+		}
+	}
+	if same {
+		return meanings[0].label
+	}
+	parts := make([]string, 0, len(meanings))
+	for _, m := range meanings {
+		parts = append(parts, fmt.Sprintf("%s (%s)", m.label, m.scope))
+	}
+	return strings.Join(parts, " · ")
+}
+
 // helpContentLines builds the flat list of styled content lines (excluding
 // the title, blank, and indicator slots) that participate in scrolling.
 // Each section header is followed by its entries and a trailing blank
@@ -100,14 +210,23 @@ const helpFooterOverflowLine = "  …         footer overflow — least-frequent
 func helpContentLines() []string {
 	var lines []string
 	for _, sec := range helpSections {
-		lines = append(lines, styleHeader.Render(sec.name))
-		for _, line := range sec.lines {
-			lines = append(lines, styleDim.Render(line))
-		}
-		lines = append(lines, "")
+		lines = appendHelpSection(lines, sec.name, sec.lines)
+	}
+	for _, sec := range helpPaletteSections {
+		lines = appendHelpSection(lines, sec.name, helpPaletteLines(sec.palettes))
 	}
 	lines = append(lines, styleDim.Render(helpFooterOverflowLine))
 	return lines
+}
+
+// appendHelpSection appends one styled header, its dim body lines, and the
+// trailing blank separator the scroll math counts.
+func appendHelpSection(lines []string, name string, body []string) []string {
+	lines = append(lines, styleHeader.Render(name))
+	for _, line := range body {
+		lines = append(lines, styleDim.Render(line))
+	}
+	return append(lines, "")
 }
 
 // helpBoxInnerWidth returns the value passed to styleOverlayBox.Width for the

@@ -1,0 +1,16 @@
+{
+  "name": "plan-search-sort-rebind",
+  "fixture": "basic",
+  "size": { "width": 100, "height": 30 },
+  "actions": [
+    { "type": "key", "key": "P" },
+    { "type": "key", "key": "o" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "plan_search" },
+    { "type": "contains_text", "text": "sort: recent" },
+    { "type": "contains_text", "text": "o sort" },
+    { "type": "excludes_text", "text": "s sort" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -554,8 +554,7 @@ func commandCatalog() []command {
 			description: "Open the complete dashboard keyboard reference.",
 			aliases:     []string{"help", "keys"}, shortcut: keyQuestion,
 			execute: func(m Model, _ commandContext) (Model, tea.Cmd) {
-				m.helpOffset = 0
-				m.mode = ModeHelp
+				m.openHelp(ModeList)
 				return m, nil
 			},
 		},

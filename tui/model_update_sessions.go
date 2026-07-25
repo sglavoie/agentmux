@@ -177,7 +177,7 @@ func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Mode
 			m.publishSessionResults(msg.results)
 		}
 		m.sessionLoading = false
-	} else if m.mode == ModeSessionSearch {
+	} else if m.activeRootMode() == ModeSessionSearch {
 		m.sessionLoading = true
 		cmds = append(cmds, m.runSessionSearchCmd(m.sessionSearchSeq, m.transcriptIndex, m.transcriptReaders, m.currentSessionQuery()))
 	} else {
@@ -189,7 +189,7 @@ func (m Model) handleSessionCacheLoadDone(msg sessionCacheLoadDoneMsg) (tea.Mode
 		warmSeq := msg.seq
 		warmQuery := transcript.Query{}
 		if !publishCachedResults {
-			if m.mode == ModeSessionSearch {
+			if m.activeRootMode() == ModeSessionSearch {
 				warmSeq = m.sessionSearchSeq
 				warmQuery = m.currentSessionQuery()
 			} else {
@@ -340,7 +340,7 @@ func (m Model) handlePlanCacheLoadDone(msg planCacheLoadDoneMsg) (tea.Model, tea
 			m.publishPlanResults(msg.results)
 		}
 	}
-	if m.mode != ModePlanSearch {
+	if m.activeRootMode() != ModePlanSearch {
 		m.planLoading = false
 		return m, nil
 	}
@@ -414,8 +414,10 @@ func (m Model) handlePlanEditorErr(msg planEditorErrMsg) (tea.Model, tea.Cmd) {
 // viewer, dropping stale loads from a previous viewer session.
 func (m Model) handlePlanFilesLoaded(msg planFilesLoadedMsg) (tea.Model, tea.Cmd) {
 	// Drop stale loads: either the user already left the viewer, or
-	// pressed Enter on a different plan before this one finished.
-	if m.mode != ModePlanView || msg.seq != m.planViewerLoadSeq {
+	// pressed Enter on a different plan before this one finished. An overlay
+	// raised over the viewer is a detour, not an exit, so its return mode
+	// still owns the result.
+	if m.activeRootMode() != ModePlanView || msg.seq != m.planViewerLoadSeq {
 		return m, nil
 	}
 	m.planViewerLoading = false
@@ -436,8 +438,11 @@ func (m Model) handlePlanFilesLoaded(msg planFilesLoadedMsg) (tea.Model, tea.Cmd
 // the session transcript viewer, dropping stale loads.
 func (m Model) handleViewerMessagesLoaded(msg viewerMessagesLoadedMsg) (tea.Model, tea.Cmd) {
 	// Drop stale loads: either the user already left the viewer, or
-	// pressed Enter on a different row before this one finished.
-	if m.mode != ModeSessionView || msg.seq != m.viewerLoadSeq {
+	// pressed Enter on a different row before this one finished. An overlay
+	// raised over the viewer is not an exit, so its return mode owns the
+	// result — otherwise a load finishing behind help or the handoff picker
+	// would leave the viewer stuck on "loading" after the detour.
+	if m.activeRootMode() != ModeSessionView || msg.seq != m.viewerLoadSeq {
 		return m, nil
 	}
 	m.viewerLoading = false

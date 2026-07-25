@@ -17,6 +17,7 @@ type fakeLaunchDispatchClient struct {
 	windows  []kitty.OSWindow
 	launched []kitty.LaunchOpts
 	closed   []string
+	focused  []string
 }
 
 func (f *fakeLaunchDispatchClient) ListWindows() ([]kitty.OSWindow, error) { return f.windows, nil }
@@ -46,10 +47,13 @@ func (f *fakeLaunchDispatchClient) SetTabColor(string, string, string, string, s
 }
 func (f *fakeLaunchDispatchClient) SetTabTitle(string, string) error            { return nil }
 func (f *fakeLaunchDispatchClient) SetUserVars(string, map[string]string) error { return nil }
-func (f *fakeLaunchDispatchClient) FocusTab(string) error                       { return nil }
-func (f *fakeLaunchDispatchClient) FocusWindow(string) error                    { return nil }
-func (f *fakeLaunchDispatchClient) GetText(string, string) (string, error)      { return "", nil }
-func (f *fakeLaunchDispatchClient) LaunchOverlayPager(string) error             { return nil }
+func (f *fakeLaunchDispatchClient) FocusTab(match string) error {
+	f.focused = append(f.focused, match)
+	return nil
+}
+func (f *fakeLaunchDispatchClient) FocusWindow(string) error               { return nil }
+func (f *fakeLaunchDispatchClient) GetText(string, string) (string, error) { return "", nil }
+func (f *fakeLaunchDispatchClient) LaunchOverlayPager(string) error        { return nil }
 
 // collectLeafMsgs invokes cmd and recursively expands any tea.Sequence /
 // tea.Batch slice results into the leaf tea.Msg values they produce. Used

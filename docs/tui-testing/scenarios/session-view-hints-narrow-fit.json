@@ -1,0 +1,14 @@
+{
+  "name": "session-view-hints-narrow-fit",
+  "fixture": "basic",
+  "size": { "width": 60, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "S" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "session_view" },
+    { "type": "contains_text", "text": "? more" },
+    { "type": "no_layout_issues" }
+  ]
+}

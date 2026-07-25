@@ -49,25 +49,13 @@ func renderFooter(m Model) string {
 			footerLine(m.width, "  ", "/: search", "j/k: up/down", "g/G: top/bottom", "pgup/pgdn: page"),
 		)
 	case ModeSessionSearch:
-		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "/ filter", "h/p/r chips", "enter view", "c continue", "f fork", "w worktree", "H handoff", "E edit handoff", "d delete", "i ID", "Y path", "esc back"),
-			footerLine(m.width, "  ", "j/k: up/down", "ctrl+d/u: half", "ctrl+f/b: page", "g/G: top/bottom"),
-		)
+		lines = footerHintLines(m, sessionSearchFooterPalette, footerHintMaxLines)
 	case ModeSessionView:
-		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "j/k move", "n/N match", "y copy", "Y path", "enter view message", "esc back"),
-			footerLine(m.width, "  ", "ctrl+d/u: half", "ctrl+f/b: page", "g/G: top/bot"),
-		)
+		lines = footerHintLines(m, sessionViewFooterPalette, footerHintMaxLines)
 	case ModePlanSearch:
-		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "/ filter", "r project", "enter view", "o editor", "s sort", "Y path", "esc back"),
-			footerLine(m.width, " · ", "j/k up/down", "g/G top/bot", "ctrl+d/u half", "ctrl+f/b page"),
-		)
+		lines = footerHintLines(m, planSearchFooterPalette, footerHintMaxLines)
 	case ModePlanView:
-		lines = nonEmptyFooterLines(
-			footerLine(m.width, " · ", "/ search", "n/N match", "y copy", "Y path", "o editor", "esc back"),
-			footerLine(m.width, " · ", "j/k scroll", "g/G top/bot", "ctrl+d/u half", "ctrl+f/b page"),
-		)
+		lines = footerHintLines(m, planViewFooterPalette, footerHintMaxLines)
 	case ModeMessageDetail:
 		lines = nonEmptyFooterLines(footerLine(m.width, " · ", "j/k scroll", "g/G top/bottom", "esc/q/enter close"))
 	case ModeDeleteChoice:
@@ -377,11 +365,14 @@ func countFooterPhysicalRows(lines []string) int {
 // styling of each entry changes (available vs unavailable) so users always see
 // every action in the same sequence. `section` preserves each action's semantic
 // bucket (row actions, launching, app-wide commands) inside the shared wrap.
+// `priority` orders truncation when a palette cannot fit its row budget: 0 is
+// never dropped, and higher numbers are dropped before lower ones.
 type footerEntry struct {
-	key     string
-	label   string
-	section string
-	availFn func(Model) bool
+	key      string
+	label    string
+	section  string
+	availFn  func(Model) bool
+	priority int
 }
 
 // Section identifiers for footer command rows.
@@ -401,22 +392,24 @@ func hasRow(m Model) bool {
 // command rows. Order is invariant — entries never move between states. Each
 // entry's availability function decides whether to render with the available
 // or unavailable style.
+// Every entry carries priority 0: the ModeList footer is budgeted by
+// listFooterBudgetLineCount rather than truncated, so no entry is ever dropped.
 var listFooterPalette = []footerEntry{
 	{"e", "peek", footerSectionRow, func(m Model) bool {
 		return hasRow(m) && m.filtered[m.cursor].State == "bolt"
-	}},
-	{"T", "timeline", footerSectionRow, hasRow},
-	{"r", "restart", footerSectionRow, hasRow},
-	{"c", "profile", footerSectionRow, hasRow},
-	{"C", "launch", footerSectionRow, hasRow},
-	{"s", "project sessions", footerSectionRow, hasRow},
+	}, 0},
+	{"T", "timeline", footerSectionRow, hasRow, 0},
+	{"r", "restart", footerSectionRow, hasRow, 0},
+	{"c", "profile", footerSectionRow, hasRow, 0},
+	{"C", "launch", footerSectionRow, hasRow, 0},
+	{"s", "project sessions", footerSectionRow, hasRow, 0},
 	{"x", "clear", footerSectionRow, func(m Model) bool {
 		if !hasRow(m) {
 			return false
 		}
 		return stateGroup(m.filtered[m.cursor], m.lastActivity, m.idleThreshold) == 0
-	}},
-	{"X", "close", footerSectionRow, hasRow},
+	}, 0},
+	{"X", "close", footerSectionRow, hasRow, 0},
 	{"o", "open dir", footerSectionRow, func(m Model) bool {
 		if !hasRow(m) {
 			return false
@@ -424,7 +417,7 @@ var listFooterPalette = []footerEntry{
 		s := m.filtered[m.cursor]
 		_, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
 		return ok
-	}},
+	}, 0},
 	{"O", "open in editor", footerSectionRow, func(m Model) bool {
 		if !hasRow(m) {
 			return false
@@ -432,13 +425,13 @@ var listFooterPalette = []footerEntry{
 		s := m.filtered[m.cursor]
 		_, ok := findConfigSession(m.cfg, s.EffectiveProfile(), s.EffectiveProject())
 		return ok
-	}},
-	{"f", "profile", footerSectionLaunch, func(Model) bool { return true }},
-	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }},
-	{":", "command palette", footerSectionApp, func(Model) bool { return true }},
-	{"S", "sessions", footerSectionApp, func(Model) bool { return true }},
-	{"P", "plans", footerSectionApp, func(Model) bool { return true }},
-	{"R", "resort", footerSectionApp, func(Model) bool { return true }},
+	}, 0},
+	{"f", "profile", footerSectionLaunch, func(Model) bool { return true }, 0},
+	{"l", "launch", footerSectionLaunch, func(Model) bool { return true }, 0},
+	{":", "command palette", footerSectionApp, func(Model) bool { return true }, 0},
+	{"S", "sessions", footerSectionApp, func(Model) bool { return true }, 0},
+	{"P", "plans", footerSectionApp, func(Model) bool { return true }, 0},
+	{"R", "resort", footerSectionApp, func(Model) bool { return true }, 0},
 }
 
 func listFooterActions(m Model) string {

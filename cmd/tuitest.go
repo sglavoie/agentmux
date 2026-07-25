@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/sglavoie/agentmux/tui"
 	"github.com/spf13/cobra"
@@ -79,7 +81,11 @@ var tuiTestFixtureCmd = &cobra.Command{
 // bad invocation (exitInvalidInput); a clean run with a failing assertion is a
 // scenario regression (exitScenarioFailure). Output is emitted before the
 // failure exit so the results are always visible.
-func runTUITestScenarios(cmd *cobra.Command, paths []string) error {
+func runTUITestScenarios(cmd *cobra.Command, args []string) error {
+	paths, err := tuiTestScenarioPaths(args)
+	if err != nil {
+		return &ExitError{Code: exitInvalidInput, Err: err}
+	}
 	results := make([]tui.UITestScenarioResult, 0, len(paths))
 	for _, path := range paths {
 		sc, err := tui.LoadUITestScenario(path)
@@ -110,6 +116,33 @@ func runTUITestScenarios(cmd *cobra.Command, paths []string) error {
 		return &ExitError{Code: exitScenarioFailure, Quiet: true}
 	}
 	return nil
+}
+
+// tuiTestScenarioPaths expands shell-style glob patterns in the scenario
+// arguments. The documented invocation is
+// `tui-test run docs/tui-testing/scenarios/*.json`, which an interactive shell
+// expands before the process starts; automation that execs the binary directly
+// (verification harnesses, exec.Command, just recipes with shell disabled)
+// passes the pattern through verbatim, so the command expands it itself rather
+// than reporting the pattern as a missing file. A pattern matching nothing is a
+// bad invocation, matching the treatment of a missing literal path.
+func tuiTestScenarioPaths(args []string) ([]string, error) {
+	paths := make([]string, 0, len(args))
+	for _, arg := range args {
+		if !strings.ContainsAny(arg, "*?[") {
+			paths = append(paths, arg)
+			continue
+		}
+		matches, err := filepath.Glob(arg)
+		if err != nil {
+			return nil, fmt.Errorf("tui-test: bad scenario pattern %q: %w", arg, err)
+		}
+		if len(matches) == 0 {
+			return nil, fmt.Errorf("tui-test: no scenario files match %q", arg)
+		}
+		paths = append(paths, matches...)
+	}
+	return paths, nil
 }
 
 // tuiTestScenariosFailed reports whether any scenario had an unmet assertion.

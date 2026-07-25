@@ -163,7 +163,7 @@ func TestPlanViewerPageKeysScrollWrappedRowsWithinOneLogicalLine(t *testing.T) {
 	m := Model{
 		mode:             ModePlanView,
 		width:            8,
-		height:           16,
+		height:           8,
 		planViewerLines:  []string{"abcdefghijklmnopqrstuvwxTAIL"},
 		planViewerCursor: 0,
 	}
@@ -329,7 +329,7 @@ func TestPlanViewer_StaleLoadIsDropped(t *testing.T) {
 	}
 }
 
-// TestPlanViewer_OpenEditorInvokesLaunch exercises the `o` keybinding from
+// TestPlanViewer_OpenEditorInvokesLaunch exercises the `e` keybinding from
 // inside the viewer.
 func TestPlanViewer_OpenEditorInvokesLaunch(t *testing.T) {
 	m, meta := planViewTestModel(t)
@@ -342,11 +342,11 @@ func TestPlanViewer_OpenEditorInvokesLaunch(t *testing.T) {
 	updated, _ = m.Update(loaded)
 	m = updated.(Model)
 
-	_, oCmd := m.Update(keyPress("o"))
-	if oCmd == nil {
-		t.Fatal("`o` produced nil cmd; want openPlanInEditorCmd")
+	_, editorCmd := m.Update(keyPress("e"))
+	if editorCmd == nil {
+		t.Fatal("`e` produced nil cmd; want openPlanInEditorCmd")
 	}
-	if msg := oCmd(); msg != nil {
+	if msg := editorCmd(); msg != nil {
 		if errMsg, ok := msg.(planEditorErrMsg); ok {
 			t.Fatalf("openPlanInEditorCmd surfaced an error: %v", errMsg.err)
 		}
@@ -365,7 +365,7 @@ func TestPlanViewer_OpenEditorInvokesLaunch(t *testing.T) {
 		}
 	}
 	if !launchCalled {
-		t.Error("expected kitten @ launch call after `o` keypress in viewer")
+		t.Error("expected kitten @ launch call after `e` keypress in viewer")
 	}
 }
 

@@ -304,6 +304,44 @@ func TestTUITestRunCommittedScenariosEndToEnd(t *testing.T) {
 	}
 }
 
+// TestTUITestRunExpandsScenarioGlob pins the unshelled form of the documented
+// `tui-test run docs/tui-testing/scenarios/*.json` invocation: when the binary
+// is exec'd directly the pattern arrives verbatim, so the command must expand it
+// to the same committed scenario set an interactive shell would have passed.
+func TestTUITestRunExpandsScenarioGlob(t *testing.T) {
+	entries, err := os.ReadDir(committedScenariosDir)
+	if err != nil {
+		t.Fatalf("reading committed scenarios dir: %v", err)
+	}
+	want := 0
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
+			want++
+		}
+	}
+
+	stdout, stderr, err := runRootArgs(t, "tui-test", "run",
+		filepath.Join(committedScenariosDir, "*.json"), "--json")
+	if err != nil {
+		t.Fatalf("glob run returned error: %v (stderr=%q)", err, stderr)
+	}
+	var results []tui.UITestScenarioResult
+	if err := json.Unmarshal([]byte(stdout), &results); err != nil {
+		t.Fatalf("glob run did not emit a JSON array: %v\noutput=%q", err, stdout)
+	}
+	if len(results) != want {
+		t.Fatalf("glob expanded to %d scenarios, want %d", len(results), want)
+	}
+
+	// A pattern matching nothing stays a bad invocation rather than silently
+	// running zero scenarios and exiting clean.
+	_, _, err = runRootArgs(t, "tui-test", "run",
+		filepath.Join(t.TempDir(), "*.json"), "--json")
+	if ee := asExitError(t, err); ee.Code != exitInvalidInput {
+		t.Errorf("unmatched pattern should exit %d, got %d", exitInvalidInput, ee.Code)
+	}
+}
+
 // TestTUITestActionsOverlayWidthRegression pins the actions-popup sizing fix
 // (commit 26d9545) through the CLI. A terminal too narrow for the overlay's
 // widest row exits with the scenario-failure code and reports modal_width_overflow;

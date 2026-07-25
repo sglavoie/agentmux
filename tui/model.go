@@ -9,10 +9,12 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/internal/worktree"
 )
 
 // Model is the root Bubble Tea model for the dashboard.
@@ -25,6 +27,12 @@ type Model struct {
 	attentionStates    map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
 	backgroundCommands modelBackgroundCommands
 	daemonCommand      func(daemon.Request) (daemon.Response, error)
+	// handoffRunner and worktreeRunner are nil in production, which tells the
+	// action registry to use its real workflows. Tests substitute recorders so
+	// the viewer's H/E/w commands can execute without creating Git state or
+	// writing to the operator's handoff directory.
+	handoffRunner  handoff.Runner
+	worktreeRunner worktree.Runner
 
 	// session state
 	sessions   []session.RunningSession // sorted full list
@@ -182,6 +190,10 @@ type Model struct {
 	// overlay (ModeHelp). Reset to 0 whenever the overlay is opened or closed.
 	helpOffset int
 
+	// helpReturnMode is the mode the help overlay was raised from. Closing
+	// help lands there, so a search query or open viewer survives the detour.
+	helpReturnMode Mode
+
 	// detail pane state (ModeDetail). Fields are zeroed when the pane is
 	// closed so the placeholder render reads as a fresh state.
 	detailWindowID int                   // 0 when pane is closed
@@ -300,7 +312,7 @@ type Model struct {
 	planRefreshErr            error
 	planSearchErr             error
 	planSearchSeq             int
-	planSortMode              plans.SortMode // cycled with `s`; zero value = SortByMatches
+	planSortMode              plans.SortMode // cycled with `o`; zero value = SortByMatches
 	planFilterProject         plans.ProjectFilter
 
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the

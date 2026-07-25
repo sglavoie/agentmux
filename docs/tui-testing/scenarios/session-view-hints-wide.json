@@ -1,0 +1,14 @@
+{
+  "name": "session-view-hints-wide",
+  "fixture": "basic",
+  "size": { "width": 200, "height": 32 },
+  "actions": [
+    { "type": "key", "key": "S" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "session_view" },
+    { "type": "contains_text", "text": "c continue" },
+    { "type": "no_layout_issues" }
+  ]
+}

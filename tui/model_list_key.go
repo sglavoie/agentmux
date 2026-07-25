@@ -227,8 +227,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.applyFilterChange(Filter{})
 
 	case keyQuestion:
-		m.helpOffset = 0
-		m.mode = ModeHelp
+		m.openHelp(ModeList)
 
 	case keyL:
 		m.pickerSessions = sortPickerSessions(m.cfg.Sessions)

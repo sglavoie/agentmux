@@ -188,6 +188,9 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	case keySlash:
 		m.sessionSearchMode = true
 		return m, nil
+	case keyQuestion:
+		m.openHelp(ModeSessionSearch)
+		return m, nil
 	case keyJ, keyDown:
 		m.sessionCursor = clamp(m.sessionCursor+1, 0, len(m.sessionResults)-1)
 		scrollSessionSearchToCursor(&m)
@@ -269,35 +272,13 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		meta := m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta)
-		m.isolatedForkConversation = &meta
-		m.targetSession = session.RunningSession{Base: meta.Project, Project: meta.Project, Directory: meta.CWD, Profile: meta.DisplayProfile(), Account: meta.DisplayProfile(), Harness: meta.Harness}
-		m.confirmAction = "fork worktree"
-		m.confirmConsequence = worktreeForkConsequence
-		m.confirmReturnMode = ModeSessionSearch
-		m.mode = ModeConfirm
+		m.startWorktreeForkConfirm(m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta), ModeSessionSearch)
 		return m, nil
 	case "H", "E":
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
 			return m, nil
 		}
-		meta := m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta)
-		m.handoffConversation = &meta
-		m.targetSession = session.RunningSession{
-			Base: meta.Project, Project: meta.Project, Directory: meta.CWD,
-			Profile: meta.DisplayProfile(), Account: meta.DisplayProfile(), Harness: meta.Harness,
-		}
-		m.configPickerAccounts = m.cfg.Accounts
-		if len(m.configPickerAccounts) == 0 {
-			m.configPickerAccounts = m.cfg.Profiles
-		}
-		m.configPickerCurrent = meta.DisplayProfile()
-		m.configPickerCursor = pickerAccountIndex(m.configPickerAccounts, m.configPickerCurrent)
-		m.configPickerPurpose = ConfigPickerHandoff
-		m.configPickerReturnMode = ModeSessionSearch
-		m.configPickerProjectIdx = -1
-		m.handoffEdit = msg.String() == "E"
-		m.mode = ModeConfigPicker
+		m.startHandoffPicker(m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta), ModeSessionSearch, msg.String() == "E")
 		return m, nil
 	case keyD:
 		if m.sessionCursor < 0 || m.sessionCursor >= len(m.sessionResults) {
@@ -306,6 +287,40 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		return m.enterDeleteChoice(m.contextualSessionMeta(m.sessionResults[m.sessionCursor].Meta))
 	}
 	return m, nil
+}
+
+// startWorktreeForkConfirm stages an isolated Git worktree fork of meta and
+// raises the confirmation prompt. returnMode is where both accept and cancel
+// land, so the search list and the transcript viewer share one implementation.
+func (m *Model) startWorktreeForkConfirm(meta transcript.SessionMeta, returnMode Mode) {
+	m.isolatedForkConversation = &meta
+	m.targetSession = session.RunningSession{Base: meta.Project, Project: meta.Project, Directory: meta.CWD, Profile: meta.DisplayProfile(), Account: meta.DisplayProfile(), Harness: meta.Harness}
+	m.confirmAction = "fork worktree"
+	m.confirmConsequence = worktreeForkConsequence
+	m.confirmReturnMode = returnMode
+	m.mode = ModeConfirm
+}
+
+// startHandoffPicker stages a cross-harness handoff of meta and opens the
+// profile picker. edit carries the `E` variant's request to review the pack
+// before launching; returnMode is where accept and cancel both land.
+func (m *Model) startHandoffPicker(meta transcript.SessionMeta, returnMode Mode, edit bool) {
+	m.handoffConversation = &meta
+	m.targetSession = session.RunningSession{
+		Base: meta.Project, Project: meta.Project, Directory: meta.CWD,
+		Profile: meta.DisplayProfile(), Account: meta.DisplayProfile(), Harness: meta.Harness,
+	}
+	m.configPickerAccounts = m.cfg.Accounts
+	if len(m.configPickerAccounts) == 0 {
+		m.configPickerAccounts = m.cfg.Profiles
+	}
+	m.configPickerCurrent = meta.DisplayProfile()
+	m.configPickerCursor = pickerAccountIndex(m.configPickerAccounts, m.configPickerCurrent)
+	m.configPickerPurpose = ConfigPickerHandoff
+	m.configPickerReturnMode = returnMode
+	m.configPickerProjectIdx = -1
+	m.handoffEdit = edit
+	m.mode = ModeConfigPicker
 }
 
 // contextualSessionMeta returns a copy whose primary project reflects the

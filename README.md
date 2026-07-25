@@ -281,7 +281,9 @@ is not the stored primary title.
 - `i` copies the selected session ID, and `Y` copies its transcript path.
 - `enter` opens the transcript viewer; `n`/`N` move between matches,
   `j`/`k`, `g`/`G`, and `Ctrl+d/u/f/b` scroll, `y` copies the selected
-  message, and `Y` copies the transcript path.
+  message, and `Y` copies the transcript path. The viewer also accepts the
+  `c`, `f`, `w`, `H`, `E`, and `i` actions below for the conversation it has
+  open and returns to the viewer once they complete.
 - `c` continues the selected conversation, `f` forks it, `w` creates an
   isolated Git worktree fork, `H` creates a handoff, and `E` creates an
   editable handoff.
@@ -321,9 +323,11 @@ plan directories; an unreadable plan never blanks rows that were read
 successfully. Each row and viewer header shows the associated configured
 project title. Press `r` to filter by the projects represented in the index or
 by `Unknown`; equally specific configuration aliases are separate filter
-choices and match the same plans. `/` searches, `enter` opens the viewer, `Y`
-copies the plan directory, and the viewer supports `j`/`k`, `g`/`G`,
-`Ctrl+d/u/f/b`, and `y` to copy the selected raw line.
+choices and match the same plans. `/` searches, `o` cycles the result sort
+between match count and recency, `e` opens the selected plan directory in your
+editor, `Y` copies the plan directory, and `enter` opens the viewer. The viewer
+supports `j`/`k`, `g`/`G`, `Ctrl+d/u/f/b`, `y` to copy the selected raw line,
+and `e` to open the plan directory in your editor.
 
 Project association is source-backed rather than inferred from plan prose.
 Agent Mux resolves the canonical plan workspace in this order: retained ASL

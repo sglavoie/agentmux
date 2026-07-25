@@ -8,6 +8,23 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon"
 )
 
+// activeRootMode resolves the root view that currently owns the model's async
+// state. Help, confirmations, and the profile/handoff picker replace m.mode for
+// the duration of the detour but return to the view they were raised from, so a
+// load completing behind one of them still belongs to that view.
+func (m Model) activeRootMode() Mode {
+	switch m.mode {
+	case ModeHelp:
+		return m.helpReturnMode
+	case ModeConfirm:
+		return m.confirmReturnMode
+	case ModeConfigPicker:
+		return m.configPickerReturnMode
+	default:
+		return m.mode
+	}
+}
+
 func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyEsc, keyQ:
@@ -381,7 +398,7 @@ func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	total, visible := helpScrollBounds(m, helpVisibleHeight(m))
 	switch msg.String() {
 	case keyEsc, keyQuestion, keyQ:
-		m.mode = ModeList
+		m.mode = m.helpReturnMode
 		m.helpOffset = 0
 	case keyCtrlC:
 		return m, tea.Quit

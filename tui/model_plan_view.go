@@ -57,7 +57,7 @@ func (m *Model) exitPlanView() {
 // handlePlanViewKey processes keys while ModePlanView is active. j/k/g/G
 // and n/N move between logical source lines, pgup/pgdn page through visual
 // wrapped rows, and `y` copies the selected raw source line. Also supports
-// `o` (open the plan dir in $EDITOR) and `/` (re-enter the originating plan
+// `e` (open the plan dir in $EDITOR) and `/` (re-enter the originating plan
 // picker with the current query).
 func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	total := len(m.planViewerLines)
@@ -74,6 +74,9 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyQ:
 		m.exitPlanView()
 		m.exitPlanSearch()
+		return m, nil
+	case keyQuestion:
+		m.openHelp(ModePlanView)
 		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
@@ -125,7 +128,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, copyTextCmd(m.planViewerLines[m.planViewerCursor])
-	case keyO:
+	case keyPlanOpenEditor:
 		if m.viewerPlan == nil {
 			return m, nil
 		}
@@ -245,6 +248,14 @@ func planViewerErrorLines(m Model) int {
 	return 0
 }
 
+// planViewerScrollHeight sizes the plan viewer's scroll window under the plan
+// viewer's own footer. Mirrors viewerScrollHeight: offsets are recomputed for
+// loads that land behind an overlay and for resizes arriving from another mode.
+func planViewerScrollHeight(m Model) int {
+	m.mode = ModePlanView
+	return planViewerVisibleHeight(m)
+}
+
 // scrollPlanViewerToCursor advances m.planViewerScroll, a visual wrapped-row
 // offset, the minimum amount needed to keep m.planViewerCursor, a logical
 // source-line index, visible inside the windowed body. Mirrors
@@ -255,7 +266,7 @@ func scrollPlanViewerToCursor(m *Model) {
 	totalLines := len(m.planViewerLines)
 	rows := planViewerRows(*m)
 	totalRows := len(rows)
-	height := planViewerVisibleHeight(*m)
+	height := planViewerScrollHeight(*m)
 	if height <= 0 || totalLines == 0 || totalRows == 0 {
 		m.planViewerScroll = 0
 		m.planViewerCursor = 0
@@ -298,7 +309,7 @@ func scrollPlanViewerToCursor(m *Model) {
 // surviving a resize that changes the wrapped row count.
 func clampPlanViewerScroll(m *Model) {
 	total := len(planViewerRows(*m))
-	visible := planViewerVisibleHeight(*m)
+	visible := planViewerScrollHeight(*m)
 	maxOffset := planViewerMaxScrollOffset(total, visible)
 	if m.planViewerScroll > maxOffset {
 		m.planViewerScroll = maxOffset

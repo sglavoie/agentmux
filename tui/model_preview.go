@@ -63,9 +63,12 @@ func (m Model) render() string {
 		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
 	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeCommandPalette:
 		var base string
-		if m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker {
+		switch {
+		case m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker:
 			base = renderPicker(m)
-		} else {
+		case m.mode == ModeHelp:
+			base = helpBaseView(m)
+		default:
 			base = renderDashboard(m)
 		}
 		var popup string

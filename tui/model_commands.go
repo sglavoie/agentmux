@@ -222,51 +222,59 @@ func restartCmd(client kitty.KittyClient, running session.RunningSession, cfg *c
 	}
 }
 
-// conversationActionWithDaemonCmd runs an indexed-conversation action away
-// from the UI loop. Continue performs the exact-live lookup in the shared
-// action registry; fork validates and launches only a native branch. Both
-// preserve the session-search screen rather than overloading Enter's viewer.
-func conversationActionWithDaemonCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, request func(daemon.Request) (daemon.Response, error), meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
+// conversationDependencies collects the injected seams every
+// indexed-conversation action needs. A nil handoff or worktree runner tells the
+// registry to use its real workflow.
+func (m Model) conversationDependencies(readers map[string]transcript.Reader) actions.Dependencies {
+	return actions.Dependencies{
+		Kitty:    m.client,
+		Config:   m.cfg,
+		Readers:  readers,
+		Daemon:   m.actionDaemon(),
+		Handoff:  m.handoffRunner,
+		Worktree: m.worktreeRunner,
+	}
+}
+
+// runConversationActionCmd runs an indexed-conversation action away from the UI
+// loop. Continue performs the exact-live lookup in the shared action registry;
+// fork validates and launches only a native branch. Both preserve the
+// session-search screen rather than overloading Enter's viewer.
+func runConversationActionCmd(deps actions.Dependencies, meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
 	return func() tea.Msg {
-		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
-			Kitty: client, Config: cfg, Readers: readers, Daemon: request,
-		}, actionID, actions.Request{Conversation: &meta})
+		_, err := sharedActionRegistry.Execute(context.Background(), deps, actionID, actions.Request{Conversation: &meta})
 		return actionDoneMsg{err: err}
 	}
 }
 
 func (m Model) conversationActionCmd(readers map[string]transcript.Reader, meta transcript.SessionMeta, actionID actions.ID) tea.Cmd {
-	return conversationActionWithDaemonCmd(m.client, m.cfg, readers, m.actionDaemon(), meta, actionID)
+	return runConversationActionCmd(m.conversationDependencies(readers), meta, actionID)
 }
 
-func conversationWorktreeForkWithDaemonCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, request func(daemon.Request) (daemon.Response, error), meta transcript.SessionMeta) tea.Cmd {
+func runConversationWorktreeForkCmd(deps actions.Dependencies, meta transcript.SessionMeta) tea.Cmd {
 	return func() tea.Msg {
-		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
-			Kitty: client, Config: cfg, Readers: readers, Daemon: request,
-		}, actions.ForkWorktree, actions.Request{Conversation: &meta, Confirmed: true})
+		_, err := sharedActionRegistry.Execute(context.Background(), deps, actions.ForkWorktree, actions.Request{Conversation: &meta, Confirmed: true})
 		return actionDoneMsg{err: err}
 	}
 }
 
 func (m Model) conversationWorktreeForkCmd(meta transcript.SessionMeta) tea.Cmd {
-	return conversationWorktreeForkWithDaemonCmd(m.client, m.cfg, m.transcriptReaders, m.actionDaemon(), meta)
+	return runConversationWorktreeForkCmd(m.conversationDependencies(m.transcriptReaders), meta)
 }
 
-func conversationHandoffWithDaemonCmd(client kitty.KittyClient, cfg *config.Config, readers map[string]transcript.Reader, request func(daemon.Request) (daemon.Response, error), meta transcript.SessionMeta, profile string, edit bool) tea.Cmd {
+func runConversationHandoffCmd(deps actions.Dependencies, meta transcript.SessionMeta, profile string, edit bool) tea.Cmd {
 	return func() tea.Msg {
 		parameters := map[string]string{"profile": profile}
 		if edit {
 			parameters["edit"] = "true"
 		}
-		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{
-			Kitty: client, Config: cfg, Readers: readers, Daemon: request,
-		}, actions.Handoff, actions.Request{Conversation: &meta, Parameters: parameters})
+		_, err := sharedActionRegistry.Execute(context.Background(), deps, actions.Handoff, actions.Request{Conversation: &meta, Parameters: parameters})
 		return actionDoneMsg{err: err}
 	}
 }
 
 func (m Model) conversationHandoffCmd(meta transcript.SessionMeta, profile string, edit bool) tea.Cmd {
-	return conversationHandoffWithDaemonCmd(m.client, m.cfg, m.transcriptReaders, m.actionDaemon(), meta, profile, edit)
+	return runConversationHandoffCmd(m.conversationDependencies(m.transcriptReaders), meta, profile, edit)
 }
 
 func (m Model) actionDaemon() func(daemon.Request) (daemon.Response, error) {
