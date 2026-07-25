@@ -466,6 +466,7 @@ func buildHookStateUpdateRequest(
 		Reason:           payload.Reason,
 		ContextLimit:     contextLimitDetected,
 		ResetFlow:        resetFlowDetected,
+		QuestionPreview:  payload.QuestionPreview,
 	}
 }
 

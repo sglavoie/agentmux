@@ -22,6 +22,8 @@ const (
 	agentSessionLoopVerificationStarted   = "AgentSessionLoopVerificationStarted"
 	agentSessionLoopVerificationHeartbeat = "AgentSessionLoopVerificationHeartbeat"
 	agentSessionLoopVerificationFinished  = "AgentSessionLoopVerificationFinished"
+	agentSessionLoopWaitStarted           = "AgentSessionLoopWaitStarted"
+	agentSessionLoopWaitEnded             = "AgentSessionLoopWaitEnded"
 	agentSessionLoopPaused                = "AgentSessionLoopPaused"
 	agentSessionLoopFinished              = "AgentSessionLoopFinished"
 )
@@ -314,7 +316,8 @@ func isAgentSessionLoopEvent(eventOrAction string) bool {
 	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
 		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnFinished,
 		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
-		agentSessionLoopVerificationFinished, agentSessionLoopPaused,
+		agentSessionLoopVerificationFinished, agentSessionLoopWaitStarted,
+		agentSessionLoopWaitEnded, agentSessionLoopPaused,
 		agentSessionLoopFinished:
 		return true
 	default:
@@ -327,10 +330,11 @@ func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.Workspa
 	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
 		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnFinished,
 		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
-		agentSessionLoopVerificationFinished, agentSessionLoopPaused:
+		agentSessionLoopVerificationFinished, agentSessionLoopWaitStarted,
+		agentSessionLoopWaitEnded, agentSessionLoopPaused:
 		// Every non-final lifecycle event asserts the loop marker: turns and
 		// verification are active work, between-turn signals keep the lease, and
-		// a paused run still owns 🔁 while it awaits a human.
+		// a paused or question-waiting run still owns 🔁 while it awaits a human.
 		return boolPtr(true)
 	case agentSessionLoopFinished:
 		if strings.TrimSpace(target.CWD) == "" && target.WindowID <= 0 {

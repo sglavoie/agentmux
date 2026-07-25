@@ -136,6 +136,7 @@ const (
 	ASLPhaseTurn         = "turn"         // ⚡🔁 — a turn is executing
 	ASLPhaseVerification = "verification" // ⚡🔁 — verification is running
 	ASLPhaseBetween      = "between"      // 🔁 only — idle between turns
+	ASLPhaseWaiting      = "waiting"      // ❓🔁 — awaiting a mailbox reply
 	ASLPhasePaused       = "paused"       // attention icon + 🔁 — awaiting a human
 	ASLPhaseFinished     = "finished"     // 🛑, lease released
 )
@@ -587,6 +588,8 @@ func (r *Reducer) resolve(ev ReducerEvent) (action, icon string, leaseLive bool)
 			return "active", "bolt", true
 		case ASLPhaseBetween:
 			return "idle", "", true
+		case ASLPhaseWaiting:
+			return "elicitation", "question", true
 		case ASLPhasePaused:
 			return ev.Action, reducerActionIcon(ev.Action), true
 		case ASLPhaseFinished:

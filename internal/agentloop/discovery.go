@@ -35,6 +35,7 @@ const (
 	PhaseTurn         = "turn"         // a session turn is executing
 	PhaseVerification = "verification" // a verification pass is running
 	PhaseBetween      = "between"      // run alive, idle between turns
+	PhaseWaiting      = "waiting"      // run alive, blocked on a mailbox reply
 	PhasePaused       = "paused"       // run paused awaiting a human
 )
 
@@ -70,7 +71,7 @@ type Candidate struct {
 	ActiveTurn    int
 
 	// Phase is the run's derived lifecycle phase (PhaseTurn, PhaseVerification,
-	// PhaseBetween, or PhasePaused). ActiveVerification reports whether a
+	// PhaseBetween, PhaseWaiting, or PhasePaused). ActiveVerification reports whether a
 	// verification pass is in flight, Paused whether the run is paused awaiting
 	// a human, and HeartbeatAt the most recent liveness signal persisted by the
 	// run (the active turn's last heartbeat, or the verification's current
@@ -354,7 +355,15 @@ type stateFile struct {
 	Paused             bool                `json:"paused"`
 	ActiveTurn         *activeTurn         `json:"active_turn"`
 	ActiveVerification *activeVerification `json:"active_verification"`
+	WaitingForReply    *waitingForReply    `json:"waiting_for_reply"`
 	KittyWindowID      int                 `json:"kitty_window_id"`
+}
+
+// waitingForReply is the marker agent-session-loop persists while a run is
+// blocked on a supervisor mailbox reply, and removes once the wait ends. Only
+// the question identity is read: the question body never reaches discovery.
+type waitingForReply struct {
+	QuestionID string `json:"question_id"`
 }
 
 type activeTurn struct {
@@ -473,8 +482,11 @@ func readCandidate(stateDir string, pidRunning PIDChecker, includePaused bool) (
 // statePhase derives the run's lifecycle phase from persisted state. Pause wins
 // (a paused run's active turn/verification snapshots are already cleared, but a
 // racing writer must still classify as paused); an in-flight verification
-// outranks the turn it verifies; an active turn is executing; anything else is
-// alive between turns.
+// outranks the turn it verifies; an active turn is executing; a live
+// waiting_for_reply marker means the run is blocked on a mailbox reply between
+// turns; anything else is alive between turns. Waiting deliberately ranks below
+// executing work so a marker a racing writer has not yet cleared cannot mask a
+// turn that has already resumed.
 func statePhase(state stateFile) string {
 	switch {
 	case state.Paused:
@@ -483,6 +495,8 @@ func statePhase(state stateFile) string {
 		return PhaseVerification
 	case state.ActiveTurn != nil:
 		return PhaseTurn
+	case state.WaitingForReply != nil:
+		return PhaseWaiting
 	default:
 		return PhaseBetween
 	}

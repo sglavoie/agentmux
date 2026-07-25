@@ -1,0 +1,11 @@
+{
+  "name": "asl-question-pending-narrow-fit",
+  "fixture": "asl_question",
+  "size": { "width": 30, "height": 40 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "api" },
+    { "type": "contains_text", "text": "❓ awaiting response" },
+    { "type": "no_layout_issues" }
+  ]
+}

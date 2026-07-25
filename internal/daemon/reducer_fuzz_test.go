@@ -185,7 +185,7 @@ func (g *fuzzGen) subagentEvent() ReducerEvent {
 func (g *fuzzGen) aslEvent() ReducerEvent {
 	i := g.rng.Intn(len(fuzzSources.runs))
 	src := fuzzSources.runs[i]
-	phases := []string{ASLPhaseTurn, ASLPhaseVerification, ASLPhaseBetween, ASLPhasePaused, ASLPhaseFinished}
+	phases := []string{ASLPhaseTurn, ASLPhaseVerification, ASLPhaseBetween, ASLPhaseWaiting, ASLPhasePaused, ASLPhaseFinished}
 	phase := phases[g.rng.Intn(len(phases))]
 	ev := ReducerEvent{
 		Source: src,

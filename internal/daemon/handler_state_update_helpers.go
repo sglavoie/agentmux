@@ -46,6 +46,7 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 		Reason:               req.Reason,
 		ContextLimit:         req.ContextLimit,
 		ResetFlow:            req.ResetFlow,
+		QuestionPreview:      req.QuestionPreview,
 		RouteDecision:        req.routeDecision,
 		OriginWindowID:       req.WindowID,
 		TraceID:              req.TraceID,

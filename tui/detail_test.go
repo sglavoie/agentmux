@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
 // detailModel returns a model parked in ModeDetail with the cursor's
@@ -223,6 +225,60 @@ func TestDetailRowShowsCompactTraceAndDecisiveReason(t *testing.T) {
 		if !strings.Contains(row, want) {
 			t.Fatalf("detail row missing %q: %q", want, row)
 		}
+	}
+}
+
+func TestDetailRowShowsASLQuestionPreview(t *testing.T) {
+	event := daemon.SessionEvent{
+		At: time.Unix(100, 0).Unix(), Event: "AgentSessionLoopWaitStarted", Action: "elicitation",
+		QuestionPreview: "Should the shim keep the narrow branch?",
+	}
+	row := stripAnsi(detailRow(event, time.Unix(101, 0), 120))
+	if !strings.Contains(row, "q: Should the shim keep the narrow branch?") {
+		t.Fatalf("detail row missing question preview: %q", row)
+	}
+}
+
+// The preview is model-controlled text rendered straight into the terminal.
+// Hook decode is the boundary that removes terminal controls, so a row built
+// from a decoded hostile payload carries no escape sequence of its own — only
+// the CSI styling Lipgloss adds.
+func TestDetailRowRendersSanitizedQuestionPreview(t *testing.T) {
+	esc, bel := string(rune(0x1b)), string(rune(0x07))
+	hostile, err := json.Marshal(map[string]string{
+		"question_preview": esc + "[2JShip " + esc + "]0;pwned" + bel + "the shim?",
+	})
+	if err != nil {
+		t.Fatalf("marshal hostile payload: %v", err)
+	}
+	payload, err := hookevent.DecodeHookPayload(strings.NewReader(string(hostile)))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload error: %v", err)
+	}
+
+	event := daemon.SessionEvent{
+		At: time.Unix(100, 0).Unix(), Event: "AgentSessionLoopWaitStarted", Action: "elicitation",
+		QuestionPreview: payload.QuestionPreview,
+	}
+	row := stripAnsi(detailRow(event, time.Unix(101, 0), 120))
+	if !strings.Contains(row, "q: Ship the shim?") {
+		t.Fatalf("detail row missing sanitized preview: %q", row)
+	}
+	if strings.ContainsAny(row, esc+bel) {
+		t.Fatalf("detail row still carries terminal controls: %q", row)
+	}
+}
+
+// An event with no preview must not leave an empty labelled column behind —
+// the producer omits the key whenever the question carries no text, and
+// payload compaction drops it above 256 KiB.
+func TestDetailRowOmitsEmptyQuestionPreview(t *testing.T) {
+	event := daemon.SessionEvent{
+		At: time.Unix(100, 0).Unix(), Event: "AgentSessionLoopWaitStarted", Action: "elicitation",
+	}
+	row := stripAnsi(detailRow(event, time.Unix(101, 0), 120))
+	if strings.Contains(row, "q:") {
+		t.Fatalf("detail row rendered an empty question preview: %q", row)
 	}
 }
 

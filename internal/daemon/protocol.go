@@ -158,6 +158,10 @@ type Request struct {
 	Reason           string                  `json:"reason,omitempty"`            // normalized reason payload field
 	ContextLimit     bool                    `json:"context_limit,omitempty"`     // true when indicator detected a context-limit stop/failure
 	ResetFlow        bool                    `json:"reset_flow,omitempty"`        // true when the event belongs to a user-initiated session reset flow
+	// QuestionPreview is the ASL mailbox question summary, already collapsed and
+	// bounded by hookevent decoding. It reaches the TUI detail view through
+	// SessionEvent only and is deliberately never folded into reducer facts.
+	QuestionPreview string `json:"question_preview,omitempty"`
 }
 
 // Response is a JSON message sent by the daemon back to the client.
@@ -573,6 +577,12 @@ type SessionEvent struct {
 	ClearedSubagents     *int                             `json:"cleared_subagents,omitempty"`
 	SynthesizedStop      *bool                            `json:"synthesized_stop,omitempty"`
 	TerminalHookEvidence string                           `json:"terminal_hook_evidence,omitempty"`
+
+	// QuestionPreview is the bounded ASL mailbox question summary carried by
+	// AgentSessionLoopWaitStarted. It is the only free-text payload field the
+	// daemon retains on an event, and it is absent when the producer sent no
+	// text or when payload compaction dropped it.
+	QuestionPreview string `json:"question_preview,omitempty"`
 
 	// eventRef exists only while appendEventLocked stamps the daemon sequence.
 	// Stored/exported events always clear it.

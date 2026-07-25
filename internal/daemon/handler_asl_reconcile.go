@@ -205,6 +205,9 @@ func (h *Handler) reconcileASLCandidates(now time.Time, windows []kitty.OSWindow
 //   - Paused runs seed a bare lease (phase only, no attention action): 🔁
 //     survives a restart, but a pause prompt the user may have already seen is
 //     not re-alerted from disk.
+//   - A waiting run does seed ❓, because unlike a pause its marker is only on
+//     disk while the loop process is alive and blocked on the reply — discovery
+//     drops dead runs, so the question is provably still open right now.
 func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 	st := h.ensureWindowStateLocked(seed.windowID)
 	if st.Reducer == nil {
@@ -268,6 +271,8 @@ func aslPhaseForDiscovered(phase string) string {
 		return ASLPhaseTurn
 	case agentloop.PhaseVerification:
 		return ASLPhaseVerification
+	case agentloop.PhaseWaiting:
+		return ASLPhaseWaiting
 	case agentloop.PhasePaused:
 		return ASLPhasePaused
 	default:

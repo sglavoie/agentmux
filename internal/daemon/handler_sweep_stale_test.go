@@ -342,6 +342,51 @@ func TestSweepStale_IgnoresStopAndPermission(t *testing.T) {
 	})
 }
 
+// TestSweepStale_IgnoresWaitingASLRun verifies that a run blocked on a mailbox
+// reply keeps ❓ and 🔁 no matter how long the wait runs. A wait is quiet by
+// construction — no heartbeats arrive while the loop is blocked — so sweeping
+// it would erase the one signal that a human is being waited on.
+func TestSweepStale_IgnoresWaitingASLRun(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, rec := newSweepTestHandler(10 * time.Minute)
+		questionTitle := palette.BuildTitle("W:api", "question", true)
+		fake.windows = fakeOSWindowsWithTab(42, questionTitle)
+
+		now := time.Now()
+		h.stateMu.Lock()
+		st := h.ensureWindowStateLocked(42)
+		st.Activity = now.Add(-2 * time.Hour)
+		st.LastAction = "elicitation"
+		st.LastSessionTitle = "W:api"
+		st.Reducer = NewReducer(h.reducerCfg)
+		st.Reducer.Apply(ReducerEvent{
+			Source: aslSource("run-A"), RunID: "run-A", Phase: ASLPhaseWaiting,
+			Seq: 1, At: now.Add(-2 * time.Hour).Unix(),
+		})
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		if got := rec.len(); got != 0 {
+			t.Fatalf("dispatches = %d; want 0 (a waiting run is not idle)", got)
+		}
+		if got := len(fake.titleCalls()); got != 0 {
+			t.Fatalf("SetTabTitle calls = %d; want 0", got)
+		}
+		h.stateMu.Lock()
+		action := h.store[42].LastAction
+		reduced := h.store[42].Reducer.Reduce(now.Unix())
+		h.stateMu.Unlock()
+		if action != "elicitation" {
+			t.Fatalf("lastAction[42] = %q; want elicitation (untouched)", action)
+		}
+		if reduced.Icon != "question" || !reduced.Looping {
+			t.Fatalf("reduced = %+v; want ❓ + 🔁 preserved across the sweep", reduced)
+		}
+	})
+}
+
 // TestSweepStale_SubagentAndCompactAlsoCleared verifies that the sweep treats
 // subagent and compact identically to active: all three are "agent-in-flight"
 // states that get cleared when stale.

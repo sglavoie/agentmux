@@ -305,8 +305,9 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 // the run's loop lease without a turn (between); turn start/heartbeat are an
 // executing turn; verification start/heartbeat are a running verification; a
 // finished turn or verification returns the run to between-turns (the lease
-// stays live, no icon); paused awaits a human; finished releases the lease and
-// stops.
+// stays live, no icon); a started wait awaits a mailbox reply and an ended wait
+// returns to between-turns; paused awaits a human; finished releases the lease
+// and stops.
 func aslPhaseForEvent(event string) string {
 	switch event {
 	case agentSessionLoopStarted:
@@ -317,6 +318,10 @@ func aslPhaseForEvent(event string) string {
 		return ASLPhaseBetween
 	case agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat:
 		return ASLPhaseVerification
+	case agentSessionLoopWaitStarted:
+		return ASLPhaseWaiting
+	case agentSessionLoopWaitEnded:
+		return ASLPhaseBetween
 	case agentSessionLoopPaused:
 		return ASLPhasePaused
 	case agentSessionLoopFinished:

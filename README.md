@@ -427,15 +427,19 @@ producer stays explicitly unidentified instead of being guessed as Claude.
 `PATH`. It emits `AgentSessionLoopStarted`, `AgentSessionLoopTurnStarted`,
 `AgentSessionLoopTurnHeartbeat`, `AgentSessionLoopTurnFinished`,
 `AgentSessionLoopVerificationStarted`, `AgentSessionLoopVerificationHeartbeat`,
-`AgentSessionLoopVerificationFinished`, `AgentSessionLoopPaused`, and
+`AgentSessionLoopVerificationFinished`, `AgentSessionLoopWaitStarted`,
+`AgentSessionLoopWaitEnded`, `AgentSessionLoopPaused`, and
 `AgentSessionLoopFinished` with JSON that includes `source`, `reason`, `run_id`,
-`plan_dir`, `cwd`, `state_path`, and `harness`. Every event carries the run's
-`run_id` and a persisted monotonic source sequence, so the daemon keys one
+`plan_dir`, `cwd`, `state_path`, and `harness`. Wait events additionally carry
+`question_id`, `question_preview`, and `wait_reason`. Every event carries the
+run's `run_id` and a persisted monotonic source sequence, so the daemon keys one
 lease per run: overlapping runs in one workspace hold independent facts, a
-run's turn/verification phases render ⚡🔁, between-turns and paused states
-keep 🔁, and one run finishing never changes another run's state (verified
-live with two overlapping runs in a single window). Turn and verification
-heartbeats re-assert the lease every 30 seconds.
+run's turn/verification phases render ⚡🔁, a run blocked on a supervisor
+mailbox reply renders ❓🔁, between-turns and paused states keep 🔁, and one run
+finishing never changes another run's state (verified live with two overlapping
+runs in a single window). Turn and verification heartbeats re-assert the lease
+every 30 seconds. A question wait has no stale threshold: it stays ❓ until the
+run answers, pauses, or finishes.
 When the final run finishes, that terminal boundary also retires an older
 interactive `bolt`/`compact` fact, so a lost Codex/Claude `Stop` or Copilot
 `agentStop` cannot leave `⚡` masking the run's `🛑`; newer activity, pipe-mode

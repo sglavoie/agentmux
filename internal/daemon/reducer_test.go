@@ -218,3 +218,80 @@ func TestReducerUserClearAcknowledgesButKeepsLease(t *testing.T) {
 		t.Fatalf("post-heartbeat = %+v; want bolt + looping", got)
 	}
 }
+
+// TestReducerWaitingRunHoldsQuestionWithLease pins the wait lifecycle: a run
+// blocked on a mailbox reply shows ❓🔁, and the wait ending returns it to a
+// bare loop marker without waiting for a turn or finish event.
+func TestReducerWaitingRunHoldsQuestionWithLease(t *testing.T) {
+	r := NewReducer(zeroCfg)
+	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: 10})
+	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 2, At: 11})
+	if got := r.Reduce(100); got.Icon != "question" || !got.Looping {
+		t.Fatalf("waiting = %+v; want question + looping", got)
+	}
+
+	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 3, At: 12})
+	if got := r.Reduce(100); got.Icon != "" || !got.Looping {
+		t.Fatalf("wait ended = %+v; want bare loop marker", got)
+	}
+}
+
+// TestReducerWaitingRunOrderIndependent: a wait is a normal per-source fact, so
+// a duplicate wait-started is a no-op and a wait-started that arrives after the
+// wait-ended it precedes is rejected as reordered rather than repainting ❓.
+func TestReducerWaitingRunOrderIndependent(t *testing.T) {
+	waiting := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 10}
+	ended := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 2, At: 11}
+
+	r := NewReducer(zeroCfg)
+	if d := r.Apply(waiting); d != DecisionApplied {
+		t.Fatalf("first wait decision = %v, want applied", d)
+	}
+	if d := r.Apply(waiting); d != DecisionDuplicate {
+		t.Fatalf("duplicate wait decision = %v, want duplicate", d)
+	}
+	r.Apply(ended)
+	if d := r.Apply(waiting); d != DecisionReordered {
+		t.Fatalf("late wait decision = %v, want reordered", d)
+	}
+	if got := r.Reduce(100); got.Icon != "" || !got.Looping {
+		t.Fatalf("after late wait = %+v; want the ended wait to stand", got)
+	}
+	if got := Replay(zeroCfg, 100, ended, waiting); got.Icon != "" || !got.Looping {
+		t.Fatalf("reverse arrival = %+v; want the same ended state", got)
+	}
+}
+
+// TestReducerWaitingSharesQuestionTierWithPermission: a waiting run's ❓ and a
+// harness permission 🔑 share one precedence tier, so the tie breaks on recency
+// exactly as it does for a paused question.
+func TestReducerWaitingSharesQuestionTierWithPermission(t *testing.T) {
+	waiting := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 100}
+	permission := ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200}
+	if got := Replay(zeroCfg, 300, waiting, permission); got.Icon != "key" {
+		t.Fatalf("newer permission = %q; want key", got.Icon)
+	}
+
+	newerWait := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 300}
+	olderPermission := ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200}
+	if got := Replay(zeroCfg, 400, olderPermission, newerWait); got.Icon != "question" {
+		t.Fatalf("newer wait = %q; want question", got.Icon)
+	}
+}
+
+// TestReducerWaitingPausedFallback: if the wait never reports an end (the run
+// pauses out of the wait instead) the pause's own attention icon supersedes ❓,
+// and the terminal finish still releases the lease.
+func TestReducerWaitingPausedFallback(t *testing.T) {
+	r := NewReducer(zeroCfg)
+	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 10})
+	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Action: "failure", Phase: ASLPhasePaused, Seq: 2, At: 11})
+	if got := r.Reduce(100); got.Icon != "warning" || !got.Looping {
+		t.Fatalf("paused out of a wait = %+v; want warning + looping", got)
+	}
+
+	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseFinished, Seq: 3, At: 12})
+	if got := r.Reduce(100); got.Icon != "stop" || got.Looping {
+		t.Fatalf("finished = %+v; want stop without looping", got)
+	}
+}

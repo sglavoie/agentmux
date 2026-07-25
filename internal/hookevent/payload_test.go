@@ -1,6 +1,7 @@
 package hookevent
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -119,6 +120,90 @@ func TestDecodeHookPayload_ParsesLoopWorkspaceFields(t *testing.T) {
 	}
 	if payload.StatePath != "/tmp/asl/state.json" {
 		t.Fatalf("StatePath = %q, want /tmp/asl/state.json", payload.StatePath)
+	}
+}
+
+func TestDecodeHookPayload_ParsesLoopWaitFields(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"hook_event_name": "AgentSessionLoopWaitStarted",
+		"source": "agent_session_loop",
+		"question_id": "q-7f3a",
+		"question_preview": "Should  the\n shim keep\tthe narrow branch?",
+		"wait_reason": "reply"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(wait fields) error: %v", err)
+	}
+	if payload.QuestionID != "q-7f3a" {
+		t.Fatalf("QuestionID = %q, want q-7f3a", payload.QuestionID)
+	}
+	if payload.WaitReason != "reply" {
+		t.Fatalf("WaitReason = %q, want reply", payload.WaitReason)
+	}
+	if want := "Should the shim keep the narrow branch?"; payload.QuestionPreview != want {
+		t.Fatalf("QuestionPreview = %q, want collapsed %q", payload.QuestionPreview, want)
+	}
+}
+
+// An omitted preview stays empty rather than becoming a placeholder: the
+// producer drops the key entirely when the question carries no text.
+func TestDecodeHookPayload_OmittedQuestionPreviewIsEmpty(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{"question_id": "q-1"}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(no preview) error: %v", err)
+	}
+	if payload.QuestionPreview != "" {
+		t.Fatalf("QuestionPreview = %q, want empty", payload.QuestionPreview)
+	}
+}
+
+// The producer already bounds the preview; decode re-bounds it so a hand-written
+// or replayed payload cannot widen the only free-text field the dashboard shows.
+func TestDecodeHookPayload_BoundsOversizedQuestionPreview(t *testing.T) {
+	oversized := strings.Repeat("é", 500)
+	payload, err := DecodeHookPayload(strings.NewReader(`{"question_preview": "` + oversized + `"}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(oversized preview) error: %v", err)
+	}
+	if got := len([]rune(payload.QuestionPreview)); got != maxQuestionPreviewRunes {
+		t.Fatalf("QuestionPreview runes = %d, want %d", got, maxQuestionPreviewRunes)
+	}
+	if payload.QuestionPreview != strings.Repeat("é", maxQuestionPreviewRunes) {
+		t.Fatalf("QuestionPreview = %q, want a rune-safe truncation", payload.QuestionPreview)
+	}
+}
+
+// The question body is model-controlled text that the dashboard renders into a
+// terminal, so decode drops whole escape sequences and stray controls instead of
+// leaving parameter residue behind. Ordinary Unicode is untouched.
+func TestDecodeHookPayload_StripsTerminalControlsFromQuestionPreview(t *testing.T) {
+	esc, bel := string(rune(0x1b)), string(rune(0x07))
+	c1CSI, c1OSC, st := string(rune(0x9b)), string(rune(0x9d)), string(rune(0x9c))
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"csi", esc + "[2JShip" + esc + "[31m the shim?", "Ship the shim?"},
+		{"osc terminated by bel", "Ship " + esc + "]0;pwned" + bel + "the" + bel + " shim?", "Ship the shim?"},
+		{"c1 introducers", "Ship " + c1CSI + "31mthe " + c1OSC + "0;pwned" + st + " shim?", "Ship the shim?"},
+		{"unterminated osc swallows the rest", "Ship " + esc + "]0;pwned the shim?", "Ship"},
+		{"printable unicode", "Caf\u00e9 \U0001f1eb\U0001f1f7 \u2014 ship the shim?", "Caf\u00e9 \U0001f1eb\U0001f1f7 \u2014 ship the shim?"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			encoded, err := json.Marshal(map[string]string{"question_preview": tc.raw})
+			if err != nil {
+				t.Fatalf("marshal %s payload: %v", tc.name, err)
+			}
+			payload, err := DecodeHookPayload(strings.NewReader(string(encoded)))
+			if err != nil {
+				t.Fatalf("DecodeHookPayload(%s) error: %v", tc.name, err)
+			}
+			if payload.QuestionPreview != tc.want {
+				t.Fatalf("QuestionPreview = %q, want %q", payload.QuestionPreview, tc.want)
+			}
+		})
 	}
 }
 

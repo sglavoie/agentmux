@@ -243,8 +243,9 @@ func detailHeader(m Model) string {
 }
 
 // detailRow renders one event row. Suppressed events dim the arrow and append
-// a marker glyph. The flexible detail column exposes tool, compact trace ID,
-// and the decisive reason without disturbing the fixed event/action columns.
+// a marker glyph. The flexible detail column exposes tool, the ASL question
+// preview, compact trace ID, and the decisive reason without disturbing the
+// fixed event/action columns.
 func detailRow(ev daemon.SessionEvent, now time.Time, width int) string {
 	timeCell := padRight(formatRelativeAge(time.Unix(ev.At, 0), now), detailColTime)
 	eventCell := padRight(ev.Event, detailColEvent)
@@ -269,9 +270,14 @@ func detailRow(ev daemon.SessionEvent, now time.Time, width int) string {
 	if toolWidth < 0 {
 		toolWidth = 0
 	}
-	details := make([]string, 0, 3)
+	details := make([]string, 0, 4)
 	if ev.ToolName != "" {
 		details = append(details, ev.ToolName)
+	}
+	// The daemon already collapsed and bounded the preview, so the shared
+	// column truncation below is the only clipping applied here.
+	if ev.QuestionPreview != "" {
+		details = append(details, "q: "+ev.QuestionPreview)
 	}
 	if ev.TraceID != "" {
 		traceID := ev.TraceID

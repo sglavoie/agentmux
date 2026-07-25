@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -302,6 +304,28 @@ func TestNormalizeCannotProduceTerminalState(t *testing.T) {
 			if got.Icon == "stop" || got.Icon == "error" {
 				t.Fatalf("event=%q payload=%q produced terminal icon %q", ev, p, got.Icon)
 			}
+		}
+	}
+}
+
+// TestNormalizeWaitEventCarriesNoQuestionText enforces the schema boundary for
+// the one hook payload that carries free text: the question preview must reach
+// the event log and the detail view, never the reducer's fact contract.
+func TestNormalizeWaitEventCarriesNoQuestionText(t *testing.T) {
+	const secret = "why did the deployment fail on shard 7"
+	n := NormalizedFromHook("AgentSessionLoopWaitStarted", "claude",
+		`{"run_id":"r1","question_id":"q1","question_preview":"`+secret+`"}`, 51, false)
+	if n.Phase != ASLPhaseWaiting {
+		t.Fatalf("phase = %q, want %q", n.Phase, ASLPhaseWaiting)
+	}
+	v := reflect.ValueOf(n)
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.Kind() != reflect.String {
+			continue
+		}
+		if strings.Contains(field.String(), secret) {
+			t.Fatalf("NormalizedEvent.%s leaked question text: %q", v.Type().Field(i).Name, field.String())
 		}
 	}
 }

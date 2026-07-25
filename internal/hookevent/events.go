@@ -22,7 +22,7 @@ var eventToAction = map[string]string{
 	// to record an ASL lifecycle event without painting a legacy icon, so the
 	// existing harness state (whatever the user is actually waiting on) stays
 	// visible underneath 🔁. The daemon's reducer derives the per-run phase
-	// (turn, verification, between, paused, finished) from the event name and
+	// (turn, verification, between, waiting, paused, finished) from the event name and
 	// owns the authoritative icon + loop lease.
 	"AgentSessionLoopStarted":               "loop_marker",
 	"AgentSessionLoopTurnStarted":           "loop_marker",
@@ -31,6 +31,8 @@ var eventToAction = map[string]string{
 	"AgentSessionLoopVerificationStarted":   "loop_marker",
 	"AgentSessionLoopVerificationHeartbeat": "loop_marker",
 	"AgentSessionLoopVerificationFinished":  "loop_marker",
+	"AgentSessionLoopWaitStarted":           "loop_marker",
+	"AgentSessionLoopWaitEnded":             "loop_marker",
 	"AgentSessionLoopPaused":                "loop_marker",
 	"AgentSessionLoopFinished":              "idle",
 

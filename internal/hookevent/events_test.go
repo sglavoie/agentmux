@@ -19,6 +19,8 @@ func TestResolveAction_AllEvents(t *testing.T) {
 		{"SessionStart", "idle"},
 		{"AgentSessionLoopStarted", "loop_marker"},
 		{"AgentSessionLoopTurnStarted", "loop_marker"},
+		{"AgentSessionLoopWaitStarted", "loop_marker"},
+		{"AgentSessionLoopWaitEnded", "loop_marker"},
 		{"AgentSessionLoopFinished", "idle"},
 		{"Setup", "active"},
 		{"UserPromptSubmit", "active"},

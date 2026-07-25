@@ -32,7 +32,7 @@ func setenvFunc(t *testing.T) func(string, string) error {
 
 func TestUITestFixtureNamesAreSortedAndKnown(t *testing.T) {
 	names := UITestFixtureNames()
-	want := []string{"actions", "basic", "wide_profiles"}
+	want := []string{"actions", "asl_question", "basic", "wide_profiles"}
 	if len(names) != len(want) {
 		t.Fatalf("expected %d fixtures, got %v", len(want), names)
 	}

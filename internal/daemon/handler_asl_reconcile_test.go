@@ -17,7 +17,7 @@ import (
 )
 
 // TestNormalizeASLLifecyclePhases pins the event → phase (and paused →
-// attention action) contract for all nine lifecycle events.
+// attention action) contract for every lifecycle event.
 func TestNormalizeASLLifecyclePhases(t *testing.T) {
 	cases := []struct {
 		event      string
@@ -32,6 +32,8 @@ func TestNormalizeASLLifecyclePhases(t *testing.T) {
 		{"AgentSessionLoopVerificationStarted", `{"run_id":"r1"}`, ASLPhaseVerification, ""},
 		{"AgentSessionLoopVerificationHeartbeat", `{"run_id":"r1"}`, ASLPhaseVerification, ""},
 		{"AgentSessionLoopVerificationFinished", `{"run_id":"r1"}`, ASLPhaseBetween, ""},
+		{"AgentSessionLoopWaitStarted", `{"run_id":"r1","question_id":"q1","question_preview":"pick one"}`, ASLPhaseWaiting, ""},
+		{"AgentSessionLoopWaitEnded", `{"run_id":"r1","question_id":"q1","wait_reason":"timeout"}`, ASLPhaseBetween, ""},
 		{"AgentSessionLoopPaused", `{"run_id":"r1","pause_reason":"question"}`, ASLPhasePaused, "elicitation"},
 		{"AgentSessionLoopPaused", `{"run_id":"r1","pause_reason":"verify-failed"}`, ASLPhasePaused, "failure"},
 		{"AgentSessionLoopPaused", `{"run_id":"r1","reason":"blocked"}`, ASLPhasePaused, "failure"},
@@ -367,6 +369,142 @@ func TestHookEventPausedRunShowsAttentionIcon(t *testing.T) {
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopPaused", projectDir, hookevent.HookPayload{RunID: "run-A", PauseReason: "question"})
 	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "question" {
 		t.Fatalf("paused run = looping=%v icon=%q; want ❓ + 🔁", looping, icon)
+	}
+}
+
+// TestHookEventWaitingRunShowsQuestionIcon drives the mailbox wait through the
+// full hook path: ❓ appears while the run is blocked, the wait ending returns
+// the window to a bare 🔁, and the loop marker never drops in between.
+func TestHookEventWaitingRunShowsQuestionIcon(t *testing.T) {
+	h, windows, projectDir := reconcileTestFixture(t)
+	fake := &fakeKittyClient{windows: windows}
+	h.SetKittyClient(fake)
+
+	aslLifecycleHookRequest(t, h, "AgentSessionLoopTurnStarted", projectDir, hookevent.HookPayload{RunID: "run-A"})
+	aslLifecycleHookRequest(t, h, "AgentSessionLoopWaitStarted", projectDir, hookevent.HookPayload{
+		RunID: "run-A", QuestionID: "q-1", QuestionPreview: "ship the shim change?",
+	})
+	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "question" {
+		t.Fatalf("waiting run = looping=%v icon=%q; want ❓ + 🔁", looping, icon)
+	}
+
+	aslLifecycleHookRequest(t, h, "AgentSessionLoopWaitEnded", projectDir, hookevent.HookPayload{
+		RunID: "run-A", QuestionID: "q-1", WaitReason: "reply",
+	})
+	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "" {
+		t.Fatalf("wait ended = looping=%v icon=%q; want bare 🔁", looping, icon)
+	}
+}
+
+// TestHookEventWaitStartedCarriesQuestionPreviewToSessionDetail: the preview is
+// the one free-text payload field the daemon keeps, and it reaches the TUI only
+// through the session detail buffer — never through NormalizedEvent or a
+// reducer fact.
+func TestHookEventWaitStartedCarriesQuestionPreviewToSessionDetail(t *testing.T) {
+	h, windows, projectDir := reconcileTestFixture(t)
+	fake := &fakeKittyClient{windows: windows}
+	h.SetKittyClient(fake)
+
+	const preview = "Should the shim keep the narrow branch?"
+	aslLifecycleHookRequest(t, h, "AgentSessionLoopWaitStarted", projectDir, hookevent.HookPayload{
+		RunID: "run-A", QuestionID: "q-1", QuestionPreview: preview,
+	})
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if !resp.OK {
+		t.Fatalf("session detail response = %+v", resp)
+	}
+	var found bool
+	for _, ev := range resp.Events {
+		if ev.Event != agentSessionLoopWaitStarted {
+			continue
+		}
+		found = true
+		if ev.QuestionPreview != preview {
+			t.Fatalf("QuestionPreview = %q, want %q", ev.QuestionPreview, preview)
+		}
+	}
+	if !found {
+		t.Fatalf("no %s event in session detail buffer: %+v", agentSessionLoopWaitStarted, resp.Events)
+	}
+}
+
+// TestHookEventWaitStartedSanitizesQuestionPreview: the question body is
+// model-controlled, so the hook decode boundary must strip terminal controls
+// before the daemon copies the preview onto the SessionEvent the detail view
+// renders.
+func TestHookEventWaitStartedSanitizesQuestionPreview(t *testing.T) {
+	h, windows, projectDir := reconcileTestFixture(t)
+	fake := &fakeKittyClient{windows: windows}
+	h.SetKittyClient(fake)
+
+	esc, bel := string(rune(0x1b)), string(rune(0x07))
+	aslLifecycleHookRequest(t, h, "AgentSessionLoopWaitStarted", projectDir, hookevent.HookPayload{
+		RunID: "run-A", QuestionID: "q-1",
+		QuestionPreview: esc + "[2JShip " + esc + "]0;pwned" + bel + "the shim?",
+	})
+
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if !resp.OK {
+		t.Fatalf("session detail response = %+v", resp)
+	}
+	var found bool
+	for _, ev := range resp.Events {
+		if ev.Event != agentSessionLoopWaitStarted {
+			continue
+		}
+		found = true
+		if want := "Ship the shim?"; ev.QuestionPreview != want {
+			t.Fatalf("QuestionPreview = %q, want %q", ev.QuestionPreview, want)
+		}
+	}
+	if !found {
+		t.Fatalf("no %s event in session detail buffer: %+v", agentSessionLoopWaitStarted, resp.Events)
+	}
+}
+
+// TestReconcileSeedsWaitingRunAsQuestion: unlike a pause (whose prompt may have
+// already been seen), a waiting marker only survives on disk while the loop
+// process is alive and blocked, so restart recovery re-asserts ❓.
+func TestReconcileSeedsWaitingRunAsQuestion(t *testing.T) {
+	h, windows, projectDir := reconcileTestFixture(t)
+	stubDaemonLoopDiscover(t, []agentloop.Candidate{loopCandidate(projectDir, "run-A", agentloop.PhaseWaiting)}, nil)
+
+	h.ReconcileASLLeases(time.Now(), windows)
+
+	looping, icon := windowLoopState(t, h, 42)
+	if !looping || icon != "question" {
+		t.Fatalf("seeded waiting state = looping=%v icon=%q; want ❓ + 🔁", looping, icon)
+	}
+}
+
+// TestReconcileSettlesQuestionWhenWaitingRunVanishes: if the loop dies mid-wait
+// no wait-ended event ever arrives, so the ❓ must not linger forever —
+// reconciliation converges it to the finished state after two misses.
+func TestReconcileSettlesQuestionWhenWaitingRunVanishes(t *testing.T) {
+	h, windows, projectDir := reconcileTestFixture(t)
+	fake := &fakeKittyClient{windows: windows}
+	h.SetKittyClient(fake)
+	now := time.Now()
+
+	stubDaemonLoopDiscover(t, []agentloop.Candidate{loopCandidate(projectDir, "run-A", agentloop.PhaseWaiting)}, nil)
+	aslLifecycleHookRequest(t, h, "AgentSessionLoopWaitStarted", projectDir, hookevent.HookPayload{
+		RunID: "run-A", QuestionID: "q-1",
+	})
+	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "question" {
+		t.Fatalf("waiting run = looping=%v icon=%q; want ❓ + 🔁", looping, icon)
+	}
+
+	stubDaemonLoopDiscover(t, nil, nil)
+	h.ReconcileASLLeases(now, windows)
+	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "question" {
+		t.Fatalf("one miss = looping=%v icon=%q; want ❓ preserved until two misses", looping, icon)
+	}
+
+	h.ReconcileASLLeases(now.Add(30*time.Second), windows)
+	looping, icon := windowLoopState(t, h, 42)
+	if looping || icon != "stop" {
+		t.Fatalf("after two misses = looping=%v icon=%q; want the question settled to 🛑", looping, icon)
 	}
 }
 

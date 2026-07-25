@@ -143,6 +143,7 @@ type UITestFixture struct {
 var uitestFixtureBuilders = map[string]func() UITestFixture{
 	"basic":         basicFixture,
 	"actions":       actionsFixture,
+	"asl_question":  aslQuestionFixture,
 	"wide_profiles": wideProfilesFixture,
 }
 
@@ -265,6 +266,40 @@ func actionsFixture() UITestFixture {
 	return UITestFixture{
 		Name:        "actions",
 		Description: "single long-titled session for exercising the actions overlay width",
+		Size:        UITestSize{Width: 100, Height: 32},
+		Config:      cfg,
+		Windows:     windows,
+	}
+}
+
+// aslQuestionFixture is the basic dashboard with one looping agent-session-loop
+// run blocked on a mailbox question (❓🔁) and a sibling run still working
+// (⚡🔁). It exists so scenarios can exercise the question-pending presentation —
+// attention grouping, the "awaiting response" gloss, and the `]q` jump — without
+// a daemon painting the state.
+func aslQuestionFixture() UITestFixture {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Directory: "~/projects/api", Profile: "work"},
+			{Title: "backend", Directory: "~/projects/backend", Profile: "work"},
+			{Title: "dotfiles", Directory: "~/dotfiles", Profile: "personal"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "❓🔁🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
+		uitestTab(2, 21, "⚡🔁🦊backend", false, managedVars("work", "claude", "backend", "~/projects/backend")),
+		uitestTab(3, 31, "🤖dotfiles", false, managedVars("personal", "codex", "dotfiles", "~/dotfiles")),
+	)}
+	return UITestFixture{
+		Name:        "asl_question",
+		Description: "an ASL run awaiting a mailbox reply alongside an active looping run",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
 		Windows:     windows,

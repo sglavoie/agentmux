@@ -1,0 +1,19 @@
+{
+  "name": "asl-question-pending-wide",
+  "fixture": "asl_question",
+  "size": { "width": 120, "height": 36 },
+  "actions": [
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "]" },
+    { "type": "key", "key": "q" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "selected_title", "value": "api" },
+    { "type": "contains_text", "text": "Needs Attention (1)" },
+    { "type": "contains_text", "text": "❓ awaiting response" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -639,8 +639,11 @@ func inferReplayInput(decision *replayDecision) {
 	switch strings.ToLower(decision.event) {
 	case "userpromptsubmit", "userpromptsubmitted":
 		decision.prompt = true
-	case "agentsessionloopstarted", "agentsessionloopturnfinished", "agentsessionloopverificationfinished":
+	case "agentsessionloopstarted", "agentsessionloopturnfinished",
+		"agentsessionloopverificationfinished", "agentsessionloopwaitended":
 		decision.phase = daemon.ASLPhaseBetween
+	case "agentsessionloopwaitstarted":
+		decision.phase = daemon.ASLPhaseWaiting
 	case "agentsessionloopturnstarted", "agentsessionloopturnheartbeat":
 		decision.phase = daemon.ASLPhaseTurn
 	case "agentsessionloopverificationstarted", "agentsessionloopverificationheartbeat":

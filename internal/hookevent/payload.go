@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/harness"
 )
@@ -19,6 +20,13 @@ import (
 // daemon's ceiling so the two limits stay in sync; anything beyond is
 // truncated and surfaces as a JSON parse error from the leftover bytes.
 const maxHookPayloadBytes = 1 << 20
+
+// maxQuestionPreviewRunes bounds the free-text question preview carried by
+// agent_session_loop wait events. The producer already collapses whitespace and
+// caps at the same width; re-bounding on decode means a hand-written, replayed,
+// or future producer payload cannot widen the only free-text field the daemon
+// persists and the dashboard renders.
+const maxQuestionPreviewRunes = 160
 
 // HookPayload captures the hook fields Agent Mux currently needs for icon logic
 // and debug traces. Unknown fields are ignored.
@@ -41,6 +49,9 @@ type HookPayload struct {
 	RunIDCamel            string `json:"runId"`
 	StatePath             string `json:"state_path"`
 	RunFinishedAt         string `json:"run_finished_at"`
+	QuestionID            string `json:"question_id"`
+	QuestionPreview       string `json:"question_preview"`
+	WaitReason            string `json:"wait_reason"`
 	Prompt                string `json:"prompt"`
 	InitialPrompt         string `json:"initial_prompt"`
 	InitialPromptCamel    string `json:"initialPrompt"`
@@ -115,7 +126,98 @@ func DecodeHookPayload(r io.Reader) (HookPayload, error) {
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return HookPayload{}, fmt.Errorf("parse hook payload JSON: %w", err)
 	}
+	payload.QuestionPreview = boundQuestionPreview(payload.QuestionPreview)
 	return payload, nil
+}
+
+// boundQuestionPreview strips terminal controls, collapses whitespace, and
+// truncates to maxQuestionPreviewRunes, matching the producer's own bounding so
+// a decoded preview is always a single bounded line of printable text.
+func boundQuestionPreview(value string) string {
+	collapsed := strings.Join(strings.Fields(stripTerminalControls(value)), " ")
+	runes := []rune(collapsed)
+	if len(runes) <= maxQuestionPreviewRunes {
+		return collapsed
+	}
+	return string(runes[:maxQuestionPreviewRunes])
+}
+
+// stripTerminalControls removes C0/C1 controls from untrusted text. The question
+// body is model-controlled and the TUI detail view renders it straight into the
+// terminal, so an escape introducer takes its whole sequence with it rather than
+// leaving printable parameter residue such as "[2J" behind. Controls that are
+// also whitespace become a space so the caller's collapse still separates the
+// words they joined.
+func stripTerminalControls(value string) string {
+	runes := []rune(value)
+	var b strings.Builder
+	b.Grow(len(value))
+	for i := 0; i < len(runes); {
+		r := runes[i]
+		switch {
+		case !unicode.IsControl(r):
+			b.WriteRune(r)
+			i++
+		case unicode.IsSpace(r):
+			b.WriteRune(' ')
+			i++
+		default:
+			i += controlSequenceLen(runes[i:])
+		}
+	}
+	return b.String()
+}
+
+// controlSequenceLen returns how many runes the control sequence starting at
+// runes[0] occupies. A bare control is one rune; an ESC or C1 introducer also
+// covers its parameters and terminator. An unterminated sequence consumes the
+// remainder, which is what a terminal parser would do with it too.
+func controlSequenceLen(runes []rune) int {
+	switch runes[0] {
+	case 0x1b:
+		if len(runes) == 1 {
+			return 1
+		}
+		switch runes[1] {
+		case '[':
+			return 2 + csiTailLen(runes[2:])
+		case ']', 'P', 'X', '^', '_':
+			return 2 + stringTailLen(runes[2:])
+		default:
+			return 2
+		}
+	case 0x9b: // C1 CSI
+		return 1 + csiTailLen(runes[1:])
+	case 0x90, 0x98, 0x9d, 0x9e, 0x9f: // C1 DCS, SOS, OSC, PM, APC
+		return 1 + stringTailLen(runes[1:])
+	default:
+		return 1
+	}
+}
+
+// csiTailLen counts the parameter and intermediate runes plus the final rune
+// (0x40-0x7e) that closes a CSI sequence.
+func csiTailLen(runes []rune) int {
+	for i, r := range runes {
+		if r >= 0x40 && r <= 0x7e {
+			return i + 1
+		}
+	}
+	return len(runes)
+}
+
+// stringTailLen counts a string-terminated body plus its terminator: BEL, or ST
+// in either its two-rune (ESC \) or single-rune (0x9c) form.
+func stringTailLen(runes []rune) int {
+	for i, r := range runes {
+		switch {
+		case r == 0x07 || r == 0x9c:
+			return i + 1
+		case r == 0x1b && i+1 < len(runes) && runes[i+1] == '\\':
+			return i + 2
+		}
+	}
+	return len(runes)
 }
 
 func (p HookPayload) EffectiveNotificationType() string {

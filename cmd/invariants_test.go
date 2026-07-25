@@ -126,6 +126,9 @@ func TestInvariantASLActiveWorkMustBeVisible(t *testing.T) {
 		{"turn showing bolt passes", daemon.ASLPhaseTurn, "bolt", false},
 		{"between showing empty passes", daemon.ASLPhaseBetween, "", false},
 		{"paused showing empty passes", daemon.ASLPhasePaused, "", false},
+		// A waiting run is blocked on a human, not executing: the active-work
+		// invariant deliberately says nothing about what it renders.
+		{"waiting showing empty passes", daemon.ASLPhaseWaiting, "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

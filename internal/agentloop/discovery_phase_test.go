@@ -144,6 +144,59 @@ func TestDiscoverBetweenPhaseWithoutActiveTurn(t *testing.T) {
 	}
 }
 
+// A live waiting_for_reply marker means the run is blocked on a supervisor
+// answer between turns. Unlike a pause the process stays alive, so the run is
+// visible to default discovery and reconciliation can re-assert ❓ after a
+// daemon restart.
+func TestDiscoverWaitingPhaseFromWaitingForReply(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	seedLoopState(t, root, planDir, 123, map[string]any{
+		"run_id":         "run-waiting",
+		"run_started_at": "2026-07-10T13:05:00+00:00",
+		"waiting_for_reply": map[string]any{
+			"question_id":   "q-1",
+			"started_at":    "2026-07-10T13:25:00+00:00",
+			"hard_deadline": "2026-07-10T14:25:00+00:00",
+		},
+	})
+
+	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 1 || got[0].Phase != PhaseWaiting {
+		t.Fatalf("candidates = %+v; want one waiting-phase candidate", got)
+	}
+	if got[0].Paused {
+		t.Errorf("paused = true; want false (a wait is nonterminal)")
+	}
+}
+
+// Executing work outranks a waiting marker a racing writer has not yet cleared:
+// a resumed turn must never be reported as still blocked on a reply.
+func TestDiscoverActiveTurnOutranksStaleWaitingMarker(t *testing.T) {
+	root := t.TempDir()
+	planDir := filepath.Join(t.TempDir(), "plan")
+	seedLoopState(t, root, planDir, 123, map[string]any{
+		"run_id":         "run-resumed",
+		"run_started_at": "2026-07-10T13:05:00+00:00",
+		"active_turn": map[string]any{
+			"session":    4,
+			"turn_index": 3,
+		},
+		"waiting_for_reply": map[string]any{"question_id": "q-1"},
+	})
+
+	got, err := Discover(DiscoverOptions{StateRoot: root, PIDRunning: func(int) bool { return true }})
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 1 || got[0].Phase != PhaseTurn {
+		t.Fatalf("candidates = %+v; want the executing turn to win", got)
+	}
+}
+
 // A pause finalizes the loop process: the PID dies and run_finished_at is
 // written. Default discovery must keep hiding it (routing and loop markers
 // require live processes); IncludePaused exposes it for reconciliation.
