@@ -113,6 +113,11 @@ func (h *Handler) reconcileASLCandidates(now time.Time, windows []kitty.OSWindow
 	changedWindows := make(map[int]bool)
 
 	for _, seed := range seeds {
+		h.registerASLSupervisorTargetLocked(aslSupervisorTarget{
+			windowID:       seed.windowID,
+			originWindowID: seed.candidate.WindowID,
+			candidate:      seed.candidate,
+		})
 		if h.seedASLLeaseLocked(now, seed) {
 			changedWindows[seed.windowID] = true
 		}
@@ -150,6 +155,14 @@ func (h *Handler) reconcileASLCandidates(now time.Time, windows []kitty.OSWindow
 				continue
 			}
 			delete(h.aslMissStreak, ref)
+			delete(h.aslSupervisorTargets, ref)
+			h.clearASLSupervisorQuestionLocked(
+				windowID,
+				fact.RunID,
+				fact.Seq+1,
+				now,
+				"ASL run missing from consecutive discoveries; supervisor question projection retired",
+			)
 			st.ShadowSeq++
 			st.Reducer.Apply(ReducerEvent{
 				Source:         SourceID{Kind: SourceASL, Key: fact.Key},

@@ -269,6 +269,11 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	case notify:
 		h.maybeNotifyTraced(req.WindowID, req.SessionTitle, req.Account, outcome.notifyAction, req.PipeMode, notificationTraceFromEvent(completedEvent))
 	}
+	if decision == DecisionApplied &&
+		(n.Source.Kind == SourceHarness || n.Source.Kind == SourceLegacy) &&
+		n.Action == "stop" && !n.PipeMode {
+		h.correlateASLSupervisorQuestion(req.WindowID, now)
+	}
 }
 
 // publishEffectiveLocked writes the reduced effective state as the window's

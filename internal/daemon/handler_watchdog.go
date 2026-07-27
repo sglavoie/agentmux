@@ -248,6 +248,12 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 			delete(h.aslMissStreak, ref)
 		}
 	}
+	for ref := range h.aslSupervisorTargets {
+		if _, ok := closed[ref.windowID]; ok {
+			delete(h.aslSupervisorTargets, ref)
+			delete(h.aslSupervisorProjections, ref)
+		}
+	}
 	// Idle-sample stabilization streaks are per-window too: a closed window's
 	// pane can produce no further screen evidence, so its streaks (and the
 	// evidence generations they track) go with it.

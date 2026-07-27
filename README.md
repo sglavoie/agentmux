@@ -440,6 +440,20 @@ finishing never changes another run's state (verified live with two overlapping
 runs in a single window). Turn and verification heartbeats re-assert the lease
 every 30 seconds. A question wait has no stale threshold: it stays ❓ until the
 run answers, pauses, or finishes.
+ASL supervisor lease schema v2 also exposes a fixed-size, text-free projection
+of questions observed by the supervisor (`run_id`, mailbox projection sequence,
+count, latest question ID, and timestamp). Agent Mux refreshes registered live
+runs on its two-second maintenance cycle and shows ❓🔁 only when that exact
+run still has an unanswered question **and** the newest interactive supervisor
+state is a clean `Stop` no older than the question. This conjunction avoids
+alerting for worker questions the supervisor answers autonomously and covers
+either observation order (mailbox first or Stop first) without parsing terminal
+prose. A new correlated question uses the existing “User input requested”
+notification path; mute, permission-notification configuration, cooldown, and
+click-to-focus behavior remain unchanged. The probe clears on a fresh zero
+count or run completion, survives heartbeats and transient lease failures, and
+persists across daemon restarts. V1, stale, malformed, and foreign-run leases
+cannot raise or clear the probe.
 When the final run finishes, that terminal boundary also retires an older
 interactive `bolt`/`compact` fact, so a lost Codex/Claude `Stop` or Copilot
 `agentStop` cannot leave `⚡` masking the run's `🛑`; newer activity, pipe-mode

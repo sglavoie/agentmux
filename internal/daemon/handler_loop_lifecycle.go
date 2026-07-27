@@ -124,6 +124,17 @@ func (h *Handler) handleLoopLifecycleTarget(
 			"error", resp.Error,
 		)
 	}
+	runID := payload.EffectiveRunID()
+	if eventOrAction == agentSessionLoopFinished {
+		h.finishASLSupervisorQuestion(target.windowID, runID, time.Now())
+	} else {
+		h.registerASLSupervisorLifecycleTarget(
+			target.windowID,
+			originWindowID,
+			runID,
+			payload.StatePath,
+		)
+	}
 
 	if marker := loopMarkerForLifecycleTarget(eventOrAction, target.workspace, openTargets); marker != nil {
 		h.stateMu.Lock()

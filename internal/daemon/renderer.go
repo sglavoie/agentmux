@@ -206,6 +206,10 @@ func (h *Handler) runSnapshotTickWithReceipts(now time.Time, windows []kitty.OSW
 	// First tick doubles as the startup reconciliation; afterwards the interval
 	// gate keeps it to every aslReconcileInterval.
 	h.maybeReconcileASLLeases(now, windows)
+	// Registered ASL runs expose a fixed-size, text-free supervisor projection.
+	// Refresh it every maintenance tick so a mailbox question and a supervisor
+	// Stop correlate within the existing two-second render cadence.
+	h.refreshASLSupervisorQuestions(now)
 	// Batched-persistence flush and drift convergence: hand every window with
 	// pending durable state, failed writes to retry, or a drifted title to the
 	// render worker. The maintenance loop itself never writes to Kitty.
