@@ -44,6 +44,9 @@ func TestListWithConfig_TitleFallback_HappyPath(t *testing.T) {
             "id": 21,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/tmp"}
+            ],
             "user_vars": {}
           }
         ]
@@ -102,6 +105,9 @@ func TestListWithConfig_TitleFallback_ProfileMatchCaseInsensitive(t *testing.T) 
             "id": 23,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/projects/api"}
+            ],
             "user_vars": {}
           }
         ]
@@ -143,6 +149,9 @@ func TestListWithConfig_TitleFallback_AmbiguousMatchSkipped(t *testing.T) {
             "id": 41,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/tmp"}
+            ],
             "user_vars": {}
           }
         ]
@@ -190,6 +199,9 @@ func TestListWithConfig_TitleFallback_NoConfigMatch(t *testing.T) {
             "id": 51,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/tmp"}
+            ],
             "user_vars": {}
           }
         ]
@@ -448,6 +460,9 @@ func TestListWithConfig_ManagedWindowRepairsStaleUserVarsFromHarnessEmojiTitle(t
 					Project:      "Analytics",
 					AMXDirectory: analyticsDir,
 				},
+				ForegroundProcesses: []kitty.ForegroundProcess{{
+					Cmdline: []string{"codex"},
+				}},
 			}},
 		}},
 	}})
@@ -490,8 +505,14 @@ func TestListWithConfig_CWDFallback_PrefersActiveWindow(t *testing.T) {
 			IsActive: true,
 			Title:    "codex",
 			Windows: []kitty.Window{
-				{ID: 71, CWD: otherDir},
-				{ID: 72, IsActive: true, CWD: projectDir},
+				{
+					ID: 71, CWD: otherDir,
+					ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"claude"}, CWD: otherDir}},
+				},
+				{
+					ID: 72, IsActive: true, CWD: projectDir,
+					ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"claude"}, CWD: projectDir}},
+				},
 			},
 		}},
 	}})
@@ -525,7 +546,10 @@ func TestListWithConfig_CWDFallback_AmbiguousDirectorySkipped(t *testing.T) {
 			ID:       80,
 			IsActive: true,
 			Title:    "codex",
-			Windows:  []kitty.Window{{ID: 81, IsActive: true, CWD: projectDir}},
+			Windows: []kitty.Window{{
+				ID: 81, IsActive: true, CWD: projectDir,
+				ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"codex"}, CWD: projectDir}},
+			}},
 		}},
 	}})
 
@@ -556,7 +580,10 @@ func TestListWithConfig_TitleFallbackBeatsCWDFallback(t *testing.T) {
 			ID:       90,
 			IsActive: true,
 			Title:    "api",
-			Windows:  []kitty.Window{{ID: 91, IsActive: true, CWD: backendDir}},
+			Windows: []kitty.Window{{
+				ID: 91, IsActive: true, CWD: backendDir,
+				ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"claude"}, CWD: backendDir}},
+			}},
 		}},
 	}})
 
@@ -577,6 +604,145 @@ func TestListWithConfig_TitleFallbackBeatsCWDFallback(t *testing.T) {
 	}
 	if sessions[0].Project != "api" || sessions[0].Directory != apiDir {
 		t.Fatalf("session = %+v, want title fallback api at %q", sessions[0], apiDir)
+	}
+}
+
+func TestListWithConfig_ProjectDirectoryWithoutHarnessIsNotGhost(t *testing.T) {
+	projectDir := t.TempDir()
+	client := newClientFromWindows(t, []kitty.OSWindow{{
+		ID:       1,
+		IsActive: true,
+		Tabs: []kitty.Tab{
+			{
+				ID:       100,
+				IsActive: true,
+				Title:    "amx",
+				Windows: []kitty.Window{{
+					ID:       101,
+					IsActive: true,
+					CWD:      projectDir,
+					ForegroundProcesses: []kitty.ForegroundProcess{{
+						Cmdline: []string{"amx", "--window-id", "99"},
+						CWD:     projectDir,
+					}},
+				}},
+			},
+			{
+				ID:    102,
+				Title: "shell",
+				Windows: []kitty.Window{{
+					ID:       103,
+					IsActive: true,
+					CWD:      projectDir,
+					ForegroundProcesses: []kitty.ForegroundProcess{{
+						Cmdline: []string{"zsh"},
+						CWD:     projectDir,
+					}},
+				}},
+			},
+		},
+	}})
+
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "work", Harness: "codex"}},
+		Sessions: []config.Session{{Title: "Katana", Account: "work", Directory: projectDir}},
+	}
+
+	sessions, ghosts, err := session.ListWithConfig(client, cfg)
+	if err != nil {
+		t.Fatalf("ListWithConfig: %v", err)
+	}
+	if len(sessions) != 0 || len(ghosts) != 0 {
+		t.Fatalf("non-harness project tabs became managed: sessions=%+v ghosts=%+v", sessions, ghosts)
+	}
+}
+
+func TestListWithConfig_StaleRecoveredMetadataWithoutHarnessIsIgnored(t *testing.T) {
+	projectDir := t.TempDir()
+	client := newClientFromWindows(t, []kitty.OSWindow{{
+		ID:       1,
+		IsActive: true,
+		Tabs: []kitty.Tab{{
+			ID:       110,
+			IsActive: true,
+			Title:    "Katana",
+			Windows: []kitty.Window{{
+				ID:       111,
+				IsActive: true,
+				CWD:      projectDir,
+				UserVars: kitty.UserVars{
+					Profile:      "work",
+					Harness:      "codex",
+					Project:      "Katana",
+					AMXDirectory: projectDir,
+				},
+				ForegroundProcesses: []kitty.ForegroundProcess{{
+					Cmdline: []string{"zsh"},
+					CWD:     projectDir,
+				}},
+			}},
+		}},
+	}})
+
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "work", Harness: "codex"}},
+		Sessions: []config.Session{{Title: "Katana", Account: "work", Directory: projectDir}},
+	}
+
+	sessions, ghosts, err := session.ListWithConfig(client, cfg)
+	if err != nil {
+		t.Fatalf("ListWithConfig: %v", err)
+	}
+	if len(sessions) != 0 || len(ghosts) != 0 {
+		t.Fatalf("stale recovered metadata remained live: sessions=%+v ghosts=%+v", sessions, ghosts)
+	}
+}
+
+func TestListWithConfig_CWDFallbackTargetsHarnessBelowActiveDashboardOverlay(t *testing.T) {
+	projectDir := t.TempDir()
+	client := newClientFromWindows(t, []kitty.OSWindow{{
+		ID:       1,
+		IsActive: true,
+		Tabs: []kitty.Tab{{
+			ID:       120,
+			IsActive: true,
+			Title:    "amx",
+			Windows: []kitty.Window{
+				{
+					ID:       121,
+					IsActive: true,
+					CWD:      projectDir,
+					ForegroundProcesses: []kitty.ForegroundProcess{{
+						Cmdline: []string{"amx", "--window-id", "122"},
+						CWD:     projectDir,
+					}},
+				},
+				{
+					ID:  122,
+					CWD: projectDir,
+					ForegroundProcesses: []kitty.ForegroundProcess{{
+						Cmdline: []string{"codex", "--yolo"},
+						CWD:     projectDir,
+					}},
+				},
+			},
+		}},
+	}})
+
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "work", Harness: "codex"}},
+		Sessions: []config.Session{{Title: "Katana", Account: "work", Directory: projectDir}},
+	}
+
+	sessions, ghosts, err := session.ListWithConfig(client, cfg)
+	if err != nil {
+		t.Fatalf("ListWithConfig: %v", err)
+	}
+	if len(sessions) != 1 || len(ghosts) != 1 {
+		t.Fatalf("expected one live harness ghost, got sessions=%+v ghosts=%+v", sessions, ghosts)
+	}
+	if sessions[0].WindowID != 122 || ghosts[0].WindowID != 122 {
+		t.Fatalf("recovery targeted overlay instead of harness: session=%+v ghost=%+v", sessions[0], ghosts[0])
 	}
 }
 

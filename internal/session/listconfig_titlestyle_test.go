@@ -22,6 +22,9 @@ func TestListWithConfig_TitleFallback_StripsStateIcon(t *testing.T) {
             "id": 31,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/tmp"}
+            ],
             "user_vars": {}
           }
         ]
@@ -70,6 +73,9 @@ func TestListWithConfig_TitleFallback_PreservesMuteIcon(t *testing.T) {
             "id": 33,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/projects/api"}
+            ],
             "user_vars": {}
           }
         ]
@@ -118,6 +124,9 @@ func TestListWithConfig_TitleFallback_LegacyPrefixedTitle_UniqueMatch(t *testing
             "id": 46,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/projects/api"}
+            ],
             "user_vars": {}
           }
         ]
@@ -168,6 +177,9 @@ func TestListWithConfig_TitleFallback_ExactTitleBeatsLegacyPrefix(t *testing.T) 
             "id": 48,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/projects/personal-w-api"}
+            ],
             "user_vars": {}
           }
         ]
@@ -218,6 +230,9 @@ func TestListWithConfig_TitleFallback_LegacyPrefixedTitle_AmbiguousMatchSkipped(
             "id": 50,
             "is_active": true,
             "cwd": "/tmp",
+            "foreground_processes": [
+              {"cmdline": ["claude"], "cwd": "/tmp"}
+            ],
             "user_vars": {}
           }
         ]

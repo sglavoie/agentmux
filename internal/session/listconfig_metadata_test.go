@@ -24,6 +24,7 @@ func TestListWithConfig_AnchoredWindow_NoGhostEmitted(t *testing.T) {
             "is_active": true,
             "cwd": "/projects/api",
             "user_vars": {
+              "amx_launch_id": "fixture-api",
               "cc_account": "work",
               "cc_cwd": "/projects/api"
             }

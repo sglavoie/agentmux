@@ -209,6 +209,7 @@ func managedVars(profile, harness, project, dir string) kitty.UserVars {
 		Project:      project,
 		AMXDirectory: dir,
 		CWD:          dir,
+		LaunchID:     "uitest-" + project,
 	}
 }
 

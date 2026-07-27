@@ -128,7 +128,7 @@ func TestInitialFetchCmdConsumesExistingDashboardSelectionRequest(t *testing.T) 
 				ID:    7,
 				Title: "api",
 				Windows: []kitty.Window{{
-					ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+					ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", LaunchID: "api-launch"},
 				}},
 			},
 			{
@@ -162,7 +162,7 @@ func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
 			ID:    7,
 			Title: "api",
 			Windows: []kitty.Window{
-				{ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"}},
+				{ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", LaunchID: "api-launch"}},
 				{ID: 99, IsActive: true},
 			},
 		}},
@@ -177,6 +177,78 @@ func TestInitialFetchCmdResolvesSourcePaneToContainingTab(t *testing.T) {
 	}
 	if len(msg.sessions) != 1 || msg.sessions[0].TabID != 7 {
 		t.Fatalf("sessions = %+v, want one managed row for tab 7", msg.sessions)
+	}
+}
+
+func TestFetchCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *testing.T) {
+	oldDaemonRequest := daemonRequest
+	daemonRequest = func(daemon.Request) (daemon.Response, error) {
+		return daemon.Response{}, errors.New("daemon unavailable")
+	}
+	t.Cleanup(func() { daemonRequest = oldDaemonRequest })
+
+	katanaDir := t.TempDir()
+	pulseDir := t.TempDir()
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{{Name: "work", Harness: "codex"}},
+		Sessions: []config.Session{
+			{Title: "Katana", Account: "work", Directory: katanaDir},
+			{Title: "Pulse", Account: "work", Directory: pulseDir},
+		},
+	}
+	client := NewUITestKittyClient([]kitty.OSWindow{{
+		ID:       1,
+		IsActive: true,
+		Tabs: []kitty.Tab{
+			{
+				ID:       40,
+				IsActive: true,
+				Title:    "amx",
+				Windows: []kitty.Window{{
+					ID:       401,
+					IsActive: true,
+					CWD:      katanaDir,
+					ForegroundProcesses: []kitty.ForegroundProcess{{
+						Cmdline: []string{"amx", "--window-id", "400"},
+						CWD:     katanaDir,
+					}},
+				}},
+			},
+			{
+				ID:    50,
+				Title: "Pulse",
+				Windows: []kitty.Window{{
+					ID:       501,
+					IsActive: true,
+					CWD:      pulseDir,
+					UserVars: kitty.UserVars{
+						Profile: "work", Harness: "codex", Project: "Pulse",
+						AMXDirectory: pulseDir, LaunchID: "pulse-launch",
+					},
+				}},
+			},
+		},
+	}})
+
+	m := loadSessions(NewModel(cfg, client), []session.RunningSession{
+		{TabID: 40, WindowID: 400, Base: "Katana", Profile: "work", Account: "work", Project: "Katana"},
+		{TabID: 50, WindowID: 501, Base: "Pulse", Profile: "work", Account: "work", Project: "Pulse"},
+	})
+	m.cursor = 0
+
+	msg := fetchCmd(client, cfg, "alpha")().(sessionsMsg)
+	if len(msg.sessions) != 1 || msg.sessions[0].Project != "Pulse" {
+		t.Fatalf("post-close sessions = %+v, want only Pulse", msg.sessions)
+	}
+	if calls := client.CallsFor("SetUserVars"); len(calls) != 0 {
+		t.Fatalf("dashboard overlay was re-anchored: %+v", calls)
+	}
+
+	updated, _ := m.Update(msg)
+	m = updated.(Model)
+	if len(m.filtered) != 1 || m.filtered[0].Project != "Pulse" || m.cursor != 0 {
+		t.Fatalf("refreshed dashboard = rows %+v cursor %d, want only Pulse at cursor 0", m.filtered, m.cursor)
 	}
 }
 
@@ -202,7 +274,7 @@ func TestFetchCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 			Windows: []kitty.Window{{
 				ID:       42,
 				IsActive: true,
-				UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: "/work/api"},
+				UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: "/work/api", LaunchID: "api-launch"},
 			}},
 		}},
 	}})
@@ -233,7 +305,7 @@ func TestFetchCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
 			Windows: []kitty.Window{{
 				ID:       42,
 				IsActive: true,
-				UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: "/work/api"},
+				UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: "/work/api", LaunchID: "api-launch"},
 			}},
 		}},
 	}})

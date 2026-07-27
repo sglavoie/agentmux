@@ -82,9 +82,10 @@ func (rs RunningSession) TitleParts() palette.TitleParts {
 }
 
 // GhostTab is a managed tab whose anchor window (the one bearing amx user vars)
-// no longer exists, but whose tab still matches a unique configured project by
-// title or working directory. Callers can use the WindowID to re-stamp user
-// vars onto the surviving window and restore normal detection.
+// no longer exists, but whose surviving live harness window still matches a
+// unique configured project by title or working directory. Callers can use the
+// WindowID to re-stamp user vars onto that harness window and restore normal
+// detection.
 type GhostTab struct {
 	TabID    int
 	WindowID int
@@ -136,11 +137,12 @@ func ListFromOSWindowsWithConfig(osWindows []kitty.OSWindow, cfg *config.Config)
 }
 
 // ListWithConfig returns running sessions plus any "ghost" tabs whose anchor
-// window is gone but whose tab resolves unambiguously to a configured project.
-// Title matching is tried first, including legacy "<initial>:<project>"
-// titles. If that fails, the active window's CWD can recover a tab whose title
-// no longer identifies the project. When cfg is nil, no fallback occurs and
-// ghosts is always empty — behavior is identical to List.
+// window is gone but whose surviving live harness window resolves
+// unambiguously to a configured project. Title matching is tried first,
+// including legacy "<initial>:<project>" titles. If that fails, the harness
+// window's CWD can recover a tab whose title no longer identifies the project.
+// When cfg is nil, no fallback occurs and ghosts is always empty — behavior is
+// identical to List.
 func ListWithConfig(client kitty.KittyClient, cfg *config.Config) (sessions []RunningSession, ghosts []GhostTab, err error) {
 	osWindows, err := client.ListWindows()
 	if err != nil {
@@ -187,6 +189,14 @@ func tabToRunningSession(tab kitty.Tab, ctx projectMatchContext) (rs RunningSess
 		if win.UserVars.EffectiveProfile() == "" {
 			continue
 		}
+		// Config-aware discovery can encounter metadata that a previous ghost
+		// recovery stamped onto an overlay or ordinary shell. Modern launches
+		// carry a launch ID and remain authoritative through brief Kitty
+		// process-list gaps. Recovered and legacy anchors do not, so require
+		// live harness evidence before treating them as running.
+		if ctx.cfg != nil && win.UserVars.LaunchID == "" && !windowHasHarnessProcess(*win) {
+			continue
+		}
 		if win.IsActive {
 			if ctx.cfg != nil {
 				if rs, ghost, ok := managedWindowOverride(tab, *win, ctx); ok {
@@ -219,13 +229,18 @@ func tabToRunningSession(tab kitty.Tab, ctx projectMatchContext) (rs RunningSess
 }
 
 // titleFallback recognizes a tab by its title even when no window carries amx
-// user vars (the anchor harness window was closed). It returns a fabricated
-// RunningSession and a GhostTab pointing at the window that should be
-// re-stamped. The match must be unique — ambiguous or unconfigured titles are
-// skipped. Exact project-title matches are preferred; legacy
-// "<initial>:<project>" titles are only considered when no exact match exists.
+// user vars (the anchor harness window was closed), provided another live
+// harness window survives. It returns a fabricated RunningSession and a
+// GhostTab pointing at that window. The match must be unique — ambiguous or
+// unconfigured titles are skipped. Exact project-title matches are preferred;
+// legacy "<initial>:<project>" titles are only considered when no exact match
+// exists.
 func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab, bool) {
 	if len(tab.Windows) == 0 {
+		return RunningSession{}, nil, false
+	}
+	candidates := fallbackWindowsByPriority(tab)
+	if len(candidates) == 0 {
 		return RunningSession{}, nil, false
 	}
 	base, state, starred, muted := palette.ParseTitleFull(tab.Title)
@@ -243,15 +258,9 @@ func titleFallback(tab kitty.Tab, cfg *config.Config) (RunningSession, *GhostTab
 	}
 	m := matches[0]
 
-	winID := tab.Windows[0].ID
-	for i := range tab.Windows {
-		if tab.Windows[i].IsActive {
-			winID = tab.Windows[i].ID
-			break
-		}
-	}
-
-	return fallbackSessionFromMatch(tab, winID, m, matchBase, state, starred, muted, cfg)
+	// Re-anchor the actual harness pane, never an active dashboard overlay or
+	// unrelated shell that merely shares the tab.
+	return fallbackSessionFromMatch(tab, candidates[0].ID, m, matchBase, state, starred, muted, cfg)
 }
 
 // managedWindowOverride repairs a window that still has amx user vars, but
@@ -292,16 +301,17 @@ func matchTabTitleFallback(tab kitty.Tab, cfg *config.Config) (titleFallbackMatc
 	return matches[0], matchBase, state, starred, muted, true
 }
 
-// cwdFallback recognizes a tab by the working directory of its active window
-// when no window carries amx user vars and the title no longer identifies the
-// configured project. The CWD must resolve to exactly one configured project.
+// cwdFallback recognizes a tab by the working directory of a live harness
+// window when no window carries amx user vars and the title no longer
+// identifies the configured project. The CWD must resolve to exactly one
+// configured project.
 func cwdFallback(tab kitty.Tab, ctx projectMatchContext) (RunningSession, *GhostTab, bool) {
 	if len(tab.Windows) == 0 {
 		return RunningSession{}, nil, false
 	}
 
 	for _, win := range fallbackWindowsByPriority(tab) {
-		cwd := windowFallbackCWD(win)
+		cwd := windowGhostCWD(win)
 		if strings.TrimSpace(cwd) == "" {
 			continue
 		}
@@ -342,8 +352,8 @@ func fallbackWindowsByPriority(tab kitty.Tab) []kitty.Window {
 	}
 	appendMatching(func(win kitty.Window) bool { return win.IsActive && windowHarnessCWD(win) != "" })
 	appendMatching(func(win kitty.Window) bool { return windowHarnessCWD(win) != "" })
-	appendMatching(func(win kitty.Window) bool { return win.IsActive })
-	appendMatching(func(kitty.Window) bool { return true })
+	appendMatching(func(win kitty.Window) bool { return win.IsActive && windowHasHarnessProcess(win) })
+	appendMatching(windowHasHarnessProcess)
 	return windows
 }
 
@@ -604,6 +614,26 @@ func windowFallbackCWD(win kitty.Window) string {
 		}
 	}
 	return win.CWD
+}
+
+// windowGhostCWD deliberately ignores unrelated foreground processes. Ghost
+// recovery is allowed only for a window that already has live harness
+// evidence, so the harness CWD (or that Kitty window's own CWD when the process
+// omits one) is the only safe project identity.
+func windowGhostCWD(win kitty.Window) string {
+	if cwd := windowHarnessCWD(win); cwd != "" {
+		return cwd
+	}
+	return strings.TrimSpace(win.CWD)
+}
+
+func windowHasHarnessProcess(win kitty.Window) bool {
+	for _, fp := range win.ForegroundProcesses {
+		if cmdlineContainsHarness(fp.Cmdline) {
+			return true
+		}
+	}
+	return false
 }
 
 func windowHarnessCWD(win kitty.Window) string {

@@ -17,6 +17,7 @@
             "cwd": "/Users/user/dotfiles",
             "cmdline": ["claude"],
             "user_vars": {
+              "amx_launch_id": "fixture-dotfiles",
               "cc_account": "personal",
               "cc_config_dir": "~/.config/claude",
               "cc_flags": "",
@@ -41,6 +42,7 @@
             "cwd": "/Users/user/projects/api",
             "cmdline": ["claude", "--dangerously-skip-permissions"],
             "user_vars": {
+              "amx_launch_id": "fixture-api",
               "cc_account": "work",
               "cc_config_dir": "~/.config/claude-work",
               "cc_flags": "--dangerously-skip-permissions",

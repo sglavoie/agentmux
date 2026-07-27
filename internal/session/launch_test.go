@@ -127,7 +127,8 @@ func TestLaunch_DedupUsesEffectiveProfile(t *testing.T) {
 	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
 		`{"id":10,"is_active":true,"title":"api","windows":[` +
 		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{` +
-		`"amx_profile":"claude-prod","amx_project":"api","amx_directory":"/tmp/api"` +
+		`"amx_profile":"claude-prod","amx_project":"api","amx_directory":"/tmp/api",` +
+		`"amx_launch_id":"existing-api"` +
 		`}}]}]}]`)
 	runner := kitty.NewMockRunner(map[string][]byte{
 		"kitten @ ls": fixture,
@@ -230,7 +231,8 @@ func TestLaunch_InsertLocationUsesEffectiveProfile(t *testing.T) {
 func TestLaunch_DedupSeesConfigMatchedGhostTabs(t *testing.T) {
 	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
 		`{"id":10,"is_active":true,"title":"api","windows":[` +
-		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{}}` +
+		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{},` +
+		`"foreground_processes":[{"cmdline":["claude"],"cwd":"/tmp/api"}]}` +
 		`]}]}]`)
 	runner := kitty.NewMockRunner(map[string][]byte{
 		"kitten @ ls": fixture,
@@ -260,6 +262,37 @@ func TestLaunch_DedupSeesConfigMatchedGhostTabs(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestLaunch_ProjectDirectoryWithoutHarnessDoesNotDedup(t *testing.T) {
+	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
+		`{"id":10,"is_active":true,"title":"api","windows":[` +
+		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{},` +
+		`"foreground_processes":[{"cmdline":["zsh"],"cwd":"/tmp/api"}]}` +
+		`]}]}]`)
+	runner := kitty.NewMockRunner(map[string][]byte{
+		"kitten @ ls": fixture,
+	})
+	client := kitty.NewClientWithSocket(runner, "")
+	cfg := &config.Config{
+		Defaults: config.Defaults{Sort: "alpha"},
+		Accounts: []config.Account{
+			{Name: "work", ConfigDir: "~/.config/claude-work"},
+		},
+		Sessions: []config.Session{
+			{Title: "api", Account: "work", Directory: "/tmp/api"},
+		},
+	}
+
+	if err := session.Launch(client, cfg.Sessions[0], cfg.Accounts[0], cfg); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	for _, call := range runner.Calls {
+		if call.Name == "kitten" && hasArg(call.Args, "launch") {
+			return
+		}
+	}
+	t.Fatal("ordinary shell in project directory suppressed the real harness launch")
 }
 
 // TestLaunch_ColorRetryApplied verifies that SetTabColor is called when the
