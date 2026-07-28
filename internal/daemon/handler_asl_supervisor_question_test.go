@@ -203,6 +203,83 @@ func TestASLSupervisorQuestionRejectsActiveAndPredatingStops(t *testing.T) {
 	})
 }
 
+func TestASLSupervisorQuestionRejectsUntrustedWorkerStops(t *testing.T) {
+	cases := []struct {
+		name  string
+		event ReducerEvent
+	}{
+		{
+			name: "anonymous legacy SessionEnd",
+			event: ReducerEvent{
+				Source: SourceID{Kind: SourceLegacy, Key: "win:42"},
+				Action: "stop",
+				Seq:    1,
+			},
+		},
+		{
+			name: "unidentified harness stop",
+			event: ReducerEvent{
+				Source: SourceID{Kind: SourceHarness, Key: "win:42"},
+				Action: "stop",
+				Seq:    1,
+			},
+		},
+		{
+			name: "identified pipe worker stop",
+			event: ReducerEvent{
+				Source:    SourceID{Kind: SourceHarness, Key: "claude:worker"},
+				Action:    "stop",
+				SessionID: "worker",
+				PipeMode:  true,
+				Seq:       1,
+			},
+		},
+		{
+			name: "untrusted synthetic stop",
+			event: ReducerEvent{
+				Source: SourceID{Kind: SourceProbe, Key: "other"},
+				Action: "stop",
+				Seq:    1,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, target, now := supervisorQuestionFixture(t, nil)
+			tc.event.At = now.Unix()
+			h.stateMu.Lock()
+			st := h.store[42]
+			st.Reducer.Apply(tc.event)
+			h.publishEffectiveLocked(42, st, st.Reducer.Reduce(now.Unix()))
+			h.stateMu.Unlock()
+
+			h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
+			if got := supervisorVisibleState(t, h); got.Icon != "bolt" || !got.Looping {
+				t.Fatalf("untrusted stop = %+v; want active supervisor bolt + loop", got)
+			}
+		})
+	}
+}
+
+func TestASLSupervisorQuestionAcceptsAuthoritativeStopProbe(t *testing.T) {
+	h, target, now := supervisorQuestionFixture(t, nil)
+	h.stateMu.Lock()
+	st := h.store[42]
+	st.Reducer.Apply(ReducerEvent{
+		Source: SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource},
+		Action: "stop",
+		Seq:    1,
+		At:     now.Unix(),
+	})
+	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(now.Unix()))
+	h.stateMu.Unlock()
+
+	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
+	if got := supervisorVisibleState(t, h); got.Icon != "question" || !got.Looping {
+		t.Fatalf("authoritative stop probe + projection = %+v; want question + loop", got)
+	}
+}
+
 func TestASLSupervisorQuestionSurvivesHeartbeatAndClearsOnReply(t *testing.T) {
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
@@ -340,7 +417,7 @@ func TestASLSupervisorMailboxReplyCutoffBlocksStaleProjection(t *testing.T) {
 	}
 }
 
-func TestASLSupervisorMailboxReplyPreservesRunnerWaitingQuestion(t *testing.T) {
+func TestASLSupervisorMailboxReplyLeavesRunnerWaitingLoopBare(t *testing.T) {
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
@@ -362,9 +439,8 @@ func TestASLSupervisorMailboxReplyPreservesRunnerWaitingQuestion(t *testing.T) {
 		supervisorMailboxReplyPayload(target, 7, 8),
 	)
 
-	if got := supervisorVisibleState(t, h); got.Icon != "question" || !got.Looping ||
-		got.Source.Kind != SourceASL {
-		t.Fatalf("runner waiting state after supervisor clear = %+v; want ASL question + loop", got)
+	if got := supervisorVisibleState(t, h); got.Icon != "" || !got.Looping {
+		t.Fatalf("runner waiting state after supervisor clear = %+v; want bare ASL loop", got)
 	}
 }
 

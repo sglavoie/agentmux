@@ -274,10 +274,10 @@ func actionsFixture() UITestFixture {
 }
 
 // aslQuestionFixture is the basic dashboard with one looping agent-session-loop
-// run blocked on a mailbox question (❓🔁) and a sibling run still working
-// (⚡🔁). It exists so scenarios can exercise the question-pending presentation —
-// attention grouping, the "awaiting response" gloss, and the `]q` jump — without
-// a daemon painting the state.
+// run whose supervisor has handed a mailbox question to the user (❓🔁) and a
+// sibling run still working (⚡🔁). It exists so scenarios can exercise the
+// human-actionable presentation — attention grouping, the "awaiting response"
+// gloss, and the `]q` jump — without a daemon painting the state.
 func aslQuestionFixture() UITestFixture {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
@@ -300,7 +300,7 @@ func aslQuestionFixture() UITestFixture {
 	)}
 	return UITestFixture{
 		Name:        "asl_question",
-		Description: "an ASL run awaiting a mailbox reply alongside an active looping run",
+		Description: "an ASL supervisor awaiting a human mailbox reply alongside an active looping run",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
 		Windows:     windows,

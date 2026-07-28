@@ -337,8 +337,20 @@ func (h *Handler) retractCodexPromptObservation(now time.Time, binding screenPro
 	if !st.Reducer.Retract(source, nextSeq, now.Unix()) {
 		return
 	}
+	// The screen probe installed the elicitation guard together with its fact.
+	// If Codex never emits PostToolUse, withdrawing only the reducer fact would
+	// leave ordinary activity suppressed behind a question that is no longer
+	// visible. The receipt check above proves no newer hook state landed during
+	// the read, so it is safe to withdraw the matching guard as well.
+	h.guard.Clear(windowID)
 	st.ShadowSeq = nextSeq
-	h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
+	effective := st.Reducer.Reduce(now.Unix())
+	st.LastAction = processLifecycleActionForIcon(effective.Icon)
+	meta := h.windowMetadata[windowID]
+	meta.Durable.LastAction = st.LastAction
+	h.windowMetadata[windowID] = meta
+	h.publishEffectiveLocked(windowID, st, effective)
+	h.syncRendererMetadataLocked(windowID)
 	h.markWindowDirtyLocked(windowID)
 }
 

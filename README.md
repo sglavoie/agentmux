@@ -443,30 +443,33 @@ the tab keeps rendering ⚡🔁. Lifecycle events carry the run's `run_id` and a
 persisted monotonic source sequence; the mailbox-reply marker uses the physical
 mailbox reply sequence. The daemon keys one lease per run: overlapping runs in
 one workspace hold independent facts, a run's turn/verification phases render
-⚡🔁, a run blocked on a supervisor mailbox reply renders ❓🔁, between-turns
-and paused states keep 🔁, and one run finishing never changes another run's
-state (verified live with two overlapping runs in a single window). Turn and
-verification heartbeats re-assert the lease every 30 seconds. A question wait
-has no stale threshold: it stays ❓ until the run answers, pauses, or finishes.
+⚡🔁, a worker blocked on a supervisor mailbox reply and a between-turns run
+render bare 🔁, paused states add their human-attention icon, and one run
+finishing never changes another run's state (verified live with two overlapping
+runs in a single window). Turn and verification heartbeats re-assert the lease
+every 30 seconds. A worker wait has no stale threshold: it keeps 🔁 until the
+run answers, pauses, or finishes without claiming that user input is actionable.
 ASL supervisor lease schema v2 also exposes a fixed-size, text-free projection
 of questions observed by the supervisor (`run_id`, mailbox projection sequence,
 count, latest question ID, and timestamp). Agent Mux refreshes registered live
 runs on its two-second maintenance cycle and shows ❓🔁 only when that exact
 run still has an unanswered question **and** the newest interactive supervisor
-state is a clean `Stop` no older than the question. This conjunction avoids
-alerting for worker questions the supervisor answers autonomously and covers
-either observation order (mailbox first or Stop first) without parsing terminal
-prose. A new correlated question uses the existing “User input requested”
-notification path; mute, permission-notification configuration, cooldown, and
-click-to-focus behavior remain unchanged. When `asl inbox reply` proves that
-the matching projected question was the sole unanswered question, its
-text-free `AgentSessionLoopMailboxReply` marker retracts that exact probe
-immediately and prevents a concurrent stale projection from restoring it; the
-underlying active run therefore returns both Kitty and the dashboard to ⚡🔁.
-A fresh zero count or run completion remains the compatibility fallback. The
-probe survives ordinary heartbeats and transient lease failures and persists
-across daemon restarts. V1, stale, malformed, foreign-run, and mismatched reply
-evidence cannot raise or clear the probe.
+state is a trusted identified harness `Stop` (or daemon-authoritative
+screen/transcript stop) no older than the question. Anonymous legacy and
+pipe-worker terminal events cannot hand the question to the user. This
+conjunction avoids alerting for worker questions the supervisor answers
+autonomously and covers either observation order (mailbox first or Stop first)
+without parsing terminal prose. A new correlated question uses the existing
+“User input requested” notification path; mute, permission-notification
+configuration, cooldown, and click-to-focus behavior remain unchanged. When
+`asl inbox reply` proves that the matching projected question was the sole
+unanswered question, its text-free `AgentSessionLoopMailboxReply` marker
+retracts that exact probe immediately and prevents a concurrent stale
+projection from restoring it; Kitty and the dashboard return to the underlying
+live loop state. A fresh zero count or run completion remains the compatibility
+fallback. The probe survives ordinary heartbeats and transient lease failures
+and persists across daemon restarts. V1, stale, malformed, foreign-run, and
+mismatched reply evidence cannot raise or clear the probe.
 When the final run finishes, that terminal boundary also retires an older
 interactive `bolt`/`compact` fact, so a lost Codex/Claude `Stop` or Copilot
 `agentStop` cannot leave `⚡` masking the run's `🛑`; newer activity, pipe-mode
@@ -810,19 +813,22 @@ three are told apart by event name and source key:
   on a terminal record. Native `agentStop`/`sessionEnd` remain the primary
   Copilot stop.
 
-Codex 0.133.0 and 0.134.0 expose edit approvals and `request_user_input` waits
-through TUI/server-request flows rather than normal lifecycle hooks. Agent Mux
-keeps the Codex hook installation to supported command hooks and uses a
-best-effort Kitty screen fallback to classify visible Codex prompts, including
-the 0.134.0 bottom-pane question UI, while preserving terminal, warning, and
-error states. A separate conservative stop-only fallback recognizes Codex's
-cleared idle UI after `/clear` when full Kitty scrollback no longer contains a
-transcript. The per-harness stop fallbacks described above (Codex/Claude
-`ScreenStopProbe`, Copilot `TranscriptStopProbe`) repair a turn that finished
-without a native terminal hook so the icon settles on `🛑` instead of staying
-`⚡`. Each fires only on a stuck `bolt` tab and never downgrades protected
-attention states (`key`, `question`, `error`, `warning`, `subagent`, `compact`),
-and never retires pipe-mode, subagent, or live ASL facts. The daemon runs these
+Codex exposes edit approvals and `request_user_input` waits through
+TUI/server-request flows. A native `PreToolUse(request_user_input)`, when
+available, is only early intent: Agent Mux keeps the tab active until its
+best-effort Kitty screen probe confirms that the question UI is visibly
+answerable. The probe owns ❓ and its notification, and withdraws both its fact
+and guard when the prompt disappears even if no `PostToolUse` arrives. It
+recognizes both edit approvals and the bottom-pane question UI while preserving
+terminal, warning, and error states. A separate conservative stop-only fallback
+recognizes Codex's cleared idle UI after `/clear` when full Kitty scrollback no
+longer contains a transcript. The per-harness stop fallbacks described above
+(Codex/Claude `ScreenStopProbe`, Copilot `TranscriptStopProbe`) repair a turn
+that finished without a native terminal hook so the icon settles on `🛑`
+instead of staying `⚡`. Each fires only on a stuck `bolt` tab and never
+downgrades protected attention states (`key`, `question`, `error`, `warning`,
+`subagent`, `compact`), and never retires pipe-mode, subagent, or live ASL facts.
+The daemon runs these
 probes on the same periodic probe loop as the renderer tick (every 2s).
 In split Kitty tabs, screen probes read only the tab-title owner: the active
 managed pane, or the first managed pane if none is active. Sibling panes cannot

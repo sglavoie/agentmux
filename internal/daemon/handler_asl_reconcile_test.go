@@ -409,10 +409,10 @@ func TestHookEventPausedRunShowsAttentionIcon(t *testing.T) {
 	}
 }
 
-// TestHookEventWaitingRunShowsQuestionIcon drives the mailbox wait through the
-// full hook path: ❓ appears while the run is blocked, the wait ending returns
-// the window to a bare 🔁, and the loop marker never drops in between.
-func TestHookEventWaitingRunShowsQuestionIcon(t *testing.T) {
+// TestHookEventWaitingRunKeepsBareLoop drives the worker mailbox wait through
+// the full hook path: the loop lease stays live without claiming that a user
+// can answer yet, and the wait ending remains a bare 🔁.
+func TestHookEventWaitingRunKeepsBareLoop(t *testing.T) {
 	h, windows, projectDir := reconcileTestFixture(t)
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
@@ -421,8 +421,8 @@ func TestHookEventWaitingRunShowsQuestionIcon(t *testing.T) {
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopWaitStarted", projectDir, hookevent.HookPayload{
 		RunID: "run-A", QuestionID: "q-1", QuestionPreview: "ship the shim change?",
 	})
-	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "question" {
-		t.Fatalf("waiting run = looping=%v icon=%q; want ❓ + 🔁", looping, icon)
+	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "" {
+		t.Fatalf("waiting run = looping=%v icon=%q; want bare 🔁", looping, icon)
 	}
 
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopWaitEnded", projectDir, hookevent.HookPayload{
@@ -500,25 +500,24 @@ func TestHookEventWaitStartedSanitizesQuestionPreview(t *testing.T) {
 	}
 }
 
-// TestReconcileSeedsWaitingRunAsQuestion: unlike a pause (whose prompt may have
-// already been seen), a waiting marker only survives on disk while the loop
-// process is alive and blocked, so restart recovery re-asserts ❓.
-func TestReconcileSeedsWaitingRunAsQuestion(t *testing.T) {
+// TestReconcileSeedsWaitingRunAsBareLoop: restart recovery preserves the live
+// worker lease without manufacturing a human handoff from persisted wait state.
+func TestReconcileSeedsWaitingRunAsBareLoop(t *testing.T) {
 	h, windows, projectDir := reconcileTestFixture(t)
 	stubDaemonLoopDiscover(t, []agentloop.Candidate{loopCandidate(projectDir, "run-A", agentloop.PhaseWaiting)}, nil)
 
 	h.ReconcileASLLeases(time.Now(), windows)
 
 	looping, icon := windowLoopState(t, h, 42)
-	if !looping || icon != "question" {
-		t.Fatalf("seeded waiting state = looping=%v icon=%q; want ❓ + 🔁", looping, icon)
+	if !looping || icon != "" {
+		t.Fatalf("seeded waiting state = looping=%v icon=%q; want bare 🔁", looping, icon)
 	}
 }
 
-// TestReconcileSettlesQuestionWhenWaitingRunVanishes: if the loop dies mid-wait
-// no wait-ended event ever arrives, so the ❓ must not linger forever —
-// reconciliation converges it to the finished state after two misses.
-func TestReconcileSettlesQuestionWhenWaitingRunVanishes(t *testing.T) {
+// TestReconcileSettlesWaitingLeaseWhenRunVanishes: if the loop dies mid-wait
+// no wait-ended event ever arrives, so reconciliation converges its bare lease
+// to the finished state after two misses.
+func TestReconcileSettlesWaitingLeaseWhenRunVanishes(t *testing.T) {
 	h, windows, projectDir := reconcileTestFixture(t)
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
@@ -528,20 +527,20 @@ func TestReconcileSettlesQuestionWhenWaitingRunVanishes(t *testing.T) {
 	aslLifecycleHookRequest(t, h, "AgentSessionLoopWaitStarted", projectDir, hookevent.HookPayload{
 		RunID: "run-A", QuestionID: "q-1",
 	})
-	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "question" {
-		t.Fatalf("waiting run = looping=%v icon=%q; want ❓ + 🔁", looping, icon)
+	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "" {
+		t.Fatalf("waiting run = looping=%v icon=%q; want bare 🔁", looping, icon)
 	}
 
 	stubDaemonLoopDiscover(t, nil, nil)
 	h.ReconcileASLLeases(now, windows)
-	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "question" {
-		t.Fatalf("one miss = looping=%v icon=%q; want ❓ preserved until two misses", looping, icon)
+	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "" {
+		t.Fatalf("one miss = looping=%v icon=%q; want bare 🔁 preserved until two misses", looping, icon)
 	}
 
 	h.ReconcileASLLeases(now.Add(30*time.Second), windows)
 	looping, icon := windowLoopState(t, h, 42)
 	if looping || icon != "stop" {
-		t.Fatalf("after two misses = looping=%v icon=%q; want the question settled to 🛑", looping, icon)
+		t.Fatalf("after two misses = looping=%v icon=%q; want the waiting lease settled to 🛑", looping, icon)
 	}
 }
 

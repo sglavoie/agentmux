@@ -219,15 +219,15 @@ func TestReducerUserClearAcknowledgesButKeepsLease(t *testing.T) {
 	}
 }
 
-// TestReducerWaitingRunHoldsQuestionWithLease pins the wait lifecycle: a run
-// blocked on a mailbox reply shows ❓🔁, and the wait ending returns it to a
-// bare loop marker without waiting for a turn or finish event.
-func TestReducerWaitingRunHoldsQuestionWithLease(t *testing.T) {
+// TestReducerWaitingRunHoldsBareLease pins the wait lifecycle: a worker blocked
+// on a mailbox reply keeps 🔁 without claiming the human-actionable question
+// icon, and the wait ending remains a bare loop until work resumes or finishes.
+func TestReducerWaitingRunHoldsBareLease(t *testing.T) {
 	r := NewReducer(zeroCfg)
 	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 1, At: 10})
 	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 2, At: 11})
-	if got := r.Reduce(100); got.Icon != "question" || !got.Looping {
-		t.Fatalf("waiting = %+v; want question + looping", got)
+	if got := r.Reduce(100); got.Icon != "" || !got.Looping {
+		t.Fatalf("waiting = %+v; want bare loop marker", got)
 	}
 
 	r.Apply(ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 3, At: 12})
@@ -238,7 +238,7 @@ func TestReducerWaitingRunHoldsQuestionWithLease(t *testing.T) {
 
 // TestReducerWaitingRunOrderIndependent: a wait is a normal per-source fact, so
 // a duplicate wait-started is a no-op and a wait-started that arrives after the
-// wait-ended it precedes is rejected as reordered rather than repainting ❓.
+// wait-ended it precedes is rejected as reordered rather than reopening it.
 func TestReducerWaitingRunOrderIndependent(t *testing.T) {
 	waiting := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 10}
 	ended := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseBetween, Seq: 2, At: 11}
@@ -262,10 +262,9 @@ func TestReducerWaitingRunOrderIndependent(t *testing.T) {
 	}
 }
 
-// TestReducerWaitingSharesQuestionTierWithPermission: a waiting run's ❓ and a
-// harness permission 🔑 share one precedence tier, so the tie breaks on recency
-// exactly as it does for a paused question.
-func TestReducerWaitingSharesQuestionTierWithPermission(t *testing.T) {
+// TestReducerWaitingDoesNotCompeteWithAttention: an internal mailbox wait owns
+// only 🔁, so a real permission prompt remains visible regardless of recency.
+func TestReducerWaitingDoesNotCompeteWithAttention(t *testing.T) {
 	waiting := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 100}
 	permission := ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200}
 	if got := Replay(zeroCfg, 300, waiting, permission); got.Icon != "key" {
@@ -274,13 +273,13 @@ func TestReducerWaitingSharesQuestionTierWithPermission(t *testing.T) {
 
 	newerWait := ReducerEvent{Source: aslSource("run-1"), RunID: "run-1", Phase: ASLPhaseWaiting, Seq: 1, At: 300}
 	olderPermission := ReducerEvent{Source: harnessSource(), Action: "permission", Seq: 1, At: 200}
-	if got := Replay(zeroCfg, 400, olderPermission, newerWait); got.Icon != "question" {
-		t.Fatalf("newer wait = %q; want question", got.Icon)
+	if got := Replay(zeroCfg, 400, olderPermission, newerWait); got.Icon != "key" {
+		t.Fatalf("newer internal wait = %q; want permission preserved", got.Icon)
 	}
 }
 
 // TestReducerWaitingPausedFallback: if the wait never reports an end (the run
-// pauses out of the wait instead) the pause's own attention icon supersedes ❓,
+// pauses out of the wait instead) the pause supplies its own attention icon,
 // and the terminal finish still releases the lease.
 func TestReducerWaitingPausedFallback(t *testing.T) {
 	r := NewReducer(zeroCfg)

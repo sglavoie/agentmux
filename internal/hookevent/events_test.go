@@ -325,7 +325,7 @@ func TestResolveAction_RequestUserInputToolPrompt(t *testing.T) {
 		want    string
 	}{
 		{
-			name:    "Codex request_user_input start shows question icon",
+			name:    "harness-agnostic request_user_input start shows question icon",
 			event:   "PreToolUse",
 			payload: HookPayload{ToolName: "request_user_input"},
 			want:    "elicitation",
@@ -354,6 +354,56 @@ func TestResolveAction_RequestUserInputToolPrompt(t *testing.T) {
 			got, ok := ResolveAction(tc.event, tc.payload)
 			if !ok || got != tc.want {
 				t.Fatalf("ResolveAction(%q, %+v) = (%q, %v), want (%q, true)", tc.event, tc.payload, got, ok, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveActionForHarness_CodexRequestUserInputWaitsForScreen(t *testing.T) {
+	cases := []struct {
+		name    string
+		event   string
+		harness string
+		payload HookPayload
+		want    string
+	}{
+		{
+			name:    "Codex tool start stays active before prompt renders",
+			event:   "PreToolUse",
+			harness: "codex",
+			payload: HookPayload{ToolName: "request_user_input"},
+			want:    "active",
+		},
+		{
+			name:    "Codex camel-case tool start stays active",
+			event:   "preToolUse",
+			harness: " CODEX ",
+			payload: HookPayload{ToolNameCamel: " request_user_input "},
+			want:    "active",
+		},
+		{
+			name:    "Codex completion remains active",
+			event:   "PostToolUse",
+			harness: "codex",
+			payload: HookPayload{ToolName: "request_user_input"},
+			want:    "active",
+		},
+		{
+			name:    "Claude keeps native question semantics",
+			event:   "PreToolUse",
+			harness: "claude",
+			payload: HookPayload{ToolName: "request_user_input"},
+			want:    "elicitation",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveActionForHarness(tc.event, tc.payload, tc.harness)
+			if !ok || got != tc.want {
+				t.Fatalf(
+					"ResolveActionForHarness(%q, %+v, %q) = (%q, %v), want (%q, true)",
+					tc.event, tc.payload, tc.harness, got, ok, tc.want,
+				)
 			}
 		})
 	}

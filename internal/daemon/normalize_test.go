@@ -168,6 +168,19 @@ func TestNormalizeDeterministic(t *testing.T) {
 	}
 }
 
+func TestNormalizeCodexRequestUserInputStartStaysActiveUntilScreenConfirmation(t *testing.T) {
+	n := NormalizedFromHook(
+		"PreToolUse",
+		"codex",
+		`{"session_id":"sess-1","tool_name":"request_user_input","source_sequence":"3","emitted_time":"1700000000"}`,
+		51,
+		false,
+	)
+	if n.Action != "active" || n.Source != (SourceID{Kind: SourceHarness, Key: "codex:sess-1"}) {
+		t.Fatalf("normalized Codex request_user_input start = %+v, want identified active source", n)
+	}
+}
+
 func TestNormalizedFromHookRequestStampsOnlyOrdinaryValidatedSources(t *testing.T) {
 	identity := &HarnessProcessIdentity{Harness: "claude", PID: 42, StartToken: "Thu Jul 16 10:20:30 2026"}
 	want := *identity

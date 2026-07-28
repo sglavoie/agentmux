@@ -137,6 +137,64 @@ func TestProbeCodexScreenPrompts_RequestUserInputReplacesBoltWithQuestion(t *tes
 	}
 }
 
+func TestProbeCodexScreenPrompts_RequestUserInputOnlyWhileVisibleWithoutPostToolUse(t *testing.T) {
+	h := newTestHandler()
+	base := time.Now()
+	fake := &fakeKittyClient{
+		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+			Profile: "work",
+			Harness: "codex",
+		}),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): codexWorkingTurnScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	codexSeedActiveBolt(t, h, 42, "sess-1", base.Unix())
+
+	// Native PreToolUse(request_user_input) leaves the session active while
+	// Codex is still rendering the prompt.
+	h.ProbeCodexScreenPrompts(base)
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("pre-render working screen = %+v, want bolt", eff)
+	}
+
+	fake.mu.Lock()
+	fake.getText[kitty.MatchWindowByID(42)] = codexRequestUserInputScreen
+	fake.mu.Unlock()
+	h.ProbeCodexScreenPrompts(base.Add(time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "question" {
+		t.Fatalf("visible question = %+v, want question", eff)
+	}
+	if got := h.guard.Current(42); got != "elicitation" {
+		t.Fatalf("visible question guard = %q, want elicitation", got)
+	}
+
+	// No PostToolUse arrives. Once the prompt is no longer visible, the probe
+	// must withdraw both its fact and its guard, revealing native activity.
+	fake.mu.Lock()
+	fake.getText[kitty.MatchWindowByID(42)] = codexWorkingTurnScreen
+	fake.mu.Unlock()
+	h.ProbeCodexScreenPrompts(base.Add(2 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("answered prompt without PostToolUse = %+v, want underlying bolt", eff)
+	}
+	if got := h.guard.Current(42); got != "" {
+		t.Fatalf("answered prompt guard = %q, want cleared", got)
+	}
+	h.stateMu.Lock()
+	probeFact := h.store[42].Reducer.facts[SourceID{Kind: SourceProbe, Key: screenPromptProbeSource}]
+	lastAction := h.store[42].LastAction
+	durableAction := h.windowMetadata[42].Durable.LastAction
+	h.stateMu.Unlock()
+	if probeFact != nil && probeFact.icon != "" {
+		t.Fatalf("answered prompt retained visible screen contribution: %+v", probeFact)
+	}
+	if lastAction != "active" || durableAction != "active" {
+		t.Fatalf("answered prompt actions = state %q durable %q, want active", lastAction, durableAction)
+	}
+}
+
 func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestion(t *testing.T) {
 	h := newTestHandler()
 	fake := &fakeKittyClient{

@@ -342,21 +342,20 @@ func TestSweepStale_IgnoresStopAndPermission(t *testing.T) {
 	})
 }
 
-// TestSweepStale_IgnoresWaitingASLRun verifies that a run blocked on a mailbox
-// reply keeps ❓ and 🔁 no matter how long the wait runs. A wait is quiet by
-// construction — no heartbeats arrive while the loop is blocked — so sweeping
-// it would erase the one signal that a human is being waited on.
+// TestSweepStale_IgnoresWaitingASLRun verifies that a worker blocked on a
+// mailbox reply keeps its bare 🔁 no matter how long the wait runs. A wait is
+// quiet by construction, so sweeping it would erase the live run lease.
 func TestSweepStale_IgnoresWaitingASLRun(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		h, fake, rec := newSweepTestHandler(10 * time.Minute)
-		questionTitle := palette.BuildTitle("W:api", "question", true)
-		fake.windows = fakeOSWindowsWithTab(42, questionTitle)
+		loopTitle := palette.BuildTitleParts(palette.TitleParts{Base: "W:api", Starred: true, Looping: true})
+		fake.windows = fakeOSWindowsWithTab(42, loopTitle)
 
 		now := time.Now()
 		h.stateMu.Lock()
 		st := h.ensureWindowStateLocked(42)
 		st.Activity = now.Add(-2 * time.Hour)
-		st.LastAction = "elicitation"
+		st.LastAction = ""
 		st.LastSessionTitle = "W:api"
 		st.Reducer = NewReducer(h.reducerCfg)
 		st.Reducer.Apply(ReducerEvent{
@@ -378,11 +377,11 @@ func TestSweepStale_IgnoresWaitingASLRun(t *testing.T) {
 		action := h.store[42].LastAction
 		reduced := h.store[42].Reducer.Reduce(now.Unix())
 		h.stateMu.Unlock()
-		if action != "elicitation" {
-			t.Fatalf("lastAction[42] = %q; want elicitation (untouched)", action)
+		if action != "" {
+			t.Fatalf("lastAction[42] = %q; want empty (untouched)", action)
 		}
-		if reduced.Icon != "question" || !reduced.Looping {
-			t.Fatalf("reduced = %+v; want ❓ + 🔁 preserved across the sweep", reduced)
+		if reduced.Icon != "" || !reduced.Looping {
+			t.Fatalf("reduced = %+v; want bare 🔁 preserved across the sweep", reduced)
 		}
 	})
 }

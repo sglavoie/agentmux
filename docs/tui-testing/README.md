@@ -107,7 +107,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | --- | --- | --- |
 | `basic` | two Claude work projects + a Codex personal project | realistic multi-profile dashboard baseline |
 | `actions` | one session with a very long title | stresses the actions overlay box width |
-| `asl_question` | `basic` with a `❓🔁` question-pending run and a `⚡🔁` active run | ASL mailbox-wait presentation: attention grouping, gloss, `]q` jump |
+| `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, `]q` jump |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
 
 The `basic` fixture's list is state/profile-grouped, not globally
@@ -249,8 +249,8 @@ file. The exact inventory is:
 | --- | --- | --- |
 | [`baseline-layout.json`](scenarios/baseline-layout.json) | `basic` | dashboard list renders clean with all projects visible |
 | [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions overlay fits after pressing `a` on a long-titled session |
-| [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a question-pending ASL run leads Needs Attention and keeps its `awaiting response` gloss at narrow width |
-| [`asl-question-pending-wide.json`](scenarios/asl-question-pending-wide.json) | `asl_question` | `]q` jumps from an unrelated row back to the question-pending run |
+| [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a human-actionable ASL handoff leads Needs Attention and keeps its `awaiting response` gloss at narrow width |
+| [`asl-question-pending-wide.json`](scenarios/asl-question-pending-wide.json) | `asl_question` | `]q` jumps from an unrelated row back to the human-actionable ASL handoff |
 | [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without Kitty mutations |
 | [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
 | [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |

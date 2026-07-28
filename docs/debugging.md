@@ -253,8 +253,9 @@ Claude observer receipts such as `InstructionsLoaded`, `CwdChanged`, and
 `WorktreeRemove` are recorded as intentional suppressions. `FileChanged` and
 `WorktreeCreate` are intentionally not installed because they require matcher
 or response semantics Agent Mux does not own. Codex edit approvals and
-`request_user_input` waits are not command-hook events in supported versions;
-the daemon uses conservative Kitty-screen probes instead. Copilot
+`request_user_input` waits are screen-authoritative: an early native tool-start
+receipt remains active, and the daemon's conservative Kitty-screen probe alone
+raises or retracts the visible question. Copilot
 `notification.agent_idle` describes a background agent and does not stop the
 interactive session. Unknown future events are retained as rejected evidence
 without reducer mutation.

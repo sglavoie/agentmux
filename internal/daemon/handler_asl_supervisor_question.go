@@ -250,10 +250,10 @@ func (h *Handler) correlateASLSupervisorQuestion(windowID int, now time.Time) {
 }
 
 // applyASLSupervisorQuestionLocked applies the text-free question probe only
-// when the newest interactive harness fact is a clean Stop no older than the
-// pending mailbox question. If a live ASL waiting phase already contributes the
-// same visible state, this distinct probe adds no visual change but supplies
-// per-question persistence and notification deduplication.
+// when the newest trusted interactive fact is a clean Stop no older than the
+// pending mailbox question. The worker's ASL waiting phase contributes only
+// the live loop lease; this correlated probe is the sole owner of the
+// human-actionable question icon and its notification deduplication.
 func (h *Handler) applyASLSupervisorQuestionLocked(
 	now time.Time,
 	target aslSupervisorTarget,
@@ -338,12 +338,14 @@ func (h *Handler) applyASLSupervisorQuestionLocked(
 func latestInteractiveSupervisorFact(r *Reducer, now int64) (*sourceFact, bool) {
 	var current *sourceFact
 	for _, fact := range r.facts {
-		probeIsSupervisorEvidence := fact.source.Kind == SourceProbe &&
-			fact.icon != "" &&
-			!strings.HasPrefix(fact.source.Key, aslSupervisorQuestionProbePrefix)
-		eligibleSource := fact.source.Kind == SourceHarness ||
-			fact.source.Kind == SourceLegacy ||
-			probeIsSupervisorEvidence
+		identifiedHarness := fact.source.Kind == SourceHarness &&
+			fact.sessionID != "" &&
+			harnessFromSourceKey(fact.source.Key, fact.sessionID) != ""
+		authoritativeStopProbe := fact.source.Kind == SourceProbe &&
+			fact.terminated &&
+			fact.action == "stop" &&
+			isAuthoritativeSupervisorStopProbe(fact.source.Key)
+		eligibleSource := identifiedHarness || authoritativeStopProbe
 		if !eligibleSource || fact.pipeMode || !conversationFactLive(fact, now) {
 			continue
 		}
@@ -352,6 +354,15 @@ func latestInteractiveSupervisorFact(r *Reducer, now int64) (*sourceFact, bool) 
 		}
 	}
 	return current, current != nil
+}
+
+func isAuthoritativeSupervisorStopProbe(key string) bool {
+	switch key {
+	case screenPromptProbeSource, claudeScreenStopProbeSource, copilotTranscriptStopProbeSource:
+		return true
+	default:
+		return false
+	}
 }
 
 func (h *Handler) dispatchASLSupervisorNotification(notification *aslSupervisorNotification) {

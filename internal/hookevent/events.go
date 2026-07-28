@@ -167,7 +167,7 @@ func ResolveActionForHarness(input string, payload HookPayload, harnessName stri
 	if action, ok := resolveNotificationAction(input, payload, harnessName); ok {
 		return action, true
 	}
-	if action, ok := resolveToolAction(input, payload); ok {
+	if action, ok := resolveToolAction(input, payload, harnessName); ok {
 		return action, true
 	}
 	if action, ok := resolveCompactAction(input, payload); ok {
@@ -329,12 +329,22 @@ func isCopilotHarness(name string) bool {
 	return strings.EqualFold(strings.TrimSpace(name), harness.Copilot)
 }
 
-func resolveToolAction(input string, payload HookPayload) (string, bool) {
+func isCodexHarness(name string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), harness.Codex)
+}
+
+func resolveToolAction(input string, payload HookPayload, harnessName string) (string, bool) {
 	if normalizeLifecycleValue(payload.EffectiveToolName()) != "request_user_input" {
 		return "", false
 	}
 	switch input {
 	case "PreToolUse", "preToolUse":
+		// Codex emits the tool-start hook before its interactive question is
+		// rendered. Keep the native source active until the daemon's Codex
+		// screen probe confirms that the prompt is actually answerable.
+		if isCodexHarness(harnessName) {
+			return "active", true
+		}
 		return "elicitation", true
 	case "PostToolUse", "postToolUse":
 		return "active", true

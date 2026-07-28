@@ -350,7 +350,7 @@ func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.Workspa
 		// Every non-final lifecycle event asserts the loop marker: turns and
 		// verification are active work (a suspected or retracted worker hang is
 		// still an executing turn), between-turn signals keep the lease, and
-		// a paused or question-waiting run still owns 🔁 while it awaits a human.
+		// a paused or mailbox-waiting run still owns 🔁 while it is blocked.
 		return boolPtr(true)
 	case agentSessionLoopFinished:
 		if strings.TrimSpace(target.CWD) == "" && target.WindowID <= 0 {
