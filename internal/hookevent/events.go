@@ -17,22 +17,24 @@ var eventToAction = map[string]string{
 	// Idle: session started, waiting for user input.
 	"sessionStart": "idle",
 	"SessionStart": "idle",
-	// Internal Agent Mux signals from agent_session_loop loop lifecycle changes.
-	// Everything except the final run finish is marker-only: it tells the daemon
-	// to record an ASL lifecycle event without painting a legacy icon, so the
-	// existing harness state (whatever the user is actually waiting on) stays
-	// visible underneath 🔁. The daemon's reducer derives the per-run phase
-	// (turn, verification, between, waiting, paused, finished) from the event name and
-	// owns the authoritative icon + loop lease.
+	// Internal Agent Mux signals from agent_session_loop. Lifecycle events are
+	// marker-only except for the final run finish: the daemon derives the per-run
+	// phase (turn, verification, between, waiting, paused, finished) from their
+	// names and owns the authoritative icon + loop lease. MailboxReply shares the
+	// recognized marker action for delivery compatibility but is intercepted by
+	// the supervisor-probe handler before ordinary lifecycle normalization.
 	"AgentSessionLoopStarted":               "loop_marker",
 	"AgentSessionLoopTurnStarted":           "loop_marker",
 	"AgentSessionLoopTurnHeartbeat":         "loop_marker",
+	"AgentSessionLoopTurnHangSuspected":     "loop_marker",
+	"AgentSessionLoopTurnHangCleared":       "loop_marker",
 	"AgentSessionLoopTurnFinished":          "loop_marker",
 	"AgentSessionLoopVerificationStarted":   "loop_marker",
 	"AgentSessionLoopVerificationHeartbeat": "loop_marker",
 	"AgentSessionLoopVerificationFinished":  "loop_marker",
 	"AgentSessionLoopWaitStarted":           "loop_marker",
 	"AgentSessionLoopWaitEnded":             "loop_marker",
+	"AgentSessionLoopMailboxReply":          "loop_marker",
 	"AgentSessionLoopPaused":                "loop_marker",
 	"AgentSessionLoopFinished":              "idle",
 

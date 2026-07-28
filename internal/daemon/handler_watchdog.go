@@ -252,6 +252,7 @@ func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
 		if _, ok := closed[ref.windowID]; ok {
 			delete(h.aslSupervisorTargets, ref)
 			delete(h.aslSupervisorProjections, ref)
+			delete(h.aslSupervisorReplyCutoffs, ref)
 		}
 	}
 	// Idle-sample stabilization streaks are per-window too: a closed window's

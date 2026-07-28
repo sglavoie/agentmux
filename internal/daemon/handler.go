@@ -171,9 +171,12 @@ type Handler struct {
 	// these registered targets instead of rescanning the complete ASL state
 	// root. Projections are cached separately so a Stop arriving after the
 	// mailbox observation can correlate without filesystem I/O on the hook
-	// path. Both maps are guarded by stateMu.
-	aslSupervisorTargets     map[aslLeaseRef]aslSupervisorTarget
-	aslSupervisorProjections map[aslLeaseRef]agentloop.SupervisorQuestionProjection
+	// path. Reply cutoffs keep an in-flight stale projection from reasserting a
+	// question after its exact mailbox reply. All three maps are guarded by
+	// stateMu.
+	aslSupervisorTargets      map[aslLeaseRef]aslSupervisorTarget
+	aslSupervisorProjections  map[aslLeaseRef]agentloop.SupervisorQuestionProjection
+	aslSupervisorReplyCutoffs map[aslLeaseRef]uint64
 
 	// idleSampleStreak counts, per window probe source, how many consecutive
 	// stabilized idle screen samples an adapter has observed before an
@@ -297,6 +300,7 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		aslMissStreak:                  make(map[aslLeaseRef]int),
 		aslSupervisorTargets:           make(map[aslLeaseRef]aslSupervisorTarget),
 		aslSupervisorProjections:       make(map[aslLeaseRef]agentloop.SupervisorQuestionProjection),
+		aslSupervisorReplyCutoffs:      make(map[aslLeaseRef]uint64),
 		idleSampleStreak:               make(map[idleSampleRef]int),
 		idleSampleGen:                  make(map[idleSampleRef]int64),
 		lastSeenEventAt:                make(map[string]time.Time),

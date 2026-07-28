@@ -425,21 +425,29 @@ producer stays explicitly unidentified instead of being guessed as Claude.
 
 `agent-session-loop` / `asl` uses that same hook endpoint when `amx` is on
 `PATH`. It emits `AgentSessionLoopStarted`, `AgentSessionLoopTurnStarted`,
-`AgentSessionLoopTurnHeartbeat`, `AgentSessionLoopTurnFinished`,
+`AgentSessionLoopTurnHeartbeat`, `AgentSessionLoopTurnHangSuspected`,
+`AgentSessionLoopTurnHangCleared`, `AgentSessionLoopTurnFinished`,
 `AgentSessionLoopVerificationStarted`, `AgentSessionLoopVerificationHeartbeat`,
 `AgentSessionLoopVerificationFinished`, `AgentSessionLoopWaitStarted`,
-`AgentSessionLoopWaitEnded`, `AgentSessionLoopPaused`, and
+`AgentSessionLoopWaitEnded`, `AgentSessionLoopMailboxReply`,
+`AgentSessionLoopPaused`, and
 `AgentSessionLoopFinished` with JSON that includes `source`, `reason`, `run_id`,
 `plan_dir`, `cwd`, `state_path`, and `harness`. Wait events additionally carry
-`question_id`, `question_preview`, and `wait_reason`. Every event carries the
-run's `run_id` and a persisted monotonic source sequence, so the daemon keys one
-lease per run: overlapping runs in one workspace hold independent facts, a
-run's turn/verification phases render ⚡🔁, a run blocked on a supervisor
-mailbox reply renders ❓🔁, between-turns and paused states keep 🔁, and one run
-finishing never changes another run's state (verified live with two overlapping
-runs in a single window). Turn and verification heartbeats re-assert the lease
-every 30 seconds. A question wait has no stale threshold: it stays ❓ until the
-run answers, pauses, or finishes.
+`question_id`, `question_preview`, and `wait_reason`. Hang events additionally
+carry the bounded scalars `hang_reason` (`result_received_process_alive` or
+`zero_cpu_idle`), `hang_idle_seconds`, and `harness_pid`; unknown values are
+omitted from the payload rather than sent as null. Both hang events stay in
+the turn phase — a suspicion episode is still an executing turn — so they
+re-assert the active loop lease like a heartbeat instead of releasing it, and
+the tab keeps rendering ⚡🔁. Lifecycle events carry the run's `run_id` and a
+persisted monotonic source sequence; the mailbox-reply marker uses the physical
+mailbox reply sequence. The daemon keys one lease per run: overlapping runs in
+one workspace hold independent facts, a run's turn/verification phases render
+⚡🔁, a run blocked on a supervisor mailbox reply renders ❓🔁, between-turns
+and paused states keep 🔁, and one run finishing never changes another run's
+state (verified live with two overlapping runs in a single window). Turn and
+verification heartbeats re-assert the lease every 30 seconds. A question wait
+has no stale threshold: it stays ❓ until the run answers, pauses, or finishes.
 ASL supervisor lease schema v2 also exposes a fixed-size, text-free projection
 of questions observed by the supervisor (`run_id`, mailbox projection sequence,
 count, latest question ID, and timestamp). Agent Mux refreshes registered live
@@ -450,10 +458,15 @@ alerting for worker questions the supervisor answers autonomously and covers
 either observation order (mailbox first or Stop first) without parsing terminal
 prose. A new correlated question uses the existing “User input requested”
 notification path; mute, permission-notification configuration, cooldown, and
-click-to-focus behavior remain unchanged. The probe clears on a fresh zero
-count or run completion, survives heartbeats and transient lease failures, and
-persists across daemon restarts. V1, stale, malformed, and foreign-run leases
-cannot raise or clear the probe.
+click-to-focus behavior remain unchanged. When `asl inbox reply` proves that
+the matching projected question was the sole unanswered question, its
+text-free `AgentSessionLoopMailboxReply` marker retracts that exact probe
+immediately and prevents a concurrent stale projection from restoring it; the
+underlying active run therefore returns both Kitty and the dashboard to ⚡🔁.
+A fresh zero count or run completion remains the compatibility fallback. The
+probe survives ordinary heartbeats and transient lease failures and persists
+across daemon restarts. V1, stale, malformed, foreign-run, and mismatched reply
+evidence cannot raise or clear the probe.
 When the final run finishes, that terminal boundary also retires an older
 interactive `bolt`/`compact` fact, so a lost Codex/Claude `Stop` or Copilot
 `agentStop` cannot leave `⚡` masking the run's `🛑`; newer activity, pipe-mode

@@ -28,6 +28,8 @@ func TestNormalizeASLLifecyclePhases(t *testing.T) {
 		{"AgentSessionLoopStarted", `{"run_id":"r1"}`, ASLPhaseBetween, ""},
 		{"AgentSessionLoopTurnStarted", `{"run_id":"r1"}`, ASLPhaseTurn, ""},
 		{"AgentSessionLoopTurnHeartbeat", `{"run_id":"r1"}`, ASLPhaseTurn, ""},
+		{"AgentSessionLoopTurnHangSuspected", `{"run_id":"r1","hang_reason":"zero_cpu_idle","hang_idle_seconds":"210"}`, ASLPhaseTurn, ""},
+		{"AgentSessionLoopTurnHangCleared", `{"run_id":"r1","hang_reason":"zero_cpu_idle"}`, ASLPhaseTurn, ""},
 		{"AgentSessionLoopTurnFinished", `{"run_id":"r1"}`, ASLPhaseBetween, ""},
 		{"AgentSessionLoopVerificationStarted", `{"run_id":"r1"}`, ASLPhaseVerification, ""},
 		{"AgentSessionLoopVerificationHeartbeat", `{"run_id":"r1"}`, ASLPhaseVerification, ""},
@@ -55,6 +57,41 @@ func TestNormalizeASLLifecyclePhases(t *testing.T) {
 		if n.RunID != "r1" {
 			t.Errorf("%s: run id = %q, want r1", tc.event, n.RunID)
 		}
+	}
+}
+
+// TestReducerHangEventsFoldAsTurnAndKeepLease pins the hang lifecycle
+// vocabulary end to end by event name: a suspected worker hang and its
+// retraction normalize as deliverable turn-phase facts (never unknown-event
+// drops), so the run keeps ⚡🔁 through the whole suspicion episode and only the
+// turn finish returns it to a bare loop marker.
+func TestReducerHangEventsFoldAsTurnAndKeepLease(t *testing.T) {
+	r := NewReducer(ReducerConfig{})
+	episode := []struct {
+		event   string
+		payload string
+	}{
+		{"AgentSessionLoopTurnStarted", `{"run_id":"r1","source_sequence":"1","emitted_time":"100"}`},
+		{"AgentSessionLoopTurnHangSuspected", `{"run_id":"r1","source_sequence":"2","emitted_time":"101","hang_reason":"result_received_process_alive"}`},
+		{"AgentSessionLoopTurnHangCleared", `{"run_id":"r1","source_sequence":"3","emitted_time":"102","hang_reason":"result_received_process_alive"}`},
+	}
+	for _, step := range episode {
+		n := NormalizedFromHook(step.event, "claude", step.payload, 42, false)
+		if n.Invalid || !n.Deliverable() {
+			t.Fatalf("%s: normalized = %+v; want deliverable", step.event, n)
+		}
+		if d := r.ApplyNormalized(n); d != DecisionApplied {
+			t.Fatalf("%s: decision = %v; want applied", step.event, d)
+		}
+		if got := r.Reduce(200); got.Icon != "bolt" || !got.Looping {
+			t.Fatalf("%s: reduced = %+v; want bolt + looping (lease preserved)", step.event, got)
+		}
+	}
+
+	r.ApplyNormalized(NormalizedFromHook("AgentSessionLoopTurnFinished", "claude",
+		`{"run_id":"r1","source_sequence":"4","emitted_time":"103"}`, 42, false))
+	if got := r.Reduce(200); got.Icon != "" || !got.Looping {
+		t.Fatalf("after finish = %+v; want bare loop marker", got)
 	}
 }
 

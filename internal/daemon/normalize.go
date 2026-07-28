@@ -303,7 +303,9 @@ func normalizeASLEvent(event string, payload hookevent.HookPayload, windowID int
 
 // aslPhaseForEvent maps ASL lifecycle events onto reducer phases. Started opens
 // the run's loop lease without a turn (between); turn start/heartbeat are an
-// executing turn; verification start/heartbeat are a running verification; a
+// executing turn, and so are a suspected worker hang and its retraction (the
+// turn is still live — notify-only suspicion must not drop the lease or repaint
+// the icon); verification start/heartbeat are a running verification; a
 // finished turn or verification returns the run to between-turns (the lease
 // stays live, no icon); a started wait awaits a mailbox reply and an ended wait
 // returns to between-turns; paused awaits a human; finished releases the lease
@@ -312,7 +314,8 @@ func aslPhaseForEvent(event string) string {
 	switch event {
 	case agentSessionLoopStarted:
 		return ASLPhaseBetween
-	case agentSessionLoopTurnStarted, agentSessionLoopTurnHeartbeat:
+	case agentSessionLoopTurnStarted, agentSessionLoopTurnHeartbeat,
+		agentSessionLoopTurnHangSuspected, agentSessionLoopTurnHangCleared:
 		return ASLPhaseTurn
 	case agentSessionLoopTurnFinished, agentSessionLoopVerificationFinished:
 		return ASLPhaseBetween

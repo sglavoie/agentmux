@@ -644,7 +644,8 @@ func inferReplayInput(decision *replayDecision) {
 		decision.phase = daemon.ASLPhaseBetween
 	case "agentsessionloopwaitstarted":
 		decision.phase = daemon.ASLPhaseWaiting
-	case "agentsessionloopturnstarted", "agentsessionloopturnheartbeat":
+	case "agentsessionloopturnstarted", "agentsessionloopturnheartbeat",
+		"agentsessionloopturnhangsuspected", "agentsessionloopturnhangcleared":
 		decision.phase = daemon.ASLPhaseTurn
 	case "agentsessionloopverificationstarted", "agentsessionloopverificationheartbeat":
 		decision.phase = daemon.ASLPhaseVerification

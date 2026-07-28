@@ -112,6 +112,11 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		return Response{OK: true}
 	}
 
+	if eventOrAction == agentSessionLoopMailboxReply {
+		h.handleASLSupervisorMailboxReply(payload, time.Now())
+		return Response{OK: true}
+	}
+
 	if isAgentSessionLoopEvent(eventOrAction) {
 		// A loop lifecycle event changes the active-loop set, so the routing
 		// cache built from a prior burst is no longer authoritative.

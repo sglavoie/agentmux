@@ -350,6 +350,7 @@ func TestDecodeHookPayload_ParsesIdentityFields(t *testing.T) {
 		"agent_type": "explore",
 		"run_id": "run-42",
 		"source_sequence": "12",
+		"mailbox_projection_sequence": "11",
 		"source_event_id": "evt-abc",
 		"emitted_time": "1700000000"
 	}`))
@@ -364,6 +365,9 @@ func TestDecodeHookPayload_ParsesIdentityFields(t *testing.T) {
 		"agent_type":      {payload.EffectiveAgentType(), "explore"},
 		"run_id":          {payload.EffectiveRunID(), "run-42"},
 		"source_sequence": {payload.EffectiveSourceSequence(), "12"},
+		"mailbox_projection_sequence": {
+			payload.EffectiveMailboxProjectionSequence(), "11",
+		},
 		"source_event_id": {payload.EffectiveSourceEventID(), "evt-abc"},
 		"emitted_time":    {payload.EffectiveEmittedTime(), "1700000000"},
 	}
@@ -383,6 +387,7 @@ func TestDecodeHookPayload_ParsesCamelIdentityFields(t *testing.T) {
 		"agentType": "plan",
 		"runId": "run-c",
 		"sourceSequence": "7",
+		"mailboxProjectionSequence": "6",
 		"sourceEventId": "evt-c",
 		"emittedTime": "1700000123"
 	}`))
@@ -397,8 +402,11 @@ func TestDecodeHookPayload_ParsesCamelIdentityFields(t *testing.T) {
 		"agentType":      {payload.EffectiveAgentType(), "plan"},
 		"runId":          {payload.EffectiveRunID(), "run-c"},
 		"sourceSequence": {payload.EffectiveSourceSequence(), "7"},
-		"sourceEventId":  {payload.EffectiveSourceEventID(), "evt-c"},
-		"emittedTime":    {payload.EffectiveEmittedTime(), "1700000123"},
+		"mailboxProjectionSequence": {
+			payload.EffectiveMailboxProjectionSequence(), "6",
+		},
+		"sourceEventId": {payload.EffectiveSourceEventID(), "evt-c"},
+		"emittedTime":   {payload.EffectiveEmittedTime(), "1700000123"},
 	}
 	for name, c := range checks {
 		if c.got != c.want {

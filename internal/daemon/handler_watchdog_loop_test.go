@@ -537,7 +537,16 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 	st.LastSessionTitle = "W:api"
 	h.touchWindowMetadataLocked(Request{WindowID: 42, SessionTitle: "W:api", Account: "work"})
 	h.kittySockets[42] = "unix:/tmp/kitty-1"
-	h.aslMissStreak[aslLeaseRef{windowID: 42, key: "run-1"}] = 1
+	ref := aslLeaseRef{windowID: 42, key: "run-1"}
+	h.aslMissStreak[ref] = 1
+	h.aslSupervisorTargets[ref] = aslSupervisorTarget{
+		windowID: 42,
+		candidate: agentloop.Candidate{
+			RunID:    "run-1",
+			StateDir: t.TempDir(),
+		},
+	}
+	h.aslSupervisorReplyCutoffs[ref] = 8
 	h.enqueueRenderLocked(42, st)
 	h.stateMu.Unlock()
 
@@ -547,6 +556,8 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 	_, inStore := h.store[42]
 	_, hasSocket := h.kittySockets[42]
 	streaks := len(h.aslMissStreak)
+	supervisorTargets := len(h.aslSupervisorTargets)
+	replyCutoffs := len(h.aslSupervisorReplyCutoffs)
 	meta, hasMeta := h.windowMetadata[42]
 	_, hasTombstone := h.windowTombstones[42]
 	h.stateMu.Unlock()
@@ -559,6 +570,13 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 	}
 	if streaks != 0 {
 		t.Fatalf("ASL miss streaks = %d; want 0", streaks)
+	}
+	if supervisorTargets != 0 || replyCutoffs != 0 {
+		t.Fatalf(
+			"ASL supervisor state survived prune: targets=%d cutoffs=%d",
+			supervisorTargets,
+			replyCutoffs,
+		)
 	}
 	if !h.renderQueue.empty() {
 		t.Fatalf("queued render for closed window not cancelled")

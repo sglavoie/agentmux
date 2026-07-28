@@ -593,7 +593,8 @@ func (h *Handler) handleLoopMarkerStateUpdate(req Request) Response {
 	loopingBefore, loopingSetBefore := st.Looping, st.LoopingSet
 	switch req.Event {
 	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
-		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnFinished,
+		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnHangSuspected,
+		agentSessionLoopTurnHangCleared, agentSessionLoopTurnFinished,
 		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
 		agentSessionLoopVerificationFinished, agentSessionLoopPaused:
 		st.Looping = true

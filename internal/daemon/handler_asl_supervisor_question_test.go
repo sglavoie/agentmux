@@ -1,12 +1,15 @@
 package daemon
 
 import (
+	"fmt"
+	"path/filepath"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
 const (
@@ -97,6 +100,45 @@ func supervisorVisibleState(t *testing.T, h *Handler) EffectiveState {
 		t.Fatal("missing supervisor fixture state")
 	}
 	return st.Reducer.Reduce(time.Now().Unix())
+}
+
+func supervisorMailboxReplyPayload(
+	target aslSupervisorTarget,
+	projectionSeq uint64,
+	replySeq uint64,
+) hookevent.HookPayload {
+	return hookevent.HookPayload{
+		Source:                    "agent_session_loop",
+		Reason:                    aslMailboxReplyReason,
+		RunID:                     target.candidate.RunID,
+		StatePath:                 filepath.Join(target.candidate.StateDir, "state.json"),
+		QuestionID:                supervisorQuestionID,
+		SourceSequence:            fmt.Sprintf("%d", replySeq),
+		MailboxProjectionSequence: fmt.Sprintf("%d", projectionSeq),
+		SourceEventID: fmt.Sprintf(
+			"%s:mailbox-reply:%d",
+			target.candidate.RunID,
+			replySeq,
+		),
+		EmittedTime: "1785256911",
+	}
+}
+
+func deliverSupervisorMailboxReply(
+	t *testing.T,
+	h *Handler,
+	payload hookevent.HookPayload,
+) {
+	t.Helper()
+	resp := h.Handle(Request{
+		Type:        TypeHookEvent,
+		WindowID:    42,
+		Event:       agentSessionLoopMailboxReply,
+		PayloadJSON: hookPayloadJSON(t, payload),
+	})
+	if !resp.OK {
+		t.Fatalf("mailbox reply response = %+v", resp)
+	}
 }
 
 func TestASLSupervisorQuestionProjectionBeforeStopRaisesQuestionAndNotifiesOnce(t *testing.T) {
@@ -191,6 +233,141 @@ func TestASLSupervisorQuestionSurvivesHeartbeatAndClearsOnReply(t *testing.T) {
 	}
 }
 
+func TestASLSupervisorMailboxReplyClearsMatchingProbeImmediately(t *testing.T) {
+	h, target, now := supervisorQuestionFixture(t, nil)
+	applySupervisorStop(h, now)
+	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
+	h.renderQueue = newRenderQueue()
+
+	deliverSupervisorMailboxReply(
+		t,
+		h,
+		supervisorMailboxReplyPayload(target, 7, 8),
+	)
+
+	if got := supervisorVisibleState(t, h); got.Icon != "bolt" || !got.Looping {
+		t.Fatalf("matching mailbox reply = %+v; want underlying bolt + loop", got)
+	}
+	if got := h.Handle(Request{Type: TypeStateQuery}).States[42]; got.IconState != "bolt" || !got.Looping {
+		t.Fatalf("dashboard snapshot after reply = %+v; want bolt + loop", got)
+	}
+	if h.renderQueue.empty() {
+		t.Fatal("matching mailbox reply did not queue Kitty title reconciliation")
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	ref := aslLeaseRef{windowID: 42, key: supervisorRunID}
+	if _, ok := h.aslSupervisorProjections[ref]; ok {
+		t.Fatal("matching mailbox reply retained cached projection")
+	}
+	if got := h.aslSupervisorReplyCutoffs[ref]; got != 8 {
+		t.Fatalf("reply cutoff = %d; want 8", got)
+	}
+}
+
+func TestASLSupervisorMailboxReplyRejectsMismatchedEvidence(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*hookevent.HookPayload)
+	}{
+		{"source", func(p *hookevent.HookPayload) { p.Source = "other" }},
+		{"reason", func(p *hookevent.HookPayload) { p.Reason = "other" }},
+		{"run", func(p *hookevent.HookPayload) { p.RunID = "other-run" }},
+		{"state", func(p *hookevent.HookPayload) { p.StatePath = filepath.Join(t.TempDir(), "state.json") }},
+		{"question", func(p *hookevent.HookPayload) { p.QuestionID = "00000000-0000-0000-0000-000000000099" }},
+		{"projection sequence", func(p *hookevent.HookPayload) { p.MailboxProjectionSequence = "6" }},
+		{"reply ordering", func(p *hookevent.HookPayload) { p.SourceSequence = "7" }},
+		{"event identity", func(p *hookevent.HookPayload) { p.SourceEventID = "wrong" }},
+		{"malformed sequence", func(p *hookevent.HookPayload) { p.SourceSequence = "not-a-sequence" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, target, now := supervisorQuestionFixture(t, nil)
+			applySupervisorStop(h, now)
+			h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
+			payload := supervisorMailboxReplyPayload(target, 7, 8)
+			tc.mutate(&payload)
+			deliverSupervisorMailboxReply(t, h, payload)
+			if got := supervisorVisibleState(t, h); got.Icon != "question" || !got.Looping {
+				t.Fatalf("mismatched reply = %+v; want question + loop", got)
+			}
+		})
+	}
+}
+
+func TestASLSupervisorMailboxReplyDoesNotClearMultipleQuestions(t *testing.T) {
+	h, target, now := supervisorQuestionFixture(t, nil)
+	applySupervisorStop(h, now)
+	projection := supervisorProjection(now, 7)
+	projection.UnansweredQuestions = 2
+	h.acceptASLSupervisorProjection(now, target, projection)
+
+	deliverSupervisorMailboxReply(
+		t,
+		h,
+		supervisorMailboxReplyPayload(target, 7, 8),
+	)
+
+	if got := supervisorVisibleState(t, h); got.Icon != "question" || !got.Looping {
+		t.Fatalf("reply with another question pending = %+v; want question + loop", got)
+	}
+}
+
+func TestASLSupervisorMailboxReplyCutoffBlocksStaleProjection(t *testing.T) {
+	h, target, now := supervisorQuestionFixture(t, nil)
+	applySupervisorStop(h, now)
+
+	deliverSupervisorMailboxReply(
+		t,
+		h,
+		supervisorMailboxReplyPayload(target, 7, 8),
+	)
+	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
+	if got := supervisorVisibleState(t, h); got.Icon != "bolt" || !got.Looping {
+		t.Fatalf("stale projection after reply = %+v; want bolt + loop", got)
+	}
+
+	newQuestion := supervisorProjection(now.Add(time.Second), 9)
+	newQuestion.LatestQuestionID = "00000000-0000-0000-0000-000000000022"
+	h.acceptASLSupervisorProjection(now.Add(time.Second), target, newQuestion)
+	if got := supervisorVisibleState(t, h); got.Icon != "question" || !got.Looping {
+		t.Fatalf("newer question after reply = %+v; want question + loop", got)
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	if _, ok := h.aslSupervisorReplyCutoffs[aslLeaseRef{windowID: 42, key: supervisorRunID}]; ok {
+		t.Fatal("newer projection did not retire reply cutoff")
+	}
+}
+
+func TestASLSupervisorMailboxReplyPreservesRunnerWaitingQuestion(t *testing.T) {
+	h, target, now := supervisorQuestionFixture(t, nil)
+	applySupervisorStop(h, now)
+	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
+	h.stateMu.Lock()
+	st := h.store[42]
+	st.Reducer.Apply(ReducerEvent{
+		Source: SourceID{Kind: SourceASL, Key: supervisorRunID},
+		RunID:  supervisorRunID,
+		Phase:  ASLPhaseWaiting,
+		Seq:    2,
+		At:     now.Unix(),
+	})
+	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(now.Unix()))
+	h.stateMu.Unlock()
+
+	deliverSupervisorMailboxReply(
+		t,
+		h,
+		supervisorMailboxReplyPayload(target, 7, 8),
+	)
+
+	if got := supervisorVisibleState(t, h); got.Icon != "question" || !got.Looping ||
+		got.Source.Kind != SourceASL {
+		t.Fatalf("runner waiting state after supervisor clear = %+v; want ASL question + loop", got)
+	}
+}
+
 func TestASLSupervisorQuestionUserClearIsNotReassertedBySameProjection(t *testing.T) {
 	h, target, now := supervisorQuestionFixture(t, nil)
 	projection := supervisorProjection(now, 7)
@@ -231,5 +408,8 @@ func TestASLSupervisorQuestionRunFinishRetiresProbeAndTarget(t *testing.T) {
 	}
 	if _, ok := h.aslSupervisorProjections[ref]; ok {
 		t.Fatal("finished run retained supervisor projection")
+	}
+	if _, ok := h.aslSupervisorReplyCutoffs[ref]; ok {
+		t.Fatal("finished run retained supervisor reply cutoff")
 	}
 }

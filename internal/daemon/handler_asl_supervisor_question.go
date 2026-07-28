@@ -1,18 +1,23 @@
 package daemon
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/hookevent"
 )
 
 const (
 	aslSupervisorQuestionProbePrefix = "asl_supervisor:"
 	eventASLSupervisorQuestion       = "ASLSupervisorQuestion"
+	agentSessionLoopMailboxReply     = "AgentSessionLoopMailboxReply"
+	aslMailboxReplyReason            = "mailbox_reply_appended"
 )
 
 // aslSupervisorTarget is one live ASL run whose adjacent fixed-size supervisor
@@ -116,6 +121,13 @@ func (h *Handler) acceptASLSupervisorProjection(
 		h.stateMu.Unlock()
 		return
 	}
+	if cutoff, ok := h.aslSupervisorReplyCutoffs[ref]; ok {
+		if projection.ProjectionSeq <= cutoff {
+			h.stateMu.Unlock()
+			return
+		}
+		delete(h.aslSupervisorReplyCutoffs, ref)
+	}
 
 	if projection.UnansweredQuestions == 0 {
 		delete(h.aslSupervisorProjections, ref)
@@ -134,6 +146,82 @@ func (h *Handler) acceptASLSupervisorProjection(
 	notification := h.applyASLSupervisorQuestionLocked(now, target, projection)
 	h.stateMu.Unlock()
 	h.dispatchASLSupervisorNotification(notification)
+}
+
+// handleASLSupervisorMailboxReply consumes ASL's authoritative, text-free
+// fast-clear marker. It only retracts the exact single-question projection the
+// producer answered; runner lifecycle facts remain untouched.
+func (h *Handler) handleASLSupervisorMailboxReply(
+	payload hookevent.HookPayload,
+	now time.Time,
+) {
+	runID := strings.TrimSpace(payload.EffectiveRunID())
+	questionID := strings.TrimSpace(payload.QuestionID)
+	if strings.TrimSpace(payload.Source) != "agent_session_loop" ||
+		strings.TrimSpace(payload.Reason) != aslMailboxReplyReason ||
+		runID == "" ||
+		!validASLMailboxQuestionID(questionID) {
+		return
+	}
+	replySeq, _, err := parseSourceSeqAt(payload)
+	if err != nil || replySeq == 0 {
+		return
+	}
+	projectionRaw := strings.TrimSpace(
+		payload.EffectiveMailboxProjectionSequence(),
+	)
+	projectionSeq, err := strconv.ParseUint(projectionRaw, 10, 64)
+	if err != nil || projectionSeq == 0 || replySeq <= projectionSeq {
+		return
+	}
+	if strings.TrimSpace(payload.EffectiveSourceEventID()) !=
+		fmt.Sprintf("%s:mailbox-reply:%d", runID, replySeq) {
+		return
+	}
+	canonicalStatePath, err := agentloop.CanonicalizePath(payload.StatePath)
+	if err != nil || filepath.Base(canonicalStatePath) != "state.json" {
+		return
+	}
+	stateDir := filepath.Dir(canonicalStatePath)
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	for ref, target := range h.aslSupervisorTargets {
+		if ref.key != runID ||
+			target.candidate.RunID != runID ||
+			target.candidate.StateDir != stateDir {
+			continue
+		}
+		if replySeq > h.aslSupervisorReplyCutoffs[ref] {
+			h.aslSupervisorReplyCutoffs[ref] = replySeq
+		}
+		projection, ok := h.aslSupervisorProjections[ref]
+		if !ok ||
+			projection.ProjectionSeq != projectionSeq ||
+			projection.UnansweredQuestions != 1 ||
+			projection.LatestQuestionID != questionID {
+			continue
+		}
+		h.clearASLSupervisorQuestionLocked(
+			ref.windowID,
+			runID,
+			replySeq,
+			now,
+			fmt.Sprintf(
+				"matching ASL mailbox reply resolved supervisor question %s",
+				questionID,
+			),
+		)
+	}
+}
+
+func validASLMailboxQuestionID(raw string) bool {
+	compact := strings.ReplaceAll(raw, "-", "")
+	if len(compact) != 32 {
+		return false
+	}
+	_, err := hex.DecodeString(compact)
+	return err == nil
 }
 
 // correlateASLSupervisorQuestion re-evaluates cached projections after a clean
@@ -337,6 +425,7 @@ func (h *Handler) finishASLSupervisorQuestion(windowID int, runID string, now ti
 	h.stateMu.Lock()
 	ref := aslLeaseRef{windowID: windowID, key: runID}
 	delete(h.aslSupervisorTargets, ref)
+	delete(h.aslSupervisorReplyCutoffs, ref)
 	seq := uint64(0)
 	if st, ok := h.windowStateLocked(windowID); ok && st.Reducer != nil {
 		if fact := st.Reducer.facts[aslSupervisorQuestionSource(runID)]; fact != nil {

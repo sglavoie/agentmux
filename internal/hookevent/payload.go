@@ -66,22 +66,24 @@ type HookPayload struct {
 	// are wire-encoded as strings (a numeric spelling that fails JSON decoding is
 	// caught upstream and quarantined rather than silently zeroed). Prompt bodies
 	// are deliberately absent from the identity set: they never key a source.
-	SessionID           string `json:"session_id"`
-	SessionIDCamel      string `json:"sessionId"`
-	TurnID              string `json:"turn_id"`
-	TurnIDCamel         string `json:"turnId"`
-	ToolUseID           string `json:"tool_use_id"`
-	ToolUseIDCamel      string `json:"toolUseId"`
-	AgentID             string `json:"agent_id"`
-	AgentIDCamel        string `json:"agentId"`
-	AgentType           string `json:"agent_type"`
-	AgentTypeCamel      string `json:"agentType"`
-	SourceSequence      string `json:"source_sequence"`
-	SourceSequenceCamel string `json:"sourceSequence"`
-	SourceEventID       string `json:"source_event_id"`
-	SourceEventIDCamel  string `json:"sourceEventId"`
-	EmittedTime         string `json:"emitted_time"`
-	EmittedTimeCamel    string `json:"emittedTime"`
+	SessionID                      string `json:"session_id"`
+	SessionIDCamel                 string `json:"sessionId"`
+	TurnID                         string `json:"turn_id"`
+	TurnIDCamel                    string `json:"turnId"`
+	ToolUseID                      string `json:"tool_use_id"`
+	ToolUseIDCamel                 string `json:"toolUseId"`
+	AgentID                        string `json:"agent_id"`
+	AgentIDCamel                   string `json:"agentId"`
+	AgentType                      string `json:"agent_type"`
+	AgentTypeCamel                 string `json:"agentType"`
+	SourceSequence                 string `json:"source_sequence"`
+	SourceSequenceCamel            string `json:"sourceSequence"`
+	MailboxProjectionSequence      string `json:"mailbox_projection_sequence"`
+	MailboxProjectionSequenceCamel string `json:"mailboxProjectionSequence"`
+	SourceEventID                  string `json:"source_event_id"`
+	SourceEventIDCamel             string `json:"sourceEventId"`
+	EmittedTime                    string `json:"emitted_time"`
+	EmittedTimeCamel               string `json:"emittedTime"`
 }
 
 // ReadHookPayload decodes hook JSON from stdin when stdin is piped. Interactive
@@ -273,6 +275,13 @@ func (p HookPayload) EffectiveRunID() string {
 
 func (p HookPayload) EffectiveSourceSequence() string {
 	return firstNonBlank(p.SourceSequence, p.SourceSequenceCamel)
+}
+
+func (p HookPayload) EffectiveMailboxProjectionSequence() string {
+	return firstNonBlank(
+		p.MailboxProjectionSequence,
+		p.MailboxProjectionSequenceCamel,
+	)
 }
 
 func (p HookPayload) EffectiveSourceEventID() string {

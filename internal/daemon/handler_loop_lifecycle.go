@@ -18,6 +18,8 @@ const (
 	agentSessionLoopStarted               = "AgentSessionLoopStarted"
 	agentSessionLoopTurnStarted           = "AgentSessionLoopTurnStarted"
 	agentSessionLoopTurnHeartbeat         = "AgentSessionLoopTurnHeartbeat"
+	agentSessionLoopTurnHangSuspected     = "AgentSessionLoopTurnHangSuspected"
+	agentSessionLoopTurnHangCleared       = "AgentSessionLoopTurnHangCleared"
 	agentSessionLoopTurnFinished          = "AgentSessionLoopTurnFinished"
 	agentSessionLoopVerificationStarted   = "AgentSessionLoopVerificationStarted"
 	agentSessionLoopVerificationHeartbeat = "AgentSessionLoopVerificationHeartbeat"
@@ -325,7 +327,8 @@ func normalizeKnownLoopHarness(raw string) string {
 func isAgentSessionLoopEvent(eventOrAction string) bool {
 	switch eventOrAction {
 	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
-		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnFinished,
+		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnHangSuspected,
+		agentSessionLoopTurnHangCleared, agentSessionLoopTurnFinished,
 		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
 		agentSessionLoopVerificationFinished, agentSessionLoopWaitStarted,
 		agentSessionLoopWaitEnded, agentSessionLoopPaused,
@@ -339,12 +342,14 @@ func isAgentSessionLoopEvent(eventOrAction string) bool {
 func loopMarkerForLifecycleTarget(eventOrAction string, target agentloop.WorkspaceTarget, openTargets []agentloop.WorkspaceTarget) *bool {
 	switch eventOrAction {
 	case agentSessionLoopStarted, agentSessionLoopTurnStarted,
-		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnFinished,
+		agentSessionLoopTurnHeartbeat, agentSessionLoopTurnHangSuspected,
+		agentSessionLoopTurnHangCleared, agentSessionLoopTurnFinished,
 		agentSessionLoopVerificationStarted, agentSessionLoopVerificationHeartbeat,
 		agentSessionLoopVerificationFinished, agentSessionLoopWaitStarted,
 		agentSessionLoopWaitEnded, agentSessionLoopPaused:
 		// Every non-final lifecycle event asserts the loop marker: turns and
-		// verification are active work, between-turn signals keep the lease, and
+		// verification are active work (a suspected or retracted worker hang is
+		// still an executing turn), between-turn signals keep the lease, and
 		// a paused or question-waiting run still owns 🔁 while it awaits a human.
 		return boolPtr(true)
 	case agentSessionLoopFinished:
