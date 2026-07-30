@@ -71,9 +71,10 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(now time.Time, snapshot sc
 				TargetWindowID:      win.ID,
 				SourceReceipt:       snapshot.receipt(win.ID),
 				TargetReceipt:       snapshot.receipt(win.ID),
-				SnapshotGen:         snapshot.gen,
 				legacyDirectManaged: true,
 			}
+			binding.SnapshotTabID, binding.SnapshotTabEpoch, _ =
+				snapshot.tabEpochForWindow(win.ID)
 			binding.Producer.Harness = harness.Codex
 			h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), win.UserVars)
 		}
@@ -588,20 +589,20 @@ func (h *Handler) probeCodexIdleWindow(
 		return
 	}
 	h.applyAuthoritativeIdle(AuthoritativeIdle{
-		WindowID:            targetWindowID,
-		Source:              source,
-		Harness:             harness.Codex,
-		CapturedSeq:         binding.TargetReceipt,
-		CapturedSnapshotGen: binding.SnapshotGen,
-		ProbeBinding:        binding,
-		At:                  now.Unix(),
-		RequiredSamples:     1,
-		SessionTitle:        titleParts.Base,
-		Account:             userVars.EffectiveProfile(),
-		PipeMode:            false,
-		Muted:               titleParts.Muted || userVars.Mute != "",
-		SourceEventID:       fmt.Sprintf("codex-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
-		DiagnosticEvent:     screenStopProbeEvent,
+		WindowID:         targetWindowID,
+		Source:           source,
+		Harness:          harness.Codex,
+		CapturedSeq:      binding.TargetReceipt,
+		CapturedTabEpoch: binding.SnapshotTabEpoch,
+		ProbeBinding:     binding,
+		At:               now.Unix(),
+		RequiredSamples:  1,
+		SessionTitle:     titleParts.Base,
+		Account:          userVars.EffectiveProfile(),
+		PipeMode:         false,
+		Muted:            titleParts.Muted || userVars.Mute != "",
+		SourceEventID:    fmt.Sprintf("codex-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
+		DiagnosticEvent:  screenStopProbeEvent,
 	})
 }
 

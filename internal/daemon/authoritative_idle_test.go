@@ -193,7 +193,7 @@ func TestScreenProbesDiscardSnapshotPredatingReducerEvent(t *testing.T) {
 }
 
 // TestAuthoritativeIdleAdapters_DiscardStaleMuteSnapshot proves the independent
-// Kitty snapshot-generation gate for every authoritative-idle adapter. Each
+// Kitty tab-epoch gate for every authoritative-idle adapter. Each
 // probe pauses in external I/O, a newer muted snapshot is published without a
 // reducer event, and the old observation then resumes. The stale observation
 // must not overwrite the mute cache, settle the reducer, or dispatch a stop

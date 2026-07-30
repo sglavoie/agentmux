@@ -99,6 +99,23 @@ Add notes
 			wantOK:     true,
 		},
 		{
+			name: "request user input numbered plan questions",
+			screen: `
+Question 1/3 (3 unanswered)
+Should the plan cover only the nine formal FR findings, or also remediate the four items listed as residual risks?
+
+› 1. Nine findings (Recommended)  Fix FR-1 through FR-9.
+  2. Include residuals            Also address the residual risks.
+  3. None of the above
+
+tab to add notes | enter to submit answer | ←/→ to navigate questions | esc to interrupt
+`,
+			wantKind:   CodexPromptRequestUserInput,
+			wantAction: "elicitation",
+			wantIcon:   "question",
+			wantOK:     true,
+		},
+		{
 			name: "unanswered confirmation",
 			screen: `
 Unanswered confirmation

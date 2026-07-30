@@ -91,9 +91,6 @@ func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot screenP
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	if !h.screenProbeGenerationCurrentLocked(snapshot.gen) {
-		return nil
-	}
 	var recovery []screenProbeBinding
 	for i := range snapshot.windows {
 		for j := range snapshot.windows[i].Tabs {
@@ -112,19 +109,12 @@ func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot screenP
 				if !ok {
 					continue
 				}
-				if _, _, _, found := kitty.FindWindowLocationByID(snapshot.windows, sourceWindowID); !found {
+				binding, found := newScreenProbeBinding(snapshot, identity, sourceWindowID, target.ID)
+				if !found {
 					continue
 				}
-				binding := screenProbeBinding{
-					Producer:       identity,
-					SourceWindowID: sourceWindowID,
-					TargetWindowID: target.ID,
-					SourceReceipt:  snapshot.receipt(sourceWindowID),
-					TargetReceipt:  snapshot.receipt(target.ID),
-					SnapshotGen:    snapshot.gen,
-					recoverySource: source,
-					recoveryAt:     now.Unix(),
-				}
+				binding.recoverySource = source
+				binding.recoveryAt = now.Unix()
 				if h.screenProbeBindingCurrentLocked(binding) {
 					recovery = append(recovery, binding)
 				}
@@ -373,25 +363,25 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	}
 
 	applied := h.applyAuthoritativeIdle(AuthoritativeIdle{
-		WindowID:            windowID,
-		Source:              source,
-		Harness:             harness.Copilot,
-		CapturedSeq:         binding.TargetReceipt,
-		CapturedSnapshotGen: binding.SnapshotGen,
-		ProbeBinding:        binding,
-		At:                  now.Unix(),
-		RequiredSamples:     requiredSamples,
-		Generation:          generation,
-		ConfirmStable:       confirmStable,
-		ConfirmNotify:       confirmNotify,
-		SessionTitle:        sessionTitle,
-		Account:             account,
-		PipeMode:            false,
-		Muted:               muted,
-		SessionID:           sessionID,
-		SourceEventID:       probeSourceEventID,
-		TraceID:             probeTraceID,
-		DiagnosticEvent:     copilotTranscriptStopProbeEvent,
+		WindowID:         windowID,
+		Source:           source,
+		Harness:          harness.Copilot,
+		CapturedSeq:      binding.TargetReceipt,
+		CapturedTabEpoch: binding.SnapshotTabEpoch,
+		ProbeBinding:     binding,
+		At:               now.Unix(),
+		RequiredSamples:  requiredSamples,
+		Generation:       generation,
+		ConfirmStable:    confirmStable,
+		ConfirmNotify:    confirmNotify,
+		SessionTitle:     sessionTitle,
+		Account:          account,
+		PipeMode:         false,
+		Muted:            muted,
+		SessionID:        sessionID,
+		SourceEventID:    probeSourceEventID,
+		TraceID:          probeTraceID,
+		DiagnosticEvent:  copilotTranscriptStopProbeEvent,
 	})
 	outcome, reason := "pending", "stabilizing_or_stale"
 	if applied {

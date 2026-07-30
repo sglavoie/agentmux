@@ -37,20 +37,20 @@ import (
 // labels the adapter that produced the evidence; CapturedSeq is the window's
 // reducer receipt sequence (WindowState.ShadowSeq) sampled before the screen
 // read, used to discard the probe if any reducer event has since landed;
-// CapturedSnapshotGen binds cached mute/routing evidence to the Kitty snapshot
+// CapturedTabEpoch binds cached mute/routing evidence to the Kitty tab snapshot
 // that supplied it; At is the evidence timestamp; and RequiredSamples is how
 // many consecutive stabilized idle observations must agree before the stop is
 // applied (values below 1 are treated as 1). The remaining fields carry the
 // notification context used only when the reduced state actually transitions
 // to stop.
 type AuthoritativeIdle struct {
-	WindowID            int
-	Source              SourceID
-	Harness             string
-	CapturedSeq         uint64
-	CapturedSnapshotGen uint64
+	WindowID         int
+	Source           SourceID
+	Harness          string
+	CapturedSeq      uint64
+	CapturedTabEpoch uint64
 	// ProbeBinding, when present, strengthens the ordinary target receipt and
-	// snapshot-generation checks with the exact producer session, source pane,
+	// tab-epoch checks with the exact producer session, source pane,
 	// and source receipt captured by a route-aware adapter. Legacy/direct
 	// adapters may leave it zero-valued and retain the original checks.
 	ProbeBinding    screenProbeBinding
@@ -265,7 +265,7 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 	// mute assignment and reducer mutation below: a mute-only snapshot change
 	// cannot be overwritten by an older observation whose reducer receipt still
 	// happens to match.
-	fresh := st.ShadowSeq == obs.CapturedSeq && h.screenProbeGenerationCurrentLocked(obs.CapturedSnapshotGen)
+	fresh := st.ShadowSeq == obs.CapturedSeq && obs.CapturedTabEpoch == 0
 	if obs.ProbeBinding.valid() {
 		fresh = obs.ProbeBinding.TargetWindowID == obs.WindowID &&
 			obs.ProbeBinding.TargetReceipt == obs.CapturedSeq &&

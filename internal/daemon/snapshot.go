@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"reflect"
 	"sync"
 	"time"
 
@@ -35,6 +36,12 @@ type kittySnapshot struct {
 	// gen increments on every publish so a consumer can detect that the world
 	// changed between two reads without diffing the whole tree.
 	gen uint64
+	// probeTabs carries a separate freshness epoch for each Kitty tab. Repeated
+	// maintenance/render publications preserve an unchanged tab's epoch, so
+	// activity in one tab cannot starve screen probes in another. A tab-local
+	// focus, topology, mute, title, ownership, or foreground-command change
+	// advances only that tab's epoch.
+	probeTabs map[int]screenProbeTabState
 	// at is the wall-clock time the snapshot was captured, used only for
 	// diagnostics/staleness reporting.
 	at time.Time
@@ -50,8 +57,36 @@ type kittySnapshot struct {
 // writes happen once per render interval, so an RWMutex keeps concurrent hook
 // routing off the writer's back.
 type snapshotStore struct {
-	mu   sync.RWMutex
-	snap kittySnapshot
+	mu             sync.RWMutex
+	snap           kittySnapshot
+	nextProbeEpoch uint64
+}
+
+// screenProbeTabState is the immutable, probe-relevant projection of one
+// Kitty tab plus its monotonic freshness epoch.
+type screenProbeTabState struct {
+	epoch     uint64
+	signature screenProbeTabSignature
+}
+
+type screenProbeTabSignature struct {
+	osWindowID       int
+	osWindowActive   bool
+	osWindowFocused  bool
+	osWindowLastUsed bool
+	tabActive        bool
+	title            string
+	windows          []screenProbeWindowSignature
+}
+
+type screenProbeWindowSignature struct {
+	id                    int
+	active                bool
+	effectiveProfile      string
+	effectiveHarness      string
+	mute                  string
+	cmdline               []string
+	foregroundProcessArgs [][]string
 }
 
 // publish replaces the cached snapshot with windows captured at now. The slice
@@ -62,22 +97,78 @@ func (s *snapshotStore) publish(windows []kitty.OSWindow, now time.Time) {
 
 func (s *snapshotStore) publishWithReceipts(windows []kitty.OSWindow, reducerReceipts map[int]uint64, now time.Time) {
 	s.mu.Lock()
+	probeTabs := make(map[int]screenProbeTabState)
+	for i := range windows {
+		osWindow := &windows[i]
+		for j := range osWindow.Tabs {
+			tab := &osWindow.Tabs[j]
+			state := screenProbeTabState{
+				signature: screenProbeSignature(osWindow, tab),
+			}
+			if previous, ok := s.snap.probeTabs[tab.ID]; ok &&
+				reflect.DeepEqual(previous.signature, state.signature) {
+				state.epoch = previous.epoch
+			} else {
+				s.nextProbeEpoch++
+				state.epoch = s.nextProbeEpoch
+			}
+			probeTabs[tab.ID] = state
+		}
+	}
 	s.snap.windows = windows
 	s.snap.reducerReceipts = reducerReceipts
 	s.snap.gen++
+	s.snap.probeTabs = probeTabs
 	s.snap.at = now
 	s.snap.ready = true
 	s.mu.Unlock()
+}
+
+func screenProbeSignature(osWindow *kitty.OSWindow, tab *kitty.Tab) screenProbeTabSignature {
+	signature := screenProbeTabSignature{
+		osWindowID:       osWindow.ID,
+		osWindowActive:   osWindow.IsActive,
+		osWindowFocused:  osWindow.IsFocused,
+		osWindowLastUsed: osWindow.LastFocused,
+		tabActive:        tab.IsActive,
+		title:            tab.Title,
+		windows:          make([]screenProbeWindowSignature, 0, len(tab.Windows)),
+	}
+	for i := range tab.Windows {
+		win := &tab.Windows[i]
+		windowSignature := screenProbeWindowSignature{
+			id:               win.ID,
+			active:           win.IsActive,
+			effectiveProfile: win.UserVars.EffectiveProfile(),
+			effectiveHarness: win.UserVars.EffectiveHarness(),
+			mute:             win.UserVars.Mute,
+			cmdline:          win.Cmdline,
+		}
+		for j := range win.ForegroundProcesses {
+			windowSignature.foregroundProcessArgs = append(
+				windowSignature.foregroundProcessArgs,
+				win.ForegroundProcesses[j].Cmdline,
+			)
+		}
+		signature.windows = append(signature.windows, windowSignature)
+	}
+	return signature
 }
 
 // loadForScreenProbes returns the immutable window tree together with the
 // reducer receipts captured before the ListWindows call that produced it and
 // the publication generation that owns both. Both the slice and map are
 // read-only after publication.
-func (s *snapshotStore) loadForScreenProbes() (windows []kitty.OSWindow, reducerReceipts map[int]uint64, gen uint64, ready bool) {
+func (s *snapshotStore) loadForScreenProbes() (
+	windows []kitty.OSWindow,
+	reducerReceipts map[int]uint64,
+	gen uint64,
+	probeTabs map[int]screenProbeTabState,
+	ready bool,
+) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.snap.windows, s.snap.reducerReceipts, s.snap.gen, s.snap.ready
+	return s.snap.windows, s.snap.reducerReceipts, s.snap.gen, s.snap.probeTabs, s.snap.ready
 }
 
 // screenProbeSnapshot is the causally bound evidence consumed by every
@@ -87,9 +178,11 @@ func (s *snapshotStore) loadForScreenProbes() (windows []kitty.OSWindow, reducer
 type screenProbeSnapshot struct {
 	windows         []kitty.OSWindow
 	reducerReceipts map[int]uint64
+	probeTabs       map[int]screenProbeTabState
 	// gen binds every cached observation to the Kitty snapshot that supplied
-	// its routing, title mute, and cc_mute evidence. A zero generation denotes
-	// a direct caller-supplied snapshot rather than the shared cache.
+	// it. Probe bindings use the narrower per-tab epochs above; gen remains the
+	// publication counter exposed by the general snapshot cache. A zero
+	// generation denotes a direct caller-supplied snapshot.
 	gen uint64
 }
 
@@ -97,23 +190,40 @@ func (s screenProbeSnapshot) receipt(windowID int) uint64 {
 	return s.reducerReceipts[windowID]
 }
 
+func (s screenProbeSnapshot) tabEpochForWindow(windowID int) (tabID int, epoch uint64, ok bool) {
+	_, tab, _, found := kitty.FindWindowLocationByID(s.windows, windowID)
+	if !found {
+		return 0, 0, false
+	}
+	if s.gen == 0 {
+		return tab.ID, 0, true
+	}
+	state, found := s.probeTabs[tab.ID]
+	if !found || state.epoch == 0 {
+		return 0, 0, false
+	}
+	return tab.ID, state.epoch, true
+}
+
 // screenProbeBinding is the immutable routing and freshness evidence shared by
 // the periodic screen/transcript adapters. Producer identifies the harness
 // session whose external evidence is being read; SourceWindowID is that
 // producer pane, while TargetWindowID owns the reducer state that observations
 // mutate. Direct managed sessions use the same source and target. Both receipts
-// are captured before the Kitty snapshot that supplied the route, and
-// SnapshotGen invalidates the complete binding when focus or window topology
-// changes. Most bindings require a live producer route; terminalProducer and
-// recoverySource narrowly authorize Codex clear and Copilot self-recovery after
-// the ordinary live route has closed.
+// are captured before the Kitty snapshot that supplied the route. SnapshotTabID
+// and SnapshotTabEpoch invalidate the complete binding when that tab's focus,
+// topology, mute, ownership, or foreground command changes without allowing
+// unrelated tab publications to starve it. Most bindings require a live
+// producer route; terminalProducer and recoverySource narrowly authorize Codex
+// clear and Copilot self-recovery after the ordinary live route has closed.
 type screenProbeBinding struct {
 	Producer            conversation.Identity
 	SourceWindowID      int
 	TargetWindowID      int
 	SourceReceipt       uint64
 	TargetReceipt       uint64
-	SnapshotGen         uint64
+	SnapshotTabID       int
+	SnapshotTabEpoch    uint64
 	legacyDirectManaged bool
 	terminalProducer    bool
 	terminalAt          int64
@@ -126,10 +236,38 @@ func (b screenProbeBinding) valid() bool {
 		(!b.Producer.Valid() && (!b.legacyDirectManaged || harness.NormalizeKnown(b.Producer.Harness) == "")) {
 		return false
 	}
+	if b.SnapshotTabEpoch > 0 && b.SnapshotTabID <= 0 {
+		return false
+	}
 	if b.terminalProducer && b.recoverySource.Kind != "" {
 		return false
 	}
 	return b.recoverySource.Kind == "" || b.recoverySource.Kind == SourceProbe
+}
+
+func newScreenProbeBinding(
+	snapshot screenProbeSnapshot,
+	producer conversation.Identity,
+	sourceWindowID int,
+	targetWindowID int,
+) (screenProbeBinding, bool) {
+	sourceTabID, sourceEpoch, ok := snapshot.tabEpochForWindow(sourceWindowID)
+	if !ok {
+		return screenProbeBinding{}, false
+	}
+	targetTabID, targetEpoch, ok := snapshot.tabEpochForWindow(targetWindowID)
+	if !ok || sourceTabID != targetTabID || sourceEpoch != targetEpoch {
+		return screenProbeBinding{}, false
+	}
+	return screenProbeBinding{
+		Producer:         producer,
+		SourceWindowID:   sourceWindowID,
+		TargetWindowID:   targetWindowID,
+		SourceReceipt:    snapshot.receipt(sourceWindowID),
+		TargetReceipt:    snapshot.receipt(targetWindowID),
+		SnapshotTabID:    targetTabID,
+		SnapshotTabEpoch: targetEpoch,
+	}, true
 }
 
 // screenProbeBindings derives producer/source/target routes from the reducers
@@ -146,9 +284,6 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	if !h.screenProbeGenerationCurrentLocked(snapshot.gen) {
-		return nil
-	}
 
 	var bindings []screenProbeBinding
 	for i := range snapshot.windows {
@@ -177,16 +312,9 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 						continue
 					}
 				}
-				if _, _, _, found := kitty.FindWindowLocationByID(snapshot.windows, sourceWindowID); !found {
+				binding, found := newScreenProbeBinding(snapshot, identity, sourceWindowID, target.ID)
+				if !found {
 					continue
-				}
-				binding := screenProbeBinding{
-					Producer:       identity,
-					SourceWindowID: sourceWindowID,
-					TargetWindowID: target.ID,
-					SourceReceipt:  snapshot.receipt(sourceWindowID),
-					TargetReceipt:  snapshot.receipt(target.ID),
-					SnapshotGen:    snapshot.gen,
 				}
 				if h.screenProbeBindingCurrentLocked(binding) {
 					bindings = append(bindings, binding)
@@ -204,15 +332,16 @@ func (h *Handler) screenProbeBindings(snapshot screenProbeSnapshot, producerHarn
 					harness.NormalizeKnown(st.LastHarness) != producerHarness {
 					continue
 				}
-				binding := screenProbeBinding{
-					Producer:            conversation.Identity{Harness: producerHarness},
-					SourceWindowID:      owner.ID,
-					TargetWindowID:      owner.ID,
-					SourceReceipt:       snapshot.receipt(owner.ID),
-					TargetReceipt:       snapshot.receipt(owner.ID),
-					SnapshotGen:         snapshot.gen,
-					legacyDirectManaged: true,
+				binding, found := newScreenProbeBinding(
+					snapshot,
+					conversation.Identity{Harness: producerHarness},
+					owner.ID,
+					owner.ID,
+				)
+				if !found {
+					continue
 				}
+				binding.legacyDirectManaged = true
 				if h.screenProbeBindingCurrentLocked(binding) {
 					bindings = append(bindings, binding)
 				}
@@ -254,9 +383,6 @@ func (h *Handler) screenProbeTerminalBindings(snapshot screenProbeSnapshot, prod
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	if !h.screenProbeGenerationCurrentLocked(snapshot.gen) {
-		return nil
-	}
 
 	var bindings []screenProbeBinding
 	for i := range snapshot.windows {
@@ -275,19 +401,12 @@ func (h *Handler) screenProbeTerminalBindings(snapshot screenProbeSnapshot, prod
 				if !ok || sourceWindowID == target.ID {
 					continue
 				}
-				if _, _, _, found := kitty.FindWindowLocationByID(snapshot.windows, sourceWindowID); !found {
+				binding, found := newScreenProbeBinding(snapshot, identity, sourceWindowID, target.ID)
+				if !found {
 					continue
 				}
-				binding := screenProbeBinding{
-					Producer:         identity,
-					SourceWindowID:   sourceWindowID,
-					TargetWindowID:   target.ID,
-					SourceReceipt:    snapshot.receipt(sourceWindowID),
-					TargetReceipt:    snapshot.receipt(target.ID),
-					SnapshotGen:      snapshot.gen,
-					terminalProducer: true,
-					terminalAt:       now,
-				}
+				binding.terminalProducer = true
+				binding.terminalAt = now
 				if h.screenProbeBindingCurrentLocked(binding) {
 					bindings = append(bindings, binding)
 				}
@@ -315,7 +434,7 @@ func (h *Handler) screenProbeTerminalBindings(snapshot screenProbeSnapshot, prod
 // screenProbeBindingCurrentLocked revalidates every causal component of a
 // binding. Callers hold stateMu and keep it held through any ensuing mutation.
 func (h *Handler) screenProbeBindingCurrentLocked(binding screenProbeBinding) bool {
-	if !binding.valid() || !h.screenProbeGenerationCurrentLocked(binding.SnapshotGen) ||
+	if !binding.valid() || !h.screenProbeTabCurrentLocked(binding) ||
 		!h.windowReceiptCurrentLocked(binding.SourceWindowID, binding.SourceReceipt) ||
 		!h.windowReceiptCurrentLocked(binding.TargetWindowID, binding.TargetReceipt) {
 		return false
@@ -344,6 +463,32 @@ func (h *Handler) screenProbeBindingCurrentLocked(binding screenProbeBinding) bo
 		)
 	}
 	return st.Reducer.HasLiveProducerRoute(binding.Producer, binding.SourceWindowID, binding.TargetWindowID)
+}
+
+func (h *Handler) screenProbeTabCurrentLocked(binding screenProbeBinding) bool {
+	if binding.SnapshotTabEpoch == 0 {
+		return true
+	}
+	h.snapshots.mu.RLock()
+	defer h.snapshots.mu.RUnlock()
+	if !h.snapshots.snap.ready {
+		return false
+	}
+	state, ok := h.snapshots.snap.probeTabs[binding.SnapshotTabID]
+	if !ok || state.epoch != binding.SnapshotTabEpoch {
+		return false
+	}
+	_, sourceTab, _, sourceFound := kitty.FindWindowLocationByID(
+		h.snapshots.snap.windows,
+		binding.SourceWindowID,
+	)
+	_, targetTab, _, targetFound := kitty.FindWindowLocationByID(
+		h.snapshots.snap.windows,
+		binding.TargetWindowID,
+	)
+	return sourceFound && targetFound &&
+		sourceTab.ID == binding.SnapshotTabID &&
+		targetTab.ID == binding.SnapshotTabID
 }
 
 // screenProbeBindingEligibilityCurrentLocked adds the target's current reduced
@@ -419,8 +564,13 @@ func (h *Handler) cachedSnapshot() (windows []kitty.OSWindow, gen uint64, ready 
 // cachedScreenProbeSnapshot returns the last published external evidence and
 // its causally earlier reducer receipts without any Kitty I/O.
 func (h *Handler) cachedScreenProbeSnapshot() (screenProbeSnapshot, bool) {
-	windows, receipts, gen, ready := h.snapshots.loadForScreenProbes()
-	return screenProbeSnapshot{windows: windows, reducerReceipts: receipts, gen: gen}, ready
+	windows, receipts, gen, probeTabs, ready := h.snapshots.loadForScreenProbes()
+	return screenProbeSnapshot{
+		windows:         windows,
+		reducerReceipts: receipts,
+		probeTabs:       probeTabs,
+		gen:             gen,
+	}, ready
 }
 
 // screenProbeSnapshotForWindows binds an already-available window tree to the
@@ -428,20 +578,6 @@ func (h *Handler) cachedScreenProbeSnapshot() (screenProbeSnapshot, bool) {
 // supply their own ListWindows result instead of consuming the shared cache.
 func (h *Handler) screenProbeSnapshotForWindows(windows []kitty.OSWindow) screenProbeSnapshot {
 	return screenProbeSnapshot{windows: windows, reducerReceipts: h.captureSnapshotReducerReceipts()}
-}
-
-// screenProbeGenerationCurrentLocked reports whether cached probe evidence is
-// still owned by the latest published Kitty snapshot. Callers hold stateMu;
-// publishSnapshotWithReceipts holds that same lock while incrementing the
-// generation and refreshing mute state, making this check atomic with every
-// subsequent state mutation. Generation zero is reserved for direct snapshots
-// that did not come from the shared cache.
-func (h *Handler) screenProbeGenerationCurrentLocked(capturedGen uint64) bool {
-	if capturedGen == 0 {
-		return true
-	}
-	_, currentGen, ready := h.snapshots.load()
-	return ready && currentGen == capturedGen
 }
 
 // primeSnapshot performs one best-effort ListWindows through the injected client

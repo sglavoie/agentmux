@@ -41,6 +41,106 @@ func TestProbeCodexScreenPrompts_RoutedPromptReadsProducerAndPreservesTargetOwne
 	assertRoutedProbeOwnership(t, h, 42, harness.Claude)
 }
 
+func TestProbeCodexScreenPrompts_RoutedPromptSurvivesUnrelatedTabPublication(t *testing.T) {
+	h := newTestHandler()
+	base := time.Unix(1_700_000_000, 0)
+	windows := routedCodexProbeWithEarlierTab(
+		palette.BuildTitle("W:earlier", "bolt", false),
+		palette.BuildTitle("W:owner", "bolt", false),
+	)
+	fake := &fakeKittyClient{
+		windows: windows,
+		getText: map[string]string{
+			kitty.MatchWindowByID(41): codexWorkingTurnScreen,
+			kitty.MatchWindowByID(43): codexRequestUserInputScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	codexSeedActiveBolt(t, h, 41, "earlier", base.Unix())
+	seedRoutedHarnessProbe(t, h, 42, 43, harness.Codex, harness.Claude, "katana", base.Unix(), "active")
+	h.publishSnapshot(windows, base)
+	snapshot, ready := h.cachedScreenProbeSnapshot()
+	if !ready {
+		t.Fatal("cached screen-probe snapshot is not ready")
+	}
+
+	var reads []string
+	republished := false
+	fake.beforeGetText = func(match, extent string) {
+		if extent != "screen" {
+			return
+		}
+		reads = append(reads, match)
+		if match == kitty.MatchWindowByID(41) && !republished {
+			republished = true
+			h.publishSnapshot(
+				routedCodexProbeWithEarlierTab(
+					palette.BuildTitle("W:earlier", "question", false),
+					palette.BuildTitle("W:owner", "bolt", false),
+				),
+				base.Add(time.Second),
+			)
+		}
+	}
+	h.probeCodexScreenPromptsWithSnapshot(base.Add(2*time.Second), snapshot)
+
+	if !republished {
+		t.Fatal("earlier tab did not publish a competing snapshot")
+	}
+	if len(reads) != 2 ||
+		reads[0] != kitty.MatchWindowByID(41) ||
+		reads[1] != kitty.MatchWindowByID(43) {
+		t.Fatalf("screen reads = %+v, want earlier pane 41 then routed Katana source pane 43", reads)
+	}
+	if eff, _ := windowEffective(t, h, 41); eff.Icon != "bolt" {
+		t.Fatalf("stale earlier-tab observation changed its state to %+v, want bolt", eff)
+	}
+	if eff, visible := windowEffective(t, h, 42); eff.Icon != "question" || visible != "question" {
+		t.Fatalf("Katana target effective = %+v visible %q, want question/question", eff, visible)
+	}
+	ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenPromptProbeEvent)
+	if !ok || ev.PromptKind != string(CodexPromptRequestUserInput) || ev.OriginWindowID != 43 {
+		t.Fatalf("Katana routed prompt event = %+v ok=%v, want request_user_input from origin 43", ev, ok)
+	}
+}
+
+func routedCodexProbeWithEarlierTab(earlierTitle, routedTitle string) []kitty.OSWindow {
+	return []kitty.OSWindow{{
+		ID:        1,
+		IsActive:  true,
+		IsFocused: true,
+		Tabs: []kitty.Tab{
+			{
+				ID:    99,
+				Title: earlierTitle,
+				Windows: []kitty.Window{{
+					ID:       41,
+					IsActive: true,
+					UserVars: kitty.UserVars{Profile: "earlier", Harness: harness.Codex},
+				}},
+			},
+			{
+				ID:    100,
+				Title: routedTitle,
+				Windows: []kitty.Window{
+					{
+						ID:       42,
+						IsActive: false,
+						UserVars: kitty.UserVars{Profile: "owner", Harness: harness.Claude},
+					},
+					{
+						ID:       43,
+						IsActive: true,
+						ForegroundProcesses: []kitty.ForegroundProcess{{
+							Cmdline: []string{"/opt/homebrew/bin/codex"},
+						}},
+					},
+				},
+			},
+		},
+	}}
+}
+
 func TestProbeCodexScreenPrompts_RoutedClearReadsProducerAndClearsTarget(t *testing.T) {
 	h := newTestHandler()
 	base := time.Now()

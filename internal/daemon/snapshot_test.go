@@ -26,6 +26,76 @@ func TestSnapshotStore_PublishAndLoad(t *testing.T) {
 	}
 }
 
+func TestSnapshotStore_ScreenProbeEpochsAreTabScoped(t *testing.T) {
+	var s snapshotStore
+	base := time.Unix(1_700_000_000, 0)
+	windows := screenProbeEpochWindows("first", "second", false, "")
+	s.publish(windows, base)
+
+	_, _, _, firstProbeTabs, ready := s.loadForScreenProbes()
+	if !ready {
+		t.Fatal("first screen-probe snapshot is not ready")
+	}
+	firstTabEpoch := firstProbeTabs[100].epoch
+	secondTabEpoch := firstProbeTabs[101].epoch
+	if firstTabEpoch == 0 || secondTabEpoch == 0 || firstTabEpoch == secondTabEpoch {
+		t.Fatalf("initial tab epochs = first %d second %d; want distinct non-zero epochs", firstTabEpoch, secondTabEpoch)
+	}
+
+	s.publish(screenProbeEpochWindows("first", "second", false, ""), base.Add(time.Second))
+	_, _, _, unchangedProbeTabs, _ := s.loadForScreenProbes()
+	if got := unchangedProbeTabs[100].epoch; got != firstTabEpoch {
+		t.Fatalf("identical publish advanced first tab epoch %d -> %d", firstTabEpoch, got)
+	}
+	if got := unchangedProbeTabs[101].epoch; got != secondTabEpoch {
+		t.Fatalf("identical publish advanced second tab epoch %d -> %d", secondTabEpoch, got)
+	}
+
+	s.publish(screenProbeEpochWindows("first changed", "second", false, ""), base.Add(2*time.Second))
+	_, _, _, changedFirstProbeTabs, _ := s.loadForScreenProbes()
+	if got := changedFirstProbeTabs[100].epoch; got == firstTabEpoch {
+		t.Fatalf("changed first tab retained epoch %d", got)
+	}
+	if got := changedFirstProbeTabs[101].epoch; got != secondTabEpoch {
+		t.Fatalf("first-tab change advanced unrelated second tab epoch %d -> %d", secondTabEpoch, got)
+	}
+
+	s.publish(screenProbeEpochWindows("first changed", "second", true, "1"), base.Add(3*time.Second))
+	_, _, _, changedSecondProbeTabs, _ := s.loadForScreenProbes()
+	if got := changedSecondProbeTabs[101].epoch; got == secondTabEpoch {
+		t.Fatalf("second-tab focus/mute change retained epoch %d", got)
+	}
+}
+
+func screenProbeEpochWindows(firstTitle, secondTitle string, secondActive bool, secondMute string) []kitty.OSWindow {
+	return []kitty.OSWindow{{
+		ID:        1,
+		IsActive:  true,
+		IsFocused: true,
+		Tabs: []kitty.Tab{
+			{
+				ID:       100,
+				IsActive: true,
+				Title:    firstTitle,
+				Windows: []kitty.Window{{
+					ID:       41,
+					IsActive: true,
+					UserVars: kitty.UserVars{Profile: "work", Harness: "codex"},
+				}},
+			},
+			{
+				ID:    101,
+				Title: secondTitle,
+				Windows: []kitty.Window{{
+					ID:       42,
+					IsActive: secondActive,
+					UserVars: kitty.UserVars{Profile: "work", Harness: "codex", Mute: secondMute},
+				}},
+			},
+		},
+	}}
+}
+
 // TestHookRoutingReadsCacheNotLiveList proves the hook path resolves ownership
 // from the published snapshot and never calls ListWindows: after priming the
 // cache, the live client is set to fail every list, yet a hook still enriches

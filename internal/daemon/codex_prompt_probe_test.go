@@ -373,7 +373,7 @@ func TestProbeCodexScreenPrompts_DetectedPromptMutedWindowNoDispatch(t *testing.
 }
 
 // TestProbeCodexScreenPrompts_DiscardsStaleMuteSnapshot pins the Kitty
-// snapshot-generation boundary independently of the reducer receipt. A newer
+// tab-epoch boundary independently of the reducer receipt. A newer
 // mute-only snapshot leaves ShadowSeq unchanged while the old prompt read is
 // blocked; resuming that read must discard the complete observation before it
 // mutates prompt state or schedules a notification.
@@ -1788,7 +1788,8 @@ func directCodexProbeBinding(windowID int, receipt, snapshotGen uint64) screenPr
 		TargetWindowID:      windowID,
 		SourceReceipt:       receipt,
 		TargetReceipt:       receipt,
-		SnapshotGen:         snapshotGen,
+		SnapshotTabID:       100,
+		SnapshotTabEpoch:    snapshotGen,
 		legacyDirectManaged: true,
 	}
 	binding.Producer.Harness = harness.Codex
