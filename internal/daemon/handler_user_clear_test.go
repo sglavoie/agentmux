@@ -178,16 +178,26 @@ func TestHandler_UserClearNoOwnerLeavesTabUnchanged(t *testing.T) {
 	}
 }
 
-// TestHandler_UserClearOwnerlessTabWithGlyphCreatesNoSourceState verifies that
-// F8 on an ownerless tab is a pure no-op that never mutates source state, even
-// when the tab already shows a state glyph (so context resolution parses a
-// non-empty current icon). Before the fix, context resolution recorded the
-// source pane's mute snapshot and thereby created a durable store entry for a
-// window that has nothing to wipe.
-func TestHandler_UserClearOwnerlessTabWithGlyphCreatesNoSourceState(t *testing.T) {
+// TestHandler_UserClearOwnerlessTabWithGlyphClearsSource verifies the
+// subprocess case: a harness such as `claude -p` can leave a recognized state
+// icon on a tab with no managed title owner, and F8 must still dismiss it.
+func TestHandler_UserClearOwnerlessTabWithGlyphClearsSource(t *testing.T) {
 	h := newTestHandler()
+	liveTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "api",
+		State:   "stop",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
+	wantTitle := palette.BuildTitleParts(palette.TitleParts{
+		Base:    "api",
+		Starred: true,
+		Muted:   true,
+		Looping: true,
+	})
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
-		palette.BuildTitle("api", "stop", false), // ownerless tab already showing a glyph
+		liveTitle,
 		[]kitty.Window{{ID: 43, IsActive: true}}, // no managed pane owns the tab
 	)}
 	h.SetKittyClient(fake)
@@ -197,18 +207,50 @@ func TestHandler_UserClearOwnerlessTabWithGlyphCreatesNoSourceState(t *testing.T
 		t.Fatalf("user_clear response = %+v", resp)
 	}
 
-	// No source entry at all — not merely an entry with empty render fields.
 	h.stateMu.Lock()
-	_, exists := h.store[43]
+	st := h.store[43]
 	h.stateMu.Unlock()
-	if exists {
-		t.Fatalf("source window gained a state entry; ownerless F8 must not mutate source state before owner selection")
+	if st == nil || st.DesiredIcon != "" || !st.StateSet || !st.Dirty {
+		t.Fatalf("source state = %+v; want an explicit empty state queued for rendering", st)
+	}
+	if h.renderQueue.empty() {
+		t.Fatal("ownerless visible-icon clear was not queued immediately")
+	}
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(detail.Events) != 1 || detail.Events[0].Action != "user_clear" ||
+		detail.Events[0].Suppressed || detail.Events[0].RouteDecision != routeDecisionSource {
+		t.Fatalf("events = %+v; want one allowed source-routed user_clear", detail.Events)
 	}
 
-	// And the renderer must not touch the tab title either.
 	h.renderSnapshot(fake.windows)
-	if calls := fake.titleCalls(); len(calls) != 0 {
-		t.Fatalf("SetTabTitle calls = %+v; want none for an ownerless no-op", calls)
+	calls := fake.titleCalls()
+	if len(calls) != 1 || calls[0].match != kitty.MatchTabByWindowID(43) || calls[0].title != wantTitle {
+		t.Fatalf("SetTabTitle calls = %+v; want ownerless tab converged to %q", calls, wantTitle)
+	}
+}
+
+func TestHandler_UserClearOwnerlessRecordedStateWithoutLiveIcon(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
+		"api",
+		[]kitty.Window{{ID: 43, IsActive: true}},
+	)}
+	h.SetKittyClient(fake)
+	seedOwnerState(h, 43, "stop", "stop")
+
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 43, Event: "user_clear"})
+	if !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+
+	h.stateMu.Lock()
+	st := h.store[43]
+	h.stateMu.Unlock()
+	if st == nil || st.DesiredIcon != "" || !st.StateSet || !st.Dirty {
+		t.Fatalf("source state = %+v; want recorded ownerless state cleared", st)
+	}
+	if g := h.guard.Current(43); g != "" {
+		t.Fatalf("source guard = %q; want cleared", g)
 	}
 }
 

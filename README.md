@@ -675,12 +675,13 @@ cross-contamination.
 Because hooks can fire from any pane in a split tab, the daemon applies an
 active-pane route policy rather than writing titles from the indicator:
 
-- **F8 (`user_clear`)** clears only the owner's state icon. It is retargeted to
-  the managed owner from whichever pane pressed the binding — owner, managed
-  non-owner, or unmanaged sibling — so the wipe always lands on the daemon-owned
-  title and is never dropped as an owner mismatch. `🔁`, the base title, harness
-  emoji, `★`, and `🔇` are all preserved. A tab with no managed owner is a
-  successful no-op that creates no durable state.
+- **F8 (`user_clear`)** clears the tab's state icon. On a managed tab it is
+  retargeted to the title owner from whichever pane pressed the binding —
+  owner, managed non-owner, or unmanaged sibling — so the wipe is never dropped
+  as an owner mismatch. On an ownerless tab, it clears a recognized state icon
+  from the source pane, including terminal icons left by subprocesses such as
+  `claude -p`; an icon-free ownerless tab remains a no-op. `🔁`, the base title,
+  harness emoji, `★`, and `🔇` are all preserved.
 - **Unmanaged producer routing** lets the active unmanaged pane borrow exactly
   one managed target. A direct user prompt is authoritative focus evidence even
   if the cached Kitty snapshot lags; an exact live ASL candidate also authorizes
@@ -1094,12 +1095,12 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   recognized harness still matches by CWD, and if no same-harness managed Kitty
   tab is open, Agent Mux falls back to the same workspace rather than updating an
   unrelated caller tab.
-- **F8 does nothing from a split pane**: F8 clears the tab's managed state icon
-  regardless of which pane is focused. Inspect
-  `amx daemon export-events --window <owner-id>` (the managed tab-title owner,
-  not the pane you pressed F8 in) and confirm a non-suppressed `user_clear`
-  event on the owner. If the owner shows `owner_mismatch` for `user_clear`, the
-  tab has no managed owner or the daemon predates the routing fix — run
+- **F8 does nothing from a tab or split pane**: F8 clears a recognized state
+  icon regardless of whether the tab is managed. For a managed tab, inspect
+  `amx daemon export-events --window <owner-id>` (the managed title owner); for
+  an ownerless subprocess tab, inspect the pane that fired F8. Confirm a
+  non-suppressed `user_clear` event. An `owner_mismatch` for `user_clear`
+  indicates that the daemon predates this routing behavior — run
   `amx daemon restart` after `just install`.
 - **A loop running in a split pane doesn't drive the tab**: an
   `agent-session-loop` started in an *unmanaged* sibling pane only routes to the

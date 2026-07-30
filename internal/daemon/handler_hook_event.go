@@ -35,12 +35,13 @@ type hookEventContext struct {
 	// muted is the mute state parsed from the live snapshot (title marker or
 	// cc_mute user var) for the source pane. It is recorded into the daemon's
 	// mute cache only by the path that actually updates the source window, so a
-	// no-op (e.g. an ownerless F8) never creates durable source state.
+	// no-op (e.g. F8 on an icon-free ownerless tab) never creates durable source
+	// state.
 	muted bool
 	// lookupFailed is true when the Kitty snapshot could not be read at all
 	// (ListWindows returned an error). It distinguishes a genuinely ownerless
-	// tab — where an F8 wipe is a safe no-op — from an inability to see the tab,
-	// where user_clear must fall back to the source pane rather than vanish.
+	// tab from an inability to see the tab, where user_clear must fall back to
+	// the source pane rather than vanish.
 	lookupFailed bool
 }
 
@@ -275,8 +276,10 @@ func (h *Handler) shouldPreserveLateCopilotSessionStart(
 //     and durable state updates all run against the owner. The owner's desired
 //     state icon is cleared and marked dirty for immediate reconciliation while
 //     Looping, base title, harness emoji, star, and mute are preserved.
-//   - A tab with no managed owner has no daemon-owned title to wipe, so the
-//     request is a successful no-op that never creates durable renderer state.
+//   - On a tab with no managed owner, a recognized state icon can still come
+//     from an ownerless subprocess such as `claude -p`. The request targets the
+//     source pane when that icon is visible or the pane has a recorded state;
+//     an icon-free ownerless tab remains a no-op.
 //   - When the Kitty snapshot could not be read at all, title ownership is
 //     unknown; rather than silently dropping the clear, the wipe falls back to
 //     the source pane that fired F8.
@@ -284,11 +287,29 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	targetID := 0
 	profile := ""
 	harnessName := ""
+	forceVisibleClear := false
 	switch {
 	case ctx.owner != nil:
 		targetID = ctx.owner.ID
 		profile = ctx.owner.UserVars.EffectiveProfile()
 		harnessName = ctx.owner.UserVars.EffectiveHarness()
+	case ctx.tab != nil && ctx.win != nil && h.ownerlessSourceHasClearableState(ctx.req.WindowID, ctx.req.currentIconState):
+		// Ownerless harness subprocesses still use the source window's reducer
+		// and render state icons through renderTitleOwnerLocked. Clear that same
+		// source instead of requiring a managed cc_account/cc_harness owner.
+		targetID = ctx.req.WindowID
+		profile = ctx.req.Account
+		harnessName = ctx.req.targetHarness
+		// A visible icon may outlive in-memory state (for example across a
+		// degraded restart). In that case user_clear creates an already-empty
+		// state, which is not a state-to-state visual change, so explicitly
+		// enqueue it below to converge the live title without waiting for the
+		// maintenance interval.
+		forceVisibleClear = ctx.req.currentIconState != ""
+		slog.Debug("user_clear wiping ownerless source pane",
+			"window_id", ctx.req.WindowID,
+			"event", eventOrAction,
+		)
 	case ctx.lookupFailed:
 		// The list failed, so we cannot resolve the title owner. Retain a safe
 		// fallback: wipe the source pane instead of dropping the clear entirely.
@@ -301,9 +322,9 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 			"event", eventOrAction,
 		)
 	default:
-		// Genuinely ownerless tab: no daemon-owned title to wipe. A pure no-op
-		// that must not create durable renderer state for the source pane.
-		slog.Debug("user_clear ignored: tab has no managed title owner",
+		// No managed owner, recognized live state icon, or recorded source state:
+		// keep F8 a pure no-op that creates no durable renderer state.
+		slog.Debug("user_clear ignored: tab has no clearable state icon",
 			"window_id", ctx.req.WindowID,
 			"event", eventOrAction,
 		)
@@ -335,6 +356,9 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	case ctx.owner != nil:
 		stateReq.routeDecision = routeDecisionOwner
 		chooseRoute(ctx.req.routeEvidence, routeDecisionOwner, "user_clear_owner", ctx.owner)
+	case !ctx.lookupFailed:
+		stateReq.routeDecision = routeDecisionSource
+		chooseRoute(ctx.req.routeEvidence, routeDecisionSource, "user_clear_source", ctx.win)
 	case ctx.lookupFailed:
 		stateReq.routeDecision = routeDecisionSourceFallback
 		chooseRoute(ctx.req.routeEvidence, routeDecisionSourceFallback, "lookup_fallback", ctx.win)
@@ -342,7 +366,29 @@ func (h *Handler) handleUserClearHookEvent(ctx hookEventContext, eventOrAction, 
 	stateReq.normalizationOutcome = normalizationOutcomeFor(normalized)
 	stateReq.routeEvidence = cloneRoutingEvidence(ctx.req.routeEvidence)
 	h.handleStateUpdate(stateReq)
+	if forceVisibleClear {
+		// user_clear above made the new/empty source state durable. Queue that
+		// exact generation so an externally stranded icon disappears promptly.
+		h.stateMu.Lock()
+		if st, ok := h.windowStateLocked(targetID); ok && st.Dirty {
+			h.enqueueRenderLocked(targetID, st)
+		}
+		h.stateMu.Unlock()
+	}
 	return Response{OK: true}
+}
+
+// ownerlessSourceHasClearableState reports whether F8 has anything to dismiss
+// on a tab without a managed title owner. The live parsed icon covers stranded
+// titles; the desired state covers a recorded icon that has not rendered yet.
+func (h *Handler) ownerlessSourceHasClearableState(windowID int, liveIcon string) bool {
+	if liveIcon != "" {
+		return true
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	st, ok := h.windowStateLocked(windowID)
+	return ok && desiredIconForState(st) != ""
 }
 
 func (h *Handler) resolveHookEventContext(req Request) hookEventContext {
@@ -416,8 +462,9 @@ func (h *Handler) resolveHookEventContext(req Request) hookEventContext {
 		ctx.req.Harness = ctx.req.targetHarness
 	}
 	// Record the mute state on ctx rather than mutating the daemon store here:
-	// context resolution must stay side-effect free so a no-op path (an
-	// ownerless F8) never creates durable renderer state for the source pane.
+	// context resolution must stay side-effect free so a no-op path (F8 on an
+	// icon-free ownerless tab) never creates durable renderer state for the
+	// source pane.
 	// The path that updates the source window records it via setMutedFromSnapshot.
 	ctx.muted = parts.Muted || win.UserVars.Mute != ""
 	return ctx
