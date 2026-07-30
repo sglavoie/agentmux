@@ -689,6 +689,15 @@ active-pane route policy rather than writing titles from the indicator:
   valid through that session's terminal event after focus moves. A new inactive
   unmanaged session, an ambiguous target, or CWD/harness similarity alone is
   rejected as `owner_mismatch`.
+- **Non-interactive runs are excluded.** A background `claude -p` or
+  `codex exec` in an unmanaged pane is not a session the dashboard reports on,
+  so prompt/focus evidence no longer lets it borrow the managed owner, and in an
+  ownerless tab it creates no state on the plain pane. Such hooks are suppressed
+  as `unmanaged_pipe_source`, which is distinct from `owner_mismatch` and never
+  feeds the doctor mismatch findings. An exact live ASL candidate still
+  authorizes its pane, and ASL lifecycle events keep their `🔁` marker. The same
+  exclusion keeps `codex exec` out of the Codex foreground screen probe. Pipe
+  mode inside a *managed* pane is unaffected.
 
 For the acceptance record, required live-client transitions, and dogfood
 checklist, see [Daemon State Acceptance Evidence](docs/daemon_state_acceptance.md).

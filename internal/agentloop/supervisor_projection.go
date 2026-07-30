@@ -62,7 +62,7 @@ func ReadSupervisorQuestionProjection(candidate Candidate, now time.Time) (Super
 	if err != nil {
 		return SupervisorQuestionProjection{}, false, err
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	if err := unix.Flock(int(file.Fd()), unix.LOCK_SH); err != nil {
 		return SupervisorQuestionProjection{}, false, err

@@ -303,6 +303,7 @@ request, or source-event ID from `tail`.
 | Duplicate delivery | Hook outcome `duplicate` plus `request_replayed` daemon decision; no reducer mutation | Treat as successful idempotency unless duplicates grow unexpectedly |
 | Queue saturation | Request-scoped `ingress_queue` or `dedupe_cache` saturation evidence and doctor metrics | Inspect burst source and daemon latency with `debug explain` |
 | Route mismatch | `owner_mismatch` routing evidence with rejected alternatives | Compare producer and managed-owner identity; resync stamped hooks |
+| Non-interactive run in a plain pane | `unmanaged_pipe_source` suppression with no reducer mutation | Expected and benign: `claude -p` or `codex exec` in an unmanaged pane must not drive icons |
 | Quarantined identity | `quarantined` decision with synthesized fallback identity and low confidence | Fix missing/malformed session identity; do not infer ownership from titles |
 | Reducer suppression | Decision reason such as reordered, duplicate source sequence, guard, or protected-state precedence | Inspect before/after reducer evidence in `debug explain --json` |
 | Missing terminal hook / process exit | `hook.process_detection`, a committed `daemon.process_lifecycle`, `HarnessProcessExited`, and explanation `process_lifecycle_recovery` share the exact fingerprint and render generation | Use the tracing commands above; distinguish `missing` from `replaced_instance`, then confirm the linked renderer generation completed |

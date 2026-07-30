@@ -60,11 +60,99 @@ func TestSnapshotStore_ScreenProbeEpochsAreTabScoped(t *testing.T) {
 		t.Fatalf("first-tab change advanced unrelated second tab epoch %d -> %d", secondTabEpoch, got)
 	}
 
-	s.publish(screenProbeEpochWindows("first changed", "second", true, "1"), base.Add(3*time.Second))
-	_, _, _, changedSecondProbeTabs, _ := s.loadForScreenProbes()
-	if got := changedSecondProbeTabs[101].epoch; got == secondTabEpoch {
-		t.Fatalf("second-tab focus/mute change retained epoch %d", got)
+	// A pane going active stays tab-scoped: it can move FindTabTitleOwner
+	// without touching the flags of the pane a probe is actually reading.
+	s.publish(screenProbeEpochWindows("first changed", "second", true, ""), base.Add(3*time.Second))
+	_, _, _, focusedProbeTabs, _ := s.loadForScreenProbes()
+	if got := focusedProbeTabs[101].epoch; got == secondTabEpoch {
+		t.Fatalf("second-tab focus change retained epoch %d", got)
 	}
+	focusedTabEpoch := focusedProbeTabs[101].epoch
+	focusedWindowEpoch := focusedProbeTabs[101].windows[42].epoch
+	if focusedWindowEpoch == 0 {
+		t.Fatal("second-tab window epoch is zero")
+	}
+
+	// Mute is per-pane, so it must leave the tab epoch alone.
+	s.publish(screenProbeEpochWindows("first changed", "second", true, "1"), base.Add(4*time.Second))
+	_, _, _, mutedProbeTabs, _ := s.loadForScreenProbes()
+	if got := mutedProbeTabs[101].epoch; got != focusedTabEpoch {
+		t.Fatalf("mute change advanced tab epoch %d -> %d", focusedTabEpoch, got)
+	}
+	if got := mutedProbeTabs[101].windows[42].epoch; got == focusedWindowEpoch {
+		t.Fatalf("mute change retained window epoch %d", got)
+	}
+}
+
+// TestSnapshotStore_ScreenProbeWindowEpochsIsolateSiblingChurn covers the usual
+// layout: a managed harness pane beside a plain terminal. Every command run in
+// the plain pane rewrites its foreground processes, and folding that raw argv
+// into the tab signature starved the managed pane's in-flight probes.
+func TestSnapshotStore_ScreenProbeWindowEpochsIsolateSiblingChurn(t *testing.T) {
+	var s snapshotStore
+	base := time.Unix(1_700_000_000, 0)
+
+	s.publish(screenProbeSplitTabWindows([]string{"/bin/ls", "-la"}), base)
+	_, _, _, first, ready := s.loadForScreenProbes()
+	if !ready {
+		t.Fatal("first screen-probe snapshot is not ready")
+	}
+	tabEpoch := first[100].epoch
+	managedEpoch := first[100].windows[41].epoch
+	plainEpoch := first[100].windows[42].epoch
+	if tabEpoch == 0 || managedEpoch == 0 || plainEpoch == 0 {
+		t.Fatalf("initial epochs = tab %d managed %d plain %d; want non-zero", tabEpoch, managedEpoch, plainEpoch)
+	}
+
+	s.publish(screenProbeSplitTabWindows([]string{"/usr/bin/rg", "needle"}), base.Add(time.Second))
+	_, _, _, churned, _ := s.loadForScreenProbes()
+	if got := churned[100].epoch; got != tabEpoch {
+		t.Fatalf("sibling shell command advanced tab epoch %d -> %d", tabEpoch, got)
+	}
+	if got := churned[100].windows[41].epoch; got != managedEpoch {
+		t.Fatalf("sibling shell command advanced managed window epoch %d -> %d", managedEpoch, got)
+	}
+	if got := churned[100].windows[42].epoch; got != plainEpoch {
+		t.Fatalf("sibling shell command advanced its own window epoch %d -> %d", plainEpoch, got)
+	}
+
+	// Starting a harness is the one foreground fact probes consume, so the
+	// plain pane's own epoch advances while the managed sibling stays fresh.
+	s.publish(screenProbeSplitTabWindows([]string{"/opt/homebrew/bin/claude", "-p", "say hi"}), base.Add(2*time.Second))
+	_, _, _, harnessed, _ := s.loadForScreenProbes()
+	if got := harnessed[100].epoch; got != tabEpoch {
+		t.Fatalf("sibling harness start advanced tab epoch %d -> %d", tabEpoch, got)
+	}
+	if got := harnessed[100].windows[41].epoch; got != managedEpoch {
+		t.Fatalf("sibling harness start advanced managed window epoch %d -> %d", managedEpoch, got)
+	}
+	if got := harnessed[100].windows[42].epoch; got == plainEpoch {
+		t.Fatalf("sibling harness start retained window epoch %d", got)
+	}
+}
+
+func screenProbeSplitTabWindows(plainForeground []string) []kitty.OSWindow {
+	return []kitty.OSWindow{{
+		ID:        1,
+		IsActive:  true,
+		IsFocused: true,
+		Tabs: []kitty.Tab{{
+			ID:       100,
+			IsActive: true,
+			Title:    "api",
+			Windows: []kitty.Window{
+				{
+					ID:       41,
+					IsActive: true,
+					UserVars: kitty.UserVars{Profile: "work", Harness: "codex"},
+				},
+				{
+					ID:                  42,
+					ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: plainForeground}},
+				},
+			},
+		}},
+	}}
 }
 
 func screenProbeEpochWindows(firstTitle, secondTitle string, secondActive bool, secondMute string) []kitty.OSWindow {

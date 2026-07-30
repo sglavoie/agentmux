@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
@@ -36,11 +37,10 @@ type kittySnapshot struct {
 	// gen increments on every publish so a consumer can detect that the world
 	// changed between two reads without diffing the whole tree.
 	gen uint64
-	// probeTabs carries a separate freshness epoch for each Kitty tab. Repeated
-	// maintenance/render publications preserve an unchanged tab's epoch, so
-	// activity in one tab cannot starve screen probes in another. A tab-local
-	// focus, topology, mute, title, ownership, or foreground-command change
-	// advances only that tab's epoch.
+	// probeTabs carries a separate freshness epoch for each Kitty tab plus one
+	// for each pane inside it. Repeated maintenance/render publications preserve
+	// an unchanged epoch, so activity in one tab cannot starve screen probes in
+	// another, and a busy plain split cannot starve the managed pane beside it.
 	probeTabs map[int]screenProbeTabState
 	// at is the wall-clock time the snapshot was captured, used only for
 	// diagnostics/staleness reporting.
@@ -63,12 +63,19 @@ type snapshotStore struct {
 }
 
 // screenProbeTabState is the immutable, probe-relevant projection of one
-// Kitty tab plus its monotonic freshness epoch.
+// Kitty tab plus its monotonic freshness epoch and the per-pane epochs of the
+// panes it currently holds. Nesting the pane map under the tab makes a pane
+// that moved to another tab fail closed without a separate residency check.
 type screenProbeTabState struct {
 	epoch     uint64
 	signature screenProbeTabSignature
+	windows   map[int]screenProbeWindowState
 }
 
+// screenProbeTabSignature holds the facts every probe in the tab shares. Pane
+// ownership stays here because FindTabTitleOwner resolves to the active managed
+// pane, else the first managed pane: a third pane becoming active can move
+// ownership without touching the probed pane's own flags.
 type screenProbeTabSignature struct {
 	osWindowID       int
 	osWindowActive   bool
@@ -76,17 +83,31 @@ type screenProbeTabSignature struct {
 	osWindowLastUsed bool
 	tabActive        bool
 	title            string
-	windows          []screenProbeWindowSignature
+	ownership        []screenProbeOwnershipSignature
 }
 
+type screenProbeOwnershipSignature struct {
+	id               int
+	active           bool
+	effectiveProfile string
+	effectiveHarness string
+}
+
+type screenProbeWindowState struct {
+	epoch     uint64
+	signature screenProbeWindowSignature
+}
+
+// screenProbeWindowSignature is a derived projection rather than raw argv. A
+// plain pane rewrites its foreground processes on every shell command and a
+// routed source pane rewrites them on every tool the harness spawns, so raw
+// argv makes probes self-invalidate mid-read. Whether a pane runs a harness,
+// and whether that run is non-interactive, is the only foreground fact any
+// probe path consumes.
 type screenProbeWindowSignature struct {
-	id                    int
-	active                bool
-	effectiveProfile      string
-	effectiveHarness      string
-	mute                  string
-	cmdline               []string
-	foregroundProcessArgs [][]string
+	mute               string
+	foregroundHarness  string
+	foregroundPipeMode bool
 }
 
 // publish replaces the cached snapshot with windows captured at now. The slice
@@ -104,13 +125,26 @@ func (s *snapshotStore) publishWithReceipts(windows []kitty.OSWindow, reducerRec
 			tab := &osWindow.Tabs[j]
 			state := screenProbeTabState{
 				signature: screenProbeSignature(osWindow, tab),
+				windows:   make(map[int]screenProbeWindowState, len(tab.Windows)),
 			}
-			if previous, ok := s.snap.probeTabs[tab.ID]; ok &&
-				reflect.DeepEqual(previous.signature, state.signature) {
+			previous, hadPrevious := s.snap.probeTabs[tab.ID]
+			if hadPrevious && reflect.DeepEqual(previous.signature, state.signature) {
 				state.epoch = previous.epoch
 			} else {
 				s.nextProbeEpoch++
 				state.epoch = s.nextProbeEpoch
+			}
+			for k := range tab.Windows {
+				win := &tab.Windows[k]
+				windowState := screenProbeWindowState{signature: screenProbeWindowSignatureFor(win)}
+				if prior, ok := previous.windows[win.ID]; hadPrevious && ok &&
+					prior.signature == windowState.signature {
+					windowState.epoch = prior.epoch
+				} else {
+					s.nextProbeEpoch++
+					windowState.epoch = s.nextProbeEpoch
+				}
+				state.windows[win.ID] = windowState
 			}
 			probeTabs[tab.ID] = state
 		}
@@ -132,27 +166,49 @@ func screenProbeSignature(osWindow *kitty.OSWindow, tab *kitty.Tab) screenProbeT
 		osWindowLastUsed: osWindow.LastFocused,
 		tabActive:        tab.IsActive,
 		title:            tab.Title,
-		windows:          make([]screenProbeWindowSignature, 0, len(tab.Windows)),
+		ownership:        make([]screenProbeOwnershipSignature, 0, len(tab.Windows)),
 	}
 	for i := range tab.Windows {
 		win := &tab.Windows[i]
-		windowSignature := screenProbeWindowSignature{
+		signature.ownership = append(signature.ownership, screenProbeOwnershipSignature{
 			id:               win.ID,
 			active:           win.IsActive,
 			effectiveProfile: win.UserVars.EffectiveProfile(),
 			effectiveHarness: win.UserVars.EffectiveHarness(),
-			mute:             win.UserVars.Mute,
-			cmdline:          win.Cmdline,
-		}
-		for j := range win.ForegroundProcesses {
-			windowSignature.foregroundProcessArgs = append(
-				windowSignature.foregroundProcessArgs,
-				win.ForegroundProcesses[j].Cmdline,
-			)
-		}
-		signature.windows = append(signature.windows, windowSignature)
+		})
 	}
 	return signature
+}
+
+func screenProbeWindowSignatureFor(win *kitty.Window) screenProbeWindowSignature {
+	signature := screenProbeWindowSignature{mute: win.UserVars.Mute}
+	signature.foregroundHarness, signature.foregroundPipeMode = screenProbeForegroundHarness(win)
+	return signature
+}
+
+// screenProbeForegroundHarness names the harness this pane is running, if any,
+// preferring the pane's own command line over its foreground processes.
+func screenProbeForegroundHarness(win *kitty.Window) (string, bool) {
+	if name, pipeMode, ok := harnessInvocationFromCmdline(win.Cmdline); ok {
+		return name, pipeMode
+	}
+	for i := range win.ForegroundProcesses {
+		if name, pipeMode, ok := harnessInvocationFromCmdline(win.ForegroundProcesses[i].Cmdline); ok {
+			return name, pipeMode
+		}
+	}
+	return "", false
+}
+
+func harnessInvocationFromCmdline(cmdline []string) (string, bool, bool) {
+	if len(cmdline) == 0 {
+		return "", false, false
+	}
+	name := harness.NormalizeKnown(filepath.Base(cmdline[0]))
+	if name == "" {
+		return "", false, false
+	}
+	return name, harness.InvocationIsPipeMode(name, cmdline[1:]), true
 }
 
 // loadForScreenProbes returns the immutable window tree together with the
@@ -190,19 +246,29 @@ func (s screenProbeSnapshot) receipt(windowID int) uint64 {
 	return s.reducerReceipts[windowID]
 }
 
-func (s screenProbeSnapshot) tabEpochForWindow(windowID int) (tabID int, epoch uint64, ok bool) {
+// probeEpochsForWindow returns the tab-scoped and pane-scoped freshness epochs
+// covering windowID. A zero generation denotes a direct caller-supplied
+// snapshot that carries no epochs at all; those bindings skip epoch validation
+// entirely.
+func (s screenProbeSnapshot) probeEpochsForWindow(windowID int) (
+	tabID int, tabEpoch, windowEpoch uint64, ok bool,
+) {
 	_, tab, _, found := kitty.FindWindowLocationByID(s.windows, windowID)
 	if !found {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	if s.gen == 0 {
-		return tab.ID, 0, true
+		return tab.ID, 0, 0, true
 	}
 	state, found := s.probeTabs[tab.ID]
 	if !found || state.epoch == 0 {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
-	return tab.ID, state.epoch, true
+	windowState, found := state.windows[windowID]
+	if !found || windowState.epoch == 0 {
+		return 0, 0, 0, false
+	}
+	return tab.ID, state.epoch, windowState.epoch, true
 }
 
 // screenProbeBinding is the immutable routing and freshness evidence shared by
@@ -211,11 +277,13 @@ func (s screenProbeSnapshot) tabEpochForWindow(windowID int) (tabID int, epoch u
 // producer pane, while TargetWindowID owns the reducer state that observations
 // mutate. Direct managed sessions use the same source and target. Both receipts
 // are captured before the Kitty snapshot that supplied the route. SnapshotTabID
-// and SnapshotTabEpoch invalidate the complete binding when that tab's focus,
-// topology, mute, ownership, or foreground command changes without allowing
-// unrelated tab publications to starve it. Most bindings require a live
-// producer route; terminalProducer and recoverySource narrowly authorize Codex
-// clear and Copilot self-recovery after the ordinary live route has closed.
+// and SnapshotTabEpoch invalidate the binding when the tab's focus, topology,
+// title, or pane ownership changes, while SnapshotSourceEpoch and
+// SnapshotTargetEpoch invalidate it when either of its own two panes changes —
+// so an unrelated pane in the same tab cannot starve it. Most bindings require
+// a live producer route; terminalProducer and recoverySource narrowly authorize
+// Codex clear and Copilot self-recovery after the ordinary live route has
+// closed.
 type screenProbeBinding struct {
 	Producer            conversation.Identity
 	SourceWindowID      int
@@ -224,6 +292,8 @@ type screenProbeBinding struct {
 	TargetReceipt       uint64
 	SnapshotTabID       int
 	SnapshotTabEpoch    uint64
+	SnapshotSourceEpoch uint64
+	SnapshotTargetEpoch uint64
 	legacyDirectManaged bool
 	terminalProducer    bool
 	terminalAt          int64
@@ -236,7 +306,10 @@ func (b screenProbeBinding) valid() bool {
 		(!b.Producer.Valid() && (!b.legacyDirectManaged || harness.NormalizeKnown(b.Producer.Harness) == "")) {
 		return false
 	}
-	if b.SnapshotTabEpoch > 0 && b.SnapshotTabID <= 0 {
+	// A hand-built binding that recorded a tab epoch but no pane epochs is
+	// partially populated; fail it closed rather than skipping the pane checks.
+	if b.SnapshotTabEpoch > 0 &&
+		(b.SnapshotTabID <= 0 || b.SnapshotSourceEpoch == 0 || b.SnapshotTargetEpoch == 0) {
 		return false
 	}
 	if b.terminalProducer && b.recoverySource.Kind != "" {
@@ -251,22 +324,24 @@ func newScreenProbeBinding(
 	sourceWindowID int,
 	targetWindowID int,
 ) (screenProbeBinding, bool) {
-	sourceTabID, sourceEpoch, ok := snapshot.tabEpochForWindow(sourceWindowID)
+	sourceTabID, sourceTabEpoch, sourceEpoch, ok := snapshot.probeEpochsForWindow(sourceWindowID)
 	if !ok {
 		return screenProbeBinding{}, false
 	}
-	targetTabID, targetEpoch, ok := snapshot.tabEpochForWindow(targetWindowID)
-	if !ok || sourceTabID != targetTabID || sourceEpoch != targetEpoch {
+	targetTabID, targetTabEpoch, targetEpoch, ok := snapshot.probeEpochsForWindow(targetWindowID)
+	if !ok || sourceTabID != targetTabID || sourceTabEpoch != targetTabEpoch {
 		return screenProbeBinding{}, false
 	}
 	return screenProbeBinding{
-		Producer:         producer,
-		SourceWindowID:   sourceWindowID,
-		TargetWindowID:   targetWindowID,
-		SourceReceipt:    snapshot.receipt(sourceWindowID),
-		TargetReceipt:    snapshot.receipt(targetWindowID),
-		SnapshotTabID:    targetTabID,
-		SnapshotTabEpoch: targetEpoch,
+		Producer:            producer,
+		SourceWindowID:      sourceWindowID,
+		TargetWindowID:      targetWindowID,
+		SourceReceipt:       snapshot.receipt(sourceWindowID),
+		TargetReceipt:       snapshot.receipt(targetWindowID),
+		SnapshotTabID:       targetTabID,
+		SnapshotTabEpoch:    targetTabEpoch,
+		SnapshotSourceEpoch: sourceEpoch,
+		SnapshotTargetEpoch: targetEpoch,
 	}, true
 }
 
@@ -434,7 +509,7 @@ func (h *Handler) screenProbeTerminalBindings(snapshot screenProbeSnapshot, prod
 // screenProbeBindingCurrentLocked revalidates every causal component of a
 // binding. Callers hold stateMu and keep it held through any ensuing mutation.
 func (h *Handler) screenProbeBindingCurrentLocked(binding screenProbeBinding) bool {
-	if !binding.valid() || !h.screenProbeTabCurrentLocked(binding) ||
+	if !binding.valid() || !h.screenProbeFreshnessCurrentLocked(binding) ||
 		!h.windowReceiptCurrentLocked(binding.SourceWindowID, binding.SourceReceipt) ||
 		!h.windowReceiptCurrentLocked(binding.TargetWindowID, binding.TargetReceipt) {
 		return false
@@ -465,7 +540,10 @@ func (h *Handler) screenProbeBindingCurrentLocked(binding screenProbeBinding) bo
 	return st.Reducer.HasLiveProducerRoute(binding.Producer, binding.SourceWindowID, binding.TargetWindowID)
 }
 
-func (h *Handler) screenProbeTabCurrentLocked(binding screenProbeBinding) bool {
+// screenProbeFreshnessCurrentLocked revalidates the tab epoch plus the epoch of
+// each of the binding's own two panes. Presence in the tab's pane map is proof
+// of current residency, so no window-tree scan is needed.
+func (h *Handler) screenProbeFreshnessCurrentLocked(binding screenProbeBinding) bool {
 	if binding.SnapshotTabEpoch == 0 {
 		return true
 	}
@@ -478,17 +556,12 @@ func (h *Handler) screenProbeTabCurrentLocked(binding screenProbeBinding) bool {
 	if !ok || state.epoch != binding.SnapshotTabEpoch {
 		return false
 	}
-	_, sourceTab, _, sourceFound := kitty.FindWindowLocationByID(
-		h.snapshots.snap.windows,
-		binding.SourceWindowID,
-	)
-	_, targetTab, _, targetFound := kitty.FindWindowLocationByID(
-		h.snapshots.snap.windows,
-		binding.TargetWindowID,
-	)
-	return sourceFound && targetFound &&
-		sourceTab.ID == binding.SnapshotTabID &&
-		targetTab.ID == binding.SnapshotTabID
+	source, ok := state.windows[binding.SourceWindowID]
+	if !ok || source.epoch != binding.SnapshotSourceEpoch {
+		return false
+	}
+	target, ok := state.windows[binding.TargetWindowID]
+	return ok && target.epoch == binding.SnapshotTargetEpoch
 }
 
 // screenProbeBindingEligibilityCurrentLocked adds the target's current reduced

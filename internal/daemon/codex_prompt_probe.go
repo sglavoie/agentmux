@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -66,16 +67,16 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(now time.Time, snapshot sc
 			if !ok {
 				continue
 			}
-			binding := screenProbeBinding{
-				SourceWindowID:      win.ID,
-				TargetWindowID:      win.ID,
-				SourceReceipt:       snapshot.receipt(win.ID),
-				TargetReceipt:       snapshot.receipt(win.ID),
-				legacyDirectManaged: true,
+			binding, found := newScreenProbeBinding(
+				snapshot,
+				conversation.Identity{Harness: harness.Codex},
+				win.ID,
+				win.ID,
+			)
+			if !found {
+				continue
 			}
-			binding.SnapshotTabID, binding.SnapshotTabEpoch, _ =
-				snapshot.tabEpochForWindow(win.ID)
-			binding.Producer.Harness = harness.Codex
+			binding.legacyDirectManaged = true
 			h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), win.UserVars)
 		}
 	}
@@ -199,11 +200,17 @@ func codexPromptProbeHasCodexForeground(win kitty.Window) bool {
 	return false
 }
 
+// codexPromptProbeCmdlineIsCodex accepts only an interactive Codex invocation.
+// A non-interactive run such as `codex exec` is a background subprocess in an
+// unmanaged pane, not a session the dashboard reports on.
 func codexPromptProbeCmdlineIsCodex(cmdline []string) bool {
 	if len(cmdline) == 0 {
 		return false
 	}
-	return strings.EqualFold(filepath.Base(cmdline[0]), "codex")
+	if !strings.EqualFold(filepath.Base(cmdline[0]), "codex") {
+		return false
+	}
+	return !harness.InvocationIsPipeMode(harness.Codex, cmdline[1:])
 }
 
 func codexPromptProbeCanOverwrite(iconState string) bool {
@@ -589,20 +596,19 @@ func (h *Handler) probeCodexIdleWindow(
 		return
 	}
 	h.applyAuthoritativeIdle(AuthoritativeIdle{
-		WindowID:         targetWindowID,
-		Source:           source,
-		Harness:          harness.Codex,
-		CapturedSeq:      binding.TargetReceipt,
-		CapturedTabEpoch: binding.SnapshotTabEpoch,
-		ProbeBinding:     binding,
-		At:               now.Unix(),
-		RequiredSamples:  1,
-		SessionTitle:     titleParts.Base,
-		Account:          userVars.EffectiveProfile(),
-		PipeMode:         false,
-		Muted:            titleParts.Muted || userVars.Mute != "",
-		SourceEventID:    fmt.Sprintf("codex-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
-		DiagnosticEvent:  screenStopProbeEvent,
+		WindowID:        targetWindowID,
+		Source:          source,
+		Harness:         harness.Codex,
+		CapturedSeq:     binding.TargetReceipt,
+		ProbeBinding:    binding,
+		At:              now.Unix(),
+		RequiredSamples: 1,
+		SessionTitle:    titleParts.Base,
+		Account:         userVars.EffectiveProfile(),
+		PipeMode:        false,
+		Muted:           titleParts.Muted || userVars.Mute != "",
+		SourceEventID:   fmt.Sprintf("codex-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
+		DiagnosticEvent: screenStopProbeEvent,
 	})
 }
 

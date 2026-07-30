@@ -29,6 +29,7 @@ const (
 	DecisionReasonElicitationPending        = "elicitation_pending"
 	DecisionReasonAutoApprovedPermission    = "auto_approved_permission"
 	DecisionReasonOwnerMismatch             = "owner_mismatch"
+	DecisionReasonUnmanagedPipeSource       = "unmanaged_pipe_source"
 	DecisionReasonPreservesIcon             = "preserves_icon"
 	DecisionReasonReducerBypassed           = "reducer_bypassed"
 	DecisionReasonResetFlowRewrite          = "reset_flow_rewrite"

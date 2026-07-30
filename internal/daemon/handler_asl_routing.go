@@ -270,6 +270,18 @@ func (h *Handler) invalidateActiveLoopCache() {
 	h.stateMu.Unlock()
 }
 
+// hasExactActiveLoopCandidate reports whether an active agent-session-loop run
+// exactly identifies windowID. Discovery failure fails closed, matching
+// tryRouteActiveLoopSiblingHook.
+func (h *Handler) hasExactActiveLoopCandidate(windowID int) bool {
+	candidates, err := h.activeLoopCandidates()
+	if err != nil {
+		return false
+	}
+	_, ok := exactActiveLoopCandidate(candidates, windowID)
+	return ok
+}
+
 // exactActiveLoopCandidate returns the unique discovered candidate whose
 // WindowID identifies windowID. Every candidate is already live and unfinished
 // (agentloop.Discover guarantees it), but duplicate exact matches are still

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -169,6 +170,172 @@ func TestHandler_UnmanagedPromptTakeoverAndStickyTerminal(t *testing.T) {
 	if len(sourceDetail.Events) != 1 || !sourceDetail.Events[0].Suppressed ||
 		sourceDetail.Events[0].SuppressionReason != suppressionReasonOwnerMismatch {
 		t.Fatalf("source events = %+v; want closed-route owner_mismatch", sourceDetail.Events)
+	}
+}
+
+// TestHandler_PipeModeUnmanagedSourceDoesNotBorrowOwner covers the common
+// layout of one plain split beside a managed harness pane: a background
+// `claude -p` in the plain pane must not drive the managed session's icons,
+// while an interactive run in the same pane still borrows the owner.
+func TestHandler_PipeModeUnmanagedSourceDoesNotBorrowOwner(t *testing.T) {
+	stubDaemonLoopDiscover(t, nil, nil)
+	h := newTestHandler()
+	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
+
+	resp := h.Handle(Request{
+		Type:        TypeHookEvent,
+		WindowID:    43,
+		Event:       "UserPromptSubmit",
+		Harness:     harness.Claude,
+		PipeMode:    true,
+		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "pipe-run"}),
+	})
+	if !resp.OK {
+		t.Fatalf("hook response = %+v", resp)
+	}
+
+	if owner := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(owner.Events) != 0 {
+		t.Fatalf("owner events = %+v; want the pipe run kept off the managed session", owner.Events)
+	}
+	h.stateMu.Lock()
+	ownerState := h.store[42]
+	h.stateMu.Unlock()
+	if ownerState != nil && ownerState.DesiredIcon != "" {
+		t.Fatalf("owner icon = %q; want no icon from a background pipe run", ownerState.DesiredIcon)
+	}
+
+	source := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(source.Events) != 1 || !source.Events[0].Suppressed ||
+		source.Events[0].SuppressionReason != suppressionReasonUnmanagedPipeSource {
+		t.Fatalf("source events = %+v; want unmanaged_pipe_source suppression", source.Events)
+	}
+
+	// Regression guard: the same pane running interactively still borrows the
+	// owner exactly as before.
+	if resp := h.Handle(Request{
+		Type:        TypeHookEvent,
+		WindowID:    43,
+		Event:       "UserPromptSubmit",
+		Harness:     harness.Claude,
+		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "interactive-run"}),
+	}); !resp.OK {
+		t.Fatalf("interactive hook response = %+v", resp)
+	}
+	owner := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(owner.Events) != 1 || owner.Events[0].Suppressed ||
+		owner.Events[0].RouteDecision != routeDecisionOwner ||
+		owner.Events[0].SourceKey != "claude:interactive-run" {
+		t.Fatalf("owner events = %+v; want the interactive run routed to the owner", owner.Events)
+	}
+}
+
+// TestHandler_PipeModeUnmanagedSourceRoutesWithExactLoopCandidate verifies the
+// ASL exception survives the pipe-mode gate: an `asl run` drives its harness
+// through pipe mode, and an exact live loop candidate is independent
+// authorization to borrow the managed owner.
+func TestHandler_PipeModeUnmanagedSourceRoutesWithExactLoopCandidate(t *testing.T) {
+	projectDir := t.TempDir()
+	stubDaemonLoopDiscover(t, []agentloop.Candidate{aslCandidate(43, projectDir)}, nil)
+
+	h := newTestHandler()
+	h.SetKittyClient(&fakeKittyClient{windows: aslSiblingWindows("api", projectDir, 42, 43)})
+
+	resp := h.Handle(Request{
+		Type:        TypeHookEvent,
+		WindowID:    43,
+		Event:       "UserPromptSubmit",
+		Harness:     harness.Claude,
+		PipeMode:    true,
+		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "loop-run"}),
+	})
+	if !resp.OK {
+		t.Fatalf("hook response = %+v", resp)
+	}
+
+	owner := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(owner.Events) != 1 || owner.Events[0].Suppressed ||
+		owner.Events[0].RouteDecision != routeDecisionOwner ||
+		owner.Events[0].SourceKey != "claude:loop-run" {
+		t.Fatalf("owner events = %+v; want the loop's hook routed to the owner", owner.Events)
+	}
+}
+
+// TestHandler_PipeModeOwnerlessTabStrandsNoIcon covers a tab holding only plain
+// panes. Without the guard the source path creates durable state that renders
+// an icon on a terminal that owns no session.
+func TestHandler_PipeModeOwnerlessTabStrandsNoIcon(t *testing.T) {
+	stubDaemonLoopDiscover(t, nil, nil)
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: hookEventWindows("api", []kitty.Window{
+		{ID: 43, IsActive: true},
+		{ID: 44, IsActive: false},
+	})}
+	h.SetKittyClient(fake)
+
+	// The prompt is what strands the icon: ungated it sets a durable bolt that
+	// the pipe run's own Stop then declines to retire.
+	for _, event := range []string{"UserPromptSubmit", "Stop"} {
+		if resp := h.Handle(Request{
+			Type:        TypeHookEvent,
+			WindowID:    43,
+			Event:       event,
+			Harness:     harness.Claude,
+			PipeMode:    true,
+			PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "pipe-run"}),
+		}); !resp.OK {
+			t.Fatalf("%s response = %+v", event, resp)
+		}
+	}
+
+	h.stateMu.Lock()
+	st := h.store[43]
+	h.stateMu.Unlock()
+	if st != nil && (st.DesiredIcon != "" || st.StateSet || st.Effective.Icon != "") {
+		t.Fatalf("plain pane state = %+v; want no icon state", st)
+	}
+	if calls := fake.titleCalls(); len(calls) != 0 {
+		t.Fatalf("SetTabTitle calls = %+v; want none", calls)
+	}
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 43})
+	if len(detail.Events) != 2 {
+		t.Fatalf("source events = %+v; want both events recorded as suppressed", detail.Events)
+	}
+	for _, event := range detail.Events {
+		if !event.Suppressed || event.SuppressionReason != suppressionReasonUnmanagedPipeSource {
+			t.Fatalf("source event = %+v; want unmanaged_pipe_source suppression", event)
+		}
+	}
+}
+
+// TestHandler_PipeModeOwnerlessTabStillMarksLoop verifies the ownerless guard
+// excludes ASL lifecycle events, so `asl run` in a plain-only tab keeps its
+// loop marker.
+func TestHandler_PipeModeOwnerlessTabStillMarksLoop(t *testing.T) {
+	stubDaemonLoopDiscover(t, nil, nil)
+	h := newTestHandler()
+	h.SetKittyClient(&fakeKittyClient{windows: hookEventWindows("api", []kitty.Window{
+		{ID: 43, IsActive: true},
+	})})
+
+	resp := h.Handle(Request{
+		Type:     TypeHookEvent,
+		WindowID: 43,
+		Event:    "AgentSessionLoopStarted",
+		PipeMode: true,
+		PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{
+			Source: "agent_session_loop", Harness: harness.Claude, RunID: "run-1", CWD: t.TempDir(),
+		}),
+	})
+	if !resp.OK {
+		t.Fatalf("hook response = %+v", resp)
+	}
+
+	h.stateMu.Lock()
+	st := h.store[43]
+	looping := st != nil && st.Effective.Looping
+	h.stateMu.Unlock()
+	if !looping {
+		t.Fatalf("loop state = %+v; want an active loop marker", st)
 	}
 }
 

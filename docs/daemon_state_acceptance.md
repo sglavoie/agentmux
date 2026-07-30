@@ -203,6 +203,12 @@ cross-harness traces carry `route_decision: "owner"`, retain the producer pane
 in `origin_window_id`, and produce none of the mismatch findings. Ordinary
 acknowledged history remains an informational `acknowledged_state` finding.
 
+A non-interactive harness run in an unmanaged pane (`claude -p`, `codex exec`)
+is suppressed as `unmanaged_pipe_source`, not `owner_mismatch`. This is the
+expected, benign outcome of a background subprocess in the plain split of a
+managed tab, so it is deliberately excluded from both `owner_mismatch_*`
+findings and must never contribute to their counts.
+
 For the next installed acceptance run, retain all of the following:
 
 - `amx config hooks-status` showing every generated hook in sync and stamped

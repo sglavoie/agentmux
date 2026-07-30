@@ -68,3 +68,22 @@ func (h *Handler) suppressOwnerMismatch(ctx hookEventContext, eventOrAction, act
 		)
 	}
 }
+
+// suppressUnmanagedPipeSource records a non-interactive harness run in an
+// unmanaged pane. It is deliberately distinct from owner_mismatch: this is the
+// expected, benign outcome of a background subprocess and must not feed the
+// owner_mismatch_* doctor findings.
+func (h *Handler) suppressUnmanagedPipeSource(ctx hookEventContext, eventOrAction, action string) {
+	ctx.req.Event = eventOrAction
+	ctx.req.routeDecision = routeDecisionRejected
+	chooseRoute(ctx.req.routeEvidence, routeDecisionRejected, DecisionReasonUnmanagedPipeSource, nil)
+	if ctx.owner != nil {
+		ctx.req.routeEvidence.RejectedAlternatives = append(ctx.req.routeEvidence.RejectedAlternatives,
+			RejectedRouteEvidence{WindowID: ctx.owner.ID, Reason: DecisionReasonUnmanagedPipeSource})
+	}
+	h.appendSuppressedHookEvent(ctx.req, action, suppressionReasonUnmanagedPipeSource)
+	slog.Debug("hook event ignored: non-interactive harness run in an unmanaged pane",
+		"window_id", ctx.req.WindowID,
+		"event", eventOrAction,
+	)
+}

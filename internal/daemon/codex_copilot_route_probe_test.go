@@ -104,6 +104,90 @@ func TestProbeCodexScreenPrompts_RoutedPromptSurvivesUnrelatedTabPublication(t *
 	}
 }
 
+// TestProbeCodexScreenPrompts_RoutedPromptSurvivesSiblingPaneChurn is the
+// within-tab counterpart of the unrelated-tab case above: an ordinary shell
+// command in the plain split must not invalidate a probe already reading the
+// routed producer pane beside it.
+func TestProbeCodexScreenPrompts_RoutedPromptSurvivesSiblingPaneChurn(t *testing.T) {
+	h := newTestHandler()
+	base := time.Unix(1_700_000_000, 0)
+	windows := routedCodexProbeWithPlainSibling(
+		palette.BuildTitle("W:owner", "bolt", false),
+		[]string{"/bin/ls", "-la"},
+	)
+	fake := &fakeKittyClient{
+		windows: windows,
+		getText: map[string]string{
+			kitty.MatchWindowByID(43): codexRequestUserInputScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	seedRoutedHarnessProbe(t, h, 42, 43, harness.Codex, harness.Claude, "katana", base.Unix(), "active")
+	h.publishSnapshot(windows, base)
+	snapshot, ready := h.cachedScreenProbeSnapshot()
+	if !ready {
+		t.Fatal("cached screen-probe snapshot is not ready")
+	}
+
+	republished := false
+	fake.beforeGetText = func(match, extent string) {
+		if extent != "screen" || match != kitty.MatchWindowByID(43) || republished {
+			return
+		}
+		republished = true
+		h.publishSnapshot(
+			routedCodexProbeWithPlainSibling(
+				palette.BuildTitle("W:owner", "bolt", false),
+				[]string{"/usr/bin/rg", "needle"},
+			),
+			base.Add(time.Second),
+		)
+	}
+	h.probeCodexScreenPromptsWithSnapshot(base.Add(2*time.Second), snapshot)
+
+	if !republished {
+		t.Fatal("plain sibling pane did not publish a competing snapshot")
+	}
+	if eff, visible := windowEffective(t, h, 42); eff.Icon != "question" || visible != "question" {
+		t.Fatalf("routed target effective = %+v visible %q, want question/question", eff, visible)
+	}
+	ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenPromptProbeEvent)
+	if !ok || ev.PromptKind != string(CodexPromptRequestUserInput) || ev.OriginWindowID != 43 {
+		t.Fatalf("routed prompt event = %+v ok=%v, want request_user_input from origin 43", ev, ok)
+	}
+}
+
+func routedCodexProbeWithPlainSibling(routedTitle string, plainForeground []string) []kitty.OSWindow {
+	return []kitty.OSWindow{{
+		ID:        1,
+		IsActive:  true,
+		IsFocused: true,
+		Tabs: []kitty.Tab{{
+			ID:       100,
+			IsActive: true,
+			Title:    routedTitle,
+			Windows: []kitty.Window{
+				{
+					ID:       42,
+					IsActive: false,
+					UserVars: kitty.UserVars{Profile: "owner", Harness: harness.Claude},
+				},
+				{
+					ID:       43,
+					IsActive: true,
+					ForegroundProcesses: []kitty.ForegroundProcess{{
+						Cmdline: []string{"/opt/homebrew/bin/codex"},
+					}},
+				},
+				{
+					ID:                  44,
+					ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: plainForeground}},
+				},
+			},
+		}},
+	}}
+}
+
 func routedCodexProbeWithEarlierTab(earlierTitle, routedTitle string) []kitty.OSWindow {
 	return []kitty.OSWindow{{
 		ID:        1,

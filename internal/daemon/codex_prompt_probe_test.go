@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -236,6 +237,64 @@ func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestio
 	h.stateMu.Unlock()
 	if meta.Durable.Harness != harness.Codex || lastHarness != harness.Codex {
 		t.Fatalf("ownerless Codex identity = durable %q LastHarness %q, want explicit codex", meta.Durable.Harness, lastHarness)
+	}
+}
+
+func TestProbeCodexScreenPrompts_UnmanagedPipeModeCodexForegroundIsNotProbed(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		cmdline   []string
+		wantProbe bool
+	}{
+		{"interactive codex", []string{"/opt/homebrew/bin/codex", "--yolo"}, true},
+		{"codex exec", []string{"/opt/homebrew/bin/codex", "exec", "say hi"}, false},
+		{"codex review", []string{"/opt/homebrew/bin/codex", "review"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var reads []string
+			fake := &fakeKittyClient{
+				windows: codexProbeForegroundWindows(
+					42,
+					palette.BuildTitle("W:api", "bolt", false),
+					tc.cmdline,
+				),
+				getText: map[string]string{
+					kitty.MatchWindowByID(42): codexRequestUserInputScreen,
+				},
+			}
+			fake.beforeGetText = func(match, _ string) {
+				mu.Lock()
+				defer mu.Unlock()
+				reads = append(reads, match)
+			}
+			h := newTestHandler()
+			h.SetKittyClient(fake)
+
+			h.ProbeCodexScreenPrompts(time.Unix(1_700_000_000, 0))
+
+			mu.Lock()
+			gotReads := len(reads)
+			mu.Unlock()
+			if tc.wantProbe {
+				if gotReads == 0 {
+					t.Fatal("GetText calls = 0, want the interactive pane probed")
+				}
+				if got := len(fake.titleCalls()); got != 1 {
+					t.Fatalf("SetTabTitle calls = %d, want 1", got)
+				}
+				return
+			}
+			if gotReads != 0 {
+				t.Fatalf("GetText calls = %v, want none for a non-interactive run", reads)
+			}
+			if got := len(fake.titleCalls()); got != 0 {
+				t.Fatalf("SetTabTitle calls = %d, want 0", got)
+			}
+			if resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}); len(resp.Events) != 0 {
+				t.Fatalf("events = %d, want 0", len(resp.Events))
+			}
+		})
 	}
 }
 
@@ -1790,6 +1849,8 @@ func directCodexProbeBinding(windowID int, receipt, snapshotGen uint64) screenPr
 		TargetReceipt:       receipt,
 		SnapshotTabID:       100,
 		SnapshotTabEpoch:    snapshotGen,
+		SnapshotSourceEpoch: snapshotGen,
+		SnapshotTargetEpoch: snapshotGen,
 		legacyDirectManaged: true,
 	}
 	binding.Producer.Harness = harness.Codex

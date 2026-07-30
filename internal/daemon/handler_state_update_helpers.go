@@ -15,6 +15,7 @@ const (
 	suppressionReasonUnknownEvent         = DecisionReasonUnknownEvent
 	suppressionReasonAutoApprovedPerm     = DecisionReasonAutoApprovedPermission
 	suppressionReasonOwnerMismatch        = DecisionReasonOwnerMismatch
+	suppressionReasonUnmanagedPipeSource  = DecisionReasonUnmanagedPipeSource
 	suppressionReasonIgnoredEvent         = DecisionReasonIgnoredEvent
 	suppressionReasonInvalidPayload       = DecisionReasonInvalidPayload
 )

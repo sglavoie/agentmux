@@ -149,7 +149,10 @@ func (h *Handler) handleHookEvent(req Request) Response {
 
 		// A direct prompt is authoritative focus evidence even when the cached
 		// Kitty snapshot lags. Other new ordinary sessions must be visibly active.
-		if hookevent.IsPromptEvent(eventOrAction) || (ctx.win != nil && ctx.win.IsActive) {
+		// Prompt and focus are too weak for a non-interactive run: a background
+		// `claude -p` in the plain split must not drive the owner's icons.
+		if !ctx.req.PipeMode &&
+			(hookevent.IsPromptEvent(eventOrAction) || (ctx.win != nil && ctx.win.IsActive)) {
 			ctx.req.routeEvidence.PromptCandidate = hookevent.IsPromptEvent(eventOrAction)
 			ctx.req.routeEvidence.FocusCandidate = ctx.win != nil && ctx.win.IsActive
 			ctx.req.routeEvidence.SelectionReason = "prompt_or_focus"
@@ -163,7 +166,25 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		if h.tryRouteActiveLoopSiblingHook(ctx, eventOrAction, action, payload) {
 			return Response{OK: true}
 		}
-		h.suppressOwnerMismatch(ctx, eventOrAction, action)
+		if ctx.req.PipeMode {
+			h.suppressUnmanagedPipeSource(ctx, eventOrAction, action)
+		} else {
+			h.suppressOwnerMismatch(ctx, eventOrAction, action)
+		}
+		return Response{OK: true}
+	}
+
+	// A non-interactive run in an unmanaged pane of an ownerless tab has no
+	// session to report on, and creating source state here strands an icon on a
+	// plain terminal. ASL lifecycle events keep their loop marker, and a pane
+	// running an exact active loop keeps delivering that run's harness hooks.
+	if ctx.req.PipeMode && ctx.win != nil &&
+		ctx.win.UserVars.EffectiveProfile() == "" && ctx.win.UserVars.EffectiveHarness() == "" &&
+		!isAgentSessionLoopEvent(eventOrAction) &&
+		!h.hasExactActiveLoopCandidate(ctx.req.WindowID) {
+		normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
+		ctx.req.normalized = &normalized
+		h.suppressUnmanagedPipeSource(ctx, eventOrAction, action)
 		return Response{OK: true}
 	}
 

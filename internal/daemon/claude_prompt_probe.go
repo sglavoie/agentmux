@@ -148,19 +148,18 @@ func (h *Handler) probeClaudeIdleWindow(
 	}
 
 	h.applyAuthoritativeIdle(AuthoritativeIdle{
-		WindowID:         targetWindowID,
-		Source:           source,
-		Harness:          harness.Claude,
-		CapturedSeq:      binding.TargetReceipt,
-		CapturedTabEpoch: binding.SnapshotTabEpoch,
-		ProbeBinding:     binding,
-		At:               now.Unix(),
-		RequiredSamples:  required,
-		SessionTitle:     sessionTitle,
-		Account:          account,
-		PipeMode:         pipeMode,
-		Muted:            muted,
-		SourceEventID:    fmt.Sprintf("claude-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
-		DiagnosticEvent:  screenStopProbeEvent,
+		WindowID:        targetWindowID,
+		Source:          source,
+		Harness:         harness.Claude,
+		CapturedSeq:     binding.TargetReceipt,
+		ProbeBinding:    binding,
+		At:              now.Unix(),
+		RequiredSamples: required,
+		SessionTitle:    sessionTitle,
+		Account:         account,
+		PipeMode:        pipeMode,
+		Muted:           muted,
+		SourceEventID:   fmt.Sprintf("claude-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
+		DiagnosticEvent: screenStopProbeEvent,
 	})
 }
