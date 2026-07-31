@@ -41,7 +41,7 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		"X         close session (confirm)",
 		"C         launch new session with profile selection",
 		"f         cycle profile (dashboard live / launcher default)",
-		"o         open session directory in a plain shell tab",
+		"o         open selected launcher directories (highlighted fallback)",
 		"e         peek scrollback (active rows only)",
 	} {
 		if !strings.Contains(out, frag) {

@@ -98,8 +98,9 @@ func (m Model) handleResortDone(msg resortDoneMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// handlePickerOpenDone processes a pickerOpenDoneMsg: quits on success or
-// surfaces the error in the header and triggers a refresh on failure.
+// handlePickerOpenDone processes a single or aggregate pickerOpenDoneMsg:
+// quits on success or surfaces the error in the header and triggers a refresh
+// on failure.
 func (m Model) handlePickerOpenDone(msg pickerOpenDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.actionErr = msg.err

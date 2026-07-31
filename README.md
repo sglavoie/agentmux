@@ -220,7 +220,8 @@ its own badge/metadata columns.
 - `P` pins or unpins the highlighted project so pinned projects stay at the top,
 - `s` searches past session transcripts for the highlighted project,
 - `C` chooses a **one-time profile override** for the highlighted project,
-- `o` opens the highlighted project's directory instead of launching it.
+- `o` opens every selected project's directory; with no selection, it opens
+  the highlighted project's directory instead.
 
 The profile cycle starts at **All** whenever the launcher opens, includes only
 profiles that own configured projects, and follows the launcher's alphabetical

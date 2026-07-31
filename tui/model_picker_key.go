@@ -193,11 +193,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m.enterSessionSearchForProject(m.pickerSessions[origIdx].Title)
 	case keyO:
-		if len(m.pickerFilteredIdx) > 0 {
-			origIdx := m.pickerFilteredIdx[m.pickerCursor]
-			return m, pickerOpenCmd(m, m.pickerSessionWithResolvedProfile(origIdx))
-		}
-		return m, nil
+		return m, pickerOpenCmd(m, m.pickerOpenTargets())
 	case keyOpenEditor:
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]

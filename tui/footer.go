@@ -24,7 +24,7 @@ func renderFooter(m Model) string {
 		lines = nonEmptyFooterLines(footerLine(m.width, "   ", "[y]es", "[n]o", "[esc] cancel"))
 	case ModePicker:
 		lines = nonEmptyFooterLines(
-			footerLine(m.width, "  ", "space: toggle", "enter: launch", "f: profile", "P: pin", "s: sessions", "C: profile", "o: open dir", "O: open in editor", "p: preview", "esc: clear/exit"),
+			footerLine(m.width, "  ", "space: toggle", "enter: launch", "f: profile", "P: pin", "s: sessions", "C: profile", "o: open dirs", "O: open in editor", "p: preview", "esc: clear/exit"),
 			footerLine(m.width, "  ", "DSL: @profile, word", "j/k: up/down", "g/G: top/bottom"),
 		)
 	case ModeConfigPicker:

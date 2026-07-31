@@ -95,7 +95,7 @@ var helpSections = []struct {
 		"  l         open session launcher (live filter + preview)",
 		"  P         pin / unpin highlighted launcher project",
 		"  C         launch new session with profile selection",
-		"  o         open session directory in a plain shell tab",
+		"  o         open selected launcher directories (highlighted fallback)",
 		"  y         copy session title",
 		"  p         toggle preview pane (also active in launcher)",
 	}},

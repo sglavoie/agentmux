@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -149,11 +150,47 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	return m, tea.Batch(cmds...)
 }
 
-// pickerOpenCmd opens the given session's directory in a plain shell tab.
-func pickerOpenCmd(m Model, sess config.Session) tea.Cmd {
+// pickerOpenTargets returns every selected launcher project in stable picker
+// order. With no explicit selection, it preserves the launcher's historical
+// behavior by returning only the highlighted project.
+func (m Model) pickerOpenTargets() []config.Session {
+	targets := make([]config.Session, 0, len(m.pickerSelected))
+	for i := range m.pickerSessions {
+		if m.pickerSelected[i] {
+			targets = append(targets, m.pickerSessionWithResolvedProfile(i))
+		}
+	}
+	if len(targets) > 0 {
+		return targets
+	}
+	if m.pickerCursor < 0 || m.pickerCursor >= len(m.pickerFilteredIdx) {
+		return nil
+	}
+	origIdx := m.pickerFilteredIdx[m.pickerCursor]
+	if origIdx < 0 || origIdx >= len(m.pickerSessions) {
+		return nil
+	}
+	return []config.Session{m.pickerSessionWithResolvedProfile(origIdx)}
+}
+
+// pickerOpenCmd opens every target directory in a plain shell tab. All
+// targets are attempted even when one fails; project-labelled errors are
+// joined into the single completion message consumed by the existing open
+// handler.
+func pickerOpenCmd(m Model, targets []config.Session) tea.Cmd {
+	if len(targets) == 0 {
+		return nil
+	}
 	return func() tea.Msg {
-		_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenDirectory, actions.Request{Project: &sess})
-		return pickerOpenDoneMsg{err: err}
+		errs := make([]error, 0)
+		for i := range targets {
+			sess := targets[i]
+			_, err := sharedActionRegistry.Execute(context.Background(), actions.Dependencies{Kitty: m.client, Config: m.cfg}, actions.OpenDirectory, actions.Request{Project: &sess})
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", configSessionDisplayTitle(sess), err))
+			}
+		}
+		return pickerOpenDoneMsg{err: errors.Join(errs...)}
 	}
 }
 
