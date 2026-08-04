@@ -224,15 +224,15 @@ func (h *Handler) handleHookEvent(req Request) Response {
 	)
 	propagateIngressTrace(&stateReq, ctx.req)
 	// Stamp the source-scoped view for the shadow reducer while the raw payload
-	// is still in hand. A deferred stop keeps the stamp and delivers it at
-	// commit time.
+	// is still in hand. A held stop keeps the stamp and delivers it at commit
+	// time.
 	normalized := normalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 	stateReq.normalized = &normalized
 	stateReq.routeDecision = routeDecisionSource
 	stateReq.normalizationOutcome = normalizationOutcomeFor(normalized)
 	chooseRoute(ctx.req.routeEvidence, routeDecisionSource, "source", ctx.win)
 	stateReq.routeEvidence = cloneRoutingEvidence(ctx.req.routeEvidence)
-	deferred := h.deferResetSensitiveStop(stateReq, payload)
+	deferred := h.holdStopForConfirmation(stateReq, payload)
 	if !deferred {
 		h.handleStateUpdate(stateReq)
 	}

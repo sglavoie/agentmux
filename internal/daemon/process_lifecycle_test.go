@@ -101,6 +101,18 @@ func lifecycleEvents(st *WindowState) []SessionEvent {
 	return out
 }
 
+// lifecycleExitEvent returns the single process-exit row a window recorded.
+func lifecycleExitEvent(t *testing.T, h *Handler, windowID int) SessionEvent {
+	t.Helper()
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	events := lifecycleEvents(h.store[windowID])
+	if len(events) != 1 {
+		t.Fatalf("window %d process-exit rows = %+v, want exactly one", windowID, events)
+	}
+	return events[0]
+}
+
 func TestProcessLifecycleAliveAndUnknownPreserveState(t *testing.T) {
 	for _, status := range []HarnessProcessInspection{HarnessProcessAliveSameInstance, HarnessProcessUnknown} {
 		t.Run(string(status), func(t *testing.T) {

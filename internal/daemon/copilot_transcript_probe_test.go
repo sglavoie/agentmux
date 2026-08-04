@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -958,6 +959,97 @@ func TestProbeCopilotTranscriptStop_PostStatAppendNotificationSuppressed(t *test
 	if got := rec.len(); got != 0 {
 		t.Fatalf("notifications after recovery = %d, want 0", got)
 	}
+}
+
+// armCopilotTerminalHold drives a real Copilot hook pair — a prompt then a
+// native agentStop — and asserts the stop entered the terminal hold class
+// instead of painting immediately. Both hooks carry the session ID, so the held
+// stop and the transcript the probe reads describe the same conversation.
+func armCopilotTerminalHold(t *testing.T, h *Handler, windowID int, session string) {
+	t.Helper()
+	promptPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: session})
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: windowID, Event: "userPromptSubmitted", PayloadJSON: promptPayload}); !resp.OK {
+		t.Fatalf("userPromptSubmitted response = %+v", resp)
+	}
+	stopPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: session, StopReasonCamel: "end_turn"})
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: windowID, Event: "agentStop", PayloadJSON: stopPayload}); !resp.OK {
+		t.Fatalf("agentStop response = %+v", resp)
+	}
+	pending, armed := terminalHoldPending(t, h, windowID)
+	if !armed || pending.class != stopHoldClassTerminal {
+		t.Fatalf("pending hold = %+v/%v, want an armed terminal hold", pending, armed)
+	}
+	if eff, _ := windowEffective(t, h, windowID); eff.Icon != "bolt" {
+		t.Fatalf("icon while held = %q, want bolt", eff.Icon)
+	}
+}
+
+// TestProbeCopilotTranscriptStop_ConfirmsHeldStopInsteadOfSettling is the
+// Copilot member of the confirmation set. Copilot reads a transcript rather than
+// a screen, but the seam is the same one: two agreeing reads at an unchanged
+// transcript generation confirm the withheld agentStop instead of settling a
+// synthetic transcript stop.
+func TestProbeCopilotTranscriptStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
+	home := t.TempDir()
+	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
+	h, _, _ := copilotProbeHandlerNotifier(t, 42, "bolt", home)
+	releaseHoldAtTestEnd(t, h, 42)
+	base := time.Now()
+	armCopilotTerminalHold(t, h, 42, "sess-1")
+
+	h.ProbeCopilotTranscriptStop(base)
+	if pending, ok := terminalHoldPending(t, h, 42); !ok || pending.confirmed {
+		t.Fatalf("hold after one transcript read = %+v/%v, want an unconfirmed hold", pending, ok)
+	}
+
+	h.ProbeCopilotTranscriptStop(base)
+	pending, ok := terminalHoldPending(t, h, 42)
+	if !ok || !pending.confirmed || pending.confirmedBy != StopConfirmedByCopilotTranscript {
+		t.Fatalf("hold after two transcript reads = %+v/%v, want confirmed by %s", pending, ok, StopConfirmedByCopilotTranscript)
+	}
+	assertNoProbeStopFact(t, h, 42)
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("icon while the confirmed hold waits = %q, want bolt", eff.Icon)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if ev, ok := lastEventNamed(resp.Events, copilotTranscriptStopProbeEvent); ok {
+		t.Fatalf("probe recorded %+v; a confirmation is not a synthetic stop", ev)
+	}
+}
+
+// TestProbeCopilotTranscriptStop_AgentStopStillConvergesToStop is the
+// end-to-end non-regression the confirmed-idle gate owes Copilot: a native
+// agentStop still converges the tab to 🛑 and still notifies exactly once. The
+// gate only changes when — after the transcript confirms the turn really
+// ended — and stamps that provenance on the committed stop.
+func TestProbeCopilotTranscriptStop_AgentStopStillConvergesToStop(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		home := t.TempDir()
+		writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
+		h, _, rec := copilotProbeHandlerNotifier(t, 42, "bolt", home)
+		base := time.Now()
+		armCopilotTerminalHold(t, h, 42, "sess-1")
+
+		settleCopilotTurnEndProbe(h, base)
+		time.Sleep(defaultStopConfirmDelay)
+		synctest.Wait()
+
+		if eff, visible := windowEffective(t, h, 42); eff.Icon != "stop" || visible != "stop" {
+			t.Fatalf("effective = %+v visible %q, want stop/stop for a native agentStop", eff, visible)
+		}
+		if calls := rec.snapshot(); len(calls) != 1 {
+			t.Fatalf("stop notifications = %d, want exactly 1", len(calls))
+		}
+		resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+		ev, ok := lastEventNamed(resp.Events, "agentStop")
+		if !ok {
+			t.Fatalf("no committed agentStop row in %+v", resp.Events)
+		}
+		if ev.StopHoldOutcome != StopHoldOutcomeConfirmed || ev.StopConfirmedBy != StopConfirmedByCopilotTranscript {
+			t.Fatalf("committed agentStop = %+v, want outcome %s confirmed by %s", ev, StopHoldOutcomeConfirmed, StopConfirmedByCopilotTranscript)
+		}
+		assertNoProbeStopFact(t, h, 42)
+	})
 }
 
 // TestProbeCopilotTranscriptStop_StableCompletionNotifiesOnce is the positive

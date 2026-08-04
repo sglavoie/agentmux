@@ -6,18 +6,21 @@ import (
 )
 
 const (
-	suppressionReasonGuardBlocked         = DecisionReasonGuardBlocked
-	suppressionReasonSubagentStillRunning = DecisionReasonSubagentStillRunning
-	suppressionReasonCopilotMidSubagent   = DecisionReasonCopilotMidSubagent
-	suppressionReasonCopilotPendingPrompt = DecisionReasonCopilotPendingPrompt
-	suppressionReasonActiveAfterTerminal  = DecisionReasonActiveAfterTerminal
-	suppressionReasonElicitationPending   = DecisionReasonElicitationPending
-	suppressionReasonUnknownEvent         = DecisionReasonUnknownEvent
-	suppressionReasonAutoApprovedPerm     = DecisionReasonAutoApprovedPermission
-	suppressionReasonOwnerMismatch        = DecisionReasonOwnerMismatch
-	suppressionReasonUnmanagedPipeSource  = DecisionReasonUnmanagedPipeSource
-	suppressionReasonIgnoredEvent         = DecisionReasonIgnoredEvent
-	suppressionReasonInvalidPayload       = DecisionReasonInvalidPayload
+	suppressionReasonGuardBlocked           = DecisionReasonGuardBlocked
+	suppressionReasonSubagentStillRunning   = DecisionReasonSubagentStillRunning
+	suppressionReasonCopilotMidSubagent     = DecisionReasonCopilotMidSubagent
+	suppressionReasonCopilotPendingPrompt   = DecisionReasonCopilotPendingPrompt
+	suppressionReasonActiveAfterTerminal    = DecisionReasonActiveAfterTerminal
+	suppressionReasonElicitationPending     = DecisionReasonElicitationPending
+	suppressionReasonUnknownEvent           = DecisionReasonUnknownEvent
+	suppressionReasonAutoApprovedPerm       = DecisionReasonAutoApprovedPermission
+	suppressionReasonOwnerMismatch          = DecisionReasonOwnerMismatch
+	suppressionReasonUnmanagedPipeSource    = DecisionReasonUnmanagedPipeSource
+	suppressionReasonIgnoredEvent           = DecisionReasonIgnoredEvent
+	suppressionReasonInvalidPayload         = DecisionReasonInvalidPayload
+	suppressionReasonTerminalStopHeld       = DecisionReasonTerminalStopHeld
+	suppressionReasonTerminalStopSuperseded = DecisionReasonTerminalStopSuperseded
+	suppressionReasonTerminalStopBypassed   = DecisionReasonTerminalStopBypassed
 )
 
 func (h *Handler) lastKnownState(windowID int) (action, iconState string) {
@@ -65,6 +68,9 @@ func sessionEventFromRequest(req Request, action, resultIconState, currentIconSt
 		TargetHarness:        req.targetHarness,
 		Profile:              req.Account,
 		SaturationReason:     req.saturationReason,
+		StopHoldOutcome:      req.stopHoldOutcome,
+		StopHoldWaitedMs:     req.stopHoldWaitedMs,
+		StopConfirmedBy:      req.stopConfirmedBy,
 		TargetWindowID:       req.WindowID,
 		RouteEvidence:        cloneRoutingEvidence(req.routeEvidence),
 		eventRef:             req.eventRef,

@@ -125,6 +125,14 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 	committed := 0
 	pendingDispositions := make([]pendingLifecycleNotificationDisposition, 0)
 	diagnosticsToRecord := make([]processLifecycleDiagnostic, 0)
+	bypassedHolds := make([]pendingStopHold, 0)
+	// A verified process exit is genuinely terminal, so it settles the window
+	// directly and never enters the confirmed-idle gate. Taking the commit mutex
+	// before stateMu — the order applyCodexClearObservation established — is what
+	// makes that bypass complete: a hold callback that already passed its claim is
+	// parked here until this pass has withdrawn the window's facts, and then finds
+	// its entry gone instead of re-applying a stop over the settled state.
+	h.resetStopCommitMu.Lock()
 	h.stateMu.Lock()
 	for _, candidate := range candidates {
 		status := inspections[candidate.identity]
@@ -147,6 +155,14 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 		})
 		if !result.Changed {
 			continue
+		}
+		// Only a settlement of this exact producer retires the hold: a pass that
+		// changed nothing has not replaced the withheld stop with anything, and a
+		// pass that settled a different process in the same window has not either.
+		bypassedTerminalHold := false
+		if dropped, held := h.cancelStopHoldForProcessExitLocked(candidate.windowID, candidate.identity, facts); held {
+			bypassedHolds = append(bypassedHolds, dropped)
+			bypassedTerminalHold = dropped.class == stopHoldClassTerminal
 		}
 		st.ShadowSeq++
 		st.Reducer.Compact(observedAt.Unix())
@@ -179,6 +195,13 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 				}
 			}
 		}
+		if bypassedTerminalHold {
+			// The confirmed-idle gate was withholding a native terminal hook that
+			// genuinely arrived, so no fact carries it. The exit still synthesizes
+			// the reducer stop, but calling the hook absent would contradict this
+			// window's own held and bypassed rows.
+			terminalEvidence = processTerminalHookEvidenceObserved
+		}
 		h.appendProcessLifecycleEventLocked(
 			candidate.windowID, observedAt, action, status, candidate.identity,
 			candidate.pipeMode, terminalEvidence, result, sources, primary, renderGeneration,
@@ -197,6 +220,7 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 		committed++
 	}
 	h.stateMu.Unlock()
+	h.resetStopCommitMu.Unlock()
 
 	// Observer callbacks may perform bounded diagnostic work and can re-enter
 	// handler state. Emit cancellation dispositions only after stateMu is free.
@@ -204,6 +228,9 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 		if pending.cancelled {
 			h.notifier.emitDisposition(pending.disposition)
 		}
+	}
+	for _, dropped := range bypassedHolds {
+		h.recordBypassedStopHold(dropped)
 	}
 	for _, record := range diagnosticsToRecord {
 		h.recordProcessLifecycleSettlement(observedAt, record)

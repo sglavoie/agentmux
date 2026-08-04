@@ -221,13 +221,13 @@ func TestDaemonExportEventsCommandRejectsPositionalArgs(t *testing.T) {
 
 func TestDaemonExportEventsCommandRejectsUnsupportedSchema(t *testing.T) {
 	resetDaemonExportTestState(t)
-	daemonExportEventsSchema = 11
+	daemonExportEventsSchema = 12
 
 	err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil)
 	if err == nil {
 		t.Fatal("RunE error = nil; want schema error")
 	}
-	if got, want := err.Error(), "--schema must be 8, 9, or 10"; got != want {
+	if got, want := err.Error(), "--schema must be 8, 9, 10, or 11"; got != want {
 		t.Fatalf("RunE error = %q; want %q", got, want)
 	}
 }

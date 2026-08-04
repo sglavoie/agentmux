@@ -80,6 +80,7 @@ func TestRawHookDeliveryDoesNotInheritIndicatorResetClassification(t *testing.T)
 	t.Cleanup(func() { resetFlowStopDelay = oldDelay })
 
 	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false) // pin the immediate-stop path, not the confirmed-idle hold
 	h.SetKittyClient(&fakeKittyClient{
 		windows: hookEventWindows("api", []kitty.Window{{
 			ID:       42,

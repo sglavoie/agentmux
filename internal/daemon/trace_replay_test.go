@@ -322,6 +322,7 @@ func newReplayHandler(t *testing.T, harnessName, projectDir string) (*Handler, [
 	stubDaemonLoopDiscover(t, nil, nil)
 
 	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false) // terminal stops paint immediately, no confirmed-idle hold
 	h.SetReducerConfig(ReducerConfig{GuardDuration: 1})
 	h.probeRunner = func(fn func()) { fn() } // context-limit probes run inline
 	windows := hookEventWindows(

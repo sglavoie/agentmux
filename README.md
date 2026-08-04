@@ -707,7 +707,11 @@ The hermetic process-exit fixture and optional installed drill are documented in
 
 ### Investigating hook event flow
 
-`amx daemon export-events` writes a schema v10 JSON snapshot for investigation.
+`amx daemon export-events` writes a schema v11 JSON snapshot for investigation.
+Version 11 adds bounded terminal-stop-hold evidence: synthetic
+`TerminalStopHold` events, the per-event `stop_hold_outcome`,
+`stop_hold_waited_ms`, and `stop_confirmed_by` fields, and the shadow's
+`pending_terminal_stop` section. Every value comes from a fixed vocabulary.
 Version 10 adds the safe `ph`/`pp`/`pt` harness-process fingerprint to eligible
 source facts, enriched `HarnessProcessExited` events, and process-exit counters
 under `watchdog`. The opaque start token detects PID reuse; command lines,
@@ -716,9 +720,11 @@ trace/request/source-event identities, sanitized reducer
 inputs and outcomes, routing evidence, request-scoped saturation, bounded
 render generations, notification dispositions, and child-probe links. Raw
 payloads, prompts, tool arguments, and transcript text are not included.
-Pass `--schema 9` for the previous complete causal contract or `--schema 8` for
-the pre-causal contract. Both are explicit compatibility projections: schema 9
-cannot expose v10 process fields, and schema 8 cannot expose v9 or v10 fields.
+Pass `--schema 10` for the pre-stop-hold contract, `--schema 9` for the previous
+complete causal contract, or `--schema 8` for the pre-causal contract. All three
+are explicit compatibility projections: schema 10 cannot expose v11 stop-hold
+fields and drops `TerminalStopHold` rows entirely, schema 9 cannot expose v10
+process fields, and schema 8 cannot expose v9 or v10 fields.
 
 Version 8 retains every v7 field and adds producer-pane origins to events
 (`events[].origin_window_id`) and source facts (`shadow.facts[].ow`), plus the
@@ -726,7 +732,7 @@ acknowledgement timestamp `shadow.facts[].aa` for acknowledged facts. Version 7
 retains every v6 field and adds the interactive-ownership `pm` flag to
 pipe-mode source facts (`shadow.facts[].pm`) plus the reducer-wide causal order
 `o` used to compare equal-timestamp facts across sources (`shadow.facts[].o`).
-Each schema-v10 `shadow.facts[]` entry serializes the reducer's
+Each schema-v11 `shadow.facts[]` entry serializes the reducer's
 `SourceFactSnapshot` directly, so it uses that type's
 compact wire keys — `k` (source kind), `y` (source key), `i` (icon), `o`
 (source-independent causal application order), `ow` (producer pane), `aa`
@@ -753,7 +759,7 @@ window can be inspected without paired map lookups:
 
 ```json
 {
-  "schema_version": 10,
+  "schema_version": 11,
   "daemon": { "pid": 1234, "uptime_seconds": 97, "ready": true, "build": { ... }, "metrics": { ... } },
   "cli_build": { ... },
   "windows": [
@@ -984,6 +990,40 @@ The tab title is prefixed with an icon based on the latest hook event:
 | ⚠️ | tool failed (recoverable) |
 | ❗ | stopped with failure |
 
+### Stop confirmation
+
+A harness that ends a turn and then keeps working on its own makes the tab flip
+between ⚡ and 🛑 (and fire a notification) on every false ending. The daemon
+therefore withholds a native terminal hook from the reducer instead of painting
+it: the tab keeps showing ⚡ and 🛑 arrives only when the session has been quiet
+for `delay` seconds **and** the harness's own idle probe confirms the pane is
+really idle, with `timeout` as the hard deadline that commits an unconfirmed
+stop so every window still converges.
+
+```toml
+[defaults.stop_confirm]
+delay = 6      # quiet seconds required before a held stop may paint 🛑
+timeout = 15   # hard deadline; must be >= delay
+# enabled = true
+```
+
+Both fields fall back to their defaults when set to `0`. The values are read
+once at daemon startup, so run `amx daemon restart` after changing them.
+`enabled = false` restores the previous behaviour, where 🛑 paints the instant
+the hook lands.
+
+The hold is bypassed at arm time for pipe-mode panes, harnesses without an idle
+probe, windows holding a live ASL lease, a daemon with no Kitty client, and
+`enabled = false`. A bypass sends the native terminal to the reducer without the
+confirmed-idle wait, which paints 🛑 immediately in every case but one: under a
+live ASL lease the reducer goes on masking the stop icon for as long as the
+lease is live, so those windows still show 🛑 only once the loop finishes. A
+verified harness-process exit paints 🛑 instantly even if a hold is already
+armed, and a new prompt or any other sign the harness is still working drops
+the held stop rather than painting it. `amx daemon export-events` records each
+hold as a `TerminalStopHold` event with its `stop_hold_outcome`, and a released
+stop carries `stop_hold_waited_ms` plus the `stop_confirmed_by` evidence.
+
 ## Config commands
 
 | Command | Description |
@@ -1047,7 +1087,10 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   acknowledged facts; failure above 64). `malformed_process_identity` fails
   when an exported persisted fact contains a partial, invalid, or
   source-incompatible process fingerprint; it does not perform a live process
-  scan. Their event window is 15 minutes.
+  scan. Their event window is 15 minutes. `stop_hold_stuck` warns when a
+  terminal stop has been withheld for more than twice the configured
+  `[defaults.stop_confirm]` timeout — the window is showing an active icon for
+  a 🛑 that is past every release path.
 - **Suspected intermittent state bugs**: preserve a causal snapshot with
   `amx debug bundle --mode share`, validate it with `amx debug replay`, then run
   `amx daemon audit --duration 10m --json`. It samples the invariants every

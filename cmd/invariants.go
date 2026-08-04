@@ -41,6 +41,7 @@ const (
 	checkUnknownProducerFact      = "unknown_producer_fact"
 	checkAcknowledgedPressure     = "acknowledged_fact_pressure"
 	checkMalformedProcessIdentity = "malformed_process_identity"
+	checkStopHoldStuck            = "stop_hold_stuck"
 )
 
 const (
@@ -58,6 +59,13 @@ const activeAfterTerminalGracePeriod = 15 * time.Minute
 // activeAfterTerminalFailureCount is how many suppressions within the grace
 // period turn churn into a health failure.
 const activeAfterTerminalFailureCount = 3
+
+// stopHoldStuckTimeoutMultiple is how many configured stop_confirm timeouts a
+// terminal stop hold may stay armed before it is treated as stuck. The hold's
+// own hard deadline is one timeout after it armed, so twice that is already
+// well past every release path: the window is showing an active icon for a 🛑
+// that will never paint, and the withheld stop is invisible everywhere else.
+const stopHoldStuckTimeoutMultiple = 2
 
 // renderGenerationDriftMaxSeconds is two render intervals (the daemon renders
 // every 2s): a window still dirty past this age means the render pipeline is
@@ -223,6 +231,21 @@ func evaluateDaemonInvariants(snapshot daemon.EventsExport, health daemon.Health
 		if suppressed >= activeAfterTerminalFailureCount {
 			add(severityFailure, checkActiveAfterTerminal, id,
 				"%d active_after_terminal suppressions within %s", suppressed, activeAfterTerminalGracePeriod)
+		}
+
+		// A terminal stop hold withholds a received stop from the reducer while
+		// the window keeps showing its active icon, so it is deliberately absent
+		// from every other health surface. Its own deadline bounds it; one still
+		// armed at twice the configured timeout has outlived every release path
+		// and the 🛑 it is holding will never arrive.
+		if hold := meta.Shadow.PendingTerminalStop; hold != nil && hold.Class == daemon.StopHoldClassTerminal {
+			timeout := hold.Deadline - hold.ArmedAt
+			armedFor := now.Unix() - hold.ArmedAt
+			if timeout > 0 && armedFor > stopHoldStuckTimeoutMultiple*timeout {
+				add(severityWarning, checkStopHoldStuck, id,
+					"terminal stop held for %ds, past %dx the %ds stop_confirm timeout; the window still shows icon %q",
+					armedFor, stopHoldStuckTimeoutMultiple, timeout, desired)
+			}
 		}
 
 		// Post-cutover the reducer's effective state IS the visible state; a

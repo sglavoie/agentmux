@@ -167,7 +167,7 @@ func TestProjectExportEventsPayloadV10IncludesProcessFields(t *testing.T) {
 			TerminalHookEvidence: processTerminalHookEvidenceAbsent,
 		}},
 	}}}
-	projected, err := ProjectExportEventsPayload(payload, EventsExportSchemaVersion)
+	projected, err := ProjectExportEventsPayload(payload, EventsExportSchemaV10)
 	if err != nil {
 		t.Fatalf("ProjectExportEventsPayload: %v", err)
 	}

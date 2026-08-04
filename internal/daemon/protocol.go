@@ -39,6 +39,42 @@ const DeliveryAcknowledgementSchemaVersion = 1
 // It is a public diagnostic contract; native hook event names remain unchanged.
 const EventHarnessProcessExited = "HarnessProcessExited"
 
+// EventTerminalStopHold is the stable synthetic event emitted when the daemon
+// withholds a native terminal stop from the reducer, or drops that hold because
+// a newer authoritative event superseded it. The row is diagnostic evidence
+// only: no reducer fact is applied and the visible icon is unchanged.
+const EventTerminalStopHold = "TerminalStopHold"
+
+// StopHoldOutcome is the bounded vocabulary describing what happened to one
+// held terminal stop. Consumers branch on these values; the daemon never writes
+// free text into the field.
+type StopHoldOutcome string
+
+const (
+	// StopHoldOutcomeHeld records that a terminal stop was withheld;
+	// StopHoldOutcomeSuperseded that a newer event retired it before it painted.
+	StopHoldOutcomeHeld       StopHoldOutcome = "held"
+	StopHoldOutcomeSuperseded StopHoldOutcome = "superseded"
+	// The release outcomes describe how a held stop reached the reducer: a
+	// harness idle probe confirmed it, the hard deadline expired, or a verified
+	// harness-process exit bypassed the gate entirely.
+	StopHoldOutcomeConfirmed StopHoldOutcome = "confirmed"
+	StopHoldOutcomeDeadline  StopHoldOutcome = "deadline"
+	StopHoldOutcomeBypassed  StopHoldOutcome = "bypassed"
+)
+
+// StopConfirmedBy names the exact evidence that released a held terminal stop.
+// Probe values keep the meaning documented for `probe:<harness>` provenance:
+// the harness's own idle observation, never a lost-hook substitute.
+type StopConfirmedBy string
+
+const (
+	StopConfirmedByClaudeScreen      StopConfirmedBy = "probe:claude_screen"
+	StopConfirmedByCodexScreen       StopConfirmedBy = "probe:codex_screen"
+	StopConfirmedByCopilotTranscript StopConfirmedBy = "probe:copilot_transcript"
+	StopConfirmedByDeadline          StopConfirmedBy = "deadline"
+)
+
 // HarnessProcessIdentity is the exact, non-sensitive process fingerprint
 // discovered by a hook client. StartToken is the normalized opaque `ps lstart`
 // value; consumers compare it byte-for-byte and never parse it as a timestamp.
@@ -110,6 +146,13 @@ type Request struct {
 	// saturationReason attributes bounded-capacity degradation to this request.
 	// It is daemon-owned and appears only in sanitized decision evidence.
 	saturationReason string
+	// stopHoldOutcome, stopHoldWaitedMs and stopConfirmedBy stamp the release
+	// evidence of a terminal stop hold onto the stop the hold finally commits.
+	// Only commitStopHold sets them, so a client can never claim its own stop
+	// was confirmed idle.
+	stopHoldOutcome  StopHoldOutcome
+	stopHoldWaitedMs int
+	stopConfirmedBy  StopConfirmedBy
 	Type             MessageType `json:"type"`
 	// RequestID is a client-generated UUID identifying one logical request.
 	// It is reused verbatim across retries so the daemon can deduplicate an
@@ -285,6 +328,29 @@ type WindowDebugShadow struct {
 	// icon accountable to the authoritative facts: an active ASL lease showing
 	// stop/empty, or a live subagent without 🤖, is a health failure.
 	Facts []SourceFactSnapshot `json:"facts,omitempty"`
+	// PendingTerminalStop is present only while the handler is holding a
+	// terminal stop for this window. The hold lives in daemon memory, so a
+	// restart drops it and this section disappears.
+	PendingTerminalStop *PendingTerminalStop `json:"pending_terminal_stop,omitempty"`
+}
+
+// Stop-hold class names are the stable spelling of a hold's release rule in
+// exported diagnostics.
+const (
+	StopHoldClassReset    = "reset"
+	StopHoldClassTerminal = "terminal"
+)
+
+// PendingTerminalStop is the diagnostic view of one terminal stop the handler
+// is withholding from the reducer. ArmedAt, QuietUntil, and Deadline are unix
+// seconds; Confirmed reports whether the harness's idle probe has already
+// settled the quiet period.
+type PendingTerminalStop struct {
+	ArmedAt    int64  `json:"armed_at"`
+	QuietUntil int64  `json:"quiet_until"`
+	Deadline   int64  `json:"deadline"`
+	Confirmed  bool   `json:"confirmed"`
+	Class      string `json:"class"`
 }
 
 // ShadowMismatch is one recorded divergence between the legacy render decision
@@ -369,7 +435,10 @@ type EventsExport struct {
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
-// `amx daemon export-events`. Version 10 adds safe harness-process lifecycle
+// `amx daemon export-events`. Version 11 adds bounded terminal-stop-hold
+// evidence: synthetic `TerminalStopHold` rows, per-event hold outcome, waited
+// duration, and confirming evidence, plus the shadow's pending terminal stop.
+// Version 10 adds safe harness-process lifecycle
 // metadata to source facts, synthetic exit events, and intervention counters.
 // Version 9 adds causal decision evidence plus
 // asynchronous render, notification, and probe links. Version 8 retains every v7 field and adds durable
@@ -383,7 +452,8 @@ type EventsExport struct {
 // readiness, build identity, and request metrics (queue saturation and
 // latency).
 const (
-	EventsExportSchemaVersion = 10
+	EventsExportSchemaVersion = 11
+	EventsExportSchemaV10     = 10
 	EventsExportSchemaV9      = 9
 	EventsExportSchemaV8      = 8
 )
@@ -577,6 +647,14 @@ type SessionEvent struct {
 	ClearedSubagents     *int                             `json:"cleared_subagents,omitempty"`
 	SynthesizedStop      *bool                            `json:"synthesized_stop,omitempty"`
 	TerminalHookEvidence string                           `json:"terminal_hook_evidence,omitempty"`
+
+	// Schema-v11 terminal-stop-hold evidence. StopHoldOutcome and
+	// StopConfirmedBy carry bounded vocabulary values only; StopHoldWaitedMs is
+	// how long the stop was withheld before this row was written. They appear on
+	// EventTerminalStopHold rows and on the stop a hold finally releases.
+	StopHoldOutcome  StopHoldOutcome `json:"stop_hold_outcome,omitempty"`
+	StopHoldWaitedMs int             `json:"stop_hold_waited_ms,omitempty"`
+	StopConfirmedBy  StopConfirmedBy `json:"stop_confirmed_by,omitempty"`
 
 	// QuestionPreview is the bounded ASL mailbox question summary carried by
 	// AgentSessionLoopWaitStarted. It is the only free-text payload field the

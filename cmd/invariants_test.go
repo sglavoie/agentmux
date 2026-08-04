@@ -219,6 +219,59 @@ func TestInvariantRepeatedActiveAfterTerminalSuppressions(t *testing.T) {
 	}
 }
 
+// TestInvariantStopHoldStuckWarnsPastTwiceTheTimeout pins the one regression
+// mode the confirmed-idle gate introduces: a hold that outlives its own hard
+// deadline leaves the tab active for a stop that never paints. It is a warning
+// because the tab is still showing the state its harness last reported, so the
+// healthy verdict must not move.
+func TestInvariantStopHoldStuckWarnsPastTwiceTheTimeout(t *testing.T) {
+	const timeout = 15 * time.Second
+	hold := func(armedAgo time.Duration, class string) *daemon.PendingTerminalStop {
+		armedAt := invariantNow.Add(-armedAgo)
+		return &daemon.PendingTerminalStop{
+			ArmedAt:    armedAt.Unix(),
+			QuietUntil: armedAt.Add(6 * time.Second).Unix(),
+			Deadline:   armedAt.Add(timeout).Unix(),
+			Class:      class,
+		}
+	}
+	cases := []struct {
+		name string
+		hold *daemon.PendingTerminalStop
+		want bool
+	}{
+		{"no hold passes", nil, false},
+		{"inside the deadline passes", hold(10*time.Second, daemon.StopHoldClassTerminal), false},
+		{"past the deadline but inside twice the timeout passes", hold(20*time.Second, daemon.StopHoldClassTerminal), false},
+		{"exactly twice the timeout passes", hold(2*timeout, daemon.StopHoldClassTerminal), false},
+		{"past twice the timeout warns", hold(2*timeout+time.Second, daemon.StopHoldClassTerminal), true},
+		{"reset class is never stuck", hold(time.Hour, daemon.StopHoldClassReset), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := daemon.EventsExport{WindowMetadata: map[int]daemon.WindowDebugMetadata{
+				7: {
+					Renderer: daemon.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
+					Shadow: daemon.WindowDebugShadow{
+						EffectiveIcon: "bolt", EffectiveGen: 1, PendingTerminalStop: tc.hold,
+					},
+				},
+			}}
+			findings := evaluateDaemonInvariants(snapshot, healthyTestHealth(doctorTestBuild), doctorTestBuild, nil, invariantNow)
+			got := findingsByCheck(findings, checkStopHoldStuck)
+			if (len(got) > 0) != tc.want {
+				t.Fatalf("stop_hold_stuck findings = %+v; want finding=%t", got, tc.want)
+			}
+			if tc.want && (got[0].Severity != severityWarning || got[0].WindowID != 7) {
+				t.Fatalf("stop_hold_stuck finding = %+v; want a warning for window 7", got[0])
+			}
+			if n := countFindings(findings, severityFailure); n != 0 {
+				t.Fatalf("failure findings = %d; a stuck hold must not affect the healthy verdict (%+v)", n, findings)
+			}
+		})
+	}
+}
+
 func TestInvariantOrderBookOwnerMismatchBurstIsStructured(t *testing.T) {
 	recent := invariantNow.Add(-time.Minute).Unix()
 	events := make([]daemon.SessionEvent, 0, 19)

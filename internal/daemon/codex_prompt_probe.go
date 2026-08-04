@@ -445,13 +445,15 @@ func (h *Handler) applyCodexClearObservation(
 		targetHarnessSet: true,
 	}
 
-	// Serialize the complete clear with the final application of any deferred
-	// Stop that has already fired and claimed its timer generation. A callback
+	// Serialize the complete clear with the final application of any held Stop
+	// that has already fired and claimed its timer generation. A callback
 	// paused before this boundary remains cancelable below; a callback that
 	// already crossed it applies first and advances the receipt before this
 	// observation can recheck freshness.
 	var pendingDisposition NotificationDisposition
 	var pendingCancelled bool
+	var supersededHold pendingStopHold
+	var supersededHoldDropped bool
 	h.resetStopCommitMu.Lock()
 	h.stateMu.Lock()
 	defer func() {
@@ -460,6 +462,9 @@ func (h *Handler) applyCodexClearObservation(
 		if pendingCancelled {
 			h.notifier.emitDisposition(pendingDisposition)
 		}
+		if supersededHoldDropped {
+			h.recordSupersededStopHold(supersededHold)
+		}
 	}()
 	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
 		return icon == "" || icon == "stop"
@@ -467,12 +472,12 @@ func (h *Handler) applyCodexClearObservation(
 		slog.Debug("codex clear probe: discarded stale observation", "window_id", windowID)
 		return
 	}
-	// The receipt covers deferred reset-sensitive stops as well as applied
-	// reducer events. Cancel the pending generation that existed when this clear
-	// was captured before publishing the cleared reducer state. Because a newer
-	// deferred stop advances ShadowSeq under this same lock, the freshness check
-	// above rejects a stale clear before it can delete that newer generation.
-	h.cancelPendingResetStopLocked(windowID)
+	// The receipt covers held stops as well as applied reducer events. Cancel
+	// the pending generation that existed when this clear was captured before
+	// publishing the cleared reducer state. Because a newer held stop advances
+	// ShadowSeq under this same lock, the freshness check above rejects a stale
+	// clear before it can delete that newer generation.
+	supersededHold, supersededHoldDropped = h.cancelStopHoldLocked(windowID)
 
 	// Preserve the ordinary reset-flow provenance and final marker state: an
 	// explicit reset-scoped user_clear enters and immediately completes the

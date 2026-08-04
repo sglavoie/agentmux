@@ -261,13 +261,14 @@ interactive session. Unknown future events are retained as rejected evidence
 without reducer mutation.
 
 `amx daemon export-events` remains the compatibility snapshot. It emits schema
-v10 by default, adding safe harness-process lifecycle fields and intervention
-counters to the schema-v9 trace/request/source-event identities, sanitized
+v11 by default, adding bounded terminal-stop-hold evidence to the schema-v10
+harness-process lifecycle fields and intervention counters, themselves layered
+on the schema-v9 trace/request/source-event identities, sanitized
 reducer input and outcome evidence, routing evidence, saturation attribution, render generations,
 notification dispositions, and child probe links. Consumers can request
-`--schema 9` for the previous complete causal shape or `--schema 8` for the
-pre-causal shape; both are explicit projections and never receive v10 process
-fields accidentally.
+`--schema 10` for the pre-stop-hold shape, `--schema 9` for the previous
+complete causal shape, or `--schema 8` for the pre-causal shape; all three are
+explicit projections and never receive later fields accidentally.
 
 ## ASL delivery outcomes
 
@@ -328,7 +329,7 @@ Actual provider smoke is operator-attended and deliberately separate:
 3. In one managed session for Claude, Codex, and Copilot, record the CLI version
    and exercise prompt, tool, permission/elicitation, terminal, and error paths.
 4. For each path, retain `amx debug explain --source-event <id> --json` or a
-   schema v10 `amx daemon export-events --window <id>` snapshot.
+   schema v11 `amx daemon export-events --window <id>` snapshot.
 5. Create a share bundle only if the evidence must leave the machine; inspect
    its manifest first. Do not mark a live provider row complete unless an
    operator intentionally incurred and recorded the provider/model usage.

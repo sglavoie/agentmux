@@ -100,6 +100,7 @@ func TestHandler_ActiveUnmanagedNonPromptEstablishesRoute(t *testing.T) {
 func TestHandler_UnmanagedPromptTakeoverAndStickyTerminal(t *testing.T) {
 	stubDaemonLoopDiscover(t, nil, nil)
 	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false) // pin the immediate-stop path, not the confirmed-idle hold
 	initial := hookEventWindows("api", []kitty.Window{
 		{ID: 42, IsActive: true, UserVars: kitty.UserVars{Profile: "codex-target", Harness: harness.Codex}},
 		{ID: 44, IsActive: false, UserVars: kitty.UserVars{Profile: "other-target", Harness: harness.Copilot}},

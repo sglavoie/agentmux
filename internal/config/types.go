@@ -51,6 +51,7 @@ type Defaults struct {
 	IdleThreshold        int                  `toml:"idle_threshold"`         // seconds before a session is considered idle; 0 → default (300)
 	StaleActiveThreshold int                  `toml:"stale_active_threshold"` // deprecated: use [defaults.watchdog].active; mirrored on load
 	Watchdog             WatchdogConfig       `toml:"watchdog"`               // per-state stale-detection thresholds (seconds)
+	StopConfirm          StopConfirmConfig    `toml:"stop_confirm"`           // confirmed-idle gate before a native stop paints the terminal icon
 	SessionArchive       SessionArchiveConfig `toml:"session_archive"`        // retention policy for the searchable session-transcript index
 	Handoff              HandoffConfig        `toml:"handoff"`                // bounded cross-harness context-pack generation
 	Diagnostics          DiagnosticsConfig    `toml:"diagnostics"`            // private event journal and native/daemon log retention
@@ -124,6 +125,21 @@ type WatchdogConfig struct {
 	// false" (&false → suppressed). Only consulted from the global
 	// [defaults.watchdog] block — per-profile overrides do not apply.
 	ClaudeContextLimitProbe *bool `toml:"claude_context_limit_probe"`
+}
+
+// StopConfirmConfig gates the terminal 🛑 icon behind a confirmed-idle hold: a
+// native stop hook is held while the tab keeps showing ⚡ until a quiet period
+// elapses with no further activity, with a hard deadline so a window whose
+// harness never produces confirming evidence still converges. Zero values mean
+// "use the default" so the section can be omitted entirely.
+//
+// Enabled is *bool so the load path can distinguish "user omitted the key"
+// (nil → default true) from "user set enabled = false" (&false → immediate stop,
+// the pre-hold behaviour).
+type StopConfirmConfig struct {
+	Delay   int   `toml:"delay"`   // quiet seconds before a held stop may commit; 0 → default (6)
+	Timeout int   `toml:"timeout"` // hard deadline in seconds; commits unconfirmed; 0 → default (15)
+	Enabled *bool `toml:"enabled"`
 }
 
 // SessionArchiveConfig controls retention for the searchable session-transcript

@@ -60,6 +60,7 @@ func TestRaceInjectedLatencyHookBurstsConverge(t *testing.T) {
 	stubDaemonLoopDiscover(t, nil, nil)
 
 	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false) // pin the immediate-stop path, not the confirmed-idle hold
 	h.SetReducerConfig(ReducerConfig{GuardDuration: 1})
 	windowIDs := []int{1, 2, 3, 4}
 	fake := &fakeKittyClient{windows: raceLatencyWindows(windowIDs)}

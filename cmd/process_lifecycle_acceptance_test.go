@@ -32,7 +32,15 @@ const (
 	lifecycleRestartWindow       = 52
 	lifecycleASLWindow           = 53
 	lifecycleResetWindow         = 54
+	lifecycleStopHoldWindow      = 55
 	lifecycleAcceptanceKittyAddr = "unix:/tmp/agent-mux-process-lifecycle-acceptance-kitty"
+)
+
+// The confirmed-idle gate is configured far longer than this fixture runs, so a
+// held stop can only leave the gate by being bypassed, never by timing out.
+const (
+	lifecycleAcceptanceStopConfirmDelay   = 300
+	lifecycleAcceptanceStopConfirmTimeout = 600
 )
 
 // TestAcceptanceHarnessProcessLifecyclePipeline crosses the production Unix
@@ -59,11 +67,12 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	restoredPipe := lifecycleAcceptanceIdentity("claude", 5201)
 	aslPipe := lifecycleAcceptanceIdentity("claude", 5301)
 	resetProcess := lifecycleAcceptanceIdentity("copilot", 5401)
+	stopHoldProcess := lifecycleAcceptanceIdentity("claude", 5501)
 
 	for _, identity := range []daemon.HarnessProcessIdentity{
 		parent, claudePipe, codexPipe, copilotPipe, concurrentA, concurrentB,
 		protected, nativeBefore, interactiveClaude, interactiveCodex,
-		interactiveCopilot, restoredPipe, aslPipe, resetProcess,
+		interactiveCopilot, restoredPipe, aslPipe, resetProcess, stopHoldProcess,
 	} {
 		fixture.setProcess(identity.PID, identity.StartToken)
 	}
@@ -95,6 +104,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	fixture.sendHook(lifecycleCodexInteractive, "codex", "PreToolUse", "interactive-50", 1, false, &interactiveCodex, nil)
 	fixture.sendHook(lifecycleCopilotInteractive, "copilot", "userPromptSubmitted", "interactive-51", 1, false, &interactiveCopilot, nil)
 	fixture.sendHook(lifecycleRestartWindow, "claude", "PreToolUse", "restart-52", 1, true, &restoredPipe, nil)
+	fixture.sendHook(lifecycleStopHoldWindow, "claude", "PreToolUse", "hold-55", 1, false, &stopHoldProcess, nil)
 
 	fixture.sendHook(lifecycleASLWindow, "claude", "AgentSessionLoopTurnStarted", "", 1, false, nil, map[string]any{
 		"source":          "agent_session_loop",
@@ -133,6 +143,17 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 		return fact != nil && fact.Action == "stop" && fact.Terminated
 	})
 
+	// An interactive native terminal enters the confirmed-idle gate instead of
+	// painting. Nothing here can confirm it and the configured deadline outlives
+	// the fixture, so the only way it can leave the gate is the process exit.
+	fixture.sendHook(lifecycleStopHoldWindow, "claude", "Stop", "hold-55", 2, false, &stopHoldProcess, map[string]any{
+		"stop_reason": "end_turn",
+	})
+	fixture.waitForExport("interactive native terminal held by the confirmed-idle gate", func(export daemon.EventsExport) bool {
+		return lifecycleAcceptanceHoldOutcomes(export.EventsByWindow[lifecycleStopHoldWindow]) != nil &&
+			export.WindowMetadata[lifecycleStopHoldWindow].Shadow.EffectiveIcon == "bolt"
+	})
+
 	fixture.removeProcess(claudePipe.PID)
 	fixture.setProcess(codexPipe.PID, "Thu Jul 16 11:59:59 2026") // PID reuse.
 	fixture.removeProcess(copilotPipe.PID)
@@ -144,6 +165,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	fixture.removeProcess(interactiveCopilot.PID)
 	fixture.removeProcess(aslPipe.PID)
 	fixture.removeProcess(resetProcess.PID)
+	fixture.removeProcess(stopHoldProcess.PID)
 
 	settled := fixture.waitForExport("cross-harness lifecycle settlements", func(export daemon.EventsExport) bool {
 		for _, expected := range []struct {
@@ -161,6 +183,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 			{lifecycleCopilotInteractive, interactiveCopilot.PID},
 			{lifecycleASLWindow, aslPipe.PID},
 			{lifecycleResetWindow, resetProcess.PID},
+			{lifecycleStopHoldWindow, stopHoldProcess.PID},
 		} {
 			exit, ok := lifecycleAcceptanceExit(export.EventsByWindow[expected.windowID], expected.pid)
 			if !ok || !lifecycleAcceptanceRenderComplete(export.WindowMetadata[expected.windowID], exit.RenderGeneration) {
@@ -214,9 +237,11 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 		{lifecycleCodexInteractive, interactiveCodex},
 		{lifecycleCopilotInteractive, interactiveCopilot},
 	} {
+		// No native terminal ever reached these windows, held or applied, so a
+		// synthesized stop must keep reporting the hook as absent.
 		exit, _ := lifecycleAcceptanceExit(settled.EventsByWindow[expected.windowID], expected.identity.PID)
 		if exit.Reason != daemon.HarnessProcessExitReasonInteractive || exit.ProcessMode != "interactive" ||
-			exit.SynthesizedStop == nil || !*exit.SynthesizedStop ||
+			exit.SynthesizedStop == nil || !*exit.SynthesizedStop || exit.TerminalHookEvidence != "absent" ||
 			settled.WindowMetadata[expected.windowID].Shadow.EffectiveIcon != "stop" {
 			t.Fatalf("interactive exit for %s = %+v meta=%+v", expected.identity.Harness, exit, settled.WindowMetadata[expected.windowID].Shadow)
 		}
@@ -228,6 +253,27 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 	}
 	if asl := lifecycleAcceptanceFact(aslMeta, daemon.SourceASL, "acceptance-run-53"); asl == nil || !asl.LeaseLive || asl.Acked {
 		t.Fatalf("ASL lease changed during process settlement: %+v", asl)
+	}
+
+	// The exit takes both the commit mutex and the state lock, so a hold callback
+	// that already claimed its generation cannot re-apply its stop after the exit
+	// withdrew this window's facts: exactly one stop settles. The retired hold is
+	// the proof that the native terminal hook was received, so the exit reports it
+	// observed even though the exit synthesized the stop itself.
+	stopHoldExit, _ := lifecycleAcceptanceExit(settled.EventsByWindow[lifecycleStopHoldWindow], stopHoldProcess.PID)
+	if stopHoldExit.Reason != daemon.HarnessProcessExitReasonInteractive || stopHoldExit.SynthesizedStop == nil ||
+		!*stopHoldExit.SynthesizedStop || stopHoldExit.TerminalHookEvidence != "observed" ||
+		settled.WindowMetadata[lifecycleStopHoldWindow].Shadow.EffectiveIcon != "stop" {
+		t.Fatalf("held-stop process exit = %+v shadow=%+v", stopHoldExit, settled.WindowMetadata[lifecycleStopHoldWindow].Shadow)
+	}
+	holdOutcomes := lifecycleAcceptanceHoldOutcomes(settled.EventsByWindow[lifecycleStopHoldWindow])
+	if len(holdOutcomes) != 2 || holdOutcomes[0] != daemon.StopHoldOutcomeHeld ||
+		holdOutcomes[1] != daemon.StopHoldOutcomeBypassed {
+		t.Fatalf("stop-hold rows = %v, want [held bypassed]", holdOutcomes)
+	}
+	if got := lifecycleAcceptanceSettledStops(settled.EventsByWindow[lifecycleStopHoldWindow]); got != 1 {
+		t.Fatalf("settled stop events for the bypassed hold = %d, want exactly 1 (%+v)",
+			got, settled.EventsByWindow[lifecycleStopHoldWindow])
 	}
 
 	resetExit, _ := lifecycleAcceptanceExit(settled.EventsByWindow[lifecycleResetWindow], resetProcess.PID)
@@ -374,6 +420,10 @@ func newProcessLifecycleAcceptanceFixture(t *testing.T) *processLifecycleAccepta
 			Active: 600, Subagent: 1800, Compact: 180, HookSilence: 14400,
 			ClaudeContextLimitProbe: &disableContextProbe,
 		},
+		StopConfirm: config.StopConfirmConfig{
+			Delay:   lifecycleAcceptanceStopConfirmDelay,
+			Timeout: lifecycleAcceptanceStopConfirmTimeout,
+		},
 	}}
 	fixture.windows = lifecycleAcceptanceWindows(t, home)
 	fixture.writeKittyFixture()
@@ -405,6 +455,7 @@ func lifecycleAcceptanceWindows(t *testing.T, home string) []kitty.OSWindow {
 		lifecycleNativeAfterWindow: "claude", lifecycleClaudeInteractive: "claude",
 		lifecycleCodexInteractive: "codex", lifecycleCopilotInteractive: "copilot",
 		lifecycleRestartWindow: "claude", lifecycleASLWindow: "claude", lifecycleResetWindow: "copilot",
+		lifecycleStopHoldWindow: "claude",
 	}
 	ids := make([]int, 0, len(harnesses))
 	for id := range harnesses {
@@ -746,6 +797,30 @@ func lifecycleAcceptanceExit(events []daemon.SessionEvent, pid int) (daemon.Sess
 		}
 	}
 	return daemon.SessionEvent{}, false
+}
+
+// lifecycleAcceptanceHoldOutcomes returns the terminal-stop-hold outcomes a
+// window recorded, in order, or nil while nothing has been held yet.
+func lifecycleAcceptanceHoldOutcomes(events []daemon.SessionEvent) []daemon.StopHoldOutcome {
+	var out []daemon.StopHoldOutcome
+	for _, event := range events {
+		if event.Event == daemon.EventTerminalStopHold {
+			out = append(out, event.StopHoldOutcome)
+		}
+	}
+	return out
+}
+
+// lifecycleAcceptanceSettledStops counts the rows that actually painted a stop.
+// Synthetic hold rows carry action "stop" as well but apply nothing.
+func lifecycleAcceptanceSettledStops(events []daemon.SessionEvent) int {
+	settled := 0
+	for _, event := range events {
+		if event.Action == "stop" && event.Event != daemon.EventTerminalStopHold {
+			settled++
+		}
+	}
+	return settled
 }
 
 func assertLifecycleAcceptancePipeResult(

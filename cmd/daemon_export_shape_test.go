@@ -154,10 +154,10 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 func extractSchemaV10ExampleFacts(t *testing.T, readme string) []map[string]json.RawMessage {
 	t.Helper()
 
-	marker := "\"schema_version\": 10"
+	marker := "\"schema_version\": 11"
 	start := strings.Index(readme, marker)
 	if start < 0 {
-		t.Fatalf("README missing schema_version 10 example")
+		t.Fatalf("README missing schema_version 11 example")
 	}
 	rest := readme[start:]
 	idx := strings.Index(rest, "\"facts\"")
@@ -354,8 +354,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
 		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
 	}
-	if payload.SchemaVersion != 10 {
-		t.Fatalf("schema_version = %d; want 10", payload.SchemaVersion)
+	if payload.SchemaVersion != 11 {
+		t.Fatalf("schema_version = %d; want 11", payload.SchemaVersion)
 	}
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())

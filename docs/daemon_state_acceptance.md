@@ -72,13 +72,22 @@ Automated gates:
 Live scenarios observed (tab-title polling plus `amx daemon export-events`
 window logs retained in the session transcript):
 
+> Every turn transition below was recorded before the confirmed-idle stop hold
+> existed, when a native terminal hook painted `🛑` immediately. The hooks and
+> the settled icons are unchanged; only the timing moved. Re-running any of
+> these drills today, the tab holds `⚡` after the terminal hook and paints `🛑`
+> once the harness's own idle probe confirms (or at the hard deadline). See
+> [Cross-harness stop convergence](#cross-harness-stop-convergence-session-7).
+
 - **Claude turn transitions** — new managed tab: `⚡` on prompt submit, `🛑`
-  at turn end (`UserPromptSubmit→active→bolt`, `Stop→stop→stop`).
+  at turn end (`UserPromptSubmit→active→bolt`, `Stop→stop→stop`); under the
+  stop hold the same `Stop` is withheld and `🛑` lands after the quiet period.
 - **Three concurrent subagents with interleaved parent activity** — three
   `SubagentStart`/`SubagentStop` pairs with parent `PostToolUse` interleaved;
   `🤖` held for the whole subagent window (precedence over the parent bolt)
   and resolved to a clean `🛑` with no stranded robot icon.
-- **Codex turn transitions** — `⚡` → `🛑` within ~2s on a trivial prompt.
+- **Codex turn transitions** — `⚡` → `🛑` within ~2s on a trivial prompt; under
+  the stop hold the same turn converges after the quiet period instead.
 - **Codex manual compaction** — `/compact`: `PreCompact→compact` (`🌀`),
   `PostCompact→stop` (`🛑`).
 - **Codex automatic compaction** — with `model_auto_compact_token_limit=8000`
@@ -114,7 +123,8 @@ window logs retained in the session transcript):
   two restore defects (see notes below).
 - **Copilot turn transitions** — three live turns observed:
   `userPromptSubmitted→active→bolt` (`⚡`), `agentStop→stop` (`🛑`), twice on
-  trivial prompts and once through a real blocking tool permission. The first
+  trivial prompts and once through a real blocking tool permission; under the
+  stop hold `agentStop` is withheld until the transcript probe confirms. The first
   cold launch refused with "Please use /login" despite valid keychain
   credentials (one-time initialization; a relaunch authenticated cleanly —
   the first launch stamps `loggedInUsers` into `~/.copilot/config.json`).
@@ -215,7 +225,7 @@ For the next installed acceptance run, retain all of the following:
   with its producer `--harness` flag;
 - `amx doctor --strict` and a repeated `amx daemon audit --duration 10m --json`
   with no new mismatch, unknown-producer, or pressure failures;
-- default schema v10 exports for both the managed target and unmanaged producer
+- default schema v11 exports for both the managed target and unmanaged producer
   panes, showing trace/request/source-event correlation, producer-derived
   source key/origin, managed target ownership, reducer outcomes, async render
   links, and terminal route continuity after focus moves;
@@ -323,12 +333,46 @@ that never received a native terminal.
 
 | Scenario | Codex | Claude | Copilot |
 | --- | --- | --- | --- |
-| Normal turn completion | native `Stop` → `🛑`; if the hook is lost, `ScreenStopProbe` (`source: probe:codex_screen`, `Worked for …` + empty composer) settles `🛑` | native `Stop` → `🛑`; if absent, `ScreenStopProbe` (`source: probe:claude_screen`, idle composer, two samples) settles `🛑` | `agentStop`/`sessionEnd` → `🛑`; if absent, `TranscriptStopProbe` (`source: probe:copilot_transcript`, terminal transcript record) settles `🛑` |
+| Normal turn completion | native `Stop` → held at `⚡` until probe-confirmed or the deadline → `🛑`; the confirming evidence is the same `Worked for …` + empty composer the `ScreenStopProbe` uses, released as `stop_confirmed_by: probe:codex_screen` | native `Stop` → held at `⚡` until probe-confirmed or the deadline → `🛑`; confirmed by the same idle composer (two samples) the `ScreenStopProbe` uses, released as `stop_confirmed_by: probe:claude_screen` | `agentStop`/`sessionEnd` → held at `⚡` until probe-confirmed or the deadline → `🛑`; confirmed by the same terminal transcript record the `TranscriptStopProbe` uses, released as `stop_confirmed_by: probe:copilot_transcript` |
 | Confirmed user interruption | `ScreenStopProbe` after the TUI interrupted marker + empty composer (one sample) → `🛑` | `ScreenStopProbe` after Claude's interruption marker (one sample) → `🛑` (no native `Stop` fires on interruption) | `TranscriptStopProbe` after a terminal/abort transcript record → `🛑` |
 | Protected active states | `key`/`question`/`error`/`warning`/`subagent`/`compact`, pipe-mode `pm:true` facts, and live ASL leases are **never** downgraded by any stop fallback | same | same |
 | New prompt after stop | `UserPromptSubmit` → `⚡` (reducer recency supersedes the stop fact) | `UserPromptSubmit` → `⚡` | `userPromptSubmitted` → `⚡` |
 | Live ASL between turns | the loop lease masks `🛑` and shows `🔁`/its active/attention state; `🛑` appears only after `AgentSessionLoopFinished` | same | same |
 | Background agent idle | n/a | `agent_idle` → `🛑` (Claude semantics unchanged) | `notification.agent_idle` is **ignored** (background-agent), never a main-session stop; the interactive `⚡` is preserved |
+
+The hold applies to every native terminal that reaches the gate, not just
+`Stop`: `SessionEnd`/`sessionEnd`/`agentStop` and Claude's idle notifications
+are all withheld the same way. It is bypassed at arm time for pipe-mode panes,
+harnesses without an idle probe, windows with a live ASL lease, a daemon with no
+Kitty client, and `[defaults.stop_confirm] enabled = false`. A bypass admits the
+native terminal to the reducer without the confirmed-idle wait, which restores
+the pre-gate `🛑` everywhere except under a live ASL lease: there the lease keeps
+masking the stop icon exactly as the *Live ASL between turns* row above
+describes, so `🛑` still appears only after `AgentSessionLoopFinished`. A
+verified harness-process exit bypasses an already-armed hold and paints `🛑`
+instantly; that exit's `HarnessProcessExited` row keeps
+`synthesized_stop: true`, because the reducer stop is the exit's own, but reports
+`terminal_hook_evidence: observed` — the retired hold is proof the native hook
+did arrive. While a hold is armed the window keeps its active icon and fires no
+stop notification; a
+`TerminalStopHold` row records the `held` outcome, and a `superseded` or
+`bypassed` row records a hold that ended without ever painting.
+
+An armed hold is deliberately absent from every other health surface — the
+reducer never saw the stop, so nothing is late and nothing mismatches. Its only
+projection is `shadow.pending_terminal_stop` (`armed_at`, `quiet_until`,
+`deadline`, `confirmed`, `class`), live at export time and gone the moment the
+hold releases. `amx doctor` reads it for one **warning**-severity check,
+`stop_hold_stuck`: a terminal hold still armed at twice the configured
+`[defaults.stop_confirm] timeout` has outlived its own deadline and every
+release path, so the window is showing an active icon for a `🛑` that will
+never paint. It stays a warning — a withheld stop is not a corrupt one — and
+the healthy verdict is unaffected.
+
+Do not read a released hold's `stop_confirmed_by` as a lost hook. It names the
+evidence that let a **native** stop paint early, and the fact it commits is the
+harness's own. Only a synthetic stop *fact* whose `source` is `probe:<harness>`
+means the native hook was lost.
 
 Every synthetic stop records its source (`probe:<harness>`) and the **actual
 reduced icon** in `action` (a masked probe records the icon that actually won),

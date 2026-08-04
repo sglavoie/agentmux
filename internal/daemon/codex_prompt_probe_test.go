@@ -714,6 +714,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 	synctest.Test(t, func(t *testing.T) {
 		// Receipt-valid clear cancels an older pending stop.
 		h := newTestHandler()
+		h.SetStopConfirm(0, 0, false) // exercise the reset hold class, not the terminal one
 		base := time.Now()
 		fake := &fakeKittyClient{
 			windows: codexProbeWindows(42, palette.BuildTitle("W:api", "stop", false), kitty.UserVars{
@@ -731,7 +732,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 			t.Fatalf("older Stop response = %+v", resp)
 		}
 		h.stateMu.Lock()
-		pendingBefore, armed := h.pendingResetStops[42]
+		pendingBefore, armed := h.pendingStopHolds[42]
 		stopReceipt := h.windowReceiptLocked(42)
 		h.stateMu.Unlock()
 		if !armed || pendingBefore.timer == nil {
@@ -744,7 +745,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		h.ProbeCodexScreenPrompts(base)
 
 		h.stateMu.Lock()
-		_, stillPending := h.pendingResetStops[42]
+		_, stillPending := h.pendingStopHolds[42]
 		st := h.store[42]
 		h.stateMu.Unlock()
 		if stillPending {
@@ -779,6 +780,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		// A clear captured before another deferred stop is stale and must leave
 		// that newer pending generation intact.
 		h = newTestHandler()
+		h.SetStopConfirm(0, 0, false) // exercise the reset hold class, not the terminal one
 		fake = &fakeKittyClient{windows: codexProbeWindows(42, palette.BuildTitle("W:api", "stop", false), kitty.UserVars{
 			Profile: "work",
 			Harness: "codex",
@@ -790,7 +792,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 			t.Fatalf("newer Stop response = %+v", resp)
 		}
 		h.stateMu.Lock()
-		newerPending, armed := h.pendingResetStops[42]
+		newerPending, armed := h.pendingStopHolds[42]
 		h.stateMu.Unlock()
 		if !armed || newerPending.timer == nil {
 			t.Fatalf("newer pending reset stop = %+v, want armed timer", newerPending)
@@ -803,7 +805,7 @@ func TestProbeCodexClearWindow_CancelsDeferredStopGenerationSafely(t *testing.T)
 		})
 
 		h.stateMu.Lock()
-		pendingAfter, stillPending := h.pendingResetStops[42]
+		pendingAfter, stillPending := h.pendingStopHolds[42]
 		h.stateMu.Unlock()
 		if !stillPending || pendingAfter.seq != newerPending.seq {
 			t.Fatalf("pending after stale clear = %+v/%v, want newer generation %d retained", pendingAfter, stillPending, newerPending.seq)
@@ -849,11 +851,11 @@ func TestCodexClearDeferredStopClaimRace(t *testing.T) {
 		Event:    "Stop",
 		Harness:  "codex",
 	}
-	if !h.deferResetSensitiveStop(req, hookevent.HookPayload{}) {
+	if !h.holdStopForConfirmation(req, hookevent.HookPayload{}) {
 		t.Fatal("reset-sensitive Stop was not deferred")
 	}
 	h.stateMu.Lock()
-	pending, armed := h.pendingResetStops[42]
+	pending, armed := h.pendingStopHolds[42]
 	if armed && pending.timer != nil {
 		pending.timer.Stop()
 	}
@@ -865,7 +867,7 @@ func TestCodexClearDeferredStopClaimRace(t *testing.T) {
 	commitDone := make(chan struct{})
 	go func() {
 		defer close(commitDone)
-		h.commitDeferredResetStop(req, pending.seq)
+		h.commitStopHold(req.WindowID, pending.seq)
 	}()
 	select {
 	case <-claimed:
@@ -884,7 +886,7 @@ func TestCodexClearDeferredStopClaimRace(t *testing.T) {
 	})
 
 	h.stateMu.Lock()
-	_, stillPending := h.pendingResetStops[42]
+	_, stillPending := h.pendingStopHolds[42]
 	st := h.store[42]
 	h.stateMu.Unlock()
 	if stillPending {
@@ -1385,6 +1387,32 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 	}
 	if ev.Source != string(SourceProbe)+":"+screenPromptProbeSource {
 		t.Fatalf("ScreenStopProbe source = %q, want %q", ev.Source, string(SourceProbe)+":"+screenPromptProbeSource)
+	}
+}
+
+// TestProbeCodexScreenPrompts_ConfirmsHeldStopInsteadOfSettling is the Codex
+// twin of the Claude confirmation test, and pins the per-harness difference that
+// matters: Codex owns its own screen, so one completed-turn read is the whole
+// sample requirement and the very first probe confirms the withheld stop.
+func TestProbeCodexScreenPrompts_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
+	h, _ := newTerminalHoldProbeHandler(t, harness.Codex, codexCompletedTurnScreen)
+	releaseHoldAtTestEnd(t, h, 42)
+	base := time.Now()
+	armTerminalHold(t, h)
+
+	h.ProbeCodexScreenPrompts(base)
+
+	pending, ok := terminalHoldPending(t, h, 42)
+	if !ok || !pending.confirmed || pending.confirmedBy != StopConfirmedByCodexScreen {
+		t.Fatalf("hold after one completed-turn screen = %+v/%v, want confirmed by %s", pending, ok, StopConfirmedByCodexScreen)
+	}
+	assertNoProbeStopFact(t, h, 42)
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("icon while the confirmed hold waits = %q, want bolt", eff.Icon)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
+		t.Fatalf("probe recorded %+v; a confirmation is not a synthetic stop", ev)
 	}
 }
 

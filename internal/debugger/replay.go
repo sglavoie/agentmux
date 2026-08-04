@@ -1104,6 +1104,7 @@ func decodeEventsExport(inputPath string, data []byte) (replaySource, error) {
 		return replaySource{}, err
 	}
 	if header.SchemaVersion != daemon.EventsExportSchemaVersion &&
+		header.SchemaVersion != daemon.EventsExportSchemaV10 &&
 		header.SchemaVersion != daemon.EventsExportSchemaV9 &&
 		header.SchemaVersion != daemon.EventsExportSchemaV8 {
 		return replaySource{}, fmt.Errorf("debugger: unsupported events export schema %d", header.SchemaVersion)

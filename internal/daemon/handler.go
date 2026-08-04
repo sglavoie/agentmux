@@ -113,13 +113,13 @@ type Handler struct {
 	stateMu sync.Mutex
 	store   map[int]*WindowState
 
-	// resetStopCommitMu linearizes a claimed deferred reset-sensitive Stop's
-	// final state application with events that supersede it. Callers acquire it
-	// before stateMu; the callback does not hold either lock while invoking the
-	// test seam below.
+	// resetStopCommitMu linearizes a claimed held Stop's final state
+	// application with events that supersede it. Callers acquire it before
+	// stateMu; the callback does not hold either lock while invoking the test
+	// seam below.
 	resetStopCommitMu             sync.Mutex
-	pendingResetStops             map[int]pendingResetStop
-	nextResetStopSeq              uint64
+	pendingStopHolds              map[int]pendingStopHold
+	nextStopHoldSeq               uint64
 	afterDeferredStopClaimForTest func(windowID int, seq uint64)
 
 	kittySockets      map[int]string
@@ -206,6 +206,16 @@ type Handler struct {
 	// Defaults to true; an explicit `false` skips the probe entirely.
 	claudeContextLimitProbeEnabled bool
 
+	// stopConfirmDelay, stopConfirmTimeout and stopConfirmEnabled configure the
+	// confirmed-idle gate a native stop passes through before it paints the
+	// terminal icon: the quiet period a held stop must observe, the hard
+	// deadline after which it commits unconfirmed, and whether the gate runs at
+	// all. Set from [defaults.stop_confirm] at daemon startup
+	// (SetStopConfirm) before the hook path can read them.
+	stopConfirmDelay   time.Duration
+	stopConfirmTimeout time.Duration
+	stopConfirmEnabled bool
+
 	// copilotTranscriptHomes and copilotDefaultHome resolve a managed Copilot
 	// tab's interactive session transcript for the transcript stop probe.
 	// copilotTranscriptHomes is the ordered set of configured Copilot profile
@@ -291,11 +301,14 @@ func NewHandler(guard *StateGuard, notifier *Notifier) *Handler {
 		perAccountThresholds:           make(map[string]map[string]time.Duration),
 		perAccountHookSilence:          make(map[string]time.Duration),
 		store:                          make(map[int]*WindowState),
-		pendingResetStops:              make(map[int]pendingResetStop),
+		pendingStopHolds:               make(map[int]pendingStopHold),
 		renderQueue:                    newRenderQueue(),
 		processInspector:               newPSHarnessProcessInspector(),
 		kittySockets:                   make(map[int]string),
 		claudeContextLimitProbeEnabled: true,
+		stopConfirmDelay:               defaultStopConfirmDelay,
+		stopConfirmTimeout:             defaultStopConfirmTimeout,
+		stopConfirmEnabled:             true,
 		copilotLifecycleReader:         transcript.ReadCopilotLifecycle,
 		aslMissStreak:                  make(map[aslLeaseRef]int),
 		aslSupervisorTargets:           make(map[aslLeaseRef]aslSupervisorTarget),
@@ -480,9 +493,10 @@ func (h *Handler) handleEventsExport(req Request) Response {
 
 // exportEnrichLocked stamps live-only state onto an export snapshot: the
 // renderer dirty age (DirtySince in the metadata is copied at mutation time;
-// the age is computed at export time so a long-stuck window reads truthfully)
-// and the reducer's current source facts, so diagnostics can hold the visible
-// icon accountable to the authoritative fact set. Callers hold stateMu.
+// the age is computed at export time so a long-stuck window reads truthfully),
+// the reducer's current source facts, so diagnostics can hold the visible icon
+// accountable to the authoritative fact set, and any terminal stop still being
+// withheld from that fact set. Callers hold stateMu.
 func (h *Handler) exportEnrichLocked(windowID int, meta WindowDebugMetadata) WindowDebugMetadata {
 	st, ok := h.store[windowID]
 	if !ok {
@@ -494,6 +508,7 @@ func (h *Handler) exportEnrichLocked(windowID int, meta WindowDebugMetadata) Win
 	if st.Reducer != nil {
 		meta.Shadow.Facts = st.Reducer.Facts()
 	}
+	meta.Shadow.PendingTerminalStop = h.pendingTerminalStopSnapshotLocked(windowID)
 	return meta
 }
 

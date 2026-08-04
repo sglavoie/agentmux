@@ -138,6 +138,7 @@ func TestHandler_ActiveLoopSiblingRoutesAllStatesToOwner(t *testing.T) {
 			projectDir := t.TempDir()
 			stubDaemonLoopDiscover(t, []agentloop.Candidate{aslCandidate(43, projectDir)}, nil)
 			h := newTestHandler()
+			h.SetStopConfirm(0, 0, false) // route Stop straight to the reducer, no confirmed-idle hold
 			fake := &fakeKittyClient{windows: aslSiblingWindows("api", projectDir, 42, 43)}
 			h.SetKittyClient(fake)
 
@@ -168,6 +169,7 @@ func TestHandler_ActiveLoopSiblingTurnCyclePreservesLoop(t *testing.T) {
 	stubDaemonLoopDiscover(t, []agentloop.Candidate{aslCandidate(43, projectDir)}, nil)
 
 	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false) // route Stop straight to the reducer, no confirmed-idle hold
 	fake := &fakeKittyClient{windows: aslSiblingWindows(
 		palette.BuildTitleParts(palette.TitleParts{Base: "api", Looping: true}),
 		projectDir, 42, 43,
@@ -212,6 +214,7 @@ func TestHandler_ActiveLoopSiblingContextLimitProbesSourceRendersErrorOnOwner(t 
 	projectDir := t.TempDir()
 	stubDaemonLoopDiscover(t, []agentloop.Candidate{aslCandidate(43, projectDir)}, nil)
 	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false) // route the base transition straight to the reducer
 	// Run the async context-limit probe inline for a deterministic promotion.
 	h.probeRunner = func(fn func()) { fn() }
 	fake := &fakeKittyClient{

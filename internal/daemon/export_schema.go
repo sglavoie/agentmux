@@ -7,20 +7,110 @@ import (
 )
 
 // ProjectExportEventsPayload returns the requested public wire schema. Schemas
-// 8 and 9 are explicit field projections so fields added to the current schema
-// can never leak into compatibility output through shared nested structs.
+// 8, 9, and 10 are explicit field projections so fields added to the current
+// schema can never leak into compatibility output through shared nested
+// structs.
 func ProjectExportEventsPayload(payload ExportEventsPayload, schema int) (any, error) {
 	switch schema {
 	case EventsExportSchemaVersion:
 		payload.SchemaVersion = EventsExportSchemaVersion
 		return payload, nil
+	case EventsExportSchemaV10:
+		return projectExportEventsPayloadV10(payload), nil
 	case EventsExportSchemaV9:
 		return projectExportEventsPayloadV9(payload), nil
 	case EventsExportSchemaV8:
 		return projectExportEventsPayloadV8(payload), nil
 	default:
-		return nil, fmt.Errorf("unsupported export schema %d (want 8, 9, or 10)", schema)
+		return nil, fmt.Errorf("unsupported export schema %d (want 8, 9, 10, or 11)", schema)
 	}
+}
+
+// omitFromCompatibilityExport reports whether a row must be dropped from a
+// pre-v11 projection entirely. Rows are otherwise field-projected, so a
+// synthetic event introduced by schema v11 would appear in legacy output as a
+// row a v10 consumer has never seen, with its evidence silently stripped.
+func omitFromCompatibilityExport(event SessionEvent) bool {
+	return event.Event == EventTerminalStopHold
+}
+
+// stopHoldSuppressionReasons is the suppression vocabulary schema v11
+// introduced. Every other compatibility section is pinned by a struct, but
+// WindowDebugStats counts suppressions in an open map keyed by decision reason,
+// so a pre-v11 projection has to strip these keys by name or it reports
+// aggregates for the very rows it just dropped.
+var stopHoldSuppressionReasons = map[string]struct{}{
+	DecisionReasonTerminalStopHeld:       {},
+	DecisionReasonTerminalStopSuperseded: {},
+	DecisionReasonTerminalStopBypassed:   {},
+}
+
+func projectCompatibilityWindowDebugStats(stats WindowDebugStats) WindowDebugStats {
+	out := stats
+	out.SuppressionReasons = nil
+	for reason, count := range stats.SuppressionReasons {
+		if _, ok := stopHoldSuppressionReasons[reason]; ok {
+			continue
+		}
+		if out.SuppressionReasons == nil {
+			out.SuppressionReasons = make(map[string]int, len(stats.SuppressionReasons))
+		}
+		out.SuppressionReasons[reason] = count
+	}
+	return out
+}
+
+type exportEventsPayloadV10 struct {
+	SchemaVersion int                  `json:"schema_version"`
+	ExportedAt    int64                `json:"exported_at"`
+	Daemon        ExportDaemonMetadata `json:"daemon"`
+	CLIBuild      *buildinfo.Info      `json:"cli_build,omitempty"`
+	Windows       []exportWindowV10    `json:"windows"`
+}
+
+// exportWindowV10 keeps the nested sections schema v11 did not change. A later
+// schema that adds fields to the renderer, watchdog, or source facts must pin
+// them here the way windowDebugShadowV9 pins the pre-v10 fact shape.
+type exportWindowV10 struct {
+	WindowID int                  `json:"window_id"`
+	Stats    WindowDebugStats     `json:"stats"`
+	Durable  WindowDebugDurable   `json:"durable"`
+	Renderer WindowDebugRenderer  `json:"renderer"`
+	Shadow   windowDebugShadowV10 `json:"shadow"`
+	Watchdog WindowDebugWatchdog  `json:"watchdog"`
+	Live     WindowLiveMetadata   `json:"live"`
+	Events   []sessionEventV10    `json:"events"`
+}
+
+// windowDebugShadowV10 pins the schema-v10 shadow shape: everything the current
+// shadow carries except the v11 pending terminal stop.
+type windowDebugShadowV10 struct {
+	EffectiveIcon    string               `json:"effective_icon"`
+	EffectiveLooping bool                 `json:"effective_looping"`
+	EffectiveGen     uint64               `json:"effective_gen"`
+	MismatchCount    int                  `json:"mismatch_count"`
+	Mismatches       []ShadowMismatch     `json:"mismatches,omitempty"`
+	Facts            []SourceFactSnapshot `json:"facts,omitempty"`
+}
+
+// sessionEventV10 pins the complete schema-v10 event shape: the v9 causal
+// contract plus harness-process lifecycle evidence, the producer config
+// directory, and the bounded ASL question preview. The v11 stop-hold fields are
+// deliberately absent.
+type sessionEventV10 struct {
+	sessionEventV9
+	ProducerConfigDir    string                           `json:"producer_config_dir,omitempty"`
+	ProcessHarness       string                           `json:"process_harness,omitempty"`
+	ProcessPID           int                              `json:"process_pid,omitempty"`
+	ProcessStartToken    string                           `json:"process_start_token,omitempty"`
+	ProcessObservation   string                           `json:"process_observation,omitempty"`
+	ProcessMode          string                           `json:"process_mode,omitempty"`
+	ProcessSources       []ProcessLifecycleSourceEvidence `json:"process_sources,omitempty"`
+	WithdrawnFacts       *int                             `json:"withdrawn_facts,omitempty"`
+	ClearedSubagents     *int                             `json:"cleared_subagents,omitempty"`
+	SynthesizedStop      *bool                            `json:"synthesized_stop,omitempty"`
+	TerminalHookEvidence string                           `json:"terminal_hook_evidence,omitempty"`
+	QuestionPreview      string                           `json:"question_preview,omitempty"`
 }
 
 type exportEventsPayloadV9 struct {
@@ -197,6 +287,33 @@ type sourceFactSnapshotV9 struct {
 	TerminalAt      int64      `json:"ta,omitempty"`
 }
 
+func projectExportEventsPayloadV10(payload ExportEventsPayload) exportEventsPayloadV10 {
+	out := exportEventsPayloadV10{
+		SchemaVersion: EventsExportSchemaV10,
+		ExportedAt:    payload.ExportedAt,
+		Daemon:        payload.Daemon,
+		CLIBuild:      payload.CLIBuild,
+	}
+	if payload.Windows != nil {
+		out.Windows = make([]exportWindowV10, 0, len(payload.Windows))
+	}
+	for _, window := range payload.Windows {
+		events := make([]sessionEventV10, 0, len(window.Events))
+		for _, event := range window.Events {
+			if omitFromCompatibilityExport(event) {
+				continue
+			}
+			events = append(events, projectSessionEventV10(event))
+		}
+		out.Windows = append(out.Windows, exportWindowV10{
+			WindowID: window.WindowID, Stats: projectCompatibilityWindowDebugStats(window.Stats), Durable: window.Durable,
+			Renderer: window.Renderer, Shadow: projectWindowDebugShadowV10(window.Shadow),
+			Watchdog: window.Watchdog, Live: window.Live, Events: events,
+		})
+	}
+	return out
+}
+
 func projectExportEventsPayloadV9(payload ExportEventsPayload) exportEventsPayloadV9 {
 	out := exportEventsPayloadV9{
 		SchemaVersion: EventsExportSchemaV9,
@@ -208,12 +325,15 @@ func projectExportEventsPayloadV9(payload ExportEventsPayload) exportEventsPaylo
 		out.Windows = make([]exportWindowV9, 0, len(payload.Windows))
 	}
 	for _, window := range payload.Windows {
-		events := make([]sessionEventV9, len(window.Events))
-		for i, event := range window.Events {
-			events[i] = projectSessionEventV9(event)
+		events := make([]sessionEventV9, 0, len(window.Events))
+		for _, event := range window.Events {
+			if omitFromCompatibilityExport(event) {
+				continue
+			}
+			events = append(events, projectSessionEventV9(event))
 		}
 		out.Windows = append(out.Windows, exportWindowV9{
-			WindowID: window.WindowID, Stats: window.Stats, Durable: window.Durable,
+			WindowID: window.WindowID, Stats: projectCompatibilityWindowDebugStats(window.Stats), Durable: window.Durable,
 			Renderer: window.Renderer, Shadow: projectWindowDebugShadowV9(window.Shadow),
 			Watchdog: projectWindowDebugWatchdogV9(window.Watchdog), Live: window.Live, Events: events,
 		})
@@ -230,13 +350,16 @@ func projectExportEventsPayloadV8(payload ExportEventsPayload) exportEventsPaylo
 		Windows:       make([]exportWindowV8, 0, len(payload.Windows)),
 	}
 	for _, window := range payload.Windows {
-		events := make([]sessionEventV8, len(window.Events))
-		for i, event := range window.Events {
-			events[i] = projectSessionEventV8(event)
+		events := make([]sessionEventV8, 0, len(window.Events))
+		for _, event := range window.Events {
+			if omitFromCompatibilityExport(event) {
+				continue
+			}
+			events = append(events, projectSessionEventV8(event))
 		}
 		r := window.Renderer
 		out.Windows = append(out.Windows, exportWindowV8{
-			WindowID: window.WindowID, Stats: window.Stats, Durable: window.Durable,
+			WindowID: window.WindowID, Stats: projectCompatibilityWindowDebugStats(window.Stats), Durable: window.Durable,
 			Renderer: windowDebugRendererV8{
 				DesiredIcon: r.DesiredIcon, StateSet: r.StateSet, Looping: r.Looping, LoopingSet: r.LoopingSet,
 				RenderFailures: r.RenderFailures, LastRenderError: r.LastRenderError, KittyListenOn: r.KittyListenOn,
@@ -283,6 +406,30 @@ func projectSessionEventV9(event SessionEvent) sessionEventV9 {
 		RenderOutcome: event.RenderOutcome, RenderReason: event.RenderReason,
 		NotificationTrace: event.NotificationTrace, NotificationOutcome: event.NotificationOutcome,
 		NotificationReason: event.NotificationReason, ProbeTraceIDs: event.ProbeTraceIDs,
+	}
+}
+
+func projectSessionEventV10(event SessionEvent) sessionEventV10 {
+	return sessionEventV10{
+		sessionEventV9:    projectSessionEventV9(event),
+		ProducerConfigDir: event.ProducerConfigDir,
+		ProcessHarness:    event.ProcessHarness, ProcessPID: event.ProcessPID,
+		ProcessStartToken: event.ProcessStartToken, ProcessObservation: event.ProcessObservation,
+		ProcessMode: event.ProcessMode, ProcessSources: event.ProcessSources,
+		WithdrawnFacts: event.WithdrawnFacts, ClearedSubagents: event.ClearedSubagents,
+		SynthesizedStop: event.SynthesizedStop, TerminalHookEvidence: event.TerminalHookEvidence,
+		QuestionPreview: event.QuestionPreview,
+	}
+}
+
+func projectWindowDebugShadowV10(shadow WindowDebugShadow) windowDebugShadowV10 {
+	return windowDebugShadowV10{
+		EffectiveIcon:    shadow.EffectiveIcon,
+		EffectiveLooping: shadow.EffectiveLooping,
+		EffectiveGen:     shadow.EffectiveGen,
+		MismatchCount:    shadow.MismatchCount,
+		Mismatches:       shadow.Mismatches,
+		Facts:            shadow.Facts,
 	}
 }
 

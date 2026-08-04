@@ -43,6 +43,9 @@ const (
 	DecisionReasonUserAcknowledged          = "user_acknowledged"
 	DecisionReasonSessionAgentsCleared      = "session_agents_cleared"
 	DecisionReasonNotSelected               = "not_selected"
+	DecisionReasonTerminalStopHeld          = "terminal_stop_held"
+	DecisionReasonTerminalStopSuperseded    = "terminal_stop_superseded"
+	DecisionReasonTerminalStopBypassed      = "terminal_stop_bypassed"
 )
 
 const (

@@ -118,6 +118,11 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	if cfg.Defaults.Watchdog.ClaudeContextLimitProbe != nil {
 		handler.SetClaudeContextLimitProbe(*cfg.Defaults.Watchdog.ClaudeContextLimitProbe)
 	}
+	handler.SetStopConfirm(
+		time.Duration(cfg.Defaults.StopConfirm.Delay)*time.Second,
+		time.Duration(cfg.Defaults.StopConfirm.Timeout)*time.Second,
+		cfg.Defaults.StopConfirm.Enabled == nil || *cfg.Defaults.StopConfirm.Enabled,
+	)
 	handler.SetCopilotTranscriptHomes(copilotProfileHomes(cfg), config.ExpandTilde(harness.DefaultHomeDir(harness.Copilot)))
 	// The shadow reducer mirrors the same projections the legacy paths already
 	// consume: guard_duration for the legacy trailing-event grace and the

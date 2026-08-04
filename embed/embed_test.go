@@ -24,6 +24,11 @@ type exampleConfig struct {
 			HookSilence             int   `toml:"hook_silence"`
 			ClaudeContextLimitProbe *bool `toml:"claude_context_limit_probe"`
 		}
+		StopConfirm struct {
+			Delay   int
+			Timeout int
+			Enabled *bool
+		} `toml:"stop_confirm"`
 		SessionArchive struct {
 			KeepDays       int `toml:"keep_days"`
 			ScanMaxAgeDays int `toml:"scan_max_age_days"`
@@ -146,6 +151,16 @@ func TestExampleConfigIncludesDiagnosticDefaults(t *testing.T) {
 	}
 	if d.JournalKeepDays != 14 || d.JournalMaxMiB != 256 || d.NativeKeepDays != 14 || d.NativeMaxMiB != 1024 || d.NativeSessionMaxMiB != 128 {
 		t.Fatalf("diagnostic retention defaults = %+v", d)
+	}
+}
+
+func TestExampleConfigIncludesStopConfirmDefaults(t *testing.T) {
+	var decoded exampleConfig
+	if _, err := toml.Decode(ExampleConfig, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Defaults.StopConfirm.Delay != 6 || decoded.Defaults.StopConfirm.Timeout != 15 {
+		t.Fatalf("stop-confirm defaults = %+v", decoded.Defaults.StopConfirm)
 	}
 }
 

@@ -301,6 +301,18 @@ func (h *Handler) applyAuthoritativeIdle(obs AuthoritativeIdle) bool {
 		h.stateMu.Unlock()
 		return false
 	}
+	// Every freshness and stabilization gate has passed, so this is the strongest
+	// idle evidence the daemon can produce — exactly the moment a native terminal
+	// stop being withheld for this window should be released. Hand the evidence to
+	// the hold instead of settling a probe fact: the committed stop keeps its
+	// harness provenance, and `probe:<harness>` keeps meaning the native hook was
+	// lost. The stabilization streak is deliberately left intact — the tab stays ⚡
+	// until the hold commits, so the next observation must be able to confirm
+	// again if this one is superseded by trailing activity.
+	if h.confirmStopHoldLocked(obs.WindowID, obs.Source) {
+		h.stateMu.Unlock()
+		return false
+	}
 
 	// Snapshot-derived mute state is part of the observation. Apply it only
 	// after every freshness gate and in the same critical section as the

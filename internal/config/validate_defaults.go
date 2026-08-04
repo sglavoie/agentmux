@@ -40,6 +40,18 @@ func validateDefaults(d *Defaults) []string {
 	if d.Watchdog.HookSilence < 0 {
 		errs = append(errs, "defaults.watchdog.hook_silence must be >= 0")
 	}
+	if d.StopConfirm.Delay < 0 {
+		errs = append(errs, "defaults.stop_confirm.delay must be >= 0")
+	}
+	if d.StopConfirm.Timeout < 0 {
+		errs = append(errs, "defaults.stop_confirm.timeout must be >= 0")
+	}
+	if d.StopConfirm.Delay >= 0 && d.StopConfirm.Timeout >= 0 && d.StopConfirm.Timeout < d.StopConfirm.Delay {
+		errs = append(errs, fmt.Sprintf(
+			"defaults.stop_confirm.timeout (%d) must be >= defaults.stop_confirm.delay (%d): the hard deadline cannot expire before the quiet period",
+			d.StopConfirm.Timeout, d.StopConfirm.Delay,
+		))
+	}
 	if d.SessionArchive.KeepDays < 0 {
 		errs = append(errs, "defaults.session_archive.keep_days must be >= 0")
 	}

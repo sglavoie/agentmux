@@ -210,7 +210,7 @@ func (h *Handler) routeUnmanagedHookTarget(
 		selectionReason = "owner"
 	}
 	chooseRoute(stateReq.routeEvidence, routeDecisionOwner, selectionReason, target.win)
-	if h.deferResetSensitiveStop(stateReq, payload) {
+	if h.holdStopForConfirmation(stateReq, payload) {
 		return probeTarget
 	}
 	h.handleStateUpdate(stateReq)

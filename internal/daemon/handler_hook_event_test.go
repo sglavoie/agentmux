@@ -231,6 +231,7 @@ func TestHandler_HookEventCodexManualCompactRemainsStopped(t *testing.T) {
 		guard := NewStateGuard(time.Hour)
 		notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
 		h := NewHandler(guard, notifier)
+		h.SetStopConfirm(0, 0, false) // pin the immediate-stop path, not the confirmed-idle hold
 		fake := &fakeKittyClient{
 			windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
 				ID:       42,
@@ -626,6 +627,7 @@ func TestHandler_HookEventDefersResetSensitiveStop(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		h := newTestHandler()
+		h.SetStopConfirm(0, 0, false) // exercise the reset hold class, not the terminal one
 		fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
 			ID:       42,
 			UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
@@ -680,6 +682,7 @@ func TestHandler_HookEventDeferredResetStopSupersededByPromptAndClear(t *testing
 
 	synctest.Test(t, func(t *testing.T) {
 		h := newTestHandler()
+		h.SetStopConfirm(0, 0, false) // exercise the reset hold class, not the terminal one
 		fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
 			ID:       42,
 			IsActive: true,
@@ -728,6 +731,7 @@ func TestHandler_CopilotLateInitialSessionStartPreservesPromptAndAllowsStop(t *t
 	t.Cleanup(func() { resetFlowStopDelay = oldDelay })
 
 	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false) // pin the immediate-stop path, not the confirmed-idle hold
 	fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "", false), []kitty.Window{{
 		ID:       42,
 		IsActive: true,

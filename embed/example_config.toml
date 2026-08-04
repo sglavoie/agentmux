@@ -105,6 +105,29 @@ hook_silence = 14400
 # Set to false to disable the probe entirely. Default: true.
 # claude_context_limit_probe = true
 
+# Stop confirmation: a harness that finishes a turn and then keeps working on
+# its own would otherwise flip the tab between the active ⚡ and terminal 🛑
+# icons (and fire a notification) on every false ending. A native stop is held
+# while the tab keeps showing ⚡ and paints 🛑 only once *both* halves agree: the
+# session has been quiet for `delay` seconds *and* the harness's own idle probe
+# confirms the pane is really idle. `timeout` is the hard deadline after which
+# the stop commits unconfirmed, so a window nothing ever confirms still
+# converges. A verified harness-process exit bypasses the gate, as does a new
+# prompt or any other sign the harness is still working (the held stop is
+# dropped instead of painting). These values are read once when the daemon
+# starts: run `amx daemon restart` after changing them.
+[defaults.stop_confirm]
+# Quiet seconds required before a held stop may paint 🛑. Set to 0 to use the
+# default.
+delay = 6
+# Hard deadline in seconds: past this the held stop commits even without
+# confirmation, so a window whose harness produces no idle evidence still
+# converges. Must be >= delay. Set to 0 to use the default.
+timeout = 15
+# Set to false to restore the previous behaviour, where 🛑 paints the instant
+# the stop hook lands. Default: true.
+# enabled = true
+
 # Session archive: retention policy for the searchable filesystem transcript
 # cache. Refresh/prune operations hide entries older than keep_days; harness
 # transcript files on disk are left intact. Set keep_days to 0 to use the

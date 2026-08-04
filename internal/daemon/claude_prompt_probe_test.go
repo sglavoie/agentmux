@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -273,6 +274,40 @@ func TestProbeClaudeScreenStop_UnmanagedForegroundNotProbed(t *testing.T) {
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
 	if len(resp.Events) != 0 {
 		t.Fatalf("events = %d, want 0 for an unmanaged foreground tab", len(resp.Events))
+	}
+}
+
+// TestProbeClaudeScreenStop_ConfirmsHeldStopInsteadOfSettling proves the probe
+// keeps running while a native stop is withheld — the target is still ⚡, so the
+// bolt eligibility gate passes — and that its settle is consumed as confirmation
+// of that held stop instead of painting a synthetic one. The sample requirement
+// is unchanged by the hold: Claude still needs two agreeing screen reads.
+func TestProbeClaudeScreenStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
+	h, _ := newTerminalHoldProbeHandler(t, harness.Claude, claudeIdleScreen)
+	releaseHoldAtTestEnd(t, h, 42)
+	base := time.Now()
+	armTerminalHold(t, h)
+
+	h.ProbeClaudeScreenStop(base)
+	if pending, ok := terminalHoldPending(t, h, 42); !ok || pending.confirmed {
+		t.Fatalf("hold after one agreeing screen = %+v/%v, want an unconfirmed hold", pending, ok)
+	}
+
+	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
+	pending, ok := terminalHoldPending(t, h, 42)
+	if !ok || !pending.confirmed || pending.confirmedBy != StopConfirmedByClaudeScreen {
+		t.Fatalf("hold after two agreeing screens = %+v/%v, want confirmed by %s", pending, ok, StopConfirmedByClaudeScreen)
+	}
+
+	// The held stop still owns the transition: the probe settled nothing of its
+	// own and the tab stays ⚡ until the hold commits.
+	assertNoProbeStopFact(t, h, 42)
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("icon while the confirmed hold waits = %q, want bolt", eff.Icon)
+	}
+	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
+		t.Fatalf("probe recorded %+v; a confirmation is not a synthetic stop", ev)
 	}
 }
 

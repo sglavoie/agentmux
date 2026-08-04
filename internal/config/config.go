@@ -183,6 +183,16 @@ func applyDefaults(cfg *Config) {
 		t := true
 		cfg.Defaults.Watchdog.ClaudeContextLimitProbe = &t
 	}
+	if cfg.Defaults.StopConfirm.Delay == 0 {
+		cfg.Defaults.StopConfirm.Delay = 6
+	}
+	if cfg.Defaults.StopConfirm.Timeout == 0 {
+		cfg.Defaults.StopConfirm.Timeout = 15
+	}
+	if cfg.Defaults.StopConfirm.Enabled == nil {
+		t := true
+		cfg.Defaults.StopConfirm.Enabled = &t
+	}
 	if len(cfg.Defaults.Jump.AttentionStates) == 0 {
 		cfg.Defaults.Jump.AttentionStates = []string{"key", "error", "warning", "question"}
 	}

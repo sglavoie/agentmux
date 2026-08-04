@@ -82,6 +82,17 @@ func (h *Handler) SetClaudeContextLimitProbe(enabled bool) {
 	h.claudeContextLimitProbeEnabled = enabled
 }
 
+// SetStopConfirm configures the confirmed-idle gate applied to native stops:
+// delay is the quiet period a held stop must observe, timeout is the hard
+// deadline past which it commits unconfirmed, and enabled false restores the
+// immediate-stop behaviour. Mirrors the [defaults.stop_confirm] config block.
+// Safe to call once before the hook path runs.
+func (h *Handler) SetStopConfirm(delay, timeout time.Duration, enabled bool) {
+	h.stopConfirmDelay = delay
+	h.stopConfirmTimeout = timeout
+	h.stopConfirmEnabled = enabled
+}
+
 // SetCopilotTranscriptHomes installs the Copilot home directories the transcript
 // stop probe resolves a managed tab's interactive session transcript against.
 // profileHomes is the ordered set of configured Copilot profile homes (the
