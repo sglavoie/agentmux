@@ -102,3 +102,24 @@ color = "blue"
 		t.Fatalf("StopFailure user-disabled: got true, want false (stop_failure = false in config should be respected)")
 	}
 }
+
+func TestLoad_NotificationAlerterPath(t *testing.T) {
+	content := `
+[defaults.notifications]
+alerter_path = "/custom/bin/alerter"
+
+[[profiles]]
+name = "work"
+home_dir = "~/.claude-work"
+color = "blue"
+`
+	path := writeTempConfig(t, content)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got, want := cfg.Defaults.Notifications.AlerterPath, "/custom/bin/alerter"; got != want {
+		t.Fatalf("AlerterPath: got %q, want %q", got, want)
+	}
+}

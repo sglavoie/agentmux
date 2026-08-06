@@ -14,22 +14,33 @@ import (
 // fakeFocusClient records FocusTab / FocusWindow calls so tests can assert
 // the exact match expressions produced by Notifier.focusForClick.
 type fakeFocusClient struct {
-	mu      sync.Mutex
-	tabs    []string
-	windows []string
+	mu            sync.Mutex
+	live          []kitty.OSWindow
+	tabs          []string
+	windows       []string
+	tabSockets    []string
+	windowSockets []string
 }
 
-func (f *fakeFocusClient) FocusTab(matchExpr string) error {
+func (f *fakeFocusClient) ListWindows(string) ([]kitty.OSWindow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.live, nil
+}
+
+func (f *fakeFocusClient) FocusTab(socket, matchExpr string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.tabs = append(f.tabs, matchExpr)
+	f.tabSockets = append(f.tabSockets, socket)
 	return nil
 }
 
-func (f *fakeFocusClient) FocusWindow(matchExpr string) error {
+func (f *fakeFocusClient) FocusWindow(socket, matchExpr string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.windows = append(f.windows, matchExpr)
+	f.windowSockets = append(f.windowSockets, socket)
 	return nil
 }
 
@@ -41,6 +52,18 @@ func (f *fakeFocusClient) snapshot() ([]string, []string) {
 	return tabs, windows
 }
 
+func focusTestWindows(ids ...int) []kitty.OSWindow {
+	windows := make([]kitty.Window, 0, len(ids))
+	for _, id := range ids {
+		windows = append(windows, kitty.Window{ID: id})
+	}
+	return []kitty.OSWindow{{Tabs: []kitty.Tab{{Windows: windows}}}}
+}
+
+func focusTarget(windowID int, account, socket string) NotificationTarget {
+	return NotificationTarget{WindowID: windowID, Account: account, KittyListenOn: socket, Navigable: true}
+}
+
 // TestNotifier_FocusOnClick_RealWindow drives the happy path: dispatcher
 // reports a click for a real (positive) window ID, so the notifier issues
 // the canonical two-step focus pattern (FocusTab then FocusWindow), both
@@ -49,11 +72,11 @@ func TestNotifier_FocusOnClick_RealWindow(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true}
 		n, calls := newTestNotifier(cfg)
-		focus := &fakeFocusClient{}
+		focus := &fakeFocusClient{live: focusTestWindows(42)}
 		n.SetFocus(focus)
 		calls.setClickResult(true)
 
-		n.MaybeNotify(42, "W:api", "work", "stop", false)
+		n.MaybeNotifyTarget(focusTarget(42, "work", "unix:/tmp/kitty-42"), "W:api", "stop", false)
 		synctest.Wait()
 
 		tabs, windows := focus.snapshot()
@@ -62,6 +85,9 @@ func TestNotifier_FocusOnClick_RealWindow(t *testing.T) {
 		}
 		if want := []string{kitty.MatchWindowByID(42)}; !equalSlice(windows, want) {
 			t.Errorf("FocusWindow calls = %v, want %v", windows, want)
+		}
+		if !equalSlice(focus.tabSockets, []string{"unix:/tmp/kitty-42"}) || !equalSlice(focus.windowSockets, []string{"unix:/tmp/kitty-42"}) {
+			t.Errorf("focus sockets = tabs %v windows %v, want captured socket", focus.tabSockets, focus.windowSockets)
 		}
 	})
 }
@@ -73,10 +99,10 @@ func TestNotifier_NoFocusWithoutClick(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true}
 		n, _ := newTestNotifier(cfg)
-		focus := &fakeFocusClient{}
+		focus := &fakeFocusClient{live: focusTestWindows(42)}
 		n.SetFocus(focus)
 
-		n.MaybeNotify(42, "W:api", "work", "stop", false)
+		n.MaybeNotifyTarget(focusTarget(42, "work", "unix:/tmp/kitty-42"), "W:api", "stop", false)
 		synctest.Wait()
 
 		tabs, windows := focus.snapshot()
@@ -97,10 +123,10 @@ func TestNotifier_NoFocusOnDispatchError(t *testing.T) {
 		n.dispatch = func(_ context.Context, _ int, _, _, _ string) (dispatchResult, error) {
 			return deliveredResult(interactionClicked), errors.New("boom")
 		}
-		focus := &fakeFocusClient{}
+		focus := &fakeFocusClient{live: focusTestWindows(42)}
 		n.SetFocus(focus)
 
-		n.MaybeNotify(42, "W:api", "work", "stop", false)
+		n.MaybeNotifyTarget(focusTarget(42, "work", "unix:/tmp/kitty-42"), "W:api", "stop", false)
 		synctest.Wait()
 
 		tabs, windows := focus.snapshot()
@@ -110,16 +136,14 @@ func TestNotifier_NoFocusOnDispatchError(t *testing.T) {
 	})
 }
 
-// TestNotifier_FocusOnClick_HookSilenceFallsBackToAccount mirrors the
-// hook-silence dispatch path, where the windowID is a synthetic negative
-// number and only the account is meaningful. The notifier must fall back
-// to matching every window for that account.
-func TestNotifier_FocusOnClick_HookSilenceFallsBackToAccount(t *testing.T) {
+// TestNotifier_FocusOnClick_HookSilenceIsInformational locks in that a
+// profile-wide alert never guesses which pane the user intended.
+func TestNotifier_FocusOnClick_HookSilenceIsInformational(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		enabled := true
 		cfg := &config.NotificationConfig{HookSilence: &enabled}
 		n, calls := newTestNotifier(cfg)
-		focus := &fakeFocusClient{}
+		focus := &fakeFocusClient{live: focusTestWindows(42, 43)}
 		n.SetFocus(focus)
 		calls.setClickResult(true)
 
@@ -128,11 +152,8 @@ func TestNotifier_FocusOnClick_HookSilenceFallsBackToAccount(t *testing.T) {
 		synctest.Wait()
 
 		tabs, windows := focus.snapshot()
-		if len(tabs) != 0 {
-			t.Errorf("FocusTab calls = %v, want none (account fallback uses FocusWindow only)", tabs)
-		}
-		if want := []string{kitty.MatchAccountWindows("work")}; !equalSlice(windows, want) {
-			t.Errorf("FocusWindow calls = %v, want %v", windows, want)
+		if len(tabs) != 0 || len(windows) != 0 {
+			t.Errorf("hook-silence click focused an arbitrary target: tabs=%v windows=%v", tabs, windows)
 		}
 	})
 }
@@ -145,7 +166,7 @@ func TestNotifier_FocusOnClick_NoTargetIsNoop(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true}
 		n, calls := newTestNotifier(cfg)
-		focus := &fakeFocusClient{}
+		focus := &fakeFocusClient{live: focusTestWindows(42, 43)}
 		n.SetFocus(focus)
 		calls.setClickResult(true)
 
@@ -169,12 +190,12 @@ func TestNotifier_FocusOnClick_ConcurrentDistinctWindows(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true}
 		n, calls := newTestNotifier(cfg)
-		focus := &fakeFocusClient{}
+		focus := &fakeFocusClient{live: focusTestWindows(42, 43)}
 		n.SetFocus(focus)
 		calls.setClickResult(true)
 
-		n.MaybeNotify(42, "W:api", "work", "stop", false)
-		n.MaybeNotify(43, "P:web", "play", "stop", false)
+		n.MaybeNotifyTarget(focusTarget(42, "work", "unix:/tmp/kitty-a"), "W:api", "stop", false)
+		n.MaybeNotifyTarget(focusTarget(43, "play", "unix:/tmp/kitty-b"), "P:web", "stop", false)
 		synctest.Wait()
 
 		tabs, windows := focus.snapshot()
@@ -221,6 +242,56 @@ func TestNotifier_FocusOnClick_ConcurrentDistinctWindows(t *testing.T) {
 			t.Errorf("n.last entries = %d, want 2 (one per window)", entries)
 		}
 	})
+}
+
+func TestNotifier_MissingSocketSuppressesPaneNotification(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		n, calls := newTestNotifier(&config.NotificationConfig{Stop: true})
+		n.SetFocus(&fakeFocusClient{live: focusTestWindows(42)})
+		var dispositions []NotificationDisposition
+		n.SetObserver(func(disposition NotificationDisposition) { dispositions = append(dispositions, disposition) })
+
+		n.MaybeNotifyTarget(focusTarget(42, "work", ""), "W:api", "stop", false)
+		synctest.Wait()
+
+		if calls.len() != 0 {
+			t.Fatalf("dispatch calls = %d, want none without reusable socket", calls.len())
+		}
+		if !hasDisposition(dispositions, "decision", "suppressed", "focus_unavailable") {
+			t.Fatalf("dispositions = %+v, want focus_unavailable suppression", dispositions)
+		}
+	})
+}
+
+func TestNotifier_ClosedTargetDoesNotFallback(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		n, calls := newTestNotifier(&config.NotificationConfig{Stop: true})
+		focus := &fakeFocusClient{live: focusTestWindows(99)}
+		n.SetFocus(focus)
+		calls.setClickResult(true)
+		var dispositions []NotificationDisposition
+		n.SetObserver(func(disposition NotificationDisposition) { dispositions = append(dispositions, disposition) })
+
+		n.MaybeNotifyTarget(focusTarget(42, "work", "unix:/tmp/kitty-42"), "W:api", "stop", false)
+		synctest.Wait()
+
+		tabs, windows := focus.snapshot()
+		if len(tabs) != 0 || len(windows) != 0 {
+			t.Fatalf("stale click focused fallback: tabs=%v windows=%v", tabs, windows)
+		}
+		if !hasDisposition(dispositions, "focus", "suppressed", "focus_target_stale") {
+			t.Fatalf("dispositions = %+v, want stale-target suppression", dispositions)
+		}
+	})
+}
+
+func hasDisposition(dispositions []NotificationDisposition, stage, outcome, reason string) bool {
+	for _, disposition := range dispositions {
+		if disposition.Stage == stage && disposition.Outcome == outcome && disposition.Reason == reason {
+			return true
+		}
+	}
+	return false
 }
 
 func sameCount(a, b map[string]int) bool {

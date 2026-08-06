@@ -50,7 +50,7 @@ func TestNotificationDispatchFailurePersistsTerminalJournalOutcome(t *testing.T)
 
 func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 	got := alerterArgs("W:api", "Session stopped")
-	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", "", "--timeout", "300"}
+	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", "", "--timeout", "300", "--sender", "net.kovidgoyal.kitty"}
 	if len(got) != len(want) {
 		t.Fatalf("alerterArgs len = %d, want %d (%v)", len(got), len(want), got)
 	}
@@ -75,7 +75,7 @@ func TestAlerterDispatchTimeoutIncludesProtocolGrace(t *testing.T) {
 
 // TestNotifier_DispatchHonorsContextTimeout locks in the dispatch goroutine's
 // bound — every dispatcher invocation must run under a context that expires.
-// Without this, a hung osascript/alerter call would leak its goroutine for the
+// Without this, a hung Alerter call would leak its goroutine for the
 // life of the daemon. The synthetic dispatcher used here blocks on ctx.Done so
 // the assertion is "the timeout fires", not "the call returns on its own".
 func TestNotifier_DispatchHonorsContextTimeout(t *testing.T) {
@@ -153,37 +153,6 @@ func TestNotifier_EmptySessionTitleFallback(t *testing.T) {
 			t.Errorf("title = %q, want %q", calls.snapshot()[0].title, "Agent Mux")
 		}
 	})
-}
-
-// TestQuoteAppleScript covers AppleScript-safe escaping for the osascript
-// dispatcher. The previous implementation used Go's %q verb, which can emit
-// \uXXXX / \xNN sequences (e.g. for the Unicode line separator U+2028) that
-// AppleScript treats as a syntax error, causing the notification to silently
-// fail. quoteAppleScript must only emit AppleScript's recognized escapes
-// (\\, \", \n, \r, \t) and pass every other rune through verbatim.
-func TestQuoteAppleScript(t *testing.T) {
-	cases := []struct {
-		in   string
-		want string
-	}{
-		{"", `""`},
-		{"hello", `"hello"`},
-		{`"`, `"\""`},
-		{`back\slash`, `"back\\slash"`},
-		{"tab\there", `"tab\there"`},
-		{"line1\nline2", `"line1\nline2"`},
-		{"carriage\rreturn", `"carriage\rreturn"`},
-		// Non-ASCII printable characters must pass through verbatim — Go's %q
-		// would have re-encoded the line-separator and confused AppleScript.
-		{"  sep", `"` + "  sep" + `"`},
-		{"café", `"café"`},
-	}
-	for _, tc := range cases {
-		got := quoteAppleScript(tc.in)
-		if got != tc.want {
-			t.Errorf("quoteAppleScript(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
 }
 
 // TestNotifier_RecorderClickKnobFlowsThroughDispatch confirms the
@@ -288,7 +257,7 @@ func TestNotifier_DispatchSuppressesFocusForTerminalInteraction(t *testing.T) {
 				dispositions = append(dispositions, disposition)
 			})
 
-			n.runDispatch(42, "work", "W:api", "Session stopped", "stop", NotificationTrace{})
+			n.runDispatch(NotificationTarget{WindowID: 42, Account: "work"}, "W:api", "Session stopped", "stop", NotificationTrace{})
 
 			seen := make(map[string]bool)
 			for _, disposition := range dispositions {

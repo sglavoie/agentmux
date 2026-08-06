@@ -244,6 +244,9 @@ type Response struct {
 	// latency, for diagnostics surfaces.
 	Build   *buildinfo.Info  `json:"build,omitempty"`
 	Metrics *MetricsSnapshot `json:"metrics,omitempty"`
+	// Notification is omitted by older daemons. New daemons publish the
+	// startup-selected backend capability independently of global readiness.
+	Notification *NotificationCapability `json:"notification,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial restore
 	// before binding the public socket, or — after a degraded start — later
 	// recovered when a maintenance tick restored durable state from a

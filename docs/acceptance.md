@@ -174,17 +174,30 @@ incur provider/model usage merely to complete the automated gate.
 
 Native-notification timeout evidence is a separate provider-free live check:
 
-1. Launch a disposable, unfocused Kitty window with a unique AgentMux-managed
-   session identity. Record its window ID, the UTC start time, and baseline
-   spool count; never reuse an active user session.
-2. Send one terminal lifecycle event from the disposable window and leave the
-   native notification untouched for the complete five-minute alerter protocol
-   timeout. Keep the window alive so daemon renderer activity continues.
-3. Query that exact window and time range. Require dispatch
+1. Start the daemon with a restricted launchd-style `PATH` and require
+   `amx daemon status` plus `amx doctor --strict` to report Alerter 26 or newer,
+   its resolved executable, and interactive capability. This verifies discovery
+   from the standard installation directories rather than the caller's shell.
+2. Launch two disposable, unfocused Kitty windows/tabs with unique
+   AgentMux-managed session identities. Record the target window ID, its Kitty
+   socket, the UTC start time, and baseline spool count; never reuse an active
+   user session.
+3. Send one terminal lifecycle event from the target pane, click its native
+   notification, and require Kitty to become foreground with that exact OS
+   window, tab, and pane focused. Confirm the notification uses Kitty's sender
+   identity. Post another notification, close its target before clicking it,
+   and require a
+   `focus_target_stale` suppression with no fallback to the other disposable
+   window.
+4. Send a second terminal lifecycle event from the disposable target and leave
+   the native notification untouched for the complete five-minute alerter
+   protocol timeout. Keep the window alive so daemon renderer activity
+   continues.
+5. Query that exact window and time range. Require dispatch
    `sent/send_success`, then focus `suppressed/interaction_timeout`, with no
    `failed/send_failed` or `failed/backend_timeout`. A bounded exact explanation
    must classify the no-interaction result as `notification_suppression`.
-4. Confirm renderer events continued, the final spool count did not show a
+6. Confirm renderer events continued, the final spool count did not show a
    reader-induced burst, and `tail --last` ends at the newest event time.
-5. Close only the disposable Kitty window after preserving the status, tail,
+7. Close only the disposable Kitty windows after preserving the status, tail,
    explain, bundle, and replay evidence.

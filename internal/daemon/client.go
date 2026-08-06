@@ -208,6 +208,7 @@ type Health struct {
 	DegradedReason string
 	Build          *buildinfo.Info
 	Metrics        *MetricsSnapshot
+	Notification   *NotificationCapability
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -229,6 +230,7 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		DegradedReason: resp.DegradedReason,
 		Build:          resp.Build,
 		Metrics:        resp.Metrics,
+		Notification:   resp.Notification,
 	}
 }
 

@@ -181,6 +181,11 @@ native_session_max_mib = 128
 
 [defaults.notifications]
 
+# Native notifications require alerter 26 or newer. AgentMux searches PATH and
+# common Homebrew/MacPorts locations by default. Set an absolute path only to
+# make that executable authoritative.
+# alerter_path = "/custom/path/to/alerter"
+
 # Notify when a session is waiting for your permission to use a tool.
 permission = true
 

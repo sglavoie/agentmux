@@ -56,13 +56,14 @@ type doctorReport struct {
 }
 
 type doctorDaemonStatus struct {
-	Alive          bool                    `json:"alive"`
-	Ready          bool                    `json:"ready"`
-	DegradedReason string                  `json:"degraded_reason,omitempty"`
-	PID            int                     `json:"pid,omitempty"`
-	UptimeSeconds  int64                   `json:"uptime_seconds,omitempty"`
-	Build          *buildinfo.Info         `json:"build,omitempty"`
-	Metrics        *daemon.MetricsSnapshot `json:"metrics,omitempty"`
+	Alive          bool                           `json:"alive"`
+	Ready          bool                           `json:"ready"`
+	DegradedReason string                         `json:"degraded_reason,omitempty"`
+	PID            int                            `json:"pid,omitempty"`
+	UptimeSeconds  int64                          `json:"uptime_seconds,omitempty"`
+	Build          *buildinfo.Info                `json:"build,omitempty"`
+	Metrics        *daemon.MetricsSnapshot        `json:"metrics,omitempty"`
+	Notification   *daemon.NotificationCapability `json:"notification,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -117,6 +118,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		UptimeSeconds:  int64(health.Uptime / time.Second),
 		Build:          health.Build,
 		Metrics:        health.Metrics,
+		Notification:   health.Notification,
 	}
 	if health.Alive {
 		if _, err := fmt.Fprintf(textOut, "daemon: running (pid %d, uptime %s)\n", health.PID, health.Uptime.Round(time.Second)); err != nil {
@@ -130,6 +132,11 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		addFinding(severityFailure, "daemon_unreachable", "daemon is unreachable")
+	}
+	if health.Alive {
+		if err := writeDoctorNotificationCapability(textOut, health.Notification, addFinding); err != nil {
+			return err
+		}
 	}
 
 	if err := writeDoctorSocketStatus(textOut, reportIssue("socket")); err != nil {
@@ -226,6 +233,50 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			Err:   fmt.Errorf("doctor: %d health failure(s) detected", failures),
 			Quiet: doctorJSON,
 		}
+	}
+	return nil
+}
+
+func writeDoctorNotificationCapability(out io.Writer, capability *daemon.NotificationCapability, addFinding func(string, string, string, ...any)) error {
+	if capability == nil {
+		cfg, err := doctorLoadConfig()
+		if err != nil {
+			if _, writeErr := fmt.Fprintf(out, "notifications: unknown (older daemon; config unavailable: %s)\n", err); writeErr != nil {
+				return writeErr
+			}
+			addFinding(severityWarning, "notifications_unknown", "notification capability is unreported and config cannot be loaded: %s", err)
+			return nil
+		}
+		if _, err := fmt.Fprintln(out, "notifications: unknown (older daemon; restart required)"); err != nil {
+			return err
+		}
+		if cfg.Defaults.Notifications.AnyEnabled() {
+			addFinding(severityFailure, "notifications_unreported", "running daemon does not report notification capability; restart it before relying on click-to-focus")
+		}
+		return nil
+	}
+
+	state := "unavailable"
+	if !capability.Enabled {
+		state = "disabled"
+	} else if capability.Available && capability.Interactive {
+		state = "ready"
+	}
+	detail := capability.Backend
+	if capability.Version != "" {
+		detail += " " + capability.Version
+	}
+	if capability.Executable != "" {
+		detail += " at " + capability.Executable
+	}
+	if capability.Reason != "" && capability.Reason != "disabled" {
+		detail += "; " + capability.Reason
+	}
+	if _, err := fmt.Fprintf(out, "notifications: %s (%s)\n", state, detail); err != nil {
+		return err
+	}
+	if capability.Enabled && (!capability.Available || !capability.Interactive) {
+		addFinding(severityFailure, "notifications_unavailable", "interactive notifications are enabled but unavailable: %s", capability.Reason)
 	}
 	return nil
 }

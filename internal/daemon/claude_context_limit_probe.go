@@ -174,7 +174,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 		// the pre-recorded pipeMode through MaybeNotify so the notifier's own
 		// suppression remains the single source of truth.
 		if effective.Icon == "error" && before.Icon != "error" {
-			h.notifier.MaybeNotify(targetWindowID, baseTitle, account, claudeContextLimitProbeAction, pipeMode)
+			h.maybeNotify(targetWindowID, baseTitle, account, claudeContextLimitProbeAction, pipeMode)
 		}
 	}
 }

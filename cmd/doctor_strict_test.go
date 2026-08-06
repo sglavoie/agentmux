@@ -40,6 +40,10 @@ func setUpDoctorFixture(t *testing.T, health daemon.Health, snapshot daemon.Even
 	}
 
 	build := doctorTestBuild
+	if health.Alive && health.Notification == nil {
+		capability := doctorTestNotification
+		health.Notification = &capability
+	}
 	doctorCLIBuild = func() buildinfo.Info { return build }
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
@@ -135,6 +139,37 @@ func TestDoctorStrictPassesOnCleanDeployment(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "overall: clean") {
 		t.Errorf("doctor output missing overall: clean:\n%s", out.String())
+	}
+}
+
+func TestDoctorStrictFailsWhenInteractiveNotificationsUnavailable(t *testing.T) {
+	build := doctorTestBuild
+	capability := daemon.NotificationCapability{
+		Enabled: true, Backend: "alerter", Reason: "not_found",
+	}
+	health := daemon.Health{
+		Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build,
+		Notification: &capability,
+	}
+	setUpDoctorFixture(t, health, daemon.EventsExport{})
+	doctorStrict = true
+
+	var out bytes.Buffer
+	doctorCmd.SetOut(&out)
+	err := runDoctor(doctorCmd, nil)
+
+	var exitErr *ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != exitHealthFailure {
+		t.Fatalf("err = %+v; want strict health failure", err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"notifications: unavailable (alerter; not_found)",
+		"[notifications_unavailable] interactive notifications are enabled but unavailable: not_found",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("doctor output missing %q:\n%s", want, got)
+		}
 	}
 }
 
@@ -237,6 +272,9 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	}
 	if !report.Daemon.Alive || !report.Daemon.Ready || report.Daemon.PID != 77 {
 		t.Fatalf("report.Daemon = %+v", report.Daemon)
+	}
+	if report.Daemon.Notification == nil || !report.Daemon.Notification.Interactive || report.Daemon.Notification.Executable != "/opt/homebrew/bin/alerter" {
+		t.Fatalf("report.Daemon.Notification = %+v; want ready Alerter capability", report.Daemon.Notification)
 	}
 	if report.CLIBuild.BinaryHash != doctorTestBuild.BinaryHash {
 		t.Fatalf("report.CLIBuild = %+v; want the injected CLI identity", report.CLIBuild)

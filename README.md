@@ -24,8 +24,8 @@ The binary is **`amx`**.
 - Go 1.22+
 - Kitty with remote control enabled
 - [`just`](https://github.com/casey/just) for the provided build/install tasks
-- [`alerter`](https://github.com/vjeantet/alerter) on macOS if you want native
-  notifications
+- [`alerter`](https://github.com/vjeantet/alerter) 26.x or newer on macOS when
+  any native notification is enabled (`brew install vjeantet/tap/alerter`)
 
 Your `kitty.conf` must include:
 
@@ -972,9 +972,24 @@ The notifications themselves are gated by `[defaults.notifications]`:
 
 ```toml
 [defaults.notifications]
+# alerter_path = "/custom/path/to/alerter"
 stale_active = true
 hook_silence = true
 ```
+
+AgentMux requires Alerter 26 or newer and does not fall back to AppleScript.
+At daemon startup it resolves `alerter_path` when set; otherwise it searches
+`PATH`, `/opt/homebrew/bin`, `/usr/local/bin`, and `/opt/local/bin`. An explicit
+path is authoritative, so an invalid value is reported instead of silently
+selecting another installation. Run `amx daemon status` or `amx doctor` to see
+the selected executable and capability, and restart the daemon after installing
+Alerter or changing this setting.
+
+Clicking a session notification activates Kitty and focuses the exact originating
+OS window, tab, and pane through that session's Kitty socket. If the daemon did
+not receive a reusable socket or the target no longer exists, it records a
+diagnostic suppression and does not guess another target. Profile-wide hook
+silence notifications remain informational and do not navigate on click.
 
 ## Tab icons
 

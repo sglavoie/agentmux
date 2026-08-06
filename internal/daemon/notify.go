@@ -2,14 +2,10 @@ package daemon
 
 // Notification backends and click-to-focus contract.
 //
-// macOS notifications dispatch via one of two backends, selected once at
-// Notifier construction: `alerter` (preferred when installed) and `osascript`
-// (fallback). Only the alerter backend is interactive — when the user clicks
-// the notification body, alerter prints @CONTENTCLICKED / @ACTIONCLICKED on
-// stdout and the Notifier focuses the originating Kitty tab/window via the
-// focusClient installed by SetFocus. osascript's `display notification` is
-// fire-and-forget and cannot relay interaction, so its notifications never
-// trigger a focus action.
+// macOS notifications require Alerter 26.x or newer. A pane-specific
+// notification also carries the reusable Kitty socket that can focus its exact
+// source after Alerter reports a click. Notifications are suppressed when
+// either half of that interactive contract is unavailable.
 
 import (
 	"context"
@@ -67,6 +63,16 @@ type NotificationTrace struct {
 	RunID         string
 }
 
+// NotificationTarget identifies the only Kitty pane a click may focus.
+// Navigable is false for profile-wide informational notifications such as
+// hook-silence alerts, which intentionally have no arbitrary pane fallback.
+type NotificationTarget struct {
+	WindowID      int
+	Account       string
+	KittyListenOn string
+	Navigable     bool
+}
+
 // NotificationDisposition is one explicit notification decision or terminal
 // asynchronous outcome. It intentionally excludes notification body content.
 type NotificationDisposition struct {
@@ -79,18 +85,41 @@ type NotificationDisposition struct {
 	ObservedAt time.Time
 }
 
-// focusClient is the narrow subset of the Kitty client that the Notifier
-// uses to surface the originating tab/window after a notification click.
-// kitty.SubprocessClient satisfies this interface implicitly. Declaring it
-// here rather than depending on the full KittyClient interface keeps the
-// test fake minimal (no need to stub every Kitty operation).
+// focusClient scopes every read/write to the notification's captured socket.
+// The production adapter wraps kitty.SubprocessClient; tests record the socket
+// directly without implementing unrelated Kitty operations.
 type focusClient interface {
-	FocusTab(matchExpr string) error
-	FocusWindow(matchExpr string) error
+	ListWindows(socket string) ([]kitty.OSWindow, error)
+	FocusTab(socket, matchExpr string) error
+	FocusWindow(socket, matchExpr string) error
+}
+
+type kittyNotificationFocus struct {
+	client *kitty.SubprocessClient
+}
+
+func newKittyNotificationFocus(client *kitty.SubprocessClient) *kittyNotificationFocus {
+	return &kittyNotificationFocus{client: client}
+}
+
+func (f *kittyNotificationFocus) scoped(socket string) *kitty.SubprocessClient {
+	return f.client.WithSocket(socket)
+}
+
+func (f *kittyNotificationFocus) ListWindows(socket string) ([]kitty.OSWindow, error) {
+	return f.scoped(socket).ListWindows()
+}
+
+func (f *kittyNotificationFocus) FocusTab(socket, matchExpr string) error {
+	return f.scoped(socket).FocusTab(matchExpr)
+}
+
+func (f *kittyNotificationFocus) FocusWindow(socket, matchExpr string) error {
+	return f.scoped(socket).FocusWindow(matchExpr)
 }
 
 // Notifier tracks per-window cooldowns and fires macOS notifications via
-// the selected backend (alerter when installed, osascript otherwise).
+// the selected Alerter backend when its startup capability probe succeeds.
 type Notifier struct {
 	mu              sync.Mutex
 	observerMu      sync.RWMutex
@@ -102,15 +131,16 @@ type Notifier struct {
 	dispatchTimeout time.Duration
 	cfg             *config.NotificationConfig
 	now             func() time.Time // injectable for tests
-	dispatch        dispatchFn       // injectable for tests
-	focus           focusClient      // optional; nil when the daemon has no Kitty client wired
-	isMuted         func(int) bool   // optional; nil treats every window as unmuted (tests + pre-wire)
-	ctx             context.Context  // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
+	dispatch        dispatchFn       // nil when compatible Alerter is unavailable; injectable for tests
+	capability      NotificationCapability
+	focus           focusClient     // optional; nil when the daemon has no Kitty client wired
+	isMuted         func(int) bool  // optional; nil treats every window as unmuted (tests + pre-wire)
+	ctx             context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
 }
 
 // NewNotifier creates a Notifier with the given notification config.
 func NewNotifier(cfg *config.NotificationConfig) *Notifier {
-	d := selectDispatcher()
+	d := selectDispatcher(cfg)
 	return &Notifier{
 		last:            make(map[notifyKey]time.Time),
 		pending:         make(map[int]pendingNotification),
@@ -119,8 +149,17 @@ func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 		cfg:             cfg,
 		now:             time.Now,
 		dispatch:        d.fn,
+		capability:      d.capability,
 		ctx:             context.Background(),
 	}
+}
+
+// Capability returns the immutable backend capability selected at daemon
+// startup. The value is copied so callers cannot mutate notifier state.
+func (n *Notifier) Capability() NotificationCapability {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.capability
 }
 
 // SetFocus installs the Kitty client used to surface the originating
@@ -197,19 +236,33 @@ func (n *Notifier) emitDisposition(disposition NotificationDisposition) {
 // CancelPending discards the pending notification when a later non-permission
 // event makes it stale.
 //
-// account threads the originating profile through to the dispatcher so a
-// click on the notification can be resolved to the right Kitty window even
-// when windowID is synthetic (e.g. the hook-silence sweep uses
-// hookSilenceWindowID(account) instead of a real window). It may be empty
-// when the caller does not know the account; click-target resolution
-// silently no-ops in that case.
+// This compatibility entry point has no captured Kitty socket, so its
+// notifications are informational. Production pane notifications use
+// MaybeNotifyTarget with a reusable socket and Navigable set to true.
 func (n *Notifier) MaybeNotify(windowID int, sessionTitle, account, action string, pipeMode bool) {
-	n.MaybeNotifyTraced(windowID, sessionTitle, account, action, pipeMode, NotificationTrace{})
+	n.MaybeNotifyTarget(NotificationTarget{
+		WindowID: windowID, Account: account,
+	}, sessionTitle, action, pipeMode)
+}
+
+// MaybeNotifyTarget is MaybeNotify with an explicit socket-aware click target.
+func (n *Notifier) MaybeNotifyTarget(target NotificationTarget, sessionTitle, action string, pipeMode bool) {
+	n.MaybeNotifyTracedTarget(target, sessionTitle, action, pipeMode, NotificationTrace{})
 }
 
 // MaybeNotifyTraced is MaybeNotify with causal identity retained across every
 // suppression, debounce, dispatch, and focus outcome.
 func (n *Notifier) MaybeNotifyTraced(windowID int, sessionTitle, account, action string, pipeMode bool, trace NotificationTrace) {
+	n.MaybeNotifyTracedTarget(NotificationTarget{
+		WindowID: windowID, Account: account,
+	}, sessionTitle, action, pipeMode, trace)
+}
+
+// MaybeNotifyTracedTarget retains both causal identity and the exact Kitty
+// focus target across debounce, dispatch, and click processing.
+func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTitle, action string, pipeMode bool, trace NotificationTrace) {
+	windowID := target.WindowID
+	account := target.Account
 	if trace.TraceID == "" {
 		trace.TraceID = diagnostics.NewTraceID()
 	}
@@ -234,6 +287,21 @@ func (n *Notifier) MaybeNotifyTraced(windowID int, sessionTitle, account, action
 	}
 	if !n.actionEnabled(action) {
 		emit("decision", "suppressed", "config_disabled")
+		return
+	}
+	n.mu.Lock()
+	dispatchAvailable := n.dispatch != nil
+	focusAvailable := n.focus != nil
+	n.mu.Unlock()
+	if !dispatchAvailable {
+		emit("decision", "suppressed", "backend_unavailable")
+		return
+	}
+	// Production wires focus before accepting requests. The focusAvailable
+	// guard preserves isolated reducer tests whose intentionally incomplete
+	// handler topology has no Kitty client at all.
+	if target.Navigable && focusAvailable && !isReusableKittySocket(target.KittyListenOn) {
+		emit("decision", "suppressed", "focus_unavailable")
 		return
 	}
 
@@ -263,7 +331,7 @@ func (n *Notifier) MaybeNotifyTraced(windowID int, sessionTitle, account, action
 			emit("decision", "suppressed", "cooldown")
 			return
 		}
-		if disposition, ok := n.schedulePermissionLocked(windowID, account, title, subtitle, trace); ok {
+		if disposition, ok := n.schedulePermissionLocked(target, title, subtitle, trace); ok {
 			dispositions = append(dispositions, disposition)
 		}
 		n.mu.Unlock()
@@ -288,22 +356,29 @@ func (n *Notifier) MaybeNotifyTraced(windowID int, sessionTitle, account, action
 		n.emitDisposition(disposition)
 	}
 	emit("decision", "scheduled", "dispatch")
-	go n.runDispatch(windowID, account, title, subtitle, action, trace)
+	go n.runDispatch(target, title, subtitle, action, trace)
 }
 
 // runDispatch invokes the configured dispatcher under a bounded context. The
 // dispatcher's underlying process (or test stub) is responsible for honoring
-// ctx.Done — the real osascript/alerter backends do via exec.CommandContext.
-// windowID and account are forwarded so Session 3's focus closure can map
-// a clicked notification back to the right Kitty window.
-func (n *Notifier) runDispatch(windowID int, account, title, subtitle, action string, trace NotificationTrace) {
+// ctx.Done — the real Alerter backend does via exec.CommandContext.
+// The complete target is retained so a click can use the exact captured socket
+// and window ID after the backend returns.
+func (n *Notifier) runDispatch(target NotificationTarget, title, subtitle, action string, trace NotificationTrace) {
+	windowID := target.WindowID
+	account := target.Account
 	n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "attempted", Reason: "backend_started"})
 	n.mu.Lock()
 	parent := n.ctx
+	dispatch := n.dispatch
 	n.mu.Unlock()
+	if dispatch == nil {
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "dispatch", Outcome: "suppressed", Reason: "backend_unavailable"})
+		return
+	}
 	ctx, cancel := context.WithTimeout(parent, n.dispatchTimeout)
 	defer cancel()
-	result, err := n.dispatch(ctx, windowID, account, title, subtitle)
+	result, err := dispatch(ctx, windowID, account, title, subtitle)
 	if err != nil {
 		outcome, reason := "failed", "send_failed"
 		switch {
@@ -333,6 +408,10 @@ func (n *Notifier) runDispatch(windowID int, account, title, subtitle, action st
 		return
 	}
 	slog.Debug("notifier: clicked", "window_id", windowID, "account", account, "title", title, "subtitle", subtitle)
+	if !target.Navigable || windowID <= 0 {
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_target_missing"})
+		return
+	}
 	n.mu.Lock()
 	focus := n.focus
 	n.mu.Unlock()
@@ -340,11 +419,15 @@ func (n *Notifier) runDispatch(windowID int, account, title, subtitle, action st
 		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_unavailable"})
 		return
 	}
-	if windowID <= 0 && account == "" {
-		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_target_missing"})
+	if !isReusableKittySocket(target.KittyListenOn) {
+		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_unavailable"})
 		return
 	}
-	if err := n.focusForClick(focus, windowID, account); err != nil {
+	if err := n.focusForClick(focus, target); err != nil {
+		if errors.Is(err, errFocusTargetStale) {
+			n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "suppressed", Reason: "focus_target_stale"})
+			return
+		}
 		n.emitDisposition(NotificationDisposition{Trace: trace, WindowID: windowID, Action: action, Stage: "focus", Outcome: "failed", Reason: "focus_failed"})
 		return
 	}
@@ -353,28 +436,28 @@ func (n *Notifier) runDispatch(windowID int, account, title, subtitle, action st
 
 // focusForClick brings the source of a clicked notification back to the
 // foreground. The two-step focus pattern (FocusTab → FocusWindow) mirrors
-// cmd/root.go:47-62. Errors are logged at debug and swallowed: the
-// notification subprocess has already returned, the window may have been
-// closed in the meantime, and propagating the error would only spam logs.
-func (n *Notifier) focusForClick(focus focusClient, windowID int, account string) error {
+// cmd/root.go:47-62. It returns errors so runDispatch can record a precise
+// terminal focus disposition after the notification subprocess exits.
+
+var errFocusTargetStale = errors.New("notification focus target is no longer live")
+
+func (n *Notifier) focusForClick(focus focusClient, target NotificationTarget) error {
+	windowID := target.WindowID
+	windows, err := focus.ListWindows(target.KittyListenOn)
+	if err != nil {
+		return err
+	}
+	if _, _, _, ok := kitty.FindWindowLocationByID(windows, windowID); !ok {
+		return errFocusTargetStale
+	}
 	var errs []error
-	switch {
-	case windowID > 0:
-		if err := focus.FocusTab(kitty.MatchTabByWindowID(windowID)); err != nil {
-			slog.Debug("notifier: focus tab failed", "err", err, "window_id", windowID)
-			errs = append(errs, err)
-		}
-		if err := focus.FocusWindow(kitty.MatchWindowByID(windowID)); err != nil {
-			slog.Debug("notifier: focus window failed", "err", err, "window_id", windowID)
-			errs = append(errs, err)
-		}
-	case account != "":
-		if err := focus.FocusWindow(kitty.MatchAccountWindows(account)); err != nil {
-			slog.Debug("notifier: focus account window failed", "err", err, "account", account)
-			errs = append(errs, err)
-		}
-	default:
-		slog.Debug("notifier: click had no focus target", "window_id", windowID)
+	if err := focus.FocusTab(target.KittyListenOn, kitty.MatchTabByWindowID(windowID)); err != nil {
+		slog.Debug("notifier: focus tab failed", "err", err, "window_id", windowID)
+		errs = append(errs, err)
+	}
+	if err := focus.FocusWindow(target.KittyListenOn, kitty.MatchWindowByID(windowID)); err != nil {
+		slog.Debug("notifier: focus window failed", "err", err, "window_id", windowID)
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }

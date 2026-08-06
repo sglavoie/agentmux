@@ -5,16 +5,18 @@ package daemon
 import "time"
 
 type pendingNotification struct {
-	timer *time.Timer
-	seq   uint64
-	trace NotificationTrace
+	timer  *time.Timer
+	seq    uint64
+	trace  NotificationTrace
+	target NotificationTarget
 }
 
-func (n *Notifier) schedulePermissionLocked(windowID int, account, title, subtitle string, trace NotificationTrace) (NotificationDisposition, bool) {
+func (n *Notifier) schedulePermissionLocked(target NotificationTarget, title, subtitle string, trace NotificationTrace) (NotificationDisposition, bool) {
+	windowID := target.WindowID
 	cancelled, hadPending := n.cancelPendingLocked(windowID, "debounce_refreshed")
 	n.nextPendingSeq++
 	seq := n.nextPendingSeq
-	entry := pendingNotification{seq: seq, trace: trace}
+	entry := pendingNotification{seq: seq, trace: trace, target: target}
 	entry.timer = time.AfterFunc(n.debounce, func() {
 		n.mu.Lock()
 		pending, ok := n.pending[windowID]
@@ -34,7 +36,7 @@ func (n *Notifier) schedulePermissionLocked(windowID int, account, title, subtit
 		n.last[key] = now
 		n.mu.Unlock()
 
-		n.runDispatch(windowID, account, title, subtitle, "permission", trace)
+		n.runDispatch(pending.target, title, subtitle, "permission", trace)
 	})
 	n.pending[windowID] = entry
 	return cancelled, hadPending

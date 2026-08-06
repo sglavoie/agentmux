@@ -164,6 +164,10 @@ func resetDaemonStatusTestState(t *testing.T) {
 
 func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 	build := buildinfo.Info{Version: "9.9.9", Revision: "0123456789abcdef", GoVersion: "go1.99"}
+	notification := daemon.NotificationCapability{
+		Enabled: true, Available: true, Interactive: true, Backend: "alerter",
+		Executable: "/opt/homebrew/bin/alerter", Version: "26.5",
+	}
 	cases := []struct {
 		name   string
 		health daemon.Health
@@ -171,16 +175,27 @@ func TestDaemonStatusCommandWritesToCommandOutput(t *testing.T) {
 	}{
 		{
 			name:   "running ready with build",
-			health: daemon.Health{Alive: true, Ready: true, Build: &build},
+			health: daemon.Health{Alive: true, Ready: true, Build: &build, Notification: &notification},
 			want: "daemon: running (/tmp/amx.sock)\n" +
 				"ready: true\n" +
-				"build: " + build.String() + "\n",
+				"build: " + build.String() + "\n" +
+				"notifications: ready (alerter 26.5 at /opt/homebrew/bin/alerter)\n",
 		},
 		{
 			name:   "running degraded",
 			health: daemon.Health{Alive: true, Ready: false, DegradedReason: "initial snapshot timed out"},
 			want: "daemon: running (/tmp/amx.sock)\n" +
-				"ready: false (initial snapshot timed out)\n",
+				"ready: false (initial snapshot timed out)\n" +
+				"notifications: unknown (restart older daemon)\n",
+		},
+		{
+			name: "notifications unavailable without degrading daemon",
+			health: daemon.Health{Alive: true, Ready: true, Notification: &daemon.NotificationCapability{
+				Enabled: true, Backend: "alerter", Reason: "not_found",
+			}},
+			want: "daemon: running (/tmp/amx.sock)\n" +
+				"ready: true\n" +
+				"notifications: unavailable (alerter; not_found)\n",
 		},
 		{
 			name: "not running",

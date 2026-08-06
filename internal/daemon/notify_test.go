@@ -21,6 +21,28 @@ func TestNotifier_FiresForStop(t *testing.T) {
 	})
 }
 
+func TestNotifier_BackendUnavailableSuppressesWithoutCooldown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		n, _ := newTestNotifier(&config.NotificationConfig{Stop: true})
+		n.dispatch = nil
+		var dispositions []NotificationDisposition
+		n.SetObserver(func(disposition NotificationDisposition) { dispositions = append(dispositions, disposition) })
+
+		n.MaybeNotify(1, "W:api", "work", "stop", false)
+		synctest.Wait()
+
+		if !hasDisposition(dispositions, "decision", "suppressed", "backend_unavailable") {
+			t.Fatalf("dispositions = %+v, want backend_unavailable", dispositions)
+		}
+		n.mu.Lock()
+		entries := len(n.last)
+		n.mu.Unlock()
+		if entries != 0 {
+			t.Fatalf("cooldown entries = %d, want none for unavailable backend", entries)
+		}
+	})
+}
+
 func TestNotifier_FiresForPermission(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Permission: true}

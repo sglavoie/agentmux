@@ -530,8 +530,8 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 		if h.guard != nil {
 			h.guard.Clear(s.windowID)
 		}
-		if s.notify && h.notifier != nil {
-			h.notifier.MaybeNotify(s.windowID, s.title, s.account, "stale", s.pipeMode)
+		if s.notify {
+			h.maybeNotify(s.windowID, s.title, s.account, "stale", s.pipeMode)
 		}
 	}
 	return len(stale) > 0 || changedWindows > 0
@@ -720,7 +720,9 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 
 	for _, s := range silent {
 		if h.notifier != nil {
-			h.notifier.MaybeNotify(hookSilenceWindowID(s.account), s.account, s.account, "hook_silence", false)
+			h.notifier.MaybeNotifyTarget(NotificationTarget{
+				WindowID: hookSilenceWindowID(s.account), Account: s.account,
+			}, s.account, "hook_silence", false)
 		}
 	}
 }

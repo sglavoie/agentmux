@@ -374,6 +374,10 @@ func (h *Handler) handleHealth() Response {
 		metrics := h.metricsFn()
 		resp.Metrics = &metrics
 	}
+	if h.notifier != nil {
+		capability := h.notifier.Capability()
+		resp.Notification = &capability
+	}
 	return resp
 }
 
@@ -566,14 +570,28 @@ func (h *Handler) maybeNotify(windowID int, sessionTitle, account, action string
 	if h.notifier == nil {
 		return
 	}
-	h.notifier.MaybeNotify(windowID, sessionTitle, account, action, pipeMode)
+	h.notifier.MaybeNotifyTarget(h.notificationTarget(windowID, account), sessionTitle, action, pipeMode)
 }
 
 func (h *Handler) maybeNotifyTraced(windowID int, sessionTitle, account, action string, pipeMode bool, trace NotificationTrace) {
 	if h.notifier == nil {
 		return
 	}
-	h.notifier.MaybeNotifyTraced(windowID, sessionTitle, account, action, pipeMode, trace)
+	h.notifier.MaybeNotifyTracedTarget(h.notificationTarget(windowID, account), sessionTitle, action, pipeMode, trace)
+}
+
+func (h *Handler) notificationTarget(windowID int, account string) NotificationTarget {
+	target := NotificationTarget{WindowID: windowID, Account: account, Navigable: windowID > 0}
+	if windowID <= 0 {
+		return target
+	}
+	h.stateMu.Lock()
+	target.KittyListenOn = h.kittySockets[windowID]
+	h.stateMu.Unlock()
+	if !isReusableKittySocket(target.KittyListenOn) {
+		target.KittyListenOn = ""
+	}
+	return target
 }
 
 func (h *Handler) handleShutdown() Response {

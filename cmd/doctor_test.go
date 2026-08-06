@@ -58,6 +58,10 @@ func resetDoctorTestState(t *testing.T) {
 // doctorTestBuild is a matching CLI/daemon artifact identity for tests that
 // exercise a healthy deployment.
 var doctorTestBuild = buildinfo.Info{Version: "1.2.3", Revision: "cafe0123", GoVersion: "go1.99", BinaryHash: "hash-a"}
+var doctorTestNotification = daemon.NotificationCapability{
+	Enabled: true, Available: true, Interactive: true, Backend: "alerter",
+	Executable: "/opt/homebrew/bin/alerter", Version: "26.5",
+}
 
 func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 	resetDoctorTestState(t)
@@ -82,7 +86,7 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 	doctorCLIBuild = func() buildinfo.Info { return build }
 	newDoctorDaemonClient = func() daemonExportClient {
 		return &fakeDaemonExportClient{
-			health: daemon.Health{Alive: true, PID: 4242, Uptime: 2 * time.Minute, Ready: true, Build: &build},
+			health: daemon.Health{Alive: true, PID: 4242, Uptime: 2 * time.Minute, Ready: true, Build: &build, Notification: &doctorTestNotification},
 			export: func(int) (daemon.EventsExport, error) {
 				return daemon.EventsExport{
 					EventsByWindow: map[int][]daemon.SessionEvent{42: {{

@@ -164,13 +164,23 @@ type HandoffConfig struct {
 // (nil → defaults to true so pre-existing configs still get terminal-failure
 // notifications) from "user set stop_failure = false" (&false → suppressed).
 type NotificationConfig struct {
-	Error                bool  `toml:"error"`
-	Permission           bool  `toml:"permission"`
-	Stop                 bool  `toml:"stop"`
-	StopFailure          *bool `toml:"stop_failure"`
-	StaleActive          *bool `toml:"stale_active"` // notify on stale-active detection; nil → default true
-	HookSilence          *bool `toml:"hook_silence"` // notify on hook-silence detection; nil → default true
-	PermissionDebounceMs int   `toml:"permission_debounce_ms"`
+	AlerterPath          string `toml:"alerter_path"`
+	Error                bool   `toml:"error"`
+	Permission           bool   `toml:"permission"`
+	Stop                 bool   `toml:"stop"`
+	StopFailure          *bool  `toml:"stop_failure"`
+	StaleActive          *bool  `toml:"stale_active"` // notify on stale-active detection; nil → default true
+	HookSilence          *bool  `toml:"hook_silence"` // notify on hook-silence detection; nil → default true
+	PermissionDebounceMs int    `toml:"permission_debounce_ms"`
+}
+
+// AnyEnabled reports whether at least one native-notification category is
+// enabled. Nil pointer fields retain their backward-compatible default of true.
+func (c NotificationConfig) AnyEnabled() bool {
+	return c.Error || c.Permission || c.Stop ||
+		c.StopFailure == nil || *c.StopFailure ||
+		c.StaleActive == nil || *c.StaleActive ||
+		c.HookSilence == nil || *c.HookSilence
 }
 
 // PreviewConfig controls the dashboard split-pane live preview.

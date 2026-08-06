@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 // TestHealthCarriesBuildIdentityAndMetrics verifies TypeHealth reports the
@@ -26,6 +27,23 @@ func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
 	}
 	if resp.Metrics == nil || resp.Metrics.Accepted != 5 || resp.Metrics.QueueFull != 1 || resp.Metrics.QueueLastWaitNs != 250 {
 		t.Fatalf("resp.Metrics = %+v; want the server snapshot", resp.Metrics)
+	}
+}
+
+func TestHealthCarriesNotificationCapabilityWithoutDegradingReadiness(t *testing.T) {
+	n := NewNotifier(&config.NotificationConfig{Stop: true})
+	n.capability = NotificationCapability{
+		Enabled: true, Backend: "alerter", Reason: "not_found",
+	}
+	h := NewHandler(NewStateGuard(time.Second), n)
+	h.MarkReady()
+
+	resp := h.Handle(Request{Type: TypeHealth})
+	if !resp.Ready {
+		t.Fatal("missing Alerter must not degrade daemon readiness")
+	}
+	if resp.Notification == nil || !resp.Notification.Enabled || resp.Notification.Available || resp.Notification.Reason != "not_found" {
+		t.Fatalf("notification capability = %+v", resp.Notification)
 	}
 }
 
