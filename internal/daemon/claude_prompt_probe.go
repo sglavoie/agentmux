@@ -65,7 +65,11 @@ func (h *Handler) probeClaudeScreenStopWithSnapshot(now time.Time, snapshot scre
 		if !ok {
 			continue
 		}
-		h.probeClaudeIdleWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars)
+		_, _, source, ok := kitty.FindWindowLocationByID(snapshot.windows, binding.SourceWindowID)
+		if !ok {
+			continue
+		}
+		h.probeClaudeIdleWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars, source.Title)
 	}
 }
 
@@ -87,6 +91,7 @@ func (h *Handler) probeClaudeIdleWindow(
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
+	sourceWindowTitle string,
 ) {
 	source := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
 	targetWindowID := binding.TargetWindowID
@@ -125,6 +130,14 @@ func (h *Handler) probeClaudeIdleWindow(
 	}
 	muted = muted || st.Muted
 	h.stateMu.Unlock()
+
+	// Claude can leave its empty composer visible throughout a live turn while
+	// advertising the work only in the pane title. Treat that title as protected
+	// active evidence and spend any partial idle streak before reading the screen.
+	if claudeWindowTitleHasActiveWork(sourceWindowTitle) {
+		h.ClearIdleSample(targetWindowID, source)
+		return
+	}
 
 	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
 	if err != nil {

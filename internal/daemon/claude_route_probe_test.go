@@ -93,6 +93,82 @@ func TestProbeClaudeScreenStop_RoutedProducerSettlesManagedTarget(t *testing.T) 
 	}
 }
 
+func TestProbeClaudeScreenStop_RoutedBusyProducerTitleKeepsManagedTargetActive(t *testing.T) {
+	h := newTestHandler()
+	base := time.Unix(1_700_000_000, 0)
+	windows := routedClaudeProbeWindows(true)
+	setProbeWindowTitle(t, windows, 43, "\u2802 Fix drawer drag resistance")
+	fake := &fakeKittyClient{
+		windows: windows,
+		getText: map[string]string{
+			kitty.MatchWindowByID(43): claudeIdleScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	seedRoutedClaudeProbe(t, h, 42, 43, "routed-title-busy", base.Unix())
+
+	reads := 0
+	fake.beforeGetText = func(match, extent string) {
+		if match == kitty.MatchWindowByID(43) && extent == "screen" {
+			reads++
+		}
+	}
+	h.ProbeClaudeScreenStop(base.Add(time.Second))
+	h.ProbeClaudeScreenStop(base.Add(3 * time.Second))
+
+	if reads != 0 {
+		t.Fatalf("routed busy producer screen reads = %d, want 0", reads)
+	}
+	if eff, visible := windowEffective(t, h, 42); eff.Icon != "bolt" || visible != "bolt" {
+		t.Fatalf("managed target with busy producer title = %+v/%q, want bolt/bolt", eff, visible)
+	}
+	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
+		t.Fatalf("target ScreenStopProbe recorded for busy routed producer: %+v", ev)
+	}
+}
+
+func TestProbeClaudeScreenStop_RoutedBusyTitleInvalidatesStaleIdleRead(t *testing.T) {
+	h := newTestHandler()
+	base := time.Unix(1_700_000_000, 0)
+	idleWindows := routedClaudeProbeWindows(true)
+	setProbeWindowTitle(t, idleWindows, 43, "Fix drawer drag resistance")
+	busyWindows := routedClaudeProbeWindows(true)
+	setProbeWindowTitle(t, busyWindows, 43, "\u2733 Fix drawer drag resistance")
+	fake := &fakeKittyClient{
+		windows: idleWindows,
+		getText: map[string]string{
+			kitty.MatchWindowByID(43): claudeInterruptedScreen,
+		},
+	}
+	h.SetKittyClient(fake)
+	seedRoutedClaudeProbe(t, h, 42, 43, "routed-title-race", base.Unix())
+	h.publishSnapshot(idleWindows, base)
+	staleSnapshot, ready := h.cachedScreenProbeSnapshot()
+	if !ready {
+		t.Fatal("idle screen-probe snapshot is not ready")
+	}
+
+	publishedBusy := false
+	fake.beforeGetText = func(match, extent string) {
+		if publishedBusy || match != kitty.MatchWindowByID(43) || extent != "screen" {
+			return
+		}
+		publishedBusy = true
+		h.publishSnapshot(busyWindows, base.Add(time.Second))
+	}
+	h.probeClaudeScreenStopWithSnapshot(base.Add(time.Second), staleSnapshot)
+
+	if !publishedBusy {
+		t.Fatal("stale idle probe never reached the injected screen read")
+	}
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("busy-title publication did not invalidate stale idle read: %+v", eff)
+	}
+	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
+		t.Fatalf("ScreenStopProbe recorded from stale idle-title snapshot: %+v", ev)
+	}
+}
+
 func TestProbeClaudeContextLimit_RoutedBindingSurvivesFocusAfterStaleReadIsDiscarded(t *testing.T) {
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
@@ -201,6 +277,15 @@ func routedClaudeProbeWindows(sourceActive bool) []kitty.OSWindow {
 			IsActive: !sourceActive,
 		},
 	)
+}
+
+func setProbeWindowTitle(t *testing.T, windows []kitty.OSWindow, windowID int, title string) {
+	t.Helper()
+	_, _, win, ok := kitty.FindWindowLocationByID(windows, windowID)
+	if !ok {
+		t.Fatalf("probe window %d not found", windowID)
+	}
+	win.Title = title
 }
 
 func seedRoutedClaudeProbe(t *testing.T, h *Handler, targetWindowID, sourceWindowID int, sessionID string, at int64) uint64 {

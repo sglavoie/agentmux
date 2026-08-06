@@ -131,6 +131,44 @@ func TestSnapshotStore_ScreenProbeWindowEpochsIsolateSiblingChurn(t *testing.T) 
 	}
 }
 
+func TestSnapshotStore_ClaudeBusyTitleUsesNormalizedWindowEpoch(t *testing.T) {
+	var s snapshotStore
+	base := time.Unix(1_700_000_000, 0)
+
+	s.publish(claudeTitleEpochWindows("\u2733 Fix drawer drag resistance"), base)
+	_, _, _, first, ready := s.loadForScreenProbes()
+	if !ready {
+		t.Fatal("first Claude title snapshot is not ready")
+	}
+	tabEpoch := first[100].epoch
+	busyEpoch := first[100].windows[42].epoch
+	if tabEpoch == 0 || busyEpoch == 0 {
+		t.Fatalf("initial epochs = tab %d window %d, want non-zero", tabEpoch, busyEpoch)
+	}
+
+	// Spinner frame and task text changes remain in the same busy class, so they
+	// must not continuously invalidate an otherwise stable screen probe binding.
+	s.publish(claudeTitleEpochWindows("\u2802 Run focused tests"), base.Add(time.Second))
+	_, _, _, stillBusy, _ := s.loadForScreenProbes()
+	if got := stillBusy[100].epoch; got != tabEpoch {
+		t.Fatalf("busy title change advanced tab epoch %d -> %d", tabEpoch, got)
+	}
+	if got := stillBusy[100].windows[42].epoch; got != busyEpoch {
+		t.Fatalf("busy title change advanced window epoch %d -> %d", busyEpoch, got)
+	}
+
+	// Busy-to-idle is probe-relevant evidence and must invalidate an in-flight
+	// observation, while remaining isolated from the containing tab's epoch.
+	s.publish(claudeTitleEpochWindows("Run focused tests"), base.Add(2*time.Second))
+	_, _, _, idle, _ := s.loadForScreenProbes()
+	if got := idle[100].epoch; got != tabEpoch {
+		t.Fatalf("busy-to-idle title change advanced tab epoch %d -> %d", tabEpoch, got)
+	}
+	if got := idle[100].windows[42].epoch; got == busyEpoch {
+		t.Fatalf("busy-to-idle title change retained window epoch %d", got)
+	}
+}
+
 func screenProbeSplitTabWindows(plainForeground []string) []kitty.OSWindow {
 	return []kitty.OSWindow{{
 		ID:        1,
@@ -151,6 +189,25 @@ func screenProbeSplitTabWindows(plainForeground []string) []kitty.OSWindow {
 					ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: plainForeground}},
 				},
 			},
+		}},
+	}}
+}
+
+func claudeTitleEpochWindows(windowTitle string) []kitty.OSWindow {
+	return []kitty.OSWindow{{
+		ID:        1,
+		IsActive:  true,
+		IsFocused: true,
+		Tabs: []kitty.Tab{{
+			ID:       100,
+			IsActive: true,
+			Title:    "api",
+			Windows: []kitty.Window{{
+				ID:                  42,
+				IsActive:            true,
+				Title:               windowTitle,
+				ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"/opt/homebrew/bin/claude"}}},
+			}},
 		}},
 	}}
 }

@@ -101,13 +101,14 @@ type screenProbeWindowState struct {
 // screenProbeWindowSignature is a derived projection rather than raw argv. A
 // plain pane rewrites its foreground processes on every shell command and a
 // routed source pane rewrites them on every tool the harness spawns, so raw
-// argv makes probes self-invalidate mid-read. Whether a pane runs a harness,
-// and whether that run is non-interactive, is the only foreground fact any
-// probe path consumes.
+// argv makes probes self-invalidate mid-read. The projection keeps only facts
+// probes consume: harness/pipe identity plus Claude's normalized busy-title
+// class, never the rotating marker or task text itself.
 type screenProbeWindowSignature struct {
 	mute               string
 	foregroundHarness  string
 	foregroundPipeMode bool
+	claudeBusyTitle    bool
 }
 
 // publish replaces the cached snapshot with windows captured at now. The slice
@@ -181,7 +182,10 @@ func screenProbeSignature(osWindow *kitty.OSWindow, tab *kitty.Tab) screenProbeT
 }
 
 func screenProbeWindowSignatureFor(win *kitty.Window) screenProbeWindowSignature {
-	signature := screenProbeWindowSignature{mute: win.UserVars.Mute}
+	signature := screenProbeWindowSignature{
+		mute:            win.UserVars.Mute,
+		claudeBusyTitle: claudeWindowTitleHasActiveWork(win.Title),
+	}
 	signature.foregroundHarness, signature.foregroundPipeMode = screenProbeForegroundHarness(win)
 	return signature
 }

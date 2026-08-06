@@ -3,6 +3,7 @@ package daemon
 import (
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
 )
@@ -115,6 +116,20 @@ func claudeScreenHasActiveWork(screen string) bool {
 		return true
 	}
 	return false
+}
+
+// claudeWindowTitleHasActiveWork reports whether Claude's pane title carries
+// its out-of-band busy marker. Recent Claude builds can keep an empty composer
+// visible while moving the only active-work signal into the terminal title, so
+// the screen body alone is not sufficient idle evidence. The star is Claude's
+// ordinary work marker; Braille-pattern runes cover its alternate high-effort
+// spinner without coupling freshness to the individual animation frame.
+func claudeWindowTitleHasActiveWork(title string) bool {
+	runes := []rune(strings.TrimLeftFunc(title, unicode.IsSpace))
+	if len(runes) < 2 || !unicode.IsSpace(runes[1]) {
+		return false
+	}
+	return runes[0] == '\u2733' || runes[0] >= '\u2800' && runes[0] <= '\u28ff'
 }
 
 // claudeScreenHasBlockingPrompt reports whether the screen shows a Claude

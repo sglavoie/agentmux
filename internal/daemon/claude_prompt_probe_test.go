@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -131,6 +132,70 @@ func TestProbeClaudeScreenStop_ActiveSpinnerKeepsBolt(t *testing.T) {
 	resp := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
 	if ev, ok := lastEventNamed(resp.Events, screenStopProbeEvent); ok {
 		t.Fatalf("ScreenStopProbe row recorded for a still-working turn: %+v", ev)
+	}
+}
+
+// TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt covers Claude builds that
+// leave an empty composer in the screen body while publishing the only active
+// work marker through Kitty's pane title. This is the live Pulse regression:
+// the false stop used to paint until the next tool hook restored the bolt.
+func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
+	base := time.Now()
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = "\u2733 Fix drawer drag resistance"
+	fake := &fakeKittyClient{
+		windows: windows,
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): claudeIdleScreen,
+		},
+	}
+	notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
+	h := NewHandler(NewStateGuard(time.Hour), notifier)
+	notifier.SetIsMuted(h.IsMuted)
+	h.SetKittyClient(fake)
+	claudeSeedActiveBolt(t, h, 42, "sess-title-busy", base.Unix())
+
+	reads := 0
+	fake.beforeGetText = func(match, extent string) {
+		if match == kitty.MatchWindowByID(42) && extent == "screen" {
+			reads++
+		}
+	}
+	for _, elapsed := range []time.Duration{0, 2 * time.Second, 4 * time.Second} {
+		h.ProbeClaudeScreenStop(base.Add(elapsed))
+	}
+
+	if reads != 0 {
+		t.Fatalf("screen reads with busy pane title = %d, want 0", reads)
+	}
+	if got := len(fake.titleCalls()); got != 0 {
+		t.Fatalf("SetTabTitle calls with busy pane title = %d, want 0", got)
+	}
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective with busy pane title = %+v, want bolt", eff)
+	}
+	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
+		t.Fatalf("ScreenStopProbe row recorded for busy pane title: %+v", ev)
+	}
+	if got := rec.len(); got != 0 {
+		t.Fatalf("notifications with busy pane title = %d, want 0 (%+v)", got, rec.snapshot())
+	}
+
+	// Once the pane title itself becomes idle, the existing two-sample screen
+	// fallback remains authoritative and converges the stuck bolt to stop.
+	fake.mu.Lock()
+	fake.windows[0].Tabs[0].Windows[0].Title = "Fix drawer drag resistance"
+	fake.mu.Unlock()
+	h.ProbeClaudeScreenStop(base.Add(6 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective after first fully-idle sample = %+v, want bolt", eff)
+	}
+	h.ProbeClaudeScreenStop(base.Add(8 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
+		t.Fatalf("effective after second fully-idle sample = %+v, want stop", eff)
 	}
 }
 

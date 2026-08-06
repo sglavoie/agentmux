@@ -821,9 +821,11 @@ three are told apart by event name and source key:
   composer and no visible prompt.
 - **Claude** — `event: "ScreenStopProbe"`, `source: "probe:claude_screen"`
   (same event name as Codex, distinct source). Fires on a stuck Claude `⚡`
-  whose composer is idle (two consecutive samples) or that shows Claude's
-  interruption marker (one sample). Native `Notification/idle_prompt` is the
-  primary Claude stop; this screen probe is the interruption/no-hook fallback.
+  whose composer is idle and whose Kitty pane title has no Claude busy marker
+  (two consecutive samples), or that shows Claude's interruption marker with
+  the same non-busy title gate (one sample). Native `Notification/idle_prompt`
+  is the primary Claude stop; this screen probe is the interruption/no-hook
+  fallback.
 - **Copilot** — `event: "TranscriptStopProbe"`,
   `source: "probe:copilot_transcript"`. Reads no screen: it consults the
   interactive session transcript's latest state-bearing event and settles only
