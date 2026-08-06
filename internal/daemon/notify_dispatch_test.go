@@ -50,7 +50,7 @@ func TestNotificationDispatchFailurePersistsTerminalJournalOutcome(t *testing.T)
 
 func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 	got := alerterArgs("W:api", "Session stopped")
-	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", "", "--timeout", "300", "--sender", "net.kovidgoyal.kitty"}
+	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", "", "--timeout", "300", "--sender", "fr.vjeantet.alerter"}
 	if len(got) != len(want) {
 		t.Fatalf("alerterArgs len = %d, want %d (%v)", len(got), len(want), got)
 	}

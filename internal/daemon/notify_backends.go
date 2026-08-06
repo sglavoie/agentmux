@@ -4,6 +4,8 @@ package daemon
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -24,14 +26,22 @@ import (
 // backend's successful @TIMEOUT token while still bounding a genuinely stuck
 // process.
 const (
-	alerterProtocolTimeout = 5 * time.Minute
-	alerterTimeoutGrace    = time.Minute
-	alerterDispatchTimeout = alerterProtocolTimeout + alerterTimeoutGrace
-	alerterProbeTimeout    = 500 * time.Millisecond
-	kittyBundleIdentifier  = "net.kovidgoyal.kitty"
+	alerterProtocolTimeout  = 5 * time.Minute
+	alerterTimeoutGrace     = time.Minute
+	alerterDispatchTimeout  = alerterProtocolTimeout + alerterTimeoutGrace
+	alerterProbeTimeout     = 500 * time.Millisecond
+	notificationTestTimeout = 5 * time.Second
+	notificationTestGrace   = 5 * time.Second
+	alerterBundleIdentifier = "fr.vjeantet.alerter"
 )
 
 const minimumAlerterMajor = 26
+
+// ErrNotificationDeliveryUnconfirmed means Alerter did not acknowledge the
+// test notification before the bounded probe expired. The most common cause is
+// disabled Alerter notifications, though a stuck Notification Center can produce
+// the same result.
+var ErrNotificationDeliveryUnconfirmed = errors.New("notification delivery could not be confirmed")
 
 // NotificationCapability is the daemon-start snapshot of native notification
 // support. It is exported through health so operators can distinguish a ready
@@ -44,6 +54,14 @@ type NotificationCapability struct {
 	Executable  string `json:"executable,omitempty"`
 	Version     string `json:"version,omitempty"`
 	Reason      string `json:"reason,omitempty"`
+}
+
+// NotificationDeliveryTestResult describes a successful visible delivery
+// probe. Interaction is Alerter's terminal result (for example, "clicked" or
+// "interaction_timeout").
+type NotificationDeliveryTestResult struct {
+	Capability  NotificationCapability
+	Interaction string
 }
 
 type deliveryOutcome string
@@ -219,16 +237,85 @@ func notificationsEnabled(cfg *config.NotificationConfig) bool {
 }
 
 func alerterArgs(title, subtitle string) []string {
-	timeoutSeconds := strconv.FormatInt(int64(alerterProtocolTimeout/time.Second), 10)
-	return []string{"--title", title, "--subtitle", subtitle, "--message", "", "--timeout", timeoutSeconds, "--sender", kittyBundleIdentifier}
+	return alerterArgsWithTimeout(title, subtitle, alerterProtocolTimeout)
+}
+
+func alerterArgsWithTimeout(title, subtitle string, timeout time.Duration) []string {
+	return alerterArgsWithMessage(title, subtitle, "", timeout)
+}
+
+func alerterArgsWithMessage(title, subtitle, message string, timeout time.Duration) []string {
+	timeoutSeconds := strconv.FormatInt(int64(timeout/time.Second), 10)
+	return []string{"--title", title, "--subtitle", subtitle, "--message", message, "--timeout", timeoutSeconds, "--sender", alerterBundleIdentifier}
 }
 
 func runAlerterAt(ctx context.Context, path string, _ int, _ string, title, subtitle string) (dispatchResult, error) {
-	out, err := exec.CommandContext(ctx, path, alerterArgs(title, subtitle)...).Output()
+	return runAlerterAtWithTimeout(ctx, path, title, subtitle, alerterProtocolTimeout)
+}
+
+func runAlerterAtWithTimeout(ctx context.Context, path, title, subtitle string, timeout time.Duration) (dispatchResult, error) {
+	out, err := exec.CommandContext(ctx, path, alerterArgsWithTimeout(title, subtitle, timeout)...).Output()
 	if err != nil {
 		return dispatchResult{}, err
 	}
 	return parseAlerterOutput(out), nil
+}
+
+// TestNotificationDelivery sends a visible, short-lived notification under
+// Alerter's own bundle identity. It intentionally bypasses Agent Mux's per-event
+// notification switches because invoking the command is explicit consent to a
+// one-off test. A clean Alerter exit confirms delivery; expiration means the
+// backend never acknowledged delivery.
+func TestNotificationDelivery(ctx context.Context, cfg *config.NotificationConfig) (NotificationDeliveryTestResult, error) {
+	return testNotificationDeliveryWith(ctx, cfg, defaultAlerterResolver(), notificationTestTimeout+notificationTestGrace, runNotificationTestAt)
+}
+
+type notificationTestRunner func(context.Context, string, string, string, time.Duration) (dispatchResult, error)
+
+func runNotificationTestAt(ctx context.Context, path, title, message string, timeout time.Duration) (dispatchResult, error) {
+	out, err := exec.CommandContext(ctx, path, alerterArgsWithMessage(title, "Notification test", message, timeout)...).Output()
+	if err != nil {
+		return dispatchResult{}, err
+	}
+	return parseAlerterOutput(out), nil
+}
+
+func testNotificationDeliveryWith(ctx context.Context, cfg *config.NotificationConfig, resolver alerterResolver, dispatchTimeout time.Duration, run notificationTestRunner) (NotificationDeliveryTestResult, error) {
+	// Preserve the configured executable override while forcing discovery on for
+	// this explicit test, even when every automatic notification category is off.
+	testConfig := config.NotificationConfig{Stop: true}
+	if cfg != nil {
+		testConfig.AlerterPath = cfg.AlerterPath
+	}
+	capability := resolveAlerter(&testConfig, resolver)
+	result := NotificationDeliveryTestResult{Capability: capability}
+	if !capability.Available || !capability.Interactive {
+		return result, fmt.Errorf("notification backend unavailable (%s)", capability.Reason)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, dispatchTimeout)
+	defer cancel()
+
+	dispatched, err := run(
+		probeCtx,
+		capability.Executable,
+		"Agent Mux notification test",
+		"If you can see this, Agent Mux notifications are working.",
+		notificationTestTimeout,
+	)
+	if err != nil {
+		if errors.Is(probeCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+			return result, ErrNotificationDeliveryUnconfirmed
+		}
+		if probeCtx.Err() != nil {
+			return result, probeCtx.Err()
+		}
+		return result, fmt.Errorf("running notification backend: %w", err)
+	}
+	result.Interaction = string(dispatched.interaction)
+	return result, nil
 }
 
 // parseAlerterOutput reports the terminal delivery and interaction outcome.
