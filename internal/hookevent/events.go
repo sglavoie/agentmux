@@ -20,9 +20,9 @@ var eventToAction = map[string]string{
 	// Internal Agent Mux signals from agent_session_loop. Lifecycle events are
 	// marker-only except for the final run finish: the daemon derives the per-run
 	// phase (turn, verification, between, waiting, paused, finished) from their
-	// names and owns the authoritative icon + loop lease. MailboxReply shares the
-	// recognized marker action for delivery compatibility but is intercepted by
-	// the supervisor-probe handler before ordinary lifecycle normalization.
+	// names and owns the authoritative icon + loop lease. Mailbox events share
+	// the recognized marker action for delivery compatibility but are intercepted
+	// by the supervisor-probe handler before ordinary lifecycle normalization.
 	"AgentSessionLoopStarted":               "loop_marker",
 	"AgentSessionLoopTurnStarted":           "loop_marker",
 	"AgentSessionLoopTurnHeartbeat":         "loop_marker",
@@ -34,7 +34,9 @@ var eventToAction = map[string]string{
 	"AgentSessionLoopVerificationFinished":  "loop_marker",
 	"AgentSessionLoopWaitStarted":           "loop_marker",
 	"AgentSessionLoopWaitEnded":             "loop_marker",
+	"AgentSessionLoopMailboxQuestion":       "loop_marker",
 	"AgentSessionLoopMailboxReply":          "loop_marker",
+	"AgentSessionLoopMailboxResolution":     "loop_marker",
 	"AgentSessionLoopPaused":                "loop_marker",
 	"AgentSessionLoopFinished":              "idle",
 

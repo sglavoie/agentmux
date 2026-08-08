@@ -156,7 +156,7 @@ func (h *Handler) reconcileASLCandidates(now time.Time, windows []kitty.OSWindow
 			}
 			delete(h.aslMissStreak, ref)
 			delete(h.aslSupervisorTargets, ref)
-			delete(h.aslSupervisorReplyCutoffs, ref)
+			delete(h.aslSupervisorClosureCutoffs, ref)
 			h.clearASLSupervisorQuestionLocked(
 				windowID,
 				fact.RunID,

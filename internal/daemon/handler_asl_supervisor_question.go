@@ -11,13 +11,19 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/hookevent"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 const (
-	aslSupervisorQuestionProbePrefix = "asl_supervisor:"
-	eventASLSupervisorQuestion       = "ASLSupervisorQuestion"
-	agentSessionLoopMailboxReply     = "AgentSessionLoopMailboxReply"
-	aslMailboxReplyReason            = "mailbox_reply_appended"
+	aslSupervisorQuestionProbePrefix  = "asl_supervisor:"
+	eventASLSupervisorQuestion        = "ASLSupervisorQuestion"
+	agentSessionLoopMailboxQuestion   = "AgentSessionLoopMailboxQuestion"
+	agentSessionLoopMailboxReply      = "AgentSessionLoopMailboxReply"
+	agentSessionLoopMailboxResolution = "AgentSessionLoopMailboxResolution"
+	aslMailboxQuestionReason          = "mailbox_question_surfaced"
+	aslMailboxReplyReason             = "mailbox_reply_appended"
+	aslMailboxResolutionReason        = "mailbox_resolution_appended"
 )
 
 // aslSupervisorTarget is one live ASL run whose adjacent fixed-size supervisor
@@ -29,13 +35,14 @@ type aslSupervisorTarget struct {
 }
 
 type aslSupervisorNotification struct {
-	windowID      int
-	sessionTitle  string
-	account       string
-	harness       string
-	sessionID     string
-	runID         string
-	sourceEventID string
+	windowID       int
+	sessionTitle   string
+	account        string
+	harness        string
+	sessionID      string
+	runID          string
+	sourceEventID  string
+	bypassCooldown bool
 }
 
 func aslSupervisorQuestionSource(runID string) SourceID {
@@ -121,12 +128,12 @@ func (h *Handler) acceptASLSupervisorProjection(
 		h.stateMu.Unlock()
 		return
 	}
-	if cutoff, ok := h.aslSupervisorReplyCutoffs[ref]; ok {
+	if cutoff, ok := h.aslSupervisorClosureCutoffs[ref]; ok {
 		if projection.ProjectionSeq <= cutoff {
 			h.stateMu.Unlock()
 			return
 		}
-		delete(h.aslSupervisorReplyCutoffs, ref)
+		delete(h.aslSupervisorClosureCutoffs, ref)
 	}
 
 	if projection.UnansweredQuestions == 0 {
@@ -142,40 +149,194 @@ func (h *Handler) acceptASLSupervisorProjection(
 		return
 	}
 
+	previous := h.aslSupervisorProjections[ref]
+	if st, ok := h.windowStateLocked(target.windowID); ok && st.Reducer != nil {
+		fact := st.Reducer.facts[aslSupervisorQuestionSource(target.candidate.RunID)]
+		if fact != nil && fact.acked &&
+			previous.LatestQuestionID == projection.LatestQuestionID {
+			// F8 dismisses the current open set. Lease heartbeats and unrelated
+			// mailbox records may advance ProjectionSeq, but only a different latest
+			// question identity is allowed to re-arm the attention probe.
+			h.aslSupervisorProjections[ref] = projection
+			h.stateMu.Unlock()
+			return
+		}
+	}
 	h.aslSupervisorProjections[ref] = projection
 	notification := h.applyASLSupervisorQuestionLocked(now, target, projection)
 	h.stateMu.Unlock()
 	h.dispatchASLSupervisorNotification(notification)
 }
 
-// handleASLSupervisorMailboxReply consumes ASL's authoritative, text-free
-// fast-clear marker. It only retracts the exact single-question projection the
-// producer answered; runner lifecycle facts remain untouched.
-func (h *Handler) handleASLSupervisorMailboxReply(
+// handleASLSupervisorMailboxQuestion consumes ASL's body-free handoff as soon
+// as outbox wait surfaces an actionable open set. Unlike the lease compatibility
+// path, a direct handoff does not wait for a correlated harness Stop.
+func (h *Handler) handleASLSupervisorMailboxQuestion(
 	payload hookevent.HookPayload,
+	baseReq Request,
+	windows []kitty.OSWindow,
 	now time.Time,
 ) {
 	runID := strings.TrimSpace(payload.EffectiveRunID())
 	questionID := strings.TrimSpace(payload.QuestionID)
 	if strings.TrimSpace(payload.Source) != "agent_session_loop" ||
-		strings.TrimSpace(payload.Reason) != aslMailboxReplyReason ||
+		strings.TrimSpace(payload.Reason) != aslMailboxQuestionReason ||
+		runID == "" ||
+		!validASLMailboxQuestionID(questionID) ||
+		payload.UnansweredQuestions <= 0 ||
+		strings.TrimSpace(payload.DeliveryState) != "open" ||
+		strings.TrimSpace(payload.QuestionPreview) != "" {
+		return
+	}
+	questionSeq, _, err := parseSourceSeqAt(payload)
+	if err != nil || questionSeq == 0 {
+		return
+	}
+	projectionSeq, err := strconv.ParseUint(
+		strings.TrimSpace(payload.EffectiveMailboxProjectionSequence()),
+		10,
+		64,
+	)
+	if err != nil || projectionSeq < questionSeq {
+		return
+	}
+	if strings.TrimSpace(payload.EffectiveSourceEventID()) !=
+		fmt.Sprintf("%s:mailbox-question:%d", runID, questionSeq) {
+		return
+	}
+	createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(payload.QuestionCreatedAt))
+	if err != nil {
+		return
+	}
+	canonicalStatePath, err := agentloop.CanonicalizePath(payload.StatePath)
+	if err != nil || filepath.Base(canonicalStatePath) != "state.json" {
+		return
+	}
+	stateDir := filepath.Dir(canonicalStatePath)
+	targets, _ := loopLifecycleTargets(windows, payload)
+	for _, routeTarget := range targets {
+		parts := palette.ParseTitleParts(routeTarget.tab.Title)
+		profile := ""
+		harnessName := ""
+		muted := parts.Muted
+		if routeTarget.win != nil {
+			profile = routeTarget.win.UserVars.EffectiveProfile()
+			harnessName = routeTarget.win.UserVars.EffectiveHarness()
+			muted = muted || routeTarget.win.UserVars.Mute != ""
+		}
+		h.setMutedFromSnapshot(routeTarget.windowID, muted)
+		originWindowID := baseReq.WindowID
+		if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {
+			originWindowID = payloadWindowID
+		}
+		target := aslSupervisorTarget{
+			windowID:       routeTarget.windowID,
+			originWindowID: originWindowID,
+			candidate: agentloop.Candidate{
+				RunID:    runID,
+				StateDir: stateDir,
+			},
+		}
+		projection := agentloop.SupervisorQuestionProjection{
+			RunID:                   runID,
+			ProjectionSeq:           projectionSeq,
+			UnansweredQuestions:     payload.UnansweredQuestions,
+			LatestQuestionID:        questionID,
+			LatestQuestionCreatedAt: createdAt,
+			UpdatedAt:               now,
+		}
+
+		h.stateMu.Lock()
+		ref := aslLeaseRef{windowID: target.windowID, key: runID}
+		if cutoff, ok := h.aslSupervisorClosureCutoffs[ref]; ok {
+			if projectionSeq <= cutoff {
+				h.stateMu.Unlock()
+				continue
+			}
+			delete(h.aslSupervisorClosureCutoffs, ref)
+		}
+		st := h.ensureWindowStateLocked(target.windowID)
+		if st.Reducer == nil {
+			st.Reducer = NewReducer(h.reducerCfg)
+		}
+		if st.LastSessionTitle == "" {
+			st.LastSessionTitle = parts.Base
+		}
+		if st.LastAccount == "" {
+			st.LastAccount = profile
+		}
+		if st.LastHarness == "" {
+			st.LastHarness = firstNonEmpty(harnessName, baseReq.Harness, payload.Harness)
+		}
+		h.registerASLSupervisorTargetLocked(target)
+		previous := h.aslSupervisorProjections[ref]
+		if fact := st.Reducer.facts[aslSupervisorQuestionSource(runID)]; fact != nil && fact.acked &&
+			previous.LatestQuestionID == projection.LatestQuestionID {
+			h.aslSupervisorProjections[ref] = projection
+			h.stateMu.Unlock()
+			continue
+		}
+		h.aslSupervisorProjections[ref] = projection
+		notification := h.applyASLSupervisorQuestionEvidenceLocked(
+			now,
+			target,
+			projection,
+			strings.TrimSpace(payload.EffectiveSourceEventID()),
+			firstNonEmpty(harnessName, baseReq.Harness, payload.Harness, st.LastHarness),
+			"",
+			true,
+			fmt.Sprintf(
+				"ASL outbox wait surfaced %d unanswered mailbox question(s), latest id %s",
+				projection.UnansweredQuestions,
+				projection.LatestQuestionID,
+			),
+		)
+		h.stateMu.Unlock()
+		h.dispatchASLSupervisorNotification(notification)
+	}
+}
+
+// handleASLSupervisorMailboxClosure consumes ASL's authoritative, text-free
+// reply/resolution fast-clear marker. The producer emits it only after its
+// post-append snapshot proves the run has no remaining open questions.
+func (h *Handler) handleASLSupervisorMailboxClosure(
+	event string,
+	payload hookevent.HookPayload,
+	now time.Time,
+) {
+	runID := strings.TrimSpace(payload.EffectiveRunID())
+	questionID := strings.TrimSpace(payload.QuestionID)
+	reason := aslMailboxReplyReason
+	eventLabel := "mailbox-reply"
+	if event == agentSessionLoopMailboxResolution {
+		reason = aslMailboxResolutionReason
+		eventLabel = "mailbox-resolution"
+		action := strings.TrimSpace(payload.ResolutionAction)
+		if action != "continue" && action != "pause" {
+			return
+		}
+	} else if event != agentSessionLoopMailboxReply {
+		return
+	}
+	if strings.TrimSpace(payload.Source) != "agent_session_loop" ||
+		strings.TrimSpace(payload.Reason) != reason ||
 		runID == "" ||
 		!validASLMailboxQuestionID(questionID) {
 		return
 	}
-	replySeq, _, err := parseSourceSeqAt(payload)
-	if err != nil || replySeq == 0 {
+	closureSeq, _, err := parseSourceSeqAt(payload)
+	if err != nil || closureSeq == 0 {
 		return
 	}
 	projectionRaw := strings.TrimSpace(
 		payload.EffectiveMailboxProjectionSequence(),
 	)
 	projectionSeq, err := strconv.ParseUint(projectionRaw, 10, 64)
-	if err != nil || projectionSeq == 0 || replySeq <= projectionSeq {
+	if err != nil || projectionSeq == 0 || projectionSeq > closureSeq {
 		return
 	}
 	if strings.TrimSpace(payload.EffectiveSourceEventID()) !=
-		fmt.Sprintf("%s:mailbox-reply:%d", runID, replySeq) {
+		fmt.Sprintf("%s:%s:%d", runID, eventLabel, closureSeq) {
 		return
 	}
 	canonicalStatePath, err := agentloop.CanonicalizePath(payload.StatePath)
@@ -192,23 +353,21 @@ func (h *Handler) handleASLSupervisorMailboxReply(
 			target.candidate.StateDir != stateDir {
 			continue
 		}
-		if replySeq > h.aslSupervisorReplyCutoffs[ref] {
-			h.aslSupervisorReplyCutoffs[ref] = replySeq
+		if closureSeq > h.aslSupervisorClosureCutoffs[ref] {
+			h.aslSupervisorClosureCutoffs[ref] = closureSeq
 		}
 		projection, ok := h.aslSupervisorProjections[ref]
-		if !ok ||
-			projection.ProjectionSeq != projectionSeq ||
-			projection.UnansweredQuestions != 1 ||
-			projection.LatestQuestionID != questionID {
+		if !ok || projection.ProjectionSeq > closureSeq {
 			continue
 		}
 		h.clearASLSupervisorQuestionLocked(
 			ref.windowID,
 			runID,
-			replySeq,
+			closureSeq,
 			now,
 			fmt.Sprintf(
-				"matching ASL mailbox reply resolved supervisor question %s",
+				"ASL %s closed the surfaced mailbox question set at question %s",
+				eventLabel,
 				questionID,
 			),
 		)
@@ -274,6 +433,45 @@ func (h *Handler) applyASLSupervisorQuestionLocked(
 	if terminalAt < projection.LatestQuestionCreatedAt.Unix() {
 		return nil
 	}
+	return h.applyASLSupervisorQuestionEvidenceLocked(
+		now,
+		target,
+		projection,
+		fmt.Sprintf(
+			"asl-supervisor:%s:%s",
+			target.candidate.RunID,
+			projection.LatestQuestionID,
+		),
+		firstNonEmpty(
+			harnessFromSourceKey(stop.source.Key, stop.sessionID),
+			st.LastHarness,
+		),
+		stop.sessionID,
+		false,
+		fmt.Sprintf(
+			"clean supervisor stop correlated with %d unanswered ASL mailbox question(s), latest id %s",
+			projection.UnansweredQuestions,
+			projection.LatestQuestionID,
+		),
+	)
+}
+
+// applyASLSupervisorQuestionEvidenceLocked owns the common reducer projection
+// used by both the immediate outbox handoff and the clean-Stop lease fallback.
+func (h *Handler) applyASLSupervisorQuestionEvidenceLocked(
+	now time.Time,
+	target aslSupervisorTarget,
+	projection agentloop.SupervisorQuestionProjection,
+	sourceEventID string,
+	harnessName string,
+	sessionID string,
+	bypassCooldown bool,
+	reason string,
+) *aslSupervisorNotification {
+	st, ok := h.windowStateLocked(target.windowID)
+	if !ok || st.Reducer == nil || projection.UnansweredQuestions <= 0 {
+		return nil
+	}
 
 	before := st.Reducer.Reduce(now.Unix())
 	source := aslSupervisorQuestionSource(target.candidate.RunID)
@@ -297,11 +495,6 @@ func (h *Handler) applyASLSupervisorQuestionLocked(
 	} else {
 		h.markWindowActivityDirtyLocked(target.windowID)
 	}
-	reason := fmt.Sprintf(
-		"clean supervisor stop correlated with %d unanswered ASL mailbox question(s), latest id %s",
-		projection.UnansweredQuestions,
-		projection.LatestQuestionID,
-	)
 	h.appendWatchdogEventLocked(
 		target.windowID,
 		target.originWindowID,
@@ -312,26 +505,19 @@ func (h *Handler) applyASLSupervisorQuestionLocked(
 		reason,
 	)
 
-	sourceEventID := fmt.Sprintf(
-		"asl-supervisor:%s:%s",
-		target.candidate.RunID,
-		projection.LatestQuestionID,
-	)
 	if effective.Icon != "question" ||
 		!h.shouldNotifySourceEventLocked(st, sourceEventID) {
 		return nil
 	}
 	return &aslSupervisorNotification{
-		windowID:     target.windowID,
-		sessionTitle: st.LastSessionTitle,
-		account:      st.LastAccount,
-		harness: firstNonEmpty(
-			harnessFromSourceKey(stop.source.Key, stop.sessionID),
-			st.LastHarness,
-		),
-		sessionID:     stop.sessionID,
-		runID:         target.candidate.RunID,
-		sourceEventID: sourceEventID,
+		windowID:       target.windowID,
+		sessionTitle:   st.LastSessionTitle,
+		account:        st.LastAccount,
+		harness:        firstNonEmpty(harnessName, st.LastHarness),
+		sessionID:      sessionID,
+		runID:          target.candidate.RunID,
+		sourceEventID:  sourceEventID,
+		bypassCooldown: bypassCooldown,
 	}
 }
 
@@ -368,6 +554,9 @@ func isAuthoritativeSupervisorStopProbe(key string) bool {
 func (h *Handler) dispatchASLSupervisorNotification(notification *aslSupervisorNotification) {
 	if notification == nil {
 		return
+	}
+	if notification.bypassCooldown && h.notifier != nil {
+		h.notifier.ResetActionCooldown(notification.windowID, "elicitation")
 	}
 	h.maybeNotifyTraced(
 		notification.windowID,
@@ -436,7 +625,7 @@ func (h *Handler) finishASLSupervisorQuestion(windowID int, runID string, now ti
 	h.stateMu.Lock()
 	ref := aslLeaseRef{windowID: windowID, key: runID}
 	delete(h.aslSupervisorTargets, ref)
-	delete(h.aslSupervisorReplyCutoffs, ref)
+	delete(h.aslSupervisorClosureCutoffs, ref)
 	seq := uint64(0)
 	if st, ok := h.windowStateLocked(windowID); ok && st.Reducer != nil {
 		if fact := st.Reducer.facts[aslSupervisorQuestionSource(runID)]; fact != nil {

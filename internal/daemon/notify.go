@@ -493,6 +493,14 @@ func (n *Notifier) ResetCooldown(windowID int) {
 	}
 }
 
+// ResetActionCooldown permits an independently identified user-attention event
+// to notify even when an earlier event of the same class was recent.
+func (n *Notifier) ResetActionCooldown(windowID int, action string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	delete(n.last, notifyKey{windowID: windowID, action: action})
+}
+
 // PurgeWindow drops every cooldown entry and any pending permission timer for
 // windowID. Called by the daemon's per-sweep closed-window GC so the notifier's
 // bookkeeping cannot accumulate dead entries (or fire a long-debounced

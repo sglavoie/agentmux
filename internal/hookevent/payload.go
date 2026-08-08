@@ -50,7 +50,11 @@ type HookPayload struct {
 	StatePath             string `json:"state_path"`
 	RunFinishedAt         string `json:"run_finished_at"`
 	QuestionID            string `json:"question_id"`
+	QuestionCreatedAt     string `json:"question_created_at"`
 	QuestionPreview       string `json:"question_preview"`
+	UnansweredQuestions   int    `json:"unanswered_questions"`
+	DeliveryState         string `json:"delivery_state"`
+	ResolutionAction      string `json:"resolution_action"`
 	WaitReason            string `json:"wait_reason"`
 	Prompt                string `json:"prompt"`
 	InitialPrompt         string `json:"initial_prompt"`

@@ -157,6 +157,28 @@ func TestDecodeHookPayload_OmittedQuestionPreviewIsEmpty(t *testing.T) {
 	}
 }
 
+func TestDecodeHookPayload_ParsesBodyFreeMailboxQuestionFields(t *testing.T) {
+	payload, err := DecodeHookPayload(strings.NewReader(`{
+		"question_id": "00000000-0000-0000-0000-000000000011",
+		"question_created_at": "2026-08-07T18:00:00+00:00",
+		"unanswered_questions": 2,
+		"delivery_state": "open",
+		"resolution_action": "continue"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeHookPayload(mailbox question fields) error: %v", err)
+	}
+	if payload.QuestionCreatedAt != "2026-08-07T18:00:00+00:00" ||
+		payload.UnansweredQuestions != 2 ||
+		payload.DeliveryState != "open" ||
+		payload.ResolutionAction != "continue" {
+		t.Fatalf("mailbox question fields = %+v", payload)
+	}
+	if payload.QuestionPreview != "" {
+		t.Fatalf("body-free payload gained preview %q", payload.QuestionPreview)
+	}
+}
+
 // The producer already bounds the preview; decode re-bounds it so a hand-written
 // or replayed payload cannot widen the only free-text field the dashboard shows.
 func TestDecodeHookPayload_BoundsOversizedQuestionPreview(t *testing.T) {

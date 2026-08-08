@@ -546,7 +546,7 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 			StateDir: t.TempDir(),
 		},
 	}
-	h.aslSupervisorReplyCutoffs[ref] = 8
+	h.aslSupervisorClosureCutoffs[ref] = 8
 	h.enqueueRenderLocked(42, st)
 	h.stateMu.Unlock()
 
@@ -557,7 +557,7 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 	_, hasSocket := h.kittySockets[42]
 	streaks := len(h.aslMissStreak)
 	supervisorTargets := len(h.aslSupervisorTargets)
-	replyCutoffs := len(h.aslSupervisorReplyCutoffs)
+	replyCutoffs := len(h.aslSupervisorClosureCutoffs)
 	meta, hasMeta := h.windowMetadata[42]
 	_, hasTombstone := h.windowTombstones[42]
 	h.stateMu.Unlock()

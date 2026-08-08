@@ -113,8 +113,14 @@ func (h *Handler) handleHookEvent(req Request) Response {
 		return Response{OK: true}
 	}
 
-	if eventOrAction == agentSessionLoopMailboxReply {
-		h.handleASLSupervisorMailboxReply(payload, time.Now())
+	if eventOrAction == agentSessionLoopMailboxQuestion {
+		h.handleASLSupervisorMailboxQuestion(payload, ctx.req, ctx.windows, time.Now())
+		return Response{OK: true}
+	}
+
+	if eventOrAction == agentSessionLoopMailboxReply ||
+		eventOrAction == agentSessionLoopMailboxResolution {
+		h.handleASLSupervisorMailboxClosure(eventOrAction, payload, time.Now())
 		return Response{OK: true}
 	}
 
