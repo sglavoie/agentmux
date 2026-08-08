@@ -691,7 +691,11 @@ active-pane route policy rather than writing titles from the indicator:
   as an owner mismatch. On an ownerless tab, it clears a recognized state icon
   from the source pane, including terminal icons left by subprocesses such as
   `claude -p`; an icon-free ownerless tab remains a no-op. `🔁`, the base title,
-  harness emoji, `★`, and `🔇` are all preserved.
+  harness emoji, `★`, and `🔇` are all preserved. On a managed Claude pane,
+  the clear is transient while Claude's current pane title still carries its
+  busy marker: the next 2-second probe tick restores `⚡` from that positive
+  activity evidence. This recovery never creates `🔁`; only a live ASL lease
+  owns the loop marker.
 - **Unmanaged producer routing** lets the active unmanaged pane borrow exactly
   one managed target. A direct user prompt is authoritative focus evidence even
   if the cached Kitty snapshot lags; an exact live ASL candidate also authorizes
@@ -834,7 +838,10 @@ three are told apart by event name and source key:
   (two consecutive samples), or that shows Claude's interruption marker with
   the same non-busy title gate (one sample). Native `Notification/idle_prompt`
   is the primary Claude stop; this screen probe is the interruption/no-hook
-  fallback.
+  fallback. The positive half uses the same reducer source and records
+  `event: "ScreenActiveProbe"` when a current busy pane title restores an empty
+  managed Claude tab to `⚡`. It never replaces `🛑` or another explicit icon,
+  repeats an event for an existing `⚡`, or changes the independent ASL lease.
 - **Copilot** — `event: "TranscriptStopProbe"`,
   `source: "probe:copilot_transcript"`. Reads no screen: it consults the
   interactive session transcript's latest state-bearing event and settles only
@@ -853,10 +860,11 @@ recognizes Codex's cleared idle UI after `/clear` when full Kitty scrollback no
 longer contains a transcript. The per-harness stop fallbacks described above
 (Codex/Claude `ScreenStopProbe`, Copilot `TranscriptStopProbe`) repair a turn
 that finished without a native terminal hook so the icon settles on `🛑`
-instead of staying `⚡`. Each fires only on a stuck `bolt` tab and never
-downgrades protected attention states (`key`, `question`, `error`, `warning`,
-`subagent`, `compact`), and never retires pipe-mode, subagent, or live ASL facts.
-The daemon runs these
+instead of staying `⚡`. The stop paths fire only on a stuck `bolt` tab and never
+downgrade protected attention states (`key`, `question`, `error`, `warning`,
+`subagent`, `compact`), or retire pipe-mode, subagent, or live ASL facts. Claude's
+busy-title active recovery is likewise narrow: it only fills an empty icon. The
+daemon runs these
 probes on the same periodic probe loop as the renderer tick (every 2s).
 In split Kitty tabs, screen probes read only the tab-title owner: the active
 managed pane, or the first managed pane if none is active. Sibling panes cannot

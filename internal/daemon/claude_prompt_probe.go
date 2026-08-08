@@ -11,8 +11,15 @@ import (
 )
 
 const (
+	// screenActiveProbeEvent records the positive half of the Claude pane-title
+	// probe: a current busy marker restored an otherwise empty managed tab to
+	// active. The reducer fact shares claudeScreenStopProbeSource with the idle
+	// half so a later non-busy idle screen can replace it with stop cleanly.
+	screenActiveProbeEvent = "ScreenActiveProbe"
+
 	// claudeScreenStopProbeSource keys the SourceProbe fact the Claude idle
-	// stop settles under. It is deliberately distinct from the Codex probe's
+	// stop and busy-title active recovery settle under. It is deliberately
+	// distinct from the Codex probe's
 	// codex_screen key so the two harnesses' idle evidence never collide, and
 	// distinct from the context-limit probe's own SourceProbe fact
 	// (claudeContextLimitFactSource) so a stuck-turn "stop" and a context-limit
@@ -52,7 +59,8 @@ func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
 // already-published Kitty snapshot. Direct sessions retain the managed
 // title-owner selection; a borrowed session follows its live reducer binding to
 // read the unmanaged producer pane and apply the result to the managed target.
-// Only a target whose current reduced icon is a stuck ⚡ is considered: any
+// A busy Claude pane title can also restore an empty target to ⚡. Otherwise,
+// only a target whose current reduced icon is a stuck ⚡ is considered: any
 // other visible state is either already terminal or a higher-precedence icon
 // the idle path must never downgrade.
 func (h *Handler) ProbeClaudeScreenStopWithSnapshot(now time.Time, windows []kitty.OSWindow) {
@@ -96,6 +104,18 @@ func (h *Handler) probeClaudeIdleWindow(
 	source := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
 	targetWindowID := binding.TargetWindowID
 
+	// Claude's pane title is the strongest positive evidence available while a
+	// turn is running: some builds keep an empty composer on screen throughout
+	// the turn and publish activity only through this marker. Handle it before
+	// the bolt-only idle eligibility gate so an acknowledged, restored, or
+	// otherwise hook-missed empty tab can recover to ⚡. The helper revalidates
+	// the exact snapshot binding and only mutates an empty reduced icon; terminal
+	// and higher-precedence states are never replaced.
+	if claudeWindowTitleHasActiveWork(sourceWindowTitle) {
+		h.recoverClaudeBusyTitle(now, binding, titleParts, userVars)
+		return
+	}
+
 	// Revalidate the snapshot receipt before the off-lock GetText. A window with no
 	// reducer facts (an unmanaged/foreground-only bolt) has no stale interactive
 	// work for the probe to settle, so bail without a screen read and drop any
@@ -130,14 +150,6 @@ func (h *Handler) probeClaudeIdleWindow(
 	}
 	muted = muted || st.Muted
 	h.stateMu.Unlock()
-
-	// Claude can leave its empty composer visible throughout a live turn while
-	// advertising the work only in the pane title. Treat that title as protected
-	// active evidence and spend any partial idle streak before reading the screen.
-	if claudeWindowTitleHasActiveWork(sourceWindowTitle) {
-		h.ClearIdleSample(targetWindowID, source)
-		return
-	}
 
 	screen, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "screen")
 	if err != nil {
@@ -175,4 +187,118 @@ func (h *Handler) probeClaudeIdleWindow(
 		SourceEventID:   fmt.Sprintf("claude-screen-stop:%d:%d:%d", binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
 		DiagnosticEvent: screenStopProbeEvent,
 	})
+}
+
+// recoverClaudeBusyTitle promotes an empty managed Claude target to active from
+// the pane title's current busy marker. It deliberately performs no screen read:
+// the marker is already part of the causally-bound Kitty snapshot. Existing
+// icons are left untouched, including stop and every attention/error state.
+func (h *Handler) recoverClaudeBusyTitle(
+	now time.Time,
+	binding screenProbeBinding,
+	titleParts palette.TitleParts,
+	userVars kitty.UserVars,
+) {
+	targetWindowID := binding.TargetWindowID
+	source := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+
+	if !h.screenProbeBindingCurrentLocked(binding) {
+		slog.Debug("claude active probe: discarded stale snapshot",
+			"source_window_id", binding.SourceWindowID, "target_window_id", targetWindowID)
+		return
+	}
+
+	// A current busy marker invalidates any partial idle stabilization even when
+	// an explicit icon prevents active recovery.
+	h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
+
+	currentIcon := titleParts.State
+	st, ok := h.windowStateLocked(targetWindowID)
+	if ok && st != nil {
+		currentIcon = st.Effective.Icon
+		// Reset flows own their transient empty state until their cleanup event
+		// commits; the next snapshot tick may recover normally once the flow ends.
+		if st.PendingReset != resetFlowNone {
+			return
+		}
+	}
+	if currentIcon != "" {
+		return
+	}
+
+	st = h.ensureWindowStateLocked(targetWindowID)
+	before := st.Effective
+	if st.Reducer == nil {
+		st.Reducer = NewReducer(h.reducerCfg)
+	}
+
+	nextSeq := st.ShadowSeq + 1
+	decision := st.Reducer.Apply(ReducerEvent{
+		Source:         source,
+		Action:         "active",
+		Seq:            nextSeq,
+		At:             now.Unix(),
+		Prompt:         true,
+		OriginWindowID: binding.SourceWindowID,
+	})
+	if decision != DecisionApplied {
+		return
+	}
+	st.ShadowSeq = nextSeq
+
+	st.Activity = now
+	if titleParts.Base != "" {
+		st.LastSessionTitle = titleParts.Base
+	}
+	if profile := userVars.EffectiveProfile(); profile != "" && st.LastAccount == "" {
+		st.LastAccount = profile
+	}
+	if st.LastHarness == "" {
+		st.LastHarness = harness.Claude
+	}
+	st.LastAction = "active"
+	st.LastActiveEvent = screenActiveProbeEvent
+	st.NotifiedStale = false
+
+	st.Reducer.Compact(now.Unix())
+	effective := st.Reducer.Reduce(now.Unix())
+	h.publishEffectiveLocked(targetWindowID, st, effective)
+
+	meta := h.windowMetadata[targetWindowID]
+	if titleParts.Base != "" {
+		meta.Durable.SessionTitle = titleParts.Base
+	}
+	if profile := userVars.EffectiveProfile(); profile != "" && meta.Durable.Profile == "" {
+		meta.Durable.Profile = profile
+	}
+	if meta.Durable.Harness == "" {
+		meta.Durable.Harness = harness.Claude
+	}
+	meta.Durable.ActivityAt = now.Unix()
+	meta.Durable.LastAction = "active"
+	meta.Durable.LastActiveEvent = screenActiveProbeEvent
+	h.windowMetadata[targetWindowID] = meta
+
+	resultAction := effective.Icon
+	if resultAction == "" {
+		resultAction = "idle"
+	}
+	h.appendWatchdogEventLocked(
+		targetWindowID,
+		binding.SourceWindowID,
+		now,
+		screenActiveProbeEvent,
+		resultAction,
+		string(source.Kind)+":"+source.Key,
+		fmt.Sprintf("Claude busy pane title restored visible state %q→%q", before.Icon, effective.Icon),
+	)
+	h.syncRendererMetadataLocked(targetWindowID)
+	if effective != before {
+		h.markWindowDirtyLocked(targetWindowID)
+	} else {
+		h.markWindowActivityDirtyLocked(targetWindowID)
+	}
 }

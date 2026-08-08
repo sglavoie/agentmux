@@ -180,6 +180,9 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
 		t.Fatalf("ScreenStopProbe row recorded for busy pane title: %+v", ev)
 	}
+	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
+		t.Fatalf("ScreenActiveProbe row repeated for an existing bolt: %+v", ev)
+	}
 	if got := rec.len(); got != 0 {
 		t.Fatalf("notifications with busy pane title = %d, want 0 (%+v)", got, rec.snapshot())
 	}
@@ -196,6 +199,197 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 	h.ProbeClaudeScreenStop(base.Add(8 * time.Second))
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
 		t.Fatalf("effective after second fully-idle sample = %+v, want stop", eff)
+	}
+}
+
+// TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState covers the missing
+// positive half of the pane-title probe. A managed Claude owner can have no
+// reducer state after restore or missed hooks; the current busy marker alone is
+// sufficient to recover ⚡ without scraping the empty composer.
+func TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState(t *testing.T) {
+	base := time.Now()
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = "\u2733 Repair advisor calibration"
+	fake := &fakeKittyClient{
+		windows: windows,
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): claudeIdleScreen,
+		},
+	}
+	reads := 0
+	fake.beforeGetText = func(match, extent string) {
+		if match == kitty.MatchWindowByID(42) && extent == "screen" {
+			reads++
+		}
+	}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+
+	h.ProbeClaudeScreenStop(base)
+
+	if reads != 0 {
+		t.Fatalf("screen reads for busy-title recovery = %d, want 0", reads)
+	}
+	if eff, visible := windowEffective(t, h, 42); eff.Icon != "bolt" || eff.Looping || visible != "bolt" {
+		t.Fatalf("recovered effective = %+v visible=%q, want non-looping bolt", eff, visible)
+	}
+	if calls := fake.titleCalls(); len(calls) != 1 || calls[0].title != palette.BuildTitle("W:api", "bolt", false) {
+		t.Fatalf("SetTabTitle calls = %+v, want one recovered bolt title", calls)
+	}
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	ev, ok := lastEventNamed(detail.Events, screenActiveProbeEvent)
+	if !ok {
+		t.Fatalf("no %q row in %+v", screenActiveProbeEvent, detail.Events)
+	}
+	if ev.Action != "bolt" || ev.Source != string(SourceProbe)+":"+claudeScreenStopProbeSource {
+		t.Fatalf("ScreenActiveProbe = %+v, want actual bolt from Claude screen source", ev)
+	}
+
+	// Repeated busy snapshots keep the recovered bolt without fact or event churn.
+	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
+	detail = h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	count := 0
+	for _, event := range detail.Events {
+		if event.Event == screenActiveProbeEvent {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("ScreenActiveProbe rows after repeated busy snapshot = %d, want 1", count)
+	}
+
+	// Once the marker disappears, the same probe fact follows the established
+	// two-sample idle path from active to stop.
+	fake.mu.Lock()
+	fake.windows[0].Tabs[0].Windows[0].Title = "Repair advisor calibration"
+	fake.mu.Unlock()
+	h.ProbeClaudeScreenStop(base.Add(4 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective after first idle sample = %+v, want recovered bolt retained", eff)
+	}
+	h.ProbeClaudeScreenStop(base.Add(6 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
+		t.Fatalf("effective after second idle sample = %+v, want stop", eff)
+	}
+}
+
+// TestProbeClaudeScreenStop_BusyPaneTitleRecoversAfterUserClearPreservingLoop
+// pins the reported sequence. F8 acknowledges the icon contribution but keeps
+// the live ASL lease; the next busy-title probe restores ⚡ without inventing or
+// withdrawing the independent 🔁 marker.
+func TestProbeClaudeScreenStop_BusyPaneTitleRecoversAfterUserClearPreservingLoop(t *testing.T) {
+	base := time.Now()
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", true), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = "\u2733 Repair advisor calibration"
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudeIdleScreen,
+	}}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+	claudeSeedActiveBolt(t, h, 42, "sess-clear", base.Unix())
+
+	h.stateMu.Lock()
+	st := h.store[42]
+	st.ShadowSeq++
+	if decision := st.Reducer.Apply(ReducerEvent{
+		Source: SourceID{Kind: SourceASL, Key: "run-1"},
+		RunID:  "run-1", Phase: ASLPhaseBetween, Seq: 1, At: base.Unix(),
+	}); decision != DecisionApplied {
+		h.stateMu.Unlock()
+		t.Fatalf("seed ASL lease decision = %q, want applied", decision)
+	}
+	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(base.Unix()))
+	h.stateMu.Unlock()
+
+	if resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: harness.Claude}); !resp.OK {
+		t.Fatalf("user_clear response = %+v", resp)
+	}
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "" || !eff.Looping {
+		t.Fatalf("after user_clear effective = %+v, want bare live loop", eff)
+	}
+
+	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" || !eff.Looping {
+		t.Fatalf("after busy-title recovery effective = %+v, want bolt + preserved loop", eff)
+	}
+	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); !ok || ev.Action != "bolt" {
+		t.Fatalf("ScreenActiveProbe row = %+v ok=%v, want bolt", ev, ok)
+	}
+}
+
+// TestProbeClaudeScreenStop_BusyPaneTitleDoesNotOverrideStop proves the
+// positive title signal is recovery for an empty state only, not a general
+// authority over explicit terminal outcomes.
+func TestProbeClaudeScreenStop_BusyPaneTitleDoesNotOverrideStop(t *testing.T) {
+	base := time.Now()
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "stop", false), kitty.UserVars{
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = "\u2733 Repair advisor calibration"
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudeIdleScreen,
+	}}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+	stop := NormalizedEvent{
+		Source: SourceID{Kind: SourceHarness, Key: "claude:sess-stop"},
+		Action: "stop", SessionID: "sess-stop", Event: "Stop", At: base.Unix(),
+	}
+	if resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", normalized: &stop}); !resp.OK {
+		t.Fatalf("seed stop response = %+v", resp)
+	}
+
+	h.ProbeClaudeScreenStop(base.Add(time.Second))
+
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
+		t.Fatalf("effective with busy title over stop = %+v, want stop preserved", eff)
+	}
+	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
+		t.Fatalf("ScreenActiveProbe row recorded over explicit stop: %+v", ev)
+	}
+}
+
+// TestProbeClaudeScreenStop_ConcurrentTerminalInvalidatesBusyRecovery proves the
+// receipt captured before ListWindows prevents a busy snapshot from replacing a
+// terminal reducer event that lands while Kitty is producing that snapshot.
+func TestProbeClaudeScreenStop_ConcurrentTerminalInvalidatesBusyRecovery(t *testing.T) {
+	base := time.Now()
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = "\u2733 Repair advisor calibration"
+	fake := &fakeKittyClient{windows: windows}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+
+	injected := false
+	fake.beforeListWindows = func() {
+		if injected {
+			return
+		}
+		injected = true
+		stop := NormalizedEvent{
+			Source: SourceID{Kind: SourceHarness, Key: "claude:sess-race"},
+			Action: "stop", SessionID: "sess-race", Event: "Stop", At: base.Unix(),
+		}
+		if resp := h.handleStateUpdate(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", normalized: &stop}); !resp.OK {
+			t.Fatalf("concurrent stop response = %+v", resp)
+		}
+	}
+
+	h.ProbeClaudeScreenStop(base.Add(time.Second))
+
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
+		t.Fatalf("effective after concurrent stop = %+v, want stop", eff)
+	}
+	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
+		t.Fatalf("ScreenActiveProbe row recorded from stale busy snapshot: %+v", ev)
 	}
 }
 
