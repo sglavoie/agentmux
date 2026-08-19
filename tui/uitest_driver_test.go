@@ -59,6 +59,37 @@ func TestUITestDriverOpenActionsAndResize(t *testing.T) {
 	}
 }
 
+func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
+	fx := worktreesFixture()
+	client := NewUITestKittyClient(fx.Windows)
+	d := NewUITestDriver(fx.Config, client, UITestSize{Width: 120, Height: 30})
+	cleanupUITestDriver(t, d)
+
+	d.model.mode = ModeWorktrees
+	d.model.worktreeFiltered = sortWorktreeViews(fx.Worktrees)
+	found := false
+	for i, entry := range d.model.worktreeFiltered {
+		if entry.ID == "wt-clean" {
+			d.model.worktreeCursor = i
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("worktrees fixture is missing wt-clean")
+	}
+
+	if err := d.Key("o"); err != nil {
+		t.Fatalf("Key(o) error: %v", err)
+	}
+	if got := d.Model().actionErr; got == nil || got.Error() != "uitest: live worktree action access is disabled" {
+		t.Fatalf("shell action error = %v, want hermetic seam refusal", got)
+	}
+	if got := len(client.CallsFor("LaunchTab")); got != 0 {
+		t.Fatalf("LaunchTab calls = %d, want none from refused hermetic action", got)
+	}
+}
+
 // TestUITestDriverTextTypesEachRune verifies Text enters a search query one key
 // at a time, matching how the model sees per-rune input.
 func TestUITestDriverTextTypesEachRune(t *testing.T) {

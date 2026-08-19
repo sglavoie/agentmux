@@ -30,6 +30,12 @@ func (m Model) render() string {
 		// Session search owns its full layout (header + chips + query +
 		// results) so the dashboard list is not rendered below.
 		sb.WriteString(renderSessionSearch(m))
+	case ModeWorktrees:
+		sb.WriteString(renderWorktrees(m))
+	case ModeWorktreeSessionPicker:
+		base := renderWorktrees(m)
+		popup := renderWorktreeSessionPickerBox(m)
+		sb.WriteString(centerOverlay(base, popup, m.width, rootBodyHeight(m), true))
 	case ModePlanSearch:
 		// Plan search owns its full layout — like ModeSessionSearch, the
 		// dashboard list must not render underneath.
@@ -69,7 +75,11 @@ func (m Model) render() string {
 		case m.mode == ModeHelp:
 			base = helpBaseView(m)
 		default:
-			base = renderDashboard(m)
+			if m.activeRootMode() == ModeWorktrees {
+				base = renderWorktrees(m)
+			} else {
+				base = renderDashboard(m)
+			}
 		}
 		var popup string
 		switch m.mode {

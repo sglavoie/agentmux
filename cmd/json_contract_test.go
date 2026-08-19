@@ -25,6 +25,24 @@ func TestSessionJSONCommandSurfaceIsVersioned(t *testing.T) {
 	}
 }
 
+// Worktree commands share the retained command envelope. Keep every JSON leaf
+// explicit so adding or removing a worktree surface requires a contract audit.
+func TestWorktreeJSONCommandSurfaceIsVersioned(t *testing.T) {
+	commands := []*cobra.Command{
+		worktreeListCmd, worktreeShowCmd, worktreeReopenCmd,
+		worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd,
+		worktreeForgetCmd,
+	}
+	for _, command := range commands {
+		if command.Flags().Lookup("json") == nil {
+			t.Errorf("%s does not declare --json", command.CommandPath())
+		}
+	}
+	if JSONSchemaVersion != 1 {
+		t.Fatalf("unexpected JSON schema version %d", JSONSchemaVersion)
+	}
+}
+
 // Debug commands intentionally emit command-specific reports directly rather
 // than wrapping them in the retained session command envelope. Audit every
 // JSON-producing leaf and every report-family schema together so either kind

@@ -73,6 +73,8 @@ amx tui-test list-fixtures
 # asl_question
 # basic
 # wide_profiles
+# worktree_lifecycle
+# worktrees
 ```
 
 ### `amx tui-test run SCENARIO... [--json]`
@@ -109,6 +111,8 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `actions` | one session with a very long title | stresses the actions overlay box width |
 | `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, `]q` jump |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
+| `worktree_lifecycle` | deterministic reopen and cleanup outcomes | exercises focus/resume/fresh reopen, ambiguity, replacement profiles, cleanup refusals, safe deletion, forgetting, and partial recovery without real Git or Kitty mutations |
+| `worktrees` | clean, dirty, live, looping, missing, and invalid managed worktrees | hermetic Worktrees browsing, filtering, badges, and layout |
 
 The `basic` fixture's list is state/profile-grouped, not globally
 alpha-sorted: the cursor starts on `dotfiles` (personal).
@@ -177,7 +181,7 @@ silently selecting nothing.
 **Mode names**: `list`, `search`, `confirm`, `picker`, `config_picker`,
 `help`, `detail`, `actions`, `session_search`, `session_view`,
 `delete_choice`, `chip_picker`, `message_detail`, `plan_search`, `plan_view`,
-and `command_palette`.
+`worktrees`, and `command_palette`.
 
 **Kitty `op` names** recorded by the no-op client: `LaunchTab`,
 `LaunchOverlay`, `CloseTab`, `MoveTab`, `SetTabColor`, `SetTabTitle`,
@@ -277,6 +281,23 @@ file. The exact inventory is:
 | [`session-search-header-narrow-fit.json`](scenarios/session-search-header-narrow-fit.json) | `basic` | Past Sessions header and filters fit at narrow width |
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |
+| [`worktrees-browse.json`](scenarios/worktrees-browse.json) | `worktrees` | `W` opens the hermetic managed-worktree inventory and whitespace-AND filtering narrows to the dirty row without exposing lifecycle mutations |
+| [`worktrees-cleanup-active-refusal.json`](scenarios/worktrees-cleanup-active-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a snapshot with a live session |
+| [`worktrees-cleanup-dirty-refusal.json`](scenarios/worktrees-cleanup-dirty-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a dirty snapshot |
+| [`worktrees-cleanup-looping-refusal.json`](scenarios/worktrees-cleanup-looping-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a snapshot with an active loop |
+| [`worktrees-delete-merged-branch.json`](scenarios/worktrees-delete-merged-branch.json) | `worktree_lifecycle` | `D` confirms and completes safe deletion of a branch recorded as merged |
+| [`worktrees-delete-unmerged-refusal.json`](scenarios/worktrees-delete-unmerged-refusal.json) | `worktree_lifecycle` | `D` refuses an unmerged branch before confirmation |
+| [`worktrees-forget-invalid.json`](scenarios/worktrees-forget-invalid.json) | `worktree_lifecycle` | `F` explicitly forgets invalid sidecar metadata |
+| [`worktrees-forget-missing.json`](scenarios/worktrees-forget-missing.json) | `worktree_lifecycle` | `F` explicitly forgets retained metadata for a missing checkout |
+| [`worktrees-partial-recovery.json`](scenarios/worktrees-partial-recovery.json) | `worktree_lifecycle` | a typed partial cleanup reports the removed checkout and retained recovery row |
+| [`worktrees-picker-narrow-fit.json`](scenarios/worktrees-picker-narrow-fit.json) | `worktree_lifecycle` | the ambiguous live-session picker remains usable at narrow width |
+| [`worktrees-remove-retain-branch.json`](scenarios/worktrees-remove-retain-branch.json) | `worktree_lifecycle` | default `d` removal retains the branch and refreshes away the checkout row |
+| [`worktrees-reopen-ambiguous.json`](scenarios/worktrees-reopen-ambiguous.json) | `worktree_lifecycle` | ambiguous live sessions open a detailed picker without focusing either candidate |
+| [`worktrees-reopen-fresh.json`](scenarios/worktrees-reopen-fresh.json) | `worktree_lifecycle` | smart reopen launches fresh when no live session or transcript exists |
+| [`worktrees-reopen-live.json`](scenarios/worktrees-reopen-live.json) | `worktree_lifecycle` | smart reopen focuses the sole live Kitty session |
+| [`worktrees-reopen-replacement-profile.json`](scenarios/worktrees-reopen-replacement-profile.json) | `worktree_lifecycle` | a stale recorded profile detours through the shared profile picker and launches with the replacement |
+| [`worktrees-reopen-resume.json`](scenarios/worktrees-reopen-resume.json) | `worktree_lifecycle` | smart reopen resumes the newest indexed conversation |
+| [`worktrees-short-layout.json`](scenarios/worktrees-short-layout.json) | `worktree_lifecycle` | the inventory remains bounded in a short terminal |
 
 Run them all:
 

@@ -15,7 +15,8 @@ The binary is **`amx`**.
 - supports multiple harness profiles side by side,
 - gives each project a default profile, but lets you override it for one launch,
 - searches filesystem-backed Past Sessions and Plans without a database,
-- creates standalone handoff files and ordinary Git worktrees for continuity,
+- creates standalone handoff files and manages Git worktrees through safe reopen,
+  cleanup, branch-retention, and metadata-recovery workflows,
 - syncs hook commands into each profile so tab icons track agent state,
 - keeps the current Kitty/daemon/tab-color workflow intact.
 
@@ -107,7 +108,7 @@ remove or override it if you prefer a different trust flow.
 
 The detailed guides are organized by operational area:
 
-- [Dashboard, launcher, past sessions, plans, and filtering](docs/usage.md)
+- [Dashboard, launcher, managed worktrees, past sessions, plans, and filtering](docs/usage.md)
 - [Harness hook setup and event contracts](docs/hooks.md)
 - [Daemon lifecycle, routing, diagnostics, and privacy](docs/daemon.md)
 - [Watchdog, tab icons, and stop confirmation](docs/watchdog.md)

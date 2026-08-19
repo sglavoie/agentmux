@@ -7,6 +7,7 @@ package actions
 import (
 	"context"
 
+	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/handoff"
@@ -21,20 +22,27 @@ import (
 type ID string
 
 const (
-	Focus         ID = "session.focus"
-	Launch        ID = "session.launch"
-	Continue      ID = "session.continue"
-	Fork          ID = "session.fork"
-	ForkWorktree  ID = "session.fork_worktree"
-	Handoff       ID = "session.handoff"
-	OpenDirectory ID = "project.open_directory"
-	OpenEditor    ID = "project.open_editor"
-	CopyTitle     ID = "session.copy_title"
-	ClearStatus   ID = "session.clear_status"
-	ToggleLock    ID = "session.toggle_lock"
-	ToggleMute    ID = "session.toggle_mute"
-	Close         ID = "session.close"
-	Restart       ID = "session.restart"
+	Focus          ID = "session.focus"
+	Launch         ID = "session.launch"
+	Continue       ID = "session.continue"
+	Fork           ID = "session.fork"
+	ForkWorktree   ID = "session.fork_worktree"
+	Handoff        ID = "session.handoff"
+	OpenDirectory  ID = "project.open_directory"
+	OpenEditor     ID = "project.open_editor"
+	CopyTitle      ID = "session.copy_title"
+	ClearStatus    ID = "session.clear_status"
+	ToggleLock     ID = "session.toggle_lock"
+	ToggleMute     ID = "session.toggle_mute"
+	Close          ID = "session.close"
+	Restart        ID = "session.restart"
+	WorktreeList   ID = "worktree.list"
+	WorktreeShow   ID = "worktree.show"
+	WorktreeReopen ID = "worktree.reopen"
+	WorktreeShell  ID = "worktree.shell"
+	WorktreeEditor ID = "worktree.editor"
+	WorktreeRemove ID = "worktree.remove"
+	WorktreeForget ID = "worktree.forget"
 )
 
 // EntityKind identifies a typed target accepted by an action.
@@ -44,6 +52,7 @@ const (
 	EntityRunningSession EntityKind = "running_session"
 	EntityProject        EntityKind = "project"
 	EntityConversation   EntityKind = "conversation"
+	EntityWorktree       EntityKind = "worktree"
 )
 
 // EntityRequirement declares the target an action needs before it can run.
@@ -93,13 +102,27 @@ type Definition struct {
 // Dependencies are the injected seams an action can use.  Actions do not
 // construct Kitty clients, read configuration files, or reach into Bubble Tea.
 type Dependencies struct {
-	Kitty     kitty.KittyClient
-	Config    *config.Config
-	Clipboard func(string) error
-	Daemon    func(daemon.Request) (daemon.Response, error)
-	Readers   map[string]transcript.Reader
-	Handoff   handoff.Runner
-	Worktree  worktree.Runner
+	Kitty           kitty.KittyClient
+	Config          *config.Config
+	Clipboard       func(string) error
+	Daemon          func(daemon.Request) (daemon.Response, error)
+	Readers         map[string]transcript.Reader
+	Handoff         handoff.Runner
+	Worktree        worktree.Runner
+	WorktreeManager WorktreeLifecycle
+	LiveSessions    func(*config.Config) ([]session.RunningSession, error)
+	ActiveLoops     func() ([]agentloop.Candidate, error)
+	TranscriptIndex func() (*transcript.Index, error)
+}
+
+// WorktreeLifecycle is the Git-authoritative inventory and cleanup boundary
+// used by shared lifecycle actions. The production implementation is
+// worktree.Manager; tests and alternate frontends may inject a narrow fake.
+type WorktreeLifecycle interface {
+	List(context.Context) ([]worktree.Entry, error)
+	Resolve(context.Context, string) (worktree.Entry, error)
+	Remove(context.Context, string, worktree.RemoveOptions) (worktree.MutationResult, error)
+	Forget(context.Context, string) (worktree.MutationResult, error)
 }
 
 // Request holds the typed targets and plain parameters supplied to one action.
@@ -109,6 +132,8 @@ type Request struct {
 	Session      *session.RunningSession
 	Project      *config.Session
 	Conversation *transcript.SessionMeta
+	Worktree     *worktree.Entry
+	Selector     string
 	Parameters   map[string]string
 	Confirmed    bool
 }
@@ -127,6 +152,15 @@ type Error struct {
 	Action            ID                `json:"action,omitempty"`
 	Message           string            `json:"message"`
 	MissingParameters []ParameterSchema `json:"missing_parameters,omitempty"`
+	Candidates        []Candidate       `json:"candidates,omitempty"`
+}
+
+// Candidate is a presentation-neutral disambiguation choice. CLI callers map
+// it to the common schema-v1 Candidate shape without parsing error strings.
+type Candidate struct {
+	ID            string `json:"id"`
+	DisplayName   string `json:"display_name"`
+	CanonicalPath string `json:"canonical_path,omitempty"`
 }
 
 func (e *Error) Error() string { return e.Message }

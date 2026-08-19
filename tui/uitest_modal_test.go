@@ -183,6 +183,7 @@ func TestUITestModalBoxRendererCoversOverlayModes(t *testing.T) {
 	modal := []Mode{
 		ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp,
 		ModeDetail, ModeDeleteChoice, ModeChipPicker, ModeCommandPalette,
+		ModeWorktreeSessionPicker,
 	}
 	for _, mode := range modal {
 		if modalBoxRenderer(mode) == nil {

@@ -32,6 +32,11 @@ func renderFooter(m Model) string {
 			footerLine(m.width, "  ", "enter: select", "esc/q: cancel"),
 			footerLine(m.width, "  ", "j/k: up/down"),
 		)
+	case ModeWorktreeSessionPicker:
+		lines = nonEmptyFooterLines(
+			footerLine(m.width, "  ", "enter: focus", "esc/q: cancel"),
+			footerLine(m.width, "  ", "j/k: up/down"),
+		)
 	case ModeHelp:
 		lines = nonEmptyFooterLines(footerLine(m.width, "  ", "j/k: up/down", "g/G: top/bottom", "esc/?/q: close help"))
 	case ModeActions:
@@ -56,6 +61,8 @@ func renderFooter(m Model) string {
 		lines = footerHintLines(m, planSearchFooterPalette, footerHintMaxLines)
 	case ModePlanView:
 		lines = footerHintLines(m, planViewFooterPalette, footerHintMaxLines)
+	case ModeWorktrees:
+		lines = footerHintLines(m, worktreesFooterPalette, footerHintMaxLines)
 	case ModeMessageDetail:
 		lines = nonEmptyFooterLines(footerLine(m.width, " · ", "j/k scroll", "g/G top/bottom", "esc/q/enter close"))
 	case ModeDeleteChoice:

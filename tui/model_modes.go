@@ -20,6 +20,8 @@ func (m Model) activeRootMode() Mode {
 		return m.confirmReturnMode
 	case ModeConfigPicker:
 		return m.configPickerReturnMode
+	case ModeWorktreeSessionPicker:
+		return ModeWorktrees
 	default:
 		return m.mode
 	}
@@ -33,6 +35,9 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.handoffEdit = false
 		}
 		m.mode = m.configPickerReturnMode
+		if m.activeConfigPickerPurpose() == ConfigPickerWorktreeReopen {
+			m.worktreeActionTarget = nil
+		}
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyJ, keyDown:
@@ -53,6 +58,9 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.handoffConversation = nil
 				m.handoffEdit = false
 				return m, m.conversationHandoffCmd(meta, acc.Name, edit)
+			}
+			if purpose == ConfigPickerWorktreeReopen {
+				return m.reopenWorktreeWithParameters(map[string]string{"profile": acc.Name})
 			}
 			if purpose == ConfigPickerLauncherOverride && m.configPickerProjectIdx >= 0 && m.configPickerProjectIdx < len(m.pickerSessions) {
 				defaultProfile := m.pickerSessions[m.configPickerProjectIdx].EffectiveProfile()

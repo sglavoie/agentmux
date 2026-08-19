@@ -42,6 +42,8 @@ type Request struct {
 	ProjectLabel string
 	SourceCWD    string
 	SessionID    string
+	Profile      string
+	Harness      string
 	AllowDirty   bool
 }
 
@@ -52,6 +54,11 @@ type Result struct {
 	Branch       string
 	BaseRef      string
 	SourceRoot   string
+	ID           string
+	BaseCommit   string
+	SourceBranch string
+	CreatedAt    time.Time
+	MetadataPath string
 }
 
 // Runner is the narrow action-facing worktree lifecycle contract. Removal is
@@ -65,13 +72,16 @@ type Runner interface {
 // Workflow owns the destination-directory and bounded Git command boundaries.
 // Its private seams keep integration tests out of the user's Agent Mux tree.
 type Workflow struct {
-	directory func() (string, error)
-	now       func() time.Time
+	directory     func() (string, error)
+	now           func() time.Time
+	newID         func() (string, error)
+	writeMetadata func(string, Metadata) error
+	rollback      func(context.Context, Result) error
 }
 
 // NewWorkflow constructs the production worktree service.
 func NewWorkflow() *Workflow {
-	return &Workflow{directory: defaultDirectory, now: time.Now}
+	return &Workflow{directory: defaultDirectory, now: time.Now, newID: newWorktreeID, writeMetadata: WriteMetadata}
 }
 
 // Create refuses a dirty source unless explicitly overridden, adds a new Git
@@ -96,6 +106,10 @@ func (w *Workflow) Create(ctx context.Context, request Request) (Result, error) 
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: resolving source checkout: %v", ErrNotGitCheckout, err)
 	}
+	baseCommit, sourceBranch, gitCommonDir, err := sourceGitIdentity(ctx, sourceRoot)
+	if err != nil {
+		return Result{}, err
+	}
 	dirty, err := gitDirty(ctx, sourceRoot)
 	if err != nil {
 		return Result{}, err
@@ -113,25 +127,77 @@ func (w *Workflow) Create(ctx context.Context, request Request) (Result, error) 
 	if err != nil {
 		return Result{}, err
 	}
-	parent, err := worktreeParent(root, projectLabel)
+	root, err = managedRoot(root)
 	if err != nil {
 		return Result{}, err
 	}
-	branch, destination, err := w.nextName(ctx, sourceRoot, parent, projectLabel, request.SessionID)
+	now := w.now
+	if now == nil {
+		now = time.Now
+	}
+	createdAt := now().UTC()
+	newID := w.newID
+	if newID == nil {
+		newID = newWorktreeID
+	}
+	id, err := newID()
 	if err != nil {
 		return Result{}, err
-	}
-	if _, err := runGit(ctx, sourceRoot, gitCommandTimeout, "worktree", "add", "-b", branch, destination, "HEAD"); err != nil {
-		return Result{}, fmt.Errorf("worktree: creating isolated checkout: %w", err)
 	}
 
-	return Result{
-		ProjectLabel: projectLabel,
-		Path:         destination,
-		Branch:       branch,
-		BaseRef:      "HEAD",
-		SourceRoot:   sourceRoot,
-	}, nil
+	var result Result
+	err = withMutationLock(ctx, root, func() error {
+		parent, err := worktreeParent(root, projectLabel)
+		if err != nil {
+			return err
+		}
+		branch, destination, err := w.nextName(ctx, sourceRoot, parent, projectLabel, request.SessionID, createdAt)
+		if err != nil {
+			return err
+		}
+		if _, err := runGit(ctx, sourceRoot, gitCommandTimeout, "worktree", "add", "-b", branch, destination, baseCommit); err != nil {
+			return fmt.Errorf("worktree: creating isolated checkout: %w", err)
+		}
+		canonicalDestination, err := canonicalDirectory(destination)
+		if err != nil {
+			primary := fmt.Errorf("worktree: resolving created checkout: %w", err)
+			rollbackResult := Result{Path: destination, Branch: branch, SourceRoot: sourceRoot, MetadataPath: SidecarPath(destination)}
+			if rollbackErr := w.rollbackCreation(context.Background(), rollbackResult); rollbackErr != nil {
+				return errors.Join(primary, fmt.Errorf("worktree: rolling back failed creation: %w", rollbackErr))
+			}
+			return primary
+		}
+		result = Result{
+			ProjectLabel: projectLabel, Path: canonicalDestination, Branch: branch,
+			BaseRef: "HEAD", SourceRoot: sourceRoot, ID: id, BaseCommit: baseCommit,
+			SourceBranch: sourceBranch, CreatedAt: createdAt, MetadataPath: SidecarPath(canonicalDestination),
+		}
+		metadata := Metadata{
+			SchemaVersion: MetadataSchemaVersion, ID: id, ProjectLabel: projectLabel,
+			Path: canonicalDestination, Branch: branch, GitCommonDir: gitCommonDir,
+			SourceRoot: sourceRoot, SourceBranch: sourceBranch, BaseCommit: baseCommit,
+			Profile: request.Profile, Harness: request.Harness,
+			SourceConversationID: request.SessionID, CreatedAt: createdAt,
+		}
+		writeMetadata := w.writeMetadata
+		if writeMetadata == nil {
+			writeMetadata = WriteMetadata
+		}
+		if err := writeMetadata(result.MetadataPath, metadata); err != nil {
+			primary := fmt.Errorf("worktree: persisting metadata: %w", err)
+			// Compensation must still run if the caller canceled while the
+			// sidecar was being persisted; each Git command remains bounded.
+			if rollbackErr := w.rollbackCreation(context.Background(), result); rollbackErr != nil {
+				return errors.Join(primary, fmt.Errorf("worktree: rolling back failed creation: %w", rollbackErr))
+			}
+			return primary
+		}
+		return nil
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	return result, nil
 }
 
 // RemoveUnused removes a checkout only after a caller knows no harness was
@@ -140,12 +206,15 @@ func (w *Workflow) RemoveUnused(ctx context.Context, result Result) error {
 	return removeGitWorktree(ctx, result)
 }
 
-func (w *Workflow) nextName(ctx context.Context, sourceRoot, parent, projectLabel, sessionID string) (string, string, error) {
-	now := w.now
-	if now == nil {
-		now = time.Now
+func (w *Workflow) rollbackCreation(ctx context.Context, result Result) error {
+	if w.rollback != nil {
+		return w.rollback(ctx, result)
 	}
-	timestamp := now().UTC().Format("20060102T150405Z")
+	return removeGitWorktree(ctx, result)
+}
+
+func (w *Workflow) nextName(ctx context.Context, sourceRoot, parent, projectLabel, sessionID string, createdAt time.Time) (string, string, error) {
+	timestamp := createdAt.UTC().Format("20060102T150405Z")
 	projectSlug := slug(projectLabel, "project")
 	sessionSlug := shortSlug(sessionID)
 	for attempt := 1; attempt < 10_000; attempt++ {
@@ -180,6 +249,30 @@ func defaultDirectory() (string, error) {
 		return "", fmt.Errorf("worktree: resolving home directory: %w", err)
 	}
 	return filepath.Join(home, ".local", "share", "agent-mux", "worktrees"), nil
+}
+
+func managedRoot(root string) (string, error) {
+	if strings.TrimSpace(root) == "" {
+		return "", errors.New("worktree: destination root is required")
+	}
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("worktree: resolving destination root: %w", err)
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return "", fmt.Errorf("worktree: creating destination root %s: %w", root, err)
+	}
+	info, err := os.Lstat(root)
+	if err != nil {
+		return "", fmt.Errorf("worktree: inspecting destination root: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return "", fmt.Errorf("worktree: destination root %s is not a directory", root)
+	}
+	if err := os.Chmod(root, 0o700); err != nil {
+		return "", fmt.Errorf("worktree: securing destination root: %w", err)
+	}
+	return filepath.Clean(root), nil
 }
 
 func worktreeParent(root, projectLabel string) (string, error) {
@@ -233,6 +326,27 @@ func gitDirty(ctx context.Context, directory string) (bool, error) {
 	return len(out) > 0, nil
 }
 
+func sourceGitIdentity(ctx context.Context, sourceRoot string) (baseCommit, sourceBranch, gitCommonDir string, err error) {
+	baseCommit, err = gitLine(ctx, sourceRoot, gitProbeTimeout, "rev-parse", "HEAD")
+	if err != nil {
+		return "", "", "", fmt.Errorf("worktree: resolving source base commit: %w", err)
+	}
+	branchOut, err := runGit(ctx, sourceRoot, gitProbeTimeout, "branch", "--show-current")
+	if err != nil {
+		return "", "", "", fmt.Errorf("worktree: resolving source branch: %w", err)
+	}
+	sourceBranch = strings.TrimSpace(string(branchOut))
+	gitCommonDir, err = gitLine(ctx, sourceRoot, gitProbeTimeout, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", "", "", fmt.Errorf("worktree: resolving Git common directory: %w", err)
+	}
+	gitCommonDir, err = canonicalDirectory(gitCommonDir)
+	if err != nil {
+		return "", "", "", fmt.Errorf("worktree: canonicalizing Git common directory: %w", err)
+	}
+	return baseCommit, sourceBranch, gitCommonDir, nil
+}
+
 func gitBranchExists(ctx context.Context, directory, branch string) (bool, error) {
 	commandCtx, cancel := context.WithTimeout(ctx, gitProbeTimeout)
 	defer cancel()
@@ -255,15 +369,23 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 	if strings.TrimSpace(result.Path) == "" || strings.TrimSpace(result.SourceRoot) == "" {
 		return errors.New("worktree: cleanup is missing checkout path or source root")
 	}
+	var cleanupErrors []error
 	if _, err := runGit(ctx, result.SourceRoot, gitCommandTimeout, "worktree", "remove", "--force", result.Path); err != nil {
-		return fmt.Errorf("worktree: removing unused checkout %s: %w", result.Path, err)
+		cleanupErrors = append(cleanupErrors, fmt.Errorf("worktree: removing unused checkout %s: %w", result.Path, err))
 	}
 	if branch := strings.TrimSpace(result.Branch); branch != "" {
 		if _, err := runGit(ctx, result.SourceRoot, gitCommandTimeout, "branch", "-D", branch); err != nil {
-			return fmt.Errorf("worktree: removing unused branch %s: %w", branch, err)
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("worktree: removing unused branch %s: %w", branch, err))
 		}
 	}
-	return nil
+	metadataPath := strings.TrimSpace(result.MetadataPath)
+	if metadataPath == "" {
+		metadataPath = SidecarPath(result.Path)
+	}
+	if err := os.Remove(metadataPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		cleanupErrors = append(cleanupErrors, fmt.Errorf("worktree: removing metadata %s: %w", metadataPath, err))
+	}
+	return errors.Join(cleanupErrors...)
 }
 
 func runGit(ctx context.Context, directory string, timeout time.Duration, args ...string) ([]byte, error) {

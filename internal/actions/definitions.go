@@ -16,6 +16,7 @@ func defaultDefinitions() []Definition {
 	sessionRequirement := []EntityRequirement{{Kind: EntityRunningSession, Description: "live managed session"}}
 	projectRequirement := []EntityRequirement{{Kind: EntityProject, Description: "configured project"}}
 	conversationRequirement := []EntityRequirement{{Kind: EntityConversation, Description: "indexed conversation"}}
+	worktreeRequirement := []EntityRequirement{{Kind: EntityWorktree, Description: "managed worktree"}}
 	return []Definition{
 		{
 			ID: Focus, Label: "focus tab", Description: "focus the session's Kitty tab", Requires: sessionRequirement,
@@ -225,6 +226,70 @@ func defaultDefinitions() []Definition {
 					return Result{}, err
 				}
 				return Result{Changed: true, Message: "restarted session"}, nil
+			},
+		},
+		{
+			ID: WorktreeList, Label: "list worktrees", Description: "list managed Git worktrees and current activity",
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return listWorktrees(ctx, deps)
+			},
+		},
+		{
+			ID: WorktreeShow, Label: "show worktree", Description: "show one managed Git worktree", Requires: worktreeRequirement,
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return showWorktree(ctx, deps, request)
+			},
+		},
+		{
+			ID: WorktreeReopen, Label: "reopen worktree", Description: "focus a live session or resume the newest conversation", Requires: worktreeRequirement,
+			Parameters: []ParameterSchema{
+				{Name: "session", Type: "string", Description: "live-session candidate identifier"},
+				{Name: "profile", Type: "string", Description: "replacement profile for a fresh launch"},
+			},
+			available: func(deps Dependencies, request Request) Availability {
+				return worktreeOpenAvailability(deps, request, true)
+			},
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return reopenWorktree(ctx, deps, request)
+			},
+		},
+		{
+			ID: WorktreeShell, Label: "open worktree shell", Description: "open a shell in the worktree", Requires: worktreeRequirement,
+			available: func(deps Dependencies, request Request) Availability {
+				return worktreeOpenAvailability(deps, request, false)
+			},
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return openWorktree(ctx, deps, request, false)
+			},
+		},
+		{
+			ID: WorktreeEditor, Label: "open worktree editor", Description: "open an editor in the worktree", Requires: worktreeRequirement,
+			available: func(deps Dependencies, request Request) Availability {
+				return worktreeOpenAvailability(deps, request, false)
+			},
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return openWorktree(ctx, deps, request, true)
+			},
+		},
+		{
+			ID: WorktreeRemove, Label: "remove worktree", Description: "safely remove a clean inactive worktree", Requires: worktreeRequirement,
+			Parameters:   []ParameterSchema{{Name: "delete_branch", Type: "boolean", Description: "also safely delete the merged worktree branch"}},
+			Confirmation: Confirmation{Required: true, Prompt: "remove this worktree?"},
+			available: func(_ Dependencies, request Request) Availability {
+				return worktreeRemoveAvailability(request)
+			},
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return removeWorktree(ctx, deps, request)
+			},
+		},
+		{
+			ID: WorktreeForget, Label: "forget worktree metadata", Description: "forget stale or invalid worktree metadata", Requires: worktreeRequirement,
+			Confirmation: Confirmation{Required: true, Prompt: "forget this worktree metadata?"},
+			available: func(_ Dependencies, request Request) Availability {
+				return worktreeForgetAvailability(request)
+			},
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return forgetWorktree(ctx, deps, request)
 			},
 		},
 	}

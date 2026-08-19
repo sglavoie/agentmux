@@ -132,6 +132,9 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 	}
 	var records []diagnostics.TraceEnvelope
 	waitForAcceptance(t, "causal journal and async effects", func() bool {
+		if _, promoteErr := journal.PromoteSpool(t.Context()); promoteErr != nil {
+			return false
+		}
 		read, readErr := journal.Read(t.Context(), diagnostics.Selector{})
 		if readErr != nil {
 			return false

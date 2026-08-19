@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/sglavoie/agentmux/internal/actions"
 )
 
 // Consequence strings shown on line 2 of the confirm overlay so the user
@@ -22,6 +24,7 @@ const (
 // The footer (rendered separately) carries the y/n/esc affordances.
 func renderConfirm(m Model) string {
 	var verb string
+	title := runningSessionDisplayTitle(m.targetSession)
 	switch m.confirmAction {
 	case "close":
 		verb = "Close"
@@ -29,18 +32,40 @@ func renderConfirm(m Model) string {
 		verb = "Restart"
 	case "fork worktree":
 		verb = "Fork in new worktree"
+	case "worktree remove":
+		verb = "Remove worktree checkout"
+		title = worktreeConfirmationTitle(m.worktreeActionTarget)
+	case "worktree delete branch":
+		verb = "Remove worktree and delete branch"
+		title = worktreeConfirmationTitle(m.worktreeActionTarget)
+	case "worktree forget":
+		verb = "Forget worktree metadata"
+		title = worktreeConfirmationTitle(m.worktreeActionTarget)
 	default:
 		verb = m.confirmAction
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styleHeader.Render(fmt.Sprintf("%s %q?", verb, displayRenderTitleIcon(runningSessionDisplayTitle(m.targetSession)))))
+	sb.WriteString(styleHeader.Render(fmt.Sprintf("%s %q?", verb, displayRenderTitleIcon(title))))
 	sb.WriteByte('\n')
 	if m.confirmConsequence != "" {
 		sb.WriteString(styleDim.Render(m.confirmConsequence))
 		sb.WriteByte('\n')
 	}
 	return sb.String()
+}
+
+func worktreeConfirmationTitle(target *actions.WorktreeView) string {
+	if target == nil {
+		return "selected worktree"
+	}
+	if strings.TrimSpace(target.ProjectLabel) != "" {
+		return target.ProjectLabel + " · " + target.Branch
+	}
+	if strings.TrimSpace(target.Branch) != "" {
+		return target.Branch
+	}
+	return target.ID
 }
 
 // renderConfirmBox wraps renderConfirm in styleOverlayBox so the y/n confirm

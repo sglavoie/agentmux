@@ -33,6 +33,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleSessionViewKey(msg)
 	case ModeMessageDetail:
 		return m.handleMessageDetailKey(msg)
+	case ModeWorktrees:
+		return m.handleWorktreesKey(msg)
+	case ModeWorktreeSessionPicker:
+		return m.handleWorktreeSessionPickerKey(msg)
 	case ModeDeleteChoice:
 		return m.handleDeleteChoiceKey(msg)
 	case ModeChipPicker:
@@ -124,9 +128,16 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			meta := *m.isolatedForkConversation
 			m.isolatedForkConversation = nil
 			return m, m.conversationWorktreeForkCmd(meta)
+		case "worktree remove":
+			return m.confirmedWorktreeMutation(false)
+		case "worktree delete branch":
+			return m.confirmedWorktreeMutation(true)
+		case "worktree forget":
+			return m.confirmedWorktreeForget()
 		}
 	case keyN, keyEsc:
 		m.isolatedForkConversation = nil
+		m.worktreeActionTarget = nil
 		m.mode = m.confirmReturnMode
 		if m.mode == ModeConfirm {
 			m.mode = ModeList

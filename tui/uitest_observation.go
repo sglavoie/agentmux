@@ -42,6 +42,10 @@ func uitestCursor(m Model) int {
 		return m.configPickerCursor
 	case ModeCommandPalette:
 		return m.commandCursor
+	case ModeWorktrees:
+		return m.worktreeCursor
+	case ModeWorktreeSessionPicker:
+		return m.worktreeSessionCursor
 	default:
 		return m.cursor
 	}
@@ -78,12 +82,16 @@ func uitestModeName(mode Mode) string {
 		return "chip_picker"
 	case ModeMessageDetail:
 		return "message_detail"
+	case ModeWorktrees:
+		return "worktrees"
 	case ModePlanSearch:
 		return "plan_search"
 	case ModePlanView:
 		return "plan_view"
 	case ModeCommandPalette:
 		return "command_palette"
+	case ModeWorktreeSessionPicker:
+		return "worktree_session_picker"
 	default:
 		return "unknown"
 	}

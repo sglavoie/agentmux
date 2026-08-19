@@ -170,7 +170,8 @@ func forkConversationInWorktree(ctx context.Context, deps Dependencies, meta tra
 		runner = worktree.NewWorkflow()
 	}
 	isolated, err := runner.Create(ctx, worktree.Request{
-		Config: deps.Config, ProjectLabel: meta.Project, SourceCWD: meta.CWD, SessionID: identity.SessionID, AllowDirty: allowDirty,
+		Config: deps.Config, ProjectLabel: meta.Project, SourceCWD: meta.CWD, SessionID: identity.SessionID,
+		Profile: account.Name, Harness: identity.Harness, AllowDirty: allowDirty,
 	})
 	if err != nil {
 		return Result{}, worktreeActionError(err)
@@ -215,7 +216,9 @@ func addIsolatedWorktreeResult(result Result, isolated worktree.Result) Result {
 	result.Data["fork_kind"] = "isolated"
 	result.Data["worktree"] = map[string]any{
 		"project": isolated.ProjectLabel, "path": isolated.Path, "branch": isolated.Branch,
-		"base_ref": isolated.BaseRef, "source_root": isolated.SourceRoot,
+		"base_ref": isolated.BaseRef, "source_root": isolated.SourceRoot, "id": isolated.ID,
+		"base_commit": isolated.BaseCommit, "source_branch": isolated.SourceBranch,
+		"created_at": isolated.CreatedAt, "metadata_path": isolated.MetadataPath,
 	}
 	if result.Message == "started portable fork from finalized handoff pack" {
 		result.Message = "started portable fork in isolated worktree"

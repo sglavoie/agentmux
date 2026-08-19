@@ -267,8 +267,11 @@ func TestForkWorktreeLaunchesNativeForkAndRetainsSuccessfulWorktree(t *testing.T
 	client := &continuityKitty{}
 	reader := &continuityReader{harness: harness.Codex}
 	meta := continuityMeta(t, harness.Codex, "source-1", "work")
+	createdAt := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
 	managed := &continuityWorktree{created: worktree.Result{
 		ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", BaseRef: "HEAD", SourceRoot: t.TempDir(),
+		ID: "11111111-2222-4333-8444-555555555555", BaseCommit: "0123456789012345678901234567890123456789",
+		SourceBranch: "main", CreatedAt: createdAt, MetadataPath: "/tmp/source-1.amx-worktree.json",
 	}}
 	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
 		Kitty: client, Config: continuityConfig(harness.Codex), Readers: map[string]transcript.Reader{harness.Codex: reader}, Worktree: managed,
@@ -276,7 +279,8 @@ func TestForkWorktreeLaunchesNativeForkAndRetainsSuccessfulWorktree(t *testing.T
 	if err != nil {
 		t.Fatalf("ForkWorktree: %v", err)
 	}
-	if len(managed.requests) != 1 || managed.requests[0].SourceCWD != meta.CWD || managed.requests[0].ProjectLabel != meta.Project || managed.requests[0].AllowDirty {
+	if len(managed.requests) != 1 || managed.requests[0].SourceCWD != meta.CWD || managed.requests[0].ProjectLabel != meta.Project ||
+		managed.requests[0].Profile != "work" || managed.requests[0].Harness != harness.Codex || managed.requests[0].AllowDirty {
 		t.Fatalf("worktree requests = %+v", managed.requests)
 	}
 	if len(client.launched) != 1 || client.launched[0].Directory != managed.created.Path {
@@ -288,7 +292,9 @@ func TestForkWorktreeLaunchesNativeForkAndRetainsSuccessfulWorktree(t *testing.T
 	worktreeData, ok := result.Data["worktree"].(map[string]any)
 	if !ok || worktreeData["project"] != "api" || worktreeData["path"] != managed.created.Path ||
 		worktreeData["branch"] != managed.created.Branch || worktreeData["base_ref"] != "HEAD" ||
-		worktreeData["source_root"] != managed.created.SourceRoot {
+		worktreeData["source_root"] != managed.created.SourceRoot || worktreeData["id"] != managed.created.ID ||
+		worktreeData["base_commit"] != managed.created.BaseCommit || worktreeData["source_branch"] != "main" ||
+		worktreeData["created_at"] != createdAt || worktreeData["metadata_path"] != managed.created.MetadataPath {
 		t.Fatalf("worktree result data = %#v", result.Data["worktree"])
 	}
 	if _, exists := worktreeData["workspace_id"]; exists {

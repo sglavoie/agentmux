@@ -109,7 +109,10 @@ func (r *Registry) Execute(ctx context.Context, deps Dependencies, id ID, reques
 		if message == "" {
 			message = fmt.Sprintf("action %q requires confirmation", id)
 		}
-		return Result{}, &Error{Code: "confirmation_required", Action: id, Message: message}
+		return Result{}, &Error{
+			Code: "confirmation_required", Action: id, Message: message,
+			MissingParameters: []ParameterSchema{{Name: "yes", Type: "boolean", Description: "explicitly confirm this destructive action", Required: true}},
+		}
 	}
 	result, err := definition.execute(ctx, deps, request)
 	result.Action = id
@@ -133,6 +136,10 @@ func validateEntities(definition Definition, request Request) error {
 		case EntityConversation:
 			if request.Conversation == nil {
 				return &Error{Code: "missing_entity", Action: definition.ID, Message: "an indexed conversation is required"}
+			}
+		case EntityWorktree:
+			if request.Worktree == nil && strings.TrimSpace(request.Selector) == "" {
+				return &Error{Code: "missing_entity", Action: definition.ID, Message: "a worktree selector is required"}
 			}
 		default:
 			return &Error{Code: "invalid_action", Action: definition.ID, Message: fmt.Sprintf("unknown entity requirement %q", requirement.Kind)}

@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
@@ -291,6 +292,29 @@ type Model struct {
 	messageDetailIdx    int
 	messageDetailScroll int
 
+	// worktree inventory view (ModeWorktrees). worktreeEntries keeps the last
+	// successful Git-authoritative snapshot while worktreeFiltered is the
+	// whitespace-AND filtered window. Refreshes preserve the selected stable ID
+	// and retain cached rows until the matching sequence response arrives.
+	worktreeEntries    []actions.WorktreeView
+	worktreeFiltered   []actions.WorktreeView
+	worktreeCursor     int
+	worktreeOffset     int
+	worktreeFilter     string
+	worktreeFilterMode bool
+	worktreeLoading    bool
+	worktreeWarnings   []string
+	worktreeErr        error
+	worktreeRefreshSeq int
+	worktreeSelectedID string
+	// Lifecycle detours retain a value copy of the selected row so refreshes
+	// cannot retarget a confirmation, live-session choice, or profile choice.
+	worktreeActionTarget      *actions.WorktreeView
+	worktreeActionInFlight    bool
+	worktreeSessionCandidates []actions.WorktreeLiveSession
+	worktreeSessionCursor     int
+	worktreeSessionOffset     int
+
 	// plan search view (ModePlanSearch). plansIndex is lazy-constructed on first
 	// entry and reused across refreshes. planResults holds the most recent
 	// plans.Search output; planQuery is the text typed after `/`. planSearchMode
@@ -500,6 +524,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case viewerMessagesLoadedMsg:
 		return m.handleViewerMessagesLoaded(msg)
+
+	case worktreesLoadedMsg:
+		return m.handleWorktreesLoaded(msg)
+
+	case worktreeActionDoneMsg:
+		return m.handleWorktreeActionDone(msg)
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)

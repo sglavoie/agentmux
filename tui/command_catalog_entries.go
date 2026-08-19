@@ -282,6 +282,16 @@ func commandCatalog() []command {
 			},
 		},
 		{
+			id: commandManageWorktrees, group: commandGroupExplore,
+			title:       staticCommandTitle("Manage Worktrees"),
+			description: "Browse managed Git worktrees and open their paths.",
+			aliases:     []string{"git", "branches", "inventory"}, shortcut: keyWorktrees,
+			execute: func(m Model, _ commandContext) (Model, tea.Cmd) {
+				updated, cmd := m.enterWorktrees()
+				return updated.(Model), cmd
+			},
+		},
+		{
 			id: commandTogglePreview, group: commandGroupExplore,
 			title: func(m Model, _ commandContext) string {
 				if m.previewEnabled {

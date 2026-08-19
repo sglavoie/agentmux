@@ -29,6 +29,7 @@ func TestFooterHintLinesFitWideTerminal(t *testing.T) {
 		{name: "session view", palette: sessionViewFooterPalette},
 		{name: "plan search", palette: planSearchFooterPalette},
 		{name: "plan view", palette: planViewFooterPalette},
+		{name: "worktrees", palette: worktreesFooterPalette},
 	}
 
 	for _, tc := range cases {
@@ -71,6 +72,11 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 			name:    "plan view",
 			palette: planViewFooterPalette,
 			wants:   []string{"/ search", "n/N match", "y copy", "Y path", "e editor", "esc back"},
+		},
+		{
+			name:    "worktrees",
+			palette: worktreesFooterPalette,
+			wants:   []string{"/ filter", "o shell", "O editor", "Y path", "r refresh", "? help", "esc back"},
 		},
 	}
 

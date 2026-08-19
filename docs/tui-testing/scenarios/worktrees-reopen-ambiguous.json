@@ -1,0 +1,20 @@
+{
+  "name": "worktrees-reopen-ambiguous",
+  "fixture": "worktree_lifecycle",
+  "size": { "width": 132, "height": 34 },
+  "actions": [
+    { "type": "key", "key": "W" },
+    { "type": "key", "key": "/" },
+    { "type": "text", "text": "wt-multi" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "worktree_session_picker" },
+    { "type": "contains_text", "text": "candidate 81" },
+    { "type": "contains_text", "text": "native-multi-81" },
+    { "type": "contains_text", "text": "personal/codex" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
+    { "type": "no_layout_issues" }
+  ]
+}

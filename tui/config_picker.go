@@ -9,7 +9,11 @@ func renderConfigPicker(m Model) string {
 	var sb strings.Builder
 	purpose := m.activeConfigPickerPurpose()
 	header := purpose.header()
-	sb.WriteString(styleHeader.Render(header+": "+runningSessionDisplayTitle(m.targetSession)) + "\n\n")
+	title := runningSessionDisplayTitle(m.targetSession)
+	if purpose == ConfigPickerWorktreeReopen && m.worktreeActionTarget != nil {
+		title = worktreeConfirmationTitle(m.worktreeActionTarget)
+	}
+	sb.WriteString(styleHeader.Render(header+": "+title) + "\n\n")
 
 	maxName, maxHarness := 0, 0
 	for _, acc := range m.configPickerAccounts {

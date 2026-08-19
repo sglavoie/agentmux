@@ -254,6 +254,8 @@ func TestColonRemainsInputOutsideDashboardAndNeverOpensFromNavigation(t *testing
 		ModeConfirm, ModePicker, ModeConfigPicker, ModeHelp, ModeDetail, ModeActions,
 		ModeSessionSearch, ModeSessionView, ModeDeleteChoice, ModeChipPicker,
 		ModeMessageDetail, ModePlanSearch, ModePlanView,
+		ModeWorktrees,
+		ModeWorktreeSessionPicker,
 	} {
 		t.Run(uitestModeName(mode)+" navigation", func(t *testing.T) {
 			m := testModelWithSessions()

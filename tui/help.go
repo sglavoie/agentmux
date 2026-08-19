@@ -32,6 +32,8 @@ func helpBaseView(m Model) string {
 		return renderPlanSearch(m)
 	case ModePlanView:
 		return renderPlanView(m)
+	case ModeWorktrees:
+		return renderWorktrees(m)
 	default:
 		return renderDashboard(m)
 	}
@@ -43,7 +45,7 @@ func helpBaseView(m Model) string {
 // acceptable when grouping is more useful than capping length. Keys that
 // overload across modes (e.g. `tab`/`esc`) are listed under the section
 // where they're most often reached for; the footer/actions overlay
-// disclose mode-specific meanings inline. Past Sessions and Plans keys are
+// disclose mode-specific meanings inline. Past Sessions, Plans, and Worktrees keys are
 // not listed here — helpPaletteSections generates them from the footer
 // palettes so each of those bindings is declared exactly once.
 var helpSections = []struct {
@@ -111,6 +113,7 @@ var helpSections = []struct {
 		"  d         show session detail (hook event log)",
 		"  S         search past session transcripts",
 		"  P         search saved plans (from dashboard)",
+		"  W         manage Git worktrees",
 		"  q         quit",
 		"  ctrl+c    quit",
 	}},
@@ -128,8 +131,8 @@ type helpPalette struct {
 	entries []footerEntry
 }
 
-// helpPaletteSections are the sections generated from the Past Sessions and
-// Plans footer palettes. The palettes are the single source of truth for those
+// helpPaletteSections are the sections generated from the Past Sessions,
+// Plans, and Worktrees footer palettes. The palettes are the single source of truth for those
 // modes: narrow terminals drop their lowest-priority hints (nav keys first), so
 // the overlay is the only place the complete keymap is always visible.
 var helpPaletteSections = []struct {
@@ -143,6 +146,9 @@ var helpPaletteSections = []struct {
 	{"Plans", []helpPalette{
 		{"search", planSearchFooterPalette},
 		{"viewer", planViewFooterPalette},
+	}},
+	{"Worktrees", []helpPalette{
+		{"browser", worktreesFooterPalette},
 	}},
 }
 

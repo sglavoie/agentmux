@@ -136,6 +136,13 @@ func modeErrorStatus(m Model) (statusMessage, bool) {
 		if m.planViewerLoadErr != nil {
 			return statusMessage{Text: "Read error: " + m.planViewerLoadErr.Error(), Severity: statusError}, true
 		}
+	case ModeWorktrees:
+		if m.worktreeErr != nil {
+			return statusMessage{Text: "Refresh error: " + m.worktreeErr.Error(), Severity: statusError}, true
+		}
+		if len(m.worktreeWarnings) > 0 {
+			return statusMessage{Text: fmt.Sprintf("Worktrees: %d warning%s", len(m.worktreeWarnings), plural(len(m.worktreeWarnings))), Severity: statusWarning}, true
+		}
 	}
 	return statusMessage{}, false
 }
@@ -173,6 +180,9 @@ func fallbackStatusText(m Model) string {
 	case ModePicker:
 		return pickerStatusText(m)
 	case ModeConfigPicker:
+		if m.activeConfigPickerPurpose() == ConfigPickerWorktreeReopen {
+			return "Choose worktree replacement profile"
+		}
 		if m.configPickerReturnMode == ModePicker {
 			return "Choose launch profile"
 		}
@@ -214,6 +224,22 @@ func fallbackStatusText(m Model) string {
 		return fmt.Sprintf("Plans: %d result%s", n, plural(n))
 	case ModePlanView:
 		return planViewStatusText(m)
+	case ModeWorktrees:
+		if m.worktreeActionInFlight {
+			return "Worktrees: lifecycle action in progress"
+		}
+		if m.worktreeLoading {
+			if len(m.worktreeEntries) > 0 {
+				return fmt.Sprintf("Worktrees: refreshing %d cached", len(m.worktreeEntries))
+			}
+			return "Worktrees: loading"
+		}
+		if len(m.worktreeFiltered) == len(m.worktreeEntries) {
+			return fmt.Sprintf("Worktrees: %d managed", len(m.worktreeEntries))
+		}
+		return fmt.Sprintf("Worktrees: %d/%d visible", len(m.worktreeFiltered), len(m.worktreeEntries))
+	case ModeWorktreeSessionPicker:
+		return fmt.Sprintf("Choose live worktree session: %d candidate%s", len(m.worktreeSessionCandidates), plural(len(m.worktreeSessionCandidates)))
 	default:
 		return listStatusText(m)
 	}

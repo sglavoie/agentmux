@@ -27,6 +27,25 @@ scenario. `just check` adds the repository linter and is the final local/CI
 gate. The end-to-end coverage map is documented in
 [`docs/acceptance.md`](acceptance.md).
 
+### Live Kitty worktree smoke checklist
+
+The automated gate uses hermetic Kitty and Git fixtures. Before a release, run
+these checks in a disposable managed worktree when a live Kitty instance is
+available:
+
+- `Enter` focuses a sole live session; an ambiguous pair opens the candidate
+  picker instead of guessing.
+- A closed conversation resumes, while a worktree with no indexed conversation
+  launches fresh.
+- Dirty work, a live session, and an active ASL loop each block cleanup.
+- `d` removes the checkout but leaves its branch.
+- `D` deletes only a branch merged into the source branch recorded by the
+  schema-v1 sidecar; an unmerged branch is refused.
+
+If the environment cannot safely provide Kitty, a disposable Git repository,
+or an isolated transcript index, record the skipped item as residual manual QA.
+The automated `just check` result remains the release completion gate.
+
 ### TUI layout regression harness
 
 A hidden developer command, `amx tui-test`, drives the dashboard model

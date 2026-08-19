@@ -1,0 +1,19 @@
+{
+  "name": "worktrees-partial-recovery",
+  "fixture": "worktree_lifecycle",
+  "size": { "width": 132, "height": 34 },
+  "actions": [
+    { "type": "key", "key": "W" },
+    { "type": "key", "key": "/" },
+    { "type": "text", "text": "wt-partial" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "d" },
+    { "type": "key", "key": "y" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "worktrees" },
+    { "type": "contains_text", "text": "Partial cleanup: checkout removed" },
+    { "type": "contains_text", "text": "missing" },
+    { "type": "no_layout_issues" }
+  ]
+}

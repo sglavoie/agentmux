@@ -43,6 +43,14 @@ func hasViewerSession(m Model) bool { return m.viewerSession != nil }
 
 func hasViewerMessages(m Model) bool { return len(m.viewerMessages) > 0 }
 
+func hasWorktreeResult(m Model) bool {
+	return m.worktreeCursor >= 0 && m.worktreeCursor < len(m.worktreeFiltered)
+}
+
+func hasPresentWorktree(m Model) bool {
+	return hasWorktreeResult(m) && m.worktreeFiltered[m.worktreeCursor].Exists
+}
+
 var sessionSearchFooterPalette = []footerEntry{
 	{"/", "filter", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"h/p/r", "chips", footerSectionApp, footerAlways, footerPrioritySecondary},
@@ -125,6 +133,24 @@ var planViewFooterPalette = []footerEntry{
 	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
+}
+
+var worktreesFooterPalette = []footerEntry{
+	{"/", "filter", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"enter", "reopen", footerSectionRow, hasPresentWorktree, footerPriorityEssential},
+	{"o", "shell", footerSectionRow, hasPresentWorktree, footerPriorityPrimary},
+	{"O", "editor", footerSectionRow, hasPresentWorktree, footerPriorityPrimary},
+	{"d", "remove", footerSectionRow, hasWorktreeResult, footerPriorityPrimary},
+	{"D", "delete branch", footerSectionRow, hasWorktreeResult, footerPrioritySecondary},
+	{"F", "forget", footerSectionRow, hasWorktreeResult, footerPrioritySecondary},
+	{"Y", "path", footerSectionRow, func(m Model) bool { return selectedWorktreePath(m) != "" }, footerPrioritySecondary},
+	{"r", "refresh", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"?", "help", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
+	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
+	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
+	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
 }
 
 // footerHintLines renders entries into physical footer rows, wrapped to

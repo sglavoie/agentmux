@@ -138,6 +138,70 @@ is an explicit request for new tab(s): if the selected project/profile is
 already running, Agent Mux opens another instance instead of skipping or
 focusing the existing tab.
 
+## Managed worktrees
+
+Press `W` from the dashboard, or run **Manage Worktrees** from the command
+palette, to open the Git-authoritative inventory under
+`~/.local/share/agent-mux/worktrees`. `/` filters by stable ID, project,
+branch, path, profile, harness, and lifecycle labels. `j`/`k`, `g`/`G`, and
+`Ctrl+d/u/f/b` navigate; `Y` copies the canonical checkout path, `o` opens a
+shell, `O` opens the configured editor, and `r` refreshes Git and activity
+facts.
+
+`Enter` smart-reopens the selected worktree. A sole live Kitty session is
+focused. Multiple live sessions open a picker that identifies the project,
+profile, harness, Kitty tab/window, candidate ID, and native harness session ID
+when known. With no live session, Agent Mux resumes the newest indexed
+conversation inside the checkout or launches a fresh session. If recorded
+profile provenance is no longer usable, the normal profile picker requests an
+explicit replacement; it does not silently choose another identity.
+
+Cleanup is always explicit:
+
+- `d` removes a clean, inactive checkout and its sidecar while retaining the
+  branch.
+- `D` additionally deletes the worktree branch, but only after fresh Git checks
+  prove it is merged into the source branch recorded when the worktree was
+  created.
+- `F` forgets retained metadata for a missing checkout or invalid metadata. It
+  changes neither a checkout nor a Git branch.
+
+The TUI shows refusal reasons known from its latest snapshot before opening a
+confirmation, then the shared action performs fresh activity, dirtiness, lock,
+registration, metadata, ref, and ancestry checks immediately before mutation.
+Agent Mux never force-removes a worktree, deletes an unmerged branch, closes a
+Kitty session, stops an active loop, or acts on a worktree outside its managed
+root. Partial cleanup is reported with the durable steps that succeeded; the
+inventory refreshes and retains the recovery row instead of presenting the
+operation as all-or-nothing.
+
+The same lifecycle is scriptable:
+
+```bash
+amx worktree list [--json]
+amx worktree show <selector> [--json]
+amx worktree reopen <selector> [--session <candidate>] [--profile <name>] [--json]
+amx worktree shell <selector> [--json]
+amx worktree edit <selector> [--json]
+amx worktree remove <selector> --yes [--delete-branch] [--json]
+amx worktree forget <selector> --yes [--json]
+```
+
+A selector is a full stable ID, unique ID prefix, branch, or canonical path.
+Ambiguous selectors and live sessions return structured candidates rather than
+guessing. Machine-readable output keeps the common schema-v1 envelope; all
+worktree fields are additive.
+
+Each newly created checkout has an adjacent private schema-v1
+`<checkout>.amx-worktree.json` sidecar. Git remains authoritative for checkout,
+branch, status, and merge facts; the durable sidecar stores the stable ID and
+provenance Git does not retain: source root/branch/base commit, project,
+profile, harness, source conversation, and creation time. Older managed-root
+checkouts on `amx/…` branches without sidecars remain visible as `legacy`.
+Default branch-retaining removal is available after fresh safety checks, but
+branch deletion requires validated schema-v1 provenance. Malformed sidecars
+stay visible as invalid recovery records and are never discarded automatically.
+
 ## Past sessions
 
 Press `S` from the dashboard to search past sessions across every configured
@@ -243,13 +307,13 @@ Agent Mux does not use SQLite. Local files have deliberately narrow ownership:
 | `~/.local/share/agent-mux/transcripts.json` and `transcripts.search/` | Disposable metadata and search caches rebuilt from harness transcript files. Malformed metadata is renamed with a `.corrupt-<timestamp>` suffix; orphan sidecars are measured by `transcripts status`, pruned explicitly by `transcripts compact`, or fully reset by `transcripts rebuild --all`. |
 | `~/.local/share/agent-mux/plans.json` and `plans.search/` | Disposable metadata and search caches rebuilt from directories under `plans_directory`. |
 | `~/.local/share/agent-mux/handoffs/` | Private standalone Markdown artifacts. Successful and partially launched handoffs remain until you delete them. |
-| `~/.local/share/agent-mux/worktrees/` | Ordinary registered Git worktrees. Successful launches remain until you remove them with Git; a failed launch removes only the worktree created for that attempt. |
+| `~/.local/share/agent-mux/worktrees/` and adjacent `*.amx-worktree.json` files | Durable managed Git worktrees plus private schema-v1 provenance. Git owns checkout/branch truth; sidecars retain stable identity and source/profile/harness lineage. Use `amx worktree remove ... --yes` for safe cleanup or `amx worktree forget ... --yes` only for missing/invalid metadata. These are not disposable caches. |
 | `~/.local/share/agent-mux/launch_overrides.json` | Per-user launcher choices, including one-time profile overrides and pinned projects; independent of transcript and plan caches. |
 | `daemon.sock`, `daemon.lock`, and `daemon.autostart.lock` | Ordinary daemon coordination files, not database state. |
 
 The corresponding `.lock` sidecars are stable advisory locks and may remain
 between runs. Do not delete the whole `agent-mux` data directory to repair a
-cache: transcript files, plan directories, handoffs, worktrees, configuration,
+cache: transcript files, plan directories, handoffs, durable worktrees and sidecars, configuration,
 and launch overrides have separate lifecycles.
 
 ## One-off cleanup after upgrading from a SQLite release

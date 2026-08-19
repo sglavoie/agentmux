@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,6 +35,7 @@ const (
 	lifecycleASLWindow           = 53
 	lifecycleResetWindow         = 54
 	lifecycleStopHoldWindow      = 55
+	lifecycleHookRetryBudget     = 2 * time.Second
 	lifecycleAcceptanceKittyAddr = "unix:/tmp/agent-mux-process-lifecycle-acceptance-kitty"
 )
 
@@ -274,15 +277,41 @@ func (f *processLifecycleAcceptanceFixture) sendHook(
 		Harness: harnessName, ProducerHarness: harnessName, HarnessProcess: process,
 		PipeMode: pipeMode, PayloadJSON: string(encoded), Account: "acceptance",
 		SessionTitle: fmt.Sprintf("W:lifecycle-%d", windowID), KittyListenOn: lifecycleAcceptanceKittyAddr,
-		RequestID: fmt.Sprintf("lifecycle-request-%d", f.requestSeq),
-		TraceID:   fmt.Sprintf("lifecycle-trace-%d", f.requestSeq),
-		Attempt:   1, PayloadSize: int64(len(encoded)), PayloadEncoding: "json",
+		RequestID:   fmt.Sprintf("lifecycle-request-%d", f.requestSeq),
+		TraceID:     fmt.Sprintf("lifecycle-trace-%d", f.requestSeq),
+		PayloadSize: int64(len(encoded)), PayloadEncoding: "json",
 	}
-	resp, err := daemon.NewClient().Send(req)
-	if err != nil {
-		f.t.Fatalf("send %s for window %d: %v", event, windowID, err)
+	client := daemon.NewClient()
+	deadline := time.Now().Add(lifecycleHookRetryBudget)
+	var resp daemon.Response
+	// Package-level load can exceed the production acknowledgement budget even
+	// though the hermetic daemon is making progress. Bound the complete retry
+	// window by the production cold-start budget and reuse the request ID so a
+	// retry observes the dedupe result instead of applying the hook twice.
+	attempt := 1
+	for {
+		req.Attempt = attempt
+		resp, err = client.Send(req)
+		if err == nil && !resp.Retryable {
+			break
+		}
+		var netErr net.Error
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) && (!errors.As(err, &netErr) || !netErr.Timeout()) {
+			f.t.Fatalf("send %s for window %d: %v", event, windowID, err)
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				f.t.Fatalf("send %s for window %d: %v", event, windowID, err)
+			}
+			f.t.Fatalf("send %s for window %d response remained retryable: %+v", event, windowID, resp)
+		}
+		attempt++
+		time.Sleep(10 * time.Millisecond)
 	}
-	if !resp.OK || resp.Delivery == nil || resp.Delivery.Status != daemon.DeliveryAcknowledgementAccepted {
+	acknowledged := resp.Delivery != nil &&
+		(resp.Delivery.Status == daemon.DeliveryAcknowledgementAccepted ||
+			attempt > 1 && resp.Delivery.Status == daemon.DeliveryAcknowledgementDuplicate)
+	if !resp.OK || !acknowledged {
 		f.t.Fatalf("send %s for window %d response = %+v", event, windowID, resp)
 	}
 }
@@ -424,9 +453,13 @@ func (f *processLifecycleAcceptanceFixture) journalRecords() []diagnostics.Trace
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	records, err := journal.Read(f.t.Context(), diagnostics.Selector{})
-	if err != nil {
-		f.t.Fatal(err)
-	}
+	var records []diagnostics.TraceEnvelope
+	waitForAcceptance(f.t, "process lifecycle journal availability", func() bool {
+		if _, err = journal.PromoteSpool(f.t.Context()); err != nil {
+			return false
+		}
+		records, err = journal.Read(f.t.Context(), diagnostics.Selector{})
+		return err == nil
+	})
 	return records
 }

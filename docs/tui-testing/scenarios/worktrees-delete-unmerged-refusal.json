@@ -1,0 +1,18 @@
+{
+  "name": "worktrees-delete-unmerged-refusal",
+  "fixture": "worktree_lifecycle",
+  "size": { "width": 132, "height": 34 },
+  "actions": [
+    { "type": "key", "key": "W" },
+    { "type": "key", "key": "/" },
+    { "type": "text", "text": "wt-unmerged" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "D" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "worktrees" },
+    { "type": "contains_text", "text": "not merged into the recorded source branch" },
+    { "type": "contains_text", "text": "unmerged-project" },
+    { "type": "no_layout_issues" }
+  ]
+}

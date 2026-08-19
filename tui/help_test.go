@@ -16,7 +16,7 @@ func TestRenderHelpNoHeightShowsAll(t *testing.T) {
 
 	out := stripAnsi(renderHelp(m))
 
-	for _, header := range []string{"Navigate", "Act on row", "Launch / open", "Filter", "App", "Past Sessions", "Plans"} {
+	for _, header := range []string{"Navigate", "Act on row", "Launch / open", "Filter", "App", "Past Sessions", "Plans", "Worktrees"} {
 		if !strings.Contains(out, header) {
 			t.Errorf("expected section header %q in help output, got:\n%s", header, out)
 		}

@@ -50,3 +50,10 @@ func currentPlanViewPath(m Model) string {
 	}
 	return m.viewerPlan.DirPath
 }
+
+func selectedWorktreePath(m Model) string {
+	if m.worktreeCursor < 0 || m.worktreeCursor >= len(m.worktreeFiltered) {
+		return ""
+	}
+	return m.worktreeFiltered[m.worktreeCursor].Path
+}

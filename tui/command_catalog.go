@@ -34,6 +34,7 @@ const (
 	commandOpenLauncher       commandID = "explore.open-launcher"
 	commandSearchAllSessions  commandID = "explore.search-session-history"
 	commandSearchPlans        commandID = "explore.search-plans"
+	commandManageWorktrees    commandID = "explore.manage-worktrees"
 	commandTogglePreview      commandID = "explore.toggle-preview"
 	commandResortTabs         commandID = "app.resort-tabs"
 	commandUndoClose          commandID = "app.undo-close"

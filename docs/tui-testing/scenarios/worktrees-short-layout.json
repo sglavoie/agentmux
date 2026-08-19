@@ -1,0 +1,13 @@
+{
+  "name": "worktrees-short-layout",
+  "fixture": "worktree_lifecycle",
+  "size": { "width": 100, "height": 10 },
+  "actions": [
+    { "type": "key", "key": "W" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "worktrees" },
+    { "type": "contains_text", "text": "Worktrees" },
+    { "type": "no_layout_issues" }
+  ]
+}
