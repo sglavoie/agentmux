@@ -372,7 +372,7 @@ func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
 	if version != "0.6.0" {
 		t.Fatalf("version = %q, want 0.6.0", version)
 	}
-	for _, path := range []string{"../README.md", "../docs/debugging.md", "../docs/acceptance.md"} {
+	for _, path := range []string{"../docs/daemon.md", "../docs/debugging.md", "../docs/acceptance.md"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)

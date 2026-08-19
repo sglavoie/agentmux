@@ -1,0 +1,125 @@
+package daemon
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/hookevent"
+	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
+)
+
+func TestHandler_CopilotLateInitialSessionStartPreservesPromptAndAllowsStop(t *testing.T) {
+	oldDelay := resetFlowStopDelay
+	resetFlowStopDelay = 0
+	t.Cleanup(func() { resetFlowStopDelay = oldDelay })
+
+	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false) // pin the immediate-stop path, not the confirmed-idle hold
+	fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "", false), []kitty.Window{{
+		ID:       42,
+		IsActive: true,
+		UserVars: kitty.UserVars{Profile: "copilot", Harness: "copilot"},
+	}})}
+	h.SetKittyClient(fake)
+
+	promptPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1"})
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "userPromptSubmitted", PayloadJSON: promptPayload}); !resp.OK {
+		t.Fatalf("userPromptSubmitted response = %+v", resp)
+	}
+
+	startPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1", Source: "new"})
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "sessionStart", PayloadJSON: startPayload}); !resp.OK {
+		t.Fatalf("sessionStart response = %+v", resp)
+	}
+	h.stateMu.Lock()
+	if got := h.store[42].DesiredIcon; got != "bolt" {
+		h.stateMu.Unlock()
+		t.Fatalf("late initial sessionStart desired icon = %q, want bolt", got)
+	}
+	h.stateMu.Unlock()
+
+	stopPayload := hookPayloadJSON(t, hookevent.HookPayload{SessionIDCamel: "session-1", StopReasonCamel: "end_turn"})
+	if resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "agentStop", PayloadJSON: stopPayload}); !resp.OK {
+		t.Fatalf("agentStop response = %+v", resp)
+	}
+	h.stateMu.Lock()
+	if got := h.store[42].DesiredIcon; got != "stop" {
+		h.stateMu.Unlock()
+		t.Fatalf("agentStop desired icon = %q, want stop", got)
+	}
+	h.stateMu.Unlock()
+
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) != 3 {
+		t.Fatalf("events = %+v, want prompt/start/stop", detail.Events)
+	}
+	if detail.Events[1].ResetFlow || detail.Events[1].ResultIconState != IconStatePreserve {
+		t.Fatalf("late sessionStart event = %+v, want non-reset preserve", detail.Events[1])
+	}
+}
+
+// TestHandler_HookEventClaudePermissionRequestSurfacesKey pins the corrected
+// behavior: a Claude PreToolUse → PermissionRequest is a real, user-blocking
+// prompt, not an auto-approved tool. The PermissionRequest event is applied (not
+// suppressed) and surfaces the 🔑 icon.
+func TestHandler_HookEventClaudePermissionRequestSurfacesKey(t *testing.T) {
+	h := newTestHandler()
+	fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
+		ID:       42,
+		UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+	}})}
+	h.SetKittyClient(fake)
+
+	h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PreToolUse"})
+	resp := h.Handle(Request{Type: TypeHookEvent, WindowID: 42, Event: "PermissionRequest"})
+	if !resp.OK {
+		t.Fatalf("PermissionRequest response = %+v", resp)
+	}
+	detail := h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
+	if len(detail.Events) != 2 {
+		t.Fatalf("events = %+v; want two events", detail.Events)
+	}
+	ev := detail.Events[1]
+	if ev.Suppressed || ev.Action != "permission" || ev.ResultIconState != "key" {
+		t.Fatalf("event = %+v; want applied permission surfacing the key", ev)
+	}
+}
+
+func hookPayloadJSON(t *testing.T, payload hookevent.HookPayload) string {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal hook payload: %v", err)
+	}
+	return string(data)
+}
+
+func hookEventWindows(tabTitle string, windows []kitty.Window) []kitty.OSWindow {
+	return []kitty.OSWindow{{
+		ID: 1,
+		Tabs: []kitty.Tab{{
+			ID:      100,
+			Title:   tabTitle,
+			Windows: windows,
+		}},
+	}}
+}
+
+func stubDaemonLoopDiscover(t *testing.T, candidates []agentloop.Candidate, err error) {
+	t.Helper()
+	old := daemonLoopDiscover
+	daemonLoopDiscover = func(agentloop.DiscoverOptions) ([]agentloop.Candidate, error) {
+		out := make([]agentloop.Candidate, len(candidates))
+		copy(out, candidates)
+		return out, err
+	}
+	t.Cleanup(func() {
+		daemonLoopDiscover = old
+	})
+}
+
+type errHookEventGetTextShouldNotRun struct{}
+
+func (errHookEventGetTextShouldNotRun) Error() string { return "GetText should not run" }

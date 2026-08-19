@@ -69,10 +69,10 @@ func TestAgentMuxConfContainsIconPickerBinding(t *testing.T) {
 	}
 }
 
-func TestReadmeDocumentsPassiveLoopMarkers(t *testing.T) {
-	readme, err := os.ReadFile("README.md")
+func TestUsageGuideDocumentsPassiveLoopMarkers(t *testing.T) {
+	guide, err := os.ReadFile("docs/usage.md")
 	if err != nil {
-		t.Fatalf("ReadFile(README.md): %v", err)
+		t.Fatalf("ReadFile(docs/usage.md): %v", err)
 	}
 
 	for _, documented := range []string{
@@ -81,8 +81,8 @@ func TestReadmeDocumentsPassiveLoopMarkers(t *testing.T) {
 		"`AgentSessionLoopFinished` hook",
 		"Run and tail loops outside the dashboard with `agent-session-loop` directly.",
 	} {
-		if !strings.Contains(string(readme), documented) {
-			t.Fatalf("README.md missing documented passive loop marker text %q", documented)
+		if !strings.Contains(string(guide), documented) {
+			t.Fatalf("docs/usage.md missing documented passive loop marker text %q", documented)
 		}
 	}
 }
