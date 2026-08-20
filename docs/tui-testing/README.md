@@ -253,8 +253,13 @@ file. The exact inventory is:
 | --- | --- | --- |
 | [`baseline-layout.json`](scenarios/baseline-layout.json) | `basic` | dashboard list renders clean with all projects visible |
 | [`actions-popup-fit.json`](scenarios/actions-popup-fit.json) | `actions` | actions overlay fits after pressing `a` on a long-titled session |
+| [`asl-abort-confirmation-fit.json`](scenarios/asl-abort-confirmation-fit.json) | `asl_runs` | `a` confirms an abort against the captured run and states the 120-second grace and its degrade-to-stop behavior |
 | [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a human-actionable ASL handoff leads Needs Attention and keeps its `awaiting response` gloss at narrow width |
 | [`asl-question-pending-wide.json`](scenarios/asl-question-pending-wide.json) | `asl_question` | `]q` jumps from an unrelated row back to the human-actionable ASL handoff |
+| [`asl-response-live-wide.json`](scenarios/asl-response-live-wide.json) | `asl_runs` | `r` opens the live response form with an answer editor, the Reply/Continue/Pause buttons, and the multiple-question counter |
+| [`asl-response-paused-narrow-fit.json`](scenarios/asl-response-paused-narrow-fit.json) | `asl_runs` | a paused run's form offers only reply-and-resume and still fits a narrow terminal while typing |
+| [`asl-runs-narrow-fit.json`](scenarios/asl-runs-narrow-fit.json) | `asl_runs` | narrow Runs rows keep state, label, reason, and age, and move the rest into the selected-row panel |
+| [`asl-runs-wide.json`](scenarios/asl-runs-wide.json) | `asl_runs` | `A` opens Runs with needs-action rows first, the full wide columns, and no Kitty focus |
 | [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without Kitty mutations |
 | [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
 | [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |

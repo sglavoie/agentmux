@@ -143,6 +143,20 @@ func modeErrorStatus(m Model) (statusMessage, bool) {
 		if len(m.worktreeWarnings) > 0 {
 			return statusMessage{Text: fmt.Sprintf("Worktrees: %d warning%s", len(m.worktreeWarnings), plural(len(m.worktreeWarnings))), Severity: statusWarning}, true
 		}
+	case ModeASLRuns:
+		if m.aslErr != nil {
+			return statusMessage{Text: sentenceCase(m.aslErr.Error()), Severity: statusError}, true
+		}
+		if m.aslNotice != "" {
+			return statusMessage{Text: sentenceCase(m.aslNotice), Severity: statusWarning}, true
+		}
+		if aslView(m) == aslViewStale {
+			return statusMessage{Text: "Runs: read-only, showing the last snapshot", Severity: statusWarning}, true
+		}
+	case ModeASLResponse:
+		if m.aslResponse.notice != "" {
+			return statusMessage{Text: sentenceCase(m.aslResponse.notice), Severity: statusWarning}, true
+		}
 	}
 	return statusMessage{}, false
 }
@@ -238,8 +252,27 @@ func fallbackStatusText(m Model) string {
 			return fmt.Sprintf("Worktrees: %d managed", len(m.worktreeEntries))
 		}
 		return fmt.Sprintf("Worktrees: %d/%d visible", len(m.worktreeFiltered), len(m.worktreeEntries))
-	case ModeWorktreeSessionPicker:
-		return fmt.Sprintf("Choose live worktree session: %d candidate%s", len(m.worktreeSessionCandidates), plural(len(m.worktreeSessionCandidates)))
+	case ModeASLRuns:
+		switch aslView(m) {
+		case aslViewLoading:
+			return "Runs: loading"
+		case aslViewUnavailable:
+			return "Runs: agent-session-loop unavailable"
+		}
+		return fmt.Sprintf("Runs: %d need action / %d active", aslNeedsActionCount(m.aslRows), len(m.aslRows))
+	case ModeASLResponse:
+		if m.aslResponse.inFlight {
+			return "Runs: submitting"
+		}
+		if total := len(m.aslResponse.questionIDs); total > 1 {
+			return fmt.Sprintf("Runs: answering question %d of %d", m.aslResponse.questionIdx+1, total)
+		}
+		if m.aslResponse.kind == aslResponsePaused {
+			return "Runs: reply and resume"
+		}
+		return "Runs: reply"
+	case ModeLiveSessionPicker:
+		return fmt.Sprintf("Choose live session: %d candidate%s", len(m.livePickerCandidates), plural(len(m.livePickerCandidates)))
 	default:
 		return listStatusText(m)
 	}

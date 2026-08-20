@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 )
 
@@ -205,6 +206,9 @@ type Health struct {
 	Build          *buildinfo.Info
 	Metrics        *MetricsSnapshot
 	Notification   *NotificationCapability
+	// ASL is the optional agent-session-loop capability block. Nil means the
+	// daemon publishes no ASL integration at all.
+	ASL *aslbridge.Status
 }
 
 // Health pings the daemon and returns its liveness, PID and uptime. Never
@@ -227,6 +231,7 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		Build:          resp.Build,
 		Metrics:        resp.Metrics,
 		Notification:   resp.Notification,
+		ASL:            resp.ASLCapability,
 	}
 }
 

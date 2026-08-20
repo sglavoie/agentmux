@@ -10,7 +10,7 @@
     { "type": "key", "key": "enter" }
   ],
   "assertions": [
-    { "type": "mode_equals", "mode": "worktree_session_picker" },
+    { "type": "mode_equals", "mode": "live_session_picker" },
     { "type": "contains_text", "text": "Choose live session" },
     { "type": "no_layout_issues" }
   ]

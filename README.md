@@ -18,6 +18,8 @@ The binary is **`amx`**.
 - creates standalone handoff files and manages Git worktrees through safe reopen,
   cleanup, branch-retention, and metadata-recovery workflows,
 - syncs hook commands into each profile so tab icons track agent state,
+- answers, resumes, stops, and aborts in-flight `agent-session-loop` runs from
+  the `A` cockpit view,
 - keeps the current Kitty/daemon/tab-color workflow intact.
 
 ## Prerequisites
@@ -27,6 +29,10 @@ The binary is **`amx`**.
 - [`just`](https://github.com/casey/just) for the provided build/install tasks
 - [`alerter`](https://github.com/vjeantet/alerter) 26.x or newer on macOS when
   any native notification is enabled (`brew install vjeantet/tap/alerter`)
+- `agent-session-loop` (optional) for the `A` cockpit view. Without it, Agent
+  Mux behaves exactly as it did before the integration existed. Install or
+  upgrade it *before* upgrading Agent Mux; a bridge that is missing or speaks
+  an older protocol is reported as unavailable, never driven.
 
 Your `kitty.conf` must include:
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/handoff"
@@ -309,11 +310,56 @@ type Model struct {
 	worktreeSelectedID string
 	// Lifecycle detours retain a value copy of the selected row so refreshes
 	// cannot retarget a confirmation, live-session choice, or profile choice.
-	worktreeActionTarget      *actions.WorktreeView
-	worktreeActionInFlight    bool
-	worktreeSessionCandidates []actions.WorktreeLiveSession
-	worktreeSessionCursor     int
-	worktreeSessionOffset     int
+	worktreeActionTarget   *actions.WorktreeView
+	worktreeActionInFlight bool
+
+	// agent-session-loop runs view (ModeASLRuns). aslRows is the last snapshot
+	// projection sorted by urgency; refreshes keep the cached rows and the
+	// selected row_id so a poll landing under the cursor cannot move it.
+	// aslLoaded distinguishes "no snapshot yet" from "a snapshot with no rows",
+	// and aslStatus carries the daemon's availability verdict so the header can
+	// say unavailable instead of rendering a false empty state.
+	aslRows       []aslbridge.Row
+	aslMeta       aslbridge.SnapshotMeta
+	aslStatus     aslbridge.Status
+	aslCursor     int
+	aslOffset     int
+	aslSelectedID string
+	aslLoading    bool
+	aslLoaded     bool
+	aslErr        error
+	aslRefreshSeq int
+	// aslFocusTarget retains the row a focus detour was raised for, so an
+	// ambiguity choice cannot be retargeted by a refresh landing mid-detour.
+	aslFocusTarget string
+	// aslResponse is the answer form (ModeASLResponse). It owns the fetched
+	// question body and the operator's drafts and is zeroed wholesale on cancel,
+	// success, and mode exit.
+	aslResponse aslResponseState
+	// aslOperations is the bounded body-free receipt window shown next to the
+	// runs list, so an accepted submission can reach consumed after its form has
+	// already closed.
+	aslOperations []aslOperationView
+	// aslActionTarget retains the run a stop/abort confirmation was raised for,
+	// so a refresh landing under the overlay cannot retarget it.
+	aslActionTarget    *aslActionTarget
+	aslControlInFlight bool
+	aslControlSeq      int
+	// aslNotice explains the outcome of a deliberate action: a refusal, an
+	// invalidated target, or an accepted control command. It is kept apart from
+	// aslErr because aslErr also decides whether the held snapshot is
+	// trustworthy, and an action refusal says nothing about the snapshot.
+	aslNotice string
+
+	// Shared live-session ambiguity picker (ModeLiveSessionPicker). Any caller
+	// that resolves a target to more than one live Kitty session raises it;
+	// livePickerPurpose decides what Enter does and where Esc lands.
+	livePickerCandidates []actions.WorktreeLiveSession
+	livePickerCursor     int
+	livePickerOffset     int
+	livePickerPurpose    LivePickerPurpose
+	livePickerTitle      string
+	livePickerReturnMode Mode
 
 	// plan search view (ModePlanSearch). plansIndex is lazy-constructed on first
 	// entry and reused across refreshes. planResults holds the most recent
@@ -530,6 +576,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case worktreeActionDoneMsg:
 		return m.handleWorktreeActionDone(msg)
+
+	case aslSnapshotLoadedMsg:
+		return m.handleASLSnapshotLoaded(msg)
+
+	case aslWorkbenchDoneMsg:
+		return m.handleASLWorkbenchDone(msg)
+
+	case aslQuestionLoadedMsg:
+		return m.handleASLQuestionLoaded(msg)
+
+	case aslActionDoneMsg:
+		return m.handleASLActionDone(msg)
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)

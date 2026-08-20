@@ -62,6 +62,32 @@ confirm_destructive = false
 # created. Standalone handoffs, Git worktrees, and launch_overrides.json are
 # separate user assets and are never removed by cache maintenance.
 
+# Optional agent-session-loop (ASL) integration. The daemon starts
+# `<command> bridge serve --stdio --protocol 1` after its own socket is
+# published, so a missing or slow ASL never delays Agent Mux.
+#
+# Omitting `enabled` probes for ASL and stays quiet when it is absent. Setting
+# it to true additionally reports an unavailable integration through
+# `amx doctor`, without making the daemon itself unready. Setting it to false
+# never starts a subprocess at all.
+#
+# `command` must be a plain executable name or path: the daemon supplies the
+# arguments and never runs it through a shell. A value containing a space is
+# accepted only when it is an existing absolute path to an executable file.
+#
+# The whole section is optional. Omitting it entirely is the auto mode above,
+# so upgrading needs no config change: without ASL installed, Agent Mux behaves
+# exactly as it did before. Install or upgrade ASL first, then Agent Mux — an
+# older bridge is reported as unavailable rather than driven at a protocol it
+# does not speak.
+#
+# The integration powers the `A` runs view: answering questions, resuming,
+# stopping, and aborting runs that are already in flight. It never starts or
+# tails a loop, and it never records question or reply text. See docs/usage.md.
+[defaults.asl]
+# enabled = true
+# command = "asl"
+
 # Preview pane shown by the `p` keybinding. Direction chooses a side-by-side
 # split ("horizontal") or stacked split ("vertical"). Ratio is the fraction of
 # the terminal given to the preview. Refresh is in milliseconds while the

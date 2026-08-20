@@ -20,10 +20,12 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -59,6 +61,58 @@ type UITestDriver struct {
 	errMu      sync.Mutex
 	err        error
 	liveAccess uitestLiveAccessGuard
+
+	workbenchMu    sync.Mutex
+	workbenchOpens []UITestWorkbenchOpen
+
+	aslActionMu sync.Mutex
+	aslActions  []UITestASLAction
+}
+
+// UITestASLAction records one submitted agent-session-loop mutation. It carries
+// the target and the operation ID but never the operator's answer, so a test
+// that prints the recording cannot leak reply text.
+type UITestASLAction struct {
+	RowID       string
+	Method      string
+	OperationID string
+	QuestionID  string
+	ActionToken string
+}
+
+// ASLActions returns the mutations the model submitted, in order.
+func (d *UITestDriver) ASLActions() []UITestASLAction {
+	d.aslActionMu.Lock()
+	defer d.aslActionMu.Unlock()
+	return append([]UITestASLAction(nil), d.aslActions...)
+}
+
+func (d *UITestDriver) recordASLAction(action UITestASLAction) {
+	d.aslActionMu.Lock()
+	d.aslActions = append(d.aslActions, action)
+	d.aslActionMu.Unlock()
+}
+
+// UITestWorkbenchOpen records one attempted Workbench deep link. It carries the
+// row and the requested focus but no URL, because a fixture never mints a
+// tokenized link: the recording surface cannot leak a bearer token even if a
+// test prints it.
+type UITestWorkbenchOpen struct {
+	RowID string
+	Focus string
+}
+
+// WorkbenchOpens returns the Workbench deep links the model attempted, in order.
+func (d *UITestDriver) WorkbenchOpens() []UITestWorkbenchOpen {
+	d.workbenchMu.Lock()
+	defer d.workbenchMu.Unlock()
+	return append([]UITestWorkbenchOpen(nil), d.workbenchOpens...)
+}
+
+func (d *UITestDriver) recordWorkbenchOpen(open UITestWorkbenchOpen) {
+	d.workbenchMu.Lock()
+	d.workbenchOpens = append(d.workbenchOpens, open)
+	d.workbenchMu.Unlock()
 }
 
 type uitestLiveAccessGuard struct {
@@ -180,6 +234,30 @@ func hermeticModelBackgroundCommands() modelBackgroundCommands {
 				return worktreeActionDoneMsg{action: id, err: errors.New("uitest: live worktree action access is disabled")}
 			}
 		},
+		aslSnapshot: func(_ Model, seq int) tea.Cmd {
+			return func() tea.Msg {
+				return aslSnapshotLoadedMsg{seq: seq, status: aslbridge.Status{Reason: "uitest: live agent-session-loop access is disabled"}}
+			}
+		},
+		aslWorkbench: func(_ Model, rowID, _, focus string) tea.Cmd {
+			return func() tea.Msg {
+				return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
+			}
+		},
+		aslQuestion: func(_ Model, seq int, _, _ string) tea.Cmd {
+			return func() tea.Msg {
+				return aslQuestionLoadedMsg{seq: seq, err: errors.New("uitest: live agent-session-loop access is disabled")}
+			}
+		},
+		aslAction: func(_ Model, seq int, control bool, rowID string, req aslbridge.ActionRequest) tea.Cmd {
+			return func() tea.Msg {
+				return aslActionDoneMsg{
+					seq: seq, control: control, rowID: rowID, method: req.Method,
+					operationID: req.OperationID,
+					err:         errors.New("uitest: live agent-session-loop access is disabled"),
+				}
+			}
+		},
 	}
 }
 
@@ -208,6 +286,79 @@ func NewUITestFixtureDriver(fx UITestFixture, size UITestSize) (*UITestDriver, *
 	}
 	d.model.backgroundCommands.worktreeAction = func(_ Model, id actions.ID, request actions.Request) tea.Cmd {
 		return fixtureWorktreeActionCmd(client, &fixtureWorktrees, id, request)
+	}
+	fixtureRows := append([]aslbridge.Row(nil), fx.ASLRows...)
+	fixtureStatus := fx.ASLStatus
+	d.model.backgroundCommands.aslSnapshot = func(_ Model, seq int) tea.Cmd {
+		return func() tea.Msg {
+			if !fixtureStatus.Available {
+				return aslSnapshotLoadedMsg{seq: seq, status: fixtureStatus}
+			}
+			return aslSnapshotLoadedMsg{
+				seq:      seq,
+				snapshot: aslbridge.Snapshot{Rows: append([]aslbridge.Row(nil), fixtureRows...)},
+				meta:     aslbridge.SnapshotMeta{ReceivedAt: time.Now()},
+				status:   fixtureStatus,
+			}
+		}
+	}
+	d.model.backgroundCommands.aslWorkbench = func(_ Model, rowID, planDir, focus string) tea.Cmd {
+		return func() tea.Msg {
+			d.recordWorkbenchOpen(UITestWorkbenchOpen{RowID: rowID, Focus: focus})
+			if planDir == "" {
+				return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
+			}
+			return aslWorkbenchDoneMsg{rowID: rowID, focus: focus}
+		}
+	}
+	fixtureBodies := fx.ASLQuestionBodies
+	d.model.backgroundCommands.aslQuestion = func(_ Model, seq int, planDir, questionID string) tea.Cmd {
+		return func() tea.Msg {
+			body, ok := fixtureBodies[questionID]
+			if !ok {
+				return aslQuestionLoadedMsg{seq: seq, err: errors.New("no-open-question: fixture has no such question")}
+			}
+			if body.PlanDir == "" {
+				body.PlanDir = planDir
+			}
+			if body.QuestionID == "" {
+				body.QuestionID = questionID
+			}
+			return aslQuestionLoadedMsg{seq: seq, body: body}
+		}
+	}
+	fixtureOutcomes := fx.ASLActionOutcomes
+	d.model.backgroundCommands.aslAction = func(_ Model, seq int, control bool, rowID string, req aslbridge.ActionRequest) tea.Cmd {
+		return func() tea.Msg {
+			d.recordASLAction(UITestASLAction{
+				RowID:       rowID,
+				Method:      req.Method,
+				OperationID: req.OperationID,
+				QuestionID:  req.QuestionID,
+				ActionToken: req.ActionToken,
+			})
+			msg := aslActionDoneMsg{
+				seq: seq, control: control, rowID: rowID, method: req.Method,
+				operationID: req.OperationID, status: aslbridge.OperationAccepted,
+			}
+			// The fixture holds the token the real bridge would demand for this
+			// question, so a submission carrying a spent one is refused here
+			// rather than silently accepted.
+			if body, ok := fixtureBodies[req.QuestionID]; ok && req.ActionToken != body.ActionToken {
+				msg.err = errors.New(aslbridge.CodeStaleActionToken + ": fixture refusal")
+				return msg
+			}
+			if outcome, ok := fixtureOutcomes[req.Method]; ok {
+				if outcome.ErrorCode != "" {
+					msg.err = errors.New(outcome.ErrorCode + ": fixture refusal")
+					return msg
+				}
+				if outcome.Status != "" {
+					msg.status = outcome.Status
+				}
+			}
+			return msg
+		}
 	}
 	d.loadSessionsFrom(client, fx.Config)
 	return d, client

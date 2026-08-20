@@ -59,6 +59,8 @@ Key flows:
   project title, `r` filters by project (including `Unknown`), `Y` copies the
   full plan path, and the viewer wraps long lines, supports less-style
   `Ctrl+d/u/f/b` paging, and `y` copies the selected raw line
+- `A`: open the `agent-session-loop` runs view (the intervention cockpit); the
+  command palette lists it as **Show Runs**
 - `?`: show the full keymap
 
 The dashboard profile cycle is an `@profile` filter: it follows
@@ -84,7 +86,6 @@ loop while it is active, preserving existing state, star, and mute icons.
 Finished runs stop counting as active when loop discovery sees
 `run_finished_at` in `state.json`, and the `AgentSessionLoopFinished` hook
 clears active-class icons while reconciling the tab-title `🔁` marker.
-Run and tail loops outside the dashboard with `agent-session-loop` directly.
 
 The dashboard keeps the profile badge and harness metadata separate from the
 title column, so visible titles are just the project name.
@@ -98,6 +99,86 @@ The detail pane's event history persists through terminal hooks (`Stop`,
 review what a session did after its icon clears. History is held in memory per
 Kitty window and capped at 5 000 events (oldest dropped); it is released only
 when the window closes or the daemon restarts.
+
+## The agent-session-loop cockpit
+
+`A` opens the runs view: every active or actionable `agent-session-loop` run,
+newest need first. It is an *intervention* surface, not a loop runner. Agent Mux
+never starts, schedules, or tails a loop — start runs with `agent-session-loop`
+directly and use the cockpit to answer and steer the ones already in flight.
+
+Inside the runs view:
+
+- `j`/`k`, `g`/`G`, `Ctrl+d`/`Ctrl+u`, `Ctrl+f`/`Ctrl+b`: move the cursor
+- `r`: open the response form for the selected run
+- `s`: stop the run after the current session, after confirmation
+- `a`: abort the run, after confirmation
+- `w`: open the run's Workbench page in your browser
+- `f`: focus the Kitty window bound to the run
+- `Y`: copy the run's workspace root
+- `?`: show the keymap; `q`, `Esc`, or `A` returns to the dashboard
+
+The response form shows the question and the replies the run will accept.
+`Tab`/`Shift+Tab` moves between the editor and the buttons, `←`/`→` picks a
+button, `Enter` submits the focused button (and inserts a newline in the
+editor), `Ctrl+s` submits from anywhere, `Ctrl+n`/`Ctrl+p` step through a
+multi-question set, and `Esc` closes the form. A reply button that needs text
+refuses an empty draft rather than sending one.
+
+At 100 columns or wider the list shows state, label, session/phase, harness,
+age, and workspace root. Below that it drops to state, label, age, and reason,
+and moves session, harness, and workspace into the detail panel underneath.
+
+### Cockpit boundary
+
+The cockpit answers questions, resumes, stops, and aborts. Everything else —
+plan authoring, run scheduling, verification detail, per-session logs, and any
+configuration — lives in the Workbench, which `w` opens. Workbench URLs are
+minted per request, carry a single-use token, and are handed straight to the
+browser: Agent Mux never stores, caches, or logs one, so a failed open simply
+asks again rather than reusing a link.
+
+### Degraded behavior
+
+Agent Mux talks to one `agent-session-loop` bridge subprocess owned by the
+daemon. When that process is gone, the header shows `[unavailable]` and the list
+reads `(agent-session-loop is unavailable)` with a short sanitized reason.
+
+When the process is alive but the last snapshot has aged out, the header shows
+`[stale]` and a banner reads `read-only: showing the last agent-session-loop
+snapshot`. Reading keeps working; every action refuses immediately with
+`actions are unavailable: this snapshot is read-only` rather than sending a
+mutation whose outcome nobody can predict. The daemon restarts the bridge on a
+capped backoff and the view returns to `[live]` on its own. The same banner
+appears for the first few seconds after a daemon restart on a large plan corpus:
+a snapshot projects every discovered plan, and actions wait for the first one.
+
+Actions are also refused, each with its own message, when the daemon reports
+mutations disabled, when the selected run carries no action token, and when the
+run's own state has moved on — a plan that vanished, a run that already
+finished, a question answered somewhere else. Every action carries a token
+fingerprinting the state you were looking at; the bridge re-reads that state
+before writing and rejects a stale token without touching anything. Agent Mux
+never retries a mutation on your behalf. Refresh and reissue.
+
+### What the cockpit never keeps
+
+Question and reply text is fetched only to render the form you are looking at.
+It is never written into snapshots, caches, logs, the causal journal, hook
+events, toasts, `amx doctor`, or a debug bundle. The same holds for Workbench
+tokens. What *is* published about the integration is deliberately limited to
+counters and identities: whether the bridge is available, its version and
+protocol, its restart count, snapshot age, how many actions were accepted,
+consumed, rejected, expired, or superseded, and a sanitized failure reason that
+is reduced to a stable error code.
+
+### Recovery
+
+Start with `amx doctor --strict`, whose `asl:` line reports mode, executable,
+version, protocol, snapshot age, restart count, action outcomes, and the current
+reason. `amx daemon status` prints the same line. If the bridge is missing or
+too old, install or upgrade `agent-session-loop` first, then restart the daemon.
+`docs/operations.md` covers the individual failures.
 
 ## Launcher
 

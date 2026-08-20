@@ -68,17 +68,18 @@ func TestUITestObservationTracksModeCursor(t *testing.T) {
 // output never regresses to bare integers or drifts silently.
 func TestUITestObservationModeNames(t *testing.T) {
 	cases := map[Mode]string{
-		ModeList:                  "list",
-		ModeSearch:                "search",
-		ModeConfirm:               "confirm",
-		ModePicker:                "picker",
-		ModeConfigPicker:          "config_picker",
-		ModeHelp:                  "help",
-		ModeActions:               "actions",
-		ModeDetail:                "detail",
-		ModeCommandPalette:        "command_palette",
-		ModeWorktrees:             "worktrees",
-		ModeWorktreeSessionPicker: "worktree_session_picker",
+		ModeList:              "list",
+		ModeSearch:            "search",
+		ModeConfirm:           "confirm",
+		ModePicker:            "picker",
+		ModeConfigPicker:      "config_picker",
+		ModeHelp:              "help",
+		ModeActions:           "actions",
+		ModeDetail:            "detail",
+		ModeCommandPalette:    "command_palette",
+		ModeWorktrees:         "worktrees",
+		ModeLiveSessionPicker: "live_session_picker",
+		ModeASLRuns:           "asl_runs",
 	}
 	for mode, want := range cases {
 		if got := uitestModeName(mode); got != want {

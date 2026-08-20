@@ -1,0 +1,17 @@
+{
+  "name": "asl-abort-confirmation-fit",
+  "fixture": "asl_runs",
+  "size": { "width": 80, "height": 24 },
+  "actions": [
+    { "type": "key", "key": "A" },
+    { "type": "key", "key": "a" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "confirm" },
+    { "type": "contains_text", "text": "Abort the in-flight turn" },
+    { "type": "contains_text", "text": "120 seconds" },
+    { "type": "contains_text", "text": "degrades to" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
+    { "type": "no_layout_issues" }
+  ]
+}

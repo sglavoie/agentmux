@@ -52,8 +52,10 @@ func modalBoxRenderer(mode Mode) func(Model) string {
 		return renderChipPickerBox
 	case ModeCommandPalette:
 		return renderCommandPaletteBox
-	case ModeWorktreeSessionPicker:
-		return renderWorktreeSessionPickerBox
+	case ModeLiveSessionPicker:
+		return renderLiveSessionPickerBox
+	case ModeASLResponse:
+		return renderASLResponseBox
 	default:
 		return nil
 	}
@@ -150,7 +152,7 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 // content. The command palette deliberately wraps descriptions and disabled
 // reasons to the live content width, so its m.width-4 clamp is not overflow.
 func modalUsesResponsiveWidth(mode Mode) bool {
-	return mode == ModeCommandPalette || mode == ModeWorktreeSessionPicker
+	return mode == ModeCommandPalette || mode == ModeLiveSessionPicker || mode == ModeASLResponse
 }
 
 // popupLineCount returns the number of rows a popup box occupies, matching the

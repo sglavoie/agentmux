@@ -41,6 +41,12 @@ func renderConfirm(m Model) string {
 	case "worktree forget":
 		verb = "Forget worktree metadata"
 		title = worktreeConfirmationTitle(m.worktreeActionTarget)
+	case aslConfirmStop:
+		verb = "Stop after the current session"
+		title = aslConfirmationTitle(m.aslActionTarget)
+	case aslConfirmAbort:
+		verb = "Abort the in-flight turn"
+		title = aslConfirmationTitle(m.aslActionTarget)
 	default:
 		verb = m.confirmAction
 	}
@@ -53,6 +59,19 @@ func renderConfirm(m Model) string {
 		sb.WriteByte('\n')
 	}
 	return sb.String()
+}
+
+// aslConfirmationTitle names the captured run. It reads the capture rather than
+// the current selection, so the overlay keeps describing what the operator
+// reviewed even if a refresh moves the list underneath it.
+func aslConfirmationTitle(target *aslActionTarget) string {
+	if target == nil {
+		return "selected run"
+	}
+	if strings.TrimSpace(target.Label) != "" {
+		return target.Label
+	}
+	return target.RowID
 }
 
 func worktreeConfirmationTitle(target *actions.WorktreeView) string {

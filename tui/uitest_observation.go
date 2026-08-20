@@ -44,8 +44,12 @@ func uitestCursor(m Model) int {
 		return m.commandCursor
 	case ModeWorktrees:
 		return m.worktreeCursor
-	case ModeWorktreeSessionPicker:
-		return m.worktreeSessionCursor
+	case ModeLiveSessionPicker:
+		return m.livePickerCursor
+	case ModeASLRuns:
+		return m.aslCursor
+	case ModeASLResponse:
+		return m.aslResponse.questionIdx
 	default:
 		return m.cursor
 	}
@@ -90,8 +94,12 @@ func uitestModeName(mode Mode) string {
 		return "plan_view"
 	case ModeCommandPalette:
 		return "command_palette"
-	case ModeWorktreeSessionPicker:
-		return "worktree_session_picker"
+	case ModeLiveSessionPicker:
+		return "live_session_picker"
+	case ModeASLRuns:
+		return "asl_runs"
+	case ModeASLResponse:
+		return "asl_response"
 	default:
 		return "unknown"
 	}

@@ -56,7 +56,8 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	scrollPlanViewerToCursor(&m)
 	scrollChipPickerToCursor(&m)
 	scrollWorktreesToCursor(&m)
-	scrollWorktreeSessionsToCursor(&m)
+	scrollLivePickerToCursor(&m)
+	scrollASLToCursor(&m)
 	if len(cmds) > 0 {
 		return m, tea.Batch(cmds...)
 	}

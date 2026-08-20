@@ -157,7 +157,7 @@ func renderListAt(m Model, width, height int) string {
 		}
 		var activeLoopCell string
 		if activeLoopActive {
-			activeLoopCell = renderActiveLoopCell(s.Looping)
+			activeLoopCell = renderLoopCellFor(m, s)
 		}
 		tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
 		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, tabNumberCell, activeLoopCell, ageCell)
@@ -264,8 +264,22 @@ func anyVisibleRowHasActiveLoop(m Model, startIdx, endIdx int) bool {
 		if m.filtered[i].Looping {
 			return true
 		}
+		if _, ok := aslMarkerFor(m, m.filtered[i]); ok {
+			return true
+		}
 	}
 	return false
+}
+
+// renderLoopCellFor prefers the ASL state marker when the run is exactly bound
+// to this session, and otherwise keeps the daemon's own loop marker. A guessed
+// association would put a wrong state next to a session, so a row that ASL
+// cannot positively identify keeps the marker it already had.
+func renderLoopCellFor(m Model, s session.RunningSession) string {
+	if marker, ok := aslMarkerFor(m, s); ok {
+		return displayPadRight(marker, activeLoopColumnWidth)
+	}
+	return renderActiveLoopCell(s.Looping)
 }
 
 func renderActiveLoopCell(active bool) string {

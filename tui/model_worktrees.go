@@ -490,7 +490,7 @@ func (m Model) handleWorktreeReopenDone(msg worktreeActionDoneMsg) (tea.Model, t
 }
 
 func (m *Model) openWorktreeSessionPicker(candidates []actions.Candidate) {
-	m.worktreeSessionCandidates = nil
+	var resolved []actions.WorktreeLiveSession
 	if m.worktreeActionTarget != nil {
 		byID := make(map[string]actions.WorktreeLiveSession, len(m.worktreeActionTarget.LiveSessions))
 		for _, candidate := range m.worktreeActionTarget.LiveSessions {
@@ -498,16 +498,27 @@ func (m *Model) openWorktreeSessionPicker(candidates []actions.Candidate) {
 		}
 		for _, candidate := range candidates {
 			if live, ok := byID[candidate.ID]; ok {
-				m.worktreeSessionCandidates = append(m.worktreeSessionCandidates, live)
+				resolved = append(resolved, live)
 			} else {
-				m.worktreeSessionCandidates = append(m.worktreeSessionCandidates, actions.WorktreeLiveSession{ID: candidate.ID, Project: candidate.DisplayName, Directory: candidate.CanonicalPath})
+				resolved = append(resolved, actions.WorktreeLiveSession{ID: candidate.ID, Project: candidate.DisplayName, Directory: candidate.CanonicalPath})
 			}
 		}
 	}
-	m.worktreeSessionCursor = 0
-	m.worktreeSessionOffset = 0
+	m.openLiveSessionPicker(LivePickerWorktreeReopen, ModeWorktrees, worktreeConfirmationTitle(m.worktreeActionTarget), resolved)
+}
+
+// openLiveSessionPicker raises the shared ambiguity picker. The caller supplies
+// the mode Esc lands on, so a detour can never strand the operator in a view
+// they did not open.
+func (m *Model) openLiveSessionPicker(purpose LivePickerPurpose, returnMode Mode, title string, candidates []actions.WorktreeLiveSession) {
+	m.livePickerCandidates = candidates
+	m.livePickerPurpose = purpose
+	m.livePickerReturnMode = returnMode
+	m.livePickerTitle = title
+	m.livePickerCursor = 0
+	m.livePickerOffset = 0
 	m.actionErr = nil
-	m.mode = ModeWorktreeSessionPicker
+	m.mode = ModeLiveSessionPicker
 }
 
 func (m *Model) openWorktreeProfilePicker() {
@@ -533,44 +544,54 @@ func sessionForWorktreePicker(target *actions.WorktreeView) session.RunningSessi
 	return session.RunningSession{Base: target.ProjectLabel, Project: target.ProjectLabel, Profile: target.Profile, Harness: target.Harness, Directory: target.Path}
 }
 
-func (m Model) handleWorktreeSessionPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleLiveSessionPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyEsc, keyQ:
-		m.mode = ModeWorktrees
-		m.worktreeSessionCandidates = nil
-		m.worktreeActionTarget = nil
+		chosen := m.livePickerPurpose
+		m.mode = m.livePickerReturnMode
+		m.livePickerCandidates = nil
+		m.livePickerTitle = ""
+		if chosen == LivePickerWorktreeReopen {
+			m.worktreeActionTarget = nil
+		}
 		return m, nil
 	case keyJ, keyDown:
-		m.worktreeSessionCursor = clamp(m.worktreeSessionCursor+1, 0, len(m.worktreeSessionCandidates)-1)
+		m.livePickerCursor = clamp(m.livePickerCursor+1, 0, len(m.livePickerCandidates)-1)
 	case keyK, keyUp:
-		m.worktreeSessionCursor = clamp(m.worktreeSessionCursor-1, 0, len(m.worktreeSessionCandidates)-1)
+		m.livePickerCursor = clamp(m.livePickerCursor-1, 0, len(m.livePickerCandidates)-1)
 	case keyEnter:
-		if m.worktreeSessionCursor < 0 || m.worktreeSessionCursor >= len(m.worktreeSessionCandidates) {
+		if m.livePickerCursor < 0 || m.livePickerCursor >= len(m.livePickerCandidates) {
 			return m, nil
 		}
-		id := m.worktreeSessionCandidates[m.worktreeSessionCursor].ID
-		m.worktreeSessionCandidates = nil
-		return m.reopenWorktreeWithParameters(map[string]string{"session": id})
+		chosen := m.livePickerCandidates[m.livePickerCursor]
+		purpose := m.livePickerPurpose
+		m.mode = m.livePickerReturnMode
+		m.livePickerCandidates = nil
+		m.livePickerTitle = ""
+		if purpose == LivePickerASLFocus {
+			return m, focusCmd(m.client, chosen.TabID)
+		}
+		return m.reopenWorktreeWithParameters(map[string]string{"session": chosen.ID})
 	}
-	scrollWorktreeSessionsToCursor(&m)
+	scrollLivePickerToCursor(&m)
 	return m, nil
 }
 
-func scrollWorktreeSessionsToCursor(m *Model) {
-	total := len(m.worktreeSessionCandidates)
-	visible := worktreeSessionVisibleRows(*m)
+func scrollLivePickerToCursor(m *Model) {
+	total := len(m.livePickerCandidates)
+	visible := livePickerVisibleRows(*m)
 	if total == 0 || visible <= 0 {
-		m.worktreeSessionOffset = 0
+		m.livePickerOffset = 0
 		return
 	}
-	m.worktreeSessionCursor = clamp(m.worktreeSessionCursor, 0, total-1)
-	if m.worktreeSessionCursor < m.worktreeSessionOffset {
-		m.worktreeSessionOffset = m.worktreeSessionCursor
+	m.livePickerCursor = clamp(m.livePickerCursor, 0, total-1)
+	if m.livePickerCursor < m.livePickerOffset {
+		m.livePickerOffset = m.livePickerCursor
 	}
-	if m.worktreeSessionCursor >= m.worktreeSessionOffset+visible {
-		m.worktreeSessionOffset = m.worktreeSessionCursor - visible + 1
+	if m.livePickerCursor >= m.livePickerOffset+visible {
+		m.livePickerOffset = m.livePickerCursor - visible + 1
 	}
 }
 

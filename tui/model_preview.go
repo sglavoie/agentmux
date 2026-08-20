@@ -32,9 +32,11 @@ func (m Model) render() string {
 		sb.WriteString(renderSessionSearch(m))
 	case ModeWorktrees:
 		sb.WriteString(renderWorktrees(m))
-	case ModeWorktreeSessionPicker:
-		base := renderWorktrees(m)
-		popup := renderWorktreeSessionPickerBox(m)
+	case ModeASLRuns:
+		sb.WriteString(renderASLRuns(m))
+	case ModeLiveSessionPicker:
+		base := rootBaseView(m)
+		popup := renderLiveSessionPickerBox(m)
 		sb.WriteString(centerOverlay(base, popup, m.width, rootBodyHeight(m), true))
 	case ModePlanSearch:
 		// Plan search owns its full layout — like ModeSessionSearch, the
@@ -67,7 +69,7 @@ func (m Model) render() string {
 		}
 		overlayH := rootBodyHeight(m)
 		sb.WriteString(centerOverlay(base, popup, m.width, overlayH, true))
-	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeCommandPalette:
+	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeCommandPalette, ModeASLResponse:
 		var base string
 		switch {
 		case m.mode == ModeConfigPicker && m.configPickerReturnMode == ModePicker:
@@ -75,11 +77,7 @@ func (m Model) render() string {
 		case m.mode == ModeHelp:
 			base = helpBaseView(m)
 		default:
-			if m.activeRootMode() == ModeWorktrees {
-				base = renderWorktrees(m)
-			} else {
-				base = renderDashboard(m)
-			}
+			base = rootBaseView(m)
 		}
 		var popup string
 		switch m.mode {
@@ -95,6 +93,8 @@ func (m Model) render() string {
 			popup = renderDetailBox(m)
 		case ModeCommandPalette:
 			popup = renderCommandPaletteBox(m)
+		case ModeASLResponse:
+			popup = renderASLResponseBox(m)
 		}
 		overlayH := rootBodyHeight(m)
 		if m.mode == ModeConfigPicker {
@@ -126,6 +126,20 @@ func (m Model) render() string {
 	}
 
 	return composeRootView(sb.String(), m)
+}
+
+// rootBaseView renders the full-layout view that currently owns the screen, so
+// an overlay raised from Worktrees or Runs dims that view rather than the
+// dashboard the operator is not looking at.
+func rootBaseView(m Model) string {
+	switch m.activeRootMode() {
+	case ModeWorktrees:
+		return renderWorktrees(m)
+	case ModeASLRuns:
+		return renderASLRuns(m)
+	default:
+		return renderDashboard(m)
+	}
 }
 
 func composeRootView(body string, m Model) string {

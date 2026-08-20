@@ -4,6 +4,8 @@ package tui
 const (
 	keyUp                   = "up"
 	keyDown                 = "down"
+	keyLeft                 = "left"
+	keyRight                = "right"
 	keyJ                    = "j"
 	keyK                    = "k"
 	keyG                    = "g"
@@ -41,6 +43,11 @@ const (
 	keySessionSearch        = "S" // opens ModeSessionSearch (past harness transcripts)
 	keyPlanSearch           = "P" // opens ModePlanSearch (past agent plans)
 	keyWorktrees            = "W" // opens ModeWorktrees (managed Git worktrees)
+	keyASLRuns              = "A" // toggles ModeASLRuns (agent-session-loop runs)
+	keyASLWorkbench         = "w" // ModeASLRuns: open the run's Workbench deep link
+	keyASLRespond           = "r" // ModeASLRuns: open the response/resume form for the run
+	keyASLStop              = "s" // ModeASLRuns: confirm stop after the current session
+	keyASLAbort             = "a" // ModeASLRuns: confirm aborting the in-flight turn
 	keyDeleteWorktreeBranch = "D" // ModeWorktrees: remove checkout and safely delete merged branch
 	keyForgetWorktree       = "F" // ModeWorktrees: forget missing or invalid sidecar metadata
 	keyPinProject           = "P" // ModePicker: pin/unpin the highlighted configured project
@@ -75,6 +82,7 @@ const (
 	keyCtrlK  = "ctrl+k" // move up in searchable command menus
 	keyCtrlN  = "ctrl+n" // move down in searchable command menus
 	keyCtrlP  = "ctrl+p" // move up in searchable command menus
+	keyCtrlS  = "ctrl+s" // submit a multi-line editor whose Enter inserts a newline
 
 	keyTogglePreview = "p" // toggles the split-pane live preview
 

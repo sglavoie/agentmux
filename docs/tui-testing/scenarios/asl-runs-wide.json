@@ -1,0 +1,19 @@
+{
+  "name": "asl-runs-wide",
+  "fixture": "asl_runs",
+  "size": { "width": 132, "height": 34 },
+  "actions": [
+    { "type": "key", "key": "A" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "asl_runs" },
+    { "type": "contains_text", "text": "3 need action" },
+    { "type": "contains_text", "text": "api-refactor" },
+    { "type": "contains_text", "text": "gateway-upgrade" },
+    { "type": "contains_text", "text": "sess-dotfiles" },
+    { "type": "contains_text", "text": "codex" },
+    { "type": "excludes_text", "text": "unavailable" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -61,9 +61,11 @@ func TestDebugJSONCommandSurfaceIsVersioned(t *testing.T) {
 
 	// Additive fields carried by existing schema versions (no bump required):
 	// status/tail v2 health gained `earliest_observed_at`, the shared
-	// `journal_snapshot` object gained `promoted_spool_files_read`, and the
+	// `journal_snapshot` object gained `promoted_spool_files_read`, the
 	// status v2 hooks report gained `delivery_failures` {count, latest_at}
-	// beside the stable `hook_delivery_failures` warning finding.
+	// beside the stable `hook_delivery_failures` warning finding, and the
+	// bundle v2 `doctor.json` member gained the optional `daemon.asl`
+	// capability block, which a daemon without the integration omits entirely.
 	schemas := []struct {
 		name          string
 		version, want int

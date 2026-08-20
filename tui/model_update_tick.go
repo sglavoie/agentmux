@@ -26,6 +26,14 @@ func (m Model) handleTick(msg tickMsg) (tea.Model, tea.Cmd) {
 	if m.mode == ModeDetail && m.detailWindowID != 0 {
 		cmds = append(cmds, m.runSessionDetailCmd(m.detailWindowID))
 	}
+	// The Runs view polls on the shared tick rather than owning a refresh key,
+	// so a snapshot arriving under the cursor cannot change modes or selection.
+	if m.activeRootMode() == ModeASLRuns {
+		m.captureASLSelection()
+		m.aslLoading = true
+		m.aslRefreshSeq++
+		cmds = append(cmds, m.runASLSnapshotCmd(m.aslRefreshSeq))
+	}
 	return m, tea.Batch(cmds...)
 }
 

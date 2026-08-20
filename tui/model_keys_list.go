@@ -2,6 +2,8 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/sglavoie/agentmux/internal/aslbridge"
 )
 
 // handleKey dispatches key events by current mode.
@@ -35,8 +37,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleMessageDetailKey(msg)
 	case ModeWorktrees:
 		return m.handleWorktreesKey(msg)
-	case ModeWorktreeSessionPicker:
-		return m.handleWorktreeSessionPickerKey(msg)
+	case ModeASLRuns:
+		return m.handleASLRunsKey(msg)
+	case ModeASLResponse:
+		return m.handleASLResponseKey(msg)
+	case ModeLiveSessionPicker:
+		return m.handleLiveSessionPickerKey(msg)
 	case ModeDeleteChoice:
 		return m.handleDeleteChoiceKey(msg)
 	case ModeChipPicker:
@@ -134,10 +140,15 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.confirmedWorktreeMutation(true)
 		case "worktree forget":
 			return m.confirmedWorktreeForget()
+		case aslConfirmStop:
+			return m.submitASLControl(aslbridge.MethodRunStopAfterCurrent)
+		case aslConfirmAbort:
+			return m.submitASLControl(aslbridge.MethodRunAbort)
 		}
 	case keyN, keyEsc:
 		m.isolatedForkConversation = nil
 		m.worktreeActionTarget = nil
+		m.aslActionTarget = nil
 		m.mode = m.confirmReturnMode
 		if m.mode == ModeConfirm {
 			m.mode = ModeList

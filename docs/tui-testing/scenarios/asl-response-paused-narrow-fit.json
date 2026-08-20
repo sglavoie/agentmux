@@ -1,0 +1,18 @@
+{
+  "name": "asl-response-paused-narrow-fit",
+  "fixture": "asl_runs",
+  "size": { "width": 60, "height": 18 },
+  "actions": [
+    { "type": "key", "key": "A" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "r" },
+    { "type": "text", "text": "resume with the rehearsal plan" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "asl_response" },
+    { "type": "contains_text", "text": "Reply and resume" },
+    { "type": "excludes_text", "text": "Continue" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
+    { "type": "no_layout_issues" }
+  ]
+}

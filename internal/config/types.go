@@ -63,6 +63,29 @@ type Defaults struct {
 	Jump                 JumpConfig           `toml:"jump"`            // bracket-key (]/[ and }/{) attention-state navigation
 	Editor               string               `toml:"editor"`          // overrides $VISUAL/$EDITOR for the `O` keybinding (Open in editor)
 	PlansDirectory       string               `toml:"plans_directory"` // root for the `P` keybinding's plans index; defaults to ~/.local/share/agent-plans
+	ASL                  ASLConfig            `toml:"asl"`             // optional agent-session-loop bridge integration
+}
+
+// ASLConfig controls the optional agent-session-loop bridge. Enabled is a
+// pointer boolean because the three states are observably different: omitted
+// probes and stays quiet when ASL is absent, explicit true reports an
+// unavailable integration, and explicit false never starts a subprocess at all.
+type ASLConfig struct {
+	Enabled *bool  `toml:"enabled"`
+	Command string `toml:"command"`
+}
+
+// ASLModeValue reports the tri-state as one of "auto", "required", or
+// "disabled".
+func (a ASLConfig) ASLModeValue() string {
+	switch {
+	case a.Enabled == nil:
+		return "auto"
+	case *a.Enabled:
+		return "required"
+	default:
+		return "disabled"
+	}
 }
 
 // DiagnosticsConfig controls private diagnostic persistence. Pointer booleans

@@ -264,6 +264,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.PlansDirectory == "" {
 		cfg.Defaults.PlansDirectory = "~/.local/share/agent-plans"
 	}
+	if strings.TrimSpace(cfg.Defaults.ASL.Command) == "" {
+		cfg.Defaults.ASL.Command = "asl"
+	}
 
 	normalizeAliases(cfg)
 }

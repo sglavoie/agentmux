@@ -27,6 +27,14 @@ scenario. `just check` adds the repository linter and is the final local/CI
 gate. The end-to-end coverage map is documented in
 [`docs/acceptance.md`](acceptance.md).
 
+`just asl-integration` is separate and opt-in. Every other recipe is hermetic
+and needs no `agent-session-loop` installed; this one launches the real bridge
+against a throwaway plan and state root and checks the handshake, capabilities,
+snapshot decoding, action and receipt shapes, the Workbench URL shape, and a
+clean shutdown. When it is asked for, a missing or protocol-incompatible ASL
+fails it rather than skipping — a silent skip would report a compatible pair
+that was never actually checked.
+
 ### Live Kitty worktree smoke checklist
 
 The automated gate uses hermetic Kitty and Git fixtures. Before a release, run
@@ -59,6 +67,42 @@ directly:
 ```bash
 amx tui-test run docs/tui-testing/scenarios/*.json
 ```
+
+## agent-session-loop rollout
+
+The daemon speaks bridge protocol 1 to one `agent-session-loop` subprocess.
+**Release and install ASL first, then Agent Mux.** The bridge is the older,
+more widely installed half; upgrading it first means the new Agent Mux finds a
+bridge it can talk to on the first start. The reverse order is safe but inert:
+an ASL that predates the bridge is reported as unavailable and the cockpit is
+read-only until it is upgraded.
+
+There is no migration. Omitting `[defaults.asl]` entirely is auto mode: the
+daemon probes once, stays quiet when ASL is absent, and every pre-existing
+Agent Mux behavior — including the `🔁` loop marker and ASL lease handling,
+which read loop state from disk and do not use the bridge — is unchanged. Set
+`enabled = true` only when you want an unavailable integration to surface as a
+`amx doctor` finding, and `enabled = false` to never start the subprocess.
+
+The capability block is additive on the wire. An older `amx` ignores the `asl`
+key in a newer daemon's health response, and a newer `amx` against an older
+daemon prints `asl: unreported (older daemon)` instead of failing.
+
+### Deferred
+
+These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
+
+- **Plans readiness and launch.** Agent Mux does not evaluate whether a plan is
+  ready to run, and does not start runs. Use `asl prepare` and `asl run`.
+- **Unified diagnostics bundle.** `amx debug bundle` carries the ASL capability
+  block via `doctor.json` only. ASL's own diagnostics are not collected into
+  the same archive.
+- **Worktree-registry binding.** Runs are matched to managed worktrees by
+  canonicalized workspace path, not by a shared registry identity.
+- **Assurance inbox.** Verification findings are visible in the Workbench, not
+  as an Agent Mux queue.
+- **Model and profile brokering.** ASL chooses its own harness and model;
+  Agent Mux profiles do not override what a run launches.
 
 ## Troubleshooting
 
@@ -164,6 +208,42 @@ amx tui-test run docs/tui-testing/scenarios/*.json
   `amx doctor` reports known Kitty sockets and renderer drift; a `fd:` value or
   render failures indicate a stale binary — `just install` then
   `amx daemon restart`.
+- **The `A` view says `agent-session-loop is unavailable`**: read the `asl:` line
+  from `amx doctor` or `amx daemon status`. It names the mode, the resolved
+  executable, the negotiated version and protocol, snapshot age, restart count,
+  action outcomes, and a sanitized reason. `mode disabled` means
+  `[defaults.asl] enabled = false`. A mode line with no executable means the
+  configured `command` is not on the daemon's `PATH` — the daemon's environment,
+  not your shell's. A nonzero restart count with a reason means the bridge is
+  crashing; ASL's own stderr is captured in the daemon log, and the daemon
+  retries on a capped backoff without further action.
+- **The `A` view is stuck read-only / `[stale]`**: the bridge process is alive
+  but its last snapshot aged out, so reads continue and every action refuses
+  rather than sending a mutation with an unpredictable outcome. This clears
+  itself once a fresh snapshot arrives. If it does not, the restart count in the
+  `asl:` line is the thing to watch: a climbing count is a crashing bridge, a
+  frozen count with a growing snapshot age is a hung one. `amx daemon restart`
+  replaces the subprocess. Read-only for the first several seconds after a
+  restart is expected rather than a fault: a snapshot projects every discovered
+  plan, so on a corpus of several hundred the first one takes seconds, and
+  actions stay disabled until it lands.
+- **An action was refused with a code**: the codes are stable and each names a
+  distinct race. `stale-action-token` means the plan or run moved between the
+  snapshot you read and the action you sent; `invalid-plan`, `no-active-run`,
+  `run-mismatch`, `no-open-question`, and `question-mismatch` each name what
+  moved. All of them are resolved the same way: let the view refresh and reissue.
+  Agent Mux never resubmits a mutation on its own, because a bridge that
+  accepted a write and then died leaves an outcome nobody can infer.
+- **`w` does not open the Workbench**: the link is minted per request and never
+  cached, so a failure is always current, not stale. `workbench-unavailable`
+  means ASL could not bind or start the server; check whether another Workbench
+  is already bound. `no supported URL opener on this platform` means Agent Mux
+  found no `open`/`xdg-open` equivalent. Only `http`/`https` URLs are opened.
+- **A debug bundle needs to be shared**: the ASL block in `doctor.json` carries
+  availability, version, protocol, restart count, snapshot age, per-method
+  request counts, and action outcome counts. It carries no plan path, run ID,
+  question ID, question or reply text, and no Workbench token; bridge-supplied
+  failure messages are reduced to their stable error code before publication.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`

@@ -34,6 +34,8 @@ func helpBaseView(m Model) string {
 		return renderPlanView(m)
 	case ModeWorktrees:
 		return renderWorktrees(m)
+	case ModeASLRuns:
+		return renderASLRuns(m)
 	default:
 		return renderDashboard(m)
 	}
@@ -114,6 +116,7 @@ var helpSections = []struct {
 		"  S         search past session transcripts",
 		"  P         search saved plans (from dashboard)",
 		"  W         manage Git worktrees",
+		"  A         show agent-session-loop runs",
 		"  q         quit",
 		"  ctrl+c    quit",
 	}},
@@ -149,6 +152,9 @@ var helpPaletteSections = []struct {
 	}},
 	{"Worktrees", []helpPalette{
 		{"browser", worktreesFooterPalette},
+	}},
+	{"Runs", []helpPalette{
+		{"runs", aslRunsFooterPalette},
 	}},
 }
 

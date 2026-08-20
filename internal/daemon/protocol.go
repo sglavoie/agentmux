@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 )
 
@@ -16,6 +17,14 @@ const (
 	TypeEventsExport    MessageType = "events_export"
 	TypeShutdown        MessageType = "shutdown"
 	TypeHealth          MessageType = "health"
+
+	// ASL bridge requests. They are answered from daemon memory or forwarded to
+	// the bridge subprocess; every one of them fails cleanly when the optional
+	// integration is disabled or unavailable.
+	TypeASLSnapshot  MessageType = "asl_snapshot"
+	TypeASLQuestion  MessageType = "asl_question"
+	TypeASLAction    MessageType = "asl_action"
+	TypeASLWorkbench MessageType = "asl_workbench"
 
 	// IconStatePreserve signals the client to keep the current icon unchanged.
 	IconStatePreserve = "preserve"
@@ -204,6 +213,40 @@ type Request struct {
 	// bounded by hookevent decoding. It reaches the TUI detail view through
 	// SessionEvent only and is deliberately never folded into reducer facts.
 	QuestionPreview string `json:"question_preview,omitempty"`
+	// ASL carries the typed parameters of an ASL bridge request. It is a
+	// separate struct rather than more flat fields so no ASL parameter can be
+	// confused with hook-event state by a generic consumer.
+	ASL *ASLRequest `json:"asl,omitempty"`
+}
+
+// ASLRequest is the typed parameter block for the ASL message types. Text is
+// operator-authored reply prose: it is a SecretText so no formatter, log line,
+// or journal record can render it.
+type ASLRequest struct {
+	Method      string               `json:"method,omitempty"`
+	PlanDir     string               `json:"plan_dir,omitempty"`
+	RowID       string               `json:"row_id,omitempty"`
+	RunID       string               `json:"run_id,omitempty"`
+	QuestionID  string               `json:"question_id,omitempty"`
+	OperationID string               `json:"operation_id,omitempty"`
+	ActionToken string               `json:"action_token,omitempty"`
+	Resolution  string               `json:"resolution,omitempty"`
+	Note        string               `json:"note,omitempty"`
+	Focus       string               `json:"focus,omitempty"`
+	Text        aslbridge.SecretText `json:"text,omitempty"`
+}
+
+// ASLResponse carries whichever typed result the requested ASL method produces.
+// Status accompanies every reply so a client can render availability and
+// staleness without a second round trip.
+type ASLResponse struct {
+	Status    aslbridge.Status         `json:"status"`
+	Snapshot  *aslbridge.Snapshot      `json:"snapshot,omitempty"`
+	Meta      *aslbridge.SnapshotMeta  `json:"meta,omitempty"`
+	Receipts  []aslbridge.Operation    `json:"receipts,omitempty"`
+	Question  *aslbridge.QuestionBody  `json:"question,omitempty"`
+	Operation *aslbridge.Operation     `json:"operation,omitempty"`
+	Workbench *aslbridge.WorkbenchLink `json:"workbench,omitempty"`
 }
 
 // Response is a JSON message sent by the daemon back to the client.
@@ -246,6 +289,12 @@ type Response struct {
 	// Notification is omitted by older daemons. New daemons publish the
 	// startup-selected backend capability independently of global readiness.
 	Notification *NotificationCapability `json:"notification,omitempty"`
+	// ASLCapability is the optional agent-session-loop integration block. It is
+	// omitted entirely by daemons built without the integration configured, and
+	// its unavailability never affects Ready.
+	ASLCapability *aslbridge.Status `json:"asl,omitempty"`
+	// ASL is populated for the ASL message types.
+	ASL *ASLResponse `json:"asl_result,omitempty"`
 	// Ready reports whether the daemon completed its bounded initial restore
 	// before binding the public socket, or — after a degraded start — later
 	// recovered when a maintenance tick restored durable state from a

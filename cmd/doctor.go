@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -61,6 +62,7 @@ type doctorDaemonStatus struct {
 	Build          *buildinfo.Info                `json:"build,omitempty"`
 	Metrics        *daemon.MetricsSnapshot        `json:"metrics,omitempty"`
 	Notification   *daemon.NotificationCapability `json:"notification,omitempty"`
+	ASL            *aslbridge.Status              `json:"asl,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -116,6 +118,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		Build:          health.Build,
 		Metrics:        health.Metrics,
 		Notification:   health.Notification,
+		ASL:            health.ASL,
 	}
 	if health.Alive {
 		if _, err := fmt.Fprintf(textOut, "daemon: running (pid %d, uptime %s)\n", health.PID, health.Uptime.Round(time.Second)); err != nil {
@@ -132,6 +135,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	}
 	if health.Alive {
 		if err := writeDoctorNotificationCapability(textOut, health.Notification, addFinding); err != nil {
+			return err
+		}
+		if err := writeDoctorASLCapability(textOut, health.ASL, addFinding); err != nil {
 			return err
 		}
 	}

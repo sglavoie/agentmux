@@ -10,7 +10,7 @@
     { "type": "key", "key": "enter" }
   ],
   "assertions": [
-    { "type": "mode_equals", "mode": "worktree_session_picker" },
+    { "type": "mode_equals", "mode": "live_session_picker" },
     { "type": "contains_text", "text": "candidate 81" },
     { "type": "contains_text", "text": "native-multi-81" },
     { "type": "contains_text", "text": "personal/codex" },

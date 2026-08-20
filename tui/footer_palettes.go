@@ -1,6 +1,10 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/sglavoie/agentmux/internal/aslbridge"
+)
 
 // Per-mode footer palettes for the Past Sessions and Plans views. Each palette
 // is a flat, declaration-ordered list: footerHintLines renders it into at most
@@ -151,6 +155,81 @@ var worktreesFooterPalette = []footerEntry{
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
 	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
+}
+
+var aslRunsFooterPalette = []footerEntry{
+	{"f", "focus", footerSectionRow, aslFocusAvailable, footerPriorityEssential},
+	{"r", "respond", footerSectionRow, aslRespondAvailable, footerPriorityEssential},
+	{"s", "stop", footerSectionRow, aslStopAvailable, footerPriorityPrimary},
+	{"a", "abort", footerSectionRow, aslAbortAvailable, footerPriorityPrimary},
+	{"w", "workbench", footerSectionRow, aslWorkbenchAvailable, footerPriorityPrimary},
+	{"Y", "path", footerSectionRow, func(m Model) bool {
+		row, ok := m.selectedASLRow()
+		return ok && row.WorkspaceRoot != ""
+	}, footerPrioritySecondary},
+	{"?", "help", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
+	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
+	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
+	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
+}
+
+// aslRespondAvailable, aslStopAvailable, and aslAbortAvailable read exactly the
+// same gate the key handlers do, so the footer can never offer an action the
+// bridge would refuse.
+func aslRespondAvailable(m Model) bool {
+	row, ok := m.selectedASLRow()
+	if !ok {
+		return false
+	}
+	allowed, _ := aslActionAllowed(m, row, aslResponseGateMethod(aslResponseKindFor(row)))
+	return allowed
+}
+
+func aslStopAvailable(m Model) bool {
+	return aslControlAvailable(m, aslbridge.MethodRunStopAfterCurrent)
+}
+
+func aslAbortAvailable(m Model) bool {
+	return aslControlAvailable(m, aslbridge.MethodRunAbort)
+}
+
+func aslControlAvailable(m Model, method string) bool {
+	row, ok := m.selectedASLRow()
+	if !ok {
+		return false
+	}
+	allowed, _ := aslActionAllowed(m, row, method)
+	return allowed
+}
+
+var aslResponseFooterPalette = []footerEntry{
+	{"ctrl+s", "submit", footerSectionRow, footerAlways, footerPriorityEssential},
+	{"tab", "editor/buttons", footerSectionRow, footerAlways, footerPriorityEssential},
+	{"enter", "newline or button", footerSectionRow, footerAlways, footerPriorityPrimary},
+	{"ctrl+n/p", "question", footerSectionRow, func(m Model) bool {
+		return len(m.aslResponse.questionIDs) > 1
+	}, footerPriorityPrimary},
+	{"esc", "cancel", footerSectionApp, footerAlways, footerPriorityEssential},
+}
+
+// aslFocusAvailable mirrors what f actually does: it is offered only when the
+// selected run resolves to at least one live Kitty session.
+func aslFocusAvailable(m Model) bool {
+	row, ok := m.selectedASLRow()
+	if !ok {
+		return false
+	}
+	if _, bound := aslExactBinding(row, m.sessions); bound {
+		return true
+	}
+	return len(aslFallbackCandidates(row, m.sessions)) > 0
+}
+
+func aslWorkbenchAvailable(m Model) bool {
+	row, ok := m.selectedASLRow()
+	return ok && row.PlanDir != "" && openBrowserSupported()
 }
 
 // footerHintLines renders entries into physical footer rows, wrapped to

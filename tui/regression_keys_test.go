@@ -265,7 +265,7 @@ func TestHandleKeyDispatchByMode(t *testing.T) {
 		ModeActions,
 		ModeCommandPalette,
 		ModeWorktrees,
-		ModeWorktreeSessionPicker,
+		ModeLiveSessionPicker,
 	} {
 		t.Run(modeName(mode), func(t *testing.T) {
 			m := loadSessions(testModel(), makeSessions())
@@ -351,8 +351,8 @@ func modeName(m Mode) string {
 		return "ModeCommandPalette"
 	case ModeWorktrees:
 		return "ModeWorktrees"
-	case ModeWorktreeSessionPicker:
-		return "ModeWorktreeSessionPicker"
+	case ModeLiveSessionPicker:
+		return "ModeLiveSessionPicker"
 	}
 	return "Mode?"
 }

@@ -1,0 +1,19 @@
+{
+  "name": "asl-response-live-wide",
+  "fixture": "asl_runs",
+  "size": { "width": 132, "height": 34 },
+  "actions": [
+    { "type": "key", "key": "A" },
+    { "type": "key", "key": "r" },
+    { "type": "text", "text": "after the cutover" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "asl_response" },
+    { "type": "contains_text", "text": "Reply to api-refactor" },
+    { "type": "contains_text", "text": "question 1 of 2" },
+    { "type": "contains_text", "text": "Continue" },
+    { "type": "contains_text", "text": "Pause" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -3,6 +3,7 @@ package daemon
 import (
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
@@ -54,6 +55,13 @@ type Handler struct {
 	// saturation, queue latency) for TypeHealth and export surfaces. Installed
 	// by NewServer; nil when the handler runs without a server.
 	metricsFn func() MetricsSnapshot
+
+	// aslBridge is the optional agent-session-loop integration. Unset means the
+	// daemon was started without it, in which case every ASL request is refused
+	// and the health capability block is omitted. It is installed after the
+	// socket is already serving, so it is read atomically rather than under
+	// stateMu: connections are being answered before it exists.
+	aslBridge atomic.Pointer[ASLBridge]
 
 	// eventSeq is the daemon's global monotonic receipt sequence, stamped onto
 	// every event appended to a per-window ring so exports can totally order
@@ -349,6 +357,14 @@ func (h *Handler) Handle(req Request) Response {
 		resp = h.handleSessionDetail(req)
 	case TypeEventsExport:
 		resp = h.handleEventsExport(req)
+	case TypeASLSnapshot:
+		resp = h.handleASLSnapshot()
+	case TypeASLQuestion:
+		resp = h.handleASLQuestion(req)
+	case TypeASLAction:
+		resp = h.handleASLAction(req)
+	case TypeASLWorkbench:
+		resp = h.handleASLWorkbench(req)
 	case TypeHealth:
 		resp = h.handleHealth()
 	case TypeShutdown:
@@ -377,6 +393,10 @@ func (h *Handler) handleHealth() Response {
 	if h.notifier != nil {
 		capability := h.notifier.Capability()
 		resp.Notification = &capability
+	}
+	if bridge := h.asl(); bridge != nil {
+		status := bridge.Status()
+		resp.ASLCapability = &status
 	}
 	return resp
 }

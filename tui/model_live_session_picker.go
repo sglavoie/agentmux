@@ -7,12 +7,11 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 )
 
-func renderWorktreeSessionPicker(m Model) string {
+func renderLiveSessionPicker(m Model) string {
 	var sb strings.Builder
-	title := worktreeConfirmationTitle(m.worktreeActionTarget)
-	sb.WriteString(styleHeader.Render("Choose live session: " + title))
+	sb.WriteString(styleHeader.Render("Choose live session: " + m.livePickerTitle))
 	sb.WriteString("\n\n")
-	if len(m.worktreeSessionCandidates) == 0 {
+	if len(m.livePickerCandidates) == 0 {
 		sb.WriteString(styleDim.Render("No live-session candidates remain."))
 		sb.WriteByte('\n')
 		return sb.String()
@@ -21,15 +20,15 @@ func renderWorktreeSessionPicker(m Model) string {
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
-	window := flatListWindowFor(len(m.worktreeSessionCandidates), m.worktreeSessionOffset, worktreeSessionVisibleRows(m))
+	window := flatListWindowFor(len(m.livePickerCandidates), m.livePickerOffset, livePickerVisibleRows(m))
 	if window.showTop {
 		sb.WriteString(styleDim.Render("  ▲ more sessions"))
 		sb.WriteByte('\n')
 	}
 	for index := window.start; index < window.end; index++ {
-		candidate := m.worktreeSessionCandidates[index]
-		line := formatWorktreeSessionCandidate(candidate, contentWidth)
-		if index == m.worktreeSessionCursor {
+		candidate := m.livePickerCandidates[index]
+		line := formatLiveSessionCandidate(candidate, contentWidth)
+		if index == m.livePickerCursor {
 			line = styleSelected.Render(line)
 		}
 		sb.WriteString(line)
@@ -42,7 +41,7 @@ func renderWorktreeSessionPicker(m Model) string {
 	return sb.String()
 }
 
-func worktreeSessionVisibleRows(m Model) int {
+func livePickerVisibleRows(m Model) int {
 	rows := rootBodyHeight(m) - 4
 	if rows < 1 {
 		return 1
@@ -50,7 +49,7 @@ func worktreeSessionVisibleRows(m Model) int {
 	return rows
 }
 
-func formatWorktreeSessionCandidate(candidate actions.WorktreeLiveSession, width int) string {
+func formatLiveSessionCandidate(candidate actions.WorktreeLiveSession, width int) string {
 	project := strings.TrimSpace(candidate.Project)
 	if project == "" {
 		project = "(unknown project)"
@@ -70,8 +69,8 @@ func formatWorktreeSessionCandidate(candidate actions.WorktreeLiveSession, width
 	return displayStyledTruncate(line, width, "…")
 }
 
-func renderWorktreeSessionPickerBox(m Model) string {
-	content := strings.TrimRight(renderWorktreeSessionPicker(m), "\n")
+func renderLiveSessionPickerBox(m Model) string {
+	content := strings.TrimRight(renderLiveSessionPicker(m), "\n")
 	boxWidth := popupWidth(content) + styleOverlayBox.GetHorizontalFrameSize()
 	if boxWidth < 64 {
 		boxWidth = 64

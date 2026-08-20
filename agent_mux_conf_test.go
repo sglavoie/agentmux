@@ -69,7 +69,10 @@ func TestAgentMuxConfContainsIconPickerBinding(t *testing.T) {
 	}
 }
 
-func TestUsageGuideDocumentsPassiveLoopMarkers(t *testing.T) {
+// The 🔁 marker stays passive and the cockpit is an intervention surface, not a
+// loop runner. That boundary is the thing an operator most easily assumes wrong,
+// so the guide has to state it and this pins that it still does.
+func TestUsageGuideDocumentsTheLoopMarkerAndCockpitBoundary(t *testing.T) {
 	guide, err := os.ReadFile("docs/usage.md")
 	if err != nil {
 		t.Fatalf("ReadFile(docs/usage.md): %v", err)
@@ -79,10 +82,11 @@ func TestUsageGuideDocumentsPassiveLoopMarkers(t *testing.T) {
 		"Rows marked with `🔁` have at least one active `agent-session-loop` run",
 		"`run_finished_at` in `state.json`",
 		"`AgentSessionLoopFinished` hook",
-		"Run and tail loops outside the dashboard with `agent-session-loop` directly.",
+		"never starts, schedules, or tails a loop",
+		"never retries a mutation on your behalf.",
 	} {
 		if !strings.Contains(string(guide), documented) {
-			t.Fatalf("docs/usage.md missing documented passive loop marker text %q", documented)
+			t.Fatalf("docs/usage.md missing documented text %q", documented)
 		}
 	}
 }

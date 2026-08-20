@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -113,7 +115,42 @@ func validateDefaults(d *Defaults) []string {
 	if d.Notifications.PermissionDebounceMs < 0 {
 		errs = append(errs, "defaults.notifications.permission_debounce_ms must be >= 0")
 	}
+	errs = append(errs, validateASL(&d.ASL)...)
 	return errs
+}
+
+// aslShellMetacharacters are rejected in defaults.asl.command because the
+// daemon starts the bridge directly with a fixed argv. Accepting shell syntax
+// here would promise an interpretation that never happens.
+const aslShellMetacharacters = "|&;<>()$`\\\"'\n\t*?[]#"
+
+func validateASL(a *ASLConfig) []string {
+	command := strings.TrimSpace(a.Command)
+	if command == "" {
+		return nil
+	}
+	if strings.ContainsAny(command, aslShellMetacharacters) {
+		return []string{"defaults.asl.command must be a plain executable name or path, without shell syntax"}
+	}
+	if strings.Contains(command, " ") && !isExecutableFile(command) {
+		return []string{"defaults.asl.command must not contain arguments; the daemon supplies them"}
+	}
+	return nil
+}
+
+// isExecutableFile reports whether command is an existing absolute path to an
+// executable file. The daemon passes the command as a single argv element, so a
+// spaced string that names such a file is a legitimate path; anything else with
+// a space can only be an attempt to pass arguments.
+func isExecutableFile(command string) bool {
+	if !filepath.IsAbs(command) {
+		return false
+	}
+	info, err := os.Stat(command)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	return info.Mode().Perm()&0o111 != 0
 }
 
 func validateJump(j *JumpConfig) []string {

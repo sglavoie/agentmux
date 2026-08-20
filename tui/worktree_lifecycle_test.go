@@ -72,10 +72,10 @@ func TestWorktreeAmbiguousLiveSessionPickerFocusAndCancel(t *testing.T) {
 		t.Fatalf("open live picker: %v", err)
 	}
 	model := driver.Model()
-	if model.mode != ModeWorktreeSessionPicker || len(model.worktreeSessionCandidates) != 2 {
-		t.Fatalf("picker state = mode %v candidates %+v", model.mode, model.worktreeSessionCandidates)
+	if model.mode != ModeLiveSessionPicker || len(model.livePickerCandidates) != 2 {
+		t.Fatalf("picker state = mode %v candidates %+v", model.mode, model.livePickerCandidates)
 	}
-	view := stripAnsi(renderWorktreeSessionPicker(model))
+	view := stripAnsi(renderLiveSessionPicker(model))
 	for _, want := range []string{"candidate 81", "candidate 82", "native-multi-81", "work/claude", "personal/codex"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("picker missing %q:\n%s", want, view)

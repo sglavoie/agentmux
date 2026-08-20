@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -208,6 +209,16 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		close(renderWorkerDone)
 	}()
 	go handler.runScreenProbes(ctx)
+	// The ASL bridge is started only here, after the socket is published and
+	// the core loops are running, so a missing, slow, or wedged ASL can never
+	// delay Agent Mux startup or affect readiness.
+	aslManager := aslbridge.New(aslbridge.Options{
+		Mode:    aslbridge.Mode(cfg.Defaults.ASL.ASLModeValue()),
+		Command: cfg.Defaults.ASL.Command,
+	})
+	handler.SetASLBridge(aslManager)
+	aslManager.Start(ctx)
+	defer aslManager.Close()
 	slog.Info("daemon: ready", "socket", socketPath)
 	recorder.record("daemon.ready", "success", "maintenance_loops_started", nil)
 	waitForRenderWorker := func() {

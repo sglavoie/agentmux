@@ -292,6 +292,16 @@ func commandCatalog() []command {
 			},
 		},
 		{
+			id: commandShowRuns, group: commandGroupExplore,
+			title:       staticCommandTitle("Show Runs"),
+			description: "Review active and actionable agent-session-loop runs.",
+			aliases:     []string{"asl", "loop", "needs action"}, shortcut: keyASLRuns,
+			execute: func(m Model, _ commandContext) (Model, tea.Cmd) {
+				updated, cmd := m.enterASLRuns()
+				return updated.(Model), cmd
+			},
+		},
+		{
 			id: commandTogglePreview, group: commandGroupExplore,
 			title: func(m Model, _ commandContext) string {
 				if m.previewEnabled {

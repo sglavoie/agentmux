@@ -20,8 +20,10 @@ func (m Model) activeRootMode() Mode {
 		return m.confirmReturnMode
 	case ModeConfigPicker:
 		return m.configPickerReturnMode
-	case ModeWorktreeSessionPicker:
-		return ModeWorktrees
+	case ModeLiveSessionPicker:
+		return m.livePickerReturnMode
+	case ModeASLResponse:
+		return ModeASLRuns
 	default:
 		return m.mode
 	}

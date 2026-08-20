@@ -29,6 +29,15 @@ race-core:
 tui-scenarios:
     go run . tui-test run docs/tui-testing/scenarios/*.json
 
+# Exercise the installed agent-session-loop bridge end to end against a
+# throwaway plan and state root. Every other recipe stays hermetic and needs no
+# ASL; this one is opt-in because it needs a real `asl` on PATH. When it is
+# asked for, an ASL that is missing or speaks a different protocol fails here
+# rather than skipping: a silent skip would report a compatible pair that was
+# never actually checked.
+asl-integration:
+    AMX_ASL_INTEGRATION=1 go test -count=1 -run TestInstalledBridge ./internal/aslbridge
+
 # Product acceptance without the optional linter dependency.
 acceptance: test race-core vet tui-scenarios
 

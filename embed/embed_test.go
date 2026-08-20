@@ -62,6 +62,10 @@ type exampleConfig struct {
 			MinCols   int `toml:"min_cols"`
 			MinRows   int `toml:"min_rows"`
 		}
+		ASL struct {
+			Enabled *bool  `toml:"enabled"`
+			Command string `toml:"command"`
+		} `toml:"asl"`
 	}
 	HarnessEmojis map[string]string `toml:"harness_emojis"`
 	HarnessColors map[string]string `toml:"harness_colors"`

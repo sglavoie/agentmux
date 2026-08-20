@@ -11,7 +11,7 @@
   "assertions": [
     { "type": "mode_equals", "mode": "help" },
     { "type": "contains_text", "text": "Transcript:" },
-    { "type": "contains_text", "text": "Worktrees" },
+    { "type": "contains_text", "text": "Runs" },
     { "type": "excludes_layout_issue", "value": "modal_height_overflow" },
     { "type": "excludes_layout_issue", "value": "modal_clipped_by_root" }
   ]

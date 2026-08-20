@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -52,6 +53,29 @@ func writeDoctorNotificationCapability(out io.Writer, capability *daemon.Notific
 	}
 	if capability.Enabled && (!capability.Available || !capability.Interactive) {
 		addFinding(severityFailure, "notifications_unavailable", "interactive notifications are enabled but unavailable: %s", capability.Reason)
+	}
+	return nil
+}
+
+// writeDoctorASLCapability reports the optional agent-session-loop
+// integration. An absent or unavailable bridge is a failure only when the
+// operator required it: in auto mode a missing ASL is a supported
+// configuration, not a health problem.
+func writeDoctorASLCapability(out io.Writer, status *aslbridge.Status, addFinding func(string, string, string, ...any)) error {
+	if status == nil {
+		if _, err := fmt.Fprintln(out, "asl: unreported (older daemon)"); err != nil {
+			return err
+		}
+		return nil
+	}
+	if _, err := fmt.Fprintf(out, "asl: %s\n", aslStatusLine(status)); err != nil {
+		return err
+	}
+	if status.Mode == string(aslbridge.ModeRequired) && !status.Available {
+		addFinding(severityFailure, "asl_unavailable", "asl integration is required but unavailable: %s", status.Reason)
+	}
+	if status.Available && !status.MutationsEnabled {
+		addFinding(severityWarning, "asl_read_only", "asl integration is connected but actions are disabled pending a fresh snapshot")
 	}
 	return nil
 }
