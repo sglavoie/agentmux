@@ -149,8 +149,10 @@ func TestFormatAgeCoarseRounding(t *testing.T) {
 
 // TestFormatRunElapsedBoundaries pins the run-timer format at every edge of
 // the table: no anchor, the second/minute rollovers, the one-hour switch to
-// the compact hour form, a two-digit hour count, and the negative clamp that
-// protects against daemon/TUI clock skew.
+// the compact hour form, a two-digit hour count, the 99-to-100-hour switch to
+// the day form and its own saturation past 99 days, and the negative clamp
+// that protects against daemon/TUI clock skew. Every case also re-asserts the
+// five-cell contract the activity column reserves its width against.
 func TestFormatRunElapsedBoundaries(t *testing.T) {
 	now := time.Now()
 	cases := []struct {
@@ -164,17 +166,35 @@ func TestFormatRunElapsedBoundaries(t *testing.T) {
 		{"last second under an hour", 59*time.Minute + 59*time.Second, "59:59"},
 		{"exactly one hour", time.Hour, "1h00"},
 		{"two-digit hours", 10*time.Hour + 7*time.Minute, "10h07"},
+		{"last minute under 100 hours", 99*time.Hour + 59*time.Minute, "99h59"},
+		{"exactly 100 hours", 100 * time.Hour, "4d04"},
+		{"a month of grinding", 30*24*time.Hour + 5*time.Hour + 12*time.Minute, "30d05"},
+		{"widest day form", 99*24*time.Hour + 23*time.Hour, "99d23"},
+		{"saturates at 100 days", 100 * 24 * time.Hour, "99d+"},
+		{"saturates for an absurd stretch", 5000 * 24 * time.Hour, "99d+"},
 		{"negative clamps to zero", -30 * time.Second, "0:00"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := formatRunElapsed(now.Add(-tc.elapsed), now); got != tc.want {
+			got := formatRunElapsed(now.Add(-tc.elapsed), now)
+			if got != tc.want {
 				t.Errorf("formatRunElapsed(%s) = %q, want %q", tc.elapsed, got, tc.want)
+			}
+			if w := displayWidth(got); w > runTimerMaxCells {
+				t.Errorf("formatRunElapsed(%s) = %q occupies %d cells, want at most %d", tc.elapsed, got, w, runTimerMaxCells)
 			}
 		})
 	}
 	if got := formatRunElapsed(time.Time{}, now); got != "—" {
 		t.Errorf("a row with no anchor = %q, want the dash placeholder", got)
+	}
+
+	// The named cases only sample the bands; sweep the whole range so no
+	// future band boundary can reintroduce an unbounded leading count.
+	for elapsed := time.Second; elapsed < 1<<20*time.Hour; elapsed = elapsed*3/2 + time.Second {
+		if w := displayWidth(formatRunElapsed(now.Add(-elapsed), now)); w > runTimerMaxCells {
+			t.Fatalf("formatRunElapsed(%s) = %q occupies %d cells, want at most %d", elapsed, formatRunElapsed(now.Add(-elapsed), now), w, runTimerMaxCells)
+		}
 	}
 }
 
@@ -342,9 +362,11 @@ func TestRenderListActivityColumnHiddenByDefault(t *testing.T) {
 }
 
 // TestRenderListActivityColumnSharedWidthAcrossRows asserts that once the
-// column is reserved, an idle row renders the "—" placeholder and both rows
-// pay the same column width, so the directory column starts at one offset
-// regardless of how wide the busiest row's timer is.
+// column is reserved, an idle row renders the "—" placeholder and every row
+// pays the same column width, so the directory column starts at one offset
+// regardless of how wide the busiest row's timer is. The third row carries the
+// widest representation formatRunElapsed can produce, pinning that even a
+// multi-month stretch cannot widen the column past a warning-decorated timer.
 func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 	now := time.Now()
 	m := Model{
@@ -353,6 +375,7 @@ func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 		sessions: []session.RunningSession{
 			{WindowID: 1, Base: "api", State: "bolt", Account: "work", Directory: "~/p", BusySince: now.Add(-(12*time.Hour + 7*time.Minute + 30*time.Second))},
 			{WindowID: 2, Base: "web", State: "bolt", Account: "work", Directory: "~/p"},
+			{WindowID: 3, Base: "etl", State: "bolt", Account: "work", Directory: "~/p", BusySince: now.Add(-(99*24*time.Hour + 23*time.Hour))},
 		},
 		watchdog: map[int]daemon.WatchdogState{
 			1: {LastAction: "active", LastEventAt: now.Add(-9 * time.Minute).Unix(), ThresholdSec: 600},
@@ -365,23 +388,31 @@ func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 	}
 
 	lines := strings.Split(strings.TrimRight(stripAnsi(renderList(m)), "\n"), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("expected 2 rendered rows, got %d: %q", len(lines), lines)
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 rendered rows, got %d: %q", len(lines), lines)
 	}
-	busy, idle := lines[0], lines[1]
+	busy, idle, long := lines[0], lines[1], lines[2]
 	if !strings.Contains(busy, "12h07") {
 		t.Errorf("expected \"12h07\" on the busy row; got %q", busy)
 	}
 	if !strings.Contains(idle, "—") {
 		t.Errorf("expected dash placeholder on the idle row; got %q", idle)
 	}
-	busyDir := strings.Index(busy, "~/p")
-	idleDir := strings.Index(idle, "~/p")
-	if busyDir < 0 || idleDir < 0 {
-		t.Fatalf("directory column missing: busy=%q idle=%q", busy, idle)
+	if !strings.Contains(long, "99d23") {
+		t.Errorf("expected \"99d23\" on the long-running row; got %q", long)
 	}
-	if got, want := displayWidth(idle[:idleDir]), displayWidth(busy[:busyDir]); got != want {
-		t.Errorf("directory starts at cell %d on the idle row and %d on the busy row; the activity column must share one width", got, want)
+	busyDir := strings.Index(busy, "~/p")
+	for _, row := range []struct {
+		name string
+		line string
+	}{{"idle", idle}, {"long-running", long}} {
+		dir := strings.Index(row.line, "~/p")
+		if busyDir < 0 || dir < 0 {
+			t.Fatalf("directory column missing: busy=%q %s=%q", busy, row.name, row.line)
+		}
+		if got, want := displayWidth(row.line[:dir]), displayWidth(busy[:busyDir]); got != want {
+			t.Errorf("directory starts at cell %d on the %s row and %d on the busy row; the activity column must share one width", got, row.name, want)
+		}
 	}
 }
 

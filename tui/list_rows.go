@@ -323,11 +323,24 @@ func formatAge(ws daemon.WatchdogState, now time.Time) string {
 	return fmt.Sprintf("%dh", int(elapsed/time.Hour))
 }
 
+// Run-timer display contract. Every band rolls over before its leading count
+// reaches three digits and the last one saturates, which is what bounds any
+// elapsed duration — however absurd — to runTimerMaxCells.
+const (
+	runTimerMaxCells      = 5
+	runTimerHourBandLimit = 100 * time.Hour
+	runTimerDayBandLimit  = 100 * 24 * time.Hour
+	runTimerOverflowText  = "99d+"
+)
+
 // formatRunElapsed renders how long a row's current busy stretch has been
-// running, in at most five cells: `—` for a row with no anchor, `M:SS` below
-// one hour and `<n>h<MM>` at or above it. Negative durations clamp to zero so
-// clock skew between the daemon and the TUI cannot surface a count running
-// backwards, mirroring formatRelativeAge.
+// running, in at most runTimerMaxCells cells: `—` for a row with no anchor,
+// `M:SS` below one hour, `<n>h<MM>` below 100 hours, `<n>d<HH>` below 100 days,
+// and the saturating `99d+` beyond that. Each band rolls over before its
+// leading count reaches three digits, so the activity column can never outgrow
+// its reserved width. Negative durations clamp to zero so clock skew between
+// the daemon and the TUI cannot surface a count running backwards, mirroring
+// formatRelativeAge.
 func formatRunElapsed(busySince, now time.Time) string {
 	if busySince.IsZero() {
 		return "—"
@@ -336,10 +349,16 @@ func formatRunElapsed(busySince, now time.Time) string {
 	if elapsed < 0 {
 		elapsed = 0
 	}
-	if elapsed < time.Hour {
+	switch {
+	case elapsed < time.Hour:
 		return fmt.Sprintf("%d:%02d", int(elapsed/time.Minute), int(elapsed/time.Second)%60)
+	case elapsed < runTimerHourBandLimit:
+		return fmt.Sprintf("%dh%02d", int(elapsed/time.Hour), int(elapsed/time.Minute)%60)
+	case elapsed < runTimerDayBandLimit:
+		return fmt.Sprintf("%dd%02d", int(elapsed/(24*time.Hour)), int(elapsed/time.Hour)%24)
+	default:
+		return runTimerOverflowText
 	}
-	return fmt.Sprintf("%dh%02d", int(elapsed/time.Hour), int(elapsed/time.Minute)%60)
 }
 
 // activityCellText returns a row's rendered activity text and whether the
