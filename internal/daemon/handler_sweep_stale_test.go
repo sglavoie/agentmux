@@ -281,6 +281,108 @@ func TestSweepStale_ClearsBusySinceWithNilReducer(t *testing.T) {
 	})
 }
 
+// TestSweepStale_PreservesBusySinceWhenReductionStaysActive pins the anchor
+// across a whole-window stale decision that re-reduces back into the active
+// class. The bolt fact expires on its own 10-minute threshold while the
+// subagent fact survives its 30-minute one, so the visible icon goes bolt →
+// subagent without ever leaving the class: the busy stretch never ended and
+// the timer must not restart.
+func TestSweepStale_PreservesBusySinceWhenReductionStaysActive(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, _, _ := newSweepTestHandlerWithMap(map[string]time.Duration{
+			"active":   10 * time.Minute,
+			"subagent": 30 * time.Minute,
+		}, nil)
+		now := time.Now()
+
+		h.stateMu.Lock()
+		st := h.ensureWindowStateLocked(42)
+		st.LastAction = "active"
+		st.LastSessionTitle = "W:api"
+		st.Activity = now.Add(-15 * time.Minute)
+		h.stateMu.Unlock()
+		seedReducerFact(h, 42, now,
+			ReducerEvent{
+				Source: SourceID{Kind: SourceHarness, Key: "main"},
+				Action: "active", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
+			},
+			ReducerEvent{
+				Source: SourceID{Kind: SourceSubagent, Key: "agent-1"},
+				Action: "subagent", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
+			},
+		)
+
+		anchor := now.Add(-20 * time.Minute)
+		h.stateMu.Lock()
+		h.store[42].BusySince = anchor
+		h.stateMu.Unlock()
+
+		h.SweepStaleWithSnapshot(now, nil)
+		synctest.Wait()
+
+		if got := effectiveState(h, 42).Icon; got != "subagent" {
+			t.Fatalf("icon after sweep = %q; want subagent (the surviving fact keeps the tab)", got)
+		}
+		h.stateMu.Lock()
+		lastAction := h.store[42].LastAction
+		busy := h.store[42].BusySince
+		h.stateMu.Unlock()
+		if lastAction != "" {
+			t.Fatalf("lastAction = %q; want cleared by the whole-window sweep", lastAction)
+		}
+		if !busy.Equal(anchor) {
+			t.Fatalf("BusySince = %v; want the original anchor %v", busy, anchor)
+		}
+	})
+}
+
+// TestSweepStale_ClearsBusySinceWhenReductionLeavesActiveClass pins the other
+// half of the rule: the surviving fact here is a permission, so the swept
+// window reduces to an attention icon. The busy stretch really did end and the
+// anchor must go with it.
+func TestSweepStale_ClearsBusySinceWhenReductionLeavesActiveClass(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, _, _ := newSweepTestHandlerWithMap(map[string]time.Duration{
+			"active": 10 * time.Minute,
+		}, nil)
+		now := time.Now()
+
+		h.stateMu.Lock()
+		st := h.ensureWindowStateLocked(42)
+		st.LastAction = "active"
+		st.LastSessionTitle = "W:api"
+		st.Activity = now.Add(-15 * time.Minute)
+		h.stateMu.Unlock()
+		seedReducerFact(h, 42, now,
+			ReducerEvent{
+				Source: SourceID{Kind: SourceHarness, Key: "main"},
+				Action: "active", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
+			},
+			ReducerEvent{
+				Source: SourceID{Kind: SourceProbe, Key: "permission"},
+				Action: "permission", Seq: 1, At: now.Add(-15 * time.Minute).Unix(),
+			},
+		)
+
+		h.stateMu.Lock()
+		h.store[42].BusySince = now.Add(-20 * time.Minute)
+		h.stateMu.Unlock()
+
+		h.SweepStaleWithSnapshot(now, nil)
+		synctest.Wait()
+
+		if got := effectiveState(h, 42).Icon; got != "key" {
+			t.Fatalf("icon after sweep = %q; want key (the attention fact keeps the tab)", got)
+		}
+		h.stateMu.Lock()
+		busy := h.store[42].BusySince
+		h.stateMu.Unlock()
+		if !busy.IsZero() {
+			t.Fatalf("BusySince = %v; want zero once the icon left the active class", busy)
+		}
+	})
+}
+
 func fakeOSWindowsWithSplitTab(tabTitle string, windows []kitty.Window) []kitty.OSWindow {
 	return []kitty.OSWindow{
 		{
