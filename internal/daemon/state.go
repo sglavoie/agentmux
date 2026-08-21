@@ -95,13 +95,15 @@ type WindowState struct {
 	watchdogIdle     time.Duration
 	watchdogFactIdle map[SourceID]*factIdle
 
-	// promotedBusyTitle is the Claude pane title the busy-title probe last
-	// promoted to ⚡ from (unexported, never persisted). The watchdog expires a
-	// title-promoted fact on its own threshold, so without this a window whose
-	// title is stale — Claude leaves the last spinner frame behind — would be
-	// re-promoted from the same unchanged text on the next probe tick and cycle
-	// through ⚡ forever. Real activity through reduceStateUpdate clears it.
-	promotedBusyTitle string
+	// promotedBusyBody is the marker body of the Claude pane title the busy-title
+	// probe last promoted to ⚡ from (unexported, never persisted). The watchdog
+	// expires a title-promoted fact on its own threshold, so without this a window
+	// whose title is stale — Claude leaves the last description behind — would be
+	// re-promoted from the same unchanged body on the next probe tick and cycle
+	// through ⚡ forever. The marker rune is excluded because it is a frozen
+	// animation frame: keying on the raw title re-arms on frame rotation alone.
+	// Real activity through reduceStateUpdate clears it.
+	promotedBusyBody string
 }
 
 // CurrentConversation derives this window's current parent conversation from

@@ -135,10 +135,10 @@ func TestProbeClaudeScreenStop_ActiveSpinnerKeepsBolt(t *testing.T) {
 	}
 }
 
-// TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt covers Claude builds that
-// leave an empty composer in the screen body while publishing the only active
-// work marker through Kitty's pane title. This is the live Pulse regression:
-// the false stop used to paint until the next tool hook restored the bolt.
+// TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt covers a genuinely working
+// turn that also publishes a busy pane title. The title is now read as
+// stale-tolerant, so the probe scrapes the screen every tick; the working screen
+// is what keeps \u26a1 alive, silently, for as long as the turn runs.
 func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
@@ -149,7 +149,7 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 	fake := &fakeKittyClient{
 		windows: windows,
 		getText: map[string]string{
-			kitty.MatchWindowByID(42): claudeIdleScreen,
+			kitty.MatchWindowByID(42): claudeWorkingScreen,
 		},
 	}
 	notifier, rec := newTestNotifier(&config.NotificationConfig{Stop: true})
@@ -164,12 +164,13 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 			reads++
 		}
 	}
-	for _, elapsed := range []time.Duration{0, 2 * time.Second, 4 * time.Second} {
-		h.ProbeClaudeScreenStop(base.Add(elapsed))
+	const workingTicks = 12
+	for tick := 0; tick < workingTicks; tick++ {
+		h.ProbeClaudeScreenStop(base.Add(time.Duration(2*tick) * time.Second))
 	}
 
-	if reads != 0 {
-		t.Fatalf("screen reads with busy pane title = %d, want 0", reads)
+	if reads != workingTicks {
+		t.Fatalf("screen reads with a busy pane title = %d, want %d", reads, workingTicks)
 	}
 	if got := len(fake.titleCalls()); got != 0 {
 		t.Fatalf("SetTabTitle calls with busy pane title = %d, want 0", got)
@@ -178,7 +179,7 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 		t.Fatalf("effective with busy pane title = %+v, want bolt", eff)
 	}
 	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenStopProbeEvent); ok {
-		t.Fatalf("ScreenStopProbe row recorded for busy pane title: %+v", ev)
+		t.Fatalf("ScreenStopProbe row recorded for a working turn: %+v", ev)
 	}
 	if ev, ok := lastEventNamed(h.Handle(Request{Type: TypeSessionDetail, WindowID: 42}).Events, screenActiveProbeEvent); ok {
 		t.Fatalf("ScreenActiveProbe row repeated for an existing bolt: %+v", ev)
@@ -187,16 +188,17 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 		t.Fatalf("notifications with busy pane title = %d, want 0 (%+v)", got, rec.snapshot())
 	}
 
-	// Once the pane title itself becomes idle, the existing two-sample screen
-	// fallback remains authoritative and converges the stuck bolt to stop.
+	// Once the turn ends and the title reverts, the two-sample screen fallback
+	// converges the stuck bolt to stop.
 	fake.mu.Lock()
 	fake.windows[0].Tabs[0].Windows[0].Title = "Fix drawer drag resistance"
+	fake.getText[kitty.MatchWindowByID(42)] = claudeIdleScreen
 	fake.mu.Unlock()
-	h.ProbeClaudeScreenStop(base.Add(6 * time.Second))
+	h.ProbeClaudeScreenStop(base.Add(26 * time.Second))
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
 		t.Fatalf("effective after first fully-idle sample = %+v, want bolt", eff)
 	}
-	h.ProbeClaudeScreenStop(base.Add(8 * time.Second))
+	h.ProbeClaudeScreenStop(base.Add(28 * time.Second))
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
 		t.Fatalf("effective after second fully-idle sample = %+v, want stop", eff)
 	}
@@ -230,6 +232,8 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState(t *testing.T) {
 
 	h.ProbeClaudeScreenStop(base)
 
+	// A committed promotion bumps the window receipt, so the eligibility gate
+	// discards this tick's binding and no screen is read on a promotion tick.
 	if reads != 0 {
 		t.Fatalf("screen reads for busy-title recovery = %d, want 0", reads)
 	}
@@ -249,7 +253,12 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState(t *testing.T) {
 	}
 
 	// Repeated busy snapshots keep the recovered bolt without fact or event churn.
+	// The screen is now read on every non-promoting tick, but the marker title
+	// holds the settle behind the longer marker run.
 	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
+	if reads != 1 {
+		t.Fatalf("screen reads after a repeated busy snapshot = %d, want 1", reads)
+	}
 	detail = h.Handle(Request{Type: TypeSessionDetail, WindowID: 42})
 	count := 0
 	for _, event := range detail.Events {
@@ -260,19 +269,18 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("ScreenActiveProbe rows after repeated busy snapshot = %d, want 1", count)
 	}
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective after one marker-run sample = %+v, want recovered bolt retained", eff)
+	}
 
-	// Once the marker disappears, the same probe fact follows the established
-	// two-sample idle path from active to stop.
+	// Once the marker disappears, the requirement drops back to two samples and
+	// the sample already banked under the marker completes the run.
 	fake.mu.Lock()
 	fake.windows[0].Tabs[0].Windows[0].Title = "Repair advisor calibration"
 	fake.mu.Unlock()
 	h.ProbeClaudeScreenStop(base.Add(4 * time.Second))
-	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
-		t.Fatalf("effective after first idle sample = %+v, want recovered bolt retained", eff)
-	}
-	h.ProbeClaudeScreenStop(base.Add(6 * time.Second))
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
-		t.Fatalf("effective after second idle sample = %+v, want stop", eff)
+		t.Fatalf("effective after the second idle sample = %+v, want stop", eff)
 	}
 }
 

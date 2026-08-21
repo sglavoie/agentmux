@@ -123,37 +123,53 @@ func claudeScreenHasActiveWork(screen string) bool {
 const claudeRestingTitleText = "Claude Code"
 
 // claudeTitleMarkerBody splits a Claude pane title into its work-marker rune and
-// trimmed body, reporting whether a recognized marker is present.
+// trimmed body, reporting whether a recognized marker is present. Claude cycles
+// its star, its Braille spinner block, and its quadrant spinner block through
+// this position.
 func claudeTitleMarkerBody(title string) (string, bool) {
 	runes := []rune(strings.TrimLeftFunc(title, unicode.IsSpace))
 	if len(runes) < 2 || !unicode.IsSpace(runes[1]) {
 		return "", false
 	}
-	if runes[0] != '\u2733' && (runes[0] < '\u2800' || runes[0] > '\u28ff') {
+	if !claudeTitleMarkerRune(runes[0]) {
 		return "", false
 	}
 	return strings.TrimSpace(string(runes[2:])), true
 }
 
-// claudeWindowTitleHasActiveWork reports whether Claude's pane title carries a
-// work marker over a turn description. Recent Claude builds can keep an empty
-// composer visible while moving the only active-work signal into the terminal
-// title, so the screen body alone is not sufficient idle evidence.
-//
-// Claude leaves its last marker rune in the title after a turn ends and reverts
-// only the body to claudeRestingTitleText. The body is therefore the sole
-// freshness signal for both star and Braille markers; the Braille rune was
-// observed static on both working and idle panes.
-func claudeWindowTitleHasActiveWork(title string) bool {
-	body, ok := claudeTitleMarkerBody(title)
-	return ok && body != claudeRestingTitleText
+func claudeTitleMarkerRune(r rune) bool {
+	switch {
+	case r == '\u2733':
+		return true
+	case r >= '\u2800' && r <= '\u28ff':
+		return true
+	case r >= '\u25d0' && r <= '\u25d3':
+		return true
+	}
+	return false
 }
 
-// claudeWindowTitleHasRestingMarker reports a marker rune left over Claude's
-// generic resting body — a frame that outlived the turn that produced it.
-func claudeWindowTitleHasRestingMarker(title string) bool {
+// claudeTitleHasMarker reports whether Claude's pane title carries a work marker
+// at all, over a description body or over the generic resting body alike.
+func claudeTitleHasMarker(title string) bool {
+	_, ok := claudeTitleMarkerBody(title)
+	return ok
+}
+
+// claudeWindowTitleHasDescriptionMarker reports whether Claude's pane title
+// carries a work marker over a turn description rather than over its generic
+// resting body.
+//
+// A description body is stale-tolerant evidence, not proof of active work.
+// Claude reverts neither the marker rune nor the description reliably when a
+// turn ends, so an idle pane can hold the same description title indefinitely.
+// The screen scrape is authoritative for whether a turn is running; this
+// classifier only gates positive promotion of an empty tab to ⚡, where a marker
+// that outlived its turn costs one recoverable promotion rather than a stuck
+// icon.
+func claudeWindowTitleHasDescriptionMarker(title string) bool {
 	body, ok := claudeTitleMarkerBody(title)
-	return ok && body == claudeRestingTitleText
+	return ok && body != claudeRestingTitleText
 }
 
 // claudeScreenHasBlockingPrompt reports whether the screen shows a Claude

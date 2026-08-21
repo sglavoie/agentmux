@@ -101,7 +101,7 @@ func TestProbeClaudeScreenStop_RoutedBusyProducerTitleKeepsManagedTargetActive(t
 	fake := &fakeKittyClient{
 		windows: windows,
 		getText: map[string]string{
-			kitty.MatchWindowByID(43): claudeIdleScreen,
+			kitty.MatchWindowByID(43): claudeWorkingScreen,
 		},
 	}
 	h.SetKittyClient(fake)
@@ -116,8 +116,10 @@ func TestProbeClaudeScreenStop_RoutedBusyProducerTitleKeepsManagedTargetActive(t
 	h.ProbeClaudeScreenStop(base.Add(time.Second))
 	h.ProbeClaudeScreenStop(base.Add(3 * time.Second))
 
-	if reads != 0 {
-		t.Fatalf("routed busy producer screen reads = %d, want 0", reads)
+	// The routed producer's screen — not its title — is what holds the target
+	// active, so the probe reads it on every tick.
+	if reads != 2 {
+		t.Fatalf("routed busy producer screen reads = %d, want 2", reads)
 	}
 	if eff, visible := windowEffective(t, h, 42); eff.Icon != "bolt" || visible != "bolt" {
 		t.Fatalf("managed target with busy producer title = %+v/%q, want bolt/bolt", eff, visible)

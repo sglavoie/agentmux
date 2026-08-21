@@ -96,12 +96,15 @@ The tab title is prefixed with an icon based on the latest hook event:
 | ⚠️ | tool failed (recoverable) |
 | ❗ | stopped with failure |
 
-Claude pane-title work markers need both a marker and a fresh description body.
-A `✳` rune or any Braille-pattern rune over the generic resting body `Claude Code`
-is stale evidence left by a finished turn, never active-work evidence. When a stuck
-⚡ has that resting-marker title, the idle screen probe still requires a longer
-four-sample stabilization run before settling it, guarding against a transient
-generic title while Claude is genuinely working.
+Claude pane-title work markers — a `✳` rune, any Braille-pattern rune, or any
+quadrant-spinner rune — are stale-tolerant evidence, never proof of active work.
+Claude reverts neither the marker frame nor the task description reliably when a
+turn ends, so an idle pane can hold `✳ Fix the parser` indefinitely. The screen
+scrape is authoritative for whether a turn is running; a marker title only
+lengthens stabilization, requiring a four-sample run before a stuck ⚡ settles
+instead of the usual two. A description body additionally gates the positive
+half: it can restore a hook-missed empty tab to ⚡ once, keyed on the description
+alone so a rotating marker frame cannot re-arm it.
 
 ### Stop confirmation
 

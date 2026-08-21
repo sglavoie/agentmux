@@ -243,14 +243,17 @@ three are told apart by event name and source key:
   composer and no visible prompt.
 - **Claude** — `event: "ScreenStopProbe"`, `source: "probe:claude_screen"`
   (same event name as Codex, distinct source). Fires on a stuck Claude `⚡`
-  whose composer is idle and whose Kitty pane title has no Claude busy marker
-  (two consecutive samples), or that shows Claude's interruption marker with
-  the same non-busy title gate (one sample). Native `Notification/idle_prompt`
-  is the primary Claude stop; this screen probe is the interruption/no-hook
-  fallback. The positive half uses the same reducer source and records
-  `event: "ScreenActiveProbe"` when a current busy pane title restores an empty
-  managed Claude tab to `⚡`. It never replaces `🛑` or another explicit icon,
-  repeats an event for an existing `⚡`, or changes the independent ASL lease.
+  whose composer is idle (two consecutive samples), or that shows Claude's
+  interruption marker (one sample). The Kitty pane title never vetoes the screen
+  read — Claude leaves a marker and its task description behind after a turn, so
+  a title gate would strand idle panes on `⚡` forever. A title still carrying a
+  marker only lengthens stabilization to four consecutive samples, outranking the
+  interruption fast path. Native `Notification/idle_prompt` is the primary Claude
+  stop; this screen probe is the interruption/no-hook fallback. The positive half
+  uses the same reducer source and records `event: "ScreenActiveProbe"` when a
+  marker over a task description restores an empty managed Claude tab to `⚡`,
+  once per description. It never replaces `🛑` or another explicit icon, repeats
+  an event for an existing `⚡`, or changes the independent ASL lease.
 - **Copilot** — `event: "TranscriptStopProbe"`,
   `source: "probe:copilot_transcript"`. Reads no screen: it consults the
   interactive session transcript's latest state-bearing event and settles only

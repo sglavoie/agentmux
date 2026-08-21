@@ -339,7 +339,7 @@ func TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow(t *testin
 	}
 	h.SetKittyClient(fake)
 
-	for sample := 1; sample <= claudeIdleProbeRestingMarkerSamples+2; sample++ {
+	for sample := 1; sample <= claudeIdleProbeMarkerSamples+2; sample++ {
 		h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
 		if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 0 {
 			t.Fatalf("ScreenActiveProbe rows after sample %d = %d, want 0", sample, got)
@@ -357,8 +357,8 @@ func TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow(t *testin
 // phantom's exit: a stale marker over Claude's resting body must enter the idle
 // path, but it uses the longer stabilization gate before settling a stuck ⚡.
 func TestProbeClaudeScreenStop_RestingBrailleRequiresFourIdleSamples(t *testing.T) {
-	if claudeIdleProbeRestingMarkerSamples != 4 {
-		t.Fatalf("resting-marker sample requirement = %d, want 4", claudeIdleProbeRestingMarkerSamples)
+	if claudeIdleProbeMarkerSamples != 4 {
+		t.Fatalf("marker sample requirement = %d, want 4", claudeIdleProbeMarkerSamples)
 	}
 	base := time.Now()
 	const restingTitle = "\u2802 " + claudeRestingTitleText
@@ -391,35 +391,152 @@ func TestProbeClaudeScreenStop_RestingBrailleRequiresFourIdleSamples(t *testing.
 	}
 }
 
-// TestProbeClaudeScreenStop_BusyBrailleDescriptionVetoesIdleScreen preserves
-// the window-33 behavior: a description body is current work evidence even when
-// Claude leaves an empty composer on screen, so the idle probe must never settle.
-func TestProbeClaudeScreenStop_BusyBrailleDescriptionVetoesIdleScreen(t *testing.T) {
+// TestProbeClaudeScreenStop_BusyBrailleDescriptionSettlesAfterMarkerRun pins the
+// reported defect. Claude keeps a task description in its pane title long after
+// the turn that produced it ended, so a description title cannot veto the screen
+// read: an idle pane holding one would never settle. The screen is authoritative
+// and the title only lengthens stabilization to the marker run.
+func TestProbeClaudeScreenStop_BusyBrailleDescriptionSettlesAfterMarkerRun(t *testing.T) {
 	base := time.Now()
-	const busyTitle = "\u2810 Fix cursor corruption"
+	const staleTitle = "\u2810 Fix cursor corruption"
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
 		Profile: "work",
 		Harness: harness.Claude,
 	})
-	windows[0].Tabs[0].Windows[0].Title = busyTitle
+	windows[0].Tabs[0].Windows[0].Title = staleTitle
 	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
 		kitty.MatchWindowByID(42): claudeIdleScreen,
 	}}
 	h := newTestHandler()
 	h.SetKittyClient(fake)
-	claudeSeedActiveBolt(t, h, 42, "sess-working", base.Unix())
+	claudeSeedActiveBolt(t, h, 42, "sess-stale-description", base.Unix())
 
-	for sample := 1; sample <= claudeIdleProbeRestingMarkerSamples*2; sample++ {
+	for sample := 1; sample < claudeIdleProbeMarkerSamples; sample++ {
+		h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
+		if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+			t.Fatalf("effective after sample %d = %+v, want bolt still held", sample, eff)
+		}
+		assertNoProbeStopFact(t, h, 42)
+	}
+
+	// The settle lands on the marker run and survives every later tick: the tab is
+	// no longer \u26a1, so the eligibility gate stops re-reading, and the description
+	// title cannot re-promote a pane that is not empty.
+	for sample := claudeIdleProbeMarkerSamples; sample <= claudeIdleProbeMarkerSamples*2; sample++ {
+		h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
+		if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
+			t.Fatalf("effective after sample %d = %+v, want stop", sample, eff)
+		}
+	}
+	if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 1 {
+		t.Fatalf("ScreenStopProbe rows = %d, want 1", got)
+	}
+	if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 0 {
+		t.Fatalf("ScreenActiveProbe rows = %d, want 0", got)
+	}
+}
+
+// TestProbeClaudeScreenStop_StaleDescriptionSurvivesMarkerRotation pins the
+// body-keyed one-shot. Claude freezes an arbitrary spinner frame in front of a
+// stale description, so a raw-title key would re-arm promotion on every frame
+// change and cycle the window through \u26a1 forever.
+func TestProbeClaudeScreenStop_StaleDescriptionSurvivesMarkerRotation(t *testing.T) {
+	base := time.Now()
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = "\u2810 Fix cursor corruption"
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudeIdleScreen,
+	}}
+	h := newTestHandler()
+	h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Minute}, nil)
+	h.SetKittyClient(fake)
+
+	h.ProbeClaudeScreenStop(base)
+	if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 1 {
+		t.Fatalf("ScreenActiveProbe rows after first promotion = %d, want 1", got)
+	}
+
+	expired := base.Add(11 * time.Minute)
+	h.SweepStaleWithSnapshot(expired, nil)
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "" {
+		t.Fatalf("effective after watchdog expiry = %+v, want empty", eff)
+	}
+
+	// Same description, a different frozen frame: not new work.
+	fake.mu.Lock()
+	fake.windows[0].Tabs[0].Windows[0].Title = "\u2802 Fix cursor corruption"
+	fake.mu.Unlock()
+	h.ProbeClaudeScreenStop(expired.Add(2 * time.Second))
+
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "" {
+		t.Fatalf("effective after a rotated marker frame = %+v, want no second promotion", eff)
+	}
+	if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 1 {
+		t.Fatalf("ScreenActiveProbe rows after a rotated marker frame = %d, want 1", got)
+	}
+}
+
+// TestProbeClaudeScreenStop_BlockingPromptWithDescriptionTitleKeepsBolt proves
+// the screen classifiers, not the title, are what defend an open permission
+// prompt now that a description title no longer vetoes the read.
+func TestProbeClaudeScreenStop_BlockingPromptWithDescriptionTitleKeepsBolt(t *testing.T) {
+	base := time.Now()
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = "\u2733 Fix cursor corruption"
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudePermissionScreen,
+	}}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+	claudeSeedActiveBolt(t, h, 42, "sess-blocked", base.Unix())
+
+	for sample := 1; sample <= claudeIdleProbeMarkerSamples*3; sample++ {
 		h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
 	}
 
 	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
-		t.Fatalf("effective after repeated idle-screen samples = %+v, want bolt", eff)
+		t.Fatalf("effective over an open permission prompt = %+v, want bolt", eff)
 	}
 	assertNoProbeStopFact(t, h, 42)
 	if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 0 {
 		t.Fatalf("ScreenStopProbe rows = %d, want 0", got)
 	}
+}
+
+// TestProbeClaudeScreenStop_HookEventResetsDescriptionMarkerRun proves the
+// decisive safety property behind dropping the title veto: any applied reducer
+// event restarts the streak, so a settle really does mean an uninterrupted run
+// of idle screens with zero hook traffic.
+func TestProbeClaudeScreenStop_HookEventResetsDescriptionMarkerRun(t *testing.T) {
+	base := time.Now()
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = "\u2733 Fix cursor corruption"
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudeIdleScreen,
+	}}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+	claudeSeedActiveBolt(t, h, 42, "sess-hooked", base.Unix())
+
+	for sample := 1; sample < claudeIdleProbeMarkerSamples; sample++ {
+		h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
+	}
+	claudeSeedActiveBolt(t, h, 42, "sess-hooked", base.Add(3*time.Second).Unix())
+
+	h.ProbeClaudeScreenStop(base.Add(time.Duration(claudeIdleProbeMarkerSamples) * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective after a hook reset the streak = %+v, want bolt", eff)
+	}
+	assertNoProbeStopFact(t, h, 42)
 }
 
 func countEventsNamed(t *testing.T, h *Handler, windowID int, name string) int {

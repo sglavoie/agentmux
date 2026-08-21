@@ -183,7 +183,7 @@ func screenProbeSignature(osWindow *kitty.OSWindow, tab *kitty.Tab) screenProbeT
 func screenProbeWindowSignatureFor(win *kitty.Window) screenProbeWindowSignature {
 	signature := screenProbeWindowSignature{
 		mute:            win.UserVars.Mute,
-		claudeBusyTitle: claudeWindowTitleHasActiveWork(win.Title),
+		claudeBusyTitle: claudeWindowTitleHasDescriptionMarker(win.Title),
 	}
 	signature.foregroundHarness, signature.foregroundPipeMode = screenProbeForegroundHarness(win)
 	return signature

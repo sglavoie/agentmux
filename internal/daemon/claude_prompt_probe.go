@@ -34,13 +34,13 @@ const (
 	// sample).
 	claudeIdleProbeRequiredSamples = 2
 
-	// claudeIdleProbeRestingMarkerSamples stabilizes a screen whose pane title
-	// still carries a marker rune over Claude's generic resting body. The marker
-	// is stale evidence, not active-work evidence, but a genuinely working turn
-	// can briefly publish the same shape before it computes a description — so
-	// this class settles on a longer run (~8s at the 2s probe cadence) than a bare
-	// title.
-	claudeIdleProbeRestingMarkerSamples = 4
+	// claudeIdleProbeMarkerSamples stabilizes a screen whose pane title still
+	// carries a marker rune, over a description body or Claude's generic resting
+	// body alike. A marker is stale-tolerant evidence, not active-work evidence:
+	// Claude leaves the last frame behind after a turn. But a genuinely working
+	// turn publishes the same shape, so this class settles on a longer run (~8s at
+	// the 2s probe cadence) than a bare title.
+	claudeIdleProbeMarkerSamples = 4
 )
 
 // ProbeClaudeScreenStop scans managed Claude windows for a finished interactive
@@ -101,7 +101,8 @@ func (h *Handler) probeClaudeScreenStopWithSnapshot(now time.Time, snapshot scre
 //
 // The interruption marker is stronger evidence than a bare idle composer, so it
 // settles immediately (one sample) while a plain composer-idle screen must agree
-// across two consecutive samples first.
+// across two consecutive samples first. A pane title still carrying a marker
+// outranks both and requires the longer marker run.
 func (h *Handler) probeClaudeIdleWindow(
 	now time.Time,
 	binding screenProbeBinding,
@@ -112,16 +113,19 @@ func (h *Handler) probeClaudeIdleWindow(
 	source := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
 	targetWindowID := binding.TargetWindowID
 
-	// Claude's pane title is the strongest positive evidence available while a
-	// turn is running: some builds keep an empty composer on screen throughout
-	// the turn and publish activity only through this marker. Handle it before
-	// the bolt-only idle eligibility gate so an acknowledged, restored, or
-	// otherwise hook-missed empty tab can recover to ⚡. The helper revalidates
-	// the exact snapshot binding and only mutates an empty reduced icon; terminal
-	// and higher-precedence states are never replaced.
-	if claudeWindowTitleHasActiveWork(sourceWindowTitle) {
+	// A description title recovers a hook-missed empty tab to ⚡ before the
+	// bolt-only idle eligibility gate below. The helper revalidates the exact
+	// snapshot binding and only mutates an empty reduced icon; terminal and
+	// higher-precedence states are never replaced.
+	//
+	// It deliberately does not veto the screen read that follows. Claude keeps a
+	// description title long after its turn ends, so a title that stopped the
+	// probe here would leave an idle pane permanently unable to settle. A
+	// committed promotion bumps ShadowSeq and so fails the eligibility check
+	// below on this same tick; every other tick reads the screen, which is
+	// authoritative for whether a turn is actually running.
+	if claudeWindowTitleHasDescriptionMarker(sourceWindowTitle) {
 		h.recoverClaudeBusyTitle(now, binding, titleParts, userVars, sourceWindowTitle)
-		return
 	}
 
 	// Revalidate the snapshot receipt before the off-lock GetText. A window with no
@@ -179,11 +183,11 @@ func (h *Handler) probeClaudeIdleWindow(
 	if interrupted {
 		required = 1
 	}
-	// A resting marker deliberately overrides the interrupted fast path. A stale
+	// A marker title deliberately overrides the interrupted fast path. A stale
 	// on-screen interruption marker from an earlier turn must not settle a
-	// genuinely working pane during its brief generic-title phase in one tick.
-	if claudeWindowTitleHasRestingMarker(sourceWindowTitle) {
-		required = claudeIdleProbeRestingMarkerSamples
+	// genuinely working pane in one tick.
+	if claudeTitleHasMarker(sourceWindowTitle) {
+		required = claudeIdleProbeMarkerSamples
 	}
 
 	h.applyAuthoritativeIdle(AuthoritativeIdle{
@@ -204,12 +208,13 @@ func (h *Handler) probeClaudeIdleWindow(
 }
 
 // recoverClaudeBusyTitle promotes an empty managed Claude target to active from
-// the pane title's current busy marker. It deliberately performs no screen read:
-// the marker is already part of the causally-bound Kitty snapshot. Existing
-// icons are left untouched, including stop and every attention/error state.
-// Promotion is one-shot per title text (see WindowState.promotedBusyTitle): a
-// title that outlives the turn that produced it recovers ⚡ once, not on every
-// tick after the watchdog expires the promoted fact.
+// the pane title's busy marker. It deliberately performs no screen read: the
+// marker is already part of the causally-bound Kitty snapshot, and the caller
+// scrapes the screen on the same tick. Existing icons are left untouched,
+// including stop and every attention/error state. Promotion is one-shot per
+// marker body (see WindowState.promotedBusyBody): a title that outlives the turn
+// that produced it recovers ⚡ once, not on every tick after the watchdog expires
+// the promoted fact.
 func (h *Handler) recoverClaudeBusyTitle(
 	now time.Time,
 	binding screenProbeBinding,
@@ -229,10 +234,6 @@ func (h *Handler) recoverClaudeBusyTitle(
 		return
 	}
 
-	// A current busy marker invalidates any partial idle stabilization even when
-	// an explicit icon prevents active recovery.
-	h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
-
 	currentIcon := titleParts.State
 	st, ok := h.windowStateLocked(targetWindowID)
 	if ok && st != nil {
@@ -246,7 +247,11 @@ func (h *Handler) recoverClaudeBusyTitle(
 	if currentIcon != "" {
 		return
 	}
-	if ok && st != nil && st.promotedBusyTitle == sourceWindowTitle {
+	// The marker rune is an animation frame frozen at an arbitrary value, so the
+	// one-shot is keyed on the body alone: a raw-title key re-arms itself whenever
+	// the frozen frame differs over the same description.
+	promotedBody, _ := claudeTitleMarkerBody(sourceWindowTitle)
+	if ok && st != nil && st.promotedBusyBody == promotedBody {
 		return
 	}
 
@@ -270,6 +275,11 @@ func (h *Handler) recoverClaudeBusyTitle(
 	}
 	st.ShadowSeq = nextSeq
 
+	// Only a committed promotion invalidates accumulated idle evidence. The
+	// caller's screen read now depends on that streak surviving every tick where
+	// the title merely repeats itself.
+	h.clearIdleSampleLocked(idleSampleRef{windowID: targetWindowID, key: source.Key})
+
 	st.Activity = now
 	if titleParts.Base != "" {
 		st.LastSessionTitle = titleParts.Base
@@ -283,7 +293,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	st.LastAction = "active"
 	st.LastActiveEvent = screenActiveProbeEvent
 	st.NotifiedStale = false
-	st.promotedBusyTitle = sourceWindowTitle
+	st.promotedBusyBody = promotedBody
 
 	st.Reducer.Compact(now.Unix())
 	effective := st.Reducer.Reduce(now.Unix())
