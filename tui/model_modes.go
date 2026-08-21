@@ -44,8 +44,13 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case keyJ, keyDown:
 		m.configPickerCursor = clamp(m.configPickerCursor+1, 0, len(m.configPickerAccounts)-1)
+		// The centered overlay changes this row from ANSI-free selection text
+		// back to its semantic colors. Force a complete repaint so terminal
+		// diffing cannot retain a cell from the prior reverse-video span.
+		return m, tea.ClearScreen
 	case keyK, keyUp:
 		m.configPickerCursor = clamp(m.configPickerCursor-1, 0, len(m.configPickerAccounts)-1)
+		return m, tea.ClearScreen
 	case keyEnter:
 		if m.configPickerCursor >= 0 && m.configPickerCursor < len(m.configPickerAccounts) {
 			acc := m.configPickerAccounts[m.configPickerCursor]

@@ -165,7 +165,7 @@ func renderCompletion(m Model) string {
 		c := m.completion.Candidates[i]
 		body := "  " + string(m.completion.Sigil) + c + "  "
 		if i == m.completion.Selected {
-			sb.WriteString(styleCompletionSelected.Render(body))
+			sb.WriteString(renderSelectedRow(body))
 		} else {
 			sb.WriteString(styleCompletionPopup.Render(body))
 		}

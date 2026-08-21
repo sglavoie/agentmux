@@ -202,7 +202,7 @@ func renderASLRunList(m Model, height int) string {
 	for i := window.start; i < window.end; i++ {
 		line := formatASLRow(m.aslRows[i], m.width, aslWide(m))
 		if i == m.aslCursor {
-			line = styleSelected.Render(line)
+			line = renderSelectedRow(line)
 		}
 		sb.WriteString(line)
 		sb.WriteByte('\n')

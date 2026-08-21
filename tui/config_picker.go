@@ -45,7 +45,7 @@ func renderConfigPicker(m Model) string {
 			line += styleDim.Render(" (current)")
 		}
 		if i == m.configPickerCursor {
-			sb.WriteString(styleSelected.Render(line))
+			sb.WriteString(renderSelectedRow(line))
 		} else {
 			sb.WriteString(line)
 		}

@@ -101,7 +101,7 @@ func renderWorktreeList(m Model, height int) string {
 	for i := window.start; i < window.end; i++ {
 		line := formatWorktreeRow(m.worktreeFiltered[i], m.width)
 		if i == m.worktreeCursor {
-			line = styleSelected.Render(line)
+			line = renderSelectedRow(line)
 		}
 		sb.WriteString(line)
 		sb.WriteByte('\n')

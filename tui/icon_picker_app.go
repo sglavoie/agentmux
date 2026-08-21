@@ -160,7 +160,7 @@ func (m iconPickerModel) View() tea.View {
 	for i, item := range m.items {
 		label := fmt.Sprintf("  %s  %s", item.emoji, item.name)
 		if i == m.cursor {
-			sb.WriteString(styleSelected.Render(label) + "\n")
+			sb.WriteString(renderSelectedRow(label) + "\n")
 		} else {
 			sb.WriteString(label + "\n")
 		}

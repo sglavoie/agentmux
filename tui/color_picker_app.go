@@ -198,7 +198,7 @@ func (m colorPickerModel) View() tea.View {
 				suffix = " ←"
 			}
 			if i == m.cursor {
-				sb.WriteString(styleSelected.Render(label+suffix) + "\n")
+				sb.WriteString(renderSelectedRow(label+suffix) + "\n")
 			} else {
 				sb.WriteString(label + suffix + "\n")
 			}
@@ -215,7 +215,7 @@ func (m colorPickerModel) View() tea.View {
 	sb.WriteString(styleDim.Render(divider) + "\n")
 	resetLabel := fmt.Sprintf("  %s  %s", resetItem.emoji, resetItem.name)
 	if m.cursor == len(m.items)-1 {
-		sb.WriteString(styleSelected.Render(resetLabel) + "\n")
+		sb.WriteString(renderSelectedRow(resetLabel) + "\n")
 	} else {
 		sb.WriteString(resetLabel + "\n")
 	}

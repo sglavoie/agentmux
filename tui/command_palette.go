@@ -425,7 +425,7 @@ func renderCommandPaletteRow(m Model, row commandPaletteDisplayRow, width int) s
 		return styleHeader.Render(text)
 	}
 	if row.commandIndex == m.commandCursor && row.commandIndex >= 0 {
-		return styleSelected.Render(displayPadRight(text, width))
+		return renderSelectedRow(displayPadRight(text, width))
 	}
 	if row.commandIndex >= 0 {
 		availability := m.commandResults[row.commandIndex].availabilityFor(m, m.commandContext)

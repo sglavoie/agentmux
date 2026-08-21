@@ -81,7 +81,7 @@ func renderChipPicker(m Model) string {
 			line += styleDim.Render(" (current)")
 		}
 		if i == m.chipPickerCursor {
-			sb.WriteString(styleSelected.Render(line))
+			sb.WriteString(renderSelectedRow(line))
 		} else {
 			sb.WriteString(line)
 		}

@@ -56,6 +56,7 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"command-palette-narrow-scroll.json":        false,
 		"command-palette-wide.json":                 false,
 		"config-picker-fit.json":                    false,
+		"config-picker-selection-transition.json":   false,
 		"contextual-help-from-session-view.json":    false,
 		"footer-gloss-narrow-fit.json":              false,
 		"help-modal-narrow-fit.json":                false,

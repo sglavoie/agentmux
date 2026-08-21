@@ -29,7 +29,7 @@ func renderLiveSessionPicker(m Model) string {
 		candidate := m.livePickerCandidates[index]
 		line := formatLiveSessionCandidate(candidate, contentWidth)
 		if index == m.livePickerCursor {
-			line = styleSelected.Render(line)
+			line = renderSelectedRow(line)
 		}
 		sb.WriteString(line)
 		sb.WriteByte('\n')

@@ -164,7 +164,7 @@ func renderListAt(m Model, width, height int) string {
 		var styledRow string
 		switch {
 		case i == m.cursor:
-			styledRow = styleSelected.Render(row)
+			styledRow = renderSelectedRow(row)
 		case s.Locked:
 			styledRow = styleDim.Render(row)
 		case g == 0:

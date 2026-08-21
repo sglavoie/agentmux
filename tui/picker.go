@@ -255,7 +255,7 @@ func renderPickerList(m Model, height int) string {
 		}
 
 		if i == m.pickerCursor {
-			sb.WriteString(styleSelected.Render(line))
+			sb.WriteString(renderSelectedRow(line))
 		} else {
 			sb.WriteString(line)
 		}

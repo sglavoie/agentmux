@@ -265,6 +265,7 @@ file. The exact inventory is:
 | [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |
 | [`command-palette-wide.json`](scenarios/command-palette-wide.json) | `basic` | wide empty-query palette shows grouped commands and inline disabled reasons |
 | [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits after pressing `C` with long profile names |
+| [`config-picker-selection-transition.json`](scenarios/config-picker-selection-transition.json) | `wide_profiles` | `l` → `C` → `down` restores the old colored profile row and keeps the new selection within the modal |
 | [`contextual-help-from-session-view.json`](scenarios/contextual-help-from-session-view.json) | `basic` | `?` opens the generated keymap over the truncated transcript viewer, which stays as the backdrop |
 | [`footer-gloss-narrow-fit.json`](scenarios/footer-gloss-narrow-fit.json) | `basic` | narrow footer keeps the surviving dashboard hints readable |
 | [`help-modal-narrow-fit.json`](scenarios/help-modal-narrow-fit.json) | `basic` | help remains bounded in a narrow viewport |

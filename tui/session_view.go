@@ -113,7 +113,7 @@ func renderSessionViewBody(m Model, height int) string {
 		line := formatViewerLine(m.viewerMessages[i], maxWidth)
 		switch {
 		case i == cursorLine:
-			sb.WriteString(styleSelected.Render(line))
+			sb.WriteString(renderSelectedRow(line))
 		case isMatchLine[i]:
 			sb.WriteString(styleSearch.Render(line))
 		default:

@@ -155,7 +155,7 @@ func renderPlanSearchList(m Model, height int) string {
 		res := m.planResults[i]
 		line := formatPlanRow(res, maxWidth)
 		if i == m.planCursor {
-			sb.WriteString(styleSelected.Render(line))
+			sb.WriteString(renderSelectedRow(line))
 		} else {
 			sb.WriteString(line)
 		}

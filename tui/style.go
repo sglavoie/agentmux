@@ -90,11 +90,10 @@ var (
 	stylePipErr  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555"))
 	styleBanner  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00")).Bold(true)
 
-	// Completion popup styles. The selected row inverts so it pops without
-	// recoloring; non-selected rows use the dim footer style so the menu
-	// reads as auxiliary UI rather than competing with the input bar.
-	styleCompletionPopup    = lipgloss.NewStyle().Faint(true)
-	styleCompletionSelected = lipgloss.NewStyle().Bold(true).Reverse(true)
+	// Completion popup styles. Selected rows use renderSelectedRow so they
+	// share the same normalized highlight as every other selectable list;
+	// non-selected rows stay dim so the menu reads as auxiliary UI.
+	styleCompletionPopup = lipgloss.NewStyle().Faint(true)
 
 	// Detail-pane styles (ModeDetail). detailRowStyle is intentionally
 	// neutral so row text inherits the terminal's default foreground;

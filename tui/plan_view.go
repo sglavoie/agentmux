@@ -82,7 +82,7 @@ func renderPlanViewBody(m Model, height int) string {
 		line := row.text
 		switch {
 		case row.sourceLine == cursorLine:
-			sb.WriteString(styleSelected.Render(line))
+			sb.WriteString(renderSelectedRow(line))
 		case row.isMatch(m.planViewerMatchLines):
 			sb.WriteString(styleSearch.Render(line))
 		case row.isSeparator(m.planViewerLines):
