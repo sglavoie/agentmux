@@ -138,6 +138,10 @@ func (h *Handler) reduceStateUpdate(req Request, outcome applyOutcome, resp Resp
 	if st.Reducer == nil {
 		st.Reducer = NewReducer(h.reducerCfg)
 	}
+	// A real hook/ASL event is the only evidence that re-arms one-shot busy-title
+	// promotion. The probe applies its own fact directly through st.Reducer.Apply
+	// and never reaches here, so it cannot re-arm itself.
+	st.promotedBusyTitle = ""
 	effectiveBefore := st.Effective
 	// Today's harness payloads carry no source_sequence; assign the window's
 	// receipt sequence so per-source monotonicity (duplicate/reorder handling)

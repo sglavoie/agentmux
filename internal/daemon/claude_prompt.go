@@ -118,18 +118,34 @@ func claudeScreenHasActiveWork(screen string) bool {
 	return false
 }
 
+// claudeRestingTitleText is the generic body Claude Code publishes in its pane
+// title when no turn is running.
+const claudeRestingTitleText = "Claude Code"
+
 // claudeWindowTitleHasActiveWork reports whether Claude's pane title carries
 // its out-of-band busy marker. Recent Claude builds can keep an empty composer
 // visible while moving the only active-work signal into the terminal title, so
 // the screen body alone is not sufficient idle evidence. The star is Claude's
 // ordinary work marker; Braille-pattern runes cover its alternate high-effort
 // spinner without coupling freshness to the individual animation frame.
+//
+// The two markers are deliberately asymmetric over the generic body: Claude's
+// resting title is exactly "\u2733 Claude Code", so a star there is no evidence at
+// all, while a star over a turn description ("\u2733 Fix drawer drag resistance") is.
+// Braille runes are spinner animation frames that only render while a turn runs,
+// so they mean work even over the generic body.
 func claudeWindowTitleHasActiveWork(title string) bool {
 	runes := []rune(strings.TrimLeftFunc(title, unicode.IsSpace))
 	if len(runes) < 2 || !unicode.IsSpace(runes[1]) {
 		return false
 	}
-	return runes[0] == '\u2733' || runes[0] >= '\u2800' && runes[0] <= '\u28ff'
+	switch {
+	case runes[0] == '\u2733':
+		return strings.TrimSpace(string(runes[2:])) != claudeRestingTitleText
+	case runes[0] >= '\u2800' && runes[0] <= '\u28ff':
+		return true
+	}
+	return false
 }
 
 // claudeScreenHasBlockingPrompt reports whether the screen shows a Claude

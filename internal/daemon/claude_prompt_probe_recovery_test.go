@@ -253,6 +253,94 @@ func TestProbeClaudeScreenStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
 	}
 }
 
+// TestProbeClaudeScreenStop_StaleBusyTitlePromotesOnce pins the sawtooth fix. A
+// pane title that outlives its turn promotes ⚡ once; when the watchdog expires
+// that promoted fact the same unchanged title must not promote again, or the
+// window cycles through ⚡ forever with a restarting busy anchor. A real hook
+// event re-arms promotion even when the title text is identical.
+func TestProbeClaudeScreenStop_StaleBusyTitlePromotesOnce(t *testing.T) {
+	base := time.Now()
+	const staleTitle = "⠐ " + claudeRestingTitleText
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = staleTitle
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudeIdleScreen,
+	}}
+	h := newTestHandler()
+	h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Minute}, nil)
+	h.SetKittyClient(fake)
+
+	h.ProbeClaudeScreenStop(base)
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective after first busy-title probe = %+v, want bolt", eff)
+	}
+	if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 1 {
+		t.Fatalf("ScreenActiveProbe rows after first promotion = %d, want 1", got)
+	}
+
+	expired := base.Add(11 * time.Minute)
+	h.SweepStaleWithSnapshot(expired, nil)
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "" {
+		t.Fatalf("effective after watchdog expiry = %+v, want empty", eff)
+	}
+	if anchor := windowBusySince(t, h, 42); !anchor.IsZero() {
+		t.Fatalf("BusySince after watchdog expiry = %v, want zero", anchor)
+	}
+
+	h.ProbeClaudeScreenStop(expired.Add(2 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "" {
+		t.Fatalf("effective after re-probing the same stale title = %+v, want no second promotion", eff)
+	}
+	if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 1 {
+		t.Fatalf("ScreenActiveProbe rows after re-probing the same title = %d, want 1", got)
+	}
+	if anchor := windowBusySince(t, h, 42); !anchor.IsZero() {
+		t.Fatalf("BusySince after re-probing the same title = %v, want zero", anchor)
+	}
+
+	// A genuine turn re-arms promotion: the same title recovers once more after
+	// the watchdog expires the hook-backed fact.
+	resumed := expired.Add(time.Minute)
+	claudeSeedActiveBolt(t, h, 42, "sess-resumed", resumed.Unix())
+	h.SweepStaleWithSnapshot(resumed.Add(11*time.Minute), nil)
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "" {
+		t.Fatalf("effective after expiring the hook fact = %+v, want empty", eff)
+	}
+
+	h.ProbeClaudeScreenStop(resumed.Add(12 * time.Minute))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective after a re-armed busy-title probe = %+v, want bolt", eff)
+	}
+	if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 2 {
+		t.Fatalf("ScreenActiveProbe rows after re-armed promotion = %d, want 2", got)
+	}
+}
+
+func countEventsNamed(t *testing.T, h *Handler, windowID int, name string) int {
+	t.Helper()
+	count := 0
+	for _, event := range h.Handle(Request{Type: TypeSessionDetail, WindowID: windowID}).Events {
+		if event.Event == name {
+			count++
+		}
+	}
+	return count
+}
+
+func windowBusySince(t *testing.T, h *Handler, windowID int) time.Time {
+	t.Helper()
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	st, ok := h.store[windowID]
+	if !ok {
+		t.Fatalf("no window state for %d", windowID)
+	}
+	return st.BusySince
+}
+
 // claudeSeedActiveBolt folds a real session-scoped Claude UserPromptSubmit fact
 // into a window so its stuck ⚡ is backed by a live interactive reducer fact —
 // the reducer precedence a synthetic screen stop must defeat. It mirrors

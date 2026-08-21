@@ -112,7 +112,7 @@ func (h *Handler) probeClaudeIdleWindow(
 	// the exact snapshot binding and only mutates an empty reduced icon; terminal
 	// and higher-precedence states are never replaced.
 	if claudeWindowTitleHasActiveWork(sourceWindowTitle) {
-		h.recoverClaudeBusyTitle(now, binding, titleParts, userVars)
+		h.recoverClaudeBusyTitle(now, binding, titleParts, userVars, sourceWindowTitle)
 		return
 	}
 
@@ -193,11 +193,15 @@ func (h *Handler) probeClaudeIdleWindow(
 // the pane title's current busy marker. It deliberately performs no screen read:
 // the marker is already part of the causally-bound Kitty snapshot. Existing
 // icons are left untouched, including stop and every attention/error state.
+// Promotion is one-shot per title text (see WindowState.promotedBusyTitle): a
+// title that outlives the turn that produced it recovers ⚡ once, not on every
+// tick after the watchdog expires the promoted fact.
 func (h *Handler) recoverClaudeBusyTitle(
 	now time.Time,
 	binding screenProbeBinding,
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
+	sourceWindowTitle string,
 ) {
 	targetWindowID := binding.TargetWindowID
 	source := SourceID{Kind: SourceProbe, Key: claudeScreenStopProbeSource}
@@ -226,6 +230,9 @@ func (h *Handler) recoverClaudeBusyTitle(
 		}
 	}
 	if currentIcon != "" {
+		return
+	}
+	if ok && st != nil && st.promotedBusyTitle == sourceWindowTitle {
 		return
 	}
 
@@ -262,6 +269,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	st.LastAction = "active"
 	st.LastActiveEvent = screenActiveProbeEvent
 	st.NotifiedStale = false
+	st.promotedBusyTitle = sourceWindowTitle
 
 	st.Reducer.Compact(now.Unix())
 	effective := st.Reducer.Reduce(now.Unix())
