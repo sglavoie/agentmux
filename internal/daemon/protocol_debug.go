@@ -87,6 +87,10 @@ type WindowDebugShadow struct {
 	// terminal stop for this window. The hold lives in daemon memory, so a
 	// restart drops it and this section disappears.
 	PendingTerminalStop *PendingTerminalStop `json:"pending_terminal_stop,omitempty"`
+	// BusySinceAt is when the window's current active-class stretch began (unix
+	// seconds). Absent while the window is not busy, which also preserves the
+	// former response shape for clients that do not render the stretch.
+	BusySinceAt int64 `json:"busy_since_at,omitempty"`
 }
 
 // Stop-hold class names are the stable spelling of a hold's release rule in

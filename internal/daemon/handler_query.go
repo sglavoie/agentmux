@@ -110,8 +110,9 @@ func (h *Handler) handleEventsExport(req Request) Response {
 // renderer dirty age (DirtySince in the metadata is copied at mutation time;
 // the age is computed at export time so a long-stuck window reads truthfully),
 // the reducer's current source facts, so diagnostics can hold the visible icon
-// accountable to the authoritative fact set, and any terminal stop still being
-// withheld from that fact set. Callers hold stateMu.
+// accountable to the authoritative fact set, any terminal stop still being
+// withheld from that fact set, and the current busy-stretch anchor. Callers
+// hold stateMu.
 func (h *Handler) exportEnrichLocked(windowID int, meta WindowDebugMetadata) WindowDebugMetadata {
 	st, ok := h.store[windowID]
 	if !ok {
@@ -124,6 +125,9 @@ func (h *Handler) exportEnrichLocked(windowID int, meta WindowDebugMetadata) Win
 		meta.Shadow.Facts = st.Reducer.Facts()
 	}
 	meta.Shadow.PendingTerminalStop = h.pendingTerminalStopSnapshotLocked(windowID)
+	if !st.BusySince.IsZero() {
+		meta.Shadow.BusySinceAt = st.BusySince.Unix()
+	}
 	return meta
 }
 

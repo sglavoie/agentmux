@@ -372,8 +372,8 @@ func hasAcceptanceStage(records []diagnostics.TraceEnvelope, stage, outcome, rea
 }
 
 func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
-	if version != "0.6.0" {
-		t.Fatalf("version = %q, want 0.6.0", version)
+	if version != "0.7.0" {
+		t.Fatalf("version = %q, want 0.7.0", version)
 	}
 	for _, path := range []string{"../docs/daemon.md", "../docs/debugging.md", "../docs/acceptance.md"} {
 		data, err := os.ReadFile(path)
@@ -382,7 +382,7 @@ func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
 		}
 		text := string(data)
 		for _, required := range []string{
-			"amx debug status", "amx debug explain", "amx debug bundle", "schema v11",
+			"amx debug status", "amx debug explain", "amx debug bundle", "schema v12",
 			"schema v2", "journal_snapshot", "event-time", "--graph-depth",
 			"notification_failure", "v1 and v2", "causal-record wrappers",
 		} {

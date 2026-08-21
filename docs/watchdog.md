@@ -96,6 +96,13 @@ The tab title is prefixed with an icon based on the latest hook event:
 | ⚠️ | tool failed (recoverable) |
 | ❗ | stopped with failure |
 
+Claude pane-title work markers need both a marker and a fresh description body.
+A `✳` rune or any Braille-pattern rune over the generic resting body `Claude Code`
+is stale evidence left by a finished turn, never active-work evidence. When a stuck
+⚡ has that resting-marker title, the idle screen probe still requires a longer
+four-sample stabilization run before settling it, guarding against a transient
+generic title while Claude is genuinely working.
+
 ### Stop confirmation
 
 A harness that ends a turn and then keeps working on its own makes the tab flip

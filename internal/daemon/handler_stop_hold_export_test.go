@@ -1,7 +1,9 @@
 package daemon
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -20,7 +22,17 @@ func stopHoldExportPayload() ExportEventsPayload {
 			},
 		},
 		Shadow: WindowDebugShadow{
-			EffectiveIcon: "bolt",
+			EffectiveIcon:    "bolt",
+			EffectiveLooping: true,
+			EffectiveGen:     7,
+			MismatchCount:    1,
+			BusySinceAt:      90,
+			Mismatches: []ShadowMismatch{{
+				At: 99, Event: "PreToolUse", Action: "active", LegacyIcon: "", ShadowIcon: "bolt",
+			}},
+			Facts: []SourceFactSnapshot{{
+				Kind: SourceHarness, Key: "claude:session", Action: "active", Icon: "bolt", Seq: 7,
+			}},
 			PendingTerminalStop: &PendingTerminalStop{
 				ArmedAt: 100, QuietUntil: 102, Deadline: 108, Confirmed: true, Class: StopHoldClassTerminal,
 			},
@@ -56,13 +68,92 @@ func stopHoldExportJSON(t *testing.T, schema int) map[string]any {
 	return raw
 }
 
-func TestProjectExportEventsPayloadV11RoundTripsStopHoldFields(t *testing.T) {
+func TestProjectExportEventsPayloadV12RoundTripsStopHoldFields(t *testing.T) {
 	raw := stopHoldExportJSON(t, EventsExportSchemaVersion)
-	if got := int(raw["schema_version"].(float64)); got != 11 {
-		t.Fatalf("schema_version = %d; want 11", got)
+	if got := int(raw["schema_version"].(float64)); got != 12 {
+		t.Fatalf("schema_version = %d; want 12", got)
 	}
 	window := raw["windows"].([]any)[0].(map[string]any)
 	pending, ok := window["shadow"].(map[string]any)["pending_terminal_stop"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema v12 shadow lost pending_terminal_stop: %v", window["shadow"])
+	}
+	if int(pending["armed_at"].(float64)) != 100 || int(pending["quiet_until"].(float64)) != 102 ||
+		int(pending["deadline"].(float64)) != 108 || pending["confirmed"] != true ||
+		pending["class"] != StopHoldClassTerminal {
+		t.Fatalf("schema v12 pending_terminal_stop = %v", pending)
+	}
+	events := window["events"].([]any)
+	if len(events) != 2 {
+		t.Fatalf("schema v12 events = %d; want 2", len(events))
+	}
+	held := events[0].(map[string]any)
+	if held["event"] != EventTerminalStopHold || held["stop_hold_outcome"] != string(StopHoldOutcomeHeld) {
+		t.Fatalf("schema v12 hold row = %v", held)
+	}
+	confirmed := events[1].(map[string]any)
+	if confirmed["stop_hold_outcome"] != string(StopHoldOutcomeConfirmed) ||
+		int(confirmed["stop_hold_waited_ms"].(float64)) != 1400 ||
+		confirmed["stop_confirmed_by"] != string(StopConfirmedByClaudeScreen) {
+		t.Fatalf("schema v12 confirmed row = %v", confirmed)
+	}
+	reasons := window["stats"].(map[string]any)["suppression_reasons"].(map[string]any)
+	for reason, want := range map[string]int{
+		suppressionReasonTerminalStopHeld:       2,
+		suppressionReasonTerminalStopSuperseded: 3,
+		suppressionReasonTerminalStopBypassed:   4,
+	} {
+		if got, ok := reasons[reason].(float64); !ok || int(got) != want {
+			t.Fatalf("schema v12 dropped stop-hold aggregate %q: %v", reason, reasons)
+		}
+	}
+}
+
+func TestProjectExportEventsPayloadV11IdentityProjection(t *testing.T) {
+	payload := stopHoldExportPayload()
+	projectedV11, err := ProjectExportEventsPayload(payload, EventsExportSchemaV11)
+	if err != nil {
+		t.Fatalf("ProjectExportEventsPayload(v11): %v", err)
+	}
+	projectedV12, err := ProjectExportEventsPayload(payload, EventsExportSchemaVersion)
+	if err != nil {
+		t.Fatalf("ProjectExportEventsPayload(v12): %v", err)
+	}
+	v11JSON, err := json.Marshal(projectedV11)
+	if err != nil {
+		t.Fatalf("Marshal(v11): %v", err)
+	}
+	v12JSON, err := json.Marshal(projectedV12)
+	if err != nil {
+		t.Fatalf("Marshal(v12): %v", err)
+	}
+	normalizedV12 := bytes.Replace(v12JSON, []byte(`,"busy_since_at":90`), nil, 1)
+	normalizedV12 = bytes.Replace(normalizedV12, []byte(`"schema_version":12`), []byte(`"schema_version":11`), 1)
+	if !bytes.Equal(v11JSON, normalizedV12) {
+		t.Fatalf("schema v11 projection differs from v12 beyond schema_version and busy_since_at:\nv11: %s\nv12 normalized: %s", v11JSON, normalizedV12)
+	}
+
+	var rawV11 map[string]any
+	if err := json.Unmarshal(v11JSON, &rawV11); err != nil {
+		t.Fatalf("Unmarshal(v11): %v", err)
+	}
+	var rawV12 map[string]any
+	if err := json.Unmarshal(v12JSON, &rawV12); err != nil {
+		t.Fatalf("Unmarshal(v12): %v", err)
+	}
+	if got := int(rawV11["schema_version"].(float64)); got != 11 {
+		t.Fatalf("schema_version = %d; want 11", got)
+	}
+	window := rawV11["windows"].([]any)[0].(map[string]any)
+	shadowV11 := window["shadow"].(map[string]any)
+	if _, ok := shadowV11["busy_since_at"]; ok {
+		t.Fatalf("schema v11 shadow leaked busy_since_at: %v", shadowV11)
+	}
+	shadowV12 := rawV12["windows"].([]any)[0].(map[string]any)["shadow"].(map[string]any)
+	if got, ok := shadowV12["busy_since_at"].(float64); !ok || int64(got) != 90 {
+		t.Fatalf("schema v12 busy_since_at = %v; want 90", shadowV12["busy_since_at"])
+	}
+	pending, ok := shadowV11["pending_terminal_stop"].(map[string]any)
 	if !ok {
 		t.Fatalf("schema v11 shadow lost pending_terminal_stop: %v", window["shadow"])
 	}
@@ -87,13 +178,41 @@ func TestProjectExportEventsPayloadV11RoundTripsStopHoldFields(t *testing.T) {
 	}
 	reasons := window["stats"].(map[string]any)["suppression_reasons"].(map[string]any)
 	for reason, want := range map[string]int{
+		suppressionReasonGuardBlocked:           1,
 		suppressionReasonTerminalStopHeld:       2,
 		suppressionReasonTerminalStopSuperseded: 3,
 		suppressionReasonTerminalStopBypassed:   4,
 	} {
 		if got, ok := reasons[reason].(float64); !ok || int(got) != want {
-			t.Fatalf("schema v11 dropped stop-hold aggregate %q: %v", reason, reasons)
+			t.Fatalf("schema v11 suppression aggregate %q = %v; want %d", reason, reasons[reason], want)
 		}
+	}
+}
+
+func TestHandler_ExportProjectsBusySinceAndOmitsItWhenIdle(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse", SessionTitle: "W:api"})
+
+	h.stateMu.Lock()
+	anchor := h.store[42].BusySince
+	h.stateMu.Unlock()
+	if anchor.IsZero() {
+		t.Fatal("active window has a zero busy anchor")
+	}
+
+	resp := h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+	if got := resp.WindowMetadata[42].Shadow.BusySinceAt; got != anchor.Unix() {
+		t.Fatalf("busy_since_at = %d; want anchor %d", got, anchor.Unix())
+	}
+
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop", SessionTitle: "W:api"})
+	resp = h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+	encoded, err := json.Marshal(resp.WindowMetadata[42].Shadow)
+	if err != nil {
+		t.Fatalf("Marshal(idle shadow): %v", err)
+	}
+	if strings.Contains(string(encoded), `"busy_since_at"`) {
+		t.Fatalf("idle shadow emitted busy_since_at: %s", encoded)
 	}
 }
 

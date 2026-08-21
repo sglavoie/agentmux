@@ -7,7 +7,7 @@ import (
 )
 
 // ProjectExportEventsPayload returns the requested public wire schema. Schemas
-// 8, 9, and 10 are explicit field projections so fields added to the current
+// 8, 9, 10, and 11 are explicit field projections so fields added to the current
 // schema can never leak into compatibility output through shared nested
 // structs.
 func ProjectExportEventsPayload(payload ExportEventsPayload, schema int) (any, error) {
@@ -15,6 +15,8 @@ func ProjectExportEventsPayload(payload ExportEventsPayload, schema int) (any, e
 	case EventsExportSchemaVersion:
 		payload.SchemaVersion = EventsExportSchemaVersion
 		return payload, nil
+	case EventsExportSchemaV11:
+		return projectExportEventsPayloadV11(payload), nil
 	case EventsExportSchemaV10:
 		return projectExportEventsPayloadV10(payload), nil
 	case EventsExportSchemaV9:
@@ -22,7 +24,7 @@ func ProjectExportEventsPayload(payload ExportEventsPayload, schema int) (any, e
 	case EventsExportSchemaV8:
 		return projectExportEventsPayloadV8(payload), nil
 	default:
-		return nil, fmt.Errorf("unsupported export schema %d (want 8, 9, 10, or 11)", schema)
+		return nil, fmt.Errorf("unsupported export schema %d (want 8, 9, 10, 11, or 12)", schema)
 	}
 }
 
@@ -58,6 +60,38 @@ func projectCompatibilityWindowDebugStats(stats WindowDebugStats) WindowDebugSta
 		out.SuppressionReasons[reason] = count
 	}
 	return out
+}
+
+type exportEventsPayloadV11 struct {
+	SchemaVersion int                  `json:"schema_version"`
+	ExportedAt    int64                `json:"exported_at"`
+	Daemon        ExportDaemonMetadata `json:"daemon"`
+	CLIBuild      *buildinfo.Info      `json:"cli_build,omitempty"`
+	Windows       []exportWindowV11    `json:"windows"`
+}
+
+type exportWindowV11 struct {
+	WindowID int                  `json:"window_id"`
+	Stats    WindowDebugStats     `json:"stats"`
+	Durable  WindowDebugDurable   `json:"durable"`
+	Renderer WindowDebugRenderer  `json:"renderer"`
+	Shadow   windowDebugShadowV11 `json:"shadow"`
+	Watchdog WindowDebugWatchdog  `json:"watchdog"`
+	Live     WindowLiveMetadata   `json:"live"`
+	Events   []SessionEvent       `json:"events"`
+}
+
+// windowDebugShadowV11 pins the schema-v11 shadow shape: everything the current
+// shadow carries through the pending terminal stop. The v12 busy-stretch anchor
+// is deliberately absent.
+type windowDebugShadowV11 struct {
+	EffectiveIcon       string               `json:"effective_icon"`
+	EffectiveLooping    bool                 `json:"effective_looping"`
+	EffectiveGen        uint64               `json:"effective_gen"`
+	MismatchCount       int                  `json:"mismatch_count"`
+	Mismatches          []ShadowMismatch     `json:"mismatches,omitempty"`
+	Facts               []SourceFactSnapshot `json:"facts,omitempty"`
+	PendingTerminalStop *PendingTerminalStop `json:"pending_terminal_stop,omitempty"`
 }
 
 type exportEventsPayloadV10 struct {
@@ -287,6 +321,26 @@ type sourceFactSnapshotV9 struct {
 	TerminalAt      int64      `json:"ta,omitempty"`
 }
 
+func projectExportEventsPayloadV11(payload ExportEventsPayload) exportEventsPayloadV11 {
+	out := exportEventsPayloadV11{
+		SchemaVersion: EventsExportSchemaV11,
+		ExportedAt:    payload.ExportedAt,
+		Daemon:        payload.Daemon,
+		CLIBuild:      payload.CLIBuild,
+	}
+	if payload.Windows != nil {
+		out.Windows = make([]exportWindowV11, 0, len(payload.Windows))
+	}
+	for _, window := range payload.Windows {
+		out.Windows = append(out.Windows, exportWindowV11{
+			WindowID: window.WindowID, Stats: window.Stats, Durable: window.Durable,
+			Renderer: window.Renderer, Shadow: projectWindowDebugShadowV11(window.Shadow),
+			Watchdog: window.Watchdog, Live: window.Live, Events: window.Events,
+		})
+	}
+	return out
+}
+
 func projectExportEventsPayloadV10(payload ExportEventsPayload) exportEventsPayloadV10 {
 	out := exportEventsPayloadV10{
 		SchemaVersion: EventsExportSchemaV10,
@@ -419,6 +473,18 @@ func projectSessionEventV10(event SessionEvent) sessionEventV10 {
 		WithdrawnFacts: event.WithdrawnFacts, ClearedSubagents: event.ClearedSubagents,
 		SynthesizedStop: event.SynthesizedStop, TerminalHookEvidence: event.TerminalHookEvidence,
 		QuestionPreview: event.QuestionPreview,
+	}
+}
+
+func projectWindowDebugShadowV11(shadow WindowDebugShadow) windowDebugShadowV11 {
+	return windowDebugShadowV11{
+		EffectiveIcon:       shadow.EffectiveIcon,
+		EffectiveLooping:    shadow.EffectiveLooping,
+		EffectiveGen:        shadow.EffectiveGen,
+		MismatchCount:       shadow.MismatchCount,
+		Mismatches:          shadow.Mismatches,
+		Facts:               shadow.Facts,
+		PendingTerminalStop: shadow.PendingTerminalStop,
 	}
 }
 

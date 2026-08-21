@@ -254,13 +254,13 @@ func TestProbeClaudeScreenStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
 }
 
 // TestProbeClaudeScreenStop_StaleBusyTitlePromotesOnce pins the sawtooth fix. A
-// pane title that outlives its turn promotes ⚡ once; when the watchdog expires
-// that promoted fact the same unchanged title must not promote again, or the
-// window cycles through ⚡ forever with a restarting busy anchor. A real hook
-// event re-arms promotion even when the title text is identical.
+// stale description title that outlives its turn promotes ⚡ once; when the
+// watchdog expires that promoted fact the same unchanged title must not promote
+// again, or the window cycles through ⚡ forever with a restarting busy anchor.
+// A real hook event re-arms promotion even when the title text is identical.
 func TestProbeClaudeScreenStop_StaleBusyTitlePromotesOnce(t *testing.T) {
 	base := time.Now()
-	const staleTitle = "⠐ " + claudeRestingTitleText
+	const staleTitle = "⠐ Repair advisor calibration"
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
 		Profile: "work",
 		Harness: harness.Claude,
@@ -316,6 +316,109 @@ func TestProbeClaudeScreenStop_StaleBusyTitlePromotesOnce(t *testing.T) {
 	}
 	if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 2 {
 		t.Fatalf("ScreenActiveProbe rows after re-armed promotion = %d, want 2", got)
+	}
+}
+
+// TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow pins the
+// phantom's origin: Claude's generic resting title can retain a Braille marker
+// after the turn ends, but that stale frame must never recover an empty tab to ⚡.
+func TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow(t *testing.T) {
+	base := time.Now()
+	const restingTitle = "\u2802 " + claudeRestingTitleText
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = restingTitle
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudeIdleScreen,
+	}}
+	h := newTestHandler()
+	if resp := h.Handle(Request{Type: TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: harness.Claude}); !resp.OK {
+		t.Fatalf("seed empty state response = %+v", resp)
+	}
+	h.SetKittyClient(fake)
+
+	for sample := 1; sample <= claudeIdleProbeRestingMarkerSamples+2; sample++ {
+		h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
+		if got := countEventsNamed(t, h, 42, screenActiveProbeEvent); got != 0 {
+			t.Fatalf("ScreenActiveProbe rows after sample %d = %d, want 0", sample, got)
+		}
+		if eff, _ := windowEffective(t, h, 42); eff.Icon != "" {
+			t.Fatalf("effective after sample %d = %+v, want empty", sample, eff)
+		}
+		if anchor := windowBusySince(t, h, 42); !anchor.IsZero() {
+			t.Fatalf("BusySince after sample %d = %v, want zero", sample, anchor)
+		}
+	}
+}
+
+// TestProbeClaudeScreenStop_RestingBrailleRequiresFourIdleSamples pins the
+// phantom's exit: a stale marker over Claude's resting body must enter the idle
+// path, but it uses the longer stabilization gate before settling a stuck ⚡.
+func TestProbeClaudeScreenStop_RestingBrailleRequiresFourIdleSamples(t *testing.T) {
+	if claudeIdleProbeRestingMarkerSamples != 4 {
+		t.Fatalf("resting-marker sample requirement = %d, want 4", claudeIdleProbeRestingMarkerSamples)
+	}
+	base := time.Now()
+	const restingTitle = "\u2802 " + claudeRestingTitleText
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = restingTitle
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudeIdleScreen,
+	}}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+	claudeSeedActiveBolt(t, h, 42, "sess-resting", base.Unix())
+
+	h.ProbeClaudeScreenStop(base.Add(time.Second))
+	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective after sample 2 = %+v, want bolt", eff)
+	}
+	assertNoProbeStopFact(t, h, 42)
+
+	h.ProbeClaudeScreenStop(base.Add(3 * time.Second))
+	h.ProbeClaudeScreenStop(base.Add(4 * time.Second))
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
+		t.Fatalf("effective after sample 4 = %+v, want stop", eff)
+	}
+	if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 1 {
+		t.Fatalf("ScreenStopProbe rows after sample 4 = %d, want 1", got)
+	}
+}
+
+// TestProbeClaudeScreenStop_BusyBrailleDescriptionVetoesIdleScreen preserves
+// the window-33 behavior: a description body is current work evidence even when
+// Claude leaves an empty composer on screen, so the idle probe must never settle.
+func TestProbeClaudeScreenStop_BusyBrailleDescriptionVetoesIdleScreen(t *testing.T) {
+	base := time.Now()
+	const busyTitle = "\u2810 Fix cursor corruption"
+	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
+		Profile: "work",
+		Harness: harness.Claude,
+	})
+	windows[0].Tabs[0].Windows[0].Title = busyTitle
+	fake := &fakeKittyClient{windows: windows, getText: map[string]string{
+		kitty.MatchWindowByID(42): claudeIdleScreen,
+	}}
+	h := newTestHandler()
+	h.SetKittyClient(fake)
+	claudeSeedActiveBolt(t, h, 42, "sess-working", base.Unix())
+
+	for sample := 1; sample <= claudeIdleProbeRestingMarkerSamples*2; sample++ {
+		h.ProbeClaudeScreenStop(base.Add(time.Duration(sample) * time.Second))
+	}
+
+	if eff, _ := windowEffective(t, h, 42); eff.Icon != "bolt" {
+		t.Fatalf("effective after repeated idle-screen samples = %+v, want bolt", eff)
+	}
+	assertNoProbeStopFact(t, h, 42)
+	if got := countEventsNamed(t, h, 42, screenStopProbeEvent); got != 0 {
+		t.Fatalf("ScreenStopProbe rows = %d, want 0", got)
 	}
 }
 

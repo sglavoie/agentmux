@@ -413,7 +413,7 @@ func TestReplayAcceptsCompleteEventsExportSchemasV9AndNewer(t *testing.T) {
 			},
 		}},
 	}}}
-	for _, schema := range []int{daemon.EventsExportSchemaV9, daemon.EventsExportSchemaV10, daemon.EventsExportSchemaVersion} {
+	for _, schema := range []int{daemon.EventsExportSchemaV9, daemon.EventsExportSchemaV10, daemon.EventsExportSchemaV11, daemon.EventsExportSchemaVersion} {
 		t.Run(strconv.Itoa(schema), func(t *testing.T) {
 			input := filepath.Join(t.TempDir(), "events.json")
 			projected, err := daemon.ProjectExportEventsPayload(payload, schema)
@@ -441,10 +441,10 @@ func TestReplayAcceptsCompleteEventsExportSchemasV9AndNewer(t *testing.T) {
 
 func TestReplayRejectsUnsupportedEventsExportSchema(t *testing.T) {
 	input := filepath.Join(t.TempDir(), "events.json")
-	if err := os.WriteFile(input, []byte(`{"schema_version":12,"windows":[]}`), 0o600); err != nil {
+	if err := os.WriteFile(input, []byte(`{"schema_version":13,"windows":[]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Replay(t.Context(), input, ReplayOptions{}); err == nil || !strings.Contains(err.Error(), "unsupported events export schema 12") {
+	if _, err := Replay(t.Context(), input, ReplayOptions{}); err == nil || !strings.Contains(err.Error(), "unsupported events export schema 13") {
 		t.Fatalf("unsupported events export error = %v", err)
 	}
 }

@@ -1,6 +1,6 @@
 # Product acceptance
 
-The AgentMux 0.6.0 product acceptance gate is:
+The AgentMux 0.7.0 product acceptance gate is:
 
 ```bash
 just check
@@ -53,6 +53,11 @@ bundles and causal-record wrappers.
 
 ## Workflow coverage
 
+This table is an exact, manually maintained inventory. It is not exhaustively
+enforced by `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow`, which
+checks only the required `2,000-to-1`, `json_compact`, `strict exit 2`, and
+`informational` substrings; omitting a workflow row will not make that test fail.
+
 | Workflow | Automated coverage |
 | --- | --- |
 | Focus or resume an exact conversation | `internal/actions` continuity tests and `cmd` session command tests cover live focus, native resume, selector errors, and schema-v1 output. |
@@ -66,8 +71,9 @@ bundles and causal-record wrappers.
 | Diagnostic pipeline | `cmd.TestAcceptanceDiagnosticPipeline` drives the real hook command adapter through journal persistence and Unix IPC into an in-process daemon with fake Kitty, then checks duplicate acknowledgement, renderer writes, notification suppression, compact large-payload source isolation and terminal clearing, strict/legacy oversize behavior, a schema-v2 snapshot-backed share bundle and offline replay, and a bounded ASL source-event explanation. `internal/debugger.TestAcceptanceSinglePassStatusSurvivesTinySegmentCompaction` records synthetic status timings and proves one traversal plus lossless 2,000-segment convergence. `internal/debugger.TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence` rewrites the bundle as schema v1 and verifies v1/v2-compatible replay. |
 | Harness process lifecycle | `cmd.TestAcceptanceHarnessProcessLifecyclePipeline` uses a real Unix socket plus controllable `ps` and fake Kitty boundaries to prove cross-harness pipe and interactive exits, parent/child and concurrent isolation, attention preservation, native-hook races, reset and ASL exclusions, schema-v4 restart settlement, schema-v10 diagnostics, and linked renderer completion. The automated/live boundary and optional installed drill are documented in [Process-Lifecycle Acceptance](acceptance-testing.md). |
 | Terminal stop confirmation | `internal/daemon/terminal_stop_hold_test.go` proves a native terminal is withheld at `⚡` until both the quiet period elapses and an idle probe confirms, that the deadline commits an unconfirmed hold, and that a new prompt supersedes one; the bypass matrix (pipe mode, no idle probe, live ASL lease, no Kitty client, `enabled = false`) and a verified process exit all skip the confirmed-idle wait, restoring the immediate `🛑` for every bypass except the live ASL lease, whose stop the reducer goes on masking until the loop finishes. `internal/daemon/handler_stop_hold_export_test.go` pins the schema-v11 `stop_hold_outcome`/`stop_confirmed_by`/`pending_terminal_stop` projection, its removal under schema v10, and the live hold reaching `daemon export-events`. `internal/config/config_stop_confirm_test.go` covers `[defaults.stop_confirm]` defaults and validation, and `cmd.TestInvariantStopHoldStuckWarnsPastTwiceTheTimeout` pins the `stop_hold_stuck` warning without changing the healthy verdict. Live per-harness confirmation against an installed binary is operator work, recorded in [Daemon State Acceptance](daemon_state_acceptance.md). |
-| Dashboard run timer | `internal/daemon` proves the busy-stretch anchor the timer reads: `TestBusySinceStampedOnActiveClassEntry` and `TestBusySinceSurvivesActiveClassChurn` start it once per stretch and hold it across a `⚡`/`🤖`/`🌀` handoff, `TestBusySinceClearedByEveryNonActiveIcon` clears it on stop and on a permission pause as well as every other non-active icon, and `TestSweepStale_ClearsBusySinceWithNilReducer` clears it on a stale sweep. It survives a daemon restart at its original instant through `TestUserVarV4RoundTripPersistsFactsProcessAndEffective`, `TestRestoreFromUserVarsKeepsLivePersistedBusySince`, and `TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads`, with `TestUserVarV1IgnoresBusySinceAndSelfHealsOnRestore` pinning the pre-upgrade self-heal, and reaches the dashboard through `TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle` plus `tui.TestApplyDaemonStatesStampsBusySince`. `tui.TestFormatRunElapsedBoundaries`, `tui.TestActivityCellTextWarningRequiresTimer`, `tui.TestRenderListActivityColumnHiddenByDefault`, and the `run-timer-narrow-fit`/`run-timer-wide` scenarios cover the rendered bands, the `⏳` warning belonging only to rows with a live timer, and both widths. Live per-harness confirmation against an installed binary is operator work, recorded under [Dashboard run timer](#dashboard-run-timer). |
-| Debug workflow | `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow` pins AgentMux 0.6.0, schema v11 export documentation, the schema-v2 snapshot contract, event-time tail semantics, explain graph defaults, v1/v2 bundle replay, the `amx debug status` → `amx debug explain` → `amx debug bundle` → `amx debug replay` workflow, and every required failure-matrix row including distinct notification failure and suppression. |
+| Claude stale pane-title recovery | `internal/daemon.TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow` proves a resting Braille title never creates a phantom ⚡ or busy anchor, `internal/daemon.TestProbeClaudeScreenStop_RestingBrailleRequiresFourIdleSamples` pins the four-sample exit from an existing phantom, and `internal/daemon.TestProbeClaudeScreenStop_BusyBrailleDescriptionVetoesIdleScreen` preserves the active-description veto for a genuinely working pane whose screen appears idle. |
+| Dashboard run timer | `internal/daemon` proves the busy-stretch anchor the timer reads: `TestBusySinceStampedOnActiveClassEntry` and `TestBusySinceSurvivesActiveClassChurn` start it once per stretch and hold it across a `⚡`/`🤖`/`🌀` handoff, `TestBusySinceClearedByEveryNonActiveIcon` clears it on stop and on a permission pause as well as every other non-active icon, and `TestSweepStale_ClearsBusySinceWithNilReducer` clears it on a stale sweep and removes it from the export. It survives a daemon restart at its original instant through `TestUserVarV4RoundTripPersistsFactsProcessAndEffective`, `TestRestoreFromUserVarsKeepsLivePersistedBusySince`, and `TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads`, with `TestUserVarV1IgnoresBusySinceAndSelfHealsOnRestore` pinning the pre-upgrade self-heal, and reaches the dashboard through `TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle` plus `tui.TestApplyDaemonStatesStampsBusySince`. `TestHandler_ExportProjectsBusySinceAndOmitsItWhenIdle` pins current-schema export inclusion and idle omission, while `TestProjectExportEventsPayloadV11IdentityProjection` pins schema-v11 exclusion and schema-v12 inclusion. `tui.TestFormatRunElapsedBoundaries`, `tui.TestActivityCellTextWarningRequiresTimer`, `tui.TestRenderListActivityColumnHiddenByDefault`, and the `run-timer-narrow-fit`/`run-timer-wide` scenarios cover the rendered bands, the `⏳` warning belonging only to rows with a live timer, and both widths. Live per-harness confirmation against an installed binary is operator work, recorded under [Dashboard run timer](#dashboard-run-timer). |
+| Debug workflow | `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow` pins AgentMux 0.7.0, schema v12 export documentation, the schema-v2 snapshot contract, event-time tail semantics, explain graph defaults, v1/v2 bundle replay, the `amx debug status` → `amx debug explain` → `amx debug bundle` → `amx debug replay` workflow, and every required failure-matrix row including distinct notification failure and suppression. |
 | Bundle secrecy and traversal | `internal/debugger` tests plant a secret corpus, verify share/forensic redaction, exclude raw sources, reject symlink publication, build flat deterministic archives, and replay portable share evidence. |
 | Restart and replay equivalence | `internal/daemon` restart-prefix tests and `internal/debugger` golden replay tests cover restored reducer state including exact process ownership, daemon sequence resets, ordering, routing, ASL phases, duplicate requests, coalesced renders, and explicit schema-v8/v9 limitations. |
 | ASL delivery correlation | `/Users/sglavoie/scripts/tests` covers stable UUIDv5 request IDs, bounded retry/backoff, duplicates, permanent failures, legacy fallback, missing binaries, exhaustion, metrics/tail/Workbench visibility; `internal/debugger.TestExplainCorrelatesASLSourceDeliveryDaemonAndRenderEvidence` pins the cross-repository graph. |
@@ -110,10 +116,11 @@ CLI/daemon build identities. Hook synchronization happens afterward because a
 public hook contract changed: the safe Claude observers must be installed
 before the final strict-doctor record is retained.
 
-The release uses schema v11 for `amx daemon export-events` by default. Acceptance
-also retains `--schema 10`, `--schema 9`, and `--schema 8` coverage as explicit
-compatibility projections: schema 10 omits v11 stop-hold evidence, and schemas 9
-and 8 additionally omit v10 process fields. For first-line diagnosis use:
+The release uses schema v12 for `amx daemon export-events` by default. Acceptance
+also retains `--schema 11`, `--schema 10`, `--schema 9`, and `--schema 8` coverage
+as explicit compatibility projections: schema 11 omits the v12 busy-stretch
+anchor, schema 10 omits v11 stop-hold evidence, and schemas 9 and 8 additionally
+omit v10 process fields. For first-line diagnosis use:
 
 ```bash
 amx debug status
@@ -190,7 +197,7 @@ delivery, replay, bundle, and correlation behavior.
 Actual provider smoke is a separate operator-attended record. For each installed
 provider, record the CLI version and intentionally exercise prompt, tool,
 permission/elicitation, terminal, and failure paths in a managed Kitty session.
-Retain a schema v11 export or `amx debug explain --source-event <id> --json` for
+Retain a schema v12 export or `amx debug explain --source-event <id> --json` for
 each path. Do not infer that this drill ran from an automated pass, and do not
 incur provider/model usage merely to complete the automated gate.
 

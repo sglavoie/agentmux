@@ -308,6 +308,7 @@ func decodeEventsExport(inputPath string, data []byte) (replaySource, error) {
 		return replaySource{}, err
 	}
 	if header.SchemaVersion != daemon.EventsExportSchemaVersion &&
+		header.SchemaVersion != daemon.EventsExportSchemaV11 &&
 		header.SchemaVersion != daemon.EventsExportSchemaV10 &&
 		header.SchemaVersion != daemon.EventsExportSchemaV9 &&
 		header.SchemaVersion != daemon.EventsExportSchemaV8 {

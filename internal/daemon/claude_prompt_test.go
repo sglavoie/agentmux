@@ -62,7 +62,7 @@ func TestClaudeWindowTitleHasActiveWork(t *testing.T) {
 		{name: "leading whitespace", title: "  \u2733 Working", want: true},
 		{name: "star resting title", title: "\u2733 " + claudeRestingTitleText},
 		{name: "star resting title padded", title: "  \u2733  " + claudeRestingTitleText + "  "},
-		{name: "braille over generic body", title: "\u2810 " + claudeRestingTitleText, want: true},
+		{name: "braille over generic body", title: "\u2810 " + claudeRestingTitleText},
 		{name: "plain session title", title: "Fix drawer drag resistance"},
 		{name: "blank title"},
 		{name: "unrecognized symbol", title: "\u2705 Finished"},
@@ -72,6 +72,30 @@ func TestClaudeWindowTitleHasActiveWork(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := claudeWindowTitleHasActiveWork(tc.title); got != tc.want {
 				t.Fatalf("claudeWindowTitleHasActiveWork(%q) = %v, want %v", tc.title, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestClaudeWindowTitleHasRestingMarker(t *testing.T) {
+	cases := []struct {
+		name  string
+		title string
+		want  bool
+	}{
+		{name: "braille over generic body", title: "\u2810 " + claudeRestingTitleText, want: true},
+		{name: "star over generic body", title: "\u2733 " + claudeRestingTitleText, want: true},
+		{name: "braille over description", title: "\u2802 Plan next steps"},
+		{name: "star over description", title: "\u2733 Fix drawer drag resistance"},
+		{name: "no marker", title: claudeRestingTitleText},
+		{name: "leading and body whitespace", title: "  \u2810  " + claudeRestingTitleText + "  ", want: true},
+		{name: "unicode separator", title: "\u2733\u00a0" + claudeRestingTitleText, want: true},
+		{name: "marker without separator", title: "\u2810" + claudeRestingTitleText},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := claudeWindowTitleHasRestingMarker(tc.title); got != tc.want {
+				t.Fatalf("claudeWindowTitleHasRestingMarker(%q) = %v, want %v", tc.title, got, tc.want)
 			}
 		})
 	}

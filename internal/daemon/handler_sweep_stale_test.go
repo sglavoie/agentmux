@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -263,7 +265,13 @@ func TestSweepStale_ClearsBusySinceWithNilReducer(t *testing.T) {
 		st.LastAction = "active"
 		st.LastSessionTitle = "W:api"
 		st.BusySince = now.Add(-15 * time.Minute)
+		h.windowMetadata[42] = WindowDebugMetadata{}
 		h.stateMu.Unlock()
+
+		before := h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+		if got := before.WindowMetadata[42].Shadow.BusySinceAt; got != st.BusySince.Unix() {
+			t.Fatalf("busy_since_at before sweep = %d; want %d", got, st.BusySince.Unix())
+		}
 
 		h.SweepStale(now)
 		synctest.Wait()
@@ -277,6 +285,15 @@ func TestSweepStale_ClearsBusySinceWithNilReducer(t *testing.T) {
 		}
 		if !anchor.IsZero() {
 			t.Fatalf("BusySince[42] = %v; want zero after the sweep", anchor)
+		}
+
+		after := h.Handle(Request{Type: TypeEventsExport, WindowID: 42})
+		encoded, err := json.Marshal(after.WindowMetadata[42].Shadow)
+		if err != nil {
+			t.Fatalf("Marshal(swept shadow): %v", err)
+		}
+		if strings.Contains(string(encoded), `"busy_since_at"`) {
+			t.Fatalf("stale-swept shadow emitted busy_since_at: %s", encoded)
 		}
 	})
 }

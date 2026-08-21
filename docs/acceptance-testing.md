@@ -32,8 +32,9 @@ The test covers:
 
 The sanitized production-hook trace corpus independently carries a complete
 pipe-process fingerprint through every-prefix `amx_state` restart equivalence.
-Schema compatibility tests retain explicit schema 9 and schema 8 projections;
-both must omit schema-v10 process fields.
+Schema compatibility tests retain explicit schema 11, schema 10, schema 9 and
+schema 8 projections; schema 11 must omit the v12 busy-stretch anchor, while
+schema 9 and schema 8 must omit schema-v10 process fields.
 
 The release gates remain:
 
@@ -73,8 +74,8 @@ candidate artifact, start a scoped diagnostic capture, and run a non-committing
 5. Exiting one interactive session for each installed harness synthesizes a
    silent clean stop only when its native terminal hook is absent.
 6. `amx doctor --strict`, `amx debug status`, the lifecycle tail, explanation,
-   and schema-v11 export are clean. Retain schema 9 and schema 8 exports proving
-   the process fields are excluded.
+   and schema-v12 export are clean. Retain schema 11, schema 9, and schema 8
+   exports proving the compatibility projections exclude their later fields.
 
 Use the commands in [Debugging event delivery](debugging.md#tracing-a-harness-process-exit)
 to preserve the exact settlement and renderer trace. Do not modify the `spec`

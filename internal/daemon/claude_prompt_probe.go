@@ -33,6 +33,14 @@ const (
 	// interruption path is stronger evidence and settles immediately (one
 	// sample).
 	claudeIdleProbeRequiredSamples = 2
+
+	// claudeIdleProbeRestingMarkerSamples stabilizes a screen whose pane title
+	// still carries a marker rune over Claude's generic resting body. The marker
+	// is stale evidence, not active-work evidence, but a genuinely working turn
+	// can briefly publish the same shape before it computes a description — so
+	// this class settles on a longer run (~8s at the 2s probe cadence) than a bare
+	// title.
+	claudeIdleProbeRestingMarkerSamples = 4
 )
 
 // ProbeClaudeScreenStop scans managed Claude windows for a finished interactive
@@ -170,6 +178,12 @@ func (h *Handler) probeClaudeIdleWindow(
 	required := claudeIdleProbeRequiredSamples
 	if interrupted {
 		required = 1
+	}
+	// A resting marker deliberately overrides the interrupted fast path. A stale
+	// on-screen interruption marker from an earlier turn must not settle a
+	// genuinely working pane during its brief generic-title phase in one tick.
+	if claudeWindowTitleHasRestingMarker(sourceWindowTitle) {
+		required = claudeIdleProbeRestingMarkerSamples
 	}
 
 	h.applyAuthoritativeIdle(AuthoritativeIdle{

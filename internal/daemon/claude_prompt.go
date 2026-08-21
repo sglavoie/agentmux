@@ -122,30 +122,38 @@ func claudeScreenHasActiveWork(screen string) bool {
 // title when no turn is running.
 const claudeRestingTitleText = "Claude Code"
 
-// claudeWindowTitleHasActiveWork reports whether Claude's pane title carries
-// its out-of-band busy marker. Recent Claude builds can keep an empty composer
-// visible while moving the only active-work signal into the terminal title, so
-// the screen body alone is not sufficient idle evidence. The star is Claude's
-// ordinary work marker; Braille-pattern runes cover its alternate high-effort
-// spinner without coupling freshness to the individual animation frame.
-//
-// The two markers are deliberately asymmetric over the generic body: Claude's
-// resting title is exactly "\u2733 Claude Code", so a star there is no evidence at
-// all, while a star over a turn description ("\u2733 Fix drawer drag resistance") is.
-// Braille runes are spinner animation frames that only render while a turn runs,
-// so they mean work even over the generic body.
-func claudeWindowTitleHasActiveWork(title string) bool {
+// claudeTitleMarkerBody splits a Claude pane title into its work-marker rune and
+// trimmed body, reporting whether a recognized marker is present.
+func claudeTitleMarkerBody(title string) (string, bool) {
 	runes := []rune(strings.TrimLeftFunc(title, unicode.IsSpace))
 	if len(runes) < 2 || !unicode.IsSpace(runes[1]) {
-		return false
+		return "", false
 	}
-	switch {
-	case runes[0] == '\u2733':
-		return strings.TrimSpace(string(runes[2:])) != claudeRestingTitleText
-	case runes[0] >= '\u2800' && runes[0] <= '\u28ff':
-		return true
+	if runes[0] != '\u2733' && (runes[0] < '\u2800' || runes[0] > '\u28ff') {
+		return "", false
 	}
-	return false
+	return strings.TrimSpace(string(runes[2:])), true
+}
+
+// claudeWindowTitleHasActiveWork reports whether Claude's pane title carries a
+// work marker over a turn description. Recent Claude builds can keep an empty
+// composer visible while moving the only active-work signal into the terminal
+// title, so the screen body alone is not sufficient idle evidence.
+//
+// Claude leaves its last marker rune in the title after a turn ends and reverts
+// only the body to claudeRestingTitleText. The body is therefore the sole
+// freshness signal for both star and Braille markers; the Braille rune was
+// observed static on both working and idle panes.
+func claudeWindowTitleHasActiveWork(title string) bool {
+	body, ok := claudeTitleMarkerBody(title)
+	return ok && body != claudeRestingTitleText
+}
+
+// claudeWindowTitleHasRestingMarker reports a marker rune left over Claude's
+// generic resting body — a frame that outlived the turn that produced it.
+func claudeWindowTitleHasRestingMarker(title string) bool {
+	body, ok := claudeTitleMarkerBody(title)
+	return ok && body == claudeRestingTitleText
 }
 
 // claudeScreenHasBlockingPrompt reports whether the screen shows a Claude

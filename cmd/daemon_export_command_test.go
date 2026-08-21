@@ -143,8 +143,8 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 	if payload.SchemaVersion != daemon.EventsExportSchemaVersion {
 		t.Fatalf("schema_version = %d; want %d", payload.SchemaVersion, daemon.EventsExportSchemaVersion)
 	}
-	if payload.SchemaVersion != 11 {
-		t.Fatalf("schema_version = %d; want 11", payload.SchemaVersion)
+	if payload.SchemaVersion != 12 {
+		t.Fatalf("schema_version = %d; want 12", payload.SchemaVersion)
 	}
 	if payload.ExportedAt != now.Unix() {
 		t.Fatalf("exported_at = %d; want %d", payload.ExportedAt, now.Unix())

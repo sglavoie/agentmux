@@ -166,6 +166,9 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
 - **The bolt icon stays after the agent is done**: run `amx config hooks-status`
   and `amx config hooks-sync` to restore terminal hooks like
   `sessionEnd`/`Stop`/`agentStop` and the child-complete `TeammateIdle` hook.
+  After upgrading from an older build, Claude panes stuck on the bolt icon by a
+  stale generic title clear on their own within about 8 seconds; no manual
+  intervention is required.
   Current releases also recover across daemon restarts on the next cleanup
   event. For Codex, a completed-turn screen fallback also settles a stuck bolt
   on `🛑` when the tab shows `Worked for …` with an empty composer; look for
