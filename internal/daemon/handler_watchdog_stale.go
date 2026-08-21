@@ -120,6 +120,9 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 			st.SubagentCount = 0
 			st.DesiredIcon = ""
 			st.StateSet = true
+			// A nil-reducer window never reaches publishEffectiveLocked below,
+			// so the anchor would otherwise stay live on a swept window.
+			st.BusySince = time.Time{}
 			if st.Reducer != nil {
 				// The stale facts were already expired individually above;
 				// re-reduce so surviving facts (attention/terminal icons, ASL

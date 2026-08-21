@@ -2,8 +2,11 @@ package tui
 
 import (
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 func TestHealthCmd_StartsDaemonWhenDead(t *testing.T) {
@@ -25,5 +28,32 @@ func TestHealthCmd_StartsDaemonWhenDead(t *testing.T) {
 	}
 	if spawned != "/tmp/amx" {
 		t.Fatalf("SpawnDetached path = %q, want /tmp/amx", spawned)
+	}
+}
+
+// TestApplyDaemonStatesStampsBusySince asserts the busy anchor follows the
+// daemon: a reported anchor lands as a real timestamp, an omitted one stays
+// the zero time rather than the unix epoch, and a window the daemon has no
+// entry for is cleared alongside State and Looping.
+func TestApplyDaemonStatesStampsBusySince(t *testing.T) {
+	anchor := time.Unix(1710000100, 0)
+	sessions := []session.RunningSession{
+		{WindowID: 1},
+		{WindowID: 2},
+		{WindowID: 3, State: "bolt", Looping: true, BusySince: anchor},
+	}
+	applyDaemonStates(sessions, map[int]daemon.WindowStateSnapshot{
+		1: {IconState: "bolt", BusySinceAt: anchor.Unix()},
+		2: {IconState: "key"},
+	})
+
+	if !sessions[0].BusySince.Equal(anchor) {
+		t.Errorf("BusySince = %v, want the daemon's anchor %v", sessions[0].BusySince, anchor)
+	}
+	if !sessions[1].BusySince.IsZero() {
+		t.Errorf("BusySince = %v for an idle window, want the zero time", sessions[1].BusySince)
+	}
+	if !sessions[2].BusySince.IsZero() {
+		t.Errorf("BusySince = %v for a window the daemon does not know, want the zero time", sessions[2].BusySince)
 	}
 }

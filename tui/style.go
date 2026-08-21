@@ -32,7 +32,7 @@ var (
 
 	styleAttentionRow = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffaa00"))
 
-	// styleAgeWarning colors the per-row age cell when a sweep-eligible
+	// styleAgeWarning colors the per-row activity cell when a sweep-eligible
 	// session has been silent for ≥ 80% of its resolved threshold. Reuses
 	// the attention amber so the cue reads as "approaching stale" without
 	// the full alarm weight of styleError.

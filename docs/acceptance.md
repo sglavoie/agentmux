@@ -66,6 +66,7 @@ bundles and causal-record wrappers.
 | Diagnostic pipeline | `cmd.TestAcceptanceDiagnosticPipeline` drives the real hook command adapter through journal persistence and Unix IPC into an in-process daemon with fake Kitty, then checks duplicate acknowledgement, renderer writes, notification suppression, compact large-payload source isolation and terminal clearing, strict/legacy oversize behavior, a schema-v2 snapshot-backed share bundle and offline replay, and a bounded ASL source-event explanation. `internal/debugger.TestAcceptanceSinglePassStatusSurvivesTinySegmentCompaction` records synthetic status timings and proves one traversal plus lossless 2,000-segment convergence. `internal/debugger.TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence` rewrites the bundle as schema v1 and verifies v1/v2-compatible replay. |
 | Harness process lifecycle | `cmd.TestAcceptanceHarnessProcessLifecyclePipeline` uses a real Unix socket plus controllable `ps` and fake Kitty boundaries to prove cross-harness pipe and interactive exits, parent/child and concurrent isolation, attention preservation, native-hook races, reset and ASL exclusions, schema-v4 restart settlement, schema-v10 diagnostics, and linked renderer completion. The automated/live boundary and optional installed drill are documented in [Process-Lifecycle Acceptance](acceptance-testing.md). |
 | Terminal stop confirmation | `internal/daemon/terminal_stop_hold_test.go` proves a native terminal is withheld at `⚡` until both the quiet period elapses and an idle probe confirms, that the deadline commits an unconfirmed hold, and that a new prompt supersedes one; the bypass matrix (pipe mode, no idle probe, live ASL lease, no Kitty client, `enabled = false`) and a verified process exit all skip the confirmed-idle wait, restoring the immediate `🛑` for every bypass except the live ASL lease, whose stop the reducer goes on masking until the loop finishes. `internal/daemon/handler_stop_hold_export_test.go` pins the schema-v11 `stop_hold_outcome`/`stop_confirmed_by`/`pending_terminal_stop` projection, its removal under schema v10, and the live hold reaching `daemon export-events`. `internal/config/config_stop_confirm_test.go` covers `[defaults.stop_confirm]` defaults and validation, and `cmd.TestInvariantStopHoldStuckWarnsPastTwiceTheTimeout` pins the `stop_hold_stuck` warning without changing the healthy verdict. Live per-harness confirmation against an installed binary is operator work, recorded in [Daemon State Acceptance](daemon_state_acceptance.md). |
+| Dashboard run timer | `internal/daemon` proves the busy-stretch anchor the timer reads: `TestBusySinceStampedOnActiveClassEntry` and `TestBusySinceSurvivesActiveClassChurn` start it once per stretch and hold it across a `⚡`/`🤖`/`🌀` handoff, `TestBusySinceClearedByEveryNonActiveIcon` clears it on stop and on a permission pause as well as every other non-active icon, and `TestSweepStale_ClearsBusySinceWithNilReducer` clears it on a stale sweep. It survives a daemon restart at its original instant through `TestUserVarV4RoundTripPersistsFactsProcessAndEffective`, `TestRestoreFromUserVarsKeepsLivePersistedBusySince`, and `TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads`, with `TestUserVarV1IgnoresBusySinceAndSelfHealsOnRestore` pinning the pre-upgrade self-heal, and reaches the dashboard through `TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle` plus `tui.TestApplyDaemonStatesStampsBusySince`. `tui.TestFormatRunElapsedBoundaries`, `tui.TestActivityCellTextWarningRequiresTimer`, `tui.TestRenderListActivityColumnHiddenByDefault`, and the `run-timer-narrow-fit`/`run-timer-wide` scenarios cover the rendered bands, the `⏳` warning belonging only to rows with a live timer, and both widths. Live per-harness confirmation against an installed binary is operator work, recorded under [Dashboard run timer](#dashboard-run-timer). |
 | Debug workflow | `cmd.TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow` pins AgentMux 0.6.0, schema v11 export documentation, the schema-v2 snapshot contract, event-time tail semantics, explain graph defaults, v1/v2 bundle replay, the `amx debug status` → `amx debug explain` → `amx debug bundle` → `amx debug replay` workflow, and every required failure-matrix row including distinct notification failure and suppression. |
 | Bundle secrecy and traversal | `internal/debugger` tests plant a secret corpus, verify share/forensic redaction, exclude raw sources, reject symlink publication, build flat deterministic archives, and replay portable share evidence. |
 | Restart and replay equivalence | `internal/daemon` restart-prefix tests and `internal/debugger` golden replay tests cover restored reducer state including exact process ownership, daemon sequence resets, ordering, routing, ASL phases, duplicate requests, coalesced renders, and explicit schema-v8/v9 limitations. |
@@ -157,6 +158,27 @@ manual, one-off deployment flow:
 Record `just acceptance`, optional `just check`, installed daemon/doctor/session
 smoke, cache population, and the post-smoke filesystem inventory in the release
 handoff.
+
+### Dashboard run timer
+
+Automated coverage stops at the daemon boundary and the hermetic TUI scenarios,
+so the timer's behaviour against a real harness is operator-attended work on the
+artifact `just install-restart-smoke` installed, after strict doctor reports no
+new reducer or renderer findings and matching CLI/daemon build identities:
+
+1. Send a long prompt to a live session. The dashboard row shows ⚡ with a
+   timer counting up in `refresh_interval` steps — 2 seconds by default, so the
+   seconds digit advances in visible jumps rather than smoothly.
+2. At a permission prompt (🔑) the timer clears to `—`; approving it restarts
+   the timer from `0:00`.
+3. After a turn finishes (🛑) the timer stays `—`.
+4. Restart the daemon mid-turn. The timer resumes from the original anchor
+   rather than from zero; confirm the restored window with
+   `amx daemon export-events --current-window --last 50`.
+5. Temporarily lower `[defaults.watchdog].active` and restart the daemon to
+   force a stale sweep. ⏳ appears beside the still-running timer, then the icon
+   and the timer clear together.
+6. Across a subagent handoff (⚡ → 🤖 → ⚡) the timer does not reset.
 
 ## Automated versus live-provider evidence
 

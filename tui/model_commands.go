@@ -170,10 +170,15 @@ func applyDaemonStates(sessions []session.RunningSession, states map[int]daemon.
 		if !ok {
 			sessions[i].State = ""
 			sessions[i].Looping = false
+			sessions[i].BusySince = time.Time{}
 			continue
 		}
 		sessions[i].State = state.IconState
 		sessions[i].Looping = state.Looping
+		sessions[i].BusySince = time.Time{}
+		if state.BusySinceAt > 0 {
+			sessions[i].BusySince = time.Unix(state.BusySinceAt, 0)
+		}
 	}
 }
 

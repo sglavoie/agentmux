@@ -217,6 +217,108 @@ func TestRestoreFromUserVarsRepublishesReducedStateAfterTombstoneExpiry(t *testi
 	}
 }
 
+// TestRestoreFromUserVarsKeepsLivePersistedBusySince pins the whole point of
+// persisting the anchor: a daemon restart in the middle of an agent turn must
+// resume the elapsed stretch, not restart it from the restore instant.
+func TestRestoreFromUserVarsKeepsLivePersistedBusySince(t *testing.T) {
+	h := newTestHandler()
+	now := time.Now()
+	anchor := now.Add(-7 * time.Minute).Truncate(time.Second)
+
+	r := NewReducer(ReducerConfig{})
+	r.Apply(ReducerEvent{
+		Source: SourceID{Kind: SourceHarness, Key: "claude:s1"},
+		Action: "active", Seq: 1, At: now.Add(-time.Minute).Unix(),
+	})
+	encoded, err := WindowState{
+		LastAction: "active",
+		Reducer:    r,
+		Effective:  r.Reduce(now.Unix()),
+		ShadowSeq:  1,
+		BusySince:  anchor,
+	}.MarshalUserVar()
+	if err != nil {
+		t.Fatalf("MarshalUserVar() error: %v", err)
+	}
+
+	h.restoreFromUserVars([]kitty.OSWindow{{
+		Tabs: []kitty.Tab{{
+			Windows: []kitty.Window{{
+				ID:       42,
+				UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXState: encoded},
+			}},
+		}},
+	}}, now)
+
+	h.stateMu.Lock()
+	st, ok := h.store[42]
+	h.stateMu.Unlock()
+	if !ok {
+		t.Fatalf("restored state missing")
+	}
+	if desiredIconForState(st) != "bolt" {
+		t.Fatalf("restored icon = %q, want the still-busy bolt", desiredIconForState(st))
+	}
+	if !st.BusySince.Equal(anchor) {
+		t.Fatalf("anchor = %v; want the persisted %v", st.BusySince, anchor)
+	}
+}
+
+// TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads covers the restore
+// path that never reaches publishEffectiveLocked: a fact-less payload still
+// restores an icon from the legacy scalar, so the anchor invariant has to be
+// re-asserted against it or a pre-upgrade busy window would restore anchorless
+// and a stale persisted anchor would outlive its stretch.
+func TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads(t *testing.T) {
+	h := newTestHandler()
+	now := time.Now()
+
+	encode := func(state WindowState) string {
+		encoded, err := state.MarshalUserVar()
+		if err != nil {
+			t.Fatalf("MarshalUserVar() error: %v", err)
+		}
+		return encoded
+	}
+	// Window 42 is a pre-upgrade busy payload (no persisted anchor); window 43
+	// carries an anchor that its icon no longer justifies.
+	busy := encode(WindowState{LastAction: "active", Activity: now.Add(-time.Minute)})
+	stopped := encode(WindowState{
+		LastAction: "stop",
+		Activity:   now.Add(-time.Minute),
+		BusySince:  now.Add(-time.Hour).Truncate(time.Second),
+	})
+
+	h.restoreFromUserVars([]kitty.OSWindow{{
+		Tabs: []kitty.Tab{{
+			Windows: []kitty.Window{
+				{ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXState: busy}},
+				{ID: 43, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXState: stopped}},
+			},
+		}},
+	}}, now)
+
+	h.stateMu.Lock()
+	busySt, stoppedSt := h.store[42], h.store[43]
+	h.stateMu.Unlock()
+	if busySt == nil || stoppedSt == nil {
+		t.Fatalf("restored state missing: busy=%v stopped=%v", busySt, stoppedSt)
+	}
+	if busySt.Reducer != nil || stoppedSt.Reducer != nil {
+		t.Fatalf("payloads were not fact-less: busy=%v stopped=%v", busySt.Reducer, stoppedSt.Reducer)
+	}
+	if desiredIconForState(busySt) != "bolt" || desiredIconForState(stoppedSt) != "stop" {
+		t.Fatalf("restored icons = %q/%q, want bolt/stop",
+			desiredIconForState(busySt), desiredIconForState(stoppedSt))
+	}
+	if !busySt.BusySince.Equal(now) {
+		t.Fatalf("busy anchor = %v; want it self-healed to the restore instant %v", busySt.BusySince, now)
+	}
+	if !stoppedSt.BusySince.IsZero() {
+		t.Fatalf("stopped anchor = %v; want the stale value cleared", stoppedSt.BusySince)
+	}
+}
+
 func TestRestoreFromUserVarsMigratesV1PayloadToSyntheticLegacySource(t *testing.T) {
 	h := newTestHandler()
 	cfg := ReducerConfig{GuardDuration: 7}

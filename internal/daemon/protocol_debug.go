@@ -13,6 +13,10 @@ type WindowStateSnapshot struct {
 	LastAction  string `json:"last_action"`
 	LastEventAt int64  `json:"last_event_at"`
 	GuardAction string `json:"guard_action"`
+	// BusySinceAt is when the window's current active-class stretch began (unix
+	// seconds). Absent while the window is not busy, which also preserves the
+	// former response shape for clients that do not render the stretch.
+	BusySinceAt int64 `json:"busy_since_at,omitempty"`
 	// Conversation is derived from live parent-harness reducer facts. It is
 	// absent for identity-less state, preserving the former response shape for
 	// clients that do not use live-conversation continuity.

@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -50,6 +52,41 @@ func TestHandler_StateQueryReturnsDaemonStateSnapshot(t *testing.T) {
 	}
 	if got.IconState != "key" || !got.Looping || got.LastAction != "permission" || got.LastEventAt == 0 || got.GuardAction != "permission" {
 		t.Fatalf("state snapshot = %+v, want key looping permission timestamp guard", got)
+	}
+}
+
+func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
+	h := newTestHandler()
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 7, Action: "active", IsPrompt: true})
+	h.Handle(Request{Type: TypeStateUpdate, WindowID: 9, Action: "permission"})
+
+	anchor := busySince(t, h, 7)
+	if anchor.IsZero() {
+		t.Fatal("active window has no anchor to report")
+	}
+
+	resp := h.Handle(Request{Type: TypeStateQuery})
+	busy, ok := resp.States[7]
+	if !ok {
+		t.Fatalf("state query omitted window 7: %+v", resp.States)
+	}
+	if busy.BusySinceAt != anchor.Unix() {
+		t.Fatalf("BusySinceAt = %d, want the daemon's anchor %d", busy.BusySinceAt, anchor.Unix())
+	}
+	idle, ok := resp.States[9]
+	if !ok {
+		t.Fatalf("state query omitted window 9: %+v", resp.States)
+	}
+	if idle.BusySinceAt != 0 {
+		t.Fatalf("BusySinceAt = %d for a paused window, want 0", idle.BusySinceAt)
+	}
+
+	encoded, err := json.Marshal(idle)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	if strings.Contains(string(encoded), "busy_since_at") {
+		t.Fatalf("idle snapshot wrote the field on the wire: %s", encoded)
 	}
 }
 

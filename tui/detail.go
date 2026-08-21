@@ -231,8 +231,7 @@ func detailHeader(m Model) string {
 	}
 	meta := []string{fmt.Sprintf("state=%s", state)}
 	if ws, found := m.watchdog[s.WindowID]; found && ws.LastAction != "" {
-		ageText, _ := formatAge(ws, time.Now())
-		meta = append(meta, fmt.Sprintf("age=%s", ageText))
+		meta = append(meta, fmt.Sprintf("age=%s", formatAge(ws, time.Now())))
 	}
 	meta = append(meta, fmt.Sprintf("%d events", len(m.detailEvents)))
 	if n := len(m.detailEvents); n > 0 && isTerminalAction(m.detailEvents[n-1].Action) {

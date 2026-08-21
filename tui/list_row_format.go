@@ -26,14 +26,15 @@ func harnessLabel(h string) string {
 }
 
 // formatRow formats a single session row.
-// Format: tab_number | [loop] | state_icon | account_prefix | <emoji> harness | title | [age] | directory
+// Format: tab_number | [loop] | state_icon | account_prefix | <emoji> harness | title | [activity] | directory
 // tabNumberCell is a fixed-width, pre-rendered cell such as "1: " or
 // " 1: ". It is blank-padded when the tab number is unavailable.
 // activeLoopCell is empty when the loop column is not reserved; otherwise it is
 // a fixed-width cell containing either 🔁 or spaces.
-// ageCell is empty when no row in the current view carries a watchdog entry;
-// otherwise it is a pre-rendered fixed-width cell (ageColumnWidth cells,
-// trailing space included) inserted immediately before the directory column.
+// activityCell is empty when no row in the current view is running a busy
+// stretch; otherwise it is a pre-rendered cell (activityColumnWidth cells for
+// the whole render pass, trailing space included) inserted immediately before
+// the directory column.
 // cfg supplies the [harness_emojis] lookup so the harness cell can render as
 // "<emoji> <label>". harnessColor supplies the optional [harness_colors]
 // foreground for that cell. When the configured emoji is empty, the cell
@@ -43,7 +44,7 @@ func harnessLabel(h string) string {
 // fixed columns before the directory column: tab number + lock + mute + state icon + a
 // space + the "[X]" account badge + a space + the harness cell + a space +
 // the title column + the two separator spaces that precede the directory.
-// The dynamic columns (loop, age, pulse, group border) are excluded because
+// The dynamic columns (loop, activity, pulse, group border) are excluded because
 // they are only reserved when a row needs them. Below this floor the row can
 // no longer shrink, so renderListAt clamps it and renderSplit falls back to
 // the plain full-width list.
@@ -54,7 +55,7 @@ func minListRowWidth() int {
 		titleColWidth + 2 // title + separators before dir
 }
 
-func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, tabNumberCell, activeLoopCell, ageCell string) string {
+func formatRow(s session.RunningSession, acctColor, harnessColor map[string]string, cfg *config.Config, width int, tabNumberCell, activeLoopCell, activityCell string) string {
 	// Lock indicator column. Always reserved (2 cells) so column alignment is
 	// stable; only filled when the session is locked.
 	lockCol := "  "
@@ -132,10 +133,10 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	dir := s.Directory
 	maxDir := dirMaxWidth
 	if width > 0 {
-		used := displayWidth(tabNumberCell) + lockColumnWidth + muteColumnWidth + displayWidth(activeLoopCell) + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3 + displayWidth(ageCell)
+		used := displayWidth(tabNumberCell) + lockColumnWidth + muteColumnWidth + displayWidth(activeLoopCell) + 3 + 4 + harnessColWidth + 1 + titleColWidth + 3 + displayWidth(activityCell)
 		// tab number + lock (2) + mute (2) + optional loop + icon+space (3) + "[X] " badge (4)
 		//   + harness (10) + space (1) + title (20) + separators before dir (3)
-		//   + optional age cell.
+		//   + optional activity cell, whose width is set per render pass.
 		available := width - used
 		if available < 0 {
 			available = 0
@@ -145,7 +146,7 @@ func formatRow(s session.RunningSession, acctColor, harnessColor map[string]stri
 	dir = displayTruncateLeft(dir, maxDir, "…")
 	dir = styleDim.Render(dir)
 
-	return tabNumberCell + lockCol + muteCol + activeLoopCell + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + ageCell + dir
+	return tabNumberCell + lockCol + muteCol + activeLoopCell + iconCol + " " + badge + " " + harnessCell + " " + title + "  " + activityCell + dir
 }
 
 // tabNumberColumnWidth returns a stable width for every row in the current

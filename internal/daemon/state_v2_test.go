@@ -1,9 +1,13 @@
 package daemon
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
@@ -14,12 +18,14 @@ func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 	r.Apply(ReducerEvent{Source: SourceID{Kind: SourceASL, Key: "run-1"}, Phase: ASLPhaseTurn, RunID: "run-1", Seq: 5, At: 1710000300})
 
 	now := int64(1710000400)
+	busySince := time.Unix(1710000100, 0)
 	state := WindowState{
 		LastAction:   "active",
 		Reducer:      r,
 		Effective:    r.Reduce(now),
 		EffectiveGen: 7,
 		ShadowSeq:    9,
+		BusySince:    busySince,
 	}
 
 	encoded, err := state.MarshalUserVar()
@@ -29,7 +35,7 @@ func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 	if !strings.Contains(encoded, `"v":4`) {
 		t.Fatalf("MarshalUserVar() missing schema discriminator: %s", encoded)
 	}
-	for _, fragment := range []string{`"pv":1`, `"ph":"claude"`, `"pp":4321`, `"pt":"Mon Jul 13 10:11:12 2026"`} {
+	for _, fragment := range []string{`"pv":1`, `"ph":"claude"`, `"pp":4321`, `"pt":"Mon Jul 13 10:11:12 2026"`, `"bs":1710000100`} {
 		if !strings.Contains(encoded, fragment) {
 			t.Fatalf("MarshalUserVar() missing process field %s: %s", fragment, encoded)
 		}
@@ -50,6 +56,9 @@ func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 	}
 	if got.EffectiveGen != 7 || got.ShadowSeq != 9 {
 		t.Fatalf("EffectiveGen/ShadowSeq = %d/%d, want 7/9", got.EffectiveGen, got.ShadowSeq)
+	}
+	if !got.BusySince.Equal(busySince) {
+		t.Fatalf("BusySince = %v, want %v", got.BusySince, busySince)
 	}
 	if before, after := r.Reduce(now), got.Reducer.Reduce(now); after != before {
 		t.Fatalf("restart equivalence broken: Reduce = %+v, want %+v", after, before)
@@ -240,6 +249,46 @@ func TestUserVarV4MigratesEmptyV1WithoutFacts(t *testing.T) {
 	}
 	if st.Effective != (EffectiveState{}) || st.ShadowSeq != 0 {
 		t.Fatalf("empty v1 payload set effective state: %+v seq %d", st.Effective, st.ShadowSeq)
+	}
+}
+
+// TestUserVarV1IgnoresBusySinceAndSelfHealsOnRestore pins the deliberate gap in
+// migrateReducerV1: the anchor is a v2+ field, so a v1 payload restores zero
+// even if something injected a bs key, and the restore-time invariant re-stamps
+// it from the icon the window actually restored with.
+func TestUserVarV1IgnoresBusySinceAndSelfHealsOnRestore(t *testing.T) {
+	h := newTestHandler()
+	now := time.Now()
+	raw := fmt.Sprintf(`{"a":"active","acct":"work","h":"codex","t":%d,"bs":1710000000}`, now.Add(-time.Minute).Unix())
+
+	var decoded WindowState
+	if err := decoded.UnmarshalUserVar(raw); err != nil {
+		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
+	}
+	if !decoded.BusySince.IsZero() {
+		t.Fatalf("v1 restore read an anchor = %v; want zero", decoded.BusySince)
+	}
+
+	h.restoreFromUserVars([]kitty.OSWindow{{
+		Tabs: []kitty.Tab{{
+			Windows: []kitty.Window{{
+				ID:       42,
+				UserVars: kitty.UserVars{Profile: "work", Harness: "codex", AMXState: raw},
+			}},
+		}},
+	}}, now)
+
+	h.stateMu.Lock()
+	st, ok := h.store[42]
+	h.stateMu.Unlock()
+	if !ok {
+		t.Fatalf("restored state missing")
+	}
+	if desiredIconForState(st) != "bolt" {
+		t.Fatalf("restored icon = %q, want bolt", desiredIconForState(st))
+	}
+	if !st.BusySince.After(now.Add(-time.Second)) {
+		t.Fatalf("anchor = %v; want it self-healed to restore time, not the payload's stale value", st.BusySince)
 	}
 }
 

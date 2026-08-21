@@ -124,84 +124,120 @@ func TestRenderHealthHintsShownWhenDegraded(t *testing.T) {
 	}
 }
 
-// TestFormatAgeNoLastAction asserts the placeholder dash and warning=false
-// when the watchdog entry carries no LastAction (e.g., a row whose tab is
-// not in a sweep-eligible state).
+// TestFormatAgeNoLastAction asserts the detail pane's placeholder dash when
+// the watchdog entry carries no LastAction (e.g., a row whose tab is not in a
+// sweep-eligible state).
 func TestFormatAgeNoLastAction(t *testing.T) {
-	text, warning := formatAge(daemon.WatchdogState{}, time.Now())
-	if text != "—" {
+	if text := formatAge(daemon.WatchdogState{}, time.Now()); text != "—" {
 		t.Errorf("expected dash placeholder, got %q", text)
 	}
-	if warning {
-		t.Error("warning must not fire when LastAction is empty")
-	}
 }
 
-// TestFormatAgeWithinThreshold asserts coarse minute rounding and that the
-// warning flag stays off while elapsed sits below the 80% band.
-func TestFormatAgeWithinThreshold(t *testing.T) {
+// TestFormatAgeCoarseRounding asserts the detail pane's age label rounds to
+// whole minutes below one hour and to whole hours beyond it.
+func TestFormatAgeCoarseRounding(t *testing.T) {
 	now := time.Now()
-	ws := daemon.WatchdogState{
-		LastAction:   "active",
-		LastEventAt:  now.Add(-5 * time.Minute).Unix(),
-		ThresholdSec: 600, // 10 min — 5 min is 50% of threshold, well below warning band
-	}
-	text, warning := formatAge(ws, now)
-	if text != "5m" {
+	minutes := daemon.WatchdogState{LastAction: "active", LastEventAt: now.Add(-5 * time.Minute).Unix()}
+	if text := formatAge(minutes, now); text != "5m" {
 		t.Errorf("expected \"5m\", got %q", text)
 	}
-	if warning {
-		t.Error("warning must not fire at 50%% of threshold")
-	}
-}
-
-// TestFormatAgeWarningBand asserts that warning flips to true once elapsed
-// reaches 80% of the resolved threshold. 8m of 10m = exactly 80%, on the band.
-func TestFormatAgeWarningBand(t *testing.T) {
-	now := time.Now()
-	ws := daemon.WatchdogState{
-		LastAction:   "active",
-		LastEventAt:  now.Add(-8 * time.Minute).Unix(),
-		ThresholdSec: 600,
-	}
-	text, warning := formatAge(ws, now)
-	if text != "8m" {
-		t.Errorf("expected \"8m\", got %q", text)
-	}
-	if !warning {
-		t.Error("warning must fire at exactly 80%% of threshold")
-	}
-}
-
-// TestFormatAgeBeyondHour asserts the format switches to "<n>h" once the
-// elapsed time crosses one hour. A 2h-old entry with no threshold has
-// warning=false because ThresholdSec=0 disables the warning gate.
-func TestFormatAgeBeyondHour(t *testing.T) {
-	now := time.Now()
-	ws := daemon.WatchdogState{
-		LastAction:  "subagent",
-		LastEventAt: now.Add(-2 * time.Hour).Unix(),
-	}
-	text, warning := formatAge(ws, now)
-	if text != "2h" {
+	hours := daemon.WatchdogState{LastAction: "subagent", LastEventAt: now.Add(-2 * time.Hour).Unix()}
+	if text := formatAge(hours, now); text != "2h" {
 		t.Errorf("expected \"2h\", got %q", text)
 	}
+}
+
+// TestFormatRunElapsedBoundaries pins the run-timer format at every edge of
+// the table: no anchor, the second/minute rollovers, the one-hour switch to
+// the compact hour form, a two-digit hour count, and the negative clamp that
+// protects against daemon/TUI clock skew.
+func TestFormatRunElapsedBoundaries(t *testing.T) {
+	now := time.Now()
+	cases := []struct {
+		name    string
+		elapsed time.Duration
+		want    string
+	}{
+		{"zero seconds", 0, "0:00"},
+		{"under one minute", 59 * time.Second, "0:59"},
+		{"one minute", time.Minute, "1:00"},
+		{"last second under an hour", 59*time.Minute + 59*time.Second, "59:59"},
+		{"exactly one hour", time.Hour, "1h00"},
+		{"two-digit hours", 10*time.Hour + 7*time.Minute, "10h07"},
+		{"negative clamps to zero", -30 * time.Second, "0:00"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatRunElapsed(now.Add(-tc.elapsed), now); got != tc.want {
+				t.Errorf("formatRunElapsed(%s) = %q, want %q", tc.elapsed, got, tc.want)
+			}
+		})
+	}
+	if got := formatRunElapsed(time.Time{}, now); got != "—" {
+		t.Errorf("a row with no anchor = %q, want the dash placeholder", got)
+	}
+}
+
+// TestActivityCellTextWarningRequiresTimer asserts the staleness warning keeps
+// its 80%-of-threshold rule but never fires on a row without a timer: the
+// reduced icon is authoritative, so a diverged LastAction scalar must not
+// decorate an idle row.
+func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
+	now := time.Now()
+	busy := session.RunningSession{WindowID: 1, BusySince: now.Add(-90 * time.Second)}
+	idle := session.RunningSession{WindowID: 2}
+	onBand := daemon.WatchdogState{
+		LastAction:   "active",
+		LastEventAt:  now.Add(-8 * time.Minute).Unix(), // 8m of 10m is exactly the band
+		ThresholdSec: 600,
+	}
+
+	text, warning := activityCellText(busy, onBand, now)
+	if !warning {
+		t.Error("warning must fire at 80% of threshold on a row with a timer")
+	}
+	if want := "1:30 " + ageWarningGlyph; text != want {
+		t.Errorf("warning text = %q, want %q", text, want)
+	}
+
+	text, warning = activityCellText(idle, onBand, now)
 	if warning {
+		t.Error("warning must not fire on a row with no timer")
+	}
+	if text != "—" {
+		t.Errorf("idle text = %q, want the dash placeholder", text)
+	}
+
+	belowBand := daemon.WatchdogState{
+		LastAction:   "active",
+		LastEventAt:  now.Add(-5 * time.Minute).Unix(),
+		ThresholdSec: 600,
+	}
+	if _, warning = activityCellText(busy, belowBand, now); warning {
+		t.Error("warning must not fire at 50% of threshold")
+	}
+
+	noThreshold := daemon.WatchdogState{LastAction: "active", LastEventAt: now.Add(-2 * time.Hour).Unix()}
+	if _, warning = activityCellText(busy, noThreshold, now); warning {
 		t.Error("warning must not fire when ThresholdSec is zero")
 	}
 }
 
-// TestRenderAgeCellWarningStyled asserts the warning glyph appears and the
-// cell carries lipgloss styling (ANSI escape) when the warning band is hit.
-// A non-warning cell renders plain text.
-func TestRenderAgeCellWarningStyled(t *testing.T) {
+// TestRenderActivityCellWarningStyled asserts the warning glyph appears and
+// the cell carries lipgloss styling (ANSI escape) when the warning band is
+// hit, that a non-warning cell renders plain text, and that both pad to the
+// width the render pass chose.
+func TestRenderActivityCellWarningStyled(t *testing.T) {
 	now := time.Now()
+	busy := session.RunningSession{WindowID: 1, BusySince: now.Add(-90 * time.Second)}
+	width := 8
+
 	wsWarn := daemon.WatchdogState{
 		LastAction:   "active",
 		LastEventAt:  now.Add(-9 * time.Minute).Unix(),
 		ThresholdSec: 600,
 	}
-	cell := renderAgeCell(wsWarn, now)
+	cell := renderActivityCell(busy, wsWarn, now, width)
 	plain := stripAnsi(cell)
 	if !strings.Contains(plain, ageWarningGlyph) {
 		t.Errorf("warning cell missing ⏳ glyph; got %q", plain)
@@ -209,8 +245,8 @@ func TestRenderAgeCellWarningStyled(t *testing.T) {
 	if cell == plain {
 		t.Errorf("warning cell expected ANSI styling; got plain %q", cell)
 	}
-	if got := runewidth.StringWidth(plain); got != ageColumnWidth {
-		t.Errorf("warning cell width = %d, want %d (%q)", got, ageColumnWidth, plain)
+	if got := runewidth.StringWidth(plain); got != width {
+		t.Errorf("warning cell width = %d, want %d (%q)", got, width, plain)
 	}
 
 	wsOk := daemon.WatchdogState{
@@ -218,81 +254,76 @@ func TestRenderAgeCellWarningStyled(t *testing.T) {
 		LastEventAt:  now.Add(-1 * time.Minute).Unix(),
 		ThresholdSec: 600,
 	}
-	cellOk := renderAgeCell(wsOk, now)
+	cellOk := renderActivityCell(busy, wsOk, now, width)
 	if strings.Contains(cellOk, ageWarningGlyph) {
 		t.Errorf("non-warning cell must not include ⏳; got %q", cellOk)
 	}
-	if got := runewidth.StringWidth(stripAnsi(cellOk)); got != ageColumnWidth {
-		t.Errorf("non-warning cell width = %d, want %d (%q)", got, ageColumnWidth, cellOk)
+	if got := runewidth.StringWidth(stripAnsi(cellOk)); got != width {
+		t.Errorf("non-warning cell width = %d, want %d (%q)", got, width, cellOk)
 	}
 }
 
-// TestAnyRowHasAgeFalseWhenNoLastAction asserts the column reservation
-// predicate returns false when every watchdog entry has an empty LastAction
-// (the daemon shouldn't emit such entries today, but the predicate must
-// tolerate the case so a daemon downgrade doesn't permanently reserve the
-// column).
-func TestAnyRowHasAgeFalseWhenNoLastAction(t *testing.T) {
+// TestAnyRowHasActivityFalseWhenNoRowIsBusy asserts the column reservation
+// predicate ignores watchdog entries entirely: a sweep-eligible row with no
+// busy anchor (a pre-upgrade daemon, or a window paused on a prompt) must not
+// reserve the column.
+func TestAnyRowHasActivityFalseWhenNoRowIsBusy(t *testing.T) {
 	m := Model{
 		cfg: &config.Config{},
 		filtered: []session.RunningSession{
 			{WindowID: 1, Base: "a", State: "bolt"},
-		},
-		watchdog: map[int]daemon.WatchdogState{
-			1: {LastAction: "", LastEventAt: time.Now().Unix()},
-		},
-	}
-	if anyRowHasAge(m) {
-		t.Error("anyRowHasAge must return false when no row has a LastAction")
-	}
-}
-
-// TestAnyRowHasAgeTrueWhenAnyRowHasLastAction asserts the predicate flips
-// to true as soon as one filtered row has a sweep-eligible watchdog entry.
-func TestAnyRowHasAgeTrueWhenAnyRowHasLastAction(t *testing.T) {
-	m := Model{
-		cfg: &config.Config{},
-		filtered: []session.RunningSession{
-			{WindowID: 1, Base: "a", State: "bolt"},
-			{WindowID: 2, Base: "b", State: ""},
 		},
 		watchdog: map[int]daemon.WatchdogState{
 			1: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
 		},
 	}
-	if !anyRowHasAge(m) {
-		t.Error("anyRowHasAge must return true when at least one row carries LastAction")
+	if anyRowHasActivity(m) {
+		t.Error("anyRowHasActivity must return false when no row carries a BusySince")
 	}
 }
 
-// TestRenderListAgeColumnAppears verifies that renderList reserves the age
-// column when the model carries a watchdog entry with a LastAction. The
-// rendered output must contain the minute label so the column is visibly
-// present beside the row.
-func TestRenderListAgeColumnAppears(t *testing.T) {
+// TestAnyRowHasActivityTrueWhenAnyRowIsBusy asserts the predicate flips to
+// true as soon as one filtered row is running a busy stretch.
+func TestAnyRowHasActivityTrueWhenAnyRowIsBusy(t *testing.T) {
+	m := Model{
+		cfg: &config.Config{},
+		filtered: []session.RunningSession{
+			{WindowID: 1, Base: "a", State: "bolt", BusySince: time.Now()},
+			{WindowID: 2, Base: "b", State: ""},
+		},
+	}
+	if !anyRowHasActivity(m) {
+		t.Error("anyRowHasActivity must return true when at least one row is busy")
+	}
+}
+
+// TestRenderListActivityColumnAppears verifies that renderList reserves the
+// activity column when a row carries a busy anchor, and renders the elapsed
+// stretch rather than the time since the last hook event.
+func TestRenderListActivityColumnAppears(t *testing.T) {
 	now := time.Now()
 	m := Model{
 		cfg:   &config.Config{},
 		width: 80,
 		sessions: []session.RunningSession{
-			{WindowID: 1, Base: "api", State: "bolt", Account: "work"},
+			{WindowID: 1, Base: "api", State: "bolt", Account: "work", BusySince: now.Add(-(3*time.Minute + 7500*time.Millisecond))},
 		},
 		watchdog: map[int]daemon.WatchdogState{
-			1: {LastAction: "active", LastEventAt: now.Add(-3 * time.Minute).Unix(), ThresholdSec: 600},
+			1: {LastAction: "active", LastEventAt: now.Unix(), ThresholdSec: 600},
 		},
 	}
 	m.filtered = m.sessions
 	out := stripAnsi(renderList(m))
-	if !strings.Contains(out, "3m") {
-		t.Errorf("expected \"3m\" age cell in render; got %q", out)
+	if !strings.Contains(out, "3:07") {
+		t.Errorf("expected \"3:07\" run timer in render; got %q", out)
 	}
 }
 
-// TestRenderListAgeColumnHiddenByDefault asserts that with no watchdog
-// entries, the age column is omitted entirely so rows recover their full
-// directory budget. The "—" placeholder must NOT appear because the column
-// itself is not reserved.
-func TestRenderListAgeColumnHiddenByDefault(t *testing.T) {
+// TestRenderListActivityColumnHiddenByDefault asserts that with no busy rows
+// the column is omitted entirely so rows recover their full directory budget.
+// The "—" placeholder must NOT appear because the column itself is not
+// reserved.
+func TestRenderListActivityColumnHiddenByDefault(t *testing.T) {
 	m := Model{
 		cfg:   &config.Config{},
 		width: 80,
@@ -301,8 +332,8 @@ func TestRenderListAgeColumnHiddenByDefault(t *testing.T) {
 		},
 	}
 	m.filtered = m.sessions
-	if anyRowHasAge(m) {
-		t.Fatal("baseline model with nil watchdog should not reserve age column")
+	if anyRowHasActivity(m) {
+		t.Fatal("baseline model with no busy rows should not reserve the activity column")
 	}
 	out := stripAnsi(renderList(m))
 	if strings.Contains(out, "—") {
@@ -310,29 +341,47 @@ func TestRenderListAgeColumnHiddenByDefault(t *testing.T) {
 	}
 }
 
-// TestRenderListAgeColumnRendersDashForRowsWithoutWatchdog asserts that
-// once the column is reserved (because at least one row has a watchdog
-// entry), the other rows render the "—" placeholder so cells stay aligned.
-func TestRenderListAgeColumnRendersDashForRowsWithoutWatchdog(t *testing.T) {
+// TestRenderListActivityColumnSharedWidthAcrossRows asserts that once the
+// column is reserved, an idle row renders the "—" placeholder and both rows
+// pay the same column width, so the directory column starts at one offset
+// regardless of how wide the busiest row's timer is.
+func TestRenderListActivityColumnSharedWidthAcrossRows(t *testing.T) {
 	now := time.Now()
 	m := Model{
 		cfg:   &config.Config{},
 		width: 80,
 		sessions: []session.RunningSession{
-			{WindowID: 1, Base: "api", State: "bolt", Account: "work"},
-			{WindowID: 2, Base: "web", State: "bolt", Account: "work"},
+			{WindowID: 1, Base: "api", State: "bolt", Account: "work", Directory: "~/p", BusySince: now.Add(-(12*time.Hour + 7*time.Minute + 30*time.Second))},
+			{WindowID: 2, Base: "web", State: "bolt", Account: "work", Directory: "~/p"},
 		},
 		watchdog: map[int]daemon.WatchdogState{
-			1: {LastAction: "active", LastEventAt: now.Add(-2 * time.Minute).Unix(), ThresholdSec: 600},
+			1: {LastAction: "active", LastEventAt: now.Add(-9 * time.Minute).Unix(), ThresholdSec: 600},
 		},
 	}
 	m.filtered = m.sessions
-	out := stripAnsi(renderList(m))
-	if !strings.Contains(out, "—") {
-		t.Errorf("expected dash placeholder on the row without watchdog; got %q", out)
+
+	if got, want := activityColumnWidth(m, now), displayWidth("12h07 "+ageWarningGlyph)+1; got != want {
+		t.Fatalf("activityColumnWidth = %d, want %d (the widest cell of the pass plus its trailing space)", got, want)
 	}
-	if !strings.Contains(out, "2m") {
-		t.Errorf("expected \"2m\" on the row with watchdog; got %q", out)
+
+	lines := strings.Split(strings.TrimRight(stripAnsi(renderList(m)), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 rendered rows, got %d: %q", len(lines), lines)
+	}
+	busy, idle := lines[0], lines[1]
+	if !strings.Contains(busy, "12h07") {
+		t.Errorf("expected \"12h07\" on the busy row; got %q", busy)
+	}
+	if !strings.Contains(idle, "—") {
+		t.Errorf("expected dash placeholder on the idle row; got %q", idle)
+	}
+	busyDir := strings.Index(busy, "~/p")
+	idleDir := strings.Index(idle, "~/p")
+	if busyDir < 0 || idleDir < 0 {
+		t.Fatalf("directory column missing: busy=%q idle=%q", busy, idle)
+	}
+	if got, want := displayWidth(idle[:idleDir]), displayWidth(busy[:busyDir]); got != want {
+		t.Errorf("directory starts at cell %d on the idle row and %d on the busy row; the activity column must share one width", got, want)
 	}
 }
 

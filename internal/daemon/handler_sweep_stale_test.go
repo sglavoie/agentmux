@@ -247,6 +247,40 @@ func TestSweepStale_WithoutNotifierStillClearsStateAndTitle(t *testing.T) {
 	}
 }
 
+// TestSweepStale_ClearsBusySinceWithNilReducer pins the busy-stretch anchor to
+// the sweep's own scalar reset. A window that never built a reducer never
+// reaches publishEffectiveLocked, so without an explicit clear here the swept
+// window would keep a live anchor and go on counting after its icon is gone.
+func TestSweepStale_ClearsBusySinceWithNilReducer(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, fake, _ := newSweepTestHandler(10 * time.Minute)
+		fake.windows = fakeOSWindowsWithTab(42, palette.BuildTitle("W:api", "bolt", false))
+
+		now := time.Now()
+		h.stateMu.Lock()
+		st := h.ensureWindowStateLocked(42)
+		st.Activity = now.Add(-15 * time.Minute)
+		st.LastAction = "active"
+		st.LastSessionTitle = "W:api"
+		st.BusySince = now.Add(-15 * time.Minute)
+		h.stateMu.Unlock()
+
+		h.SweepStale(now)
+		synctest.Wait()
+
+		h.stateMu.Lock()
+		hasReducer := h.store[42].Reducer != nil
+		anchor := h.store[42].BusySince
+		h.stateMu.Unlock()
+		if hasReducer {
+			t.Fatal("window gained a reducer; the nil-reducer path was not exercised")
+		}
+		if !anchor.IsZero() {
+			t.Fatalf("BusySince[42] = %v; want zero after the sweep", anchor)
+		}
+	})
+}
+
 func fakeOSWindowsWithSplitTab(tabTitle string, windows []kitty.Window) []kitty.OSWindow {
 	return []kitty.OSWindow{
 		{

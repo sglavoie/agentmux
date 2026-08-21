@@ -19,6 +19,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -140,6 +141,13 @@ type UITestFixture struct {
 	Config      *config.Config
 	Windows     []kitty.OSWindow
 	Worktrees   []actions.WorktreeView
+	// States and Watchdog stand in for one daemon state query, keyed by Kitty
+	// window ID. They carry the state a tab title cannot express — the busy
+	// anchor above all — so a fixture can pin the dashboard's daemon-owned
+	// columns. A fixture that leaves them nil reproduces an unreachable daemon,
+	// which is the honest default for a fixture with no daemon at all.
+	States   map[int]daemon.WindowStateSnapshot
+	Watchdog map[int]daemon.WatchdogState
 	// ASLRows and ASLStatus stand in for one daemon ASL snapshot. A fixture that
 	// leaves ASLStatus zero reports the integration as unavailable, which is the
 	// honest default for a dashboard fixture with no agent-session-loop at all.
@@ -172,6 +180,7 @@ var uitestFixtureBuilders = map[string]func() UITestFixture{
 	"worktrees":          worktreesFixture,
 	"worktree_lifecycle": worktreeLifecycleFixture,
 	"asl_runs":           aslRunsFixture,
+	"run_timers":         runTimersFixture,
 }
 
 // UITestFixtureError reports a request for an unknown built-in fixture and
@@ -582,6 +591,66 @@ func aslRunsFixture() UITestFixture {
 				Body:      "This run is paused. Reply to resume it.",
 				BodyBytes: 39, ActionToken: "token-paused",
 			},
+		},
+	}
+}
+
+// runTimersFixture covers the per-row run timer across the bands it formats
+// differently: a sub-minute burst, a multi-minute stretch, an hours-long
+// stretch, a row deep enough into its watchdog threshold to carry the ⏳
+// warning, and an idle row with no anchor at all. Every timestamp is a fixed
+// offset from the driver's frozen clock, so each cell renders exact text. The
+// idle row's own watchdog entry is inside the warning band on purpose: it must
+// still render a bare em dash, because the warning belongs to rows that are
+// actually running.
+func runTimersFixture() UITestFixture {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "burst", Directory: "~/projects/burst", Profile: "work"},
+			{Title: "review", Directory: "~/projects/review", Profile: "work"},
+			{Title: "indexer", Directory: "~/projects/indexer", Profile: "work"},
+			{Title: "stale", Directory: "~/projects/stale", Profile: "work"},
+			{Title: "idle", Directory: "~/projects/idle", Profile: "personal"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "⚡🦊burst", true, managedVars("work", "claude", "burst", "~/projects/burst")),
+		uitestTab(2, 21, "🤖🦊review", false, managedVars("work", "claude", "review", "~/projects/review")),
+		uitestTab(3, 31, "🌀🦊indexer", false, managedVars("work", "claude", "indexer", "~/projects/indexer")),
+		uitestTab(4, 41, "⚡🦊stale", false, managedVars("work", "claude", "stale", "~/projects/stale")),
+		uitestTab(5, 51, "🛑🤖idle", false, managedVars("personal", "codex", "idle", "~/projects/idle")),
+	)}
+	// Anchors chosen so each row lands in a different formatting band:
+	// 0:07, 3:07, 12h07, 9:41 (warning), and the em dash.
+	busySince := func(d time.Duration) int64 { return uitestFrozenNow.Add(-d).Unix() }
+	lastEvent := busySince
+	const thresholdSec = 600
+	return UITestFixture{
+		Name:        "run_timers",
+		Description: "busy stretches spanning the sub-minute, multi-minute, hours-long, warning, and idle timer bands",
+		Size:        UITestSize{Width: 120, Height: 32},
+		Config:      cfg,
+		Windows:     windows,
+		States: map[int]daemon.WindowStateSnapshot{
+			11: {IconState: "bolt", BusySinceAt: busySince(7 * time.Second)},
+			21: {IconState: "subagent", BusySinceAt: busySince(3*time.Minute + 7*time.Second)},
+			31: {IconState: "compact", BusySinceAt: busySince(12*time.Hour + 7*time.Minute)},
+			41: {IconState: "bolt", BusySinceAt: busySince(9*time.Minute + 41*time.Second)},
+			51: {IconState: "stop"},
+		},
+		Watchdog: map[int]daemon.WatchdogState{
+			11: {LastAction: "active", LastEventAt: lastEvent(7 * time.Second), ThresholdSec: thresholdSec},
+			21: {LastAction: "subagent", LastEventAt: lastEvent(3*time.Minute + 7*time.Second), ThresholdSec: thresholdSec},
+			31: {LastAction: "compact", LastEventAt: lastEvent(45 * time.Second), ThresholdSec: thresholdSec},
+			41: {LastAction: "active", LastEventAt: lastEvent(9*time.Minute + 41*time.Second), ThresholdSec: thresholdSec},
+			51: {LastAction: "active", LastEventAt: lastEvent(22 * time.Minute), ThresholdSec: thresholdSec},
 		},
 	}
 }

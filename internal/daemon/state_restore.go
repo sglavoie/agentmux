@@ -167,6 +167,12 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 				st.Dirty = true
 				st.DirtySince = now
 				st.Seq++
+				// A fact-less payload never reaches publishEffectiveLocked above
+				// yet still restores an icon, so re-assert the anchor invariant
+				// against the icon this window actually restored with: a
+				// pre-upgrade payload self-heals to now and a persisted anchor
+				// that restored onto a non-active icon is dropped.
+				stampBusySinceLocked(&st, desiredIconForState(&st), now)
 				h.store[win.ID] = &st
 				h.syncRendererMetadataLocked(win.ID)
 			}

@@ -29,7 +29,10 @@ func TestSpawnDetachedPersistsBootstrapFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	daemonDir := filepath.Join(stateHome, "agent-mux", "daemon")
-	deadline := time.Now().Add(3 * time.Second)
+	// Same host-load tolerance as TestSpawnDetachedFallbackWithoutDiagnostics
+	// below: the detached child may not be scheduled promptly under the full
+	// parallel suite, so bound a genuinely missing log rather than a slow host.
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		matches, _ := filepath.Glob(filepath.Join(daemonDir, "bootstrap-*.log"))
 		if len(matches) == 1 {

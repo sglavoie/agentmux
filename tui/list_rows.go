@@ -45,15 +45,10 @@ const minimumTabNumberColumnWidth = 3
 // reserved when at least one rendered row has a matching active loop.
 const activeLoopColumnWidth = 3
 
-// ageColumnWidth is the visual width consumed by the per-row age column
-// (5 cells of text + 1 trailing space). Sized to fit a warning cell like
-// "9m ⏳"; only reserved when at least one row carries a sweep-eligible
-// LastAction in m.watchdog.
-const ageColumnWidth = 6
-
-// ageWarningGlyph is appended to the age text once the elapsed time has
-// crossed the 80% warning band. Rendered in styleAgeWarning so it reads as
-// "approaching stale" without competing with the row's icon column.
+// ageWarningGlyph is appended to the activity text once the time since the
+// last hook event has crossed the 80% warning band. Rendered in
+// styleAgeWarning so it reads as "approaching stale" without competing with
+// the row's icon column.
 const ageWarningGlyph = "⏳"
 
 // harnessColWidth is the visual width reserved for the harness cell. Sized
@@ -80,8 +75,13 @@ func renderListAt(m Model, width, height int) string {
 	groupCounts := countGroups(m.filtered, m.lastActivity, m.idleThreshold)
 	multiGroup := groupCounts > 1
 	pulseActive := anyRowHasActivePulse(m)
-	ageActive := anyRowHasAge(m)
+	activityActive := anyRowHasActivity(m)
+	// Fall back to the wall clock for a Model built as a bare literal, which is
+	// how most of this package's render tests construct their input.
 	now := time.Now()
+	if m.now != nil {
+		now = m.now()
+	}
 
 	total := len(m.filtered)
 	startIdx := 0
@@ -125,6 +125,10 @@ func renderListAt(m Model, width, height int) string {
 	}
 	activeLoopActive := anyVisibleRowHasActiveLoop(m, startIdx, endIdx)
 	tabNumberWidth := tabNumberColumnWidth(m.filtered)
+	var activityWidth int
+	if activityActive {
+		activityWidth = activityColumnWidth(m, now)
+	}
 
 	var sb strings.Builder
 	if showTop {
@@ -151,16 +155,16 @@ func renderListAt(m Model, width, height int) string {
 		if pulseActive && rowWidth > 0 {
 			rowWidth -= pulseColumnWidth
 		}
-		var ageCell string
-		if ageActive {
-			ageCell = renderAgeCell(m.watchdog[s.WindowID], now)
+		var activityCell string
+		if activityActive {
+			activityCell = renderActivityCell(s, m.watchdog[s.WindowID], now, activityWidth)
 		}
 		var activeLoopCell string
 		if activeLoopActive {
 			activeLoopCell = renderLoopCellFor(m, s)
 		}
 		tabNumberCell := renderTabNumberCell(s.TabNumber, tabNumberWidth)
-		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, tabNumberCell, activeLoopCell, ageCell)
+		row := formatRow(s, acctColor, harnessColor, m.cfg, rowWidth, tabNumberCell, activeLoopCell, activityCell)
 		var styledRow string
 		switch {
 		case i == m.cursor:
@@ -289,61 +293,96 @@ func renderActiveLoopCell(active bool) string {
 	return displayPadRight("🔁", activeLoopColumnWidth)
 }
 
-// anyRowHasAge reports whether any filtered row carries a sweep-eligible
-// watchdog entry. Mirrors anyRowHasActivePulse: the age column is reserved
-// for the entire render pass when at least one row has a non-empty
-// LastAction, otherwise the column is omitted so rows recover their full
-// directory budget.
-func anyRowHasAge(m Model) bool {
-	if len(m.watchdog) == 0 {
-		return false
-	}
+// anyRowHasActivity reports whether any filtered row is running a busy
+// stretch. Mirrors anyRowHasActivePulse: the activity column is reserved for
+// the entire render pass when at least one row carries a timer, otherwise
+// the column is omitted so rows recover their full directory budget.
+func anyRowHasActivity(m Model) bool {
 	for _, s := range m.filtered {
-		if ws, ok := m.watchdog[s.WindowID]; ok && ws.LastAction != "" {
+		if !s.BusySince.IsZero() {
 			return true
 		}
 	}
 	return false
 }
 
-// formatAge returns the per-row age label and the warning flag for a single
-// watchdog entry. The text is `—` for rows with no LastAction; otherwise a
-// coarsely rounded duration (`<n>m` under one hour, `<n>h` beyond). warning
-// is true once the elapsed time has reached 80% of the resolved threshold,
-// so the caller can flip the cell to styleAgeWarning. ThresholdSec ≤ 0
-// disables the warning (no threshold configured for that window).
-func formatAge(ws daemon.WatchdogState, now time.Time) (text string, warning bool) {
+// formatAge returns the detail pane's age label for a single watchdog entry:
+// `—` for an entry with no LastAction, otherwise the coarsely rounded time
+// since the last hook event (`<n>m` under one hour, `<n>h` beyond).
+func formatAge(ws daemon.WatchdogState, now time.Time) string {
 	if ws.LastAction == "" {
-		return "—", false
+		return "—"
 	}
 	elapsed := now.Sub(time.Unix(ws.LastEventAt, 0))
 	if elapsed < 0 {
 		elapsed = 0
 	}
 	if elapsed < time.Hour {
-		text = fmt.Sprintf("%dm", int(elapsed/time.Minute))
-	} else {
-		text = fmt.Sprintf("%dh", int(elapsed/time.Hour))
+		return fmt.Sprintf("%dm", int(elapsed/time.Minute))
 	}
-	if ws.ThresholdSec > 0 {
-		threshold := time.Duration(ws.ThresholdSec) * time.Second
-		if elapsed*5 >= threshold*4 {
-			warning = true
-		}
-	}
-	return text, warning
+	return fmt.Sprintf("%dh", int(elapsed/time.Hour))
 }
 
-// renderAgeCell builds a fixed-width age cell sized to ageColumnWidth. The
-// trailing space is part of the cell so callers can concatenate it before
-// the directory without an extra separator. Warning rows get the warning
-// glyph appended and the whole text styled in styleAgeWarning.
-func renderAgeCell(ws daemon.WatchdogState, now time.Time) string {
-	text, warning := formatAge(ws, now)
-	if warning {
-		text = text + " " + ageWarningGlyph
+// formatRunElapsed renders how long a row's current busy stretch has been
+// running, in at most five cells: `—` for a row with no anchor, `M:SS` below
+// one hour and `<n>h<MM>` at or above it. Negative durations clamp to zero so
+// clock skew between the daemon and the TUI cannot surface a count running
+// backwards, mirroring formatRelativeAge.
+func formatRunElapsed(busySince, now time.Time) string {
+	if busySince.IsZero() {
+		return "—"
 	}
-	pad := ageColumnWidth - 1 - displayWidth(text)
+	elapsed := now.Sub(busySince)
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	if elapsed < time.Hour {
+		return fmt.Sprintf("%d:%02d", int(elapsed/time.Minute), int(elapsed/time.Second)%60)
+	}
+	return fmt.Sprintf("%dh%02d", int(elapsed/time.Hour), int(elapsed/time.Minute)%60)
+}
+
+// activityCellText returns a row's rendered activity text and whether the
+// staleness warning fires. The warning keeps the watchdog's 80%-of-threshold
+// rule (ThresholdSec ≤ 0 disables it) but applies only to a row that has a
+// timer: the reducer is authoritative for what the row displays, so a row
+// whose legacy LastAction scalar has diverged from the reduced icon must not
+// render a bare `— ⏳`.
+func activityCellText(s session.RunningSession, ws daemon.WatchdogState, now time.Time) (text string, warning bool) {
+	text = formatRunElapsed(s.BusySince, now)
+	if s.BusySince.IsZero() || ws.LastAction == "" || ws.ThresholdSec <= 0 {
+		return text, false
+	}
+	elapsed := now.Sub(time.Unix(ws.LastEventAt, 0))
+	threshold := time.Duration(ws.ThresholdSec) * time.Second
+	if elapsed*5 < threshold*4 {
+		return text, false
+	}
+	return text + " " + ageWarningGlyph, true
+}
+
+// activityColumnWidth returns a stable width for every row in the current
+// filtered result set: the widest rendered activity text plus one trailing
+// space. Mirrors tabNumberColumnWidth — one scan per render pass, so the
+// column cannot jitter between rows of the same frame.
+func activityColumnWidth(m Model, now time.Time) int {
+	widest := displayWidth("—")
+	for _, s := range m.filtered {
+		text, _ := activityCellText(s, m.watchdog[s.WindowID], now)
+		if w := displayWidth(text); w > widest {
+			widest = w
+		}
+	}
+	return widest + 1
+}
+
+// renderActivityCell builds one activity cell padded to width. The trailing
+// space is part of the cell so callers can concatenate it before the
+// directory without an extra separator. Warning rows get the warning glyph
+// appended and the whole cell styled in styleAgeWarning.
+func renderActivityCell(s session.RunningSession, ws daemon.WatchdogState, now time.Time, width int) string {
+	text, warning := activityCellText(s, ws, now)
+	pad := width - 1 - displayWidth(text)
 	if pad < 0 {
 		pad = 0
 	}

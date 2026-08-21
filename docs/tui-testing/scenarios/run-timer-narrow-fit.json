@@ -1,0 +1,15 @@
+{
+  "name": "run-timer-narrow-fit",
+  "fixture": "run_timers",
+  "size": { "width": 57, "height": 24 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "0:07" },
+    { "type": "contains_text", "text": "3:07" },
+    { "type": "contains_text", "text": "12h07" },
+    { "type": "contains_text", "text": "9:41 ⏳" },
+    { "type": "contains_text", "text": "—" },
+    { "type": "excludes_text", "text": "— ⏳" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -10,10 +10,12 @@ The daemon includes a watchdog that turns three independent signals into a
    one of those icons but the daemon stops receiving fresh hook events for
    longer than the threshold, the daemon clears the icon and (optionally)
    fires a one-shot notification.
-2. **Glanceable age column in the dashboard.** The list shows how long ago
-   the most recent hook event was for each active-class row. As the age
-   approaches the configured threshold the cell shifts into a warning
-   style, so a stuck session is visible before it becomes stale.
+2. **Glanceable run timer in the dashboard.** The list shows how long the
+   current busy stretch has been running for each active-class row, and
+   clears the cell to `—` the moment the row leaves that class. As the
+   most recent hook event ages toward the configured threshold the cell
+   shifts into a warning style with a ⏳ beside the running timer, so a
+   stuck session is visible before it becomes stale.
 3. **Account-level hook silence.** A separate sweep watches whether each
    profile is producing _any_ hook events at all. If an entire profile
    goes silent for longer than the hook-silence threshold (default 4

@@ -303,6 +303,27 @@ func (h *Handler) publishEffectiveLocked(windowID int, st *WindowState, effectiv
 	meta.Shadow.EffectiveLooping = effective.Looping
 	meta.Shadow.EffectiveGen = st.EffectiveGen
 	h.windowMetadata[windowID] = meta
+	stampBusySinceLocked(st, effective.Icon, time.Now())
+}
+
+// stampBusySinceLocked maintains the busy-stretch anchor as an idempotent
+// invariant of the visible icon rather than as a transition rule: an
+// active-class icon stamps only when the anchor is zero, and every other icon
+// zeroes it. That gets each case right without any "previous state" reasoning
+// — entering the class stamps because leaving it already zeroed, bolt →
+// subagent → bolt inside one turn leaves the original anchor alone, and a
+// restored anchor survives its first republish because it is non-zero.
+// Reading the clock under stateMu matches markWindowStateDirtyLocked.
+// Callers hold stateMu.
+func stampBusySinceLocked(st *WindowState, icon string, now time.Time) {
+	switch icon {
+	case "bolt", "subagent", "compact":
+		if st.BusySince.IsZero() {
+			st.BusySince = now
+		}
+	default:
+		st.BusySince = time.Time{}
+	}
 }
 
 // maxNotifiedSourceEvents bounds the per-window ring of upstream source event

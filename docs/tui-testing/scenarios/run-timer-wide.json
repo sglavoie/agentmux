@@ -1,0 +1,19 @@
+{
+  "name": "run-timer-wide",
+  "fixture": "run_timers",
+  "size": { "width": 120, "height": 32 },
+  "actions": [
+    { "type": "tick", "count": 2 }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "0:07" },
+    { "type": "contains_text", "text": "3:07" },
+    { "type": "contains_text", "text": "12h07" },
+    { "type": "contains_text", "text": "9:41 ⏳" },
+    { "type": "contains_text", "text": "—" },
+    { "type": "excludes_text", "text": "— ⏳" },
+    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
+    { "type": "no_layout_issues" }
+  ]
+}

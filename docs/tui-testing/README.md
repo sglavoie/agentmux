@@ -71,7 +71,9 @@ Print the built-in fixture names (one per line, or a JSON string array with
 amx tui-test list-fixtures
 # actions
 # asl_question
+# asl_runs
 # basic
+# run_timers
 # wide_profiles
 # worktree_lifecycle
 # worktrees
@@ -110,12 +112,31 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `basic` | two Claude work projects + a Codex personal project | realistic multi-profile dashboard baseline |
 | `actions` | one session with a very long title | stresses the actions overlay box width |
 | `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, `]q` jump |
+| `asl_runs` | four supervisor runs spanning exact, ambiguous, second-exact, and unbound live sessions | Runs view focus outcomes and binding presentation |
+| `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
 | `worktree_lifecycle` | deterministic reopen and cleanup outcomes | exercises focus/resume/fresh reopen, ambiguity, replacement profiles, cleanup refusals, safe deletion, forgetting, and partial recovery without real Git or Kitty mutations |
 | `worktrees` | clean, dirty, live, looping, missing, and invalid managed worktrees | hermetic Worktrees browsing, filtering, badges, and layout |
 
 The `basic` fixture's list is state/profile-grouped, not globally
 alpha-sorted: the cursor starts on `dotfiles` (personal).
+
+### Daemon-owned state and the frozen clock
+
+A fixture may also carry the per-window state the daemon owns — icon state,
+looping, the busy-stretch anchor, and watchdog thresholds — which no Kitty tab
+title can express. The harness overlays it on the enumerated sessions and
+replays it on every refresh, so a `tick` action does not wipe the columns it
+feeds. The daemon is never contacted: a fixture that supplies no such state
+renders exactly as it would against an unreachable daemon, which stays the
+default.
+
+Because those columns include a seconds-resolution run timer, the harness pins
+the model's render clock to one fixed instant instead of reading the wall
+clock. Fixtures anchor their timestamps at fixed offsets from it, so every cell
+renders identical text on every run and scenarios can assert it exactly. Only
+the render clock is frozen; pulse decay and idle classification still follow
+the wall clock.
 
 ## Scenario schema
 
@@ -281,6 +302,8 @@ file. The exact inventory is:
 | [`plan-search-sort-rebind.json`](scenarios/plan-search-sort-rebind.json) | `basic` | `o` cycles the Plans sort order and the footer advertises `o sort`, not `s sort` |
 | [`plan-view-fit.json`](scenarios/plan-view-fit.json) | `basic` | plan viewer read-error line wraps to width after `P` then `enter` |
 | [`plan-view-narrow-fit.json`](scenarios/plan-view-narrow-fit.json) | `basic` | plan viewer remains bounded at narrow width |
+| [`run-timer-narrow-fit.json`](scenarios/run-timer-narrow-fit.json) | `run_timers` | every run-timer band still renders whole at the narrowest width that fits the activity column |
+| [`run-timer-wide.json`](scenarios/run-timer-wide.json) | `run_timers` | run timers survive refresh ticks and only running rows carry the `⏳` warning |
 | [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | live-list filter rows truncate at a sub-floor terminal after `/` |
 | [`session-fork-continuity.json`](scenarios/session-fork-continuity.json) | `basic` | Past Sessions dispatches a native fork through the shared action registry |
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after pressing `S` |

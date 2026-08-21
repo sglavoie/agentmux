@@ -29,6 +29,10 @@ type Model struct {
 	attentionStates    map[string]bool // states the bracket-key nav (]/[ and }/{) jumps to
 	backgroundCommands modelBackgroundCommands
 	daemonCommand      func(daemon.Request) (daemon.Response, error)
+	// now is the render clock. Production uses time.Now; the UI test harness
+	// freezes it so the seconds-resolution run timer renders identical text on
+	// every run.
+	now func() time.Time
 	// handoffRunner and worktreeRunner are nil in production, which tells the
 	// action registry to use its real workflows. Tests substitute recorders so
 	// the viewer's H/E/w commands can execute without creating Git state or
@@ -450,6 +454,7 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, 
 		attentionStates:       attn,
 		backgroundCommands:    defaultModelBackgroundCommands(),
 		daemonCommand:         daemonRequest,
+		now:                   time.Now,
 		idleThreshold:         idle,
 		focusedChipIdx:        -1,
 		amxBin:                amxBin,

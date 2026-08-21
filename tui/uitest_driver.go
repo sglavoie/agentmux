@@ -42,6 +42,12 @@ const (
 	uitestDrainMaxSteps = 256
 )
 
+// uitestFrozenNow is the instant every harness run renders against. A
+// seconds-resolution timer measured from the wall clock cannot be asserted
+// exactly, so the driver pins the model's render clock here and fixtures
+// anchor their daemon-owned timestamps at fixed offsets from it.
+var uitestFrozenNow = time.Date(2026, 1, 2, 15, 4, 5, 0, time.UTC)
+
 // UITestDriver holds a live Model plus the terminal size it is rendered at, and
 // applies scenario actions to it. It never talks to a live Kitty instance; all
 // side effects flow through the injected kitty.KittyClient (a no-op recorder in
@@ -165,6 +171,7 @@ func newUITestDriverModel(m Model, size UITestSize, tempParent string) (*UITestD
 	m.sessionResults = append([]transcript.Result(nil), snapshot.transcriptResults...)
 	m.plansIndex = snapshot.planIndex
 	m.backgroundCommands = hermeticModelBackgroundCommands()
+	m.now = func() time.Time { return uitestFrozenNow }
 	// Plan fixtures exercise navigation and layout, not filesystem scan
 	// latency. Supply deterministic command results so the driver never relies
 	// on a 50ms wall-clock race or the operator's real plan index.
@@ -203,18 +210,34 @@ func newUITestDriverModel(m Model, size UITestSize, tempParent string) (*UITestD
 	return d, nil
 }
 
+// hermeticInitialFetch enumerates sessions from the no-op Kitty client and
+// overlays the fixture's daemon-owned state, which no Kitty title can carry
+// (the busy anchor above all). Both maps are nil for a driver built without a
+// fixture, which reproduces an unreachable daemon exactly as before. The
+// daemon is never contacted either way, so the no-live-daemon guarantee holds.
+func hermeticInitialFetch(states map[int]daemon.WindowStateSnapshot, watchdog map[int]daemon.WatchdogState) func(Model, int) tea.Cmd {
+	return func(m Model, _ int) tea.Cmd {
+		return func() tea.Msg {
+			windows, err := m.client.ListWindows()
+			if err != nil {
+				return errMsg{err: err}
+			}
+			sessions, _ := session.ListFromOSWindowsWithConfig(windows, m.cfg)
+			if states != nil {
+				applyDaemonStates(sessions, states)
+			}
+			return sessionsMsg{
+				sessions: session.SortRunning(sessions, m.sortMode),
+				watchdog: watchdog,
+				states:   states,
+			}
+		}
+	}
+}
+
 func hermeticModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
-		initialFetch: func(m Model, sourceWindowID int) tea.Cmd {
-			return func() tea.Msg {
-				windows, err := m.client.ListWindows()
-				if err != nil {
-					return errMsg{err: err}
-				}
-				sessions, _ := session.ListFromOSWindowsWithConfig(windows, m.cfg)
-				return sessionsMsg{sessions: session.SortRunning(sessions, m.sortMode)}
-			}
-		},
+		initialFetch: hermeticInitialFetch(nil, nil),
 		activeLoops: func(seq int) tea.Cmd {
 			return func() tea.Msg { return activeLoopsMsg{seq: seq} }
 		},
@@ -278,6 +301,7 @@ func NewUITestFixtureDriver(fx UITestFixture, size UITestSize) (*UITestDriver, *
 	}
 	client := NewUITestKittyClient(fx.Windows)
 	d := NewUITestDriver(fx.Config, client, size)
+	d.model.backgroundCommands.initialFetch = hermeticInitialFetch(fx.States, fx.Watchdog)
 	fixtureWorktrees := append([]actions.WorktreeView(nil), fx.Worktrees...)
 	d.model.backgroundCommands.worktrees = func(_ Model, seq int) tea.Cmd {
 		return func() tea.Msg {
@@ -360,7 +384,7 @@ func NewUITestFixtureDriver(fx UITestFixture, size UITestSize) (*UITestDriver, *
 			return msg
 		}
 	}
-	d.loadSessionsFrom(client, fx.Config)
+	d.loadSessionsFrom(client, fx.Config, fx.States, fx.Watchdog)
 	return d, client
 }
 
@@ -459,22 +483,31 @@ func NewUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow,
 	if err != nil {
 		return nil, nil, env, err
 	}
-	d.loadSessionsFrom(client, cfg)
+	d.loadSessionsFrom(client, cfg, nil, nil)
 	return d, client, env, nil
 }
 
 // loadSessionsFrom populates the model's session list the way the production
 // fetch command does, but synchronously: it enumerates managed sessions from
-// client + cfg and feeds them through Model.Update as a sessionsMsg. This lets
-// a fixture- or config-backed driver start with a populated list without
-// running the refresh ticker. A query error leaves the model with an empty
-// list rather than failing driver construction.
-func (d *UITestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Config) {
+// client + cfg, overlays the caller's daemon-owned state, and feeds the result
+// through Model.Update as a sessionsMsg. This lets a fixture- or config-backed
+// driver start with a populated list without running the refresh ticker, and
+// keeps that first list identical to what a later tick's hermetic initial fetch
+// would produce. A query error leaves the model with an empty list rather than
+// failing driver construction.
+func (d *UITestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Config, states map[int]daemon.WindowStateSnapshot, watchdog map[int]daemon.WatchdogState) {
 	sessions, _, err := session.ListWithConfig(client, cfg)
 	if err != nil {
 		return
 	}
-	d.recordErr(d.dispatch(sessionsMsg{sessions: session.SortRunning(sessions, d.model.sortMode)}))
+	if states != nil {
+		applyDaemonStates(sessions, states)
+	}
+	d.recordErr(d.dispatch(sessionsMsg{
+		sessions: session.SortRunning(sessions, d.model.sortMode),
+		watchdog: watchdog,
+		states:   states,
+	}))
 }
 
 // Model returns a copy of the current model for assertions that need more than

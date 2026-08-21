@@ -36,6 +36,11 @@ type WindowState struct {
 	GuardAction                string
 	GuardExpiresAt             time.Time
 
+	// BusySince is the start of the window's current active-class stretch —
+	// the moment the reduced effective icon entered bolt/subagent/compact —
+	// and is zero whenever the window is not busy.
+	BusySince time.Time
+
 	// Render-generation diagnostics. Seq is the window's generation counter;
 	// these track how far each stage of the render pipeline has advanced so
 	// exports can show where a window is stuck. DirtySince is when the current
@@ -149,6 +154,10 @@ type windowStateUserVar struct {
 	Harness                    string                     `json:"h,omitempty"`
 	LastEventAt                int64                      `json:"t,omitempty"`
 	ProcessTokenVersion        int                        `json:"pv,omitempty"`
+	// BusySince is the busy-stretch anchor. It was added inside schema v4
+	// rather than bumping the schema: older readers ignore it, and a payload
+	// written without it restores zero and self-heals on the next publish.
+	BusySince int64 `json:"bs,omitempty"`
 
 	// Schema v2+: bounded source facts plus the shadow effective generation.
 	Facts            []SourceFactSnapshot `json:"f,omitempty"`
@@ -194,6 +203,9 @@ func (s WindowState) MarshalUserVar() (string, error) {
 	}
 	if !s.Activity.IsZero() {
 		uv.LastEventAt = s.Activity.Unix()
+	}
+	if !s.BusySince.IsZero() {
+		uv.BusySince = s.BusySince.Unix()
 	}
 	if s.Reducer != nil {
 		uv.Facts = s.Reducer.Facts()
@@ -308,6 +320,12 @@ func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 	}
 	s.EffectiveGen = uv.EffectiveGen
 	s.ShadowSeq = uv.ShadowSeq
+	// The busy-stretch anchor is not a reducer fact, but it rides the same
+	// schema gate: only v2+ payloads can carry one, and a v4 payload written
+	// before the field existed leaves it zero for the restore path to re-stamp.
+	if uv.BusySince != 0 {
+		s.BusySince = time.Unix(uv.BusySince, 0)
+	}
 	// Never hand out a receipt sequence at or below a restored fact's: the
 	// reducer would discard the next live event as reordered.
 	if s.Reducer != nil {

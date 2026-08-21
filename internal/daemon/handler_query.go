@@ -18,6 +18,9 @@ func (h *Handler) handleStateQuery() Response {
 			identityCopy := identity
 			state.Conversation = &identityCopy
 		}
+		if !st.BusySince.IsZero() {
+			state.BusySinceAt = st.BusySince.Unix()
+		}
 		if st.Activity.IsZero() {
 			states[id] = state
 			continue

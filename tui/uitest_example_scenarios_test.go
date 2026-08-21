@@ -72,6 +72,8 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"plan-view-fit.json":                        false,
 		"plan-view-narrow-fit.json":                 false,
 		"resize-stress.json":                        false,
+		"run-timer-narrow-fit.json":                 false,
+		"run-timer-wide.json":                       false,
 		"search-narrow-fit.json":                    false,
 		"session-fork-continuity.json":              false,
 		"session-search-chips-fit.json":             false,

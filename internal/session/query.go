@@ -1,6 +1,8 @@
 package session
 
 import (
+	"time"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -13,10 +15,11 @@ type RunningSession struct {
 	TabNumber        int // 1-based physical position within the containing Kitty OS window
 	WindowID         int
 	Key              string
-	Title            string // raw Kitty tab title (may include icons)
-	Base             string // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
-	State            string // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
-	Looping          bool   // daemon-owned loop marker; title-derived only when the daemon is unreachable
+	Title            string    // raw Kitty tab title (may include icons)
+	Base             string    // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
+	State            string    // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
+	Looping          bool      // daemon-owned loop marker; title-derived only when the daemon is unreachable
+	BusySince        time.Time // daemon-owned start of the current active-class stretch; zero when the row is not busy
 	Starred          bool
 	Locked           bool
 	Muted            bool
