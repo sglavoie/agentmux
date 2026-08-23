@@ -1,11 +1,16 @@
 package plans
 
+// What a first Refresh discovers and what metadata it derives: which
+// directories are plans at all, which files inside them count, how deep the
+// walk goes, and where the snippet comes from. What a *second* Refresh does to
+// state the first one left behind — sidecar rewrites and entry pruning — lives
+// in index_refresh_recache_test.go.
+
 import (
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
-	"time"
 )
 
 // seedPlanDir creates dir under root and writes the given files (relative
@@ -107,38 +112,6 @@ func TestRefresh_PopulatesEntriesAndSkipsSources(t *testing.T) {
 	}
 }
 
-func TestRefresh_DropsPreviouslyIndexedSkippedDirectories(t *testing.T) {
-	root := t.TempDir()
-	for _, name := range []string{"sources", ".hidden"} {
-		planDir := seedPlanDir(t, root, name, map[string]string{
-			"manifest.md": "# should not remain indexed",
-		})
-		key := PlanKey(planDir)
-
-		idx := newTestIndex(t)
-		idx.entries[key] = PlanMeta{
-			Name:    name,
-			DirPath: planDir,
-			Files:   []string{"manifest.md"},
-			Snippet: "# should not remain indexed",
-		}
-		if err := idx.store.Write(key, "should not remain indexed"); err != nil {
-			t.Fatalf("seed sidecar for %s: %v", name, err)
-		}
-		sidecar := idx.store.Path(key)
-
-		if err := idx.Refresh(root); err != nil {
-			t.Fatalf("Refresh with %s: %v", name, err)
-		}
-		if _, ok := idx.Get(key); ok {
-			t.Errorf("%s entry should be dropped", name)
-		}
-		if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
-			t.Errorf("%s sidecar should be deleted; stat err = %v", name, err)
-		}
-	}
-}
-
 func TestRefresh_RelativeRootStoresAbsolutePaths(t *testing.T) {
 	base := t.TempDir()
 	rootName := "plans-root"
@@ -182,243 +155,6 @@ func TestRefresh_RelativeRootStoresAbsolutePaths(t *testing.T) {
 	}
 	if _, ok := idx.Get(PlanKey(filepath.Join(rootName, planName))); ok {
 		t.Errorf("entry unexpectedly indexed under relative key")
-	}
-}
-
-func TestRefresh_IdempotentNoSidecarRewrite(t *testing.T) {
-	root := t.TempDir()
-	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
-		"manifest.md":  "# title\nbody",
-		"session-1.md": "session 1",
-	})
-
-	idx := newTestIndex(t)
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 1: %v", err)
-	}
-	sidecar := idx.store.Path(PlanKey(planDir))
-	info1, err := os.Stat(sidecar)
-	if err != nil {
-		t.Fatalf("stat sidecar: %v", err)
-	}
-
-	// Sleep just past filesystem mtime granularity (some FS have 1s
-	// resolution); a rewrite would update mtime, no-op should not.
-	time.Sleep(20 * time.Millisecond)
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 2: %v", err)
-	}
-	info2, err := os.Stat(sidecar)
-	if err != nil {
-		t.Fatalf("stat sidecar again: %v", err)
-	}
-	if !info1.ModTime().Equal(info2.ModTime()) {
-		t.Errorf("sidecar mtime changed: %v -> %v (expected no rewrite on cache hit)",
-			info1.ModTime(), info2.ModTime())
-	}
-}
-
-func TestRefresh_RebuildsMissingSidecarOnCacheHit(t *testing.T) {
-	root := t.TempDir()
-	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
-		"manifest.md":  "# title",
-		"session-1.md": "body-only-needle",
-	})
-
-	idx := newTestIndex(t)
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 1: %v", err)
-	}
-
-	sidecar := idx.store.Path(PlanKey(planDir))
-	if err := os.Remove(sidecar); err != nil {
-		t.Fatalf("remove sidecar: %v", err)
-	}
-
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 2: %v", err)
-	}
-	if _, err := os.Stat(sidecar); err != nil {
-		t.Fatalf("sidecar was not rebuilt: %v", err)
-	}
-
-	results, err := Search(idx, Query{Text: "body-only-needle"})
-	if err != nil {
-		t.Fatalf("Search: %v", err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("len(results) = %d, want 1", len(results))
-	}
-	if results[0].Meta.DirPath != planDir {
-		t.Errorf("Meta.DirPath = %q, want %q", results[0].Meta.DirPath, planDir)
-	}
-}
-
-func TestRefresh_RebuildsNonRegularSidecarOnCacheHit(t *testing.T) {
-	root := t.TempDir()
-	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
-		"manifest.md":  "# title",
-		"session-1.md": "body-only-needle",
-	})
-
-	idx := newTestIndex(t)
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 1: %v", err)
-	}
-
-	sidecar := idx.store.Path(PlanKey(planDir))
-	if err := os.Remove(sidecar); err != nil {
-		t.Fatalf("remove sidecar: %v", err)
-	}
-	if err := os.Mkdir(sidecar, 0o755); err != nil {
-		t.Fatalf("replace sidecar with directory: %v", err)
-	}
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 2: %v", err)
-	}
-	if info, err := os.Stat(sidecar); err != nil {
-		t.Fatalf("stat rebuilt sidecar: %v", err)
-	} else if !info.Mode().IsRegular() {
-		t.Fatalf("rebuilt sidecar mode = %v, want regular file", info.Mode())
-	}
-
-	results, err := Search(idx, Query{Text: "body-only-needle"})
-	if err != nil {
-		t.Fatalf("Search: %v", err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("len(results) = %d, want 1", len(results))
-	}
-	if results[0].Meta.DirPath != planDir {
-		t.Errorf("Meta.DirPath = %q, want %q", results[0].Meta.DirPath, planDir)
-	}
-}
-
-func TestRefresh_RebuildsWhenMarkdownFileListChanges(t *testing.T) {
-	root := t.TempDir()
-	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
-		"manifest.md": "# title",
-		"old.md":      "old-needle",
-	})
-
-	idx := newTestIndex(t)
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 1: %v", err)
-	}
-	original, ok := idx.Get(PlanKey(planDir))
-	if !ok {
-		t.Fatalf("entry missing after first refresh")
-	}
-
-	if err := os.Remove(filepath.Join(planDir, "old.md")); err != nil {
-		t.Fatalf("remove old markdown: %v", err)
-	}
-	newPath := filepath.Join(planDir, "new.md")
-	if err := os.WriteFile(newPath, []byte("new-needle"), 0o644); err != nil {
-		t.Fatalf("write new markdown: %v", err)
-	}
-	if err := os.Chtimes(newPath, original.ModTime, original.ModTime); err != nil {
-		t.Fatalf("set new markdown time: %v", err)
-	}
-
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 2: %v", err)
-	}
-
-	oldResults, err := Search(idx, Query{Text: "old-needle"})
-	if err != nil {
-		t.Fatalf("Search old needle: %v", err)
-	}
-	if len(oldResults) != 0 {
-		t.Fatalf("len(oldResults) = %d, want 0 after old markdown was removed", len(oldResults))
-	}
-
-	newResults, err := Search(idx, Query{Text: "new-needle"})
-	if err != nil {
-		t.Fatalf("Search new needle: %v", err)
-	}
-	if len(newResults) != 1 {
-		t.Fatalf("len(newResults) = %d, want 1 after sidecar rebuild", len(newResults))
-	}
-	if newResults[0].Meta.DirPath != planDir {
-		t.Errorf("Meta.DirPath = %q, want %q", newResults[0].Meta.DirPath, planDir)
-	}
-}
-
-func TestRefresh_DropsVanishedPlans(t *testing.T) {
-	root := t.TempDir()
-	planA := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
-		"manifest.md": "# alpha",
-	})
-	planB := seedPlanDir(t, root, "beta-ccdd44556677", map[string]string{
-		"manifest.md": "# beta",
-	})
-
-	idx := newTestIndex(t)
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 1: %v", err)
-	}
-	if idx.Len() != 2 {
-		t.Fatalf("after first refresh Len = %d, want 2", idx.Len())
-	}
-	sidecarB := idx.store.Path(PlanKey(planB))
-	if _, err := os.Stat(sidecarB); err != nil {
-		t.Fatalf("expected sidecar B to exist: %v", err)
-	}
-
-	// Remove plan B from disk; re-refresh should drop its entry and
-	// sidecar.
-	if err := os.RemoveAll(planB); err != nil {
-		t.Fatalf("removing plan B: %v", err)
-	}
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 2: %v", err)
-	}
-	if idx.Len() != 1 {
-		t.Fatalf("after vanish Len = %d, want 1", idx.Len())
-	}
-	if _, ok := idx.Get(PlanKey(planA)); !ok {
-		t.Errorf("plan A unexpectedly dropped")
-	}
-	if _, ok := idx.Get(PlanKey(planB)); ok {
-		t.Errorf("plan B entry should be gone")
-	}
-	if _, err := os.Stat(sidecarB); !os.IsNotExist(err) {
-		t.Errorf("plan B sidecar should be deleted; stat err = %v", err)
-	}
-}
-
-func TestRefresh_DropsPlanWhenMarkdownRemoved(t *testing.T) {
-	root := t.TempDir()
-	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
-		"manifest.md": "# alpha",
-		"notes.txt":   "not indexed",
-	})
-
-	idx := newTestIndex(t)
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 1: %v", err)
-	}
-	key := PlanKey(planDir)
-	sidecar := idx.store.Path(key)
-	if _, ok := idx.Get(key); !ok {
-		t.Fatalf("entry missing after first refresh")
-	}
-	if _, err := os.Stat(sidecar); err != nil {
-		t.Fatalf("sidecar missing after first refresh: %v", err)
-	}
-
-	if err := os.Remove(filepath.Join(planDir, "manifest.md")); err != nil {
-		t.Fatalf("removing manifest: %v", err)
-	}
-	if err := idx.Refresh(root); err != nil {
-		t.Fatalf("Refresh 2: %v", err)
-	}
-	if _, ok := idx.Get(key); ok {
-		t.Errorf("entry should be dropped after plan has no markdown files")
-	}
-	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
-		t.Errorf("sidecar should be deleted after markdown removal; stat err = %v", err)
 	}
 }
 

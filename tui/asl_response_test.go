@@ -1,7 +1,10 @@
 package tui
 
+// Form flow: opening the response form against a captured target, editing and
+// navigating drafts, and submitting them. Refusal handling lives in
+// asl_refusal_test.go and the control commands in asl_control_test.go.
+
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -28,6 +31,22 @@ func typeASLAnswer(t *testing.T, d *UITestDriver, text string) {
 	t.Helper()
 	if err := d.Text(text); err != nil {
 		t.Fatalf("typing the answer: %v", err)
+	}
+}
+
+// assertNoASLTextLeak checks the surfaces an answer must never reach: the
+// rendered screen, the model's own formatting, and the observation a scenario
+// serializes.
+func assertNoASLTextLeak(t *testing.T, d *UITestDriver, text string) {
+	t.Helper()
+	observation := d.Observe()
+	for _, line := range observation.Screen.Lines {
+		if strings.Contains(line, text) {
+			t.Fatalf("answer text reached the screen: %q", line)
+		}
+	}
+	if dump := fmt.Sprintf("%+v", d.Model()); strings.Contains(dump, text) {
+		t.Fatal("answer text survived formatting the model")
 	}
 }
 
@@ -220,59 +239,6 @@ func TestASLResponseSubmitsTwoQuestionsEndToEnd(t *testing.T) {
 	}
 }
 
-func TestASLResponseRefusesASubmissionBeforeItIsReauthorized(t *testing.T) {
-	fx := aslRunsFixture()
-	body := fx.ASLQuestionBodies["q-api-2"]
-	body.ActionToken = ""
-	fx.ASLQuestionBodies["q-api-2"] = body
-	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
-	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
-		t.Fatalf("entering Runs: %v", err)
-	}
-	selectASLRun(t, d, "row-reply")
-	if err := d.Key(keyASLRespond); err != nil {
-		t.Fatalf("opening the form: %v", err)
-	}
-	typeASLAnswer(t, d, "answer for one")
-	if err := d.Key(keyCtrlS); err != nil {
-		t.Fatalf("submitting the first question: %v", err)
-	}
-
-	m := d.Model()
-	if m.aslResponse.active {
-		t.Fatal("the form stayed open without a token to submit under")
-	}
-	if !strings.Contains(m.aslNotice, "changed") {
-		t.Fatalf("notice = %q, want a changed-target explanation", m.aslNotice)
-	}
-	if got := len(d.ASLActions()); got != 1 {
-		t.Fatalf("submitted %d actions, want exactly 1 under the spent token", got)
-	}
-}
-
-func TestASLResponseRefusesAnEmptyAnswerWithoutSubmitting(t *testing.T) {
-	d := openASLResponseDriver(t, "row-reply")
-	if err := d.Key(keyCtrlS); err != nil {
-		t.Fatalf("submitting: %v", err)
-	}
-	if actions := d.ASLActions(); len(actions) != 0 {
-		t.Fatalf("an empty answer was submitted: %+v", actions)
-	}
-	if notice := d.Model().aslResponse.notice; !strings.Contains(notice, "empty") {
-		t.Fatalf("notice = %q, want an empty-answer explanation", notice)
-	}
-
-	// Whitespace is not an answer either.
-	typeASLAnswer(t, d, "   ")
-	if err := d.Key(keyCtrlS); err != nil {
-		t.Fatalf("submitting whitespace: %v", err)
-	}
-	if actions := d.ASLActions(); len(actions) != 0 {
-		t.Fatalf("a blank answer was submitted: %+v", actions)
-	}
-}
-
 func TestASLResponseEnterInsertsANewlineAndTabMovesFocus(t *testing.T) {
 	d := openASLResponseDriver(t, "row-reply")
 	typeASLAnswer(t, d, "one")
@@ -319,22 +285,6 @@ func TestASLResponseEscapeClearsTheBodyAndEveryDraft(t *testing.T) {
 		t.Fatalf("cancel submitted something: %+v", actions)
 	}
 	assertNoASLTextLeak(t, d, "secret answer text")
-}
-
-// assertNoASLTextLeak checks the surfaces an answer must never reach: the
-// rendered screen, the model's own formatting, and the observation a scenario
-// serializes.
-func assertNoASLTextLeak(t *testing.T, d *UITestDriver, text string) {
-	t.Helper()
-	observation := d.Observe()
-	for _, line := range observation.Screen.Lines {
-		if strings.Contains(line, text) {
-			t.Fatalf("answer text reached the screen: %q", line)
-		}
-	}
-	if dump := fmt.Sprintf("%+v", d.Model()); strings.Contains(dump, text) {
-		t.Fatal("answer text survived formatting the model")
-	}
 }
 
 func TestASLResponseRedactsDraftsAndBodiesInFormattedOutput(t *testing.T) {
@@ -402,348 +352,6 @@ func TestASLResponseRetryReusesTheOperationIDForTheSameCall(t *testing.T) {
 	updated, _ = m.submitASLResponse(m.aslResponse.buttons[1])
 	if got := updated.(Model).aslResponse.pending.operationID; got == first {
 		t.Fatal("a different closure reused the reply's operation ID")
-	}
-}
-
-func TestASLResponseStaleTargetInvalidatesTheFormAndRefreshes(t *testing.T) {
-	fx := aslRunsFixture()
-	fx.ASLActionOutcomes = map[string]UITestASLOutcome{
-		aslbridge.MethodQuestionReply: {ErrorCode: "stale-action-token"},
-	}
-	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
-	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
-		t.Fatalf("entering Runs: %v", err)
-	}
-	selectASLRun(t, d, "row-reply")
-	if err := d.Key(keyASLRespond); err != nil {
-		t.Fatalf("opening the form: %v", err)
-	}
-	typeASLAnswer(t, d, "answer")
-	if err := d.Key(keyCtrlS); err != nil {
-		t.Fatalf("submitting: %v", err)
-	}
-
-	m := d.Model()
-	if m.mode != ModeASLRuns || m.aslResponse.active {
-		t.Fatalf("a stale target left the form open: mode=%v active=%v", m.mode, m.aslResponse.active)
-	}
-	if !strings.Contains(m.aslNotice, "changed") {
-		t.Fatalf("notice = %q, want a changed-target explanation", m.aslNotice)
-	}
-	if got := len(d.ASLActions()); got != 1 {
-		t.Fatalf("submitted %d actions, want exactly 1 with no automatic retry", got)
-	}
-}
-
-func TestASLResponseBridgeRefusalNeverEchoesBridgeText(t *testing.T) {
-	fx := aslRunsFixture()
-	fx.ASLActionOutcomes = map[string]UITestASLOutcome{
-		aslbridge.MethodQuestionReply: {ErrorCode: "mutation-failed"},
-	}
-	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
-	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
-		t.Fatalf("entering Runs: %v", err)
-	}
-	selectASLRun(t, d, "row-reply")
-	if err := d.Key(keyASLRespond); err != nil {
-		t.Fatalf("opening the form: %v", err)
-	}
-	typeASLAnswer(t, d, "answer")
-	if err := d.Key(keyCtrlS); err != nil {
-		t.Fatalf("submitting: %v", err)
-	}
-	m := d.Model()
-	if !m.aslResponse.active {
-		t.Fatal("a non-stale refusal closed the form")
-	}
-	if m.aslResponse.status != aslOpFailed {
-		t.Fatalf("status = %q, want %q", m.aslResponse.status, aslOpFailed)
-	}
-	if strings.Contains(m.aslResponse.notice, "fixture refusal") {
-		t.Fatalf("the bridge's own message was echoed: %q", m.aslResponse.notice)
-	}
-}
-
-func TestASLResponseVanishedQuestionIsRefusedOnFetch(t *testing.T) {
-	fx := aslRunsFixture()
-	delete(fx.ASLQuestionBodies, "q-api-1")
-	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
-	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
-		t.Fatalf("entering Runs: %v", err)
-	}
-	selectASLRun(t, d, "row-reply")
-	if err := d.Key(keyASLRespond); err != nil {
-		t.Fatalf("opening the form: %v", err)
-	}
-	m := d.Model()
-	if m.aslResponse.active {
-		t.Fatal("a vanished question left the form open")
-	}
-	if !strings.Contains(m.aslNotice, "changed") {
-		t.Fatalf("notice = %q, want a changed-target explanation", m.aslNotice)
-	}
-}
-
-func TestASLResponseDisconnectedBridgeOffersNoActions(t *testing.T) {
-	fx := aslRunsFixture()
-	fx.ASLStatus.MutationsEnabled = false
-	d, _ := NewUITestFixtureDriver(fx, UITestSize{})
-	t.Cleanup(func() { _ = d.Close() })
-	if err := d.Key(keyASLRuns); err != nil {
-		t.Fatalf("entering Runs: %v", err)
-	}
-	selectASLRun(t, d, "row-reply")
-	for _, key := range []string{keyASLRespond, keyASLStop, keyASLAbort} {
-		if err := d.Key(key); err != nil {
-			t.Fatalf("pressing %q: %v", key, err)
-		}
-		if got := d.Model().mode; got != ModeASLRuns {
-			t.Fatalf("%q left mode at %v with mutations disabled", key, got)
-		}
-	}
-	if !strings.Contains(d.Model().aslNotice, "disabled") {
-		t.Fatalf("notice = %q, want the disabled-mutations explanation", d.Model().aslNotice)
-	}
-	if actions := d.ASLActions(); len(actions) != 0 {
-		t.Fatalf("a disabled bridge still received %+v", actions)
-	}
-}
-
-func TestASLResponseCachedRowsAreReadOnly(t *testing.T) {
-	d, _ := enterASLRunsDriver(t)
-	selectASLRun(t, d, "row-reply")
-	m := d.Model()
-	m.aslMeta.Stale = true
-	if view := aslView(m); view != aslViewStale {
-		t.Fatalf("view = %v, want aslViewStale", view)
-	}
-	row, _ := m.selectedASLRow()
-	for _, method := range []string{
-		aslbridge.MethodQuestionReply,
-		aslbridge.MethodRunStopAfterCurrent,
-		aslbridge.MethodRunAbort,
-	} {
-		allowed, reason := aslActionAllowed(m, row, method)
-		if allowed {
-			t.Fatalf("%s was allowed against a cached row", method)
-		}
-		if !strings.Contains(reason, "read-only") {
-			t.Fatalf("reason for %s = %q, want a read-only explanation", method, reason)
-		}
-	}
-}
-
-func TestASLActionsFollowProjectedCapabilities(t *testing.T) {
-	d, _ := enterASLRunsDriver(t)
-	selectASLRun(t, d, "row-verify")
-	m := d.Model()
-	row, _ := m.selectedASLRow()
-
-	if allowed, _ := aslActionAllowed(m, row, aslbridge.MethodRunStopAfterCurrent); !allowed {
-		t.Fatal("a permitted stop was refused")
-	}
-	allowed, reason := aslActionAllowed(m, row, aslbridge.MethodRunAbort)
-	if allowed {
-		t.Fatal("abort was allowed on a run that does not permit it")
-	}
-	if !strings.Contains(reason, "no in-flight turn") {
-		t.Fatalf("reason = %q, want the row's own disabled reason", reason)
-	}
-
-	// The footer must offer exactly what the handlers allow.
-	if aslAbortAvailable(m) {
-		t.Fatal("the footer offered abort on a run that refuses it")
-	}
-	if !aslStopAvailable(m) {
-		t.Fatal("the footer hid a permitted stop")
-	}
-}
-
-func TestASLStopAndAbortConfirmBeforeSubmitting(t *testing.T) {
-	for _, tc := range []struct {
-		key         string
-		action      string
-		method      string
-		consequence string
-	}{
-		{keyASLStop, aslConfirmStop, aslbridge.MethodRunStopAfterCurrent, "runs to completion"},
-		{keyASLAbort, aslConfirmAbort, aslbridge.MethodRunAbort, "120 seconds"},
-	} {
-		t.Run(tc.action, func(t *testing.T) {
-			d, _ := enterASLRunsDriver(t)
-			selectASLRun(t, d, "row-reply")
-			if err := d.Key(tc.key); err != nil {
-				t.Fatalf("pressing %q: %v", tc.key, err)
-			}
-			m := d.Model()
-			if m.mode != ModeConfirm || m.confirmAction != tc.action {
-				t.Fatalf("mode=%v action=%q, want ModeConfirm/%s", m.mode, m.confirmAction, tc.action)
-			}
-			if m.aslActionTarget == nil || m.aslActionTarget.RowID != "row-reply" {
-				t.Fatalf("capture = %+v, want row-reply", m.aslActionTarget)
-			}
-			if !strings.Contains(m.confirmConsequence, tc.consequence) {
-				t.Fatalf("consequence = %q, want it to mention %q", m.confirmConsequence, tc.consequence)
-			}
-			if actions := d.ASLActions(); len(actions) != 0 {
-				t.Fatalf("the confirmation already submitted %+v", actions)
-			}
-
-			if err := d.Key(keyY); err != nil {
-				t.Fatalf("confirming: %v", err)
-			}
-			actions := d.ASLActions()
-			if len(actions) != 1 || actions[0].Method != tc.method {
-				t.Fatalf("actions = %+v, want one %s", actions, tc.method)
-			}
-			if d.Model().aslActionTarget != nil {
-				t.Fatal("the capture survived its submission")
-			}
-			if d.Model().mode != ModeASLRuns {
-				t.Fatalf("mode after confirming = %v, want ModeASLRuns", d.Model().mode)
-			}
-		})
-	}
-}
-
-func TestASLControlCancellationSubmitsNothingAndDropsTheCapture(t *testing.T) {
-	d, _ := enterASLRunsDriver(t)
-	selectASLRun(t, d, "row-reply")
-	if err := d.Key(keyASLStop); err != nil {
-		t.Fatalf("pressing %q: %v", keyASLStop, err)
-	}
-	if err := d.Key(keyN); err != nil {
-		t.Fatalf("declining: %v", err)
-	}
-	m := d.Model()
-	if m.aslActionTarget != nil {
-		t.Fatal("declining kept the capture")
-	}
-	if m.mode != ModeASLRuns {
-		t.Fatalf("mode after declining = %v, want ModeASLRuns", m.mode)
-	}
-	if actions := d.ASLActions(); len(actions) != 0 {
-		t.Fatalf("declining submitted %+v", actions)
-	}
-}
-
-func TestASLConfirmationKeepsItsCaptureWhenTheListRefreshes(t *testing.T) {
-	d, _ := enterASLRunsDriver(t)
-	selectASLRun(t, d, "row-reply")
-	if err := d.Key(keyASLStop); err != nil {
-		t.Fatalf("pressing %q: %v", keyASLStop, err)
-	}
-
-	// A snapshot landing under the overlay drops the confirmed run entirely.
-	m := d.Model()
-	remaining := make([]aslbridge.Row, 0, len(m.aslRows))
-	for _, row := range m.aslRows {
-		if row.RowID != "row-reply" {
-			remaining = append(remaining, row)
-		}
-	}
-	d.Inject(aslSnapshotLoadedMsg{
-		seq:      d.Model().aslRefreshSeq,
-		snapshot: aslbridge.Snapshot{Rows: remaining},
-		status:   aslRunsFixture().ASLStatus,
-	})
-	if target := d.Model().aslActionTarget; target == nil || target.RowID != "row-reply" {
-		t.Fatalf("capture after a refresh = %+v, want row-reply", target)
-	}
-	if got := aslConfirmationTitle(d.Model().aslActionTarget); got != "api-refactor" {
-		t.Fatalf("confirmation title = %q, want the captured label", got)
-	}
-}
-
-func TestASLOperationReceiptsAdvanceAfterTheFormCloses(t *testing.T) {
-	d := openASLResponseDriver(t, "row-paused")
-	typeASLAnswer(t, d, "resume please")
-	if err := d.Key(keyCtrlS); err != nil {
-		t.Fatalf("submitting: %v", err)
-	}
-	m := d.Model()
-	if m.aslResponse.active {
-		t.Fatal("the paused form stayed open after a resume")
-	}
-	if len(m.aslOperations) != 1 || m.aslOperations[0].State != aslOpAccepted {
-		t.Fatalf("operations = %+v, want one accepted receipt", m.aslOperations)
-	}
-	operationID := m.aslOperations[0].OperationID
-
-	d.Inject(aslSnapshotLoadedMsg{
-		seq:      d.Model().aslRefreshSeq,
-		snapshot: aslbridge.Snapshot{Rows: d.Model().aslRows},
-		status:   aslRunsFixture().ASLStatus,
-		receipts: []aslbridge.Operation{{OperationID: operationID, Status: aslbridge.OperationConsumed}},
-	})
-	ops := d.Model().aslOperations
-	if len(ops) != 1 || ops[0].State != aslOpConsumed {
-		t.Fatalf("operations after the receipt = %+v, want consumed", ops)
-	}
-	assertNoASLTextLeak(t, d, "resume please")
-}
-
-func TestASLOperationHistoryStaysBounded(t *testing.T) {
-	var m Model
-	for i := 0; i < aslOperationHistory+3; i++ {
-		m.trackASLOperation(aslOperationView{
-			OperationID: fmt.Sprintf("op-%d", i),
-			Method:      aslbridge.MethodQuestionReply,
-			State:       aslOpSubmitting,
-		})
-	}
-	if len(m.aslOperations) != aslOperationHistory {
-		t.Fatalf("tracked %d operations, want %d", len(m.aslOperations), aslOperationHistory)
-	}
-	if m.aslOperations[0].OperationID != "op-3" {
-		t.Fatalf("oldest retained operation = %q, want op-3", m.aslOperations[0].OperationID)
-	}
-}
-
-// A refusal the TUI does not recognize falls through to the generic "outcome is
-// unknown" sentence, which is correct for a genuinely unknown outcome and wrong
-// for a code the bridge already explains. Auditing against the shared vocabulary
-// makes a bridge that grows a code fail here rather than silently degrade.
-func TestASLRefusalTextCoversEveryDeclaredErrorCode(t *testing.T) {
-	generic := aslRefusalText(errors.New("some-code-that-does-not-exist: detail"))
-
-	for _, code := range aslbridge.ErrorCodes {
-		if aslStaleCodes[code] == aslErrorCodes[code] {
-			t.Errorf("%s: must be classified as exactly one of stale or error", code)
-			continue
-		}
-		err := errors.New(code + ": drop the v1 column before the backfill lands")
-		if got := aslErrorCode(err); got != code {
-			t.Errorf("%s: recovered code = %q", code, got)
-		}
-		text := aslRefusalText(err)
-		if strings.Contains(text, "backfill") {
-			t.Errorf("%s: refusal text repeats the bridge message: %q", code, text)
-		}
-		if aslStaleCodes[code] {
-			if !aslStaleTarget(err) {
-				t.Errorf("%s: stale code is not treated as a moved target", code)
-			}
-			continue
-		}
-		if text == generic {
-			t.Errorf("%s: falls through to the generic unknown-outcome sentence", code)
-		}
-	}
-
-	declared := make(map[string]bool, len(aslbridge.ErrorCodes))
-	for _, code := range aslbridge.ErrorCodes {
-		declared[code] = true
-	}
-	for _, mapped := range []map[string]bool{aslStaleCodes, aslErrorCodes} {
-		for code := range mapped {
-			if !declared[code] {
-				t.Errorf("%s: mapped here but absent from aslbridge.ErrorCodes", code)
-			}
-		}
 	}
 }
 

@@ -1,30 +1,29 @@
 package daemon
 
-// Deterministic fault injection. Each test injects one audited failure mode —
-// wedged or failing Kitty listing, flapping title writes, a crash between the
-// ordered persist and title writes, degraded startup, IPC response loss, queue
-// pressure, dropped ASL lifecycle events, malformed persisted state — and
-// asserts the corresponding recovery invariant:
+// Deterministic fault injection against the render and restore pipeline. Each
+// test injects one audited failure mode — wedged or failing Kitty listing,
+// flapping title writes, a crash between the ordered persist and title writes,
+// degraded startup, malformed persisted state — and asserts the corresponding
+// recovery invariant:
 //
 //   - a wedged Kitty never blocks hook acknowledgement;
 //   - the rendered generation eventually equals the desired generation once
 //     the fault clears;
-//   - one logical request applies exactly once even when its response is lost;
-//   - queue pressure degrades (inline processing, queue_full counter) but
-//     never drops an event;
-//   - reconciliation repairs dropped ASL lifecycle events in both directions;
+//   - the visible state may lag the durable state, never run ahead of it;
 //   - malformed persisted state is discarded without harming other windows.
+//
+// Transport-level faults — lost IPC responses and ingress queue pressure —
+// live in fault_injection_ipc_test.go; dropped ASL lifecycle events and their
+// reconciliation repairs in fault_injection_asl_test.go.
 
 import (
 	"errors"
 	"fmt"
-	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
@@ -253,200 +252,6 @@ func TestFaultDegradedStartupStillAppliesEvents(t *testing.T) {
 	h.stateMu.Unlock()
 	if !converged {
 		t.Fatalf("render did not converge after startup fault cleared: %+v", st)
-	}
-}
-
-// TestFaultResponseLossRetryAppliesOnce reproduces the ambiguous-timeout
-// fault: the daemon applies a request but the client never sees the response
-// (connection closed early). The client's retry with the same request ID must
-// not re-apply the event.
-func TestFaultResponseLossRetryAppliesOnce(t *testing.T) {
-	sock, server := newTestServerWithRef(t)
-
-	req := Request{
-		Type:      TypeStateUpdate,
-		RequestID: "lost-response-1",
-		WindowID:  7,
-		Action:    "subagent",
-		Event:     "SubagentStart",
-	}
-
-	// First delivery: write the request, then close without reading the
-	// response — the daemon processes it but the response is lost.
-	conn, err := net.Dial("unix", sock)
-	if err != nil {
-		t.Fatalf("dial: %v", err)
-	}
-	data := fmt.Sprintf(`{"type":%q,"request_id":%q,"window_id":7,"action":"subagent","event":"SubagentStart"}`+"\n",
-		TypeStateUpdate, req.RequestID)
-	if _, err := conn.Write([]byte(data)); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	_ = conn.Close()
-
-	// Wait until the daemon has actually applied the first delivery.
-	c := NewClientWithSocket(sock)
-	deadline := time.Now().Add(3 * time.Second)
-	for server.Metrics().Accepted < 1 {
-		if time.Now().After(deadline) {
-			t.Fatal("daemon never processed the response-lost request")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-
-	// The retry (same request ID) must replay, not re-apply.
-	retry, err := c.Send(req)
-	if err != nil {
-		t.Fatalf("retry send: %v", err)
-	}
-	if !retry.OK {
-		t.Fatalf("retry response = %+v; want replayed OK", retry)
-	}
-
-	snap := server.Metrics()
-	if snap.Accepted != 1 || snap.Duplicate < 1 {
-		t.Fatalf("metrics = %+v; want exactly one accepted apply and the retry deduplicated", snap)
-	}
-	server.handler.stateMu.Lock()
-	count := server.handler.store[7].SubagentCount
-	server.handler.stateMu.Unlock()
-	if count != 1 {
-		t.Fatalf("SubagentCount = %d after response-loss retry; want 1 (applied once)", count)
-	}
-}
-
-// TestFaultQueuePressureNeverDropsEvents saturates a two-slot ingress queue
-// while the consumer is parked. Overflow requests degrade to inline processing
-// and bump queue_full, but every submitted event still applies exactly once,
-// and the queue-latency counters record the pressure.
-func TestFaultQueuePressureNeverDropsEvents(t *testing.T) {
-	var applied atomic.Int32
-	gate := make(chan struct{})
-	var gateOnce sync.Once
-	handle := func(_ Request) Response {
-		<-gate
-		applied.Add(1)
-		return Response{OK: true}
-	}
-	var metrics Metrics
-	q := newIngressQueueCap(handle, &metrics, 2)
-	t.Cleanup(func() {
-		gateOnce.Do(func() { close(gate) })
-		q.stop()
-	})
-
-	const submitters = 12
-	var wg sync.WaitGroup
-	wg.Add(submitters)
-	for i := 0; i < submitters; i++ {
-		go func() {
-			defer wg.Done()
-			if resp := q.submit(Request{Type: TypeStateUpdate}); !resp.OK {
-				t.Errorf("submit under pressure = %+v; want ok", resp)
-			}
-		}()
-	}
-
-	// Wait until the queue is saturated (some submits degraded inline and are
-	// parked in handle), then release everything.
-	deadline := time.Now().Add(3 * time.Second)
-	for metrics.queueFull.Load() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("queue never saturated")
-		}
-		time.Sleep(time.Millisecond)
-	}
-	gateOnce.Do(func() { close(gate) })
-	wg.Wait()
-
-	if got := applied.Load(); got != submitters {
-		t.Fatalf("applied = %d; want %d (queue pressure must not drop events)", got, submitters)
-	}
-	snap := metrics.Snapshot()
-	if snap.QueueFull == 0 {
-		t.Fatal("queue_full = 0; want the overflow degradation counted")
-	}
-	if snap.QueueMaxWaitNs == 0 {
-		t.Fatal("queue latency was not recorded under pressure")
-	}
-}
-
-// TestFaultDroppedASLFinishRepairedByReconciliation drops a run's finish event
-// after its turn started through the real hook path. Two consecutive
-// successful discoveries that cannot see the run must converge the lease to
-// the state the lost finish would have produced, and the repair must be
-// recorded as a synthetic watchdog intervention.
-func TestFaultDroppedASLFinishRepairedByReconciliation(t *testing.T) {
-	h, windows, projectDir := reconcileTestFixture(t)
-	fake := &fakeKittyClient{windows: windows}
-	h.SetKittyClient(fake)
-	h.publishSnapshot(windows, time.Now())
-	stubDaemonLoopDiscover(t, nil, nil)
-
-	resp := h.Handle(Request{
-		Type:     TypeHookEvent,
-		WindowID: 42,
-		Event:    "AgentSessionLoopTurnStarted",
-		PayloadJSON: fmt.Sprintf(
-			`{"source":"agent_session_loop","cwd":%q,"harness":"claude","run_id":"run-lost"}`, projectDir),
-	})
-	if !resp.OK {
-		t.Fatalf("turn started = %+v", resp)
-	}
-	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "bolt" {
-		t.Fatalf("live run = looping=%v icon=%q; want ⚡🔁", looping, icon)
-	}
-
-	// The finish event is dropped. Reconciliation misses the run twice.
-	now := time.Now()
-	h.ReconcileASLLeases(now, windows)
-	if looping, _ := windowLoopState(t, h, 42); !looping {
-		t.Fatal("one miss released the lease; want two-miss protection")
-	}
-	h.ReconcileASLLeases(now.Add(aslReconcileInterval), windows)
-
-	looping, icon := windowLoopState(t, h, 42)
-	if looping || icon != "stop" {
-		t.Fatalf("after two misses = looping=%v icon=%q; want the lost finish's 🛑 without 🔁", looping, icon)
-	}
-
-	export := h.Handle(Request{Type: TypeEventsExport})
-	wd := export.WindowMetadata[42].Watchdog
-	if wd.Reconciles == 0 || wd.LastEvent != eventASLReconciled {
-		t.Fatalf("watchdog metadata = %+v; want the reconciliation repair recorded", wd)
-	}
-}
-
-// TestFaultDroppedASLStartSeededByReconciliation is the opposite direction: no
-// lifecycle event ever arrived (daemon restarted, hooks dropped), but the
-// loop's on-disk state reports an executing turn. Reconciliation must seed the
-// lease with the discovered phase.
-func TestFaultDroppedASLStartSeededByReconciliation(t *testing.T) {
-	h, windows, projectDir := reconcileTestFixture(t)
-	stubDaemonLoopDiscover(t, []agentloop.Candidate{loopCandidate(projectDir, "run-seeded", agentloop.PhaseTurn)}, nil)
-
-	h.ReconcileASLLeases(time.Now(), windows)
-
-	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "bolt" {
-		t.Fatalf("seeded = looping=%v icon=%q; want ⚡🔁 from discovery", looping, icon)
-	}
-}
-
-// TestFaultDiscoveryFailurePreservesLeases: a failing discovery is missing
-// evidence, not evidence of absence — leases survive any number of failed
-// scans.
-func TestFaultDiscoveryFailurePreservesLeases(t *testing.T) {
-	h, windows, projectDir := reconcileTestFixture(t)
-	stubDaemonLoopDiscover(t, []agentloop.Candidate{loopCandidate(projectDir, "run-A", agentloop.PhaseTurn)}, nil)
-	h.ReconcileASLLeases(time.Now(), windows)
-
-	stubDaemonLoopDiscover(t, nil, errors.New("state dir unreadable"))
-	now := time.Now()
-	for i := 1; i <= 3; i++ {
-		h.ReconcileASLLeases(now.Add(time.Duration(i)*aslReconcileInterval), windows)
-	}
-	if looping, icon := windowLoopState(t, h, 42); !looping || icon != "bolt" {
-		t.Fatalf("after failed discoveries = looping=%v icon=%q; want lease preserved", looping, icon)
 	}
 }
 

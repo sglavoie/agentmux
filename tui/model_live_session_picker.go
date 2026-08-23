@@ -4,8 +4,117 @@ import (
 	"fmt"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/session"
 )
+
+// openLiveSessionPicker raises the shared ambiguity picker. The caller supplies
+// the mode Esc lands on, so a detour can never strand the operator in a view
+// they did not open.
+func (m *Model) openLiveSessionPicker(purpose LivePickerPurpose, returnMode Mode, title string, candidates []actions.WorktreeLiveSession) {
+	m.livePickerCandidates = candidates
+	m.livePickerPurpose = purpose
+	m.livePickerReturnMode = returnMode
+	m.livePickerTitle = title
+	m.livePickerCursor = 0
+	m.livePickerOffset = 0
+	m.actionErr = nil
+	m.mode = ModeLiveSessionPicker
+}
+
+func (m *Model) openWorktreeSessionPicker(candidates []actions.Candidate) {
+	var resolved []actions.WorktreeLiveSession
+	if m.worktreeActionTarget != nil {
+		byID := make(map[string]actions.WorktreeLiveSession, len(m.worktreeActionTarget.LiveSessions))
+		for _, candidate := range m.worktreeActionTarget.LiveSessions {
+			byID[candidate.ID] = candidate
+		}
+		for _, candidate := range candidates {
+			if live, ok := byID[candidate.ID]; ok {
+				resolved = append(resolved, live)
+			} else {
+				resolved = append(resolved, actions.WorktreeLiveSession{ID: candidate.ID, Project: candidate.DisplayName, Directory: candidate.CanonicalPath})
+			}
+		}
+	}
+	m.openLiveSessionPicker(LivePickerWorktreeReopen, ModeWorktrees, worktreeConfirmationTitle(m.worktreeActionTarget), resolved)
+}
+
+func (m *Model) openWorktreeProfilePicker() {
+	m.configPickerAccounts = append(m.configPickerAccounts[:0], m.cfg.Accounts...)
+	m.configPickerPurpose = ConfigPickerWorktreeReopen
+	m.configPickerReturnMode = ModeWorktrees
+	m.configPickerProjectIdx = -1
+	m.configPickerCurrent = ""
+	m.configPickerCursor = 0
+	m.targetSession = sessionForWorktreePicker(m.worktreeActionTarget)
+	if m.worktreeActionTarget != nil {
+		m.configPickerCurrent = m.worktreeActionTarget.Profile
+		m.configPickerCursor = pickerAccountIndex(m.cfg.Accounts, m.configPickerCurrent)
+	}
+	m.actionErr = nil
+	m.mode = ModeConfigPicker
+}
+
+func sessionForWorktreePicker(target *actions.WorktreeView) session.RunningSession {
+	if target == nil {
+		return session.RunningSession{}
+	}
+	return session.RunningSession{Base: target.ProjectLabel, Project: target.ProjectLabel, Profile: target.Profile, Harness: target.Harness, Directory: target.Path}
+}
+
+func (m Model) handleLiveSessionPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case keyCtrlC:
+		return m, tea.Quit
+	case keyEsc, keyQ:
+		chosen := m.livePickerPurpose
+		m.mode = m.livePickerReturnMode
+		m.livePickerCandidates = nil
+		m.livePickerTitle = ""
+		if chosen == LivePickerWorktreeReopen {
+			m.worktreeActionTarget = nil
+		}
+		return m, nil
+	case keyJ, keyDown:
+		m.livePickerCursor = clamp(m.livePickerCursor+1, 0, len(m.livePickerCandidates)-1)
+	case keyK, keyUp:
+		m.livePickerCursor = clamp(m.livePickerCursor-1, 0, len(m.livePickerCandidates)-1)
+	case keyEnter:
+		if m.livePickerCursor < 0 || m.livePickerCursor >= len(m.livePickerCandidates) {
+			return m, nil
+		}
+		chosen := m.livePickerCandidates[m.livePickerCursor]
+		purpose := m.livePickerPurpose
+		m.mode = m.livePickerReturnMode
+		m.livePickerCandidates = nil
+		m.livePickerTitle = ""
+		if purpose == LivePickerASLFocus {
+			return m, focusCmd(m.client, chosen.TabID)
+		}
+		return m.reopenWorktreeWithParameters(map[string]string{"session": chosen.ID})
+	}
+	scrollLivePickerToCursor(&m)
+	return m, nil
+}
+
+func scrollLivePickerToCursor(m *Model) {
+	total := len(m.livePickerCandidates)
+	visible := livePickerVisibleRows(*m)
+	if total == 0 || visible <= 0 {
+		m.livePickerOffset = 0
+		return
+	}
+	m.livePickerCursor = clamp(m.livePickerCursor, 0, total-1)
+	if m.livePickerCursor < m.livePickerOffset {
+		m.livePickerOffset = m.livePickerCursor
+	}
+	if m.livePickerCursor >= m.livePickerOffset+visible {
+		m.livePickerOffset = m.livePickerCursor - visible + 1
+	}
+}
 
 func renderLiveSessionPicker(m Model) string {
 	var sb strings.Builder
